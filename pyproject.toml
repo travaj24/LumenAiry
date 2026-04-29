@@ -86,9 +86,11 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/travaj24/Lumenairy"
-Repository = "https://github.com/travaj24/Lumenairy.git"
-Issues = "https://github.com/travaj24/Lumenairy/issues"
+Homepage = "https://github.com/travaj24/LumenAiry"
+Documentation = "https://github.com/travaj24/LumenAiry/wiki"
+Repository = "https://github.com/travaj24/LumenAiry.git"
+Issues = "https://github.com/travaj24/LumenAiry/issues"
+Changelog = "https://github.com/travaj24/LumenAiry/releases"
 
 [project.scripts]
 optical-designer = "lumenairy.ui.main_window:_cli_main"

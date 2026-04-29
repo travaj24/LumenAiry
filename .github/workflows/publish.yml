@@ -1,0 +1,75 @@
+name: Publish to PyPI
+
+# Auto-publish to PyPI when a GitHub Release is published.
+#
+# Authentication uses PyPI Trusted Publishing (OIDC) -- NO secret tokens.
+# Before this workflow can succeed, the project owner must register this
+# repository as a trusted publisher at:
+#
+#     https://pypi.org/manage/project/lumenairy/settings/publishing/
+#
+# Settings to enter:
+#   PyPI Project Name :  lumenairy
+#   Owner             :  travaj24
+#   Repository name   :  LumenAiry
+#   Workflow name     :  publish.yml
+#   Environment name  :  pypi
+#
+# (The environment name below MUST match the one entered above.)
+
+on:
+  release:
+    types: [published]
+  # Allow manual re-runs from the Actions tab if a release upload fails part-way.
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build sdist + wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tooling
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Validate distributions
+        run: python -m twine check dist/*
+
+      - name: Upload artifacts for the publish job
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    # The "pypi" environment is what PyPI's Trusted Publishing config
+    # checks for -- requests from any other environment will be rejected.
+    environment:
+      name: pypi
+      url: https://pypi.org/project/lumenairy/
+    permissions:
+      id-token: write   # required by pypa/gh-action-pypi-publish for OIDC
+    steps:
+      - name: Download built distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No `with: password:` -- Trusted Publishing handles auth via OIDC.
