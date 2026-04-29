@@ -41,8 +41,11 @@ def run_file(path: pathlib.Path, quiet: bool) -> tuple[int, float, str]:
     )
     dt = time.perf_counter() - t0
     out = (proc.stdout or '') + (proc.stderr or '')
-    if proc.returncode != 0 and not quiet:
-        # On failure always show output so the user can diagnose
+    if proc.returncode != 0:
+        # On failure ALWAYS show the file's output -- otherwise --quiet
+        # would hide exactly the diagnostic info we need on CI.
+        print(f'\n--- FAILURE in {path.name} (exit={proc.returncode}, '
+              f'{dt:.1f}s) ---')
         print(out, end='' if out.endswith('\n') else '\n')
     elif not quiet:
         print(out, end='' if out.endswith('\n') else '\n')
