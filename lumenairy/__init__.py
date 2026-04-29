@@ -430,7 +430,7 @@ from .plotting import (
     compute_jones_pupil,
 )
 
-__version__ = "3.2.14.1"
+__version__ = "3.2.14.2"
 
 __all__ = [
     # Propagation

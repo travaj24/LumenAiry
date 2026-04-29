@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "3.2.14.1"
+version = "3.2.14.2"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -48,6 +48,7 @@ dependencies = [
     "refractiveindex>=1.0",
     "scipy>=1.7",
     "matplotlib>=3.5",
+    "psutil>=5.0",
 ]
 
 [project.optional-dependencies]
@@ -78,7 +79,6 @@ all = [
     "astropy>=5.0",
     "h5py>=3.0",
     "zarr>=2.14",
-    "psutil>=5.0",
 ]
 dev = [
     "pytest>=7.0",
