@@ -45,17 +45,21 @@ jobs:
           python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
 
       - name: Run validation suite
+        # Tee stdout/stderr to a file so the artifact step (below) has
+        # something concrete to upload on failure -- the suite itself
+        # prints to stdout and doesn't write a log file.
+        shell: bash
         run: |
-          python validation/run_all.py --quiet
+          python validation/run_all.py 2>&1 | tee validation_output.txt
+          # Propagate the suite's exit code (the tee zeros it otherwise)
+          exit ${PIPESTATUS[0]}
         timeout-minutes: 15
 
-      - name: Upload run.log on failure
+      - name: Upload validation log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: validation-logs-${{ matrix.os }}-py${{ matrix.python-version }}
-          path: |
-            validation/**/*.log
-            validation/**/run.log
-          if-no-files-found: ignore
+          name: validation-output-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: validation_output.txt
+          if-no-files-found: warn
           retention-days: 7
