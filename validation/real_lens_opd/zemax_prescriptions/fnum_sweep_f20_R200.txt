@@ -1,0 +1,24 @@
+# Zemax-compatible lens data for: fnum_sweep_f20_R200
+# Description: Plano-convex f/# sweep: R1=200 mm, ap=8 mm
+#
+# Test conditions
+#   Primary wavelength: 1.3100 um
+#   Source: collimated on-axis plane wave
+#   Aperture: clear semi-diameter = 4.0000 mm (diameter 8.0000 mm)
+#   Stop surface index: 1
+#   Paraxial EFL (at this wavelength): 397.154 mm
+#   Residual (piston+tilt+defocus) RMS (slant): 1.27 nm
+#   Expected OPD in Zemax: compare to the piston+tilt+defocus-removed trace; the two should agree to the Zemax sampling limit for aberration shape (spherical, coma, higher).
+#
+# Paste into the Zemax Lens Data Editor (Sequential mode)
+# Columns: SURF | TYPE | RADIUS [mm] | THICKNESS [mm] | MATERIAL | SEMI-DIA [mm] | CONIC | COMMENT
+#
+# SURF TYPE                  RADIUS        THICKNESS   MATERIAL   SEMI-DIA    CONIC  COMMENT
+  OBJ  STANDARD            Infinity         Infinity         --      0.000    0.000  Object at infinity
+ * STO  STANDARD          200.000000         3.000000      N-BK7     4.0000   0.0000  surface 1
+   2    STANDARD            Infinity       397.154069         --     4.0000   0.0000  surface 2
+   IMA  STANDARD            Infinity         0.000000         --     0.0000   0.0000  Image plane
+#
+# Legend: "*" marks the aperture stop.
+# To verify OPD in Zemax: Analysis > Wavefront > Wavefront Map, or Analysis > Aberrations > Optical Path Difference (OPD fan).
+# Remember to set Aperture Type -> "Float By Stop Size" and the primary wavelength to match the value listed above.

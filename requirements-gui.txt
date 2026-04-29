@@ -1,0 +1,34 @@
+# Additional dependencies for the Optical Designer GUI application
+#
+# Install alongside the base library requirements:
+#   pip install -r requirements.txt -r requirements-gui.txt
+#
+# Or install everything via pyproject.toml:
+#   pip install -e ".[gui]"
+
+# GUI framework (required for the application)
+PySide6>=6.5
+
+# Plotting — used by ray fan, tolerance, wave optics, glass map panels
+matplotlib>=3.5
+
+# Optimization — used by the optimizer dock (Nelder-Mead, global search)
+scipy>=1.7
+
+# Interactive 3D viewer — used by the 3D layout panel
+pyvista>=0.40
+pyvistaqt>=0.9
+
+# Storage — used by wave optics output (HDF5/Zarr)
+h5py>=3.0
+# zarr>=2.14       # uncomment for Zarr output support
+
+# Fast FFT — optional, gives pyFFTW backend option in wave optics panel
+# pyfftw>=0.13
+
+# Fused phase-screen multiply — optional, automatically used by apply_real_lens
+# when present; ~1.5-2x speedup and much lower peak memory at large grids (N>=2048)
+# numexpr>=2.8
+
+# GPU acceleration — optional, gives CuPy backend option in wave optics panel
+# cupy>=11.0       # requires CUDA toolkit

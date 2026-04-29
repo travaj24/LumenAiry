@@ -1,0 +1,61 @@
+name: Validate
+
+# Runs the full validation suite on every push to main and on every PR.
+# Matrix-tests against multiple Python versions so we catch any 3.x-specific
+# regressions early.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  # Allow manual triggering from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11', '3.12', '3.13']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install Lumenairy with all extras + dev
+        # GUI / GPU / FITS extras are skipped in CI because they need
+        # platform tooling we don't run on a standard runner (Qt
+        # platform plugin, CUDA toolkit, etc.).  Core + perf + numba
+        # is enough to exercise the validation suite.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
+
+      - name: Library version + import sanity
+        run: |
+          python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
+
+      - name: Run validation suite
+        run: |
+          python validation/run_all.py --quiet
+        timeout-minutes: 15
+
+      - name: Upload run.log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-logs-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            validation/**/*.log
+            validation/**/run.log
+          if-no-files-found: ignore
+          retention-days: 7

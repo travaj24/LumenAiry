@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumenairy"
+version = "3.2.14.1"
+description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [
+    { name = "Andrew Traverso" },
+]
+keywords = [
+    "optics",
+    "physics",
+    "propagation",
+    "angular-spectrum-method",
+    "diffraction",
+    "fourier-optics",
+    "wave-optics",
+    "ray-tracing",
+    "photonics",
+    "metasurface",
+    "polarization",
+    "zemax",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Image Processing",
+]
+
+dependencies = [
+    "numpy>=1.20",
+    "refractiveindex>=1.0",
+    "scipy>=1.7",
+    "matplotlib>=3.5",
+]
+
+[project.optional-dependencies]
+fft = ["pyfftw>=0.13"]
+gpu = ["cupy>=11.0"]
+fits = ["astropy>=5.0"]
+hdf5 = ["h5py>=3.0"]
+zarr = ["zarr>=2.14"]
+# numexpr fuses the ``E * exp(-1j*k0*opd)`` phase-screen multiply in
+# ``apply_real_lens``, ~1.7x faster at large N and substantially
+# lower peak memory (no complex128 NxN intermediates).  Optional --
+# library falls back to numpy when missing.
+perf = ["numexpr>=2.8"]
+# Numba JIT for the aspheric-coefficient sum and the Maslov Chebyshev
+# evaluator.  Library falls back to NumPy paths when missing.
+numba = ["numba>=0.58"]
+# Optical Designer GUI: PySide6 + 3D viewer + storage backend.
+gui = [
+    "PySide6>=6.5",
+    "pyvista>=0.40",
+    "pyvistaqt>=0.9",
+    "h5py>=3.0",
+]
+all = [
+    "pyfftw>=0.13",
+    "numexpr>=2.8",
+    "numba>=0.58",
+    "astropy>=5.0",
+    "h5py>=3.0",
+    "zarr>=2.14",
+    "psutil>=5.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov",
+]
+
+[project.urls]
+Homepage = "https://github.com/travaj24/Lumenairy"
+Repository = "https://github.com/travaj24/Lumenairy.git"
+Issues = "https://github.com/travaj24/Lumenairy/issues"
+
+[project.scripts]
+optical-designer = "lumenairy.ui.main_window:_cli_main"
+
+# Auto-discover sub-packages (lumenairy + lumenairy.ui) instead of
+# hand-listing each.  ``find:`` requires the include glob so we don't
+# accidentally pick up other top-level dirs.
+[tool.setuptools.packages.find]
+include = ["lumenairy*"]
+
+[tool.setuptools.package-data]
+lumenairy = ["*.md", "*.txt", "*.html"]

@@ -1,0 +1,25 @@
+# Zemax-compatible lens data for: AC254-200-C
+# Description: AC254-200-C achromat f=200 mm
+#
+# Test conditions
+#   Primary wavelength: 1.3100 um
+#   Source: collimated on-axis plane wave
+#   Aperture: clear semi-diameter = 7.5000 mm (diameter 15.0000 mm)
+#   Stop surface index: 1
+#   Paraxial EFL (at this wavelength): 139.192 mm
+#   Residual (piston+tilt+defocus) RMS (slant): 1.33 nm
+#   Expected OPD in Zemax: compare to the piston+tilt+defocus-removed trace; the two should agree to the Zemax sampling limit for aberration shape (spherical, coma, higher).
+#
+# Paste into the Zemax Lens Data Editor (Sequential mode)
+# Columns: SURF | TYPE | RADIUS [mm] | THICKNESS [mm] | MATERIAL | SEMI-DIA [mm] | CONIC | COMMENT
+#
+# SURF TYPE                  RADIUS        THICKNESS   MATERIAL   SEMI-DIA    CONIC  COMMENT
+  OBJ  STANDARD            Infinity         Infinity         --      0.000    0.000  Object at infinity
+ * STO  STANDARD          110.100000         4.000000    N-BAF10     7.5000   0.0000  surface 1
+   2    STANDARD          -80.600000         2.000000    N-SF6HT     7.5000   0.0000  surface 2
+   3    STANDARD         -277.500000       139.192225         --     7.5000   0.0000  surface 3
+   IMA  STANDARD            Infinity         0.000000         --     0.0000   0.0000  Image plane
+#
+# Legend: "*" marks the aperture stop.
+# To verify OPD in Zemax: Analysis > Wavefront > Wavefront Map, or Analysis > Aberrations > Optical Path Difference (OPD fan).
+# Remember to set Aperture Type -> "Float By Stop Size" and the primary wavelength to match the value listed above.

@@ -1,0 +1,20 @@
+# Runtime dependencies for lumenairy
+#
+# === Required (core functionality will not work without these) ===
+numpy>=1.20
+refractiveindex>=1.0      # glass catalog lookups (get_glass_index, apply_real_lens, Thorlabs)
+scipy>=1.7                # resample_field (Fresnel grid resampling), optimization
+matplotlib>=3.5           # plotting (spot_diagram, ray_fan_plot, plot_field, etc.)
+
+# === Recommended (needed for common workflows) ===
+h5py>=3.0                 # HDF5 field storage (save_field_h5, save_planes_h5, etc.)
+psutil>=5.0               # accurate memory detection (falls back to 4 GB default without it)
+
+# === Optional (uncomment as needed) ===
+# pyfftw>=0.13            # multi-threaded CPU FFT (opt-in via USE_PYFFTW = True)
+# numexpr>=2.8            # fused phase-screen multiply in apply_real_lens (1.5-2x speedup at large N)
+# numba>=0.60             # JIT fastpath for _Cheb2DEvaluator in apply_real_lens_traced (newton_fit='polynomial');
+#                         # ~10-15x Newton-phase speedup vs pure NumPy.  Requires numba>=0.65 for Python 3.14.
+# cupy>=11.0              # GPU acceleration (CUDA required); enables xp=cupy in _Cheb2DEvaluator
+# astropy>=5.0            # FITS file I/O for load_fits_field / save_fits_field
+# zarr>=2.14              # Zarr storage backend (alternative to HDF5)
