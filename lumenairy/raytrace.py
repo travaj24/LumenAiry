@@ -56,6 +56,8 @@ RAY_TIR             = 1    # total internal reflection at refract
 RAY_APERTURE        = 2    # clipped by a surface semi_diameter
 RAY_MISSED_SURFACE  = 3    # intersection Newton failed / no real root
 RAY_NAN             = 4    # arithmetic produced NaN/Inf (numerical fault)
+RAY_EVANESCENT      = 5    # diffraction order does not propagate
+                           # (L'^2 + M'^2 > 1 after a grating k-shift)
 
 
 @dataclass
@@ -1081,6 +1083,171 @@ def make_rings(semi_aperture=12.7e-3, num_rings=6, rays_per_ring=36,
     L = np.zeros_like(x)
     M = np.full_like(y, np.sin(field_angle))
     return _make_bundle(x, y, L, M, wavelength)
+
+
+# ============================================================================
+# Diffraction-order direction shift (gratings / DOEs in the traced path)
+# ============================================================================
+
+def apply_doe_phase_traced(rays, order_x, order_y=0, *,
+                           period_x, period_y=None, wavelength=None):
+    """Apply a grating diffraction-order direction shift to a ray bundle.
+
+    Each ray's transverse direction cosines are shifted by the grating
+    equation::
+
+        L_new = L + order_x * lambda / period_x
+        M_new = M + order_y * lambda / period_y
+
+    The longitudinal cosine is recomputed from
+    ``L_new**2 + M_new**2 + N_new**2 == 1``.  Orders for which
+    ``L_new**2 + M_new**2 > 1`` are evanescent (do not propagate); those
+    rays are flagged ``alive=False`` with ``error_code = RAY_EVANESCENT``.
+
+    Ray positions ``(x, y, z)`` and the OPL accumulator are *not*
+    modified -- the grating is treated as a thin diffractive surface
+    that only redirects each ray.  If you need to add the constant
+    grating-order phase shift to ``opd``, do so manually after the call.
+
+    The function supports two calling conventions:
+
+    1. **Single order** -- pass scalar ``order_x`` and ``order_y``.
+       The returned bundle has the same length as ``rays``.
+
+    2. **Order array** -- pass 1-D arrays of equal length for
+       ``order_x`` and ``order_y``.  The returned bundle is replicated
+       ``len(order_x)`` times in *order-major* layout::
+
+           out[order=k, ray=i] = out[k * n_rays + i]
+
+       i.e. all rays for order 0, then all rays for order 1, ...
+
+    Typical use: split a ray bundle at a Dammann-grating plane into a
+    set of diffraction orders, then continue tracing each order through
+    the post-grating optics with a single :func:`trace` call on the
+    flattened bundle.
+
+    Parameters
+    ----------
+    rays : RayBundle
+        Input bundle.  Not modified in place.
+    order_x : float, int, or 1-D array-like
+        Diffraction order along the grating's x-axis.  Half-integer
+        orders are allowed (e.g. for even-N Dammann splitters).
+    order_y : float, int, or 1-D array-like, default 0
+        Diffraction order along the grating's y-axis.  When passing
+        arrays, ``order_x`` and ``order_y`` must broadcast to the same
+        1-D length.
+    period_x : float
+        Grating period along x [m].  Required keyword.
+    period_y : float, optional
+        Grating period along y [m].  Defaults to ``period_x`` (square
+        crossed grating).  Use ``np.inf`` to disable diffraction along
+        one axis (1-D grating).
+    wavelength : float, optional
+        Vacuum wavelength [m].  Defaults to ``rays.wavelength``.
+
+    Returns
+    -------
+    RayBundle
+        New bundle (positions copied, directions shifted).  Length equals
+        ``len(rays)`` for scalar orders or ``n_orders * len(rays)`` for
+        order arrays.
+
+    Notes
+    -----
+    The grating equation here is the small-angle / paraxial direction-
+    cosine form: ``sin(theta_diff) - sin(theta_in) = m * lambda / Lambda``
+    expressed as ``L_new = L_in + m * lambda / Lambda``.  This is the
+    standard 1-st-order DOE / Dammann ray-tracing convention; it neglects
+    the cosine factor that distinguishes ``sin`` from the direction
+    cosine for very large grating angles.  For modest deflections
+    (sub-100 mrad) the two are interchangeable to <1% even at the
+    pupil edge.
+
+    See Also
+    --------
+    trace : Geometric ray tracer (call after this function with the
+        post-grating surfaces).
+    lumenairy.doe.makedammann2d : 2-D Dammann period derivation.
+    """
+    if wavelength is None:
+        wavelength = rays.wavelength
+    if period_y is None:
+        period_y = period_x
+
+    # Normalize order args; track whether the caller passed scalars
+    # (single-order convention) or arrays (multi-order replication).
+    mx = np.asarray(order_x, dtype=np.float64)
+    my = np.asarray(order_y, dtype=np.float64)
+    scalar_input = (mx.ndim == 0 and my.ndim == 0)
+    mx = np.atleast_1d(mx)
+    my = np.atleast_1d(my)
+    if mx.ndim != 1 or my.ndim != 1:
+        raise ValueError(
+            f"order_x and order_y must be scalar or 1-D, got shapes "
+            f"{mx.shape} and {my.shape}")
+    try:
+        mx, my = np.broadcast_arrays(mx, my)
+    except ValueError as e:
+        raise ValueError(
+            f"order_x (length {len(mx)}) and order_y (length {len(my)}) "
+            f"must broadcast to the same 1-D length") from e
+    n_orders = mx.size
+    n_rays = len(rays.x)
+
+    # Per-order direction increments.
+    dL = (mx * wavelength / period_x).reshape(n_orders, 1)
+    dM = (my * wavelength / period_y).reshape(n_orders, 1)
+
+    # Broadcast to (n_orders, n_rays); reshape input direction cosines.
+    L_new = rays.L.reshape(1, n_rays) + dL
+    M_new = rays.M.reshape(1, n_rays) + dM
+
+    sum_sq = L_new ** 2 + M_new ** 2
+    propagating = sum_sq <= 1.0
+    N_new = np.zeros_like(L_new)
+    np.sqrt(np.maximum(1.0 - sum_sq, 0.0), out=N_new, where=propagating)
+
+    # Per-order alive / error_code grids.
+    alive_in = np.asarray(rays.alive, dtype=bool).reshape(1, n_rays)
+    alive_new = alive_in & propagating
+
+    if rays.error_code is not None:
+        ec_in = np.asarray(rays.error_code).reshape(1, n_rays)
+        ec_new = np.broadcast_to(ec_in, (n_orders, n_rays)).copy()
+    else:
+        ec_new = np.zeros((n_orders, n_rays), dtype=np.uint8)
+        ec_new[~alive_in.repeat(n_orders, axis=0)] = RAY_TIR
+    # First-failure-wins: only stamp RAY_EVANESCENT on rays that were
+    # alive coming in but became non-propagating from the order shift.
+    newly_dead = (~propagating) & alive_in
+    ec_new[newly_dead] = RAY_EVANESCENT
+
+    if scalar_input:
+        # Single-order convention: same shape as input.
+        return RayBundle(
+            x=rays.x.copy(), y=rays.y.copy(), z=rays.z.copy(),
+            L=L_new[0], M=M_new[0], N=N_new[0],
+            wavelength=wavelength,
+            alive=alive_new[0],
+            opd=rays.opd.copy(),
+            error_code=ec_new[0],
+        )
+
+    # Order-major flatten: all rays for order 0, then order 1, ...
+    return RayBundle(
+        x=np.tile(rays.x, n_orders),
+        y=np.tile(rays.y, n_orders),
+        z=np.tile(rays.z, n_orders),
+        L=L_new.reshape(-1),
+        M=M_new.reshape(-1),
+        N=N_new.reshape(-1),
+        wavelength=wavelength,
+        alive=alive_new.reshape(-1),
+        opd=np.tile(rays.opd, n_orders),
+        error_code=ec_new.reshape(-1),
+    )
 
 
 # ============================================================================

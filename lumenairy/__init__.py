@@ -331,6 +331,7 @@ from .raytrace import (
     make_ring,
     make_grid,
     make_rings,
+    apply_doe_phase_traced,
     trace_prescription,
     system_abcd,
     system_abcd_prescription,
@@ -356,6 +357,7 @@ from .raytrace import (
     RAY_APERTURE,
     RAY_MISSED_SURFACE,
     RAY_NAN,
+    RAY_EVANESCENT,
     find_paraxial_focus,
     trace_summary,
     prescription_summary,
@@ -430,7 +432,7 @@ from .plotting import (
     compute_jones_pupil,
 )
 
-__version__ = "3.2.14.3"
+__version__ = "3.2.15"
 
 __all__ = [
     # Propagation
@@ -522,6 +524,7 @@ __all__ = [
     'make_ring',
     'make_grid',
     'make_rings',
+    'apply_doe_phase_traced',
     'trace_prescription',
     'system_abcd',
     'system_abcd_prescription',
@@ -547,6 +550,7 @@ __all__ = [
     'RAY_APERTURE',
     'RAY_MISSED_SURFACE',
     'RAY_NAN',
+    'RAY_EVANESCENT',
     'find_paraxial_focus',
     'trace_summary',
     'prescription_summary',

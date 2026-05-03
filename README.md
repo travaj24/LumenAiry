@@ -10,6 +10,26 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.2.15
+
+- **`apply_doe_phase_traced`** — new ray-trace primitive for splitting
+  a `RayBundle` at a thin grating / DOE plane into one or more
+  diffraction orders.  Applies the grating-equation direction-cosine
+  shift `L_new = L + m_x * lambda / period_x` (and same on y) per
+  ray, recomputes `N` from the unit-norm constraint, and flags
+  evanescent orders (`L'^2 + M'^2 > 1`) `alive=False` with a new
+  `RAY_EVANESCENT = 5` error code.  Two calling conventions: scalar
+  orders return a same-shape bundle; 1-D order arrays return a
+  bundle replicated `n_orders * n_rays` in order-major layout, ready
+  for a single `trace()` call through the post-grating optics.  Use
+  case: ray-trace through a Dammann splitter or any thin grating
+  in a sequential prescription.
+
+  > Validation: 6 new tests in `test_raytrace.py` cover zero-order
+  > no-op, the grating equation, unit-norm preservation, evanescent
+  > flagging, order-major layout, and free-space round-trip;
+  > 32/32 raytrace + 17/17 optimize tests pass.
+
 ## What's new in 3.2.14
 
 A focused performance pass on the highest-traffic paths.  All
@@ -530,6 +550,9 @@ GPU / multi-threaded FFT acceleration.
 - **OPD analysis** — wavefront error fans
 - **Through-focus** — RMS spot vs defocus with best-focus finder
 - **Ray generators** — fans, grids, concentric rings, single rays
+- **Diffraction-order shift** — `apply_doe_phase_traced` splits a ray
+  bundle at a thin grating / DOE into one or more orders (single or
+  array), with evanescent flagging via `RAY_EVANESCENT`
 - **Prescription compatible** — same prescription dicts as `apply_real_lens`
 - **System compatible** — `raytrace_system()` accepts the same element list
   as `propagate_through_system()` for instant wave-optics ↔ ray-optics switching

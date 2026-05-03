@@ -26,6 +26,7 @@ from lumenairy.raytrace import (
     find_paraxial_focus, seidel_coefficients, spot_rms,
     spot_geo_radius, ray_fan_data, opd_fan_data,
     trace_prescription, prescription_summary, make_rings, Surface,
+    apply_doe_phase_traced, RAY_EVANESCENT, RAY_OK,
 )
 
 
@@ -558,6 +559,164 @@ def t_trace_prescription_returns_image_rays():
 
 H.run('trace_prescription: most rays alive at image plane',
       t_trace_prescription_returns_image_rays)
+
+
+# ---------------------------------------------------------------------
+H.section('DOE / grating diffraction-order direction shift')
+
+
+def t_doe_phase_traced_zero_order():
+    """order=(0, 0) is a no-op: directions and aliveness unchanged."""
+    rays = _make_bundle(x=np.linspace(-1e-3, 1e-3, 9),
+                        y=np.zeros(9),
+                        L=np.zeros(9), M=np.zeros(9),
+                        wavelength=1.31e-6)
+    out = apply_doe_phase_traced(rays, order_x=0, order_y=0,
+                                 period_x=10e-6)
+    same_dir = (np.allclose(out.L, rays.L)
+                and np.allclose(out.M, rays.M)
+                and np.allclose(out.N, rays.N))
+    same_alive = bool(out.alive.all()) and (out.n_rays == rays.n_rays)
+    return same_dir and same_alive, \
+        f'L drift max={np.max(np.abs(out.L - rays.L)):.2e}'
+
+
+H.run('DOE: zero order is a no-op', t_doe_phase_traced_zero_order)
+
+
+def t_doe_phase_traced_grating_equation():
+    """Single-axis grating: dL = m*lambda/period exactly; M unchanged."""
+    lam = 1.31e-6
+    period = 10e-6
+    m = 3
+    rays = _make_bundle(x=np.zeros(1), y=np.zeros(1),
+                        L=np.zeros(1), M=np.zeros(1), wavelength=lam)
+    out = apply_doe_phase_traced(rays, order_x=m, order_y=0,
+                                 period_x=period)
+    expected_L = m * lam / period
+    L_err = abs(out.L[0] - expected_L)
+    M_unchanged = abs(out.M[0]) < 1e-15
+    norm_ok = abs(out.L[0] ** 2 + out.M[0] ** 2 + out.N[0] ** 2 - 1.0)
+    return (L_err < 1e-15 and M_unchanged and norm_ok < 1e-15), \
+        (f'L={out.L[0]:.8f} (expected {expected_L:.8f}), '
+         f'M={out.M[0]:.2e}, |L^2+M^2+N^2-1|={norm_ok:.2e}')
+
+
+H.run('DOE: 1-D grating equation dL = m*lambda/period',
+      t_doe_phase_traced_grating_equation)
+
+
+def t_doe_phase_traced_unit_direction_norm():
+    """L^2 + M^2 + N^2 == 1 exactly for every alive ray after a 2-D
+    crossed-grating order shift over a fan of input angles."""
+    lam = 1.31e-6
+    rays = _make_bundle(
+        x=np.zeros(7), y=np.zeros(7),
+        L=np.linspace(-0.1, 0.1, 7),
+        M=np.linspace(-0.05, 0.05, 7),
+        wavelength=lam)
+    out = apply_doe_phase_traced(rays, order_x=2, order_y=-1,
+                                 period_x=8e-6, period_y=12e-6)
+    norm = out.L ** 2 + out.M ** 2 + out.N ** 2
+    err = float(np.max(np.abs(norm[out.alive] - 1.0)))
+    return err < 1e-15, f'max |norm-1| = {err:.2e}'
+
+
+H.run('DOE: post-shift direction cosines remain unit-normalized',
+      t_doe_phase_traced_unit_direction_norm)
+
+
+def t_doe_phase_traced_evanescent():
+    """Very high diffraction order: |L+dL|^2 + |M+dM|^2 > 1 should
+    flag the ray alive=False with RAY_EVANESCENT."""
+    lam = 1.31e-6
+    period = 1.5e-6                   # period < lambda -> high orders evanescent
+    rays = _make_bundle(x=np.zeros(1), y=np.zeros(1),
+                        L=np.zeros(1), M=np.zeros(1), wavelength=lam)
+    # m=2 -> dL = 2*1.31/1.5 = 1.747, clearly evanescent
+    out = apply_doe_phase_traced(rays, order_x=2, order_y=0,
+                                 period_x=period)
+    dead = (not bool(out.alive[0]))
+    code_ok = (out.error_code is not None
+               and int(out.error_code[0]) == int(RAY_EVANESCENT))
+    return dead and code_ok, \
+        (f'alive={bool(out.alive[0])}, '
+         f'code={int(out.error_code[0]) if out.error_code is not None else None}, '
+         f'expected RAY_EVANESCENT={int(RAY_EVANESCENT)}')
+
+
+H.run('DOE: evanescent orders flagged alive=False, RAY_EVANESCENT',
+      t_doe_phase_traced_evanescent)
+
+
+def t_doe_phase_traced_array_orders_layout():
+    """Array-order input replicates bundle in order-major layout:
+    out[k*n_rays:(k+1)*n_rays] is the k-th order's rays."""
+    lam = 1.31e-6
+    period = 20e-6
+    rays = _make_bundle(x=np.linspace(-1e-3, 1e-3, 5),
+                        y=np.zeros(5),
+                        L=np.zeros(5), M=np.zeros(5), wavelength=lam)
+    mx = np.array([0, 1, 2, -1])
+    my = np.array([0, 0, 1, -2])
+    out = apply_doe_phase_traced(rays, order_x=mx, order_y=my,
+                                 period_x=period)
+    # Length check
+    if out.n_rays != len(mx) * 5:
+        return False, f'len={out.n_rays}, expected {len(mx)*5}'
+    # Per-order direction-cosine check (order-major layout)
+    ok = True
+    for k in range(len(mx)):
+        sl = slice(k * 5, (k + 1) * 5)
+        expected_L = mx[k] * lam / period
+        expected_M = my[k] * lam / period
+        if not (np.allclose(out.L[sl], expected_L)
+                and np.allclose(out.M[sl], expected_M)
+                and np.allclose(out.x[sl], rays.x)
+                and np.allclose(out.y[sl], rays.y)):
+            ok = False
+            break
+    return ok, f'n_rays={out.n_rays} for {len(mx)} orders x 5 rays'
+
+
+H.run('DOE: order-array input replicates in order-major layout',
+      t_doe_phase_traced_array_orders_layout)
+
+
+def t_doe_phase_traced_freespace_shift():
+    """End-to-end: launch on-axis ray bundle, apply grating shift, then
+    trace through D mm of glass-free space.  Transverse landing position
+    must equal D * (m*lambda/period) within paraxial tolerance."""
+    lam = 1.31e-6
+    period = 50e-6
+    D = 30e-3                         # 30 mm of free space
+    # A "free space" surface: flat, air on both sides, thickness D.
+    surfs = [Surface(radius=np.inf, glass_before='air',
+                     glass_after='air',
+                     semi_diameter=20e-3, thickness=D),
+             Surface(radius=np.inf, glass_before='air',
+                     glass_after='air',
+                     semi_diameter=20e-3, thickness=0)]
+    rays0 = _make_bundle(x=np.zeros(1), y=np.zeros(1),
+                         L=np.zeros(1), M=np.zeros(1), wavelength=lam)
+    m = 4
+    rays1 = apply_doe_phase_traced(rays0, order_x=m, order_y=0,
+                                   period_x=period)
+    res = trace(rays1, surfs, lam)
+    x_landed = res.image_rays.x[0]
+    # Expected (paraxial): x = D * tan(theta) = D * L / N ~ D * L for small L
+    L = rays1.L[0]
+    Nz = rays1.N[0]
+    expected_x = D * L / Nz
+    err_um = abs(x_landed - expected_x) * 1e6
+    return err_um < 1e-3, \
+        (f'x_landed={x_landed*1e6:.4f} um, '
+         f'expected={expected_x*1e6:.4f} um, '
+         f'err={err_um:.2e} um')
+
+
+H.run('DOE: free-space transverse shift = distance * direction-cosine',
+      t_doe_phase_traced_freespace_shift)
 
 
 if __name__ == '__main__':

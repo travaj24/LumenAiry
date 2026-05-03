@@ -2,6 +2,39 @@
 
 All notable changes to the core library are documented here.
 
+## [3.2.15] — 2026-05-03
+
+### Feature — `apply_doe_phase_traced`: grating diffraction-order shift for ray bundles
+
+New public function in `lumenairy.raytrace` for splitting a
+`RayBundle` into one or more diffraction orders at a thin grating /
+DOE plane.  Applies the grating-equation direction-cosine shift
+`L_new = L + m_x * lambda / period_x` (and the same on the y-axis)
+to every ray, recomputes `N` from the unit-norm constraint, and
+flags evanescent orders (`L'^2 + M'^2 > 1`) as `alive=False` with a
+new error code `RAY_EVANESCENT = 5`.
+
+Two calling conventions:
+
+- **Scalar orders** -- pass `order_x`, `order_y` as scalars; returns a
+  bundle the same length as the input.
+- **Order arrays** -- pass 1-D arrays of equal length; returns a
+  replicated bundle in *order-major* layout (all rays for order 0,
+  then order 1, ...).  This is the form used to split a single
+  pre-DOE bundle into N orders for one downstream `trace()` call.
+
+Use case: ray-trace through a Dammann splitter or any thin grating
+in a sequential prescription.  Before this, callers had to construct
+`RayBundle` instances directly and apply the k-shift inline; this
+function packages the bookkeeping (broadcast, evanescent flagging,
+`error_code` propagation under the first-failure-wins invariant)
+and matches the public `trace` / `make_*` API conventions.
+
+Exports: `apply_doe_phase_traced`, `RAY_EVANESCENT`.
+
+> Validation: all 32 raytrace tests pass (6 new), 17 optimize tests
+> pass.
+
 ## [3.2.14.1] — 2026-04-25
 
 ### Bugfix — H-cache OOM at very large N (regression introduced in 3.2.14)
