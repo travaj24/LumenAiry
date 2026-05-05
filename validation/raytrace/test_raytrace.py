@@ -802,5 +802,54 @@ H.run('trace + surface_diffraction: evanescent orders flagged',
       t_trace_diff_evanescent_flagging)
 
 
+# ----------------------------------------------------------------------
+# JAX-traceable trace tests
+# ----------------------------------------------------------------------
+
+def t_trace_jax_singlet_runs():
+    """trace_jax produces finite output through a singlet."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    n = 5
+    state = make_jax_ray_state(
+        x=jnp.linspace(-1e-3, 1e-3, n),
+        y=jnp.zeros(n), z=jnp.zeros(n),
+        L=jnp.zeros(n), M=jnp.zeros(n), N=jnp.ones(n),
+    )
+    out = trace_jax(state, presc, wavelength=633e-9)
+    finite = bool(jnp.all(jnp.isfinite(out.x))
+                  and jnp.all(jnp.isfinite(out.opd)))
+    return finite, 'output finite'
+
+
+def t_trace_jax_grad_finite():
+    """jax.grad through trace_jax returns a finite gradient of OPD."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    def opd_of(x0):
+        state = make_jax_ray_state(
+            x=jnp.array([x0]), y=jnp.zeros(1), z=jnp.zeros(1),
+            L=jnp.zeros(1), M=jnp.zeros(1), N=jnp.ones(1),
+        )
+        out = trace_jax(state, presc, wavelength=633e-9)
+        return jnp.sum(out.opd)
+    g = jax.grad(opd_of)(jnp.float32(0.5e-3))
+    return bool(jnp.isfinite(g)), f'grad={float(g):.4e}'
+
+
+H.section('JAX-traceable trace')
+H.run('trace_jax through singlet runs', t_trace_jax_singlet_runs)
+H.run('jax.grad through trace_jax', t_trace_jax_grad_finite)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

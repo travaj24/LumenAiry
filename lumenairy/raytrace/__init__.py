@@ -64,6 +64,15 @@ from .bundles import (
     path_to_ray,
 )
 
+# JAX-traceable trace (functional / immutable; differentiable via
+# jax.grad and JIT-able via jax.jit).
+from .jax_trace import (
+    JaxRayState,
+    make_jax_ray_state,
+    trace_jax,
+    jax_state_to_raybundle,
+)
+
 
 __all__ = [
     'RayBundle',
@@ -112,4 +121,8 @@ __all__ = [
     'ray_to_path',
     'ray_to_beamlet',
     'path_to_ray',
+    'JaxRayState',
+    'make_jax_ray_state',
+    'trace_jax',
+    'jax_state_to_raybundle',
 ]
