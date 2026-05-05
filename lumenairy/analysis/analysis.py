@@ -591,7 +591,7 @@ def chromatic_focal_shift(prescription, wavelengths):
     shift : float
         Peak-valley of BFL across wavelengths [m] (= axial colour).
     """
-    from .raytrace import surfaces_from_prescription, system_abcd
+    from ..raytrace import surfaces_from_prescription, system_abcd
 
     wavelengths = np.asarray(wavelengths, dtype=np.float64)
     efls = np.empty_like(wavelengths)
@@ -633,10 +633,10 @@ def polychromatic_strehl(prescription, wavelengths, weights,
     z_bests : ndarray
         Per-wavelength best-focus positions [m].
     """
-    from .lenses import apply_real_lens
+    from ..lenses import apply_real_lens
     from .through_focus import (through_focus_scan, find_best_focus,
                                 diffraction_limited_peak)
-    from .raytrace import surfaces_from_prescription, system_abcd
+    from ..raytrace import surfaces_from_prescription, system_abcd
 
     wavelengths = np.asarray(wavelengths, dtype=np.float64)
     weights = np.asarray(weights, dtype=np.float64)
