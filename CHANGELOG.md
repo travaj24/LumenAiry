@@ -14,32 +14,53 @@ top-level import (e.g. ``from lumenairy import angular_spectrum_propagate``,
 ``from lumenairy.propagation import X``, ``from lumenairy.asymptotic
 import Y``) continues to work via thin shim re-exports.
 
-### Subpackage reorganisation (partial)
+### Subpackage reorganisation (complete)
 
-Two new subpackages have been created in this release; the rest are
-deferred to a follow-up.
+The full library has been reorganised into eight thematic
+subpackages.  Every previous top-level import path is preserved
+through thin re-export shims, so user code continues to work
+unchanged.
 
-- **`lumenairy.backend`** -- numerical-backend dispatch.
-  `array_namespace`, `is_numpy_array` / `is_cupy_array` /
-  `is_jax_array`, `to_numpy` / `to_backend`, `RandomState`,
-  multi-backend `fft2` / `ifft2` / `fft` / `ifft` / `fftshift` /
-  `fftfreq`, scipy-special / linalg compat, affinity-aware
-  `available_cpus`.
+- **`lumenairy.backend`** -- numerical-backend dispatch
+  (``array_namespace``, FFT / RNG / scipy compat, CPU helpers).
 
-- **`lumenairy.propagators`** -- diffraction-propagator family.
-  Existing modules `propagation` and `asymptotic` are now in this
-  subpackage; new modules `gbd`, `hfpi`, `hf`, `dispatch`,
-  `subaperture` are also here.
+- **`lumenairy.propagators`** -- diffraction-propagator family
+  (``propagation``, ``asymptotic``, ``gbd``, ``hfpi``, ``hf``,
+  ``dispatch``, ``subaperture``).
 
-  Backwards-compat shims at ``lumenairy/propagation.py`` and
-  ``lumenairy/asymptotic.py`` re-export the entire submodule
-  namespace so ``from lumenairy.propagation import X`` and
-  ``from lumenairy.asymptotic import X`` continue to work.
+- **`lumenairy.raytrace`** -- geometric ray tracing
+  (``core`` -- the previous ``raytrace.py``).
 
-The remaining subpackages (`elements`, `raytrace`, `io`, `analysis`,
-`sources`, `optimize`) are scheduled for a follow-up reorganisation
-release; their modules continue to ship at the top level until
-then.
+- **`lumenairy.elements`** -- optical-element family
+  (``lenses``, ``doe``, ``coatings``, ``freeform``, ``elements``,
+  ``rcwa``, ``polarization``).
+
+- **`lumenairy.io`** -- prescription I/O + storage + codegen
+  (``prescriptions``, ``hdf5`` -- previously ``hdf5_io``,
+  ``storage``, ``codegen``).
+
+- **`lumenairy.analysis`** -- analysis & post-processing
+  (``analysis``, ``detector``, ``ghost``, ``interferometry``,
+  ``phase_retrieval``, ``coherence``, ``through_focus``,
+  ``plotting``).
+
+- **`lumenairy.sources`** -- source-field generators
+  (``core`` -- the previous ``sources.py``).
+
+- **`lumenairy.optimize`** -- prescription optimization
+  (``core`` -- the previous ``optimize.py``, ``multiconfig``).
+
+Backwards-compatibility shims are in place at every previously
+top-level location: ``from lumenairy.propagation import X``,
+``from lumenairy.lenses import Y``, ``from lumenairy.raytrace
+import Z``, etc. all continue to work via thin re-export modules
+that mirror the moved submodule's namespace (including private
+names that some downstream code reaches into).
+
+Each subpackage's ``__init__.py`` mirrors all of its submodules'
+namespaces, so ``from lumenairy.elements import apply_real_lens``
+works as a flat alternative to ``from lumenairy.elements.lenses
+import apply_real_lens``.
 
 ### Multi-backend infrastructure
 

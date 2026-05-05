@@ -53,9 +53,12 @@ E_out = la.propagate(E_in, z=1e-3, wavelength=1.31e-6, dx=4e-6,
                      method='auto')
 ```
 
-A follow-up release will reorganise the remaining top-level
-modules (`lenses`, `raytrace`, `prescriptions`, `analysis`, etc.)
-into matching subpackages with the same shim strategy.
+The library is now organised into eight thematic subpackages
+(`backend`, `propagators`, `raytrace`, `elements`, `io`,
+`analysis`, `sources`, `optimize`).  All previous top-level
+import paths (``from lumenairy.propagation import X``,
+``from lumenairy.lenses import Y``, etc.) continue to work via
+thin re-export shims; no user-visible breakage.
 
 ## What's new in 3.3.3
 
