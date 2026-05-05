@@ -4,7 +4,56 @@ All notable changes to the core library are documented here.
 
 ## [3.4.0] — 2026-05-05
 
-### Major — Multi-backend foundation, new propagators, partial reorg
+### Stage 2-4 features added (prescription paths, variance reduction, vectorial)
+
+The new propagators introduced earlier in 3.4.0 now operate on full
+optical prescriptions, not just free-space scenarios:
+
+- **`propagate_hfpi_through_prescription`** -- HFPI walks a sequential
+  prescription via :func:`lumenairy.raytrace.trace`, accumulates OPL
+  into the path complex weights, and re-emits secondary HF sources
+  at every diffracting surface (auto-detected from finite
+  ``semi_diameter``).
+- **`propagate_gbd_through_prescription`** -- paraxial GBD via
+  system ABCD evolution.  Each beamlet's complex Q-parameter and
+  base ray transform via the prescription's
+  ``system_abcd_prescription`` matrix.  Adds the
+  ``apply_abcd_to_beamlets`` primitive.
+- **`propagate_huygens_fresnel_through_prescription`** -- Van-Vleck
+  HF for prescriptions via the existing asymptotic saddle-point
+  machinery (``method='asymptotic'``).  Direct 2-D quadrature
+  variant (``method='direct'``) currently raises ``NotImplementedError``;
+  it requires a new HF-form polynomial fit ``Phi(s1, s2)`` and is
+  tracked as future work.
+
+The top-level dispatcher (``propagate(method='auto'|'gbd'|'hfpi'|'hf')``)
+now routes prescription-bearing calls to all of these.
+
+**Variance reduction:** ``init_paths_stratified`` partitions the
+source-pixel index x forward-cone direction sphere into
+equal-solid-angle strata and samples one path per stratum, reducing
+the variance of HFPI Monte-Carlo estimates by 2-10x for
+smooth-amplitude / smooth-OPL systems.
+
+**Subaperture asymptotic:** ``propagate_subaperture_asymptotic``
+decomposes the source plane into overlapping patches, fits a local
+polynomial per patch, propagates each, and recombines the per-patch
+output fields with a partition-of-unity weighting.  Restores
+deterministic-asymptotic accuracy for wide-field / high-NA systems
+where a single global polynomial fit underflows at the box edges.
+
+**Vectorial HFPI:** new module ``lumenairy.propagators.vectorial_hfpi``
+extends scalar HFPI with Jones polarization vectors (Ex, Ey) per
+path.  ``VectorPathBundle`` carries the polarization state;
+``init_vector_paths_from_field``, ``propagate_vector_to_plane``,
+``apply_vector_aperture_diffraction``, ``accumulate_vector_to_grid``,
+and end-to-end ``propagate_vector_hfpi_freespace_aperture`` are
+the public API.  Required for high-NA imaging (NA > 0.3) where
+polarization rotates strongly across the focal plane.
+
+### Original 3.4.0 release notes (continued)
+
+### Major — Multi-backend foundation, new propagators, full reorg
 
 This release establishes first-class **NumPy / CuPy / JAX** backend
 support, adds four new propagator modules, introduces a top-level
