@@ -1,0 +1,173 @@
+lumenairy -- consolidated references
+=====================================
+
+This file collects every external reference (papers, books,
+dissertations, standards, design notes) cited by the lumenairy
+codebase.  Citations have been removed from inline source comments
+and docstrings to keep the source clean and stable across literature
+updates; this file is the single point of reference and is updated
+whenever a new algorithm draws on published work.
+
+Numbering is for in-code lookup only (e.g. ``[Ref-7]`` in a
+docstring means entry 7 below).  Numbering is stable -- new entries
+append to the end of each section.
+
+
+Section A.  Diffraction integrals and propagation
+-------------------------------------------------
+
+[A1]  J. W. Goodman, "Introduction to Fourier Optics," 4th ed.,
+      W. H. Freeman, 2017.  General reference for the
+      angular-spectrum, Fresnel, Fraunhofer, and Rayleigh-Sommerfeld
+      integrals.
+
+[A2]  S. A. Collins Jr., "Lens-system diffraction integral written
+      in terms of matrix optics," J. Opt. Soc. Am. 60, 1168-1177
+      (1970).  Collins integral for paraxial systems.
+
+[A3]  N. Lindlein, "Simulation of micro-optical systems including
+      microlens arrays," J. Opt. A: Pure Appl. Opt. 4, S1-S9 (2002).
+      Treatment of cascaded diffraction.
+
+[A4]  L. B. Aarts, "Free-space diffraction at a circular aperture,"
+      Opt. Commun. 200, 35-43 (2001).  Analytical reference for the
+      on-axis intensity of a converging spherical wave through a
+      circular aperture (HFPI validation reference).
+
+
+Section B.  Phase-space / Maslov / asymptotic propagators
+---------------------------------------------------------
+
+[B1]  V. P. Maslov and M. V. Fedoriuk, "Semi-Classical Approximation
+      in Quantum Mechanics," Reidel, 1981.  Original Maslov method
+      and the Lagrangian-submanifold parametrisation.
+
+[B2]  M. A. Alonso and G. W. Forbes, "Asymptotic estimation of the
+      optical wave propagator. I. Derivation of a new method,"
+      J. Opt. Soc. Am. A 15, 1329-1340 (1998).  Saddle-point
+      asymptotic method for diffraction integrals.
+
+[B3]  M. A. Alonso and G. W. Forbes, "Asymptotic estimation of the
+      optical wave propagator. II. Relative validity,"
+      J. Opt. Soc. Am. A 15, 1341-1354 (1998).  Convergence and
+      validity analysis.
+
+[B4]  M. A. Alonso, "Wigner functions in optics," Adv. Opt.
+      Photon. 3, 272-365 (2011).  Wigner-distribution-function
+      treatment of paraxial diffraction.
+
+
+Section C.  Ray-based diffraction methods (HFPI / GBD / BSP)
+-------------------------------------------------------------
+
+[C1]  B. M. Mout, "Ray-based methods for simulating aberrations and
+      cascaded diffraction in imaging systems," Ph.D. Dissertation,
+      Delft University of Technology, 2019.  Scalar and vectorial
+      Huygens-Fresnel Path Integration (HFPI) algorithm and
+      validation suite.
+
+[C2]  J. R. Mahan, N. Q. Vinh, V. X. Ho, N. B. Munir, "Monte Carlo
+      Ray-Trace Diffraction Based On the Huygens-Fresnel
+      Principle," arXiv:1802.08814 (2018).  MCRT-HF experimental
+      validation on single-slit and circular-aperture diffraction.
+
+[C3]  G. W. Forbes, "Beam Synthesis Propagation," Synopsys CODE V
+      product documentation.  Reference for the BSP algorithmic
+      approach.
+
+[C4]  J. Ashcraft et al., "Open-source Gaussian Beamlet
+      Decomposition for modeling astronomical telescopes,"
+      arXiv:2106.09162 (2021).  Open-source GBD implementation.
+
+[C5]  J. Ashcraft, "Poke: an open-source ray-based physical optics
+      platform," arXiv:2309.04649 (2023).  Polarization ray tracing
+      + GBD; not a runtime dependency.
+
+[C6]  C. Hagen, "A Generalized Expression for Accelerating Beamlet
+      Decomposition Simulations," arXiv:2404.12454 (2024).
+      Tilted-plane analytical evaluation accelerating modified GBD.
+
+[C7]  E. Agu and F. S. Hill Jr., "A Simple Method for Ray Tracing
+      Diffraction," LNCS 2669, 336-345 (2003).  Computer-graphics
+      diffraction-grating BRDF using HF principle.
+
+
+Section D.  Polarization and vectorial optics
+---------------------------------------------
+
+[D1]  R. C. Jones, "A New Calculus for the Treatment of Optical
+      Systems," J. Opt. Soc. Am. 31, 488-493 (1941).
+
+[D2]  W. S. T. Lam, S. McClain, R. A. Chipman, "Three-dimensional
+      polarization ray tracing calculus," Appl. Opt. 50, 2855-2865
+      (2011).
+
+[D3]  M. Born, E. Wolf, "Principles of Optics," 7th ed., Cambridge
+      University Press, 1999.
+
+
+Section E.  Surfaces, glasses, and prescription I/O
+---------------------------------------------------
+
+[E1]  G. W. Forbes, "Shape specification for axially symmetric
+      optical surfaces," Opt. Express 15, 5218-5226 (2007).
+      Q-type orthogonal polynomial surface representation.
+
+[E2]  Schott, Ohara, Hoya optical glass catalog data.  Refractive
+      index dispersion equations (Sellmeier, Schott formula).
+
+[E3]  Zemax LLC, "Zemax OpticStudio Knowledge Base":  ``.zmx`` file
+      format reference.
+
+[E4]  Synopsys Optical Solutions Group, "Code V Reference Manual":
+      ``.seq`` macro language.
+
+
+Section F.  Differentiable / autograd optical modeling
+------------------------------------------------------
+
+[F1]  L. Desdoigts et al., "Differentiable Optics with dLux II,"
+      arXiv:2406.08704 (2024).  JAX-based differentiable telescope
+      modeling; not a runtime dependency.
+
+[F2]  J. Bradbury et al., "JAX: composable transformations of
+      Python+NumPy programs," http://github.com/google/jax (2018-).
+      Optional dependency.
+
+
+Section G.  RCWA and metasurface modeling
+-----------------------------------------
+
+[G1]  M. G. Moharam, T. K. Gaylord, "Rigorous coupled-wave analysis
+      of planar-grating diffraction," J. Opt. Soc. Am. 71, 811-818
+      (1981).  Foundation of the rcwa module.
+
+
+Section H.  Diffractive optical elements (DOEs / Dammann)
+---------------------------------------------------------
+
+[H1]  H. Dammann, K. Goertler, "High-efficiency in-line
+      multiple-imaging by means of multiple-phase holograms,"
+      Opt. Commun. 3, 312-315 (1971).  Dammann grating design.
+
+[H2]  M. W. Farn, "New iterative algorithm for the design of
+      phase-only gratings," Proc. SPIE 1555, 34 (1991).  Iterative
+      Fourier transform algorithm (IFTA).
+
+
+Section I.  Standards and conventions
+-------------------------------------
+
+[I1]  Python Array API Standard, https://data-apis.org/array-api/.
+      The dispatch convention used by ``lumenairy._array``.
+
+[I2]  pyFFTW: https://github.com/pyFFTW/pyFFTW.  Default CPU FFT
+      backend.
+
+
+How to cite lumenairy
+=====================
+
+If you use lumenairy in published research, please cite the project
+URL and the algorithms relevant to your work from the sections
+above.

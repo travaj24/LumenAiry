@@ -13,7 +13,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.raytrace import (
     surfaces_from_prescription, system_abcd,
 )
@@ -35,7 +35,7 @@ def t_bk7_dispersion():
     }
     max_err = 0.0
     for wl, n_ref in reference.items():
-        n_calc = op.get_glass_index('N-BK7', wl)
+        n_calc = la.get_glass_index('N-BK7', wl)
         max_err = max(max_err, abs(n_calc - n_ref))
     return max_err < 0.002, f'max index error = {max_err:.5f}'
 
@@ -45,9 +45,9 @@ H.run('Glass: N-BK7 Sellmeier dispersion accuracy',
 
 
 def t_achromat_correction():
-    pres = op.thorlabs_lens('AC254-100-C')
+    pres = la.thorlabs_lens('AC254-100-C')
     wvs = np.linspace(1.0e-6, 1.6e-6, 7)
-    efls, _, _ = op.chromatic_focal_shift(pres, wvs)
+    efls, _, _ = la.chromatic_focal_shift(pres, wvs)
     efl_pv = efls.max() - efls.min()
     efl_mean = efls.mean()
     variation_pct = efl_pv / efl_mean * 100
@@ -65,19 +65,19 @@ H.section('Tolerancing: tilt / form error')
 
 def t_tolerance_tilt_shifts_centroid():
     N = 256; dx = 8e-6; lam = 1.31e-6
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=3e-3)
     E_in = np.ones((N, N), dtype=np.complex128)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
-    E_nom = op.apply_real_lens(E_in, pres, lam, dx)
-    E_focus_nom = op.angular_spectrum_propagate(E_nom, bfl, lam, dx)
-    cx_nom, _ = op.beam_centroid(E_focus_nom, dx)
-    pres_pert = op.apply_perturbations(pres, [
-        op.Perturbation(surface_index=0, tilt=(1e-3, 0), name='tilt')])
-    E_pert = op.apply_real_lens(E_in, pres_pert, lam, dx)
-    E_focus_pert = op.angular_spectrum_propagate(E_pert, bfl, lam, dx)
-    cx_pert, _ = op.beam_centroid(E_focus_pert, dx)
+    E_nom = la.apply_real_lens(E_in, pres, lam, dx)
+    E_focus_nom = la.angular_spectrum_propagate(E_nom, bfl, lam, dx)
+    cx_nom, _ = la.beam_centroid(E_focus_nom, dx)
+    pres_pert = la.apply_perturbations(pres, [
+        la.Perturbation(surface_index=0, tilt=(1e-3, 0), name='tilt')])
+    E_pert = la.apply_real_lens(E_in, pres_pert, lam, dx)
+    E_focus_pert = la.angular_spectrum_propagate(E_pert, bfl, lam, dx)
+    cx_pert, _ = la.beam_centroid(E_focus_pert, dx)
     shift = abs(cx_pert - cx_nom)
     return shift > 1e-6, \
         f'centroid shift = {shift*1e6:.2f} um'
@@ -89,21 +89,21 @@ H.run('Tolerance: tilt shifts focal-plane centroid',
 
 def t_tolerance_form_error_degrades():
     N = 256; dx = 8e-6; lam = 1.31e-6
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_nom = op.apply_real_lens(E_in, pres, lam, dx)
-    ideal = op.diffraction_limited_peak(E_nom, lam, bfl, dx)
-    E_focus_nom = op.angular_spectrum_propagate(E_nom, bfl, lam, dx)
+    E_nom = la.apply_real_lens(E_in, pres, lam, dx)
+    ideal = la.diffraction_limited_peak(E_nom, lam, bfl, dx)
+    E_focus_nom = la.angular_spectrum_propagate(E_nom, bfl, lam, dx)
     strehl_nom = float(np.abs(E_focus_nom).max()**2 / ideal)
-    pres_pert = op.apply_perturbations(pres, [
-        op.Perturbation(surface_index=0, form_error_rms=200e-9,
+    pres_pert = la.apply_perturbations(pres, [
+        la.Perturbation(surface_index=0, form_error_rms=200e-9,
                         random_seed=42, name='form')],
         N=N, dx=dx)
-    E_pert = op.apply_real_lens(E_in, pres_pert, lam, dx)
-    E_focus_pert = op.angular_spectrum_propagate(E_pert, bfl, lam, dx)
+    E_pert = la.apply_real_lens(E_in, pres_pert, lam, dx)
+    E_focus_pert = la.angular_spectrum_propagate(E_pert, bfl, lam, dx)
     strehl_pert = float(np.abs(E_focus_pert).max()**2 / ideal)
     return strehl_pert < strehl_nom, \
         f'nominal={strehl_nom:.4f}, perturbed={strehl_pert:.4f}'
@@ -114,12 +114,12 @@ H.run('Tolerance: form error degrades Strehl',
 
 
 def t_tolerancing_with_biconic():
-    pres = op.make_biconic(50e-3, 60e-3, -60e-3, -70e-3, 3e-3,
+    pres = la.make_biconic(50e-3, 60e-3, -60e-3, -70e-3, 3e-3,
                            'N-BK7', aperture=3e-3)
     E = np.ones((128, 128), dtype=np.complex128)
-    perts = [op.Perturbation(surface_index=0, tilt=(1e-4, 0),
+    perts = [la.Perturbation(surface_index=0, tilt=(1e-4, 0),
                              name='p1')]
-    results = op.tolerancing_sweep(
+    results = la.tolerancing_sweep(
         pres, 1.31e-6, 128, 16e-6, E, perts,
         focal_length=50e-3, aperture=3e-3, verbose=False)
     return len(results) == 2, f'{len(results)} sweep points'
@@ -134,12 +134,12 @@ H.section('Monte Carlo tolerancing')
 
 
 def t_monte_carlo_strehl_stats():
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, 1.31e-6)
     E_in = np.ones((64, 64), dtype=np.complex128)
-    stats = op.monte_carlo_tolerancing(
+    stats = la.monte_carlo_tolerancing(
         pres, 1.31e-6, 64, 32e-6, E_in,
         perturbation_spec=[{'surface_index': 0, 'tilt_std': 5e-3}],
         focal_length=bfl, aperture=3e-3,
@@ -155,10 +155,10 @@ H.run('Monte Carlo: Strehl stats are physically reasonable',
 
 
 def t_monte_carlo_tolerancing_basic():
-    pres = op.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=3e-3)
     E = np.ones((128, 128), dtype=np.complex128)
-    stats = op.monte_carlo_tolerancing(
+    stats = la.monte_carlo_tolerancing(
         pres, 1.31e-6, 128, 16e-6, E,
         perturbation_spec=[{'surface_index': 0,
                             'tilt_std': 1e-4,

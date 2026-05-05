@@ -25,7 +25,7 @@ _LIB_ROOT = os.path.normpath(os.path.join(_HERE, '..', '..'))
 if _LIB_ROOT not in sys.path:
     sys.path.insert(0, _LIB_ROOT)
 
-import lumenairy as op  # noqa: E402
+import lumenairy as la  # noqa: E402
 from lumenairy.prescriptions import thorlabs_lens  # noqa: E402
 from lumenairy.raytrace import (  # noqa: E402
     surfaces_from_prescription, system_abcd)
@@ -65,50 +65,50 @@ def main():
     t0 = time.time()
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
-        E_exit = op.apply_real_lens(
+        E_exit = la.apply_real_lens(
             E_source, pres, lam, dx,
             bandlimit=True, slant_correction=True)
     print(f"  apply_real_lens: {time.time()-t0:.1f}s")
 
-    ideal_peak = op.diffraction_limited_peak(E_exit, lam, f_nom, dx)
+    ideal_peak = la.diffraction_limited_peak(E_exit, lam, f_nom, dx)
     print(f"  Diffraction-limited |E|^2 peak = {ideal_peak:.4e}")
 
     # --- Through-focus scan -----------------------------------------
     print("\nThrough-focus scan (nominal)...")
     z_range = f_nom + np.linspace(-5e-3, 5e-3, 41)
     t0 = time.time()
-    scan = op.through_focus_scan(
+    scan = la.through_focus_scan(
         E_exit, dx, lam, z_range,
         bucket_radius=20e-6, ideal_peak=ideal_peak,
         verbose=False)
     print(f"  scan: {time.time()-t0:.1f}s")
 
-    z_best, strehl_best = op.find_best_focus(scan, 'strehl')
-    z_spot, spot_min = op.find_best_focus(scan, 'spot')
+    z_best, strehl_best = la.find_best_focus(scan, 'strehl')
+    z_spot, spot_min = la.find_best_focus(scan, 'spot')
     print(f"  Best Strehl: {strehl_best:.4f} at z = {z_best*1e3:.3f} mm")
     print(f"  Min D4sigma: {spot_min*1e6:.2f} um at z = {z_spot*1e3:.3f} mm")
 
     fig_path = os.path.join(OUT_DIR, 'through_focus_scan.png')
-    op.plot_through_focus(scan, best_z=z_best, path=fig_path)
+    la.plot_through_focus(scan, best_z=z_best, path=fig_path)
     print(f"  Saved: {fig_path}")
 
     # --- Tolerancing sweep ------------------------------------------
     print("\nTolerancing sweep (single-axis perturbations)...")
     perts = [
-        op.Perturbation(surface_index=0, decenter=(50e-6, 0.0),
+        la.Perturbation(surface_index=0, decenter=(50e-6, 0.0),
                         name='S0 decenter 50 um x'),
-        op.Perturbation(surface_index=0, tilt=(1e-3, 0.0),
+        la.Perturbation(surface_index=0, tilt=(1e-3, 0.0),
                         name='S0 tilt 1 mrad Tx'),
-        op.Perturbation(surface_index=0, form_error_rms=100e-9,
+        la.Perturbation(surface_index=0, form_error_rms=100e-9,
                         random_seed=42,
                         name='S0 form error 100 nm RMS'),
-        op.Perturbation(surface_index=1, decenter=(50e-6, 0.0),
+        la.Perturbation(surface_index=1, decenter=(50e-6, 0.0),
                         name='S1 (interior) decenter 50 um x'),
-        op.Perturbation(surface_index=2, decenter=(50e-6, 0.0),
+        la.Perturbation(surface_index=2, decenter=(50e-6, 0.0),
                         name='S2 decenter 50 um x'),
     ]
 
-    results = op.tolerancing_sweep(
+    results = la.tolerancing_sweep(
         pres, lam, N, dx, E_source, perts,
         focal_length=f_nom, aperture=aperture,
         z_scan_range=(-5e-3, 5e-3), z_scan_n=21,

@@ -119,7 +119,7 @@ ray-leg-only evaluation cost.
   form tensor in milliseconds per merit call.  No wave leg required.
 
   ```python
-  merit = op.LGAberrationMerit(
+  merit = la.LGAberrationMerit(
       targets={(2, 0): 1.0,    # primary spherical
                (1, 1): 1.0,    # coma (sin)
                (1, -1): 1.0,   # coma (cos)
@@ -936,7 +936,7 @@ next to the `Optical_Propagation_Library` directory and add it to
 ```python
 import sys
 sys.path.insert(0, 'Optical_Propagation_Library')
-import lumenairy as op
+import lumenairy as la
 ```
 
 ### Usage
@@ -944,7 +944,7 @@ import lumenairy as op
 Once installed (or on `sys.path`):
 
 ```python
-import lumenairy as op
+import lumenairy as la
 # or
 from lumenairy import angular_spectrum_propagate, JonesField
 ```
@@ -987,17 +987,17 @@ pip install pyfftw astropy h5py matplotlib
 
 ```python
 import numpy as np
-import lumenairy as op
+import lumenairy as la
 
 # Create a Gaussian beam
-E, x, y = op.create_gaussian_beam(N=512, dx=2e-6, sigma=50e-6)
+E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, sigma=50e-6)
 
 # Propagate 10 cm through free space
-E_prop = op.angular_spectrum_propagate(E, z=0.1, wavelength=1.3e-6, dx=2e-6)
+E_prop = la.angular_spectrum_propagate(E, z=0.1, wavelength=1.3e-6, dx=2e-6)
 
 # Analyze
-cx, cy = op.beam_centroid(E_prop, 2e-6)
-dx_b, dy_b = op.beam_d4sigma(E_prop, 2e-6)
+cx, cy = la.beam_centroid(E_prop, 2e-6)
+dx_b, dy_b = la.beam_d4sigma(E_prop, 2e-6)
 print(f"Centroid: ({cx*1e6:.1f}, {cy*1e6:.1f}) um")
 print(f"D4sigma:  {dx_b*1e6:.0f} x {dy_b*1e6:.0f} um")
 ```
@@ -1005,21 +1005,21 @@ print(f"D4sigma:  {dx_b*1e6:.0f} x {dy_b*1e6:.0f} um")
 ### Geometric ray tracing
 
 ```python
-import lumenairy as op
+import lumenairy as la
 
 # Load a prescription and ray-trace it
-rx = op.thorlabs_lens('AC254-100-C')
-surfaces = op.surfaces_from_prescription(rx)
+rx = la.thorlabs_lens('AC254-100-C')
+surfaces = la.surfaces_from_prescription(rx)
 
 # ABCD matrix and focal lengths
-abcd, efl, bfl, ffl = op.system_abcd(surfaces, wavelength=1.31e-6)
+abcd, efl, bfl, ffl = la.system_abcd(surfaces, wavelength=1.31e-6)
 print(f"EFL = {efl*1e3:.1f} mm, BFL = {bfl*1e3:.1f} mm")
 
 # Trace rays and generate a spot diagram
-result = op.trace_prescription(rx, wavelength=1.31e-6, num_rings=8,
+result = la.trace_prescription(rx, wavelength=1.31e-6, num_rings=8,
                                image_distance=bfl)
-op.spot_diagram(result, units='um')
-op.trace_summary(result)
+la.spot_diagram(result, units='um')
+la.trace_summary(result)
 
 # Same element list for wave-optics AND ray-optics
 elements = [
@@ -1028,25 +1028,25 @@ elements = [
     {'type': 'propagate', 'z': 100e-3},
 ]
 # Wave-optics
-E_out, _ = op.propagate_through_system(E_in, elements, 1.31e-6, dx)
+E_out, _ = la.propagate_through_system(E_in, elements, 1.31e-6, dx)
 # Geometric ray trace — same element list
-result, surfs = op.raytrace_system(elements, 1.31e-6, semi_aperture=5e-3)
+result, surfs = la.raytrace_system(elements, 1.31e-6, semi_aperture=5e-3)
 ```
 
 ### Real lens from Zemax file
 
 ```python
 # Load a lens prescription from a Zemax .zmx file
-rx = op.load_zmx_prescription('path/to/lens.zmx')
+rx = la.load_zmx_prescription('path/to/lens.zmx')
 
 # Or use a Thorlabs catalog lens
-rx = op.thorlabs_lens('AC254-200-C')
+rx = la.thorlabs_lens('AC254-200-C')
 
 # Fast analytic thin-element model (default)
-E_out = op.apply_real_lens(E_in, rx, wavelength=1.3e-6, dx=2e-6)
+E_out = la.apply_real_lens(E_in, rx, wavelength=1.3e-6, dx=2e-6)
 
 # Higher-accuracy hybrid wave/ray model -- sub-nm OPD on doublets
-E_out = op.apply_real_lens_traced(E_in, rx, wavelength=1.3e-6, dx=2e-6,
+E_out = la.apply_real_lens_traced(E_in, rx, wavelength=1.3e-6, dx=2e-6,
                                    ray_subsample=4)
 ```
 
@@ -1054,10 +1054,10 @@ E_out = op.apply_real_lens_traced(E_in, rx, wavelength=1.3e-6, dx=2e-6,
 
 ```python
 # Turn a Zemax .zmx into a self-contained Python sim script
-import lumenairy as op
+import lumenairy as la
 
-rx = op.load_zmx_prescription('AC254-100-C.zmx')
-code = op.generate_simulation_script(
+rx = la.load_zmx_prescription('AC254-100-C.zmx')
+code = la.generate_simulation_script(
     rx,
     wavelength=1.31e-6,
     N=2048,
@@ -1069,7 +1069,7 @@ with open('sim_AC254_100C.py', 'w') as f:
     f.write(code)
 
 # Or one-shot from a file path
-code = op.generate_script_from_zmx('AC254-100-C.zmx', wavelength=1.31e-6)
+code = la.generate_script_from_zmx('AC254-100-C.zmx', wavelength=1.31e-6)
 ```
 
 The output is a runnable script with the prescription data inline, ready
@@ -1080,32 +1080,32 @@ collaborator.
 
 ```python
 # Cylindrical lens (focuses in x only)
-pres = op.make_cylindrical(R_focus=50e-3, d=3e-3, glass='N-BK7', axis='x')
-E_line_focus = op.apply_real_lens(E_in, pres, wavelength=1.3e-6, dx=2e-6)
+pres = la.make_cylindrical(R_focus=50e-3, d=3e-3, glass='N-BK7', axis='x')
+E_line_focus = la.apply_real_lens(E_in, pres, wavelength=1.3e-6, dx=2e-6)
 
 # Biconic singlet (independent x and y curvatures)
-pres = op.make_biconic(R1_x=50e-3, R1_y=70e-3,
+pres = la.make_biconic(R1_x=50e-3, R1_y=70e-3,
                         R2_x=-30e-3, R2_y=-40e-3,
                         d=4e-3, glass='N-BK7')
-E_anam = op.apply_real_lens(E_in, pres, wavelength=1.3e-6, dx=2e-6)
+E_anam = la.apply_real_lens(E_in, pres, wavelength=1.3e-6, dx=2e-6)
 ```
 
 ### Zernike decomposition of an OPD map
 
 ```python
 # Extract the OPD map from a wave field
-E_exit = op.apply_real_lens(E_in, prescription, wavelength, dx)
-X, Y, opd = op.wave_opd_2d(E_exit, dx, wavelength,
+E_exit = la.apply_real_lens(E_in, prescription, wavelength, dx)
+X, Y, opd = la.wave_opd_2d(E_exit, dx, wavelength,
                             aperture=10e-3, focal_length=100e-3,
                             f_ref=100e-3)
 
 # Decompose into 21 Zernike modes (covers up through 5th-order spherical)
-coeffs, names = op.zernike_decompose(opd, dx, aperture=10e-3, n_modes=21)
+coeffs, names = la.zernike_decompose(opd, dx, aperture=10e-3, n_modes=21)
 for j, (c, n) in enumerate(zip(coeffs, names)):
     print(f'  Z{j:2d} {n:30s}: {c*1e9:+8.2f} nm RMS')
 
 # Reconstruct from a coefficient set
-opd_recon = op.zernike_reconstruct(coeffs, dx, opd.shape, aperture=10e-3)
+opd_recon = la.zernike_reconstruct(coeffs, dx, opd.shape, aperture=10e-3)
 ```
 
 ### Sampling check for OPD extraction
@@ -1113,7 +1113,7 @@ opd_recon = op.zernike_reconstruct(coeffs, dx, opd.shape, aperture=10e-3)
 ```python
 # Before committing to a long simulation, verify the grid is fine
 # enough for clean OPD unwrap at the pupil edge
-samp = op.check_opd_sampling(dx=4e-6, wavelength=1.31e-6,
+samp = la.check_opd_sampling(dx=4e-6, wavelength=1.31e-6,
                               aperture=12e-3, focal_length=45e-3)
 print(f'  Nyquist margin: {samp["margin"]:.2f}  (>= 2 = safe)')
 if not samp['ok']:
@@ -1125,10 +1125,10 @@ if not samp['ok']:
 
 ```python
 # Refine a Thorlabs achromat to hit a custom focal-length target
-template = op.thorlabs_lens('AC254-100-C')
+template = la.thorlabs_lens('AC254-100-C')
 template['aperture_diameter'] = 10e-3
 
-param = op.DesignParameterization(
+param = la.DesignParameterization(
     template=template,
     free_vars=[
         ('surfaces', 0, 'radius'),
@@ -1142,12 +1142,12 @@ param = op.DesignParameterization(
             (4e-3, 8e-3)])
 
 merit = [
-    op.FocalLengthMerit(target=110e-3, weight=1.0),
-    op.SphericalSeidelMerit(weight=1e-10),
-    op.StrehlMerit(min_strehl=0.95, weight=10.0),
+    la.FocalLengthMerit(target=110e-3, weight=1.0),
+    la.SphericalSeidelMerit(weight=1e-10),
+    la.StrehlMerit(min_strehl=0.95, weight=10.0),
 ]
 
-result = op.design_optimize(parameterization=param,
+result = la.design_optimize(parameterization=param,
                              merit_terms=merit,
                              wavelength=1.31e-6,
                              N=256, dx=20e-6,
@@ -1165,29 +1165,29 @@ Any of the core library's slow entry points accept an optional
 from the same hook:
 
 ```python
-import lumenairy as op
+import lumenairy as la
 
 def cb(stage, fraction, message=''):
     print(f'{stage}: {fraction*100:5.1f}%  {message}')
 
 # Wave-optics pipeline
-E_out = op.apply_real_lens_traced(
+E_out = la.apply_real_lens_traced(
     E_in, prescription, wavelength=1.31e-6, dx=2e-6,
     ray_subsample=4, progress=cb)
-E_out, _ = op.propagate_through_system(
+E_out, _ = la.propagate_through_system(
     E_in, elements, wavelength=1.31e-6, dx=2e-6, progress=cb)
 
 # Through-focus and tolerancing
-scan = op.through_focus_scan(E_exit, dx, wavelength, z_values, progress=cb)
-results = op.tolerancing_sweep(prescription, wavelength, N, dx, E_source,
+scan = la.through_focus_scan(E_exit, dx, wavelength, z_values, progress=cb)
+results = la.tolerancing_sweep(prescription, wavelength, N, dx, E_source,
                                 perturbations, focal_length=bfl,
                                 aperture=ap, progress=cb)
-stats = op.monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
+stats = la.monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
                                     spec, focal_length=bfl, aperture=ap,
                                     n_trials=100, progress=cb)
 
 # Design optimization (progress is per merit-function evaluation)
-result = op.design_optimize(parameterization=param, merit_terms=merits,
+result = la.design_optimize(parameterization=param, merit_terms=merits,
                              wavelength=1.31e-6, max_iter=200, progress=cb)
 ```
 
@@ -1207,23 +1207,23 @@ protocol.
 
 ```python
 # Run a 21-plane through-focus scan
-E_exit = op.apply_real_lens(E_in, prescription, wavelength, dx)
-ideal_peak = op.diffraction_limited_peak(E_exit, wavelength, bfl, dx)
+E_exit = la.apply_real_lens(E_in, prescription, wavelength, dx)
+ideal_peak = la.diffraction_limited_peak(E_exit, wavelength, bfl, dx)
 z_values = bfl + np.linspace(-1e-3, +1e-3, 21)
-scan = op.through_focus_scan(E_exit, dx, wavelength, z_values,
+scan = la.through_focus_scan(E_exit, dx, wavelength, z_values,
                               ideal_peak=ideal_peak,
                               bucket_radius=20e-6)
-z_best, strehl_best = op.find_best_focus(scan, 'strehl')
-op.plot_through_focus(scan, best_z=z_best, path='through_focus.png')
+z_best, strehl_best = la.find_best_focus(scan, 'strehl')
+la.plot_through_focus(scan, best_z=z_best, path='through_focus.png')
 
 # Tolerancing: how does Strehl change with surface tilt / decenter?
 perts = [
-    op.Perturbation(surface_index=0, tilt=(1e-3, 0),       name='S0 tilt 1 mrad'),
-    op.Perturbation(surface_index=1, decenter=(50e-6, 0),  name='S1 decenter 50 um'),
-    op.Perturbation(surface_index=2, form_error_rms=100e-9,
+    la.Perturbation(surface_index=0, tilt=(1e-3, 0),       name='S0 tilt 1 mrad'),
+    la.Perturbation(surface_index=1, decenter=(50e-6, 0),  name='S1 decenter 50 um'),
+    la.Perturbation(surface_index=2, form_error_rms=100e-9,
                     random_seed=42, name='S2 form error 100 nm RMS'),
 ]
-results = op.tolerancing_sweep(prescription, wavelength, N, dx,
+results = la.tolerancing_sweep(prescription, wavelength, N, dx,
                                 E_in, perts,
                                 focal_length=bfl, aperture=10e-3,
                                 bucket_radius=20e-6)
@@ -1233,11 +1233,11 @@ results = op.tolerancing_sweep(prescription, wavelength, N, dx,
 
 ```python
 # Create a right-hand circularly polarized Gaussian beam
-scalar, _, _ = op.create_gaussian_beam(256, 2e-6, 30e-6)
-field = op.create_circular_polarized(scalar, dx=2e-6, handedness='right')
+scalar, _, _ = la.create_gaussian_beam(256, 2e-6, 30e-6)
+field = la.create_circular_polarized(scalar, dx=2e-6, handedness='right')
 
 # Propagate through a half-wave plate at 22.5°
-op.apply_half_wave_plate(field, angle=np.pi/8)
+la.apply_half_wave_plate(field, angle=np.pi/8)
 
 # Apply a lens (polarization-preserving)
 field.apply_thin_lens(f=100e-3, wavelength=1.3e-6)
@@ -1246,7 +1246,7 @@ field.apply_thin_lens(f=100e-3, wavelength=1.3e-6)
 field.propagate(z=100e-3, wavelength=1.3e-6)
 
 # Measure Stokes parameters
-S = op.stokes_parameters(field)
+S = la.stokes_parameters(field)
 print(f"S3/S0 = {S['S3'].mean() / S['S0'].mean():+.3f}")
 ```
 
@@ -1259,7 +1259,7 @@ X, Y = np.meshgrid(x, x)
 source = np.exp(-(X**2 + Y**2) / 0.3**2)
 target = (np.sqrt(X**2 + Y**2) < 0.4).astype(float)
 
-phase, err = op.gerchberg_saxton(source, target, n_iter=500)
+phase, err = la.gerchberg_saxton(source, target, n_iter=500)
 # 'phase' is the design phase-only DOE
 ```
 
@@ -1272,20 +1272,20 @@ planes = [
     {'field': E1, 'dx': 2e-6, 'z': 10e-3,  'label': 'after lens'},
     {'field': E2, 'dx': 2e-6, 'z': 100e-3, 'label': 'focal plane'},
 ]
-op.save_planes_h5('simulation.h5', planes, wavelength=1.3e-6)
+la.save_planes_h5('simulation.h5', planes, wavelength=1.3e-6)
 
 # Load back later
-planes, meta = op.load_planes_h5('simulation.h5')
+planes, meta = la.load_planes_h5('simulation.h5')
 print(f"Wavelength: {meta['wavelength']*1e9:.0f} nm")
 for p in planes:
     print(f"  {p['label']}: z={p['z']*1e3:.1f} mm, shape={p['field'].shape}")
 
 # Append planes incrementally during a long simulation
-op.append_plane_h5('simulation.h5', E_new, dx=2e-6, z=200e-3,
+la.append_plane_h5('simulation.h5', E_new, dx=2e-6, z=200e-3,
                    label='detector plane')
 
 # Save a polarized Jones field
-op.save_jones_field_h5('polarized.h5', jones_field, wavelength=1.3e-6)
+la.save_jones_field_h5('polarized.h5', jones_field, wavelength=1.3e-6)
 ```
 
 ### Plotting
@@ -1294,27 +1294,27 @@ op.save_jones_field_h5('polarized.h5', jones_field, wavelength=1.3e-6)
 import matplotlib.pyplot as plt
 
 # Single field intensity and phase
-fig, axes = op.plot_field(E, dx=2e-6, title='Focal plane')
+fig, axes = la.plot_field(E, dx=2e-6, title='Focal plane')
 
 # Log-scale intensity
-fig, ax = op.plot_intensity(E, dx=2e-6, log=True)
+fig, ax = la.plot_intensity(E, dx=2e-6, log=True)
 
 # Cross-section with phase overlay
-fig, ax = op.plot_cross_section(E, dx=2e-6, axis='x', show_phase=True)
+fig, ax = la.plot_cross_section(E, dx=2e-6, axis='x', show_phase=True)
 
 # Multi-plane grid from a loaded HDF5 file
-planes, _ = op.load_planes_h5('simulation.h5')
-fig, axes = op.plot_planes_grid(planes, n_cols=3, suptitle='Propagation')
+planes, _ = la.load_planes_h5('simulation.h5')
+fig, axes = la.plot_planes_grid(planes, n_cols=3, suptitle='Propagation')
 
 # PSF and MTF
-fig1, ax1 = op.plot_psf(psf, dx_psf=dx_psf, log=True)
-fig2, ax2 = op.plot_mtf(freq, mtf_profile, diffraction_limit=100)
+fig1, ax1 = la.plot_psf(psf, dx_psf=dx_psf, log=True)
+fig2, ax2 = la.plot_mtf(freq, mtf_profile, diffraction_limit=100)
 
 # Stokes parameters for a polarized field
-fig, axes = op.plot_stokes(jones_field)
+fig, axes = la.plot_stokes(jones_field)
 
 # Polarization ellipses overlaid on intensity
-fig, ax = op.plot_polarization_ellipses(jones_field, n_ellipses=12)
+fig, ax = la.plot_polarization_ellipses(jones_field, n_ellipses=12)
 
 plt.show()
 ```
@@ -1323,21 +1323,21 @@ plt.show()
 
 ```python
 # Build a circular pupil with some spherical aberration
-pupil = op.apply_aperture(
+pupil = la.apply_aperture(
     np.ones((256, 256), dtype=complex),
     dx=25e-6, shape='circular',
     params={'diameter': 5e-3}
 )
-pupil = op.apply_zernike_aberration(
+pupil = la.apply_zernike_aberration(
     pupil, dx=25e-6,
     coefficients={(4, 0): 0.25},       # 1/4 wave spherical
     aperture_radius=2.5e-3
 )
 
 # Compute PSF and MTF
-psf, dx_psf = op.compute_psf(pupil, wavelength=1.3e-6, f=50e-3, dx_pupil=25e-6)
-mtf = op.compute_mtf(psf)
-freq, mtf_profile = op.mtf_radial(mtf, dx_psf, 1.3e-6, 50e-3)
+psf, dx_psf = la.compute_psf(pupil, wavelength=1.3e-6, f=50e-3, dx_pupil=25e-6)
+mtf = la.compute_mtf(psf)
+freq, mtf_profile = la.mtf_radial(mtf, dx_psf, 1.3e-6, 50e-3)
 ```
 
 ## Project Layout

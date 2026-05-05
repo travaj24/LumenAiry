@@ -13,7 +13,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 
 
 H = Harness('detector')
@@ -22,7 +22,7 @@ H = Harness('detector')
 def t_detector_total_signal():
     N = 128; dx = 8e-6
     E = np.ones((N, N), dtype=np.complex128) * 1e6
-    img, _, _ = op.apply_detector(E, dx, pixel_pitch=32e-6, n_pixels=30,
+    img, _, _ = la.apply_detector(E, dx, pixel_pitch=32e-6, n_pixels=30,
                                   exposure_time=1.0,
                                   quantum_efficiency=1.0,
                                   read_noise_e=0, dark_current_e_per_s=0,
@@ -42,7 +42,7 @@ def t_detector_shot_noise():
     E = np.ones((N, N), dtype=np.complex128) * 1e5
     imgs = []
     for seed in range(20):
-        img, _, _ = op.apply_detector(E, dx, pixel_pitch=32e-6,
+        img, _, _ = la.apply_detector(E, dx, pixel_pitch=32e-6,
                                       n_pixels=30, exposure_time=1.0,
                                       quantum_efficiency=1.0,
                                       read_noise_e=0, seed=seed)
@@ -62,10 +62,10 @@ H.run('Detector: shot noise ~ sqrt(N)', t_detector_shot_noise)
 def t_detector_read_noise():
     N = 128; dx = 8e-6
     E = np.ones((N, N), dtype=np.complex128) * 1e5
-    imgs_no = [op.apply_detector(E, dx, 32e-6, 30,
+    imgs_no = [la.apply_detector(E, dx, 32e-6, 30,
                                  read_noise_e=0, seed=i)[0]
                for i in range(10)]
-    imgs_rn = [op.apply_detector(E, dx, 32e-6, 30,
+    imgs_rn = [la.apply_detector(E, dx, 32e-6, 30,
                                  read_noise_e=50, seed=i)[0]
                for i in range(10)]
     std_no = np.array(imgs_no).std(axis=0).mean()
@@ -89,7 +89,7 @@ def t_shack_hartmann_defocus():
     Z4 = np.sqrt(3) * (2 * rho**2 - 1)
     phase = k0 * defocus_coeff * Z4
     E = np.exp(1j * phase)
-    _, _, wf, _, _ = op.shack_hartmann(
+    _, _, wf, _, _ = la.shack_hartmann(
         E, dx, lam, lenslet_pitch=50e-6, lenslet_focal=200e-6,
         n_lenslets=8)
     center = wf[4, 4]
@@ -110,7 +110,7 @@ def t_gerchberg_saxton():
     source = np.exp(-(X**2 + Y**2) / 0.3**2)
     target = (np.where(np.abs(X) < 0.3, 1.0, 0.0)
               * np.where(np.abs(Y) < 0.3, 1.0, 0.0))
-    phase, err = op.gerchberg_saxton(source, target, n_iter=100)
+    phase, err = la.gerchberg_saxton(source, target, n_iter=100)
     if isinstance(err, (list, np.ndarray)) and len(err) > 1:
         return err[-1] < err[0], \
             f'GS error: initial={err[0]:.4f}, final={err[-1]:.4f}'

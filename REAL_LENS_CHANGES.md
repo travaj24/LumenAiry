@@ -302,7 +302,7 @@ FFT round-off floor, and power conservation matches to 5.4e-7.
 
 Third lens propagator, complementing the analytic (phase-screen) and
 traced (Newton-on-spline) paths.  The method follows the
-Kravtsov-Orlov / Forbes-Alonso phase-space formulation: instead of
+Phase-space formulation: instead of
 representing the lens's effect in object-space coordinates (`s1`) or
 pupil coordinates (`s1 -> s2` map), it fits a smooth polynomial to
 the symplectic canonical map `(s2, v2) -> s1` and uses that chart to
@@ -345,7 +345,7 @@ geometric-image caustics.
 
 ### Speedups
 
-All four of the OPDGPU `maslov_zemax_merit.tex` paper's acceleration
+All four of the acceleration
 tricks and one CPU-specific one are implemented:
 
 1. **Precompute s2-basis** `G[s2, j] = T_{k1_j}(u_s2x) T_{k2_j}(u_s2y)`
@@ -647,27 +647,27 @@ for each case so results can be cross-verified in OpticStudio.
 
 ```python
 # Most lenses, fastest mode
-E = op.apply_real_lens(E_in, prescription, wavelength, dx)
+E = la.apply_real_lens(E_in, prescription, wavelength, dx)
 
 # Cemented doublets / multi-surface / critical accuracy
-E = op.apply_real_lens_traced(E_in, prescription, wavelength, dx,
+E = la.apply_real_lens_traced(E_in, prescription, wavelength, dx,
                                ray_subsample=4)
 
 # Intensity-accurate: Fresnel + absorption + slant
-E = op.apply_real_lens(E_in, prescription, wavelength, dx,
+E = la.apply_real_lens(E_in, prescription, wavelength, dx,
                         fresnel=True, absorption=True,
                         slant_correction=True)
 
 # Anamorphic cylindrical element
-pres = op.make_cylindrical(R_focus=50e-3, d=3e-3, glass='N-BK7', axis='x')
-E = op.apply_real_lens(E_in, pres, wavelength, dx)
+pres = la.make_cylindrical(R_focus=50e-3, d=3e-3, glass='N-BK7', axis='x')
+E = la.apply_real_lens(E_in, pres, wavelength, dx)
 
 # Pre-flight sampling check
 from lumenairy.raytrace import (
     surfaces_from_prescription, system_abcd)
 _, efl, bfl, _ = system_abcd(
     surfaces_from_prescription(prescription), wavelength)
-samp = op.check_opd_sampling(dx, wavelength, aperture, bfl)
+samp = la.check_opd_sampling(dx, wavelength, aperture, bfl)
 if not samp['ok']:
     raise ValueError(f'dx too coarse: {samp["recommendations"]}')
 ```

@@ -20,7 +20,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.raytrace import (
     surfaces_from_prescription, system_abcd, trace, _make_bundle,
     find_paraxial_focus, seidel_coefficients, spot_rms,
@@ -48,7 +48,7 @@ def t_raytrace_snell():
                         wavelength=1.31e-6)
     result = trace(rays, surfs, 1.31e-6)
     M_out = result.image_rays.M[0]
-    n2 = op.get_glass_index('N-BK7', 1.31e-6)
+    n2 = la.get_glass_index('N-BK7', 1.31e-6)
     expected_M = np.sin(np.arcsin(1.0 * np.sin(angle) / n2))
     err = abs(abs(M_out) - expected_M)
     return err < 1e-6, \
@@ -59,7 +59,7 @@ H.run('Raytrace: Snell law at flat interface', t_raytrace_snell)
 
 
 def t_raytrace_opl_bookkeeping():
-    n_glass = op.get_glass_index('N-BK7', 1.31e-6)
+    n_glass = la.get_glass_index('N-BK7', 1.31e-6)
     d = 5e-3
     surfs = [Surface(radius=np.inf, glass_before='air',
                      glass_after='N-BK7',
@@ -83,7 +83,7 @@ H.run('Raytrace: on-axis OPL = n*d', t_raytrace_opl_bookkeeping)
 
 def t_raytrace_biconic():
     N = 256; lam = 1.31e-6
-    pres = op.make_biconic(50e-3, 100e-3, -60e-3, -100e-3, 4e-3,
+    pres = la.make_biconic(50e-3, 100e-3, -60e-3, -100e-3, 4e-3,
                            'N-BK7', aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, efl_x, _, _ = system_abcd(surfs, lam)
@@ -105,7 +105,7 @@ H.section('Seidel / paraxial / ABCD')
 
 
 def t_seidel_vs_raytrace_sa():
-    pres = op.make_singlet(51.5e-3, np.inf, 4.1e-3, 'N-BK7',
+    pres = la.make_singlet(51.5e-3, np.inf, 4.1e-3, 'N-BK7',
                            aperture=25.4e-3)
     surfs = surfaces_from_prescription(pres)
     lam = 1.31e-6
@@ -139,7 +139,7 @@ H.run('Seidel vs ray-trace: spherical aberration sign',
 
 def t_abcd_vs_raytrace_efl():
     import lumenairy.raytrace as rt
-    tmpl = op.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
+    tmpl = la.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
                            aperture=5e-3)
     wv = 1.310e-6
     surfs = rt.surfaces_from_prescription(tmpl)
@@ -169,11 +169,11 @@ H.run('ray-trace EFL == ABCD EFL within 0.1%',
 
 
 def t_check_opd_sampling_with_abcd_bfl():
-    pres = op.thorlabs_lens('AC254-100-C')
+    pres = la.thorlabs_lens('AC254-100-C')
     pres['aperture_diameter'] = 10e-3
     surfs = surfaces_from_prescription(pres)
     _, efl, bfl, _ = system_abcd(surfs, 1.31e-6)
-    samp = op.check_opd_sampling(4e-6, 1.31e-6, 10e-3, bfl, verbose=False)
+    samp = la.check_opd_sampling(4e-6, 1.31e-6, 10e-3, bfl, verbose=False)
     return isinstance(samp['margin'], float), \
         f'margin={samp["margin"]:.2f}'
 
@@ -183,12 +183,12 @@ H.run('check_opd_sampling + ABCD BFL',
 
 
 def t_chromatic_shift_sign():
-    pres_sing = op.make_singlet(51.5e-3, np.inf, 4.1e-3, 'N-BK7',
+    pres_sing = la.make_singlet(51.5e-3, np.inf, 4.1e-3, 'N-BK7',
                                 aperture=10e-3)
-    pres_doub = op.thorlabs_lens('AC254-100-C')
+    pres_doub = la.thorlabs_lens('AC254-100-C')
     wvs = [1.064e-6, 1.31e-6, 1.55e-6]
-    _, _, shift_sing = op.chromatic_focal_shift(pres_sing, wvs)
-    _, _, shift_doub = op.chromatic_focal_shift(pres_doub, wvs)
+    _, _, shift_sing = la.chromatic_focal_shift(pres_sing, wvs)
+    _, _, shift_doub = la.chromatic_focal_shift(pres_doub, wvs)
     return shift_doub < shift_sing, \
         (f'singlet shift={shift_sing*1e3:.3f}mm, '
          f'doublet shift={shift_doub*1e3:.3f}mm')
@@ -203,7 +203,7 @@ H.section('Spot / ray fan / OPD fan')
 
 
 def t_spot_rms_vs_geo():
-    pres = op.thorlabs_lens('LA1050-C')
+    pres = la.thorlabs_lens('LA1050-C')
     surfs = surfaces_from_prescription(pres)
     bfl = find_paraxial_focus(surfs, 1.31e-6)
     surfs[-1].thickness = bfl
@@ -222,7 +222,7 @@ H.run('Spot: GEO radius >= RMS radius', t_spot_rms_vs_geo)
 
 
 def t_ray_fan_symmetric():
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=10e-3)
     surfs = surfaces_from_prescription(pres)
     bfl = find_paraxial_focus(surfs, 1.31e-6)
     surfs[-1].thickness = bfl
@@ -244,7 +244,7 @@ H.run('Ray fan: on-axis tangential is antisymmetric',
 
 
 def t_opd_fan_small_for_singlet():
-    pres = op.make_singlet(200e-3, np.inf, 3e-3, 'N-BK7',
+    pres = la.make_singlet(200e-3, np.inf, 3e-3, 'N-BK7',
                            aperture=5e-3)
     surfs = surfaces_from_prescription(pres)
     py, opd_y, px, opd_x = opd_fan_data(surfs, 1.31e-6,
@@ -269,7 +269,7 @@ H.run('make_rings: correct ray count', t_make_rings_count)
 
 
 def t_trace_prescription_convenience():
-    result = trace_prescription(op.thorlabs_lens('AC254-100-C'),
+    result = trace_prescription(la.thorlabs_lens('AC254-100-C'),
                                 wavelength=1.31e-6, num_rings=4)
     alive = result.image_rays.alive.sum()
     return alive > 10, f'{alive} rays alive at image'
@@ -282,7 +282,7 @@ H.run('trace_prescription: returns valid result',
 def t_prescription_summary_text():
     import io
     import contextlib
-    pres = op.thorlabs_lens('AC254-100-C')
+    pres = la.thorlabs_lens('AC254-100-C')
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
         prescription_summary(pres, 1.31e-6)
@@ -298,13 +298,13 @@ H.section('Through-focus / single-plane / image-side')
 
 
 def t_through_focus_peak_at_focus():
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, 1.31e-6)
     E_in = np.ones((256, 256), dtype=np.complex128)
-    E_exit = op.apply_real_lens(E_in, pres, 1.31e-6, 16e-6)
+    E_exit = la.apply_real_lens(E_in, pres, 1.31e-6, 16e-6)
     z = np.linspace(bfl - 5e-3, bfl + 5e-3, 21)
-    scan = op.through_focus_scan(E_exit, 16e-6, 1.31e-6, z)
+    scan = la.through_focus_scan(E_exit, 16e-6, 1.31e-6, z)
     z_peak = z[np.argmax(scan.peak_I)]
     err = abs(z_peak - bfl)
     return err < 2e-3, \
@@ -317,15 +317,15 @@ H.run('Through-focus: peak near BFL', t_through_focus_peak_at_focus)
 
 def t_through_focus_on_traced_output():
     N = 256; dx = 16e-6; lam = 1.31e-6
-    pres = op.thorlabs_lens('AC254-100-C')
+    pres = la.thorlabs_lens('AC254-100-C')
     pres['aperture_diameter'] = 3e-3
     E = np.ones((N, N), dtype=np.complex128)
-    Et = op.apply_real_lens_traced(E, pres, lam, dx,
+    Et = la.apply_real_lens_traced(E, pres, lam, dx,
                                    ray_subsample=4, n_workers=1)
-    ideal = op.diffraction_limited_peak(Et, lam, 85e-3, dx)
+    ideal = la.diffraction_limited_peak(Et, lam, 85e-3, dx)
     z = np.linspace(80e-3, 90e-3, 11)
-    scan = op.through_focus_scan(Et, dx, lam, z, ideal_peak=ideal)
-    zb, _ = op.find_best_focus(scan, 'strehl')
+    scan = la.through_focus_scan(Et, dx, lam, z, ideal_peak=ideal)
+    zb, _ = la.find_best_focus(scan, 'strehl')
     return np.isfinite(zb), f'best focus z={zb*1e3:.2f}mm'
 
 
@@ -335,11 +335,11 @@ H.run('through-focus on traced output',
 
 def t_single_plane_metrics_keys():
     N = 256; dx = 16e-6; lam = 1.31e-6
-    pres = op.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    E_exit = op.apply_real_lens(E, pres, lam, dx)
-    m = op.single_plane_metrics(E_exit, dx, lam, bucket_radius=100e-6)
+    E_exit = la.apply_real_lens(E, pres, lam, dx)
+    m = la.single_plane_metrics(E_exit, dx, lam, bucket_radius=100e-6)
     needed = {'peak_I', 'centroid_x', 'centroid_y',
               'd4sigma_x', 'd4sigma_y', 'rms_radius',
               'power_in_bucket'}
@@ -352,12 +352,12 @@ H.run('single_plane_metrics keys', t_single_plane_metrics_keys)
 
 def t_compute_psf_plus_ideal_peak():
     N = 256; dx = 16e-6; lam = 1.31e-6
-    pres = op.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    E_exit = op.apply_real_lens(E, pres, lam, dx)
-    psf, dx_psf = op.compute_psf(E_exit, lam, 100e-3, dx)
-    ideal_peak = op.diffraction_limited_peak(E_exit, lam, 100e-3, dx)
+    E_exit = la.apply_real_lens(E, pres, lam, dx)
+    psf, dx_psf = la.compute_psf(E_exit, lam, 100e-3, dx)
+    ideal_peak = la.diffraction_limited_peak(E_exit, lam, 100e-3, dx)
     return psf.max() > 0 and ideal_peak > 0, \
         f'PSF peak={psf.max():.3e}, ideal={ideal_peak:.3e}'
 
@@ -368,17 +368,17 @@ H.run('compute_psf + through-focus ideal peak',
 
 def t_offaxis_shifts_psf():
     N = 512; dx = 4e-6; lam = 1.31e-6; angle = 0.01
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
-    E_on, _, _ = op.create_tilted_plane_wave(N, dx, lam, angle_y=0)
-    E_on = op.apply_real_lens(E_on, pres, lam, dx)
-    E_foc_on = op.angular_spectrum_propagate(E_on, bfl, lam, dx)
-    _, cy_on = op.beam_centroid(E_foc_on, dx)
-    E_off, _, _ = op.create_tilted_plane_wave(N, dx, lam, angle_y=angle)
-    E_off = op.apply_real_lens(E_off, pres, lam, dx)
-    E_foc_off = op.angular_spectrum_propagate(E_off, bfl, lam, dx)
-    _, cy_off = op.beam_centroid(E_foc_off, dx)
+    E_on, _, _ = la.create_tilted_plane_wave(N, dx, lam, angle_y=0)
+    E_on = la.apply_real_lens(E_on, pres, lam, dx)
+    E_foc_on = la.angular_spectrum_propagate(E_on, bfl, lam, dx)
+    _, cy_on = la.beam_centroid(E_foc_on, dx)
+    E_off, _, _ = la.create_tilted_plane_wave(N, dx, lam, angle_y=angle)
+    E_off = la.apply_real_lens(E_off, pres, lam, dx)
+    E_foc_off = la.angular_spectrum_propagate(E_off, bfl, lam, dx)
+    _, cy_off = la.beam_centroid(E_foc_off, dx)
     shift = cy_off - cy_on
     expected_shift = bfl * np.tan(angle)
     err_pct = abs(shift - expected_shift) / abs(expected_shift) * 100
@@ -400,8 +400,8 @@ def t_grating_orders():
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
     E_in = np.exp(1j * np.pi * np.sin(2 * np.pi * X / d))
-    E_in = op.apply_thin_lens(E_in, f, lam, dx)
-    E_focus = op.angular_spectrum_propagate(E_in, f, lam, dx)
+    E_in = la.apply_thin_lens(E_in, f, lam, dx)
+    E_focus = la.angular_spectrum_propagate(E_in, f, lam, dx)
     I = np.abs(E_focus[N//2, :])**2
     x_1 = lam * f / d
     pix_1 = int(round(x_1 / dx))
@@ -427,10 +427,10 @@ H.section('Ray physics: conjugates / through-focus / orientation')
 def t_seidel_spherical_aberration_orientation_dependence():
     """A plano-convex lens with curved side facing the incoming light
     has different spherical aberration than the reverse orientation."""
-    p_a = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
-    p_b = op.make_singlet(np.inf, -50e-3, 4e-3, 'N-BK7', aperture=20e-3)
-    out_a = op.seidel_prescription(p_a, 0.587e-6)
-    out_b = op.seidel_prescription(p_b, 0.587e-6)
+    p_a = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
+    p_b = la.make_singlet(np.inf, -50e-3, 4e-3, 'N-BK7', aperture=20e-3)
+    out_a = la.seidel_prescription(p_a, 0.587e-6)
+    out_b = la.seidel_prescription(p_b, 0.587e-6)
     # seidel_prescription returns a tuple whose first element is a dict
     # of per-surface coefficient arrays; sum S1 (spherical) over surfaces.
     sa_a = float(np.sum(out_a[0]['S1']))
@@ -448,7 +448,7 @@ H.run('Seidel SA: depends on plano-convex orientation',
 def t_through_focus_rms_minimum_near_paraxial_focus():
     """Through-focus RMS spot has its minimum near the paraxial focus."""
     from lumenairy.raytrace import refocus
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=10e-3)
     surfs = surfaces_from_prescription(pres)
     bfl = find_paraxial_focus(surfs, 0.587e-6)
     rays = make_rings(semi_aperture=4e-3, num_rings=4, rays_per_ring=8,
@@ -487,12 +487,12 @@ H.run('make_rings: ray count = num_rings*rays_per_ring + chief',
 def t_chromatic_focal_shift_consistent_with_index_change():
     """Comparing two wavelengths, the singlet focus shift should have
     the same sign as -dn (higher index -> shorter EFL)."""
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
     surfs = surfaces_from_prescription(pres)
     bfl_short = find_paraxial_focus(surfs, 0.486e-6)  # F-line (blue)
     bfl_long  = find_paraxial_focus(surfs, 0.656e-6)  # C-line (red)
-    n_short = op.get_glass_index('N-BK7', 0.486e-6)
-    n_long  = op.get_glass_index('N-BK7', 0.656e-6)
+    n_short = la.get_glass_index('N-BK7', 0.486e-6)
+    n_long  = la.get_glass_index('N-BK7', 0.656e-6)
     # n_short > n_long for normal dispersion -> bfl_short < bfl_long
     sign_correct = (n_short > n_long) == (bfl_short < bfl_long)
     return sign_correct, \
@@ -509,7 +509,7 @@ def t_lens_abcd_consistency_with_system_abcd():
     """For a single lens, lens_abcd should give the same EFL as
     system_abcd applied to its surfaces."""
     from lumenairy.raytrace import lens_abcd
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
     surfs = surfaces_from_prescription(pres)
     _, efl_sys, _, _ = system_abcd(surfs, 0.587e-6)
     info = lens_abcd(surfs, 0.587e-6)
@@ -526,7 +526,7 @@ H.run('lens_abcd EFL matches system_abcd EFL',
 def t_spot_rms_decreases_with_smaller_aperture():
     """Closing the aperture reduces spherical-aberration-driven spot
     RMS for a singlet (since SA scales with marginal ray height^4)."""
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
     surfs = surfaces_from_prescription(pres)
     rms = []
     for ap in (8e-3, 4e-3, 2e-3):
@@ -548,7 +548,7 @@ H.run('Spot RMS shrinks monotonically with smaller aperture',
 def t_trace_prescription_returns_image_rays():
     """trace_prescription must produce a TraceResult whose image_rays
     has the requested number of rays alive."""
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=20e-3)
     res = trace_prescription(pres, semi_aperture=5e-3, num_rings=4,
                              rays_per_ring=8, wavelength=0.587e-6)
     n_alive = int(np.sum(res.image_rays.alive))
@@ -726,7 +726,7 @@ H.section('trace() embedded grating diffraction (surface_diffraction kwarg)')
 def t_trace_diff_kick_matches_apply_doe():
     """Per-surface diffraction in trace() reproduces the angular kick
     from apply_doe_phase_traced exactly."""
-    pres = op.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=10e-3)
     surfs = surfaces_from_prescription(pres)
     lam = 1.31e-6
     period = 100e-6
@@ -752,7 +752,7 @@ def t_trace_diff_opl_includes_grating_phase():
     accumulator (this is the 'constant phase shift' that
     apply_doe_phase_traced docstring says callers must add manually --
     trace's surface_diffraction does it automatically)."""
-    pres = op.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=10e-3)
     surfs = surfaces_from_prescription(pres)
     lam = 1.31e-6
     period = 100e-6
@@ -781,7 +781,7 @@ H.run('trace + surface_diffraction: OPL includes m*lam*x/period',
 def t_trace_diff_evanescent_flagging():
     """Diffraction order whose grating equation produces L^2+M^2>1 is
     evanescent and the ray gets flagged alive=False."""
-    pres = op.make_singlet(50e-3, np.inf, 1e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, np.inf, 1e-3, 'N-BK7', aperture=10e-3)
     surfs = surfaces_from_prescription(pres)
     lam = 1.31e-6
     period = 1.0e-6   # period < lambda forces large-angle

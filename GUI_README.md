@@ -428,11 +428,11 @@ Persistent storage for materials, lenses, and phase masks across sessions:
 
 ```python
 # Works from Python scripts too (no GUI needed)
-import lumenairy as op
+import lumenairy as la
 
-op.save_material('MyPolymer', n=1.52)
-op.save_lens('My_PCX', op.make_singlet(...))
-op.save_phase_mask('vortex', expression='arctan2(Y, X) * 3')
+la.save_material('MyPolymer', n=1.52)
+la.save_lens('My_PCX', la.make_singlet(...))
+la.save_phase_mask('vortex', expression='arctan2(Y, X) * 3')
 ```
 
 GUI provides a Library dock with browse/add/delete for each category.
@@ -486,11 +486,11 @@ Spot diagram  <-- trace_ready signal
 The library can be used independently of the GUI:
 
 ```python
-import lumenairy as op
+import lumenairy as la
 
-E = op.angular_spectrum_propagate(E_in, z=0.1, wavelength=1.31e-6, dx=2e-6)
-result = op.trace_prescription(rx, wavelength=1.31e-6)
-op.spot_diagram(result)
+E = la.angular_spectrum_propagate(E_in, z=0.1, wavelength=1.31e-6, dx=2e-6)
+result = la.trace_prescription(rx, wavelength=1.31e-6)
+la.spot_diagram(result)
 ```
 
 ## Project Layout

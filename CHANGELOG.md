@@ -16,7 +16,7 @@ inside the grid with margin.  Optionally rounds `N` to the next
 power of two for FFT-friendly sizing.
 
 ```python
-rec = op.recommend_grid_for_prescription(
+rec = la.recommend_grid_for_prescription(
     prescription, wavelength,
     source_waist=120e-6,
     doe_orders_max=8,
@@ -42,7 +42,7 @@ Does *not* scale conics, glass identities, tilts, or wavelength
 m-scale designs without re-deriving every surface field.
 
 ```python
-big = op.scale_prescription(small, factor=10.0)  # 10x linear
+big = la.scale_prescription(small, factor=10.0)  # 10x linear
 ```
 
 ### Feature — Endpoint-anchored Chebyshev nodes for `fit_canonical_polynomials`
@@ -76,7 +76,7 @@ because `apply_doe_phase_traced` operates on standalone `RayBundle`
 objects, not surfaces in a sequential prescription.
 
 ```python
-fit = op.fit_canonical_polynomials(
+fit = la.fit_canonical_polynomials(
     prescription, wavelength,
     source_box_half=...,
     surface_diffraction={
@@ -183,8 +183,9 @@ polynomial fit.
   prescription, fit Phi(s2, v2) and s1(s2, v2) as 4-variable
   Chebyshev tensor-product polynomials, and return a fit container
   with analytic gradient evaluation.  Sub-microwave residual on
-  refractive systems; includes the linear-phase-extraction trick of
-  paper 1 Section 5 for diffractive surfaces at non-zero orders.
+  refractive systems; includes a linear-phase-extraction step that
+  restores Nyquist sampling for diffractive surfaces at non-zero
+  orders.
 
 - **`aberration_tensor(fit, s2_image, ...)` -> `AberrationTensorResult`**.
   Compute the Laguerre-Gaussian aberration tensor T_{k;n,m} at a
@@ -206,7 +207,7 @@ polynomial fit.
   divergence near caustics or out-of-box pixels.
 
 - **`solve_envelope_stationary(fit, s2, source_point, w_s, w_p, ...)`**.
-  Newton-solve the envelope-stationary equation (paper 2 eq. 9) for
+  Newton-solve the envelope-stationary equation for
   the v_2* that maximises the joint Gaussian envelope.  Used inside
   the propagator and the aberration tensor; exposed for users who
   want to inspect the chief-ray geometry directly.
@@ -1486,7 +1487,7 @@ Accuracy unchanged vs 3.1.6 default, within the stated tolerances.
 
   **Detection example (Design 51 tx4designstudy51.zmx):**
 
-      rx = op.load_zmx_prescription('tx4designstudy51.zmx')
+      rx = la.load_zmx_prescription('tx4designstudy51.zmx')
       print(rx['object_distance'])   # -> 0.096669 (m), = 96.67 mm
 
   of previously-dropped dummy-surface thickness, which (without

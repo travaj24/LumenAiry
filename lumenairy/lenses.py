@@ -3890,7 +3890,7 @@ def apply_real_lens_maslov(
         Max total degree of the Chebyshev tensor-product fit.  4 -> 70
         coefficients per polynomial (fast, accurate for most refractive
         systems).  6 -> 210 (captures strongly-aberrated and
-        diffractive systems per OPDGPU maslov_zemax_merit.tex).
+        diffractive systems).
     n_v2 : int, default 32
         Number of quadrature samples per axis in the v2 direction
         cosine integral.  Maslov quadrature-validity bound:
@@ -3945,7 +3945,7 @@ def apply_real_lens_maslov(
     extract_linear_phase : bool, default True
         Pre-fit and drop the linear component of OPD(s2, v2) before the
         Chebyshev fit.  Repairs the missing grating kick for diffractive
-        surfaces at nonzero orders (see OPDGPU Section 4); no-op for
+        surfaces at nonzero orders; no-op for
         zeroth-order / refractive-only systems.
     verbose : bool, default False
         If True, print timing and diagnostic info.
@@ -3967,7 +3967,7 @@ def apply_real_lens_maslov(
     References
     ----------
     Kravtsov & Orlov, *Caustics, Catastrophes and Wave Fields* (1999).
-    Forbes & Alonso, JOSA A 15, 1341 (1998).
+    see ``REFERENCES.txt`` Section B.
     """
     t0 = time.perf_counter()
     E_in = np.asarray(E_in)
@@ -4123,7 +4123,7 @@ def apply_real_lens_maslov(
     u_v2x = (v2x - v2x_c) / v2x_h
     u_v2y = (v2y - v2y_c) / v2y_h
 
-    # Optional linear-phase extraction (OPDGPU Section 4)
+    # Optional linear-phase extraction
     linear_coeffs = None
     if extract_linear_phase:
         X5 = np.column_stack([
@@ -4260,7 +4260,7 @@ def apply_real_lens_maslov(
     #
     #                       with Hessian H and signature sigma.  This
     #                       is the analytic Gaussian-moment limit of
-    #                       Forbes-Alonso / small_waist_asymptotic.tex;
+    #                       saddle-point asymptotic;
     #                       it gives the correct answer when the
     #                       integrand is delta-like in v2 (collimated
     #                       input, a geometric image) -- the case where
@@ -4759,7 +4759,7 @@ def _integrate_local_quadrature(
     Eobj gradient) that leading-order stationary phase truncates.
 
     NUFFT connection:  the local-quadrature step is a direct numerical
-    evaluation of what OPDGPU's small_waist_asymptotic paper writes as
+    the leading-order asymptotic evaluation of
     a closed-form Wick-contracted Gaussian moment sum.  A genuine
     NUFFT-accelerated path would replace the uniform quadrature with
     analytic moment evaluation against Laguerre-Gaussian basis

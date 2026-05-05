@@ -2,13 +2,15 @@
 lumenairy.asymptotic -- Phase-space asymptotic propagator and Laguerre-Gaussian
 aberration tensor.
 
-This module implements the closed-form Gaussian-moment evaluation of the
-phase-space (Maslov) diffraction integral derived in the companion design
-notes ``maslov_zemax_merit`` (paper 1) and ``small_waist_asymptotic`` (paper
-2).  It complements ``apply_real_lens_maslov`` -- which evaluates the same
-underlying integral by direct Chebyshev-quadrature in v_2 -- by replacing
-the quadrature with a finite Wick-contracted moment over a complex-symmetric
-covariance matrix built from the Chebyshev polynomial fit.
+This module implements the closed-form Gaussian-moment evaluation of
+the phase-space (Maslov) diffraction integral.  It complements
+``apply_real_lens_maslov`` -- which evaluates the same underlying
+integral by direct Chebyshev-quadrature in v_2 -- by replacing the
+quadrature with a finite Wick-contracted moment over a
+complex-symmetric covariance matrix built from the Chebyshev
+polynomial fit.
+
+See ``REFERENCES.txt`` for the foundational publications.
 
 What this is for
 ----------------
@@ -51,21 +53,21 @@ Canonical polynomial fit
   -- public version of the apply_real_lens_maslov fit:  trace a
   Chebyshev-node grid through the surface pair, fit Phi(s2, v2) and
   s1(s2, v2) as 4-variable Chebyshev tensor-product polynomials, and
-  return a ``CanonicalPolyFit`` dataclass.  Includes the
-  linear-phase-extraction trick of paper 1 Section 5 for diffractive
-  surfaces.
+  return a ``CanonicalPolyFit`` dataclass.  Includes a
+  linear-phase-extraction step that restores Nyquist sampling for
+  diffractive surfaces at non-zero orders.
 
 Aberration tensor and propagator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 - ``solve_envelope_stationary(fit, s2, source_point, w_s, w_p, v2_centre)``
-  -- Newton-solve paper 2 eq. (9) for the envelope-stationary v_2*.
+  -- Newton-solve the envelope-stationary equation for v_2*.
 - ``aberration_tensor(fit, s2_image, source_lg_modes, pupil_lg_modes,
   output_lg_modes, source_point, w_s, w_p, v2_centre, w_o, ...)`` --
-  paper 2 eq. (44):  compute the LG aberration tensor T_{k;n,m}
-  whose indices are physical Seidel/Zernike aberrations.
+  compute the LG aberration tensor T_{k;n,m} whose indices are
+  physical Seidel/Zernike aberrations.
 - ``propagate_modal_asymptotic(fit, source_lg_amps, pupil_lg_amps,
-  source_point, w_s, w_p, v2_centre, output_grid)`` -- paper 2 eq. (24):
+  source_point, w_s, w_p, v2_centre, output_grid)`` --
   evaluate the leading-order modal propagator on a 2-D output grid.
 
 Conventions
@@ -379,7 +381,7 @@ def lg_seidel_label(p: int, ell: int) -> str:
     """Map an LG output-mode index ``(p, ell)`` to its classical
     Seidel/Zernike aberration name.
 
-    From paper 2, Section 7.5.  Used by tooling and diagnostics that
+    Used by tooling and diagnostics that
     want to report aberrations by name rather than by index.
     """
     abs_ell = abs(ell)
@@ -414,7 +416,7 @@ def gaussian_moment_2d(a: int, b: int,
 
     where ``Z = pi / sqrt(det M)`` is the Gaussian normalisation.
     Vanishes by symmetry for ``a + b`` odd; otherwise evaluates the
-    closed-form pair-counting sum (paper 2, eq. 36).
+    closed-form pair-counting sum.
 
     Parameters
     ----------
@@ -499,7 +501,7 @@ def gaussian_moment_table_2d(M: np.ndarray, max_total_order: int
 @dataclass
 class CanonicalPolyFit:
     """Result of a Chebyshev tensor-product fit to ray-traced
-    ``Phi(s2, v2)`` and ``s1(s2, v2)`` (paper 1, Section 3).
+    ``Phi(s2, v2)`` and ``s1(s2, v2)``.
 
     Fields
     ------
@@ -515,7 +517,7 @@ class CanonicalPolyFit:
         Coefficients of the s1 back-map components (in metres).
     linear_coeffs_phi : ndarray, optional
         ``(alpha_0, alpha_1, alpha_2, alpha_3, alpha_4)`` of the linear
-        prefit of Phi (paper 1, Section 5.4).  None if the fit was done
+        prefit of Phi.  None if the fit was done
         with ``extract_linear_phase=False``.
     s2x_centre, s2x_halfrange : float
         Normalisation parameters for s2x:  ``u_s2x = (s2x - centre) /
@@ -601,7 +603,7 @@ class CanonicalPolyFit:
             If True and the fit extracted a linear ramp, re-add it to
             give the *raw* OPD that the ray trace would report.  If
             False, return only the Chebyshev residual (the
-            integrator-safe form, see paper 1 Section 5).
+            integrator-safe form).
         """
         u1, u2, u3, u4 = self.to_normalised(s2x, s2y, v2x, v2y)
         phi = _evaluate_polynomial_4d(self.coef_phi, self.multi_indices,
@@ -674,7 +676,7 @@ def fit_canonical_polynomials(
     endpoint_anchored: bool = False,
 ) -> CanonicalPolyFit:
     """Fit Chebyshev tensor-product polynomials to ``Phi(s2, v2)`` and
-    ``s1(s2, v2)`` over a 4-D source x pupil grid (paper 1, Section 3).
+    ``s1(s2, v2)`` over a 4-D source x pupil grid.
 
     The trace-and-fit pipeline samples a Chebyshev-node grid in the
     source-plane coordinates ``(s1_x, s1_y)`` and the input direction
@@ -715,7 +717,7 @@ def fit_canonical_polynomials(
     extract_linear_phase : bool
         If True (default), pre-fit and subtract a 5-parameter linear
         ramp from Phi before the Chebyshev fit -- this restores Nyquist
-        sampling for diffractive surfaces at non-zero orders (paper 1,
+        sampling for diffractive surfaces at non-zero orders (
         Section 5).  No-op for refractive systems.
     object_distance : float, optional
         Source-plane to first-surface distance [m].  Defaults to
@@ -850,7 +852,7 @@ def fit_canonical_polynomials(
     s1y_live = s1y_in[alive]
 
     # Normalise the OUTPUT (s2, v2) coordinates to [-1, 1]^4 from the
-    # observed extents of the live rays (paper 1 §3.2).  Rays that end
+    # observed extents of the live rays.  Rays that end
     # up at extreme s2 or v2 set the box; the 5%-pad in _fit_normaliser
     # leaves room for evaluation at boundary pixels.
     s2x_c, s2x_h = _fit_normaliser(s2x_live)
@@ -928,7 +930,7 @@ def solve_envelope_stationary(
     max_iter: int = 12,
     tol: float = 1e-12,
 ) -> Tuple[Tuple[float, float], int, float]:
-    """Newton-solve the envelope-stationary equation (paper 2, eq. 9).
+    """Newton-solve the envelope-stationary equation.
 
     Find ``v_2^*`` such that the joint Gaussian envelope
 
@@ -1140,7 +1142,7 @@ def _compute_M_b(
     w_s: float, w_p: float,
     v_cx: float, v_cy: float,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, complex]:
-    """Build the complex beam matrix M (paper 2 eq. 16), the linear
+    """Build the complex beam matrix M, the linear
     term b (eq. 17), the Jacobian J*, and the OPL piston Phi*."""
     s2x_arr = np.asarray(s2x).reshape(())
     s2y_arr = np.asarray(s2y).reshape(())
@@ -1244,7 +1246,7 @@ def aberration_tensor(
 ) -> AberrationTensorResult:
     """LG aberration tensor at a single chief-ray image point.
 
-    Implements paper 2 Section 7:  expand source, pupil, and output
+    Expand source, pupil, and output
     fields in Laguerre-Gaussian bases, evaluate the leading-order
     asymptotic propagator analytically as a Wick-contracted Gaussian
     moment, and project onto the output basis to read off the
@@ -1335,7 +1337,7 @@ def aberration_tensor(
     Sigma = 0.5 * M_inv  # 2x2 complex covariance
     sqrt_detM = np.sqrt(np.linalg.det(M))
 
-    # Leading amplitude (paper 2 eq. 20)
+    # Leading amplitude
     A_lead = (detJ * (math.pi / sqrt_detM) * G0
               * np.exp(2j * math.pi * phi_star)
               * np.exp(0.25 * b @ M_inv @ b))
@@ -1389,7 +1391,7 @@ def aberration_tensor(
         # to evaluating the integral once at s2_image and asking how it
         # decomposes against output mode k.
         #
-        # Practical implementation: paper 2 shows that for the field at
+        # Practical implementation: for the field at
         # s2_image + sigma = s2_image, the projection of I_{n,m} onto
         # LG^out_k integrates the conjugate output polynomial against
         # the leading Gaussian envelope.  At sigma = 0 the integral
@@ -1431,7 +1433,7 @@ def aberration_tensor(
                 # integrated out separately; here we provide the
                 # SCALAR projection at the chief ray, which is what
                 # matters for the Seidel-name-meaning of the
-                # coefficients.  See paper 2 eq. (52) and surrounding
+                # coefficients.  See
                 # discussion.
                 P_eta = _multiply_polys_2d(src_poly_eta, pup_poly_eta)
                 exp_val = _contract_against_moment_table(P_eta, eta_moments)
@@ -1512,7 +1514,7 @@ def _polynomial_substitute_linear_2d(
 
 
 # ===========================================================================
-# Section 6 -- Modal asymptotic propagator (paper 2 leading order)
+# Section 6 -- Modal asymptotic propagator (leading-order)
 # ===========================================================================
 
 def propagate_modal_asymptotic(
@@ -1528,7 +1530,7 @@ def propagate_modal_asymptotic(
     s2_grid_y: np.ndarray,
 ) -> np.ndarray:
     """Evaluate the leading-order modal asymptotic propagator on a 2-D
-    output grid (paper 2, eq. 24).
+    output grid.
 
     For each output pixel, solves the envelope-stationary equation,
     builds the complex beam matrix, and evaluates the closed-form

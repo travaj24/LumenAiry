@@ -1,7 +1,7 @@
 """
 Freeform surface types beyond standard conic + asphere.
 
-Adds XY polynomial surfaces, Q-type (Forbes) polynomials, and
+Adds XY polynomial surfaces, Q-type orthogonal polynomials, and
 Chebyshev surfaces for modern freeform optics design.
 
 These integrate with the existing prescription dict format via

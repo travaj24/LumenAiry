@@ -2112,9 +2112,9 @@ def scale_prescription(prescription, factor):
 
     Examples
     --------
-    >>> import lumenairy as op
-    >>> rx = op.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=10e-3)
-    >>> rx_small = op.scale_prescription(rx, 0.25)
+    >>> import lumenairy as la
+    >>> rx = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=10e-3)
+    >>> rx_small = la.scale_prescription(rx, 0.25)
     >>> rx_small['surfaces'][0]['radius']  # 50 mm * 0.25 = 12.5 mm
     0.0125
     >>> rx_small['aperture_diameter']      # 10 mm * 0.25 = 2.5 mm

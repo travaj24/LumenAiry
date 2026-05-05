@@ -35,14 +35,14 @@ Typical usage
 
 .. code-block:: python
 
-    import lumenairy as op
+    import lumenairy as la
     from lumenairy.optimize import (
         DesignParameterization, design_optimize,
         FocalLengthMerit, StrehlMerit, RMSWavefrontMerit,
     )
 
     # Start from a Thorlabs AC254-100-C achromat, free up R1/R2/R3/d1.
-    template = op.thorlabs_lens('AC254-100-C')
+    template = la.thorlabs_lens('AC254-100-C')
     template['aperture_diameter'] = 10e-3
 
     param = DesignParameterization(template,
@@ -195,10 +195,10 @@ class MultiPrescriptionParameterization:
 
     Example
     -------
-    >>> import lumenairy as op
-    >>> obj = op.thorlabs_lens('AC254-200-C')
-    >>> eye = op.thorlabs_lens('AC254-050-C')
-    >>> param = op.MultiPrescriptionParameterization(
+    >>> import lumenairy as la
+    >>> obj = la.thorlabs_lens('AC254-200-C')
+    >>> eye = la.thorlabs_lens('AC254-050-C')
+    >>> param = la.MultiPrescriptionParameterization(
     ...     templates=[obj, eye],
     ...     free_vars=[
     ...         (0, 'surfaces', 0, 'radius'),  # obj R1
@@ -209,7 +209,7 @@ class MultiPrescriptionParameterization:
     ...     bounds=[(100e-3, 300e-3), (-300e-3, -50e-3),
     ...             (20e-3, 100e-3), (1e-3, 5e-3)])
     >>> # The merit must know which prescription slot maps to which lens:
-    >>> merit = op.MatchIdealSystemMerit(
+    >>> merit = la.MatchIdealSystemMerit(
     ...     ideal_elements=[
     ...         {'type': 'lens', 'f': 200e-3},
     ...         {'type': 'propagate', 'z': 250e-3},
@@ -1138,7 +1138,7 @@ class ZernikeCoefficientMerit(MeritTerm):
 
 class LGAberrationMerit(MeritTerm):
     """Penalise specified Laguerre-Gaussian aberration-tensor channels
-    via the closed-form modal asymptotic propagator (paper 2,
+    via the closed-form modal asymptotic propagator (
     Section 7).
 
     Each entry ``L_{(p, ell), n}(s_2^img)`` of the LG aberration tensor
@@ -1152,7 +1152,7 @@ class LGAberrationMerit(MeritTerm):
 
     The merit is computed from a Chebyshev tensor-product fit of the
     prescription's canonical map ``Phi(s2, v2), s1(s2, v2)``
-    (paper 1, Section 3) -- a single fit drives all targeted
+    -- a single fit drives all targeted
     aberration channels at all chosen field points.
 
     Parameters

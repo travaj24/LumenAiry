@@ -14,7 +14,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.optimize import EvaluationContext
 
 
@@ -22,7 +22,7 @@ H = Harness('optimize')
 
 
 def _make_test_pres(aperture=4e-3):
-    return op.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
+    return la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=aperture)
 
 
@@ -47,7 +47,7 @@ def t_match_ideal_zero_on_ideal():
     opd_ideal = -(X**2 + Y**2) / (2.0 * f)
     pres = _make_test_pres(aperture=ap)
     ctx = _ctx_with_opd(opd_ideal, dx, pres)
-    m = op.MatchIdealThinLensMerit(target_focal_length=f, weight=1.0,
+    m = la.MatchIdealThinLensMerit(target_focal_length=f, weight=1.0,
                                    exclude_low_order=4, n_modes=15)
     val = m.evaluate(ctx)
     return val < 1e-4, f'merit on ideal = {val:.3e} (expect ~0)'
@@ -66,7 +66,7 @@ def t_match_ideal_nonzero_on_aberrated():
                  + 100e-9 * (r2 / (ap/2)**2)**2)
     pres = _make_test_pres(aperture=ap)
     ctx = _ctx_with_opd(opd_aberr, dx, pres)
-    m = op.MatchIdealThinLensMerit(target_focal_length=f, weight=1.0,
+    m = la.MatchIdealThinLensMerit(target_focal_length=f, weight=1.0,
                                    exclude_low_order=4, n_modes=15)
     val = m.evaluate(ctx)
     return 1e-5 < val < 1.0, f'merit on aberrated = {val:.3e}'
@@ -82,7 +82,7 @@ def t_match_ideal_scales_with_aberration():
     X, Y = np.meshgrid(x, x)
     r2 = X**2 + Y**2
     pres = _make_test_pres(aperture=ap)
-    m = op.MatchIdealThinLensMerit(target_focal_length=f, weight=1.0,
+    m = la.MatchIdealThinLensMerit(target_focal_length=f, weight=1.0,
                                    exclude_low_order=4, n_modes=15)
     vals = []
     for amp in [50e-9, 100e-9, 200e-9]:
@@ -106,7 +106,7 @@ def t_match_target_zero_when_equal():
     X, Y = np.meshgrid(x, x)
     target = -(X**2 + Y**2) / 0.2 + 1e-9 * X**3
     pres = _make_test_pres(aperture=ap)
-    m = op.MatchTargetOPDMerit(target_opd=target, weight=1.0,
+    m = la.MatchTargetOPDMerit(target_opd=target, weight=1.0,
                                exclude_low_order=4, n_modes=15)
     val = m.evaluate(_ctx_with_opd(target.copy(), dx, pres))
     return val < 1e-6, f'merit when wavefronts equal = {val:.3e}'
@@ -126,7 +126,7 @@ def t_match_target_callable():
     def target_fn(X_, Y_, prescription):
         return -(X_**2 + Y_**2) / 0.2
 
-    m = op.MatchTargetOPDMerit(target_opd=target_fn, weight=1.0,
+    m = la.MatchTargetOPDMerit(target_opd=target_fn, weight=1.0,
                                exclude_low_order=4, n_modes=15)
     val = m.evaluate(_ctx_with_opd(actual, dx, pres))
     return val < 1e-6, f'merit with callable target = {val:.3e}'
@@ -141,8 +141,8 @@ def t_zernike_coeff_target():
     coeffs_in = np.zeros(15)
     coeffs_in[4] = 30e-9
     coeffs_in[12] = 50e-9
-    opd = op.zernike_reconstruct(coeffs_in, dx, (N, N), ap)
-    m = op.ZernikeCoefficientMerit(targets={12: 0.0}, weight=1.0,
+    opd = la.zernike_reconstruct(coeffs_in, dx, (N, N), ap)
+    m = la.ZernikeCoefficientMerit(targets={12: 0.0}, weight=1.0,
                                    n_modes=15)
     val = m.evaluate(_ctx_with_opd(opd, dx, pres))
     expected = (50e-9 / 1.31e-6) ** 2
@@ -160,8 +160,8 @@ def t_zernike_coeff_zero_when_match():
     pres = _make_test_pres(aperture=ap)
     coeffs_in = np.zeros(15)
     coeffs_in[12] = 75e-9
-    opd = op.zernike_reconstruct(coeffs_in, dx, (N, N), ap)
-    m = op.ZernikeCoefficientMerit(targets={12: 75e-9}, weight=1.0,
+    opd = la.zernike_reconstruct(coeffs_in, dx, (N, N), ap)
+    m = la.ZernikeCoefficientMerit(targets={12: 75e-9}, weight=1.0,
                                    n_modes=15)
     val = m.evaluate(_ctx_with_opd(opd, dx, pres))
     return val < 1e-6, f'merit when target met = {val:.3e}'
@@ -178,9 +178,9 @@ def t_composite_sum():
         prescription=pres, wavelength=1.31e-6, N=N, dx=32e-6,
         efl=99e-3, bfl=80e-3,
         seidel=np.array([1e-5, 0, 0, 0, 0]))
-    a = op.FocalLengthMerit(target=100e-3, weight=1.0)
-    b = op.SphericalSeidelMerit(weight=1.0)
-    composite = op.CompositeMerit([a, b], weight=1.0)
+    a = la.FocalLengthMerit(target=100e-3, weight=1.0)
+    b = la.SphericalSeidelMerit(weight=1.0)
+    composite = la.CompositeMerit([a, b], weight=1.0)
     val_composite = composite.evaluate(ctx)
     val_sum = a.evaluate(ctx) + b.evaluate(ctx)
     return abs(val_composite - val_sum) < 1e-15, \
@@ -197,10 +197,10 @@ def t_composite_weight():
         prescription=pres, wavelength=1.31e-6, N=N, dx=32e-6,
         efl=99e-3, bfl=80e-3,
         seidel=np.array([1e-5, 0, 0, 0, 0]))
-    a = op.FocalLengthMerit(target=100e-3, weight=1.0)
-    b = op.SphericalSeidelMerit(weight=1.0)
-    base = op.CompositeMerit([a, b], weight=1.0).evaluate(ctx)
-    scaled = op.CompositeMerit([a, b], weight=3.5).evaluate(ctx)
+    a = la.FocalLengthMerit(target=100e-3, weight=1.0)
+    b = la.SphericalSeidelMerit(weight=1.0)
+    base = la.CompositeMerit([a, b], weight=1.0).evaluate(ctx)
+    scaled = la.CompositeMerit([a, b], weight=3.5).evaluate(ctx)
     return abs(scaled - 3.5 * base) < 1e-12 * max(abs(base), 1e-12), \
         f'scaled={scaled:.3e} vs base*3.5={3.5*base:.3e}'
 
@@ -215,7 +215,7 @@ def t_callable_merit_passes_ctx():
         efl=99e-3, bfl=80e-3, strehl_best=0.5)
     def fn(c):
         return c.efl + c.strehl_best
-    m = op.CallableMerit(fn, weight=2.0)
+    m = la.CallableMerit(fn, weight=2.0)
     val = m.evaluate(ctx)
     expected = 2.0 * (99e-3 + 0.5)
     return abs(val - expected) < 1e-15, \
@@ -227,7 +227,7 @@ H.run('CallableMerit: passes ctx and applies weight',
 
 
 def t_multifield_merit():
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     from lumenairy.raytrace import (
         surfaces_from_prescription, system_abcd)
     surfs = surfaces_from_prescription(pres)
@@ -235,8 +235,8 @@ def t_multifield_merit():
     ctx = EvaluationContext(
         prescription=pres, wavelength=1.31e-6, N=64, dx=32e-6,
         efl=float(efl), bfl=float(bfl))
-    sub = op.StrehlMerit(min_strehl=0.9, weight=1.0)
-    mf = op.MultiFieldMerit(field_angles=[0.0, 0.005, 0.01],
+    sub = la.StrehlMerit(min_strehl=0.9, weight=1.0)
+    mf = la.MultiFieldMerit(field_angles=[0.0, 0.005, 0.01],
                             sub_merit=sub)
     val = mf.evaluate(ctx)
     return np.isfinite(val), f'multi-field merit = {val:.4e}'
@@ -253,14 +253,14 @@ H.section('Optimizer convergence')
 
 
 def t_optimizer_converges_to_efl():
-    template = op.make_singlet(60e-3, np.inf, 4e-3, 'N-BK7',
+    template = la.make_singlet(60e-3, np.inf, 4e-3, 'N-BK7',
                                aperture=10e-3)
-    param = op.DesignParameterization(
+    param = la.DesignParameterization(
         template=template,
         free_vars=[('surfaces', 0, 'radius')],
         bounds=[(30e-3, 100e-3)])
-    merit = [op.FocalLengthMerit(target=100e-3, weight=1.0)]
-    result = op.design_optimize(param, merit, wavelength=1.31e-6,
+    merit = [la.FocalLengthMerit(target=100e-3, weight=1.0)]
+    result = la.design_optimize(param, merit, wavelength=1.31e-6,
                                 N=64, dx=64e-6, max_iter=30,
                                 verbose=False)
     err_pct = abs(result.context_final.efl - 100e-3) / 100e-3 * 100
@@ -273,11 +273,11 @@ H.run('Optimizer: converges to target EFL',
 
 
 def t_de_optimizer_converges():
-    template = op.make_singlet(60e-3, np.inf, 4e-3, 'N-BK7',
+    template = la.make_singlet(60e-3, np.inf, 4e-3, 'N-BK7',
                                aperture=10e-3)
-    p = op.DesignParameterization(template,
+    p = la.DesignParameterization(template,
         [('surfaces', 0, 'radius')], [(30e-3, 100e-3)])
-    r = op.design_optimize(p, [op.FocalLengthMerit(100e-3)], 1.31e-6,
+    r = la.design_optimize(p, [la.FocalLengthMerit(100e-3)], 1.31e-6,
                            N=64, dx=64e-6, method='de', max_iter=30,
                            verbose=False)
     err = abs(r.context_final.efl - 100e-3)
@@ -288,11 +288,11 @@ H.run('DE optimizer: converges to EFL target', t_de_optimizer_converges)
 
 
 def t_basin_hopping_converges():
-    template = op.make_singlet(60e-3, np.inf, 4e-3, 'N-BK7',
+    template = la.make_singlet(60e-3, np.inf, 4e-3, 'N-BK7',
                                aperture=10e-3)
-    p = op.DesignParameterization(template,
+    p = la.DesignParameterization(template,
         [('surfaces', 0, 'radius')], [(30e-3, 100e-3)])
-    r = op.design_optimize(p, [op.FocalLengthMerit(100e-3)], 1.31e-6,
+    r = la.design_optimize(p, [la.FocalLengthMerit(100e-3)], 1.31e-6,
                            N=64, dx=64e-6, method='basin_hopping',
                            max_iter=10, verbose=False)
     return r.merit < 0.01, f'merit = {r.merit:.4e}'
@@ -302,10 +302,10 @@ H.run('Basin-hopping: finds local minimum', t_basin_hopping_converges)
 
 
 def t_optimizer_match_ideal():
-    template = op.make_doublet(
+    template = la.make_doublet(
         R1=80e-3, R2=-40e-3, R3=-200e-3, d1=6e-3, d2=2.5e-3,
         glass1='N-BAF10', glass2='N-SF6HT', aperture=3e-3)
-    param = op.DesignParameterization(
+    param = la.DesignParameterization(
         template=template,
         free_vars=[('surfaces', 0, 'radius'),
                    ('surfaces', 1, 'radius'),
@@ -313,11 +313,11 @@ def t_optimizer_match_ideal():
         bounds=[(40e-3, 100e-3), (-80e-3, -25e-3),
                 (-300e-3, -120e-3)])
     merit_terms = [
-        op.FocalLengthMerit(target=85e-3, weight=1.0),
-        op.MatchIdealThinLensMerit(target_focal_length=85e-3,
+        la.FocalLengthMerit(target=85e-3, weight=1.0),
+        la.MatchIdealThinLensMerit(target_focal_length=85e-3,
                                    weight=10.0, exclude_low_order=4),
     ]
-    result = op.design_optimize(param, merit_terms,
+    result = la.design_optimize(param, merit_terms,
                                 wavelength=1.31e-6, N=64, dx=32e-6,
                                 max_iter=30, verbose=False)
     return result.merit < 1.0, f'final merit = {result.merit:.3e}'
@@ -327,10 +327,10 @@ H.run('Optimizer: MatchIdealThinLens converges', t_optimizer_match_ideal)
 
 
 def t_match_ideal_in_optimizer():
-    template = op.make_doublet(
+    template = la.make_doublet(
         R1=80e-3, R2=-40e-3, R3=-200e-3, d1=6e-3, d2=2.5e-3,
         glass1='N-BAF10', glass2='N-SF6HT', aperture=3e-3)
-    param = op.DesignParameterization(
+    param = la.DesignParameterization(
         template=template,
         free_vars=[('surfaces', 0, 'radius'),
                    ('surfaces', 1, 'radius'),
@@ -338,12 +338,12 @@ def t_match_ideal_in_optimizer():
         bounds=[(40e-3, 100e-3), (-80e-3, -25e-3),
                 (-300e-3, -120e-3)])
     merit_terms = [
-        op.FocalLengthMerit(target=85e-3, weight=1.0),
-        op.MatchIdealThinLensMerit(target_focal_length=85e-3,
+        la.FocalLengthMerit(target=85e-3, weight=1.0),
+        la.MatchIdealThinLensMerit(target_focal_length=85e-3,
                                    weight=10.0,
                                    exclude_low_order=4, n_modes=15),
     ]
-    res = op.design_optimize(parameterization=param,
+    res = la.design_optimize(parameterization=param,
                              merit_terms=merit_terms,
                              wavelength=1.31e-6, N=64, dx=32e-6,
                              method='L-BFGS-B', max_iter=30,
@@ -352,7 +352,7 @@ def t_match_ideal_in_optimizer():
     init_ctx = EvaluationContext(prescription=init_pres,
                                  wavelength=1.31e-6, N=64, dx=32e-6)
     E_in = np.ones((64, 64), dtype=np.complex128)
-    E_init = op.apply_real_lens(E_in, init_pres, 1.31e-6, 32e-6)
+    E_init = la.apply_real_lens(E_in, init_pres, 1.31e-6, 32e-6)
     from lumenairy.analysis import wave_opd_2d
     try:
         _, _, opd_init = wave_opd_2d(E_init, 32e-6, 1.31e-6,
@@ -373,14 +373,14 @@ H.run('MatchIdealThinLens: optimizer reduces it',
 
 
 def t_design_optimize_focal_length_target():
-    template = op.make_singlet(60e-3, float('inf'), 4e-3, 'N-BK7',
+    template = la.make_singlet(60e-3, float('inf'), 4e-3, 'N-BK7',
                                aperture=10e-3)
-    param = op.DesignParameterization(
+    param = la.DesignParameterization(
         template=template,
         free_vars=[('surfaces', 0, 'radius')],
         bounds=[(30e-3, 100e-3)])
-    merit = [op.FocalLengthMerit(target=100e-3, weight=1.0)]
-    res = op.design_optimize(parameterization=param, merit_terms=merit,
+    merit = [la.FocalLengthMerit(target=100e-3, weight=1.0)]
+    res = la.design_optimize(parameterization=param, merit_terms=merit,
                              wavelength=1.31e-6, N=64, dx=64e-6,
                              method='L-BFGS-B', max_iter=30,
                              verbose=False)

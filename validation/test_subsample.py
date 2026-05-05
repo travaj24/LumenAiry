@@ -24,7 +24,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 
 
 H = Harness('subsample')
@@ -33,7 +33,7 @@ H = Harness('subsample')
 # ---------------------------------------------------------------------
 H.section('Guardrail behaviour')
 
-tmpl = op.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
+tmpl = la.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
                        aperture=5e-3)
 N_guard = 512
 dx_guard = 19.5e-6
@@ -43,7 +43,7 @@ E_in_guard = np.ones((N_guard, N_guard), dtype=np.complex128)
 
 def t_guardrail_sub4_passes():
     try:
-        op.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
                                   ray_subsample=4, n_workers=1)
         return True, 'sub=4 at 64 coarse/aperture passes'
     except Exception as e:
@@ -56,7 +56,7 @@ H.run('sub=4 (64 coarse/aperture) passes', t_guardrail_sub4_passes)
 def t_guardrail_sub16_raises():
     raised = False
     try:
-        op.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
                                   ray_subsample=16, n_workers=1)
     except ValueError:
         raised = True
@@ -70,7 +70,7 @@ H.run('sub=16 (16 coarse/aperture) raises ValueError',
 def t_guardrail_warn_mode():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
-        op.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
                                   ray_subsample=16, n_workers=1,
                                   on_undersample='warn')
         fired = any(issubclass(wi.category, RuntimeWarning) for wi in w)
@@ -83,7 +83,7 @@ H.run('on_undersample=warn fires RuntimeWarning', t_guardrail_warn_mode)
 def t_guardrail_silent_mode():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
-        op.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
                                   ray_subsample=16, n_workers=1,
                                   on_undersample='silent')
         silent = (len(w) == 0)
@@ -96,7 +96,7 @@ H.run('on_undersample=silent emits no warnings',
 
 def t_guardrail_disabled():
     try:
-        op.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
                                   ray_subsample=32, n_workers=1,
                                   min_coarse_samples_per_aperture=0)
         return True, 'override=0 disables check'
@@ -112,7 +112,7 @@ H.run('min_coarse_samples_per_aperture=0 disables check',
 H.section('ProcessPool numerical match (serial vs n_workers=8)')
 
 
-tmpl_pp = op.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
+tmpl_pp = la.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
                           aperture=5e-3)
 N_pp = 512
 dx_pp = 1e-2 / N_pp
@@ -121,10 +121,10 @@ E_in_pp = np.ones((N_pp, N_pp), dtype=np.complex128)
 
 def _pp_match(sub):
     def _fn():
-        E_serial = op.apply_real_lens_traced(
+        E_serial = la.apply_real_lens_traced(
             E_in_pp, tmpl_pp, 1.31e-6, dx_pp,
             ray_subsample=sub, n_workers=1)
-        E_pool = op.apply_real_lens_traced(
+        E_pool = la.apply_real_lens_traced(
             E_in_pp, tmpl_pp, 1.31e-6, dx_pp,
             ray_subsample=sub, n_workers=8)
         diff = np.abs(E_pool - E_serial)
@@ -144,11 +144,11 @@ H.section('Subsampling error scaling vs coarse-samples-per-aperture')
 
 def _err_scaling(sub, band):
     def _fn():
-        E_ref = op.apply_real_lens_traced(
+        E_ref = la.apply_real_lens_traced(
             E_in_guard, tmpl, wv, dx_guard,
             ray_subsample=1, n_workers=1,
             min_coarse_samples_per_aperture=0)
-        E_test = op.apply_real_lens_traced(
+        E_test = la.apply_real_lens_traced(
             E_in_guard, tmpl, wv, dx_guard,
             ray_subsample=sub, n_workers=1,
             min_coarse_samples_per_aperture=0)
@@ -208,10 +208,10 @@ def t_diagnostic_scan():
 
     cases = [
         ('slow symmetric singlet',
-         op.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
+         la.make_singlet(R1=0.05, R2=-0.05, d=4e-3, glass='N-BK7',
                          aperture=5e-3)),
         ('fast singlet',
-         op.make_singlet(R1=0.015, R2=-0.015, d=3e-3, glass='N-BK7',
+         la.make_singlet(R1=0.015, R2=-0.015, d=3e-3, glass='N-BK7',
                          aperture=5e-3)),
     ]
     N = 1024
@@ -227,7 +227,7 @@ def t_diagnostic_scan():
             if aperture / (dx * sub) < 16:
                 continue
             try:
-                E_exit = op.apply_real_lens_traced(
+                E_exit = la.apply_real_lens_traced(
                     E_in, pres, 1.31e-6, dx,
                     ray_subsample=sub, n_workers=1,
                     min_coarse_samples_per_aperture=0)

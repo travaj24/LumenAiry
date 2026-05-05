@@ -19,18 +19,18 @@ re-export shim.
 
 Quick start::
 
-    import lumenairy as op
+    import lumenairy as la
 
     # Choose backend for NEW files (default = 'hdf5')
-    op.set_storage_backend('zarr')
+    la.set_storage_backend('zarr')
 
     # Unified API — works with both HDF5 and Zarr:
-    op.append_plane('output.zarr', E, dx=dx, label='After L1')
-    planes = op.load_planes('output.zarr', indices=[0, 5])
+    la.append_plane('output.zarr', E, dx=dx, label='After L1')
+    planes = la.load_planes('output.zarr', indices=[0, 5])
 
     # HDF5-specific (explicit):
-    op.save_field_h5('field.h5', E, dx=2e-6, wavelength=1.31e-6)
-    E, meta = op.load_field_h5('field.h5')
+    la.save_field_h5('field.h5', E, dx=2e-6, wavelength=1.31e-6)
+    E, meta = la.load_field_h5('field.h5')
 
 Author: Andrew Traverso
 """

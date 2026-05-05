@@ -13,7 +13,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.raytrace import (
     surfaces_from_prescription, system_abcd, Surface,
 )
@@ -26,7 +26,7 @@ N_default = 256; dx_default = 4e-6; lam_default = 1.31e-6
 def t_circular_aperture():
     N = N_default; dx = dx_default
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_aperture(E_in, dx, shape='circular',
+    E_out = la.apply_aperture(E_in, dx, shape='circular',
                               params={'diameter': 0.5e-3})
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
@@ -45,7 +45,7 @@ H.run('Aperture: circular clips correctly', t_circular_aperture)
 def t_rectangular_aperture():
     N = N_default; dx = dx_default
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_aperture(E_in, dx, shape='rectangular',
+    E_out = la.apply_aperture(E_in, dx, shape='rectangular',
                               params={'width_x': 0.2e-3,
                                       'width_y': 0.1e-3})
     edge_val = np.abs(E_out[N//2, N//2 + 30])
@@ -59,7 +59,7 @@ H.run('Aperture: rectangular clips correctly', t_rectangular_aperture)
 
 def t_turbulence_phase_screen():
     N = 256; dx = 1e-3; r0 = 0.1
-    screen = op.generate_turbulence_screen(N, dx, r0, seed=42)
+    screen = la.generate_turbulence_screen(N, dx, r0, seed=42)
     return screen.shape == (N, N) and np.std(screen) > 0, \
         f'screen shape={screen.shape}, std={np.std(screen):.2f}'
 
@@ -71,7 +71,7 @@ H.run('Turbulence: Kolmogorov screen has ~correct std',
 def t_zernike_aberration():
     N = 64; dx = 16e-6
     E = np.ones((N, N), dtype=np.complex128)
-    E_ab = op.apply_zernike_aberration(E, dx, coefficients={(4, 0): 0.25},
+    E_ab = la.apply_zernike_aberration(E, dx, coefficients={(4, 0): 0.25},
                                        aperture_radius=0.4e-3)
     phase_var = np.std(np.angle(E_ab[np.abs(E_ab) > 0.1]))
     return phase_var > 0.01, f'phase std = {phase_var:.4f} rad'
@@ -83,7 +83,7 @@ H.run('Zernike aberration: applies phase variation',
 
 def t_dammann_grating():
     try:
-        phase = op.makedammann2d(
+        phase = la.makedammann2d(
             periodx=100, periody=100, waveln_um=1.31,
             wavsamp=0.5, phaselevels=4, phasesteps=2,
             orders=(3, 3), itr=100, seed=42, verbose=False)
@@ -114,9 +114,9 @@ H.run('Mirror: f = R/2 for concave mirror', t_curved_mirror_focus)
 def t_apply_mirror_convergence():
     N = 256; dx = 8e-6; lam = 1.31e-6; R = 50e-3
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_mirror(E_in, lam, dx, radius=R,
+    E_out = la.apply_mirror(E_in, lam, dx, radius=R,
                             aperture_diameter=3e-3)
-    E_foc = op.angular_spectrum_propagate(E_out, R/2, lam, dx)
+    E_foc = la.angular_spectrum_propagate(E_out, R/2, lam, dx)
     I = np.abs(E_foc)**2
     peak_idx = np.unravel_index(np.argmax(I), I.shape)
     err = max(abs(peak_idx[0] - N//2), abs(peak_idx[1] - N//2))
@@ -136,7 +136,7 @@ def t_circular_aperture_throughput_matches_disk_area():
     transmitted power equal to the disk area (within sampling)."""
     N, dx, ap = 256, 8e-6, 1e-3
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_aperture(E_in, dx, shape='circular',
+    E_out = la.apply_aperture(E_in, dx, shape='circular',
                               params={'diameter': ap})
     P_out = float(np.sum(np.abs(E_out)**2) * dx**2)
     P_expect = np.pi * (ap / 2)**2
@@ -155,7 +155,7 @@ def t_rectangular_aperture_throughput_matches_area():
     N, dx = 256, 4e-6
     wx, wy = 200e-6, 150e-6
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_aperture(E_in, dx, shape='rectangular',
+    E_out = la.apply_aperture(E_in, dx, shape='rectangular',
                               params={'width_x': wx, 'width_y': wy})
     P_out = float(np.sum(np.abs(E_out)**2) * dx**2)
     rel = abs(P_out - wx * wy) / (wx * wy)
@@ -173,7 +173,7 @@ def t_gaussian_aperture_attenuates_edges_relative_to_center():
     N, dx = 256, 8e-6
     sigma = 200e-6
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_gaussian_aperture(E_in, dx, sigma=sigma)
+    E_out = la.apply_gaussian_aperture(E_in, dx, sigma=sigma)
     center = float(np.abs(E_out[N//2, N//2]))
     edge = float(np.abs(E_out[N//2, N - 5]))
     return center > 0.99 and edge < 1e-4 * center, \
@@ -189,7 +189,7 @@ def t_apply_zernike_aberration_finite_phase_field():
     inside the aperture for non-zero coefficients."""
     N, dx = 64, 16e-6
     E = np.ones((N, N), dtype=np.complex128)
-    E_ab = op.apply_zernike_aberration(
+    E_ab = la.apply_zernike_aberration(
         E, dx, coefficients={(4, 0): 0.5},
         aperture_radius=0.4e-3)
     inside = np.abs(E_ab) > 0.5
@@ -206,11 +206,11 @@ def t_aperture_then_propagation_preserves_total_power():
     """Total power after (aperture -> ASM) equals power after just the
     aperture (ASM is unitary)."""
     N, dx, lam, ap = 256, 8e-6, 1.31e-6, 1e-3
-    E_in, _, _ = op.create_gaussian_beam(N, dx, 200e-6)
-    E_a = op.apply_aperture(E_in, dx, shape='circular',
+    E_in, _, _ = la.create_gaussian_beam(N, dx, 200e-6)
+    E_a = la.apply_aperture(E_in, dx, shape='circular',
                              params={'diameter': ap})
     P_after_aperture = float(np.sum(np.abs(E_a)**2) * dx**2)
-    E_z = op.angular_spectrum_propagate(E_a, 1e-3, lam, dx)
+    E_z = la.angular_spectrum_propagate(E_a, 1e-3, lam, dx)
     P_after_prop = float(np.sum(np.abs(E_z)**2) * dx**2)
     rel = abs(P_after_aperture - P_after_prop) / P_after_aperture
     return rel < 1e-6, \
@@ -224,7 +224,7 @@ H.run('Aperture + ASM: power conserved across propagation',
 
 def t_turbulence_screen_shape_and_finiteness():
     """Turbulence screen returns a finite array of the requested shape."""
-    screen = op.generate_turbulence_screen(N=256, dx=4e-6, r0=0.1, seed=11)
+    screen = la.generate_turbulence_screen(N=256, dx=4e-6, r0=0.1, seed=11)
     return (screen.shape == (256, 256) and np.all(np.isfinite(screen))
             and float(np.std(screen)) > 0), \
         f'shape={screen.shape}, std={float(np.std(screen)):.3f}'
@@ -240,7 +240,7 @@ def t_apply_mask_phase_only_preserves_amplitude():
     E = np.ones((N, N), dtype=np.complex128)
     rng = np.random.default_rng(2)
     phase_mask = rng.uniform(-np.pi, np.pi, (N, N))
-    E_out = op.apply_mask(E, np.exp(1j * phase_mask))
+    E_out = la.apply_mask(E, np.exp(1j * phase_mask))
     err = np.max(np.abs(np.abs(E_out) - np.abs(E)))
     return err < 1e-12, f'|E_out| - |E| max = {err:.2e}'
 

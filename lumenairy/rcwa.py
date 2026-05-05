@@ -12,7 +12,7 @@ Diffraction efficiencies for 1-D binary phase gratings.
    polarisation and angle-of-incidence effects are significant, the
    results are **approximate**.
 
-   The Fourier-space eigendecomposition (Moharam-Gaylord) is set up
+   The Fourier-space eigendecomposition is set up
    inside the function for future use but the interface S-matrix
    matching required to finish a true RCWA calculation is not yet
    implemented.  Reflection is assumed zero (valid for a lossless
@@ -28,12 +28,7 @@ thin-grating diffraction:
 
 which sums to unity by Parseval's theorem for a pure phase grating.
 
-References
-----------
-Goodman, J. "Introduction to Fourier Optics" 3rd ed., chapter 4
-(for the thin-grating formula).
-Moharam & Gaylord (1981), JOSA 71(7), 811-818 (for full RCWA; not
-yet implemented here).
+See ``REFERENCES.txt`` Sections A and G.
 
 Limitations
 -----------

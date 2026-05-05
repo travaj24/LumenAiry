@@ -18,7 +18,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 
 
 H = Harness('io')
@@ -38,8 +38,8 @@ def t_h5_single_field():
     E = np.random.default_rng(0).standard_normal((N, N)).astype(np.complex128)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'f.h5')
-        op.save_field_h5(p, E, dx=dx, wavelength=lam)
-        E2, meta = op.load_field_h5(p)
+        la.save_field_h5(p, E, dx=dx, wavelength=lam)
+        E2, meta = la.load_field_h5(p)
     return np.allclose(E, E2), \
         f'roundtrip err={np.max(np.abs(E-E2)):.2e}'
 
@@ -57,8 +57,8 @@ def t_h5_jones():
                     Ey=1j*np.ones((N, N), dtype=np.complex128), dx=dx)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'j.h5')
-        op.save_jones_field_h5(p, jf, wavelength=lam)
-        result = op.load_jones_field_h5(p)
+        la.save_jones_field_h5(p, jf, wavelength=lam)
+        result = la.load_jones_field_h5(p)
         jf2 = result[0] if isinstance(result, tuple) else result
     ok = np.allclose(jf.Ex, jf2.Ex) and np.allclose(jf.Ey, jf2.Ey)
     return ok, 'jones roundtrip OK' if ok else 'mismatch'
@@ -75,9 +75,9 @@ def t_h5_list_contents():
     E = np.ones((N, N), dtype=np.complex128)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'lc.h5')
-        op.append_plane_h5(p, E, dx=dx, dy=dx, z=0, label='plane0')
-        op.append_plane_h5(p, E*2, dx=dx, dy=dx, z=1e-3, label='plane1')
-        contents = op.list_h5_contents(p)
+        la.append_plane_h5(p, E, dx=dx, dy=dx, z=0, label='plane0')
+        la.append_plane_h5(p, E*2, dx=dx, dy=dx, z=1e-3, label='plane1')
+        contents = la.list_h5_contents(p)
     return len(contents) >= 2, f'{len(contents)} planes listed'
 
 
@@ -95,8 +95,8 @@ def t_h5_save_planes():
                'dx': dx, 'z': 1e-3, 'label': 'out'}]
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'planes.h5')
-        op.save_planes_h5(p, planes, wavelength=lam)
-        loaded, meta = op.load_planes_h5(p)
+        la.save_planes_h5(p, planes, wavelength=lam)
+        loaded, meta = la.load_planes_h5(p)
     return len(loaded) == 2, f'{len(loaded)} planes loaded'
 
 
@@ -113,9 +113,9 @@ def t_hdf5_roundtrip_append():
               + 1j * np.random.default_rng(43).standard_normal((N, N)))
     with tempfile.TemporaryDirectory() as td:
         path = os.path.join(td, 'test.h5')
-        op.append_plane_h5(path, E_orig, dx=dx, dy=dx, z=0.0,
+        la.append_plane_h5(path, E_orig, dx=dx, dy=dx, z=0.0,
                            label='test')
-        loaded = op.load_planes_h5(path)
+        loaded = la.load_planes_h5(path)
         planes = loaded[0] if isinstance(loaded, tuple) else loaded
         E_loaded = planes[0]['field']
     err = np.max(np.abs(E_orig - E_loaded))
@@ -133,9 +133,9 @@ def t_phase_file_roundtrip():
     phase = np.random.default_rng(1).standard_normal((32, 32))
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'ph.csv')
-        op.save_phase_file(p, phase, cell_pixel_size=dx,
+        la.save_phase_file(p, phase, cell_pixel_size=dx,
                            metadata={'wavelength': lam})
-        result = op.load_phase_file(p)
+        result = la.load_phase_file(p)
         phase2 = result[0] if isinstance(result, tuple) else result
     return np.allclose(phase, phase2, atol=1e-6), \
         f'roundtrip err={np.max(np.abs(phase-phase2)):.2e}'
@@ -149,13 +149,13 @@ H.section('Zemax export / import')
 
 
 def t_zemax_export_reimport():
-    pres = op.make_doublet(50e-3, -30e-3, -80e-3, 4e-3, 2e-3,
+    pres = la.make_doublet(50e-3, -30e-3, -80e-3, 4e-3, 2e-3,
                            'N-BK7', 'N-SF6HT', aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         txt_path = os.path.join(td, 'test.txt')
         zmx_path = os.path.join(td, 'test.zmx')
-        op.export_zemax_lens_data(pres, txt_path, wavelength=lam)
-        op.export_zemax_zmx(pres, zmx_path, wavelength=lam)
+        la.export_zemax_lens_data(pres, txt_path, wavelength=lam)
+        la.export_zemax_zmx(pres, zmx_path, wavelength=lam)
         with open(txt_path) as f:
             txt = f.read()
         has_surfaces = 'STANDARD' in txt and 'N-BK7' in txt
@@ -171,12 +171,12 @@ H.run('Zemax export: valid surface table + wavelength',
 
 
 def t_zemax_export_file_sizes():
-    pres = op.make_singlet(50e-3, -30e-3, 4e-3, 'N-BK7', aperture=5e-3)
+    pres = la.make_singlet(50e-3, -30e-3, 4e-3, 'N-BK7', aperture=5e-3)
     with tempfile.TemporaryDirectory() as td:
         txt = os.path.join(td, 'test.txt')
-        op.export_zemax_lens_data(pres, txt, wavelength=lam)
+        la.export_zemax_lens_data(pres, txt, wavelength=lam)
         zmx = os.path.join(td, 'test.zmx')
-        op.export_zemax_zmx(pres, zmx, wavelength=lam)
+        la.export_zemax_zmx(pres, zmx, wavelength=lam)
         ok = (os.path.getsize(txt) > 100
               and os.path.getsize(zmx) > 100)
     return ok, f'files have nontrivial size'
@@ -186,13 +186,13 @@ H.run('zemax export files valid', t_zemax_export_file_sizes)
 
 
 def t_load_zmx_prescription():
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         zmx = os.path.join(td, 'test.zmx')
-        op.export_zemax_zmx(pres, zmx, wavelength=lam)
+        la.export_zemax_zmx(pres, zmx, wavelength=lam)
         try:
-            rx = op.load_zmx_prescription(zmx)
+            rx = la.load_zmx_prescription(zmx)
             return 'surfaces' in rx, \
                 f'loaded {len(rx.get("surfaces", []))} surfaces'
         except Exception as e:
@@ -228,14 +228,14 @@ H.section('CODE V .seq import/export')
 
 
 def t_codev_seq_roundtrip():
-    pres = op.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
+    pres = la.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
                            d1=4e-3, d2=2e-3,
                            glass1='N-BK7', glass2='N-SF6HT',
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'doublet.seq')
-        op.export_codev_seq(pres, p, wavelength=1.31e-6, stop_surface=0)
-        loaded = op.load_codev_seq(p)
+        la.export_codev_seq(pres, p, wavelength=1.31e-6, stop_surface=0)
+        loaded = la.load_codev_seq(p)
     ok = (len(loaded['surfaces']) == len(pres['surfaces'])
           and loaded['thicknesses'] == pres['thicknesses']
           and all(a['radius'] == b['radius']
@@ -251,14 +251,14 @@ H.run('CODE V .seq: doublet round-trip', t_codev_seq_roundtrip)
 
 
 def t_codev_seq_units_mm():
-    pres = op.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=25.4e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=25.4e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'singlet.seq')
-        op.export_codev_seq(pres, p, wavelength=1.31e-6, units='MM')
+        la.export_codev_seq(pres, p, wavelength=1.31e-6, units='MM')
         with open(p) as f:
             txt = f.read()
         has_dim_mm = 'DIM MM' in txt
-        loaded = op.load_codev_seq(p)
+        loaded = la.load_codev_seq(p)
     ok = (has_dim_mm
           and abs(loaded['surfaces'][0]['radius'] - 50e-3) < 1e-12
           and abs(loaded['thicknesses'][0] - 3e-3) < 1e-12
@@ -270,12 +270,12 @@ H.run('CODE V .seq: DIM MM units round-trip', t_codev_seq_units_mm)
 
 
 def t_codev_seq_conic_roundtrip():
-    pres = op.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
     pres['surfaces'][0]['conic'] = -0.5
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'conic.seq')
-        op.export_codev_seq(pres, p, wavelength=1.55e-6)
-        loaded = op.load_codev_seq(p)
+        la.export_codev_seq(pres, p, wavelength=1.55e-6)
+        loaded = la.load_codev_seq(p)
     return abs(loaded['surfaces'][0]['conic'] - (-0.5)) < 1e-12, \
         f'conic = {loaded["surfaces"][0]["conic"]}'
 
@@ -285,14 +285,14 @@ H.run('CODE V .seq: conic constant round-trip',
 
 
 def t_codev_seq_stop_position():
-    pres = op.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
+    pres = la.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
                            d1=4e-3, d2=2e-3,
                            glass1='N-BK7', glass2='N-SF6HT',
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'stop2.seq')
-        op.export_codev_seq(pres, p, stop_surface=2)
-        loaded = op.load_codev_seq(p)
+        la.export_codev_seq(pres, p, stop_surface=2)
+        loaded = la.load_codev_seq(p)
     return loaded.get('stop_index') == 2, \
         f'stop_index = {loaded.get("stop_index")}'
 
@@ -306,14 +306,14 @@ H.section('Quadoa Optikos .qos import/export')
 
 
 def t_quadoa_qos_doublet_roundtrip():
-    pres = op.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
+    pres = la.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
                            d1=4e-3, d2=2e-3,
                            glass1='N-BK7', glass2='N-SF6HT',
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'doublet.qos')
-        op.export_quadoa_qos(pres, p, wavelength=1.31e-6, stop_surface=0)
-        loaded = op.load_quadoa_qos(p)
+        la.export_quadoa_qos(pres, p, wavelength=1.31e-6, stop_surface=0)
+        loaded = la.load_quadoa_qos(p)
     same_n = len(loaded['surfaces']) == len(pres['surfaces'])
     same_t = (len(loaded['thicknesses']) == len(pres['thicknesses'])
               and all(abs(a - b) < 1e-12 for a, b in
@@ -332,13 +332,13 @@ H.run('Quadoa .qos: doublet round-trip', t_quadoa_qos_doublet_roundtrip)
 
 
 def t_quadoa_qos_units_mm():
-    pres = op.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=25.4e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=25.4e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'singlet.qos')
-        op.export_quadoa_qos(pres, p, wavelength=1.31e-6, units='MM')
+        la.export_quadoa_qos(pres, p, wavelength=1.31e-6, units='MM')
         with open(p) as f:
             txt = f.read()
-        loaded = op.load_quadoa_qos(p)
+        loaded = la.load_quadoa_qos(p)
     ok = ('"units": "MM"' in txt
           and abs(loaded['surfaces'][0]['radius'] - 50e-3) < 1e-12
           and abs(loaded['thicknesses'][0] - 3e-3) < 1e-12
@@ -353,7 +353,7 @@ def t_quadoa_qos_aspheric_and_semi_diameters():
     """Aspheric coeffs, semi_diameter, and biconic radius_y all
     round-trip through .qos JSON.
     """
-    pres = op.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
     pres['surfaces'][0]['conic'] = -0.5
     pres['surfaces'][0]['aspheric_coeffs'] = [0.0, 1e-6, -2e-9, 3e-12]
     pres['surfaces'][0]['semi_diameter'] = 5.5e-3
@@ -361,8 +361,8 @@ def t_quadoa_qos_aspheric_and_semi_diameters():
     pres['surfaces'][1]['conic_y'] = 0.1
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'asph.qos')
-        op.export_quadoa_qos(pres, p, wavelength=1.31e-6)
-        loaded = op.load_quadoa_qos(p)
+        la.export_quadoa_qos(pres, p, wavelength=1.31e-6)
+        loaded = la.load_quadoa_qos(p)
     s0 = loaded['surfaces'][0]
     s1 = loaded['surfaces'][1]
     ok = (abs(s0['conic'] - (-0.5)) < 1e-12
@@ -384,14 +384,14 @@ def t_quadoa_qos_apply_real_lens_works():
     """A round-tripped Quadoa prescription drives apply_real_lens
     without errors and yields a finite, non-zero output.
     """
-    pres = op.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=8e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=8e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'singlet.qos')
-        op.export_quadoa_qos(pres, p, wavelength=1.31e-6)
-        loaded = op.load_quadoa_qos(p)
+        la.export_quadoa_qos(pres, p, wavelength=1.31e-6)
+        loaded = la.load_quadoa_qos(p)
     N, dx, lam = 256, 8e-6, 1.31e-6
     E = np.ones((N, N), dtype=np.complex128)
-    E_out = op.apply_real_lens(E, loaded, lam, dx)
+    E_out = la.apply_real_lens(E, loaded, lam, dx)
     ok = np.all(np.isfinite(E_out)) and np.abs(E_out).max() > 0
     return ok, f'peak={np.abs(E_out).max():.3e}'
 
@@ -406,11 +406,11 @@ H.section('Geometric scaling: scale_prescription')
 
 def t_scale_prescription_radii_and_thicknesses():
     """Scaling by 0.5 halves every linear dimension."""
-    pres = op.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
+    pres = la.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
                            d1=4e-3, d2=2e-3,
                            glass1='N-BK7', glass2='N-SF6HT',
                            aperture=20e-3)
-    pres_half = op.scale_prescription(pres, 0.5)
+    pres_half = la.scale_prescription(pres, 0.5)
     radii_ok = all(
         abs(pres_half['surfaces'][i]['radius']
             - 0.5 * pres['surfaces'][i]['radius']) < 1e-12
@@ -433,13 +433,13 @@ H.run('scale_prescription: linear dimensions scale uniformly',
 def t_scale_prescription_preserves_magnification():
     """Geometric self-similarity preserves the paraxial A_p (magnification)."""
     from lumenairy.raytrace import system_abcd_prescription
-    pres = op.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
+    pres = la.make_doublet(R1=50e-3, R2=-30e-3, R3=-80e-3,
                            d1=4e-3, d2=2e-3,
                            glass1='N-BK7', glass2='N-SF6HT',
                            aperture=20e-3)
     pres['object_distance'] = 100e-3
     M_orig, _, _, _ = system_abcd_prescription(pres, 1.31e-6)
-    pres_half = op.scale_prescription(pres, 0.5)
+    pres_half = la.scale_prescription(pres, 0.5)
     M_half, _, _, _ = system_abcd_prescription(pres_half, 1.31e-6)
     A_orig, A_half = float(M_orig[0, 0]), float(M_half[0, 0])
     rel_err = abs(A_orig - A_half) / max(abs(A_orig), 1e-30)
@@ -454,9 +454,9 @@ H.run('scale_prescription: magnification A is invariant under scaling',
 def t_scale_prescription_aspheric_coeffs():
     """A_n must scale as 1/factor**(n-1) so the surface sag
     sum_n A_n * h^n scales linearly with factor when h does."""
-    pres = op.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
     pres['surfaces'][0]['aspheric_coeffs'] = {4: 1e-6, 6: 1e-9}
-    pres_half = op.scale_prescription(pres, 0.5)
+    pres_half = la.scale_prescription(pres, 0.5)
     A4_new = pres_half['surfaces'][0]['aspheric_coeffs'][4]
     A6_new = pres_half['surfaces'][0]['aspheric_coeffs'][6]
     expected_A4 = 1e-6 / (0.5 ** 3)  # / s^(n-1) = / 0.5^3 = * 8
@@ -482,11 +482,11 @@ H.run('scale_prescription: aspheric A_n scale to keep sag self-similar',
 
 def t_scale_prescription_round_trip():
     """Scaling by s then by 1/s recovers the original to machine precision."""
-    pres = op.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
     pres['surfaces'][0]['aspheric_coeffs'] = {4: 1e-6, 6: 1e-9}
     pres['surfaces'][0]['conic'] = -0.5
-    pres_round = op.scale_prescription(
-        op.scale_prescription(pres, 0.25), 4.0)
+    pres_round = la.scale_prescription(
+        la.scale_prescription(pres, 0.25), 4.0)
     R_err = abs(pres_round['surfaces'][0]['radius']
                 - pres['surfaces'][0]['radius'])
     A4_err = abs(pres_round['surfaces'][0]['aspheric_coeffs'][4]
@@ -503,11 +503,11 @@ H.run('scale_prescription: round-trip s then 1/s recovers original',
 
 def t_scale_prescription_invalid_factor():
     """factor <= 0 or non-finite must raise ValueError."""
-    pres = op.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
+    pres = la.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
     raised = []
     for bad in (0, -1, np.inf, np.nan):
         try:
-            op.scale_prescription(pres, bad)
+            la.scale_prescription(pres, bad)
         except ValueError:
             raised.append(True)
         else:
@@ -530,7 +530,7 @@ def t_user_library_material():
         name = '_test_physics_mat_'
         save_material(name, n=1.55)
         load_material(name)
-        n = op.get_glass_index(name, 1.31e-6)
+        n = la.get_glass_index(name, 1.31e-6)
         delete_material(name)
         return abs(n - 1.55) < 1e-6, f'loaded n = {n}'
     except Exception as e:

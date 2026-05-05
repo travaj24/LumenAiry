@@ -33,7 +33,7 @@ _LIB_ROOT = os.path.normpath(os.path.join(_HERE, '..'))
 if _LIB_ROOT not in sys.path:
     sys.path.insert(0, _LIB_ROOT)
 
-import lumenairy as op                    # noqa: E402
+import lumenairy as la                    # noqa: E402
 import lumenairy.raytrace as rt           # noqa: E402
 
 
@@ -74,15 +74,15 @@ def test_singlet_lensmaker():
     R1, R2 = 50e-3, -50e-3
     d = 5e-3
     wavelength = 0.587e-6    # d-line for classical lensmaker comparison
-    rx = op.make_singlet(R1=R1, R2=R2, d=d, glass='N-BK7',
+    rx = la.make_singlet(R1=R1, R2=R2, d=d, glass='N-BK7',
                           aperture=20e-3)
-    n = op.get_glass_index('N-BK7', wavelength)
+    n = la.get_glass_index('N-BK7', wavelength)
 
     # Thick-lens lensmaker: 1/f = (n-1) [1/R1 - 1/R2 + (n-1)*d/(n*R1*R2)]
     f_lensmaker = 1.0 / ((n - 1.0) * (
         1.0 / R1 - 1.0 / R2 + (n - 1.0) * d / (n * R1 * R2)))
 
-    info = op.lens_abcd(rx, wavelength)
+    info = la.lens_abcd(rx, wavelength)
     _check("EFL matches lensmaker to <0.1%",
            _isclose(info.efl, f_lensmaker, rtol=1e-3),
            f"library={info.efl*1e3:.4f} mm, lensmaker={f_lensmaker*1e3:.4f} mm")
@@ -106,17 +106,17 @@ def test_singlet_lensmaker():
 
 def test_doublet_abcd():
     _section("Test 2: doublet ABCD vs manual matrix composition")
-    rx = op.make_doublet(R1=50e-3, R2=-50e-3, R3=-100e-3,
+    rx = la.make_doublet(R1=50e-3, R2=-50e-3, R3=-100e-3,
                            d1=5e-3, d2=3e-3,
                            glass1='N-BK7', glass2='N-SF2',
                            aperture=20e-3)
     wavelength = 0.587e-6
-    info = op.lens_abcd(rx, wavelength)
+    info = la.lens_abcd(rx, wavelength)
 
     # Build the ABCD manually surface-by-surface in reduced (y, nu)
     # form: R = [[1, 0], [-phi, 1]],  T = [[1, t/n], [0, 1]]
-    n1 = op.get_glass_index('N-BK7', wavelength)
-    n2 = op.get_glass_index('N-SF2', wavelength)
+    n1 = la.get_glass_index('N-BK7', wavelength)
+    n2 = la.get_glass_index('N-SF2', wavelength)
     R1, R2, R3 = 50e-3, -50e-3, -100e-3
     d1, d2 = 5e-3, 3e-3
 
@@ -153,18 +153,18 @@ def test_doublet_abcd():
 def test_find_lenses():
     _section("Test 3: find_lenses auto-detection")
     # Singlet: one element
-    rx1 = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx1 = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                             aperture=20e-3)
-    lenses1 = op.find_lenses(rt.surfaces_from_prescription(rx1), 0.55e-6)
+    lenses1 = la.find_lenses(rt.surfaces_from_prescription(rx1), 0.55e-6)
     _check("singlet detected as 1 element", len(lenses1) == 1,
            f"found {len(lenses1)}")
 
     # Cemented doublet: one element (glass->glass interior)
-    rx2 = op.make_doublet(R1=50e-3, R2=-50e-3, R3=-100e-3,
+    rx2 = la.make_doublet(R1=50e-3, R2=-50e-3, R3=-100e-3,
                             d1=5e-3, d2=3e-3,
                             glass1='N-BK7', glass2='N-SF2',
                             aperture=20e-3)
-    lenses2 = op.find_lenses(rt.surfaces_from_prescription(rx2), 0.55e-6)
+    lenses2 = la.find_lenses(rt.surfaces_from_prescription(rx2), 0.55e-6)
     _check("cemented doublet stays grouped as 1 element",
            len(lenses2) == 1, f"found {len(lenses2)}")
 
@@ -172,14 +172,14 @@ def test_find_lenses():
     surf1 = rt.surfaces_from_prescription(rx1)
     surf1[1].thickness = 5e-3  # Air gap to next lens
     surf1.extend(rt.surfaces_from_prescription(rx1))
-    lenses3 = op.find_lenses(surf1, 0.55e-6)
+    lenses3 = la.find_lenses(surf1, 0.55e-6)
     _check("two air-separated singlets detected as 2 elements",
            len(lenses3) == 2, f"found {len(lenses3)}")
 
     # LensInfo round-trip through lens_abcd(LensInfo, surfaces=...)
     surfaces = rt.surfaces_from_prescription(rx2)
-    li_vis = op.find_lenses(surfaces, 0.55e-6)[0]
-    li_nir = op.lens_abcd(li_vis, 1.31e-6, surfaces=surfaces)
+    li_vis = la.find_lenses(surfaces, 0.55e-6)[0]
+    li_nir = la.lens_abcd(li_vis, 1.31e-6, surfaces=surfaces)
     _check("lens_abcd(LensInfo, surfaces=...) preserves start_index",
            li_nir.start_index == li_vis.start_index,
            f"vis={li_vis.start_index} nir={li_nir.start_index}")
@@ -187,7 +187,7 @@ def test_find_lenses():
            li_nir.end_index == li_vis.end_index,
            f"vis={li_vis.end_index} nir={li_nir.end_index}")
     _check("lens_abcd(LensInfo) EFL matches manual slice",
-           abs(li_nir.efl - op.lens_abcd(
+           abs(li_nir.efl - la.lens_abcd(
                surfaces[li_vis.start_index:li_vis.end_index + 1],
                1.31e-6).efl) < 1e-12,
            f"{li_nir.efl}")
@@ -202,7 +202,7 @@ def test_find_lenses():
 
 def test_seidel_invariants():
     _section("Test 4: stop-aware Seidel invariants")
-    rx = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                           aperture=20e-3)
     surfaces = rt.surfaces_from_prescription(rx)
     wavelength = 0.587e-6
@@ -241,10 +241,10 @@ def test_seidel_invariants():
 
 def test_compute_pupils():
     _section("Test 5: compute_pupils")
-    rx = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                           aperture=20e-3)
     surfaces = rt.surfaces_from_prescription(rx)
-    pupils = op.compute_pupils(surfaces, 0.587e-6)
+    pupils = la.compute_pupils(surfaces, 0.587e-6)
 
     # Stop at surface 0 => EP coincides with stop
     _check("EP at z=0 when stop is surface 0",
@@ -270,7 +270,7 @@ def test_compute_pupils():
 
 def test_refocus():
     _section("Test 6: refocus vs full retrace")
-    rx = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                           aperture=20e-3)
     surfaces = rt.surfaces_from_prescription(rx)
     wavelength = 0.587e-6
@@ -282,7 +282,7 @@ def test_refocus():
 
     # Refocus to paraxial focus (BFL after last surface)
     _, _, bfl, _ = rt.system_abcd(surfaces, wavelength)
-    refocused = op.refocus(result, bfl)
+    refocused = la.refocus(result, bfl)
     rms_r, _ = rt.spot_rms(refocused)
 
     # Full retrace with an image-plane surface
@@ -319,14 +319,14 @@ def test_refocus():
 
 def test_through_focus_rms():
     _section("Test 7: through_focus_rms locates best focus")
-    rx = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                           aperture=20e-3)
     surfaces = rt.surfaces_from_prescription(rx)
     wavelength = 0.587e-6
     _, _, bfl, _ = rt.system_abcd(surfaces, wavelength)
 
     shifts = bfl + np.linspace(-5e-3, 5e-3, 101)
-    _, rms, best = op.through_focus_rms(surfaces, wavelength, 8e-3, shifts,
+    _, rms, best = la.through_focus_rms(surfaces, wavelength, 8e-3, shifts,
                                           num_rings=5, rays_per_ring=36)
     # Best focus is offset from paraxial by spherical aberration.  For
     # an F/5 biconvex singlet the best RMS spot is roughly 1-3 mm
@@ -347,7 +347,7 @@ def test_through_focus_rms():
 
 def test_lens_operator_agreement():
     _section("Test 8: apply_real_lens vs apply_real_lens_traced")
-    rx = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                           aperture=20e-3)
     wavelength = 1.31e-6
     N, dx = 512, 10e-6
@@ -355,8 +355,8 @@ def test_lens_operator_agreement():
     X, Y = np.meshgrid(x, x, indexing='xy')
     E_in = np.exp(-(X ** 2 + Y ** 2) / (5e-3) ** 2).astype(np.complex128)
 
-    E_rl = op.apply_real_lens(E_in, rx, wavelength, dx)
-    E_tr = op.apply_real_lens_traced(E_in, rx, wavelength, dx,
+    E_rl = la.apply_real_lens(E_in, rx, wavelength, dx)
+    E_tr = la.apply_real_lens_traced(E_in, rx, wavelength, dx,
                                         n_workers=1, parallel_amp=False,
                                         min_coarse_samples_per_aperture=0)
     I_rl = np.abs(E_rl) ** 2
@@ -376,7 +376,7 @@ def test_lens_operator_agreement():
     # planes, not lens exit), but it should at least run without
     # error and produce a non-zero output.
     try:
-        E_ms = op.apply_real_lens_maslov(
+        E_ms = la.apply_real_lens_maslov(
             E_in, rx, wavelength, dx,
             ray_field_samples=8, ray_pupil_samples=8,
             integration_method='stationary_phase',
@@ -396,7 +396,7 @@ def test_lens_operator_agreement():
 
 def test_error_codes():
     _section("Test 9: per-ray error codes")
-    rx = op.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=5e-3, glass='N-BK7',
                           aperture=20e-3)
     surfaces = rt.surfaces_from_prescription(rx)
 
@@ -405,8 +405,8 @@ def test_error_codes():
                           field_angle=0.0, wavelength=0.587e-6)
     result = rt.trace(rays, surfaces, 0.587e-6)
     final = result.image_rays
-    n_aperture = int(np.sum(final.error_code == op.RAY_APERTURE))
-    n_ok = int(np.sum(final.error_code == op.RAY_OK))
+    n_aperture = int(np.sum(final.error_code == la.RAY_APERTURE))
+    n_ok = int(np.sum(final.error_code == la.RAY_OK))
     _check("aperture-vignetted rays flagged RAY_APERTURE",
            n_aperture > 0,
            f"alive={n_ok}, aperture-killed={n_aperture}")
@@ -421,7 +421,7 @@ def test_error_codes():
 # ---------------------------------------------------------------------------
 
 def main():
-    print(f"lumenairy v{op.__version__}")
+    print(f"lumenairy v{la.__version__}")
     print(f"Validation lens test harness")
 
     test_singlet_lensmaker()

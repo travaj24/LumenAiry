@@ -14,7 +14,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.polarization import JonesField
 
 
@@ -26,7 +26,7 @@ def t_hwp_rotation():
     Ex = np.ones((N, N), dtype=np.complex128)
     Ey = np.zeros((N, N), dtype=np.complex128)
     jf = JonesField(Ex=Ex, Ey=Ey, dx=dx)
-    op.apply_half_wave_plate(jf, angle=np.radians(22.5))
+    la.apply_half_wave_plate(jf, angle=np.radians(22.5))
     Ex_out = jf.Ex[N//2, N//2]
     Ey_out = jf.Ey[N//2, N//2]
     ratio = abs(Ey_out) / abs(Ex_out)
@@ -41,7 +41,7 @@ def t_qwp_linear_to_circular():
     Ex = np.ones((N, N), dtype=np.complex128)
     Ey = np.zeros((N, N), dtype=np.complex128)
     jf = JonesField(Ex=Ex, Ey=Ey, dx=dx)
-    op.apply_quarter_wave_plate(jf, angle=np.radians(45))
+    la.apply_quarter_wave_plate(jf, angle=np.radians(45))
     Ex_out = jf.Ex[N//2, N//2]
     Ey_out = jf.Ey[N//2, N//2]
     amp_ratio = abs(Ey_out) / abs(Ex_out) if abs(Ex_out) > 0 else 0
@@ -61,7 +61,7 @@ def t_polarization_through_lens():
     E = np.ones((N, N), dtype=np.complex128)
     jf = JonesField(Ex=E * np.cos(np.pi/4),
                     Ey=E * np.sin(np.pi/4), dx=dx)
-    pres = op.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     jf.apply_real_lens(pres, lam)
     cx = N // 2
     ratio = (abs(jf.Ey[cx, cx] / jf.Ex[cx, cx])
@@ -77,7 +77,7 @@ def t_stokes_parameters():
     N = 64; dx = 16e-6
     jf = JonesField(Ex=np.ones((N, N), dtype=np.complex128),
                     Ey=np.zeros((N, N), dtype=np.complex128), dx=dx)
-    S = op.stokes_parameters(jf)
+    S = la.stokes_parameters(jf)
     S0 = S['S0'][N//2, N//2]; S1 = S['S1'][N//2, N//2]
     S2 = S['S2'][N//2, N//2]; S3 = S['S3'][N//2, N//2]
     return (abs(S1/S0 - 1) < 0.01 and abs(S2) < 0.01 and abs(S3) < 0.01,
@@ -91,7 +91,7 @@ def t_polarization_ellipse():
     N = 64; dx = 16e-6
     jf = JonesField(Ex=np.ones((N, N), dtype=np.complex128),
                     Ey=1j*np.ones((N, N), dtype=np.complex128), dx=dx)
-    result = op.polarization_ellipse(jf)
+    result = la.polarization_ellipse(jf)
     if isinstance(result, tuple) and len(result) == 2:
         return True, f'returns tuple of length {len(result)}'
     return True, f'returns {type(result)}'
@@ -103,7 +103,7 @@ H.run('Polarization ellipse: circular -> chi=45 deg',
 
 def t_jones_field_biconic():
     N = 256; dx = 16e-6; lam = 1.31e-6
-    pres = op.make_biconic(50e-3, 60e-3, float('inf'), float('inf'),
+    pres = la.make_biconic(50e-3, 60e-3, float('inf'), float('inf'),
                            3e-3, 'N-BK7', aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
     jf = JonesField(Ex=E.copy(), Ey=E.copy(), dx=dx)
@@ -121,14 +121,14 @@ H.section('Jones pupil (exit-pupil 2x2 Jones matrix)')
 def t_jones_pupil_scalar_lens_diagonal():
     """A scalar (non-polarizing) lens should have a diagonal Jones pupil:
     J_xx = J_yy and J_xy = J_yx = 0."""
-    pres = op.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=5e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=5e-3)
     N, dx, lam = 128, 32e-6, 1.31e-6
 
     def apply(jf):
         jf.apply_real_lens(pres, lam)
         return jf
 
-    J, _, _ = op.compute_jones_pupil(apply, N, dx, lam)
+    J, _, _ = la.compute_jones_pupil(apply, N, dx, lam)
     jxx_peak = float(np.abs(J[..., 0, 0]).max())
     jyy_peak = float(np.abs(J[..., 1, 1]).max())
     jxy_peak = float(np.abs(J[..., 0, 1]).max())
@@ -149,15 +149,15 @@ def t_plot_jones_pupil_returns_figure():
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
-    pres = op.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=5e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=5e-3)
     N, dx, lam = 64, 32e-6, 1.31e-6
 
     def apply(jf):
         jf.apply_real_lens(pres, lam)
         return jf
 
-    J, dx_out, dy_out = op.compute_jones_pupil(apply, N, dx, lam)
-    fig, axes = op.plot_jones_pupil(J, dx=dx_out, dy=dy_out)
+    J, dx_out, dy_out = la.compute_jones_pupil(apply, N, dx, lam)
+    fig, axes = la.plot_jones_pupil(J, dx=dx_out, dy=dy_out)
     ok = (fig is not None and axes.shape == (2, 4))
     plt.close('all')
     return ok, f'fig={fig is not None}, axes.shape={axes.shape}'
@@ -174,7 +174,7 @@ def t_plot_jones_pupil_amplitude_only():
     J = np.zeros((32, 32, 2, 2), dtype=np.complex128)
     J[..., 0, 0] = 1.0
     J[..., 1, 1] = 1.0
-    fig, axes = op.plot_jones_pupil(
+    fig, axes = la.plot_jones_pupil(
         J, show_phase=False, show_amplitude=True)
     ok = (fig is not None and axes.shape == (2, 2))
     plt.close('all')
@@ -186,7 +186,7 @@ H.run('plot_jones_pupil (amp-only) returns 2x2', t_plot_jones_pupil_amplitude_on
 
 def t_plot_jones_pupil_rejects_wrong_shape():
     try:
-        op.plot_jones_pupil(np.zeros((32, 32, 3, 3), dtype=np.complex128))
+        la.plot_jones_pupil(np.zeros((32, 32, 3, 3), dtype=np.complex128))
         return False, 'should have raised'
     except ValueError:
         return True, 'ValueError raised'
@@ -200,7 +200,7 @@ def t_jones_field_sas_propagate():
     """JonesField.sas_propagate applies SAS to Ex and Ey independently
     and updates dx/dy."""
     N, dx, lam = 256, 4e-6, 1.31e-6
-    E, _, _ = op.create_gaussian_beam(N, dx, 50e-6)
+    E, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
     jf = JonesField(Ex=E.copy(), Ey=E.copy() * 1j, dx=dx)
     jf.sas_propagate(z=500e-3, wavelength=lam)
     expected_dx = lam * 500e-3 / (2 * N * dx)
@@ -251,7 +251,7 @@ def t_malus_law_through_two_linear_polarizers():
     expected = []
     for theta in (0.0, np.pi/6, np.pi/4, np.pi/3, np.pi/2):
         jf = JonesField(Ex=Ex.copy(), Ey=Ey.copy(), dx=dx)
-        op.apply_polarizer(jf, angle=theta)
+        la.apply_polarizer(jf, angle=theta)
         I = float(np.abs(jf.Ex[N//2, N//2])**2 +
                   np.abs(jf.Ey[N//2, N//2])**2)
         intensities.append(I)
@@ -273,8 +273,8 @@ def t_crossed_polarizers_block_light():
     Ex = np.ones((N, N), dtype=np.complex128) * np.cos(np.pi/4)
     Ey = np.ones((N, N), dtype=np.complex128) * np.sin(np.pi/4)
     jf = JonesField(Ex=Ex, Ey=Ey, dx=dx)
-    op.apply_polarizer(jf, angle=0.0)         # x-polarizer
-    op.apply_polarizer(jf, angle=np.pi / 2)   # y-polarizer (crossed)
+    la.apply_polarizer(jf, angle=0.0)         # x-polarizer
+    la.apply_polarizer(jf, angle=np.pi / 2)   # y-polarizer (crossed)
     I = float(np.abs(jf.Ex[N//2, N//2])**2 +
               np.abs(jf.Ey[N//2, N//2])**2)
     return I < 1e-15, f'transmitted I = {I:.2e}'
@@ -293,11 +293,11 @@ def t_two_quarter_wave_plates_equal_half_wave():
     Ex = np.ones((N, N), dtype=np.complex128)
     Ey = np.zeros((N, N), dtype=np.complex128)
     jf_h = JonesField(Ex=Ex.copy(), Ey=Ey.copy(), dx=dx)
-    op.apply_half_wave_plate(jf_h, angle=angle)
+    la.apply_half_wave_plate(jf_h, angle=angle)
     # Compare: two QWPs at the same angle.
     jf_q = JonesField(Ex=Ex.copy(), Ey=Ey.copy(), dx=dx)
-    op.apply_quarter_wave_plate(jf_q, angle=angle)
-    op.apply_quarter_wave_plate(jf_q, angle=angle)
+    la.apply_quarter_wave_plate(jf_q, angle=angle)
+    la.apply_quarter_wave_plate(jf_q, angle=angle)
     err_x = abs(jf_h.Ex[N//2, N//2] - jf_q.Ex[N//2, N//2])
     err_y = abs(jf_h.Ey[N//2, N//2] - jf_q.Ey[N//2, N//2])
     return err_x < 1e-10 and err_y < 1e-10, \
@@ -315,7 +315,7 @@ def t_circular_polarization_S3_signature():
     Ex = np.ones((N, N), dtype=np.complex128)
     Ey = 1j * np.ones((N, N), dtype=np.complex128)
     jf = JonesField(Ex=Ex, Ey=Ey, dx=dx)
-    S = op.stokes_parameters(jf)
+    S = la.stokes_parameters(jf)
     s0 = float(S['S0'][N//2, N//2])
     s1 = float(S['S1'][N//2, N//2])
     s2 = float(S['S2'][N//2, N//2])
@@ -337,7 +337,7 @@ def t_degree_of_polarization_for_pure_states_is_one():
     Ex = np.ones((N, N), dtype=np.complex128)
     Ey = 1j * np.ones((N, N), dtype=np.complex128) * 0.5
     jf = JonesField(Ex=Ex, Ey=Ey, dx=dx)
-    dop = op.degree_of_polarization(jf)
+    dop = la.degree_of_polarization(jf)
     val = float(np.mean(dop))
     return abs(val - 1.0) < 1e-10, f'DoP mean = {val:.6f}'
 
@@ -350,7 +350,7 @@ def t_jones_field_create_linear_polarized_at_angle():
     """create_linear_polarized at 45 deg gives Ex = Ey at the center."""
     N, dx = 16, 16e-6
     scalar = np.ones((N, N), dtype=np.complex128)
-    jf = op.create_linear_polarized(scalar, dx, angle=np.pi / 4)
+    jf = la.create_linear_polarized(scalar, dx, angle=np.pi / 4)
     ex = jf.Ex[N//2, N//2]
     ey = jf.Ey[N//2, N//2]
     return abs(abs(ex) - abs(ey)) < 1e-10 and abs(abs(ex)) > 0.5, \
@@ -365,8 +365,8 @@ def t_jones_field_create_circular_polarized_S3():
     """create_circular_polarized -> S3/S0 = +/- 1."""
     N, dx = 16, 16e-6
     scalar = np.ones((N, N), dtype=np.complex128)
-    jf = op.create_circular_polarized(scalar, dx, handedness='right')
-    S = op.stokes_parameters(jf)
+    jf = la.create_circular_polarized(scalar, dx, handedness='right')
+    S = la.stokes_parameters(jf)
     s0 = float(np.mean(S['S0']))
     s3 = float(np.mean(S['S3']))
     return abs(abs(s3) / s0 - 1.0) < 1e-10, \
@@ -384,7 +384,7 @@ def t_apply_rotator_preserves_total_power():
     Ey = 0.5 * np.ones((N, N), dtype=np.complex128)
     jf = JonesField(Ex=Ex, Ey=Ey, dx=dx)
     P_in = float(np.sum(np.abs(jf.Ex)**2 + np.abs(jf.Ey)**2))
-    op.apply_rotator(jf, angle=np.radians(33))
+    la.apply_rotator(jf, angle=np.radians(33))
     P_out = float(np.sum(np.abs(jf.Ex)**2 + np.abs(jf.Ey)**2))
     rel = abs(P_out - P_in) / P_in
     return rel < 1e-12, f'P rel diff = {rel:.2e}'

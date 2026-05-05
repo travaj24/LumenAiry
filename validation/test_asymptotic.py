@@ -23,7 +23,7 @@ import numpy as np
 
 from _harness import Harness
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.asymptotic import (
     lg_polynomial,
     hg_polynomial,
@@ -512,7 +512,7 @@ H.section('Layer 3 -- Canonical polynomial fit')
 def _build_test_singlet():
     """100mm focal length BK7 singlet with 12mm aperture, used as the
     test prescription throughout the fit/aberration-tensor tests."""
-    pres = op.make_singlet(
+    pres = la.make_singlet(
         51.5e-3,         # R1
         np.inf,          # R2
         4.1e-3,          # thickness
@@ -898,7 +898,7 @@ H.section('Layer 7 -- LGAberrationMerit')
 def t_lg_merit_runs():
     """LGAberrationMerit can be instantiated and evaluated."""
     pres = _build_test_singlet()
-    merit = op.LGAberrationMerit(
+    merit = la.LGAberrationMerit(
         targets={(2, 0): 1.0, (1, 1): 1.0, (1, -1): 1.0},
         field_points=[(0.0, 0.0)],
         w_s=20e-6, w_p=0.02,
@@ -925,10 +925,10 @@ def t_lg_merit_responds_to_curvature():
     verifies the merit is actually sensitive to design parameters
     (otherwise it would be useless for optimisation)."""
     pres_a = _build_test_singlet()
-    pres_b = op.make_singlet(60.0e-3, np.inf, 4.1e-3, 'N-BK7',
+    pres_b = la.make_singlet(60.0e-3, np.inf, 4.1e-3, 'N-BK7',
                               aperture=12.0e-3)
     pres_b['object_distance'] = 200e-3
-    merit = op.LGAberrationMerit(
+    merit = la.LGAberrationMerit(
         targets={(2, 0): 1.0},
         field_points=[(0.0, 0.0)],
         w_s=20e-6, w_p=0.02,
@@ -965,7 +965,7 @@ def t_lg_merit_handles_bad_prescription():
     # (always-aborts trace).
     pres = _build_test_singlet()
     pres['surfaces'][0]['radius'] = 1e-12   # near-zero radius
-    merit = op.LGAberrationMerit(
+    merit = la.LGAberrationMerit(
         targets={(2, 0): 1.0},
         fit_kwargs=dict(source_box_half=20e-6, pupil_box_half=0.02,
                         n_field=6, n_pupil=6, poly_order=4),
@@ -993,7 +993,7 @@ def t_fit_endpoint_anchored_default_off():
     to existing behaviour; passing True changes the fit slightly but
     keeps it valid."""
     from lumenairy.asymptotic import fit_canonical_polynomials
-    pres = op.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=8e-3)
+    pres = la.make_singlet(50e-3, -50e-3, 3e-3, 'N-BK7', aperture=8e-3)
     pres['object_distance'] = 50e-3
     common = dict(
         wavelength=1.31e-6,

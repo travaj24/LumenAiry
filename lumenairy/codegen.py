@@ -20,10 +20,10 @@ Usage
 -----
 From a .zmx file::
 
-    import lumenairy as op
+    import lumenairy as la
     from lumenairy.codegen import generate_simulation_script
 
-    rx = op.load_zmx_prescription('my_design.zmx')
+    rx = la.load_zmx_prescription('my_design.zmx')
     code = generate_simulation_script(rx, wavelength=1.31e-6)
 
     with open('sim_my_design.py', 'w') as f:
@@ -31,7 +31,7 @@ From a .zmx file::
 
 From a prescription text export::
 
-    rx = op.load_zemax_prescription_txt('design-prescription.txt')
+    rx = la.load_zemax_prescription_txt('design-prescription.txt')
     code = generate_simulation_script(rx)
 
 Author: Andrew Traverso
@@ -132,10 +132,10 @@ def generate_simulation_script(
 
     Examples
     --------
-    >>> import lumenairy as op
+    >>> import lumenairy as la
     >>> from lumenairy.codegen import generate_simulation_script
     >>>
-    >>> rx = op.load_zmx_prescription('AC254-200-C.zmx')
+    >>> rx = la.load_zmx_prescription('AC254-200-C.zmx')
     >>> code = generate_simulation_script(rx, wavelength=1.31e-6,
     ...                                   output_path='sim_ac254.py')
     """
@@ -468,7 +468,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
     lines.append('')
     lines.append('import numpy as np')
     lines.append('import time')
-    lines.append('import lumenairy as op')
+    lines.append('import lumenairy as la')
     lines.append('')
 
     # --- Parameters ---
@@ -547,11 +547,11 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
 
     # Source
     lines.append('    # --- Source ---')
-    lines.append('    E, x, y = op.create_gaussian_beam(N, dx, SOURCE_SIGMA)')
+    lines.append('    E, x, y = la.create_gaussian_beam(N, dx, SOURCE_SIGMA)')
     lines.append("    planes.append({'field': E.copy(), 'dx': dx, 'z': 0.0, "
                  "'label': 'Source'})")
     if include_analysis:
-        lines.append("    P0 = op.beam_power(E, dx)")
+        lines.append("    P0 = la.beam_power(E, dx)")
         lines.append("    if verbose: print(f'Source power: {P0:.4e}')")
     lines.append('')
 
@@ -567,7 +567,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             lines.append(f'    # --- Step {step_num}: Free-space propagation '
                          f'({z * 1e3:.3f} mm) ---')
             lines.append(f'    if verbose: print("Propagating {z * 1e3:.3f} mm ...")')
-            lines.append(f'    E = op.angular_spectrum_propagate('
+            lines.append(f'    E = la.angular_spectrum_propagate('
                          f'E, {z:.17e}, WAVELENGTH, dx)')
             lines.append(f"    planes.append({{'field': E.copy(), 'dx': dx, "
                          f"'z': {z_total:.17e}, 'label': 'After {z * 1e3:.2f} mm prop'}})")
@@ -579,13 +579,13 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             label = rx['name']
             lines.append(f'    # --- Step {step_num}: {label} ---')
             lines.append(f'    if verbose: print("Applying {label} ...")')
-            lines.append(f'    E = op.apply_real_lens(E, {var_name}, '
+            lines.append(f'    E = la.apply_real_lens(E, {var_name}, '
                          f'WAVELENGTH, dx)')
             lines.append(f"    planes.append({{'field': E.copy(), 'dx': dx, "
                          f"'z': {z_total:.17e}, 'label': {label!r}}})")
             if include_analysis:
                 lines.append(f"    if verbose:")
-                lines.append(f"        P = op.beam_power(E, dx)")
+                lines.append(f"        P = la.beam_power(E, dx)")
                 lines.append(f"        print(f'  Power after lens: {{P:.4e}}')")
             lines.append('')
 
@@ -598,7 +598,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             comment = step.get('comment', 'Mirror')
             lines.append(f'    # --- Step {step_num}: {comment} ---')
             lines.append(f'    if verbose: print("Applying mirror ...")')
-            lines.append(f'    E = op.apply_mirror(E, WAVELENGTH, dx, '
+            lines.append(f'    E = la.apply_mirror(E, WAVELENGTH, dx, '
                          f'radius={r_str}, conic={conic}, '
                          f'aperture_diameter={ap_str})')
             lines.append(f"    planes.append({{'field': E.copy(), 'dx': dx, "
@@ -608,7 +608,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
         elif step['type'] == 'aperture':
             d = step['diameter']
             lines.append(f'    # --- Step {step_num}: Aperture stop ---')
-            lines.append(f'    E = op.apply_aperture(E, dx, shape="circular", '
+            lines.append(f'    E = la.apply_aperture(E, dx, shape="circular", '
                          f'params={{"diameter": {d:.17e}}})')
             lines.append(f"    planes.append({{'field': E.copy(), 'dx': dx, "
                          f"'z': {z_total:.17e}, 'label': 'Aperture stop'}})")
@@ -631,7 +631,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
     lines.append('    # --- Done ---')
     lines.append("    t_elapsed = time.time() - t_start")
     if include_analysis:
-        lines.append("    P_final = op.beam_power(E, dx)")
+        lines.append("    P_final = la.beam_power(E, dx)")
         lines.append("    if verbose:")
         lines.append("        print(f'\\nSimulation complete in {t_elapsed:.1f}s')")
         lines.append("        print(f'Final power: {P_final:.4e}')")
@@ -653,7 +653,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
         lines.append('def plot_results(planes):')
         lines.append('    """Plot all intermediate planes."""')
         lines.append('    try:')
-        lines.append('        fig, axes = op.plot_planes_grid(')
+        lines.append('        fig, axes = la.plot_planes_grid(')
         lines.append(f'            planes, suptitle={sys_name!r})')
         lines.append('        return fig')
         lines.append('    except ImportError:')
@@ -700,7 +700,7 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
 
     lines.append('')
     lines.append('import numpy as np')
-    lines.append('import lumenairy as op')
+    lines.append('import lumenairy as la')
     lines.append('')
 
     # Parameters
@@ -771,15 +771,15 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
     lines.append('')
 
     # Source and run
-    lines.append('E, x, y = op.create_gaussian_beam(N, dx, '
+    lines.append('E, x, y = la.create_gaussian_beam(N, dx, '
                  f'{source_sigma:.17e})')
-    lines.append('E_out, intermediates = op.propagate_through_system(')
+    lines.append('E_out, intermediates = la.propagate_through_system(')
     lines.append('    E, elements, WAVELENGTH, dx, verbose=True)')
     lines.append('')
 
     if include_analysis:
-        lines.append("P_in = op.beam_power(E, dx)")
-        lines.append("P_out = op.beam_power(E_out, dx)")
+        lines.append("P_in = la.beam_power(E, dx)")
+        lines.append("P_out = la.beam_power(E_out, dx)")
         lines.append("print(f'Throughput: {P_out/P_in:.4f}')")
 
     return '\n'.join(lines)

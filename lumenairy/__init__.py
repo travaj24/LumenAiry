@@ -12,8 +12,8 @@ Usage::
 
     from lumenairy import angular_spectrum_propagate, apply_thin_lens
     # or
-    import lumenairy as op
-    E_out = op.angular_spectrum_propagate(E_in, z, wavelength, dx)
+    import lumenairy as la
+    E_out = la.angular_spectrum_propagate(E_in, z, wavelength, dx)
 
 All public functions are available directly from the package namespace.
 For more granular imports, use the submodules::

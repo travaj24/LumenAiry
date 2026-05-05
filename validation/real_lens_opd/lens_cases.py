@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import numpy as np
 
-import lumenairy as op
+import lumenairy as la
 from lumenairy.prescriptions import (
     make_singlet,
     make_doublet,
