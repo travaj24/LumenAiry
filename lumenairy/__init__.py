@@ -58,7 +58,7 @@ from .propagation import (
 from .lenses import NUMEXPR_AVAILABLE
 
 # ── Backend / runtime helpers ────────────────────────────────────────────
-from ._backends import available_cpus
+from .backend import available_cpus
 
 # ── Lenses ───────────────────────────────────────────────────────────────
 from .lenses import (
@@ -458,7 +458,54 @@ from .plotting import (
     compute_jones_pupil,
 )
 
-__version__ = "3.3.3"
+# ── Multi-backend infrastructure (3.4.0) ─────────────────────────────
+# Foundation for first-class NumPy / CuPy / JAX backend support.
+from .backend import (
+    array_namespace,
+    is_numpy_array,
+    is_cupy_array,
+    is_jax_array,
+    backend_name,
+    to_numpy,
+    to_backend,
+    JAX_AVAILABLE,
+    RandomState,
+)
+
+# ── New propagators (3.4.0) ──────────────────────────────────────────
+from .propagators.hfpi import (
+    PathBundle,
+    init_paths_from_field,
+    propagate_to_plane,
+    apply_aperture_diffraction,
+    accumulate_to_grid,
+    propagate_hfpi_freespace_aperture,
+)
+from .propagators.gbd import (
+    BeamletBundle,
+    decompose_field_to_beamlets,
+    propagate_beamlets_freespace,
+    apply_thin_lens_to_beamlets,
+    reconstruct_field_from_beamlets,
+    propagate_gbd_freespace,
+    propagate_gbd_thin_lens,
+)
+from .propagators.hf import (
+    propagate_huygens_fresnel_freespace,
+    propagate_huygens_fresnel_with_opl_callable,
+)
+from .propagators.subaperture import (
+    PatchGrid,
+    patches_for_box,
+    patch_window,
+    combine_patch_fields,
+)
+from .propagators.dispatch import (
+    propagate,
+    VALID_METHODS,
+)
+
+__version__ = "3.4.0"
 
 __all__ = [
     # Propagation

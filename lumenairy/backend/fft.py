@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ._array import (
+from .array import (
     JAX_AVAILABLE,
     is_jax_array,
     is_cupy_array,
@@ -61,7 +61,7 @@ def fft2(x):
     """
     if is_jax_array(x):
         return _jnp.fft.fft2(x)
-    from . import propagation as _prop
+    from .. import propagation as _prop
     return _prop._fft2(x)
 
 
@@ -70,7 +70,7 @@ def ifft2(x):
     :func:`fft2`."""
     if is_jax_array(x):
         return _jnp.fft.ifft2(x)
-    from . import propagation as _prop
+    from .. import propagation as _prop
     return _prop._ifft2(x)
 
 
@@ -85,7 +85,7 @@ def fft(x, axis=-1, n=None):
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.fft(x, n=n, axis=axis)
-    from . import propagation as _prop
+    from .. import propagation as _prop
     if _prop.USE_SCIPY_FFT and _prop.SCIPY_FFT_AVAILABLE:
         import scipy.fft as _sp
         return _sp.fft(x, n=n, axis=axis, workers=_prop.SCIPY_FFT_WORKERS)
@@ -99,7 +99,7 @@ def ifft(x, axis=-1, n=None):
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.ifft(x, n=n, axis=axis)
-    from . import propagation as _prop
+    from .. import propagation as _prop
     if _prop.USE_SCIPY_FFT and _prop.SCIPY_FFT_AVAILABLE:
         import scipy.fft as _sp
         return _sp.ifft(x, n=n, axis=axis, workers=_prop.SCIPY_FFT_WORKERS)
@@ -153,7 +153,7 @@ def fft_backend_for(x) -> str:
         return 'jax'
     if is_cupy_array(x):
         return 'cupy'
-    from . import propagation as _prop
+    from .. import propagation as _prop
     shape = tuple(x.shape) if hasattr(x, 'shape') else ()
     if (_prop.USE_PYFFTW and _prop.PYFFTW_AVAILABLE
             and len(shape) >= 2

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "3.3.3"
+version = "3.4.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -57,6 +57,14 @@ gpu = ["cupy>=11.0"]
 fits = ["astropy>=5.0"]
 hdf5 = ["h5py>=3.0"]
 zarr = ["zarr>=2.14"]
+# JAX (CPU): enables automatic differentiation of any function written
+# against the array-namespace dispatch (lumenairy.backend), JIT
+# compilation via XLA, and free GPU/TPU acceleration if the user
+# installs jax[cuda] / jax[tpu] separately.
+jax = ["jax>=0.4.20"]
+# JAX with CUDA wheels.  User is responsible for ensuring a compatible
+# CUDA / cuDNN install is on the system.
+jax-gpu = ["jax[cuda12]>=0.4.20"]
 # numexpr fuses the ``E * exp(-1j*k0*opd)`` phase-screen multiply in
 # ``apply_real_lens``, ~1.7x faster at large N and substantially
 # lower peak memory (no complex128 NxN intermediates).  Optional --
@@ -79,6 +87,7 @@ all = [
     "astropy>=5.0",
     "h5py>=3.0",
     "zarr>=2.14",
+    "jax>=0.4.20",
 ]
 dev = [
     "pytest>=7.0",

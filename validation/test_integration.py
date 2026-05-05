@@ -52,7 +52,7 @@ MUST_EXPORT = [
 
 
 def t_symbols_present():
-    missing = [n for n in MUST_EXPORT if not hasattr(op, n)]
+    missing = [n for n in MUST_EXPORT if not hasattr(la, n)]
     return len(missing) == 0, \
         f'missing attrs: {missing}' if missing else 'all present'
 
@@ -76,7 +76,7 @@ for fname in ['apply_real_lens', 'apply_real_lens_traced',
               'design_optimize']:
     def _make(name):
         def _fn():
-            fn = getattr(op, name)
+            fn = getattr(la,name)
             sig = inspect.signature(fn)
             return 'progress' in sig.parameters, f'params include progress'
         return _fn
@@ -246,7 +246,7 @@ H.section('Plotting smoke (matplotlib Agg backend)')
 
 def _plot_smoke(plot_fn_name, builder, *args, **kwargs):
     def _fn():
-        fn = getattr(op, plot_fn_name)
+        fn = getattr(la,plot_fn_name)
         import matplotlib.pyplot as plt
         arg = builder()
         result = fn(arg, *args, **kwargs)

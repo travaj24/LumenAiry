@@ -3203,7 +3203,7 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
     # versions, so threading delivers no speedup.
 
     from concurrent.futures import ProcessPoolExecutor, as_completed
-    from ._backends import available_cpus
+    from .backend import available_cpus
 
     # Affinity-aware: respect cgroup limits, taskset masks, Python 3.13+
     # process_cpu_count so we don't oversubscribe a restricted machine.

@@ -10,6 +10,53 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.4.0
+
+Major release.
+
+- **Multi-backend (NumPy / CuPy / JAX).** New `lumenairy.backend`
+  subpackage provides namespace dispatch (`array_namespace`),
+  array predicates, multi-backend FFT (preserves the long-standing
+  pyFFTW > scipy.fft > numpy.fft hierarchy for NumPy + adds cuFFT
+  for CuPy + JAX-XLA for JAX arrays), `RandomState` with
+  per-backend RNG idioms, and scipy-special / linalg dispatch.
+  JAX arrays are differentiable via ``jax.grad`` and JIT-compilable
+  via ``jax.jit``.
+
+- **New `lumenairy.propagators` subpackage** holding all
+  diffraction propagators -- existing (`propagation`, `asymptotic`)
+  and new (`hfpi`, `gbd`, `hf`, `dispatch`, `subaperture`).
+  Existing import paths still work via thin re-export shims.
+
+- **`hfpi`** -- Huygens-Fresnel Path Integration (Monte Carlo
+  ray-based, handles cascaded diffraction).
+- **`gbd`** -- Gaussian Beamlet Decomposition (deterministic
+  ray-based, ~100x faster than HFPI on smooth systems).
+- **`hf`** -- Van-Vleck-corrected deterministic HF.
+- **`dispatch`** -- top-level ``propagate(E, ..., method='auto')``
+  smart selector.
+- **`subaperture`** -- patch decomposition utilities.
+
+- **Bundle naming unification.** New `PathBundle` (HFPI) and
+  `BeamletBundle` (GBD) share ``positions`` / ``directions``
+  field names with the existing `RayBundle`.
+
+- **`REFERENCES.txt`** at the top level consolidates every external
+  citation; inline citations have been removed from source.
+
+- **Import alias** is now ``import lumenairy as la`` throughout
+  the docs and tests (previously ``as op``).
+
+```python
+import lumenairy as la
+E_out = la.propagate(E_in, z=1e-3, wavelength=1.31e-6, dx=4e-6,
+                     method='auto')
+```
+
+A follow-up release will reorganise the remaining top-level
+modules (`lenses`, `raytrace`, `prescriptions`, `analysis`, etc.)
+into matching subpackages with the same shim strategy.
+
 ## What's new in 3.3.3
 
 - **`recommend_grid_for_prescription`** — design-time companion to

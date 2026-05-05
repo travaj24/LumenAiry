@@ -2,6 +2,125 @@
 
 All notable changes to the core library are documented here.
 
+## [3.4.0] — 2026-05-05
+
+### Major — Multi-backend foundation, new propagators, partial reorg
+
+This release establishes first-class **NumPy / CuPy / JAX** backend
+support, adds four new propagator modules, introduces a top-level
+smart-method dispatcher, and begins reorganising the library into
+subpackages.  Existing user code is unchanged: every previously
+top-level import (e.g. ``from lumenairy import angular_spectrum_propagate``,
+``from lumenairy.propagation import X``, ``from lumenairy.asymptotic
+import Y``) continues to work via thin shim re-exports.
+
+### Subpackage reorganisation (partial)
+
+Two new subpackages have been created in this release; the rest are
+deferred to a follow-up.
+
+- **`lumenairy.backend`** -- numerical-backend dispatch.
+  `array_namespace`, `is_numpy_array` / `is_cupy_array` /
+  `is_jax_array`, `to_numpy` / `to_backend`, `RandomState`,
+  multi-backend `fft2` / `ifft2` / `fft` / `ifft` / `fftshift` /
+  `fftfreq`, scipy-special / linalg compat, affinity-aware
+  `available_cpus`.
+
+- **`lumenairy.propagators`** -- diffraction-propagator family.
+  Existing modules `propagation` and `asymptotic` are now in this
+  subpackage; new modules `gbd`, `hfpi`, `hf`, `dispatch`,
+  `subaperture` are also here.
+
+  Backwards-compat shims at ``lumenairy/propagation.py`` and
+  ``lumenairy/asymptotic.py`` re-export the entire submodule
+  namespace so ``from lumenairy.propagation import X`` and
+  ``from lumenairy.asymptotic import X`` continue to work.
+
+The remaining subpackages (`elements`, `raytrace`, `io`, `analysis`,
+`sources`, `optimize`) are scheduled for a follow-up reorganisation
+release; their modules continue to ship at the top level until
+then.
+
+### Multi-backend infrastructure
+
+- **`lumenairy.backend.array`** -- `array_namespace(*arrays)`
+  returns the appropriate numpy / cupy / jax.numpy namespace.
+  Mixing arrays from different backends raises ``TypeError``.
+
+- **`lumenairy.backend.fft`** -- public 2-D / 1-D FFT entry points.
+  Preserves the long-standing pyFFTW > scipy.fft > numpy.fft
+  priority chain (with plan caching, bad-shape blacklist, automatic
+  fallback) for NumPy arrays; CuPy arrays use cuFFT; **JAX arrays
+  use `jax.numpy.fft` so calls are differentiable via `jax.grad`
+  and JIT-compilable via `jax.jit`**.
+
+- **`lumenairy.backend.random`** -- `RandomState` wrapper that
+  accepts an integer seed, `np.random.Generator`,
+  `cp.random.Generator`, or `jax.random.PRNGKey`.
+
+- **`lumenairy.backend.scipy`** -- compatibility layer for
+  scipy.special / scipy.linalg on multi-backend arrays.
+
+### New propagators
+
+- **`lumenairy.propagators.hfpi`** -- Huygens-Fresnel Path
+  Integration.  Monte Carlo ray-based diffraction.  Handles
+  cascaded diffraction natively.  `PathBundle`,
+  `init_paths_from_field`, `propagate_to_plane`,
+  `apply_aperture_diffraction`, `accumulate_to_grid`,
+  `propagate_hfpi_freespace_aperture`.
+
+- **`lumenairy.propagators.gbd`** -- Gaussian Beamlet Decomposition.
+  Deterministic ray-based diffraction (100x faster than HFPI for
+  smooth refractive systems).  `BeamletBundle`, beamlet ABCD
+  evolution through free space and thin lenses, coherent
+  recombination.
+
+- **`lumenairy.propagators.hf`** -- Van-Vleck-corrected
+  deterministic Huygens-Fresnel propagator with the density factor
+  in the integrand.
+
+- **`lumenairy.propagators.dispatch`** -- top-level smart-method
+  `propagate(E, ..., method='auto')`.
+
+- **`lumenairy.propagators.subaperture`** -- patch / subaperture
+  decomposition utilities.
+
+### Bundle field-name unification
+
+The new `PathBundle` (HFPI) and `BeamletBundle` (GBD) data
+structures share field names ``positions`` / ``directions`` with
+the existing `RayBundle` so user code can operate on any bundle
+type with a uniform vocabulary.
+
+### Optional dependencies
+
+- **`jax`** -- JAX for CPU (autodiff + XLA JIT).
+- **`jax-gpu`** -- JAX with CUDA wheels.
+
+### Documentation
+
+- **`REFERENCES.txt`** -- new top-level file consolidating every
+  external citation (papers, dissertations, standards) the codebase
+  draws on.  Inline citations have been removed from source
+  comments and docstrings; this file is the single point of
+  reference.
+
+### Naming convention
+
+- The documented import alias is now **``import lumenairy as la``**
+  throughout the README, CHANGELOG, and all tests / examples
+  (previously ``as op``).
+
+### Testing
+
+- 6 new validation files (`test_backend`, `test_hfpi`, `test_gbd`,
+  `test_hf`, `test_dispatch`, `test_subaperture`) covering 46 new
+  tests, all passing.
+- All 23 existing test files continue to pass with no regressions:
+  full suite is **23/23 files green**, all individual tests
+  passing.
+
 ## [3.3.3] — 2026-05-05
 
 ### Feature — `recommend_grid_for_prescription`

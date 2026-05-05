@@ -28,7 +28,7 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 
-from ._array import (
+from .array import (
     JAX_AVAILABLE,
     CUPY_AVAILABLE,
     is_jax_array,

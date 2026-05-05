@@ -39,7 +39,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from ._array import array_namespace, is_jax_array
+from ..backend import array_namespace, is_jax_array
 
 
 # ============================================================================

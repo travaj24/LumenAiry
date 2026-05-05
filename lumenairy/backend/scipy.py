@@ -21,7 +21,7 @@ import numpy as np
 import scipy.special as _sp_special
 import scipy.linalg as _sp_linalg
 
-from ._array import (
+from .array import (
     JAX_AVAILABLE,
     CUPY_AVAILABLE,
     is_jax_array,

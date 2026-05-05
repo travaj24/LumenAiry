@@ -36,10 +36,9 @@ from typing import Optional, Tuple, Union
 
 import numpy as np
 
-from ._array import (
-    array_namespace, is_jax_array, to_numpy,
+from ..backend import (
+    array_namespace, is_jax_array, to_numpy, RandomState,
 )
-from ._random import RandomState
 
 
 # ============================================================================
