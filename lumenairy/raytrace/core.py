@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
 from ..glass import get_glass_index
-from ..lenses import surface_sag_general, surface_sag_biconic
+from ..elements.lenses import surface_sag_general, surface_sag_biconic
 
 
 # ============================================================================
