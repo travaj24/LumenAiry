@@ -274,10 +274,33 @@ def propagate_huygens_fresnel_through_prescription(
         )
 
     if method == 'direct':
-        raise NotImplementedError(
-            "method='direct' (full 2-D Chebyshev quadrature with "
-            "Van Vleck factor) is not yet implemented for prescriptions. "
-            "Use method='asymptotic' (the saddle-point form) for now.")
+        from .asymptotic import (
+            fit_hf_polynomials, propagate_hf_chebyshev_quadrature,
+        )
+        # Build the HF-form polynomial fit Phi(s1, s2).
+        hf_fit = fit_hf_polynomials(
+            prescription, wavelength,
+            source_box_half=source_box_half,
+            pupil_box_half=pupil_box_half,
+            n_field=n_field,
+            n_pupil=n_pupil,
+            poly_order=poly_order,
+        )
+
+        # Build input and output grids.
+        Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
+        in_x = (_np.arange(Nx_in) - Nx_in / 2 + 0.5) * dx
+        in_y = (_np.arange(Ny_in) - Ny_in / 2 + 0.5) * dx
+        cx, cy = output_centre
+        out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
+        out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy
+
+        return propagate_hf_chebyshev_quadrature(
+            hf_fit, E_in,
+            input_grid_x=in_x, input_grid_y=in_y,
+            output_grid_x=out_x, output_grid_y=out_y,
+            apply_van_vleck=True,
+        )
 
     raise ValueError(
         f"propagate_huygens_fresnel_through_prescription: method must be "

@@ -114,6 +114,7 @@ from ..elements.lenses import (
 __all__ = [
     # Data containers
     'CanonicalPolyFit',
+    'HFPolyFit',
     'AberrationTensorResult',
     # Modes / polynomial coefficients
     'lg_polynomial',
@@ -126,13 +127,15 @@ __all__ = [
     # Wick moments
     'gaussian_moment_2d',
     'gaussian_moment_table_2d',
-    # Polynomial fit
+    # Polynomial fits
     'fit_canonical_polynomials',
+    'fit_hf_polynomials',
     # Stationary solver
     'solve_envelope_stationary',
     # Top-level evaluators
     'aberration_tensor',
     'propagate_modal_asymptotic',
+    'propagate_hf_chebyshev_quadrature',
 ]
 
 
@@ -1746,4 +1749,363 @@ def decompose_hg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
         for nj in range(n_max + 1):
             mode = evaluate_hg_mode(mi, nj, wx, wy, x, y, cx, cy)
             out[(mi, nj)] = complex(np.sum(np.conj(mode) * field) * da)
+    return out
+# ===========================================================================
+# Section 8 -- HF-form polynomial fit:  Phi(s1, s2)
+# ===========================================================================
+#
+# The canonical fit (Section 3) parametrises Phi as a function of (s2, v2)
+# -- the natural coordinates for the asymptotic / Maslov saddle-point
+# evaluation.  For direct Huygens-Fresnel quadrature without any
+# saddle-point approximation we want Phi expressed as a function of the
+# endpoints (s1, s2) so that the HF integral
+#
+#     E_HF(s2) = integral E_in(s1) sqrt(|det d2 Phi / d s1 d s2|)
+#                * exp(2 pi i Phi(s1, s2)) d^2 s1
+#
+# can be evaluated by 2-D quadrature over s1 with no inverse mapping.
+#
+# The fit traces a Chebyshev grid in (s1, v1), records the (s1, s2_observed,
+# OPL) tuples, and least-squares fits Phi as a 4-D Chebyshev tensor
+# product in (s1_x, s1_y, s2_x, s2_y).  The Van Vleck cross-Hessian
+# determinant ``det d2 Phi / d s1 d s2`` is computed analytically from
+# the polynomial coefficients.
+
+
+@dataclass
+class HFPolyFit:
+    """4-D Chebyshev tensor-product fit of Phi(s1, s2).
+
+    Counterpart to :class:`CanonicalPolyFit` for direct
+    Huygens-Fresnel quadrature.  Fields mirror CanonicalPolyFit but
+    the four normalisation axes are (s1x, s1y, s2x, s2y) instead of
+    (s2x, s2y, v2x, v2y).
+    """
+    poly_order: int
+    multi_indices: List[Tuple[int, int, int, int]]
+    coef_phi: np.ndarray
+    s1x_centre: float
+    s1x_halfrange: float
+    s1y_centre: float
+    s1y_halfrange: float
+    s2x_centre: float
+    s2x_halfrange: float
+    s2y_centre: float
+    s2y_halfrange: float
+    wavelength: float
+    res_phi_rms_waves: float = 0.0
+    n_rays: int = 0
+    linear_coeffs_phi: Optional[np.ndarray] = None
+    extract_linear_phase: bool = False
+
+    def to_normalised(self, s1x, s1y, s2x, s2y):
+        u1 = (s1x - self.s1x_centre) / self.s1x_halfrange
+        u2 = (s1y - self.s1y_centre) / self.s1y_halfrange
+        u3 = (s2x - self.s2x_centre) / self.s2x_halfrange
+        u4 = (s2y - self.s2y_centre) / self.s2y_halfrange
+        return u1, u2, u3, u4
+
+    def in_box(self, s1x, s1y, s2x, s2y):
+        u1, u2, u3, u4 = self.to_normalised(s1x, s1y, s2x, s2y)
+        return ((np.abs(u1) <= 1.0) & (np.abs(u2) <= 1.0)
+                & (np.abs(u3) <= 1.0) & (np.abs(u4) <= 1.0))
+
+    def eval_phi(self, s1x, s1y, s2x, s2y, *, include_linear: bool = True):
+        """Evaluate Phi(s1, s2) [waves]."""
+        u1, u2, u3, u4 = self.to_normalised(s1x, s1y, s2x, s2y)
+        phi = _evaluate_polynomial_4d(self.coef_phi, self.multi_indices,
+                                       u1, u2, u3, u4, self.poly_order)
+        if include_linear and self.linear_coeffs_phi is not None:
+            a0, a1, a2, a3, a4 = self.linear_coeffs_phi
+            phi = phi + (a0 + a1 * u1 + a2 * u2 + a3 * u3 + a4 * u4)
+        return phi
+
+    def eval_van_vleck_density(self, s1x, s1y, s2x, s2y):
+        """Evaluate sqrt(|det d2 Phi / d s1 d s2|) -- the Van Vleck factor.
+
+        The 2x2 cross-Hessian is computed analytically from the
+        Chebyshev polynomial via term-wise derivatives.
+        """
+        u1, u2, u3, u4 = self.to_normalised(s1x, s1y, s2x, s2y)
+        inv_h1x = 1.0 / self.s1x_halfrange
+        inv_h1y = 1.0 / self.s1y_halfrange
+        inv_h2x = 1.0 / self.s2x_halfrange
+        inv_h2y = 1.0 / self.s2y_halfrange
+
+        d13 = _eval_4d_cross_deriv(self.coef_phi, self.multi_indices,
+                                    u1, u2, u3, u4, self.poly_order, 0, 2)
+        d14 = _eval_4d_cross_deriv(self.coef_phi, self.multi_indices,
+                                    u1, u2, u3, u4, self.poly_order, 0, 3)
+        d23 = _eval_4d_cross_deriv(self.coef_phi, self.multi_indices,
+                                    u1, u2, u3, u4, self.poly_order, 1, 2)
+        d24 = _eval_4d_cross_deriv(self.coef_phi, self.multi_indices,
+                                    u1, u2, u3, u4, self.poly_order, 1, 3)
+
+        H11 = d13 * (inv_h1x * inv_h2x)
+        H12 = d14 * (inv_h1x * inv_h2y)
+        H21 = d23 * (inv_h1y * inv_h2x)
+        H22 = d24 * (inv_h1y * inv_h2y)
+        det = H11 * H22 - H12 * H21
+        return np.sqrt(np.abs(det))
+
+
+def _eval_4d_cross_deriv(coef, multi_indices, u1, u2, u3, u4,
+                          poly_order, axis_a, axis_b):
+    """Evaluate d2 phi / (d u_a d u_b) of a 4-D Chebyshev tensor product
+    at scattered points.
+
+    Uses Chebyshev derivative tables (T'_n = n U_{n-1}) on the two
+    differentiation axes and ordinary tables on the other two.
+    """
+    tables = [
+        _chebyshev_vandermonde(u1, poly_order),
+        _chebyshev_vandermonde(u2, poly_order),
+        _chebyshev_vandermonde(u3, poly_order),
+        _chebyshev_vandermonde(u4, poly_order),
+    ]
+    deriv_tables = [
+        _chebyshev_derivative_vandermonde(u1, poly_order),
+        _chebyshev_derivative_vandermonde(u2, poly_order),
+        _chebyshev_derivative_vandermonde(u3, poly_order),
+        _chebyshev_derivative_vandermonde(u4, poly_order),
+    ]
+    use_tables = [
+        deriv_tables[i] if i in (axis_a, axis_b) else tables[i]
+        for i in range(4)
+    ]
+
+    out = np.zeros_like(np.asarray(u1, dtype=np.float64))
+    for j, (k1, k2, k3, k4) in enumerate(multi_indices):
+        out += (coef[j] * use_tables[0][k1] * use_tables[1][k2]
+                * use_tables[2][k3] * use_tables[3][k4])
+    return out
+
+
+def fit_hf_polynomials(
+    prescription,
+    wavelength,
+    *,
+    source_box_half=50e-6,
+    pupil_box_half=0.05,
+    n_field=8,
+    n_pupil=8,
+    poly_order=6,
+    extract_linear_phase=True,
+    object_distance=None,
+    surface_diffraction=None,
+    endpoint_anchored=False,
+):
+    """Fit a 4-D Chebyshev tensor-product polynomial to Phi(s1, s2).
+
+    HF counterpart to :func:`fit_canonical_polynomials`.  Traces a
+    (s1, v1) Chebyshev-node grid through the prescription, records
+    the (s1, s2_observed, OPL) tuples, and least-squares fits Phi
+    as a function of the endpoint pair (s1, s2).
+
+    Parameters
+    ----------
+    prescription : dict
+    wavelength : float
+    source_box_half, pupil_box_half : float
+    n_field, n_pupil : int
+        Per-axis Chebyshev sampling.
+    poly_order : int
+    extract_linear_phase : bool
+    object_distance : float, optional
+    surface_diffraction : dict, optional
+    endpoint_anchored : bool
+
+    Returns
+    -------
+    HFPolyFit
+    """
+    from ..raytrace import surfaces_from_prescription, _make_bundle, trace
+
+    if wavelength <= 0:
+        raise ValueError("wavelength must be > 0")
+    if poly_order < 0:
+        raise ValueError("poly_order must be >= 0")
+    if source_box_half <= 0 or pupil_box_half <= 0:
+        raise ValueError("source_box_half and pupil_box_half must be > 0")
+
+    if object_distance is None:
+        object_distance = float(prescription.get('object_distance', 0.0)) or 0.0
+
+    surfaces = surfaces_from_prescription(prescription)
+
+    def cheb_nodes(n):
+        i = np.arange(n)
+        x = np.cos(np.pi * (i + 0.5) / n)
+        if endpoint_anchored and n >= 2:
+            x = x / np.cos(np.pi / (2.0 * n))
+        return x
+
+    u_field = cheb_nodes(n_field)
+    u_pupil = cheb_nodes(n_pupil)
+    s1x_axis = u_field * source_box_half
+    s1y_axis = u_field * source_box_half
+    v1x_axis = u_pupil * pupil_box_half
+    v1y_axis = u_pupil * pupil_box_half
+
+    S1X, S1Y, V1X, V1Y = np.meshgrid(s1x_axis, s1y_axis,
+                                      v1x_axis, v1y_axis,
+                                      indexing='ij')
+    s1x_in = S1X.ravel()
+    s1y_in = S1Y.ravel()
+    v1x_in = V1X.ravel()
+    v1y_in = V1Y.ravel()
+    n_rays = s1x_in.size
+
+    sumsq = v1x_in * v1x_in + v1y_in * v1y_in
+    if np.any(sumsq >= 1.0):
+        raise ValueError(
+            "pupil_box_half too large; reduce it.")
+
+    bundle = _make_bundle(
+        x=s1x_in.astype(np.float64),
+        y=s1y_in.astype(np.float64),
+        L=v1x_in.astype(np.float64),
+        M=v1y_in.astype(np.float64),
+        wavelength=wavelength,
+    )
+    bundle.z = np.full(n_rays, -object_distance, dtype=np.float64)
+
+    res = trace(bundle, surfaces, wavelength, output_filter='last',
+                surface_diffraction=surface_diffraction)
+    final = res.image_rays
+    alive = np.asarray(final.alive, dtype=bool)
+    n_alive = int(alive.sum())
+    if n_alive < max(64, 0.5 * n_rays):
+        raise RuntimeError(
+            f"Too many rays died during HF-fit trace: "
+            f"{n_alive} alive of {n_rays}.  Reduce pupil_box_half "
+            f"or check apertures.")
+
+    s2x_obs = np.asarray(final.x, dtype=np.float64)
+    s2y_obs = np.asarray(final.y, dtype=np.float64)
+    phi_obs = np.asarray(final.opd, dtype=np.float64) / wavelength
+
+    s1x_live = s1x_in[alive]
+    s1y_live = s1y_in[alive]
+    s2x_live = s2x_obs[alive]
+    s2y_live = s2y_obs[alive]
+    phi_live = phi_obs[alive]
+
+    s1x_c, s1x_h = _fit_normaliser(s1x_live)
+    s1y_c, s1y_h = _fit_normaliser(s1y_live)
+    s2x_c, s2x_h = _fit_normaliser(s2x_live)
+    s2y_c, s2y_h = _fit_normaliser(s2y_live)
+
+    u_s1x = (s1x_live - s1x_c) / s1x_h
+    u_s1y = (s1y_live - s1y_c) / s1y_h
+    u_s2x = (s2x_live - s2x_c) / s2x_h
+    u_s2y = (s2y_live - s2y_c) / s2y_h
+
+    linear_coeffs = None
+    if extract_linear_phase:
+        X5 = np.column_stack([
+            np.ones_like(u_s1x), u_s1x, u_s1y, u_s2x, u_s2y,
+        ])
+        linear_coeffs, *_ = np.linalg.lstsq(X5, phi_live, rcond=None)
+        opd_residual = phi_live - X5 @ linear_coeffs
+    else:
+        opd_residual = phi_live.copy()
+
+    multi_indices = _multi_indices_total_degree(4, poly_order)
+    n_basis = len(multi_indices)
+    T1 = _chebyshev_vandermonde(u_s1x, poly_order)
+    T2 = _chebyshev_vandermonde(u_s1y, poly_order)
+    T3 = _chebyshev_vandermonde(u_s2x, poly_order)
+    T4 = _chebyshev_vandermonde(u_s2y, poly_order)
+    A = np.empty((u_s1x.size, n_basis), dtype=np.float64)
+    for j, (k1, k2, k3, k4) in enumerate(multi_indices):
+        A[:, j] = T1[k1] * T2[k2] * T3[k3] * T4[k4]
+    coef_phi, *_ = np.linalg.lstsq(A, opd_residual, rcond=None)
+    res_phi = float(np.sqrt(np.mean((opd_residual - A @ coef_phi) ** 2)))
+
+    return HFPolyFit(
+        poly_order=poly_order,
+        multi_indices=multi_indices,
+        coef_phi=coef_phi,
+        s1x_centre=s1x_c, s1x_halfrange=s1x_h,
+        s1y_centre=s1y_c, s1y_halfrange=s1y_h,
+        s2x_centre=s2x_c, s2x_halfrange=s2x_h,
+        s2y_centre=s2y_c, s2y_halfrange=s2y_h,
+        wavelength=wavelength,
+        res_phi_rms_waves=res_phi,
+        n_rays=n_alive,
+        linear_coeffs_phi=linear_coeffs,
+        extract_linear_phase=extract_linear_phase,
+    )
+
+
+def propagate_hf_chebyshev_quadrature(
+    fit,
+    E_in,
+    input_grid_x,
+    input_grid_y,
+    output_grid_x,
+    output_grid_y,
+    *,
+    apply_van_vleck=True,
+    chunk_output=64,
+):
+    """Direct 2-D HF quadrature using a tensor-product Chebyshev
+    polynomial fit of Phi(s1, s2).
+
+    For each output point s2, evaluates
+
+        E_HF(s2) = sum over input grid of
+                   E_in(s1) * sqrt(|det d2 Phi / d s1 d s2|)
+                   * exp(2 pi i Phi(s1, s2)) * dx * dy
+
+    using the polynomial fit's analytical Phi and Van Vleck factor.
+
+    Parameters
+    ----------
+    fit : HFPolyFit
+    E_in : ndarray (Ny_in, Nx_in) complex
+    input_grid_x, input_grid_y : 1-D arrays
+    output_grid_x, output_grid_y : 1-D arrays
+    apply_van_vleck : bool
+    chunk_output : int
+        Output points processed per chunk to bound memory.
+
+    Returns
+    -------
+    ndarray (Ny_out, Nx_out) complex
+    """
+    Nx_in = input_grid_x.shape[0]
+    Ny_in = input_grid_y.shape[0]
+    Nx_out = output_grid_x.shape[0]
+    Ny_out = output_grid_y.shape[0]
+    if E_in.shape != (Ny_in, Nx_in):
+        raise ValueError(
+            f"E_in shape {E_in.shape} mismatches input grid "
+            f"({Ny_in}, {Nx_in}).")
+
+    dx = float(np.mean(np.diff(input_grid_x)))
+    dy = float(np.mean(np.diff(input_grid_y)))
+    pixel_area = dx * dy
+
+    S1X, S1Y = np.meshgrid(input_grid_x, input_grid_y, indexing='xy')
+    out = np.zeros((Ny_out, Nx_out), dtype=E_in.dtype)
+
+    n_out = Ny_out * Nx_out
+    for start in range(0, n_out, chunk_output):
+        end = min(start + chunk_output, n_out)
+        for k in range(start, end):
+            iy = k // Nx_out
+            ix = k % Nx_out
+            s2x = float(output_grid_x[ix])
+            s2y = float(output_grid_y[iy])
+
+            phi = fit.eval_phi(S1X, S1Y, s2x, s2y, include_linear=True)
+            kernel = np.exp(2j * np.pi * phi).astype(E_in.dtype)
+            if apply_van_vleck:
+                density = fit.eval_van_vleck_density(S1X, S1Y, s2x, s2y)
+                integrand = E_in * density * kernel
+            else:
+                integrand = E_in * kernel
+            out[iy, ix] = np.sum(integrand) * pixel_area
     return out
