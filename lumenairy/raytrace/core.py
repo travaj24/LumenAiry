@@ -38,8 +38,8 @@ import numpy as np
 from dataclasses import dataclass, field
 from typing import List, Optional, Dict
 
-from .glass import get_glass_index
-from .lenses import surface_sag_general, surface_sag_biconic
+from ..glass import get_glass_index
+from ..lenses import surface_sag_general, surface_sag_biconic
 
 
 # ============================================================================
@@ -274,7 +274,7 @@ def _surface_sag_xy(x, y, surface):
                 "Freeform departure on a biconic base is not supported "
                 "yet: leave radius_y unset, or extend "
                 "freeform.surface_sag_freeform with biconic support.")
-        from .freeform import surface_sag_freeform
+        from ..freeform import surface_sag_freeform
         sd = dict(spec)
         # surface_sag_freeform reads 'freeform_type', 'radius', 'conic',
         # plus per-kind keys.  The Surface dataclass already supplies
@@ -2984,7 +2984,7 @@ def surfaces_from_elements(elements, wavelength):
 
             # Register the glass temporarily
             _glass_name = f'__spherical_{id(elem)}'
-            from .glass import GLASS_REGISTRY, _glass_cache
+            from ..glass import GLASS_REGISTRY, _glass_cache
             # Store a fixed-index material
             _register_fixed_index(_glass_name, n_lens, wavelength)
 
@@ -3046,7 +3046,7 @@ def surfaces_from_elements(elements, wavelength):
 # Thin-lens helper: register a fixed-index "glass" for spherical/aspheric lenses
 def _register_fixed_index(name, n, wavelength):
     """Register a fixed refractive index as a temporary glass entry."""
-    from .glass import GLASS_REGISTRY, _glass_cache
+    from ..glass import GLASS_REGISTRY, _glass_cache
 
     class _FixedIndex:
         def __init__(self, n_val):
