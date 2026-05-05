@@ -2109,3 +2109,129 @@ def propagate_hf_chebyshev_quadrature(
                 integrand = E_in * kernel
             out[iy, ix] = np.sum(integrand) * pixel_area
     return out
+
+
+# ===========================================================================
+# Section 9 -- Backend-aware polynomial evaluation (NumPy / CuPy / JAX)
+# ===========================================================================
+#
+# The polynomial helpers in lumenairy.elements.lenses are NumPy-only
+# (they use np.empty / in-place writes that JAX can't trace).  These
+# replacements use array_namespace dispatch and functional-style
+# Chebyshev recurrence so the evaluation can run on JAX arrays and
+# differentiate via jax.grad.
+#
+# The fit objects (CanonicalPolyFit, HFPolyFit) gain ``eval_phi_xp``
+# methods that route through these backend-aware helpers.
+
+
+def _chebyshev_vandermonde_xp(u, max_k, xp):
+    """Backend-aware Chebyshev Vandermonde T[n](u).
+
+    Returns a list of arrays (length max_k+1) rather than a single
+    stacked array, so JAX can build it functionally.
+    """
+    u_arr = xp.asarray(u)
+    T = [xp.ones_like(u_arr)]
+    if max_k >= 1:
+        T.append(u_arr)
+    for n in range(2, max_k + 1):
+        T.append(2.0 * u_arr * T[n - 1] - T[n - 2])
+    return T
+
+
+def _evaluate_polynomial_4d_xp(coeffs, multi_indices, u1, u2, u3, u4,
+                                  max_order, xp):
+    """Backend-aware 4-D Chebyshev tensor-product evaluator.
+
+    Mirrors :func:`lumenairy.elements.lenses._evaluate_polynomial_4d`
+    but routes through ``xp = array_namespace(u1, u2, u3, u4)`` so it
+    works on NumPy / CuPy / JAX arrays uniformly.
+    """
+    T1 = _chebyshev_vandermonde_xp(u1, max_order, xp)
+    T2 = _chebyshev_vandermonde_xp(u2, max_order, xp)
+    T3 = _chebyshev_vandermonde_xp(u3, max_order, xp)
+    T4 = _chebyshev_vandermonde_xp(u4, max_order, xp)
+    out = None
+    for c, (k1, k2, k3, k4) in zip(coeffs, multi_indices):
+        if float(c) == 0.0:
+            continue
+        term = float(c) * T1[k1] * T2[k2] * T3[k3] * T4[k4]
+        out = term if out is None else out + term
+    if out is None:
+        return xp.zeros_like(xp.asarray(u1))
+    return out
+
+
+# Add JAX-friendly evaluator methods to the fit dataclasses via
+# monkey-patching.  These are purely additive -- the original NumPy
+# eval_phi / eval_s1 methods are unchanged and remain the default.
+
+def _CanonicalPolyFit_eval_phi_xp(self, s2x, s2y, v2x, v2y, *,
+                                   include_linear=True):
+    """Backend-aware Phi(s2, v2) evaluation.
+
+    Accepts NumPy / CuPy / JAX inputs and stays in the input backend.
+    Output is differentiable via ``jax.grad`` for JAX inputs.
+    """
+    from ..backend import array_namespace
+    xp = array_namespace(s2x, s2y, v2x, v2y)
+    u1 = (s2x - self.s2x_centre) / self.s2x_halfrange
+    u2 = (s2y - self.s2y_centre) / self.s2y_halfrange
+    u3 = (v2x - self.v2x_centre) / self.v2x_halfrange
+    u4 = (v2y - self.v2y_centre) / self.v2y_halfrange
+    phi = _evaluate_polynomial_4d_xp(
+        self.coef_phi, self.multi_indices,
+        u1, u2, u3, u4, self.poly_order, xp,
+    )
+    if include_linear and self.linear_coeffs_phi is not None:
+        a0, a1, a2, a3, a4 = self.linear_coeffs_phi
+        phi = phi + (float(a0) + float(a1) * u1 + float(a2) * u2
+                     + float(a3) * u3 + float(a4) * u4)
+    return phi
+
+
+def _CanonicalPolyFit_eval_s1_xp(self, s2x, s2y, v2x, v2y):
+    """Backend-aware s1(s2, v2) back-map evaluation."""
+    from ..backend import array_namespace
+    xp = array_namespace(s2x, s2y, v2x, v2y)
+    u1 = (s2x - self.s2x_centre) / self.s2x_halfrange
+    u2 = (s2y - self.s2y_centre) / self.s2y_halfrange
+    u3 = (v2x - self.v2x_centre) / self.v2x_halfrange
+    u4 = (v2y - self.v2y_centre) / self.v2y_halfrange
+    s1x = _evaluate_polynomial_4d_xp(
+        self.coef_s1x, self.multi_indices,
+        u1, u2, u3, u4, self.poly_order, xp,
+    )
+    s1y = _evaluate_polynomial_4d_xp(
+        self.coef_s1y, self.multi_indices,
+        u1, u2, u3, u4, self.poly_order, xp,
+    )
+    return s1x, s1y
+
+
+def _HFPolyFit_eval_phi_xp(self, s1x, s1y, s2x, s2y, *,
+                            include_linear=True):
+    """Backend-aware Phi(s1, s2) evaluation for the HF fit."""
+    from ..backend import array_namespace
+    xp = array_namespace(s1x, s1y, s2x, s2y)
+    u1 = (s1x - self.s1x_centre) / self.s1x_halfrange
+    u2 = (s1y - self.s1y_centre) / self.s1y_halfrange
+    u3 = (s2x - self.s2x_centre) / self.s2x_halfrange
+    u4 = (s2y - self.s2y_centre) / self.s2y_halfrange
+    phi = _evaluate_polynomial_4d_xp(
+        self.coef_phi, self.multi_indices,
+        u1, u2, u3, u4, self.poly_order, xp,
+    )
+    if include_linear and self.linear_coeffs_phi is not None:
+        a0, a1, a2, a3, a4 = self.linear_coeffs_phi
+        phi = phi + (float(a0) + float(a1) * u1 + float(a2) * u2
+                     + float(a3) * u3 + float(a4) * u4)
+    return phi
+
+
+# Attach the new methods to the existing dataclasses (additive; old
+# eval_phi / eval_s1 stay intact for back-compat).
+CanonicalPolyFit.eval_phi_xp = _CanonicalPolyFit_eval_phi_xp
+CanonicalPolyFit.eval_s1_xp = _CanonicalPolyFit_eval_s1_xp
+HFPolyFit.eval_phi_xp = _HFPolyFit_eval_phi_xp

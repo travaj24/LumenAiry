@@ -1027,5 +1027,53 @@ H.run('fit_canonical_polynomials: endpoint_anchored option produces valid fit',
       t_fit_endpoint_anchored_default_off)
 
 
+# ----------------------------------------------------------------------
+# JAX backend tests -- backend-aware polynomial evaluation on the fits.
+# ----------------------------------------------------------------------
+
+def t_canonical_fit_jax_eval():
+    """eval_phi_xp accepts JAX arrays and returns JAX output."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    presc['object_distance'] = 30e-3
+    from lumenairy.propagators.asymptotic import fit_canonical_polynomials
+    fit = fit_canonical_polynomials(
+        presc, 633e-9, source_box_half=40e-6, pupil_box_half=2e-3,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    phi = fit.eval_phi_xp(jnp.array([0.0]), jnp.array([0.0]),
+                           jnp.array([0.0]), jnp.array([0.0]))
+    return la.is_jax_array(phi) and bool(jnp.isfinite(phi[0])), 'ok'
+
+
+def t_canonical_fit_jax_grad():
+    """jax.grad through fit.eval_phi_xp produces a finite gradient."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    presc['object_distance'] = 30e-3
+    from lumenairy.propagators.asymptotic import fit_canonical_polynomials
+    fit = fit_canonical_polynomials(
+        presc, 633e-9, source_box_half=40e-6, pupil_box_half=2e-3,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    def phi_at(s2x_scalar):
+        return fit.eval_phi_xp(s2x_scalar, jnp.array(0.0),
+                                jnp.array(0.0), jnp.array(0.0))
+    g = jax.grad(phi_at)(jnp.float32(0.0))
+    return bool(jnp.isfinite(g)), f'grad={float(g):.4e}'
+
+
+H.section('JAX backend (polynomial eval)')
+H.run('CanonicalPolyFit.eval_phi_xp accepts JAX', t_canonical_fit_jax_eval)
+H.run('jax.grad through eval_phi_xp', t_canonical_fit_jax_grad)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())
