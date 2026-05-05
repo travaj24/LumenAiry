@@ -17,8 +17,10 @@ operations:
   PRNG keys.
 * :mod:`lumenairy.backend.scipy` -- backend-aware scipy.special /
   scipy.linalg dispatch.
-* :mod:`lumenairy.backend.cpu` -- ``available_cpus`` (affinity-aware
-  CPU count).
+
+(``available_cpus`` -- the affinity-aware process CPU count -- was
+formerly here but lives in :mod:`lumenairy.memory` since it's a
+runtime-resource query, not an array backend.)
 
 Author: Andrew Traverso
 """
@@ -43,7 +45,6 @@ from .fft import (
 )
 from .random import RandomState
 from . import scipy as scipy
-from .cpu import available_cpus
 
 
 __all__ = [
@@ -61,5 +62,4 @@ __all__ = [
     'fft_backend_for',
     'RandomState',
     'scipy',
-    'available_cpus',
 ]

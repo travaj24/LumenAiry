@@ -97,7 +97,7 @@ except ImportError:
 
 # Affinity-aware CPU count -- respects cgroups / taskset / Python 3.13+
 # process_cpu_count so we don't oversubscribe a restricted machine.
-from ..backend import available_cpus as _available_cpus
+from ..memory import available_cpus as _available_cpus
 
 
 # ============================================================================

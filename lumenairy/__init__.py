@@ -58,7 +58,7 @@ from .propagators.propagation import (
 from .elements.lenses import NUMEXPR_AVAILABLE
 
 # ── Backend / runtime helpers ────────────────────────────────────────────
-from .backend import available_cpus
+from .memory import available_cpus
 
 # ── Lenses ───────────────────────────────────────────────────────────────
 from .elements.lenses import (

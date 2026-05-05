@@ -2,35 +2,130 @@
 lumenairy.analysis -- analysis & post-processing tools.
 
 Submodules:
-* :mod:`lumenairy.analysis.analysis` -- core analysis
-  (Strehl, MTF, PSF, Zernike, OPD).
-* :mod:`lumenairy.analysis.detector` -- detector models.
-* :mod:`lumenairy.analysis.ghost` -- ghost reflection analysis.
-* :mod:`lumenairy.analysis.interferometry` -- simulated
-  interferograms.
-* :mod:`lumenairy.analysis.phase_retrieval` -- Gerchberg-Saxton /
-  error-reduction phase retrieval.
-* :mod:`lumenairy.analysis.coherence` -- partially-coherent
-  propagation.
-* :mod:`lumenairy.analysis.through_focus` -- through-focus scans.
-* :mod:`lumenairy.analysis.plotting` -- field / PSF / MTF /
-  Stokes plots.
 
-This package's ``__init__`` mirrors all submodule namespaces so
-existing user imports of the form ``from lumenairy.analysis import
-X`` (or via the top-level shim ``from lumenairy.detector import
-Y``) continue to work unchanged.
+* :mod:`lumenairy.analysis.analysis` -- core beam analysis (Strehl,
+  PSF, MTF, OTF, Zernike decomposition, OPD).
+* :mod:`lumenairy.analysis.detector` -- detector models +
+  Shack-Hartmann wavefront sensing.
+* :mod:`lumenairy.analysis.ghost` -- ghost / parasitic-reflection
+  enumeration and analysis.
+* :mod:`lumenairy.analysis.interferometry` -- simulated
+  interferograms, phase-shift extraction.
+* :mod:`lumenairy.analysis.phase_retrieval` -- Gerchberg-Saxton,
+  error reduction, hybrid input-output.
+* :mod:`lumenairy.analysis.coherence` -- partially-coherent /
+  Kohler / extended-source imaging.
+* :mod:`lumenairy.analysis.through_focus` -- through-focus scans,
+  best-focus search, tolerancing sweeps.
+* :mod:`lumenairy.analysis.plotting` -- field / PSF / MTF / Stokes
+  / Jones-pupil plotting helpers.
 """
-from . import analysis as _analysis
-from . import detector as _detector
-from . import ghost as _ghost
-from . import interferometry as _interferometry
-from . import phase_retrieval as _phase_retrieval
-from . import coherence as _coherence
-from . import through_focus as _through_focus
-from . import plotting as _plotting
-for _m in (_analysis, _detector, _ghost, _interferometry,
-            _phase_retrieval, _coherence, _through_focus, _plotting):
-    globals().update({k: v for k, v in _m.__dict__.items()
-                       if not k.startswith('__')})
-del _m
+
+from .analysis import (
+    beam_centroid,
+    beam_d4sigma,
+    beam_power,
+    strehl_ratio,
+    check_sampling_conditions,
+    compute_psf,
+    compute_otf,
+    compute_mtf,
+    mtf_radial,
+    remove_wavefront_modes,
+    opd_pv_rms,
+    wave_opd_1d,
+    wave_opd_2d,
+    check_opd_sampling,
+    chromatic_focal_shift,
+    polychromatic_strehl,
+    radial_power_bands,
+    zernike_polynomial,
+    zernike_basis_matrix,
+    zernike_decompose,
+    zernike_reconstruct,
+    zernike_index_to_nm,
+    zernike_nm_to_index,
+)
+from .detector import (
+    apply_detector,
+    shack_hartmann,
+)
+from .ghost import (
+    enumerate_ghost_paths,
+    ghost_analysis,
+)
+from .interferometry import (
+    simulate_interferogram,
+    phase_shift_extract,
+    fringe_spacing,
+)
+from .phase_retrieval import (
+    gerchberg_saxton,
+    error_reduction,
+    hybrid_input_output,
+)
+from .coherence import (
+    koehler_image,
+    extended_source_image,
+    mutual_coherence,
+)
+from .through_focus import (
+    single_plane_metrics,
+    diffraction_limited_peak,
+    through_focus_scan,
+    find_best_focus,
+    plot_through_focus,
+    ThroughFocusResult,
+    Perturbation,
+    apply_perturbations,
+    tolerancing_sweep,
+    monte_carlo_tolerancing,
+)
+from .plotting import (
+    plot_intensity,
+    plot_phase,
+    plot_field,
+    plot_amplitude_phase,
+    plot_cross_section,
+    plot_planes_grid,
+    plot_psf,
+    plot_mtf,
+    plot_stokes,
+    plot_polarization_ellipses,
+    plot_beam_profile,
+    plot_jones_pupil,
+    compute_jones_pupil,
+)
+
+
+__all__ = [
+    # analysis
+    'beam_centroid', 'beam_d4sigma', 'beam_power', 'strehl_ratio',
+    'check_sampling_conditions', 'compute_psf', 'compute_otf',
+    'compute_mtf', 'mtf_radial', 'remove_wavefront_modes',
+    'opd_pv_rms', 'wave_opd_1d', 'wave_opd_2d', 'check_opd_sampling',
+    'chromatic_focal_shift', 'polychromatic_strehl',
+    'radial_power_bands',
+    'zernike_polynomial', 'zernike_basis_matrix', 'zernike_decompose',
+    'zernike_reconstruct', 'zernike_index_to_nm', 'zernike_nm_to_index',
+    # detector
+    'apply_detector', 'shack_hartmann',
+    # ghost
+    'enumerate_ghost_paths', 'ghost_analysis',
+    # interferometry
+    'simulate_interferogram', 'phase_shift_extract', 'fringe_spacing',
+    # phase retrieval
+    'gerchberg_saxton', 'error_reduction', 'hybrid_input_output',
+    # coherence
+    'koehler_image', 'extended_source_image', 'mutual_coherence',
+    # through focus
+    'single_plane_metrics', 'diffraction_limited_peak',
+    'through_focus_scan', 'find_best_focus', 'plot_through_focus',
+    'ThroughFocusResult', 'Perturbation', 'apply_perturbations',
+    'tolerancing_sweep', 'monte_carlo_tolerancing',
+    # plotting
+    'plot_intensity', 'plot_phase', 'plot_field', 'plot_amplitude_phase',
+    'plot_cross_section', 'plot_planes_grid', 'plot_psf', 'plot_mtf',
+    'plot_stokes', 'plot_polarization_ellipses', 'plot_beam_profile',
+    'plot_jones_pupil', 'compute_jones_pupil',
+]

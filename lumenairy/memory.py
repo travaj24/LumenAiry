@@ -1,29 +1,32 @@
 """
-Memory-Aware Batching Helpers
-==============================
+Runtime resource helpers (memory + CPU).
+=========================================
 
-Utilities for estimating the memory cost of an operation and deciding
-whether to run it straight-through or split it into batches that fit in
-the machine's available RAM.
+Two responsibilities, both system-resource queries:
 
-The core idea is::
+1. **Memory-aware batching.**  Estimate the memory cost of an
+   operation and decide whether to run it straight-through or
+   split it into batches that fit available RAM::
 
-    cost = estimate_op_memory(shape, dtype, n_work_arrays)
-    batch = pick_batch_size(n_items, cost_per_item, safety=0.5)
+       cost = estimate_op_memory(shape, dtype, n_work_arrays)
+       batch = pick_batch_size(n_items, cost_per_item, safety=0.5)
 
-Most functions in the library operate on a single (Ny, Nx) complex field
-and allocate a handful of working arrays internally (FFT buffers, phase
-masks, etc.).  For operations that loop over K sources / slices / lenslets,
-these helpers pick the largest K' that will comfortably fit in RAM and
-return that as the recommended batch size.
+2. **Affinity-aware CPU count.**  :func:`available_cpus` returns
+   "what this process can actually use" rather than the raw
+   ``os.cpu_count()`` -- respects ``taskset`` / cgroup limits /
+   ``os.process_cpu_count()`` (Python 3.13+) / Windows process
+   affinity.  Worker pools, the pyFFTW thread setting, and any
+   future thread / process dispatch should call this rather than
+   ``os.cpu_count()`` directly.
 
-The helpers degrade gracefully: if :mod:`psutil` is not installed or the
-OS does not expose memory info, they fall back to conservative defaults
-and a warning is emitted.
+The helpers degrade gracefully: if :mod:`psutil` is not installed
+or the OS does not expose memory info, they fall back to
+conservative defaults and a warning is emitted.
 
 Author: Andrew Traverso
 """
 
+import os
 import warnings
 import numpy as np
 
@@ -353,3 +356,62 @@ def print_memory_report(planned_cost_bytes=None, prefix=''):
         status = 'OK' if fits else 'SPLIT needed'
         msg += f" — planned op: {cost} [{status}]"
     print(msg, flush=True)
+
+
+# ============================================================================
+# CPU-count helper (affinity / cgroup aware)
+# ============================================================================
+
+def available_cpus() -> int:
+    """Return the number of CPUs this process can actually use.
+
+    Preference order:
+
+    1. ``os.process_cpu_count()`` (Python 3.13+): the canonical
+       "CPUs available to this process" number, respects CPU-quota
+       cgroups and affinity masks.
+    2. ``len(os.sched_getaffinity(0))`` (Linux / BSD): honours
+       ``taskset`` restrictions.
+    3. ``len(psutil.Process().cpu_affinity())`` (optional cross-
+       platform path, captures Windows process affinity).
+    4. ``os.cpu_count()`` fallback -- the raw logical-CPU count,
+       used only when nothing above is available.
+
+    Always returns at least 1.
+    """
+    if hasattr(os, 'process_cpu_count'):
+        try:
+            n = os.process_cpu_count()
+            if n:
+                return int(n)
+        except Exception:
+            pass
+
+    if hasattr(os, 'sched_getaffinity'):
+        try:
+            n = len(os.sched_getaffinity(0))
+            if n > 0:
+                return int(n)
+        except Exception:
+            pass
+
+    try:
+        import psutil
+        n = len(psutil.Process().cpu_affinity())
+        if n > 0:
+            return int(n)
+    except Exception:
+        pass
+
+    return max(1, int(os.cpu_count() or 1))
+
+
+__all__ = [
+    'get_ram_budget', 'set_max_ram',
+    'available_memory_bytes', 'total_memory_bytes', 'memory_info',
+    'bytes_per_element', 'array_bytes',
+    'estimate_op_memory', 'pick_batch_size',
+    'should_split',
+    'format_bytes', 'print_memory_report',
+    'available_cpus',
+]

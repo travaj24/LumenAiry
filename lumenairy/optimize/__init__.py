@@ -2,13 +2,90 @@
 lumenairy.optimize -- prescription optimization, multi-config
 parameterization, design merits.
 
-Implementation in :mod:`lumenairy.optimize.core` (main optimizer
-+ merits) and :mod:`lumenairy.optimize.multiconfig` (multi-config
-parameterization).  This package's ``__init__`` mirrors both
-submodules' namespaces so existing user imports of the form
-``from lumenairy.optimize import X`` continue to work unchanged.
+Submodules:
+
+* :mod:`lumenairy.optimize.core` -- ``DesignParameterization``,
+  the merit-term hierarchy (focal length, BFL, Seidel, Strehl,
+  RMS wavefront, spot size, chromatic shift, target-OPD, etc.),
+  and ``design_optimize``.
+* :mod:`lumenairy.optimize.multiconfig` -- multi-configuration
+  parameterization, zoom configs, afocal angular magnification,
+  beam-expander / Keplerian-telescope helpers.
 """
-from . import core as _core
-from . import multiconfig as _multiconfig
-globals().update({k: v for k, v in _core.__dict__.items() if not k.startswith('__')})
-globals().update({k: v for k, v in _multiconfig.__dict__.items() if not k.startswith('__')})
+
+from .core import (
+    DesignParameterization,
+    MultiPrescriptionParameterization,
+    MeritTerm,
+    FocalLengthMerit,
+    BackFocalLengthMerit,
+    SphericalSeidelMerit,
+    StrehlMerit,
+    RMSWavefrontMerit,
+    SpotSizeMerit,
+    ChromaticFocalShiftMerit,
+    MatchIdealThinLensMerit,
+    MatchIdealSystemMerit,
+    MatchTargetOPDMerit,
+    ZernikeCoefficientMerit,
+    LGAberrationMerit,
+    CompositeMerit,
+    CallableMerit,
+    MultiWavelengthMerit,
+    MultiFieldMerit,
+    MinThicknessMerit,
+    MaxThicknessMerit,
+    MinBackFocalLengthMerit,
+    MaxFNumberMerit,
+    ToleranceAwareMerit,
+    EvaluationContext,
+    DesignResult,
+    design_optimize,
+)
+from .multiconfig import (
+    Configuration,
+    multi_config_merit,
+    create_zoom_configs,
+    afocal_angular_magnification,
+    beam_expander_prescription,
+    keplerian_telescope,
+)
+
+
+__all__ = [
+    # core
+    'DesignParameterization',
+    'MultiPrescriptionParameterization',
+    'MeritTerm',
+    'FocalLengthMerit',
+    'BackFocalLengthMerit',
+    'SphericalSeidelMerit',
+    'StrehlMerit',
+    'RMSWavefrontMerit',
+    'SpotSizeMerit',
+    'ChromaticFocalShiftMerit',
+    'MatchIdealThinLensMerit',
+    'MatchIdealSystemMerit',
+    'MatchTargetOPDMerit',
+    'ZernikeCoefficientMerit',
+    'LGAberrationMerit',
+    'CompositeMerit',
+    'CallableMerit',
+    'MultiWavelengthMerit',
+    'MultiFieldMerit',
+    'MinThicknessMerit',
+    'MaxThicknessMerit',
+    'MinBackFocalLengthMerit',
+    'MaxFNumberMerit',
+    'ToleranceAwareMerit',
+    'EvaluationContext',
+    'DesignResult',
+    'design_optimize',
+    # multiconfig
+    'Configuration',
+    'multi_config_merit',
+    'create_zoom_configs',
+    'afocal_angular_magnification',
+    'beam_expander_prescription',
+    'keplerian_telescope',
+]
