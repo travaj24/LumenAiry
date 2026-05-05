@@ -78,6 +78,15 @@ from .vectorial_hfpi import (
     accumulate_vector_to_grid,
     propagate_vector_hfpi_freespace_aperture,
 )
+from .mhs import (
+    HuygensSurface,
+    MhsSubdomain,
+    MhsPipeline,
+    asm_subdomain,
+    aperture_subdomain,
+    gbd_freespace_subdomain,
+    prescription_subdomain,
+)
 
 __all__ = [
     'BeamletBundle',
@@ -113,4 +122,11 @@ __all__ = [
     'apply_vector_aperture_diffraction',
     'accumulate_vector_to_grid',
     'propagate_vector_hfpi_freespace_aperture',
+    'HuygensSurface',
+    'MhsSubdomain',
+    'MhsPipeline',
+    'asm_subdomain',
+    'aperture_subdomain',
+    'gbd_freespace_subdomain',
+    'prescription_subdomain',
 ]

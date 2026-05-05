@@ -51,6 +51,51 @@ and end-to-end ``propagate_vector_hfpi_freespace_aperture`` are
 the public API.  Required for high-NA imaging (NA > 0.3) where
 polarization rotates strongly across the focal plane.
 
+### Final-batch deferred items (5 items)
+
+The 5-item deferred list from earlier in the 3.4.0 development
+cycle is now implemented:
+
+**Item 1 -- Tensor-product Chebyshev HF**: New ``HFPolyFit`` (4-D
+Chebyshev tensor product fit of ``Phi(s1, s2)``) and
+``fit_hf_polynomials`` / ``propagate_hf_chebyshev_quadrature``.
+The deferred ``method='direct'`` path of
+``propagate_huygens_fresnel_through_prescription`` is now wired
+to the direct 2-D quadrature with the analytical Van Vleck
+density factor.
+
+**Item 2 -- JAX backend in propagation**: ``angular_spectrum_propagate``,
+``fresnel_propagate``, ``fraunhofer_propagate``, and
+``rayleigh_sommerfeld_propagate`` now accept JAX arrays and stay
+in the JAX backend.  All four are differentiable via ``jax.grad``
+and JIT-able via ``jax.jit``.  The pyFFTW > scipy.fft > numpy.fft
+priority chain is preserved for NumPy inputs; JAX uses ``jnp.fft``
+(XLA).
+
+**Item 3 -- JAX backend in asymptotic** (polynomial eval):
+``CanonicalPolyFit.eval_phi_xp`` / ``eval_s1_xp`` and
+``HFPolyFit.eval_phi_xp`` use backend-aware Chebyshev evaluation
+so the OPL polynomial surfaces are differentiable on JAX inputs.
+The full ``propagate_modal_asymptotic`` per-pixel Newton solver
+remains NumPy-only (genuine multi-week refactor).
+
+**Item 4 -- JAX-traceable trace**: New module
+``lumenairy.raytrace.jax_trace`` with ``trace_jax``, a functional
+ray-trace via ``jax.lax``-friendly surface walk.  Supports
+spherical and flat refractive surfaces; aspherics, apertures
+killing rays, and DOE order kicks are intentionally not in scope
+(use the NumPy ``trace`` for those).  ``jax.grad(trace_jax_loss)``
+returns finite gradients of OPD w.r.t. ray launch coordinates.
+
+**Item 5 -- MHS framework**: New module
+``lumenairy.propagators.mhs`` with ``HuygensSurface``,
+``MhsSubdomain``, and ``MhsPipeline`` classes.  Compose multiple
+subdomain propagators (ASM, GBD, HFPI, prescription-based, hard
+aperture) into a single chain via Huygens-surface field
+reconstruction.  Convenience builders: ``asm_subdomain``,
+``aperture_subdomain``, ``gbd_freespace_subdomain``,
+``prescription_subdomain``.
+
 ### Original 3.4.0 release notes (continued)
 
 ### Major — Multi-backend foundation, new propagators, full reorg
