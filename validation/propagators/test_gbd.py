@@ -102,6 +102,23 @@ def t_jax_dispatch():
     return la.is_jax_array(b.positions), 'jax positions'
 
 
+def t_prescription_gbd():
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    presc['object_distance'] = 30e-3
+    N = 32; dx = 5e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (30e-6)**2).astype(np.complex128)
+    out = propagate_gbd_through_prescription(
+        E, dx, presc, wavelength=lam,
+        sample_step=4, chunk_beamlets=256,
+    )
+    return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), (
+        f'peak={float(np.max(np.abs(out))):.3f}')
+
+
 def main():
     H.section('Decomposition')
     H.run('beamlet count', t_decompose_count)
@@ -117,6 +134,10 @@ def main():
 
     H.section('JAX backend')
     H.run('JAX dispatch', t_jax_dispatch)
+
+    H.section('Prescription path')
+    H.run('GBD through singlet prescription via system ABCD',
+          t_prescription_gbd)
 
     sys.exit(H.summary())
 

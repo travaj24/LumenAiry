@@ -34,7 +34,7 @@ from ..backend import array_namespace
 
 VALID_METHODS = (
     'auto', 'asm', 'fresnel', 'fraunhofer', 'rs',
-    'maslov', 'asymptotic', 'gbd', 'hfpi',
+    'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf',
 )
 
 
@@ -132,7 +132,7 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
         return rayleigh_sommerfeld_propagate(E_in, z, wavelength, dx, **kwargs)
 
     if method == 'gbd':
-        from .gbd import propagate_gbd_freespace
+        from .gbd import propagate_gbd_freespace, propagate_gbd_through_prescription
         if prescription is None:
             if z is None:
                 raise ValueError(
@@ -142,12 +142,18 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
                 output_grid=output_grid, output_dx=output_dx,
                 **kwargs,
             )
-        raise NotImplementedError(
-            "propagate(method='gbd') with prescription is not yet "
-            "implemented (requires raytrace + prescription integration).")
+        return propagate_gbd_through_prescription(
+            E_in, dx, prescription,
+            wavelength=wavelength,
+            output_grid=output_grid, output_dx=output_dx,
+            **kwargs,
+        )
 
     if method == 'hfpi':
-        from .hfpi import propagate_hfpi_freespace_aperture
+        from .hfpi import (
+            propagate_hfpi_freespace_aperture,
+            propagate_hfpi_through_prescription,
+        )
         if prescription is None:
             if 'aperture_radius' not in kwargs:
                 raise ValueError(
@@ -159,9 +165,31 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
                 wavelength=wavelength,
                 **kwargs,
             )
-        raise NotImplementedError(
-            "propagate(method='hfpi') with prescription is not yet "
-            "implemented.")
+        return propagate_hfpi_through_prescription(
+            E_in, dx, prescription,
+            wavelength=wavelength,
+            output_grid=output_grid, output_dx=output_dx,
+            **kwargs,
+        )
+
+    if method == 'hf':
+        from .hf import (
+            propagate_huygens_fresnel_freespace,
+            propagate_huygens_fresnel_through_prescription,
+        )
+        if prescription is None:
+            if z is None:
+                raise ValueError(
+                    "propagate(method='hf') without prescription requires z.")
+            return propagate_huygens_fresnel_freespace(
+                E_in, z, wavelength, dx, **kwargs,
+            )
+        return propagate_huygens_fresnel_through_prescription(
+            E_in, dx, prescription,
+            wavelength=wavelength,
+            output_grid=output_grid, output_dx=output_dx,
+            **kwargs,
+        )
 
     if method == 'maslov':
         from ..elements.lenses import apply_real_lens_maslov

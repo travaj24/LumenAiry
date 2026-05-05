@@ -18,7 +18,7 @@ H = Harness('dispatch')
 
 def t_valid_methods():
     expected = {'auto', 'asm', 'fresnel', 'fraunhofer', 'rs',
-                'maslov', 'asymptotic', 'gbd', 'hfpi'}
+                'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf'}
     return set(VALID_METHODS) == expected, f'methods = {VALID_METHODS}'
 
 

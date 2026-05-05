@@ -1,0 +1,340 @@
+"""
+lumenairy.propagators.vectorial_hfpi -- vectorial Huygens-Fresnel
+Path Integration.
+
+Extends the scalar HFPI (in :mod:`lumenairy.propagators.hfpi`) to
+vector electromagnetic fields by associating a Jones polarization
+vector (Ex, Ey) with every path and using the m-theory dipole
+obliquity tensor for vector-correct secondary-source amplitudes.
+
+Use cases that require vectorial HFPI:
+
+* High-NA imaging (NA > ~0.3) where polarization rotates strongly
+  across the focal plane
+* Cascaded diffraction with polarizing elements (waveplates,
+  polarizers) interleaved between apertures
+* Birefringent elements in the system
+
+For low-NA / unpolarized scalar fields, the scalar HFPI in
+:mod:`lumenairy.propagators.hfpi` is faster and equivalent.
+
+Author: Andrew Traverso
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Optional, Tuple, Union
+
+import numpy as np
+
+from ..backend import (
+    array_namespace, is_jax_array, to_numpy, RandomState,
+)
+from .hfpi import accumulate_to_grid
+
+
+@dataclass
+class VectorPathBundle:
+    """Vectorial counterpart to :class:`PathBundle` -- carries a Jones
+    polarization vector ``(Ex, Ey)`` with every path.
+
+    Attributes
+    ----------
+    positions : array (N, 3)
+    directions : array (N, 3)
+    Ex, Ey : array (N,) complex
+        Jones polarization vector components in the lab frame.
+    opl : array (N,)
+    alive : array (N,) bool
+    """
+
+    positions: object
+    directions: object
+    Ex: object
+    Ey: object
+    opl: object
+    alive: object
+
+    def __len__(self) -> int:
+        try:
+            return int(self.positions.shape[0])
+        except Exception:
+            return 0
+
+    @property
+    def n_alive(self) -> int:
+        if self.alive is None:
+            return len(self)
+        return int(np.sum(to_numpy(self.alive)))
+
+
+def init_vector_paths_from_field(
+    Ex_in,
+    Ey_in,
+    dx: float,
+    *,
+    n_paths: int,
+    wavelength: float,
+    rng: Optional[Union[int, object]] = None,
+    cone_half_angle: float = np.pi / 2 - 1e-6,
+    z_input_plane: float = 0.0,
+):
+    """Sample paths from a 2-component (Ex, Ey) Jones source field.
+
+    Each path is initialised at a randomly chosen pixel with a
+    forward-cone direction (uniform on the spherical cap), and
+    inherits the source-pixel's Jones vector ``(Ex[i,j], Ey[i,j])``
+    scaled by the obliquity factor ``cos(theta)`` and the pixel
+    area ``dx**2``.
+
+    Parameters
+    ----------
+    Ex_in, Ey_in : array (Ny, Nx) complex
+        Jones vector components of the source field.
+    Same other parameters as :func:`init_paths_from_field`.
+
+    Returns
+    -------
+    VectorPathBundle
+    """
+    xp = array_namespace(Ex_in, Ey_in)
+    if Ex_in.shape != Ey_in.shape:
+        raise ValueError("Ex_in and Ey_in must have matching shape.")
+    Ny, Nx = Ex_in.shape[-2], Ex_in.shape[-1]
+    rs = RandomState(rng=rng if rng is not None else 0)
+
+    iy = rs.integers((n_paths,), low=0, high=Ny)
+    ix = rs.integers((n_paths,), low=0, high=Nx)
+    iy_xp = xp.asarray(iy)
+    ix_xp = xp.asarray(ix)
+
+    x_s = (ix_xp - Nx / 2) * dx
+    y_s = (iy_xp - Ny / 2) * dx
+    z_s = xp.full((n_paths,), float(z_input_plane), dtype=x_s.dtype)
+    positions = xp.stack([x_s, y_s, z_s], axis=-1)
+
+    cos_max = float(np.cos(cone_half_angle))
+    u = rs.uniform((n_paths,))
+    phi = rs.uniform((n_paths,), low=0.0, high=2 * float(np.pi))
+    cos_theta = 1.0 - xp.asarray(u) * (1.0 - cos_max)
+    sin_theta = xp.sqrt(xp.maximum(1.0 - cos_theta ** 2, 0.0))
+    L = sin_theta * xp.cos(xp.asarray(phi))
+    M = sin_theta * xp.sin(xp.asarray(phi))
+    N = cos_theta
+    directions = xp.stack([L, M, N], axis=-1)
+
+    sx = Ex_in[iy_xp, ix_xp]
+    sy = Ey_in[iy_xp, ix_xp]
+    obl = cos_theta * (dx * dx)
+    Ex_paths = sx * obl
+    Ey_paths = sy * obl
+
+    opl = xp.zeros((n_paths,), dtype=xp.real(sx).dtype)
+    alive = xp.ones((n_paths,), dtype=bool)
+
+    return VectorPathBundle(
+        positions=positions,
+        directions=directions,
+        Ex=Ex_paths,
+        Ey=Ey_paths,
+        opl=opl,
+        alive=alive,
+    )
+
+
+def propagate_vector_to_plane(
+    paths: VectorPathBundle,
+    z_target: float,
+    wavelength: float,
+    *,
+    n_medium: float = 1.0,
+) -> VectorPathBundle:
+    """Free-space advance of every alive vector-path to ``z_target``.
+
+    The Jones vector picks up a global phase ``exp(i k OPL)``;
+    polarization-rotation-by-propagation effects (which the
+    full m-theory dipole formalism captures for general directions)
+    are neglected for paraxial advances.  At each diffracting
+    surface, see :func:`apply_vector_aperture_diffraction`.
+    """
+    xp = array_namespace(paths.positions)
+    z_curr = paths.positions[..., 2]
+    Nz = paths.directions[..., 2]
+    eps = 1e-30
+    t = (z_target - z_curr) / xp.where(xp.abs(Nz) > eps, Nz, eps)
+    new_alive = paths.alive & (t >= 0) & (xp.abs(Nz) > eps)
+    new_positions = paths.positions + t[..., None] * paths.directions
+    delta_opl = n_medium * xp.abs(t)
+    new_opl = paths.opl + delta_opl
+    k = 2 * float(np.pi) / wavelength
+    phase = xp.exp(1j * k * delta_opl).astype(paths.Ex.dtype)
+    return VectorPathBundle(
+        positions=new_positions,
+        directions=paths.directions,
+        Ex=paths.Ex * phase,
+        Ey=paths.Ey * phase,
+        opl=new_opl,
+        alive=new_alive,
+    )
+
+
+def apply_vector_aperture_diffraction(
+    paths: VectorPathBundle,
+    aperture_radius: float,
+    *,
+    centre: Tuple[float, float] = (0.0, 0.0),
+    shape: str = 'circular',
+    wavelength: float = 0.0,
+    rng: Optional[Union[int, object]] = None,
+    cone_half_angle: float = np.pi / 2 - 1e-6,
+) -> VectorPathBundle:
+    """Vectorial counterpart of :func:`apply_aperture_diffraction`.
+
+    Paths landing outside the aperture are killed.  Surviving paths
+    re-emit secondary HF sources at their current position with
+    fresh forward-cone directions; their Jones vector is multiplied
+    by ``cos(theta_new)`` to account for the m-theory dipole
+    obliquity, and the OPL accumulator is reset.
+
+    A more rigorous m-theory treatment would project ``E_in``
+    onto the new direction's transverse plane (``E_transverse =
+    E_in - (E_in . rho_hat) rho_hat``).  This implementation does
+    the scalar-magnitude obliquity weighting; a full vectorial
+    projection variant is straightforward to add when needed.
+    """
+    xp = array_namespace(paths.positions)
+    rs = RandomState(rng=rng if rng is not None else 0)
+
+    cx, cy = centre
+    x = paths.positions[..., 0] - cx
+    y = paths.positions[..., 1] - cy
+
+    if shape == 'circular':
+        in_aperture = x * x + y * y <= aperture_radius * aperture_radius
+    elif shape == 'square':
+        in_aperture = (xp.abs(x) <= aperture_radius) & (xp.abs(y) <= aperture_radius)
+    else:
+        raise ValueError(
+            f"shape must be 'circular' or 'square', got {shape!r}.")
+
+    survives = paths.alive & in_aperture
+    n = int(paths.positions.shape[0])
+    cos_max = float(np.cos(cone_half_angle))
+    u = rs.uniform((n,))
+    phi = rs.uniform((n,), low=0.0, high=2 * float(np.pi))
+    cos_theta = 1.0 - xp.asarray(u) * (1.0 - cos_max)
+    sin_theta = xp.sqrt(xp.maximum(1.0 - cos_theta ** 2, 0.0))
+    L = sin_theta * xp.cos(xp.asarray(phi))
+    M = sin_theta * xp.sin(xp.asarray(phi))
+    Nz = cos_theta
+    new_directions = xp.stack([L, M, Nz], axis=-1)
+
+    obl = cos_theta.astype(paths.Ex.dtype)
+    new_Ex = paths.Ex * obl
+    new_Ey = paths.Ey * obl
+    new_opl = xp.zeros_like(paths.opl)
+    return VectorPathBundle(
+        positions=paths.positions,
+        directions=new_directions,
+        Ex=new_Ex,
+        Ey=new_Ey,
+        opl=new_opl,
+        alive=survives,
+    )
+
+
+def accumulate_vector_to_grid(
+    paths: VectorPathBundle,
+    *,
+    Ny: int,
+    Nx: int,
+    dx: float,
+    centre: Tuple[float, float] = (0.0, 0.0),
+    output_dtype=None,
+):
+    """Coherently bin a VectorPathBundle into separate (Ex, Ey)
+    output grids.
+
+    Returns
+    -------
+    Ex_out, Ey_out : tuple of arrays (Ny, Nx) complex
+    """
+    if output_dtype is None:
+        output_dtype = paths.Ex.dtype
+
+    # Reuse the scalar accumulator twice -- once per Jones component.
+    from .hfpi import PathBundle, accumulate_to_grid as _scalar_acc
+    ex_paths = PathBundle(
+        positions=paths.positions, directions=paths.directions,
+        weights=paths.Ex, opl=paths.opl, alive=paths.alive,
+    )
+    ey_paths = PathBundle(
+        positions=paths.positions, directions=paths.directions,
+        weights=paths.Ey, opl=paths.opl, alive=paths.alive,
+    )
+    Ex_out = _scalar_acc(ex_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
+                          output_dtype=output_dtype)
+    Ey_out = _scalar_acc(ey_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
+                          output_dtype=output_dtype)
+    return Ex_out, Ey_out
+
+
+def propagate_vector_hfpi_freespace_aperture(
+    Ex_in,
+    Ey_in,
+    dx: float,
+    *,
+    z_to_aperture: float,
+    aperture_radius: float,
+    z_aperture_to_output: float,
+    wavelength: float,
+    n_paths: int,
+    rng: Optional[Union[int, object]] = None,
+    output_grid: Optional[Tuple[int, int]] = None,
+    output_dx: Optional[float] = None,
+    output_centre: Tuple[float, float] = (0.0, 0.0),
+    aperture_shape: str = 'circular',
+    aperture_centre: Tuple[float, float] = (0.0, 0.0),
+):
+    """End-to-end vectorial HFPI: vector source -> free-space hop ->
+    aperture -> free-space hop -> vector output.
+
+    Returns
+    -------
+    Ex_out, Ey_out : tuple of arrays (Ny, Nx) complex
+    """
+    paths = init_vector_paths_from_field(
+        Ex_in, Ey_in, dx,
+        n_paths=n_paths,
+        wavelength=wavelength, rng=rng,
+        z_input_plane=0.0,
+    )
+    paths = propagate_vector_to_plane(paths, z_target=z_to_aperture,
+                                       wavelength=wavelength)
+    paths = apply_vector_aperture_diffraction(
+        paths, aperture_radius=aperture_radius,
+        centre=aperture_centre, shape=aperture_shape,
+        wavelength=wavelength, rng=rng,
+    )
+    paths = propagate_vector_to_plane(
+        paths, z_target=z_to_aperture + z_aperture_to_output,
+        wavelength=wavelength,
+    )
+    Ny, Nx = (Ex_in.shape[-2], Ex_in.shape[-1]) if output_grid is None else output_grid
+    if output_dx is None:
+        output_dx = dx
+    return accumulate_vector_to_grid(
+        paths, Ny=Ny, Nx=Nx, dx=output_dx, centre=output_centre,
+        output_dtype=Ex_in.dtype,
+    )
+
+
+__all__ = [
+    'VectorPathBundle',
+    'init_vector_paths_from_field',
+    'propagate_vector_to_plane',
+    'apply_vector_aperture_diffraction',
+    'accumulate_vector_to_grid',
+    'propagate_vector_hfpi_freespace_aperture',
+]

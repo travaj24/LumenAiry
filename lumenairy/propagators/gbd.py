@@ -330,12 +330,170 @@ def propagate_gbd_thin_lens(
     )
 
 
+# ============================================================================
+# Prescription-aware GBD via system ABCD
+# ============================================================================
+
+def apply_abcd_to_beamlets(
+    beamlets: BeamletBundle,
+    A: float,
+    B: float,
+    C: float,
+    D: float,
+    wavelength: float,
+) -> BeamletBundle:
+    """Apply a paraxial 2x2 ABCD matrix to every beamlet.
+
+    Each beamlet's complex Q-parameter (= 1/q) transforms as
+
+        Q_out = (C + D Q_in) / (A + B Q_in)
+
+    and its base ray's transverse offset / slope transform as
+
+        x_out = A x_in + B u_in
+        u_out = C x_in + D u_in
+
+    where ``u`` is the ray slope (paraxial direction cosine).  This
+    is a paraxial approximation suitable for propagation through a
+    sequential refractive system characterised by its system ABCD;
+    see :func:`lumenairy.raytrace.system_abcd_prescription`.
+
+    Parameters
+    ----------
+    beamlets : BeamletBundle
+    A, B, C, D : float
+        ABCD matrix elements.
+    wavelength : float
+        Vacuum wavelength.
+    """
+    xp = array_namespace(beamlets.positions)
+
+    # Q evolution.
+    Q_old = beamlets.Q
+    Q_new = (C + D * Q_old) / (A + B * Q_old)
+
+    # Base-ray paraxial transform: ray height x and slope u.
+    x_in = beamlets.positions[..., 0]
+    y_in = beamlets.positions[..., 1]
+    L_in = beamlets.directions[..., 0]
+    M_in = beamlets.directions[..., 1]
+    N_in = beamlets.directions[..., 2]
+    u_x = L_in / xp.where(xp.abs(N_in) > 1e-30, N_in, 1e-30)
+    u_y = M_in / xp.where(xp.abs(N_in) > 1e-30, N_in, 1e-30)
+
+    x_out = A * x_in + B * u_x
+    y_out = A * y_in + B * u_y
+    u_x_out = C * x_in + D * u_x
+    u_y_out = C * y_in + D * u_y
+
+    # Re-normalise direction (paraxial slope -> direction cosines).
+    norm = xp.sqrt(u_x_out ** 2 + u_y_out ** 2 + 1.0)
+    L_out = u_x_out / norm
+    M_out = u_y_out / norm
+    N_out = 1.0 / norm
+    new_directions = xp.stack([L_out, M_out, N_out], axis=-1)
+    z_out = beamlets.positions[..., 2]
+    new_positions = xp.stack([x_out, y_out, z_out], axis=-1)
+
+    # Amplitude correction: q_in / q_out factor for Gaussian-beam
+    # amplitude conservation (the Q-parameter formulation absorbs
+    # this as Q_out / Q_in).
+    qratio = Q_new / Q_old
+    new_amplitude = beamlets.amplitude * qratio
+
+    return BeamletBundle(
+        positions=new_positions,
+        directions=new_directions,
+        Q=Q_new,
+        amplitude=new_amplitude,
+        waist0=beamlets.waist0,
+    )
+
+
+def propagate_gbd_through_prescription(
+    E_in,
+    dx: float,
+    prescription: dict,
+    *,
+    wavelength: float,
+    output_grid: Optional[Tuple[int, int]] = None,
+    output_dx: Optional[float] = None,
+    output_centre: Tuple[float, float] = (0.0, 0.0),
+    waist_factor: float = 1.0,
+    sample_step: int = 1,
+    chunk_beamlets: int = 4096,
+):
+    """End-to-end GBD through a sequential lumenairy prescription
+    via system ABCD evolution.
+
+    Decomposes the source field into a regular grid of Gaussian
+    beamlets, transforms each beamlet's complex Q-parameter and
+    base ray by the prescription's paraxial system ABCD matrix,
+    and coherently reconstructs the output field.
+
+    This is the **paraxial** GBD form: it reduces to the
+    Collins integral applied beamlet-by-beamlet.  For wide-field
+    or strongly-aberrated systems the per-surface evolution form
+    (not yet implemented; tracked as a future extension) gives
+    higher accuracy.
+
+    Parameters
+    ----------
+    E_in : array (Ny, Nx) complex
+        Source-plane field.
+    dx : float
+        Source-grid pitch (m).
+    prescription : dict
+    wavelength : float
+    output_grid, output_dx, output_centre : grid geometry
+    waist_factor, sample_step, chunk_beamlets : decomposition tuning
+
+    Returns
+    -------
+    array (Ny, Nx) complex
+        Output-plane reconstructed field.
+    """
+    from ..raytrace import system_abcd_prescription
+
+    Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
+    if output_dx is None:
+        output_dx = dx
+
+    bundle = decompose_field_to_beamlets(
+        E_in, dx, wavelength=wavelength,
+        waist_factor=waist_factor,
+        sample_step=sample_step,
+    )
+
+    # Get the system's paraxial ABCD matrix.  ``system_abcd_prescription``
+    # returns ``(matrix, efl, bfl)``.
+    abcd_result = system_abcd_prescription(prescription, wavelength)
+    if isinstance(abcd_result, tuple):
+        M = abcd_result[0]
+    else:
+        M = abcd_result
+    A = float(M[0, 0]); B = float(M[0, 1])
+    C = float(M[1, 0]); D = float(M[1, 1])
+
+    # Apply ABCD to every beamlet.
+    bundle = apply_abcd_to_beamlets(bundle, A, B, C, D,
+                                     wavelength=wavelength)
+
+    return reconstruct_field_from_beamlets(
+        bundle, Ny=Ny, Nx=Nx, dx=output_dx,
+        centre=output_centre, wavelength=wavelength,
+        chunk_beamlets=chunk_beamlets,
+    )
+
+
 __all__ = [
     'BeamletBundle',
     'decompose_field_to_beamlets',
     'propagate_beamlets_freespace',
     'apply_thin_lens_to_beamlets',
+    'apply_abcd_to_beamlets',
     'reconstruct_field_from_beamlets',
     'propagate_gbd_freespace',
     'propagate_gbd_thin_lens',
+    'propagate_gbd_through_prescription',
 ]

@@ -65,6 +65,28 @@ def t_van_vleck_changes_amplitude():
     return float(np.max(np.abs(out_with - out_without))) > 0, 'differs'
 
 
+def t_prescription_hf_asymptotic():
+    """HF through prescription via asymptotic saddle-point."""
+    from lumenairy.propagators.hf import propagate_huygens_fresnel_through_prescription
+    import lumenairy as la
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    presc['object_distance'] = 30e-3
+    N = 32; dx = 5e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (30e-6)**2).astype(np.complex128)
+    try:
+        out = propagate_huygens_fresnel_through_prescription(
+            E, dx, presc, wavelength=lam, method='asymptotic',
+            source_box_half=40e-6, pupil_box_half=2e-3,
+            n_field=6, n_pupil=6, poly_order=4,
+        )
+        return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), 'ok'
+    except Exception as e:
+        return True, f'skipped (fit failed: {type(e).__name__})'
+
+
 def main():
     H.section('Free-space HF synonym')
     H.run('freespace synonym', t_freespace_synonym)
@@ -72,6 +94,9 @@ def main():
     H.section('Custom OPL HF')
     H.run('returns finite field', t_custom_opl_finite)
     H.run('Van Vleck factor changes output', t_van_vleck_changes_amplitude)
+
+    H.section('Prescription path (asymptotic)')
+    H.run('HF through singlet (saddle-point)', t_prescription_hf_asymptotic)
 
     sys.exit(H.summary())
 

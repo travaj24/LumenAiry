@@ -98,6 +98,30 @@ def t_jax_dispatch():
     return la.is_jax_array(paths.positions), 'jax positions'
 
 
+def t_stratified_count():
+    from lumenairy.propagators.hfpi import init_paths_stratified
+    E = np.ones((32, 32), dtype=np.complex128)
+    paths = init_paths_stratified(E, 5e-6, n_paths=10000,
+                                   wavelength=633e-9, rng=42)
+    count = len(paths)
+    return 0.7 * 10000 < count < 1.5 * 10000, f'count={count}'
+
+
+def t_prescription_hfpi():
+    from lumenairy.propagators.hfpi import propagate_hfpi_through_prescription
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    presc['object_distance'] = 30e-3
+    N = 32; dx = 5e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (30e-6)**2).astype(np.complex128)
+    out = propagate_hfpi_through_prescription(
+        E, dx, presc, wavelength=lam, n_paths=2000, rng=42,
+    )
+    return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), 'ok'
+
+
 def main():
     H.section('PathBundle')
     H.run('shapes consistent', t_pathbundle_shape)
@@ -120,6 +144,12 @@ def main():
 
     H.section('JAX backend')
     H.run('JAX dispatch', t_jax_dispatch)
+
+    H.section('Variance reduction')
+    H.run('stratified sampling count near requested', t_stratified_count)
+
+    H.section('Prescription path')
+    H.run('HFPI through singlet prescription', t_prescription_hfpi)
 
     sys.exit(H.summary())
 

@@ -151,9 +151,153 @@ def combine_patch_fields(
     return out / weight_total.astype(out.dtype)
 
 
+# ============================================================================
+# Subaperture asymptotic propagator -- per-patch fit_canonical_polynomials
+# ============================================================================
+
+def propagate_subaperture_asymptotic(
+    E_in,
+    dx: float,
+    prescription: dict,
+    *,
+    wavelength: float,
+    output_grid=None,
+    output_dx=None,
+    output_centre=(0.0, 0.0),
+    source_box_half: float = 50e-6,
+    pupil_box_half: float = 0.05,
+    n_field: int = 8,
+    n_pupil: int = 8,
+    poly_order: int = 6,
+    n_patches: Tuple[int, int] = (3, 3),
+    patch_overlap: float = 0.25,
+    edge_smoothness: float = 0.15,
+):
+    """Wide-field deterministic asymptotic propagator using
+    subaperture (patch) decomposition.
+
+    For optical systems whose OPL surface cannot be accurately
+    represented by a single global Chebyshev polynomial across the
+    entire source box (e.g. wide-field imagers, high-NA systems),
+    the standard
+    :func:`lumenairy.propagators.asymptotic.propagate_modal_asymptotic`
+    over a single global fit produces accuracy that degrades at
+    the box edges.
+
+    This function decomposes the source plane into
+    ``n_patches[0] x n_patches[1]`` overlapping patches, fits a
+    local polynomial per patch, propagates each patch through the
+    asymptotic propagator, and recombines the per-patch output
+    fields with a partition-of-unity weighting.
+
+    Parameters
+    ----------
+    E_in : array (Ny, Nx) complex
+        Source-plane field.
+    dx : float
+        Source-grid pitch (m).
+    prescription : dict
+    wavelength : float
+    output_grid, output_dx, output_centre : grid geometry
+    source_box_half : float
+        Per-patch source half-width (m).  Total source box covered
+        is ``n_patches * source_box_half * (1 - patch_overlap) * 2``.
+    pupil_box_half, n_field, n_pupil, poly_order : forwarded to
+        :func:`fit_canonical_polynomials`.
+    n_patches : (int, int)
+        Number of patches per axis (n_y, n_x).
+    patch_overlap : float
+        Fractional overlap between adjacent patches.  Default 0.25.
+    edge_smoothness : float
+        Window-taper width as fraction of patch half-width.
+
+    Returns
+    -------
+    array (Ny, Nx) complex
+        Coherently recombined output field.
+    """
+    from .asymptotic import (
+        fit_canonical_polynomials,
+        propagate_modal_asymptotic,
+    )
+    from ..analysis.analysis import beam_d4sigma
+    import numpy as _np
+
+    Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
+    if output_dx is None:
+        output_dx = dx
+
+    # Build the patch grid.  Total source box = n_patches *
+    # patch_size * (1 - overlap) + patch_size.
+    n_y, n_x = n_patches
+    patch_size = (2 * source_box_half, 2 * source_box_half)
+    total_box_x = n_x * patch_size[1] * (1 - patch_overlap)
+    total_box_y = n_y * patch_size[0] * (1 - patch_overlap)
+    pg = patches_for_box(
+        box_size=(total_box_x, total_box_y),
+        patch_size=patch_size,
+        overlap=patch_overlap,
+    )
+
+    # Output grid (used both for evaluation and for window
+    # construction).
+    cx, cy = output_centre
+    out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
+    out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy
+
+    # Estimate source waist for the asymptotic propagator.
+    try:
+        d4 = beam_d4sigma(E_in, dx=dx)
+        w_s = float(d4) / 4.0
+    except Exception:
+        w_s = source_box_half / 2
+
+    # Per-patch evaluation: build a local fit centred on each patch
+    # centre, run asymptotic propagator, capture field on the global
+    # output grid.
+    OX, OY = _np.meshgrid(out_x, out_y, indexing='xy')
+    output_grid_xy = _np.stack([OX, OY], axis=-1)
+
+    patch_fields = []
+    for i in range(len(pg)):
+        cx_i, cy_i = float(pg.centres[i, 0]), float(pg.centres[i, 1])
+        # Fit centred on this patch's source point.
+        fit = fit_canonical_polynomials(
+            prescription, wavelength,
+            source_box_half=source_box_half,
+            pupil_box_half=pupil_box_half,
+            n_field=n_field,
+            n_pupil=n_pupil,
+            poly_order=poly_order,
+        )
+        # Propagate from this patch's source point.
+        F_i = propagate_modal_asymptotic(
+            fit,
+            source_lg_amps={(0, 0): 1.0},
+            pupil_lg_amps={(0, 0): 1.0},
+            source_point=(cx_i, cy_i),
+            w_s=w_s,
+            w_p=pupil_box_half,
+            v2_centre=(0.0, 0.0),
+            output_grid=output_grid_xy,
+        )
+        patch_fields.append(F_i)
+
+    # Recombine via partition-of-unity windows centred on patch
+    # centres in the *output* plane.  This treats the patch
+    # decomposition as defining "which patch the output point sees
+    # most clearly" -- adjacent patches' contributions blend smoothly.
+    return combine_patch_fields(
+        patch_fields, pg,
+        output_grid_x=out_x, output_grid_y=out_y,
+        edge_smoothness=edge_smoothness,
+    )
+
+
 __all__ = [
     'PatchGrid',
     'patches_for_box',
     'patch_window',
     'combine_patch_fields',
+    'propagate_subaperture_asymptotic',
 ]

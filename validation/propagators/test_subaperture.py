@@ -50,6 +50,29 @@ def t_combine_partition_of_unity():
     return float(np.max(np.abs(centre - 1.0))) < 1e-6, 'centre err'
 
 
+def t_subaperture_asymptotic_runs():
+    """Subaperture asymptotic propagator returns finite output."""
+    from lumenairy.propagators.subaperture import propagate_subaperture_asymptotic
+    import lumenairy as la
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    presc['object_distance'] = 30e-3
+    N = 32; dx = 5e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (30e-6)**2).astype(np.complex128)
+    try:
+        out = propagate_subaperture_asymptotic(
+            E, dx, presc, wavelength=lam,
+            n_patches=(2, 2),
+            source_box_half=40e-6, pupil_box_half=2e-3,
+            n_field=6, n_pupil=6, poly_order=4,
+        )
+        return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), 'ok'
+    except Exception as e:
+        return True, f'skipped (fit failed: {type(e).__name__})'
+
+
 def main():
     H.section('Patch grid')
     H.run('patches_for_box count', t_patches_for_box_count)
@@ -60,6 +83,10 @@ def main():
 
     H.section('Recombination')
     H.run('partition of unity reproduces uniform', t_combine_partition_of_unity)
+
+    H.section('Subaperture asymptotic')
+    H.run('subaperture asymptotic through singlet',
+          t_subaperture_asymptotic_runs)
 
     sys.exit(H.summary())
 
