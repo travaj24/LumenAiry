@@ -26,8 +26,8 @@ _HERE = pathlib.Path(__file__).resolve().parent
 
 
 def discover_tests() -> list[pathlib.Path]:
-    files = sorted(_HERE.glob("test_*.py"))
-    return [f for f in files if f.name != "_harness.py"]
+    files = sorted(_HERE.rglob("test_*.py"))
+    return [f for f in files if f.name != "_harness.py" and "__pycache__" not in f.parts]
 
 
 def run_file(path: pathlib.Path, quiet: bool) -> tuple[int, float, str]:

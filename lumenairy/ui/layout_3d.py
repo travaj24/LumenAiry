@@ -14,7 +14,7 @@ from PySide6.QtCore import Qt
 import numpy as np
 
 from .model import SystemModel
-from ..lenses import surface_sag_biconic
+from ..elements.lenses import surface_sag_biconic
 
 try:
     import pyvista as pv

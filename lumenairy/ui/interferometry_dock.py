@@ -195,7 +195,7 @@ class InterferometryDock(QWidget):
             self.summary.append('Load OPD first.')
             return
         try:
-            from lumenairy.interferometry import simulate_interferogram
+            from lumenairy.analysis.interferometry import simulate_interferogram
             fr = simulate_interferogram(
                 self._opd, self._wavelength,
                 tilt_x=self.spin_tx.value(),
@@ -213,7 +213,7 @@ class InterferometryDock(QWidget):
             self.summary.append('Load OPD first.')
             return
         try:
-            from lumenairy.interferometry import (
+            from lumenairy.analysis.interferometry import (
                 simulate_interferogram, phase_shift_extract)
             steps = self.spin_steps.value()
             shifts = 2 * np.pi * np.arange(steps) / steps

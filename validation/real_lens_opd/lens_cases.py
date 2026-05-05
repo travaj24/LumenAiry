@@ -33,7 +33,7 @@ from __future__ import annotations
 import numpy as np
 
 import lumenairy as la
-from lumenairy.prescriptions import (
+from lumenairy.io.prescriptions import (
     make_singlet,
     make_doublet,
     thorlabs_lens,

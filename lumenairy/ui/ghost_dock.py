@@ -88,7 +88,7 @@ class GhostDock(QWidget):
 
         wv = self.sm.wavelength_m
         try:
-            from ..ghost import ghost_analysis
+            from ..analysis.ghost import ghost_analysis
             ghosts = ghost_analysis(pres, wv, verbose=False)
         except Exception as e:
             self.lbl_summary.setText(f'Error: {e}')

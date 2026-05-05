@@ -146,7 +146,7 @@ def _is_cupy_array(x):
     return isinstance(x, cp.ndarray)
 
 # Sibling-module imports (created separately in this package) ----------------
-from ..propagation import angular_spectrum_propagate
+from ..propagators.propagation import angular_spectrum_propagate
 from ..glass import get_glass_index, get_glass_index_complex
 
 # Typing: the Maslov section (merged in 3.2.2 from the former
@@ -1279,13 +1279,13 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
         else:
             E = E_in.copy()
         if not cp.iscomplexobj(E):
-            from ..propagation import DEFAULT_COMPLEX_DTYPE
+            from ..propagators.propagation import DEFAULT_COMPLEX_DTYPE
             E = E.astype(DEFAULT_COMPLEX_DTYPE)
     else:
         if np.iscomplexobj(E_in):
             E = E_in.copy()
         else:
-            from ..propagation import DEFAULT_COMPLEX_DTYPE
+            from ..propagators.propagation import DEFAULT_COMPLEX_DTYPE
             E = E_in.astype(DEFAULT_COMPLEX_DTYPE)
 
     # Entrance aperture (only if no explicit stop surface specified)
@@ -1477,7 +1477,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
             # loss is a feature of the physical regime, not a bug in
             # the dispatcher.
             if wave_propagator == 'sas':
-                from ..propagation import (
+                from ..propagators.propagation import (
                     scalable_angular_spectrum_propagate, resample_field)
                 E, dx_new, _ = scalable_angular_spectrum_propagate(
                     E, thickness, lam_medium, dx)
@@ -1485,7 +1485,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
                     E, _ = resample_field(
                         E, dx_new, dx, N_out=E.shape[-1])
             elif wave_propagator == 'fresnel':
-                from ..propagation import (
+                from ..propagators.propagation import (
                     fresnel_propagate, resample_field)
                 E, dx_new, _ = fresnel_propagate(
                     E, thickness, lam_medium, dx)
@@ -1493,7 +1493,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
                     E, _ = resample_field(
                         E, dx_new, dx, N_out=E.shape[-1])
             elif wave_propagator == 'rayleigh_sommerfeld':
-                from ..propagation import rayleigh_sommerfeld_propagate
+                from ..propagators.propagation import rayleigh_sommerfeld_propagate
                 E = rayleigh_sommerfeld_propagate(
                     E, thickness, lam_medium, dx)
             elif wave_propagator == 'asm':
@@ -2583,7 +2583,7 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
     from ..raytrace import (
         surfaces_from_prescription, trace, _make_bundle,
     )
-    from ..propagation import angular_spectrum_propagate
+    from ..propagators.propagation import angular_spectrum_propagate
     from ..progress import call_progress, ProgressScaler
 
     call_progress(progress, 'real_lens_traced', 0.0, 'initialising')

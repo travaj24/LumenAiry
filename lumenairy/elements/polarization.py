@@ -38,7 +38,7 @@ Author: Andrew Traverso
 import numpy as np
 
 # Scalar propagation and element functions (dispatched per component)
-from ..propagation import (
+from ..propagators.propagation import (
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
     angular_spectrum_propagate_batch,

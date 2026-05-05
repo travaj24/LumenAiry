@@ -42,8 +42,8 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from ..propagation import angular_spectrum_propagate
-from ..lenses import apply_real_lens
+from ..propagators.propagation import angular_spectrum_propagate
+from ..elements.lenses import apply_real_lens
 from .analysis import (
     beam_centroid,
     beam_d4sigma,

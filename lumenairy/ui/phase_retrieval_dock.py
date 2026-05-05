@@ -47,7 +47,7 @@ class _GSWorker(QThread):
     def run(self):
         try:
             if self.algo == 'gs':
-                from lumenairy.phase_retrieval import gerchberg_saxton
+                from lumenairy.analysis.phase_retrieval import gerchberg_saxton
                 phase, history = gerchberg_saxton(
                     self.source_amp, self.target_amp,
                     n_iter=self.n_iter, return_history=True)
@@ -55,7 +55,7 @@ class _GSWorker(QThread):
                     'success': True, 'phase': phase,
                     'history': np.asarray(history)})
             else:
-                from lumenairy.phase_retrieval import error_reduction
+                from lumenairy.analysis.phase_retrieval import error_reduction
                 field, history = error_reduction(
                     self.target_amp, self.support,
                     n_iter=self.n_iter, return_history=True)

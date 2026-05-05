@@ -57,13 +57,13 @@ if _LIB_ROOT not in sys.path:
     sys.path.insert(0, _LIB_ROOT)
 
 import lumenairy as la
-from lumenairy.lenses import apply_real_lens, apply_real_lens_traced
+from lumenairy.elements.lenses import apply_real_lens, apply_real_lens_traced
 from lumenairy.analysis import (
     remove_wavefront_modes,
     opd_pv_rms,
     wave_opd_1d,
 )
-from lumenairy.prescriptions import (
+from lumenairy.io.prescriptions import (
     export_zemax_lens_data,
     export_zemax_zmx,
 )

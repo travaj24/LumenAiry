@@ -103,7 +103,7 @@ class FieldBrowserDock(QWidget):
         if not path:
             return
         try:
-            from lumenairy.storage import list_planes
+            from lumenairy.io.storage import list_planes
             self._filepath = path
             self._planes = list_planes(path)
         except Exception as e:
@@ -125,7 +125,7 @@ class FieldBrowserDock(QWidget):
             return
         plane = self._planes[sel]
         try:
-            from lumenairy.storage import load_plane_by_label
+            from lumenairy.io.storage import load_plane_by_label
             field, dx, meta = load_plane_by_label(
                 self._filepath, plane['label'])
             self._current_field = field

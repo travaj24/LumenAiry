@@ -633,7 +633,7 @@ def polychromatic_strehl(prescription, wavelengths, weights,
     z_bests : ndarray
         Per-wavelength best-focus positions [m].
     """
-    from ..lenses import apply_real_lens
+    from ..elements.lenses import apply_real_lens
     from .through_focus import (through_focus_scan, find_best_focus,
                                 diffraction_limited_peak)
     from ..raytrace import surfaces_from_prescription, system_abcd

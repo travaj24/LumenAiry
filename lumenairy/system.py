@@ -10,13 +10,13 @@ Author: Andrew Traverso
 
 import numpy as np
 
-from .propagation import (
+from .propagators.propagation import (
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
     fresnel_propagate,
     resample_field,
 )
-from .lenses import (
+from .elements.lenses import (
     apply_thin_lens,
     apply_spherical_lens,
     apply_aspheric_lens,
@@ -266,7 +266,7 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
                     E, _ = resample_field(E, dx_new, current_dx,
                                           N_out=E_in.shape[-1])
             elif prop_method == 'sas' and not has_tilt:
-                from .propagation import scalable_angular_spectrum_propagate
+                from .propagators.propagation import scalable_angular_spectrum_propagate
                 pad = elem.get('pad', 2)
                 skip_final_phase = elem.get('skip_final_phase', False)
                 E, dx_new, dy_new = scalable_angular_spectrum_propagate(

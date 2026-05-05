@@ -164,7 +164,7 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             "implemented.")
 
     if method == 'maslov':
-        from ..lenses import apply_real_lens_maslov
+        from ..elements.lenses import apply_real_lens_maslov
         if prescription is None:
             raise ValueError(
                 "propagate(method='maslov') requires a prescription.")

@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..propagation import angular_spectrum_propagate
+from ..propagators.propagation import angular_spectrum_propagate
 
 
 def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,

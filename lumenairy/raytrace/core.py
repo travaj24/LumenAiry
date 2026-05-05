@@ -274,7 +274,7 @@ def _surface_sag_xy(x, y, surface):
                 "Freeform departure on a biconic base is not supported "
                 "yet: leave radius_y unset, or extend "
                 "freeform.surface_sag_freeform with biconic support.")
-        from ..freeform import surface_sag_freeform
+        from ..elements.freeform import surface_sag_freeform
         sd = dict(spec)
         # surface_sag_freeform reads 'freeform_type', 'radius', 'conic',
         # plus per-kind keys.  The Surface dataclass already supplies

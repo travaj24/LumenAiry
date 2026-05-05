@@ -26,7 +26,7 @@ if _LIB_ROOT not in sys.path:
     sys.path.insert(0, _LIB_ROOT)
 
 import lumenairy as la  # noqa: E402
-from lumenairy.prescriptions import thorlabs_lens  # noqa: E402
+from lumenairy.io.prescriptions import thorlabs_lens  # noqa: E402
 from lumenairy.raytrace import (  # noqa: E402
     surfaces_from_prescription, system_abcd)
 

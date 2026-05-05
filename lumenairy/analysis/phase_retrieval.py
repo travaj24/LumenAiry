@@ -29,7 +29,7 @@ Author: Andrew Traverso
 """
 
 import numpy as np
-from ..propagation import _fft2, _ifft2
+from ..propagators.propagation import _fft2, _ifft2
 
 
 # =============================================================================

@@ -572,7 +572,7 @@ def plot_stokes(jones_field, dx=None, unit='auto', figsize=(12, 10),
     fig, axes
     """
     _require_mpl()
-    from ..polarization import stokes_parameters
+    from ..elements.polarization import stokes_parameters
     S = stokes_parameters(jones_field)
     if dx is None:
         dx = jones_field.dx
@@ -636,7 +636,7 @@ def plot_polarization_ellipses(jones_field, n_ellipses=16, unit='auto',
     fig, ax
     """
     _require_mpl()
-    from ..polarization import polarization_ellipse, stokes_parameters
+    from ..elements.polarization import polarization_ellipse, stokes_parameters
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -825,7 +825,7 @@ def compute_jones_pupil(apply_fn, N, dx, wavelength, dy=None):
         Pitch of the returned array -- equal to ``dx`` / ``dy`` for
         a real-lens pipeline that preserves grid pitch.
     """
-    from ..polarization import JonesField
+    from ..elements.polarization import JonesField
 
     if dy is None:
         dy = dx

@@ -100,7 +100,7 @@ import numpy as np
 # Reuse the proven Chebyshev infrastructure that already powers
 # apply_real_lens_maslov.  These helpers are private only by leading-
 # underscore convention; they are stable and well-validated.
-from ..lenses import (
+from ..elements.lenses import (
     _chebyshev_vandermonde,
     _chebyshev_derivative_vandermonde,
     _chebyshev_second_derivative_vandermonde,

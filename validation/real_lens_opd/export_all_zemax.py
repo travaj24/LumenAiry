@@ -12,7 +12,7 @@ _LIB_ROOT = os.path.normpath(os.path.join(_HERE, '..', '..'))
 if _LIB_ROOT not in sys.path:
     sys.path.insert(0, _LIB_ROOT)
 
-from lumenairy.prescriptions import (
+from lumenairy.io.prescriptions import (
     export_zemax_lens_data, export_zemax_zmx,
 )
 from lumenairy.raytrace import (

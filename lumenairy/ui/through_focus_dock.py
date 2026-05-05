@@ -54,7 +54,7 @@ class ThroughFocusWorker(QThread):
 
     def run(self):
         try:
-            from lumenairy.through_focus import through_focus_scan
+            from lumenairy.analysis.through_focus import through_focus_scan
             res = through_focus_scan(
                 self.E_exit, self.dx, self.wavelength, self.z_values,
                 bucket_radius=self.bucket_radius,
@@ -258,7 +258,7 @@ class ThroughFocusDock(QWidget):
         ideal_peak = None
         if self.chk_normalized.isChecked():
             try:
-                from lumenairy.through_focus import (
+                from lumenairy.analysis.through_focus import (
                     diffraction_limited_peak)
                 # use z0 as the focal length reference
                 ideal_peak = diffraction_limited_peak(

@@ -1166,7 +1166,7 @@ class MainWindow(QMainWindow):
 
     def _build_thorlabs_menu(self, parent_menu):
         """Group the Thorlabs catalog by family + EFL for findability."""
-        from ..prescriptions import THORLABS_CATALOG
+        from ..io.prescriptions import THORLABS_CATALOG
 
         try:
             from .. import raytrace as _rt
@@ -1510,7 +1510,7 @@ class MainWindow(QMainWindow):
         and offer to replace the first lens element with the best match.
         """
         try:
-            from ..prescriptions import THORLABS_CATALOG
+            from ..io.prescriptions import THORLABS_CATALOG
             from ..raytrace import system_abcd, surfaces_from_prescription
             pres = self.model.to_prescription()
             surfs = surfaces_from_prescription(pres)
@@ -1880,7 +1880,7 @@ class MainWindow(QMainWindow):
                  'phase_levels': int(p['levels'])}))
 
     def _ins_thorlabs(self, part):
-        from ..prescriptions import thorlabs_lens
+        from ..io.prescriptions import thorlabs_lens
         try:
             p, ok = self._elem_dialog(f'Insert {part}', {
                 'dist': ('Distance from previous', 50, 0, 1e6, 2, 'mm'),
@@ -1945,7 +1945,7 @@ class MainWindow(QMainWindow):
     # ── File operations ────────────────────────────────────────────
 
     def _load_thorlabs(self):
-        from ..prescriptions import THORLABS_CATALOG, thorlabs_lens
+        from ..io.prescriptions import THORLABS_CATALOG, thorlabs_lens
         parts = sorted(THORLABS_CATALOG.keys())
         part, ok = QInputDialog.getItem(self, 'Load Thorlabs Lens', 'Part:', parts, 0, False)
         if ok and part:
@@ -1967,13 +1967,13 @@ class MainWindow(QMainWindow):
             self._suppress_dirty_marking = True
             try:
                 if lower.endswith('.zmx'):
-                    from ..prescriptions import load_zmx_prescription
+                    from ..io.prescriptions import load_zmx_prescription
                     rx = load_zmx_prescription(fp)
                 elif lower.endswith('.seq'):
-                    from ..prescriptions import load_codev_seq
+                    from ..io.prescriptions import load_codev_seq
                     rx = load_codev_seq(fp)
                 else:
-                    from ..prescriptions import load_zemax_prescription_txt
+                    from ..io.prescriptions import load_zemax_prescription_txt
                     rx = load_zemax_prescription_txt(fp)
                 wv = rx.get('wavelength', self.model.wavelength_nm * 1e-9)
                 if isinstance(wv, float) and wv < 1e-3:
@@ -1995,11 +1995,11 @@ class MainWindow(QMainWindow):
         lower = fp.lower()
         try:
             if lower.endswith('.zmx'):
-                from ..prescriptions import export_zemax_zmx
+                from ..io.prescriptions import export_zemax_zmx
                 export_zemax_zmx(rx, fp,
                                  wavelength=self.model.wavelength_nm * 1e-9)
             elif lower.endswith('.seq'):
-                from ..prescriptions import export_codev_seq
+                from ..io.prescriptions import export_codev_seq
                 export_codev_seq(rx, fp,
                                  wavelength=self.model.wavelength_nm * 1e-9)
             else:
@@ -2094,13 +2094,13 @@ class MainWindow(QMainWindow):
                     self.model._restore_state(state)
                 else:
                     if lower.endswith('.zmx'):
-                        from ..prescriptions import load_zmx_prescription
+                        from ..io.prescriptions import load_zmx_prescription
                         rx = load_zmx_prescription(path)
                     elif lower.endswith('.seq'):
-                        from ..prescriptions import load_codev_seq
+                        from ..io.prescriptions import load_codev_seq
                         rx = load_codev_seq(path)
                     else:
-                        from ..prescriptions import load_zemax_prescription_txt
+                        from ..io.prescriptions import load_zemax_prescription_txt
                         rx = load_zemax_prescription_txt(path)
                     wv = rx.get('wavelength', self.model.wavelength_nm * 1e-9)
                     if isinstance(wv, float) and wv < 1e-3:
@@ -2117,7 +2117,7 @@ class MainWindow(QMainWindow):
     def _open_demo(self):
         """Load the AC254-100-C demo lens (wired to the Welcome dock)."""
         try:
-            from ..prescriptions import thorlabs_lens
+            from ..io.prescriptions import thorlabs_lens
             self._suppress_dirty_marking = True
             try:
                 self.model.load_prescription(thorlabs_lens('AC254-100-C'), 1310.0)
@@ -2187,13 +2187,13 @@ class MainWindow(QMainWindow):
                     self.model._restore_state(state)
                 else:
                     if lower.endswith('.zmx'):
-                        from ..prescriptions import load_zmx_prescription
+                        from ..io.prescriptions import load_zmx_prescription
                         rx = load_zmx_prescription(fp)
                     elif lower.endswith('.seq'):
-                        from ..prescriptions import load_codev_seq
+                        from ..io.prescriptions import load_codev_seq
                         rx = load_codev_seq(fp)
                     else:
-                        from ..prescriptions import load_zemax_prescription_txt
+                        from ..io.prescriptions import load_zemax_prescription_txt
                         rx = load_zemax_prescription_txt(fp)
                     wv = rx.get('wavelength', self.model.wavelength_nm * 1e-9)
                     if isinstance(wv, float) and wv < 1e-3:
@@ -2275,20 +2275,20 @@ def _cli_main():
     window = MainWindow()
     args = sys.argv[1:]
     if '--demo' in args:
-        from ..prescriptions import thorlabs_lens
+        from ..io.prescriptions import thorlabs_lens
         window.model.load_prescription(thorlabs_lens('AC254-100-C'), 1310.0)
     elif args and not args[0].startswith('-'):
         fp = args[0]
         try:
             lower = fp.lower()
             if lower.endswith('.zmx'):
-                from ..prescriptions import load_zmx_prescription
+                from ..io.prescriptions import load_zmx_prescription
                 rx = load_zmx_prescription(fp)
             elif lower.endswith('.seq'):
-                from ..prescriptions import load_codev_seq
+                from ..io.prescriptions import load_codev_seq
                 rx = load_codev_seq(fp)
             else:
-                from ..prescriptions import load_zemax_prescription_txt
+                from ..io.prescriptions import load_zemax_prescription_txt
                 rx = load_zemax_prescription_txt(fp)
             wv = rx.get('wavelength', 1310e-9)
             if isinstance(wv, float) and wv < 1e-3: wv *= 1e9

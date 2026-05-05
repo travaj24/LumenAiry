@@ -20,7 +20,7 @@ from PySide6.QtGui import (
 import numpy as np
 
 from .model import SystemModel
-from ..lenses import surface_sag_biconic
+from ..elements.lenses import surface_sag_biconic
 
 
 class Layout2DView(QWidget):

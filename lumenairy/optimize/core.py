@@ -83,13 +83,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from ..lenses import apply_real_lens, apply_real_lens_traced
+from ..elements.lenses import apply_real_lens, apply_real_lens_traced
 from ..raytrace import (
     surfaces_from_prescription, system_abcd, trace,
     seidel_coefficients,
 )
 from ..analysis import wave_opd_2d, zernike_decompose
-from ..through_focus import (
+from ..analysis.through_focus import (
     through_focus_scan, find_best_focus, diffraction_limited_peak,
 )
 
@@ -892,7 +892,7 @@ class MatchIdealSystemMerit(MeritTerm):
         the one that minimises the penalty (i.e. maximises overlap),
         and return that value.  Uses ASM (fast, exact, preserves dx).
         """
-        from ..propagation import angular_spectrum_propagate
+        from ..propagators.propagation import angular_spectrum_propagate
         # Default range: +-f/20 where f ~= ctx.efl or ctx.bfl; fall
         # back to +-5 mm if neither is available.
         if self.focus_search_range is not None:
@@ -1234,7 +1234,7 @@ class LGAberrationMerit(MeritTerm):
 
     def evaluate(self, ctx) -> float:
         # Lazy import to avoid bootstrap cycles.
-        from ..asymptotic import (fit_canonical_polynomials,
+        from ..propagators.asymptotic import (fit_canonical_polynomials,
                                   aberration_tensor)
         try:
             fit = fit_canonical_polynomials(
@@ -1619,7 +1619,7 @@ class ToleranceAwareMerit(MeritTerm):
         self.needs_wave = sub_merit.needs_wave
 
     def evaluate(self, ctx) -> float:
-        from ..through_focus import apply_perturbations, Perturbation
+        from ..analysis.through_focus import apply_perturbations, Perturbation
 
         total = 0.0
         for t in range(self.n_trials):

@@ -258,7 +258,7 @@ def load_jones_field_h5(filepath):
     metadata : dict
     """
     _require_h5py()
-    from ..polarization import JonesField
+    from ..elements.polarization import JonesField
     with h5py.File(filepath, 'r') as f:
         if 'jones' not in f:
             raise KeyError(

@@ -18,15 +18,15 @@ Usage::
 All public functions are available directly from the package namespace.
 For more granular imports, use the submodules::
 
-    from lumenairy.propagation import angular_spectrum_propagate
-    from lumenairy.lenses import apply_real_lens
+    from lumenairy.propagators.propagation import angular_spectrum_propagate
+    from lumenairy.elements.lenses import apply_real_lens
     from lumenairy.glass import get_glass_index, GLASS_REGISTRY
 
 Author: Andrew Traverso
 """
 
 # ── Propagation ──────────────────────────────────────────────────────────
-from .propagation import (
+from .propagators.propagation import (
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
     scalable_angular_spectrum_propagate,
@@ -55,13 +55,13 @@ from .propagation import (
 # depend on the optional backends (e.g. the numexpr-fused phase-screen
 # path inside apply_real_lens).  Truthy if the package is importable
 # in the current environment.
-from .lenses import NUMEXPR_AVAILABLE
+from .elements.lenses import NUMEXPR_AVAILABLE
 
 # ── Backend / runtime helpers ────────────────────────────────────────────
 from .backend import available_cpus
 
 # ── Lenses ───────────────────────────────────────────────────────────────
-from .lenses import (
+from .elements.lenses import (
     apply_thin_lens,
     apply_spherical_lens,
     apply_aspheric_lens,
@@ -75,7 +75,7 @@ from .lenses import (
     check_grid_vs_apertures,
     recommend_grid_for_prescription,
 )
-from .lenses import apply_real_lens_maslov
+from .elements.lenses import apply_real_lens_maslov
 
 # ── Glass catalog ────────────────────────────────────────────────────────
 from .glass import (
@@ -144,40 +144,40 @@ from .sources import (
 )
 
 # ── High-NA vector diffraction (Richards-Wolf) ─────────────────────────
-from .vector_diffraction import (
+from .propagators.vector_diffraction import (
     richards_wolf_focus,
     debye_wolf_psf,
 )
 
 # ── Partial coherence / extended-source imaging ────────────────────────
-from .coherence import (
+from .analysis.coherence import (
     koehler_image,
     extended_source_image,
     mutual_coherence,
 )
 
 # ── Detector model / wavefront sensing ─────────────────────────────────
-from .detector import (
+from .analysis.detector import (
     apply_detector,
     shack_hartmann,
 )
 
 # ── Thin-film coatings ────────────────────────────────────────────────
-from .coatings import (
+from .elements.coatings import (
     coating_reflectance,
     quarter_wave_ar,
     broadband_ar_v_coat,
 )
 
 # ── Interferometry ────────────────────────────────────────────────────
-from .interferometry import (
+from .analysis.interferometry import (
     simulate_interferogram,
     phase_shift_extract,
     fringe_spacing,
 )
 
 # ── Freeform surfaces ─────────────────────────────────────────────────
-from .freeform import (
+from .elements.freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
     surface_sag_chebyshev,
@@ -185,13 +185,13 @@ from .freeform import (
 )
 
 # ── Ghost analysis ────────────────────────────────────────────────────
-from .ghost import (
+from .analysis.ghost import (
     enumerate_ghost_paths,
     ghost_analysis,
 )
 
 # ── BSDF surface scatter (stray-light analysis) ─────────────────────────
-from .bsdf import (
+from .elements.bsdf import (
     BSDFModel,
     LambertianBSDF,
     GaussianBSDF,
@@ -201,13 +201,13 @@ from .bsdf import (
 )
 
 # ── RCWA (rigorous coupled-wave analysis) ─────────────────────────────
-from .rcwa import (
+from .elements.rcwa import (
     rcwa_1d,
     grating_efficiency_vs_wavelength,
 )
 
 # ── Multi-configuration + afocal mode ─────────────────────────────────
-from .multiconfig import (
+from .optimize.multiconfig import (
     Configuration,
     multi_config_merit,
     create_zoom_configs,
@@ -217,7 +217,7 @@ from .multiconfig import (
 )
 
 # ── Through-focus / tolerancing ─────────────────────────────────────────
-from .through_focus import (
+from .analysis.through_focus import (
     single_plane_metrics,
     diffraction_limited_peak,
     through_focus_scan,
@@ -262,7 +262,7 @@ from .optimize import (
 )
 
 # ── Phase-space asymptotic propagator + LG aberration tensor ────────────
-from .asymptotic import (
+from .propagators.asymptotic import (
     CanonicalPolyFit,
     AberrationTensorResult,
     fit_canonical_polynomials,
@@ -281,7 +281,7 @@ from .asymptotic import (
 )
 
 # ── DOE / Gratings / Phase I/O ──────────────────────────────────────────
-from .doe import (
+from .elements.doe import (
     create_periodic_phase_mask,
     create_microlens_array,
     makedammann2d,
@@ -292,14 +292,14 @@ from .doe import (
 )
 
 # ── Phase retrieval ─────────────────────────────────────────────────────
-from .phase_retrieval import (
+from .analysis.phase_retrieval import (
     gerchberg_saxton,
     error_reduction,
     hybrid_input_output,
 )
 
 # ── Code generation: prescription -> standalone simulation script ───────
-from .codegen import (
+from .io.codegen import (
     generate_simulation_script,
     generate_script_from_zmx,
     generate_script_from_txt,
@@ -309,7 +309,7 @@ from .codegen import (
 from .progress import ProgressCallback, ProgressScaler, call_progress
 
 # ── Polarization / Jones calculus ───────────────────────────────────────
-from .polarization import (
+from .elements.polarization import (
     JonesField,
     apply_jones_matrix,
     apply_polarizer,
@@ -326,7 +326,7 @@ from .polarization import (
 )
 
 # ── Lens prescriptions ──────────────────────────────────────────────────
-from .prescriptions import (
+from .io.prescriptions import (
     make_singlet,
     make_doublet,
     make_cylindrical,
@@ -395,7 +395,7 @@ from .raytrace import (
 from .system import propagate_through_system
 
 # ── Storage (unified HDF5 / Zarr) ────────────────────────────────────────
-from .storage import (
+from .io.storage import (
     # Unified dispatch API
     set_storage_backend,
     get_storage_backend,
@@ -442,7 +442,7 @@ from .memory import (
 )
 
 # ── Plotting utilities ─────────────────────────────────────────────────
-from .plotting import (
+from .analysis.plotting import (
     plot_intensity,
     plot_phase,
     plot_field,

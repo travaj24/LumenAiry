@@ -63,7 +63,7 @@ def _local_asm_baseline_ms(force=False):
         # Local import to avoid a hard dependency at module import time
         # (this file is imported eagerly during QMainWindow construction;
         # we don't want a slow propagation import to block startup).
-        from ..propagation import angular_spectrum_propagate
+        from ..propagators.propagation import angular_spectrum_propagate
         N0 = 512
         E = np.ones((N0, N0), dtype=np.complex128)
         # Warmup (FFT-plan caches, JIT, etc.)
@@ -322,13 +322,13 @@ class WaveOpticsWorker(QThread):
                                 f'{stage}: {msg}' if msg else stage)
 
     def run(self):
-        from ..propagation import (
+        from ..propagators.propagation import (
             angular_spectrum_propagate,
             fresnel_propagate, fraunhofer_propagate,
             rayleigh_sommerfeld_propagate,
             resample_field, PYFFTW_AVAILABLE, CUPY_AVAILABLE,
         )
-        from ..lenses import surface_sag_general
+        from ..elements.lenses import surface_sag_general
         from ..glass import get_glass_index
         from ..analysis import beam_d4sigma, beam_power
 
@@ -433,7 +433,7 @@ class WaveOpticsWorker(QThread):
 
             if lens_model in ('real_lens', 'real_lens_traced',
                               'real_lens_maslov') and trace_surfs:
-                from ..lenses import (apply_real_lens,
+                from ..elements.lenses import (apply_real_lens,
                                        apply_real_lens_traced,
                                        apply_real_lens_maslov)
                 pres = self.model.to_prescription()
@@ -546,7 +546,7 @@ class WaveOpticsWorker(QThread):
                             E, ts.thickness, lam_med, current_dx,
                             use_gpu=use_gpu)
                     elif method == 'sas':
-                        from ..propagation import (
+                        from ..propagators.propagation import (
                             scalable_angular_spectrum_propagate)
                         E, dx_new, _ = scalable_angular_spectrum_propagate(
                             E, ts.thickness, lam_med, current_dx,
@@ -582,7 +582,7 @@ class WaveOpticsWorker(QThread):
                     E_focus = rayleigh_sommerfeld_propagate(
                         E, bfl_m, wv, current_dx, use_gpu=use_gpu)
                 elif method == 'sas':
-                    from ..propagation import (
+                    from ..propagators.propagation import (
                         scalable_angular_spectrum_propagate)
                     E_focus, dx_focus, _ = scalable_angular_spectrum_propagate(
                         E, bfl_m, wv, current_dx, use_gpu=use_gpu)
@@ -618,10 +618,10 @@ class WaveOpticsWorker(QThread):
                 try:
                     ext = os.path.splitext(output_path)[1].lower()
                     if ext == '.zarr':
-                        from ..storage import set_storage_backend, append_plane, write_metadata
+                        from ..io.storage import set_storage_backend, append_plane, write_metadata
                         set_storage_backend('zarr')
                     else:
-                        from ..storage import set_storage_backend, append_plane, write_metadata
+                        from ..io.storage import set_storage_backend, append_plane, write_metadata
                         set_storage_backend('hdf5')
 
                     for p in planes:
@@ -820,7 +820,7 @@ class WaveOpticsDock(QWidget):
 
         self.combo_backend = QComboBox()
         backends = ['NumPy FFT']
-        from ..propagation import PYFFTW_AVAILABLE, CUPY_AVAILABLE, SCIPY_FFT_AVAILABLE
+        from ..propagators.propagation import PYFFTW_AVAILABLE, CUPY_AVAILABLE, SCIPY_FFT_AVAILABLE
         if SCIPY_FFT_AVAILABLE:
             backends.append('SciPy FFT')
         if PYFFTW_AVAILABLE:

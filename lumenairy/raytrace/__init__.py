@@ -1,14 +1,22 @@
 """
-lumenairy.raytrace -- geometric ray tracing through sequential
-optical prescriptions.
+lumenairy.raytrace -- geometric ray tracing.
 
-The implementation lives in :mod:`lumenairy.raytrace.core`.  This
-package's ``__init__`` mirrors the entire submodule namespace
-(including private helpers) so existing user imports of the form
-``from lumenairy.raytrace import X`` continue to work unchanged.
+Submodules:
 
-New code may use either ``from lumenairy.raytrace import X`` (works
-unchanged) or ``from lumenairy.raytrace.core import X`` (explicit).
+* :mod:`lumenairy.raytrace.core` -- ``RayBundle``, ``Surface``,
+  ``trace``, ``surfaces_from_prescription``, ABCD, paraxial trace,
+  fan / ring / grid bundle factories.
+* :mod:`lumenairy.raytrace.bundles` -- ``BundleProtocol`` shared
+  type and ``ray_to_path`` / ``ray_to_beamlet`` / ``path_to_ray``
+  inter-bundle conversion utilities.
 """
 from . import core as _impl
 globals().update({k: v for k, v in _impl.__dict__.items() if not k.startswith('__')})
+
+# Bundle protocol + conversions
+from .bundles import (
+    BundleProtocol,
+    ray_to_path,
+    ray_to_beamlet,
+    path_to_ray,
+)

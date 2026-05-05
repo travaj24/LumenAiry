@@ -22,8 +22,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from ..propagation import angular_spectrum_propagate
-from ..lenses import apply_real_lens
+from ..propagators.propagation import angular_spectrum_propagate
+from ..elements.lenses import apply_real_lens
 
 
 def koehler_image(object_field, prescription, wavelength, dx,
