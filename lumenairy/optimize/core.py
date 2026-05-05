@@ -83,13 +83,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from .lenses import apply_real_lens, apply_real_lens_traced
-from .raytrace import (
+from ..lenses import apply_real_lens, apply_real_lens_traced
+from ..raytrace import (
     surfaces_from_prescription, system_abcd, trace,
     seidel_coefficients,
 )
-from .analysis import wave_opd_2d, zernike_decompose
-from .through_focus import (
+from ..analysis import wave_opd_2d, zernike_decompose
+from ..through_focus import (
     through_focus_scan, find_best_focus, diffraction_limited_peak,
 )
 
@@ -547,7 +547,7 @@ class MatchIdealThinLensMerit(MeritTerm):
         # (excluding the requested low-order modes which represent
         # piston / tilt / defocus -- usually NOT what you want to
         # penalise unless you've fixed alignment).
-        from .analysis import zernike_decompose
+        from ..analysis import zernike_decompose
         finite = np.isfinite(diff)
         # Replace NaN with 0 in the masked region; decompose handles it
         diff_clean = np.where(finite, diff, 0.0)
@@ -835,7 +835,7 @@ class MatchIdealSystemMerit(MeritTerm):
         return expanded
 
     def _propagate(self, elements, E_in, ctx, wavelength):
-        from .system import propagate_through_system
+        from ..system import propagate_through_system
         E_out, _ = propagate_through_system(
             E_in, elements, wavelength, ctx.dx)
         return E_out
@@ -892,7 +892,7 @@ class MatchIdealSystemMerit(MeritTerm):
         the one that minimises the penalty (i.e. maximises overlap),
         and return that value.  Uses ASM (fast, exact, preserves dx).
         """
-        from .propagation import angular_spectrum_propagate
+        from ..propagation import angular_spectrum_propagate
         # Default range: +-f/20 where f ~= ctx.efl or ctx.bfl; fall
         # back to +-5 mm if neither is available.
         if self.focus_search_range is not None:
@@ -1072,7 +1072,7 @@ class MatchTargetOPDMerit(MeritTerm):
                 f'target_opd shape {target.shape} does not match '
                 f'opd_map shape {ctx.opd_map.shape}')
         diff = ctx.opd_map - target
-        from .analysis import zernike_decompose
+        from ..analysis import zernike_decompose
         finite = np.isfinite(diff)
         diff_clean = np.where(finite, diff, 0.0)
         try:
@@ -1121,7 +1121,7 @@ class ZernikeCoefficientMerit(MeritTerm):
         ap = ctx.prescription.get('aperture_diameter')
         if ap is None:
             return 0.0
-        from .analysis import zernike_decompose
+        from ..analysis import zernike_decompose
         finite = np.isfinite(ctx.opd_map)
         opd_clean = np.where(finite, ctx.opd_map, 0.0)
         try:
@@ -1234,7 +1234,7 @@ class LGAberrationMerit(MeritTerm):
 
     def evaluate(self, ctx) -> float:
         # Lazy import to avoid bootstrap cycles.
-        from .asymptotic import (fit_canonical_polynomials,
+        from ..asymptotic import (fit_canonical_polynomials,
                                   aberration_tensor)
         try:
             fit = fit_canonical_polynomials(
@@ -1483,7 +1483,7 @@ class MultiFieldMerit(MeritTerm):
             ap = ctx.prescription.get('aperture_diameter')
             if ap and hasattr(self.sub_merit, 'needs_wave') and self.sub_merit.needs_wave:
                 try:
-                    from .analysis import wave_opd_2d
+                    from ..analysis import wave_opd_2d
                     _, _, opd = wave_opd_2d(
                         E_exit, ctx.dx, ctx.wavelength,
                         aperture=ap, focal_length=ctx.bfl, f_ref=ctx.bfl)
@@ -1619,7 +1619,7 @@ class ToleranceAwareMerit(MeritTerm):
         self.needs_wave = sub_merit.needs_wave
 
     def evaluate(self, ctx) -> float:
-        from .through_focus import apply_perturbations, Perturbation
+        from ..through_focus import apply_perturbations, Perturbation
 
         total = 0.0
         for t in range(self.n_trials):
@@ -1818,7 +1818,7 @@ def design_optimize(parameterization,
     DesignResult
     """
     import scipy.optimize as so
-    from .progress import call_progress
+    from ..progress import call_progress
 
     need_wave = any(m.needs_wave for m in merit_terms)
     n_params = parameterization.n_params
