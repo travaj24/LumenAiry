@@ -784,8 +784,15 @@ def angular_spectrum_propagate(
         in far and near fields." Opt. Express 17(22): 19662-19673.
     """
 
-    # -- array library selection (NumPy vs. CuPy) ---------------------------
-    if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
+    # -- array library selection (NumPy / CuPy / JAX) ----------------------
+    # JAX arrays bypass the chunked H construction and the host cache;
+    # they take a one-shot all-NxN H and stay in the input backend.
+    from ..backend import is_jax_array, JAX_AVAILABLE
+    is_jax = is_jax_array(E_in)
+    if is_jax:
+        import jax.numpy as _jnp
+        xp = _jnp
+    elif CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         xp = cp
         if not _is_cupy_array(E_in):
             E_in = cp.asarray(E_in)
@@ -815,9 +822,9 @@ def angular_spectrum_propagate(
     # ── 3.2.14 H cache ───────────────────────────────────────────────
     # Geometry signature.  Hits return the previously-built H without
     # re-running the chunked kernel construction (~30-50% of total
-    # ASM time on 2k+ grids).  CuPy device arrays are kept out of the
-    # cache (host-side dict can't safely retain device pointers across
-    # context lifetimes).
+    # ASM time on 2k+ grids).  CuPy device arrays and JAX traced
+    # arrays are kept out of the cache (host-side dict can't safely
+    # retain device pointers / traced objects).
     h_key = None
     H = None
     if xp is np:
@@ -825,6 +832,27 @@ def angular_spectrum_propagate(
                  float(wavelength), float(z), bool(bandlimit),
                  np.dtype(target_cdtype).str)
         H = _h_cache_lookup(h_key)
+
+    if H is None and is_jax:
+        # JAX path: build H in one shot (no chunking, no in-place
+        # writes; jax.numpy is functional / immutable).
+        fx = (xp.arange(Nx, dtype=xp.float64) - Nx / 2) / (Nx * dx)
+        fy = (xp.arange(Ny, dtype=xp.float64) - Ny / 2) / (Ny * dy)
+        kx_sq = (2 * float(np.pi) * fx) ** 2
+        ky_sq = (2 * float(np.pi) * fy) ** 2
+        kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
+        prop = kz_sq > 0
+        kz = xp.where(prop, xp.sqrt(xp.where(prop, kz_sq, 0.0)), 0.0)
+        H = xp.where(prop, xp.exp(1j * kz * z), 0.0).astype(target_cdtype)
+        if bandlimit and z != 0:
+            Lx = Nx * dx
+            Ly = Ny * dy
+            fx_max = Lx / (2 * wavelength * abs(z))
+            fy_max = Ly / (2 * wavelength * abs(z))
+            bl_x = xp.abs(fx) < fx_max
+            bl_y = xp.abs(fy) < fy_max
+            mask = bl_x[None, :] & bl_y[:, None]
+            H = H * mask.astype(target_cdtype)
 
     if H is None:
         # Spatial-frequency squared vectors (cached on numpy path).
@@ -890,7 +918,10 @@ def angular_spectrum_propagate(
         print(f"  ASM propagation: z = {z*1e3:.3f} mm  (H cache HIT)")
 
     # -- propagate: E_out = IFFT{ FFT{E_in} * H } ---------------------------
-    if xp is np:
+    if is_jax:
+        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_in)))
+        E_out = xp.fft.fftshift(xp.fft.ifft2(xp.fft.ifftshift(E_fft * H)))
+    elif xp is np:
         E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_in)))
         E_out = np.fft.fftshift(_ifft2(np.fft.ifftshift(E_fft * H)))
     else:
@@ -1239,35 +1270,38 @@ def fresnel_propagate(E_in, z, wavelength, dx, dy=None):
     For very long distances (small Fresnel number), this becomes equivalent
     to the Fraunhofer approximation.
     """
+    from ..backend import array_namespace, is_jax_array
+    xp = array_namespace(E_in)
+    is_jax = is_jax_array(E_in)
+
     if dy is None:
         dy = dx
 
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
 
-    # -- input coordinates ---------------------------------------------------
-    x1 = (np.arange(Nx) - Nx / 2) * dx
-    y1 = (np.arange(Ny) - Ny / 2) * dy
-    X1, Y1 = np.meshgrid(x1, y1)
-
-    # -- output grid spacing (changes with z) --------------------------------
+    # -- input / output coordinates -----------------------------------------
+    x1 = (xp.arange(Nx) - Nx / 2) * dx
+    y1 = (xp.arange(Ny) - Ny / 2) * dy
+    X1, Y1 = xp.meshgrid(x1, y1, indexing='xy')
     dx_out = wavelength * abs(z) / (Nx * dx)
     dy_out = wavelength * abs(z) / (Ny * dy)
-
-    # -- output coordinates --------------------------------------------------
-    x2 = (np.arange(Nx) - Nx / 2) * dx_out
-    y2 = (np.arange(Ny) - Ny / 2) * dy_out
-    X2, Y2 = np.meshgrid(x2, y2)
+    x2 = (xp.arange(Nx) - Nx / 2) * dx_out
+    y2 = (xp.arange(Ny) - Ny / 2) * dy_out
+    X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # -- quadratic phase in input plane --------------------------------------
-    E_mod = E_in * np.exp(1j * k / (2 * z) * (X1**2 + Y1**2))
+    E_mod = E_in * xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2))
 
-    # -- FFT -----------------------------------------------------------------
-    E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_mod)))
+    # -- FFT -- use _fft for NumPy/CuPy fast path; jnp.fft for JAX -----------
+    if is_jax:
+        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_mod)))
+    else:
+        E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_mod)))
 
     # -- quadratic phase in output plane + prefactor -------------------------
-    prefactor = (np.exp(1j * k * z) / (1j * wavelength * z)
-                 * np.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
+    prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
+                 * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
 
     E_out = prefactor * E_fft
@@ -1403,6 +1437,10 @@ def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
     Fraunhofer is the standard approach: place the input field at the lens,
     set z = focal length, and the output is the focal-plane field.
     """
+    from ..backend import array_namespace, is_jax_array
+    xp = array_namespace(E_in)
+    is_jax = is_jax_array(E_in)
+
     if dy is None:
         dy = dx
 
@@ -1414,16 +1452,19 @@ def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
     dy_out = wavelength * abs(z) / (Ny * dy)
 
     # Output coordinates
-    x2 = (np.arange(Nx) - Nx / 2) * dx_out
-    y2 = (np.arange(Ny) - Ny / 2) * dy_out
-    X2, Y2 = np.meshgrid(x2, y2)
+    x2 = (xp.arange(Nx) - Nx / 2) * dx_out
+    y2 = (xp.arange(Ny) - Ny / 2) * dy_out
+    X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # Single FFT of the input field
-    E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_in)))
+    if is_jax:
+        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_in)))
+    else:
+        E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_in)))
 
     # Output quadratic phase + prefactor
-    prefactor = (np.exp(1j * k * z) / (1j * wavelength * z)
-                 * np.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
+    prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
+                 * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
 
     E_out = prefactor * E_fft
@@ -1531,7 +1572,12 @@ def rayleigh_sommerfeld_propagate(
     """
 
     # -- array library selection -----------------------------------------------
-    if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
+    from ..backend import is_jax_array, JAX_AVAILABLE
+    is_jax = is_jax_array(E_in)
+    if is_jax:
+        import jax.numpy as _jnp
+        xp = _jnp
+    elif CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         xp = cp
         if not _is_cupy_array(E_in):
             E_in = cp.asarray(E_in)
@@ -1547,39 +1593,45 @@ def rayleigh_sommerfeld_propagate(
     k = 2 * np.pi / wavelength
 
     # -- zero-pad to avoid circular convolution --------------------------------
-    # Use the transfer-function approach instead of direct convolution:
-    # compute h in spatial domain, FFT it, multiply with FFT of padded E.
-    # The input field is centred in the padded array.
     Ny2 = 2 * Ny
     Nx2 = 2 * Nx
 
-    E_padded = xp.zeros((Ny2, Nx2), dtype=xp.complex128)
-    # Centre the input field in the padded array
-    y0 = Ny // 2
-    x0 = Nx // 2
-    E_padded[y0:y0 + Ny, x0:x0 + Nx] = E_in
+    if is_jax:
+        # JAX is functional / immutable -- can't write into a pre-allocated
+        # array.  Build the padded array via jnp.zeros + at[].set.
+        E_padded = xp.zeros((Ny2, Nx2), dtype=xp.complex128)
+        y0 = Ny // 2
+        x0 = Nx // 2
+        E_padded = E_padded.at[y0:y0 + Ny, x0:x0 + Nx].set(E_in)
+    else:
+        E_padded = xp.zeros((Ny2, Nx2), dtype=xp.complex128)
+        y0 = Ny // 2
+        x0 = Nx // 2
+        E_padded[y0:y0 + Ny, x0:x0 + Nx] = E_in
 
     # -- build the RS impulse response h(x, y, z) on the padded grid -----------
-    # Centred at (0, 0) for proper convolution alignment
     x = (xp.arange(Nx2) - Nx2 / 2) * dx
     y = (xp.arange(Ny2) - Ny2 / 2) * dy
-    X, Y = xp.meshgrid(x, y)
+    X, Y = xp.meshgrid(x, y, indexing='xy')
     r = xp.sqrt(X ** 2 + Y ** 2 + z ** 2)
-
-    # Rayleigh-Sommerfeld impulse response (first kind):
-    #   h = (1/2pi) * (z/r^2) * (ik - 1/r) * exp(ikr)
     h = (z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r) * (1j * k - 1.0 / r)
-    h *= dx * dy  # pixel area for discrete convolution
+    h = h * (dx * dy)
 
     if verbose:
         print(f"  RS propagation: z = {z*1e3:.3f} mm")
         print(f"  Grid: {Ny}x{Nx} -> padded {Ny2}x{Nx2}")
         print(f"  Wavelength: {wavelength*1e9:.1f} nm")
-        print(f"  Kernel max |h|: {float(xp.max(xp.abs(h))):.4e}")
+        try:
+            print(f"  Kernel max |h|: {float(xp.max(xp.abs(h))):.4e}")
+        except Exception:
+            pass
 
     # -- convolve via FFT ------------------------------------------------------
-    # ifftshift the kernel so its origin is at array index (0,0) for FFT
-    if xp is np:
+    if is_jax:
+        H = xp.fft.fft2(xp.fft.ifftshift(h))
+        E_fft = xp.fft.fft2(E_padded)
+        E_conv = xp.fft.ifft2(E_fft * H)
+    elif xp is np:
         H = _fft2(np.fft.ifftshift(h))
         E_fft = _fft2(E_padded)
         E_conv = _ifft2(E_fft * H)

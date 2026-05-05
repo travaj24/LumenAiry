@@ -374,5 +374,61 @@ H.run('check_sampling_conditions returns dict with ok key',
       t_check_sampling_conditions_returns_diagnostics)
 
 
+# ----------------------------------------------------------------------
+# JAX backend tests -- propagation.py functions accept JAX arrays and
+# stay differentiable via jax.grad.
+# ----------------------------------------------------------------------
+
+def t_jax_asm_runs():
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    E = jnp.ones((64, 64), dtype=jnp.complex64)
+    out = la.angular_spectrum_propagate(E, z=1e-3, wavelength=633e-9, dx=5e-6)
+    return la.is_jax_array(out), f'type={type(out).__name__}'
+
+
+def t_jax_asm_differentiable():
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    N = 32; dx = 5e-6; lam = 633e-9
+    x = (jnp.arange(N) - N/2 + 0.5) * dx
+    X, Y = jnp.meshgrid(x, x, indexing='xy')
+    E = jnp.exp(-(X*X + Y*Y) / (10e-6)**2).astype(jnp.complex64)
+    def loss(scale):
+        out = la.angular_spectrum_propagate(E * scale, z=1e-3,
+                                              wavelength=lam, dx=dx)
+        return jnp.sum(jnp.abs(out) ** 2).astype(jnp.float32)
+    g = jax.grad(loss)(jnp.float32(1.0))
+    return bool(jnp.isfinite(g)), f'grad={float(g):.4e}'
+
+
+def t_jax_fresnel_runs():
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    E = jnp.ones((32, 32), dtype=jnp.complex64)
+    out, _, _ = la.fresnel_propagate(E, z=10e-3, wavelength=633e-9, dx=5e-6)
+    return la.is_jax_array(out), 'fresnel jax ok'
+
+
+def t_jax_rs_runs():
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    E = jnp.ones((32, 32), dtype=jnp.complex64)
+    out = la.rayleigh_sommerfeld_propagate(E, z=1e-3, wavelength=633e-9, dx=5e-6)
+    return la.is_jax_array(out), 'RS jax ok'
+
+
+H.section('JAX backend')
+H.run('ASM accepts JAX arrays', t_jax_asm_runs)
+H.run('ASM differentiable via jax.grad', t_jax_asm_differentiable)
+H.run('Fresnel accepts JAX arrays', t_jax_fresnel_runs)
+H.run('Rayleigh-Sommerfeld accepts JAX arrays', t_jax_rs_runs)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())
