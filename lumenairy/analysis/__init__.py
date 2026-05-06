@@ -81,6 +81,11 @@ from .through_focus import (
     tolerancing_sweep,
     monte_carlo_tolerancing,
 )
+from .aberration import (
+    AberrationSummary,
+    aberration_summary,
+    format_aberration_summary,
+)
 from .plotting import (
     plot_intensity,
     plot_phase,
@@ -123,6 +128,8 @@ __all__ = [
     'through_focus_scan', 'find_best_focus', 'plot_through_focus',
     'ThroughFocusResult', 'Perturbation', 'apply_perturbations',
     'tolerancing_sweep', 'monte_carlo_tolerancing',
+    # aberration (unified Seidel + LG tensor)
+    'AberrationSummary', 'aberration_summary', 'format_aberration_summary',
     # plotting
     'plot_intensity', 'plot_phase', 'plot_field', 'plot_amplitude_phase',
     'plot_cross_section', 'plot_planes_grid', 'plot_psf', 'plot_mtf',

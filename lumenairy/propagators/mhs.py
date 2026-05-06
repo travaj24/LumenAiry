@@ -175,7 +175,12 @@ class MhsPipeline:
         return out
 
     def run(self, E_in,
-            return_intermediate: bool = True
+            return_intermediate: bool = True,
+            checkpoint=None,
+            store=None,
+            label_prefix: str = 'mhs',
+            return_result: bool = False,
+            wavelength: float = 0.0,
             ) -> Union[List[Tuple[HuygensSurface, object]], object]:
         """Run the pipeline.
 
@@ -187,25 +192,161 @@ class MhsPipeline:
             If True (default), return the field at every surface
             along the chain, paired with that surface.  If False,
             return only the final-surface field.
+        checkpoint : callable, optional
+            ``checkpoint(idx, surface, field)`` is called after every
+            subdomain finishes, including the input plane (idx=0,
+            surface=first in_surface, field=E_in).  Useful for
+            streaming progress bars or custom persistence.  Returning
+            from the callback is fine; raising aborts the run.
+        store : str, pathlib.Path, or storage handle, optional
+            If given, each plane is appended to a unified Zarr / HDF5
+            store via :func:`lumenairy.io.storage.append_plane`.
+            ``label_prefix`` controls the per-plane key, which is
+            ``f"{label_prefix}_{idx:03d}_{surface.label or 'plane'}"``.
+            The store's parent directory must exist; the file will be
+            created on first write.
+        label_prefix : str
+            Prefix for plane labels when ``store`` is provided.
+        return_result : bool, default False
+            If True, return a
+            :class:`lumenairy.propagators.PropagationResult` carrying
+            the final field plus a ``history`` list of
+            ``(label, field, dx)`` tuples for every Huygens surface
+            (including the input plane).  ``return_intermediate`` is
+            superseded -- the result always holds the full history.
+        wavelength : float, default 0.0
+            Forwarded onto the ``PropagationResult.wavelength`` field
+            when ``return_result=True``.  Default 0 keeps the legacy
+            (non-result) call signature unchanged.
 
         Returns
         -------
-        list of (HuygensSurface, array) | array
+        list of (HuygensSurface, array) | array | PropagationResult
         """
-        E_current = E_in
-        if return_intermediate:
-            history = [(self.subdomains[0].in_surface, E_in)]
+        if store is not None:
+            from ..io.storage import append_plane
 
-        for sub in self.subdomains:
+        def _persist(idx, surface, field):
+            if checkpoint is not None:
+                checkpoint(idx, surface, field)
+            if store is not None:
+                label = (f"{label_prefix}_{idx:03d}_"
+                         f"{surface.label or 'plane'}")
+                append_plane(store, field, surface.dx,
+                              z=surface.z, label=label)
+
+        first_surf = self.subdomains[0].in_surface
+        _persist(0, first_surf, E_in)
+
+        E_current = E_in
+        # Always retain (surface, field) tuples internally when either
+        # return_intermediate or return_result is set; for legacy
+        # call sites that pass return_intermediate=False (default
+        # before this change), we skip the list entirely.
+        track_history = return_intermediate or return_result
+        if track_history:
+            history = [(first_surf, E_in)]
+
+        for i, sub in enumerate(self.subdomains, start=1):
             E_next = sub.propagator(E_current, sub.in_surface,
                                      sub.out_surface, **sub.kwargs)
-            if return_intermediate:
+            _persist(i, sub.out_surface, E_next)
+            if track_history:
                 history.append((sub.out_surface, E_next))
             E_current = E_next
 
+        if return_result:
+            from .result import PropagationResult
+            last_surf = self.subdomains[-1].out_surface
+            return PropagationResult(
+                field=E_current,
+                dx=last_surf.dx,
+                wavelength=float(wavelength),
+                z=last_surf.z,
+                method='mhs',
+                history=[
+                    (s.label or f'plane_{j}', f, s.dx)
+                    for j, (s, f) in enumerate(history)
+                ],
+            )
         if return_intermediate:
             return history
         return E_current
+
+    @classmethod
+    def from_prescription(cls,
+                           prescription: dict,
+                           *,
+                           wavelength: float,
+                           dx: float,
+                           Ny: int,
+                           Nx: int,
+                           pre_distance: float = 0.0,
+                           post_distance: float = 0.0,
+                           method: str = 'gbd',
+                           **method_kwargs) -> 'MhsPipeline':
+        """Build a 3-subdomain ASM -> prescription -> ASM pipeline.
+
+        Convenience for the common case "free-space lead-in + lens
+        prescription + free-space lead-out".  The lens block uses the
+        chosen ``method`` (any prescription-capable propagator:
+        ``'gbd'``, ``'hf'``, ``'hfpi'``, ``'maslov'``).  Free-space
+        legs use Angular Spectrum.
+
+        Parameters
+        ----------
+        prescription : dict
+            Lens prescription (``make_singlet`` / Zemax-loaded /
+            user-built).
+        wavelength : float
+            Wavelength [m].
+        dx : float
+            Sample spacing [m] for the input plane.  All four planes
+            share this spacing.
+        Ny, Nx : int
+            Grid shape, used for all surfaces.
+        pre_distance : float, default 0
+            Distance from input plane to the first lens surface.  Set
+            to 0 for the input plane to coincide with the lens vertex.
+        post_distance : float, default 0
+            Distance from the last lens surface to the output plane.
+            Set to 0 for the output plane to coincide with the back
+            vertex.  Set to e.g. ``bfl`` to land on the image plane.
+        method : str, default 'gbd'
+            Propagator routed via :func:`la.propagate` for the lens
+            block.
+        **method_kwargs
+            Forwarded to the chosen lens propagator.
+        """
+        # Reference z=0 at the front lens vertex; pre-input plane sits
+        # at z=-pre_distance; post-output at z = thickness_total +
+        # post_distance.
+        thicknesses = list(prescription.get('thicknesses', []))
+        thickness_total = float(sum(thicknesses)) if thicknesses else 0.0
+
+        s_input = HuygensSurface(z=-pre_distance, Ny=Ny, Nx=Nx, dx=dx,
+                                  label='mhs:input')
+        s_pre_lens = HuygensSurface(z=0.0, Ny=Ny, Nx=Nx, dx=dx,
+                                     label='mhs:pre-lens')
+        s_post_lens = HuygensSurface(z=thickness_total, Ny=Ny, Nx=Nx,
+                                      dx=dx, label='mhs:post-lens')
+        s_output = HuygensSurface(z=thickness_total + post_distance,
+                                   Ny=Ny, Nx=Nx, dx=dx,
+                                   label='mhs:output')
+
+        subs = []
+        if pre_distance > 0:
+            subs.append(asm_subdomain(s_input, s_pre_lens,
+                                       wavelength=wavelength))
+        subs.append(prescription_subdomain(
+            s_pre_lens if pre_distance > 0 else s_input,
+            s_post_lens,
+            prescription, wavelength=wavelength, method=method,
+            **method_kwargs))
+        if post_distance > 0:
+            subs.append(asm_subdomain(s_post_lens, s_output,
+                                       wavelength=wavelength))
+        return cls(subs)
 
 
 # ---------------------------------------------------------------------------

@@ -93,7 +93,7 @@ from __future__ import annotations
 import copy
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 
@@ -109,6 +109,7 @@ from ..elements.lenses import (
     _evaluate_polynomial_4d_and_grad34,
     _fit_normaliser,
 )
+from ..backend import JAX_AVAILABLE
 
 
 __all__ = [
@@ -2235,3 +2236,307 @@ def _HFPolyFit_eval_phi_xp(self, s1x, s1y, s2x, s2y, *,
 CanonicalPolyFit.eval_phi_xp = _CanonicalPolyFit_eval_phi_xp
 CanonicalPolyFit.eval_s1_xp = _CanonicalPolyFit_eval_s1_xp
 HFPolyFit.eval_phi_xp = _HFPolyFit_eval_phi_xp
+
+
+# ===========================================================================
+# Section 11 -- JAX paths for aberration_tensor / propagate_modal_asymptotic
+# ===========================================================================
+#
+# JAX-traceable, closed-form variants restricted to the
+# LG_{0,0} -> LG_{0,0} -> LG_{0,0} (Strehl-amplitude) case.  These
+# are the most useful end-to-end-differentiable channels for design
+# optimisation (the leading "ideal-Gaussian-pupil-and-source"
+# coefficient that absorbs Strehl, defocus, and tilt into a single
+# complex amplitude after the M-matrix formalism).
+#
+# Restrictions vs. the NumPy versions:
+#   * v_star (the envelope-stationary pupil point) is a parameter,
+#     not solved internally.  Run the NumPy
+#     :func:`solve_envelope_stationary` once and feed v_star in --
+#     this avoids an iterative Newton in the JAX trace and keeps the
+#     graph fully closed-form.
+#   * Only the (p, ell) = (0, 0) source / pupil / output channel is
+#     evaluated -- multi-mode tensors require the dict-based polynomial
+#     algebra that does not translate to JAX cleanly.
+#
+# Differentiable wrt: fit coefficients, s2_image, v_star, source_point,
+# w_s, w_p, w_o, v2_centre.
+
+
+def _compute_M_b_xp(fit, s2x, s2y, v2x, v2y, src_x, src_y, w_s, w_p,
+                     v_cx, v_cy):
+    """Backend-aware (NumPy / JAX) M, b, J*, phi*, G0, detJ at
+    (s2, v_star).
+
+    Mirrors :func:`_compute_M_b` but uses ``eval_phi_xp`` /
+    ``eval_s1_xp`` and JAX autodiff (``jacfwd`` / ``hessian``) for the
+    Jacobian and Hessian.  Stays in the input array's backend so it
+    runs on NumPy *or* JAX inputs and is differentiable when called on
+    JAX inputs.
+    """
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            "JAX is not installed; install with `pip install jax`")
+    import jax
+    import jax.numpy as jnp
+
+    s2x = jnp.asarray(s2x); s2y = jnp.asarray(s2y)
+
+    def s1_of_v(v):
+        s1x, s1y = fit.eval_s1_xp(s2x, s2y, v[0], v[1])
+        return jnp.stack([s1x, s1y])
+
+    def phi_of_v(v):
+        return fit.eval_phi_xp(s2x, s2y, v[0], v[1], include_linear=False)
+
+    v_arr = jnp.stack([jnp.asarray(v2x), jnp.asarray(v2y)])
+    s1_star = s1_of_v(v_arr)
+    J = jax.jacfwd(s1_of_v)(v_arr)        # (2, 2)
+    phi_val = phi_of_v(v_arr)
+    g = jax.grad(phi_of_v)(v_arr)         # (2,)
+    H_phi = jax.hessian(phi_of_v)(v_arr)  # (2, 2)
+
+    inv_ws2 = 1.0 / (w_s * w_s)
+    inv_wp2 = 1.0 / (w_p * w_p)
+
+    M_real = inv_ws2 * (J.T @ J) + inv_wp2 * jnp.eye(2)
+    M = M_real - 1j * jnp.pi * H_phi
+
+    r_star = jnp.stack([s1_star[0] - src_x, s1_star[1] - src_y])
+    delta_v = jnp.stack([v_arr[0] - v_cx, v_arr[1] - v_cy])
+    b = (2.0j * jnp.pi * g
+         - 2.0 * inv_ws2 * (J.T @ r_star)
+         - 2.0 * inv_wp2 * delta_v)
+    detJ = jnp.abs(J[0, 0] * J[1, 1] - J[0, 1] * J[1, 0])
+
+    G0 = jnp.exp(
+        -(r_star[0] ** 2 + r_star[1] ** 2) / (w_s * w_s)
+        - (delta_v[0] ** 2 + delta_v[1] ** 2) / (w_p * w_p)
+    )
+    return M, b, s1_star, J, phi_val, G0, detJ
+
+
+class JaxAberrationTensorResult(NamedTuple):
+    """JAX-friendly mirror of :class:`AberrationTensorResult`.
+
+    Fields match the NumPy result so callers can use the same
+    ``.L``-indexing pattern across both backends.  The ``L`` field is
+    a (1, 1) JAX array carrying the LG_{(0,0),(0,0)} coefficient; the
+    ``output_modes`` / ``source_modes`` / ``pupil_modes`` fields are
+    static Python lists (NamedTuple PyTree leaves).
+    """
+    L: object
+    output_modes: list
+    source_modes: list
+    pupil_modes: list
+    s2_image: tuple
+    w_s: float
+    w_p: float
+    w_o: object  # may be a JAX scalar
+    v_star: tuple
+
+
+def aberration_tensor_lg00_jax(
+    fit,
+    s2_image,
+    v_star,
+    *,
+    source_point=(0.0, 0.0),
+    w_s: float = 50e-6,
+    w_p: float = 0.05,
+    w_o=None,
+    v2_centre=(0.0, 0.0),
+    return_result: bool = False,
+):
+    """JAX-traceable LG_{0,0} -> LG_{0,0} -> LG_{0,0} aberration coefficient.
+
+    Single-coefficient form of :func:`aberration_tensor` for the
+    output mode (0, 0) projected onto a (0, 0) source and (0, 0) pupil
+    -- the leading Strehl amplitude in the modal asymptotic expansion.
+
+    The Newton solve for the envelope-stationary point is **not**
+    performed here -- pass ``v_star`` (typically computed once via the
+    NumPy :func:`solve_envelope_stationary`).  Skipping the Newton
+    keeps the JAX graph fully closed-form and JIT/grad-friendly.
+
+    Parameters
+    ----------
+    fit : CanonicalPolyFit
+    s2_image : (float, float) or 2-tuple of JAX scalars
+    v_star : (float, float) or 2-tuple of JAX scalars
+        Envelope-stationary point.
+    source_point : (float, float)
+    w_s, w_p, w_o : float
+        Gaussian waists for source / pupil / output.  ``w_o`` defaults
+        to a Maréchal scale derived from M.
+    v2_centre : (float, float)
+    return_result : bool, default False
+        If True, return a :class:`JaxAberrationTensorResult` whose
+        ``.L`` field holds a (1, 1) JAX array (mirroring the NumPy
+        :func:`aberration_tensor` API).  If False (default), return
+        the bare complex scalar -- the simplest target for
+        ``jax.grad``.
+
+    Returns
+    -------
+    complex JAX scalar OR :class:`JaxAberrationTensorResult`
+
+    Differentiable via ``jax.grad`` wrt fit coefficients, s2_image,
+    v_star, source_point, w_s, w_p, w_o, v2_centre.
+    """
+    if not JAX_AVAILABLE:
+        raise ImportError("JAX is not installed.")
+    import jax.numpy as jnp
+
+    s2x, s2y = s2_image
+    v2x, v2y = v_star
+    src_x, src_y = source_point
+    v_cx, v_cy = v2_centre
+
+    M, b, _s1_star, _J, phi_star, G0, detJ = _compute_M_b_xp(
+        fit, s2x, s2y, v2x, v2y, src_x, src_y, w_s, w_p, v_cx, v_cy
+    )
+
+    M_inv = jnp.linalg.inv(M)
+    sqrt_detM = jnp.sqrt(jnp.linalg.det(M))
+
+    if w_o is None:
+        eig_M_real = jnp.linalg.eigvalsh(jnp.real(M))
+        # eigvalsh returns ascending; the largest eigenvalue gives the
+        # tightest output Gaussian; clamp to a positive minimum.
+        w_o = 1.0 / jnp.sqrt(jnp.maximum(eig_M_real[-1], 1e-30))
+
+    b_quad = 0.25 * (b @ M_inv @ b)
+    A_lead = (detJ * (jnp.pi / sqrt_detM) * G0
+              * jnp.exp(2j * jnp.pi * phi_star)
+              * jnp.exp(b_quad))
+
+    # LG_{0,0} normalisation: N = sqrt(2 / (pi w^2)).  Output projection
+    # is the conjugate of N_o (real positive, so just N_o).
+    N_s = jnp.sqrt(2.0 / (jnp.pi * w_s * w_s))
+    N_p = jnp.sqrt(2.0 / (jnp.pi * w_p * w_p))
+    N_o = jnp.sqrt(2.0 / (jnp.pi * w_o * w_o))
+
+    L_scalar = A_lead * N_s * N_p * N_o
+    if not return_result:
+        return L_scalar
+
+    L_matrix = L_scalar.reshape((1, 1))
+    return JaxAberrationTensorResult(
+        L=L_matrix,
+        output_modes=[(0, 0)],
+        source_modes=[(0, 0)],
+        pupil_modes=[(0, 0)],
+        s2_image=tuple(s2_image),
+        w_s=w_s, w_p=w_p, w_o=w_o,
+        v_star=tuple(v_star),
+    )
+
+
+def _modal_field_lg00_pixel_jax(fit, s2x, s2y, v2x, v2y,
+                                  src_x, src_y, w_s, w_p, v_cx, v_cy):
+    """Single-pixel LG_{0,0} field value (no output-mode projection).
+
+    Mirrors the ``propagate_modal_asymptotic`` per-pixel formula for
+    source = pupil = LG_{0,0}: returns the field
+    ``E(s2) = A_lead * N_s * N_p`` (the polynomial in ``eta`` reduces to
+    a constant whose Wick zeroth moment is unity).
+    """
+    import jax.numpy as jnp
+    M, b, _s1_star, _J, phi_star, G0, detJ = _compute_M_b_xp(
+        fit, s2x, s2y, v2x, v2y, src_x, src_y, w_s, w_p, v_cx, v_cy
+    )
+    M_inv = jnp.linalg.inv(M)
+    sqrt_detM = jnp.sqrt(jnp.linalg.det(M))
+    b_quad = 0.25 * (b @ M_inv @ b)
+    A_lead = (detJ * (jnp.pi / sqrt_detM) * G0
+              * jnp.exp(2j * jnp.pi * phi_star)
+              * jnp.exp(b_quad))
+    N_s = jnp.sqrt(2.0 / (jnp.pi * w_s * w_s))
+    N_p = jnp.sqrt(2.0 / (jnp.pi * w_p * w_p))
+    return A_lead * N_s * N_p
+
+
+def propagate_modal_asymptotic_lg00_jax(
+    fit,
+    s2_grid_x,
+    s2_grid_y,
+    v_star_grid,
+    *,
+    source_point=(0.0, 0.0),
+    w_s: float = 50e-6,
+    w_p: float = 0.05,
+    v2_centre=(0.0, 0.0),
+):
+    """JAX-traceable per-pixel evaluator for the LG_{0,0} channel.
+
+    Vectorised LG_{0,0} -> LG_{0,0} version of
+    :func:`propagate_modal_asymptotic` over a 2-D output-plane grid.
+    Returns the field ``E(s2)`` at each pixel (matching the NumPy
+    version's output, not the basis-projected coefficient that
+    :func:`aberration_tensor_lg00_jax` returns).
+
+    The ``v_star_grid`` argument supplies the pre-solved envelope-
+    stationary point at each pixel -- typically obtained via
+    :func:`solve_envelope_stationary` on the NumPy fit (warm-start
+    chain along the grid).  Skipping the per-pixel Newton in JAX
+    keeps the entire evaluator JIT/grad-friendly.
+
+    Parameters
+    ----------
+    fit : CanonicalPolyFit
+    s2_grid_x, s2_grid_y : array-like
+        Output-plane sample points, same shape.
+    v_star_grid : array-like, shape (..., 2)
+        Pre-solved envelope-stationary point at each grid point.  The
+        leading dimensions match s2_grid_x; the trailing dimension is 2
+        (v2x, v2y).
+    source_point : (float, float)
+    w_s, w_p : float
+    v2_centre : (float, float)
+
+    Returns
+    -------
+    complex JAX array, same shape as s2_grid_x
+        Output field E(s2).
+    """
+    if not JAX_AVAILABLE:
+        raise ImportError("JAX is not installed.")
+    import jax
+    import jax.numpy as jnp
+
+    s2x = jnp.asarray(s2_grid_x)
+    s2y = jnp.asarray(s2_grid_y)
+    v_grid = jnp.asarray(v_star_grid)
+    if s2x.shape != s2y.shape:
+        raise ValueError(
+            f"s2_grid_x and s2_grid_y shape mismatch: {s2x.shape} vs {s2y.shape}")
+    if v_grid.shape[:-1] != s2x.shape or v_grid.shape[-1] != 2:
+        raise ValueError(
+            f"v_star_grid shape {v_grid.shape} incompatible with grid {s2x.shape} "
+            "(expected (..., 2))")
+
+    src_x, src_y = source_point
+    v_cx, v_cy = v2_centre
+
+    def evaluate_pixel(sx, sy, v):
+        return _modal_field_lg00_pixel_jax(
+            fit, sx, sy, v[0], v[1],
+            src_x, src_y, w_s, w_p, v_cx, v_cy,
+        )
+
+    flat_sx = s2x.reshape(-1)
+    flat_sy = s2y.reshape(-1)
+    flat_v = v_grid.reshape(-1, 2)
+    flat_out = jax.vmap(evaluate_pixel, in_axes=(0, 0, 0))(
+        flat_sx, flat_sy, flat_v)
+    return flat_out.reshape(s2x.shape)
+
+
+# Add to public API.
+if 'aberration_tensor_lg00_jax' not in __all__:
+    __all__.append('aberration_tensor_lg00_jax')
+if 'propagate_modal_asymptotic_lg00_jax' not in __all__:
+    __all__.append('propagate_modal_asymptotic_lg00_jax')
+if 'JaxAberrationTensorResult' not in __all__:
+    __all__.append('JaxAberrationTensorResult')

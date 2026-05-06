@@ -97,6 +97,7 @@ from .elements import (
 
 # ── Sources ──────────────────────────────────────────────────────────────
 from .sources import (
+    Source,
     create_gaussian_beam,
     create_hermite_gauss,
     create_laguerre_gauss,
@@ -105,6 +106,11 @@ from .sources import (
 )
 
 # ── Beam analysis ────────────────────────────────────────────────────────
+from .analysis.aberration import (
+    AberrationSummary,
+    aberration_summary,
+    format_aberration_summary,
+)
 from .analysis import (
     beam_centroid,
     beam_d4sigma,
@@ -249,6 +255,7 @@ from .optimize import (
     LGAberrationMerit,
     CompositeMerit,
     CallableMerit,
+    JaxMeritTerm,
     MultiWavelengthMerit,
     MultiFieldMerit,
     MinThicknessMerit,
@@ -259,15 +266,21 @@ from .optimize import (
     EvaluationContext,
     DesignResult,
     design_optimize,
+    WAVE_PROPAGATOR_REGISTRY,
+    register_wave_propagator,
+    unregister_wave_propagator,
 )
 
 # ── Phase-space asymptotic propagator + LG aberration tensor ────────────
 from .propagators.asymptotic import (
     CanonicalPolyFit,
+    HFPolyFit,
     AberrationTensorResult,
     fit_canonical_polynomials,
+    fit_hf_polynomials,
     aberration_tensor,
     propagate_modal_asymptotic,
+    propagate_hf_chebyshev_quadrature,
     solve_envelope_stationary,
     lg_polynomial,
     hg_polynomial,
@@ -278,6 +291,9 @@ from .propagators.asymptotic import (
     lg_seidel_label,
     gaussian_moment_2d,
     gaussian_moment_table_2d,
+    aberration_tensor_lg00_jax,
+    propagate_modal_asymptotic_lg00_jax,
+    JaxAberrationTensorResult,
 )
 
 # ── DOE / Gratings / Phase I/O ──────────────────────────────────────────
@@ -407,6 +423,7 @@ from .io.storage import (
     load_plane_slice,
     write_sim_metadata,
     read_sim_metadata,
+    replay_run,
     # Backwards-compatible aliases
     list_planes_store,
     load_plane_by_label_store,
@@ -476,86 +493,95 @@ from .backend import (
 from .propagators.hfpi import (
     PathBundle,
     init_paths_from_field,
+    init_paths_stratified,
     propagate_to_plane,
     apply_aperture_diffraction,
     accumulate_to_grid,
     propagate_hfpi_freespace_aperture,
+    propagate_hfpi_through_prescription,
 )
 from .propagators.gbd import (
     BeamletBundle,
     decompose_field_to_beamlets,
     propagate_beamlets_freespace,
     apply_thin_lens_to_beamlets,
+    apply_abcd_to_beamlets,
     reconstruct_field_from_beamlets,
     propagate_gbd_freespace,
     propagate_gbd_thin_lens,
+    propagate_gbd_through_prescription,
 )
 from .propagators.hf import (
     propagate_huygens_fresnel_freespace,
     propagate_huygens_fresnel_with_opl_callable,
+    propagate_huygens_fresnel_through_prescription,
 )
 from .propagators.subaperture import (
     PatchGrid,
     patches_for_box,
     patch_window,
     combine_patch_fields,
+    propagate_subaperture_asymptotic,
 )
 from .propagators.dispatch import (
     propagate,
     VALID_METHODS,
 )
+from .propagators.result import PropagationResult
+from .propagators.mhs import (
+    HuygensSurface,
+    MhsSubdomain,
+    MhsPipeline,
+    asm_subdomain,
+    aperture_subdomain,
+    gbd_freespace_subdomain,
+    prescription_subdomain,
+)
+from .propagators.vectorial_hfpi import (
+    VectorPathBundle,
+    init_vector_paths_from_field,
+    propagate_vector_to_plane,
+    apply_vector_aperture_diffraction,
+    accumulate_vector_to_grid,
+    propagate_vector_hfpi_freespace_aperture,
+)
+from .raytrace.jax_trace import (
+    JaxRayState,
+    make_jax_ray_state,
+    trace_jax,
+    jax_state_to_raybundle,
+    raybundle_to_jax_state,
+)
 
-__version__ = "3.4.0"
+__version__ = "3.5.0"
 
+#
+# __all__ is grouped by user-journey tier:
+#
+#   Tier 1 -- Build a system (sources, prescriptions, elements, glass)
+#   Tier 2 -- Propagate (dispatcher + propagator families)
+#   Tier 3 -- Trace (geometric + JAX-traceable)
+#   Tier 4 -- Analyze (beam analysis, aberration summary, through-focus,
+#                       tolerancing, ghost, coherence, detector, etc.)
+#   Tier 5 -- Optimize (parameterizations, merit terms, design_optimize)
+#   Tier 6 -- Asymptotic / LG (polynomial fits, LG/HG, aberration tensor)
+#   Tier 7 -- Specialized physics (RCWA, BSDF, coatings, vector
+#                                    diffraction, vectorial HFPI)
+#   Tier 8 -- I/O (prescription formats, HDF5/Zarr, code generation)
+#   Tier 9 -- Plotting
+#   Tier 10 - Infrastructure (backend, memory, progress, JAX flags)
+#
 __all__ = [
-    # Propagation
-    'angular_spectrum_propagate',
-    'angular_spectrum_propagate_tilted',
-    'scalable_angular_spectrum_propagate',
-    'fresnel_propagate',
-    'fraunhofer_propagate',
-    'rayleigh_sommerfeld_propagate',
-    'resample_field',
-    'set_default_complex_dtype',
-    'get_default_complex_dtype',
-    'set_asm_cache_size',
-    'set_fft_plan_cache_size',
-    'clear_asm_caches',
-    'reset_fft_backend',
-    # Lenses
-    'apply_thin_lens',
-    'apply_spherical_lens',
-    'apply_aspheric_lens',
-    'apply_real_lens',
-    'apply_real_lens_traced',
-    'apply_real_lens_maslov',
-    'surface_sag_general',
-    'surface_sag_biconic',
-    'make_cylindrical',
-    'make_biconic',
-    'apply_cylindrical_lens',
-    'apply_grin_lens',
-    'apply_axicon',
-    'check_grid_vs_apertures',
-    'recommend_grid_for_prescription',
-    # Glass
-    'get_glass_index',
-    'get_glass_index_complex',
-    'GLASS_REGISTRY',
-    # Elements
-    'apply_mirror',
-    'apply_aperture',
-    'apply_gaussian_aperture',
-    'apply_mask',
-    'zernike',
-    'apply_zernike_aberration',
-    'generate_turbulence_screen',
-    # Sources
+
+    # ============================================================
+    # Tier 1 -- Build a system
+    # ============================================================
+
+    # Sources (field generators + Source object)
+    'Source',
     'create_gaussian_beam',
     'create_hermite_gauss',
     'create_laguerre_gauss',
-    'hermite_physicist',
-    'laguerre_generalized',
     'create_tilted_plane_wave',
     'create_point_source',
     'create_multi_field_sources',
@@ -564,7 +590,221 @@ __all__ = [
     'create_fiber_mode',
     'create_led_source',
     'create_bessel_beam',
-    # Analysis
+    'hermite_physicist',
+    'laguerre_generalized',
+
+    # Prescriptions (factories + format I/O)
+    'make_singlet',
+    'make_doublet',
+    'make_cylindrical',
+    'make_biconic',
+    'thorlabs_lens',
+    'THORLABS_CATALOG',
+    'load_zmx_prescription',
+    'load_zemax_prescription_txt',
+    'export_zemax_lens_data',
+    'export_zemax_zmx',
+    'load_codev_seq',
+    'export_codev_seq',
+    'load_quadoa_qos',
+    'export_quadoa_qos',
+    'QUADOA_SCHEMA_VERSION',
+    'scale_prescription',
+
+    # Lens / element models (apply on a field)
+    'apply_thin_lens',
+    'apply_spherical_lens',
+    'apply_aspheric_lens',
+    'apply_real_lens',
+    'apply_real_lens_traced',
+    'apply_real_lens_maslov',
+    'apply_cylindrical_lens',
+    'apply_grin_lens',
+    'apply_axicon',
+    'apply_mirror',
+    'apply_aperture',
+    'apply_gaussian_aperture',
+    'apply_mask',
+    'apply_zernike_aberration',
+
+    # Surface / sag helpers
+    'surface_sag_general',
+    'surface_sag_biconic',
+    'surface_sag_xy_polynomial',
+    'surface_sag_zernike_freeform',
+    'surface_sag_chebyshev',
+    'surface_sag_freeform',
+
+    # Polarization / Jones calculus
+    'JonesField',
+    'apply_jones_matrix',
+    'apply_polarizer',
+    'apply_waveplate',
+    'apply_half_wave_plate',
+    'apply_quarter_wave_plate',
+    'apply_rotator',
+    'create_linear_polarized',
+    'create_circular_polarized',
+    'create_elliptical_polarized',
+    'stokes_parameters',
+    'degree_of_polarization',
+    'polarization_ellipse',
+
+    # Glass
+    'get_glass_index',
+    'get_glass_index_complex',
+    'GLASS_REGISTRY',
+
+    # DOE / phase mask helpers
+    'create_periodic_phase_mask',
+    'create_microlens_array',
+    'makedammann2d',
+
+    # Other field generators
+    'zernike',
+    'generate_turbulence_screen',
+
+    # Grid / sampling helpers
+    'check_grid_vs_apertures',
+    'recommend_grid_for_prescription',
+
+    # ============================================================
+    # Tier 2 -- Propagate (dispatcher + propagator families)
+    # ============================================================
+
+    # Top-level smart-method propagator
+    'propagate',
+    'VALID_METHODS',
+    'PropagationResult',
+
+    # Free-space propagators (low-level)
+    'angular_spectrum_propagate',
+    'angular_spectrum_propagate_tilted',
+    'scalable_angular_spectrum_propagate',
+    'fresnel_propagate',
+    'fraunhofer_propagate',
+    'rayleigh_sommerfeld_propagate',
+    'resample_field',
+
+    # Huygens-Fresnel family
+    'propagate_huygens_fresnel_freespace',
+    'propagate_huygens_fresnel_with_opl_callable',
+    'propagate_huygens_fresnel_through_prescription',
+
+    # Gaussian Beamlet Decomposition
+    'BeamletBundle',
+    'decompose_field_to_beamlets',
+    'propagate_beamlets_freespace',
+    'apply_thin_lens_to_beamlets',
+    'apply_abcd_to_beamlets',
+    'reconstruct_field_from_beamlets',
+    'propagate_gbd_freespace',
+    'propagate_gbd_thin_lens',
+    'propagate_gbd_through_prescription',
+
+    # Huygens-Fresnel Path Integration (Monte Carlo)
+    'PathBundle',
+    'init_paths_from_field',
+    'init_paths_stratified',
+    'propagate_to_plane',
+    'apply_aperture_diffraction',
+    'accumulate_to_grid',
+    'propagate_hfpi_freespace_aperture',
+    'propagate_hfpi_through_prescription',
+
+    # Vectorial HFPI (Jones-vector paths)
+    'VectorPathBundle',
+    'init_vector_paths_from_field',
+    'propagate_vector_to_plane',
+    'apply_vector_aperture_diffraction',
+    'accumulate_vector_to_grid',
+    'propagate_vector_hfpi_freespace_aperture',
+
+    # Subaperture decomposition
+    'PatchGrid',
+    'patches_for_box',
+    'patch_window',
+    'combine_patch_fields',
+    'propagate_subaperture_asymptotic',
+
+    # Multiple Huygens Surface (MHS) framework
+    'HuygensSurface',
+    'MhsSubdomain',
+    'MhsPipeline',
+    'asm_subdomain',
+    'aperture_subdomain',
+    'gbd_freespace_subdomain',
+    'prescription_subdomain',
+
+    # Element-walking system propagator
+    'propagate_through_system',
+
+    # ============================================================
+    # Tier 3 -- Trace (geometric + JAX-traceable)
+    # ============================================================
+
+    # Geometric ray trace
+    'RayBundle',
+    'Surface',
+    'TraceResult',
+    'trace',
+    'trace_prescription',
+    'surfaces_from_prescription',
+    'surfaces_from_elements',
+    'raytrace_system',
+    'apply_doe_phase_traced',
+
+    # Ray generators
+    'make_ray',
+    'make_fan',
+    'make_ring',
+    'make_grid',
+    'make_rings',
+
+    # Ray-trace analysis
+    'system_abcd',
+    'system_abcd_prescription',
+    'seidel_coefficients',
+    'seidel_prescription',
+    'spot_rms',
+    'spot_geo_radius',
+    'spot_diagram',
+    'ray_fan_data',
+    'ray_fan_plot',
+    'ray_fan_plot_prescription',
+    'opd_fan_data',
+    'through_focus_rms',
+    'refocus',
+    'find_stop',
+    'compute_pupils',
+    'lens_abcd',
+    'find_lenses',
+    'LensInfo',
+    'PupilInfo',
+    'find_paraxial_focus',
+    'trace_summary',
+    'prescription_summary',
+
+    # Per-ray diagnostic codes
+    'RAY_OK',
+    'RAY_TIR',
+    'RAY_APERTURE',
+    'RAY_MISSED_SURFACE',
+    'RAY_NAN',
+    'RAY_EVANESCENT',
+
+    # JAX-traceable ray trace
+    'JaxRayState',
+    'make_jax_ray_state',
+    'trace_jax',
+    'jax_state_to_raybundle',
+    'raybundle_to_jax_state',
+
+    # ============================================================
+    # Tier 4 -- Analyze
+    # ============================================================
+
+    # Beam analysis (Strehl, PSF, MTF, OPD, Zernike)
     'beam_centroid',
     'beam_d4sigma',
     'beam_power',
@@ -588,49 +828,12 @@ __all__ = [
     'zernike_reconstruct',
     'zernike_index_to_nm',
     'zernike_nm_to_index',
-    # Geometric ray tracing
-    'RayBundle',
-    'Surface',
-    'TraceResult',
-    'trace',
-    'surfaces_from_prescription',
-    'make_ray',
-    'make_fan',
-    'make_ring',
-    'make_grid',
-    'make_rings',
-    'apply_doe_phase_traced',
-    'trace_prescription',
-    'system_abcd',
-    'system_abcd_prescription',
-    'seidel_coefficients',
-    'seidel_prescription',
-    'spot_rms',
-    'spot_geo_radius',
-    'spot_diagram',
-    'ray_fan_data',
-    'ray_fan_plot',
-    'ray_fan_plot_prescription',
-    'opd_fan_data',
-    'through_focus_rms',
-    'refocus',
-    'find_stop',
-    'compute_pupils',
-    'lens_abcd',
-    'find_lenses',
-    'LensInfo',
-    'PupilInfo',
-    'RAY_OK',
-    'RAY_TIR',
-    'RAY_APERTURE',
-    'RAY_MISSED_SURFACE',
-    'RAY_NAN',
-    'RAY_EVANESCENT',
-    'find_paraxial_focus',
-    'trace_summary',
-    'prescription_summary',
-    'surfaces_from_elements',
-    'raytrace_system',
+
+    # Unified aberration analysis (Seidel + LG tensor)
+    'AberrationSummary',
+    'aberration_summary',
+    'format_aberration_summary',
+
     # Through-focus / tolerancing
     'single_plane_metrics',
     'diffraction_limited_peak',
@@ -642,9 +845,44 @@ __all__ = [
     'apply_perturbations',
     'tolerancing_sweep',
     'monte_carlo_tolerancing',
-    # Hybrid wave/ray design optimization
+
+    # Coherence / extended-source imaging
+    'koehler_image',
+    'extended_source_image',
+    'mutual_coherence',
+
+    # Detector / wavefront sensing
+    'apply_detector',
+    'shack_hartmann',
+
+    # Interferometry
+    'simulate_interferogram',
+    'phase_shift_extract',
+    'fringe_spacing',
+
+    # Phase retrieval
+    'gerchberg_saxton',
+    'error_reduction',
+    'hybrid_input_output',
+
+    # Ghost analysis
+    'enumerate_ghost_paths',
+    'ghost_analysis',
+
+    # ============================================================
+    # Tier 5 -- Optimize
+    # ============================================================
+
     'DesignParameterization',
     'MultiPrescriptionParameterization',
+    'EvaluationContext',
+    'DesignResult',
+    'design_optimize',
+    'WAVE_PROPAGATOR_REGISTRY',
+    'register_wave_propagator',
+    'unregister_wave_propagator',
+
+    # Merit terms
     'MeritTerm',
     'FocalLengthMerit',
     'BackFocalLengthMerit',
@@ -660,6 +898,7 @@ __all__ = [
     'LGAberrationMerit',
     'CompositeMerit',
     'CallableMerit',
+    'JaxMeritTerm',
     'MultiWavelengthMerit',
     'MultiFieldMerit',
     'MinThicknessMerit',
@@ -667,61 +906,7 @@ __all__ = [
     'MinBackFocalLengthMerit',
     'MaxFNumberMerit',
     'ToleranceAwareMerit',
-    'EvaluationContext',
-    'DesignResult',
-    'design_optimize',
-    # Phase-space asymptotic propagator + LG aberration tensor
-    'CanonicalPolyFit',
-    'AberrationTensorResult',
-    'fit_canonical_polynomials',
-    'aberration_tensor',
-    'propagate_modal_asymptotic',
-    'solve_envelope_stationary',
-    'lg_polynomial',
-    'hg_polynomial',
-    'evaluate_lg_mode',
-    'evaluate_hg_mode',
-    'decompose_lg',
-    'decompose_hg',
-    'lg_seidel_label',
-    'gaussian_moment_2d',
-    'gaussian_moment_table_2d',
-    # Vector diffraction
-    'richards_wolf_focus',
-    'debye_wolf_psf',
-    # Partial coherence
-    'koehler_image',
-    'extended_source_image',
-    'mutual_coherence',
-    # Detector / wavefront sensing
-    'apply_detector',
-    'shack_hartmann',
-    # Thin-film coatings
-    'coating_reflectance',
-    'quarter_wave_ar',
-    'broadband_ar_v_coat',
-    # Interferometry
-    'simulate_interferogram',
-    'phase_shift_extract',
-    'fringe_spacing',
-    # Freeform surfaces
-    'surface_sag_xy_polynomial',
-    'surface_sag_zernike_freeform',
-    'surface_sag_chebyshev',
-    'surface_sag_freeform',
-    # Ghost analysis
-    'enumerate_ghost_paths',
-    'ghost_analysis',
-    # BSDF surface scatter
-    'BSDFModel',
-    'LambertianBSDF',
-    'GaussianBSDF',
-    'HarveyShackBSDF',
-    'make_bsdf',
-    'sample_scatter_rays',
-    # RCWA
-    'rcwa_1d',
-    'grating_efficiency_vs_wavelength',
+
     # Multi-configuration / afocal
     'Configuration',
     'multi_config_merit',
@@ -729,58 +914,85 @@ __all__ = [
     'afocal_angular_magnification',
     'beam_expander_prescription',
     'keplerian_telescope',
-    # DOE / I/O
-    'create_periodic_phase_mask',
-    'create_microlens_array',
-    'makedammann2d',
-    'load_phase_file',
-    'save_phase_file',
-    'load_fits_field',
-    'save_fits_field',
-    # Phase retrieval
-    'gerchberg_saxton',
-    'error_reduction',
-    'hybrid_input_output',
-    # Code generation
-    'generate_simulation_script',
-    'generate_script_from_zmx',
-    'generate_script_from_txt',
-    # Progress reporting
-    'ProgressCallback',
-    'ProgressScaler',
-    'call_progress',
-    # Polarization / Jones calculus
-    'JonesField',
-    'apply_jones_matrix',
-    'apply_polarizer',
-    'apply_waveplate',
-    'apply_half_wave_plate',
-    'apply_quarter_wave_plate',
-    'apply_rotator',
-    'create_linear_polarized',
-    'create_circular_polarized',
-    'create_elliptical_polarized',
-    'stokes_parameters',
-    'degree_of_polarization',
-    'polarization_ellipse',
-    # Prescriptions
-    'export_zemax_lens_data',
-    'export_zemax_zmx',
-    'load_codev_seq',
-    'export_codev_seq',
-    'export_quadoa_qos',
-    'load_quadoa_qos',
-    'QUADOA_SCHEMA_VERSION',
-    'scale_prescription',
-    'make_singlet',
-    'make_doublet',
-    'thorlabs_lens',
-    'load_zmx_prescription',
-    'load_zemax_prescription_txt',
-    'THORLABS_CATALOG',
-    # System
-    'propagate_through_system',
-    # HDF5 I/O
+
+    # ============================================================
+    # Tier 6 -- Asymptotic / LG aberration tensor
+    # ============================================================
+
+    # Polynomial fits
+    'CanonicalPolyFit',
+    'HFPolyFit',
+    'AberrationTensorResult',
+    'fit_canonical_polynomials',
+    'fit_hf_polynomials',
+
+    # Newton solver / propagators / quadrature
+    'solve_envelope_stationary',
+    'aberration_tensor',
+    'propagate_modal_asymptotic',
+    'propagate_hf_chebyshev_quadrature',
+
+    # LG / HG basis
+    'lg_polynomial',
+    'hg_polynomial',
+    'evaluate_lg_mode',
+    'evaluate_hg_mode',
+    'decompose_lg',
+    'decompose_hg',
+    'lg_seidel_label',
+
+    # Wick moments
+    'gaussian_moment_2d',
+    'gaussian_moment_table_2d',
+
+    # JAX paths
+    'aberration_tensor_lg00_jax',
+    'propagate_modal_asymptotic_lg00_jax',
+    'JaxAberrationTensorResult',
+
+    # ============================================================
+    # Tier 7 -- Specialized physics
+    # ============================================================
+
+    # Vector diffraction (high-NA focus)
+    'richards_wolf_focus',
+    'debye_wolf_psf',
+
+    # RCWA (rigorous coupled-wave analysis)
+    'rcwa_1d',
+    'grating_efficiency_vs_wavelength',
+
+    # BSDF / surface scatter
+    'BSDFModel',
+    'LambertianBSDF',
+    'GaussianBSDF',
+    'HarveyShackBSDF',
+    'make_bsdf',
+    'sample_scatter_rays',
+
+    # Thin-film coatings
+    'coating_reflectance',
+    'quarter_wave_ar',
+    'broadband_ar_v_coat',
+
+    # ============================================================
+    # Tier 8 -- I/O (HDF5 / Zarr / phase / FITS / code-gen)
+    # ============================================================
+
+    # Unified storage (HDF5 / Zarr dispatch)
+    'set_storage_backend',
+    'get_storage_backend',
+    'default_extension',
+    'append_plane',
+    'load_planes',
+    'list_planes_store',
+    'load_plane_by_label_store',
+    'load_plane_slice_store',
+    'write_metadata',
+    'read_metadata',
+    'replay_run',
+
+    # HDF5 (low-level)
     'save_field_h5',
     'load_field_h5',
     'save_planes_h5',
@@ -795,31 +1007,22 @@ __all__ = [
     'TempFieldStore',
     'write_sim_metadata',
     'read_sim_metadata',
-    # Unified storage (HDF5 / Zarr)
-    'set_storage_backend',
-    'get_storage_backend',
-    'default_extension',
-    'append_plane',
-    'load_planes',
-    'list_planes_store',
-    'load_plane_by_label_store',
-    'load_plane_slice_store',
-    'write_metadata',
-    'read_metadata',
-    # Memory-aware batching
-    'available_memory_bytes',
-    'total_memory_bytes',
-    'memory_info',
-    'bytes_per_element',
-    'array_bytes',
-    'estimate_op_memory',
-    'pick_batch_size',
-    'should_split',
-    'format_bytes',
-    'print_memory_report',
-    'get_ram_budget',
-    'set_max_ram',
-    # Plotting
+
+    # Phase / FITS file I/O
+    'load_phase_file',
+    'save_phase_file',
+    'load_fits_field',
+    'save_fits_field',
+
+    # Code generation
+    'generate_simulation_script',
+    'generate_script_from_zmx',
+    'generate_script_from_txt',
+
+    # ============================================================
+    # Tier 9 -- Plotting
+    # ============================================================
+
     'plot_intensity',
     'plot_phase',
     'plot_field',
@@ -833,14 +1036,45 @@ __all__ = [
     'plot_beam_profile',
     'plot_jones_pupil',
     'compute_jones_pupil',
-    # Backend info
+
+    # ============================================================
+    # Tier 10 -- Infrastructure (backend, memory, progress, flags)
+    # ============================================================
+
+    # Backend availability flags
     'PYFFTW_AVAILABLE',
     'CUPY_AVAILABLE',
     'NUMEXPR_AVAILABLE',
+    'JAX_AVAILABLE',
     'available_cpus',
     'set_fft_threads',
     'set_fft_fallback',
     'reset_fft_backend',
+
     # Precision configuration
+    'set_default_complex_dtype',
+    'get_default_complex_dtype',
     'DEFAULT_COMPLEX_DTYPE',
+    'set_asm_cache_size',
+    'set_fft_plan_cache_size',
+    'clear_asm_caches',
+
+    # Memory-aware batching
+    'available_memory_bytes',
+    'total_memory_bytes',
+    'memory_info',
+    'bytes_per_element',
+    'array_bytes',
+    'estimate_op_memory',
+    'pick_batch_size',
+    'should_split',
+    'format_bytes',
+    'print_memory_report',
+    'get_ram_budget',
+    'set_max_ram',
+
+    # Progress callback infrastructure
+    'ProgressCallback',
+    'ProgressScaler',
+    'call_progress',
 ]

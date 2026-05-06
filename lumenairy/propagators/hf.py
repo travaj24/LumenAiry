@@ -262,15 +262,19 @@ def propagate_huygens_fresnel_through_prescription(
         w_p = pupil_box_half
         v2_centre = (0.0, 0.0)
 
+        # propagate_modal_asymptotic expects per-pixel s2 grids.
+        # OX, OY were built above on the output_grid_xy / output_dx
+        # spec and are the right grids to sample on.
         return propagate_modal_asymptotic(
             fit,
-            source_lg_amps=source_lg,
-            pupil_lg_amps=pupil_lg,
+            source_amplitudes=source_lg,
+            pupil_amplitudes=pupil_lg,
             source_point=source_point,
             w_s=w_s,
             w_p=w_p,
             v2_centre=v2_centre,
-            output_grid=output_grid_xy,
+            s2_grid_x=OX,
+            s2_grid_y=OY,
         )
 
     if method == 'direct':

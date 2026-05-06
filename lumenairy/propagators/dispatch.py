@@ -18,7 +18,7 @@ Method selection logic (when ``method='auto'``)
 
 The user can always override by passing ``method='asm'`` /
 ``'fresnel'`` / ``'fraunhofer'`` / ``'rs'`` / ``'maslov'`` /
-``'asymptotic'`` / ``'gbd'`` / ``'hfpi'``.
+``'asymptotic'`` / ``'gbd'`` / ``'hfpi'`` / ``'hf'`` / ``'mhs'``.
 
 Author: Andrew Traverso
 """
@@ -27,6 +27,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+import math
+
 import numpy as np
 
 from ..backend import array_namespace
@@ -34,7 +36,7 @@ from ..backend import array_namespace
 
 VALID_METHODS = (
     'auto', 'asm', 'fresnel', 'fraunhofer', 'rs',
-    'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf',
+    'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf', 'mhs',
 )
 
 
@@ -46,8 +48,10 @@ def propagate(
     dx: float,
     prescription: Optional[Dict[str, Any]] = None,
     method: str = 'auto',
+    accuracy: str = 'balanced',
     output_grid: Optional[tuple] = None,
     output_dx: Optional[float] = None,
+    return_result: bool = False,
     **method_kwargs,
 ):
     """Top-level smart-method propagator.
@@ -56,6 +60,30 @@ def propagate(
     based on the geometry of the request and the structure of the
     prescription (when provided).  See the module docstring for
     selection logic.
+
+    Parameters
+    ----------
+    accuracy : 'fast' | 'balanced' | 'accurate', default 'balanced'
+        Hint for the ``method='auto'`` selector:
+
+          * ``'fast'`` -- prefer the cheapest method that is
+            asymptotically valid (e.g. ``'maslov'`` over GBD when
+            both apply).
+          * ``'balanced'`` -- the default; trades accuracy for
+            speed on a case-by-case basis.
+          * ``'accurate'`` -- prefer the highest-fidelity method
+            for the geometry (e.g. ``'gbd'`` over ``'maslov'`` for
+            aspherics, ``'hf'`` over ``'maslov'`` for general
+            paraxial-violating systems).
+
+        Has no effect when ``method`` is set to a specific string.
+    return_result : bool, default False
+        When True, wrap the output in a
+        :class:`lumenairy.propagators.PropagationResult` carrying
+        the field plus ``dx``, ``wavelength``, ``method``, and a
+        ``metadata`` dict.  When False (default), return the bare
+        propagator output (typically a complex ndarray) -- preserving
+        backward compatibility and zero-overhead fast loops.
     """
     if method not in VALID_METHODS:
         raise ValueError(
@@ -65,9 +93,9 @@ def propagate(
     if method == 'auto':
         method = _auto_select_method(
             E_in, z=z, wavelength=wavelength, dx=dx,
-            prescription=prescription)
+            prescription=prescription, accuracy=accuracy)
 
-    return _dispatch_to_method(
+    out = _dispatch_to_method(
         method, E_in,
         z=z, wavelength=wavelength, dx=dx,
         prescription=prescription,
@@ -75,10 +103,68 @@ def propagate(
         output_dx=output_dx,
         **method_kwargs,
     )
+    if not return_result:
+        return out
+
+    from .result import PropagationResult
+    out_dx = output_dx if output_dx is not None else dx
+    # Best-effort: bare ndarray -> wrap directly; tuple / list / other
+    # -> stash into metadata so callers can still introspect.
+    if isinstance(out, np.ndarray):
+        return PropagationResult(
+            field=out, dx=out_dx, wavelength=wavelength,
+            z=z, method=method, metadata={},
+        )
+    return PropagationResult(
+        field=getattr(out, 'field', None) or _coerce_field(out),
+        dx=out_dx, wavelength=wavelength,
+        z=z, method=method,
+        metadata={'native_return': out},
+    )
 
 
-def _auto_select_method(E_in, *, z, wavelength, dx, prescription):
-    """Pick a method from the geometry + prescription structure."""
+def _coerce_field(x):
+    """Coerce a non-ndarray propagator return into a complex array
+    if possible -- otherwise return ``None`` and stash the raw value
+    in metadata for inspection."""
+    try:
+        arr = np.asarray(x)
+        if np.iscomplexobj(arr) or arr.dtype.kind == 'f':
+            return arr
+    except Exception:
+        pass
+    return None
+
+
+def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
+                          accuracy='balanced'):
+    """Pick a method from the geometry + prescription structure.
+
+    Selection logic
+    ---------------
+
+    With a prescription:
+      1. If any surface carries a DOE / grating phase  ->  ``hfpi``
+         (HFPI honours hard diffractive surfaces natively).
+      2. If the prescription has any aspheric coefficients and
+         ``accuracy in ('balanced', 'accurate')``               ->  ``gbd``
+         (Gaussian Beamlet Decomposition is the right choice
+         when the paraxial Maslov prediction breaks down at
+         high-order asphere terms).
+      3. If ``accuracy == 'accurate'`` and any surface has a
+         finite ``semi_diameter`` or ``aperture_diameter``      ->  ``hf``
+         (Van-Vleck-corrected Huygens-Fresnel handles hard-
+         aperture diffraction better than Maslov for general
+         systems).
+      4. Otherwise                                              ->  ``maslov``
+         (paraxial-corrected analytic propagator; fastest of the
+         prescription methods).
+
+    Without a prescription (free-space):
+      - ``z`` is None or zero                                    ->  ``asm``.
+      - Far-field (Fresnel number ``N_F < 0.1``)                ->  ``fraunhofer``.
+      - Otherwise                                               ->  ``asm``.
+    """
     if prescription is not None:
         events = prescription.get('events_json') or []
         has_doe = False
@@ -87,7 +173,38 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription):
                 if isinstance(ev, dict) and ev.get('type') == 'doe':
                     has_doe = True
                     break
-        return 'hfpi' if has_doe else 'maslov'
+        if has_doe:
+            return 'hfpi'
+
+        # Inspect surfaces for aspherics and hard apertures.
+        surfs = prescription.get('surfaces') or []
+        has_aspheric = False
+        has_hard_aperture = False
+        for s in surfs:
+            if not isinstance(s, dict):
+                continue
+            asph = s.get('aspheric_coeffs')
+            if asph:
+                has_aspheric = True
+            asph_y = s.get('aspheric_coeffs_y')
+            if asph_y:
+                has_aspheric = True
+            sd = s.get('semi_diameter')
+            if sd is not None:
+                try:
+                    if math.isfinite(float(sd)) and float(sd) > 0:
+                        has_hard_aperture = True
+                except (TypeError, ValueError):
+                    pass
+        # Top-level aperture stop counts as a hard aperture as well.
+        if prescription.get('aperture_diameter') is not None:
+            has_hard_aperture = True
+
+        if has_aspheric and accuracy in ('balanced', 'accurate'):
+            return 'gbd'
+        if has_hard_aperture and accuracy == 'accurate':
+            return 'hf'
+        return 'maslov'
 
     if z is None or z == 0:
         return 'asm'
@@ -202,15 +319,35 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
         )
 
     if method == 'asymptotic':
-        from .asymptotic import propagate_modal_asymptotic
-        if prescription is None:
+        from .asymptotic import (propagate_modal_asymptotic,
+                                  fit_canonical_polynomials)
+        # Caller may pass a pre-built fit via kwargs['fit'] or supply
+        # a prescription that the dispatcher will fit on the fly.
+        fit = kwargs.pop('fit', None)
+        if fit is None:
+            if prescription is None:
+                raise ValueError(
+                    "propagate(method='asymptotic') requires either "
+                    "fit=... or a prescription.")
+            fit_kwargs = kwargs.pop('fit_kwargs', {}) or {}
+            fit = fit_canonical_polynomials(
+                prescription, wavelength=wavelength, **fit_kwargs)
+        return propagate_modal_asymptotic(fit, **kwargs)
+
+    if method == 'mhs':
+        from .mhs import MhsPipeline
+        # Accept either a fully-built pipeline OR a list of subdomains.
+        pipeline = kwargs.pop('pipeline', None)
+        subdomains = kwargs.pop('subdomains', None)
+        if pipeline is None and subdomains is None:
             raise ValueError(
-                "propagate(method='asymptotic') requires a prescription "
-                "and an LG-mode source decomposition.")
-        return propagate_modal_asymptotic(
-            E_in, prescription, dx, wavelength,
-            **kwargs,
-        )
+                "propagate(method='mhs') requires either pipeline=... "
+                "or subdomains=... .")
+        if pipeline is None:
+            pipeline = MhsPipeline(subdomains)
+        return_intermediate = kwargs.pop('return_intermediate', False)
+        return pipeline.run(E_in, return_intermediate=return_intermediate,
+                            **kwargs)
 
     raise NotImplementedError(f"Method {method!r} is not implemented.")
 

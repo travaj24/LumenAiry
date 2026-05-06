@@ -572,3 +572,159 @@ def create_bessel_beam(N, dx, wavelength, cone_angle, x0=0, y0=0):
     k_r = 2 * np.pi / wavelength * np.sin(cone_angle)
     E = j0(k_r * r).astype(np.complex128)
     return E, x, y
+
+
+# ---------------------------------------------------------------------------
+# Source -- bundles E + dx + wavelength + source_point with chainable
+# .propagate(...) and .from_X(...) factories
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass, field as _dc_field
+from typing import Optional as _Optional, Tuple as _Tuple
+
+
+@dataclass
+class Source:
+    """A complex field on a regular grid with the metadata it needs to
+    propagate through the rest of lumenairy.
+
+    Bundles the four pieces of state every propagator wants -- ``E``,
+    ``dx``, ``wavelength``, and (for asymptotic / aberration-tensor
+    work) ``source_point`` -- so callers don't have to repeat them.
+
+    Attributes
+    ----------
+    E : ndarray, complex
+        Field on a (Ny, Nx) grid.
+    dx : float
+        Sample spacing [m].
+    wavelength : float
+        Vacuum wavelength [m].
+    source_point : (float, float), default (0, 0)
+        Object-plane location used by the asymptotic / LG-tensor
+        propagators.  Ignored by ASM / GBD / HFPI / HF.
+    name : str, optional
+        Human-readable label, propagated to descendants for tracing.
+    """
+    E: 'object'  # numpy or cupy or jax ndarray
+    dx: float
+    wavelength: float
+    source_point: _Tuple[float, float] = (0.0, 0.0)
+    name: _Optional[str] = None
+
+    @property
+    def shape(self):
+        return tuple(self.E.shape[-2:])
+
+    def __repr__(self):
+        return (f"Source(shape={self.shape}, dx={self.dx:.3g}m, "
+                f"wavelength={self.wavelength*1e9:.1f}nm, "
+                f"source_point={self.source_point}, "
+                f"name={self.name!r})")
+
+    def propagate(self,
+                   *,
+                   method: str = 'auto',
+                   z: _Optional[float] = None,
+                   prescription: _Optional[dict] = None,
+                   **kwargs) -> 'Source':
+        """Propagate this Source via :func:`la.propagate` and return
+        the result as a new Source on the (possibly resampled) output
+        plane.
+
+        ``z``, ``prescription``, ``method``, and any propagator-
+        specific keyword arguments are forwarded to the dispatcher.
+        ``dx`` defaults to the input spacing; pass ``output_dx`` to
+        change it.  Wavelength, source_point, and name are inherited
+        on the new Source (with ``->{method}`` appended to the name
+        for trace-ability).
+        """
+        from ..propagators.dispatch import propagate
+        E_out = propagate(
+            self.E,
+            wavelength=self.wavelength,
+            dx=self.dx,
+            z=z,
+            prescription=prescription,
+            method=method,
+            **kwargs,
+        )
+        out_dx = kwargs.get('output_dx', self.dx) or self.dx
+        new_name = (self.name or 'Source')
+        new_name = f'{new_name}->{method}'
+        return Source(
+            E=E_out, dx=out_dx, wavelength=self.wavelength,
+            source_point=self.source_point, name=new_name,
+        )
+
+    # -- Factories that wrap the existing create_X functions ----------
+
+    @classmethod
+    def gaussian(cls, w0: float, N: int, dx: float, wavelength: float,
+                  *, x0: float = 0.0, y0: float = 0.0,
+                  source_point: _Tuple[float, float] = (0.0, 0.0),
+                  name: _Optional[str] = None,
+                  use_gpu: bool = False) -> 'Source':
+        """Gaussian beam at the waist.  ``w0`` is the 1/e^2 intensity
+        radius."""
+        sigma = w0 / np.sqrt(2)
+        E, _, _ = create_gaussian_beam(
+            N, dx, sigma, wavelength=wavelength, x0=x0, y0=y0,
+            use_gpu=use_gpu)
+        return cls(E=E, dx=dx, wavelength=wavelength,
+                   source_point=source_point,
+                   name=name or f'Gaussian(w0={w0:.2g}m)')
+
+    @classmethod
+    def plane_wave(cls, N: int, dx: float, wavelength: float,
+                    *, angle_x: float = 0.0, angle_y: float = 0.0,
+                    amplitude: float = 1.0,
+                    source_point: _Tuple[float, float] = (0.0, 0.0),
+                    name: _Optional[str] = None) -> 'Source':
+        """Tilted plane wave (uses ``create_tilted_plane_wave``)."""
+        E, _, _ = create_tilted_plane_wave(
+            N, dx, wavelength, angle_x=angle_x, angle_y=angle_y,
+            amplitude=amplitude)
+        return cls(E=E, dx=dx, wavelength=wavelength,
+                   source_point=source_point,
+                   name=name or 'PlaneWave')
+
+    @classmethod
+    def point_source(cls, N: int, dx: float, wavelength: float,
+                      *, x0: float = 0.0, y0: float = 0.0,
+                      z0: float = 0.0, amplitude: float = 1.0,
+                      name: _Optional[str] = None) -> 'Source':
+        """Diverging spherical wave from a point at (x0, y0, z0)."""
+        E, _, _ = create_point_source(
+            N, dx, wavelength, x0=x0, y0=y0, z0=z0,
+            amplitude=amplitude)
+        return cls(E=E, dx=dx, wavelength=wavelength,
+                   source_point=(float(x0), float(y0)),
+                   name=name or 'PointSource')
+
+    @classmethod
+    def top_hat(cls, diameter: float, N: int, dx: float, wavelength: float,
+                  *, x0: float = 0.0, y0: float = 0.0,
+                  source_point: _Tuple[float, float] = (0.0, 0.0),
+                  name: _Optional[str] = None) -> 'Source':
+        """Uniform circular aperture beam."""
+        E, _, _ = create_top_hat_beam(
+            N, dx, diameter, wavelength=wavelength, x0=x0, y0=y0)
+        return cls(E=E, dx=dx, wavelength=wavelength,
+                   source_point=source_point,
+                   name=name or f'TopHat(D={diameter:.2g}m)')
+
+    @classmethod
+    def fiber_mode(cls, mode_field_diameter: float, N: int, dx: float,
+                    wavelength: float, *, x0: float = 0.0, y0: float = 0.0,
+                    na: float = 0.12,
+                    source_point: _Tuple[float, float] = (0.0, 0.0),
+                    name: _Optional[str] = None) -> 'Source':
+        """Single-mode fiber output."""
+        E, _, _ = create_fiber_mode(
+            N, dx, mode_field_diameter, wavelength,
+            x0=x0, y0=y0, na=na)
+        return cls(E=E, dx=dx, wavelength=wavelength,
+                   source_point=source_point,
+                   name=name or f'Fiber(MFD={mode_field_diameter:.2g}m)')
+

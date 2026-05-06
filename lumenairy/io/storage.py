@@ -906,3 +906,84 @@ load_plane_by_label_store = load_plane_by_label
 load_plane_slice_store = load_plane_slice
 write_metadata = write_sim_metadata
 read_metadata = read_sim_metadata
+
+
+def replay_run(filepath, *, label_prefix=None, wavelength=None,
+                method=None):
+    """Read every plane from a stored run and return a
+    :class:`lumenairy.propagators.PropagationResult`.
+
+    The store is the write-side end of the pipeline established by
+    :meth:`MhsPipeline.run(store=...)`,
+    :func:`propagate_through_system(store=...)`, and
+    :class:`design_optimize(plane_logger=...)` (when the user wires
+    a logger that calls :func:`append_plane`).  This function closes
+    the loop: a single call returns the field at every plane in the
+    order they were written, paired with their dx and label, so
+    callers can replay, plot, or diff without re-running the
+    simulation.
+
+    Parameters
+    ----------
+    filepath : str or pathlib.Path
+        HDF5 or Zarr store written via :func:`append_plane`.
+    label_prefix : str, optional
+        If given, only planes whose ``label`` starts with this prefix
+        are included (e.g. ``label_prefix='mhs'`` to filter MHS-only
+        planes from a mixed run).
+    wavelength : float, optional
+        Forwarded onto the result's ``wavelength`` field.  Default 0
+        (storage doesn't carry wavelength as a per-plane attribute).
+    method : str, optional
+        Free-form method tag for the result (e.g. ``'mhs'``,
+        ``'system'``).  Defaults to ``'replay'``.
+
+    Returns
+    -------
+    PropagationResult
+        ``.field`` is the LAST plane (the exit-plane field by
+        convention).  ``.history`` carries every plane as
+        ``(label, field, dx)`` tuples.  ``.dx`` is taken from the
+        last plane.
+    """
+    from ..propagators.result import PropagationResult
+
+    planes_info, _file_meta = list_planes(filepath)
+
+    # Filter + sort by stored index.
+    selected = []
+    for info in planes_info:
+        label = info.get('label', '') or ''
+        if label_prefix is not None and not label.startswith(label_prefix):
+            continue
+        selected.append(info)
+    selected.sort(key=lambda d: d.get('index', 0))
+
+    if not selected:
+        return PropagationResult(
+            field=np.zeros((0, 0), dtype=np.complex128),
+            dx=0.0, wavelength=float(wavelength or 0.0),
+            method=method or 'replay',
+            history=[],
+        )
+
+    # Bulk-load the actual field arrays.
+    indices = [info['index'] for info in selected]
+    full_planes, _ = load_planes(filepath, indices=indices)
+
+    history = []
+    for info, plane in zip(selected, full_planes):
+        history.append((
+            plane.get('label', info.get('label', '')) or f"plane_{info.get('index', 0)}",
+            plane['field'],
+            float(plane.get('dx', info.get('dx', 0.0)) or 0.0),
+        ))
+
+    last_label, last_field, last_dx = history[-1]
+    return PropagationResult(
+        field=last_field, dx=last_dx,
+        wavelength=float(wavelength or 0.0),
+        method=method or 'replay',
+        history=history,
+        metadata={'source': str(filepath)},
+    )

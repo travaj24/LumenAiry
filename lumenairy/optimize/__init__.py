@@ -31,6 +31,7 @@ from .core import (
     LGAberrationMerit,
     CompositeMerit,
     CallableMerit,
+    JaxMeritTerm,
     MultiWavelengthMerit,
     MultiFieldMerit,
     MinThicknessMerit,
@@ -41,6 +42,9 @@ from .core import (
     EvaluationContext,
     DesignResult,
     design_optimize,
+    WAVE_PROPAGATOR_REGISTRY,
+    register_wave_propagator,
+    unregister_wave_propagator,
 )
 from .multiconfig import (
     Configuration,
@@ -71,6 +75,7 @@ __all__ = [
     'LGAberrationMerit',
     'CompositeMerit',
     'CallableMerit',
+    'JaxMeritTerm',
     'MultiWavelengthMerit',
     'MultiFieldMerit',
     'MinThicknessMerit',
@@ -81,6 +86,9 @@ __all__ = [
     'EvaluationContext',
     'DesignResult',
     'design_optimize',
+    'WAVE_PROPAGATOR_REGISTRY',
+    'register_wave_propagator',
+    'unregister_wave_propagator',
     # multiconfig
     'Configuration',
     'multi_config_merit',

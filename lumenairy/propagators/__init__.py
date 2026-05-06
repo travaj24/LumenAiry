@@ -32,6 +32,9 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+# Unified result container (opt-in; native return shapes preserved).
+from .result import PropagationResult
+
 # New propagators (no cycles).
 from .gbd import (
     BeamletBundle,
@@ -89,6 +92,7 @@ from .mhs import (
 )
 
 __all__ = [
+    'PropagationResult',
     'BeamletBundle',
     'decompose_field_to_beamlets',
     'propagate_beamlets_freespace',

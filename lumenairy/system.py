@@ -38,7 +38,10 @@ from .elements import (
 
 def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
                              method='asm', use_gpu=False, verbose=False,
-                             progress=None):
+                             progress=None,
+                             checkpoint=None, store=None,
+                             label_prefix='system',
+                             return_result=False):
     """
     Propagate a field through a sequence of optical elements.
 
@@ -94,6 +97,26 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
 
     verbose : bool, default=False
         Print progress information and record intermediate fields.
+    checkpoint : callable, optional
+        ``checkpoint(idx, elem, E)`` is called after every element
+        finishes (idx=0 is the input plane, before any element runs).
+        Use to stream intermediate fields without paying the
+        per-element copy that ``verbose=True`` triggers.  Returning
+        from the callback is fine; raising aborts the run.
+    store : str, pathlib.Path, or storage handle, optional
+        If given, each intermediate field is appended to a unified
+        Zarr / HDF5 store via
+        :func:`lumenairy.io.storage.append_plane`.  Plane labels are
+        ``f"{label_prefix}_{idx:03d}_{elem_type}"``.
+    label_prefix : str, default 'system'
+        Prefix for plane labels when ``store`` is provided.
+    return_result : bool, default False
+        If True, return a
+        :class:`lumenairy.propagators.PropagationResult` carrying the
+        final field plus a ``history`` of per-element planes (labels
+        derived from each element's ``type`` key).  ``intermediates``
+        is auto-populated on the result.  When False (default), the
+        legacy ``(E_out, intermediates)`` tuple is returned.
 
     Returns
     -------
@@ -225,10 +248,28 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
     >>> E_out, _ = propagate_through_system(E_in, elements, wavelength, dx)
     """
     from .progress import call_progress, ProgressScaler
+    if store is not None:
+        from .io.storage import append_plane
+
+    history_entries = []  # list of (label, field, dx) for return_result
+
+    def _persist(idx, elem_type, field, dx_now):
+        if checkpoint is not None:
+            checkpoint(idx, elem_type, field)
+        if store is not None:
+            label = f"{label_prefix}_{idx:03d}_{elem_type}"
+            append_plane(store, field, dx_now, label=label)
+        if return_result:
+            history_entries.append(
+                (f"{idx:03d}_{elem_type}",
+                 field.copy() if hasattr(field, 'copy') else np.array(field),
+                 float(dx_now)))
+
     E = E_in.copy() if hasattr(E_in, 'copy') else np.array(E_in)
     intermediates = []
     current_dx = dx
     current_dy = dy if dy is not None else dx
+    _persist(0, 'input', E, current_dx)
 
     n_elem = max(1, len(elements))
     for i, elem in enumerate(elements):
@@ -409,6 +450,13 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
 
         if verbose:
             intermediates.append(E.copy() if hasattr(E, 'copy') else np.array(E))
+        _persist(i + 1, elem.get('type', '?'), E, current_dx)
 
     call_progress(progress, 'system', 1.0, 'done')
+    if return_result:
+        from .propagators.result import PropagationResult
+        return PropagationResult(
+            field=E, dx=current_dx, wavelength=float(wavelength),
+            method='system', history=history_entries,
+        )
     return E, intermediates

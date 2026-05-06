@@ -10,6 +10,95 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.5.0
+
+Major release covering three sessions of feature work and API
+harmonization.
+
+- **JAX-traceable ray trace** (`trace_jax`) gains aspheric Newton
+  intersect (`jax.lax.fori_loop`), aperture clipping, and DOE order
+  kicks.  End-to-end differentiable via `jax.grad`.
+
+- **JAX paths for the LG aberration tensor**:
+  `aberration_tensor_lg00_jax` and
+  `propagate_modal_asymptotic_lg00_jax` give differentiable
+  Strehl-amplitude evaluation.
+
+- **Multiple Huygens Surface (MHS) framework** -- new
+  `lumenairy.propagators.mhs` module with `HuygensSurface`,
+  `MhsSubdomain`, `MhsPipeline`, four convenience builders, and
+  `MhsPipeline.from_prescription(...)` one-call ASM -> lens -> ASM
+  chain builder.  Storage hooks via `pipeline.run(checkpoint=...,
+  store=path)`.
+
+- **`Source` class** bundles `(E, dx, wavelength, source_point,
+  name)` with chainable `.propagate(...)` returning another
+  Source; class-method factories `Source.gaussian`,
+  `Source.plane_wave`, `Source.point_source`,
+  `Source.top_hat`, `Source.fiber_mode`.
+
+- **Smarter `propagate(method='auto')`** -- the dispatcher now
+  inspects surfaces for aspheric coefficients, DOE events, and
+  hard apertures.  New `accuracy='fast' | 'balanced' |
+  'accurate'` hint.  `'mhs'` joins
+  `'asm'`/`'fresnel'`/`'gbd'`/`'hf'`/`'hfpi'`/`'maslov'`/`'asymptotic'`.
+
+- **Unified `PropagationResult`** -- opt-in via
+  `return_result=True` on `propagate()`,
+  `MhsPipeline.run(...)`, and `propagate_through_system(...)`.
+  Carries `.field`, `.dx`, `.wavelength`, `.method`, `.history`
+  list of `(label, field, dx)` planes, and `.metadata`.  Tuple-
+  unpacks for backward compat; `np.asarray()` falls through to
+  the field.
+
+- **`replay_run(filepath, ...)`** reads back every plane stored
+  by an MHS / system run, returning a `PropagationResult` with
+  `.history` populated.
+
+- **Optimize layer extensions:**
+  - `wave_propagator='real_lens' | 'gbd' | 'hf' | 'hfpi' |
+    'asymptotic'` plumbs any modern propagator into the wave leg.
+  - `WAVE_PROPAGATOR_REGISTRY` + `register_wave_propagator(name,
+    fn)` for user-registered custom propagators.
+  - `JaxMeritTerm(fn, build_args=lambda x: ...)` enables analytic
+    JAX gradients flowing into SciPy via `jac='auto'`.
+
+- **Unified `aberration_summary(prescription, wavelength, ...)`**
+  returns Seidel + EFL/BFL + LG aberration tensor in one call;
+  `differentiable=True` routes through the JAX path.
+
+- **`__all__` reorganized into 10 user-journey tiers** -- 358
+  entries grouped by build/propagate/trace/analyze/optimize/...
+  -- no entries removed.
+
+- **`examples/` directory** with five end-to-end runnable scripts
+  demonstrating the core workflows.
+
+```python
+import lumenairy as la
+
+# One-liner system propagation:
+src = la.Source.gaussian(w0=200e-6, N=256, dx=4e-6, wavelength=1.31e-6)
+out = src.propagate(method='asm', z=10e-3)
+
+# Aberration analysis:
+presc = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                         glass='N-BK7', aperture=6e-3)
+print(la.format_aberration_summary(la.aberration_summary(presc, 1.31e-6)))
+
+# JAX-differentiable design optimization:
+import jax.numpy as jnp
+term = la.JaxMeritTerm(
+    fn=lambda R: jnp.abs((R - 30e-3) * 1e3),
+    build_args=lambda x: (x[0],),
+    real_part=True,
+)
+res = la.design_optimize(parameterization=..., merit_terms=[term],
+                          jac='auto', ...)
+```
+
+See [`examples/`](examples/) for full runnable scripts.
+
 ## What's new in 3.4.0
 
 Major release.

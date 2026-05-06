@@ -5,6 +5,7 @@ Gauss, Laguerre-Gauss).
 """
 
 from .core import (
+    Source,
     create_gaussian_beam,
     create_hermite_gauss,
     create_laguerre_gauss,
@@ -22,6 +23,7 @@ from .core import (
 
 
 __all__ = [
+    'Source',
     'create_gaussian_beam',
     'create_hermite_gauss',
     'create_laguerre_gauss',

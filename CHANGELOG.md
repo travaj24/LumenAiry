@@ -2,6 +2,277 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.0] — 2026-05-05
+
+Three sessions of feature work landed under 3.5.0: completing the
+deferred JAX / asymptotic / trace items, then a sweep of "synergy"
+upgrades that wire the new propagators into the optimize / dispatch /
+storage layers, then a final pass of API harmonization.  All 25
+validation files green throughout.
+
+### JAX-traceable ray trace gains aspheric / aperture / DOE support
+
+`lumenairy/raytrace/jax_trace.py`:
+
+- **Aspheric Newton intersect** via `jax.lax.fori_loop` (8 fixed
+  iterations).  Surface conic + even-aspheric coefficients are
+  honoured; the closed-form spherical/flat path remains for surfaces
+  without aspherics.  Intersections fully JIT-able and grad-able.
+- **Aperture clipping** via the `alive` mask -- rays whose
+  intersection point falls outside `semi_diameter` are vignetted
+  forward.
+- **DOE order kicks**: `trace_jax(..., surface_diffraction={i: (m_x,
+  m_y, period_x, period_y)})` shifts direction cosines by
+  `m * lambda / period` and adds the linear OPL term at the
+  intersection point.  Evanescent orders kill the ray.
+- **Bidirectional RayBundle <-> JaxRayState conversions**:
+  `RayBundle.to_jax_state()`, `raybundle_to_jax_state(rb)` (mirror
+  of existing `jax_state_to_raybundle(state, wavelength=...)`).
+
+### LG aberration tensor + modal asymptotic on JAX
+
+`lumenairy/propagators/asymptotic.py`:
+
+- `aberration_tensor_lg00_jax(fit, s2_image, v_star, ...,
+  return_result=False)` -- closed-form L_{(0,0),(0,0)} coefficient.
+  Newton solve for `v_star` is performed externally; the JAX graph
+  itself is closed-form and differentiable wrt fit coefficients,
+  s2_image, v_star, source_point, and waist parameters.
+  `return_result=True` returns a `JaxAberrationTensorResult`
+  NamedTuple mirroring the NumPy result's `.L` / `.output_modes` /
+  `.w_o` shape (with `.L` a (1, 1) JAX array).
+- `propagate_modal_asymptotic_lg00_jax(fit, s2_grid_x, s2_grid_y,
+  v_star_grid, ...)` -- vmap'd per-pixel evaluator.  Takes a
+  pre-solved `v_star` grid (typically from the NumPy
+  `solve_envelope_stationary` warm-start chain); skipping the
+  per-pixel Newton keeps the entire evaluator JIT/grad-friendly.
+
+### Multiple Huygens Surface (MHS) framework
+
+New module `lumenairy/propagators/mhs.py`:
+
+- `HuygensSurface(z, Ny, Nx, dx, centre, label)` dataclass for a
+  sample plane.
+- `MhsSubdomain(propagator, in_surface, out_surface, kwargs, label)`
+  -- a single plane-to-plane operator.
+- `MhsPipeline([sub_a, sub_b, ...])` validates the surface-chain
+  consistency, then `pipeline.run(E_in, ...)` walks the chain.
+- Convenience builders: `asm_subdomain`, `aperture_subdomain`,
+  `gbd_freespace_subdomain`, `prescription_subdomain` (the last
+  routes through `la.propagate(method=...)`).
+- **`MhsPipeline.from_prescription(prescription, wavelength=, dx=,
+  Ny=, Nx=, pre_distance=, post_distance=, method='gbd')`**
+  one-call ASM -> prescription -> ASM chain builder.
+- **Storage hooks**: `pipeline.run(checkpoint=cb, store=path,
+  label_prefix='mhs')` fires per-subdomain callback and optionally
+  streams every plane through `la.append_plane` for replay.
+
+### Top-level dispatcher: smarter auto + MHS routing + result wrapper
+
+`lumenairy/propagators/dispatch.py`:
+
+- **`'mhs'` added to `VALID_METHODS`**: `la.propagate(method='mhs',
+  subdomains=[...])` or `pipeline=...` runs the MHS chain inline.
+- **Smarter `_auto_select_method`**: when given a prescription the
+  dispatcher now inspects surfaces for aspheric coefficients (->
+  `'gbd'`), DOE / grating events (-> `'hfpi'`), and finite hard
+  apertures (when `accuracy='accurate'` -> `'hf'`).  New `accuracy`
+  hint (`'fast'` | `'balanced'` | `'accurate'`).
+- **Through-prescription routing for asymptotic** -- the dispatcher
+  now builds a `CanonicalPolyFit` from the prescription on the fly
+  if the user didn't supply one.  Pre-existing signature mismatch
+  fixed.
+- **`return_result=False` opt-in flag**: when True, wraps the
+  output in a `PropagationResult` carrying `.field`, `.dx`,
+  `.wavelength`, `.method`, `.metadata`.  Default behaviour is
+  unchanged (bare ndarray) -- zero-overhead fast loops still work
+  exactly as before.
+
+### Unified `PropagationResult`
+
+New module `lumenairy/propagators/result.py`:
+
+`PropagationResult(field, dx, wavelength, z, method, history,
+metadata, intermediates)` -- one container shared by `propagate()`,
+`MhsPipeline.run(return_result=True)`, and
+`propagate_through_system(return_result=True)`.
+
+- `.field` is the exit-plane field; `.history` is a list of
+  `(label, field, dx)` tuples for plane-walking propagators.
+- Tuple-unpacks as `(field, intermediates)` -- a drop-in for
+  callers that did `E, intermediates = propagate_through_system(...)`.
+- `np.asarray(result)` returns the field, so it slots in wherever a
+  bare ndarray is accepted.
+- `.to_source()` wraps the result back into a `Source`.
+
+Every wrapping is **opt-in via `return_result=True`** -- existing
+return shapes are preserved everywhere.
+
+### `Source` class
+
+New `lumenairy.sources.Source` dataclass bundles
+`(E, dx, wavelength, source_point, name)` with chainable
+`.propagate(method='auto', z=..., prescription=..., **kwargs)`:
+
+- Returns another `Source` so chains read like English:
+  `Source.gaussian(...).propagate(method='asm', z=10e-3).
+  propagate(method='gbd', prescription=p)`.
+- Class-method factories: `Source.gaussian`, `Source.plane_wave`,
+  `Source.point_source`, `Source.top_hat`, `Source.fiber_mode`.
+- Wavelength and source_point are inherited automatically; the name
+  is extended with `->{method}` for trace-ability.
+
+### Optimize layer extensions
+
+`lumenairy/optimize/core.py`:
+
+- **`wave_propagator` parameter** on `design_optimize`: selects the
+  wave-leg propagator from
+  `'real_lens'`/`'gbd'`/`'hf'`/`'hfpi'`/`'asymptotic'`.  Keeps every
+  existing merit term as-is (they read `ctx.E_exit`); the optimizer
+  can now drive any of the modern propagators as the wave model.
+- **`WAVE_PROPAGATOR_REGISTRY` + `register_wave_propagator(name,
+  fn)`**: the if/elif dispatch is now a registry.  Users can plug in
+  custom propagators (e.g. an external simulator) and use them via
+  `wave_propagator=name`.
+- **`JaxMeritTerm`** -- differentiable merit term wrapping a
+  JAX-traceable callable.  Two modes:
+  - `JaxMeritTerm(fn, ...)` -- forward-only; SciPy's FD gradient
+    handles the rest.
+  - `JaxMeritTerm(fn, build_args=lambda x: (...))` --
+    differentiable in x.  `gradient_at_x(x)` returns a NumPy array
+    via `jax.grad`.
+- **`jac='auto' | 'fd' | callable`** parameter on `design_optimize`:
+  when at least one `JaxMeritTerm` has `build_args`, an analytic
+  Jacobian is assembled (analytic for JAX merits + FD for the
+  rest) and passed to SciPy as `jac=`.  Test confirms 1-parameter
+  problem converges to err=6.87e-9 in 30 iterations.
+- **`plane_logger=fn(iter, ctx)`** parameter on `design_optimize`:
+  callback fires after every merit evaluation -- useful for
+  streaming intermediate `ctx.E_exit` / OPD / prescription state to
+  a unified store.
+- `EvaluationContext.x` -- new field carrying the current parameter
+  vector so JaxMeritTerm can route through its `build_args(x)`
+  consistently.
+
+### Unified aberration analysis
+
+New module `lumenairy/analysis/aberration.py`:
+
+- `aberration_summary(prescription, wavelength, ...)` -- one call
+  returns a dataclass carrying summed Seidel coefficients +
+  per-surface breakdown + EFL/BFL + LG aberration tensor.
+- **`differentiable=True`** flag routes the LG-tensor branch through
+  `aberration_tensor_lg00_jax`; the result's `.lg_tensor.L` is a
+  (1, 1) JAX array (differentiable via `jax.grad`).
+- `format_aberration_summary(summary, units='mm')` -- pretty-printer.
+
+### Storage and replay
+
+`lumenairy/io/storage.py` and `lumenairy/system.py`:
+
+- **`replay_run(filepath, *, label_prefix=None, wavelength=None,
+  method=None)`**: reads every plane from a Zarr / HDF5 store
+  written by an MHS / system / design_optimize run and returns a
+  `PropagationResult` with `.history`.  Closes the loop on stored
+  runs -- a single call can replay, plot, or diff without re-running
+  the simulation.
+- **`propagate_through_system(checkpoint=fn, store=path,
+  label_prefix='system', return_result=False)`**: per-element
+  callback + optional Zarr / HDF5 streaming.  Backward-compatible
+  `(E_out, intermediates)` tuple is the default return.
+
+### `__all__` reorganized into 10 user-journey tiers
+
+`lumenairy/__init__.py` -- 358-entry `__all__` is now grouped:
+
+1. Build a system (sources, prescriptions, lenses, elements)
+2. Propagate (dispatcher + propagator families)
+3. Trace (geometric + JAX-traceable)
+4. Analyze (aberration_summary, through-focus, tolerancing,
+   coherence, detector, interferometry, phase retrieval, ghost)
+5. Optimize (parameterizations, merit terms, design_optimize,
+   wave-propagator registry)
+6. Asymptotic / LG aberration tensor
+7. Specialized physics (RCWA, BSDF, vector diffraction, coatings)
+8. I/O (HDF5/Zarr storage, prescription formats, code-gen)
+9. Plotting
+10. Infrastructure (backend, memory, progress, JAX flag, precision)
+
+No entries removed; reorder + clearer grouping.
+
+### Examples directory
+
+New `examples/` directory with five end-to-end runnable scripts:
+
+| File | What it shows |
+|------|---------------|
+| `01_basic_propagation.py` | Source + free-space + thin-lens + propagate-to-focus |
+| `02_design_optimization.py` | design_optimize with FocalLength + Strehl merits |
+| `03_high_fidelity_wave.py` | wave_propagator: real_lens vs GBD vs HF on the same prescription |
+| `04_jax_differentiable.py` | JaxMeritTerm + jac='auto' (analytic JAX gradients into SciPy) |
+| `05_mhs_pipeline_with_replay.py` | MhsPipeline.from_prescription + checkpoint logging + replay_run |
+
+### Pre-existing bug fixes
+
+- `propagate_huygens_fresnel_through_prescription` was passing
+  `source_lg_amps`/`pupil_lg_amps`/`output_grid` to
+  `propagate_modal_asymptotic` (legacy kwarg names that no longer
+  exist).  Fixed to use the current
+  `source_amplitudes`/`pupil_amplitudes`/`s2_grid_x`/`s2_grid_y`.
+- The dispatcher's `'asymptotic'` branch was calling
+  `propagate_modal_asymptotic(E_in, prescription, dx, ...)` --
+  wrong signature.  Fixed to build a fit from the prescription (or
+  accept a pre-built one via `wave_propagator_kwargs={'fit': ...}`).
+
+### Validation suite expansion
+
+A targeted survey of the test suite identified gaps in physics-
+correctness coverage, cross-functional integration, and quantitative
+JAX/NumPy comparison.  ~32 new tests were added across the suite to
+close those gaps; all 25 test files remain green.  Highlights:
+
+- **Cross-method physics agreement.** GBD free-space matches ASM on
+  collimated Gaussians (rel < 1%); MhsPipeline single-ASM matches
+  direct ASM call to numerical zero; ASM NumPy vs JAX value
+  equivalence (rel < 5e-3, JAX float32).
+- **Power conservation.** ASM, Fresnel (with grid-rescaling fix),
+  GBD free-space, MHS chains, and `apply_real_lens` on a clear
+  aperture all verified.
+- **JAX gradients vs finite differences.** ASM, `trace_jax`, and
+  `aberration_tensor_lg00_jax` now have quantitative grad-vs-FD
+  checks (instead of just `isfinite`).  ASM grad rel < 4e-5;
+  aberration_tensor rel < 2e-3 (off-axis).
+- **Through-prescription propagation.** GBD-through-prescription
+  peak intensity verified to land at the system BFL.
+- **Smarter dispatcher auto-mode.** Aspheric-routing, hard-aperture
+  + accuracy='accurate' routing, and empty-surfaces fallback all
+  tested.
+- **PropagationResult interop.** Tuple-unpacking, `np.asarray()`
+  array-protocol, `.to_source()` round-trip all covered.
+- **Replay round-trip.** HDF5 + Zarr (when installed) both verified
+  to reconstruct the stored field history.
+- **Wave-propagator registry.** End-to-end `design_optimize` with
+  `wave_propagator='gbd'` and `'hf'` confirmed to converge to
+  target EFL.
+- **Physics-law correctness.**  Lambertian BRDF = rho/pi for all
+  upper-hemisphere directions (closed-form check).  Lambertian
+  hemispheric sampling: <cos(theta)> = 2/3 (50k samples within
+  3e-4 of analytic mean).  Ghost-path focus_z positions verified
+  finite + distinct on a Thorlabs achromat (3 ghosts at 26.7,
+  37.1, 46.9 mm).  Stokes S1/S0 preserved through ASM
+  propagation.  Through-focus Strehl symmetric about best focus
+  for an aberration-free thin-lens.  Richards-Wolf reduces to
+  scalar at low NA (`|Ez|^2 / |Ex|^2 << 1`).
+- **Tolerancing statistics.**  Monte-Carlo seed reproducibility
+  verified (max diff = 0).  Strehl-peak std grows with
+  perturbation magnitude (5e-5 tilt -> sigma=0.017; 5e-3 tilt
+  -> sigma=0.193).
+
+The expansion uncovered and fixed the two pre-existing bugs noted
+above (`propagate_huygens_fresnel_through_prescription` and the
+dispatcher's `'asymptotic'` branch).
+
 ## [3.4.0] — 2026-05-05
 
 ### Stage 2-4 features added (prescription paths, variance reduction, vectorial)

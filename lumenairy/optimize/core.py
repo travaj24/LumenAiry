@@ -95,6 +95,115 @@ from ..analysis.through_focus import (
 
 
 # =========================================================================
+# Wave-propagator registry
+# =========================================================================
+#
+# ``WAVE_PROPAGATOR_REGISTRY`` maps a string name to a callable with
+# the signature
+#
+#     fn(E0, pres, *, wavelength, dx, N, wp_kwargs, opts) -> E_exit
+#
+# where ``opts`` is a dict of design_optimize-internal flags (e.g.
+# ``wave_traced`` / ``ray_subsample``) so the registered function can
+# honour them.  ``wp_kwargs`` is a mutable dict the function may
+# ``.pop`` from to extract its own options.  Returns the post-lens
+# field on the (Ny, Nx, dx) grid expected by the wave-leg merits.
+#
+# Users can register custom propagators with
+# :func:`register_wave_propagator(name, fn)` and immediately use them
+# via ``design_optimize(wave_propagator=name)``.  The default registry
+# below is populated with the same five propagators that the legacy
+# if/elif chain handled (real_lens, gbd, hf, hfpi, asymptotic) -- the
+# refactor preserves behaviour byte-for-byte.
+
+WAVE_PROPAGATOR_REGISTRY: Dict[str, Callable] = {}
+
+
+def register_wave_propagator(name: str, fn: Callable) -> None:
+    """Register a custom wave-leg propagator under ``name``.
+
+    The function is called by :func:`design_optimize` when its
+    ``wave_propagator=name``.  Signature:
+
+    ``fn(E0, pres, *, wavelength, dx, N, wp_kwargs, opts) -> E_exit``
+
+    where ``wp_kwargs`` is a mutable dict the function may pop from,
+    and ``opts`` is a dict carrying ``design_optimize``-internal
+    flags (``wave_traced``, ``ray_subsample``, ...).
+    """
+    WAVE_PROPAGATOR_REGISTRY[name] = fn
+
+
+def unregister_wave_propagator(name: str) -> None:
+    """Remove a wave propagator from the registry."""
+    WAVE_PROPAGATOR_REGISTRY.pop(name, None)
+
+
+def _wave_real_lens(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    if opts.get('wave_traced', False):
+        return apply_real_lens_traced(
+            E0, pres, wavelength, dx,
+            ray_subsample=opts.get('ray_subsample', 4), n_workers=1,
+            **wp_kwargs)
+    return apply_real_lens(E0, pres, wavelength, dx, **wp_kwargs)
+
+
+def _wave_gbd(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    from ..propagators.gbd import propagate_gbd_through_prescription
+    return propagate_gbd_through_prescription(
+        E0, dx, pres, wavelength=wavelength, **wp_kwargs)
+
+
+def _wave_hf(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    from ..propagators.hf import propagate_huygens_fresnel_through_prescription
+    return propagate_huygens_fresnel_through_prescription(
+        E0, dx, pres, wavelength=wavelength, **wp_kwargs)
+
+
+def _wave_hfpi(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    from ..propagators.hfpi import propagate_hfpi_through_prescription
+    return propagate_hfpi_through_prescription(
+        E0, dx, pres, wavelength=wavelength, **wp_kwargs)
+
+
+def _wave_asymptotic(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+    from ..propagators.asymptotic import (
+        fit_canonical_polynomials, propagate_modal_asymptotic,
+    )
+    # Fit the prescription (or reuse a pre-built fit if supplied).
+    fit = wp_kwargs.pop('fit', None)
+    fit_kw = wp_kwargs.pop('fit_kwargs', {}) or {}
+    if fit is None:
+        fit = fit_canonical_polynomials(
+            pres, wavelength=wavelength, **fit_kw)
+    # Sample the asymptotic propagator on the (Ny, Nx, dx) wave grid
+    # so downstream merits see a usable field.  Centre at the chief
+    # image of the on-axis source.
+    _ax = (np.arange(N) - N / 2 + 0.5) * dx
+    _x_grid = _ax + fit.s2x_centre
+    _y_grid = _ax + fit.s2y_centre
+    _X, _Y = np.meshgrid(_x_grid, _y_grid, indexing='xy')
+    _wp = wp_kwargs.pop('w_p', 0.05)
+    _ws = wp_kwargs.pop('w_s', 50e-6)
+    return propagate_modal_asymptotic(
+        fit,
+        s2_grid_x=_X, s2_grid_y=_Y,
+        w_s=_ws, w_p=_wp,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+        **wp_kwargs,
+    )
+
+
+# Populate the default registry.  Users can override these by
+# re-registering, but all five preserve exact legacy behaviour.
+register_wave_propagator('real_lens', _wave_real_lens)
+register_wave_propagator('gbd', _wave_gbd)
+register_wave_propagator('hf', _wave_hf)
+register_wave_propagator('hfpi', _wave_hfpi)
+register_wave_propagator('asymptotic', _wave_asymptotic)
+
+
+# =========================================================================
 # Parameterization
 # =========================================================================
 
@@ -1338,6 +1447,126 @@ class CallableMerit(MeritTerm):
         return self.weight * float(self.fn(ctx))
 
 
+class JaxMeritTerm(MeritTerm):
+    """Differentiable merit term backed by a JAX-traceable callable.
+
+    Has two operating modes:
+
+    1. **Forward-only** (the default).  ``fn(ctx) -> JAX scalar``
+       runs once per merit evaluation; the gradient w.r.t. design
+       parameters comes from SciPy's finite-difference Jacobian.
+       Useful for quick experimentation.
+
+    2. **Differentiable in x** -- pass ``build_args=callable(x)``
+       returning a tuple of JAX-traceable inputs to ``fn``.  In this
+       mode :meth:`gradient_at_x` returns ``d(weight * |fn|) / dx``
+       via :func:`jax.grad`, and :func:`design_optimize` will pick
+       these gradients up automatically when ``jac='auto'`` (default
+       there).  This closes the loop on JAX-differentiable merits:
+       analytic gradients flow into SciPy without finite differences.
+
+    Parameters
+    ----------
+    fn : callable
+        Either ``fn(ctx) -> JAX scalar`` (mode 1) or
+        ``fn(*args) -> JAX scalar`` (mode 2; args provided by
+        ``build_args``).
+    weight : float
+    needs_wave : bool, default False
+        Set True if the inner JAX function reads ``ctx.E_exit``.
+        Forces the wave leg to run during :meth:`evaluate`.
+    name : str, optional
+    real_part : bool, default False
+        If True, return ``real(fn(...))`` instead of ``|fn(...)|``.
+        Useful when the JAX evaluator already returns a real scalar
+        (e.g. RMS spot size).
+    build_args : callable, optional
+        ``build_args(x: ndarray) -> tuple of JAX scalars`` mapping a
+        parameter vector to the positional arguments of ``fn``.
+        Required for analytic gradient propagation through
+        :func:`design_optimize`.
+
+    Notes
+    -----
+    The forward-mode ``evaluate(ctx)`` works the same in both modes.
+    When ``build_args`` is provided and ``ctx.x`` exists,
+    ``evaluate`` calls ``fn(*build_args(ctx.x))`` (matching the
+    gradient path).  Without ``ctx.x``, it falls back to the legacy
+    ``fn(ctx)`` form -- letting the same JaxMeritTerm be used both
+    inside ``design_optimize`` and in standalone evaluations.
+    """
+
+    name = 'JaxMerit'
+
+    def __init__(self, fn, weight: float = 1.0,
+                 needs_wave: bool = False,
+                 name: Optional[str] = None,
+                 real_part: bool = False,
+                 build_args: Optional[Callable] = None):
+        self.fn = fn
+        self.weight = float(weight)
+        self.needs_wave = bool(needs_wave)
+        self.real_part = bool(real_part)
+        self.build_args = build_args
+        if name is not None:
+            self.name = name
+
+    def supports_jax_grad(self) -> bool:
+        """True if this merit can produce an analytic gradient via
+        :func:`jax.grad` on the parameter vector x."""
+        return self.build_args is not None
+
+    def _reduce(self, val):
+        """Reduce a complex / array JAX value to a real scalar
+        (matching :meth:`evaluate`'s output)."""
+        import jax.numpy as jnp
+        if self.real_part:
+            return jnp.real(val)
+        return jnp.abs(val)
+
+    def evaluate(self, ctx) -> float:
+        if self.build_args is not None and getattr(ctx, 'x', None) is not None:
+            val = self.fn(*self.build_args(ctx.x))
+        else:
+            val = self.fn(ctx)
+        # Bridge JAX -> NumPy at the merit boundary.
+        try:
+            import numpy as _np
+            arr = _np.asarray(val)
+        except Exception:
+            return self.weight * float(val)
+        if self.real_part:
+            return self.weight * float(arr.real)
+        return self.weight * float(abs(arr))
+
+    def gradient_at_x(self, x):
+        """Analytic gradient of ``weight * reduction(fn(...))`` wrt x.
+
+        Returns a NumPy array of shape ``(len(x),)``.  Requires
+        ``build_args`` to have been supplied at construction.
+        """
+        if self.build_args is None:
+            raise RuntimeError(
+                "JaxMeritTerm.gradient_at_x requires build_args to be "
+                "set; either pass build_args=... at construction or "
+                "fall back to finite differences.")
+        import jax
+        import jax.numpy as jnp
+        weight = self.weight
+
+        def _scalar(x_jax):
+            args = self.build_args(x_jax)
+            val = self.fn(*args)
+            return weight * self._reduce(val)
+
+        # Use JAX's default float dtype -- requesting float64 raises
+        # a UserWarning when jax_enable_x64 isn't set, which is the
+        # common case for a fresh ``import jax``.
+        x_jax = jnp.asarray(x)
+        g = jax.grad(_scalar)(x_jax)
+        return np.asarray(g)
+
+
 class ChromaticFocalShiftMerit(MeritTerm):
     """Penalise focal-length variation across wavelengths.
 
@@ -1710,6 +1939,12 @@ class EvaluationContext:
     # ``prescription`` stays == ``prescriptions[0]`` for backward
     # compatibility so single-prescription merit terms keep working.
     prescriptions: Optional[List[Dict[str, Any]]] = None
+    # Current parameter vector (populated by design_optimize).  Lets
+    # JaxMeritTerm route through its build_args(x) for analytic
+    # gradient propagation.  Standalone evaluations may leave this
+    # None; merits should fall back to ctx-based code paths in that
+    # case.
+    x: Optional[np.ndarray] = None
 
     def rms_wavefront_waves(self, n_modes: int = 21,
                              exclude_low_order: int = 3) -> float:
@@ -1758,9 +1993,13 @@ def design_optimize(parameterization,
                     method: str = 'L-BFGS-B',
                     max_iter: int = 100,
                     wave_traced: bool = False,
+                    wave_propagator: str = 'real_lens',
+                    wave_propagator_kwargs: Optional[Dict[str, Any]] = None,
                     ray_subsample: int = 4,
                     z_scan_range: Optional[Tuple[float, float]] = None,
                     z_scan_n: int = 31,
+                    jac: Any = 'auto',
+                    plane_logger: Optional[Callable] = None,
                     verbose: bool = True,
                     progress=None) -> DesignResult:
     """Optimize a lens prescription against a set of merit terms.
@@ -1794,7 +2033,32 @@ def design_optimize(parameterization,
     wave_traced : bool, default False
         If True, use :func:`apply_real_lens_traced` for the wave
         leg (sub-nm OPD accuracy but slower).  Otherwise use
-        :func:`apply_real_lens` (fast analytic model).
+        :func:`apply_real_lens` (fast analytic model).  Ignored
+        when ``wave_propagator`` is non-default.
+    wave_propagator : str, default 'real_lens'
+        Selects the wave-leg propagator.  Options:
+
+          * ``'real_lens'`` -- ``apply_real_lens`` /
+            ``apply_real_lens_traced`` (the default; fast, paraxial).
+          * ``'gbd'`` -- ``propagate_gbd_through_prescription``
+            (beamlet decomposition; better for high-NA / thick
+            optics).
+          * ``'hf'`` -- ``propagate_huygens_fresnel_through_prescription``
+            (Van-Vleck-corrected Huygens-Fresnel; broadest validity).
+          * ``'hfpi'`` -- ``propagate_hfpi_through_prescription``
+            (Monte Carlo path integration; honours hard apertures
+            and DOEs natively).
+          * ``'asymptotic'`` -- ``propagate_modal_asymptotic`` after
+            ``fit_canonical_polynomials`` (per-pixel saddle-point
+            evaluator; ~10^3-10^4x faster than direct quadrature for
+            paraxial systems).
+    wave_propagator_kwargs : dict, optional
+        Extra keyword arguments forwarded to the chosen wave
+        propagator (e.g. ``n_paths`` for HFPI, ``M_super`` for GBD).
+        For ``wave_propagator='asymptotic'`` the special keys
+        ``fit`` and ``fit_kwargs`` are honoured (pre-built
+        :class:`CanonicalPolyFit` and ``fit_canonical_polynomials``
+        kwargs respectively).
     ray_subsample : int, default 4
         Passed to ``apply_real_lens_traced`` when used.
     z_scan_range : tuple, optional
@@ -1802,6 +2066,22 @@ def design_optimize(parameterization,
         length, for the through-focus scan.  Default: ±f/20.
     z_scan_n : int, default 31
         Points in the through-focus scan.
+    jac : 'auto' | 'fd' | callable, default 'auto'
+        Jacobian strategy.
+
+          * ``'auto'`` -- if any :class:`JaxMeritTerm` was constructed
+            with ``build_args``, assemble an analytic Jacobian for
+            those terms (via :func:`jax.grad`) and combine with FD for
+            the remaining merit terms.  Falls back to ``'fd'`` when
+            no JAX merits with ``build_args`` are present.
+          * ``'fd'`` -- pure finite differences (SciPy default).
+          * callable -- a user-supplied ``f(x) -> ndarray`` passed
+            through to SciPy as ``jac=...``.
+    plane_logger : callable, optional
+        ``plane_logger(iteration, ctx)`` called after every merit
+        evaluation.  Useful for streaming intermediate
+        prescriptions / E_exit / OPD maps to a unified store; see
+        :func:`lumenairy.io.storage.append_plane`.
     verbose : bool
     progress : callable, optional
         ``ProgressCallback`` (see :mod:`lumenairy.progress`).
@@ -1867,7 +2147,8 @@ def design_optimize(parameterization,
             prescriptions = [pres]
         ctx = EvaluationContext(
             prescription=pres, wavelength=wavelength, N=N, dx=dx,
-            prescriptions=prescriptions)
+            prescriptions=prescriptions,
+            x=np.asarray(x, dtype=np.float64).copy())
         # Ray-leg (always)
         surfs = surfaces_from_prescription(pres)
         try:
@@ -1897,12 +2178,25 @@ def design_optimize(parameterization,
                 E0 = np.ones((N, N), dtype=np.complex128)
             else:
                 E0 = E_in
-            if wave_traced:
-                E_exit = apply_real_lens_traced(
-                    E0, pres, wavelength, dx,
-                    ray_subsample=ray_subsample, n_workers=1)
-            else:
-                E_exit = apply_real_lens(E0, pres, wavelength, dx)
+            wp_kwargs = dict(wave_propagator_kwargs or {})
+            try:
+                _wave_fn = WAVE_PROPAGATOR_REGISTRY[wave_propagator]
+            except KeyError:
+                raise ValueError(
+                    f"design_optimize: unknown wave_propagator "
+                    f"{wave_propagator!r}; expected one of "
+                    f"{sorted(WAVE_PROPAGATOR_REGISTRY)} "
+                    "(register custom propagators with "
+                    "register_wave_propagator(name, fn)).")
+            _opts = {
+                'wave_traced': wave_traced,
+                'ray_subsample': ray_subsample,
+            }
+            E_exit = _wave_fn(
+                E0, pres,
+                wavelength=wavelength, dx=dx, N=N,
+                wp_kwargs=wp_kwargs, opts=_opts,
+            )
             ctx.E_exit = E_exit
             # Through-focus scan
             if not np.isfinite(ctx.bfl) or abs(ctx.bfl) > 10:
@@ -1936,11 +2230,64 @@ def design_optimize(parameterization,
 
         return _sum_merits(ctx, merit_terms), ctx
 
+    # ------------------------------------------------------------------
+    # JaxMeritTerm gradient routing.  When jac='auto' and at least one
+    # JaxMeritTerm has build_args set, we combine analytic JAX
+    # gradients for those terms with finite-difference partials for
+    # everything else.  Pure-FD ('fd' or no JAX merits) is the legacy
+    # path; user-callable jac is forwarded as-is.
+    # ------------------------------------------------------------------
+    jax_grad_terms = [
+        m for m in merit_terms
+        if isinstance(m, JaxMeritTerm) and m.supports_jax_grad()
+    ]
+    other_terms = [m for m in merit_terms if m not in jax_grad_terms]
+
+    def _fd_grad_for(terms, x, eps=1e-7):
+        """Forward-FD gradient of sum(t.evaluate(ctx)) for the
+        selected ``terms`` only."""
+        if not terms:
+            return np.zeros_like(x, dtype=np.float64)
+        x = np.asarray(x, dtype=np.float64)
+        _, ctx0 = evaluate(x)
+        f0 = sum(t.evaluate(ctx0) for t in terms)
+        g = np.zeros_like(x)
+        for i in range(x.size):
+            x_pert = x.copy()
+            step = eps * max(abs(x[i]), 1.0)
+            x_pert[i] = x[i] + step
+            _, ctx_p = evaluate(x_pert)
+            fp = sum(t.evaluate(ctx_p) for t in terms)
+            g[i] = (fp - f0) / step
+        return g
+
+    def _merit_jac_auto(x):
+        # Analytic part: sum gradient_at_x for JAX terms.
+        g = np.zeros_like(np.asarray(x, dtype=np.float64))
+        for t in jax_grad_terms:
+            g = g + t.gradient_at_x(x)
+        # Finite-difference part: gradient of the remaining terms.
+        if other_terms:
+            g = g + _fd_grad_for(other_terms, x)
+        return g
+
+    use_analytic_jac = (jac == 'auto' and len(jax_grad_terms) > 0)
+    user_jac = jac if (callable(jac)) else None
+    final_jac = (
+        user_jac if user_jac is not None
+        else (_merit_jac_auto if use_analytic_jac else None)
+    )
+
     def merit_fn(x):
         call_count[0] += 1
         value, ctx = evaluate(x)
         last_value[0] = float(value)
         last_efl[0] = float(ctx.efl) if np.isfinite(ctx.efl) else 0.0
+        if plane_logger is not None:
+            try:
+                plane_logger(call_count[0], ctx)
+            except Exception:
+                pass  # logger errors must not derail optimization
         # Fallback eval-counter progress for methods without a per-
         # iteration callback hook (Powell, DE, dual_annealing, basin-
         # hopping).  For methods with a scipy callback we also emit
@@ -2032,6 +2379,7 @@ def design_optimize(parameterization,
     else:
         res = so.minimize(
             merit_fn, x0, method=method,
+            jac=final_jac,
             bounds=bounds if method in ('L-BFGS-B', 'SLSQP', 'trust-constr') else None,
             options={'maxiter': max_iter, 'disp': verbose},
             callback=_scipy_cb_minimize)

@@ -129,6 +129,21 @@ class RayBundle:
                          if self.error_code is not None else None),
         )
 
+    def to_jax_state(self):
+        """Convert this RayBundle to a :class:`JaxRayState`.
+
+        The JAX state drops ``wavelength`` and ``error_code`` (which
+        have no JAX-traceable analogue); ``alive`` is preserved as the
+        JAX bool mask.  Useful when handing a NumPy-traced bundle into
+        ``trace_jax`` for differentiable downstream optics.
+        """
+        from .jax_trace import make_jax_ray_state
+        return make_jax_ray_state(
+            x=self.x, y=self.y, z=self.z,
+            L=self.L, M=self.M, N=self.N,
+            opd=self.opd, alive=self.alive,
+        )
+
 
 @dataclass
 class Surface:
