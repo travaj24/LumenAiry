@@ -264,8 +264,16 @@ def reset_fft_backend():
             pyfftw.interfaces.cache.disable()
             pyfftw.interfaces.cache.enable()
             pyfftw.interfaces.cache.set_keepalive_time(30.0)
-        except Exception:
-            pass
+        except Exception as _exc:
+            # pyfftw can fail to reset its cache on bad PyFFTW
+            # internal state; surface the failure as a warning instead
+            # of swallowing it silently (audit feedback 3.5.4).
+            import warnings as _warnings
+            _warnings.warn(
+                f"pyfftw cache reset in reset_fft_backend failed: "
+                f"{type(_exc).__name__}: {_exc}.  pyFFTW will "
+                f"continue using the existing cache.",
+                RuntimeWarning, stacklevel=2)
 
 
 def set_fft_plan_cache_size(n):
@@ -614,8 +622,13 @@ def _handle_pyfftw_failure(x, op_name, exc):
             pyfftw.interfaces.cache.disable()
             pyfftw.interfaces.cache.enable()
             pyfftw.interfaces.cache.set_keepalive_time(30.0)
-        except Exception:
-            pass
+        except Exception as _cache_exc:
+            warnings.warn(
+                f"pyfftw cache reset after FFT failure threw "
+                f"{type(_cache_exc).__name__}: {_cache_exc}.  Continuing "
+                f"with the existing cache; if subsequent shapes also "
+                f"fail consider calling reset_fft_backend() explicitly.",
+                RuntimeWarning, stacklevel=2)
         warnings.warn(
             f'pyFFTW {op_name} failed on shape {shape}: '
             f'{type(exc).__name__}: {exc}.  Falling back to '
@@ -1641,8 +1654,12 @@ def rayleigh_sommerfeld_propagate(
         print(f"  Wavelength: {wavelength*1e9:.1f} nm")
         try:
             print(f"  Kernel max |h|: {float(xp.max(xp.abs(h))):.4e}")
-        except Exception:
-            pass
+        except Exception as _exc:
+            # xp.max + float() can fail under JAX tracing where h is
+            # an abstract array.  Cosmetic print failure -- demote to
+            # a brief diagnostic so debug runs surface the cause.
+            print(f"  Kernel max |h|: <unavailable: "
+                  f"{type(_exc).__name__}>")
 
     # -- convolve via FFT ------------------------------------------------------
     if is_jax:

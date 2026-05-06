@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "3.5.3"
+version = "3.5.4"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -112,3 +112,27 @@ include = ["lumenairy*"]
 
 [tool.setuptools.package-data]
 lumenairy = ["*.md", "*.txt", "*.html"]
+
+[tool.pytest.ini_options]
+# pytest is a thin wrapper around the existing validation harness in
+# validation/.  See tests/test_validation_files.py: it parametrizes
+# over each validation/<dir>/test_*.py file and runs them as
+# subprocesses, giving pytest's per-test isolation, fail-fast (-x),
+# filtering (-k), parallel execution (pytest-xdist -n auto), and
+# JUnit XML for CI -- without refactoring the existing
+# validation/_harness.py infrastructure.
+#
+# testpaths is `tests/` only (NOT validation/) because the
+# validation files use t_* function names (single underscore) and
+# would not be auto-collected by pytest anyway, but they DO run
+# H.run(...) calls at module-import time which would double-execute
+# each validation if both pytest and the wrapper collected them.
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]

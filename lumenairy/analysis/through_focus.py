@@ -917,3 +917,166 @@ def monte_carlo_tolerancing_jax(prescription, wavelength, N, dx, E_source,
         'trial_results': trial_results,
         'strehl_array': strehls,
     }
+
+
+def tolerancing_report(stats, *,
+                       perturbation_spec=None,
+                       trial_perturbations=None,
+                       strehl_thresholds=(0.5, 0.7, 0.8, 0.9, 0.95),
+                       n_yield_curve_points=51,
+                       format='text'):
+    """Produce a human-readable report from a Monte-Carlo tolerancing run.
+
+    Takes the dict returned by :func:`monte_carlo_tolerancing` or
+    :func:`monte_carlo_tolerancing_jax` and produces:
+
+      1. Summary statistics (mean, std, p05/p50/p95, min/max).
+      2. Strehl yield at standard thresholds:
+         ``P(S_peak > T)`` for T in ``strehl_thresholds``.
+      3. Strehl-yield curve data (threshold_axis, yield_axis) for
+         plotting the CDF.
+      4. *(Optional)* Per-knob sensitivity ranking, if the original
+         ``perturbation_spec`` and ``trial_perturbations`` (one
+         Perturbation list per trial, in spec order) are supplied.
+         Reports the abs-correlation between perturbation magnitude
+         and Strehl loss, ranked by importance.
+
+    Parameters
+    ----------
+    stats : dict
+        Output of :func:`monte_carlo_tolerancing` / its JAX twin.
+        Must have ``strehl_array`` populated.
+    perturbation_spec : list of dict, optional
+        The original perturbation_spec passed to the MC run.
+    trial_perturbations : list of list of Perturbation, optional
+        Per-trial perturbation lists.
+    strehl_thresholds : tuple of float
+        Yield thresholds.  Default ``(0.5, 0.7, 0.8, 0.9, 0.95)``.
+    n_yield_curve_points : int
+        Resolution of the yield CDF.
+    format : ``'text'`` | ``'dict'``
+        Return form.  ``'text'`` returns a printable string; ``'dict'``
+        returns a structured dict suitable for further processing.
+
+    Returns
+    -------
+    report : str or dict
+    """
+    if 'strehl_array' not in stats:
+        raise ValueError(
+            "tolerancing_report: stats dict has no 'strehl_array' key. "
+            "Pass the dict returned by monte_carlo_tolerancing or "
+            "monte_carlo_tolerancing_jax.")
+
+    strehls = np.asarray(stats['strehl_array'], dtype=float)
+    n_trials = strehls.size
+    valid = np.isfinite(strehls)
+    n_valid = int(valid.sum())
+    s_finite = strehls[valid]
+
+    def _stat(fn, default=float('nan')):
+        return float(fn(s_finite)) if s_finite.size else default
+
+    summary = {
+        'mean': _stat(np.mean),
+        'std':  _stat(np.std),
+        'p05':  _stat(lambda a: np.percentile(a, 5)),
+        'p50':  _stat(lambda a: np.percentile(a, 50)),
+        'p95':  _stat(lambda a: np.percentile(a, 95)),
+        'min':  _stat(np.min),
+        'max':  _stat(np.max),
+    }
+
+    yields = {float(T): (float(np.mean(s_finite > T)) if s_finite.size
+                         else float('nan'))
+              for T in strehl_thresholds}
+
+    if s_finite.size:
+        T_axis = np.linspace(max(0.0, summary['min']), 1.0,
+                              n_yield_curve_points)
+        yield_axis = np.array(
+            [float(np.mean(s_finite > t)) for t in T_axis])
+    else:
+        T_axis = np.zeros(n_yield_curve_points)
+        yield_axis = np.zeros(n_yield_curve_points)
+
+    sensitivity_rows = []
+    sensitivity_note = None
+    if perturbation_spec is not None and trial_perturbations is not None:
+        feat_names = []
+        for spec in perturbation_spec:
+            sidx = spec['surface_index']
+            feat_names.extend([
+                f's{sidx}_decenter_x', f's{sidx}_decenter_y',
+                f's{sidx}_tilt_x', f's{sidx}_tilt_y',
+                f's{sidx}_form_error',
+            ])
+        feat_mat = np.zeros((n_trials, len(feat_names)))
+        for t, perts in enumerate(trial_perturbations):
+            for k, p in enumerate(perts):
+                base = k * 5
+                feat_mat[t, base + 0] = float(p.decenter[0])
+                feat_mat[t, base + 1] = float(p.decenter[1])
+                feat_mat[t, base + 2] = float(p.tilt[0])
+                feat_mat[t, base + 3] = float(p.tilt[1])
+                feat_mat[t, base + 4] = float(p.form_error_rms or 0.0)
+        loss = (1.0 - strehls) - np.mean(1.0 - strehls)
+        loss_std = np.std(loss)
+        for j, name in enumerate(feat_names):
+            x = np.abs(feat_mat[:, j])
+            sx = x - np.mean(x)
+            sx_std = np.std(sx)
+            denom = sx_std * loss_std * n_trials
+            rho = float(np.sum(sx * loss) / denom) if denom > 0 else 0.0
+            sensitivity_rows.append(
+                {'feature': name, 'rho_abs_loss': rho})
+        sensitivity_rows.sort(key=lambda r: -abs(r['rho_abs_loss']))
+    elif perturbation_spec is not None:
+        sensitivity_note = (
+            "Sensitivity ranking skipped: perturbation_spec was supplied "
+            "but trial_perturbations was not.  Pass the per-trial "
+            "Perturbation lists (one list per trial, in spec order).")
+
+    report_dict = {
+        'n_trials': n_trials,
+        'n_valid_trials': n_valid,
+        'strehl_summary': summary,
+        'yields': yields,
+        'yield_curve': {'threshold': T_axis, 'yield': yield_axis},
+        'sensitivity_ranking': sensitivity_rows,
+        'sensitivity_note': sensitivity_note,
+    }
+
+    if format == 'dict':
+        return report_dict
+
+    lines = ['=' * 60, 'Tolerancing Report', '=' * 60,
+             f'Trials: {n_trials} ({n_valid} valid)', '',
+             'Strehl summary', '-' * 30,
+             f'  mean  = {summary["mean"]:.4f}',
+             f'  std   = {summary["std"]:.4f}',
+             f'  P05   = {summary["p05"]:.4f}',
+             f'  P50   = {summary["p50"]:.4f}',
+             f'  P95   = {summary["p95"]:.4f}',
+             f'  min   = {summary["min"]:.4f}',
+             f'  max   = {summary["max"]:.4f}',
+             '',
+             'Yield at threshold', '-' * 30,
+             ]
+    for T, y in yields.items():
+        lines.append(f'  P(S_peak > {T:.2f}) = {y*100:.1f} %')
+    lines.append('')
+    if sensitivity_rows:
+        lines.append('Sensitivity ranking (abs correlation with Strehl loss)')
+        lines.append('-' * 60)
+        lines.append(f'  {"feature":<28s} {"|rho|":>8s}')
+        for r in sensitivity_rows[:10]:
+            lines.append(
+                f'  {r["feature"]:<28s} {r["rho_abs_loss"]:>8.4f}')
+    elif sensitivity_note:
+        lines.append('Sensitivity ranking')
+        lines.append('-' * 30)
+        lines.append(f'  ({sensitivity_note})')
+    lines.append('')
+    return '\n'.join(lines)
+

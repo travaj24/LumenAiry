@@ -87,11 +87,15 @@ from .through_focus import (
     tolerancing_sweep,
     monte_carlo_tolerancing,
     monte_carlo_tolerancing_jax,
+    tolerancing_report,
 )
 from .aberration import (
     AberrationSummary,
     aberration_summary,
     format_aberration_summary,
+    CausticDiagnostic,
+    caustic_diagnostic,
+    plot_caustic_diagnostic,
 )
 from .plotting import (
     plot_intensity,
@@ -114,6 +118,7 @@ __all__ = [
     # analysis
     'beam_centroid', 'beam_d4sigma', 'beam_power', 'strehl_ratio',
     'coupling_efficiency', 'M2',
+    'caustic_diagnostic', 'plot_caustic_diagnostic', 'CausticDiagnostic',
     'check_sampling_conditions', 'compute_psf', 'compute_otf',
     'compute_mtf', 'mtf_radial', 'remove_wavefront_modes',
     'opd_pv_rms', 'wave_opd_1d', 'wave_opd_2d', 'check_opd_sampling',
@@ -139,6 +144,7 @@ __all__ = [
     'ThroughFocusResult', 'Perturbation', 'apply_perturbations',
     'tolerancing_sweep', 'monte_carlo_tolerancing',
     'monte_carlo_tolerancing_jax',
+    'tolerancing_report',
     # aberration (unified Seidel + LG tensor)
     'AberrationSummary', 'aberration_summary', 'format_aberration_summary',
     # plotting

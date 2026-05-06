@@ -681,6 +681,81 @@ H.run('M2: two-spot beam > 1 on spread axis',
 
 
 # ===========================================================================
+# Caustic diagnostic
+# ===========================================================================
+
+def t_caustic_diagnostic_singlet_focus():
+    """A singlet's BFL ~ R/(n-1) shows up as one caustic crossing
+    near the analytic focal point with Maslov index 2 (point focus,
+    both eigenvalues cross simultaneously)."""
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                              glass='N-BK7', aperture=4e-3)
+    diag = la.caustic_diagnostic(
+        presc, wavelength=633e-9, fan_radius=2e-4,
+        n_z_per_gap=64, z_after_last_surface=80e-3)
+    # f = R/(n-1) ~ 20/0.515 = 38.8 mm BFL relative to back vertex
+    # (z=2mm), so absolute focal z ~ 40.8 mm.  Allow +- 2 mm.
+    if not diag.caustic_z:
+        return False, 'no caustic crossings detected'
+    z_focus_mm = diag.caustic_z[0] * 1e3
+    in_range = 36 <= z_focus_mm <= 44
+    return (in_range and diag.maslov_index == 2,
+            f'focus z = {z_focus_mm:.2f} mm (expect 36-44), '
+            f'Maslov = {diag.maslov_index} (expect 2)')
+
+
+def t_caustic_diagnostic_no_caustic_in_collimated_path():
+    """Free-space-only prescription (no refractive surfaces) raises
+    ValueError; tested via a singlet with the SAME radius on both
+    sides + same glass = essentially a flat plate, no focus."""
+    # A flat plate (R=inf both sides) has no focal point; collimated
+    # input stays collimated -> no caustic crossings within a finite
+    # post-plate distance.
+    presc = la.make_singlet(R1=float('inf'), R2=float('inf'),
+                              d=2e-3, glass='N-BK7', aperture=4e-3)
+    diag = la.caustic_diagnostic(
+        presc, wavelength=633e-9, fan_radius=2e-4,
+        n_z_per_gap=32, z_after_last_surface=80e-3)
+    return (len(diag.caustic_z) == 0 and diag.maslov_index == 0,
+            f'caustic_z={diag.caustic_z}, Maslov={diag.maslov_index}'
+            f' (expected 0/0 for a flat plate)')
+
+
+H.run('caustic_diagnostic: singlet focus at expected BFL',
+      t_caustic_diagnostic_singlet_focus)
+H.run('caustic_diagnostic: flat plate has no caustic',
+      t_caustic_diagnostic_no_caustic_in_collimated_path)
+
+
+def t_tolerancing_report_text():
+    """tolerancing_report produces a non-empty text report from a
+    stats dict."""
+    stats = {'strehl_array': np.array([0.95, 0.85, 0.7, 0.6, 0.4])}
+    report = la.tolerancing_report(stats, format='text')
+    return ('Trials: 5' in report
+            and 'Strehl summary' in report
+            and 'Yield at threshold' in report,
+            f'len={len(report)} chars')
+
+
+def t_tolerancing_report_dict_yields():
+    """tolerancing_report dict has yields at requested thresholds."""
+    stats = {'strehl_array': np.array([0.95, 0.85, 0.7, 0.6, 0.4])}
+    report = la.tolerancing_report(stats,
+        strehl_thresholds=(0.5, 0.8), format='dict')
+    # 4 of 5 are > 0.5  -> yield 0.8.  2 of 5 are > 0.8 -> yield 0.4
+    return (abs(report['yields'][0.5] - 0.8) < 1e-9
+            and abs(report['yields'][0.8] - 0.4) < 1e-9,
+            f'yields = {report["yields"]}')
+
+
+H.run('tolerancing_report: text format produces non-empty report',
+      t_tolerancing_report_text)
+H.run('tolerancing_report: dict yields match the input array',
+      t_tolerancing_report_dict_yields)
+
+
+# ===========================================================================
 # JAX path: monte_carlo_tolerancing_jax
 # ===========================================================================
 

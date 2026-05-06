@@ -2,6 +2,107 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.4] — 2026-05-06
+
+Audit follow-up release.  Three audit-flagged gaps closed; one
+quiet-failure mode in the propagator core is now visible.
+
+### `caustic_diagnostic` -- "where do focuses live in this design?"
+
+New analyzer that surfaces the Maslov machinery already present
+in `apply_real_lens_maslov`.  Traces a small fan of rays through a
+prescription, computes the Jacobian eigenvalues at sample planes
+between every pair of refractive surfaces, and reports:
+
+* `caustic_z` -- z coordinates of caustic / focal-point crossings.
+* `maslov_index` -- total Jacobian-eigenvalue zero-crossings (the
+  exact integer the Maslov-method propagator adds ``-pi/2``-per to
+  the geometric phase).
+* `det_J`, `chief_ray_height` -- per-z-sample arrays for plotting.
+
+A companion `plot_caustic_diagnostic` helper produces a two-panel
+figure showing det(J) and chief-ray height vs z, with caustic
+crossings and surface positions annotated.
+
+For an axisymmetric singlet at its expected BFL, the diagnostic
+reports one caustic crossing at the focal point with Maslov index
+2 (point caustic = both eigenvalues cross simultaneously); for a
+tilted-input astigmatic system, it splits into two caustics
+(sagittal + tangential) with Maslov index 2.
+
+Closes the audit's "Maslov index / caustic crossing diagnostic
+not surfaced to users" gap.
+
+### `tolerancing_report` -- structured reporting for MC runs
+
+New helper that turns the raw output of `monte_carlo_tolerancing`
+or `monte_carlo_tolerancing_jax` into:
+
+* Strehl summary (mean / std / p05 / p50 / p95 / min / max)
+* Yield at standard thresholds (P(S > 0.5), 0.7, 0.8, 0.9, 0.95)
+* Strehl-yield curve data (CDF arrays for plotting)
+* *Optional* per-knob sensitivity ranking (correlation between
+  perturbation magnitude and Strehl loss, ranked by importance) --
+  pass `perturbation_spec=` and `trial_perturbations=` to enable
+
+Output format selectable via `format='text'` (default, prints a
+structured report) or `format='dict'` (returns a dict for further
+processing).
+
+Closes the audit's "tolerancing report generator" gap.
+
+### Pytest entry point
+
+Added `tests/test_validation_files.py` plus a `[tool.pytest.ini_options]`
+block in `pyproject.toml`.  Pytest now parametrizes over each of
+the 25 validation files and runs them as subprocesses, giving:
+
+* per-test isolation (`pytest -x` for fail-fast)
+* filtering (`pytest -k 'asymptotic'` to run a subset)
+* parallel execution via pytest-xdist (`pytest -n auto`)
+* JUnit XML for CI (`pytest --junitxml=results.xml`)
+* coverage hooks (`pytest --cov=lumenairy`)
+
+Without refactoring the existing `validation/_harness.py`
+infrastructure -- `validation/run_all.py` continues to work
+unchanged.  This is a thin pytest layer; a deeper refactor (each
+``t_*`` function as a parametrized pytest test) is on a future
+roadmap.
+
+### Core-path silent-failure fix in `propagators/propagation.py`
+
+The audit flagged three `except Exception: pass` blocks in
+`propagation.py`'s core path (lines 250, 599, 1626 in the 3.5.2
+codebase).  All three are now visible:
+
+* pyfftw cache reset failures in `reset_fft_backend` and after a
+  per-shape FFT failure now emit `RuntimeWarning` instead of
+  swallowing silently.  Users no longer hit a "pyFFTW used the
+  wrong cache" Heisenbug without diagnostic.
+* The verbose-mode kernel-max printout in
+  `propagate_rayleigh_sommerfeld` (which can fail under JAX
+  tracing because `xp.max + float()` doesn't work on abstract
+  arrays) now prints `<unavailable: TraceError>` with the
+  exception class name instead of silently producing no output.
+
+The remaining 169 `except Exception: pass` blocks across the
+package are mostly Qt/PySide UI defensive disconnects (125 of
+them) where silent fall-through is correct; the non-UI blocks
+have been triaged and confirmed defensive.
+
+### Validation
+
+All 25 validation files pass.  +4 new tests in `test_analysis.py`:
+caustic_diagnostic singlet-focus check, caustic_diagnostic
+flat-plate-no-caustic check, tolerancing_report text-format
+non-empty check, tolerancing_report dict-yields check.
+
+### Backwards compatibility
+
+`__all__` grows from 377 to 380 (`caustic_diagnostic`,
+`plot_caustic_diagnostic`, `CausticDiagnostic`, `tolerancing_report`).
+No existing API changes.
+
 ## [3.5.3] — 2026-05-06
 
 Audit-driven cleanup release.  No behaviour changes for any

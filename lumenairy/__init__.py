@@ -127,6 +127,9 @@ from .analysis import (
     strehl_ratio,
     coupling_efficiency,
     M2,
+    caustic_diagnostic,
+    plot_caustic_diagnostic,
+    CausticDiagnostic,
     check_sampling_conditions,
     compute_psf,
     compute_otf,
@@ -247,6 +250,7 @@ from .analysis.through_focus import (
     tolerancing_sweep,
     monte_carlo_tolerancing,
     monte_carlo_tolerancing_jax,
+    tolerancing_report,
 )
 
 # ── Hybrid wave/ray design optimization ────────────────────────────────
@@ -570,7 +574,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.5.3"
+__version__ = "3.5.4"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -829,6 +833,9 @@ __all__ = [
     'beam_d4sigma',
     'coupling_efficiency',
     'M2',
+    'caustic_diagnostic',
+    'plot_caustic_diagnostic',
+    'CausticDiagnostic',
     'beam_power',
     'strehl_ratio',
     'check_sampling_conditions',
@@ -980,6 +987,7 @@ __all__ = [
     'apply_real_lens_traced_jax',
     'apply_real_lens_maslov_jax',
     'monte_carlo_tolerancing_jax',
+    'tolerancing_report',
 
     # ============================================================
     # Tier 7 -- Specialized physics
