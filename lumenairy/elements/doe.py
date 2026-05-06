@@ -484,11 +484,17 @@ def makedammann2d(
 # FITS FILE I/O (optional — requires astropy)
 # =============================================================================
 
-try:
-    from astropy.io import fits as _fits
-    _ASTROPY_AVAILABLE = True
-except ImportError:
-    _ASTROPY_AVAILABLE = False
+import importlib.util as _importlib_util
+_ASTROPY_AVAILABLE = _importlib_util.find_spec('astropy') is not None
+_fits = None  # populated lazily by _ensure_astropy_loaded()
+
+
+def _ensure_astropy_loaded():
+    global _fits
+    if _fits is None and _ASTROPY_AVAILABLE:
+        from astropy.io import fits as _f
+        _fits = _f
+    return _fits is not None
 
 
 def load_fits_field(filepath, hdu_amplitude=0, hdu_phase=None):
@@ -523,6 +529,7 @@ def load_fits_field(filepath, hdu_amplitude=0, hdu_phase=None):
     if not _ASTROPY_AVAILABLE:
         raise ImportError("astropy is required for FITS support. "
                           "Install with: pip install astropy")
+    _ensure_astropy_loaded()
 
     with _fits.open(filepath) as hdul:
         amp_data = np.array(hdul[hdu_amplitude].data)
@@ -576,6 +583,7 @@ def save_fits_field(filepath, E, wavelength=None, dx=None, dy=None,
     if not _ASTROPY_AVAILABLE:
         raise ImportError("astropy is required for FITS support. "
                           "Install with: pip install astropy")
+    _ensure_astropy_loaded()
 
     header = _fits.Header()
     if wavelength is not None:

@@ -125,6 +125,8 @@ from .analysis import (
     beam_d4sigma,
     beam_power,
     strehl_ratio,
+    coupling_efficiency,
+    M2,
     check_sampling_conditions,
     compute_psf,
     compute_otf,
@@ -511,6 +513,7 @@ from .propagators.hfpi import (
     apply_aperture_diffraction,
     accumulate_to_grid,
     propagate_hfpi_freespace_aperture,
+    propagate_hfpi,                          # canonical-order alias
     propagate_hfpi_through_prescription,
 )
 from .propagators.gbd import (
@@ -521,6 +524,7 @@ from .propagators.gbd import (
     apply_abcd_to_beamlets,
     reconstruct_field_from_beamlets,
     propagate_gbd_freespace,
+    propagate_gbd,                           # canonical-order alias
     propagate_gbd_thin_lens,
     propagate_gbd_through_prescription,
 )
@@ -566,7 +570,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.5.2"
+__version__ = "3.5.3"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -712,6 +716,7 @@ __all__ = [
     'apply_abcd_to_beamlets',
     'reconstruct_field_from_beamlets',
     'propagate_gbd_freespace',
+    'propagate_gbd',
     'propagate_gbd_thin_lens',
     'propagate_gbd_through_prescription',
 
@@ -723,6 +728,7 @@ __all__ = [
     'apply_aperture_diffraction',
     'accumulate_to_grid',
     'propagate_hfpi_freespace_aperture',
+    'propagate_hfpi',
     'propagate_hfpi_through_prescription',
 
     # Vectorial HFPI (Jones-vector paths)
@@ -821,6 +827,8 @@ __all__ = [
     # Beam analysis (Strehl, PSF, MTF, OPD, Zernike)
     'beam_centroid',
     'beam_d4sigma',
+    'coupling_efficiency',
+    'M2',
     'beam_power',
     'strehl_ratio',
     'check_sampling_conditions',

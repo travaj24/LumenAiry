@@ -585,6 +585,102 @@ H.run('strehl_ratio: invariant under global phase rotation',
 
 
 # ===========================================================================
+# coupling_efficiency / M2
+# ===========================================================================
+
+def t_coupling_efficiency_self_is_one():
+    """coupling_efficiency(E, E) = 1 to machine precision."""
+    N, dx = 128, 2e-6
+    x = (np.arange(N) - N/2) * dx
+    X, Y = np.meshgrid(x, x)
+    E = np.exp(-(X**2 + Y**2) / (10e-6) ** 2).astype(np.complex128)
+    eta = la.coupling_efficiency(E, E, dx)
+    return abs(eta - 1.0) < 1e-12, f'eta = {eta:.10f}'
+
+
+def t_coupling_efficiency_2x_wider_matches_analytic():
+    """For two centred Gaussians with waist ratio 2:1, the 2-D overlap
+    efficiency is (4/5)^2 = 0.64 analytically."""
+    N, dx = 256, 2e-6
+    x = (np.arange(N) - N/2) * dx
+    X, Y = np.meshgrid(x, x)
+    w0 = 10e-6
+    E1 = np.exp(-(X**2 + Y**2) / w0**2).astype(np.complex128)
+    E2 = np.exp(-(X**2 + Y**2) / (2*w0)**2).astype(np.complex128)
+    eta = la.coupling_efficiency(E1, E2, dx)
+    expected = (2 * w0 * 2*w0 / (w0**2 + (2*w0)**2)) ** 2
+    return abs(eta - expected) < 5e-3, (
+        f'eta={eta:.4f}, expected={expected:.4f}')
+
+
+def t_coupling_efficiency_orthogonal_tilt_is_zero():
+    """A linearly-phase-tilted Gaussian decouples from the untilted
+    reference."""
+    N, dx = 256, 2e-6
+    x = (np.arange(N) - N/2) * dx
+    X, Y = np.meshgrid(x, x)
+    w0 = 10e-6
+    E = np.exp(-(X**2 + Y**2) / w0**2).astype(np.complex128)
+    E_tilt = E * np.exp(1j * 2 * np.pi * X / (5e-6))
+    eta = la.coupling_efficiency(E_tilt, E, dx)
+    return eta < 1e-6, f'eta = {eta:.3e}'
+
+
+def t_M2_fundamental_gaussian_is_one():
+    """M^2 = 1 for a fundamental Gaussian beam to grid-sampling
+    precision."""
+    N, dx = 128, 2e-6
+    x = (np.arange(N) - N/2) * dx
+    X, Y = np.meshgrid(x, x)
+    E = np.exp(-(X**2 + Y**2) / (10e-6) ** 2).astype(np.complex128)
+    M2x, M2y = la.M2(E, dx, 1.31e-6)
+    return (abs(M2x - 1.0) < 0.01 and abs(M2y - 1.0) < 0.01,
+            f'M2 = ({M2x:.4f}, {M2y:.4f})')
+
+
+def t_M2_invariant_under_phase_curvature():
+    """A spherically-curved Gaussian still has M^2 = 1 (curvature is
+    propagation, not extra mode content)."""
+    N, dx = 128, 2e-6
+    x = (np.arange(N) - N/2) * dx
+    X, Y = np.meshgrid(x, x)
+    w0 = 10e-6
+    R = 1e-3
+    E = np.exp(-(X**2 + Y**2) / w0**2).astype(np.complex128)
+    E_curved = E * np.exp(-1j * np.pi * (X**2 + Y**2) / (1.31e-6 * R))
+    M2x, M2y = la.M2(E_curved, dx, 1.31e-6)
+    return (abs(M2x - 1.0) < 0.05 and abs(M2y - 1.0) < 0.05,
+            f'curved M2 = ({M2x:.4f}, {M2y:.4f}) (vs flat = 1.0)')
+
+
+def t_M2_two_spot_beam_is_greater_than_one():
+    """A two-spot beam has M^2 substantially > 1 along the spot-spread
+    axis and ~1 along the orthogonal axis."""
+    N, dx = 256, 2e-6
+    x = (np.arange(N) - N/2) * dx
+    X, Y = np.meshgrid(x, x)
+    w0 = 10e-6
+    E = (np.exp(-((X - 15e-6)**2 + Y**2) / w0**2)
+         + np.exp(-((X + 15e-6)**2 + Y**2) / w0**2)).astype(np.complex128)
+    M2x, M2y = la.M2(E, dx, 1.31e-6)
+    return (M2x > 2.0 and abs(M2y - 1.0) < 0.05,
+            f'two-spot M2 = ({M2x:.3f}, {M2y:.3f})')
+
+
+H.run('coupling_efficiency: self overlap = 1',
+      t_coupling_efficiency_self_is_one)
+H.run('coupling_efficiency: 2x-wider Gaussian matches analytic',
+      t_coupling_efficiency_2x_wider_matches_analytic)
+H.run('coupling_efficiency: orthogonal tilt -> zero',
+      t_coupling_efficiency_orthogonal_tilt_is_zero)
+H.run('M2: fundamental Gaussian = 1', t_M2_fundamental_gaussian_is_one)
+H.run('M2: invariant under phase curvature',
+      t_M2_invariant_under_phase_curvature)
+H.run('M2: two-spot beam > 1 on spread axis',
+      t_M2_two_spot_beam_is_greater_than_one)
+
+
+# ===========================================================================
 # JAX path: monte_carlo_tolerancing_jax
 # ===========================================================================
 

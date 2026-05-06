@@ -24,25 +24,37 @@ import warnings
 import numpy as np
 
 # GPU backend ----------------------------------------------------------------
-try:
-    import cupy as cp
-    CUPY_AVAILABLE = True
-except ImportError:
-    # Sentinel so ``xp is cp`` checks below don't NameError when cupy
-    # isn't installed (CI / pure-CPU users).
-    cp = None
-    CUPY_AVAILABLE = False
+# Lazy: only check availability via find_spec, defer the actual import
+# to first use.  Saves ~200 ms at lumenairy import time on machines
+# with CuPy installed.
+import importlib.util as _importlib_util
+CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
+cp = None  # populated by _ensure_cupy_loaded() on first use
+
+
+def _ensure_cupy_loaded():
+    global cp
+    if cp is None and CUPY_AVAILABLE:
+        import cupy as _c
+        cp = _c
+    return cp is not None
+
 
 # Optional fused-expression backend ------------------------------------------
 # numexpr evaluates array expressions in chunked, multi-threaded passes
 # without materialising full N x N intermediates.  Used by apply_real_lens
 # to fuse the ``E * exp(-1j*k0*opd)`` phase-screen multiply, which at
 # N=32768 otherwise allocates three 17 GB complex128 temporaries.
-try:
-    import numexpr as _ne
-    NUMEXPR_AVAILABLE = True
-except ImportError:
-    NUMEXPR_AVAILABLE = False
+NUMEXPR_AVAILABLE = _importlib_util.find_spec('numexpr') is not None
+_ne = None  # populated by _ensure_numexpr_loaded() on first use
+
+
+def _ensure_numexpr_loaded():
+    global _ne
+    if _ne is None and NUMEXPR_AVAILABLE:
+        import numexpr as _n
+        _ne = _n
+    return _ne is not None
 
 # Optional Numba JIT.  Used by ``_aspheric_sag_accum_numba`` (fused
 # polynomial-aspheric loop, 3.2.14) and the Maslov Chebyshev evaluator
@@ -142,6 +154,8 @@ def _is_cupy_array(x):
     causing every NumPy array to get routed into the CuPy branch.
     """
     if not CUPY_AVAILABLE:
+        return False
+    if cp is None and not _ensure_cupy_loaded():
         return False
     return isinstance(x, cp.ndarray)
 
@@ -1404,7 +1418,9 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
             opd = n2r * sag / cos_tt_safe - n1r * sag / cos_ti_safe
         else:
             opd = (n2r - n1r) * sag
-        if xp is np and NUMEXPR_AVAILABLE and E.size >= _NUMEXPR_MIN_SIZE:
+        if (xp is np and NUMEXPR_AVAILABLE
+                and E.size >= _NUMEXPR_MIN_SIZE
+                and _ensure_numexpr_loaded()):
             # Fused multiply + complex exp in one threaded, chunked pass
             # -- avoids the three complex128 N x N temporaries that
             # ``E * np.exp(-1j * k0 * opd)`` otherwise materialises.
@@ -4463,7 +4479,8 @@ def _integrate_quadrature(
 
     if use_numexpr is None:
         use_numexpr = NUMEXPR_AVAILABLE
-    use_numexpr = bool(use_numexpr) and NUMEXPR_AVAILABLE
+    use_numexpr = (bool(use_numexpr) and NUMEXPR_AVAILABLE
+                    and _ensure_numexpr_loaded())
     _progress('integrate', 0.65,
               f'quadrature: {n_v2_total} v2 samples, chunk={chunk_v2}, '
               f'numexpr={use_numexpr}')

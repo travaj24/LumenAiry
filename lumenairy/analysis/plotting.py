@@ -27,19 +27,32 @@ Author: Andrew Traverso
 
 import numpy as np
 
-try:
-    import matplotlib.pyplot as plt
-    from matplotlib.patches import Ellipse, Rectangle
-    from matplotlib.colors import LogNorm, Normalize, TwoSlopeNorm
-    _MPL_AVAILABLE = True
-except ImportError:
-    _MPL_AVAILABLE = False
+import importlib.util as _importlib_util
+_MPL_AVAILABLE = _importlib_util.find_spec('matplotlib') is not None
+plt = None
+Ellipse = Rectangle = None
+LogNorm = Normalize = TwoSlopeNorm = None
 
 
 def _require_mpl():
+    global plt, Ellipse, Rectangle, LogNorm, Normalize, TwoSlopeNorm
     if not _MPL_AVAILABLE:
         raise ImportError("matplotlib is required for plotting. "
                           "Install with: pip install matplotlib")
+    if plt is None:
+        import matplotlib.pyplot as _plt
+        from matplotlib.patches import (
+            Ellipse as _Ellipse, Rectangle as _Rectangle)
+        from matplotlib.colors import (
+            LogNorm as _LogNorm, Normalize as _Normalize,
+            TwoSlopeNorm as _TwoSlopeNorm)
+        plt = _plt
+        Ellipse, Rectangle = _Ellipse, _Rectangle
+        LogNorm, Normalize, TwoSlopeNorm = _LogNorm, _Normalize, _TwoSlopeNorm
+        # Update module globals so other functions in this file see them.
+        globals().update(plt=plt, Ellipse=Ellipse, Rectangle=Rectangle,
+                          LogNorm=LogNorm, Normalize=Normalize,
+                          TwoSlopeNorm=TwoSlopeNorm)
 
 
 def _auto_extent(N, dx, unit='auto'):

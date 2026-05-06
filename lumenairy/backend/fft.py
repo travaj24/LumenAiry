@@ -37,12 +37,15 @@ from .array import (
     JAX_AVAILABLE,
     is_jax_array,
     is_cupy_array,
+    _get_jnp,
 )
 
-if JAX_AVAILABLE:
-    import jax.numpy as _jnp
-else:
-    _jnp = None
+
+def _jnp_or_none():
+    """Lazy accessor for jax.numpy.  Avoids loading JAX at import time
+    when the FFT path doesn't actually run JAX (which is most of the
+    time)."""
+    return _get_jnp() if JAX_AVAILABLE else None
 
 
 # ============================================================================
@@ -60,7 +63,7 @@ def fft2(x):
       chain plus CuPy short-circuit.
     """
     if is_jax_array(x):
-        return _jnp.fft.fft2(x)
+        return _get_jnp().fft.fft2(x)
     from ..propagators import propagation as _prop
     return _prop._fft2(x)
 
@@ -69,7 +72,7 @@ def ifft2(x):
     """Backend-aware 2-D inverse FFT.  Same priority chain as
     :func:`fft2`."""
     if is_jax_array(x):
-        return _jnp.fft.ifft2(x)
+        return _get_jnp().fft.ifft2(x)
     from ..propagators import propagation as _prop
     return _prop._ifft2(x)
 
@@ -81,7 +84,7 @@ def ifft2(x):
 def fft(x, axis=-1, n=None):
     """Backend-aware 1-D forward FFT."""
     if is_jax_array(x):
-        return _jnp.fft.fft(x, n=n, axis=axis)
+        return _get_jnp().fft.fft(x, n=n, axis=axis)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.fft(x, n=n, axis=axis)
@@ -95,7 +98,7 @@ def fft(x, axis=-1, n=None):
 def ifft(x, axis=-1, n=None):
     """Backend-aware 1-D inverse FFT."""
     if is_jax_array(x):
-        return _jnp.fft.ifft(x, n=n, axis=axis)
+        return _get_jnp().fft.ifft(x, n=n, axis=axis)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.ifft(x, n=n, axis=axis)
@@ -113,7 +116,7 @@ def ifft(x, axis=-1, n=None):
 def fftshift(x, axes=None):
     """Backend-dispatched ``fft.fftshift``."""
     if is_jax_array(x):
-        return _jnp.fft.fftshift(x, axes=axes)
+        return _get_jnp().fft.fftshift(x, axes=axes)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.fftshift(x, axes=axes)
@@ -123,7 +126,7 @@ def fftshift(x, axes=None):
 def ifftshift(x, axes=None):
     """Backend-dispatched ``fft.ifftshift``."""
     if is_jax_array(x):
-        return _jnp.fft.ifftshift(x, axes=axes)
+        return _get_jnp().fft.ifftshift(x, axes=axes)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.ifftshift(x, axes=axes)

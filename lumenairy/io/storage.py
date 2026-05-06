@@ -42,17 +42,19 @@ import numpy as np
 # HDF5 backend
 # =========================================================================
 
-try:
-    import h5py
-    _H5PY_AVAILABLE = True
-except ImportError:
-    _H5PY_AVAILABLE = False
+import importlib.util as _importlib_util
+_H5PY_AVAILABLE = _importlib_util.find_spec('h5py') is not None
+h5py = None  # populated lazily on first use
 
 
 def _require_h5py():
+    global h5py
     if not _H5PY_AVAILABLE:
         raise ImportError("h5py is required for HDF5 I/O. "
                           "Install with: pip install h5py")
+    if h5py is None:
+        import h5py as _h
+        globals()['h5py'] = _h
 
 
 def _decode_attr(val):

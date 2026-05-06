@@ -28,12 +28,48 @@ from .array import (
     is_cupy_array,
 )
 
-if JAX_AVAILABLE:
-    import jax.scipy.special as _jax_special
-    import jax.scipy.linalg as _jax_linalg
-else:
-    _jax_special = None
-    _jax_linalg = None
+_jax_special_cache = None
+_jax_linalg_cache = None
+
+
+def _get_jax_special():
+    global _jax_special_cache
+    if _jax_special_cache is None and JAX_AVAILABLE:
+        import jax.scipy.special as _m
+        _jax_special_cache = _m
+    return _jax_special_cache
+
+
+def _get_jax_linalg():
+    global _jax_linalg_cache
+    if _jax_linalg_cache is None and JAX_AVAILABLE:
+        import jax.scipy.linalg as _m
+        _jax_linalg_cache = _m
+    return _jax_linalg_cache
+
+
+# Property-style accessors so existing _jax_special / _jax_linalg
+# references still work.  Resolved on first access; AttributeError
+# behaviour mirrors the underlying module so getattr(default) calls
+# still work as before.
+class _LazyAttrProxy:
+    def __init__(self, getter):
+        object.__setattr__(self, '_getter', getter)
+
+    def __getattr__(self, name):
+        # Avoid infinite recursion on internal attrs.
+        if name.startswith('_'):
+            raise AttributeError(name)
+        m = self._getter()
+        if m is None:
+            # JAX absent -- expose nothing, mirroring the original
+            # ``_jax_special = None`` behaviour at the call site.
+            raise AttributeError(name)
+        return getattr(m, name)
+
+
+_jax_special = _LazyAttrProxy(_get_jax_special)
+_jax_linalg = _LazyAttrProxy(_get_jax_linalg)
 
 
 def _dispatch_special(name, x, *args, **kwargs):

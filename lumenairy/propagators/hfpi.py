@@ -295,6 +295,29 @@ def accumulate_to_grid(
 # End-to-end convenience
 # ============================================================================
 
+def propagate_hfpi(E_in, z, wavelength, dx, *,
+                    aperture_radius,
+                    z_aperture_to_output,
+                    n_paths,
+                    **kwargs):
+    """Canonical-order HFPI three-leg propagation.
+
+    Argument order ``(E_in, z, wavelength, dx)`` matches
+    :func:`angular_spectrum_propagate`.  ``z`` here is the source-plane
+    -> aperture distance (i.e. the first leg).  Other HFPI-specific
+    parameters remain keyword-only.
+
+    Internally delegates to :func:`propagate_hfpi_freespace_aperture`
+    (which retains its legacy
+    ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)`` order).
+    """
+    return propagate_hfpi_freespace_aperture(
+        E_in, dx, z_to_aperture=z, wavelength=wavelength,
+        aperture_radius=aperture_radius,
+        z_aperture_to_output=z_aperture_to_output,
+        n_paths=n_paths, **kwargs)
+
+
 def propagate_hfpi_freespace_aperture(
     E_in,
     dx: float,
@@ -315,6 +338,12 @@ def propagate_hfpi_freespace_aperture(
     aperture -> free space -> output plane.
 
     The canonical single-aperture-diffraction validation case.
+
+    .. note::
+       This function uses a non-canonical argument order
+       ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)``.  Prefer
+       :func:`propagate_hfpi` for the canonical
+       ``(E_in, z, wavelength, dx)`` order.
     """
     paths = init_paths_from_field(
         E_in, dx,

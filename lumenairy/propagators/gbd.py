@@ -257,6 +257,21 @@ def reconstruct_field_from_beamlets(
 # End-to-end convenience
 # ============================================================================
 
+def propagate_gbd(E_in, z, wavelength, dx, **kwargs):
+    """Canonical-order GBD free-space propagation.
+
+    Argument order ``(E_in, z, wavelength, dx)`` matches
+    :func:`angular_spectrum_propagate` and
+    :func:`propagate_huygens_fresnel`.  This is the recommended entry
+    point for new code.  Internally delegates to
+    :func:`propagate_gbd_freespace` (which retains its legacy
+    ``(E_in, dx, *, z, wavelength, ...)`` order for backwards
+    compatibility).
+    """
+    return propagate_gbd_freespace(
+        E_in, dx, z=z, wavelength=wavelength, **kwargs)
+
+
 def propagate_gbd_freespace(
     E_in,
     dx: float,
@@ -270,7 +285,16 @@ def propagate_gbd_freespace(
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
 ):
-    """End-to-end free-space GBD: source -> z -> output."""
+    """End-to-end free-space GBD: source -> z -> output.
+
+    .. note::
+       This function uses a non-canonical argument order
+       ``(E_in, dx, *, z, wavelength, ...)``.  Prefer
+       :func:`propagate_gbd` for the canonical
+       ``(E_in, z, wavelength, dx)`` order shared with
+       :func:`angular_spectrum_propagate` and
+       :func:`propagate_huygens_fresnel`.
+    """
     Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
     if output_dx is None:
         output_dx = dx

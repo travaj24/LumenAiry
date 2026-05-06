@@ -16,14 +16,17 @@ Author: Andrew Traverso
 
 import numpy as np
 
-try:
-    import cupy as cp
-    CUPY_AVAILABLE = True
-except ImportError:
-    # Sentinel so ``xp is cp`` checks below don't NameError when cupy
-    # isn't installed.
-    cp = None
-    CUPY_AVAILABLE = False
+import importlib.util as _importlib_util
+CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
+cp = None  # populated lazily on first use
+
+
+def _ensure_cupy_loaded():
+    global cp
+    if cp is None and CUPY_AVAILABLE:
+        import cupy as _c
+        cp = _c
+    return cp is not None
 
 
 # ---------------------------------------------------------------------------

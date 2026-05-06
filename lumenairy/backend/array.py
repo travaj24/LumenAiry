@@ -29,27 +29,60 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import importlib.util as _importlib_util
+
 import numpy as np
 
 # ============================================================================
-# Optional backend imports
+# Optional-backend availability checks (lazy)
 # ============================================================================
+#
+# Heavy optional dependencies (CuPy, JAX) are NOT loaded at import time.
+# Only their availability is detected via importlib.util.find_spec, which
+# is essentially free and does not actually import the package.  The
+# modules themselves are loaded lazily on first call to a function that
+# needs them, via the _get_*() accessors below.
+#
+# Keeping JAX_AVAILABLE / CUPY_AVAILABLE as module-level constants
+# preserves the public API used by ~60+ callers across the package.
 
-try:
-    import cupy as _cp
-    CUPY_AVAILABLE = True
-except ImportError:
-    _cp = None
-    CUPY_AVAILABLE = False
+CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
+JAX_AVAILABLE = _importlib_util.find_spec('jax') is not None
 
-try:
-    import jax
-    import jax.numpy as _jnp
-    JAX_AVAILABLE = True
-except ImportError:
-    jax = None
-    _jnp = None
-    JAX_AVAILABLE = False
+# Cached lazy module references.  Populated on first access.
+_cp = None
+_jnp = None
+_jax = None
+
+
+def _get_cupy():
+    """Return the cupy module, importing on first call.  None if CuPy
+    is not installed."""
+    global _cp
+    if _cp is None and CUPY_AVAILABLE:
+        import cupy as _cp_mod
+        _cp = _cp_mod
+    return _cp
+
+
+def _get_jax():
+    """Return the jax module, importing on first call.  None if JAX is
+    not installed."""
+    global _jax
+    if _jax is None and JAX_AVAILABLE:
+        import jax as _jax_mod
+        _jax = _jax_mod
+    return _jax
+
+
+def _get_jnp():
+    """Return the jax.numpy module, importing on first call.  None if
+    JAX is not installed."""
+    global _jnp
+    if _jnp is None and JAX_AVAILABLE:
+        import jax.numpy as _jnp_mod
+        _jnp = _jnp_mod
+    return _jnp
 
 
 # ============================================================================
@@ -73,7 +106,10 @@ def is_cupy_array(x) -> bool:
     installed."""
     if not CUPY_AVAILABLE:
         return False
-    return isinstance(x, _cp.ndarray)
+    cp = _get_cupy()
+    if cp is None:
+        return False
+    return isinstance(x, cp.ndarray)
 
 
 def is_jax_array(x) -> bool:
@@ -83,10 +119,13 @@ def is_jax_array(x) -> bool:
     """
     if not JAX_AVAILABLE:
         return False
-    if isinstance(x, jax.Array):
+    jax_mod = _get_jax()
+    if jax_mod is None:
+        return False
+    if isinstance(x, jax_mod.Array):
         return True
     try:
-        return isinstance(x, jax.core.Tracer)
+        return isinstance(x, jax_mod.core.Tracer)
     except Exception:
         return False
 
@@ -129,9 +168,9 @@ def array_namespace(*arrays):
             "inputs to a single backend before calling.")
 
     if saw_jax:
-        return _jnp
+        return _get_jnp()
     if saw_cupy:
-        return _cp
+        return _get_cupy()
     return np
 
 
@@ -140,9 +179,9 @@ def backend_name(xp) -> str:
     :func:`array_namespace`."""
     if xp is np:
         return 'numpy'
-    if CUPY_AVAILABLE and xp is _cp:
+    if CUPY_AVAILABLE and xp is _get_cupy():
         return 'cupy'
-    if JAX_AVAILABLE and xp is _jnp:
+    if JAX_AVAILABLE and xp is _get_jnp():
         return 'jax'
     return getattr(xp, '__name__', repr(xp))
 
@@ -160,7 +199,7 @@ def to_numpy(x):
     if is_numpy_array(x):
         return x
     if is_cupy_array(x):
-        return _cp.asnumpy(x)
+        return _get_cupy().asnumpy(x)
     if is_jax_array(x):
         return np.asarray(x)
     return np.asarray(x)
@@ -175,14 +214,14 @@ def to_backend(x, xp):
     """
     if xp is np:
         return to_numpy(x)
-    if CUPY_AVAILABLE and xp is _cp:
+    if CUPY_AVAILABLE and xp is _get_cupy():
         if is_cupy_array(x):
             return x
-        return _cp.asarray(to_numpy(x))
-    if JAX_AVAILABLE and xp is _jnp:
+        return _get_cupy().asarray(to_numpy(x))
+    if JAX_AVAILABLE and xp is _get_jnp():
         if is_jax_array(x):
             return x
-        return _jnp.asarray(to_numpy(x))
+        return _get_jnp().asarray(to_numpy(x))
     raise TypeError(
         f"to_backend: unrecognised target namespace {xp!r}.  Expected "
         f"numpy, cupy, or jax.numpy.")

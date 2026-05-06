@@ -32,11 +32,18 @@ Author: Andrew Traverso
 # ---------------------------------------------------------------------------
 # Optional dependency
 # ---------------------------------------------------------------------------
-try:
-    from refractiveindex import RefractiveIndexMaterial
-    _REFRACTIVEINDEX_AVAILABLE = True
-except ImportError:
-    _REFRACTIVEINDEX_AVAILABLE = False
+import importlib.util as _importlib_util
+_REFRACTIVEINDEX_AVAILABLE = (
+    _importlib_util.find_spec('refractiveindex') is not None)
+RefractiveIndexMaterial = None  # populated lazily on first use
+
+
+def _ensure_refractiveindex_loaded():
+    global RefractiveIndexMaterial
+    if RefractiveIndexMaterial is None and _REFRACTIVEINDEX_AVAILABLE:
+        from refractiveindex import RefractiveIndexMaterial as _RIM
+        globals()['RefractiveIndexMaterial'] = _RIM
+    return RefractiveIndexMaterial is not None
 
 # ---------------------------------------------------------------------------
 # Glass registry -- (shelf, book, page) tuples for refractiveindex.info
@@ -98,6 +105,7 @@ def get_glass_index(glass_name, wavelength):
         raise ImportError(
             "The 'refractiveindex' package is required for glass index lookup. "
             "Install it with: pip install refractiveindex")
+    _ensure_refractiveindex_loaded()
 
     if glass_name not in GLASS_REGISTRY:
         raise ValueError(

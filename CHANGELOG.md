@@ -2,6 +2,114 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.3] — 2026-05-06
+
+Audit-driven cleanup release.  No behaviour changes for any
+existing supported call; new exported names and faster startup.
+
+### Lazy-loading of heavy optional dependencies
+
+`import lumenairy` previously eagerly loaded JAX, CuPy, h5py,
+pyfftw, numexpr, matplotlib, astropy, refractiveindex, and PIL --
+roughly 2.3 s on a development box even when the user only
+wanted the NumPy ASM path.  All ten dependencies are now lazy:
+
+* `find_spec`-based availability checks at import time replace
+  unguarded `try: import X` blocks in `backend/array.py`,
+  `backend/scipy.py`, `backend/fft.py`, `propagators/propagation.py`,
+  `elements/lenses.py`, `elements/doe.py`, `glass.py`,
+  `analysis/plotting.py`, `io/storage.py`, `sources/core.py`.
+* `_ensure_*_loaded()` helpers (or per-module `_get_*()`
+  accessors) import the actual package on first use.
+* The `JAX_AVAILABLE` / `CUPY_AVAILABLE` / `_H5PY_AVAILABLE` /
+  etc. module-level constants are preserved -- the ~60 callers
+  across the package that branch on them require no change.
+
+Result: `import lumenairy` measured at **0.60 s** end-to-end,
+**0 heavy deps** loaded eagerly (down from 10).  Roughly **3.85x
+faster startup**.  Net: every CLI script and notebook that uses
+the library starts up faster, and JAX is no longer pulled in
+for purely-NumPy workflows.
+
+### Canonical propagator argument order
+
+Three of the four end-to-end propagators historically used
+`(E_in, dx, *, z, wavelength, ...)`; only `angular_spectrum_propagate`
+and `propagate_huygens_fresnel_freespace` used the canonical
+`(E_in, z, wavelength, dx, ...)`.  3.5.3 adds the canonical-order
+forms as separate names, leaving the legacy signatures untouched
+for backwards compatibility:
+
+* `lumenairy.propagate_gbd(E_in, z, wavelength, dx, **kwargs)` --
+  delegates to `propagate_gbd_freespace`.
+* `lumenairy.propagate_hfpi(E_in, z, wavelength, dx, *,
+  aperture_radius, z_aperture_to_output, n_paths, **kwargs)` --
+  delegates to `propagate_hfpi_freespace_aperture`.
+
+The legacy `propagate_gbd_freespace` and
+`propagate_hfpi_freespace_aperture` continue to work; their
+docstrings now point users at the canonical-order versions.
+
+### New analysis utilities
+
+* `lumenairy.coupling_efficiency(E, mode, dx, dy=None)` --
+  classical mode-overlap coupling efficiency for fiber-coupling /
+  receiver-mode-matching applications.  Returns
+  `|<E|mode>|^2 / (<E|E>*<mode|mode>)` in [0, 1].  Validated
+  against the analytic 2-D Gaussian-to-Gaussian overlap
+  ``(2 w1 w2 / (w1^2 + w2^2))^2``.
+* `lumenairy.M2(E, dx, wavelength, dy=None)` -- ISO 11146
+  beam-quality factor at a single plane, with phase-curvature
+  correction via the Wigner cross-term so the result is
+  invariant under propagation.  Returns `(M2_x, M2_y)`.  A
+  fundamental Gaussian gives 1.0 to grid-sampling precision; a
+  curved (non-waist) Gaussian still gives 1.0; a multi-mode beam
+  gives M2 > 1 along the spread axis.
+
+Both have validation tests in `test_analysis.py`.
+
+### Library export bug fixes (carried over from 3.5.2 work)
+
+* `export_zemax_zmx` and `export_zemax_lens_data` now honour
+  per-surface `semi_diameter` from the prescription dict
+  (previously emitted only the global `aperture_diameter / 2`
+  for every row, dropping aperture-override information).
+* `export_zemax_zmx` now emits aspheric coefficients via
+  `TYPE EVENASPH` + `PARM` rows instead of silently dropping
+  them.  Coefficient unit conversion is m^(1-power) -> mm^(1-power).
+* `export_zemax_lens_data` `extra_notes=` now correctly handles
+  a list-of-strings (a string with newlines was previously
+  iterated character-by-character into one-character comment
+  lines).
+
+### Wiki
+
+Four new pages (filling the audit's documentation gaps):
+
+* [Huygens-Fresnel Path Integration](https://github.com/travaj24/LumenAiry/wiki/Huygens-Fresnel-Path-Integration)
+* [Gaussian Beamlet Decomposition](https://github.com/travaj24/LumenAiry/wiki/Gaussian-Beamlet-Decomposition)
+* [Multi-Huygens-Surface and Patches](https://github.com/travaj24/LumenAiry/wiki/Multi-Huygens-Surface-and-Patches)
+* [Validation and Accuracy](https://github.com/travaj24/LumenAiry/wiki/Validation-and-Accuracy)
+  (single-page index of every quantitative tolerance in the suite)
+
+### Validation
+
+All 25 validation files pass; +6 new tests in `test_analysis.py`
+covering `coupling_efficiency` (self-overlap, 2x-wider analytic
+match, orthogonal-tilt zero) and `M2` (fundamental-Gaussian
+unity, curvature invariance, two-spot-beam > 1).
+
+### Known follow-ups (not in 3.5.3)
+
+* Migration of the validation harness to pytest with proper
+  fixtures.
+* Triage of the ~178 `except Exception: pass` blocks across the
+  package -- audit flagged these as future Heisenbugs.
+* Surfacing the Maslov index / caustic-crossing diagnostic to
+  end users.
+* Stray-light pipeline integration (`BSDFModel` +
+  `enumerate_ghost_paths` + `coatings.py`).
+
 ## [3.5.2] — 2026-05-06
 
 ### All four 3.5.1 reserved JAX stubs are now real implementations

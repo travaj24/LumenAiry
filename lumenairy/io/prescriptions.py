@@ -1256,11 +1256,17 @@ def export_zemax_lens_data(prescription, path, wavelength=1.31e-6,
             glass = '--'
         conic = surf.get('conic', 0.0) or 0.0
         comment = surf.get('comment', '')
+        # Per-surface semi-diameter wins over the global aperture/2.
+        # This is what lets aperture overrides (commonly used to widen
+        # individual lens housings for an off-axis fan-out simulation)
+        # round-trip through the exported file.
+        sd_surf = surf.get('semi_diameter')
+        sd_mm = float(sd_surf) * 1e3 if sd_surf is not None else semi_dia_mm
         lines.append(
             '{mark}{surf:4s} {tp:11s} {rad:>16s} {th:>16s} '
             '{gl:>10s} {sd:>10.4f} {con:>8.4f}  {cm}'
             .format(mark=stop_mark, surf=label, tp='STANDARD',
-                    rad=rad, th=t_str, gl=glass, sd=semi_dia_mm,
+                    rad=rad, th=t_str, gl=glass, sd=sd_mm,
                     con=float(conic), cm=comment or f'surface {i+1}'))
 
     # Image plane
@@ -1387,6 +1393,10 @@ def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
         disz_val = _zemax_disz(t_m)
         curv_val = _zemax_curv(R)
 
+        # Per-surface semi-diameter wins over the global aperture/2.
+        sd_surf = surf.get('semi_diameter')
+        sd_mm = float(sd_surf) * 1e3 if sd_surf is not None else semi_dia_mm
+
         lines.append(f'SURF {idx}')
         lines.append('  TYPE STANDARD')
         if i == stop_surface:
@@ -1397,7 +1407,27 @@ def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
             lines.append(f'  CONI {conic:.6f}')
         if glass_line is not None:
             lines.append(glass_line)
-        lines.append(f'  DIAM {semi_dia_mm:.6f} 0 0 0 1 ""')
+        # Even-aspheric polynomial coefficients (a_4 h^4 + a_6 h^6 + ...).
+        # Zemax's even-aspheric uses TYPE EVENASPH and PARM 1..N.  When
+        # the prescription has aspheric_coeffs, switch the surface type
+        # so the coefficients survive a Zemax round-trip.
+        asph = surf.get('aspheric_coeffs') or {}
+        if asph:
+            # Replace the TYPE STANDARD line above (just emitted).
+            for j in range(len(lines) - 1, -1, -1):
+                if lines[j] == '  TYPE STANDARD':
+                    lines[j] = '  TYPE EVENASPH'
+                    break
+            for power in sorted(asph.keys()):
+                if power <= 0 or power % 2 != 0:
+                    continue
+                # Zemax PARM index: a_4 -> 1, a_6 -> 2, a_8 -> 3, ...
+                parm_idx = power // 2 - 1
+                # Coefficient unit: input is 1/m^(power-1) for our convention,
+                # Zemax expects 1/mm^(power-1).  Convert.
+                coeff_mm = asph[power] * (1e3 ** (1 - power))
+                lines.append(f'  PARM {parm_idx} {coeff_mm:.10e}')
+        lines.append(f'  DIAM {sd_mm:.6f} 0 0 0 1 ""')
 
     # Image surface at BFL after last refracting surface
     last_idx = len(surfaces) + 1

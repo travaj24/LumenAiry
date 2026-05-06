@@ -53,15 +53,20 @@ import numpy as np
 # Optional backend imports
 # ============================================================================
 
-# GPU acceleration via CuPy
-try:
-    import cupy as cp
-    CUPY_AVAILABLE = True
-except ImportError:
-    # Sentinel so ``xp is cp`` / ``isinstance(..., cp.ndarray)`` checks
-    # below don't NameError when cupy isn't installed.
-    cp = None
-    CUPY_AVAILABLE = False
+# GPU acceleration via CuPy (lazy-loaded -- ~150 ms init cost on
+# CUDA-equipped boxes, none of which is needed for the NumPy / pyFFTW
+# default path).
+import importlib.util as _importlib_util_for_cupy
+CUPY_AVAILABLE = _importlib_util_for_cupy.find_spec('cupy') is not None
+cp = None  # populated lazily on first use
+
+
+def _ensure_cupy_loaded():
+    global cp
+    if cp is None and CUPY_AVAILABLE:
+        import cupy as _c
+        cp = _c
+    return cp is not None
 
 
 def _is_cupy_array(x):
@@ -77,16 +82,28 @@ def _is_cupy_array(x):
     """
     if not CUPY_AVAILABLE:
         return False
+    if cp is None and not _ensure_cupy_loaded():
+        return False
     return isinstance(x, cp.ndarray)
 
-# Multi-threaded FFT via pyFFTW
-try:
-    import pyfftw
-    pyfftw.interfaces.cache.enable()
-    pyfftw.interfaces.cache.set_keepalive_time(30.0)
-    PYFFTW_AVAILABLE = True
-except ImportError:
-    PYFFTW_AVAILABLE = False
+# Multi-threaded FFT via pyFFTW (lazy-loaded -- pyFFTW pulls in a
+# substantial native lib at import time, so we only load it when
+# something actually wants the pyFFTW path).
+import importlib.util as _importlib_util
+PYFFTW_AVAILABLE = _importlib_util.find_spec('pyfftw') is not None
+pyfftw = None  # populated lazily by _ensure_pyfftw_loaded()
+
+
+def _ensure_pyfftw_loaded():
+    global pyfftw
+    if not PYFFTW_AVAILABLE:
+        return False
+    if pyfftw is None:
+        import pyfftw as _p
+        _p.interfaces.cache.enable()
+        _p.interfaces.cache.set_keepalive_time(30.0)
+        pyfftw = _p
+    return True
 
 # SciPy FFT (multi-threaded via workers parameter, always available with scipy)
 try:
@@ -242,7 +259,7 @@ def reset_fft_backend():
     # for "what was just being computed" so dropping them on backend
     # reset matches the user's mental model.
     clear_asm_caches()
-    if PYFFTW_AVAILABLE:
+    if PYFFTW_AVAILABLE and _ensure_pyfftw_loaded():
         try:
             pyfftw.interfaces.cache.disable()
             pyfftw.interfaces.cache.enable()
@@ -301,6 +318,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     # negligible; speedup vs scipy.fft comes from buffer reuse and
     # the threaded kernel.  pyfftw.FFTW.__call__ on the same buf is
     # not thread-safe -- the per-plan lock guards that.
+    _ensure_pyfftw_loaded()
     buf = pyfftw.empty_aligned(shape_t, dtype=dt)
     direction_flag = 'FFTW_FORWARD' if direction == 'fwd' else 'FFTW_BACKWARD'
     # Choose FFT axes: for 2-D shapes use (0, 1); for higher-D shapes
