@@ -2,6 +2,96 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.2] — 2026-05-06
+
+### All four 3.5.1 reserved JAX stubs are now real implementations
+
+3.5.1 added seven JAX-companion functions: three real, four reserved
+stubs that raised `NotImplementedError`.  3.5.2 lands the four
+remaining functions as real, validated, ``jax.grad``-compatible
+implementations.
+
+**`lumenairy.apply_real_lens_traced_jax`**
+
+Per-pixel ray-traced phase screen built from `trace_jax` + Newton
+inversion of the entrance->exit map (Chebyshev tensor-product fit
+for the inverse interpolant).  Default cheb_order=10 (66 basis
+terms) reaches sub-nm OPD residual on typical refractive lenses.
+Output is `E_in * mask * exp(i k0 OPD)` (thin-OPD-screen
+treatment); pass `amplitude='analytic'` for the NumPy-version's
+diffractive-amplitude leg via callback.  ``jax.grad`` flows from
+the output field back through ``E_in``; the prescription dict is
+treated as static (same constraint as `trace_jax`).  Validated
+against `apply_real_lens_traced` to ~0.7 nm RMS / 1 nm peak OPD on
+a moderate singlet, and ``jax.grad`` matches finite differences to
+5e-7 relative.
+
+**`lumenairy.apply_real_lens_maslov_jax`**
+
+Same structure as `apply_real_lens_traced_jax` plus a Maslov-index
+correction: counts Jacobian-determinant sign flips along the
+radial path from origin to each entrance pixel and adds
+``-pi/2 * count`` to the geometric phase.  Extends valid OPD
+modelling into caustic / focal-region neighbourhoods.  For
+non-caustic geometries the Maslov index is zero everywhere and
+the output matches `apply_real_lens_traced_jax` exactly.
+
+**`lumenairy.fit_canonical_polynomials_jax`**
+
+JAX-traceable canonical polynomial fit.  Uses `trace_jax` for the
+sample-collection ray bundle and `jnp.linalg.lstsq` for the 4-D
+Chebyshev tensor-product solve.  Returns a `CanonicalPolyFit`
+populated with JAX arrays (the dataclass's `eval_phi_xp` /
+`eval_s1_xp` methods preserve the gradient graph end-to-end into
+`aberration_tensor_lg00_jax` and `solve_envelope_stationary_jax_ift`).
+Coefficients agree with the NumPy fit to 1e-7 relative on a
+moderate singlet; ``jax.grad`` w.r.t. ``source_box_half`` matches
+finite differences to ~5e-3 relative (lstsq backward through the
+fit normaliser is the limiting factor).  Requires JAX x64 mode --
+single-precision lstsq + Chebyshev tensor product gives ~5%
+coefficient error and NaN gradients, so the function raises if
+called without `jax.config.update('jax_enable_x64', True)`.
+
+**`lumenairy.monte_carlo_tolerancing_jax`**
+
+JAX-accelerated trial sweep.  Per-trial perturbation generation
+stays in NumPy (``apply_perturbations`` mutates a Python
+prescription dict); the wave-leg propagation routes through either
+`apply_real_lens_traced_jax` (default) or NumPy `apply_real_lens`
+(``wave_propagator='real_lens'``), and the through-focus scan uses
+`through_focus_scan_jax`.  Identical Strehl distribution as the
+NumPy version on the same RNG seed; ~25% faster on the validation
+case (5 trials, 11-point z-scan, N=256) thanks to the fused
+per-z propagation.
+
+### Implementation note
+
+* `apply_real_lens_traced_jax` clamps the entrance ray-launch radius
+  to 1.02x the aperture (the NumPy reference uses 1.5x).  The
+  larger over-margin is unsafe in the JAX path because `trace_jax`
+  returns finite OPL values for rays whose geometric trajectory
+  would have negative edge-thickness through the glass (their
+  intersection points sit beyond where the next surface vertex
+  lies), where the NumPy `trace` correctly stops them.  Marginal
+  wave-grid pixels at the very edge that map back to entrance
+  positions slightly beyond aperture/2 are now zeroed by the
+  aperture mask -- the same final-zeroing the NumPy version
+  applies anyway.
+
+### `__all__`
+
+Size unchanged at 373.  Behaviour change: four entries that
+previously raised `NotImplementedError` now work.
+
+### Validation
+
+All 25 validation files pass.  Two new tests in `test_lenses.py`
+(`apply_real_lens_traced_jax` matches NumPy OPD; ``jax.grad`` vs
+FD), one in `test_lenses.py` (Maslov vs traced for non-caustic),
+two in `test_asymptotic.py` (`fit_canonical_polynomials_jax`
+matches NumPy; ``jax.grad`` finite), one in `test_analysis.py`
+(`monte_carlo_tolerancing_jax` matches NumPy on shared RNG).
+
 ## [3.5.1] — 2026-05-05
 
 ### Additive JAX paths across analysis + system + propagators

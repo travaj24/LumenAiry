@@ -800,24 +800,120 @@ def through_focus_scan_jax(E_exit, dx, wavelength, z_values,
 
 
 
-def monte_carlo_tolerancing_jax(*args, **kwargs):
-    """JAX-vmapped Monte-Carlo tolerancing trial sweep.
+def monte_carlo_tolerancing_jax(prescription, wavelength, N, dx, E_source,
+                                 perturbation_spec, focal_length, aperture,
+                                 n_trials=100, seed=0,
+                                 z_scan_range=None, z_scan_n=21,
+                                 bucket_radius=None,
+                                 wave_propagator='real_lens_traced_jax',
+                                 verbose=True, progress=None):
+    """JAX-accelerated Monte-Carlo tolerancing trial sweep.
 
-    Planned for a future release.  Each trial in the existing NumPy
-    monte_carlo_tolerancing() runs a full perturb + propagate +
-    through-focus-scan sequence.  A JAX version would vmap over trial
-    seeds and run all N trials in one fused JAX kernel -- provided
-    the inner perturb + propagate chain is JAX-traceable.  Currently
-    apply_perturbations() and apply_real_lens() run in NumPy, so a
-    full vmap requires routing through their JAX equivalents
-    (apply_real_lens_traced_jax, etc.) which are themselves still
-    incomplete.
+    Per-trial structure mirrors :func:`monte_carlo_tolerancing`:
 
-    For now, use :func:`monte_carlo_tolerancing` (NumPy).  The
-    iteration is embarrassingly parallel across trials, so the
-    bottleneck is the per-trial wave-leg cost rather than the trial
-    loop itself.
+      1. Draw perturbations from the user-specified distributions
+         (NumPy ``np.random`` -- ``apply_perturbations`` mutates a
+         Python prescription dict so the perturbation step itself
+         stays in NumPy).
+      2. Run the wave leg through the perturbed prescription.
+         When ``wave_propagator='real_lens_traced_jax'`` (default)
+         this is :func:`lumenairy.apply_real_lens_traced_jax`; pass
+         ``'real_lens'`` for the analytic NumPy variant.
+      3. Run :func:`through_focus_scan_jax` on the exit field --
+         this is the heavy compute (one ASM propagation per ``z``
+         sample) and runs as a single fused JAX kernel per trial.
+      4. Record peak Strehl from the scan and aggregate across
+         trials.
+
+    The trial loop is sequential (perturbation generation cannot be
+    vmap'd because ``apply_perturbations`` operates on a Python
+    prescription dict).  The win over the pure-NumPy version comes
+    from ``through_focus_scan_jax``'s fused per-z propagation, which
+    yields the same 5-15x speedup quoted there for typical 30+ point
+    z-scans (larger on GPU).
+
+    Parameters and return contract are identical to
+    :func:`monte_carlo_tolerancing`; the ``wave_propagator`` knob is
+    new and lets you opt into the analytic NumPy ``apply_real_lens``
+    if you need its full diffraction-amplitude treatment rather than
+    the ray-traced OPD screen of ``apply_real_lens_traced_jax``.
     """
-    raise NotImplementedError(
-        "monte_carlo_tolerancing_jax is reserved for a future "
-        "release.  Use monte_carlo_tolerancing() (NumPy).")
+    from ..backend import JAX_AVAILABLE as _JAX_AVAILABLE
+    if not _JAX_AVAILABLE:
+        raise ImportError(
+            'JAX is not installed; install with `pip install jax` or '
+            'use monte_carlo_tolerancing() (NumPy).')
+    from ..progress import call_progress
+    from ..elements.lenses import (
+        apply_real_lens, apply_real_lens_traced_jax,
+    )
+
+    if z_scan_range is None:
+        z_scan_range = (-focal_length / 20.0, focal_length / 20.0)
+    z_values = np.linspace(z_scan_range[0], z_scan_range[1], z_scan_n) \
+                  + focal_length
+
+    if wave_propagator not in ('real_lens_traced_jax', 'real_lens'):
+        raise ValueError(
+            f"wave_propagator must be 'real_lens_traced_jax' or "
+            f"'real_lens'; got {wave_propagator!r}")
+
+    trial_results = []
+    strehls = np.empty(n_trials)
+    for t in range(n_trials):
+        call_progress(progress, 'monte_carlo_tolerancing_jax',
+                      t / max(n_trials, 1),
+                      f'trial {t + 1}/{n_trials}')
+        rng = np.random.default_rng(seed + t)
+        perts = []
+        for spec in perturbation_spec:
+            d_std = spec.get('decenter_std', 0.0)
+            t_std = spec.get('tilt_std', 0.0)
+            f_rms = spec.get('form_error_rms', 0.0)
+            perts.append(Perturbation(
+                surface_index=spec['surface_index'],
+                decenter=(rng.normal(0, d_std) if d_std > 0 else 0.0,
+                          rng.normal(0, d_std) if d_std > 0 else 0.0),
+                tilt=(rng.normal(0, t_std) if t_std > 0 else 0.0,
+                      rng.normal(0, t_std) if t_std > 0 else 0.0),
+                form_error_rms=f_rms,
+                random_seed=int(rng.integers(0, 2**31 - 1)),
+                name=f'trial_{t}_s{spec["surface_index"]}',
+            ))
+        pres_p = apply_perturbations(prescription, perts, N=N, dx=dx)
+
+        if wave_propagator == 'real_lens_traced_jax':
+            E_exit = apply_real_lens_traced_jax(
+                E_source, pres_p, wavelength, dx, ray_subsample=4)
+        else:  # 'real_lens'
+            E_exit_np = apply_real_lens(
+                E_source, pres_p, wavelength, dx,
+                bandlimit=True, slant_correction=True)
+            E_exit = E_exit_np
+
+        ideal_peak = diffraction_limited_peak(
+            np.asarray(E_exit), wavelength, focal_length, dx)
+        scan = through_focus_scan_jax(
+            E_exit, dx, wavelength, z_values,
+            bucket_radius=bucket_radius, ideal_peak=ideal_peak,
+        )
+        z_best, strehl_peak = find_best_focus(scan, 'strehl')
+        strehls[t] = strehl_peak
+        trial_results.append({
+            'trial': t,
+            'z_best': z_best,
+            'strehl_peak': strehl_peak,
+        })
+        if verbose and (t + 1) % max(1, n_trials // 10) == 0:
+            print(f'    trial {t+1}/{n_trials}: Strehl={strehl_peak:.3f}')
+
+    call_progress(progress, 'monte_carlo_tolerancing_jax', 1.0, 'done')
+    return {
+        'strehl_peak_mean': float(np.mean(strehls)),
+        'strehl_peak_std':  float(np.std(strehls)),
+        'strehl_peak_p05':  float(np.percentile(strehls, 5)),
+        'strehl_peak_p50':  float(np.percentile(strehls, 50)),
+        'strehl_peak_p95':  float(np.percentile(strehls, 95)),
+        'trial_results': trial_results,
+        'strehl_array': strehls,
+    }

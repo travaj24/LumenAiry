@@ -584,5 +584,47 @@ H.run('strehl_ratio: invariant under global phase rotation',
       t_strehl_ratio_unchanged_under_global_phase)
 
 
+# ===========================================================================
+# JAX path: monte_carlo_tolerancing_jax
+# ===========================================================================
+
+def t_monte_carlo_tolerancing_jax_matches_numpy_real_lens():
+    """JAX MC tolerancing with wave_propagator='real_lens' returns the same
+    Strehl distribution as the NumPy reference for the same RNG seed
+    (sequential trial loop, identical physics, only the through-focus scan
+    is JAX-accelerated)."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    N = 256
+    dx = 10e-6
+    wl = 633e-9
+    E_source = np.ones((N, N), dtype=np.complex128)
+    focal_length = 20e-3 / (1.515 - 1)  # ~ 38.8 mm
+    spec = [
+        {'surface_index': 0, 'decenter_std': 5e-6, 'tilt_std': 1e-3},
+        {'surface_index': 1, 'decenter_std': 5e-6, 'tilt_std': 1e-3},
+    ]
+    s_jx = la.monte_carlo_tolerancing_jax(
+        presc, wl, N, dx, E_source, spec, focal_length, aperture=4e-3,
+        n_trials=3, seed=42, z_scan_n=11, verbose=False,
+        wave_propagator='real_lens',
+    )
+    s_np = la.monte_carlo_tolerancing(
+        presc, wl, N, dx, E_source, spec, focal_length, aperture=4e-3,
+        n_trials=3, seed=42, z_scan_n=11, verbose=False,
+    )
+    diff = float(np.max(np.abs(s_jx['strehl_array'] - s_np['strehl_array'])))
+    return diff < 1e-3, (
+        f'max Strehl diff={diff:.3e}, '
+        f'jx mean={s_jx["strehl_peak_mean"]:.4f} '
+        f'np mean={s_np["strehl_peak_mean"]:.4f}')
+
+
+H.run('monte_carlo_tolerancing_jax matches NumPy for real_lens propagator',
+      t_monte_carlo_tolerancing_jax_matches_numpy_real_lens)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

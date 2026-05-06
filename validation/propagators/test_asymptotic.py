@@ -1459,5 +1459,70 @@ H.run('solve_envelope_stationary_jax_ift IFT backward matches FD',
       t_solve_envelope_stationary_jax_ift_grad_matches_fd)
 
 
+# ===========================================================================
+# Layer 13 -- fit_canonical_polynomials_jax (JAX-traceable polynomial fit)
+# ===========================================================================
+
+def t_fit_canonical_polynomials_jax_matches_numpy():
+    """JAX fit's coefficients agree with the NumPy fit on the same prescription."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, fit_canonical_polynomials_jax,
+    )
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    wl = 633e-9
+    fit_np = fit_canonical_polynomials(
+        presc, wl, source_box_half=20e-6, pupil_box_half=0.05,
+        n_field=4, n_pupil=8, poly_order=4,
+    )
+    fit_jx = fit_canonical_polynomials_jax(
+        presc, wl, source_box_half=20e-6, pupil_box_half=0.05,
+        n_field=4, n_pupil=8, poly_order=4,
+    )
+    diff_phi = float(np.max(np.abs(
+        np.asarray(fit_jx.coef_phi) - fit_np.coef_phi)))
+    diff_s1 = float(np.max(np.abs(
+        np.asarray(fit_jx.coef_s1x) - fit_np.coef_s1x)))
+    rel_phi = diff_phi / max(np.max(np.abs(fit_np.coef_phi)), 1e-30)
+    return rel_phi < 1e-5, (
+        f'rel coef_phi diff={rel_phi:.3e}, '
+        f'abs coef_s1x diff={diff_s1:.3e}')
+
+
+def t_fit_canonical_polynomials_jax_grad_finite():
+    """jax.grad through fit_canonical_polynomials_jax produces a finite gradient."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials_jax,
+    )
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+
+    def loss(sbh):
+        fit = fit_canonical_polynomials_jax(
+            presc, 633e-9, source_box_half=sbh, pupil_box_half=0.05,
+            n_field=4, n_pupil=8, poly_order=4,
+        )
+        return jnp.sum(fit.coef_phi ** 2)
+
+    g = float(jax.grad(loss)(20e-6))
+    return bool(np.isfinite(g)) and abs(g) > 0, f'grad={g:.4e}'
+
+
+H.section('fit_canonical_polynomials_jax')
+H.run('fit_canonical_polynomials_jax matches NumPy fit',
+      t_fit_canonical_polynomials_jax_matches_numpy)
+H.run('jax.grad through fit_canonical_polynomials_jax is finite',
+      t_fit_canonical_polynomials_jax_grad_finite)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

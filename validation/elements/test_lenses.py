@@ -781,5 +781,118 @@ H.run('Axicon: produces non-zero on-axis intensity at z>0',
       t_axicon_makes_bessel_intensity_pattern)
 
 
+# ===========================================================================
+# JAX path: apply_real_lens_traced_jax / apply_real_lens_maslov_jax
+# ===========================================================================
+
+def t_apply_real_lens_traced_jax_runs():
+    """apply_real_lens_traced_jax produces finite output of the same dtype."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=2e-3)
+    N = 64
+    E_in = jnp.ones((N, N), dtype=jnp.complex128)
+    E_out = la.apply_real_lens_traced_jax(
+        E_in, presc, 633e-9, 20e-6, ray_subsample=4, cheb_order=8)
+    return (E_out.shape == (N, N)
+            and bool(jnp.all(jnp.isfinite(E_out)))
+            and float(jnp.max(jnp.abs(E_out))) > 0), (
+        f'shape={E_out.shape} max|E|={float(jnp.max(jnp.abs(E_out))):.3f}')
+
+
+def t_apply_real_lens_traced_jax_matches_numpy_opd():
+    """OPD output of apply_real_lens_traced_jax tracks NumPy
+    apply_real_lens_traced to within a few nm RMS on a moderate singlet."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    presc = la.make_singlet(R1=50e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    N = 1024
+    dx = 5e-6
+    wl = 633e-9
+    E_in = np.ones((N, N), dtype=np.complex128)
+    E_jax = la.apply_real_lens_traced_jax(
+        E_in, presc, wl, dx, ray_subsample=4, cheb_order=10)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        E_np = la.apply_real_lens_traced(
+            E_in, presc, wl, dx, ray_subsample=4, on_undersample='silent',
+            n_workers=1, preserve_input_phase=False)
+    ratio = np.asarray(E_jax) / np.where(np.abs(E_np) > 1e-6, E_np, 1)
+    mask = (np.abs(E_np) > 0.5 * np.max(np.abs(E_np))) \
+            & (np.abs(np.asarray(E_jax)) > 1e-6)
+    opd_diff_nm = (np.angle(ratio) / (2 * np.pi / wl) * 1e9)
+    rms = float(np.sqrt(np.mean(opd_diff_nm[mask] ** 2)))
+    return rms < 10.0, f'OPD diff RMS = {rms:.2f} nm (threshold 10 nm)'
+
+
+def t_apply_real_lens_traced_jax_grad_finite():
+    """jax.grad through apply_real_lens_traced_jax produces a finite gradient
+    w.r.t. E_in, matching finite differences."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=2e-3)
+    N = 64
+    dx = 20e-6
+    wl = 633e-9
+    def loss(E_in):
+        E_out = la.apply_real_lens_traced_jax(
+            E_in, presc, wl, dx, ray_subsample=4, cheb_order=8)
+        c = N // 2
+        return jnp.sum(jnp.abs(E_out[c-2:c+2, c-2:c+2]) ** 2)
+    x = (jnp.arange(N) - N / 2) * dx
+    X, Y = jnp.meshgrid(x, x, indexing='ij')
+    E_in = jnp.exp(1j * 2 * jnp.pi * 1e3 * X).astype(jnp.complex128)
+    g = jax.grad(loss)(E_in)
+    delta = 1e-6
+    y0 = float(loss(E_in))
+    y_p = float(loss(E_in.at[N//2, N//2].add(delta)))
+    fd = (y_p - y0) / delta
+    jx = float(g[N//2, N//2].real)
+    rel = abs(fd - jx) / max(abs(jx), abs(fd), 1e-12)
+    return (bool(jnp.all(jnp.isfinite(g))) and rel < 1e-3,
+            f'rel(JAX, FD) = {rel:.3e}, JAX={jx:.4e}, FD={fd:.4e}')
+
+
+def t_apply_real_lens_maslov_jax_no_caustic_matches_traced():
+    """For a non-caustic geometry, Maslov index = 0 and the Maslov output
+    should equal apply_real_lens_traced_jax."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=2e-3)
+    N = 64
+    dx = 20e-6
+    wl = 633e-9
+    E_in = jnp.ones((N, N), dtype=jnp.complex128)
+    E_traced = la.apply_real_lens_traced_jax(
+        E_in, presc, wl, dx, ray_subsample=4)
+    E_maslov = la.apply_real_lens_maslov_jax(
+        E_in, presc, wl, dx, ray_subsample=4)
+    diff = float(jnp.max(jnp.abs(E_traced - E_maslov)))
+    return diff < 1e-12, f'max diff = {diff:.3e}'
+
+
+H.section('JAX traced / Maslov real-lens propagators')
+H.run('apply_real_lens_traced_jax: runs and produces finite output',
+      t_apply_real_lens_traced_jax_runs)
+H.run('apply_real_lens_traced_jax: OPD matches NumPy within 10 nm RMS',
+      t_apply_real_lens_traced_jax_matches_numpy_opd)
+H.run('jax.grad through apply_real_lens_traced_jax matches FD',
+      t_apply_real_lens_traced_jax_grad_finite)
+H.run('apply_real_lens_maslov_jax matches traced for non-caustic geometry',
+      t_apply_real_lens_maslov_jax_no_caustic_matches_traced)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())
