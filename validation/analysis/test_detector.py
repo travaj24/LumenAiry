@@ -123,5 +123,72 @@ def t_gerchberg_saxton():
 H.run('Phase retrieval: GS error decreases', t_gerchberg_saxton)
 
 
+def t_shack_hartmann_recovers_tilt():
+    """Shack-Hartmann should recover a known wavefront tilt as a
+    nonzero centroid-shift map (slope_x).  The integrated wavefront
+    is gauge-fixed at the centre, so we test the slope output
+    directly.
+    """
+    N = 256; dx = 4e-6; lam = 1.31e-6
+    x = (np.arange(N) - N/2) * dx
+    X, _Y = np.meshgrid(x, x)
+    # Strong tilt: 5 waves end-to-end across the pupil.
+    waves_total = 5.0
+    phase = (2 * np.pi * waves_total / (N * dx)) * X
+    E = np.exp(1j * phase)
+    slope_x, slope_y, wf, _, _ = la.shack_hartmann(
+        E, dx, lam, lenslet_pitch=50e-6, lenslet_focal=200e-6,
+        n_lenslets=8)
+    # slope_x should be nonzero and near-uniform (positive) for a
+    # left-to-right tilt.  slope_y should be near zero.
+    slope_x_mean = float(np.mean(slope_x))
+    slope_y_mean = float(np.mean(slope_y))
+    slope_x_std = float(np.std(slope_x))
+    # Tilt produces a UNIFORM slope across the pupil; the test is
+    # whether at least one slope axis has nonzero mean with std much
+    # smaller than the mean (uniform tilt, not random noise).  We
+    # don't fix which axis dominates -- SH may use (row, col) instead
+    # of (x, y) -- because either is physically valid.
+    slope_y_std = float(np.std(slope_y))
+    abs_means = (abs(slope_x_mean), abs(slope_y_mean))
+    abs_stds = (slope_x_std, slope_y_std)
+    nonzero = max(abs_means) > 1e-6
+    uniform = min(s / max(m, 1e-30) for m, s in zip(abs_means, abs_stds)
+                   if m > 1e-12) < 0.5
+    return (nonzero and uniform), (
+        f'slope_x mean={slope_x_mean:.3e} (std={slope_x_std:.2e}), '
+        f'slope_y mean={slope_y_mean:.3e} (std={slope_y_std:.2e})')
+
+
+def t_phase_retrieval_hio_runs_and_decreases():
+    """Hybrid Input-Output phase retrieval should run and produce
+    finite output, with monotonic-or-decreasing error over the run.
+    """
+    N = 128
+    x = np.linspace(-1, 1, N)
+    X, Y = np.meshgrid(x, x)
+    source = np.exp(-(X**2 + Y**2) / 0.3**2)
+    target = (np.where(np.abs(X) < 0.3, 1.0, 0.0)
+              * np.where(np.abs(Y) < 0.3, 1.0, 0.0))
+    try:
+        phase, err = la.hybrid_input_output(
+            source, target, n_iter=50, beta=0.7)
+    except TypeError:
+        # Older signature without beta.
+        phase, err = la.hybrid_input_output(source, target, n_iter=50)
+    finite = bool(np.all(np.isfinite(phase)))
+    if isinstance(err, (list, np.ndarray)) and len(err) > 1:
+        decreased = err[-1] < err[0]
+        return finite and decreased, (
+            f'HIO err: {err[0]:.4f} -> {err[-1]:.4f}; finite={finite}')
+    return finite, f'HIO produced phase shape {phase.shape}'
+
+
+H.run('Shack-Hartmann: recovers known tilt (gradient sign)',
+      t_shack_hartmann_recovers_tilt)
+H.run('Phase retrieval: HIO runs and decreases error',
+      t_phase_retrieval_hio_runs_and_decreases)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

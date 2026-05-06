@@ -251,5 +251,47 @@ H.run('apply_mask: phase-only mask preserves amplitude',
       t_apply_mask_phase_only_preserves_amplitude)
 
 
+def t_periodic_phase_mask_diffracts_to_correct_orders():
+    """Pi-phase periodic mask diffracts a uniform field to the +/-1
+    orders at the pixel positions predicted by the grating equation
+    sin(theta) = lambda / period.  Catches indexing / period bugs
+    in create_periodic_phase_mask.
+    """
+    N = 256; dx = 1e-6; lam = 1e-6
+    period_pixels = 8
+    period_m = period_pixels * dx
+    phase_cell = np.zeros((period_pixels, period_pixels), dtype=np.float64)
+    phase_cell[:, period_pixels // 2:] = np.pi
+
+    mask = la.create_periodic_phase_mask(
+        N, dx, phase_cell, cell_pixel_size=dx)
+    E_in = np.ones((N, N), dtype=np.complex128)
+    E_after = E_in * mask
+    F = np.fft.fftshift(np.fft.fft2(E_after))
+    I = np.abs(F) ** 2
+
+    # FFT pixel <-> spatial-frequency: the +/-1 diffraction order sits
+    # at m = N*dx/period pixels off-centre.
+    expected_pixel_offset = int(round(N * dx / period_m))
+    cx = N // 2
+    centre_row = I[N // 2]
+    plus = cx + expected_pixel_offset
+    minus = cx - expected_pixel_offset
+    window = 2
+    sl_p = slice(plus - window, plus + window + 1)
+    sl_m = slice(minus - window, minus + window + 1)
+    max_p = int(np.argmax(centre_row[sl_p])) + (plus - window)
+    max_m = int(np.argmax(centre_row[sl_m])) + (minus - window)
+    err_p = abs(max_p - plus)
+    err_m = abs(max_m - minus)
+    return (err_p <= 1 and err_m <= 1), (
+        f'expected +/-1 at pixels {plus},{minus}; '
+        f'got {max_p},{max_m}; err {err_p},{err_m}')
+
+
+H.run('Pi-phase periodic mask diffracts to correct +/-1 order pixels',
+      t_periodic_phase_mask_diffracts_to_correct_orders)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

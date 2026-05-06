@@ -73,7 +73,34 @@ def t_subaperture_asymptotic_runs():
         return True, f'skipped (fit failed: {type(e).__name__})'
 
 
+def t_subaperture_window_sum_in_overlap_region_smooth():
+    """Sum of patch windows over a 0.5-overlap tiling produces a
+    smooth, finite, all-positive map across the source box -- no
+    division-by-zero or holes between patches.  (A strict
+    partition-of-unity guarantee depends on edge_smoothness; here
+    we just verify the sum is well-conditioned.)
+    """
+    pg = patches_for_box(box_size=(1e-3, 1e-3),
+                         patch_size=(0.4e-3, 0.4e-3),
+                         overlap=0.5)
+    N = 64
+    x = np.linspace(-0.4e-3, 0.4e-3, N)
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    total = np.zeros_like(X)
+    for i in range(len(pg)):
+        c = (float(pg.centres[i, 0]), float(pg.centres[i, 1]))
+        hw = (float(pg.half_widths[i, 0]), float(pg.half_widths[i, 1]))
+        total += patch_window(X, Y, c, hw)
+    inside = (np.abs(X) < 0.2e-3) & (np.abs(Y) < 0.2e-3)
+    inside_min = float(np.min(total[inside]))
+    inside_max = float(np.max(total[inside]))
+    return (inside_min > 0 and bool(np.all(np.isfinite(total)))), (
+        f'inside-box sum range: [{inside_min:.3f}, {inside_max:.3f}]')
+
+
 def main():
+    import lumenairy as la
+
     H.section('Patch grid')
     H.run('patches_for_box count', t_patches_for_box_count)
 
@@ -83,6 +110,8 @@ def main():
 
     H.section('Recombination')
     H.run('partition of unity reproduces uniform', t_combine_partition_of_unity)
+    H.run('window sum over overlap tiling is positive + finite',
+          t_subaperture_window_sum_in_overlap_region_smooth)
 
     H.section('Subaperture asymptotic')
     H.run('subaperture asymptotic through singlet',

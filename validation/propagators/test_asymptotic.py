@@ -1075,5 +1075,321 @@ H.run('CanonicalPolyFit.eval_phi_xp accepts JAX', t_canonical_fit_jax_eval)
 H.run('jax.grad through eval_phi_xp', t_canonical_fit_jax_grad)
 
 
+# ===========================================================================
+# Layer 11 -- JAX paths for aberration_tensor / propagate_modal_asymptotic
+# ===========================================================================
+
+def t_aberration_tensor_lg00_jax_matches_numpy():
+    """LG_{0,0} JAX path matches the (0, 0) element of NumPy aberration_tensor."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary,
+        aberration_tensor, aberration_tensor_lg00_jax,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=8, n_pupil=8, poly_order=6,
+    )
+    s2_image = (fit.s2x_centre, fit.s2y_centre)
+    v_star, _, _ = solve_envelope_stationary(
+        fit, s2_image, (0.0, 0.0),
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+    res = aberration_tensor(
+        fit, s2_image=s2_image,
+        source_point=(0.0, 0.0),
+        source_modes=[(0, 0)], pupil_modes=[(0, 0)],
+        output_modes=[(0, 0)],
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+    L_np = complex(res.L[0, 0])
+    L_jax = aberration_tensor_lg00_jax(
+        fit, s2_image, v_star,
+        source_point=(0.0, 0.0),
+        w_s=20e-6, w_p=0.02, w_o=res.w_o,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+    L_jax_c = complex(L_jax)
+    rel = abs(L_np - L_jax_c) / max(abs(L_np), 1e-30)
+    return rel < 1e-3, (
+        f'L_np={L_np:.4e}, L_jax={L_jax_c:.4e}, rel_err={rel:.2e}')
+
+
+def t_aberration_tensor_lg00_jax_grad():
+    """jax.grad of |L_{(0,0),(0,0)}|^2 wrt source_point yields a finite gradient."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary,
+        aberration_tensor_lg00_jax,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    s2_image = (fit.s2x_centre, fit.s2y_centre)
+    v_star, _, _ = solve_envelope_stationary(
+        fit, s2_image, (0.0, 0.0),
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+
+    def strehl_amp(src_x):
+        L = aberration_tensor_lg00_jax(
+            fit, s2_image, (float(v_star[0]), float(v_star[1])),
+            source_point=(src_x, 0.0),
+            w_s=20e-6, w_p=0.02,
+            v2_centre=(fit.v2x_centre, fit.v2y_centre),
+        )
+        return jnp.abs(L) ** 2
+
+    g = jax.grad(strehl_amp)(jnp.float32(0.0))
+    return bool(jnp.isfinite(g)), f'd|L|^2/dx={float(g):.4e}'
+
+
+def t_propagate_modal_asymptotic_lg00_jax_matches_numpy():
+    """JAX per-pixel evaluator matches NumPy on a small grid."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary,
+        propagate_modal_asymptotic, propagate_modal_asymptotic_lg00_jax,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=8, n_pupil=8, poly_order=6,
+    )
+    L_box = fit.s2x_halfrange * 0.2
+    n = 5
+    ax = np.linspace(-L_box, L_box, n) + fit.s2x_centre
+    ay = np.linspace(-L_box, L_box, n) + fit.s2y_centre
+    X, Y = np.meshgrid(ax, ay, indexing='xy')
+
+    field_np = propagate_modal_asymptotic(
+        fit,
+        source_point=(0.0, 0.0),
+        source_amplitudes={(0, 0): 1.0 + 0.0j},
+        pupil_amplitudes={(0, 0): 1.0 + 0.0j},
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+        s2_grid_x=X, s2_grid_y=Y,
+    )
+
+    # Build v_star grid via NumPy Newton (warm-start across pixels).
+    v_grid = np.zeros(X.shape + (2,), dtype=np.float64)
+    last_v = (fit.v2x_centre, fit.v2y_centre)
+    for iy in range(X.shape[0]):
+        for ix in range(X.shape[1]):
+            v_star, _, _ = solve_envelope_stationary(
+                fit, (X[iy, ix], Y[iy, ix]), (0.0, 0.0),
+                w_s=20e-6, w_p=0.02,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre),
+                v2_initial=last_v,
+            )
+            v_grid[iy, ix, 0] = v_star[0]
+            v_grid[iy, ix, 1] = v_star[1]
+            last_v = v_star
+
+    field_jax = propagate_modal_asymptotic_lg00_jax(
+        fit, X, Y, v_grid,
+        source_point=(0.0, 0.0),
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+    field_jax_np = np.asarray(field_jax)
+    # NumPy uses an internal w_o auto-pick; JAX uses its own.  We just
+    # check that the magnitude profiles agree to a few percent in the
+    # central pixel where the leading term dominates.
+    centre = (n // 2, n // 2)
+    rel = abs(abs(field_np[centre]) - abs(field_jax_np[centre])) / max(
+        abs(field_np[centre]), 1e-30)
+    finite = bool(np.all(np.isfinite(field_jax_np)))
+    return (finite and rel < 0.05), (
+        f'centre |E_np|={abs(field_np[centre]):.3e}, '
+        f'|E_jax|={abs(field_jax_np[centre]):.3e}, rel={rel:.2e}')
+
+
+H.section('JAX paths -- aberration_tensor / modal asymptotic')
+H.run('aberration_tensor_lg00_jax matches NumPy (0,0) element',
+      t_aberration_tensor_lg00_jax_matches_numpy)
+H.run('jax.grad through aberration_tensor_lg00_jax',
+      t_aberration_tensor_lg00_jax_grad)
+H.run('propagate_modal_asymptotic_lg00_jax matches NumPy on small grid',
+      t_propagate_modal_asymptotic_lg00_jax_matches_numpy)
+
+
+def t_aberration_tensor_lg00_jax_named_result():
+    """return_result=True returns a JaxAberrationTensorResult NamedTuple."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary,
+        aberration_tensor_lg00_jax, JaxAberrationTensorResult,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    s2_image = (fit.s2x_centre, fit.s2y_centre)
+    v_star, _, _ = solve_envelope_stationary(
+        fit, s2_image, (0.0, 0.0),
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+    res = aberration_tensor_lg00_jax(
+        fit, s2_image, v_star, w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+        return_result=True,
+    )
+    return (isinstance(res, JaxAberrationTensorResult)
+            and tuple(res.L.shape) == (1, 1)), (
+        f'type={type(res).__name__}, L shape='
+        f'{tuple(res.L.shape) if hasattr(res, "L") else "n/a"}')
+
+
+H.run('aberration_tensor_lg00_jax(return_result=True) returns NamedTuple',
+      t_aberration_tensor_lg00_jax_named_result)
+
+
+# ===========================================================================
+# Layer 12 -- Unified analysis.aberration
+# ===========================================================================
+
+def t_aberration_summary_seidel_and_lg():
+    """la.aberration_summary populates Seidel totals + LG L_(0,0)."""
+    pres = _build_test_singlet()
+    summary = la.aberration_summary(
+        pres, wavelength=1.31e-6,
+        w_s=20e-6, w_p=0.02,
+        fit_kwargs=dict(source_box_half=20e-6, pupil_box_half=0.02,
+                         n_field=6, n_pupil=6, poly_order=4),
+    )
+    seidel_finite = bool(np.all(np.isfinite(summary.seidel_total)))
+    has_efl = summary.efl is not None and np.isfinite(summary.efl)
+    has_lg = summary.lg_tensor is not None
+    has_per_surface = (summary.seidel_per_surface is not None
+                       and len(summary.seidel_per_surface) >= 2)
+    return (seidel_finite and has_efl and has_lg and has_per_surface), (
+        f'seidel_finite={seidel_finite}, efl={summary.efl}, '
+        f'has_lg={has_lg}, n_surf={len(summary.seidel_per_surface or [])}')
+
+
+def t_aberration_summary_format_runs():
+    """format_aberration_summary returns a non-empty string."""
+    pres = _build_test_singlet()
+    summary = la.aberration_summary(
+        pres, wavelength=1.31e-6, include_lg_tensor=False,
+    )
+    text = la.format_aberration_summary(summary)
+    return (isinstance(text, str) and len(text) > 0
+            and 'Seidel' in text), f'length={len(text)}'
+
+
+def t_aberration_summary_differentiable():
+    """differentiable=True swaps in JAX path; jax.grad works on |L|^2."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    pres = _build_test_singlet()
+    summary = la.aberration_summary(
+        pres, wavelength=1.31e-6,
+        w_s=20e-6, w_p=0.02,
+        fit_kwargs=dict(source_box_half=20e-6, pupil_box_half=0.02,
+                         n_field=6, n_pupil=6, poly_order=4),
+        differentiable=True,
+    )
+    if summary.lg_tensor is None:
+        return False, f'lg_tensor missing; notes={summary.notes}'
+    L = summary.lg_tensor.L
+    # JAX (1, 1) array
+    return tuple(L.shape) == (1, 1), (
+        f'L shape={tuple(L.shape)}, type={type(summary.lg_tensor).__name__}')
+
+
+H.section('Unified aberration analysis')
+H.run('aberration_summary populates Seidel + LG tensor',
+      t_aberration_summary_seidel_and_lg)
+H.run('format_aberration_summary returns non-empty text',
+      t_aberration_summary_format_runs)
+H.run('aberration_summary(differentiable=True) routes to JAX path',
+      t_aberration_summary_differentiable)
+
+
+def t_aberration_summary_efl_matches_system_abcd():
+    """summary.efl should equal system_abcd's EFL to high precision."""
+    pres = _build_test_singlet()
+    summary = la.aberration_summary(pres, wavelength=1.31e-6,
+                                      include_lg_tensor=False)
+    surfs = la.surfaces_from_prescription(pres)
+    _, efl_abcd, _, _ = la.system_abcd(surfs, 1.31e-6)
+    rel = abs(summary.efl - float(efl_abcd)) / abs(float(efl_abcd))
+    return rel < 1e-9, (
+        f'summary.efl={summary.efl:.6e}, system_abcd={float(efl_abcd):.6e}, '
+        f'rel={rel:.2e}')
+
+
+def t_aberration_tensor_grad_matches_fd():
+    """jax.grad of |L_(0,0)|^2 wrt source_point[0] agrees with FD."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary,
+        aberration_tensor_lg00_jax,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    s2_image = (fit.s2x_centre, fit.s2y_centre)
+    v_star, _, _ = solve_envelope_stationary(
+        fit, s2_image, (0.0, 0.0),
+        w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre),
+    )
+
+    def loss(src_x):
+        L = aberration_tensor_lg00_jax(
+            fit, s2_image, (float(v_star[0]), float(v_star[1])),
+            source_point=(src_x, 0.0),
+            w_s=20e-6, w_p=0.02,
+            v2_centre=(fit.v2x_centre, fit.v2y_centre),
+        )
+        return jnp.abs(L) ** 2
+
+    # Off-axis base point so the symmetric peak doesn't zero out the FD.
+    base = 5e-6
+    g_jax = float(jax.grad(loss)(jnp.float32(base)))
+    eps = 5e-7
+    f_p = float(loss(jnp.float32(base + eps)))
+    f_m = float(loss(jnp.float32(base - eps)))
+    g_fd = (f_p - f_m) / (2 * eps)
+    rel = (abs(g_jax - g_fd)
+           / max(abs(g_fd), abs(g_jax), 1e-30))
+    return rel < 0.10, (
+        f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}')
+
+
+H.run('aberration_summary.efl matches system_abcd to 1e-9',
+      t_aberration_summary_efl_matches_system_abcd)
+H.run('aberration_tensor_lg00_jax grad vs FD',
+      t_aberration_tensor_grad_matches_fd)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

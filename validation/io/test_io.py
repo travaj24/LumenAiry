@@ -544,5 +544,82 @@ H.run('User library: save/load fixed-index material',
       t_user_library_material)
 
 
+def t_replay_run_round_trip():
+    """append_plane + replay_run reproduces the stored planes."""
+    tmpdir = tempfile.mkdtemp()
+    path = os.path.join(tmpdir, 'replay.h5')
+    try:
+        N = 16; dx = 5e-6
+        E1 = np.ones((N, N), dtype=np.complex128)
+        E2 = 0.5 * np.ones((N, N), dtype=np.complex128)
+        E3 = (np.arange(N * N).reshape(N, N) / (N * N)
+              ).astype(np.complex128)
+        la.append_plane(path, E1, dx, label='replay_000_input')
+        la.append_plane(path, E2, dx, label='replay_001_mid')
+        la.append_plane(path, E3, dx, label='replay_002_output')
+
+        result = la.replay_run(path, label_prefix='replay',
+                                wavelength=633e-9, method='unit-test')
+        if not isinstance(result, la.PropagationResult):
+            return False, f'type={type(result).__name__}'
+        labels = result.labels()
+        n_ok = (len(result.history) == 3
+                and labels[0].endswith('input')
+                and labels[-1].endswith('output'))
+        # Final field equals the last appended plane.
+        err = float(np.max(np.abs(result.field - E3)))
+        return (n_ok and err < 1e-12), (
+            f'labels={labels}, exit-plane err={err:.2e}')
+    finally:
+        try:
+            os.remove(path)
+            os.rmdir(tmpdir)
+        except OSError:
+            pass
+
+
+H.run('replay_run reads back stored planes into a PropagationResult',
+      t_replay_run_round_trip)
+
+
+def t_replay_run_zarr_round_trip():
+    """replay_run also works on Zarr stores."""
+    try:
+        import zarr  # noqa: F401
+    except ImportError:
+        return True, 'skipped (zarr not installed)'
+
+    tmpdir = tempfile.mkdtemp()
+    path = os.path.join(tmpdir, 'replay.zarr')
+    try:
+        N = 16; dx = 5e-6
+        E1 = np.ones((N, N), dtype=np.complex128)
+        E2 = (np.arange(N * N).reshape(N, N) / (N * N)
+              ).astype(np.complex128)
+        la.append_plane(path, E1, dx, label='zarr_000_input')
+        la.append_plane(path, E2, dx, label='zarr_001_output')
+
+        result = la.replay_run(path, label_prefix='zarr',
+                                wavelength=633e-9)
+        if not isinstance(result, la.PropagationResult):
+            return False, f'type={type(result).__name__}'
+        ok = (len(result.history) == 2
+              and result.labels()[0].endswith('input')
+              and result.labels()[-1].endswith('output'))
+        err = float(np.max(np.abs(result.field - E2)))
+        return ok and err < 1e-12, (
+            f'labels={result.labels()}, exit-plane err={err:.2e}')
+    finally:
+        try:
+            import shutil
+            shutil.rmtree(path, ignore_errors=True)
+            os.rmdir(tmpdir)
+        except OSError:
+            pass
+
+
+H.run('replay_run round-trip on a Zarr store', t_replay_run_zarr_round_trip)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

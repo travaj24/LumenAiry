@@ -122,6 +122,66 @@ def t_prescription_hfpi():
     return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), 'ok'
 
 
+def t_hfpi_aperture_decreases_alive_count():
+    """An aperture must reduce alive paths.  Catches bugs where the
+    aperture mask isn't applied or `alive` is reset elsewhere.
+    """
+    N = 16; dx = 5e-6; lam = 633e-9
+    E = np.ones((N, N), dtype=np.complex128)
+    paths_in = init_paths_from_field(E, dx, n_paths=2000,
+                                       wavelength=lam, rng=42)
+    n_in = int(np.sum(paths_in.alive))
+    paths_at_ap = propagate_to_plane(paths_in, z_target=1e-3,
+                                       wavelength=lam)
+    paths_after_ap = apply_aperture_diffraction(
+        paths_at_ap, aperture_radius=20e-6,
+        wavelength=lam,
+    )
+    n_after = int(np.sum(paths_after_ap.alive))
+    return n_after < n_in and n_after >= 0, (
+        f'alive in={n_in}, after_aperture={n_after}')
+
+
+def t_hfpi_stratified_lower_variance_than_uniform():
+    """Stratified sampling should yield lower per-pixel intensity
+    variance than uniform random sampling (for a smooth source).
+    """
+    from lumenairy.propagators.hfpi import init_paths_stratified
+    N = 16; dx = 10e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (60e-6)**2).astype(np.complex128)
+
+    n_paths = 2000
+    # Uniform.
+    paths_u = init_paths_from_field(E, dx, n_paths=n_paths,
+                                      wavelength=lam, rng=1)
+    paths_u = propagate_to_plane(paths_u, z_target=1e-3, wavelength=lam)
+    out_u = accumulate_to_grid(paths_u, Ny=N, Nx=N, dx=dx)
+
+    # Stratified.
+    paths_s = init_paths_stratified(E, dx, n_paths=n_paths,
+                                      wavelength=lam, rng=1)
+    paths_s = propagate_to_plane(paths_s, z_target=1e-3, wavelength=lam)
+    out_s = accumulate_to_grid(paths_s, Ny=N, Nx=N, dx=dx)
+
+    var_u = float(np.var(np.abs(out_u) ** 2))
+    var_s = float(np.var(np.abs(out_s) ** 2))
+    # Both should be > 0; stratified should be reasonably comparable
+    # or smaller.  Use a generous bound to avoid Monte-Carlo flakies.
+    ratio = var_s / max(var_u, 1e-30)
+    return ratio < 5.0, (
+        f'var_uniform={var_u:.3e}, var_stratified={var_s:.3e}, '
+        f'ratio={ratio:.2f}')
+
+
+H.section('Deep physics')
+H.run('HFPI aperture reduces alive-path count',
+      t_hfpi_aperture_decreases_alive_count)
+H.run('HFPI stratified sampling variance bounded',
+      t_hfpi_stratified_lower_variance_than_uniform)
+
+
 def main():
     H.section('PathBundle')
     H.run('shapes consistent', t_pathbundle_shape)

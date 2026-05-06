@@ -846,9 +846,285 @@ def t_trace_jax_grad_finite():
     return bool(jnp.isfinite(g)), f'grad={float(g):.4e}'
 
 
+def t_trace_jax_aspheric_matches_numpy():
+    """trace_jax with conic + aspheric coefficients matches the NumPy trace."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import (
+        make_jax_ray_state, trace_jax, jax_state_to_raybundle,
+    )
+    # Singlet with a moderate conic + 4th-order aspheric on the front.
+    presc = {
+        'name': 'aspheric singlet',
+        'aperture_diameter': 4e-3,
+        'surfaces': [
+            {'radius': 5.0e-3, 'conic': -0.5,
+             'aspheric_coeffs': {4: 1e6},  # a_4 * h^4 with a_4 = 1e6
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+        ],
+        'thicknesses': [2e-3],
+    }
+    n = 7
+    xs = np.linspace(-1.5e-3, 1.5e-3, n)
+    state = make_jax_ray_state(
+        x=jnp.asarray(xs), y=jnp.zeros(n), z=jnp.zeros(n),
+        L=jnp.zeros(n), M=jnp.zeros(n), N=jnp.ones(n),
+    )
+    out_jax = trace_jax(state, presc, wavelength=633e-9)
+    out_np_state = jax_state_to_raybundle(out_jax)
+
+    # Reference: NumPy trace through the same prescription.
+    rays = la.RayBundle(
+        x=xs.copy(), y=np.zeros(n), z=np.zeros(n),
+        L=np.zeros(n), M=np.zeros(n), N=np.ones(n),
+        wavelength=633e-9,
+        alive=np.ones(n, dtype=bool),
+        opd=np.zeros(n),
+        error_code=np.zeros(n, dtype=np.uint8),
+    )
+    surfaces = la.surfaces_from_prescription(presc)
+    res = la.trace(rays, surfaces, wavelength=633e-9,
+                    output_filter='last')
+    final_np = res.ray_history[-1]
+
+    # Compare positions and OPD.  Allow a small tolerance for the
+    # finite Newton iteration count vs. the NumPy 1e-15 early-exit.
+    pos_ok = np.allclose(out_np_state.x, final_np.x, atol=1e-9)
+    opd_ok = np.allclose(out_np_state.opd, final_np.opd, atol=1e-9)
+    return (pos_ok and opd_ok), (
+        f'pos max-err={float(np.max(np.abs(out_np_state.x - final_np.x))):.2e}m, '
+        f'opd max-err={float(np.max(np.abs(out_np_state.opd - final_np.opd))):.2e}m')
+
+
+def t_trace_jax_aperture_clips():
+    """Rays outside the surface semi_diameter are vignetted."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+    # Place a tight aperture stop on the first surface.
+    presc = {
+        'name': 'apertured plate',
+        'aperture_diameter': 1e-2,  # generous default
+        'surfaces': [
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None, 'semi_diameter': 0.5e-3,
+             'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'N-BK7', 'glass_after': 'air'},
+        ],
+        'thicknesses': [1e-3],
+    }
+    # Ray on-axis (alive) and one well outside the aperture (clipped).
+    xs = jnp.array([0.0, 1e-3])
+    state = make_jax_ray_state(
+        x=xs, y=jnp.zeros(2), z=jnp.zeros(2),
+        L=jnp.zeros(2), M=jnp.zeros(2), N=jnp.ones(2),
+    )
+    out = trace_jax(state, presc, wavelength=633e-9)
+    alive = np.asarray(out.alive)
+    return (bool(alive[0]) and not bool(alive[1])), (
+        f'alive={alive.tolist()}')
+
+
+def t_trace_jax_doe_kick_shifts_direction():
+    """surface_diffraction kick shifts direction cosines and adds linear OPL."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
+    presc = {
+        'name': 'flat DOE',
+        'aperture_diameter': 1e-2,
+        'surfaces': [
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'air'},
+        ],
+        'thicknesses': [],
+    }
+    lam = 633e-9
+    period_x = 2e-6  # 2 um pitch
+    expected_dL = 1.0 * lam / period_x
+    state = make_jax_ray_state(
+        x=jnp.array([1e-4]), y=jnp.zeros(1), z=jnp.zeros(1),
+        L=jnp.zeros(1), M=jnp.zeros(1), N=jnp.ones(1),
+    )
+    out = trace_jax(
+        state, presc, wavelength=lam,
+        surface_diffraction={0: (1, 0, period_x, float('inf'))},
+    )
+    L_out = float(out.L[0])
+    M_out = float(out.M[0])
+    N_out = float(out.N[0])
+    opd_out = float(out.opd[0])
+    # JAX defaults to float32, so opd magnitude ~3e-5 has ~1e-12 absolute
+    # precision; pick tolerances that accommodate single-precision.
+    L_ok = abs(L_out - expected_dL) < 1e-7
+    M_ok = abs(M_out) < 1e-9
+    norm_ok = abs(L_out * L_out + M_out * M_out + N_out * N_out - 1.0) < 1e-6
+    opd_ok = abs(opd_out - expected_dL * 1e-4) < 1e-10
+    return (L_ok and M_ok and norm_ok and opd_ok), (
+        f'L={L_out:.4e} (expected {expected_dL:.4e}), '
+        f'|d|^2={L_out**2 + M_out**2 + N_out**2:.6f}, opd={opd_out:.4e}')
+
+
+def t_raybundle_to_jax_state_round_trip():
+    """RayBundle.to_jax_state() and raybundle_to_jax_state agree;
+    round-trip via jax_state_to_raybundle preserves geometric fields."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    n = 7
+    rb = la.RayBundle(
+        x=np.linspace(-1e-3, 1e-3, n),
+        y=np.zeros(n), z=np.zeros(n),
+        L=np.zeros(n), M=np.zeros(n), N=np.ones(n),
+        wavelength=633e-9,
+        alive=np.ones(n, dtype=bool),
+        opd=np.zeros(n),
+    )
+    js_method = rb.to_jax_state()
+    js_func = la.raybundle_to_jax_state(rb)
+    rb_back = la.jax_state_to_raybundle(js_method, wavelength=633e-9)
+    method_match = np.allclose(np.asarray(js_method.x), rb.x)
+    func_match = np.allclose(np.asarray(js_func.x), rb.x)
+    rb_match = (np.allclose(rb_back.x, rb.x)
+                and rb_back.wavelength == 633e-9
+                and rb_back.error_code is not None)
+    return (method_match and func_match and rb_match), (
+        f'method ok={method_match}, func ok={func_match}, '
+        f'round-trip ok={rb_match}')
+
+
 H.section('JAX-traceable trace')
 H.run('trace_jax through singlet runs', t_trace_jax_singlet_runs)
 H.run('jax.grad through trace_jax', t_trace_jax_grad_finite)
+H.run('trace_jax with aspheric matches NumPy trace',
+      t_trace_jax_aspheric_matches_numpy)
+H.run('trace_jax aperture clipping vignettes outside-aperture rays',
+      t_trace_jax_aperture_clips)
+H.run('trace_jax DOE kick shifts direction cosines + OPL',
+      t_trace_jax_doe_kick_shifts_direction)
+H.run('RayBundle.to_jax_state round-trip preserves geometry',
+      t_raybundle_to_jax_state_round_trip)
+
+
+def t_trace_jax_grad_vs_finite_difference():
+    """jax.grad of OPD wrt initial ray height agrees with FD."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import (
+        make_jax_ray_state, trace_jax,
+    )
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+
+    def opd_at(x0):
+        state = make_jax_ray_state(
+            x=jnp.array([x0]), y=jnp.zeros(1), z=jnp.zeros(1),
+            L=jnp.zeros(1), M=jnp.zeros(1), N=jnp.ones(1),
+        )
+        out = trace_jax(state, presc, wavelength=633e-9)
+        return jnp.sum(out.opd)
+
+    x0 = jnp.float32(0.5e-3)
+    g_jax = float(jax.grad(opd_at)(x0))
+    eps = 1e-6
+    g_fd = (float(opd_at(jnp.float32(0.5e-3 + eps)))
+            - float(opd_at(jnp.float32(0.5e-3 - eps)))) / (2 * eps)
+    # float32 OPD ~ 1e-3 m precision; allow loose relative tolerance.
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), abs(g_jax), 1e-30)
+    return rel < 0.10, (
+        f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}')
+
+
+def t_trace_jax_spherical_only_matches_numpy_dense():
+    """trace_jax (no aspherics) matches NumPy trace on a dense
+    sweep of ray heights to high precision.
+    """
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import (
+        make_jax_ray_state, trace_jax, jax_state_to_raybundle,
+    )
+    presc = la.make_singlet(R1=5.16e-3, R2=float('inf'), d=2e-3,
+                             glass='N-BK7', aperture=4e-3)
+    n = 31
+    xs = np.linspace(-1.5e-3, 1.5e-3, n)
+    state = make_jax_ray_state(
+        x=jnp.asarray(xs), y=jnp.zeros(n), z=jnp.zeros(n),
+        L=jnp.zeros(n), M=jnp.zeros(n), N=jnp.ones(n),
+    )
+    out_jax = trace_jax(state, presc, wavelength=633e-9)
+    rb_jax = jax_state_to_raybundle(out_jax)
+
+    rays = la.RayBundle(
+        x=xs.copy(), y=np.zeros(n), z=np.zeros(n),
+        L=np.zeros(n), M=np.zeros(n), N=np.ones(n),
+        wavelength=633e-9,
+        alive=np.ones(n, dtype=bool),
+        opd=np.zeros(n),
+    )
+    surfs = la.surfaces_from_prescription(presc)
+    res = la.trace(rays, surfs, wavelength=633e-9, output_filter='last')
+    final_np = res.ray_history[-1]
+
+    pos_err = float(np.max(np.abs(rb_jax.x - final_np.x)))
+    opd_err = float(np.max(np.abs(rb_jax.opd - final_np.opd)))
+    return (pos_err < 1e-9 and opd_err < 1e-9), (
+        f'pos max-err={pos_err:.2e}m, opd max-err={opd_err:.2e}m')
+
+
+H.section('Deep physics: trace_jax')
+H.run('jax.grad through trace_jax matches finite differences',
+      t_trace_jax_grad_vs_finite_difference)
+H.run('trace_jax spherical-only matches NumPy on dense sweep',
+      t_trace_jax_spherical_only_matches_numpy_dense)
+
+
+def t_through_focus_scan_symmetric_about_best_focus():
+    """For an aberration-free thin-lens output, through-focus Strehl
+    should be approximately symmetric about the best-focus plane.
+    """
+    N = 256; dx = 16e-6; lam = 1.31e-6
+    # Aberration-free: build a Gaussian + clean thin-lens phase, no
+    # higher-order aberrations.
+    f_lens = 50e-3
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E_in = np.exp(-(X*X + Y*Y) / (2e-3)**2).astype(np.complex128)
+    E_after = la.apply_thin_lens(E_in, dx, f_lens, lam)
+    z_values = np.linspace(f_lens - 5e-3, f_lens + 5e-3, 21)
+    ideal = la.diffraction_limited_peak(E_after, lam, f_lens, dx)
+    scan = la.through_focus_scan(E_after, dx, lam, z_values,
+                                   ideal_peak=ideal, verbose=False)
+    z_best, _ = la.find_best_focus(scan, 'strehl')
+    strehl = np.asarray(scan.strehl)
+    # Find the index nearest z_best.
+    i_best = int(np.argmin(np.abs(z_values - z_best)))
+    # Symmetry: for offset i, strehl[i_best - i] approx strehl[i_best + i].
+    # Use the largest valid offset.
+    n_check = min(i_best, len(z_values) - 1 - i_best, 5)
+    if n_check < 2:
+        return True, f'too few samples to test symmetry (n_check={n_check})'
+    asymm = float(np.max(np.abs(
+        strehl[i_best - n_check:i_best]
+        - strehl[i_best + 1:i_best + n_check + 1][::-1])))
+    return asymm < 0.10, (
+        f'max |left - right| Strehl asymmetry over +/-{n_check} samples '
+        f'= {asymm:.3e} (peak Strehl = {float(np.max(strehl)):.3f})')
+
+
+H.run('through_focus_scan symmetric about best focus (clean lens)',
+      t_through_focus_scan_symmetric_about_best_focus)
 
 
 if __name__ == '__main__':

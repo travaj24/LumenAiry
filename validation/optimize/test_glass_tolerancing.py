@@ -175,5 +175,54 @@ H.run('monte_carlo_tolerancing returns expected stats',
       t_monte_carlo_tolerancing_basic)
 
 
+def t_monte_carlo_seed_reproducibility():
+    """Two runs with the same seed should produce identical Strehl
+    arrays.  Catches any unseeded RNG / global-state leak.
+    """
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+                           aperture=3e-3)
+    E = np.ones((64, 64), dtype=np.complex128)
+    common = dict(prescription=pres, wavelength=1.31e-6, N=64, dx=32e-6,
+                  E_source=E,
+                  perturbation_spec=[{'surface_index': 0,
+                                      'tilt_std': 1e-4}],
+                  focal_length=100e-3, aperture=3e-3,
+                  n_trials=8, verbose=False)
+    a = la.monte_carlo_tolerancing(seed=42, **common)
+    b = la.monte_carlo_tolerancing(seed=42, **common)
+    arr_a = np.asarray(a['strehl_array'])
+    arr_b = np.asarray(b['strehl_array'])
+    return np.allclose(arr_a, arr_b), (
+        f'max |a - b| = {float(np.max(np.abs(arr_a - arr_b))):.2e}')
+
+
+def t_monte_carlo_std_grows_with_perturbation():
+    """Larger tilt-std perturbations should produce larger Strehl-peak
+    std (the yield distribution gets wider as tolerance loosens).
+    """
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+                           aperture=3e-3)
+    E = np.ones((64, 64), dtype=np.complex128)
+    common = dict(prescription=pres, wavelength=1.31e-6, N=64, dx=32e-6,
+                  E_source=E,
+                  focal_length=100e-3, aperture=3e-3,
+                  n_trials=10, seed=7, verbose=False)
+    tight = la.monte_carlo_tolerancing(
+        perturbation_spec=[{'surface_index': 0, 'tilt_std': 5e-5}],
+        **common)
+    loose = la.monte_carlo_tolerancing(
+        perturbation_spec=[{'surface_index': 0, 'tilt_std': 5e-3}],
+        **common)
+    return loose['strehl_peak_std'] > tight['strehl_peak_std'], (
+        f'std tight={tight["strehl_peak_std"]:.4e}, '
+        f'loose={loose["strehl_peak_std"]:.4e}')
+
+
+H.run('Monte Carlo tolerancing seed gives reproducible results',
+      t_monte_carlo_seed_reproducibility)
+H.run('Monte Carlo tolerancing std grows with perturbation magnitude',
+      t_monte_carlo_std_grows_with_perturbation)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

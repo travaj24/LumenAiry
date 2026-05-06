@@ -229,5 +229,24 @@ H.run('Koehler imaging: typical NA returns finite image',
       t_koehler_imaging_finite_intensity)
 
 
+def t_richards_wolf_low_na_reduces_to_scalar():
+    """At low NA, Richards-Wolf vector focus should give Ez << Ex
+    (paraxial scalar limit: longitudinal component vanishes).
+    """
+    pupil = np.ones((64, 64), dtype=np.complex128)
+    Ex, Ey, Ez, _, _ = la.richards_wolf_focus(
+        pupil, wavelength=633e-9, NA=0.05, f=10e-3, dx_pupil=400e-9,
+        polarization='x',
+    )
+    p_x = float(np.sum(np.abs(Ex) ** 2))
+    p_z = float(np.sum(np.abs(Ez) ** 2))
+    rel_z = p_z / max(p_x, 1e-30)
+    return rel_z < 0.01, f'P_z/P_x = {rel_z:.2e}'
+
+
+H.run('Richards-Wolf at low NA: Ez << Ex (scalar limit)',
+      t_richards_wolf_low_na_reduces_to_scalar)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

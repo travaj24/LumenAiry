@@ -260,6 +260,46 @@ H.run('Ghost analysis of Thorlabs doublet (3 paths)',
       t_ghost_of_thorlabs)
 
 
+def t_ghost_focus_positions_finite_and_distinct():
+    """Each ghost path's focus_z_estimate should be finite and the
+    different ghost paths should produce DIFFERENT focal positions
+    (a real lens system has multiple ghost focuses, not one).
+    """
+    pres = la.thorlabs_lens('AC254-100-C')
+    ghosts = la.ghost_analysis(pres, lam, verbose=False)
+    z_focuses = [g['focus_z_estimate'] for g in ghosts
+                 if 'focus_z_estimate' in g
+                 and g['focus_z_estimate'] is not None]
+    n_finite = sum(1 for z in z_focuses if np.isfinite(z))
+    distinct = len(set(round(z * 1e6) for z in z_focuses
+                       if np.isfinite(z))) >= 2
+    return n_finite >= 2 and distinct, (
+        f'finite focus_z_estimates: {n_finite}/{len(ghosts)}; '
+        f'distinct: {distinct}; values (mm): '
+        f'{[f"{z*1e3:.2f}" for z in z_focuses if np.isfinite(z)][:5]}')
+
+
+def t_ghost_intensity_ordering_by_path():
+    """Ghosts traversing two reflection bounces should always have
+    intensity below 1: R_i * R_j is the product of two Fresnel
+    reflectances, each < 1.  Catches sign-bug or normalization-bug
+    in the intensity computation.
+    """
+    pres = la.thorlabs_lens('AC254-100-C')
+    ghosts = la.ghost_analysis(pres, lam, verbose=False)
+    intensities = [g['intensity'] for g in ghosts]
+    all_below_one = all(0 <= I < 1.0 for I in intensities)
+    sorted_descending = intensities == sorted(intensities, reverse=True)
+    return all_below_one and sorted_descending, (
+        f'intensities={intensities[:5]}, sorted={sorted_descending}')
+
+
+H.run('Ghost focus_z positions finite + distinct',
+      t_ghost_focus_positions_finite_and_distinct)
+H.run('Ghost intensities < 1 and sorted brightest-first',
+      t_ghost_intensity_ordering_by_path)
+
+
 # ---------------------------------------------------------------------
 H.section('RCWA')
 
@@ -354,6 +394,121 @@ def t_multi_config_weighted():
 
 
 H.run('Multi-config: weighted sum correct', t_multi_config_weighted)
+
+
+def t_multi_config_field_angle_changes_merit():
+    """Configurations with different field_angle values should
+    produce different per-config merit values when the merit_fn
+    consumes field_angle (catches the case where Configuration's
+    field_angle isn't actually plumbed through to the merit).
+    """
+    from lumenairy.optimize.multiconfig import (
+        Configuration, multi_config_merit)
+    pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
+                           aperture=10e-3)
+    cfgs = [
+        Configuration('on_axis', pres, field_angle=0.0, weight=1.0),
+        Configuration('off_axis', pres, field_angle=0.05, weight=1.0),
+    ]
+
+    # Merit that depends on field_angle directly via the prescription
+    # (which Configuration carries unchanged) -- since field_angle
+    # itself isn't part of the prescription dict, we read it via the
+    # merit_fn signature `(prescription, wavelength, field_angle)`.
+    def field_dependent_merit(p, w, f):
+        return float(f) ** 2
+
+    total, per = multi_config_merit(cfgs, field_dependent_merit)
+    differ = abs(per[0] - per[1]) > 1e-12
+    return differ, f'per-config merits = {per}'
+
+
+H.run('Multi-config: field_angle propagates to merit',
+      t_multi_config_field_angle_changes_merit)
+
+
+# ---------------------------------------------------------------------
+H.section('Freeform sag continuity')
+
+
+def t_freeform_xy_polynomial_C0_continuous():
+    """surface_sag_xy_polynomial should be C^0 continuous: a small
+    grid shift produces a small sag change.  Catches stair-step or
+    interpolation bugs.
+    """
+    from lumenairy.elements.freeform import surface_sag_xy_polynomial
+    N = 64
+    x = np.linspace(-1e-3, 1e-3, N)
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    coeffs = {(2, 0): 1e-3, (0, 2): -5e-4, (4, 0): 1e2}
+    sag1 = surface_sag_xy_polynomial(X, Y, R=np.inf, conic=0.0,
+                                      xy_coeffs=coeffs)
+    # Shift the grid by 1% of a pixel.
+    eps = 1e-2 * (x[1] - x[0])
+    sag2 = surface_sag_xy_polynomial(X + eps, Y, R=np.inf, conic=0.0,
+                                      xy_coeffs=coeffs)
+    diff = float(np.max(np.abs(sag2 - sag1)))
+    sag_scale = float(np.max(np.abs(sag1)))
+    return diff < 0.05 * sag_scale + 1e-12, (
+        f'sub-pixel shift produced max-abs-diff = {diff:.2e} '
+        f'(sag scale {sag_scale:.2e})')
+
+
+def t_freeform_zernike_derivative_finite():
+    """surface_sag_zernike_freeform's first derivative computed by
+    central differences should be finite and bounded everywhere
+    inside the unit disk (no infinity / NaN at any pixel).
+    """
+    from lumenairy.elements.freeform import surface_sag_zernike_freeform
+    N = 96
+    x = np.linspace(-0.95, 0.95, N)
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    # Mix of low- and mid-order Zernikes with realistic magnitudes.
+    zern = {4: 0.5e-6, 11: 0.2e-6, 22: 0.1e-6}
+    sag = surface_sag_zernike_freeform(
+        X, Y, R=np.inf, conic=0.0,
+        zernike_coeffs=zern, norm_radius=1.0)
+    finite = bool(np.all(np.isfinite(sag)))
+    inside = (X**2 + Y**2) < 0.81
+    dz_dx = np.gradient(sag, axis=1) / (x[1] - x[0])
+    dz_dy = np.gradient(sag, axis=0) / (x[1] - x[0])
+    grad_finite_inside = bool(
+        np.all(np.isfinite(dz_dx[inside]))
+        and np.all(np.isfinite(dz_dy[inside])))
+    return finite and grad_finite_inside, (
+        f'sag finite={finite}, grad finite (inside)={grad_finite_inside}')
+
+
+def t_freeform_dispatch_recovers_underlying_sag():
+    """surface_sag_freeform routing dispatch should produce the same
+    sag as calling the underlying surface_sag_xy_polynomial directly.
+    Catches any wiring drift between the high-level dispatch helper
+    and the per-type implementation.
+    """
+    from lumenairy.elements.freeform import (
+        surface_sag_xy_polynomial, surface_sag_freeform,
+    )
+    N = 32
+    x = np.linspace(-1e-3, 1e-3, N)
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    coeffs = {(2, 0): 5e-4, (0, 2): 5e-4}
+    direct = surface_sag_xy_polynomial(X, Y, R=np.inf, conic=0.0,
+                                        xy_coeffs=coeffs)
+    via_dispatch = surface_sag_freeform(X, Y, {
+        'freeform_type': 'xy_polynomial',
+        'xy_coeffs': coeffs,
+        'radius': np.inf, 'conic': 0.0,
+    })
+    err = float(np.max(np.abs(direct - via_dispatch)))
+    return err < 1e-15, f'direct vs dispatch max-err = {err:.2e}'
+
+
+H.run('Freeform XY-polynomial sag is sub-pixel C^0 continuous',
+      t_freeform_xy_polynomial_C0_continuous)
+H.run('Freeform Zernike sag has finite derivative inside unit disk',
+      t_freeform_zernike_derivative_finite)
+H.run('surface_sag_freeform dispatch matches direct call',
+      t_freeform_dispatch_recovers_underlying_sag)
 
 
 # ---------------------------------------------------------------------
@@ -568,6 +723,80 @@ def t_make_bsdf_lambertian_returns_lambertian_instance():
 
 H.run('make_bsdf: lambertian factory returns LambertianBSDF',
       t_make_bsdf_lambertian_returns_lambertian_instance)
+
+
+def t_lambertian_bsdf_evaluates_to_constant_rho_over_pi():
+    """Lambertian BRDF is rho/pi for ALL incident/scattered direction
+    pairs in the upper hemisphere -- the defining property.  Catches
+    bugs where a directional weighting is applied to the value
+    (the cosine weighting belongs in the radiance integral, not in
+    the BRDF itself).
+    """
+    rho = 0.4
+    bsdf = la.LambertianBSDF(rho=rho)
+    expected = rho / np.pi
+    inc = np.array([0.0, 0.0, -1.0])
+    samples = [
+        np.array([0.0, 0.0, 1.0]),                  # straight up
+        np.array([0.5, 0.0, np.sqrt(0.75)]),        # 30 deg in x
+        np.array([0.0, 0.7071, 0.7071]),            # 45 deg in y
+        np.array([0.6, 0.6, np.sqrt(1 - 0.72)]),    # diagonal
+    ]
+    vals = [float(bsdf.evaluate(inc, s)) for s in samples]
+    err = max(abs(v - expected) for v in vals)
+    return err < 1e-12, (
+        f'expected {expected:.6e}; got {[f"{v:.6e}" for v in vals]}; '
+        f'max-err={err:.2e}')
+
+
+def t_lambertian_bsdf_sample_distribution_matches_cos_law():
+    """Lambertian sampling: scattered ray polar angle should follow
+    p(theta) = sin(theta) * cos(theta) / pi (the projected-area-
+    weighted distribution).  Verify that <cos(theta)> = 2/3 (the
+    closed-form mean of the cosine-weighted distribution over the
+    upper hemisphere).
+    """
+    rng = np.random.default_rng(0)
+    bsdf = la.LambertianBSDF(rho=1.0)
+    inc = np.array([0.0, 0.0, -1.0])
+    n = 50000
+    dirs = bsdf.sample(inc, n_samples=n, rng=rng)
+    # cos(theta) = z-component of a unit-length scattered direction.
+    cos_theta = np.asarray(dirs)[:, 2]
+    in_upper = cos_theta > 0
+    mean_cos = float(np.mean(cos_theta[in_upper]))
+    # 2/3 is the closed-form mean for cos-weighted hemisphere sampling.
+    err = abs(mean_cos - 2.0 / 3.0)
+    return err < 0.02, (
+        f'mean(cos theta) = {mean_cos:.4f}, expected 0.6667, err={err:.2e}')
+
+
+def t_gaussian_bsdf_concentrates_within_sigma():
+    """Most Gaussian-BSDF samples should land within ~3 sigma of the
+    specular direction.  Catches sigma-units-bug or wrong sampling
+    width.
+    """
+    sigma = 0.01  # rad
+    rng = np.random.default_rng(7)
+    bsdf = la.GaussianBSDF(sigma_rad=sigma, scattered_fraction=1.0)
+    inc = np.array([0.0, 0.0, -1.0])  # specular -> +z
+    n = 20000
+    dirs = np.asarray(bsdf.sample(inc, n_samples=n, rng=rng))
+    # Angle between each sample and the specular direction (+z):
+    cos_theta = dirs[:, 2]
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)
+    theta = np.arccos(cos_theta)
+    frac_within_3sigma = float(np.mean(theta < 3 * sigma))
+    return frac_within_3sigma > 0.99, (
+        f'fraction of samples within 3*sigma = {frac_within_3sigma:.4f}')
+
+
+H.run('Lambertian BSDF.evaluate is constant rho/pi',
+      t_lambertian_bsdf_evaluates_to_constant_rho_over_pi)
+H.run('Lambertian BSDF.sample: <cos(theta)> = 2/3 (cosine law)',
+      t_lambertian_bsdf_sample_distribution_matches_cos_law)
+H.run('Gaussian BSDF.sample: > 99 percent within 3-sigma',
+      t_gaussian_bsdf_concentrates_within_sigma)
 
 
 if __name__ == '__main__':

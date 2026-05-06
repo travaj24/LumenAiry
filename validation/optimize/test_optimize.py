@@ -394,5 +394,168 @@ H.run('design_optimize focal-length target',
       t_design_optimize_focal_length_target)
 
 
+def t_jax_merit_term_gradient_at_x():
+    """JaxMeritTerm with build_args returns a finite gradient via jax.grad."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+
+    def fn(a, b):
+        return jnp.array(a * a + b * b + 0j)
+
+    def build_args(x):
+        return (x[0], x[1])
+
+    term = la.JaxMeritTerm(fn, weight=2.0, build_args=build_args)
+    g = term.gradient_at_x(np.array([3.0, 4.0]))
+    # |val| = a^2 + b^2 (val is real positive); weight * d/da = 2 * 2a = 4a.
+    expected = np.array([12.0, 16.0])
+    return np.allclose(g, expected, atol=1e-3), (
+        f'g={g.tolist()}, expected={expected.tolist()}')
+
+
+def t_design_optimize_uses_jax_jac_for_jaxmerit():
+    """jac='auto' drives a JaxMeritTerm to its minimum via analytic grad."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+
+    template = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
+                                aperture=10e-3)
+    param = la.DesignParameterization(
+        template=template,
+        free_vars=[('surfaces', 0, 'radius')],
+        bounds=[(20e-3, 70e-3)])
+    target = 30e-3
+
+    def fn(R):
+        return jnp.abs((R - target) * 1e3)
+
+    def build_args(x):
+        return (x[0],)
+
+    term = la.JaxMeritTerm(fn, weight=1.0, build_args=build_args,
+                            real_part=True)
+    res = la.design_optimize(parameterization=param, merit_terms=[term],
+                              wavelength=1.31e-6, N=8, dx=64e-6,
+                              method='L-BFGS-B', max_iter=30,
+                              verbose=False, jac='auto')
+    R_opt = float(res.x[0])
+    err = abs(R_opt - target) / target
+    return err < 1e-3, f'R_opt={R_opt:.6e}, err={err:.2e}'
+
+
+H.section('JaxMeritTerm + jac=auto')
+H.run('JaxMeritTerm.gradient_at_x returns analytic gradient',
+      t_jax_merit_term_gradient_at_x)
+H.run('design_optimize(jac=auto) drives JaxMeritTerm to minimum',
+      t_design_optimize_uses_jax_jac_for_jaxmerit)
+
+
+def t_wave_propagator_registry_default_keys():
+    """The five built-in propagators are present in the registry."""
+    keys = set(la.WAVE_PROPAGATOR_REGISTRY)
+    expected = {'real_lens', 'gbd', 'hf', 'hfpi', 'asymptotic'}
+    return expected.issubset(keys), f'keys={sorted(keys)}'
+
+
+def t_wave_propagator_registry_user_register():
+    """User-registered propagators are callable via design_optimize."""
+    called = {'count': 0}
+
+    def custom(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
+        called['count'] += 1
+        # Trivial propagator: return the input field unchanged.
+        return E0
+
+    la.register_wave_propagator('test_custom', custom)
+    try:
+        template = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
+                                    aperture=10e-3)
+        param = la.DesignParameterization(
+            template=template,
+            free_vars=[('surfaces', 0, 'radius')],
+            bounds=[(20e-3, 70e-3)])
+        merit = [la.StrehlMerit(min_strehl=1.0, weight=1.0)]
+        # Just one iteration is enough to fire the wave leg.
+        la.design_optimize(
+            parameterization=param, merit_terms=merit,
+            wavelength=633e-9, N=16, dx=64e-6,
+            method='L-BFGS-B', max_iter=1,
+            wave_propagator='test_custom',
+            verbose=False)
+    finally:
+        la.unregister_wave_propagator('test_custom')
+    return called['count'] >= 1, f'called {called["count"]} times'
+
+
+H.section('Wave-propagator registry')
+H.run('built-in registry has 5 propagators',
+      t_wave_propagator_registry_default_keys)
+H.run('user-registered propagator is invoked by design_optimize',
+      t_wave_propagator_registry_user_register)
+
+
+def _make_optimize_problem(template_R1=60e-3, target_efl=100e-3):
+    """Helper: build a 1-parameter optimization problem on R1."""
+    template = la.make_singlet(template_R1, float('inf'), 4e-3, 'N-BK7',
+                                aperture=10e-3)
+    param = la.DesignParameterization(
+        template=template,
+        free_vars=[('surfaces', 0, 'radius')],
+        bounds=[(30e-3, 100e-3)])
+    merit = [la.FocalLengthMerit(target=target_efl, weight=1.0)]
+    return param, merit
+
+
+def t_design_optimize_with_gbd_propagator_decreases_merit():
+    """design_optimize converges with wave_propagator='gbd'."""
+    param, merit = _make_optimize_problem()
+    x_init = param.initial_values()
+    res = la.design_optimize(
+        parameterization=param, merit_terms=merit,
+        wavelength=1.31e-6, N=64, dx=64e-6,
+        method='L-BFGS-B', max_iter=10,
+        wave_propagator='gbd',
+        wave_propagator_kwargs={'sample_step': 8, 'chunk_beamlets': 128},
+        verbose=False,
+    )
+    final_R1 = float(res.x[0])
+    drift_ok = final_R1 != float(x_init[0])  # optimizer moved
+    efl_close = abs(res.context_final.efl - 100e-3) / 100e-3 < 1e-3
+    return drift_ok and efl_close, (
+        f'R1: {x_init[0]*1e3:.2f} -> {final_R1*1e3:.4f}mm, '
+        f'EFL={res.context_final.efl*1e3:.4f}mm')
+
+
+def t_design_optimize_with_hf_propagator_decreases_merit():
+    """design_optimize converges with wave_propagator='hf'."""
+    param, merit = _make_optimize_problem()
+    x_init = param.initial_values()
+    res = la.design_optimize(
+        parameterization=param, merit_terms=merit,
+        wavelength=1.31e-6, N=32, dx=64e-6,
+        method='L-BFGS-B', max_iter=8,
+        wave_propagator='hf',
+        wave_propagator_kwargs={
+            'method': 'asymptotic',
+            'source_box_half': 40e-6, 'pupil_box_half': 0.02,
+            'n_field': 6, 'n_pupil': 6, 'poly_order': 4,
+        },
+        verbose=False,
+    )
+    efl_close = abs(res.context_final.efl - 100e-3) / 100e-3 < 1e-3
+    return efl_close, (
+        f'R1={float(res.x[0])*1e3:.4f}mm, '
+        f'EFL={res.context_final.efl*1e3:.4f}mm')
+
+
+H.section('design_optimize end-to-end with non-default wave propagators')
+H.run('wave_propagator=gbd converges to target EFL',
+      t_design_optimize_with_gbd_propagator_decreases_merit)
+H.run('wave_propagator=hf converges to target EFL',
+      t_design_optimize_with_hf_propagator_decreases_merit)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

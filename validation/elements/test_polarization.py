@@ -396,5 +396,42 @@ H.run('apply_rotator: preserves total intensity',
       t_apply_rotator_preserves_total_power)
 
 
+def t_stokes_preserved_through_asm_propagation():
+    """Stokes S1/S0 should be preserved when each Jones component
+    propagates through the same scalar ASM kernel (free-space is
+    polarization-insensitive in the scalar regime).
+    """
+    N, dx = 64, 5e-6
+    lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    base = np.exp(-(X*X + Y*Y) / (60e-6)**2).astype(np.complex128)
+    theta = np.deg2rad(30)
+    Ex_in = base * np.cos(theta)
+    Ey_in = base * np.sin(theta)
+    jf_in = JonesField(Ex=Ex_in, Ey=Ey_in, dx=dx)
+    S_in = la.stokes_parameters(jf_in)
+    s1_in = float(np.sum(S_in['S1']) / max(np.sum(S_in['S0']), 1e-30))
+
+    Ex_out = la.angular_spectrum_propagate(Ex_in, z=1e-3,
+                                            wavelength=lam, dx=dx)
+    Ey_out = la.angular_spectrum_propagate(Ey_in, z=1e-3,
+                                            wavelength=lam, dx=dx)
+    jf_out = JonesField(Ex=Ex_out, Ey=Ey_out, dx=dx)
+    S_out = la.stokes_parameters(jf_out)
+    s1_out = float(np.sum(S_out['S1']) / max(np.sum(S_out['S0']), 1e-30))
+
+    expected = np.cos(2 * theta)  # linear pol at angle theta -> S1/S0
+    err_in = abs(s1_in - expected)
+    err_out = abs(s1_out - expected)
+    return (err_in < 1e-9 and err_out < 1e-6), (
+        f'expected S1/S0={expected:.4f}; in={s1_in:.4f} '
+        f'(err={err_in:.2e}); out={s1_out:.4f} (err={err_out:.2e})')
+
+
+H.run('Stokes S1/S0 preserved through ASM propagation',
+      t_stokes_preserved_through_asm_propagation)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

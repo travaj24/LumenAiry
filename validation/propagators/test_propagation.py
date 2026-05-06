@@ -430,5 +430,112 @@ H.run('Fresnel accepts JAX arrays', t_jax_fresnel_runs)
 H.run('Rayleigh-Sommerfeld accepts JAX arrays', t_jax_rs_runs)
 
 
+# ----------------------------------------------------------------------
+# Deep physics tests
+# ----------------------------------------------------------------------
+
+def t_asm_numpy_jax_value_equivalence():
+    """ASM on JAX matches NumPy on the same input to FFT precision."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax.numpy as jnp
+    N = 64; dx = 5e-6; lam = 633e-9
+    rng = np.random.default_rng(7)
+    E_np = (rng.standard_normal((N, N))
+            + 1j * rng.standard_normal((N, N))).astype(np.complex64)
+    E_jax = jnp.asarray(E_np)
+    out_np = la.angular_spectrum_propagate(E_np, z=1e-3, wavelength=lam, dx=dx)
+    out_jax = la.angular_spectrum_propagate(E_jax, z=1e-3,
+                                             wavelength=lam, dx=dx)
+    out_jax_np = np.asarray(out_jax)
+    rel = (float(np.max(np.abs(out_np - out_jax_np)))
+           / max(float(np.max(np.abs(out_np))), 1e-30))
+    # JAX defaults to float32, so single-precision FFT has ~1e-3
+    # absolute precision on a normalised field.
+    return rel < 5e-3, f'rel max-err = {rel:.2e}'
+
+
+def t_asm_fresnel_power_conservation():
+    """Both ASM and Fresnel preserve total integrated intensity.
+
+    For Fresnel the output dx differs from the input dx, so the
+    per-pixel power scaling differs; we integrate `|E|^2 * dx * dy`
+    so the comparison is in physical (m^2) units.
+    """
+    N = 64; dx = 5e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (40e-6)**2).astype(np.complex128)
+    p_in = float(np.sum(np.abs(E) ** 2)) * dx * dx
+
+    out_asm = la.angular_spectrum_propagate(E, z=1e-3, wavelength=lam, dx=dx)
+    p_asm = float(np.sum(np.abs(out_asm) ** 2)) * dx * dx
+
+    out_fre, dx_out, dy_out = la.fresnel_propagate(
+        E, z=10e-3, wavelength=lam, dx=dx)
+    p_fre = float(np.sum(np.abs(out_fre) ** 2)) * dx_out * dy_out
+
+    asm_rel = abs(p_asm - p_in) / p_in
+    fre_rel = abs(p_fre - p_in) / p_in
+    return (asm_rel < 1e-6 and fre_rel < 0.05), (
+        f'ASM rel={asm_rel:.2e}, Fresnel rel={fre_rel:.2e}')
+
+
+def t_real_lens_power_conservation_clear_aperture():
+    """apply_real_lens conserves power for a beam smaller than the
+    clear aperture (refraction is unitary in the scalar regime;
+    only aperture clipping should reduce energy).
+    """
+    presc = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                             glass='N-BK7', aperture=12e-3)
+    N = 512; dx = 20e-6; lam = 1.31e-6
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    # 1.5 mm Gaussian, well within the 6 mm aperture half-extent.
+    E = np.exp(-(X*X + Y*Y) / (1.5e-3)**2).astype(np.complex128)
+    p_in = float(np.sum(np.abs(E) ** 2))
+    fwd = la.apply_real_lens(E, presc, lam, dx)
+    p_out = float(np.sum(np.abs(fwd) ** 2))
+    rel = abs(p_out - p_in) / p_in
+    return rel < 0.05, f'P_in={p_in:.4e}, P_out={p_out:.4e}, rel={rel:.2e}'
+
+
+def t_asm_jax_grad_matches_fd():
+    """jax.grad of <|ASM(E)|^2> wrt a scale knob agrees with FD."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    N = 32; dx = 5e-6; lam = 633e-9
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    base = np.exp(-(X*X + Y*Y) / (50e-6)**2).astype(np.complex64)
+    E_jax = jnp.asarray(base)
+
+    def loss(scale):
+        out = la.angular_spectrum_propagate(
+            E_jax * scale, z=1e-3, wavelength=lam, dx=dx)
+        return jnp.sum(jnp.abs(out) ** 2)
+
+    g_jax = float(jax.grad(loss)(jnp.float32(1.0)))
+    eps = 1e-3
+    f_p = float(loss(jnp.float32(1.0 + eps)))
+    f_m = float(loss(jnp.float32(1.0 - eps)))
+    g_fd = (f_p - f_m) / (2 * eps)
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), 1e-30)
+    return rel < 1e-2, f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}'
+
+
+H.section('Deep physics: cross-backend, conservation, reciprocity, grad')
+H.run('ASM NumPy vs JAX value equivalence',
+      t_asm_numpy_jax_value_equivalence)
+H.run('ASM and Fresnel power conservation',
+      t_asm_fresnel_power_conservation)
+H.run('apply_real_lens conserves power on a clear aperture',
+      t_real_lens_power_conservation_clear_aperture)
+H.run('jax.grad of ASM matches finite differences',
+      t_asm_jax_grad_matches_fd)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

@@ -247,5 +247,75 @@ H.run('Fiber mode: finite, positive total power',
       t_fiber_mode_normalized_total_power_finite)
 
 
+def t_source_class_gaussian_factory():
+    """la.Source.gaussian builds a propagatable Source object."""
+    src = la.Source.gaussian(w0=20e-6, N=32, dx=2e-6, wavelength=633e-9)
+    ok = (src.shape == (32, 32) and src.dx == 2e-6
+          and src.wavelength == 633e-9 and src.E.shape == (32, 32)
+          and 'Gaussian' in (src.name or ''))
+    return ok, f'shape={src.shape}, name={src.name!r}'
+
+
+def t_source_propagate_returns_source():
+    """source.propagate(method='asm', z=...) returns another Source."""
+    src = la.Source.gaussian(w0=20e-6, N=32, dx=2e-6, wavelength=633e-9)
+    out = src.propagate(method='asm', z=1e-3)
+    return (isinstance(out, la.Source)
+            and out.shape == src.shape
+            and out.wavelength == src.wavelength), (
+        f'shape={out.shape}, name={out.name!r}')
+
+
+H.section('Source class')
+H.run('Source.gaussian factory builds propagatable Source',
+      t_source_class_gaussian_factory)
+H.run('Source.propagate returns a chained Source',
+      t_source_propagate_returns_source)
+
+
+def t_source_deep_chain_preserves_metadata():
+    """Multi-step Source.propagate() chain preserves dx, wavelength,
+    and source_point through every link.  Catches drift bugs in the
+    chaining logic.
+    """
+    src = la.Source.gaussian(w0=200e-6, N=64, dx=4e-6, wavelength=1.31e-6,
+                              source_point=(10e-6, 0.0), name='start')
+    out1 = src.propagate(method='asm', z=1e-3)
+    out2 = out1.propagate(method='asm', z=1e-3)
+    out3 = out2.propagate(method='fresnel', z=1e-2)
+    # Wavelength and source_point survive all hops.
+    wl_ok = (out1.wavelength == src.wavelength
+             and out2.wavelength == src.wavelength
+             and out3.wavelength == src.wavelength)
+    sp_ok = (out1.source_point == src.source_point
+             and out2.source_point == src.source_point
+             and out3.source_point == src.source_point)
+    # Names accumulate -> trace-ability.
+    name_chain = '->asm->asm->fresnel' in (out3.name or '')
+    return wl_ok and sp_ok and name_chain, (
+        f'wl_ok={wl_ok}, sp_ok={sp_ok}, name={out3.name!r}')
+
+
+def t_source_propagate_through_prescription():
+    """Source.propagate(method='auto', prescription=...) routes to the
+    smart-method dispatcher with the prescription path."""
+    presc = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                             glass='N-BK7', aperture=6e-3)
+    src = la.Source.gaussian(w0=1e-3, N=128, dx=20e-6,
+                              wavelength=1.31e-6)
+    out = src.propagate(method='auto', prescription=presc)
+    return (isinstance(out, la.Source)
+            and out.shape == src.shape
+            and out.wavelength == src.wavelength
+            and bool(np.all(np.isfinite(np.abs(out.E))))), (
+        f'shape={out.shape}, finite={np.all(np.isfinite(np.abs(out.E)))}')
+
+
+H.run('Source deep chain preserves wavelength / source_point',
+      t_source_deep_chain_preserves_metadata)
+H.run('Source.propagate(prescription=...) routes via auto-method',
+      t_source_propagate_through_prescription)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())
