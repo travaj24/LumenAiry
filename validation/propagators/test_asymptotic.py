@@ -1391,5 +1391,73 @@ H.run('aberration_tensor_lg00_jax grad vs FD',
       t_aberration_tensor_grad_matches_fd)
 
 
+def t_solve_envelope_stationary_jax_ift_forward_matches_numpy():
+    """JAX-IFT Newton solver forward pass matches NumPy solver to
+    float-precision tolerance."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary,
+        solve_envelope_stationary_jax_ift,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+    src = (5e-6, 3e-6)  # off-axis to make v_star non-trivial
+    v_np, _, _ = solve_envelope_stationary(
+        fit, s2, src, w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre))
+    v_jax = solve_envelope_stationary_jax_ift(
+        fit, s2, src, w_s=20e-6, w_p=0.02,
+        v2_centre=(fit.v2x_centre, fit.v2y_centre), n_iter=15)
+    err = float(np.max(np.abs(np.array(v_np) - np.asarray(v_jax))))
+    return err < 1e-8, f'max |v_np - v_jax| = {err:.2e}'
+
+
+def t_solve_envelope_stationary_jax_ift_grad_matches_fd():
+    """JAX-IFT custom_vjp backward gradient matches finite differences
+    on dv*[0+1]/d(source_x).  Verifies the IFT linear solve is correct."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    from lumenairy.propagators.asymptotic import (
+        fit_canonical_polynomials, solve_envelope_stationary_jax_ift,
+    )
+    pres = _build_test_singlet()
+    fit = fit_canonical_polynomials(
+        pres, wavelength=1.31e-6,
+        source_box_half=20e-6, pupil_box_half=0.02,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    s2 = (fit.s2x_centre, fit.s2y_centre)
+    base_src_x = 5e-6
+
+    def loss(src_x):
+        v = solve_envelope_stationary_jax_ift(
+            fit, s2, (src_x, 3e-6), w_s=20e-6, w_p=0.02,
+            v2_centre=(fit.v2x_centre, fit.v2y_centre), n_iter=15)
+        return v[0] + v[1]
+
+    g_jax = float(jax.grad(loss)(jnp.float32(base_src_x)))
+    eps = 1e-7
+    g_fd = (float(loss(jnp.float32(base_src_x + eps)))
+            - float(loss(jnp.float32(base_src_x - eps)))) / (2 * eps)
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), abs(g_jax), 1e-30)
+    # Single-precision JAX floor ~1e-5 - 1e-3 relative.
+    return rel < 1e-3, f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}'
+
+
+H.section('JAX-IFT envelope-stationary solver')
+H.run('solve_envelope_stationary_jax_ift forward matches NumPy',
+      t_solve_envelope_stationary_jax_ift_forward_matches_numpy)
+H.run('solve_envelope_stationary_jax_ift IFT backward matches FD',
+      t_solve_envelope_stationary_jax_ift_grad_matches_fd)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

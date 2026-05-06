@@ -315,3 +315,129 @@ def hybrid_input_output(measured_amplitude, support, n_iter=200, beta=0.9,
     if return_history:
         return obj, final_err, history
     return obj, final_err
+
+
+# ----------------------------------------------------------------------
+# JAX-jit'd phase-retrieval variants
+# ----------------------------------------------------------------------
+
+def gerchberg_saxton_jax(source_amplitude, target_amplitude, n_iter=200):
+    """JAX-jit'd Gerchberg-Saxton iteration.
+
+    Same physics as :func:`gerchberg_saxton`; the iteration loop runs
+    inside ``jax.lax.fori_loop`` so the entire run is one fused JIT
+    kernel.  Best speedup on GPU; CPU benefit is modest because the
+    NumPy version already uses pyFFTW.
+
+    Returns
+    -------
+    phase : ndarray (real, same shape as inputs)
+        Recovered source-plane phase.
+    err : float
+        Final intensity-domain RMS error.
+    """
+    from ..backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            'JAX is not installed; install with `pip install jax` or '
+            'use gerchberg_saxton() (NumPy).')
+    import jax
+    import jax.numpy as jnp
+
+    src = jnp.asarray(source_amplitude, dtype=jnp.float32)
+    tgt = jnp.asarray(target_amplitude, dtype=jnp.float32)
+
+    def body(i, state):
+        E_in, _ = state
+        # Source -> target FFT
+        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_in)))
+        # Replace amplitude with target, keep phase
+        E_target = tgt * jnp.exp(1j * jnp.angle(F))
+        # Inverse FFT
+        E_back = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(E_target)))
+        # Replace amplitude with source, keep phase (next iter input)
+        E_next = src * jnp.exp(1j * jnp.angle(E_back))
+        return (E_next, F)
+
+    E0 = src.astype(jnp.complex64)
+    E_final, F_final = jax.lax.fori_loop(0, int(n_iter), body, (E0, E0))
+    phase = jnp.angle(E_final)
+    err = float(jnp.mean((jnp.abs(F_final) - tgt) ** 2))
+    return np.asarray(phase), err
+
+
+def error_reduction_jax(measured_amplitude, support, n_iter=200,
+                          init_phase=None):
+    """JAX-jit'd Error-Reduction phase retrieval (Fienup 1982).
+
+    Mirror of :func:`error_reduction` -- alternating-projection on the
+    Fourier-amplitude constraint and a real-space support constraint.
+    """
+    from ..backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError('JAX is not installed.')
+    import jax
+    import jax.numpy as jnp
+
+    meas = jnp.asarray(measured_amplitude, dtype=jnp.float32)
+    sup = jnp.asarray(support, dtype=bool)
+
+    if init_phase is None:
+        rng = np.random.default_rng(0)
+        init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(np.float32)
+        init_phase = jnp.asarray(init_phase_np)
+
+    F0 = meas * jnp.exp(1j * init_phase)
+    obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
+
+    def body(i, obj):
+        # Real-space: enforce support (zero outside)
+        obj = jnp.where(sup, obj, 0.0)
+        # Fourier-space: enforce amplitude
+        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
+        F = meas * jnp.exp(1j * jnp.angle(F))
+        return jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
+
+    obj_final = jax.lax.fori_loop(0, int(n_iter), body, obj0)
+    F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final)))
+    err = float(jnp.mean((jnp.abs(F) - meas) ** 2))
+    return np.asarray(obj_final), err
+
+
+def hybrid_input_output_jax(measured_amplitude, support, n_iter=200,
+                              beta=0.9, init_phase=None):
+    """JAX-jit'd Hybrid Input-Output phase retrieval.
+
+    HIO swaps the support projection for an outside-support feedback
+    update with parameter ``beta`` (typically 0.7-0.9).  Generally
+    converges faster + less prone to local minima than ER.
+    """
+    from ..backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError('JAX is not installed.')
+    import jax
+    import jax.numpy as jnp
+
+    meas = jnp.asarray(measured_amplitude, dtype=jnp.float32)
+    sup = jnp.asarray(support, dtype=bool)
+    beta_j = jnp.asarray(float(beta), dtype=jnp.float32)
+
+    if init_phase is None:
+        rng = np.random.default_rng(0)
+        init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(np.float32)
+        init_phase = jnp.asarray(init_phase_np)
+
+    F0 = meas * jnp.exp(1j * init_phase)
+    obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
+
+    def body(i, obj):
+        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
+        F = meas * jnp.exp(1j * jnp.angle(F))
+        g = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
+        # HIO: keep inside support, feedback correction outside
+        return jnp.where(sup, g, obj - beta_j * g)
+
+    obj_final = jax.lax.fori_loop(0, int(n_iter), body, obj0)
+    F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final)))
+    err = float(jnp.mean((jnp.abs(F) - meas) ** 2))
+    return np.asarray(obj_final), err

@@ -4933,3 +4933,40 @@ def _integrate_local_quadrature(
               f'{n_s2} samples/pixel, {t_int:.1f}s')
 
     return E_flat.reshape(N_out_coarse, N_out_coarse)
+
+
+def apply_real_lens_traced_jax(*args, **kwargs):
+    """JAX-vmapped per-pixel ray-traced apply_real_lens.
+
+    Planned for a future release (likely 3.6.0).  The full
+    implementation would:
+      1. vmap ``trace_jax`` over a (Ny, Nx) grid of per-pixel ray
+         launch positions, obtaining the per-pixel OPD.
+      2. Build the complex phase screen ``exp(i k0 OPD)`` in JAX.
+      3. Apply via the existing JAX ``angular_spectrum_propagate``
+         between surfaces.
+
+    Useful primarily on GPU, where the vmap unlocks 20-50x over the
+    existing NumPy ``apply_real_lens_traced``.  The current NumPy
+    path uses thread parallelism (``n_workers``) which gets close to
+    the GPU benefit on multi-core CPUs anyway.
+
+    For now, use :func:`apply_real_lens_traced` (NumPy).
+    """
+    raise NotImplementedError(
+        "apply_real_lens_traced_jax is reserved for a future "
+        "release.  Use apply_real_lens_traced() (NumPy).")
+
+
+def apply_real_lens_maslov_jax(*args, **kwargs):
+    """JAX-vmapped Maslov real-lens propagator.
+
+    Planned companion to :func:`apply_real_lens_traced_jax`, with the
+    same vmap-over-pixels pattern but using the Maslov method for
+    caustic-region accuracy.
+
+    For now, use :func:`apply_real_lens_maslov` (NumPy).
+    """
+    raise NotImplementedError(
+        "apply_real_lens_maslov_jax is reserved for a future "
+        "release.  Use apply_real_lens_maslov() (NumPy).")

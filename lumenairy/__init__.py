@@ -75,7 +75,11 @@ from .elements.lenses import (
     check_grid_vs_apertures,
     recommend_grid_for_prescription,
 )
-from .elements.lenses import apply_real_lens_maslov
+from .elements.lenses import (
+    apply_real_lens_maslov,
+    apply_real_lens_traced_jax,
+    apply_real_lens_maslov_jax,
+)
 
 # ── Glass catalog ────────────────────────────────────────────────────────
 from .glass import (
@@ -110,6 +114,11 @@ from .analysis.aberration import (
     AberrationSummary,
     aberration_summary,
     format_aberration_summary,
+)
+from .analysis.phase_retrieval import (
+    gerchberg_saxton_jax,
+    error_reduction_jax,
+    hybrid_input_output_jax,
 )
 from .analysis import (
     beam_centroid,
@@ -227,6 +236,7 @@ from .analysis.through_focus import (
     single_plane_metrics,
     diffraction_limited_peak,
     through_focus_scan,
+    through_focus_scan_jax,
     find_best_focus,
     plot_through_focus,
     ThroughFocusResult,
@@ -234,6 +244,7 @@ from .analysis.through_focus import (
     apply_perturbations,
     tolerancing_sweep,
     monte_carlo_tolerancing,
+    monte_carlo_tolerancing_jax,
 )
 
 # ── Hybrid wave/ray design optimization ────────────────────────────────
@@ -294,6 +305,8 @@ from .propagators.asymptotic import (
     aberration_tensor_lg00_jax,
     propagate_modal_asymptotic_lg00_jax,
     JaxAberrationTensorResult,
+    solve_envelope_stationary_jax_ift,
+    fit_canonical_polynomials_jax,
 )
 
 # ── DOE / Gratings / Phase I/O ──────────────────────────────────────────
@@ -408,7 +421,7 @@ from .raytrace import (
 )
 
 # ── System propagation ──────────────────────────────────────────────────
-from .system import propagate_through_system
+from .system import propagate_through_system, propagate_through_system_jax
 
 # ── Storage (unified HDF5 / Zarr) ────────────────────────────────────────
 from .io.storage import (
@@ -553,7 +566,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.5.0"
+__version__ = "3.5.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -738,6 +751,7 @@ __all__ = [
 
     # Element-walking system propagator
     'propagate_through_system',
+    'propagate_through_system_jax',
 
     # ============================================================
     # Tier 3 -- Trace (geometric + JAX-traceable)
@@ -838,6 +852,7 @@ __all__ = [
     'single_plane_metrics',
     'diffraction_limited_peak',
     'through_focus_scan',
+    'through_focus_scan_jax',
     'find_best_focus',
     'plot_through_focus',
     'ThroughFocusResult',
@@ -864,6 +879,9 @@ __all__ = [
     'gerchberg_saxton',
     'error_reduction',
     'hybrid_input_output',
+    'gerchberg_saxton_jax',
+    'error_reduction_jax',
+    'hybrid_input_output_jax',
 
     # Ghost analysis
     'enumerate_ghost_paths',
@@ -949,6 +967,11 @@ __all__ = [
     'aberration_tensor_lg00_jax',
     'propagate_modal_asymptotic_lg00_jax',
     'JaxAberrationTensorResult',
+    'solve_envelope_stationary_jax_ift',
+    'fit_canonical_polynomials_jax',
+    'apply_real_lens_traced_jax',
+    'apply_real_lens_maslov_jax',
+    'monte_carlo_tolerancing_jax',
 
     # ============================================================
     # Tier 7 -- Specialized physics

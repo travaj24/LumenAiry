@@ -2533,6 +2533,195 @@ def propagate_modal_asymptotic_lg00_jax(
     return flat_out.reshape(s2x.shape)
 
 
+# ===========================================================================
+# JAX-grad-friendly Newton solver for the envelope-stationary equation
+# (implicit-function-theorem backward, fixed-iter forward)
+# ===========================================================================
+#
+# The forward pass runs a fixed-iteration Newton in JAX (jax.lax.fori_loop).
+# The backward pass uses jax.custom_vjp + the implicit function theorem:
+#
+#     F(v*; theta) = 0     =>     dv*/dtheta = -[dF/dv*]^-1 dF/dtheta
+#
+# So the gradient w.r.t. inputs is computed by a single 2x2 linear solve,
+# not by unrolling autograd through the iteration loop.  This gives the
+# *exact* IFT gradient at the fixed point regardless of N_iter (as long
+# as Newton has converged); it also avoids growing the computational graph
+# linearly with iteration count.
+#
+# Lazy JAX: the @custom_vjp decoration runs on first call (cached
+# thereafter).  Module imports cleanly without JAX installed; only
+# calling the function requires JAX.
+
+# Module-level cache for the decorated solver; populated on first call.
+_JAX_IFT_SOLVER_CACHE = None
+
+
+def _build_jax_ift_solver():
+    """Construct (and cache) the @jax.custom_vjp-decorated Newton-IFT
+    solver.  Lazy: imports JAX inside, runs at most once per process."""
+    global _JAX_IFT_SOLVER_CACHE
+    if _JAX_IFT_SOLVER_CACHE is not None:
+        return _JAX_IFT_SOLVER_CACHE
+
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            "JAX is not installed; install with `pip install jax`.")
+    import jax
+    import jax.numpy as jnp
+    from functools import partial as _partial
+
+    def _residual(v, s2, source, ws, wp, vc, fit):
+        """Envelope-stationary residual
+            F(v) = (J^T (s1 - source)) / w_s^2 + (v - v_centre) / w_p^2
+        with J = ds_1/dv, s_1 = fit.eval_s1_xp(s2, v).  Returns 2-vec.
+        """
+        def s1_of_v(vv):
+            s1x, s1y = fit.eval_s1_xp(s2[0], s2[1], vv[0], vv[1])
+            return jnp.stack([s1x, s1y])
+
+        s1 = s1_of_v(v)
+        J = jax.jacfwd(s1_of_v)(v)
+        delta_s = s1 - source
+        delta_v = v - vc
+        return (J.T @ delta_s) / (ws * ws) + delta_v / (wp * wp)
+
+    def _newton_loop(s2, source, ws, wp, vc, n_iter, fit):
+        """Fixed-iter Gauss-Newton-like step on F = 0."""
+
+        def step(_, v):
+            def s1_of_v(vv):
+                s1x, s1y = fit.eval_s1_xp(s2[0], s2[1], vv[0], vv[1])
+                return jnp.stack([s1x, s1y])
+
+            s1 = s1_of_v(v)
+            J = jax.jacfwd(s1_of_v)(v)
+            F = (J.T @ (s1 - source)) / (ws * ws) + (v - vc) / (wp * wp)
+            # Gauss-Newton-like Hessian: keep the J^T J piece, drop the
+            # second-order term in (s_1 - source) -- exact at the fixed
+            # point, gives quadratic-ish convergence elsewhere.
+            H = (J.T @ J) / (ws * ws) + jnp.eye(2) / (wp * wp)
+            return v - jnp.linalg.solve(H, F)
+
+        return jax.lax.fori_loop(0, n_iter, step, vc)
+
+    @_partial(jax.custom_vjp, nondiff_argnums=(5, 6))
+    def _solve(s2, source, ws, wp, vc, n_iter, fit):
+        return _newton_loop(s2, source, ws, wp, vc, n_iter, fit)
+
+    def _fwd(s2, source, ws, wp, vc, n_iter, fit):
+        v_star = _newton_loop(s2, source, ws, wp, vc, n_iter, fit)
+        # Save inputs for the IFT backward.
+        return v_star, (v_star, s2, source, ws, wp, vc)
+
+    def _bwd(n_iter, fit, saved, g):
+        # Implicit-function theorem:
+        #   dv*/dtheta = -[dF/dv]^-1 dF/dtheta
+        # so the cotangent contribution of theta is
+        #   bar(theta) = -lambda^T dF/dtheta
+        # where lambda solves
+        #   [dF/dv]^T lambda = bar(v) = g
+        # See e.g. Krishnan & Mahmoud 2020, "Differentiating through implicit
+        # solvers".  Computing dF/dv and dF/dtheta uses jax.jacrev on the
+        # JAX-traceable residual.
+        v_star, s2, source, ws, wp, vc = saved
+        # All Jacobians evaluated at v_star.
+        dF_dv = jax.jacrev(_residual, argnums=0)(
+            v_star, s2, source, ws, wp, vc, fit)
+        lam = jnp.linalg.solve(dF_dv.T, g)
+        # -lambda^T dF/dtheta for each differentiable arg.
+        dF_ds2 = jax.jacrev(_residual, argnums=1)(
+            v_star, s2, source, ws, wp, vc, fit)
+        dF_dsrc = jax.jacrev(_residual, argnums=2)(
+            v_star, s2, source, ws, wp, vc, fit)
+        dF_dws = jax.jacrev(_residual, argnums=3)(
+            v_star, s2, source, ws, wp, vc, fit)
+        dF_dwp = jax.jacrev(_residual, argnums=4)(
+            v_star, s2, source, ws, wp, vc, fit)
+        dF_dvc = jax.jacrev(_residual, argnums=5)(
+            v_star, s2, source, ws, wp, vc, fit)
+        grad_s2 = -lam @ dF_ds2
+        grad_src = -lam @ dF_dsrc
+        grad_ws = -lam @ dF_dws    # scalar via 2-vec @ 2-vec
+        grad_wp = -lam @ dF_dwp
+        grad_vc = -lam @ dF_dvc
+        return grad_s2, grad_src, grad_ws, grad_wp, grad_vc
+
+    _solve.defvjp(_fwd, _bwd)
+    _JAX_IFT_SOLVER_CACHE = _solve
+    return _solve
+
+
+def solve_envelope_stationary_jax_ift(
+    fit,
+    s2,
+    source_point,
+    *,
+    w_s: float,
+    w_p: float,
+    v2_centre=(0.0, 0.0),
+    n_iter: int = 15,
+):
+    """JAX-differentiable Newton solver for the envelope-stationary
+    equation, with gradients computed via the **implicit function
+    theorem** (custom_vjp).
+
+    The forward pass runs a fixed ``n_iter`` Gauss-Newton iterations
+    inside ``jax.lax.fori_loop``; the backward pass computes
+    ``dv*/dθ = -[∂F/∂v]^{-1} ∂F/∂θ`` via a single 2x2 linear solve,
+    so the gradient is independent of ``n_iter`` (as long as Newton
+    has converged).
+
+    This is the JAX-grad-friendly companion to
+    :func:`solve_envelope_stationary` (NumPy).  Use it when you need
+    ``v*`` to flow through a JAX trace (e.g. as input to
+    :func:`aberration_tensor_lg00_jax`) and want the gradient of
+    downstream losses to propagate back to ``s2``, ``source_point``,
+    ``w_s``, ``w_p``, or ``v2_centre``.
+
+    Parameters
+    ----------
+    fit : CanonicalPolyFit
+        Polynomial fit; treated as a *non-differentiable* closure
+        (its coefficients are not part of the JAX gradient chain).
+    s2, source_point : 2-element array-like
+        Image- and source-plane points.  Differentiable.
+    w_s, w_p : float (or JAX scalar)
+        Source / pupil Gaussian waists.  Differentiable.
+    v2_centre : 2-element array-like
+        Pupil centre.  Differentiable.
+    n_iter : int, default 15
+        Fixed Newton-iteration count.  More than 12 is rarely needed
+        for well-conditioned designs; 15 gives ample margin.
+
+    Returns
+    -------
+    v_star : JAX 2-vector
+        The envelope-stationary point.  Backward-differentiable via
+        IFT.
+
+    Notes
+    -----
+    Convergence is not checked at run time -- the iteration always
+    runs the full ``n_iter`` steps.  For pathological inputs where
+    the Gauss-Newton Hessian becomes ill-conditioned, prefer the
+    NumPy :func:`solve_envelope_stationary` (which has a stalling
+    early-exit + linalg-error fallback).
+    """
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            "JAX is not installed; install with `pip install jax`.")
+    import jax.numpy as jnp
+
+    solver = _build_jax_ift_solver()
+    s2_j = jnp.asarray(s2)
+    src_j = jnp.asarray(source_point)
+    ws_j = jnp.asarray(w_s)
+    wp_j = jnp.asarray(w_p)
+    vc_j = jnp.asarray(v2_centre)
+    return solver(s2_j, src_j, ws_j, wp_j, vc_j, int(n_iter), fit)
+
+
 # Add to public API.
 if 'aberration_tensor_lg00_jax' not in __all__:
     __all__.append('aberration_tensor_lg00_jax')
@@ -2540,3 +2729,33 @@ if 'propagate_modal_asymptotic_lg00_jax' not in __all__:
     __all__.append('propagate_modal_asymptotic_lg00_jax')
 if 'JaxAberrationTensorResult' not in __all__:
     __all__.append('JaxAberrationTensorResult')
+if 'solve_envelope_stationary_jax_ift' not in __all__:
+    __all__.append('solve_envelope_stationary_jax_ift')
+
+
+def fit_canonical_polynomials_jax(*args, **kwargs):
+    """JAX-traceable canonical polynomial fit.
+
+    Planned for a future release.  The full implementation requires
+    rewriting the sample-collection ray trace + linear least-squares
+    in JAX (using ``trace_jax`` for the ray trace and
+    ``jnp.linalg.lstsq`` for the Chebyshev solve).  The work is
+    feasible but non-trivial because the existing NumPy fit handles
+    several edge cases (line search on the source box, anchor at
+    box endpoints, surface_diffraction order routing) that need
+    careful translation.
+
+    For now, use :func:`fit_canonical_polynomials` (NumPy) -- the
+    resulting fit is already consumable by JAX paths
+    (``aberration_tensor_lg00_jax``, ``solve_envelope_stationary_jax_ift``)
+    via its ``eval_phi_xp`` / ``eval_s1_xp`` methods.
+    """
+    raise NotImplementedError(
+        "fit_canonical_polynomials_jax is reserved for a future "
+        "release.  Use fit_canonical_polynomials() (NumPy); the "
+        "resulting fit is consumable by all JAX downstream paths "
+        "via fit.eval_phi_xp / fit.eval_s1_xp.")
+
+
+if 'fit_canonical_polynomials_jax' not in __all__:
+    __all__.append('fit_canonical_polynomials_jax')

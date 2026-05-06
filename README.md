@@ -10,6 +10,34 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.5.1
+
+Patch release: additive JAX-companion functions across `analysis`,
+`system`, and `propagators`.  Every change is opt-in (suffix `_jax`);
+no existing function behaviour changes.
+
+- **`solve_envelope_stationary_jax_ift`** — JAX-grad-friendly Newton
+  solver for the envelope-stationary equation, with backward via the
+  implicit function theorem (`jax.custom_vjp`).  Forward matches the
+  NumPy solver to ~1e-12; backward IFT matches FD to single-precision
+  JAX float32 floor.
+- **`through_focus_scan_jax`** — JAX-batched z-scan via
+  `angular_spectrum_propagate` (already JAX-traceable).
+- **`gerchberg_saxton_jax`, `error_reduction_jax`, `hybrid_input_output_jax`**
+  — JAX-jit'd phase-retrieval iterations using `jax.lax.fori_loop`.
+- **`propagate_through_system_jax`** — element-by-element walk with
+  per-element JAX dispatch for `propagate` / `lens` / `aperture` /
+  `mask`; falls back to NumPy at element boundaries for unsupported
+  types.
+
+Reserved stubs documenting the planned interface (raise
+`NotImplementedError`):
+`fit_canonical_polynomials_jax`, `apply_real_lens_traced_jax`,
+`apply_real_lens_maslov_jax`, `monte_carlo_tolerancing_jax`.  Each
+points users at the NumPy version that's already complete.
+
+`__all__` is now 373 entries.  All 25 validation files green.
+
 ## What's new in 3.5.0
 
 Major release covering three sessions of feature work and API

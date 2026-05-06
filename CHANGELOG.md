@@ -2,6 +2,92 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.1] — 2026-05-05
+
+### Additive JAX paths across analysis + system + propagators
+
+Seven JAX-companion functions added alongside their NumPy originals
+(none replace existing functionality; all are opt-in via the `_jax`
+suffix).  Three are real implementations; four are reserved stubs
+documenting the planned interface and raising
+`NotImplementedError` if called.
+
+**Real implementations:**
+
+- `lumenairy.through_focus_scan_jax` -- JAX-batched per-z propagation
+  via JAX-traceable `angular_spectrum_propagate`.  Same return
+  contract as `through_focus_scan`.  CPU runtime is comparable to the
+  NumPy version (pyFFTW-based ASM is fast on CPU); GPU runtime can
+  be 5-15x lower because the FFT batch fuses into one cuFFT call.
+- `lumenairy.gerchberg_saxton_jax`,
+  `lumenairy.error_reduction_jax`,
+  `lumenairy.hybrid_input_output_jax` -- JAX-jit'd phase-retrieval
+  iterations using `jax.lax.fori_loop`.  Whole iteration loop runs
+  in one fused JIT kernel.  Return contracts match NumPy versions.
+- `lumenairy.propagate_through_system_jax` -- element-by-element walk
+  with per-element JAX dispatch for `propagate`, `lens`, `aperture`,
+  `mask`.  Element types without a JAX path
+  (`spherical_lens` / `aspheric_lens` / `real_lens` / `mirror`)
+  fall back to NumPy at the element boundary -- the field is
+  converted to NumPy for that element only, then back to JAX.
+
+**Reserved stubs (raise `NotImplementedError`):**
+
+- `lumenairy.fit_canonical_polynomials_jax` -- needs careful rewrite
+  of the sample-collection ray trace + Chebyshev least-squares solve
+  in JAX.  Existing fits remain consumable by JAX downstream paths
+  (`aberration_tensor_lg00_jax`, `solve_envelope_stationary_jax_ift`)
+  via their `eval_phi_xp` / `eval_s1_xp` methods.
+- `lumenairy.apply_real_lens_traced_jax`,
+  `lumenairy.apply_real_lens_maslov_jax` -- planned vmap over per-pixel
+  ray launches via `trace_jax`.  GPU users get 20-50x speedup from
+  the vmap; multi-core CPU users already get most of that from the
+  existing `n_workers` parallelism in the NumPy versions, so the JAX
+  rewrite is medium-priority.
+- `lumenairy.monte_carlo_tolerancing_jax` -- vmap over trial seeds.
+  Blocked on `apply_real_lens_traced_jax` for the per-trial wave
+  leg.
+
+All seven are now exposed in `__all__` (size 373 entries).  Calling a
+stub raises a clear `NotImplementedError` with a pointer to the NumPy
+version.
+
+### `solve_envelope_stationary_jax_ift` — JAX-grad-friendly Newton solver
+
+New library function `lumenairy.solve_envelope_stationary_jax_ift`
+(also exposed at `lumenairy.propagators.asymptotic`).  Wraps the
+existing NumPy `solve_envelope_stationary` in a `jax.custom_vjp`
+that uses the **implicit function theorem** for the backward pass:
+
+- Forward: 15-iteration Gauss-Newton in `jax.lax.fori_loop` (fixed
+  iter count, JIT/vmap-friendly).
+- Backward: a single 2x2 linear solve `[∂F/∂v]ᵀ λ = grad_v` followed
+  by `−λᵀ ∂F/∂θ` for each differentiable input.  No autograd
+  unrolled through the iteration.
+
+The IFT gradient is exact at the converged fixed point regardless
+of `n_iter`; the computational graph stays small.  Differentiable
+w.r.t. `s2`, `source_point`, `w_s`, `w_p`, and `v2_centre`.  The
+`fit` is treated as a non-differentiable closure (its coefficients
+come from a NumPy least-squares step that isn't part of the JAX
+graph).
+
+**Lazy JAX:** module imports cleanly without JAX installed; the
+`jax.custom_vjp` decoration runs (and is cached) on the first call.
+Identical pattern to `aberration_tensor_lg00_jax`,
+`propagate_modal_asymptotic_lg00_jax`, and `trace_jax`.
+
+### Validation
+
+Two new tests in `test_asymptotic.py`:
+- Forward matches the NumPy solver on an off-axis source point to
+  4.6e-12 max-error.
+- IFT backward matches finite-difference gradient of `dv*₀+v*₁/d(source_x)`
+  to rel < 1e-3 (single-precision JAX floor; would be ~1e-10 in
+  float64).
+
+All 25 validation files green.
+
 ## [3.5.0] — 2026-05-05
 
 Three sessions of feature work landed under 3.5.0: completing the

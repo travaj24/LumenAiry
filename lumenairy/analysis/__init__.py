@@ -63,6 +63,9 @@ from .phase_retrieval import (
     gerchberg_saxton,
     error_reduction,
     hybrid_input_output,
+    gerchberg_saxton_jax,
+    error_reduction_jax,
+    hybrid_input_output_jax,
 )
 from .coherence import (
     koehler_image,
@@ -73,6 +76,7 @@ from .through_focus import (
     single_plane_metrics,
     diffraction_limited_peak,
     through_focus_scan,
+    through_focus_scan_jax,
     find_best_focus,
     plot_through_focus,
     ThroughFocusResult,
@@ -80,6 +84,7 @@ from .through_focus import (
     apply_perturbations,
     tolerancing_sweep,
     monte_carlo_tolerancing,
+    monte_carlo_tolerancing_jax,
 )
 from .aberration import (
     AberrationSummary,
@@ -121,13 +126,16 @@ __all__ = [
     'simulate_interferogram', 'phase_shift_extract', 'fringe_spacing',
     # phase retrieval
     'gerchberg_saxton', 'error_reduction', 'hybrid_input_output',
+    'gerchberg_saxton_jax', 'error_reduction_jax', 'hybrid_input_output_jax',
     # coherence
     'koehler_image', 'extended_source_image', 'mutual_coherence',
     # through focus
     'single_plane_metrics', 'diffraction_limited_peak',
-    'through_focus_scan', 'find_best_focus', 'plot_through_focus',
+    'through_focus_scan', 'through_focus_scan_jax', 'find_best_focus',
+    'plot_through_focus',
     'ThroughFocusResult', 'Perturbation', 'apply_perturbations',
     'tolerancing_sweep', 'monte_carlo_tolerancing',
+    'monte_carlo_tolerancing_jax',
     # aberration (unified Seidel + LG tensor)
     'AberrationSummary', 'aberration_summary', 'format_aberration_summary',
     # plotting

@@ -460,3 +460,87 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
             method='system', history=history_entries,
         )
     return E, intermediates
+
+
+def propagate_through_system_jax(E_in, elements, wavelength, dx, dy=None,
+                                   method='asm', verbose=False):
+    """JAX-traceable variant of :func:`propagate_through_system`.
+
+    Element-by-element walk where each element type is dispatched to
+    its JAX-compatible handler when one exists:
+      * ``propagate``       -> ``angular_spectrum_propagate`` (JAX)
+      * ``lens`` (paraxial) -> JAX-traceable thin-lens phase screen
+      * ``aperture``        -> JAX boolean mask multiplication
+      * ``mask``            -> JAX phase / amplitude mask multiplication
+
+    Element types without a JAX path
+    (``spherical_lens``, ``aspheric_lens``, ``real_lens``, ``mirror``)
+    fall back to NumPy at the element boundary -- the field is
+    converted via ``np.asarray`` for the element call, then back to
+    ``jnp.asarray`` for the next propagation step.  This loses
+    differentiability through the NumPy element, but lets the rest of
+    the chain stay in JAX.
+
+    Returns
+    -------
+    E_out : JAX array, complex
+        Field after the full element chain.
+    """
+    from .backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            'JAX is not installed; install with `pip install jax` or '
+            'use propagate_through_system() (NumPy).')
+    import jax.numpy as jnp
+    from .propagators.propagation import angular_spectrum_propagate
+
+    if dy is None:
+        dy = dx
+
+    E = jnp.asarray(E_in, dtype=jnp.complex64)
+    Ny, Nx = E.shape[-2:]
+    x = (jnp.arange(Nx) - Nx / 2) * dx
+    y = (jnp.arange(Ny) - Ny / 2) * dy
+    X, Y = jnp.meshgrid(x, y, indexing='xy')
+    k0 = 2.0 * jnp.pi / wavelength
+
+    for i, elem in enumerate(elements):
+        etype = elem.get('type', '')
+        if verbose:
+            print(f'  Stage {i+1}/{len(elements)}: {etype}', flush=True)
+
+        if etype == 'propagate':
+            z = elem['z']
+            bandlimit = elem.get('bandlimit', True)
+            E = angular_spectrum_propagate(
+                E, float(z), wavelength, dx, bandlimit=bandlimit)
+
+        elif etype == 'lens':
+            f = elem['f']
+            xc = elem.get('xc', 0.0)
+            yc = elem.get('yc', 0.0)
+            r2 = (X - xc) ** 2 + (Y - yc) ** 2
+            E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
+
+        elif etype == 'aperture':
+            r = elem.get('radius', None)
+            if r is not None:
+                xc = elem.get('xc', 0.0)
+                yc = elem.get('yc', 0.0)
+                mask = (((X - xc) ** 2 + (Y - yc) ** 2) <= r ** 2)
+                E = E * mask.astype(jnp.complex64)
+
+        elif etype == 'mask':
+            mask = jnp.asarray(elem['mask'])
+            E = E * mask
+
+        else:
+            # Fallback: NumPy element at the boundary.
+            from .system import propagate_through_system
+            E_np = np.asarray(E)
+            E_np, _ = propagate_through_system(
+                E_np, [elem], wavelength, dx, dy=dy,
+                method=method, verbose=False)
+            E = jnp.asarray(E_np)
+
+    return E
