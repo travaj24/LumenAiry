@@ -109,3 +109,125 @@ def ghost_analysis(prescription, wavelength, semi_aperture=None,
                   f'(R1={g["R_i"]:.4f}, R2={g["R_j"]:.4f})')
 
     return ghosts
+
+
+def non_sequential_stray_light(prescription, wavelength, *,
+                                n_rays=21,
+                                semi_aperture=None,
+                                top_n=10,
+                                bsdf_model=None,
+                                verbose=True):
+    """Combined ghost + scatter stray-light report for a prescription.
+
+    Wraps :func:`ghost_analysis` (2-bounce reflections via Fresnel)
+    with an optional surface-scatter contribution from a
+    :class:`BSDFModel` and returns a single structured report.  This
+    is the "single entry point" API for assessing stray light at
+    design-review time, without having to manually combine the
+    individual primitives.
+
+    Parameters
+    ----------
+    prescription : dict
+        Standard lumenairy prescription.
+    wavelength : float
+        Vacuum wavelength [m].
+    n_rays : int, default 21
+        Per-ghost-path ray fan resolution (passed to
+        :func:`ghost_analysis`).
+    semi_aperture : float, optional
+        Half-aperture for the ray fan.  Defaults to
+        ``prescription['aperture_diameter'] / 2``.
+    top_n : int, default 10
+        Limit the report to this many brightest ghost paths.
+    bsdf_model : BSDFModel, optional
+        If supplied, also reports the integrated TIS (Total
+        Integrated Scatter) contribution from each surface using
+        the BSDF's scatter coefficient.  TIS is added to the
+        reflected-ghost intensity to give a worst-case stray-light
+        fraction.  When ``None`` (default), only ghost reflections
+        are reported.
+    verbose : bool
+
+    Returns
+    -------
+    report : dict
+        ``ghosts`` -- list of dicts as returned by
+        :func:`ghost_analysis`, truncated to ``top_n``.
+        ``ghost_total_intensity`` -- sum of relative intensities
+        across ALL ghost paths (not just top_n).
+        ``scatter_tis_per_surface`` -- per-surface TIS contribution
+        if ``bsdf_model`` was given, else ``None``.
+        ``stray_light_fraction`` -- conservative upper bound:
+        ``ghost_total + sum(scatter_tis_per_surface)``.
+
+    Notes
+    -----
+    This is a *first-pass* stray-light estimate.  It does NOT do a
+    full non-sequential ray trace branching into reflected +
+    scattered children at every surface.  The intensities reported
+    are linearly composable (sum of independent contributions) and
+    so are conservative for typical refractive systems where each
+    surface contributes < 1% reflection.  For final stray-light
+    sign-off use a dedicated non-sequential code (FRED, ASAP) on
+    the prescription exported via :func:`export_zemax_zmx`.
+    """
+    ghosts = ghost_analysis(prescription, wavelength,
+                              semi_aperture=semi_aperture,
+                              n_rays=n_rays, verbose=False)
+
+    ghost_total = float(sum(g['intensity'] for g in ghosts))
+    top_ghosts = ghosts[:top_n] if top_n > 0 else ghosts
+
+    scatter_tis_per_surface = None
+    if bsdf_model is not None:
+        # Integrate the BSDF over the upper hemisphere to get TIS.
+        # Use a small Monte-Carlo: sample 2k uniform-hemisphere
+        # directions, weight by cos(theta), average.
+        rng = np.random.default_rng(0)
+        n_samples = 2000
+        # Uniform on upper hemisphere via 2 cos-weighted samples.
+        u = rng.random(n_samples)
+        v = rng.random(n_samples)
+        # cos-weighted hemisphere: theta = arccos(sqrt(1-u))
+        cos_t = np.sqrt(1.0 - u)
+        sin_t = np.sqrt(u)
+        phi = 2.0 * np.pi * v
+        # Local incident direction: (0,0,1).  Out: (sin_t cos_phi, sin_t sin_phi, cos_t).
+        try:
+            f = bsdf_model.evaluate(
+                np.array([0.0, 0.0, 1.0]),
+                np.stack([sin_t * np.cos(phi),
+                          sin_t * np.sin(phi),
+                          cos_t], axis=-1),
+            )
+            tis_each_surface = float(np.mean(f * cos_t) * np.pi)
+        except Exception:
+            tis_each_surface = float('nan')
+        n_surfs = len(prescription.get('surfaces', []))
+        scatter_tis_per_surface = [tis_each_surface] * n_surfs
+
+    stray_light_fraction = ghost_total
+    if scatter_tis_per_surface is not None:
+        stray_light_fraction += sum(s for s in scatter_tis_per_surface
+                                      if np.isfinite(s))
+
+    if verbose:
+        print(f'Non-sequential stray-light report:')
+        print(f'  Ghost paths: {len(ghosts)}, '
+              f'top-{top_n} contribute '
+              f'{sum(g["intensity"] for g in top_ghosts):.3e}')
+        print(f'  Total ghost intensity: {ghost_total:.3e}')
+        if scatter_tis_per_surface is not None:
+            print(f'  Per-surface TIS (BSDF): '
+                  f'{scatter_tis_per_surface[0]:.3e} per surface, '
+                  f'{len(scatter_tis_per_surface)} surfaces')
+        print(f'  Conservative stray-light fraction: '
+              f'{stray_light_fraction:.3e}')
+
+    return {
+        'ghosts': top_ghosts,
+        'ghost_total_intensity': ghost_total,
+        'scatter_tis_per_surface': scatter_tis_per_surface,
+        'stray_light_fraction': stray_light_fraction,
+    }

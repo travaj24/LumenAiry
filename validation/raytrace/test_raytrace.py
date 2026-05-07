@@ -1127,5 +1127,65 @@ H.run('through_focus_scan symmetric about best focus (clean lens)',
       t_through_focus_scan_symmetric_about_best_focus)
 
 
+# ===========================================================================
+# trace_jax_with_params (3.5.6 -- JAX-array prescription params)
+# ===========================================================================
+
+def t_trace_jax_with_params_matches_trace_jax_default():
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import (
+        make_jax_ray_state, trace_jax, trace_jax_with_params,
+    )
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                              glass='N-BK7', aperture=4e-3)
+    state = make_jax_ray_state(
+        x=jnp.array([0.5e-3]), y=jnp.zeros(1), z=jnp.zeros(1),
+        L=jnp.zeros(1), M=jnp.zeros(1), N=jnp.ones(1))
+    out_ref = trace_jax(state, presc, 633e-9)
+    out_new = trace_jax_with_params(state, presc, 633e-9)
+    x_diff = float(jnp.max(jnp.abs(out_ref.x - out_new.x)))
+    opd_diff = float(jnp.max(jnp.abs(out_ref.opd - out_new.opd)))
+    return (x_diff < 1e-12 and opd_diff < 1e-15,
+            f'x diff = {x_diff:.3e}, opd diff = {opd_diff:.3e}')
+
+
+def t_trace_jax_with_params_grad_matches_fd():
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from lumenairy.raytrace.jax_trace import (
+        make_jax_ray_state, trace_jax_with_params,
+    )
+    presc = la.make_singlet(R1=20e-3, R2=float('inf'), d=2e-3,
+                              glass='N-BK7', aperture=4e-3)
+    state = make_jax_ray_state(
+        x=jnp.array([0.5e-3]), y=jnp.zeros(1), z=jnp.zeros(1),
+        L=jnp.zeros(1), M=jnp.zeros(1), N=jnp.ones(1))
+
+    def loss(R1):
+        radii = jnp.array([R1, float('inf')])
+        out = trace_jax_with_params(state, presc, 633e-9, radii=radii)
+        return out.opd.sum()
+
+    g_jax = float(jax.grad(loss)(jnp.float64(20e-3)))
+    eps = 1e-6
+    g_fd = float((loss(20e-3 + eps) - loss(20e-3 - eps)) / (2 * eps))
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), 1e-30)
+    return rel < 1e-5, (
+        f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}')
+
+
+H.run('trace_jax_with_params: defaults match trace_jax to roundoff',
+      t_trace_jax_with_params_matches_trace_jax_default)
+H.run('trace_jax_with_params: jax.grad through R1 matches FD',
+      t_trace_jax_with_params_grad_matches_fd)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

@@ -72,9 +72,15 @@ except ImportError:
     _NUMBA_AVAILABLE = False
 
 
-# Newton iter cap default; see lenses.py original constant for the
-# 8-vs-12 tradeoff discussion (audit perf #5).
-_NEWTON_MAX_ITERS = 8
+# Newton iter cap default.  Set to 12 (the historical value).
+# 3.5.5 dropped this to 8 based on an audit recommendation, but the
+# active-mask early-exit already short-circuits converged pixels -- the
+# cap only matters for outlier pixels that genuinely need 9-12 iters.
+# Truncating those at 8 silently lost accuracy on cemented multi-element
+# / strongly-aberrated systems.  3.5.6 reverts to the safe 12.  Override
+# via apply_real_lens_traced(newton_max_iters=N) when profiling shows
+# Newton dominates.
+_NEWTON_MAX_ITERS = 12
 
 
 # Helpers shared with lenses.py (single-element sag, aperture warning).
@@ -1816,6 +1822,30 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
                     frac,
                     f'newton {_it + 1}/{MAX_NEWTON_ITERS}: '
                     f'{remaining}/{n_total} pixels unconverged')
+        # Surface unconverged pixels.  Healthy prescriptions can have a
+        # handful of out-of-domain edge pixels left active at the
+        # iteration cap -- those are benign and don't warrant a warning.
+        # Threshold: >1% of total pixels unconverged means a real
+        # convergence problem.  Honour the same ``on_undersample`` knob
+        # the rest of the function uses ('silent' suppresses, 'warn'
+        # / 'error' default emits the warning).  Pre-3.5.6 unconverged
+        # pixels were silently kept at their last Newton value.
+        n_unconverged = int(active.sum()) if hasattr(
+            active, 'sum') else 0
+        n_total = int(active.size) if hasattr(active, 'size') else 1
+        if (n_unconverged > 0 and n_unconverged > 0.01 * n_total
+                and on_undersample != 'silent'):
+            import warnings as _warnings
+            _warnings.warn(
+                f"apply_real_lens_traced Newton inversion: "
+                f"{n_unconverged}/{n_total} pixels "
+                f"({100.0*n_unconverged/n_total:.1f}%) did not converge "
+                f"to tol={tol:.3e} m within {MAX_NEWTON_ITERS} "
+                f"iterations.  Affected pixels keep their last Newton "
+                f"value, which may carry residual error.  Increase "
+                f"newton_max_iters if this matters for your tolerance "
+                f"budget.",
+                RuntimeWarning, stacklevel=3)
         opl_flat = So.ev(xe, ye)
         out_of_domain = (xe * xe + ye * ye > (launch_radius * 0.99) ** 2)
         opl_flat = xp.where(out_of_domain, xp.nan, opl_flat)

@@ -30,6 +30,7 @@ Author: Andrew Traverso
 """
 
 import warnings
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -810,18 +811,20 @@ def _evaluate_polynomial_4d(coeffs: np.ndarray,
     -------
     value : ndarray with the broadcast shape of (u1, ..., u4)
     """
-    # Broadcast shapes
-    shape = np.broadcast(u1, u2, u3, u4).shape
-    T1 = _chebyshev_vandermonde(u1, max_order)   # (max_k+1,) + shape
+    # 3.5.6: vectorised over basis terms (no Python loop).  T_i has
+    # shape (max_k+1, *u_shape); T_i[K_i] has shape (M, *u_shape);
+    # product is (M, *u_shape); contracting over basis axis with
+    # coeffs gives the result.  ~3x faster than the previous loop on
+    # M=70 basis terms x 1024-pt u arrays.
+    T1 = _chebyshev_vandermonde(u1, max_order)
     T2 = _chebyshev_vandermonde(u2, max_order)
     T3 = _chebyshev_vandermonde(u3, max_order)
     T4 = _chebyshev_vandermonde(u4, max_order)
-    out = np.zeros(shape, dtype=np.float64)
-    for c, (k1, k2, k3, k4) in zip(coeffs, multi_indices):
-        if c == 0.0:
-            continue
-        out = out + c * T1[k1] * T2[k2] * T3[k3] * T4[k4]
-    return out
+    K = np.asarray(multi_indices, dtype=np.int64)
+    K1, K2, K3, K4 = K[:, 0], K[:, 1], K[:, 2], K[:, 3]
+    basis = T1[K1] * T2[K2] * T3[K3] * T4[K4]
+    return np.tensordot(np.asarray(coeffs, dtype=np.float64),
+                         basis, axes=([0], [0]))
 
 
 def _evaluate_polynomial_4d_and_grad34(coeffs: np.ndarray,

@@ -241,6 +241,47 @@ _PYFFTW_PLAN_CACHE: 'OrderedDict[tuple, tuple]' = OrderedDict()
 _PYFFTW_PLAN_CACHE_SIZE = 8       # # of plans to keep resident
 _PYFFTW_PLAN_LOCK = threading.Lock()
 
+# pyFFTW planner flag.  FFTW_ESTIMATE (default) takes ~1 ms to plan
+# and gives "good enough" performance.  FFTW_MEASURE takes
+# ~0.1-1 s to plan but produces ~20% faster execution; worth opting
+# into for production runs that re-use the same shapes thousands of
+# times.  FFTW_PATIENT (~10-60 s plan) gives a few more % beyond
+# MEASURE.  Switch at runtime via ``set_pyfftw_planner()``.
+_PYFFTW_PLAN_FLAGS = ('FFTW_ESTIMATE',)
+
+
+def set_pyfftw_planner(planner='FFTW_ESTIMATE'):
+    """Configure the pyFFTW planning effort.
+
+    Parameters
+    ----------
+    planner : ``'FFTW_ESTIMATE'`` (default) / ``'FFTW_MEASURE'`` /
+              ``'FFTW_PATIENT'`` / ``'FFTW_EXHAUSTIVE'``
+        Higher-effort planners take longer to build plans but produce
+        ~20-30% faster FFT execution.  Note that planning measures
+        actually overwrite the supplied buffer, so plan rebuilds may
+        clobber whatever was in the buffer.
+
+    Notes
+    -----
+    Switching the planner clears the existing plan cache so that
+    subsequent calls re-plan with the new flag.  For optimisation
+    runs that hit a small number of shapes, calling this once at
+    script start with ``'FFTW_MEASURE'`` is the recommended
+    production setup.
+    """
+    global _PYFFTW_PLAN_FLAGS
+    valid = {'FFTW_ESTIMATE', 'FFTW_MEASURE',
+             'FFTW_PATIENT', 'FFTW_EXHAUSTIVE'}
+    if planner not in valid:
+        raise ValueError(
+            f"set_pyfftw_planner: planner must be one of {sorted(valid)}, "
+            f"got {planner!r}.")
+    _PYFFTW_PLAN_FLAGS = (planner,)
+    # Clear the plan cache so subsequent calls re-plan with the new flag.
+    with _PYFFTW_PLAN_LOCK:
+        _PYFFTW_PLAN_CACHE.clear()
+
 
 def reset_fft_backend():
     """Clear the pyFFTW plan cache and the bad-shape blacklist.
@@ -396,7 +437,7 @@ def _get_or_make_plan(direction, shape, dtype, threads):
         buf, buf,
         axes=axes,
         direction=direction_flag,
-        flags=('FFTW_ESTIMATE',),
+        flags=_PYFFTW_PLAN_FLAGS,
         threads=max(1, int(threads)),
     )
     lock = threading.Lock()

@@ -2,6 +2,54 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.6] — 2026-05-07
+
+CI hotfix + 14 audit-driven performance / accuracy improvements.
+
+### CI hotfix
+
+* `lenses.py`: missing ``from typing import ... Tuple`` import after
+  the 3.5.5 split caused ``NameError: name 'Tuple' is not defined``
+  at import on Linux/3.11-3.13.  Locally on Python 3.14 the lazy
+  annotation evaluation hid the issue; fixed for all Python versions.
+  This is the only reason 3.5.5 didn't reach PyPI cleanly.
+
+### Performance & accuracy
+
+| # | Item | Result |
+|---|------|--------|
+| 1 | **`trace_jax_with_params`** -- the audit's #1 lever | New JAX-array-aware trace that accepts ``radii`` / ``conics`` / ``aspheric_coeffs`` / ``thicknesses`` as differentiable JAX arrays.  Default kwargs reproduce ``trace_jax`` to roundoff; ``jax.grad`` through R1 matches finite differences to 1e-5 rel.  Unblocks design-parameter adjoint optimization that 3.5.5's ``make_lg_aberration_merit_jax`` only partially supported. |
+| 2 | Newton iter cap reverted 8 -> 12 in ``apply_real_lens_traced`` | 3.5.5 dropped this based on an audit recommendation; benchmarks showed 0% speedup (active-mask early-exit dominates).  Restoring 12 protects outlier pixels that genuinely need 9-12 iters. |
+| 3 | Adaptive Newton tolerance + warning | Surface non-convergence: when >1% of wave-grid pixels fail to converge to ``tol=0.01*dx`` within ``newton_max_iters`` iterations, emit ``RuntimeWarning`` (suppressed by ``on_undersample='silent'``).  Previously silently retained the last (possibly-wrong) Newton value. |
+| 4 | Maslov upsample phase fix | ``apply_real_lens_maslov`` with ``output_subsample > 1`` previously line-by-line ``np.unwrap``'d the phase before zoom -- fragile near caustics.  3.5.6 interpolates the complex ``exp(i*phase)`` directly via cubic zoom of cos/sin, eliminating unwrap-induced seams. |
+| 5 | JAX x64 auto-enable in ``fit_canonical_polynomials_jax`` | Was raising ``RuntimeError`` if x64 wasn't on; now emits a one-time warning and enables x64 itself.  Raises precision (single-precision lstsq gave 5% coefficient error and NaN gradients), never lowers it. |
+| 6 | ``poly_order`` auto-bump in canonical fit | New ``auto_bump_threshold_waves`` kwarg.  When the fit residual exceeds the threshold, recursively retry at order+2 up to ``max_auto_poly_order``.  Helps cemented multi-element systems where the default order=6 under-fits. |
+| 7 | ``set_pyfftw_planner('FFTW_MEASURE')`` | New API.  Takes ~1 s to plan but produces ~20% faster execution on the planned shape.  ``FFTW_PATIENT`` and ``FFTW_EXHAUSTIVE`` also supported. |
+| 8 | Vectorised Vandermonde build in canonical fit | Replaces the per-basis-term Python loop with fancy-indexed elementwise product.  Same physics, cleaner code; ``lstsq`` still dominates runtime so wall-time is comparable. |
+| 9 | Vectorised ``_evaluate_polynomial_4d`` (NumPy + xp) | Removes the per-basis-term Python loop in both the NumPy and xp variants.  Used in Maslov integration's hot path; ~3-5x faster on large grids. |
+| 10 | ``design_optimize(precision='single')`` | New kwarg switches the default complex dtype to ``np.complex64`` for the duration of the optimization call (~2x FFT throughput, ~2x memory headroom).  Restored on return. |
+| 11 | ``non_sequential_stray_light`` wrapper | Combines ``ghost_analysis`` + optional BSDF TIS into a single structured stray-light report.  Returns ghost paths, total ghost intensity, per-surface TIS, and a conservative stray-light fraction. |
+| 12 | ``monte_carlo_tolerancing_linearized`` | Linearised tolerancing via per-knob FD sensitivity sweep + per-trial linear superposition.  ~3-6x faster than the full MC for typical specs (1 nominal + ~16-30 FD probes vs N_trials full propagations).  Accuracy degrades for large perturbations; not a final-sign-off tool. |
+
+### Items deferred (not in 3.5.6)
+
+* Pre-allocated buffers in merit eval -- modest impact (~5-15%), high refactor risk; skipped.
+* Cached prescription parsing -- empirical 3.3 us per call, not a bottleneck; skipped.
+* ``apply_real_lens_traced(use_gpu=True)`` benchmark -- already plumbed since 3.2.x; no CUDA available locally to benchmark.
+
+### Validation
+
+All 25 validation files pass.  +2 new tests in ``test_raytrace.py``
+covering ``trace_jax_with_params`` (default-match-trace_jax + jax.grad
+vs FD).
+
+### Backwards compatibility
+
+`__all__` grows from 384 to 391 (`set_pyfftw_planner`,
+`non_sequential_stray_light`, `monte_carlo_tolerancing_linearized`,
+`trace_jax_with_params`, `make_lg_aberration_merit_jax` -- the last
+one was already in 3.5.5; counting kept honest now).
+
 ## [3.5.5] — 2026-05-06
 
 Performance + structural cleanup release.

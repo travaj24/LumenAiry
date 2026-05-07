@@ -55,6 +55,7 @@ from .detector import (
 from .ghost import (
     enumerate_ghost_paths,
     ghost_analysis,
+    non_sequential_stray_light,
 )
 from .interferometry import (
     simulate_interferogram,
@@ -87,6 +88,7 @@ from .through_focus import (
     tolerancing_sweep,
     monte_carlo_tolerancing,
     monte_carlo_tolerancing_jax,
+    monte_carlo_tolerancing_linearized,
     tolerancing_report,
 )
 from .aberration import (
@@ -129,7 +131,7 @@ __all__ = [
     # detector
     'apply_detector', 'shack_hartmann',
     # ghost
-    'enumerate_ghost_paths', 'ghost_analysis',
+    'enumerate_ghost_paths', 'ghost_analysis', 'non_sequential_stray_light',
     # interferometry
     'simulate_interferogram', 'phase_shift_extract', 'fringe_spacing',
     # phase retrieval
@@ -144,6 +146,7 @@ __all__ = [
     'ThroughFocusResult', 'Perturbation', 'apply_perturbations',
     'tolerancing_sweep', 'monte_carlo_tolerancing',
     'monte_carlo_tolerancing_jax',
+    'monte_carlo_tolerancing_linearized',
     'tolerancing_report',
     # aberration (unified Seidel + LG tensor)
     'AberrationSummary', 'aberration_summary', 'format_aberration_summary',

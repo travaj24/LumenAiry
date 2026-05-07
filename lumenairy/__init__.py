@@ -36,6 +36,7 @@ from .propagators.propagation import (
     get_default_complex_dtype,
     set_asm_cache_size,
     set_fft_plan_cache_size,
+    set_pyfftw_planner,
     warmup_fft_plans,
     clear_asm_caches,
     reset_fft_backend,
@@ -210,6 +211,7 @@ from .elements.freeform import (
 from .analysis.ghost import (
     enumerate_ghost_paths,
     ghost_analysis,
+    non_sequential_stray_light,
 )
 
 # ── BSDF surface scatter (stray-light analysis) ─────────────────────────
@@ -252,6 +254,7 @@ from .analysis.through_focus import (
     tolerancing_sweep,
     monte_carlo_tolerancing,
     monte_carlo_tolerancing_jax,
+    monte_carlo_tolerancing_linearized,
     tolerancing_report,
 )
 
@@ -577,7 +580,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.5.5"
+__version__ = "3.5.6"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -905,6 +908,7 @@ __all__ = [
     # Ghost analysis
     'enumerate_ghost_paths',
     'ghost_analysis',
+    'non_sequential_stray_light',
 
     # ============================================================
     # Tier 5 -- Optimize
@@ -992,6 +996,7 @@ __all__ = [
     'apply_real_lens_traced_jax',
     'apply_real_lens_maslov_jax',
     'monte_carlo_tolerancing_jax',
+    'monte_carlo_tolerancing_linearized',
     'tolerancing_report',
 
     # ============================================================
@@ -1101,6 +1106,7 @@ __all__ = [
     'DEFAULT_COMPLEX_DTYPE',
     'set_asm_cache_size',
     'set_fft_plan_cache_size',
+    'set_pyfftw_planner',
     'warmup_fft_plans',
     'clear_asm_caches',
 
