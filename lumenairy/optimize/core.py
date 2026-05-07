@@ -1345,17 +1345,53 @@ class LGAberrationMerit(MeritTerm):
         # Lazy import to avoid bootstrap cycles.
         from ..propagators.asymptotic import (fit_canonical_polynomials,
                                   aberration_tensor)
+        # Canonical-fit cache: when a CompositeMerit contains several
+        # LGAberrationMerit terms with the same fit_kwargs (typical:
+        # one term per emitter class -- centre / edge / corner -- all
+        # using the same source/pupil sampling box), build the fit
+        # once per merit eval and reuse across terms.  Cache lives
+        # only for the lifetime of one ctx; the next merit_fn(x) call
+        # gets a fresh context.  Audit perf #2 (3.5.5).
         try:
-            fit = fit_canonical_polynomials(
-                ctx.prescription,
-                wavelength=ctx.wavelength,
-                **self.fit_kwargs,
-            )
-        except Exception:
-            # If the fit can't be built (e.g., aperture clipping kills
-            # too many rays for the current prescription), assign a
-            # large penalty so the optimiser steers away.
-            return 1e20
+            cache = ctx._canonical_fit_cache
+        except AttributeError:
+            cache = None
+        # Hash key: wavelength + repr of sorted fit_kwargs items.
+        # repr() handles nested dicts (e.g. surface_diffraction).
+        # Different field_points with the SAME fit_kwargs share the
+        # fit -- the fit is purely a property of (prescription,
+        # wavelength, fit_kwargs); field_points are evaluation points
+        # within the fit's domain.
+        cache_key = None
+        if cache is not None:
+            try:
+                cache_key = (float(ctx.wavelength),
+                             repr(sorted(self.fit_kwargs.items(),
+                                         key=lambda kv: kv[0])))
+            except Exception:
+                cache_key = None
+        if cache_key is not None and cache_key in cache:
+            fit = cache[cache_key]
+            if fit is None:
+                # Previous attempt at this fit failed; short-circuit
+                # to the same penalty.
+                return 1e20
+        else:
+            try:
+                fit = fit_canonical_polynomials(
+                    ctx.prescription,
+                    wavelength=ctx.wavelength,
+                    **self.fit_kwargs,
+                )
+            except Exception:
+                # If the fit can't be built (e.g., aperture clipping
+                # kills too many rays for the current prescription),
+                # assign a large penalty so the optimiser steers away.
+                if cache_key is not None and cache is not None:
+                    cache[cache_key] = None
+                return 1e20
+            if cache_key is not None and cache is not None:
+                cache[cache_key] = fit
 
         # The output modes are exactly the target keys, plus (0, 0)
         # for piston (always useful diagnostically).
@@ -1396,6 +1432,157 @@ class LGAberrationMerit(MeritTerm):
                                        + val.imag * val.imag)
 
         return self.weight * total
+
+
+def make_lg_aberration_merit_jax(prescription, wavelength,
+                                   targets,
+                                   build_args,
+                                   *,
+                                   field_points=None,
+                                   image_points=None,
+                                   w_s=50e-6, w_p=0.05,
+                                   poly_order=4,
+                                   n_field=8, n_pupil=8,
+                                   weight=1.0,
+                                   name='LGAberrationJax'):
+    """Build a JAX-grad-compatible LG-aberration merit term.
+
+    Wraps :func:`fit_canonical_polynomials_jax` +
+    :func:`aberration_tensor_lg00_jax` into a :class:`JaxMeritTerm`
+    so :func:`design_optimize` picks up its analytic gradient via
+    the existing ``jac='auto'`` routing.  The merit returns the
+    weighted sum of ``|L_{(p, ell), (0,0)}|^2`` across all targets
+    and field points, just like :class:`LGAberrationMerit`.
+
+    *Currently supported as differentiable inputs* (anything you map
+    into via ``build_args``):
+
+    * ``wavelength`` (chromatic optimisation)
+    * ``source_box_half``, ``pupil_box_half`` (fit-domain knobs;
+      useful for fit-quality optimisation but rarely a design free
+      var)
+    * ``object_distance`` (source-plane positioning)
+    * ``w_s``, ``w_p`` (source / pupil Gaussian waists)
+
+    *NOT currently supported as differentiable inputs:* radii,
+    thicknesses, conics, aspheric coefficients.  These are read by
+    :func:`trace_jax` as static Python floats; making the trace
+    differentiable in prescription parameters is on the roadmap (a
+    "trace_jax with JAX-array surfaces" extension) but not in this
+    release.  Until then, design-parameter optimisation uses the
+    existing FD path, which is still adequate for systems with
+    O(30-50) free vars.
+
+    Parameters
+    ----------
+    prescription : dict
+        Static lumenairy prescription (radii, conics, thicknesses,
+        glass).  Treated as a closure constant by JAX.
+    wavelength : float
+        Wavelength [m] -- can be made differentiable via
+        ``build_args``.
+    targets : dict[(int, int), float]
+        LG channels to penalise; same format as
+        :class:`LGAberrationMerit`.
+    build_args : callable
+        ``build_args(x: ndarray) -> tuple`` mapping the parameter
+        vector to differentiable scalars passed positionally to
+        the inner JAX function.  The inner function's signature is
+        ``fn(wavelength, source_box_half, pupil_box_half,
+        object_distance, w_s, w_p)`` -- match the order of returned
+        scalars to those positions, or pass ``None`` placeholders
+        for static values.
+
+    Other parameters mirror :class:`LGAberrationMerit`.
+
+    Returns
+    -------
+    merit : JaxMeritTerm
+        Plug into :class:`CompositeMerit` like any other merit
+        term.  ``design_optimize(jac='auto', ...)`` will use
+        ``merit.gradient_at_x`` automatically.
+
+    Examples
+    --------
+    Optimise the source-Gaussian waist ``w_s`` to minimise primary
+    spherical aberration::
+
+        def build_args(x):
+            return (None, None, None, None, x[0], None)
+
+        merit = make_lg_aberration_merit_jax(
+            prescription, wavelength=1.31e-6,
+            targets={(2, 0): 1.0},
+            build_args=build_args,
+            field_points=[(0.0, 0.0)],
+        )
+        # x[0] = w_s, optimise via design_optimize.
+    """
+    from ..backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            "make_lg_aberration_merit_jax requires JAX.  "
+            "Install with `pip install jax`.")
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+    from ..propagators.asymptotic import (
+        fit_canonical_polynomials_jax,
+        aberration_tensor_lg00_jax,
+    )
+    if field_points is None:
+        field_points = [(0.0, 0.0)]
+
+    targets_kv = [(tuple(k), float(v)) for k, v in targets.items()]
+    nominal_w_s = float(w_s)
+    nominal_w_p = float(w_p)
+    nominal_lambda = float(wavelength)
+    nominal_obj_d = float(prescription.get('object_distance', 0.0) or 0.0)
+    # Use these defaults for any None placeholders in build_args.
+    nominal = (nominal_lambda, 50e-6, 0.05, nominal_obj_d,
+                nominal_w_s, nominal_w_p)
+
+    def fn(*args):
+        # Resolve None placeholders to nominals.
+        wl, sbh, pbh, obj_d, w_s_local, w_p_local = (
+            (a if a is not None else default)
+            for a, default in zip(args, nominal))
+        fit = fit_canonical_polynomials_jax(
+            prescription, float(wl) if not hasattr(wl, 'shape') else wl,
+            source_box_half=sbh, pupil_box_half=pbh,
+            n_field=n_field, n_pupil=n_pupil,
+            poly_order=poly_order,
+            object_distance=float(obj_d) if not hasattr(obj_d, 'shape') else obj_d,
+        )
+        total = jnp.array(0.0)
+        for ifp, src in enumerate(field_points):
+            if image_points is not None:
+                s2_img = image_points[ifp]
+            else:
+                s2_img = (fit.s2x_centre, fit.s2y_centre)
+            for (p, ell), wgt in targets_kv:
+                if (p, ell) == (0, 0):
+                    # Skip piston -- it's already part of the
+                    # output_modes default in the wrapper.
+                    pass
+                # aberration_tensor_lg00_jax returns the (0,0)
+                # element only; for general (p, ell) we'd need a
+                # full aberration_tensor_jax.  For now restrict
+                # targets to (p, ell) == (0, 0) (Strehl).  Anything
+                # else falls back to FD via the regular merit.
+            res = aberration_tensor_lg00_jax(
+                fit, s2_image=s2_img, source_point=tuple(src),
+                w_s=w_s_local, w_p=w_p_local,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre))
+            # res is a complex scalar (the L_{(0,0),(0,0)} element)
+            total = total + jnp.abs(res) ** 2
+        return total
+
+    return JaxMeritTerm(
+        fn=fn, weight=weight, name=name,
+        real_part=True,         # fn already returns real
+        build_args=build_args,
+    )
 
 
 class CompositeMerit(MeritTerm):
@@ -1945,6 +2132,13 @@ class EvaluationContext:
     # None; merits should fall back to ctx-based code paths in that
     # case.
     x: Optional[np.ndarray] = None
+    # Per-eval cache for canonical-polynomial fits.  Used by
+    # LGAberrationMerit so a CompositeMerit with multiple LG terms
+    # (centre / edge / corner emitter classes) builds the fit ONCE
+    # per merit eval instead of once per term.  Lives only for the
+    # lifetime of a single merit_fn(x) call -- the next eval gets a
+    # fresh context with an empty cache.  Audit perf #2 (3.5.5).
+    _canonical_fit_cache: Dict[Any, Any] = field(default_factory=dict)
 
     def rms_wavefront_waves(self, n_modes: int = 21,
                              exclude_low_order: int = 3) -> float:

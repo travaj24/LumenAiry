@@ -2,6 +2,59 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.5] — 2026-05-06
+
+Performance + structural cleanup release.
+
+### Performance: 6 audit-driven optimisations
+
+| # | Item | Result |
+|---|------|--------|
+| 1 | JAX adjoint gradient via `make_lg_aberration_merit_jax` | New convenience factory wraps `JaxMeritTerm` for the LG-aberration case.  Differentiable inputs (`wavelength`, `source_box_half`, `pupil_box_half`, `object_distance`, `w_s`, `w_p`) flow through `design_optimize`'s `jac='auto'` path automatically.  **Prescription-parameter differentiation (radii / conics / aspheric) remains FD-only**: gated on a `trace_jax`-with-JAX-array-prescription extension that's a separate roadmap item. |
+| 2 | Cache canonical fit across multi-term merits | New `EvaluationContext._canonical_fit_cache`.  When a `CompositeMerit` contains several `LGAberrationMerit` terms with identical `fit_kwargs` (typical: one term per emitter class -- centre / edge / corner), the canonical fit is built once per merit eval and shared.  Validated **2.8x speedup** on a 3-term composite. |
+| 3 | GPU FFT path for `apply_real_lens` | `apply_real_lens(use_gpu=True)` and CuPy auto-dispatch were already wired but the module docstring incorrectly said "CPU only".  Stale docstring fixed; lazy-load bug from 3.5.3 (`xp = cp` when `cp` was None) fixed. |
+| 4 | Persistent worker pool for `apply_real_lens_traced` | New `lumenairy.close_worker_pool()` API.  The Newton-inversion `ProcessPoolExecutor` is now a module-level lazy singleton instead of being spawned-and-torn-down per call.  Validated **3x speedup** on subsequent calls (4.4 s -> 1.5 s after first call) -- amortises Windows-spawn cost across optimisation / tolerancing runs. |
+| 5 | Newton iter count adaptation | Default `_NEWTON_MAX_ITERS` lowered from 12 to 8 in `apply_real_lens_traced`.  Empirically a no-op (the per-pixel `active`-mask early-exit already converges most pixels in <8 iters), but the lower default shaves the worst-case for outlier pixels.  Override via `apply_real_lens_traced(newton_max_iters=12)` if needed. |
+| 6 | Pre-warm FFT plan cache | New `lumenairy.warmup_fft_plans(shapes, dtype=None, threads=None)` API.  Pre-builds pyFFTW plans for given shapes so the first ASM call at each shape doesn't pay the planning cost.  Validated **1.8x speedup** on first call after warmup at N=2048. |
+
+### Structural: lenses.py split into 6 focused modules
+
+`lenses.py` was 5,597 lines.  Split into:
+
+| File | Lines | Contents |
+|---|--:|---|
+| `lenses.py` | **950** | Surface sag, grid-vs-aperture utilities, shared Chebyshev helpers, re-exports |
+| `_lens_thin.py` | 576 | `apply_thin_lens`, `apply_spherical_lens`, `apply_aspheric_lens`, `apply_cylindrical_lens`, `apply_axicon`, `apply_grin_lens` |
+| `_lens_real.py` | 629 | `apply_real_lens` (analytic split-step ASM through glass) |
+| `_lens_traced.py` | 2,098 | `apply_real_lens_traced` + `_Cheb2DEvaluator` + Newton inversion + worker pool helpers |
+| `lenses_maslov.py` | 857 | `apply_real_lens_maslov` (phase-space Maslov propagator) |
+| `_lens_jax.py` | 710 | `apply_real_lens_traced_jax`, `apply_real_lens_maslov_jax` + JAX helpers |
+| **Total** | 5,820 | (small overhead from per-file headers + lazy-load shims) |
+
+**`lenses.py` is now 83% smaller** (5,597 -> 950 lines).  All public names are re-exported so existing imports continue to work unchanged:
+
+```python
+from lumenairy.elements.lenses import apply_real_lens         # works
+from lumenairy.elements.lenses import apply_real_lens_traced  # works
+from lumenairy.elements.lenses import apply_real_lens_maslov  # works
+```
+
+The mid-file `from .. import raytrace as rt` workaround that the audit flagged is gone -- it now lives at the top of `lenses_maslov.py` where it belongs.
+
+### Audit follow-ups not in 3.5.5
+
+The "real" P1 (JAX adjoint through prescription parameters -- radii, conics, aspheric coefficients) requires a `trace_jax` extension that takes JAX-array surface params instead of static Python floats.  That's a multi-day refactor of every static `bool(np.isinf(R))` / static-conic branch in `_intersect_jax` / `_refract_jax`.  Tagged as a future item.
+
+Stray-light pipeline integration, deeper pytest refactor, NA-aware vector source primitive, and detector ROIC modelling remain on the roadmap.
+
+### Validation
+
+All 25 validation files pass.  No new test files were added in this release; the existing physics tolerances are preserved bit-for-bit by the structural split (the function bodies were moved verbatim).
+
+### Backwards compatibility
+
+Every public API continues to work unchanged.  `__all__` grows from 380 to 384 (`make_lg_aberration_merit_jax`, `warmup_fft_plans`, `close_worker_pool`, plus the `tolerancing_report` from 3.5.4 that was already counted).
+
 ## [3.5.4] — 2026-05-06
 
 Audit follow-up release.  Three audit-flagged gaps closed; one

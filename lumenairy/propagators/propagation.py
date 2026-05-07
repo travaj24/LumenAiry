@@ -286,6 +286,62 @@ def set_fft_plan_cache_size(n):
             _PYFFTW_PLAN_CACHE.popitem(last=False)
 
 
+def warmup_fft_plans(shapes, dtype=None, threads=None):
+    """Pre-build pyFFTW plans for the given shapes so the first
+    propagation at each shape pays the planning cost only once at
+    warmup, not inside a hot loop.
+
+    The first ``angular_spectrum_propagate`` / ``apply_real_lens`` /
+    similar call at a new shape spends ~100-1000 ms inside FFTW's
+    plan optimiser.  Subsequent calls at the same shape reuse the
+    cached plan in ~10-100 ms.  For optimisation runs and parameter
+    sweeps that hit the same handful of shapes thousands of times
+    this is a no-op (the cache warms itself on the first iter); for
+    interactive sessions where the user wants the first call to be
+    fast, call this once at script start.
+
+    Parameters
+    ----------
+    shapes : iterable of tuple
+        2-D shapes ``(Ny, Nx)`` (or higher-D batched shapes) to
+        plan for.  Both forward and inverse plans are pre-built.
+    dtype : numpy dtype, optional
+        Complex dtype for the planned buffers.  Defaults to
+        ``np.complex128``.  Pass ``np.complex64`` for the
+        single-precision path used by the JAX/CuPy paths.
+    threads : int, optional
+        Threads per plan.  Defaults to
+        :func:`lumenairy._backends.available_cpus`.
+
+    Returns
+    -------
+    n_plans : int
+        Number of plans built (2 per requested shape; both
+        directions).  ``0`` if pyFFTW is not installed.
+
+    Examples
+    --------
+    Pre-warm a typical optimisation grid::
+
+        import lumenairy as la
+        la.warmup_fft_plans([(1024, 1024)])
+        # Subsequent ASM calls at N=1024 hit the cached plan immediately.
+    """
+    if not PYFFTW_AVAILABLE or not _ensure_pyfftw_loaded():
+        return 0
+    if dtype is None:
+        dtype = np.complex128
+    if threads is None:
+        threads = max(1, _available_cpus())
+    n = 0
+    for shape in shapes:
+        for direction in ('fwd', 'inv'):
+            _get_or_make_plan(direction, tuple(shape), dtype,
+                                int(threads))
+            n += 1
+    return n
+
+
 def _get_or_make_plan(direction, shape, dtype, threads):
     """Return a cached in-place pyFFTW plan for ``direction`` ('fwd' or
     'inv') at the requested ``shape`` / ``dtype`` / ``threads``.

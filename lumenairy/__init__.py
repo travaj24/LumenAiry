@@ -36,6 +36,7 @@ from .propagators.propagation import (
     get_default_complex_dtype,
     set_asm_cache_size,
     set_fft_plan_cache_size,
+    warmup_fft_plans,
     clear_asm_caches,
     reset_fft_backend,
     rayleigh_sommerfeld_propagate,
@@ -67,6 +68,7 @@ from .elements.lenses import (
     apply_aspheric_lens,
     apply_real_lens,
     apply_real_lens_traced,
+    close_worker_pool,
     surface_sag_general,
     surface_sag_biconic,
     apply_cylindrical_lens,
@@ -270,6 +272,7 @@ from .optimize import (
     MatchTargetOPDMerit,
     ZernikeCoefficientMerit,
     LGAberrationMerit,
+    make_lg_aberration_merit_jax,
     CompositeMerit,
     CallableMerit,
     JaxMeritTerm,
@@ -574,7 +577,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.5.4"
+__version__ = "3.5.5"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -638,6 +641,7 @@ __all__ = [
     'apply_aspheric_lens',
     'apply_real_lens',
     'apply_real_lens_traced',
+    'close_worker_pool',
     'apply_real_lens_maslov',
     'apply_cylindrical_lens',
     'apply_grin_lens',
@@ -929,6 +933,7 @@ __all__ = [
     'MatchTargetOPDMerit',
     'ZernikeCoefficientMerit',
     'LGAberrationMerit',
+    'make_lg_aberration_merit_jax',
     'CompositeMerit',
     'CallableMerit',
     'JaxMeritTerm',
@@ -1096,6 +1101,7 @@ __all__ = [
     'DEFAULT_COMPLEX_DTYPE',
     'set_asm_cache_size',
     'set_fft_plan_cache_size',
+    'warmup_fft_plans',
     'clear_asm_caches',
 
     # Memory-aware batching
