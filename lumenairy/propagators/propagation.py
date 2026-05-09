@@ -1062,6 +1062,88 @@ def angular_spectrum_propagate(
         return E_out
 
 
+def apply_fresnel_curvature(E, dx, wavelength, R, sign=+1, dy=None):
+    """Apply (or remove) a Fresnel quadratic phase ``exp(i*sign*k*r^2/(2R))``.
+
+    Used to convert between phase conventions when comparing fields
+    produced by different libraries.
+
+    Background
+    ----------
+    Lumenairy's propagators (and the standard Fresnel/ASM family --
+    LightPipes, prysm, diffractio, POPPy, Zemax POP) keep the **full
+    physical phase** at the output plane.  Some ray-trace-rooted
+    aberration-analysis tools (notably OPDPy and Zemax wavefront
+    operands like ``OPDX``) instead store the **chief-relative OPD**,
+    which implicitly subtracts the natural Gaussian-beam wavefront
+    curvature at the image plane.
+
+    The two conventions differ by exactly a Fresnel quadratic phase
+    ``exp(i*k*r^2/(2*R))`` with ``R = v - f`` for a thin-lens
+    imager (image distance minus focal length).
+
+    Use this function to round-trip between conventions:
+
+    .. code-block:: python
+
+        # Convert OPDPy / Zemax-OPD output to Lumenairy / LightPipes:
+        E_absolute = apply_fresnel_curvature(
+            E_chief_relative, dx, wavelength, R=v - f, sign=+1)
+
+        # Convert Lumenairy / LightPipes output to chief-relative:
+        E_chief_relative = apply_fresnel_curvature(
+            E_absolute, dx, wavelength, R=v - f, sign=-1)
+
+    For multi-element systems, ``R`` is the wavefront radius of
+    curvature at the image plane predicted by Gaussian-beam ABCD
+    propagation -- see Saleh & Teich, *Fundamentals of Photonics*,
+    Section 3.1.
+
+    Parameters
+    ----------
+    E : ndarray, complex 2D
+        Input field.  Grid is assumed to be centred on the chief image
+        point (the centre pixel is at coordinate ``(0, 0)``, with the
+        same half-pixel offset convention as
+        :func:`angular_spectrum_propagate`).
+    dx : float
+        Pixel pitch in the x-direction (metres).
+    wavelength : float
+        Wavelength (metres).
+    R : float
+        Wavefront radius of curvature (metres).  For a thin-lens
+        imager, ``R = image_distance - focal_length``.
+    sign : int, default ``+1``
+        ``+1`` adds the curvature (chief-relative -> absolute).
+        ``-1`` removes the curvature (absolute -> chief-relative).
+    dy : float, optional
+        Pixel pitch in y.  Defaults to ``dx``.
+
+    Returns
+    -------
+    E_out : ndarray, complex
+        Same shape and dtype as ``E``, with the Fresnel curvature
+        multiplied (or divided) in.
+
+    See also
+    --------
+    Wiki: "Phase conventions and inter-library comparison"
+    """
+    if dy is None:
+        dy = dx
+    if R == 0 or not np.isfinite(R):
+        return E.copy()
+    if sign not in (+1, -1):
+        raise ValueError(f"sign must be +1 or -1, got {sign}")
+    Ny, Nx = E.shape
+    ax_x = (np.arange(Nx) - Nx / 2 + 0.5) * dx
+    ax_y = (np.arange(Ny) - Ny / 2 + 0.5) * dy
+    Y, X = np.meshgrid(ax_y, ax_x, indexing='ij')
+    r2 = X * X + Y * Y
+    k = 2.0 * np.pi / wavelength
+    return E * np.exp(sign * 1j * k * r2 / (2.0 * R))
+
+
 def angular_spectrum_propagate_batch(E_stack, z, wavelength, dx,
                                       dy=None, bandlimit=True,
                                       use_gpu=False):
@@ -1343,6 +1425,196 @@ def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
 
 
 # ============================================================================
+# ASM with arbitrary user-specified output grid (MFT inverse-FT)
+# ============================================================================
+
+def angular_spectrum_propagate_mft(
+    E_in,
+    z,
+    wavelength,
+    dx_in,
+    dx_out,
+    N_out,
+    *,
+    dy_in=None,
+    dy_out=None,
+    centre_out=(0.0, 0.0),
+    bandlimit=True,
+    use_gpu=False,
+):
+    """Exact Angular Spectrum Method propagation onto an arbitrary
+    user-specified output grid.
+
+    Identical math to :func:`angular_spectrum_propagate` for the
+    forward (FFT + transfer-function) step, but the inverse Fourier
+    step samples the output field on a user-specified grid via a
+    Bluestein chirp-Z transform rather than reusing the input's FFT
+    grid.  This enables **focal-plane zoom for high-NA / non-paraxial
+    systems** without zero-padding the input.
+
+    Use cases where this beats :func:`fresnel_propagate_mft`:
+        - High NA (NA > ~0.1) where the paraxial Fresnel assumption breaks.
+        - Fields with significant evanescent content (sub-wavelength
+          structures, near-field).
+        - Anywhere :func:`angular_spectrum_propagate` is preferred over
+          :func:`fresnel_propagate`, but you also want non-natural output
+          grid sampling.
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+    z : float
+        Propagation distance [m].
+    wavelength : float
+    dx_in : float
+        Input grid spacing in x [m].
+    dx_out : float
+        Output grid spacing in x [m] (independent of ``dx_in`` and ``z``).
+    N_out : int
+        Output grid size (square).
+    dy_in, dy_out : float, optional
+    centre_out : (float, float), optional
+        Physical ``(x, y)`` centre of the output grid [m].  Defaults to
+        ``(0, 0)`` (on-axis).
+    bandlimit : bool, default True
+        Apply Matsushima-Shimobaba band-limiting to the ASM transfer
+        function on the input frequency grid.  Same default and effect
+        as :func:`angular_spectrum_propagate`.
+    use_gpu : bool, default False
+
+    Returns
+    -------
+    E_out : ndarray (complex, N_out x N_out)
+        Output field on the user's centred grid.  Carries the absolute
+        physical phase including the natural Fresnel curvature -- this
+        is the same convention as :func:`angular_spectrum_propagate`,
+        :func:`fresnel_propagate`, and every other Lumenairy propagator.
+
+    Notes
+    -----
+    Algorithm: regular FFT of the input, transfer function multiplication,
+    then Bluestein chirp-Z inverse FT onto the chosen output grid.
+    Cost: 2 * O(N^2 log N)  + O((N + M) log (N + M))  per axis.
+
+    For the same-grid case (``dx_out == dx_in`` and ``N_out == Nx_in``,
+    ``centre_out == (0, 0)``) the result agrees with
+    :func:`angular_spectrum_propagate` to roughly float64 round-off
+    (~1e-12 relative error).
+
+    See also
+    --------
+    angular_spectrum_propagate : exact ASM with the natural FFT grid.
+    fresnel_propagate_mft : paraxial Fresnel with arbitrary output grid.
+    fraunhofer_propagate_mft : far-field with arbitrary output grid.
+    """
+    from ..backend import is_jax_array
+    from ._bluestein import _bluestein_centred_2d
+
+    is_jax = is_jax_array(E_in)
+    if is_jax:
+        import jax.numpy as _jnp
+        xp = _jnp
+        fft2 = _jnp.fft.fft2
+        ifft2 = _jnp.fft.ifft2
+    elif CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
+        if not _ensure_cupy_loaded():
+            raise RuntimeError("CuPy requested but failed to load.")
+        xp = cp
+        fft2 = cp.fft.fft2
+        ifft2 = cp.fft.ifft2
+        if not _is_cupy_array(E_in):
+            E_in = cp.asarray(E_in)
+    else:
+        xp = np
+        fft2 = _fft2
+        ifft2 = _ifft2
+        if _is_cupy_array(E_in):
+            E_in = E_in.get()
+
+    if dy_in is None:
+        dy_in = dx_in
+    if dy_out is None:
+        dy_out = dx_out
+
+    Ny_in, Nx_in = E_in.shape
+    Ny_out = Nx_out = int(N_out)
+
+    if xp.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+
+    k = 2.0 * np.pi / wavelength
+    xc, yc = float(centre_out[0]), float(centre_out[1])
+
+    # ----- 1) Build ASM transfer function H(fx, fy) on the input freq grid --
+    # Same construction as angular_spectrum_propagate (centred convention,
+    # exact `kz = sqrt(k^2 - kx^2 - ky^2)`, optional Matsushima band-limit).
+    fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
+    fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
+    kx_sq = (2.0 * np.pi * fx) ** 2
+    ky_sq = (2.0 * np.pi * fy) ** 2
+    kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
+    prop_mask = kz_sq > 0
+    kz = np.where(prop_mask, np.sqrt(np.where(prop_mask, kz_sq, 0.0)), 0.0)
+    H_np = np.where(prop_mask, np.exp(1j * kz * z), 0.0).astype(target_cdtype)
+    if bandlimit and z != 0:
+        Lx_phys = Nx_in * dx_in
+        Ly_phys = Ny_in * dy_in
+        fx_max = Lx_phys / (2.0 * wavelength * abs(z))
+        fy_max = Ly_phys / (2.0 * wavelength * abs(z))
+        bl_mask = ((np.abs(fx)[None, :] <= fx_max)
+                   & (np.abs(fy)[:, None] <= fy_max))
+        H_np = np.where(bl_mask, H_np, 0.0).astype(target_cdtype)
+
+    if xp is np:
+        H = H_np
+    else:
+        H = xp.asarray(H_np)
+
+    # ----- 2) FFT input to angular spectrum (centred convention) ------------
+    # Match the existing angular_spectrum_propagate's fftshift/ifftshift
+    # idiom so the centred-frequency grid lines up.
+    if is_jax:
+        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_in)))
+    else:
+        E_fft = xp.fft.fftshift(fft2(xp.fft.ifftshift(E_in)))
+    A_propagated = E_fft * H
+
+    # ----- 3) Inverse FT onto user-specified output grid via Bluestein ------
+    # The inverse FT of the propagated angular spectrum is
+    #   E_out(x_out, y_out) = integral A(fx, fy) * exp(+2*pi*j*(fx*x_out + fy*y_out)) dfx dfy
+    # Discretised on the centred input frequency grid:
+    #   fx[nx] = (nx - Nx_in/2) / (Nx_in * dx_in)   (with dfx = 1/(Nx_in * dx_in))
+    #   x_out[kx] = (kx - Nx_out/2) * dx_out + xc
+    # The product fx[nx] * x_out[kx] expands to a centred Bluestein form
+    # with alpha = dfx * dx_out = dx_out / (Nx_in * dx_in) and sign = +1.
+    # The 1/(Nx_in*Ny_in) prefactor matches numpy/scipy's IFFT normalisation
+    # so that round-tripping through ASM-MFT recovers the input on the
+    # natural grid.
+    alpha_x = dx_out / (Nx_in * dx_in)
+    alpha_y = dy_out / (Ny_in * dy_in)
+    kc_x = Nx_out / 2.0 - xc / dx_out
+    kc_y = Ny_out / 2.0 - yc / dy_out
+
+    F = _bluestein_centred_2d(
+        A_propagated, alpha_x, alpha_y, Ny_out, Nx_out,
+        n_centre_in_x=Nx_in / 2.0,
+        n_centre_in_y=Ny_in / 2.0,
+        k_centre_out_x=kc_x,
+        k_centre_out_y=kc_y,
+        sign=+1, xp=xp, fft2=fft2, ifft2=ifft2,
+        target_cdtype=target_cdtype,
+    )
+
+    norm = target_cdtype.type(1.0 / (Nx_in * Ny_in))
+    E_out = F * norm
+    if E_out.dtype != target_cdtype:
+        E_out = E_out.astype(target_cdtype)
+    return E_out
+
+
+# ============================================================================
 # Single-FFT Fresnel propagation
 # ============================================================================
 
@@ -1508,6 +1780,190 @@ def resample_field(E_in, dx_in, dx_out, N_out=None, order=3):
     return E_out, dx_out
 
 
+# ============================================================================
+# Fresnel propagation onto an arbitrary user-specified output grid (MFT)
+# ============================================================================
+
+def fresnel_propagate_mft(
+    E_in,
+    z,
+    wavelength,
+    dx_in,
+    dx_out,
+    N_out,
+    *,
+    dy_in=None,
+    dy_out=None,
+    centre_out=(0.0, 0.0),
+    use_gpu=False,
+):
+    """Fresnel propagation onto an arbitrary user-specified output grid.
+
+    Unlike :func:`fresnel_propagate`, which forces ``dx_out = lambda*z/(N*dx_in)``
+    and ``N_out = N_in``, this routine evaluates the Fresnel diffraction
+    integral at exactly the output grid you ask for.  It is the standard
+    tool for **focal-plane zoom** -- sampling a tightly-focused region of
+    the output plane at sub-FFT-pitch resolution without padding the input
+    grid by the corresponding factor.
+
+    The math is the same as :func:`fresnel_propagate` (single-FFT paraxial
+    Fresnel: input quadratic phase + Fourier transform + output quadratic
+    phase + ``exp(i*k*z) / (i*lambda*z)`` carrier prefactor).  Only the
+    Fourier-transform step is replaced with a Bluestein chirp-Z transform
+    that samples directly onto the chosen output grid.
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+        Input field on a centred grid (pixel ``[Ny//2, Nx//2]`` at
+        coordinate ``(0, 0)``, matching the convention of
+        :func:`fresnel_propagate`).
+    z : float
+        Propagation distance [m].
+    wavelength : float
+        Wavelength [m].
+    dx_in : float
+        Input grid spacing in x [m].
+    dx_out : float
+        Desired output grid spacing in x [m].  This is independent of
+        ``dx_in`` and ``z`` -- pick whatever sampling you want at the
+        output plane.
+    N_out : int
+        Output grid size (square output: ``N_out`` by ``N_out``).
+    dy_in, dy_out : float, optional
+        Input / output grid spacings in y.  Default to ``dx_in`` / ``dx_out``.
+    centre_out : (float, float), optional
+        Physical ``(x, y)`` centre of the output grid [m].  Defaults to
+        ``(0, 0)`` (on-axis).  Use a non-zero value to zoom into an
+        off-axis region of the output plane (e.g. the chief image of a
+        field point off the optical axis).
+    use_gpu : bool, default False
+        Route through CuPy if available.  Auto-detected from ``E_in``
+        (CuPy / JAX arrays use their native backend regardless of this
+        flag).
+
+    Returns
+    -------
+    E_out : ndarray (complex, N_out x N_out)
+        Output field on the user's centred grid.
+
+    Notes
+    -----
+    Algorithm: O((N + M) log (N + M)) per axis via Bluestein's chirp-Z
+    transform with two zero-padded 2-D FFTs.  Substantially faster than
+    a direct matrix-Fourier transform (O(N^2 M^2)) for typical
+    focal-zoom workflows.
+
+    Sampling: the same Fresnel-number heuristic as :func:`fresnel_propagate`
+    applies to ``dx_in`` and ``z`` (no new validity restriction comes
+    from the user-specified output grid).  In particular the input must
+    Nyquist-resolve the input quadratic phase
+    ``exp(i*k/(2z) * (X_in^2 + Y_in^2))`` -- if ``dx_in`` is too coarse
+    for the chosen ``z``, the output is aliased regardless of ``dx_out``.
+
+    See also
+    --------
+    fresnel_propagate : single-FFT Fresnel with the natural FFT output grid.
+    fraunhofer_propagate_mft : far-field counterpart.
+    angular_spectrum_propagate_mft : exact ASM with arbitrary output grid.
+    """
+    # ----- backend dispatch -------------------------------------------------
+    from ..backend import is_jax_array
+    from ._bluestein import _bluestein_centred_2d
+
+    is_jax = is_jax_array(E_in)
+    if is_jax:
+        import jax.numpy as _jnp
+        xp = _jnp
+        fft2 = _jnp.fft.fft2
+        ifft2 = _jnp.fft.ifft2
+    elif CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
+        if not _ensure_cupy_loaded():
+            raise RuntimeError("CuPy requested but failed to load.")
+        xp = cp
+        fft2 = cp.fft.fft2
+        ifft2 = cp.fft.ifft2
+        if not _is_cupy_array(E_in):
+            E_in = cp.asarray(E_in)
+    else:
+        xp = np
+        fft2 = _fft2
+        ifft2 = _ifft2
+        if _is_cupy_array(E_in):
+            E_in = E_in.get()
+
+    if dy_in is None:
+        dy_in = dx_in
+    if dy_out is None:
+        dy_out = dx_out
+
+    Ny_in, Nx_in = E_in.shape
+    Ny_out = Nx_out = int(N_out)
+
+    if xp.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+
+    k = 2.0 * np.pi / wavelength
+    xc, yc = float(centre_out[0]), float(centre_out[1])
+
+    # ----- coordinate grids (numpy for chirp construction) ------------------
+    n_x = np.arange(Nx_in, dtype=np.float64)
+    n_y = np.arange(Ny_in, dtype=np.float64)
+    k_x = np.arange(Nx_out, dtype=np.float64)
+    k_y = np.arange(Ny_out, dtype=np.float64)
+    x_in = (n_x - Nx_in / 2.0) * dx_in
+    y_in = (n_y - Ny_in / 2.0) * dy_in
+    x_out = (k_x - Nx_out / 2.0) * dx_out + xc
+    y_out = (k_y - Ny_out / 2.0) * dy_out + yc
+    X_in_np, Y_in_np = np.meshgrid(x_in, y_in, indexing='xy')
+    X_out_np, Y_out_np = np.meshgrid(x_out, y_out, indexing='xy')
+
+    def _to_xp(arr_np_complex):
+        a = arr_np_complex.astype(target_cdtype, copy=False)
+        if xp is np:
+            return a
+        return xp.asarray(a)
+
+    # ----- 1) input-plane quadratic phase -----------------------------------
+    quad_in = _to_xp(np.exp(1j * k / (2.0 * z) * (X_in_np**2 + Y_in_np**2)))
+    E_mod = E_in * quad_in
+
+    # ----- 2) Fresnel Fourier integral via Bluestein on centred grid --------
+    # Sum_{ny, nx} E_mod[ny, nx] * exp(-i*k/z * (x_in[nx]*x_out[kx] + y_in[ny]*y_out[ky]))
+    # = Sum_{ny, nx} E_mod[ny, nx]
+    #              * exp(-2*pi*j*alpha_x*(nx - Nx_in/2)*(kx - kc_x))
+    #              * exp(-2*pi*j*alpha_y*(ny - Ny_in/2)*(ky - kc_y))
+    # with
+    #     alpha = dx_in*dx_out/(lambda*z)   ("natural" Bluestein coefficient)
+    #     kc_x  = Nx_out/2 - xc/dx_out      (output centre shifted by centre_out)
+    alpha_x = dx_in * dx_out / (wavelength * z)
+    alpha_y = dy_in * dy_out / (wavelength * z)
+    kc_x = Nx_out / 2.0 - xc / dx_out
+    kc_y = Ny_out / 2.0 - yc / dy_out
+
+    F = _bluestein_centred_2d(
+        E_mod, alpha_x, alpha_y, Ny_out, Nx_out,
+        n_centre_in_x=Nx_in / 2.0,
+        n_centre_in_y=Ny_in / 2.0,
+        k_centre_out_x=kc_x,
+        k_centre_out_y=kc_y,
+        sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
+        target_cdtype=target_cdtype,
+    )
+
+    # ----- 3) output-plane quadratic phase + carrier prefactor + area -------
+    quad_out = _to_xp(np.exp(1j * k / (2.0 * z) * (X_out_np**2 + Y_out_np**2)))
+    prefactor = (np.exp(1j * k * z) / (1j * wavelength * z)) * dx_in * dy_in
+    prefactor_c = target_cdtype.type(prefactor)
+
+    E_out = prefactor_c * quad_out * F
+    if E_out.dtype != target_cdtype:
+        E_out = E_out.astype(target_cdtype)
+    return E_out
+
+
 def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
     """
     Propagate a field to the Fraunhofer (far-field) diffraction pattern.
@@ -1598,6 +2054,149 @@ def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
     E_out = prefactor * E_fft
 
     return E_out, dx_out, dy_out
+
+
+# ============================================================================
+# Fraunhofer propagation onto an arbitrary user-specified output grid (MFT)
+# ============================================================================
+
+def fraunhofer_propagate_mft(
+    E_in,
+    z,
+    wavelength,
+    dx_in,
+    dx_out,
+    N_out,
+    *,
+    dy_in=None,
+    dy_out=None,
+    centre_out=(0.0, 0.0),
+    use_gpu=False,
+):
+    """Fraunhofer (far-field) propagation onto an arbitrary user-specified
+    output grid.
+
+    Identical math to :func:`fraunhofer_propagate` (single Fourier transform
+    with output quadratic phase + carrier prefactor) except the FT step
+    uses a Bluestein chirp-Z transform that samples directly onto the
+    chosen output grid.  This is the standard tool for **coronagraph and
+    high-contrast imaging codes** -- you can sample the far-field at
+    sub-lambda/D resolution around an off-axis stellar PSF without zero-
+    padding the input pupil to enormous sizes.
+
+    Differs from :func:`fresnel_propagate_mft` by skipping the input-plane
+    quadratic phase ``exp(i*k/(2z)*(X_in^2 + Y_in^2))`` -- it is assumed
+    negligible at large z (small Fresnel number).
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+    z : float
+        Propagation distance [m].
+    wavelength : float
+    dx_in : float
+        Input grid spacing [m].
+    dx_out : float
+        Output grid spacing [m] (independent of ``dx_in`` and ``z``).
+    N_out : int
+        Output grid size (square).
+    dy_in, dy_out : float, optional
+    centre_out : (float, float), optional
+        Physical ``(x, y)`` centre of the output grid [m].  Defaults to
+        ``(0, 0)``.  Use a non-zero value to evaluate the far-field at
+        an off-axis point (e.g. an exoplanet location relative to a
+        stellar chief image).
+    use_gpu : bool, default False
+
+    Returns
+    -------
+    E_out : ndarray (complex, N_out x N_out)
+
+    See also
+    --------
+    fraunhofer_propagate : single-FFT Fraunhofer with the natural FFT grid.
+    fresnel_propagate_mft : near-field counterpart, includes input-plane
+        quadratic phase.
+    """
+    from ..backend import is_jax_array
+    from ._bluestein import _bluestein_centred_2d
+
+    is_jax = is_jax_array(E_in)
+    if is_jax:
+        import jax.numpy as _jnp
+        xp = _jnp
+        fft2 = _jnp.fft.fft2
+        ifft2 = _jnp.fft.ifft2
+    elif CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
+        if not _ensure_cupy_loaded():
+            raise RuntimeError("CuPy requested but failed to load.")
+        xp = cp
+        fft2 = cp.fft.fft2
+        ifft2 = cp.fft.ifft2
+        if not _is_cupy_array(E_in):
+            E_in = cp.asarray(E_in)
+    else:
+        xp = np
+        fft2 = _fft2
+        ifft2 = _ifft2
+        if _is_cupy_array(E_in):
+            E_in = E_in.get()
+
+    if dy_in is None:
+        dy_in = dx_in
+    if dy_out is None:
+        dy_out = dx_out
+
+    Ny_in, Nx_in = E_in.shape
+    Ny_out = Nx_out = int(N_out)
+
+    if xp.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+
+    k = 2.0 * np.pi / wavelength
+    xc, yc = float(centre_out[0]), float(centre_out[1])
+
+    n_x = np.arange(Nx_in, dtype=np.float64)
+    n_y = np.arange(Ny_in, dtype=np.float64)
+    k_x = np.arange(Nx_out, dtype=np.float64)
+    k_y = np.arange(Ny_out, dtype=np.float64)
+    x_out = (k_x - Nx_out / 2.0) * dx_out + xc
+    y_out = (k_y - Ny_out / 2.0) * dy_out + yc
+    X_out_np, Y_out_np = np.meshgrid(x_out, y_out, indexing='xy')
+
+    def _to_xp(arr_np_complex):
+        a = arr_np_complex.astype(target_cdtype, copy=False)
+        if xp is np:
+            return a
+        return xp.asarray(a)
+
+    # No input quadratic phase (Fraunhofer assumption).
+    # Bluestein FT directly on E_in.
+    alpha_x = dx_in * dx_out / (wavelength * z)
+    alpha_y = dy_in * dy_out / (wavelength * z)
+    kc_x = Nx_out / 2.0 - xc / dx_out
+    kc_y = Ny_out / 2.0 - yc / dy_out
+
+    F = _bluestein_centred_2d(
+        E_in, alpha_x, alpha_y, Ny_out, Nx_out,
+        n_centre_in_x=Nx_in / 2.0,
+        n_centre_in_y=Ny_in / 2.0,
+        k_centre_out_x=kc_x,
+        k_centre_out_y=kc_y,
+        sign=-1, xp=xp, fft2=fft2, ifft2=ifft2,
+        target_cdtype=target_cdtype,
+    )
+
+    quad_out = _to_xp(np.exp(1j * k / (2.0 * z) * (X_out_np**2 + Y_out_np**2)))
+    prefactor = (np.exp(1j * k * z) / (1j * wavelength * z)) * dx_in * dy_in
+    prefactor_c = target_cdtype.type(prefactor)
+
+    E_out = prefactor_c * quad_out * F
+    if E_out.dtype != target_cdtype:
+        E_out = E_out.astype(target_cdtype)
+    return E_out
 
 
 # ============================================================================

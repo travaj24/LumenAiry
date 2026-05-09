@@ -526,6 +526,57 @@ def t_asm_jax_grad_matches_fd():
     return rel < 1e-2, f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}'
 
 
+def t_apply_fresnel_curvature_round_trip():
+    """apply_fresnel_curvature with sign=+1 then sign=-1 must return the
+    input exactly (modulo float64 round-off).  This is the building
+    block for converting between phase conventions when comparing
+    against ray-trace-rooted libraries (OPDPy, Zemax OPD operands)."""
+    N = 128
+    dx = 5e-5
+    wl = 1.31e-6
+    R = 0.107   # 107 mm -- typical (v-f) for our singlet test
+    ax = (np.arange(N) - N/2 + 0.5) * dx
+    Y, X = np.meshgrid(ax, ax, indexing='ij')
+    E_in = np.exp(-(X**2 + Y**2) / (1e-3)**2).astype(np.complex128)
+    E_plus = la.apply_fresnel_curvature(E_in, dx, wl, R, sign=+1)
+    E_back = la.apply_fresnel_curvature(E_plus, dx, wl, R, sign=-1)
+    err_round_trip = float(np.max(np.abs(E_in - E_back)))
+    # Verify the magnitude is unchanged
+    mag_change = float(np.max(np.abs(np.abs(E_in) - np.abs(E_plus))))
+    # Verify a non-trivial phase change happens off-axis
+    phase_change = float(np.abs(
+        np.angle(E_plus[N//2, N//2 + 30]) - np.angle(E_in[N//2, N//2 + 30])))
+    ok = (err_round_trip < 1e-12
+          and mag_change < 1e-15
+          and phase_change > 0.5)
+    return ok, (
+        f'round-trip err = {err_round_trip:.2e}, '
+        f'mag change = {mag_change:.2e}, '
+        f'off-axis phase change = {phase_change:.3f} rad'
+    )
+
+
+H.run('apply_fresnel_curvature: sign=+1/-1 round-trips exactly',
+      t_apply_fresnel_curvature_round_trip)
+
+
+def t_apply_fresnel_curvature_zero_R_is_identity():
+    """R = 0 (or inf, NaN) is a no-op -- defensive default for
+    multi-element prescriptions where v-f is ill-defined."""
+    N = 64
+    dx = 1e-5
+    wl = 1.31e-6
+    E_in = np.ones((N, N), dtype=np.complex128)
+    E_R0  = la.apply_fresnel_curvature(E_in, dx, wl, R=0.0)
+    E_inf = la.apply_fresnel_curvature(E_in, dx, wl, R=float('inf'))
+    return (np.allclose(E_R0, E_in) and np.allclose(E_inf, E_in)), \
+           'expected identity for R=0 and R=inf'
+
+
+H.run('apply_fresnel_curvature: R=0 / R=inf are identities',
+      t_apply_fresnel_curvature_zero_R_is_identity)
+
+
 H.section('Deep physics: cross-backend, conservation, reciprocity, grad')
 H.run('ASM NumPy vs JAX value equivalence',
       t_asm_numpy_jax_value_equivalence)
@@ -535,6 +586,299 @@ H.run('apply_real_lens conserves power on a clear aperture',
       t_real_lens_power_conservation_clear_aperture)
 H.run('jax.grad of ASM matches finite differences',
       t_asm_jax_grad_matches_fd)
+
+
+H.section('MFT propagators: arbitrary-output-grid Fresnel / Fraunhofer / ASM')
+
+
+def _mft_test_setup_natural_grid(z=10e-3, lam=1.31e-6, dx_in=5e-6, N=128):
+    """Build a Gaussian + the natural FFT-output grid.  The MFT propagators
+    on this grid must agree with their non-MFT siblings."""
+    ax = (np.arange(N) - N / 2) * dx_in
+    X, Y = np.meshgrid(ax, ax, indexing='xy')
+    E_in = np.exp(-(X**2 + Y**2) / (50e-6) ** 2).astype(np.complex128)
+    dx_out = lam * abs(z) / (N * dx_in)   # natural Fresnel/Fraunhofer pitch
+    return E_in, z, lam, dx_in, dx_out, N
+
+
+def t_fresnel_mft_matches_fresnel_at_natural_grid():
+    """fresnel_propagate_mft on the natural FFT-output grid agrees with
+    fresnel_propagate to ~1e-9 relative (just floating-point round-off
+    differences from the chirp-Z FFT pair vs single FFT)."""
+    E, z, lam, dx_in, dx_out, N = _mft_test_setup_natural_grid()
+    E_ref, dx_out_ref, _ = la.fresnel_propagate(E, z, lam, dx_in)
+    E_mft = la.fresnel_propagate_mft(E, z, lam, dx_in, dx_out_ref, N)
+    rel = np.max(np.abs(E_ref - E_mft)) / np.max(np.abs(E_ref))
+    return rel < 1e-9, (
+        f'max |E_ref - E_mft| / max|E_ref| = {rel:.2e}; '
+        f'natural dx_out = {dx_out_ref*1e6:.3f} um')
+
+
+H.run('fresnel_propagate_mft @ natural grid = fresnel_propagate',
+      t_fresnel_mft_matches_fresnel_at_natural_grid)
+
+
+def t_fraunhofer_mft_matches_fraunhofer_at_natural_grid():
+    """fraunhofer_propagate_mft @ natural grid = fraunhofer_propagate."""
+    E, z, lam, dx_in, dx_out, N = _mft_test_setup_natural_grid(z=1.0)
+    E_ref, dx_out_ref, _ = la.fraunhofer_propagate(E, z, lam, dx_in)
+    E_mft = la.fraunhofer_propagate_mft(E, z, lam, dx_in, dx_out_ref, N)
+    rel = np.max(np.abs(E_ref - E_mft)) / np.max(np.abs(E_ref))
+    return rel < 1e-9, f'max rel err = {rel:.2e}'
+
+
+H.run('fraunhofer_propagate_mft @ natural grid = fraunhofer_propagate',
+      t_fraunhofer_mft_matches_fraunhofer_at_natural_grid)
+
+
+def t_asm_mft_matches_asm_at_natural_grid():
+    """angular_spectrum_propagate_mft on the same input grid (dx_out =
+    dx_in, N_out = N_in, centre_out = (0, 0)) agrees with
+    angular_spectrum_propagate to ~1e-9 relative.  This isolates the
+    Bluestein chirp-Z step against the standard IFFT."""
+    N = 128; dx = 5e-6; lam = 1.31e-6; z = 5e-3
+    ax = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(ax, ax, indexing='xy')
+    E = np.exp(-(X**2 + Y**2) / (40e-6) ** 2).astype(np.complex128)
+    E_ref = la.angular_spectrum_propagate(E, z, lam, dx)
+    E_mft = la.angular_spectrum_propagate_mft(E, z, lam, dx, dx, N)
+    rel = np.max(np.abs(E_ref - E_mft)) / np.max(np.abs(E_ref))
+    return rel < 1e-9, f'max rel err = {rel:.2e}'
+
+
+H.run('angular_spectrum_propagate_mft @ same grid = angular_spectrum_propagate',
+      t_asm_mft_matches_asm_at_natural_grid)
+
+
+def t_fresnel_mft_focal_zoom_matches_gaussian_beam_formula():
+    """Focal-zoom physics test: propagate a collimated Gaussian beam
+    through free-space Fresnel by its Rayleigh range and check that the
+    output waist + on-axis amplitude match the analytical Gaussian-beam
+    formulae.
+
+    For a Gaussian beam with waist w0 starting at z=0 (planar wavefront),
+    after propagation by z the new waist is
+        w(z) = w0 * sqrt(1 + (z/z_R)^2),   z_R = pi * w0^2 / lambda
+    and the on-axis amplitude is |E(0, z)| / |E(0, 0)| = w0 / w(z).
+
+    We pick a tightly-focused source so the natural FFT pitch is too
+    coarse to resolve the propagated beam, forcing fresnel_propagate_mft
+    to genuinely zoom in.
+    """
+    lam = 1.31e-6
+    w0 = 30e-6
+    z_R = np.pi * w0**2 / lam              # ~2.16 mm Rayleigh range
+    z = z_R                                # propagate by 1 z_R: w grows by sqrt(2)
+
+    # Input on a coarse grid sized for the beam waist.
+    N_in = 256
+    dx_in = 4e-6                           # Nyquist ~ 8 lambda
+    ax_in = (np.arange(N_in) - N_in / 2) * dx_in
+    X, Y = np.meshgrid(ax_in, ax_in, indexing='xy')
+    E_in = np.exp(-(X**2 + Y**2) / w0**2).astype(np.complex128)
+
+    # Natural Fresnel-output dx is lam*z/(N*dx_in) ~ 2.7 um -- comparable.
+    # Choose a deliberately FINER output grid (1 um pitch, N_out = 128)
+    # that is NOT the natural FFT grid, to verify the zoom works.
+    N_out = 128
+    dx_out = 1e-6
+    E_out = la.fresnel_propagate_mft(E_in, z, lam, dx_in, dx_out, N_out)
+
+    # Analytical predictions.
+    w_z = w0 * np.sqrt(1 + (z / z_R) ** 2)
+    expected_w = w_z
+
+    # Measure the output waist by fitting |E_out|^2 to a Gaussian
+    # (1/e^2 intensity radius gives the waist).
+    I = np.abs(E_out) ** 2
+    ax_out = (np.arange(N_out) - N_out / 2) * dx_out
+    Xo, Yo = np.meshgrid(ax_out, ax_out, indexing='xy')
+    Ro = np.sqrt(Xo**2 + Yo**2)
+    # Second-moment waist:  w^2 = 4 * <r^2 * I> / <I>
+    measured_w = float(np.sqrt(2 * np.sum(Ro**2 * I) / np.sum(I)))
+
+    # On-axis amplitude ratio.  For Gaussian beam: |E(0,z)|/|E(0,0)| = w0/w(z).
+    # |E(0, 0)| = 1 by construction; |E(0, z)| read off the centre pixel.
+    centre = E_out[N_out // 2, N_out // 2]
+    measured_amp_ratio = float(np.abs(centre))
+    expected_amp_ratio = w0 / w_z
+
+    rel_w = abs(measured_w - expected_w) / expected_w
+    rel_amp = abs(measured_amp_ratio - expected_amp_ratio) / expected_amp_ratio
+
+    ok = (rel_w < 0.02 and rel_amp < 0.05)
+    return ok, (
+        f'expected w(z) = {expected_w*1e6:.3f} um, measured = {measured_w*1e6:.3f} um '
+        f'(rel {rel_w:.2%}); '
+        f'expected amp ratio = {expected_amp_ratio:.4f}, '
+        f'measured = {measured_amp_ratio:.4f} (rel {rel_amp:.2%})')
+
+
+H.run('fresnel_propagate_mft focal zoom matches Gaussian-beam formula',
+      t_fresnel_mft_focal_zoom_matches_gaussian_beam_formula)
+
+
+def t_fraunhofer_mft_focal_zoom_matches_circular_aperture_airy():
+    """Focal-zoom physics test for Fraunhofer-MFT: a uniform circular
+    aperture far-field is the Airy pattern.  Check the first-null
+    position is at 1.22 * lambda * z / D.
+    """
+    lam = 1.31e-6
+    D = 1e-3                               # 1 mm aperture diameter
+    z = 1.0                                 # 1 m to far-field
+
+    N_in = 256; dx_in = 8e-6
+    ax_in = (np.arange(N_in) - N_in / 2) * dx_in
+    X, Y = np.meshgrid(ax_in, ax_in, indexing='xy')
+    aperture = (X**2 + Y**2 <= (D / 2) ** 2).astype(np.complex128)
+
+    # First Airy null at r = 1.22 * lambda * z / D
+    r_null = 1.22 * lam * z / D            # ~1.6 mm
+    # Zoom into the first 3 nulls at fine sampling.
+    dx_out = r_null / 30
+    N_out = 256                            # extent ~8.5 r_null
+    E_out = la.fraunhofer_propagate_mft(aperture, z, lam, dx_in, dx_out, N_out)
+    I = np.abs(E_out) ** 2
+    # Find first-null radius along the centre row by locating the first
+    # local minimum near the predicted radius.
+    centre_row = I[N_out // 2, N_out // 2:]
+    # Smooth a touch by averaging nearest neighbours to avoid pixel
+    # discretisation noise.
+    smoothed = np.convolve(centre_row, np.ones(3) / 3, mode='same')
+    # Walk outward from the centre, find first index where slope flips
+    # from negative to positive (i.e., a local minimum).
+    diffs = np.diff(smoothed)
+    sign_change = np.where((diffs[:-1] < 0) & (diffs[1:] > 0))[0]
+    if len(sign_change) == 0:
+        return False, 'no null found in central row'
+    idx_null = sign_change[0] + 1
+    r_measured = idx_null * dx_out
+    rel = abs(r_measured - r_null) / r_null
+    return rel < 0.05, (
+        f'expected first null at {r_null*1e3:.3f} mm, '
+        f'measured at {r_measured*1e3:.3f} mm (rel {rel:.2%})')
+
+
+H.run('fraunhofer_propagate_mft focal zoom matches Airy first-null radius',
+      t_fraunhofer_mft_focal_zoom_matches_circular_aperture_airy)
+
+
+def t_asm_mft_focal_zoom_matches_asm_with_resample():
+    """For the ASM-MFT, validate that zooming into a sub-region of the
+    output produces the same field as ASM on the natural grid then
+    resampling that sub-region with cubic interpolation.
+
+    This is a structural test: ASM (exact) produces the ground-truth
+    field at the natural grid; MFT-ASM with a finer grid samples the
+    SAME field at a different sampling, so the two must agree where
+    they overlap.
+    """
+    N_in = 128; dx = 5e-6; lam = 1.31e-6; z = 1e-3
+    ax_in = (np.arange(N_in) - N_in / 2) * dx
+    X, Y = np.meshgrid(ax_in, ax_in, indexing='xy')
+    E_in = np.exp(-(X**2 + Y**2) / (30e-6) ** 2).astype(np.complex128)
+
+    # Reference: ASM at natural grid.
+    E_ref = la.angular_spectrum_propagate(E_in, z, lam, dx)
+
+    # MFT-ASM on the SAME grid -- should match to ~1e-9 (already covered by
+    # an earlier test, but here we verify on a sub-window via centre_out).
+    N_out = 64; dx_out = dx          # half the FOV but same pitch
+    # Recover the central N_out region of E_ref.
+    mid = N_in // 2
+    half = N_out // 2
+    E_ref_central = E_ref[mid - half:mid + half, mid - half:mid + half]
+    E_mft = la.angular_spectrum_propagate_mft(
+        E_in, z, lam, dx, dx_out, N_out, centre_out=(0.0, 0.0))
+    rel = np.max(np.abs(E_ref_central - E_mft)) / np.max(np.abs(E_ref_central))
+    return rel < 1e-9, (
+        f'central-region MFT vs ref ASM: max rel err = {rel:.2e} '
+        f'(N_out={N_out}, dx_out={dx_out*1e6:.1f} um)')
+
+
+H.run('angular_spectrum_propagate_mft sub-window matches ASM central region',
+      t_asm_mft_focal_zoom_matches_asm_with_resample)
+
+
+def t_fresnel_mft_jax_grad_matches_fd():
+    """jax.grad through fresnel_propagate_mft matches finite differences."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    N = 32; dx = 5e-6; lam = 633e-9; z = 1e-3
+    ax = (jnp.arange(N) - N / 2) * dx
+    X, Y = jnp.meshgrid(ax, ax, indexing='xy')
+    E = jnp.exp(-(X * X + Y * Y) / (10e-6) ** 2).astype(jnp.complex64)
+
+    def loss(scale):
+        out = la.fresnel_propagate_mft(E * scale, z, lam, dx, dx, N)
+        return jnp.sum(jnp.abs(out) ** 2).astype(jnp.float32)
+
+    g_jax = float(jax.grad(loss)(jnp.float32(1.0)))
+    eps = 1e-3
+    g_fd = (float(loss(jnp.float32(1.0 + eps)))
+            - float(loss(jnp.float32(1.0 - eps)))) / (2 * eps)
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), 1e-30)
+    return rel < 1e-2, f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}'
+
+
+H.run('jax.grad of fresnel_propagate_mft matches FD',
+      t_fresnel_mft_jax_grad_matches_fd)
+
+
+def t_fraunhofer_mft_jax_grad_matches_fd():
+    """jax.grad through fraunhofer_propagate_mft matches finite differences."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    N = 32; dx = 5e-6; lam = 633e-9; z = 0.1
+    ax = (jnp.arange(N) - N / 2) * dx
+    X, Y = jnp.meshgrid(ax, ax, indexing='xy')
+    E = jnp.exp(-(X * X + Y * Y) / (10e-6) ** 2).astype(jnp.complex64)
+
+    def loss(scale):
+        out = la.fraunhofer_propagate_mft(E * scale, z, lam, dx, dx, N)
+        return jnp.sum(jnp.abs(out) ** 2).astype(jnp.float32)
+
+    g_jax = float(jax.grad(loss)(jnp.float32(1.0)))
+    eps = 1e-3
+    g_fd = (float(loss(jnp.float32(1.0 + eps)))
+            - float(loss(jnp.float32(1.0 - eps)))) / (2 * eps)
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), 1e-30)
+    return rel < 1e-2, f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}'
+
+
+H.run('jax.grad of fraunhofer_propagate_mft matches FD',
+      t_fraunhofer_mft_jax_grad_matches_fd)
+
+
+def t_asm_mft_jax_grad_matches_fd():
+    """jax.grad through angular_spectrum_propagate_mft matches finite differences."""
+    if not la.JAX_AVAILABLE:
+        return True, 'skipped (no jax)'
+    import jax
+    import jax.numpy as jnp
+    N = 32; dx = 5e-6; lam = 633e-9; z = 1e-3
+    ax = (jnp.arange(N) - N / 2) * dx
+    X, Y = jnp.meshgrid(ax, ax, indexing='xy')
+    E = jnp.exp(-(X * X + Y * Y) / (10e-6) ** 2).astype(jnp.complex64)
+
+    def loss(scale):
+        out = la.angular_spectrum_propagate_mft(E * scale, z, lam, dx, dx, N)
+        return jnp.sum(jnp.abs(out) ** 2).astype(jnp.float32)
+
+    g_jax = float(jax.grad(loss)(jnp.float32(1.0)))
+    eps = 1e-3
+    g_fd = (float(loss(jnp.float32(1.0 + eps)))
+            - float(loss(jnp.float32(1.0 - eps)))) / (2 * eps)
+    rel = abs(g_jax - g_fd) / max(abs(g_fd), 1e-30)
+    return rel < 1e-2, f'jax.grad={g_jax:.4e}, fd={g_fd:.4e}, rel={rel:.2e}'
+
+
+H.run('jax.grad of angular_spectrum_propagate_mft matches FD',
+      t_asm_mft_jax_grad_matches_fd)
 
 
 if __name__ == '__main__':

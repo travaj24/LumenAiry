@@ -42,6 +42,10 @@ from .propagators.propagation import (
     reset_fft_backend,
     rayleigh_sommerfeld_propagate,
     resample_field,
+    apply_fresnel_curvature,
+    fresnel_propagate_mft,
+    fraunhofer_propagate_mft,
+    angular_spectrum_propagate_mft,
     # FFT backend configuration
     PYFFTW_AVAILABLE,
     CUPY_AVAILABLE,
@@ -580,7 +584,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.5.6"
+__version__ = "3.5.7"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -713,6 +717,10 @@ __all__ = [
     'fraunhofer_propagate',
     'rayleigh_sommerfeld_propagate',
     'resample_field',
+    'apply_fresnel_curvature',
+    'fresnel_propagate_mft',
+    'fraunhofer_propagate_mft',
+    'angular_spectrum_propagate_mft',
 
     # Huygens-Fresnel family
     'propagate_huygens_fresnel_freespace',

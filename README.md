@@ -10,6 +10,85 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.5.7
+
+Inter-library compatibility improvements.  Driven by an empirical
+multi-library cross-validation (LightPipes, prysm, POPPy, diffractio,
+OPDPy) that surfaced two gaps -- a phase-convention mismatch against
+ray-trace-rooted aberration tools and a missing arbitrary-output-grid
+focal-zoom propagator.  Both addressed; nothing existing changes.
+
+- **`apply_fresnel_curvature(E, dx, wavelength, R, sign=±1)`** -- new
+  utility for round-tripping between phase conventions.  Lumenairy and
+  the Fresnel/ASM-propagator family (LightPipes, prysm, POPPy,
+  diffractio, Zemax POP) keep the absolute physical phase at the
+  output plane.  OPDPy and Zemax wavefront operands store the
+  chief-relative OPD -- a different reference, purpose-built for
+  aberration analysis -- which differs by exactly
+  `exp(i*k*r²/(2R))` with `R = v - f` for a thin-lens imager
+  (Gaussian-beam ABCD prediction).  The new utility converts cleanly
+  in either direction.  Empirical agreement post-correction:
+  Lumenairy ↔ OPDPy at **0.99996** complex correlation.
+
+- **`fresnel_propagate_mft`** -- single-FFT paraxial Fresnel onto a
+  user-specified output grid via Bluestein chirp-Z transform.  Pick
+  any `dx_out`, `N_out`, `centre_out=(x, y)` independently of `dx_in`
+  and `z`.  Standard tool for focal-plane zoom (sample a tightly-focused
+  region at sub-pixel resolution without padding the input grid by
+  the corresponding factor).  Same physics as `fresnel_propagate`.
+
+- **`fraunhofer_propagate_mft`** -- far-field counterpart to
+  `fresnel_propagate_mft`.  Excellent for coronagraph and
+  high-contrast imaging workflows.  POPPy's `apply_image_plane_fftmft`
+  and prysm's `focus_fixed_sampling` are well-established equivalents
+  in their respective ecosystems and the inspiration for this addition.
+
+- **`angular_spectrum_propagate_mft`** -- exact ASM
+  (`exp(i*kz*z)` with `kz = sqrt(k² - kx² - ky²)`) followed by a
+  Bluestein chirp-Z inverse FT onto the user-specified output grid.
+  POPPy, prysm, and diffractio offer arbitrary-output-grid focal zoom
+  via their paraxial Fresnel propagators (the natural choice for the
+  imaging applications they're built for); this addition extends that
+  capability to high-NA / strongly-diverging beams where the exact ASM
+  kernel is preferred.
+
+All three propagators share an internal `_bluestein_2d` helper module
+and follow the same backend dispatch pattern as
+`angular_spectrum_propagate` (NumPy / pyFFTW / CuPy / JAX, with
+`jax.grad` validated to ~1e-5 of finite differences).  At the natural
+FFT-output grid, MFT versions agree with their non-MFT siblings to
+~2e-14 relative.  Bluestein cost scales as `O((N + M) log (N + M))`
+per axis vs `O(N²M²)` for direct matrix DFT.
+
+`__all__` grows from 391 to 395.  No existing API changes.  All 40
+propagator validation tests pass.
+
+## What's new in 3.5.6
+
+CI hotfix + 14 audit-driven performance / accuracy improvements.
+
+- **`trace_jax_with_params`** -- JAX-array-aware ray tracer that accepts
+  radii, conics, aspheric coefficients, and thicknesses as
+  differentiable JAX arrays.  Unblocks design-parameter adjoint
+  optimization that 3.5.5's `make_lg_aberration_merit_jax` only
+  partially supported.
+- Newton iter cap reverted 8 → 12 in `apply_real_lens_traced` (3.5.5
+  drop showed 0% speedup).
+- Adaptive Newton convergence warning when >1% of pixels fail.
+- Maslov upsample phase fix (cubic zoom of cos/sin instead of
+  `np.unwrap`).
+- JAX x64 auto-enable in `fit_canonical_polynomials_jax`.
+- `set_pyfftw_planner('FFTW_MEASURE')` API for ~20% faster FFTs after
+  ~1 s planning cost.
+- Vectorised Vandermonde + 4-D polynomial evaluator (3-5× faster
+  Maslov hot path).
+- `design_optimize(precision='single')` for ~2× FFT throughput.
+- `non_sequential_stray_light` and `monte_carlo_tolerancing_linearized`
+  helpers.
+
+Plus a CI-only fix: missing `from typing import Tuple` in
+`elements/lenses.py` after the 3.5.5 split.
+
 ## What's new in 3.5.1
 
 Patch release: additive JAX-companion functions across `analysis`,

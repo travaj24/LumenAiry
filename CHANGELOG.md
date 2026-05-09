@@ -2,6 +2,153 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.7] — 2026-05-08
+
+Inter-library compatibility improvements: a phase-convention conversion
+utility (driven by a multi-library cross-validation against LightPipes,
+prysm, POPPy, diffractio, and OPDPy) and three new arbitrary-output-grid
+"MFT" propagators that close the focal-zoom capability gap with POPPy
+and prysm.
+
+### Added
+
+* **``apply_fresnel_curvature(E, dx, wavelength, R, sign=+1, dy=None)``**
+  -- new public utility for round-tripping between phase conventions
+  when comparing Lumenairy's complex-field outputs against ray-trace-rooted
+  aberration-analysis tools.
+
+  Lumenairy and the Fresnel/ASM-propagator family (LightPipes, prysm,
+  POPPy, diffractio, Zemax POP) keep the **absolute physical phase** at
+  the output plane: ``arg(E)`` is what a co-propagating plane-wave
+  reference (or a coherent receiver) would actually measure.  Other
+  excellent tools -- notably **OPDPy** and Zemax wavefront operands
+  like ``OPDX`` / ``RWFE`` -- instead store the chief-relative OPD,
+  which is purpose-built for aberration analysis (Strehl, RMS WFE,
+  Zernike decomposition) and implicitly removes the natural
+  Gaussian-beam Fresnel curvature at the image plane that would
+  otherwise be a large nuisance term.  The two outputs differ by
+  exactly ``exp(i*k*r^2/(2*R))`` with ``R = v - f`` (image distance
+  minus focal length) for a thin-lens imager, predictable from
+  Gaussian-beam ABCD theory.
+
+  ``apply_fresnel_curvature`` adds (or removes, with ``sign=-1``) this
+  curvature so users can convert between the two conventions:
+
+  .. code-block:: python
+
+      # Convert OPDPy / Zemax-OPD output to Lumenairy / LightPipes:
+      E_absolute = la.apply_fresnel_curvature(
+          E_chief_relative, dx, wavelength, R=v - f)
+
+      # Convert Lumenairy / LightPipes output to chief-relative:
+      E_chief_relative = la.apply_fresnel_curvature(
+          E_absolute, dx, wavelength, R=v - f, sign=-1)
+
+  Empirical multi-library cross-check (1 mm Gaussian, thin lens
+  f=100 mm, 1:1 conjugate, lambda=1310 nm):
+
+  | Library | Convention | Complex correlation vs Lumenairy (post-alignment) |
+  |---|---|---|
+  | prysm `free_space` | absolute (paraxial Fresnel) | **1.00000** |
+  | LightPipes `Forvard` | absolute (exact ASM) | **0.996** (sub-pixel grid offset) |
+  | POPPy `propagate_fresnel` | absolute (auto-rescaling Fresnel) | matches qualitatively (R = 113.9 mm fit; predicted 100 mm) |
+  | OPDPy AS / Maslov | chief-relative | **0.99996** *after applying R = v - f Fresnel correction* |
+
+  The new wiki page **Phase Conventions and Inter-Library Comparison**
+  documents the conventions for each library, when each form is
+  appropriate, and how to convert between them.
+
+* **``fresnel_propagate_mft(E_in, z, wavelength, dx_in, dx_out, N_out, ...)``**
+  -- new public propagator.  Single-FFT paraxial Fresnel on an
+  arbitrary user-specified output grid via Bluestein chirp-Z transform.
+  Same math as ``fresnel_propagate`` but the user picks ``dx_out`` and
+  ``N_out`` independently of ``dx_in`` and ``z``.  Standard tool for
+  focal-plane zoom (sample a tightly-focused output region at sub-pixel
+  resolution without padding the input grid by the corresponding
+  factor).  Also accepts ``centre_out=(x, y)`` to evaluate the output
+  on an off-axis region of the focal plane.
+
+* **``fraunhofer_propagate_mft(E_in, z, wavelength, dx_in, dx_out, N_out, ...)``**
+  -- new public propagator.  Far-field counterpart to
+  ``fresnel_propagate_mft``, drops the input-plane quadratic phase (the
+  paraxial small-angle assumption).  Excellent for coronagraph and
+  high-contrast imaging workflows -- sample the far-field at
+  sub-lambda/D resolution around an off-axis stellar PSF without
+  zero-padding the input pupil.  POPPy's ``apply_image_plane_fftmft``
+  and prysm's ``focus_fixed_sampling`` are well-established equivalents
+  in their respective ecosystems and the inspiration for this
+  Lumenairy addition.
+
+* **``angular_spectrum_propagate_mft(E_in, z, wavelength, dx_in, dx_out, N_out, ...)``**
+  -- new public propagator.  Exact ASM (``exp(i*kz*z)`` with
+  ``kz = sqrt(k^2 - kx^2 - ky^2)``) followed by a Bluestein chirp-Z
+  inverse FT onto the user-specified output grid.  POPPy, prysm, and
+  diffractio offer arbitrary-output-grid focal-zoom via their paraxial
+  Fresnel propagators (which is the right choice for the imaging
+  applications they're built for); this Lumenairy addition extends
+  that capability to high-NA / strongly-diverging beams where the
+  exact ASM kernel is preferred.  Same ``bandlimit=True`` default as
+  ``angular_spectrum_propagate``.
+
+* Internal helper module **``lumenairy/propagators/_bluestein.py``**
+  with ``_bluestein_2d`` (the Bluestein chirp-Z primitive) and
+  ``_bluestein_centred_2d`` (centred-index wrapper).  Used by all three
+  MFT propagators; also reusable for future MFT-based work in
+  ``analysis/`` (MTF, phase retrieval).
+
+### Standardisation across all new propagators
+
+Each new ``*_propagate_mft`` function follows the existing Lumenairy
+propagator conventions:
+
+* Backend dispatch identical to ``angular_spectrum_propagate``: NumPy
+  CPU (with pyFFTW dispatch via ``_fft2`` / ``_ifft2``), CuPy GPU, JAX.
+* Float32 / float64 controlled by ``DEFAULT_COMPLEX_DTYPE`` and the
+  input dtype.
+* JAX-traceable end-to-end (validated with ``jax.grad``).
+* Carrier ``exp(i*k*z)`` preserved -- absolute-phase convention,
+  consistent with the rest of Lumenairy and most of the Fresnel/ASM
+  ecosystem.
+* Live in ``lumenairy/propagators/propagation.py`` next to their
+  same-grid siblings; exposed at top level (``la.fresnel_propagate_mft``,
+  etc.) and added to ``__all__``.
+
+### Performance
+
+Bluestein chirp-Z transform achieves ``O((N+M) log (N+M))`` per axis
+where ``N = N_in`` and ``M = N_out``.  Compared to the alternative
+matrix-Fourier transform (``O(N^2 M^2)``):
+
+| Setting | MDFT (CPU) | Bluestein/CZT (CPU) |
+|---|---|---|
+| 512^2 -> 128^2 | ~50-100 ms | **~10-30 ms** |
+| 2048^2 -> 256^2 | ~2-5 s | **~80-200 ms** |
+
+The Bluestein helper internally calls Lumenairy's ``_fft2`` / ``_ifft2``
+dispatch, so pyFFTW is used automatically when available.  GPU and JAX
+paths benefit from cuFFT / XLA acceleration of the same FFTs.
+
+### Validation
+
+| # | Test | Result |
+|---|------|--------|
+| 1 | ``apply_fresnel_curvature``: ``sign=+1`` then ``-1`` round-trips exactly | round-trip err 1.25e-16; mag unchanged; phase change non-trivial |
+| 2 | ``apply_fresnel_curvature``: ``R=0`` and ``R=inf`` are identities | passes |
+| 3 | ``fresnel_propagate_mft`` @ natural grid = ``fresnel_propagate`` | rel err **2.25e-14** |
+| 4 | ``fraunhofer_propagate_mft`` @ natural grid = ``fraunhofer_propagate`` | rel err **2.09e-14** |
+| 5 | ``angular_spectrum_propagate_mft`` @ same grid = ``angular_spectrum_propagate`` | rel err **2.35e-14** |
+| 6 | Fresnel-MFT focal zoom matches Gaussian-beam ABCD formula (waist + amplitude) | 1.28% / 0.00% |
+| 7 | Fraunhofer-MFT focal zoom matches Airy first-null ``1.22*lambda*z/D`` | exact (0.00%) |
+| 8 | ASM-MFT central sub-window matches ASM reference | rel err **1.07e-14** |
+| 9-11 | ``jax.grad`` of all three MFT propagators matches FD | rel err 2-5e-5 |
+
+Total propagator-suite tests: **40 / 40 pass.**
+
+### Backwards compatibility
+
+``__all__`` grows from 391 to 395 entries (4 new public functions).
+No existing API behaviour changes.
+
 ## [3.5.6] — 2026-05-07
 
 CI hotfix + 14 audit-driven performance / accuracy improvements.
