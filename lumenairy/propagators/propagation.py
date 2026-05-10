@@ -534,13 +534,15 @@ def set_asm_cache_size(h_cache=None, freq_cache=None, bandlimit_cache=None,
             _H_CACHE_MAX_BYTES_PER_ENTRY = int(h_max_bytes_per_entry)
         if h_max_total_bytes is not None:
             _H_CACHE_MAX_TOTAL_BYTES = int(h_max_total_bytes)
-        # Apply count + bytes bounds together.
-        total = sum(int(getattr(v, 'nbytes', 0)) for v in _H_CACHE.values())
+        # Apply count + bytes bounds together.  _entry_bytes handles
+        # both single-array and tuple-bundle entries (the latter is
+        # used by SAS to cache delta_H + H1 + H2 jointly).
+        total = sum(_entry_bytes(v) for v in _H_CACHE.values())
         while (len(_H_CACHE) > _H_CACHE_SIZE
                or total > _H_CACHE_MAX_TOTAL_BYTES):
             try:
                 _, dropped = _H_CACHE.popitem(last=False)
-                total -= int(getattr(dropped, 'nbytes', 0))
+                total -= _entry_bytes(dropped)
             except KeyError:
                 break
         if freq_cache is not None:
@@ -622,6 +624,20 @@ def _h_cache_lookup(key):
     return None
 
 
+def _entry_bytes(v):
+    """Bytes accounting that handles both single arrays (the ASM H
+    case) and tuples of arrays (the SAS case, where the cache entry
+    bundles ``(delta_H, H1, H2_or_None)`` under one key).  Anything
+    without ``.nbytes`` and not a tuple/list is treated as zero
+    bytes -- safe since the eviction loop only undercounts, which
+    can lead to a slightly larger working set but never to incorrect
+    behaviour."""
+    if isinstance(v, (tuple, list)):
+        return sum(int(getattr(a, 'nbytes', 0))
+                   for a in v if a is not None)
+    return int(getattr(v, 'nbytes', 0))
+
+
 def _h_cache_store(key, H):
     """Store H in the cache, honoring both count and byte bounds.
 
@@ -637,22 +653,25 @@ def _h_cache_store(key, H):
     oldest entries until total bytes fits.  Keeps the cache useful
     on intermediate grids (e.g. N=4096 at ~256 MB per H, holds 32+
     entries within the budget) without ballooning at large N.
+
+    ``H`` may be a single ndarray (the ASM / RS / tilted-ASM /
+    ASM-MFT case) or a tuple of arrays (the SAS case, which bundles
+    ``delta_H``, ``H1``, and ``H2`` -- all sharing one geometry --
+    into a single cache entry).  Sizing uses :func:`_entry_bytes`
+    so tuple bundles are budgeted by their summed array bytes.
     """
-    try:
-        h_bytes = int(H.nbytes)
-    except Exception:
-        h_bytes = 0
+    h_bytes = _entry_bytes(H)
     if h_bytes > _H_CACHE_MAX_BYTES_PER_ENTRY:
         return  # too big to cache; lookups will miss + rebuild
     with _ASM_CACHE_LOCK:
         _H_CACHE[key] = H
         # Drop oldest entries until count and total-bytes fit.
-        total = sum(int(getattr(v, 'nbytes', 0)) for v in _H_CACHE.values())
+        total = sum(_entry_bytes(v) for v in _H_CACHE.values())
         while (len(_H_CACHE) > _H_CACHE_SIZE
                or total > _H_CACHE_MAX_TOTAL_BYTES):
             try:
                 _, dropped = _H_CACHE.popitem(last=False)
-                total -= int(getattr(dropped, 'nbytes', 0))
+                total -= _entry_bytes(dropped)
             except KeyError:
                 break
 
@@ -1370,7 +1389,13 @@ def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
         return angular_spectrum_propagate(E_in, z, wavelength, dx, dy,
                                           bandlimit=bandlimit)
 
-    # -- spatial coordinate grids --------------------------------------------
+    # Target complex dtype (matches angular_spectrum_propagate / RS).
+    if np.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+
+    # -- spatial coordinate grids (carrier; per-call) ------------------------
     x = (np.arange(Nx) - Nx / 2) * dx
     y = (np.arange(Ny) - Ny / 2) * dy
     X, Y = np.meshgrid(x, y)
@@ -1379,40 +1404,60 @@ def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
     carrier = np.exp(-1j * 2 * np.pi * (fx0 * X + fy0 * Y))
     E_demod = E_in * carrier
 
-    # -- shifted transfer function -------------------------------------------
-    # kz is evaluated at (fx + fx0, fy + fy0) so the baseband field
-    # propagates with the correct kz for each plane-wave component.
-    k = 2 * np.pi / wavelength
-    dfx = 1.0 / (Nx * dx)
-    dfy = 1.0 / (Ny * dy)
-    fx = (np.arange(Nx) - Nx / 2) * dfx
-    fy = (np.arange(Ny) - Ny / 2) * dfy
-    FX, FY = np.meshgrid(fx, fy)
+    # ── H cache (NumPy backend) ───────────────────────────────────────
+    # The shifted transfer function depends on (Ny, Nx, dy, dx,
+    # wavelength, z, fx0, fy0, bandlimit, dtype).  fx0/fy0 are the
+    # tilt-derived carrier frequencies and they fully encode the
+    # propagation-direction shift, so the cache key handles arbitrary
+    # tilt angles without needing tilt_x / tilt_y in the key directly.
+    # 'ASM_TILTED' tag keeps these entries disjoint from plain-ASM ones.
+    h_key = (int(Ny), int(Nx), float(dy), float(dx),
+             float(wavelength), float(z),
+             float(fx0), float(fy0),
+             bool(bandlimit),
+             np.dtype(target_cdtype).str, 'ASM_TILTED')
+    H = _h_cache_lookup(h_key)
 
-    FX_shifted = FX + fx0
-    FY_shifted = FY + fy0
-    kx = 2 * np.pi * FX_shifted
-    ky = 2 * np.pi * FY_shifted
+    if H is None:
+        # -- shifted transfer function -------------------------------------
+        # kz is evaluated at (fx + fx0, fy + fy0) so the baseband field
+        # propagates with the correct kz for each plane-wave component.
+        k = 2 * np.pi / wavelength
+        dfx = 1.0 / (Nx * dx)
+        dfy = 1.0 / (Ny * dy)
+        fx = (np.arange(Nx) - Nx / 2) * dfx
+        fy = (np.arange(Ny) - Ny / 2) * dfy
+        FX, FY = np.meshgrid(fx, fy)
 
-    kz_sq = k**2 - kx**2 - ky**2
-    kz = np.where(kz_sq > 0, np.sqrt(np.maximum(kz_sq, 0)), 0)
-    H = np.exp(1j * kz * z)
-    H = np.where(kz_sq > 0, H, 0)
+        FX_shifted = FX + fx0
+        FY_shifted = FY + fy0
+        kx = 2 * np.pi * FX_shifted
+        ky = 2 * np.pi * FY_shifted
 
-    # -- band-limiting on the BASEBAND (demodulated) spectrum ---------------
-    # The Matsushima-Shimobaba criterion bounds the frequency content of the
-    # field AS SAMPLED on the grid; after demodulation the tilted beam's
-    # energy lives around FX = 0 (baseband), so the mask must be centred
-    # there.  Applying it to ``FX_shifted`` (carrier-plus-baseband) kills
-    # the baseband DC mode for any meaningful tilt and zeros the whole
-    # propagated field.
-    if bandlimit and z != 0:
-        Lx = Nx * dx
-        Ly = Ny * dy
-        fx_max = Lx / (2 * wavelength * abs(z))
-        fy_max = Ly / (2 * wavelength * abs(z))
-        H = np.where((np.abs(FX) < fx_max) &
-                      (np.abs(FY) < fy_max), H, 0)
+        kz_sq = k**2 - kx**2 - ky**2
+        kz = np.where(kz_sq > 0, np.sqrt(np.maximum(kz_sq, 0)), 0)
+        H = np.exp(1j * kz * z)
+        H = np.where(kz_sq > 0, H, 0)
+
+        # -- band-limiting on the BASEBAND (demodulated) spectrum --------
+        # The Matsushima-Shimobaba criterion bounds the frequency content
+        # of the field AS SAMPLED on the grid; after demodulation the
+        # tilted beam's energy lives around FX = 0 (baseband), so the
+        # mask must be centred there.  Applying it to FX_shifted
+        # (carrier-plus-baseband) kills the baseband DC mode for any
+        # meaningful tilt and zeros the whole propagated field.
+        if bandlimit and z != 0:
+            Lx = Nx * dx
+            Ly = Ny * dy
+            fx_max = Lx / (2 * wavelength * abs(z))
+            fy_max = Ly / (2 * wavelength * abs(z))
+            H = np.where((np.abs(FX) < fx_max) &
+                          (np.abs(FY) < fy_max), H, 0)
+
+        if H.dtype != target_cdtype:
+            H = H.astype(target_cdtype)
+
+        _h_cache_store(h_key, H)
 
     # -- propagate baseband with shifted transfer function -------------------
     E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_demod)))
@@ -1550,27 +1595,64 @@ def angular_spectrum_propagate_mft(
     # ----- 1) Build ASM transfer function H(fx, fy) on the input freq grid --
     # Same construction as angular_spectrum_propagate (centred convention,
     # exact `kz = sqrt(k^2 - kx^2 - ky^2)`, optional Matsushima band-limit).
-    fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
-    fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
-    kx_sq = (2.0 * np.pi * fx) ** 2
-    ky_sq = (2.0 * np.pi * fy) ** 2
-    kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
-    prop_mask = kz_sq > 0
-    kz = np.where(prop_mask, np.sqrt(np.where(prop_mask, kz_sq, 0.0)), 0.0)
-    H_np = np.where(prop_mask, np.exp(1j * kz * z), 0.0).astype(target_cdtype)
-    if bandlimit and z != 0:
-        Lx_phys = Nx_in * dx_in
-        Ly_phys = Ny_in * dy_in
-        fx_max = Lx_phys / (2.0 * wavelength * abs(z))
-        fy_max = Ly_phys / (2.0 * wavelength * abs(z))
-        bl_mask = ((np.abs(fx)[None, :] <= fx_max)
-                   & (np.abs(fy)[:, None] <= fy_max))
-        H_np = np.where(bl_mask, H_np, 0.0).astype(target_cdtype)
-
-    if xp is np:
-        H = H_np
+    #
+    # H depends only on the input geometry (Ny_in, Nx_in, dy_in, dx_in,
+    # wavelength, z, bandlimit, dtype) -- the user-specified output grid
+    # (dx_out, N_out, centre_out) only enters in the Bluestein step
+    # below.  Cache H on the input-geometry signature so repeat calls
+    # at the same input plane onto different output grids share one
+    # H build.  ``'ASM_MFT'`` tag keeps these entries disjoint from
+    # plain ASM, since this builder uses ``fx <= fx_max`` (closed
+    # interval) where ASM uses ``fx < fx_max`` -- a one-bin boundary
+    # difference we preserve to avoid changing documented behaviour.
+    if is_jax:
+        # JAX path: build under the tracer (no host-side cache).
+        fx = (xp.arange(Nx_in, dtype=xp.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
+        fy = (xp.arange(Ny_in, dtype=xp.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
+        kx_sq = (2.0 * float(np.pi) * fx) ** 2
+        ky_sq = (2.0 * float(np.pi) * fy) ** 2
+        kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
+        prop_mask = kz_sq > 0
+        kz = xp.where(prop_mask, xp.sqrt(xp.where(prop_mask, kz_sq, 0.0)),
+                      0.0)
+        H = xp.where(prop_mask, xp.exp(1j * kz * z), 0.0).astype(target_cdtype)
+        if bandlimit and z != 0:
+            Lx_phys = Nx_in * dx_in
+            Ly_phys = Ny_in * dy_in
+            fx_max = Lx_phys / (2.0 * wavelength * abs(z))
+            fy_max = Ly_phys / (2.0 * wavelength * abs(z))
+            bl_mask = ((xp.abs(fx)[None, :] <= fx_max)
+                       & (xp.abs(fy)[:, None] <= fy_max))
+            H = xp.where(bl_mask, H, 0.0).astype(target_cdtype)
     else:
-        H = xp.asarray(H_np)
+        # NumPy / CuPy paths share a NumPy-host H cache; CuPy uploads
+        # via xp.asarray on demand.
+        h_key = (int(Ny_in), int(Nx_in), float(dy_in), float(dx_in),
+                 float(wavelength), float(z),
+                 bool(bandlimit),
+                 np.dtype(target_cdtype).str, 'ASM_MFT')
+        H_np = _h_cache_lookup(h_key)
+        if H_np is None:
+            fx = (np.arange(Nx_in, dtype=np.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
+            fy = (np.arange(Ny_in, dtype=np.float64) - Ny_in / 2.0) / (Ny_in * dy_in)
+            kx_sq = (2.0 * np.pi * fx) ** 2
+            ky_sq = (2.0 * np.pi * fy) ** 2
+            kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
+            prop_mask = kz_sq > 0
+            kz = np.where(prop_mask,
+                          np.sqrt(np.where(prop_mask, kz_sq, 0.0)), 0.0)
+            H_np = np.where(prop_mask, np.exp(1j * kz * z), 0.0).astype(
+                target_cdtype)
+            if bandlimit and z != 0:
+                Lx_phys = Nx_in * dx_in
+                Ly_phys = Ny_in * dy_in
+                fx_max = Lx_phys / (2.0 * wavelength * abs(z))
+                fy_max = Ly_phys / (2.0 * wavelength * abs(z))
+                bl_mask = ((np.abs(fx)[None, :] <= fx_max)
+                           & (np.abs(fy)[:, None] <= fy_max))
+                H_np = np.where(bl_mask, H_np, 0.0).astype(target_cdtype)
+            _h_cache_store(h_key, H_np)
+        H = H_np if xp is np else xp.asarray(H_np)
 
     # ----- 2) FFT input to angular spectrum (centred convention) ------------
     # Match the existing angular_spectrum_propagate's fftshift/ifftshift
@@ -2209,6 +2291,7 @@ def rayleigh_sommerfeld_propagate(
     wavelength,
     dx,
     dy=None,
+    bandlimit=False,
     use_gpu=False,
     verbose=False
 ):
@@ -2248,6 +2331,17 @@ def rayleigh_sommerfeld_propagate(
         Grid spacing in x [m].
     dy : float, optional
         Grid spacing in y [m].  Defaults to dx.
+    bandlimit : bool, default False
+        Apply a Matsushima-style frequency cutoff to the FFT'd kernel
+        ``H = FFT(h)``.  Default ``False`` preserves the historical
+        "exact Green's function" character of RS that justifies its
+        use over ASM in the near field.  Set ``True`` to suppress
+        aliasing artifacts on coarse grids at long propagation
+        distances (where the kernel chirp under-samples on the
+        discrete grid, the same regime where ASM's ``bandlimit=True``
+        default is needed).  Cutoff is computed on the padded
+        (2N x 2N) grid so the resulting bandwidth budget matches the
+        FFT length actually used by the convolution.
     use_gpu : bool, default False
         Use CuPy GPU acceleration if available.
     verbose : bool, default False
@@ -2277,6 +2371,15 @@ def rayleigh_sommerfeld_propagate(
     results.  For intermediate distances they agree to machine precision
     when ASM uses no band-limiting (``bandlimit=False``).
 
+    **H caching:** the FFT'd kernel ``H`` is cached on the NumPy backend
+    keyed on ``(2*Ny, 2*Nx, dy, dx, wavelength, z, bandlimit, dtype)``.
+    Repeat calls at the same geometry skip the kernel build and FFT
+    (~30-40% of total RS time on 2k+ grids).  The cache is shared
+    with :func:`angular_spectrum_propagate` and obeys the same byte
+    budgets configured via :func:`set_asm_cache_size`.  CuPy and JAX
+    arrays are kept out of the cache (host-side dict can't safely
+    retain device pointers / traced objects); rebuild every call.
+
     References
     ----------
     [1] Goodman, J.W. "Introduction to Fourier Optics" (3rd ed.),
@@ -2284,6 +2387,10 @@ def rayleigh_sommerfeld_propagate(
     [2] Shen, F. and Wang, A. (2006). "Fast-Fourier-transform based
         numerical integration method for the Rayleigh-Sommerfeld
         diffraction formula." Appl. Opt. 45(6): 1102-1110.
+    [3] Matsushima, K. and Shimobaba, T. (2009). "Band-limited angular
+        spectrum method for numerical simulation of free-space
+        propagation in far and near fields." Opt. Express 17(22):
+        19662-19673.
 
     Examples
     --------
@@ -2317,57 +2424,124 @@ def rayleigh_sommerfeld_propagate(
     if dy is None:
         dy = dx
 
+    # Target complex dtype for h, H, and the padded buffer.  Inferred
+    # from E_in so the caller controls precision via input dtype.
+    # Non-complex input falls back to DEFAULT_COMPLEX_DTYPE to match
+    # the standardisation used by angular_spectrum_propagate and the
+    # MFT propagator family.
+    if xp.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+
     k = 2 * np.pi / wavelength
 
     # -- zero-pad to avoid circular convolution --------------------------------
     Ny2 = 2 * Ny
     Nx2 = 2 * Nx
 
+    # ── H cache (NumPy backend only) ─────────────────────────────────
+    # Geometry signature.  Hits return the previously-built H without
+    # re-running the kernel construction or its FFT (~30-40% of total
+    # RS time on 2k+ grids).  The 'RS' tag keeps RS keys disjoint from
+    # ASM keys even when the unpadded grid sizes happen to coincide.
+    h_key = None
+    H = None
+    if xp is np:
+        h_key = (int(Ny2), int(Nx2), float(dy), float(dx),
+                 float(wavelength), float(z), bool(bandlimit),
+                 np.dtype(target_cdtype).str, 'RS')
+        H = _h_cache_lookup(h_key)
+
+    cache_hit = H is not None
+
+    if H is None:
+        # -- build the RS impulse response h(x, y, z) on the padded grid -------
+        x = (xp.arange(Nx2) - Nx2 / 2) * dx
+        y = (xp.arange(Ny2) - Ny2 / 2) * dy
+        X, Y = xp.meshgrid(x, y, indexing='xy')
+        r = xp.sqrt(X ** 2 + Y ** 2 + z ** 2)
+        h = (z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r) * (1j * k - 1.0 / r)
+        h = h * (dx * dy)
+        if h.dtype != target_cdtype:
+            h = h.astype(target_cdtype)
+
+        if verbose:
+            print(f"  RS propagation: z = {z*1e3:.3f} mm  (H cache miss)")
+            print(f"  Grid: {Ny}x{Nx} -> padded {Ny2}x{Nx2}")
+            print(f"  Wavelength: {wavelength*1e9:.1f} nm")
+            try:
+                print(f"  Kernel max |h|: {float(xp.max(xp.abs(h))):.4e}")
+            except Exception as _exc:
+                # xp.max + float() can fail under JAX tracing where h is
+                # an abstract array.  Cosmetic print failure -- demote to
+                # a brief diagnostic so debug runs surface the cause.
+                print(f"  Kernel max |h|: <unavailable: "
+                      f"{type(_exc).__name__}>")
+
+        # -- FFT the kernel ----------------------------------------------------
+        if is_jax:
+            H = xp.fft.fft2(xp.fft.ifftshift(h))
+        elif xp is np:
+            H = _fft2(np.fft.ifftshift(h))
+        else:
+            H = xp.fft.fft2(xp.fft.ifftshift(h))
+
+        # -- Matsushima-style bandlimit on the padded H ------------------------
+        # Cutoff matches the ASM derivation but uses the padded extent
+        # (Lx2 = 2*Nx*dx) since the FFT length is what determines the
+        # discrete frequency support.  The mask is built in centred
+        # order then ifftshifted to align with H's DC-at-corner layout.
+        if bandlimit and z != 0:
+            fx = (np.arange(Nx2) - Nx2 / 2) / (Nx2 * dx)
+            fy = (np.arange(Ny2) - Ny2 / 2) / (Ny2 * dy)
+            Lx2 = Nx2 * dx
+            Ly2 = Ny2 * dy
+            fx_max = Lx2 / (2 * wavelength * abs(z))
+            fy_max = Ly2 / (2 * wavelength * abs(z))
+            bl_x = np.abs(fx) < fx_max
+            bl_y = np.abs(fy) < fy_max
+            mask = (bl_y[:, None] & bl_x[None, :])
+            mask = np.fft.ifftshift(mask)
+            mask_c = mask.astype(target_cdtype)
+            if xp is np:
+                H = H * mask_c
+            else:
+                H = H * xp.asarray(mask_c)
+            if verbose:
+                kept_frac = float(np.mean(mask))
+                print(f"  Bandlimit: keeping {kept_frac*100:.1f}% of "
+                      f"padded spectrum")
+
+        # Store under the NumPy key only.  See _h_cache_store for the
+        # byte-budget eviction policy.  Cached H is used read-only.
+        if h_key is not None:
+            _h_cache_store(h_key, H)
+    elif verbose:
+        print(f"  RS propagation: z = {z*1e3:.3f} mm  (H cache HIT)")
+
+    # -- build the padded input field -----------------------------------------
     if is_jax:
         # JAX is functional / immutable -- can't write into a pre-allocated
         # array.  Build the padded array via jnp.zeros + at[].set.
-        E_padded = xp.zeros((Ny2, Nx2), dtype=xp.complex128)
+        E_padded = xp.zeros((Ny2, Nx2), dtype=target_cdtype)
         y0 = Ny // 2
         x0 = Nx // 2
         E_padded = E_padded.at[y0:y0 + Ny, x0:x0 + Nx].set(E_in)
     else:
-        E_padded = xp.zeros((Ny2, Nx2), dtype=xp.complex128)
+        E_padded = xp.zeros((Ny2, Nx2), dtype=target_cdtype)
         y0 = Ny // 2
         x0 = Nx // 2
         E_padded[y0:y0 + Ny, x0:x0 + Nx] = E_in
 
-    # -- build the RS impulse response h(x, y, z) on the padded grid -----------
-    x = (xp.arange(Nx2) - Nx2 / 2) * dx
-    y = (xp.arange(Ny2) - Ny2 / 2) * dy
-    X, Y = xp.meshgrid(x, y, indexing='xy')
-    r = xp.sqrt(X ** 2 + Y ** 2 + z ** 2)
-    h = (z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r) * (1j * k - 1.0 / r)
-    h = h * (dx * dy)
-
-    if verbose:
-        print(f"  RS propagation: z = {z*1e3:.3f} mm")
-        print(f"  Grid: {Ny}x{Nx} -> padded {Ny2}x{Nx2}")
-        print(f"  Wavelength: {wavelength*1e9:.1f} nm")
-        try:
-            print(f"  Kernel max |h|: {float(xp.max(xp.abs(h))):.4e}")
-        except Exception as _exc:
-            # xp.max + float() can fail under JAX tracing where h is
-            # an abstract array.  Cosmetic print failure -- demote to
-            # a brief diagnostic so debug runs surface the cause.
-            print(f"  Kernel max |h|: <unavailable: "
-                  f"{type(_exc).__name__}>")
-
     # -- convolve via FFT ------------------------------------------------------
     if is_jax:
-        H = xp.fft.fft2(xp.fft.ifftshift(h))
         E_fft = xp.fft.fft2(E_padded)
         E_conv = xp.fft.ifft2(E_fft * H)
     elif xp is np:
-        H = _fft2(np.fft.ifftshift(h))
         E_fft = _fft2(E_padded)
         E_conv = _ifft2(E_fft * H)
     else:
-        H = xp.fft.fft2(xp.fft.ifftshift(h))
         E_fft = xp.fft.fft2(E_padded)
         E_conv = xp.fft.ifft2(E_fft * H)
 
@@ -2542,31 +2716,81 @@ def scalable_angular_spectrum_propagate(
     as1 = (N + 1) // 2
     psi_p[as1:as1 + N, as1:as1 + N] = E_in
 
-    # -- spatial-frequency axes (natural FFT order) --------------------------
-    #   fftfreq(N_new, d=L_new/N_new) = fftfreq(N_new, d=dx)
-    f_x = xp.fft.fftfreq(N_new, d=dx).astype(target_fdtype)
-    f_y = f_x  # square grid
+    # ── Kernel cache (NumPy backend) ────────────────────────────────
+    # SAS builds three padded-grid kernels per call: the ASM-minus-Fresnel
+    # precompensation ``delta_H``, the Fresnel input chirp ``H1``, and
+    # (when skip_final_phase is False) the output-plane quadratic phase
+    # ``H2``.  All three depend only on (N_new, dx, lam, z,
+    # skip_final_phase, dtype), so we bundle them under a single cache
+    # entry keyed on that signature.  Cached as a tuple
+    # ``(delta_H, H1, H2_or_None)``; _entry_bytes accounts for tuple
+    # bundles in the H-cache byte budget.
+    h_key = None
+    cached = None
+    if xp is np:
+        h_key = (int(N_new), float(dx), float(lam), float(z),
+                 bool(skip_final_phase),
+                 np.dtype(target_cdtype).str, 'SAS')
+        cached = _h_cache_lookup(h_key)
 
-    # -- band-limit W: ASM-vs-Fresnel validity region ------------------------
-    # Paper eq. (12): the precompensation is valid wherever both
-    # inequalities hold, else drop the mode.
-    two_z = 2.0 * z if z != 0 else 1e-30
-    cx = lam * f_x[None, :]
-    cy = lam * f_y[:, None]
-    tx = L_new / two_z + xp.abs(cx)
-    ty = L_new / two_z + xp.abs(cy)
-    W = ((cx ** 2 * (1.0 + tx ** 2) / tx ** 2 + cy ** 2 <= 1.0)
-         & (cy ** 2 * (1.0 + ty ** 2) / ty ** 2 + cx ** 2 <= 1.0))
+    if cached is None:
+        # -- spatial-frequency axes (natural FFT order) -------------------
+        #   fftfreq(N_new, d=L_new/N_new) = fftfreq(N_new, d=dx)
+        f_x = xp.fft.fftfreq(N_new, d=dx).astype(target_fdtype)
+        f_y = f_x  # square grid
 
-    # -- ASM-minus-Fresnel precompensation phase -----------------------------
-    #   H_AS  = sqrt(1 - (lam*fx)^2 - (lam*fy)^2)
-    #   H_Fr  = 1 - ((lam*fx)^2 + (lam*fy)^2) / 2
-    #   delta_H = W * exp( i * k * z * (H_AS - H_Fr) )
-    k = 2 * np.pi / lam
-    h_AS = xp.sqrt((1.0 + 0j) - cx ** 2 - cy ** 2)
-    h_Fr = 1.0 - 0.5 * (cx ** 2 + cy ** 2)
-    delta_H = W * xp.exp(1j * k * z * (h_AS - h_Fr))
-    delta_H = delta_H.astype(target_cdtype, copy=False)
+        # -- band-limit W: ASM-vs-Fresnel validity region -----------------
+        # Paper eq. (12): the precompensation is valid wherever both
+        # inequalities hold, else drop the mode.
+        two_z = 2.0 * z if z != 0 else 1e-30
+        cx = lam * f_x[None, :]
+        cy = lam * f_y[:, None]
+        tx = L_new / two_z + xp.abs(cx)
+        ty = L_new / two_z + xp.abs(cy)
+        W = ((cx ** 2 * (1.0 + tx ** 2) / tx ** 2 + cy ** 2 <= 1.0)
+             & (cy ** 2 * (1.0 + ty ** 2) / ty ** 2 + cx ** 2 <= 1.0))
+
+        # -- ASM-minus-Fresnel precompensation phase ----------------------
+        #   H_AS  = sqrt(1 - (lam*fx)^2 - (lam*fy)^2)
+        #   H_Fr  = 1 - ((lam*fx)^2 + (lam*fy)^2) / 2
+        #   delta_H = W * exp( i * k * z * (H_AS - H_Fr) )
+        k = 2 * np.pi / lam
+        h_AS = xp.sqrt((1.0 + 0j) - cx ** 2 - cy ** 2)
+        h_Fr = 1.0 - 0.5 * (cx ** 2 + cy ** 2)
+        delta_H = W * xp.exp(1j * k * z * (h_AS - h_Fr))
+        delta_H = delta_H.astype(target_cdtype, copy=False)
+
+        # -- Fresnel chirp on natural-order grid --------------------------
+        coord_centred = xp.linspace(
+            -L_new / 2, L_new / 2, N_new, endpoint=False,
+            dtype=target_fdtype)
+        coord_nat = xp.fft.ifftshift(coord_centred)
+        x = coord_nat[None, :]
+        y = coord_nat[:, None]
+        H1 = xp.exp(1j * k / (2.0 * z) * (x ** 2 + y ** 2))
+        if H1.dtype != target_cdtype:
+            H1 = H1.astype(target_cdtype, copy=False)
+
+        # -- output-plane quadratic phase (optional) ----------------------
+        if skip_final_phase:
+            H2 = None
+        else:
+            dq = lam * z / L_new  # output pitch on padded grid
+            Q = dq * N_new        # full extent of padded output grid
+            q_centred = xp.linspace(
+                -Q / 2, Q / 2, N_new, endpoint=False, dtype=target_fdtype)
+            q_nat = xp.fft.ifftshift(q_centred)
+            qx = q_nat[None, :]
+            qy = q_nat[:, None]
+            H2 = xp.exp(1j * k * z) * xp.exp(
+                1j * k / (2.0 * z) * (qx ** 2 + qy ** 2))
+            if H2.dtype != target_cdtype:
+                H2 = H2.astype(target_cdtype, copy=False)
+
+        if h_key is not None:
+            _h_cache_store(h_key, (delta_H, H1, H2))
+    else:
+        delta_H, H1, H2 = cached
 
     # -- apply precompensation in frequency space ---------------------------
     # The reference uses ifftshift(psi_p) then fft2, i.e. treat the centred
@@ -2575,15 +2799,6 @@ def scalable_angular_spectrum_propagate(
         xp.fft.fft2(xp.fft.ifftshift(psi_p)) * delta_H)
 
     # -- Fresnel chirp + single FFT -----------------------------------------
-    # x,y arrays are in natural FFT order (ifftshifted centred coords).
-    coord_centred = xp.linspace(
-        -L_new / 2, L_new / 2, N_new, endpoint=False,
-        dtype=target_fdtype)
-    coord_nat = xp.fft.ifftshift(coord_centred)
-    x = coord_nat[None, :]
-    y = coord_nat[:, None]
-
-    H1 = xp.exp(1j * k / (2.0 * z) * (x ** 2 + y ** 2))
     # Fresnel-style amplitude prefactor so the output is the physical
     # diffracted field (not a raw DFT sample).  This matches the
     # normalization used by fresnel_propagate in this library and is
@@ -2593,15 +2808,6 @@ def scalable_angular_spectrum_propagate(
         psi_p_final = amp_pref * xp.fft.fftshift(
             xp.fft.fft2(H1 * psi_precomp))
     else:
-        dq = lam * z / L_new  # output pitch on padded grid
-        Q = dq * N_new        # full extent of padded output grid
-        q_centred = xp.linspace(
-            -Q / 2, Q / 2, N_new, endpoint=False, dtype=target_fdtype)
-        q_nat = xp.fft.ifftshift(q_centred)
-        qx = q_nat[None, :]
-        qy = q_nat[:, None]
-        H2 = xp.exp(1j * k * z) * xp.exp(
-            1j * k / (2.0 * z) * (qx ** 2 + qy ** 2))
         psi_p_final = amp_pref * xp.fft.fftshift(
             H2 * xp.fft.fft2(H1 * psi_precomp))
 
@@ -2618,7 +2824,10 @@ def scalable_angular_spectrum_propagate(
         print(f"  Output grid: {N}x{N}  pitch {dx_out*1e6:.3f} um  "
               f"extent {N*dx_out*1e3:.3f} mm  "
               f"(zoom {dx_out/dx:.2f}x)")
-        kept = float(xp.sum(W)) / (N_new * N_new)
+        # delta_H = W * exp(...) is zero exactly where W is, so the
+        # nonzero count of delta_H reproduces W's count without needing
+        # W itself (which is now scoped inside the cache-miss branch).
+        kept = float(xp.sum(delta_H != 0)) / (N_new * N_new)
         print(f"  Band-limit kept: {kept*100:.1f}% of SAS spectrum")
         if z_limit > 0:
             print(f"  z_limit from paper: {z_limit*1e3:.2f} mm")

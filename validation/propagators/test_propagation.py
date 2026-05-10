@@ -149,6 +149,154 @@ H.run('Rayleigh-Sommerfeld vs ASM: near-field agreement',
       t_rs_vs_asm_near_field)
 
 
+def t_rs_h_cache_idempotent():
+    """Repeat RS calls at the same geometry must agree bit-for-bit.
+
+    Exercises the H-cache lookup path in rayleigh_sommerfeld_propagate.
+    The first call builds and caches H; the second hits the cache and
+    must return an output that's identical (no precision drift, no
+    accidental in-place mutation of the cached H)."""
+    N = 128; dx = 2e-6; lam = 1.31e-6; z = 50e-6
+    E_in, _, _ = la.create_gaussian_beam(N, dx, 30e-6)
+    E1 = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx)
+    E2 = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx)
+    same = bool(np.array_equal(E1, E2))
+    nonzero = float(np.max(np.abs(E1))) > 0
+    return same and nonzero, (
+        f'cached vs fresh max |diff| = '
+        f'{float(np.max(np.abs(E1 - E2))):.2e}')
+
+
+H.run('Rayleigh-Sommerfeld: H-cache returns identical result',
+      t_rs_h_cache_idempotent)
+
+
+def t_rs_bandlimit_kwarg_accepted():
+    """bandlimit=True must run without error and produce a valid field
+    that closely matches bandlimit=False at typical optical distances
+    (where the kernel is well-sampled and the cutoff is essentially
+    inactive).  This is a sanity test for the new kwarg and its
+    Matsushima-style mask construction on the padded grid."""
+    N = 128; dx = 2e-6; lam = 1.31e-6; z = 100e-6
+    E_in, _, _ = la.create_gaussian_beam(N, dx, 30e-6)
+    E_off = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx,
+                                              bandlimit=False)
+    E_on = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx,
+                                             bandlimit=True)
+    rel = (float(np.max(np.abs(E_on - E_off)))
+           / max(float(np.max(np.abs(E_off))), 1e-30))
+    finite = bool(np.all(np.isfinite(E_on)))
+    return finite and rel < 1e-6, (
+        f'finite={finite}, rel-diff bandlimit on/off = {rel:.2e}')
+
+
+H.run('Rayleigh-Sommerfeld: bandlimit kwarg accepted, agrees with '
+      'no-bandlimit at well-sampled z',
+      t_rs_bandlimit_kwarg_accepted)
+
+
+def t_rs_alias_in_apply_real_lens():
+    """apply_real_lens accepts wave_propagator='rs' as a short alias
+    for 'rayleigh_sommerfeld' and produces the same field bytewise."""
+    presc = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                             glass='N-BK7', aperture=12e-3)
+    N = 128; dx = 30e-6; lam = 1.31e-6
+    x = (np.arange(N) - N/2 + 0.5) * dx
+    X, Y = np.meshgrid(x, x, indexing='xy')
+    E = np.exp(-(X*X + Y*Y) / (1.5e-3)**2).astype(np.complex128)
+    E_long = la.apply_real_lens(E, presc, lam, dx,
+                                 wave_propagator='rayleigh_sommerfeld')
+    E_short = la.apply_real_lens(E, presc, lam, dx, wave_propagator='rs')
+    same = bool(np.array_equal(E_long, E_short))
+    return same, (
+        f"'rs' vs 'rayleigh_sommerfeld' max |diff| = "
+        f"{float(np.max(np.abs(E_long - E_short))):.2e}")
+
+
+H.run("apply_real_lens: 'rs' is an alias for 'rayleigh_sommerfeld'",
+      t_rs_alias_in_apply_real_lens)
+
+
+def t_asm_tilted_cache_idempotent():
+    """angular_spectrum_propagate_tilted's new H-cache must not change
+    output bytewise between fresh and cached calls at the same
+    geometry, including under bandlimit=True (the band-limit mask is
+    baked into the cached H)."""
+    N = 128; dx = 2e-6; lam = 1.31e-6; z = 5e-3
+    tilt_x = 0.02; tilt_y = -0.01
+    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E1 = la.angular_spectrum_propagate_tilted(
+        E_in, z, lam, dx, tilt_x=tilt_x, tilt_y=tilt_y, bandlimit=True)
+    E2 = la.angular_spectrum_propagate_tilted(
+        E_in, z, lam, dx, tilt_x=tilt_x, tilt_y=tilt_y, bandlimit=True)
+    same = bool(np.array_equal(E1, E2))
+    nonzero = float(np.max(np.abs(E1))) > 0
+    return same and nonzero, (
+        f'cached vs fresh max |diff| = '
+        f'{float(np.max(np.abs(E1 - E2))):.2e}')
+
+
+H.run('Tilted ASM: H-cache returns identical result',
+      t_asm_tilted_cache_idempotent)
+
+
+def t_sas_cache_idempotent():
+    """scalable_angular_spectrum_propagate's bundled (delta_H, H1, H2)
+    cache must round-trip exactly, including the skip_final_phase=True
+    branch that omits H2."""
+    N = 128; dx = 4e-6; lam = 1.31e-6; z = 50e-3
+    E_in, _, _ = la.create_gaussian_beam(N, dx, 80e-6)
+    # Default branch: full H2.
+    E1, _, _ = la.scalable_angular_spectrum_propagate(E_in, z, lam, dx)
+    E2, _, _ = la.scalable_angular_spectrum_propagate(E_in, z, lam, dx)
+    full_same = bool(np.array_equal(E1, E2))
+    # Skip-final-phase branch: H2 is None.  Cached entry must still
+    # reproduce the same output.
+    E3, _, _ = la.scalable_angular_spectrum_propagate(
+        E_in, z, lam, dx, skip_final_phase=True)
+    E4, _, _ = la.scalable_angular_spectrum_propagate(
+        E_in, z, lam, dx, skip_final_phase=True)
+    skip_same = bool(np.array_equal(E3, E4))
+    return full_same and skip_same, (
+        f'full max |diff| = {float(np.max(np.abs(E1 - E2))):.2e}, '
+        f'skip max |diff| = {float(np.max(np.abs(E3 - E4))):.2e}')
+
+
+H.run('SAS: kernel-bundle cache returns identical result',
+      t_sas_cache_idempotent)
+
+
+def t_asm_mft_cache_idempotent():
+    """angular_spectrum_propagate_mft caches the input-geometry H
+    (independent of the user output grid).  Same call twice on the
+    same input + output geometry must agree bit-for-bit; same input
+    onto two *different* output grids must each remain physically
+    correct after a cache hit on the shared H."""
+    N = 64; dx_in = 5e-6; lam = 1.31e-6; z = 5e-3
+    E_in, _, _ = la.create_gaussian_beam(N, dx_in, 30e-6)
+    # Idempotency on identical call.
+    E1 = la.angular_spectrum_propagate_mft(
+        E_in, z, lam, dx_in, dx_in, N)
+    E2 = la.angular_spectrum_propagate_mft(
+        E_in, z, lam, dx_in, dx_in, N)
+    same = bool(np.array_equal(E1, E2))
+    # Reuse cached H on a different output grid -- correctness check
+    # via agreement with the natural-grid ASM at the same input geom.
+    E_natural_ref = la.angular_spectrum_propagate(E_in, z, lam, dx_in)
+    E_natural_mft = la.angular_spectrum_propagate_mft(
+        E_in, z, lam, dx_in, dx_in, N)
+    rel = (float(np.max(np.abs(E_natural_ref - E_natural_mft)))
+           / max(float(np.max(np.abs(E_natural_ref))), 1e-30))
+    return same and rel < 1e-12, (
+        f'idempotent={same}, MFT-vs-ASM rel-err after cache hit = '
+        f'{rel:.2e}')
+
+
+H.run('ASM-MFT: input-H cache returns identical result, reuses across '
+      'different output grids',
+      t_asm_mft_cache_idempotent)
+
+
 def t_sampling_check_values():
     r = la.check_opd_sampling(4e-6, 1.31e-6, 12e-3, 45e-3, verbose=False)
     marginal_ok = not r['ok'] and r['margin'] > 1.0

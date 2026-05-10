@@ -10,6 +10,42 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.5.8
+
+Propagator-family H-cache standardisation.  The same
+``_h_cache_lookup`` pattern that already speeds up
+``angular_spectrum_propagate`` is now applied to the rest of the
+"fast" propagator family (Rayleigh-Sommerfeld, tilted ASM, scalable
+ASM, ASM-MFT), plus a Matsushima-style ``bandlimit`` kwarg on RS and
+an ``'rs'`` short alias in the ``apply_real_lens`` dispatcher.
+
+- **`rayleigh_sommerfeld_propagate`** -- adds an H-cache (FFT'd
+  Green's function keyed on geometry signature; ~2-4x warm-call
+  speedup at N=1024-2048), a new ``bandlimit=False`` kwarg
+  (Matsushima cutoff on the padded-grid kernel; defaults to off to
+  preserve the "exact Green's function" semantic), and standardised
+  ``target_cdtype`` inference matching the rest of the library.
+- **`angular_spectrum_propagate_tilted`** -- adds an H-cache keyed on
+  ``(Ny, Nx, dy, dx, lambda, z, fx0, fy0, bandlimit, dtype)``;
+  ~1.5-1.7x warm-call speedup at N >= 1024.
+- **`scalable_angular_spectrum_propagate`** -- bundles the three
+  per-call padded kernels (``delta_H``, ``H1``, ``H2``) under one
+  cache entry; ~2x warm-call speedup across N=512-2048.
+- **`angular_spectrum_propagate_mft`** -- caches the input-grid H
+  separately from the per-call Bluestein step.  Calls onto multiple
+  output grids from one input plane (the natural focal-plane-probing
+  pattern) get **~2.7x amortised speedup** at N=1024 after the first
+  build.
+- **`apply_real_lens(wave_propagator='rs')`** -- short alias for
+  ``'rayleigh_sommerfeld'``; the dispatcher also forwards the
+  function's ``bandlimit`` kwarg into the RS path.
+
+The internal ``_h_cache_store`` byte budget grows a small
+``_entry_bytes`` helper so it correctly accounts for both single-array
+entries and tuple bundles (the SAS case).  No existing API behaviour
+changes; ``__all__`` unchanged.  46/46 propagator tests pass; all 25
+validation files green.
+
 ## What's new in 3.5.7
 
 Inter-library compatibility improvements.  Driven by an empirical

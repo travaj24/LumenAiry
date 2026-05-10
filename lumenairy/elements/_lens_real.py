@@ -491,6 +491,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
             #   'sas'                scalable angular spectrum + resample
             #   'fresnel'            single-FFT Fresnel + resample
             #   'rayleigh_sommerfeld' Rayleigh-Sommerfeld convolution
+            #     (alias: 'rs')
             #
             # Physically ASM is the right choice for the short (mm) glass
             # thicknesses typical of lenses; the other three are exposed
@@ -518,10 +519,10 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
                 if abs(dx_new - dx) > dx * 1e-6:
                     E, _ = resample_field(
                         E, dx_new, dx, N_out=E.shape[-1])
-            elif wave_propagator == 'rayleigh_sommerfeld':
+            elif wave_propagator in ('rayleigh_sommerfeld', 'rs'):
                 from ..propagators.propagation import rayleigh_sommerfeld_propagate
                 E = rayleigh_sommerfeld_propagate(
-                    E, thickness, lam_medium, dx)
+                    E, thickness, lam_medium, dx, bandlimit=bandlimit)
             elif wave_propagator == 'asm':
                 E = angular_spectrum_propagate(
                     E, thickness, lam_medium, dx, bandlimit=bandlimit)
@@ -529,7 +530,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
                 raise ValueError(
                     f"apply_real_lens: unknown wave_propagator "
                     f"{wave_propagator!r}.  Supported: 'asm', 'sas', "
-                    f"'fresnel', 'rayleigh_sommerfeld'.")
+                    f"'fresnel', 'rayleigh_sommerfeld' (alias 'rs').")
             # Bulk absorption: exp(-2*pi * kappa * t / lambda0)
             if absorption and n_medium_kappa != 0.0:
                 E = E * xp.exp(-k0 * n_medium_kappa * thickness)
