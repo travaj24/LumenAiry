@@ -1288,6 +1288,216 @@ def export_zemax_lens_data(prescription, path, wavelength=1.31e-6,
         f.write('\n'.join(lines) + '\n')
 
 
+def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
+                            stop_surface=0, aperture_diameter=None,
+                            back_focal_length=None, name=None):
+    """3.7.0: cb/mirror-aware .zmx writer.
+
+    Walks ``prescription['elements']`` (full chronological list with
+    mirrors) and ``prescription['coord_breaks']``, emitting
+    ``TYPE COORDBRK`` surfaces with ``PARM 1..6`` filled in,
+    ``GLAS MIRROR`` rows for reflective surfaces, and standard
+    refractive surfaces with the appropriate ``GLAS`` and curvature.
+    Thicknesses are converted from physical-positive (the GUI's
+    internal convention since 3.6.1 hotfix-6) back to Zemax-signed
+    (negative post-mirror so the unfolded cumulative z keeps moving
+    forward) by tracking mirror parity.
+
+    Used by :func:`export_zemax_zmx` when the prescription dict
+    carries the new keys; the pre-3.7 lens-only path remains the
+    fallback.
+    """
+    full = prescription['elements']
+    cbs = prescription.get('coord_breaks') or []
+    all_thicknesses = (prescription.get('all_thicknesses')
+                        or prescription.get('thicknesses') or [])
+    if aperture_diameter is None:
+        aperture_diameter = prescription.get('aperture_diameter', 25.4e-3)
+    name = name or prescription.get('name',
+        os.path.splitext(os.path.basename(path))[0])
+    epd_mm = aperture_diameter * 1e3
+    wvl_um = wavelength * 1e6
+    semi_dia_mm = 0.5 * aperture_diameter * 1e3
+
+    # Index cb's by surf_num (after which Zemax surface they sit).
+    cb_at_surfnum = {}
+    for cb in cbs:
+        try:
+            sn = int(cb.get('surf_num', -1))
+        except (TypeError, ValueError):
+            continue
+        cb_at_surfnum.setdefault(sn, []).append(cb)
+
+    lines = []
+    lines.append('VERS 210000 0 123 0 0')
+    lines.append('MODE SEQ')
+    lines.append(f'NAME {name}')
+    lines.append('UNIT MM X W X CM MR CPMM')
+    lines.append(f'ENPD {epd_mm:.8f}')
+    lines.append('ENVD 2.0e+01 1 0')
+    lines.append('GFAC 0 0')
+    lines.append('GCAT SCHOTT MISC')
+    lines.append('RAIM 0 0 1 1 0 0 0 0 0')
+    lines.append('PUSH 0 0 0 0 0 0')
+    lines.append('SDMA 0 1 0')
+    lines.append('FTYP 0 0 1 1 0 0 0')
+    lines.append('ROPD 2')
+    lines.append('PICB 1')
+    lines.append('XFLN 0')
+    lines.append('YFLN 0')
+    lines.append('FWGN 1')
+    lines.append('VDXN 0')
+    lines.append('VDYN 0')
+    lines.append('VCXN 0')
+    lines.append('VCYN 0')
+    lines.append('VANN 0')
+    lines.append(f'WAVM 1 {wvl_um:.6f} 1.0')
+    lines.append('PWAV 1')
+
+    def _zemax_curv(R):
+        return 0.0 if (R is None or np.isinf(R)) else 1.0 / (R * 1e3)
+
+    # SURF 0: object at infinity
+    lines.append('SURF 0')
+    lines.append('  TYPE STANDARD')
+    lines.append('  CURV 0 0 0 0 0 ""')
+    lines.append('  DISZ INFINITY')
+    lines.append(f'  DIAM {semi_dia_mm:.6f} 0 0 0 1 ""')
+
+    # Walk the elements, interleaving cb's where they belong.
+    # The GUI's to_prescription tags each cb with the surf_num it
+    # sits at (i.e. the running counter increments AT the cb).
+    surf_counter = 0   # we just emitted SURF 0 (object)
+    # Track how many mirrors we've crossed so we can flip thickness
+    # signs back to Zemax's convention.
+    mirror_count = 0
+
+    # Build a flat list of (item_kind, payload, thickness_after_m)
+    # in the order the importer's output puts them, then emit SURFs.
+    flat = []
+    cb_iter = list(cbs)
+    cb_idx = 0
+    for ei, e in enumerate(full):
+        e_surf_num = int(e.get('surf_num', surf_counter + 1))
+        # Drain any cb's that target a surf <= e_surf_num.
+        while cb_idx < len(cb_iter):
+            sn = int(cb_iter[cb_idx].get('surf_num', 0))
+            if sn < e_surf_num:
+                flat.append(('cb', cb_iter[cb_idx], None))
+                cb_idx += 1
+            else:
+                break
+        flat.append(('elem', e, None))
+    while cb_idx < len(cb_iter):
+        flat.append(('cb', cb_iter[cb_idx], None))
+        cb_idx += 1
+
+    # Emit surfaces.  The thickness AFTER an element/cb comes from
+    # all_thicknesses indexed by element index; cb's get thickness 0
+    # (they don't advance, just transform the frame).
+    elem_idx_in_full = 0
+    for kind, payload, _ in flat:
+        surf_counter += 1
+        if kind == 'cb':
+            cb = payload
+            # COORDBRK entry.  PARM 1=decX_mm, 2=decY_mm,
+            # 3=tiltX_deg, 4=tiltY_deg, 5=tiltZ_deg, 6=order.
+            dx_mm = float(cb.get('decenter_x_m', 0.0)) * 1e3
+            dy_mm = float(cb.get('decenter_y_m', 0.0)) * 1e3
+            tx = float(cb.get('tilt_x_deg', 0.0))
+            ty = float(cb.get('tilt_y_deg', 0.0))
+            tz = float(cb.get('tilt_z_deg', 0.0))
+            order = int(cb.get('order', 0) or 0)
+            disz_mm = float(cb.get('thickness_m', 0.0)) * 1e3
+            # Apply mirror_count parity to flip sign back to Zemax.
+            if mirror_count % 2 == 1:
+                disz_mm = -disz_mm
+            lines.append(f'SURF {surf_counter}')
+            lines.append('  TYPE COORDBRK')
+            lines.append('  CURV 0.0 0 0.0 0.0 0')
+            lines.append(f'  PARM 1 {dx_mm:.10g}')
+            lines.append(f'  PARM 2 {dy_mm:.10g}')
+            lines.append(f'  PARM 3 {tx:.10g}')
+            lines.append(f'  PARM 4 {ty:.10g}')
+            lines.append(f'  PARM 5 {tz:.10g}')
+            lines.append(f'  PARM 6 {order}')
+            lines.append(f'  DISZ {disz_mm:.8f}')
+            lines.append('  DIAM 0 0 0 0 1 ""')
+            continue
+
+        # Element: refractive or mirror.  Thickness AFTER this elem
+        # comes from all_thicknesses[elem_idx_in_full].
+        e = payload
+        t_after_m = (all_thicknesses[elem_idx_in_full]
+                      if elem_idx_in_full < len(all_thicknesses) else 0.0)
+        elem_idx_in_full += 1
+        # Convert physical-positive back to Zemax-signed.
+        if mirror_count % 2 == 1:
+            t_after_m = -t_after_m
+        disz_mm = t_after_m * 1e3
+
+        e_type = e.get('element_type', 'surface')
+        R_m = e.get('radius', float('inf'))
+        conic = float(e.get('conic', 0.0) or 0.0)
+        sd_m = e.get('semi_diameter')
+        sd_mm_e = (float(sd_m) * 1e3
+                    if (sd_m is not None and np.isfinite(sd_m))
+                    else semi_dia_mm)
+        comment = (e.get('comment') or '').strip()
+        curv_val = _zemax_curv(R_m)
+        lines.append(f'SURF {surf_counter}')
+        if comment:
+            lines.append(f'  COMM {comment}')
+        if e_type == 'mirror':
+            lines.append('  TYPE STANDARD')
+            lines.append(f'  CURV {curv_val:.10f} 0 0 0 0 ""')
+            if conic != 0.0:
+                lines.append(f'  CONI {conic:.6f}')
+            lines.append('  GLAS MIRROR 0 0 1.5 50.0 0 0 0 0 0 0')
+            lines.append(f'  DISZ {disz_mm:.8f}')
+            lines.append(f'  DIAM {sd_mm_e:.6f} 0 0 0 1 ""')
+            mirror_count += 1
+        else:
+            lines.append('  TYPE STANDARD')
+            if surf_counter == stop_surface + 1:
+                lines.append('  STOP')
+            lines.append(f'  CURV {curv_val:.10f} 0 0 0 0 ""')
+            lines.append(f'  DISZ {disz_mm:.8f}')
+            if conic != 0.0:
+                lines.append(f'  CONI {conic:.6f}')
+            glass_after = e.get('glass_after', 'air')
+            if glass_after and glass_after.lower() not in ('air', ''):
+                lines.append(
+                    f'  GLAS {glass_after} 0 0 1.5 50.0 0 0 0 0 0 0')
+            asph = e.get('aspheric_coeffs') or {}
+            if asph:
+                # Replace TYPE STANDARD line above with EVENASPH.
+                for j in range(len(lines) - 1, -1, -1):
+                    if lines[j] == '  TYPE STANDARD':
+                        lines[j] = '  TYPE EVENASPH'
+                        break
+                for power in sorted(asph.keys()):
+                    if power <= 0 or power % 2 != 0:
+                        continue
+                    parm_idx = power // 2 - 1
+                    coeff_mm = asph[power] * (1e3 ** (1 - power))
+                    lines.append(f'  PARM {parm_idx} {coeff_mm:.10e}')
+            lines.append(f'  DIAM {sd_mm_e:.6f} 0 0 0 1 ""')
+
+    # Image surface
+    surf_counter += 1
+    lines.append(f'SURF {surf_counter}')
+    lines.append('  TYPE STANDARD')
+    lines.append('  CURV 0 0 0 0 0 ""')
+    lines.append('  DISZ 0.0')
+    lines.append(f'  DIAM {semi_dia_mm:.6f} 0 0 0 1 ""')
+
+    lines.append('BLNK ')
+
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(lines) + '\n')
+
+
 def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
                      stop_surface=0, aperture_diameter=None,
                      back_focal_length=None, name=None):
@@ -1297,6 +1507,14 @@ def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
     The produced file contains surface data, one wavelength, and an
     on-axis field.  Other Zemax settings use defaults; you may need to
     tweak glass catalogs or aperture conventions after opening the file.
+
+    3.7.0: when the prescription carries the full ``elements`` list
+    (with mirrors) and ``coord_breaks`` list, the writer emits
+    matching ``GLAS MIRROR`` and ``TYPE COORDBRK`` entries with the
+    correct PARM 1-6 fields so a round-trip ``load_zmx_prescription``
+    → GUI edit → ``export_zemax_zmx`` preserves fold geometry.  The
+    pre-3.7 lens-only path (``surfaces`` + ``thicknesses``) remains
+    the fallback when these keys are absent.
 
     Parameters
     ----------
@@ -1325,6 +1543,20 @@ def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
     session in Zemax and manually enter the rows from
     :func:`export_zemax_lens_data` instead.
     """
+    # 3.7.0: prefer the full chronological list when present (it
+    # carries mirrors and is aligned with all_thicknesses + the
+    # coord_breaks list).  Fall back to the lens-only path otherwise.
+    full_elements = prescription.get('elements')
+    coord_breaks = prescription.get('coord_breaks') or []
+    if full_elements is not None and (coord_breaks
+                                       or any(e.get('element_type') == 'mirror'
+                                              for e in full_elements)):
+        return _export_zemax_zmx_full(
+            prescription, path, wavelength=wavelength,
+            stop_surface=stop_surface,
+            aperture_diameter=aperture_diameter,
+            back_focal_length=back_focal_length, name=name)
+
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
     if aperture_diameter is None:

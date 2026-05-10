@@ -640,12 +640,13 @@ class SystemModel(QObject):
         return frames
 
     def surface_frames_2d_mm(self):
-        """3.6.1 hotfix-6: per-traced-surface 2D world frame
+        """3.6.1 hotfix-6 / 3.7.0: per-traced-surface 2D world frame
         ``(z, y, theta_rad)`` in trace order, plus the image-plane
-        frame appended at the end.  Same conventions as
-        :meth:`element_frames_2d_mm` (mirror_sign tracking, π flip
-        per mirror, decenter / tilt absorption).  Used by both
-        layout views to position rays in the folded world frame.
+        frame appended at the end.  When an element carries a tilt
+        / decenter, a coord-break frame is emitted BEFORE the
+        element's surfaces (matching the cb Surface emitted by
+        :meth:`_build_trace_surfaces_internal` so the trace history
+        and surface frames stay aligned).
         """
         surf_frames = []
         z, y, theta = 0.0, 0.0, 0.0
@@ -655,6 +656,11 @@ class SystemModel(QObject):
             d = float(getattr(elem, 'distance_mm', 0.0))
             z += d * np.cos(theta)
             y += d * np.sin(theta)
+            has_tilt = (
+                float(getattr(elem, 'tilt_x', 0.0)) != 0.0
+                or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
+                or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
+                or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
             dy = float(getattr(elem, 'decenter_y', 0.0))
             if dy:
                 z += dy * (-np.sin(theta))
@@ -662,6 +668,12 @@ class SystemModel(QObject):
             tx = float(getattr(elem, 'tilt_x', 0.0))
             if tx:
                 theta += np.radians(tx)
+            # Emit a cb frame at the element's front vertex with the
+            # new (post-tilt) orientation.  Detector elements never
+            # need a cb frame (the trace list doesn't emit one for
+            # them either).
+            if has_tilt and elem.elem_type != 'Detector':
+                surf_frames.append((z, y, theta))
             if elem.elem_type == 'Detector':
                 surf_frames.append((z, y, theta))
                 continue
@@ -691,6 +703,11 @@ class SystemModel(QObject):
                 continue
             d = float(getattr(elem, 'distance_mm', 0.0))
             origin = origin + d * R[:, 2]
+            has_tilt = (
+                float(getattr(elem, 'tilt_x', 0.0)) != 0.0
+                or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
+                or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
+                or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
             dx = float(getattr(elem, 'decenter_x', 0.0))
             dy = float(getattr(elem, 'decenter_y', 0.0))
             if dx:
@@ -709,6 +726,11 @@ class SystemModel(QObject):
                 R = R @ np.array([[ c, 0, s],
                                   [ 0, 1, 0],
                                   [-s, 0, c]])
+            # 3.7.0: emit a cb frame for tilted elements to align
+            # with the cb Surface emitted by
+            # _build_trace_surfaces_internal.
+            if has_tilt and elem.elem_type != 'Detector':
+                surf_frames.append((origin.copy(), R.copy()))
             if elem.elem_type == 'Detector':
                 surf_frames.append((origin.copy(), R.copy()))
                 continue
@@ -1745,14 +1767,67 @@ class SystemModel(QObject):
         return self._flat_surfaces_cache
 
     def _build_trace_surfaces_internal(self):
+        """Flatten the element list into a sequential Surface list.
+
+        3.7.0: emits a coord-break Surface BEFORE any element that
+        has non-zero ``tilt_x`` / ``tilt_y`` / ``decenter_x`` /
+        ``decenter_y`` (and a matching un-tilt cb AFTER if the
+        element is a Mirror, so the post-mirror axis returns to a
+        Zemax-style "always +z" representation for any subsequent
+        elements that aren't themselves tilted).  Untilted systems
+        emit no coord-breaks → identical behaviour to pre-3.7.
+
+        The trace history will have one entry per surface in this
+        list, including coord-breaks; ``surface_frames_2d/3d_mm``
+        emit matching world frames in the same order so ray
+        rendering stays aligned.
+        """
         trace_surfaces = []
-        z_positions = self.element_z_positions_mm()
+
+        def _has_tilt(elem):
+            return (
+                float(getattr(elem, 'tilt_x', 0.0)) != 0.0
+                or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
+                or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
+                or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
 
         for ei, elem in enumerate(self.elements):
             if elem.elem_type in ('Source', 'Detector'):
                 continue
             if not elem.surfaces:
                 continue
+
+            # 3.7.0: Insert a coord-break right before this element
+            # if it carries any tilt/decenter (typically absorbed
+            # from an imported COORDBRK).  The cb sits AT the
+            # element's front vertex position: the previous surface's
+            # air-gap thickness already carried the ray to that
+            # position in the OLD (pre-tilt) local frame, the cb
+            # transforms the frame in place, and the cb's own
+            # thickness is 0 -- the element's first surface is
+            # immediately after the cb at the same world position.
+            #
+            # This matches the GUI's ``element_frames_2d/3d_mm``
+            # convention (advance-in-old-frame, then apply tilt at
+            # the destination); using cb.thickness = elem.distance
+            # would double-count and put post-tilt elements
+            # diagonally offset from where the layout draws them.
+            tilt_pre = _has_tilt(elem)
+            if tilt_pre:
+                trace_surfaces.append(Surface(
+                    is_coordbrk=True,
+                    tilt_x_deg=float(getattr(elem, 'tilt_x', 0.0)),
+                    tilt_y_deg=float(getattr(elem, 'tilt_y', 0.0)),
+                    decenter_x_m=(float(getattr(elem, 'decenter_x', 0.0))
+                                   * 1e-3),
+                    decenter_y_m=(float(getattr(elem, 'decenter_y', 0.0))
+                                   * 1e-3),
+                    coordbrk_order=0,
+                    thickness=0.0,
+                    glass_before='air', glass_after='air',
+                    label=f'{elem.name} CB-pre',
+                    surf_num=len(trace_surfaces),
+                ))
 
             for si, srow in enumerate(elem.surfaces):
                 R_m = srow.radius * 1e-3 if np.isfinite(srow.radius) else np.inf
@@ -2192,11 +2267,25 @@ class SystemModel(QObject):
         the surface is rotationally symmetric (None vs missing-key are
         both interpreted as "symmetric" by the core, but emitting the
         keys makes diff'ing two prescriptions reliable).
+
+        3.7.0: also emits ``elements`` (full chronological list with
+        mirrors), ``all_thicknesses`` (aligned to ``elements``), and
+        ``coord_breaks`` (one entry per tilted/decentered element)
+        so the round-trip through .zmx export preserves fold geometry
+        and tilt/decenter information.  The legacy lens-only
+        ``surfaces`` / ``thicknesses`` keys remain for callers that
+        expect the pre-3.7 format.
         """
+        # Legacy lens-only path (refractive surfaces from the trace
+        # surface list, with cb's filtered out -- their thicknesses
+        # are 0 in the cb emission so this just gives the same
+        # refractive sequence as pre-3.7 unfolded systems).
         surfaces = self.build_trace_surfaces()
         rx_surfaces = []
         thicknesses = []
         for i, s in enumerate(surfaces):
+            if s.is_coordbrk:
+                continue
             surf_dict = {
                 'radius': s.radius,
                 'conic': s.conic,
@@ -2208,13 +2297,128 @@ class SystemModel(QObject):
                 'aspheric_coeffs_y': getattr(s, 'aspheric_coeffs_y', None),
             }
             rx_surfaces.append(surf_dict)
-            if i < len(surfaces) - 1:
+            if i < len(surfaces) - 1 and not surfaces[i + 1].is_coordbrk:
                 thicknesses.append(s.thickness)
+            elif i < len(surfaces) - 1:
+                # Skip the cb that follows; its 0-thickness is
+                # absorbed into the next refractive surface's gap.
+                thicknesses.append(s.thickness)
+
+        # 3.7.0: full element list + coord_breaks for round-trip.
+        # Walk self.elements directly so we capture the GUI's
+        # element-level metadata (mirrors, names, comments, tilts).
+        # Emit one synthetic cb per tilted element, with surf_num
+        # set so an importer's ``next-following surf > cb_n``
+        # heuristic re-attaches it to the same element.
+        elements_out = []
+        all_thicknesses = []
+        coord_breaks_out = []
+        running_surf_num = 0   # Zemax-like surface counter
+
+        for ei, elem in enumerate(self.elements):
+            if elem.elem_type in ('Source', 'Detector'):
+                continue
+            # Emit a coord_break BEFORE this element's surfaces if
+            # it carries any tilt/decenter.  surf_num = previous
+            # rendered surf so the cb sits between elements.
+            has_tilt = any(float(getattr(elem, f, 0.0)) != 0.0
+                            for f in ('tilt_x', 'tilt_y',
+                                       'decenter_x', 'decenter_y'))
+            if has_tilt:
+                coord_breaks_out.append({
+                    'surf_num': running_surf_num,
+                    'tilt_x_deg': float(getattr(elem, 'tilt_x', 0.0)),
+                    'tilt_y_deg': float(getattr(elem, 'tilt_y', 0.0)),
+                    'tilt_z_deg': 0.0,
+                    'decenter_x_m': float(getattr(elem, 'decenter_x', 0.0))
+                                     * 1e-3,
+                    'decenter_y_m': float(getattr(elem, 'decenter_y', 0.0))
+                                     * 1e-3,
+                    'order': 0,
+                    'thickness_m': 0.0,
+                })
+                running_surf_num += 1
+            # Emit each surface within the element.
+            for si, srow in enumerate(elem.surfaces):
+                running_surf_num += 1
+                R_m = (srow.radius * 1e-3
+                       if np.isfinite(srow.radius) else float('inf'))
+                sd_m = (srow.semi_diameter * 1e-3
+                        if np.isfinite(srow.semi_diameter)
+                        else float('inf'))
+                if srow.surf_type == 'Mirror' \
+                        or elem.elem_type == 'Mirror':
+                    elements_out.append({
+                        'element_type': 'mirror',
+                        'radius': R_m,
+                        'conic': srow.conic,
+                        'aspheric_coeffs':
+                            getattr(srow, 'aspheric_coeffs', None),
+                        'semi_diameter': sd_m,
+                        'surf_num': running_surf_num,
+                        'comment': elem.name if elem.name else '',
+                    })
+                else:
+                    if si == 0:
+                        glass_before = 'air'
+                    else:
+                        prev_glass = elem.surfaces[si - 1].glass
+                        glass_before = prev_glass if prev_glass else 'air'
+                    glass_after = srow.glass if srow.glass else 'air'
+                    elements_out.append({
+                        'element_type': 'surface',
+                        'radius': R_m,
+                        'conic': srow.conic,
+                        'aspheric_coeffs':
+                            getattr(srow, 'aspheric_coeffs', None),
+                        'glass_before': glass_before,
+                        'glass_after': glass_after,
+                        'semi_diameter': sd_m,
+                        'surf_num': running_surf_num,
+                        'comment': elem.name
+                            if (si == 0 and elem.name
+                                and elem.elem_type != 'Singlet'
+                                and not elem.name.startswith('Lens '))
+                            else '',
+                    })
+                # Thickness from this surface to the next item (the
+                # next surface OR the next element's leading cb /
+                # first surface).
+                if si < len(elem.surfaces) - 1:
+                    all_thicknesses.append(srow.thickness * 1e-3)
+                else:
+                    # Last surface in the element -- thickness goes
+                    # to the next element's cb (if tilted) or front
+                    # vertex.  Walk forward to the next non-source/
+                    # detector element.
+                    next_elem = None
+                    for ej in range(ei + 1, len(self.elements)):
+                        if self.elements[ej].elem_type in (
+                                'Source', 'Detector'):
+                            if (self.elements[ej].elem_type ==
+                                    'Detector'):
+                                next_elem = self.elements[ej]
+                                break
+                            continue
+                        next_elem = self.elements[ej]
+                        break
+                    if next_elem is not None:
+                        all_thicknesses.append(
+                            next_elem.distance_mm * 1e-3)
+                    else:
+                        all_thicknesses.append(0.0)
+
         return {
             'name': 'User design',
             'aperture_diameter': self.epd_m,
+            # Legacy lens-only keys (mirrors / cb's filtered out).
             'surfaces': rx_surfaces,
             'thicknesses': thicknesses,
+            # 3.7.0: full chronological list + coord_breaks for
+            # round-trip preservation of fold geometry.
+            'elements': elements_out,
+            'all_thicknesses': all_thicknesses,
+            'coord_breaks': coord_breaks_out,
         }
 
 

@@ -192,6 +192,24 @@ class Surface:
     thickness: float = 0.0
     label: str = ''
     surf_num: int = -1
+    # 3.7.0: Coordinate-break support.  When ``is_coordbrk`` is True
+    # this Surface is treated as a Zemax-style COORDBRK -- the trace
+    # loop transforms the ray bundle's frame (decenter then tilt, or
+    # the reverse if ``coordbrk_order`` is non-zero) and skips
+    # intersection / refraction / reflection.  Paraxial helpers
+    # (system_abcd, find_paraxial_focus, compute_pupils,
+    # seidel_coefficients, find_stop) skip these.  ``thickness`` on a
+    # coord-break is the air gap from the break to the next surface
+    # in the local (post-transform) frame, exactly like Zemax DISZ.
+    is_coordbrk: bool = False
+    tilt_x_deg: float = 0.0
+    tilt_y_deg: float = 0.0
+    tilt_z_deg: float = 0.0
+    decenter_x_m: float = 0.0
+    decenter_y_m: float = 0.0
+    # Zemax PARM 6: 0 = pre-decenter, then-tilt; 1 = pre-tilt, then-
+    # decenter.  We match Zemax's default (0) for compatibility.
+    coordbrk_order: int = 0
     # Biconic / anamorphic extensions (all optional; None => rotationally
     # symmetric surface using radius / conic / aspheric_coeffs above).
     radius_y: Optional[float] = None
@@ -655,6 +673,95 @@ def _transfer(rays, thickness, n_medium):
     rays.z = np.zeros_like(rays.z)  # reset to vertex of next surface
 
 
+def _apply_coord_break(rays, surface):
+    """3.7.0: Apply a Zemax-style coordinate break to the ray bundle.
+
+    A coord-break shifts the local coordinate frame: subsequent
+    surfaces are then expressed in the new frame.  To re-express the
+    rays in the new frame we apply the *inverse* of the frame
+    transformation:
+
+    * Decenter (dx, dy) → subtract from (x, y).
+    * Tilt about X / Y / Z by angles (tx, ty, tz) → rotate ray
+      position and direction by the inverse of those rotations
+      (i.e., by ``Rx(-tx) @ Ry(-ty) @ Rz(-tz)``).
+
+    Order follows Zemax PARM 6:
+
+    * 0 (default): tilts first, then decenter.
+    * 1          : decenter first, then tilts.
+
+    This is purely a frame transform -- no propagation, no OPL, no
+    intersection.  The trace loop should call this for surfaces
+    where ``surface.is_coordbrk`` is True and skip the usual
+    intersect / refract / reflect path.
+    """
+    if not surface.is_coordbrk:
+        return
+    dx = float(surface.decenter_x_m)
+    dy = float(surface.decenter_y_m)
+    tx = np.radians(float(surface.tilt_x_deg))
+    ty = np.radians(float(surface.tilt_y_deg))
+    tz = np.radians(float(surface.tilt_z_deg))
+    order = int(getattr(surface, 'coordbrk_order', 0) or 0)
+
+    def _decenter():
+        if dx:
+            rays.x = rays.x - dx
+        if dy:
+            rays.y = rays.y - dy
+
+    def _rot_x(theta):
+        if theta == 0.0:
+            return
+        c, s = np.cos(theta), np.sin(theta)
+        # Express old-frame vector in a frame rotated by +theta about X:
+        # apply Rx(-theta) → y' =  c*y + s*z;   z' = -s*y + c*z.
+        y_n =  c * rays.y + s * rays.z
+        z_n = -s * rays.y + c * rays.z
+        rays.y, rays.z = y_n, z_n
+        M_n =  c * rays.M + s * rays.N
+        N_n = -s * rays.M + c * rays.N
+        rays.M, rays.N = M_n, N_n
+
+    def _rot_y(theta):
+        if theta == 0.0:
+            return
+        c, s = np.cos(theta), np.sin(theta)
+        # Ry(-theta) → x' = c*x - s*z;  z' = s*x + c*z.
+        x_n =  c * rays.x - s * rays.z
+        z_n =  s * rays.x + c * rays.z
+        rays.x, rays.z = x_n, z_n
+        L_n =  c * rays.L - s * rays.N
+        N_n =  s * rays.L + c * rays.N
+        rays.L, rays.N = L_n, N_n
+
+    def _rot_z(theta):
+        if theta == 0.0:
+            return
+        c, s = np.cos(theta), np.sin(theta)
+        # Rz(-theta) → x' = c*x + s*y;  y' = -s*x + c*y.
+        x_n =  c * rays.x + s * rays.y
+        y_n = -s * rays.x + c * rays.y
+        rays.x, rays.y = x_n, y_n
+        L_n =  c * rays.L + s * rays.M
+        M_n = -s * rays.L + c * rays.M
+        rays.L, rays.M = L_n, M_n
+
+    def _tilts():
+        # Intrinsic rotation order: X, then Y, then Z (Zemax default).
+        _rot_x(tx)
+        _rot_y(ty)
+        _rot_z(tz)
+
+    if order == 1:
+        _decenter()
+        _tilts()
+    else:
+        _tilts()
+        _decenter()
+
+
 # ============================================================================
 # Sequential trace engine
 # ============================================================================
@@ -732,6 +839,30 @@ def trace(rays, surfaces, wavelength, output_filter='all',
     for i, surf in enumerate(surfaces):
         n1 = _n_pre[i]
         n2 = _n_post[i]
+
+        # 3.7.0: Coord-break surfaces are pure frame transforms --
+        # decenter + tilt with no intersection / OPL.  Apply the
+        # transform, record the post-transform bundle in history (so
+        # downstream consumers indexing by surface number stay
+        # aligned), and continue to the transfer step below.
+        if surf.is_coordbrk:
+            _apply_coord_break(r, surf)
+            if output_filter == 'all':
+                history.append(r.copy())
+            elif callable(output_filter):
+                item = output_filter(r, surf, i)
+                if item is not None:
+                    history.append(item)
+            if i == len(surfaces) - 1:
+                final = r.copy() if output_filter == 'last' else None
+            if i < len(surfaces) - 1:
+                # Coord-break thickness is the air gap to the next
+                # surface in the (post-transform) frame, exactly
+                # like a regular surface's DISZ.  Use the post-cb
+                # n2 (which equals n1 -- coord-breaks are inside a
+                # single medium) so the OPL bookkeeping matches.
+                _transfer(r, surf.thickness, n2)
+            continue
 
         # 1. Intersect with surface (accumulates OPL in glass_before)
         _intersect_surface(r, surf, n_medium=n1)
@@ -1434,6 +1565,15 @@ def _paraxial_trace(surfaces, wavelength, y_in=0.0, u_in=0.0):
     u = float(u_in)
 
     for i, surf in enumerate(surfaces):
+        # 3.7.0: Coord-breaks have no power; just apply their
+        # transfer thickness and record the unchanged state.
+        if surf.is_coordbrk:
+            y_hist.append(y)
+            u_hist.append(u)
+            if i < len(surfaces) - 1:
+                y = y + u * surf.thickness
+            continue
+
         n1 = get_glass_index(surf.glass_before, wavelength)
         n2 = get_glass_index(surf.glass_after, wavelength)
         R = surf.radius
@@ -1507,6 +1647,21 @@ def system_abcd(surfaces, wavelength):
     M = np.eye(2)
 
     for i, surf in enumerate(surfaces):
+        # 3.7.0: Skip the refraction matrix for coord-breaks (they're
+        # frame transforms, not optical surfaces with power) but
+        # still apply their thickness as an air-gap transfer so the
+        # cumulative axial separation matches the trace.
+        if surf.is_coordbrk:
+            if i < len(surfaces) - 1:
+                t = surf.thickness
+                # n_after is the medium of the post-cb leg; for a
+                # coord-break that's the same as the pre-cb medium.
+                n_after = get_glass_index(surf.glass_after, wavelength)
+                T_mat = np.array([[1.0, t / n_after],
+                                  [0.0, 1.0]])
+                M = T_mat @ M
+            continue
+
         n1 = get_glass_index(surf.glass_before, wavelength)
         n2 = get_glass_index(surf.glass_after, wavelength)
         R = surf.radius
@@ -2152,6 +2307,21 @@ def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
     S5 = np.zeros(n_surf)
 
     for i, surf in enumerate(surfaces):
+        # 3.7.0: Coord-breaks contribute no Seidel power; transfer
+        # the rays through their air-gap thickness and skip.
+        if surf.is_coordbrk:
+            y_m[i] = y_val_m
+            nu_m[i] = nu_val_m
+            y_c[i] = y_val_c
+            nu_c[i] = nu_val_c
+            if i < n_surf - 1:
+                t = float(surf.thickness)
+                n_after = get_glass_index(surf.glass_after, wavelength)
+                if n_after > 0:
+                    y_val_m = y_val_m + (nu_val_m / n_after) * t
+                    y_val_c = y_val_c + (nu_val_c / n_after) * t
+            continue
+
         n1 = get_glass_index(surf.glass_before, wavelength)
         n2 = get_glass_index(surf.glass_after, wavelength)
         R = surf.radius
