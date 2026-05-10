@@ -10,6 +10,33 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.6.0
+
+GUI update only — no core-library API changes.  Closes ~30 audit
+findings raised after 3.5.9: 5 new specialty docks (Richards-Wolf
+high-NA focus, Köhler partial coherence, Shack-Hartmann sensing,
+LG aberration tensor, RCWA grating), Wave Optics dispatch picks up
+GBD / HFPI / Huygens-Fresnel / Subaperture, Quick-run preset bar,
+detector-model toggle, Insert > Source presets, F6-F10 shortcuts,
+sortable shortcuts dialog, in-app What's-New modal, expanded Help
+and Tools menus, optimizer redesign, run-button standardisation,
+Welcome-dock + REPL improvements.
+
+See [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full list.
+
+## What's new in 3.5.9
+
+GUI update only — no core-library API changes.  Application
+renamed from "Optical Designer" to **LumenAiry Designer** with
+backward-compat aliases for the launcher and console-script entry
+point.  GUI catch-up to 3.3-3.5 core-library work: MFT propagators
+exposed in the Wave Optics dock, Bandlimit + chief-relative-OPD
+checkboxes, Custom MHS chain tab, Caustic Diagnostic dock, JAX
+optimizer toggle, Tools > Scale system menu, structured Tolerance
+report.
+
+See [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full list.
+
 ## What's new in 3.5.8
 
 Propagator-family H-cache standardisation.  The same
