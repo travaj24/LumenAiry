@@ -41,6 +41,13 @@ class Layout3DView(QWidget):
         # explanation; here we just track the index and re-add a
         # gold highlight ring after every rebuild.
         self._selected_elem_idx = -1
+        # 3.6.1 hotfix-3: camera-position persistence.  The first
+        # rebuild snaps to an iso view; subsequent rebuilds
+        # (triggered by every parameter edit) preserve whatever
+        # orientation the user has rotated to, instead of fighting
+        # them by re-snapping every time.  The toolbar's "Reset
+        # View" button still calls _reset_camera() directly.
+        self._camera_initialized = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -110,6 +117,17 @@ class Layout3DView(QWidget):
                 self._render_static()
             return
 
+        # 3.6.1 hotfix-3: snapshot the camera state before we tear
+        # down the scene so the user's orbit/zoom/pan survive a
+        # parameter edit.  Only restored when _camera_initialized
+        # is True (i.e., not the first rebuild).
+        saved_cam = None
+        if self._camera_initialized:
+            try:
+                saved_cam = self._plotter.camera_position
+            except Exception:
+                saved_cam = None
+
         self._plotter.clear()
 
         elements = self.sm.elements
@@ -161,7 +179,20 @@ class Layout3DView(QWidget):
         # 3.6.1: redraw selection highlight on top after rebuild.
         self._redraw_highlight_3d()
 
-        self._reset_camera()
+        # 3.6.1 hotfix-3: restore camera state if we have one;
+        # otherwise (first rebuild) snap to the default iso view
+        # and remember that the camera has been initialised.
+        if saved_cam is not None:
+            try:
+                self._plotter.camera_position = saved_cam
+            except Exception:
+                # If restoration fails for any reason, fall back
+                # to the iso-view snap so the user still gets a
+                # usable view.
+                self._reset_camera()
+        else:
+            self._reset_camera()
+            self._camera_initialized = True
 
     def _draw_surface_3d(self, z, sd, row, idx, all_surfaces, z_positions):
         """Draw a refractive surface as a curved disc.
