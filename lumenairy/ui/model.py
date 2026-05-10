@@ -531,6 +531,11 @@ class SystemModel(QObject):
         """
         frames = []
         z, y, theta = 0.0, 0.0, 0.0   # source frame
+        # All distances and internal thicknesses are stored in
+        # physical (positive) convention by load_prescription /
+        # the editor, so the theta-flip post-Mirror suffices to
+        # advance the back vertex in the correct world direction
+        # without any extra sign tracking here.
         for ei, elem in enumerate(self.elements):
             if elem.elem_type == 'Source':
                 frames.append((z, y, theta))
@@ -552,6 +557,12 @@ class SystemModel(QObject):
             # 4. Record the front-vertex frame.
             frames.append((z, y, theta))
             # 5. Advance through the element's internal thickness.
+            #    Internal thicknesses are positive physical
+            #    dimensions; the post-mirror theta flip alone
+            #    advances the back vertex in the correct world
+            #    direction, so we do NOT multiply by mirror_sign
+            #    here (that's only for distance_mm which carries
+            #    the Zemax post-mirror sign convention).
             if elem.surfaces:
                 internal = sum(float(s.thickness) for s in elem.surfaces)
                 z += internal * np.cos(theta)
@@ -577,6 +588,10 @@ class SystemModel(QObject):
         frames = []
         origin = np.zeros(3)
         R = np.eye(3)
+        # See note in element_frames_2d_mm — distances and internal
+        # thicknesses are stored in physical (positive) convention
+        # by load_prescription, so the post-Mirror Rflip alone gives
+        # the correct world direction.
         for ei, elem in enumerate(self.elements):
             if elem.elem_type == 'Source':
                 frames.append((origin.copy(), R.copy()))
@@ -610,7 +625,9 @@ class SystemModel(QObject):
                 R = R @ Ry
             # 4. Record the front-vertex frame.
             frames.append((origin.copy(), R.copy()))
-            # 5. Advance through internal thickness.
+            # 5. Advance through internal thickness (positive
+            #    physical dimension; the Rflip post-mirror handles
+            #    direction, so do NOT apply mirror_sign here).
             if elem.surfaces:
                 internal = sum(float(s.thickness) for s in elem.surfaces)
                 origin = origin + internal * R[:, 2]
@@ -619,10 +636,94 @@ class SystemModel(QObject):
                 Rflip = np.array([[1, 0, 0],
                                    [0, 1, 0],
                                    [0, 0, -1]])
-                # Equivalent to rotating R such that the new local
-                # +z faces the old local -z direction.
                 R = R @ Rflip
         return frames
+
+    def surface_frames_2d_mm(self):
+        """3.6.1 hotfix-6: per-traced-surface 2D world frame
+        ``(z, y, theta_rad)`` in trace order, plus the image-plane
+        frame appended at the end.  Same conventions as
+        :meth:`element_frames_2d_mm` (mirror_sign tracking, π flip
+        per mirror, decenter / tilt absorption).  Used by both
+        layout views to position rays in the folded world frame.
+        """
+        surf_frames = []
+        z, y, theta = 0.0, 0.0, 0.0
+        for elem in self.elements:
+            if elem.elem_type == 'Source':
+                continue
+            d = float(getattr(elem, 'distance_mm', 0.0))
+            z += d * np.cos(theta)
+            y += d * np.sin(theta)
+            dy = float(getattr(elem, 'decenter_y', 0.0))
+            if dy:
+                z += dy * (-np.sin(theta))
+                y += dy * (np.cos(theta))
+            tx = float(getattr(elem, 'tilt_x', 0.0))
+            if tx:
+                theta += np.radians(tx)
+            if elem.elem_type == 'Detector':
+                surf_frames.append((z, y, theta))
+                continue
+            cum_t = 0.0
+            for srow in elem.surfaces:
+                z_s = z + cum_t * np.cos(theta)
+                y_s = y + cum_t * np.sin(theta)
+                surf_frames.append((z_s, y_s, theta))
+                cum_t += float(srow.thickness)
+            z += cum_t * np.cos(theta)
+            y += cum_t * np.sin(theta)
+            if elem.elem_type == 'Mirror':
+                theta += np.pi
+        return surf_frames
+
+    def surface_frames_3d_mm(self):
+        """3.6.1 hotfix-6: per-traced-surface 3D world frame
+        ``(origin_xyz, R_3x3)`` in trace order, plus the image-plane
+        frame appended at the end.  Same conventions as
+        :meth:`element_frames_3d_mm`.
+        """
+        surf_frames = []
+        origin = np.zeros(3)
+        R = np.eye(3)
+        for elem in self.elements:
+            if elem.elem_type == 'Source':
+                continue
+            d = float(getattr(elem, 'distance_mm', 0.0))
+            origin = origin + d * R[:, 2]
+            dx = float(getattr(elem, 'decenter_x', 0.0))
+            dy = float(getattr(elem, 'decenter_y', 0.0))
+            if dx:
+                origin = origin + dx * R[:, 0]
+            if dy:
+                origin = origin + dy * R[:, 1]
+            tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
+            ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
+            if tx_rad:
+                c, s = np.cos(tx_rad), np.sin(tx_rad)
+                R = R @ np.array([[1, 0, 0],
+                                  [0, c, -s],
+                                  [0, s,  c]])
+            if ty_rad:
+                c, s = np.cos(ty_rad), np.sin(ty_rad)
+                R = R @ np.array([[ c, 0, s],
+                                  [ 0, 1, 0],
+                                  [-s, 0, c]])
+            if elem.elem_type == 'Detector':
+                surf_frames.append((origin.copy(), R.copy()))
+                continue
+            cum_t = 0.0
+            for srow in elem.surfaces:
+                surf_frames.append((
+                    origin + cum_t * R[:, 2],
+                    R.copy()))
+                cum_t += float(srow.thickness)
+            origin = origin + cum_t * R[:, 2]
+            if elem.elem_type == 'Mirror':
+                R = R @ np.array([[1, 0, 0],
+                                  [0, 1, 0],
+                                  [0, 0, -1]])
+        return surf_frames
 
     def get_display_distance(self, elem_index):
         """Value to show in the Distance column."""
@@ -1478,10 +1579,19 @@ class SystemModel(QObject):
         #    Singlet / Doublet / Triplet elements and emitting
         #    Mirror elements directly.  Dummies are skipped but
         #    their thickness is rolled into ``pending_dist_mm``.
+        #
+        # 3.6.1 hotfix-6: convert Zemax-signed thicknesses into
+        # physical (positive) magnitudes by tracking the parity of
+        # mirrors crossed.  Zemax encodes post-mirror DISZ values
+        # as negative so the unfolded cumulative z keeps moving
+        # forward; the GUI's internal model is in the FOLDED
+        # convention (theta-flip per mirror in element_frames),
+        # so we need positive distances and thicknesses.
         # ------------------------------------------------------------
         pending_dist_mm = 0.0
         n_lens = 0
         n_mirror = 0
+        thickness_sign = 1.0   # flips at every mirror crossed
 
         i = 0
         while i < len(rx_items):
@@ -1489,7 +1599,8 @@ class SystemModel(QObject):
             item_type = item.get('element_type', 'surface')
             comment = (item.get('comment') or '').strip()
             sd_local = _per_surf_sd(item)
-            t_after_mm = (rx_thick_full[i] * 1e3
+            # Convert Zemax-signed thickness to physical positive.
+            t_after_mm = (thickness_sign * rx_thick_full[i] * 1e3
                           if i < len(rx_thick_full) else 0.0)
 
             # Skip dummy spacer surfaces.
@@ -1515,6 +1626,9 @@ class SystemModel(QObject):
                                decenter_x=dx, decenter_y=dy)
                 self.elements.append(elem)
                 pending_dist_mm = t_after_mm
+                # Each mirror crossed flips the Zemax-vs-physical
+                # sign convention for the following thicknesses.
+                thickness_sign = -thickness_sign
                 i += 1
                 continue
 
@@ -1548,8 +1662,9 @@ class SystemModel(QObject):
                              if np.isfinite(rk['radius']) else np.inf)
                     if k < j - 1:
                         # Internal thickness to the next surface
-                        # of THIS lens.
-                        tk_mm = (rx_thick_full[k] * 1e3
+                        # of THIS lens.  Convert Zemax-signed value
+                        # to physical positive via thickness_sign.
+                        tk_mm = (thickness_sign * rx_thick_full[k] * 1e3
                                  if k < len(rx_thick_full) else 0.0)
                     else:
                         tk_mm = 0.0
@@ -1570,11 +1685,13 @@ class SystemModel(QObject):
                                decenter_x=dx, decenter_y=dy)
                 self.elements.append(elem)
                 # Distance to the next element comes from the
-                # thickness AFTER this lens's last surface.
+                # thickness AFTER this lens's last surface (Zemax-
+                # signed → physical positive via thickness_sign).
                 last_k = j - 1
-                pending_dist_mm = (rx_thick_full[last_k] * 1e3
-                                   if last_k < len(rx_thick_full)
-                                   else 0.0)
+                pending_dist_mm = (
+                    thickness_sign * rx_thick_full[last_k] * 1e3
+                    if last_k < len(rx_thick_full)
+                    else 0.0)
                 i = j
                 continue
 

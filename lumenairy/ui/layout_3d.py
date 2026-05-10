@@ -172,6 +172,9 @@ class Layout3DView(QWidget):
         frames = self.sm.element_frames_3d_mm()
 
         # ── Optical-axis polyline (traces the bent path) ──
+        # 3.6.1 hotfix-6: post-mirror Rflip on R[:,2] alone gives
+        # the correct world direction for internal-thickness
+        # advances; do NOT apply mirror_sign here.
         axis_pts = []
         if frames:
             o0, R0 = frames[0]
@@ -183,7 +186,8 @@ class Layout3DView(QWidget):
                 continue
             axis_pts.append(o.copy())
             if elem.surfaces:
-                internal = sum(float(s.thickness) for s in elem.surfaces)
+                internal = sum(
+                    float(s.thickness) for s in elem.surfaces)
                 axis_pts.append(o + internal * R[:, 2])
         if frames:
             o_last, R_last = frames[-1]
@@ -564,24 +568,14 @@ class Layout3DView(QWidget):
         for name in actors_to_remove:
             self._plotter.remove_actor(name)
 
-        # Per-element 3D frames + per-surface frame list (one entry
-        # per traced surface in order, plus the image plane).
-        frames = self.sm.element_frames_3d_mm()
-        if not frames:
-            return
-        surf_frames = []   # list of (origin_xyz, R_3x3)
-        for ei, elem in enumerate(self.sm.elements):
-            if elem.elem_type in ('Source', 'Detector'):
-                continue
-            o, R = frames[ei]
-            cum_t = 0.0
-            for srow in elem.surfaces:
-                surf_frames.append((o + cum_t * R[:, 2], R))
-                cum_t += float(srow.thickness)
-        if self.sm.elements \
-                and self.sm.elements[-1].elem_type == 'Detector':
-            surf_frames.append(frames[-1])
+        # 3.6.1 hotfix-6: per-traced-surface 3D world frames in trace
+        # order (incl. image plane), with mirror_sign tracking so
+        # post-mirror surfaces sit on the correct side of the mirror.
+        surf_frames = self.sm.surface_frames_3d_mm()
         if not surf_frames:
+            return
+        elem_frames = self.sm.element_frames_3d_mm()
+        if not elem_frames:
             return
 
         n_rays = result.input_rays.n_rays
@@ -593,7 +587,7 @@ class Layout3DView(QWidget):
             wv_color = self.sm.prefs.get('ray_color', '#5cb8ff')
 
         # Source frame for the launch point.
-        o_src, R_src = frames[0]
+        o_src, R_src = elem_frames[0]
 
         def to_world(si, x_local, y_local):
             o, R = surf_frames[si]

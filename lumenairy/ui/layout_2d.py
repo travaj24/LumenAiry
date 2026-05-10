@@ -33,17 +33,36 @@ class Layout2DView(QWidget):
         super().__init__(parent)
         self.sm = system_model
 
-        # 3.6.1: allow the layout dock to shrink freely.  Without an
-        # explicit minimum the QGraphicsView's size hint follows the
-        # scene's bounding rect (often hundreds of px) and prevents
-        # the user from dragging the dock down to give the
-        # prescription editor more room.
-        self.setMinimumSize(40, 40)
-        from PySide6.QtWidgets import QSizePolicy
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 3.6.1 hotfix-6: allow the layout dock to shrink freely.
+        # Override minimumSizeHint as well -- the inherited
+        # implementation walks the layout (QGraphicsView etc.) and
+        # produces a much larger value than setMinimumSize alone
+        # can defeat.
+        from PySide6.QtWidgets import QSizePolicy, QPushButton, QHBoxLayout
+        from PySide6.QtCore import QSize
+        self.setMinimumSize(0, 0)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # 3.6.1 hotfix-6: thin toolbar with Reset View + zoom hints.
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(2, 2, 2, 2)
+        btn_reset = QPushButton('Reset View')
+        btn_reset.setFixedHeight(20)
+        btn_reset.setToolTip(
+            'Fit the entire optical system in view (Ctrl+0 also works '
+            'when the dock has focus).')
+        btn_reset.clicked.connect(self._reset_view)
+        toolbar.addWidget(btn_reset)
+        toolbar.addStretch()
+        from PySide6.QtWidgets import QLabel
+        hint = QLabel('Wheel: zoom · Drag: pan')
+        hint.setStyleSheet('color: #7a94b8; font-size: 10px;')
+        toolbar.addWidget(hint)
+        layout.addLayout(toolbar)
 
         self.scene = QGraphicsScene()
         bg = self.sm.prefs.get('bg_2d', '#050709')
@@ -55,7 +74,15 @@ class Layout2DView(QWidget):
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.view.setMinimumSize(0, 0)
-        self.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.view.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+
+        # 3.6.1 hotfix-6: install our own wheelEvent on the view so
+        # the wheel always zooms regardless of scrollbar state.  At
+        # high zoom the QGraphicsView's default handler routes the
+        # wheel to its scrollbars instead of bubbling up to our
+        # parent-widget handler -- the user gets stuck panning when
+        # they wanted to keep zooming.
+        self.view.wheelEvent = self._view_wheel_event
 
         layout.addWidget(self.view)
 
@@ -596,34 +623,16 @@ class Layout2DView(QWidget):
 
         S = self.SCALE
 
-        # Per-element world-frame triples.
-        frames = self.sm.element_frames_2d_mm()
-        if not frames:
-            return
-
-        # Build a per-traced-surface frame list.  ``trace_result``'s
-        # history walks the same surface order as
-        # _build_trace_surfaces_internal: every non-source/detector
-        # element contributes one entry per internal surface, then
-        # run_trace appends one image-plane surface at the end.
-        surf_frames = []  # list of (z_w, y_w, theta) per surface
-        for ei, elem in enumerate(self.sm.elements):
-            if elem.elem_type in ('Source', 'Detector'):
-                continue
-            z_w, y_w, theta = frames[ei]
-            cum_t = 0.0
-            for srow in elem.surfaces:
-                z_s = z_w + cum_t * np.cos(theta)
-                y_s = y_w + cum_t * np.sin(theta)
-                surf_frames.append((z_s, y_s, theta))
-                cum_t += float(srow.thickness)
-
-        # Image-plane frame (matches the detector's element frame).
-        if self.sm.elements \
-                and self.sm.elements[-1].elem_type == 'Detector':
-            surf_frames.append(frames[-1])
-
+        # 3.6.1 hotfix-6: per-traced-surface 2D world frames in
+        # trace order (incl. image plane), with mirror_sign tracking
+        # so post-mirror surfaces sit on the correct side of the
+        # mirror in the world frame.
+        surf_frames = self.sm.surface_frames_2d_mm()
         if not surf_frames:
+            return
+        # Source frame (always frames[0] from element_frames).
+        elem_frames = self.sm.element_frames_2d_mm()
+        if not elem_frames:
             return
 
         # Ray colour — preference or wavelength-based.
@@ -642,7 +651,7 @@ class Layout2DView(QWidget):
         step = max(1, n_rays // 50)
 
         # Source frame for the launch point.
-        z_src, y_src, t_src = frames[0]
+        z_src, y_src, t_src = elem_frames[0]
         src_ux, src_uy = -np.sin(t_src), np.cos(t_src)
 
         def to_world(si, y_local):
@@ -760,6 +769,43 @@ class Layout2DView(QWidget):
         QGraphicsView.mousePressEvent(self.view, event)
 
     def wheelEvent(self, event):
-        """Zoom with scroll wheel."""
+        """Forward bubbled-up wheel events to the view zoom handler.
+
+        Most wheel events go directly to the QGraphicsView via
+        ``_view_wheel_event``; this fallback only fires when the
+        wheel happens over the toolbar / margins.
+        """
+        self._view_wheel_event(event)
+
+    def _view_wheel_event(self, event):
+        """3.6.1 hotfix-6: always zoom on wheel; never let the
+        QGraphicsView's default handler route to scrollbars.
+
+        Without this override, once the scene exceeds the viewport
+        (zoomed in), the wheel scrolls instead of zooming.
+        """
         factor = 1.15 if event.angleDelta().y() > 0 else 0.87
         self.view.scale(factor, factor)
+        event.accept()
+
+    def _reset_view(self):
+        """Fit the entire scene with a small margin (toolbar button)."""
+        if self.scene.items():
+            self.view.fitInView(
+                self.scene.sceneRect().adjusted(-40, -40, 40, 40),
+                Qt.KeepAspectRatio,
+            )
+
+    def minimumSizeHint(self):
+        """3.6.1 hotfix-6: report a tiny minimum so the QDockWidget
+        will let the user drag the layout pane down to almost
+        nothing.  The inherited implementation walks the
+        QGraphicsView size hint and reserves several hundred px,
+        which is what was preventing the dock from collapsing.
+        """
+        from PySide6.QtCore import QSize
+        return QSize(40, 40)
+
+    def sizeHint(self):
+        from PySide6.QtCore import QSize
+        return QSize(400, 200)
