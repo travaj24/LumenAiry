@@ -41,7 +41,8 @@ class GhostDock(QWidget):
 
         # -- Toolbar
         toolbar = QHBoxLayout()
-        self.btn_run = QPushButton('Run ghost analysis')
+        self.btn_run = QPushButton('▶ Run ghost analysis')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.setToolTip(
             'Enumerate all ordered surface pairs (i, j) with j > i+1 '
             'and compute the ghost intensity R_i * R_j from bare-Fresnel '

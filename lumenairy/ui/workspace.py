@@ -262,7 +262,7 @@ class ManageWorkspaceDialog(QDialog):
 #  Bumped each release that adds a new default workspace.  Used by
 #  load_json() to merge new defaults into existing saved blobs without
 #  overwriting user customizations.
-DEFAULTS_REVISION = 3
+DEFAULTS_REVISION = 4
 
 DEFAULT_WORKSPACES = [
     ('Design', [
@@ -275,11 +275,12 @@ DEFAULT_WORKSPACES = [
     ('Analysis', [
         'layout', 'spot', 'rayfan', 'footprint', 'distortion',
         'spot_field', 'through_focus', 'psfmtf', 'field_browser',
-        'caustic', 'summary',
+        'caustic', 'lg_aberration', 'shack_hartmann', 'summary',
     ]),
     ('Wave Optics', [
         'layout', 'waveoptics', 'zernike', 'interferometry',
-        'phase_retrieval', 'ghost',
+        'phase_retrieval', 'ghost', 'richards_wolf', 'coherence',
+        'rcwa',
     ]),
     ('Tolerancing', [
         'layout', 'tolerance', 'sensitivity', 'summary',
@@ -318,6 +319,12 @@ def default_dock_titles():
         'tolerance': 'Tolerance',
         'sensitivity': 'Sensitivity',
         'caustic': 'Caustic diagnostic',
+        # 3.6 specialty docks
+        'richards_wolf': 'Richards-Wolf focus',
+        'coherence': 'Partial coherence (Köhler)',
+        'shack_hartmann': 'Shack-Hartmann',
+        'lg_aberration': 'LG aberration tensor',
+        'rcwa': 'RCWA grating',
         'materials': 'Materials',
         'glassmap': 'Glass Map',
         'diagnostics': 'Diagnostics',
@@ -533,12 +540,26 @@ class WorkspaceManager(QObject):
 
             saved_rev = int(d.get('defaults_revision', 0))
             if saved_rev < DEFAULTS_REVISION:
-                existing_names = {w.name for w in self.workspaces}
+                existing_by_name = {w.name: w for w in self.workspaces}
                 for name, docks in DEFAULT_WORKSPACES:
-                    if name not in existing_names:
-                        docks = [x for x in docks
-                                 if x in self.dock_registry]
-                        self.workspaces.append(Workspace(name, docks))
+                    valid_docks = [x for x in docks
+                                   if x in self.dock_registry]
+                    if name not in existing_by_name:
+                        # Add the whole new workspace.
+                        self.workspaces.append(Workspace(name, valid_docks))
+                    else:
+                        # Workspace exists -- union-merge any newly-added
+                        # default docks into it without disturbing the
+                        # user's existing list / dock order.  This
+                        # closes the 3.5.9 gap where the new caustic
+                        # dock would silently fail to appear for users
+                        # with persisted layouts.
+                        ws = existing_by_name[name]
+                        existing_set = set(ws.dock_names)
+                        for doc in valid_docks:
+                            if doc not in existing_set:
+                                ws.dock_names.append(doc)
+                                existing_set.add(doc)
             return True
         except Exception:
             return False

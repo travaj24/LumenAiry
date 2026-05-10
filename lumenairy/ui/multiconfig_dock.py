@@ -117,7 +117,8 @@ class MultiConfigDock(QWidget):
         self.spin_iter.setRange(10, 5000)
         self.spin_iter.setValue(100)
         run_row.addWidget(self.spin_iter)
-        self.btn_run = QPushButton('Jointly optimise')
+        self.btn_run = QPushButton('▶ Jointly optimise')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.setToolTip(
             'Run design_optimize on the MultiPrescriptionParameterization.'
             '  Uses the wavelengths and variable list set in the '

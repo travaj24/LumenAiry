@@ -26,6 +26,7 @@ class WelcomeDock(QWidget):
     open_demo_requested = Signal()
     browse_library_requested = Signal()
     show_shortcuts_requested = Signal()
+    show_repl_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,14 +44,32 @@ class WelcomeDock(QWidget):
         outer.addWidget(title)
 
         subtitle = QLabel(
-            'Get started by opening a prescription, inserting an element,\n'
-            'or picking from the catalog.  You can drop any .zmx / .seq /\n'
-            '.txt / .json file directly onto the window.')
+            'Build, analyze, optimize, and validate optical systems '
+            'interactively, with the full lumenairy library on tap.\n'
+            'Drop any .zmx / .seq / .txt / .json file onto this window '
+            'to load.  Have a Python prescription?  Open the Python '
+            'Console (REPL) dock and call '
+            '<code>model.load_prescription(rx)</code>.')
         subtitle.setStyleSheet('color: #97a8c2;')
+        subtitle.setWordWrap(True)
         outer.addWidget(subtitle)
 
-        # ── Quick-start buttons ──
-        qs_label = QLabel('Quick start')
+        # ── Hero: open the demo lens (3.6 redesign) ──
+        # The single most valuable first action for new users.
+        # Made larger and more prominent than the secondary row.
+        hero = QPushButton('▶  Open Demo (AC254-100-C)')
+        hero.setObjectName('run_button')
+        hero_font = hero.font()
+        hero_font.setPointSize(hero_font.pointSize() + 2)
+        hero_font.setBold(True)
+        hero.setFont(hero_font)
+        hero.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        hero.setMinimumHeight(40)
+        hero.clicked.connect(self.open_demo_requested.emit)
+        outer.addWidget(hero)
+
+        # ── Secondary row ──
+        qs_label = QLabel('Or jump straight in')
         qs_font = qs_label.font()
         qs_font.setBold(True)
         qs_label.setFont(qs_font)
@@ -58,10 +77,10 @@ class WelcomeDock(QWidget):
 
         qs_row = QHBoxLayout()
         for text, sig in [
-            ('Open Demo (AC254-100-C)',  self.open_demo_requested),
             ('Insert Singlet',           self.insert_singlet_requested),
             ('Insert Achromat',          self.insert_achromat_requested),
             ('Browse Library',           self.browse_library_requested),
+            ('Open Python REPL',         self.show_repl_requested),
             ('Keyboard Shortcuts',       self.show_shortcuts_requested),
         ]:
             b = QPushButton(text)

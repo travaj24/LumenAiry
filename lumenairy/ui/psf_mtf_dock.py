@@ -106,8 +106,12 @@ class PSFMTFDock(QWidget):
             'FFT zero-pad factor.  Higher = finer focal-plane '
             'sampling (at memory cost).')
         psf_layout.addWidget(self.spin_over)
-        self.btn_psf = QPushButton('Compute PSF + MTF')
+        self.btn_psf = QPushButton('▶ Compute PSF + MTF  (F9)')
+        self.btn_psf.setObjectName('run_button')
         self.btn_psf.clicked.connect(self._compute_psf_mtf)
+        # Alias for the F-key dispatcher (which looks for btn_run /
+        # btn_compute / btn_recompute on the dock widget).
+        self.btn_compute = self.btn_psf
         psf_layout.addWidget(self.btn_psf)
         psf_layout.addStretch()
         layout.addWidget(psf_box)
@@ -126,7 +130,8 @@ class PSFMTFDock(QWidget):
         self.spin_dx.setValue(16.0)
         self.spin_dx.setDecimals(2)
         poly_layout.addWidget(self.spin_dx)
-        self.btn_poly = QPushButton('Compute poly-Strehl')
+        self.btn_poly = QPushButton('▶ Compute poly-Strehl')
+        self.btn_poly.setObjectName('run_button')
         self.btn_poly.clicked.connect(self._compute_poly)
         poly_layout.addWidget(self.btn_poly)
         self.progress_poly = QProgressBar()

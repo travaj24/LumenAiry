@@ -62,6 +62,8 @@ class SourceDefinition:
         'plane_wave',
         'gaussian',
         'gaussian_aperture',
+        'top_hat',
+        'fiber_mode',
         'point_source',
         'emitter_array',
     ]
@@ -77,9 +79,17 @@ class SourceDefinition:
         self.emitter_nx = kwargs.get('emitter_nx', 12)
         self.emitter_ny = kwargs.get('emitter_ny', 12)
         self.emitter_waist_mm = kwargs.get('emitter_waist_mm', 0.009)
+        # 3.6: top-hat + fiber-mode source factories from Source class.
+        self.top_hat_diameter_mm = kwargs.get('top_hat_diameter_mm', 2.0)
+        self.fiber_mfd_um = kwargs.get('fiber_mfd_um', 10.4)
+        self.fiber_NA = kwargs.get('fiber_NA', 0.14)
         # Off-axis field angle for tilted plane-wave / point-source
         self.field_angle_x_deg = kwargs.get('field_angle_x_deg', 0.0)
         self.field_angle_y_deg = kwargs.get('field_angle_y_deg', 0.0)
+        # 3.6: source polarization (Jones).  None = unpolarized scalar.
+        # Otherwise one of 'linear_x', 'linear_y', 'linear_45',
+        # 'rcp', 'lcp'.  Consumed by to_source() when present.
+        self.polarization = kwargs.get('polarization', None)
 
     def describe(self):
         if self.source_type == 'plane_wave':
@@ -90,6 +100,11 @@ class SourceDefinition:
             return f'Gaussian aperture sigma={self.sigma_mm:.2f}mm'
         elif self.source_type == 'point_source':
             return f'Point source at {self.object_distance_mm:.1f}mm'
+        elif self.source_type == 'top_hat':
+            return f'Top-hat aperture (d={self.top_hat_diameter_mm:.3f}mm)'
+        elif self.source_type == 'fiber_mode':
+            return (f'Fiber mode (MFD={self.fiber_mfd_um:.1f}µm, '
+                    f'NA={self.fiber_NA:.3f})')
         elif self.source_type == 'emitter_array':
             return (f'Emitter array {self.emitter_nx}x{self.emitter_ny}, '
                     f'pitch={self.emitter_pitch_mm:.3f}mm')
@@ -165,6 +180,19 @@ class SourceDefinition:
             return _Source.gaussian(
                 w0, N, dx_m, wavelength,
                 name=f'Gaussian-aperture (sigma={self.sigma_mm:.2f} mm)')
+
+        if self.source_type == 'top_hat':
+            d = self.top_hat_diameter_mm * 1e-3
+            return _Source.top_hat(
+                d, N, dx_m, wavelength,
+                name=f'Top-hat (d={self.top_hat_diameter_mm:.3f} mm)')
+
+        if self.source_type == 'fiber_mode':
+            mfd = self.fiber_mfd_um * 1e-6
+            return _Source.fiber_mode(
+                mfd, N, dx_m, wavelength, na=self.fiber_NA,
+                name=f'Fiber mode (MFD={self.fiber_mfd_um:.1f} um, '
+                     f'NA={self.fiber_NA:.3f})')
 
         if self.source_type == 'point_source':
             z0 = -self.object_distance_mm * 1e-3

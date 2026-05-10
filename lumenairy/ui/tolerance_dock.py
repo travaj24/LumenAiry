@@ -201,6 +201,7 @@ class ToleranceDock(QWidget):
         run_row.addWidget(self.spin_trials)
 
         self.btn_run = QPushButton('▶ Run MC')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
 
@@ -218,9 +219,26 @@ class ToleranceDock(QWidget):
             'will route through la.tolerancing_report for full '
             'Strehl yield curves.')
         self.btn_export.setEnabled(False)
+        self.btn_export.setToolTip(
+            'Run an MC analysis first to enable export.')
         self.btn_export.clicked.connect(self._export_report)
         run_row.addWidget(self.btn_export)
         layout.addLayout(run_row)
+
+        # 3.6: surface the dock's MC limitations up-front so users
+        # know the simple ray-trace MC isn't a substitute for the
+        # core's Strehl-yield monte_carlo_tolerancing.
+        warn = QLabel(
+            'Note: this dock runs a lightweight ray-trace MC that '
+            'collects RMS spot + EFL only.  Decenter is applied as a '
+            'bundle-level lateral shift, not per-element.  For Strehl '
+            'yield curves and per-element decenter / tilt / form-error '
+            'MC, use lumenairy.monte_carlo_tolerancing in a script.')
+        warn.setWordWrap(True)
+        warn.setStyleSheet(
+            'color: #ffd178; padding: 4px 6px; '
+            'border: 1px solid #2a3548; border-radius: 3px;')
+        layout.addWidget(warn)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -341,6 +359,9 @@ class ToleranceDock(QWidget):
             'efl_mm_nominal': float(self.sm.efl_mm),
         }
         self.btn_export.setEnabled(len(rms) > 0)
+        if len(rms) > 0:
+            self.btn_export.setToolTip(
+                'Export the last MC results as JSON or text.')
 
         # Summary text
         if len(rms) > 0:
@@ -387,6 +408,17 @@ class ToleranceDock(QWidget):
             'kind': 'lumenairy_tolerance_report',
             'version': '1',
             'generator': 'lumenairy.ui.ToleranceDock',
+            'limitations': [
+                'Decenter is applied as a bundle-level lateral '
+                'shift; per-element decenter/tilt/form-error MC '
+                'requires lumenairy.monte_carlo_tolerancing.',
+                'Strehl yield curves are NOT included; this report '
+                'is built from a lightweight ray-trace MC engine '
+                'that captures RMS spot + EFL only.',
+                'The dock does not (yet) consume tolerancing_report; '
+                'expected to migrate when the core MC integration '
+                'lands.',
+            ],
             'tolerances_1sigma': rs['tolerances'],
             'n_trials_requested': rs['n_trials_requested'],
             'n_trials_converged': rs['n_trials_converged'],

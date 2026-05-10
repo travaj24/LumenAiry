@@ -62,8 +62,23 @@ class ReplDock(QWidget):
         f = QFont('Consolas', 10)
         self.output.setFont(f)
         self.output.appendPlainText(
-            '# Python REPL.  Bound: model, np, plt, result, wave.\n'
-            '# Enter to execute, Up/Down for history.\n')
+            '# LumenAiry Designer — Python Console (REPL)\n'
+            '# Pre-bound names: model, np, plt, result, wave, la\n'
+            '# Enter to execute, Up/Down for command history.\n'
+            '#\n'
+            '# Quick examples:\n'
+            "#   model.elements                              "
+            '# inspect the optical system\n'
+            "#   import lumenairy as la                      "
+            '# core library is also pre-imported as `la`\n'
+            "#   rx = la.thorlabs_lens('AC254-100-C')        "
+            '# load a Thorlabs prescription\n'
+            "#   model.load_prescription(rx, 1310.0)         "
+            '# push it into the GUI\n'
+            "#   la.save_lens('my_lens', model.to_prescription())  "
+            '# save to user library\n'
+            "#   plt.imshow(np.abs(wave['planes'][-1]['field'])**2)  "
+            '# show last wave-optics PSF\n')
         outer.addWidget(self.output, stretch=1)
 
         row = QHBoxLayout()
@@ -92,6 +107,13 @@ class ReplDock(QWidget):
         try:
             import matplotlib.pyplot as plt
             self._globals['plt'] = plt
+        except Exception:
+            pass
+        # 3.6: also pre-import the core library as `la` so users
+        # can transcribe library examples directly into the REPL.
+        try:
+            import lumenairy as la
+            self._globals['la'] = la
         except Exception:
             pass
         self._globals['model'] = self._model

@@ -146,7 +146,8 @@ class ThroughFocusDock(QWidget):
 
         # ── Run controls + progress ──
         run_row = QHBoxLayout()
-        self.btn_run = QPushButton('Run through-focus scan')
+        self.btn_run = QPushButton('▶ Run through-focus scan  (F7)')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.clicked.connect(self._start_scan)
         run_row.addWidget(self.btn_run)
         self.btn_stop = QPushButton('Stop')

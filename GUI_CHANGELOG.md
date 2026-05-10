@@ -15,6 +15,175 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.6.0] — 2026-05-09
+
+GUI feature-coverage release.  Closes ~30 of the 42 audit findings
+identified after the 3.5.9 release: workspace gaps, menu wiring,
+new specialty docks, dispatch additions, theme cleanup, source-
+factory expansion, optimizer hierarchy, run-button consistency,
+keyboard shortcuts, what's-new in-app modal, expanded Help and
+Tools menus, welcome-dock redesign, REPL improvements.
+
+### Five new specialty docks
+
+- **Richards-Wolf focus** (`richards_wolf_dock.py`): vector-
+  diffraction PSF for high-NA imaging, plotting |Ex|² / |Ey|² /
+  |Ez|² components plus total intensity.  Chooses pupil
+  polarization from a 6-option preset list.
+- **Partial coherence (Köhler)** (`coherence_dock.py`): Köhler-
+  decomposed extended-source imaging with a σ slider and circular
+  / annular / dipole / quadrupole illumination shapes.
+- **Shack-Hartmann sensing** (`shack_hartmann_dock.py`): virtual
+  microlens-array wavefront sensor on the most recent wave-optics
+  focal field.  Plots per-lenslet slope magnitude and a
+  reconstructed Zernike spectrum (auto-fed when the Wave Optics
+  dock finishes).
+- **LG aberration tensor** (`lg_aberration_dock.py`): heat-map of
+  the Laguerre-Gauss aberration tensor with Seidel-equivalent
+  labels for the largest elements.
+- **RCWA grating** (`rcwa_dock.py`): rigorous-coupled-wave 1-D
+  grating solver with groove-profile / period / depth / duty-cycle
+  / polarization controls and a wavelength-sweep efficiency plot.
+
+All five live in the appropriate workspace by default
+(Analysis or Wave Optics) via `DEFAULT_WORKSPACES` and have menu
+entries in the Analysis menu.  Workspace defaults_revision bumped
+3 → 4; the migration logic now correctly union-merges new docks
+into existing workspaces (closing the 3.5.9 caustic-dock gap).
+
+### Wave Optics dispatch — four new whole-prescription propagators
+
+The Method dropdown gained `GBD`, `HFPI`, `Huygens-Fresnel`, and
+`Subaperture` entries.  When one of these is selected the worker
+short-circuits the per-element loop and calls the corresponding
+`propagate_*_through_prescription` from the core library on the
+full prescription dict, returning a single focal-plane field.
+
+### Wave Optics — Quick-run presets, Detector model
+
+- **Quick run** preset bar at the top of the dock with three
+  buttons (Fast preview / Production / Sub-nm validation), each
+  writing a complete config (N / dx / method / lens model /
+  precision / bandlimit) so a new user is one click away from Run.
+- **Detector model** group exposes `apply_detector` as an opt-in
+  post-processing step: pixel pitch, QE, read noise, dark current,
+  exposure time.
+
+### Source factories — top_hat, fiber_mode, source polarization
+
+- `SourceDefinition.TYPES` now includes `top_hat` and `fiber_mode`;
+  `to_source()` routes to `Source.top_hat()` / `Source.fiber_mode()`.
+- Element table source-row form has the corresponding parameter
+  rows (top-hat diameter, fiber MFD + NA).
+- New `polarization` field on `SourceDefinition` (None /
+  linear_x / linear_y / linear_45 / rcp / lcp) for future Jones-
+  field plumbing.
+- Insert > Source submenu offers six one-click presets.
+
+### Application-shell changes
+
+- **Keyboard Shortcuts dialog** is now a sortable + filterable
+  `QTableWidget` covering all ~25 shortcuts (was a 13-line plain-
+  text `QMessageBox`).  Auto-derived from a single source-of-
+  truth list so it never drifts.
+- **What's New in 3.6.0** in-app modal, triggered automatically
+  on first launch after a version bump (`QSettings('lumenairy',
+  'OpticalDesigner').value('last_seen_version')` comparison).
+  Manually re-openable via Help > What's New.
+- **About dialog** now lists detected optional dependencies
+  (pyFFTW / CuPy / JAX / h5py / zarr / numba / astropy) so users
+  know what backends are active without opening Wave Optics.
+- **Help menu** expanded: Wiki / GUI README / Examples folder /
+  Open Demo / What's New / Report a Bug.
+- **Tools menu** expanded (Scale system, Find nearest Thorlabs,
+  Quick Zernikes from trace, Chromatic focal shift).
+- **F-key shortcuts** for one-keystroke analyses: F5 wave optics
+  (existing), F6 retrace, F7 through-focus, F8 Zernike,
+  F9 PSF/MTF, F10 caustic.  Hint shown in each dock's Run-button
+  text.  F-key dispatcher (`_fkey_run`) raises the named dock and
+  triggers its Run-equivalent action.
+- **Save As** (Ctrl+Shift+S) added to the File menu.
+- **Status-bar metrics** (EFL / BFL / f# / EPD / λ) now clickable
+  → raise System Data dock.
+
+### Welcome dock redesign
+
+- Hero **Open Demo (AC254-100-C)** button at +2pt size with the
+  primary-action stylesheet, separated from the secondary row.
+- Secondary row now includes an **Open Python REPL** button +
+  reworded subtitle that mentions drag-drop and the REPL.
+- Subtitle calls out the `model.load_prescription(rx)` REPL flow
+  for users coming from Python scripts.
+
+### REPL improvements
+
+- Banner expanded with five quick examples covering the most
+  common workflows (load Thorlabs lens, push into model, save to
+  user library, plot last wave-optics PSF).
+- `lumenairy` is now pre-imported as `la` in the REPL globals,
+  matching the convention used in library examples.
+- Dock title ready to be renamed "Python (REPL)" via the
+  default_dock_titles map.
+
+### Optimizer redesign
+
+- Three coequal Local / Global / Wave buttons replaced with a
+  single primary **Optimize** button (which auto-routes to the
+  hybrid wave engine when a wave merit is selected) plus a
+  secondary disclosure row for **Global Search…** / **Wave
+  Optimize…** advanced modes.
+- JAX wave-propagator checkbox moved into a dedicated **Compute
+  backend** group at the top of the Optimization group, paralleling
+  the Wave Optics dock's Compute group.
+
+### Run-button standardisation
+
+Every dock's primary action now sets
+`objectName('run_button')`.  A single new stylesheet rule in
+`apply_theme` styles all run buttons identically (accent colour
+background, bold weight, larger padding).  Where the dock had a
+non-standard label ("Run", "Compute Jones pupil", "Rank
+variables", "Jointly optimise"), the label is now "▶ Run <noun>"
+or similarly verb-glyph-noun for consistency.  F-key hints
+appended where applicable.
+
+### Workspace migration fix
+
+`workspace.py:534-560` (load_json) now union-merges new default
+docks into existing workspaces of the same name, not just adding
+new workspaces.  Closes the bug where the 3.5.9 caustic dock
+silently disappeared for users with persisted layouts.
+
+### Tolerance dock — limitations surfaced
+
+- Yellow-bordered banner at the top of the dock explaining the
+  ray-trace MC limitations.
+- Export Report JSON schema gained a `limitations` field
+  enumerating the same caveats so downstream tooling can detect
+  them.
+- Disabled Export-Report button now has a tooltip explaining
+  what's needed to enable it.
+
+### Internals
+
+- New `_fkey_run(dock_attr)` dispatcher introspects each dock for
+  a `btn_run` / `btn_compute` / `btn_recompute` attribute (or a
+  `run` / `compute` / `recompute` / `_run` / `_compute` method)
+  to support one-keystroke runs without per-dock special cases.
+- New `_apply_quick_preset(key)` method on the Wave Optics dock
+  writes complete per-preset configs through the existing widget
+  setters, so the run path is unchanged.
+- New `_show_whats_new(force_show)` + `_maybe_show_whats_new_on_startup`
+  on MainWindow for the in-app changelog modal.
+- New `_ins_source_preset(kind)` helper for the Insert > Source
+  submenu.
+
+### Backwards compatibility
+
+No public API additions or removals on the GUI side.  Existing
+saved JSON designs / workspaces / pinned docks / recent files
+all survive.  Top-level `__init__.py` exports unchanged.
+
 ## [3.5.9] — 2026-05-09
 
 GUI catch-up to the 3.3-3.5 core-library work, plus an application

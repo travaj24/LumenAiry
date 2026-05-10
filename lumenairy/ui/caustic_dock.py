@@ -118,7 +118,8 @@ class CausticDock(QWidget):
 
         # ── Run / clear ──
         run_row = QHBoxLayout()
-        self.btn_run = QPushButton('▶ Run caustic diagnostic')
+        self.btn_run = QPushButton('▶ Run caustic diagnostic  (F10)')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
         self.btn_clear = QPushButton('Clear')

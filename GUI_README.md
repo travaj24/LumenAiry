@@ -3,7 +3,7 @@
 A PySide6 desktop application for interactive optical system design, analysis,
 and optimization.  Built on the `lumenairy` library.
 
-**Version:** 3.5.9
+**Version:** 3.6.0
 **Author:** Andrew Traverso
 
 > Renamed from "Optical Designer" to **LumenAiry Designer** in 3.5.9.

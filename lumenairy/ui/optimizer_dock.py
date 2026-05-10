@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QProgressBar, QTextEdit, QCheckBox, QGroupBox, QComboBox,
-    QDialog, QDialogButtonBox, QScrollArea,
+    QDialog, QDialogButtonBox, QScrollArea, QFormLayout,
 )
 from PySide6.QtGui import QFont, QColor
 
@@ -170,71 +170,78 @@ class OptimizerDock(QWidget):
         opt_group = QGroupBox('Optimization')
         opt_layout = QVBoxLayout(opt_group)
 
-        iter_row = QHBoxLayout()
-        iter_row.addWidget(QLabel('Max iterations:'))
-        self.spin_iter = QSpinBox()
-        self.spin_iter.setRange(10, 5000)
-        self.spin_iter.setValue(200)
-        iter_row.addWidget(self.spin_iter)
-        opt_layout.addLayout(iter_row)
-
-        # ── JAX gradient toggle (3.5.9) ──
-        # When checked, passes jac='auto' through to design_optimize
-        # and routes the wave-leg through the JAX-traceable
-        # apply_real_lens_traced_jax (3.5.0+).  design_optimize
-        # already defaults to jac='auto' but the wave_propagator
-        # default 'real_lens' uses the NumPy path; opting into the
-        # JAX wave propagator unlocks analytic Jacobians for any
-        # JAX-aware merit terms in the term list.
+        # ── Compute backend (3.6) ──
+        # JAX is a *backend* choice; group it with iterations rather
+        # than placing it between two run-config rows.
         try:
             import jax  # noqa
             _jax_ok = True
         except Exception:
             _jax_ok = False
-        jax_row = QHBoxLayout()
-        self.chk_jax = QCheckBox('Use JAX wave propagator (faster gradients)')
+        backend_group = QGroupBox('Compute backend')
+        backend_layout = QFormLayout(backend_group)
+        self.spin_iter = QSpinBox()
+        self.spin_iter.setRange(10, 5000)
+        self.spin_iter.setValue(200)
+        backend_layout.addRow('Max iterations:', self.spin_iter)
+        self.chk_jax = QCheckBox(
+            'Use JAX wave propagator (faster gradients)')
         self.chk_jax.setChecked(False)
         self.chk_jax.setEnabled(_jax_ok)
         self.chk_jax.setToolTip(
             'Route the wave leg through apply_real_lens_traced_jax '
             'and let design_optimize use jax.grad-derived analytic '
-            'Jacobians for JAX-aware merit terms.  Requires jax to '
-            'be installed.\n\n'
-            'Falls back to finite differences for any merit terms '
-            'that are not JAX-built.  Significant speedup on systems '
-            'with many free variables; smaller benefit on geometric-'
-            'merit-only optimization.'
+            'Jacobians for JAX-aware merit terms.  Falls back to FD '
+            'for non-JAX merit terms.  Significant speedup on systems '
+            'with many free variables.'
             + ('' if _jax_ok else
                '\n\n(JAX not detected — install via '
                'pip install jax jaxlib)'))
-        jax_row.addWidget(self.chk_jax)
-        jax_row.addStretch()
-        opt_layout.addLayout(jax_row)
+        backend_layout.addRow(self.chk_jax)
+        opt_layout.addWidget(backend_group)
 
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # indeterminate
         self.progress_bar.setVisible(False)
         opt_layout.addWidget(self.progress_bar)
 
-        btn_row = QHBoxLayout()
-        self.btn_optimize = QPushButton('Local Optimize')
+        # ── Run buttons (3.6) ──
+        # Promote a single primary action; the other two move under a
+        # disclosure so novices aren't forced to choose between three
+        # similar-looking buttons before pressing Run.
+        primary_row = QHBoxLayout()
+        self.btn_optimize = QPushButton('▶ Optimize')
+        self.btn_optimize.setObjectName('run_button')
+        self.btn_optimize.setToolTip(
+            'Run the local Nelder-Mead geometric optimizer.  When a '
+            'wave merit is selected the run automatically reroutes '
+            'to the hybrid wave/ray design_optimize engine.')
         self.btn_optimize.clicked.connect(self._start_optimize)
-        self.btn_global = QPushButton('Global Search')
-        self.btn_global.setToolTip('Random restart optimization (finds different lens forms)')
-        self.btn_global.clicked.connect(self._start_global)
-        self.btn_wave = QPushButton('Wave Optimize')
-        self.btn_wave.setToolTip(
-            'Hybrid wave/ray optimization using the design_optimize engine. '
-            'Slower but uses wave-optics merits (Strehl, wavefront, etc.)')
-        self.btn_wave.clicked.connect(self._start_wave_optimize)
+        # Alias so F-key dispatcher / tests can always find btn_run.
+        self.btn_run = self.btn_optimize
+        primary_row.addWidget(self.btn_optimize)
         self.btn_stop = QPushButton('Stop')
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self._stop_optimize)
-        btn_row.addWidget(self.btn_optimize)
-        btn_row.addWidget(self.btn_global)
-        btn_row.addWidget(self.btn_wave)
-        btn_row.addWidget(self.btn_stop)
-        opt_layout.addLayout(btn_row)
+        primary_row.addWidget(self.btn_stop)
+        opt_layout.addLayout(primary_row)
+
+        # Disclosure for advanced run modes.
+        adv_row = QHBoxLayout()
+        self.btn_global = QPushButton('Global Search…')
+        self.btn_global.setToolTip(
+            'Random-restart optimization (finds different lens forms)')
+        self.btn_global.clicked.connect(self._start_global)
+        adv_row.addWidget(self.btn_global)
+        self.btn_wave = QPushButton('Wave Optimize…')
+        self.btn_wave.setToolTip(
+            'Force the hybrid wave/ray engine even when only '
+            'geometric merits are selected.  Use for Strehl / RMS '
+            'wavefront / Zernike-coefficient targets.')
+        self.btn_wave.clicked.connect(self._start_wave_optimize)
+        adv_row.addWidget(self.btn_wave)
+        adv_row.addStretch()
+        opt_layout.addLayout(adv_row)
 
         layout.addWidget(opt_group)
 

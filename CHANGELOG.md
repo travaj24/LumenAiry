@@ -2,6 +2,57 @@
 
 All notable changes to the core library are documented here.
 
+## [3.6.0] — 2026-05-09
+
+GUI feature-coverage release.  No core-library API changes; all
+work in this release surfaces previously-unwrapped library
+capabilities through the LumenAiry Designer GUI.  See
+[GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full list.
+
+Highlights of GUI-facing changes:
+
+- 5 new specialty docks (Richards-Wolf vector diffraction,
+  Köhler partial coherence, Shack-Hartmann sensing, LG aberration
+  tensor, RCWA grating analyser).
+- Wave Optics dispatch dropdown now also exposes whole-prescription
+  GBD / HFPI / Huygens-Fresnel / Subaperture propagators.
+- Wave Optics Quick-run preset bar (Fast / Production / Sub-nm).
+- Detector model toggle (apply_detector) on the focal-plane field.
+- Source factories `Source.top_hat` and `Source.fiber_mode`
+  reachable from Insert > Source and the source-row form.
+- F6/F7/F8/F9/F10 keyboard shortcuts for retrace / through-focus /
+  Zernike / PSF-MTF / caustic.
+- Sortable + filterable Keyboard Shortcuts dialog.
+- In-app "What's New" modal triggered once per release version.
+- Help menu expanded with Wiki, Examples, GUI README, Bug
+  tracker, Open Demo, What's New links.
+- About dialog now lists detected optional dependencies.
+- Tools menu expanded (Scale system, Find nearest Thorlabs,
+  Quick Zernikes from trace, Chromatic focal shift).
+- Welcome dock redesigned with a hero "Open Demo" button + a
+  dedicated "Open Python REPL" button + drag-drop / REPL hints.
+- Optimizer dock: primary "Optimize" button + advanced disclosure
+  (Global Search, Wave Optimize); JAX checkbox moved into a
+  Compute backend group.
+- Run buttons standardised across all docks via a single
+  `objectName('run_button')` stylesheet rule.
+- Status-bar EFL / BFL / f# / EPD / λ metrics are now clickable
+  (raise the System Data dock).
+- Workspace migration now union-merges new docks into existing
+  workspaces so upgraders pick up new specialty docks without
+  losing customisations.
+- Tolerance dock surfaces its MC limitations up-front and the
+  Export Report schema includes a `limitations` field.
+- Welcome dock + REPL banner advertise `lumenairy` examples /
+  pre-bound `la` namespace for transcribing library examples.
+
+### Backwards compatibility
+
+No core-library API changes.  `__all__` unchanged.  GUI tracks
+library version per the lockstep policy in `GUI_README.md`.
+QSettings storage key unchanged so existing user customisations
+survive the upgrade.
+
 ## [3.5.9] — 2026-05-09
 
 GUI catch-up release.  No core-library API changes; this version

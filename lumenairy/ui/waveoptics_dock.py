@@ -550,6 +550,90 @@ class WaveOpticsWorker(QThread):
             # overall progress (source was step 1, focus+analysis the
             # last two).
             n_surf = max(1, len(trace_surfs))
+
+            # 3.6: whole-prescription propagators (GBD, HFPI,
+            # Huygens-Fresnel, Subaperture) take the full prescription
+            # rather than per-surface fields, so we short-circuit the
+            # per-element loop and call them directly.  Result is the
+            # focal-plane field (output_dx defaulting to dx_in).
+            whole_prescription = {
+                'gbd', 'hfpi', 'huygens-fresnel', 'subaperture',
+            }
+            if method in whole_prescription:
+                try:
+                    pres = self.model.to_prescription()
+                except Exception as exc:
+                    self.finished.emit({
+                        'error': f'Cannot export prescription: {exc}'})
+                    return
+                step = total_steps - 2
+                self.progress.emit(step, total_steps,
+                                    f'Running {method} (whole-prescription)')
+                try:
+                    if method == 'gbd':
+                        from ..propagators.propagation import (
+                            propagate_gbd_through_prescription)
+                        E_focus = propagate_gbd_through_prescription(
+                            E, dx, pres, wavelength=wv)
+                    elif method == 'hfpi':
+                        from ..propagators.propagation import (
+                            propagate_hfpi_through_prescription)
+                        E_focus = propagate_hfpi_through_prescription(
+                            E, dx, pres, wavelength=wv,
+                            n_paths=cfg.get('hfpi_n_paths', 4096))
+                    elif method == 'huygens-fresnel':
+                        from ..propagators.propagation import (
+                            propagate_huygens_fresnel_through_prescription)
+                        E_focus = (
+                            propagate_huygens_fresnel_through_prescription(
+                                E, dx, pres, wavelength=wv))
+                    elif method == 'subaperture':
+                        from ..propagators.propagation import (
+                            propagate_subaperture_asymptotic)
+                        E_focus = propagate_subaperture_asymptotic(
+                            E, dx, pres, wavelength=wv)
+                except Exception as exc:
+                    self.finished.emit({
+                        'error': f'{method} failed: '
+                                 f'{type(exc).__name__}: {exc}'})
+                    return
+                current_dx = dx
+                # Build a minimal "planes" record so the rest of the
+                # finalisation code (intensity, beam D4-sigma, save)
+                # works unchanged.
+                planes = [{
+                    'label': f'{method.upper()} focus',
+                    'field': E_focus, 'dx': current_dx, 'z': 0.0,
+                }]
+                I_focus = np.abs(E_focus) ** 2
+                from ..analysis import beam_d4sigma, beam_power
+                power_in = beam_power(E, dx)
+                power_focus = beam_power(E_focus, current_dx)
+                try:
+                    dx_b, dy_b = beam_d4sigma(E_focus, current_dx)
+                    d4sig = (dx_b + dy_b) / 2
+                except Exception:
+                    d4sig = 0
+                elapsed = time.time() - t_start
+                self.progress.emit(total_steps, total_steps, 'done')
+                results.update({
+                    'planes': planes,
+                    'I_focus': I_focus,
+                    'dx': current_dx,
+                    'wavelength': wv,
+                    'power_in': power_in,
+                    'power_focus': power_focus,
+                    'peak_intensity': np.max(I_focus),
+                    'd4sigma': d4sig,
+                    'N': N,
+                    'elapsed': elapsed,
+                    'n_planes_saved': len(planes),
+                    'output_path': '',
+                    'propagation_result': None,
+                })
+                self.finished.emit(results)
+                return
+
             if used_lens_router:
                 trace_surfs = []   # skip the inline loop
             else:
@@ -678,6 +762,20 @@ class WaveOpticsWorker(QThread):
                 # operands.  Skipped on MFT-Fraunhofer (the natural
                 # output is already a far-field amplitude where this
                 # conversion is ill-defined).
+                # 3.6: optional detector model (applied to E_focus).
+                if cfg.get('detector_apply', False):
+                    try:
+                        from ..detector import apply_detector
+                        E_focus = apply_detector(
+                            E_focus, current_dx,
+                            pixel_pitch=cfg['detector_pixel_um'] * 1e-6,
+                            quantum_efficiency=cfg['detector_qe'],
+                            read_noise_e=cfg['detector_read_noise_e'],
+                            dark_current_e_per_s=cfg['detector_dark_e_per_s'],
+                            exposure_time=cfg['detector_exposure_s'])
+                    except Exception:
+                        pass
+
                 if (chief_relative_focal
                         and method != 'fraunhofer'
                         and method != 'fraunhofer-mft'):
@@ -831,6 +929,33 @@ class WaveOpticsDock(QWidget):
         # without duplicating widgets.
         self._mhs_tab = None  # filled in _build_mhs_tab() at end of __init__
 
+        # ── Quick-run presets (3.6) ──
+        # One-click sane defaults for the three most common runs.
+        # Each preset writes a complete config (N / dx / method /
+        # lens_model / precision / bandlimit) so a new user can
+        # press Run with confidence immediately.  Power users can
+        # then tweak below.
+        quick_group = QGroupBox('Quick run')
+        quick_layout = QHBoxLayout(quick_group)
+        quick_layout.setContentsMargins(6, 6, 6, 6)
+        for label, key, tip in [
+            ('Fast preview', 'fast',
+             'N=512, dx=4 µm, ASM phase-screen, complex64.\n'
+             'Sub-second on 1k grids.  Fine for sanity checks.'),
+            ('Production', 'production',
+             'N=1024, dx=2 µm, apply_real_lens, ASM, complex128, '
+             'bandlimit=ON.  Default for design reviews.'),
+            ('Sub-nm validation', 'validation',
+             'N=2048, dx=1 µm, apply_real_lens_traced sub=1, '
+             'complex128.  Sub-nm OPD; minutes per run.'),
+        ]:
+            btn = QPushButton(label)
+            btn.setToolTip(tip)
+            btn.clicked.connect(lambda _c=False, k=key:
+                                self._apply_quick_preset(k))
+            quick_layout.addWidget(btn)
+        layout.addWidget(quick_group)
+
         # ── Simulation Parameters ──
         sim_group = QGroupBox('Simulation Parameters')
         sim_layout = QFormLayout(sim_group)
@@ -864,7 +989,13 @@ class WaveOpticsDock(QWidget):
         self.combo_method.addItems(['ASM', 'Fresnel', 'Fraunhofer',
                                     'Rayleigh-Sommerfeld', 'SAS',
                                     'Fresnel MFT', 'Fraunhofer MFT',
-                                    'ASM MFT'])
+                                    'ASM MFT',
+                                    # 3.6: standalone propagators
+                                    # exposed at the dock level.
+                                    'GBD',
+                                    'HFPI',
+                                    'Huygens-Fresnel',
+                                    'Subaperture'])
         self.combo_method.setToolTip(
             'Free-space propagator used BETWEEN elements (MFT variants '
             'are applied at the FOCAL plane only; between-surface steps '
@@ -968,6 +1099,45 @@ class WaveOpticsDock(QWidget):
         # against ray-trace-rooted aberration tools (OPDPy, Zemax
         # OPD operands).  Optional post-processing applied to the
         # focal-plane field only.
+        # \u2500\u2500 Detector model toggle (3.6) \u2500\u2500
+        # Optional pixel-array sensor model applied to the focal-plane
+        # field via apply_detector.  Adds gain / QE / read-noise /
+        # dark-current realism on top of the wave-optics PSF.
+        det_group = QGroupBox('Detector model (optional)')
+        det_layout = QFormLayout(det_group)
+        self.chk_detector = QCheckBox('Apply detector to focal field')
+        self.chk_detector.setChecked(False)
+        self.chk_detector.setToolTip(
+            'After propagation, sample the focal-plane field on a '
+            'pixel grid and add Poisson + read + dark-current noise.')
+        det_layout.addRow(self.chk_detector)
+        self.spin_pixel_um = QDoubleSpinBox()
+        self.spin_pixel_um.setRange(0.1, 1000.0)
+        self.spin_pixel_um.setValue(5.0)
+        self.spin_pixel_um.setDecimals(2)
+        self.spin_pixel_um.setSuffix(' \u00b5m')
+        det_layout.addRow('Pixel pitch:', self.spin_pixel_um)
+        self.spin_qe = QDoubleSpinBox()
+        self.spin_qe.setRange(0.0, 1.0)
+        self.spin_qe.setSingleStep(0.05)
+        self.spin_qe.setValue(0.7)
+        det_layout.addRow('Quantum efficiency:', self.spin_qe)
+        self.spin_read_noise = QDoubleSpinBox()
+        self.spin_read_noise.setRange(0.0, 1000.0)
+        self.spin_read_noise.setValue(3.0)
+        det_layout.addRow('Read noise (e\u207b):', self.spin_read_noise)
+        self.spin_dark = QDoubleSpinBox()
+        self.spin_dark.setRange(0.0, 1e6)
+        self.spin_dark.setValue(0.0)
+        det_layout.addRow('Dark current (e\u207b/s):', self.spin_dark)
+        self.spin_exposure = QDoubleSpinBox()
+        self.spin_exposure.setRange(1e-6, 1e6)
+        self.spin_exposure.setValue(1.0)
+        self.spin_exposure.setDecimals(4)
+        self.spin_exposure.setSuffix(' s')
+        det_layout.addRow('Exposure:', self.spin_exposure)
+        sim_layout.addRow(det_group)
+
         row_chief = QHBoxLayout()
         self.chk_chief_relative = QCheckBox(
             'Convert focal field to chief-relative OPD '
@@ -1223,7 +1393,8 @@ class WaveOpticsDock(QWidget):
         self.btn_save_toggle.toggled.connect(self._on_save_toggle)
         run_row.addWidget(self.btn_save_toggle)
 
-        self.btn_run = QPushButton('\u25B6 Run Wave-Optics')
+        self.btn_run = QPushButton('\u25B6 Run Wave-Optics  (F5)')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.setToolTip(
             'Start a background simulation.  Press F5 from anywhere to '
             'trigger this.')
@@ -1611,6 +1782,44 @@ class WaveOpticsDock(QWidget):
                 2: 'real_lens_traced',
                 3: 'real_lens_maslov'}.get(idx, 'asm')
 
+    def _apply_quick_preset(self, key: str):
+        """3.6: write a complete dock config for one of three named
+        production presets.  The user is then one click away from
+        Run.  Implemented by setting the existing widgets, so the
+        run path is unchanged.
+        """
+        presets = {
+            'fast': {
+                'N': 512, 'dx_um': 4.0, 'method_text': 'ASM',
+                'lens_idx': 0, 'precision_idx': 1, 'bandlimit': True,
+            },
+            'production': {
+                'N': 1024, 'dx_um': 2.0, 'method_text': 'ASM',
+                'lens_idx': 1, 'precision_idx': 0, 'bandlimit': True,
+            },
+            'validation': {
+                'N': 2048, 'dx_um': 1.0, 'method_text': 'ASM',
+                'lens_idx': 2, 'precision_idx': 0, 'bandlimit': True,
+                'ray_subsample': 1,
+            },
+        }
+        p = presets.get(key)
+        if p is None:
+            return
+        idx = self.spin_N.findData(p['N'])
+        if idx >= 0:
+            self.spin_N.setCurrentIndex(idx)
+        self.spin_dx.setValue(p['dx_um'])
+        idx = self.combo_method.findText(p['method_text'])
+        if idx >= 0:
+            self.combo_method.setCurrentIndex(idx)
+        self.combo_lens_model.setCurrentIndex(p['lens_idx'])
+        self.combo_precision.setCurrentIndex(p['precision_idx'])
+        self.chk_bandlimit.setChecked(p['bandlimit'])
+        if 'ray_subsample' in p:
+            self.spin_raysub.setValue(p['ray_subsample'])
+        self._update_forecast()
+
     def _current_method_key(self):
         """Map the combo-box label to the canonical method key used
         downstream (config dict, dispatch, forecast lookup).  Kept
@@ -1627,6 +1836,15 @@ class WaveOpticsDock(QWidget):
             return 'fraunhofer-mft'
         if 'sas' in text:
             return 'sas'
+        # 3.6: standalone-prescription propagator dispatch keys.
+        if 'gbd' in text:
+            return 'gbd'
+        if 'hfpi' in text:
+            return 'hfpi'
+        if 'huygens' in text:
+            return 'huygens-fresnel'
+        if 'subaperture' in text:
+            return 'subaperture'
         return text
 
     def _update_mft_visibility(self):
@@ -1865,6 +2083,13 @@ class WaveOpticsDock(QWidget):
             # comparison against ray-trace-rooted libraries.
             'chief_relative_focal': bool(
                 self.chk_chief_relative.isChecked()),
+            # 3.6: detector model post-processing.
+            'detector_apply': bool(self.chk_detector.isChecked()),
+            'detector_pixel_um': float(self.spin_pixel_um.value()),
+            'detector_qe': float(self.spin_qe.value()),
+            'detector_read_noise_e': float(self.spin_read_noise.value()),
+            'detector_dark_e_per_s': float(self.spin_dark.value()),
+            'detector_exposure_s': float(self.spin_exposure.value()),
         }
 
         self.btn_run.setEnabled(False)

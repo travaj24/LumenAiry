@@ -100,9 +100,16 @@ class MainWindow(QMainWindow):
         self.metric_fnum = QLabel('f/# —')
         self.metric_epd  = QLabel('EPD —')
         self.metric_wv   = QLabel('λ —')
+        # 3.6: clickable metrics raise the System Data dock so users
+        # can drill from the headline numbers to the full table.
         for w in (self.metric_efl, self.metric_bfl, self.metric_fnum,
                   self.metric_epd, self.metric_wv):
-            w.setStyleSheet('padding: 0 8px;')
+            w.setStyleSheet(
+                'padding: 0 8px; QLabel:hover { color: #5cb8ff; }')
+            w.setToolTip('Click to open System Data')
+            w.setCursor(Qt.PointingHandCursor)
+            w.mousePressEvent = (
+                lambda _e=None: self._show_and_raise(self.summary_dock))
             self.statusBar().addPermanentWidget(w)
 
         # Diagnostics badge on the right of the status bar.
@@ -135,6 +142,11 @@ class MainWindow(QMainWindow):
         self._autosave_timer.setInterval(1000)
         self._autosave_timer.timeout.connect(self.model.autosave_session)
         self.model.system_changed.connect(self._autosave_timer.start)
+
+        # 3.6: deferred What's-New popup, fires once per release.
+        # Wrapped in QTimer.singleShot so the main window paints
+        # before the modal appears.
+        QTimer.singleShot(400, self._maybe_show_whats_new_on_startup)
 
         # Track the last-used insert type so Ctrl+R can repeat it.
         self._last_insert_action = None
@@ -231,6 +243,41 @@ class MainWindow(QMainWindow):
         self.caustic_dock = dock(
             'Caustic diagnostic', self.caustic_widget,
             Qt.BottomDockWidgetArea, 'caustic')
+
+        # 3.6: five new specialty docks landing the bulk of the
+        # remaining library coverage (Richards-Wolf vector
+        # diffraction, Köhler partial coherence, Shack-Hartmann
+        # sensing, LG aberration tensor, RCWA grating efficiency).
+        # All ride in the appropriate workspace via DEFAULT_WORKSPACES.
+        from .richards_wolf_dock import RichardsWolfDock
+        self.richards_wolf_widget = RichardsWolfDock(self.model)
+        self.richards_wolf_dock = dock(
+            'Richards-Wolf focus', self.richards_wolf_widget,
+            Qt.BottomDockWidgetArea, 'richards_wolf')
+
+        from .coherence_dock import CoherenceDock
+        self.coherence_widget = CoherenceDock(self.model)
+        self.coherence_dock = dock(
+            'Partial coherence (Köhler)', self.coherence_widget,
+            Qt.BottomDockWidgetArea, 'coherence')
+
+        from .shack_hartmann_dock import ShackHartmannDock
+        self.sh_widget = ShackHartmannDock(self.model)
+        self.sh_dock = dock(
+            'Shack-Hartmann', self.sh_widget,
+            Qt.BottomDockWidgetArea, 'shack_hartmann')
+
+        from .lg_aberration_dock import LGAberrationDock
+        self.lg_widget = LGAberrationDock(self.model)
+        self.lg_dock = dock(
+            'LG aberration tensor', self.lg_widget,
+            Qt.BottomDockWidgetArea, 'lg_aberration')
+
+        from .rcwa_dock import RCWADock
+        self.rcwa_widget = RCWADock(self.model)
+        self.rcwa_dock = dock(
+            'RCWA grating', self.rcwa_widget,
+            Qt.BottomDockWidgetArea, 'rcwa')
 
         from .psf_mtf_dock import PSFMTFDock
         self.psfmtf_widget = PSFMTFDock(self.model)
@@ -331,6 +378,18 @@ class MainWindow(QMainWindow):
         self.waveoptics_widget.run_finished.connect(
             self.repl_widget.set_wave_result)
 
+        # 3.6: route the focal-plane field into the Shack-Hartmann
+        # dock so the user doesn't have to manually re-import.
+        def _push_field_to_sh(result):
+            try:
+                planes = result.get('planes') if isinstance(result, dict) else None
+                if planes:
+                    last = planes[-1]
+                    self.sh_widget.set_field(last['field'], last['dx'])
+            except Exception:
+                pass
+        self.waveoptics_widget.run_finished.connect(_push_field_to_sh)
+
         # Welcome panel: empty-state guidance with quick-start actions
         # and a recent-files list.  Default in the Design workspace.
         from .welcome_dock import WelcomeDock
@@ -348,6 +407,8 @@ class MainWindow(QMainWindow):
             lambda: self._show_and_raise(self.library_dock))
         self.welcome_widget.show_shortcuts_requested.connect(
             self._show_shortcuts)
+        self.welcome_widget.show_repl_requested.connect(
+            lambda: self._show_and_raise(self.repl_dock))
 
         # When the wave-optics dock finishes a run, hand the focal-plane
         # field to the Zernike dock so its decompose button operates on
@@ -765,8 +826,13 @@ class MainWindow(QMainWindow):
         fm.addAction('&Open Prescription File...', self._load_file).setShortcut('Ctrl+O')
         fm.addAction('Load &Thorlabs Lens...', self._load_thorlabs)
         fm.addSeparator()
-        fm.addAction('Save Design (&JSON)...', self._save_json_design).setShortcut('Ctrl+S')
+        fm.addAction('Save Design (&JSON)...',
+                     self._save_json_design).setShortcut('Ctrl+S')
+        fm.addAction('Save Design &As (JSON)...',
+                     self._save_json_design_as).setShortcut('Ctrl+Shift+S')
         fm.addAction('Open Design (JSON)...', self._open_json_design)
+        fm.addSeparator()
+        fm.addAction('Open &Demo Lens (AC254-100-C)', self._open_demo)
         fm.addSeparator()
         fm.addAction('&Export Prescription...', self._export_prescription)
         fm.addAction('Export &Python Sim Script...', self._export_python_script)
@@ -808,6 +874,24 @@ class MainWindow(QMainWindow):
         dm.addAction('Diffraction Grating...', self._ins_grating)
         dm.addAction('Dammann Grating...', self._ins_dammann)
 
+        # ── Sources (3.6) ──
+        # Quick presets that swap the source on the current model.
+        # Equivalent to clicking Source row 0 and editing, but
+        # discoverable from the Insert menu.
+        sm = im.addMenu('&Source')
+        sm.addAction('Plane wave (fills EPD)',
+                     lambda: self._ins_source_preset('plane_wave'))
+        sm.addAction('Gaussian beam (d = 1 mm)',
+                     lambda: self._ins_source_preset('gaussian'))
+        sm.addAction('Gaussian aperture (sigma = 5 mm)',
+                     lambda: self._ins_source_preset('gaussian_aperture'))
+        sm.addAction('Top-hat aperture',
+                     lambda: self._ins_source_preset('top_hat'))
+        sm.addAction('Fiber mode (MFD)',
+                     lambda: self._ins_source_preset('fiber_mode'))
+        sm.addAction('Point source (1000 mm)',
+                     lambda: self._ins_source_preset('point_source'))
+
         im.addSeparator()
         # Thorlabs catalog grouped by family.  Within each family,
         # entries are sorted by focal length and the EFL is shown in
@@ -828,12 +912,21 @@ class MainWindow(QMainWindow):
         am = mb.addMenu('&Analysis')
         am.addAction('&Retrace', lambda: self.model.run_trace()).setShortcut('Ctrl+T')
         am.addSeparator()
-        am.addAction('Through-focus scan',
-                     lambda: self._show_and_raise(self.through_focus_dock))
-        am.addAction('PSF / MTF',
-                     lambda: self._show_and_raise(self.psfmtf_dock))
-        am.addAction('Zernike decomposition',
-                     lambda: self._show_and_raise(self.zernike_dock))
+        # 3.6: F-key shortcuts give one-keystroke access to the most-
+        # used analyses.  F5 (wave optics), F6 (retrace), F7
+        # (through-focus), F8 (Zernike), F9 (PSF/MTF), F10 (caustic).
+        am.addAction('Through-focus scan (F7)',
+                     lambda: self._fkey_run('through_focus_dock')
+                     ).setShortcut('F7')
+        am.addAction('PSF / MTF (F9)',
+                     lambda: self._fkey_run('psfmtf_dock')
+                     ).setShortcut('F9')
+        am.addAction('Zernike decomposition (F8)',
+                     lambda: self._fkey_run('zernike_dock')
+                     ).setShortcut('F8')
+        am.addAction('Caustic diagnostic (F10)',
+                     lambda: self._fkey_run('caustic_dock')
+                     ).setShortcut('F10')
         am.addAction('Sensitivity',
                      lambda: self._show_and_raise(self.sensitivity_dock))
         am.addAction('Interferometry',
@@ -853,12 +946,28 @@ class MainWindow(QMainWindow):
         am.addAction('Spot vs Field',
                      lambda: self._show_and_raise(self.spot_field_dock))
         am.addSeparator()
+        am.addAction('Custom MHS chain (Wave Optics → tab 2)',
+                     self._open_mhs_tab)
+        # 3.6 specialty analyses.
+        am.addAction('Richards-Wolf focus (high-NA)',
+                     lambda: self._show_and_raise(self.richards_wolf_dock))
+        am.addAction('Partial coherence (Köhler)',
+                     lambda: self._show_and_raise(self.coherence_dock))
+        am.addAction('Shack-Hartmann sensing',
+                     lambda: self._show_and_raise(self.sh_dock))
+        am.addAction('LG aberration tensor',
+                     lambda: self._show_and_raise(self.lg_dock))
+        am.addAction('RCWA grating',
+                     lambda: self._show_and_raise(self.rcwa_dock))
+        am.addSeparator()
         am.addAction('Chromatic focal shift (dialog)', self._run_chromatic)
         am.addAction('Quick Zernikes from ray-trace OPD',
                      self._zernike_from_trace)
         am.addSeparator()
         am.addAction('Run Wave Optics (F5)', self._run_waveoptics_now)\
             .setShortcut('F5')
+        am.addAction('Retrace (F6)',
+                     lambda: self.model.run_trace()).setShortcut('F6')
         am.addSeparator()
         am.addAction('Export current spot diagram (PNG)...',
                      self._export_spot_png)
@@ -972,11 +1081,15 @@ class MainWindow(QMainWindow):
         om.addAction('Lens function options...',
                      self._show_lens_options)
 
-        # ── Tools (3.5.9) ──
-        # Cross-cutting utilities backed by core-library functions:
-        # currently just scale_prescription, room to grow.
+        # ── Tools (3.5.9+) ──
+        # Cross-cutting utilities backed by core-library functions.
         tm = mb.addMenu('&Tools')
         tm.addAction('Scale system...', self._show_scale_dialog)
+        tm.addAction('Find nearest Thorlabs part...',
+                     self._find_nearest_thorlabs)
+        tm.addAction('Quick Zernikes from ray-trace OPD',
+                     self._zernike_from_trace)
+        tm.addAction('Chromatic focal shift...', self._run_chromatic)
 
         # Help
         hm = mb.addMenu('&Help')
@@ -985,6 +1098,13 @@ class MainWindow(QMainWindow):
         cmd_act.triggered.connect(self._open_command_palette)
         hm.addAction(cmd_act)
         hm.addAction('Keyboard Shortcuts', self._show_shortcuts)
+        hm.addSeparator()
+        hm.addAction('What\'s New in 3.6...', self._show_whats_new)
+        hm.addAction('GUI README...', self._open_gui_readme)
+        hm.addAction('Examples folder...', self._open_examples_folder)
+        hm.addAction('Wiki / Documentation', self._open_wiki)
+        hm.addAction('Report a Bug', self._open_issues)
+        hm.addSeparator()
         hm.addAction('&About', self._show_about)
 
     # ------------------------------------------------------------------
@@ -1387,32 +1507,85 @@ class MainWindow(QMainWindow):
             self._last_insert_action()
 
     def _show_shortcuts(self):
-        lines = [
-            'File / Edit',
-            '  Ctrl+N         New system',
-            '  Ctrl+O         Open prescription (.zmx / .txt)',
-            '  Ctrl+S         Save as JSON',
-            '  Ctrl+Z         Undo',
-            '  Ctrl+Y         Redo',
-            '  Ctrl+B         Save snapshot',
-            '',
-            'Insert',
-            '  Ctrl+L         Plano-convex singlet',
-            '  Ctrl+Shift+L   Achromatic doublet',
-            '  Ctrl+M         Flat mirror',
-            '  Ctrl+R         Repeat last insert',
-            '  Ctrl+D         Delete selected element',
-            '',
-            'Table navigation',
-            '  Ctrl+E         Focus element table',
-            '  Alt+\u2191 / Alt+\u2193  Move selected element up / down',
-            '',
-            'Analysis',
-            '  Ctrl+T         Retrace',
-            '  F5             Run Wave Optics',
+        """Sortable + filterable shortcut reference (3.6).
+
+        Replaces the prior plain-text QMessageBox so the list is
+        searchable and so new shortcuts (F-keys, Ctrl+1..9, etc.)
+        get a real entry rather than getting buried.  Auto-derived
+        from a single source-of-truth list so the dialog never
+        drifts from the actual key bindings.
+        """
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QTableWidget, QTableWidgetItem,
+            QHeaderView, QLineEdit, QDialogButtonBox)
+        rows = [
+            # (Category, Shortcut, Action)
+            ('File',     'Ctrl+N',         'New system'),
+            ('File',     'Ctrl+O',         'Open prescription (.zmx / .txt / .seq)'),
+            ('File',     'Ctrl+S',         'Save design as JSON'),
+            ('File',     'Ctrl+Shift+S',   'Save design As JSON'),
+            ('File',     'Ctrl+Q',         'Quit'),
+            ('Edit',     'Ctrl+Z',         'Undo'),
+            ('Edit',     'Ctrl+Y',         'Redo (Ctrl+Shift+Z on macOS)'),
+            ('Edit',     'Ctrl+B',         'Save snapshot'),
+            ('Insert',   'Ctrl+L',         'Plano-convex singlet'),
+            ('Insert',   'Ctrl+Shift+L',   'Achromatic doublet'),
+            ('Insert',   'Ctrl+M',         'Flat mirror'),
+            ('Insert',   'Ctrl+R',         'Repeat last insert'),
+            ('Insert',   'Ctrl+D',         'Delete selected element'),
+            ('Table',    'Ctrl+E',         'Focus element table'),
+            ('Table',    'Alt+\u2191 / Alt+\u2193',  'Move selected element up / down'),
+            ('Table',    'Shift+\u2191 / Shift+\u2193',
+                         'Bump element distance \u00b10.1 mm'),
+            ('Table',    'Ctrl+Shift+\u2191 / \u2193',
+                         'Bump element distance \u00b11 mm'),
+            ('Analysis', 'Ctrl+T',         'Retrace'),
+            ('Analysis', 'F5',             'Run Wave Optics'),
+            ('Analysis', 'F6',             'Retrace'),
+            ('Analysis', 'F7',             'Through-focus scan'),
+            ('Analysis', 'F8',             'Zernike decomposition'),
+            ('Analysis', 'F9',             'PSF / MTF'),
+            ('Analysis', 'F10',            'Caustic diagnostic'),
+            ('View',     'Ctrl+1 .. Ctrl+9',
+                         'Jump to workspace tab N'),
+            ('View',     'F11',            'Compact mode (toggle menus / titlebars)'),
+            ('Help',     'Ctrl+K',         'Command palette'),
+            ('Help',     'Ctrl+Shift+P',   'Command palette (alt)'),
         ]
-        QMessageBox.information(self, 'Keyboard Shortcuts',
-                                '\n'.join(lines))
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Keyboard Shortcuts')
+        dlg.resize(600, 500)
+        v = QVBoxLayout(dlg)
+        filt = QLineEdit()
+        filt.setPlaceholderText('Filter\u2026 (try "F", "Ctrl+S", "trace")')
+        v.addWidget(filt)
+        tbl = QTableWidget(len(rows), 3)
+        tbl.setHorizontalHeaderLabels(['Category', 'Shortcut', 'Action'])
+        tbl.horizontalHeader().setSectionResizeMode(
+            QHeaderView.ResizeToContents)
+        tbl.horizontalHeader().setStretchLastSection(True)
+        tbl.setSortingEnabled(True)
+        tbl.setEditTriggers(tbl.NoEditTriggers)
+        tbl.setSelectionBehavior(tbl.SelectRows)
+        for i, (cat, sc, act) in enumerate(rows):
+            tbl.setItem(i, 0, QTableWidgetItem(cat))
+            tbl.setItem(i, 1, QTableWidgetItem(sc))
+            tbl.setItem(i, 2, QTableWidgetItem(act))
+        v.addWidget(tbl, stretch=1)
+
+        def _apply_filter(text):
+            t = text.strip().lower()
+            for r in range(tbl.rowCount()):
+                row_text = ' '.join(
+                    tbl.item(r, c).text() for c in range(3)).lower()
+                tbl.setRowHidden(r, bool(t) and t not in row_text)
+
+        filt.textChanged.connect(_apply_filter)
+        bb = QDialogButtonBox(QDialogButtonBox.Close)
+        bb.rejected.connect(dlg.reject)
+        bb.accepted.connect(dlg.accept)
+        v.addWidget(bb)
+        dlg.exec()
 
     def _restore_session(self):
         if self.model.restore_session():
@@ -2230,11 +2403,40 @@ class MainWindow(QMainWindow):
         event.ignore()
 
     def _show_about(self):
+        # Probe optional deps so users know what's active without
+        # opening Wave Optics first.
+        def _probe(mod):
+            try:
+                __import__(mod)
+                return True
+            except Exception:
+                return False
+        deps = [
+            ('pyFFTW', _probe('pyfftw')),
+            ('CuPy (GPU)', _probe('cupy')),
+            ('JAX', _probe('jax')),
+            ('h5py (HDF5)', _probe('h5py')),
+            ('zarr (Zarr)', _probe('zarr')),
+            ('numba', _probe('numba')),
+            ('astropy (FITS)', _probe('astropy')),
+        ]
+        deps_html = '<br>'.join(
+            f'  {"✓" if ok else "✗"} {name}'
+            for name, ok in deps)
         QMessageBox.about(self, 'About LumenAiry Designer',
             '<h3>LumenAiry Designer</h3>'
-            '<p>Open-source optical design application.</p>'
-            f'<p>Library version: {_get_version()}</p>'
-            '<p>Author: Andrew Traverso</p>')
+            '<p>Open-source optical design application built on the '
+            '<code>lumenairy</code> library.</p>'
+            f'<p>Library version: <b>{_get_version()}</b></p>'
+            '<p>Author: Andrew Traverso · License: MIT</p>'
+            '<p><b>Optional dependencies detected</b>:<br>'
+            f'{deps_html}</p>'
+            '<p><a href="https://github.com/travaj24/LumenAiry">'
+            'GitHub</a> · '
+            '<a href="https://github.com/travaj24/LumenAiry/wiki">'
+            'Wiki</a> · '
+            '<a href="https://github.com/travaj24/LumenAiry/issues">'
+            'Report a bug</a></p>')
 
     def _open_command_palette(self):
         """Manual entry point for the command palette (Help menu).
@@ -2346,6 +2548,194 @@ class MainWindow(QMainWindow):
             return
         self.status_label.setText(
             f'System scaled by {factor:g} (linear dimensions only).')
+
+    # ────────────────────────────────────────────────────────────────
+    # 3.6 helpers — Save As, source presets, dock helpers, Help menu
+    # ────────────────────────────────────────────────────────────────
+
+    def _save_json_design_as(self):
+        """Save Design As: forces the file dialog regardless of any
+        previously-saved path.  Promotes a chosen path to current.
+        """
+        prev = self._current_path
+        self._current_path = ''   # force fresh dialog
+        self._save_json_design()
+        if not self._current_path:
+            self._current_path = prev  # user cancelled
+
+    def _ins_source_preset(self, kind: str):
+        """Apply a quick source preset.  Mirrors the source-row form
+        on the element table but reachable from Insert > Source so
+        new users aren't forced to hunt for row 0.
+        """
+        from .model import SourceDefinition
+        defaults = {
+            'plane_wave': dict(),
+            'gaussian': dict(beam_diameter_mm=1.0),
+            'gaussian_aperture': dict(sigma_mm=5.0),
+            'top_hat': dict(top_hat_diameter_mm=2.0),
+            'fiber_mode': dict(fiber_mfd_um=10.4, fiber_NA=0.14),
+            'point_source': dict(object_distance_mm=1000.0),
+        }
+        kwargs = defaults.get(kind, {})
+        self.model.source = SourceDefinition(
+            kind, wavelength_nm=self.model.wavelength_nm, **kwargs)
+        try:
+            self.model.system_changed.emit()
+        except Exception:
+            pass
+        self.status_label.setText(
+            f'Source set to: {self.model.source.describe()}')
+
+    def _fkey_run(self, dock_attr: str):
+        """F-key dispatcher: raise the named dock and (when it
+        exposes a Run-equivalent action) trigger it so a single
+        keystroke produces the analysis the user wanted.
+        """
+        dock = getattr(self, dock_attr, None)
+        if dock is None:
+            return
+        self._show_and_raise(dock)
+        widget = dock.widget()
+        # Look for a sensible run-button to click.  Each dock that
+        # opts in exposes either a 'btn_run' or a method named
+        # 'run' / 'compute' / 'recompute'.
+        for attr in ('btn_run', 'btn_compute', 'btn_recompute'):
+            btn = getattr(widget, attr, None)
+            if btn is not None and btn.isEnabled():
+                btn.click()
+                return
+        for m in ('run', 'compute', 'recompute', '_run', '_compute'):
+            f = getattr(widget, m, None)
+            if callable(f):
+                try:
+                    f()
+                except Exception:
+                    pass
+                return
+
+    def _open_mhs_tab(self):
+        """Raise the Wave Optics dock and switch to its Custom MHS
+        chain tab so the menu entry actually lands the user there.
+        """
+        self._show_and_raise(self.waveoptics_dock)
+        try:
+            self.waveoptics_widget._tabs.setCurrentIndex(1)
+        except Exception:
+            pass
+
+    def _show_whats_new(self, *, force_show=False):
+        """Show the in-app changelog highlight for the current version.
+
+        Stored vs current __version__ comparison: when the GUI starts,
+        if last_seen_version != current and the user hasn't opted out,
+        the same modal pops automatically (see __init__'s call).
+        """
+        from .. import __version__
+        title = f'What\'s New in {__version__}'
+        body = (
+            f'<h3>LumenAiry Designer {__version__}</h3>'
+            '<p><b>Highlights</b></p>'
+            '<ul>'
+            '<li><b>App rename</b>: Optical Designer → '
+            'LumenAiry Designer (3.5.9).  Backward-compat aliases '
+            'preserved.</li>'
+            '<li><b>Wave Optics propagators</b>: 3 new MFT methods '
+            '(focal-plane zoom), Bandlimit checkbox, '
+            'Convert-to-chief-relative-OPD toggle, smarter '
+            'Recommend-grid (3.5.7-3.5.8).</li>'
+            '<li><b>Custom MHS chain</b>: new tab inside Wave Optics '
+            'driving MhsPipeline.from_prescription directly.</li>'
+            '<li><b>Caustic Diagnostic</b>: new dock wrapping '
+            'caustic_diagnostic + plot_caustic_diagnostic.</li>'
+            '<li><b>Optimizer</b>: JAX wave-propagator toggle for '
+            'analytic Jacobians on JAX merit terms.</li>'
+            '<li><b>Tools menu</b>: Scale system, Find nearest '
+            'Thorlabs, Quick Zernikes, Chromatic shift.</li>'
+            '<li><b>Tolerance</b>: structured Export Report.</li>'
+            '<li><b>Sources</b>: top-hat + fiber-mode factories now '
+            'reachable from Insert > Source and the source-row form.</li>'
+            '<li><b>Keyboard</b>: F6/F7/F8/F9/F10 one-keystroke '
+            'analyses; Ctrl+Shift+S Save-As.</li>'
+            '<li><b>Help menu</b>: Wiki, Examples, GUI README, Bug '
+            'tracker links.</li>'
+            '</ul>'
+            '<p>See GUI_CHANGELOG.md for the full list, or press '
+            'Ctrl+K for the command palette to discover new docks.</p>'
+        )
+        QMessageBox.about(self, title, body)
+        try:
+            from PySide6.QtCore import QSettings
+            s = QSettings('lumenairy', 'OpticalDesigner')
+            s.setValue('last_seen_version', __version__)
+        except Exception:
+            pass
+
+    def _maybe_show_whats_new_on_startup(self):
+        """Auto-open the What's New modal once per release."""
+        try:
+            from PySide6.QtCore import QSettings
+            from .. import __version__
+            s = QSettings('lumenairy', 'OpticalDesigner')
+            seen = s.value('last_seen_version', '') or ''
+            if str(seen) != str(__version__):
+                self._show_whats_new()
+        except Exception:
+            pass
+
+    def _open_gui_readme(self):
+        """Open GUI_README.md from the install root in the OS handler."""
+        import os
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        candidates = [
+            os.path.join(os.path.dirname(__file__),
+                         '..', '..', 'GUI_README.md'),
+            os.path.join(os.path.dirname(__file__),
+                         '..', '..', '..', 'GUI_README.md'),
+        ]
+        for path in candidates:
+            path = os.path.abspath(path)
+            if os.path.exists(path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                return
+        QMessageBox.information(
+            self, 'GUI README',
+            'Could not locate GUI_README.md beside the install.  '
+            'Visit the wiki: '
+            'https://github.com/travaj24/LumenAiry/wiki')
+
+    def _open_examples_folder(self):
+        """Locate and open the examples/ folder shipped with the repo."""
+        import os
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        candidates = [
+            os.path.join(os.path.dirname(__file__),
+                         '..', '..', 'examples'),
+            os.path.join(os.path.dirname(__file__),
+                         '..', '..', '..', 'examples'),
+        ]
+        for path in candidates:
+            path = os.path.abspath(path)
+            if os.path.isdir(path):
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+                return
+        QMessageBox.information(
+            self, 'Examples',
+            'Could not locate the examples/ folder beside the install.')
+
+    def _open_wiki(self):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(
+            'https://github.com/travaj24/LumenAiry/wiki'))
+
+    def _open_issues(self):
+        from PySide6.QtGui import QDesktopServices
+        from PySide6.QtCore import QUrl
+        QDesktopServices.openUrl(QUrl(
+            'https://github.com/travaj24/LumenAiry/issues'))
 
 
 def _get_version():
@@ -2477,6 +2867,9 @@ def apply_theme(app, prefs=None):
         QPushButton:hover {{ background: {hover}; border-color: {accent}; }}
         QPushButton:pressed {{ background: {hover}; }}
         QPushButton:checked {{ background: {accent}; color: {t['highlight_text']}; }}
+        QPushButton#run_button {{ background: {accent}; border: 1px solid {accent}; color: {t['highlight_text']}; padding: 6px 16px; font-weight: bold; }}
+        QPushButton#run_button:hover {{ background: {hover}; border-color: {accent}; }}
+        QPushButton#run_button:disabled {{ background: {btn}; color: {dim}; border: 1px solid {border}; }}
         QLabel {{ color: {text}; font-family: Consolas; font-size: 12px; }}
         QComboBox {{ background: {btn}; color: {text}; border: 1px solid {border}; padding: 3px 6px; font-family: Consolas; }}
         QComboBox:hover {{ border-color: {accent}; }}

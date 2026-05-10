@@ -46,8 +46,11 @@ class ZernikeDock(QWidget):
         self.spin_modes.setValue(21)
         ctrl.addWidget(self.spin_modes)
 
-        self.btn_decompose = QPushButton('Decompose (wave OPD)')
+        self.btn_decompose = QPushButton('▶ Decompose (wave OPD)  (F8)')
+        self.btn_decompose.setObjectName('run_button')
         self.btn_decompose.clicked.connect(self.decompose)
+        # F-key dispatcher alias.
+        self.btn_run = self.btn_decompose
         self.btn_decompose.setToolTip(
             'Fit Zernike modes to the latest wave-optics OPD map.\n'
             'Requires a prior wave-optics run (auto-populated on '

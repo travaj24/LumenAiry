@@ -58,7 +58,8 @@ class JonesPupilDock(QWidget):
         self.spin_dx.setSuffix(' µm')
         toolbar.addWidget(self.spin_dx)
 
-        self.btn_run = QPushButton('Compute Jones pupil')
+        self.btn_run = QPushButton('▶ Compute Jones pupil')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.setToolTip(
             'Probe the current prescription with pure-x and pure-y '
             'plane-wave inputs, record both outgoing JonesFields, and '

@@ -412,6 +412,16 @@ class SurfaceDetailPanel(QWidget):
             ('emitter_waist_mm',    'Emitter waist (mm):',    '0.009',
              '1/e\u00b2 waist radius of each emitter',
              {'emitter_array'}),
+            # 3.6: top-hat + fiber-mode source factories.
+            ('top_hat_diameter_mm', 'Top-hat diameter (mm):', '2.0',
+             'Hard-edge top-hat aperture diameter',
+             {'top_hat'}),
+            ('fiber_mfd_um',        'Fiber MFD (\u00b5m):',    '10.4',
+             'Mode-field diameter of the fiber output',
+             {'fiber_mode'}),
+            ('fiber_NA',            'Fiber NA:',              '0.14',
+             'Numerical aperture of the fiber',
+             {'fiber_mode'}),
             ('field_angle_x_deg',   'Field angle X (deg):',   '0.0',
              'Off-axis tilt about the X axis (applies to any source)',
              None),  # always shown

@@ -65,7 +65,8 @@ class SensitivityDock(QWidget):
         ])
         ctl_row.addWidget(self.combo_metric)
 
-        self.btn_run = QPushButton('Rank variables')
+        self.btn_run = QPushButton('▶ Rank variables')
+        self.btn_run.setObjectName('run_button')
         self.btn_run.clicked.connect(self._run_ranking)
         ctl_row.addWidget(self.btn_run)
 
