@@ -1776,6 +1776,16 @@ class WaveOpticsDock(QWidget):
         self.chk_save.setChecked(checked)
         self._update_forecast()
 
+    def _on_save_toggle(self, checked):
+        """Sync the save-planes pill with the main save-to-file
+        checkbox so the two controls never disagree.  Connected
+        from `__init__` to `self.btn_save_toggle.toggled`.
+        """
+        self.btn_save_toggle.setText(
+            'Save planes: ON' if checked else 'Save planes: OFF')
+        self.chk_save.setChecked(checked)
+        self._update_forecast()
+
     def _current_lens_model(self):
         idx = self.combo_lens_model.currentIndex()
         return {0: 'asm', 1: 'real_lens',
