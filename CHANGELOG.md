@@ -2,6 +2,88 @@
 
 All notable changes to the core library are documented here.
 
+## [3.7.0] — 2026-05-10
+
+Tilt-aware sequential ray tracing.  The core trace engine now
+recognises coordinate-break surfaces and transforms the ray
+bundle's frame at each one, so folded systems (mirrors with
+coord-breaks, decentered lenses) actually deflect rays at
+trace time instead of running through the unfolded co-axial
+equivalent.  Backward compatible: existing prescriptions
+emit no coord-breaks, so the trace path for un-tilted systems
+is unchanged and all 25 validation suite files pass without
+modification.
+
+### Added
+
+* `Surface` dataclass gains six optional fields: `is_coordbrk`
+  (bool), `tilt_x_deg`, `tilt_y_deg`, `tilt_z_deg`,
+  `decenter_x_m`, `decenter_y_m`, plus `coordbrk_order` (Zemax
+  PARM 6 — 0 = tilts-first-then-decenter, 1 = decenter-first-
+  then-tilts).  All default to `is_coordbrk=False`, so existing
+  constructor calls and serialised systems are unaffected.
+* `_apply_coord_break(rays, surface)` helper transforms a ray
+  bundle's local frame in place: subtracts decenter from
+  `(x, y)` and rotates position + direction cosines by the
+  inverse of the tilt matrix.  Order follows PARM 6.
+* `trace()` main loop checks `surf.is_coordbrk` BEFORE
+  intersect / refract / reflect and routes to
+  `_apply_coord_break`.  The cb is recorded in `ray_history`
+  so consumers indexing by surface number stay aligned, and
+  its `thickness` carries the ray to the next surface in the
+  new (post-transform) frame.
+* The GUI's `SystemModel.to_prescription()` now also emits
+  `elements` (full chronological list incl. mirrors),
+  `all_thicknesses` aligned to it, and `coord_breaks` (one
+  entry per tilted element) — the same shape the importer
+  produces — so a round-trip through `.zmx` export/import
+  preserves fold geometry.
+
+### Changed
+
+* `system_abcd()`, `paraxial_trace()`, and
+  `seidel_coefficients()` now skip coord-break surfaces (no
+  refractive power) but apply their thicknesses as plain
+  transfer matrices so the cumulative axial separation
+  matches the trace.  `find_paraxial_focus()` inherits the
+  cb-skipping via `system_abcd`.  `find_stop()` and
+  `compute_pupils()` need no changes.
+* `lumenairy.io.prescriptions.export_zemax_zmx()` dispatches
+  to a new cb / mirror-aware writer when the prescription
+  carries the new keys.  The new writer emits
+  `TYPE COORDBRK` rows with `PARM 1..6`, `GLAS MIRROR` rows,
+  and converts physical-positive thicknesses back to Zemax-
+  signed (negative post-mirror) by tracking mirror parity.
+  Pre-3.7 lens-only prescriptions still go through the
+  legacy writer unchanged.
+
+### Backwards compatibility
+
+No public API removals.  `__all__` unchanged.  All 25
+validation suite files (`python validation/run_all.py`) pass
+unchanged.  Code that constructs `Surface` objects with the
+pre-3.7 keyword arguments works identically.
+
+### Known limitations (3.7.x scope)
+
+* Wave-optics propagation (Fresnel / ASM) does not yet honour
+  tilt frames; folded systems with wave-level analysis still
+  see the un-tilted equivalent.  Plumbing fold-aware Fresnel /
+  ASM is queued for 3.8.
+* `find_paraxial_focus()` returns the BFL of the un-folded
+  paraxial calc; for folded systems the world detector
+  position needs a chief-ray chase through the system to find
+  the actual focus.  Workaround: place the detector manually
+  at the desired distance.
+* The optimizer accepts `'tilt_x'` / `'decenter_y'` field
+  names in opt-variable tuples, but `set_variable_values`
+  writes them to the surface rather than the element-level
+  attribute.  Element-level tilt/decenter as variables needs
+  a small dispatch fix.
+* The JAX trace path mirrors the NumPy trace but does not yet
+  implement the cb branch; differentiable trace through
+  folded systems falls back to the NumPy path.
+
 ## [3.6.1] — 2026-05-10
 
 GUI bug-fix + UX-cleanup release.  No core-library API changes.

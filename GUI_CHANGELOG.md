@@ -15,6 +15,89 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.7.0] — 2026-05-10
+
+Tilt-aware ray tracing reaches the GUI, plus the folded-geometry
+layout hotfixes (3.6.1 hotfix-4 → -6) consolidated into a single
+release.  Imported `.zmx` prescriptions with COORDBRK surfaces
+now render folded **and** the rays actually deflect at the fold;
+the round-trip through Zemax export/import preserves mirrors
+and coord-breaks.
+
+### LumenAiry Designer is still in BETA
+
+Layouts, dock arrangements, default workspaces, and even menu
+names continue to change between minor releases.  Pin a specific
+version if you depend on a particular GUI behaviour.
+
+### Layout views — fold geometry + ray tracing
+
+* `SystemModel._build_trace_surfaces_internal()` emits a
+  coord-break Surface immediately before any element with
+  non-zero `tilt_x` / `tilt_y` / `decenter_x` / `decenter_y`,
+  so the core trace's new cb handler (3.7.0 core release)
+  actually folds rays at the right places.
+* New `surface_frames_2d_mm()` / `surface_frames_3d_mm()`
+  helpers emit a per-traced-surface frame in trace order —
+  including a frame entry for each cb so `_draw_rays` stays
+  index-aligned with the new trace history length.
+* `element_frames_2d_mm()` / `element_frames_3d_mm()` updated
+  to compute world positions in physical-positive convention
+  (post-mirror distances no longer double-count the Zemax
+  signed-thickness convention).
+* `to_prescription()` now emits `elements` + `all_thicknesses`
+  + `coord_breaks` for round-trip preservation; the legacy
+  lens-only `surfaces` / `thicknesses` keys remain.
+
+### Layout dock UX
+
+* Layout dock can finally be dragged down to a small height
+  to give the prescription editor more vertical room.
+  Required overriding `minimumSizeHint()` (the inherited
+  implementation walked the QGraphicsView size hint and
+  reserved several hundred pixels) plus `QSizePolicy.Ignored`
+  on both Layout2D and Layout3D.
+* Wheel-zoom now always zooms — even at high zoom where the
+  QGraphicsView would previously route the wheel to its
+  scrollbars instead of bubbling up to our handler.
+* New "Reset View" button on the 2D layout toolbar (3D
+  layout already had one).
+* New ⟲ / ⟳ in-plane rotation buttons on the 3D layout
+  toolbar (camera roll about the forward axis).
+
+### Prescription import
+
+* `.zmx` and `.txt` prescription import now consumes the full
+  importer-side `elements` list (with mirrors and surf_num)
+  plus `all_thicknesses` and `coord_breaks`, instead of the
+  lens-only filtered `surfaces` list.  Mirrors no longer
+  vanish on import; coord-breaks land on the right element.
+* Element labels prefer the per-surface `COMM` field
+  ("Diffractive", "SpatialFilter", "Metasurface" in
+  tx4designstudy71.zmx) and fall back to running "Lens 1" /
+  "Mirror 1" tags instead of repeating the source filename
+  on every row.
+* Dummy air-air infinite-radius surfaces with no comment are
+  silently skipped and their thicknesses rolled into the
+  next rendered element's distance.  Specialty air-air
+  planes that *do* carry a comment get rendered as flat
+  zero-thickness elements labelled by the comment.
+
+### Known limitations
+
+* The core ray tracer now folds rays at coord-breaks, but
+  the **layout view's ray rendering** can still look off
+  for some folded designs depending on local-frame vs.
+  world-frame conventions in the cb's neighbourhood.
+  Refinement continues; please file specific examples
+  (screenshots + the prescription) to the wiki Issues page.
+* Wave-optics propagation does not yet honour fold
+  geometry; Wave Optics dock results on a folded system are
+  still computed against the un-folded equivalent.
+* Detector position from BFL still uses the un-folded
+  paraxial calc.  Workaround: edit the detector distance
+  manually after import.
+
 ## [3.6.1] — 2026-05-10
 
 GUI overhaul addressing the 3.6.0 audit's four headline issues
