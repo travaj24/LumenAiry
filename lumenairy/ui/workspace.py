@@ -262,7 +262,7 @@ class ManageWorkspaceDialog(QDialog):
 #  Bumped each release that adds a new default workspace.  Used by
 #  load_json() to merge new defaults into existing saved blobs without
 #  overwriting user customizations.
-DEFAULTS_REVISION = 5
+DEFAULTS_REVISION = 6
 
 DEFAULT_WORKSPACES = [
     # 3.6.1: trimmed defaults.  The rule of thumb: each workspace
@@ -275,7 +275,7 @@ DEFAULT_WORKSPACES = [
     # toggle list and via View > Configure Workspace Docks --
     # they're just not opened by default.
     ('Design', [
-        'layout', 'library', 'summary',
+        'layout', 'layout3d', 'summary', 'library',
     ]),
     ('Optimize', [
         'layout', 'optimizer', 'sliders',

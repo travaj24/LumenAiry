@@ -161,6 +161,15 @@ class Layout2DView(QWidget):
         label.setPos(z_ima - 10, self.sm.epd_mm / 2 * S + 5)
         self.scene.addItem(label)
 
+        # 3.6.1 hotfix: register a click zone for the detector so it
+        # is selectable from the layout (parity with the other
+        # elements + the new source glyph).
+        det_idx = len(elements) - 1
+        if det_idx >= 0 and elements[det_idx].elem_type == 'Detector':
+            zone_w = max(8.0, sd_ima * S * 0.3)
+            self._surface_zones.append(
+                (z_ima - zone_w, z_ima + zone_w, det_idx))
+
         # ── Fit view ──
         self.view.fitInView(
             self.scene.sceneRect().adjusted(-40, -40, 40, 40),
@@ -352,55 +361,80 @@ class Layout2DView(QWidget):
         lbl.setPos(z - 30, -epd_h_px - 24)
         self.scene.addItem(lbl)
 
-        # 3.6.1 (Stage C.1): optional preview rays just upstream of
-        # the source, illustrating propagation direction.  Coloured by
-        # wavelength so they read as a visual extension of the
-        # downstream traced rays.  Toggle via prefs key
-        # 'show_source_preview' (default ON).
-        if not self.sm.prefs.get('show_source_preview', True):
+        # 3.6.1 (Stage C.1): optional preview rays drawn DOWNSTREAM
+        # of the source -- from the source plane to the first
+        # optical surface -- to make the propagation direction
+        # visually unambiguous.  The original (3.6.1 first cut)
+        # drew them upstream of the source which read backward.
+        # Default OFF in 3.6.1 hotfix; opt-in via the preference key
+        # so users who want this overlay can enable it without
+        # confusing ray directions for everyone else.
+        if not self.sm.prefs.get('show_source_preview', False):
+            return
+        # Find the first optical surface's z to bound the rays.
+        try:
+            elem_z = self.sm.element_z_positions_mm()
+        except Exception:
+            return
+        if len(elem_z) < 2:
+            return
+        z_first = elem_z[1] * S  # first optical-element vertex
+        # Don't draw if the gap is degenerate.
+        if z_first - z < 4:
             return
         try:
             wv = self.sm.wavelength_nm
             rc = self._wavelength_to_color(wv)
-            ray_pen = QPen(QColor(*rc, 100), 0.8)
+            ray_pen = QPen(QColor(*rc, 110), 0.8)
         except Exception:
-            ray_pen = QPen(QColor(180, 200, 255, 80), 0.8)
-        # Length of the upstream preview, in scene pixels.
-        upstream = max(20.0, epd_h_px * 0.6)
-        # Per-source-type ray pattern.
+            ray_pen = QPen(QColor(180, 200, 255, 90), 0.8)
+
         if st == 'plane_wave':
-            # Parallel rays evenly distributed across the EPD.
+            # Parallel rays from source plane through first surface.
             for ay in np.linspace(-epd_h_px * 0.85,
                                    epd_h_px * 0.85, 5):
-                self.scene.addLine(
-                    z - upstream, ay, z, ay, ray_pen)
-        elif st in ('gaussian', 'gaussian_aperture', 'top_hat',
-                    'fiber_mode', 'emitter_array'):
-            # Slightly converging fan onto the source aperture.
+                self.scene.addLine(z, ay, z_first, ay, ray_pen)
+        elif st in ('gaussian', 'gaussian_aperture'):
+            # Diverging from waist at the source plane.
             if st == 'gaussian':
-                ap = max(6.0, src.beam_diameter_mm / 2 * S)
-            elif st == 'gaussian_aperture':
-                ap = max(6.0, src.sigma_mm * S)
-            elif st == 'top_hat':
-                ap = max(6.0, src.top_hat_diameter_mm / 2 * S)
-            elif st == 'fiber_mode':
-                ap = max(4.0, src.fiber_mfd_um * 1e-3 / 2 * S)
+                ap_far = max(8.0,
+                              src.beam_diameter_mm / 2 * 1.5 * S)
             else:
-                ap = max(6.0, src.emitter_pitch_mm * S
-                          * src.emitter_nx / 2)
-            for ay in np.linspace(-ap, ap, 5):
+                ap_far = max(8.0, src.sigma_mm * 1.5 * S)
+            ap_near = ap_far * 0.25
+            for k, ay_far in enumerate(
+                    np.linspace(-ap_far, ap_far, 5)):
+                ay_near = -ap_near + (k * 2 * ap_near / 4)
                 self.scene.addLine(
-                    z - upstream, ay, z, ay * 0.7, ray_pen)
-        elif st == 'point_source':
-            # Diverging fan upstream from a virtual source point.
+                    z, ay_near, z_first, ay_far, ray_pen)
+        elif st == 'top_hat':
+            # Hard-edged parallel from the rim of the aperture.
+            ap = max(6.0, src.top_hat_diameter_mm / 2 * S)
+            for ay in np.linspace(-ap, ap, 5):
+                self.scene.addLine(z, ay, z_first, ay, ray_pen)
+        elif st == 'fiber_mode':
+            # Diverging cone with NA-derived half-angle.
             try:
-                obj_dist_mm = max(1.0, src.object_distance_mm)
+                na = max(0.001, float(src.fiber_NA))
             except Exception:
-                obj_dist_mm = 1000.0
-            virt_z = z - min(upstream, obj_dist_mm * S * 0.5)
-            for ay in np.linspace(-epd_h_px * 0.6,
-                                   epd_h_px * 0.6, 7):
-                self.scene.addLine(virt_z, 0.0, z, ay, ray_pen)
+                na = 0.14
+            ap_far = max(8.0,
+                          (z_first - z) * np.tan(np.arcsin(na)))
+            for ay in np.linspace(-ap_far, ap_far, 5):
+                self.scene.addLine(z, 0.0, z_first, ay, ray_pen)
+        elif st == 'point_source':
+            # Diverging fan from the source point at z=0.
+            for ay in np.linspace(
+                    -epd_h_px * 0.6, epd_h_px * 0.6, 7):
+                self.scene.addLine(z, 0.0, z_first, ay, ray_pen)
+        elif st == 'emitter_array':
+            # One short ray per visible emitter (parallel beam).
+            nx = max(1, min(5, src.emitter_nx))
+            ny = max(1, min(5, src.emitter_ny))
+            pitch_px = max(2.0, src.emitter_pitch_mm * S)
+            for iy in range(ny):
+                cy = (iy - (ny - 1) / 2) * pitch_px
+                self.scene.addLine(z, cy, z_first, cy, ray_pen)
 
     # 3.6.1: bidirectional table <-> layout selection.
     # The layout already emits sm.element_selected on click (handled
