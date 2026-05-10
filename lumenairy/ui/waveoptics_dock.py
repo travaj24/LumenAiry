@@ -1660,8 +1660,11 @@ class WaveOpticsDock(QWidget):
             ['Subdomain', 'In z [mm]', 'Out z [mm]', 'Label'])
         self.tbl_mhs.horizontalHeader().setSectionResizeMode(
             QHeaderView.Stretch)
-        self.tbl_mhs.setSelectionBehavior(self.tbl_mhs.SelectRows)
-        self.tbl_mhs.setEditTriggers(self.tbl_mhs.NoEditTriggers)
+        from PySide6.QtWidgets import QAbstractItemView
+        self.tbl_mhs.setSelectionBehavior(
+            QAbstractItemView.SelectRows)
+        self.tbl_mhs.setEditTriggers(
+            QAbstractItemView.NoEditTriggers)
         layout.addWidget(self.tbl_mhs, stretch=1)
 
         # Status + summary.

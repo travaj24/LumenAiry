@@ -1565,8 +1565,9 @@ class MainWindow(QMainWindow):
             QHeaderView.ResizeToContents)
         tbl.horizontalHeader().setStretchLastSection(True)
         tbl.setSortingEnabled(True)
-        tbl.setEditTriggers(tbl.NoEditTriggers)
-        tbl.setSelectionBehavior(tbl.SelectRows)
+        from PySide6.QtWidgets import QAbstractItemView
+        tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectRows)
         for i, (cat, sc, act) in enumerate(rows):
             tbl.setItem(i, 0, QTableWidgetItem(cat))
             tbl.setItem(i, 1, QTableWidgetItem(sc))
