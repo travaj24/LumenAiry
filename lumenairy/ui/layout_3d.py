@@ -49,9 +49,13 @@ class Layout3DView(QWidget):
         # View" button still calls _reset_camera() directly.
         self._camera_initialized = False
 
-        # 3.6.1: allow the layout dock to shrink freely.
+        # 3.7.2: allow the layout dock to shrink freely.  When 2D
+        # and 3D layouts are tabbed in the same dock, the dock
+        # honours the LARGER of their minimums -- so 3D needs the
+        # same minimumSizeHint() override as 2D, otherwise the
+        # QtInteractor's default size hint pins the dock open.
         from PySide6.QtWidgets import QSizePolicy
-        self.setMinimumSize(40, 40)
+        self.setMinimumSize(0, 0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout = QVBoxLayout(self)
@@ -89,8 +93,11 @@ class Layout3DView(QWidget):
         toolbar.addWidget(btn_rot_cw)
 
         # View axis buttons
-        for label, view in [('Front', 'xy'), ('Side', 'xz'), ('Top', 'yz'),
-                             ('Iso', 'iso')]:
+        # 3.7.2: 'Side' now snaps to the 2D-matching layout view
+        # (optical axis +z horizontal, +y up).  'Iso' stays as the
+        # oblique-with-elevation view.
+        for label, view in [('Front', 'xy'), ('Side', 'side2d'),
+                             ('Top', 'yz'), ('Iso', 'iso')]:
             btn = QPushButton(label)
             btn.setFixedWidth(40)
             btn.setToolTip(f'Snap to {label.lower()} view')
@@ -589,9 +596,14 @@ class Layout3DView(QWidget):
         # Source frame for the launch point.
         o_src, R_src = elem_frames[0]
 
-        def to_world(si, x_local, y_local):
+        def to_world(si, x_local, y_local, z_local=0.0):
+            """3.7.2: include z_local so coord-break frames where
+            the rotation transform leaves a non-zero ray.z render
+            at the correct world position instead of jumping."""
             o, R = surf_frames[si]
-            return o + x_local * R[:, 0] + y_local * R[:, 1]
+            return (o + x_local * R[:, 0]
+                    + y_local * R[:, 1]
+                    + z_local * R[:, 2])
 
         for r in range(0, n_rays, step):
             if not result.input_rays.alive[r]:
@@ -606,12 +618,15 @@ class Layout3DView(QWidget):
                        + y_in * R_src[:, 1])
 
             # Pre-lens segment: end at surface 0 using history[0]'s
-            # local (x, y) so a tilted launch terminates at the
-            # right height.
+            # local (x, y, z) so a tilted launch terminates at the
+            # right height (and a cb's non-zero z is honoured).
             if history and len(history) > 0 and history[0].alive[r]:
+                z0 = history[0].z[r] * 1e3 if hasattr(
+                    history[0], 'z') else 0.0
                 pts.append(to_world(0,
                                     history[0].x[r] * 1e3,
-                                    history[0].y[r] * 1e3))
+                                    history[0].y[r] * 1e3,
+                                    z0))
             else:
                 pts.append(to_world(0, x_in, y_in))
 
@@ -621,8 +636,10 @@ class Layout3DView(QWidget):
                     break
                 x_l = history[si].x[r] * 1e3
                 y_l = history[si].y[r] * 1e3
+                z_l = (history[si].z[r] * 1e3
+                        if hasattr(history[si], 'z') else 0.0)
                 if si < len(surf_frames):
-                    pts.append(to_world(si, x_l, y_l))
+                    pts.append(to_world(si, x_l, y_l, z_l))
                 else:
                     o_last, R_last = surf_frames[-1]
                     pts.append(pts[-1] + 20.0 * R_last[:, 2])
@@ -661,11 +678,22 @@ class Layout3DView(QWidget):
             pass
 
     def _reset_camera(self):
-        """Reset camera to a side view with slight elevation."""
-        self._snap_to_view('iso')
+        """3.7.2: Reset to a 2D-matching side view by default
+        (optical axis +z horizontal-right, +y vertical-up).  Use
+        the Iso toolbar button for the previous slight-elevation
+        oblique view.
+        """
+        self._snap_to_view('side2d')
 
     def _snap_to_view(self, view):
-        """Snap camera to an axis-aligned or isometric view."""
+        """Snap camera to an axis-aligned or isometric view.
+
+        3.7.2: ``'side2d'`` is the new default view that matches the
+        2D layout's side-view orientation (camera looks from -x;
+        on-screen, +z is right and +y is up).  PyVista's stock
+        ``'xz'`` / ``'yz'`` strings have the wrong axis swap (z up
+        instead of z right), so a custom camera position is set.
+        """
         if self._plotter is None:
             return
         if view == 'xy':
@@ -674,6 +702,25 @@ class Layout3DView(QWidget):
             self._plotter.camera_position = 'xz'
         elif view == 'yz':
             self._plotter.camera_position = 'yz'
+        elif view == 'side2d':
+            # Match the 2D side-view: optical axis +z horizontal,
+            # +y up.  Camera at -x looking through origin.
+            try:
+                bounds = self._plotter.bounds
+                cx = 0.5 * (bounds[0] + bounds[1])
+                cy = 0.5 * (bounds[2] + bounds[3])
+                cz = 0.5 * (bounds[4] + bounds[5])
+                # Camera distance: enough that reset_camera can
+                # tighten the fit while preserving orientation.
+                dx = max(50.0, abs(bounds[1] - bounds[0]) * 2)
+            except Exception:
+                cx = cy = cz = 0.0
+                dx = 200.0
+            self._plotter.camera_position = [
+                (cx - dx, cy, cz),  # camera at -x
+                (cx, cy, cz),       # focal at scene centre
+                (0.0, 1.0, 0.0),    # +y up
+            ]
         elif view == 'iso':
             self._plotter.camera_position = 'xz'
             self._plotter.camera.azimuth = 25
@@ -735,6 +782,20 @@ class Layout3DView(QWidget):
             else:
                 return '#ff4444'
         return '#8888cc'
+
+    def minimumSizeHint(self):
+        """3.7.2: report a tiny minimum so the QDockWidget will let
+        the user shrink the layout pane.  When 2D and 3D layouts
+        are tabbed in the same dock, the dock honours the LARGER
+        of their minimumSizeHints, so 3D needs the same override
+        as 2D for the dock to actually shrink.
+        """
+        from PySide6.QtCore import QSize
+        return QSize(40, 40)
+
+    def sizeHint(self):
+        from PySide6.QtCore import QSize
+        return QSize(400, 200)
 
     def closeEvent(self, event):
         if self._plotter is not None:

@@ -667,11 +667,23 @@ class Layout2DView(QWidget):
         z_src, y_src, t_src = elem_frames[0]
         src_ux, src_uy = -np.sin(t_src), np.cos(t_src)
 
-        def to_world(si, y_local):
-            """Map (surface index, local-y mm) → world (z_mm, y_mm)."""
+        def to_world(si, y_local, z_local=0.0):
+            """Map (surface index, local-y mm, local-z mm) → world.
+
+            3.7.2: include ``z_local`` so coord-break surfaces — where
+            the rotation transform mixes the ray's y and z components
+            and leaves a non-zero z_local — render at the correct
+            world position instead of jumping discontinuously.
+            Regular refractive / reflective surfaces have ray.z = sag
+            (small) at intersection time; including it costs nothing
+            and improves sub-mm accuracy at curved surfaces too.
+            """
             zw, yw, th = surf_frames[si]
-            ux, uy = -np.sin(th), np.cos(th)
-            return (zw + y_local * ux, yw + y_local * uy)
+            cz, sz = np.cos(th), np.sin(th)
+            ux, uy = -sz, cz       # local +y in world
+            ax, ay =  cz, sz       # local +z in world
+            return (zw + y_local * ux + z_local * ax,
+                    yw + y_local * uy + z_local * ay)
 
         for r in range(0, n_rays, step):
             if not trace_result.input_rays.alive[r]:
@@ -689,7 +701,10 @@ class Layout2DView(QWidget):
             # propagation through the air gap) when available, so
             # tilted launches still terminate at the right height.
             if history and len(history) > 0 and history[0].alive[r]:
-                pts.append(to_world(0, history[0].y[r] * 1e3))
+                z0 = history[0].z[r] * 1e3 if hasattr(
+                    history[0], 'z') else 0.0
+                pts.append(to_world(0,
+                                    history[0].y[r] * 1e3, z0))
             else:
                 # Ray died before surface 0 — draw a straight pre-lens
                 # segment using the launch y projected onto surf 0's
@@ -698,13 +713,16 @@ class Layout2DView(QWidget):
 
             # Through-system + image plane: history[si] is AFTER
             # surface si.  Each entry's ray.y is the local-frame
-            # height at surf_frames[si].
+            # height at surf_frames[si]; ray.z carries the local-z
+            # offset (non-zero across coord-breaks).
             for si in range(1, len(history)):
                 if not history[si].alive[r]:
                     break
                 y_local = history[si].y[r] * 1e3   # m -> mm
+                z_local = (history[si].z[r] * 1e3
+                            if hasattr(history[si], 'z') else 0.0)
                 if si < len(surf_frames):
-                    pts.append(to_world(si, y_local))
+                    pts.append(to_world(si, y_local, z_local))
                 else:
                     # History longer than known frames — extrapolate
                     # 20 mm forward along the last frame's axis so

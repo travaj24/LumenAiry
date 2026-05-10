@@ -1940,12 +1940,24 @@ class SystemModel(QObject):
 
     def run_trace(self, num_rings=8, rays_per_ring=36, image_distance=None):
         """Run a geometric ray trace using the active source definition."""
-        # Use a fresh copy so we don't mutate the cache
+        # Use a fresh copy so we don't mutate the cache.  3.7.2: also
+        # copy the coord-break fields (is_coordbrk + tilt_*_deg +
+        # decenter_*_m + coordbrk_order) -- the previous copy stripped
+        # them, so cb surfaces silently degenerated into no-op flat
+        # air-air surfaces and the trace ran through the unfolded
+        # equivalent of every imported folded design.
         surfaces = [Surface(
             radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,
             glass_before=s.glass_before, glass_after=s.glass_after,
             is_mirror=s.is_mirror, thickness=s.thickness,
             label=s.label, surf_num=s.surf_num,
+            is_coordbrk=getattr(s, 'is_coordbrk', False),
+            tilt_x_deg=getattr(s, 'tilt_x_deg', 0.0),
+            tilt_y_deg=getattr(s, 'tilt_y_deg', 0.0),
+            tilt_z_deg=getattr(s, 'tilt_z_deg', 0.0),
+            decenter_x_m=getattr(s, 'decenter_x_m', 0.0),
+            decenter_y_m=getattr(s, 'decenter_y_m', 0.0),
+            coordbrk_order=getattr(s, 'coordbrk_order', 0),
         ) for s in self._build_trace_surfaces_internal()]
         if not surfaces:
             return None
