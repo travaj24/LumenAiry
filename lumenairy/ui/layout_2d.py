@@ -498,19 +498,54 @@ class Layout2DView(QWidget):
             break
 
     def _draw_rays(self, trace_result):
-        """Draw traced rays on the scene."""
+        """Draw traced rays on the scene.
+
+        Rays are plotted in world-frame z (mm), computed from the
+        per-element positions returned by ``element_z_positions_mm``
+        plus each surface's internal thickness within its element.
+        Bug fix in 3.6.1 hotfix-2: previously this method built a
+        flat cumulative-thickness ``z_positions`` from
+        ``build_trace_surfaces``, which only sums *in-glass*
+        thicknesses and ignores the source-to-first-surface air gap
+        entirely.  That made the entire ray fan render at z ~ 0-10
+        mm instead of spanning the actual ~150 mm system length.
+        """
         if trace_result is None:
             return
 
         S = self.SCALE
 
-        # Compute z positions from the flattened trace surfaces
-        trace_surfs = self.sm.build_trace_surfaces()
-        z_positions = [0.0]
-        for ts in trace_surfs:
-            z_positions.append(z_positions[-1] + ts.thickness * 1e3)  # m -> mm
+        # World-frame z (mm) of every traced surface.  Walk the
+        # element list in order, skipping the Source (z=0, no
+        # surfaces) and the Detector (handled separately as the
+        # image plane below); every other element contributes one
+        # entry per internal surface, offset from the element's
+        # front vertex by the cumulative in-glass thickness.
+        elem_z = self.sm.element_z_positions_mm()
+        surf_world_z = []
+        for ei, elem in enumerate(self.sm.elements):
+            if elem.elem_type in ('Source', 'Detector'):
+                continue
+            z0 = elem_z[ei]
+            cum_t = 0.0
+            # elem.surfaces[i].thickness is already in mm (GUI
+            # convention); do NOT multiply by 1e3 -- doing so blew
+            # the lens out by 1000x in the first cut of this fix.
+            for srow in elem.surfaces:
+                surf_world_z.append(z0 + cum_t)
+                cum_t += srow.thickness
+        # Image-plane / detector z follows the last optical surface.
+        # The trace's history may include the image plane as an
+        # extra entry beyond the optical surfaces; we tack on the
+        # detector's world z so the final segment lands correctly.
+        if elem_z and self.sm.elements \
+                and self.sm.elements[-1].elem_type == 'Detector':
+            surf_world_z.append(elem_z[-1])
 
-        # Ray color — use preference or wavelength-based
+        if not surf_world_z:
+            return
+
+        # Ray color — preference or wavelength-based.
         if self.sm.prefs.get('ray_use_wavelength', True):
             wv = self.sm.wavelength_nm
             rc = self._wavelength_to_color(wv)
@@ -521,40 +556,47 @@ class Layout2DView(QWidget):
             c.setAlpha(120)
             ray_pen = QPen(c, 0.8)
 
-        # For each ray, draw from surface to surface
         n_rays = trace_result.input_rays.n_rays
         history = trace_result.ray_history
-
-        # Subsample rays for display (limit to ~50 for clarity)
         step = max(1, n_rays // 50)
+
+        # Source plane = z = 0 in world coordinates (matches
+        # SystemModel.element_z_positions_mm convention).
+        z_source = 0.0
+        z_first_surf = surf_world_z[0]
 
         for r in range(0, n_rays, step):
             if not trace_result.input_rays.alive[r]:
                 continue
 
-            # Start: input ray at z=z_positions[1] (first optical surface)
-            # The input rays are at z=0 of the first surface
             pts = []
+            y_in = trace_result.input_rays.y[r] * 1e3   # m -> mm
 
-            # Entry point: y from input ray
-            y_in = trace_result.input_rays.y[r] * 1e3  # m → mm
-            pts.append((z_positions[1] * S, y_in * S))
+            # Pre-lens segment: from source plane to the first
+            # optical surface, at the input ray's launch y.  For a
+            # plane wave this gives a horizontal line; for a point
+            # source it gives the divergent fan we expect.
+            pts.append((z_source * S, y_in * S))
+            pts.append((z_first_surf * S, y_in * S))
 
-            # Each surface in history
+            # Through-system segments: history[si] is the ray bundle
+            # AFTER surface si, so its y is the height at
+            # surf_world_z[si] (refraction is in-place; z doesn't
+            # change at the refraction event itself, only between
+            # surfaces).
             for si, rb in enumerate(history):
                 if not rb.alive[r]:
                     break
-                y = rb.y[r] * 1e3  # m → mm
-                # Surface index in the table: si corresponds to
-                # optical surface si, which is table row si+1
-                if si + 1 < len(z_positions):
-                    z = z_positions[si + 1] * S
+                y = rb.y[r] * 1e3   # m -> mm
+                if si < len(surf_world_z):
+                    z = surf_world_z[si] * S
                 else:
-                    # Image plane or beyond
+                    # Beyond the last known surface -- extrapolate
+                    # 20 mm forward so the ray has somewhere to go.
                     z = pts[-1][0] + 20 * S
                 pts.append((z, y * S))
 
-            # Draw the ray as connected line segments
+            # Draw connected segments.
             for j in range(len(pts) - 1):
                 self.scene.addLine(
                     pts[j][0], pts[j][1],

@@ -422,7 +422,29 @@ class Layout3DView(QWidget):
         for name in actors_to_remove:
             self._plotter.remove_actor(name)
 
-        z_positions = self._compute_z_positions()
+        # Same world-frame surface-z calculation as layout_2d's
+        # _draw_rays (3.6.1 hotfix-2): one entry per *optical
+        # surface* in trace order, world-frame z in mm.  Plus a
+        # tail entry at the detector position so the final history
+        # bundle (image plane) lands correctly.
+        elem_z = self.sm.element_z_positions_mm()
+        surf_world_z = []
+        for ei, elem in enumerate(self.sm.elements):
+            if elem.elem_type in ('Source', 'Detector'):
+                continue
+            z0 = elem_z[ei]
+            cum_t = 0.0
+            # elem.surfaces[i].thickness is already in mm (GUI
+            # convention); do NOT scale by 1e3.
+            for srow in elem.surfaces:
+                surf_world_z.append(z0 + cum_t)
+                cum_t += srow.thickness
+        if elem_z and self.sm.elements \
+                and self.sm.elements[-1].elem_type == 'Detector':
+            surf_world_z.append(elem_z[-1])
+        if not surf_world_z:
+            return
+
         n_rays = result.input_rays.n_rays
         step = max(1, n_rays // 40)
         history = result.ray_history
@@ -431,6 +453,8 @@ class Layout3DView(QWidget):
         else:
             wv_color = self.sm.prefs.get('ray_color', '#5cb8ff')
 
+        z_first_surf = surf_world_z[0]
+
         for r in range(0, n_rays, step):
             if not result.input_rays.alive[r]:
                 continue
@@ -438,16 +462,22 @@ class Layout3DView(QWidget):
             pts = []
             x_in = result.input_rays.x[r] * 1e3
             y_in = result.input_rays.y[r] * 1e3
-            z0 = z_positions[1] if len(z_positions) > 1 else 0
-            pts.append([x_in, y_in, z0])
 
+            # Pre-lens segment: from source plane (z=0) to the
+            # first optical surface, at the input-ray launch (x, y).
+            pts.append([x_in, y_in, 0.0])
+            pts.append([x_in, y_in, z_first_surf])
+
+            # Through-system segments using world-frame surface z.
             for si, rb in enumerate(history):
                 if not rb.alive[r]:
                     break
                 x = rb.x[r] * 1e3
                 y = rb.y[r] * 1e3
-                zi = si + 1
-                z = z_positions[zi] if zi < len(z_positions) else pts[-1][2] + 20
+                if si < len(surf_world_z):
+                    z = surf_world_z[si]
+                else:
+                    z = pts[-1][2] + 20
                 pts.append([x, y, z])
 
             if len(pts) >= 2:
@@ -457,7 +487,14 @@ class Layout3DView(QWidget):
                                        name=f'ray_{r}')
 
     def _compute_z_positions(self):
-        """Cumulative z positions from element distances."""
+        """Cumulative z positions from element distances.
+
+        Retained for backward compatibility with older callers
+        (e.g., the now-removed ``_draw_rays`` body that used to
+        consume this) but no longer used internally; the new
+        world-frame surface-z calculation lives inline in
+        ``_draw_rays``.
+        """
         return self.sm.element_z_positions_mm()
 
     def _reset_camera(self):
