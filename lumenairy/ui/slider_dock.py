@@ -266,6 +266,45 @@ class SliderDock(QWidget):
         self.scroll_layout.addStretch()
         self._update_merit()
 
+    def attach_variable(self, elem_idx, surf_idx, field):
+        """3.6.1 (Stage C.2): public slot called from main_window when
+        the user picks "Attach slider to this parameter…" on the
+        prescription editor.  By the time we get here, the variable
+        has already been appended to ``sm.opt_variables`` by the
+        SystemModel helper, so ``_generate_sliders`` will pick it up.
+        Locate the matching slider in the regenerated list and pulse
+        it amber for ~3 seconds so the user can see which one is new.
+        """
+        # Force a regeneration so the new variable's slider exists.
+        self._generate_sliders()
+        target = (int(elem_idx), int(surf_idx), str(field))
+        # Find the matching slider widget by aligning indices into
+        # opt_variables with self._sliders (skipping the empty-state
+        # placeholder, which is also stored in self._sliders when
+        # the list was empty).
+        match_slider = None
+        for var, slider in zip(self.sm.opt_variables, self._sliders):
+            if isinstance(slider, ParameterSlider):
+                triple = tuple(var) if len(var) == 3 \
+                    else (var[0], var[1], 'radius')
+                if triple == target:
+                    match_slider = slider
+                    break
+        if match_slider is None:
+            return
+        # Pulse: temporarily set a bright stylesheet, restore after
+        # 3 seconds.  Uses QTimer so the UI thread is not blocked.
+        try:
+            prior = match_slider.styleSheet() or ''
+            match_slider.setStyleSheet(
+                prior + '\n* { background: #4a3a16; }')
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(
+                3000,
+                lambda: match_slider.setStyleSheet(prior))
+        except Exception:
+            pass
+
     def _on_slider_change(self, var_index, new_value):
         """Called when any slider is moved."""
         values = self.sm.get_variable_values()

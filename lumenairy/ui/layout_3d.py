@@ -36,6 +36,11 @@ class Layout3DView(QWidget):
         super().__init__(parent)
         self.sm = system_model
         self._plotter = None
+        # 3.6.1: bidirectional table <-> layout selection.  See
+        # the matching machinery in layout_2d.py for the full
+        # explanation; here we just track the index and re-add a
+        # gold highlight ring after every rebuild.
+        self._selected_elem_idx = -1
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
@@ -122,7 +127,14 @@ class Layout3DView(QWidget):
 
         # Draw elements
         for ei, elem in enumerate(elements):
-            if elem.elem_type in ('Source', 'Detector'):
+            # 3.6.1: render the source as a visible 3D glyph instead
+            # of skipping it.  Detector is still drawn separately
+            # below as the image-plane disc.
+            if elem.elem_type == 'Source':
+                src = getattr(elem, 'source', None) or self.sm.source
+                self._draw_source_3d(z_positions[ei], src, ei)
+                continue
+            if elem.elem_type == 'Detector':
                 continue
 
             z = z_positions[ei]
@@ -145,6 +157,9 @@ class Layout3DView(QWidget):
 
         # Draw rays if we have a trace result
         self._draw_rays()
+
+        # 3.6.1: redraw selection highlight on top after rebuild.
+        self._redraw_highlight_3d()
 
         self._reset_camera()
 
@@ -231,6 +246,166 @@ class Layout3DView(QWidget):
                        inner=0, outer=sd, r_res=1, c_res=48)
         self._plotter.add_mesh(disc, color='#7799cc', opacity=0.5,
                                name=f'mirror_{idx}')
+
+    def _draw_source_3d(self, z, src, idx):
+        """3.6.1: render the optical source in the 3D view.
+
+        Mirrors layout_2d.py._draw_source.  Per-source-type
+        primitives are added with name=f'source_{idx}' so subsequent
+        rebuilds replace cleanly.  All sizes are in mm (the scene's
+        native unit).
+        """
+        if self._plotter is None or src is None:
+            return
+        accent = '#78dc8c'   # mint green, matches 2D layout
+        epd_h = max(2.0, self.sm.epd_mm / 2)
+        st = src.source_type
+        try:
+            if st == 'plane_wave':
+                # Disc cap perpendicular to the optical axis +
+                # cone glyph pointing into the system to indicate
+                # propagation direction.
+                cap = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+                              inner=0, outer=epd_h, c_res=48)
+                self._plotter.add_mesh(
+                    cap, color=accent, opacity=0.45,
+                    name=f'source_{idx}')
+                arrow = pv.Cone(center=(0, 0, z + epd_h * 0.3),
+                                direction=(0, 0, 1),
+                                height=epd_h * 0.4, radius=epd_h * 0.15)
+                self._plotter.add_mesh(
+                    arrow, color=accent, opacity=0.7,
+                    name=f'source_arrow_{idx}')
+
+            elif st in ('gaussian', 'gaussian_aperture'):
+                if st == 'gaussian':
+                    w_mm = max(0.05, src.beam_diameter_mm)
+                else:
+                    w_mm = max(0.05, src.sigma_mm * 2)
+                # Use an ellipsoid (oblate sphere) as a Gaussian
+                # waist proxy; scaled along z by half its lateral
+                # extent so it visually reads as an extended source.
+                sphere = pv.Sphere(center=(0, 0, z), radius=w_mm / 2)
+                sphere.scale([1.0, 1.0, 0.25], inplace=True)
+                self._plotter.add_mesh(
+                    sphere, color=accent, opacity=0.55,
+                    name=f'source_{idx}')
+
+            elif st == 'top_hat':
+                half = max(0.5, src.top_hat_diameter_mm / 2)
+                cap = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+                              inner=0, outer=half, c_res=48)
+                self._plotter.add_mesh(
+                    cap, color=accent, opacity=0.65,
+                    name=f'source_{idx}')
+
+            elif st == 'fiber_mode':
+                half = max(0.05, src.fiber_mfd_um * 1e-3 / 2)
+                outer = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+                                inner=half, outer=half * 2.5, c_res=48)
+                inner = pv.Sphere(center=(0, 0, z), radius=half)
+                self._plotter.add_mesh(
+                    outer, color=accent, opacity=0.35,
+                    name=f'source_{idx}')
+                self._plotter.add_mesh(
+                    inner, color=accent, opacity=0.85,
+                    name=f'source_core_{idx}')
+
+            elif st == 'point_source':
+                # Small bright sphere; size scales with EPD.
+                r = max(0.4, epd_h * 0.04)
+                sphere = pv.Sphere(center=(0, 0, z), radius=r)
+                self._plotter.add_mesh(
+                    sphere, color=accent, opacity=0.95,
+                    name=f'source_{idx}')
+
+            elif st == 'emitter_array':
+                # A grid of small spheres at the emitter pitch.
+                # Cap visible count at 7x7 to match the 2D layout.
+                nx = max(1, min(7, src.emitter_nx))
+                ny = max(1, min(7, src.emitter_ny))
+                pitch = max(0.005, src.emitter_pitch_mm)
+                w0 = max(0.001, src.emitter_waist_mm)
+                # Use MultiBlock so a single name can hold all dots.
+                blocks = pv.MultiBlock()
+                for ix in range(nx):
+                    for iy in range(ny):
+                        cx = (ix - (nx - 1) / 2) * pitch
+                        cy = (iy - (ny - 1) / 2) * pitch
+                        blocks.append(
+                            pv.Sphere(center=(cx, cy, z), radius=w0))
+                self._plotter.add_mesh(
+                    blocks, color=accent, opacity=0.9,
+                    name=f'source_{idx}')
+
+            else:
+                # Unknown future type: marker sphere.
+                sphere = pv.Sphere(center=(0, 0, z), radius=0.5)
+                self._plotter.add_mesh(
+                    sphere, color=accent, opacity=0.6,
+                    name=f'source_{idx}')
+        except Exception:
+            # Don't let an unusual source type crash the whole
+            # layout build; fall back to a placeholder marker.
+            try:
+                self._plotter.add_mesh(
+                    pv.Sphere(center=(0, 0, z), radius=0.5),
+                    color=accent, opacity=0.6,
+                    name=f'source_{idx}')
+            except Exception:
+                pass
+
+    def set_selected_element(self, idx: int):
+        """Public slot wired in main_window.py to the new
+        element_selected_in_table signal.  Stores the selected index
+        and repaints the highlight ring.
+        """
+        try:
+            idx = int(idx)
+        except Exception:
+            idx = -1
+        self._selected_elem_idx = idx
+        self._redraw_highlight_3d()
+
+    def _redraw_highlight_3d(self):
+        """Repaint the gold selection ring on the highlighted element."""
+        if self._plotter is None:
+            return
+        try:
+            self._plotter.remove_actor('selection_highlight')
+        except Exception:
+            pass
+        idx = self._selected_elem_idx
+        if idx < 0:
+            return
+        elements = self.sm.elements
+        if idx >= len(elements):
+            return
+        try:
+            z_positions = self.sm.element_z_positions_mm()
+        except Exception:
+            return
+        if idx >= len(z_positions):
+            return
+        z = z_positions[idx]
+        elem = elements[idx]
+        # Determine the element's lateral extent for the ring radius.
+        if elem.surfaces:
+            sd = elem.surfaces[0].semi_diameter
+            if not np.isfinite(sd):
+                sd = self.sm.epd_mm / 2
+        else:
+            sd = self.sm.epd_mm / 2
+        ring_r = max(2.0, sd * 1.15)
+        try:
+            ring = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+                           inner=ring_r, outer=ring_r * 1.06,
+                           c_res=64)
+            self._plotter.add_mesh(
+                ring, color='gold', opacity=0.85,
+                name='selection_highlight')
+        except Exception:
+            pass
 
     def _draw_rays(self):
         """Overlay traced rays on the 3D scene."""

@@ -262,31 +262,35 @@ class ManageWorkspaceDialog(QDialog):
 #  Bumped each release that adds a new default workspace.  Used by
 #  load_json() to merge new defaults into existing saved blobs without
 #  overwriting user customizations.
-DEFAULTS_REVISION = 4
+DEFAULTS_REVISION = 5
 
 DEFAULT_WORKSPACES = [
+    # 3.6.1: trimmed defaults.  The rule of thumb: each workspace
+    # opens with the 2-3 docks the user almost always wants for that
+    # phase of work.  Specialty docks (interferometry, phase
+    # retrieval, ghost, footprint, distortion, spot-field, through-
+    # focus, field browser, caustic, LG aberration, Shack-Hartmann,
+    # Richards-Wolf, partial-coherence, RCWA) are still wired into
+    # the application, available via the View menu's per-dock
+    # toggle list and via View > Configure Workspace Docks --
+    # they're just not opened by default.
     ('Design', [
-        'welcome', 'layout', 'layout3d', 'summary', 'library',
+        'layout', 'library', 'summary',
     ]),
     ('Optimize', [
-        'layout', 'optimizer', 'sliders', 'multiconfig',
-        'snapshots', 'summary',
+        'layout', 'optimizer', 'sliders',
     ]),
     ('Analysis', [
-        'layout', 'spot', 'rayfan', 'footprint', 'distortion',
-        'spot_field', 'through_focus', 'psfmtf', 'field_browser',
-        'caustic', 'lg_aberration', 'shack_hartmann', 'summary',
+        'layout', 'spot', 'rayfan', 'summary', 'psfmtf',
     ]),
     ('Wave Optics', [
         'layout', 'waveoptics', 'zernike', 'interferometry',
-        'phase_retrieval', 'ghost', 'richards_wolf', 'coherence',
-        'rcwa',
     ]),
     ('Tolerancing', [
-        'layout', 'tolerance', 'sensitivity', 'summary',
+        'layout', 'tolerance', 'sensitivity',
     ]),
     ('Materials', [
-        'materials', 'glassmap', 'library', 'summary',
+        'materials', 'glassmap',
     ]),
 ]
 
@@ -341,6 +345,10 @@ class WorkspaceManager(QObject):
     """Owns the list of workspaces and applies/saves QMainWindow layouts."""
 
     changed = Signal()
+    # 3.6.1: emitted in load_json when the saved layout is from a
+    # revision earlier than DEFAULTS_REVISION.  main_window listens
+    # and offers a one-time "workspaces simplified -- reset?" prompt.
+    needs_reset_prompt = Signal()
 
     def __init__(self, main_window, dock_registry):
         """
@@ -539,6 +547,7 @@ class WorkspaceManager(QObject):
                 0, min(len(self.workspaces) - 1, int(d.get('current', 0))))
 
             saved_rev = int(d.get('defaults_revision', 0))
+            needs_prompt = False
             if saved_rev < DEFAULTS_REVISION:
                 existing_by_name = {w.name: w for w in self.workspaces}
                 for name, docks in DEFAULT_WORKSPACES:
@@ -560,6 +569,21 @@ class WorkspaceManager(QObject):
                             if doc not in existing_set:
                                 ws.dock_names.append(doc)
                                 existing_set.add(doc)
+                # 3.6.1: when the user's saved layout predates the
+                # trimmed-defaults revision (5), they likely have the
+                # old bloated 13-dock Analysis tab etc.  Defer to
+                # main_window: emit a signal and let the UI ask
+                # whether to reset to the new minimal defaults.
+                # We deliberately do not auto-trim -- the user may
+                # have hand-curated their layout.
+                if saved_rev < 5:
+                    needs_prompt = True
+            if needs_prompt:
+                # Defer the emit until after load_json returns so the
+                # caller can finish wiring before the modal pops.
+                from PySide6.QtCore import QTimer as _QTimer
+                _QTimer.singleShot(
+                    0, lambda: self.needs_reset_prompt.emit())
             return True
         except Exception:
             return False

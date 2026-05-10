@@ -188,6 +188,23 @@ class MainWindow(QMainWindow):
         self.layout3d_view = Layout3DView(self.model)
         self.layout3d_dock = dock('3D Layout', self.layout3d_view, Qt.TopDockWidgetArea, 'layout3d')
 
+        # 3.6.1: forward element-table row selection to the layout
+        # views so a click in the table highlights the corresponding
+        # element in 2D / 3D.  The reverse direction (layout-click ->
+        # table) was already plumbed via SystemModel.element_selected.
+        self.element_editor.element_selected_in_table.connect(
+            self.layout_view.set_selected_element)
+        self.element_editor.element_selected_in_table.connect(
+            self.layout3d_view.set_selected_element)
+
+        # 3.6.1 (Stage C.2): OSLO-style "attach slider".  Right-click
+        # any numeric cell in the surface sub-table and pick "Attach
+        # slider to this parameter…" -- the SystemModel adds the
+        # variable, the editor emits this signal, and we raise +
+        # pulse the new slider.
+        self.element_editor.slider_attach_requested.connect(
+            self._on_slider_attach)
+
         self.spot_widget = SpotDiagramWidget(self.model)
         self.spot_dock = dock('Spot Diagram', self.spot_widget, Qt.RightDockWidgetArea, 'spot')
 
@@ -539,6 +556,11 @@ class MainWindow(QMainWindow):
 
         self.workspace_mgr = WorkspaceManager(self, self._dock_registry)
         self.workspace_mgr.init_defaults()
+        # 3.6.1: connect the migration-prompt signal BEFORE load_json
+        # so the prompt can fire (deferred via QTimer.singleShot) on
+        # the user's first 3.6.1 launch with a pre-3.6.1 saved layout.
+        self.workspace_mgr.needs_reset_prompt.connect(
+            self._offer_workspace_reset)
 
         # Restore from QSettings if available.
         try:
@@ -592,6 +614,61 @@ class MainWindow(QMainWindow):
         # before switching -- so positions are preserved per-tab.
         self.workspace_mgr.save_current_layout()
         self.workspace_mgr.apply_index(idx)
+
+    def _on_slider_attach(self, triple):
+        """3.6.1 (Stage C.2): user picked "Attach slider to this
+        parameter…" in the prescription editor.  Raise the Sliders
+        dock and pulse the matching ParameterSlider.
+        """
+        try:
+            elem_idx, surf_idx, field = triple
+        except Exception:
+            return
+        try:
+            self._show_and_raise(self.slider_dock)
+        except Exception:
+            pass
+        try:
+            self.slider_widget.attach_variable(
+                elem_idx, surf_idx, field)
+        except Exception:
+            pass
+
+    def _offer_workspace_reset(self):
+        """3.6.1: one-time prompt offered to upgraders whose saved
+        workspaces predate the trimmed defaults.  Choosing Yes
+        reinitialises workspaces from DEFAULT_WORKSPACES; choosing No
+        keeps the user's current layout.  Either way, the prompt is
+        only shown once -- defaults_revision tracks acknowledgement.
+        """
+        try:
+            ans = QMessageBox.question(
+                self, 'Workspaces simplified (3.6.1)',
+                'Default workspaces have been trimmed for a cleaner '
+                'start (Analysis went 13 → 5 docks; Wave Optics went '
+                '9 → 4).  All specialty docks remain available via '
+                'View > Configure Workspace Docks…\n\n'
+                'Reset to the new minimal defaults?  '
+                '(Your custom workspace tabs will be preserved either '
+                'way.)',
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No)
+        except Exception:
+            ans = QMessageBox.No
+        if ans == QMessageBox.Yes:
+            try:
+                self.workspace_mgr.init_defaults()
+                self.workspace_bar.set_names(
+                    self.workspace_mgr.titles(),
+                    current_index=self.workspace_mgr.current_index)
+                self.workspace_mgr.apply_index(
+                    self.workspace_mgr.current_index)
+                self.status_label.setText(
+                    'Workspaces reset to 3.6.1 minimal defaults.')
+            except Exception as exc:
+                QMessageBox.warning(self, 'Workspace reset',
+                                     f'Could not reset workspaces: '
+                                     f'{type(exc).__name__}: {exc}')
 
     def _on_workspace_add_requested(self):
         name, ok = QInputDialog.getText(
@@ -976,21 +1053,41 @@ class MainWindow(QMainWindow):
 
         # View
         vm = mb.addMenu('&View')
-        for d in [self.layout_dock, self.layout3d_dock, self.spot_dock,
-                  self.rayfan_dock, self.summary_dock, self.glassmap_dock,
-                  self.library_dock, self.snapshots_dock,
-                  self.field_browser_dock, self.materials_dock,
-                  self.jones_pupil_dock]:
+        # 3.6.1: top-level "Configure Workspace Docks" promoted out of
+        # the Workspace submenu so users can find it in one click when
+        # they want to add the (now off-by-default) specialty docks.
+        vm.addAction('&Configure Workspace Docks...',
+                     lambda: self._on_workspace_manage_requested(
+                         self.workspace_mgr.current_index))
+        vm.addSeparator()
+        # ── Layouts & overview ──
+        for d in [self.layout_dock, self.layout3d_dock, self.summary_dock,
+                  self.library_dock, self.welcome_dock,
+                  self.snapshots_dock]:
             vm.addAction(d.toggleViewAction())
         vm.addSeparator()
-        for d in [self.optimizer_dock, self.slider_dock,
-                  self.tolerance_dock, self.waveoptics_dock,
-                  self.zernike_dock, self.through_focus_dock,
-                  self.psfmtf_dock, self.sensitivity_dock,
+        # ── Geometric analysis ──
+        for d in [self.spot_dock, self.rayfan_dock, self.psfmtf_dock,
+                  self.through_focus_dock, self.footprint_dock,
+                  self.distortion_dock, self.spot_field_dock,
+                  self.field_browser_dock, self.caustic_dock]:
+            vm.addAction(d.toggleViewAction())
+        vm.addSeparator()
+        # ── Wave optics & specialty (3.6.1: 3.6.0's specialty docks
+        # now exposed in the View menu, not just the Manage Docks
+        # dialog). ──
+        for d in [self.waveoptics_dock, self.zernike_dock,
                   self.interferometry_dock, self.phase_retrieval_dock,
-                  self.multiconfig_dock, self.ghost_dock,
-                  self.footprint_dock, self.distortion_dock,
-                  self.spot_field_dock,
+                  self.ghost_dock, self.jones_pupil_dock,
+                  self.richards_wolf_dock, self.coherence_dock,
+                  self.sh_dock, self.lg_dock, self.rcwa_dock]:
+            vm.addAction(d.toggleViewAction())
+        vm.addSeparator()
+        # ── Materials, optimization, utilities ──
+        for d in [self.materials_dock, self.glassmap_dock,
+                  self.optimizer_dock, self.slider_dock,
+                  self.tolerance_dock, self.sensitivity_dock,
+                  self.multiconfig_dock, self.repl_dock,
                   self.diagnostics_dock]:
             vm.addAction(d.toggleViewAction())
 

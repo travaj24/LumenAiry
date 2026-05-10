@@ -7,7 +7,7 @@ Clicking an element shows its internal surfaces in a detail panel below.
 Author: Andrew Traverso
 """
 
-from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QTimer
+from PySide6.QtCore import Qt, QAbstractTableModel, QModelIndex, QTimer, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableView, QHeaderView,
     QPushButton, QLabel, QLineEdit, QComboBox, QAbstractItemView,
@@ -326,6 +326,10 @@ class TypeDelegate(QStyledItemDelegate):
 class SurfaceDetailPanel(QWidget):
     """Shows and edits the internal surfaces of the selected element."""
 
+    # 3.6.1: forwarded to ElementTableEditor.slider_attach_requested
+    # which main_window.py listens to (see _on_slider_attach).
+    slider_attach_requested = Signal(tuple)
+
     def __init__(self, system_model: SystemModel, parent=None):
         super().__init__(parent)
         self.sm = system_model
@@ -494,7 +498,16 @@ class SurfaceDetailPanel(QWidget):
         self._show_relevant_source_rows(src.source_type)
 
     def _on_source_type_changed(self, text):
+        # 3.6.1: source-type combo is a discrete change, not text.
+        # Flush the 200 ms debounce timer that text inputs use, and
+        # apply the new source synchronously so the 2D / 3D layouts
+        # rebuild immediately rather than waiting for the user to
+        # idle for 200 ms.
         self._show_relevant_source_rows(text)
+        try:
+            self._src_timer.stop()
+        except Exception:
+            pass
         self._apply_source_params()
 
     def _show_relevant_source_rows(self, source_type):
@@ -505,6 +518,19 @@ class SurfaceDetailPanel(QWidget):
             label_widget.setVisible(show)
             inp_widget.setVisible(show)
 
+    def _attach_slider(self, elem_idx, surf_idx, field):
+        """3.6.1 (Stage C.2): promote (elem_idx, surf_idx, field) to
+        an optimization variable via SystemModel and emit a signal
+        that ElementTableEditor forwards to main_window so the
+        Sliders dock can raise + pulse the new slider.
+        """
+        try:
+            self.sm.add_optimization_variable(elem_idx, surf_idx, field)
+        except Exception:
+            pass
+        self.slider_attach_requested.emit(
+            (int(elem_idx), int(surf_idx), str(field)))
+
     def _on_surface_context_menu(self, pos):
         """Right-click context menu on the surface sub-table."""
         from PySide6.QtWidgets import QMenu
@@ -512,6 +538,7 @@ class SurfaceDetailPanel(QWidget):
         if not index.isValid():
             return
         surf_idx = index.row()
+        col = index.column()
         if self._elem_idx < 0:
             return
         elem = self.sm.elements[self._elem_idx]
@@ -520,6 +547,33 @@ class SurfaceDetailPanel(QWidget):
         s = elem.surfaces[surf_idx]
 
         menu = QMenu(self.surf_table)
+        # 3.6.1 (Stage C.2): OSLO-style "attach slider" lets the user
+        # promote any numeric cell to an optimization variable in one
+        # click.  Column-to-field map matches SurfaceSubModel.COLUMNS:
+        #   1: Radius   2: Thickness   4: Semi-Diam   5: Conic
+        #   6: Radius Y 7: Conic Y
+        # Glass (col 3) and Surf# (col 0) are not numeric variables.
+        col_to_field = {
+            1: 'radius',
+            2: 'thickness',
+            4: 'semi_diameter',
+            5: 'conic',
+            6: 'radius_y',
+            7: 'conic_y',
+        }
+        slider_field = col_to_field.get(col)
+        if slider_field is not None:
+            act_slider = menu.addAction(
+                f'Attach slider to this {slider_field}…')
+            act_slider.setToolTip(
+                'Promote this parameter to an optimization variable '
+                'and reveal the Sliders dock so you can drag it '
+                'live.  OSLO-style interactive tuning.')
+            act_slider.triggered.connect(
+                lambda _c=False, f=slider_field, sidx=surf_idx:
+                    self._attach_slider(self._elem_idx, sidx, f))
+            menu.addSeparator()
+
         if s.glass:
             act = menu.addAction(
                 f'Propagate "{s.glass}" to all cemented faces in this element')
@@ -712,6 +766,19 @@ class SurfaceSubModel(QAbstractTableModel):
 class ElementTableEditor(QWidget):
     """Complete element editor with toolbar, table, and detail panel."""
 
+    # 3.6.1: emitted when the user selects a different table row.
+    # Wired in main_window.py to Layout2DView.set_selected_element
+    # and Layout3DView.set_selected_element so the layout shows a
+    # gold highlight around the chosen element.  This is the
+    # forward direction (table -> layout); the reverse direction
+    # (layout-click -> table) was already plumbed via
+    # SystemModel.element_selected.
+    element_selected_in_table = Signal(int)
+    # 3.6.1 (Stage C.2): OSLO-style "attach slider" emit.  Carries
+    # (elem_idx, surf_idx, field) so main_window can raise the
+    # Sliders dock and pulse the matching ParameterSlider.
+    slider_attach_requested = Signal(tuple)
+
     def __init__(self, system_model: SystemModel, parent=None):
         super().__init__(parent)
         self.sm = system_model
@@ -877,6 +944,10 @@ class ElementTableEditor(QWidget):
 
         # Detail panel
         self.detail_panel = SurfaceDetailPanel(self.sm)
+        # 3.6.1: forward the attach-slider request out of the panel
+        # so main_window can raise the Sliders dock.
+        self.detail_panel.slider_attach_requested.connect(
+            self.slider_attach_requested.emit)
         splitter.addWidget(self.detail_panel)
 
         splitter.setStretchFactor(0, 2)
@@ -910,6 +981,13 @@ class ElementTableEditor(QWidget):
     def _on_row_selected(self, current, previous):
         self.detail_panel.show_element(current.row())
         self._update_toolbar_enabled()
+        # 3.6.1: forward selection to the layout views so the user
+        # sees a highlight in 2D / 3D when they click a table row.
+        try:
+            row = int(current.row())
+        except Exception:
+            row = -1
+        self.element_selected_in_table.emit(row)
 
     def _update_toolbar_enabled(self, *args):
         """Enable/disable Group/Ungroup/Delete based on current selection."""

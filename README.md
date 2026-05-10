@@ -10,6 +10,34 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.6.1
+
+GUI update only — no core-library API changes.  Audit-driven
+overhaul addressing the four headline issues from the 3.6.0
+review:
+
+- Sources are now drawn in the 2D and 3D layouts (per-source-
+  type glyphs: bar / ellipse / disc / annulus / dot / array).
+- Selecting a row in the prescription editor now highlights the
+  corresponding element in 2D and 3D layouts (gold outline).
+- Source-type changes refresh the layouts immediately (no more
+  200 ms debounce wait on a discrete combo change).
+- Workspace defaults trimmed (Analysis 13→5, Wave Optics 9→4)
+  with a one-time "reset to new defaults?" migration prompt for
+  upgraders.
+
+Plus two industry-pattern adoptions inspired by Optiland /
+Zemax / OSLO:
+
+- **Source-preview rays** drawn upstream of the source in the
+  2D layout, illustrating propagation direction.  Toggleable.
+- **OSLO-style "Attach slider to this parameter…"** — right-
+  click any numeric cell in the surface sub-table to promote
+  it to an optimization variable and reveal the Sliders dock
+  with the new slider pulsing amber for 3 seconds.
+
+See [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full list.
+
 ## What's new in 3.6.0
 
 GUI update only — no core-library API changes.  Closes ~30 audit

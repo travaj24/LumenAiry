@@ -15,6 +15,142 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.6.1] — 2026-05-10
+
+GUI overhaul addressing the 3.6.0 audit's four headline issues:
+sources weren't drawn in 2D / 3D layouts, edits to source type
+didn't refresh the layouts, selecting a row in the prescription
+editor didn't highlight in the layout, and workspaces opened
+with too many docks at once.  Plus two industry-pattern
+adoptions (source-preview rays, OSLO-style attach-slider).
+
+### Layout views — sources are now drawn
+
+`Layout2DView._draw_source` and `Layout3DView._draw_source_3d`
+render the optical source as a per-source-type glyph at z=0:
+
+* **Plane wave**: vertical bar across the EPD (2D) / disc cap
+  perpendicular to the optical axis (3D), plus propagation-
+  direction arrows / cone glyph.
+* **Gaussian**: filled ellipse sized by `beam_diameter_mm`
+  (2D) / oblate sphere (3D).
+* **Gaussian aperture**: ellipse sized by `sigma_mm`.
+* **Top-hat**: hard-edge rectangle / disc of width
+  `top_hat_diameter_mm`.
+* **Fiber mode**: annular ring outline with MFD-derived inner
+  radius.
+* **Point source**: small dot.
+* **Emitter array**: grid of dots at the configured pitch
+  (capped at 7×7 visible).
+
+Source `.describe()` text is shown above the glyph in mint
+green to match the source-row tint in the element table.  The
+source z-position is registered into `_surface_zones` so a click
+in the layout selects element 0 (the source row).
+
+### Layout views — bidirectional table-layout selection highlight
+
+Previously the layout-click → table direction worked but the
+table-row-click → layout direction was missing.  3.6.1 adds:
+
+* `Layout2DView.set_selected_element(idx)` and
+  `Layout3DView.set_selected_element(idx)` slots.
+* `_redraw_highlight()` / `_redraw_highlight_3d()` overlays a
+  translucent amber rectangle (2D) or gold ring (3D) on the
+  selected element's z-zone.  Highlight survives auto-retraces
+  (re-added at the end of `rebuild()`).
+* `ElementTableEditor.element_selected_in_table = Signal(int)`
+  emitted from `_on_row_selected()`.
+* `MainWindow.__init__` wires the signal into both layout views.
+
+### Source-type changes refresh layouts immediately
+
+Previously `_on_source_type_changed` only triggered a layout
+rebuild after the 200 ms text-input debounce timer expired.
+3.6.1 stops the timer and applies the new source synchronously
+on the discrete combo-box change, so the 2D / 3D glyph updates
+immediately.
+
+### Workspace defaults trimmed
+
+`DEFAULT_WORKSPACES` rebalanced to focused minimal sets:
+
+| Workspace    | 3.6.0 | 3.6.1 | Default docks                              |
+|--------------|-------|-------|--------------------------------------------|
+| Design       | 5     | 3     | layout, library, summary                   |
+| Optimize     | 6     | 3     | layout, optimizer, sliders                 |
+| Analysis     | **13**| 5     | layout, spot, rayfan, summary, psfmtf      |
+| Wave Optics  | **9** | 4     | layout, waveoptics, zernike, interferometry |
+| Tolerancing  | 4     | 3     | layout, tolerance, sensitivity             |
+| Materials    | 4     | 2     | materials, glassmap                        |
+
+`DEFAULTS_REVISION` bumped 4 → 5.  Existing users with
+persisted layouts get a one-time "Workspaces simplified — reset
+to new defaults?" prompt on first 3.6.1 launch via the new
+`WorkspaceManager.needs_reset_prompt` signal; choosing No
+preserves their existing layout.  The new docks (caustic,
+richards_wolf, coherence, shack_hartmann, lg_aberration, rcwa)
+remain available via View > Configure Workspace Docks…
+
+### View menu — Configure Workspace Docks promoted; specialty docks listed
+
+* New top-level **View > Configure Workspace Docks…** action
+  (was previously buried two levels deep under View >
+  Workspace > Manage Docks).
+* The View menu's flat dock-toggle list now exposes every 3.6
+  specialty dock (caustic, richards_wolf, coherence,
+  shack_hartmann, lg_aberration, rcwa) and the welcome / repl /
+  diagnostics docks, organised into four groups separated by
+  separators: Layouts & overview / Geometric analysis / Wave
+  optics & specialty / Materials, optimization, utilities.
+
+### Source-preview rays in the 2D layout
+
+`_draw_source` now also draws short upstream preview rays
+illustrating propagation direction.  Pattern depends on source
+type (parallel rays for plane-wave, converging fan for
+Gaussian, diverging fan from a virtual point for point-source,
+etc.).  Coloured by wavelength to read as a visual extension of
+the downstream traced rays.  Toggleable via the new
+`SystemModel.prefs['show_source_preview']` flag (default ON).
+
+### OSLO-style "Attach slider to this parameter…"
+
+Right-click any numeric cell in the surface sub-table (Radius,
+Thickness, Semi-Diam, Conic, Radius Y, Conic Y) → "Attach
+slider to this <field>…".  In one click:
+
+* `SystemModel.add_optimization_variable(elem_idx, surf_idx,
+  field)` appends to `opt_variables` and emits
+  `system_changed`.
+* The Sliders dock is raised automatically.
+* The corresponding `ParameterSlider` is generated (idempotent
+  if already present) and pulses amber for 3 seconds so the
+  user can see which one is new.
+* Drag it → 2D layout's existing 200 ms debounce kicks in →
+  retrace + redraw.
+
+This collapses the previous multi-step path (open Optimizer
+dock → variable-grid dialog → tick checkbox → OK → switch to
+Sliders dock → click Generate → drag) into a single right-click.
+
+### Internals
+
+* `SurfaceDetailPanel` gained a `slider_attach_requested` signal
+  forwarded out via `ElementTableEditor.slider_attach_requested`
+  to `MainWindow._on_slider_attach`.
+* `WorkspaceManager.load_json` defers `needs_reset_prompt`
+  emission via `QTimer.singleShot(0, ...)` so the modal pops
+  *after* the caller finishes wiring (avoiding re-entrancy
+  with toolbar/menu construction).
+
+### Backwards compatibility
+
+* No public-API changes.
+* Existing user customisations (saved JSON designs,
+  workspaces, recent files, dock layouts, pinned docks) all
+  survive the upgrade.  QSettings storage key unchanged.
+
 ## [3.6.0] — 2026-05-09
 
 GUI feature-coverage release.  Closes ~30 of the 42 audit findings

@@ -2,6 +2,23 @@
 
 All notable changes to the core library are documented here.
 
+## [3.6.1] — 2026-05-10
+
+GUI bug-fix + UX-cleanup release.  No core-library API changes.
+
+* Library: new `SystemModel.add_optimization_variable(elem_idx,
+  surf_idx, field)` helper used by the new "Attach slider to this
+  parameter" GUI flow (it lives on the GUI's `SystemModel`, not
+  the public `lumenairy` API surface, so no `__all__` change).
+* Library: GUI catch-up release otherwise.  See
+  [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full GUI-side
+  changes (3 layout-bug fixes, workspace defaults trimmed,
+  source-preview rays, OSLO-style attach-slider).
+
+### Backwards compatibility
+
+No public API changes.  `__all__` unchanged.
+
 ## [3.6.0] — 2026-05-09
 
 GUI feature-coverage release.  No core-library API changes; all

@@ -1563,6 +1563,31 @@ class SystemModel(QObject):
                     setattr(elem.surfaces[surf_idx], field, values[i])
         self._invalidate()
 
+    def add_optimization_variable(self, elem_idx, surf_idx, field):
+        """3.6.1: append (elem_idx, surf_idx, field) to opt_variables
+        if not already present, then emit system_changed so the
+        Slider dock and the optimizer's variable-grid dialog notice
+        the new variable.
+
+        Used by the OSLO-style "Attach slider to this parameter…"
+        right-click action on the prescription editor: a single
+        click promotes a cell into an optimization variable without
+        the user having to open the optimizer dock first.
+
+        Returns True when a new variable was added; False when the
+        triple was already in the list (idempotent).
+        """
+        triple = (int(elem_idx), int(surf_idx), str(field))
+        for existing in self.opt_variables:
+            if tuple(existing) == triple:
+                return False
+        self.opt_variables.append(triple)
+        try:
+            self.system_changed.emit()
+        except Exception:
+            pass
+        return True
+
     # Merit type for the geometric optimizer.  Set by the optimizer dock.
     # Valid values: 'rms_spot' (default), 'efl_target', 'bfl_target',
     #               'seidel_spherical', 'min_thickness', 'max_fnumber'

@@ -51,6 +51,13 @@ class Layout2DView(QWidget):
         # Connect
         # Map z-position (scene coords) to surface index for click detection
         self._surface_zones = []  # list of (z_start, z_end, surface_index)
+        # 3.6.1: index of the element highlighted in the layout (kept in
+        # sync with the prescription-table selection via the new
+        # element_selected_in_table signal in main_window).  -1 means
+        # no selection.  Highlight items live in self._highlight_items
+        # so they can be removed/redrawn without a full rebuild.
+        self._selected_elem_idx = -1
+        self._highlight_items = []
 
         self.sm.system_changed.connect(self.rebuild)
         self.sm.trace_ready.connect(self._draw_rays)
@@ -102,7 +109,21 @@ class Layout2DView(QWidget):
 
         # ── Draw each element ──
         for ei, elem in enumerate(elements):
-            if elem.elem_type in ('Source', 'Detector'):
+            # 3.6.1: render the source as a visible glyph instead of
+            # skipping it.  Detector is still skipped here because the
+            # image-plane line below covers it.
+            if elem.elem_type == 'Source':
+                src = getattr(elem, 'source', None) or self.sm.source
+                z_src = z_positions[ei] * S
+                self._draw_source(z_src, src)
+                # Register a click zone at the source so users can
+                # click it in the layout and have the table jump to
+                # element 0.
+                zone_w = max(8, self.sm.epd_mm / 2 * S * 0.3)
+                self._surface_zones.append(
+                    (z_src - zone_w, z_src + zone_w, ei))
+                continue
+            if elem.elem_type == 'Detector':
                 continue
 
             z_front = z_positions[ei] * S
@@ -145,6 +166,10 @@ class Layout2DView(QWidget):
             self.scene.sceneRect().adjusted(-40, -40, 40, 40),
             Qt.KeepAspectRatio,
         )
+
+        # 3.6.1: re-draw the selection highlight on top after a full
+        # rebuild so the gold outline survives auto-retraces.
+        self._redraw_highlight()
 
         # Auto-trace
         self.sm.run_trace()
@@ -229,6 +254,214 @@ class Layout2DView(QWidget):
         for i in range(n_hatches + 1):
             y = -h + (2 * h / n_hatches) * i
             self.scene.addLine(z, y, z + 3, y - 4, hatch_pen)
+
+    def _draw_source(self, z, src):
+        """3.6.1: draw a visible glyph for the optical source.
+
+        Dispatches on ``src.source_type`` (model.SourceDefinition.TYPES)
+        to draw a different shape per source kind.  Uses the EPD as
+        a fallback height when the source has no intrinsic size
+        (plane wave) so the glyph stays in proportion to the rest
+        of the layout.
+
+        Parameters
+        ----------
+        z : float
+            Source z-position in scene pixels.
+        src : SourceDefinition or None
+            The current source.  If ``None``, falls back to the
+            model's source.
+        """
+        S = self.SCALE
+        if src is None:
+            return
+        accent = QColor(120, 220, 140)        # mint green
+        pen = QPen(accent, 1.6)
+        fill = QBrush(QColor(120, 220, 140, 70))
+        epd_h_px = max(8.0, self.sm.epd_mm / 2 * S)
+        st = src.source_type
+
+        if st == 'plane_wave':
+            # Vertical bar across the EPD + 3 short propagation
+            # arrows pointing into the system.
+            self.scene.addLine(z, -epd_h_px, z, epd_h_px, pen)
+            for ay in (-epd_h_px * 0.6, 0.0, epd_h_px * 0.6):
+                self.scene.addLine(z - 6, ay, z + 4, ay, pen)
+                self.scene.addLine(z + 4, ay, z + 1, ay - 2, pen)
+                self.scene.addLine(z + 4, ay, z + 1, ay + 2, pen)
+
+        elif st in ('gaussian', 'gaussian_aperture'):
+            # Filled ellipse sized by beam diameter or sigma.
+            if st == 'gaussian':
+                w_mm = max(0.05, src.beam_diameter_mm)
+            else:
+                w_mm = max(0.05, src.sigma_mm * 2)
+            half = w_mm / 2 * S
+            half = max(half, 6.0)
+            self.scene.addEllipse(z - 3, -half, 6, 2 * half, pen, fill)
+
+        elif st == 'top_hat':
+            # Hard-edge rectangle at the source plane.
+            half = max(6.0, src.top_hat_diameter_mm / 2 * S)
+            self.scene.addRect(z - 3, -half, 6, 2 * half, pen, fill)
+
+        elif st == 'fiber_mode':
+            # Annular ring outline (MFD-derived radius).  No fill.
+            half = max(4.0, src.fiber_mfd_um * 1e-3 / 2 * S)
+            outer = max(half * 1.4, half + 4)
+            self.scene.addEllipse(z - outer, -outer,
+                                  2 * outer, 2 * outer, pen,
+                                  QBrush(Qt.NoBrush))
+            self.scene.addEllipse(z - half, -half,
+                                  2 * half, 2 * half, pen, fill)
+
+        elif st == 'point_source':
+            # Small filled circle.
+            r = 4.0
+            self.scene.addEllipse(z - r, -r, 2 * r, 2 * r,
+                                  pen, fill)
+
+        elif st == 'emitter_array':
+            # Grid of dots; cap visible count at 7x7 so the layout
+            # doesn't drown in micro-dots for large arrays.
+            nx = max(1, min(7, src.emitter_nx))
+            ny = max(1, min(7, src.emitter_ny))
+            pitch_px = max(2.0, src.emitter_pitch_mm * S)
+            x0 = z
+            y0 = 0.0
+            for ix in range(nx):
+                for iy in range(ny):
+                    cx = x0 + (ix - (nx - 1) / 2) * pitch_px * 0.0
+                    cy = y0 + (iy - (ny - 1) / 2) * pitch_px
+                    self.scene.addEllipse(cx - 1.5, cy - 1.5,
+                                          3, 3, pen, fill)
+
+        else:
+            # Unknown future source-type: a question-mark marker.
+            self.scene.addLine(z - 4, -4, z + 4, -4, pen)
+            self.scene.addLine(z, -4, z, 4, pen)
+
+        # Source description label above the glyph.
+        try:
+            label_text = src.describe()
+        except Exception:
+            label_text = st
+        lbl = QGraphicsTextItem(label_text)
+        lbl.setDefaultTextColor(accent)
+        lbl.setFont(QFont('Consolas', 7))
+        lbl.setPos(z - 30, -epd_h_px - 24)
+        self.scene.addItem(lbl)
+
+        # 3.6.1 (Stage C.1): optional preview rays just upstream of
+        # the source, illustrating propagation direction.  Coloured by
+        # wavelength so they read as a visual extension of the
+        # downstream traced rays.  Toggle via prefs key
+        # 'show_source_preview' (default ON).
+        if not self.sm.prefs.get('show_source_preview', True):
+            return
+        try:
+            wv = self.sm.wavelength_nm
+            rc = self._wavelength_to_color(wv)
+            ray_pen = QPen(QColor(*rc, 100), 0.8)
+        except Exception:
+            ray_pen = QPen(QColor(180, 200, 255, 80), 0.8)
+        # Length of the upstream preview, in scene pixels.
+        upstream = max(20.0, epd_h_px * 0.6)
+        # Per-source-type ray pattern.
+        if st == 'plane_wave':
+            # Parallel rays evenly distributed across the EPD.
+            for ay in np.linspace(-epd_h_px * 0.85,
+                                   epd_h_px * 0.85, 5):
+                self.scene.addLine(
+                    z - upstream, ay, z, ay, ray_pen)
+        elif st in ('gaussian', 'gaussian_aperture', 'top_hat',
+                    'fiber_mode', 'emitter_array'):
+            # Slightly converging fan onto the source aperture.
+            if st == 'gaussian':
+                ap = max(6.0, src.beam_diameter_mm / 2 * S)
+            elif st == 'gaussian_aperture':
+                ap = max(6.0, src.sigma_mm * S)
+            elif st == 'top_hat':
+                ap = max(6.0, src.top_hat_diameter_mm / 2 * S)
+            elif st == 'fiber_mode':
+                ap = max(4.0, src.fiber_mfd_um * 1e-3 / 2 * S)
+            else:
+                ap = max(6.0, src.emitter_pitch_mm * S
+                          * src.emitter_nx / 2)
+            for ay in np.linspace(-ap, ap, 5):
+                self.scene.addLine(
+                    z - upstream, ay, z, ay * 0.7, ray_pen)
+        elif st == 'point_source':
+            # Diverging fan upstream from a virtual source point.
+            try:
+                obj_dist_mm = max(1.0, src.object_distance_mm)
+            except Exception:
+                obj_dist_mm = 1000.0
+            virt_z = z - min(upstream, obj_dist_mm * S * 0.5)
+            for ay in np.linspace(-epd_h_px * 0.6,
+                                   epd_h_px * 0.6, 7):
+                self.scene.addLine(virt_z, 0.0, z, ay, ray_pen)
+
+    # 3.6.1: bidirectional table <-> layout selection.
+    # The layout already emits sm.element_selected on click (handled
+    # by ElementTableEditor), but the reverse direction (table click
+    # -> layout highlight) was missing.  set_selected_element is the
+    # public slot wired in main_window.py to the new
+    # element_selected_in_table signal on ElementTableEditor.
+
+    def set_selected_element(self, idx: int):
+        """Public slot: set the currently-highlighted element index.
+
+        Negative values clear the highlight.  Repaint is incremental
+        (clears and adds the highlight items only); it does not
+        trigger a full rebuild.
+        """
+        try:
+            idx = int(idx)
+        except Exception:
+            idx = -1
+        self._selected_elem_idx = idx
+        self._redraw_highlight()
+
+    def _redraw_highlight(self):
+        """Repaint the selection-highlight overlay.
+
+        Cleared and redrawn every time the selection changes or the
+        scene is rebuilt.  Looks up the element's z-zone in
+        self._surface_zones (registered during rebuild) and overlays
+        a translucent amber rectangle there.
+        """
+        # Clear prior highlight items.
+        for it in self._highlight_items:
+            try:
+                self.scene.removeItem(it)
+            except Exception:
+                pass
+        self._highlight_items.clear()
+        idx = self._selected_elem_idx
+        if idx < 0 or not self._surface_zones:
+            return
+        # Find the zone for this element.  _surface_zones is a list
+        # of (z_start, z_end, element_index); pick the matching
+        # entry.
+        for z_start, z_end, ei in self._surface_zones:
+            if ei != idx:
+                continue
+            S = self.SCALE
+            h = max(8.0, self.sm.epd_mm / 2 * S * 1.1)
+            pad_z = max(6.0, (z_end - z_start) * 0.15)
+            outline_pen = QPen(QColor(255, 200, 80), 2)
+            fill = QBrush(QColor(255, 200, 80, 60))
+            rect = self.scene.addRect(
+                z_start - pad_z, -h,
+                (z_end - z_start) + 2 * pad_z, 2 * h,
+                outline_pen, fill)
+            # Push the highlight to the front so it sits on top of
+            # rays / glass fills without obscuring them entirely
+            # (alpha=60 keeps everything underneath visible).
+            rect.setZValue(100)
+            self._highlight_items.append(rect)
+            break
 
     def _draw_rays(self, trace_result):
         """Draw traced rays on the scene."""
