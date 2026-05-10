@@ -1372,38 +1372,68 @@ class SystemModel(QObject):
     # ── Load from prescription ────────────────────────────────────
 
     def load_prescription(self, prescription, wavelength_nm=None):
-        """Load a prescription dict, grouping surfaces into elements."""
+        """Load a prescription dict, grouping surfaces into elements.
+
+        3.6.1 hotfix-5: prefer the importer's full ``elements`` list
+        (which includes mirrors with their ``surf_num`` and
+        ``comment`` fields) plus ``all_thicknesses`` aligned to it.
+        The lens-only ``surfaces`` list strips mirrors and surf_num,
+        so consuming it caused fold mirrors to vanish and the
+        coord-break absorption pass to find no targets.
+
+        Element labels prefer the per-surface ``comment`` from the
+        .zmx COMM field when non-empty; otherwise they get a
+        running ``Lens 1`` / ``Mirror 1`` / etc. tag so the
+        prescription editor doesn't show every row as the source
+        filename.
+        """
         self._checkpoint()
         if wavelength_nm is not None:
             self.wavelength_nm = wavelength_nm
             self.wavelengths_nm = [wavelength_nm]
 
-        rx_surfs = prescription.get('surfaces', [])
-        rx_thick = prescription.get('thicknesses', [])
-        aperture = prescription.get('aperture_diameter')
-        name = prescription.get('name', 'Imported')
+        # Prefer the full elements list (with mirrors + surf_num);
+        # fall back to the lens-only surfaces list for legacy
+        # callers that don't ship the new key.
+        full = prescription.get('elements')
+        if full is not None:
+            rx_items = full
+            rx_thick_full = prescription.get('all_thicknesses', []) or []
+        else:
+            rx_items = prescription.get('surfaces', []) or []
+            rx_thick_full = prescription.get('thicknesses', []) or []
 
-        # 3.6.1: collect coord-break tilts/decenters by the surf_num
-        # they sit BEFORE.  The importer keeps these out of
-        # `surfaces` (they're geometric transforms, not refractive
-        # surfaces), so without this absorption pass, the GUI never
-        # sees them and the layout draws an unfolded straight
-        # optical axis.  We accumulate into a dict keyed by the
-        # next-optical-surface's `surf_num`; when we build that
-        # element we apply the accumulated transform.
+        aperture = prescription.get('aperture_diameter')
+
+        # ------------------------------------------------------------
+        # 1. Identify dummy air-air infinite-R surfaces with no
+        #    comment.  These are Zemax DISZ spacers / COORDBRK
+        #    reference planes and should not appear in the
+        #    prescription editor; their thicknesses get absorbed
+        #    into the next rendered element's distance.
+        # ------------------------------------------------------------
+        def _is_dummy(item):
+            if item.get('element_type') == 'mirror':
+                return False
+            gb = item.get('glass_before', 'air')
+            ga = item.get('glass_after', 'air')
+            R = item.get('radius', np.inf)
+            cmt = (item.get('comment') or '').strip()
+            return (gb == 'air' and ga == 'air'
+                    and not np.isfinite(R) and not cmt)
+
+        # Build the cb map keyed by the next NON-DUMMY surf_num
+        # so a coord-break that nominally targets a skipped dummy
+        # still lands on the right rendered element.
         cbs = prescription.get('coord_breaks', []) or []
-        # Order surfaces by surf_num so cbs that precede a given
-        # optical surface get correctly attached.
         sorted_cbs = sorted(cbs, key=lambda c: int(c.get('surf_num', 0)))
-        # Map: optical-surface surf_num -> accumulated transform.
-        # We'll determine which optical surface a cb precedes by
-        # picking the first surf with a higher surf_num.
-        sorted_optical_nums = sorted(
-            int(s['surf_num']) for s in rx_surfs if 'surf_num' in s)
+        rendered_surf_nums = [
+            int(it['surf_num']) for it in rx_items
+            if not _is_dummy(it) and it.get('surf_num') is not None]
         cb_for_surf = {}
         for cb in sorted_cbs:
             cb_n = int(cb.get('surf_num', 0))
-            target = next((sn for sn in sorted_optical_nums
+            target = next((sn for sn in rendered_surf_nums
                             if sn > cb_n), None)
             if target is None:
                 continue
@@ -1418,127 +1448,159 @@ class SystemModel(QObject):
 
         if aperture:
             self.epd_mm = aperture * 1e3
+        sd_default = aperture * 1e3 / 2 if aperture else np.inf
 
-        sd_mm = aperture * 1e3 / 2 if aperture else np.inf
-
+        # ------------------------------------------------------------
+        # 2. Reset the element list (preserve any existing source).
+        # ------------------------------------------------------------
         self.elements = [
             Element(0, 'Source', 'Source', distance_mm=0.0,
-                    source=self.elements[0].source if self.elements else SourceDefinition()),
+                    source=self.elements[0].source if self.elements
+                    else SourceDefinition()),
         ]
 
-        # Group consecutive glass-bearing surfaces into elements
+        def _per_surf_sd(item):
+            psd = item.get('semi_diameter')
+            if psd is not None and np.isfinite(psd):
+                return psd * 1e3
+            return sd_default
+
+        def _attach_cb(item):
+            cb = cb_for_surf.get(int(item.get('surf_num', -1)))
+            if not cb:
+                return 0.0, 0.0, 0.0, 0.0
+            return (cb['tilt_x_deg'], cb['tilt_y_deg'],
+                    cb['decenter_x_m'] * 1e3,
+                    cb['decenter_y_m'] * 1e3)
+
+        # ------------------------------------------------------------
+        # 3. Walk the items, grouping refractive surfaces into
+        #    Singlet / Doublet / Triplet elements and emitting
+        #    Mirror elements directly.  Dummies are skipped but
+        #    their thickness is rolled into ``pending_dist_mm``.
+        # ------------------------------------------------------------
+        pending_dist_mm = 0.0
+        n_lens = 0
+        n_mirror = 0
+
         i = 0
-        while i < len(rx_surfs):
-            ps = rx_surfs[i]
-            glass_after = ps.get('glass_after', 'air')
-            # 3.6.1: importer marks mirrors with element_type='mirror'
-            # (no glass_before / glass_after); the previous logic
-            # missed flat mirrors entirely (R=inf would fall through
-            # to the standalone-Singlet branch instead of being
-            # tagged as a Mirror).  Honour the importer flag here
-            # so .zmx and .txt prescriptions render mirror glyphs
-            # in both layouts.
-            ps_is_mirror = (ps.get('element_type') == 'mirror'
-                            or ps.get('is_mirror', False))
-            if ps_is_mirror:
-                R_mm = (ps['radius'] * 1e3
-                        if np.isfinite(ps['radius']) else np.inf)
-                conic = ps.get('conic', 0.0)
-                dist_mm = (rx_thick[i - 1] * 1e3
-                           if i > 0 and i - 1 < len(rx_thick) else 0.0)
-                ps_sd = ps.get('semi_diameter')
-                sd_local = (ps_sd * 1e3 if ps_sd is not None
-                            and np.isfinite(ps_sd) else sd_mm)
-                s = SurfaceRow(R_mm, 0.0, '', sd_local, conic,
-                                surf_type='Mirror')
-                # Reuse `name` (the prescription name) for the
-                # element label or fall back to a per-mirror tag.
-                label = ps.get('comment') or f'M{i + 1}'
-                # 3.6.1: pick up any coord-break transforms that
-                # precede this mirror in the raw prescription.
-                cb = cb_for_surf.get(int(ps.get('surf_num', -1)))
-                tx = cb['tilt_x_deg'] if cb else 0.0
-                ty = cb['tilt_y_deg'] if cb else 0.0
-                dx = cb['decenter_x_m'] * 1e3 if cb else 0.0
-                dy = cb['decenter_y_m'] * 1e3 if cb else 0.0
-                elem = Element(len(self.elements), label, 'Mirror',
-                               distance_mm=dist_mm, surfaces=[s],
-                               tilt_x=tx, tilt_y=ty,
-                               decenter_x=dx, decenter_y=dy)
-                self.elements.append(elem)
+        while i < len(rx_items):
+            item = rx_items[i]
+            item_type = item.get('element_type', 'surface')
+            comment = (item.get('comment') or '').strip()
+            sd_local = _per_surf_sd(item)
+            t_after_mm = (rx_thick_full[i] * 1e3
+                          if i < len(rx_thick_full) else 0.0)
+
+            # Skip dummy spacer surfaces.
+            if _is_dummy(item):
+                pending_dist_mm += t_after_mm
                 i += 1
                 continue
 
+            # ── Mirror element ──
+            if item_type == 'mirror':
+                R_mm = (item['radius'] * 1e3
+                        if np.isfinite(item['radius']) else np.inf)
+                conic = item.get('conic', 0.0)
+                n_mirror += 1
+                label = comment or f'Mirror {n_mirror}'
+                tx, ty, dx, dy = _attach_cb(item)
+                s = SurfaceRow(R_mm, 0.0, '', sd_local, conic,
+                                surf_type='Mirror')
+                elem = Element(len(self.elements), label, 'Mirror',
+                               distance_mm=pending_dist_mm,
+                               surfaces=[s],
+                               tilt_x=tx, tilt_y=ty,
+                               decenter_x=dx, decenter_y=dy)
+                self.elements.append(elem)
+                pending_dist_mm = t_after_mm
+                i += 1
+                continue
+
+            # ── Refractive surface (or specialty plane) ──
+            glass_after = item.get('glass_after', 'air')
+
             if glass_after != 'air':
-                # Start of a lens — find where we exit glass
+                # Start of a lens — find the matching air boundary.
                 j = i + 1
-                while j < len(rx_surfs):
-                    prev_glass = rx_surfs[j - 1].get('glass_after', 'air')
+                while j < len(rx_items):
+                    prev_glass = rx_items[j - 1].get('glass_after', 'air')
                     if prev_glass == 'air':
                         break
                     j += 1
-                # Surfaces i..j-1 form a lens element
                 n_surf = j - i
                 if n_surf == 2:
                     etype = 'Singlet'
                 elif n_surf == 3:
                     etype = 'Doublet'
+                elif n_surf == 4:
+                    etype = 'Triplet'
                 else:
-                    etype = 'Triplet' if n_surf == 4 else 'Singlet'
+                    etype = 'Singlet'
 
-                # Distance: air gap from the previous element's back vertex
-                # = thickness of the surface BEFORE this one (the air gap)
-                if i > 0 and i - 1 < len(rx_thick):
-                    dist_mm = rx_thick[i - 1] * 1e3
-                else:
-                    dist_mm = 0.0
+                tx, ty, dx, dy = _attach_cb(item)
 
                 surf_rows = []
                 for k in range(i, j):
-                    R_mm = rx_surfs[k]['radius'] * 1e3 if np.isfinite(rx_surfs[k]['radius']) else np.inf
-                    # Internal thickness (glass)
-                    t_mm = rx_thick[k] * 1e3 if k < len(rx_thick) else 0.0
-                    glass = rx_surfs[k].get('glass_after', '')
+                    rk = rx_items[k]
+                    Rk_mm = (rk['radius'] * 1e3
+                             if np.isfinite(rk['radius']) else np.inf)
+                    if k < j - 1:
+                        # Internal thickness to the next surface
+                        # of THIS lens.
+                        tk_mm = (rx_thick_full[k] * 1e3
+                                 if k < len(rx_thick_full) else 0.0)
+                    else:
+                        tk_mm = 0.0
+                    glass = rk.get('glass_after', '')
                     if glass == 'air':
                         glass = ''
-                    conic = rx_surfs[k].get('conic', 0.0)
-                    surf_rows.append(SurfaceRow(R_mm, t_mm, glass, sd_mm, conic))
+                    conic = rk.get('conic', 0.0)
+                    surf_rows.append(SurfaceRow(
+                        Rk_mm, tk_mm, glass,
+                        _per_surf_sd(rk), conic))
 
-                # 3.6.1: pick up any coord-break transforms that
-                # precede this lens in the raw prescription.
-                cb = cb_for_surf.get(int(rx_surfs[i].get('surf_num', -1)))
-                tx = cb['tilt_x_deg'] if cb else 0.0
-                ty = cb['tilt_y_deg'] if cb else 0.0
-                dx = cb['decenter_x_m'] * 1e3 if cb else 0.0
-                dy = cb['decenter_y_m'] * 1e3 if cb else 0.0
-                elem = Element(len(self.elements), name, etype,
-                               distance_mm=dist_mm, surfaces=surf_rows,
+                n_lens += 1
+                label = comment or f'Lens {n_lens}'
+                elem = Element(len(self.elements), label, etype,
+                               distance_mm=pending_dist_mm,
+                               surfaces=surf_rows,
                                tilt_x=tx, tilt_y=ty,
                                decenter_x=dx, decenter_y=dy)
                 self.elements.append(elem)
+                # Distance to the next element comes from the
+                # thickness AFTER this lens's last surface.
+                last_k = j - 1
+                pending_dist_mm = (rx_thick_full[last_k] * 1e3
+                                   if last_k < len(rx_thick_full)
+                                   else 0.0)
                 i = j
-            else:
-                # Standalone surface (no glass entering) — likely a mirror or flat
-                # Check if it's a mirror type
-                R_mm = ps['radius'] * 1e3 if np.isfinite(ps['radius']) else np.inf
-                conic = ps.get('conic', 0.0)
+                continue
 
-                dist_mm = rx_thick[i - 1] * 1e3 if i > 0 and i - 1 < len(rx_thick) else 0.0
-
-                # 3.6.1: when a standalone surface lacks the
-                # importer's `element_type='mirror'` tag (older
-                # prescription dicts), curved + no-glass = mirror,
-                # flat + no-glass = leftover artifact (skip
-                # silently rather than render it as a confusing
-                # zero-thickness Singlet).
-                if R_mm != np.inf:
-                    s = SurfaceRow(R_mm, 0.0, '', sd_mm, conic,
-                                   surf_type='Mirror')
-                    elem = Element(len(self.elements), f'M{i+1}',
-                                   'Mirror',
-                                   distance_mm=dist_mm, surfaces=[s])
-                    self.elements.append(elem)
+            # Specialty air-air plane with a comment (e.g. DGRATING,
+            # SpatialFilter): render as a flat zero-thickness
+            # element labelled by the comment so the user sees it.
+            if comment:
+                R_mm = (item['radius'] * 1e3
+                        if np.isfinite(item['radius']) else np.inf)
+                conic = item.get('conic', 0.0)
+                tx, ty, dx, dy = _attach_cb(item)
+                s = SurfaceRow(R_mm, 0.0, '', sd_local, conic)
+                elem = Element(len(self.elements), comment, 'Singlet',
+                               distance_mm=pending_dist_mm,
+                               surfaces=[s],
+                               tilt_x=tx, tilt_y=ty,
+                               decenter_x=dx, decenter_y=dy)
+                self.elements.append(elem)
+                pending_dist_mm = t_after_mm
                 i += 1
+                continue
+
+            # Trailing glass→air surface that didn't get grouped —
+            # accumulate its thickness and move on.
+            pending_dist_mm += t_after_mm
+            i += 1
 
         # Detector at the BFL
         try:
