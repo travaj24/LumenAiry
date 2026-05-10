@@ -13,28 +13,51 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 ## What's new in 3.6.1
 
 GUI update only — no core-library API changes.  Audit-driven
-overhaul addressing the four headline issues from the 3.6.0
-review:
+overhaul of the LumenAiry Designer GUI plus three hotfixes
+against bugs caught after the first 3.6.1 push.
 
-- Sources are now drawn in the 2D and 3D layouts (per-source-
-  type glyphs: bar / ellipse / disc / annulus / dot / array).
+**Layout fixes**
+
+- Sources are now drawn in the 2D and 3D layouts as per-source-
+  type glyphs (bar / ellipse / disc / annulus / dot / array).
 - Selecting a row in the prescription editor now highlights the
-  corresponding element in 2D and 3D layouts (gold outline).
+  corresponding element in both layouts.
 - Source-type changes refresh the layouts immediately (no more
   200 ms debounce wait on a discrete combo change).
-- Workspace defaults trimmed (Analysis 13→5, Wave Optics 9→4)
+- Detector is now clickable from the 2D layout's image-plane
+  line.
+- Rays render in correct world-frame z (the previous version
+  squished the entire fan into ~10 mm because it summed only
+  in-glass thicknesses; the source-to-first-surface air gap
+  was missed and the parallel pre-lens beam was invisible).
+- 3D layout preserves orbit / zoom / pan across parameter
+  edits.  Only the very first rebuild snaps to iso; the
+  toolbar's "Reset View" button still works.
+
+**Workspace UX cleanup**
+
+- `DEFAULT_WORKSPACES` trimmed (Analysis 13→5, Wave Optics 9→4)
   with a one-time "reset to new defaults?" migration prompt for
   upgraders.
+- New top-level *View > Configure Workspace Docks…* action.
+- All 3.6.0 specialty docks now exposed in the View menu.
 
-Plus two industry-pattern adoptions inspired by Optiland /
-Zemax / OSLO:
+**Industry-pattern adoptions** (Optiland / Zemax / OSLO)
 
-- **Source-preview rays** drawn upstream of the source in the
-  2D layout, illustrating propagation direction.  Toggleable.
+- **Source-preview rays** drawn from source plane to first
+  surface (toggleable, off by default).
 - **OSLO-style "Attach slider to this parameter…"** — right-
   click any numeric cell in the surface sub-table to promote
   it to an optimization variable and reveal the Sliders dock
   with the new slider pulsing amber for 3 seconds.
+
+**Cleanup**
+
+- Removed the legacy `optical-designer` console script and
+  `run_optical_designer.py` launcher.  Use `lumenairy-designer`
+  (or `python run_lumenairy_designer.py`) instead.  The
+  QSettings storage key is unchanged so existing user
+  customisations survive.
 
 See [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full list.
 

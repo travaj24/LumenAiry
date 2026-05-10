@@ -17,12 +17,111 @@ historical entries below retain the old name for traceability.
 
 ## [3.6.1] — 2026-05-10
 
-GUI overhaul addressing the 3.6.0 audit's four headline issues:
-sources weren't drawn in 2D / 3D layouts, edits to source type
-didn't refresh the layouts, selecting a row in the prescription
-editor didn't highlight in the layout, and workspaces opened
-with too many docks at once.  Plus two industry-pattern
-adoptions (source-preview rays, OSLO-style attach-slider).
+GUI overhaul addressing the 3.6.0 audit's four headline issues
+plus three hotfixes against bugs the user caught after the first
+3.6.1 push, plus the removal of the legacy `optical-designer`
+launcher / console-script aliases that 3.5.9 had retained for
+backward compatibility.
+
+### Initial 3.6.1 push
+
+Stages A + B + C of the 3.6.0-audit overhaul:
+
+* **Stage A — layout-bug fixes.**  Sources are now drawn in 2D
+  and 3D layouts as per-source-type glyphs (bar / ellipse /
+  disc / annulus / dot / array).  Source-type combo changes
+  refresh the layouts immediately (no 200 ms debounce wait).
+  Selecting a row in the prescription editor highlights the
+  corresponding element in 2D (amber rectangle) and 3D (gold
+  ring); highlight survives auto-retraces.
+* **Stage B — workspace UX cleanup.**  `DEFAULT_WORKSPACES`
+  trimmed (Analysis 13 → 5, Wave Optics 9 → 4, others
+  rebalanced).  New top-level "View > Configure Workspace
+  Docks…" action.  All 3.6.0 specialty docks now exposed in
+  the View menu's flat toggle list.  One-time "Workspaces
+  simplified — reset?" migration prompt for upgraders.
+* **Stage C — industry-pattern adoptions.**  Optional source-
+  preview rays in the 2D layout (Optiland / Zemax pattern).
+  OSLO-style "Attach slider to this parameter…" right-click
+  action on the surface sub-table.
+
+### Hotfix-1 (bundled into 3.6.1)
+
+* `layout3d` was dropped from the Design workspace defaults in
+  the Stage B trim.  Restored.  `DEFAULTS_REVISION` bumped 5 → 6
+  so existing users with persisted layouts get layout3d added
+  back via the union-merge migration path.
+* The Stage C source-preview rays were drawn UPSTREAM of the
+  source plane and read as converging-into-the-source for non-
+  plane-wave types.  Rewrote them to draw DOWNSTREAM (source
+  plane → first lens surface) with per-source-type patterns
+  (parallel for plane-wave, diverging from waist for Gaussian,
+  cone with NA-derived half-angle for fiber-mode, diverging fan
+  from the source point for point-source).  Default flipped to
+  OFF so the overlay is opt-in.
+* Detector wasn't selectable from the 2D layout.  Registered a
+  click zone for the detector at the image-plane line so it
+  matches the source / lens click behaviour.
+
+### Hotfix-2 (bundled into 3.6.1)
+
+* Both `_draw_rays` paths (2D and 3D) built `z_positions` from
+  the cumulative thicknesses of the optical surfaces only, via
+  `build_trace_surfaces`.  That ignores the source-to-first-
+  surface air gap, so rays for a typical 50-mm-source-to-lens
+  + 100-mm-detector setup were squished into the first ~10 mm
+  of the layout instead of spanning the actual ~150 mm system
+  length.  Plus no segment was ever drawn from the source
+  plane to the first lens surface, so the parallel pre-lens
+  beam was invisible.
+* Rewrote both `_draw_rays` to compute world-frame z for every
+  traced surface using `element_z_positions_mm()` plus per-
+  surface offsets within each element, append the detector z
+  for the final history bundle, and prepend a (z=0, y_in) →
+  (z=z_first_surf, y_in) segment so the parallel-beam pre-lens
+  leg is visible.  Verified: chief ray (input y=0) now reaches
+  z=150 with y=0; marginal ray (input y=−2.21 mm) stays
+  parallel from z=0 to z=50, refracts, and converges to
+  y=0.55 mm at the image plane (close to focus, slight
+  spherical aberration as expected).
+* (A self-introduced unit bug in the first cut of this fix
+  that multiplied an already-mm thickness by 1e3 was caught
+  and corrected before commit.  Surface thicknesses on the
+  GUI-side `Element.surfaces` are in mm; the metres-scale
+  appears only on the core-library `Surface` objects from
+  `build_trace_surfaces`.)
+
+### Hotfix-3 (bundled into 3.6.1)
+
+* The 3D layout reset its camera orientation on every
+  `system_changed` rebuild, so any parameter edit (radius
+  bump, source-type change, distance edit) snapped the user
+  back to the iso default and undid their orbit / zoom / pan.
+* Fixed by snapshotting `self._plotter.camera_position` BEFORE
+  `plotter.clear()` and restoring it after the new scene has
+  been drawn.  Only the very first rebuild snaps to iso (and
+  flips a `_camera_initialized` flag); subsequent rebuilds
+  preserve the saved camera.  The toolbar's "Reset View"
+  button still calls `_reset_camera()` directly, so the user
+  can deliberately recenter when they want to.
+
+### Removed: legacy launcher + script alias
+
+* `run_optical_designer.py` deleted.
+* `optical-designer` console-script entry removed from
+  `pyproject.toml`.
+* `run_lumenairy_designer.py` no longer imports from the old
+  launcher; the `main()` function is now inlined and uses the
+  top-level `lumenairy as la` namespace for the prescription
+  helpers (`thorlabs_lens`, `load_zmx_prescription`,
+  `load_zemax_prescription_txt`) -- the original launcher had
+  imported them from a non-existent `lumenairy.prescriptions`
+  submodule, an IDE-flagged bug that worked only because the
+  fallback path hit when `--demo` wasn't supplied.
+
+The QSettings key `(lumenairy, OpticalDesigner)` is unchanged
+so existing saved workspaces, recent files, and pinned-dock
+state survive the launcher / alias removal.
 
 ### Layout views — sources are now drawn
 

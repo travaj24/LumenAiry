@@ -102,11 +102,7 @@ Issues = "https://github.com/travaj24/LumenAiry/issues"
 Changelog = "https://github.com/travaj24/LumenAiry/releases"
 
 [project.scripts]
-# Preferred name (3.5.9+).  ``optical-designer`` retained as a
-# backward-compat alias for users with existing scripts; both
-# entry points invoke the same _cli_main.
 lumenairy-designer = "lumenairy.ui.main_window:_cli_main"
-optical-designer = "lumenairy.ui.main_window:_cli_main"
 
 # Auto-discover sub-packages (lumenairy + lumenairy.ui) instead of
 # hand-listing each.  ``find:`` requires the include glob so we don't

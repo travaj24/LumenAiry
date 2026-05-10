@@ -6,14 +6,25 @@ All notable changes to the core library are documented here.
 
 GUI bug-fix + UX-cleanup release.  No core-library API changes.
 
-* Library: new `SystemModel.add_optimization_variable(elem_idx,
-  surf_idx, field)` helper used by the new "Attach slider to this
-  parameter" GUI flow (it lives on the GUI's `SystemModel`, not
-  the public `lumenairy` API surface, so no `__all__` change).
-* Library: GUI catch-up release otherwise.  See
-  [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full GUI-side
-  changes (3 layout-bug fixes, workspace defaults trimmed,
-  source-preview rays, OSLO-style attach-slider).
+* `SystemModel.add_optimization_variable(elem_idx, surf_idx,
+  field)` helper added on the GUI-side `SystemModel` (used by
+  the new "Attach slider to this parameter…" right-click flow);
+  not part of the public `lumenairy` API surface.
+* See [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full GUI-side
+  changes: source glyphs in 2D and 3D layouts, bidirectional
+  table-layout selection highlighting, immediate refresh on
+  source-type change, world-frame ray rendering, 3D camera
+  persistence across parameter edits, workspace-defaults trim
+  with migration prompt, source-preview rays, OSLO-style attach-
+  slider, and the launcher / script-alias cleanup.
+
+### Removed
+
+* Legacy `optical-designer` console script and
+  `run_optical_designer.py` launcher (3.5.9 backward-compat
+  aliases for the rename).  Use `lumenairy-designer` or
+  `python run_lumenairy_designer.py` instead.  QSettings storage
+  key unchanged so existing user customisations survive.
 
 ### Backwards compatibility
 

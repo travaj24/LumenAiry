@@ -825,7 +825,7 @@ class MainWindow(QMainWindow):
         """Export the current workspace set to a .workspace JSON file."""
         path, _ = QFileDialog.getSaveFileName(
             self, 'Export Workspaces',
-            'optical_designer.workspace',
+            'lumenairy_designer.workspace',
             'Workspace JSON (*.workspace *.json)')
         if not path:
             return
@@ -2845,11 +2845,7 @@ def _get_version():
 
 
 def _cli_main():
-    """Entry point for the lumenairy-designer / optical-designer
-    commands.  ``optical-designer`` is kept as a legacy alias in
-    pyproject.toml for backward compatibility; both invoke this
-    same function.
-    """
+    """Entry point for the ``lumenairy-designer`` console script."""
     import sys
     from PySide6.QtWidgets import QApplication
     app = QApplication(sys.argv)

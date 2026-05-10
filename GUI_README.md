@@ -1,5 +1,14 @@
 # LumenAiry Designer — GUI Application
 
+> **Status: BETA.**  The GUI tracks the same version number as the
+> core library but its UX is still evolving rapidly — layouts, dock
+> arrangements, default workspaces, and even menu names may change
+> between minor releases.  Pin a specific lumenairy version if you
+> depend on a particular GUI behaviour.  See the
+> [LumenAiry Designer (GUI Beta)](https://github.com/travaj24/LumenAiry/wiki/LumenAiry-Designer-%28GUI-Beta%29)
+> wiki page for the complete UI walkthrough, including known
+> beta-quality friction items.
+
 A PySide6 desktop application for interactive optical system design, analysis,
 and optimization.  Built on the `lumenairy` library.
 
@@ -7,10 +16,12 @@ and optimization.  Built on the `lumenairy` library.
 **Author:** Andrew Traverso
 
 > Renamed from "Optical Designer" to **LumenAiry Designer** in 3.5.9.
-> The pyproject script `optical-designer` and the launcher
-> `run_optical_designer.py` are kept as backward-compatible aliases;
-> existing user workspaces, recent files, and dock layouts are
-> preserved (the QSettings storage key is unchanged).
+> The legacy `optical-designer` console script and
+> `run_optical_designer.py` launcher were dropped in 3.6.1; use
+> `lumenairy-designer` or `python run_lumenairy_designer.py`
+> instead.  Existing user workspaces, recent files, and dock
+> layouts are preserved (the QSettings storage key is unchanged
+> from the rename release).
 
 Versioning note: the GUI application used to be released under its
 own track (3.2.x during the 2026-04-16 feature-gap pass) but this was
@@ -265,18 +276,16 @@ Or install and run as a command:
 ```bash
 pip install -e ".[gui]"
 lumenairy-designer --demo
-# or, equivalently (legacy alias):
-optical-designer --demo
 ```
 
 ## Launch Options
 
 ```bash
-python run_optical_designer.py                 # empty system
-python run_optical_designer.py --demo          # AC254-100-C doublet
-python run_optical_designer.py path/to/file.zmx   # open .zmx prescription
-python run_optical_designer.py path/to/file.txt   # open prescription text
-python run_optical_designer.py path/to/file.json  # open native JSON design
+python run_lumenairy_designer.py                   # empty system
+python run_lumenairy_designer.py --demo            # AC254-100-C doublet
+python run_lumenairy_designer.py path/to/file.zmx  # open .zmx prescription
+python run_lumenairy_designer.py path/to/file.txt  # open prescription text
+python run_lumenairy_designer.py path/to/file.json # open native JSON design
 ```
 
 ## Keyboard Shortcuts
@@ -510,7 +519,7 @@ Optical_Propagation_Library_UI/
     LICENSE
     pyproject.toml
     requirements.txt
-    run_optical_designer.py      # GUI launch script
+    run_lumenairy_designer.py    # GUI launch script
     lumenairy/         # core library
         __init__.py              # v3.0.0
         propagation.py           # ASM, Fresnel, Fraunhofer, RS
