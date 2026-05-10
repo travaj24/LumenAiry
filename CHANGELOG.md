@@ -2,6 +2,28 @@
 
 All notable changes to the core library are documented here.
 
+## [3.5.9] — 2026-05-09
+
+GUI catch-up release.  No core-library API changes; this version
+exists primarily to surface the 3.5.7-3.5.8 propagator family and
+the 3.3.x-3.5.4 analysis utilities through the
+**LumenAiry Designer** GUI, which had been pinned to 3.2.14
+behaviours.  Library + GUI versions are once again in lockstep
+per the policy stated in `GUI_README.md`.
+
+See [`GUI_CHANGELOG.md`](GUI_CHANGELOG.md) for the full GUI-side
+changes (Wave Optics dock dispatch, new Caustic Diagnostic dock,
+optimizer JAX toggle, Tools menu, Custom-MHS-chain tab, app
+rename to LumenAiry Designer).
+
+### Backwards compatibility
+
+No core-library API changes.  `__all__` unchanged.  The Optical
+Designer → LumenAiry Designer rename ships the
+`run_optical_designer.py` launcher and `optical-designer` script
+entry point as backward-compatible aliases for the new
+`run_lumenairy_designer.py` / `lumenairy-designer` names.
+
 ## [3.5.8] — 2026-05-09
 
 H-cache standardisation across the rest of the propagator family.

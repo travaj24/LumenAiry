@@ -1,10 +1,16 @@
-# Optical Designer — GUI Application
+# LumenAiry Designer — GUI Application
 
 A PySide6 desktop application for interactive optical system design, analysis,
 and optimization.  Built on the `lumenairy` library.
 
-**Version:** 3.2.14
+**Version:** 3.5.9
 **Author:** Andrew Traverso
+
+> Renamed from "Optical Designer" to **LumenAiry Designer** in 3.5.9.
+> The pyproject script `optical-designer` and the launcher
+> `run_optical_designer.py` are kept as backward-compatible aliases;
+> existing user workspaces, recent files, and dock layouts are
+> preserved (the QSettings storage key is unchanged).
 
 Versioning note: the GUI application used to be released under its
 own track (3.2.x during the 2026-04-16 feature-gap pass) but this was
@@ -42,7 +48,7 @@ docks no longer all crowd the screen at once.
 ### Productivity polish (3.2.12)
 - **`Ctrl+1` … `Ctrl+9`** — jump directly to workspace tabs.
 - **Window title** shows current file + dirty marker
-  (`Optical Designer — file.zmx*`).
+  (`LumenAiry Designer — file.zmx*`).
 - **Drag-and-drop** any `.zmx`, `.txt`, `.seq`, or `.json` onto
   the window to load.
 - **Permanent right-aligned status bar metrics**: EFL, BFL, f/#,
@@ -251,13 +257,15 @@ to the current system.
 ```bash
 cd Optical_Propagation_Library_UI
 pip install -e ".[gui]"                  # install with PySide6
-python run_optical_designer.py --demo    # launch with demo lens
+python run_lumenairy_designer.py --demo  # launch with demo lens
 ```
 
 Or install and run as a command:
 
 ```bash
 pip install -e ".[gui]"
+lumenairy-designer --demo
+# or, equivalently (legacy alias):
 optical-designer --demo
 ```
 

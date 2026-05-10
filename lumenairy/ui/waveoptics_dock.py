@@ -13,7 +13,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox, QComboBox,
     QTextEdit, QCheckBox, QFileDialog, QLineEdit, QScrollArea,
-    QFormLayout,
+    QFormLayout, QTabWidget, QTableWidget, QTableWidgetItem,
+    QHeaderView, QMessageBox,
 )
 from PySide6.QtGui import QFont
 
@@ -190,7 +191,15 @@ def forecast_resources(N, n_surfaces, n_save_planes,
                    'fresnel': 0.8,
                    'fraunhofer': 0.6,
                    'rayleigh-sommerfeld': 3.3,
-                   'sas': 5.0}.get(method, 1.0)
+                   'sas': 5.0,
+                   # MFT siblings: between-element steps fall back to
+                   # the natural-grid base method; only the to-focus
+                   # call hits the Bluestein chirp-Z path, so the
+                   # per-surface cost matches the base method to
+                   # within FFT scheduling jitter.
+                   'asm-mft': 1.0,
+                   'fresnel-mft': 0.8,
+                   'fraunhofer-mft': 0.6}.get(method, 1.0)
 
     # Per-surface / per-system cost depends on which lens path is used.
     if lens_model == 'real_lens_traced':
@@ -326,6 +335,9 @@ class WaveOpticsWorker(QThread):
             angular_spectrum_propagate,
             fresnel_propagate, fraunhofer_propagate,
             rayleigh_sommerfeld_propagate,
+            angular_spectrum_propagate_mft,
+            fresnel_propagate_mft, fraunhofer_propagate_mft,
+            apply_fresnel_curvature,
             resample_field, PYFFTW_AVAILABLE, CUPY_AVAILABLE,
         )
         from ..elements.lenses import surface_sag_general
@@ -336,7 +348,27 @@ class WaveOpticsWorker(QThread):
         N = cfg['N']
         dx = cfg['dx_m']
         wv = self.model.wavelength_m
-        method = cfg['method']  # 'asm', 'fresnel', 'fraunhofer'
+        method = cfg['method']  # 'asm', 'fresnel', 'fraunhofer', etc.
+        bandlimit = cfg.get('bandlimit', True)
+        # MFT methods: between-element steps fall back to the
+        # natural-grid base method; only the to-focus step uses the
+        # arbitrary-output-grid Bluestein chirp-Z.  Keep the focal-zoom
+        # config alongside the dispatch so all three to-focus branches
+        # see consistent parameters.
+        mft_methods = ('asm-mft', 'fresnel-mft', 'fraunhofer-mft')
+        is_mft = method in mft_methods
+        if is_mft:
+            base_method = {
+                'asm-mft': 'asm',
+                'fresnel-mft': 'fresnel',
+                'fraunhofer-mft': 'fraunhofer',
+            }[method]
+        else:
+            base_method = method
+        mft_dx_out = cfg.get('mft_dx_out_m', dx)
+        mft_N_out = int(cfg.get('mft_N_out', N))
+        mft_centre = cfg.get('mft_centre_out_m', (0.0, 0.0))
+        chief_relative_focal = bool(cfg.get('chief_relative_focal', False))
         use_gpu = cfg.get('use_gpu', False)
         output_path = cfg.get('output_path', '')
         save_plane_flags = cfg.get('save_planes', {})  # {label: bool}
@@ -382,30 +414,54 @@ class WaveOpticsWorker(QThread):
             cdtype = (np.complex64 if precision == 'complex64'
                       else np.complex128)
 
-            E = np.ones((N, N), dtype=cdtype)
             x = (np.arange(N) - N / 2) * dx
             X, Y = np.meshgrid(x, x)
             R_sq = X ** 2 + Y ** 2
             epd_m = self.model.epd_m
 
-            # Source type
+            # Source construction (3.5.9): prefer the Source factories
+            # (3.5.0) via SourceDefinition.to_source so the dock's
+            # source path stays in lockstep with the rest of the
+            # library's source story.  Source.gaussian, plane_wave,
+            # and point_source all return Source instances; we copy
+            # E off the wrapper and recast to the user-selected
+            # precision (Source factories build complex128 so the
+            # dtype control still happens here).  Falls back to the
+            # legacy hand-rolled construction if to_source raises
+            # (e.g. an unknown source_type added in a future model
+            # version).
             src = self.model.source
-            if src and src.source_type == 'gaussian':
-                w0 = src.beam_diameter_mm * 1e-3 / 2
-                E = np.exp(-(R_sq) / (w0 ** 2)).astype(cdtype)
-            elif src and src.source_type == 'gaussian_aperture':
-                sigma = src.sigma_mm * 1e-3
-                E = np.exp(-R_sq / (2 * sigma ** 2)).astype(cdtype)
-            else:
-                # Plane wave clipped by EPD
-                E[R_sq > (epd_m / 2) ** 2] = 0.0
+            try:
+                if src is None:
+                    raise ValueError('no source defined')
+                src_inst = src.to_source(N=N, dx_m=dx, epd_m=epd_m)
+                E = np.asarray(src_inst.E, dtype=cdtype)
+            except Exception:
+                E = np.ones((N, N), dtype=cdtype)
+                if src and src.source_type == 'gaussian':
+                    w0 = src.beam_diameter_mm * 1e-3 / 2
+                    E = np.exp(-(R_sq) / (w0 ** 2)).astype(cdtype)
+                elif src and src.source_type == 'gaussian_aperture':
+                    sigma = src.sigma_mm * 1e-3
+                    E = np.exp(-R_sq / (2 * sigma ** 2)).astype(cdtype)
+                else:
+                    # Plane wave clipped by EPD
+                    E[R_sq > (epd_m / 2) ** 2] = 0.0
 
             # Off-axis field angle: apply linear phase tilt to the source.
             # Direction cosines: kx = k0 * sin(theta_x), ky = k0 * sin(theta_y).
-            # Carrier phase = exp(i * (kx*X + ky*Y)).  Applied to all source
-            # types (plane / gaussian / gaussian_aperture).
-            if src is not None and (src.field_angle_x_deg
-                                    or src.field_angle_y_deg):
+            # Carrier phase = exp(i * (kx*X + ky*Y)).
+            #
+            # Note: Source.plane_wave already accepts angle_x/angle_y
+            # and the to_source() path forwards these.  But the
+            # gaussian / gaussian_aperture / point_source factories
+            # don't carry tilt, so we still apply the carrier here
+            # uniformly for non-plane-wave types so the angle setting
+            # always behaves the same way.
+            if (src is not None
+                    and src.source_type != 'plane_wave'
+                    and (src.field_angle_x_deg
+                         or src.field_angle_y_deg)):
                 k0 = 2 * np.pi / wv
                 kx = k0 * np.sin(np.radians(src.field_angle_x_deg))
                 ky = k0 * np.sin(np.radians(src.field_angle_y_deg))
@@ -531,21 +587,24 @@ class WaveOpticsWorker(QThread):
                     n_med = n2 if n2 > 1 else 1.0
                     lam_med = wv / n_med
 
-                    if method == 'fresnel':
+                    # Between-surface dispatch.  MFT methods use the
+                    # natural-grid base method here -- the MFT chirp-Z
+                    # is only applied at the to-focus step below.
+                    if base_method == 'fresnel':
                         E, dx_new, _ = fresnel_propagate(
                             E, ts.thickness, lam_med, current_dx)
                         if abs(dx_new - current_dx) > current_dx * 1e-6:
                             E, _ = resample_field(E, dx_new, current_dx,
                                                    N_out=N)
-                    elif method == 'fraunhofer' and i == len(trace_surfs) - 1:
+                    elif base_method == 'fraunhofer' and i == len(trace_surfs) - 1:
                         E, dx_new, _ = fraunhofer_propagate(
                             E, ts.thickness, lam_med, current_dx)
                         current_dx = dx_new
-                    elif method == 'rayleigh-sommerfeld':
+                    elif base_method == 'rayleigh-sommerfeld':
                         E = rayleigh_sommerfeld_propagate(
                             E, ts.thickness, lam_med, current_dx,
-                            use_gpu=use_gpu)
-                    elif method == 'sas':
+                            bandlimit=bandlimit, use_gpu=use_gpu)
+                    elif base_method == 'sas':
                         from ..propagators.propagation import (
                             scalable_angular_spectrum_propagate)
                         E, dx_new, _ = scalable_angular_spectrum_propagate(
@@ -557,7 +616,7 @@ class WaveOpticsWorker(QThread):
                     else:
                         E = angular_spectrum_propagate(
                             E, ts.thickness, lam_med, current_dx,
-                            bandlimit=True, use_gpu=use_gpu)
+                            bandlimit=bandlimit, use_gpu=use_gpu)
 
                     z_cum += ts.thickness
 
@@ -570,7 +629,25 @@ class WaveOpticsWorker(QThread):
             bfl_mm = self.model.bfl_mm
             if np.isfinite(bfl_mm) and bfl_mm > 0:
                 bfl_m = bfl_mm * 1e-3
-                if method == 'fraunhofer':
+                if is_mft:
+                    # MFT focal-zoom dispatch (3.5.7).  Output grid
+                    # entirely user-specified -- decoupled from input
+                    # grid and propagation distance.
+                    if method == 'fraunhofer-mft':
+                        E_focus = fraunhofer_propagate_mft(
+                            E, bfl_m, wv, current_dx, mft_dx_out,
+                            mft_N_out, centre_out=mft_centre)
+                    elif method == 'fresnel-mft':
+                        E_focus = fresnel_propagate_mft(
+                            E, bfl_m, wv, current_dx, mft_dx_out,
+                            mft_N_out, centre_out=mft_centre)
+                    else:  # 'asm-mft'
+                        E_focus = angular_spectrum_propagate_mft(
+                            E, bfl_m, wv, current_dx, mft_dx_out,
+                            mft_N_out, centre_out=mft_centre,
+                            bandlimit=bandlimit, use_gpu=use_gpu)
+                    current_dx = mft_dx_out
+                elif method == 'fraunhofer':
                     E_focus, dx_focus, _ = fraunhofer_propagate(
                         E, bfl_m, wv, current_dx)
                     current_dx = dx_focus
@@ -580,7 +657,8 @@ class WaveOpticsWorker(QThread):
                     current_dx = dx_focus
                 elif method == 'rayleigh-sommerfeld':
                     E_focus = rayleigh_sommerfeld_propagate(
-                        E, bfl_m, wv, current_dx, use_gpu=use_gpu)
+                        E, bfl_m, wv, current_dx,
+                        bandlimit=bandlimit, use_gpu=use_gpu)
                 elif method == 'sas':
                     from ..propagators.propagation import (
                         scalable_angular_spectrum_propagate)
@@ -590,8 +668,26 @@ class WaveOpticsWorker(QThread):
                 else:
                     E_focus = angular_spectrum_propagate(
                         E, bfl_m, wv, current_dx,
-                        bandlimit=True, use_gpu=use_gpu)
+                        bandlimit=bandlimit, use_gpu=use_gpu)
                 z_cum += bfl_m
+
+                # Optional 3.5.7 chief-relative-OPD conversion on the
+                # focal field.  Bridges the absolute-phase convention
+                # used by Lumenairy / Fresnel / ASM family against the
+                # ray-trace-rooted form used by OPDPy and Zemax OPD
+                # operands.  Skipped on MFT-Fraunhofer (the natural
+                # output is already a far-field amplitude where this
+                # conversion is ill-defined).
+                if (chief_relative_focal
+                        and method != 'fraunhofer'
+                        and method != 'fraunhofer-mft'):
+                    efl_mm = float(self.model.efl_mm)
+                    if np.isfinite(efl_mm) and efl_mm > 0:
+                        R = (bfl_mm - efl_mm) * 1e-3
+                        if abs(R) > 1e-9:
+                            E_focus = apply_fresnel_curvature(
+                                E_focus, current_dx, wv, R=R, sign=-1)
+
                 maybe_save('Focus', E_focus, z_cum)
             else:
                 E_focus = E
@@ -637,6 +733,41 @@ class WaveOpticsWorker(QThread):
                 except Exception as e:
                     results['save_error'] = str(e)
 
+            # 3.5.9: also surface the run as a PropagationResult
+            # (3.5.0 unified return type) so downstream consumers
+            # (other docks, scripted callers) can use the same
+            # wrapper they get from la.propagate().  Existing
+            # consumers of `results['planes']`, `results['I_focus']`,
+            # etc. continue to work untouched.
+            try:
+                from ..propagators import PropagationResult
+                history = [(p['label'], p['field'], p['z'])
+                           for p in planes]
+                propagation_result = PropagationResult(
+                    field=E_focus, dx=current_dx, wavelength=wv,
+                    z=z_cum, method=method,
+                    history=history,
+                    metadata={
+                        'N': N, 'dx_in': dx,
+                        'lens_model': cfg.get('lens_model', 'asm'),
+                        'bandlimit': bandlimit,
+                        'is_mft': is_mft,
+                        'mft_dx_out_m': mft_dx_out if is_mft else None,
+                        'mft_N_out': mft_N_out if is_mft else None,
+                        'mft_centre_out_m':
+                            mft_centre if is_mft else None,
+                        'chief_relative_focal':
+                            chief_relative_focal,
+                        'power_in': power_in,
+                        'power_focus': power_focus,
+                        'peak_intensity': float(np.max(I_focus)),
+                        'd4sigma': d4sig,
+                        'elapsed_sec': elapsed,
+                    },
+                    intermediates=None)
+            except Exception:
+                propagation_result = None
+
             results.update({
                 'planes': planes,
                 'I_focus': I_focus,
@@ -650,6 +781,7 @@ class WaveOpticsWorker(QThread):
                 'elapsed': elapsed,
                 'n_planes_saved': len(planes),
                 'output_path': output_path,
+                'propagation_result': propagation_result,
             })
 
         except Exception as e:
@@ -674,17 +806,30 @@ class WaveOpticsDock(QWidget):
         self.sm = system_model
         self._worker = None
 
+        # ── Tabbed layout (3.5.9) ──
+        # The existing per-element propagation flow lives in the
+        # "Per-element propagation" tab; the new "Custom MHS chain"
+        # tab exposes the Multi-Huygens-Surface framework
+        # (3.5.0) for advanced subdomain chaining via
+        # MhsPipeline.from_prescription / .run.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self._tabs = QTabWidget()
+        outer.addWidget(self._tabs)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         inner = QWidget()
         layout = QVBoxLayout(inner)
         layout.setContentsMargins(6, 6, 6, 6)
         layout.setSpacing(4)
-
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
         scroll.setWidget(inner)
-        outer.addWidget(scroll)
+        self._tabs.addTab(scroll, 'Per-element propagation')
+
+        # MHS-chain tab is built lazily after the per-element tab is
+        # populated so we can reuse the dock's N / dx / save settings
+        # without duplicating widgets.
+        self._mhs_tab = None  # filled in _build_mhs_tab() at end of __init__
 
         # ── Simulation Parameters ──
         sim_group = QGroupBox('Simulation Parameters')
@@ -717,17 +862,29 @@ class WaveOpticsDock(QWidget):
         row_method = QHBoxLayout()
         self.combo_method = QComboBox()
         self.combo_method.addItems(['ASM', 'Fresnel', 'Fraunhofer',
-                                    'Rayleigh-Sommerfeld', 'SAS'])
+                                    'Rayleigh-Sommerfeld', 'SAS',
+                                    'Fresnel MFT', 'Fraunhofer MFT',
+                                    'ASM MFT'])
         self.combo_method.setToolTip(
-            'Free-space propagator used BETWEEN elements.\n'
+            'Free-space propagator used BETWEEN elements (MFT variants '
+            'are applied at the FOCAL plane only; between-surface steps '
+            'fall back to the corresponding base method on the natural '
+            'grid).\n'
             '  ASM:     exact band-limited, fixed grid (default).\n'
             '  Fresnel: single-FFT paraxial; auto-resampled back to dx.\n'
             '  Fraunhofer: far-field only (last surface).\n'
             '  R-S:     Rayleigh-Sommerfeld convolution (slowest).\n'
             '  SAS:     Scalable Angular Spectrum (Heintzmann 2023); '
             'right for long z where plain ASM needs too many samples. '
-            'Auto-resampled back to dx.')
+            'Auto-resampled back to dx.\n'
+            '  Fresnel MFT / Fraunhofer MFT / ASM MFT (3.5.7): same '
+            'physics as their non-MFT siblings, but the focal plane is '
+            'sampled on a user-specified grid (dx_out, N_out, '
+            'centre_out) via Bluestein chirp-Z.  Standard tool for '
+            'focal-plane zoom.')
         self.combo_method.currentIndexChanged.connect(self._update_forecast)
+        self.combo_method.currentIndexChanged.connect(
+            self._update_mft_visibility)
         row_method.addWidget(QLabel('Method:'))
         row_method.addWidget(self.combo_method)
         self.btn_recommend = QPushButton('Recommend')
@@ -737,6 +894,96 @@ class WaveOpticsDock(QWidget):
         self.btn_recommend.clicked.connect(self._recommend_grid)
         row_method.addWidget(self.btn_recommend)
         sim_layout.addRow(row_method)
+
+        # \u2500\u2500 Bandlimit checkbox (3.5.8): Matsushima cutoff applied to
+        # ASM / RS / ASM-MFT transfer functions.  Default ON matches
+        # the historical hardcoded behaviour for ASM; on Rayleigh-
+        # Sommerfeld the core library defaults to OFF, but exposing
+        # the toggle here lets users opt in at the dock level.
+        row_bandlimit = QHBoxLayout()
+        self.chk_bandlimit = QCheckBox('Bandlimit (Matsushima)')
+        self.chk_bandlimit.setChecked(True)
+        self.chk_bandlimit.setToolTip(
+            'Apply the Matsushima-Shimobaba frequency cutoff to the '
+            'propagator transfer function.  Suppresses aliasing on '
+            'coarse grids at long propagation distances.  Default ON.\n'
+            'Affects ASM, ASM-MFT, and Rayleigh-Sommerfeld between-'
+            'element + to-focus calls.  Fresnel/Fraunhofer ignore this '
+            'flag (their kernels are not band-limit-able in the same '
+            'way).')
+        self.chk_bandlimit.toggled.connect(self._update_forecast)
+        row_bandlimit.addWidget(self.chk_bandlimit)
+        row_bandlimit.addStretch()
+        sim_layout.addRow(row_bandlimit)
+
+        # \u2500\u2500 Focal-plane MFT zoom group (revealed when an MFT method
+        # is selected) \u2500\u2500
+        # Lets the user oversample the focal plane on a user-specified
+        # grid, decoupled from the input grid.  The non-MFT siblings
+        # would require a much larger N to achieve the same effective
+        # focal-plane sampling.
+        self.grp_mft = QWidget()
+        mft_layout = QFormLayout(self.grp_mft)
+        mft_layout.setContentsMargins(0, 0, 0, 0)
+        self.spin_dx_out = QDoubleSpinBox()
+        self.spin_dx_out.setRange(1e-4, 1e6)
+        self.spin_dx_out.setDecimals(4)
+        self.spin_dx_out.setValue(1.0)
+        self.spin_dx_out.setSuffix(' \u00b5m')
+        self.spin_dx_out.setToolTip(
+            'Output-plane pixel pitch.  Independent of dx_in and z; '
+            'standard tool for sampling a tightly-focused region at '
+            'sub-FFT-pitch resolution without padding the input grid.')
+        mft_layout.addRow('Output dx:', self.spin_dx_out)
+        self.spin_N_out = QSpinBox()
+        self.spin_N_out.setRange(16, 32768)
+        self.spin_N_out.setValue(256)
+        self.spin_N_out.setToolTip(
+            'Output grid size (square).  Independent of input N.')
+        mft_layout.addRow('Output N:', self.spin_N_out)
+        row_centre = QHBoxLayout()
+        self.spin_cx = QDoubleSpinBox()
+        self.spin_cx.setRange(-1e6, 1e6)
+        self.spin_cx.setDecimals(3)
+        self.spin_cx.setValue(0.0)
+        self.spin_cx.setSuffix(' \u00b5m')
+        self.spin_cy = QDoubleSpinBox()
+        self.spin_cy.setRange(-1e6, 1e6)
+        self.spin_cy.setDecimals(3)
+        self.spin_cy.setValue(0.0)
+        self.spin_cy.setSuffix(' \u00b5m')
+        row_centre.addWidget(QLabel('x:'))
+        row_centre.addWidget(self.spin_cx)
+        row_centre.addWidget(QLabel('y:'))
+        row_centre.addWidget(self.spin_cy)
+        mft_centre_widget = QWidget()
+        mft_centre_widget.setLayout(row_centre)
+        mft_layout.addRow('Output centre:', mft_centre_widget)
+        sim_layout.addRow(self.grp_mft)
+        self.grp_mft.setVisible(False)
+
+        # \u2500\u2500 Convert focal field to chief-relative (3.5.7
+        # apply_fresnel_curvature) \u2500\u2500
+        # Bridges the absolute-phase convention used by Lumenairy
+        # against ray-trace-rooted aberration tools (OPDPy, Zemax
+        # OPD operands).  Optional post-processing applied to the
+        # focal-plane field only.
+        row_chief = QHBoxLayout()
+        self.chk_chief_relative = QCheckBox(
+            'Convert focal field to chief-relative OPD '
+            '(R = v \u2212 f)')
+        self.chk_chief_relative.setChecked(False)
+        self.chk_chief_relative.setToolTip(
+            'After propagation, divide out the natural Gaussian-beam '
+            'wavefront curvature exp(i\u00b7k\u00b7r\u00b2/(2R)) at the focal plane.\n'
+            'Useful for comparing fields against OPDPy / Zemax OPD '
+            'operands, which store the chief-relative form.\n'
+            'R defaults to bfl \u2212 efl (thin-lens approximation); for '
+            'multi-element systems this is the predicted image-plane '
+            'wavefront radius from Gaussian-beam ABCD propagation.')
+        row_chief.addWidget(self.chk_chief_relative)
+        row_chief.addStretch()
+        sim_layout.addRow(row_chief)
 
         # Lens-model selector: picks HOW each lens element is treated.
         row_lens = QHBoxLayout()
@@ -1127,9 +1374,230 @@ class WaveOpticsDock(QWidget):
 
         self._update_forecast()
 
-    # ── Forecast ──────────────────────────────────────────────────
+        # Now that the per-element tab is fully populated, build the
+        # MHS-chain tab.  Done here (end of __init__) so we can read
+        # back any settings already established on the per-element
+        # side -- e.g. wavelength + N + dx defaults.
+        self._build_mhs_tab()
 
-    def _on_save_toggle(self, checked):
+    # ── MHS chain tab (3.5.9) ─────────────────────────────────────
+
+    def _build_mhs_tab(self):
+        """Add the 'Custom MHS chain' tab for advanced users who want
+        to drive :class:`lumenairy.MhsPipeline` directly.
+
+        The pipeline is constructed via ``MhsPipeline.from_prescription``
+        -- that path takes a prescription dict, the same wavelength /
+        N / dx as the per-element tab, plus optional pre/post
+        free-space distances and a propagator-method override.
+        After construction the resulting subdomains are listed as a
+        read-only table (z, label, dx, N) so the user can see the
+        plane layout the pipeline will use before pressing Run.
+        """
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        inner = QWidget()
+        layout = QVBoxLayout(inner)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(4)
+        scroll.setWidget(inner)
+        self._tabs.addTab(scroll, 'Custom MHS chain')
+
+        # Description / context.
+        desc = QLabel(
+            'Drive lumenairy.MhsPipeline directly: build a sequence '
+            'of MhsSubdomains from the current prescription with '
+            'one chosen propagator (method) per subdomain, optionally '
+            'adding free-space pre- and post-distances.  Output is '
+            'a list of (HuygensSurface, field) pairs you can save to '
+            'HDF5 / Zarr the same way the per-element tab does.')
+        desc.setWordWrap(True)
+        desc.setStyleSheet('color: #7a94b8; font-size: 11px;')
+        layout.addWidget(desc)
+
+        # Pipeline construction parameters.
+        ppgrp = QGroupBox('Pipeline parameters')
+        ppform = QFormLayout(ppgrp)
+
+        self.combo_mhs_method = QComboBox()
+        # Methods recognised by MhsPipeline.from_prescription.  GBD is
+        # the natural choice for thick + curved subdomains; the others
+        # are exposed for cross-validation / scripted overrides.
+        self.combo_mhs_method.addItems(['gbd', 'asm', 'fresnel',
+                                         'rayleigh_sommerfeld'])
+        self.combo_mhs_method.setToolTip(
+            'Per-subdomain propagator.  GBD (Gaussian beamlet '
+            'decomposition) is the natural choice for thick / curved '
+            'subdomains; ASM / Fresnel / RS are exposed for cross-'
+            'validation against the per-element tab.')
+        ppform.addRow('Method:', self.combo_mhs_method)
+
+        self.spin_mhs_pre = QDoubleSpinBox()
+        self.spin_mhs_pre.setRange(0.0, 1e6)
+        self.spin_mhs_pre.setDecimals(3)
+        self.spin_mhs_pre.setValue(0.0)
+        self.spin_mhs_pre.setSuffix(' mm')
+        self.spin_mhs_pre.setToolTip(
+            'Free-space pre-distance prepended before the first '
+            'refractive surface.  Useful when the source plane is '
+            'separated from the first lens.')
+        ppform.addRow('Pre-distance:', self.spin_mhs_pre)
+
+        self.spin_mhs_post = QDoubleSpinBox()
+        self.spin_mhs_post.setRange(0.0, 1e6)
+        self.spin_mhs_post.setDecimals(3)
+        self.spin_mhs_post.setValue(0.0)
+        self.spin_mhs_post.setSuffix(' mm')
+        self.spin_mhs_post.setToolTip(
+            'Free-space post-distance appended after the last '
+            'refractive surface.  Set to e.g. the BFL to reach the '
+            'focal plane within the pipeline rather than as a '
+            'separate to-focus call.')
+        ppform.addRow('Post-distance:', self.spin_mhs_post)
+
+        self.lbl_mhs_grid = QLabel('Grid: inherits N / dx from the '
+                                    'per-element tab.')
+        self.lbl_mhs_grid.setStyleSheet('color: #7a94b8;')
+        ppform.addRow(self.lbl_mhs_grid)
+
+        layout.addWidget(ppgrp)
+
+        # Build / inspect / run.
+        btn_row = QHBoxLayout()
+        self.btn_mhs_build = QPushButton('Build pipeline')
+        self.btn_mhs_build.setToolTip(
+            'Construct MhsPipeline.from_prescription with the '
+            'current settings and populate the subdomain table '
+            'below.  No propagation happens until you press Run.')
+        self.btn_mhs_build.clicked.connect(self._mhs_build_pipeline)
+        btn_row.addWidget(self.btn_mhs_build)
+        self.btn_mhs_run = QPushButton('▶ Run pipeline')
+        self.btn_mhs_run.setEnabled(False)
+        self.btn_mhs_run.setToolTip(
+            'Run the previously-built pipeline on the current '
+            'source field.  Intermediate planes are kept in memory; '
+            'use the per-element tab\'s save plumbing for HDF5/Zarr '
+            'export of the full chain.')
+        self.btn_mhs_run.clicked.connect(self._mhs_run_pipeline)
+        btn_row.addWidget(self.btn_mhs_run)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        # Subdomain inventory.
+        self.tbl_mhs = QTableWidget(0, 4)
+        self.tbl_mhs.setHorizontalHeaderLabels(
+            ['Subdomain', 'In z [mm]', 'Out z [mm]', 'Label'])
+        self.tbl_mhs.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch)
+        self.tbl_mhs.setSelectionBehavior(self.tbl_mhs.SelectRows)
+        self.tbl_mhs.setEditTriggers(self.tbl_mhs.NoEditTriggers)
+        layout.addWidget(self.tbl_mhs, stretch=1)
+
+        # Status + summary.
+        self.lbl_mhs_status = QTextEdit()
+        self.lbl_mhs_status.setReadOnly(True)
+        self.lbl_mhs_status.setMaximumHeight(120)
+        self.lbl_mhs_status.setFont(QFont('Consolas', 10))
+        self.lbl_mhs_status.setStyleSheet(
+            'QTextEdit{background:#0a0c10;color:#7a94b8;border:none}')
+        layout.addWidget(self.lbl_mhs_status)
+
+        self._mhs_pipeline = None
+        self._mhs_last_planes = None
+        self._mhs_tab = inner
+
+    def _mhs_build_pipeline(self):
+        try:
+            import lumenairy as _la
+            pres = self.sm.to_prescription()
+        except Exception as exc:
+            self.lbl_mhs_status.setPlainText(
+                f'Could not export prescription: '
+                f'{type(exc).__name__}: {exc}')
+            return
+
+        N = self.spin_N.currentData() or 1024
+        dx_m = self.spin_dx.value() * 1e-6
+        wv = self.sm.wavelength_m
+        method = self.combo_mhs_method.currentText()
+        pre_m = float(self.spin_mhs_pre.value()) * 1e-3
+        post_m = float(self.spin_mhs_post.value()) * 1e-3
+
+        try:
+            pipeline = _la.MhsPipeline.from_prescription(
+                pres, wavelength=wv, dx=dx_m, Ny=N, Nx=N,
+                pre_distance=pre_m, post_distance=post_m,
+                method=method)
+        except Exception as exc:
+            self.lbl_mhs_status.setPlainText(
+                f'MhsPipeline.from_prescription failed: '
+                f'{type(exc).__name__}: {exc}')
+            return
+        self._mhs_pipeline = pipeline
+
+        try:
+            surfaces = pipeline.surfaces()
+        except Exception:
+            surfaces = []
+        n_sub = pipeline.n_subdomains()
+        self.tbl_mhs.setRowCount(n_sub)
+        for i, sub in enumerate(getattr(pipeline, 'subdomains', []) or []):
+            self.tbl_mhs.setItem(i, 0, QTableWidgetItem(f'{i}'))
+            self.tbl_mhs.setItem(
+                i, 1, QTableWidgetItem(f'{sub.in_surface.z * 1e3:.4f}'))
+            self.tbl_mhs.setItem(
+                i, 2, QTableWidgetItem(f'{sub.out_surface.z * 1e3:.4f}'))
+            self.tbl_mhs.setItem(
+                i, 3, QTableWidgetItem(sub.label or ''))
+
+        self.btn_mhs_run.setEnabled(n_sub > 0)
+        self.lbl_mhs_status.setPlainText(
+            f'Built MhsPipeline with {n_sub} subdomain(s); '
+            f'{len(surfaces)} Huygens surface(s).\n'
+            f'Method: {method}; pre {pre_m * 1e3:.3f} mm, '
+            f'post {post_m * 1e3:.3f} mm.\n'
+            f'Press "Run pipeline" to propagate the current source '
+            f'field through every subdomain.')
+
+    def _mhs_run_pipeline(self):
+        pipeline = self._mhs_pipeline
+        if pipeline is None:
+            return
+        # Build a source field consistent with the per-element tab.
+        # Plane-wave-clipped-by-EPD is the safe default; users who
+        # want a more nuanced source can run the per-element tab
+        # first and use the same model.
+        N = self.spin_N.currentData() or 1024
+        dx_m = self.spin_dx.value() * 1e-6
+        x = (np.arange(N) - N / 2) * dx_m
+        X, Y = np.meshgrid(x, x)
+        E = np.ones((N, N), dtype=np.complex128)
+        epd_m = self.sm.epd_m
+        if epd_m > 0:
+            E[X * X + Y * Y > (epd_m / 2) ** 2] = 0.0
+
+        try:
+            planes = pipeline.run(E, return_intermediate=True)
+        except Exception as exc:
+            self.lbl_mhs_status.setPlainText(
+                f'MhsPipeline.run failed: '
+                f'{type(exc).__name__}: {exc}')
+            return
+        self._mhs_last_planes = planes
+
+        # Summary: peak / centroid per plane.
+        from ..analysis import beam_d4sigma
+        lines = [f'Pipeline run: {len(planes)} plane(s).',
+                 '       z [mm]   |E|_peak    label']
+        for surf, field in planes:
+            try:
+                peak = float(np.max(np.abs(field)))
+            except Exception:
+                peak = float('nan')
+            label = getattr(surf, 'label', '') or ''
+            lines.append(
+                f'  {surf.z * 1e3:10.4f}  {peak:10.4e}    {label}')
+        self.lbl_mhs_status.setPlainText('\n'.join(lines))
         self.btn_save_toggle.setText(
             'Save planes: ON' if checked else 'Save planes: OFF')
         # Keep the main save-to-file checkbox in sync so the two
@@ -1143,6 +1611,29 @@ class WaveOpticsDock(QWidget):
                 2: 'real_lens_traced',
                 3: 'real_lens_maslov'}.get(idx, 'asm')
 
+    def _current_method_key(self):
+        """Map the combo-box label to the canonical method key used
+        downstream (config dict, dispatch, forecast lookup).  Kept
+        here as a single source of truth so the run-path and the
+        forecast see the same key."""
+        text = self.combo_method.currentText().lower()
+        if 'rayleigh' in text or 'sommerfeld' in text:
+            return 'rayleigh-sommerfeld'
+        if 'asm mft' in text:
+            return 'asm-mft'
+        if 'fresnel mft' in text:
+            return 'fresnel-mft'
+        if 'fraunhofer mft' in text:
+            return 'fraunhofer-mft'
+        if 'sas' in text:
+            return 'sas'
+        return text
+
+    def _update_mft_visibility(self):
+        """Show the focal-zoom group only for MFT methods."""
+        key = self._current_method_key()
+        self.grp_mft.setVisible(key.endswith('-mft'))
+
     def _update_forecast(self):
         N = self.spin_N.currentData() or 1024
         n_surfs = len(self.sm.build_trace_surfaces())
@@ -1153,13 +1644,7 @@ class WaveOpticsDock(QWidget):
 
         lens_model = self._current_lens_model()
         ray_sub = int(self.spin_raysub.value())
-        method = self.combo_method.currentText().lower()
-        if 'rayleigh' in method or 'sommerfeld' in method:
-            method_key = 'rayleigh-sommerfeld'
-        elif 'sas' in method:
-            method_key = 'sas'
-        else:
-            method_key = method
+        method_key = self._current_method_key()
 
         peak_mem, disk, est_time = forecast_resources(
             N, n_surfs, n_save,
@@ -1306,7 +1791,7 @@ class WaveOpticsDock(QWidget):
     def _run(self):
         N = self.spin_N.currentData() or 1024
         dx_m = self.spin_dx.value() * 1e-6
-        method = self.combo_method.currentText().lower()
+        method = self._current_method_key()
 
         backend_text = self.combo_backend.currentText()
         if 'CuPy' in backend_text:
@@ -1364,6 +1849,22 @@ class WaveOpticsDock(QWidget):
             'precision': ('complex64'
                           if self.combo_precision.currentIndex() == 1
                           else 'complex128'),
+            # 3.5.8 propagator standardisation: Matsushima bandlimit
+            # exposed as a single dock-wide flag (passed to ASM, RS,
+            # ASM-MFT).
+            'bandlimit': bool(self.chk_bandlimit.isChecked()),
+            # 3.5.7 MFT propagators: focal-plane output grid
+            # parameters.  Only consulted when method endswith '-mft'.
+            'mft_dx_out_m': float(self.spin_dx_out.value()) * 1e-6,
+            'mft_N_out': int(self.spin_N_out.value()),
+            'mft_centre_out_m': (
+                float(self.spin_cx.value()) * 1e-6,
+                float(self.spin_cy.value()) * 1e-6),
+            # 3.5.7 apply_fresnel_curvature: optional post-processing
+            # applied to the focal field for chief-relative-OPD
+            # comparison against ray-trace-rooted libraries.
+            'chief_relative_focal': bool(
+                self.chk_chief_relative.isChecked()),
         }
 
         self.btn_run.setEnabled(False)

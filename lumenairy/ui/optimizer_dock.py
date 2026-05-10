@@ -178,6 +178,39 @@ class OptimizerDock(QWidget):
         iter_row.addWidget(self.spin_iter)
         opt_layout.addLayout(iter_row)
 
+        # ── JAX gradient toggle (3.5.9) ──
+        # When checked, passes jac='auto' through to design_optimize
+        # and routes the wave-leg through the JAX-traceable
+        # apply_real_lens_traced_jax (3.5.0+).  design_optimize
+        # already defaults to jac='auto' but the wave_propagator
+        # default 'real_lens' uses the NumPy path; opting into the
+        # JAX wave propagator unlocks analytic Jacobians for any
+        # JAX-aware merit terms in the term list.
+        try:
+            import jax  # noqa
+            _jax_ok = True
+        except Exception:
+            _jax_ok = False
+        jax_row = QHBoxLayout()
+        self.chk_jax = QCheckBox('Use JAX wave propagator (faster gradients)')
+        self.chk_jax.setChecked(False)
+        self.chk_jax.setEnabled(_jax_ok)
+        self.chk_jax.setToolTip(
+            'Route the wave leg through apply_real_lens_traced_jax '
+            'and let design_optimize use jax.grad-derived analytic '
+            'Jacobians for JAX-aware merit terms.  Requires jax to '
+            'be installed.\n\n'
+            'Falls back to finite differences for any merit terms '
+            'that are not JAX-built.  Significant speedup on systems '
+            'with many free variables; smaller benefit on geometric-'
+            'merit-only optimization.'
+            + ('' if _jax_ok else
+               '\n\n(JAX not detected — install via '
+               'pip install jax jaxlib)'))
+        jax_row.addWidget(self.chk_jax)
+        jax_row.addStretch()
+        opt_layout.addLayout(jax_row)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # indeterminate
         self.progress_bar.setVisible(False)
@@ -611,9 +644,14 @@ class OptimizerDock(QWidget):
             self.progress_bar.setFormat('%p%')
 
             # Run in background thread
+            use_jax = bool(self.chk_jax.isChecked())
             self._worker = WaveOptimizeWorker(
                 param, merit_terms, self.sm.wavelength_nm * 1e-9,
-                self.spin_iter.value())
+                self.spin_iter.value(), use_jax=use_jax)
+            if use_jax:
+                self.log.append(
+                    '  JAX wave propagator: ON (jac="auto" will use '
+                    'analytic Jacobians for JAX merit terms)')
             self._worker.finished_result.connect(self._on_wave_finished)
             self._worker.fine_progress.connect(self._on_wave_progress)
             self._worker.start()
@@ -669,12 +707,14 @@ class WaveOptimizeWorker(QThread):
     finished_result = Signal(dict)
     fine_progress = Signal(float, str)   # fraction in [0, 1], label
 
-    def __init__(self, param, merit_terms, wavelength, max_iter):
+    def __init__(self, param, merit_terms, wavelength, max_iter,
+                 use_jax=False):
         super().__init__()
         self.param = param
         self.merit_terms = merit_terms
         self.wavelength = wavelength
         self.max_iter = max_iter
+        self.use_jax = use_jax
 
     def _on_progress(self, stage, fraction, message=''):
         # Route the core's callback into a Qt signal the dock can
@@ -684,6 +724,14 @@ class WaveOptimizeWorker(QThread):
     def run(self):
         try:
             from lumenairy.optimize import design_optimize
+            # JAX wave propagator (3.5.0+): apply_real_lens_traced_jax
+            # is JAX-traceable so design_optimize's jac='auto' default
+            # can construct analytic Jacobians for JAX-aware merit
+            # terms.  The kwarg is forwarded only when requested so
+            # the NumPy default path is unchanged for existing users.
+            extra = {}
+            if self.use_jax:
+                extra['wave_propagator'] = 'real_lens_traced_jax'
             result = design_optimize(
                 parameterization=self.param,
                 merit_terms=self.merit_terms,
@@ -692,7 +740,8 @@ class WaveOptimizeWorker(QThread):
                 method='L-BFGS-B',
                 max_iter=self.max_iter,
                 verbose=False,
-                progress=self._on_progress)
+                progress=self._on_progress,
+                **extra)
             self.finished_result.emit({
                 'success': True,
                 'merit': result.merit,

@@ -95,6 +95,110 @@ class SourceDefinition:
                     f'pitch={self.emitter_pitch_mm:.3f}mm')
         return self.source_type
 
+    def to_source(self, N: int, dx_m: float, *, epd_m: float = 0.0):
+        """Build a :class:`lumenairy.Source` instance (3.5.0) on the
+        given grid, using the appropriate factory for this source's
+        ``source_type``.  Returned ``Source`` carries an ``E_field``
+        you can drop into any propagator and a ``.propagate(...)``
+        method that chains through the dispatcher.
+
+        Parameters
+        ----------
+        N : int
+            Grid size for the source field.
+        dx_m : float
+            Grid pitch in metres.
+        epd_m : float, optional
+            Entrance-pupil diameter in metres.  Used by the
+            ``plane_wave`` branch to clip the field to the pupil
+            (mirroring the dock's behaviour); other source types
+            ignore it.
+
+        Returns
+        -------
+        :class:`lumenairy.Source`
+
+        Notes
+        -----
+        Mapping rules (UI source type → core factory):
+
+        * ``plane_wave`` -> :meth:`Source.plane_wave` with the
+          field-angle tilts; clipped to the pupil if ``epd_m > 0``.
+        * ``gaussian`` -> :meth:`Source.gaussian` with
+          ``w0 = beam_diameter_mm * 1e-3 / 2``.
+        * ``gaussian_aperture`` -> :meth:`Source.gaussian` with
+          ``w0 = sigma_mm * 1e-3`` (sigma is the 1/e amplitude
+          radius; Source uses w0 the same way).
+        * ``point_source`` -> :meth:`Source.point_source` placed
+          at ``z0 = -object_distance_mm * 1e-3``.
+        * ``emitter_array`` -> falls back to a tiled superposition
+          of ``Source.gaussian`` instances; not a perfect mapping
+          but the same physical content as the dock's existing
+          plane-wave-clipped path.
+        """
+        import numpy as _np
+        from lumenairy import Source as _Source
+        wavelength = self.wavelength_nm * 1e-9
+
+        if self.source_type == 'plane_wave':
+            ax = _np.deg2rad(self.field_angle_x_deg)
+            ay = _np.deg2rad(self.field_angle_y_deg)
+            src = _Source.plane_wave(
+                N, dx_m, wavelength,
+                angle_x=ax, angle_y=ay,
+                name=f'Plane wave ({self.wavelength_nm:.0f} nm)')
+            if epd_m and epd_m > 0:
+                ax_grid = (_np.arange(N) - N / 2) * dx_m
+                X, Y = _np.meshgrid(ax_grid, ax_grid)
+                mask = (X * X + Y * Y) <= (epd_m / 2) ** 2
+                src.E = src.E * mask
+            return src
+
+        if self.source_type == 'gaussian':
+            w0 = self.beam_diameter_mm * 1e-3 / 2
+            return _Source.gaussian(
+                w0, N, dx_m, wavelength,
+                name=f'Gaussian (d={self.beam_diameter_mm:.3f} mm)')
+
+        if self.source_type == 'gaussian_aperture':
+            w0 = self.sigma_mm * 1e-3
+            return _Source.gaussian(
+                w0, N, dx_m, wavelength,
+                name=f'Gaussian-aperture (sigma={self.sigma_mm:.2f} mm)')
+
+        if self.source_type == 'point_source':
+            z0 = -self.object_distance_mm * 1e-3
+            return _Source.point_source(
+                N, dx_m, wavelength, z0=z0,
+                name=f'Point source ({self.object_distance_mm:.1f} mm)')
+
+        if self.source_type == 'emitter_array':
+            # No 1:1 core factory; build by tiled superposition of
+            # individual Gaussian emitters at the requested pitch.
+            ax_grid = (_np.arange(N) - N / 2) * dx_m
+            X, Y = _np.meshgrid(ax_grid, ax_grid)
+            E = _np.zeros((N, N), dtype=_np.complex128)
+            w0 = self.emitter_waist_mm * 1e-3
+            pitch = self.emitter_pitch_mm * 1e-3
+            for iy in range(self.emitter_ny):
+                for ix in range(self.emitter_nx):
+                    cx = (ix - (self.emitter_nx - 1) / 2) * pitch
+                    cy = (iy - (self.emitter_ny - 1) / 2) * pitch
+                    E += _np.exp(-((X - cx) ** 2 + (Y - cy) ** 2) /
+                                  (w0 ** 2))
+            src = _Source(
+                E=E.astype(_np.complex128),
+                wavelength=wavelength, dx=dx_m,
+                name=f'Emitter array '
+                     f'{self.emitter_nx}×{self.emitter_ny}')
+            return src
+
+        # Unknown type — fall through to a unit plane wave so callers
+        # always get a valid Source rather than None.
+        return _Source.plane_wave(
+            N, dx_m, wavelength,
+            name=f'(unknown source_type={self.source_type!r})')
+
 
 # ════════════════════════════════════════════════════════════════════════
 # Element — one optical element (lens, mirror, DOE, source, detector)
@@ -1571,7 +1675,27 @@ class SystemModel(QObject):
 
         Returns (N, dx_um) where N is a "nice" FFT size (2^a, 2^a*3, or
         2^a*5) and dx_um is the grid spacing in micrometres.
+
+        Delegates to :func:`lumenairy.recommend_grid_for_prescription`
+        when the system can be exported as a prescription dict; that
+        path also handles DOE diffraction-order spread correctly.
+        Falls back to the local NA-based heuristic when the
+        prescription export fails (sourceless system, in-progress
+        edits, etc.).
         """
+        # Prefer the library implementation when we can build a
+        # prescription dict from the current model -- it handles DOE
+        # diffraction-order spread and any future heuristic
+        # improvements that land in the core.
+        try:
+            import lumenairy as _la
+            pres = self.to_prescription()
+            rec = _la.recommend_grid_for_prescription(
+                pres, self.wavelength_m)
+            return int(rec['N']), float(rec['dx']) * 1e6
+        except Exception:
+            pass
+
         surfs = self.build_trace_surfaces()
         wv = self.wavelength_m
         efl = self.efl_mm * 1e-3  # m

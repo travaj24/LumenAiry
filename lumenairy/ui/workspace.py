@@ -262,7 +262,7 @@ class ManageWorkspaceDialog(QDialog):
 #  Bumped each release that adds a new default workspace.  Used by
 #  load_json() to merge new defaults into existing saved blobs without
 #  overwriting user customizations.
-DEFAULTS_REVISION = 2
+DEFAULTS_REVISION = 3
 
 DEFAULT_WORKSPACES = [
     ('Design', [
@@ -275,7 +275,7 @@ DEFAULT_WORKSPACES = [
     ('Analysis', [
         'layout', 'spot', 'rayfan', 'footprint', 'distortion',
         'spot_field', 'through_focus', 'psfmtf', 'field_browser',
-        'summary',
+        'caustic', 'summary',
     ]),
     ('Wave Optics', [
         'layout', 'waveoptics', 'zernike', 'interferometry',
@@ -317,6 +317,7 @@ def default_dock_titles():
         'ghost': 'Ghost Analysis',
         'tolerance': 'Tolerance',
         'sensitivity': 'Sensitivity',
+        'caustic': 'Caustic diagnostic',
         'materials': 'Materials',
         'glassmap': 'Glass Map',
         'diagnostics': 'Diagnostics',

@@ -1,5 +1,5 @@
 """
-Optical Designer — PySide6 optical design application.
+LumenAiry Designer — PySide6 optical design application.
 
 This subpackage provides the graphical user interface for the
 lumenairy library, built on Qt 6 (PySide6).

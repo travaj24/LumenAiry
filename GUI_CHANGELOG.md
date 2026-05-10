@@ -1,4 +1,4 @@
-# Changelog — Optical Designer (GUI)
+# Changelog — LumenAiry Designer (GUI)
 
 All notable changes to the GUI application are documented here.
 For core library changes, see `CHANGELOG.md`.
@@ -10,6 +10,185 @@ the same version number as the core `lumenairy` library
 `__version__` from the library, so users saw two different numbers
 for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 2026-04-16) retain their original numbers below for traceability.
+
+**Naming note:** the application was renamed from "Optical
+Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
+historical entries below retain the old name for traceability.
+
+## [3.5.9] — 2026-05-09
+
+GUI catch-up to the 3.3-3.5 core-library work, plus an application
+rename.  Closes the largest user-visible gap since 3.2.14: every
+3.5.7 propagator and 3.5.4 analysis utility now has a UI surface,
+and the optimizer + tolerance docks gain new integration points
+for the JAX path and structured reports.
+
+### Application rename — Optical Designer → LumenAiry Designer
+
+- Window title, About dialog, welcome panel, file-dialog filters,
+  and `app.setApplicationName` now read **LumenAiry Designer**.
+- New `run_lumenairy_designer.py` launcher and
+  `lumenairy-designer` console-script entry point in
+  `pyproject.toml`.
+- `run_optical_designer.py` and the `optical-designer` script are
+  kept as backward-compatible aliases for users with existing
+  shortcuts / CI scripts; both invoke the same `_cli_main` entry
+  point.
+- The `QSettings('lumenairy', 'OpticalDesigner')` storage key is
+  intentionally **left unchanged** so user customisations
+  (workspaces, recent files, dock layouts, pinned docks) survive
+  the upgrade without a migration step.
+
+### Wave Optics dock — propagator family + post-processing
+
+Wired the 3.5.7-3.5.8 propagator additions through the
+`combo_method` dispatch and the `_run` config dict:
+
+- **Three new MFT methods** in the Method dropdown: *Fresnel
+  MFT*, *Fraunhofer MFT*, *ASM MFT*.  When an MFT method is
+  selected, a *Focal-plane zoom* parameter group is revealed so
+  the user can set `dx_out` (µm), `N_out`, and `centre_out` (x,
+  y).  Between-element steps fall back to the corresponding non-
+  MFT base method on the natural grid; only the to-focus step
+  uses the Bluestein chirp-Z path.  Standard tool for focal-
+  plane zoom (sample a tightly-focused region at sub-FFT-pitch
+  resolution without padding the input).
+- **Bandlimit (Matsushima)** checkbox.  Single dock-wide flag
+  passed to ASM, RS, and ASM-MFT calls (between-element + to-
+  focus).  Default ON.  Surfaces the kwarg added to
+  `rayleigh_sommerfeld_propagate` in 3.5.8.
+- **Convert focal field to chief-relative OPD (R = v − f)**
+  checkbox.  When enabled, applies `apply_fresnel_curvature`
+  (3.5.7) to the focal-plane field with `R = bfl − efl` so the
+  output can be compared bit-for-bit against ray-trace-rooted
+  aberration tools (OPDPy, Zemax OPD operands).
+- **Recommend grid** button now delegates to
+  `la.recommend_grid_for_prescription` (3.3.3) when the system
+  exports as a prescription dict; falls back to the local NA-
+  based heuristic otherwise.  Picks up DOE diffraction-order
+  spread handling and any future core-side recommendation
+  improvements automatically.
+
+### Wave Optics dock — Custom MHS chain tab
+
+New tab inside the Wave Optics dock for advanced users who want
+to drive `MhsPipeline` (3.5.0) directly:
+
+- Method selector for per-subdomain propagator (`gbd` / `asm` /
+  `fresnel` / `rayleigh_sommerfeld`).
+- Pre- and post-distance fields for free-space sections before
+  the first refractive surface and after the last.
+- **Build pipeline** constructs `MhsPipeline.from_prescription`
+  from the current model + the per-element tab's `N` / `dx` /
+  wavelength.
+- Subdomain inventory table (in z, out z, label) so the user can
+  inspect the constructed plane layout before pressing Run.
+- **Run pipeline** propagates the source field through every
+  subdomain, with a per-plane peak / label summary.
+
+### Tolerance dock — Export Report
+
+- New **Export Report…** button writes a structured JSON or text
+  report from the cached MC results.  Schema is versioned
+  (`'kind': 'lumenairy_tolerance_report', 'version': '1'`) so
+  downstream consumers can rely on the structure.  Includes per-
+  knob tolerances, summary stats (mean / std / median / p05 /
+  p95 / min / max for both RMS spot and EFL), and the full per-
+  trial arrays.
+- A future Strehl-based MC + JAX backend integration via
+  `tolerancing_report` and `monte_carlo_tolerancing_jax` is
+  deferred to a follow-up release: the existing dock's
+  perturbation model (radius-%, thickness-mm, decenter-mm)
+  doesn't directly map to the core's decenter / tilt / form-
+  error MC API, so a clean integration deserves its own design
+  pass.
+
+### Optimizer dock — JAX wave propagator toggle
+
+- New **Use JAX wave propagator** checkbox.  When checked, passes
+  `wave_propagator='real_lens_traced_jax'` into `design_optimize`
+  so the optimizer's default `jac='auto'` strategy can build
+  analytic Jacobians (via `jax.grad`) for any JAX-aware merit
+  terms.  Falls back to FD for non-JAX merits.  Greyed out when
+  `jax` is not installed.
+
+### New: Caustic Diagnostic dock
+
+- Wraps `caustic_diagnostic` + `plot_caustic_diagnostic` (3.5.4).
+- Inputs: fan radius (µm), samples per gap, optional post-surface
+  sample length (mm).
+- Output: matplotlib plot (delegated to
+  `plot_caustic_diagnostic` for visual consistency with the
+  library's reference rendering) + a text summary listing
+  detected caustic crossings with their Maslov indices.
+- Runs in a background thread to keep the UI responsive on
+  multi-element systems.
+- Lives in the **Analysis** workspace by default
+  (`defaults_revision` bumped 2 → 3 so existing saved workspaces
+  pick it up without losing customisations).
+
+### New: Tools > Scale system…
+
+- New menu item under a new **Tools** menu in the menu bar.
+- Uses `scale_prescription` (3.3.3) to multiply every linear
+  dimension (radii, thicknesses, semi-diameters, aspheric
+  coefficients) of the current system by a user-specified factor.
+- F-number, NA, and paraxial magnification are preserved by
+  geometric self-similarity; wavelength is NOT scaled.  Useful
+  for unit conversions (mm ↔ m) and for cheaper polynomial-fit-
+  based diffraction methods at smaller absolute extents.
+
+### `SystemModel.SourceDefinition` ↔ `lumenairy.Source` integration
+
+- New `SourceDefinition.to_source(N, dx_m, epd_m=...)` method
+  returns a `lumenairy.Source` (3.5.0) instance built via the
+  appropriate core factory (`Source.gaussian`,
+  `Source.plane_wave`, `Source.point_source`).  ``emitter_array``
+  -- which has no 1:1 core factory -- builds a tiled superposition
+  of ``Source.gaussian`` instances and wraps them in a `Source`
+  via the dataclass constructor.
+- Wave Optics dock's `_run` now uses `to_source()` to construct
+  the source field whenever possible, so the dock's source path
+  stays in lockstep with the rest of the library's source story.
+  Falls back to the legacy hand-rolled construction if
+  `to_source()` raises.
+
+### `PropagationResult` opt-in
+
+- `WaveOpticsWorker.run` now also produces a
+  :class:`lumenairy.PropagationResult` (3.5.0) and emits it in
+  the result dict under the new key ``propagation_result``.
+  Existing keys (``planes``, ``I_focus``, ``dx``, ``power_in``,
+  etc.) are unchanged so nothing breaks; downstream consumers
+  can opt into the unified wrapper by reading
+  ``result['propagation_result']``.
+- The wrapper carries the focal-plane field, output dx,
+  wavelength, and method as the canonical fields, plus a
+  ``history`` list of per-plane (label, field, z) tuples and
+  a ``metadata`` dict with the forecast inputs (lens model,
+  bandlimit, MFT params, chief-relative-OPD flag, power-in /
+  power-focus / d4sigma / elapsed time).
+
+### Internals / structure
+
+- Wave Optics dock is now a `QTabWidget` with two tabs:
+  *Per-element propagation* (the existing flow) and *Custom MHS
+  chain* (new).  All existing widgets, signals, and the
+  `run_finished` signal are unchanged on the per-element tab.
+- `lumenairy/ui/caustic_dock.py` (new file, ~250 LOC) follows the
+  existing dock conventions (matplotlib canvas, `QThread`
+  worker, `_draw_empty` / `_draw_result` helpers).
+- `_current_method_key()` factored out as the single source of
+  truth for the wave-optics method-key conversion (used by both
+  the forecast and the run dispatch).
+
+### Deferred to a future release
+
+- Strehl-based MC integration in the tolerance dock (the dock's
+  existing perturbation model -- radius-%, thickness-mm,
+  decenter-mm -- doesn't directly map to the core's decenter /
+  tilt / form-error MC API; a clean integration deserves its own
+  focused design pass).
 
 ## [3.2.14] — 2026-04-24
 

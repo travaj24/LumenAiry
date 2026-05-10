@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit,
+    QFileDialog, QMessageBox,
 )
 from PySide6.QtGui import QFont
 
@@ -202,6 +203,23 @@ class ToleranceDock(QWidget):
         self.btn_run = QPushButton('▶ Run MC')
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
+
+        # 3.5.9: structured-report export (uses tolerancing_report
+        # when Strehl data is available; falls back to a JSON/text
+        # summary built from the locally-collected RMS + EFL arrays
+        # when only the lightweight MC engine has run).
+        self.btn_export = QPushButton('Export Report…')
+        self.btn_export.setToolTip(
+            'Export a structured Monte Carlo report (JSON or text).\n'
+            'Includes per-knob tolerances, per-trial RMS / EFL '
+            'arrays, and summary statistics (median, sigma, p95, '
+            'yield).  When Strehl data becomes available '
+            '(future Lumenairy core-MC integration) the export '
+            'will route through la.tolerancing_report for full '
+            'Strehl yield curves.')
+        self.btn_export.setEnabled(False)
+        self.btn_export.clicked.connect(self._export_report)
+        run_row.addWidget(self.btn_export)
         layout.addLayout(run_row)
 
         self.progress_bar = QProgressBar()
@@ -304,6 +322,26 @@ class ToleranceDock(QWidget):
 
         self._draw_histograms(rms, efl)
 
+        # Cache for the structured-report export.  Stash both the
+        # filtered arrays and the per-knob tolerances so the report
+        # is self-contained and reproducible without keeping a
+        # reference to the dock.
+        self._last_results = {
+            'rms_um': np.asarray(rms),
+            'efl_mm': np.asarray(efl),
+            'tolerances': {
+                'radius_pct_1sigma': float(self.spin_radius.value()),
+                'thickness_mm_1sigma': float(self.spin_thick.value()),
+                'decenter_mm_1sigma': float(self.spin_decenter.value()),
+            },
+            'n_trials_requested': int(self.spin_trials.value()),
+            'n_trials_converged': int(len(rms)),
+            'wavelength_m': float(self.sm.wavelength_m),
+            'epd_m': float(self.sm.epd_m),
+            'efl_mm_nominal': float(self.sm.efl_mm),
+        }
+        self.btn_export.setEnabled(len(rms) > 0)
+
         # Summary text
         if len(rms) > 0:
             p95 = np.percentile(rms, 95)
@@ -314,3 +352,119 @@ class ToleranceDock(QWidget):
                 f'σ={np.std(efl):.4f} mm  |  '
                 f'{len(rms)}/{self.spin_trials.value()} converged'
             )
+
+    # ── Structured report export (3.5.9) ─────────────────────────────
+
+    def _build_report_dict(self):
+        """Build a structured report dict from the cached MC results.
+
+        Includes summary statistics, percentile breakdowns, and the
+        full per-trial arrays so downstream tools (or a future
+        Strehl-aware path through ``la.tolerancing_report``) can
+        re-derive yield curves.
+        """
+        rs = getattr(self, '_last_results', None)
+        if rs is None or len(rs.get('rms_um', [])) == 0:
+            return None
+        rms = np.asarray(rs['rms_um'])
+        efl = np.asarray(rs['efl_mm'])
+
+        def _stats(a, label, units):
+            if len(a) == 0:
+                return {'label': label, 'units': units}
+            return {
+                'label': label, 'units': units,
+                'mean': float(np.mean(a)),
+                'std': float(np.std(a)),
+                'median': float(np.median(a)),
+                'min': float(np.min(a)),
+                'max': float(np.max(a)),
+                'p05': float(np.percentile(a, 5)),
+                'p95': float(np.percentile(a, 95)),
+            }
+
+        return {
+            'kind': 'lumenairy_tolerance_report',
+            'version': '1',
+            'generator': 'lumenairy.ui.ToleranceDock',
+            'tolerances_1sigma': rs['tolerances'],
+            'n_trials_requested': rs['n_trials_requested'],
+            'n_trials_converged': rs['n_trials_converged'],
+            'system': {
+                'wavelength_m': rs['wavelength_m'],
+                'epd_m': rs['epd_m'],
+                'efl_mm_nominal': rs['efl_mm_nominal'],
+            },
+            'rms_spot': _stats(rms, 'RMS spot size', 'um'),
+            'efl': _stats(efl, 'Effective focal length', 'mm'),
+            'arrays': {
+                'rms_um': rms.tolist(),
+                'efl_mm': efl.tolist(),
+            },
+            'note': (
+                'Strehl-based yield curves require the core '
+                'monte_carlo_tolerancing path; this report is built '
+                'from the lightweight ray-trace MC engine.  Future '
+                'releases will route through la.tolerancing_report '
+                'when Strehl arrays are available.'),
+        }
+
+    def _format_report_text(self, report):
+        """Plain-text rendering for human-readable export."""
+        lines = []
+        lines.append('LumenAiry — Monte Carlo Tolerance Report')
+        lines.append('=' * 56)
+        tol = report['tolerances_1sigma']
+        sys_ = report['system']
+        lines.append(f"Trials:    {report['n_trials_converged']} converged "
+                     f"of {report['n_trials_requested']} requested")
+        lines.append(f"Wavelength: {sys_['wavelength_m'] * 1e9:.1f} nm")
+        lines.append(f"EPD:        {sys_['epd_m'] * 1e3:.3f} mm")
+        lines.append(f"EFL:        {sys_['efl_mm_nominal']:.3f} mm")
+        lines.append('')
+        lines.append('Tolerances (1σ):')
+        lines.append(f"  Radius:    {tol['radius_pct_1sigma']:.3f} %")
+        lines.append(f"  Thickness: {tol['thickness_mm_1sigma']:.4f} mm")
+        lines.append(f"  Decenter:  {tol['decenter_mm_1sigma']:.4f} mm")
+        lines.append('')
+        for key in ('rms_spot', 'efl'):
+            s = report[key]
+            if 'median' not in s:
+                continue
+            lines.append(f"{s['label']} [{s['units']}]:")
+            lines.append(f"  median {s['median']:.4f}, "
+                         f"sigma {s['std']:.4f}")
+            lines.append(f"  p05 {s['p05']:.4f}  "
+                         f"p95 {s['p95']:.4f}  "
+                         f"min {s['min']:.4f}  max {s['max']:.4f}")
+            lines.append('')
+        lines.append('Note: ' + report['note'])
+        return '\n'.join(lines)
+
+    def _export_report(self):
+        report = self._build_report_dict()
+        if report is None:
+            QMessageBox.information(self, 'Export Report',
+                                     'No MC data to export.  Run an '
+                                     'MC analysis first.')
+            return
+        path, sel = QFileDialog.getSaveFileName(
+            self, 'Export Tolerance Report', 'tolerance_report',
+            'JSON (*.json);;Text (*.txt);;All Files (*)')
+        if not path:
+            return
+        try:
+            if path.lower().endswith('.txt') or 'Text' in sel:
+                if not path.lower().endswith('.txt'):
+                    path += '.txt'
+                with open(path, 'w', encoding='utf-8') as fp:
+                    fp.write(self._format_report_text(report))
+            else:
+                if not path.lower().endswith('.json'):
+                    path += '.json'
+                import json as _json
+                with open(path, 'w', encoding='utf-8') as fp:
+                    _json.dump(report, fp, indent=2)
+        except Exception as e:
+            QMessageBox.warning(self, 'Export Report',
+                                 f'Could not write report:\n{e}')

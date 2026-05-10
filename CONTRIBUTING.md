@@ -16,7 +16,7 @@ pip install -e ".[all,dev,gui]"
 
 The `[all]` extra pulls in `pyfftw`, `numexpr`, `numba`, `astropy`,
 `h5py`, `zarr`, `psutil` (everything optional for the core library).
-`[gui]` adds the PySide6 + pyvista stack for the Optical Designer
+`[gui]` adds the PySide6 + pyvista stack for the LumenAiry Designer
 GUI.  `[dev]` adds `pytest` for the test runners.
 
 ## Running the validation suite

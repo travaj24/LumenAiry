@@ -1,5 +1,5 @@
 """
-MainWindow — Optical Designer application shell.
+MainWindow — LumenAiry Designer application shell.
 
 Author: Andrew Traverso
 """
@@ -38,11 +38,11 @@ from .workspace import (
 
 
 class MainWindow(QMainWindow):
-    """Optical Designer main application window."""
+    """LumenAiry Designer main application window."""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('Optical Designer')
+        self.setWindowTitle('LumenAiry Designer')
         self.setMinimumSize(1200, 700)
         self.setCorner(Qt.TopLeftCorner, Qt.LeftDockWidgetArea)
         self.setCorner(Qt.BottomLeftCorner, Qt.BottomDockWidgetArea)
@@ -220,6 +220,17 @@ class MainWindow(QMainWindow):
         self.through_focus_dock = dock(
             'Through-focus', self.through_focus_widget,
             Qt.BottomDockWidgetArea, 'through_focus')
+
+        # Caustic diagnostic dock (3.5.9) — wraps caustic_diagnostic +
+        # plot_caustic_diagnostic from the core (3.5.4).  Ships in the
+        # Analysis workspace by default; useful for debugging through-
+        # focus oddities where the geometric caustic doesn't sit where
+        # the wave-optics PSF claims focus is.
+        from .caustic_dock import CausticDock
+        self.caustic_widget = CausticDock(self.model)
+        self.caustic_dock = dock(
+            'Caustic diagnostic', self.caustic_widget,
+            Qt.BottomDockWidgetArea, 'caustic')
 
         from .psf_mtf_dock import PSFMTFDock
         self.psfmtf_widget = PSFMTFDock(self.model)
@@ -961,6 +972,12 @@ class MainWindow(QMainWindow):
         om.addAction('Lens function options...',
                      self._show_lens_options)
 
+        # ── Tools (3.5.9) ──
+        # Cross-cutting utilities backed by core-library functions:
+        # currently just scale_prescription, room to grow.
+        tm = mb.addMenu('&Tools')
+        tm.addAction('Scale system...', self._show_scale_dialog)
+
         # Help
         hm = mb.addMenu('&Help')
         cmd_act = QAction('Command Palette (Ctrl+K)...', self)
@@ -1410,7 +1427,7 @@ class MainWindow(QMainWindow):
     def _save_json_design(self):
         path, _ = QFileDialog.getSaveFileName(
             self, 'Save Design (JSON)',
-            filter='Optical Designer JSON (*.json)')
+            filter='LumenAiry Designer JSON (*.json)')
         if not path:
             return
         if not path.endswith('.json'):
@@ -1428,7 +1445,7 @@ class MainWindow(QMainWindow):
     def _open_json_design(self):
         path, _ = QFileDialog.getOpenFileName(
             self, 'Open Design (JSON)',
-            filter='Optical Designer JSON (*.json);;All files (*)')
+            filter='LumenAiry Designer JSON (*.json);;All files (*)')
         if not path:
             return
         try:
@@ -2130,7 +2147,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, 'Demo failed', str(e))
 
     def _refresh_window_title(self):
-        base = 'Optical Designer'
+        base = 'LumenAiry Designer'
         if self._current_path:
             name = os.path.basename(self._current_path)
             star = '*' if self._dirty else ''
@@ -2213,8 +2230,8 @@ class MainWindow(QMainWindow):
         event.ignore()
 
     def _show_about(self):
-        QMessageBox.about(self, 'About Optical Designer',
-            '<h3>Optical Designer</h3>'
+        QMessageBox.about(self, 'About LumenAiry Designer',
+            '<h3>LumenAiry Designer</h3>'
             '<p>Open-source optical design application.</p>'
             f'<p>Library version: {_get_version()}</p>'
             '<p>Author: Andrew Traverso</p>')
@@ -2256,6 +2273,80 @@ class MainWindow(QMainWindow):
                 pass
             self.status_label.setText('Lens function options updated.')
 
+    def _show_scale_dialog(self):
+        """Tools > Scale system… (3.5.9).
+
+        Wraps :func:`lumenairy.scale_prescription`: every linear
+        dimension (radii, thicknesses, semi-diameters, aperture
+        diameter, asphere coefficients) multiplied by ``factor``;
+        F-number and NA are preserved.  Result is loaded back into
+        the model and pushed onto the undo stack so the operation
+        is reversible from the menu's standard Edit > Undo.
+        """
+        from PySide6.QtWidgets import QDoubleSpinBox, QDialog, QVBoxLayout, \
+            QFormLayout, QDialogButtonBox, QLabel
+        try:
+            pres = self.model.to_prescription()
+        except Exception as exc:
+            QMessageBox.warning(self, 'Scale system',
+                                 f'Could not export current system: '
+                                 f'{type(exc).__name__}: {exc}')
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle('Scale system')
+        v = QVBoxLayout(dlg)
+        v.addWidget(QLabel(
+            'Multiply every linear dimension (radii, thicknesses,\n'
+            'semi-diameters, aperture, aspheric coeffs) by the\n'
+            'scale factor.  F-number and NA are preserved; the\n'
+            'wavelength is NOT scaled.'))
+        form = QFormLayout()
+        spin = QDoubleSpinBox()
+        spin.setDecimals(6)
+        spin.setRange(1e-6, 1e6)
+        spin.setValue(1.0)
+        spin.setToolTip(
+            'Common values: 0.001 to convert mm-built systems to '
+            'metres; 1000 for the reverse.  Any positive factor is '
+            'physically meaningful by self-similarity.')
+        form.addRow('Scale factor:', spin)
+        v.addLayout(form)
+        bb = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        factor = float(spin.value())
+        if factor <= 0 or not np.isfinite(factor):
+            QMessageBox.warning(self, 'Scale system',
+                                 'Scale factor must be a positive '
+                                 'finite number.')
+            return
+        try:
+            import lumenairy as _la
+            scaled = _la.scale_prescription(pres, factor)
+        except Exception as exc:
+            QMessageBox.warning(self, 'Scale system',
+                                 f'scale_prescription failed: '
+                                 f'{type(exc).__name__}: {exc}')
+            return
+
+        try:
+            self.model.load_prescription(scaled,
+                                          wavelength_nm=self.model.wavelength_nm)
+        except Exception as exc:
+            QMessageBox.warning(self, 'Scale system',
+                                 f'Could not load the scaled '
+                                 f'prescription back into the model: '
+                                 f'{type(exc).__name__}: {exc}')
+            return
+        self.status_label.setText(
+            f'System scaled by {factor:g} (linear dimensions only).')
+
 
 def _get_version():
     try:
@@ -2266,11 +2357,15 @@ def _get_version():
 
 
 def _cli_main():
-    """Entry point for the optical-designer command."""
+    """Entry point for the lumenairy-designer / optical-designer
+    commands.  ``optical-designer`` is kept as a legacy alias in
+    pyproject.toml for backward compatibility; both invoke this
+    same function.
+    """
     import sys
     from PySide6.QtWidgets import QApplication
     app = QApplication(sys.argv)
-    app.setApplicationName('Optical Designer')
+    app.setApplicationName('LumenAiry Designer')
     apply_dark_theme(app)
     window = MainWindow()
     args = sys.argv[1:]

@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """
-Launch the Optical Designer application.
+Launch the LumenAiry Designer application.
+
+Legacy launcher kept for backward compatibility with existing
+desktop shortcuts and CI scripts.  ``run_lumenairy_designer.py``
+is the new preferred filename; both invoke the same entry point.
 
 Usage
 -----
@@ -22,7 +26,7 @@ def main():
     from lumenairy.ui.main_window import MainWindow, apply_dark_theme
 
     app = QApplication(sys.argv)
-    app.setApplicationName('Optical Designer')
+    app.setApplicationName('LumenAiry Designer')
 
 
     apply_dark_theme(app)

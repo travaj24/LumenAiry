@@ -35,7 +35,7 @@ class WelcomeDock(QWidget):
         outer.setContentsMargins(20, 20, 20, 20)
         outer.setSpacing(14)
 
-        title = QLabel('Welcome to Optical Designer')
+        title = QLabel('Welcome to LumenAiry Designer')
         f = title.font()
         f.setPointSize(f.pointSize() + 4)
         f.setBold(True)
