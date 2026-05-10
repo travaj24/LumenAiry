@@ -273,7 +273,8 @@ class Element:
     def __init__(self, elem_num=0, name='', elem_type='Singlet',
                  distance_mm=0.0, tilt_x=0.0, tilt_y=0.0,
                  decenter_x=0.0, decenter_y=0.0,
-                 surfaces=None, source=None, aux=None):
+                 surfaces=None, source=None, aux=None,
+                 origin=None, R=None):
         self.elem_num = elem_num
         self.name = name
         self.elem_type = elem_type
@@ -285,6 +286,22 @@ class Element:
         self.surfaces = surfaces or []
         self.source = source            # SourceDefinition, only for 'Source' type
         self.aux = aux or {}            # MLA/DOE params
+        # 3.7.3: per-element world-frame canonical state.  ``origin`` is
+        # the front-vertex world position in mm; ``R`` is a 3x3 rotation
+        # mapping local axes (x, y, z=optical axis) into world coords.
+        # Populated by ``SystemModel.recompute_element_frames()`` after
+        # any structural change to the element list, so layout views
+        # and ``_build_trace_surfaces_internal`` can read them directly
+        # without re-walking distance_mm/tilt_x conventions every call.
+        # Constructors may pass (origin, R) explicitly when building a
+        # system in absolute coords (e.g., from a Zemax import that
+        # has already accumulated cb's into world frames); otherwise
+        # they default to identity and recompute_element_frames() fills
+        # them in from the relative fields.
+        self.origin = (np.zeros(3, dtype=float)
+                        if origin is None else np.asarray(origin, dtype=float))
+        self.R = (np.eye(3, dtype=float)
+                   if R is None else np.asarray(R, dtype=float))
 
     @property
     def internal_thickness_mm(self):
@@ -508,270 +525,97 @@ class SystemModel(QObject):
         return positions
 
     def element_frames_2d_mm(self):
-        """3.6.1: per-element 2D world frame `(z, y, theta_rad)` for
-        the side-view 2D layout, accounting for mirror reflections
-        and per-element ``tilt_x`` / ``decenter_y`` (which carry
-        coord-break information absorbed at import time).
+        """3.7.3: per-element 2D world frame ``(z, y, theta_rad)``
+        for the 2D side-view layout.  Reads each element's cached
+        ``origin`` (3-vector, mm) and ``R`` (3x3 rotation) -- both
+        kept in sync by :meth:`recompute_element_frames` after every
+        structural change -- and projects them onto the y-z plane.
 
-        ``theta`` is the propagation-direction angle in the y-z
-        plane, measured CCW from +z.  All elements have flat
-        ``theta = 0`` when no mirrors / coord-break tilts are
-        present, falling back to the historical straight-axis
-        layout exactly.
-
-        For a 45° fold mirror, set ``elem.tilt_x = 45`` -- the
-        mirror surface is then drawn rotated 45° in the visible
-        plane and the outgoing axis bends 90° (180° + 2*tilt
-        per the standard reflection formula in y-z).
-
-        Surfaces beyond a Mirror live in the reflected frame, so
-        a folding-mirror plus subsequent imaging optics will draw
-        in the correct +y (or wherever) direction, not stacked
-        on top of the upstream optics on the +z axis.
+        ``theta`` is the angle of the local +z axis in the y-z
+        plane, measured CCW from world +z.  For unfolded systems
+        every element has ``theta = 0``; for folded systems theta
+        accumulates the tilts and mirror flips encoded in R.
         """
         frames = []
-        z, y, theta = 0.0, 0.0, 0.0   # source frame
-        # All distances and internal thicknesses are stored in
-        # physical (positive) convention by load_prescription /
-        # the editor, so the theta-flip post-Mirror suffices to
-        # advance the back vertex in the correct world direction
-        # without any extra sign tracking here.
-        for ei, elem in enumerate(self.elements):
-            if elem.elem_type == 'Source':
-                frames.append((z, y, theta))
-                continue
-            # 1. Advance to this element along the current axis.
-            d = float(getattr(elem, 'distance_mm', 0.0))
-            z += d * np.cos(theta)
-            y += d * np.sin(theta)
-            # 2. Apply pre-element decenter_y perpendicular to axis.
-            #    Local "up" direction = (-sin(theta), cos(theta)).
-            dy = float(getattr(elem, 'decenter_y', 0.0))
-            if dy:
-                z += dy * (-np.sin(theta))
-                y += dy * (np.cos(theta))
-            # 3. Apply pre-element tilt_x (rotates incoming axis).
-            tx = float(getattr(elem, 'tilt_x', 0.0))
-            if tx:
-                theta += np.radians(tx)
-            # 4. Record the front-vertex frame.
-            frames.append((z, y, theta))
-            # 5. Advance through the element's internal thickness.
-            #    Internal thicknesses are positive physical
-            #    dimensions; the post-mirror theta flip alone
-            #    advances the back vertex in the correct world
-            #    direction, so we do NOT multiply by mirror_sign
-            #    here (that's only for distance_mm which carries
-            #    the Zemax post-mirror sign convention).
-            if elem.surfaces:
-                internal = sum(float(s.thickness) for s in elem.surfaces)
-                z += internal * np.cos(theta)
-                y += internal * np.sin(theta)
-            # 6. If mirror, reflect: outgoing axis is incoming + π.
-            if elem.elem_type == 'Mirror':
-                theta += np.pi
+        for elem in self.elements:
+            o = elem.origin
+            zaxis = elem.R[:, 2]
+            theta = float(np.arctan2(zaxis[1], zaxis[2]))
+            frames.append((float(o[2]), float(o[1]), theta))
         return frames
 
     def element_frames_3d_mm(self):
-        """3.6.1: per-element 3D world frame ``(origin_xyz, R)`` for
-        the 3D layout.  ``origin_xyz`` is a length-3 numpy array in
-        scene mm; ``R`` is a 3x3 rotation matrix mapping local axes
-        (z = optical axis, y = vertical, x = horizontal) into world
-        coordinates.
-
-        Applies element ``tilt_x`` (rotation about local x), then
-        ``tilt_y`` (rotation about local y), then ``decenter_x`` /
-        ``decenter_y`` perpendicular to the optical axis.  Mirror
-        elements rotate the outgoing axis by 180° about local x
-        after the surface (matches the 2D side-view convention).
+        """3.7.3: per-element 3D world frame ``(origin_xyz, R)``
+        for the 3D layout.  Reads each element's cached
+        ``origin`` / ``R`` (kept in sync by
+        :meth:`recompute_element_frames`).  ``origin`` is a length-3
+        numpy array in scene mm; ``R`` is a 3x3 rotation matrix
+        mapping local axes (z = optical axis, y = vertical, x =
+        horizontal) into world coordinates.
         """
-        frames = []
-        origin = np.zeros(3)
-        R = np.eye(3)
-        # See note in element_frames_2d_mm — distances and internal
-        # thicknesses are stored in physical (positive) convention
-        # by load_prescription, so the post-Mirror Rflip alone gives
-        # the correct world direction.
-        for ei, elem in enumerate(self.elements):
-            if elem.elem_type == 'Source':
-                frames.append((origin.copy(), R.copy()))
-                continue
-            # 1. Advance along the current optical axis (local +z).
-            axis_world = R[:, 2]
-            d = float(getattr(elem, 'distance_mm', 0.0))
-            origin = origin + d * axis_world
-            # 2. Apply decenters perpendicular to the optical axis.
-            dx = float(getattr(elem, 'decenter_x', 0.0))
-            dy = float(getattr(elem, 'decenter_y', 0.0))
-            if dx:
-                origin = origin + dx * R[:, 0]
-            if dy:
-                origin = origin + dy * R[:, 1]
-            # 3. Apply tilt_x then tilt_y (intrinsic; about local
-            #    x then the new y).  3.7.1: Use OPTICAL-convention
-            #    rotation matrices (Zemax / Code-V), which are
-            #    sign-flipped from the math right-hand-rule
-            #    convention.  +tilt_x makes local +z rotate toward
-            #    +y (matching the 2D side-view's
-            #    ``theta += radians(tx)`` with +y up).  Without the
-            #    flip, +tilt_x rotated local +z toward -y in 3D --
-            #    the 2D layout folded correctly while the 3D layout
-            #    showed post-fold elements pointing the wrong way.
-            tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
-            ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
-            if tx_rad:
-                c, s = np.cos(tx_rad), np.sin(tx_rad)
-                Rx = np.array([[1, 0, 0],
-                                [0, c,  s],
-                                [0, -s, c]])
-                R = R @ Rx
-            if ty_rad:
-                c, s = np.cos(ty_rad), np.sin(ty_rad)
-                Ry = np.array([[c, 0, -s],
-                                [0, 1,  0],
-                                [s, 0,  c]])
-                R = R @ Ry
-            # 4. Record the front-vertex frame.
-            frames.append((origin.copy(), R.copy()))
-            # 5. Advance through internal thickness (positive
-            #    physical dimension; the Rflip post-mirror handles
-            #    direction, so do NOT apply mirror_sign here).
-            if elem.surfaces:
-                internal = sum(float(s.thickness) for s in elem.surfaces)
-                origin = origin + internal * R[:, 2]
-            # 6. Mirror reflection.  3.7.1: use a 180° rotation
-            # about local +x (which negates both +y and +z) instead
-            # of a pure +z reflection.  The reflection variant
-            # ``diag(1, 1, -1)`` flips the frame's handedness, so
-            # subsequent intrinsic rotations (Rx, Ry) compose
-            # incorrectly with respect to the 2D side-view's
-            # ``theta += π`` convention -- a multi-fold sequence
-            # like cb-pre + mirror + cb-post that should net 90°
-            # in 2D netted 0° in 3D.  ``Rmirror = diag(1, -1, -1)``
-            # is a proper rotation (det = +1) so the frame stays
-            # right-handed and downstream rotations behave the
-            # same as in 2D.
-            if elem.elem_type == 'Mirror':
-                Rmirror = np.array([[1,  0,  0],
-                                    [0, -1,  0],
-                                    [0,  0, -1]])
-                R = R @ Rmirror
-        return frames
+        return [(elem.origin.copy(), elem.R.copy())
+                for elem in self.elements]
 
     def surface_frames_2d_mm(self):
-        """3.6.1 hotfix-6 / 3.7.0: per-traced-surface 2D world frame
+        """3.7.3: per-traced-surface 2D world frame
         ``(z, y, theta_rad)`` in trace order, plus the image-plane
-        frame appended at the end.  When an element carries a tilt
-        / decenter, a coord-break frame is emitted BEFORE the
-        element's surfaces (matching the cb Surface emitted by
-        :meth:`_build_trace_surfaces_internal` so the trace history
-        and surface frames stay aligned).
+        frame at the end.  Walks each element's cached front-vertex
+        frame and steps along internal thicknesses to land each
+        internal surface; emits a cb frame at the element's front
+        vertex when the element carries any tilt/decenter (matching
+        the cb Surface emitted by
+        :meth:`_build_trace_surfaces_internal`).
         """
         surf_frames = []
-        z, y, theta = 0.0, 0.0, 0.0
         for elem in self.elements:
             if elem.elem_type == 'Source':
                 continue
-            d = float(getattr(elem, 'distance_mm', 0.0))
-            z += d * np.cos(theta)
-            y += d * np.sin(theta)
+            o = elem.origin
+            R = elem.R
+            theta = float(np.arctan2(R[1, 2], R[2, 2]))
             has_tilt = (
                 float(getattr(elem, 'tilt_x', 0.0)) != 0.0
                 or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
                 or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
                 or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
-            dy = float(getattr(elem, 'decenter_y', 0.0))
-            if dy:
-                z += dy * (-np.sin(theta))
-                y += dy * (np.cos(theta))
-            tx = float(getattr(elem, 'tilt_x', 0.0))
-            if tx:
-                theta += np.radians(tx)
-            # Emit a cb frame at the element's front vertex with the
-            # new (post-tilt) orientation.  Detector elements never
-            # need a cb frame (the trace list doesn't emit one for
-            # them either).
-            if has_tilt and elem.elem_type != 'Detector':
-                surf_frames.append((z, y, theta))
             if elem.elem_type == 'Detector':
-                surf_frames.append((z, y, theta))
+                surf_frames.append((float(o[2]), float(o[1]), theta))
                 continue
+            if has_tilt:
+                surf_frames.append((float(o[2]), float(o[1]), theta))
             cum_t = 0.0
             for srow in elem.surfaces:
-                z_s = z + cum_t * np.cos(theta)
-                y_s = y + cum_t * np.sin(theta)
+                z_s = float(o[2]) + cum_t * np.cos(theta)
+                y_s = float(o[1]) + cum_t * np.sin(theta)
                 surf_frames.append((z_s, y_s, theta))
                 cum_t += float(srow.thickness)
-            z += cum_t * np.cos(theta)
-            y += cum_t * np.sin(theta)
-            if elem.elem_type == 'Mirror':
-                theta += np.pi
         return surf_frames
 
     def surface_frames_3d_mm(self):
-        """3.6.1 hotfix-6: per-traced-surface 3D world frame
+        """3.7.3: per-traced-surface 3D world frame
         ``(origin_xyz, R_3x3)`` in trace order, plus the image-plane
-        frame appended at the end.  Same conventions as
-        :meth:`element_frames_3d_mm`.
+        frame at the end.
         """
         surf_frames = []
-        origin = np.zeros(3)
-        R = np.eye(3)
         for elem in self.elements:
             if elem.elem_type == 'Source':
                 continue
-            d = float(getattr(elem, 'distance_mm', 0.0))
-            origin = origin + d * R[:, 2]
+            o = elem.origin
+            R = elem.R
             has_tilt = (
                 float(getattr(elem, 'tilt_x', 0.0)) != 0.0
                 or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
                 or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
                 or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
-            dx = float(getattr(elem, 'decenter_x', 0.0))
-            dy = float(getattr(elem, 'decenter_y', 0.0))
-            if dx:
-                origin = origin + dx * R[:, 0]
-            if dy:
-                origin = origin + dy * R[:, 1]
-            tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
-            ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
-            # 3.7.1: optical-convention rotation matrices, sign-
-            # flipped from math right-hand-rule.  See note in
-            # element_frames_3d_mm.
-            if tx_rad:
-                c, s = np.cos(tx_rad), np.sin(tx_rad)
-                R = R @ np.array([[1, 0, 0],
-                                  [0, c,  s],
-                                  [0, -s, c]])
-            if ty_rad:
-                c, s = np.cos(ty_rad), np.sin(ty_rad)
-                R = R @ np.array([[c, 0, -s],
-                                  [0, 1,  0],
-                                  [s, 0,  c]])
-            # 3.7.0: emit a cb frame for tilted elements to align
-            # with the cb Surface emitted by
-            # _build_trace_surfaces_internal.
-            if has_tilt and elem.elem_type != 'Detector':
-                surf_frames.append((origin.copy(), R.copy()))
             if elem.elem_type == 'Detector':
-                surf_frames.append((origin.copy(), R.copy()))
+                surf_frames.append((o.copy(), R.copy()))
                 continue
+            if has_tilt:
+                surf_frames.append((o.copy(), R.copy()))
             cum_t = 0.0
             for srow in elem.surfaces:
-                surf_frames.append((
-                    origin + cum_t * R[:, 2],
-                    R.copy()))
+                surf_frames.append((o + cum_t * R[:, 2], R.copy()))
                 cum_t += float(srow.thickness)
-            origin = origin + cum_t * R[:, 2]
-            if elem.elem_type == 'Mirror':
-                # 3.7.1: 180° rotation about local +x (proper
-                # rotation, det = +1) instead of a reflection so
-                # the frame stays right-handed and subsequent
-                # tilts compose consistently with the 2D side-
-                # view convention.
-                R = R @ np.array([[1,  0,  0],
-                                  [0, -1,  0],
-                                  [0,  0, -1]])
         return surf_frames
 
     def get_display_distance(self, elem_index):
@@ -1224,6 +1068,86 @@ class SystemModel(QObject):
         self._efl = None
         self._bfl = None
         self._flat_surfaces_cache = None
+        # 3.7.3: keep each Element's cached world-frame ``origin`` /
+        # ``R`` in sync with the relative fields after any structural
+        # change.  Layout views and the trace-surface builder read
+        # these directly instead of re-walking distance_mm / tilt_x
+        # conventions every call -- that path was the origin of the
+        # frame-convention bugs (Rx sign, Rmirror reflection vs
+        # rotation, mirror_sign tracking) we burned commits hunting.
+        self.recompute_element_frames()
+
+    def recompute_element_frames(self):
+        """Walk the element list and assign each element's
+        ``origin`` (world-frame front vertex, mm) and ``R`` (3x3
+        rotation, local axes in world coords) from the existing
+        relative fields (distance_mm, tilt_x, tilt_y, decenter_x,
+        decenter_y) plus mirror reflections.
+
+        This is the single place where the relative -> absolute
+        conversion happens.  Called from :meth:`_invalidate` after
+        every structural change, so consumers (layout views, trace
+        surface-list builder, prescription editor in absolute
+        mode) can read ``e.origin`` / ``e.R`` directly without
+        worrying about the conversion conventions.
+
+        Convention matches the pre-3.7.3 ``element_frames_3d_mm``
+        (which is now removed in favour of this method): optical-
+        convention ``Rx`` / ``Ry`` (Zemax PARM 3 / 4), mirror as a
+        proper 180° rotation about local +x (det = +1, frame stays
+        right-handed), distance applied along previous element's
+        local +z axis, decenter perpendicular to that axis, tilt
+        applied at the element's front vertex (advance-then-tilt).
+        """
+        origin = np.zeros(3, dtype=float)
+        R = np.eye(3, dtype=float)
+        for elem in self.elements:
+            if elem.elem_type == 'Source':
+                elem.origin = origin.copy()
+                elem.R = R.copy()
+                continue
+            # 1. Advance to this element along the previous frame's
+            # local +z axis.
+            d = float(getattr(elem, 'distance_mm', 0.0))
+            origin = origin + d * R[:, 2]
+            # 2. Apply decenters perpendicular to the optical axis.
+            dx = float(getattr(elem, 'decenter_x', 0.0))
+            dy = float(getattr(elem, 'decenter_y', 0.0))
+            if dx:
+                origin = origin + dx * R[:, 0]
+            if dy:
+                origin = origin + dy * R[:, 1]
+            # 3. Apply tilts (optical convention: +tilt_x rotates
+            # local +z toward +y, matching Zemax / Code-V / 2D side
+            # view).
+            tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
+            ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
+            if tx_rad:
+                c, s = np.cos(tx_rad), np.sin(tx_rad)
+                R = R @ np.array([[1, 0, 0],
+                                  [0, c,  s],
+                                  [0, -s, c]])
+            if ty_rad:
+                c, s = np.cos(ty_rad), np.sin(ty_rad)
+                R = R @ np.array([[c, 0, -s],
+                                  [0, 1,  0],
+                                  [s, 0,  c]])
+            # 4. Record the front-vertex frame on the element.
+            elem.origin = origin.copy()
+            elem.R = R.copy()
+            # 5. Advance through internal thickness for the next
+            # iteration.  (Internal thicknesses are positive
+            # physical dimensions; the post-mirror Rmirror handles
+            # direction reversal.)
+            if elem.surfaces:
+                internal = sum(float(s.thickness) for s in elem.surfaces)
+                origin = origin + internal * R[:, 2]
+            # 6. Mirror reflection: 180° rotation about local +x
+            # (det = +1, frame stays right-handed).
+            if elem.elem_type == 'Mirror':
+                R = R @ np.array([[1,  0,  0],
+                                  [0, -1,  0],
+                                  [0,  0, -1]])
 
     # ── Undo / redo ────────────────────────────────────────────────
 
