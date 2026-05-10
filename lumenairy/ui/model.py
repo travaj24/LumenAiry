@@ -608,20 +608,28 @@ class SystemModel(QObject):
             if dy:
                 origin = origin + dy * R[:, 1]
             # 3. Apply tilt_x then tilt_y (intrinsic; about local
-            #    x then the new y).  Standard rotation matrices.
+            #    x then the new y).  3.7.1: Use OPTICAL-convention
+            #    rotation matrices (Zemax / Code-V), which are
+            #    sign-flipped from the math right-hand-rule
+            #    convention.  +tilt_x makes local +z rotate toward
+            #    +y (matching the 2D side-view's
+            #    ``theta += radians(tx)`` with +y up).  Without the
+            #    flip, +tilt_x rotated local +z toward -y in 3D --
+            #    the 2D layout folded correctly while the 3D layout
+            #    showed post-fold elements pointing the wrong way.
             tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
             ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
             if tx_rad:
                 c, s = np.cos(tx_rad), np.sin(tx_rad)
                 Rx = np.array([[1, 0, 0],
-                                [0, c, -s],
-                                [0, s,  c]])
+                                [0, c,  s],
+                                [0, -s, c]])
                 R = R @ Rx
             if ty_rad:
                 c, s = np.cos(ty_rad), np.sin(ty_rad)
-                Ry = np.array([[ c, 0, s],
-                                [ 0, 1, 0],
-                                [-s, 0, c]])
+                Ry = np.array([[c, 0, -s],
+                                [0, 1,  0],
+                                [s, 0,  c]])
                 R = R @ Ry
             # 4. Record the front-vertex frame.
             frames.append((origin.copy(), R.copy()))
@@ -631,12 +639,23 @@ class SystemModel(QObject):
             if elem.surfaces:
                 internal = sum(float(s.thickness) for s in elem.surfaces)
                 origin = origin + internal * R[:, 2]
-            # 6. Mirror reflection: 180° about local x (flips +z).
+            # 6. Mirror reflection.  3.7.1: use a 180° rotation
+            # about local +x (which negates both +y and +z) instead
+            # of a pure +z reflection.  The reflection variant
+            # ``diag(1, 1, -1)`` flips the frame's handedness, so
+            # subsequent intrinsic rotations (Rx, Ry) compose
+            # incorrectly with respect to the 2D side-view's
+            # ``theta += π`` convention -- a multi-fold sequence
+            # like cb-pre + mirror + cb-post that should net 90°
+            # in 2D netted 0° in 3D.  ``Rmirror = diag(1, -1, -1)``
+            # is a proper rotation (det = +1) so the frame stays
+            # right-handed and downstream rotations behave the
+            # same as in 2D.
             if elem.elem_type == 'Mirror':
-                Rflip = np.array([[1, 0, 0],
-                                   [0, 1, 0],
-                                   [0, 0, -1]])
-                R = R @ Rflip
+                Rmirror = np.array([[1,  0,  0],
+                                    [0, -1,  0],
+                                    [0,  0, -1]])
+                R = R @ Rmirror
         return frames
 
     def surface_frames_2d_mm(self):
@@ -716,16 +735,19 @@ class SystemModel(QObject):
                 origin = origin + dy * R[:, 1]
             tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
             ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
+            # 3.7.1: optical-convention rotation matrices, sign-
+            # flipped from math right-hand-rule.  See note in
+            # element_frames_3d_mm.
             if tx_rad:
                 c, s = np.cos(tx_rad), np.sin(tx_rad)
                 R = R @ np.array([[1, 0, 0],
-                                  [0, c, -s],
-                                  [0, s,  c]])
+                                  [0, c,  s],
+                                  [0, -s, c]])
             if ty_rad:
                 c, s = np.cos(ty_rad), np.sin(ty_rad)
-                R = R @ np.array([[ c, 0, s],
-                                  [ 0, 1, 0],
-                                  [-s, 0, c]])
+                R = R @ np.array([[c, 0, -s],
+                                  [0, 1,  0],
+                                  [s, 0,  c]])
             # 3.7.0: emit a cb frame for tilted elements to align
             # with the cb Surface emitted by
             # _build_trace_surfaces_internal.
@@ -742,9 +764,14 @@ class SystemModel(QObject):
                 cum_t += float(srow.thickness)
             origin = origin + cum_t * R[:, 2]
             if elem.elem_type == 'Mirror':
-                R = R @ np.array([[1, 0, 0],
-                                  [0, 1, 0],
-                                  [0, 0, -1]])
+                # 3.7.1: 180° rotation about local +x (proper
+                # rotation, det = +1) instead of a reflection so
+                # the frame stays right-handed and subsequent
+                # tilts compose consistently with the 2D side-
+                # view convention.
+                R = R @ np.array([[1,  0,  0],
+                                  [0, -1,  0],
+                                  [0,  0, -1]])
         return surf_frames
 
     def get_display_distance(self, elem_index):

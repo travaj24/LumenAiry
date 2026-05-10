@@ -714,38 +714,44 @@ def _apply_coord_break(rays, surface):
     def _rot_x(theta):
         if theta == 0.0:
             return
+        # 3.7.1: optical-convention frame rotation by +theta about X
+        # (Zemax / Code-V convention) is the inverse of the math
+        # right-hand-rule rotation.  To express a ray vector in the
+        # new frame we apply Rx_math(+theta), i.e.
+        #   y' = c*y - s*z;   z' = s*y + c*z.
+        # The previous (3.7.0) implementation used Rx_math(-theta),
+        # which made the 3D layout's post-fold orientation opposite
+        # to the 2D layout's.
         c, s = np.cos(theta), np.sin(theta)
-        # Express old-frame vector in a frame rotated by +theta about X:
-        # apply Rx(-theta) → y' =  c*y + s*z;   z' = -s*y + c*z.
-        y_n =  c * rays.y + s * rays.z
-        z_n = -s * rays.y + c * rays.z
+        y_n =  c * rays.y - s * rays.z
+        z_n =  s * rays.y + c * rays.z
         rays.y, rays.z = y_n, z_n
-        M_n =  c * rays.M + s * rays.N
-        N_n = -s * rays.M + c * rays.N
+        M_n =  c * rays.M - s * rays.N
+        N_n =  s * rays.M + c * rays.N
         rays.M, rays.N = M_n, N_n
 
     def _rot_y(theta):
         if theta == 0.0:
             return
         c, s = np.cos(theta), np.sin(theta)
-        # Ry(-theta) → x' = c*x - s*z;  z' = s*x + c*z.
-        x_n =  c * rays.x - s * rays.z
-        z_n =  s * rays.x + c * rays.z
+        # Optical convention: Ry_math(+theta) applied to the ray.
+        x_n =  c * rays.x + s * rays.z
+        z_n = -s * rays.x + c * rays.z
         rays.x, rays.z = x_n, z_n
-        L_n =  c * rays.L - s * rays.N
-        N_n =  s * rays.L + c * rays.N
+        L_n =  c * rays.L + s * rays.N
+        N_n = -s * rays.L + c * rays.N
         rays.L, rays.N = L_n, N_n
 
     def _rot_z(theta):
         if theta == 0.0:
             return
         c, s = np.cos(theta), np.sin(theta)
-        # Rz(-theta) → x' = c*x + s*y;  y' = -s*x + c*y.
-        x_n =  c * rays.x + s * rays.y
-        y_n = -s * rays.x + c * rays.y
+        # Optical convention: Rz_math(+theta) applied to the ray.
+        x_n =  c * rays.x - s * rays.y
+        y_n =  s * rays.x + c * rays.y
         rays.x, rays.y = x_n, y_n
-        L_n =  c * rays.L + s * rays.M
-        M_n = -s * rays.L + c * rays.M
+        L_n =  c * rays.L - s * rays.M
+        M_n =  s * rays.L + c * rays.M
         rays.L, rays.M = L_n, M_n
 
     def _tilts():

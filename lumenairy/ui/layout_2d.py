@@ -33,36 +33,49 @@ class Layout2DView(QWidget):
         super().__init__(parent)
         self.sm = system_model
 
-        # 3.6.1 hotfix-6: allow the layout dock to shrink freely.
-        # Override minimumSizeHint as well -- the inherited
-        # implementation walks the layout (QGraphicsView etc.) and
-        # produces a much larger value than setMinimumSize alone
-        # can defeat.
-        from PySide6.QtWidgets import QSizePolicy, QPushButton, QHBoxLayout
+        # 3.7.1: allow the layout dock to shrink freely by overriding
+        # minimumSizeHint() (set below) -- using QSizePolicy.Ignored
+        # at this level was the prior attempt (3.6.1 hotfix-6), which
+        # let the dock collapse but also broke the toolbar layout
+        # because the QVBoxLayout had no size preferences to work
+        # with at all and gave the Reset-View toolbar half the dock
+        # frame.  Reverted to Expanding here; the dock-shrink fix
+        # lives entirely in minimumSizeHint().
+        from PySide6.QtWidgets import (
+            QSizePolicy, QPushButton, QHBoxLayout, QLabel, QWidget,
+        )
         from PySide6.QtCore import QSize
         self.setMinimumSize(0, 0)
-        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # 3.6.1 hotfix-6: thin toolbar with Reset View + zoom hints.
-        toolbar = QHBoxLayout()
-        toolbar.setContentsMargins(2, 2, 2, 2)
-        btn_reset = QPushButton('Reset View')
-        btn_reset.setFixedHeight(20)
+        # 3.7.1: thin toolbar (Reset View + zoom hint) wrapped in a
+        # QWidget with a HARD fixed height so the QVBoxLayout can't
+        # grow it past 28 px no matter how Qt resolves the size
+        # constraints.  Without the wrapper, a QHBoxLayout inside a
+        # QVBoxLayout has no enforced height ceiling and ate half the
+        # dock when the parent had QSizePolicy.Ignored.
+        toolbar_widget = QWidget(self)
+        toolbar_widget.setFixedHeight(28)
+        toolbar_widget.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar = QHBoxLayout(toolbar_widget)
+        toolbar.setContentsMargins(4, 2, 4, 2)
+        toolbar.setSpacing(6)
+        btn_reset = QPushButton('Reset View', toolbar_widget)
+        btn_reset.setFixedHeight(22)
         btn_reset.setToolTip(
-            'Fit the entire optical system in view (Ctrl+0 also works '
-            'when the dock has focus).')
+            'Fit the entire optical system in view.')
         btn_reset.clicked.connect(self._reset_view)
         toolbar.addWidget(btn_reset)
         toolbar.addStretch()
-        from PySide6.QtWidgets import QLabel
-        hint = QLabel('Wheel: zoom · Drag: pan')
+        hint = QLabel('Wheel: zoom · Drag: pan', toolbar_widget)
         hint.setStyleSheet('color: #7a94b8; font-size: 10px;')
         toolbar.addWidget(hint)
-        layout.addLayout(toolbar)
+        layout.addWidget(toolbar_widget)
 
         self.scene = QGraphicsScene()
         bg = self.sm.prefs.get('bg_2d', '#050709')
@@ -74,17 +87,17 @@ class Layout2DView(QWidget):
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.view.setMinimumSize(0, 0)
-        self.view.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Ignored)
+        self.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
-        # 3.6.1 hotfix-6: install our own wheelEvent on the view so
-        # the wheel always zooms regardless of scrollbar state.  At
-        # high zoom the QGraphicsView's default handler routes the
-        # wheel to its scrollbars instead of bubbling up to our
-        # parent-widget handler -- the user gets stuck panning when
-        # they wanted to keep zooming.
+        # 3.7.1: install our own wheelEvent on the view so the wheel
+        # always zooms regardless of scrollbar state.  At high zoom
+        # the QGraphicsView's default handler would route the wheel
+        # to scrollbars instead of bubbling up to our parent
+        # widget's handler, leaving the user stuck panning when they
+        # wanted to keep zooming.
         self.view.wheelEvent = self._view_wheel_event
 
-        layout.addWidget(self.view)
+        layout.addWidget(self.view, stretch=1)
 
         # Connect
         # Map z-position (scene coords) to surface index for click detection
