@@ -331,6 +331,48 @@ class Element:
             return f'{self.decenter_y:.4g}' if self.decenter_y != 0 else '0'
         return ''
 
+    def display_value_absolute(self, col):
+        """3.7.3: column display for the prescription editor's
+        absolute-coordinates mode.  Reads ``origin`` / ``R`` cached
+        on the element by ``SystemModel.recompute_element_frames``.
+
+        Columns: [Elem#, Name, Type, Z, Rx, Ry, X, Y].
+
+        Rx/Ry are derived from R as the rotation angles about the
+        world x and y axes that take world (0, 0, 1) to local +z
+        (i.e., R[:, 2]).  For a system without tilt_z those are
+        the standard Euler "ax-then-ay" decomposition; for systems
+        with tilt_z the displayed Rx/Ry are still well-defined
+        (they describe the orientation of the local +z axis) but
+        don't capture the in-plane spin.
+        """
+        if col == 0:
+            return str(self.elem_num)
+        elif col == 1:
+            return self.name
+        elif col == 2:
+            return self.elem_type
+        elif col == 3:
+            return f'{float(self.origin[2]):.4g}'
+        elif col == 4:
+            # Rx (deg): rotation about world +x.  Derived from
+            # R[:, 2] via arctan2(-R[1,2], R[2,2]) so 0° gives the
+            # identity rotation.
+            zaxis = self.R[:, 2]
+            ax_deg = float(np.degrees(np.arctan2(-zaxis[1], zaxis[2])))
+            return f'{ax_deg:.4g}' if abs(ax_deg) > 1e-6 else '0'
+        elif col == 5:
+            # Ry (deg): rotation about world +y.
+            zaxis = self.R[:, 2]
+            denom = float(np.sqrt(zaxis[1] ** 2 + zaxis[2] ** 2))
+            ay_deg = float(np.degrees(np.arctan2(zaxis[0], denom)))
+            return f'{ay_deg:.4g}' if abs(ay_deg) > 1e-6 else '0'
+        elif col == 6:
+            return f'{float(self.origin[0]):.4g}'
+        elif col == 7:
+            return f'{float(self.origin[1]):.4g}'
+        return ''
+
     def summary(self):
         """One-line summary for tooltips."""
         parts = [self.elem_type]
@@ -617,6 +659,84 @@ class SystemModel(QObject):
                 surf_frames.append((o + cum_t * R[:, 2], R.copy()))
                 cum_t += float(srow.thickness)
         return surf_frames
+
+    def set_element_absolute_field(self, elem_idx, col, value):
+        """3.7.3: write an edit from the prescription editor's
+        absolute-coordinates mode.  ``col`` is the column index
+        (3 = Z, 4 = Rx, 5 = Ry, 6 = X, 7 = Y); ``value`` is the
+        new floating-point value the user typed.
+
+        Computes the corresponding relative-field update that
+        will make :meth:`recompute_element_frames` reproduce the
+        user's intended absolute position / orientation, then
+        triggers ``_invalidate`` so the caches and views refresh.
+
+        Position edits (Z / X / Y) update ``distance_mm`` /
+        ``decenter_x`` / ``decenter_y`` so the element lands at
+        the desired world coordinates relative to the previous
+        element's back vertex.
+
+        Orientation edits (Rx / Ry) update ``tilt_x`` /
+        ``tilt_y`` so the element's local +z axis points in the
+        desired world direction.
+
+        Source rows are read-only in absolute mode (the source
+        is anchored at the world origin); detector rows allow
+        position edits but not orientation edits.
+        """
+        if elem_idx <= 0 or elem_idx >= len(self.elements):
+            return
+        e = self.elements[elem_idx]
+        if e.elem_type == 'Source':
+            return
+        try:
+            v = float(value)
+        except (TypeError, ValueError):
+            return
+        self._checkpoint()
+        # Orientation edits: drive tilt_x / tilt_y directly.
+        if col == 4:
+            e.tilt_x = v
+            self._invalidate()
+            self.system_changed.emit()
+            return
+        if col == 5:
+            e.tilt_y = v
+            self._invalidate()
+            self.system_changed.emit()
+            return
+        # Position edits (col 3 = Z, 6 = X, 7 = Y).  We start
+        # from the element's CURRENT cached origin, replace just
+        # the edited component, then back-derive distance_mm /
+        # decenter_x / decenter_y from the desired origin minus
+        # the previous element's back vertex projected onto the
+        # previous element's local axes.
+        cur_origin = e.origin.copy()
+        if col == 3:
+            cur_origin[2] = v
+        elif col == 6:
+            cur_origin[0] = v
+        elif col == 7:
+            cur_origin[1] = v
+        else:
+            return
+        prev = self.elements[elem_idx - 1]
+        prev_back = prev.origin.copy()
+        if prev.surfaces:
+            internal = sum(float(s.thickness) for s in prev.surfaces)
+            prev_back = prev_back + internal * prev.R[:, 2]
+        delta = cur_origin - prev_back
+        new_distance = float(np.dot(delta, prev.R[:, 2]))
+        # Subtract the axial component to get the perpendicular
+        # offset, then project that onto local +x / +y.
+        perp = delta - new_distance * prev.R[:, 2]
+        new_dx = float(np.dot(perp, prev.R[:, 0]))
+        new_dy = float(np.dot(perp, prev.R[:, 1]))
+        e.distance_mm = max(0.0, new_distance)
+        e.decenter_x = new_dx
+        e.decenter_y = new_dy
+        self._invalidate()
+        self.system_changed.emit()
 
     def get_display_distance(self, elem_index):
         """Value to show in the Distance column."""

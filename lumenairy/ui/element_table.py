@@ -57,6 +57,12 @@ class ElementTableModel(QAbstractTableModel):
         col = index.column()
 
         if role in (Qt.DisplayRole, Qt.EditRole):
+            # 3.7.3: in absolute-coordinates mode, columns 3-7 read
+            # from each element's cached origin/R rather than the
+            # relative tilt_x/decenter_y fields, so the labels
+            # "Z, Rx, Ry, X, Y" actually mean what the headers say.
+            if self.sm.coordinate_mode == 'absolute' and col in (3, 4, 5, 6, 7):
+                return elem.display_value_absolute(col)
             if col == 3:
                 return elem.display_value(col, self.sm.get_display_distance(index.row()))
             return elem.display_value(col)
@@ -126,7 +132,20 @@ class ElementTableModel(QAbstractTableModel):
     def setData(self, index, value, role=Qt.EditRole):
         if role != Qt.EditRole:
             return False
-        return self.sm.set_element_field(index.row(), index.column(), str(value))
+        col = index.column()
+        # 3.7.3: in absolute-coordinates mode, columns 3-7 (Z, Rx,
+        # Ry, X, Y) write through ``set_element_absolute_field``
+        # which back-derives the relative fields so
+        # ``recompute_element_frames`` reproduces the user's
+        # intended absolute position / orientation.  Column 3 in
+        # absolute mode used to dispatch to set_display_distance
+        # (which only handled Z); the new path also covers Rx/Ry/
+        # X/Y which the old wiring left as no-op writes to the
+        # relative tilt_x/decenter_y fields.
+        if self.sm.coordinate_mode == 'absolute' and col in (3, 4, 5, 6, 7):
+            self.sm.set_element_absolute_field(index.row(), col, value)
+            return True
+        return self.sm.set_element_field(index.row(), col, str(value))
 
 
 # ────────────────────────────────────────────────────────────────────────
