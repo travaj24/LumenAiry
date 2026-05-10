@@ -49,6 +49,11 @@ class Layout3DView(QWidget):
         # View" button still calls _reset_camera() directly.
         self._camera_initialized = False
 
+        # 3.6.1: allow the layout dock to shrink freely.
+        from PySide6.QtWidgets import QSizePolicy
+        self.setMinimumSize(40, 40)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
 
@@ -61,6 +66,27 @@ class Layout3DView(QWidget):
         btn_reset_cam = QPushButton('Reset View')
         btn_reset_cam.clicked.connect(self._reset_camera)
         toolbar.addWidget(btn_reset_cam)
+
+        # 3.6.1: in-plane rotate buttons.  Roll the camera about its
+        # forward axis so the entire scene appears to rotate inside
+        # the visible window without changing what's facing you.
+        # Useful when the user has rotated to an oblique view and
+        # wants to level the optical axis horizontally / vertically.
+        btn_rot_ccw = QPushButton('⟲')
+        btn_rot_ccw.setFixedWidth(28)
+        btn_rot_ccw.setToolTip(
+            'Rotate the view 15° counter-clockwise in the plane '
+            'of the screen (camera roll).')
+        btn_rot_ccw.clicked.connect(lambda: self._roll_view(-15))
+        toolbar.addWidget(btn_rot_ccw)
+
+        btn_rot_cw = QPushButton('⟳')
+        btn_rot_cw.setFixedWidth(28)
+        btn_rot_cw.setToolTip(
+            'Rotate the view 15° clockwise in the plane of the '
+            'screen (camera roll).')
+        btn_rot_cw.clicked.connect(lambda: self._roll_view(+15))
+        toolbar.addWidget(btn_rot_cw)
 
         # View axis buttons
         for label, view in [('Front', 'xy'), ('Side', 'xz'), ('Top', 'yz'),
@@ -111,7 +137,14 @@ class Layout3DView(QWidget):
         self.sm.trace_ready.connect(lambda _: self._draw_rays())
 
     def rebuild(self):
-        """Rebuild the entire 3D scene from the model."""
+        """Rebuild the entire 3D scene from the model.
+
+        3.6.1 hotfix-4: uses ``element_frames_3d_mm`` to position and
+        orient each element in the world frame so mirror folds and
+        coord-break tilts actually bend the geometry.  Local surface
+        primitives are placed at the element's world origin and
+        rotated by the element's rotation matrix.
+        """
         if self._plotter is None:
             if PYVISTA_AVAILABLE and not PYVISTAQT_AVAILABLE:
                 self._render_static()
@@ -134,44 +167,74 @@ class Layout3DView(QWidget):
         if len(elements) < 2:
             return
 
-        z_positions = self.sm.element_z_positions_mm()
+        # Per-element 3D frames (origin_xyz, 3x3 R) carrying mirror
+        # reflections and absorbed coord-break tilt/decenter info.
+        frames = self.sm.element_frames_3d_mm()
 
-        # Optical axis
-        z_min = z_positions[0] - 20
-        z_max = z_positions[-1] + 20
-        axis_line = pv.Line((0, 0, z_min), (0, 0, z_max))
-        self._plotter.add_mesh(axis_line, color='#3a4a60', line_width=1,
-                               name='axis')
-
-        # Draw elements
+        # ── Optical-axis polyline (traces the bent path) ──
+        axis_pts = []
+        if frames:
+            o0, R0 = frames[0]
+            axis_pts.append(o0 - 20.0 * R0[:, 2])
         for ei, elem in enumerate(elements):
-            # 3.6.1: render the source as a visible 3D glyph instead
-            # of skipping it.  Detector is still drawn separately
-            # below as the image-plane disc.
+            o, R = frames[ei]
+            if elem.elem_type == 'Source':
+                axis_pts.append(o.copy())
+                continue
+            axis_pts.append(o.copy())
+            if elem.surfaces:
+                internal = sum(float(s.thickness) for s in elem.surfaces)
+                axis_pts.append(o + internal * R[:, 2])
+        if frames:
+            o_last, R_last = frames[-1]
+            axis_pts.append(o_last + 20.0 * R_last[:, 2])
+        if len(axis_pts) >= 2:
+            try:
+                axis_poly = pv.lines_from_points(np.array(axis_pts))
+                self._plotter.add_mesh(
+                    axis_poly, color='#3a4a60', line_width=1,
+                    name='axis')
+            except Exception:
+                pass
+
+        # ── Draw each element in its rotated frame ──
+        for ei, elem in enumerate(elements):
+            o, R = frames[ei]
             if elem.elem_type == 'Source':
                 src = getattr(elem, 'source', None) or self.sm.source
-                self._draw_source_3d(z_positions[ei], src, ei)
+                self._draw_source_3d(o, R, src, ei)
                 continue
             if elem.elem_type == 'Detector':
                 continue
 
-            z = z_positions[ei]
+            cum_t = 0.0
             for si, srow in enumerate(elem.surfaces):
-                internal_offset = sum(s.thickness for s in elem.surfaces[:si])
-                z_s = z + internal_offset
-                sd = srow.semi_diameter if np.isfinite(srow.semi_diameter) else self.sm.epd_mm / 2
+                surf_origin = o + cum_t * R[:, 2]
+                sd = srow.semi_diameter \
+                    if np.isfinite(srow.semi_diameter) \
+                    else self.sm.epd_mm / 2
 
-                if srow.surf_type == 'Mirror' or elem.elem_type == 'Mirror':
-                    self._draw_mirror_3d(z_s, sd, srow, ei * 100 + si)
+                if srow.surf_type == 'Mirror' \
+                        or elem.elem_type == 'Mirror':
+                    self._draw_mirror_3d(
+                        surf_origin, R, sd, srow,
+                        ei * 100 + si)
                 else:
-                    self._draw_surface_3d(z_s, sd, srow, ei * 100 + si, elem.surfaces, z_positions)
+                    self._draw_surface_3d(
+                        surf_origin, R, sd, srow,
+                        ei * 100 + si, elem.surfaces)
+                cum_t += float(srow.thickness)
 
-        # Image plane
-        z_ima = z_positions[-1]
-        ima_disc = pv.Disc(center=(0, 0, z_ima), normal=(0, 0, 1),
-                           inner=0, outer=self.sm.epd_mm / 2)
-        self._plotter.add_mesh(ima_disc, color='#884444', opacity=0.3,
-                               name='image_plane')
+        # ── Image plane (detector) in its frame ──
+        if frames:
+            o_det, R_det = frames[-1]
+            ima_disc = pv.Disc(
+                center=tuple(o_det),
+                normal=tuple(R_det[:, 2]),
+                inner=0, outer=self.sm.epd_mm / 2)
+            self._plotter.add_mesh(
+                ima_disc, color='#884444', opacity=0.3,
+                name='image_plane')
 
         # Draw rays if we have a trace result
         self._draw_rays()
@@ -194,30 +257,31 @@ class Layout3DView(QWidget):
             self._reset_camera()
             self._camera_initialized = True
 
-    def _draw_surface_3d(self, z, sd, row, idx, all_surfaces, z_positions):
+    def _draw_surface_3d(self, surf_origin, R_world, sd, row, idx,
+                          all_surfaces):
         """Draw a refractive surface as a curved disc.
 
-        Sag is evaluated with the core ``surface_sag_biconic`` so the 3D
-        view honours conic, polynomial-aspheric, and biconic-Y terms and
-        cannot drift from the ray tracer's geometry.  Coordinates here
-        are in mm (scene units); the core works in metres, so we scale
-        in then back out.
+        ``surf_origin`` is the surface vertex in world mm; ``R_world``
+        is the 3x3 rotation matrix mapping local axes (x, y, z=optical
+        axis) into world coordinates.  Sag is evaluated in the local
+        frame with ``surface_sag_biconic``, then the resulting points
+        are rotated and translated into world coordinates so a tilted
+        or folded surface draws in its proper orientation.
         """
-        R = row.radius
+        Rrad = row.radius
         n_theta = 48
         n_radial = 16
         theta = np.linspace(0, 2 * np.pi, n_theta)
         radii = np.linspace(0, sd, n_radial)
 
-        # Vectorised sag eval: build (n_radial, n_theta) grids in metres,
-        # call the core, then convert back to scene mm.
-        T, Rg = np.meshgrid(theta, radii)        # shape (n_radial, n_theta)
+        # Vectorised sag eval in the local frame (mm → m → mm).
+        T, Rg = np.meshgrid(theta, radii)        # (n_radial, n_theta)
         x_mm = Rg * np.cos(T)
         y_mm = Rg * np.sin(T)
         try:
             sag_m = surface_sag_biconic(
                 x_mm.ravel() * 1e-3, y_mm.ravel() * 1e-3,
-                R_x=R * 1e-3 if np.isfinite(R) else np.inf,
+                R_x=Rrad * 1e-3 if np.isfinite(Rrad) else np.inf,
                 R_y=(row.radius_y * 1e-3
                      if (getattr(row, 'radius_y', None) is not None
                          and np.isfinite(row.radius_y))
@@ -231,11 +295,14 @@ class Layout3DView(QWidget):
         except Exception:
             sag_mm = np.zeros((n_radial, n_theta))
 
-        points = np.column_stack([
-            x_mm.ravel(), y_mm.ravel(), (z + sag_mm).ravel(),
+        # Local-frame points: (x, y, sag).  Rotate into world and add
+        # the surface origin.  All meshes built downstream use the
+        # transformed points directly.
+        local_pts = np.column_stack([
+            x_mm.ravel(), y_mm.ravel(), sag_mm.ravel(),
         ])
+        world_pts = local_pts @ R_world.T + surf_origin[None, :]
 
-        # Build faces
         faces = []
         for ir in range(n_radial - 1):
             for it in range(n_theta - 1):
@@ -246,39 +313,51 @@ class Layout3DView(QWidget):
                 faces.append([4, p0, p1, p2, p3])
 
         if faces:
-            mesh = pv.PolyData(points, np.array(faces))
+            mesh = pv.PolyData(world_pts, np.array(faces))
             color = '#5588cc' if row.glass else '#aaaaaa'
             self._plotter.add_mesh(mesh, color=color, opacity=0.35,
                                    name=f'surf_{idx}')
 
-        # Glass volume between this surface and the next
+        # Glass volume between this surface and the next, oriented
+        # along the local +z axis (world: R_world[:, 2]).
         if row.glass and idx < len(all_surfaces) - 1:
-            z_next = z + (row.thickness if np.isfinite(row.thickness) else 0)
-            if abs(z_next - z) > 0.01:
-                cyl = pv.Cylinder(center=(0, 0, (z + z_next) / 2),
-                                  direction=(0, 0, 1),
-                                  radius=sd, height=abs(z_next - z),
-                                  resolution=48)
-                self._plotter.add_mesh(cyl, color='#334466', opacity=0.08,
-                                       name=f'glass_{idx}')
+            t = row.thickness if np.isfinite(row.thickness) else 0
+            if abs(t) > 0.01:
+                axis_w = R_world[:, 2]
+                center = surf_origin + 0.5 * t * axis_w
+                cyl = pv.Cylinder(
+                    center=tuple(center),
+                    direction=tuple(axis_w),
+                    radius=sd, height=abs(t),
+                    resolution=48)
+                self._plotter.add_mesh(
+                    cyl, color='#334466', opacity=0.08,
+                    name=f'glass_{idx}')
 
-        # Edge ring for visibility
-        ring_pts = np.column_stack([
-            sd * np.cos(theta), sd * np.sin(theta),
-            np.full(n_theta, z),
+        # Edge ring at the surface vertex, in the local xy plane.
+        ring_local = np.column_stack([
+            sd * np.cos(theta), sd * np.sin(theta), np.zeros(n_theta),
         ])
-        ring = pv.lines_from_points(np.vstack([ring_pts, ring_pts[:1]]))
-        self._plotter.add_mesh(ring, color=color if row.glass else '#888888',
-                               line_width=1.5, name=f'ring_{idx}')
+        ring_world = ring_local @ R_world.T + surf_origin[None, :]
+        ring = pv.lines_from_points(
+            np.vstack([ring_world, ring_world[:1]]))
+        ring_color = '#5588cc' if row.glass else '#888888'
+        self._plotter.add_mesh(
+            ring, color=ring_color, line_width=1.5,
+            name=f'ring_{idx}')
 
-    def _draw_mirror_3d(self, z, sd, row, idx):
-        """Draw a mirror as an opaque disc with edge ring."""
-        disc = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
-                       inner=0, outer=sd, r_res=1, c_res=48)
+    def _draw_mirror_3d(self, surf_origin, R_world, sd, row, idx):
+        """Draw a mirror as an opaque disc with edge ring at the
+        surface vertex, oriented by the element's rotation matrix.
+        """
+        disc = pv.Disc(
+            center=tuple(surf_origin),
+            normal=tuple(R_world[:, 2]),
+            inner=0, outer=sd, r_res=1, c_res=48)
         self._plotter.add_mesh(disc, color='#7799cc', opacity=0.5,
                                name=f'mirror_{idx}')
 
-    def _draw_source_3d(self, z, src, idx):
+    def _draw_source_3d(self, origin, R_world, src, idx):
         """3.6.1: render the optical source in the 3D view.
 
         Mirrors layout_2d.py._draw_source.  Per-source-type
@@ -291,19 +370,33 @@ class Layout3DView(QWidget):
         accent = '#78dc8c'   # mint green, matches 2D layout
         epd_h = max(2.0, self.sm.epd_mm / 2)
         st = src.source_type
+        # World-frame helpers: source origin and the local +z axis
+        # in world coordinates.  All glyphs are drawn at ``origin``
+        # with their natural local-frame orientation, then their
+        # normal / direction vectors are mapped through R_world so
+        # a folded source still renders correctly.
+        o = np.asarray(origin, dtype=float)
+        z_axis_w = R_world[:, 2]
+
+        def to_world(local_xyz):
+            """Map a length-3 local point into world coords."""
+            return tuple(o + R_world @ np.asarray(local_xyz, dtype=float))
+
         try:
             if st == 'plane_wave':
                 # Disc cap perpendicular to the optical axis +
                 # cone glyph pointing into the system to indicate
                 # propagation direction.
-                cap = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+                cap = pv.Disc(center=tuple(o),
+                              normal=tuple(z_axis_w),
                               inner=0, outer=epd_h, c_res=48)
                 self._plotter.add_mesh(
                     cap, color=accent, opacity=0.45,
                     name=f'source_{idx}')
-                arrow = pv.Cone(center=(0, 0, z + epd_h * 0.3),
-                                direction=(0, 0, 1),
-                                height=epd_h * 0.4, radius=epd_h * 0.15)
+                arrow = pv.Cone(center=to_world((0, 0, epd_h * 0.3)),
+                                direction=tuple(z_axis_w),
+                                height=epd_h * 0.4,
+                                radius=epd_h * 0.15)
                 self._plotter.add_mesh(
                     arrow, color=accent, opacity=0.7,
                     name=f'source_arrow_{idx}')
@@ -313,10 +406,11 @@ class Layout3DView(QWidget):
                     w_mm = max(0.05, src.beam_diameter_mm)
                 else:
                     w_mm = max(0.05, src.sigma_mm * 2)
-                # Use an ellipsoid (oblate sphere) as a Gaussian
-                # waist proxy; scaled along z by half its lateral
-                # extent so it visually reads as an extended source.
-                sphere = pv.Sphere(center=(0, 0, z), radius=w_mm / 2)
+                # Oblate-sphere proxy for a Gaussian waist; rotation
+                # is approximate (sphere scaling is axis-aligned),
+                # so we accept a slight orientation mismatch when
+                # the source itself is tilted.
+                sphere = pv.Sphere(center=tuple(o), radius=w_mm / 2)
                 sphere.scale([1.0, 1.0, 0.25], inplace=True)
                 self._plotter.add_mesh(
                     sphere, color=accent, opacity=0.55,
@@ -324,7 +418,8 @@ class Layout3DView(QWidget):
 
             elif st == 'top_hat':
                 half = max(0.5, src.top_hat_diameter_mm / 2)
-                cap = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+                cap = pv.Disc(center=tuple(o),
+                              normal=tuple(z_axis_w),
                               inner=0, outer=half, c_res=48)
                 self._plotter.add_mesh(
                     cap, color=accent, opacity=0.65,
@@ -332,9 +427,11 @@ class Layout3DView(QWidget):
 
             elif st == 'fiber_mode':
                 half = max(0.05, src.fiber_mfd_um * 1e-3 / 2)
-                outer = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
-                                inner=half, outer=half * 2.5, c_res=48)
-                inner = pv.Sphere(center=(0, 0, z), radius=half)
+                outer = pv.Disc(center=tuple(o),
+                                normal=tuple(z_axis_w),
+                                inner=half, outer=half * 2.5,
+                                c_res=48)
+                inner = pv.Sphere(center=tuple(o), radius=half)
                 self._plotter.add_mesh(
                     outer, color=accent, opacity=0.35,
                     name=f'source_{idx}')
@@ -345,33 +442,33 @@ class Layout3DView(QWidget):
             elif st == 'point_source':
                 # Small bright sphere; size scales with EPD.
                 r = max(0.4, epd_h * 0.04)
-                sphere = pv.Sphere(center=(0, 0, z), radius=r)
+                sphere = pv.Sphere(center=tuple(o), radius=r)
                 self._plotter.add_mesh(
                     sphere, color=accent, opacity=0.95,
                     name=f'source_{idx}')
 
             elif st == 'emitter_array':
-                # A grid of small spheres at the emitter pitch.
-                # Cap visible count at 7x7 to match the 2D layout.
+                # Grid of small spheres at the emitter pitch in the
+                # local x-y plane, mapped to world via R_world.
                 nx = max(1, min(7, src.emitter_nx))
                 ny = max(1, min(7, src.emitter_ny))
                 pitch = max(0.005, src.emitter_pitch_mm)
                 w0 = max(0.001, src.emitter_waist_mm)
-                # Use MultiBlock so a single name can hold all dots.
                 blocks = pv.MultiBlock()
                 for ix in range(nx):
                     for iy in range(ny):
                         cx = (ix - (nx - 1) / 2) * pitch
                         cy = (iy - (ny - 1) / 2) * pitch
-                        blocks.append(
-                            pv.Sphere(center=(cx, cy, z), radius=w0))
+                        blocks.append(pv.Sphere(
+                            center=to_world((cx, cy, 0.0)),
+                            radius=w0))
                 self._plotter.add_mesh(
                     blocks, color=accent, opacity=0.9,
                     name=f'source_{idx}')
 
             else:
                 # Unknown future type: marker sphere.
-                sphere = pv.Sphere(center=(0, 0, z), radius=0.5)
+                sphere = pv.Sphere(center=tuple(o), radius=0.5)
                 self._plotter.add_mesh(
                     sphere, color=accent, opacity=0.6,
                     name=f'source_{idx}')
@@ -380,7 +477,7 @@ class Layout3DView(QWidget):
             # layout build; fall back to a placeholder marker.
             try:
                 self._plotter.add_mesh(
-                    pv.Sphere(center=(0, 0, z), radius=0.5),
+                    pv.Sphere(center=tuple(o), radius=0.5),
                     color=accent, opacity=0.6,
                     name=f'source_{idx}')
             except Exception:
@@ -399,7 +496,12 @@ class Layout3DView(QWidget):
         self._redraw_highlight_3d()
 
     def _redraw_highlight_3d(self):
-        """Repaint the gold selection ring on the highlighted element."""
+        """Repaint the gold selection ring on the highlighted element.
+
+        3.6.1 hotfix-4: ring is placed at the element's world-frame
+        origin and oriented by its rotation matrix so a folded
+        element shows its highlight ring tilted with the element.
+        """
         if self._plotter is None:
             return
         try:
@@ -413,12 +515,12 @@ class Layout3DView(QWidget):
         if idx >= len(elements):
             return
         try:
-            z_positions = self.sm.element_z_positions_mm()
+            frames = self.sm.element_frames_3d_mm()
         except Exception:
             return
-        if idx >= len(z_positions):
+        if idx >= len(frames):
             return
-        z = z_positions[idx]
+        o, R = frames[idx]
         elem = elements[idx]
         # Determine the element's lateral extent for the ring radius.
         if elem.surfaces:
@@ -429,7 +531,8 @@ class Layout3DView(QWidget):
             sd = self.sm.epd_mm / 2
         ring_r = max(2.0, sd * 1.15)
         try:
-            ring = pv.Disc(center=(0, 0, z), normal=(0, 0, 1),
+            ring = pv.Disc(center=tuple(o),
+                           normal=tuple(R[:, 2]),
                            inner=ring_r, outer=ring_r * 1.06,
                            c_res=64)
             self._plotter.add_mesh(
@@ -439,7 +542,15 @@ class Layout3DView(QWidget):
             pass
 
     def _draw_rays(self):
-        """Overlay traced rays on the 3D scene."""
+        """Overlay traced rays on the 3D scene.
+
+        3.6.1 hotfix-4: rays are placed in the per-element 3D world
+        frames returned by ``element_frames_3d_mm``.  Each surface
+        contributes a ``(origin, R)`` pair; a ray's local (x, y)
+        height at that surface maps to world via
+        ``origin + x*R[:,0] + y*R[:,1]`` so rays bend correctly
+        through mirrors and coord-break tilts in 3D.
+        """
         if self._plotter is None:
             return
 
@@ -453,27 +564,24 @@ class Layout3DView(QWidget):
         for name in actors_to_remove:
             self._plotter.remove_actor(name)
 
-        # Same world-frame surface-z calculation as layout_2d's
-        # _draw_rays (3.6.1 hotfix-2): one entry per *optical
-        # surface* in trace order, world-frame z in mm.  Plus a
-        # tail entry at the detector position so the final history
-        # bundle (image plane) lands correctly.
-        elem_z = self.sm.element_z_positions_mm()
-        surf_world_z = []
+        # Per-element 3D frames + per-surface frame list (one entry
+        # per traced surface in order, plus the image plane).
+        frames = self.sm.element_frames_3d_mm()
+        if not frames:
+            return
+        surf_frames = []   # list of (origin_xyz, R_3x3)
         for ei, elem in enumerate(self.sm.elements):
             if elem.elem_type in ('Source', 'Detector'):
                 continue
-            z0 = elem_z[ei]
+            o, R = frames[ei]
             cum_t = 0.0
-            # elem.surfaces[i].thickness is already in mm (GUI
-            # convention); do NOT scale by 1e3.
             for srow in elem.surfaces:
-                surf_world_z.append(z0 + cum_t)
-                cum_t += srow.thickness
-        if elem_z and self.sm.elements \
+                surf_frames.append((o + cum_t * R[:, 2], R))
+                cum_t += float(srow.thickness)
+        if self.sm.elements \
                 and self.sm.elements[-1].elem_type == 'Detector':
-            surf_world_z.append(elem_z[-1])
-        if not surf_world_z:
+            surf_frames.append(frames[-1])
+        if not surf_frames:
             return
 
         n_rays = result.input_rays.n_rays
@@ -484,35 +592,49 @@ class Layout3DView(QWidget):
         else:
             wv_color = self.sm.prefs.get('ray_color', '#5cb8ff')
 
-        z_first_surf = surf_world_z[0]
+        # Source frame for the launch point.
+        o_src, R_src = frames[0]
+
+        def to_world(si, x_local, y_local):
+            o, R = surf_frames[si]
+            return o + x_local * R[:, 0] + y_local * R[:, 1]
 
         for r in range(0, n_rays, step):
             if not result.input_rays.alive[r]:
                 continue
 
             pts = []
-            x_in = result.input_rays.x[r] * 1e3
+            x_in = result.input_rays.x[r] * 1e3   # m → mm
             y_in = result.input_rays.y[r] * 1e3
 
-            # Pre-lens segment: from source plane (z=0) to the
-            # first optical surface, at the input-ray launch (x, y).
-            pts.append([x_in, y_in, 0.0])
-            pts.append([x_in, y_in, z_first_surf])
+            # Source launch point in world coords.
+            pts.append(o_src + x_in * R_src[:, 0]
+                       + y_in * R_src[:, 1])
 
-            # Through-system segments using world-frame surface z.
-            for si, rb in enumerate(history):
-                if not rb.alive[r]:
+            # Pre-lens segment: end at surface 0 using history[0]'s
+            # local (x, y) so a tilted launch terminates at the
+            # right height.
+            if history and len(history) > 0 and history[0].alive[r]:
+                pts.append(to_world(0,
+                                    history[0].x[r] * 1e3,
+                                    history[0].y[r] * 1e3))
+            else:
+                pts.append(to_world(0, x_in, y_in))
+
+            # Through-system + image plane.
+            for si in range(1, len(history)):
+                if not history[si].alive[r]:
                     break
-                x = rb.x[r] * 1e3
-                y = rb.y[r] * 1e3
-                if si < len(surf_world_z):
-                    z = surf_world_z[si]
+                x_l = history[si].x[r] * 1e3
+                y_l = history[si].y[r] * 1e3
+                if si < len(surf_frames):
+                    pts.append(to_world(si, x_l, y_l))
                 else:
-                    z = pts[-1][2] + 20
-                pts.append([x, y, z])
+                    o_last, R_last = surf_frames[-1]
+                    pts.append(pts[-1] + 20.0 * R_last[:, 2])
 
             if len(pts) >= 2:
-                ray_line = pv.lines_from_points(np.array(pts))
+                ray_line = pv.lines_from_points(np.asarray(pts))
                 self._plotter.add_mesh(ray_line, color=wv_color,
                                        line_width=1.2, opacity=0.5,
                                        name=f'ray_{r}')
@@ -527,6 +649,22 @@ class Layout3DView(QWidget):
         ``_draw_rays``.
         """
         return self.sm.element_z_positions_mm()
+
+    def _roll_view(self, deg):
+        """3.6.1: rotate the camera in the plane of the screen by
+        ``deg`` degrees (positive = clockwise from the user's
+        perspective).  Implemented as a roll about the camera's
+        forward (view) axis so the perceived orientation rotates
+        without changing what's facing the viewer.
+        """
+        if self._plotter is None:
+            return
+        try:
+            cam = self._plotter.camera
+            cam.roll = (cam.roll or 0.0) + float(deg)
+            self._plotter.render()
+        except Exception:
+            pass
 
     def _reset_camera(self):
         """Reset camera to a side view with slight elevation."""

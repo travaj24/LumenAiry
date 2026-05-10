@@ -33,6 +33,15 @@ class Layout2DView(QWidget):
         super().__init__(parent)
         self.sm = system_model
 
+        # 3.6.1: allow the layout dock to shrink freely.  Without an
+        # explicit minimum the QGraphicsView's size hint follows the
+        # scene's bounding rect (often hundreds of px) and prevents
+        # the user from dragging the dock down to give the
+        # prescription editor more room.
+        self.setMinimumSize(40, 40)
+        from PySide6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -45,6 +54,8 @@ class Layout2DView(QWidget):
         self.view.setRenderHint(_P.RenderHint.Antialiasing, True)
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
+        self.view.setMinimumSize(0, 0)
+        self.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout.addWidget(self.view)
 
@@ -99,76 +110,142 @@ class Layout2DView(QWidget):
             )
             return
 
-        z_positions = self.sm.element_z_positions_mm()
+        # 3.6.1: per-element 2D frames in mm + radians.  Carry
+        # mirror reflections and tilt_x / decenter_y (the absorbed
+        # COORDBRK information from .zmx import) so a folded
+        # geometry actually shows up bent in the layout.
+        frames = self.sm.element_frames_2d_mm()
 
-        # ── Draw optical axis ──
-        z_min = -20
-        z_max = max(z_positions) + 20
+        # ── Draw the optical-axis polyline ──
+        # Each segment goes from one element's front vertex to the
+        # next, plus the in-element internal-thickness span.  This
+        # replaces the single horizontal dashed line: the axis now
+        # actually traces the path through the system.
         axis_pen = QPen(QColor(40, 50, 65), 1, Qt.DashLine)
-        self.scene.addLine(z_min * S, 0, z_max * S, 0, axis_pen)
-
-        # ── Draw each element ──
+        path_pts = []
+        # Start a bit upstream of the source for context.
+        if frames:
+            z0, y0, t0 = frames[0]
+            path_pts.append((z0 - 20 * np.cos(t0),
+                             y0 - 20 * np.sin(t0)))
         for ei, elem in enumerate(elements):
-            # 3.6.1: render the source as a visible glyph instead of
-            # skipping it.  Detector is still skipped here because the
-            # image-plane line below covers it.
+            z_w, y_w, theta = frames[ei]
+            if elem.elem_type == 'Source':
+                # Source plane sits at the source's frame; advance
+                # path through the source plane and into the gap to
+                # the next element handled by the next element.
+                path_pts.append((z_w, y_w))
+                continue
+            # Append the front vertex of this element ...
+            path_pts.append((z_w, y_w))
+            # ... and the back vertex (front + internal thickness
+            # along this element's local axis).
+            internal = sum(s.thickness for s in elem.surfaces) \
+                if elem.surfaces else 0.0
+            path_pts.append((z_w + internal * np.cos(theta),
+                             y_w + internal * np.sin(theta)))
+        # Extend a bit past the last element along its outgoing
+        # direction so the final segment doesn't terminate abruptly
+        # at the detector.
+        if frames:
+            z_last, y_last, t_last = frames[-1]
+            path_pts.append((z_last + 20 * np.cos(t_last),
+                             y_last + 20 * np.sin(t_last)))
+        for j in range(len(path_pts) - 1):
+            self.scene.addLine(
+                path_pts[j][0] * S, path_pts[j][1] * S,
+                path_pts[j + 1][0] * S, path_pts[j + 1][1] * S,
+                axis_pen)
+
+        # ── Draw each element in its rotated frame ──
+        from PySide6.QtGui import QTransform
+        for ei, elem in enumerate(elements):
+            z_w, y_w, theta = frames[ei]
             if elem.elem_type == 'Source':
                 src = getattr(elem, 'source', None) or self.sm.source
-                z_src = z_positions[ei] * S
+                z_src = z_w * S
+                # Source glyph still drawn axis-aligned; rotation at
+                # the source itself is 0 in the unfolded case.
                 self._draw_source(z_src, src)
-                # Register a click zone at the source so users can
-                # click it in the layout and have the table jump to
-                # element 0.
                 zone_w = max(8, self.sm.epd_mm / 2 * S * 0.3)
                 self._surface_zones.append(
                     (z_src - zone_w, z_src + zone_w, ei))
                 continue
             if elem.elem_type == 'Detector':
+                # Image plane is drawn in its own frame below.
                 continue
 
-            z_front = z_positions[ei] * S
+            # Track which scene items belong to this element so we
+            # can group them and apply the rotation transform in one
+            # shot (Qt's createItemGroup walks an item list).
+            items_before = set(self.scene.items())
 
             for si, srow in enumerate(elem.surfaces):
-                # z of this surface within the element
-                internal_offset = sum(s.thickness for s in elem.surfaces[:si])
-                z = z_front + internal_offset * S
-                sd = srow.semi_diameter if np.isfinite(srow.semi_diameter) else self.sm.epd_mm / 2
+                # Local z of this surface inside the element.
+                z_local = sum(s.thickness
+                               for s in elem.surfaces[:si]) * S
+                sd = (srow.semi_diameter
+                      if np.isfinite(srow.semi_diameter)
+                      else self.sm.epd_mm / 2)
                 h = sd * S
 
-                if srow.surf_type == 'Mirror' or elem.elem_type == 'Mirror':
-                    self._draw_mirror(z, h, srow)
+                if srow.surf_type == 'Mirror' \
+                        or elem.elem_type == 'Mirror':
+                    self._draw_mirror(z_local, h, srow)
                 else:
-                    self._draw_surface(z, h, srow, si, elem.surfaces)
+                    self._draw_surface(z_local, h, srow,
+                                        si, elem.surfaces)
 
-            # Register clickable zone for this element
-            sd = elem.surfaces[0].semi_diameter if elem.surfaces else self.sm.epd_mm / 2
+            new_items = [it for it in self.scene.items()
+                         if it not in items_before]
+            if new_items:
+                group = self.scene.createItemGroup(new_items)
+                t = QTransform()
+                t.translate(z_w * S, y_w * S)
+                t.rotate(float(np.degrees(theta)))
+                group.setTransform(t)
+
+            # Register click zone at the element's world-frame
+            # position.  Zone is axis-aligned in scene coords (the
+            # click test is point-in-rect against z and y), so we
+            # use a slightly enlarged box around the element's
+            # rotated extent.
+            sd = (elem.surfaces[0].semi_diameter
+                  if elem.surfaces else self.sm.epd_mm / 2)
             if not np.isfinite(sd):
                 sd = self.sm.epd_mm / 2
             h = sd * S
-            zone_width = max(10, h * 0.3)
-            self._surface_zones.append((z_front - zone_width, z_front + zone_width, ei))
+            zone_w = max(10, h * 0.3)
+            self._surface_zones.append(
+                (z_w * S - zone_w, z_w * S + zone_w, ei))
 
-        # ── Draw image plane (detector) ──
-        z_ima = z_positions[-1] * S
+        # ── Draw image plane (detector) in its frame ──
+        det_idx = len(elements) - 1
+        z_ima_w, y_ima_w, t_ima = frames[-1] if frames else (0, 0, 0)
         ima_pen = QPen(QColor(180, 100, 100), 1.5, Qt.DashDotLine)
         sd_ima = self.sm.epd_mm / 2
-        self.scene.addLine(z_ima, -sd_ima * S, z_ima, sd_ima * S, ima_pen)
+        # Rotated image-plane line: from (z_ima, y_ima - h) to
+        # (z_ima, y_ima + h) in the local frame, then rotated.
+        ux, uy = -np.sin(t_ima), np.cos(t_ima)  # local +y in world
+        self.scene.addLine(
+            (z_ima_w + ux * (-sd_ima)) * S,
+            (y_ima_w + uy * (-sd_ima)) * S,
+            (z_ima_w + ux * sd_ima) * S,
+            (y_ima_w + uy * sd_ima) * S,
+            ima_pen)
 
-        # ── Label ──
         label = QGraphicsTextItem('Image')
         label.setDefaultTextColor(QColor(200, 130, 130))
         label.setFont(QFont('Consolas', 8))
-        label.setPos(z_ima - 10, self.sm.epd_mm / 2 * S + 5)
+        label.setPos((z_ima_w + ux * sd_ima) * S - 10,
+                     (y_ima_w + uy * sd_ima) * S + 5)
         self.scene.addItem(label)
 
-        # 3.6.1 hotfix: register a click zone for the detector so it
-        # is selectable from the layout (parity with the other
-        # elements + the new source glyph).
-        det_idx = len(elements) - 1
+        # Detector click zone.
         if det_idx >= 0 and elements[det_idx].elem_type == 'Detector':
             zone_w = max(8.0, sd_ima * S * 0.3)
             self._surface_zones.append(
-                (z_ima - zone_w, z_ima + zone_w, det_idx))
+                (z_ima_w * S - zone_w, z_ima_w * S + zone_w, det_idx))
 
         # ── Fit view ──
         self.view.fitInView(
@@ -500,52 +577,56 @@ class Layout2DView(QWidget):
     def _draw_rays(self, trace_result):
         """Draw traced rays on the scene.
 
-        Rays are plotted in world-frame z (mm), computed from the
-        per-element positions returned by ``element_z_positions_mm``
-        plus each surface's internal thickness within its element.
-        Bug fix in 3.6.1 hotfix-2: previously this method built a
-        flat cumulative-thickness ``z_positions`` from
-        ``build_trace_surfaces``, which only sums *in-glass*
-        thicknesses and ignores the source-to-first-surface air gap
-        entirely.  That made the entire ray fan render at z ~ 0-10
-        mm instead of spanning the actual ~150 mm system length.
+        3.6.1 hotfix-4: rays are now plotted in the per-element 2D
+        world frames returned by
+        :meth:`SystemModel.element_frames_2d_mm`.  Each surface
+        contributes a ``(z_world, y_world, theta)`` triple; a ray's
+        local-frame ``y`` (perpendicular to the local optical axis)
+        is converted to world coordinates via the surface's local
+        +y direction ``(-sin theta, cos theta)`` so rays follow the
+        bent path through mirrors and coord-break tilts.  Falls back
+        to a straight-axis layout when no folds are present.
+
+        3.6.1 hotfix-2 (kept) — the world-frame z accounts for the
+        source-to-first-surface air gap; previously the entire ray
+        fan was squished into the first ~10 mm of the system.
         """
         if trace_result is None:
             return
 
         S = self.SCALE
 
-        # World-frame z (mm) of every traced surface.  Walk the
-        # element list in order, skipping the Source (z=0, no
-        # surfaces) and the Detector (handled separately as the
-        # image plane below); every other element contributes one
-        # entry per internal surface, offset from the element's
-        # front vertex by the cumulative in-glass thickness.
-        elem_z = self.sm.element_z_positions_mm()
-        surf_world_z = []
+        # Per-element world-frame triples.
+        frames = self.sm.element_frames_2d_mm()
+        if not frames:
+            return
+
+        # Build a per-traced-surface frame list.  ``trace_result``'s
+        # history walks the same surface order as
+        # _build_trace_surfaces_internal: every non-source/detector
+        # element contributes one entry per internal surface, then
+        # run_trace appends one image-plane surface at the end.
+        surf_frames = []  # list of (z_w, y_w, theta) per surface
         for ei, elem in enumerate(self.sm.elements):
             if elem.elem_type in ('Source', 'Detector'):
                 continue
-            z0 = elem_z[ei]
+            z_w, y_w, theta = frames[ei]
             cum_t = 0.0
-            # elem.surfaces[i].thickness is already in mm (GUI
-            # convention); do NOT multiply by 1e3 -- doing so blew
-            # the lens out by 1000x in the first cut of this fix.
             for srow in elem.surfaces:
-                surf_world_z.append(z0 + cum_t)
-                cum_t += srow.thickness
-        # Image-plane / detector z follows the last optical surface.
-        # The trace's history may include the image plane as an
-        # extra entry beyond the optical surfaces; we tack on the
-        # detector's world z so the final segment lands correctly.
-        if elem_z and self.sm.elements \
-                and self.sm.elements[-1].elem_type == 'Detector':
-            surf_world_z.append(elem_z[-1])
+                z_s = z_w + cum_t * np.cos(theta)
+                y_s = y_w + cum_t * np.sin(theta)
+                surf_frames.append((z_s, y_s, theta))
+                cum_t += float(srow.thickness)
 
-        if not surf_world_z:
+        # Image-plane frame (matches the detector's element frame).
+        if self.sm.elements \
+                and self.sm.elements[-1].elem_type == 'Detector':
+            surf_frames.append(frames[-1])
+
+        if not surf_frames:
             return
 
-        # Ray color — preference or wavelength-based.
+        # Ray colour — preference or wavelength-based.
         if self.sm.prefs.get('ray_use_wavelength', True):
             wv = self.sm.wavelength_nm
             rc = self._wavelength_to_color(wv)
@@ -560,10 +641,15 @@ class Layout2DView(QWidget):
         history = trace_result.ray_history
         step = max(1, n_rays // 50)
 
-        # Source plane = z = 0 in world coordinates (matches
-        # SystemModel.element_z_positions_mm convention).
-        z_source = 0.0
-        z_first_surf = surf_world_z[0]
+        # Source frame for the launch point.
+        z_src, y_src, t_src = frames[0]
+        src_ux, src_uy = -np.sin(t_src), np.cos(t_src)
+
+        def to_world(si, y_local):
+            """Map (surface index, local-y mm) → world (z_mm, y_mm)."""
+            zw, yw, th = surf_frames[si]
+            ux, uy = -np.sin(th), np.cos(th)
+            return (zw + y_local * ux, yw + y_local * uy)
 
         for r in range(0, n_rays, step):
             if not trace_result.input_rays.alive[r]:
@@ -572,35 +658,44 @@ class Layout2DView(QWidget):
             pts = []
             y_in = trace_result.input_rays.y[r] * 1e3   # m -> mm
 
-            # Pre-lens segment: from source plane to the first
-            # optical surface, at the input ray's launch y.  For a
-            # plane wave this gives a horizontal line; for a point
-            # source it gives the divergent fan we expect.
-            pts.append((z_source * S, y_in * S))
-            pts.append((z_first_surf * S, y_in * S))
+            # Source launch point in world coords.
+            pts.append((z_src + y_in * src_ux,
+                        y_src + y_in * src_uy))
 
-            # Through-system segments: history[si] is the ray bundle
-            # AFTER surface si, so its y is the height at
-            # surf_world_z[si] (refraction is in-place; z doesn't
-            # change at the refraction event itself, only between
-            # surfaces).
-            for si, rb in enumerate(history):
-                if not rb.alive[r]:
+            # Pre-lens segment: end at the first surface.  Use
+            # history[0].y (the ray's height at surface 0 after
+            # propagation through the air gap) when available, so
+            # tilted launches still terminate at the right height.
+            if history and len(history) > 0 and history[0].alive[r]:
+                pts.append(to_world(0, history[0].y[r] * 1e3))
+            else:
+                # Ray died before surface 0 — draw a straight pre-lens
+                # segment using the launch y projected onto surf 0's
+                # local +y, which is exact for an unfolded source.
+                pts.append(to_world(0, y_in))
+
+            # Through-system + image plane: history[si] is AFTER
+            # surface si.  Each entry's ray.y is the local-frame
+            # height at surf_frames[si].
+            for si in range(1, len(history)):
+                if not history[si].alive[r]:
                     break
-                y = rb.y[r] * 1e3   # m -> mm
-                if si < len(surf_world_z):
-                    z = surf_world_z[si] * S
+                y_local = history[si].y[r] * 1e3   # m -> mm
+                if si < len(surf_frames):
+                    pts.append(to_world(si, y_local))
                 else:
-                    # Beyond the last known surface -- extrapolate
-                    # 20 mm forward so the ray has somewhere to go.
-                    z = pts[-1][0] + 20 * S
-                pts.append((z, y * S))
+                    # History longer than known frames — extrapolate
+                    # 20 mm forward along the last frame's axis so
+                    # the ray has somewhere to go.
+                    zw, yw, th = surf_frames[-1]
+                    pts.append((pts[-1][0] + 20 * np.cos(th),
+                                pts[-1][1] + 20 * np.sin(th)))
 
-            # Draw connected segments.
+            # Draw connected segments (scaled to scene pixels).
             for j in range(len(pts) - 1):
                 self.scene.addLine(
-                    pts[j][0], pts[j][1],
-                    pts[j + 1][0], pts[j + 1][1],
+                    pts[j][0] * S, pts[j][1] * S,
+                    pts[j + 1][0] * S, pts[j + 1][1] * S,
                     ray_pen,
                 )
 

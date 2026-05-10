@@ -507,6 +507,123 @@ class SystemModel(QObject):
                 positions.append(z)
         return positions
 
+    def element_frames_2d_mm(self):
+        """3.6.1: per-element 2D world frame `(z, y, theta_rad)` for
+        the side-view 2D layout, accounting for mirror reflections
+        and per-element ``tilt_x`` / ``decenter_y`` (which carry
+        coord-break information absorbed at import time).
+
+        ``theta`` is the propagation-direction angle in the y-z
+        plane, measured CCW from +z.  All elements have flat
+        ``theta = 0`` when no mirrors / coord-break tilts are
+        present, falling back to the historical straight-axis
+        layout exactly.
+
+        For a 45° fold mirror, set ``elem.tilt_x = 45`` -- the
+        mirror surface is then drawn rotated 45° in the visible
+        plane and the outgoing axis bends 90° (180° + 2*tilt
+        per the standard reflection formula in y-z).
+
+        Surfaces beyond a Mirror live in the reflected frame, so
+        a folding-mirror plus subsequent imaging optics will draw
+        in the correct +y (or wherever) direction, not stacked
+        on top of the upstream optics on the +z axis.
+        """
+        frames = []
+        z, y, theta = 0.0, 0.0, 0.0   # source frame
+        for ei, elem in enumerate(self.elements):
+            if elem.elem_type == 'Source':
+                frames.append((z, y, theta))
+                continue
+            # 1. Advance to this element along the current axis.
+            d = float(getattr(elem, 'distance_mm', 0.0))
+            z += d * np.cos(theta)
+            y += d * np.sin(theta)
+            # 2. Apply pre-element decenter_y perpendicular to axis.
+            #    Local "up" direction = (-sin(theta), cos(theta)).
+            dy = float(getattr(elem, 'decenter_y', 0.0))
+            if dy:
+                z += dy * (-np.sin(theta))
+                y += dy * (np.cos(theta))
+            # 3. Apply pre-element tilt_x (rotates incoming axis).
+            tx = float(getattr(elem, 'tilt_x', 0.0))
+            if tx:
+                theta += np.radians(tx)
+            # 4. Record the front-vertex frame.
+            frames.append((z, y, theta))
+            # 5. Advance through the element's internal thickness.
+            if elem.surfaces:
+                internal = sum(float(s.thickness) for s in elem.surfaces)
+                z += internal * np.cos(theta)
+                y += internal * np.sin(theta)
+            # 6. If mirror, reflect: outgoing axis is incoming + π.
+            if elem.elem_type == 'Mirror':
+                theta += np.pi
+        return frames
+
+    def element_frames_3d_mm(self):
+        """3.6.1: per-element 3D world frame ``(origin_xyz, R)`` for
+        the 3D layout.  ``origin_xyz`` is a length-3 numpy array in
+        scene mm; ``R`` is a 3x3 rotation matrix mapping local axes
+        (z = optical axis, y = vertical, x = horizontal) into world
+        coordinates.
+
+        Applies element ``tilt_x`` (rotation about local x), then
+        ``tilt_y`` (rotation about local y), then ``decenter_x`` /
+        ``decenter_y`` perpendicular to the optical axis.  Mirror
+        elements rotate the outgoing axis by 180° about local x
+        after the surface (matches the 2D side-view convention).
+        """
+        frames = []
+        origin = np.zeros(3)
+        R = np.eye(3)
+        for ei, elem in enumerate(self.elements):
+            if elem.elem_type == 'Source':
+                frames.append((origin.copy(), R.copy()))
+                continue
+            # 1. Advance along the current optical axis (local +z).
+            axis_world = R[:, 2]
+            d = float(getattr(elem, 'distance_mm', 0.0))
+            origin = origin + d * axis_world
+            # 2. Apply decenters perpendicular to the optical axis.
+            dx = float(getattr(elem, 'decenter_x', 0.0))
+            dy = float(getattr(elem, 'decenter_y', 0.0))
+            if dx:
+                origin = origin + dx * R[:, 0]
+            if dy:
+                origin = origin + dy * R[:, 1]
+            # 3. Apply tilt_x then tilt_y (intrinsic; about local
+            #    x then the new y).  Standard rotation matrices.
+            tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
+            ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
+            if tx_rad:
+                c, s = np.cos(tx_rad), np.sin(tx_rad)
+                Rx = np.array([[1, 0, 0],
+                                [0, c, -s],
+                                [0, s,  c]])
+                R = R @ Rx
+            if ty_rad:
+                c, s = np.cos(ty_rad), np.sin(ty_rad)
+                Ry = np.array([[ c, 0, s],
+                                [ 0, 1, 0],
+                                [-s, 0, c]])
+                R = R @ Ry
+            # 4. Record the front-vertex frame.
+            frames.append((origin.copy(), R.copy()))
+            # 5. Advance through internal thickness.
+            if elem.surfaces:
+                internal = sum(float(s.thickness) for s in elem.surfaces)
+                origin = origin + internal * R[:, 2]
+            # 6. Mirror reflection: 180° about local x (flips +z).
+            if elem.elem_type == 'Mirror':
+                Rflip = np.array([[1, 0, 0],
+                                   [0, 1, 0],
+                                   [0, 0, -1]])
+                # Equivalent to rotating R such that the new local
+                # +z faces the old local -z direction.
+                R = R @ Rflip
+        return frames
+
     def get_display_distance(self, elem_index):
         """Value to show in the Distance column."""
         if self._coordinate_mode == 'relative':
@@ -1266,6 +1383,39 @@ class SystemModel(QObject):
         aperture = prescription.get('aperture_diameter')
         name = prescription.get('name', 'Imported')
 
+        # 3.6.1: collect coord-break tilts/decenters by the surf_num
+        # they sit BEFORE.  The importer keeps these out of
+        # `surfaces` (they're geometric transforms, not refractive
+        # surfaces), so without this absorption pass, the GUI never
+        # sees them and the layout draws an unfolded straight
+        # optical axis.  We accumulate into a dict keyed by the
+        # next-optical-surface's `surf_num`; when we build that
+        # element we apply the accumulated transform.
+        cbs = prescription.get('coord_breaks', []) or []
+        # Order surfaces by surf_num so cbs that precede a given
+        # optical surface get correctly attached.
+        sorted_cbs = sorted(cbs, key=lambda c: int(c.get('surf_num', 0)))
+        # Map: optical-surface surf_num -> accumulated transform.
+        # We'll determine which optical surface a cb precedes by
+        # picking the first surf with a higher surf_num.
+        sorted_optical_nums = sorted(
+            int(s['surf_num']) for s in rx_surfs if 'surf_num' in s)
+        cb_for_surf = {}
+        for cb in sorted_cbs:
+            cb_n = int(cb.get('surf_num', 0))
+            target = next((sn for sn in sorted_optical_nums
+                            if sn > cb_n), None)
+            if target is None:
+                continue
+            slot = cb_for_surf.setdefault(target, {
+                'tilt_x_deg': 0.0, 'tilt_y_deg': 0.0,
+                'decenter_x_m': 0.0, 'decenter_y_m': 0.0,
+            })
+            slot['tilt_x_deg'] += float(cb.get('tilt_x_deg', 0.0))
+            slot['tilt_y_deg'] += float(cb.get('tilt_y_deg', 0.0))
+            slot['decenter_x_m'] += float(cb.get('decenter_x_m', 0.0))
+            slot['decenter_y_m'] += float(cb.get('decenter_y_m', 0.0))
+
         if aperture:
             self.epd_mm = aperture * 1e3
 
@@ -1281,6 +1431,43 @@ class SystemModel(QObject):
         while i < len(rx_surfs):
             ps = rx_surfs[i]
             glass_after = ps.get('glass_after', 'air')
+            # 3.6.1: importer marks mirrors with element_type='mirror'
+            # (no glass_before / glass_after); the previous logic
+            # missed flat mirrors entirely (R=inf would fall through
+            # to the standalone-Singlet branch instead of being
+            # tagged as a Mirror).  Honour the importer flag here
+            # so .zmx and .txt prescriptions render mirror glyphs
+            # in both layouts.
+            ps_is_mirror = (ps.get('element_type') == 'mirror'
+                            or ps.get('is_mirror', False))
+            if ps_is_mirror:
+                R_mm = (ps['radius'] * 1e3
+                        if np.isfinite(ps['radius']) else np.inf)
+                conic = ps.get('conic', 0.0)
+                dist_mm = (rx_thick[i - 1] * 1e3
+                           if i > 0 and i - 1 < len(rx_thick) else 0.0)
+                ps_sd = ps.get('semi_diameter')
+                sd_local = (ps_sd * 1e3 if ps_sd is not None
+                            and np.isfinite(ps_sd) else sd_mm)
+                s = SurfaceRow(R_mm, 0.0, '', sd_local, conic,
+                                surf_type='Mirror')
+                # Reuse `name` (the prescription name) for the
+                # element label or fall back to a per-mirror tag.
+                label = ps.get('comment') or f'M{i + 1}'
+                # 3.6.1: pick up any coord-break transforms that
+                # precede this mirror in the raw prescription.
+                cb = cb_for_surf.get(int(ps.get('surf_num', -1)))
+                tx = cb['tilt_x_deg'] if cb else 0.0
+                ty = cb['tilt_y_deg'] if cb else 0.0
+                dx = cb['decenter_x_m'] * 1e3 if cb else 0.0
+                dy = cb['decenter_y_m'] * 1e3 if cb else 0.0
+                elem = Element(len(self.elements), label, 'Mirror',
+                               distance_mm=dist_mm, surfaces=[s],
+                               tilt_x=tx, tilt_y=ty,
+                               decenter_x=dx, decenter_y=dy)
+                self.elements.append(elem)
+                i += 1
+                continue
 
             if glass_after != 'air':
                 # Start of a lens — find where we exit glass
@@ -1317,8 +1504,17 @@ class SystemModel(QObject):
                     conic = rx_surfs[k].get('conic', 0.0)
                     surf_rows.append(SurfaceRow(R_mm, t_mm, glass, sd_mm, conic))
 
+                # 3.6.1: pick up any coord-break transforms that
+                # precede this lens in the raw prescription.
+                cb = cb_for_surf.get(int(rx_surfs[i].get('surf_num', -1)))
+                tx = cb['tilt_x_deg'] if cb else 0.0
+                ty = cb['tilt_y_deg'] if cb else 0.0
+                dx = cb['decenter_x_m'] * 1e3 if cb else 0.0
+                dy = cb['decenter_y_m'] * 1e3 if cb else 0.0
                 elem = Element(len(self.elements), name, etype,
-                               distance_mm=dist_mm, surfaces=surf_rows)
+                               distance_mm=dist_mm, surfaces=surf_rows,
+                               tilt_x=tx, tilt_y=ty,
+                               decenter_x=dx, decenter_y=dy)
                 self.elements.append(elem)
                 i = j
             else:
@@ -1329,10 +1525,19 @@ class SystemModel(QObject):
 
                 dist_mm = rx_thick[i - 1] * 1e3 if i > 0 and i - 1 < len(rx_thick) else 0.0
 
-                s = SurfaceRow(R_mm, 0.0, '', sd_mm, conic)
-                elem = Element(len(self.elements), f'S{i+1}', 'Mirror' if R_mm != np.inf else 'Singlet',
-                               distance_mm=dist_mm, surfaces=[s])
-                self.elements.append(elem)
+                # 3.6.1: when a standalone surface lacks the
+                # importer's `element_type='mirror'` tag (older
+                # prescription dicts), curved + no-glass = mirror,
+                # flat + no-glass = leftover artifact (skip
+                # silently rather than render it as a confusing
+                # zero-thickness Singlet).
+                if R_mm != np.inf:
+                    s = SurfaceRow(R_mm, 0.0, '', sd_mm, conic,
+                                   surf_type='Mirror')
+                    elem = Element(len(self.elements), f'M{i+1}',
+                                   'Mirror',
+                                   distance_mm=dist_mm, surfaces=[s])
+                    self.elements.append(elem)
                 i += 1
 
         # Detector at the BFL
