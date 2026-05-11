@@ -1200,74 +1200,101 @@ class SystemModel(QObject):
     def recompute_element_frames(self):
         """Walk the element list and assign each element's
         ``origin`` (world-frame front vertex, mm) and ``R`` (3x3
-        rotation, local axes in world coords) from the existing
-        relative fields (distance_mm, tilt_x, tilt_y, decenter_x,
-        decenter_y) plus mirror reflections.
+        rotation, local axes in world coords) from the relative
+        fields (distance_mm, tilt_x, tilt_y, decenter_x, decenter_y).
 
-        This is the single place where the relative -> absolute
-        conversion happens.  Called from :meth:`_invalidate` after
-        every structural change, so consumers (layout views, trace
-        surface-list builder, prescription editor in absolute
-        mode) can read ``e.origin`` / ``e.R`` directly without
-        worrying about the conversion conventions.
+        Single place for the relative -> absolute conversion.
 
-        Convention matches the pre-3.7.3 ``element_frames_3d_mm``
-        (which is now removed in favour of this method): optical-
-        convention ``Rx`` / ``Ry`` (Zemax PARM 3 / 4), mirror as a
-        proper 180° rotation about local +x (det = +1, frame stays
-        right-handed), distance applied along previous element's
-        local +z axis, decenter perpendicular to that axis, tilt
-        applied at the element's front vertex (advance-then-tilt).
+        3.7.4 convention:
+
+        * Distances are Zemax-signed (negative post-mirror so the
+          unfolded cumulative z keeps moving forward).
+        * No ``Rmirror`` is applied at mirror elements -- the
+          trace's N-flip handles direction reversal locally, and
+          the FRAME stays unchanged at the mirror.  Combined with
+          Zemax-signed distances this gives correct world positions
+          for normal mirrors AND for fold-mirrors with absorbed
+          cb_pre tilts.
+        * For elements immediately AFTER a Mirror that carry a
+          tilt (the cb_post case absorbed by load_prescription),
+          the tilt is applied BEFORE the advance.  This is the
+          ASYMMETRY that the cb_pre / cb_post split requires:
+          cb_pre sits BEFORE its companion surface so its tilt
+          applies AT the destination (advance-then-tilt is right
+          for that), but cb_post sits AT the mirror's exit so its
+          tilt applies BEFORE the gap to the next surface
+          (tilt-then-advance is right for that).
+        * Optical-convention ``Rx`` / ``Ry`` (Zemax PARM 3 / 4):
+          +tilt_x rotates local +z toward +y.
         """
         origin = np.zeros(3, dtype=float)
         R = np.eye(3, dtype=float)
+        prev_was_mirror = False
         for elem in self.elements:
             if elem.elem_type == 'Source':
                 elem.origin = origin.copy()
                 elem.R = R.copy()
+                prev_was_mirror = False
                 continue
-            # 1. Advance to this element along the previous frame's
-            # local +z axis.
             d = float(getattr(elem, 'distance_mm', 0.0))
-            origin = origin + d * R[:, 2]
-            # 2. Apply decenters perpendicular to the optical axis.
             dx = float(getattr(elem, 'decenter_x', 0.0))
             dy = float(getattr(elem, 'decenter_y', 0.0))
-            if dx:
-                origin = origin + dx * R[:, 0]
-            if dy:
-                origin = origin + dy * R[:, 1]
-            # 3. Apply tilts (optical convention: +tilt_x rotates
-            # local +z toward +y, matching Zemax / Code-V / 2D side
-            # view).
             tx_rad = np.radians(float(getattr(elem, 'tilt_x', 0.0)))
             ty_rad = np.radians(float(getattr(elem, 'tilt_y', 0.0)))
-            if tx_rad:
-                c, s = np.cos(tx_rad), np.sin(tx_rad)
-                R = R @ np.array([[1, 0, 0],
-                                  [0, c,  s],
-                                  [0, -s, c]])
-            if ty_rad:
-                c, s = np.cos(ty_rad), np.sin(ty_rad)
-                R = R @ np.array([[c, 0, -s],
-                                  [0, 1,  0],
-                                  [s, 0,  c]])
-            # 4. Record the front-vertex frame on the element.
+            has_tilt = (tx_rad != 0.0 or ty_rad != 0.0
+                        or dx != 0.0 or dy != 0.0)
+
+            cb_post_case = prev_was_mirror and has_tilt
+
+            if cb_post_case:
+                # cb_post: apply tilt at the previous element's
+                # exit (mirror back vertex), THEN advance.
+                if tx_rad:
+                    c, s = np.cos(tx_rad), np.sin(tx_rad)
+                    R = R @ np.array([[1, 0, 0],
+                                      [0, c,  s],
+                                      [0, -s, c]])
+                if ty_rad:
+                    c, s = np.cos(ty_rad), np.sin(ty_rad)
+                    R = R @ np.array([[c, 0, -s],
+                                      [0, 1,  0],
+                                      [s, 0,  c]])
+                origin = origin + d * R[:, 2]
+                if dx:
+                    origin = origin + dx * R[:, 0]
+                if dy:
+                    origin = origin + dy * R[:, 1]
+            else:
+                # cb_pre / normal case: advance first, then apply
+                # decenter perp to the pre-tilt axis, then tilt.
+                origin = origin + d * R[:, 2]
+                if dx:
+                    origin = origin + dx * R[:, 0]
+                if dy:
+                    origin = origin + dy * R[:, 1]
+                if tx_rad:
+                    c, s = np.cos(tx_rad), np.sin(tx_rad)
+                    R = R @ np.array([[1, 0, 0],
+                                      [0, c,  s],
+                                      [0, -s, c]])
+                if ty_rad:
+                    c, s = np.cos(ty_rad), np.sin(ty_rad)
+                    R = R @ np.array([[c, 0, -s],
+                                      [0, 1,  0],
+                                      [s, 0,  c]])
+
+            # Record the front-vertex frame on the element.
             elem.origin = origin.copy()
             elem.R = R.copy()
-            # 5. Advance through internal thickness for the next
-            # iteration.  (Internal thicknesses are positive
-            # physical dimensions; the post-mirror Rmirror handles
-            # direction reversal.)
+            # Advance through internal thickness.  Internal
+            # thicknesses are Zemax-signed (negative post-mirror);
+            # combined with unchanged R[:,2] this places the back
+            # vertex in the correct world direction.
             if elem.surfaces:
                 internal = sum(float(s.thickness) for s in elem.surfaces)
                 origin = origin + internal * R[:, 2]
-            # 6. Mirror reflection: 180° rotation about local +x
-            # (det = +1, frame stays right-handed).
-            if elem.elem_type == 'Mirror':
-                R = R @ np.array([[1,  0,  0],
-                                  [0, -1,  0],
-                                  [0,  0, -1]])
+            # No Rmirror.
+            prev_was_mirror = (elem.elem_type == 'Mirror')
 
     # ── Undo / redo ────────────────────────────────────────────────
 
@@ -1673,18 +1700,20 @@ class SystemModel(QObject):
         #    Mirror elements directly.  Dummies are skipped but
         #    their thickness is rolled into ``pending_dist_mm``.
         #
-        # 3.6.1 hotfix-6: convert Zemax-signed thicknesses into
-        # physical (positive) magnitudes by tracking the parity of
-        # mirrors crossed.  Zemax encodes post-mirror DISZ values
-        # as negative so the unfolded cumulative z keeps moving
-        # forward; the GUI's internal model is in the FOLDED
-        # convention (theta-flip per mirror in element_frames),
-        # so we need positive distances and thicknesses.
+        # 3.7.4: keep Zemax-signed thicknesses as the canonical
+        # storage (negative post-mirror, positive otherwise).  The
+        # previous "convert to physical positive + flip R[:,2] at
+        # each mirror" approach (3.6.1 hotfix-6) double-counted
+        # for tilted mirrors and made the layout's post-fold
+        # element positions diverge from the actual ray direction.
+        # With Zemax-signed distances and no Rmirror at mirrors
+        # in recompute_element_frames, the trace's N-flip handles
+        # the direction reversal cleanly and the element world
+        # positions match where rays actually go.
         # ------------------------------------------------------------
         pending_dist_mm = 0.0
         n_lens = 0
         n_mirror = 0
-        thickness_sign = 1.0   # flips at every mirror crossed
 
         i = 0
         while i < len(rx_items):
@@ -1692,8 +1721,10 @@ class SystemModel(QObject):
             item_type = item.get('element_type', 'surface')
             comment = (item.get('comment') or '').strip()
             sd_local = _per_surf_sd(item)
-            # Convert Zemax-signed thickness to physical positive.
-            t_after_mm = (thickness_sign * rx_thick_full[i] * 1e3
+            # 3.7.4: keep the Zemax-signed thickness as-is (was being
+            # converted to physical-positive via mirror parity in
+            # 3.6.1 hotfix-6; that conversion is reverted).
+            t_after_mm = (rx_thick_full[i] * 1e3
                           if i < len(rx_thick_full) else 0.0)
 
             # Skip dummy spacer surfaces.
@@ -1719,9 +1750,8 @@ class SystemModel(QObject):
                                decenter_x=dx, decenter_y=dy)
                 self.elements.append(elem)
                 pending_dist_mm = t_after_mm
-                # Each mirror crossed flips the Zemax-vs-physical
-                # sign convention for the following thicknesses.
-                thickness_sign = -thickness_sign
+                # 3.7.4: no thickness_sign flip (was reverted to
+                # keep Zemax-signed convention as canonical).
                 i += 1
                 continue
 
@@ -1754,10 +1784,9 @@ class SystemModel(QObject):
                     Rk_mm = (rk['radius'] * 1e3
                              if np.isfinite(rk['radius']) else np.inf)
                     if k < j - 1:
-                        # Internal thickness to the next surface
-                        # of THIS lens.  Convert Zemax-signed value
-                        # to physical positive via thickness_sign.
-                        tk_mm = (thickness_sign * rx_thick_full[k] * 1e3
+                        # 3.7.4: Internal thickness to the next surface
+                        # of THIS lens, kept Zemax-signed.
+                        tk_mm = (rx_thick_full[k] * 1e3
                                  if k < len(rx_thick_full) else 0.0)
                     else:
                         tk_mm = 0.0
@@ -1777,12 +1806,10 @@ class SystemModel(QObject):
                                tilt_x=tx, tilt_y=ty,
                                decenter_x=dx, decenter_y=dy)
                 self.elements.append(elem)
-                # Distance to the next element comes from the
-                # thickness AFTER this lens's last surface (Zemax-
-                # signed → physical positive via thickness_sign).
+                # 3.7.4: Distance to next element kept Zemax-signed.
                 last_k = j - 1
                 pending_dist_mm = (
-                    thickness_sign * rx_thick_full[last_k] * 1e3
+                    rx_thick_full[last_k] * 1e3
                     if last_k < len(rx_thick_full)
                     else 0.0)
                 i = j

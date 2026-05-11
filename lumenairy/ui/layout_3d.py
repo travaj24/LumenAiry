@@ -76,8 +76,13 @@ class Layout3DView(QWidget):
         # the visible window without changing what's facing you.
         # Useful when the user has rotated to an oblique view and
         # wants to level the optical axis horizontally / vertically.
+        # 3.7.4: widen rotation + view buttons so the unicode arrow
+        # glyphs and view labels are readable (28-40 px was too
+        # narrow on default Qt fonts; the glyphs were getting
+        # clipped or hidden behind the button border).
         btn_rot_ccw = QPushButton('⟲')
-        btn_rot_ccw.setFixedWidth(28)
+        btn_rot_ccw.setMinimumWidth(40)
+        btn_rot_ccw.setStyleSheet('font-size: 16px;')
         btn_rot_ccw.setToolTip(
             'Rotate the view 15° counter-clockwise in the plane '
             'of the screen (camera roll).')
@@ -85,21 +90,20 @@ class Layout3DView(QWidget):
         toolbar.addWidget(btn_rot_ccw)
 
         btn_rot_cw = QPushButton('⟳')
-        btn_rot_cw.setFixedWidth(28)
+        btn_rot_cw.setMinimumWidth(40)
+        btn_rot_cw.setStyleSheet('font-size: 16px;')
         btn_rot_cw.setToolTip(
             'Rotate the view 15° clockwise in the plane of the '
             'screen (camera roll).')
         btn_rot_cw.clicked.connect(lambda: self._roll_view(+15))
         toolbar.addWidget(btn_rot_cw)
 
-        # View axis buttons
-        # 3.7.2: 'Side' now snaps to the 2D-matching layout view
-        # (optical axis +z horizontal, +y up).  'Iso' stays as the
-        # oblique-with-elevation view.
+        # View axis buttons.  3.7.4: minimumWidth 56 (was fixedWidth
+        # 40) so 'Front' / 'Side' / etc. fit on default Qt fonts.
         for label, view in [('Front', 'xy'), ('Side', 'side2d'),
                              ('Top', 'yz'), ('Iso', 'iso')]:
             btn = QPushButton(label)
-            btn.setFixedWidth(40)
+            btn.setMinimumWidth(56)
             btn.setToolTip(f'Snap to {label.lower()} view')
             btn.clicked.connect(lambda checked, v=view: self._snap_to_view(v))
             toolbar.addWidget(btn)
