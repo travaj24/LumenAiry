@@ -15,6 +15,122 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.7.9] — 2026-05-11
+
+Quality-of-life pass: debounced auto-retrace, wave-optics fold
+filters + saved-file loader, multi-row prescription editing,
+template-driven inserts, recent-files timestamps, F1 cheatsheet.
+No new library APIs; everything builds on the 3.7.6 → 3.7.8
+foundation.
+
+### LumenAiry Designer is still in BETA
+
+Layouts, dock arrangements, default workspaces, and even menu
+names continue to change between minor releases.  Pin a
+specific version if you depend on a particular GUI behaviour.
+
+### Wave Optics dock
+
+* **Unfold mirrors + Ignore lateral CBs checkboxes** (default ON
+  for both).  Make the existing implicit "wave optics runs the
+  un-folded equivalent" behaviour explicit and controllable.
+  See `_filter_wave_optics_surfaces` in `waveoptics_dock.py`
+  for the per-flag semantics.
+* **Embedded prescription metadata in saved runs**.
+  HDF5 / Zarr outputs now include the full JSON-encoded
+  prescription, lumenairy version, propagator settings (lens
+  model, ray-subsample, bandlimit), and the unfold / ignore-CB
+  flag state alongside the existing wavelength / grid / method
+  fields.  Saved runs are now self-describing.
+* **"Load saved run…" button** opens a previously-saved
+  output, shows metadata + plane list in a dialog, and offers
+  a one-click "Load prescription into model" action so the
+  exact prescription that produced the saved file can be
+  recovered weeks later.
+* **Duration forecast updated** to use the filtered surface
+  count when "Unfold mirrors" / "Ignore lateral CBs" is on
+  (the prior forecast was ~10-20 % pessimistic on folded
+  designs because it counted cb / mirror surfaces that
+  contribute no real per-surface FFT work).
+
+### Performance — debounced auto-retrace + status
+
+* `system_changed → 200 ms one-shot timer → model.retrace()`.
+  Slider drags / rapid keystrokes coalesce into one trace at
+  the end of the edit.  Honours `model.auto_retrace_mode` so
+  the existing manual / on / geometric-only pref is now
+  actually functional.
+* New `SystemModel.trace_started` signal fires at the top of
+  `run_trace`; `MainWindow` raises a busy cursor + "Tracing…"
+  status label, restored on `trace_ready`.  Users get clear
+  feedback during heavy traces instead of a frozen window.
+
+### Prescription editor — multi-row select
+
+* Shift-click / Ctrl-click rows in the element table to build
+  a multi-row selection; right-click → context menu shows
+  "Delete N Elements" / "Duplicate N Elements" instead of
+  the single-row equivalents.  Source / Detector rows are
+  excluded from batch operations regardless of selection.
+* Move Up / Move Down stay single-row only (re-ordering N
+  rows at once is queued for a later release with proper
+  drag-to-reorder).
+
+### Insert from Template
+
+* New **Insert → From Template** submenu with five common
+  multi-element builds: Cemented doublet (F/4.5), Plossl
+  eyepiece, Petzval objective, Kepler telescope (afocal,
+  user-chosen magnification), 4-f relay (unit mag).  All
+  parametrised on focal length so they scale to any system
+  size.  Each template inserts complete element chains in one
+  click; the trailing Detector / Source placement is unchanged.
+* Same builders exposed as **example-design buttons** in the
+  Welcome dock so new users see a working multi-element design
+  one click after the demo.
+
+### Discoverability — F1 + Ctrl+?
+
+* Keyboard Shortcuts dialog now bound to **F1** and **Ctrl+?**
+  in addition to the existing Help-menu entry.  One keystroke
+  from anywhere in the app.
+* What's New modal body refreshed for 3.7.x highlights and now
+  auto-renders the current `__version__` in its menu entry
+  title (was hard-coded as "3.6…" since the 3.5.9 entry was
+  last updated).
+
+### Recent files — timestamps
+
+* `_push_recent_file` stores `(path, iso_timestamp)` pairs
+  instead of just paths.  Welcome dock's Recent list now
+  shows "(2h ago)" / "(3d ago)" / "(2mo ago)" tags next to
+  each file.  Legacy string-list storage is migrated
+  transparently on read.
+
+### Backwards compatibility
+
+* No public Python API removals.
+* `Surface`, `SystemModel`, all changelogs, all 26 validation
+  files pass unchanged.
+* Saved HDF5 / Zarr files from prior releases still load (the
+  new metadata loader handles the "no embedded prescription"
+  case gracefully).
+
+### Documented deferrals
+
+* **Optimizer convergence plot** — needs `design_optimize` to
+  expose per-iteration merit history through a structured
+  callback.  Library-side work queued.
+* **Drag-to-reorder rows** — `QTableView` internal-move with a
+  custom model is fiddly; Move Up / Move Down keyboard
+  shortcuts cover the common case for now.
+* **Per-surface Seidel decomposition**, **sensitivity-analysis
+  auto-vars**, **multi-stage optimization scripts**, **tutorial
+  mode**, **NA cones / ray-density heat-map / glass-color
+  fills**, **MTF target overlays**, **auto-Airy overlay on
+  every spot dock** — all useful, all queued for future
+  releases.
+
 ## [3.7.8] — 2026-05-11
 
 Closes the remaining 3.7.6 / 3.7.7 fold-correctness gaps and

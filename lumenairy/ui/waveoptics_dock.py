@@ -304,6 +304,83 @@ def format_time(seconds):
 # Worker thread
 # ════════════════════════════════════════════════════════════════════════
 
+def _filter_wave_optics_surfaces(
+    trace_surfs,
+    *,
+    unfold_mirrors=True,
+    ignore_lateral_cbs=True,
+):
+    """3.7.9: pre-filter the trace-surface list for the wave-optics
+    propagation loop.
+
+    The wave-optics dock does NOT yet honour fold geometry --
+    mirrors silently produce no reflection phase and coord-breaks
+    silently ignore their tilt/decenter, so a folded prescription
+    runs as its un-folded equivalent.  These options make that
+    fact explicit and let the user choose alternate semantics.
+
+    Parameters
+    ----------
+    trace_surfs : list of Surface
+        Output of ``SystemModel.build_trace_surfaces()`` (legacy
+        local list with ``is_coordbrk=True`` Surfaces interspersed).
+    unfold_mirrors : bool, default True
+        Skip every ``is_mirror=True`` surface AND the cb (pre- and
+        post-) directly flanking it.  Flip post-mirror negative
+        thicknesses back to positive so the unfolded path
+        accumulates distances correctly.  Off: leave mirrors in,
+        they degenerate to flat phase-free surfaces (the legacy
+        behaviour, also leaves Zemax-signed negatives in the
+        thickness column which propagates the field backwards).
+    ignore_lateral_cbs : bool, default True
+        Drop any ``is_coordbrk=True`` surface with
+        ``tilt_x_deg == tilt_y_deg == 0`` (decenter-only cbs).
+        Off: leave them in (current behaviour silently treats
+        them as no-ops since the dock loop doesn't apply
+        decenters).
+
+    Returns
+    -------
+    list of Surface
+        Fresh list (callers can safely mutate without affecting
+        the model's cached list).
+    """
+    out = []
+    n = len(trace_surfs)
+    skipped_mirror_at = set()
+    if unfold_mirrors:
+        # Two-pass: find mirror indices and the cb's directly
+        # flanking them, then build a skip-set.
+        for i, s in enumerate(trace_surfs):
+            if getattr(s, 'is_mirror', False):
+                skipped_mirror_at.add(i)
+                # cb_pre is at i-1 if it exists with is_coordbrk
+                if i > 0 and getattr(trace_surfs[i - 1],
+                                      'is_coordbrk', False):
+                    skipped_mirror_at.add(i - 1)
+                # cb_post is at i+1 if it exists
+                if (i + 1 < n
+                        and getattr(trace_surfs[i + 1],
+                                     'is_coordbrk', False)):
+                    skipped_mirror_at.add(i + 1)
+    for i, s in enumerate(trace_surfs):
+        if i in skipped_mirror_at:
+            continue
+        if ignore_lateral_cbs and getattr(s, 'is_coordbrk', False):
+            tx = float(getattr(s, 'tilt_x_deg', 0.0))
+            ty = float(getattr(s, 'tilt_y_deg', 0.0))
+            if tx == 0.0 and ty == 0.0:
+                continue
+        # Unfold: flip post-mirror Zemax-signed negative thicknesses
+        # back to positive so the unfolded accumulation is sensible.
+        if unfold_mirrors and s.thickness < 0:
+            from copy import copy as _copy
+            s = _copy(s)
+            s.thickness = abs(s.thickness)
+        out.append(s)
+    return out
+
+
 class WaveOpticsWorker(QThread):
     """Run wave-optics propagation in a background thread."""
     progress = Signal(int, int, str)          # step, total, label (coarse)
@@ -395,6 +472,18 @@ class WaveOpticsWorker(QThread):
         if not trace_surfs:
             self.finished.emit({'error': 'No optical surfaces.'})
             return
+
+        # 3.7.9: apply the dock's "Unfold mirrors" + "Ignore lateral
+        # coord-breaks" filters to the surface list before the
+        # propagation loop.  See _filter_wave_optics_surfaces docstring
+        # for the per-flag semantics.
+        unfold_mirrors = bool(cfg.get('unfold_mirrors', True))
+        ignore_lateral_cbs = bool(cfg.get('ignore_lateral_cbs', True))
+        trace_surfs = _filter_wave_optics_surfaces(
+            trace_surfs,
+            unfold_mirrors=unfold_mirrors,
+            ignore_lateral_cbs=ignore_lateral_cbs,
+        )
 
         total_steps = len(trace_surfs) + 3
         step = 0
@@ -821,12 +910,36 @@ class WaveOpticsWorker(QThread):
                     for p in planes:
                         append_plane(output_path, p['field'], p['dx'],
                                      z=p['z'], label=p['label'])
+                    # 3.7.9: embed the prescription JSON alongside
+                    # the field data so a saved run is self-
+                    # describing.  Lets the saved-run loader (new
+                    # in 3.7.9) round-trip a complete simulation
+                    # context -- prescription + grid + propagator
+                    # + planes -- back into the dock for review.
+                    try:
+                        import json as _json
+                        rx_json = _json.dumps(
+                            self.model.to_prescription())
+                    except Exception:
+                        rx_json = ''
                     write_metadata(output_path, {
                         'wavelength': wv,
                         'grid_N': N,
                         'dx': dx,
                         'method': method,
                         'n_planes': len(planes),
+                        'lumenairy_version': __import__(
+                            'lumenairy').__version__,
+                        'prescription_json': rx_json,
+                        'unfold_mirrors': bool(cfg.get(
+                            'unfold_mirrors', True)),
+                        'ignore_lateral_cbs': bool(cfg.get(
+                            'ignore_lateral_cbs', True)),
+                        'lens_model': cfg.get('lens_model', ''),
+                        'ray_subsample': int(cfg.get(
+                            'ray_subsample', 8)),
+                        'bandlimit': bool(cfg.get(
+                            'bandlimit', True)),
                     })
                 except Exception as e:
                     results['save_error'] = str(e)
@@ -1076,6 +1189,51 @@ class WaveOpticsDock(QWidget):
         row_bandlimit.addWidget(self.chk_bandlimit)
         row_bandlimit.addStretch()
         sim_layout.addRow(row_bandlimit)
+
+        # 3.7.9: explicit unfold + lateral-cb filters.  Wave-optics
+        # propagation already runs the un-folded equivalent today
+        # (mirrors have radius=inf so produce no phase, cb's with
+        # zero tilt produce no decenter effect) -- these checkboxes
+        # surface that fact and let the user choose alternate
+        # semantics now or when fold-aware ASM lands.
+        row_unfold = QHBoxLayout()
+        self.chk_unfold_mirrors = QCheckBox(
+            'Unfold steering mirrors')
+        self.chk_unfold_mirrors.setChecked(True)
+        self.chk_unfold_mirrors.setToolTip(
+            "Treat the system as un-folded for wave-optics "
+            "propagation: skip Mirror elements and the coord-"
+            "break pair flanking each mirror; flip post-mirror "
+            "negative distances back to positive.\n\n"
+            "Default ON because the wave-optics propagators do "
+            "NOT yet honour fold geometry -- leaving this OFF on "
+            "a folded design today silently runs the unfolded "
+            "equivalent anyway and may include the mirror's "
+            "Zemax-signed negative thickness as a backwards "
+            "propagation step, which is rarely what you want.")
+        # Toggle re-runs the forecast so the per-surface FFT
+        # cost reflects the filtered surface count.
+        self.chk_unfold_mirrors.toggled.connect(self._update_forecast)
+        row_unfold.addWidget(self.chk_unfold_mirrors)
+        self.chk_ignore_lateral_cbs = QCheckBox(
+            'Ignore lateral coord-breaks (x/y decenter only)')
+        self.chk_ignore_lateral_cbs.setChecked(True)
+        self.chk_ignore_lateral_cbs.setToolTip(
+            "Drop any coord-break that only applies an in-plane "
+            "(x, y) decenter without tilt.  Pure decenters "
+            "translate the local frame perpendicular to the "
+            "propagation axis; they have no effect on wave "
+            "propagation along z, only on where subsequent "
+            "elements are CENTRED in the field.\n\n"
+            "Default ON: treat decentered elements as if they "
+            "were on-axis for the wave-optics run.\n\n"
+            "OFF (future work): apply the decenter as an np.roll "
+            "of the field; relevant for off-axis stops and lateral-"
+            "shift relay systems.")
+        self.chk_ignore_lateral_cbs.toggled.connect(self._update_forecast)
+        row_unfold.addWidget(self.chk_ignore_lateral_cbs)
+        row_unfold.addStretch()
+        sim_layout.addRow(row_unfold)
 
         # \u2500\u2500 Focal-plane MFT zoom group (revealed when an MFT method
         # is selected) \u2500\u2500
@@ -1452,8 +1610,20 @@ class WaveOpticsDock(QWidget):
         self.btn_stop = QPushButton('Stop')
         self.btn_stop.setEnabled(False)
         self.btn_stop.clicked.connect(self._stop)
+        # 3.7.9: Load a previously-saved wave-optics run from disk
+        # (HDF5 / Zarr).  Inspects the embedded prescription JSON
+        # + simulation parameters + the saved plane fields.  Lets
+        # users review a saved run weeks later without having to
+        # remember which prescription was active when it ran.
+        self.btn_load_run = QPushButton('Load saved run\u2026')
+        self.btn_load_run.setToolTip(
+            'Open a saved wave-optics output (.h5 or .zarr) and '
+            'inspect its embedded prescription, propagator '
+            'settings, and saved field planes.')
+        self.btn_load_run.clicked.connect(self._load_saved_run)
         run_row.addWidget(self.btn_run)
         run_row.addWidget(self.btn_stop)
+        run_row.addWidget(self.btn_load_run)
         layout.addLayout(run_row)
 
         # Forecast strip right above the progress bar so it's always
@@ -1981,7 +2151,25 @@ class WaveOpticsDock(QWidget):
 
     def _update_forecast(self):
         N = self.spin_N.currentData() or 1024
-        n_surfs = len(self.sm.build_trace_surfaces())
+        # 3.7.9: count the surfaces the actual run will see -- the
+        # unfold + lateral-cb filters strip mirrors / cbs before
+        # the propagation loop, so a folded design's forecast was
+        # ~10-20 % too pessimistic before this change (it counted
+        # the cb / mirror Surfaces that contribute no real per-
+        # surface FFT work).
+        raw = self.sm.build_trace_surfaces()
+        unfold = (hasattr(self, 'chk_unfold_mirrors')
+                  and self.chk_unfold_mirrors.isChecked())
+        ignore_cbs = (hasattr(self, 'chk_ignore_lateral_cbs')
+                      and self.chk_ignore_lateral_cbs.isChecked())
+        if unfold or ignore_cbs:
+            n_surfs = len(_filter_wave_optics_surfaces(
+                raw,
+                unfold_mirrors=unfold,
+                ignore_lateral_cbs=ignore_cbs,
+            ))
+        else:
+            n_surfs = len(raw)
         saving = (self.chk_save.isChecked()
                   and self.btn_save_toggle.isChecked())
         n_save = (sum(1 for cb in self.plane_checks if cb.isChecked())
@@ -2198,6 +2386,14 @@ class WaveOpticsDock(QWidget):
             # exposed as a single dock-wide flag (passed to ASM, RS,
             # ASM-MFT).
             'bandlimit': bool(self.chk_bandlimit.isChecked()),
+            # 3.7.9: explicit unfold + lateral-cb filters.  Default
+            # ON to match the legacy implicit behaviour; expose
+            # the toggles so users can pick alternate semantics
+            # (e.g. once fold-aware ASM lands, OFF would route to
+            # the fold-aware path instead).
+            'unfold_mirrors': bool(self.chk_unfold_mirrors.isChecked()),
+            'ignore_lateral_cbs': bool(
+                self.chk_ignore_lateral_cbs.isChecked()),
             # 3.5.7 MFT propagators: focal-plane output grid
             # parameters.  Only consulted when method endswith '-mft'.
             'mft_dx_out_m': float(self.spin_dx_out.value()) * 1e-6,
@@ -2237,6 +2433,159 @@ class WaveOpticsDock(QWidget):
         if self._worker and self._worker.isRunning():
             self._worker.terminate()
             self._on_finished({'error': 'Stopped by user'})
+
+    def _load_saved_run(self):
+        """3.7.9: Open a saved wave-optics output file (HDF5 / Zarr)
+        and show its metadata + embedded prescription in a dialog.
+
+        Saved files since 3.7.9 carry a full JSON-encoded prescription
+        alongside the standard (wavelength, grid_N, dx, method, …)
+        metadata, so a saved run is fully self-describing.  Older
+        files just show the standard metadata + a note that the
+        prescription wasn't embedded.
+
+        Dialog offers a "Load prescription into model" button that
+        replaces the current SystemModel.elements with the saved
+        prescription -- useful for reviewing a saved run against
+        the design that produced it.
+        """
+        from PySide6.QtWidgets import (
+            QFileDialog, QDialog, QVBoxLayout, QLabel, QTextEdit,
+            QDialogButtonBox, QPushButton, QHBoxLayout, QMessageBox,
+        )
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Open saved wave-optics run', '',
+            'Lumenairy outputs (*.h5 *.zarr);;HDF5 (*.h5);;Zarr (*.zarr)')
+        if not path:
+            return
+        try:
+            from ..io.storage import read_sim_metadata, list_planes
+            meta = read_sim_metadata(path) or {}
+            try:
+                planes_info = list_planes(path)
+            except Exception:
+                planes_info = []
+        except Exception as e:
+            QMessageBox.warning(
+                self, 'Load failed',
+                f'Could not read {path}:\n{e}')
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f'Saved run: {os.path.basename(path)}')
+        dlg.setModal(True)
+        dlg.resize(700, 540)
+        lay = QVBoxLayout(dlg)
+        # ── Run metadata summary ──
+        wv = meta.get('wavelength')
+        try:
+            wv_nm = float(wv) * 1e9 if wv else None
+        except Exception:
+            wv_nm = None
+        method = meta.get('method', '?')
+        N = meta.get('grid_N', '?')
+        dx = meta.get('dx', None)
+        try:
+            dx_um = float(dx) * 1e6 if dx else None
+        except Exception:
+            dx_um = None
+        ver = meta.get('lumenairy_version', 'pre-3.7.9 (no version tag)')
+        summary = (
+            f'<b>File:</b> {os.path.basename(path)}<br>'
+            f'<b>Lumenairy version:</b> {ver}<br>'
+            f'<b>Method:</b> {method}<br>'
+            f'<b>Grid:</b> N = {N}'
+            + (f', dx = {dx_um:.3f} µm' if dx_um else '')
+            + (f'<br><b>Wavelength:</b> {wv_nm:.1f} nm' if wv_nm else '')
+            + f'<br><b>Saved planes:</b> {len(planes_info)}'
+            + (f'<br><b>Unfold mirrors:</b> '
+               f'{meta.get("unfold_mirrors", "?")}'
+               f'<br><b>Ignore lateral CBs:</b> '
+               f'{meta.get("ignore_lateral_cbs", "?")}'
+               if 'unfold_mirrors' in meta else '')
+            + (f'<br><b>Lens model:</b> {meta.get("lens_model", "?")}'
+               f', ray subsample = {meta.get("ray_subsample", "?")}'
+               if 'lens_model' in meta else '')
+        )
+        hdr = QLabel(summary)
+        hdr.setTextFormat(Qt.RichText)
+        hdr.setStyleSheet('color: #dde8f8; font-size: 12px;')
+        lay.addWidget(hdr)
+        # ── Plane list ──
+        if planes_info:
+            lbl_planes = QLabel('<b>Planes:</b>')
+            lay.addWidget(lbl_planes)
+            te_planes = QTextEdit()
+            te_planes.setReadOnly(True)
+            te_planes.setMaximumHeight(140)
+            lines = []
+            for i, p in enumerate(planes_info):
+                lab = p.get('label', f'plane_{i}')
+                z = p.get('z', None)
+                lines.append(
+                    f'  [{i:2d}] {lab:30s}'
+                    + (f'  z = {float(z) * 1e3:.3f} mm'
+                       if z is not None else ''))
+            te_planes.setPlainText('\n'.join(lines))
+            lay.addWidget(te_planes)
+        # ── Embedded prescription (if present) ──
+        rx_json = meta.get('prescription_json', '')
+        if rx_json:
+            lbl_rx = QLabel('<b>Embedded prescription (JSON):</b>')
+            lay.addWidget(lbl_rx)
+            te_rx = QTextEdit()
+            te_rx.setReadOnly(True)
+            try:
+                import json as _json
+                te_rx.setPlainText(_json.dumps(
+                    _json.loads(rx_json), indent=2))
+            except Exception:
+                te_rx.setPlainText(rx_json)
+            lay.addWidget(te_rx)
+        else:
+            lay.addWidget(QLabel(
+                '<i>No embedded prescription (file predates 3.7.9 '
+                'metadata).</i>'))
+        # ── Actions ──
+        actions_row = QHBoxLayout()
+        if rx_json:
+            btn_load_rx = QPushButton('Load prescription into model')
+            btn_load_rx.setToolTip(
+                'Replace the current model elements with the '
+                'prescription embedded in this file.')
+
+            def _do_load_rx():
+                ans = QMessageBox.question(
+                    dlg, 'Replace current model?',
+                    'Replace the current optical system with the '
+                    'prescription from this file?\n\n'
+                    'Your current prescription will be lost (use '
+                    'Undo to restore it).',
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No)
+                if ans != QMessageBox.Yes:
+                    return
+                try:
+                    import json as _json
+                    rx = _json.loads(rx_json)
+                    self.model.load_prescription(rx)
+                    QMessageBox.information(
+                        dlg, 'Loaded',
+                        'Prescription loaded into the current model.')
+                    dlg.accept()
+                except Exception as e:
+                    QMessageBox.warning(
+                        dlg, 'Load failed',
+                        f'Could not load embedded prescription:\n{e}')
+
+            btn_load_rx.clicked.connect(_do_load_rx)
+            actions_row.addWidget(btn_load_rx)
+        actions_row.addStretch()
+        btns = QDialogButtonBox(QDialogButtonBox.Close)
+        btns.rejected.connect(dlg.accept)
+        btns.accepted.connect(dlg.accept)
+        actions_row.addWidget(btns)
+        lay.addLayout(actions_row)
+        dlg.exec()
 
     def _on_progress(self, step, total, label):
         # Coarse-grained per-stage progress -- complements the

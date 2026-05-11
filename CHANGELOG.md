@@ -2,6 +2,34 @@
 
 All notable changes to the core library are documented here.
 
+## [3.7.9] — 2026-05-11
+
+GUI-driven quality-of-life release.  Only one core API change:
+`SystemModel.trace_started` signal added.  All other work is in
+the GUI; see `GUI_CHANGELOG.md` for the user-facing list.
+
+### Added
+
+* `SystemModel.trace_started` — emitted at the top of `run_trace`.
+  Lets the GUI raise a busy cursor / status label as soon as the
+  trace begins, paired with the existing `trace_ready` for the
+  post-trace cleanup.  No-op for non-GUI consumers that haven't
+  connected to the new signal.
+
+### Notes
+
+* The default Lumenairy storage path now embeds the active
+  prescription (JSON) plus propagator settings inside saved
+  HDF5 / Zarr outputs (set via the wave-optics dock; the
+  `lumenairy.io.storage.write_sim_metadata` API is unchanged).
+  Older files load fine with the new dock's "Load saved run…"
+  flow -- the embedded-prescription block is treated as
+  optional.
+
+### Backwards compatibility
+
+No removals.  All 26 validation suite files pass.
+
 ## [3.7.8] — 2026-05-11
 
 Closes the remaining ray-trace gaps from the 3.7.6 / 3.7.7

@@ -10,6 +10,44 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.7.9
+
+Quality-of-life pass: debounced auto-retrace, wave-optics fold
+filters + saved-file loader, multi-row prescription editing,
+template-driven inserts, recent-files timestamps, F1 cheatsheet.
+
+**Library**
+
+- `SystemModel.trace_started` signal — fires at the top of every
+  `run_trace`.  Lets GUIs raise a busy cursor / status label
+  immediately rather than waiting for `trace_ready` at the end.
+- Saved wave-optics HDF5 / Zarr outputs now embed the full
+  prescription JSON + propagator settings + lumenairy version,
+  so a saved run is self-describing.
+
+**GUI**
+
+- **Wave Optics dock**: explicit `Unfold steering mirrors` and
+  `Ignore lateral CBs` checkboxes; embedded-prescription saved-
+  file loader (with one-click "Load prescription into model");
+  duration forecast updated for the filtered surface count.
+- **Debounced auto-retrace**: edits coalesce into one retrace
+  200 ms after the last change.  Honours the existing
+  `auto_retrace_mode` pref.  Status indicator + busy cursor.
+- **Multi-row select in the prescription editor**: Shift+click
+  / Ctrl+click rows, right-click → "Delete N Elements" /
+  "Duplicate N Elements".
+- **Insert → From Template**: cemented doublet, Plossl, Petzval,
+  Kepler telescope (afocal, user-chosen mag), 4-f relay.  Same
+  builders exposed as example-design buttons in the Welcome dock.
+- **F1 / Ctrl+?**: keyboard shortcut cheatsheet from anywhere.
+- **Recent files** carry timestamps now ("2h ago", "3d ago").
+- **What's New modal** refreshed for 3.7.x and auto-titled from
+  `__version__`.
+
+See [CHANGELOG.md](CHANGELOG.md) and [GUI_CHANGELOG.md](GUI_CHANGELOG.md)
+for the full list.
+
 ## What's new in 3.7.8
 
 Closes the remaining 3.7.6 / 3.7.7 fold-correctness gaps and ships

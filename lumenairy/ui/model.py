@@ -410,6 +410,7 @@ class SystemModel(QObject):
     system_changed = Signal()       # prescription changed — triggers retrace
     display_changed = Signal()      # display-only change (coord mode) — no retrace
     trace_ready = Signal(object)
+    trace_started = Signal()      # emitted at the top of run_trace
     element_selected = Signal(int)
     optimization_progress = Signal(int, float)
     optimization_finished = Signal(bool, str)
@@ -2208,6 +2209,7 @@ class SystemModel(QObject):
         and are transformed into each surface's local frame only for
         the intersection / refraction step.  No coord-break surfaces.
         """
+        self.trace_started.emit()
         world_list = self._build_trace_surfaces_world()
         surfaces = [Surface(
             radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,

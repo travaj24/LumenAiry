@@ -1050,7 +1050,12 @@ class ElementTableEditor(QWidget):
     # --- Context menu + search ---------------------------------------
 
     def _on_table_context_menu(self, pos):
-        """Right-click menu on the element table."""
+        """Right-click menu on the element table.
+
+        3.7.9: multi-row aware -- when 2+ rows are selected
+        (Shift+click / Ctrl+click), "Delete" / "Duplicate" act on
+        the whole selection rather than the right-clicked row.
+        """
         from PySide6.QtWidgets import QMenu
         index = self.table.indexAt(pos)
         if not index.isValid():
@@ -1061,9 +1066,25 @@ class ElementTableEditor(QWidget):
         elem = self.sm.elements[row]
         is_endpoint = elem.elem_type in ('Source', 'Detector')
 
+        # 3.7.9: gather the selection.  Endpoint rows are excluded
+        # from batch operations regardless of selection state.
+        sel_rows = sorted({
+            ix.row() for ix in self.table.selectionModel().selectedRows()
+            if 0 <= ix.row() < len(self.sm.elements)
+            and self.sm.elements[ix.row()].elem_type
+                    not in ('Source', 'Detector')
+        })
+        multi = len(sel_rows) > 1 and row in sel_rows
+
         m = QMenu(self)
-        act_dup    = m.addAction('Duplicate Element')
-        act_del    = m.addAction('Delete Element')
+        if multi:
+            act_dup = m.addAction(
+                f'Duplicate {len(sel_rows)} Elements')
+            act_del = m.addAction(
+                f'Delete {len(sel_rows)} Elements')
+        else:
+            act_dup = m.addAction('Duplicate Element')
+            act_del = m.addAction('Delete Element')
         m.addSeparator()
         act_up     = m.addAction('Move Up')
         act_down   = m.addAction('Move Down')
@@ -1079,6 +1100,10 @@ class ElementTableEditor(QWidget):
         # Endpoints can't be moved / duplicated / deleted.
         for a in (act_dup, act_del, act_up, act_down):
             a.setEnabled(not is_endpoint)
+        # Up / Down only valid for single-row selection.
+        if multi:
+            act_up.setEnabled(False)
+            act_down.setEnabled(False)
         # Source has no meaningful distance variable.
         if elem.elem_type == 'Source':
             act_var.setEnabled(False)
@@ -1087,9 +1112,17 @@ class ElementTableEditor(QWidget):
         if chosen is None:
             return
         if chosen is act_dup:
-            self._duplicate_element(row)
+            # Process in descending order so indices stay valid as
+            # we duplicate.
+            targets = (sel_rows if multi else [row])
+            for r in sorted(targets, reverse=True):
+                self._duplicate_element(r)
         elif chosen is act_del:
-            self.sm.delete_element(row)
+            targets = (sel_rows if multi else [row])
+            # Delete from the bottom up so earlier indices remain
+            # valid for the rest of the loop.
+            for r in sorted(targets, reverse=True):
+                self.sm.delete_element(r)
         elif chosen is act_up:
             self.sm.move_element(row, -1)
         elif chosen is act_down:

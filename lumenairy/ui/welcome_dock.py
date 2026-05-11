@@ -27,6 +27,7 @@ class WelcomeDock(QWidget):
     browse_library_requested = Signal()
     show_shortcuts_requested = Signal()
     show_repl_requested = Signal()
+    insert_template_requested = Signal(str)  # template kind name
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -89,6 +90,30 @@ class WelcomeDock(QWidget):
             qs_row.addWidget(b)
         outer.addLayout(qs_row)
 
+        # ── 3.7.9: example designs row ──
+        # One-click loaders for common multi-element templates --
+        # same builders the Insert > From Template menu uses.
+        # Lets new users see a non-trivial design in 1 click without
+        # having to know the Insert menu structure.
+        ex_label = QLabel('Example designs')
+        ex_label.setFont(qs_font)
+        outer.addWidget(ex_label)
+        ex_row = QHBoxLayout()
+        for text, kind in [
+            ('Cemented doublet',  'cemented_doublet'),
+            ('Plossl eyepiece',   'plossl'),
+            ('Petzval objective', 'petzval'),
+            ('Kepler telescope',  'kepler_telescope'),
+            ('4-f relay',         '4f_relay'),
+        ]:
+            b = QPushButton(text)
+            b.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            b.clicked.connect(
+                lambda checked=False, k=kind:
+                self.insert_template_requested.emit(k))
+            ex_row.addWidget(b)
+        outer.addLayout(ex_row)
+
         # ── Recent files ──
         rec_label = QLabel('Recent files')
         rec_label.setFont(qs_font)
@@ -115,19 +140,55 @@ class WelcomeDock(QWidget):
     #  Recent-file list
     # ------------------------------------------------------------------
 
-    def set_recent_files(self, paths):
-        """Replace the recent-files list (most recent first)."""
+    def set_recent_files(self, entries):
+        """Replace the recent-files list (most recent first).
+
+        3.7.9: ``entries`` may now be either a list of strings (the
+        legacy format, paths only) or a list of ``(path, timestamp)``
+        tuples (timestamp is an ISO-8601 string or a float).  When a
+        timestamp is present it's rendered as a relative age tag
+        ("2h ago", "3d ago") next to the file name.
+        """
+        import datetime as _dt
+        import time as _time
         self.recent_list.clear()
-        if not paths:
+        if not entries:
             it = QListWidgetItem('(no recent files yet)')
             it.setFlags(Qt.NoItemFlags)
             self.recent_list.addItem(it)
             return
-        for p in paths:
-            display = f'{os.path.basename(p)}    —    {p}'
+        now = _time.time()
+        for entry in entries:
+            if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                p, ts = entry[0], entry[1]
+            else:
+                p, ts = entry, None
+            try:
+                if isinstance(ts, str):
+                    dt = _dt.datetime.fromisoformat(ts)
+                    ts_epoch = dt.timestamp()
+                else:
+                    ts_epoch = float(ts) if ts is not None else None
+            except Exception:
+                ts_epoch = None
+            age = ''
+            if ts_epoch is not None:
+                dt_sec = max(0.0, now - ts_epoch)
+                if dt_sec < 60:
+                    age = ' (just now)'
+                elif dt_sec < 3600:
+                    age = f' ({int(dt_sec / 60)}m ago)'
+                elif dt_sec < 86400:
+                    age = f' ({int(dt_sec / 3600)}h ago)'
+                elif dt_sec < 86400 * 30:
+                    age = f' ({int(dt_sec / 86400)}d ago)'
+                else:
+                    age = f' ({int(dt_sec / (86400 * 30))}mo ago)'
+            display = f'{os.path.basename(p)}{age}    —    {p}'
             it = QListWidgetItem(display)
             it.setData(Qt.UserRole, p)
-            it.setToolTip(p)
+            it.setToolTip(p + (f'\nLast opened: {ts}'
+                                if ts is not None else ''))
             self.recent_list.addItem(it)
 
     def _on_recent_activated(self, item):

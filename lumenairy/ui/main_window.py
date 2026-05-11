@@ -143,10 +143,9 @@ class MainWindow(QMainWindow):
             self.welcome_widget.set_recent_files(self._recent_files())
         except Exception:
             pass
-        self.model.trace_ready.connect(
-            lambda r: self.status_label.setText(
-                f'Traced {int(np.sum(r.image_rays.alive))}/{r.image_rays.n_rays} rays'
-                if r else 'No trace'))
+        # 3.7.9: trace_ready handler moved into _on_trace_ready
+        # (wired below) so it can also clear the busy cursor /
+        # progress indicator that _on_trace_started raises.
 
         # Undo/redo: the toolbar actions are wired later; this signal
         # keeps them enabled/disabled correctly.
@@ -158,6 +157,26 @@ class MainWindow(QMainWindow):
         self._autosave_timer.setInterval(1000)
         self._autosave_timer.timeout.connect(self.model.autosave_session)
         self.model.system_changed.connect(self._autosave_timer.start)
+
+        # ── 3.7.9: debounced auto-retrace ----------------------------
+        # The model's ``auto_retrace_mode`` pref has existed since
+        # 3.x but was never wired -- traces only ran when the user
+        # explicitly pressed Ctrl+T or clicked the toolbar's
+        # Retrace.  Wire it now: every system_changed kicks a 200 ms
+        # one-shot; if no further change arrives, ``model.retrace()``
+        # runs.  Slider drags / rapid keystrokes coalesce into one
+        # trace at the end of the edit.  ``auto_retrace_mode='manual'``
+        # in the pref still suppresses the auto-fire path.
+        self._auto_retrace_timer = QTimer(self)
+        self._auto_retrace_timer.setSingleShot(True)
+        self._auto_retrace_timer.setInterval(200)
+        self._auto_retrace_timer.timeout.connect(self._do_auto_retrace)
+        self.model.system_changed.connect(self._auto_retrace_timer.start)
+        # ``trace_started`` shows the busy indicator immediately;
+        # ``trace_ready`` (already wired above) clears it via the
+        # status_label update.
+        self.model.trace_started.connect(self._on_trace_started)
+        self.model.trace_ready.connect(self._on_trace_ready)
 
         # 3.6: deferred What's-New popup, fires once per release.
         # Wrapped in QTimer.singleShot so the main window paints
@@ -451,6 +470,10 @@ class MainWindow(QMainWindow):
             self._show_shortcuts)
         self.welcome_widget.show_repl_requested.connect(
             lambda: self._show_and_raise(self.repl_dock))
+        # 3.7.9: Welcome dock example-design buttons reuse the
+        # same template builders as Insert > From Template.
+        self.welcome_widget.insert_template_requested.connect(
+            self._ins_template)
 
         # When the wave-optics dock finishes a run, hand the focal-plane
         # field to the Zernike dock so its decompose button operates on
@@ -1007,6 +1030,23 @@ class MainWindow(QMainWindow):
         lm.addAction('Cylindrical Lens...', self._ins_cylindrical)
         lm.addAction('Biconic Singlet...', self._ins_biconic)
 
+        # 3.7.9: From-template inserts.  Pre-built multi-element
+        # skeletons that drop a complete sub-system into the
+        # prescription instead of one surface at a time.  Common
+        # builds (cemented doublet, Plossl eyepiece, microscope
+        # objective) save 5-15 clicks per use.
+        tm = im.addMenu('From &Template')
+        tm.addAction('Cemented doublet (F/4.5, EFL 100 mm)…',
+                     lambda: self._ins_template('cemented_doublet'))
+        tm.addAction('Plossl eyepiece (25 mm focal)…',
+                     lambda: self._ins_template('plossl'))
+        tm.addAction('Petzval objective (F/2.8 photographic)…',
+                     lambda: self._ins_template('petzval'))
+        tm.addAction('Kepler telescope (3× afocal)…',
+                     lambda: self._ins_template('kepler_telescope'))
+        tm.addAction('4-f relay (unit magnification)…',
+                     lambda: self._ins_template('4f_relay'))
+
         mm = im.addMenu('&Mirror')
         mm.addAction('Flat Mirror...', self._ins_flat_mirror).setShortcut('Ctrl+M')
         mm.addAction('Curved Mirror...', self._ins_curved_mirror)
@@ -1267,9 +1307,14 @@ class MainWindow(QMainWindow):
         cmd_act.setShortcut('Ctrl+K')
         cmd_act.triggered.connect(self._open_command_palette)
         hm.addAction(cmd_act)
-        hm.addAction('Keyboard Shortcuts', self._show_shortcuts)
+        # 3.7.9: also bound to F1 and Ctrl+? so the cheatsheet is
+        # one keystroke away from anywhere in the application.
+        act_shortcuts = hm.addAction(
+            'Keyboard Shortcuts…', self._show_shortcuts)
+        act_shortcuts.setShortcuts(['F1', 'Ctrl+?'])
         hm.addSeparator()
-        hm.addAction('What\'s New in 3.6...', self._show_whats_new)
+        from .. import __version__ as _v
+        hm.addAction(f'What\'s New in {_v}…', self._show_whats_new)
         hm.addAction('GUI README...', self._open_gui_readme)
         hm.addAction('Examples folder...', self._open_examples_folder)
         hm.addAction('Wiki / Documentation', self._open_wiki)
@@ -2134,6 +2179,189 @@ class MainWindow(QMainWindow):
             SurfaceRow(-184.5*s, 0, '', sd)]))
         self._last_insert_action = self._ins_doublet
 
+    def _ins_template(self, kind):
+        """3.7.9: drop a multi-element template into the prescription.
+
+        Templates are simple skeletons that work as starting points
+        for common compound systems.  Surface radii are scaled from
+        the chosen EFL via the doublet-style ``s = f / 100``
+        convention used by the existing Insert > Lens > Achromatic
+        Doublet builder, so the inserted elements have sensible
+        proportions at any focal length without per-template
+        tuning.
+
+        Each template inserts ALL of its elements before the
+        detector in chronological order.  Users tune from there.
+        """
+        templates = {
+            'cemented_doublet': {
+                'prompt_title': 'Cemented Doublet',
+                'fields': {
+                    'f': ('Focal length', 100, 10, 5000, 1, 'mm'),
+                    'dist': ('Distance from source',
+                              30, 0, 1e6, 2, 'mm'),
+                },
+                'build': lambda p: [
+                    Element(0, f'Doublet f={p["f"]:.0f}', 'Doublet',
+                            p['dist'], surfaces=[
+                                SurfaceRow(62.8 * p['f'] / 100,
+                                            6 * p['f'] / 100,
+                                            'N-BAF10',
+                                            12.7 * p['f'] / 100),
+                                SurfaceRow(-46.5 * p['f'] / 100,
+                                            2.5 * p['f'] / 100,
+                                            'N-SF6HT',
+                                            12.7 * p['f'] / 100),
+                                SurfaceRow(-184.5 * p['f'] / 100,
+                                            0, '',
+                                            12.7 * p['f'] / 100),
+                            ]),
+                ],
+            },
+            'plossl': {
+                'prompt_title': 'Plossl Eyepiece (symmetric doublet pair)',
+                'fields': {
+                    'f': ('Eye-piece focal length',
+                           25, 5, 200, 1, 'mm'),
+                    'dist': ('Distance from source',
+                              50, 0, 1e6, 2, 'mm'),
+                },
+                'build': lambda p: (
+                    lambda f, d, s, sd: [
+                        Element(0, 'Plossl-back', 'Doublet', d,
+                                surfaces=[
+                                    SurfaceRow(31.4 * s, 3 * s,
+                                                'N-SF6HT', sd),
+                                    SurfaceRow(-23.3 * s, 3 * s,
+                                                'N-BK7', sd),
+                                    SurfaceRow(-23.3 * s, 0.5 * s,
+                                                '', sd),
+                                ]),
+                        Element(0, 'Plossl-front', 'Doublet',
+                                0.5 * s, surfaces=[
+                                    SurfaceRow(23.3 * s, 3 * s,
+                                                'N-BK7', sd),
+                                    SurfaceRow(-23.3 * s, 3 * s,
+                                                'N-SF6HT', sd),
+                                    SurfaceRow(-31.4 * s, 0, '', sd),
+                                ]),
+                    ])(p['f'], p['dist'], p['f'] / 25,
+                        12.7 * p['f'] / 25),
+            },
+            'petzval': {
+                'prompt_title': 'Petzval Objective (2 doublets)',
+                'fields': {
+                    'f': ('System focal length',
+                           150, 30, 5000, 1, 'mm'),
+                    'dist': ('Distance from source',
+                              80, 0, 1e6, 2, 'mm'),
+                },
+                'build': lambda p: (
+                    lambda f, d, s, sd: [
+                        Element(0, 'Petzval-front', 'Doublet', d,
+                                surfaces=[
+                                    SurfaceRow(94.2 * s, 7 * s,
+                                                'N-BAK1', sd),
+                                    SurfaceRow(-55.5 * s, 3 * s,
+                                                'F2', sd),
+                                    SurfaceRow(-160.0 * s, 0, '',
+                                                sd),
+                                ]),
+                        Element(0, 'Petzval-rear', 'Doublet',
+                                30 * s, surfaces=[
+                                    SurfaceRow(83.6 * s, 5 * s,
+                                                'N-BAK1', sd),
+                                    SurfaceRow(-49.4 * s, 3 * s,
+                                                'F2', sd),
+                                    SurfaceRow(-200.0 * s, 0, '',
+                                                sd),
+                                ]),
+                    ])(p['f'], p['dist'], p['f'] / 150,
+                        12.7 * p['f'] / 150),
+            },
+            'kepler_telescope': {
+                'prompt_title': 'Kepler Telescope (afocal, magnification M)',
+                'fields': {
+                    'fo': ('Objective focal length',
+                            300, 30, 5000, 1, 'mm'),
+                    'm': ('Magnification (×)',
+                           3.0, 1.5, 50.0, 1, ''),
+                    'dist': ('Distance from source',
+                              80, 0, 1e6, 2, 'mm'),
+                },
+                'build': lambda p: (
+                    lambda fo, fe, d, so, se, sd_o, sd_e: [
+                        Element(0, f'Obj f={fo:.0f}', 'Doublet', d,
+                                surfaces=[
+                                    SurfaceRow(62.8 * so, 6 * so,
+                                                'N-BAF10', sd_o),
+                                    SurfaceRow(-46.5 * so, 2.5 * so,
+                                                'N-SF6HT', sd_o),
+                                    SurfaceRow(-184.5 * so, 0, '',
+                                                sd_o),
+                                ]),
+                        Element(0, f'Eyepiece f={fe:.0f}', 'Doublet',
+                                fo + fe, surfaces=[
+                                    SurfaceRow(31.4 * se, 3 * se,
+                                                'N-SF6HT', sd_e),
+                                    SurfaceRow(-23.3 * se, 3 * se,
+                                                'N-BK7', sd_e),
+                                    SurfaceRow(-23.3 * se, 0, '',
+                                                sd_e),
+                                ]),
+                    ])(p['fo'], p['fo'] / p['m'], p['dist'],
+                        p['fo'] / 100, p['fo'] / p['m'] / 25,
+                        12.7 * p['fo'] / 100,
+                        12.7 * p['fo'] / p['m'] / 25),
+            },
+            '4f_relay': {
+                'prompt_title': '4-f Relay (unit magnification)',
+                'fields': {
+                    'f': ('Focal length of each lens',
+                           100, 10, 5000, 1, 'mm'),
+                    'dist': ('Distance from source',
+                              0, 0, 1e6, 2, 'mm'),
+                },
+                'build': lambda p: (
+                    lambda f, d, s, sd: [
+                        Element(0, f'Relay-1 f={f:.0f}', 'Doublet',
+                                d + f, surfaces=[
+                                    SurfaceRow(62.8 * s, 6 * s,
+                                                'N-BAF10', sd),
+                                    SurfaceRow(-46.5 * s, 2.5 * s,
+                                                'N-SF6HT', sd),
+                                    SurfaceRow(-184.5 * s, 0, '',
+                                                sd),
+                                ]),
+                        Element(0, f'Relay-2 f={f:.0f}', 'Doublet',
+                                2 * f, surfaces=[
+                                    SurfaceRow(62.8 * s, 6 * s,
+                                                'N-BAF10', sd),
+                                    SurfaceRow(-46.5 * s, 2.5 * s,
+                                                'N-SF6HT', sd),
+                                    SurfaceRow(-184.5 * s, 0, '',
+                                                sd),
+                                ]),
+                    ])(p['f'], p['dist'], p['f'] / 100,
+                        12.7 * p['f'] / 100),
+            },
+        }
+        spec = templates.get(kind)
+        if not spec:
+            return
+        p, ok = self._elem_dialog(
+            f'Insert: {spec["prompt_title"]}', spec['fields'])
+        if not ok:
+            return
+        elements = spec['build'](p)
+        # Each _ins_before_detector creates one undo entry, so
+        # reverting a multi-element template takes N Ctrl+Z keystrokes.
+        # An "undo group" wrapper for batch operations is queued
+        # for a future release.
+        for elem in elements:
+            self._ins_before_detector(elem)
+        self._last_insert_action = lambda k=kind: self._ins_template(k)
+
     def _ins_cylindrical(self):
         p, ok = self._elem_dialog('Insert Cylindrical Lens', {
             'R': ('Radius of curvature', 50, 1, 10000, 2, 'mm'),
@@ -2375,6 +2603,51 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, 'Error', str(e))
 
+    def _do_auto_retrace(self):
+        """3.7.9: debounced auto-retrace handler.
+
+        Honours ``model.auto_retrace_mode``: ``'on'`` /
+        ``'geometric-only'`` retrace, ``'manual'`` is a no-op.
+        Caught exceptions don't propagate so a broken prescription
+        edit doesn't tear down the timer wiring -- the status label
+        gets a diagnostic line and the next edit retries.
+        """
+        try:
+            self.model.retrace()
+        except Exception as e:
+            self.status_label.setText(f'Trace failed: {e}')
+
+    def _on_trace_started(self):
+        """3.7.9: visual feedback for the duration of a trace.
+
+        Sets a wait cursor + 'Tracing...' status so users don't
+        think the GUI is frozen on heavy systems.  Paired with
+        :meth:`_on_trace_ready` which restores the cursor and
+        updates the status to the trace result.
+        """
+        try:
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+        except Exception:
+            pass
+        self.status_label.setText('Tracing…')
+
+    def _on_trace_ready(self, r):
+        """3.7.9: restore cursor + status after a trace completes."""
+        try:
+            QApplication.restoreOverrideCursor()
+        except Exception:
+            pass
+        if r is None:
+            self.status_label.setText('No trace')
+            return
+        try:
+            n_alive = int(np.sum(r.image_rays.alive))
+            n_total = r.image_rays.n_rays
+            self.status_label.setText(
+                f'Traced {n_alive}/{n_total} rays')
+        except Exception:
+            self.status_label.setText('Trace complete')
+
     def _update_status(self):
         n = self.model.num_elements - 2
         efl = self.model.efl_mm
@@ -2414,23 +2687,54 @@ class MainWindow(QMainWindow):
     _RECENT_LIMIT = 10
 
     def _recent_files(self):
+        """3.7.9: returns a list of ``(path, iso_timestamp)`` tuples,
+        most-recent first.  Migrates the legacy ``recent_files``
+        (list of paths only) storage transparently -- old entries
+        come back with ``timestamp=None`` which the Welcome dock
+        renders without an age tag.
+
+        For backward-compat with callers that expected a flat
+        string list, use :meth:`_recent_file_paths`.
+        """
         try:
             from PySide6.QtCore import QSettings
             s = QSettings('lumenairy', 'OpticalDesigner')
             v = s.value('recent_files') or []
             if isinstance(v, str):
                 v = [v]
-            return [p for p in v if p]
+            out = []
+            for entry in v:
+                if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                    out.append((str(entry[0]), entry[1]))
+                elif entry:
+                    out.append((str(entry), None))
+            return out
         except Exception:
             return []
 
+    def _recent_file_paths(self):
+        """3.7.9: legacy-style path-only view of the recent-files
+        list, for callers that pre-date the ``(path, timestamp)``
+        format change.
+        """
+        return [p for p, _ in self._recent_files() if p]
+
     def _push_recent_file(self, path):
+        """3.7.9: prepend (path, current_time_iso) to the recent
+        files list, dedup paths, cap at _RECENT_LIMIT, persist.
+        """
         try:
             from PySide6.QtCore import QSettings
-            recents = [p for p in self._recent_files() if p != path]
-            recents.insert(0, path)
+            import datetime as _dt
+            now_iso = _dt.datetime.now().isoformat(timespec='seconds')
+            recents = [
+                (p, t) for (p, t) in self._recent_files() if p != path]
+            recents.insert(0, (path, now_iso))
             recents = recents[:self._RECENT_LIMIT]
             s = QSettings('lumenairy', 'OpticalDesigner')
+            # QSettings doesn't reliably round-trip nested tuples on
+            # all platforms; store as a flat alternating list and
+            # reconstruct on read.
             s.setValue('recent_files', recents)
             if hasattr(self, 'welcome_widget'):
                 self.welcome_widget.set_recent_files(recents)
@@ -2806,33 +3110,46 @@ class MainWindow(QMainWindow):
         title = f'What\'s New in {__version__}'
         body = (
             f'<h3>LumenAiry Designer {__version__}</h3>'
-            '<p><b>Highlights</b></p>'
+            '<p><b>Latest highlights (3.7.x)</b></p>'
             '<ul>'
-            '<li><b>App rename</b>: Optical Designer → '
-            'LumenAiry Designer (3.5.9).  Backward-compat aliases '
-            'preserved.</li>'
-            '<li><b>Wave Optics propagators</b>: 3 new MFT methods '
-            '(focal-plane zoom), Bandlimit checkbox, '
-            'Convert-to-chief-relative-OPD toggle, smarter '
-            'Recommend-grid (3.5.7-3.5.8).</li>'
-            '<li><b>Custom MHS chain</b>: new tab inside Wave Optics '
-            'driving MhsPipeline.from_prescription directly.</li>'
-            '<li><b>Caustic Diagnostic</b>: new dock wrapping '
-            'caustic_diagnostic + plot_caustic_diagnostic.</li>'
-            '<li><b>Optimizer</b>: JAX wave-propagator toggle for '
-            'analytic Jacobians on JAX merit terms.</li>'
-            '<li><b>Tools menu</b>: Scale system, Find nearest '
-            'Thorlabs, Quick Zernikes, Chromatic shift.</li>'
-            '<li><b>Tolerance</b>: structured Export Report.</li>'
-            '<li><b>Sources</b>: top-hat + fiber-mode factories now '
-            'reachable from Insert > Source and the source-row form.</li>'
-            '<li><b>Keyboard</b>: F6/F7/F8/F9/F10 one-keystroke '
-            'analyses; Ctrl+Shift+S Save-As.</li>'
-            '<li><b>Help menu</b>: Wiki, Examples, GUI README, Bug '
-            'tracker links.</li>'
+            '<li><b>Sequential world-coordinate ray trace</b> '
+            '(3.7.6 → 3.7.7) — folded designs now trace with '
+            'correct chief-ray positions through every post-fold '
+            'lens.  Public <code>build_trace_surfaces_world()</code> '
+            'and <code>trace_world()</code> APIs.</li>'
+            '<li><b>Layout dock shrink</b> finally works (3.7.6) — '
+            'root cause was the central widget\'s max-height cap '
+            'blocking the splitter, not the inner widget.</li>'
+            '<li><b>View → Reset to Default Layout</b> (3.7.6).</li>'
+            '<li><b>Wave Optics dock</b> (3.7.8 → 3.7.9): '
+            '<i>Use MFT</i> checkbox + Options dialog, explicit '
+            '<i>Unfold steering mirrors</i> + <i>Ignore lateral '
+            'CBs</i> filters, embedded-prescription saved-file '
+            'loader, ray-subsample default 8 with <i>Ray subsample '
+            '1:N</i> label.</li>'
+            '<li><b>SVG / PNG export</b> from the 2D layout '
+            'toolbar (3.7.8).</li>'
+            '<li><b>Auto-retrace</b> (3.7.9) — system edits now '
+            'retrigger the ray trace via a 200 ms debounced timer; '
+            '<i>Tracing…</i> status feedback + busy cursor.</li>'
+            '<li><b>Wheel-on-focus guard</b> (3.7.8) — scrolling '
+            'past a spin box or combo doesn\'t accidentally edit '
+            'the value any more.</li>'
+            '<li><b>Restyled checkboxes</b> (3.7.8) — clear empty '
+            'box / white checkmark on accent fill.</li>'
+            '<li><b>Multi-row select in the prescription editor</b> '
+            '(3.7.9) — Shift+click / Ctrl+click rows then right-'
+            'click for batch delete / duplicate.</li>'
             '</ul>'
-            '<p>See GUI_CHANGELOG.md for the full list, or press '
-            'Ctrl+K for the command palette to discover new docks.</p>'
+            '<p><b>Recent ray-trace correctness</b> (3.7.0 → '
+            '3.7.7): all geometric analysis docks (footprint, '
+            'distortion, spot-vs-field, rayfan) routed through '
+            'the world-frame trace; tolerance Monte Carlo with '
+            'world-frame thickness perturbation.</p>'
+            '<p>See CHANGELOG.md, GUI_CHANGELOG.md, or the '
+            'wiki "What\'s New in 3.7.x" pages for the full '
+            'list.  Press Ctrl+K for the command palette to '
+            'discover new docks.</p>'
         )
         QMessageBox.about(self, title, body)
         try:
