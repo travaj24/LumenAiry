@@ -3295,23 +3295,29 @@ THEMES = {
 
 
 class _WheelOnFocusFilter(QObject):
-    """3.7.9: swallow wheel events on spin boxes / combo boxes /
-    sliders unless they currently hold keyboard focus.
+    """3.7.9: swallow ALL wheel events on spin boxes / combo boxes
+    / sliders, regardless of focus state.
 
-    The default Qt behaviour binds ``wheelEvent`` to value-change on
-    every spinbox / combobox / slider, which is a recurring source
-    of "I scrolled past this widget on my way somewhere else and
-    accidentally edited the value" friction.  The standard
-    workaround across PySide6 apps is to install one of these on
-    ``QApplication`` so the value-change only fires when the user
-    has explicitly clicked into the widget.
+    The default Qt behaviour binds ``wheelEvent`` to value-change
+    on every spinbox / combobox / slider, which is a recurring
+    source of "I scrolled and the value changed" friction --
+    including while the widget is focused, because users
+    routinely scroll the surrounding form area without intending
+    to edit a value.
+
+    3.7.9 first cut filtered only unfocused widgets; users
+    reported the focused-and-scrolling case was still broken
+    (which it was -- once you click into a spinbox to type, any
+    subsequent scroll edit-bombs it).  3.7.9 hotfix: block the
+    wheel entirely on these widgets.  Users who want
+    scroll-to-edit can click the up/down arrows or type the
+    value; the scroll is reserved for actual page scrolling.
 
     Implementation: intercept ``QEvent.Wheel`` events targeted at
-    one of the affected widget classes; if the widget doesn't have
-    focus, mark the event accepted (so it doesn't bubble further as
-    a scroll-area scroll) and return True to stop processing.  If
-    it does have focus, pass through normally so deliberate
-    in-widget scroll-to-change still works.
+    one of the affected widget classes, call ``event.ignore()``
+    so Qt re-dispatches to the parent (a containing scroll area
+    will receive it and scroll the form normally), and return
+    True to halt the wheel-edit handler.
     """
 
     def eventFilter(self, watched, event):
@@ -3320,9 +3326,8 @@ class _WheelOnFocusFilter(QObject):
                 QAbstractSpinBox, QComboBox, QSlider,
             )
             if isinstance(watched, (QAbstractSpinBox, QComboBox, QSlider)):
-                if not watched.hasFocus():
-                    event.ignore()
-                    return True
+                event.ignore()
+                return True
         return False
 
 
