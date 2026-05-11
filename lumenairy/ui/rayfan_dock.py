@@ -14,8 +14,8 @@ from matplotlib.figure import Figure
 
 from .model import SystemModel
 from ..raytrace import (
-    ray_fan_data, opd_fan_data, make_fan, trace, spot_rms,
-    Surface, find_paraxial_focus,
+    ray_fan_data, opd_fan_data, ray_fan_data_world, opd_fan_data_world,
+    make_fan, trace, spot_rms, Surface, find_paraxial_focus,
 )
 
 
@@ -95,7 +95,12 @@ class RayFanDock(QWidget):
         self.fig.clear()
         plot_type = self.combo_plot.currentIndex()
 
-        surfaces = self.sm.build_trace_surfaces()
+        # 3.7.8: world-frame surface list with image plane appended.
+        # Routes the ray-fan / OPD-fan calls through trace_world via
+        # the world-frame helpers (ray_fan_data_world /
+        # opd_fan_data_world), so folded designs get the correct
+        # tangential / sagittal residuals at the image plane.
+        surfaces = self.sm.build_run_trace_world_surfaces()
         if not surfaces:
             self.canvas.draw()
             return
@@ -123,7 +128,8 @@ class RayFanDock(QWidget):
             for i, fa_deg in enumerate(fields):
                 fa_rad = np.radians(fa_deg)
                 try:
-                    py, ey, px, ex = ray_fan_data(surfaces, wv, semi_ap, fa_rad, 101)
+                    py, ey, px, ex = ray_fan_data_world(
+                        surfaces, wv, semi_ap, fa_rad, 101)
                     c = colors[i % len(colors)]
                     ax_t.plot(py, ey * 1e6, color=c, linewidth=1.2,
                               label=f'{fa_deg:.1f}°')
@@ -159,7 +165,8 @@ class RayFanDock(QWidget):
             for i, fa_deg in enumerate(fields):
                 fa_rad = np.radians(fa_deg)
                 try:
-                    py, opd_y, px, opd_x = opd_fan_data(surfaces, wv, semi_ap, fa_rad, 101)
+                    py, opd_y, px, opd_x = opd_fan_data_world(
+                        surfaces, wv, semi_ap, fa_rad, 101)
                     c = colors[i % len(colors)]
                     ax_t.plot(py, opd_y, color=c, linewidth=1.2, label=f'{fa_deg:.1f}°')
                     ax_s.plot(px, opd_x, color=c, linewidth=1.2, label=f'{fa_deg:.1f}°')
@@ -186,21 +193,19 @@ class RayFanDock(QWidget):
             fa_sweep = np.linspace(0, max(max(fields), 5.0), 21)
             rms_values = []
 
-            # 3.7.7: world-frame surface list with image plane at
-            # the Detector's world frame (or paraxial focus).
-            # ``trace_world`` gives geometry-accurate spot RMS in
-            # folded designs; the legacy field-curvature path
-            # silently inherited the cb-pre-tilted-frame ~1 mm
-            # offset on tilted systems.
+            # 3.7.8: reuse the dock-level ``surfaces`` (already a
+            # world-frame list with image plane appended) instead
+            # of rebuilding per-iteration.  trace_world routes via
+            # _world_to_local_state at each surface for the
+            # existing intersect/refract math.
             from ..raytrace.core import trace_world
             from ..raytrace import make_rings
-            surfs_world = self.sm.build_run_trace_world_surfaces()
 
             for fa_deg in fa_sweep:
                 fa_rad = np.radians(fa_deg)
                 try:
                     rays = make_rings(semi_ap, 6, 24, fa_rad, wv)
-                    result = trace_world(rays, surfs_world, wv)
+                    result = trace_world(rays, surfaces, wv)
                     rms, _ = spot_rms(result)
                     rms_values.append(rms * 1e6)
                 except Exception:

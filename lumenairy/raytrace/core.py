@@ -2829,6 +2829,39 @@ def ray_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
     return py, ey, px, ex
 
 
+def ray_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
+                        n_rays=101):
+    """3.7.8: world-frame version of :func:`ray_fan_data`.
+
+    Identical signature and return shape to ``ray_fan_data``, but
+    expects each ``Surface`` in ``surfaces`` to have populated
+    ``world_origin`` and ``world_R`` fields and routes through
+    :func:`trace_world` so the fan is geometry-accurate on folded
+    designs (the chief-ray and per-pupil-coord ray traces all
+    land at the correct world image-plane position).
+    """
+    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
+    res_y = trace_world(fan_y, surfaces, wavelength)
+    img_y = res_y.image_rays
+
+    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength)
+    res_chief = trace_world(chief, surfaces, wavelength)
+    y_ref = res_chief.image_rays.y[0]
+    x_ref = res_chief.image_rays.x[0]
+
+    py = np.linspace(-1, 1, n_rays)
+    ey = np.where(img_y.alive, img_y.y - y_ref, np.nan)
+
+    fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
+    res_x = trace_world(fan_x, surfaces, wavelength)
+    img_x = res_x.image_rays
+
+    px = np.linspace(-1, 1, n_rays)
+    ex = np.where(img_x.alive, img_x.x - x_ref, np.nan)
+
+    return py, ey, px, ex
+
+
 def ray_fan_plot(surfaces, wavelength, semi_aperture, field_angles=None,
                  n_rays=101, ax=None, units='um'):
     """Plot transverse ray aberration fans.
@@ -2940,6 +2973,36 @@ def opd_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
 
     px = np.linspace(-1, 1, n_rays)
     opd_x = np.where(img_x.alive, (img_x.opd - opd_ref) / wavelength, np.nan)
+
+    return py, opd_y, px, opd_x
+
+
+def opd_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
+                        n_rays=101):
+    """3.7.8: world-frame version of :func:`opd_fan_data`.
+
+    Identical signature and return shape; routes through
+    :func:`trace_world` for fold-accurate OPD residuals.
+    """
+    fan_y = make_fan('y', semi_aperture, n_rays, field_angle, wavelength)
+    res_y = trace_world(fan_y, surfaces, wavelength)
+    img_y = res_y.image_rays
+
+    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength)
+    res_chief = trace_world(chief, surfaces, wavelength)
+    opd_ref = res_chief.image_rays.opd[0]
+
+    py = np.linspace(-1, 1, n_rays)
+    opd_y = np.where(img_y.alive,
+                     (img_y.opd - opd_ref) / wavelength, np.nan)
+
+    fan_x = make_fan('x', semi_aperture, n_rays, field_angle, wavelength)
+    res_x = trace_world(fan_x, surfaces, wavelength)
+    img_x = res_x.image_rays
+
+    px = np.linspace(-1, 1, n_rays)
+    opd_x = np.where(img_x.alive,
+                     (img_x.opd - opd_ref) / wavelength, np.nan)
 
     return py, opd_y, px, opd_x
 

@@ -584,7 +584,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.7.7"
+__version__ = "3.7.8"
 
 #
 # __all__ is grouped by user-journey tier:

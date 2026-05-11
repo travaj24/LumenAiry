@@ -27,6 +27,7 @@ from ..raytrace import (
     Surface, trace, make_rings, spot_rms, system_abcd,
     find_paraxial_focus,
 )
+from ..raytrace.core import trace_world
 
 
 class ToleranceWorker(QThread):
@@ -49,7 +50,20 @@ class ToleranceWorker(QThread):
         rms_list = []
         efl_list = []
         rng = np.random.default_rng()
-        base_surfaces = self.model.build_trace_surfaces()
+        # 3.7.8: world-frame trace + perturb the WORLD positions of
+        # downstream surfaces when a thickness is perturbed (so
+        # folded designs see the correct downstream shift along the
+        # perturbed gap's local +z axis).  The legacy code only
+        # perturbed Surface.thickness, which the world trace ignores
+        # entirely -- thickness perturbations would have had zero
+        # effect post-3.7.6.  This rewrite makes the Monte Carlo
+        # actually tolerance the gaps in the world frame.
+        base_world = self.model.build_run_trace_world_surfaces()
+        # Legacy local list -- still used for ABCD / paraxial EFL/BFL
+        # because the world list has Surface.thickness only carried
+        # for compat and system_abcd needs real per-surface
+        # thicknesses for the paraxial transfer matrices.
+        base_local = self.model.build_trace_surfaces()
         wv = self.model.wavelength_m
         semi_ap = self.model.epd_m / 2.0
 
@@ -59,72 +73,80 @@ class ToleranceWorker(QThread):
                 trial / max(self.n_trials, 1),
                 f'trial {trial + 1}/{self.n_trials}')
 
-            # Decenter is a lateral ray perturbation applied to the
-            # whole incoming bundle: a random offset draws the ray
-            # starting point in (x, y).  Physically equivalent to
-            # perturbing one lens element's decenter when only one lens
-            # is present; for multi-element systems it's a first-order
-            # approximation until per-element decenters are plumbed
-            # through Surface.
             if self.tol_decenter_mm > 0:
                 dec_x = rng.normal(0, self.tol_decenter_mm * 1e-3)
                 dec_y = rng.normal(0, self.tol_decenter_mm * 1e-3)
             else:
                 dec_x = dec_y = 0.0
 
-            # Perturb surfaces
-            surfs = []
-            for s in base_surfaces:
-                R = s.radius
-                if np.isfinite(R) and self.tol_radius_pct > 0:
-                    R *= (1 + rng.normal(0, self.tol_radius_pct / 100))
-
-                # Anamorphic: independently perturb the y-axis radius so
-                # that biconic / cylindrical surfaces are toleranced rather
-                # than silently snapping to rotational symmetry.
-                Ry = s.radius_y
-                if (Ry is not None and np.isfinite(Ry)
-                        and self.tol_radius_pct > 0):
-                    Ry *= (1 + rng.normal(0, self.tol_radius_pct / 100))
-
-                t = s.thickness
-                if t > 0 and self.tol_thickness_mm > 0:
-                    t += rng.normal(0, self.tol_thickness_mm * 1e-3)
-                    t = max(t, 0)
-
-                surfs.append(Surface(
-                    radius=R, conic=s.conic,
+            # --- Perturb world surfaces ---
+            # Copy base world surfaces with fresh world_origin / world_R
+            # arrays so this trial's mutations don't leak across trials.
+            trial_surfs = []
+            for s in base_world:
+                trial_surfs.append(Surface(
+                    radius=s.radius, conic=s.conic,
                     aspheric_coeffs=s.aspheric_coeffs,
                     semi_diameter=s.semi_diameter,
-                    glass_before=s.glass_before, glass_after=s.glass_after,
-                    is_mirror=s.is_mirror, thickness=t,
-                    label=s.label,
-                    surf_num=s.surf_num,
-                    radius_y=Ry,
-                    conic_y=s.conic_y,
+                    glass_before=s.glass_before,
+                    glass_after=s.glass_after,
+                    is_mirror=s.is_mirror, thickness=s.thickness,
+                    label=s.label, surf_num=s.surf_num,
+                    radius_y=s.radius_y, conic_y=s.conic_y,
                     aspheric_coeffs_y=s.aspheric_coeffs_y,
+                    world_origin=(s.world_origin.copy()
+                                  if s.world_origin is not None
+                                  else None),
+                    world_R=(s.world_R.copy()
+                             if s.world_R is not None else None),
                 ))
 
+            # Radius perturbations are per-surface, no downstream shift.
+            for s in trial_surfs:
+                if np.isfinite(s.radius) and self.tol_radius_pct > 0:
+                    s.radius *= (1 + rng.normal(
+                        0, self.tol_radius_pct / 100))
+                if (s.radius_y is not None
+                        and np.isfinite(s.radius_y)
+                        and self.tol_radius_pct > 0):
+                    s.radius_y *= (1 + rng.normal(
+                        0, self.tol_radius_pct / 100))
+
+            # Thickness perturbations: shift all downstream
+            # world_origins by delta_t * surface_i.world_R[:,2].
+            # Only positive-thickness gaps are perturbed (matches
+            # the legacy filter -- skip post-mirror Zemax-signed
+            # negative thicknesses to avoid double-counting).
+            if self.tol_thickness_mm > 0:
+                for i, s in enumerate(trial_surfs[:-1]):
+                    if s.thickness > 0 and s.world_R is not None:
+                        delta_t = rng.normal(
+                            0, self.tol_thickness_mm * 1e-3)
+                        shift = delta_t * s.world_R[:, 2]
+                        for s2 in trial_surfs[i + 1:]:
+                            if s2.world_origin is not None:
+                                s2.world_origin = (
+                                    s2.world_origin + shift)
+
             try:
-                # ABCD
-                _, efl, bfl, _ = system_abcd(surfs, wv)
+                # ABCD on the legacy local list -- world thickness
+                # perturbations are first-order on EFL, so we use
+                # the un-perturbed paraxial EFL/BFL as a stable
+                # reference for the live histogram.  For a tighter
+                # tolerance histogram on EFL itself, a future
+                # release can re-derive paraxial from the perturbed
+                # world list.
+                _, efl, bfl, _ = system_abcd(base_local, wv)
                 efl_list.append(efl * 1e3)  # mm
 
-                # Trace -- offset the whole bundle by the sampled decenter.
                 rays = make_rings(semi_ap, 6, 24, 0.0, wv)
                 if dec_x or dec_y:
                     rays.x = rays.x + dec_x
                     rays.y = rays.y + dec_y
-                if np.isfinite(bfl) and bfl > 0:
-                    surfs[-1].thickness = bfl
-                    surfs.append(Surface(radius=np.inf, semi_diameter=np.inf,
-                        glass_before=surfs[-1].glass_after,
-                        glass_after=surfs[-1].glass_after))
-                result = trace(rays, surfs, wv)
+
+                result = trace_world(rays, trial_surfs, wv)
                 rms, _ = spot_rms(result)
-                rms_list.append(rms * 1e6)  # µm
-                # Emit the running trial so the dock can update its
-                # live histogram.
+                rms_list.append(rms * 1e6)
                 self.trial_result.emit(
                     float(rms * 1e6), float(efl * 1e3))
             except Exception as e:

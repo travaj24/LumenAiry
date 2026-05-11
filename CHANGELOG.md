@@ -2,6 +2,39 @@
 
 All notable changes to the core library are documented here.
 
+## [3.7.8] — 2026-05-11
+
+Closes the remaining ray-trace gaps from the 3.7.6 / 3.7.7
+world-frame rollout: the paraxial fan helpers
+(`ray_fan_data`, `opd_fan_data`) now have world-frame
+counterparts, so the Ray Fan dock's tangential / sagittal /
+OPD plots are fold-accurate on the same prescriptions where
+`run_trace` already was.
+
+### Added
+
+* `ray_fan_data_world(surfaces, wavelength, semi_aperture,
+  field_angle, n_rays)` -- identical signature and return
+  shape to `ray_fan_data`, but expects each Surface to have
+  `world_origin` / `world_R` populated and routes through
+  `trace_world` so the per-pupil-coordinate fan rays and
+  reference chief ray all land at the correct world image
+  position in folded designs.
+* `opd_fan_data_world(...)` -- world-frame OPD residuals.
+* Both helpers re-exported from `lumenairy.raytrace` for
+  drop-in use by the GUI's Ray Fan dock and external scripts.
+
+### Notes
+
+* `ray_fan_plot` (the matplotlib helper that wraps
+  `ray_fan_data`) is unchanged -- it remains a paraxial-trace
+  shortcut for axial systems.  Use `trace_world` +
+  `ray_fan_data_world` for folded systems.
+
+### Backwards compatibility
+
+No public API removals.  All 26 validation suite files pass.
+
 ## [3.7.7] — 2026-05-11
 
 Public API for the world-frame trace + GUI-side correctness rollout.

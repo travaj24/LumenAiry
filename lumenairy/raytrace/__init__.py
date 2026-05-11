@@ -35,6 +35,8 @@ from .core import (
     ray_fan_plot,
     ray_fan_plot_prescription,
     opd_fan_data,
+    ray_fan_data_world,
+    opd_fan_data_world,
     through_focus_rms,
     refocus,
     find_stop,

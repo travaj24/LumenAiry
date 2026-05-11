@@ -15,6 +15,104 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.7.8] — 2026-05-11
+
+Closes the remaining 3.7.6 / 3.7.7 fold-correctness gaps and
+ships three discoverability / workflow polishes.  All four
+ray-trace docks (Footprint, Distortion, Spot vs Field, Ray
+Fan) and the Tolerance Monte Carlo now route through the
+world-frame trace.
+
+### LumenAiry Designer is still in BETA
+
+Layouts, dock arrangements, default workspaces, and even menu
+names continue to change between minor releases.  Pin a
+specific version if you depend on a particular GUI behaviour.
+
+### Ray Fan dock -- tangential / sagittal / OPD plots are now
+fold-accurate
+
+3.7.7 migrated the Ray Fan dock's field-curvature plot to the
+world-frame trace but left the main tangential / sagittal
+ray-fan and OPD-fan plots on the legacy `ray_fan_data` /
+`opd_fan_data` helpers (which used the local-frame
+`trace()`).  3.7.8 plumbs the dock through the new
+`ray_fan_data_world` / `opd_fan_data_world` core helpers, so
+folded designs see the same `~1/cos(θ)`-corrected residuals
+the layouts have been showing since 3.7.6.
+
+### Tolerance dock -- world-frame Monte Carlo
+
+3.7.7 documented the Tolerance dock as "intentionally not
+migrated" because the Monte Carlo trial loop perturbs
+`Surface.thickness`, which the world trace ignores entirely
+(the gap is encoded in the next surface's `world_origin`).
+3.7.8 fixes this properly: each trial copies the world surface
+list with fresh `world_origin` / `world_R` arrays, then
+perturbs the DOWNSTREAM surfaces' `world_origin` by
+`delta_t * surface_i.world_R[:, 2]` for every positive-
+thickness gap.  Radius perturbations remain per-surface (no
+downstream shift).  Decenter still perturbs the ray bundle.
+
+This is the correct world-frame analogue of the local-frame
+thickness-chain perturbation: shifting the gap between surface
+i and surface i+1 by `delta_t` shifts surface i+1 (and every
+downstream surface including the image plane) by the same
+delta along surface i's local +z direction, exactly as the
+local trace would.
+
+### 2D layout toolbar -- source-preview toggle exposed
+
+The `show_source_preview` preference has existed since 3.6.1
+but was undiscoverable (only settable by editing the prefs
+dict directly).  Added a `Source preview` checkbox to the 2D
+layout toolbar that persists to the same pref key, so users
+can flick downstream preview rays on / off without leaving
+the dock.
+
+### 2D layout toolbar -- Export to SVG / PNG
+
+New `Export…` button in the 2D layout toolbar opens a file
+dialog and renders the current scene to either SVG (vector,
+zoom-independent line weight, default) or PNG (raster, 2×
+device-pixel-ratio so slide-deck inserts stay sharp).
+Includes a 40-px margin around the bounding box matching the
+"Reset View" framing.
+
+### Wave-optics fold-awareness -- inventoried, deferred
+
+The Wave Optics dock still routes through
+`apply_real_lens_traced` (`lumenairy/elements/lenses.py`),
+which builds its own surface list from the prescription
+dict's `'surfaces'` key and calls the legacy local-frame
+`trace()`.  The prescription's `'surfaces'` key drops
+coord-break entries during `to_prescription()`, so wave-
+optics propagation through folded systems silently runs the
+unfolded equivalent path.  A `tilted_asm_propagate` exists in
+`lumenairy.propagation` and could feed a fold-aware lens
+propagator, but composing through a folded prescription
+needs ~500-1000 lines of new core code (per-fold rotation
+bookkeeping, tilted-frame Newton inversion in the OPL
+extraction).  Documented as a known limitation; queued for a
+future minor release.
+
+### Non-sequential trace -- deferred to a major release
+
+Beam splitters, ghost analysis, double-pass systems can't be
+expressed in the sequential trace.  The 3.7.6 world-frame
+surface representation (`world_origin` + `world_R` per
+surface) is exactly the input a non-sequential trace would
+need, so the foundation is in place -- but implementing the
+ray-vs-surfaces priority search, the per-ray surface
+candidate list, and the energy bookkeeping for
+splitter / partial-reflection branches is the scope of an
+architectural overhaul rather than a dock migration.  Queued
+for the 3.9 / 4.0 line.
+
+### Backwards compatibility
+
+No public API removals.  All 26 validation suite files pass.
+
 ## [3.7.7] — 2026-05-11
 
 World-frame correctness rollout to the remaining analysis docks,

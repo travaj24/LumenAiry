@@ -10,6 +10,48 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.7.8
+
+Closes the remaining 3.7.6 / 3.7.7 fold-correctness gaps and ships
+three discoverability / workflow polishes.  All four ray-trace
+analysis docks (Footprint, Distortion, Spot vs Field, Ray Fan) and
+the Tolerance Monte Carlo now route through the world-frame trace.
+
+**Library**
+
+- New `ray_fan_data_world` and `opd_fan_data_world` -- drop-in
+  world-frame analogues of `ray_fan_data` / `opd_fan_data`.
+
+**GUI**
+
+- Ray Fan dock's tangential / sagittal / OPD plots now route
+  through `*_world` helpers (3.7.7 only migrated the field-
+  curvature plot).
+- Tolerance dock Monte Carlo properly perturbs world-frame
+  geometry: each trial shifts downstream `world_origin` values
+  by `delta_t * surface_i.world_R[:,2]` for every positive-
+  thickness gap.  Previously, 3.7.7 documented this as
+  "intentionally not migrated" because `Surface.thickness`
+  perturbations are ignored by the world trace.
+- 2D layout: source-preview toggle surfaced as a toolbar
+  checkbox (was a buried pref since 3.6.1).
+- 2D layout: new `Export…` button for SVG (vector) / PNG (2×
+  raster).
+
+**Known limitations queued for future releases**
+
+- Wave-optics propagation through folded systems still routes
+  the unfolded equivalent.  Infrastructure inventoried; ~500-
+  1000 LOC core work to wire fold-aware ASM into
+  `apply_real_lens_traced`.
+- Non-sequential trace (beam splitters, ghosts, double-pass)
+  needs an architectural overhaul; the world-frame surface
+  representation gives the right foundation but is not enough
+  on its own.
+
+See [CHANGELOG.md](CHANGELOG.md) and [GUI_CHANGELOG.md](GUI_CHANGELOG.md)
+for the full list.
+
 ## What's new in 3.7.7
 
 World-frame correctness rollout to the remaining analysis docks

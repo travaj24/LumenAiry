@@ -88,6 +88,32 @@ class Layout2DView(QWidget):
             'Fit the entire optical system in view.')
         btn_reset.clicked.connect(self._reset_view)
         toolbar.addWidget(btn_reset)
+        # 3.7.8: Export the current scene to a vector (SVG) or
+        # raster (PNG) file.  Useful for design reviews, papers,
+        # and pasting into slide decks.  Single button → file
+        # dialog dispatches on extension.
+        btn_export = QPushButton('Export…', toolbar_widget)
+        btn_export.setFixedHeight(22)
+        btn_export.setToolTip(
+            'Export the layout to SVG (vector) or PNG (raster).')
+        btn_export.clicked.connect(self._export_scene)
+        toolbar.addWidget(btn_export)
+        # 3.7.8: Surface a checkbox for the source-preview rays
+        # (drawn from the source plane to the first optical surface,
+        # coloured by wavelength; off by default).  The underlying
+        # pref already existed but was undiscoverable.
+        from PySide6.QtWidgets import QCheckBox
+        chk_src = QCheckBox('Source preview', toolbar_widget)
+        chk_src.setFixedHeight(22)
+        chk_src.setToolTip(
+            "Draw preview rays from the source plane to the first "
+            "optical surface.  Shape depends on source type "
+            "(parallel for plane wave, diverging fan for point "
+            "source, NA cone for fiber mode, etc).")
+        chk_src.setChecked(
+            bool(self.sm.prefs.get('show_source_preview', False)))
+        chk_src.toggled.connect(self._toggle_source_preview)
+        toolbar.addWidget(chk_src)
         toolbar.addStretch()
         # 3.7.5: direction-colour legend.  Hidden by default; the
         # rebuild() pass populates / shows / hides it based on
@@ -924,6 +950,71 @@ class Layout2DView(QWidget):
         factor = 1.15 if event.angleDelta().y() > 0 else 0.87
         self.view.scale(factor, factor)
         event.accept()
+
+    def _export_scene(self):
+        """3.7.8: export the current 2D scene to SVG (vector, default)
+        or PNG (raster) for design reviews and figures.
+
+        Vector export preserves zoom-independent line weight; raster
+        export at 2x device-pixel-ratio captures the current view
+        antialiasing for slide decks.  Dispatches on the chosen
+        filename extension.
+        """
+        from PySide6.QtWidgets import QFileDialog
+        from PySide6.QtCore import QRectF
+        from PySide6.QtGui import QImage, QPainter
+        if not self.scene.items():
+            return
+        target_rect = self.scene.sceneRect().adjusted(-40, -40, 40, 40)
+        path, _ = QFileDialog.getSaveFileName(
+            self, 'Export layout',
+            'lumenairy_layout.svg',
+            'SVG vector (*.svg);;PNG raster (*.png)')
+        if not path:
+            return
+        ext = path.lower().rsplit('.', 1)[-1] if '.' in path else ''
+        try:
+            if ext == 'svg':
+                from PySide6.QtSvg import QSvgGenerator
+                gen = QSvgGenerator()
+                gen.setFileName(path)
+                gen.setSize(target_rect.size().toSize())
+                gen.setViewBox(target_rect)
+                gen.setTitle('LumenAiry Designer layout')
+                gen.setDescription(
+                    'Exported from LumenAiry Designer 2D layout')
+                painter = QPainter(gen)
+                self.scene.render(painter, QRectF(), target_rect)
+                painter.end()
+            else:
+                # PNG (or any other ext -> coerce to PNG)
+                if ext != 'png':
+                    path = path + '.png'
+                w = int(target_rect.width() * 2)
+                h = int(target_rect.height() * 2)
+                img = QImage(w, h, QImage.Format_ARGB32)
+                img.fill(QColor(self.sm.prefs.get('bg_2d',
+                                                   '#050709')))
+                painter = QPainter(img)
+                painter.setRenderHint(
+                    QPainter.RenderHint.Antialiasing, True)
+                self.scene.render(painter, QRectF(0, 0, w, h),
+                                  target_rect)
+                painter.end()
+                img.save(path)
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, 'Export failed',
+                f'Could not export layout:\n{e}')
+
+    def _toggle_source_preview(self, on):
+        """3.7.8: toolbar checkbox handler -- persists the pref and
+        rebuilds the scene so the source-preview rays appear /
+        disappear immediately.
+        """
+        self.sm.prefs['show_source_preview'] = bool(on)
+        self.rebuild()
 
     def _reset_view(self):
         """Fit the entire scene with a small margin (toolbar button)."""
