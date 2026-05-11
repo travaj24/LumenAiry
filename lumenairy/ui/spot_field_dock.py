@@ -95,6 +95,7 @@ class SpotFieldDock(QWidget):
         from ..raytrace import (
             find_paraxial_focus, trace, make_rings, spot_rms,
             system_abcd, Surface)
+        from ..raytrace.core import trace_world
         self.fig.clear()
 
         surfaces = self.sm.build_trace_surfaces()
@@ -108,7 +109,10 @@ class SpotFieldDock(QWidget):
         per_ring = self.spin_per_ring.value()
         fields_deg = list(self.sm.field_angles_deg) or [0.0]
 
-        # Add a flat image plane at paraxial focus
+        # Paraxial BFL for the dock's status line.  Calculated on
+        # the legacy local list so cb_pre Surfaces with their
+        # thickness=0 contribute correctly to the cumulative axial
+        # transfer.
         try:
             _, efl, bfl, _ = system_abcd(surfaces, wv)
             if not (np.isfinite(bfl) and bfl > 0):
@@ -119,12 +123,13 @@ class SpotFieldDock(QWidget):
             self._draw_message('Cannot compute BFL.')
             return
 
-        surfs_img = surfaces[:]
-        surfs_img[-1].thickness = bfl
-        surfs_img.append(Surface(
-            radius=np.inf, semi_diameter=np.inf,
-            glass_before=surfs_img[-1].glass_after,
-            glass_after=surfs_img[-1].glass_after))
+        # 3.7.7: world-frame surfaces with image plane already
+        # appended at the Detector's world frame (or paraxial
+        # focus).  Eliminates the per-call manual image-plane
+        # construction and gives correct geometry on folded
+        # designs.
+        surfs_img = self.sm.build_run_trace_world_surfaces(
+            image_distance=bfl)
 
         # Trace each field, collect spots
         results = []
@@ -132,7 +137,7 @@ class SpotFieldDock(QWidget):
             fa_rad = np.radians(fa_deg)
             try:
                 rays = make_rings(semi_ap, rings, per_ring, fa_rad, wv)
-                r = trace(rays, surfs_img, wv)
+                r = trace_world(rays, surfs_img, wv)
             except Exception:
                 r = None
             results.append((fa_deg, r))

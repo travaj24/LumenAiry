@@ -86,9 +86,15 @@ class FootprintDock(QWidget):
         from ..raytrace import (
             surfaces_from_prescription, trace, make_rings,
             find_paraxial_focus, Surface)
+        from ..raytrace.core import trace_world
         self.fig.clear()
 
-        surfaces = self.sm.build_trace_surfaces()
+        # 3.7.7: switch to the world-frame trace path so folded
+        # designs render with correct per-surface ray positions.
+        # ``build_run_trace_world_surfaces`` already appends the
+        # image plane at the Detector's world frame (or the
+        # paraxial focus along the last surface's local +z).
+        surfaces = self.sm.build_run_trace_world_surfaces()
         if not surfaces:
             self._draw_message('No surfaces in current system.')
             return
@@ -104,21 +110,6 @@ class FootprintDock(QWidget):
         else:
             fields_deg = list(self.sm.field_angles_deg) or [0.0]
 
-        # Add a flat image plane at the paraxial focus so the last subplot
-        # is the spot diagram at the image surface (consistent with what
-        # the user sees in the Spot Diagram dock).
-        try:
-            bfl = find_paraxial_focus(surfaces, wv)
-            if np.isfinite(bfl) and bfl > 0:
-                surfaces = surfaces[:]
-                surfaces[-1].thickness = bfl
-                surfaces.append(Surface(
-                    radius=np.inf, semi_diameter=np.inf,
-                    glass_before=surfaces[-1].glass_after,
-                    glass_after=surfaces[-1].glass_after))
-        except Exception:
-            pass
-
         # Lay out subplots: one per refracting/image surface.
         n_surf = len(surfaces)
         n_cols = min(4, n_surf)
@@ -132,7 +123,7 @@ class FootprintDock(QWidget):
             fa_rad = np.radians(fa_deg)
             try:
                 rays = make_rings(semi_ap, rings, per_ring, fa_rad, wv)
-                result = trace(rays, surfaces, wv)
+                result = trace_world(rays, surfaces, wv)
             except Exception:
                 continue
 

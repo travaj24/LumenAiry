@@ -2,6 +2,52 @@
 
 All notable changes to the core library are documented here.
 
+## [3.7.7] — 2026-05-11
+
+Public API for the world-frame trace + GUI-side correctness rollout.
+The 3.7.6 release added the world-frame trace path (`trace_world`)
+but only the GUI's main `run_trace` used it; analysis docks
+(footprint, distortion, spot-vs-field, rayfan field-curvature)
+still built their own surface lists via the legacy local-frame
+path and inherited the residual ~1/cos(θ) geometry error in
+folded designs.  3.7.7 promotes the world-frame surface builder
+to a public method and routes those docks through it.
+
+### Added
+
+* `SystemModel.build_trace_surfaces_world()` — public cached
+  accessor for the world-frame surface list (one Surface per
+  actual optical surface, each carrying absolute
+  `world_origin` and `world_R`).  Pair with `trace_world` for
+  folded-system-accurate analysis from any consumer that
+  currently calls `build_trace_surfaces()` + `trace()`.
+* `SystemModel.build_run_trace_world_surfaces(image_distance=
+  None)` — world-frame surface list with an image-plane
+  Surface appended at the Detector's world frame (or, if no
+  Detector / zero distance, at the last optical surface
+  advanced by `image_distance` (or the paraxial BFL) along its
+  local `+z` axis).  This is the surface list every analysis
+  dock needs when it wants "full trace with image plane".
+
+### Changed
+
+* `SystemModel.__init__` and `_invalidate` add
+  `self._flat_surfaces_world_cache = None` so the world
+  surface list is cached and invalidated on the same
+  granularity as the legacy `build_trace_surfaces()` cache.
+
+### Backwards compatibility
+
+No public API removals.  `build_trace_surfaces()` /
+`_build_trace_surfaces_internal()` continue to return the
+legacy local-frame list (with cb_pre Surfaces) for ABCD /
+paraxial helpers and any external consumer that hasn't yet
+migrated.  All 25 numerical validation files still pass
+unchanged; a new `validation/gui/test_layout_shrink.py`
+brings the suite total to 26 files / +14 assertions covering
+GUI dock-shrink physics and tx71 world-frame chief-ray
+landings.
+
 ## [3.7.6] — 2026-05-11
 
 Sequential **world-coordinate** ray trace.  The core trace engine

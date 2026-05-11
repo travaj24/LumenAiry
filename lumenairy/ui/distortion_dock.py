@@ -93,8 +93,15 @@ class DistortionDock(QWidget):
         from ..raytrace import (
             surfaces_from_prescription, find_paraxial_focus, trace,
             _make_bundle, system_abcd, Surface)
+        from ..raytrace.core import trace_world
         self.fig.clear()
 
+        # 3.7.7: world-frame trace so distortion analysis is
+        # geometry-accurate on folded designs.  ``system_abcd``
+        # still runs on the legacy local list (no behaviour
+        # change for paraxial: world and local lists have the
+        # same optical-power surfaces; world just drops the
+        # zero-power cb_pre Surfaces).
         surfaces = self.sm.build_trace_surfaces()
         if not surfaces:
             self._draw_message('No surfaces in current system.')
@@ -102,8 +109,7 @@ class DistortionDock(QWidget):
 
         wv = self.sm.wavelength_m
 
-        # Need EFL + BFL for the f*tan(theta) reference and to put
-        # a flat image plane at the paraxial focus.
+        # Need EFL + BFL for the f*tan(theta) reference.
         try:
             _, efl, bfl, _ = system_abcd(surfaces, wv)
         except Exception as e:
@@ -114,13 +120,11 @@ class DistortionDock(QWidget):
             self._draw_message('Need a converging system with finite EFL/BFL.')
             return
 
-        # Build the surfaces-to-image-plane stack
-        surfs_img = surfaces[:]
-        surfs_img[-1].thickness = bfl
-        surfs_img.append(Surface(
-            radius=np.inf, semi_diameter=np.inf,
-            glass_before=surfs_img[-1].glass_after,
-            glass_after=surfs_img[-1].glass_after))
+        # World-frame surfaces with image plane appended at the
+        # Detector's world frame (or paraxial focus along last
+        # surface's local +z if no Detector).
+        surfs_img = self.sm.build_run_trace_world_surfaces(
+            image_distance=bfl)
 
         # Sweep field angles: 0 → max
         max_deg = float(self.spin_max_deg.value())
@@ -137,7 +141,7 @@ class DistortionDock(QWidget):
                     x=np.array([0.0]), y=np.array([0.0]),
                     L=np.array([0.0]), M=np.array([np.sin(theta)]),
                     wavelength=wv)
-                result = trace(rays, surfs_img, wv)
+                result = trace_world(rays, surfs_img, wv)
                 if result.image_rays.alive[0]:
                     h_chief.append(float(result.image_rays.y[0]))
                 else:
@@ -213,7 +217,7 @@ class DistortionDock(QWidget):
                         L=np.array([np.sin(tx)]),
                         M=np.array([np.sin(ty)]),
                         wavelength=wv)
-                    r = trace(rays, surfs_img, wv)
+                    r = trace_world(rays, surfs_img, wv)
                     if r.image_rays.alive[0]:
                         actual_x[iy, ix] = r.image_rays.x[0]
                         actual_y[iy, ix] = r.image_rays.y[0]

@@ -145,6 +145,18 @@ class Layout3DView(QWidget):
             self._plotter.interactor.setSizePolicy(
                 QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(self._plotter.interactor, stretch=1)
+            # 3.7.7: keep pixel-per-mm constant when the viewport
+            # resizes (so undocking + shrinking the floating window
+            # CLIPS the optics instead of rescaling them).  VTK's
+            # default is to rescale the rendered image to fit the
+            # viewport, which compresses the optics when the window
+            # shrinks -- users want the lens to stay the same on-
+            # screen size and just have edges cut off.  We hook the
+            # viewport widget's resizeEvent and adjust the camera's
+            # ``parallel_scale`` (or, for perspective, the
+            # ``view_angle``) by the ratio of new to old viewport
+            # height so the world-units-per-pixel ratio stays fixed.
+            self._plotter.interactor.installEventFilter(self)
         elif PYVISTA_AVAILABLE:
             # Fallback: static image label
             self._fallback_label = QLabel('pyvistaqt not available — static render only.\npip install pyvistaqt')
@@ -864,6 +876,49 @@ class Layout3DView(QWidget):
             else:
                 return '#ff4444'
         return '#8888cc'
+
+    def eventFilter(self, watched, event):
+        """3.7.7: keep VTK pixel-per-mm constant when the viewport
+        resizes -- shrinking clips the optics, doesn't rescale them.
+
+        Default VTK behaviour: ``parallel_scale`` (the half-height
+        of the visible region in world units) is fixed by the
+        camera, so when the viewport pixel height changes the
+        world-per-pixel ratio changes proportionally and the image
+        rescales.  Same for perspective: ``view_angle`` (vertical
+        FOV) is fixed so smaller viewport = smaller image of the
+        same world content.
+
+        Fix: on every viewport resize, scale the camera's
+        ``parallel_scale`` (parallel projection) or
+        ``view_angle``-via-tan (perspective projection) by the
+        ratio of new to old viewport height.  This keeps the
+        on-screen pixel size of every world feature constant; the
+        viewport just clips at its new edges.
+        """
+        from PySide6.QtCore import QEvent
+        if (self._plotter is not None
+                and watched is self._plotter.interactor
+                and event.type() == QEvent.Resize):
+            old = event.oldSize()
+            new = event.size()
+            if old.height() > 0 and new.height() > 0:
+                ratio = new.height() / old.height()
+                if ratio > 0 and abs(ratio - 1.0) > 1e-6:
+                    try:
+                        cam = self._plotter.camera
+                        if cam.parallel_projection:
+                            cam.parallel_scale = (
+                                cam.parallel_scale * ratio)
+                        else:
+                            half = np.radians(cam.view_angle) / 2.0
+                            new_half_tan = np.tan(half) * ratio
+                            cam.view_angle = float(
+                                2.0 * np.degrees(np.arctan(new_half_tan)))
+                        self._plotter.render()
+                    except Exception:
+                        pass
+        return super().eventFilter(watched, event)
 
     def minimumSizeHint(self):
         """3.7.2: report a tiny minimum so the QDockWidget will let

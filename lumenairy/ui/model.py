@@ -492,6 +492,7 @@ class SystemModel(QObject):
         self._efl = None
         self._bfl = None
         self._flat_surfaces_cache = None
+        self._flat_surfaces_world_cache = None
 
         # Undo / redo stacks.  Each entry is a deep copy of everything
         # needed to reproduce the system (see _capture_state /
@@ -1177,6 +1178,7 @@ class SystemModel(QObject):
         self._efl = None
         self._bfl = None
         self._flat_surfaces_cache = None
+        self._flat_surfaces_world_cache = None
         # 3.7.3: keep each Element's cached world-frame ``origin`` /
         # ``R`` in sync with the relative fields after any structural
         # change.  Layout views and the trace-surface builder read
@@ -1852,6 +1854,85 @@ class SystemModel(QObject):
             return self._flat_surfaces_cache
         self._flat_surfaces_cache = self._build_trace_surfaces_internal()
         return self._flat_surfaces_cache
+
+    def build_trace_surfaces_world(self):
+        """3.7.7: Public cached accessor for the world-frame
+        trace surface list (one :class:`Surface` per actual
+        optical surface, each carrying absolute ``world_origin``
+        and ``world_R``).  Pair with :func:`trace_world` for
+        folded-system-accurate analysis from any dock that
+        currently calls ``build_trace_surfaces()`` +
+        :func:`trace`.
+
+        The world list has FEWER entries than the legacy local
+        list -- no ``is_coordbrk=True`` Surfaces, since tilts
+        are absorbed into each surface's ``world_R``.  Any code
+        that indexes ray history by hard-coded surface number
+        and runs against tilted systems needs to walk
+        ``result.surfaces`` rather than the legacy list to stay
+        index-aligned.
+        """
+        if self._flat_surfaces_world_cache is not None:
+            return self._flat_surfaces_world_cache
+        self._flat_surfaces_world_cache = self._build_trace_surfaces_world()
+        return self._flat_surfaces_world_cache
+
+    def build_run_trace_world_surfaces(self, image_distance=None):
+        """3.7.7: World-frame surface list with a final
+        image-plane Surface appended at the Detector's world
+        frame (or, if no Detector / zero distance, at the last
+        surface advanced by ``image_distance`` (or the paraxial
+        BFL) along its local +z axis).
+
+        This is the surface list that the docks need when they
+        want a "full trace with image plane".  Returns a fresh
+        copy so the caller can mutate (e.g. override the image
+        distance) without affecting the cache.
+        """
+        world_list = [Surface(
+            radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,
+            glass_before=s.glass_before, glass_after=s.glass_after,
+            is_mirror=s.is_mirror, thickness=s.thickness,
+            label=s.label, surf_num=s.surf_num,
+            radius_y=s.radius_y, conic_y=s.conic_y,
+            world_origin=(s.world_origin.copy()
+                          if s.world_origin is not None else None),
+            world_R=(s.world_R.copy()
+                     if s.world_R is not None else None),
+        ) for s in self.build_trace_surfaces_world()]
+        if not world_list:
+            return world_list
+
+        det = self.elements[-1] if self.elements else None
+        img_world_origin = None
+        img_world_R = None
+        if det and det.elem_type == 'Detector' and det.distance_mm > 0:
+            img_world_origin = np.asarray(det.origin, dtype=float) * 1e-3
+            img_world_R = np.asarray(det.R, dtype=float).copy()
+        elif image_distance is None:
+            try:
+                bfl = find_paraxial_focus(world_list, self.wavelength_m)
+                if np.isfinite(bfl) and bfl > 0:
+                    image_distance = bfl
+            except Exception:
+                pass
+
+        if img_world_origin is None and image_distance is not None:
+            last = world_list[-1]
+            img_world_origin = (last.world_origin
+                                + image_distance * last.world_R[:, 2])
+            img_world_R = last.world_R.copy()
+
+        if img_world_origin is not None and img_world_R is not None:
+            last_glass = world_list[-1].glass_after
+            world_list.append(Surface(
+                radius=np.inf, semi_diameter=np.inf,
+                glass_before=last_glass, glass_after=last_glass,
+                label='Image',
+                world_origin=img_world_origin,
+                world_R=img_world_R,
+            ))
+        return world_list
 
     def _build_trace_surfaces_internal(self):
         """Flatten the element list into a sequential Surface list.

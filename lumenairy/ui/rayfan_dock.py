@@ -186,28 +186,21 @@ class RayFanDock(QWidget):
             fa_sweep = np.linspace(0, max(max(fields), 5.0), 21)
             rms_values = []
 
+            # 3.7.7: world-frame surface list with image plane at
+            # the Detector's world frame (or paraxial focus).
+            # ``trace_world`` gives geometry-accurate spot RMS in
+            # folded designs; the legacy field-curvature path
+            # silently inherited the cb-pre-tilted-frame ~1 mm
+            # offset on tilted systems.
+            from ..raytrace.core import trace_world
+            from ..raytrace import make_rings
+            surfs_world = self.sm.build_run_trace_world_surfaces()
+
             for fa_deg in fa_sweep:
                 fa_rad = np.radians(fa_deg)
                 try:
-                    from ..raytrace import make_rings
                     rays = make_rings(semi_ap, 6, 24, fa_rad, wv)
-                    surfs = [Surface(
-                        radius=s.radius, conic=s.conic,
-                        aspheric_coeffs=s.aspheric_coeffs,
-                        semi_diameter=s.semi_diameter,
-                        glass_before=s.glass_before, glass_after=s.glass_after,
-                        is_mirror=s.is_mirror, thickness=s.thickness,
-                    ) for s in surfaces]
-                    try:
-                        bfl = find_paraxial_focus(surfs, wv)
-                        if np.isfinite(bfl) and bfl > 0:
-                            surfs[-1].thickness = bfl
-                            surfs.append(Surface(radius=np.inf, semi_diameter=np.inf,
-                                glass_before=surfs[-1].glass_after,
-                                glass_after=surfs[-1].glass_after))
-                    except Exception:
-                        pass
-                    result = trace(rays, surfs, wv)
+                    result = trace_world(rays, surfs_world, wv)
                     rms, _ = spot_rms(result)
                     rms_values.append(rms * 1e6)
                 except Exception:

@@ -10,6 +10,56 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.7.7
+
+World-frame correctness rollout to the remaining analysis docks
+(footprint, distortion, spot-vs-field, rayfan field-curvature),
+plus a 3D undocked-shrink rescale fix and a GUI visual-regression
+test that would have caught the prior shrink regressions in 30
+seconds.  Builds on the 3.7.6 `trace_world` infrastructure.
+
+**Library — new public API**
+
+- `SystemModel.build_trace_surfaces_world()` — public cached
+  accessor for the world-frame surface list (one Surface per
+  optical surface, each carrying `world_origin` + `world_R`).
+- `SystemModel.build_run_trace_world_surfaces(image_distance=
+  None)` — same list with an image-plane Surface appended at
+  the Detector's world frame (or paraxial focus along the last
+  surface's local +z).  Drop-in replacement for the manual
+  `surfaces[-1].thickness = bfl` + `Surface(radius=inf, ...)`
+  boilerplate every analysis dock used to write.
+
+**GUI — analysis docks migrated**
+
+- Footprint, Distortion, Spot vs Field, and the Ray-Fan dock's
+  field-curvature plot now use `build_run_trace_world_surfaces()`
+  + `trace_world()`.  Per-surface scatter plots and chief-ray
+  distortion traces land at the correct world positions in
+  folded designs.
+- Tolerance dock and Wave Optics dock intentionally stay on the
+  legacy path — see `GUI_CHANGELOG.md` for the rationale.
+
+**GUI — 3D undocked-shrink rescale fix**
+
+- `Layout3DView.eventFilter` adjusts the camera's `parallel_scale`
+  (or `view_angle` for perspective) proportionally to the
+  viewport-height ratio on every resize.  Shrinking the floating
+  3D window now CLIPS the optics at its new edges instead of
+  rescaling — the on-screen pixel size of every world feature
+  stays fixed.
+
+**Validation — new GUI smoke suite**
+
+- `validation/gui/test_layout_shrink.py` runs offscreen and
+  catches: layout-dock pinned-at-minimum regressions, splitter-
+  won't-shrink regressions, layout-construction crashes, and
+  tx71 chief-ray world-position regressions.  14 assertions;
+  picked up by `run_all.py`.  Suite total now 26 files.
+
+See [CHANGELOG.md](CHANGELOG.md) and [GUI_CHANGELOG.md](GUI_CHANGELOG.md)
+for the full list.
+
 ## What's new in 3.7.6
 
 **Sequential world-coordinate ray trace** (core) plus a folded-

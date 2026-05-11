@@ -15,6 +15,131 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.7.7] — 2026-05-11
+
+World-frame correctness rollout to the remaining analysis docks,
+3D undocked-shrink rescale fix, and a new GUI visual-regression
+test that would have caught the 3.7.5 / 3.7.6 dock-shrink
+regressions in 30 seconds.  Builds on the 3.7.6
+`trace_world` infrastructure -- no new core library code,
+just exposing `build_trace_surfaces_world()` / `build_run_trace
+_world_surfaces()` as public methods and migrating four docks
+to them.
+
+### LumenAiry Designer is still in BETA
+
+Layouts, dock arrangements, default workspaces, and even menu
+names continue to change between minor releases.  Pin a specific
+version if you depend on a particular GUI behaviour.
+
+### Analysis docks — migrated to the world-frame trace path
+
+These docks previously built their own surface list via
+`SystemModel.build_trace_surfaces()` (legacy local list with
+cb_pre Surfaces) and called `trace()` directly.  On folded
+designs they inherited the same ~1/cos(θ) world-position
+error that the 3.7.6 `run_trace` migration eliminated for the
+2D / 3D layouts.
+
+* **Footprint dock** -- now uses
+  `build_run_trace_world_surfaces()` + `trace_world()`.  Per-
+  surface footprint scatter plots correctly land on each
+  post-fold lens's clear-aperture region in folded systems
+  instead of being offset by ~1 mm.
+* **Distortion dock** -- migrated chief-ray traces for both
+  the 1D distortion sweep and the 2D distortion grid.  EFL /
+  BFL still come from `system_abcd` on the legacy local list
+  (paraxial calculation is identical between local and world
+  lists for axially-symmetric systems; folded systems'
+  distortion calculation now uses the world-correct chief-ray
+  landing positions for the actual-vs-paraxial residual).
+* **Spot vs Field dock** -- migrated; per-field spot diagrams
+  now land at the correct world-frame image-plane positions
+  through folded geometry.
+* **Ray fan dock** (field-curvature plot only) -- the
+  RMS-vs-field plot now uses `trace_world()`.  The ray-fan and
+  OPD-fan plots still use `ray_fan_data()` / `opd_fan_data()`
+  helpers on the legacy local list; those helpers are paraxial
+  enough that folded-system inaccuracy is negligible at small
+  field angles, and migrating them is a library-side change
+  (queued for a future release).
+
+### Not migrated (and why)
+
+* **Tolerance dock** -- the Monte Carlo trial loop perturbs
+  `Surface.thickness` field-by-field to model thickness
+  tolerancing.  In the world-frame trace, `Surface.thickness`
+  is unused (the gap to the next surface is encoded in the
+  next surface's `world_origin`), so perturbing it would have
+  no effect.  Proper migration requires perturbing the
+  prescription's element distances before building world
+  surfaces.  Stayed on the legacy path for this release; the
+  thickness perturbation works correctly in the local trace
+  even for folded designs (the world-position error is
+  statistical and absorbs into the Monte Carlo spread).
+* **Wave Optics dock** -- doesn't call `trace()` directly;
+  routes to `apply_real_lens_traced` / `apply_real_lens` /
+  `apply_real_lens_maslov`, which build their own surface
+  lists from prescription dicts.  No surface-list migration
+  needed.
+* **Spot Diagram + MTF (analysis.py)** -- consume the model's
+  pre-computed `_trace_result` (already world-frame from
+  3.7.6) for spot RMS / Airy disk; only call `find_stop` /
+  `system_abcd` paraxial helpers on the legacy list (which
+  handles cb_pre surfaces correctly).  No migration needed.
+
+### 3D layout -- pixel-fixed undocked shrink
+
+Earlier 3.7.6 fixed the docked-shrink physics (the central
+widget's `setMaximumHeight(350)` cap that pinned the splitter)
+but the user noted that when the 3D layout is UNDOCKED and
+the floating window is shrunk, VTK rescales the rendered
+optics rather than clipping.  Fixed.
+
+* `Layout3DView.eventFilter` intercepts the `QtInteractor`'s
+  resize events and adjusts the camera's `parallel_scale` (or
+  `view_angle` via tan, for perspective projection) by the
+  ratio of new to old viewport height.  This keeps world-
+  units-per-pixel constant -- the on-screen pixel size of
+  every world feature stays fixed; the viewport just clips at
+  its new edges.
+
+### GUI visual-regression harness
+
+New `validation/gui/test_layout_shrink.py` runs offscreen via
+the existing `Harness` and is auto-discovered by
+`validation/run_all.py`.  Covers:
+
+* Layout2DView / Layout3DView construct on empty model
+  without crashing.
+* Both layouts accept `resize(60, 80)` (the dock-shrink
+  smoke test).
+* `MainWindow.layout_dock` starts at a sensible default
+  (not pinned at minimum, not taking the whole window).
+* `resizeDocks([200], Vertical)` actually shrinks the
+  layout dock below its default.
+* The layout dock's true minimum is < 80 px.
+* tx71 chief-ray world-position smoke test:
+  `SpatialFilter S1` lands at its vertex within 0.1 mm.
+
+14 assertions; runs in ~4 seconds via `run_all`.
+
+### Source rendering
+
+Source glyphs in the 2D / 3D layouts (added in 3.6.1) are
+still working: distinct glyphs per `source_type` (plane wave
+bar, Gaussian ellipse, top-hat rectangle, fiber-mode annulus,
+point-source dot, emitter-array grid).  Verified during this
+release's smoke testing.
+
+### Backwards compatibility
+
+No public API removals.  `build_trace_surfaces()` continues to
+return the legacy local-frame list for ABCD / paraxial /
+tolerance / wave-optics consumers.  All 25 numerical
+validation files pass unchanged; the suite now has 26 files
+total with the new GUI test.
+
 ## [3.7.6] — 2026-05-11
 
 Folded-design correctness pass plus a long-running dock-shrink fix.
