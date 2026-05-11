@@ -4,7 +4,7 @@ MainWindow — LumenAiry Designer application shell.
 Author: Andrew Traverso
 """
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QObject, QEvent
 from PySide6.QtWidgets import (
     QMainWindow, QDockWidget, QToolBar, QFileDialog,
     QMessageBox, QLabel, QApplication, QInputDialog,
@@ -2977,8 +2977,50 @@ THEMES = {
 }
 
 
+class _WheelOnFocusFilter(QObject):
+    """3.7.9: swallow wheel events on spin boxes / combo boxes /
+    sliders unless they currently hold keyboard focus.
+
+    The default Qt behaviour binds ``wheelEvent`` to value-change on
+    every spinbox / combobox / slider, which is a recurring source
+    of "I scrolled past this widget on my way somewhere else and
+    accidentally edited the value" friction.  The standard
+    workaround across PySide6 apps is to install one of these on
+    ``QApplication`` so the value-change only fires when the user
+    has explicitly clicked into the widget.
+
+    Implementation: intercept ``QEvent.Wheel`` events targeted at
+    one of the affected widget classes; if the widget doesn't have
+    focus, mark the event accepted (so it doesn't bubble further as
+    a scroll-area scroll) and return True to stop processing.  If
+    it does have focus, pass through normally so deliberate
+    in-widget scroll-to-change still works.
+    """
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Wheel:
+            from PySide6.QtWidgets import (
+                QAbstractSpinBox, QComboBox, QSlider,
+            )
+            if isinstance(watched, (QAbstractSpinBox, QComboBox, QSlider)):
+                if not watched.hasFocus():
+                    event.ignore()
+                    return True
+        return False
+
+
+_WHEEL_FILTER_SINGLETON = None
+
+
 def apply_theme(app, prefs=None):
     """Apply a theme with configurable accent color."""
+    global _WHEEL_FILTER_SINGLETON
+    # Install the wheel-on-focus filter once per app.  Idempotent
+    # (the singleton check prevents duplicate filters on every
+    # theme change).
+    if _WHEEL_FILTER_SINGLETON is None:
+        _WHEEL_FILTER_SINGLETON = _WheelOnFocusFilter(app)
+        app.installEventFilter(_WHEEL_FILTER_SINGLETON)
     if prefs is None:
         prefs = {'theme': 'dark', 'accent': '#5cb8ff'}
 
@@ -3058,9 +3100,40 @@ def apply_theme(app, prefs=None):
         QTextEdit {{ background: {bg}; color: {dim}; border: none; }}
         QProgressBar {{ background: {btn}; border: 1px solid {border}; text-align: center; color: {text}; font-size: 11px; }}
         QProgressBar::chunk {{ background: {accent}; }}
-        QCheckBox {{ color: {text}; }}
-        QCheckBox::indicator {{ width: 14px; height: 14px; }}
-        QCheckBox::indicator:checked {{ background: {accent}; border: 1px solid {accent}; }}
+        QCheckBox {{ color: {text}; spacing: 6px; }}
+        QCheckBox::indicator {{
+            width: 14px; height: 14px;
+            border: 1px solid {dim};
+            border-radius: 2px;
+            background: {btn};
+        }}
+        QCheckBox::indicator:hover {{ border: 1px solid {accent}; }}
+        QCheckBox::indicator:checked {{
+            background: {accent};
+            border: 1px solid {accent};
+            image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M2.5 7.5 L5.8 10.8 L11.5 3.5' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+        }}
+        QCheckBox::indicator:checked:hover {{ background: {hover}; border-color: {accent}; }}
+        QCheckBox::indicator:indeterminate {{
+            background: {btn};
+            border: 1px solid {accent};
+            image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><line x1='3' y1='7' x2='11' y2='7' stroke='%23dde8f8' stroke-width='2.4' stroke-linecap='round'/></svg>");
+        }}
+        QCheckBox::indicator:disabled {{
+            border: 1px solid {grid};
+            background: {bg};
+        }}
+        QGroupBox::indicator {{
+            width: 14px; height: 14px;
+            border: 1px solid {dim};
+            border-radius: 2px;
+            background: {btn};
+        }}
+        QGroupBox::indicator:checked {{
+            background: {accent};
+            border: 1px solid {accent};
+            image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 14'><path d='M2.5 7.5 L5.8 10.8 L11.5 3.5' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+        }}
     """)
 
 
