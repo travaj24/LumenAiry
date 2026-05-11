@@ -10,6 +10,45 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.7.10
+
+Workspace reorganisation pass.  Each tab's default dock set is
+restructured so the tab's headline tool gets the dominant space.
+Driven by a parallel-agent survey of how Zemax OpticStudio, Code V,
+OSLO, and Optiland organise their equivalent workspaces.
+
+**GUI**
+
+- **Wave Optics tab**: 2D layout dropped; `waveoptics` dock is
+  now the dominant left ~60%; `zernike` right; field-consumer
+  tools (`phase_retrieval`, `interferometry`, `jones_pupil`,
+  `coherence`) tabbed below.  Addresses the explicit user
+  complaint that wave-optics wasn't front-and-center.
+- **Analysis tab**: 2×2 plot grid (`spot`, `rayfan`, `psfmtf`,
+  `distortion`) with field-aware and aperture-coverage siblings
+  tabbed in.
+- **Optimize tab**: optimizer + sliders left spine; live spot /
+  rayfan / PSF-MTF top-right; summary bottom-right for live
+  before/after metrics.
+- **Tolerancing tab**: MC histograms dominant; sensitivity
+  worst-offenders right; spot as worst-trial inspector.
+- **Materials tab**: catalog list + Abbe diagram as headline
+  pair.
+- **Design tab**: prescription editor (central) + summary
+  (System Explorer analogue) + layout / layout3d tabbed
+  thumbnail + library / snapshots.
+
+The 2D / 3D layout pair is only on the **Design** tab by default
+(layout3d tabbed with layout, so both share one dock slot).
+Every specialty dock remains one click away via the View menu.
+
+Existing users get a one-time **"Workspaces reorganised (3.7.10)"**
+prompt offering to migrate to the new defaults; custom workspaces
+are preserved either way.
+
+See [GUI_CHANGELOG.md](GUI_CHANGELOG.md) for the full per-tab
+table.
+
 ## What's new in 3.7.9
 
 Quality-of-life pass: debounced auto-retrace, wave-optics fold

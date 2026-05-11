@@ -262,35 +262,86 @@ class ManageWorkspaceDialog(QDialog):
 #  Bumped each release that adds a new default workspace.  Used by
 #  load_json() to merge new defaults into existing saved blobs without
 #  overwriting user customizations.
-DEFAULTS_REVISION = 6
+DEFAULTS_REVISION = 7
 
 DEFAULT_WORKSPACES = [
-    # 3.6.1: trimmed defaults.  The rule of thumb: each workspace
-    # opens with the 2-3 docks the user almost always wants for that
-    # phase of work.  Specialty docks (interferometry, phase
-    # retrieval, ghost, footprint, distortion, spot-field, through-
-    # focus, field browser, caustic, LG aberration, Shack-Hartmann,
-    # Richards-Wolf, partial-coherence, RCWA) are still wired into
-    # the application, available via the View menu's per-dock
-    # toggle list and via View > Configure Workspace Docks --
-    # they're just not opened by default.
+    # 3.7.10: tab-specific dock sets driven by a parallel-agent
+    # survey of Zemax OpticStudio / Code V / OSLO / Optiland
+    # conventions.  Common conclusion: the prescription editor
+    # (central widget, always visible) is sufficient geometric
+    # orientation -- the layout dock duplicates that while
+    # stealing space from each tab's actual headline tool.
+    # Reference tools all keep layout on the "Design" view only
+    # and treat the other workspaces as focused workflow panels
+    # where the headline dock dominates.  3.6.1's trim brought
+    # the per-tab dock COUNT down; 3.7.10 trims the dock
+    # SELECTION so each tab puts its headline tool front-and-
+    # centre rather than burying it behind a duplicated layout.
+    #
+    # Layout / layout3d are tabbed together in the same dock
+    # slot (not stacked side-by-side), so including both on the
+    # Design tab consumes one dock area, not two -- per the
+    # 3.7.10 review.
     ('Design', [
-        'layout', 'layout3d', 'summary', 'library',
+        # Design view: prescription editor + System Explorer
+        # analogue (summary) on the left, layout thumbnail on
+        # the right, library + snapshots tabbed bottom.  Matches
+        # Zemax's Lens Data Editor + System Explorer pairing and
+        # Optiland's System Properties layout.
+        'summary', 'layout', 'layout3d', 'library', 'snapshots',
     ]),
     ('Optimize', [
-        'layout', 'optimizer', 'sliders',
+        # Optimize cockpit: merit-function editor + sliders left
+        # spine; spot / rayfan / PSF-MTF tabbed top-right as
+        # live-update convergence views; summary as bottom-right
+        # before/after metrics; snapshots for pre/post capture.
+        # Layout dropped -- the central prescription editor
+        # already shows the system.
+        'optimizer', 'sliders', 'spot', 'rayfan', 'psfmtf',
+        'summary', 'snapshots',
     ]),
     ('Analysis', [
-        'layout', 'spot', 'rayfan', 'summary', 'psfmtf',
+        # 2x2 geometric plot grid (spot / rayfan / PSF-MTF /
+        # distortion), with field-aware drill-downs (spot_field,
+        # field_browser) tabbed beside spot and aperture / focus
+        # diagnostics (footprint, through_focus, caustic) tabbed
+        # beside distortion.  Layout dropped -- redundant with
+        # the prescription editor.
+        'spot', 'rayfan', 'psfmtf', 'distortion',
+        'spot_field', 'field_browser', 'footprint',
+        'through_focus', 'caustic',
     ]),
     ('Wave Optics', [
-        'layout', 'waveoptics', 'zernike', 'interferometry',
+        # 3.7.10: the user's explicit complaint was that
+        # waveoptics wasn't front-and-center on this tab.
+        # Layout dropped entirely.  waveoptics gets the
+        # dominant left ~60% so its 3-dozen controls finally
+        # have room to breathe; zernike is the right-hand "what
+        # came out" view; phase_retrieval / interferometry /
+        # jones_pupil / coherence tabbed below zernike as
+        # field-consumer tools (mirrors Zemax's POP-window
+        # convention).
+        'waveoptics', 'zernike', 'phase_retrieval',
+        'interferometry', 'jones_pupil', 'coherence',
     ]),
     ('Tolerancing', [
-        'layout', 'tolerance', 'sensitivity',
+        # MC histograms (tolerance dock) dominant top-left;
+        # sensitivity worst-offenders right; spot as the
+        # worst-trial inspector below tolerance; optimizer
+        # tabbed for compensator setup; multiconfig + diagnostics
+        # as the supporting tab stack.  Layout dropped -- the
+        # tolerance workflow doesn't need geometric context.
+        'tolerance', 'sensitivity', 'spot', 'optimizer',
+        'multiconfig', 'diagnostics',
     ]),
     ('Materials', [
-        'materials', 'glassmap',
+        # Catalog list + Abbe diagram are the headline pair;
+        # summary keeps the user oriented to surface-by-surface
+        # glass assignments; optimizer is colocated for the
+        # canonical Hammer-style glass-substitution solve.
+        # Layout dropped -- glass picking is an off-system
+        # task.
+        'materials', 'glassmap', 'summary', 'optimizer',
     ]),
 ]
 
@@ -576,7 +627,14 @@ class WorkspaceManager(QObject):
                 # whether to reset to the new minimal defaults.
                 # We deliberately do not auto-trim -- the user may
                 # have hand-curated their layout.
-                if saved_rev < 5:
+                # 3.7.10: same prompt fires when the saved revision
+                # predates the workspace-content reorganisation
+                # (revision 7).  Pre-7 layouts have `layout` on
+                # every workspace; the new defaults drop it from
+                # Wave Optics / Tolerancing / Materials / Analysis /
+                # Optimize so the headline dock for each tab gets
+                # the dominant space.
+                if saved_rev < 5 or saved_rev < DEFAULTS_REVISION:
                     needs_prompt = True
             if needs_prompt:
                 # Defer the emit until after load_json returns so the

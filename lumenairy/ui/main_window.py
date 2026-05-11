@@ -683,22 +683,35 @@ class MainWindow(QMainWindow):
             pass
 
     def _offer_workspace_reset(self):
-        """3.6.1: one-time prompt offered to upgraders whose saved
-        workspaces predate the trimmed defaults.  Choosing Yes
-        reinitialises workspaces from DEFAULT_WORKSPACES; choosing No
-        keeps the user's current layout.  Either way, the prompt is
-        only shown once -- defaults_revision tracks acknowledgement.
+        """3.6.1 + 3.7.10: one-time prompt offered to upgraders whose
+        saved workspaces predate the current trimmed defaults.
+        Choosing Yes reinitialises workspaces from
+        DEFAULT_WORKSPACES; choosing No keeps the user's current
+        layout.  Either way the prompt is only shown once --
+        defaults_revision tracks acknowledgement.
         """
         try:
             ans = QMessageBox.question(
-                self, 'Workspaces simplified (3.6.1)',
-                'Default workspaces have been trimmed for a cleaner '
-                'start (Analysis went 13 → 5 docks; Wave Optics went '
-                '9 → 4).  All specialty docks remain available via '
-                'View > Configure Workspace Docks…\n\n'
-                'Reset to the new minimal defaults?  '
-                '(Your custom workspace tabs will be preserved either '
-                'way.)',
+                self, 'Workspaces reorganised (3.7.10)',
+                "Default workspaces have been reorganised so each "
+                "tab's headline tool gets the dominant space:\n\n"
+                "• Design       — prescription + system data + "
+                "layout thumbnail\n"
+                "• Optimize     — merit function & sliders + live "
+                "spot / OPD / MTF\n"
+                "• Analysis     — 2×2 plot grid (spot / rayfan / "
+                "PSF-MTF / distortion)\n"
+                "• Wave Optics — Wave-optics dock dominant + "
+                "Zernike + interferometry-family tabs\n"
+                "• Tolerancing — Monte-Carlo histograms + "
+                "sensitivity worst-offenders\n"
+                "• Materials   — glass catalog + Abbe map\n\n"
+                "The 2D layout is now only on the Design tab so it "
+                "doesn't crowd out each workspace's primary tool. "
+                "Every specialty dock remains one click away via "
+                "View → Configure Workspace Docks…\n\n"
+                "Reset to the new defaults?  Your custom workspace "
+                "tabs are preserved either way.",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No)
         except Exception:

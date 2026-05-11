@@ -15,6 +15,80 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.7.10] — 2026-05-11
+
+Workspace reorganisation pass.  Each tab's default dock set is
+restructured so the tab's headline tool gets the dominant space
+rather than competing with a redundant 2D layout view.
+
+### LumenAiry Designer is still in BETA
+
+Layouts, dock arrangements, default workspaces, and even menu
+names continue to change between minor releases.  Pin a
+specific version if you depend on a particular GUI behaviour.
+
+### Workspace defaults rebuilt from comparable-tool conventions
+
+3.7.10 is driven by a parallel-agent survey of how Zemax
+OpticStudio, Code V, OSLO, and Optiland organise the
+equivalent workspaces.  The common conclusion: every
+reference tool treats the **prescription editor** (which
+LumenAiry already exposes as an always-visible central widget)
+as the geometric context; the 2D layout view is **reference,
+not headline**, and lives only on the design / overview
+screen.  Putting it on every workspace was the cause of the
+"my actual tool is buried in a thin strip" complaints.
+
+Per-tab changes (revision 7):
+
+| Tab           | Dock count | Headline / dominant tool     |
+|---------------|-----------|------------------------------|
+| Design        | 5         | prescription editor + summary (System Explorer analogue) |
+| Optimize      | 7         | optimizer + sliders + live spot / rayfan / PSF-MTF       |
+| Analysis      | 9         | 2×2 plot grid (spot / rayfan / PSF-MTF / distortion)     |
+| Wave Optics   | 6         | **waveoptics dock dominant** (the explicit user ask)     |
+| Tolerancing   | 6         | tolerance MC histograms + sensitivity worst-offenders    |
+| Materials     | 4         | materials catalog + glassmap Abbe diagram                |
+
+* The 2D / 3D layout pair is **only on the Design tab** by
+  default.  They remain tabbed together so including both
+  consumes one dock slot, not two.
+* The `summary` dock appears on Design / Optimize / Materials
+  -- it's small and useful (EFL / BFL / F# / EPD), unlike the
+  layout dock duplication.
+* The `snapshots` dock is added to Design + Optimize so the
+  natural "edit -> snapshot -> keep editing" loop has a home.
+* Every specialty dock remains one click away via
+  **View -> Configure Workspace Docks…**, the per-dock
+  toggle entries in the View menu, and the View ->
+  Workspaces submenu.
+
+### Migration prompt for existing users
+
+`DEFAULTS_REVISION` bumped 6 -> 7; existing users with a
+persisted workspace blob get a one-time "Workspaces
+reorganised (3.7.10)" prompt on their first 3.7.10 launch.
+Choosing **Yes** rebuilds workspaces from the new defaults;
+**No** keeps the user's current layout.  Custom workspaces
+the user added (beyond the six built-in tabs) are preserved
+either way.
+
+### Why this fixes the Wave Optics complaint
+
+The Wave Optics workspace dock list went from
+`[layout, waveoptics, zernike, interferometry]` (4 docks,
+2D layout dominant at the top) to
+`[waveoptics, zernike, phase_retrieval, interferometry,
+jones_pupil, coherence]` (6 docks, **no layout**, waveoptics
+dominant).  Verified via headless smoke test that switching
+to the Wave Optics tab now hides `layout_dock` and shows
+`waveoptics_dock`.
+
+### Backwards compatibility
+
+No public Python API removals.  All 26 validation suite
+files pass.
+
 ## [3.7.9] — 2026-05-11
 
 Quality-of-life pass: debounced auto-retrace, wave-optics fold

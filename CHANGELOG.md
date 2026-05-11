@@ -2,6 +2,15 @@
 
 All notable changes to the core library are documented here.
 
+## [3.7.10] — 2026-05-11
+
+GUI-only release.  No core library API changes; see
+`GUI_CHANGELOG.md` for the workspace reorganisation details.
+
+### Backwards compatibility
+
+No public API removals.  All 26 validation suite files pass.
+
 ## [3.7.9] — 2026-05-11
 
 GUI-driven quality-of-life release.  Only one core API change:
