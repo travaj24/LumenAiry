@@ -9,17 +9,28 @@ Qt and won't see them.
 
 Run standalone or via `run_all.py`.  Uses the standard `Harness`
 pattern so failures route through the same summary.
+
+GUI deps (PySide6, matplotlib, pyvista) are gated behind the
+``[gui]`` extra and intentionally NOT installed on CI -- see
+``.github/workflows/validate.yml``.  This test self-skips with
+exit 0 when any GUI dependency is missing so CI stays green;
+locally it runs in full.
 """
 from __future__ import annotations
 
 import os
 import sys
 
-# Force offscreen Qt + stub pyvistaqt BEFORE importing lumenairy.ui.
+# Force offscreen Qt + add the validation/ parent so _harness is
+# importable BEFORE we attempt the GUI imports.  Done first so the
+# skip-on-missing-deps path below still has a working sys.path.
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.normpath(os.path.join(_HERE, '..')))
 
+# Stub pyvistaqt with a minimal QtInteractor before importing
+# lumenairy.ui.layout_3d -- otherwise that module imports the real
+# pyvistaqt at module-load time when it IS installed (dev machines).
 import types as _types
 _fake_qt = _types.ModuleType('pyvistaqt')
 
@@ -32,11 +43,37 @@ class _FakeQtInteractor:  # noqa: D401 -- minimal stub
 _fake_qt.QtInteractor = _FakeQtInteractor
 sys.modules.setdefault('pyvistaqt', _fake_qt)
 
+# Probe GUI deps.  On CI (PySide6 / matplotlib / pyvista not
+# installed -- the workflow installs only ``[fft,perf,numba,hdf5,
+# zarr,dev]``), any of these imports raise ImportError and we
+# skip the suite cleanly with exit 0.  Locally (pip install -e
+# .[gui]) everything imports and the suite runs.
+try:
+    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import Qt, QSettings
+    # Eagerly import lumenairy.ui modules so that ANY missing GUI
+    # transitive dep (matplotlib, pyvista, refractiveindex glass
+    # catalogs that load on first use, etc.) surfaces as a clean
+    # skip rather than a half-loaded module + crash later.
+    import lumenairy.ui.layout_3d as _m3
+    from lumenairy.ui.model import SystemModel
+    from lumenairy.ui.layout_2d import Layout2DView
+    from lumenairy.ui.layout_3d import Layout3DView
+    from lumenairy.ui.main_window import MainWindow
+    from lumenairy.io.prescriptions import load_zmx_prescription
+except ImportError as _e:
+    print('=' * 60)
+    print('  gui-layout-shrink')
+    print('=' * 60)
+    print(f'  [SKIP] GUI dependencies not available: {_e}')
+    print('  Install with: pip install -e ".[gui]"')
+    print('=' * 60)
+    print('RESULT [gui-layout-shrink]: skipped (no GUI deps)')
+    print('=' * 60)
+    sys.exit(0)
+
 
 from _harness import Harness  # noqa: E402
-
-from PySide6.QtWidgets import QApplication  # noqa: E402
-from PySide6.QtCore import Qt, QSettings  # noqa: E402
 
 _app = QApplication.instance() or QApplication([])
 
@@ -47,16 +84,7 @@ _s.remove('workspaces/data')
 
 # Force the 3D layout into its fallback (label) path so the
 # headless test doesn't try to spin up VTK + an OpenGL context.
-import lumenairy.ui.layout_3d as _m3  # noqa: E402
-
 _m3.PYVISTAQT_AVAILABLE = False
-
-
-from lumenairy.ui.model import SystemModel  # noqa: E402
-from lumenairy.ui.layout_2d import Layout2DView  # noqa: E402
-from lumenairy.ui.layout_3d import Layout3DView  # noqa: E402
-from lumenairy.ui.main_window import MainWindow  # noqa: E402
-from lumenairy.io.prescriptions import load_zmx_prescription  # noqa: E402
 
 
 def _tx71_path():

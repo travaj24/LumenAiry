@@ -108,7 +108,13 @@ optics rather than clipping.  Fixed.
 
 New `validation/gui/test_layout_shrink.py` runs offscreen via
 the existing `Harness` and is auto-discovered by
-`validation/run_all.py`.  Covers:
+`validation/run_all.py`.  Self-skips with exit 0 when GUI
+dependencies aren't installed (the workflow installs only
+`[fft,perf,numba,hdf5,zarr,dev]`, NOT `[gui]`, so PySide6 /
+matplotlib / pyvista aren't available on CI runners), keeping
+the build green there while still exercising the GUI surface
+locally for any developer with `pip install -e ".[gui]"`.
+Covers:
 
 * Layout2DView / Layout3DView construct on empty model
   without crashing.
