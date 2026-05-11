@@ -122,6 +122,11 @@ from .analysis.aberration import (
     aberration_summary,
     format_aberration_summary,
 )
+from .analysis.image_plane_wfe import (
+    ImagePlaneWFE,
+    eval_image_plane_wfe,
+    remove_low_order_aberrations,
+)
 from .analysis.phase_retrieval import (
     gerchberg_saxton_jax,
     error_reduction_jax,
@@ -423,6 +428,8 @@ from .raytrace import (
     find_lenses,
     LensInfo,
     PupilInfo,
+    FirstOrderData,
+    first_order_data,
     RAY_OK,
     RAY_TIR,
     RAY_APERTURE,
@@ -820,6 +827,8 @@ __all__ = [
     'find_lenses',
     'LensInfo',
     'PupilInfo',
+    'FirstOrderData',
+    'first_order_data',
     'find_paraxial_focus',
     'trace_summary',
     'prescription_summary',
@@ -877,6 +886,9 @@ __all__ = [
     'AberrationSummary',
     'aberration_summary',
     'format_aberration_summary',
+    'ImagePlaneWFE',
+    'eval_image_plane_wfe',
+    'remove_low_order_aberrations',
 
     # Through-focus / tolerancing
     'single_plane_metrics',

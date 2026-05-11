@@ -2154,6 +2154,167 @@ class PupilInfo:
     stop_index: int
 
 
+@dataclass
+class FirstOrderData:
+    """Comprehensive paraxial first-order characterisation of a system.
+
+    Combines :class:`PupilInfo`, the system ABCD matrix, and the
+    common focal-length / focus-distance / principal-plane summaries
+    that downstream analysis (image-plane wavefront error,
+    diffraction-limited PSF / MTF estimates, tolerance budgets)
+    needs.
+
+    All distances are in metres unless noted; positions follow the
+    same sign convention as :class:`PupilInfo` -- ``ep_z`` is
+    measured from ``surfaces[0]`` (negative = object-side of the
+    first surface), ``xp_z`` is measured from ``surfaces[-1]``
+    (positive = image-side of the last surface).
+
+    Attributes
+    ----------
+    efl : float
+        Effective focal length [m].  ``-1 / C`` where ``C`` is the
+        bottom-left ABCD element.
+    bfl : float
+        Back focal length: distance from the LAST surface vertex to
+        the rear focal point [m].  Positive = on image side.
+    ffl : float
+        Front focal length: distance from the FIRST surface vertex to
+        the front focal point [m].  Negative typically (focal point
+        on object side).
+    ep_z, ep_radius : float
+        Entrance pupil axial position and radius (see
+        :class:`PupilInfo`).
+    xp_z, xp_radius : float
+        Exit pupil axial position and radius (see
+        :class:`PupilInfo`).
+    pp_object_z : float
+        Object-space principal plane H, measured from
+        ``surfaces[0]``.  Positive = image-side of the first
+        vertex.  Computed as ``efl - ffl``: front focal point is at
+        ``-ffl`` from the first vertex (sign convention here treats
+        ``ffl`` as the unsigned magnitude returned by
+        :func:`system_abcd`), and H is one EFL forward of it.
+        For a thin lens, ``efl == ffl`` and H collapses to the
+        vertex (zero).
+    pp_image_z : float
+        Image-space principal plane H', measured from
+        ``surfaces[-1]``.  Positive = image-side.
+        ``pp_image_z = bfl - efl`` (rear focal point measured from
+        last vertex, walked backward by efl).
+    fnum : float
+        Working f-number (``efl / (2 * ep_radius)``) when EP radius
+        is finite, else ``inf``.
+    abcd : ndarray, shape (2, 2)
+        Full system ABCD matrix from
+        :func:`system_abcd`.
+    stop_index : int
+        Surface index of the aperture stop used for pupil imaging.
+    """
+    efl: float
+    bfl: float
+    ffl: float
+    ep_z: float
+    ep_radius: float
+    xp_z: float
+    xp_radius: float
+    pp_object_z: float
+    pp_image_z: float
+    fnum: float
+    abcd: 'np.ndarray'
+    stop_index: int
+
+    def summary(self, units: str = 'mm') -> str:
+        """One-page text summary, useful for GUI or stdout printouts."""
+        s = {'m': 1.0, 'mm': 1e3, 'um': 1e6, 'µm': 1e6}.get(units, 1e3)
+        u = 'mm' if units == 'm' else units  # display label
+        if units == 'm':
+            s = 1.0; u = 'm'
+        lines = [
+            f'First-order data:',
+            f'  EFL = {self.efl*s:+.4f} {u}',
+            f'  BFL = {self.bfl*s:+.4f} {u}   (last vertex -> rear focus)',
+            f'  FFL = {self.ffl*s:+.4f} {u}   (first vertex -> front focus)',
+            f'  f/# = {self.fnum:.3f}',
+            f'  EP  z={self.ep_z*s:+.4f} {u}  radius={self.ep_radius*s:.4f} {u}',
+            f'  XP  z={self.xp_z*s:+.4f} {u}  radius={self.xp_radius*s:.4f} {u}',
+            f'  H   (object PP, from surf 0)        '
+            f'= {self.pp_object_z*s:+.4f} {u}',
+            f"  H'  (image  PP, from last surface) "
+            f'= {self.pp_image_z*s:+.4f} {u}',
+            f'  Stop surface index = {self.stop_index}',
+        ]
+        return '\n'.join(lines)
+
+
+def first_order_data(surfaces_or_prescription, wavelength,
+                       stop_index=None):
+    """Compute a comprehensive paraxial first-order summary of a system.
+
+    Combines :func:`system_abcd`, :func:`compute_pupils`, and the
+    standard focal-length / principal-plane geometry into a single
+    :class:`FirstOrderData` record.
+
+    Parameters
+    ----------
+    surfaces_or_prescription : list of Surface OR prescription dict
+        Accepts either a pre-built surface list (as from
+        :func:`surfaces_from_prescription`) or a raw prescription
+        dictionary; the latter is converted internally.
+    wavelength : float
+        Vacuum wavelength [m].
+    stop_index : int, optional
+        Override the aperture-stop surface index.  Defaults to the
+        result of :func:`find_stop`.
+
+    Returns
+    -------
+    FirstOrderData
+        Single record with EFL, BFL, FFL, EP/XP positions and radii,
+        principal-plane locations, f-number, and the underlying ABCD
+        matrix.
+
+    Notes
+    -----
+    Principal planes are computed from the focal lengths via the
+    standard relations:
+
+        H   = ffl + efl       (object-side, from first surface)
+        H'  = bfl - efl       (image-side,  from last surface)
+
+    These are the conjugate points where the system acts as a
+    "thin lens" of focal length ``efl``.  For a thin lens both
+    collapse to zero; for thick or compound systems they offset
+    by the principal-plane separation.
+    """
+    if isinstance(surfaces_or_prescription, dict):
+        surfaces = surfaces_from_prescription(surfaces_or_prescription)
+    else:
+        surfaces = surfaces_or_prescription
+    abcd, efl, bfl, ffl = system_abcd(surfaces, wavelength)
+    pupils = compute_pupils(surfaces, wavelength, stop_index=stop_index)
+    pp_object_z = efl - ffl       # H from first vertex
+    pp_image_z = bfl - efl        # H' from last vertex
+    if np.isfinite(pupils.ep_radius) and pupils.ep_radius > 0:
+        fnum = abs(efl) / (2.0 * pupils.ep_radius)
+    else:
+        fnum = float('inf')
+    return FirstOrderData(
+        efl=float(efl),
+        bfl=float(bfl),
+        ffl=float(ffl),
+        ep_z=float(pupils.ep_z),
+        ep_radius=float(pupils.ep_radius),
+        xp_z=float(pupils.xp_z),
+        xp_radius=float(pupils.xp_radius),
+        pp_object_z=float(pp_object_z),
+        pp_image_z=float(pp_image_z),
+        fnum=float(fnum),
+        abcd=abcd,
+        stop_index=int(pupils.stop_index),
+    )
+
+
 def compute_pupils(surfaces, wavelength, stop_index=None):
     """Paraxial entrance and exit pupil positions and radii.
 

@@ -15,6 +15,52 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.8.0] — 2026-05-11
+
+### LumenAiry Designer is still in BETA
+
+Image-plane wavefront-analysis release.  The Analysis tab's
+"Summary" dock (`SystemSummaryWidget`) now reports image-plane
+RS-OPD live for the active prescription, alongside the existing
+EFL / BFL / NA / Airy / principal-plane / EP-XP summary.
+
+### Added
+
+* **System Summary widget — Image-plane WFE block.**  When the
+  active prescription has a valid finite-conjugate object
+  distance, the summary text appends:
+
+      ═══ Image-plane WFE (on-axis) ═══
+        PV:               +X.XXXX waves
+        RMS:                X.XXXX waves
+        Strehl (Marechal):  X.XXXX
+        Residual after best-fit (piston+tilt+defocus+r^4): X.XXX mw
+
+  Computed via the new `lumenairy.eval_image_plane_wfe` and
+  `remove_low_order_aberrations` core APIs (see `CHANGELOG.md`).
+  No new controls -- the block appears automatically and updates
+  on any prescription / wavelength change via the existing
+  `system_changed` signal.  Costs ~1 ray-trace per change at
+  21x21 pupil samples; well under the existing auto-retrace
+  debounce window.
+
+### Notes
+
+* Existing docks (waveoptics, zernike, spot, rayfan, etc.)
+  unchanged.  The new image-plane WFE block uses the same
+  prescription that everything else does (via
+  `SystemModel.to_prescription`), so there's no separate
+  control to set up.
+* Behaviour with non-flat fields: the on-axis (Hx=Hy=0)
+  measurement is what the summary reports.  Off-axis image-plane
+  WFE will land in a future release once OPDPy gains off-axis
+  chief-ray handling.
+
+### Backwards compatibility
+
+No removals; no workspace / DEFAULTS_REVISION bump.  Existing
+custom workspaces are preserved.
+
 ## [3.7.10] — 2026-05-11
 
 Workspace reorganisation pass.  Each tab's default dock set is

@@ -321,6 +321,40 @@ class SystemSummaryWidget(QWidget):
             except Exception:
                 pass
 
+            # 3.8.0: image-plane reference-sphere wavefront error
+            # (on-axis, paraxial conjugates).  Best-effort -- skip
+            # quietly if no prescription is built yet or trace can't
+            # complete.
+            try:
+                from ..analysis import (
+                    eval_image_plane_wfe, remove_low_order_aberrations,
+                )
+                presc = self.sm.to_prescription() if hasattr(
+                    self.sm, 'to_prescription') else None
+                if presc and presc.get('surfaces') and presc.get(
+                        'object_distance', 0) > 0:
+                    wfe = eval_image_plane_wfe(
+                        presc, wavelength=self.sm.wavelength_m,
+                        n_pupil=21)
+                    resid = remove_low_order_aberrations(
+                        wfe.opd_w, wfe.px, wfe.py)
+                    import numpy as _np
+                    resid_rms = float(_np.sqrt(_np.nanmean(resid ** 2)))
+                    lines.append('')
+                    lines.append('═══ Image-plane WFE (on-axis) ═══')
+                    lines.append(
+                        f'  PV:         {wfe.pv_waves:+.4f} waves')
+                    lines.append(
+                        f'  RMS:        {wfe.rms_waves:.4f} waves')
+                    lines.append(
+                        f'  Strehl (Marechal): {wfe.strehl:.4f}')
+                    lines.append(
+                        f'  Residual after best-fit '
+                        f'(piston+tilt+defocus+r^4): '
+                        f'{resid_rms*1e3:.3f} mw')
+            except Exception:
+                pass
+
         except Exception as e:
             lines.append(f'  Error computing ABCD: {e}')
 

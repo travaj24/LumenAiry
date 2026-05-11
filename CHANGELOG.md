@@ -2,6 +2,102 @@
 
 All notable changes to the core library are documented here.
 
+## [3.8.0] — 2026-05-11
+
+Image-plane wavefront-analysis release.  Adds three peer-library
+features that have been missing from the public API up to now:
+direct image-plane reference-sphere OPD evaluation, a unified
+first-order paraxial summary, and a best-fit low-order aberration
+removal utility.  All three were validated by a 13-lens
+cross-check against rayoptics + Optiland + OPDPy (see the
+`OPDPy_Lumenairy_Crosscheck/` companion repo), which is also the
+context in which the API was designed.
+
+### Added
+
+* **`lumenairy.analysis.eval_image_plane_wfe(prescription,
+  wavelength, field=(0,0), n_pupil=31, img_d_m=None)`** — direct
+  image-plane reference-sphere wavefront-error evaluation.
+  Returns an `ImagePlaneWFE` dataclass with per-ray pupil
+  coordinates, OPD in waves, alive mask, and convenience
+  properties `pv_waves`, `rms_waves`, `strehl` (Marechal
+  approximation).  Uses an EXACT ray-sphere intersection from
+  the actual lens-exit ray state `(x, y, z, L, M, N)` to the
+  reference sphere centered on the chief ray's image-plane
+  intersect, so it's accurate for fast f/2 systems and
+  diverging singlets (negative `img_d_m` supported).  This is
+  the standard textbook Zemax / Code V WFE convention, and is
+  the natural complement to `apply_real_lens_traced` which
+  returns lens-exit chief-relative OPL (the right input for
+  downstream ASM / Fresnel propagation).
+* **`lumenairy.remove_low_order_aberrations(opd_w, px, py,
+  include_r4=True)`** — best-fit subtraction of piston + tilt +
+  defocus + 4th-order spherical from a scattered OPD field.
+  The residual is the genuinely-higher-order aberration content
+  (6th-order SA, coma, astigmatism, ...) where independent
+  ray-trace implementations actually diverge — the realistic
+  apples-to-apples cross-library comparison metric.  See the
+  cross-check methodology document for why best-fit removal is
+  preferable to "common-sphere projection" between libraries
+  that all use chief-ray-centered reference spheres of
+  different radii.
+* **`lumenairy.raytrace.first_order_data(surfaces_or_prescription,
+  wavelength, stop_index=None)`** — comprehensive paraxial
+  first-order summary in a single call.  Returns
+  `FirstOrderData` with EFL, BFL, FFL, EP/XP positions and
+  radii, principal-plane offsets, working f-number, the full
+  ABCD matrix, and stop index.  Includes a `.summary(units)`
+  convenience formatter for printout.  Combines
+  `system_abcd`, `compute_pupils`, and the standard
+  focal-length / principal-plane geometry into one record;
+  used internally by `eval_image_plane_wfe` to derive the
+  finite-conjugate image distance from the Gauss imaging
+  equation + principal-plane offsets.
+* **`lumenairy.ImagePlaneWFE`**, **`lumenairy.FirstOrderData`** —
+  dataclass result types for the above, also re-exported from
+  the top-level `lumenairy` namespace.
+
+### GUI
+
+* `SystemSummaryWidget` (Analysis tab "Summary" dock) now
+  appends an **Image-plane WFE (on-axis)** block reporting
+  PV / RMS / Marechal Strehl and the after-best-fit residual
+  RMS, computed live from the current prescription.  No new
+  controls; the block appears automatically when the system
+  has a valid finite-conjugate object distance and prescription.
+  See `GUI_CHANGELOG.md` for the per-tab dock placement.
+
+### Validation
+
+* New `validation/analysis/test_image_plane_wfe.py` — 11 checks
+  spanning `first_order_data` paraxial geometry (EFL, H/H' for
+  plano-convex and thick equiconvex, f-number), chief-at-zero +
+  sign convention + PV agreement with rayoptics (5% tolerance)
+  + aplanatic-conic-reduces-RMS for `eval_image_plane_wfe`, and
+  pure-defocus / r⁴-toggle / orthogonal-astigmatism-preserved
+  checks for `remove_low_order_aberrations`.  All 11 pass.
+* The 27-file validation suite (`validation/run_all.py`) was
+  unchanged; the new file brings the total to 27.
+
+### Notes
+
+* `find_paraxial_focus(surfaces, wavelength)` still returns the
+  back focal length (infinity-conjugate focus).  For
+  finite-conjugate imaging, `eval_image_plane_wfe` now computes
+  the correct image distance internally from the Gauss equation +
+  principal-plane offsets.  A standalone
+  `find_image_distance(surfaces, wavelength, object_distance)`
+  helper may be added in a later release; for now use
+  `1 / (1/efl - 1/(obj_d + pp_object_z)) + pp_image_z` from a
+  `first_order_data` call.
+
+### Backwards compatibility
+
+No removals.  No changes to `apply_real_lens_traced`, the
+ray-trace `trace()` primitive, or any pre-3.8 public API.
+The three new functions are purely additive.  All 27
+validation files pass.
+
 ## [3.7.10] — 2026-05-11
 
 GUI-only release.  No core library API changes; see

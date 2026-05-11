@@ -10,6 +10,46 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.8.0
+
+Image-plane wavefront-analysis release.  Three peer-library
+features that were missing from the public API up to now:
+
+- **`lumenairy.eval_image_plane_wfe(prescription, wavelength,
+  field=(0,0), n_pupil=31)`** — direct image-plane
+  reference-sphere wavefront-error evaluation (the textbook
+  Zemax / Code V WFE convention).  Returns an `ImagePlaneWFE`
+  result with per-ray pupil coordinates, OPD in waves, alive
+  mask, and `pv_waves` / `rms_waves` / `strehl` properties.
+  Complements `apply_real_lens_traced` (which returns the
+  lens-exit chief-relative OPL appropriate for downstream ASM /
+  Fresnel propagation); the two are connected by an exact
+  ray-sphere intersection internally.  Validated against
+  rayoptics + Optiland + OPDPy across 13 lens forms; see
+  `OPDPy_Lumenairy_Crosscheck/CROSS_CHECK_METHODOLOGY.md` in
+  the companion repo.
+- **`lumenairy.remove_low_order_aberrations(opd_w, px, py,
+  include_r4=True)`** — best-fit subtraction of piston + tilt +
+  defocus + 4th-order spherical from a scattered OPD field.
+  Residual is the genuinely-higher-order aberration content
+  (6th-order SA, coma, astigmatism) where ray-trace
+  implementations actually diverge; this is the realistic
+  apples-to-apples cross-library agreement metric.
+- **`lumenairy.raytrace.first_order_data(prescription,
+  wavelength)`** — single-call paraxial summary.  Returns
+  `FirstOrderData` with EFL, BFL, FFL, EP/XP positions and
+  radii, principal-plane offsets, working f-number, the full
+  ABCD matrix, and stop index.
+
+**GUI:** the Analysis tab's "System Summary" dock now appends
+an **Image-plane WFE (on-axis)** block reporting PV / RMS /
+Marechal Strehl and the after-best-fit residual, live from
+the active prescription.
+
+See `CHANGELOG.md` and `GUI_CHANGELOG.md` for full release
+notes, and the 3.8.0 wiki "What's New" page for usage
+examples.
+
 ## What's new in 3.7.10
 
 Workspace reorganisation pass.  Each tab's default dock set is
