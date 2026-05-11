@@ -72,8 +72,16 @@ class Layout2DView(QWidget):
         btn_reset.clicked.connect(self._reset_view)
         toolbar.addWidget(btn_reset)
         toolbar.addStretch()
+        # 3.7.5: direction-colour legend.  Hidden by default; the
+        # rebuild() pass populates / shows / hides it based on
+        # whether the current system has any mirrors.
+        self._legend = QLabel('', toolbar_widget)
+        self._legend.setStyleSheet('font-size: 11px;')
+        self._legend.setTextFormat(Qt.RichText)
+        self._legend.setVisible(False)
+        toolbar.addWidget(self._legend)
         hint = QLabel('Wheel: zoom · Drag: pan', toolbar_widget)
-        hint.setStyleSheet('color: #7a94b8; font-size: 10px;')
+        hint.setStyleSheet('color: #7a94b8; font-size: 10px; padding-left: 12px;')
         toolbar.addWidget(hint)
         layout.addWidget(toolbar_widget)
 
@@ -296,6 +304,36 @@ class Layout2DView(QWidget):
         # 3.6.1: re-draw the selection highlight on top after a full
         # rebuild so the gold outline survives auto-retraces.
         self._redraw_highlight()
+
+        # 3.7.5: refresh the direction-colour legend in the toolbar
+        # if this system has any mirrors.  Built dynamically from
+        # the actual mirror count so a 5-fold system shows the
+        # right colours.
+        try:
+            ts = self.sm.build_trace_surfaces()
+            mirror_count = sum(1 for s in ts
+                               if getattr(s, 'is_mirror', False))
+        except Exception:
+            mirror_count = 0
+        if mirror_count > 0:
+            palette = [
+                ('#7cbcff', 'forward'),
+                ('#ff9966', 'after mirror 1'),
+                ('#88ff66', 'after mirror 2'),
+                ('#dc82ff', 'after mirror 3'),
+                ('#ffdc64', 'after mirror 4'),
+                ('#64ffdc', 'after mirror 5+'),
+            ]
+            n_show = min(mirror_count + 1, len(palette))
+            parts = []
+            for i in range(n_show):
+                col, label = palette[i]
+                parts.append(
+                    f'<span style="color:{col}">● {label}</span>')
+            self._legend.setText('  '.join(parts))
+            self._legend.setVisible(True)
+        else:
+            self._legend.setVisible(False)
 
         # Auto-trace
         self.sm.run_trace()
@@ -648,16 +686,56 @@ class Layout2DView(QWidget):
         if not elem_frames:
             return
 
-        # Ray colour — preference or wavelength-based.
-        if self.sm.prefs.get('ray_use_wavelength', True):
-            wv = self.sm.wavelength_nm
-            rc = self._wavelength_to_color(wv)
-            ray_pen = QPen(QColor(*rc, 120), 0.8)
-        else:
+        # 3.7.5: Ray colour by DIRECTION (mirror count) when the
+        # system has any folds, so the 2D side-view's overlapping
+        # forward + return + post-fold paths visually separate.
+        # Pre-Mirror-1 segments (forward path): blue.
+        # Post-Mirror-1 segments (return path): orange.
+        # Post-Mirror-2 segments (first fold): green.
+        # Subsequent folds cycle through magenta / yellow / cyan.
+        #
+        # For un-folded systems (no Mirror elements), fall back to
+        # the wavelength-based / preference-based colouring.
+        trace_surfs = self.sm.build_trace_surfaces()
+        has_mirrors = any(getattr(s, 'is_mirror', False)
+                          for s in trace_surfs)
+        # Mirror count BEFORE each ray segment (segment k = pts[k] to
+        # pts[k+1], i.e., the line from history[k-1] world to
+        # history[k] world; segment 0 is source to history[0]).
+        # mirrors_before[k] = mirrors crossed in trace_surfs[0:k].
+        mirrors_before = [0]
+        running = 0
+        for s in trace_surfs:
+            if getattr(s, 'is_mirror', False):
+                running += 1
+            mirrors_before.append(running)
+        # Plus the image plane at the end (no mirror).
+        mirrors_before.append(running)
+
+        direction_palette = [
+            (124, 188, 255),  # 0 mirrors: forward (blue)
+            (255, 153, 102),  # 1 mirror: return (orange)
+            (136, 255, 102),  # 2 mirrors: post-fold (green)
+            (220, 130, 255),  # 3 mirrors: magenta
+            (255, 220, 100),  # 4 mirrors: yellow
+            (100, 255, 220),  # 5+ mirrors: cyan
+        ]
+
+        def pen_for_segment(seg_idx):
+            if has_mirrors:
+                mc = min(mirrors_before[seg_idx],
+                         len(direction_palette) - 1)
+                rgb = direction_palette[mc]
+                return QPen(QColor(*rgb, 150), 0.9)
+            # No folds — use wavelength / preference colour.
+            if self.sm.prefs.get('ray_use_wavelength', True):
+                wv = self.sm.wavelength_nm
+                rc = self._wavelength_to_color(wv)
+                return QPen(QColor(*rc, 120), 0.8)
             rc_hex = self.sm.prefs.get('ray_color', '#5cb8ff')
             c = QColor(rc_hex)
             c.setAlpha(120)
-            ray_pen = QPen(c, 0.8)
+            return QPen(c, 0.8)
 
         n_rays = trace_result.input_rays.n_rays
         history = trace_result.ray_history
@@ -732,11 +810,13 @@ class Layout2DView(QWidget):
                                 pts[-1][1] + 20 * np.sin(th)))
 
             # Draw connected segments (scaled to scene pixels).
+            # 3.7.5: each segment gets its own pen coloured by
+            # how many mirrors have been crossed before it.
             for j in range(len(pts) - 1):
                 self.scene.addLine(
                     pts[j][0] * S, pts[j][1] * S,
                     pts[j + 1][0] * S, pts[j + 1][1] * S,
-                    ray_pen,
+                    pen_for_segment(j),
                 )
 
     @staticmethod

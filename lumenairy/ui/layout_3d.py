@@ -592,10 +592,39 @@ class Layout3DView(QWidget):
         n_rays = result.input_rays.n_rays
         step = max(1, n_rays // 40)
         history = result.ray_history
+        # 3.7.5: per-segment direction-based colouring for folded
+        # systems (matches the 2D layout palette).  Pre-Mirror-1
+        # = blue, post-Mirror-1 = orange, post-Mirror-2 = green,
+        # subsequent folds cycle through magenta / yellow / cyan.
+        trace_surfs = self.sm.build_trace_surfaces()
+        has_mirrors = any(getattr(s, 'is_mirror', False)
+                          for s in trace_surfs)
+        mirrors_before = [0]
+        running = 0
+        for s in trace_surfs:
+            if getattr(s, 'is_mirror', False):
+                running += 1
+            mirrors_before.append(running)
+        mirrors_before.append(running)
+        direction_palette = [
+            '#7cbcff',   # 0 mirrors: forward (blue)
+            '#ff9966',   # 1 mirror: return (orange)
+            '#88ff66',   # 2 mirrors: post-fold (green)
+            '#dc82ff',   # 3 mirrors: magenta
+            '#ffdc64',   # 4 mirrors: yellow
+            '#64ffdc',   # 5+ mirrors: cyan
+        ]
         if self.sm.prefs.get('ray_use_wavelength', True):
             wv_color = self._wv_color(self.sm.wavelength_nm)
         else:
             wv_color = self.sm.prefs.get('ray_color', '#5cb8ff')
+
+        def color_for_segment(seg_idx):
+            if not has_mirrors:
+                return wv_color
+            mc = min(mirrors_before[seg_idx],
+                     len(direction_palette) - 1)
+            return direction_palette[mc]
 
         # Source frame for the launch point.
         o_src, R_src = elem_frames[0]
@@ -648,11 +677,34 @@ class Layout3DView(QWidget):
                     o_last, R_last = surf_frames[-1]
                     pts.append(pts[-1] + 20.0 * R_last[:, 2])
 
+            # 3.7.5: draw each segment as its own mesh so direction-
+            # based colouring works.  Group consecutive segments
+            # that share the same colour into a single polyline to
+            # keep the actor count down (one actor per
+            # direction-colour transition).
             if len(pts) >= 2:
-                ray_line = pv.lines_from_points(np.asarray(pts))
-                self._plotter.add_mesh(ray_line, color=wv_color,
-                                       line_width=1.2, opacity=0.5,
-                                       name=f'ray_{r}')
+                run_start = 0
+                run_color = color_for_segment(0)
+                for j in range(1, len(pts) - 1):
+                    seg_color = color_for_segment(j)
+                    if seg_color != run_color:
+                        # Flush the previous run as one polyline.
+                        run_pts = np.asarray(pts[run_start:j + 1])
+                        ray_line = pv.lines_from_points(run_pts)
+                        self._plotter.add_mesh(
+                            ray_line, color=run_color,
+                            line_width=1.2, opacity=0.55,
+                            name=f'ray_{r}_{run_start}')
+                        run_start = j
+                        run_color = seg_color
+                # Trailing run.
+                run_pts = np.asarray(pts[run_start:])
+                if len(run_pts) >= 2:
+                    ray_line = pv.lines_from_points(run_pts)
+                    self._plotter.add_mesh(
+                        ray_line, color=run_color,
+                        line_width=1.2, opacity=0.55,
+                        name=f'ray_{r}_{run_start}')
 
     def _compute_z_positions(self):
         """Cumulative z positions from element distances.
