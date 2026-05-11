@@ -66,11 +66,27 @@ class MainWindow(QMainWindow):
 
         # ── Central widget: element table ──
         self.element_editor = ElementTableEditor(self.model)
-        self.element_editor.setMaximumHeight(350)
+        # 3.7.6: removed ``setMaximumHeight(350)``.  The cap was the
+        # root cause of "layout dock won't shrink when docked": when
+        # the user dragged the splitter between the top dock area
+        # and the central area UP to shrink the 2D / 3D layout, the
+        # freed vertical space wanted to flow into the central
+        # widget -- but it was capped at 350 px, so the freed space
+        # had nowhere to go and Qt refused to move the splitter at
+        # all.  Removing the cap lets the element table grow into
+        # the freed space naturally; the table has its own internal
+        # scrollbar so excess rows don't push the layout open.
         self.setCentralWidget(self.element_editor)
 
         # ── Docks ──
         self._create_docks()
+        # 3.7.6: capture the freshly-built default dock geometry
+        # BEFORE any persisted workspace state is restored.  This
+        # snapshot powers the View ▸ Reset to Default Layout menu
+        # item; restoring it un-floats / re-tabs / re-sizes every
+        # dock back to first-launch state without restarting the
+        # application.
+        self._default_layout_state = bytes(self.saveState().data())
         self._build_menus()
         # Workspace bar sits above the main toolbar; _build_toolbar runs
         # AFTER so its toolbar lands on a new row underneath.
@@ -173,6 +189,15 @@ class MainWindow(QMainWindow):
             d = QDockWidget(title, self)
             d.setObjectName(name)
             d.setWidget(widget)
+            # 3.7.6: drop the dock widget's own minimum to 0.  Even
+            # after the contained widget reports a tiny minimum
+            # (Layout2DView / Layout3DView), the QDockWidget itself
+            # still carries a default minimum derived from its
+            # title-bar + widget sizeHint -- which a docked splitter
+            # respects as a hard floor.  Setting (0, 0) here is what
+            # lets users actually drag the dock splitter below the
+            # widget's natural width when the layouts are docked.
+            d.setMinimumSize(0, 0)
             # Allow floating (pop out) + closing.  Users with big
             # simulations tend to want Wave Optics or Spot Diagram on
             # a separate monitor.
@@ -877,6 +902,46 @@ class MainWindow(QMainWindow):
         )
         self.workspace_mgr.apply_index(0)
 
+    def _reset_to_default_layout(self):
+        """3.7.6: Restore the full dock layout to first-launch defaults.
+
+        Re-tabs the 2D / 3D layouts together, un-floats every dock,
+        snaps split-areas back to their initial sizes, and resets
+        the workspace set to the built-in defaults.  Persists the
+        new state to QSettings so the next launch starts clean.
+        """
+        ans = QMessageBox.question(
+            self, 'Reset to Default Layout',
+            'Restore the default dock layout and workspace set?\n\n'
+            'This re-tabs the 2D / 3D layouts, un-floats every dock, '
+            'and discards any custom workspaces.  Your prescription, '
+            'undo history, and preferences are NOT affected.',
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if ans != QMessageBox.Yes:
+            return
+        try:
+            blob = getattr(self, '_default_layout_state', None)
+            if blob:
+                from PySide6.QtCore import QByteArray
+                self.restoreState(QByteArray(blob))
+            # Re-apply default workspace definitions and select index 0.
+            self.workspace_mgr.init_defaults()
+            self.workspace_bar.set_names(
+                self.workspace_mgr.titles(), current_index=0)
+            self.workspace_mgr.apply_index(0)
+            # Reapply the showEvent's default dock sizes so the layout
+            # dock gets its big-area allocation back.
+            try:
+                self.resizeDocks(
+                    [self.layout_dock, self.optimizer_dock],
+                    [400, 150],
+                    Qt.Vertical,
+                )
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def _save_workspace_preferences(self):
         """Persist the workspace set to QSettings."""
         try:
@@ -1059,6 +1124,14 @@ class MainWindow(QMainWindow):
         vm.addAction('&Configure Workspace Docks...',
                      lambda: self._on_workspace_manage_requested(
                          self.workspace_mgr.current_index))
+        # 3.7.6: top-level "Reset to Default Layout" -- restores
+        # the first-launch dock arrangement (tabbed 2D / 3D, default
+        # split sizes, default workspaces).  Separate from the
+        # buried "Reset Workspaces to Defaults" in the Workspace
+        # submenu so users who broke their layout by dragging docks
+        # around can recover without restarting.
+        vm.addAction('Reset to &Default Layout',
+                     self._reset_to_default_layout)
         vm.addSeparator()
         # ── Layouts & overview ──
         for d in [self.layout_dock, self.layout3d_dock, self.summary_dock,

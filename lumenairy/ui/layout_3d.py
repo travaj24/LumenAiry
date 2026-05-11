@@ -49,72 +49,78 @@ class Layout3DView(QWidget):
         # View" button still calls _reset_camera() directly.
         self._camera_initialized = False
 
-        # 3.7.2: allow the layout dock to shrink freely.  When 2D
-        # and 3D layouts are tabbed in the same dock, the dock
-        # honours the LARGER of their minimums -- so 3D needs the
-        # same minimumSizeHint() override as 2D, otherwise the
-        # QtInteractor's default size hint pins the dock open.
-        from PySide6.QtWidgets import QSizePolicy
+        # 3.7.6: allow the layout dock to shrink freely.  Previous
+        # attempts (3.7.2 setMinimumSize + minimumSizeHint override)
+        # didn't help because Qt's QDockWidget reads the layout's
+        # effective minimum size (sum of child minimums for a
+        # QVBoxLayout) regardless of the widget's own setMinimumSize.
+        # The correct decoupling is
+        # ``setSizeConstraint(QLayout.SetNoConstraint)`` on the main
+        # QVBoxLayout, paired with a QToolBar (Qt's built-in toolbar
+        # with overflow handling) instead of the QHBoxLayout +
+        # QPushButton row that summed ~720 px of hard minimums and
+        # pinned the dock open.  When the dock is narrower than the
+        # toolbar's natural width, QToolBar shows a ">>" overflow
+        # button and pushes hidden actions into a popup -- the user
+        # never loses access to Refresh / View axes / camera roll
+        # even when the dock is 80 px wide.
+        from PySide6.QtWidgets import QSizePolicy, QLayout, QToolBar
+        from PySide6.QtGui import QAction
         self.setMinimumSize(0, 0)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(2, 2, 2, 2)
+        layout.setSizeConstraint(QLayout.SetNoConstraint)
 
-        # Toolbar
-        toolbar = QHBoxLayout()
-        btn_refresh = QPushButton('Refresh')
-        btn_refresh.clicked.connect(self.rebuild)
-        toolbar.addWidget(btn_refresh)
+        # 3.7.6: QToolBar replaces the QHBoxLayout-with-buttons --
+        # QToolBar's built-in overflow handler shows a ">>" popup
+        # when narrower than its actions need.  Use Expanding
+        # horizontally (so it fills the dock width) + Fixed
+        # vertically; ``minimumWidth(0)`` lets it accept clipping.
+        toolbar = QToolBar(self)
+        toolbar.setMovable(False)
+        toolbar.setFloatable(False)
+        toolbar.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar.setMinimumWidth(0)
+        toolbar.setStyleSheet(
+            'QToolBar { spacing: 4px; border: 0; }'
+            'QToolButton { padding: 2px 8px; }')
 
-        btn_reset_cam = QPushButton('Reset View')
-        btn_reset_cam.clicked.connect(self._reset_camera)
-        toolbar.addWidget(btn_reset_cam)
+        act_refresh = toolbar.addAction('Refresh')
+        act_refresh.triggered.connect(self.rebuild)
+        act_refresh.setToolTip('Rebuild the 3D scene from the model.')
 
-        # 3.6.1: in-plane rotate buttons.  Roll the camera about its
-        # forward axis so the entire scene appears to rotate inside
-        # the visible window without changing what's facing you.
-        # Useful when the user has rotated to an oblique view and
-        # wants to level the optical axis horizontally / vertically.
-        # 3.7.4: widen rotation + view buttons so the unicode arrow
-        # glyphs and view labels are readable (28-40 px was too
-        # narrow on default Qt fonts; the glyphs were getting
-        # clipped or hidden behind the button border).
-        btn_rot_ccw = QPushButton('⟲')
-        btn_rot_ccw.setMinimumWidth(40)
-        btn_rot_ccw.setStyleSheet('font-size: 16px;')
-        btn_rot_ccw.setToolTip(
-            'Rotate the view 15° counter-clockwise in the plane '
-            'of the screen (camera roll).')
-        btn_rot_ccw.clicked.connect(lambda: self._roll_view(-15))
-        toolbar.addWidget(btn_rot_ccw)
+        act_reset = toolbar.addAction('Reset View')
+        act_reset.triggered.connect(self._reset_camera)
+        act_reset.setToolTip('Fit the entire system in view '
+                              '(isometric).')
 
-        btn_rot_cw = QPushButton('⟳')
-        btn_rot_cw.setMinimumWidth(40)
-        btn_rot_cw.setStyleSheet('font-size: 16px;')
-        btn_rot_cw.setToolTip(
-            'Rotate the view 15° clockwise in the plane of the '
-            'screen (camera roll).')
-        btn_rot_cw.clicked.connect(lambda: self._roll_view(+15))
-        toolbar.addWidget(btn_rot_cw)
+        toolbar.addSeparator()
 
-        # View axis buttons.  3.7.4: minimumWidth 56 (was fixedWidth
-        # 40) so 'Front' / 'Side' / etc. fit on default Qt fonts.
-        for label, view in [('Front', 'xy'), ('Side', 'side2d'),
-                             ('Top', 'yz'), ('Iso', 'iso')]:
-            btn = QPushButton(label)
-            btn.setMinimumWidth(56)
-            btn.setToolTip(f'Snap to {label.lower()} view')
-            btn.clicked.connect(lambda checked, v=view: self._snap_to_view(v))
-            toolbar.addWidget(btn)
+        act_roll_ccw = toolbar.addAction('⟲')
+        act_roll_ccw.triggered.connect(lambda: self._roll_view(-15))
+        act_roll_ccw.setToolTip(
+            'Rotate the view 15° counter-clockwise in the screen '
+            'plane (camera roll).')
 
-        toolbar.addStretch()
+        act_roll_cw = toolbar.addAction('⟳')
+        act_roll_cw.triggered.connect(lambda: self._roll_view(+15))
+        act_roll_cw.setToolTip(
+            'Rotate the view 15° clockwise in the screen plane '
+            '(camera roll).')
 
-        help_label = QLabel('Left-drag: rotate | Scroll: zoom | Middle-drag: pan')
-        help_label.setStyleSheet("color: #7a94b8; font-size: 10px;")
-        toolbar.addWidget(help_label)
+        toolbar.addSeparator()
 
-        layout.addLayout(toolbar)
+        for label, view_id in [('Front', 'xy'), ('Side', 'side2d'),
+                                ('Top', 'yz'), ('Iso', 'iso')]:
+            act = toolbar.addAction(label)
+            act.triggered.connect(
+                lambda checked=False, v=view_id: self._snap_to_view(v))
+            act.setToolTip(f'Snap the camera to the {label.lower()} '
+                            'view.')
+
+        layout.addWidget(toolbar)
 
         # 3D widget
         if PYVISTA_AVAILABLE and PYVISTAQT_AVAILABLE:
@@ -126,6 +132,18 @@ class Layout3DView(QWidget):
                 line_width=2, color='#aabbcc',
                 xlabel='X', ylabel='Y', zlabel='Z',
             )
+            # 3.7.6: let the VTK widget shrink with the dock --
+            # ``Expanding`` so it fills available space (the
+            # natural default for a viewport widget),
+            # ``setMinimumSize(0, 0)`` so it can shrink to zero
+            # when the dock is dragged narrow.  Using
+            # ``Ignored`` here is wrong: it tells Qt the viewport
+            # doesn't want any space, and the dock area allocates
+            # minimal space at launch instead of letting the user
+            # shrink the dock from a sensible default.
+            self._plotter.interactor.setMinimumSize(0, 0)
+            self._plotter.interactor.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(self._plotter.interactor, stretch=1)
         elif PYVISTA_AVAILABLE:
             # Fallback: static image label
@@ -134,7 +152,9 @@ class Layout3DView(QWidget):
             self._fallback_label.setStyleSheet(
                 "QLabel { background: #050709; color: #a0b4d0; "
                 "font-family: Consolas; font-size: 12px; }")
-            self._fallback_label.setMinimumSize(300, 200)
+            self._fallback_label.setMinimumSize(0, 0)
+            self._fallback_label.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(self._fallback_label, stretch=1)
         else:
             lbl = QLabel('PyVista not installed.\npip install pyvista pyvistaqt')
@@ -142,6 +162,9 @@ class Layout3DView(QWidget):
             lbl.setStyleSheet(
                 "QLabel { background: #050709; color: #a0b4d0; "
                 "font-family: Consolas; font-size: 12px; }")
+            lbl.setMinimumSize(0, 0)
+            lbl.setSizePolicy(
+                QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(lbl, stretch=1)
 
         self.sm.system_changed.connect(self.rebuild)
@@ -596,7 +619,11 @@ class Layout3DView(QWidget):
         # systems (matches the 2D layout palette).  Pre-Mirror-1
         # = blue, post-Mirror-1 = orange, post-Mirror-2 = green,
         # subsequent folds cycle through magenta / yellow / cyan.
-        trace_surfs = self.sm.build_trace_surfaces()
+        # 3.7.5: walk the world-frame surface list that was actually
+        # traced (``result.surfaces``) so mirror-count indices align
+        # with ``ray_history``.  The legacy ``build_trace_surfaces``
+        # still emits cb_pre entries that the world trace skips.
+        trace_surfs = result.surfaces
         has_mirrors = any(getattr(s, 'is_mirror', False)
                           for s in trace_surfs)
         mirrors_before = [0]
@@ -605,7 +632,6 @@ class Layout3DView(QWidget):
             if getattr(s, 'is_mirror', False):
                 running += 1
             mirrors_before.append(running)
-        mirrors_before.append(running)
         direction_palette = [
             '#7cbcff',   # 0 mirrors: forward (blue)
             '#ff9966',   # 1 mirror: return (orange)

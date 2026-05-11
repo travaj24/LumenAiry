@@ -15,6 +15,116 @@ for the same release).  Historical GUI-only releases (e.g. 3.2.0,
 Designer" to "**LumenAiry Designer**" in 3.5.9.  Earlier
 historical entries below retain the old name for traceability.
 
+## [3.7.6] — 2026-05-11
+
+Folded-design correctness pass plus a long-running dock-shrink fix.
+Consolidates the 3.7.1 → 3.7.5 in-flight commits that fixed
+specific folded-geometry issues into a single release built on
+the new core `trace_world` engine (see `CHANGELOG.md`).
+
+### LumenAiry Designer is still in BETA
+
+Layouts, dock arrangements, default workspaces, and even menu
+names continue to change between minor releases.  Pin a specific
+version if you depend on a particular GUI behaviour.
+
+### Folded designs — chief ray now lands on post-fold lens centres
+
+* `SystemModel.run_trace` now uses the core's new world-coord
+  trace path (`trace_world` + `_build_trace_surfaces_world`).
+  Each surface in the trace list carries its absolute world
+  position (`world_origin`) and orientation (`world_R`); rays
+  propagate in world coords between surfaces.  Verified on
+  tx4designstudy71: chief-ray world positions after a 45° fold
+  mirror land at each subsequent lens centre to floating-point
+  precision (`SpatialFilter`, `Lens 10`, `Lens 11`, `Lens 12`,
+  `Detector` all hit dead-centre), and the chief-ray world
+  direction after the fold is `(0, +1, 0)` — parallel to the
+  post-fold optical axis instead of off by `1 - cos(45°)` ≈ 30 %.
+* `surface_frames_2d_mm` / `surface_frames_3d_mm` no longer emit
+  a separate cb_pre frame for tilted elements -- one frame per
+  actual surface, matching the world trace's ray history
+  one-to-one.  The 2D / 3D layouts read this and draw rays
+  through each surface's exact world frame.
+* Layout colour-coding now indexes off `trace_result.surfaces`
+  (the actual traced list) instead of the legacy
+  `build_trace_surfaces()` output, so direction-based mirror-
+  count colours stay aligned with the ray history through any
+  fold geometry.
+* Recovered from earlier 3.7.x experiments (rolled into this
+  release): 3D fold orientation matches 2D (3.7.1), cb fields
+  no longer stripped in the run_trace fresh-copy (3.7.2),
+  `Element.origin` / `Element.R` cached as canonical world
+  frame so the prescription editor's absolute-coords mode
+  actually edits absolute (3.7.3), Zemax → world conversion is
+  now exact for folded designs (3.7.4), and ray segments are
+  coloured by direction (mirror count) in both 2D and 3D so
+  forward / return / post-fold paths visually separate (3.7.5).
+
+### Layout-dock shrink — root cause finally found
+
+Multiple previous attempts (`setMinimumSize(0, 0)`,
+`minimumSizeHint(40, 40)` override, `setSizeConstraint
+(SetNoConstraint)`, `QDockWidget.setMinimumSize(0, 0)`) failed
+because they addressed the wrong constraint.  The real culprit
+was `self.element_editor.setMaximumHeight(350)` on the central
+widget: when the user dragged the splitter UP to shrink the
+2D / 3D layout dock, the freed vertical space wanted to flow
+into the central widget -- but it was capped at 350 px, so the
+freed space had nowhere to go and Qt refused to move the
+splitter at all.
+
+* Removed `element_editor.setMaximumHeight(350)`.  The element
+  table now grows naturally into freed vertical space; its
+  internal scrollbar handles overflow.  Verified
+  programmatically: `resizeDocks([target], Vertical)` now
+  actually resizes the layout dock to any value between its 56
+  px minimum and the available area.
+* Reverted the over-aggressive `QSizePolicy.Ignored` policies
+  I'd added to the inner `QGraphicsView` / `QtInteractor` /
+  toolbar in the prior round -- those made the docks start at
+  minimum size on first launch (the opposite problem) because
+  `Ignored` tells Qt the widget doesn't want any space.
+  Restored to `Expanding` so docks start at a useful default.
+* 3D layout's button row is now a `QToolBar` (was a
+  `QHBoxLayout` of `QPushButton` with hard `setMinimumWidth`).
+  Qt's `QToolBar` has built-in overflow handling -- when the
+  dock is narrower than the natural action row, hidden buttons
+  go into a `">>"` popup instead of forcing the dock wide.
+* `Layout2DView.resizeEvent` no longer calls `fitInView` --
+  shrinking the dock now CLIPS the visible scene portion (and
+  shows scrollbars if needed) instead of rescaling the entire
+  drawing.  Users complained the rescale-on-resize destroyed
+  their chosen zoom and made the layout feel "live" in a
+  distracting way.
+
+### View ▸ Reset to Default Layout
+
+* New top-level **View ▸ Reset to Default Layout** menu action.
+  Captures the freshly-built default dock geometry once on
+  startup (after `_create_docks()`, before any persisted
+  workspace state restoration) and lets the user restore it
+  on demand without restarting the application.  Un-floats /
+  re-tabs / re-sizes every dock back to first-launch state and
+  resets the workspace set to the built-in defaults.
+  Prescription, undo history, and preferences are unaffected.
+* The buried **View ▸ Workspace ▸ Reset Workspaces to Defaults**
+  entry remains for users who want to reset only the workspace
+  definitions without touching dock geometry.
+
+### Backwards compatibility
+
+* `lumenairy.raytrace.trace()` (the legacy local-frame trace)
+  is unchanged.  Custom Surface lists, ABCD / paraxial /
+  Seidel helpers, the wave-optics dock, tolerance / rayfan /
+  spot-field / distortion / footprint docks (all of which
+  build their own surface lists and call `trace()` directly)
+  continue to work without modification.
+* `Surface` gains two optional fields (`world_origin`,
+  `world_R`, both default `None`).  Existing constructor calls
+  and serialised systems are unaffected.
+* All 25 validation suite files pass unchanged.
+
 ## [3.7.0] — 2026-05-10
 
 Tilt-aware ray tracing reaches the GUI, plus the folded-geometry

@@ -10,6 +10,74 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.7.6
+
+**Sequential world-coordinate ray trace** (core) plus a folded-
+design correctness pass and a long-running dock-shrink fix in the
+GUI.  The core trace engine now has a second sequential trace
+path (`trace_world`) that propagates rays in world coordinates
+between surfaces; each `Surface` carries its absolute
+`world_origin` and `world_R` (local-to-world rotation), and only
+drops into local coords for the per-surface intersect / refract /
+reflect step.  This eliminates the ~`1/cos(θ)` world-position
+error that the legacy local-frame trace's coord-break stack
+introduced for any element following a tilted mirror.
+
+**Library changes**
+
+- New `lumenairy.raytrace.trace_world(rays, surfaces, wavelength,
+  ...)`.  Same signature as `trace()`, but expects each surface
+  to have `world_origin` and `world_R` populated.
+- `Surface` gains two optional fields (`world_origin`, `world_R`,
+  both default `None`).  Backward compatible: existing surfaces
+  / pickles / constructor calls are unaffected, and the legacy
+  `trace()` path still works.
+- All 25 validation files pass unchanged.
+
+**GUI changes — folded designs**
+
+- `SystemModel.run_trace` now uses the world-coord trace path.
+  Verified on `tx4designstudy71.zmx` (a 1× telecentric design
+  with a 45° fold mirror): the chief ray's world positions
+  after the fold now land at each subsequent lens centre to
+  floating-point precision (`SpatialFilter`, `Lens 10`,
+  `Lens 11`, `Lens 12`, `Detector` all hit dead-centre).
+- Layout views (`surface_frames_2d_mm` / `surface_frames_3d_mm`)
+  emit one frame per actual optical surface — no separate
+  cb_pre frame.  Matches the world-trace ray history one-to-one.
+- Direction-coloured ray segments (forward / return / post-fold)
+  in both 2D and 3D layouts (3.7.5 rolled in).
+
+**GUI changes — dock-shrink finally fixed**
+
+The 2D / 3D layout dock would refuse to shrink when docked, no
+matter what minimum-size constraints the contained widget or
+QDockWidget reported.  The real culprit was
+`element_editor.setMaximumHeight(350)` on the central widget:
+when the user dragged the splitter UP to shrink the layout
+dock, the freed vertical space wanted to flow into the central
+widget — but it was capped at 350 px, so Qt refused to move
+the splitter at all.  Cap removed; the element table grows
+into the freed space naturally.
+
+- 3D layout's button row is now a `QToolBar` with built-in
+  overflow popup — when the dock is narrow, hidden buttons go
+  into a `">>"` menu instead of forcing the dock open.
+- Shrinking now CLIPS the 2D scene (and shows scrollbars if
+  needed) instead of rescaling — `Layout2DView.resizeEvent` no
+  longer calls `fitInView`.  The toolbar's "Reset View" button
+  still re-fits on demand.
+
+**GUI changes — Reset to Default Layout**
+
+- New **View ▸ Reset to Default Layout** menu action.  Captures
+  the freshly-built default dock geometry on startup and lets
+  the user un-float / re-tab / re-size every dock back to
+  first-launch state without restarting the application.
+
+See [CHANGELOG.md](CHANGELOG.md) and [GUI_CHANGELOG.md](GUI_CHANGELOG.md)
+for the full list.
+
 ## What's new in 3.6.1
 
 GUI update only — no core-library API changes.  Audit-driven

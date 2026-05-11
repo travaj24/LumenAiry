@@ -33,16 +33,24 @@ class Layout2DView(QWidget):
         super().__init__(parent)
         self.sm = system_model
 
-        # 3.7.1: allow the layout dock to shrink freely by overriding
-        # minimumSizeHint() (set below) -- using QSizePolicy.Ignored
-        # at this level was the prior attempt (3.6.1 hotfix-6), which
-        # let the dock collapse but also broke the toolbar layout
-        # because the QVBoxLayout had no size preferences to work
-        # with at all and gave the Reset-View toolbar half the dock
-        # frame.  Reverted to Expanding here; the dock-shrink fix
-        # lives entirely in minimumSizeHint().
+        # 3.7.6: allow the layout dock to shrink freely.  The earlier
+        # attempts (3.6.1 hotfix-6 with QSizePolicy.Ignored, 3.7.1
+        # with minimumSizeHint override) both failed because Qt's
+        # QDockWidget uses the **layout's** effective minimum size
+        # (sum of child minimums for a QVBoxLayout) regardless of
+        # the widget's own setMinimumSize / minimumSizeHint when
+        # the widget hosts a layout.  The correct fix is
+        # ``setSizeConstraint(QLayout.SetNoConstraint)`` on the
+        # main QVBoxLayout, which tells Qt the layout's minimum
+        # must NOT propagate up to the widget; combined with the
+        # toolbar's ``QSizePolicy.Ignored`` (so the toolbar accepts
+        # being clipped horizontally when the dock is narrower than
+        # its natural minimum), the dock can now shrink to almost
+        # zero in both dimensions, with the toolbar clipping
+        # gracefully and the 2D view auto-refitting in resizeEvent.
         from PySide6.QtWidgets import (
             QSizePolicy, QPushButton, QHBoxLayout, QLabel, QWidget,
+            QLayout,
         )
         from PySide6.QtCore import QSize
         self.setMinimumSize(0, 0)
@@ -51,6 +59,7 @@ class Layout2DView(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        layout.setSizeConstraint(QLayout.SetNoConstraint)
 
         # 3.7.1: thin toolbar (Reset View + zoom hint) wrapped in a
         # QWidget with a HARD fixed height so the QVBoxLayout can't
@@ -60,8 +69,16 @@ class Layout2DView(QWidget):
         # dock when the parent had QSizePolicy.Ignored.
         toolbar_widget = QWidget(self)
         toolbar_widget.setFixedHeight(28)
+        # 3.7.6: ``Expanding`` horizontally so the toolbar fills the
+        # dock width when there's room, ``Fixed`` vertically at 28
+        # px.  ``setMinimumWidth(0)`` lets the toolbar accept being
+        # clipped when the dock is narrower than the natural button
+        # row; combined with the parent layout's
+        # ``SetNoConstraint`` this lets the dock shrink without the
+        # toolbar's sum-of-buttons pinning the dock open.
         toolbar_widget.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
+        toolbar_widget.setMinimumWidth(0)
         toolbar = QHBoxLayout(toolbar_widget)
         toolbar.setContentsMargins(4, 2, 4, 2)
         toolbar.setSpacing(6)
@@ -95,7 +112,16 @@ class Layout2DView(QWidget):
         self.view.setDragMode(QGraphicsView.ScrollHandDrag)
         self.view.setTransformationAnchor(QGraphicsView.AnchorUnderMouse)
         self.view.setMinimumSize(0, 0)
-        self.view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        # 3.7.6: ``Expanding`` so the view fills available dock
+        # space when the user has room (the natural default for a
+        # QGraphicsView), while ``setMinimumSize(0, 0)`` lets it
+        # shrink to zero when the dock is dragged narrow.  Using
+        # ``Ignored`` here was wrong: it told Qt the view didn't
+        # care about size, so the dock area allocated minimal
+        # space and the layout never reached a useful default
+        # size on first launch.
+        self.view.setSizePolicy(
+            QSizePolicy.Expanding, QSizePolicy.Expanding)
 
         # 3.7.1: install our own wheelEvent on the view so the wheel
         # always zooms regardless of scrollbar state.  At high zoom
@@ -696,21 +722,21 @@ class Layout2DView(QWidget):
         #
         # For un-folded systems (no Mirror elements), fall back to
         # the wavelength-based / preference-based colouring.
-        trace_surfs = self.sm.build_trace_surfaces()
+        # 3.7.5: walk the surfaces that were ACTUALLY traced
+        # (``trace_result.surfaces``, the world-frame surface list
+        # with no cb_pre entries) so the mirror-count index aligns
+        # one-to-one with ``ray_history``.  Using the legacy local
+        # list (``build_trace_surfaces``) would be off-by-N because
+        # it still emits cb_pre Surfaces that the world trace skips.
+        trace_surfs = trace_result.surfaces
         has_mirrors = any(getattr(s, 'is_mirror', False)
                           for s in trace_surfs)
-        # Mirror count BEFORE each ray segment (segment k = pts[k] to
-        # pts[k+1], i.e., the line from history[k-1] world to
-        # history[k] world; segment 0 is source to history[0]).
-        # mirrors_before[k] = mirrors crossed in trace_surfs[0:k].
         mirrors_before = [0]
         running = 0
         for s in trace_surfs:
             if getattr(s, 'is_mirror', False):
                 running += 1
             mirrors_before.append(running)
-        # Plus the image plane at the end (no mirror).
-        mirrors_before.append(running)
 
         direction_palette = [
             (124, 188, 255),  # 0 mirrors: forward (blue)
@@ -920,3 +946,18 @@ class Layout2DView(QWidget):
     def sizeHint(self):
         from PySide6.QtCore import QSize
         return QSize(400, 200)
+
+    def resizeEvent(self, event):
+        """3.7.6: no auto-refit on resize.
+
+        Earlier (post-fix) iterations of this method called
+        ``self.view.fitInView`` here so the scene rescaled to the
+        new viewport size.  Users complained that shrinking the
+        dock should CLIP the visible portion of the optics, not
+        rescale the whole drawing -- the latter destroys the
+        user's chosen zoom and makes the layout feel "live" in
+        a distracting way.  Reverted: the QGraphicsView's
+        scrollbars handle overflow naturally; ``Reset View`` (the
+        toolbar button) re-fits on demand.
+        """
+        super().resizeEvent(event)

@@ -15,6 +15,7 @@ from .core import (
     Surface,
     TraceResult,
     trace,
+    trace_world,
     surfaces_from_prescription,
     make_ray,
     make_fan,

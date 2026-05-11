@@ -2,6 +2,95 @@
 
 All notable changes to the core library are documented here.
 
+## [3.7.6] — 2026-05-11
+
+Sequential **world-coordinate** ray trace.  The core trace engine
+now has a second sequential trace path (`trace_world`) that
+propagates rays in world coordinates between surfaces and only
+drops into each surface's local frame for the intersect /
+refract / reflect step.  Surfaces in this path carry their own
+absolute `world_origin` and `world_R` (local-to-world rotation),
+which means folded systems are encoded as "each surface knows
+where it actually is in space" rather than as a chain of
+coordinate-break frame transforms.  This eliminates the
+~`1/cos(θ)` world-distance error that the cb_pre-tilted local
+frame introduced for any element following a tilted mirror.
+
+The legacy local-frame `trace()` path is unchanged and remains
+the default for code that constructs `Surface` objects directly
+(test suites, wave-optics modules, ABCD / paraxial helpers).
+The GUI's `SystemModel.run_trace` switches to `trace_world` so
+the 2D / 3D layouts, spot diagram, and image-plane trace see
+world-accurate ray positions in folded prescriptions.
+
+### Added
+
+* `trace_world(rays, surfaces, wavelength, output_filter,
+  surface_diffraction)` in `lumenairy.raytrace.core` — same
+  signature as `trace()`, but expects each `Surface` to have
+  `world_origin` (m, shape `(3,)`) and `world_R` (shape
+  `(3, 3)`).  Re-exported as `lumenairy.raytrace.trace_world`.
+* `Surface.world_origin` and `Surface.world_R` optional fields
+  (default `None`).  When both are populated, `trace_world`
+  treats the surface as positioned at `world_origin` in world
+  coords with its local +z axis along `world_R[:, 2]`.  When
+  `None`, surfaces are only usable on the legacy `trace()`
+  path (no behavioural change for pre-3.7.6 callers).
+* `_world_to_local_state(rays, origin, R)` and
+  `_local_to_world_state(rays, origin, R)` helpers transform
+  a `RayBundle`'s positions and direction cosines between the
+  world frame and a given surface-local frame.  Orthogonal
+  transforms (preserve unit-length direction vectors).
+* `surfaces[i].world_origin` and `world_R` are preserved on
+  `Surface` copies (the run_trace fresh-copy loop in
+  `SystemModel.run_trace` carries them through).
+
+### Changed
+
+* `SystemModel._build_trace_surfaces_world` emits ONE
+  `Surface` per actual optical surface (S1, S2, …) with
+  `world_origin` and `world_R` baked in from each
+  `Element.origin` / `Element.R` (computed by
+  `recompute_element_frames`).  No coord-break Surfaces on
+  the world path — tilts and decenters are absorbed into each
+  surface's `world_R` and `world_origin`.
+* `SystemModel.run_trace` now uses `trace_world` +
+  `_build_trace_surfaces_world`.  The legacy
+  `_build_trace_surfaces_internal` (with cb_pre Surfaces) and
+  the legacy `trace()` are retained as the public
+  `build_trace_surfaces()` for ABCD / paraxial / wave-optics
+  consumers that don't yet need world-frame accuracy.
+* `surface_frames_2d_mm` / `surface_frames_3d_mm` no longer
+  emit a separate cb_pre frame for tilted elements — one
+  entry per actual surface, matching the world-trace history
+  one-to-one.
+* `_build_trace_surfaces_internal` now routes the post-mirror
+  air gap onto the cb_post Surface's thickness instead of the
+  mirror's surface thickness.  This is a band-aid on the
+  legacy local-frame path that the world-trace path replaces
+  cleanly; both produce the correct world-frame ray
+  positions on tx4designstudy71 and similar folded designs.
+
+### Backwards compatibility
+
+No public API removals.  `trace()`, `system_abcd()`,
+`paraxial_trace()`, `seidel_coefficients()`, `find_stop()`,
+`compute_pupils()`, and `surfaces_from_prescription()` all
+unchanged.  `Surface` is a frozen dataclass — the new fields
+are optional with `default=None`, so existing constructor
+calls and pickled surface lists are unaffected.  All 25
+validation suite files pass unchanged.
+
+### Verified on the folded test design
+
+`tx4designstudy71.zmx` (a 1× telecentric design with a
+45° fold mirror, six pre-fold lenses + Metasurface + six
+return-leg lenses + a 45° fold + SpatialFilter + three more
+lenses + Detector): the chief ray's world positions after
+`run_trace` now land at each post-fold lens centre to
+floating-point precision, with the post-fold world direction
+correctly `(0, +1, 0)` matching the post-fold optical axis.
+
 ## [3.7.0] — 2026-05-10
 
 Tilt-aware sequential ray tracing.  The core trace engine now

@@ -20,6 +20,7 @@ from ..raytrace import (
     trace, make_rings, make_fan, make_ray, spot_rms, spot_geo_radius,
     find_paraxial_focus, TraceResult, seidel_coefficients,
 )
+from ..raytrace.core import trace_world
 from ..glass import get_glass_index, GLASS_REGISTRY
 
 
@@ -599,14 +600,15 @@ class SystemModel(QObject):
                 for elem in self.elements]
 
     def surface_frames_2d_mm(self):
-        """3.7.3: per-traced-surface 2D world frame
+        """3.7.5: per-traced-surface 2D world frame
         ``(z, y, theta_rad)`` in trace order, plus the image-plane
-        frame at the end.  Walks each element's cached front-vertex
-        frame and steps along internal thicknesses to land each
-        internal surface; emits a cb frame at the element's front
-        vertex when the element carries any tilt/decenter (matching
-        the cb Surface emitted by
-        :meth:`_build_trace_surfaces_internal`).
+        frame at the end.  One entry per ACTUAL optical surface --
+        no separate coord-break frames -- so it matches the world-
+        coord trace surface list emitted by
+        :meth:`_build_trace_surfaces_world` one-to-one.
+
+        Walks each element's cached front-vertex frame and steps
+        along internal thicknesses to land each internal surface.
         """
         surf_frames = []
         for elem in self.elements:
@@ -615,16 +617,9 @@ class SystemModel(QObject):
             o = elem.origin
             R = elem.R
             theta = float(np.arctan2(R[1, 2], R[2, 2]))
-            has_tilt = (
-                float(getattr(elem, 'tilt_x', 0.0)) != 0.0
-                or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
-                or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
-                or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
             if elem.elem_type == 'Detector':
                 surf_frames.append((float(o[2]), float(o[1]), theta))
                 continue
-            if has_tilt:
-                surf_frames.append((float(o[2]), float(o[1]), theta))
             cum_t = 0.0
             for srow in elem.surfaces:
                 z_s = float(o[2]) + cum_t * np.cos(theta)
@@ -634,9 +629,10 @@ class SystemModel(QObject):
         return surf_frames
 
     def surface_frames_3d_mm(self):
-        """3.7.3: per-traced-surface 3D world frame
+        """3.7.5: per-traced-surface 3D world frame
         ``(origin_xyz, R_3x3)`` in trace order, plus the image-plane
-        frame at the end.
+        frame at the end.  One entry per ACTUAL optical surface --
+        matches :meth:`_build_trace_surfaces_world` one-to-one.
         """
         surf_frames = []
         for elem in self.elements:
@@ -644,16 +640,9 @@ class SystemModel(QObject):
                 continue
             o = elem.origin
             R = elem.R
-            has_tilt = (
-                float(getattr(elem, 'tilt_x', 0.0)) != 0.0
-                or float(getattr(elem, 'tilt_y', 0.0)) != 0.0
-                or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
-                or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
             if elem.elem_type == 'Detector':
                 surf_frames.append((o.copy(), R.copy()))
                 continue
-            if has_tilt:
-                surf_frames.append((o.copy(), R.copy()))
             cum_t = 0.0
             for srow in elem.surfaces:
                 surf_frames.append((o + cum_t * R[:, 2], R.copy()))
@@ -1889,29 +1878,52 @@ class SystemModel(QObject):
                 or float(getattr(elem, 'decenter_x', 0.0)) != 0.0
                 or float(getattr(elem, 'decenter_y', 0.0)) != 0.0)
 
+        # 3.7.5: cb_post air-gap routing.  When the previous element
+        # was a Mirror and the current element carries an absorbed
+        # cb (the original .zmx had a cb AFTER the mirror so the
+        # post-fold axis re-aligns with the reflected ray), the gap
+        # from the mirror to this element MUST be carried on the
+        # cb's thickness, NOT on the mirror's surface thickness.
+        # Reason: in the mirror's local frame, the reflected ray's
+        # N (= cos(45°) ≈ 0.707 for a 45° fold) is not 1, so a
+        # transfer of d in that frame moves the ray by d/N ≈ 1.41 d
+        # in world along the wrong direction (cb-pre-tilted-z, not
+        # the reflected ray direction).  Routing the gap through
+        # the cb instead puts the transfer in the POST-cb local
+        # frame, where N ≈ 1 and the world displacement matches the
+        # GUI's element_frames placement (origin += d * R[:,2] in
+        # the post-cb-post rotation).
+        prev_elem_was_mirror = False
+
         for ei, elem in enumerate(self.elements):
             if elem.elem_type in ('Source', 'Detector'):
                 continue
             if not elem.surfaces:
                 continue
 
+            tilt_pre = _has_tilt(elem)
+            cb_post_case = prev_elem_was_mirror and tilt_pre
+
             # 3.7.0: Insert a coord-break right before this element
             # if it carries any tilt/decenter (typically absorbed
             # from an imported COORDBRK).  The cb sits AT the
-            # element's front vertex position: the previous surface's
-            # air-gap thickness already carried the ray to that
-            # position in the OLD (pre-tilt) local frame, the cb
-            # transforms the frame in place, and the cb's own
-            # thickness is 0 -- the element's first surface is
+            # element's front vertex position.
+            #
+            # cb_pre case (non-mirror predecessor): the previous
+            # surface's air-gap thickness already carried the ray
+            # to that position in the OLD (pre-tilt) local frame,
+            # the cb transforms the frame in place, and the cb's
+            # own thickness is 0 -- the element's first surface is
             # immediately after the cb at the same world position.
             #
-            # This matches the GUI's ``element_frames_2d/3d_mm``
-            # convention (advance-in-old-frame, then apply tilt at
-            # the destination); using cb.thickness = elem.distance
-            # would double-count and put post-tilt elements
-            # diagonally offset from where the layout draws them.
-            tilt_pre = _has_tilt(elem)
+            # cb_post case (mirror predecessor): the gap is carried
+            # by THIS cb's thickness in the post-cb local frame so
+            # the transfer happens with N ≈ 1.  The mirror's
+            # surface thickness stays at 0 (no transfer in the
+            # cb-pre-tilted frame).
             if tilt_pre:
+                cb_thickness = (elem.distance_mm * 1e-3
+                                if cb_post_case else 0.0)
                 trace_surfaces.append(Surface(
                     is_coordbrk=True,
                     tilt_x_deg=float(getattr(elem, 'tilt_x', 0.0)),
@@ -1921,7 +1933,7 @@ class SystemModel(QObject):
                     decenter_y_m=(float(getattr(elem, 'decenter_y', 0.0))
                                    * 1e-3),
                     coordbrk_order=0,
-                    thickness=0.0,
+                    thickness=cb_thickness,
                     glass_before='air', glass_after='air',
                     label=f'{elem.name} CB-pre',
                     surf_num=len(trace_surfaces),
@@ -1963,13 +1975,110 @@ class SystemModel(QObject):
                 ))
 
             # Set the air gap from this element's last surface to the next
-            # element's first surface (but NOT for Detector — that's handled by run_trace)
+            # element's first surface (but NOT for Detector — that's
+            # handled by run_trace).  3.7.5: if the next element will
+            # absorb the gap onto its own cb_pre (cb_post case),
+            # leave this element's last surface thickness at 0 — the
+            # gap is carried in the post-cb frame instead.
             if trace_surfaces and ei + 1 < len(self.elements):
                 next_elem = self.elements[ei + 1]
                 if next_elem.elem_type != 'Detector' and next_elem.surfaces:
-                    trace_surfaces[-1].thickness = next_elem.distance_mm * 1e-3
+                    next_is_cb_post = (elem.elem_type == 'Mirror'
+                                       and _has_tilt(next_elem))
+                    if not next_is_cb_post:
+                        trace_surfaces[-1].thickness = next_elem.distance_mm * 1e-3
+
+            prev_elem_was_mirror = (elem.elem_type == 'Mirror')
 
         return trace_surfaces
+
+    def _build_trace_surfaces_world(self):
+        """3.7.5: World-frame trace surface list.
+
+        Emits ONE :class:`Surface` per actual optical surface (S1,
+        S2, ...).  Each Surface carries:
+
+        * ``world_origin`` (m, shape (3,)): the surface's vertex
+          position in world coordinates.
+        * ``world_R``      (shape (3, 3)): the local-to-world
+          rotation, i.e. the columns are local +x/+y/+z expressed in
+          world coords.  Surface curvature / sag is defined in this
+          local frame (z = sag(x, y) with vertex at origin).
+
+        Walks each element from front to back and steps along its
+        local +z axis (``elem.R[:, 2]``) by the per-surface internal
+        thicknesses, so multi-surface elements (Singlets,
+        Diffractives, Aspherics) get correctly placed S1, S2, etc.
+
+        No coord-break Surfaces are emitted -- tilts and decenters
+        are absorbed into each element's ``R`` and ``origin`` by
+        :meth:`recompute_element_frames`.  ``surface.thickness`` is
+        carried over for paraxial / ABCD compatibility but is not
+        used by :func:`trace_world`.
+        """
+        world_surfaces = []
+        for elem in self.elements:
+            if elem.elem_type in ('Source', 'Detector'):
+                continue
+            if not elem.surfaces:
+                continue
+
+            origin = np.asarray(elem.origin, dtype=float)
+            R = np.asarray(elem.R, dtype=float)
+            z_axis = R[:, 2]
+
+            cum_t_m = 0.0
+            for si, srow in enumerate(elem.surfaces):
+                R_m = (srow.radius * 1e-3
+                       if np.isfinite(srow.radius) else np.inf)
+                sd_m = (srow.semi_diameter * 1e-3
+                        if np.isfinite(srow.semi_diameter) else np.inf)
+                if si == 0:
+                    glass_before = 'air'
+                else:
+                    prev_glass = elem.surfaces[si - 1].glass
+                    glass_before = prev_glass if prev_glass else 'air'
+                glass_after = srow.glass if srow.glass else 'air'
+
+                # Carry the internal thickness on the surface (in
+                # metres) only so that paraxial helpers reading the
+                # legacy ``thickness`` field still work; the world
+                # trace itself ignores it.
+                if si < len(elem.surfaces) - 1:
+                    thick_m = srow.thickness * 1e-3
+                else:
+                    thick_m = 0.0
+
+                is_mirror = (srow.surf_type == 'Mirror'
+                             or elem.elem_type == 'Mirror')
+
+                ry_m = None
+                if srow.radius_y is not None:
+                    ry_m = (srow.radius_y * 1e-3
+                            if np.isfinite(srow.radius_y) else np.inf)
+
+                # World vertex position for this surface: element
+                # front vertex (in mm per recompute_element_frames)
+                # advanced by the cumulative internal thickness (m)
+                # along the element's local +z.  Output in metres so
+                # the trace's intersection / OPL math stays in SI.
+                surf_world_origin = (origin * 1e-3) + cum_t_m * z_axis
+
+                world_surfaces.append(Surface(
+                    radius=R_m, conic=srow.conic, semi_diameter=sd_m,
+                    glass_before=glass_before, glass_after=glass_after,
+                    is_mirror=is_mirror, thickness=thick_m,
+                    label=f'{elem.name} S{si+1}',
+                    surf_num=len(world_surfaces),
+                    radius_y=ry_m,
+                    conic_y=srow.conic_y,
+                    world_origin=surf_world_origin,
+                    world_R=R.copy(),
+                ))
+
+                cum_t_m += float(srow.thickness) * 1e-3
+
+        return world_surfaces
 
     # ── ABCD ───────────────────────────────────────────────────────
 
@@ -2010,26 +2119,26 @@ class SystemModel(QObject):
         return self.run_trace()
 
     def run_trace(self, num_rings=8, rays_per_ring=36, image_distance=None):
-        """Run a geometric ray trace using the active source definition."""
-        # Use a fresh copy so we don't mutate the cache.  3.7.2: also
-        # copy the coord-break fields (is_coordbrk + tilt_*_deg +
-        # decenter_*_m + coordbrk_order) -- the previous copy stripped
-        # them, so cb surfaces silently degenerated into no-op flat
-        # air-air surfaces and the trace ran through the unfolded
-        # equivalent of every imported folded design.
+        """Run a geometric ray trace using the active source definition.
+
+        3.7.5: traces in WORLD coordinates via :func:`trace_world`.
+        Each Surface carries its own ``world_origin`` and ``world_R``;
+        rays propagate sequentially in world coords between surfaces
+        and are transformed into each surface's local frame only for
+        the intersection / refraction step.  No coord-break surfaces.
+        """
+        world_list = self._build_trace_surfaces_world()
         surfaces = [Surface(
             radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,
             glass_before=s.glass_before, glass_after=s.glass_after,
             is_mirror=s.is_mirror, thickness=s.thickness,
             label=s.label, surf_num=s.surf_num,
-            is_coordbrk=getattr(s, 'is_coordbrk', False),
-            tilt_x_deg=getattr(s, 'tilt_x_deg', 0.0),
-            tilt_y_deg=getattr(s, 'tilt_y_deg', 0.0),
-            tilt_z_deg=getattr(s, 'tilt_z_deg', 0.0),
-            decenter_x_m=getattr(s, 'decenter_x_m', 0.0),
-            decenter_y_m=getattr(s, 'decenter_y_m', 0.0),
-            coordbrk_order=getattr(s, 'coordbrk_order', 0),
-        ) for s in self._build_trace_surfaces_internal()]
+            radius_y=s.radius_y, conic_y=s.conic_y,
+            world_origin=(s.world_origin.copy()
+                          if s.world_origin is not None else None),
+            world_R=(s.world_R.copy()
+                     if s.world_R is not None else None),
+        ) for s in world_list]
         if not surfaces:
             return None
 
@@ -2080,31 +2189,42 @@ class SystemModel(QObject):
             rays = make_rings(semi_ap, num_rings, rays_per_ring,
                               fa_rad, wv)
 
-        # Find image distance
-        if image_distance is None:
-            # Use detector element distance
-            det = self.elements[-1] if self.elements else None
-            if det and det.elem_type == 'Detector' and det.distance_mm > 0:
-                image_distance = det.distance_mm * 1e-3
-            else:
-                try:
-                    bfl = find_paraxial_focus(surfaces, wv)
-                    if np.isfinite(bfl) and bfl > 0:
-                        image_distance = bfl
-                except Exception:
-                    pass
+        # 3.7.5: Image plane in world coords.  Prefer the Detector
+        # element's world frame so the image plane is at the
+        # detector's true world position even after folds.  Falls
+        # back to last-surface + paraxial-bfl along last surface's
+        # local +z if no Detector exists or it's at zero distance.
+        det = self.elements[-1] if self.elements else None
+        img_world_origin = None
+        img_world_R = None
+        if det and det.elem_type == 'Detector' and det.distance_mm > 0:
+            img_world_origin = np.asarray(det.origin, dtype=float) * 1e-3
+            img_world_R = np.asarray(det.R, dtype=float).copy()
+        elif image_distance is None:
+            try:
+                bfl = find_paraxial_focus(surfaces, wv)
+                if np.isfinite(bfl) and bfl > 0:
+                    image_distance = bfl
+            except Exception:
+                pass
 
-        # Add image plane surface
-        if image_distance is not None:
+        if img_world_origin is None and image_distance is not None and surfaces:
+            last = surfaces[-1]
+            img_world_origin = (last.world_origin
+                                + image_distance * last.world_R[:, 2])
+            img_world_R = last.world_R.copy()
+
+        if img_world_origin is not None and img_world_R is not None:
             last_glass = surfaces[-1].glass_after if surfaces else 'air'
-            surfaces[-1].thickness = image_distance
             surfaces.append(Surface(
                 radius=np.inf, semi_diameter=np.inf,
                 glass_before=last_glass, glass_after=last_glass,
                 label='Image',
+                world_origin=img_world_origin,
+                world_R=img_world_R,
             ))
 
-        result = trace(rays, surfaces, wv)
+        result = trace_world(rays, surfaces, wv)
         self._trace_result = result
         self.trace_ready.emit(result)
         return result
