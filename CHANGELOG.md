@@ -2,6 +2,14 @@
 
 All notable changes to the core library are documented here.
 
+## [3.8.1] — 2026-05-11
+
+Patch release.  Single fix: `lumenairy.__version__` was inadvertently
+left at `"3.7.10"` in the 3.8.0 source even though `pyproject.toml`
+bumped to `3.8.0` (so PyPI metadata and editable installs reported
+mismatched versions).  This release re-syncs the two.  No API
+changes.
+
 ## [3.8.0] — 2026-05-11
 
 Image-plane wavefront-analysis release.  Adds three peer-library
