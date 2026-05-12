@@ -1632,8 +1632,9 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
         if not CUPY_AVAILABLE:
             raise ImportError(
                 "use_gpu=True requires the 'cupy' package.  Install with "
-                "'pip install cupy-cuda12x' (matching your CUDA version) "
-                "or set use_gpu=False to stay on the CPU path.")
+                "'pip install cupy-cuda12x' (NVIDIA, matching your CUDA "
+                "version) or 'pip install cupy-rocm-6-1' (AMD ROCm); or set "
+                "use_gpu=False to stay on the CPU path.")
         _newton_xp = cp
 
     if newton_fit == 'polynomial':

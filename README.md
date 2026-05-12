@@ -34,7 +34,7 @@ checks; all pass.  No changes to `apply_real_lens_traced`,
 `trace()`, or any other pre-3.8.2 API; defaults reproduce 3.8.0
 / 3.8.1 output bit-for-bit.
 
-See [the 3.8.2 wiki page](https://github.com/travaj24/LumenAiry/wiki/What's-New-in-3.8.2)
+See [Release Notes / 3.8.2](https://github.com/travaj24/LumenAiry/wiki/Release-Notes#whats-new-in-3-8-2)
 for full examples and the per-library cheat sheet.
 
 3.8.1 was a one-line metadata fix (`__version__` was stale at
@@ -1630,8 +1630,16 @@ from lumenairy import angular_spectrum_propagate, JonesField
   decomposition (Householder QR), and `design_optimize`
 - `pyfftw` — extra ~10-20% on top of SciPy FFT (opt-in via
   `op.propagation.USE_PYFFTW = True`); ~2× memory per FFT plan
-- `cupy` — GPU acceleration (auto-detected; pass `use_gpu=True` to supported
-  functions)
+- `cupy` — GPU acceleration on **NVIDIA CUDA** or **AMD ROCm**
+  (auto-detected; pass `use_gpu=True` to supported functions).
+  Install the wheel that matches your hardware:
+  `pip install cupy-cuda12x` (CUDA 12.x) or
+  `pip install cupy-rocm-6-1` (ROCm 6.x).  See the
+  [Installation wiki page](https://github.com/travaj24/LumenAiry/wiki/Installation#gpu-setup)
+  for the full toolkit matrix and known-good GPU families.
+  Intel oneAPI / SYCL backends are not yet wired up because
+  CuPy doesn't ship an oneAPI wheel; the CPU path stays the
+  fallback on that hardware.
 - `astropy` — FITS file I/O for `load_fits_field` / `save_fits_field`
 - `h5py` — HDF5 field storage (`save_field_h5`, `save_planes_h5`, etc.)
 - `matplotlib` — all plotting utilities (`plot_intensity`, `plot_stokes`,

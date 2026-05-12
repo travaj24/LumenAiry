@@ -257,8 +257,9 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
         if not CUPY_AVAILABLE:
             raise ImportError(
                 "use_gpu=True (or CuPy input) requires the 'cupy' package.  "
-                "Install cupy-cuda12x (or matching CUDA version) or call "
-                "with use_gpu=False to stay on the CPU path.")
+                "Install cupy-cuda12x (NVIDIA, matching your CUDA version) "
+                "or cupy-rocm-6-1 (AMD ROCm); or call with use_gpu=False to "
+                "stay on the CPU path.")
         # Trigger the lazy import; _is_cupy_array(E_in) above only
         # ensured cp was loaded if E_in was already CuPy, but the
         # use_gpu=True + numpy-input path does not pass through that
