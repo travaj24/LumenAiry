@@ -819,6 +819,221 @@ def polychromatic_strehl(prescription, wavelengths, weights,
     return strehl_poly, strehls, z_bests
 
 
+def polychromatic_psf(prescription, wavelengths, weights, N, dx, *,
+                      E_in=None, image_distance=None,
+                      normalize='power', bandlimit=True,
+                      return_components=False):
+    """Accumulate a polychromatic PSF on a common image-plane grid.
+
+    For each wavelength in ``wavelengths`` propagates a pupil-plane
+    field through the prescription, propagates from the exit pupil
+    to a common image plane via the angular-spectrum method, and
+    sums the per-wavelength intensities weighted by ``weights``.
+    Companion to :func:`polychromatic_strehl`, which only returns
+    scalar Strehl ratios -- this routine returns the full integrated
+    intensity map at the detector.
+
+    Parameters
+    ----------
+    prescription : dict
+        Lumenairy lens prescription (see [[Function Reference Prescriptions]]).
+    wavelengths : sequence of float
+        Vacuum wavelengths [m].  Typically 3-10 samples bracketing
+        the operating band; more samples give smoother chromatic
+        broadening but linearly more work.
+    weights : sequence of float
+        Per-wavelength spectral weights (e.g. blackbody, LED emission
+        curve, AM1.5 solar).  Re-normalised internally so they sum
+        to 1.
+    N, dx : int, float
+        Pupil-plane grid (input field is ``N x N`` on pitch ``dx``).
+    E_in : ndarray (complex, N x N), optional
+        Pupil-plane input field.  Defaults to a unit plane wave
+        (constant amplitude 1, flat phase).
+    image_distance : float, optional
+        Common image-plane distance measured from the **exit surface
+        of the lens** [m].  All wavelengths are propagated to this
+        same plane so the per-wavelength PSFs live on a common grid
+        and can be summed directly.  Defaults to the paraxial back
+        focal length at the centroid wavelength
+        ``sum(weights * wavelengths)``.
+    normalize : ``'power'`` (default) / ``'peak'`` / ``'none'``
+        Output scaling of the accumulated PSF intensity:
+
+        * ``'power'``: ``sum(psf) * dx**2 == 1``.  Correct for
+          relative-throughput / encircled-energy work.
+        * ``'peak'``: ``psf.max() == 1``.  Useful for PSF-shape
+          display.
+        * ``'none'``: raw weighted-sum of per-wavelength
+          ``|E_image|**2``.
+    bandlimit : bool, default True
+        Forwarded to the internal :func:`angular_spectrum_propagate`
+        calls (Matsushima-Shimobaba band-limit on the ASM transfer
+        function).
+    return_components : bool, default False
+        If True, also return the per-wavelength PSF stack as an
+        ``(n_wavelengths, N, N)`` ndarray under
+        ``info['per_wavelength_psf']``.  Memory-hungry for large N.
+
+    Returns
+    -------
+    psf_poly : ndarray (real, N x N)
+        Weighted-sum polychromatic PSF on the input grid, scaled
+        according to ``normalize``.
+    dx_psf : float
+        Image-plane grid spacing [m].  Equals ``dx`` -- the ASM
+        propagation preserves the grid.
+    info : dict
+        Diagnostic metrics:
+
+        * ``'wavelengths'``, ``'weights'``, ``'image_distance'``
+          -- echoed inputs (weights are the renormalised values).
+        * ``'centroid_wavelength'`` [m] -- spectral centroid.
+        * ``'per_wavelength_strehl'`` -- peak / diffraction-limited
+          peak at the common image plane (NOT each wavelength's
+          own best-focus, so this is the chromatic-defocus-included
+          Strehl).  Informational only -- on coarse grids small
+          deviations above 1.0 can occur because the reference
+          uses ASM with band-limit, whereas the aberrated peak
+          inherits the lens's own ASM step; for canonical Strehl
+          ratios use :func:`polychromatic_strehl` (per-wavelength
+          best focus).
+        * ``'per_wavelength_peak'`` -- raw peak intensity at each
+          wavelength (same units as the input).
+        * ``'centroid'`` -- intensity-weighted ``(x, y)`` of the
+          accumulated PSF [m].
+        * ``'d4sigma'`` -- D4-sigma widths ``(Dx, Dy)`` of the
+          accumulated PSF [m].
+        * ``'per_wavelength_psf'`` -- per-wavelength stack (only if
+          ``return_components=True``).
+
+    Notes
+    -----
+    The "common image plane" approach means each wavelength experiences
+    its own chromatic defocus relative to the paraxial focus at the
+    centroid wavelength -- exactly what a real broadband detector
+    sees.  This is the right tool for **answering "what does my camera
+    record"** rather than "what's the diffraction-limited PSF at this
+    wavelength?".
+
+    For the latter (per-wavelength best-focus Strehl), use
+    :func:`polychromatic_strehl`.  For polychromatic OTF / MTF, take
+    the FFT of the returned ``psf_poly``:
+
+    .. code-block:: python
+
+        otf_poly = lm.compute_otf(psf_poly)
+        mtf_poly = np.abs(otf_poly)
+
+    See also
+    --------
+    polychromatic_strehl : scalar Strehl with per-wavelength best
+        focus.
+    compute_psf : monochromatic PSF from a pupil function.
+    """
+    from ..elements.lenses import apply_real_lens
+    from ..propagators.propagation import angular_spectrum_propagate
+    from ..raytrace import surfaces_from_prescription, system_abcd
+    from .through_focus import diffraction_limited_peak
+
+    wavelengths = np.asarray(wavelengths, dtype=np.float64)
+    weights = np.asarray(weights, dtype=np.float64)
+    if wavelengths.size != weights.size:
+        raise ValueError(
+            f"wavelengths and weights must have the same length; "
+            f"got {wavelengths.size} and {weights.size}.")
+    if wavelengths.size == 0:
+        raise ValueError("Need at least one wavelength.")
+    weights = weights / weights.sum()
+
+    centroid_wl = float(np.sum(weights * wavelengths))
+
+    if image_distance is None:
+        surfs = surfaces_from_prescription(prescription)
+        _, _, bfl, _ = system_abcd(surfs, centroid_wl)
+        image_distance = float(bfl)
+    image_distance = float(image_distance)
+
+    if E_in is None:
+        E_in = np.ones((N, N), dtype=np.complex128)
+
+    psf_acc = np.zeros((N, N), dtype=np.float64)
+    per_peak = np.empty(wavelengths.size, dtype=np.float64)
+    per_strehl = np.empty(wavelengths.size, dtype=np.float64)
+    components = None
+    if return_components:
+        components = np.empty((wavelengths.size, N, N), dtype=np.float64)
+
+    for i, wl in enumerate(wavelengths):
+        wl_f = float(wl)
+        E_exit = apply_real_lens(E_in, prescription, wl_f, dx)
+        E_image = angular_spectrum_propagate(
+            E_exit, image_distance, wl_f, dx, bandlimit=bandlimit)
+        I = np.abs(E_image) ** 2
+        per_peak[i] = float(I.max())
+        # Strehl reference: amplitude-only-pupil propagated to the
+        # SAME common image_distance with a converging phase tuned
+        # to that distance.  Diverges from a "per-wavelength best
+        # focus" reference -- intentional, because the reported
+        # Strehl is the chromatic-defocus-aware peak ratio at the
+        # detector plane.
+        peak_ref = diffraction_limited_peak(
+            E_exit, wl_f, image_distance, dx, bandlimit=bandlimit)
+        per_strehl[i] = (per_peak[i] / peak_ref
+                         if peak_ref > 0 else 0.0)
+        contribution = float(weights[i]) * I
+        psf_acc += contribution
+        if components is not None:
+            components[i] = I
+
+    if normalize == 'power':
+        total = float(psf_acc.sum() * dx ** 2)
+        if total > 0:
+            psf_out = psf_acc / total
+        else:
+            psf_out = psf_acc
+    elif normalize == 'peak':
+        peak = float(psf_acc.max())
+        psf_out = psf_acc / peak if peak > 0 else psf_acc
+    elif normalize == 'none':
+        psf_out = psf_acc
+    else:
+        raise ValueError(
+            f"Unknown normalize mode: {normalize!r}.  "
+            f"Use 'power', 'peak', or 'none'.")
+
+    # Centroid + D4-sigma diagnostics over the accumulated PSF.
+    total = float(psf_out.sum())
+    if total > 0:
+        x = (np.arange(N) - N / 2) * dx
+        y = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, y)
+        xc = float((psf_out * X).sum() / total)
+        yc = float((psf_out * Y).sum() / total)
+        var_x = float((psf_out * (X - xc) ** 2).sum() / total)
+        var_y = float((psf_out * (Y - yc) ** 2).sum() / total)
+        d4x = 4.0 * np.sqrt(max(var_x, 0.0))
+        d4y = 4.0 * np.sqrt(max(var_y, 0.0))
+    else:
+        xc = yc = 0.0
+        d4x = d4y = 0.0
+
+    info = {
+        'wavelengths': wavelengths,
+        'weights': weights,
+        'image_distance': image_distance,
+        'centroid_wavelength': centroid_wl,
+        'per_wavelength_peak': per_peak,
+        'per_wavelength_strehl': per_strehl,
+        'centroid': (xc, yc),
+        'd4sigma': (d4x, d4y),
+    }
+    if components is not None:
+        info['per_wavelength_psf'] = components
+
+    return psf_out, float(dx), info
+
+
 # ============================================================================
 # Zernike polynomial decomposition of OPD / wavefront maps
 # ============================================================================

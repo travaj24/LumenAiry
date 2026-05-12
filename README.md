@@ -10,6 +10,36 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.9.0
+
+**Coronagraph & broadband-imaging building blocks.**  Four
+coronagraph templates land as first-class helpers
+(`apply_lyot_focal_plane_mask`, `apply_vortex_phase_mask`,
+`apply_lyot_stop`, `apply_apodized_pupil`) -- transmission filters
+that compose with the existing MFT propagator family
+(`fresnel_propagate_mft`, `fraunhofer_propagate_mft`,
+`angular_spectrum_propagate_mft`) into a textbook focal-plane-zoom
+coronagraph pipeline.  The end-to-end validation
+(`validation/elements/test_elements.py`) confirms >100x on-axis
+starlight suppression for a charge-2 vortex with an 0.85*D Lyot
+stop.
+
+`polychromatic_psf` complements the existing `polychromatic_strehl`
+by returning the **full integrated PSF intensity map** on a common
+image plane across wavelengths -- the realistic "what does a
+broadband detector record" picture, including chromatic-defocus
+broadening.  Returns power-normalised, peak-normalised, or raw
+weighted-sum scaling, plus per-wavelength diagnostics
+(centroid wavelength, per-lambda peaks, D4-sigma).
+
+The existing `generate_turbulence_screen` (Kolmogorov / von Kármán
+PSD with outer- and inner-scale support) is now better surfaced in
+the documentation; the 5/3-power structure-function and outer-scale
+variance behaviours are exercised by new validation tests.  The
+three MFT propagators get full Function-Reference wiki coverage.
+
+No breaking changes; all additions are pure-additive.
+
 ## What's new in 3.8.2
 
 Adds two optional convention controls to

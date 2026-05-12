@@ -430,6 +430,352 @@ def apply_zernike_aberration(E_in, dx, coefficients, aperture_radius):
 
 
 # =============================================================================
+# CORONAGRAPH TEMPLATES
+# =============================================================================
+#
+# Helpers for the canonical building blocks of high-contrast imaging
+# systems: focal-plane occulters (Lyot mask, scalar vortex), downstream
+# pupil filters (Lyot stop), and entrance-pupil apodizers.  They follow
+# the standard convention used by POPPy / HCIPy / prysm: each is a
+# transmission filter applied to an existing complex field; energy
+# blocked / phase-shifted by the mask is removed from the field rather
+# than renormalised.
+#
+# Typical pipeline (Lyot coronagraph):
+#
+#     E_pup  = apply_apodized_pupil(E_pup, dx, diameter=D,
+#                                    apodization='cos2')        # entrance
+#     E_foc  = la.fraunhofer_propagate_mft(E_pup, f, wl,
+#                                          dx, dx_foc, N_foc)   # to focus
+#     E_foc  = apply_lyot_focal_plane_mask(E_foc, dx_foc,
+#                                          mask_diameter=4*lam_over_D)
+#     E_pup2 = la.fraunhofer_propagate_mft(E_foc, f, wl,
+#                                          dx_foc, dx, N)        # back to pupil
+#     E_pup2 = apply_lyot_stop(E_pup2, dx,
+#                              outer_diameter=0.95 * D)
+#     # ... propagate to final image plane.
+#
+# References
+# ----------
+# [1] Lyot, B. (1939).  "The study of the solar corona without an
+#     eclipse."  Monthly Notices RAS 99, 580.
+# [2] Mawet, D. et al. (2005).  "Annular Groove Phase Mask Coronagraph."
+#     ApJ 633, 1191.
+# [3] Soummer, R. (2005).  "Apodized Pupil Lyot Coronagraphs for
+#     Arbitrary Telescope Apertures."  ApJ 618, L161.
+# [4] Kasdin, N.J. et al. (2003).  "Extrasolar planet finding via
+#     optimal apodized-pupil and shaped-pupil coronagraphs."  ApJ
+#     582, 1147.
+
+def apply_lyot_focal_plane_mask(E_in, dx, mask_diameter, *,
+                                 profile='hard', sigma=None,
+                                 xc=0.0, yc=0.0, dy=None):
+    """Apply a focal-plane occulter (classical Lyot coronagraph mask).
+
+    A focal-plane mask that blocks the on-axis stellar PSF core,
+    leaving the diffracted starlight and any companion light to
+    propagate through the downstream Lyot stop.  This is the
+    focal-plane element of a Lyot or band-limited coronagraph.
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+        Input focal-plane field (typically from
+        :func:`fraunhofer_propagate_mft` or :func:`compute_psf`).
+    dx : float
+        Focal-plane grid spacing [m].
+    mask_diameter : float
+        Diameter of the occulting mask [m].  For an f/D system at
+        wavelength ``lambda`` the diffraction-limited PSF FWHM is
+        ``1.028 * lambda * f / D``; coronagraph masks are typically
+        sized in units of ``lambda*f/D``, with ``4 lambda*f/D`` a
+        common choice for ground-based systems.
+    profile : ``'hard'`` (default) / ``'gaussian'`` / ``'sin2'``
+        Mask transmission profile:
+
+        * ``'hard'``: ``T = 0`` inside the mask, ``1`` outside.  The
+          classical Lyot mask.
+        * ``'gaussian'``: ``T(r) = 1 - exp(-r^2 / (2 sigma^2))``;
+          smooth-edged for reduced ringing.  Requires ``sigma``.
+        * ``'sin2'``: band-limited mask ``T(r) = sin^2(pi r / D)``
+          inside the mask diameter, smoothly going to 1 at the edge.
+          A simple band-limited approximation in the Kuchner-Traub
+          family.
+    sigma : float, optional
+        Gaussian width parameter [m] for ``profile='gaussian'``.
+        Defaults to ``mask_diameter / 6`` (3-sigma at the mask edge).
+        Ignored for ``'hard'`` / ``'sin2'``.
+    xc, yc : float, default 0
+        Mask centre [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+
+    Returns
+    -------
+    E_out : ndarray (complex, Ny x Nx)
+        Field with the focal-plane mask applied.  Energy blocked by
+        the mask is removed (not renormalised).
+
+    Notes
+    -----
+    The ``'gaussian'`` and ``'sin2'`` smooth-edged profiles avoid the
+    Gibbs ringing that a hard-edge mask introduces at the downstream
+    Lyot stop, which in turn improves the achievable contrast.  In
+    practice they trade off inner-working-angle for contrast --
+    smoother masks let starlight closer to the chief through.
+
+    The sign of the field outside the mask is preserved; this routine
+    does NOT apply the +1 -> 0 polarity flip that some coronagraph
+    architectures use for matched-filter detection.
+    """
+    if dy is None:
+        dy = dx
+    Ny, Nx = E_in.shape
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    R = np.sqrt((X - xc) ** 2 + (Y - yc) ** 2)
+    R_mask = mask_diameter / 2.0
+
+    if profile == 'hard':
+        T = np.where(R <= R_mask, 0.0, 1.0)
+    elif profile == 'gaussian':
+        sig = sigma if sigma is not None else mask_diameter / 6.0
+        T = 1.0 - np.exp(-R ** 2 / (2.0 * sig ** 2))
+    elif profile == 'sin2':
+        inside = R <= R_mask
+        T = np.where(inside,
+                     np.sin(np.pi * R / mask_diameter) ** 2,
+                     1.0)
+    else:
+        raise ValueError(
+            f"Unknown focal-plane-mask profile: {profile!r}.  "
+            f"Use 'hard', 'gaussian', or 'sin2'.")
+
+    return E_in * T
+
+
+def apply_vortex_phase_mask(E_in, dx, *, charge=2, xc=0.0, yc=0.0,
+                             dy=None):
+    """Apply a scalar focal-plane vortex phase mask.
+
+    Imparts an azimuthal phase ramp ``exp(1j * l * theta)`` to a
+    focal-plane field, where ``l`` is the topological charge
+    ("vortex charge").  Combined with a downstream Lyot stop, this is
+    the vector- / scalar-vortex coronagraph -- the standard
+    architecture for high-contrast imaging close to the chief ray
+    (small inner working angle).
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+        Input focal-plane field.
+    dx : float
+        Focal-plane grid spacing [m].
+    charge : int, default 2
+        Vortex topological charge ``l``.  Standard values for
+        astronomical coronagraphs are 2, 4, 6, 8 (even charges
+        produce nulls at the chief; odd charges leave a residual).
+        Charge 2 is the AGPM design [2]; charge 4 trades inner
+        working angle for tighter null and is the standard for
+        ground-based ELT-class systems.
+    xc, yc : float, default 0
+        Vortex centre [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+
+    Returns
+    -------
+    E_out : ndarray (complex, Ny x Nx)
+        Field with the vortex phase applied.  Amplitude is unchanged
+        (this is a pure phase mask); the energy redistribution
+        happens at the downstream Lyot stop.
+
+    Notes
+    -----
+    The phase at the exact centre (``r = 0``) is mathematically
+    undefined; this routine sets it to zero, which is the standard
+    convention for numerical simulations.
+
+    A perfect scalar vortex requires zero-thickness at the singularity,
+    so the simulated mask still aliases slightly even at very fine
+    grids.  Use an oversampled focal-plane sampling
+    (:func:`fraunhofer_propagate_mft` with a small ``dx_out``) to
+    minimise the alias.
+    """
+    if dy is None:
+        dy = dx
+    Ny, Nx = E_in.shape
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    Xc = X - xc
+    Yc = Y - yc
+
+    theta = np.arctan2(Yc, Xc)
+    # Zero out the centre pixel to avoid the arctan2 discontinuity.
+    centre = (np.abs(Xc) < 0.5 * dx) & (np.abs(Yc) < 0.5 * dy)
+    phase = np.where(centre, 0.0, int(charge) * theta)
+
+    return E_in * np.exp(1j * phase)
+
+
+def apply_lyot_stop(E_in, dx, *, outer_diameter, inner_diameter=0.0,
+                     xc=0.0, yc=0.0, dy=None):
+    """Apply a downstream Lyot-stop pupil aperture.
+
+    Hard-edge annular aperture used in the pupil plane downstream of
+    a coronagraphic focal-plane mask.  Functionally equivalent to
+    ``apply_aperture(..., shape='annular', ...)`` but named to match
+    coronagraph literature.
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+        Pupil-plane field (typically the result of a Fraunhofer
+        back-propagation from the masked focal plane).
+    dx : float
+        Pupil-plane grid spacing [m].
+    outer_diameter : float
+        Outer diameter of the Lyot stop [m].  Typically a fraction
+        (0.90 - 0.95) of the entrance-pupil diameter to remove the
+        peripheral diffracted starlight.
+    inner_diameter : float, default 0
+        Inner diameter (central obstruction) [m].  Use a non-zero
+        value for systems with a secondary obscuration (e.g. on-axis
+        telescopes) or for an aggressive Lyot design that strips out
+        the on-axis bright spot.
+    xc, yc : float, default 0
+        Stop centre [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+
+    Returns
+    -------
+    E_out : ndarray (complex, Ny x Nx)
+        Field with the annular Lyot stop applied (zeroed outside the
+        annulus).
+
+    Notes
+    -----
+    The optimal Lyot stop is design-specific: for a hard-edge focal
+    plane mask the rule of thumb is ``outer = 0.85 * D_entrance`` and
+    ``inner = 0`` for circular pupils; vortex coronagraphs typically
+    use a tighter outer of ``0.95 * D``.  For arbitrary geometries
+    use :func:`apply_aperture` directly to build a custom Lyot stop.
+    """
+    return apply_aperture(
+        E_in, dx,
+        shape='annular',
+        params={'inner_diameter': inner_diameter,
+                'outer_diameter': outer_diameter},
+        xc=xc, yc=yc, dy=dy)
+
+
+def apply_apodized_pupil(E_in, dx, diameter, *,
+                         apodization='cos2', exponent=2,
+                         sigma=None, xc=0.0, yc=0.0, dy=None):
+    """Apply an entrance-pupil apodizer (graded-transmission aperture).
+
+    Replaces the hard-edge pupil with a smooth-edged amplitude
+    distribution that suppresses the high-frequency diffraction
+    wings of the PSF.  Used at the entrance pupil of apodized-pupil
+    Lyot coronagraphs (APLC) [3] and shaped-pupil coronagraphs [4]
+    -- a simpler-to-evaluate analog of the Kasdin / Soummer optimal
+    apodizations.
+
+    Parameters
+    ----------
+    E_in : ndarray (complex, Ny x Nx)
+        Pupil-plane field.
+    dx : float
+        Pupil-plane grid spacing [m].
+    diameter : float
+        Apodizer outer diameter [m] (transmission is zero outside).
+    apodization : ``'cos2'`` / ``'cos_power'`` / ``'gaussian'`` / ``'sonine'``
+        Radial transmission profile, all functions of ``rho = 2 r / D``
+        in [0, 1] (zero outside):
+
+        * ``'cos2'`` (default): ``T(rho) = cos^2(pi/2 * rho)``.
+          Classic Hanning-window-style soft edge.  PSF first-null at
+          ``~1.5 lambda f / D``, sidelobes ~ 30 dB below peak.
+        * ``'cos_power'``: ``T(rho) = cos^n(pi/2 * rho)`` with
+          ``n = exponent``.  Higher ``n`` = smoother edge, fainter
+          sidelobes, wider core.
+        * ``'gaussian'``: ``T(rho) = exp(-(r/sigma)^2 / 2)``.  Requires
+          ``sigma`` [m].  Pure Gaussian apodisation (Strehl-optimal for
+          a fixed-area aperture).
+        * ``'sonine'``: ``T(rho) = (1 - rho^2)^exponent``.  The Sonine /
+          Bracewell family.  ``exponent = 1`` is the simple Bartlett
+          / cosine taper, higher integer values give faster sidelobe
+          rolloff.
+    exponent : int or float, default 2
+        Exponent for ``cos_power`` and ``sonine`` profiles.  Ignored
+        for ``'cos2'`` and ``'gaussian'``.
+    sigma : float, optional
+        Width parameter [m] for ``'gaussian'``.  Defaults to
+        ``diameter / 6`` (3-sigma at the aperture edge).
+    xc, yc : float, default 0
+        Apodizer centre [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+
+    Returns
+    -------
+    E_out : ndarray (complex, Ny x Nx)
+        Apodized field.  Energy removed by the apodization is NOT
+        renormalised back; the Strehl ratio (with respect to a unit
+        plane wave) drops accordingly.
+
+    Notes
+    -----
+    These analytic apodisations are useful baselines but not optimal
+    in the Kasdin / Soummer / Vanderbei sense -- those require a
+    pupil-specific numerical optimisation problem to solve.  For a
+    target contrast curve, use these as starting points and refine
+    with the prolate-spheroidal or shaped-pupil designs from the
+    coronagraph-design literature.
+
+    References
+    ----------
+    [3] Soummer, R. (2005).  ApJ 618, L161.
+    [4] Kasdin, N.J. et al. (2003).  ApJ 582, 1147.
+    """
+    if dy is None:
+        dy = dx
+    Ny, Nx = E_in.shape
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    R = np.sqrt((X - xc) ** 2 + (Y - yc) ** 2)
+    R_max = diameter / 2.0
+    rho = R / R_max
+    inside = rho <= 1.0
+
+    if apodization == 'cos2':
+        T = np.where(inside, np.cos(0.5 * np.pi * rho) ** 2, 0.0)
+    elif apodization == 'cos_power':
+        T = np.where(inside,
+                     np.cos(0.5 * np.pi * rho) ** float(exponent),
+                     0.0)
+    elif apodization == 'gaussian':
+        sig = sigma if sigma is not None else diameter / 6.0
+        T = np.where(inside,
+                     np.exp(-R ** 2 / (2.0 * sig ** 2)),
+                     0.0)
+    elif apodization == 'sonine':
+        T = np.where(inside,
+                     np.clip(1.0 - rho ** 2, 0.0, 1.0) ** float(exponent),
+                     0.0)
+    else:
+        raise ValueError(
+            f"Unknown apodization profile: {apodization!r}.  "
+            f"Use 'cos2', 'cos_power', 'gaussian', or 'sonine'.")
+
+    return E_in * T
+
+
+# =============================================================================
 # ATMOSPHERIC / TURBULENCE PHASE SCREENS
 # =============================================================================
 

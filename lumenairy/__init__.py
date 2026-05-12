@@ -103,6 +103,10 @@ from .elements import (
     apply_mask,
     zernike,
     apply_zernike_aberration,
+    apply_lyot_focal_plane_mask,
+    apply_vortex_phase_mask,
+    apply_lyot_stop,
+    apply_apodized_pupil,
     generate_turbulence_screen,
 )
 
@@ -154,6 +158,7 @@ from .analysis import (
     check_opd_sampling,
     chromatic_focal_shift,
     polychromatic_strehl,
+    polychromatic_psf,
     radial_power_bands,
     zernike_polynomial,
     zernike_basis_matrix,
@@ -591,7 +596,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.8.3"
+__version__ = "3.9.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -702,6 +707,12 @@ __all__ = [
     # Other field generators
     'zernike',
     'generate_turbulence_screen',
+
+    # Coronagraph templates
+    'apply_lyot_focal_plane_mask',
+    'apply_vortex_phase_mask',
+    'apply_lyot_stop',
+    'apply_apodized_pupil',
 
     # Grid / sampling helpers
     'check_grid_vs_apertures',
@@ -874,6 +885,7 @@ __all__ = [
     'check_opd_sampling',
     'chromatic_focal_shift',
     'polychromatic_strehl',
+    'polychromatic_psf',
     'radial_power_bands',
     'zernike_polynomial',
     'zernike_basis_matrix',

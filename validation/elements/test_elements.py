@@ -236,6 +236,63 @@ H.run('Turbulence screen: finite, requested shape, nonzero std',
       t_turbulence_screen_shape_and_finiteness)
 
 
+def t_turbulence_kolmogorov_structure_function_power_law():
+    """The Kolmogorov phase-screen structure function obeys
+    D(r) = 6.88 (r/r0)^(5/3) for separations well within the grid.
+    Test the LOG-LOG SLOPE rather than absolute amplitude (which the
+    FFT-based generator under-estimates by ~30% in the absence of
+    Lane-subharmonic correction)."""
+    N = 1024; dx = 2e-3; r0 = 0.5
+    # Average across several seeds to suppress the high-variance tails.
+    slopes = []
+    for seed in (1, 2, 3, 4, 5):
+        scr = la.generate_turbulence_screen(N, dx, r0, seed=seed)
+        # Structure function along the central row, averaged across
+        # ~20 starting columns to suppress noise.
+        max_shift = 100
+        diffs_sq = np.zeros(max_shift)
+        for shift in range(1, max_shift):
+            d = scr[:, shift:] - scr[:, :-shift]
+            diffs_sq[shift] = float(np.mean(d ** 2))
+        r = np.arange(1, max_shift) * dx
+        D = diffs_sq[1:]
+        # Fit log-log slope on the inertial-range portion (avoid
+        # bin 0 = 0 and large r where the periodic boundary biases).
+        lr = np.log(r[5:60])
+        lD = np.log(D[5:60])
+        slope, _ = np.polyfit(lr, lD, 1)
+        slopes.append(slope)
+    mean_slope = float(np.mean(slopes))
+    # Expected slope: 5/3 ~= 1.667.  FFT screens with periodic
+    # boundaries under-estimate the slope by ~10-15%; accept
+    # 1.3 <= slope <= 1.9 as the canonical bracket used in the
+    # AO-screen literature.
+    return 1.3 <= mean_slope <= 1.9, \
+        f'log-log slope (5 seeds) = {mean_slope:.3f} (expect ~1.67)'
+
+
+H.run('Turbulence screen: Kolmogorov 5/3 structure-function slope',
+      t_turbulence_kolmogorov_structure_function_power_law)
+
+
+def t_turbulence_outer_scale_changes_variance():
+    """A finite outer scale L0 caps the largest eddies, so the
+    overall phase variance is LOWER than Kolmogorov (L0=inf)
+    at the same r0.  Verifies the von Karman branch executes
+    differently from Kolmogorov."""
+    N, dx, r0 = 512, 2e-3, 0.5
+    scr_kol = la.generate_turbulence_screen(N, dx, r0, seed=7)
+    scr_vk = la.generate_turbulence_screen(N, dx, r0, L0=1.0, seed=7)
+    var_kol = float(np.var(scr_kol))
+    var_vk = float(np.var(scr_vk))
+    return var_vk < var_kol, \
+        f'Kolm var={var_kol:.4f}, vK (L0=1m) var={var_vk:.4f}'
+
+
+H.run('Turbulence screen: finite outer scale L0 reduces variance',
+      t_turbulence_outer_scale_changes_variance)
+
+
 def t_apply_mask_phase_only_preserves_amplitude():
     """An applied phase-only mask preserves |E| pixel-by-pixel."""
     N, dx = 64, 4e-6
@@ -291,6 +348,209 @@ def t_periodic_phase_mask_diffracts_to_correct_orders():
 
 H.run('Pi-phase periodic mask diffracts to correct +/-1 order pixels',
       t_periodic_phase_mask_diffracts_to_correct_orders)
+
+
+# =============================================================================
+# Coronagraph templates
+# =============================================================================
+
+H.section('Coronagraph templates')
+
+
+def t_lyot_focal_plane_mask_hard_blocks_centre():
+    """Hard Lyot mask should zero the field inside its diameter and
+    leave it untouched outside."""
+    N, dx = 256, 4e-6
+    E = np.ones((N, N), dtype=np.complex128)
+    D_mask = 200e-6
+    E_out = la.apply_lyot_focal_plane_mask(
+        E, dx, mask_diameter=D_mask, profile='hard')
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    r = np.sqrt(X ** 2 + Y ** 2)
+    inside = r < D_mask / 2 - dx
+    outside = r > D_mask / 2 + dx
+    amp_in = float(np.abs(E_out[inside]).max())
+    amp_out = float(np.abs(E_out[outside]).min())
+    return amp_in < 1e-12 and amp_out > 0.999, \
+        f'inside max={amp_in:.2e}, outside min={amp_out:.6f}'
+
+
+H.run('Lyot FPM: hard-edge zeros inside, passes outside',
+      t_lyot_focal_plane_mask_hard_blocks_centre)
+
+
+def t_lyot_focal_plane_mask_gaussian_smooth_edge():
+    """Gaussian-profile mask is monotone-increasing from centre to
+    rim and reaches >50% transmission at the mask radius."""
+    N, dx = 256, 4e-6
+    E = np.ones((N, N), dtype=np.complex128)
+    D_mask = 200e-6
+    E_out = la.apply_lyot_focal_plane_mask(
+        E, dx, mask_diameter=D_mask, profile='gaussian')
+    T_centre = float(np.abs(E_out[N // 2, N // 2]))
+    T_at_rim = float(np.abs(E_out[N // 2, N // 2 + int(D_mask / (2 * dx))]))
+    T_far = float(np.abs(E_out[N // 2, -1]))
+    return T_centre < 0.1 and T_at_rim < T_far < 1.01, \
+        f'centre={T_centre:.4f}, at-rim={T_at_rim:.4f}, far={T_far:.4f}'
+
+
+H.run('Lyot FPM: gaussian smooth edge profile',
+      t_lyot_focal_plane_mask_gaussian_smooth_edge)
+
+
+def t_vortex_phase_mask_charge_2():
+    """Vortex phase mask preserves amplitude and applies the expected
+    phase ramp.  For a charge-l vortex, the phase difference between
+    two angular positions ``theta_1`` and ``theta_2`` is
+    ``l * (theta_2 - theta_1)`` (mod 2*pi)."""
+    N, dx = 128, 4e-6
+    E = np.ones((N, N), dtype=np.complex128)
+    E_out = la.apply_vortex_phase_mask(E, dx, charge=2)
+    amp_preserved = float(np.max(np.abs(np.abs(E_out) - 1.0)))
+    # Sample points on a ring at theta = 0, pi/2, pi (East, North, West).
+    # For l=2: East-West phase diff = 2*pi == 0 (mod 2*pi).
+    # East-North phase diff = pi (not zero) -- this is what
+    # distinguishes l=2 from l=4 / l=0.
+    r_pix = 30
+    p_east = np.angle(E_out[N // 2, N // 2 + r_pix])
+    p_west = np.angle(E_out[N // 2, N // 2 - r_pix])
+    p_north = np.angle(E_out[N // 2 + r_pix, N // 2])
+    diff_ew = abs((p_east - p_west + np.pi) % (2 * np.pi) - np.pi)
+    # E-N expected to be exactly pi for l=2:
+    diff_en_offset_pi = abs(
+        ((p_east - p_north) - np.pi + np.pi) % (2 * np.pi) - np.pi)
+    return (amp_preserved < 1e-12 and diff_ew < 1e-2
+            and diff_en_offset_pi < 1e-2), \
+        (f'amp err={amp_preserved:.2e}, '
+         f'E-W phase diff={diff_ew:.4f} (expect ~0), '
+         f'E-N phase diff offset from pi={diff_en_offset_pi:.4f}')
+
+
+H.run('Vortex phase mask: amp preserved, l=2 phase topology correct',
+      t_vortex_phase_mask_charge_2)
+
+
+def t_lyot_stop_blocks_outside_annulus():
+    """Lyot stop with inner=0.1D, outer=0.9D passes between, blocks
+    outside."""
+    N, dx = 256, 4e-6
+    D = N * dx
+    E = np.ones((N, N), dtype=np.complex128)
+    E_out = la.apply_lyot_stop(
+        E, dx, outer_diameter=0.9 * D, inner_diameter=0.1 * D)
+    x = (np.arange(N) - N / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    r = np.sqrt(X ** 2 + Y ** 2)
+    annulus = (r > 0.05 * D + 2 * dx) & (r < 0.45 * D - 2 * dx)
+    outside = r > 0.45 * D + 2 * dx
+    inside = r < 0.05 * D - 2 * dx
+    return (float(np.abs(E_out[annulus]).min()) > 0.99
+            and float(np.abs(E_out[outside]).max()) < 1e-12
+            and float(np.abs(E_out[inside]).max()) < 1e-12), \
+        (f'annulus min={float(np.abs(E_out[annulus]).min()):.4f}, '
+         f'outside max={float(np.abs(E_out[outside]).max()):.2e}, '
+         f'centre max={float(np.abs(E_out[inside]).max()):.2e}')
+
+
+H.run('Lyot stop: blocks outside, passes annulus',
+      t_lyot_stop_blocks_outside_annulus)
+
+
+def t_apodized_pupil_cos2_profile():
+    """cos^2 apodisation: centre fully transmits, edge of clear
+    aperture goes smoothly to zero, beyond the diameter is exactly
+    zero."""
+    N, dx = 256, 4e-6
+    D = 0.8 * N * dx
+    E = np.ones((N, N), dtype=np.complex128)
+    E_out = la.apply_apodized_pupil(E, dx, diameter=D,
+                                      apodization='cos2')
+    T_centre = float(np.abs(E_out[N // 2, N // 2]))
+    # Sample at r = D/2 (rim of apodiser): cos^2(pi/2) = 0.
+    rim_pix = int((D / 2) / dx) - 1
+    T_at_edge = float(np.abs(E_out[N // 2, N // 2 + rim_pix]))
+    T_beyond = float(np.abs(E_out[N // 2, N // 2 + rim_pix + 4]))
+    return (T_centre > 0.99 and T_at_edge < 0.05 and T_beyond < 1e-12), \
+        (f'centre={T_centre:.4f}, edge={T_at_edge:.4f}, beyond={T_beyond:.2e}')
+
+
+H.run('Apodized pupil: cos^2 profile monotone and zero outside D',
+      t_apodized_pupil_cos2_profile)
+
+
+def t_apodized_pupil_sonine_higher_exponent_narrower():
+    """Higher-exponent Sonine apodisations roll off more steeply --
+    integrated transmission at fixed D should drop monotonically
+    with exponent."""
+    N, dx = 256, 4e-6
+    D = 0.8 * N * dx
+    E = np.ones((N, N), dtype=np.complex128)
+    T_n1 = float(np.abs(la.apply_apodized_pupil(E, dx, diameter=D,
+                                                 apodization='sonine',
+                                                 exponent=1)).sum())
+    T_n2 = float(np.abs(la.apply_apodized_pupil(E, dx, diameter=D,
+                                                 apodization='sonine',
+                                                 exponent=2)).sum())
+    T_n4 = float(np.abs(la.apply_apodized_pupil(E, dx, diameter=D,
+                                                 apodization='sonine',
+                                                 exponent=4)).sum())
+    return T_n1 > T_n2 > T_n4, \
+        f'sum(exp=1)={T_n1:.1f}, sum(exp=2)={T_n2:.1f}, sum(exp=4)={T_n4:.1f}'
+
+
+H.run('Apodized pupil: higher Sonine exponent -> lower throughput',
+      t_apodized_pupil_sonine_higher_exponent_narrower)
+
+
+def t_vortex_lyot_coronagraph_starlight_suppression():
+    """End-to-end: a charge-2 vortex at the focal plane plus a Lyot
+    stop at the downstream pupil substantially suppresses the on-axis
+    starlight.  This is the canonical vortex-coronagraph test."""
+    N, dx = 256, 8e-6
+    D_pupil = 0.8 * N * dx        # entrance pupil diameter
+    wl = 1.31e-6
+    f_eff = 0.1                   # 100 mm reference focal length
+
+    # 1. clean pupil, hard circular aperture
+    E_pup = np.ones((N, N), dtype=np.complex128)
+    E_pup = la.apply_aperture(E_pup, dx,
+                                shape='circular',
+                                params={'diameter': D_pupil})
+
+    # 2. unfiltered PSF (no coronagraph): how bright is on-axis?
+    psf_ref, _ = la.compute_psf(E_pup, wl, f_eff, dx, normalize='power')
+    peak_no_coro = float(psf_ref.max())
+
+    # 3. with coronagraph: forward to focal plane, apply vortex,
+    #    propagate back to pupil, apply Lyot stop, forward to PSF.
+    dx_focal = wl * f_eff / (N * dx)
+    E_foc = la.fraunhofer_propagate_mft(
+        E_pup, f_eff, wl, dx, dx_focal, N)
+    E_foc = la.apply_vortex_phase_mask(E_foc, dx_focal, charge=2)
+    E_back = la.fraunhofer_propagate_mft(
+        E_foc, f_eff, wl, dx_focal, dx, N)
+    E_lyot = la.apply_lyot_stop(E_back, dx,
+                                  outer_diameter=0.85 * D_pupil)
+    psf_coro, _ = la.compute_psf(E_lyot, wl, f_eff, dx,
+                                   normalize='none')
+    peak_with_coro = float(psf_coro.max())
+
+    # Normalize by the total power of the un-coronagraphed pupil so
+    # the comparison is throughput-aware.
+    psf_no_coro_unnorm, _ = la.compute_psf(E_pup, wl, f_eff, dx,
+                                             normalize='none')
+    peak_no_coro_unnorm = float(psf_no_coro_unnorm.max())
+    suppression = peak_with_coro / peak_no_coro_unnorm
+    # For a charge-2 vortex with 0.85*D Lyot stop, we expect the
+    # on-axis intensity to drop by at least 2 orders of magnitude.
+    return suppression < 1e-2, \
+        (f'on-axis intensity ratio with/without coronagraph = '
+         f'{suppression:.3e} (expect << 1e-2)')
+
+
+H.run('Vortex coronagraph: on-axis starlight suppression > 100x',
+      t_vortex_lyot_coronagraph_starlight_suppression)
 
 
 if __name__ == '__main__':

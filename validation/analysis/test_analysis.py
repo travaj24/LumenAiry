@@ -797,5 +797,125 @@ H.run('monte_carlo_tolerancing_jax matches NumPy for real_lens propagator',
       t_monte_carlo_tolerancing_jax_matches_numpy_real_lens)
 
 
+# ---------------------------------------------------------------------
+H.section('Polychromatic PSF accumulator')
+
+
+def t_polychromatic_psf_power_conserved():
+    """With normalize='power' the accumulated PSF integrates to 1."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    wvs = [1.30e-6, 1.31e-6, 1.32e-6]
+    weights = [1.0, 1.0, 1.0]
+    psf, dx_psf, _ = la.polychromatic_psf(
+        p, wvs, weights, N=128, dx=120e-6, normalize='power')
+    total = float(psf.sum() * dx_psf ** 2)
+    return abs(total - 1.0) < 1e-9, f'integral={total:.6f} (expect 1.0)'
+
+
+H.run('polychromatic_psf: power-normalized PSF integrates to 1',
+      t_polychromatic_psf_power_conserved)
+
+
+def t_polychromatic_psf_peak_normalised():
+    """With normalize='peak' the accumulated PSF has max == 1."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    psf, _, _ = la.polychromatic_psf(
+        p, [1.30e-6, 1.31e-6, 1.32e-6], [1, 1, 1],
+        N=128, dx=120e-6, normalize='peak')
+    pk = float(psf.max())
+    return abs(pk - 1.0) < 1e-9, f'peak={pk:.6f} (expect 1.0)'
+
+
+H.run('polychromatic_psf: peak-normalized PSF has max=1',
+      t_polychromatic_psf_peak_normalised)
+
+
+def t_polychromatic_psf_centroid_on_axis_for_axial_design():
+    """A symmetric singlet illuminated on-axis should produce an
+    on-axis polychromatic PSF: centroid within one pixel of zero."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    N, dx = 128, 120e-6
+    _, _, info = la.polychromatic_psf(
+        p, [1.30e-6, 1.31e-6, 1.32e-6], [1, 1, 1], N, dx)
+    cx, cy = info['centroid']
+    return abs(cx) < dx and abs(cy) < dx, \
+        f'centroid=({cx*1e6:.2f}, {cy*1e6:.2f}) um, pixel={dx*1e6:.2f} um'
+
+
+H.run('polychromatic_psf: on-axis singlet PSF centroid is on-axis',
+      t_polychromatic_psf_centroid_on_axis_for_axial_design)
+
+
+def t_polychromatic_psf_components_sum_to_total():
+    """The per-wavelength component stack, weight-summed and
+    re-normalised, matches the returned aggregate PSF."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    N, dx = 96, 150e-6
+    wvs = [1.30e-6, 1.31e-6, 1.32e-6]
+    weights = [1.0, 1.5, 0.5]
+    psf, dx_psf, info = la.polychromatic_psf(
+        p, wvs, weights, N, dx, return_components=True,
+        normalize='power')
+    stack = info['per_wavelength_psf']
+    rebuilt = np.tensordot(info['weights'], stack, axes=([0], [0]))
+    rebuilt = rebuilt / (rebuilt.sum() * dx_psf ** 2)
+    err = float(np.max(np.abs(rebuilt - psf)))
+    return err < 1e-10, f'max |rebuilt - psf| = {err:.2e}'
+
+
+H.run('polychromatic_psf: per-wavelength components sum to aggregate',
+      t_polychromatic_psf_components_sum_to_total)
+
+
+def t_polychromatic_psf_broader_than_mono():
+    """A polychromatic PSF over a finite bandwidth is BROADER than the
+    centroid-wavelength monochromatic PSF (chromatic-defocus
+    contribution).  Test via D4-sigma."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    N, dx = 192, 90e-6
+    centre_wl = 1.31e-6
+    # Monochromatic at centre wavelength
+    psf_mono, _, info_m = la.polychromatic_psf(
+        p, [centre_wl], [1.0], N, dx, normalize='power')
+    d4_mono = max(info_m['d4sigma'])
+    # Polychromatic over +/- 30 nm (large band -> visible chromatic
+    # defocus through BK7 dispersion)
+    wvs = [1.28e-6, 1.29e-6, 1.30e-6, 1.31e-6, 1.32e-6, 1.33e-6, 1.34e-6]
+    weights = [1.0] * len(wvs)
+    psf_poly, _, info_p = la.polychromatic_psf(
+        p, wvs, weights, N, dx, normalize='power')
+    d4_poly = max(info_p['d4sigma'])
+    return d4_poly > d4_mono * 0.99, \
+        (f'd4_poly={d4_poly*1e6:.2f}um, '
+         f'd4_mono={d4_mono*1e6:.2f}um at lambda={centre_wl*1e9:.0f}nm')
+
+
+H.run('polychromatic_psf: polychromatic D4-sigma >= monochromatic',
+      t_polychromatic_psf_broader_than_mono)
+
+
+def t_polychromatic_psf_centroid_wavelength_matches_input():
+    """centroid_wavelength = weighted-mean of input wavelengths."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    wvs = np.array([1.20e-6, 1.31e-6, 1.55e-6])
+    weights = np.array([0.5, 1.0, 0.2])
+    expected = float(np.sum(weights * wvs) / np.sum(weights))
+    _, _, info = la.polychromatic_psf(
+        p, wvs, weights, N=64, dx=200e-6)
+    return abs(info['centroid_wavelength'] - expected) < 1e-15, \
+        (f'reported={info["centroid_wavelength"]:.6e}, '
+         f'expected={expected:.6e}')
+
+
+H.run('polychromatic_psf: centroid wavelength == weighted mean of inputs',
+      t_polychromatic_psf_centroid_wavelength_matches_input)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())
