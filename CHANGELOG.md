@@ -2,6 +2,49 @@
 
 All notable changes to the core library are documented here.
 
+## [4.1.0] — 2026-05-12
+
+**`pupil_grid` kwarg on `eval_image_plane_wfe` for cross-library
+grid matching.**  Pure-additive; no breaking changes.
+
+### Added
+
+* **`eval_image_plane_wfe(..., pupil_grid=(px, py))`** -- the
+  function now accepts an arbitrary pair of normalised pupil-
+  coordinate arrays (px, py in [-1, 1]) instead of generating its
+  own internal square grid.  When given, one ray is launched per
+  ``(px[i], py[i])`` pair; coordinates outside the unit disk are
+  silently dropped.
+
+  Use cases:
+  * **Cross-library validation.**  Evaluate Lumenairy WFE at
+    exactly the same pupil sample points rayoptics / Optiland /
+    Zemax used, eliminating the nearest-neighbour interpolation
+    noise that otherwise dominated the raw cross-library diff
+    floor at ~5-10% of WFE RMS.
+  * **Chebyshev / Gauss-Lobatto quadrature** for high-order
+    polynomial fits where the user wants edge-clustered nodes.
+  * **Sparse / structured grids** (rings, fans, custom sample
+    layouts) for fast aberration screens.
+
+  The OPDPy / Lumenairy cross-check repo's new
+  ``xcheck_grid_matching.py`` script demonstrates the workflow:
+  for the L1 plano-convex test lens, switching from the historic
+  KDTree-NN comparison to exact grid matching drops the
+  Lumenairy-vs-rayoptics raw RMS diff from 50.6 mw to 0.19 mw
+  (260x improvement), confirming that the bulk of the prior
+  raw-diff floor was geometric grid-layout noise rather than
+  real physics-level disagreement.
+
+### Validation
+
+* 4 new tests in
+  ``validation/analysis/test_image_plane_wfe.py`` cover the
+  ``pupil_grid`` kwarg: 8-ray ring is traced exactly, out-of-disk
+  coords are silently dropped, empty / all-outside grids raise
+  ``ValueError``, and a Chebyshev grid produces finite WFE.
+* Full suite: 29/29 files pass.
+
 ## [4.0.1] — 2026-05-12
 
 **Bug-fix patch.**  A deep multi-agent audit of the 4.0.0 codebase

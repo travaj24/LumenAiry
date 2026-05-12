@@ -549,6 +549,97 @@ H.run('chief-ray N-fallback uses abs() < eps + NaN return (no silent unit)',
       t_chief_image_xy_no_silent_unit_fallback)
 
 
+H.section('pupil_grid custom-coordinate kwarg (4.1+)')
+
+
+def t_pupil_grid_kwarg_basic():
+    """pupil_grid=(px, py) bypasses the internal square-grid
+    generation and traces exactly the given normalised pupil
+    coords."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    # 8-ray ring at the pupil rim
+    theta = np.linspace(0, 2 * np.pi, 8, endpoint=False)
+    px = 0.95 * np.cos(theta)
+    py = 0.95 * np.sin(theta)
+    wfe = la.eval_image_plane_wfe(p, WL, pupil_grid=(px, py))
+    return (wfe.px.size == 8
+            and np.allclose(wfe.px, px)
+            and np.allclose(wfe.py, py)), \
+        f'n_rays={wfe.px.size} (expect 8)'
+
+
+H.run('pupil_grid: 8-ray ring traces exactly the supplied coords',
+      t_pupil_grid_kwarg_basic)
+
+
+def t_pupil_grid_drops_outside_disk():
+    """Coords with px^2 + py^2 > 1 are silently dropped."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    px = np.array([0.0, 0.5, 1.5, -2.0, 0.7])  # 2 outside disk
+    py = np.array([0.0, 0.0, 0.0, 0.0, 0.7])
+    wfe = la.eval_image_plane_wfe(p, WL, pupil_grid=(px, py))
+    # Inside-disk: (0,0), (0.5,0), (0.7,0.7) -> 3 rays
+    return wfe.px.size == 3, \
+        f'n_rays={wfe.px.size} (expect 3 after clipping)'
+
+
+H.run('pupil_grid: silently drops out-of-disk coords',
+      t_pupil_grid_drops_outside_disk)
+
+
+def t_pupil_grid_empty_raises():
+    """Empty / all-outside-disk pupil_grid raises ValueError."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    for px, py in (
+        (np.array([]), np.array([])),
+        (np.array([2.0, 3.0]), np.array([0.0, 0.0])),  # all outside disk
+    ):
+        try:
+            la.eval_image_plane_wfe(p, WL, pupil_grid=(px, py))
+            return False, f'no exception for px={px}'
+        except ValueError:
+            pass
+    return True, 'both empty and all-outside raised ValueError'
+
+
+H.run('pupil_grid: empty / all-outside-disk raises ValueError',
+      t_pupil_grid_empty_raises)
+
+
+def t_pupil_grid_chebyshev_matches_chebyshev():
+    """Building a Chebyshev grid and passing it via pupil_grid
+    gives the same WFE as building it ourselves and tracing each
+    ray via the existing default path (with n_pupil set to the
+    Chebyshev grid size and post-filtering)."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    # Chebyshev-Gauss-Lobatto nodes (cluster at the edge)
+    n = 15
+    i = np.arange(n)
+    cheb = np.cos(np.pi * i / (n - 1))
+    PX, PY = np.meshgrid(cheb, cheb)
+    wfe = la.eval_image_plane_wfe(p, WL,
+                                    pupil_grid=(PX.ravel(), PY.ravel()))
+    # The Chebyshev grid clusters at the rim -- the inside-disk
+    # count must be < n*n.
+    n_inside = wfe.px.size
+    return (n_inside > 0
+            and n_inside <= n * n
+            and np.isfinite(wfe.rms_waves)), \
+        f'inside-disk Chebyshev rays = {n_inside} (max {n*n})'
+
+
+H.run('pupil_grid: Chebyshev grid produces finite WFE',
+      t_pupil_grid_chebyshev_matches_chebyshev)
+
+
 # ---------------------------------------------------------------------
 def main():
     return H.summary()

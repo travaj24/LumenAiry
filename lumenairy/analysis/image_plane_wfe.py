@@ -167,6 +167,7 @@ def eval_image_plane_wfe(
     image_plane: str = 'paraxial',
     sphere_tangent: str = 'vertex',
     field_max_m: Optional[float] = None,
+    pupil_grid: Optional[Tuple[np.ndarray, np.ndarray]] = None,
 ) -> ImagePlaneWFE:
     """Compute image-plane reference-sphere wavefront error.
 
@@ -238,6 +239,29 @@ def eval_image_plane_wfe(
         omitted and ``field == (0, 0)``, has no effect (on-axis
         case).  Falls back to ``prescription['field_max_m']`` if the
         prescription carries that key.
+    pupil_grid : tuple ``(px, py)``, optional *(4.1+)*
+        Custom pupil-grid coordinates as a pair of 1-D arrays of
+        **normalised pupil coordinates** in ``[-1, 1]`` -- one ray
+        is launched per ``(px[i], py[i])`` pair.  When given,
+        ``n_pupil`` is ignored and the function bypasses its
+        internal square-grid-clipped-to-disk generation.
+
+        Use cases:
+
+        * **Cross-library validation:** evaluate Lumenairy WFE at
+          exactly the pupil sample points another library is using
+          (rayoptics, Optiland, Zemax), eliminating the
+          nearest-neighbour interpolation noise that otherwise
+          dominates raw-diff floors at ~5-10% of WFE RMS.
+        * **Chebyshev / Gauss-Lobatto quadrature** for high-order
+          polynomial fits where the user wants nodes clustered at
+          the pupil edge.
+        * **Sparse / structured grids** for fast aberration screens
+          (e.g. 8 rays on a ring for a quick spherical-vs-coma
+          check).
+
+        Coordinates outside the unit disk (``px**2 + py**2 > 1``)
+        are silently dropped before the trace.
 
     Returns
     -------
@@ -353,12 +377,32 @@ def eval_image_plane_wfe(
             f'(got {aperture_m:g} m).')
     semi = aperture_m / 2.0
 
-    # Square pupil grid clipped to the unit disk
-    p1 = np.linspace(-1.0, 1.0, n_pupil)
-    PX, PY = np.meshgrid(p1, p1)
-    px = PX.ravel(); py = PY.ravel()
-    inside = (px ** 2 + py ** 2) <= 1.0
-    px = px[inside]; py = py[inside]
+    # Pupil-grid generation: either user-supplied (4.1+) or the
+    # default square-clipped-to-disk used by all earlier versions.
+    if pupil_grid is not None:
+        px_in, py_in = pupil_grid
+        px = np.asarray(px_in, dtype=np.float64).ravel()
+        py = np.asarray(py_in, dtype=np.float64).ravel()
+        if px.size != py.size:
+            raise ValueError(
+                f"pupil_grid: px and py must have the same length; "
+                f"got {px.size} and {py.size}.")
+        if px.size == 0:
+            raise ValueError("pupil_grid: no sample points provided.")
+        inside = (px ** 2 + py ** 2) <= 1.0 + 1e-12
+        if not np.all(inside):
+            px = px[inside]; py = py[inside]
+        if px.size == 0:
+            raise ValueError(
+                "pupil_grid: all sample points fell outside the "
+                "unit disk after clipping.")
+    else:
+        # Default: square grid clipped to the unit disk.
+        p1 = np.linspace(-1.0, 1.0, n_pupil)
+        PX, PY = np.meshgrid(p1, p1)
+        px = PX.ravel(); py = PY.ravel()
+        inside = (px ** 2 + py ** 2) <= 1.0
+        px = px[inside]; py = py[inside]
 
     # Compute object-space source position.  On-axis (Hx=Hy=0)
     # this is (0, 0, -obj_d).  Off-axis the source is laterally
