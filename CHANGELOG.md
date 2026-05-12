@@ -2,6 +2,73 @@
 
 All notable changes to the core library are documented here.
 
+## [3.8.2] — 2026-05-11
+
+Adds two optional convention controls to
+`lumenairy.eval_image_plane_wfe` so the function can be aligned
+exactly with Zemax OpticStudio / rayoptics / Optiland defaults
+when doing cross-library validation, and so it can also report
+"best-focus" wavefront error (the focus a lab tech finds by
+maximising spot intensity, which is what published Strehl ratios
+implicitly assume).
+
+### Added
+
+* **`image_plane` parameter on `eval_image_plane_wfe`**, default
+  `'paraxial'` (back-compat).  Accepts:
+
+  * `'paraxial'` -- chief paraxial focus from the Gauss imaging
+    equation + principal planes.  Matches Zemax `WavefrontMap`
+    default, rayoptics `foc=0`, Optiland default.  Use for
+    cross-library validation.
+  * `'best_rms'` -- closed-form shift to the image plane that
+    minimises WFE RMS.  Fits a defocus coefficient to the
+    paraxial-focus WFE and converts via
+    `1/R' = 1/R + 2*c1*lambda/r_pupil^2`.  No iteration.
+  * `'best_pv'` -- 1-D numerical minimisation of PV via
+    `scipy.optimize.minimize_scalar` (with a 21-point coarse-
+    scan fallback if scipy is unavailable).  Useful for
+    PV-defined tolerance specs.
+* **`sphere_tangent` parameter on `eval_image_plane_wfe`**,
+  default `'vertex'` (back-compat).  Accepts:
+
+  * `'vertex'` -- reference sphere tangent at the LAST LENS
+    SURFACE vertex; radius = `img_d_m`.  Simplest convention;
+    matches what the 3.8.0 / 3.8.1 versions of this function
+    used.
+  * `'exit_pupil'` -- tangent at the exit pupil; radius =
+    `img_d_m - xp_z` (using the signed exit-pupil offset from
+    `first_order_data`).  Matches rayoptics / Optiland / Zemax
+    internal conventions.  Mathematically a no-op for the WFE
+    of chief-centred spheres (chief sits on every concentric
+    sphere with zero OPD), but adopting this convention makes
+    the reported sphere radius match other libraries' reported
+    values for downstream interoperability.
+* **`ImagePlaneWFE` dataclass gained four new fields**:
+  `image_plane`, `sphere_tangent`, `r_sphere_m` (signed
+  reference-sphere radius actually used), and
+  `img_d_m_paraxial` (the pre-shift paraxial image distance, so
+  the longitudinal shift `img_d_m - img_d_m_paraxial` is easy to
+  read out for `'best_rms'` / `'best_pv'` modes).
+
+### Validation
+
+* `validation/analysis/test_image_plane_wfe.py` extended from 11
+  to 18 checks: default-equals-paraxial back-compat,
+  best_rms-reduces-RMS, best_pv-reduces-PV, image-plane shift is
+  recorded, sphere-tangent rebases radius, sphere-tangent
+  vertex-vs-exit_pupil WFEs agree within FP noise (verifies the
+  no-op claim from CROSS_CHECK_METHODOLOGY.md), and invalid
+  argument raises `ValueError`.  All 18 pass.
+
+### Backwards compatibility
+
+Fully back-compatible.  Default values of both new parameters
+(`image_plane='paraxial'`, `sphere_tangent='vertex'`) reproduce
+3.8.0 / 3.8.1 output bit-for-bit.  No changes to
+`apply_real_lens_traced`, the `trace()` ray-trace primitive,
+`first_order_data`, or `remove_low_order_aberrations`.
+
 ## [3.8.1] — 2026-05-11
 
 Patch release.  Single fix: `lumenairy.__version__` was inadvertently

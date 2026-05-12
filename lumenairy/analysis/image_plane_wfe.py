@@ -64,11 +64,26 @@ class ImagePlaneWFE:
     chief_idx : int
         Index of the chief ray (px ~ 0, py ~ 0) in the arrays.
     img_d_m : float
-        Image distance used for the reference sphere [m].
+        Chief-ray image distance from the last lens vertex [m].
+        For ``image_plane='best_rms'``/``'best_pv'`` this is the
+        SHIFTED value, not the paraxial value.
     wavelength_m : float
         Wavelength used [m].
     aperture_m : float
         Entrance-pupil diameter used [m].
+    image_plane : str
+        ``'paraxial'`` / ``'best_rms'`` / ``'best_pv'`` -- which
+        focus convention produced ``img_d_m`` (3.8.2+).
+    sphere_tangent : str
+        ``'vertex'`` / ``'exit_pupil'`` -- which point on the
+        chief ray the reference sphere is tangent to (3.8.2+).
+    r_sphere_m : float
+        Signed reference-sphere radius actually used [m].  Equals
+        ``img_d_m`` for ``sphere_tangent='vertex'``,
+        ``img_d_m - xp_z`` for ``sphere_tangent='exit_pupil'``.
+    img_d_m_paraxial : float
+        The paraxial image distance (before any ``image_plane``
+        shift), for diagnostic purposes.
     """
     px: np.ndarray
     py: np.ndarray
@@ -78,6 +93,10 @@ class ImagePlaneWFE:
     img_d_m: float
     wavelength_m: float
     aperture_m: float
+    image_plane: str = 'paraxial'
+    sphere_tangent: str = 'vertex'
+    r_sphere_m: float = float('nan')
+    img_d_m_paraxial: float = float('nan')
 
     @property
     def pv_waves(self) -> float:
@@ -108,20 +127,47 @@ class ImagePlaneWFE:
         return float(np.exp(-(sigma ** 2)))
 
 
+def _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
+                      cz, R, wavelength_m, chief_idx, alive):
+    """Inner kernel: exact ray-sphere intersection for the reference
+    sphere centered at ``(0, 0, cz)`` with signed radius ``R``.
+
+    Returns the per-ray reference-sphere OPD in waves, with
+    rayoptics / Optiland sign convention and chief re-zeroed.
+    """
+    b = 2.0 * (s2x * Ld + s2y * Md + (s2z - cz) * Nd)
+    c = s2x ** 2 + s2y ** 2 + (s2z - cz) ** 2 - R ** 2
+    disc = b ** 2 - 4.0 * c
+    sqrt_disc = np.sqrt(np.maximum(disc, 0.0))
+    t1 = (-b - sqrt_disc) / 2.0
+    t2 = (-b + sqrt_disc) / 2.0
+    # Smallest-|t| root: continuous through chief (t_chief=0 for
+    # vertex-tangent; can be non-zero for exit-pupil-tangent or
+    # diverging-system spheres).
+    t = np.where(np.abs(t1) < np.abs(t2), t1, t2)
+    rs_w = -(opd_a_w + t / wavelength_m)  # rayoptics sign
+    if np.isfinite(rs_w[chief_idx]):
+        rs_w = rs_w - rs_w[chief_idx]
+    rs_w = np.where(alive, rs_w, np.nan)
+    return rs_w
+
+
 def eval_image_plane_wfe(
     prescription: dict,
     wavelength: float,
     field: Tuple[float, float] = (0.0, 0.0),
     n_pupil: int = 31,
     img_d_m: Optional[float] = None,
+    image_plane: str = 'paraxial',
+    sphere_tangent: str = 'vertex',
 ) -> ImagePlaneWFE:
     """Compute image-plane reference-sphere wavefront error.
 
     For each pupil-grid ray traced from the object plane through the
     lens, finds the exact intersection with the reference sphere
     centered on the chief ray's image-plane intersect, with radius
-    equal to the chief lens-exit-to-image distance.  The chief is
-    on the sphere by construction (zero OPD); marginal-ray OPDs
+    determined by the ``sphere_tangent`` choice.  The chief is on
+    the sphere by construction (zero OPD); marginal-ray OPDs
     capture the system's image-plane wavefront error.
 
     Parameters
@@ -144,23 +190,55 @@ def eval_image_plane_wfe(
         Cartesian grid is generated and clipped to the unit disk).
     img_d_m : float, optional
         Override the paraxial image distance from the last lens
-        surface [m].  Defaults to
-        :func:`lumenairy.raytrace.find_paraxial_focus` of the
-        prescription's surfaces.  Negative values are supported
-        for diverging systems with virtual images.
+        surface [m].  Defaults to the value derived from the
+        prescription's object distance + EFL + principal planes.
+        Negative values are supported for diverging systems with
+        virtual images.
+    image_plane : {'paraxial', 'best_rms', 'best_pv'}, default 'paraxial'
+        Which image-plane convention to use *(3.8.2+)*:
+
+        * ``'paraxial'`` -- chief paraxial focus (Gauss imaging
+          equation + principal planes).  Matches Zemax
+          ``WavefrontMap`` default, rayoptics ``foc=0``, Optiland
+          default.  Use this for cross-library validation.
+        * ``'best_rms'`` -- shift the image plane to minimise the
+          RMS of the WFE.  Closed-form: fit defocus to the
+          paraxial-focus WFE, derive the shift, re-evaluate.
+          This is the focus a lab tech finds by maximising
+          intensity; published Strehl ratios assume it.
+        * ``'best_pv'`` -- shift to minimise PV.  Uses a 1-D
+          numerical search since closed-form doesn't exist for
+          arbitrary aberration content.  Less common; useful for
+          PV-defined tolerance specs.
+    sphere_tangent : {'vertex', 'exit_pupil'}, default 'vertex'
+        Where on the chief ray the reference sphere is tangent
+        *(3.8.2+)*:
+
+        * ``'vertex'`` -- tangent at the LAST LENS SURFACE vertex.
+          Radius = ``img_d_m``.  Simplest convention; what
+          ``conv_a_to_rs_opd`` and pre-3.8.2 versions of this
+          function used.
+        * ``'exit_pupil'`` -- tangent at the exit pupil.  Radius =
+          ``img_d_m - xp_z`` where ``xp_z`` is the signed exit-
+          pupil offset from the last surface (typically negative
+          for stop-at-front singlets, putting XP inside the lens).
+          Matches the convention rayoptics, Optiland, and Zemax use
+          internally.
 
     Returns
     -------
     ImagePlaneWFE
-        Per-ray pupil coordinates, OPD in waves, alive mask, and
-        aggregated PV / RMS / Strehl summaries.
+        Per-ray pupil coordinates, OPD in waves, alive mask,
+        aggregated PV / RMS / Strehl, and metadata recording
+        which conventions produced this result.
 
     Raises
     ------
     NotImplementedError
         For non-zero ``field``.
     ValueError
-        For invalid or empty prescriptions.
+        For invalid or empty prescriptions, or unrecognised
+        ``image_plane`` / ``sphere_tangent`` choices.
 
     Notes
     -----
@@ -174,13 +252,30 @@ def eval_image_plane_wfe(
         c = s2x^2 + s2y^2 + (s2z - cz)^2 - R^2,
 
     for each ray, picking the root with smallest |t| so the
-    formula remains continuous through ``t_chief = 0`` for both
-    converging (``img_d_m > 0``) and diverging (``img_d_m < 0``)
-    systems.  The OPL adjustment is ``t * n_air`` (with
-    ``n_air = 1``), added to the chief-relative lens-exit OPL,
-    sign-flipped to match the rayoptics / Optiland convention,
-    then re-zeroed on the chief value.
+    formula remains continuous through ``t_chief = 0``.  The OPL
+    adjustment is ``t * n_air`` (with ``n_air = 1``), added to
+    the chief-relative lens-exit OPL, sign-flipped to match the
+    rayoptics / Optiland convention, then re-zeroed on the chief
+    value.
+
+    For ``image_plane='best_rms'``, the closed-form shift comes
+    from fitting ``c1 * r_norm^2`` (defocus, normalised pupil)
+    to the paraxial-focus WFE:
+
+        1/R'  =  1/R  +  2 * c1 [waves] * lambda / r_pupil^2
+
+    where ``r_pupil`` is the entrance-pupil semi-aperture.  The
+    sphere is then re-cast with radius ``R'`` and the ray-sphere
+    intersection re-evaluated; the trace itself is not repeated.
     """
+    if image_plane not in ('paraxial', 'best_rms', 'best_pv'):
+        raise ValueError(
+            f"eval_image_plane_wfe: image_plane must be one of "
+            f"('paraxial','best_rms','best_pv'); got {image_plane!r}.")
+    if sphere_tangent not in ('vertex', 'exit_pupil'):
+        raise ValueError(
+            f"eval_image_plane_wfe: sphere_tangent must be one of "
+            f"('vertex','exit_pupil'); got {sphere_tangent!r}.")
     if field != (0.0, 0.0):
         raise NotImplementedError(
             'eval_image_plane_wfe: off-axis fields (Hx,Hy != 0,0) '
@@ -197,6 +292,10 @@ def eval_image_plane_wfe(
             f'eval_image_plane_wfe: prescription object_distance must '
             f'be > 0 (got {obj_d_m:g} m).')
 
+    # Need first-order data for both the paraxial image-distance
+    # derivation AND the exit-pupil sphere tangent (3.8.2+).
+    fod = first_order_data(surfaces, wavelength)
+
     if img_d_m is None:
         # Compute the paraxial image distance for the actual finite
         # object conjugate (not the BFL, which is the infinity-
@@ -204,7 +303,6 @@ def eval_image_plane_wfe(
         # at the principal planes:
         #     1/v - 1/u = 1/f,  with u = -obj_d_m (object before lens)
         # then offset by the image-side principal-plane position.
-        fod = first_order_data(surfaces, wavelength)
         if not np.isfinite(fod.efl) or fod.efl == 0:
             raise ValueError(
                 'eval_image_plane_wfe: lens has degenerate EFL; '
@@ -226,6 +324,8 @@ def eval_image_plane_wfe(
             #   pp_image_z relative to last surface.  So
             #   img_d_from_last = v_pp + pp_image_z.
             img_d_m = float(v_pp + fod.pp_image_z)
+
+    img_d_m_paraxial = float(img_d_m)
 
     aperture_m = float(prescription.get('aperture_diameter', 0.0))
     if aperture_m <= 0:
@@ -265,8 +365,8 @@ def eval_image_plane_wfe(
         np.median(opl[alive]) if alive.any() else 0.0)
     opd_a_w = (opl - opl_chief) / wavelength
 
-    # Exact ray-sphere intersection -- sphere centered on chief
-    # image intersect with radius = img_d_m (signed)
+    # Ray state at the lens exit -- shared input to every
+    # reference-sphere evaluation below.
     s2x = np.asarray(f.x)
     s2y = np.asarray(f.y)
     s2z = np.asarray(f.z)
@@ -274,27 +374,89 @@ def eval_image_plane_wfe(
     Md = np.asarray(f.M)
     Nd = np.asarray(f.N)
     z_chief = s2z[chief]
-    cz = z_chief + img_d_m
-    R = img_d_m
-    b = 2.0 * (s2x * Ld + s2y * Md + (s2z - cz) * Nd)
-    c = s2x ** 2 + s2y ** 2 + (s2z - cz) ** 2 - R ** 2
-    disc = b ** 2 - 4.0 * c
-    sqrt_disc = np.sqrt(np.maximum(disc, 0.0))
-    t1 = (-b - sqrt_disc) / 2.0
-    t2 = (-b + sqrt_disc) / 2.0
-    # Smallest-|t| root: works for both converging (img_d_m > 0)
-    # and diverging (img_d_m < 0) systems.
-    t = np.where(np.abs(t1) < np.abs(t2), t1, t2)
 
-    rs_w = -(opd_a_w + t / wavelength)  # sign-flip to match rayoptics
-    if np.isfinite(rs_w[chief]):
-        rs_w = rs_w - rs_w[chief]
-    rs_w = np.where(alive, rs_w, np.nan)
+    # Compute the reference-sphere radius from img_d_m + the
+    # tangent-point choice.  Sphere centre is always at the chief
+    # image intersect (0, 0, z_chief + img_d_m).
+    def _radius_for(d):
+        """Signed sphere radius for chief image distance ``d``."""
+        if sphere_tangent == 'vertex':
+            return d
+        # exit_pupil: tangent at chief intersection with XP plane.
+        # xp_z is the SIGNED offset from last vertex (negative when
+        # XP is inside the lens).  R = (image - XP), measured along
+        # the chief: img_d_m - xp_z.
+        return d - fod.xp_z
+
+    R = _radius_for(img_d_m)
+    cz = z_chief + img_d_m
+    rs_w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
+                              cz, R, wavelength, chief, alive)
+
+    # 3.8.2: image-plane choice.  For 'best_rms' / 'best_pv' we
+    # fit / search the longitudinal shift that minimises the
+    # corresponding wavefront metric and re-evaluate.
+    if image_plane != 'paraxial':
+        if image_plane == 'best_rms':
+            # Closed form: fit c0 + c1 * (px^2 + py^2) to the
+            # paraxial WFE and convert c1 to a sphere-radius
+            # shift via R' = 1 / (1/R + 2*c1*lambda / r_pup^2).
+            r2 = px ** 2 + py ** 2
+            mask = np.isfinite(rs_w)
+            if mask.any():
+                A = np.column_stack([np.ones(mask.sum()), r2[mask]])
+                coefs, *_ = np.linalg.lstsq(A, rs_w[mask], rcond=None)
+                c1 = float(coefs[1])  # waves of defocus
+                r_pup = semi  # entrance-pupil semi-aperture [m]
+                inv_R_new = (1.0 / img_d_m
+                              + 2.0 * c1 * wavelength / r_pup ** 2)
+                if abs(inv_R_new) > 1e-30:
+                    img_d_m = 1.0 / inv_R_new
+        elif image_plane == 'best_pv':
+            # 1-D numerical search over the longitudinal shift dz
+            # that minimises PV.  Uses scipy.optimize when available;
+            # falls back to a coarse + bisect search.
+            def _pv_at(d_test):
+                R_t = _radius_for(d_test)
+                cz_t = z_chief + d_test
+                w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z,
+                                       Ld, Md, Nd, cz_t, R_t,
+                                       wavelength, chief, alive)
+                w = w[np.isfinite(w)]
+                return float(w.max() - w.min()) if w.size else np.inf
+            # Search range: paraxial +/- 10 * (Marechal wavelength
+            # depth-of-focus) = +/- 10 * 4 * f/#^2 * lambda
+            r_pup = semi
+            fnum = abs(img_d_m) / (2.0 * r_pup) if r_pup > 0 else 8.0
+            dof = 4.0 * fnum ** 2 * wavelength
+            dz_max = 10.0 * dof
+            try:
+                from scipy.optimize import minimize_scalar as _mins
+                res_opt = _mins(
+                    lambda dz: _pv_at(img_d_m + dz),
+                    bracket=(-dz_max, 0.0, dz_max),
+                    method='brent',
+                    options={'xtol': 1e-9})
+                img_d_m = float(img_d_m + res_opt.x)
+            except Exception:
+                # 21-point coarse scan as fallback
+                shifts = np.linspace(-dz_max, dz_max, 21)
+                pvs = [_pv_at(img_d_m + dz) for dz in shifts]
+                img_d_m = float(img_d_m + shifts[int(np.argmin(pvs))])
+        # Re-evaluate with the shifted image distance
+        R = _radius_for(img_d_m)
+        cz = z_chief + img_d_m
+        rs_w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
+                                  cz, R, wavelength, chief, alive)
 
     return ImagePlaneWFE(
         px=px, py=py, opd_w=rs_w, alive=alive,
         chief_idx=chief, img_d_m=img_d_m,
         wavelength_m=wavelength, aperture_m=aperture_m,
+        image_plane=image_plane,
+        sphere_tangent=sphere_tangent,
+        r_sphere_m=float(R),
+        img_d_m_paraxial=img_d_m_paraxial,
     )
 
 

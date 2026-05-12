@@ -259,6 +259,153 @@ H.run('remove_low_order: preserves astigmatism (orthogonal mode)',
 
 
 # ---------------------------------------------------------------------
+H.section('3.8.2: image_plane + sphere_tangent options')
+
+
+def t_image_plane_default_paraxial():
+    """Default image_plane is 'paraxial' (back-compat)."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    a = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31)
+    b = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                              image_plane='paraxial')
+    return (abs(a.pv_waves - b.pv_waves) < 1e-12,
+              f'default PV={a.pv_waves:.4f}, '
+              f"image_plane='paraxial' PV={b.pv_waves:.4f}")
+
+
+H.run("image_plane default == 'paraxial' (back-compat)",
+      t_image_plane_default_paraxial)
+
+
+def t_best_rms_reduces_rms():
+    """best_rms image-plane gives smaller RMS than paraxial for any
+    aberrated system."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    par = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                                 image_plane='paraxial')
+    bf = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                                image_plane='best_rms')
+    return (bf.rms_waves <= par.rms_waves,
+              f'paraxial RMS={par.rms_waves:.4f}, '
+              f'best_rms RMS={bf.rms_waves:.4f}')
+
+
+H.run("image_plane='best_rms' reduces RMS below paraxial",
+      t_best_rms_reduces_rms)
+
+
+def t_best_pv_reduces_pv():
+    """best_pv image-plane gives PV <= paraxial PV."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    par = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                                 image_plane='paraxial')
+    bf = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                                image_plane='best_pv')
+    return (bf.pv_waves <= par.pv_waves + 1e-6,
+              f'paraxial PV={par.pv_waves:.4f}, '
+              f'best_pv PV={bf.pv_waves:.4f}')
+
+
+H.run("image_plane='best_pv' reduces PV below paraxial",
+      t_best_pv_reduces_pv)
+
+
+def t_best_rms_shifts_image_plane():
+    """best_rms reports an img_d_m different from paraxial."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    bf = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                                image_plane='best_rms')
+    shift = abs(bf.img_d_m - bf.img_d_m_paraxial)
+    return (shift > 0.01e-3 and bf.img_d_m_paraxial > 0,
+              f'paraxial img_d={bf.img_d_m_paraxial*1e3:.4f} mm, '
+              f'best_rms img_d={bf.img_d_m*1e3:.4f} mm, '
+              f'shift={shift*1e6:.2f} um')
+
+
+H.run('best_rms records distinct img_d_m + img_d_m_paraxial',
+      t_best_rms_shifts_image_plane)
+
+
+def t_sphere_tangent_changes_radius():
+    """sphere_tangent='exit_pupil' produces a different r_sphere_m
+    than 'vertex' (the chief OPD is unchanged but the sphere radius
+    is rebased to the exit-pupil distance)."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    v = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                               sphere_tangent='vertex')
+    x = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                               sphere_tangent='exit_pupil')
+    # Vertex-tangent: R = img_d.  Exit-pupil-tangent: R = img_d - xp_z
+    # (xp_z < 0 for stop-at-front singlet, so |R_xp| > |R_vertex|).
+    return (x.r_sphere_m > v.r_sphere_m,
+              f'vertex R={v.r_sphere_m*1e3:.4f} mm, '
+              f'exit_pupil R={x.r_sphere_m*1e3:.4f} mm')
+
+
+H.run("sphere_tangent='exit_pupil' rebases the sphere radius",
+      t_sphere_tangent_changes_radius)
+
+
+def t_sphere_tangent_noop_for_chief():
+    """Chief-centred reference spheres of different radii give the
+    SAME WFE -- the chief is on every concentric sphere with zero
+    OPD by construction, and the marginal-ray WFE is invariant to
+    where on the chief ray the sphere is tangent.  The PV and RMS
+    should agree at the FP-noise level."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    v = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                               sphere_tangent='vertex')
+    x = eval_image_plane_wfe(p, wavelength=WL, n_pupil=31,
+                               sphere_tangent='exit_pupil')
+    # WFE PV should differ by < ~0.01 wave (numerical FP roundoff).
+    pv_diff = abs(v.pv_waves - x.pv_waves)
+    rms_diff = abs(v.rms_waves - x.rms_waves)
+    return (pv_diff < 0.01 and rms_diff < 0.01,
+              f'PV diff={pv_diff*1e3:.3g} mw, '
+              f'RMS diff={rms_diff*1e3:.3g} mw')
+
+
+H.run('sphere_tangent vertex vs exit_pupil WFEs match within FP noise',
+      t_sphere_tangent_noop_for_chief)
+
+
+def t_invalid_image_plane_raises():
+    """Unknown image_plane string raises ValueError."""
+    n = 1.5168
+    p = la.make_singlet(R1=(n - 1) * 100e-3, R2=float('inf'),
+                          d=4.1e-3, glass='N-BK7', aperture=12e-3)
+    p['object_distance'] = 200e-3
+    try:
+        eval_image_plane_wfe(p, wavelength=WL, n_pupil=11,
+                              image_plane='best_potato')
+        return (False, "no exception raised for invalid value")
+    except ValueError as e:
+        return ('best_potato' in str(e),
+                  f'raised ValueError: {e}')
+
+
+H.run('invalid image_plane raises ValueError', t_invalid_image_plane_raises)
+
+
+# ---------------------------------------------------------------------
 def main():
     return H.summary()
 
