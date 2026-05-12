@@ -78,6 +78,15 @@ from .jax_trace import (
     jax_state_to_raybundle,
 )
 
+# Paraxial-design one-liner helpers.
+from .paraxial import (
+    field_of_view,
+    optical_invariant,
+    f_number,
+    defocus_waves_to_zernike,
+    astigmatism_waves_to_zernike,
+)
+
 
 __all__ = [
     'RayBundle',
@@ -132,4 +141,10 @@ __all__ = [
     'make_jax_ray_state',
     'trace_jax',
     'jax_state_to_raybundle',
+    # paraxial helpers
+    'field_of_view',
+    'optical_invariant',
+    'f_number',
+    'defocus_waves_to_zernike',
+    'astigmatism_waves_to_zernike',
 ]

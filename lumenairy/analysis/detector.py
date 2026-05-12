@@ -24,7 +24,12 @@ from ..propagators.propagation import angular_spectrum_propagate
 def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
                    exposure_time=1.0, quantum_efficiency=1.0,
                    read_noise_e=0.0, dark_current_e_per_s=0.0,
-                   full_well=np.inf, seed=None):
+                   full_well=np.inf, seed=None,
+                   hot_pixel_map=None,
+                   cosmic_ray_rate=0.0,
+                   cosmic_ray_amp_e=5e4,
+                   bayer_pattern=None,
+                   bayer_qe=(0.40, 0.55, 0.20)):
     """Simulate detection of a coherent field on a pixel array.
 
     Parameters
@@ -43,7 +48,9 @@ def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
     exposure_time : float, default 1.0
         Integration time [s].
     quantum_efficiency : float, default 1.0
-        Fraction of incident photons detected (0 to 1).
+        Fraction of incident photons detected (0 to 1).  When
+        ``bayer_pattern`` is set this is the *global* QE before the
+        Bayer-cell weight is applied.
     read_noise_e : float, default 0
         Gaussian read noise [electrons RMS] per pixel.
     dark_current_e_per_s : float, default 0
@@ -52,6 +59,27 @@ def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
         Saturation level [electrons].  Pixels above this are clipped.
     seed : int, optional
         Random seed for reproducible noise.
+    hot_pixel_map : ndarray (bool, n_pixels x n_pixels), optional *(4.0+)*
+        Boolean map of hot pixels: ``True`` pixels are saturated to
+        ``full_well`` regardless of incident signal.  Useful for
+        modelling a known defect map from detector characterisation.
+    cosmic_ray_rate : float, default 0  *(4.0+)*
+        Expected cosmic-ray strikes per ``exposure_time`` per
+        ``n_pixels^2`` array.  Strikes are Poisson-distributed in
+        count and uniformly distributed in pixel coordinates; each
+        strike adds ``cosmic_ray_amp_e`` electrons to the affected
+        pixel.
+    cosmic_ray_amp_e : float, default 5e4  *(4.0+)*
+        Charge per cosmic-ray strike [electrons].
+    bayer_pattern : ``None`` (default) or ``'RGGB'`` / ``'BGGR'`` / ``'GRBG'`` / ``'GBRG'``  *(4.0+)*
+        If set, applies a 2 x 2 Bayer colour-filter array to the
+        per-pixel QE.  The default ``None`` produces a monochromatic
+        detector (matches pre-4.0 behaviour).  The Bayer cell uses
+        ``bayer_qe = (qe_R, qe_G, qe_B)``.
+    bayer_qe : (float, float, float), default ``(0.40, 0.55, 0.20)``
+        Per-channel QE multipliers when ``bayer_pattern`` is set.
+        Defaults are representative of a generic visible-light CMOS
+        sensor; tune for specific hardware.
 
     Returns
     -------
@@ -119,18 +147,66 @@ def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
     # the field sample.
     image = resampled * pixel_pitch ** 2
 
+    # Per-pixel QE map.  For a Bayer detector, the QE varies per-cell
+    # on a 2x2 mosaic; otherwise QE is uniform.
+    if bayer_pattern is None:
+        qe_map = float(quantum_efficiency)
+    else:
+        valid_patterns = ('RGGB', 'BGGR', 'GRBG', 'GBRG')
+        if bayer_pattern not in valid_patterns:
+            raise ValueError(
+                f"bayer_pattern must be one of {valid_patterns} or None; "
+                f"got {bayer_pattern!r}.")
+        qe_r, qe_g, qe_b = bayer_qe
+        # 2x2 base cell.  Within each cell index (i, j):
+        #   RGGB: [[R, G], [G, B]]
+        cells = {
+            'RGGB': np.array([[qe_r, qe_g], [qe_g, qe_b]], dtype=float),
+            'BGGR': np.array([[qe_b, qe_g], [qe_g, qe_r]], dtype=float),
+            'GRBG': np.array([[qe_g, qe_r], [qe_b, qe_g]], dtype=float),
+            'GBRG': np.array([[qe_g, qe_b], [qe_r, qe_g]], dtype=float),
+        }
+        cell = cells[bayer_pattern] * float(quantum_efficiency)
+        # Tile to full detector size.
+        qe_map = np.tile(cell, (n_pixels // 2 + 1, n_pixels // 2 + 1))
+        qe_map = qe_map[:n_pixels, :n_pixels]
+
     # Convert to photon counts
-    signal_e = image * quantum_efficiency * exposure_time
+    signal_e = image * qe_map * exposure_time
     signal_e = signal_e + dark_current_e_per_s * exposure_time
 
     # Noise
     rng = np.random.default_rng(seed)
-    if signal_e.max() > 0:
+    if float(np.asarray(signal_e).max()) > 0:
         # Poisson shot noise
         signal_e = rng.poisson(np.maximum(signal_e, 0).astype(np.float64))
         signal_e = signal_e.astype(np.float64)
     if read_noise_e > 0:
         signal_e = signal_e + rng.normal(0, read_noise_e, signal_e.shape)
+
+    # Cosmic-ray strikes: Poisson count of pixel-localised events.
+    if cosmic_ray_rate > 0:
+        n_strikes = rng.poisson(float(cosmic_ray_rate))
+        if n_strikes > 0:
+            ys = rng.integers(0, n_pixels, size=n_strikes)
+            xs = rng.integers(0, n_pixels, size=n_strikes)
+            for yy, xx in zip(ys, xs):
+                signal_e[yy, xx] += float(cosmic_ray_amp_e)
+
+    # Hot pixels: saturated to full_well regardless of incident signal.
+    if hot_pixel_map is not None:
+        hp = np.asarray(hot_pixel_map, dtype=bool)
+        if hp.shape != signal_e.shape:
+            raise ValueError(
+                f"hot_pixel_map shape {hp.shape} does not match "
+                f"detector shape {signal_e.shape}.")
+        if np.isfinite(full_well):
+            signal_e = np.where(hp, full_well, signal_e)
+        else:
+            # full_well == inf and hot map specified: still flag them
+            # with a finite spike rather than leaving as detected signal.
+            signal_e = np.where(hp, 1e9, signal_e)
+
     # Full-well clipping
     signal_e = np.clip(signal_e, 0, full_well)
 

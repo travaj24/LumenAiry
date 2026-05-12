@@ -33,7 +33,8 @@ def _ensure_cupy_loaded():
 # Fundamental Gaussian beam
 # ---------------------------------------------------------------------------
 
-def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0, use_gpu=False):
+def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0,
+                          use_gpu=False, dy=None, normalize='peak'):
     """
     Create a Gaussian beam field.
 
@@ -43,7 +44,7 @@ def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0, use_gpu=Fals
         Grid size. If int, creates an N x N grid. If tuple, interpreted as
         (Ny, Nx).
     dx : float
-        Grid spacing [m].
+        Grid spacing in x [m].
     sigma : float
         Gaussian width parameter (field standard deviation) [m].
         The 1/e field amplitude radius is sigma * sqrt(2).
@@ -55,6 +56,16 @@ def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0, use_gpu=Fals
         Center position of the beam [m].
     use_gpu : bool, default False
         If True and CuPy is available, create the arrays on the GPU.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    normalize : ``'peak'`` (default) / ``'power'`` / ``'none'``
+        Output scaling.  ``'peak'`` (the historical default) returns
+        a unit-peak amplitude field.  ``'power'`` returns a
+        unit-integrated-power field (matching :func:`create_hermite_gauss`
+        and :func:`create_laguerre_gauss` -- pass ``normalize='power'``
+        whenever you want to chain or compare across the mode-family
+        helpers).  ``'none'`` returns the raw ``exp(-r^2/(2 sigma^2))``
+        without scaling.
 
     Returns
     -------
@@ -69,6 +80,8 @@ def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0, use_gpu=Fals
         xp = cp
     else:
         xp = np
+    if dy is None:
+        dy = dx
 
     if isinstance(N, int):
         Ny, Nx = N, N
@@ -76,12 +89,25 @@ def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0, use_gpu=Fals
         Ny, Nx = N
 
     x = (xp.arange(Nx) - Nx / 2) * dx
-    y = (xp.arange(Ny) - Ny / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
     X, Y = xp.meshgrid(x, y)
 
     # Gaussian amplitude: exp(-r^2 / (2 sigma^2))
     E = xp.exp(-((X - x0)**2 + (Y - y0)**2) / (2 * sigma**2))
     E = E.astype(complex)
+
+    if normalize == 'peak':
+        pass  # already peak == 1 from exp(0) at the centre
+    elif normalize == 'power':
+        norm = xp.sqrt(xp.sum(xp.abs(E) ** 2) * dx * dy)
+        if float(norm) > 0:
+            E = E / norm
+    elif normalize == 'none':
+        pass
+    else:
+        raise ValueError(
+            f"create_gaussian_beam: normalize must be one of "
+            f"'peak', 'power', 'none'; got {normalize!r}.")
 
     return E, x, y
 
@@ -126,16 +152,18 @@ def hermite_physicist(n, x):
         return H_curr
 
 
-def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0):
+def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0,
+                          dy=None, normalize='power'):
     """
     Create a Hermite-Gaussian (HG_mn) beam mode at the waist.
 
     Parameters
     ----------
-    N : int
-        Grid size (N x N).
+    N : int or (Ny, Nx)
+        Grid size.  If a scalar, an ``N x N`` square grid is built.  Pass
+        a 2-tuple ``(Ny, Nx)`` for rectangular grids.
     dx : float
-        Grid spacing [m].
+        Grid spacing in x [m].
     w0 : float
         Beam waist (1/e^2 intensity radius) [m].
     wavelength : float
@@ -145,10 +173,14 @@ def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0):
         Transverse mode indices. HG_00 is the fundamental Gaussian.
     x0, y0 : float, default 0
         Beam center [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square pitch).
+        Provide explicitly for rectangular-pitch grids so the
+        Gaussian envelope isn't silently stretched along y.
 
     Returns
     -------
-    E : ndarray, complex (N x N)
+    E : ndarray, complex (Ny x Nx)
         Hermite-Gaussian mode field, power-normalised.
     x : ndarray
         1-D x-coordinate array [m].
@@ -164,8 +196,14 @@ def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0):
 
     where H_m is the physicist's Hermite polynomial of order m.
     """
-    x = (np.arange(N) - N / 2) * dx
-    y = (np.arange(N) - N / 2) * dx
+    if dy is None:
+        dy = dx
+    if isinstance(N, (tuple, list)):
+        Ny, Nx = int(N[0]), int(N[1])
+    else:
+        Ny = Nx = int(N)
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
     X, Y = np.meshgrid(x, y)
 
     u = np.sqrt(2) * (X - x0) / w0
@@ -177,10 +215,20 @@ def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0):
     gaussian = np.exp(-((X - x0)**2 + (Y - y0)**2) / w0**2)
     E = (Hm * Hn * gaussian).astype(complex)
 
-    # Power-normalise
-    norm = np.sqrt(np.sum(np.abs(E)**2) * dx**2)
-    if norm > 0:
-        E /= norm
+    if normalize == 'power':
+        norm = np.sqrt(np.sum(np.abs(E)**2) * dx * dy)
+        if norm > 0:
+            E /= norm
+    elif normalize == 'peak':
+        pk = float(np.abs(E).max())
+        if pk > 0:
+            E /= pk
+    elif normalize == 'none':
+        pass
+    else:
+        raise ValueError(
+            f"create_hermite_gauss: normalize must be one of "
+            f"'peak', 'power', 'none'; got {normalize!r}.")
 
     return E, x, y
 
@@ -229,16 +277,17 @@ def laguerre_generalized(p, l_abs, x):
         return L_curr
 
 
-def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0):
+def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0,
+                           dy=None, normalize='power'):
     """
     Create a Laguerre-Gaussian (LG_pl) beam mode at the waist.
 
     Parameters
     ----------
-    N : int
-        Grid size (N x N).
+    N : int or (Ny, Nx)
+        Grid size.  Scalar = square grid; tuple = rectangular.
     dx : float
-        Grid spacing [m].
+        Grid spacing in x [m].
     w0 : float
         Beam waist (1/e^2 intensity radius) [m].
     wavelength : float
@@ -251,10 +300,12 @@ def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0):
         LG_00 is the fundamental Gaussian.
     x0, y0 : float, default 0
         Beam center [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
 
     Returns
     -------
-    E : ndarray, complex (N x N)
+    E : ndarray, complex (Ny x Nx)
         Laguerre-Gaussian mode field, power-normalised.
     x : ndarray
         1-D x-coordinate array [m].
@@ -270,8 +321,14 @@ def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0):
 
     where L_p^|l| is the generalized Laguerre polynomial.
     """
-    x = (np.arange(N) - N / 2) * dx
-    y = (np.arange(N) - N / 2) * dx
+    if dy is None:
+        dy = dx
+    if isinstance(N, (tuple, list)):
+        Ny, Nx = int(N[0]), int(N[1])
+    else:
+        Ny = Nx = int(N)
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
     X, Y = np.meshgrid(x, y)
 
     r = np.sqrt((X - x0)**2 + (Y - y0)**2)
@@ -286,10 +343,20 @@ def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0):
     gaussian = np.exp(-r**2 / w0**2)
     E = (rho**abs(l) * L * gaussian * np.exp(1j * l * theta))
 
-    # Power-normalise
-    norm = np.sqrt(np.sum(np.abs(E)**2) * dx**2)
-    if norm > 0:
-        E /= norm
+    if normalize == 'power':
+        norm = np.sqrt(np.sum(np.abs(E)**2) * dx * dy)
+        if norm > 0:
+            E /= norm
+    elif normalize == 'peak':
+        pk = float(np.abs(E).max())
+        if pk > 0:
+            E /= pk
+    elif normalize == 'none':
+        pass
+    else:
+        raise ValueError(
+            f"create_laguerre_gauss: normalize must be one of "
+            f"'peak', 'power', 'none'; got {normalize!r}.")
 
     return E, x, y
 

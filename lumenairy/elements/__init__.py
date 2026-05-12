@@ -69,6 +69,7 @@ from .elements import (
     apply_vortex_phase_mask,
     apply_lyot_stop,
     apply_apodized_pupil,
+    coronagraph_contrast_curve,
     generate_turbulence_screen,
 )
 from .rcwa import (
@@ -121,6 +122,7 @@ __all__ = [
     'apply_mask', 'zernike', 'apply_zernike_aberration',
     'apply_lyot_focal_plane_mask', 'apply_vortex_phase_mask',
     'apply_lyot_stop', 'apply_apodized_pupil',
+    'coronagraph_contrast_curve',
     'generate_turbulence_screen',
     # rcwa
     'rcwa_1d', 'grating_efficiency_vs_wavelength',

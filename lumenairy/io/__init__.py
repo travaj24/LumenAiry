@@ -34,6 +34,7 @@ from .prescriptions import (
     load_quadoa_qos,
     QUADOA_SCHEMA_VERSION,
     scale_prescription,
+    normalize_prescription,
     THORLABS_CATALOG,
 )
 from .storage import (
@@ -87,6 +88,7 @@ __all__ = [
     'load_quadoa_qos',
     'QUADOA_SCHEMA_VERSION',
     'scale_prescription',
+    'normalize_prescription',
     'THORLABS_CATALOG',
     # storage
     'set_storage_backend',

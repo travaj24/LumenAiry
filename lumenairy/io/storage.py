@@ -72,7 +72,8 @@ def _decode_attr(val):
 # ── Single field I/O (HDF5-specific) ────────────────────────────────────
 
 def save_field_h5(filepath, E, dx, dy=None, wavelength=None, label=None,
-                  metadata=None, compression='gzip', compression_opts=4):
+                  metadata=None, compression='gzip', compression_opts=4,
+                  preserve_dtype=False):
     """
     Save a single complex optical field to an HDF5 file.
 
@@ -81,7 +82,8 @@ def save_field_h5(filepath, E, dx, dy=None, wavelength=None, label=None,
     filepath : str
         Output .h5 file path.
     E : ndarray (complex, Ny x Nx)
-        Complex electric field.
+        Complex electric field.  CuPy / JAX arrays are accepted and
+        converted to NumPy for storage.
     dx : float
         Grid spacing in x [m].
     dy : float, optional
@@ -96,18 +98,31 @@ def save_field_h5(filepath, E, dx, dy=None, wavelength=None, label=None,
         HDF5 compression filter ('gzip', 'lzf', or None).
     compression_opts : int, default 4
         Compression level (for gzip, 1-9).
+    preserve_dtype : bool, default False
+        If True, store ``E`` at its native complex precision
+        (``complex64`` or ``complex128``).  If False (the historical
+        default), coerce to ``complex128`` for storage.  ``complex64``
+        is ~2× smaller on disk and is sufficient for most propagation
+        simulations; use ``preserve_dtype=True`` to keep the original
+        precision through a round-trip (``save_field_h5`` ->
+        ``load_field_h5``).
     """
     _require_h5py()
     if dy is None:
         dy = dx
-    E = np.asarray(E, dtype=np.complex128)
+    # Coerce CuPy / JAX -> NumPy without disturbing dtype if requested.
+    from ..backend import to_numpy
+    E_np = to_numpy(E) if not isinstance(E, np.ndarray) else E
+    if not preserve_dtype:
+        E_np = E_np.astype(np.complex128, copy=False)
     with h5py.File(filepath, 'w') as f:
         dset = f.create_dataset(
-            'field', data=E,
+            'field', data=E_np,
             compression=compression, compression_opts=compression_opts
         )
         dset.attrs['dx'] = float(dx)
         dset.attrs['dy'] = float(dy)
+        dset.attrs['dtype'] = str(E_np.dtype)
         if wavelength is not None:
             dset.attrs['wavelength'] = float(wavelength)
         if label is not None:
@@ -142,7 +157,8 @@ def load_field_h5(filepath):
 # ── Multi-plane I/O (HDF5-specific) ─────────────────────────────────────
 
 def save_planes_h5(filepath, planes, wavelength=None, metadata=None,
-                   compression='gzip', compression_opts=4):
+                   compression='gzip', compression_opts=4,
+                   preserve_dtype=False):
     """
     Save a sequence of complex fields to a single HDF5 file.
 
@@ -151,13 +167,25 @@ def save_planes_h5(filepath, planes, wavelength=None, metadata=None,
     filepath : str
     planes : list of dict
         Each dict has ``'field'`` (ndarray), ``'dx'`` (float), and
-        optional ``'dy'``, ``'z'``, ``'label'``, plus any extra keys.
+        optional ``'dy'``, ``'z'``, ``'wavelength'``, ``'label'``,
+        plus any extra keys.  Per-plane ``'wavelength'`` (4.0+)
+        survives the round-trip -- useful for chromatic-design runs
+        where different planes were propagated at different
+        wavelengths.
     wavelength : float, optional
+        Run-level (file-level) wavelength.  Per-plane wavelengths
+        in ``planes[i]['wavelength']`` are also stored and override
+        the run-level value on load.
     metadata : dict, optional
     compression : str, default 'gzip'
     compression_opts : int, default 4
+    preserve_dtype : bool, default False
+        Preserve the per-plane complex precision (``complex64`` /
+        ``complex128``).  See :func:`save_field_h5` for the same
+        flag.
     """
     _require_h5py()
+    from ..backend import to_numpy
     n = len(planes)
     if n == 0:
         raise ValueError("At least one plane is required")
@@ -174,7 +202,11 @@ def save_planes_h5(filepath, planes, wavelength=None, metadata=None,
                 raise ValueError(
                     f"Plane {i} missing required 'field' or 'dx'")
             name = f'plane_{i:02d}'
-            E = np.asarray(plane['field'], dtype=np.complex128)
+            E_in = plane['field']
+            E = (to_numpy(E_in) if not isinstance(E_in, np.ndarray)
+                 else E_in)
+            if not preserve_dtype:
+                E = E.astype(np.complex128, copy=False)
             dset = grp.create_dataset(
                 name, data=E,
                 compression=compression,
@@ -186,6 +218,7 @@ def save_planes_h5(filepath, planes, wavelength=None, metadata=None,
                 dset.attrs[str(key)] = value
             if 'dy' not in plane:
                 dset.attrs['dy'] = float(plane['dx'])
+            dset.attrs['dtype'] = str(E.dtype)
 
 
 def load_planes_h5(filepath, indices=None):

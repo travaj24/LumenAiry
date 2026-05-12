@@ -115,6 +115,32 @@ class JonesField:
         return JonesField(self.Ex.copy(), self.Ey.copy(), self.dx, self.dy)
 
     # ------------------------------------------------------------------
+    # Polarization analysis (bound forms of the module-level helpers)
+    # ------------------------------------------------------------------
+
+    def stokes_parameters(self):
+        """Per-pixel Stokes parameters dict ``{'S0', 'S1', 'S2', 'S3'}``.
+
+        Equivalent to module-level :func:`stokes_parameters`; exposed
+        as a bound method so JonesField pipelines can chain
+        ``jf.propagate(...).stokes_parameters()`` without round-tripping
+        through the scalar API.
+        """
+        return stokes_parameters(self)
+
+    def degree_of_polarization(self):
+        """Per-pixel DOP map.  Equivalent to module-level
+        :func:`degree_of_polarization`."""
+        return degree_of_polarization(self)
+
+    def polarization_ellipse(self):
+        """Per-pixel polarization-ellipse ``(orientation, ellipticity)``.
+
+        Equivalent to module-level :func:`polarization_ellipse`.
+        """
+        return polarization_ellipse(self)
+
+    # ------------------------------------------------------------------
     # Propagation (scalar functions applied to each component)
     # ------------------------------------------------------------------
 

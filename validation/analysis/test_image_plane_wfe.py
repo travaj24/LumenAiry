@@ -405,6 +405,107 @@ def t_invalid_image_plane_raises():
 H.run('invalid image_plane raises ValueError', t_invalid_image_plane_raises)
 
 
+# =====================================================================
+# Off-axis support (4.0+)
+# =====================================================================
+
+H.section('Off-axis fields (4.0+)')
+
+
+def t_off_axis_requires_field_max_m():
+    """Calling with non-zero field but no field_max_m raises ValueError."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    try:
+        la.eval_image_plane_wfe(p, WL, field=(0.5, 0.0), n_pupil=15)
+        return False, 'no exception raised'
+    except ValueError as e:
+        return 'field_max_m' in str(e), str(e)
+
+
+H.run('off-axis without field_max_m -> ValueError',
+      t_off_axis_requires_field_max_m)
+
+
+def t_off_axis_field_max_m_kwarg():
+    """Off-axis WFE computes when field_max_m is given."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    wfe = la.eval_image_plane_wfe(p, WL, field=(0.5, 0.0), n_pupil=15,
+                                    field_max_m=1e-3)
+    return (np.isfinite(wfe.rms_waves) and wfe.rms_waves > 0
+            and wfe.chief_idx >= 0), \
+        f'PV={wfe.pv_waves:.4f}, RMS={wfe.rms_waves:.4f}'
+
+
+H.run('off-axis WFE with field_max_m kwarg returns finite result',
+      t_off_axis_field_max_m_kwarg)
+
+
+def t_off_axis_aberration_grows_with_field():
+    """For a singlet with positive spherical aberration, RMS WFE grows
+    monotonically from on-axis to the field edge."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    wfe_axis = la.eval_image_plane_wfe(p, WL, n_pupil=15)
+    wfe_mid = la.eval_image_plane_wfe(p, WL, field=(0.5, 0.0),
+                                         n_pupil=15, field_max_m=1e-3)
+    wfe_edge = la.eval_image_plane_wfe(p, WL, field=(1.0, 0.0),
+                                          n_pupil=15, field_max_m=1e-3)
+    monotone = wfe_axis.rms_waves <= wfe_mid.rms_waves <= wfe_edge.rms_waves
+    return monotone, (
+        f'axis={wfe_axis.rms_waves:.4f}, mid={wfe_mid.rms_waves:.4f}, '
+        f'edge={wfe_edge.rms_waves:.4f}')
+
+
+H.run('RMS WFE grows monotonically with field for a singlet',
+      t_off_axis_aberration_grows_with_field)
+
+
+def t_off_axis_zero_field_matches_on_axis():
+    """field=(0,0) with field_max_m given should match field=(0,0)
+    without field_max_m to many decimal places."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    a = la.eval_image_plane_wfe(p, WL, n_pupil=15)
+    b = la.eval_image_plane_wfe(p, WL, n_pupil=15, field=(0.0, 0.0),
+                                  field_max_m=1e-3)
+    err = abs(a.rms_waves - b.rms_waves)
+    return err < 1e-12, f'rms diff = {err:.2e}'
+
+
+H.run('field=(0,0) with field_max_m matches on-axis result',
+      t_off_axis_zero_field_matches_on_axis)
+
+
+def t_field_grid_wfe_shape_and_content():
+    """field_grid_wfe returns arrays of the requested shape with
+    sensible numerical content."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    grid = la.field_grid_wfe(p, WL, field_max_m=1e-3, n_field=3,
+                                n_pupil=15)
+    shape_ok = (grid['Hx'].shape == (3, 3)
+                and grid['rms_waves'].shape == (3, 3)
+                and len(grid['wfe_per_field']) == 9)
+    finite_ok = bool(np.all(np.isfinite(grid['rms_waves'])))
+    onaxis_min = (grid['rms_waves'][1, 1]
+                  <= grid['rms_waves'][0, 0] + 1e-6)
+    return shape_ok and finite_ok and onaxis_min, (
+        f"shape={grid['rms_waves'].shape}, "
+        f"on-axis={grid['rms_waves'][1,1]:.4f}, "
+        f"corner={grid['rms_waves'][0,0]:.4f}")
+
+
+H.run('field_grid_wfe: shape, finiteness, on-axis-minimum invariant',
+      t_field_grid_wfe_shape_and_content)
+
+
 # ---------------------------------------------------------------------
 def main():
     return H.summary()

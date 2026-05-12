@@ -2448,3 +2448,126 @@ def scale_prescription(prescription, factor):
 
     return rx
 
+
+# ============================================================================
+# Schema normalisation (4.0+)
+# ============================================================================
+
+
+def normalize_prescription(prescription):
+    """Return a copy of ``prescription`` with the canonical superset
+    of schema keys filled in.
+
+    The library's prescription dict has historically been built by
+    several routes that emit slightly different schemas:
+
+    * :func:`make_singlet` / :func:`make_doublet` / etc. return the
+      minimal ``{'surfaces', 'thicknesses', 'aperture_diameter'}``.
+    * :func:`load_zmx_prescription` adds ``'elements'`` and
+      ``'all_thicknesses'`` (refractive-only ``'surfaces'`` plus the
+      full element list including mirrors).
+    * :func:`load_zemax_prescription_txt` additionally adds
+      ``'wavelength'`` (primary), ``'units'`` (originating unit
+      string), and ``'has_semi_diameters'``.
+    * :func:`load_codev_seq` / :func:`load_quadoa_qos` match
+      ``load_zmx_prescription``'s schema.
+
+    Downstream functions (:func:`apply_real_lens`,
+    :func:`monte_carlo_tolerancing`, :func:`eval_image_plane_wfe`, ...)
+    each accept any of these schemas via silent fallback, but the
+    fallback rules differ from function to function and have caught
+    real users by surprise (for example,
+    :func:`monte_carlo_tolerancing` perturbs only ``'surfaces'`` and
+    silently skips mirrors in an ``'elements'`` list).
+
+    This helper builds the **canonical superset**: every prescription
+    is returned with both ``'surfaces'`` and ``'elements'`` populated
+    (with ``elements`` mirroring ``surfaces`` if no ``elements``
+    were provided), both ``'thicknesses'`` and ``'all_thicknesses'``
+    populated, and the optional metadata fields (``'wavelength'``,
+    ``'units'``, ``'object_distance'``, ``'stop_index'``,
+    ``'has_semi_diameters'``) present (with safe defaults: ``None``
+    for the metadata, ``0.0`` for ``object_distance`` if missing).
+
+    The original dict is not modified -- a deep-copy is returned.
+
+    Parameters
+    ----------
+    prescription : dict
+        Any LumenAiry prescription dict (built by a make_*, loaded by
+        any load_*, or hand-rolled).
+
+    Returns
+    -------
+    dict
+        Deep-copied prescription with canonical schema.
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> p = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=10e-3)
+    >>> sorted(p.keys())                                   # before
+    ['aperture_diameter', 'name', 'surfaces', 'thicknesses']
+    >>> q = la.normalize_prescription(p)
+    >>> sorted(q.keys())                                   # after
+    ['aperture_diameter', 'all_thicknesses', 'elements', 'has_semi_diameters',
+     'name', 'object_distance', 'stop_index', 'surfaces', 'thicknesses',
+     'units', 'wavelength']
+    >>> q['elements'] == q['surfaces']    # elements mirrors surfaces
+    True
+
+    Notes
+    -----
+    Callers can either run their prescription through
+    ``normalize_prescription`` once at the top of a pipeline (the
+    recommended idiom) or let each downstream function fall back to
+    its existing schema-detection logic.  Both paths work; the
+    explicit normalisation just removes ambiguity.
+    """
+    import copy
+    if not isinstance(prescription, dict):
+        raise TypeError(
+            f"normalize_prescription expects a dict, got "
+            f"{type(prescription).__name__}.")
+    rx = copy.deepcopy(prescription)
+
+    # surfaces / elements -- mirror whichever is missing.
+    surfs = rx.get('surfaces')
+    elems = rx.get('elements')
+    if surfs is None and elems is None:
+        raise ValueError(
+            "normalize_prescription: prescription has neither "
+            "'surfaces' nor 'elements'.")
+    if surfs is None:
+        # Build surfaces from elements (drop pure-mirror entries that
+        # apply_real_lens cannot consume).
+        surfs = [e for e in elems
+                 if not (isinstance(e, dict) and e.get('mirror'))]
+        rx['surfaces'] = surfs
+    if elems is None:
+        # Elements mirror surfaces verbatim (no mirrors in pure
+        # refractive prescriptions).
+        rx['elements'] = list(surfs)
+
+    # thicknesses / all_thicknesses
+    th = rx.get('thicknesses')
+    ath = rx.get('all_thicknesses')
+    if th is None and ath is not None:
+        rx['thicknesses'] = list(ath)
+    elif ath is None and th is not None:
+        rx['all_thicknesses'] = list(th)
+    elif th is None and ath is None:
+        rx['thicknesses'] = []
+        rx['all_thicknesses'] = []
+
+    # Optional metadata: ensure keys exist (with sensible defaults).
+    rx.setdefault('aperture_diameter', None)
+    rx.setdefault('object_distance', 0.0)
+    rx.setdefault('stop_index', None)
+    rx.setdefault('wavelength', None)
+    rx.setdefault('units', None)
+    rx.setdefault('has_semi_diameters', False)
+    rx.setdefault('name', None)
+
+    return rx
+

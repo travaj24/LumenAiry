@@ -1187,5 +1187,76 @@ H.run('trace_jax_with_params: jax.grad through R1 matches FD',
       t_trace_jax_with_params_grad_matches_fd)
 
 
+# =====================================================================
+# Paraxial helpers (4.0+)
+# =====================================================================
+
+H.section('Paraxial helpers (4.0+)')
+
+
+def t_defocus_to_zernike_round_trip():
+    """defocus_waves -> c(2,0) -> defocus_waves should round-trip."""
+    for d in (0.25, 0.5, 1.0, 2.0):
+        c = la.defocus_waves_to_zernike(d)
+        # Inverse: d = c * 2*sqrt(3)
+        d_back = c * 2.0 * np.sqrt(3.0)
+        if abs(d_back - d) > 1e-15:
+            return False, f'd={d}: c={c}, d_back={d_back}'
+    return True, 'all round-trips pass'
+
+
+H.run('defocus_waves_to_zernike: round-trip via c*2*sqrt(3) is exact',
+      t_defocus_to_zernike_round_trip)
+
+
+def t_astigmatism_to_zernike_value():
+    a = 1.0
+    c = la.astigmatism_waves_to_zernike(a)
+    expected = 1.0 / np.sqrt(6.0)
+    return abs(c - expected) < 1e-15, f'c={c}, expected={expected}'
+
+
+H.run('astigmatism_waves_to_zernike: 1 wave -> 1/sqrt(6)',
+      t_astigmatism_to_zernike_value)
+
+
+def t_f_number_singlet():
+    """100 mm singlet with 10 mm aperture -> f/10."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    fn = la.f_number(p, 587.56e-9)
+    return 8.0 < fn < 12.0, f'f/{fn:.3f} (expect ~f/10)'
+
+
+H.run('f_number: BK7 singlet 51.5mm/inf gives f/10', t_f_number_singlet)
+
+
+def t_field_of_view_finite_conjugate():
+    """Finite-conjugate FoV from singlet: theta_max = atan(D/2 / obj_d)."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    theta, h = la.field_of_view(p, 587.56e-9)
+    expected_theta = float(np.arctan(5e-3 / 200e-3))
+    return abs(theta - expected_theta) < 1e-12 and abs(h - 5e-3) < 1e-12, \
+        f'theta={theta:.6e}, expected={expected_theta:.6e}'
+
+
+H.run('field_of_view: finite-conjugate atan(D/2 / obj_d)',
+      t_field_of_view_finite_conjugate)
+
+
+def t_optical_invariant_formula():
+    """H = (D/2) * (h/f) for an on-axis chief at field height h."""
+    H = la.optical_invariant(efl=0.1, f_number_val=10,
+                                pupil_diameter_m=0.01, field_height_m=1e-3)
+    expected = (0.01 / 2) * (1e-3 / 0.1)  # 5e-5
+    return abs(H - expected) < 1e-15, f'H={H:.4e}, expected={expected:.4e}'
+
+
+H.run('optical_invariant: y_marg * u_chief formula',
+      t_optical_invariant_formula)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

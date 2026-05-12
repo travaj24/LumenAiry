@@ -7,10 +7,23 @@ diameter, integrated power (total or power-in-bucket), Strehl ratio
 computation, PSF/MTF analysis, and sampling-condition diagnostics for
 the Angular Spectrum Method (ASM).
 
+Backend awareness: the lightweight beam-statistic and PSF/MTF helpers
+in this module dispatch through :func:`lumenairy.backend.array_namespace`,
+so a CuPy or JAX input field flows through them without an implicit
+host transfer.  Functions that pull in SciPy primitives
+(``wave_opd_1d``, Zernike decomposition, ``polychromatic_*``) still
+operate on the NumPy backend internally and coerce on entry.
+
 Author: Andrew Traverso
 """
 
 import numpy as np
+
+
+def _xp_of(*arrays):
+    """Return the array namespace for the inputs (numpy / cupy / jax.numpy)."""
+    from ..backend import array_namespace
+    return array_namespace(*arrays)
 
 
 def beam_centroid(E, dx, dy=None):
@@ -35,16 +48,17 @@ def beam_centroid(E, dx, dy=None):
     """
     if dy is None:
         dy = dx
+    xp = _xp_of(E)
     Ny, Nx = E.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
 
-    I = np.abs(E) ** 2
-    total = np.sum(I)
-    if total == 0:
+    I = xp.abs(E) ** 2
+    total = xp.sum(I)
+    if float(total) == 0:
         return 0.0, 0.0
-    return float(np.sum(X * I) / total), float(np.sum(Y * I) / total)
+    return float(xp.sum(X * I) / total), float(xp.sum(Y * I) / total)
 
 
 def beam_d4sigma(E, dx, dy=None):
@@ -72,22 +86,23 @@ def beam_d4sigma(E, dx, dy=None):
     """
     if dy is None:
         dy = dx
+    xp = _xp_of(E)
     Ny, Nx = E.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
 
-    I = np.abs(E) ** 2
-    total = np.sum(I)
-    if total == 0:
+    I = xp.abs(E) ** 2
+    total = xp.sum(I)
+    if float(total) == 0:
         return 0.0, 0.0
 
-    cx = np.sum(X * I) / total
-    cy = np.sum(Y * I) / total
-    var_x = np.sum((X - cx) ** 2 * I) / total
-    var_y = np.sum((Y - cy) ** 2 * I) / total
+    cx = xp.sum(X * I) / total
+    cy = xp.sum(Y * I) / total
+    var_x = xp.sum((X - cx) ** 2 * I) / total
+    var_y = xp.sum((Y - cy) ** 2 * I) / total
 
-    return float(4 * np.sqrt(var_x)), float(4 * np.sqrt(var_y))
+    return float(4 * xp.sqrt(var_x)), float(4 * xp.sqrt(var_y))
 
 
 def beam_power(E, dx, dy=None, region=None):
@@ -120,15 +135,16 @@ def beam_power(E, dx, dy=None, region=None):
     """
     if dy is None:
         dy = dx
-    I = np.abs(E) ** 2
+    xp = _xp_of(E)
+    I = xp.abs(E) ** 2
 
     if region is None:
-        return float(np.sum(I) * dx * dy)
+        return float(xp.sum(I) * dx * dy)
 
     Ny, Nx = E.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
 
     shape = region.get('shape', 'circular')
     xc = region.get('xc', 0)
@@ -140,11 +156,11 @@ def beam_power(E, dx, dy=None, region=None):
     elif shape == 'rectangular':
         Wx = region['width_x']
         Wy = region['width_y']
-        mask = (np.abs(X - xc) <= Wx / 2) & (np.abs(Y - yc) <= Wy / 2)
+        mask = (xp.abs(X - xc) <= Wx / 2) & (xp.abs(Y - yc) <= Wy / 2)
     else:
         raise ValueError(f"Unknown region shape: {shape}")
 
-    return float(np.sum(I[mask]) * dx * dy)
+    return float(xp.sum(I[mask]) * dx * dy)
 
 
 def radial_power_bands(E, dx, radii, dy=None, center=None):
@@ -246,17 +262,18 @@ def strehl_ratio(E, E_ref, dx):
     ``Strehl = max(|E|^2) / max(|E_ref|^2)`` after both fields have been
     normalised to equal total power.
     """
-    I = np.abs(E) ** 2
-    I_ref = np.abs(E_ref) ** 2
+    xp = _xp_of(E, E_ref)
+    I = xp.abs(E) ** 2
+    I_ref = xp.abs(E_ref) ** 2
 
-    P = np.sum(I) * dx ** 2
-    P_ref = np.sum(I_ref) * dx ** 2
+    P = float(xp.sum(I) * dx ** 2)
+    P_ref = float(xp.sum(I_ref) * dx ** 2)
 
     if P_ref == 0 or P == 0:
         return 0.0
 
     # Normalize to same total power
-    return float(np.max(I) / P * P_ref / np.max(I_ref))
+    return float(xp.max(I)) / P * P_ref / float(xp.max(I_ref))
 
 
 def coupling_efficiency(E, mode, dx, dy=None):
@@ -572,36 +589,38 @@ def compute_psf(pupil, wavelength, f, dx_pupil, N_psf=None, oversample=1,
     broke the canonical Strehl calculation pattern; ``'power'`` is now
     the default and ``'peak'`` is opt-in.
     """
+    xp = _xp_of(pupil)
     Np = pupil.shape[0]
     if N_psf is None:
         N_psf = Np * oversample
 
-    # Zero-pad pupil if oversampling
+    # Zero-pad pupil if oversampling.  Uses xp.pad so CuPy / JAX
+    # arrays don't get coerced through NumPy.
     if N_psf > Np:
         pad_before = (N_psf - Np) // 2
         pad_after = N_psf - Np - pad_before
-        pupil_padded = np.pad(pupil, ((pad_before, pad_after),
+        pupil_padded = xp.pad(pupil, ((pad_before, pad_after),
                                        (pad_before, pad_after)),
                               mode='constant')
     else:
         pupil_padded = pupil
 
     # Fraunhofer: PSF amplitude is FFT of pupil
-    amp = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(pupil_padded)))
-    psf = np.abs(amp)**2
+    amp = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(pupil_padded)))
+    psf = xp.abs(amp) ** 2
 
     # Apply the requested normalisation.  Default is 'power' because
     # Strehl-ratio computations rely on the peak-ratio of two PSFs
     # normalised to equal total intensity.
     if normalize == 'peak':
-        if psf.max() > 0:
+        if float(psf.max()) > 0:
             psf = psf / psf.max()
     elif normalize == 'power':
         # Rescale so the total integrated intensity matches the pupil's
         # (Parseval's theorem says this should already be true modulo
         # the DFT's N^2 factor; we make it exact).
-        pupil_power = float(np.sum(np.abs(pupil_padded) ** 2))
-        psf_power = float(np.sum(psf))
+        pupil_power = float(xp.sum(xp.abs(pupil_padded) ** 2))
+        psf_power = float(xp.sum(psf))
         if psf_power > 0 and pupil_power > 0:
             psf = psf * (pupil_power / psf_power)
     elif normalize == 'none':
@@ -640,10 +659,11 @@ def compute_otf(psf):
     of the pupil function. Both approaches give the same result for
     coherent imaging systems.
     """
-    otf = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(psf)))
+    xp = _xp_of(psf)
+    otf = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(psf)))
     # Normalize so DC component = 1
     dc = otf[otf.shape[0] // 2, otf.shape[1] // 2]
-    if abs(dc) > 0:
+    if abs(complex(dc)) > 0:
         otf = otf / dc
     return otf
 
@@ -677,7 +697,8 @@ def compute_mtf(psf):
     To get radial MTF profiles (tangential/sagittal or azimuthal
     average), take cuts or radial averages of this 2D array.
     """
-    return np.abs(compute_otf(psf))
+    xp = _xp_of(psf)
+    return xp.abs(compute_otf(psf))
 
 
 def mtf_radial(mtf, dx_psf, wavelength, f):

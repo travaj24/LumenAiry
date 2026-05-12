@@ -10,6 +10,65 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.0.0
+
+**Polish + Tier-1-gap-closing release.**  A four-tier audit of the
+library (API consistency, sign / unit conventions, cross-module
+pipelines, peer-library feature parity) surfaced a set of verified
+bugs and genuine functional gaps; 4.0 ships fixes for all of them
+plus a batch of helpers that compose with the existing infrastructure.
+Pure-additive with no breaking changes.
+
+**Adaptive optics primitives (new module `lumenairy.ao`).**  Closed-
+loop AO building blocks: `DeformableMirror` (Gaussian-IF actuator
+grid), `zernike_modal_basis` + `slope_to_modal` (SH-WFS modal
+reconstructor), `LeakyIntegrator` (control law).  Compose with the
+existing `shack_hartmann` and `generate_turbulence_screen` into a
+full single-conjugate AO loop.  See [Function Reference - Adaptive
+Optics](https://github.com/travaj24/LumenAiry/wiki/Function-Reference-Adaptive-Optics).
+
+**Off-axis image-plane WFE.**  `eval_image_plane_wfe` now accepts
+`field=(Hx, Hy)` + `field_max_m` for any field point (previously
+raised `NotImplementedError` for non-zero field).  New
+`field_grid_wfe(prescription, wavelength, field_max_m, n_field)`
+runs the WFE across an `n_field x n_field` grid and returns the
+PV/RMS/Strehl maps -- the standard "image quality across the field"
+plot in one call.
+
+**More polish from the audit.**  `coronagraph_contrast_curve` for
+radial contrast in lambda/D units; `normalize_prescription` to
+unify schemas from the various loaders; paraxial helpers
+(`field_of_view`, `f_number`, `optical_invariant`,
+`defocus_waves_to_zernike`); `JonesField.stokes_parameters()` +
+`.degree_of_polarization()` + `.polarization_ellipse()` bound
+methods; `apply_zernike_aberration` and the HG/LG mode generators
+gain `dy` kwargs for rectangular grids; storage now supports
+`preserve_dtype=True`; detector model adds hot pixels, cosmic rays,
+and Bayer-pattern colour filters.
+
+**Backend preservation through analysis.**  `beam_centroid`,
+`beam_d4sigma`, `beam_power`, `strehl_ratio`, `compute_psf`,
+`compute_otf`, `compute_mtf`, `apply_aperture`, and
+`apply_gaussian_aperture` now dispatch through
+`array_namespace(...)`.  CuPy / JAX field inputs no longer get
+silently coerced to NumPy.
+
+**Source-normalisation control.**  `create_gaussian_beam`,
+`create_hermite_gauss`, and `create_laguerre_gauss` all accept a
+`normalize` kwarg with `'peak'` / `'power'` / `'none'` options.
+Each function preserves its historical default for backward
+compatibility; pass `normalize='power'` to homogenise across the
+source family.
+
+**Validation.** 29/29 validation files pass (up from 27/27 in
+3.9.0).  Two new files (`test_ao.py`, `test_coherence.py`) plus
+~30 new tests across the existing files.
+
+**New wiki pages.** Function Reference - Adaptive Optics, Migration
+Guide (POPPy / HCIPy / prysm / Optiland / rayoptics -> LumenAiry
+mapping), and Glossary (sign conventions + when-to-use-which
+propagator cheat-sheet).
+
 ## What's new in 3.9.0
 
 **Coronagraph & broadband-imaging building blocks.**  Four

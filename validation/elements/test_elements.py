@@ -553,5 +553,178 @@ H.run('Vortex coronagraph: on-axis starlight suppression > 100x',
       t_vortex_lyot_coronagraph_starlight_suppression)
 
 
+def t_coronagraph_contrast_curve_smoke():
+    """coronagraph_contrast_curve returns a sensibly-shaped output."""
+    N, dx = 64, 8e-6
+    wl = 1.31e-6
+    f_eff = 0.1
+    pupil = la.apply_aperture(np.ones((N, N), dtype=complex), dx,
+                                shape='circular',
+                                params={'diameter': 0.6 * N * dx})
+    psf_ref, dx_focal = la.compute_psf(pupil, wl, f_eff, dx,
+                                          normalize='none')
+    # Trivial "coronagraph": multiply PSF by 0.1 (10x suppression)
+    psf_coro = psf_ref * 0.1
+    curve = la.coronagraph_contrast_curve(
+        psf_coro, psf_ref, dx_focal, wl, f_eff, n_radii=16,
+        max_lam_over_D=5.0)
+    return (curve['contrast'].shape == (16,)
+            and np.all(np.isfinite(curve['r_lam_over_D']))
+            and curve['peak_ref'] > 0), (
+        f"shape={curve['contrast'].shape}, "
+        f"peak_ref={curve['peak_ref']:.3e}")
+
+
+H.run('coronagraph_contrast_curve: smoke test',
+      t_coronagraph_contrast_curve_smoke)
+
+
+# =============================================================================
+# JonesField bound analysis methods (4.0+)
+# =============================================================================
+
+H.section('JonesField bound analysis methods (4.0+)')
+
+
+def t_jonesfield_stokes_method_matches_function():
+    """jf.stokes_parameters() matches la.stokes_parameters(jf)."""
+    Es, _, _ = la.create_gaussian_beam(64, 4e-6, 50e-6)
+    jf = la.create_linear_polarized(Es, dx=4e-6, angle=np.pi / 4)
+    S_method = jf.stokes_parameters()
+    S_func = la.stokes_parameters(jf)
+    keys_match = sorted(S_method.keys()) == sorted(S_func.keys())
+    vals_match = all(np.allclose(S_method[k], S_func[k])
+                      for k in S_method)
+    return keys_match and vals_match, \
+        f'keys match: {keys_match}, vals match: {vals_match}'
+
+
+H.run('JonesField.stokes_parameters: method matches module function',
+      t_jonesfield_stokes_method_matches_function)
+
+
+def t_jonesfield_dop_and_ellipse_methods():
+    Es, _, _ = la.create_gaussian_beam(64, 4e-6, 50e-6)
+    jf = la.create_linear_polarized(Es, dx=4e-6, angle=np.pi / 4)
+    dop = jf.degree_of_polarization()
+    psi, chi = jf.polarization_ellipse()
+    return (dop.shape == (64, 64)
+            and psi.shape == (64, 64)
+            and chi.shape == (64, 64)), \
+        f'dop {dop.shape}, psi {psi.shape}, chi {chi.shape}'
+
+
+H.run('JonesField: degree_of_polarization + polarization_ellipse methods',
+      t_jonesfield_dop_and_ellipse_methods)
+
+
+# =============================================================================
+# dy support on aberration / source helpers (4.0+)
+# =============================================================================
+
+H.section('dy support (4.0+)')
+
+
+def t_apply_zernike_aberration_dy_kwarg():
+    """dy kwarg generates a rectangular-aperture aberration map."""
+    E = np.ones((64, 64), dtype=complex)
+    E_out = la.apply_zernike_aberration(E, dx=4e-6, dy=6e-6,
+                                          coefficients={(2, 0): 0.5},
+                                          aperture_radius=2e-4)
+    # Phase should be present (not all zero)
+    phase_std = float(np.std(np.angle(E_out[np.abs(E_out) > 0.1])))
+    return E_out.shape == (64, 64) and phase_std > 0, \
+        f'shape={E_out.shape}, phase std={phase_std:.4f}'
+
+
+H.run('apply_zernike_aberration: dy kwarg accepted',
+      t_apply_zernike_aberration_dy_kwarg)
+
+
+# =============================================================================
+# Detector enhancements (4.0+)
+# =============================================================================
+
+H.section('Detector noise additions (4.0+)')
+
+
+def t_detector_hot_pixel_map():
+    """Hot pixels saturate to full_well regardless of incident signal."""
+    N, dx = 64, 4e-6
+    E = 0.1 * np.ones((N, N), dtype=complex)
+    hp = np.zeros((32, 32), dtype=bool)
+    hp[5, 5] = True
+    hp[10, 20] = True
+    img, _, _ = la.apply_detector(
+        E, dx_field=dx, pixel_pitch=dx * 2,
+        n_pixels=32, exposure_time=1.0,
+        full_well=1e4, hot_pixel_map=hp, seed=0)
+    return img[5, 5] == 1e4 and img[10, 20] == 1e4, \
+        f'hp[5,5]={img[5,5]}, hp[10,20]={img[10,20]}'
+
+
+H.run('apply_detector: hot_pixel_map saturates flagged pixels',
+      t_detector_hot_pixel_map)
+
+
+def t_detector_bayer_pattern_varies_per_cell():
+    """Bayer pattern creates per-pixel QE variation on a 2x2 mosaic.
+
+    Use a high-flux input so the Poisson SNR is large enough to
+    distinguish the 0.4 / 0.55 / 0.2 QE ratios.  Average over a
+    large block of pixels to suppress shot-noise variance.
+    """
+    N, dx = 64, 4e-6
+    # Per-pixel integrated signal at exposure=1, QE=1 is dx**2 = 1.6e-11.
+    # We want each-pixel signal ~10000 photons.  exposure ~= 6e14.
+    E = np.ones((N, N), dtype=complex)
+    img, _, _ = la.apply_detector(
+        E, dx_field=dx, pixel_pitch=dx * 2, n_pixels=32,
+        exposure_time=6e14, quantum_efficiency=1.0,
+        bayer_pattern='RGGB', bayer_qe=(0.4, 0.55, 0.2), seed=0)
+    # Bayer cells (every 2x2 block): [[R, G], [G, B]]
+    # Average over many cells to suppress noise.
+    r_pixels = img[0::2, 0::2]
+    g_pixels1 = img[0::2, 1::2]
+    g_pixels2 = img[1::2, 0::2]
+    b_pixels = img[1::2, 1::2]
+    r = float(r_pixels.mean())
+    g = 0.5 * (float(g_pixels1.mean()) + float(g_pixels2.mean()))
+    b = float(b_pixels.mean())
+    # Check the QE ratios match the Bayer weights to ~5%.
+    rb = r / b if b > 0 else float('inf')
+    expected_rb = 0.4 / 0.2  # = 2.0
+    gb = g / b if b > 0 else float('inf')
+    expected_gb = 0.55 / 0.2  # = 2.75
+    rb_ok = abs(rb - expected_rb) / expected_rb < 0.05
+    gb_ok = abs(gb - expected_gb) / expected_gb < 0.05
+    return rb_ok and gb_ok, \
+        f'R/B={rb:.3f} (expect 2.0), G/B={gb:.3f} (expect 2.75)'
+
+
+H.run('apply_detector: Bayer mosaic gives correct per-cell QE ratios',
+      t_detector_bayer_pattern_varies_per_cell)
+
+
+def t_detector_cosmic_ray_increases_pixel_signal():
+    """cosmic_ray_rate > 0 adds bright pixels not seen in baseline."""
+    N, dx = 64, 4e-6
+    E = np.zeros((N, N), dtype=complex)
+    img_baseline, _, _ = la.apply_detector(
+        E, dx_field=dx, pixel_pitch=dx * 2, n_pixels=32,
+        cosmic_ray_rate=0.0, seed=42)
+    img_rays, _, _ = la.apply_detector(
+        E, dx_field=dx, pixel_pitch=dx * 2, n_pixels=32,
+        cosmic_ray_rate=50.0, cosmic_ray_amp_e=5e4, seed=42)
+    # With cosmic rays added, total signal must increase.
+    return float(img_rays.sum()) > float(img_baseline.sum()) + 1e5, \
+        (f'baseline sum={float(img_baseline.sum()):.3e}, '
+         f'with rays sum={float(img_rays.sum()):.3e}')
+
+
+H.run('apply_detector: cosmic_ray_rate adds extra charge',
+      t_detector_cosmic_ray_increases_pixel_signal)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

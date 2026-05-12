@@ -621,5 +621,99 @@ def t_replay_run_zarr_round_trip():
 H.run('replay_run round-trip on a Zarr store', t_replay_run_zarr_round_trip)
 
 
+# =====================================================================
+# Schema normalisation (4.0+)
+# =====================================================================
+
+H.section('normalize_prescription (4.0+)')
+
+
+def t_normalize_prescription_make_singlet():
+    """make_singlet output gets enriched with the full canonical set."""
+    p = la.make_singlet(R1=50e-3, R2=-50e-3, d=4e-3, glass='N-BK7',
+                          aperture=10e-3)
+    q = la.normalize_prescription(p)
+    expected = {'aperture_diameter', 'all_thicknesses', 'elements',
+                'has_semi_diameters', 'name', 'object_distance',
+                'stop_index', 'surfaces', 'thicknesses', 'units',
+                'wavelength'}
+    missing = expected - set(q.keys())
+    return not missing and q['elements'] == q['surfaces'], \
+        f'missing={missing}'
+
+
+H.run('normalize_prescription: enriches make_singlet to canonical schema',
+      t_normalize_prescription_make_singlet)
+
+
+def t_normalize_prescription_does_not_mutate_input():
+    """Input dict must not be modified -- always deep-copied."""
+    p = la.make_singlet(R1=50e-3, R2=-50e-3, d=4e-3, glass='N-BK7',
+                          aperture=10e-3)
+    original_keys = set(p.keys())
+    _ = la.normalize_prescription(p)
+    return set(p.keys()) == original_keys, \
+        f'p mutated: keys changed from {original_keys} to {set(p.keys())}'
+
+
+H.run('normalize_prescription: does not mutate input',
+      t_normalize_prescription_does_not_mutate_input)
+
+
+def t_normalize_prescription_rejects_empty():
+    try:
+        la.normalize_prescription({})
+        return False, 'no exception'
+    except ValueError as e:
+        return 'surfaces' in str(e) or 'elements' in str(e), str(e)
+
+
+H.run('normalize_prescription: empty dict raises ValueError',
+      t_normalize_prescription_rejects_empty)
+
+
+# =====================================================================
+# Storage round-trip dtype preservation (4.0+)
+# =====================================================================
+
+H.section('Storage round-trip dtype preservation (4.0+)')
+
+
+def t_save_field_h5_default_coerces_to_complex128():
+    """Default save_field_h5 still coerces to complex128 for back-compat."""
+    try:
+        import h5py  # noqa: F401
+    except ImportError:
+        return True, 'h5py not installed -- skip'
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, 't.h5')
+        E = np.ones((16, 16), dtype=np.complex64)
+        la.save_field_h5(path, E, dx=1e-3)
+        E_back, _ = la.load_field_h5(path)
+        return E_back.dtype == np.complex128, f'dtype={E_back.dtype}'
+
+
+H.run('save_field_h5: default behaviour coerces to complex128',
+      t_save_field_h5_default_coerces_to_complex128)
+
+
+def t_save_field_h5_preserve_dtype_complex64():
+    """preserve_dtype=True keeps complex64 across the round-trip."""
+    try:
+        import h5py  # noqa: F401
+    except ImportError:
+        return True, 'h5py not installed -- skip'
+    with tempfile.TemporaryDirectory() as td:
+        path = os.path.join(td, 't.h5')
+        E = np.ones((16, 16), dtype=np.complex64)
+        la.save_field_h5(path, E, dx=1e-3, preserve_dtype=True)
+        E_back, _ = la.load_field_h5(path)
+        return E_back.dtype == np.complex64, f'dtype={E_back.dtype}'
+
+
+H.run('save_field_h5: preserve_dtype=True keeps complex64',
+      t_save_field_h5_preserve_dtype_complex64)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

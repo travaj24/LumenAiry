@@ -107,6 +107,7 @@ from .elements import (
     apply_vortex_phase_mask,
     apply_lyot_stop,
     apply_apodized_pupil,
+    coronagraph_contrast_curve,
     generate_turbulence_screen,
 )
 
@@ -129,6 +130,7 @@ from .analysis.aberration import (
 from .analysis.image_plane_wfe import (
     ImagePlaneWFE,
     eval_image_plane_wfe,
+    field_grid_wfe,
     remove_low_order_aberrations,
 )
 from .analysis.phase_retrieval import (
@@ -197,6 +199,15 @@ from .analysis.coherence import (
 from .analysis.detector import (
     apply_detector,
     shack_hartmann,
+)
+
+# ── Adaptive optics primitives ─────────────────────────────────────────
+from .ao import (
+    DeformableMirror,
+    apply_dm,
+    zernike_modal_basis,
+    slope_to_modal,
+    LeakyIntegrator,
 )
 
 # ── Thin-film coatings ────────────────────────────────────────────────
@@ -397,6 +408,7 @@ from .io.prescriptions import (
     load_quadoa_qos,
     QUADOA_SCHEMA_VERSION,
     scale_prescription,
+    normalize_prescription,
     THORLABS_CATALOG,
 )
 
@@ -435,6 +447,12 @@ from .raytrace import (
     PupilInfo,
     FirstOrderData,
     first_order_data,
+    # Paraxial-design one-liner helpers (4.0+)
+    field_of_view,
+    optical_invariant,
+    f_number,
+    defocus_waves_to_zernike,
+    astigmatism_waves_to_zernike,
     RAY_OK,
     RAY_TIR,
     RAY_APERTURE,
@@ -596,7 +614,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "3.9.0"
+__version__ = "4.0.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -653,6 +671,7 @@ __all__ = [
     'export_quadoa_qos',
     'QUADOA_SCHEMA_VERSION',
     'scale_prescription',
+    'normalize_prescription',
 
     # Lens / element models (apply on a field)
     'apply_thin_lens',
@@ -713,6 +732,7 @@ __all__ = [
     'apply_vortex_phase_mask',
     'apply_lyot_stop',
     'apply_apodized_pupil',
+    'coronagraph_contrast_curve',
 
     # Grid / sampling helpers
     'check_grid_vs_apertures',
@@ -843,6 +863,12 @@ __all__ = [
     'find_paraxial_focus',
     'trace_summary',
     'prescription_summary',
+    # Paraxial helpers (4.0+)
+    'field_of_view',
+    'optical_invariant',
+    'f_number',
+    'defocus_waves_to_zernike',
+    'astigmatism_waves_to_zernike',
 
     # Per-ray diagnostic codes
     'RAY_OK',
@@ -900,6 +926,7 @@ __all__ = [
     'format_aberration_summary',
     'ImagePlaneWFE',
     'eval_image_plane_wfe',
+    'field_grid_wfe',
     'remove_low_order_aberrations',
 
     # Through-focus / tolerancing
@@ -923,6 +950,11 @@ __all__ = [
     # Detector / wavefront sensing
     'apply_detector',
     'shack_hartmann',
+
+    # Adaptive-optics primitives
+    'DeformableMirror', 'apply_dm',
+    'zernike_modal_basis', 'slope_to_modal',
+    'LeakyIntegrator',
 
     # Interferometry
     'simulate_interferogram',

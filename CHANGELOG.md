@@ -2,6 +2,164 @@
 
 All notable changes to the core library are documented here.
 
+## [4.0.0] — 2026-05-12
+
+**Polish + Tier-1-gap-closing release.**  A four-tier audit (API
+consistency, sign / unit conventions, cross-module pipelines, and
+peer-library feature parity) surfaced a set of verified bugs and
+genuine functional gaps; 4.0 ships fixes for all of them plus a
+batch of new helpers that compose with the existing infrastructure.
+Pure-additive with one soft-breaking convention fix (see below).
+
+### Added — Adaptive optics primitives
+
+* **`lumenairy.ao`** -- new module exposing closed-loop AO building
+  blocks:
+
+  * `DeformableMirror(n_actuators, pitch, dx, N,
+    inter_actuator_coupling=0.15)` -- Gaussian-influence-function DM
+    on a Cartesian actuator grid.
+  * `zernike_modal_basis(n_modes, n_lenslets, semi_aperture,
+    first_mode=1)` -- builds the slope-to-modal reconstruction
+    matrix for an OSA-indexed Zernike basis on an SH-WFS lenslet
+    grid.
+  * `slope_to_modal(slopes, basis)` -- reconstructs modal
+    coefficients from SH slopes.
+  * `LeakyIntegrator(gain, n_modes, leak=0.0)` -- first-order
+    leaky-integrator control law.
+
+  These primitives compose with the existing `shack_hartmann` and
+  `generate_turbulence_screen` into a single-conjugate AO closed
+  loop.  See the new wiki page **[Function Reference — Adaptive
+  Optics](https://github.com/travaj24/LumenAiry/wiki/Function-Reference-Adaptive-Optics)**
+  for the end-to-end pipeline.
+
+### Added — Off-axis image-plane wavefront error
+
+* **`eval_image_plane_wfe(field=(Hx, Hy), field_max_m=...)`** -- off-
+  axis field points now supported.  Previously raised
+  `NotImplementedError` for any `field != (0, 0)`.  The reference-
+  sphere kernel now generalises to arbitrary `(cx, cy, cz)` sphere
+  centres; the chief ray's transverse position at the image plane
+  is computed by free-space propagation from the last lens vertex.
+* **`field_grid_wfe(prescription, wavelength, field_max_m, n_field=5,
+  ...)`** -- wraps `eval_image_plane_wfe` over an `n_field × n_field`
+  grid of normalised field coordinates and returns
+  `(Hx, Hy, pv_waves, rms_waves, strehl, img_d_m, wfe_per_field)`
+  for the standard "WFE across the field" plot.
+
+### Added — Coronagraph contrast-curve helper
+
+* **`coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal,
+  wavelength, f_eff, ...)`** -- radial contrast vs angular separation
+  in units of `λ·f/D`.  Three azimuthal-reduction modes
+  (`'mean'` / `'median'` / `'rms'`).
+
+### Added — Paraxial-design helpers
+
+* New `lumenairy.raytrace.paraxial` submodule:
+
+  * `field_of_view(prescription, wavelength)` -- `(half_FoV_rad,
+    half_FoV_object_m)`.
+  * `f_number(prescription, wavelength)` -- paraxial `EFL / D`.
+  * `optical_invariant(efl, f_number, ...)` -- Lagrange invariant.
+  * `defocus_waves_to_zernike(d)` -- convert geometric defocus to
+    the OSA `c(2, 0)` coefficient.
+  * `astigmatism_waves_to_zernike(a)` -- same for `(2, ±2)`.
+
+### Added — Prescription schema unification
+
+* **`normalize_prescription(prescription)`** -- returns a deep-
+  copied prescription with the canonical superset of schema keys
+  populated, regardless of which loader / builder produced the
+  input.  Avoids the silent-fallback bugs where (for instance)
+  `monte_carlo_tolerancing` only perturbed `'surfaces'` and
+  silently skipped mirrors in `'elements'`.
+
+### Added — JonesField bound analysis methods
+
+* `JonesField.stokes_parameters()`, `.degree_of_polarization()`,
+  and `.polarization_ellipse()` -- bound forms of the existing
+  module-level helpers so chained pipelines
+  (`jf.propagate(...).stokes_parameters()`) work without round-
+  tripping through the scalar API.
+
+### Added — Storage round-trip dtype preservation
+
+* `save_field_h5(..., preserve_dtype=True)` and
+  `save_planes_h5(..., preserve_dtype=True)` -- keep the native
+  complex precision (`complex64` / `complex128`) through the file
+  round-trip.  Defaults to the historical complex128-coercion
+  behaviour for backward compatibility.
+
+### Added — Detector noise realism
+
+* `apply_detector` gains four new kwargs:
+
+  * `hot_pixel_map` -- boolean map of detector defects to saturate.
+  * `cosmic_ray_rate` -- Poisson-distributed strike count per
+    exposure, uniformly located.
+  * `cosmic_ray_amp_e` -- charge per strike [electrons].
+  * `bayer_pattern` (`'RGGB'` / `'BGGR'` / `'GRBG'` / `'GBRG'`) +
+    `bayer_qe=(R, G, B)` -- per-cell QE mosaic for RGB
+    colour-filter arrays.
+
+### Changed — Source normalisation conventions
+
+* `create_gaussian_beam`, `create_hermite_gauss`, and
+  `create_laguerre_gauss` all now accept a `normalize` kwarg with
+  options `'peak'`, `'power'`, or `'none'`.  Each function preserves
+  its historical default (`create_gaussian_beam`: `'peak'`;
+  `create_hermite_gauss` / `create_laguerre_gauss`: `'power'`) so
+  no existing code breaks.  Pass `normalize='power'` to homogenise
+  across the source family.
+
+### Changed — Analysis-layer GPU / JAX preservation
+
+* `beam_centroid`, `beam_d4sigma`, `beam_power`, `strehl_ratio`,
+  `compute_psf`, `compute_otf`, and `compute_mtf` now dispatch
+  through `lumenairy.backend.array_namespace`.  CuPy / JAX inputs
+  are no longer silently coerced to NumPy.
+
+### Changed — Element-family GPU / JAX preservation
+
+* `apply_aperture` and `apply_gaussian_aperture` now dispatch
+  through `array_namespace`.
+
+### Fixed — `dy` support on aberration / source helpers
+
+* `apply_zernike_aberration` now accepts a `dy` kwarg (silent
+  square-grid assumption removed for rectangular grids).
+* `create_hermite_gauss` and `create_laguerre_gauss` now accept a
+  `dy` kwarg and an `(Ny, Nx)` tuple for `N`, allowing rectangular
+  grids without stretching the mode envelope along y.
+
+### Documentation
+
+* New wiki pages: **Function Reference — Adaptive Optics**,
+  **Migration Guide** (POPPy / HCIPy / prysm / Optiland / rayoptics
+  → LumenAiry mapping), **Glossary** (sign/unit conventions + ASM
+  vs MFT vs Fresnel vs RS decision tree).
+* Expanded **Home → "What's in the box"** with high-contrast,
+  AO, broadband-imaging, and field-dependent-analysis sections.
+
+### Validation
+
+* 29/29 validation files pass (up from 27/27 in 3.9.0; two new
+  files added: `test_ao.py` and `test_coherence.py`).
+* Coherence helpers (`koehler_image`, `extended_source_image`,
+  `mutual_coherence`) -- previously untested -- now have dedicated
+  validation coverage.
+* AO primitives: 12 tests covering DM phase-application
+  invariants, modal reconstruction round-trips, integrator steady-
+  state convergence, and a zero-aberration closed-loop sanity
+  check.
+* Off-axis WFE: 5 new tests including the `field_grid_wfe` shape +
+  on-axis-minimum invariant.
+* Paraxial helpers, schema normalisation, contrast curve,
+  detector noise, JonesField bound methods, and `dy` support
+  all have dedicated tests.
+
 ## [3.9.0] — 2026-05-12
 
 Feature release.  Lights up the high-contrast-imaging and

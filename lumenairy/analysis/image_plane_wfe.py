@@ -128,15 +128,21 @@ class ImagePlaneWFE:
 
 
 def _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
-                      cz, R, wavelength_m, chief_idx, alive):
+                      cz, R, wavelength_m, chief_idx, alive,
+                      cx=0.0, cy=0.0):
     """Inner kernel: exact ray-sphere intersection for the reference
-    sphere centered at ``(0, 0, cz)`` with signed radius ``R``.
+    sphere centered at ``(cx, cy, cz)`` with signed radius ``R``.
 
     Returns the per-ray reference-sphere OPD in waves, with
     rayoptics / Optiland sign convention and chief re-zeroed.
+
+    For on-axis fields ``(cx, cy) = (0, 0)`` (default).  For off-axis
+    fields the chief ray's transverse position at the image plane is
+    passed via ``(cx, cy)``.
     """
-    b = 2.0 * (s2x * Ld + s2y * Md + (s2z - cz) * Nd)
-    c = s2x ** 2 + s2y ** 2 + (s2z - cz) ** 2 - R ** 2
+    b = 2.0 * ((s2x - cx) * Ld + (s2y - cy) * Md + (s2z - cz) * Nd)
+    c = ((s2x - cx) ** 2 + (s2y - cy) ** 2 + (s2z - cz) ** 2
+         - R ** 2)
     disc = b ** 2 - 4.0 * c
     sqrt_disc = np.sqrt(np.maximum(disc, 0.0))
     t1 = (-b - sqrt_disc) / 2.0
@@ -160,6 +166,7 @@ def eval_image_plane_wfe(
     img_d_m: Optional[float] = None,
     image_plane: str = 'paraxial',
     sphere_tangent: str = 'vertex',
+    field_max_m: Optional[float] = None,
 ) -> ImagePlaneWFE:
     """Compute image-plane reference-sphere wavefront error.
 
@@ -181,10 +188,10 @@ def eval_image_plane_wfe(
         Vacuum wavelength [m].
     field : tuple of float, default (0, 0)
         Normalised field coordinate ``(Hx, Hy)`` in ``[-1, 1]``.
-        Currently only the on-axis case ``(0, 0)`` is supported;
-        off-axis fields require chief-ray offset handling that
-        will be added in a later release.  A non-zero field raises
-        ``NotImplementedError``.
+        For off-axis fields ``(Hx, Hy) != (0, 0)`` you must also pass
+        ``field_max_m`` (or set up the prescription with a
+        ``field_max_m`` key) so the function knows the linear
+        object-space scale corresponding to ``H = 1``.
     n_pupil : int, default 31
         Pupil samples per axis (a square ``n_pupil x n_pupil``
         Cartesian grid is generated and clipped to the unit disk).
@@ -224,6 +231,13 @@ def eval_image_plane_wfe(
           for stop-at-front singlets, putting XP inside the lens).
           Matches the convention rayoptics, Optiland, and Zemax use
           internally.
+    field_max_m : float, optional
+        Maximum half-field height in **object-space metres**, used
+        to convert the normalised ``field`` coordinate to a physical
+        source position.  Required when ``field != (0, 0)``.  If
+        omitted and ``field == (0, 0)``, has no effect (on-axis
+        case).  Falls back to ``prescription['field_max_m']`` if the
+        prescription carries that key.
 
     Returns
     -------
@@ -234,11 +248,10 @@ def eval_image_plane_wfe(
 
     Raises
     ------
-    NotImplementedError
-        For non-zero ``field``.
     ValueError
-        For invalid or empty prescriptions, or unrecognised
-        ``image_plane`` / ``sphere_tangent`` choices.
+        For invalid or empty prescriptions, unrecognised
+        ``image_plane`` / ``sphere_tangent`` choices, or non-zero
+        ``field`` without a ``field_max_m`` value.
 
     Notes
     -----
@@ -276,10 +289,16 @@ def eval_image_plane_wfe(
         raise ValueError(
             f"eval_image_plane_wfe: sphere_tangent must be one of "
             f"('vertex','exit_pupil'); got {sphere_tangent!r}.")
-    if field != (0.0, 0.0):
-        raise NotImplementedError(
-            'eval_image_plane_wfe: off-axis fields (Hx,Hy != 0,0) '
-            'are not yet supported.  Use field=(0, 0).')
+    Hx = float(field[0]); Hy = float(field[1])
+    if (Hx != 0.0 or Hy != 0.0):
+        if field_max_m is None:
+            field_max_m = prescription.get('field_max_m')
+        if field_max_m is None or float(field_max_m) <= 0:
+            raise ValueError(
+                'eval_image_plane_wfe: non-zero field requires '
+                'field_max_m (object-space half-field radius in m) '
+                'either as a kwarg or in prescription["field_max_m"].')
+        field_max_m = float(field_max_m)
     if not prescription.get('surfaces'):
         raise ValueError(
             'eval_image_plane_wfe: prescription has no "surfaces".')
@@ -341,15 +360,29 @@ def eval_image_plane_wfe(
     inside = (px ** 2 + py ** 2) <= 1.0
     px = px[inside]; py = py[inside]
 
-    # On-axis object: rays launch from (0,0,-obj_d) aimed at the
-    # pupil position (px*semi, py*semi, 0).  Direction cosines:
-    h_x = px * semi
-    h_y = py * semi
-    L = h_x / np.sqrt(h_x ** 2 + h_y ** 2 + obj_d_m ** 2)
-    M = h_y / np.sqrt(h_x ** 2 + h_y ** 2 + obj_d_m ** 2)
+    # Compute object-space source position.  On-axis (Hx=Hy=0)
+    # this is (0, 0, -obj_d).  Off-axis the source is laterally
+    # displaced by (Hx*field_max_m, Hy*field_max_m).
+    if Hx == 0.0 and Hy == 0.0:
+        src_x = 0.0
+        src_y = 0.0
+    else:
+        src_x = Hx * field_max_m
+        src_y = Hy * field_max_m
 
-    bundle = _make_bundle(x=np.zeros_like(px), y=np.zeros_like(px),
-                            L=L, M=M, wavelength=wavelength)
+    # Each ray launches from (src_x, src_y, -obj_d) and aims at the
+    # pupil position (px*semi, py*semi, 0).  Direction-cosine of
+    # the displacement from source to pupil-grid point:
+    aim_x = px * semi - src_x
+    aim_y = py * semi - src_y
+    aim_z = obj_d_m  # always positive: from -obj_d to 0
+    norm_aim = np.sqrt(aim_x ** 2 + aim_y ** 2 + aim_z ** 2)
+    L = aim_x / norm_aim
+    M = aim_y / norm_aim
+
+    bundle = _make_bundle(
+        x=np.full_like(px, src_x), y=np.full_like(px, src_y),
+        L=L, M=M, wavelength=wavelength)
     bundle.z = np.full(px.size, -obj_d_m)
 
     res = trace(bundle, surfaces, wavelength, output_filter='last')
@@ -390,8 +423,22 @@ def eval_image_plane_wfe(
 
     R = _radius_for(img_d_m)
     cz = z_chief + img_d_m
+
+    def _chief_image_xy(d):
+        """Transverse position of the chief ray at axial distance
+        ``d`` past the last surface, by free-space propagation."""
+        if not alive[chief]:
+            return 0.0, 0.0
+        N_chief = float(Nd[chief]) if Nd[chief] != 0 else 1.0
+        t_advance = d / N_chief  # geometric path length
+        cx = float(s2x[chief] + Ld[chief] * t_advance)
+        cy = float(s2y[chief] + Md[chief] * t_advance)
+        return cx, cy
+
+    cx, cy = _chief_image_xy(img_d_m)
     rs_w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
-                              cz, R, wavelength, chief, alive)
+                              cz, R, wavelength, chief, alive,
+                              cx=cx, cy=cy)
 
     # 3.8.2: image-plane choice.  For 'best_rms' / 'best_pv' we
     # fit / search the longitudinal shift that minimises the
@@ -419,9 +466,11 @@ def eval_image_plane_wfe(
             def _pv_at(d_test):
                 R_t = _radius_for(d_test)
                 cz_t = z_chief + d_test
+                cx_t, cy_t = _chief_image_xy(d_test)
                 w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z,
                                        Ld, Md, Nd, cz_t, R_t,
-                                       wavelength, chief, alive)
+                                       wavelength, chief, alive,
+                                       cx=cx_t, cy=cy_t)
                 w = w[np.isfinite(w)]
                 return float(w.max() - w.min()) if w.size else np.inf
             # Search range: paraxial +/- 10 * (Marechal wavelength
@@ -446,8 +495,10 @@ def eval_image_plane_wfe(
         # Re-evaluate with the shifted image distance
         R = _radius_for(img_d_m)
         cz = z_chief + img_d_m
+        cx, cy = _chief_image_xy(img_d_m)
         rs_w = _ray_sphere_opd(opd_a_w, s2x, s2y, s2z, Ld, Md, Nd,
-                                  cz, R, wavelength, chief, alive)
+                                  cz, R, wavelength, chief, alive,
+                                  cx=cx, cy=cy)
 
     return ImagePlaneWFE(
         px=px, py=py, opd_w=rs_w, alive=alive,
@@ -458,6 +509,113 @@ def eval_image_plane_wfe(
         r_sphere_m=float(R),
         img_d_m_paraxial=img_d_m_paraxial,
     )
+
+
+def field_grid_wfe(
+    prescription: dict,
+    wavelength: float,
+    field_max_m: float,
+    n_field: int = 5,
+    n_pupil: int = 21,
+    image_plane: str = 'paraxial',
+    sphere_tangent: str = 'vertex',
+    img_d_m: Optional[float] = None,
+) -> dict:
+    """Evaluate image-plane WFE on a Cartesian grid of field points.
+
+    Builds an ``n_field x n_field`` grid of normalised field
+    coordinates ``Hx, Hy`` in ``[-1, 1]`` and runs
+    :func:`eval_image_plane_wfe` at each.  Useful for the standard
+    "how do PV/RMS/Strehl vary across the field?" plot.
+
+    Parameters
+    ----------
+    prescription : dict
+        Lumenairy lens prescription.
+    wavelength : float
+        Vacuum wavelength [m].
+    field_max_m : float
+        Object-space half-field height [m] corresponding to
+        ``|H| = 1``.  Used by :func:`eval_image_plane_wfe`.
+    n_field : int, default 5
+        Field samples per axis.  Total points = ``n_field**2``;
+        symmetric around the chief axis.
+    n_pupil : int, default 21
+        Pupil samples per axis at each field point.
+    image_plane, sphere_tangent, img_d_m : as in
+        :func:`eval_image_plane_wfe`.
+
+    Returns
+    -------
+    result : dict with keys
+        * ``'Hx'`` / ``'Hy'`` -- ``(n_field, n_field)`` arrays of
+          normalised field coords.
+        * ``'pv_waves'`` / ``'rms_waves'`` / ``'strehl'`` --
+          ``(n_field, n_field)`` arrays of WFE statistics, NaN at
+          fields where the trace failed.
+        * ``'img_d_m'`` -- per-field image distance.
+        * ``'wfe_per_field'`` -- list of per-field
+          :class:`ImagePlaneWFE` objects (flattened in row-major
+          ``(Hy, Hx)`` order).
+        * ``'wavelength_m'``, ``'field_max_m'`` -- echo of inputs.
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> p = la.thorlabs_lens('AC254-100-C')
+    >>> p['object_distance'] = 0.5
+    >>> grid = la.field_grid_wfe(p, wavelength=1.31e-6,
+    ...                            field_max_m=2e-3, n_field=5)
+    >>> rms_corner = grid['rms_waves'][0, 0]   # full off-axis
+    >>> rms_axis   = grid['rms_waves'][2, 2]   # on-axis (chief)
+
+    Notes
+    -----
+    This is the workflow the existing on-axis `eval_image_plane_wfe`
+    blocked before LumenAiry 4.0.  For per-field PSF / MTF, take
+    each :class:`ImagePlaneWFE` in ``wfe_per_field``, reconstruct
+    a pupil-phase map via the Zernike fit (``zernike_decompose``
+    followed by ``apply_zernike_aberration``), and pass through
+    :func:`compute_psf`.
+    """
+    h = np.linspace(-1.0, 1.0, int(n_field))
+    Hx, Hy = np.meshgrid(h, h)
+    pv = np.full(Hx.shape, np.nan, dtype=float)
+    rms = np.full(Hx.shape, np.nan, dtype=float)
+    strehl = np.full(Hx.shape, np.nan, dtype=float)
+    img_d = np.full(Hx.shape, np.nan, dtype=float)
+    wfes: list = []
+
+    for iy in range(Hx.shape[0]):
+        for ix in range(Hx.shape[1]):
+            field = (float(Hx[iy, ix]), float(Hy[iy, ix]))
+            try:
+                wfe = eval_image_plane_wfe(
+                    prescription, wavelength, field=field,
+                    n_pupil=n_pupil, img_d_m=img_d_m,
+                    image_plane=image_plane,
+                    sphere_tangent=sphere_tangent,
+                    field_max_m=field_max_m,
+                )
+                pv[iy, ix] = wfe.pv_waves
+                rms[iy, ix] = wfe.rms_waves
+                strehl[iy, ix] = wfe.strehl
+                img_d[iy, ix] = wfe.img_d_m
+            except Exception:
+                wfe = None
+            wfes.append(wfe)
+
+    return {
+        'Hx': Hx,
+        'Hy': Hy,
+        'pv_waves': pv,
+        'rms_waves': rms,
+        'strehl': strehl,
+        'img_d_m': img_d,
+        'wfe_per_field': wfes,
+        'wavelength_m': float(wavelength),
+        'field_max_m': float(field_max_m),
+    }
 
 
 def remove_low_order_aberrations(

@@ -103,6 +103,7 @@ from .aberration import (
 from .image_plane_wfe import (
     ImagePlaneWFE,
     eval_image_plane_wfe,
+    field_grid_wfe,
     remove_low_order_aberrations,
 )
 from .plotting import (
@@ -157,8 +158,9 @@ __all__ = [
     'tolerancing_report',
     # aberration (unified Seidel + LG tensor)
     'AberrationSummary', 'aberration_summary', 'format_aberration_summary',
-    # image-plane wavefront error (3.8.0)
-    'ImagePlaneWFE', 'eval_image_plane_wfe', 'remove_low_order_aberrations',
+    # image-plane wavefront error (3.8.0 / off-axis + field-grid 4.0)
+    'ImagePlaneWFE', 'eval_image_plane_wfe', 'field_grid_wfe',
+    'remove_low_order_aberrations',
     # plotting
     'plot_intensity', 'plot_phase', 'plot_field', 'plot_amplitude_phase',
     'plot_cross_section', 'plot_planes_grid', 'plot_psf', 'plot_mtf',
