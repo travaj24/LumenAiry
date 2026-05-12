@@ -10,6 +10,37 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 3.8.2
+
+Adds two optional convention controls to
+`lumenairy.eval_image_plane_wfe`:
+
+- `image_plane='paraxial' | 'best_rms' | 'best_pv'` —
+  select the longitudinal image-plane focus.  Default
+  `'paraxial'` matches Zemax / rayoptics / Optiland defaults;
+  `'best_rms'` does a closed-form shift to minimise WFE RMS
+  (what a lab tech finds by maximising spot intensity); `'best_pv'`
+  numerical-minimises peak-to-valley.
+- `sphere_tangent='vertex' | 'exit_pupil'` — select where on
+  the chief ray the reference sphere is tangent.  Default
+  `'vertex'` is the 3.8.0 / 3.8.1 convention; `'exit_pupil'`
+  matches the convention rayoptics / Optiland / Zemax use
+  internally.
+
+Plus four new diagnostic fields on `ImagePlaneWFE`
+(`image_plane`, `sphere_tangent`, `r_sphere_m`,
+`img_d_m_paraxial`).  Validation suite extended from 11 to 18
+checks; all pass.  No changes to `apply_real_lens_traced`,
+`trace()`, or any other pre-3.8.2 API; defaults reproduce 3.8.0
+/ 3.8.1 output bit-for-bit.
+
+See [the 3.8.2 wiki page](https://github.com/travaj24/LumenAiry/wiki/What's-New-in-3.8.2)
+for full examples and the per-library cheat sheet.
+
+3.8.1 was a one-line metadata fix (`__version__` was stale at
+`"3.7.10"` in the 3.8.0 source even though `pyproject.toml`
+bumped to `3.8.0`).  No API change.
+
 ## What's new in 3.8.0
 
 Image-plane wavefront-analysis release.  Three peer-library

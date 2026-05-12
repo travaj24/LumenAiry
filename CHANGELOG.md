@@ -2,6 +2,15 @@
 
 All notable changes to the core library are documented here.
 
+## [3.8.3] — 2026-05-11
+
+Documentation patch.  README.md leads with the 3.8.2 release notes
+(it had been left at the 3.8.0 header through the 3.8.1 and 3.8.2
+cuts, so the PyPI project description still showed the 3.8.0
+"What's new" section for users running ``pip show lumenairy``).
+No code change; bumping the patch version so that the next PyPI
+publish picks up the corrected README.
+
 ## [3.8.2] — 2026-05-11
 
 Adds two optional convention controls to
