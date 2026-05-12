@@ -2,6 +2,52 @@
 
 All notable changes to the core library are documented here.
 
+## [4.2.0] — 2026-05-12
+
+**Cross-library pupil-grid factories.**  Pure-additive; no breaking
+changes.
+
+### Added
+
+* **`zemax_pupil_grid(N=512, clip_to_disk=True)`** -- returns the
+  deterministic ``(px, py)`` pupil-sample coordinates used by
+  Zemax OpticStudio's ``WavefrontMap`` analysis at sampling N
+  (power-of-two: 32/64/128/256/512/1024/2048).  Spacing is
+  ``2 / (N - 1)``; both endpoints included.  Pair with
+  ``eval_image_plane_wfe(..., pupil_grid=...)`` for a true
+  per-ray Lumenairy-vs-Zemax comparison with zero KDTree-NN
+  interpolation noise.
+
+* **`chebyshev_pupil_grid(N=31, clip_to_disk=True)`** --
+  Chebyshev-Gauss-Lobatto nodes (cluster at the rim).  Matches
+  OPDPy's ``OPDSystem.sample()`` grid; ideal for high-order
+  polynomial WFE fits and as the "old methodology" path in the
+  cross-check repo.
+
+Both factories return plain NumPy arrays so users can freely
+filter, transform, or compose them.  Top-level exports
+``la.zemax_pupil_grid`` and ``la.chebyshev_pupil_grid``.
+
+### Validation
+
+* 6 new tests in ``validation/analysis/test_image_plane_wfe.py``
+  verify: Zemax-grid layout formula, clip-to-disk pi/4 ratio,
+  full-square mode, integration round-trip with
+  ``eval_image_plane_wfe``, Chebyshev rim-clustering, error on
+  N <= 0.
+* 34/34 tests in the analysis-WFE suite pass.
+
+### Use case
+
+```python
+# Match Zemax's WavefrontMap exactly at 512x512:
+px, py = la.zemax_pupil_grid(N=512)
+wfe = la.eval_image_plane_wfe(prescription, wavelength=587.56e-9,
+                                pupil_grid=(px, py))
+# wfe.opd_w[i] is now directly comparable to Zemax WavefrontMap[i]
+# with zero KDTree-NN interpolation noise.
+```
+
 ## [4.1.0] — 2026-05-12
 
 **`pupil_grid` kwarg on `eval_image_plane_wfe` for cross-library

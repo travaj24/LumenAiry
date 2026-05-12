@@ -131,6 +131,8 @@ from .analysis.image_plane_wfe import (
     ImagePlaneWFE,
     eval_image_plane_wfe,
     field_grid_wfe,
+    zemax_pupil_grid,
+    chebyshev_pupil_grid,
     remove_low_order_aberrations,
 )
 from .analysis.phase_retrieval import (
@@ -618,7 +620,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.1.0"
+__version__ = "4.2.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -931,6 +933,8 @@ __all__ = [
     'ImagePlaneWFE',
     'eval_image_plane_wfe',
     'field_grid_wfe',
+    'zemax_pupil_grid',
+    'chebyshev_pupil_grid',
     'remove_low_order_aberrations',
 
     # Through-focus / tolerancing

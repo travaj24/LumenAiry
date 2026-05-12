@@ -565,6 +565,125 @@ def eval_image_plane_wfe(
     )
 
 
+def zemax_pupil_grid(N: int = 512, clip_to_disk: bool = True
+                      ) -> Tuple[np.ndarray, np.ndarray]:
+    """Return the deterministic pupil-sample grid that Zemax
+    OpticStudio's ``WavefrontMap`` analysis uses.
+
+    Zemax `WavefrontMap` samples ``N x N`` rays on a Cartesian grid
+    in normalised pupil coordinates:
+
+    .. math::
+        p_i = \\frac{i - (N - 1)/2}{(N - 1)/2}, \\quad i = 0, 1, \\ldots, N-1
+
+    Spacing is ``2 / (N - 1)`` (both endpoints included).  ``N``
+    is a power of two in Zemax (32, 64, 128, 256, 512, 1024, 2048);
+    this function does not enforce that but will accept any
+    positive integer for flexibility.  Points outside the unit
+    disk are dropped by default (Zemax fills those with zero in
+    the raw output, which is generally not what you want).
+
+    Pair with :func:`eval_image_plane_wfe`'s ``pupil_grid`` kwarg
+    to get a true per-ray Lumenairy-vs-Zemax comparison with zero
+    KDTree-NN interpolation noise.
+
+    Parameters
+    ----------
+    N : int, default 512
+        Pupil samples per axis.  Use 32 / 64 / 128 / 256 / 512 /
+        1024 to match Zemax's ``Sampling`` settings exactly.
+    clip_to_disk : bool, default True
+        Drop points outside the unit disk (``px**2 + py**2 > 1``).
+        Set ``False`` to keep the full square grid (matches the
+        raw shape Zemax returns before its mask is applied).
+
+    Returns
+    -------
+    px, py : ndarrays of shape (n_rays,)
+        Flat 1-D arrays of normalised pupil coordinates.  Length
+        is ``N ** 2`` if ``clip_to_disk=False``, otherwise
+        approximately ``π/4 · N ** 2``.
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> px, py = la.zemax_pupil_grid(N=512)
+    >>> wfe = la.eval_image_plane_wfe(
+    ...     prescription, wavelength=587.56e-9,
+    ...     pupil_grid=(px, py))
+    >>> # wfe.opd_w[i] is directly comparable to Zemax's
+    >>> # WavefrontMap[i] at sampling 512x512, with zero
+    >>> # interpolation noise.
+
+    See also
+    --------
+    chebyshev_pupil_grid : edge-clustered (OPDPy-style) preset.
+    eval_image_plane_wfe : consumes the ``(px, py)`` output via
+        the ``pupil_grid`` kwarg.
+    """
+    if N <= 0:
+        raise ValueError(f"zemax_pupil_grid: N must be > 0; got {N}.")
+    ix = np.arange(N) - (N - 1) / 2.0
+    norm = (N - 1) / 2.0
+    p = ix / norm
+    PX, PY = np.meshgrid(p, p)
+    px = PX.ravel()
+    py = PY.ravel()
+    if clip_to_disk:
+        inside = (px ** 2 + py ** 2) <= 1.0 + 1e-9
+        px = px[inside]
+        py = py[inside]
+    return px, py
+
+
+def chebyshev_pupil_grid(N: int = 31, clip_to_disk: bool = True
+                          ) -> Tuple[np.ndarray, np.ndarray]:
+    """Return a Chebyshev-Gauss-Lobatto pupil-sample grid.
+
+    Nodes cluster at the rim (``|p| -> 1``) where the wavefront
+    error gradient is largest for typical aberrations (spherical,
+    coma, …).  This is the grid OPDPy's ``OPDSystem.sample()``
+    uses by default; passing it to
+    :func:`eval_image_plane_wfe`'s ``pupil_grid`` kwarg matches
+    the OPDPy-side comparison in the
+    ``OPDPy_Lumenairy_Crosscheck`` repo exactly.
+
+    Nodes are ``p_i = cos(pi * i / (N - 1))`` for
+    ``i = 0, 1, ..., N - 1``.  ``N`` odd places one node exactly
+    at the centre; ``N`` even straddles it.
+
+    Parameters
+    ----------
+    N : int, default 31
+        Number of Chebyshev nodes per axis.  Odd values are
+        recommended so a centre node lands at ``p = 0``.
+    clip_to_disk : bool, default True
+        Drop points outside the unit disk after the tensor
+        product.  Set ``False`` to keep the full square grid.
+
+    Returns
+    -------
+    px, py : ndarrays of shape (n_rays,)
+
+    See also
+    --------
+    zemax_pupil_grid : uniform-square preset.
+    eval_image_plane_wfe : consumes the ``(px, py)`` output.
+    """
+    if N <= 0:
+        raise ValueError(f"chebyshev_pupil_grid: N must be > 0; got {N}.")
+    i = np.arange(N)
+    p = np.cos(np.pi * i / max(N - 1, 1))
+    PX, PY = np.meshgrid(p, p)
+    px = PX.ravel()
+    py = PY.ravel()
+    if clip_to_disk:
+        inside = (px ** 2 + py ** 2) <= 1.0 + 1e-9
+        px = px[inside]
+        py = py[inside]
+    return px, py
+
+
 def field_grid_wfe(
     prescription: dict,
     wavelength: float,

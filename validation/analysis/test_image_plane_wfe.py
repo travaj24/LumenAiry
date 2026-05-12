@@ -640,6 +640,107 @@ H.run('pupil_grid: Chebyshev grid produces finite WFE',
       t_pupil_grid_chebyshev_matches_chebyshev)
 
 
+H.section('zemax_pupil_grid + chebyshev_pupil_grid factories (4.2+)')
+
+
+def t_zemax_pupil_grid_layout_matches_zemax_convention():
+    """The Zemax WavefrontMap spacing is 2/(N-1) and the centre
+    falls between grid nodes for even N.  Verify formula directly."""
+    px, py = la.zemax_pupil_grid(N=32, clip_to_disk=False)
+    PX = px.reshape(32, 32)
+    PY = py.reshape(32, 32)
+    expected_step = 2.0 / 31.0
+    step_x = PX[0, 1] - PX[0, 0]
+    step_y = PY[1, 0] - PY[0, 0]
+    centre_offset = abs(PX[0, 16] - (16 - 15.5) / 15.5)
+    return (abs(step_x - expected_step) < 1e-15
+            and abs(step_y - expected_step) < 1e-15
+            and centre_offset < 1e-15
+            and px.size == 32 * 32), \
+        (f'step={step_x:.6f} (exp {expected_step:.6f}), '
+         f'centre offset = {centre_offset:.2e}')
+
+
+H.run('zemax_pupil_grid: layout matches Zemax convention',
+      t_zemax_pupil_grid_layout_matches_zemax_convention)
+
+
+def t_zemax_pupil_grid_default_clips_to_disk():
+    """Default clip_to_disk=True drops out-of-disk points; the
+    pi/4 ratio is the rough expected fraction (for N >> 1)."""
+    for N in (32, 64, 128, 512):
+        px, py = la.zemax_pupil_grid(N=N)
+        n_inside = px.size
+        ratio = n_inside / (N * N)
+        if not (0.70 < ratio < 0.85):  # pi/4 ~ 0.785 with rim slop
+            return False, f'N={N}: kept {n_inside}/{N*N} = {ratio:.3f}'
+    return True, 'clip ratios in [0.70, 0.85] across N=32..512'
+
+
+H.run('zemax_pupil_grid: default clip_to_disk yields ~pi/4 ratio',
+      t_zemax_pupil_grid_default_clips_to_disk)
+
+
+def t_zemax_pupil_grid_no_clip_keeps_all():
+    """clip_to_disk=False keeps the full N*N square grid."""
+    px, py = la.zemax_pupil_grid(N=32, clip_to_disk=False)
+    return px.size == 32 * 32 and py.size == 32 * 32, \
+        f'square-grid sizes: px={px.size}, py={py.size}'
+
+
+H.run('zemax_pupil_grid: clip_to_disk=False keeps full square',
+      t_zemax_pupil_grid_no_clip_keeps_all)
+
+
+def t_zemax_pupil_grid_integrates_with_eval():
+    """Round-trip with eval_image_plane_wfe: the factory's
+    coordinates feed straight into the kwarg."""
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    px, py = la.zemax_pupil_grid(N=64)
+    wfe = la.eval_image_plane_wfe(p, WL, pupil_grid=(px, py))
+    return (wfe.px.size == px.size
+            and np.isfinite(wfe.rms_waves)
+            and wfe.rms_waves > 0), \
+        f'n_rays={wfe.px.size}, RMS={wfe.rms_waves:.4f} waves'
+
+
+H.run('zemax_pupil_grid + eval_image_plane_wfe round-trip',
+      t_zemax_pupil_grid_integrates_with_eval)
+
+
+def t_chebyshev_pupil_grid_clusters_at_rim():
+    """Chebyshev nodes are densest near |p| = 1 by design."""
+    px, py = la.chebyshev_pupil_grid(N=31, clip_to_disk=False)
+    p1 = np.cos(np.pi * np.arange(31) / 30.0)
+    # Spacing between adjacent nodes near the rim (idx 0, 1) should
+    # be much smaller than spacing near centre (idx 14, 15).
+    rim_step = abs(p1[0] - p1[1])
+    centre_step = abs(p1[14] - p1[15])
+    return rim_step < 0.5 * centre_step, \
+        f'rim step={rim_step:.4f}, centre step={centre_step:.4f}'
+
+
+H.run('chebyshev_pupil_grid: rim spacing < centre spacing',
+      t_chebyshev_pupil_grid_clusters_at_rim)
+
+
+def t_grid_factories_reject_bad_N():
+    """N <= 0 must raise ValueError."""
+    for factory in (la.zemax_pupil_grid, la.chebyshev_pupil_grid):
+        try:
+            factory(N=0)
+            return False, f'{factory.__name__} accepted N=0'
+        except ValueError:
+            pass
+    return True, 'both factories reject N=0'
+
+
+H.run('grid factories reject N <= 0',
+      t_grid_factories_reject_bad_N)
+
+
 # ---------------------------------------------------------------------
 def main():
     return H.summary()
