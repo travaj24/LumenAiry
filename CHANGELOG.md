@@ -2,6 +2,81 @@
 
 All notable changes to the core library are documented here.
 
+## [4.0.1] — 2026-05-12
+
+**Bug-fix patch.**  A deep multi-agent audit of the 4.0.0 codebase
+surfaced five real / latent bugs (plus several non-bug findings
+that were verified-then-dismissed).  This release ships fixes
+plus regression tests for each.  Pure-additive; no breaking
+changes.
+
+### Fixed
+
+* **`eval_image_plane_wfe` chief-ray `N=0` fallback was wrong physics.**
+  The new off-axis path I shipped in 4.0 had a fallback
+  ``N_chief = float(Nd[chief]) if Nd[chief] != 0 else 1.0`` that
+  used an exact-zero comparison and a non-physical unit-vector
+  default for grazing-incidence chief rays.  Replaced with
+  ``abs(N_chief) < 1e-12`` -> returns ``(nan, nan)`` so the failure
+  is visible rather than silent.  See
+  `lumenairy/analysis/image_plane_wfe.py`.
+
+* **Ray-trace direction-cosine renormalisation silently promoted
+  zero-magnitude rays to bogus unit vectors.**  After `_refract` and
+  `_reflect`, the renormalisation step was
+  ``mag = np.maximum(mag, 1e-30); rays.L /= mag``, which turned
+  a numerically-degenerate ``(0, 0, 0)`` direction-cosine vector
+  into a unit vector along ``(0, 0, 1e-30)``.  Now flags such rays
+  with ``RAY_NAN`` so downstream diagnostics catch the pathology.
+  See `lumenairy/raytrace/core.py` lines 615-664.
+
+* **`BSDFModel` base class was a regular class with `NotImplementedError`
+  in its methods** -- meaning users who accidentally instantiated
+  the base got a deferred runtime error at first method call
+  instead of a loud failure at construction.  Promoted to an
+  explicit `abc.ABC` with `@abstractmethod` decorators on
+  `evaluate` and `sample`.  Direct instantiation now raises
+  `TypeError` immediately.  Concrete subclasses (`LambertianBSDF`,
+  `GaussianBSDF`, `HarveyShackBSDF`) unchanged.
+
+### Documentation
+
+* **`rcwa_1d` was misadvertised.**  The function name implies full
+  Rigorous Coupled-Wave Analysis but the implementation is an
+  analytical thin-grating scalar approximation (reflection
+  hardcoded to zero, no S-matrix interface matching).  Added the
+  honest-name alias `thin_grating_efficiency_1d` and reserved
+  `rcwa_1d` for a future genuine RCWA implementation.  Existing
+  callers continue to work; new code should prefer the honest
+  name.
+
+* **`create_hermite_gauss` / `create_laguerre_gauss` normalisation
+  inconsistency with the asymptotic modal propagator.**  The
+  source helpers use grid-numerical power-normalisation while the
+  asymptotic-propagator modal basis uses analytical
+  normalisation.  These agree to ~1e-6 on typical grids
+  (``L >= 4 w0``) but can differ on tight grids that clip the
+  Gaussian tails.  Added a `Notes` section to both function
+  docstrings calling this out, with guidance to prefer the
+  asymptotic-module's analytical normalisation when chaining
+  through the modal-asymptotic propagator.
+
+### Validation
+
+* 4 new regression tests guard against each of the verified bugs
+  re-emerging:
+  - `validation/analysis/test_image_plane_wfe.py`: chief-ray
+    N-fallback uses the new `abs() < eps` guard + NaN return.
+  - `validation/raytrace/test_raytrace.py`: `_refract` / `_reflect`
+    flag zero-mag rays as `RAY_NAN`; normal refraction still
+    returns all alive rays.
+  - `validation/raytrace/test_raytrace.py`: `thin_grating_efficiency_1d`
+    bit-identical to `rcwa_1d`.
+  - `validation/analysis/test_features.py`: `BSDFModel()` direct
+    instantiation raises `TypeError`; concrete subclasses still
+    instantiable.
+* Full validation suite: 29/29 files pass.
+
 ## [4.0.0] — 2026-05-12
 
 **Polish + Tier-1-gap-closing release.**  A four-tier audit (API

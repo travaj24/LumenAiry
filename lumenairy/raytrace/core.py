@@ -617,8 +617,16 @@ def _refract(rays, surface, n1, n2):
     rays.M = np.where(rays.alive, mu * rays.M + factor * ny, rays.M)
     rays.N = np.where(rays.alive, mu * rays.N + factor * nz, rays.N)
 
-    # Renormalise (numerical safety)
+    # Renormalise.  If the direction vector magnitude collapsed to
+    # zero (arithmetic fault: NaN-propagating refraction, degenerate
+    # geometry, etc.), flag the ray dead with RAY_NAN instead of
+    # silently promoting (0, 0, 0) to a bogus unit vector along
+    # the small-epsilon direction.
     mag = np.sqrt(rays.L ** 2 + rays.M ** 2 + rays.N ** 2)
+    _degenerate = (mag < 1e-30) | ~np.isfinite(mag)
+    if np.any(_degenerate):
+        new_fault = _degenerate & (rays.error_code == RAY_OK)
+        rays.error_code = np.where(new_fault, RAY_NAN, rays.error_code)
     mag = np.maximum(mag, 1e-30)
     rays.L /= mag
     rays.M /= mag
@@ -655,8 +663,13 @@ def _reflect(rays, surface):
     rays.M = rays.M + 2.0 * cos_i * ny
     rays.N = rays.N + 2.0 * cos_i * nz
 
-    # Renormalise
+    # Renormalise.  Flag degenerate rays as RAY_NAN rather than
+    # silently promoting (0, 0, 0) to a unit vector.
     mag = np.sqrt(rays.L ** 2 + rays.M ** 2 + rays.N ** 2)
+    _degenerate = (mag < 1e-30) | ~np.isfinite(mag)
+    if np.any(_degenerate):
+        new_fault = _degenerate & (rays.error_code == RAY_OK)
+        rays.error_code = np.where(new_fault, RAY_NAN, rays.error_code)
     mag = np.maximum(mag, 1e-30)
     rays.L /= mag
     rays.M /= mag

@@ -10,6 +10,34 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.0.1
+
+**Bug-fix patch from the post-4.0 deep audit.**  A multi-agent
+correctness / performance / API / scope review of 4.0.0 surfaced
+five real or latent bugs.  This release ships fixes + regression
+tests for each.  Pure-additive; no breaking changes.
+
+* `eval_image_plane_wfe` chief-ray N-fallback now uses
+  `abs(N) < eps -> nan` instead of an exact-zero check with a
+  non-physical unit-vector default (4.0's off-axis path had this).
+* Ray-trace `_refract`/`_reflect` renormalisation no longer
+  silently promotes a zero-magnitude direction-cosine to a bogus
+  unit vector -- it flags the ray dead with `RAY_NAN`.
+* `BSDFModel` base class is now an explicit `abc.ABC`; direct
+  instantiation raises `TypeError` at construction instead of
+  deferring to a `NotImplementedError` at first method call.
+* `thin_grating_efficiency_1d` is a new honest-name alias for
+  `rcwa_1d`, which is an analytical thin-grating scalar
+  approximation (not full RCWA) -- the name `rcwa_1d` was
+  misadvertising.
+* `create_hermite_gauss` / `create_laguerre_gauss` docstrings now
+  call out the normalisation inconsistency with the asymptotic-
+  modal-propagator's analytical normalisation (a documentation
+  fix, not a code change).
+
+29/29 validation files still pass; 4 new regression tests guard
+each bug.
+
 ## What's new in 4.0.0
 
 **Polish + Tier-1-gap-closing release.**  A four-tier audit of the

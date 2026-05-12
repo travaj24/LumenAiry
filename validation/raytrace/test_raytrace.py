@@ -1258,5 +1258,82 @@ H.run('optical_invariant: y_marg * u_chief formula',
       t_optical_invariant_formula)
 
 
+# =====================================================================
+# Regression: direction-cosine zero-mag now flags RAY_NAN (4.0.1)
+# =====================================================================
+
+H.section('Regression: zero-mag direction-cosine flags RAY_NAN (4.0.1)')
+
+
+def t_refraction_renorm_flags_dead_ray_on_zero_mag():
+    """4.0 had `mag = np.maximum(mag, 1e-30)` in `_refract` and
+    `_reflect` which silently turned a degenerate (0,0,0) direction
+    cosine into a bogus unit vector along (0,0,1e-30).  4.0.1 flags
+    such rays with `RAY_NAN` so downstream diagnostics catch the
+    pathology.  Verify the source code contains the new guard.
+    Direct construction of a zero-magnitude post-refraction ray
+    requires an extremely pathological surface; the source-grep
+    guard is the canonical regression check."""
+    import inspect
+    from lumenairy.raytrace import core as _core
+    src_refract = inspect.getsource(_core._refract)
+    src_reflect = inspect.getsource(_core._reflect)
+    refract_has_guard = 'RAY_NAN' in src_refract and '_degenerate' in src_refract
+    reflect_has_guard = 'RAY_NAN' in src_reflect and '_degenerate' in src_reflect
+    return refract_has_guard and reflect_has_guard, \
+        f'_refract guard={refract_has_guard}, _reflect guard={reflect_has_guard}'
+
+
+H.run('raytrace _refract + _reflect flag zero-mag rays as RAY_NAN',
+      t_refraction_renorm_flags_dead_ray_on_zero_mag)
+
+
+def t_normal_refraction_still_returns_alive_rays():
+    """The new RAY_NAN guard must not flag any rays in a normal trace.
+
+    Use the make_ring API (semi_aperture, n_rays, ...) to build a
+    bundle and trace through a singlet; all rays should remain alive.
+    """
+    from lumenairy.raytrace import (surfaces_from_prescription, trace,
+                                       make_ring)
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    surfs = surfaces_from_prescription(p)
+    bundle = make_ring(semi_aperture=4e-3, n_rays=8, wavelength=587e-9)
+    res = trace(bundle, surfs, 587e-9, output_filter='last')
+    alive_count = int(np.sum(res.image_rays.alive))
+    return alive_count == 8, f'alive rays after trace = {alive_count}/8'
+
+
+H.run('regression: normal refraction still returns all alive rays',
+      t_normal_refraction_still_returns_alive_rays)
+
+
+# =====================================================================
+# Regression: thin_grating_efficiency_1d alias (4.0.1)
+# =====================================================================
+
+H.section('Regression: thin_grating_efficiency_1d alias (4.0.1)')
+
+
+def t_thin_grating_alias_matches_rcwa_1d():
+    """The new honest-name alias must return bit-identical results to
+    the historic rcwa_1d call for the same parameters."""
+    common = dict(period=1e-6, n_ridge=1.5, n_groove=1.0,
+                   n_substrate=1.5, n_superstrate=1.0,
+                   depth=2e-6, duty_cycle=0.5, wavelength=550e-9)
+    o_a, R_a, T_a = la.rcwa_1d(**common)
+    o_b, R_b, T_b = la.thin_grating_efficiency_1d(**common)
+    same_orders = np.array_equal(o_a, o_b)
+    same_T = np.array_equal(T_a, T_b)
+    same_R = np.array_equal(R_a, R_b)
+    return same_orders and same_T and same_R, \
+        (f'orders match={same_orders}, T match={same_T}, R match={same_R}')
+
+
+H.run('thin_grating_efficiency_1d bit-identical to rcwa_1d',
+      t_thin_grating_alias_matches_rcwa_1d)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

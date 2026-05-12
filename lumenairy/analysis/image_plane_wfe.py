@@ -426,10 +426,20 @@ def eval_image_plane_wfe(
 
     def _chief_image_xy(d):
         """Transverse position of the chief ray at axial distance
-        ``d`` past the last surface, by free-space propagation."""
+        ``d`` past the last surface, by free-space propagation.
+
+        Returns ``(nan, nan)`` for a grazing-incidence chief
+        (``|N_chief| < 1e-12``) -- such rays effectively never
+        reach the image plane.  Off-axis WFE for those cases is
+        meaningless, so the caller will get NaN-propagated metrics
+        and a visible failure rather than a silently-wrong result
+        from a fallback unit vector.
+        """
         if not alive[chief]:
-            return 0.0, 0.0
-        N_chief = float(Nd[chief]) if Nd[chief] != 0 else 1.0
+            return float('nan'), float('nan')
+        N_chief = float(Nd[chief])
+        if abs(N_chief) < 1e-12:
+            return float('nan'), float('nan')
         t_advance = d / N_chief  # geometric path length
         cx = float(s2x[chief] + Ld[chief] * t_advance)
         cy = float(s2y[chief] + Md[chief] * t_advance)

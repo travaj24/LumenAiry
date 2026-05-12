@@ -74,6 +74,7 @@ from .elements import (
 )
 from .rcwa import (
     rcwa_1d,
+    thin_grating_efficiency_1d,
     grating_efficiency_vs_wavelength,
 )
 from .polarization import (
@@ -125,7 +126,8 @@ __all__ = [
     'coronagraph_contrast_curve',
     'generate_turbulence_screen',
     # rcwa
-    'rcwa_1d', 'grating_efficiency_vs_wavelength',
+    'rcwa_1d', 'thin_grating_efficiency_1d',
+    'grating_efficiency_vs_wavelength',
     # polarization
     'JonesField',
     'apply_jones_matrix', 'apply_polarizer', 'apply_waveplate',

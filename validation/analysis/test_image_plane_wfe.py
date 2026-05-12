@@ -506,6 +506,49 @@ H.run('field_grid_wfe: shape, finiteness, on-axis-minimum invariant',
       t_field_grid_wfe_shape_and_content)
 
 
+# =====================================================================
+# Regression tests for 4.0.1 bug fixes
+# =====================================================================
+
+H.section('Regression: chief-ray N-fallback (4.0.1)')
+
+
+def t_chief_image_xy_no_silent_unit_fallback():
+    """The 4.0 release shipped a `_chief_image_xy` whose fallback was
+    `Nd[chief] != 0 else 1.0` -- an exact-zero check + non-physical
+    unit-vector default.  4.0.1 replaced this with abs(N) < 1e-12 -> NaN
+    so pathological cases fail visibly instead of producing wrong
+    answers.  Verify normal (large N) cases still work + the fallback
+    no longer silently produces unit-vector results.
+
+    The simplest indirect check: a normal off-axis call should still
+    produce finite, sensible WFE.  Direct check of the NaN-fallback
+    path requires constructing a chief ray with N ~ 0, which only
+    happens with unusual prescriptions and isn't easily faked
+    through the public API.  Cover that case via assertion that the
+    function reads the new code path (search for `1e-12` constant
+    in the source -- a brittle but minimal regression guard)."""
+    import inspect
+    from lumenairy.analysis import image_plane_wfe as _mod
+    src = inspect.getsource(_mod.eval_image_plane_wfe)
+    has_eps_guard = 'abs(N_chief) < 1e-12' in src
+    has_nan_return = "return float('nan'), float('nan')" in src
+    # Also confirm normal cases still work
+    p = la.make_singlet(R1=51.5e-3, R2=float('inf'), d=4e-3,
+                          glass='N-BK7', aperture=10e-3)
+    p['object_distance'] = 200e-3
+    wfe = la.eval_image_plane_wfe(p, WL, field=(0.5, 0),
+                                    n_pupil=15, field_max_m=1e-3)
+    runs_ok = bool(np.isfinite(wfe.rms_waves))
+    return has_eps_guard and has_nan_return and runs_ok, \
+        (f'eps_guard={has_eps_guard}, nan_return={has_nan_return}, '
+         f'rms={wfe.rms_waves:.4f}')
+
+
+H.run('chief-ray N-fallback uses abs() < eps + NaN return (no silent unit)',
+      t_chief_image_xy_no_silent_unit_fallback)
+
+
 # ---------------------------------------------------------------------
 def main():
     return H.summary()

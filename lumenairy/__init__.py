@@ -249,9 +249,13 @@ from .elements.bsdf import (
     sample_scatter_rays,
 )
 
-# ── RCWA (rigorous coupled-wave analysis) ─────────────────────────────
+# ── Grating diffraction efficiency (thin-grating scalar approx) ───────
+# Note: ``rcwa_1d`` is the historical name; the current implementation
+# is an analytical thin-grating scalar approximation, NOT full RCWA.
+# Use ``thin_grating_efficiency_1d`` for the honest-name alias.
 from .elements.rcwa import (
     rcwa_1d,
+    thin_grating_efficiency_1d,
     grating_efficiency_vs_wavelength,
 )
 
@@ -614,7 +618,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.0.0"
+__version__ = "4.0.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1073,6 +1077,7 @@ __all__ = [
 
     # RCWA (rigorous coupled-wave analysis)
     'rcwa_1d',
+    'thin_grating_efficiency_1d',
     'grating_efficiency_vs_wavelength',
 
     # BSDF / surface scatter

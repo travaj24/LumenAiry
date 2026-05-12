@@ -799,5 +799,43 @@ H.run('Gaussian BSDF.sample: > 99 percent within 3-sigma',
       t_gaussian_bsdf_concentrates_within_sigma)
 
 
+# =====================================================================
+# Regression: BSDFModel abstract base (4.0.1)
+# =====================================================================
+
+H.section('Regression: BSDFModel is an explicit ABC (4.0.1)')
+
+
+def t_bsdf_base_class_raises_typeerror_at_instantiation():
+    """In 4.0 and earlier, ``BSDFModel`` was a regular class whose
+    ``evaluate``/``sample`` methods raised NotImplementedError only
+    when called -- bad UX for users who accidentally instantiated
+    the base.  4.0.1 promotes it to ``abc.ABC`` so direct
+    instantiation fails immediately."""
+    try:
+        la.BSDFModel()
+        return False, 'no exception raised'
+    except TypeError as e:
+        return 'abstract' in str(e).lower(), str(e)[:120]
+
+
+H.run('BSDFModel: direct instantiation raises TypeError',
+      t_bsdf_base_class_raises_typeerror_at_instantiation)
+
+
+def t_bsdf_concrete_subclasses_still_instantiate():
+    """The ABC change must not break the existing concrete classes."""
+    classes_ok = []
+    classes_ok.append(la.LambertianBSDF(rho=0.5))
+    classes_ok.append(la.GaussianBSDF(sigma_rad=0.01))
+    classes_ok.append(la.HarveyShackBSDF(b0=1.0, l=0.01, s=2.0))
+    return all(c is not None for c in classes_ok), \
+        f'all {len(classes_ok)} concrete BSDFs instantiated OK'
+
+
+H.run('BSDF concrete subclasses still instantiable after ABC promotion',
+      t_bsdf_concrete_subclasses_still_instantiate)
+
+
 if __name__ == '__main__':
     sys.exit(H.summary())

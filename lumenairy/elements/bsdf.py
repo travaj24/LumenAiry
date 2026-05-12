@@ -48,6 +48,7 @@ References
 """
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Dict, Optional
 
@@ -59,8 +60,17 @@ import numpy as np
 # =============================================================================
 
 
-class BSDFModel:
+class BSDFModel(ABC):
     """Abstract base.  Subclasses implement ``evaluate`` and ``sample``.
+
+    ``BSDFModel`` is an explicit ``abc.ABC``; attempting to
+    instantiate it directly raises ``TypeError`` at construction
+    rather than waiting for a downstream method call to fail with
+    ``NotImplementedError``.  Subclass and implement the
+    ``@abstractmethod`` slots ``evaluate`` and ``sample`` to make
+    the class concrete -- see :class:`LambertianBSDF`,
+    :class:`GaussianBSDF`, and :class:`HarveyShackBSDF` for canonical
+    examples.
 
     Conventions
     -----------
@@ -75,11 +85,14 @@ class BSDFModel:
     """
     kind: str = 'abstract'
 
+    @abstractmethod
     def evaluate(self, incident_dir, scattered_dir):
-        raise NotImplementedError
+        """BSDF value (1/sr) for the requested scattering direction."""
 
+    @abstractmethod
     def sample(self, incident_dir, n_samples, rng=None):
-        raise NotImplementedError
+        """Draw ``n_samples`` outgoing direction cosines from the
+        BSDF lobe."""
 
     def total_integrated_scatter(self) -> float:
         """TIS = integral over outgoing hemisphere of BSDF * cos(theta) dOmega.

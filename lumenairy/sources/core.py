@@ -195,6 +195,19 @@ def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0,
                       * exp(-(x^2 + y^2) / w0^2)
 
     where H_m is the physicist's Hermite polynomial of order m.
+
+    **Normalisation note.**  When ``normalize='power'``, the returned
+    field is power-normalised by **numerical integration over the
+    grid** (``sum(|E|^2) * dx * dy = 1``).  This is grid-exact for any
+    grid that fully contains the mode (typically ``L >= 4 w0``), but
+    differs from the analytical normalisation
+    ``N = 1 / sqrt(2^m m! 2^n n! pi w0^2 / 2)``
+    used by :func:`lumenairy.propagators.asymptotic.fit_canonical_polynomials`
+    and the modal-asymptotic propagators when the grid truncates the
+    Gaussian tails.  For typical wave-optics grids the two normalisations
+    agree to ~1e-6; for tight grids that clip at 2-3 w0 the discrepancy
+    can grow.  Use the analytical asymptotic-module normalisation
+    when chaining HG modes through the modal asymptotic propagator.
     """
     if dy is None:
         dy = dx
@@ -320,6 +333,15 @@ def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0,
                           * exp(-r^2 / w0^2) * exp(i l theta)
 
     where L_p^|l| is the generalized Laguerre polynomial.
+
+    **Normalisation note.**  ``normalize='power'`` integrates over
+    the grid numerically; same caveat as :func:`create_hermite_gauss`
+    -- for grids that clip the mode tails the result differs from
+    the analytical LG normalisation used in
+    :mod:`lumenairy.propagators.asymptotic`.  For modal-asymptotic
+    chains, prefer the analytical-normalised modes built inside the
+    asymptotic propagator over passing this function's output
+    through ``propagate_modal_asymptotic``.
     """
     if dy is None:
         dy = dx
