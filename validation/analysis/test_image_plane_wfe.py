@@ -645,7 +645,12 @@ H.section('zemax_pupil_grid + chebyshev_pupil_grid factories (4.2+)')
 
 def t_zemax_pupil_grid_layout_matches_zemax_convention():
     """The Zemax WavefrontMap spacing is 2/(N-1) and the centre
-    falls between grid nodes for even N.  Verify formula directly."""
+    falls between grid nodes for even N.  Verify formula directly.
+
+    Use a 1e-12 relative tolerance rather than strict ULP-level
+    comparison; NumPy's arange + meshgrid intermediate roundings
+    differ at the last bit across NumPy versions and the bit-exact
+    formula match isn't load-bearing."""
     px, py = la.zemax_pupil_grid(N=32, clip_to_disk=False)
     PX = px.reshape(32, 32)
     PY = py.reshape(32, 32)
@@ -653,11 +658,11 @@ def t_zemax_pupil_grid_layout_matches_zemax_convention():
     step_x = PX[0, 1] - PX[0, 0]
     step_y = PY[1, 0] - PY[0, 0]
     centre_offset = abs(PX[0, 16] - (16 - 15.5) / 15.5)
-    return (abs(step_x - expected_step) < 1e-15
-            and abs(step_y - expected_step) < 1e-15
-            and centre_offset < 1e-15
+    return (abs(step_x - expected_step) < 1e-12
+            and abs(step_y - expected_step) < 1e-12
+            and centre_offset < 1e-12
             and px.size == 32 * 32), \
-        (f'step={step_x:.6f} (exp {expected_step:.6f}), '
+        (f'step={step_x:.9f} (exp {expected_step:.9f}), '
          f'centre offset = {centre_offset:.2e}')
 
 
