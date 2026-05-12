@@ -2,6 +2,76 @@
 
 All notable changes to the core library are documented here.
 
+## [3.9.0] — 2026-05-12
+
+Feature release.  Lights up the high-contrast-imaging and
+broadband-detector slice of the API surface.  Pure-additive; no
+breaking changes.
+
+### Added
+
+* **Coronagraph templates** (`lumenairy/elements/elements.py`):
+
+  * `apply_lyot_focal_plane_mask(E, dx, mask_diameter, profile=...)`
+    -- classical Lyot focal-plane occulter.  Profile options
+    `'hard'` (binary), `'gaussian'` (smooth-edged), `'sin2'`
+    (band-limited).
+  * `apply_vortex_phase_mask(E, dx, charge=2)` -- scalar focal-plane
+    vortex applying `exp(i * l * theta)`.  Charges 2 (AGPM), 4, 6,
+    8 are the standard astronomical values.
+  * `apply_lyot_stop(E, dx, outer_diameter, inner_diameter=0)` --
+    downstream pupil annulus.  Coronagraph-literature naming
+    wrapping the equivalent annular `apply_aperture` call.
+  * `apply_apodized_pupil(E, dx, diameter, apodization='cos2')` --
+    entrance-pupil graded-transmission apodiser with `'cos2'`,
+    `'cos_power'`, `'gaussian'`, and `'sonine'` profile options.
+
+* **Polychromatic PSF accumulator** (`lumenairy/analysis/analysis.py`):
+
+  * `polychromatic_psf(prescription, wavelengths, weights, N, dx,
+    *, E_in=None, image_distance=None, normalize='power',
+    bandlimit=True, return_components=False)` -- returns the full
+    integrated intensity map on a common image plane plus
+    diagnostic metrics (centroid wavelength, per-lambda peak +
+    Strehl, accumulated centroid, D4-sigma).  Complements the
+    existing `polychromatic_strehl`, which only returns scalar
+    Strehl ratios.
+
+### Validation
+
+* 7 new tests in `validation/elements/test_elements.py`: hard /
+  Gaussian Lyot mask profiles, charge-2 vortex phase topology,
+  Lyot stop annulus, cos^2 apodisation monotonicity, Sonine
+  exponent throughput ordering, and an end-to-end vortex+Lyot
+  pipeline verifying >100x on-axis starlight suppression
+  (charge-2 vortex + 0.85*D Lyot stop).
+* 2 new turbulence tests: Kolmogorov 5/3 structure-function
+  log-log slope; finite outer-scale L0 reduces phase variance
+  (von Karman branch).
+* 6 new tests in `validation/analysis/test_analysis.py` covering
+  `polychromatic_psf` power / peak normalisation, on-axis
+  centroid, per-wavelength component sum, chromatic broadening,
+  and centroid wavelength.
+* Full validation suite (27/27 files) passes.
+
+### Documentation
+
+* New wiki page: **Function Reference - Coronagraphs** with full
+  parameter tables, end-to-end pipeline walkthrough, and
+  references (Lyot 1939, Mawet 2005, Soummer 2005/2007, Kasdin
+  2003).
+* **Function Reference - Propagation** gains 154 lines documenting
+  the three matrix-Fourier-transform propagators
+  (`fresnel_propagate_mft`, `fraunhofer_propagate_mft`,
+  `angular_spectrum_propagate_mft`) that shipped in 3.5.7 but
+  were thinly documented; arbitrary-output-grid (MFT family)
+  overview + use-case breakdown + examples.
+* **Function Reference - Analysis** gains a `polychromatic_psf`
+  section with a "when to use which" callout vs
+  `polychromatic_strehl`.
+* **Home**, **Function Reference**, and **Sidebar** updated with
+  cross-links and new high-contrast / broadband-imaging bullets.
+
 ## [3.8.3] — 2026-05-11
 
 Documentation patch.  README.md leads with the 3.8.2 release notes
