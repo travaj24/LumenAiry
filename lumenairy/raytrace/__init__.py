@@ -93,8 +93,12 @@ from .seidel_analysis import (
     seidel_wfe,
 )
 
-# World-frame surface builder for folded prescriptions (4.4.0).
-from .world import world_surfaces_from_prescription
+# World-frame surface builder for folded prescriptions (4.4.0)
+# plus paraxial-focus world helper (4.5.0).
+from .world import (
+    world_surfaces_from_prescription,
+    paraxial_focus_world,
+)
 
 
 __all__ = [
@@ -117,6 +121,7 @@ __all__ = [
     'seidel_field_sweep',
     'seidel_wfe',
     'world_surfaces_from_prescription',
+    'paraxial_focus_world',
     'spot_rms',
     'spot_geo_radius',
     'spot_diagram',

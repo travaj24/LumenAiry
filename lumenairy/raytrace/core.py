@@ -1229,14 +1229,30 @@ def surfaces_from_prescription(prescription):
             if stop_idx is not None and int(stop_idx) == i:
                 is_stop_flag = True
 
+        # 4.5: honour the per-surface `is_mirror` flag from the
+        # prescription dict.  Loaders mark mirrors when the .zmx glass
+        # column says ``MIRROR``; a folded design built by hand
+        # carries the same flag.  Infer ``is_mirror`` when
+        # ``glass_after`` is the marker string ``'MIRROR'``
+        # (case-insensitive); in that case the marker is replaced by
+        # ``glass_before`` because reflection does not change the
+        # surrounding medium and ``'MIRROR'`` is not a real glass.
+        glass_before = ps['glass_before']
+        glass_after = ps['glass_after']
+        is_mirror_flag = bool(ps.get('is_mirror', False))
+        if (isinstance(glass_after, str)
+                and glass_after.upper() == 'MIRROR'):
+            is_mirror_flag = True
+            glass_after = glass_before
+
         surface_list.append(Surface(
             radius=ps['radius'],
             conic=ps.get('conic', 0.0),
             aspheric_coeffs=ps.get('aspheric_coeffs'),
             semi_diameter=sd,
-            glass_before=ps['glass_before'],
-            glass_after=ps['glass_after'],
-            is_mirror=False,
+            glass_before=glass_before,
+            glass_after=glass_after,
+            is_mirror=is_mirror_flag,
             is_stop=is_stop_flag,
             thickness=thickness,
             label=ps.get('comment', f'S{i+1}'),

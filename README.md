@@ -10,6 +10,51 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.5.0
+
+**World-frame ray tracing for folded prescriptions, end-to-end.**
+Closes the deferred gap from 4.4: folded `.zmx` designs can now be
+loaded, world-frame-traced, and analyzed paraxially from any script,
+without instantiating the GUI's `SystemModel`.  Pure-additive; no
+breaking changes.
+
+* **Mirror inference (`surfaces_from_prescription`).**  A prescription
+  surface with `glass_after='MIRROR'` (the Zemax convention from
+  `load_zmx_prescription`) is now auto-detected and emitted with
+  `is_mirror=True`, and `glass_after` is normalised back to
+  `glass_before` (since reflection does not change the surrounding
+  medium).  Previously this flag was silently dropped, and a folded
+  prescription needed manual fix-up.  No effect on un-folded
+  prescriptions.
+
+* **`paraxial_focus_world(world_surfaces, wavelength)`** -- returns
+  the world-coordinate `(focus_origin, focus_normal)` of the paraxial
+  image plane.  Traces a chief + paraxial-marginal ray through the
+  world surfaces and finds their closest-approach point, so it works
+  correctly on folded prescriptions where the unfolded BFL would
+  carry the wrong sign for a direct world-frame walk.
+
+* **Folded-design validation suite.**  New `validation/raytrace/
+  test_folded_designs.py` builds a periscope (plano-convex singlet +
+  45-deg flat fold mirror) and a 45-deg-tilted concave spherical
+  mirror from prescription dicts, then verifies:
+  * The fold mirror lands at the correct world coordinate
+    `(0, 0, 53mm)` / `(0, 0, 100mm)` and the detector lands 50mm
+    `(100mm)` post-fold in `+y`.
+  * An on-axis chief ray reflects off the mirror and lands at the
+    detector vertex.
+  * `paraxial_focus_world` returns the correct image-plane world
+    position for both designs.  For the curved fold the result
+    matches the analytical tangential focal length
+    `f_t = R/2 cos(45 deg)` ~ 70.7mm, the obliquity-induced
+    astigmatism that a paraxial trace through a tilted spherical
+    mirror produces.
+  * Straight-axis singlets give a world focus identical to
+    `last_surface_z + BFL`.
+
+* **All 34 validation files pass** (33 from 4.4 + 1 new), 52 unit
+  tests still green.
+
 ## What's new in 4.4.0
 
 **Field-resolved analyses lifted from GUI + world-frame surface builder

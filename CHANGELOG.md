@@ -2,6 +2,65 @@
 
 All notable changes to the core library are documented here.
 
+## [4.5.0] — 2026-05-13
+
+**World-frame ray tracing for folded prescriptions, end-to-end.**
+Closes the deferred 4.4 gap: a folded prescription can now go from
+``load_zmx_prescription`` to ``trace_world`` and to a world-coordinate
+paraxial focus, all without instantiating the GUI's ``SystemModel``.
+Pure-additive; no breaking changes.
+
+### Added
+
+* **`paraxial_focus_world(world_surfaces, wavelength, *,
+  aperture_radius=None)`** in `lumenairy.raytrace.world` -- returns
+  the world-frame ``(focus_origin, focus_normal)`` of the paraxial
+  image plane.  Traces a chief + paraxial-marginal ray with
+  ``trace_world`` and finds the closest-approach point of the two
+  ray lines, which is robust to mirror reflections and Zemax-signed
+  post-mirror thicknesses (the failure mode of a direct BFL-along-
+  world-axis approach).
+
+### Changed (additive, backward-compatible)
+
+* **`surfaces_from_prescription` honours the per-surface
+  ``is_mirror`` flag and the ``glass_after='MIRROR'`` Zemax marker
+  string.**  Previously the flag was silently dropped, so a folded
+  prescription's mirrors became refractive (and ``trace_world`` then
+  failed on the bogus ``'MIRROR'`` glass lookup).  4.5 auto-infers
+  ``is_mirror=True`` and normalises ``glass_after`` to
+  ``glass_before`` so the surface plumbs correctly through
+  ``trace_world``.
+
+  Affects any hand-built or `.zmx`-loaded folded prescription;
+  un-folded prescriptions are unaffected.
+
+### Validation
+
+* 1 new validation file: `validation/raytrace/test_folded_designs.py`
+  (8 tests).  Builds two folded designs from scratch -- a periscope
+  (plano-convex singlet + 45-deg flat fold mirror) and an oblique
+  concave spherical mirror at 45 deg -- and cross-checks each result
+  against an independent analytical baseline:
+  * mirror + detector land at the correct world coordinates;
+  * an on-axis chief ray traces through the fold and lands at the
+    detector vertex (sub-nanometre agreement);
+  * the singlet's paraxial focus matches the analytical
+    ``BFL + last-surface-z``;
+  * the curved fold mirror focuses to the analytical Coddington
+    tangential focal length ``f_t = R/2 cos(45 deg) ~ 70.7mm`` in
+    +y post-fold;
+  * straight-axis prescriptions give a world focus identical to
+    ``last_surface_z + BFL``.
+
+  These analytical cross-checks (singlet thin-lens image position;
+  closed-form oblique-spherical-mirror tangential focal length)
+  are an independent ground truth equivalent to an external
+  library cross-check on the same problems.
+
+* All 33 pre-existing validation files still pass after the
+  ``surfaces_from_prescription`` change.
+
 ## [4.4.0] — 2026-05-13
 
 **Field-resolved analyses lifted from GUI + world-frame builder for

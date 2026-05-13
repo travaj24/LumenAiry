@@ -34,7 +34,7 @@ from typing import List
 
 import numpy as np
 
-from .core import Surface, surfaces_from_prescription
+from .core import Surface, surfaces_from_prescription, system_abcd
 
 
 def _rot_x(rad: float) -> np.ndarray:
@@ -179,4 +179,129 @@ def world_surfaces_from_prescription(prescription) -> List[Surface]:
     return out
 
 
-__all__ = ['world_surfaces_from_prescription']
+def paraxial_focus_world(world_surfaces, wavelength, *,
+                          aperture_radius=None):
+    """Paraxial focus position and propagation direction in world coords.
+
+    Traces a chief ray and a paraxial marginal ray through the world
+    surfaces with :func:`trace_world` and finds their convergence
+    point.  This approach is robust to folded prescriptions, mirror
+    reflections, and Zemax-signed post-mirror thicknesses -- because
+    it uses actual ray traces, the sign convention in the prescription
+    doesn't have to be reconciled separately.
+
+    Parameters
+    ----------
+    world_surfaces : list of Surface
+        Output of :func:`world_surfaces_from_prescription`.  Every
+        surface must carry ``world_origin`` and ``world_R``.
+    wavelength : float
+        Wavelength [m].
+    aperture_radius : float, optional
+        Marginal-ray launch height [m] at the entrance pupil.
+        Defaults to 1/10 of the smallest finite ``semi_diameter`` in
+        the surface list (or 1 mm if no finite semi-diameter is
+        available).  Smaller values give a more strictly paraxial
+        result but lose numerical conditioning.
+
+    Returns
+    -------
+    focus_origin : ndarray (shape ``(3,)``)
+        Paraxial image-plane vertex in world coordinates [m].
+    focus_normal : ndarray (shape ``(3,)``)
+        Unit vector along the chief ray at focus (the image-plane
+        normal).  ``(0, 0, 1)`` for un-folded systems, ``(0, +1, 0)``
+        for a 90-deg fold to +y, etc.
+
+    Notes
+    -----
+    Returns the midpoint of the closest-approach segment between the
+    two traced rays, which collapses to the geometric image for a
+    paraxial system.  For systems with strong aberrations the focus
+    location will be perturbed; for those use
+    :func:`through_focus_rms` / :func:`find_best_focus`.
+
+    Examples
+    --------
+    >>> # Periscope: singlet at z=0..3mm, fold mirror at z=53mm,
+    >>> # detector 50mm past in +y.  Focus = singlet's image, 100mm
+    >>> # past the singlet along the bent axis.
+    >>> wsurfs = la.world_surfaces_from_prescription(periscope_presc)
+    >>> focus, normal = la.paraxial_focus_world(wsurfs, 1.31e-6)
+    """
+    if not world_surfaces:
+        raise ValueError(
+            "paraxial_focus_world: empty world_surfaces list.")
+    last = world_surfaces[-1]
+    if (getattr(last, 'world_origin', None) is None
+            or getattr(last, 'world_R', None) is None):
+        raise ValueError(
+            "paraxial_focus_world: last surface has no world_origin / "
+            "world_R; pass surfaces produced by "
+            "world_surfaces_from_prescription.")
+
+    # Pick a marginal-ray launch height.
+    if aperture_radius is None:
+        finite_sds = [float(s.semi_diameter) for s in world_surfaces
+                      if np.isfinite(s.semi_diameter)
+                      and s.semi_diameter > 0]
+        if finite_sds:
+            aperture_radius = 0.1 * min(finite_sds)
+        else:
+            aperture_radius = 1e-3
+
+    from .core import trace_world, _make_bundle
+
+    # Both rays travel parallel to world +z at z = 0 (paraxial /
+    # infinite-object setup).  Chief at (0, 0); marginal at
+    # (0, aperture_radius).
+    chief = _make_bundle(
+        x=np.array([0.0]), y=np.array([0.0]),
+        L=np.array([0.0]), M=np.array([0.0]),
+        wavelength=float(wavelength),
+    )
+    marginal = _make_bundle(
+        x=np.array([0.0]), y=np.array([float(aperture_radius)]),
+        L=np.array([0.0]), M=np.array([0.0]),
+        wavelength=float(wavelength),
+    )
+    res_chief = trace_world(chief, world_surfaces, wavelength)
+    res_marg = trace_world(marginal, world_surfaces, wavelength)
+
+    def _world_state(result):
+        rb = result.image_rays
+        local_pos = np.array([rb.x[0], rb.y[0], rb.z[0]], dtype=float)
+        local_dir = np.array([rb.L[0], rb.M[0], rb.N[0]], dtype=float)
+        world_pos = (np.asarray(last.world_origin, dtype=float)
+                     + last.world_R @ local_pos)
+        world_dir = last.world_R @ local_dir
+        return world_pos, world_dir
+
+    p1, d1 = _world_state(res_chief)
+    p2, d2 = _world_state(res_marg)
+
+    # Closest-approach point between two lines in 3D.  Solve the
+    # 2x2 normal-equation system for (t1, t2).
+    A = np.array([[d1 @ d1, -(d1 @ d2)],
+                  [-(d2 @ d1), d2 @ d2]])
+    b = np.array([d1 @ (p2 - p1), d2 @ (p1 - p2)])
+    try:
+        t1, t2 = np.linalg.solve(A, b)
+    except np.linalg.LinAlgError:
+        # Parallel rays (e.g. infinite focal length): no finite focus.
+        raise ValueError(
+            "paraxial_focus_world: chief and marginal rays do not "
+            "converge (parallel post-system).  System may be afocal "
+            "or aperture_radius too small.")
+    pt1 = p1 + t1 * d1
+    pt2 = p2 + t2 * d2
+    focus_origin = 0.5 * (pt1 + pt2)
+    chief_norm = float(np.linalg.norm(d1))
+    focus_normal = d1 / chief_norm if chief_norm > 0 else d1
+    return focus_origin, focus_normal
+
+
+__all__ = [
+    'world_surfaces_from_prescription',
+    'paraxial_focus_world',
+]

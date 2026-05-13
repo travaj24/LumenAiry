@@ -469,6 +469,7 @@ from .raytrace import (
     seidel_field_sweep,
     seidel_wfe,
     world_surfaces_from_prescription,
+    paraxial_focus_world,
     spot_rms,
     spot_geo_radius,
     spot_diagram,
@@ -653,7 +654,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.4.0"
+__version__ = "4.5.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -889,6 +890,7 @@ __all__ = [
     'seidel_field_sweep',
     'seidel_wfe',
     'world_surfaces_from_prescription',
+    'paraxial_focus_world',
     'spot_rms',
     'spot_geo_radius',
     'spot_diagram',
