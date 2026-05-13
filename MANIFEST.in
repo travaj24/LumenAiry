@@ -1,0 +1,42 @@
+# MANIFEST.in for lumenairy
+#
+# Controls which non-package files are included in the source
+# distribution (sdist) produced by ``python -m build``.  Wheels are
+# built from the discovered ``lumenairy*`` packages declared in
+# pyproject.toml -- they do NOT include the files listed below.
+#
+# The intent of the entries here is to make a tarball downloaded
+# from PyPI a complete reproduction of the repository: tests,
+# validation suite, examples, license, and CI workflows ship with
+# it.  This was added in 4.4.0 in response to a packaging audit
+# (the validation/ tree previously vanished from sdist + wheel).
+
+include README.md
+include CHANGELOG.md
+include LICENSE
+include pyproject.toml
+
+# Validation suite -- 31 files with ~370 physics-fidelity tests.
+# Run with `python validation/run_all.py` after extracting the sdist.
+recursive-include validation *.py *.md *.txt
+
+# Unit + integration tests.
+recursive-include tests *.py
+
+# Example scripts.
+recursive-include examples *.py *.md
+
+# CI workflows (so a downstream re-spin can replay them).
+recursive-include .github *.yml *.yaml
+
+# Don't ship caches, build artefacts, or editor cruft.
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude .DS_Store
+global-exclude .*.swp
+prune .pytest_cache
+prune **/__pycache__
+prune build
+prune dist
+prune *.egg-info

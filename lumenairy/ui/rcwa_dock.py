@@ -1,7 +1,7 @@
 """
 RCWA / grating-efficiency dock (3.6).
 
-Wraps :func:`lumenairy.rcwa_1d` and
+Wraps :func:`lumenairy.thin_grating_efficiency_1d` and
 :func:`lumenairy.grating_efficiency_vs_wavelength` so users can
 characterise diffraction-grating designs (groove profile, period,
 duty cycle, polarization) without dropping to a script.

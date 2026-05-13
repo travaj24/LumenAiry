@@ -120,6 +120,20 @@ def aberration_summary(
 
     notes: List[str] = []
 
+    # Helper: glass-catalog failures previously got buried in `notes`
+    # while Seidel returned zeros -- making a system with an unknown
+    # glass look "diffraction-limited".  Bubble them up as warnings.
+    def _maybe_warn_glass(exc: Exception) -> None:
+        msg = str(exc)
+        if 'Glass' in msg and 'not in registry' in msg:
+            import warnings
+            warnings.warn(
+                f"aberration_summary: glass not in registry; analysis "
+                f"results will be zero-filled and unreliable.  Details: "
+                f"{msg}",
+                stacklevel=3,
+            )
+
     # --- Geometric leg: Seidel + ABCD --------------------------------
     surfs = surfaces_from_prescription(prescription)
     try:
@@ -128,6 +142,7 @@ def aberration_summary(
         bfl_v = float(bfl) if np.isfinite(bfl) else None
     except Exception as exc:
         notes.append(f"system_abcd failed: {type(exc).__name__}: {exc}")
+        _maybe_warn_glass(exc)
         efl_v = bfl_v = None
 
     seidel_total = np.zeros(5, dtype=np.float64)
@@ -168,6 +183,7 @@ def aberration_summary(
                 seidel_total = np.zeros(5)
     except Exception as exc:
         notes.append(f"seidel_coefficients failed: {type(exc).__name__}: {exc}")
+        _maybe_warn_glass(exc)
 
     # --- Wave leg: LG aberration tensor -------------------------------
     lg_result = None

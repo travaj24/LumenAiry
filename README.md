@@ -10,6 +10,90 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.4.0
+
+**Field-resolved analyses lifted from GUI + world-frame surface builder
+for folded designs + Strehl alternatives + grating rename + glass-catalog
+warnings.**  Mostly additive; one breaking name change.
+
+* **World-frame surface builder (`la.world_surfaces_from_prescription`).**
+  Previously, building world-frame surfaces from a folded prescription
+  (e.g. a `.zmx` with COORDBRK surfaces) required going through the
+  GUI's `SystemModel`.  4.4 lifts that translation into the library:
+
+  ```python
+  presc = la.load_zmx_prescription('folded_design.zmx')
+  surfaces = la.world_surfaces_from_prescription(presc)
+  result = la.trace_world(rays, surfaces, 1.31e-6)
+  ```
+
+  The builder walks the combined coord-break + optical-surface
+  sequence in `surf_num` order, applies tilts (about local x/y/z) and
+  decenters with Zemax PARM ordering, and emits `Surface` objects
+  with `world_origin` (m) and `world_R` (3×3) populated.  For
+  prescriptions without coord-breaks the result is bit-identical to
+  the local-frame trace; for folded designs it gives correct
+  geometry without touching the GUI.  `la.trace_world` is now also
+  exported at top level.
+
+
+* **Eight new field-resolved analyses (`lumenairy.analysis.field`).**
+  Functions that previously lived only inside `ui/*_dock.py` are now
+  first-class public API.  GUI docks still work -- they were
+  refactored to delegate to these public functions.
+  * `distortion_vs_field`, `distortion_grid` -- chief-ray
+    f-tan(theta) distortion (sweep + 2-D grid).
+  * `footprint_per_surface` -- per-surface ray footprints grouped
+    by field angle.
+  * `spot_diagram_vs_field` -- spot diagrams at multiple field
+    angles on a common image plane.
+  * `sensitivity_ranking` -- central-difference d(merit)/d(var)
+    for an arbitrary parameter vector.
+  * `relative_illumination` -- geometric vignetting vs field (new).
+  * `field_aberration_sweep` -- real-ray sag/tan focus shifts and
+    astigmatism vs field; companion to the paraxial
+    `seidel_field_sweep` from 4.3.
+  * `petzval_radius` -- paraxial Petzval surface radius helper.
+  * Internal `_trace` dispatcher routes folded-design surface lists
+    to `trace_world` and prescription-based surface lists to
+    `trace`, so the same public functions handle both.
+
+* **Alternative Strehl definitions.**  `strehl_ratio` (peak-ratio)
+  is biased high on asymmetric PSFs where the peak shifts.  Two new
+  textbook definitions:
+  * `strehl_marechal(rms_waves)` -- closed-form
+    `exp(-(2 pi sigma)^2)` approximation; ~0.82 at 1/14 wave.
+  * `strehl_phase_integral(pupil)` -- exact small-aberration
+    `|<A e^(i phi)>|^2 / <A>^2` (Born & Wolf 9.1.10), avoids
+    peak-finding bias entirely.
+
+* **`aberration_summary` warns loudly on unknown glass.**
+  Previously a missing glass would return zero-filled Seidel
+  coefficients with the error silently appended to a `notes`
+  list -- making an unanalysable system look diffraction-limited.
+  4.4 issues a `UserWarning` while preserving the zero-fill
+  behaviour for back-compat.
+
+* **Breaking name change: `rcwa_1d` removed.**  The function name
+  advertised full Rigorous Coupled-Wave Analysis but the
+  implementation has always been an analytical thin-grating scalar
+  approximation.  Call `thin_grating_efficiency_1d` instead -- same
+  signature, same output.  The 4.0.1 alias is now the canonical
+  name.
+
+* **Packaging fix: `validation/` and `tests/` ship in the sdist.**
+  Added `MANIFEST.in` so a downloaded source distribution actually
+  contains the validation suite.
+
+* **GUI internals: four docks refactored.**  `distortion_dock`,
+  `footprint_dock`, `spot_field_dock`, and `sensitivity_dock` now
+  delegate to the new public functions instead of recomputing
+  inline.  Rendering is unchanged.
+
+* **Validation:** 1 new validation file (22 tests, all pass); 30
+  pre-existing files still pass after the rename and dock
+  refactors.
+
 ## What's new in 4.3.0
 
 **Diffractive optics, off-axis Seidel, module organization, unit-test

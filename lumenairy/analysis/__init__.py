@@ -26,6 +26,8 @@ from .analysis import (
     beam_d4sigma,
     beam_power,
     strehl_ratio,
+    strehl_marechal,
+    strehl_phase_integral,
     coupling_efficiency,
     M2,
     check_sampling_conditions,
@@ -130,11 +132,21 @@ from .ao import (
     slope_to_modal,
     LeakyIntegrator,
 )
+from .field import (
+    DistortionVsField, distortion_vs_field, distortion_grid,
+    footprint_per_surface,
+    spot_diagram_vs_field,
+    RelativeIllumination, relative_illumination,
+    FieldAberrationSweep, field_aberration_sweep,
+    petzval_radius,
+    SensitivityResult, sensitivity_ranking,
+)
 
 
 __all__ = [
     # analysis
-    'beam_centroid', 'beam_d4sigma', 'beam_power', 'strehl_ratio',
+    'beam_centroid', 'beam_d4sigma', 'beam_power',
+    'strehl_ratio', 'strehl_marechal', 'strehl_phase_integral',
     'coupling_efficiency', 'M2',
     'caustic_diagnostic', 'plot_caustic_diagnostic', 'CausticDiagnostic',
     'check_sampling_conditions', 'compute_psf', 'compute_otf',
@@ -181,4 +193,12 @@ __all__ = [
     'DeformableMirror', 'apply_dm',
     'zernike_modal_basis', 'slope_to_modal',
     'LeakyIntegrator',
+    # field-resolved analyses (4.4.0; lifted from ui/*_dock.py)
+    'DistortionVsField', 'distortion_vs_field', 'distortion_grid',
+    'footprint_per_surface',
+    'spot_diagram_vs_field',
+    'RelativeIllumination', 'relative_illumination',
+    'FieldAberrationSweep', 'field_aberration_sweep',
+    'petzval_radius',
+    'SensitivityResult', 'sensitivity_ranking',
 ]

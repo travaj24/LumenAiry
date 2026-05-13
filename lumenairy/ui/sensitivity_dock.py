@@ -121,6 +121,7 @@ class SensitivityDock(QWidget):
         return np.nan
 
     def _run_ranking(self):
+        from ..analysis.field import sensitivity_ranking
         if not self.sm.opt_variables:
             self.summary.append(
                 'No variables defined -- pick some in the Optimizer '
@@ -129,36 +130,38 @@ class SensitivityDock(QWidget):
         metric = self.combo_metric.currentIndex()
         eps_rel = self.spin_eps.value()
         x0 = self.sm.get_variable_values().copy()
-        f0 = self._evaluate(x0, metric)
+
+        labels = [
+            (f'E{var[0]}.S{var[1]}.{var[2]}'
+             if len(var) == 3 else str(var))
+            for var in self.sm.opt_variables
+        ]
+
+        # 4.4: central-difference sensitivity math lives in
+        # lumenairy.analysis.field.sensitivity_ranking.  Wrap the
+        # dock's metric evaluator into a single-argument callable.
+        result = sensitivity_ranking(
+            merit_fn=lambda x: self._evaluate(np.asarray(x), metric),
+            x0=x0,
+            labels=labels,
+            eps_rel=eps_rel,
+            eps_abs_floor=1e-9,
+        )
+        f0 = result.base_value
+        sens = list(result.derivative)
+        rel = result.relative_sensitivity
+
         self.summary.clear()
         self.summary.append(
             f'Base {self.combo_metric.currentText()} = {f0:.6g}')
         self.summary.append(
             f'{"#":>3s}  {"variable":<22s}  '
             f'{"d(merit)/d(var)":>18s}  {"|rel|":>10s}')
-
-        sens = []
-        labels = []
-        for i, var in enumerate(self.sm.opt_variables):
-            label = f'E{var[0]}.S{var[1]}.{var[2]}' if len(var) == 3 else str(var)
-            v = x0[i]
-            step = abs(v) * eps_rel if v != 0 else eps_rel
-            if step < 1e-12:
-                step = 1e-9
-            x_plus = x0.copy(); x_plus[i] = v + step
-            x_minus = x0.copy(); x_minus[i] = v - step
-            f_plus = self._evaluate(x_plus, metric)
-            f_minus = self._evaluate(x_minus, metric)
-            if not (np.isfinite(f_plus) and np.isfinite(f_minus)):
-                sens.append(np.nan)
-                labels.append(label)
+        for i, (lbl, d, r) in enumerate(zip(labels, sens, rel)):
+            if not np.isfinite(d):
                 continue
-            d = (f_plus - f_minus) / (2 * step)
-            sens.append(d)
-            labels.append(label)
-            rel = abs(d * v / f0) if abs(f0) > 1e-30 else abs(d * v)
             self.summary.append(
-                f'{i:>3d}  {label:<22s}  {d:>18.6e}  {rel:>10.4f}')
+                f'{i:>3d}  {lbl:<22s}  {d:>18.6e}  {r:>10.4f}')
 
         self._plot_ranking(labels, sens, f0)
 

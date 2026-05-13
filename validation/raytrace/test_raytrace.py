@@ -1313,26 +1313,25 @@ H.run('regression: normal refraction still returns all alive rays',
 # Regression: thin_grating_efficiency_1d alias (4.0.1)
 # =====================================================================
 
-H.section('Regression: thin_grating_efficiency_1d alias (4.0.1)')
+H.section('Regression: thin_grating_efficiency_1d energy conservation (4.4)')
 
 
-def t_thin_grating_alias_matches_rcwa_1d():
-    """The new honest-name alias must return bit-identical results to
-    the historic rcwa_1d call for the same parameters."""
-    common = dict(period=1e-6, n_ridge=1.5, n_groove=1.0,
+def t_thin_grating_energy_conserved_long_period():
+    """Lossless thin phase grating, long period (P >> lambda) so all
+    orders propagate into the substrate: sum(T) + sum(R) approaches 1
+    as n_orders grows large enough to capture the Fourier series."""
+    common = dict(period=100e-6, n_ridge=1.5, n_groove=1.0,
                    n_substrate=1.5, n_superstrate=1.0,
-                   depth=2e-6, duty_cycle=0.5, wavelength=550e-9)
-    o_a, R_a, T_a = la.rcwa_1d(**common)
-    o_b, R_b, T_b = la.thin_grating_efficiency_1d(**common)
-    same_orders = np.array_equal(o_a, o_b)
-    same_T = np.array_equal(T_a, T_b)
-    same_R = np.array_equal(R_a, R_b)
-    return same_orders and same_T and same_R, \
-        (f'orders match={same_orders}, T match={same_T}, R match={same_R}')
+                   depth=2e-6, duty_cycle=0.5, wavelength=550e-9,
+                   n_orders=201)
+    _, R, T = la.thin_grating_efficiency_1d(**common)
+    total = float(T.sum() + R.sum())
+    return abs(total - 1.0) < 5e-3, \
+        f'sum(T) + sum(R) = {total:.6f} (expected ~1)'
 
 
-H.run('thin_grating_efficiency_1d bit-identical to rcwa_1d',
-      t_thin_grating_alias_matches_rcwa_1d)
+H.run('thin_grating_efficiency_1d conserves energy (long period)',
+      t_thin_grating_energy_conserved_long_period)
 
 
 if __name__ == '__main__':

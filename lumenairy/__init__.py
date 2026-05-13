@@ -149,6 +149,8 @@ from .analysis import (
     beam_d4sigma,
     beam_power,
     strehl_ratio,
+    strehl_marechal,
+    strehl_phase_integral,
     coupling_efficiency,
     M2,
     caustic_diagnostic,
@@ -218,6 +220,25 @@ from .analysis.ao import (
     LeakyIntegrator,
 )
 
+# ── Field-resolved analyses (4.4.0) ────────────────────────────────────
+# Lifted from ui/<dock>.py so distortion / footprint / spot-by-field /
+# sensitivity ranking are reachable from scripts.  GUI docks now call
+# these public functions and render the result.
+from .analysis.field import (
+    DistortionVsField,
+    distortion_vs_field,
+    distortion_grid,
+    footprint_per_surface,
+    spot_diagram_vs_field,
+    RelativeIllumination,
+    relative_illumination,
+    FieldAberrationSweep,
+    field_aberration_sweep,
+    petzval_radius,
+    SensitivityResult,
+    sensitivity_ranking,
+)
+
 # ── Thin-film coatings ────────────────────────────────────────────────
 from .elements.coatings import (
     coating_reflectance,
@@ -258,11 +279,10 @@ from .elements.bsdf import (
 )
 
 # ── Grating diffraction efficiency (thin-grating scalar approx) ───────
-# Note: ``rcwa_1d`` is the historical name; the current implementation
-# is an analytical thin-grating scalar approximation, NOT full RCWA.
-# Use ``thin_grating_efficiency_1d`` for the honest-name alias.
+# The function is named for what it actually computes: an analytical
+# scalar thin-phase-grating diffraction-efficiency formula.  A future
+# release may add a separate full RCWA path.
 from .elements.rcwa import (
-    rcwa_1d,
     thin_grating_efficiency_1d,
     grating_efficiency_vs_wavelength,
 )
@@ -433,6 +453,7 @@ from .raytrace import (
     Surface,
     TraceResult,
     trace,
+    trace_world,
     surfaces_from_prescription,
     make_ray,
     make_fan,
@@ -447,6 +468,7 @@ from .raytrace import (
     seidel_prescription,
     seidel_field_sweep,
     seidel_wfe,
+    world_surfaces_from_prescription,
     spot_rms,
     spot_geo_radius,
     spot_diagram,
@@ -631,7 +653,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.3.0"
+__version__ = "4.4.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -845,6 +867,7 @@ __all__ = [
     'Surface',
     'TraceResult',
     'trace',
+    'trace_world',
     'trace_prescription',
     'surfaces_from_prescription',
     'surfaces_from_elements',
@@ -865,6 +888,7 @@ __all__ = [
     'seidel_prescription',
     'seidel_field_sweep',
     'seidel_wfe',
+    'world_surfaces_from_prescription',
     'spot_rms',
     'spot_geo_radius',
     'spot_diagram',
@@ -921,6 +945,8 @@ __all__ = [
     'CausticDiagnostic',
     'beam_power',
     'strehl_ratio',
+    'strehl_marechal',
+    'strehl_phase_integral',
     'check_sampling_conditions',
     'compute_psf',
     'compute_otf',
@@ -979,6 +1005,15 @@ __all__ = [
     'DeformableMirror', 'apply_dm',
     'zernike_modal_basis', 'slope_to_modal',
     'LeakyIntegrator',
+
+    # Field-resolved analyses (4.4.0)
+    'DistortionVsField', 'distortion_vs_field', 'distortion_grid',
+    'footprint_per_surface',
+    'spot_diagram_vs_field',
+    'RelativeIllumination', 'relative_illumination',
+    'FieldAberrationSweep', 'field_aberration_sweep',
+    'petzval_radius',
+    'SensitivityResult', 'sensitivity_ranking',
 
     # Interferometry
     'simulate_interferogram',
@@ -1095,8 +1130,7 @@ __all__ = [
     'richards_wolf_focus',
     'debye_wolf_psf',
 
-    # RCWA (rigorous coupled-wave analysis)
-    'rcwa_1d',
+    # Thin-grating scalar diffraction efficiency
     'thin_grating_efficiency_1d',
     'grating_efficiency_vs_wavelength',
 

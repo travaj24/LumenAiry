@@ -92,10 +92,8 @@ class SpotFieldDock(QWidget):
         self._replot()
 
     def _replot(self):
-        from ..raytrace import (
-            find_paraxial_focus, trace, make_rings, spot_rms,
-            system_abcd, Surface)
-        from ..raytrace.core import trace_world
+        from ..raytrace import find_paraxial_focus, system_abcd
+        from ..analysis.field import spot_diagram_vs_field
         self.fig.clear()
 
         surfaces = self.sm.build_trace_surfaces()
@@ -109,10 +107,7 @@ class SpotFieldDock(QWidget):
         per_ring = self.spin_per_ring.value()
         fields_deg = list(self.sm.field_angles_deg) or [0.0]
 
-        # Paraxial BFL for the dock's status line.  Calculated on
-        # the legacy local list so cb_pre Surfaces with their
-        # thickness=0 contribute correctly to the cumulative axial
-        # transfer.
+        # Paraxial EFL/BFL for status line + Airy radius.
         try:
             _, efl, bfl, _ = system_abcd(surfaces, wv)
             if not (np.isfinite(bfl) and bfl > 0):
@@ -124,28 +119,30 @@ class SpotFieldDock(QWidget):
             return
 
         # 3.7.7: world-frame surfaces with image plane already
-        # appended at the Detector's world frame (or paraxial
-        # focus).  Eliminates the per-call manual image-plane
-        # construction and gives correct geometry on folded
-        # designs.
+        # appended at the Detector's world frame (or paraxial focus).
+        # 4.4: spot-trace math lives in
+        # lumenairy.analysis.field.spot_diagram_vs_field.  Pass the
+        # world-frame surfaces so folded designs trace correctly.
         surfs_img = self.sm.build_run_trace_world_surfaces(
             image_distance=bfl)
-
-        # Trace each field, collect spots
-        results = []
-        for fa_deg in fields_deg:
-            fa_rad = np.radians(fa_deg)
-            try:
-                rays = make_rings(semi_ap, rings, per_ring, fa_rad, wv)
-                r = trace_world(rays, surfs_img, wv)
-            except Exception:
-                r = None
-            results.append((fa_deg, r))
+        try:
+            sd_results = spot_diagram_vs_field(
+                surfs_img, wv, fields_deg,
+                semi_aperture=semi_ap,
+                num_rings=rings, rays_per_ring=per_ring,
+            )
+        except Exception as e:
+            self._draw_message(f'spot_diagram_vs_field failed: {e}')
+            return
+        # Keep the per-field rms alongside the result so the loop
+        # below doesn't need to recompute it via spot_rms().
+        results = [(e['field_deg'], e['result'], e['rms_radius'])
+                   for e in sd_results]
 
         # Determine shared scale if requested
         shared_extent = 0.0
         if self.chk_share.isChecked():
-            for _, r in results:
+            for _, r, _ in results:
                 if r is None:
                     continue
                 ir = r.image_rays
@@ -171,7 +168,7 @@ class SpotFieldDock(QWidget):
         axes = self.fig.subplots(n_rows, n_cols, squeeze=False)
 
         rms_lines = []
-        for i, (fa_deg, r) in enumerate(results):
+        for i, (fa_deg, r, rms_m) in enumerate(results):
             ax = axes[i // n_cols][i % n_cols]
             ax.set_facecolor('#0a0c10')
             ax.tick_params(colors='#7a94b8', labelsize=8)
@@ -204,11 +201,11 @@ class SpotFieldDock(QWidget):
             ys = (ir.y[alive] - cy) * 1e6
             ax.scatter(xs, ys, s=6, c='#5cb8ff', alpha=0.7)
 
-            try:
-                rms_m, _ = spot_rms(r)
+            # rms_m is already computed by spot_diagram_vs_field.
+            if np.isfinite(rms_m):
                 rms_um = rms_m * 1e6
                 rms_lines.append((fa_deg, rms_um))
-            except Exception:
+            else:
                 rms_um = 0.0
 
             if airy_um > 0:

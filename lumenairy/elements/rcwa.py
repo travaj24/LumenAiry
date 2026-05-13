@@ -43,11 +43,12 @@ from __future__ import annotations
 import numpy as np
 
 
-def rcwa_1d(period, n_ridge, n_groove, n_substrate, n_superstrate,
-            depth, duty_cycle, wavelength, angle=0.0,
-            polarization='te', n_orders=11):
+def thin_grating_efficiency_1d(period, n_ridge, n_groove, n_substrate,
+                                  n_superstrate, depth, duty_cycle,
+                                  wavelength, angle=0.0,
+                                  polarization='te', n_orders=11):
     """Diffraction efficiencies for a 1-D binary phase grating
-    (**analytical thin-grating approximation -- not full RCWA**).
+    (analytical thin-grating scalar approximation).
 
     Treats the grating as a pure phase object whose transmission
     varies between two values across one period::
@@ -157,35 +158,6 @@ def rcwa_1d(period, n_ridge, n_groove, n_substrate, n_superstrate,
     return orders, R_eff, T_eff
 
 
-def thin_grating_efficiency_1d(period, n_ridge, n_groove, n_substrate,
-                                  n_superstrate, depth, duty_cycle,
-                                  wavelength, angle=0.0,
-                                  polarization='te', n_orders=11):
-    """Honest-name alias for :func:`rcwa_1d`.
-
-    ``rcwa_1d`` was historically named to advertise full Rigorous
-    Coupled-Wave Analysis, but the implementation is an analytical
-    thin-grating scalar approximation (reflection is hardcoded to
-    zero; no S-matrix interface matching).  This alias exposes the
-    same function under a name that reflects the actual physics.
-
-    See :func:`rcwa_1d` for the parameter list and return values.
-
-    Notes
-    -----
-    A future LumenAiry release may upgrade ``rcwa_1d`` to a true
-    RCWA implementation.  At that point ``thin_grating_efficiency_1d``
-    will continue to refer to the analytical thin-grating
-    approximation, while ``rcwa_1d`` will dispatch to the rigorous
-    calculation.  Code that wants stable behaviour across the
-    upgrade should call ``thin_grating_efficiency_1d`` directly.
-    """
-    return rcwa_1d(
-        period, n_ridge, n_groove, n_substrate, n_superstrate,
-        depth, duty_cycle, wavelength, angle=angle,
-        polarization=polarization, n_orders=n_orders)
-
-
 def grating_efficiency_vs_wavelength(period, n_ridge, n_groove,
                                       n_substrate, n_superstrate,
                                       depth, duty_cycle,
@@ -202,7 +174,7 @@ def grating_efficiency_vs_wavelength(period, n_ridge, n_groove,
     wavelengths = np.atleast_1d(np.asarray(wavelengths))
     eff = np.empty(wavelengths.size)
     for i, wl in enumerate(wavelengths):
-        orders, _, T = rcwa_1d(
+        orders, _, T = thin_grating_efficiency_1d(
             period, n_ridge, n_groove, n_substrate, n_superstrate,
             depth, duty_cycle, wl, polarization=polarization,
             n_orders=n_orders)

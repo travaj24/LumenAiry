@@ -301,11 +301,11 @@ H.run('Ghost intensities < 1 and sorted brightest-first',
 
 
 # ---------------------------------------------------------------------
-H.section('RCWA')
+H.section('Thin-grating diffraction efficiency')
 
 
 def t_rcwa_energy_conservation():
-    orders, _, T = la.rcwa_1d(1e-6, 1.5, 1.0, 1.52, 1.0, 0.5e-6,
+    orders, _, T = la.thin_grating_efficiency_1d(1e-6, 1.5, 1.0, 1.52, 1.0, 0.5e-6,
                               0.5, lam)
     total = T.sum()
     return 0.5 < total <= 1.01, f'total T = {total:.4f}'
@@ -316,7 +316,7 @@ H.run('RCWA: transmitted efficiency sum <= 1',
 
 
 def t_rcwa_zeroth_order_dominates():
-    orders, _, T = la.rcwa_1d(10e-6, 1.5, 1.0, 1.52, 1.0, 0.01e-6,
+    orders, _, T = la.thin_grating_efficiency_1d(10e-6, 1.5, 1.0, 1.52, 1.0, 0.01e-6,
                               0.5, lam)
     i0 = np.argmin(np.abs(orders))
     return T[i0] > 0.8, f'T_0 = {T[i0]:.4f}'
@@ -328,7 +328,7 @@ H.run('RCWA: zeroth order dominates for shallow grating',
 
 def t_rcwa_deep_grating_splits():
     d_pi = lam / (2 * (1.5 - 1.0))
-    orders, _, T = la.rcwa_1d(5e-6, 1.5, 1.0, 1.52, 1.0, d_pi, 0.5, lam)
+    orders, _, T = la.thin_grating_efficiency_1d(5e-6, 1.5, 1.0, 1.52, 1.0, d_pi, 0.5, lam)
     i0 = np.argmin(np.abs(orders))
     return T[i0] < 0.2, f'T_0 = {T[i0]:.4f} at pi depth'
 
@@ -338,7 +338,7 @@ H.run('RCWA: pi-depth suppresses zeroth order',
 
 
 def t_rcwa_large_period_scalar():
-    orders, _, T = la.rcwa_1d(100e-6, 1.5, 1.0, 1.52, 1.0, 0.1e-6,
+    orders, _, T = la.thin_grating_efficiency_1d(100e-6, 1.5, 1.0, 1.52, 1.0, 0.1e-6,
                               0.5, lam)
     i0 = np.argmin(np.abs(orders))
     return T[i0] > 0.5, \

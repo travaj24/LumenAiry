@@ -93,6 +93,9 @@ from .seidel_analysis import (
     seidel_wfe,
 )
 
+# World-frame surface builder for folded prescriptions (4.4.0).
+from .world import world_surfaces_from_prescription
+
 
 __all__ = [
     'RayBundle',
@@ -113,6 +116,7 @@ __all__ = [
     'seidel_prescription',
     'seidel_field_sweep',
     'seidel_wfe',
+    'world_surfaces_from_prescription',
     'spot_rms',
     'spot_geo_radius',
     'spot_diagram',

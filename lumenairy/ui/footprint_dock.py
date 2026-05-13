@@ -83,17 +83,15 @@ class FootprintDock(QWidget):
         self._replot()
 
     def _replot(self):
-        from ..raytrace import (
-            surfaces_from_prescription, trace, make_rings,
-            find_paraxial_focus, Surface)
-        from ..raytrace.core import trace_world
+        from ..analysis.field import footprint_per_surface
         self.fig.clear()
 
-        # 3.7.7: switch to the world-frame trace path so folded
-        # designs render with correct per-surface ray positions.
-        # ``build_run_trace_world_surfaces`` already appends the
-        # image plane at the Detector's world frame (or the
-        # paraxial focus along the last surface's local +z).
+        # 3.7.7: world-frame surfaces so folded designs render with
+        # correct per-surface ray positions.  4.4: the actual
+        # ring-trace math lives in
+        # ``lumenairy.analysis.field.footprint_per_surface`` -- this
+        # dock just builds the world-frame surface list and renders
+        # the returned per-surface dicts.
         surfaces = self.sm.build_run_trace_world_surfaces()
         if not surfaces:
             self._draw_message('No surfaces in current system.')
@@ -110,35 +108,38 @@ class FootprintDock(QWidget):
         else:
             fields_deg = list(self.sm.field_angles_deg) or [0.0]
 
+        try:
+            fp = footprint_per_surface(
+                surfaces, wv,
+                semi_aperture=semi_ap,
+                fields_deg=tuple(fields_deg),
+                num_rings=rings, rays_per_ring=per_ring,
+            )
+        except Exception as e:
+            self._draw_message(f'footprint_per_surface failed: {e}')
+            return
+
         # Lay out subplots: one per refracting/image surface.
-        n_surf = len(surfaces)
+        n_surf = len(fp)
         n_cols = min(4, n_surf)
         n_rows = (n_surf + n_cols - 1) // n_cols
         axes = self.fig.subplots(n_rows, n_cols, squeeze=False)
 
         colors = ['#5cb8ff', '#ff6b35', '#3ddc84', '#ffd166', '#ff5555']
 
-        # For each field angle, trace + draw scatter on each surface.
-        for fi, fa_deg in enumerate(fields_deg):
-            fa_rad = np.radians(fa_deg)
-            try:
-                rays = make_rings(semi_ap, rings, per_ring, fa_rad, wv)
-                result = trace_world(rays, surfaces, wv)
-            except Exception:
-                continue
-
-            color = colors[fi % len(colors)]
-
-            # ray_history is the ray bundle AT EACH SURFACE in order.
-            for si, rb in enumerate(result.ray_history):
-                if si >= n_surf:
-                    break
-                ax = axes[si // n_cols][si % n_cols]
-                alive = rb.alive
-                if alive.any():
-                    ax.scatter(rb.x[alive] * 1e3, rb.y[alive] * 1e3,
-                               s=4, c=color, alpha=0.7,
-                               label=f'{fa_deg:.1f}°' if si == 0 else None)
+        # Render the per-surface footprints returned by the analysis.
+        for si, entry in enumerate(fp):
+            ax = axes[si // n_cols][si % n_cols]
+            for fi, field_entry in enumerate(entry['fields']):
+                alive = field_entry['alive']
+                if not alive.any():
+                    continue
+                color = colors[fi % len(colors)]
+                fa_deg = field_entry['field_deg']
+                ax.scatter(field_entry['x'][alive] * 1e3,
+                           field_entry['y'][alive] * 1e3,
+                           s=4, c=color, alpha=0.7,
+                           label=f'{fa_deg:.1f}°' if si == 0 else None)
 
         # Annotate every subplot with the surface circle, axis labels,
         # face colors, and a title.
@@ -152,15 +153,15 @@ class FootprintDock(QWidget):
             ax.set_aspect('equal')
 
             # Surface clear aperture
-            sd = surfaces[si].semi_diameter
+            sd = fp[si]['semi_diameter']
             if np.isfinite(sd) and sd > 0:
                 theta = np.linspace(0, 2 * np.pi, 128)
                 ax.plot(sd * 1e3 * np.cos(theta), sd * 1e3 * np.sin(theta),
                         color='#cc6600', linewidth=1.0, linestyle='--',
                         label='SD' if si == 0 else None)
 
-            label = surfaces[si].label or f'S{si + 1}'
-            if si == n_surf - 1 and len(surfaces) > 1:
+            label = fp[si]['label']
+            if si == n_surf - 1 and n_surf > 1:
                 label = 'Image' if 'Image' not in label else label
             ax.set_title(label, color='#dde8f8', fontsize=10,
                          fontfamily='monospace')

@@ -276,6 +276,100 @@ def strehl_ratio(E, E_ref, dx):
     return float(xp.max(I)) / P * P_ref / float(xp.max(I_ref))
 
 
+def strehl_marechal(rms_waves):
+    """Marechal-approximation Strehl ratio from wavefront RMS.
+
+    .. math::
+        S \\approx \\exp\\bigl(-(2\\pi\\sigma)^2\\bigr)
+
+    where :math:`\\sigma` is the wavefront RMS error in waves.  Valid for
+    :math:`\\sigma \\ll 1` (typically :math:`\\sigma < 0.1` waves).  For
+    larger aberrations use :func:`strehl_phase_integral` or
+    :func:`strehl_ratio`.
+
+    Useful when you have an RMS-WFE estimate but no full PSF, or when
+    comparing predictions against analytic small-aberration theory.
+
+    Parameters
+    ----------
+    rms_waves : float or array
+        RMS wavefront error in waves (NOT radians).
+
+    Returns
+    -------
+    strehl : float or ndarray
+        Marechal-approximation Strehl in [0, 1].
+
+    See Also
+    --------
+    strehl_ratio : peak-ratio Strehl from full PSF.
+    strehl_phase_integral : exact small-aberration Strehl from a pupil.
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> # Diffraction-limited rule of thumb: sigma ~ 1/14 wave -> S ~ 0.82
+    >>> float(la.strehl_marechal(1.0 / 14.0))
+    0.8189...
+    """
+    sigma = 2.0 * np.pi * np.asarray(rms_waves, dtype=float)
+    return np.exp(-(sigma ** 2))
+
+
+def strehl_phase_integral(pupil):
+    """Strehl ratio from the pupil-phase integral (Born & Wolf 9.1.10).
+
+    .. math::
+        S = \\left| \\frac{\\int A(x, y) \\, e^{i\\phi(x, y)} \\, dA}{\\int A(x, y) \\, dA} \\right|^2
+
+    where :math:`A = |\\mathrm{pupil}|` is the pupil amplitude and
+    :math:`\\phi = \\arg(\\mathrm{pupil})` is the pupil phase.  This is
+    the exact small-aberration Strehl formula and avoids the
+    peak-finding bias of :func:`strehl_ratio` on asymmetric PSFs where
+    the diffraction-limited peak does not sit on the geometric chief
+    ray.
+
+    Parameters
+    ----------
+    pupil : ndarray (complex, 2-D)
+        Complex pupil function.  Amplitude defines the aperture; phase
+        carries the wavefront aberration.  Outside the aperture the
+        amplitude should be zero so it does not contribute to the
+        integral.
+
+    Returns
+    -------
+    strehl : float
+        Strehl ratio in [0, 1].  Returns 0.0 if the pupil has zero
+        net amplitude (degenerate aperture).
+
+    See Also
+    --------
+    strehl_ratio : peak-ratio Strehl from a full diffraction PSF.
+    strehl_marechal : closed-form ``exp(-(2 pi sigma)^2)`` approximation
+        from an RMS estimate.
+
+    Examples
+    --------
+    >>> import numpy as np, lumenairy as la
+    >>> N = 128
+    >>> x = (np.arange(N) - N/2) / (N/2)
+    >>> X, Y = np.meshgrid(x, x)
+    >>> aperture = (X**2 + Y**2) <= 1.0
+    >>> # Flat-phase pupil -> S = 1
+    >>> P = aperture.astype(complex)
+    >>> float(la.strehl_phase_integral(P))
+    1.0
+    """
+    A = np.abs(pupil)
+    A_sum = float(A.sum())
+    if A_sum == 0:
+        return 0.0
+    num = float(np.abs(np.sum(pupil)) ** 2)
+    den = A_sum ** 2
+    return num / den
+
+
 def coupling_efficiency(E, mode, dx, dy=None):
     r"""Compute the mode-overlap coupling efficiency between a field
     and a target mode.

@@ -2,6 +2,120 @@
 
 All notable changes to the core library are documented here.
 
+## [4.4.0] — 2026-05-13
+
+**Field-resolved analyses lifted from GUI + world-frame builder for
+folded prescriptions + Strehl alternatives + loud glass-catalog
+failures + grating rename + packaging fix.**  Mostly additive; one
+breaking name change is called out below.
+
+### Added — World-frame surface builder
+
+* **`world_surfaces_from_prescription(prescription)`** in new
+  `lumenairy.raytrace.world` -- translates a prescription with
+  COORDBRK entries (loaded via `load_zmx_prescription` from a folded
+  `.zmx`) into a list of `Surface` objects with `world_origin` (m)
+  and `world_R` (3×3) populated.  Pair with `trace_world` to trace
+  folded designs from any script, without instantiating the GUI's
+  `SystemModel`.  Honours Zemax PARM convention (tilt order, decenter
+  ordering via PARM 6).
+* **`trace_world` exported at top level**: `la.trace_world(rays,
+  world_surfaces, wavelength)` for one-stop folded-design tracing.
+
+Validation: 7 tests in `validation/raytrace/test_world_surfaces.py`
+cover straight-axis equivalence with local trace (bit-identical
+image-plane positions), tilt rotation correctness, decenter shift,
+and Zemax PARM-6 order field.
+
+### Added — Field-resolved analyses (new `lumenairy.analysis.field`)
+
+Eight analyses that previously lived only inside ``ui/*_dock.py``
+``_replot()`` bodies are now first-class public API, callable from any
+script or notebook.  The GUI docks have been refactored to call these
+public functions and render the returned dataclasses -- GUI behavior
+is preserved bit-for-bit.
+
+* **`distortion_vs_field(system, wavelength, max_field_deg, *,
+  n_points=21)`** -- chief-ray f-tan(theta) distortion sweep.  Returns
+  `DistortionVsField` dataclass.
+* **`distortion_grid(system, wavelength, max_field_deg, *, n_grid=7)`**
+  -- 2-D distortion grid (paraxial vs traced).
+* **`footprint_per_surface(system, wavelength, *, semi_aperture,
+  fields_deg, num_rings, rays_per_ring)`** -- per-surface ray
+  footprints grouped by field.
+* **`spot_diagram_vs_field(system, wavelength, fields_deg, *,
+  semi_aperture, num_rings, rays_per_ring)`** -- spot diagrams at
+  multiple field angles on a common image plane.
+* **`sensitivity_ranking(merit_fn, x0, labels=None, *, eps_rel,
+  eps_abs_floor)`** -- central-difference d(merit)/d(var) for an
+  arbitrary parameter vector.  Returns `SensitivityResult`.
+* **`relative_illumination(system, wavelength, fields_deg, *, ...)`**
+  -- geometric vignetting fraction vs field (new).  Returns
+  `RelativeIllumination`.
+* **`field_aberration_sweep(system, wavelength, fields_deg, *, ...)`**
+  -- real-ray sagittal / tangential focus shifts and astigmatism vs
+  field.  Companion to the paraxial `seidel_field_sweep`.  Returns
+  `FieldAberrationSweep`.
+* **`petzval_radius(system, wavelength)`** -- paraxial Petzval
+  surface radius from the curvature-only Hopkins sum.
+
+All eight accept either a prescription dict or a pre-built surface
+list.  Internal `_trace` dispatcher routes to `trace_world` when the
+surface list carries world frames (folded designs) and `trace`
+otherwise (standard / prescription-based designs).
+
+### Added — Strehl alternatives in `lumenairy.analysis.analysis`
+
+* **`strehl_marechal(rms_waves)`** -- closed-form
+  `exp(-(2*pi*sigma)^2)` Strehl approximation from an RMS estimate.
+  ~0.82 at 1/14 wave (the diffraction-limited rule of thumb).
+* **`strehl_phase_integral(pupil)`** -- exact small-aberration Strehl
+  `|<A exp(i*phi)>|^2 / <A>^2` (Born & Wolf 9.1.10).  Avoids the
+  peak-finding bias of `strehl_ratio` on asymmetric PSFs.
+
+### Changed
+
+* **`aberration_summary` now warns loudly on unknown glass.**  When a
+  prescription references a glass not in `GLASS_REGISTRY`, the
+  function previously returned zero-filled Seidel coefficients with
+  the error buried in `notes` -- making an unanalyzable system look
+  diffraction-limited.  4.4 issues a `UserWarning` for the
+  glass-lookup failure while keeping the zero-fill behavior for
+  back-compat.
+
+### Breaking change
+
+* **`rcwa_1d` removed.**  The function's name advertised full
+  Rigorous Coupled-Wave Analysis but the implementation has always
+  been an analytical thin-grating scalar approximation (reflection
+  hardcoded to zero, no S-matrix interface matching).  Call
+  **`thin_grating_efficiency_1d`** instead -- same signature, same
+  numerical output.  The 4.0.1 alias is now the canonical name.
+
+### Packaging
+
+* **`validation/` and `tests/` now ship in the source distribution.**
+  Added `MANIFEST.in` so that ``pip download lumenairy --no-binary
+  :all: && tar xzf ... && python validation/run_all.py`` actually
+  works.  Wheels still ship only the library packages.
+
+### GUI internals
+
+* `distortion_dock`, `footprint_dock`, `spot_field_dock`,
+  `sensitivity_dock` now delegate to the public analysis functions.
+  Rendering is unchanged; the bodies are roughly half their previous
+  size.
+
+### Validation
+
+* 1 new validation file: `validation/analysis/test_field.py`
+  (22 tests; all pass).
+* All 30 pre-existing validation files still pass after the rename
+  + refactor.
+* Existing `test_thin_grating_alias_matches_rcwa_1d` regression test
+  replaced with `t_thin_grating_energy_conserved_long_period`
+  (energy conservation on a long-period grating).
+
 ## [4.3.0] — 2026-05-13
 
 **Diffractive optics + off-axis Seidel + module organization + unit-test

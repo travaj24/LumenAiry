@@ -90,10 +90,10 @@ class DistortionDock(QWidget):
         self._replot()
 
     def _replot(self):
-        from ..raytrace import (
-            surfaces_from_prescription, find_paraxial_focus, trace,
-            _make_bundle, system_abcd, Surface)
-        from ..raytrace.core import trace_world
+        from ..raytrace import system_abcd
+        from ..analysis.field import (
+            distortion_vs_field, distortion_grid,
+        )
         self.fig.clear()
 
         # 3.7.7: world-frame trace so distortion analysis is
@@ -126,39 +126,24 @@ class DistortionDock(QWidget):
         surfs_img = self.sm.build_run_trace_world_surfaces(
             image_distance=bfl)
 
-        # Sweep field angles: 0 → max
+        # 4.4: chief-ray sweep + f-tan-theta math lives in
+        # lumenairy.analysis.field.distortion_vs_field.  Pass the
+        # world-frame surfaces we just built so folded-design
+        # geometry is preserved (the function auto-detects world
+        # frames and routes to trace_world).
         max_deg = float(self.spin_max_deg.value())
         n_pts = int(self.spin_points.value())
-        thetas_deg = np.linspace(0, max_deg, n_pts)
-        thetas_rad = np.radians(thetas_deg)
-
-        h_chief = []
-        for theta in thetas_rad:
-            # Chief ray: launched from the entrance-pupil center (x=y=0 for
-            # an on-axis stop) at angle theta in the y-direction.
-            try:
-                rays = _make_bundle(
-                    x=np.array([0.0]), y=np.array([0.0]),
-                    L=np.array([0.0]), M=np.array([np.sin(theta)]),
-                    wavelength=wv)
-                result = trace_world(rays, surfs_img, wv)
-                if result.image_rays.alive[0]:
-                    h_chief.append(float(result.image_rays.y[0]))
-                else:
-                    h_chief.append(np.nan)
-            except Exception:
-                h_chief.append(np.nan)
-
-        h_chief = np.array(h_chief)
-        h_paraxial = efl * np.tan(thetas_rad)
-
-        # Distortion %
-        # Avoid divide-by-zero at theta=0 by taking the limit
-        with np.errstate(divide='ignore', invalid='ignore'):
-            distortion_pct = np.where(
-                np.abs(h_paraxial) > 1e-15,
-                100.0 * (h_chief - h_paraxial) / h_paraxial,
-                0.0)
+        try:
+            d = distortion_vs_field(surfs_img, wv,
+                                    max_field_deg=max_deg,
+                                    n_points=n_pts)
+        except Exception as e:
+            self._draw_message(f'distortion_vs_field failed: {e}')
+            return
+        thetas_deg = d.theta_deg
+        h_chief = d.h_chief
+        h_paraxial = d.h_paraxial
+        distortion_pct = d.distortion_pct
 
         # ---- Plot 1: Distortion % vs field angle
         ax1 = self.fig.add_subplot(121)
@@ -204,29 +189,24 @@ class DistortionDock(QWidget):
                       color='#5cb8ff', fontsize=11,
                       fontfamily='monospace')
 
+        # 4.4: 2-D grid math lives in
+        # lumenairy.analysis.field.distortion_grid.
         n_grid = 7
-        ths = np.linspace(-max_deg, max_deg, n_grid)
-        ths_rad = np.radians(ths)
-        actual_x = np.full((n_grid, n_grid), np.nan)
-        actual_y = np.full((n_grid, n_grid), np.nan)
-        for ix, tx in enumerate(ths_rad):
-            for iy, ty in enumerate(ths_rad):
-                try:
-                    rays = _make_bundle(
-                        x=np.array([0.0]), y=np.array([0.0]),
-                        L=np.array([np.sin(tx)]),
-                        M=np.array([np.sin(ty)]),
-                        wavelength=wv)
-                    r = trace_world(rays, surfs_img, wv)
-                    if r.image_rays.alive[0]:
-                        actual_x[iy, ix] = r.image_rays.x[0]
-                        actual_y[iy, ix] = r.image_rays.y[0]
-                except Exception:
-                    pass
-
-        # Paraxial reference grid
-        para_x = (efl * np.tan(ths_rad))[None, :].repeat(n_grid, axis=0)
-        para_y = (efl * np.tan(ths_rad))[:, None].repeat(n_grid, axis=1)
+        try:
+            g = distortion_grid(surfs_img, wv,
+                                max_field_deg=max_deg,
+                                n_grid=n_grid)
+        except Exception:
+            g = {
+                'actual_x': np.full((n_grid, n_grid), np.nan),
+                'actual_y': np.full((n_grid, n_grid), np.nan),
+                'paraxial_x': np.full((n_grid, n_grid), np.nan),
+                'paraxial_y': np.full((n_grid, n_grid), np.nan),
+            }
+        actual_x = g['actual_x']
+        actual_y = g['actual_y']
+        para_x = g['paraxial_x']
+        para_y = g['paraxial_y']
 
         # Draw paraxial
         for i in range(n_grid):
