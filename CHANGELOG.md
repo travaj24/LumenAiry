@@ -2,6 +2,111 @@
 
 All notable changes to the core library are documented here.
 
+## [4.3.0] — 2026-05-13
+
+**Diffractive optics + off-axis Seidel + module organization + unit-test
+layer.**  Pure-additive; no breaking changes.
+
+### Added — Diffractive lens trio
+
+* **`create_diffractive_lens(N, dx_m, focal_length_m, wavelength_m, *,
+  center=(0,0))`** -- continuous-phase thin-lens equivalent
+  ``exp(-i k r^2 / (2 f))``.  Reference implementation; the limiting
+  case of `create_kinoform` as `n_levels -> inf`.
+* **`create_kinoform(N, dx_m, focal_length_m, wavelength_m, *,
+  n_levels=8, center=(0,0))`** -- multi-level quantized phase
+  diffractive lens.  Diffraction efficiency
+  ``eta_1 = sinc^2(1/n_levels)``: ~40.5% at 2 levels, ~81% at 4,
+  ~95% at 8, ~99% at 16.
+* **`create_fresnel_zone_plate(N, dx_m, focal_length_m, wavelength_m,
+  *, binary=True, n_zones=None, center=(0,0))`** -- classical
+  amplitude FZP (``binary=True``, default; ~10% efficiency) or
+  Rayleigh-Wood phase FZP (``binary=False``; ~40% efficiency).
+  ``n_zones`` crops to a finite aperture.
+
+All three exported at top-level (`lumenairy.create_diffractive_lens`,
+etc.) and from `lumenairy.elements`.  16 new validation tests in
+`validation/elements/test_doe.py`.
+
+### Added — Off-axis Seidel analysis
+
+New module `lumenairy.raytrace.seidel_analysis`:
+
+* **`seidel_field_sweep(surfaces, wavelength, field_heights, *,
+  object_distance=inf, stop_index=None)`** -- evaluates Seidel
+  Hopkins sums at a grid of field heights in one call.  Returns
+  per-surface arrays of shape ``(N_surfaces, N_fields)`` and total
+  sums of shape ``(N_fields,)``, suitable for plotting S1-S5 vs
+  field angle, finding zero-coma stops, etc.
+* **`seidel_wfe(seidel_or_totals, rho, theta, *, field_index=None,
+  field_angle=None)`** -- reconstructs ``W(rho, theta)`` from a
+  Seidel total dict using the standard Welford expansion (the
+  Petzval S4 term is scaled by ``sigma^2`` automatically using the
+  field-angle metadata that `seidel_coefficients` now exposes).
+
+`seidel_coefficients` is unchanged externally except that the
+returned dict now also contains ``'field_angle': float`` (additive
+key, backward-compatible).  Existing callers see no behavior change.
+
+10 new validation tests in `validation/raytrace/test_seidel_field.py`
+verify the scaling laws (S1/S4 field-independent, S2 ~ h, S3 ~ h^2)
+and the WFE reconstruction.
+
+### Added — Module organization polish
+
+Two functions moved to their conceptual home with full
+backward-compat re-exports:
+
+* `lumenairy.ao` -> `lumenairy.analysis.ao` (AO is analysis /
+  control, not a top-level element family).  `from lumenairy.ao
+  import DeformableMirror` still works via a shim.
+* `coronagraph_contrast_curve` moved from
+  `lumenairy.elements.elements` to a new
+  `lumenairy.analysis.coronagraph` (it's analysis, not an element
+  factory).  `from lumenairy.elements import
+  coronagraph_contrast_curve` still works via a deferred-import
+  shim.
+* New `lumenairy.elements.coronagraph` namespace module re-exports
+  the four coronagraph builders (`apply_lyot_focal_plane_mask`,
+  `apply_vortex_phase_mask`, `apply_lyot_stop`,
+  `apply_apodized_pupil`) for discoverability.
+
+### Added — Unit-test layer
+
+New `tests/unit/` directory with five focused modules:
+
+* `test_elements_lens.py` -- thin-lens and diffractive-lens
+  contracts (dtype, sign convention, phase-only unitarity,
+  n_levels quantization).
+* `test_propagation.py` -- ASM round-trip, Fresnel shape, resample
+  contracts.
+* `test_sources.py` -- shape / dtype / centroid / `(E, x, y)` tuple
+  return convention for every source factory.
+* `test_analysis.py` -- Strehl-of-self = 1, beam power scales as
+  |E|^2, Zernike decompose API.
+* `test_raytrace.py` -- ABCD det = 1, paraxial helpers.
+
+52 tests total, run in under 1 second.  Run with
+``pytest tests/unit``.  The existing pytest wrapper around the
+full validation suite moved to
+`tests/integration/test_validation_files.py` (run with
+``pytest tests/integration``).
+
+### Changed (backward-compat)
+
+* `seidel_coefficients` result dict now includes the key
+  ``'field_angle'``.  Existing code that accessed `S1`, `S2`, ...,
+  `total`, `labels`, etc., is unaffected.
+
+### Validation
+
+* All 29 pre-existing validation files pass.
+* 2 new validation files (`test_doe.py`, `test_seidel_field.py`)
+  pass 26/26.
+* 52 unit tests pass in 0.76s on a fresh checkout.
+* Total: **31 validation files, 26 new validation tests, 52 unit
+  tests -- all green.**
+
 ## [4.2.0] — 2026-05-12
 
 **Cross-library pupil-grid factories.**  Pure-additive; no breaking

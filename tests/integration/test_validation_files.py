@@ -1,4 +1,4 @@
-"""Pytest wrapper around the validation/ harness.
+"""Pytest wrapper around the validation/ harness (integration suite).
 
 Discovers each ``validation/*/test_*.py`` file and runs it as a
 parametrized pytest test, capturing the per-file pass/fail.  This
@@ -9,9 +9,13 @@ rely on.
 
 Run with:
 
-    pytest tests/test_validation_files.py -v             # standard
-    pytest tests/test_validation_files.py -n auto        # parallel
-    pytest tests/test_validation_files.py -k 'asymptotic'  # filter
+    pytest tests/integration/ -v             # standard
+    pytest tests/integration/ -n auto        # parallel (pytest-xdist)
+    pytest tests/integration/ -k 'asymptotic'  # filter
+
+In 4.3.0 this was relocated from ``tests/`` to ``tests/integration/``
+so it sits alongside the fast ``tests/unit/`` suite that is the
+default ``pytest`` target.
 """
 from __future__ import annotations
 
@@ -23,7 +27,7 @@ from pathlib import Path
 import pytest
 
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent.parent.parent
 VALIDATION = REPO / 'validation'
 
 
@@ -37,7 +41,6 @@ def _discover_validation_files():
             continue
         for f in sorted(sub.glob('test_*.py')):
             files.append(f)
-    # Top-level validation files
     for f in sorted(VALIDATION.glob('test_*.py')):
         files.append(f)
     return files
@@ -47,15 +50,10 @@ _VAL_FILES = _discover_validation_files()
 _VAL_IDS = [f.relative_to(VALIDATION).as_posix() for f in _VAL_FILES]
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize('val_file', _VAL_FILES, ids=_VAL_IDS)
 def test_validation_file_passes(val_file):
-    """Run ``python <val_file>`` in a subprocess and assert exit 0.
-
-    The subprocess approach matches what ``validation/run_all.py``
-    does, but parametrization gives pytest's per-test isolation,
-    fail-fast (``-x``), filtering (``-k``), and parallel execution
-    (``-n auto`` via pytest-xdist).
-    """
+    """Run ``python <val_file>`` in a subprocess and assert exit 0."""
     proc = subprocess.run(
         [sys.executable, str(val_file)],
         capture_output=True, text=True, timeout=600,

@@ -41,6 +41,9 @@ from .lenses import (
 from .doe import (
     create_periodic_phase_mask,
     create_microlens_array,
+    create_diffractive_lens,
+    create_kinoform,
+    create_fresnel_zone_plate,
     makedammann2d,
     load_phase_file,
     save_phase_file,
@@ -111,7 +114,10 @@ __all__ = [
     'check_grid_vs_apertures', 'recommend_grid_for_prescription',
     'NUMEXPR_AVAILABLE',
     # doe
-    'create_periodic_phase_mask', 'create_microlens_array', 'makedammann2d',
+    'create_periodic_phase_mask', 'create_microlens_array',
+    'create_diffractive_lens', 'create_kinoform',
+    'create_fresnel_zone_plate',
+    'makedammann2d',
     'load_phase_file', 'save_phase_file', 'load_fits_field', 'save_fits_field',
     # coatings
     'coating_reflectance', 'quarter_wave_ar', 'broadband_ar_v_coat',

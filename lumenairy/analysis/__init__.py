@@ -123,6 +123,13 @@ from .plotting import (
     plot_jones_pupil,
     compute_jones_pupil,
 )
+from .ao import (
+    DeformableMirror,
+    apply_dm,
+    zernike_modal_basis,
+    slope_to_modal,
+    LeakyIntegrator,
+)
 
 
 __all__ = [
@@ -169,4 +176,9 @@ __all__ = [
     'plot_cross_section', 'plot_planes_grid', 'plot_psf', 'plot_mtf',
     'plot_stokes', 'plot_polarization_ellipses', 'plot_beam_profile',
     'plot_jones_pupil', 'compute_jones_pupil',
+    # adaptive optics (moved here in 4.3.0; lumenairy.ao still works
+    # via a shim for back-compat)
+    'DeformableMirror', 'apply_dm',
+    'zernike_modal_basis', 'slope_to_modal',
+    'LeakyIntegrator',
 ]

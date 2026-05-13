@@ -2807,6 +2807,10 @@ def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
         'y_marginal': y_m,
         'y_chief': y_c,
         'stop_index': stop_index,
+        # 4.3.0: expose the field_angle used so seidel_wfe can apply
+        # the correct sigma^2 scaling to the Hopkins-S_IV (Petzval)
+        # term when reconstructing the wavefront expansion.
+        'field_angle': float(field_angle),
     }, abcd
 
 

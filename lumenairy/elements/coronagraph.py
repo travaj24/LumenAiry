@@ -1,0 +1,38 @@
+"""
+lumenairy.elements.coronagraph -- coronagraph element builders.
+
+Pure namespace module (4.3.0+) that re-exports the four coronagraph
+element factories for discoverability.  All functions remain defined
+in :mod:`lumenairy.elements.elements`; this module exists so users
+who explore the package layout can find the coronagraph builders
+together as a family rather than scattered across the general
+elements file.
+
+Element factories
+-----------------
+* :func:`apply_lyot_focal_plane_mask` -- on-axis amplitude block in
+  the focal plane (classical Lyot coronagraph).
+* :func:`apply_vortex_phase_mask` -- topological vortex phase in
+  the focal plane (charge-2 / charge-4 vortex coronagraph).
+* :func:`apply_lyot_stop` -- pupil-plane Lyot stop (annular or
+  apodized).
+* :func:`apply_apodized_pupil` -- pupil apodization (cos2 / cos_power
+  / gaussian / sonine) for shaped-pupil designs.
+
+For the analysis side -- post-coronagraph contrast curves --
+see :mod:`lumenairy.analysis.coronagraph`.
+"""
+
+from .elements import (
+    apply_lyot_focal_plane_mask,
+    apply_vortex_phase_mask,
+    apply_lyot_stop,
+    apply_apodized_pupil,
+)
+
+__all__ = [
+    'apply_lyot_focal_plane_mask',
+    'apply_vortex_phase_mask',
+    'apply_lyot_stop',
+    'apply_apodized_pupil',
+]

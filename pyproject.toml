@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "4.2.0"
+version = "4.3.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -114,25 +114,31 @@ include = ["lumenairy*"]
 lumenairy = ["*.md", "*.txt", "*.html"]
 
 [tool.pytest.ini_options]
-# pytest is a thin wrapper around the existing validation harness in
-# validation/.  See tests/test_validation_files.py: it parametrizes
-# over each validation/<dir>/test_*.py file and runs them as
-# subprocesses, giving pytest's per-test isolation, fail-fast (-x),
-# filtering (-k), parallel execution (pytest-xdist -n auto), and
-# JUnit XML for CI -- without refactoring the existing
-# validation/_harness.py infrastructure.
+# Two-layer test suite (4.3.0+):
 #
-# testpaths is `tests/` only (NOT validation/) because the
-# validation files use t_* function names (single underscore) and
-# would not be auto-collected by pytest anyway, but they DO run
-# H.run(...) calls at module-import time which would double-execute
-# each validation if both pytest and the wrapper collected them.
+#   tests/unit/        -- fast (<30s) API-contract tests; no external
+#                          deps; default target on a fresh checkout.
+#   tests/integration/ -- pytest wrapper around validation/, runs each
+#                          validation/<dir>/test_*.py as a subprocess
+#                          for full physics validation (~30 min).
+#
+# Mark integration tests with @pytest.mark.integration so they can
+# be opted-in (``-m integration``) or skipped (``-m "not integration"``).
+# The default invocation runs unit + (un-marked) tests and skips the
+# integration suite for fast dev feedback.
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "unit: fast API-contract tests, no external deps (<30s total)",
+    "integration: full validation suite via subprocess (~30 min)",
+    "regression: tests guarding against specific historical bugs",
+    "slow: long-running physics simulations",
+]
 addopts = [
     "-ra",
     "--strict-markers",
     "--strict-config",
+    "-m", "not integration",
 ]

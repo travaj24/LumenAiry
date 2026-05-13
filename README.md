@@ -10,6 +10,78 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.3.0
+
+**Diffractive optics, off-axis Seidel, module organization, unit-test
+layer.**  A four-stream release that closes audit gaps without
+breaking any existing API.  All 31 validation files and 52 new
+unit tests pass.
+
+* **Diffractive lens trio.**  Three new factory functions in
+  `lumenairy.elements.doe`, all exposed at top-level:
+  * `create_diffractive_lens(N, dx_m, focal_length_m, wavelength_m)`
+    -- continuous-phase thin-lens equivalent
+    `exp(-i k r^2 / (2 f))`.
+  * `create_kinoform(N, dx_m, focal_length_m, wavelength_m, n_levels=8)`
+    -- quantized-phase lens.  Efficiency
+    `eta ~ sinc^2(1/n_levels)`: ~81% at 4 levels, ~95% at 8, ~99%
+    at 16.
+  * `create_fresnel_zone_plate(..., binary=True, n_zones=None)` --
+    classical amplitude FZP (`binary=True`, default; ~10%
+    efficiency) or Rayleigh-Wood phase FZP (`binary=False`; ~40%
+    efficiency).  `n_zones` crops to a finite aperture.
+
+* **Off-axis Seidel analysis (`lumenairy.raytrace.seidel_analysis`).**
+  The existing `seidel_coefficients` is on-axis only by design.
+  Two new helpers extend it without breaking it:
+  * `seidel_field_sweep(surfaces, wavelength, field_heights)` --
+    evaluates the five Hopkins sums at a grid of field heights in
+    one call.  Returns per-surface arrays of shape
+    `(N_surfaces, N_fields)` and total sums of shape
+    `(N_fields,)`, suitable for plotting S1-S5 vs field angle.
+  * `seidel_wfe(seidel_result, rho, theta, ...)` -- reconstructs
+    `W(rho, theta)` from a Seidel total dict using the standard
+    Welford expansion (S1 rho^4 / 8 + S2 rho^3 cos / 2 + S3 rho^2
+    cos^2 / 2 + S4 sigma^2 rho^2 / 4 + S5 rho cos / 2).
+  * `seidel_coefficients` now returns the `field_angle` used in
+    the result dict so `seidel_wfe` can apply the Petzval `sigma^2`
+    scaling automatically.
+
+* **Module organization polish.**  Two functions that lived in
+  the "wrong" subpackage are now in their conceptual home;
+  back-compat shims keep every existing import path working:
+  * `lumenairy.ao` -> `lumenairy.analysis.ao`.  AO primitives
+    (`DeformableMirror`, `apply_dm`, `LeakyIntegrator`,
+    `zernike_modal_basis`, `slope_to_modal`) are an analysis /
+    control layer, not a top-level element family.  Old import
+    path `from lumenairy.ao import ...` still works.
+  * `coronagraph_contrast_curve` moved from
+    `lumenairy.elements.elements` to a new
+    `lumenairy.analysis.coronagraph` (it's a post-processing
+    analysis function, not an element factory).  Old import
+    paths still work via a deferred-import shim.
+  * New `lumenairy.elements.coronagraph` namespace module
+    re-exports the four coronagraph builders
+    (`apply_lyot_focal_plane_mask`, `apply_vortex_phase_mask`,
+    `apply_lyot_stop`, `apply_apodized_pupil`) for discoverability.
+
+* **Unit-test layer (`tests/unit/`).**  Five new modules
+  (`test_elements_lens.py`, `test_propagation.py`, `test_sources.py`,
+  `test_analysis.py`, `test_raytrace.py`) plus a shared
+  `tests/conftest.py` give 52 fast API-contract tests that finish
+  in <1 second total -- complementing (not replacing) the
+  ~30-minute integration validation suite.  The existing
+  pytest-wrapper around `validation/` moved to
+  `tests/integration/test_validation_files.py`.  Run the unit
+  layer alone with `pytest tests/unit`; run everything including
+  the validation subprocess wrapper with
+  `pytest tests/ -m "unit or integration"`.
+
+* **Pure-additive overall.**  Every existing import path
+  (`lumenairy.ao`, `lumenairy.elements.coronagraph_contrast_curve`,
+  the unchanged `seidel_coefficients` shape) still works.  No
+  breaking changes.
+
 ## What's new in 4.0.1
 
 **Bug-fix patch from the post-4.0 deep audit.**  A multi-agent

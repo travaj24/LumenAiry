@@ -790,175 +790,20 @@ def apply_apodized_pupil(E_in, dx, diameter, *,
     return E_in * T
 
 
-def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
-                                  f_eff, *, n_radii=64, max_lam_over_D=20.0,
-                                  center=None, azimuthal='mean'):
-    """Compute the post-coronagraph contrast curve vs angular separation.
+def coronagraph_contrast_curve(*args, **kwargs):
+    """Backward-compatibility shim; canonical home is
+    :func:`lumenairy.analysis.coronagraph.coronagraph_contrast_curve`.
 
-    Given a coronagraphed PSF (e.g. the output of the
-    apply_aperture -> Fraunhofer-MFT -> vortex / Lyot-FPM -> back-MFT
-    -> Lyot stop -> compute_psf pipeline) and the un-coronagraphed
-    reference PSF of the same pupil, returns the **radial contrast**
-    -- the local mean coronagraphed intensity divided by the
-    reference peak intensity -- as a function of angular separation
-    in units of ``lambda * f / D``.
-
-    Parameters
-    ----------
-    psf_coro : ndarray (real, N x N)
-        Intensity PSF of the coronagraphed system at the final
-        detector plane.
-    psf_ref : ndarray (real, N x N)
-        Intensity PSF of the same pupil WITHOUT the coronagraph
-        masks (used to set the contrast denominator at the on-axis
-        peak).  Both PSFs should be computed with the same
-        normalisation (typically ``normalize='none'`` so the
-        intensities are directly comparable).
-    dx_focal : float
-        Focal-plane grid spacing [m].
-    wavelength : float
-        Operating wavelength [m].
-    f_eff : float
-        Effective focal length [m].  Together with the pupil
-        diameter (implicit in ``psf_ref``) this defines the
-        lambda*f/D scale.  The function does NOT depend on the
-        pupil diameter directly -- it normalises by the chief peak
-        of ``psf_ref`` so the angular scale comes from
-        ``lambda * f_eff / D = dx_focal * (N * dx_pupil / f_eff)``
-        through the Fraunhofer relation; pass ``f_eff`` to set the
-        x-axis units.
-    n_radii : int, default 64
-        Number of radial bins.
-    max_lam_over_D : float, default 20.0
-        Outer radius of the contrast curve in units of
-        ``lambda * f_eff / D``.  Past this point the bins overflow
-        the grid for typical setups.
-    center : tuple ``(xc_pix, yc_pix)``, optional
-        Pixel coordinates of the coronagraphic chief.  Defaults to
-        the brightest pixel of ``psf_ref`` (the un-blocked chief).
-    azimuthal : ``'mean'`` (default) / ``'median'`` / ``'rms'``
-        Per-radius reduction over the azimuth.  ``'mean'`` is the
-        textbook "average contrast curve"; ``'median'`` is robust
-        against bright residual speckles; ``'rms'`` reports
-        ``sqrt(mean(I^2))`` which is the standard 1-sigma
-        speckle-noise floor metric.
-
-    Returns
-    -------
-    result : dict with keys
-        * ``'r_lam_over_D'`` -- ``(n_radii,)`` array of radial bin
-          centres in units of ``lambda * f_eff / D``.
-        * ``'contrast'`` -- ``(n_radii,)`` array of radial contrast
-          values.
-        * ``'r_pixels'`` -- raw radial bin centres in pixels.
-        * ``'peak_ref'`` -- the reference peak intensity used as
-          denominator.
-        * ``'center'`` -- pixel coordinates of the chief.
-
-    Notes
-    -----
-    For a vortex coronagraph with a 0.85 * D Lyot stop the curve
-    should drop by 3-4 orders of magnitude inside ``~3 lambda/D``
-    and asymptote to the residual-speckle floor outside that.
-
-    Examples
-    --------
-    >>> import lumenairy as la
-    >>> # Build coronagraphed and reference PSFs (see
-    >>> # Function-Reference-Coronagraphs for the pipeline)
-    >>> psf_coro, dx = la.compute_psf(E_after_coro, wl, f, dx_pupil,
-    ...                                  normalize='none')
-    >>> psf_ref, _   = la.compute_psf(E_pupil_clean, wl, f, dx_pupil,
-    ...                                  normalize='none')
-    >>> curve = la.coronagraph_contrast_curve(
-    ...     psf_coro, psf_ref, dx, wl, f)
-    >>> import matplotlib.pyplot as plt
-    >>> plt.loglog(curve['r_lam_over_D'], curve['contrast'])
+    This function is a post-processing contrast analysis, not an
+    element factory, and was relocated in 4.3.0.  Top-level
+    ``lumenairy.coronagraph_contrast_curve`` and the
+    ``lumenairy.elements`` re-export continue to work; new code
+    should import from ``lumenairy.analysis.coronagraph``.
     """
-    psf_coro = np.asarray(psf_coro, dtype=float)
-    psf_ref = np.asarray(psf_ref, dtype=float)
-    if psf_coro.shape != psf_ref.shape:
-        raise ValueError(
-            f"coronagraph_contrast_curve: coro {psf_coro.shape} "
-            f"and ref {psf_ref.shape} must have the same shape.")
-
-    Ny, Nx = psf_ref.shape
-    if center is None:
-        # Brightest pixel of the reference = chief.
-        idx = int(np.argmax(psf_ref))
-        cy_pix = idx // Nx
-        cx_pix = idx % Nx
-    else:
-        cx_pix, cy_pix = center
-
-    peak_ref = float(psf_ref.max())
-    if peak_ref <= 0:
-        raise ValueError("psf_ref has no positive intensity.")
-
-    # Pixel-radius grid in lambda * f / D units.
-    # The Fraunhofer relation says dx_focal = lambda * f / (N * dx_pupil),
-    # i.e. each pixel = lambda * f / (N * dx_pupil) m.  The diffraction
-    # scale is lambda * f / D, where D = N * dx_pupil at the natural
-    # FFT pitch.  So 1 lambda/D = N pixels and we can derive D from
-    # dx_focal directly: D = lambda * f / (N * dx_focal_native).
-    # In practice we just use dx_focal directly and assume the user's
-    # f_eff matches their pupil setup.
-    lam_over_D_per_pixel = dx_focal * Nx / (wavelength * f_eff / 1.0)
-    # That said, the cleanest formula is:
-    #     1 lambda/D in metres = wavelength * f_eff / D
-    # but D is implicit.  Use the input grid scale: each pixel is
-    # dx_focal metres, so 1 metre = 1 / dx_focal pixels, and
-    # 1 lambda/D = (wavelength*f_eff/D) metres.  Since we don't have D,
-    # we expose r_pixels too and let users convert if their pupil
-    # geometry differs.
-    # For the canonical case D = N * dx_pupil and dx_focal_native =
-    # lambda*f/(N*dx_pupil), so 1 lambda/D = N * dx_focal_native, i.e.
-    # N pixels.  Use that for the default conversion:
-    pix_per_lam_over_D = max(Nx // 8, 1) if dx_focal <= 0 else (
-        (wavelength * f_eff) / (Nx * dx_focal * dx_focal) * dx_focal)
-    # Cleaner: compute pix_per_lam_over_D = (wavelength * f_eff) /
-    # (D * dx_focal) where D = N * dx_pupil; but the user supplied
-    # dx_focal so we trust their grid.  Below we fall back to a
-    # direct formula assuming the natural-FFT-pitch grid.
-    # For the typical natural-FFT grid the result is N (= Nx).
-    pix_per_lam_over_D = float(Nx) * (dx_focal / dx_focal)  # = Nx
-
-    # Pixel-radius grid
-    y_grid = np.arange(Ny) - cy_pix
-    x_grid = np.arange(Nx) - cx_pix
-    YY, XX = np.meshgrid(y_grid, x_grid, indexing='ij')
-    r_pix = np.sqrt(XX ** 2 + YY ** 2)
-
-    # Convert max angular radius to pixels.
-    r_max_pix = max_lam_over_D * pix_per_lam_over_D
-    r_max_pix = min(r_max_pix, min(Nx, Ny) / 2 - 1)
-
-    edges = np.linspace(0.0, r_max_pix, n_radii + 1)
-    centres_pix = 0.5 * (edges[:-1] + edges[1:])
-    contrast = np.full(n_radii, np.nan, dtype=float)
-    for i in range(n_radii):
-        m = (r_pix >= edges[i]) & (r_pix < edges[i + 1])
-        if not m.any():
-            continue
-        vals = psf_coro[m]
-        if azimuthal == 'mean':
-            agg = float(np.mean(vals))
-        elif azimuthal == 'median':
-            agg = float(np.median(vals))
-        elif azimuthal == 'rms':
-            agg = float(np.sqrt(np.mean(vals ** 2)))
-        else:
-            raise ValueError(
-                f"azimuthal must be 'mean'/'median'/'rms'; got {azimuthal!r}")
-        contrast[i] = agg / peak_ref
-
-    return {
-        'r_lam_over_D': centres_pix / pix_per_lam_over_D,
-        'contrast': contrast,
-        'r_pixels': centres_pix,
-        'peak_ref': peak_ref,
-        'center': (cx_pix, cy_pix),
-    }
+    from ..analysis.coronagraph import (
+        coronagraph_contrast_curve as _impl,
+    )
+    return _impl(*args, **kwargs)
 
 
 # =============================================================================

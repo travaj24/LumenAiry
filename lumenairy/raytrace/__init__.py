@@ -87,6 +87,12 @@ from .paraxial import (
     astigmatism_waves_to_zernike,
 )
 
+# Field-dependent Seidel analysis (4.3.0).
+from .seidel_analysis import (
+    seidel_field_sweep,
+    seidel_wfe,
+)
+
 
 __all__ = [
     'RayBundle',
@@ -105,6 +111,8 @@ __all__ = [
     'system_abcd_prescription',
     'seidel_coefficients',
     'seidel_prescription',
+    'seidel_field_sweep',
+    'seidel_wfe',
     'spot_rms',
     'spot_geo_radius',
     'spot_diagram',

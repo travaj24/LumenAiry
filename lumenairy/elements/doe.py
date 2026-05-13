@@ -222,6 +222,224 @@ def create_microlens_array(N, dx, n_lenslets, pitch, focal_length, wavelength):
 
 
 # ============================================================================
+# Diffractive lenses (4.3.0)
+# ============================================================================
+
+def create_diffractive_lens(N, dx_m, focal_length_m, wavelength_m, *,
+                              center=(0.0, 0.0)):
+    """Continuous-phase diffractive lens.
+
+    Returns a phase-only transmission function ``exp(-i k r^2 / (2 f))``
+    with ``k = 2 pi / lambda``, equivalent to the limiting case of a
+    kinoform with infinite phase levels and to an ideal thin lens at
+    the design wavelength.  Primary use is pedagogical and as a
+    reference for :func:`create_kinoform` and
+    :func:`create_fresnel_zone_plate`.
+
+    Parameters
+    ----------
+    N : int
+        Grid size (N x N).
+    dx_m : float
+        Grid spacing [m].
+    focal_length_m : float
+        Design focal length [m].  Positive = converging.
+    wavelength_m : float
+        Design wavelength [m].
+    center : tuple of float, default (0.0, 0.0)
+        Lens center offset from the grid center, ``(xc, yc)`` in metres.
+
+    Returns
+    -------
+    T : ndarray (complex, N x N)
+        Phase-only transmission function (``|T| = 1`` everywhere).
+
+    See Also
+    --------
+    create_kinoform : multi-level quantized version of this lens.
+    create_fresnel_zone_plate : binary amplitude or phase zone plate.
+    apply_thin_lens : applies the same phase directly to a field.
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> T = la.create_diffractive_lens(N=256, dx_m=10e-6,
+    ...                                  focal_length_m=50e-3,
+    ...                                  wavelength_m=1.31e-6)
+    >>> E_focused = E_plane_wave * T   # ready to propagate to z=f
+    """
+    if focal_length_m == 0:
+        raise ValueError("focal_length_m must be non-zero")
+    if N <= 0:
+        raise ValueError(f"N must be > 0; got {N}")
+    if dx_m <= 0:
+        raise ValueError(f"dx_m must be > 0; got {dx_m}")
+    if wavelength_m <= 0:
+        raise ValueError(f"wavelength_m must be > 0; got {wavelength_m}")
+    xc, yc = float(center[0]), float(center[1])
+    x = (np.arange(N) - N / 2) * dx_m - xc
+    y = (np.arange(N) - N / 2) * dx_m - yc
+    X, Y = np.meshgrid(x, y)
+    r2 = X * X + Y * Y
+    k = 2.0 * np.pi / wavelength_m
+    phase = -k * r2 / (2.0 * focal_length_m)
+    return np.exp(1j * phase)
+
+
+def create_kinoform(N, dx_m, focal_length_m, wavelength_m, *,
+                      n_levels=8, center=(0.0, 0.0)):
+    """Multi-level quantized phase diffractive lens (kinoform).
+
+    Quantizes the continuous thin-lens phase ``phi(r) = -k r^2 / (2 f)``
+    (mod 2 pi) to ``n_levels`` evenly-spaced phase steps in
+    ``[0, 2 pi)``.  This is the canonical model of an etched phase
+    grating, a multilevel diffractive lens, or an SLM driving a
+    discretised phase profile.
+
+    The first-order diffraction efficiency of an ideal kinoform is
+    ``eta_1 = sinc^2(1 / n_levels)`` (~40.5% at 2 levels, ~81% at 4
+    levels, ~95% at 8 levels, ~99% at 16 levels); the remaining power
+    appears in higher diffraction orders.
+
+    Parameters
+    ----------
+    N : int
+        Grid size (N x N).
+    dx_m : float
+        Grid spacing [m].
+    focal_length_m : float
+        Design focal length [m].  Positive = converging.
+    wavelength_m : float
+        Design wavelength [m].
+    n_levels : int, default 8
+        Number of evenly-spaced phase levels in ``[0, 2 pi)``.  Must be
+        >= 2.  ``n_levels = 2`` gives a binary phase Fresnel zone plate
+        (equivalent to ``create_fresnel_zone_plate(binary=False)``);
+        ``n_levels -> inf`` recovers the continuous diffractive lens.
+    center : tuple of float, default (0.0, 0.0)
+        Lens center offset from the grid center, ``(xc, yc)`` in metres.
+
+    Returns
+    -------
+    T : ndarray (complex, N x N)
+        Phase-only transmission function (``|T| = 1`` everywhere) with
+        phase values quantized to one of ``n_levels`` discrete steps.
+
+    See Also
+    --------
+    create_diffractive_lens : continuous-phase limit
+        (``n_levels -> inf``).
+    create_fresnel_zone_plate : binary amplitude or 2-level phase
+        zone plate.
+    """
+    if int(n_levels) < 2:
+        raise ValueError(f"n_levels must be >= 2; got {n_levels}")
+    if focal_length_m == 0:
+        raise ValueError("focal_length_m must be non-zero")
+    if N <= 0 or dx_m <= 0 or wavelength_m <= 0:
+        raise ValueError("N, dx_m, wavelength_m must be > 0")
+    xc, yc = float(center[0]), float(center[1])
+    x = (np.arange(N) - N / 2) * dx_m - xc
+    y = (np.arange(N) - N / 2) * dx_m - yc
+    X, Y = np.meshgrid(x, y)
+    r2 = X * X + Y * Y
+    k = 2.0 * np.pi / wavelength_m
+    phi_continuous = -k * r2 / (2.0 * focal_length_m)
+    phi_wrapped = np.mod(phi_continuous, 2.0 * np.pi)
+    step = 2.0 * np.pi / float(n_levels)
+    phi_q = np.floor(phi_wrapped / step) * step
+    return np.exp(1j * phi_q)
+
+
+def create_fresnel_zone_plate(N, dx_m, focal_length_m, wavelength_m, *,
+                                  binary=True, n_zones=None,
+                                  center=(0.0, 0.0)):
+    """Fresnel zone plate -- binary amplitude or binary phase.
+
+    A Fresnel zone plate focuses light to ``focal_length_m`` via
+    diffraction from concentric zones.  Zone boundaries are defined by
+    half-wave phase jumps in the equivalent thin-lens phase
+    ``phi(r) = -k r^2 / (2 f)``: zone ``n`` covers
+    ``n lambda f <= r^2 < (n+1) lambda f`` (paraxial).
+
+    Parameters
+    ----------
+    N : int
+        Grid size (N x N).
+    dx_m : float
+        Grid spacing [m].
+    focal_length_m : float
+        Design focal length [m].  Positive = converging zone plate.
+    wavelength_m : float
+        Design wavelength [m].
+    binary : bool, default True
+        If True (default): amplitude FZP -- alternating zones
+        transmit (1) or block (0).  First-order efficiency
+        ``~1 / pi^2 ~= 10%`` at the design focus.
+
+        If False: phase FZP (Rayleigh-Wood zone plate) -- alternating
+        zones receive ``0`` or ``pi`` of phase, magnitude is unity
+        everywhere.  First-order efficiency
+        ``4 / pi^2 ~= 40%`` (~4x the amplitude case).
+    n_zones : int, optional
+        Number of zones to retain.  ``None`` (default) extends the
+        zones out to the grid edge.  When provided, outside the
+        n-th zone the transmission is 0 (the FZP has a finite outer
+        aperture at ``r_n = sqrt(n lambda f)``).
+    center : tuple of float, default (0.0, 0.0)
+        Lens center offset from the grid center, ``(xc, yc)`` in metres.
+
+    Returns
+    -------
+    T : ndarray (complex, N x N)
+        Transmission function.  Binary amplitude: ``|T|`` is 0 or 1,
+        phase 0 inside.  Binary phase: ``|T| = 1`` inside, phase 0
+        or ``pi``.  Outside ``n_zones`` (when specified) ``T = 0``.
+
+    See Also
+    --------
+    create_kinoform : multi-level quantized phase lens.
+    create_diffractive_lens : continuous-phase diffractive lens.
+
+    Notes
+    -----
+    The zone assignment uses ``zone_index = floor(r^2 / (lambda f))``,
+    which aligns exactly with the phase-flip boundaries of an ideal
+    converging quadratic phase.
+    """
+    if focal_length_m == 0:
+        raise ValueError("focal_length_m must be non-zero")
+    if N <= 0 or dx_m <= 0 or wavelength_m <= 0:
+        raise ValueError("N, dx_m, wavelength_m must be > 0")
+    if n_zones is not None and int(n_zones) < 1:
+        raise ValueError(f"n_zones must be >= 1; got {n_zones}")
+
+    xc, yc = float(center[0]), float(center[1])
+    x = (np.arange(N) - N / 2) * dx_m - xc
+    y = (np.arange(N) - N / 2) * dx_m - yc
+    X, Y = np.meshgrid(x, y)
+    r2 = X * X + Y * Y
+
+    lam_f = wavelength_m * abs(focal_length_m)
+    zone_index = np.floor(r2 / lam_f).astype(int)
+
+    if n_zones is not None:
+        inside = zone_index < int(n_zones)
+    else:
+        inside = np.ones_like(zone_index, dtype=bool)
+
+    is_even = (zone_index % 2 == 0)
+    if binary:
+        T = np.where(is_even & inside, 1.0 + 0j, 0.0 + 0j)
+    else:
+        phase = np.where(is_even, 0.0, np.pi)
+        T = np.exp(1j * phase)
+        if n_zones is not None:
+            T = np.where(inside, T, 0.0 + 0j)
+    return T
+
+
+# ============================================================================
 # Dammann grating design (IFTA)
 # ============================================================================
 

@@ -107,9 +107,13 @@ from .elements import (
     apply_vortex_phase_mask,
     apply_lyot_stop,
     apply_apodized_pupil,
-    coronagraph_contrast_curve,
     generate_turbulence_screen,
 )
+
+# Coronagraph contrast curve moved to analysis/coronagraph.py in
+# 4.3.0; lumenairy.elements re-export still works via a deferred-
+# import shim for back-compat.
+from .analysis.coronagraph import coronagraph_contrast_curve
 
 # ── Sources ──────────────────────────────────────────────────────────────
 from .sources import (
@@ -204,7 +208,9 @@ from .analysis.detector import (
 )
 
 # ── Adaptive optics primitives ─────────────────────────────────────────
-from .ao import (
+# AO moved to analysis/ao.py in 4.3.0; lumenairy.ao still works via
+# a back-compat shim.
+from .analysis.ao import (
     DeformableMirror,
     apply_dm,
     zernike_modal_basis,
@@ -356,6 +362,9 @@ from .propagators.asymptotic import (
 from .elements.doe import (
     create_periodic_phase_mask,
     create_microlens_array,
+    create_diffractive_lens,
+    create_kinoform,
+    create_fresnel_zone_plate,
     makedammann2d,
     load_phase_file,
     save_phase_file,
@@ -436,6 +445,8 @@ from .raytrace import (
     system_abcd_prescription,
     seidel_coefficients,
     seidel_prescription,
+    seidel_field_sweep,
+    seidel_wfe,
     spot_rms,
     spot_geo_radius,
     spot_diagram,
@@ -620,7 +631,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.2.0"
+__version__ = "4.3.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -727,6 +738,9 @@ __all__ = [
     # DOE / phase mask helpers
     'create_periodic_phase_mask',
     'create_microlens_array',
+    'create_diffractive_lens',
+    'create_kinoform',
+    'create_fresnel_zone_plate',
     'makedammann2d',
 
     # Other field generators
@@ -849,6 +863,8 @@ __all__ = [
     'system_abcd_prescription',
     'seidel_coefficients',
     'seidel_prescription',
+    'seidel_field_sweep',
+    'seidel_wfe',
     'spot_rms',
     'spot_geo_radius',
     'spot_diagram',
