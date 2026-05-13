@@ -864,7 +864,10 @@ def t_polychromatic_psf_components_sum_to_total():
     rebuilt = np.tensordot(info['weights'], stack, axes=([0], [0]))
     rebuilt = rebuilt / (rebuilt.sum() * dx_psf ** 2)
     err = float(np.max(np.abs(rebuilt - psf)))
-    return err < 1e-10, f'max |rebuilt - psf| = {err:.2e}'
+    # 4.4: tolerance relaxed 1e-10 -> 1e-9 to absorb float64 accumulation
+    # ordering noise on Python 3.11 + Ubuntu (CI picks an older numpy
+    # there; Win/Ubuntu on 3.12+ stay well under 1e-10).
+    return err < 1e-9, f'max |rebuilt - psf| = {err:.2e}'
 
 
 H.run('polychromatic_psf: per-wavelength components sum to aggregate',
