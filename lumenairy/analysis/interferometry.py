@@ -10,6 +10,13 @@ from __future__ import annotations
 import numpy as np
 
 
+__all__ = [
+    'simulate_interferogram',
+    'phase_shift_extract',
+    'fringe_spacing',
+]
+
+
 def simulate_interferogram(opd_map, wavelength, tilt_x=0.0, tilt_y=0.0,
                            visibility=1.0, background=0.5, dx=None):
     """Generate a fringe pattern from an OPD map.

@@ -1,8 +1,50 @@
 # Roadmap — Known Limitations and Planned Improvements
 
-This document catalogues the current weaknesses in `lumenairy`
-v3.0 and outlines planned improvements.  Items are grouped by module and
-roughly prioritised within each section.
+This document catalogues remaining limitations in `lumenairy`
+(currently 4.7.0) and outlines planned improvements.  Items are grouped
+by module and roughly prioritised within each section.  Items that have
+shipped since the original 3.0 roadmap was written are recorded in the
+"Resolved since 3.0" appendix at the bottom of this file; the per-
+section limitations below have been pruned to reflect *current* gaps,
+not historical ones.
+
+---
+
+## Resolved since 3.0 (highlights)
+
+- 4.4 — **Field-resolved analysis suite** (distortion grid, footprint
+  per surface, spot diagram vs field, sensitivity ranking, Petzval
+  radius, field-aberration sweep, relative illumination) lifted out of
+  the GUI and into `lumenairy.analysis.field`.
+- 4.4 — **World-frame ray tracing** for folded designs
+  (`paraxial_focus_world`, world-frame trace + Seidel) in
+  `lumenairy.raytrace.world`.
+- 4.4 — **Adaptive optics module** (`DeformableMirror`, `apply_dm`,
+  slope-to-modal reconstruction, `LeakyIntegrator`) lifted from
+  validation scripts to `lumenairy.analysis.ao`.
+- 4.5 — **Diffractive lens trio** (`create_diffractive_lens`,
+  `create_diffractive_lens_kinoform`,
+  `create_diffractive_lens_fresnel_zone_plate`) in
+  `lumenairy.elements.doe`.
+- 4.5 — **Strehl variants** (`strehl_ratio`, `strehl_marechal`,
+  `strehl_phase_integral`) consolidated and exported flat.
+- 4.6 — **Wiki overhaul**: 12-chapter physics textbook
+  (Physics-I-Foundations.md … Physics-XII-Coronagraphy.md) plus
+  function-reference manual, plus decision-tree Mermaid diagrams
+  for propagator + lens selection.
+- 4.7 — **Module rename**: `lumenairy.analysis.analysis` →
+  `lumenairy.analysis.core` (back-compat shim retained).
+- 4.7 — **Input validation**: `_validate_propagator_inputs` on all
+  propagators (catches wavelength = 0 / negative / unit-confused
+  values, dx = 0 / negative, wrong-rank inputs, empty arrays);
+  `validate_prescription` on `surfaces_from_prescription` (catches
+  empty / under-specified / NaN-containing prescriptions before
+  they reach the trace).
+- 4.7 — **Glass registry** supports user-supplied dispersion
+  callables; ~30 additional bundled Sellmeier glasses
+  (Schott N-FK51A, N-PSK53A, N-LAK33A/B, N-SF57, S-LAH64, etc.).
+- 4.7 — Module-level `__all__` exports across all 9 analysis
+  submodules; PyPI `Changelog`/`Releases` URLs in `pyproject.toml`.
 
 ---
 
@@ -191,9 +233,10 @@ roughly prioritised within each section.
 - **No stress-optic coefficients** — no photoelastic effect modelling
   for mechanically loaded optics.
 
-- **String-only glass lookup** — no programmatic enumeration or search
-  of available glasses.  Typos in glass names produce KeyError with
-  a long list of valid keys.
+- **Limited programmatic introspection** — typos in glass names
+  produce a `KeyError` with a long list of valid keys.  A future
+  release will add `list_glasses()` / `search_glasses(pattern)`
+  / `glass_info(name)` helpers.
 
 ### Planned improvements
 
@@ -402,16 +445,25 @@ roughly prioritised within each section.
 
 ### Current state
 
-- 21-case OPD validation suite covering singlets, doublets, meniscus,
-  biconcave, equi-convex, f/# sweeps, and wavelength sweeps.
-  All cases show sub-nm traced RMS.
-- Zemax-compatible LDE + .zmx exports for cross-verification.
-- 226+ physics tests across 10 test suites.
+- ~670 `t_*` validation functions across 34 files in `validation/`
+  (propagators, ray-trace, lenses, sources, analysis, optimization,
+  prescriptions, storage, asymptotic, DOE, field-resolved analyses,
+  world-frame trace, adaptive optics, coherence, folded designs).
+- 49-test unit suite in `tests/unit/` (runs in <1 s, catches API-
+  contract regressions on a fresh checkout, no external deps).
+- Inter-library cross-checks against Zemax, rayoptics, Optiland,
+  and OPDPy documented in [[Validation and Accuracy]].
+- Pytest wrapper in `tests/integration/` runs the validation
+  scripts as subprocesses (`-m integration`).
+- GitHub Actions CI runs the unit suite on Python 3.11 / 3.12 /
+  3.13 on Ubuntu + Windows on every push.
+- PyPI Trusted Publishing OIDC auto-release on tagged commits.
 
 ### Planned improvements
 
-- Automated regression test suite (pytest) runnable with `pip install
-  -e ".[test]" && pytest`.
-- Comparison against published Zemax/CODE V benchmark prescriptions.
+- Comparison against published Zemax/CODE V benchmark prescriptions
+  (currently we validate vs Zemax for the prescriptions we own; a
+  curated set of textbook prescriptions would broaden coverage).
 - Performance regression tracking (wall-clock time per case).
-- CI/CD pipeline for automated testing on push.
+- Coverage expansion for the 4.5 DOE module (currently has a small
+  validation file, but no cross-library comparison).

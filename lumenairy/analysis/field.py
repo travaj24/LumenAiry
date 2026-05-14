@@ -41,10 +41,48 @@ public functions while preserving their fold-aware geometry.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field as _dc_field
+from dataclasses import dataclass, field as _dc_field, fields as _dc_fields
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
+
+
+class _DictAttrMixin:
+    """Mixin that makes a ``@dataclass`` instance subscriptable.
+
+    ``obj['name']`` returns ``getattr(obj, 'name')`` so callers written
+    against the 4.4 dict-return API of :func:`distortion_grid` /
+    :func:`footprint_per_surface` / :func:`spot_diagram_vs_field` /
+    :func:`petzval_radius` keep working while new code can use
+    attribute access.
+
+    ``'k' in obj`` reports whether the dataclass has field ``k``.
+    Iteration yields the field names (matches ``dict.__iter__``).
+    """
+
+    def __getitem__(self, key: str):
+        try:
+            return getattr(self, key)
+        except AttributeError as e:
+            raise KeyError(key) from e
+
+    def __contains__(self, key: str) -> bool:
+        return any(f.name == key for f in _dc_fields(self))
+
+    def __iter__(self):
+        return (f.name for f in _dc_fields(self))
+
+    def keys(self):
+        return [f.name for f in _dc_fields(self)]
+
+    def values(self):
+        return [getattr(self, f.name) for f in _dc_fields(self)]
+
+    def items(self):
+        return [(f.name, getattr(self, f.name)) for f in _dc_fields(self)]
+
+    def get(self, key: str, default=None):
+        return getattr(self, key, default)
 
 from ..raytrace import (
     Surface,
@@ -276,6 +314,37 @@ def distortion_vs_field(system, wavelength, max_field_deg, *,
     )
 
 
+@dataclass
+class DistortionGrid(_DictAttrMixin):
+    """2-D chief-ray distortion-grid result.
+
+    Returned by :func:`distortion_grid`.  Subscriptable for back-compat
+    with the 4.4 dict-return API (``result['actual_x']`` works the
+    same as ``result.actual_x``).
+
+    Attributes
+    ----------
+    theta_x_deg, theta_y_deg : ndarray
+        1-D axis angles [deg], length ``n_grid``.
+    paraxial_x, paraxial_y : ndarray
+        Paraxial f-tan(theta) reference image positions [m],
+        shape ``(n_grid, n_grid)``.
+    actual_x, actual_y : ndarray
+        Traced chief-ray image positions [m], same shape.  NaN where
+        the chief ray was vignetted.
+    efl, bfl : float
+        Paraxial effective focal length and back focal length [m].
+    """
+    theta_x_deg: np.ndarray
+    theta_y_deg: np.ndarray
+    paraxial_x: np.ndarray
+    paraxial_y: np.ndarray
+    actual_x: np.ndarray
+    actual_y: np.ndarray
+    efl: float
+    bfl: float
+
+
 def distortion_grid(system, wavelength, max_field_deg, *,
                       n_grid=7, image_distance=None):
     """2-D chief-ray distortion grid.
@@ -298,11 +367,12 @@ def distortion_grid(system, wavelength, max_field_deg, *,
 
     Returns
     -------
-    result : dict
-        Keys: ``'theta_x_deg'``, ``'theta_y_deg'`` (1-D axis angles);
-        ``'paraxial_x'``, ``'paraxial_y'``, ``'actual_x'``,
-        ``'actual_y'`` (each ``(n_grid, n_grid)`` arrays [m]);
-        ``'efl'``, ``'bfl'`` (floats [m]).
+    :class:`DistortionGrid`
+        Dataclass with ``theta_x_deg``, ``theta_y_deg``,
+        ``paraxial_x``, ``paraxial_y``, ``actual_x``, ``actual_y``,
+        ``efl``, ``bfl`` attributes.  Subscriptable
+        (``result['actual_x']``) for back-compat with the 4.4
+        dict-return API.
     """
     surfaces = _resolve_surfaces(system)
     _, efl, bfl, _ = system_abcd(surfaces, wavelength)
@@ -337,21 +407,39 @@ def distortion_grid(system, wavelength, max_field_deg, *,
     para_x = (efl * np.tan(ths_rad))[None, :].repeat(n_grid, axis=0)
     para_y = (efl * np.tan(ths_rad))[:, None].repeat(n_grid, axis=1)
 
-    return {
-        'theta_x_deg': ths,
-        'theta_y_deg': ths,
-        'paraxial_x': para_x,
-        'paraxial_y': para_y,
-        'actual_x': actual_x,
-        'actual_y': actual_y,
-        'efl': float(efl),
-        'bfl': float(bfl),
-    }
+    return DistortionGrid(
+        theta_x_deg=ths,
+        theta_y_deg=ths,
+        paraxial_x=para_x,
+        paraxial_y=para_y,
+        actual_x=actual_x,
+        actual_y=actual_y,
+        efl=float(efl),
+        bfl=float(bfl),
+    )
 
 
 # ----------------------------------------------------------------------
 # Footprint per surface (lifted from ui/footprint_dock.py)
 # ----------------------------------------------------------------------
+
+@dataclass
+class FieldFootprint(_DictAttrMixin):
+    """Ray footprint at a single surface for a single field angle."""
+    field_deg: float
+    x: np.ndarray
+    y: np.ndarray
+    alive: np.ndarray
+
+
+@dataclass
+class SurfaceFootprint(_DictAttrMixin):
+    """Per-surface ray footprint aggregated across all field angles."""
+    surface_index: int
+    semi_diameter: float
+    label: str
+    fields: List[FieldFootprint]
+
 
 def footprint_per_surface(system, wavelength, *,
                             semi_aperture=None,
@@ -381,14 +469,11 @@ def footprint_per_surface(system, wavelength, *,
 
     Returns
     -------
-    list of dict, one entry per surface (last entry = image plane if
-    one was appended):
-
-        * ``'surface_index'`` : int
-        * ``'semi_diameter'`` : float [m] (NaN if undefined)
-        * ``'label'`` : str
-        * ``'fields'`` : list of dicts ``{'field_deg', 'x', 'y',
-          'alive'}``.
+    list of :class:`SurfaceFootprint`
+        One entry per surface (last entry = image plane if one was
+        appended).  Each :class:`SurfaceFootprint` is also subscriptable
+        (``entry['fields'][0]['x']``) for back-compat with the 4.4
+        dict-return API.
     """
     surfaces = _resolve_surfaces(system)
     semi_ap = _semi_aperture_from(system, semi_aperture)
@@ -405,15 +490,15 @@ def footprint_per_surface(system, wavelength, *,
         if image_distance is not None:
             surfaces = _append_image_plane(surfaces, image_distance)
 
-    out = []
+    out: List[SurfaceFootprint] = []
     for si, surf in enumerate(surfaces):
-        out.append({
-            'surface_index': si,
-            'semi_diameter': float(surf.semi_diameter)
+        out.append(SurfaceFootprint(
+            surface_index=si,
+            semi_diameter=float(surf.semi_diameter)
                 if np.isfinite(surf.semi_diameter) else float('nan'),
-            'label': surf.label or f'S{si + 1}',
-            'fields': [],
-        })
+            label=surf.label or f'S{si + 1}',
+            fields=[],
+        ))
 
     for fa_deg in fields_deg:
         fa_rad = float(np.radians(fa_deg))
@@ -423,27 +508,37 @@ def footprint_per_surface(system, wavelength, *,
             result = _trace(rays, surfaces, wavelength)
         except Exception:
             for entry in out:
-                entry['fields'].append({
-                    'field_deg': fa_deg,
-                    'x': np.array([]), 'y': np.array([]),
-                    'alive': np.array([], dtype=bool),
-                })
+                entry.fields.append(FieldFootprint(
+                    field_deg=fa_deg,
+                    x=np.array([]), y=np.array([]),
+                    alive=np.array([], dtype=bool),
+                ))
             continue
         for si, rb in enumerate(result.ray_history):
             if si >= len(out):
                 break
-            out[si]['fields'].append({
-                'field_deg': fa_deg,
-                'x': np.asarray(rb.x),
-                'y': np.asarray(rb.y),
-                'alive': np.asarray(rb.alive, dtype=bool),
-            })
+            out[si].fields.append(FieldFootprint(
+                field_deg=fa_deg,
+                x=np.asarray(rb.x),
+                y=np.asarray(rb.y),
+                alive=np.asarray(rb.alive, dtype=bool),
+            ))
     return out
 
 
 # ----------------------------------------------------------------------
 # Spot diagrams vs field (lifted from ui/spot_field_dock.py)
 # ----------------------------------------------------------------------
+
+@dataclass
+class SpotDiagramField(_DictAttrMixin):
+    """Spot-diagram statistics for a single field angle."""
+    field_deg: float
+    result: Any
+    rms_radius: float
+    geo_radius: float
+    centroid: Tuple[float, float]
+
 
 def spot_diagram_vs_field(system, wavelength, fields_deg, *,
                             semi_aperture=None,
@@ -466,14 +561,10 @@ def spot_diagram_vs_field(system, wavelength, fields_deg, *,
 
     Returns
     -------
-    list of dict, one per field angle, with keys:
-
-        * ``'field_deg'`` -- float
-        * ``'result'`` -- :class:`TraceResult` (image-plane rays at
-          ``.image_rays``)
-        * ``'rms_radius'`` -- float [m] (NaN if all rays vignetted)
-        * ``'geo_radius'`` -- float [m]
-        * ``'centroid'`` -- ``(x, y)`` tuple [m]
+    list of :class:`SpotDiagramField`
+        One :class:`SpotDiagramField` per field angle.  Each is
+        subscriptable (``entry['rms_radius']``) for back-compat with
+        the 4.4 dict-return API.
     """
     surfaces = _resolve_surfaces(system)
     semi_ap = _semi_aperture_from(system, semi_aperture)
@@ -509,13 +600,13 @@ def spot_diagram_vs_field(system, wavelength, fields_deg, *,
         else:
             cx = cy = float('nan')
             rms = geo = float('nan')
-        out.append({
-            'field_deg': fa_deg,
-            'result': result,
-            'rms_radius': rms,
-            'geo_radius': geo,
-            'centroid': (cx, cy),
-        })
+        out.append(SpotDiagramField(
+            field_deg=fa_deg,
+            result=result,
+            rms_radius=rms,
+            geo_radius=geo,
+            centroid=(cx, cy),
+        ))
     return out
 
 

@@ -2,6 +2,115 @@
 
 All notable changes to the core library are documented here.
 
+## [4.7.0] — 2026-05-14
+
+**Polish-pass release: input validation, glass-registry overhaul, API
+symmetry, packaging hygiene.**  No breaking changes; all 34 validation
+files (~670 ``t_*`` assertions) and 94 unit tests (52 baseline + 42
+new) pass.
+
+### Added
+
+* **Propagator input validation.** A new private helper
+  ``_validate_propagator_inputs(E, z, wavelength, dx, dy=None)`` is
+  called at the entry of every public free-space propagator (ASM,
+  tilted ASM, batch ASM, MFT ASM, Fresnel, Fresnel-MFT, Fraunhofer,
+  Fraunhofer-MFT, Rayleigh-Sommerfeld, scalable ASM).  It catches the
+  silent-failure regimes the old code shipped with:
+  ``wavelength = 0`` / negative (``ZeroDivisionError``);
+  ``wavelength = 1.31`` (forgot the e-6, silent garbage);
+  ``dx = 0`` (``ZeroDivisionError``);
+  ``dx = 2.0`` (forgot units, silent garbage);
+  3-D / 1-D / empty / NaN inputs; non-finite ``z``.  Errors quote the
+  parameter name, the offending value, and the calling function.
+
+* **Prescription input validation.** New public
+  ``lumenairy.validate_prescription(prescription, *, strict=True)``
+  helper, and ``surfaces_from_prescription`` now calls it internally
+  before any conversion.  Catches: empty dict, missing
+  ``'surfaces'`` / ``'thicknesses'``, surface count / thickness
+  length mismatch, NaN radius, missing glass keys, non-positive /
+  non-finite ``aperture_diameter``.  ``strict=False`` returns the
+  issue list instead of raising.
+
+* **Glass registry rebuild.**
+
+  * ``GLASS_REGISTRY`` entries can now be a *callable*
+    ``f(wavelength_m) -> n`` (returning ``float`` or ``complex``).
+    Users register custom dispersion models, prototype coatings, or
+    temperature-dependent indices with a one-line lambda.
+  * New bundled ``SELLMEIER_COEFFICIENTS`` table with ~30 Schott /
+    Ohara entries (N-FK51A, N-PSK53A, N-LAK33A/B, N-SK11, N-SK16,
+    N-SSK2, N-SF5/10/11/14/15/57, N-LASF31A/40/41/44/45/46A/46B,
+    F2, F5, SF2, S-LAH64, S-LAH79, BaF2, ...).  These work as a
+    no-external-deps fallback when the optional
+    ``refractiveindex`` package is missing.  Sellmeier output
+    matches the live refractiveindex.info lookup to machine
+    precision for the overlapping entries.
+  * New ``list_glasses()`` and ``search_glasses(pattern)`` helpers
+    for discoverability.  Errors on unknown glass names now include
+    a ``Did you mean: [...]`` suggestion (substring match first,
+    difflib closest-spelling match as fallback).
+
+* **``dy`` kwarg on the lens trio.**  ``apply_real_lens``,
+  ``apply_real_lens_traced``, and ``apply_real_lens_maslov`` now
+  accept ``dy=None`` for API symmetry with the rest of the lens
+  family.  ``apply_real_lens`` propagates non-square pixels through
+  the per-surface phase screens and the in-glass ASM.  The traced
+  and Maslov variants accept the kwarg but raise on ``dy != dx``
+  (their interpolation paths assume square pixels).
+
+* **Field-analysis dataclass returns.**  The 4.4-era
+  ``distortion_grid``, ``footprint_per_surface``, and
+  ``spot_diagram_vs_field`` returned bare dicts / lists of dicts,
+  while their siblings (``distortion_vs_field``,
+  ``relative_illumination``, ``field_aberration_sweep``,
+  ``sensitivity_ranking``) already returned named dataclasses.  This
+  inconsistency is now resolved: new ``DistortionGrid``,
+  ``SurfaceFootprint``, ``FieldFootprint``, and ``SpotDiagramField``
+  dataclasses replace the dict returns.  They subscript like dicts
+  (``result['actual_x']`` and ``fp[0]['fields'][0]['x']`` still
+  work) so 4.4 callers keep working.
+
+* **Module-level ``__all__``** in all 9 analysis submodules
+  (``core``, ``coherence``, ``detector``, ``ghost``,
+  ``image_plane_wfe``, ``through_focus``, ``interferometry``,
+  ``phase_retrieval``, ``plotting``).  ``from lumenairy.analysis.core
+  import *`` now exports exactly the documented public surface.
+
+* **PyPI ``Changelog`` + ``Releases`` URLs** in ``pyproject.toml``
+  so the project page on PyPI links directly to the in-repo
+  ``CHANGELOG.md`` and the GitHub Releases page.
+
+### Renamed
+
+* **``lumenairy.analysis.analysis`` → ``lumenairy.analysis.core``.**
+  The historical doubled-name was an accident.  A back-compat shim
+  at ``lumenairy/analysis/analysis.py`` re-exports the new module's
+  public surface, so existing user code that did
+  ``from lumenairy.analysis.analysis import beam_centroid``
+  keeps working.  New code should use
+  ``from lumenairy.analysis import beam_centroid`` (top-level) or
+  ``from lumenairy.analysis.core import beam_centroid`` (explicit).
+
+### Updated
+
+* **``ROADMAP.md``** -- header rewritten to reflect current 4.7.0
+  state (was still saying "weaknesses in `lumenairy` v3.0").  Added
+  a "Resolved since 3.0" appendix summarising the 4.x feature
+  arrivals.  Section 11 validation counts updated from the old
+  21-case OPD claim to the current ~670 ``t_*`` assertions across
+  34 files + 49 unit tests + multi-platform CI.
+
+### No breaking changes
+
+The public API is fully back-compatible.  Callers that used dict
+indexing on the 4.4 field-analysis returns keep working via the
+``_DictAttrMixin`` on the new dataclasses.  Callers that imported
+from ``lumenairy.analysis.analysis`` keep working via the shim.
+Callers that used the existing 4.6 glass / propagator / lens APIs
+see no signature changes.
+
 ## [4.6.0] — 2026-05-14
 
 **Documentation overhaul -- decision-tree front door + lens-family

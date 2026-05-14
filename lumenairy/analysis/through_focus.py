@@ -44,11 +44,31 @@ import numpy as np
 
 from ..propagators.propagation import angular_spectrum_propagate
 from ..elements.lenses import apply_real_lens
-from .analysis import (
+from .core import (
     beam_centroid,
     beam_d4sigma,
     radial_power_bands,
 )
+
+
+__all__ = [
+    # single-plane / through-focus
+    'single_plane_metrics',
+    'diffraction_limited_peak',
+    'ThroughFocusResult',
+    'through_focus_scan',
+    'through_focus_scan_jax',
+    'find_best_focus',
+    'plot_through_focus',
+    # tolerancing
+    'Perturbation',
+    'apply_perturbations',
+    'tolerancing_sweep',
+    'monte_carlo_tolerancing',
+    'monte_carlo_tolerancing_jax',
+    'monte_carlo_tolerancing_linearized',
+    'tolerancing_report',
+]
 
 
 # =========================================================================
@@ -732,7 +752,7 @@ def through_focus_scan_jax(E_exit, dx, wavelength, z_values,
     import jax
     import jax.numpy as jnp
     from ..propagators.propagation import angular_spectrum_propagate
-    from .analysis import beam_d4sigma
+    from .core import beam_d4sigma
 
     z_arr = np.asarray(z_values, dtype=np.float64)
     n_z = z_arr.size

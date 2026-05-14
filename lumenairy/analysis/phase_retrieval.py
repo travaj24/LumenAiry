@@ -32,6 +32,18 @@ import numpy as np
 from ..propagators.propagation import _fft2, _ifft2
 
 
+__all__ = [
+    # NumPy reference implementations
+    'gerchberg_saxton',
+    'error_reduction',
+    'hybrid_input_output',
+    # JAX-accelerated variants
+    'gerchberg_saxton_jax',
+    'error_reduction_jax',
+    'hybrid_input_output_jax',
+]
+
+
 # =============================================================================
 # GERCHBERG-SAXTON (GS)
 # =============================================================================

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "4.6.0"
+version = "4.7.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -99,7 +99,8 @@ Homepage = "https://github.com/travaj24/LumenAiry"
 Documentation = "https://github.com/travaj24/LumenAiry/wiki"
 Repository = "https://github.com/travaj24/LumenAiry.git"
 Issues = "https://github.com/travaj24/LumenAiry/issues"
-Changelog = "https://github.com/travaj24/LumenAiry/releases"
+Changelog = "https://github.com/travaj24/LumenAiry/blob/main/CHANGELOG.md"
+Releases = "https://github.com/travaj24/LumenAiry/releases"
 
 [project.scripts]
 lumenairy-designer = "lumenairy.ui.main_window:_cli_main"

@@ -34,6 +34,26 @@ Ellipse = Rectangle = None
 LogNorm = Normalize = TwoSlopeNorm = None
 
 
+__all__ = [
+    # field / PSF / MTF
+    'plot_intensity',
+    'plot_phase',
+    'plot_field',
+    'plot_amplitude_phase',
+    'plot_cross_section',
+    'plot_planes_grid',
+    'plot_psf',
+    'plot_mtf',
+    'plot_beam_profile',
+    # polarization
+    'plot_stokes',
+    'plot_polarization_ellipses',
+    # Jones pupil (vector / Richards-Wolf)
+    'compute_jones_pupil',
+    'plot_jones_pupil',
+]
+
+
 def _require_mpl():
     global plt, Ellipse, Rectangle, LogNorm, Normalize, TwoSlopeNorm
     if not _MPL_AVAILABLE:
@@ -730,7 +750,7 @@ def plot_beam_profile(E, dx, dy=None, axis='x', show_d4sigma=True,
     fig, ax
     """
     _require_mpl()
-    from .analysis import beam_centroid, beam_d4sigma
+    from .core import beam_centroid, beam_d4sigma
 
     if dy is None:
         dy = dx

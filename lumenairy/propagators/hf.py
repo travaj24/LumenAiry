@@ -234,7 +234,7 @@ def propagate_huygens_fresnel_through_prescription(
         # E_in; for the simplest case we approximate the source
         # as a single fundamental Gaussian whose waist matches
         # the input field's apparent waist.
-        from ..analysis.analysis import beam_d4sigma
+        from ..analysis.core import beam_d4sigma
         cx, cy = output_centre
         out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
         out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy

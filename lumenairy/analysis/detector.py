@@ -21,6 +21,12 @@ import numpy as np
 from ..propagators.propagation import angular_spectrum_propagate
 
 
+__all__ = [
+    'apply_detector',
+    'shack_hartmann',
+]
+
+
 def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
                    exposure_time=1.0, quantum_efficiency=1.0,
                    read_noise_e=0.0, dark_current_e_per_s=0.0,

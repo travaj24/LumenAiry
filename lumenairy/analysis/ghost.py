@@ -21,6 +21,13 @@ from ..raytrace import surfaces_from_prescription
 from ..glass import get_glass_index
 
 
+__all__ = [
+    'enumerate_ghost_paths',
+    'ghost_analysis',
+    'non_sequential_stray_light',
+]
+
+
 def enumerate_ghost_paths(n_surfaces):
     """List all unique 2-bounce ghost reflection paths.
 

@@ -832,6 +832,130 @@ def _ifft2(x):
 
 
 # ============================================================================
+# Input validation
+# ============================================================================
+
+def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
+                                fn_name='propagator'):
+    """Validate the standard ``(E, z, wavelength, dx, dy)`` signature.
+
+    Raises a ``ValueError`` with the offending value and the offending
+    parameter quoted, rather than letting downstream FFTs / divisions
+    fail with cryptic ``ZeroDivisionError`` / ``ValueError`` / silent
+    "all zeros" outputs.
+
+    Checks performed:
+
+    * ``E_in`` is a 2-D array of nonzero size (``Ny >= 4`` and
+      ``Nx >= 4`` -- below that the band-limit and Nyquist
+      diagnostics are meaningless).
+    * ``z`` is a real, finite scalar (any sign; ``z = 0`` is allowed
+      and returns the input unchanged via the propagator path).
+    * ``wavelength`` is a real, finite, **positive** scalar with a
+      magnitude that *looks* like metres (i.e. < 1 mm).  Values
+      above 1 mm raise -- almost always the caller forgot the
+      micron-to-metre conversion.
+    * ``dx`` (and ``dy`` if given) is a real, finite, **positive**
+      scalar with a magnitude that *looks* like a metre-scale
+      pixel pitch.  ``dx > 1 mm`` raises for the same reason.
+
+    Parameters
+    ----------
+    E_in : array_like
+    z, wavelength, dx, dy : float
+    fn_name : str
+        Name of the calling propagator, used in the error message.
+
+    Raises
+    ------
+    ValueError
+        If any of the above invariants fails.
+
+    Notes
+    -----
+    This helper is intentionally *fast* -- it does
+    ``np.asarray(E_in).shape`` and a handful of scalar comparisons,
+    so the overhead is negligible compared to even a 256x256 FFT.
+    """
+    # E_in shape
+    try:
+        Ny, Nx = E_in.shape
+    except AttributeError:
+        raise ValueError(
+            f'{fn_name}: E_in must be a 2-D array, got {type(E_in).__name__}.'
+        )
+    except ValueError:
+        raise ValueError(
+            f'{fn_name}: E_in must be a 2-D array of shape (Ny, Nx); '
+            f'got shape {tuple(E_in.shape)!r}.'
+        )
+    if Ny < 4 or Nx < 4:
+        raise ValueError(
+            f'{fn_name}: E_in is too small ({Ny}x{Nx}); each axis must '
+            f'be >= 4 samples for the propagator to be meaningful.'
+        )
+    # z
+    z_f = float(z)
+    if not np.isfinite(z_f):
+        raise ValueError(
+            f'{fn_name}: z must be a finite real scalar; got {z!r}.'
+        )
+    # wavelength
+    lam_f = float(wavelength)
+    if not np.isfinite(lam_f):
+        raise ValueError(
+            f'{fn_name}: wavelength must be a finite real scalar; '
+            f'got {wavelength!r}.'
+        )
+    if lam_f <= 0.0:
+        raise ValueError(
+            f'{fn_name}: wavelength must be positive [m]; got '
+            f'{lam_f!r}. (Did you pass a negative value, or units of '
+            f'microns / nm? LumenAiry uses metres: 1310 nm -> 1.31e-6.)'
+        )
+    if lam_f > 1e-3:
+        raise ValueError(
+            f'{fn_name}: wavelength = {lam_f!r} m looks suspicious '
+            f'(> 1 mm).  LumenAiry uses SI metres, not microns or '
+            f'nanometres.  1310 nm -> 1.31e-6; 1.55 um -> 1.55e-6.'
+        )
+    # dx
+    dx_f = float(dx)
+    if not np.isfinite(dx_f):
+        raise ValueError(
+            f'{fn_name}: dx must be a finite real scalar; got {dx!r}.'
+        )
+    if dx_f <= 0.0:
+        raise ValueError(
+            f'{fn_name}: dx must be positive [m]; got {dx_f!r}. '
+            f'(LumenAiry uses metres; for a 2 um pixel pitch pass '
+            f'dx = 2e-6, not 2.)'
+        )
+    if dx_f > 1e-3:
+        raise ValueError(
+            f'{fn_name}: dx = {dx_f!r} m looks suspicious (> 1 mm). '
+            f'LumenAiry uses SI metres for the grid pitch; for 2 um '
+            f'pass dx = 2e-6, not dx = 2.'
+        )
+    # dy (optional)
+    if dy is not None:
+        dy_f = float(dy)
+        if not np.isfinite(dy_f):
+            raise ValueError(
+                f'{fn_name}: dy must be a finite real scalar; got {dy!r}.'
+            )
+        if dy_f <= 0.0:
+            raise ValueError(
+                f'{fn_name}: dy must be positive [m]; got {dy_f!r}.'
+            )
+        if dy_f > 1e-3:
+            raise ValueError(
+                f'{fn_name}: dy = {dy_f!r} m looks suspicious (> 1 mm); '
+                f'expected SI metres.'
+            )
+
+
+# ============================================================================
 # Angular Spectrum Method (ASM) -- exact, band-limited
 # ============================================================================
 
@@ -930,6 +1054,8 @@ def angular_spectrum_propagate(
         spectrum method for numerical simulation of free-space propagation
         in far and near fields." Opt. Express 17(22): 19662-19673.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
+                                fn_name='angular_spectrum_propagate')
 
     # -- array library selection (NumPy / CuPy / JAX) ----------------------
     # JAX arrays bypass the chunked H construction and the host cache;
@@ -1193,6 +1319,11 @@ def angular_spectrum_propagate_batch(E_stack, z, wavelength, dx,
         raise ValueError(
             f"angular_spectrum_propagate_batch: input must be 3-D "
             f"(B, Ny, Nx), got shape {E_stack.shape}.")
+    # Validate using a representative 2-D slice; the batched call has
+    # the same (z, wavelength, dx, dy) constraints as the scalar
+    # propagator, so reuse the helper.
+    _validate_propagator_inputs(E_stack[0], z, wavelength, dx, dy,
+                                fn_name='angular_spectrum_propagate_batch')
 
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_stack)):
         xp = cp
@@ -1375,6 +1506,8 @@ def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
 
     For ``tilt_x = tilt_y = 0`` this reduces to standard ASM propagation.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
+                                fn_name='angular_spectrum_propagate_tilted')
     if dy is None:
         dy = dx
 
@@ -1552,6 +1685,8 @@ def angular_spectrum_propagate_mft(
     fresnel_propagate_mft : paraxial Fresnel with arbitrary output grid.
     fraunhofer_propagate_mft : far-field with arbitrary output grid.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
+                                fn_name='angular_spectrum_propagate_mft')
     from ..backend import is_jax_array
     from ._bluestein import _bluestein_centred_2d
 
@@ -1752,6 +1887,8 @@ def fresnel_propagate(E_in, z, wavelength, dx, dy=None):
     For very long distances (small Fresnel number), this becomes equivalent
     to the Fraunhofer approximation.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
+                                fn_name='fresnel_propagate')
     from ..backend import array_namespace, is_jax_array
     xp = array_namespace(E_in)
     is_jax = is_jax_array(E_in)
@@ -1949,6 +2086,8 @@ def fresnel_propagate_mft(
     fraunhofer_propagate_mft : far-field counterpart.
     angular_spectrum_propagate_mft : exact ASM with arbitrary output grid.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
+                                fn_name='fresnel_propagate_mft')
     # ----- backend dispatch -------------------------------------------------
     from ..backend import is_jax_array
     from ._bluestein import _bluestein_centred_2d
@@ -2103,6 +2242,8 @@ def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
     Fraunhofer is the standard approach: place the input field at the lens,
     set z = focal length, and the output is the focal-plane field.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
+                                fn_name='fraunhofer_propagate')
     from ..backend import array_namespace, is_jax_array
     xp = array_namespace(E_in)
     is_jax = is_jax_array(E_in)
@@ -2200,6 +2341,8 @@ def fraunhofer_propagate_mft(
     fresnel_propagate_mft : near-field counterpart, includes input-plane
         quadratic phase.
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
+                                fn_name='fraunhofer_propagate_mft')
     from ..backend import is_jax_array
     from ._bluestein import _bluestein_centred_2d
 
@@ -2404,6 +2547,8 @@ def rayleigh_sommerfeld_propagate(
     >>>
     >>> E_out = rayleigh_sommerfeld_propagate(E_in, z=1e-3, wavelength=wv, dx=dx)
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
+                                fn_name='rayleigh_sommerfeld_propagate')
 
     # -- array library selection -----------------------------------------------
     from ..backend import is_jax_array, JAX_AVAILABLE
@@ -2656,6 +2801,8 @@ def scalable_angular_spectrum_propagate(
     [2] Reference PyTorch implementation:
         https://github.com/bionanoimaging/Scalable-Angular-Spectrum-Method-SAS
     """
+    _validate_propagator_inputs(E_in, z, wavelength, dx, None,
+                                fn_name='scalable_angular_spectrum_propagate')
     # -- array library selection (NumPy vs. CuPy) ---------------------------
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         xp = cp

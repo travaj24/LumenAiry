@@ -234,7 +234,7 @@ def zernike_modal_basis(n_modes: int, n_lenslets: int,
     high accuracy at very high modes (n_modes > 50) replace with
     closed-form Zernike-derivative formulas.
     """
-    from .analysis import (
+    from .core import (
         zernike_polynomial, zernike_index_to_nm,
     )
     if n_modes <= 0:

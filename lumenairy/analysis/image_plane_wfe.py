@@ -47,6 +47,16 @@ from ..raytrace import (
 )
 
 
+__all__ = [
+    'ImagePlaneWFE',
+    'eval_image_plane_wfe',
+    'field_grid_wfe',
+    'zemax_pupil_grid',
+    'chebyshev_pupil_grid',
+    'remove_low_order_aberrations',
+]
+
+
 @dataclass
 class ImagePlaneWFE:
     """Per-ray image-plane reference-sphere wavefront error.

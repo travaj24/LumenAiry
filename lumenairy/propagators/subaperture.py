@@ -220,7 +220,7 @@ def propagate_subaperture_asymptotic(
         fit_canonical_polynomials,
         propagate_modal_asymptotic,
     )
-    from ..analysis.analysis import beam_d4sigma
+    from ..analysis.core import beam_d4sigma
     import numpy as _np
 
     Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid

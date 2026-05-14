@@ -10,6 +10,52 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.7.0
+
+**Polish-pass release: input validation, glass-registry overhaul, API
+symmetry, packaging hygiene.**  No breaking changes; the public API is
+fully back-compatible with 4.6.
+
+* **Propagator input validation.** Every public propagator (ASM,
+  Fresnel, Fraunhofer, RS, scalable ASM, the MFT variants, batch and
+  tilted) now calls a shared `_validate_propagator_inputs` helper at
+  the entry point.  It catches the silent-failure regimes the old
+  code shipped with -- `wavelength = 0` (was `ZeroDivisionError`),
+  `wavelength = 1.31` (forgot the e-6, was silent garbage),
+  `dx = 0` (was `ZeroDivisionError`), `dx = 2.0` (forgot units, was
+  silent garbage), 3-D / 1-D / empty inputs, non-finite `z`.  The
+  error message quotes the parameter, the value, and the calling
+  function.
+* **Prescription validation.** New public
+  `lumenairy.validate_prescription(prescription, *, strict=True)`,
+  also called internally by `surfaces_from_prescription`.  Catches
+  empty dict, missing keys, surface/thickness length mismatch, NaN
+  radius, bad aperture, etc., with a precise message.
+* **Glass-registry rebuild.** `GLASS_REGISTRY` entries can now be a
+  custom *callable* `f(wavelength_m) -> n_real_or_complex` so you
+  register custom dispersion (Cauchy, temperature-dependent, etc.)
+  with a one-line lambda.  A bundled `SELLMEIER_COEFFICIENTS` table
+  adds ~30 Schott / Ohara entries (N-FK51A, N-SF57, N-LASF44, S-LAH64,
+  etc.) usable without the `refractiveindex` package.  `list_glasses()`
+  / `search_glasses(pattern)` helpers + typo suggestions on unknown
+  glass names.
+* **`dy` kwarg on the lens trio.**  `apply_real_lens`,
+  `apply_real_lens_traced`, and `apply_real_lens_maslov` now take
+  `dy=None`.  `apply_real_lens` honours non-square pixels through
+  the per-surface phase screens and in-glass ASM; the traced / Maslov
+  variants accept the kwarg and raise on `dy != dx`.
+* **Field-analysis dataclass returns.** `distortion_grid`,
+  `footprint_per_surface`, and `spot_diagram_vs_field` now return
+  named dataclasses (`DistortionGrid`, `SurfaceFootprint` +
+  `FieldFootprint`, `SpotDiagramField`) -- closing the inconsistency
+  with the rest of the 4.4 field-analysis suite.  Dict-style
+  indexing keeps working for back-compat.
+* **Module rename.** `lumenairy.analysis.analysis` →
+  `lumenairy.analysis.core`.  Back-compat shim preserves the old
+  dotted import.
+* **Packaging hygiene.** Module-level `__all__` in every analysis
+  submodule.  PyPI `Changelog` + `Releases` URLs.
+
 ## What's new in 4.6.0
 
 **Documentation overhaul -- decision-tree front door + lens-family

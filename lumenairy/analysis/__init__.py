@@ -21,7 +21,7 @@ Submodules:
   / Jones-pupil plotting helpers.
 """
 
-from .analysis import (
+from .core import (
     beam_centroid,
     beam_d4sigma,
     beam_power,
@@ -133,9 +133,10 @@ from .ao import (
     LeakyIntegrator,
 )
 from .field import (
-    DistortionVsField, distortion_vs_field, distortion_grid,
-    footprint_per_surface,
-    spot_diagram_vs_field,
+    DistortionVsField, distortion_vs_field,
+    DistortionGrid, distortion_grid,
+    SurfaceFootprint, FieldFootprint, footprint_per_surface,
+    SpotDiagramField, spot_diagram_vs_field,
     RelativeIllumination, relative_illumination,
     FieldAberrationSweep, field_aberration_sweep,
     petzval_radius,
@@ -194,9 +195,10 @@ __all__ = [
     'zernike_modal_basis', 'slope_to_modal',
     'LeakyIntegrator',
     # field-resolved analyses (4.4.0; lifted from ui/*_dock.py)
-    'DistortionVsField', 'distortion_vs_field', 'distortion_grid',
-    'footprint_per_surface',
-    'spot_diagram_vs_field',
+    'DistortionVsField', 'distortion_vs_field',
+    'DistortionGrid', 'distortion_grid',
+    'SurfaceFootprint', 'FieldFootprint', 'footprint_per_surface',
+    'SpotDiagramField', 'spot_diagram_vs_field',
     'RelativeIllumination', 'relative_illumination',
     'FieldAberrationSweep', 'field_aberration_sweep',
     'petzval_radius',

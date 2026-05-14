@@ -74,6 +74,7 @@ from ..progress import call_progress
 
 
 def apply_real_lens(E_in, lens_prescription, wavelength, dx,
+                    dy=None,
                     bandlimit=True, fresnel=False, slant_correction=False,
                     absorption=False, seidel_correction=False,
                     seidel_poly_order=6, progress=None,
@@ -186,7 +187,11 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     wavelength : float
         Free-space wavelength [m].
     dx : float
-        Grid spacing [m] (square grid assumed).
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square pixels).
+        Anamorphic / non-square grids are supported throughout the
+        per-surface phase-screen + in-glass ASM pipeline.
     bandlimit : bool
         Apply band-limiting in ASM propagation steps (default True).
     fresnel : bool
@@ -293,6 +298,9 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     else:
         xp = np
 
+    if dy is None:
+        dy = dx
+
     surfaces = lens_prescription['surfaces']
     thicknesses = lens_prescription['thicknesses']
     aperture = lens_prescription.get('aperture_diameter')
@@ -307,7 +315,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     k0 = 2 * np.pi / wavelength
 
     x = (xp.arange(Nx) - Nx / 2) * dx
-    y = (xp.arange(Ny) - Ny / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
     X, Y = xp.meshgrid(x, y)
     h_sq_axis = X ** 2 + Y ** 2  # axis-centered distance, used for stop aperture
 
@@ -530,6 +538,9 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
             if wave_propagator == 'sas':
                 from ..propagators.propagation import (
                     scalable_angular_spectrum_propagate, resample_field)
+                # SAS is currently single-pitch (square-grid).  Fall
+                # back to the dx value -- callers wanting an
+                # anamorphic SAS path need to add a dy axis themselves.
                 E, dx_new, _ = scalable_angular_spectrum_propagate(
                     E, thickness, lam_medium, dx)
                 if abs(dx_new - dx) > dx * 1e-6:
@@ -539,17 +550,17 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
                 from ..propagators.propagation import (
                     fresnel_propagate, resample_field)
                 E, dx_new, _ = fresnel_propagate(
-                    E, thickness, lam_medium, dx)
+                    E, thickness, lam_medium, dx, dy=dy)
                 if abs(dx_new - dx) > dx * 1e-6:
                     E, _ = resample_field(
                         E, dx_new, dx, N_out=E.shape[-1])
             elif wave_propagator in ('rayleigh_sommerfeld', 'rs'):
                 from ..propagators.propagation import rayleigh_sommerfeld_propagate
                 E = rayleigh_sommerfeld_propagate(
-                    E, thickness, lam_medium, dx, bandlimit=bandlimit)
+                    E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
             elif wave_propagator == 'asm':
                 E = angular_spectrum_propagate(
-                    E, thickness, lam_medium, dx, bandlimit=bandlimit)
+                    E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
             else:
                 raise ValueError(
                     f"apply_real_lens: unknown wave_propagator "

@@ -26,6 +26,13 @@ from ..propagators.propagation import angular_spectrum_propagate
 from ..elements.lenses import apply_real_lens
 
 
+__all__ = [
+    'koehler_image',
+    'extended_source_image',
+    'mutual_coherence',
+]
+
+
 def koehler_image(object_field, prescription, wavelength, dx,
                   condenser_NA=0.1, n_source_points=9,
                   focal_length=None):

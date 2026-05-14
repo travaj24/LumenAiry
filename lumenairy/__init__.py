@@ -93,6 +93,9 @@ from .glass import (
     get_glass_index,
     get_glass_index_complex,
     GLASS_REGISTRY,
+    SELLMEIER_COEFFICIENTS,
+    list_glasses,
+    search_glasses,
 )
 
 # ── Optical elements ─────────────────────────────────────────────────────
@@ -227,8 +230,12 @@ from .analysis.ao import (
 from .analysis.field import (
     DistortionVsField,
     distortion_vs_field,
+    DistortionGrid,
     distortion_grid,
+    SurfaceFootprint,
+    FieldFootprint,
     footprint_per_surface,
+    SpotDiagramField,
     spot_diagram_vs_field,
     RelativeIllumination,
     relative_illumination,
@@ -455,6 +462,7 @@ from .raytrace import (
     trace,
     trace_world,
     surfaces_from_prescription,
+    validate_prescription,
     make_ray,
     make_fan,
     make_ring,
@@ -654,7 +662,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.6.0"
+__version__ = "4.7.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -757,6 +765,9 @@ __all__ = [
     'get_glass_index',
     'get_glass_index_complex',
     'GLASS_REGISTRY',
+    'SELLMEIER_COEFFICIENTS',
+    'list_glasses',
+    'search_glasses',
 
     # DOE / phase mask helpers
     'create_periodic_phase_mask',
@@ -871,6 +882,7 @@ __all__ = [
     'trace_world',
     'trace_prescription',
     'surfaces_from_prescription',
+    'validate_prescription',
     'surfaces_from_elements',
     'raytrace_system',
     'apply_doe_phase_traced',
@@ -1009,9 +1021,10 @@ __all__ = [
     'LeakyIntegrator',
 
     # Field-resolved analyses (4.4.0)
-    'DistortionVsField', 'distortion_vs_field', 'distortion_grid',
-    'footprint_per_surface',
-    'spot_diagram_vs_field',
+    'DistortionVsField', 'distortion_vs_field',
+    'DistortionGrid', 'distortion_grid',
+    'SurfaceFootprint', 'FieldFootprint', 'footprint_per_surface',
+    'SpotDiagramField', 'spot_diagram_vs_field',
     'RelativeIllumination', 'relative_illumination',
     'FieldAberrationSweep', 'field_aberration_sweep',
     'petzval_radius',

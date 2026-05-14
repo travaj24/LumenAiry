@@ -44,6 +44,7 @@ def apply_real_lens_maslov(
     lens_prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     *,
     ray_field_samples: int = 16,
     ray_pupil_samples: int = 16,
@@ -107,6 +108,11 @@ def apply_real_lens_maslov(
 
     Parameters mirror the inline-in-lenses.py predecessor exactly so
     no caller-side changes are required.
+
+    The ``dy`` parameter is accepted for API symmetry with the rest
+    of the lens family; the Maslov propagator's Chebyshev-tensor-
+    product fit assumes square pixels and will raise if
+    ``dy != dx``.
     """
     # Local references to numexpr (if available) -- the parent module
     # (lenses.py) holds the lazy module slot.
@@ -117,6 +123,14 @@ def apply_real_lens_maslov(
         raise ValueError(
             f"E_in must be square 2D, got shape {E_in.shape}")
     N = E_in.shape[0]
+
+    if dy is None:
+        dy = dx
+    if abs(float(dy) - float(dx)) > 1e-15 * max(abs(float(dx)), 1.0):
+        raise ValueError(
+            "apply_real_lens_maslov currently requires square pixels "
+            f"(dx == dy); got dx={dx!r}, dy={dy!r}.  Use apply_real_lens "
+            "for anamorphic grids.")
 
     # Pre-flight grid vs prescription-aperture check.
     try:

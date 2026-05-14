@@ -1027,6 +1027,7 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
 
 
 def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
+                           dy=None,
                            bandlimit=True, ray_subsample=8,
                            n_workers=None, progress=None,
                            min_coarse_samples_per_aperture=32,
@@ -1120,6 +1121,13 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
         Same format as :func:`apply_real_lens`.
     wavelength : float
     dx : float
+        Grid spacing [m] (square pixels assumed for the traced model).
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.  Accepted for API
+        symmetry with the rest of the lens family; the traced ray-
+        subsample / interpolation paths currently require ``dy == dx``
+        and will raise otherwise.  Use :func:`apply_real_lens` for
+        anamorphic grids.
     bandlimit : bool, default True
         Passed to the (single) ASM propagation used for amplitude
         evolution.
@@ -1269,6 +1277,19 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
     if Ny != Nx:
         raise ValueError("apply_real_lens_traced requires a square grid")
     N = Nx
+
+    if dy is None:
+        dy = dx
+    # The traced variant's ray-subsample + interpolation paths assume
+    # a square, isotropic grid.  Anamorphic (dy != dx) propagation is
+    # supported by :func:`apply_real_lens` and
+    # :func:`apply_real_lens_maslov`; for the traced model, pass
+    # equal dx + dy or fall back to the analytic model.
+    if abs(float(dy) - float(dx)) > 1e-15 * max(abs(float(dx)), 1.0):
+        raise ValueError(
+            "apply_real_lens_traced currently requires square pixels "
+            f"(dx == dy); got dx={dx!r}, dy={dy!r}.  Use apply_real_lens "
+            "for anamorphic grids.")
 
     aperture = lens_prescription.get('aperture_diameter')
     thicknesses = lens_prescription['thicknesses']

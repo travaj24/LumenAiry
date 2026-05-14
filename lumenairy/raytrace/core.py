@@ -1166,6 +1166,154 @@ def trace_world(rays, surfaces, wavelength, output_filter='all',
 # Prescription → Surface list conversion
 # ============================================================================
 
+def validate_prescription(prescription, *, strict=True):
+    """Sanity-check a lens prescription dict.
+
+    Catches the common errors that otherwise cause
+    :func:`surfaces_from_prescription` (and every downstream trace) to
+    fail with cryptic ``KeyError`` / ``IndexError`` messages, or worse,
+    silently accept a degenerate prescription.
+
+    Checks performed:
+
+    * ``prescription`` is a dict with the required keys ``'surfaces'``
+      and ``'thicknesses'``.
+    * ``len(surfaces) >= 1``.
+    * ``len(thicknesses)`` is either ``len(surfaces)`` (each surface
+      has a forward thickness) or ``len(surfaces) - 1`` (legacy
+      "between-surfaces" thicknesses; padded to match).  Other
+      mismatches raise.
+    * Each per-surface dict contains a finite, real ``radius`` (or the
+      special infinity sentinel ``np.inf``).  Stops and detectors can
+      have ``radius = np.inf``.
+    * Each per-surface dict contains ``glass_before`` and
+      ``glass_after``.  ``None`` is allowed (taken as "air"); empty
+      strings are flagged.
+    * If ``'aperture_diameter'`` is present, it is a positive finite
+      number.
+
+    Parameters
+    ----------
+    prescription : dict
+        The prescription to validate.
+    strict : bool, default True
+        If True, raise ``ValueError`` on any failure.  If False, return
+        a list of (key, reason) tuples describing each failure (empty
+        list on success) so callers can decide whether to proceed.
+
+    Returns
+    -------
+    list of (str, str)
+        Only returned when ``strict=False``.  Empty list = valid.
+
+    Raises
+    ------
+    ValueError
+        When ``strict=True`` and any check fails.
+
+    Examples
+    --------
+    >>> from lumenairy.raytrace import validate_prescription
+    >>> p = {'surfaces': [{'radius': 0.05, 'glass_before': 'air',
+    ...                    'glass_after': 'N-BK7'},
+    ...                   {'radius': -0.05, 'glass_before': 'N-BK7',
+    ...                    'glass_after': 'air'}],
+    ...      'thicknesses': [0.005, 0.1]}
+    >>> validate_prescription(p)  # raises nothing
+    """
+    issues: list[tuple[str, str]] = []
+
+    def _fail(key: str, reason: str) -> None:
+        issues.append((key, reason))
+
+    if not isinstance(prescription, dict):
+        _fail('prescription',
+              f'must be a dict, got {type(prescription).__name__}')
+    else:
+        if 'surfaces' not in prescription:
+            _fail('surfaces', "required key 'surfaces' missing")
+        if 'thicknesses' not in prescription:
+            _fail('thicknesses', "required key 'thicknesses' missing")
+
+        if 'surfaces' in prescription:
+            surfs = prescription['surfaces']
+            if not isinstance(surfs, (list, tuple)):
+                _fail('surfaces',
+                      f'must be a list, got {type(surfs).__name__}')
+            elif len(surfs) < 1:
+                _fail('surfaces',
+                      'must contain at least 1 surface (got 0)')
+            else:
+                if 'thicknesses' in prescription:
+                    thicks = prescription['thicknesses']
+                    if not isinstance(thicks, (list, tuple)):
+                        _fail('thicknesses',
+                              f'must be a list, got '
+                              f'{type(thicks).__name__}')
+                    elif len(thicks) not in (len(surfs), len(surfs) - 1):
+                        _fail('thicknesses',
+                              f'length mismatch: {len(thicks)} '
+                              f'thicknesses for {len(surfs)} surfaces. '
+                              f'Expected either equal length (each '
+                              f'surface has a forward thickness) or '
+                              f'len(surfaces) - 1 (between-surface '
+                              f'thicknesses).')
+
+                for i, ps in enumerate(surfs):
+                    if not isinstance(ps, dict):
+                        _fail(f'surfaces[{i}]',
+                              f'must be a dict, got '
+                              f'{type(ps).__name__}')
+                        continue
+                    if 'radius' not in ps:
+                        _fail(f'surfaces[{i}]',
+                              "missing 'radius' key")
+                    else:
+                        r = ps['radius']
+                        if r is None:
+                            _fail(f'surfaces[{i}].radius',
+                                  "is None (use np.inf for a flat "
+                                  "surface)")
+                        else:
+                            try:
+                                rf = float(r)
+                                if not (np.isfinite(rf) or np.isinf(rf)):
+                                    _fail(f'surfaces[{i}].radius',
+                                          f'is {r!r} (NaN); use a '
+                                          f'real number or np.inf')
+                            except (TypeError, ValueError):
+                                _fail(f'surfaces[{i}].radius',
+                                      f'is {r!r}, not a real number')
+                    for gk in ('glass_before', 'glass_after'):
+                        if gk not in ps:
+                            _fail(f'surfaces[{i}]',
+                                  f"missing '{gk}' key")
+                        elif isinstance(ps[gk], str) and not ps[gk]:
+                            _fail(f'surfaces[{i}].{gk}',
+                                  "is an empty string; use None or "
+                                  "'air' for the ambient medium")
+
+    if isinstance(prescription, dict) and 'aperture_diameter' in prescription:
+        ad = prescription['aperture_diameter']
+        if ad is not None:
+            try:
+                adf = float(ad)
+                if not (np.isfinite(adf) and adf > 0.0):
+                    _fail('aperture_diameter',
+                          f'must be positive and finite; got {ad!r}')
+            except (TypeError, ValueError):
+                _fail('aperture_diameter',
+                      f'must be a number; got {ad!r}')
+
+    if strict and issues:
+        msg = '\n  '.join(f'{k}: {r}' for k, r in issues)
+        raise ValueError(
+            f'validate_prescription: {len(issues)} issue(s) found:\n  {msg}'
+        )
+    if not strict:
+        return issues
+
+
 def surfaces_from_prescription(prescription):
     """Convert a lens prescription dict to a list of Surface objects.
 
@@ -1183,7 +1331,17 @@ def surfaces_from_prescription(prescription):
     Returns
     -------
     surfaces : list of Surface
+
+    Notes
+    -----
+    The prescription is validated via :func:`validate_prescription`
+    before any conversion; obviously-malformed input (empty dict,
+    missing thicknesses, NaN radius, ...) raises a ``ValueError``
+    with a precise message rather than producing a partially-built
+    surface list.
     """
+    validate_prescription(prescription, strict=True)
+
     p_surfs = prescription['surfaces']
     p_thick = prescription['thicknesses']
     aperture = prescription.get('aperture_diameter')
