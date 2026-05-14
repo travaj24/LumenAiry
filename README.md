@@ -10,6 +10,28 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.6.0
+
+**Documentation overhaul -- decision-tree front door + lens-family
+cross-refs.**  No code changes; the public API is identical to 4.5.0.
+
+* **README rewritten around "which function should I use?"** -- the
+  former Quick Start was replaced with a decision-tree-style set of
+  "if you need X, use Y" tables covering free-space propagation,
+  lens application (the three `apply_real_lens*` variants), folded
+  designs, field analysis, and design optimisation.  Three minimal
+  end-to-end examples follow; longer recipes moved into a "Cookbook"
+  section near the end.
+* **`apply_real_lens` / `_traced` / `_maslov` docstrings cross-link
+  to each other.**  Each now opens with a `See Also` block + a
+  one-line selection guide so the choice between the three
+  fidelity points is visible right at the top of `help(la.apply_real_lens)`.
+* **Dense physics citations moved out of the README main flow.**
+  Matsushima-Shimobaba, Heintzmann-Loetgering-Wechsler kernel
+  details, and the per-variant real-lens accuracy strategy now live
+  in an "Appendix: Physics references" at the bottom -- still here
+  for anyone who wants them, just out of the way for first-read.
+
 ## What's new in 4.5.0
 
 **World-frame ray tracing for folded prescriptions, end-to-end.**
@@ -1629,28 +1651,24 @@ GPU / multi-threaded FFT acceleration.
 - **Thin lens** (paraxial, non-paraxial, aplanatic, local-only)
 - **Spherical singlet** — exact OPD through thick glass
 - **Aspheric singlet** — conic + even polynomial coefficients
-- **Multi-surface real lens** (`apply_real_lens`) — split-step refraction
-  with ASM between surfaces.  Optional Fresnel transmission, bulk
-  absorption, slant correction, Seidel correction, biconic surfaces.
-- **Hybrid wave/ray real lens** (`apply_real_lens_traced`) — high-accuracy
-  variant: per-pixel ray-traced OPL combined with wave-amplitude
-  envelope.  Sub-nm OPD agreement with the geometric ray trace on
-  multi-surface curved-interface systems.  3.1.7: optional
-  `fast_analytic_phase`, `newton_fit='polynomial'`, and
-  default `ray_subsample=8` for large-grid speedups.
-- **Phase-space / Maslov real lens** (`apply_real_lens_maslov`) — third
-  real-lens pipeline (added 3.1.7; merged into `lenses.py` in 3.2.2).
-  Chebyshev polynomial fit of the ray-traced canonical map +
-  closed-form stationary-phase or phase-space quadrature evaluation.
-  Caustic-safe; no critical-sampling constraint; analytically
-  differentiable.  Best for caustic-near output planes, very coarse
-  grids, or design-optimization loops that need gradient information.
-- **Pluggable through-glass propagator** on `apply_real_lens` (and
-  forwarded through `apply_real_lens_traced`) via `wave_propagator`:
-  `'asm'` (default), `'sas'`, `'fresnel'`, `'rayleigh_sommerfeld'`.
-  ASM is the right physics for mm-scale glass gaps; the others are
-  exposed for cross-validation and pipelines that want a single
-  propagator used consistently throughout.
+- **Multi-surface real lens** (`apply_real_lens`) — default fast wave
+  model.  Split-step refraction with ASM between surfaces; optional
+  Fresnel transmission, bulk absorption, slant correction, Seidel
+  correction.
+- **Hybrid wave/ray real lens** (`apply_real_lens_traced`) — per-pixel
+  ray-traced OPL + wave amplitude envelope; sub-nm OPD on cemented
+  doublets and other multi-surface curved-interface systems.
+- **Phase-space / Maslov real lens** (`apply_real_lens_maslov`) —
+  Chebyshev fit of the ray-traced canonical map + Maslov integral.
+  Caustic-safe and differentiable; pair with
+  `apply_real_lens_maslov_jax` for autodiff design optimisation.
+- **Pluggable through-glass propagator** (`wave_propagator=` kwarg
+  on `apply_real_lens` / `apply_real_lens_traced`): `'asm'`
+  (default), `'sas'`, `'fresnel'`, `'rayleigh_sommerfeld'`.
+
+  *See the [Appendix](#appendix-physics-references) for the
+  underlying physics / accuracy trade-offs, or
+  `help(la.apply_real_lens)` for the per-function decision guide.*
 - **Biconic / cylindrical / toroidal** elements via `make_biconic` and
   `make_cylindrical` plus optional `radius_y`/`conic_y` keys on any
   prescription surface
@@ -1975,7 +1993,89 @@ Install optional dependencies as needed:
 pip install pyfftw astropy h5py matplotlib
 ```
 
-## Quick Start
+## Quick start: which function should I use?
+
+The library is wide -- pick a question and the table tells you where to start.
+
+### I want to propagate a field through free space
+
+| Situation | Use |
+|---|---|
+| Don't know which propagator to pick | `la.propagate(E, z=z, wavelength=wl, dx=dx)` -- smart auto-dispatch |
+| Standard near/mid-field | `la.angular_spectrum_propagate(E, z, wl, dx)` |
+| Need a specific output grid pitch (focal-plane zoom, MFT) | `la.fresnel_propagate_mft(...)` or `la.fraunhofer_propagate_mft(...)` |
+| Long-z (z*lambda/(N*dx) > 1, plain ASM would need an oversized grid) | `la.scalable_angular_spectrum_propagate(...)` |
+| Far-field | `la.fraunhofer_propagate(E, z, wl, dx)` |
+| Through one ideal thin lens | `la.apply_thin_lens(E, f, wl, dx)` |
+
+### I have a lens prescription (Zemax `.zmx`, Thorlabs catalog, or a dict)
+
+| Situation | Use |
+|---|---|
+| Default fast wave model | `la.apply_real_lens(E, presc, wl, dx)` |
+| Sub-nm OPD on cemented doublets or multi-surface curved-interface systems | `la.apply_real_lens_traced(E, presc, wl, dx)` |
+| Inside a JAX-autodiff design loop, or near a caustic | `la.apply_real_lens_maslov(...)` / `la.apply_real_lens_maslov_jax(...)` |
+| Just want a spot diagram | `la.trace_prescription(presc, wl, num_rings=8)` |
+| Paraxial EFL / BFL / first-order data | `la.first_order_data(presc, wl)` |
+| Element list shared between wave and ray paths | `la.propagate_through_system(...)` and `la.raytrace_system(...)` |
+
+### I have a folded design (mirrors + coord-breaks)
+
+| Situation | Use |
+|---|---|
+| Build world-frame surfaces from the prescription | `la.world_surfaces_from_prescription(presc)` |
+| Ray-trace through folds | `la.trace_world(rays, wsurfs, wl)` |
+| Paraxial image-plane position in world coordinates | `la.paraxial_focus_world(wsurfs, wl)` |
+
+### I need to analyze the output field
+
+| Situation | Use |
+|---|---|
+| PSF + MTF | `la.compute_psf(pupil, wl, f, dx)`, `la.compute_mtf(psf)` |
+| Strehl ratio from a PSF (peak-ratio) | `la.strehl_ratio(E, E_ref, dx)` |
+| Strehl from an RMS estimate (Marechal closed form) | `la.strehl_marechal(rms_waves)` |
+| Strehl from a pupil (exact small-aberration) | `la.strehl_phase_integral(pupil)` |
+| OPD / Zernike decomposition | `la.wave_opd_2d(...)`, `la.zernike_decompose(opd, dx, ap)` |
+| Off-axis WFE at one field point | `la.eval_image_plane_wfe(presc, wl, field=(Hx, Hy))` |
+| Full WFE-vs-field grid | `la.field_grid_wfe(presc, wl, field_max_m, n_field)` |
+| Field-resolved distortion / sensitivity / per-surface footprint | `la.distortion_vs_field`, `la.sensitivity_ranking`, `la.footprint_per_surface` |
+| Field-curvature / astigmatism vs field (real-ray) | `la.field_aberration_sweep(...)` |
+| Off-axis Seidel coefficients | `la.seidel_field_sweep(surfaces, wl, field_heights)` |
+
+### I want to optimize / tolerance a design
+
+| Situation | Use |
+|---|---|
+| Hybrid wave/ray optimisation with composable merit terms | `la.design_optimize(parameterization, merit_terms)` |
+| Tolerance sensitivity ranking | `la.sensitivity_ranking(merit_fn, x0)` |
+| Through-focus / Monte-Carlo tolerancing | `la.through_focus_scan(...)`, `la.monte_carlo_tolerancing(...)` |
+
+### Three minimal end-to-end examples
+
+```python
+# 1. Free-space propagation, smart dispatch -- works for any geometry.
+import lumenairy as la
+E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, sigma=50e-6)
+E_focus = la.propagate(E, z=0.1, wavelength=1.31e-6, dx=2e-6)
+print('centroid =', la.beam_centroid(E_focus, 2e-6))
+
+# 2. A Thorlabs lens, end-to-end.
+presc = la.thorlabs_lens('AC254-100-C')
+E_out = la.apply_real_lens(E, presc, wavelength=1.31e-6, dx=2e-6)
+
+# 3. Ray-trace the same lens for a spot RMS.
+result = la.trace_prescription(presc, wavelength=1.31e-6, num_rings=8)
+print(f'spot RMS = {la.spot_rms(result)[0]*1e6:.2f} um')
+```
+
+That's enough to start.  For longer recipes -- folded designs,
+Zernike decomposition, optimisation loops, polychromatic PSFs,
+HDF5 storage, plotting -- see the `Cookbook` section near the end
+of this README.
+
+## Cookbook
+
+Worked recipes for specific use cases.
 
 ### Basic propagation
 
@@ -2454,11 +2554,21 @@ Optical_Propagation_Library/            # project root
   of the surface (standard optics / Zemax convention)
 - **Grid:** always square (N × N), centered at the origin
 
-## Physics Notes
+## Appendix: Physics references
+
+Citation-heavy notes that don't belong in the main flow.  The
+short version of "what the propagators are" is in the
+[Quick start tables](#quick-start-which-function-should-i-use) at
+the top of this file; everything below is here for users who want
+the underlying physics.
 
 The library is designed around the Angular Spectrum Method, which is exact
 (within sampling limits) for free-space propagation. All band-limiting uses
 the Matsushima-Shimobaba (2009) rectangular criterion for anti-aliasing.
+The Scalable ASM (`scalable_angular_spectrum_propagate`) uses the
+Heintzmann-Loetgering-Wechsler (2023) three-FFT kernel for long-z
+propagation where the plain ASM grid would need to be impractically
+large.
 
 ### Real-lens accuracy strategy
 
@@ -2481,6 +2591,17 @@ Two complementary models are provided:
   combining with a wave-optics amplitude envelope.  Sub-nanometer OPD
   agreement with the geometric ray trace when properly sampled, at the
   cost of ~10–30 s on N=4096 grids.
+- **`apply_real_lens_maslov` (phase-space / Maslov integral)** —
+  traces a Chebyshev-node grid of rays from entrance to exit,
+  fits a 4-variable Chebyshev tensor-product polynomial to the
+  canonical map ``s1(s2, v2)`` and ``OPD(s2, v2)``, then evaluates
+  the Maslov integral
+  ``E(s2) = int E_in(s1(s2,v2)) exp(2 pi i OPD(s2,v2)) |det(ds1/dv2)| d^2 v2``
+  at each output pixel.  Caustic-safe (handles multi-valued ray
+  maps that break ``_traced``), no critical-sampling
+  constraint, and analytically differentiable -- the JAX twin
+  ``apply_real_lens_maslov_jax`` is the right tool inside an
+  autodiff optimisation loop.
 
 A critical OPL-bookkeeping fix in `raytrace._intersect_surface` (the
 small "vertex-plane → actual-sag-intersection" leg now correctly

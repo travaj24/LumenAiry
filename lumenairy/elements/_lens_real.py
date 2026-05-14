@@ -81,6 +81,29 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     """
     Propagate a field through a real lens defined by a surface prescription.
 
+    See Also
+    --------
+    apply_real_lens_traced :
+        Per-pixel ray-traced OPL + wave-optics amplitude envelope.
+        3-10x slower, but achieves sub-nm OPD on cemented doublets and
+        other multi-surface curved-interface systems where this function
+        hits its uniform-glass-slab accuracy ceiling.
+    apply_real_lens_maslov :
+        Phase-space Maslov propagator via a Chebyshev polynomial fit
+        of the canonical map.  Caustic-safe; pair with
+        ``apply_real_lens_maslov_jax`` for differentiable design
+        optimisation loops.
+
+    Quick decision guide
+    --------------------
+    * Default / fast wave model -> ``apply_real_lens`` (this function).
+    * Sub-nm OPD on cemented doublets / multi-surface curved interfaces
+      -> ``apply_real_lens_traced``.
+    * Inside a JAX-autodiff design optimisation, or near a caustic
+      -> ``apply_real_lens_maslov`` / ``apply_real_lens_maslov_jax``.
+
+    Description
+    -----------
     Models the lens as a sequence of refracting phase screens (one per
     surface) with angular-spectrum propagation through the glass between
     them.  Captures exact surface sag (spherical aberration and higher

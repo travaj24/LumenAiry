@@ -66,6 +66,33 @@ def apply_real_lens_maslov(
     """
     Phase-space / Maslov propagator through a thick-lens prescription.
 
+    See Also
+    --------
+    apply_real_lens :
+        Analytic split-step thin-element model.  Default fast path
+        when the output plane is well away from any caustic and
+        autodiff gradients aren't required.
+    apply_real_lens_traced :
+        Per-pixel ray-traced OPL + wave-optics amplitude envelope.
+        Achieves sub-nm OPD on cemented doublets, but is **not**
+        differentiable (uses Newton inversion of the
+        entrance->exit map) and breaks down at caustics where the
+        per-pixel ray map becomes multi-valued.
+    apply_real_lens_maslov_jax :
+        JAX-traced twin of this function for autodiff /
+        gradient-based design optimisation.
+
+    Quick decision guide
+    --------------------
+    * Default / fast wave model -> ``apply_real_lens``.
+    * Sub-nm OPD on cemented doublets / multi-surface curved interfaces
+      -> ``apply_real_lens_traced``.
+    * Inside a JAX-autodiff design optimisation, or near a caustic
+      -> ``apply_real_lens_maslov`` (this function) /
+      ``apply_real_lens_maslov_jax``.
+
+    Description
+    -----------
     Traces a Chebyshev-node grid of rays from the entrance plane of
     ``lens_prescription`` to the exit plane, fits a 4-variable
     Chebyshev tensor-product polynomial to ``s1(s2, v2)`` and
@@ -79,10 +106,7 @@ def apply_real_lens_maslov(
     physics derivation and quadrature/stationary-phase trade-offs.
 
     Parameters mirror the inline-in-lenses.py predecessor exactly so
-    no caller-side changes are required.  See also
-    :func:`apply_real_lens_traced` for the per-pixel ray-traced
-    variant and :func:`apply_real_lens` for the analytic split-step
-    fallback.
+    no caller-side changes are required.
     """
     # Local references to numexpr (if available) -- the parent module
     # (lenses.py) holds the lazy module slot.

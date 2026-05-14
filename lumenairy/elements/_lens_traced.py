@@ -1047,6 +1047,28 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
                            wave_propagator='asm'):
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
+    See Also
+    --------
+    apply_real_lens :
+        Faster (3-10x) analytic split-step model.  Use as the default
+        when sub-nm OPD on multi-surface curved-interface systems
+        isn't required and a coarser grid is preferable.
+    apply_real_lens_maslov :
+        Phase-space propagator via Chebyshev polynomial fit of the
+        canonical map.  Caustic-safe and differentiable; preferable
+        for JAX-autodiff optimisation loops and for output planes at
+        or near a caustic.
+
+    Quick decision guide
+    --------------------
+    * Default / fast wave model -> ``apply_real_lens``.
+    * Sub-nm OPD on cemented doublets / multi-surface curved interfaces
+      -> ``apply_real_lens_traced`` (this function).
+    * Inside a JAX-autodiff design optimisation, or near a caustic
+      -> ``apply_real_lens_maslov`` / ``apply_real_lens_maslov_jax``.
+
+    Description
+    -----------
     For each pixel of the simulation grid, a geometric ray is launched
     from the entrance plane straight through the prescription using the
     sequential ray tracer in :mod:`lumenairy.raytrace`.  The

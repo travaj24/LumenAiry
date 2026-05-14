@@ -2,6 +2,43 @@
 
 All notable changes to the core library are documented here.
 
+## [4.6.0] — 2026-05-14
+
+**Documentation overhaul -- decision-tree front door + lens-family
+cross-refs.**  No code changes; the public API is identical to 4.5.0.
+The 33 validation files and 52 unit tests still pass unchanged.
+
+### Changed (documentation only)
+
+* **README rewritten around "which function should I use?"** -- the
+  former Quick Start section was replaced with five "if you need X,
+  use Y" tables covering free-space propagation, lens application
+  (the three `apply_real_lens*` variants), folded designs, output
+  field analysis, and design optimisation.  Three minimal end-to-end
+  examples follow.  The longer recipes (Zernike decomposition,
+  polarization, phase retrieval, HDF5 storage, plotting, etc.) moved
+  into a new `## Cookbook` section near the end of the README, where
+  users who need them can still find them.
+
+* **`apply_real_lens` / `_traced` / `_maslov` docstrings cross-link
+  to each other.**  Each now opens with a `See Also` block + a
+  one-line `Quick decision guide` so the choice between the three
+  fidelity points is visible at the top of `help(la.apply_real_lens)`.
+
+* **Dense physics citations moved out of the README main flow.**
+  Matsushima-Shimobaba and Heintzmann-Loetgering-Wechsler kernel
+  details, per-variant real-lens accuracy notes, and the Maslov
+  integral specification now live in the renamed `Appendix: Physics
+  references` section at the bottom of the README.  The dense
+  per-`apply_real_lens` variant paragraphs in `Key Features` were
+  trimmed to one-line summaries that point at the docstrings + the
+  appendix.
+
+### No code changes
+
+The public API, all imports, all exports, and the wheel contents
+are identical to 4.5.0.
+
 ## [4.5.0] — 2026-05-13
 
 **World-frame ray tracing for folded prescriptions, end-to-end.**
