@@ -30,6 +30,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+from typing import Any
 
 import numpy as np
 
@@ -89,7 +90,7 @@ def _get_jnp():
 # Array type predicates
 # ============================================================================
 
-def is_numpy_array(x) -> bool:
+def is_numpy_array(x: Any) -> bool:
     """Return True only for NumPy ndarrays.  CuPy / JAX arrays return
     False even though they may share base classes via the Python
     Array API.
@@ -101,7 +102,7 @@ def is_numpy_array(x) -> bool:
     return isinstance(x, np.ndarray)
 
 
-def is_cupy_array(x) -> bool:
+def is_cupy_array(x: Any) -> bool:
     """Return True if ``x`` is a CuPy ndarray.  False if CuPy is not
     installed."""
     if not CUPY_AVAILABLE:
@@ -112,7 +113,7 @@ def is_cupy_array(x) -> bool:
     return isinstance(x, cp.ndarray)
 
 
-def is_jax_array(x) -> bool:
+def is_jax_array(x: Any) -> bool:
     """Return True if ``x`` is a JAX array (concrete or traced).
 
     Covers ``jax.Array`` (post-0.4) and JIT-traced ``Tracer`` objects.
@@ -134,7 +135,7 @@ def is_jax_array(x) -> bool:
 # Namespace dispatch
 # ============================================================================
 
-def array_namespace(*arrays):
+def array_namespace(*arrays: Any) -> Any:
     """Return the array namespace (``numpy``, ``cupy``, or
     ``jax.numpy``) appropriate for the given arrays.
 
@@ -174,7 +175,7 @@ def array_namespace(*arrays):
     return np
 
 
-def backend_name(xp) -> str:
+def backend_name(xp: Any) -> str:
     """Short, human-readable name of an xp namespace returned by
     :func:`array_namespace`."""
     if xp is np:
@@ -190,7 +191,7 @@ def backend_name(xp) -> str:
 # Conversion helpers
 # ============================================================================
 
-def to_numpy(x):
+def to_numpy(x: Any) -> np.ndarray:
     """Materialise ``x`` as a NumPy ndarray on the host.
 
     Use this at I/O boundaries (HDF5 / Zarr writes, plotting,
@@ -205,7 +206,7 @@ def to_numpy(x):
     return np.asarray(x)
 
 
-def to_backend(x, xp):
+def to_backend(x: Any, xp: Any) -> Any:
     """Convert ``x`` to the namespace ``xp`` (numpy / cupy /
     jax.numpy).
 

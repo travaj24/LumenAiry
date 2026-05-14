@@ -14,6 +14,10 @@ use as input to angular-spectrum or other propagation routines.
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 import importlib.util as _importlib_util
@@ -33,8 +37,18 @@ def _ensure_cupy_loaded():
 # Fundamental Gaussian beam
 # ---------------------------------------------------------------------------
 
-def create_gaussian_beam(N, dx, wavelength, *, sigma, x0=0, y0=0,
-                          use_gpu=False, dy=None, normalize='peak'):
+def create_gaussian_beam(
+    N: Union[int, Tuple[int, int]],
+    dx: float,
+    wavelength: float,
+    *,
+    sigma: float,
+    x0: float = 0,
+    y0: float = 0,
+    use_gpu: bool = False,
+    dy: Optional[float] = None,
+    normalize: str = 'peak',
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Gaussian beam field.
 
@@ -125,7 +139,7 @@ def create_gaussian_beam(N, dx, wavelength, *, sigma, x0=0, y0=0,
 # Hermite-Gaussian modes
 # ---------------------------------------------------------------------------
 
-def hermite_physicist(n, x):
+def hermite_physicist(n: int, x: np.ndarray) -> np.ndarray:
     """
     Evaluate the physicist's Hermite polynomial H_n(x) via recurrence.
 
@@ -161,8 +175,18 @@ def hermite_physicist(n, x):
         return H_curr
 
 
-def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0,
-                          dy=None, normalize='power'):
+def create_hermite_gauss(
+    N: Union[int, Tuple[int, int]],
+    dx: float,
+    w0: float,
+    wavelength: float,
+    m: int = 0,
+    n: int = 0,
+    x0: float = 0,
+    y0: float = 0,
+    dy: Optional[float] = None,
+    normalize: str = 'power',
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Hermite-Gaussian (HG_mn) beam mode at the waist.
 
@@ -259,7 +283,7 @@ def create_hermite_gauss(N, dx, w0, wavelength, m=0, n=0, x0=0, y0=0,
 # Laguerre-Gaussian modes
 # ---------------------------------------------------------------------------
 
-def laguerre_generalized(p, l_abs, x):
+def laguerre_generalized(p: int, l_abs: int, x: np.ndarray) -> np.ndarray:
     """
     Evaluate the generalized Laguerre polynomial L_p^l(x) via recurrence.
 
@@ -299,8 +323,18 @@ def laguerre_generalized(p, l_abs, x):
         return L_curr
 
 
-def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0,
-                           dy=None, normalize='power'):
+def create_laguerre_gauss(
+    N: Union[int, Tuple[int, int]],
+    dx: float,
+    w0: float,
+    wavelength: float,
+    p: int = 0,
+    l: int = 0,
+    x0: float = 0,
+    y0: float = 0,
+    dy: Optional[float] = None,
+    normalize: str = 'power',
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Laguerre-Gaussian (LG_pl) beam mode at the waist.
 
@@ -396,9 +430,18 @@ def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0,
 # Off-axis / tilted plane-wave sources
 # ---------------------------------------------------------------------------
 
-def create_tilted_plane_wave(N, dx, wavelength, angle_x=0.0, angle_y=0.0,
-                             amplitude=1.0, dy=None,
-                             *, angle_x_deg=None, angle_y_deg=None):
+def create_tilted_plane_wave(
+    N: int,
+    dx: float,
+    wavelength: float,
+    angle_x: float = 0.0,
+    angle_y: float = 0.0,
+    amplitude: float = 1.0,
+    dy: Optional[float] = None,
+    *,
+    angle_x_deg: Optional[float] = None,
+    angle_y_deg: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Create a tilted (off-axis) plane wave on an N x N grid.
 
     A tilted plane wave has a linear phase ramp across the pupil,
@@ -457,8 +500,16 @@ def create_tilted_plane_wave(N, dx, wavelength, angle_x=0.0, angle_y=0.0,
     return E, x, y
 
 
-def create_point_source(N, dx, wavelength, x0=0.0, y0=0.0, z0=0.0,
-                        amplitude=1.0, dy=None):
+def create_point_source(
+    N: int,
+    dx: float,
+    wavelength: float,
+    x0: float = 0.0,
+    y0: float = 0.0,
+    z0: float = 0.0,
+    amplitude: float = 1.0,
+    dy: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Create a diverging spherical wave from a point source at
     ``(x0, y0, z0)`` evaluated at z=0.
 
@@ -494,8 +545,14 @@ def create_point_source(N, dx, wavelength, x0=0.0, y0=0.0, z0=0.0,
     return E, x, y
 
 
-def create_multi_field_sources(N, dx, wavelength, field_angles,
-                               amplitude=1.0, dy=None):
+def create_multi_field_sources(
+    N: int,
+    dx: float,
+    wavelength: float,
+    field_angles: Sequence[Union[float, Tuple[float, float]]],
+    amplitude: float = 1.0,
+    dy: Optional[float] = None,
+) -> Tuple[List[Tuple[np.ndarray, float, float]], np.ndarray, np.ndarray]:
     """Generate a list of tilted plane waves at the given field angles.
 
     Convenience wrapper around :func:`create_tilted_plane_wave` for
@@ -538,7 +595,15 @@ def create_multi_field_sources(N, dx, wavelength, field_angles,
 # Extended source models (LED, fiber, top-hat, annular, Bessel)
 # ---------------------------------------------------------------------------
 
-def create_top_hat_beam(N, dx, wavelength, *, diameter, x0=0, y0=0):
+def create_top_hat_beam(
+    N: int,
+    dx: float,
+    wavelength: float,
+    *,
+    diameter: float,
+    x0: float = 0,
+    y0: float = 0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Uniform-intensity circular beam (top-hat / flat-top).
 
     Parameters
@@ -573,8 +638,16 @@ def create_top_hat_beam(N, dx, wavelength, *, diameter, x0=0, y0=0):
     return E, x, y
 
 
-def create_annular_beam(N, dx, wavelength, *,
-                        outer_diameter, inner_diameter, x0=0, y0=0):
+def create_annular_beam(
+    N: int,
+    dx: float,
+    wavelength: float,
+    *,
+    outer_diameter: float,
+    inner_diameter: float,
+    x0: float = 0,
+    y0: float = 0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Annular (donut) beam.
 
     Parameters
@@ -606,8 +679,16 @@ def create_annular_beam(N, dx, wavelength, *,
     return E, x, y
 
 
-def create_fiber_mode(N, dx, wavelength, *, mode_field_diameter,
-                      x0=0, y0=0, na=0.12):
+def create_fiber_mode(
+    N: int,
+    dx: float,
+    wavelength: float,
+    *,
+    mode_field_diameter: float,
+    x0: float = 0,
+    y0: float = 0,
+    na: float = 0.12,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Single-mode fiber output (Gaussian with NA-defined divergence).
 
     The mode-field diameter (MFD) is the 1/e^2 intensity diameter.
@@ -639,8 +720,15 @@ def create_fiber_mode(N, dx, wavelength, *, mode_field_diameter,
                                  x0=x0, y0=y0)
 
 
-def create_led_source(N, dx, diameter, divergence_angle,
-                      wavelength, x0=0, y0=0):
+def create_led_source(
+    N: int,
+    dx: float,
+    diameter: float,
+    divergence_angle: float,
+    wavelength: float,
+    x0: float = 0,
+    y0: float = 0,
+) -> Tuple[np.ndarray, List[Tuple[float, float]], np.ndarray, np.ndarray]:
     """Lambertian LED source (incoherent; returns the intensity
     envelope as a complex field for use with partial-coherence
     imaging).
@@ -680,7 +768,14 @@ def create_led_source(N, dx, diameter, divergence_angle,
     return E, angles, x, y
 
 
-def create_bessel_beam(N, dx, wavelength, cone_angle, x0=0, y0=0):
+def create_bessel_beam(
+    N: int,
+    dx: float,
+    wavelength: float,
+    cone_angle: float,
+    x0: float = 0,
+    y0: float = 0,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Ideal Bessel beam (J_0 profile).
 
     Creates the field proportional to J_0(k_r * r) where
@@ -748,10 +843,10 @@ class Source:
     name: _Optional[str] = None
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int, ...]:
         return tuple(self.E.shape[-2:])
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return (f"Source(shape={self.shape}, dx={self.dx:.3g}m, "
                 f"wavelength={self.wavelength*1e9:.1f}nm, "
                 f"source_point={self.source_point}, "

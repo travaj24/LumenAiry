@@ -23,7 +23,7 @@ References
 """
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple, Union, Dict, Any
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -35,7 +35,7 @@ from .core import seidel_coefficients
 # ----------------------------------------------------------------------
 
 def seidel_field_sweep(
-    surfaces,
+    surfaces: List[Any],
     wavelength: float,
     field_heights: Union[float, Sequence[float], np.ndarray],
     *,

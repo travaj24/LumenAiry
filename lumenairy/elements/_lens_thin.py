@@ -26,6 +26,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from typing import Any, Dict, Optional, Union
+
 import numpy as np
 
 # CuPy is lazy-loaded; this module accesses it via the lenses module's
@@ -64,8 +66,18 @@ def __getattr__(name):
 # Thin lens models
 # ---------------------------------------------------------------------------
 
-def apply_thin_lens(E_in, *, f, wavelength, dx, dy=None, xc=0, yc=0,
-                    use_gpu=False, lens_model='paraxial'):
+def apply_thin_lens(
+    E_in: np.ndarray,
+    *,
+    f: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    xc: float = 0,
+    yc: float = 0,
+    use_gpu: bool = False,
+    lens_model: str = 'paraxial',
+) -> np.ndarray:
     """
     Apply a thin-lens phase to an optical field.
 
@@ -166,8 +178,21 @@ def apply_thin_lens(E_in, *, f, wavelength, dx, dy=None, xc=0, yc=0,
 # Thick spherical singlet
 # ---------------------------------------------------------------------------
 
-def apply_spherical_lens(E_in, *, R1, R2, d, n_lens, wavelength, dx, dy=None,
-                         aperture_diameter=None, xc=0, yc=0, use_gpu=False):
+def apply_spherical_lens(
+    E_in: np.ndarray,
+    *,
+    R1: float,
+    R2: float,
+    d: float,
+    n_lens: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    aperture_diameter: Optional[float] = None,
+    xc: float = 0,
+    yc: float = 0,
+    use_gpu: bool = False,
+) -> np.ndarray:
     """
     Apply the phase of a thick singlet with spherical surfaces.
 
@@ -275,9 +300,25 @@ def apply_spherical_lens(E_in, *, R1, R2, d, n_lens, wavelength, dx, dy=None,
 # Thick aspheric singlet (conic + even polynomial)
 # ---------------------------------------------------------------------------
 
-def apply_aspheric_lens(E_in, *, R1, R2, d, n_lens, wavelength, dx, dy=None,
-                        k1=0, k2=0, A1=None, A2=None,
-                        aperture_diameter=None, xc=0, yc=0, use_gpu=False):
+def apply_aspheric_lens(
+    E_in: np.ndarray,
+    *,
+    R1: float,
+    R2: float,
+    d: float,
+    n_lens: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    k1: float = 0,
+    k2: float = 0,
+    A1: Optional[Dict[int, float]] = None,
+    A2: Optional[Dict[int, float]] = None,
+    aperture_diameter: Optional[float] = None,
+    xc: float = 0,
+    yc: float = 0,
+    use_gpu: bool = False,
+) -> np.ndarray:
     """
     Apply an aspheric singlet lens phase based on exact OPD through thick glass.
 
@@ -398,8 +439,17 @@ def apply_aspheric_lens(E_in, *, R1, R2, d, n_lens, wavelength, dx, dy=None,
 
 # ---------------------------------------------------------------------------
 
-def apply_cylindrical_lens(E_in, *, f, wavelength, dx, dy=None, axis='x',
-                           xc=0, yc=0):
+def apply_cylindrical_lens(
+    E_in: np.ndarray,
+    *,
+    f: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    axis: str = 'x',
+    xc: float = 0,
+    yc: float = 0,
+) -> np.ndarray:
     """
     Apply a cylindrical thin-lens phase (focusing in one axis only).
 
@@ -454,7 +504,18 @@ def apply_cylindrical_lens(E_in, *, f, wavelength, dx, dy=None, axis='x',
 # GRIN lens
 # ---------------------------------------------------------------------------
 
-def apply_grin_lens(E_in, *, n0, g, d, wavelength, dx, dy=None, xc=0, yc=0):
+def apply_grin_lens(
+    E_in: np.ndarray,
+    *,
+    n0: float,
+    g: float,
+    d: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    xc: float = 0,
+    yc: float = 0,
+) -> np.ndarray:
     """
     Apply a gradient-index (GRIN) rod lens phase (thin approximation).
 
@@ -514,7 +575,16 @@ def apply_grin_lens(E_in, *, n0, g, d, wavelength, dx, dy=None, xc=0, yc=0):
 # Axicon
 # ---------------------------------------------------------------------------
 
-def apply_axicon(E_in, alpha, n_axicon, wavelength, dx, dy=None, xc=0, yc=0):
+def apply_axicon(
+    E_in: np.ndarray,
+    alpha: float,
+    n_axicon: Union[float, str],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    xc: float = 0,
+    yc: float = 0,
+) -> np.ndarray:
     """
     Apply an axicon (conical lens) phase to generate a Bessel-like beam.
 

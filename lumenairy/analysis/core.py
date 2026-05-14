@@ -17,6 +17,10 @@ operate on the NumPy backend internally and coerce on entry.
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 
@@ -49,7 +53,11 @@ def _xp_of(*arrays):
     return array_namespace(*arrays)
 
 
-def beam_centroid(E, dx, dy=None):
+def beam_centroid(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+) -> Tuple[float, float]:
     """
     Compute the centroid (center of mass) of the beam intensity.
 
@@ -84,7 +92,11 @@ def beam_centroid(E, dx, dy=None):
     return float(xp.sum(X * I) / total), float(xp.sum(Y * I) / total)
 
 
-def beam_d4sigma(E, dx, dy=None):
+def beam_d4sigma(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+) -> Tuple[float, float]:
     """
     Compute the D4sigma (second-moment) beam diameter in x and y.
 
@@ -128,7 +140,12 @@ def beam_d4sigma(E, dx, dy=None):
     return float(4 * xp.sqrt(var_x)), float(4 * xp.sqrt(var_y))
 
 
-def beam_power(E, dx, dy=None, region=None):
+def beam_power(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    region: Optional[Dict[str, Any]] = None,
+) -> float:
     """
     Compute total power or power-in-bucket for a complex field.
 
@@ -186,7 +203,13 @@ def beam_power(E, dx, dy=None, region=None):
     return float(xp.sum(I[mask]) * dx * dy)
 
 
-def radial_power_bands(E, dx, radii, dy=None, center=None):
+def radial_power_bands(
+    E: np.ndarray,
+    dx: float,
+    radii: Sequence[float],
+    dy: Optional[float] = None,
+    center: Optional[Tuple[float, float]] = None,
+) -> np.ndarray:
     """
     Compute cumulative integrated power within concentric circular
     apertures centered on ``center`` (default: grid origin).
@@ -258,7 +281,7 @@ def radial_power_bands(E, dx, radii, dy=None, center=None):
     return powers
 
 
-def strehl_ratio(E, E_ref, dx):
+def strehl_ratio(E: np.ndarray, E_ref: np.ndarray, dx: float) -> float:
     """
     Compute the Strehl ratio of a field relative to a reference field.
 
@@ -299,7 +322,7 @@ def strehl_ratio(E, E_ref, dx):
     return float(xp.max(I)) / P * P_ref / float(xp.max(I_ref))
 
 
-def strehl_marechal(rms_waves):
+def strehl_marechal(rms_waves: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
     """Marechal-approximation Strehl ratio from wavefront RMS.
 
     .. math::
@@ -339,7 +362,7 @@ def strehl_marechal(rms_waves):
     return np.exp(-(sigma ** 2))
 
 
-def strehl_phase_integral(pupil):
+def strehl_phase_integral(pupil: np.ndarray) -> float:
     """Strehl ratio from the pupil-phase integral (Born & Wolf 9.1.10).
 
     .. math::
@@ -393,7 +416,12 @@ def strehl_phase_integral(pupil):
     return num / den
 
 
-def coupling_efficiency(E, mode, dx, dy=None):
+def coupling_efficiency(
+    E: np.ndarray,
+    mode: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+) -> float:
     r"""Compute the mode-overlap coupling efficiency between a field
     and a target mode.
 
@@ -449,7 +477,12 @@ def coupling_efficiency(E, mode, dx, dy=None):
     return float(np.abs(overlap) ** 2 / denom)
 
 
-def M2(E, dx, wavelength, dy=None):
+def M2(
+    E: np.ndarray,
+    dx: float,
+    wavelength: float,
+    dy: Optional[float] = None,
+) -> Tuple[float, float]:
     r"""Compute the ISO 11146 :math:`M^2` beam-quality factor at a
     single plane.
 
@@ -548,7 +581,14 @@ def M2(E, dx, wavelength, dy=None):
     return float(np.sqrt(M2x_sq)), float(np.sqrt(M2y_sq))
 
 
-def check_sampling_conditions(N, dx, z, wavelength, feature_size=None, verbose=True):
+def check_sampling_conditions(
+    N: int,
+    dx: float,
+    z: float,
+    wavelength: float,
+    feature_size: Optional[float] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
     """
     Check whether grid parameters satisfy ASM sampling conditions.
 
@@ -640,8 +680,15 @@ def check_sampling_conditions(N, dx, z, wavelength, feature_size=None, verbose=T
 # PSF / MTF COMPUTATION
 # =============================================================================
 
-def compute_psf(pupil, wavelength, f, dx_pupil, N_psf=None, oversample=1,
-                normalize='power'):
+def compute_psf(
+    pupil: np.ndarray,
+    wavelength: float,
+    f: float,
+    dx_pupil: float,
+    N_psf: Optional[int] = None,
+    oversample: int = 1,
+    normalize: str = 'power',
+) -> Tuple[np.ndarray, float]:
     """
     Compute the point spread function (PSF) from a pupil function.
 
@@ -752,7 +799,7 @@ def compute_psf(pupil, wavelength, f, dx_pupil, N_psf=None, oversample=1,
     return psf, dx_psf
 
 
-def compute_otf(psf):
+def compute_otf(psf: np.ndarray) -> np.ndarray:
     """
     Compute the optical transfer function (OTF) from a PSF.
 
@@ -785,7 +832,7 @@ def compute_otf(psf):
     return otf
 
 
-def compute_mtf(psf):
+def compute_mtf(psf: np.ndarray) -> np.ndarray:
     """
     Compute the modulation transfer function (MTF) from a PSF.
 
@@ -818,7 +865,12 @@ def compute_mtf(psf):
     return xp.abs(compute_otf(psf))
 
 
-def mtf_radial(mtf, dx_psf, wavelength, f):
+def mtf_radial(
+    mtf: np.ndarray,
+    dx_psf: float,
+    wavelength: float,
+    f: float,
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute the azimuthally-averaged radial MTF profile.
 
@@ -865,7 +917,10 @@ def mtf_radial(mtf, dx_psf, wavelength, f):
 # Multi-wavelength / chromatic analysis
 # ============================================================================
 
-def chromatic_focal_shift(prescription, wavelengths):
+def chromatic_focal_shift(
+    prescription: Dict[str, Any],
+    wavelengths: Sequence[float],
+) -> Tuple[np.ndarray, np.ndarray, float]:
     """Compute the paraxial focal length at each wavelength and return
     the chromatic focal shift (axial colour).
 
@@ -898,8 +953,14 @@ def chromatic_focal_shift(prescription, wavelengths):
     return efls, bfls, shift
 
 
-def polychromatic_strehl(prescription, wavelengths, weights,
-                         N, dx, E_in=None):
+def polychromatic_strehl(
+    prescription: Dict[str, Any],
+    wavelengths: Sequence[float],
+    weights: Sequence[float],
+    N: int,
+    dx: float,
+    E_in: Optional[np.ndarray] = None,
+) -> Tuple[float, np.ndarray, np.ndarray]:
     """Compute the polychromatic Strehl ratio.
 
     Propagates a plane wave through the lens at each wavelength,
@@ -957,10 +1018,19 @@ def polychromatic_strehl(prescription, wavelengths, weights,
     return strehl_poly, strehls, z_bests
 
 
-def polychromatic_psf(prescription, wavelengths, weights, N, dx, *,
-                      E_in=None, image_distance=None,
-                      normalize='power', bandlimit=True,
-                      return_components=False):
+def polychromatic_psf(
+    prescription: Dict[str, Any],
+    wavelengths: Sequence[float],
+    weights: Sequence[float],
+    N: int,
+    dx: float,
+    *,
+    E_in: Optional[np.ndarray] = None,
+    image_distance: Optional[float] = None,
+    normalize: str = 'power',
+    bandlimit: bool = True,
+    return_components: bool = False,
+) -> Tuple[np.ndarray, float, Dict[str, Any]]:
     """Accumulate a polychromatic PSF on a common image-plane grid.
 
     For each wavelength in ``wavelengths`` propagates a pupil-plane
@@ -1198,7 +1268,7 @@ def polychromatic_psf(prescription, wavelengths, weights, N, dx, *,
 # are therefore directly interpretable as RMS contributions in the
 # same units as the input OPD (meters if OPD is in meters).
 
-def zernike_index_to_nm(j):
+def zernike_index_to_nm(j: int) -> Tuple[int, int]:
     """Convert OSA single-index ``j`` to (n, m) Zernike indices."""
     j = int(j)
     if j < 0:
@@ -1212,7 +1282,7 @@ def zernike_index_to_nm(j):
     return n, m
 
 
-def zernike_nm_to_index(n, m):
+def zernike_nm_to_index(n: int, m: int) -> int:
     """Convert Zernike (n, m) to OSA single-index ``j``."""
     return (n * (n + 2) + m) // 2
 
@@ -1237,7 +1307,12 @@ def _zernike_radial(n, m, rho):
     return R
 
 
-def zernike_polynomial(n, m, rho, theta):
+def zernike_polynomial(
+    n: int,
+    m: int,
+    rho: np.ndarray,
+    theta: np.ndarray,
+) -> np.ndarray:
     """Evaluate the OSA-normalised Zernike Z_n^m on pupil polar
     coordinates.
 
@@ -1278,7 +1353,12 @@ def zernike_polynomial(n, m, rho, theta):
     return Z
 
 
-def zernike_basis_matrix(n_modes, X, Y, pupil_radius):
+def zernike_basis_matrix(
+    n_modes: int,
+    X: np.ndarray,
+    Y: np.ndarray,
+    pupil_radius: float,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Build a design matrix of the first ``n_modes`` Zernike
     polynomials evaluated on the grid ``(X, Y)``.
 
@@ -1314,8 +1394,14 @@ def zernike_basis_matrix(n_modes, X, Y, pupil_radius):
     return basis, pupil_mask
 
 
-def zernike_decompose(opd_map, dx, aperture, n_modes=21, dy=None,
-                      return_residual=False):
+def zernike_decompose(
+    opd_map: np.ndarray,
+    dx: float,
+    aperture: float,
+    n_modes: int = 21,
+    dy: Optional[float] = None,
+    return_residual: bool = False,
+) -> Union[Tuple[np.ndarray, List[str]], Tuple[np.ndarray, List[str], np.ndarray, float]]:
     """Decompose a 2-D OPD map into Zernike coefficients using a
     numerically-stable Householder QR least-squares solve.
 
@@ -1412,7 +1498,13 @@ def zernike_decompose(opd_map, dx, aperture, n_modes=21, dy=None,
     return coeffs, names
 
 
-def zernike_reconstruct(coeffs, dx, shape, aperture, dy=None):
+def zernike_reconstruct(
+    coeffs: np.ndarray,
+    dx: float,
+    shape: Tuple[int, int],
+    aperture: float,
+    dy: Optional[float] = None,
+) -> np.ndarray:
     """Reconstruct a 2-D OPD map from Zernike coefficients.
 
     Inverse of :func:`zernike_decompose`: ``opd_map ≈ sum_j coeffs[j]
@@ -1486,8 +1578,13 @@ def _zernike_classical_name(n, m):
 # Wavefront / OPD analysis
 # ============================================================================
 
-def check_opd_sampling(dx, wavelength, aperture, focal_length,
-                       verbose=True):
+def check_opd_sampling(
+    dx: float,
+    wavelength: float,
+    aperture: float,
+    focal_length: float,
+    verbose: bool = True,
+) -> Dict[str, Any]:
     """Check whether grid sampling is adequate for clean OPD extraction
     from a converging wavefront.
 
@@ -1588,8 +1685,12 @@ def check_opd_sampling(dx, wavelength, aperture, focal_length,
     }
 
 
-def remove_wavefront_modes(x, opd, modes='piston,tilt,defocus',
-                           weights=None):
+def remove_wavefront_modes(
+    x: np.ndarray,
+    opd: np.ndarray,
+    modes: str = 'piston,tilt,defocus',
+    weights: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, Dict[str, float]]:
     """Least-squares subtract low-order 1-D wavefront modes from an OPD
     profile.
 
@@ -1678,7 +1779,7 @@ def remove_wavefront_modes(x, opd, modes='piston,tilt,defocus',
     return opd - fit, dict(zip(names, coeffs.tolist()))
 
 
-def opd_pv_rms(opd):
+def opd_pv_rms(opd: np.ndarray) -> Tuple[float, float]:
     """Peak-valley and RMS of a 1-D or 2-D OPD array.
 
     Parameters
@@ -1702,8 +1803,16 @@ def opd_pv_rms(opd):
     return pv, rms
 
 
-def wave_opd_1d(E, dx, wavelength, axis='x', aperture=None, dy=None,
-                focal_length=None, f_ref=None):
+def wave_opd_1d(
+    E: np.ndarray,
+    dx: float,
+    wavelength: float,
+    axis: str = 'x',
+    aperture: Optional[float] = None,
+    dy: Optional[float] = None,
+    focal_length: Optional[float] = None,
+    f_ref: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Extract a 1-D OPD profile along the central row or column of a
     complex field.
 
@@ -1804,8 +1913,15 @@ def wave_opd_1d(E, dx, wavelength, axis='x', aperture=None, dy=None,
     return coord_crop, opd
 
 
-def wave_opd_2d(E, dx, wavelength, aperture=None, dy=None, f_ref=None,
-                focal_length=None):
+def wave_opd_2d(
+    E: np.ndarray,
+    dx: float,
+    wavelength: float,
+    aperture: Optional[float] = None,
+    dy: Optional[float] = None,
+    f_ref: Optional[float] = None,
+    focal_length: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Extract a 2-D OPD map from a complex field over its pupil.
 
     For converging wavefronts with many fringes, a reference spherical

@@ -79,7 +79,7 @@ from __future__ import annotations
 import copy
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -234,7 +234,7 @@ class DesignParameterization:
     free_vars: List[Tuple[Any, ...]]
     bounds: Optional[List[Optional[Tuple[float, float]]]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.bounds is not None:
             if len(self.bounds) != len(self.free_vars):
                 raise ValueError(
@@ -348,7 +348,7 @@ class MultiPrescriptionParameterization:
     free_vars: List[Tuple[Any, ...]]
     bounds: Optional[List[Optional[Tuple[float, float]]]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         for fv in self.free_vars:
             if not fv or not isinstance(fv[0], (int, np.integer)):
                 raise ValueError(
@@ -404,7 +404,7 @@ class MultiPrescriptionParameterization:
 _INVALID_FL_SENTINEL = 1e9
 
 
-def ctx_is_valid(ctx, field) -> bool:
+def ctx_is_valid(ctx: Any, field: str) -> bool:
     """Return True if ``ctx.<field>`` holds a usable physical value.
 
     Guards against the sentinels set when the ray-leg failed (``1e9``
@@ -450,7 +450,7 @@ class MeritTerm:
     needs_wave: bool = False
     name: str = 'MeritTerm'
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         raise NotImplementedError
 
 
@@ -468,11 +468,11 @@ class FocalLengthMerit(MeritTerm):
     needs_wave = False
     name = 'FocalLength'
 
-    def __init__(self, target: float, weight: float = 1.0):
+    def __init__(self, target: float, weight: float = 1.0) -> None:
         self.target = float(target)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         efl = getattr(ctx, 'efl', float('nan'))
         if not ctx_is_valid(ctx, 'efl'):
             return self.weight  # graceful large-but-finite penalty
@@ -494,11 +494,11 @@ class BackFocalLengthMerit(MeritTerm):
     needs_wave = False
     name = 'BackFocalLength'
 
-    def __init__(self, target: float, weight: float = 1.0):
+    def __init__(self, target: float, weight: float = 1.0) -> None:
         self.target = float(target)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         bfl = getattr(ctx, 'bfl', float('nan'))
         if not ctx_is_valid(ctx, 'bfl'):
             return self.weight
@@ -517,10 +517,10 @@ class SphericalSeidelMerit(MeritTerm):
     needs_wave = False
     name = 'SphericalSeidel'
 
-    def __init__(self, weight: float = 1.0):
+    def __init__(self, weight: float = 1.0) -> None:
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         return self.weight * ctx.seidel[0] ** 2
 
 
@@ -533,11 +533,11 @@ class StrehlMerit(MeritTerm):
     needs_wave = True
     name = 'Strehl'
 
-    def __init__(self, min_strehl: float = 0.8, weight: float = 1.0):
+    def __init__(self, min_strehl: float = 0.8, weight: float = 1.0) -> None:
         self.min_strehl = float(min_strehl)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         deficit = max(0.0, self.min_strehl - ctx.strehl_best)
         return self.weight * deficit * deficit
 
@@ -559,13 +559,13 @@ class RMSWavefrontMerit(MeritTerm):
     def __init__(self, max_rms_waves: float = 0.07,
                  n_modes: int = 21,
                  exclude_low_order: int = 4,
-                 weight: float = 1.0):
+                 weight: float = 1.0) -> None:
         self.max_rms_waves = float(max_rms_waves)
         self.n_modes = int(n_modes)
         self.exclude_low_order = int(exclude_low_order)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         rms_waves = ctx.rms_wavefront_waves(
             n_modes=self.n_modes,
             exclude_low_order=self.exclude_low_order)
@@ -579,11 +579,11 @@ class SpotSizeMerit(MeritTerm):
     needs_wave = True
     name = 'SpotSize'
 
-    def __init__(self, max_rms_radius: float, weight: float = 1.0):
+    def __init__(self, max_rms_radius: float, weight: float = 1.0) -> None:
         self.max_rms_radius = float(max_rms_radius)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         r = ctx.rms_radius_best
         excess = max(0.0, r - self.max_rms_radius)
         return self.weight * excess * excess
@@ -632,14 +632,14 @@ class MatchIdealThinLensMerit(MeritTerm):
     needs_wave = True
     name = 'MatchIdealThinLens'
 
-    def __init__(self, target_focal_length, weight=1.0,
-                 exclude_low_order=1, n_modes=21):
+    def __init__(self, target_focal_length: float, weight: float = 1.0,
+                 exclude_low_order: int = 1, n_modes: int = 21) -> None:
         self.target_focal_length = float(target_focal_length)
         self.weight = float(weight)
         self.exclude_low_order = int(exclude_low_order)
         self.n_modes = int(n_modes)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         if ctx.opd_map is None:
             return 0.0
         ap = ctx.prescription.get('aperture_diameter')
@@ -812,19 +812,19 @@ class MatchIdealSystemMerit(MeritTerm):
     needs_wave = True
     name = 'MatchIdealSystem'
 
-    def __init__(self, ideal_elements,
-                 real_elements=None,
-                 source_fn=None,
-                 match='field_overlap',
-                 aperture_mask=None,
-                 use_traced_lens=False,
-                 ray_subsample=4,
-                 focus_search=False,
-                 focus_search_range=None,
-                 focus_search_n=9,
-                 wavelengths=None,
-                 field_angles=None,
-                 weight=1.0):
+    def __init__(self, ideal_elements: Sequence[Dict[str, Any]],
+                 real_elements: Optional[Sequence[Dict[str, Any]]] = None,
+                 source_fn: Optional[Callable] = None,
+                 match: str = 'field_overlap',
+                 aperture_mask: Optional[np.ndarray] = None,
+                 use_traced_lens: bool = False,
+                 ray_subsample: int = 4,
+                 focus_search: bool = False,
+                 focus_search_range: Optional[Tuple[float, float]] = None,
+                 focus_search_n: int = 9,
+                 wavelengths: Optional[Sequence[float]] = None,
+                 field_angles: Optional[Sequence[float]] = None,
+                 weight: float = 1.0) -> None:
         self.ideal_elements = list(ideal_elements)
         self.real_elements = (list(real_elements)
                               if real_elements is not None
@@ -951,7 +951,7 @@ class MatchIdealSystemMerit(MeritTerm):
 
     # -- Main evaluate ----------------------------------------------
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         if ctx.prescription is None:
             return self.weight
 
@@ -1155,14 +1155,16 @@ class MatchTargetOPDMerit(MeritTerm):
     needs_wave = True
     name = 'MatchTargetOPD'
 
-    def __init__(self, target_opd, weight=1.0,
-                 exclude_low_order=1, n_modes=21):
+    def __init__(self, target_opd: Union[np.ndarray, Callable],
+                 weight: float = 1.0,
+                 exclude_low_order: int = 1,
+                 n_modes: int = 21) -> None:
         self.target_opd = target_opd
         self.weight = float(weight)
         self.exclude_low_order = int(exclude_low_order)
         self.n_modes = int(n_modes)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         if ctx.opd_map is None:
             return 0.0
         ap = ctx.prescription.get('aperture_diameter')
@@ -1218,13 +1220,14 @@ class ZernikeCoefficientMerit(MeritTerm):
     needs_wave = True
     name = 'ZernikeCoefficient'
 
-    def __init__(self, targets, weight=1.0, n_modes=21):
+    def __init__(self, targets: Dict[int, float],
+                 weight: float = 1.0, n_modes: int = 21) -> None:
         self.targets = {int(j): float(v) for j, v in targets.items()}
         self.weight = float(weight)
         self.n_modes = max(int(n_modes), max(self.targets) + 1
                            if self.targets else int(n_modes))
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         if ctx.opd_map is None:
             return 0.0
         ap = ctx.prescription.get('aperture_diameter')
@@ -1310,13 +1313,14 @@ class LGAberrationMerit(MeritTerm):
     needs_wave = False
     name = 'LGAberration'
 
-    def __init__(self, targets,
-                 field_points=None,
-                 image_points=None,
-                 w_s=50e-6, w_p=0.05, w_o=None,
-                 fit_kwargs=None,
-                 weight=1.0,
-                 name=None):
+    def __init__(self, targets: Dict[Any, float],
+                 field_points: Optional[Sequence[Any]] = None,
+                 image_points: Optional[Sequence[Any]] = None,
+                 w_s: float = 50e-6, w_p: float = 0.05,
+                 w_o: Optional[float] = None,
+                 fit_kwargs: Optional[Dict[str, Any]] = None,
+                 weight: float = 1.0,
+                 name: Optional[str] = None) -> None:
         if not targets:
             raise ValueError("LGAberrationMerit: targets dict is empty")
         self.targets = {tuple(k): float(v) for k, v in targets.items()}
@@ -1341,7 +1345,7 @@ class LGAberrationMerit(MeritTerm):
         if name is not None:
             self.name = str(name)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         # Lazy import to avoid bootstrap cycles.
         from ..propagators.asymptotic import (fit_canonical_polynomials,
                                   aberration_tensor)
@@ -1434,17 +1438,19 @@ class LGAberrationMerit(MeritTerm):
         return self.weight * total
 
 
-def make_lg_aberration_merit_jax(prescription, wavelength,
-                                   targets,
-                                   build_args,
-                                   *,
-                                   field_points=None,
-                                   image_points=None,
-                                   w_s=50e-6, w_p=0.05,
-                                   poly_order=4,
-                                   n_field=8, n_pupil=8,
-                                   weight=1.0,
-                                   name='LGAberrationJax'):
+def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
+                                 wavelength: float,
+                                 targets: Dict[Any, float],
+                                 build_args: Callable,
+                                 *,
+                                 field_points: Optional[Sequence[Any]] = None,
+                                 image_points: Optional[Sequence[Any]] = None,
+                                 w_s: float = 50e-6,
+                                 w_p: float = 0.05,
+                                 poly_order: int = 4,
+                                 n_field: int = 8, n_pupil: int = 8,
+                                 weight: float = 1.0,
+                                 name: str = 'LGAberrationJax') -> "JaxMeritTerm":
     """Build a JAX-grad-compatible LG-aberration merit term.
 
     Wraps :func:`fit_canonical_polynomials_jax` +
@@ -1595,12 +1601,13 @@ class CompositeMerit(MeritTerm):
 
     name = 'Composite'
 
-    def __init__(self, sub_merits, weight=1.0):
+    def __init__(self, sub_merits: Sequence[MeritTerm],
+                 weight: float = 1.0) -> None:
         self.sub_merits = list(sub_merits)
         self.weight = float(weight)
         self.needs_wave = any(m.needs_wave for m in self.sub_merits)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         s = 0.0
         for m in self.sub_merits:
             s = s + m.evaluate(ctx)
@@ -1623,14 +1630,16 @@ class CallableMerit(MeritTerm):
 
     name = 'Callable'
 
-    def __init__(self, fn, weight=1.0, needs_wave=False, name=None):
+    def __init__(self, fn: Callable, weight: float = 1.0,
+                 needs_wave: bool = False,
+                 name: Optional[str] = None) -> None:
         self.fn = fn
         self.weight = float(weight)
         self.needs_wave = bool(needs_wave)
         if name is not None:
             self.name = name
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         return self.weight * float(self.fn(ctx))
 
 
@@ -1685,11 +1694,11 @@ class JaxMeritTerm(MeritTerm):
 
     name = 'JaxMerit'
 
-    def __init__(self, fn, weight: float = 1.0,
+    def __init__(self, fn: Callable, weight: float = 1.0,
                  needs_wave: bool = False,
                  name: Optional[str] = None,
                  real_part: bool = False,
-                 build_args: Optional[Callable] = None):
+                 build_args: Optional[Callable] = None) -> None:
         self.fn = fn
         self.weight = float(weight)
         self.needs_wave = bool(needs_wave)
@@ -1711,7 +1720,7 @@ class JaxMeritTerm(MeritTerm):
             return jnp.real(val)
         return jnp.abs(val)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         if self.build_args is not None and getattr(ctx, 'x', None) is not None:
             val = self.fn(*self.build_args(ctx.x))
         else:
@@ -1766,10 +1775,10 @@ class ChromaticFocalShiftMerit(MeritTerm):
     needs_wave = False
     name = 'ChromaticFocalShift'
 
-    def __init__(self, weight: float = 1.0):
+    def __init__(self, weight: float = 1.0) -> None:
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         if ctx.efls_per_wavelength is None:
             return 0.0
         pv = (np.max(ctx.efls_per_wavelength)
@@ -1800,13 +1809,14 @@ class MultiWavelengthMerit(MeritTerm):
 
     name = 'MultiWavelength'
 
-    def __init__(self, wavelengths, sub_merit, weight=1.0):
+    def __init__(self, wavelengths: Sequence[float],
+                 sub_merit: MeritTerm, weight: float = 1.0) -> None:
         self.wavelengths = [float(w) for w in wavelengths]
         self.sub_merit = sub_merit
         self.weight = float(weight)
         self.needs_wave = sub_merit.needs_wave
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         efls = []
         total = 0.0
         for wl in self.wavelengths:
@@ -1852,13 +1862,14 @@ class MultiFieldMerit(MeritTerm):
 
     name = 'MultiField'
 
-    def __init__(self, field_angles, sub_merit, weight=1.0):
+    def __init__(self, field_angles: Sequence[float],
+                 sub_merit: MeritTerm, weight: float = 1.0) -> None:
         self.field_angles = [float(a) for a in field_angles]
         self.sub_merit = sub_merit
         self.weight = float(weight)
         self.needs_wave = True
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         total = 0.0
         for angle in self.field_angles:
             # Build tilted plane wave
@@ -1929,11 +1940,12 @@ class MinThicknessMerit(MeritTerm):
     needs_wave = False
     name = 'MinThickness'
 
-    def __init__(self, min_thickness=1e-3, weight=1.0):
+    def __init__(self, min_thickness: float = 1e-3,
+                 weight: float = 1.0) -> None:
         self.min_thickness = float(min_thickness)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         thicknesses = ctx.prescription.get('thicknesses', [])
         total = 0.0
         for t in thicknesses:
@@ -1948,11 +1960,12 @@ class MaxThicknessMerit(MeritTerm):
     needs_wave = False
     name = 'MaxThickness'
 
-    def __init__(self, max_thickness=20e-3, weight=1.0):
+    def __init__(self, max_thickness: float = 20e-3,
+                 weight: float = 1.0) -> None:
         self.max_thickness = float(max_thickness)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         thicknesses = ctx.prescription.get('thicknesses', [])
         total = 0.0
         for t in thicknesses:
@@ -1968,11 +1981,12 @@ class MinBackFocalLengthMerit(MeritTerm):
     needs_wave = False
     name = 'MinBFL'
 
-    def __init__(self, min_bfl=5e-3, weight=1.0):
+    def __init__(self, min_bfl: float = 5e-3,
+                 weight: float = 1.0) -> None:
         self.min_bfl = float(min_bfl)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         deficit = max(0.0, self.min_bfl - ctx.bfl)
         return self.weight * deficit * deficit
 
@@ -1983,11 +1997,12 @@ class MaxFNumberMerit(MeritTerm):
     needs_wave = False
     name = 'MaxFNumber'
 
-    def __init__(self, max_f_number=8.0, weight=1.0):
+    def __init__(self, max_f_number: float = 8.0,
+                 weight: float = 1.0) -> None:
         self.max_f_number = float(max_f_number)
         self.weight = float(weight)
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         ap = ctx.prescription.get('aperture_diameter', 1e-3)
         fnum = abs(ctx.efl) / ap if ap > 0 else 1e9
         excess = max(0.0, fnum - self.max_f_number)
@@ -2025,8 +2040,10 @@ class ToleranceAwareMerit(MeritTerm):
 
     name = 'ToleranceAware'
 
-    def __init__(self, sub_merit, perturbation_spec,
-                 n_trials=5, seed=42, weight=1.0):
+    def __init__(self, sub_merit: MeritTerm,
+                 perturbation_spec: Sequence[Dict[str, Any]],
+                 n_trials: int = 5, seed: int = 42,
+                 weight: float = 1.0) -> None:
         self.sub_merit = sub_merit
         self.perturbation_spec = list(perturbation_spec)
         self.n_trials = int(n_trials)
@@ -2034,7 +2051,7 @@ class ToleranceAwareMerit(MeritTerm):
         self.weight = float(weight)
         self.needs_wave = sub_merit.needs_wave
 
-    def evaluate(self, ctx) -> float:
+    def evaluate(self, ctx: Any) -> float:
         from ..analysis.through_focus import apply_perturbations, Perturbation
 
         total = 0.0
@@ -2178,7 +2195,7 @@ class DesignResult:
     prescriptions: Optional[List[Dict[str, Any]]] = None
 
 
-def design_optimize(parameterization,
+def design_optimize(parameterization: Any,
                     merit_terms: Sequence[MeritTerm],
                     wavelength: float,
                     N: int = 512,
@@ -2196,7 +2213,7 @@ def design_optimize(parameterization,
                     precision: str = 'double',
                     plane_logger: Optional[Callable] = None,
                     verbose: bool = True,
-                    progress=None) -> DesignResult:
+                    progress: Optional[Callable] = None) -> DesignResult:
     """Optimize a lens prescription against a set of merit terms.
 
     Parameters

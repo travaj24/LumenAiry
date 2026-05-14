@@ -25,7 +25,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, Union
 
 import math
 
@@ -41,7 +41,7 @@ VALID_METHODS = (
 
 
 def propagate(
-    E_in,
+    E_in: np.ndarray,
     *,
     z: Optional[float] = None,
     wavelength: float,
@@ -52,8 +52,8 @@ def propagate(
     output_grid: Optional[tuple] = None,
     output_dx: Optional[float] = None,
     return_result: bool = False,
-    **method_kwargs,
-):
+    **method_kwargs: Any,
+) -> Any:
     """Top-level smart-method propagator.
 
     Routes the call to the most appropriate underlying propagator
@@ -408,7 +408,7 @@ def _select_asm_variant(
 
 
 def which_propagator(
-    E_in,
+    E_in: np.ndarray,
     z: float,
     wavelength: float,
     dx: float,
@@ -481,7 +481,7 @@ def which_propagator(
 
 
 def asm_propagate(
-    E_in,
+    E_in: np.ndarray,
     z: float,
     wavelength: float,
     dx: float,
@@ -493,8 +493,8 @@ def asm_propagate(
     aperture_radius: Optional[float] = None,
     bandlimit: bool = True,
     verbose: bool = False,
-    **method_kwargs,
-):
+    **method_kwargs: Any,
+) -> Union[np.ndarray, Tuple[np.ndarray, ...]]:
     """Auto-select and run the best ASM-family propagator.
 
     Calls :func:`which_propagator` to pick between ``asm`` /

@@ -13,7 +13,8 @@ a map of the dominant ghosts for stray-light assessment.
 Author: Andrew Traverso
 """
 from __future__ import annotations
-from typing import List
+
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -28,7 +29,7 @@ __all__ = [
 ]
 
 
-def enumerate_ghost_paths(n_surfaces):
+def enumerate_ghost_paths(n_surfaces: int) -> List[Tuple[int, int]]:
     """List all unique 2-bounce ghost reflection paths.
 
     For ``n_surfaces`` refracting surfaces (0-indexed), each ghost
@@ -44,8 +45,13 @@ def enumerate_ghost_paths(n_surfaces):
             for j in range(i + 1, n_surfaces)]
 
 
-def ghost_analysis(prescription, wavelength, semi_aperture=None,
-                   n_rays=21, verbose=True):
+def ghost_analysis(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    semi_aperture: Optional[float] = None,
+    n_rays: int = 21,
+    verbose: bool = True,
+) -> List[Dict[str, Any]]:
     """Trace all 2-bounce ghost paths and report their relative
     intensities.
 
@@ -118,12 +124,16 @@ def ghost_analysis(prescription, wavelength, semi_aperture=None,
     return ghosts
 
 
-def non_sequential_stray_light(prescription, wavelength, *,
-                                n_rays=21,
-                                semi_aperture=None,
-                                top_n=10,
-                                bsdf_model=None,
-                                verbose=True):
+def non_sequential_stray_light(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    *,
+    n_rays: int = 21,
+    semi_aperture: Optional[float] = None,
+    top_n: int = 10,
+    bsdf_model: Optional[Any] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
     """Combined ghost + scatter stray-light report for a prescription.
 
     Wraps :func:`ghost_analysis` (2-bounce reflections via Fresnel)

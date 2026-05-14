@@ -63,7 +63,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 from dataclasses import dataclass, field as _dc_field
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -117,14 +117,14 @@ class DeformableMirror:
     command: np.ndarray = _dc_field(init=False)
     _IF_basis: Optional[np.ndarray] = _dc_field(default=None, init=False, repr=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.command = np.zeros((self.n_actuators, self.n_actuators),
                                  dtype=np.float64)
         c = max(min(self.inter_actuator_coupling, 0.99), 1e-6)
         self._sigma_IF = self.pitch / np.sqrt(-2.0 * np.log(c))
         self._build_IF_basis()
 
-    def _build_IF_basis(self):
+    def _build_IF_basis(self) -> None:
         """Pre-compute the (n_act**2, N, N) influence-function stack."""
         N = self.N
         dx = self.dx
@@ -142,7 +142,7 @@ class DeformableMirror:
                 stack[j, i] = np.exp(-d2 / (2.0 * s2))
         self._IF_basis = stack
 
-    def set_command(self, command):
+    def set_command(self, command: np.ndarray) -> None:
         """Set actuator amplitudes from a (n_act, n_act) array or a
         flat (n_act**2,) vector."""
         c = np.asarray(command, dtype=np.float64)
@@ -161,7 +161,7 @@ class DeformableMirror:
         # (n_y_act, n_x_act, 1, 1) * (n_y_act, n_x_act, N, N) -> (N, N) via sum
         return np.einsum('ij,ijkl->kl', self.command, self._IF_basis)
 
-    def apply(self, E_in, scale=1.0):
+    def apply(self, E_in: np.ndarray, scale: float = 1.0) -> np.ndarray:
         """Apply the DM phase to a complex field.
 
         Parameters
@@ -177,12 +177,16 @@ class DeformableMirror:
         phi = scale * self.phase()
         return E_in * np.exp(1j * phi)
 
-    def reset(self):
+    def reset(self) -> None:
         """Zero the command vector."""
         self.command = np.zeros_like(self.command)
 
 
-def apply_dm(E_in, dm: DeformableMirror, scale: float = 1.0):
+def apply_dm(
+    E_in: np.ndarray,
+    dm: DeformableMirror,
+    scale: float = 1.0,
+) -> np.ndarray:
     """Module-level convenience: apply a ``DeformableMirror`` phase
     to ``E_in``.  Equivalent to ``dm.apply(E_in, scale)``."""
     return dm.apply(E_in, scale=scale)
@@ -192,9 +196,12 @@ def apply_dm(E_in, dm: DeformableMirror, scale: float = 1.0):
 # Modal reconstruction (slope-to-Zernike)
 # =============================================================================
 
-def zernike_modal_basis(n_modes: int, n_lenslets: int,
-                        semi_aperture: float,
-                        first_mode: int = 1) -> dict:
+def zernike_modal_basis(
+    n_modes: int,
+    n_lenslets: int,
+    semi_aperture: float,
+    first_mode: int = 1,
+) -> Dict[str, Any]:
     """Build the slope-to-modal reconstruction matrix for a Zernike
     basis on a Shack-Hartmann lenslet grid.
 
@@ -304,7 +311,10 @@ def zernike_modal_basis(n_modes: int, n_lenslets: int,
     }
 
 
-def slope_to_modal(slopes, basis: dict) -> np.ndarray:
+def slope_to_modal(
+    slopes: np.ndarray,
+    basis: Dict[str, Any],
+) -> np.ndarray:
     """Reconstruct modal coefficients from Shack-Hartmann slopes.
 
     Parameters
@@ -373,7 +383,7 @@ class LeakyIntegrator:
     leak: float = 0.0
     command: np.ndarray = _dc_field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not 0.0 <= self.gain <= 2.0:
             raise ValueError(f"gain must be in [0, 2]; got {self.gain}")
         if not 0.0 <= self.leak <= 1.0:
@@ -390,7 +400,7 @@ class LeakyIntegrator:
         self.command = (1.0 - self.leak) * self.command + self.gain * err
         return self.command.copy()
 
-    def reset(self):
+    def reset(self) -> None:
         """Zero the command vector."""
         self.command = np.zeros_like(self.command)
 

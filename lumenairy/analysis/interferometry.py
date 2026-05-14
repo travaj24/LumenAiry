@@ -7,6 +7,9 @@ style), and extract OPD from measured fringes via phase-shifting.
 Author: Andrew Traverso
 """
 from __future__ import annotations
+
+from typing import List, Optional, Sequence, Tuple
+
 import numpy as np
 
 
@@ -17,8 +20,15 @@ __all__ = [
 ]
 
 
-def simulate_interferogram(opd_map, wavelength, tilt_x=0.0, tilt_y=0.0,
-                           visibility=1.0, background=0.5, dx=None):
+def simulate_interferogram(
+    opd_map: np.ndarray,
+    wavelength: float,
+    tilt_x: float = 0.0,
+    tilt_y: float = 0.0,
+    visibility: float = 1.0,
+    background: float = 0.5,
+    dx: Optional[float] = None,
+) -> np.ndarray:
     """Generate a fringe pattern from an OPD map.
 
     Models a Twyman-Green or Fizeau interferometer where the test
@@ -61,7 +71,11 @@ def simulate_interferogram(opd_map, wavelength, tilt_x=0.0, tilt_y=0.0,
     return fringe
 
 
-def phase_shift_extract(frames, shifts=None, convention='hardware'):
+def phase_shift_extract(
+    frames: Sequence[np.ndarray],
+    shifts: Optional[Sequence[float]] = None,
+    convention: str = 'hardware',
+) -> Tuple[np.ndarray, np.ndarray]:
     """Extract phase (OPD) from a set of phase-shifted interferograms.
 
     Standard 4-step algorithm by default (shifts = 0, pi/2, pi, 3pi/2).
@@ -130,7 +144,7 @@ def phase_shift_extract(frames, shifts=None, convention='hardware'):
     return phase, modulation
 
 
-def fringe_spacing(wavelength, tilt_angle):
+def fringe_spacing(wavelength: float, tilt_angle: float) -> float:
     """Compute fringe spacing [m] for a given reference-beam tilt.
 
     Parameters

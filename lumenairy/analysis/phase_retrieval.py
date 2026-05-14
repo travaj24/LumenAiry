@@ -28,6 +28,10 @@ References
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import List, Optional, Tuple, Union
+
 import numpy as np
 from ..propagators.propagation import _fft2, _ifft2
 
@@ -48,9 +52,15 @@ __all__ = [
 # GERCHBERG-SAXTON (GS)
 # =============================================================================
 
-def gerchberg_saxton(source_amplitude, target_amplitude, n_iter=200,
-                     initial_phase=None, return_history=False,
-                     *, backend='numpy'):
+def gerchberg_saxton(
+    source_amplitude: np.ndarray,
+    target_amplitude: np.ndarray,
+    n_iter: int = 200,
+    initial_phase: Optional[np.ndarray] = None,
+    return_history: bool = False,
+    *,
+    backend: str = 'numpy',
+) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
     """
     Gerchberg-Saxton phase retrieval between source and target amplitudes.
 
@@ -178,9 +188,15 @@ def gerchberg_saxton(source_amplitude, target_amplitude, n_iter=200,
 # ERROR REDUCTION (ER)
 # =============================================================================
 
-def error_reduction(measured_amplitude, support, n_iter=200,
-                    initial_guess=None, return_history=False,
-                    *, backend='numpy'):
+def error_reduction(
+    measured_amplitude: np.ndarray,
+    support: np.ndarray,
+    n_iter: int = 200,
+    initial_guess: Optional[np.ndarray] = None,
+    return_history: bool = False,
+    *,
+    backend: str = 'numpy',
+) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
     """
     Error-reduction phase retrieval from a single far-field intensity.
 
@@ -267,9 +283,16 @@ def error_reduction(measured_amplitude, support, n_iter=200,
 # HYBRID INPUT-OUTPUT (HIO)
 # =============================================================================
 
-def hybrid_input_output(measured_amplitude, support, n_iter=200, beta=0.9,
-                        initial_guess=None, return_history=False,
-                        *, backend='numpy'):
+def hybrid_input_output(
+    measured_amplitude: np.ndarray,
+    support: np.ndarray,
+    n_iter: int = 200,
+    beta: float = 0.9,
+    initial_guess: Optional[np.ndarray] = None,
+    return_history: bool = False,
+    *,
+    backend: str = 'numpy',
+) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
     """
     Fienup's Hybrid Input-Output (HIO) algorithm for phase retrieval.
 
@@ -367,7 +390,11 @@ def hybrid_input_output(measured_amplitude, support, n_iter=200, beta=0.9,
 # JAX-jit'd phase-retrieval variants
 # ----------------------------------------------------------------------
 
-def gerchberg_saxton_jax(source_amplitude, target_amplitude, n_iter=200):
+def gerchberg_saxton_jax(
+    source_amplitude: np.ndarray,
+    target_amplitude: np.ndarray,
+    n_iter: int = 200,
+) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Gerchberg-Saxton iteration.
 
     Same physics as :func:`gerchberg_saxton`; the iteration loop runs
@@ -412,8 +439,12 @@ def gerchberg_saxton_jax(source_amplitude, target_amplitude, n_iter=200):
     return np.asarray(phase), err
 
 
-def error_reduction_jax(measured_amplitude, support, n_iter=200,
-                          init_phase=None):
+def error_reduction_jax(
+    measured_amplitude: np.ndarray,
+    support: np.ndarray,
+    n_iter: int = 200,
+    init_phase: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Error-Reduction phase retrieval (Fienup 1982).
 
     Mirror of :func:`error_reduction` -- alternating-projection on the
@@ -450,8 +481,13 @@ def error_reduction_jax(measured_amplitude, support, n_iter=200,
     return np.asarray(obj_final), err
 
 
-def hybrid_input_output_jax(measured_amplitude, support, n_iter=200,
-                              beta=0.9, init_phase=None):
+def hybrid_input_output_jax(
+    measured_amplitude: np.ndarray,
+    support: np.ndarray,
+    n_iter: int = 200,
+    beta: float = 0.9,
+    init_phase: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Hybrid Input-Output phase retrieval.
 
     HIO swaps the support projection for an outside-support feedback

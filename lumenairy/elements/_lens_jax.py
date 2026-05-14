@@ -23,6 +23,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
+from typing import Any, Dict
 
 import numpy as np
 
@@ -294,13 +295,18 @@ def _jax_available():
     return _JA
 
 
-def apply_real_lens_traced_jax(E_in, *,
-                                prescription, wavelength, dx,
-                                ray_subsample=8,
-                                cheb_order=10,
-                                newton_iters=12,
-                                amplitude='input',
-                                bandlimit=True):
+def apply_real_lens_traced_jax(
+    E_in: Any,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    ray_subsample: int = 8,
+    cheb_order: int = 10,
+    newton_iters: int = 12,
+    amplitude: str = 'input',
+    bandlimit: bool = True,
+) -> Any:
     """JAX-traceable per-pixel ray-traced apply_real_lens.
 
     Builds a phase screen from the per-pixel ray-traced OPL through
@@ -518,12 +524,18 @@ def apply_real_lens_traced_jax(E_in, *,
     return E_out
 
 
-def apply_real_lens_maslov_jax(E_in, *, prescription, wavelength, dx,
-                                ray_subsample=8,
-                                cheb_order=10,
-                                newton_iters=12,
-                                amplitude='input',
-                                bandlimit=True):
+def apply_real_lens_maslov_jax(
+    E_in: Any,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    ray_subsample: int = 8,
+    cheb_order: int = 10,
+    newton_iters: int = 12,
+    amplitude: str = 'input',
+    bandlimit: bool = True,
+) -> Any:
     """JAX-traceable Maslov-method real-lens propagator.
 
     Same structure as :func:`apply_real_lens_traced_jax` but with a

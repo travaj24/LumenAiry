@@ -66,7 +66,7 @@ class PropagationResult:
     metadata: Dict[str, Any] = _dc_field(default_factory=dict)
     intermediates: Optional[List[np.ndarray]] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Auto-derive intermediates from history if the caller didn't
         # supply both.  This lets PropagationResult be a drop-in for
         # callers that did ``E, intermediates = propagate_through_system(...)``
@@ -77,11 +77,11 @@ class PropagationResult:
     # -- Convenience interop -----------------------------------------
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int, ...]:
         """Shape of ``field`` -- ``(Ny, Nx)``."""
         return tuple(self.field.shape[-2:])
 
-    def __iter__(self):
+    def __iter__(self) -> Any:
         """Tuple-unpack as ``(field, intermediates)`` for backward
         compat with callers that did
         ``E, intermediates = propagate_through_system(...)``.
@@ -89,7 +89,7 @@ class PropagationResult:
         yield self.field
         yield self.intermediates if self.intermediates is not None else []
 
-    def __array__(self, dtype=None):
+    def __array__(self, dtype: Optional[Any] = None) -> np.ndarray:
         """Allow ``np.asarray(result)`` to fall through to the field
         array, so PropagationResult slots in everywhere a bare
         ndarray is accepted."""
@@ -102,7 +102,7 @@ class PropagationResult:
             return []
         return [h[0] for h in self.history]
 
-    def to_source(self):
+    def to_source(self) -> Any:
         """Wrap ``field`` in a :class:`lumenairy.sources.Source` for
         chained propagation.  Wavelength and dx are inherited; the
         Source name is set from ``method`` when available."""
@@ -113,7 +113,7 @@ class PropagationResult:
                  else 'PropagationResult',
         )
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         method_part = (f', method={self.method!r}'
                         if self.method is not None else '')
         z_part = (f', z={self.z:.3g}m' if self.z is not None else '')

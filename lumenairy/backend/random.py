@@ -24,7 +24,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 
@@ -48,7 +48,7 @@ class RandomState:
     samples.
     """
 
-    def __init__(self, rng: Optional[Union[int, object]] = None):
+    def __init__(self, rng: Optional[Union[int, object]] = None) -> None:
         if rng is None or isinstance(rng, (int, np.integer)):
             self._backend = 'numpy'
             self._rng = np.random.default_rng(None if rng is None else int(rng))
@@ -75,7 +75,9 @@ class RandomState:
     # Sampling primitives.
     # ------------------------------------------------------------------
 
-    def uniform(self, shape: Tuple[int, ...], low=0.0, high=1.0, dtype=None):
+    def uniform(self, shape: Tuple[int, ...],
+                low: float = 0.0, high: float = 1.0,
+                dtype: Optional[Any] = None) -> Any:
         """Draw uniform samples on ``[low, high)``."""
         if self._backend == 'numpy':
             arr = self._rng.uniform(low, high, size=shape)
@@ -91,7 +93,9 @@ class RandomState:
         return jax.random.uniform(sub, shape, dtype=dtype,
                                   minval=low, maxval=high)
 
-    def normal(self, shape: Tuple[int, ...], mean=0.0, std=1.0, dtype=None):
+    def normal(self, shape: Tuple[int, ...],
+               mean: float = 0.0, std: float = 1.0,
+               dtype: Optional[Any] = None) -> Any:
         """Draw standard-normal samples scaled by ``std`` and shifted
         by ``mean``."""
         if self._backend == 'numpy':
@@ -106,7 +110,10 @@ class RandomState:
             dtype = jax.numpy.float32
         return mean + std * jax.random.normal(sub, shape, dtype=dtype)
 
-    def integers(self, shape: Tuple[int, ...], low=0, high=None, dtype=None):
+    def integers(self, shape: Tuple[int, ...],
+                 low: int = 0,
+                 high: Optional[int] = None,
+                 dtype: Optional[Any] = None) -> Any:
         """Draw uniform integers on ``[low, high)``."""
         if self._backend == 'numpy':
             arr = self._rng.integers(low, high, size=shape,
@@ -122,7 +129,9 @@ class RandomState:
             dtype = jax.numpy.int32
         return jax.random.randint(sub, shape, low, high, dtype=dtype)
 
-    def choice(self, n: int, shape: Tuple[int, ...], p=None, replace=True):
+    def choice(self, n: int, shape: Tuple[int, ...],
+               p: Optional[Any] = None,
+               replace: bool = True) -> Any:
         """Draw integer indices from ``[0, n)`` with optional
         weights ``p``."""
         if self._backend == 'numpy':

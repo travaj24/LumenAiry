@@ -130,7 +130,11 @@ lumenairy = ["*.md", "*.txt", "*.html", "py.typed"]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
-python_functions = ["test_*"]
+# Allow pytest to discover both the canonical ``test_*`` naming and
+# the legacy ``t_*`` naming used throughout the ``validation/`` suite
+# (the latter is wrapped by ``validation/conftest.py`` so its
+# ``(bool, str)`` returns are converted into real assertions).
+python_functions = ["test_*", "t_*"]
 markers = [
     "unit: fast API-contract tests, no external deps (<30s total)",
     "integration: full validation suite via subprocess (~30 min)",

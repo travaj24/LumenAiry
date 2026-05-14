@@ -67,6 +67,10 @@ Dependencies
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import List
+
 # ---------------------------------------------------------------------------
 # Optional dependency
 # ---------------------------------------------------------------------------
@@ -259,7 +263,7 @@ GLASS_REGISTRY = {
 }
 
 
-def list_glasses():
+def list_glasses() -> List[str]:
     """Return the sorted list of glass names known to the registry.
 
     Useful for IDE auto-complete-style discovery and for printing a
@@ -276,7 +280,7 @@ def list_glasses():
     )
 
 
-def search_glasses(pattern):
+def search_glasses(pattern: str) -> List[str]:
     """Return registry entries whose name contains ``pattern`` (case-
     insensitive).
 
@@ -295,7 +299,7 @@ def search_glasses(pattern):
 _glass_cache = {}
 
 
-def get_glass_index(glass_name, wavelength):
+def get_glass_index(glass_name: str, wavelength: float) -> float:
     """
     Look up refractive index by common glass name at a given wavelength.
 
@@ -416,7 +420,8 @@ def get_glass_index(glass_name, wavelength):
         wavelength * 1e9, unit='nm')
 
 
-def get_glass_index_complex(glass_name, wavelength):
+def get_glass_index_complex(glass_name: str,
+                            wavelength: float) -> complex:
     """
     Look up complex refractive index ``n + i*kappa`` by glass name.
 

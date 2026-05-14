@@ -71,7 +71,20 @@ user at present): see below.
   scatter / dispersion plots extracted from the GUI's
   `glass_map_dock`.
 * **`py.typed` marker** so type checkers honour the library's
-  hints.
+  hints.  4.7's annotation pass took coverage from 28.5% to
+  90.2% (>=partial) and 10.5% to 70.1% (fully annotated).
+* **`pytest validation/`** -- the 670-test validation suite is
+  now pytest-discoverable via a `validation/conftest.py` adapter.
+  The legacy `python validation/run_all.py` driver keeps working;
+  the new path adds IDE test discovery, `-k` filtering, JUnit XML,
+  and parallel execution via `pytest-xdist`.
+* **`backend='jax'` kwarg** unifies the `_jax`-suffixed analysis
+  siblings (Gerchberg-Saxton, error reduction, HIO,
+  through-focus scan, Monte-Carlo tolerancing).
+* **Array-namespace dispatch documented**: passing a CuPy or
+  JAX array as `E_in` automatically routes the entire pipeline
+  through that backend.  `use_gpu=True` remains as a back-compat
+  way to force NumPy→GPU promotion.
 
 ### Packaging hygiene
 

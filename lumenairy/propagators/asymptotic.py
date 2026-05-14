@@ -1837,19 +1837,39 @@ class HFPolyFit:
     linear_coeffs_phi: Optional[np.ndarray] = None
     extract_linear_phase: bool = False
 
-    def to_normalised(self, s1x, s1y, s2x, s2y):
+    def to_normalised(
+        self,
+        s1x: np.ndarray,
+        s1y: np.ndarray,
+        s2x: np.ndarray,
+        s2y: np.ndarray,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         u1 = (s1x - self.s1x_centre) / self.s1x_halfrange
         u2 = (s1y - self.s1y_centre) / self.s1y_halfrange
         u3 = (s2x - self.s2x_centre) / self.s2x_halfrange
         u4 = (s2y - self.s2y_centre) / self.s2y_halfrange
         return u1, u2, u3, u4
 
-    def in_box(self, s1x, s1y, s2x, s2y):
+    def in_box(
+        self,
+        s1x: np.ndarray,
+        s1y: np.ndarray,
+        s2x: np.ndarray,
+        s2y: np.ndarray,
+    ) -> np.ndarray:
         u1, u2, u3, u4 = self.to_normalised(s1x, s1y, s2x, s2y)
         return ((np.abs(u1) <= 1.0) & (np.abs(u2) <= 1.0)
                 & (np.abs(u3) <= 1.0) & (np.abs(u4) <= 1.0))
 
-    def eval_phi(self, s1x, s1y, s2x, s2y, *, include_linear: bool = True):
+    def eval_phi(
+        self,
+        s1x: np.ndarray,
+        s1y: np.ndarray,
+        s2x: np.ndarray,
+        s2y: np.ndarray,
+        *,
+        include_linear: bool = True,
+    ) -> np.ndarray:
         """Evaluate Phi(s1, s2) [waves]."""
         u1, u2, u3, u4 = self.to_normalised(s1x, s1y, s2x, s2y)
         phi = _evaluate_polynomial_4d(self.coef_phi, self.multi_indices,
@@ -1859,7 +1879,13 @@ class HFPolyFit:
             phi = phi + (a0 + a1 * u1 + a2 * u2 + a3 * u3 + a4 * u4)
         return phi
 
-    def eval_van_vleck_density(self, s1x, s1y, s2x, s2y):
+    def eval_van_vleck_density(
+        self,
+        s1x: np.ndarray,
+        s1y: np.ndarray,
+        s2x: np.ndarray,
+        s2y: np.ndarray,
+    ) -> np.ndarray:
         """Evaluate sqrt(|det d2 Phi / d s1 d s2|) -- the Van Vleck factor.
 
         The 2x2 cross-Hessian is computed analytically from the
@@ -1921,19 +1947,19 @@ def _eval_4d_cross_deriv(coef, multi_indices, u1, u2, u3, u4,
 
 
 def fit_hf_polynomials(
-    prescription,
-    wavelength,
+    prescription: Dict[str, Any],
+    wavelength: float,
     *,
-    source_box_half=50e-6,
-    pupil_box_half=0.05,
-    n_field=8,
-    n_pupil=8,
-    poly_order=6,
-    extract_linear_phase=True,
-    object_distance=None,
-    surface_diffraction=None,
-    endpoint_anchored=False,
-):
+    source_box_half: float = 50e-6,
+    pupil_box_half: float = 0.05,
+    n_field: int = 8,
+    n_pupil: int = 8,
+    poly_order: int = 6,
+    extract_linear_phase: bool = True,
+    object_distance: Optional[float] = None,
+    surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
+    endpoint_anchored: bool = False,
+) -> HFPolyFit:
     """Fit a 4-D Chebyshev tensor-product polynomial to Phi(s1, s2).
 
     HF counterpart to :func:`fit_canonical_polynomials`.  Traces a
@@ -2079,16 +2105,16 @@ def fit_hf_polynomials(
 
 
 def propagate_hf_chebyshev_quadrature(
-    fit,
-    E_in,
-    input_grid_x,
-    input_grid_y,
-    output_grid_x,
-    output_grid_y,
+    fit: HFPolyFit,
+    E_in: np.ndarray,
+    input_grid_x: np.ndarray,
+    input_grid_y: np.ndarray,
+    output_grid_x: np.ndarray,
+    output_grid_y: np.ndarray,
     *,
-    apply_van_vleck=True,
-    chunk_output=64,
-):
+    apply_van_vleck: bool = True,
+    chunk_output: int = 64,
+) -> np.ndarray:
     """Direct 2-D HF quadrature using a tensor-product Chebyshev
     polynomial fit of Phi(s1, s2).
 
@@ -2383,17 +2409,17 @@ class JaxAberrationTensorResult(NamedTuple):
 
 
 def aberration_tensor_lg00_jax(
-    fit,
-    s2_image,
-    v_star,
+    fit: CanonicalPolyFit,
+    s2_image: Tuple[float, float],
+    v_star: Tuple[float, float],
     *,
-    source_point=(0.0, 0.0),
+    source_point: Tuple[float, float] = (0.0, 0.0),
     w_s: float = 50e-6,
     w_p: float = 0.05,
-    w_o=None,
-    v2_centre=(0.0, 0.0),
+    w_o: Optional[float] = None,
+    v2_centre: Tuple[float, float] = (0.0, 0.0),
     return_result: bool = False,
-):
+) -> Any:
     """JAX-traceable LG_{0,0} -> LG_{0,0} -> LG_{0,0} aberration coefficient.
 
     Single-coefficient form of :func:`aberration_tensor` for the
@@ -2504,16 +2530,16 @@ def _modal_field_lg00_pixel_jax(fit, s2x, s2y, v2x, v2y,
 
 
 def propagate_modal_asymptotic_lg00_jax(
-    fit,
-    s2_grid_x,
-    s2_grid_y,
-    v_star_grid,
+    fit: CanonicalPolyFit,
+    s2_grid_x: np.ndarray,
+    s2_grid_y: np.ndarray,
+    v_star_grid: np.ndarray,
     *,
-    source_point=(0.0, 0.0),
+    source_point: Tuple[float, float] = (0.0, 0.0),
     w_s: float = 50e-6,
     w_p: float = 0.05,
-    v2_centre=(0.0, 0.0),
-):
+    v2_centre: Tuple[float, float] = (0.0, 0.0),
+) -> Any:
     """JAX-traceable per-pixel evaluator for the LG_{0,0} channel.
 
     Vectorised LG_{0,0} -> LG_{0,0} version of
@@ -2699,15 +2725,15 @@ def _build_jax_ift_solver():
 
 
 def solve_envelope_stationary_jax_ift(
-    fit,
-    s2,
-    source_point,
+    fit: CanonicalPolyFit,
+    s2: Tuple[float, float],
+    source_point: Tuple[float, float],
     *,
     w_s: float,
     w_p: float,
-    v2_centre=(0.0, 0.0),
+    v2_centre: Tuple[float, float] = (0.0, 0.0),
     n_iter: int = 15,
-):
+) -> Any:
     """JAX-differentiable Newton solver for the envelope-stationary
     equation, with gradients computed via the **implicit function
     theorem** (custom_vjp).

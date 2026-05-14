@@ -42,7 +42,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -74,7 +74,7 @@ class HuygensSurface:
     centre: Tuple[float, float] = (0.0, 0.0)
     label: str = ''
 
-    def grid(self):
+    def grid(self) -> Tuple[np.ndarray, np.ndarray]:
         """Return ``(X, Y)`` meshgrid arrays for this surface."""
         cx, cy = self.centre
         x = (np.arange(self.Nx) - self.Nx / 2 + 0.5) * self.dx + cx
@@ -143,11 +143,11 @@ class MhsPipeline:
         fields = pipe.run(E_in)        # list of (surface, E_at_surface)
     """
 
-    def __init__(self, subdomains: List[MhsSubdomain]):
+    def __init__(self, subdomains: List[MhsSubdomain]) -> None:
         self.subdomains = list(subdomains)
         self._validate()
 
-    def _validate(self):
+    def _validate(self) -> None:
         for i in range(len(self.subdomains) - 1):
             cur = self.subdomains[i]
             nxt = self.subdomains[i + 1]
@@ -164,7 +164,7 @@ class MhsPipeline:
                         f"{nxt.in_surface.label or nxt.in_surface.z}.")
 
     @property
-    def n_subdomains(self):
+    def n_subdomains(self) -> int:
         return len(self.subdomains)
 
     def surfaces(self) -> List[HuygensSurface]:
@@ -174,14 +174,16 @@ class MhsPipeline:
             out.append(sub.out_surface)
         return out
 
-    def run(self, E_in,
-            return_intermediate: bool = True,
-            checkpoint=None,
-            store=None,
-            label_prefix: str = 'mhs',
-            return_result: bool = False,
-            wavelength: float = 0.0,
-            ) -> Union[List[Tuple[HuygensSurface, object]], object]:
+    def run(
+        self,
+        E_in: np.ndarray,
+        return_intermediate: bool = True,
+        checkpoint: Optional[Callable] = None,
+        store: Optional[Any] = None,
+        label_prefix: str = 'mhs',
+        return_result: bool = False,
+        wavelength: float = 0.0,
+    ) -> Union[List[Tuple[HuygensSurface, np.ndarray]], np.ndarray, Any]:
         """Run the pipeline.
 
         Parameters
@@ -274,17 +276,19 @@ class MhsPipeline:
         return E_current
 
     @classmethod
-    def from_prescription(cls,
-                           prescription: dict,
-                           *,
-                           wavelength: float,
-                           dx: float,
-                           Ny: int,
-                           Nx: int,
-                           pre_distance: float = 0.0,
-                           post_distance: float = 0.0,
-                           method: str = 'gbd',
-                           **method_kwargs) -> 'MhsPipeline':
+    def from_prescription(
+        cls,
+        prescription: Dict[str, Any],
+        *,
+        wavelength: float,
+        dx: float,
+        Ny: int,
+        Nx: int,
+        pre_distance: float = 0.0,
+        post_distance: float = 0.0,
+        method: str = 'gbd',
+        **method_kwargs: Any,
+    ) -> 'MhsPipeline':
         """Build a 3-subdomain ASM -> prescription -> ASM pipeline.
 
         Convenience for the common case "free-space lead-in + lens
@@ -353,11 +357,13 @@ class MhsPipeline:
 # Convenience builders for common subdomain patterns
 # ---------------------------------------------------------------------------
 
-def asm_subdomain(in_surface: HuygensSurface,
-                   out_surface: HuygensSurface,
-                   *,
-                   wavelength: float,
-                   bandlimit: bool = True) -> MhsSubdomain:
+def asm_subdomain(
+    in_surface: HuygensSurface,
+    out_surface: HuygensSurface,
+    *,
+    wavelength: float,
+    bandlimit: bool = True,
+) -> MhsSubdomain:
     """Build an MHS subdomain that uses Angular Spectrum free-space
     propagation between two Huygens surfaces."""
     from .propagation import angular_spectrum_propagate
@@ -379,12 +385,13 @@ def asm_subdomain(in_surface: HuygensSurface,
     )
 
 
-def aperture_subdomain(in_surface: HuygensSurface,
-                        aperture_radius: float,
-                        *,
-                        shape: str = 'circular',
-                        centre: Tuple[float, float] = (0.0, 0.0)
-                        ) -> MhsSubdomain:
+def aperture_subdomain(
+    in_surface: HuygensSurface,
+    aperture_radius: float,
+    *,
+    shape: str = 'circular',
+    centre: Tuple[float, float] = (0.0, 0.0),
+) -> MhsSubdomain:
     """Build an MHS subdomain that applies a hard aperture mask in
     place (in_surface == out_surface; same z).  Useful as a thin
     "operator" subdomain between two propagation legs."""
@@ -415,14 +422,15 @@ def aperture_subdomain(in_surface: HuygensSurface,
     )
 
 
-def gbd_freespace_subdomain(in_surface: HuygensSurface,
-                              out_surface: HuygensSurface,
-                              *,
-                              wavelength: float,
-                              waist_factor: float = 1.0,
-                              sample_step: int = 1,
-                              chunk_beamlets: int = 4096
-                              ) -> MhsSubdomain:
+def gbd_freespace_subdomain(
+    in_surface: HuygensSurface,
+    out_surface: HuygensSurface,
+    *,
+    wavelength: float,
+    waist_factor: float = 1.0,
+    sample_step: int = 1,
+    chunk_beamlets: int = 4096,
+) -> MhsSubdomain:
     """MHS subdomain that uses GBD free-space propagation."""
     from .gbd import propagate_gbd_freespace
 
@@ -453,13 +461,15 @@ def gbd_freespace_subdomain(in_surface: HuygensSurface,
     )
 
 
-def prescription_subdomain(in_surface: HuygensSurface,
-                            out_surface: HuygensSurface,
-                            prescription: dict,
-                            *,
-                            wavelength: float,
-                            method: str = 'maslov',
-                            **method_kwargs) -> MhsSubdomain:
+def prescription_subdomain(
+    in_surface: HuygensSurface,
+    out_surface: HuygensSurface,
+    prescription: Dict[str, Any],
+    *,
+    wavelength: float,
+    method: str = 'maslov',
+    **method_kwargs: Any,
+) -> MhsSubdomain:
     """MHS subdomain that uses the dispatcher to propagate through a
     full prescription between two Huygens surfaces.
 

@@ -18,6 +18,10 @@ diffractive elements:
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Dict, Optional, Tuple
+
 import numpy as np
 
 
@@ -25,7 +29,7 @@ import numpy as np
 # Phase file I/O
 # ============================================================================
 
-def load_phase_file(filepath):
+def load_phase_file(filepath: str) -> np.ndarray:
     """
     Load a DOE / grating phase profile from a CSV file.
 
@@ -49,7 +53,12 @@ def load_phase_file(filepath):
     return phase
 
 
-def save_phase_file(filepath, phase, cell_pixel_size=None, metadata=None):
+def save_phase_file(
+    filepath: str,
+    phase: np.ndarray,
+    cell_pixel_size: Optional[float] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+) -> None:
     """
     Save a phase profile to a CSV file compatible with :func:`load_phase_file`.
 
@@ -90,7 +99,12 @@ def save_phase_file(filepath, phase, cell_pixel_size=None, metadata=None):
 # Phase masks
 # ============================================================================
 
-def create_periodic_phase_mask(N, dx, phase_cell, cell_pixel_size):
+def create_periodic_phase_mask(
+    N: int,
+    dx: float,
+    phase_cell: np.ndarray,
+    cell_pixel_size: float,
+) -> np.ndarray:
     """
     Tile a periodic phase element (DOE, grating, etc.) across the simulation grid.
 
@@ -149,7 +163,14 @@ def create_periodic_phase_mask(N, dx, phase_cell, cell_pixel_size):
     return np.exp(1j * phase_tiled)
 
 
-def create_microlens_array(N, dx, n_lenslets, pitch, focal_length, wavelength):
+def create_microlens_array(
+    N: int,
+    dx: float,
+    n_lenslets: int,
+    pitch: float,
+    focal_length: float,
+    wavelength: float,
+) -> np.ndarray:
     """
     Create a microlens array (MLA) phase mask.
 
@@ -225,8 +246,14 @@ def create_microlens_array(N, dx, n_lenslets, pitch, focal_length, wavelength):
 # Diffractive lenses (4.3.0)
 # ============================================================================
 
-def create_diffractive_lens(N, dx, focal_length, wavelength, *,
-                              center=(0.0, 0.0)):
+def create_diffractive_lens(
+    N: int,
+    dx: float,
+    focal_length: float,
+    wavelength: float,
+    *,
+    center: Tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
     """Continuous-phase diffractive lens.
 
     Returns a phase-only transmission function ``exp(-i k r^2 / (2 f))``
@@ -293,8 +320,15 @@ def create_diffractive_lens(N, dx, focal_length, wavelength, *,
     return np.exp(1j * phase)
 
 
-def create_kinoform(N, dx, focal_length, wavelength, *,
-                      n_levels=8, center=(0.0, 0.0)):
+def create_kinoform(
+    N: int,
+    dx: float,
+    focal_length: float,
+    wavelength: float,
+    *,
+    n_levels: int = 8,
+    center: Tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
     """Multi-level quantized phase diffractive lens (kinoform).
 
     Quantizes the continuous thin-lens phase ``phi(r) = -k r^2 / (2 f)``
@@ -364,9 +398,16 @@ def create_kinoform(N, dx, focal_length, wavelength, *,
     return np.exp(1j * phi_q)
 
 
-def create_fresnel_zone_plate(N, dx, focal_length, wavelength, *,
-                                  binary=True, n_zones=None,
-                                  center=(0.0, 0.0)):
+def create_fresnel_zone_plate(
+    N: int,
+    dx: float,
+    focal_length: float,
+    wavelength: float,
+    *,
+    binary: bool = True,
+    n_zones: Optional[int] = None,
+    center: Tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
     """Fresnel zone plate -- binary amplitude or binary phase.
 
     A Fresnel zone plate focuses light to ``focal_length`` via
@@ -466,15 +507,15 @@ def makedammann2d(
     wavsamp: float = 0.5,
     phaselevels: int = 8,
     phasesteps: int = 4,
-    diforders: np.ndarray = None,
+    diforders: Optional[np.ndarray] = None,
     diffractionthr: float = 0.25,
     nfmov: float = 0.5,
     itr: int = 3000,
     plot: bool = True,
     plot_every: int = 50,
-    seed: int = None,
-    save_path: str = None,
-):
+    seed: Optional[int] = None,
+    save_path: Optional[str] = None,
+) -> Tuple[np.ndarray, np.ndarray, Tuple[float, float]]:
     """
     Design a 2D Dammann grating using an iterative Fourier transform algorithm.
 
@@ -731,7 +772,11 @@ def _ensure_astropy_loaded():
     return _fits is not None
 
 
-def load_fits_field(filepath, hdu_amplitude=0, hdu_phase=None):
+def load_fits_field(
+    filepath: str,
+    hdu_amplitude: int = 0,
+    hdu_phase: Optional[int] = None,
+) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
     Load a complex optical field from a FITS file.
 
@@ -788,8 +833,15 @@ def load_fits_field(filepath, hdu_amplitude=0, hdu_phase=None):
     return E, metadata
 
 
-def save_fits_field(filepath, E, wavelength=None, dx=None, dy=None,
-                     metadata=None, split_amp_phase=True):
+def save_fits_field(
+    filepath: str,
+    E: np.ndarray,
+    wavelength: Optional[float] = None,
+    dx: Optional[float] = None,
+    dy: Optional[float] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    split_amp_phase: bool = True,
+) -> None:
     """
     Save a complex optical field to a FITS file.
 

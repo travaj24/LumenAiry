@@ -38,7 +38,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
-from typing import Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -75,8 +75,14 @@ __all__ = [
 # Single-plane metrics
 # =========================================================================
 
-def single_plane_metrics(E, dx, wavelength, dy=None, bucket_radius=None,
-                         ideal_peak=None):
+def single_plane_metrics(
+    E: np.ndarray,
+    dx: float,
+    wavelength: float,
+    dy: Optional[float] = None,
+    bucket_radius: Optional[float] = None,
+    ideal_peak: Optional[float] = None,
+) -> Dict[str, float]:
     """Compute diagnostic metrics for a beam at a single z plane.
 
     Parameters
@@ -138,7 +144,13 @@ def single_plane_metrics(E, dx, wavelength, dy=None, bucket_radius=None,
     return out
 
 
-def diffraction_limited_peak(E_exit, wavelength, f, dx, bandlimit=True):
+def diffraction_limited_peak(
+    E_exit: np.ndarray,
+    wavelength: float,
+    f: float,
+    dx: float,
+    bandlimit: bool = True,
+) -> float:
     """Peak intensity of the diffraction-limited focal spot produced by
     the exit pupil amplitude, evaluated at the paraxial focus.
 
@@ -210,10 +222,19 @@ class ThroughFocusResult:
     best_focus_spot: float = float('nan')
 
 
-def through_focus_scan(E_exit, dx, wavelength, z_values,
-                       bucket_radius=None, ideal_peak=None,
-                       bandlimit=True, verbose=False, progress=None,
-                       *, backend='numpy'):
+def through_focus_scan(
+    E_exit: np.ndarray,
+    dx: float,
+    wavelength: float,
+    z_values: Union[Sequence[float], np.ndarray],
+    bucket_radius: Optional[float] = None,
+    ideal_peak: Optional[float] = None,
+    bandlimit: bool = True,
+    verbose: bool = False,
+    progress: Optional[Callable[..., Any]] = None,
+    *,
+    backend: str = 'numpy',
+) -> 'ThroughFocusResult':
     """Propagate an exit-pupil field to each z and collect metrics.
 
     Parameters
@@ -315,7 +336,10 @@ def through_focus_scan(E_exit, dx, wavelength, z_values,
     )
 
 
-def find_best_focus(scan, metric='strehl'):
+def find_best_focus(
+    scan: 'ThroughFocusResult',
+    metric: str = 'strehl',
+) -> Tuple[float, float]:
     """Return the z position in the scan that best optimizes the given
     metric.
 
@@ -358,7 +382,12 @@ def find_best_focus(scan, metric='strehl'):
     return float(scan.z[best_idx]), float(values[best_idx])
 
 
-def plot_through_focus(scan, best_z=None, path=None, show=False):
+def plot_through_focus(
+    scan: 'ThroughFocusResult',
+    best_z: Optional[float] = None,
+    path: Optional[str] = None,
+    show: bool = False,
+) -> Tuple[Any, Any]:
     """Summary plot: peak / Strehl / spot-size vs z.
 
     Parameters
@@ -482,7 +511,12 @@ class Perturbation:
     name: str = ''
 
 
-def apply_perturbations(prescription, perturbations, N=None, dx=None):
+def apply_perturbations(
+    prescription: Dict[str, Any],
+    perturbations: Sequence['Perturbation'],
+    N: Optional[int] = None,
+    dx: Optional[float] = None,
+) -> Dict[str, Any]:
     """Return a deep-copied prescription with perturbations applied.
 
     Parameters
@@ -538,12 +572,21 @@ def apply_perturbations(prescription, perturbations, N=None, dx=None):
     return p
 
 
-def tolerancing_sweep(prescription, wavelength, N, dx, E_source,
-                      perturbations,
-                      focal_length, aperture,
-                      z_scan_range=None, z_scan_n=21,
-                      bucket_radius=None, verbose=True,
-                      progress=None):
+def tolerancing_sweep(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    N: int,
+    dx: float,
+    E_source: np.ndarray,
+    perturbations: Sequence['Perturbation'],
+    focal_length: float,
+    aperture: float,
+    z_scan_range: Optional[Tuple[float, float]] = None,
+    z_scan_n: int = 21,
+    bucket_radius: Optional[float] = None,
+    verbose: bool = True,
+    progress: Optional[Callable[..., Any]] = None,
+) -> List[Dict[str, Any]]:
     """Run a deterministic tolerancing sweep: for each perturbation,
     rerun ``apply_real_lens``, scan through focus, and record Strehl
     and spot-size penalties relative to the nominal case.
@@ -647,13 +690,25 @@ def tolerancing_sweep(prescription, wavelength, N, dx, E_source,
     return results
 
 
-def monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
-                            perturbation_spec, focal_length, aperture,
-                            n_trials=100, seed=0,
-                            z_scan_range=None, z_scan_n=21,
-                            bucket_radius=None,
-                            verbose=True, progress=None,
-                            *, backend='numpy'):
+def monte_carlo_tolerancing(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    N: int,
+    dx: float,
+    E_source: np.ndarray,
+    perturbation_spec: Sequence[Dict[str, Any]],
+    focal_length: float,
+    aperture: float,
+    n_trials: int = 100,
+    seed: int = 0,
+    z_scan_range: Optional[Tuple[float, float]] = None,
+    z_scan_n: int = 21,
+    bucket_radius: Optional[float] = None,
+    verbose: bool = True,
+    progress: Optional[Callable[..., Any]] = None,
+    *,
+    backend: str = 'numpy',
+) -> Dict[str, Any]:
     """Random tolerancing: draw perturbations from user-specified
     distributions and aggregate Strehl statistics.
 
@@ -764,9 +819,15 @@ def monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
     }
 
 
-def through_focus_scan_jax(E_exit, dx, wavelength, z_values,
-                            bucket_radius=None, ideal_peak=None,
-                            bandlimit=True):
+def through_focus_scan_jax(
+    E_exit: np.ndarray,
+    dx: float,
+    wavelength: float,
+    z_values: Union[Sequence[float], np.ndarray],
+    bucket_radius: Optional[float] = None,
+    ideal_peak: Optional[float] = None,
+    bandlimit: bool = True,
+) -> 'ThroughFocusResult':
     """JAX-vmapped through-focus scan.  Same return contract as
     :func:`through_focus_scan` but propagates all z values in a single
     fused JAX kernel via `jax.vmap`.
@@ -855,13 +916,24 @@ def through_focus_scan_jax(E_exit, dx, wavelength, z_values,
 
 
 
-def monte_carlo_tolerancing_jax(prescription, wavelength, N, dx, E_source,
-                                 perturbation_spec, focal_length, aperture,
-                                 n_trials=100, seed=0,
-                                 z_scan_range=None, z_scan_n=21,
-                                 bucket_radius=None,
-                                 wave_propagator='real_lens_traced_jax',
-                                 verbose=True, progress=None):
+def monte_carlo_tolerancing_jax(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    N: int,
+    dx: float,
+    E_source: np.ndarray,
+    perturbation_spec: Sequence[Dict[str, Any]],
+    focal_length: float,
+    aperture: float,
+    n_trials: int = 100,
+    seed: int = 0,
+    z_scan_range: Optional[Tuple[float, float]] = None,
+    z_scan_n: int = 21,
+    bucket_radius: Optional[float] = None,
+    wave_propagator: str = 'real_lens_traced_jax',
+    verbose: bool = True,
+    progress: Optional[Callable[..., Any]] = None,
+) -> Dict[str, Any]:
     """JAX-accelerated Monte-Carlo tolerancing trial sweep.
 
     Per-trial structure mirrors :func:`monte_carlo_tolerancing`:
@@ -974,12 +1046,15 @@ def monte_carlo_tolerancing_jax(prescription, wavelength, N, dx, E_source,
     }
 
 
-def tolerancing_report(stats, *,
-                       perturbation_spec=None,
-                       trial_perturbations=None,
-                       strehl_thresholds=(0.5, 0.7, 0.8, 0.9, 0.95),
-                       n_yield_curve_points=51,
-                       format='text'):
+def tolerancing_report(
+    stats: Dict[str, Any],
+    *,
+    perturbation_spec: Optional[Sequence[Dict[str, Any]]] = None,
+    trial_perturbations: Optional[Sequence[Sequence['Perturbation']]] = None,
+    strehl_thresholds: Sequence[float] = (0.5, 0.7, 0.8, 0.9, 0.95),
+    n_yield_curve_points: int = 51,
+    format: str = 'text',
+) -> Union[str, Dict[str, Any]]:
     """Produce a human-readable report from a Monte-Carlo tolerancing run.
 
     Takes the dict returned by :func:`monte_carlo_tolerancing` or
@@ -1136,14 +1211,21 @@ def tolerancing_report(stats, *,
     return '\n'.join(lines)
 
 
-def monte_carlo_tolerancing_linearized(prescription, wavelength, N, dx,
-                                        E_source,
-                                        perturbation_spec, focal_length,
-                                        aperture,
-                                        n_trials=100, seed=0,
-                                        z_scan_n=11,
-                                        bucket_radius=None,
-                                        verbose=True):
+def monte_carlo_tolerancing_linearized(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    N: int,
+    dx: float,
+    E_source: np.ndarray,
+    perturbation_spec: Sequence[Dict[str, Any]],
+    focal_length: float,
+    aperture: float,
+    n_trials: int = 100,
+    seed: int = 0,
+    z_scan_n: int = 11,
+    bucket_radius: Optional[float] = None,
+    verbose: bool = True,
+) -> Dict[str, Any]:
     """Linearised Monte-Carlo tolerancing.  Approximates the Strehl
     sensitivity to each perturbation knob via a small finite-difference
     sweep around the nominal, then composes per-trial Strehl predictions

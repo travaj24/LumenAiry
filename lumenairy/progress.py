@@ -86,7 +86,7 @@ class ProgressScaler:
         self.lo = float(lo)
         self.hi = float(hi)
 
-    def __call__(self, *args) -> None:
+    def __call__(self, *args: object) -> None:
         # Accept either (frac, msg='') -- inline sub-callback form,
         # or (stage, frac, msg='') -- ProgressCallback protocol form
         # used when the scaler is passed as ``progress=`` to a core

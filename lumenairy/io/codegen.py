@@ -37,6 +37,10 @@ From a prescription text export::
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Dict, Optional
+
 import numpy as np
 
 from .prescriptions import load_zemax_zmx, load_zemax_prescription_data_txt
@@ -48,17 +52,17 @@ from ..glass import GLASS_REGISTRY
 # ============================================================================
 
 def generate_simulation_script(
-    prescription,
-    wavelength=None,
-    N=2048,
-    dx=None,
-    source_sigma=None,
-    output_path=None,
-    style='unrolled',
-    include_plotting=True,
-    include_analysis=True,
-    header_comment=None,
-):
+    prescription: Dict[str, Any],
+    wavelength: Optional[float] = None,
+    N: int = 2048,
+    dx: Optional[float] = None,
+    source_sigma: Optional[float] = None,
+    output_path: Optional[str] = None,
+    style: str = 'unrolled',
+    include_plotting: bool = True,
+    include_analysis: bool = True,
+    header_comment: Optional[str] = None,
+) -> str:
     """
     Generate a Python simulation script from a parsed Zemax prescription.
 
@@ -205,7 +209,9 @@ def generate_simulation_script(
 # Convenience wrappers: file -> script in one call
 # ============================================================================
 
-def generate_script_from_zmx(filepath, wavelength=None, **kwargs):
+def generate_script_from_zmx(filepath: str,
+                             wavelength: Optional[float] = None,
+                             **kwargs: Any) -> str:
     """
     Load a ``.zmx`` file and generate a simulation script in one step.
 
@@ -226,7 +232,9 @@ def generate_script_from_zmx(filepath, wavelength=None, **kwargs):
     return generate_simulation_script(rx, wavelength=wavelength, **kwargs)
 
 
-def generate_script_from_txt(filepath, wavelength=None, **kwargs):
+def generate_script_from_txt(filepath: str,
+                             wavelength: Optional[float] = None,
+                             **kwargs: Any) -> str:
     """
     Load a Zemax prescription text export and generate a simulation script.
 

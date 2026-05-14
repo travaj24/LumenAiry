@@ -8,6 +8,10 @@ each element to the appropriate physics routine from the library submodules.
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 from .propagators.propagation import (
@@ -36,12 +40,20 @@ from .elements import (
 )
 
 
-def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
-                             method='asm', use_gpu=False, verbose=False,
-                             progress=None,
-                             checkpoint=None, store=None,
-                             label_prefix='system',
-                             return_result=False):
+def propagate_through_system(E_in: np.ndarray,
+                             elements: Sequence[Dict[str, Any]],
+                             wavelength: float,
+                             dx: float,
+                             dy: Optional[float] = None,
+                             method: str = 'asm',
+                             use_gpu: bool = False,
+                             verbose: bool = False,
+                             progress: Optional[Callable] = None,
+                             checkpoint: Optional[str] = None,
+                             store: Optional[str] = None,
+                             label_prefix: str = 'system',
+                             return_result: bool = False
+                             ) -> Union[Tuple[np.ndarray, List[Any]], Any]:
     """
     Propagate a field through a sequence of optical elements.
 
@@ -462,8 +474,13 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
     return E, intermediates
 
 
-def propagate_through_system_jax(E_in, elements, wavelength, dx, dy=None,
-                                   method='asm', verbose=False):
+def propagate_through_system_jax(E_in: np.ndarray,
+                                 elements: Sequence[Dict[str, Any]],
+                                 wavelength: float,
+                                 dx: float,
+                                 dy: Optional[float] = None,
+                                 method: str = 'asm',
+                                 verbose: bool = False) -> Any:
     """JAX-traceable variant of :func:`propagate_through_system`.
 
     Element-by-element walk where each element type is dispatched to

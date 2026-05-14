@@ -44,8 +44,11 @@ Backends
 Author:  Andrew Traverso
 """
 
+from __future__ import annotations
+
 import threading
 from collections import OrderedDict
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 
@@ -186,7 +189,7 @@ PYFFTW_FALLBACK_ON_ERROR = True
 DEFAULT_COMPLEX_DTYPE = np.complex128
 
 
-def set_default_complex_dtype(dtype) -> None:
+def set_default_complex_dtype(dtype: Any) -> None:
     """Set the default complex precision used when functions need to
     allocate a fresh complex array (e.g. when callers pass real-valued
     inputs).  Functions that operate on already-complex inputs preserve
@@ -216,7 +219,7 @@ def set_default_complex_dtype(dtype) -> None:
         _H_CACHE.clear()
 
 
-def get_default_complex_dtype():
+def get_default_complex_dtype() -> Any:
     """Return the currently-configured default complex dtype."""
     return DEFAULT_COMPLEX_DTYPE
 
@@ -250,7 +253,7 @@ _PYFFTW_PLAN_LOCK = threading.Lock()
 _PYFFTW_PLAN_FLAGS = ('FFTW_ESTIMATE',)
 
 
-def set_pyfftw_planner(planner='FFTW_ESTIMATE'):
+def set_pyfftw_planner(planner: str = 'FFTW_ESTIMATE') -> None:
     """Configure the pyFFTW planning effort.
 
     Parameters
@@ -283,7 +286,7 @@ def set_pyfftw_planner(planner='FFTW_ESTIMATE'):
         _PYFFTW_PLAN_CACHE.clear()
 
 
-def reset_fft_backend():
+def reset_fft_backend() -> None:
     """Clear the pyFFTW plan cache and the bad-shape blacklist.
 
     Useful after a transient memory crunch has passed (e.g. one big
@@ -317,7 +320,7 @@ def reset_fft_backend():
                 RuntimeWarning, stacklevel=2)
 
 
-def set_fft_plan_cache_size(n):
+def set_fft_plan_cache_size(n: int) -> None:
     """Set the maximum number of pyFFTW plans kept resident.  Default
     is 8.  Pass ``1`` to mimic the legacy single-slot behaviour."""
     global _PYFFTW_PLAN_CACHE_SIZE
@@ -327,7 +330,7 @@ def set_fft_plan_cache_size(n):
             _PYFFTW_PLAN_CACHE.popitem(last=False)
 
 
-def warmup_fft_plans(shapes, dtype=None, threads=None):
+def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional[int] = None) -> int:
     """Pre-build pyFFTW plans for the given shapes so the first
     propagation at each shape pays the planning cost only once at
     warmup, not inside a hot loop.
@@ -499,7 +502,7 @@ _H_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
 _ASM_CACHE_LOCK = threading.Lock()
 
 
-def clear_asm_caches():
+def clear_asm_caches() -> None:
     """Drop the H, frequency-grid, and band-limit caches (Tier 1.1
     + Tier 3 of the 3.2.14 perf pass)."""
     with _ASM_CACHE_LOCK:
@@ -508,8 +511,13 @@ def clear_asm_caches():
         _H_CACHE.clear()
 
 
-def set_asm_cache_size(h_cache=None, freq_cache=None, bandlimit_cache=None,
-                       h_max_bytes_per_entry=None, h_max_total_bytes=None):
+def set_asm_cache_size(
+    h_cache: Optional[int] = None,
+    freq_cache: Optional[int] = None,
+    bandlimit_cache: Optional[int] = None,
+    h_max_bytes_per_entry: Optional[int] = None,
+    h_max_total_bytes: Optional[int] = None,
+) -> None:
     """Tune the per-cache LRU bounds.  Pass ``None`` to leave a
     bound unchanged.
 
@@ -683,7 +691,7 @@ def set_fft_fallback(enabled: bool) -> None:
     PYFFTW_FALLBACK_ON_ERROR = bool(enabled)
 
 
-def set_fft_threads(n):
+def set_fft_threads(n: Optional[int]) -> None:
     """Override the thread count used by the pyFFTW / scipy.fft path.
 
     Pass a positive int to pin to that many threads (useful inside a
@@ -960,16 +968,16 @@ def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
 # ============================================================================
 
 def angular_spectrum_propagate(
-    E_in,
-    z,
-    wavelength,
-    dx,
-    dy=None,
-    bandlimit=True,
-    return_transfer_function=False,
-    use_gpu=False,
-    verbose=False
-):
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    bandlimit: bool = True,
+    return_transfer_function: bool = False,
+    use_gpu: bool = False,
+    verbose: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, np.ndarray]]:
     """
     Propagate an optical field using the Angular Spectrum Method (ASM).
 
@@ -1207,7 +1215,14 @@ def angular_spectrum_propagate(
         return E_out
 
 
-def apply_fresnel_curvature(E, dx, wavelength, R, sign=+1, dy=None):
+def apply_fresnel_curvature(
+    E: np.ndarray,
+    dx: float,
+    wavelength: float,
+    R: float,
+    sign: int = +1,
+    dy: Optional[float] = None,
+) -> np.ndarray:
     """Apply (or remove) a Fresnel quadratic phase ``exp(i*sign*k*r^2/(2R))``.
 
     Used to convert between phase conventions when comparing fields
@@ -1289,9 +1304,15 @@ def apply_fresnel_curvature(E, dx, wavelength, R, sign=+1, dy=None):
     return E * np.exp(sign * 1j * k * r2 / (2.0 * R))
 
 
-def angular_spectrum_propagate_batch(E_stack, z, wavelength, dx,
-                                      dy=None, bandlimit=True,
-                                      use_gpu=False):
+def angular_spectrum_propagate_batch(
+    E_stack: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    bandlimit: bool = True,
+    use_gpu: bool = False,
+) -> np.ndarray:
     """ASM propagation of a stack of fields ``(B, Ny, Nx)`` in one
     fused FFT pair (3.2.14).
 
@@ -1440,9 +1461,19 @@ def _ifft2_nd(x):
 # Tilted / off-axis ASM propagation
 # ============================================================================
 
-def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
-                                      tilt_x=0.0, tilt_y=0.0, bandlimit=True,
-                                      *, tilt_x_deg=None, tilt_y_deg=None):
+def angular_spectrum_propagate_tilted(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    tilt_x: float = 0.0,
+    tilt_y: float = 0.0,
+    bandlimit: bool = True,
+    *,
+    tilt_x_deg: Optional[float] = None,
+    tilt_y_deg: Optional[float] = None,
+) -> np.ndarray:
     """
     ASM propagation with a carrier tilt (off-axis propagation).
 
@@ -1618,19 +1649,19 @@ def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
 # ============================================================================
 
 def angular_spectrum_propagate_mft(
-    E_in,
-    z,
-    wavelength,
-    dx_in,
-    dx_out,
-    N_out,
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx_in: float,
+    dx_out: float,
+    N_out: int,
     *,
-    dy_in=None,
-    dy_out=None,
-    centre_out=(0.0, 0.0),
-    bandlimit=True,
-    use_gpu=False,
-):
+    dy_in: Optional[float] = None,
+    dy_out: Optional[float] = None,
+    centre_out: Tuple[float, float] = (0.0, 0.0),
+    bandlimit: bool = True,
+    use_gpu: bool = False,
+) -> np.ndarray:
     """Exact Angular Spectrum Method propagation onto an arbitrary
     user-specified output grid.
 
@@ -1846,7 +1877,13 @@ def angular_spectrum_propagate_mft(
 # Single-FFT Fresnel propagation
 # ============================================================================
 
-def fresnel_propagate(E_in, z, wavelength, dx, dy=None):
+def fresnel_propagate(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+) -> Tuple[np.ndarray, float, float]:
     """
     Propagate a field using the single-FFT Fresnel method.
 
@@ -1943,7 +1980,13 @@ def fresnel_propagate(E_in, z, wavelength, dx, dy=None):
 # FRAUNHOFER (FAR-FIELD) PROPAGATION
 # =============================================================================
 
-def resample_field(E_in, dx_in, dx_out, N_out=None, order=3):
+def resample_field(
+    E_in: np.ndarray,
+    dx_in: float,
+    dx_out: float,
+    N_out: Optional[int] = None,
+    order: int = 3,
+) -> Tuple[np.ndarray, float]:
     """
     Resample a complex optical field from one grid spacing to another.
 
@@ -2015,18 +2058,18 @@ def resample_field(E_in, dx_in, dx_out, N_out=None, order=3):
 # ============================================================================
 
 def fresnel_propagate_mft(
-    E_in,
-    z,
-    wavelength,
-    dx_in,
-    dx_out,
-    N_out,
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx_in: float,
+    dx_out: float,
+    N_out: int,
     *,
-    dy_in=None,
-    dy_out=None,
-    centre_out=(0.0, 0.0),
-    use_gpu=False,
-):
+    dy_in: Optional[float] = None,
+    dy_out: Optional[float] = None,
+    centre_out: Tuple[float, float] = (0.0, 0.0),
+    use_gpu: bool = False,
+) -> np.ndarray:
     """Fresnel propagation onto an arbitrary user-specified output grid.
 
     Unlike :func:`fresnel_propagate`, which forces ``dx_out = lambda*z/(N*dx_in)``
@@ -2196,7 +2239,13 @@ def fresnel_propagate_mft(
     return E_out
 
 
-def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
+def fraunhofer_propagate(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+) -> Tuple[np.ndarray, float, float]:
     """
     Propagate a field to the Fraunhofer (far-field) diffraction pattern.
 
@@ -2295,18 +2344,18 @@ def fraunhofer_propagate(E_in, z, wavelength, dx, dy=None):
 # ============================================================================
 
 def fraunhofer_propagate_mft(
-    E_in,
-    z,
-    wavelength,
-    dx_in,
-    dx_out,
-    N_out,
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx_in: float,
+    dx_out: float,
+    N_out: int,
     *,
-    dy_in=None,
-    dy_out=None,
-    centre_out=(0.0, 0.0),
-    use_gpu=False,
-):
+    dy_in: Optional[float] = None,
+    dy_out: Optional[float] = None,
+    centre_out: Tuple[float, float] = (0.0, 0.0),
+    use_gpu: bool = False,
+) -> np.ndarray:
     """Fraunhofer (far-field) propagation onto an arbitrary user-specified
     output grid.
 
@@ -2440,15 +2489,15 @@ def fraunhofer_propagate_mft(
 # ============================================================================
 
 def rayleigh_sommerfeld_propagate(
-    E_in,
-    z,
-    wavelength,
-    dx,
-    dy=None,
-    bandlimit=False,
-    use_gpu=False,
-    verbose=False
-):
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    bandlimit: bool = False,
+    use_gpu: bool = False,
+    verbose: bool = False,
+) -> np.ndarray:
     """
     Propagate an optical field using the Rayleigh-Sommerfeld convolution.
 
@@ -2713,15 +2762,15 @@ def rayleigh_sommerfeld_propagate(
 
 
 def scalable_angular_spectrum_propagate(
-    E_in,
-    z,
-    wavelength,
-    dx,
-    pad=2,
-    skip_final_phase=False,
-    use_gpu=False,
-    verbose=False,
-):
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    pad: int = 2,
+    skip_final_phase: bool = False,
+    use_gpu: bool = False,
+    verbose: bool = False,
+) -> Tuple[np.ndarray, float, float]:
     """
     Scalable-angular-spectrum propagator with variable output pitch.
 

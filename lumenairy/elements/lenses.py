@@ -29,8 +29,10 @@ amplitude leg can also be GPU-accelerated independently via
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
 import warnings
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -146,7 +148,12 @@ else:
     _aspheric_sag_accum_numba = None  # noqa
 
 
-def surface_sag_general(h_sq, R, conic=0.0, aspheric_coeffs=None):
+def surface_sag_general(
+    h_sq: np.ndarray,
+    R: float,
+    conic: float = 0.0,
+    aspheric_coeffs: Optional[Dict[int, float]] = None,
+) -> np.ndarray:
     """
     Compute surface sag for a general conic + even-aspheric surface.
 
@@ -224,8 +231,16 @@ def surface_sag_general(h_sq, R, conic=0.0, aspheric_coeffs=None):
 _surface_sag_general = surface_sag_general
 
 
-def surface_sag_biconic(X, Y, R_x, R_y=None, conic_x=0.0, conic_y=None,
-                        aspheric_coeffs=None, aspheric_coeffs_y=None):
+def surface_sag_biconic(
+    X: np.ndarray,
+    Y: np.ndarray,
+    R_x: float,
+    R_y: Optional[float] = None,
+    conic_x: float = 0.0,
+    conic_y: Optional[float] = None,
+    aspheric_coeffs: Optional[Dict[int, float]] = None,
+    aspheric_coeffs_y: Optional[Dict[int, float]] = None,
+) -> np.ndarray:
     """Biconic / cylindrical / toroidal surface sag.
 
     Generalises :func:`surface_sag_general` to surfaces that have
@@ -366,7 +381,13 @@ def _collect_semi_diameters(prescription):
     return out
 
 
-def check_grid_vs_apertures(prescription, N, dx, *, safety_factor=1.0):
+def check_grid_vs_apertures(
+    prescription: Dict[str, Any],
+    N: int,
+    dx: float,
+    *,
+    safety_factor: float = 1.0,
+) -> List[Tuple[str, float, float, float]]:
     """Identify every prescription surface whose semi-aperture exceeds
     the simulation grid's half-extent.
 
@@ -416,18 +437,18 @@ def check_grid_vs_apertures(prescription, N, dx, *, safety_factor=1.0):
 
 
 def recommend_grid_for_prescription(
-    prescription,
-    wavelength,
+    prescription: Dict[str, Any],
+    wavelength: float,
     *,
-    source_waist=None,
-    doe_orders_max=None,
-    doe_period=None,
-    doe_to_destination_distance=None,
-    margin_ratio=1.05,
-    samples_per_wavelength=4.0,
-    samples_per_source_waist=6.0,
-    round_n_to_power_of_two=True,
-):
+    source_waist: Optional[float] = None,
+    doe_orders_max: Optional[Tuple[float, float]] = None,
+    doe_period: Optional[Union[float, Tuple[float, float]]] = None,
+    doe_to_destination_distance: Optional[float] = None,
+    margin_ratio: float = 1.05,
+    samples_per_wavelength: float = 4.0,
+    samples_per_source_waist: float = 6.0,
+    round_n_to_power_of_two: bool = True,
+) -> Dict[str, Any]:
     """Recommend simulation grid parameters ``(N, dx)`` for an ASM run
     through a sequential prescription.
 

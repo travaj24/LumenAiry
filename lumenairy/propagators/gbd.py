@@ -35,7 +35,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -77,14 +77,14 @@ class BeamletBundle:
 # ============================================================================
 
 def decompose_field_to_beamlets(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
     *,
     wavelength: float,
     waist_factor: float = 1.0,
     sample_step: int = 1,
     z_input_plane: float = 0.0,
-):
+) -> BeamletBundle:
     """Position-decomposition of a 2-D complex source field into a
     regular grid of Gaussian beamlets.
 
@@ -221,7 +221,7 @@ def reconstruct_field_from_beamlets(
     centre: Tuple[float, float] = (0.0, 0.0),
     wavelength: float,
     chunk_beamlets: int = 4096,
-) -> object:
+) -> np.ndarray:
     """Coherently sum every beamlet's transverse profile on a 2-D
     output grid."""
     xp = array_namespace(beamlets.positions)
@@ -257,7 +257,13 @@ def reconstruct_field_from_beamlets(
 # End-to-end convenience
 # ============================================================================
 
-def propagate_gbd(E_in, z, wavelength, dx, **kwargs):
+def propagate_gbd(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    **kwargs: Any,
+) -> np.ndarray:
     """Canonical-order GBD free-space propagation.
 
     Argument order ``(E_in, z, wavelength, dx)`` matches
@@ -273,7 +279,7 @@ def propagate_gbd(E_in, z, wavelength, dx, **kwargs):
 
 
 def propagate_gbd_freespace(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
     *,
     z: float,
@@ -284,7 +290,7 @@ def propagate_gbd_freespace(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
-):
+) -> np.ndarray:
     """End-to-end free-space GBD: source -> z -> output.
 
     .. note::
@@ -314,7 +320,7 @@ def propagate_gbd_freespace(
 
 
 def propagate_gbd_thin_lens(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
     *,
     z_to_lens: float,
@@ -328,7 +334,7 @@ def propagate_gbd_thin_lens(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
-):
+) -> np.ndarray:
     """End-to-end three-leg GBD: source -> free space -> thin lens
     -> free space -> output (the canonical GBD validation case)."""
     Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
@@ -435,9 +441,9 @@ def apply_abcd_to_beamlets(
 
 
 def propagate_gbd_through_prescription(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
-    prescription: dict,
+    prescription: Dict[str, Any],
     *,
     wavelength: float,
     output_grid: Optional[Tuple[int, int]] = None,
@@ -446,7 +452,7 @@ def propagate_gbd_through_prescription(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
-):
+) -> np.ndarray:
     """End-to-end GBD through a sequential lumenairy prescription
     via system ABCD evolution.
 

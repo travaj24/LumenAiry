@@ -27,7 +27,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -85,13 +85,13 @@ def patches_for_box(
 
 
 def patch_window(
-    x,
-    y,
+    x: np.ndarray,
+    y: np.ndarray,
     centre: Tuple[float, float],
     half_widths: Tuple[float, float],
     *,
     edge_smoothness: float = 0.1,
-):
+) -> np.ndarray:
     """Smooth window for a single patch.  Returns a value in
     ``[0, 1]`` for each ``(x, y)`` position, equal to 1 inside
     ``|x - cx| < half_w_x * (1 - edge_smoothness)`` and tapered
@@ -114,13 +114,13 @@ def patch_window(
 
 
 def combine_patch_fields(
-    patch_fields: List,
+    patch_fields: List[np.ndarray],
     patch_grid: PatchGrid,
     *,
-    output_grid_x,
-    output_grid_y,
+    output_grid_x: np.ndarray,
+    output_grid_y: np.ndarray,
     edge_smoothness: float = 0.1,
-):
+) -> np.ndarray:
     """Coherent recombination of per-patch output fields into a
     global output field via partition-of-unity weights."""
     if len(patch_fields) != len(patch_grid):
@@ -156,14 +156,14 @@ def combine_patch_fields(
 # ============================================================================
 
 def propagate_subaperture_asymptotic(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
-    prescription: dict,
+    prescription: Dict[str, Any],
     *,
     wavelength: float,
-    output_grid=None,
-    output_dx=None,
-    output_centre=(0.0, 0.0),
+    output_grid: Optional[Tuple[int, int]] = None,
+    output_dx: Optional[float] = None,
+    output_centre: Tuple[float, float] = (0.0, 0.0),
     source_box_half: float = 50e-6,
     pupil_box_half: float = 0.05,
     n_field: int = 8,
@@ -172,7 +172,7 @@ def propagate_subaperture_asymptotic(
     n_patches: Tuple[int, int] = (3, 3),
     patch_overlap: float = 0.25,
     edge_smoothness: float = 0.15,
-):
+) -> np.ndarray:
     """Wide-field deterministic asymptotic propagator using
     subaperture (patch) decomposition.
 

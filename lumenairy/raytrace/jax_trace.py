@@ -38,7 +38,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import NamedTuple
+from typing import Any, Dict, NamedTuple, Optional
 
 import numpy as np
 
@@ -376,8 +376,12 @@ def _transfer_jax(state, thickness, n_medium):
 # Top-level trace
 # ----------------------------------------------------------------------
 
-def trace_jax(initial_state, prescription, wavelength,
-              surface_diffraction=None):
+def trace_jax(
+    initial_state: 'JaxRayState',
+    prescription: Dict[str, Any],
+    wavelength: float,
+    surface_diffraction: Optional[Dict[int, Any]] = None,
+) -> 'JaxRayState':
     """JAX-traceable sequential ray trace.
 
     Walks the prescription's surfaces and interleaves

@@ -35,6 +35,10 @@ or transform identically through non-polarizing elements).
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, Optional, Tuple, Union
+
 import numpy as np
 
 # Scalar propagation and element functions (dispatched per component)
@@ -89,7 +93,7 @@ class JonesField:
     matrices) mix Ex and Ey according to their 2×2 Jones matrix.
     """
 
-    def __init__(self, Ex, Ey, dx, dy=None):
+    def __init__(self, Ex: np.ndarray, Ey: np.ndarray, dx: float, dy: Optional[float] = None) -> None:
         if Ex.shape != Ey.shape:
             raise ValueError(f"Ex and Ey must have the same shape, "
                              f"got {Ex.shape} and {Ey.shape}")
@@ -99,18 +103,18 @@ class JonesField:
         self.dy = dy if dy is not None else dx
 
     @property
-    def shape(self):
+    def shape(self) -> Tuple[int, ...]:
         return self.Ex.shape
 
-    def intensity(self):
+    def intensity(self) -> np.ndarray:
         """Total intensity |Ex|^2 + |Ey|^2."""
         return np.abs(self.Ex)**2 + np.abs(self.Ey)**2
 
-    def power(self):
+    def power(self) -> float:
         """Total integrated power."""
         return float(np.sum(self.intensity()) * self.dx * self.dy)
 
-    def copy(self):
+    def copy(self) -> 'JonesField':
         """Return a deep copy of the field."""
         return JonesField(self.Ex.copy(), self.Ey.copy(), self.dx, self.dy)
 
@@ -118,7 +122,7 @@ class JonesField:
     # Polarization analysis (bound forms of the module-level helpers)
     # ------------------------------------------------------------------
 
-    def stokes_parameters(self):
+    def stokes_parameters(self) -> Dict[str, np.ndarray]:
         """Per-pixel Stokes parameters dict ``{'S0', 'S1', 'S2', 'S3'}``.
 
         Equivalent to module-level :func:`stokes_parameters`; exposed
@@ -128,12 +132,12 @@ class JonesField:
         """
         return stokes_parameters(self)
 
-    def degree_of_polarization(self):
+    def degree_of_polarization(self) -> np.ndarray:
         """Per-pixel DOP map.  Equivalent to module-level
         :func:`degree_of_polarization`."""
         return degree_of_polarization(self)
 
-    def polarization_ellipse(self):
+    def polarization_ellipse(self) -> Tuple[np.ndarray, np.ndarray]:
         """Per-pixel polarization-ellipse ``(orientation, ellipticity)``.
 
         Equivalent to module-level :func:`polarization_ellipse`.
@@ -151,7 +155,7 @@ class JonesField:
     # on a 6-core CPU; adjust via :func:`set_jones_batch_threshold`.
     _BATCH_PROPAGATE_MIN_N = 512
 
-    def propagate(self, z, wavelength, bandlimit=True):
+    def propagate(self, z: float, wavelength: float, bandlimit: bool = True) -> 'JonesField':
         """Propagate via the angular spectrum method.
 
         For grids at or above ``_BATCH_PROPAGATE_MIN_N`` (default 512)
@@ -179,7 +183,14 @@ class JonesField:
                 bandlimit=bandlimit)
         return self
 
-    def propagate_tilted(self, z, wavelength, tilt_x=0, tilt_y=0, bandlimit=True):
+    def propagate_tilted(
+        self,
+        z: float,
+        wavelength: float,
+        tilt_x: float = 0,
+        tilt_y: float = 0,
+        bandlimit: bool = True,
+    ) -> 'JonesField':
         """Propagate via off-axis ASM."""
         self.Ex = angular_spectrum_propagate_tilted(
             self.Ex, z, wavelength, self.dx, self.dy,
@@ -189,7 +200,7 @@ class JonesField:
             tilt_x=tilt_x, tilt_y=tilt_y, bandlimit=bandlimit)
         return self
 
-    def propagate_fresnel(self, z, wavelength):
+    def propagate_fresnel(self, z: float, wavelength: float) -> 'JonesField':
         """Propagate via single-FFT Fresnel. Returns new grid spacings."""
         self.Ex, dx_out, dy_out = fresnel_propagate(
             self.Ex, z, wavelength, self.dx, self.dy)
@@ -199,7 +210,7 @@ class JonesField:
         self.dy = dy_out
         return self
 
-    def propagate_fraunhofer(self, z, wavelength):
+    def propagate_fraunhofer(self, z: float, wavelength: float) -> 'JonesField':
         """Propagate to the far-field via Fraunhofer. Returns new grid spacings."""
         self.Ex, dx_out, dy_out = fraunhofer_propagate(
             self.Ex, z, wavelength, self.dx, self.dy)
@@ -209,8 +220,13 @@ class JonesField:
         self.dy = dy_out
         return self
 
-    def sas_propagate(self, z, wavelength, pad=2,
-                      skip_final_phase=False):
+    def sas_propagate(
+        self,
+        z: float,
+        wavelength: float,
+        pad: int = 2,
+        skip_final_phase: bool = False,
+    ) -> 'JonesField':
         """Propagate via the Scalable Angular Spectrum Method.
 
         Applies :func:`scalable_angular_spectrum_propagate` to ``Ex``
@@ -258,21 +274,28 @@ class JonesField:
     # Non-polarizing elements (dispatched per component)
     # ------------------------------------------------------------------
 
-    def apply_thin_lens(self, f, wavelength, **kwargs):
+    def apply_thin_lens(self, f: float, wavelength: float, **kwargs: Any) -> 'JonesField':
         """Apply a thin lens to both components."""
         self.Ex = apply_thin_lens(self.Ex, f=f, wavelength=wavelength, dx=self.dx, dy=self.dy, **kwargs)
         self.Ey = apply_thin_lens(self.Ey, f=f, wavelength=wavelength, dx=self.dx, dy=self.dy, **kwargs)
         return self
 
-    def apply_spherical_lens(self, **kwargs):
+    def apply_spherical_lens(self, **kwargs: Any) -> 'JonesField':
         self.Ex = apply_spherical_lens(self.Ex, wavelength=kwargs['wavelength'],
                                         dx=self.dx, dy=self.dy, **{k: v for k, v in kwargs.items() if k != 'wavelength'})
         self.Ey = apply_spherical_lens(self.Ey, wavelength=kwargs['wavelength'],
                                         dx=self.dx, dy=self.dy, **{k: v for k, v in kwargs.items() if k != 'wavelength'})
         return self
 
-    def apply_real_lens(self, prescription, wavelength, bandlimit=True,
-                        slant_correction=False, fresnel=False, absorption=False):
+    def apply_real_lens(
+        self,
+        prescription: Dict[str, Any],
+        wavelength: float,
+        bandlimit: bool = True,
+        slant_correction: bool = False,
+        fresnel: bool = False,
+        absorption: bool = False,
+    ) -> 'JonesField':
         """Apply a multi-surface real lens to both components.
 
         See :func:`lumenairy.lenses.apply_real_lens` for parameter
@@ -288,17 +311,23 @@ class JonesField:
             fresnel=fresnel, absorption=absorption)
         return self
 
-    def apply_mirror(self, wavelength, **kwargs):
+    def apply_mirror(self, wavelength: float, **kwargs: Any) -> 'JonesField':
         self.Ex = apply_mirror(self.Ex, wavelength, self.dx, **kwargs)
         self.Ey = apply_mirror(self.Ey, wavelength, self.dx, **kwargs)
         return self
 
-    def apply_aperture(self, shape='circular', params=None, xc=0, yc=0):
+    def apply_aperture(
+        self,
+        shape: str = 'circular',
+        params: Optional[Dict[str, Any]] = None,
+        xc: float = 0,
+        yc: float = 0,
+    ) -> 'JonesField':
         self.Ex = apply_aperture(self.Ex, self.dx, shape=shape, params=params, xc=xc, yc=yc)
         self.Ey = apply_aperture(self.Ey, self.dx, shape=shape, params=params, xc=xc, yc=yc)
         return self
 
-    def apply_mask(self, mask):
+    def apply_mask(self, mask: np.ndarray) -> 'JonesField':
         self.Ex = apply_mask(self.Ex, mask)
         self.Ey = apply_mask(self.Ey, mask)
         return self
@@ -308,7 +337,7 @@ class JonesField:
 # POLARIZATION-DEPENDENT ELEMENTS
 # =============================================================================
 
-def apply_jones_matrix(field, matrix):
+def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[np.ndarray, np.ndarray], np.ndarray]]) -> 'JonesField':
     """
     Apply an arbitrary 2×2 Jones matrix to a JonesField.
 
@@ -347,7 +376,12 @@ def apply_jones_matrix(field, matrix):
     return field
 
 
-def apply_polarizer(field, angle=0.0, *, angle_deg=None):
+def apply_polarizer(
+    field: 'JonesField',
+    angle: float = 0.0,
+    *,
+    angle_deg: Optional[float] = None,
+) -> 'JonesField':
     """
     Apply an ideal linear polarizer at the specified transmission angle.
 
@@ -376,7 +410,13 @@ def apply_polarizer(field, angle=0.0, *, angle_deg=None):
     return apply_jones_matrix(field, J)
 
 
-def apply_waveplate(field, retardance, angle=0.0, *, angle_deg=None):
+def apply_waveplate(
+    field: 'JonesField',
+    retardance: float,
+    angle: float = 0.0,
+    *,
+    angle_deg: Optional[float] = None,
+) -> 'JonesField':
     """
     Apply a waveplate (linear retarder) with arbitrary retardance.
 
@@ -421,21 +461,31 @@ def apply_waveplate(field, retardance, angle=0.0, *, angle_deg=None):
     return apply_jones_matrix(field, J)
 
 
-def apply_half_wave_plate(field, angle=0.0, *, angle_deg=None):
+def apply_half_wave_plate(
+    field: 'JonesField',
+    angle: float = 0.0,
+    *,
+    angle_deg: Optional[float] = None,
+) -> 'JonesField':
     """Convenience wrapper: half-wave plate (retardance = pi)."""
     if angle_deg is not None:
         angle = float(np.radians(angle_deg))
     return apply_waveplate(field, np.pi, angle)
 
 
-def apply_quarter_wave_plate(field, angle=0.0, *, angle_deg=None):
+def apply_quarter_wave_plate(
+    field: 'JonesField',
+    angle: float = 0.0,
+    *,
+    angle_deg: Optional[float] = None,
+) -> 'JonesField':
     """Convenience wrapper: quarter-wave plate (retardance = pi/2)."""
     if angle_deg is not None:
         angle = float(np.radians(angle_deg))
     return apply_waveplate(field, np.pi / 2, angle)
 
 
-def apply_rotator(field, angle):
+def apply_rotator(field: 'JonesField', angle: float) -> 'JonesField':
     """
     Apply a polarization rotator (e.g. Faraday rotator).
 
@@ -464,7 +514,12 @@ def apply_rotator(field, angle):
 # POLARIZED SOURCES
 # =============================================================================
 
-def create_linear_polarized(scalar_field, dx, angle=0.0, dy=None):
+def create_linear_polarized(
+    scalar_field: np.ndarray,
+    dx: float,
+    angle: float = 0.0,
+    dy: Optional[float] = None,
+) -> 'JonesField':
     """
     Create a linearly polarized JonesField from a scalar field.
 
@@ -488,7 +543,12 @@ def create_linear_polarized(scalar_field, dx, angle=0.0, dy=None):
     return JonesField(Ex, Ey, dx, dy)
 
 
-def create_circular_polarized(scalar_field, dx, handedness='right', dy=None):
+def create_circular_polarized(
+    scalar_field: np.ndarray,
+    dx: float,
+    handedness: str = 'right',
+    dy: Optional[float] = None,
+) -> 'JonesField':
     """
     Create a circularly polarized JonesField from a scalar field.
 
@@ -516,7 +576,13 @@ def create_circular_polarized(scalar_field, dx, handedness='right', dy=None):
     return JonesField(Ex, Ey, dx, dy)
 
 
-def create_elliptical_polarized(scalar_field, dx, ellipticity=0.0, orientation=0.0, dy=None):
+def create_elliptical_polarized(
+    scalar_field: np.ndarray,
+    dx: float,
+    ellipticity: float = 0.0,
+    orientation: float = 0.0,
+    dy: Optional[float] = None,
+) -> 'JonesField':
     """
     Create an elliptically polarized JonesField from a scalar field.
 
@@ -556,7 +622,7 @@ def create_elliptical_polarized(scalar_field, dx, ellipticity=0.0, orientation=0
 # POLARIZATION ANALYSIS
 # =============================================================================
 
-def stokes_parameters(field):
+def stokes_parameters(field: 'JonesField') -> Dict[str, np.ndarray]:
     """
     Compute the Stokes parameters (S0, S1, S2, S3) of a JonesField.
 
@@ -582,7 +648,7 @@ def stokes_parameters(field):
     return {'S0': S0, 'S1': S1, 'S2': S2, 'S3': S3}
 
 
-def degree_of_polarization(field):
+def degree_of_polarization(field: 'JonesField') -> np.ndarray:
     """
     Compute the degree of polarization (DOP).
 
@@ -609,7 +675,7 @@ def degree_of_polarization(field):
     return dop
 
 
-def polarization_ellipse(field):
+def polarization_ellipse(field: 'JonesField') -> Tuple[np.ndarray, np.ndarray]:
     """
     Compute the polarization ellipse parameters (orientation, ellipticity)
     at each grid point.

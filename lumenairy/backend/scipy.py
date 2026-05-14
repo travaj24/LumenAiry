@@ -16,6 +16,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from typing import Any, Tuple
+
 import numpy as np
 
 import scipy.special as _sp_special
@@ -99,7 +101,7 @@ def _dispatch_special(name, x, *args, **kwargs):
     return getattr(_sp_special, name)(x, *args, **kwargs)
 
 
-def jv(v, x):
+def jv(v: Any, x: Any) -> Any:
     """Bessel function of the first kind, order ``v``, at ``x``."""
     if is_jax_array(x):
         if hasattr(_jax_special, 'bessel_jv'):
@@ -110,22 +112,22 @@ def jv(v, x):
     return _dispatch_special('jv', x, v)
 
 
-def erf(x):
+def erf(x: Any) -> Any:
     """Error function."""
     return _dispatch_special('erf', x)
 
 
-def gammaln(x):
+def gammaln(x: Any) -> Any:
     """Log-gamma."""
     return _dispatch_special('gammaln', x)
 
 
-def expi(x):
+def expi(x: Any) -> Any:
     """Exponential integral Ei."""
     return _dispatch_special('expi', x)
 
 
-def solve(A, b):
+def solve(A: Any, b: Any) -> Any:
     """Solve ``A x = b`` on the appropriate backend."""
     if is_jax_array(A) or is_jax_array(b):
         return _jax_linalg.solve(A, b)
@@ -135,7 +137,7 @@ def solve(A, b):
     return _sp_linalg.solve(A, b)
 
 
-def lstsq(A, b, **kwargs):
+def lstsq(A: Any, b: Any, **kwargs: Any) -> Any:
     """Least-squares solve."""
     if is_jax_array(A) or is_jax_array(b):
         import jax.numpy as jnp
@@ -146,7 +148,7 @@ def lstsq(A, b, **kwargs):
     return _sp_linalg.lstsq(A, b, **kwargs)
 
 
-def eigh(A):
+def eigh(A: Any) -> Tuple[Any, Any]:
     """Hermitian eigendecomposition."""
     if is_jax_array(A):
         import jax.numpy as jnp

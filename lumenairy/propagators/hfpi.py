@@ -32,7 +32,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -79,7 +79,7 @@ class PathBundle:
 # ============================================================================
 
 def init_paths_from_field(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
     *,
     n_paths: int,
@@ -87,7 +87,7 @@ def init_paths_from_field(
     rng: Optional[Union[int, object]] = None,
     cone_half_angle: float = np.pi / 2 - 1e-6,
     z_input_plane: float = 0.0,
-):
+) -> PathBundle:
     """Sample ``n_paths`` Huygens-Fresnel paths from a complex source
     field on a uniform 2-D grid of pitch ``dx``.
 
@@ -246,8 +246,8 @@ def accumulate_to_grid(
     Nx: int,
     dx: float,
     centre: Tuple[float, float] = (0.0, 0.0),
-    output_dtype=None,
-) -> object:
+    output_dtype: Optional[Any] = None,
+) -> np.ndarray:
     """Coherently bin a PathBundle into a 2-D output field.
 
     For each path, identify the destination pixel and add the
@@ -295,11 +295,17 @@ def accumulate_to_grid(
 # End-to-end convenience
 # ============================================================================
 
-def propagate_hfpi(E_in, z, wavelength, dx, *,
-                    aperture_radius,
-                    z_aperture_to_output,
-                    n_paths,
-                    **kwargs):
+def propagate_hfpi(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    *,
+    aperture_radius: float,
+    z_aperture_to_output: float,
+    n_paths: int,
+    **kwargs: Any,
+) -> np.ndarray:
     """Canonical-order HFPI three-leg propagation.
 
     Argument order ``(E_in, z, wavelength, dx)`` matches
@@ -319,7 +325,7 @@ def propagate_hfpi(E_in, z, wavelength, dx, *,
 
 
 def propagate_hfpi_freespace_aperture(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
     *,
     z_to_aperture: float,
@@ -333,7 +339,7 @@ def propagate_hfpi_freespace_aperture(
     output_centre: Tuple[float, float] = (0.0, 0.0),
     aperture_shape: str = 'circular',
     aperture_centre: Tuple[float, float] = (0.0, 0.0),
-):
+) -> np.ndarray:
     """End-to-end three-leg HFPI: source plane -> free space ->
     aperture -> free space -> output plane.
 
@@ -382,7 +388,7 @@ def propagate_hfpi_freespace_aperture(
 # ============================================================================
 
 def init_paths_stratified(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
     *,
     n_paths: int,
@@ -392,7 +398,7 @@ def init_paths_stratified(
     z_input_plane: float = 0.0,
     n_strata_xy: Optional[Tuple[int, int]] = None,
     n_strata_dir: Optional[Tuple[int, int]] = None,
-):
+) -> PathBundle:
     """Stratified-sampling variant of :func:`init_paths_from_field`.
 
     Partitions the source-pixel index space and the forward-cone
@@ -522,21 +528,21 @@ def init_paths_stratified(
 # ============================================================================
 
 def propagate_hfpi_through_prescription(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
-    prescription: dict,
+    prescription: Dict[str, Any],
     *,
     wavelength: float,
     n_paths: int,
     rng: Optional[Union[int, object]] = None,
-    diffracting_surfaces: Optional[list] = None,
-    surface_diffraction: Optional[dict] = None,
+    diffracting_surfaces: Optional[List[int]] = None,
+    surface_diffraction: Optional[Dict[int, Any]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
     sampling: str = 'stratified',
     cone_half_angle: float = np.pi / 2 - 1e-6,
-):
+) -> np.ndarray:
     """End-to-end HFPI through a sequential lumenairy prescription.
 
     Source plane -> first surface -> ... refraction / diffraction at each

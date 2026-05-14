@@ -25,6 +25,10 @@ Requires the optional ``matplotlib`` dependency::
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 import importlib.util as _importlib_util
@@ -110,9 +114,20 @@ def _auto_extent(N, dx, unit='auto'):
 # BASIC FIELD DISPLAYS
 # =============================================================================
 
-def plot_intensity(E, dx, dy=None, log=False, vmin=None, vmax=None,
-                   unit='auto', cmap='inferno', title=None, ax=None,
-                   figsize=(6, 5), colorbar=True):
+def plot_intensity(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    log: bool = False,
+    vmin: Optional[float] = None,
+    vmax: Optional[float] = None,
+    unit: str = 'auto',
+    cmap: str = 'inferno',
+    title: Optional[str] = None,
+    ax: Optional[Any] = None,
+    figsize: Tuple[float, float] = (6, 5),
+    colorbar: bool = True,
+) -> Tuple[Any, Any]:
     """
     Plot the intensity of a complex field as a 2D image.
 
@@ -179,9 +194,18 @@ def plot_intensity(E, dx, dy=None, log=False, vmin=None, vmax=None,
     return fig, ax
 
 
-def plot_phase(E, dx, dy=None, mask_threshold=0.01, unit='auto',
-               cmap='twilight', title=None, ax=None, figsize=(6, 5),
-               colorbar=True):
+def plot_phase(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    mask_threshold: float = 0.01,
+    unit: str = 'auto',
+    cmap: str = 'twilight',
+    title: Optional[str] = None,
+    ax: Optional[Any] = None,
+    figsize: Tuple[float, float] = (6, 5),
+    colorbar: bool = True,
+) -> Tuple[Any, Any]:
     """
     Plot the phase of a complex field.
 
@@ -237,8 +261,16 @@ def plot_phase(E, dx, dy=None, mask_threshold=0.01, unit='auto',
     return fig, ax
 
 
-def plot_field(E, dx, dy=None, log_intensity=False, mask_phase=0.01,
-               unit='auto', title=None, figsize=(12, 5)):
+def plot_field(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    log_intensity: bool = False,
+    mask_phase: float = 0.01,
+    unit: str = 'auto',
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (12, 5),
+) -> Tuple[Any, Any]:
     """
     Plot intensity and phase of a field side-by-side.
 
@@ -271,8 +303,14 @@ def plot_field(E, dx, dy=None, log_intensity=False, mask_phase=0.01,
     return fig, axes
 
 
-def plot_amplitude_phase(E, dx, dy=None, unit='auto', title=None,
-                         figsize=(12, 5)):
+def plot_amplitude_phase(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    unit: str = 'auto',
+    title: Optional[str] = None,
+    figsize: Tuple[float, float] = (12, 5),
+) -> Tuple[Any, Any]:
     """Alias for :func:`plot_field` (intensity + phase side-by-side)."""
     return plot_field(E, dx, dy, unit=unit, title=title, figsize=figsize)
 
@@ -281,9 +319,19 @@ def plot_amplitude_phase(E, dx, dy=None, unit='auto', title=None,
 # CROSS SECTIONS
 # =============================================================================
 
-def plot_cross_section(E, dx, dy=None, axis='x', position=0.0, unit='auto',
-                       log=False, show_phase=False, title=None, ax=None,
-                       figsize=(8, 5)):
+def plot_cross_section(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    axis: str = 'x',
+    position: float = 0.0,
+    unit: str = 'auto',
+    log: bool = False,
+    show_phase: bool = False,
+    title: Optional[str] = None,
+    ax: Optional[Any] = None,
+    figsize: Tuple[float, float] = (8, 5),
+) -> Tuple[Any, Any]:
     """
     Plot a 1D cross section of a field along x or y.
 
@@ -371,8 +419,16 @@ def plot_cross_section(E, dx, dy=None, axis='x', position=0.0, unit='auto',
 # MULTI-PLANE GRIDS
 # =============================================================================
 
-def plot_planes_grid(planes, n_cols=4, log=False, unit='auto', cmap='inferno',
-                     auto_crop=True, figsize=None, suptitle=None):
+def plot_planes_grid(
+    planes: Sequence[Dict[str, Any]],
+    n_cols: int = 4,
+    log: bool = False,
+    unit: str = 'auto',
+    cmap: str = 'inferno',
+    auto_crop: bool = True,
+    figsize: Optional[Tuple[float, float]] = None,
+    suptitle: Optional[str] = None,
+) -> Tuple[Any, Any]:
     """
     Plot a grid of intensity maps for multiple propagation planes.
 
@@ -479,8 +535,16 @@ def plot_planes_grid(planes, n_cols=4, log=False, unit='auto', cmap='inferno',
 # PSF / MTF
 # =============================================================================
 
-def plot_psf(psf, dx_psf=None, log=True, extent_um=None, cmap='inferno',
-             title='PSF', ax=None, figsize=(6, 5)):
+def plot_psf(
+    psf: np.ndarray,
+    dx_psf: Optional[float] = None,
+    log: bool = True,
+    extent_um: Optional[float] = None,
+    cmap: str = 'inferno',
+    title: str = 'PSF',
+    ax: Optional[Any] = None,
+    figsize: Tuple[float, float] = (6, 5),
+) -> Tuple[Any, Any]:
     """
     Plot a 2D PSF.
 
@@ -536,8 +600,14 @@ def plot_psf(psf, dx_psf=None, log=True, extent_um=None, cmap='inferno',
     return fig, ax
 
 
-def plot_mtf(freq, mtf_profile, diffraction_limit=None, title='MTF',
-             ax=None, figsize=(8, 5)):
+def plot_mtf(
+    freq: np.ndarray,
+    mtf_profile: np.ndarray,
+    diffraction_limit: Optional[float] = None,
+    title: str = 'MTF',
+    ax: Optional[Any] = None,
+    figsize: Tuple[float, float] = (8, 5),
+) -> Tuple[Any, Any]:
     """
     Plot a radial MTF profile.
 
@@ -591,8 +661,13 @@ def plot_mtf(freq, mtf_profile, diffraction_limit=None, title='MTF',
 # POLARIZATION
 # =============================================================================
 
-def plot_stokes(jones_field, dx=None, unit='auto', figsize=(12, 10),
-                suptitle='Stokes parameters'):
+def plot_stokes(
+    jones_field: Any,
+    dx: Optional[float] = None,
+    unit: str = 'auto',
+    figsize: Tuple[float, float] = (12, 10),
+    suptitle: str = 'Stokes parameters',
+) -> Tuple[Any, Any]:
     """
     Plot the four Stokes parameters (S0, S1, S2, S3) for a JonesField.
 
@@ -649,10 +724,16 @@ def plot_stokes(jones_field, dx=None, unit='auto', figsize=(12, 10),
     return fig, axes
 
 
-def plot_polarization_ellipses(jones_field, n_ellipses=16, unit='auto',
-                               ellipse_scale=0.8, intensity_alpha=0.7,
-                               cmap='inferno', title='Polarization ellipses',
-                               figsize=(8, 8)):
+def plot_polarization_ellipses(
+    jones_field: Any,
+    n_ellipses: int = 16,
+    unit: str = 'auto',
+    ellipse_scale: float = 0.8,
+    intensity_alpha: float = 0.7,
+    cmap: str = 'inferno',
+    title: str = 'Polarization ellipses',
+    figsize: Tuple[float, float] = (8, 8),
+) -> Tuple[Any, Any]:
     """
     Plot the local polarization ellipse on top of the intensity image.
 
@@ -730,9 +811,18 @@ def plot_polarization_ellipses(jones_field, n_ellipses=16, unit='auto',
 # BEAM PROFILE
 # =============================================================================
 
-def plot_beam_profile(E, dx, dy=None, axis='x', show_d4sigma=True,
-                      fit_gaussian=False, unit='auto', title=None, ax=None,
-                      figsize=(8, 5)):
+def plot_beam_profile(
+    E: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+    axis: str = 'x',
+    show_d4sigma: bool = True,
+    fit_gaussian: bool = False,
+    unit: str = 'auto',
+    title: Optional[str] = None,
+    ax: Optional[Any] = None,
+    figsize: Tuple[float, float] = (8, 5),
+) -> Tuple[Any, Any]:
     """
     Plot a 1D beam intensity profile through the centroid.
 
@@ -821,7 +911,13 @@ def plot_beam_profile(E, dx, dy=None, axis='x', show_d4sigma=True,
 # =============================================================================
 
 
-def compute_jones_pupil(apply_fn, N, dx, wavelength, dy=None):
+def compute_jones_pupil(
+    apply_fn: Callable[..., Any],
+    N: int,
+    dx: float,
+    wavelength: float,
+    dy: Optional[float] = None,
+) -> Tuple[np.ndarray, float, float]:
     """Extract the full 2x2 Jones pupil from a polarization-capable system.
 
     Probes the system with two orthogonal input polarizations -- a pure
@@ -893,13 +989,19 @@ def compute_jones_pupil(apply_fn, N, dx, wavelength, dy=None):
 
 
 def plot_jones_pupil(
-    J, dx=None, dy=None, unit='auto',
-    show_amplitude=True, show_phase=True,
-    mask_amplitude_threshold=0.01,
-    amp_scale='linear', phase_cmap='twilight',
-    amp_cmap='inferno', figsize=None,
-    title='Jones pupil',
-):
+    J: np.ndarray,
+    dx: Optional[float] = None,
+    dy: Optional[float] = None,
+    unit: str = 'auto',
+    show_amplitude: bool = True,
+    show_phase: bool = True,
+    mask_amplitude_threshold: float = 0.01,
+    amp_scale: str = 'linear',
+    phase_cmap: str = 'twilight',
+    amp_cmap: str = 'inferno',
+    figsize: Optional[Tuple[float, float]] = None,
+    title: str = 'Jones pupil',
+) -> Tuple[Any, Any]:
     """Plot the 2x2 Jones pupil as amplitude + phase spatial maps.
 
     Produces either a 2x2 grid (amplitude-only or phase-only) or a
@@ -1049,19 +1151,19 @@ def plot_jones_pupil(
 # =========================================================================
 
 def plot_lens_layout(
-    prescription,
+    prescription: Dict[str, Any],
     *,
-    ax=None,
-    wavelength=None,
-    show_rays=True,
-    n_field_angles=3,
-    max_field_deg=0.0,
-    rays_per_fan=5,
-    semi_diameter=None,
-    show_optical_axis=True,
-    show_image_plane=True,
-    title=None,
-):
+    ax: Optional[Any] = None,
+    wavelength: Optional[float] = None,
+    show_rays: bool = True,
+    n_field_angles: int = 3,
+    max_field_deg: float = 0.0,
+    rays_per_fan: int = 5,
+    semi_diameter: Optional[float] = None,
+    show_optical_axis: bool = True,
+    show_image_plane: bool = True,
+    title: Optional[str] = None,
+) -> Tuple[Any, Any]:
     """Draw a 2-D cross-section of a lens prescription.
 
     Standalone script/notebook equivalent of the GUI's
@@ -1237,13 +1339,13 @@ def plot_lens_layout(
 # =========================================================================
 
 def abbe_diagram(
-    glasses=None,
+    glasses: Optional[Sequence[str]] = None,
     *,
-    wavelengths_nm=(587.6, 486.1, 656.3),
-    ax=None,
-    annotate=True,
-    title='Abbe diagram',
-):
+    wavelengths_nm: Tuple[float, float, float] = (587.6, 486.1, 656.3),
+    ax: Optional[Any] = None,
+    annotate: bool = True,
+    title: str = 'Abbe diagram',
+) -> Tuple[Any, Any, List[Tuple[str, float, float]]]:
     """Plot a refractive-index vs Abbe-number (n_d vs V_d) diagram.
 
     The classical Abbe diagram is a 2-D scatter of glass-catalogue
@@ -1328,12 +1430,12 @@ def abbe_diagram(
 
 
 def plot_glass_map(
-    glasses=None,
+    glasses: Optional[Sequence[str]] = None,
     *,
-    wavelengths_nm=(587.6, 486.1, 656.3),
-    figsize=(11, 6),
-    annotate=True,
-):
+    wavelengths_nm: Tuple[float, float, float] = (587.6, 486.1, 656.3),
+    figsize: Tuple[float, float] = (11, 6),
+    annotate: bool = True,
+) -> Tuple[Any, Any]:
     """Two-panel figure: Abbe diagram (left) + ``n(lambda)`` dispersion
     curves (right) for the same glass set.
 

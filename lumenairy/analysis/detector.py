@@ -16,6 +16,8 @@ Author: Andrew Traverso
 """
 from __future__ import annotations
 
+from typing import Any, Optional, Tuple
+
 import numpy as np
 
 from ..propagators.propagation import angular_spectrum_propagate
@@ -27,15 +29,23 @@ __all__ = [
 ]
 
 
-def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
-                   exposure_time=1.0, quantum_efficiency=1.0,
-                   read_noise_e=0.0, dark_current_e_per_s=0.0,
-                   full_well=np.inf, seed=None,
-                   hot_pixel_map=None,
-                   cosmic_ray_rate=0.0,
-                   cosmic_ray_amp_e=5e4,
-                   bayer_pattern=None,
-                   bayer_qe=(0.40, 0.55, 0.20)):
+def apply_detector(
+    E: np.ndarray,
+    dx_field: float,
+    pixel_pitch: float,
+    n_pixels: Optional[int] = None,
+    exposure_time: float = 1.0,
+    quantum_efficiency: float = 1.0,
+    read_noise_e: float = 0.0,
+    dark_current_e_per_s: float = 0.0,
+    full_well: float = np.inf,
+    seed: Optional[int] = None,
+    hot_pixel_map: Optional[np.ndarray] = None,
+    cosmic_ray_rate: float = 0.0,
+    cosmic_ray_amp_e: float = 5e4,
+    bayer_pattern: Optional[str] = None,
+    bayer_qe: Tuple[float, float, float] = (0.40, 0.55, 0.20),
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Simulate detection of a coherent field on a pixel array.
 
     Parameters
@@ -219,9 +229,16 @@ def apply_detector(E, dx_field, pixel_pitch, n_pixels=None,
     return signal_e, x_det, y_det
 
 
-def shack_hartmann(E, dx, wavelength, lenslet_pitch, lenslet_focal,
-                   n_lenslets=None, detector_pixels_per_lenslet=16,
-                   seed=None):
+def shack_hartmann(
+    E: np.ndarray,
+    dx: float,
+    wavelength: float,
+    lenslet_pitch: float,
+    lenslet_focal: float,
+    n_lenslets: Optional[int] = None,
+    detector_pixels_per_lenslet: int = 16,
+    seed: Optional[int] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Simulate a Shack-Hartmann wavefront sensor.
 
     Divides the pupil into sub-apertures, propagates each to the

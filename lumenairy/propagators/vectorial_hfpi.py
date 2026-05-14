@@ -24,7 +24,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union
 
 import numpy as np
 
@@ -70,8 +70,8 @@ class VectorPathBundle:
 
 
 def init_vector_paths_from_field(
-    Ex_in,
-    Ey_in,
+    Ex_in: np.ndarray,
+    Ey_in: np.ndarray,
     dx: float,
     *,
     n_paths: int,
@@ -79,7 +79,7 @@ def init_vector_paths_from_field(
     rng: Optional[Union[int, object]] = None,
     cone_half_angle: float = np.pi / 2 - 1e-6,
     z_input_plane: float = 0.0,
-):
+) -> VectorPathBundle:
     """Sample paths from a 2-component (Ex, Ey) Jones source field.
 
     Each path is initialised at a randomly chosen pixel with a
@@ -251,8 +251,8 @@ def accumulate_vector_to_grid(
     Nx: int,
     dx: float,
     centre: Tuple[float, float] = (0.0, 0.0),
-    output_dtype=None,
-):
+    output_dtype: Optional[Any] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Coherently bin a VectorPathBundle into separate (Ex, Ey)
     output grids.
 
@@ -281,8 +281,8 @@ def accumulate_vector_to_grid(
 
 
 def propagate_vector_hfpi_freespace_aperture(
-    Ex_in,
-    Ey_in,
+    Ex_in: np.ndarray,
+    Ey_in: np.ndarray,
     dx: float,
     *,
     z_to_aperture: float,
@@ -296,7 +296,7 @@ def propagate_vector_hfpi_freespace_aperture(
     output_centre: Tuple[float, float] = (0.0, 0.0),
     aperture_shape: str = 'circular',
     aperture_centre: Tuple[float, float] = (0.0, 0.0),
-):
+) -> Tuple[np.ndarray, np.ndarray]:
     """End-to-end vectorial HFPI: vector source -> free-space hop ->
     aperture -> free-space hop -> vector output.
 

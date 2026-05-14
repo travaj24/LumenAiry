@@ -82,7 +82,7 @@ def _check_apply_real_lens_kwarg_combination(
     slant_correction: bool,
     seidel_correction: bool,
     seidel_poly_order: int,
-    lens_prescription: dict,  # name kept for back-compat in helper signature
+    prescription: dict,
 ) -> None:
     """Validate the apply_real_lens kwarg combination space.
 
@@ -119,7 +119,7 @@ def _check_apply_real_lens_kwarg_combination(
             f"slant_correction.")
     if seidel_correction:
         try:
-            n_surf = len(lens_prescription.get('surfaces', []))
+            n_surf = len(prescription.get('surfaces', []))
         except Exception:
             n_surf = 0
         if n_surf < 2:
@@ -138,13 +138,23 @@ def _check_apply_real_lens_kwarg_combination(
             f"degrades above 12.")
 
 
-def apply_real_lens(E_in, *,
-                    prescription, wavelength, dx,
-                    dy=None,
-                    bandlimit=True, fresnel=False, slant_correction=False,
-                    absorption=False, seidel_correction=False,
-                    seidel_poly_order=6, progress=None,
-                    use_gpu=False, wave_propagator='asm'):
+def apply_real_lens(
+    E_in: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    bandlimit: bool = True,
+    fresnel: bool = False,
+    slant_correction: bool = False,
+    absorption: bool = False,
+    seidel_correction: bool = False,
+    seidel_poly_order: int = 6,
+    progress: Optional[Any] = None,
+    use_gpu: bool = False,
+    wave_propagator: str = 'asm',
+) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
 
@@ -342,7 +352,7 @@ def apply_real_lens(E_in, *,
         slant_correction=slant_correction,
         seidel_correction=seidel_correction,
         seidel_poly_order=seidel_poly_order,
-        lens_prescription=prescription,
+        prescription=prescription,
     )
 
     # Pre-flight grid vs prescription-aperture check.  If any surface's

@@ -196,6 +196,37 @@ external callers (none known at the time of release) must migrate; the
   separate entry points because their semantically-distinct
   autodiff paths benefit from the explicit name.
 
+* **E -- Type-annotation coverage push.**  Annotated ~490 public
+  functions across propagators, elements, raytrace, sources,
+  analysis, io, optimize, glass, system, and backend.  Coverage
+  jumped from **10.5% fully typed (28.5% any) → 70.1% fully typed
+  (90.2% any)**, exceeding the polish-pass 80% target.  Mypy /
+  pyright / pylance now have authoritative type information for
+  the entire user-facing API.  Forward references in
+  ``raytrace/bundles.py`` use ``TYPE_CHECKING`` imports to break
+  the runtime circular dependency.
+
+* **G -- ``pytest validation/`` works natively.**  Added
+  ``validation/conftest.py`` that wires pytest collection for the
+  670 existing ``t_*`` functions and converts their
+  ``(bool, str)`` returns into real ``AssertionError`` raises.
+  ``pyproject.toml`` now lists ``t_*`` alongside ``test_*`` in
+  ``python_functions``.  Auto-marks every collected ``t_*`` as
+  ``integration`` so it respects the project-wide
+  ``-m "not integration"`` default.  Legacy
+  ``python validation/run_all.py`` driver works unchanged.  New
+  path enables IDE test discovery, ``-k`` filtering, JUnit XML,
+  coverage, and parallel execution via ``pytest-xdist``.
+
+* **B.10 -- Array-namespace dispatch was already in place.**
+  Audit confirmed that 55 sites already use
+  ``array_namespace(E_in)`` dispatch (or equivalent
+  ``_is_cupy_array(E_in)`` / ``is_jax_array(E_in)`` checks) to
+  automatically route through NumPy / CuPy / JAX based on the
+  input array type.  ``use_gpu=True`` remains as the back-compat
+  opt-in for forcing NumPy → CuPy promotion.  README updated to
+  document the convention explicitly.
+
 ### Renamed
 
 * **``lumenairy.analysis.analysis`` → ``lumenairy.analysis.core``.**

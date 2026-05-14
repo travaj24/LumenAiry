@@ -220,8 +220,14 @@ class DistortionVsField:
     sign: str
 
 
-def distortion_vs_field(system, wavelength, max_field_deg, *,
-                          n_points=21, image_distance=None):
+def distortion_vs_field(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+    max_field_deg: float,
+    *,
+    n_points: int = 21,
+    image_distance: Optional[float] = None,
+) -> DistortionVsField:
     """Sweep chief-ray field angle and compute f-tan(theta) distortion.
 
     Parameters
@@ -345,8 +351,14 @@ class DistortionGrid(_DictAttrMixin):
     bfl: float
 
 
-def distortion_grid(system, wavelength, max_field_deg, *,
-                      n_grid=7, image_distance=None):
+def distortion_grid(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+    max_field_deg: float,
+    *,
+    n_grid: int = 7,
+    image_distance: Optional[float] = None,
+) -> DistortionGrid:
     """2-D chief-ray distortion grid.
 
     For every (theta_x, theta_y) on an n_grid x n_grid mesh covering
@@ -441,11 +453,16 @@ class SurfaceFootprint(_DictAttrMixin):
     fields: List[FieldFootprint]
 
 
-def footprint_per_surface(system, wavelength, *,
-                            semi_aperture=None,
-                            fields_deg=(0.0,),
-                            num_rings=6, rays_per_ring=12,
-                            image_distance=None):
+def footprint_per_surface(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+    *,
+    semi_aperture: Optional[float] = None,
+    fields_deg: Sequence[float] = (0.0,),
+    num_rings: int = 6,
+    rays_per_ring: int = 12,
+    image_distance: Optional[float] = None,
+) -> List[SurfaceFootprint]:
     """Per-surface ray footprints over one or more field angles.
 
     For each surface in the system, return the (x, y) coordinates of
@@ -540,10 +557,16 @@ class SpotDiagramField(_DictAttrMixin):
     centroid: Tuple[float, float]
 
 
-def spot_diagram_vs_field(system, wavelength, fields_deg, *,
-                            semi_aperture=None,
-                            num_rings=6, rays_per_ring=12,
-                            image_distance=None):
+def spot_diagram_vs_field(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+    fields_deg: Sequence[float],
+    *,
+    semi_aperture: Optional[float] = None,
+    num_rings: int = 6,
+    rays_per_ring: int = 12,
+    image_distance: Optional[float] = None,
+) -> List[SpotDiagramField]:
     """Trace spot diagrams at multiple field angles on a common image
     plane.
 
@@ -638,10 +661,16 @@ class RelativeIllumination:
     relative_illumination: np.ndarray
 
 
-def relative_illumination(system, wavelength, fields_deg, *,
-                            semi_aperture=None,
-                            num_rings=12, rays_per_ring=24,
-                            image_distance=None):
+def relative_illumination(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+    fields_deg: Sequence[float],
+    *,
+    semi_aperture: Optional[float] = None,
+    num_rings: int = 12,
+    rays_per_ring: int = 24,
+    image_distance: Optional[float] = None,
+) -> RelativeIllumination:
     """Geometric relative-illumination (vignetting) vs field angle.
 
     Launches a dense ring grid at the entrance pupil for each field
@@ -769,10 +798,16 @@ def _propagate_rms(result: TraceResult, z_to: float) -> float:
     return float(np.sqrt(np.mean((xz - cx) ** 2 + (yz - cy) ** 2)))
 
 
-def field_aberration_sweep(system, wavelength, fields_deg, *,
-                              semi_aperture=None,
-                              dz_search=None,
-                              n_z=51, n_fan=15):
+def field_aberration_sweep(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+    fields_deg: Sequence[float],
+    *,
+    semi_aperture: Optional[float] = None,
+    dz_search: Optional[float] = None,
+    n_z: int = 51,
+    n_fan: int = 15,
+) -> FieldAberrationSweep:
     """Real-ray sagittal / tangential focus shifts and astigmatism vs field.
 
     For each field angle:
@@ -862,7 +897,10 @@ def field_aberration_sweep(system, wavelength, fields_deg, *,
 # Petzval radius (new)
 # ----------------------------------------------------------------------
 
-def petzval_radius(system, wavelength):
+def petzval_radius(
+    system: Union[Dict[str, Any], List[Surface]],
+    wavelength: float,
+) -> float:
     """Paraxial Petzval surface radius [m].
 
     Computes ``1 / R_p = sum_i (n2_i - n1_i) / (n1_i n2_i R_i)`` over
@@ -932,12 +970,14 @@ class SensitivityResult:
     order: np.ndarray
 
 
-def sensitivity_ranking(merit_fn: Callable[[np.ndarray], float],
-                          x0: Sequence[float],
-                          labels: Optional[Sequence[str]] = None,
-                          *,
-                          eps_rel: float = 1e-3,
-                          eps_abs_floor: float = 1e-9):
+def sensitivity_ranking(
+    merit_fn: Callable[[np.ndarray], float],
+    x0: Sequence[float],
+    labels: Optional[Sequence[str]] = None,
+    *,
+    eps_rel: float = 1e-3,
+    eps_abs_floor: float = 1e-9,
+) -> SensitivityResult:
     """Central-difference sensitivity of a scalar merit to each
     variable.
 

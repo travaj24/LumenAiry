@@ -26,8 +26,12 @@ conservative defaults and a warning is emitted.
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
 import os
 import warnings
+from typing import Any, Dict, Optional, Tuple, Union
+
 import numpy as np
 
 try:
@@ -58,7 +62,7 @@ _DEFAULT_TOTAL_BYTES     = 8 * 1024**3   # 8 GB
 _MAX_RAM_OVERRIDE = None   # None = auto-detect via psutil
 
 
-def get_ram_budget():
+def get_ram_budget() -> int:
     """
     Return the effective RAM budget in bytes.
 
@@ -71,7 +75,7 @@ def get_ram_budget():
     return available_memory_bytes()
 
 
-def set_max_ram(value):
+def set_max_ram(value: Optional[Union[int, float]]) -> None:
     """
     Set a manual RAM budget override for the library.
 
@@ -107,7 +111,7 @@ def set_max_ram(value):
 # ---------------------------------------------------------------------------
 # Memory queries
 # ---------------------------------------------------------------------------
-def available_memory_bytes():
+def available_memory_bytes() -> int:
     """
     Return the currently available physical memory in bytes.
 
@@ -124,14 +128,14 @@ def available_memory_bytes():
     return _DEFAULT_AVAILABLE_BYTES
 
 
-def total_memory_bytes():
+def total_memory_bytes() -> int:
     """Return the total physical memory in bytes."""
     if _PSUTIL_AVAILABLE:
         return int(psutil.virtual_memory().total)
     return _DEFAULT_TOTAL_BYTES
 
 
-def memory_info():
+def memory_info() -> Dict[str, Any]:
     """
     Return a dictionary with current memory statistics.
 
@@ -166,7 +170,7 @@ def memory_info():
 # ---------------------------------------------------------------------------
 # Array memory estimation
 # ---------------------------------------------------------------------------
-def bytes_per_element(dtype):
+def bytes_per_element(dtype: Any) -> int:
     """
     Return the number of bytes per element for a numpy dtype.
 
@@ -176,7 +180,8 @@ def bytes_per_element(dtype):
     return np.dtype(dtype).itemsize
 
 
-def array_bytes(shape, dtype='complex128'):
+def array_bytes(shape: Union[int, Tuple[int, ...]],
+                dtype: Any = 'complex128') -> int:
     """
     Estimate the memory footprint of a numpy array of the given shape.
 
@@ -198,8 +203,10 @@ def array_bytes(shape, dtype='complex128'):
     return n * bytes_per_element(dtype)
 
 
-def estimate_op_memory(shape, dtype='complex128',
-                       n_work_arrays=3, extra_bytes=0):
+def estimate_op_memory(shape: Union[int, Tuple[int, ...]],
+                       dtype: Any = 'complex128',
+                       n_work_arrays: int = 3,
+                       extra_bytes: int = 0) -> int:
     """
     Estimate the peak memory cost of a typical operation on an array.
 
@@ -235,8 +242,11 @@ def estimate_op_memory(shape, dtype='complex128',
 # ---------------------------------------------------------------------------
 # Batch-size selection
 # ---------------------------------------------------------------------------
-def pick_batch_size(n_items, cost_per_item, available=None,
-                    safety=0.5, min_batch=1, max_batch=None):
+def pick_batch_size(n_items: int, cost_per_item: int,
+                    available: Optional[int] = None,
+                    safety: float = 0.5,
+                    min_batch: int = 1,
+                    max_batch: Optional[int] = None) -> int:
     """
     Choose the largest batch size that comfortably fits in available RAM.
 
@@ -289,7 +299,9 @@ def pick_batch_size(n_items, cost_per_item, available=None,
     return int(k)
 
 
-def should_split(total_cost, available=None, safety=0.5):
+def should_split(total_cost: int,
+                 available: Optional[int] = None,
+                 safety: float = 0.5) -> bool:
     """
     Decide whether an operation needs to be split into batches.
 
@@ -316,7 +328,7 @@ def should_split(total_cost, available=None, safety=0.5):
 # ---------------------------------------------------------------------------
 # Pretty-printing helpers
 # ---------------------------------------------------------------------------
-def format_bytes(nbytes):
+def format_bytes(nbytes: Union[int, float]) -> str:
     """
     Format a byte count as a human-readable string.
 
@@ -334,7 +346,8 @@ def format_bytes(nbytes):
     return f'{x:.2f} PB'
 
 
-def print_memory_report(planned_cost_bytes=None, prefix=''):
+def print_memory_report(planned_cost_bytes: Optional[int] = None,
+                        prefix: str = '') -> None:
     """
     Print a one-line human-readable memory status report.
 

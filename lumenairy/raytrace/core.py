@@ -34,9 +34,11 @@ Usage
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
 import numpy as np
 from dataclasses import dataclass, field
-from typing import List, Optional, Dict
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from ..glass import get_glass_index
 from ..elements.lenses import surface_sag_general, surface_sag_biconic
@@ -103,7 +105,7 @@ class RayBundle:
     # synthesised from alive as "alive -> OK, dead -> TIR (unknown)."
     error_code: Optional[np.ndarray] = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # Synthesise error_code if the caller didn't supply one.  This
         # keeps any pre-3.1.9 code paths (user-constructed bundles,
         # pickled objects from older versions) working transparently.
@@ -116,10 +118,10 @@ class RayBundle:
             self.error_code = ec
 
     @property
-    def n_rays(self):
+    def n_rays(self) -> int:
         return len(self.x)
 
-    def copy(self):
+    def copy(self) -> 'RayBundle':
         return RayBundle(
             x=self.x.copy(), y=self.y.copy(), z=self.z.copy(),
             L=self.L.copy(), M=self.M.copy(), N=self.N.copy(),
@@ -129,7 +131,7 @@ class RayBundle:
                          if self.error_code is not None else None),
         )
 
-    def to_jax_state(self):
+    def to_jax_state(self) -> Any:
         """Convert this RayBundle to a :class:`JaxRayState`.
 
         The JAX state drops ``wavelength`` and ``error_code`` (which
@@ -800,8 +802,13 @@ def _apply_coord_break(rays, surface):
 # Sequential trace engine
 # ============================================================================
 
-def trace(rays, surfaces, wavelength, output_filter='all',
-          surface_diffraction=None):
+def trace(
+    rays: 'RayBundle',
+    surfaces: List['Surface'],
+    wavelength: float,
+    output_filter: Union[str, Callable[..., Any]] = 'all',
+    surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
+) -> 'TraceResult':
     """Trace a ray bundle through a sequential list of surfaces.
 
     Parameters
@@ -1021,8 +1028,13 @@ def _local_to_world_state(rays, origin, R):
     rays.N = R[2, 0] * Ll + R[2, 1] * Ml + R[2, 2] * Nl
 
 
-def trace_world(rays, surfaces, wavelength, output_filter='all',
-                surface_diffraction=None):
+def trace_world(
+    rays: 'RayBundle',
+    surfaces: List['Surface'],
+    wavelength: float,
+    output_filter: Union[str, Callable[..., Any]] = 'all',
+    surface_diffraction: Optional[Dict[int, Tuple[float, float, float, float]]] = None,
+) -> 'TraceResult':
     """Sequential ray trace in world coordinates.
 
     Each Surface carries its own ``world_origin`` (vertex world
@@ -1166,7 +1178,11 @@ def trace_world(rays, surfaces, wavelength, output_filter='all',
 # Prescription → Surface list conversion
 # ============================================================================
 
-def validate_prescription(prescription, *, strict=True):
+def validate_prescription(
+    prescription: Dict[str, Any],
+    *,
+    strict: bool = True,
+) -> Optional[List[Tuple[str, str]]]:
     """Sanity-check a lens prescription dict.
 
     Catches the common errors that otherwise cause
@@ -1314,7 +1330,7 @@ def validate_prescription(prescription, *, strict=True):
         return issues
 
 
-def surfaces_from_prescription(prescription):
+def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
     """Convert a lens prescription dict to a list of Surface objects.
 
     Accepts the same prescription format returned by
@@ -1426,7 +1442,7 @@ def surfaces_from_prescription(prescription):
     return surface_list
 
 
-def find_stop(surfaces):
+def find_stop(surfaces: List['Surface']) -> int:
     """Return the index of the aperture stop in ``surfaces``.
 
     Dispatch order:
@@ -1509,7 +1525,14 @@ def _make_bundle(x, y, L, M, wavelength):
     )
 
 
-def make_ray(x=0.0, y=0.0, L=0.0, M=0.0, *, wavelength):
+def make_ray(
+    x: float = 0.0,
+    y: float = 0.0,
+    L: float = 0.0,
+    M: float = 0.0,
+    *,
+    wavelength: float,
+) -> 'RayBundle':
     """Create a single ray.
 
     Parameters
@@ -1528,8 +1551,13 @@ def make_ray(x=0.0, y=0.0, L=0.0, M=0.0, *, wavelength):
     return _make_bundle([x], [y], [L], [M], wavelength)
 
 
-def make_fan(axis='y', semi_aperture=12.7e-3, n_rays=21,
-             field_angle=0.0, wavelength=550e-9):
+def make_fan(
+    axis: str = 'y',
+    semi_aperture: float = 12.7e-3,
+    n_rays: int = 21,
+    field_angle: float = 0.0,
+    wavelength: float = 550e-9,
+) -> 'RayBundle':
     """Create a 1-D fan of rays across the pupil.
 
     Parameters
@@ -1565,8 +1593,13 @@ def make_fan(axis='y', semi_aperture=12.7e-3, n_rays=21,
     return _make_bundle(x, y, L, M, wavelength)
 
 
-def make_ring(semi_aperture=12.7e-3, n_rays=36, field_angle=0.0,
-              wavelength=550e-9, fraction=1.0):
+def make_ring(
+    semi_aperture: float = 12.7e-3,
+    n_rays: int = 36,
+    field_angle: float = 0.0,
+    wavelength: float = 550e-9,
+    fraction: float = 1.0,
+) -> 'RayBundle':
     """Create a ring of rays at a given fractional pupil radius.
 
     Parameters
@@ -1595,8 +1628,13 @@ def make_ring(semi_aperture=12.7e-3, n_rays=36, field_angle=0.0,
     return _make_bundle(x, y, L, M, wavelength)
 
 
-def make_grid(semi_aperture=12.7e-3, n_across=11, field_angle=0.0,
-              wavelength=550e-9, pattern='square'):
+def make_grid(
+    semi_aperture: float = 12.7e-3,
+    n_across: int = 11,
+    field_angle: float = 0.0,
+    wavelength: float = 550e-9,
+    pattern: str = 'square',
+) -> 'RayBundle':
     """Create a 2-D grid of rays across the pupil.
 
     Parameters
@@ -1635,8 +1673,14 @@ def make_grid(semi_aperture=12.7e-3, n_across=11, field_angle=0.0,
     return _make_bundle(x, y, L, M, wavelength)
 
 
-def make_rings(semi_aperture=12.7e-3, num_rings=6, rays_per_ring=36,
-               field_angle=0.0, wavelength=550e-9, include_chief=True):
+def make_rings(
+    semi_aperture: float = 12.7e-3,
+    num_rings: int = 6,
+    rays_per_ring: int = 36,
+    field_angle: float = 0.0,
+    wavelength: float = 550e-9,
+    include_chief: bool = True,
+) -> 'RayBundle':
     """Create concentric rings of rays (good for spot diagrams).
 
     Parameters
@@ -1683,8 +1727,15 @@ def make_rings(semi_aperture=12.7e-3, num_rings=6, rays_per_ring=36,
 # Diffraction-order direction shift (gratings / DOEs in the traced path)
 # ============================================================================
 
-def apply_doe_phase_traced(rays, order_x, order_y=0, *,
-                           period_x, period_y=None, wavelength=None):
+def apply_doe_phase_traced(
+    rays: 'RayBundle',
+    order_x: Union[float, int, Sequence[float], np.ndarray],
+    order_y: Union[float, int, Sequence[float], np.ndarray] = 0,
+    *,
+    period_x: float,
+    period_y: Optional[float] = None,
+    wavelength: Optional[float] = None,
+) -> 'RayBundle':
     """Apply a grating diffraction-order direction shift to a ray bundle.
 
     Each ray's transverse direction cosines are shifted by the grating
@@ -1848,10 +1899,17 @@ def apply_doe_phase_traced(rays, order_x, order_y=0, *,
 # High-level trace functions
 # ============================================================================
 
-def trace_prescription(prescription, wavelength, semi_aperture=None,
-                       field_angle=0.0, num_rings=6, rays_per_ring=36,
-                       ray_pattern='rings', n_across=11,
-                       image_distance=None):
+def trace_prescription(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    semi_aperture: Optional[float] = None,
+    field_angle: float = 0.0,
+    num_rings: int = 6,
+    rays_per_ring: int = 36,
+    ray_pattern: str = 'rings',
+    n_across: int = 11,
+    image_distance: Optional[float] = None,
+) -> 'TraceResult':
     """Trace rays through a lens prescription.
 
     Convenience wrapper that converts a prescription dict to surfaces,
@@ -2005,7 +2063,10 @@ def _paraxial_transfer(y, n_u, t, n):
     return y + u * t, n_u
 
 
-def system_abcd(surfaces, wavelength):
+def system_abcd(
+    surfaces: List['Surface'],
+    wavelength: float,
+) -> Tuple[np.ndarray, float, float, float]:
     """Compute the system ABCD matrix using paraxial ray tracing.
 
     Traces a marginal ray (y=1, u=0) and an axial ray (y=0, u=1)
@@ -2084,7 +2145,10 @@ def system_abcd(surfaces, wavelength):
     return M, efl, bfl, ffl
 
 
-def system_abcd_prescription(prescription, wavelength):
+def system_abcd_prescription(
+    prescription: Dict[str, Any],
+    wavelength: float,
+) -> Tuple[np.ndarray, float, float, float]:
     """Compute the ABCD matrix from a lens prescription dict.
 
     Convenience wrapper around :func:`system_abcd`.
@@ -2160,8 +2224,15 @@ def _surface_copy_with(surf, **overrides):
     )
 
 
-def lens_abcd(lens, wavelength, *, start=None, end=None, label=None,
-              surfaces=None):
+def lens_abcd(
+    lens: Union[Dict[str, Any], List['Surface'], 'Surface', 'LensInfo'],
+    wavelength: float,
+    *,
+    start: Optional[int] = None,
+    end: Optional[int] = None,
+    label: Optional[str] = None,
+    surfaces: Optional[List['Surface']] = None,
+) -> 'LensInfo':
     """Compute paraxial ABCD + EFL/BFL/FFL for a single lens element.
 
     Accepts any of the following forms of ``lens``:
@@ -2434,8 +2505,11 @@ class FirstOrderData:
         return '\n'.join(lines)
 
 
-def first_order_data(surfaces_or_prescription, wavelength,
-                       stop_index=None):
+def first_order_data(
+    surfaces_or_prescription: Union[List['Surface'], Dict[str, Any]],
+    wavelength: float,
+    stop_index: Optional[int] = None,
+) -> 'FirstOrderData':
     """Compute a comprehensive paraxial first-order summary of a system.
 
     Combines :func:`system_abcd`, :func:`compute_pupils`, and the
@@ -2502,7 +2576,11 @@ def first_order_data(surfaces_or_prescription, wavelength,
     )
 
 
-def compute_pupils(surfaces, wavelength, stop_index=None):
+def compute_pupils(
+    surfaces: List['Surface'],
+    wavelength: float,
+    stop_index: Optional[int] = None,
+) -> 'PupilInfo':
     """Paraxial entrance and exit pupil positions and radii.
 
     Images the aperture stop backward through the pre-stop optics to
@@ -2653,7 +2731,10 @@ def compute_pupils(surfaces, wavelength, stop_index=None):
     )
 
 
-def find_lenses(surfaces, wavelength):
+def find_lenses(
+    surfaces: List['Surface'],
+    wavelength: float,
+) -> List['LensInfo']:
     """Auto-detect individual lens elements in a surface list.
 
     Scans for air -> glass -> air blocks; each block becomes one
@@ -2715,9 +2796,15 @@ def find_lenses(surfaces, wavelength):
 # Seidel aberration coefficients
 # ============================================================================
 
-def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
-                        stop_index=None, field_angle=0.01,
-                        *, field_angle_deg=None):
+def seidel_coefficients(
+    surfaces: List['Surface'],
+    wavelength: float,
+    object_distance: float = np.inf,
+    stop_index: Optional[int] = None,
+    field_angle: float = 0.01,
+    *,
+    field_angle_deg: Optional[float] = None,
+) -> Tuple[Dict[str, Any], np.ndarray]:
     """Compute the five Seidel (third-order) aberration coefficients.
 
     Uses the Buchdahl-Hopkins formulation based on paraxial marginal
@@ -2996,8 +3083,13 @@ def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
     }, abcd
 
 
-def seidel_prescription(prescription, wavelength, object_distance=np.inf,
-                        stop_index=None, field_angle=0.01):
+def seidel_prescription(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    object_distance: float = np.inf,
+    stop_index: Optional[int] = None,
+    field_angle: float = 0.01,
+) -> Tuple[Dict[str, Any], np.ndarray]:
     """Compute Seidel coefficients from a lens prescription dict.
 
     Passes ``stop_index`` and ``field_angle`` through to
@@ -3017,7 +3109,7 @@ def seidel_prescription(prescription, wavelength, object_distance=np.inf,
 # Analysis: spot diagram
 # ============================================================================
 
-def spot_rms(result):
+def spot_rms(result: 'TraceResult') -> Tuple[float, Tuple[float, float]]:
     """Compute RMS spot radius from a trace result.
 
     Parameters
@@ -3046,7 +3138,7 @@ def spot_rms(result):
     return rms, (cx, cy)
 
 
-def spot_geo_radius(result):
+def spot_geo_radius(result: 'TraceResult') -> float:
     """Compute the geometric (maximum) spot radius.
 
     Parameters
@@ -3069,7 +3161,13 @@ def spot_geo_radius(result):
     return np.max(dist)
 
 
-def spot_diagram(result, ax=None, title=None, units='um', **kwargs):
+def spot_diagram(
+    result: 'TraceResult',
+    ax: Optional[Any] = None,
+    title: Optional[str] = None,
+    units: str = 'um',
+    **kwargs: Any,
+) -> Tuple[Any, Any]:
     """Plot a spot diagram from a trace result.
 
     Parameters
@@ -3141,8 +3239,13 @@ def spot_diagram(result, ax=None, title=None, units='um', **kwargs):
 # Analysis: ray fan (transverse aberration) plots
 # ============================================================================
 
-def ray_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
-                 n_rays=101):
+def ray_fan_data(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angle: float = 0.0,
+    n_rays: int = 101,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute transverse ray aberration vs normalised pupil coordinate.
 
     Parameters
@@ -3189,8 +3292,13 @@ def ray_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
     return py, ey, px, ex
 
 
-def ray_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
-                        n_rays=101):
+def ray_fan_data_world(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angle: float = 0.0,
+    n_rays: int = 101,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """3.7.8: world-frame version of :func:`ray_fan_data`.
 
     Identical signature and return shape to ``ray_fan_data``, but
@@ -3222,8 +3330,15 @@ def ray_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
     return py, ey, px, ex
 
 
-def ray_fan_plot(surfaces, wavelength, semi_aperture, field_angles=None,
-                 n_rays=101, ax=None, units='um'):
+def ray_fan_plot(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angles: Optional[Sequence[float]] = None,
+    n_rays: int = 101,
+    ax: Optional[Tuple[Any, Any]] = None,
+    units: str = 'um',
+) -> Tuple[Any, Tuple[Any, Any]]:
     """Plot transverse ray aberration fans.
 
     Parameters
@@ -3282,8 +3397,13 @@ def ray_fan_plot(surfaces, wavelength, semi_aperture, field_angles=None,
     return fig, (ax_t, ax_s)
 
 
-def ray_fan_plot_prescription(prescription, wavelength, field_angles=None,
-                              n_rays=101, units='um'):
+def ray_fan_plot_prescription(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    field_angles: Optional[Sequence[float]] = None,
+    n_rays: int = 101,
+    units: str = 'um',
+) -> Tuple[Any, Tuple[Any, Any]]:
     """Ray fan plot from a lens prescription dict."""
     surfaces = surfaces_from_prescription(prescription)
     ap = prescription.get('aperture_diameter')
@@ -3296,8 +3416,13 @@ def ray_fan_plot_prescription(prescription, wavelength, field_angles=None,
 # Analysis: OPD (wavefront error)
 # ============================================================================
 
-def opd_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
-                 n_rays=101):
+def opd_fan_data(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angle: float = 0.0,
+    n_rays: int = 101,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Compute OPD vs pupil coordinate for tangential and sagittal fans.
 
     Parameters
@@ -3337,8 +3462,13 @@ def opd_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
     return py, opd_y, px, opd_x
 
 
-def opd_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
-                        n_rays=101):
+def opd_fan_data_world(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    field_angle: float = 0.0,
+    n_rays: int = 101,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """3.7.8: world-frame version of :func:`opd_fan_data`.
 
     Identical signature and return shape; routes through
@@ -3371,7 +3501,11 @@ def opd_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
 # Analysis: through-focus spot
 # ============================================================================
 
-def refocus(result, delta_z, wavelength=None):
+def refocus(
+    result: 'TraceResult',
+    delta_z: float,
+    wavelength: Optional[float] = None,
+) -> 'TraceResult':
     """Project the final bundle of a traced result to an image plane
     at ``delta_z`` downstream of the last surface's vertex, returning
     a new ``TraceResult``.
@@ -3468,9 +3602,15 @@ def refocus(result, delta_z, wavelength=None):
     )
 
 
-def through_focus_rms(surfaces, wavelength, semi_aperture,
-                      focus_shifts, field_angle=0.0,
-                      num_rings=6, rays_per_ring=36):
+def through_focus_rms(
+    surfaces: List['Surface'],
+    wavelength: float,
+    semi_aperture: float,
+    focus_shifts: Union[Sequence[float], np.ndarray],
+    field_angle: float = 0.0,
+    num_rings: int = 6,
+    rays_per_ring: int = 36,
+) -> Tuple[np.ndarray, np.ndarray, float]:
     """Compute RMS spot size at a series of focus positions.
 
     Useful for finding best focus.
@@ -3532,7 +3672,10 @@ def through_focus_rms(surfaces, wavelength, semi_aperture,
 # Analysis: find paraxial focus
 # ============================================================================
 
-def find_paraxial_focus(surfaces, wavelength):
+def find_paraxial_focus(
+    surfaces: List['Surface'],
+    wavelength: float,
+) -> float:
     """Find the paraxial image distance from the last surface.
 
     Parameters
@@ -3553,7 +3696,7 @@ def find_paraxial_focus(surfaces, wavelength):
 # Utility: trace summary
 # ============================================================================
 
-def trace_summary(result, units='mm'):
+def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     """Print a summary of the trace result.
 
     Parameters
@@ -3605,7 +3748,11 @@ def trace_summary(result, units='mm'):
         print(f"  Spot/Airy:    {rms / airy:.2f}")
 
 
-def prescription_summary(prescription, wavelength, units='mm'):
+def prescription_summary(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    units: str = 'mm',
+) -> None:
     """Print a system summary from a prescription dict.
 
     Parameters
@@ -3642,7 +3789,10 @@ def prescription_summary(prescription, wavelength, units='mm'):
 # Compatibility bridge: system.py element-list format → Surface list
 # ============================================================================
 
-def surfaces_from_elements(elements, wavelength):
+def surfaces_from_elements(
+    elements: List[Dict[str, Any]],
+    wavelength: float,
+) -> List['Surface']:
     """Convert a ``propagate_through_system`` element list to Surfaces.
 
     This allows the same element-list used for wave-optics simulation
@@ -3868,10 +4018,17 @@ def _register_fixed_index(name, n, wavelength):
 _register_fixed_index('__thin_lens__', 1.5, 550e-9)
 
 
-def raytrace_system(elements, wavelength, semi_aperture=None,
-                    field_angle=0.0, num_rings=6, rays_per_ring=36,
-                    ray_pattern='rings', n_across=11,
-                    image_distance=None):
+def raytrace_system(
+    elements: List[Dict[str, Any]],
+    wavelength: float,
+    semi_aperture: Optional[float] = None,
+    field_angle: float = 0.0,
+    num_rings: int = 6,
+    rays_per_ring: int = 36,
+    ray_pattern: str = 'rings',
+    n_across: int = 11,
+    image_distance: Optional[float] = None,
+) -> Tuple['TraceResult', List['Surface']]:
     """Ray-trace the same element list used by propagate_through_system.
 
     This is the geometric-optics counterpart to

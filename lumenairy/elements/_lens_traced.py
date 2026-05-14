@@ -223,7 +223,7 @@ def _get_persistent_worker_pool(n_workers):
     return _PERSISTENT_POOL
 
 
-def close_worker_pool():
+def close_worker_pool() -> None:
     """Shut down the module-level worker pool used by
     :func:`apply_real_lens_traced`.
 
@@ -1026,27 +1026,34 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     return opl_map
 
 
-def apply_real_lens_traced(E_in, *,
-                           prescription, wavelength, dx,
-                           dy=None,
-                           bandlimit=True, ray_subsample=8,
-                           n_workers=None, progress=None,
-                           min_coarse_samples_per_aperture=32,
-                           on_undersample='error',
-                           preserve_input_phase=True,
-                           tilt_aware_rays=False,
-                           parallel_amp=True,
-                           parallel_amp_min_free_gb=48.0,
-                           newton_amp_mask_rel=1e-4,
-                           newton_mask_dilate_coarse_px=2,
-                           newton_max_iters=None,
-                           inversion_method='newton',
-                           fast_analytic_phase=False,
-                           newton_fit='polynomial',
-                           newton_poly_order=6,
-                           use_gpu=False,
-                           amp_use_gpu=False,
-                           wave_propagator='asm'):
+def apply_real_lens_traced(
+    E_in: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    bandlimit: bool = True,
+    ray_subsample: int = 8,
+    n_workers: Optional[int] = None,
+    progress: Optional[Any] = None,
+    min_coarse_samples_per_aperture: int = 32,
+    on_undersample: str = 'error',
+    preserve_input_phase: bool = True,
+    tilt_aware_rays: bool = False,
+    parallel_amp: bool = True,
+    parallel_amp_min_free_gb: float = 48.0,
+    newton_amp_mask_rel: float = 1e-4,
+    newton_mask_dilate_coarse_px: int = 2,
+    newton_max_iters: Optional[int] = None,
+    inversion_method: str = 'newton',
+    fast_analytic_phase: bool = False,
+    newton_fit: str = 'polynomial',
+    newton_poly_order: int = 6,
+    use_gpu: bool = False,
+    amp_use_gpu: bool = False,
+    wave_propagator: str = 'asm',
+) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
     See Also

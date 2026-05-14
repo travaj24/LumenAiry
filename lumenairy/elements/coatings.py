@@ -18,12 +18,20 @@ thickness and eta_j is the admittance (depends on polarisation).
 Author: Andrew Traverso
 """
 from __future__ import annotations
+
+from typing import List, Tuple, Union
+
 import numpy as np
 
 
-def coating_reflectance(layers, wavelengths, angle=0.0,
-                        n_substrate=1.52, n_ambient=1.0,
-                        polarization='avg'):
+def coating_reflectance(
+    layers: List[Tuple[Union[float, complex], float]],
+    wavelengths: Union[float, np.ndarray],
+    angle: float = 0.0,
+    n_substrate: Union[float, complex] = 1.52,
+    n_ambient: Union[float, complex] = 1.0,
+    polarization: str = 'avg',
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Compute spectral reflectance of a multilayer thin-film coating.
 
     Parameters
@@ -119,7 +127,10 @@ def coating_reflectance(layers, wavelengths, angle=0.0,
     return R, T, phase_r
 
 
-def quarter_wave_ar(n_substrate, wavelength_center):
+def quarter_wave_ar(
+    n_substrate: float,
+    wavelength_center: float,
+) -> List[Tuple[float, float]]:
     """Design a single-layer quarter-wave AR coating.
 
     Returns ``(n_layer, thickness)`` for a MgF2-like AR coating.
@@ -129,7 +140,10 @@ def quarter_wave_ar(n_substrate, wavelength_center):
     return [(n_layer, d)]
 
 
-def broadband_ar_v_coat(n_substrate, wavelength_center):
+def broadband_ar_v_coat(
+    n_substrate: float,
+    wavelength_center: float,
+) -> List[Tuple[float, float]]:
     """Design a simple 2-layer V-coat AR for broadband use.
 
     Returns a list of (n, d) layers.

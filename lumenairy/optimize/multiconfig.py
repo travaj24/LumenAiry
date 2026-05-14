@@ -13,7 +13,7 @@ Author: Andrew Traverso
 """
 from __future__ import annotations
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 import copy
 
 from ..raytrace import surfaces_from_prescription, system_abcd
@@ -48,7 +48,10 @@ class Configuration:
     weight: float = 1.0
 
 
-def multi_config_merit(configs, merit_fn, verbose=False):
+def multi_config_merit(configs: Sequence[Configuration],
+                       merit_fn: Callable[[Dict[str, Any], float, float], float],
+                       verbose: bool = False
+                       ) -> Tuple[float, List[float]]:
     """Evaluate a merit function across multiple configurations and
     return the weighted sum.
 
@@ -77,8 +80,10 @@ def multi_config_merit(configs, merit_fn, verbose=False):
     return total, per_config
 
 
-def create_zoom_configs(prescription_template, zoom_spacings,
-                        wavelength=1.31e-6, field_angle=0.0):
+def create_zoom_configs(prescription_template: Dict[str, Any],
+                        zoom_spacings: Sequence[Sequence[float]],
+                        wavelength: float = 1.31e-6,
+                        field_angle: float = 0.0) -> List[Configuration]:
     """Create multi-config entries for a zoom system.
 
     Parameters
@@ -113,7 +118,8 @@ def create_zoom_configs(prescription_template, zoom_spacings,
 # Afocal mode
 # =====================================================================
 
-def afocal_angular_magnification(prescription, wavelength):
+def afocal_angular_magnification(prescription: Dict[str, Any],
+                                 wavelength: float) -> Tuple[float, bool]:
     """Compute the angular magnification of an afocal system.
 
     For a properly-corrected afocal system (object and image at
@@ -208,8 +214,10 @@ def _zero_C_air_gap(prescription, gap_slot_index, wavelength=550e-9):
 _zero_B_air_gap = _zero_C_air_gap
 
 
-def beam_expander_prescription(M, f_objective, *, wavelength,
-                                glass='N-BK7', aperture=25.4e-3):
+def beam_expander_prescription(M: float, f_objective: float, *,
+                               wavelength: float,
+                               glass: str = 'N-BK7',
+                               aperture: float = 25.4e-3) -> Dict[str, Any]:
     """Create a Galilean beam expander prescription.
 
     A Galilean beam expander uses a negative (diverging) input lens
@@ -278,8 +286,10 @@ def beam_expander_prescription(M, f_objective, *, wavelength,
     return pres
 
 
-def keplerian_telescope(f_objective, f_eyepiece, *, wavelength,
-                         glass='N-BK7', aperture=25.4e-3):
+def keplerian_telescope(f_objective: float, f_eyepiece: float, *,
+                        wavelength: float,
+                        glass: str = 'N-BK7',
+                        aperture: float = 25.4e-3) -> Dict[str, Any]:
     """Create a Keplerian telescope prescription (two positive lenses
     separated to produce an afocal output).
 

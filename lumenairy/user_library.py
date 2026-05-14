@@ -30,8 +30,11 @@ Usage from Python (no GUI needed)::
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -43,7 +46,7 @@ import numpy as np
 _library_path = None
 
 
-def get_library_path():
+def get_library_path() -> Path:
     """Return the user library directory, creating it if needed."""
     global _library_path
     if _library_path is not None:
@@ -58,7 +61,7 @@ def get_library_path():
     return lib_dir
 
 
-def set_library_path(path):
+def set_library_path(path: str) -> None:
     """Override the library directory."""
     global _library_path
     _library_path = str(path)
@@ -78,8 +81,13 @@ def _safe_name(name):
 # Materials
 # ════════════════════════════════════════════════════════════════════════
 
-def save_material(name, shelf=None, book=None, page=None,
-                  n=None, dispersion=None, description=''):
+def save_material(name: str,
+                  shelf: Optional[str] = None,
+                  book: Optional[str] = None,
+                  page: Optional[str] = None,
+                  n: Optional[float] = None,
+                  dispersion: Optional[Dict[str, Any]] = None,
+                  description: str = '') -> str:
     """Save a material to the user library.
 
     Parameters
@@ -119,7 +127,7 @@ def save_material(name, shelf=None, book=None, page=None,
     return str(filepath)
 
 
-def load_material(name):
+def load_material(name: str) -> Dict[str, Any]:
     """Load a material and register it in GLASS_REGISTRY.
 
     After loading, ``get_glass_index(name, wavelength)`` will work.
@@ -154,13 +162,13 @@ def load_material(name):
     return data
 
 
-def list_materials():
+def list_materials() -> List[str]:
     """List all saved material names."""
     lib = get_library_path() / 'materials'
     return sorted(p.stem for p in lib.glob('*.json'))
 
 
-def delete_material(name):
+def delete_material(name: str) -> None:
     """Delete a saved material."""
     lib = get_library_path() / 'materials'
     filepath = lib / f'{_safe_name(name)}.json'
@@ -168,7 +176,7 @@ def delete_material(name):
         filepath.unlink()
 
 
-def register_fixed_glass(name, n):
+def register_fixed_glass(name: str, n: float) -> None:
     """Register a fixed-index material so get_glass_index works with it.
 
     Parameters
@@ -250,7 +258,8 @@ def _deserialize_prescription(data):
     return _fix(data)
 
 
-def save_lens(name, prescription, description=''):
+def save_lens(name: str, prescription: Dict[str, Any],
+              description: str = '') -> str:
     """Save a lens prescription to the user library.
 
     Parameters
@@ -276,7 +285,7 @@ def save_lens(name, prescription, description=''):
     return str(filepath)
 
 
-def load_lens(name):
+def load_lens(name: str) -> Dict[str, Any]:
     """Load a lens prescription from the user library.
 
     Parameters
@@ -299,13 +308,13 @@ def load_lens(name):
     return _deserialize_prescription(data['prescription'])
 
 
-def list_lenses():
+def list_lenses() -> List[str]:
     """List all saved lens names."""
     lib = get_library_path() / 'lenses'
     return sorted(p.stem for p in lib.glob('*.json'))
 
 
-def delete_lens(name):
+def delete_lens(name: str) -> None:
     """Delete a saved lens."""
     lib = get_library_path() / 'lenses'
     filepath = lib / f'{_safe_name(name)}.json'
@@ -317,9 +326,15 @@ def delete_lens(name):
 # Phase masks
 # ════════════════════════════════════════════════════════════════════════
 
-def save_phase_mask(name, expression=None, array=None, dx=None,
-                    wavelength=None, mask_type=None, n=None,
-                    thickness=None, description=''):
+def save_phase_mask(name: str,
+                    expression: Optional[str] = None,
+                    array: Optional[np.ndarray] = None,
+                    dx: Optional[float] = None,
+                    wavelength: Optional[float] = None,
+                    mask_type: Optional[str] = None,
+                    n: Optional[float] = None,
+                    thickness: Optional[float] = None,
+                    description: str = '') -> str:
     """Save a phase mask / DOE / glass block to the user library.
 
     Three modes:
@@ -389,7 +404,10 @@ def save_phase_mask(name, expression=None, array=None, dx=None,
     return str(filepath)
 
 
-def load_phase_mask(name, N=None, dx=None, wavelength=None):
+def load_phase_mask(name: str,
+                    N: Optional[int] = None,
+                    dx: Optional[float] = None,
+                    wavelength: Optional[float] = None) -> np.ndarray:
     """Load a phase mask and return a complex transmission array.
 
     Parameters
@@ -459,7 +477,7 @@ def load_phase_mask(name, N=None, dx=None, wavelength=None):
         raise ValueError(f"Unknown mask type: {mask_type}")
 
 
-def load_phase_mask_info(name):
+def load_phase_mask_info(name: str) -> Dict[str, Any]:
     """Load phase mask metadata without generating the array."""
     lib = get_library_path() / 'phase_masks'
     filepath = lib / f'{_safe_name(name)}.json'
@@ -469,13 +487,13 @@ def load_phase_mask_info(name):
         return json.load(f)
 
 
-def list_phase_masks():
+def list_phase_masks() -> List[str]:
     """List all saved phase mask names."""
     lib = get_library_path() / 'phase_masks'
     return sorted(p.stem for p in lib.glob('*.json'))
 
 
-def delete_phase_mask(name):
+def delete_phase_mask(name: str) -> None:
     """Delete a saved phase mask (JSON + any .npy sidecar)."""
     lib = get_library_path() / 'phase_masks'
     for ext in ('.json', '.npy'):
@@ -488,7 +506,7 @@ def delete_phase_mask(name):
 # Load all materials on import (auto-register saved glasses)
 # ════════════════════════════════════════════════════════════════════════
 
-def load_all_materials():
+def load_all_materials() -> None:
     """Load all saved materials into GLASS_REGISTRY.
 
     Called automatically on import so that saved materials are

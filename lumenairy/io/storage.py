@@ -35,7 +35,11 @@ Quick start::
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
 import os
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 
 # =========================================================================
@@ -71,9 +75,14 @@ def _decode_attr(val):
 
 # ── Single field I/O (HDF5-specific) ────────────────────────────────────
 
-def save_field_h5(filepath, E, dx, dy=None, wavelength=None, label=None,
-                  metadata=None, compression='gzip', compression_opts=4,
-                  preserve_dtype=False):
+def save_field_h5(filepath: str, E: np.ndarray, dx: float,
+                  dy: Optional[float] = None,
+                  wavelength: Optional[float] = None,
+                  label: Optional[str] = None,
+                  metadata: Optional[Dict[str, Any]] = None,
+                  compression: Optional[str] = 'gzip',
+                  compression_opts: Optional[int] = 4,
+                  preserve_dtype: bool = False) -> None:
     """
     Save a single complex optical field to an HDF5 file.
 
@@ -132,7 +141,7 @@ def save_field_h5(filepath, E, dx, dy=None, wavelength=None, label=None,
                 dset.attrs[str(key)] = value
 
 
-def load_field_h5(filepath):
+def load_field_h5(filepath: str) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
     Load a single complex field from an HDF5 file.
 
@@ -156,9 +165,12 @@ def load_field_h5(filepath):
 
 # ── Multi-plane I/O (HDF5-specific) ─────────────────────────────────────
 
-def save_planes_h5(filepath, planes, wavelength=None, metadata=None,
-                   compression='gzip', compression_opts=4,
-                   preserve_dtype=False):
+def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
+                   wavelength: Optional[float] = None,
+                   metadata: Optional[Dict[str, Any]] = None,
+                   compression: Optional[str] = 'gzip',
+                   compression_opts: Optional[int] = 4,
+                   preserve_dtype: bool = False) -> None:
     """
     Save a sequence of complex fields to a single HDF5 file.
 
@@ -221,7 +233,9 @@ def save_planes_h5(filepath, planes, wavelength=None, metadata=None,
             dset.attrs['dtype'] = str(E.dtype)
 
 
-def load_planes_h5(filepath, indices=None):
+def load_planes_h5(filepath: str,
+                   indices: Optional[Sequence[int]] = None
+                   ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
     Load multi-plane fields from an HDF5 file.
 
@@ -257,9 +271,12 @@ def load_planes_h5(filepath, indices=None):
 
 # ── Jones field I/O (HDF5-specific) ─────────────────────────────────────
 
-def save_jones_field_h5(filepath, jones_field, wavelength=None, label=None,
-                        metadata=None, compression='gzip',
-                        compression_opts=4):
+def save_jones_field_h5(filepath: str, jones_field: Any,
+                        wavelength: Optional[float] = None,
+                        label: Optional[str] = None,
+                        metadata: Optional[Dict[str, Any]] = None,
+                        compression: Optional[str] = 'gzip',
+                        compression_opts: Optional[int] = 4) -> None:
     """Save a JonesField (polarized field) to an HDF5 file."""
     _require_h5py()
     Ex = np.asarray(jones_field.Ex, dtype=np.complex128)
@@ -283,7 +300,7 @@ def save_jones_field_h5(filepath, jones_field, wavelength=None, label=None,
             compression=compression, compression_opts=compression_opts)
 
 
-def load_jones_field_h5(filepath):
+def load_jones_field_h5(filepath: str) -> Tuple[Any, Dict[str, Any]]:
     """
     Load a JonesField from an HDF5 file.
 
@@ -310,9 +327,14 @@ def load_jones_field_h5(filepath):
 
 # ── Append / inspect (HDF5-specific) ────────────────────────────────────
 
-def append_plane_h5(filepath, field, dx, dy=None, z=None, label=None,
-                    metadata=None, compression='gzip', compression_opts=4,
-                    chunk_size=1024):
+def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
+                    dy: Optional[float] = None,
+                    z: Optional[float] = None,
+                    label: Optional[str] = None,
+                    metadata: Optional[Dict[str, Any]] = None,
+                    compression: Optional[str] = 'gzip',
+                    compression_opts: Optional[int] = 4,
+                    chunk_size: int = 1024) -> None:
     """Append a single plane to a multi-plane HDF5 file (or create one)."""
     _require_h5py()
     if dy is None:
@@ -452,7 +474,7 @@ def _h5_read_sim_metadata(filepath):
     return meta
 
 
-def list_h5_contents(filepath):
+def list_h5_contents(filepath: str) -> Dict[str, Any]:
     """Print and return a summary of an HDF5 file's contents."""
     _require_h5py()
     info = {}
@@ -496,7 +518,7 @@ class TempFieldStore:
     it back later.  The temp file is cleaned up on context exit.
     """
 
-    def __init__(self, prefix='op_temp_'):
+    def __init__(self, prefix: str = 'op_temp_') -> None:
         _require_h5py()
         import tempfile as _tf
         self._tmpfile = _tf.NamedTemporaryFile(
@@ -505,7 +527,8 @@ class TempFieldStore:
         self._tmpfile.close()
         self._counter = 0
 
-    def store(self, field, dx=None):
+    def store(self, field: np.ndarray,
+              dx: Optional[float] = None) -> str:
         """Write a field to the temp file and return a handle string."""
         name = f'tmp_{self._counter:04d}'
         self._counter += 1
@@ -518,27 +541,27 @@ class TempFieldStore:
                 dset.attrs['dx'] = float(dx)
         return name
 
-    def load(self, handle):
+    def load(self, handle: str) -> np.ndarray:
         """Reload a field from the temp file by handle."""
         with h5py.File(self._path, 'r') as f:
             return np.array(f[handle])
 
-    def load_slice(self, handle, *slices):
+    def load_slice(self, handle: str, *slices: Any) -> np.ndarray:
         """Load a sub-region of a stored field."""
         with h5py.File(self._path, 'r') as f:
             return np.array(f[handle][slices])
 
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Delete the temp file."""
         try:
             os.unlink(self._path)
         except OSError:
             pass
 
-    def __enter__(self):
+    def __enter__(self) -> "TempFieldStore":
         return self
 
-    def __exit__(self, *args):
+    def __exit__(self, *args: Any) -> None:
         self.cleanup()
 
 
@@ -796,7 +819,7 @@ def _zarr_read_sim_metadata(filepath):
 _BACKEND = 'hdf5'
 
 
-def set_storage_backend(backend):
+def set_storage_backend(backend: str) -> None:
     """Set the storage backend for NEW file creation ('hdf5' or 'zarr').
 
     If ``backend='zarr'`` is requested but zarr is not installed this
@@ -819,12 +842,12 @@ def set_storage_backend(backend):
     _BACKEND = backend
 
 
-def get_storage_backend():
+def get_storage_backend() -> str:
     """Return the current default storage backend name."""
     return _BACKEND
 
 
-def default_extension():
+def default_extension() -> str:
     """Return the file extension for the current backend."""
     return '.zarr' if _BACKEND == 'zarr' else '.h5'
 
@@ -840,8 +863,13 @@ def _detect_backend(path):
 # Unified dispatch API
 # =========================================================================
 
-def append_plane(filepath, field, dx, dy=None, z=None, label=None,
-                 metadata=None, chunk_size=1024, **kwargs):
+def append_plane(filepath: str, field: np.ndarray, dx: float,
+                 dy: Optional[float] = None,
+                 z: Optional[float] = None,
+                 label: Optional[str] = None,
+                 metadata: Optional[Dict[str, Any]] = None,
+                 chunk_size: int = 1024,
+                 **kwargs: Any) -> None:
     """Append a plane to a multi-plane file (HDF5 or Zarr, auto-dispatch).
 
     Backend detection precedence: existing file inspected first; then
@@ -860,7 +888,9 @@ def append_plane(filepath, field, dx, dy=None, z=None, label=None,
                         metadata=metadata, chunk_size=chunk_size, **kwargs)
 
 
-def load_planes(filepath, indices=None):
+def load_planes(filepath: str,
+                indices: Optional[Sequence[int]] = None
+                ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """Load planes from a multi-plane file (auto-detected format)."""
     backend = _detect_backend(filepath)
     if backend == 'zarr':
@@ -869,7 +899,7 @@ def load_planes(filepath, indices=None):
         return load_planes_h5(filepath, indices=indices)
 
 
-def list_planes(filepath):
+def list_planes(filepath: str) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """List planes in a multi-plane file without loading data."""
     backend = _detect_backend(filepath)
     if backend == 'zarr':
@@ -878,8 +908,8 @@ def list_planes(filepath):
         return _h5_list_planes(filepath)
 
 
-def load_plane_by_label(filepath, label_substring, *,
-                        case_sensitive=False):
+def load_plane_by_label(filepath: str, label_substring: str, *,
+                        case_sensitive: bool = False) -> Dict[str, Any]:
     """Load the first plane matching a label substring (auto-detected)."""
     backend = _detect_backend(filepath)
     if backend == 'zarr':
@@ -890,7 +920,8 @@ def load_plane_by_label(filepath, label_substring, *,
                                        case_sensitive=case_sensitive)
 
 
-def load_plane_slice(filepath, plane_index, y_slice, x_slice):
+def load_plane_slice(filepath: str, plane_index: int,
+                     y_slice: slice, x_slice: slice) -> np.ndarray:
     """Load a rectangular slice of a plane (auto-detected format)."""
     backend = _detect_backend(filepath)
     if backend == 'zarr':
@@ -901,7 +932,7 @@ def load_plane_slice(filepath, plane_index, y_slice, x_slice):
                                     y_slice, x_slice)
 
 
-def write_sim_metadata(filepath, metadata):
+def write_sim_metadata(filepath: str, metadata: Dict[str, Any]) -> None:
     """Write simulation metadata to a file's root attributes.
 
     Backend detection precedence, in order:
@@ -926,7 +957,7 @@ def write_sim_metadata(filepath, metadata):
         _h5_write_sim_metadata(filepath, metadata)
 
 
-def read_sim_metadata(filepath):
+def read_sim_metadata(filepath: str) -> Dict[str, Any]:
     """Read simulation metadata from a file's root attributes."""
     backend = _detect_backend(filepath)
     if backend == 'zarr':
@@ -943,8 +974,10 @@ write_metadata = write_sim_metadata
 read_metadata = read_sim_metadata
 
 
-def replay_run(filepath, *, label_prefix=None, wavelength=None,
-                method=None):
+def replay_run(filepath: str, *,
+               label_prefix: Optional[str] = None,
+               wavelength: Optional[float] = None,
+               method: Optional[str] = None) -> Any:
     """Read every plane from a stored run and return a
     :class:`lumenairy.propagators.PropagationResult`.
 

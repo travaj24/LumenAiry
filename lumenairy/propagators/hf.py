@@ -19,14 +19,20 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Callable, Optional, Tuple
+from typing import Any, Dict, Callable, Optional, Tuple
 
 import numpy as np
 
 from ..backend import array_namespace, is_jax_array
 
 
-def propagate_huygens_fresnel(E_in, z, wavelength, dx, **kwargs):
+def propagate_huygens_fresnel(
+    E_in: np.ndarray,
+    z: float,
+    wavelength: float,
+    dx: float,
+    **kwargs: Any,
+) -> np.ndarray:
     """Canonical-order Huygens-Fresnel free-space propagation.
 
     Argument order ``(E_in, z, wavelength, dx)`` matches
@@ -44,14 +50,14 @@ def propagate_huygens_fresnel(E_in, z, wavelength, dx, **kwargs):
 
 
 def propagate_huygens_fresnel_freespace(
-    E_in,
+    E_in: np.ndarray,
     z: float,
     wavelength: float,
     dx: float,
     *,
     dy: Optional[float] = None,
-    **kwargs,
-):
+    **kwargs: Any,
+) -> np.ndarray:
     """Free-space Huygens-Fresnel propagation with the standard
     ``1 / (i lambda z)`` Van Vleck factor.
 
@@ -66,17 +72,17 @@ def propagate_huygens_fresnel_freespace(
 
 
 def propagate_huygens_fresnel_with_opl_callable(
-    E_in,
+    E_in: np.ndarray,
     *,
     opl_fn: Callable,
-    output_grid_x,
-    output_grid_y,
+    output_grid_x: np.ndarray,
+    output_grid_y: np.ndarray,
     input_grid_dx: float,
     wavelength: float,
     apply_van_vleck: bool = True,
     finite_diff_step: float = 1e-9,
     chunk_output: int = 64,
-):
+) -> np.ndarray:
     """Evaluate the HF integral for a user-supplied OPL callable
     ``Phi(s1, s2)``.
 
@@ -164,21 +170,21 @@ def propagate_huygens_fresnel_with_opl_callable(
 # ============================================================================
 
 def propagate_huygens_fresnel_through_prescription(
-    E_in,
+    E_in: np.ndarray,
     dx: float,
-    prescription: dict,
+    prescription: Dict[str, Any],
     *,
     wavelength: float,
-    output_grid=None,
-    output_dx=None,
-    output_centre=(0.0, 0.0),
+    output_grid: Optional[Tuple[int, int]] = None,
+    output_dx: Optional[float] = None,
+    output_centre: Tuple[float, float] = (0.0, 0.0),
     source_box_half: float = 50e-6,
     pupil_box_half: float = 0.05,
     n_field: int = 8,
     n_pupil: int = 8,
     poly_order: int = 6,
     method: str = 'asymptotic',
-):
+) -> np.ndarray:
     """End-to-end Van-Vleck-corrected HF through a sequential
     prescription.
 

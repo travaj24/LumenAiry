@@ -50,7 +50,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import numpy as np
 
@@ -86,11 +86,16 @@ class BSDFModel(ABC):
     kind: str = 'abstract'
 
     @abstractmethod
-    def evaluate(self, incident_dir, scattered_dir):
+    def evaluate(self, incident_dir: np.ndarray, scattered_dir: np.ndarray) -> np.ndarray:
         """BSDF value (1/sr) for the requested scattering direction."""
 
     @abstractmethod
-    def sample(self, incident_dir, n_samples, rng=None):
+    def sample(
+        self,
+        incident_dir: np.ndarray,
+        n_samples: int,
+        rng: Optional[Union[int, np.random.Generator]] = None,
+    ) -> np.ndarray:
         """Draw ``n_samples`` outgoing direction cosines from the
         BSDF lobe."""
 
@@ -140,7 +145,7 @@ class LambertianBSDF(BSDFModel):
     rho: float = 1.0
     kind: str = 'lambertian'
 
-    def evaluate(self, incident_dir, scattered_dir):
+    def evaluate(self, incident_dir: np.ndarray, scattered_dir: np.ndarray) -> np.ndarray:
         sd = np.asarray(scattered_dir)
         if sd.ndim == 1:
             in_hemi = sd[2] > 0
@@ -148,7 +153,12 @@ class LambertianBSDF(BSDFModel):
             in_hemi = sd[..., 2] > 0
         return self.rho / np.pi * in_hemi
 
-    def sample(self, incident_dir, n_samples, rng=None):
+    def sample(
+        self,
+        incident_dir: np.ndarray,
+        n_samples: int,
+        rng: Optional[Union[int, np.random.Generator]] = None,
+    ) -> np.ndarray:
         rng = _get_rng(rng)
         # Cosine-weighted hemisphere sample (Lambertian importance).
         xi1 = rng.random(n_samples)
@@ -205,7 +215,7 @@ class GaussianBSDF(BSDFModel):
         # Closed-form in the small-angle limit:
         return self.scattered_fraction / (2 * np.pi * s ** 2)
 
-    def evaluate(self, incident_dir, scattered_dir):
+    def evaluate(self, incident_dir: np.ndarray, scattered_dir: np.ndarray) -> np.ndarray:
         inc = np.asarray(incident_dir, dtype=float)
         sd = np.asarray(scattered_dir, dtype=float)
         # Specular direction = (L_i, M_i, -N_i) if we flip z;
@@ -221,7 +231,12 @@ class GaussianBSDF(BSDFModel):
         return (A * np.exp(-theta ** 2 / (2 * self.sigma_rad ** 2))
                 * in_hemi)
 
-    def sample(self, incident_dir, n_samples, rng=None):
+    def sample(
+        self,
+        incident_dir: np.ndarray,
+        n_samples: int,
+        rng: Optional[Union[int, np.random.Generator]] = None,
+    ) -> np.ndarray:
         rng = _get_rng(rng)
         # Sample offset angle theta ~ Gaussian truncated to [0, pi/2]
         # in the specular-frame, azimuth uniform.
@@ -308,7 +323,7 @@ class HarveyShackBSDF(BSDFModel):
                     * (self.wavelength_ref / self.wavelength) ** 2)
         return self.b0
 
-    def evaluate(self, incident_dir, scattered_dir):
+    def evaluate(self, incident_dir: np.ndarray, scattered_dir: np.ndarray) -> np.ndarray:
         inc = np.asarray(incident_dir, dtype=float)
         sd = np.asarray(scattered_dir, dtype=float)
         specular = np.array([inc[0], inc[1], -inc[2]])
@@ -323,7 +338,12 @@ class HarveyShackBSDF(BSDFModel):
         amp = self._amplitude()
         return amp / (1 + (sin_theta / self.l) ** 2) ** (self.s / 2) * in_hemi
 
-    def sample(self, incident_dir, n_samples, rng=None):
+    def sample(
+        self,
+        incident_dir: np.ndarray,
+        n_samples: int,
+        rng: Optional[Union[int, np.random.Generator]] = None,
+    ) -> np.ndarray:
         rng = _get_rng(rng)
         # Sample sin(theta) from the ABC radial profile via inverse-CDF.
         # PDF_radial ~ 1/(1 + (u/l)^2)^(s/2) * u  where u=sin(theta)
@@ -377,7 +397,7 @@ def _get_rng(rng):
     return rng
 
 
-def make_bsdf(spec) -> BSDFModel:
+def make_bsdf(spec: Optional[Union[BSDFModel, Dict[str, Any]]]) -> Optional[BSDFModel]:
     """Construct a BSDFModel from a dict spec, a BSDFModel, or None.
 
     Accepted forms
@@ -417,7 +437,12 @@ def make_bsdf(spec) -> BSDFModel:
         f"Supported: 'lambertian', 'gaussian', 'harvey_shack'.")
 
 
-def sample_scatter_rays(surface, incident_rays, n_per_ray=1, rng=None):
+def sample_scatter_rays(
+    surface: Any,
+    incident_rays: Any,
+    n_per_ray: int = 1,
+    rng: Optional[Union[int, np.random.Generator]] = None,
+) -> Any:
     """Spawn scattered rays from a surface carrying a BSDF.
 
     Parameters

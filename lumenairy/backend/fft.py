@@ -31,6 +31,8 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from typing import Any, Optional, Sequence, Union
+
 import numpy as np
 
 from .array import (
@@ -52,7 +54,7 @@ def _jnp_or_none():
 # 2-D FFT entry points
 # ============================================================================
 
-def fft2(x):
+def fft2(x: Any) -> Any:
     """Backend-aware 2-D forward FFT on the last two axes.
 
     Dispatch order:
@@ -68,7 +70,7 @@ def fft2(x):
     return _prop._fft2(x)
 
 
-def ifft2(x):
+def ifft2(x: Any) -> Any:
     """Backend-aware 2-D inverse FFT.  Same priority chain as
     :func:`fft2`."""
     if is_jax_array(x):
@@ -81,7 +83,7 @@ def ifft2(x):
 # 1-D FFT entry points
 # ============================================================================
 
-def fft(x, axis=-1, n=None):
+def fft(x: Any, axis: int = -1, n: Optional[int] = None) -> Any:
     """Backend-aware 1-D forward FFT."""
     if is_jax_array(x):
         return _get_jnp().fft.fft(x, n=n, axis=axis)
@@ -95,7 +97,7 @@ def fft(x, axis=-1, n=None):
     return np.fft.fft(x, n=n, axis=axis)
 
 
-def ifft(x, axis=-1, n=None):
+def ifft(x: Any, axis: int = -1, n: Optional[int] = None) -> Any:
     """Backend-aware 1-D inverse FFT."""
     if is_jax_array(x):
         return _get_jnp().fft.ifft(x, n=n, axis=axis)
@@ -113,7 +115,8 @@ def ifft(x, axis=-1, n=None):
 # FFT shifts and frequency grids
 # ============================================================================
 
-def fftshift(x, axes=None):
+def fftshift(x: Any,
+             axes: Optional[Union[int, Sequence[int]]] = None) -> Any:
     """Backend-dispatched ``fft.fftshift``."""
     if is_jax_array(x):
         return _get_jnp().fft.fftshift(x, axes=axes)
@@ -123,7 +126,8 @@ def fftshift(x, axes=None):
     return np.fft.fftshift(x, axes=axes)
 
 
-def ifftshift(x, axes=None):
+def ifftshift(x: Any,
+              axes: Optional[Union[int, Sequence[int]]] = None) -> Any:
     """Backend-dispatched ``fft.ifftshift``."""
     if is_jax_array(x):
         return _get_jnp().fft.ifftshift(x, axes=axes)
@@ -133,7 +137,8 @@ def ifftshift(x, axes=None):
     return np.fft.ifftshift(x, axes=axes)
 
 
-def fftfreq(n, d=1.0, xp=None):
+def fftfreq(n: int, d: float = 1.0,
+            xp: Optional[Any] = None) -> Any:
     """Backend-aware ``fft.fftfreq``.
 
     Pass ``xp`` to materialise the grid in a specific backend
@@ -148,7 +153,7 @@ def fftfreq(n, d=1.0, xp=None):
 # Diagnostic
 # ============================================================================
 
-def fft_backend_for(x) -> str:
+def fft_backend_for(x: Any) -> str:
     """Report which backend a call to :func:`fft2` would use for the
     given input.  Returns: ``'jax'`` / ``'cupy'`` / ``'pyfftw'`` /
     ``'scipy.fft'`` / ``'numpy.fft'``."""

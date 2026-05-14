@@ -544,8 +544,12 @@ def caustic_diagnostic(prescription: Dict[str, Any],
     )
 
 
-def plot_caustic_diagnostic(diag: CausticDiagnostic, *, ax=None,
-                              title: Optional[str] = None):
+def plot_caustic_diagnostic(
+    diag: CausticDiagnostic,
+    *,
+    ax: Optional[Any] = None,
+    title: Optional[str] = None,
+) -> Tuple[Any, Any]:
     """Plot caustic-diagnostic output: ``det(J)`` and chief-ray
     height vs z, with caustic crossings + surface positions
     annotated.  Requires matplotlib.

@@ -20,6 +20,8 @@ Author: Andrew Traverso
 """
 from __future__ import annotations
 
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 import numpy as np
 
 from ..propagators.propagation import angular_spectrum_propagate
@@ -33,9 +35,15 @@ __all__ = [
 ]
 
 
-def koehler_image(object_field, prescription, wavelength, dx,
-                  condenser_NA=0.1, n_source_points=9,
-                  focal_length=None):
+def koehler_image(
+    object_field: np.ndarray,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    condenser_NA: float = 0.1,
+    n_source_points: int = 9,
+    focal_length: Optional[float] = None,
+) -> np.ndarray:
     """Simulate Koehler-illumination imaging through a lens.
 
     Koehler illumination models a spatially-incoherent extended
@@ -95,9 +103,15 @@ def koehler_image(object_field, prescription, wavelength, dx,
     return I_total / max(count, 1)
 
 
-def extended_source_image(object_field, prescription, wavelength, dx,
-                          source_angles, source_weights=None,
-                          focal_length=None):
+def extended_source_image(
+    object_field: np.ndarray,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    source_angles: Sequence[Tuple[float, float]],
+    source_weights: Optional[Sequence[float]] = None,
+    focal_length: Optional[float] = None,
+) -> np.ndarray:
     """Simulate imaging with an arbitrary extended source.
 
     Each source direction contributes a coherent sub-image; the
@@ -144,7 +158,10 @@ def extended_source_image(object_field, prescription, wavelength, dx,
     return I_total
 
 
-def mutual_coherence(fields, dx):
+def mutual_coherence(
+    fields: Sequence[np.ndarray],
+    dx: float,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Compute the mutual coherence function from an ensemble of fields.
 
     Given N realisations of a partially coherent field (e.g. from

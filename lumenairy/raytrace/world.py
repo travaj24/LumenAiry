@@ -30,7 +30,7 @@ trace paths agree to numerical precision on straight-axis designs.
 """
 from __future__ import annotations
 
-from typing import List
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -81,7 +81,7 @@ def _apply_coord_break(origin: np.ndarray, R: np.ndarray,
     return new_origin, new_R
 
 
-def world_surfaces_from_prescription(prescription) -> List[Surface]:
+def world_surfaces_from_prescription(prescription: Dict[str, Any]) -> List[Surface]:
     """Build world-frame :class:`Surface` objects from a prescription.
 
     Walks the combined coord-break + optical-surface sequence in
@@ -179,8 +179,12 @@ def world_surfaces_from_prescription(prescription) -> List[Surface]:
     return out
 
 
-def paraxial_focus_world(world_surfaces, wavelength, *,
-                          aperture_radius=None):
+def paraxial_focus_world(
+    world_surfaces: List[Surface],
+    wavelength: float,
+    *,
+    aperture_radius: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
     """Paraxial focus position and propagation direction in world coords.
 
     Traces a chief ray and a paraxial marginal ray through the world

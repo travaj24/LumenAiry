@@ -40,13 +40,25 @@ Limitations
 Author: Andrew Traverso
 """
 from __future__ import annotations
+
+from typing import Tuple, Union
+
 import numpy as np
 
 
-def thin_grating_efficiency_1d(period, n_ridge, n_groove, n_substrate,
-                                  n_superstrate, depth, duty_cycle,
-                                  wavelength, angle=0.0,
-                                  polarization='te', n_orders=11):
+def thin_grating_efficiency_1d(
+    period: float,
+    n_ridge: Union[float, complex],
+    n_groove: Union[float, complex],
+    n_substrate: float,
+    n_superstrate: float,
+    depth: float,
+    duty_cycle: float,
+    wavelength: float,
+    angle: float = 0.0,
+    polarization: str = 'te',
+    n_orders: int = 11,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Diffraction efficiencies for a 1-D binary phase grating
     (analytical thin-grating scalar approximation).
 
@@ -158,11 +170,19 @@ def thin_grating_efficiency_1d(period, n_ridge, n_groove, n_substrate,
     return orders, R_eff, T_eff
 
 
-def grating_efficiency_vs_wavelength(period, n_ridge, n_groove,
-                                      n_substrate, n_superstrate,
-                                      depth, duty_cycle,
-                                      wavelengths, order=1,
-                                      polarization='te', n_orders=11):
+def grating_efficiency_vs_wavelength(
+    period: float,
+    n_ridge: Union[float, complex],
+    n_groove: Union[float, complex],
+    n_substrate: float,
+    n_superstrate: float,
+    depth: float,
+    duty_cycle: float,
+    wavelengths: Union[float, np.ndarray],
+    order: int = 1,
+    polarization: str = 'te',
+    n_orders: int = 11,
+) -> np.ndarray:
     """Compute the efficiency of a single diffraction order across
     a range of wavelengths.
 

@@ -10,9 +10,12 @@ resolved at runtime by the propagation engine.
 Author: Andrew Traverso
 """
 
+from __future__ import annotations
+
 import copy
 import os
 import warnings
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
@@ -23,7 +26,9 @@ from ..glass import GLASS_REGISTRY
 # Prescription builders
 # ============================================================================
 
-def make_singlet(R1, R2, d, glass, aperture=25.4e-3, name=None):
+def make_singlet(R1: float, R2: float, d: float, glass: str,
+                 aperture: float = 25.4e-3,
+                 name: Optional[str] = None) -> Dict[str, Any]:
     """Build a lens prescription dict for a singlet lens.
 
     Parameters
@@ -62,8 +67,9 @@ def make_singlet(R1, R2, d, glass, aperture=25.4e-3, name=None):
     }
 
 
-def make_cylindrical(R_focus, d, glass, axis='x', aperture=25.4e-3,
-                     name=None):
+def make_cylindrical(R_focus: float, d: float, glass: str,
+                     axis: str = 'x', aperture: float = 25.4e-3,
+                     name: Optional[str] = None) -> Dict[str, Any]:
     """Build a cylindrical-lens prescription (flat on one face, curved
     cylindrical on the other).
 
@@ -109,10 +115,12 @@ def make_cylindrical(R_focus, d, glass, axis='x', aperture=25.4e-3,
     }
 
 
-def make_biconic(R1_x, R1_y, R2_x, R2_y, d, glass,
-                 conic1_x=0.0, conic1_y=0.0,
-                 conic2_x=0.0, conic2_y=0.0,
-                 aperture=25.4e-3, name=None):
+def make_biconic(R1_x: float, R1_y: float, R2_x: float, R2_y: float,
+                 d: float, glass: str,
+                 conic1_x: float = 0.0, conic1_y: float = 0.0,
+                 conic2_x: float = 0.0, conic2_y: float = 0.0,
+                 aperture: float = 25.4e-3,
+                 name: Optional[str] = None) -> Dict[str, Any]:
     """Build a biconic (anamorphic) singlet prescription.
 
     Each surface has independent x- and y-axis radii and conics -- the
@@ -158,8 +166,11 @@ def make_biconic(R1_x, R1_y, R2_x, R2_y, d, glass,
     }
 
 
-def make_doublet(R1, R2, R3, d1, d2, glass1, glass2,
-                 aperture=25.4e-3, name=None):
+def make_doublet(R1: float, R2: float, R3: float,
+                 d1: float, d2: float,
+                 glass1: str, glass2: str,
+                 aperture: float = 25.4e-3,
+                 name: Optional[str] = None) -> Dict[str, Any]:
     """Build a lens prescription dict for a cemented achromatic doublet.
 
     Parameters
@@ -245,7 +256,7 @@ THORLABS_CATALOG = {
 }
 
 
-def thorlabs_lens(part_number):
+def thorlabs_lens(part_number: str) -> Dict[str, Any]:
     """Return a lens prescription dict for a Thorlabs catalog lens.
 
     The prescription uses glass name strings and is wavelength-independent.
@@ -288,7 +299,9 @@ def thorlabs_lens(part_number):
 # Zemax .zmx file parser
 # ============================================================================
 
-def load_zemax_zmx(filepath, surface_range=None, name=None):
+def load_zemax_zmx(filepath: str,
+                   surface_range: Optional[Tuple[int, int]] = None,
+                   name: Optional[str] = None) -> Dict[str, Any]:
     """Parse a Zemax ``.zmx`` text file and return a lens prescription dict.
 
     Reads the surface table from a Zemax sequential lens file and builds a
@@ -733,7 +746,9 @@ def load_zemax_zmx(filepath, surface_range=None, name=None):
 # Zemax Prescription Data text export parser
 # ---------------------------------------------------------------------------
 
-def load_zemax_prescription_data_txt(filepath, surface_range=None, name=None):
+def load_zemax_prescription_data_txt(filepath: str,
+                                     surface_range: Optional[Tuple[int, int]] = None,
+                                     name: Optional[str] = None) -> Dict[str, Any]:
     """
     Parse a Zemax "Prescription Data" text export and return a lens prescription.
 
@@ -1154,10 +1169,13 @@ def load_zemax_prescription_data_txt(filepath, surface_range=None, name=None):
 # of the surface vertex.
 
 
-def export_zemax_lens_data(prescription, path, *, wavelength,
-                           stop_surface=0, aperture_diameter=None,
-                           back_focal_length=None,
-                           description=None, extra_notes=None):
+def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
+                           wavelength: float,
+                           stop_surface: int = 0,
+                           aperture_diameter: Optional[float] = None,
+                           back_focal_length: Optional[float] = None,
+                           description: Optional[str] = None,
+                           extra_notes: Optional[str] = None) -> None:
     """Write a human-readable Zemax-LDE-style text table for a lens
     prescription.
 
@@ -1498,9 +1516,12 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         f.write('\n'.join(lines) + '\n')
 
 
-def export_zemax_zmx(prescription, path, *, wavelength,
-                     stop_surface=0, aperture_diameter=None,
-                     back_focal_length=None, name=None):
+def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
+                     wavelength: float,
+                     stop_surface: int = 0,
+                     aperture_diameter: Optional[float] = None,
+                     back_focal_length: Optional[float] = None,
+                     name: Optional[str] = None) -> None:
     """Write a minimal Zemax OpticStudio ``.zmx`` sequential file for a
     prescription.
 
@@ -1680,9 +1701,13 @@ def export_zemax_zmx(prescription, path, *, wavelength,
 # ============================================================================
 
 
-def export_codev_seq(prescription, path, *, wavelength,
-                     stop_surface=0, aperture_diameter=None,
-                     back_focal_length=None, name=None, units='M'):
+def export_codev_seq(prescription: Dict[str, Any], path: str, *,
+                     wavelength: float,
+                     stop_surface: int = 0,
+                     aperture_diameter: Optional[float] = None,
+                     back_focal_length: Optional[float] = None,
+                     name: Optional[str] = None,
+                     units: str = 'M') -> None:
     """Write a CODE V sequential ``.seq`` file for a prescription.
 
     The produced file uses the canonical CODE V ``LEN NEW`` / ``DIM`` /
@@ -1799,7 +1824,8 @@ def export_codev_seq(prescription, path, *, wavelength,
         f.write('\n'.join(lines) + '\n')
 
 
-def load_codev_seq(filepath, name=None):
+def load_codev_seq(filepath: str,
+                   name: Optional[str] = None) -> Dict[str, Any]:
     """Parse a CODE V ``.seq`` file into a library prescription dict.
 
     Reads the common subset emitted by :func:`export_codev_seq` plus
@@ -2075,9 +2101,13 @@ def _quadoa_serialize_aspheric(coeffs):
     return [float(c) for c in coeffs]
 
 
-def export_quadoa_qos(prescription, path, *, wavelength,
-                      stop_surface=0, aperture_diameter=None,
-                      back_focal_length=None, name=None, units='M'):
+def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
+                      wavelength: float,
+                      stop_surface: int = 0,
+                      aperture_diameter: Optional[float] = None,
+                      back_focal_length: Optional[float] = None,
+                      name: Optional[str] = None,
+                      units: str = 'M') -> None:
     """Write a Quadoa Optikos-style ``.qos`` JSON system file.
 
     Quadoa's native file format is JSON-based.  The official schema is
@@ -2183,7 +2213,8 @@ def export_quadoa_qos(prescription, path, *, wavelength,
         f.write('\n')
 
 
-def load_quadoa_qos(filepath, name=None):
+def load_quadoa_qos(filepath: str,
+                    name: Optional[str] = None) -> Dict[str, Any]:
     """Parse a Quadoa Optikos-style ``.qos`` JSON file into a
     lumenairy prescription dict.
 
@@ -2315,7 +2346,8 @@ def load_quadoa_qos(filepath, name=None):
 # ============================================================================
 
 
-def scale_prescription(prescription, factor):
+def scale_prescription(prescription: Dict[str, Any],
+                       factor: float) -> Dict[str, Any]:
     """Geometric self-similarity: return a deep-copied prescription
     whose every linear dimension is multiplied by ``factor``.
 
@@ -2454,7 +2486,7 @@ def scale_prescription(prescription, factor):
 # ============================================================================
 
 
-def normalize_prescription(prescription):
+def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
     """Return a copy of ``prescription`` with the canonical superset
     of schema keys filled in.
 

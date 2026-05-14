@@ -22,9 +22,19 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
 
 import numpy as np
+
+if TYPE_CHECKING:
+    # Forward references for type-checking only.  These imports cause
+    # a circular dependency at runtime (RayBundle lives in
+    # :mod:`lumenairy.raytrace.core` which itself depends on this
+    # module), so they are only loaded when a type checker
+    # (mypy / pyright / pylance) is processing the file.
+    from .core import RayBundle
+    from ..propagators.hfpi import PathBundle
+    from ..propagators.gbd import BeamletBundle
 
 
 @runtime_checkable
@@ -48,7 +58,11 @@ class BundleProtocol(Protocol):
     directions: object
 
 
-def ray_to_path(ray_bundle, *, weights=None):
+def ray_to_path(
+    ray_bundle: 'RayBundle',
+    *,
+    weights: Optional[np.ndarray] = None,
+) -> 'PathBundle':
     """Convert a :class:`RayBundle` into a :class:`PathBundle`.
 
     The ray bundle's geometric state (positions, directions, OPL,
@@ -73,7 +87,13 @@ def ray_to_path(ray_bundle, *, weights=None):
     )
 
 
-def ray_to_beamlet(ray_bundle, *, wavelength, waist0, amplitude=None):
+def ray_to_beamlet(
+    ray_bundle: 'RayBundle',
+    *,
+    wavelength: float,
+    waist0: float,
+    amplitude: Optional[np.ndarray] = None,
+) -> 'BeamletBundle':
     """Convert a :class:`RayBundle` into a :class:`BeamletBundle`.
 
     Each ray becomes the central base ray of a Gaussian beamlet
@@ -101,7 +121,7 @@ def ray_to_beamlet(ray_bundle, *, wavelength, waist0, amplitude=None):
     )
 
 
-def path_to_ray(path_bundle):
+def path_to_ray(path_bundle: 'PathBundle') -> 'RayBundle':
     """Discard the complex weight of a :class:`PathBundle` and
     return its geometric :class:`RayBundle` core.
 
