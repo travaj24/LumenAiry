@@ -112,7 +112,7 @@ lumenairy-designer = "lumenairy.ui.main_window:_cli_main"
 include = ["lumenairy*"]
 
 [tool.setuptools.package-data]
-lumenairy = ["*.md", "*.txt", "*.html"]
+lumenairy = ["*.md", "*.txt", "*.html", "py.typed"]
 
 [tool.pytest.ini_options]
 # Two-layer test suite (4.3.0+):

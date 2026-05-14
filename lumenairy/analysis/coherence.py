@@ -85,7 +85,7 @@ def koehler_image(object_field, prescription, wavelength, dx,
             # Tilted illumination
             E_illum = object_field * np.exp(
                 1j * k0 * (np.sin(ax) * X + np.sin(ay) * Y))
-            E_exit = apply_real_lens(E_illum, prescription, wavelength, dx)
+            E_exit = apply_real_lens(E_illum, prescription=prescription, wavelength=wavelength, dx=dx)
             if focal_length is not None:
                 E_exit = angular_spectrum_propagate(
                     E_exit, focal_length, wavelength, dx)
@@ -135,7 +135,7 @@ def extended_source_image(object_field, prescription, wavelength, dx,
     for (ax, ay), w in zip(source_angles, source_weights):
         E_illum = object_field * np.exp(
             1j * k0 * (np.sin(ax) * X + np.sin(ay) * Y))
-        E_exit = apply_real_lens(E_illum, prescription, wavelength, dx)
+        E_exit = apply_real_lens(E_illum, prescription=prescription, wavelength=wavelength, dx=dx)
         if focal_length is not None:
             E_exit = angular_spectrum_propagate(
                 E_exit, focal_length, wavelength, dx)

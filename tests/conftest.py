@@ -72,8 +72,8 @@ def gaussian_beam(N_small, dx_m, wavelength_m) -> np.ndarray:
     ``create_gaussian_beam`` returns ``(E, x, y)``; the fixture
     unpacks the field for tests that only need the array.
     """
-    E, _x, _y = la.create_gaussian_beam(N_small, dx_m, 30e-6,
-                                          wavelength=wavelength_m)
+    E, _x, _y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
+                                          sigma=30e-6)
     return E
 
 

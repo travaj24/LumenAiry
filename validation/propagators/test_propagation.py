@@ -54,7 +54,7 @@ H.run('ASM: energy conservation', t_asm_energy_conservation)
 
 def t_tilted_beam_propagation():
     N = 512; dx = 2e-6; lam = 1.31e-6; z = 5e-3; angle = 0.01
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     k = 2 * np.pi / lam
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
@@ -74,7 +74,7 @@ H.run('Tilted beam: drifts by z*sin(angle) under ASM',
 def t_fraunhofer_gaussian():
     N = 256; dx = 4e-6; lam = 1.31e-6; z = 1.0
     sigma = 50e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, sigma)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=sigma)
     result = la.fraunhofer_propagate(E_in, z, lam, dx)
     E_out = result[0] if isinstance(result, tuple) else result
     I = np.abs(E_out)**2
@@ -111,7 +111,7 @@ def t_asm_vs_fresnel():
     N = 512; dx = 4e-6; lam = 1.31e-6; z = 1e-3
     a = N * dx / 2
     F_num = a**2 / (lam * z)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 100e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=100e-6)
     E_asm = la.angular_spectrum_propagate(E_in, z, lam, dx)
     fres_result = la.fresnel_propagate(E_in, z, lam, dx)
     if isinstance(fres_result, tuple):
@@ -135,7 +135,7 @@ H.run('ASM vs Fresnel: agree at high Fresnel number', t_asm_vs_fresnel)
 
 def t_rs_vs_asm_near_field():
     N = 256; dx = 1e-6; lam = 1.31e-6; z = 20e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 20e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=20e-6)
     E_asm = la.angular_spectrum_propagate(E_in, z, lam, dx)
     from lumenairy.propagators.propagation import rayleigh_sommerfeld_propagate
     E_rs = rayleigh_sommerfeld_propagate(E_in, z, lam, dx)
@@ -157,7 +157,7 @@ def t_rs_h_cache_idempotent():
     must return an output that's identical (no precision drift, no
     accidental in-place mutation of the cached H)."""
     N = 128; dx = 2e-6; lam = 1.31e-6; z = 50e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 30e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=30e-6)
     E1 = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx)
     E2 = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx)
     same = bool(np.array_equal(E1, E2))
@@ -178,7 +178,7 @@ def t_rs_bandlimit_kwarg_accepted():
     inactive).  This is a sanity test for the new kwarg and its
     Matsushima-style mask construction on the padded grid."""
     N = 128; dx = 2e-6; lam = 1.31e-6; z = 100e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 30e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=30e-6)
     E_off = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx,
                                               bandlimit=False)
     E_on = la.rayleigh_sommerfeld_propagate(E_in, z, lam, dx,
@@ -204,9 +204,9 @@ def t_rs_alias_in_apply_real_lens():
     x = (np.arange(N) - N/2 + 0.5) * dx
     X, Y = np.meshgrid(x, x, indexing='xy')
     E = np.exp(-(X*X + Y*Y) / (1.5e-3)**2).astype(np.complex128)
-    E_long = la.apply_real_lens(E, presc, lam, dx,
+    E_long = la.apply_real_lens(E, prescription=presc, wavelength=lam, dx=dx,
                                  wave_propagator='rayleigh_sommerfeld')
-    E_short = la.apply_real_lens(E, presc, lam, dx, wave_propagator='rs')
+    E_short = la.apply_real_lens(E, prescription=presc, wavelength=lam, dx=dx, wave_propagator='rs')
     same = bool(np.array_equal(E_long, E_short))
     return same, (
         f"'rs' vs 'rayleigh_sommerfeld' max |diff| = "
@@ -224,7 +224,7 @@ def t_asm_tilted_cache_idempotent():
     baked into the cached H)."""
     N = 128; dx = 2e-6; lam = 1.31e-6; z = 5e-3
     tilt_x = 0.02; tilt_y = -0.01
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E1 = la.angular_spectrum_propagate_tilted(
         E_in, z, lam, dx, tilt_x=tilt_x, tilt_y=tilt_y, bandlimit=True)
     E2 = la.angular_spectrum_propagate_tilted(
@@ -245,7 +245,7 @@ def t_sas_cache_idempotent():
     cache must round-trip exactly, including the skip_final_phase=True
     branch that omits H2."""
     N = 128; dx = 4e-6; lam = 1.31e-6; z = 50e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 80e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=80e-6)
     # Default branch: full H2.
     E1, _, _ = la.scalable_angular_spectrum_propagate(E_in, z, lam, dx)
     E2, _, _ = la.scalable_angular_spectrum_propagate(E_in, z, lam, dx)
@@ -273,7 +273,7 @@ def t_asm_mft_cache_idempotent():
     onto two *different* output grids must each remain physically
     correct after a cache hit on the shared H."""
     N = 64; dx_in = 5e-6; lam = 1.31e-6; z = 5e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx_in, 30e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx_in, lam, sigma=30e-6)
     # Idempotency on identical call.
     E1 = la.angular_spectrum_propagate_mft(
         E_in, z, lam, dx_in, dx_in, N)
@@ -312,7 +312,7 @@ H.run('Sampling check: correct margin classification',
 
 def t_sas_power_conservation():
     N = 512; dx = 2e-6; lam = 1.31e-6; z = 100e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     P_in = float(np.sum(np.abs(E_in)**2) * dx**2)
     E_sas, dx_sas, dy_sas = la.scalable_angular_spectrum_propagate(
         E_in, z, lam, dx)
@@ -327,7 +327,7 @@ H.run('SAS: power conservation (Gaussian, z=100mm)',
 
 def t_sas_output_pitch_scaling():
     N = 256; dx = 2e-6; lam = 1.31e-6; z = 500e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     _, dx_sas, _ = la.scalable_angular_spectrum_propagate(
         E_in, z, lam, dx)
     expected = lam * z / (2 * N * dx)  # pad=2 default
@@ -342,7 +342,7 @@ H.run('SAS: output pitch = lam*z/(pad*N*dx)',
 
 def t_sas_matches_fresnel_peak_at_moderate_z():
     N = 512; dx = 2e-6; lam = 1.31e-6; z = 500e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E_fres, _, _ = la.fresnel_propagate(E_in, z, lam, dx)
     E_sas, _, _ = la.scalable_angular_spectrum_propagate(
         E_in, z, lam, dx)
@@ -362,7 +362,7 @@ H.run('SAS matches Fresnel peak at moderate z',
 
 def t_sas_skip_final_phase_intensity_match():
     N = 256; dx = 2e-6; lam = 1.31e-6; z = 200e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E_full, _, _ = la.scalable_angular_spectrum_propagate(
         E_in, z, lam, dx)
     E_skip, _, _ = la.scalable_angular_spectrum_propagate(
@@ -392,7 +392,7 @@ H.run('SAS: rejects non-square input', t_sas_rejects_nonsquare_input)
 
 def t_sas_inside_propagate_through_system():
     N, dx, lam = 256, 4e-6, 1.31e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     elements = [
         {'type': 'propagate', 'z': 200e-3, 'method': 'sas'},
         {'type': 'aperture', 'shape': 'circular',
@@ -415,7 +415,7 @@ def t_nyquist_warning_fires():
     pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=10e-3)
     E = np.ones((512, 512), dtype=np.complex128)
-    E_out = la.apply_real_lens(E, pres, 1.31e-6, 16e-6)
+    E_out = la.apply_real_lens(E, prescription=pres, wavelength=1.31e-6, dx=16e-6)
     with warnings.catch_warnings(record=True) as ws:
         warnings.simplefilter('always')
         la.wave_opd_1d(E_out, 16e-6, 1.31e-6,
@@ -452,7 +452,7 @@ H.run('ASM: linearity over complex superposition', t_asm_linearity)
 def t_asm_round_trip_reversibility():
     """Forward then backward ASM (z then -z) should reproduce the input."""
     N, dx, lam, z = 256, 4e-6, 1.31e-6, 8e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E_fwd = la.angular_spectrum_propagate(E_in, z, lam, dx)
     E_back = la.angular_spectrum_propagate(E_fwd, -z, lam, dx)
     err = np.max(np.abs(E_back - E_in)) / np.max(np.abs(E_in))
@@ -467,7 +467,7 @@ def t_propagation_preserves_centroid_under_symmetric_grid():
     """For a centered Gaussian on a symmetric grid, the centroid stays
     at the origin after free-space propagation."""
     N, dx, lam, z = 256, 4e-6, 1.31e-6, 4e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 80e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=80e-6)
     E_out = la.angular_spectrum_propagate(E_in, z, lam, dx)
     cx, cy = la.beam_centroid(E_out, dx)
     return abs(cx) < 1e-7 and abs(cy) < 1e-7, \
@@ -482,7 +482,7 @@ def t_propagation_d4sigma_grows_in_far_field():
     """A focused Gaussian's D4-sigma must grow when propagated past
     its waist into the far field."""
     N, dx, lam = 512, 2e-6, 1.31e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 30e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=30e-6)
     d4_in = la.beam_d4sigma(np.abs(E_in)**2, dx)
     E_far = la.angular_spectrum_propagate(E_in, 50e-3, lam, dx)
     d4_far = la.beam_d4sigma(np.abs(E_far)**2, dx)
@@ -498,7 +498,7 @@ H.run('ASM: D4-sigma grows in far field for focused Gaussian',
 def t_zero_distance_propagation_is_identity():
     """Propagating by z=0 must return exactly the input field."""
     N, dx, lam = 128, 4e-6, 1.31e-6
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 40e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=40e-6)
     E_out = la.angular_spectrum_propagate(E_in, 0.0, lam, dx)
     err = np.max(np.abs(E_out - E_in))
     return err < 1e-12, f'|E_out - E_in|_max = {err:.2e}'
@@ -642,7 +642,7 @@ def t_real_lens_power_conservation_clear_aperture():
     # 1.5 mm Gaussian, well within the 6 mm aperture half-extent.
     E = np.exp(-(X*X + Y*Y) / (1.5e-3)**2).astype(np.complex128)
     p_in = float(np.sum(np.abs(E) ** 2))
-    fwd = la.apply_real_lens(E, presc, lam, dx)
+    fwd = la.apply_real_lens(E, prescription=presc, wavelength=lam, dx=dx)
     p_out = float(np.sum(np.abs(fwd) ** 2))
     rel = abs(p_out - p_in) / p_in
     return rel < 0.05, f'P_in={p_in:.4e}, P_out={p_out:.4e}, rel={rel:.2e}'

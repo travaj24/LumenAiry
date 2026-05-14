@@ -90,7 +90,7 @@ def t_koehler_reduces_to_coherent_on_axis():
     E_obj = np.ones((N, N), dtype=np.complex128)
     I_koh = la.koehler_image(E_obj, pres, lam, dx,
                              condenser_NA=0.001, n_source_points=3)
-    E_coh = la.apply_real_lens(E_obj, pres, lam, dx)
+    E_coh = la.apply_real_lens(E_obj, prescription=pres, wavelength=lam, dx=dx)
     I_coh = np.abs(E_coh)**2
     mask = I_coh > I_coh.max() * 0.1
     if mask.sum() < 10:

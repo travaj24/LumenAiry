@@ -72,12 +72,12 @@ def t_tolerance_tilt_shifts_centroid():
     E_in = np.ones((N, N), dtype=np.complex128)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
-    E_nom = la.apply_real_lens(E_in, pres, lam, dx)
+    E_nom = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     E_focus_nom = la.angular_spectrum_propagate(E_nom, bfl, lam, dx)
     cx_nom, _ = la.beam_centroid(E_focus_nom, dx)
     pres_pert = la.apply_perturbations(pres, [
         la.Perturbation(surface_index=0, tilt=(1e-3, 0), name='tilt')])
-    E_pert = la.apply_real_lens(E_in, pres_pert, lam, dx)
+    E_pert = la.apply_real_lens(E_in, prescription=pres_pert, wavelength=lam, dx=dx)
     E_focus_pert = la.angular_spectrum_propagate(E_pert, bfl, lam, dx)
     cx_pert, _ = la.beam_centroid(E_focus_pert, dx)
     shift = abs(cx_pert - cx_nom)
@@ -96,7 +96,7 @@ def t_tolerance_form_error_degrades():
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_nom = la.apply_real_lens(E_in, pres, lam, dx)
+    E_nom = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     ideal = la.diffraction_limited_peak(E_nom, lam, bfl, dx)
     E_focus_nom = la.angular_spectrum_propagate(E_nom, bfl, lam, dx)
     strehl_nom = float(np.abs(E_focus_nom).max()**2 / ideal)
@@ -104,7 +104,7 @@ def t_tolerance_form_error_degrades():
         la.Perturbation(surface_index=0, form_error_rms=200e-9,
                         random_seed=42, name='form')],
         N=N, dx=dx)
-    E_pert = la.apply_real_lens(E_in, pres_pert, lam, dx)
+    E_pert = la.apply_real_lens(E_in, prescription=pres_pert, wavelength=lam, dx=dx)
     E_focus_pert = la.angular_spectrum_propagate(E_pert, bfl, lam, dx)
     strehl_pert = float(np.abs(E_focus_pert).max()**2 / ideal)
     return strehl_pert < strehl_nom, \

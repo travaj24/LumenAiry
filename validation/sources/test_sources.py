@@ -23,7 +23,7 @@ H = Harness('sources')
 
 def t_gaussian_beam_power():
     N = 512; dx = 2e-6; w0 = 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
     I = np.abs(E)**2
     P_measured = float(np.sum(I) * dx**2)
     peak = np.abs(E).max()
@@ -91,7 +91,7 @@ H.run('Point source: center brighter than edge',
 
 
 def t_tophat_profile():
-    E, _, _ = la.create_top_hat_beam(128, 4e-6, 0.2e-3)
+    E, _, _ = la.create_top_hat_beam(128, 4e-6, 1.31e-6, diameter=0.2e-3)
     I = np.abs(E)**2
     center = I[64, 64]
     edge = I[64, 0]
@@ -103,7 +103,7 @@ H.run('Top-hat: uniform inside, zero outside', t_tophat_profile)
 
 
 def t_annular_hole():
-    E, _, _ = la.create_annular_beam(128, 4e-6, 0.4e-3, 0.2e-3)
+    E, _, _ = la.create_annular_beam(128, 4e-6, 1.31e-6, outer_diameter=0.4e-3, inner_diameter=0.2e-3)
     I = np.abs(E)**2
     center = I[64, 64]
     ring = I[64, 64 + 38]
@@ -136,7 +136,7 @@ H.run('LED: angles within divergence cone', t_led_source_angles)
 
 
 def t_fiber_mode_gaussian():
-    E, _, _ = la.create_fiber_mode(256, 2e-6, 10e-6, 1.31e-6)
+    E, _, _ = la.create_fiber_mode(256, 2e-6, 1.31e-6, mode_field_diameter=10e-6)
     I = np.abs(E)**2
     return I.max() > 0 and I[128, 128] == I.max(), \
         'fiber mode peaked at center'
@@ -153,7 +153,7 @@ def t_gaussian_beam_d4sigma_matches_w0():
     """A Gaussian beam created with waist w0 has D4-sigma diameter = 2*w0
     (the 1/e^2 diameter is 2*w0)."""
     N, dx, w0 = 512, 2e-6, 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
     d4x, d4y = la.beam_d4sigma(np.abs(E)**2, dx)
     # D4-sigma equals 2 * w0 for Gaussian.  Sampling pushes a small bias.
     rel = abs(d4x - 2 * w0) / (2 * w0)
@@ -169,7 +169,7 @@ H.run('Gaussian beam: D4-sigma matches 2*w0',
 def t_top_hat_intensity_uniform_inside():
     """A top-hat beam has near-uniform intensity inside its aperture."""
     N, dx, R = 256, 4e-6, 200e-6
-    E, _, _ = la.create_top_hat_beam(N, dx, R)
+    E, _, _ = la.create_top_hat_beam(N, dx, 1.31e-6, diameter=R)
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
     inside = (X**2 + Y**2) < (0.5 * R)**2
@@ -187,7 +187,7 @@ def t_annular_beam_has_central_obscuration():
     in the annulus."""
     N, dx = 512, 2e-6
     D_outer, D_inner = 400e-6, 200e-6
-    out = la.create_annular_beam(N, dx, D_outer, D_inner)
+    out = la.create_annular_beam(N, dx, 1.31e-6, outer_diameter=D_outer, inner_diameter=D_inner)
     E = out[0] if isinstance(out, tuple) else out
     center = float(np.abs(E[N//2, N//2]))
     # Sample at outer-radius position along x.
@@ -236,8 +236,8 @@ H.run('Point source: returns finite, positive |E|',
 def t_fiber_mode_normalized_total_power_finite():
     """Fiber mode generator returns a field with finite total power."""
     out = la.create_fiber_mode(N=128, dx=2e-6,
-                                mode_field_diameter=10e-6,
-                                wavelength=1.31e-6)
+                                wavelength=1.31e-6,
+                                mode_field_diameter=10e-6)
     E = out[0] if isinstance(out, tuple) else out
     P = float(np.sum(np.abs(E)**2) * (2e-6)**2)
     return np.isfinite(P) and P > 0, f'P = {P:.3e}'

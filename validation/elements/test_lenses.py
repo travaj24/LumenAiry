@@ -39,7 +39,7 @@ H.section('Thin-lens and real-lens basics')
 def t_thin_lens_focal_spot():
     N = 512; dx = 4e-6; lam = 1.31e-6; f = 50e-3
     E = np.ones((N, N), dtype=np.complex128)
-    E = la.apply_thin_lens(E, f, lam, dx)
+    E = la.apply_thin_lens(E, f=f, wavelength=lam, dx=dx)
     E_focus = la.angular_spectrum_propagate(E, f, lam, dx)
     I = np.abs(E_focus)**2
     peak_idx = np.unravel_index(np.argmax(I), I.shape)
@@ -74,7 +74,7 @@ def t_real_lens_power_conservation():
     X, Y = np.meshgrid(x, x)
     mask = (X**2 + Y**2) <= (ap/2)**2
     P_in = float(np.sum(np.abs(E_in[mask])**2) * dx**2)
-    E_out = la.apply_real_lens(E_in, pres, lam, dx)
+    E_out = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     P_out = float(np.sum(np.abs(E_out)**2) * dx**2)
     ratio = P_out / P_in
     return abs(ratio - 1.0) < 0.01, f'P_out/P_in = {ratio:.6f}'
@@ -88,8 +88,8 @@ def t_fresnel_reduces_power():
     N = 256; dx = 16e-6; lam = 1.31e-6
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_no_f = la.apply_real_lens(E_in, pres, lam, dx, fresnel=False)
-    E_yes_f = la.apply_real_lens(E_in, pres, lam, dx, fresnel=True)
+    E_no_f = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, fresnel=False)
+    E_yes_f = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, fresnel=True)
     P_no = float(np.sum(np.abs(E_no_f)**2) * dx**2)
     P_yes = float(np.sum(np.abs(E_yes_f)**2) * dx**2)
     loss = 1 - P_yes / P_no
@@ -149,7 +149,7 @@ def t_cylindrical_line_focus():
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_exit = la.apply_real_lens(E_in, pres, lam, dx)
+    E_exit = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     E_focus = la.angular_spectrum_propagate(E_exit, bfl, lam, dx)
     d4x, d4y = la.beam_d4sigma(E_focus, dx)
     ratio = d4y / d4x if d4x > 0 else 0
@@ -224,7 +224,7 @@ def t_grin_lens_phase():
     N = 256; dx = 4e-6; lam = 1.31e-6
     n0 = 1.5; g = 500; d = 2e-3
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = la.apply_grin_lens(E_in, n0, g, d, lam, dx)
+    E_out = la.apply_grin_lens(E_in, n0=n0, g=g, d=d, wavelength=lam, dx=dx)
     phase_center = np.angle(E_out[N//2, N//2])
     phase_edge = np.angle(E_out[N//2, N//2 + 30])
     diff = abs(phase_edge - phase_center)
@@ -253,12 +253,12 @@ H.run('Axicon: bright center after propagation', t_axicon_bessel)
 
 def t_4f_relay():
     N = 512; dx = 4e-6; lam = 1.31e-6; f = 50e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6,
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6,
                                          x0=30e-6, y0=-20e-6)
     E = la.angular_spectrum_propagate(E_in, f, lam, dx)
-    E = la.apply_thin_lens(E, f, lam, dx)
+    E = la.apply_thin_lens(E, f=f, wavelength=lam, dx=dx)
     E = la.angular_spectrum_propagate(E, 2*f, lam, dx)
-    E = la.apply_thin_lens(E, f, lam, dx)
+    E = la.apply_thin_lens(E, f=f, wavelength=lam, dx=dx)
     E_out = la.angular_spectrum_propagate(E, f, lam, dx)
     I_in = np.abs(E_in)**2
     I_out_flipped = np.flip(np.abs(E_out)**2)
@@ -279,7 +279,7 @@ def t_biconic_traced_opd_1d():
                            aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
     Et = la.apply_real_lens_traced(
-        E, pres, lam, dx, n_workers=1,
+        E, prescription=pres, wavelength=lam, dx=dx, n_workers=1,
         min_coarse_samples_per_aperture=0)
     _, opd = la.wave_opd_1d(Et, dx, lam, aperture=2.5e-3)
     return np.isfinite(opd).any(), 'traced pipeline + opd_1d OK'
@@ -293,7 +293,7 @@ def t_cylindrical_seidel():
     pres = la.make_cylindrical(50e-3, 3e-3, 'N-BK7', axis='x',
                                aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    Ec = la.apply_real_lens(E, pres, lam, dx, seidel_correction=True)
+    Ec = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx, seidel_correction=True)
     return Ec.shape == (N, N), f'shape = {Ec.shape}'
 
 
@@ -305,7 +305,7 @@ def t_biconic_slant_correction():
     pres = la.make_biconic(50e-3, 75e-3, float('inf'), float('inf'),
                            3e-3, 'N-BK7', aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    E_out = la.apply_real_lens(E, pres, lam, dx, slant_correction=True)
+    E_out = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx, slant_correction=True)
     return np.abs(E_out).max() > 0, f'peak={np.abs(E_out).max():.3e}'
 
 
@@ -317,7 +317,7 @@ def t_seidel_runs_without_error():
     pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    E_on = la.apply_real_lens(E, pres, lam, dx, seidel_correction=True)
+    E_on = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx, seidel_correction=True)
     return (np.abs(E_on).max() > 0 and np.all(np.isfinite(E_on))), \
         f'peak={np.abs(E_on).max():.3e}'
 
@@ -354,7 +354,7 @@ def t_all_optional_features_together():
         0, 10e-9, (N, N))
     E = np.ones((N, N), dtype=np.complex128)
     E_out = la.apply_real_lens(
-        E, pres, lam, dx,
+        E, prescription=pres, wavelength=lam, dx=dx,
         fresnel=True, absorption=True,
         slant_correction=True, seidel_correction=True)
     return (E_out.shape == (N, N) and np.abs(E_out).max() > 0), \
@@ -391,9 +391,9 @@ def t_apply_real_lens_wave_propagator_sas():
     and produce similar peak amplitude."""
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
-    E_asm = la.apply_real_lens(E_in, pres, lam, dx, wave_propagator='asm')
-    E_sas = la.apply_real_lens(E_in, pres, lam, dx, wave_propagator='sas')
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_asm = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='asm')
+    E_sas = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='sas')
     peak_asm = np.abs(E_asm).max()
     peak_sas = np.abs(E_sas).max()
     ok = (E_asm.shape == E_sas.shape == (N, N)
@@ -409,9 +409,9 @@ H.run('apply_real_lens: wave_propagator=sas produces valid field',
 def t_apply_real_lens_traced_wave_propagator_sas():
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E_out = la.apply_real_lens_traced(
-        E_in, pres, lam, dx, ray_subsample=1, n_workers=1,
+        E_in, prescription=pres, wavelength=lam, dx=dx, ray_subsample=1, n_workers=1,
         wave_propagator='sas', preserve_input_phase=False)
     ok = (E_out.shape == (N, N) and np.all(np.isfinite(E_out))
           and np.abs(E_out).max() > 0)
@@ -425,9 +425,9 @@ H.run('apply_real_lens_traced: wave_propagator=sas threads through',
 def t_apply_real_lens_wave_propagator_fresnel():
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E_out = la.apply_real_lens(
-        E_in, pres, lam, dx, wave_propagator='fresnel')
+        E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='fresnel')
     ok = (E_out.shape == (N, N) and np.all(np.isfinite(E_out))
           and np.abs(E_out).max() > 0)
     return ok, f'|E|_max={np.abs(E_out).max():.3e}'
@@ -440,9 +440,9 @@ H.run('apply_real_lens: wave_propagator=fresnel produces valid field',
 def t_apply_real_lens_wave_propagator_rs():
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     E_out = la.apply_real_lens(
-        E_in, pres, lam, dx, wave_propagator='rayleigh_sommerfeld')
+        E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='rayleigh_sommerfeld')
     ok = (E_out.shape == (N, N) and np.all(np.isfinite(E_out))
           and np.abs(E_out).max() > 0)
     return ok, f'|E|_max={np.abs(E_out).max():.3e}'
@@ -458,10 +458,10 @@ def t_apply_real_lens_rs_matches_asm():
     results (peak-amplitude agreement within a few percent)."""
     N, dx, lam = 256, 4e-6, 1.31e-6
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
-    E_asm = la.apply_real_lens(E_in, pres, lam, dx, wave_propagator='asm')
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
+    E_asm = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='asm')
     E_rs = la.apply_real_lens(
-        E_in, pres, lam, dx, wave_propagator='rayleigh_sommerfeld')
+        E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='rayleigh_sommerfeld')
     rel = (abs(float(np.abs(E_asm).max()) - float(np.abs(E_rs).max()))
            / float(np.abs(E_asm).max()))
     return rel < 0.02, \
@@ -478,7 +478,7 @@ def t_apply_real_lens_unknown_wave_propagator_raises():
     pres = la.make_singlet(50e-3, -50e-3, 4e-3, 'N-BK7', aperture=3e-3)
     E_in = np.ones((N, N), dtype=np.complex128)
     try:
-        la.apply_real_lens(E_in, pres, lam, dx, wave_propagator='bogus')
+        la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx, wave_propagator='bogus')
         return False, 'should have raised'
     except ValueError:
         return True, 'ValueError raised'
@@ -506,8 +506,8 @@ def t_thin_lens_vs_real_lens_focus_position():
     X, Y = np.meshgrid(x, x)
     aper_mask = (X**2 + Y**2) <= (ap/2)**2
     E_in = E_in * aper_mask
-    E_thin = la.apply_thin_lens(E_in.astype(np.complex128), efl, lam, dx)
-    E_real = la.apply_real_lens(E_in.astype(np.complex128), pres, lam, dx)
+    E_thin = la.apply_thin_lens(E_in.astype(np.complex128), f=efl, wavelength=lam, dx=dx)
+    E_real = la.apply_real_lens(E_in.astype(np.complex128), prescription=pres, wavelength=lam, dx=dx)
     # Each propagated to its EFL.
     E_thin_f = la.angular_spectrum_propagate(E_thin, efl, lam, dx)
     E_real_f = la.angular_spectrum_propagate(E_real, efl, lam, dx)
@@ -531,8 +531,8 @@ def t_real_lens_vs_traced_low_NA_singlet():
     surfs = surfaces_from_prescription(pres)
     _, efl, _, _ = system_abcd(surfs, lam)
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_p = la.apply_real_lens(E_in, pres, lam, dx)
-    E_t = la.apply_real_lens_traced(E_in, pres, lam, dx, n_workers=1,
+    E_p = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
+    E_t = la.apply_real_lens_traced(E_in, prescription=pres, wavelength=lam, dx=dx, n_workers=1,
                                      min_coarse_samples_per_aperture=0)
     E_pf = la.angular_spectrum_propagate(E_p, efl, lam, dx)
     E_tf = la.angular_spectrum_propagate(E_t, efl, lam, dx)
@@ -554,8 +554,8 @@ def t_thin_lens_combination_law():
     f_comb = 1.0 / (1.0 / f1 + 1.0 / f2)
     E = np.ones((N, N), dtype=np.complex128)
     E_two = la.apply_thin_lens(
-        la.apply_thin_lens(E, f1, lam, dx), f2, lam, dx)
-    E_one = la.apply_thin_lens(E, f_comb, lam, dx)
+        la.apply_thin_lens(E, f=f1, wavelength=lam, dx=dx), f=f2, wavelength=lam, dx=dx)
+    E_one = la.apply_thin_lens(E, f=f_comb, wavelength=lam, dx=dx)
     # The two operators should differ only by a global constant phase,
     # so the relative phase across the aperture should be identical.
     rel_phase = np.angle(E_two * np.conj(E_one))
@@ -573,8 +573,8 @@ def t_thin_lens_inverse_cancels():
     N, dx, lam = 256, 8e-6, 1.31e-6
     f = 50e-3
     E = np.ones((N, N), dtype=np.complex128) * np.exp(0j)
-    E_out = la.apply_thin_lens(E, f, lam, dx)
-    E_back = la.apply_thin_lens(E_out, -f, lam, dx)
+    E_out = la.apply_thin_lens(E, f=f, wavelength=lam, dx=dx)
+    E_back = la.apply_thin_lens(E_out, f=-f, wavelength=lam, dx=dx)
     err = np.max(np.abs(E_back - E))
     return err < 1e-10, f'|E_back - E|_max = {err:.2e}'
 
@@ -610,7 +610,7 @@ def t_apply_real_lens_traced_intensity_finite():
     pres = la.make_singlet(40e-3, np.inf, 3e-3, 'N-BK7', aperture=ap)
     E = np.ones((N, N), dtype=np.complex128)
     Et = la.apply_real_lens_traced(
-        E, pres, lam, dx, n_workers=1,
+        E, prescription=pres, wavelength=lam, dx=dx, n_workers=1,
         min_coarse_samples_per_aperture=0)
     return np.all(np.isfinite(Et)) and np.abs(Et).max() > 0, \
         f'finite={np.all(np.isfinite(Et))}, peak={np.abs(Et).max():.3e}'
@@ -662,7 +662,7 @@ def t_apply_real_lens_warns_when_aperture_exceeds_grid():
     E = np.ones((N, N), dtype=np.complex128)
     with _warnings.catch_warnings(record=True) as w:
         _warnings.simplefilter('always')
-        la.apply_real_lens(E, pres, lam, dx)
+        la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx)
     fired = any(issubclass(rec.category, UserWarning)
                 and 'exceed' in str(rec.message).lower()
                 for rec in w)
@@ -795,7 +795,7 @@ def t_apply_real_lens_traced_jax_runs():
     N = 64
     E_in = jnp.ones((N, N), dtype=jnp.complex128)
     E_out = la.apply_real_lens_traced_jax(
-        E_in, presc, 633e-9, 20e-6, ray_subsample=4, cheb_order=8)
+        E_in, prescription=presc, wavelength=633e-9, dx=20e-6, ray_subsample=4, cheb_order=8)
     return (E_out.shape == (N, N)
             and bool(jnp.all(jnp.isfinite(E_out)))
             and float(jnp.max(jnp.abs(E_out))) > 0), (
@@ -817,12 +817,12 @@ def t_apply_real_lens_traced_jax_matches_numpy_opd():
     wl = 633e-9
     E_in = np.ones((N, N), dtype=np.complex128)
     E_jax = la.apply_real_lens_traced_jax(
-        E_in, presc, wl, dx, ray_subsample=4, cheb_order=10)
+        E_in, prescription=presc, wavelength=wl, dx=dx, ray_subsample=4, cheb_order=10)
     import warnings
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         E_np = la.apply_real_lens_traced(
-            E_in, presc, wl, dx, ray_subsample=4, on_undersample='silent',
+            E_in, prescription=presc, wavelength=wl, dx=dx, ray_subsample=4, on_undersample='silent',
             n_workers=1, preserve_input_phase=False)
     ratio = np.asarray(E_jax) / np.where(np.abs(E_np) > 1e-6, E_np, 1)
     mask = (np.abs(E_np) > 0.5 * np.max(np.abs(E_np))) \
@@ -846,7 +846,7 @@ def t_apply_real_lens_traced_jax_grad_finite():
     wl = 633e-9
     def loss(E_in):
         E_out = la.apply_real_lens_traced_jax(
-            E_in, presc, wl, dx, ray_subsample=4, cheb_order=8)
+            E_in, prescription=presc, wavelength=wl, dx=dx, ray_subsample=4, cheb_order=8)
         c = N // 2
         return jnp.sum(jnp.abs(E_out[c-2:c+2, c-2:c+2]) ** 2)
     x = (jnp.arange(N) - N / 2) * dx
@@ -876,9 +876,9 @@ def t_apply_real_lens_maslov_jax_no_caustic_matches_traced():
     wl = 633e-9
     E_in = jnp.ones((N, N), dtype=jnp.complex128)
     E_traced = la.apply_real_lens_traced_jax(
-        E_in, presc, wl, dx, ray_subsample=4)
+        E_in, prescription=presc, wavelength=wl, dx=dx, ray_subsample=4)
     E_maslov = la.apply_real_lens_maslov_jax(
-        E_in, presc, wl, dx, ray_subsample=4)
+        E_in, prescription=presc, wavelength=wl, dx=dx, ray_subsample=4)
     diff = float(jnp.max(jnp.abs(E_traced - E_maslov)))
     return diff < 1e-12, f'max diff = {diff:.3e}'
 

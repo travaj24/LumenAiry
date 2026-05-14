@@ -203,13 +203,13 @@ def _amp_callback_numpy(E_in_np, lens_prescription, wavelength, dx,
     ``phase_analytic_lens`` is unused).
     """
     E_analytic = apply_real_lens(
-        E_in_np, lens_prescription, wavelength, dx, bandlimit=bandlimit)
+        E_in_np, prescription=lens_prescription, wavelength=wavelength, dx=dx, bandlimit=bandlimit)
     if preserve_input_phase:
         # Need the analytic lens phase on a unit plane wave for the
         # delta-phase correction.
         ones = np.ones_like(E_in_np)
         E_lens_pw = apply_real_lens(
-            ones, lens_prescription, wavelength, dx, bandlimit=bandlimit)
+            ones, prescription=lens_prescription, wavelength=wavelength, dx=dx, bandlimit=bandlimit)
         phase_pw = np.angle(E_lens_pw)
     else:
         phase_pw = np.zeros_like(np.asarray(E_in_np).real, dtype=np.float64)
@@ -253,7 +253,7 @@ def _amp_callback_jax_linear(E_in, lens_prescription, wavelength, dx,
         # its tangent is zero -- skip the second apply_real_lens call).
         E_in_np = np.asarray(E_in_arr)
         E_an_np = apply_real_lens(
-            E_in_np, lens_prescription, wavelength, float(dx),
+            E_in_np, prescription=lens_prescription, wavelength=wavelength, dx=float(dx),
             bandlimit=bandlimit)
         return np.asarray(E_an_np, dtype=target_c)
 
@@ -294,7 +294,8 @@ def _jax_available():
     return _JA
 
 
-def apply_real_lens_traced_jax(E_in, lens_prescription, wavelength, dx,
+def apply_real_lens_traced_jax(E_in, *,
+                                prescription, wavelength, dx,
                                 ray_subsample=8,
                                 cheb_order=10,
                                 newton_iters=12,
@@ -381,6 +382,11 @@ def apply_real_lens_traced_jax(E_in, lens_prescription, wavelength, dx,
     import jax.numpy as jnp
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
     from ..glass import get_glass_index
+
+    # Local alias preserves the legacy name used throughout this
+    # function body (sprawling references; cheaper to rebind than
+    # rename everywhere).
+    lens_prescription = prescription
 
     E_in = jnp.asarray(E_in)
     Ny, Nx = E_in.shape
@@ -512,7 +518,7 @@ def apply_real_lens_traced_jax(E_in, lens_prescription, wavelength, dx,
     return E_out
 
 
-def apply_real_lens_maslov_jax(E_in, lens_prescription, wavelength, dx,
+def apply_real_lens_maslov_jax(E_in, *, prescription, wavelength, dx,
                                 ray_subsample=8,
                                 cheb_order=10,
                                 newton_iters=12,
@@ -551,6 +557,9 @@ def apply_real_lens_maslov_jax(E_in, lens_prescription, wavelength, dx,
     import jax.numpy as jnp
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
     from ..glass import get_glass_index
+
+    # Local alias preserves the legacy name used in this function body.
+    lens_prescription = prescription
 
     E_in = jnp.asarray(E_in)
     Ny, Nx = E_in.shape

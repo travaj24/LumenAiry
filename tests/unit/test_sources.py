@@ -20,24 +20,24 @@ import lumenairy as la
 class TestGaussianBeam:
 
     def test_shape_and_dtype(self, N_small, dx_m, wavelength_m):
-        E, x, y = la.create_gaussian_beam(N_small, dx_m, 30e-6,
-                                            wavelength=wavelength_m)
+        E, x, y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
+                                            sigma=30e-6)
         assert E.shape == (N_small, N_small)
         assert np.iscomplexobj(E)
         assert x.shape == (N_small,)
         assert y.shape == (N_small,)
 
     def test_peak_at_center(self, N_small, dx_m, wavelength_m):
-        E, _x, _y = la.create_gaussian_beam(N_small, dx_m, 30e-6,
-                                              wavelength=wavelength_m)
+        E, _x, _y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
+                                              sigma=30e-6)
         I = np.abs(E) ** 2
         iy, ix = np.unravel_index(int(np.argmax(I)), I.shape)
         assert abs(iy - N_small // 2) <= 1
         assert abs(ix - N_small // 2) <= 1
 
     def test_finite_power(self, N_small, dx_m, wavelength_m):
-        E, _x, _y = la.create_gaussian_beam(N_small, dx_m, 30e-6,
-                                              wavelength=wavelength_m)
+        E, _x, _y = la.create_gaussian_beam(N_small, dx_m, wavelength_m,
+                                              sigma=30e-6)
         power = float(np.sum(np.abs(E) ** 2) * dx_m ** 2)
         assert power > 0
         assert np.isfinite(power)
@@ -95,8 +95,8 @@ class TestTopHat:
     def test_top_hat_zero_outside_diameter(self, N_small, dx_m,
                                             wavelength_m):
         D = (N_small // 4) * dx_m  # quarter-grid disk
-        E, _x, _y = la.create_top_hat_beam(N_small, dx_m, D,
-                                              wavelength=wavelength_m)
+        E, _x, _y = la.create_top_hat_beam(N_small, dx_m, wavelength_m,
+                                              diameter=D)
         x = (np.arange(N_small) - N_small / 2) * dx_m
         X, Y = np.meshgrid(x, x)
         r = np.sqrt(X * X + Y * Y)
@@ -111,9 +111,8 @@ class TestTopHat:
 class TestAnnularBeam:
 
     def test_annular_zero_at_center(self, N_small, dx_m, wavelength_m):
-        E, _x, _y = la.create_annular_beam(N_small, dx_m,
+        E, _x, _y = la.create_annular_beam(N_small, dx_m, wavelength_m,
                                               outer_diameter=80e-6,
-                                              inner_diameter=20e-6,
-                                              wavelength=wavelength_m)
+                                              inner_diameter=20e-6)
         c = N_small // 2
         assert abs(E[c, c]) < 1e-9

@@ -33,7 +33,7 @@ def _ensure_cupy_loaded():
 # Fundamental Gaussian beam
 # ---------------------------------------------------------------------------
 
-def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0,
+def create_gaussian_beam(N, dx, wavelength, *, sigma, x0=0, y0=0,
                           use_gpu=False, dy=None, normalize='peak'):
     """
     Create a Gaussian beam field.
@@ -75,6 +75,15 @@ def create_gaussian_beam(N, dx, sigma, wavelength=None, x0=0, y0=0,
         1-D x-coordinate array [m].
     y : ndarray
         1-D y-coordinate array [m].
+
+    Notes
+    -----
+    Signature is ``(N, dx, wavelength, *, sigma, ...)`` since 4.7.
+    Prior to 4.7 the ordering was
+    ``(N, dx, sigma, wavelength=None, ...)`` with positional ``sigma``;
+    the new style places ``wavelength`` at the third positional
+    slot (matching every other source factory) and makes
+    ``sigma`` keyword-only.
     """
     if CUPY_AVAILABLE and use_gpu:
         xp = cp
@@ -388,7 +397,8 @@ def create_laguerre_gauss(N, dx, w0, wavelength, p=0, l=0, x0=0, y0=0,
 # ---------------------------------------------------------------------------
 
 def create_tilted_plane_wave(N, dx, wavelength, angle_x=0.0, angle_y=0.0,
-                             amplitude=1.0, dy=None):
+                             amplitude=1.0, dy=None,
+                             *, angle_x_deg=None, angle_y_deg=None):
     """Create a tilted (off-axis) plane wave on an N x N grid.
 
     A tilted plane wave has a linear phase ramp across the pupil,
@@ -412,6 +422,14 @@ def create_tilted_plane_wave(N, dx, wavelength, angle_x=0.0, angle_y=0.0,
     angle_y : float, default 0
         Field angle in the y-z plane [rad].  Positive = source
         tilted toward +y.
+    angle_x_deg, angle_y_deg : float, optional
+        Same as ``angle_x`` / ``angle_y`` but expressed in degrees.
+        When provided, these take precedence over the radian forms
+        and provide a convenience for human-readable field-angle
+        sweeps.  4.7+: the library is converging on ``*_deg`` as the
+        canonical user-facing angle unit; the bare-radians
+        ``angle_x`` / ``angle_y`` will become deprecated aliases in
+        a future release.
     amplitude : float, default 1
         Uniform amplitude.
     dy : float, optional
@@ -424,6 +442,10 @@ def create_tilted_plane_wave(N, dx, wavelength, angle_x=0.0, angle_y=0.0,
     x, y : ndarray
         1-D coordinate arrays [m].
     """
+    if angle_x_deg is not None:
+        angle_x = float(np.radians(angle_x_deg))
+    if angle_y_deg is not None:
+        angle_y = float(np.radians(angle_y_deg))
     if dy is None:
         dy = dx
     x = (np.arange(N) - N / 2) * dx
@@ -516,21 +538,29 @@ def create_multi_field_sources(N, dx, wavelength, field_angles,
 # Extended source models (LED, fiber, top-hat, annular, Bessel)
 # ---------------------------------------------------------------------------
 
-def create_top_hat_beam(N, dx, diameter, wavelength=None, x0=0, y0=0):
+def create_top_hat_beam(N, dx, wavelength, *, diameter, x0=0, y0=0):
     """Uniform-intensity circular beam (top-hat / flat-top).
 
     Parameters
     ----------
     N, dx : int, float
+    wavelength : float
+        Reserved for future use (overlay of a spherical-phase term);
+        currently does not affect the returned field.
     diameter : float
         Beam diameter [m].
-    wavelength : float, optional (reserved)
     x0, y0 : float
         Center [m].
 
     Returns
     -------
     E, x, y : ndarray
+
+    Notes
+    -----
+    Signature is ``(N, dx, wavelength, *, diameter, ...)`` since 4.7.
+    Prior to 4.7 the ordering was
+    ``(N, dx, diameter, wavelength=None, ...)``.
     """
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dx
@@ -543,18 +573,26 @@ def create_top_hat_beam(N, dx, diameter, wavelength=None, x0=0, y0=0):
     return E, x, y
 
 
-def create_annular_beam(N, dx, outer_diameter, inner_diameter,
-                        wavelength=None, x0=0, y0=0):
+def create_annular_beam(N, dx, wavelength, *,
+                        outer_diameter, inner_diameter, x0=0, y0=0):
     """Annular (donut) beam.
 
     Parameters
     ----------
     N, dx : int, float
+    wavelength : float
+        Reserved for future use.
     outer_diameter, inner_diameter : float [m]
 
     Returns
     -------
     E, x, y : ndarray
+
+    Notes
+    -----
+    Signature is
+    ``(N, dx, wavelength, *, outer_diameter, inner_diameter, ...)``
+    since 4.7.
     """
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dx
@@ -568,7 +606,7 @@ def create_annular_beam(N, dx, outer_diameter, inner_diameter,
     return E, x, y
 
 
-def create_fiber_mode(N, dx, mode_field_diameter, wavelength,
+def create_fiber_mode(N, dx, wavelength, *, mode_field_diameter,
                       x0=0, y0=0, na=0.12):
     """Single-mode fiber output (Gaussian with NA-defined divergence).
 
@@ -579,12 +617,17 @@ def create_fiber_mode(N, dx, mode_field_diameter, wavelength,
     Parameters
     ----------
     N, dx : int, float
-    mode_field_diameter : float [m]
     wavelength : float [m]
+    mode_field_diameter : float [m]
     x0, y0 : float
     na : float
         Fiber numerical aperture (informational; the near-field
         profile is MFD-determined).
+
+    Notes
+    -----
+    Signature is
+    ``(N, dx, wavelength, *, mode_field_diameter, ...)`` since 4.7.
 
     Returns
     -------
@@ -592,7 +635,7 @@ def create_fiber_mode(N, dx, mode_field_diameter, wavelength,
     """
     w0 = mode_field_diameter / 2.0
     sigma = w0 / np.sqrt(2)
-    return create_gaussian_beam(N, dx, sigma, wavelength=wavelength,
+    return create_gaussian_beam(N, dx, wavelength, sigma=sigma,
                                  x0=x0, y0=y0)
 
 
@@ -625,7 +668,7 @@ def create_led_source(N, dx, diameter, divergence_angle,
         covering the divergence cone with ~21 samples.
     x, y : ndarray
     """
-    E, x, y = create_top_hat_beam(N, dx, diameter, wavelength, x0, y0)
+    E, x, y = create_top_hat_beam(N, dx, wavelength, diameter=diameter, x0=x0, y0=y0)
     # Generate suggested source angles
     n_ring = 3
     angles = [(0.0, 0.0)]
@@ -761,7 +804,7 @@ class Source:
         radius."""
         sigma = w0 / np.sqrt(2)
         E, _, _ = create_gaussian_beam(
-            N, dx, sigma, wavelength=wavelength, x0=x0, y0=y0,
+            N, dx, wavelength, sigma=sigma, x0=x0, y0=y0,
             use_gpu=use_gpu)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,
@@ -801,7 +844,7 @@ class Source:
                   name: _Optional[str] = None) -> 'Source':
         """Uniform circular aperture beam."""
         E, _, _ = create_top_hat_beam(
-            N, dx, diameter, wavelength=wavelength, x0=x0, y0=y0)
+            N, dx, wavelength, diameter=diameter, x0=x0, y0=y0)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'TopHat(D={diameter:.2g}m)')
@@ -814,7 +857,7 @@ class Source:
                     name: _Optional[str] = None) -> 'Source':
         """Single-mode fiber output."""
         E, _, _ = create_fiber_mode(
-            N, dx, mode_field_diameter, wavelength,
+            N, dx, wavelength, mode_field_diameter=mode_field_diameter,
             x0=x0, y0=y0, na=na)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,

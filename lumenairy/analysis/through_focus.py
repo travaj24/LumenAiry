@@ -572,7 +572,7 @@ def tolerancing_sweep(prescription, wavelength, N, dx, E_source,
 
     def _run_one(pres_used, label, inner_scaler=None):
         E_exit = apply_real_lens(
-            E_source, pres_used, wavelength, dx,
+            E_source, prescription=pres_used, wavelength=wavelength, dx=dx,
             bandlimit=True, slant_correction=True)
         ideal_peak = diffraction_limited_peak(
             E_exit, wavelength, focal_length, dx)
@@ -699,7 +699,7 @@ def monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
             ))
         pres_p = apply_perturbations(prescription, perts, N=N, dx=dx)
         E_exit = apply_real_lens(
-            E_source, pres_p, wavelength, dx,
+            E_source, prescription=pres_p, wavelength=wavelength, dx=dx,
             bandlimit=True, slant_correction=True)
         ideal_peak = diffraction_limited_peak(
             E_exit, wavelength, focal_length, dx)
@@ -904,10 +904,10 @@ def monte_carlo_tolerancing_jax(prescription, wavelength, N, dx, E_source,
 
         if wave_propagator == 'real_lens_traced_jax':
             E_exit = apply_real_lens_traced_jax(
-                E_source, pres_p, wavelength, dx, ray_subsample=4)
+                E_source, prescription=pres_p, wavelength=wavelength, dx=dx, ray_subsample=4)
         else:  # 'real_lens'
             E_exit_np = apply_real_lens(
-                E_source, pres_p, wavelength, dx,
+                E_source, prescription=pres_p, wavelength=wavelength, dx=dx,
                 bandlimit=True, slant_correction=True)
             E_exit = E_exit_np
 
@@ -1137,7 +1137,7 @@ def monte_carlo_tolerancing_linearized(prescription, wavelength, N, dx,
     # ----- Step 1: nominal eval -----
     if verbose:
         print('  Linearised MC: nominal eval')
-    E_exit_0 = apply_real_lens(E_source, prescription, wavelength, dx,
+    E_exit_0 = apply_real_lens(E_source, prescription=prescription, wavelength=wavelength, dx=dx,
                                 bandlimit=True, slant_correction=True)
     ideal_peak = diffraction_limited_peak(
         E_exit_0, wavelength, focal_length, dx)
@@ -1181,7 +1181,7 @@ def monte_carlo_tolerancing_linearized(prescription, wavelength, N, dx,
             )
             pres_p = apply_perturbations(prescription, [pert], N=N, dx=dx)
             try:
-                E_p = apply_real_lens(E_source, pres_p, wavelength, dx,
+                E_p = apply_real_lens(E_source, prescription=pres_p, wavelength=wavelength, dx=dx,
                                        bandlimit=True,
                                        slant_correction=True)
                 scan_p = through_focus_scan(

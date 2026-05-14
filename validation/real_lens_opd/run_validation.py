@@ -107,7 +107,7 @@ def compute_wave_opd(prescription, wavelength, N, dx, aperture,
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         E_out = apply_real_lens(
-            E_in, pres, wavelength, dx,
+            E_in, prescription=pres, wavelength=wavelength, dx=dx,
             bandlimit=True,
             slant_correction=slant_correction,
             fresnel=False,
@@ -135,7 +135,7 @@ def compute_wave_opd_traced(prescription, wavelength, N, dx, aperture,
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         E_out = apply_real_lens_traced(
-            E_in, pres, wavelength, dx, bandlimit=True,
+            E_in, prescription=pres, wavelength=wavelength, dx=dx, bandlimit=True,
             ray_subsample=ray_subsample)
     # Use aperture=None so wave_opd_1d auto-crops to the ray-coverage
     # region (the actual exit pupil for the traced method may be

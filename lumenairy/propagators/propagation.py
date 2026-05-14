@@ -1441,7 +1441,8 @@ def _ifft2_nd(x):
 # ============================================================================
 
 def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
-                                      tilt_x=0.0, tilt_y=0.0, bandlimit=True):
+                                      tilt_x=0.0, tilt_y=0.0, bandlimit=True,
+                                      *, tilt_x_deg=None, tilt_y_deg=None):
     """
     ASM propagation with a carrier tilt (off-axis propagation).
 
@@ -1505,9 +1506,19 @@ def angular_spectrum_propagate_tilted(E_in, z, wavelength, dx, dy=None,
         E_out = E_prop * exp(+i * 2*pi * (fx0*X + fy0*Y))
 
     For ``tilt_x = tilt_y = 0`` this reduces to standard ASM propagation.
+
+    4.7+: convenience kwargs ``tilt_x_deg`` / ``tilt_y_deg`` accept the
+    angle in degrees and take precedence over the radian forms when
+    supplied.  These are part of the broader push toward ``_deg`` as
+    the canonical user-facing angle unit (see the polish-pass note in
+    :ref:`Release Notes`).
     """
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='angular_spectrum_propagate_tilted')
+    if tilt_x_deg is not None:
+        tilt_x = float(np.radians(tilt_x_deg))
+    if tilt_y_deg is not None:
+        tilt_y = float(np.radians(tilt_y_deg))
     if dy is None:
         dy = dx
 

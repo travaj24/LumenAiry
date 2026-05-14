@@ -29,7 +29,7 @@ def main():
     # --- 3. Apply a thin lens (50 mm focal length) --------------------
     f_lens = 50e-3
     E_after_lens = la.apply_thin_lens(
-        after_gap.E, after_gap.dx, f_lens, after_gap.wavelength)
+        after_gap.E, f=f_lens, wavelength=after_gap.wavelength, dx=after_gap.dx)
     print(f'  After 50-mm thin lens applied')
 
     # --- 4. Propagate to focus ----------------------------------------

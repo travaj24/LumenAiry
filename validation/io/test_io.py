@@ -5,7 +5,7 @@ From:
 - physics_remaining_test.py (H5 single field, JonesField, list_contents,
   phase file roundtrip, multi-plane)
 - physics_extended_test.py (Zemax export reimport)
-- physics_remaining_test.py (load_zmx_prescription)
+- physics_remaining_test.py (load_zemax_zmx)
 - deep_audit.py (zemax export files valid, load Zemax TXdesign)
 """
 from __future__ import annotations
@@ -187,14 +187,14 @@ def t_zemax_export_file_sizes():
 H.run('zemax export files valid', t_zemax_export_file_sizes)
 
 
-def t_load_zmx_prescription():
+def t_load_zemax_zmx():
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         zmx = os.path.join(td, 'test.zmx')
         la.export_zemax_zmx(pres, zmx, wavelength=lam)
         try:
-            rx = la.load_zmx_prescription(zmx)
+            rx = la.load_zemax_zmx(zmx)
             return 'surfaces' in rx, \
                 f'loaded {len(rx.get("surfaces", []))} surfaces'
         except Exception as e:
@@ -202,13 +202,13 @@ def t_load_zmx_prescription():
                 f'load_zmx raised {type(e).__name__} (acceptable for minimal zmx)'
 
 
-H.run('Zemax: load_zmx_prescription on generated file',
-      t_load_zmx_prescription)
+H.run('Zemax: load_zemax_zmx on generated file',
+      t_load_zemax_zmx)
 
 
 def t_load_zemax_txdesign():
     from lumenairy.io.prescriptions import (
-        load_zemax_prescription_txt)
+        load_zemax_prescription_data_txt)
     from lumenairy.raytrace import surfaces_from_prescription
     _here = os.path.dirname(os.path.abspath(__file__))
     _lib = os.path.normpath(os.path.join(_here, '..'))
@@ -217,7 +217,7 @@ def t_load_zemax_txdesign():
         'TXdesignstudy36-prescription.txt'))
     if not os.path.exists(tx_path):
         return True, 'TXdesign prescription file not present (skip)'
-    rx = load_zemax_prescription_txt(tx_path, surface_range=(1, 13))
+    rx = load_zemax_prescription_data_txt(tx_path, surface_range=(1, 13))
     surfs = surfaces_from_prescription(rx)
     return len(surfs) > 0, f'{len(surfs)} surfaces loaded'
 
@@ -293,7 +293,7 @@ def t_codev_seq_stop_position():
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         p = os.path.join(td, 'stop2.seq')
-        la.export_codev_seq(pres, p, stop_surface=2)
+        la.export_codev_seq(pres, p, wavelength=1.31e-6, stop_surface=2)
         loaded = la.load_codev_seq(p)
     return loaded.get('stop_index') == 2, \
         f'stop_index = {loaded.get("stop_index")}'
@@ -393,7 +393,7 @@ def t_quadoa_qos_apply_real_lens_works():
         loaded = la.load_quadoa_qos(p)
     N, dx, lam = 256, 8e-6, 1.31e-6
     E = np.ones((N, N), dtype=np.complex128)
-    E_out = la.apply_real_lens(E, loaded, lam, dx)
+    E_out = la.apply_real_lens(E, prescription=loaded, wavelength=lam, dx=dx)
     ok = np.all(np.isfinite(E_out)) and np.abs(E_out).max() > 0
     return ok, f'peak={np.abs(E_out).max():.3e}'
 

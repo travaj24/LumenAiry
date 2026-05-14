@@ -149,7 +149,7 @@ def t_interferogram_of_real_lens():
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=2e-3)
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_out = la.apply_real_lens(E_in, pres, lam, dx)
+    E_out = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     x_w, opl = la.wave_opd_1d(E_out, dx, lam, aperture=1.8e-3)
     opd_2d = np.zeros((N, N))
     for i in range(N):
@@ -168,10 +168,10 @@ def t_fiber_to_detector():
     N = 128; dx = 8e-6
     from lumenairy.raytrace import (
         surfaces_from_prescription, system_abcd)
-    E_fib, _, _ = la.create_fiber_mode(N, dx, 10e-6, lam)
+    E_fib, _, _ = la.create_fiber_mode(N, dx, lam, mode_field_diameter=10e-6)
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=2e-3)
-    E_exit = la.apply_real_lens(E_fib, pres, lam, dx)
+    E_exit = la.apply_real_lens(E_fib, prescription=pres, wavelength=lam, dx=dx)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
     E_focus = la.angular_spectrum_propagate(E_exit, bfl, lam, dx)
@@ -186,12 +186,12 @@ H.run('Composition: fiber -> lens -> detector', t_fiber_to_detector)
 def t_telescope_through_focus():
     from lumenairy.raytrace import (
         surfaces_from_prescription, system_abcd)
-    pres = la.keplerian_telescope(100e-3, 25e-3)
+    pres = la.keplerian_telescope(100e-3, 25e-3, wavelength=550e-9)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
     N = 128; dx = 16e-6
     E_in = np.ones((N, N), dtype=np.complex128)
-    E_exit = la.apply_real_lens(E_in, pres, lam, dx)
+    E_exit = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     z = np.linspace(max(abs(bfl)-20e-3, 1e-3), abs(bfl)+20e-3, 11)
     scan = la.through_focus_scan(E_exit, dx, lam, z)
     return scan.peak_I.max() > 0, \
@@ -283,7 +283,7 @@ H.run('plot_cross_section: returns figure',
 
 
 def t_plot_beam_profile():
-    E, _, _ = la.create_gaussian_beam(N_plot, dx_plot, 20e-6)
+    E, _, _ = la.create_gaussian_beam(N_plot, dx_plot, 1.31e-6, sigma=20e-6)
     fig, _ = la.plot_beam_profile(E, dx_plot)
     import matplotlib.pyplot as plt
     plt.close(fig)
@@ -342,7 +342,7 @@ def t_singlet_paraxial_focus_matches_wave_peak_position():
     surfs = surfaces_from_prescription(pres)
     bfl = find_paraxial_focus(surfs, lam)
     E = np.ones((N, N), dtype=np.complex128)
-    E_lens = la.apply_real_lens(E, pres, lam, dx)
+    E_lens = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx)
     I_focus = float(np.abs(
         la.angular_spectrum_propagate(E_lens, bfl, lam, dx)[N//2, N//2])**2)
     I_pre = float(np.abs(
@@ -378,7 +378,7 @@ def t_propagate_through_system_matches_manual_real_lens_plus_asm():
     ]
     out = propagate_through_system(E, elements, lam, dx)
     E_sys = out[0] if isinstance(out, tuple) else out
-    E_lens = la.apply_real_lens(E, pres, lam, dx)
+    E_lens = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx)
     E_prop = la.angular_spectrum_propagate(E_lens, bfl, lam, dx)
     rel = (abs(np.abs(E_sys[N//2, N//2])**2 - np.abs(E_prop[N//2, N//2])**2)
            / max(np.abs(E_prop[N//2, N//2])**2, 1e-30))
@@ -398,7 +398,7 @@ def t_real_lens_traced_subsample_finite_for_low_NA_singlet():
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
     Et = la.apply_real_lens_traced(
-        E, pres, lam, dx, n_workers=1,
+        E, prescription=pres, wavelength=lam, dx=dx, n_workers=1,
         min_coarse_samples_per_aperture=8)
     return np.all(np.isfinite(Et)) and np.abs(Et).max() > 0, \
         f'finite={np.all(np.isfinite(Et))}, peak={np.abs(Et).max():.3e}'

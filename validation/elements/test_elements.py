@@ -208,7 +208,7 @@ def t_aperture_then_propagation_preserves_total_power():
     """Total power after (aperture -> ASM) equals power after just the
     aperture (ASM is unitary)."""
     N, dx, lam, ap = 256, 8e-6, 1.31e-6, 1e-3
-    E_in, _, _ = la.create_gaussian_beam(N, dx, 200e-6)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=200e-6)
     E_a = la.apply_aperture(E_in, dx, shape='circular',
                              params={'diameter': ap})
     P_after_aperture = float(np.sum(np.abs(E_a)**2) * dx**2)
@@ -588,7 +588,7 @@ H.section('JonesField bound analysis methods (4.0+)')
 
 def t_jonesfield_stokes_method_matches_function():
     """jf.stokes_parameters() matches la.stokes_parameters(jf)."""
-    Es, _, _ = la.create_gaussian_beam(64, 4e-6, 50e-6)
+    Es, _, _ = la.create_gaussian_beam(64, 4e-6, 1.31e-6, sigma=50e-6)
     jf = la.create_linear_polarized(Es, dx=4e-6, angle=np.pi / 4)
     S_method = jf.stokes_parameters()
     S_func = la.stokes_parameters(jf)
@@ -604,7 +604,7 @@ H.run('JonesField.stokes_parameters: method matches module function',
 
 
 def t_jonesfield_dop_and_ellipse_methods():
-    Es, _, _ = la.create_gaussian_beam(64, 4e-6, 50e-6)
+    Es, _, _ = la.create_gaussian_beam(64, 4e-6, 1.31e-6, sigma=50e-6)
     jf = la.create_linear_polarized(Es, dx=4e-6, angle=np.pi / 4)
     dop = jf.degree_of_polarization()
     psi, chi = jf.polarization_ellipse()

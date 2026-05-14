@@ -260,8 +260,8 @@ class JonesField:
 
     def apply_thin_lens(self, f, wavelength, **kwargs):
         """Apply a thin lens to both components."""
-        self.Ex = apply_thin_lens(self.Ex, f, wavelength, self.dx, self.dy, **kwargs)
-        self.Ey = apply_thin_lens(self.Ey, f, wavelength, self.dx, self.dy, **kwargs)
+        self.Ex = apply_thin_lens(self.Ex, f=f, wavelength=wavelength, dx=self.dx, dy=self.dy, **kwargs)
+        self.Ey = apply_thin_lens(self.Ey, f=f, wavelength=wavelength, dx=self.dx, dy=self.dy, **kwargs)
         return self
 
     def apply_spherical_lens(self, **kwargs):
@@ -279,11 +279,11 @@ class JonesField:
         documentation.
         """
         self.Ex = apply_real_lens(
-            self.Ex, prescription, wavelength, self.dx,
+            self.Ex, prescription=prescription, wavelength=wavelength, dx=self.dx,
             bandlimit=bandlimit, slant_correction=slant_correction,
             fresnel=fresnel, absorption=absorption)
         self.Ey = apply_real_lens(
-            self.Ey, prescription, wavelength, self.dx,
+            self.Ey, prescription=prescription, wavelength=wavelength, dx=self.dx,
             bandlimit=bandlimit, slant_correction=slant_correction,
             fresnel=fresnel, absorption=absorption)
         return self
@@ -347,7 +347,7 @@ def apply_jones_matrix(field, matrix):
     return field
 
 
-def apply_polarizer(field, angle=0.0):
+def apply_polarizer(field, angle=0.0, *, angle_deg=None):
     """
     Apply an ideal linear polarizer at the specified transmission angle.
 
@@ -357,11 +357,17 @@ def apply_polarizer(field, angle=0.0):
         Input field.
     angle : float, default 0
         Transmission axis angle [radians], measured from +x axis.
+    angle_deg : float, optional
+        Transmission axis angle in degrees; when supplied, takes
+        precedence over the radian ``angle``.  4.7+: ``_deg`` is the
+        canonical user-facing angle unit.
 
     Returns
     -------
     JonesField
     """
+    if angle_deg is not None:
+        angle = float(np.radians(angle_deg))
     c = np.cos(angle)
     s = np.sin(angle)
     # Projection matrix for linear polarizer
@@ -370,7 +376,7 @@ def apply_polarizer(field, angle=0.0):
     return apply_jones_matrix(field, J)
 
 
-def apply_waveplate(field, retardance, angle=0.0):
+def apply_waveplate(field, retardance, angle=0.0, *, angle_deg=None):
     """
     Apply a waveplate (linear retarder) with arbitrary retardance.
 
@@ -384,6 +390,9 @@ def apply_waveplate(field, retardance, angle=0.0):
         - pi   = half-wave plate
     angle : float, default 0
         Fast-axis angle [radians], measured from +x axis.
+    angle_deg : float, optional
+        Fast-axis angle in degrees; takes precedence over ``angle``
+        when supplied.
 
     Returns
     -------
@@ -398,6 +407,8 @@ def apply_waveplate(field, retardance, angle=0.0):
 
     where R is the 2D rotation matrix.
     """
+    if angle_deg is not None:
+        angle = float(np.radians(angle_deg))
     c = np.cos(angle)
     s = np.sin(angle)
     e = np.exp(1j * retardance)
@@ -410,13 +421,17 @@ def apply_waveplate(field, retardance, angle=0.0):
     return apply_jones_matrix(field, J)
 
 
-def apply_half_wave_plate(field, angle=0.0):
+def apply_half_wave_plate(field, angle=0.0, *, angle_deg=None):
     """Convenience wrapper: half-wave plate (retardance = pi)."""
+    if angle_deg is not None:
+        angle = float(np.radians(angle_deg))
     return apply_waveplate(field, np.pi, angle)
 
 
-def apply_quarter_wave_plate(field, angle=0.0):
+def apply_quarter_wave_plate(field, angle=0.0, *, angle_deg=None):
     """Convenience wrapper: quarter-wave plate (retardance = pi/2)."""
+    if angle_deg is not None:
+        angle = float(np.radians(angle_deg))
     return apply_waveplate(field, np.pi / 2, angle)
 
 

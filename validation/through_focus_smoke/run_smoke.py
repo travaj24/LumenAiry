@@ -66,7 +66,7 @@ def main():
     with warnings.catch_warnings():
         warnings.simplefilter('ignore')
         E_exit = la.apply_real_lens(
-            E_source, pres, lam, dx,
+            E_source, prescription=pres, wavelength=lam, dx=dx,
             bandlimit=True, slant_correction=True)
     print(f"  apply_real_lens: {time.time()-t0:.1f}s")
 

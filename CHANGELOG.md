@@ -4,10 +4,64 @@ All notable changes to the core library are documented here.
 
 ## [4.7.0] — 2026-05-14
 
-**Polish-pass release: input validation, glass-registry overhaul, API
-symmetry, packaging hygiene.**  No breaking changes; all 34 validation
-files (~670 ``t_*`` assertions) and 94 unit tests (52 baseline + 42
-new) pass.
+**Polish-pass release + API-consistency pass.**  Implements the verified
+items from ``lumenairy_4_6_polish_pass.md`` (A.1, A.2, A.3, B.1, B.2,
+B.4, B.5, B.6, B.7, B.9, B.11, C.1, C.2, D, F.1, F.3, F.4, H.1, H.2,
+H.3, H.4, H.5, I.1, I.2, I.3).  All 34 validation files (~670 ``t_*``
+assertions) and 94 unit tests pass.
+
+### Breaking changes (single-user library — no deprecation cycle)
+
+The 4.7 release intentionally breaks several positional / kwarg
+conventions to remove footguns that the polish-pass flagged.  Existing
+external callers (none known at the time of release) must migrate; the
+4.6 -> 4.7 changes are uniform and mechanical.
+
+* **B.1 -- lens-function args are now keyword-only past ``E_in``.**
+  ``apply_thin_lens``, ``apply_spherical_lens``, ``apply_aspheric_lens``,
+  ``apply_cylindrical_lens``, ``apply_grin_lens``, ``apply_real_lens``,
+  ``apply_real_lens_traced``, ``apply_real_lens_maslov``, and their
+  ``_jax`` twins.  This removes the positional inconsistency where
+  ``wavelength`` sat at position 3 in some, 5 in others, and 6 in
+  ``apply_spherical_lens`` -- a copy-paste typo could silently swap
+  ``wavelength`` and ``dx``.  Pass everything as keyword arguments::
+
+      apply_real_lens(E, prescription=p, wavelength=lam, dx=dx)
+      apply_thin_lens(E, f=0.05, wavelength=lam, dx=dx)
+      apply_spherical_lens(E, R1=..., R2=..., d=..., n_lens=...,
+                            wavelength=lam, dx=dx)
+
+* **B.2 -- ``lens_prescription=`` kwarg renamed to ``prescription=``**
+  on the real-lens trio.  Matches the rest of the library (54 prior
+  uses of ``prescription``).  The 4.6 alias is removed.
+
+* **B.5 -- diffractive-lens factories dropped the ``_m`` suffix.**
+  ``create_diffractive_lens``, ``create_kinoform``,
+  ``create_fresnel_zone_plate`` now take ``dx`` / ``focal_length`` /
+  ``wavelength`` (no ``_m`` suffix).  LumenAiry uses SI metres
+  throughout, so the suffix was redundant.
+
+* **B.6 -- source-factory ordering standardised on
+  ``(N, dx, wavelength, *, source_specific)``.**  Affected functions:
+  ``create_gaussian_beam`` (``sigma`` is now kwonly),
+  ``create_top_hat_beam`` (``diameter`` kwonly),
+  ``create_annular_beam`` (``outer_diameter`` / ``inner_diameter``
+  kwonly), ``create_fiber_mode`` (``mode_field_diameter`` kwonly).
+  Old: ``create_gaussian_beam(N, dx, sigma, wavelength=lam)``.
+  New: ``create_gaussian_beam(N, dx, lam, sigma=sigma)``.
+
+* **B.7 -- ``wavelength`` is now required (no default) on**
+  ``keplerian_telescope``, ``beam_expander_prescription``,
+  ``export_zemax_lens_data``, ``export_zemax_zmx``, ``export_codev_seq``,
+  ``export_quadoa_qos``, and ``make_ray``.  Removes the ``550e-9`` /
+  ``1.31e-6`` defaults that disagreed across the library.
+
+* **C.2 -- Zemax loader rename.**  ``load_zmx_prescription`` →
+  ``load_zemax_zmx`` (matches ``export_zemax_zmx``).
+  ``load_zemax_prescription_txt`` → ``load_zemax_prescription_data_txt``
+  (disambiguates from the ``.zmx`` loader).
+
+### Added (non-breaking)
 
 ### Added
 
@@ -82,6 +136,54 @@ new) pass.
   so the project page on PyPI links directly to the in-repo
   ``CHANGELOG.md`` and the GitHub Releases page.
 
+* **A.3 -- ``apply_real_lens`` kwarg-combination validation.**  A new
+  ``_check_apply_real_lens_kwarg_combination`` guard runs at the top
+  of ``apply_real_lens`` and rejects nonsensical combinations
+  (unknown ``wave_propagator`` value; ``slant_correction=True`` with
+  Fresnel propagator; ``seidel_correction=True`` on a 1-surface
+  prescription; non-positive / out-of-range ``seidel_poly_order``).
+
+* **H.1 -- propagator-trio canonical-order aliases.**  New
+  ``propagate_gbd(E, z, wavelength, dx, ...)`` (already shipped in
+  4.6), ``propagate_hfpi(E, z, wavelength, dx, ...)``, and
+  ``propagate_huygens_fresnel(E, z, wavelength, dx, ...)`` provide a
+  single canonical entry point per family that matches
+  ``angular_spectrum_propagate``'s argument order.  The legacy
+  per-leg functions (``propagate_*_freespace``, ``*_thin_lens``,
+  ``*_through_prescription``, ``*_with_opl_callable``) remain for
+  specialised use cases.
+
+* **H.2 + H.3 -- ASM auto-selector and advisor.**  New
+  ``asm_propagate(E, z, wavelength, dx, **kw)`` picks between
+  ``asm`` / ``asm_tilted`` / ``asm_mft`` / ``sas`` / ``fraunhofer``
+  based on the geometry (tilt, requested output pitch, Fresnel
+  number) and runs the chosen one.  ``which_propagator(...)``
+  returns the same choice *without* running, surfacing the decision
+  for documentation / GUI display.
+
+* **H.4 -- ``plot_lens_layout``.**  Script-/notebook-callable 2-D
+  cross-section drawing of a lens prescription, lifted out of the
+  GUI's ``Layout2DView``.  Renders surfaces, glass shading, optical
+  axis, image plane, and (optionally) traced ray fans.  Independent
+  of Qt; needs only matplotlib.
+
+* **H.5 -- ``plot_glass_map`` + ``abbe_diagram``.**  Classic n_d-vs-
+  V_d Abbe-diagram scatter (with annotations) and a two-panel
+  variant that pairs the Abbe diagram with full ``n(lambda)``
+  dispersion curves over the visible + near-IR.  Lifted out of
+  the GUI's ``glass_map_dock``.
+
+* **D -- ``lumenairy._deprecation`` helper module.**  Centralises
+  ``DeprecationWarning`` emission across the polish-pass work so
+  future deprecations have a uniform message format.  Public
+  helpers: ``warn_deprecated_kwarg``, ``warn_deprecated_alias``,
+  ``deprecated_alias``, ``warn_deprecated_default``.
+
+* **F.4 -- ``py.typed`` marker.**  Empty ``lumenairy/py.typed`` file
+  registered in package-data so type checkers (mypy, pyright,
+  pylance) treat the library's type hints as authoritative rather
+  than skipping them.
+
 ### Renamed
 
 * **``lumenairy.analysis.analysis`` → ``lumenairy.analysis.core``.**
@@ -102,14 +204,14 @@ new) pass.
   21-case OPD claim to the current ~670 ``t_*`` assertions across
   34 files + 49 unit tests + multi-platform CI.
 
-### No breaking changes
-
-The public API is fully back-compatible.  Callers that used dict
-indexing on the 4.4 field-analysis returns keep working via the
-``_DictAttrMixin`` on the new dataclasses.  Callers that imported
-from ``lumenairy.analysis.analysis`` keep working via the shim.
-Callers that used the existing 4.6 glass / propagator / lens APIs
-see no signature changes.
+* **Internal callers** for the renamed functions and signature
+  changes were updated across 40+ files in ``validation/``,
+  ``tests/``, ``examples/``, ``lumenairy/ui/``, and the library
+  proper.  Three pre-existing positional-order bugs surfaced and
+  were fixed as a side effect of the rewrite: a swapped ``dx`` /
+  ``f`` in ``examples/01_basic_propagation.py``, the same in
+  ``validation/raytrace/test_raytrace.py``, and a swapped
+  ``dx, wavelength`` in ``lumenairy/propagators/dispatch.py``.
 
 ## [4.6.0] — 2026-05-14
 

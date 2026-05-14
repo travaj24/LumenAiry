@@ -18,16 +18,16 @@ import lumenairy as la
 class TestApplyThinLens:
 
     def test_preserves_complex128_dtype(self, plane_wave, wavelength_m, dx_m):
-        out = la.apply_thin_lens(plane_wave, 50e-3, wavelength_m, dx_m)
+        out = la.apply_thin_lens(plane_wave, f=50e-3, wavelength=wavelength_m, dx=dx_m)
         assert out.dtype == np.complex128
 
     def test_preserves_shape(self, plane_wave, wavelength_m, dx_m):
-        out = la.apply_thin_lens(plane_wave, 50e-3, wavelength_m, dx_m)
+        out = la.apply_thin_lens(plane_wave, f=50e-3, wavelength=wavelength_m, dx=dx_m)
         assert out.shape == plane_wave.shape
 
     def test_phase_only_unitarity(self, plane_wave, wavelength_m, dx_m):
         """A thin lens is phase-only: |output| should equal |input|."""
-        out = la.apply_thin_lens(plane_wave, 50e-3, wavelength_m, dx_m)
+        out = la.apply_thin_lens(plane_wave, f=50e-3, wavelength=wavelength_m, dx=dx_m)
         assert np.allclose(np.abs(out), np.abs(plane_wave))
 
     def test_sign_convention_converging_negative_phase(self, plane_wave,
@@ -35,17 +35,17 @@ class TestApplyThinLens:
         """Per the exp(-i omega t) convention, a converging lens (+f)
         imparts negative phase off-axis."""
         N = plane_wave.shape[0]
-        out = la.apply_thin_lens(plane_wave, 50e-3, wavelength_m, dx_m)
+        out = la.apply_thin_lens(plane_wave, f=50e-3, wavelength=wavelength_m, dx=dx_m)
         off_phase = np.angle(out[N // 2, N // 2 + N // 4])
         center_phase = np.angle(out[N // 2, N // 2])
         assert off_phase < center_phase
 
     def test_positive_vs_negative_f_have_opposite_phase_sign(
             self, plane_wave, wavelength_m, dx_m):
-        out_pos = la.apply_thin_lens(plane_wave, +50e-3,
-                                       wavelength_m, dx_m)
-        out_neg = la.apply_thin_lens(plane_wave, -50e-3,
-                                       wavelength_m, dx_m)
+        out_pos = la.apply_thin_lens(plane_wave, f=+50e-3,
+                                       wavelength=wavelength_m, dx=dx_m)
+        out_neg = la.apply_thin_lens(plane_wave, f=-50e-3,
+                                       wavelength=wavelength_m, dx=dx_m)
         N = plane_wave.shape[0]
         phi_pos = np.angle(out_pos[N // 2, N // 2 + N // 4])
         phi_neg = np.angle(out_neg[N // 2, N // 2 + N // 4])
@@ -61,8 +61,8 @@ class TestDiffractiveLens:
     def test_create_diffractive_lens_returns_phase_only(
             self, N_small, dx_m, wavelength_m):
         T = la.create_diffractive_lens(N_small, dx_m,
-                                         focal_length_m=50e-3,
-                                         wavelength_m=wavelength_m)
+                                         focal_length=50e-3,
+                                         wavelength=wavelength_m)
         assert T.dtype == np.complex128
         assert T.shape == (N_small, N_small)
         assert np.allclose(np.abs(T), 1.0)

@@ -51,6 +51,11 @@ __all__ = [
     # Jones pupil (vector / Richards-Wolf)
     'compute_jones_pupil',
     'plot_jones_pupil',
+    # Lens-layout cross-section (4.7)
+    'plot_lens_layout',
+    # Glass map / Abbe diagram (4.7)
+    'abbe_diagram',
+    'plot_glass_map',
 ]
 
 
@@ -1035,5 +1040,338 @@ def plot_jones_pupil(
                     ax.set_ylabel(f'y [{unit_label}]')
 
     fig.suptitle(title, fontsize=13, fontweight='bold')
+    fig.tight_layout()
+    return fig, axes
+
+
+# =========================================================================
+# Lens-layout 2-D cross section (H.4 4.7)
+# =========================================================================
+
+def plot_lens_layout(
+    prescription,
+    *,
+    ax=None,
+    wavelength=None,
+    show_rays=True,
+    n_field_angles=3,
+    max_field_deg=0.0,
+    rays_per_fan=5,
+    semi_diameter=None,
+    show_optical_axis=True,
+    show_image_plane=True,
+    title=None,
+):
+    """Draw a 2-D cross-section of a lens prescription.
+
+    Standalone script/notebook equivalent of the GUI's
+    ``Layout2DView`` widget: each refracting surface is drawn as the
+    sag curve over the clear aperture, glass regions are shaded, and
+    (optionally) chief + marginal rays are traced through the system
+    using :func:`lumenairy.raytrace.trace`.
+
+    Parameters
+    ----------
+    prescription : dict
+        Prescription dict (``surfaces``, ``thicknesses``,
+        ``aperture_diameter`` ...) as accepted by
+        :func:`apply_real_lens` and the raytrace.
+    ax : matplotlib Axes, optional
+        Where to draw.  A new figure is created if ``None``.
+    wavelength : float, optional
+        Wavelength [m] used for ray tracing.  Defaults to
+        ``prescription.get('wavelength', 1.31e-6)``.
+    show_rays : bool, default True
+        Trace and overlay rays for ``n_field_angles`` field positions
+        from on-axis to ``max_field_deg`` degrees.
+    n_field_angles : int, default 3
+        Number of field-angle ray fans to draw (on-axis + N-1
+        off-axis).
+    max_field_deg : float, default 0.0
+        Maximum field half-angle [deg] for the off-axis fans.
+        Ignored when ``n_field_angles == 1`` or ``show_rays`` is
+        False.
+    rays_per_fan : int, default 5
+        Rays per field-angle fan, including the chief ray.
+    semi_diameter : float, optional
+        Override for the per-surface clear-aperture half-height [m].
+    show_optical_axis : bool, default True
+    show_image_plane : bool, default True
+    title : str, optional
+
+    Returns
+    -------
+    fig : matplotlib Figure
+    ax : matplotlib Axes
+
+    Notes
+    -----
+    Surface tilts / decenters are NOT rendered; folded designs draw
+    as if all surfaces lie on the same z axis.  Use the GUI's
+    Layout3DView for folded systems.
+    """
+    _require_mpl()
+    from ..raytrace import (
+        surfaces_from_prescription, trace, make_fan,
+        find_paraxial_focus,
+    )
+    from ..elements.lenses import surface_sag_general
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(10, 4))
+    else:
+        fig = ax.figure
+
+    if wavelength is None:
+        wavelength = prescription.get('wavelength', 1.31e-6)
+
+    surfaces = surfaces_from_prescription(prescription)
+    thicknesses = prescription.get('thicknesses', [])
+    if semi_diameter is None:
+        ap = prescription.get('aperture_diameter')
+        if ap is not None:
+            semi_diameter = float(ap) / 2.0
+        else:
+            sds = [float(s.semi_diameter) for s in surfaces
+                   if np.isfinite(s.semi_diameter)]
+            semi_diameter = max(sds) if sds else 5e-3
+
+    z_vertex = [0.0]
+    for t in thicknesses:
+        z_vertex.append(z_vertex[-1] + float(t))
+
+    h = np.linspace(-semi_diameter, semi_diameter, 81)
+    surf_curves = []
+    for i, s in enumerate(surfaces):
+        sag = surface_sag_general(
+            h ** 2, s.radius, s.conic, s.aspheric_coeffs)
+        z_curve = z_vertex[i] + sag
+        surf_curves.append((z_curve, h))
+        ax.plot(z_curve, h, color='#1f3a73', lw=1.2)
+
+    # Glass shading between adjacent surfaces.
+    for i in range(len(surfaces) - 1):
+        glass_in = (surfaces[i].glass_after or '').lower()
+        if glass_in in ('', 'air', None):
+            continue
+        z_i, h_i = surf_curves[i]
+        z_ip1, h_ip1 = surf_curves[i + 1]
+        z_poly = np.concatenate([z_i, z_ip1[::-1]])
+        h_poly = np.concatenate([h_i, h_ip1[::-1]])
+        ax.fill(z_poly, h_poly, color='#a8c8e5', alpha=0.4,
+                edgecolor='none')
+
+    if show_optical_axis:
+        ax.axhline(0.0, color='gray', lw=0.5, ls='--', alpha=0.6)
+
+    image_z = None
+    if show_image_plane or show_rays:
+        try:
+            image_z = float(find_paraxial_focus(surfaces, wavelength))
+            if not np.isfinite(image_z):
+                image_z = None
+        except Exception:
+            image_z = None
+
+    if show_image_plane and image_z is not None:
+        z_img_world = z_vertex[-1] + image_z
+        ax.axvline(z_img_world, color='black', lw=0.8, ls=':',
+                   alpha=0.7)
+        ax.text(z_img_world, 1.05 * semi_diameter, 'image',
+                ha='center', va='bottom', fontsize=8, color='black')
+
+    if show_rays and image_z is not None:
+        for fa_idx in range(int(n_field_angles)):
+            if n_field_angles > 1:
+                fa = (fa_idx / (n_field_angles - 1)) * float(max_field_deg)
+            else:
+                fa = 0.0
+            fa_rad = float(np.radians(fa))
+            color = plt.cm.viridis(
+                fa_idx / max(1, n_field_angles - 1)) \
+                if n_field_angles > 1 else 'tab:orange'
+            try:
+                fan = make_fan(
+                    semi_aperture=semi_diameter, n_rays=int(rays_per_fan),
+                    field_angle=fa_rad, wavelength=wavelength)
+                r = trace(fan, surfaces, wavelength)
+            except Exception:
+                continue
+            for k in range(int(rays_per_fan)):
+                if not r.image_rays.alive[k]:
+                    continue
+                z_world = []
+                hs = []
+                for i_s, rb in enumerate(r.ray_history):
+                    sag_at_ray = surface_sag_general(
+                        np.array([float(rb.x[k]) ** 2
+                                   + float(rb.y[k]) ** 2]),
+                        surfaces[i_s].radius, surfaces[i_s].conic,
+                        surfaces[i_s].aspheric_coeffs)[0]
+                    z_world.append(z_vertex[i_s] + float(sag_at_ray))
+                    hs.append(float(rb.x[k]))
+                ir = r.image_rays
+                if ir.alive[k]:
+                    z_img_world = z_vertex[-1] + image_z
+                    Lf = float(ir.L[k])
+                    Nf = float(ir.N[k]) if hasattr(ir, 'N') else 1.0
+                    dz = z_img_world - z_world[-1]
+                    h_image = hs[-1] + (Lf / max(abs(Nf), 1e-9)) * dz
+                    z_world.append(z_img_world)
+                    hs.append(h_image)
+                ax.plot(z_world, hs, color=color, lw=0.8, alpha=0.7)
+
+    ax.set_xlabel('z [m]')
+    ax.set_ylabel('h [m]')
+    if title is None:
+        title = prescription.get('name', 'Lens layout')
+    ax.set_title(title)
+    ax.set_aspect('equal', adjustable='datalim')
+    ax.grid(True, alpha=0.2)
+
+    return fig, ax
+
+
+# =========================================================================
+# Glass map / Abbe diagram (H.5 4.7)
+# =========================================================================
+
+def abbe_diagram(
+    glasses=None,
+    *,
+    wavelengths_nm=(587.6, 486.1, 656.3),
+    ax=None,
+    annotate=True,
+    title='Abbe diagram',
+):
+    """Plot a refractive-index vs Abbe-number (n_d vs V_d) diagram.
+
+    The classical Abbe diagram is a 2-D scatter of glass-catalogue
+    entries with the d-line index ``n_d`` on the y-axis and the
+    Abbe number ``V_d = (n_d - 1) / (n_F - n_C)`` on the x-axis (note:
+    *higher* dispersion is to the *left*).  Used in lens design to
+    pick complementary glass pairs for achromatic doublets.
+
+    Parameters
+    ----------
+    glasses : list of str, optional
+        Glass names from :data:`lumenairy.GLASS_REGISTRY`.  Defaults
+        to every bundled glass with a successful index lookup at
+        all three wavelengths.
+    wavelengths_nm : tuple of 3 floats
+        ``(d, F, C)`` lines in nm.  Defaults to the standard
+        ``(587.6, 486.1, 656.3)``; the d line is sodium-D, F is
+        hydrogen-F, C is hydrogen-C.
+    ax : matplotlib Axes, optional
+    annotate : bool, default True
+        Label each point with the glass name.
+    title : str
+
+    Returns
+    -------
+    fig : matplotlib Figure
+    ax : matplotlib Axes
+    data : list of (name, n_d, V_d) tuples for the entries that
+        were successfully evaluated.
+    """
+    _require_mpl()
+    from ..glass import get_glass_index, list_glasses
+
+    if glasses is None:
+        glasses = list_glasses()
+
+    lam_d, lam_F, lam_C = (w * 1e-9 for w in wavelengths_nm)
+
+    data = []
+    for name in glasses:
+        try:
+            n_d = float(get_glass_index(name, lam_d))
+            n_F = float(get_glass_index(name, lam_F))
+            n_C = float(get_glass_index(name, lam_C))
+        except Exception:
+            continue
+        if (n_F - n_C) == 0:
+            continue
+        V_d = (n_d - 1.0) / (n_F - n_C)
+        if not (np.isfinite(n_d) and np.isfinite(V_d)):
+            continue
+        data.append((name, n_d, V_d))
+
+    if not data:
+        raise ValueError(
+            'abbe_diagram: no glasses successfully evaluated; pass a '
+            'subset of GLASS_REGISTRY keys via the `glasses=` arg.')
+
+    if ax is None:
+        fig, ax = plt.subplots(figsize=(9, 6))
+    else:
+        fig = ax.figure
+
+    Vs = [d[2] for d in data]
+    ns = [d[1] for d in data]
+    ax.scatter(Vs, ns, c='#1f3a73', s=42, alpha=0.75,
+               edgecolors='black', linewidths=0.6)
+
+    if annotate:
+        for name, n_d, V_d in data:
+            ax.annotate(name, xy=(V_d, n_d),
+                        xytext=(3, 3), textcoords='offset points',
+                        fontsize=7, alpha=0.85)
+
+    ax.invert_xaxis()  # Abbe-diagram convention: high dispersion left
+    ax.set_xlabel(r'Abbe number $V_d = (n_d - 1) / (n_F - n_C)$')
+    ax.set_ylabel(r'$n_d$ (d-line refractive index)')
+    ax.set_title(title)
+    ax.grid(True, alpha=0.3)
+
+    return fig, ax, data
+
+
+def plot_glass_map(
+    glasses=None,
+    *,
+    wavelengths_nm=(587.6, 486.1, 656.3),
+    figsize=(11, 6),
+    annotate=True,
+):
+    """Two-panel figure: Abbe diagram (left) + ``n(lambda)`` dispersion
+    curves (right) for the same glass set.
+
+    A handy starting screen for lens-design exploration.
+    """
+    _require_mpl()
+    from ..glass import get_glass_index, list_glasses
+
+    if glasses is None:
+        glasses = list_glasses()
+
+    fig, axes = plt.subplots(1, 2, figsize=figsize)
+    _, _, data = abbe_diagram(
+        glasses=glasses, wavelengths_nm=wavelengths_nm,
+        ax=axes[0], annotate=annotate,
+        title='Abbe diagram (n_d vs V_d)')
+
+    # Right panel: n(lambda) curves over a visible+IR sweep
+    wl_grid = np.linspace(0.4e-6, 1.8e-6, 80)
+    cmap = plt.cm.viridis
+    for i, (name, _, _) in enumerate(data):
+        ns = []
+        for wl in wl_grid:
+            try:
+                ns.append(float(get_glass_index(name, wl)))
+            except Exception:
+                ns.append(np.nan)
+        ns = np.array(ns)
+        if np.isfinite(ns).any():
+            color = cmap(i / max(1, len(data) - 1))
+            axes[1].plot(wl_grid * 1e9, ns, color=color, lw=0.9,
+                         label=name)
+    axes[1].set_xlabel('Wavelength [nm]')
+    axes[1].set_ylabel('Refractive index n')
+    axes[1].set_title('Dispersion curves')
+    axes[1].grid(True, alpha=0.3)
+    if annotate and len(data) <= 20:
+        axes[1].legend(fontsize=6, ncols=2, loc='upper right')
+
     fig.tight_layout()
     return fig, axes

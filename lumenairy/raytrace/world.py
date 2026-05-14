@@ -2,7 +2,7 @@
 lumenairy.raytrace.world -- world-frame surface construction.
 
 A prescription with coord-break entries (e.g. a folded ``.zmx`` design
-loaded via :func:`load_zmx_prescription`) carries tilt / decenter
+loaded via :func:`load_zemax_zmx`) carries tilt / decenter
 information in ``prescription['coord_breaks']`` and surface order in
 ``surf_num``.  :func:`surfaces_from_prescription` (4.3 and earlier)
 discards that info -- it returns a local-frame surface list suitable
@@ -18,7 +18,7 @@ rotations about local x then y axes), and emits a list of
 with :func:`trace_world` for folded-design ray tracing from any
 script:
 
-    presc = la.load_zmx_prescription('folded_design.zmx')
+    presc = la.load_zemax_zmx('folded_design.zmx')
     surfaces = la.world_surfaces_from_prescription(presc)
     result = la.trace_world(rays, surfaces, wavelength)
 
@@ -92,7 +92,7 @@ def world_surfaces_from_prescription(prescription) -> List[Surface]:
     Parameters
     ----------
     prescription : dict
-        Prescription dict from :func:`load_zmx_prescription`,
+        Prescription dict from :func:`load_zemax_zmx`,
         :func:`make_singlet`, etc.  May or may not contain
         ``'coord_breaks'``; absent or empty -> straight optical axis
         with identity rotations.
@@ -133,7 +133,7 @@ def world_surfaces_from_prescription(prescription) -> List[Surface]:
 
     For a folded design loaded from a ``.zmx``:
 
-    >>> # presc = la.load_zmx_prescription('folded.zmx')
+    >>> # presc = la.load_zemax_zmx('folded.zmx')
     >>> # wsurfs = la.world_surfaces_from_prescription(presc)
     >>> # result = la.trace_world(rays, wsurfs, wavelength)
     """

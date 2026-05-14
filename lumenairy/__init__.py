@@ -440,8 +440,8 @@ from .io.prescriptions import (
     make_cylindrical,
     make_biconic,
     thorlabs_lens,
-    load_zmx_prescription,
-    load_zemax_prescription_txt,
+    load_zemax_zmx,
+    load_zemax_prescription_data_txt,
     export_zemax_lens_data,
     export_zemax_zmx,
     load_codev_seq,
@@ -580,6 +580,9 @@ from .analysis.plotting import (
     plot_beam_profile,
     plot_jones_pupil,
     compute_jones_pupil,
+    plot_lens_layout,
+    abbe_diagram,
+    plot_glass_map,
 )
 
 # ── Multi-backend infrastructure (3.4.0) ─────────────────────────────
@@ -621,6 +624,7 @@ from .propagators.gbd import (
     propagate_gbd_through_prescription,
 )
 from .propagators.hf import (
+    propagate_huygens_fresnel,               # canonical-order alias
     propagate_huygens_fresnel_freespace,
     propagate_huygens_fresnel_with_opl_callable,
     propagate_huygens_fresnel_through_prescription,
@@ -635,6 +639,9 @@ from .propagators.subaperture import (
 from .propagators.dispatch import (
     propagate,
     VALID_METHODS,
+    asm_propagate,
+    which_propagator,
+    ASM_FAMILY,
 )
 from .propagators.result import PropagationResult
 from .propagators.mhs import (
@@ -709,8 +716,8 @@ __all__ = [
     'make_biconic',
     'thorlabs_lens',
     'THORLABS_CATALOG',
-    'load_zmx_prescription',
-    'load_zemax_prescription_txt',
+    'load_zemax_zmx',
+    'load_zemax_prescription_data_txt',
     'export_zemax_lens_data',
     'export_zemax_zmx',
     'load_codev_seq',
@@ -799,6 +806,9 @@ __all__ = [
     # Top-level smart-method propagator
     'propagate',
     'VALID_METHODS',
+    'asm_propagate',
+    'which_propagator',
+    'ASM_FAMILY',
     'PropagationResult',
 
     # Free-space propagators (low-level)
@@ -815,6 +825,7 @@ __all__ = [
     'angular_spectrum_propagate_mft',
 
     # Huygens-Fresnel family
+    'propagate_huygens_fresnel',
     'propagate_huygens_fresnel_freespace',
     'propagate_huygens_fresnel_with_opl_callable',
     'propagate_huygens_fresnel_through_prescription',
@@ -1223,6 +1234,9 @@ __all__ = [
     'plot_beam_profile',
     'plot_jones_pupil',
     'compute_jones_pupil',
+    'plot_lens_layout',
+    'abbe_diagram',
+    'plot_glass_map',
 
     # ============================================================
     # Tier 10 -- Infrastructure (backend, memory, progress, flags)

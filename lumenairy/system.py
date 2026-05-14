@@ -344,19 +344,19 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
             xc = elem.get('xc', 0)
             yc = elem.get('yc', 0)
             model = elem.get('lens_model', 'paraxial')
-            E = apply_thin_lens(E, f, wavelength, dx, dy, xc, yc,
+            E = apply_thin_lens(E, f=f, wavelength=wavelength, dx=dx, dy=dy, xc=xc, yc=yc,
                                 use_gpu=use_gpu, lens_model=model)
 
         elif elem['type'] == 'spherical_lens':
-            E = apply_spherical_lens(E, elem['R1'], elem['R2'], elem['d'],
-                                elem['n_lens'], wavelength, dx, dy,
+            E = apply_spherical_lens(E, R1=elem['R1'], R2=elem['R2'], d=elem['d'],
+                                n_lens=elem['n_lens'], wavelength=wavelength, dx=dx, dy=dy,
                                 aperture_diameter=elem.get('aperture_diameter'),
                                 xc=elem.get('xc', 0), yc=elem.get('yc', 0),
                                 use_gpu=use_gpu)
 
         elif elem['type'] == 'aspheric_lens':
-            E = apply_aspheric_lens(E, elem['R1'], elem['R2'], elem['d'],
-                                elem['n_lens'], wavelength, dx, dy,
+            E = apply_aspheric_lens(E, R1=elem['R1'], R2=elem['R2'], d=elem['d'],
+                                n_lens=elem['n_lens'], wavelength=wavelength, dx=dx, dy=dy,
                                 k1=elem.get('k1', 0), k2=elem.get('k2', 0),
                                 A1=elem.get('A1'), A2=elem.get('A2'),
                                 aperture_diameter=elem.get('aperture_diameter'),
@@ -365,7 +365,7 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
 
         elif elem['type'] == 'real_lens':
             E = apply_real_lens(
-                E, elem['prescription'], wavelength, dx,
+                E, prescription=elem['prescription'], wavelength=wavelength, dx=dx,
                 bandlimit=elem.get('bandlimit', True),
                 slant_correction=elem.get('slant_correction', False),
                 fresnel=elem.get('fresnel', False),
@@ -376,7 +376,7 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
 
         elif elem['type'] == 'real_lens_traced':
             E = apply_real_lens_traced(
-                E, elem['prescription'], wavelength, dx,
+                E, prescription=elem['prescription'], wavelength=wavelength, dx=dx,
                 bandlimit=elem.get('bandlimit', True),
                 ray_subsample=elem.get('ray_subsample', 1),
                 progress=(lambda stage, frac, msg='': sub_cb(frac, msg))
@@ -397,7 +397,7 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
                                xc=elem.get('xc', 0), yc=elem.get('yc', 0))
 
         elif elem['type'] == 'cylindrical_lens':
-            E = apply_cylindrical_lens(E, elem['f'], wavelength, dx, dy,
+            E = apply_cylindrical_lens(E, f=elem['f'], wavelength=wavelength, dx=dx, dy=dy,
                                        axis=elem.get('axis', 'x'),
                                        xc=elem.get('xc', 0),
                                        yc=elem.get('yc', 0))
@@ -408,8 +408,8 @@ def propagate_through_system(E_in, elements, wavelength, dx, dy=None,
                              xc=elem.get('xc', 0), yc=elem.get('yc', 0))
 
         elif elem['type'] == 'grin_lens':
-            E = apply_grin_lens(E, elem['n0'], elem['g'], elem['d'],
-                                wavelength, dx, dy,
+            E = apply_grin_lens(E, n0=elem['n0'], g=elem['g'], d=elem['d'],
+                                wavelength=wavelength, dx=dx, dy=dy,
                                 xc=elem.get('xc', 0), yc=elem.get('yc', 0))
 
         elif elem['type'] == 'mask':

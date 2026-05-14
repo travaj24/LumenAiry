@@ -29,8 +29,8 @@ def main():
     window = MainWindow()
 
     # Handle command-line arguments.
-    # Prescription helpers (thorlabs_lens, load_zmx_prescription,
-    # load_zemax_prescription_txt) are exported at the top-level
+    # Prescription helpers (thorlabs_lens, load_zemax_zmx,
+    # load_zemax_prescription_data_txt) are exported at the top-level
     # `lumenairy` namespace; the original launcher tried to import
     # them from a non-existent `lumenairy.prescriptions` submodule,
     # which the IDE rightly flagged but Python silently masked
@@ -44,9 +44,9 @@ def main():
         filepath = args[0]
         try:
             if filepath.lower().endswith('.zmx'):
-                rx = la.load_zmx_prescription(filepath)
+                rx = la.load_zemax_zmx(filepath)
             else:
-                rx = la.load_zemax_prescription_txt(filepath)
+                rx = la.load_zemax_prescription_data_txt(filepath)
             wv_nm = rx.get('wavelength', 1310e-9)
             if isinstance(wv_nm, float) and wv_nm < 1e-3:
                 wv_nm = wv_nm * 1e9

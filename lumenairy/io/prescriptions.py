@@ -288,8 +288,8 @@ def thorlabs_lens(part_number):
 # Zemax .zmx file parser
 # ============================================================================
 
-def load_zmx_prescription(filepath, surface_range=None, name=None):
-    """Parse a Zemax .zmx text file and return a lens prescription dict.
+def load_zemax_zmx(filepath, surface_range=None, name=None):
+    """Parse a Zemax ``.zmx`` text file and return a lens prescription dict.
 
     Reads the surface table from a Zemax sequential lens file and builds a
     prescription dict compatible with :func:`apply_real_lens`.  Handles
@@ -342,10 +342,10 @@ def load_zmx_prescription(filepath, surface_range=None, name=None):
 
     Examples
     --------
-    >>> rx = load_zmx_prescription('AC254-200-C.zmx')
-    >>> E_out = apply_real_lens(E_in, rx, wavelength=1.3e-6, dx=2.1e-6)
+    >>> rx = load_zemax_zmx('AC254-200-C.zmx')
+    >>> E_out = apply_real_lens(E_in, prescription=rx, wavelength=1.3e-6, dx=2.1e-6)
 
-    >>> rx = load_zmx_prescription('my_design.zmx', surface_range=(2, 5))
+    >>> rx = load_zemax_zmx('my_design.zmx', surface_range=(2, 5))
     """
     # Read file -- try UTF-16-LE first (Zemax default), then UTF-8
     for encoding in ('utf-16-le', 'utf-8', 'latin-1'):
@@ -733,7 +733,7 @@ def load_zmx_prescription(filepath, surface_range=None, name=None):
 # Zemax Prescription Data text export parser
 # ---------------------------------------------------------------------------
 
-def load_zemax_prescription_txt(filepath, surface_range=None, name=None):
+def load_zemax_prescription_data_txt(filepath, surface_range=None, name=None):
     """
     Parse a Zemax "Prescription Data" text export and return a lens prescription.
 
@@ -741,7 +741,7 @@ def load_zemax_prescription_txt(filepath, surface_range=None, name=None):
     tab-separated text report containing the full surface table plus
     system parameters (wavelength, units, focal length, etc.).  This
     parser reads that format and produces the same output structure as
-    :func:`load_zmx_prescription` so the two loaders are interchangeable.
+    :func:`load_zemax_zmx` so the two loaders are interchangeable.
 
     The file is typically UTF-16 encoded (both BOM-marked UTF-16 and
     UTF-8 are tried automatically).
@@ -792,7 +792,7 @@ def load_zemax_prescription_txt(filepath, surface_range=None, name=None):
 
     Examples
     --------
-    >>> rx = load_zemax_prescription_txt('TXdesign-prescription.txt')
+    >>> rx = load_zemax_prescription_data_txt('TXdesign-prescription.txt')
     >>> print(f"Found {len(rx['elements'])} elements")
     >>> print(f"Wavelength: {rx.get('wavelength', 0)*1e9:.0f} nm")
     """
@@ -990,7 +990,7 @@ def load_zemax_prescription_txt(filepath, surface_range=None, name=None):
             f"in range ({s_first}, {s_last})"
         )
 
-    # Object-space distance (see load_zmx_prescription for rationale).
+    # Object-space distance (see load_zemax_zmx for rationale).
     # Sum ``thickness`` values from the STOP surface (treated as the
     # source plane) up to but not including the first refractive
     # surface.  If no STOP is present, sum from SURF 0 onward.
@@ -1122,7 +1122,7 @@ def load_zemax_prescription_txt(filepath, surface_range=None, name=None):
         'elements': elements,
         'all_thicknesses': thicknesses,
         # Distance from the stop / source plane to the first refractive
-        # surface.  See load_zmx_prescription for rationale.
+        # surface.  See load_zemax_zmx for rationale.
         'object_distance': obj_distance,
         # Metadata from header
         'wavelength': wavelength_m,
@@ -1154,7 +1154,7 @@ def load_zemax_prescription_txt(filepath, surface_range=None, name=None):
 # of the surface vertex.
 
 
-def export_zemax_lens_data(prescription, path, wavelength=1.31e-6,
+def export_zemax_lens_data(prescription, path, *, wavelength,
                            stop_surface=0, aperture_diameter=None,
                            back_focal_length=None,
                            description=None, extra_notes=None):
@@ -1498,7 +1498,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         f.write('\n'.join(lines) + '\n')
 
 
-def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
+def export_zemax_zmx(prescription, path, *, wavelength,
                      stop_surface=0, aperture_diameter=None,
                      back_focal_length=None, name=None):
     """Write a minimal Zemax OpticStudio ``.zmx`` sequential file for a
@@ -1511,7 +1511,7 @@ def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
     3.7.0: when the prescription carries the full ``elements`` list
     (with mirrors) and ``coord_breaks`` list, the writer emits
     matching ``GLAS MIRROR`` and ``TYPE COORDBRK`` entries with the
-    correct PARM 1-6 fields so a round-trip ``load_zmx_prescription``
+    correct PARM 1-6 fields so a round-trip ``load_zemax_zmx``
     → GUI edit → ``export_zemax_zmx`` preserves fold geometry.  The
     pre-3.7 lens-only path (``surfaces`` + ``thicknesses``) remains
     the fallback when these keys are absent.
@@ -1680,7 +1680,7 @@ def export_zemax_zmx(prescription, path, wavelength=1.31e-6,
 # ============================================================================
 
 
-def export_codev_seq(prescription, path, wavelength=1.31e-6,
+def export_codev_seq(prescription, path, *, wavelength,
                      stop_surface=0, aperture_diameter=None,
                      back_focal_length=None, name=None, units='M'):
     """Write a CODE V sequential ``.seq`` file for a prescription.
@@ -2075,7 +2075,7 @@ def _quadoa_serialize_aspheric(coeffs):
     return [float(c) for c in coeffs]
 
 
-def export_quadoa_qos(prescription, path, wavelength=1.31e-6,
+def export_quadoa_qos(prescription, path, *, wavelength,
                       stop_surface=0, aperture_diameter=None,
                       back_focal_length=None, name=None, units='M'):
     """Write a Quadoa Optikos-style ``.qos`` JSON system file.
@@ -2463,14 +2463,14 @@ def normalize_prescription(prescription):
 
     * :func:`make_singlet` / :func:`make_doublet` / etc. return the
       minimal ``{'surfaces', 'thicknesses', 'aperture_diameter'}``.
-    * :func:`load_zmx_prescription` adds ``'elements'`` and
+    * :func:`load_zemax_zmx` adds ``'elements'`` and
       ``'all_thicknesses'`` (refractive-only ``'surfaces'`` plus the
       full element list including mirrors).
-    * :func:`load_zemax_prescription_txt` additionally adds
+    * :func:`load_zemax_prescription_data_txt` additionally adds
       ``'wavelength'`` (primary), ``'units'`` (originating unit
       string), and ``'has_semi_diameters'``.
     * :func:`load_codev_seq` / :func:`load_quadoa_qos` match
-      ``load_zmx_prescription``'s schema.
+      ``load_zemax_zmx``'s schema.
 
     Downstream functions (:func:`apply_real_lens`,
     :func:`monte_carlo_tolerancing`, :func:`eval_image_plane_wfe`, ...)

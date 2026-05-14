@@ -605,18 +605,18 @@ class WaveOpticsWorker(QThread):
                         opts.setdefault('tilt_aware_rays',
                                          cfg.get('tilt_aware_rays', True))
                         E = apply_real_lens_traced(
-                            E, pres, wv, current_dx,
+                            E, prescription=pres, wavelength=wv, dx=current_dx,
                             progress=self._core_progress, **opts)
                     elif lens_model == 'real_lens_maslov':
                         opts = dict(opts_all.get(
                             'apply_real_lens_maslov', {}))
                         E = apply_real_lens_maslov(
-                            E, pres, wv, current_dx, **opts)
+                            E, prescription=pres, wavelength=wv, dx=current_dx, **opts)
                     else:
                         opts = dict(opts_all.get('apply_real_lens', {}))
                         opts.setdefault('bandlimit', True)
                         E = apply_real_lens(
-                            E, pres, wv, current_dx,
+                            E, prescription=pres, wavelength=wv, dx=current_dx,
                             progress=self._core_progress, **opts)
                     used_lens_router = True
                     step += len(trace_surfs)   # credit all surfaces at once

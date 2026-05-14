@@ -2569,14 +2569,14 @@ class MainWindow(QMainWindow):
             self._suppress_dirty_marking = True
             try:
                 if lower.endswith('.zmx'):
-                    from ..io.prescriptions import load_zmx_prescription
-                    rx = load_zmx_prescription(fp)
+                    from ..io.prescriptions import load_zemax_zmx
+                    rx = load_zemax_zmx(fp)
                 elif lower.endswith('.seq'):
                     from ..io.prescriptions import load_codev_seq
                     rx = load_codev_seq(fp)
                 else:
-                    from ..io.prescriptions import load_zemax_prescription_txt
-                    rx = load_zemax_prescription_txt(fp)
+                    from ..io.prescriptions import load_zemax_prescription_data_txt
+                    rx = load_zemax_prescription_data_txt(fp)
                 wv = rx.get('wavelength', self.model.wavelength_nm * 1e-9)
                 if isinstance(wv, float) and wv < 1e-3:
                     wv *= 1e9
@@ -2772,14 +2772,14 @@ class MainWindow(QMainWindow):
                     self.model._restore_state(state)
                 else:
                     if lower.endswith('.zmx'):
-                        from ..io.prescriptions import load_zmx_prescription
-                        rx = load_zmx_prescription(path)
+                        from ..io.prescriptions import load_zemax_zmx
+                        rx = load_zemax_zmx(path)
                     elif lower.endswith('.seq'):
                         from ..io.prescriptions import load_codev_seq
                         rx = load_codev_seq(path)
                     else:
-                        from ..io.prescriptions import load_zemax_prescription_txt
-                        rx = load_zemax_prescription_txt(path)
+                        from ..io.prescriptions import load_zemax_prescription_data_txt
+                        rx = load_zemax_prescription_data_txt(path)
                     wv = rx.get('wavelength', self.model.wavelength_nm * 1e-9)
                     if isinstance(wv, float) and wv < 1e-3:
                         wv *= 1e9
@@ -2865,14 +2865,14 @@ class MainWindow(QMainWindow):
                     self.model._restore_state(state)
                 else:
                     if lower.endswith('.zmx'):
-                        from ..io.prescriptions import load_zmx_prescription
-                        rx = load_zmx_prescription(fp)
+                        from ..io.prescriptions import load_zemax_zmx
+                        rx = load_zemax_zmx(fp)
                     elif lower.endswith('.seq'):
                         from ..io.prescriptions import load_codev_seq
                         rx = load_codev_seq(fp)
                     else:
-                        from ..io.prescriptions import load_zemax_prescription_txt
-                        rx = load_zemax_prescription_txt(fp)
+                        from ..io.prescriptions import load_zemax_prescription_data_txt
+                        rx = load_zemax_prescription_data_txt(fp)
                     wv = rx.get('wavelength', self.model.wavelength_nm * 1e-9)
                     if isinstance(wv, float) and wv < 1e-3:
                         wv *= 1e9
@@ -3264,14 +3264,14 @@ def _cli_main():
         try:
             lower = fp.lower()
             if lower.endswith('.zmx'):
-                from ..io.prescriptions import load_zmx_prescription
-                rx = load_zmx_prescription(fp)
+                from ..io.prescriptions import load_zemax_zmx
+                rx = load_zemax_zmx(fp)
             elif lower.endswith('.seq'):
                 from ..io.prescriptions import load_codev_seq
                 rx = load_codev_seq(fp)
             else:
-                from ..io.prescriptions import load_zemax_prescription_txt
-                rx = load_zemax_prescription_txt(fp)
+                from ..io.prescriptions import load_zemax_prescription_data_txt
+                rx = load_zemax_prescription_data_txt(fp)
             wv = rx.get('wavelength', 1310e-9)
             if isinstance(wv, float) and wv < 1e-3: wv *= 1e9
             window.model.load_prescription(rx, wv)

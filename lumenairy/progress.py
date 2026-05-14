@@ -15,7 +15,7 @@ Usage from a script
 >>> def my_cb(stage, frac, msg=''):
 ...     print(f'{stage}: {frac*100:.0f}% {msg}')
 >>> E_out = apply_real_lens_traced(
-...     E_in, rx, wavelength=1.3e-6, dx=2e-6,
+...     E_in, prescription=rx, wavelength=1.3e-6, dx=2e-6,
 ...     progress=my_cb)
 
 Usage from a Qt dock

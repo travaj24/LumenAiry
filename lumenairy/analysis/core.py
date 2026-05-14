@@ -943,7 +943,7 @@ def polychromatic_strehl(prescription, wavelengths, weights,
     for i, wl in enumerate(wavelengths):
         surfs = surfaces_from_prescription(prescription)
         _, _, bfl, _ = system_abcd(surfs, float(wl))
-        E_exit = apply_real_lens(E_in, prescription, float(wl), dx)
+        E_exit = apply_real_lens(E_in, prescription=prescription, wavelength=float(wl), dx=dx)
         ideal = diffraction_limited_peak(E_exit, float(wl), bfl, dx)
         half = max(abs(bfl) / 20.0, 1e-3)
         z = np.linspace(bfl - half, bfl + half, 21)
@@ -1104,7 +1104,7 @@ def polychromatic_psf(prescription, wavelengths, weights, N, dx, *,
 
     for i, wl in enumerate(wavelengths):
         wl_f = float(wl)
-        E_exit = apply_real_lens(E_in, prescription, wl_f, dx)
+        E_exit = apply_real_lens(E_in, prescription=prescription, wavelength=wl_f, dx=dx)
         E_image = angular_spectrum_propagate(
             E_exit, image_distance, wl_f, dx, bandlimit=bandlimit)
         I = np.abs(E_image) ** 2

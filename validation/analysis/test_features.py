@@ -354,7 +354,7 @@ H.section('Multi-configuration / afocal')
 
 
 def t_keplerian_afocal():
-    pres = la.keplerian_telescope(200e-3, 50e-3)
+    pres = la.keplerian_telescope(200e-3, 50e-3, wavelength=550e-9)
     mag, _ = la.afocal_angular_magnification(pres, lam)
     surfs = surfaces_from_prescription(pres)
     M_abcd, _, _, _ = system_abcd(surfs, lam)
@@ -366,7 +366,7 @@ H.run('Afocal: Keplerian telescope has B ~ 0', t_keplerian_afocal)
 
 
 def t_beam_expander_magnification():
-    pres = la.beam_expander_prescription(3.0, 100e-3)
+    pres = la.beam_expander_prescription(3.0, 100e-3, wavelength=550e-9)
     mag, _ = la.afocal_angular_magnification(pres, lam)
     expected = 1.0 / 3.0
     err = abs(abs(mag) - expected) / expected

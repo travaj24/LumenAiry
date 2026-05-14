@@ -25,9 +25,9 @@ Usage
         trace_prescription, spot_diagram, ray_fan_plot,
         system_abcd, seidel_coefficients,
     )
-    from lumenairy.prescriptions import load_zemax_prescription_txt
+    from lumenairy.prescriptions import load_zemax_prescription_data_txt
 
-    rx = load_zemax_prescription_txt('design.txt', surface_range=(1, 13))
+    rx = load_zemax_prescription_data_txt('design.txt', surface_range=(1, 13))
     result = trace_prescription(rx, wavelength=1.31e-6, num_rings=10)
     spot_diagram(result)
 
@@ -1318,8 +1318,8 @@ def surfaces_from_prescription(prescription):
     """Convert a lens prescription dict to a list of Surface objects.
 
     Accepts the same prescription format returned by
-    :func:`prescriptions.load_zemax_prescription_txt`,
-    :func:`prescriptions.load_zmx_prescription`,
+    :func:`prescriptions.load_zemax_prescription_data_txt`,
+    :func:`prescriptions.load_zemax_zmx`,
     :func:`prescriptions.make_singlet`, etc.
 
     Parameters
@@ -1509,7 +1509,7 @@ def _make_bundle(x, y, L, M, wavelength):
     )
 
 
-def make_ray(x=0.0, y=0.0, L=0.0, M=0.0, wavelength=550e-9):
+def make_ray(x=0.0, y=0.0, L=0.0, M=0.0, *, wavelength):
     """Create a single ray.
 
     Parameters
@@ -2716,7 +2716,8 @@ def find_lenses(surfaces, wavelength):
 # ============================================================================
 
 def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
-                        stop_index=None, field_angle=0.01):
+                        stop_index=None, field_angle=0.01,
+                        *, field_angle_deg=None):
     """Compute the five Seidel (third-order) aberration coefficients.
 
     Uses the Buchdahl-Hopkins formulation based on paraxial marginal
@@ -2751,6 +2752,11 @@ def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
         magnitudes scale linearly with this value (and quadratically
         for astigmatism/Petzval).  0.01 rad (~0.57 deg) is the
         conventional small-angle normalisation.
+    field_angle_deg : float, optional
+        Same as ``field_angle`` but expressed in degrees.  When
+        provided, takes precedence over the radian form.  4.7+ the
+        library is converging on ``_deg`` as the canonical
+        user-facing angle unit.
 
     Returns
     -------
@@ -2766,6 +2772,8 @@ def seidel_coefficients(surfaces, wavelength, object_distance=np.inf,
     abcd : ndarray
         System ABCD matrix.
     """
+    if field_angle_deg is not None:
+        field_angle = float(np.radians(field_angle_deg))
     n_surf = len(surfaces)
     n_first = get_glass_index(surfaces[0].glass_before, wavelength)
 
@@ -3162,7 +3170,7 @@ def ray_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
     img_y = res_y.image_rays
 
     # Reference: chief ray position
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength)
+    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
     res_chief = trace(chief, surfaces, wavelength)
     y_ref = res_chief.image_rays.y[0]
     x_ref = res_chief.image_rays.x[0]
@@ -3196,7 +3204,7 @@ def ray_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
     res_y = trace_world(fan_y, surfaces, wavelength)
     img_y = res_y.image_rays
 
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength)
+    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
     res_chief = trace_world(chief, surfaces, wavelength)
     y_ref = res_chief.image_rays.y[0]
     x_ref = res_chief.image_rays.x[0]
@@ -3311,7 +3319,7 @@ def opd_fan_data(surfaces, wavelength, semi_aperture, field_angle=0.0,
     img_y = res_y.image_rays
 
     # Chief ray reference OPD
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength)
+    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
     res_chief = trace(chief, surfaces, wavelength)
     opd_ref = res_chief.image_rays.opd[0]
 
@@ -3340,7 +3348,7 @@ def opd_fan_data_world(surfaces, wavelength, semi_aperture, field_angle=0.0,
     res_y = trace_world(fan_y, surfaces, wavelength)
     img_y = res_y.image_rays
 
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength)
+    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
     res_chief = trace_world(chief, surfaces, wavelength)
     opd_ref = res_chief.image_rays.opd[0]
 

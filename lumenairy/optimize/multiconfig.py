@@ -208,8 +208,8 @@ def _zero_C_air_gap(prescription, gap_slot_index, wavelength=550e-9):
 _zero_B_air_gap = _zero_C_air_gap
 
 
-def beam_expander_prescription(M, f_objective, glass='N-BK7',
-                                aperture=25.4e-3, wavelength=550e-9):
+def beam_expander_prescription(M, f_objective, *, wavelength,
+                                glass='N-BK7', aperture=25.4e-3):
     """Create a Galilean beam expander prescription.
 
     A Galilean beam expander uses a negative (diverging) input lens
@@ -235,7 +235,6 @@ def beam_expander_prescription(M, f_objective, glass='N-BK7',
     -------
     prescription : dict
     """
-
     f_eye = -f_objective / M  # negative for Galilean
 
     n = 1.5  # approximate
@@ -279,8 +278,8 @@ def beam_expander_prescription(M, f_objective, glass='N-BK7',
     return pres
 
 
-def keplerian_telescope(f_objective, f_eyepiece, glass='N-BK7',
-                         aperture=25.4e-3, wavelength=550e-9):
+def keplerian_telescope(f_objective, f_eyepiece, *, wavelength,
+                         glass='N-BK7', aperture=25.4e-3):
     """Create a Keplerian telescope prescription (two positive lenses
     separated to produce an afocal output).
 

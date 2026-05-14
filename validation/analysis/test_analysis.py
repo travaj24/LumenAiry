@@ -154,7 +154,7 @@ def t_airy_disk():
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
     pupil = np.where(X**2 + Y**2 <= (D/2)**2, 1.0, 0.0).astype(np.complex128)
-    pupil = la.apply_thin_lens(pupil, f, lam, dx)
+    pupil = la.apply_thin_lens(pupil, f=f, wavelength=lam, dx=dx)
     E_focus = la.angular_spectrum_propagate(pupil, f, lam, dx)
     I = np.abs(E_focus)**2
     r_airy = 1.22 * lam * f / D
@@ -219,7 +219,7 @@ def t_gaussian_q_parameter():
     z = 50e-3
     z_R = np.pi * w0**2 / lam
     w_expected = w0 * np.sqrt(1 + (z / z_R)**2)
-    E, _, _ = la.create_gaussian_beam(N, dx, sigma)
+    E, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=sigma)
     E_prop = la.angular_spectrum_propagate(E, z, lam, dx)
     d4x, d4y = la.beam_d4sigma(E_prop, dx)
     w_measured = d4x / 2
@@ -241,8 +241,8 @@ def t_gaussian_through_thick_lens():
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7', aperture=3e-3)
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
-    E_in, _, _ = la.create_gaussian_beam(N, dx, sigma)
-    E_exit = la.apply_real_lens(E_in, pres, lam, dx)
+    E_in, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=sigma)
+    E_exit = la.apply_real_lens(E_in, prescription=pres, wavelength=lam, dx=dx)
     z_range = np.linspace(max(bfl - 10e-3, 1e-3), bfl + 10e-3, 41)
     best_d4 = np.inf
     best_z = 0
@@ -292,7 +292,7 @@ def t_f_ref_subtraction():
     pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=10e-3)
     E = np.ones((1024, 1024), dtype=np.complex128)
-    E_out = la.apply_real_lens(E, pres, 1.31e-6, 4e-6)
+    E_out = la.apply_real_lens(E, prescription=pres, wavelength=1.31e-6, dx=4e-6)
     _, opd = la.wave_opd_1d(E_out, 4e-6, 1.31e-6,
                             aperture=9e-3, f_ref=100e-3)
     return np.all(np.isfinite(opd)), f'opd has NaN? {not np.isfinite(opd).all()}'
@@ -318,7 +318,7 @@ H.section('Power / encircled energy / overlap invariance')
 
 def t_beam_power_gaussian():
     N = 512; dx = 2e-6; w0 = 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
     I = np.abs(E)**2
     P_measured = float(np.sum(I) * dx**2)
     peak = np.abs(E).max()
@@ -333,7 +333,7 @@ H.run('Beam power: normalised Gaussian = 1.0',
 def t_radial_power_bands():
     from lumenairy.analysis import radial_power_bands
     N = 512; dx = 2e-6; w0 = 100e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, w0)
+    E, _, _ = la.create_gaussian_beam(N, dx, 1.31e-6, sigma=w0)
     sigma = w0
     radii = [sigma, 2*sigma, 3*sigma]
     powers = radial_power_bands(E, dx, radii)

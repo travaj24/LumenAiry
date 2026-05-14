@@ -142,10 +142,10 @@ def unregister_wave_propagator(name: str) -> None:
 def _wave_real_lens(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
     if opts.get('wave_traced', False):
         return apply_real_lens_traced(
-            E0, pres, wavelength, dx,
+            E0, prescription=pres, wavelength=wavelength, dx=dx,
             ray_subsample=opts.get('ray_subsample', 4), n_workers=1,
             **wp_kwargs)
-    return apply_real_lens(E0, pres, wavelength, dx, **wp_kwargs)
+    return apply_real_lens(E0, prescription=pres, wavelength=wavelength, dx=dx, **wp_kwargs)
 
 
 def _wave_gbd(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
@@ -1872,7 +1872,7 @@ class MultiFieldMerit(MeritTerm):
             E_tilted = np.exp(1j * tilt_phase)
             # Propagate through lens
             E_exit = apply_real_lens(
-                E_tilted, ctx.prescription, ctx.wavelength, ctx.dx)
+                E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
             # Build sub-context
             sub_ctx = EvaluationContext(
                 prescription=ctx.prescription,
@@ -2080,7 +2080,7 @@ class ToleranceAwareMerit(MeritTerm):
             # Re-run wave propagation for this perturbation
             E_in = np.ones((ctx.N, ctx.N), dtype=np.complex128)
             E_exit = apply_real_lens(
-                E_in, pres_pert, ctx.wavelength, ctx.dx)
+                E_in, prescription=pres_pert, wavelength=ctx.wavelength, dx=ctx.dx)
             sub_ctx = EvaluationContext(
                 prescription=pres_pert, wavelength=ctx.wavelength,
                 N=ctx.N, dx=ctx.dx, efl=efl_p, bfl=bfl_p)

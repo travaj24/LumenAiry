@@ -64,7 +64,7 @@ def __getattr__(name):
 # Thin lens models
 # ---------------------------------------------------------------------------
 
-def apply_thin_lens(E_in, f, wavelength, dx, dy=None, xc=0, yc=0,
+def apply_thin_lens(E_in, *, f, wavelength, dx, dy=None, xc=0, yc=0,
                     use_gpu=False, lens_model='paraxial'):
     """
     Apply a thin-lens phase to an optical field.
@@ -107,6 +107,12 @@ def apply_thin_lens(E_in, f, wavelength, dx, dy=None, xc=0, yc=0,
     Returns
     -------
     E_out : ndarray (complex), same shape as *E_in*
+
+    Notes
+    -----
+    All arguments past ``E_in`` are keyword-only (since 4.7).  This
+    makes the call order non-load-bearing and prevents typos that
+    silently swap ``wavelength`` and ``dx`` (both ~1e-6).
     """
     # Determine array library
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
@@ -160,7 +166,7 @@ def apply_thin_lens(E_in, f, wavelength, dx, dy=None, xc=0, yc=0,
 # Thick spherical singlet
 # ---------------------------------------------------------------------------
 
-def apply_spherical_lens(E_in, R1, R2, d, n_lens, wavelength, dx, dy=None,
+def apply_spherical_lens(E_in, *, R1, R2, d, n_lens, wavelength, dx, dy=None,
                          aperture_diameter=None, xc=0, yc=0, use_gpu=False):
     """
     Apply the phase of a thick singlet with spherical surfaces.
@@ -269,7 +275,7 @@ def apply_spherical_lens(E_in, R1, R2, d, n_lens, wavelength, dx, dy=None,
 # Thick aspheric singlet (conic + even polynomial)
 # ---------------------------------------------------------------------------
 
-def apply_aspheric_lens(E_in, R1, R2, d, n_lens, wavelength, dx, dy=None,
+def apply_aspheric_lens(E_in, *, R1, R2, d, n_lens, wavelength, dx, dy=None,
                         k1=0, k2=0, A1=None, A2=None,
                         aperture_diameter=None, xc=0, yc=0, use_gpu=False):
     """
@@ -392,7 +398,7 @@ def apply_aspheric_lens(E_in, R1, R2, d, n_lens, wavelength, dx, dy=None,
 
 # ---------------------------------------------------------------------------
 
-def apply_cylindrical_lens(E_in, f, wavelength, dx, dy=None, axis='x',
+def apply_cylindrical_lens(E_in, *, f, wavelength, dx, dy=None, axis='x',
                            xc=0, yc=0):
     """
     Apply a cylindrical thin-lens phase (focusing in one axis only).
@@ -448,7 +454,7 @@ def apply_cylindrical_lens(E_in, f, wavelength, dx, dy=None, axis='x',
 # GRIN lens
 # ---------------------------------------------------------------------------
 
-def apply_grin_lens(E_in, n0, g, d, wavelength, dx, dy=None, xc=0, yc=0):
+def apply_grin_lens(E_in, *, n0, g, d, wavelength, dx, dy=None, xc=0, yc=0):
     """
     Apply a gradient-index (GRIN) rod lens phase (thin approximation).
 

@@ -45,7 +45,7 @@ E_in_guard = np.ones((N_guard, N_guard), dtype=np.complex128)
 
 def t_guardrail_sub4_passes():
     try:
-        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
                                   ray_subsample=4, n_workers=1)
         return True, 'sub=4 at 64 coarse/aperture passes'
     except Exception as e:
@@ -58,7 +58,7 @@ H.run('sub=4 (64 coarse/aperture) passes', t_guardrail_sub4_passes)
 def t_guardrail_sub16_raises():
     raised = False
     try:
-        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
                                   ray_subsample=16, n_workers=1)
     except ValueError:
         raised = True
@@ -72,7 +72,7 @@ H.run('sub=16 (16 coarse/aperture) raises ValueError',
 def t_guardrail_warn_mode():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
-        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
                                   ray_subsample=16, n_workers=1,
                                   on_undersample='warn')
         fired = any(issubclass(wi.category, RuntimeWarning) for wi in w)
@@ -85,7 +85,7 @@ H.run('on_undersample=warn fires RuntimeWarning', t_guardrail_warn_mode)
 def t_guardrail_silent_mode():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
-        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
                                   ray_subsample=16, n_workers=1,
                                   on_undersample='silent')
         silent = (len(w) == 0)
@@ -98,7 +98,7 @@ H.run('on_undersample=silent emits no warnings',
 
 def t_guardrail_disabled():
     try:
-        la.apply_real_lens_traced(E_in_guard, tmpl, wv, dx_guard,
+        la.apply_real_lens_traced(E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
                                   ray_subsample=32, n_workers=1,
                                   min_coarse_samples_per_aperture=0)
         return True, 'override=0 disables check'
@@ -124,10 +124,10 @@ E_in_pp = np.ones((N_pp, N_pp), dtype=np.complex128)
 def _pp_match(sub):
     def _fn():
         E_serial = la.apply_real_lens_traced(
-            E_in_pp, tmpl_pp, 1.31e-6, dx_pp,
+            E_in_pp, prescription=tmpl_pp, wavelength=1.31e-6, dx=dx_pp,
             ray_subsample=sub, n_workers=1)
         E_pool = la.apply_real_lens_traced(
-            E_in_pp, tmpl_pp, 1.31e-6, dx_pp,
+            E_in_pp, prescription=tmpl_pp, wavelength=1.31e-6, dx=dx_pp,
             ray_subsample=sub, n_workers=8)
         diff = np.abs(E_pool - E_serial)
         m = np.abs(E_serial) > 1e-6
@@ -147,11 +147,11 @@ H.section('Subsampling error scaling vs coarse-samples-per-aperture')
 def _err_scaling(sub, band):
     def _fn():
         E_ref = la.apply_real_lens_traced(
-            E_in_guard, tmpl, wv, dx_guard,
+            E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
             ray_subsample=1, n_workers=1,
             min_coarse_samples_per_aperture=0)
         E_test = la.apply_real_lens_traced(
-            E_in_guard, tmpl, wv, dx_guard,
+            E_in_guard, prescription=tmpl, wavelength=wv, dx=dx_guard,
             ray_subsample=sub, n_workers=1,
             min_coarse_samples_per_aperture=0)
         pd = np.angle(np.exp(1j * (np.angle(E_test) - np.angle(E_ref))))
@@ -230,7 +230,7 @@ def t_diagnostic_scan():
                 continue
             try:
                 E_exit = la.apply_real_lens_traced(
-                    E_in, pres, 1.31e-6, dx,
+                    E_in, prescription=pres, wavelength=1.31e-6, dx=dx,
                     ray_subsample=sub, n_workers=1,
                     min_coarse_samples_per_aperture=0)
                 if np.abs(E_exit).max() < 1e-12:

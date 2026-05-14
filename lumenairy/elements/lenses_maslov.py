@@ -41,11 +41,11 @@ from .lenses import (
 
 def apply_real_lens_maslov(
     E_in: np.ndarray,
-    lens_prescription: Dict[str, Any],
+    *,
+    prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
     dy: Optional[float] = None,
-    *,
     ray_field_samples: int = 16,
     ray_pupil_samples: int = 16,
     poly_order: int = 4,
@@ -114,6 +114,10 @@ def apply_real_lens_maslov(
     product fit assumes square pixels and will raise if
     ``dy != dx``.
     """
+    # Internal references keep the legacy local name to avoid a
+    # sprawling rename across the function body.
+    lens_prescription = prescription
+
     # Local references to numexpr (if available) -- the parent module
     # (lenses.py) holds the lazy module slot.
     from . import lenses as _lenses_module

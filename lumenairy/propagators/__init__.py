@@ -43,6 +43,7 @@ from .gbd import (
     apply_thin_lens_to_beamlets,
     apply_abcd_to_beamlets,
     reconstruct_field_from_beamlets,
+    propagate_gbd,
     propagate_gbd_freespace,
     propagate_gbd_thin_lens,
     propagate_gbd_through_prescription,
@@ -54,6 +55,7 @@ from .hfpi import (
     propagate_to_plane,
     apply_aperture_diffraction,
     accumulate_to_grid,
+    propagate_hfpi,
     propagate_hfpi_freespace_aperture,
     propagate_hfpi_through_prescription,
 )
@@ -65,6 +67,7 @@ from .subaperture import (
     propagate_subaperture_asymptotic,
 )
 from .hf import (
+    propagate_huygens_fresnel,
     propagate_huygens_fresnel_freespace,
     propagate_huygens_fresnel_with_opl_callable,
     propagate_huygens_fresnel_through_prescription,
@@ -72,6 +75,9 @@ from .hf import (
 from .dispatch import (
     propagate,
     VALID_METHODS,
+    asm_propagate,
+    which_propagator,
+    ASM_FAMILY,
 )
 from .vectorial_hfpi import (
     VectorPathBundle,
@@ -99,6 +105,7 @@ __all__ = [
     'apply_thin_lens_to_beamlets',
     'reconstruct_field_from_beamlets',
     'apply_abcd_to_beamlets',
+    'propagate_gbd',
     'propagate_gbd_freespace',
     'propagate_gbd_thin_lens',
     'propagate_gbd_through_prescription',
@@ -108,6 +115,7 @@ __all__ = [
     'propagate_to_plane',
     'apply_aperture_diffraction',
     'accumulate_to_grid',
+    'propagate_hfpi',
     'propagate_hfpi_freespace_aperture',
     'propagate_hfpi_through_prescription',
     'PatchGrid',
@@ -115,11 +123,15 @@ __all__ = [
     'patch_window',
     'combine_patch_fields',
     'propagate_subaperture_asymptotic',
+    'propagate_huygens_fresnel',
     'propagate_huygens_fresnel_freespace',
     'propagate_huygens_fresnel_with_opl_callable',
     'propagate_huygens_fresnel_through_prescription',
     'propagate',
     'VALID_METHODS',
+    'asm_propagate',
+    'which_propagator',
+    'ASM_FAMILY',
     'VectorPathBundle',
     'init_vector_paths_from_field',
     'propagate_vector_to_plane',

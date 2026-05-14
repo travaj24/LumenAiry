@@ -304,7 +304,7 @@ def t_through_focus_peak_at_focus():
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, 1.31e-6)
     E_in = np.ones((256, 256), dtype=np.complex128)
-    E_exit = la.apply_real_lens(E_in, pres, 1.31e-6, 16e-6)
+    E_exit = la.apply_real_lens(E_in, prescription=pres, wavelength=1.31e-6, dx=16e-6)
     z = np.linspace(bfl - 5e-3, bfl + 5e-3, 21)
     scan = la.through_focus_scan(E_exit, 16e-6, 1.31e-6, z)
     z_peak = z[np.argmax(scan.peak_I)]
@@ -322,7 +322,7 @@ def t_through_focus_on_traced_output():
     pres = la.thorlabs_lens('AC254-100-C')
     pres['aperture_diameter'] = 3e-3
     E = np.ones((N, N), dtype=np.complex128)
-    Et = la.apply_real_lens_traced(E, pres, lam, dx,
+    Et = la.apply_real_lens_traced(E, prescription=pres, wavelength=lam, dx=dx,
                                    ray_subsample=4, n_workers=1)
     ideal = la.diffraction_limited_peak(Et, lam, 85e-3, dx)
     z = np.linspace(80e-3, 90e-3, 11)
@@ -340,7 +340,7 @@ def t_single_plane_metrics_keys():
     pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    E_exit = la.apply_real_lens(E, pres, lam, dx)
+    E_exit = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx)
     m = la.single_plane_metrics(E_exit, dx, lam, bucket_radius=100e-6)
     needed = {'peak_I', 'centroid_x', 'centroid_y',
               'd4sigma_x', 'd4sigma_y', 'rms_radius',
@@ -357,7 +357,7 @@ def t_compute_psf_plus_ideal_peak():
     pres = la.make_singlet(50e-3, float('inf'), 4e-3, 'N-BK7',
                            aperture=3e-3)
     E = np.ones((N, N), dtype=np.complex128)
-    E_exit = la.apply_real_lens(E, pres, lam, dx)
+    E_exit = la.apply_real_lens(E, prescription=pres, wavelength=lam, dx=dx)
     psf, dx_psf = la.compute_psf(E_exit, lam, 100e-3, dx)
     ideal_peak = la.diffraction_limited_peak(E_exit, lam, 100e-3, dx)
     return psf.max() > 0 and ideal_peak > 0, \
@@ -374,11 +374,11 @@ def t_offaxis_shifts_psf():
     surfs = surfaces_from_prescription(pres)
     _, _, bfl, _ = system_abcd(surfs, lam)
     E_on, _, _ = la.create_tilted_plane_wave(N, dx, lam, angle_y=0)
-    E_on = la.apply_real_lens(E_on, pres, lam, dx)
+    E_on = la.apply_real_lens(E_on, prescription=pres, wavelength=lam, dx=dx)
     E_foc_on = la.angular_spectrum_propagate(E_on, bfl, lam, dx)
     _, cy_on = la.beam_centroid(E_foc_on, dx)
     E_off, _, _ = la.create_tilted_plane_wave(N, dx, lam, angle_y=angle)
-    E_off = la.apply_real_lens(E_off, pres, lam, dx)
+    E_off = la.apply_real_lens(E_off, prescription=pres, wavelength=lam, dx=dx)
     E_foc_off = la.angular_spectrum_propagate(E_off, bfl, lam, dx)
     _, cy_off = la.beam_centroid(E_foc_off, dx)
     shift = cy_off - cy_on
@@ -402,7 +402,7 @@ def t_grating_orders():
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
     E_in = np.exp(1j * np.pi * np.sin(2 * np.pi * X / d))
-    E_in = la.apply_thin_lens(E_in, f, lam, dx)
+    E_in = la.apply_thin_lens(E_in, f=f, wavelength=lam, dx=dx)
     E_focus = la.angular_spectrum_propagate(E_in, f, lam, dx)
     I = np.abs(E_focus[N//2, :])**2
     x_1 = lam * f / d
@@ -1101,7 +1101,7 @@ def t_through_focus_scan_symmetric_about_best_focus():
     x = (np.arange(N) - N/2 + 0.5) * dx
     X, Y = np.meshgrid(x, x, indexing='xy')
     E_in = np.exp(-(X*X + Y*Y) / (2e-3)**2).astype(np.complex128)
-    E_after = la.apply_thin_lens(E_in, dx, f_lens, lam)
+    E_after = la.apply_thin_lens(E_in, f=f_lens, wavelength=lam, dx=dx)
     z_values = np.linspace(f_lens - 5e-3, f_lens + 5e-3, 21)
     ideal = la.diffraction_limited_peak(E_after, lam, f_lens, dx)
     scan = la.through_focus_scan(E_after, dx, lam, z_values,

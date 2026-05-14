@@ -202,7 +202,7 @@ def t_jones_field_sas_propagate():
     """JonesField.sas_propagate applies SAS to Ex and Ey independently
     and updates dx/dy."""
     N, dx, lam = 256, 4e-6, 1.31e-6
-    E, _, _ = la.create_gaussian_beam(N, dx, 50e-6)
+    E, _, _ = la.create_gaussian_beam(N, dx, lam, sigma=50e-6)
     jf = JonesField(Ex=E.copy(), Ey=E.copy() * 1j, dx=dx)
     jf.sas_propagate(z=500e-3, wavelength=lam)
     expected_dx = lam * 500e-3 / (2 * N * dx)

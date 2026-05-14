@@ -26,6 +26,23 @@ import numpy as np
 from ..backend import array_namespace, is_jax_array
 
 
+def propagate_huygens_fresnel(E_in, z, wavelength, dx, **kwargs):
+    """Canonical-order Huygens-Fresnel free-space propagation.
+
+    Argument order ``(E_in, z, wavelength, dx)`` matches
+    :func:`angular_spectrum_propagate`, :func:`propagate_gbd`, and
+    :func:`propagate_hfpi`.  This is the recommended entry point for
+    new code; the trio ``propagate_huygens_fresnel_freespace`` /
+    ``_with_opl_callable`` / ``_through_prescription`` is retained
+    for specialised use cases.
+
+    Internally delegates to
+    :func:`propagate_huygens_fresnel_freespace`.
+    """
+    return propagate_huygens_fresnel_freespace(
+        E_in, z, wavelength, dx, **kwargs)
+
+
 def propagate_huygens_fresnel_freespace(
     E_in,
     z: float,

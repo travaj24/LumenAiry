@@ -225,7 +225,7 @@ def create_microlens_array(N, dx, n_lenslets, pitch, focal_length, wavelength):
 # Diffractive lenses (4.3.0)
 # ============================================================================
 
-def create_diffractive_lens(N, dx_m, focal_length_m, wavelength_m, *,
+def create_diffractive_lens(N, dx, focal_length, wavelength, *,
                               center=(0.0, 0.0)):
     """Continuous-phase diffractive lens.
 
@@ -240,11 +240,11 @@ def create_diffractive_lens(N, dx_m, focal_length_m, wavelength_m, *,
     ----------
     N : int
         Grid size (N x N).
-    dx_m : float
+    dx : float
         Grid spacing [m].
-    focal_length_m : float
+    focal_length : float
         Design focal length [m].  Positive = converging.
-    wavelength_m : float
+    wavelength : float
         Design wavelength [m].
     center : tuple of float, default (0.0, 0.0)
         Lens center offset from the grid center, ``(xc, yc)`` in metres.
@@ -260,33 +260,40 @@ def create_diffractive_lens(N, dx_m, focal_length_m, wavelength_m, *,
     create_fresnel_zone_plate : binary amplitude or phase zone plate.
     apply_thin_lens : applies the same phase directly to a field.
 
+    Notes
+    -----
+    Prior to 4.7 the kwargs were ``dx_m`` / ``focal_length_m`` /
+    ``wavelength_m``.  4.7 dropped the ``_m`` suffix to match the
+    rest of the library; LumenAiry uses SI metres throughout so the
+    suffix was redundant.
+
     Examples
     --------
     >>> import lumenairy as la
-    >>> T = la.create_diffractive_lens(N=256, dx_m=10e-6,
-    ...                                  focal_length_m=50e-3,
-    ...                                  wavelength_m=1.31e-6)
+    >>> T = la.create_diffractive_lens(N=256, dx=10e-6,
+    ...                                  focal_length=50e-3,
+    ...                                  wavelength=1.31e-6)
     >>> E_focused = E_plane_wave * T   # ready to propagate to z=f
     """
-    if focal_length_m == 0:
-        raise ValueError("focal_length_m must be non-zero")
+    if focal_length == 0:
+        raise ValueError("focal_length must be non-zero")
     if N <= 0:
         raise ValueError(f"N must be > 0; got {N}")
-    if dx_m <= 0:
-        raise ValueError(f"dx_m must be > 0; got {dx_m}")
-    if wavelength_m <= 0:
-        raise ValueError(f"wavelength_m must be > 0; got {wavelength_m}")
+    if dx <= 0:
+        raise ValueError(f"dx must be > 0; got {dx}")
+    if wavelength <= 0:
+        raise ValueError(f"wavelength must be > 0; got {wavelength}")
     xc, yc = float(center[0]), float(center[1])
-    x = (np.arange(N) - N / 2) * dx_m - xc
-    y = (np.arange(N) - N / 2) * dx_m - yc
+    x = (np.arange(N) - N / 2) * dx - xc
+    y = (np.arange(N) - N / 2) * dx - yc
     X, Y = np.meshgrid(x, y)
     r2 = X * X + Y * Y
-    k = 2.0 * np.pi / wavelength_m
-    phase = -k * r2 / (2.0 * focal_length_m)
+    k = 2.0 * np.pi / wavelength
+    phase = -k * r2 / (2.0 * focal_length)
     return np.exp(1j * phase)
 
 
-def create_kinoform(N, dx_m, focal_length_m, wavelength_m, *,
+def create_kinoform(N, dx, focal_length, wavelength, *,
                       n_levels=8, center=(0.0, 0.0)):
     """Multi-level quantized phase diffractive lens (kinoform).
 
@@ -305,11 +312,11 @@ def create_kinoform(N, dx_m, focal_length_m, wavelength_m, *,
     ----------
     N : int
         Grid size (N x N).
-    dx_m : float
+    dx : float
         Grid spacing [m].
-    focal_length_m : float
+    focal_length : float
         Design focal length [m].  Positive = converging.
-    wavelength_m : float
+    wavelength : float
         Design wavelength [m].
     n_levels : int, default 8
         Number of evenly-spaced phase levels in ``[0, 2 pi)``.  Must be
@@ -331,32 +338,38 @@ def create_kinoform(N, dx_m, focal_length_m, wavelength_m, *,
         (``n_levels -> inf``).
     create_fresnel_zone_plate : binary amplitude or 2-level phase
         zone plate.
+
+    Notes
+    -----
+    4.7 dropped the ``_m`` suffix from ``dx`` / ``focal_length`` /
+    ``wavelength`` -- LumenAiry uses SI metres throughout, so the
+    suffix was redundant.
     """
     if int(n_levels) < 2:
         raise ValueError(f"n_levels must be >= 2; got {n_levels}")
-    if focal_length_m == 0:
-        raise ValueError("focal_length_m must be non-zero")
-    if N <= 0 or dx_m <= 0 or wavelength_m <= 0:
-        raise ValueError("N, dx_m, wavelength_m must be > 0")
+    if focal_length == 0:
+        raise ValueError("focal_length must be non-zero")
+    if N <= 0 or dx <= 0 or wavelength <= 0:
+        raise ValueError("N, dx, wavelength must be > 0")
     xc, yc = float(center[0]), float(center[1])
-    x = (np.arange(N) - N / 2) * dx_m - xc
-    y = (np.arange(N) - N / 2) * dx_m - yc
+    x = (np.arange(N) - N / 2) * dx - xc
+    y = (np.arange(N) - N / 2) * dx - yc
     X, Y = np.meshgrid(x, y)
     r2 = X * X + Y * Y
-    k = 2.0 * np.pi / wavelength_m
-    phi_continuous = -k * r2 / (2.0 * focal_length_m)
+    k = 2.0 * np.pi / wavelength
+    phi_continuous = -k * r2 / (2.0 * focal_length)
     phi_wrapped = np.mod(phi_continuous, 2.0 * np.pi)
     step = 2.0 * np.pi / float(n_levels)
     phi_q = np.floor(phi_wrapped / step) * step
     return np.exp(1j * phi_q)
 
 
-def create_fresnel_zone_plate(N, dx_m, focal_length_m, wavelength_m, *,
+def create_fresnel_zone_plate(N, dx, focal_length, wavelength, *,
                                   binary=True, n_zones=None,
                                   center=(0.0, 0.0)):
     """Fresnel zone plate -- binary amplitude or binary phase.
 
-    A Fresnel zone plate focuses light to ``focal_length_m`` via
+    A Fresnel zone plate focuses light to ``focal_length`` via
     diffraction from concentric zones.  Zone boundaries are defined by
     half-wave phase jumps in the equivalent thin-lens phase
     ``phi(r) = -k r^2 / (2 f)``: zone ``n`` covers
@@ -366,11 +379,11 @@ def create_fresnel_zone_plate(N, dx_m, focal_length_m, wavelength_m, *,
     ----------
     N : int
         Grid size (N x N).
-    dx_m : float
+    dx : float
         Grid spacing [m].
-    focal_length_m : float
+    focal_length : float
         Design focal length [m].  Positive = converging zone plate.
-    wavelength_m : float
+    wavelength : float
         Design wavelength [m].
     binary : bool, default True
         If True (default): amplitude FZP -- alternating zones
@@ -406,21 +419,24 @@ def create_fresnel_zone_plate(N, dx_m, focal_length_m, wavelength_m, *,
     The zone assignment uses ``zone_index = floor(r^2 / (lambda f))``,
     which aligns exactly with the phase-flip boundaries of an ideal
     converging quadratic phase.
+
+    4.7 dropped the historical ``_m`` suffix from ``dx`` /
+    ``focal_length`` / ``wavelength``.
     """
-    if focal_length_m == 0:
-        raise ValueError("focal_length_m must be non-zero")
-    if N <= 0 or dx_m <= 0 or wavelength_m <= 0:
-        raise ValueError("N, dx_m, wavelength_m must be > 0")
+    if focal_length == 0:
+        raise ValueError("focal_length must be non-zero")
+    if N <= 0 or dx <= 0 or wavelength <= 0:
+        raise ValueError("N, dx, wavelength must be > 0")
     if n_zones is not None and int(n_zones) < 1:
         raise ValueError(f"n_zones must be >= 1; got {n_zones}")
 
     xc, yc = float(center[0]), float(center[1])
-    x = (np.arange(N) - N / 2) * dx_m - xc
-    y = (np.arange(N) - N / 2) * dx_m - yc
+    x = (np.arange(N) - N / 2) * dx - xc
+    y = (np.arange(N) - N / 2) * dx - yc
     X, Y = np.meshgrid(x, y)
     r2 = X * X + Y * Y
 
-    lam_f = wavelength_m * abs(focal_length_m)
+    lam_f = wavelength * abs(focal_length)
     zone_index = np.floor(r2 / lam_f).astype(int)
 
     if n_zones is not None:

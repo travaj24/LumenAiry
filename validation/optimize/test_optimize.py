@@ -354,7 +354,7 @@ def t_match_ideal_in_optimizer():
     init_ctx = EvaluationContext(prescription=init_pres,
                                  wavelength=1.31e-6, N=64, dx=32e-6)
     E_in = np.ones((64, 64), dtype=np.complex128)
-    E_init = la.apply_real_lens(E_in, init_pres, 1.31e-6, 32e-6)
+    E_init = la.apply_real_lens(E_in, prescription=init_pres, wavelength=1.31e-6, dx=32e-6)
     from lumenairy.analysis import wave_opd_2d
     try:
         _, _, opd_init = wave_opd_2d(E_init, 32e-6, 1.31e-6,

@@ -166,8 +166,8 @@ class TestRealLensTrioDyKwarg:
                                               wavelength_m):
         # 64x64 plane wave on dx=5um, dy=4um
         E = np.ones((64, 64), dtype=complex)
-        out = la.apply_real_lens(E, singlet_prescription, wavelength_m,
-                                  5e-6, dy=4e-6)
+        out = la.apply_real_lens(E, prescription=singlet_prescription, wavelength=wavelength_m,
+                                  dx=5e-6, dy=4e-6)
         assert out.shape == E.shape
         assert np.isfinite(np.abs(out)).all()
 
@@ -176,8 +176,8 @@ class TestRealLensTrioDyKwarg:
                                                      wavelength_m):
         E = np.ones((64, 64), dtype=complex)
         with pytest.raises(ValueError, match='square pixels'):
-            la.apply_real_lens_traced(E, singlet_prescription,
-                                       wavelength_m, 5e-6, dy=4e-6)
+            la.apply_real_lens_traced(E, prescription=singlet_prescription,
+                                       wavelength=wavelength_m, dx=5e-6, dy=4e-6)
 
 
 # ---------------------------------------------------------------------------

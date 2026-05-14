@@ -23,7 +23,7 @@ From a .zmx file::
     import lumenairy as la
     from lumenairy.codegen import generate_simulation_script
 
-    rx = la.load_zmx_prescription('my_design.zmx')
+    rx = la.load_zemax_zmx('my_design.zmx')
     code = generate_simulation_script(rx, wavelength=1.31e-6)
 
     with open('sim_my_design.py', 'w') as f:
@@ -31,7 +31,7 @@ From a .zmx file::
 
 From a prescription text export::
 
-    rx = la.load_zemax_prescription_txt('design-prescription.txt')
+    rx = la.load_zemax_prescription_data_txt('design-prescription.txt')
     code = generate_simulation_script(rx)
 
 Author: Andrew Traverso
@@ -39,7 +39,7 @@ Author: Andrew Traverso
 
 import numpy as np
 
-from .prescriptions import load_zmx_prescription, load_zemax_prescription_txt
+from .prescriptions import load_zemax_zmx, load_zemax_prescription_data_txt
 from ..glass import GLASS_REGISTRY
 
 
@@ -62,8 +62,8 @@ def generate_simulation_script(
     """
     Generate a Python simulation script from a parsed Zemax prescription.
 
-    Takes the output of :func:`load_zmx_prescription` or
-    :func:`load_zemax_prescription_txt` and produces a complete, runnable
+    Takes the output of :func:`load_zemax_zmx` or
+    :func:`load_zemax_prescription_data_txt` and produces a complete, runnable
     Python script that models the optical system using the
     ``lumenairy`` library.
 
@@ -76,8 +76,8 @@ def generate_simulation_script(
     Parameters
     ----------
     prescription : dict
-        Parsed Zemax prescription from :func:`load_zmx_prescription` or
-        :func:`load_zemax_prescription_txt`.  Must contain keys:
+        Parsed Zemax prescription from :func:`load_zemax_zmx` or
+        :func:`load_zemax_prescription_data_txt`.  Must contain keys:
         ``'elements'``, ``'all_thicknesses'``, ``'aperture_diameter'``,
         and ``'name'``.
 
@@ -135,7 +135,7 @@ def generate_simulation_script(
     >>> import lumenairy as la
     >>> from lumenairy.codegen import generate_simulation_script
     >>>
-    >>> rx = la.load_zmx_prescription('AC254-200-C.zmx')
+    >>> rx = la.load_zemax_zmx('AC254-200-C.zmx')
     >>> code = generate_simulation_script(rx, wavelength=1.31e-6,
     ...                                   output_path='sim_ac254.py')
     """
@@ -222,7 +222,7 @@ def generate_script_from_zmx(filepath, wavelength=None, **kwargs):
     -------
     script : str
     """
-    rx = load_zmx_prescription(filepath)
+    rx = load_zemax_zmx(filepath)
     return generate_simulation_script(rx, wavelength=wavelength, **kwargs)
 
 
@@ -241,7 +241,7 @@ def generate_script_from_txt(filepath, wavelength=None, **kwargs):
     -------
     script : str
     """
-    rx = load_zemax_prescription_txt(filepath)
+    rx = load_zemax_prescription_data_txt(filepath)
     return generate_simulation_script(rx, wavelength=wavelength, **kwargs)
 
 
@@ -547,7 +547,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
 
     # Source
     lines.append('    # --- Source ---')
-    lines.append('    E, x, y = la.create_gaussian_beam(N, dx, SOURCE_SIGMA)')
+    lines.append('    E, x, y = la.create_gaussian_beam(N, dx, WAVELENGTH, sigma=SOURCE_SIGMA)')
     lines.append("    planes.append({'field': E.copy(), 'dx': dx, 'z': 0.0, "
                  "'label': 'Source'})")
     if include_analysis:
@@ -579,8 +579,8 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             label = rx['name']
             lines.append(f'    # --- Step {step_num}: {label} ---')
             lines.append(f'    if verbose: print("Applying {label} ...")')
-            lines.append(f'    E = la.apply_real_lens(E, {var_name}, '
-                         f'WAVELENGTH, dx)')
+            lines.append(f'    E = la.apply_real_lens(E, prescription={var_name}, '
+                         f'wavelength=WAVELENGTH, dx=dx)')
             lines.append(f"    planes.append({{'field': E.copy(), 'dx': dx, "
                          f"'z': {z_total:.17e}, 'label': {label!r}}})")
             if include_analysis:
@@ -771,7 +771,7 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
     lines.append('')
 
     # Source and run
-    lines.append('E, x, y = la.create_gaussian_beam(N, dx, '
+    lines.append('E, x, y = la.create_gaussian_beam(N, dx, WAVELENGTH, sigma='
                  f'{source_sigma:.17e})')
     lines.append('E_out, intermediates = la.propagate_through_system(')
     lines.append('    E, elements, WAVELENGTH, dx, verbose=True)')

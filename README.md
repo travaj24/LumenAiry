@@ -12,9 +12,73 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 ## What's new in 4.7.0
 
-**Polish-pass release: input validation, glass-registry overhaul, API
-symmetry, packaging hygiene.**  No breaking changes; the public API is
-fully back-compatible with 4.6.
+**Polish-pass release + API-consistency pass.**  4.7 implements the
+verified items from the polish-pass audit, including the J.2
+API-consistency work scheduled for this milestone.  **Breaking
+changes** (no deprecation cycle, since the library has a single
+user at present): see below.
+
+### Breaking changes
+
+* **Lens-function args are keyword-only past `E_in`** -- all 8
+  `apply_*_lens` entry points (`apply_thin_lens`, `apply_spherical_lens`,
+  `apply_aspheric_lens`, `apply_cylindrical_lens`, `apply_grin_lens`,
+  `apply_real_lens`, `apply_real_lens_traced`, `apply_real_lens_maslov`)
+  now enforce keyword-only arguments after the input field.  This
+  removes the positional inconsistency where `wavelength` lived at
+  pos 3 in some, 5 in others, and 6 in `apply_spherical_lens`.
+* **`apply_real_lens` trio: `lens_prescription=` → `prescription=`**
+  (matching the rest of the library, 54 prior uses).
+* **Diffractive-lens factories drop the `_m` suffix** --
+  `create_diffractive_lens`, `create_kinoform`,
+  `create_fresnel_zone_plate` now take `dx`, `focal_length`,
+  `wavelength` (no suffix).  Library uses SI metres throughout.
+* **Source-factory ordering standardised** on `(N, dx, wavelength, *,
+  source_specific)`.  `sigma` / `diameter` / `outer_diameter` /
+  `inner_diameter` / `mode_field_diameter` are now keyword-only.
+* **`wavelength` is now required** (no default) on
+  `keplerian_telescope`, `beam_expander_prescription`, every Zemax /
+  CODE V / Quadoa exporter, and `make_ray`.  Removes the disagreeing
+  defaults (550 nm vs 1310 nm) that surfaced in the audit.
+* **Zemax loaders renamed**: `load_zmx_prescription` →
+  `load_zemax_zmx`; `load_zemax_prescription_txt` →
+  `load_zemax_prescription_data_txt`.
+
+### Added
+
+* **Input validation** on every public propagator and on
+  `surfaces_from_prescription` -- catches `wavelength = 0`,
+  `wavelength = 1.31` (forgot units), `dx <= 0`, malformed
+  prescriptions, NaN inputs, with messages that quote the
+  parameter, value, and calling function.
+* **Glass-registry rebuild** -- callable entries via
+  `GLASS_REGISTRY[name] = lambda wl: n`; 30 new bundled Sellmeier
+  glasses (N-FK51A, N-SF57, N-LASF44, S-LAH64, ...); `list_glasses()`
+  / `search_glasses()` helpers; typo suggestions on unknown names.
+* **`dy=None` kwarg** on the `apply_real_lens` trio for API symmetry.
+* **Dataclass returns** for `distortion_grid`,
+  `footprint_per_surface`, `spot_diagram_vs_field` (with
+  dict-style subscript preserved).
+* **Canonical-order propagator aliases**: `propagate_gbd`,
+  `propagate_hfpi`, `propagate_huygens_fresnel` all share
+  `(E_in, z, wavelength, dx, ...)` matching ASM.
+* **`asm_propagate` + `which_propagator`** -- auto-selector and
+  advisor for the ASM family (plain / tilted / MFT / SAS /
+  Fraunhofer) based on geometry.
+* **`plot_lens_layout(prescription, ...)`** -- script/notebook
+  cross-section drawing extracted from the GUI's `Layout2DView`.
+* **`plot_glass_map` + `abbe_diagram`** -- glass-catalogue
+  scatter / dispersion plots extracted from the GUI's
+  `glass_map_dock`.
+* **`py.typed` marker** so type checkers honour the library's
+  hints.
+
+### Packaging hygiene
+
+* Module-level `__all__` in every analysis submodule.
+* `lumenairy.analysis.analysis` → `lumenairy.analysis.core` (with
+  back-compat shim).
+* PyPI `Changelog` / `Releases` URLs in `pyproject.toml`.
 
 * **Propagator input validation.** Every public propagator (ASM,
   Fresnel, Fraunhofer, RS, scalable ASM, the MFT variants, batch and

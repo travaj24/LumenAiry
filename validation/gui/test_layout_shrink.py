@@ -60,7 +60,7 @@ try:
     from lumenairy.ui.layout_2d import Layout2DView
     from lumenairy.ui.layout_3d import Layout3DView
     from lumenairy.ui.main_window import MainWindow
-    from lumenairy.io.prescriptions import load_zmx_prescription
+    from lumenairy.io.prescriptions import load_zemax_zmx
 except ImportError as _e:
     print('=' * 60)
     print('  gui-layout-shrink')
@@ -178,7 +178,7 @@ def main():
         H.check('tx71 prescription found', True,
                 detail='skipped: no .zmx file at known path')
     else:
-        pr = load_zmx_prescription(zmx)
+        pr = load_zemax_zmx(zmx)
         sm2 = SystemModel()
         sm2.load_prescription(pr)
         result = sm2.run_trace(num_rings=1, rays_per_ring=1)

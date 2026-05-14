@@ -355,8 +355,8 @@ def test_lens_operator_agreement():
     X, Y = np.meshgrid(x, x, indexing='xy')
     E_in = np.exp(-(X ** 2 + Y ** 2) / (5e-3) ** 2).astype(np.complex128)
 
-    E_rl = la.apply_real_lens(E_in, rx, wavelength, dx)
-    E_tr = la.apply_real_lens_traced(E_in, rx, wavelength, dx,
+    E_rl = la.apply_real_lens(E_in, prescription=rx, wavelength=wavelength, dx=dx)
+    E_tr = la.apply_real_lens_traced(E_in, prescription=rx, wavelength=wavelength, dx=dx,
                                         n_workers=1, parallel_amp=False,
                                         min_coarse_samples_per_aperture=0)
     I_rl = np.abs(E_rl) ** 2
@@ -377,7 +377,7 @@ def test_lens_operator_agreement():
     # error and produce a non-zero output.
     try:
         E_ms = la.apply_real_lens_maslov(
-            E_in, rx, wavelength, dx,
+            E_in, prescription=rx, wavelength=wavelength, dx=dx,
             ray_field_samples=8, ray_pupil_samples=8,
             integration_method='stationary_phase',
             collimated_input=True, verbose=False)

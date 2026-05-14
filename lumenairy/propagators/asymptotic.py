@@ -704,7 +704,7 @@ def fit_canonical_polynomials(
     ----------
     prescription : dict
         lumenairy prescription dict (e.g. from
-        ``load_zmx_prescription`` or a builder).
+        ``load_zemax_zmx`` or a builder).
     wavelength : float
         Wavelength [m].
     source_box_half : float

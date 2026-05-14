@@ -73,7 +73,73 @@ from ..glass import get_glass_index, get_glass_index_complex
 from ..progress import call_progress
 
 
-def apply_real_lens(E_in, lens_prescription, wavelength, dx,
+_VALID_WAVE_PROPAGATORS = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
+
+
+def _check_apply_real_lens_kwarg_combination(
+    *,
+    wave_propagator: str,
+    slant_correction: bool,
+    seidel_correction: bool,
+    seidel_poly_order: int,
+    lens_prescription: dict,  # name kept for back-compat in helper signature
+) -> None:
+    """Validate the apply_real_lens kwarg combination space.
+
+    The 4.7 polish pass surfaced several silent-failure regimes when
+    mutually-incompatible kwargs are passed.  This helper raises a
+    ``ValueError`` with a precise message instead.
+
+    Checks performed:
+
+    * ``wave_propagator`` is one of ``'asm'``, ``'sas'``, ``'fresnel'``,
+      ``'rayleigh_sommerfeld'`` (alias ``'rs'``).
+    * ``slant_correction=True`` is rejected for ``wave_propagator``
+      values other than ``'asm'`` or ``'rs'``.  The Fresnel and SAS
+      paths internally resample / change pitch in ways that interact
+      badly with the per-surface slant OPD.
+    * ``seidel_correction=True`` requires at least 2 surfaces in the
+      prescription (single-surface systems have no Seidel sum to
+      apply).
+    * ``seidel_poly_order`` must be a positive integer.  Order > 12 is
+      rejected as the radial polynomial conditioning degrades.
+    """
+    if wave_propagator not in _VALID_WAVE_PROPAGATORS:
+        raise ValueError(
+            f"apply_real_lens: unknown wave_propagator "
+            f"{wave_propagator!r}.  Valid choices: "
+            f"{sorted(set(_VALID_WAVE_PROPAGATORS))}."
+        )
+    if slant_correction and wave_propagator not in ('asm', 'rs',
+                                                    'rayleigh_sommerfeld'):
+        raise ValueError(
+            f"apply_real_lens: slant_correction=True is incompatible "
+            f"with wave_propagator={wave_propagator!r}.  Use 'asm' or "
+            f"'rayleigh_sommerfeld' instead, or drop "
+            f"slant_correction.")
+    if seidel_correction:
+        try:
+            n_surf = len(lens_prescription.get('surfaces', []))
+        except Exception:
+            n_surf = 0
+        if n_surf < 2:
+            raise ValueError(
+                f"apply_real_lens: seidel_correction=True requires a "
+                f"prescription with at least 2 surfaces; got "
+                f"{n_surf}.")
+    if not isinstance(seidel_poly_order, int) or seidel_poly_order <= 0:
+        raise ValueError(
+            f"apply_real_lens: seidel_poly_order must be a positive "
+            f"integer; got {seidel_poly_order!r}.")
+    if seidel_poly_order > 12:
+        raise ValueError(
+            f"apply_real_lens: seidel_poly_order={seidel_poly_order} "
+            f"is too large; radial-polynomial fit conditioning "
+            f"degrades above 12.")
+
+
+def apply_real_lens(E_in, *,
+                    prescription, wavelength, dx,
                     dy=None,
                     bandlimit=True, fresnel=False, slant_correction=False,
                     absorption=False, seidel_correction=False,
@@ -157,7 +223,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     ----------
     E_in : ndarray (complex, N x N)
         Input electric field.
-    lens_prescription : dict
+    prescription : dict
         Required keys:
 
         ``"surfaces"`` : list of dict
@@ -266,7 +332,19 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     The returned array type follows ``use_gpu``: host -> host, device
     -> device.  Mixed-dtype callers (e.g. a complex64 host array
     promoted to the device) remain in their starting precision.
+
+    All arguments past ``E_in`` are keyword-only (4.7+).  The
+    parameter name is ``prescription`` -- the 4.6 alias
+    ``lens_prescription`` was removed in 4.7.
     """
+    _check_apply_real_lens_kwarg_combination(
+        wave_propagator=wave_propagator,
+        slant_correction=slant_correction,
+        seidel_correction=seidel_correction,
+        seidel_poly_order=seidel_poly_order,
+        lens_prescription=prescription,
+    )
+
     # Pre-flight grid vs prescription-aperture check.  If any surface's
     # semi-aperture exceeds the simulation grid, ASM will silently
     # truncate the field at the grid edge and lose energy that the real
@@ -275,7 +353,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     try:
         N_grid = int(np.shape(E_in)[0])
         _warn_if_aperture_exceeds_grid(
-            lens_prescription, N_grid, dx, source='apply_real_lens')
+            prescription, N_grid, dx, source='apply_real_lens')
     except Exception:
         pass
 
@@ -301,10 +379,10 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
     if dy is None:
         dy = dx
 
-    surfaces = lens_prescription['surfaces']
-    thicknesses = lens_prescription['thicknesses']
-    aperture = lens_prescription.get('aperture_diameter')
-    stop_index = lens_prescription.get('stop_index')
+    surfaces = prescription['surfaces']
+    thicknesses = prescription['thicknesses']
+    aperture = prescription.get('aperture_diameter')
+    stop_index = prescription.get('stop_index')
 
     assert len(thicknesses) == len(surfaces) - 1, (
         f"Need {len(surfaces) - 1} thicknesses for {len(surfaces)} surfaces, "
@@ -596,7 +674,7 @@ def apply_real_lens(E_in, lens_prescription, wavelength, dx,
         fan = _rt_make_bundle(
             x=h_fan, y=z_arr, L=z_arr, M=z_arr,
             wavelength=wavelength)
-        surfs_fan = _rt_surfaces_from_prescription(lens_prescription)
+        surfs_fan = _rt_surfaces_from_prescription(prescription)
         res_fan = _rt_trace(fan, surfs_fan, wavelength)
         final_fan = res_fan.image_rays
         alive_fan = final_fan.alive

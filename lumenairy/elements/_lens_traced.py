@@ -1026,7 +1026,8 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     return opl_map
 
 
-def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
+def apply_real_lens_traced(E_in, *,
+                           prescription, wavelength, dx,
                            dy=None,
                            bandlimit=True, ray_subsample=8,
                            n_workers=None, progress=None,
@@ -1256,6 +1257,10 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
     E_out : ndarray, complex, shape (N, N)
         Field at the exit-vertex plane of the last surface.
     """
+    # Internal references keep the legacy local name to avoid a
+    # sprawling rename across this 1500-line function body.
+    lens_prescription = prescription
+
     # Local import to avoid a circular dep at module load time
     from ..raytrace import (
         surfaces_from_prescription, trace, _make_bundle,
@@ -1377,7 +1382,7 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
 
         def _amp_call():
             return apply_real_lens(
-                E_in, lens_prescription, wavelength, dx,
+                E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                 bandlimit=bandlimit, use_gpu=amp_use_gpu,
                 wave_propagator=wave_propagator,
                 progress=lambda stage, frac, msg='':
@@ -1401,7 +1406,7 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
 
             def _amp_pw_call():
                 return apply_real_lens(
-                    ones_input, lens_prescription, wavelength, dx,
+                    ones_input, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator, progress=None)
 
@@ -1419,7 +1424,7 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
     else:
         # Sequential fallback (preserve_input_phase=False or RAM tight).
         E_analytic = apply_real_lens(
-            E_in, lens_prescription, wavelength, dx, bandlimit=bandlimit,
+            E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx, bandlimit=bandlimit,
             use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
             progress=lambda stage, frac, msg='': amp_cb(frac, f'amp: {msg}'))
         _xp = cp if _is_cupy_array(E_analytic) else np
@@ -1447,7 +1452,7 @@ def apply_real_lens_traced(E_in, lens_prescription, wavelength, dx,
                 analytic_pw_cb = ProgressScaler(progress, 'real_lens_traced',
                                                  lo=0.40, hi=0.50)
                 E_analytic_pw = apply_real_lens(
-                    np.ones_like(E_in), lens_prescription, wavelength, dx,
+                    np.ones_like(E_in), prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator,
                     progress=lambda stage, frac, msg='':

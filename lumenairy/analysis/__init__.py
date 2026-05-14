@@ -124,6 +124,9 @@ from .plotting import (
     plot_beam_profile,
     plot_jones_pupil,
     compute_jones_pupil,
+    plot_lens_layout,
+    abbe_diagram,
+    plot_glass_map,
 )
 from .ao import (
     DeformableMirror,
@@ -189,6 +192,8 @@ __all__ = [
     'plot_cross_section', 'plot_planes_grid', 'plot_psf', 'plot_mtf',
     'plot_stokes', 'plot_polarization_ellipses', 'plot_beam_profile',
     'plot_jones_pupil', 'compute_jones_pupil',
+    'plot_lens_layout',
+    'abbe_diagram', 'plot_glass_map',
     # adaptive optics (moved here in 4.3.0; lumenairy.ao still works
     # via a shim for back-compat)
     'DeformableMirror', 'apply_dm',
