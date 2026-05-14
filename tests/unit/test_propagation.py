@@ -105,12 +105,20 @@ class TestResampleField:
 class TestPropagateDispatch:
 
     def test_propagate_smoke(self, gaussian_beam, wavelength_m, dx_m):
-        """High-level dispatch should run for reasonable inputs."""
+        """High-level dispatch should run for reasonable inputs.
+
+        The auto-selector may route to ``asm`` (bare ndarray return)
+        or to ``sas`` / ``fresnel`` (``(E, dx_out, dy_out)`` tuple
+        return) depending on the grid Fresnel ratio ``Q``.  Accept
+        either form."""
         out = la.propagate(gaussian_beam, z=10e-3,
                              wavelength=wavelength_m, dx=dx_m)
-        # Default return is the field array.
         assert out is not None
-        assert out.shape == gaussian_beam.shape
+        if isinstance(out, tuple):
+            field = out[0]
+        else:
+            field = out
+        assert field.shape == gaussian_beam.shape
 
     def test_valid_methods_nonempty(self):
         """VALID_METHODS registry should be non-empty."""

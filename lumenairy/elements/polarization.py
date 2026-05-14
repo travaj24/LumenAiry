@@ -451,9 +451,15 @@ def apply_waveplate(
         angle = float(np.radians(angle_deg))
     c = np.cos(angle)
     s = np.sin(angle)
-    e = np.exp(1j * retardance)
+    # Under the library's exp(-i omega t) time-harmonic convention,
+    # the slow axis arrives *later* than the fast axis, i.e. picks up
+    # phase exp(-i phi).  Pre-4.7 the code used exp(+i phi) here,
+    # which was the EE-convention sign and produced LHCP from
+    # (1, 0)+QWP@45 instead of the textbook-expected RHCP.
+    e = np.exp(-1j * retardance)
 
-    # R(-theta) * diag(1, e) * R(theta)
+    # R(theta) * diag(1, e) * R(-theta)  -- fast axis at angle theta,
+    # slow axis perpendicular and delayed by `retardance` radians.
     J = np.array([
         [c*c + e*s*s,     c*s*(1 - e)],
         [c*s*(1 - e),     s*s + e*c*c],

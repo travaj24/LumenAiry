@@ -35,7 +35,7 @@ from ..backend import array_namespace
 
 
 VALID_METHODS = (
-    'auto', 'asm', 'fresnel', 'fraunhofer', 'rs',
+    'auto', 'asm', 'sas', 'fresnel', 'fraunhofer', 'rs',
     'maslov', 'asymptotic', 'gbd', 'hfpi', 'hf', 'mhs',
 )
 
@@ -163,6 +163,9 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
     Without a prescription (free-space):
       - ``z`` is None or zero                                    ->  ``asm``.
       - Far-field (Fresnel number ``N_F < 0.1``)                ->  ``fraunhofer``.
+      - Grid Fresnel ratio ``Q = z*lambda/(N*dx^2) > 1``         ->  ``sas``
+        (scalable ASM rescales the output pitch so the spread
+        beam fits without aliasing the ASM transfer function).
       - Otherwise                                               ->  ``asm``.
     """
     if prescription is not None:
@@ -210,13 +213,20 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
         return 'asm'
 
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    a = 0.5 * dx * max(Ny, Nx)
+    N_max = max(Ny, Nx)
+    a = 0.5 * dx * N_max
     abs_z = abs(z)
     if abs_z == 0:
         return 'asm'
     N_F = a * a / (wavelength * abs_z)
     if N_F < 0.1:
         return 'fraunhofer'
+    # Grid Fresnel ratio Q = z*lambda/(N*dx**2).  When Q > 1 the plain
+    # ASM transfer function aliases on the grid; scalable ASM rescales
+    # the output pitch so the beam fits without aliasing.
+    Q = wavelength * abs_z / (N_max * dx * dx)
+    if Q > 1.0:
+        return 'sas'
     return 'asm'
 
 
@@ -229,6 +239,13 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
         if z is None:
             return E_in
         return angular_spectrum_propagate(E_in, z, wavelength, dx, **kwargs)
+
+    if method == 'sas':
+        from .propagation import scalable_angular_spectrum_propagate
+        if z is None:
+            raise ValueError("propagate(method='sas'): z is required.")
+        return scalable_angular_spectrum_propagate(
+            E_in, z, wavelength, dx, **kwargs)
 
     if method == 'fresnel':
         from .propagation import fresnel_propagate
