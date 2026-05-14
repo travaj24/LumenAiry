@@ -212,7 +212,8 @@ class ThroughFocusResult:
 
 def through_focus_scan(E_exit, dx, wavelength, z_values,
                        bucket_radius=None, ideal_peak=None,
-                       bandlimit=True, verbose=False, progress=None):
+                       bandlimit=True, verbose=False, progress=None,
+                       *, backend='numpy'):
     """Propagate an exit-pupil field to each z and collect metrics.
 
     Parameters
@@ -243,7 +244,23 @@ def through_focus_scan(E_exit, dx, wavelength, z_values,
     Returns
     -------
     result : ThroughFocusResult
+
+    Notes
+    -----
+    Pass ``backend='jax'`` to dispatch to the JAX-traced implementation
+    (:func:`through_focus_scan_jax`).  This is the canonical 4.7+ way
+    to opt into the JAX path; the ``through_focus_scan_jax`` function
+    remains importable but is no longer the preferred entry point.
     """
+    if backend == 'jax':
+        return through_focus_scan_jax(
+            E_exit, dx, wavelength, z_values,
+            bucket_radius=bucket_radius, ideal_peak=ideal_peak,
+            bandlimit=bandlimit)
+    if backend != 'numpy':
+        raise ValueError(
+            f"through_focus_scan: backend must be 'numpy' or 'jax'; "
+            f"got {backend!r}.")
     from ..progress import call_progress
     z_arr = np.asarray(z_values, dtype=np.float64)
     n_z = z_arr.size
@@ -635,7 +652,8 @@ def monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
                             n_trials=100, seed=0,
                             z_scan_range=None, z_scan_n=21,
                             bucket_radius=None,
-                            verbose=True, progress=None):
+                            verbose=True, progress=None,
+                            *, backend='numpy'):
     """Random tolerancing: draw perturbations from user-specified
     distributions and aggregate Strehl statistics.
 
@@ -664,7 +682,24 @@ def monte_carlo_tolerancing(prescription, wavelength, N, dx, E_source,
         ``strehl_peak_p05``, ``strehl_peak_p50``, ``strehl_peak_p95``,
         ``trial_results``.  ``trial_results`` is a list of per-trial
         dicts in the same format as :func:`tolerancing_sweep`.
+
+    Notes
+    -----
+    Pass ``backend='jax'`` to dispatch to the JAX-vectorised
+    implementation (:func:`monte_carlo_tolerancing_jax`).
     """
+    if backend == 'jax':
+        return monte_carlo_tolerancing_jax(
+            prescription, wavelength, N, dx, E_source,
+            perturbation_spec, focal_length, aperture,
+            n_trials=n_trials, seed=seed,
+            z_scan_range=z_scan_range, z_scan_n=z_scan_n,
+            bucket_radius=bucket_radius,
+            verbose=verbose, progress=progress)
+    if backend != 'numpy':
+        raise ValueError(
+            f"monte_carlo_tolerancing: backend must be 'numpy' or "
+            f"'jax'; got {backend!r}.")
     from ..progress import call_progress
     if z_scan_range is None:
         z_scan_range = (-focal_length / 20.0, focal_length / 20.0)

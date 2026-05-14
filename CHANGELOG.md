@@ -184,6 +184,18 @@ external callers (none known at the time of release) must migrate; the
   pylance) treat the library's type hints as authoritative rather
   than skipping them.
 
+* **C.4 -- ``backend='jax'`` kwarg consolidation.**  The
+  ``gerchberg_saxton``, ``error_reduction``, ``hybrid_input_output``,
+  ``through_focus_scan``, and ``monte_carlo_tolerancing`` functions
+  now accept a ``backend='numpy' | 'jax'`` kwarg that dispatches to
+  the underlying JAX-traced implementation when requested.  The
+  ``_jax``-suffixed siblings remain importable for low-level use,
+  but ``backend='jax'`` is the canonical entry point.  Lens-trio
+  JAX twins (``apply_real_lens_traced_jax``,
+  ``apply_real_lens_maslov_jax``) and ``trace_jax`` stay as
+  separate entry points because their semantically-distinct
+  autodiff paths benefit from the explicit name.
+
 ### Renamed
 
 * **``lumenairy.analysis.analysis`` → ``lumenairy.analysis.core``.**

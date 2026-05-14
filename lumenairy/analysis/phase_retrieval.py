@@ -49,7 +49,8 @@ __all__ = [
 # =============================================================================
 
 def gerchberg_saxton(source_amplitude, target_amplitude, n_iter=200,
-                     initial_phase=None, return_history=False):
+                     initial_phase=None, return_history=False,
+                     *, backend='numpy'):
     """
     Gerchberg-Saxton phase retrieval between source and target amplitudes.
 
@@ -105,7 +106,19 @@ def gerchberg_saxton(source_amplitude, target_amplitude, n_iter=200,
     >>> source = np.exp(-(X**2 + Y**2) / 0.5**2)  # Gaussian input
     >>> target = np.sqrt(X**2 + Y**2) * np.exp(-(X**2 + Y**2) / 0.3**2)  # donut
     >>> phase, err = gerchberg_saxton(source, target, n_iter=300)
+
+    Notes
+    -----
+    Pass ``backend='jax'`` to dispatch to the JAX-traced
+    implementation (:func:`gerchberg_saxton_jax`).
     """
+    if backend == 'jax':
+        return gerchberg_saxton_jax(
+            source_amplitude, target_amplitude, n_iter=n_iter)
+    if backend != 'numpy':
+        raise ValueError(
+            f"gerchberg_saxton: backend must be 'numpy' or 'jax'; "
+            f"got {backend!r}.")
     if source_amplitude.shape != target_amplitude.shape:
         raise ValueError("Source and target must have the same shape")
 
@@ -166,7 +179,8 @@ def gerchberg_saxton(source_amplitude, target_amplitude, n_iter=200,
 # =============================================================================
 
 def error_reduction(measured_amplitude, support, n_iter=200,
-                    initial_guess=None, return_history=False):
+                    initial_guess=None, return_history=False,
+                    *, backend='numpy'):
     """
     Error-reduction phase retrieval from a single far-field intensity.
 
@@ -203,7 +217,16 @@ def error_reduction(measured_amplitude, support, n_iter=200,
     Error Reduction is the simplest Fienup-type algorithm. It converges
     monotonically but can stagnate. Use :func:`hybrid_input_output` for
     better escape from local minima.
+
+    Pass ``backend='jax'`` to dispatch to the JAX-traced implementation
+    (:func:`error_reduction_jax`).
     """
+    if backend == 'jax':
+        return error_reduction_jax(measured_amplitude, support, n_iter=n_iter)
+    if backend != 'numpy':
+        raise ValueError(
+            f"error_reduction: backend must be 'numpy' or 'jax'; "
+            f"got {backend!r}.")
     N = measured_amplitude.shape[0]
 
     if initial_guess is None:
@@ -245,7 +268,8 @@ def error_reduction(measured_amplitude, support, n_iter=200,
 # =============================================================================
 
 def hybrid_input_output(measured_amplitude, support, n_iter=200, beta=0.9,
-                        initial_guess=None, return_history=False):
+                        initial_guess=None, return_history=False,
+                        *, backend='numpy'):
     """
     Fienup's Hybrid Input-Output (HIO) algorithm for phase retrieval.
 
@@ -294,7 +318,17 @@ def hybrid_input_output(measured_amplitude, support, n_iter=200, beta=0.9,
     ----------
     Fienup, J.R. (1982). "Phase retrieval algorithms: a comparison."
     Applied Optics 21(15): 2758-2769.
+
+    Pass ``backend='jax'`` to dispatch to the JAX-traced implementation
+    (:func:`hybrid_input_output_jax`).
     """
+    if backend == 'jax':
+        return hybrid_input_output_jax(
+            measured_amplitude, support, n_iter=n_iter, beta=beta)
+    if backend != 'numpy':
+        raise ValueError(
+            f"hybrid_input_output: backend must be 'numpy' or 'jax'; "
+            f"got {backend!r}.")
     if initial_guess is None:
         rng = np.random.default_rng()
         phase = rng.uniform(-np.pi, np.pi, size=measured_amplitude.shape)
