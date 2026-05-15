@@ -1,7 +1,7 @@
 # Roadmap — Known Limitations and Planned Improvements
 
 This document catalogues remaining limitations in `lumenairy`
-(currently 4.7.0) and outlines planned improvements.  Items are grouped
+(currently 4.8.0) and outlines planned improvements.  Items are grouped
 by module and roughly prioritised within each section.  Items that have
 shipped since the original 3.0 roadmap was written are recorded in the
 "Resolved since 3.0" appendix at the bottom of this file; the per-

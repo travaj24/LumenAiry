@@ -2,6 +2,80 @@
 
 All notable changes to the core library are documented here.
 
+## [4.8.0] — 2026-05-15
+
+**Library-correctness pass triggered by the external wiki audit.**
+Fixes three verified bugs surfaced by the audit and closes the two
+long-deferred items (`DeformableMirror._IF_basis` memory foot-gun
+from the 4.0.1 deferred list; folded-design wave-optics silent-drop
+from the 3.7.8 archive page).  119 unit tests + 34 validation files
+pass.
+
+### Bug fixes
+
+* **`create_point_source` sign convention.**  Formula was
+  `E = A * exp(+i*k*r) / r` for both signs of `z0`, always producing
+  a diverging wave.  Fixed: `z0 <= 0` → `exp(+i*k*r)/r` (diverging,
+  source before grid); `z0 > 0` → `exp(-i*k*r)/r` (converging, focus
+  after grid).  Code that used `z0 > 0` to model an *outgoing* wave
+  must flip to `z0 < 0`.
+* **`FocalLengthMerit` / `BackFocalLengthMerit` afocal target.**
+  The `target == 0` branch returned `weight * efl**2`, growing
+  without bound as `efl → ∞` instead of pushing toward infinity as
+  the docstring promised.  Switched to penalising optical power
+  `(1/efl)^2`; merit → 0 as `efl → ∞`.
+
+### Long-deferred items now fixed
+
+* **`DeformableMirror._IF_basis` memory foot-gun** (deferred since
+  4.0.1 audit).  Eager `(n_act, n_act, N, N)` pre-allocation was 8
+  GB float64 for a 32×32 actuators × 1024×1024 pupil.  New
+  `cache_basis = {'auto', True, False}` flag (default `'auto'`)
+  caches eagerly below a 512 MB ceiling and streams on demand past
+  that.  New `DeformableMirror.fit_phase(target_phase)` public
+  modal-to-zonal projection helper.
+* **Wave optics through folded designs silent-drop.**
+  `apply_real_lens`, `apply_real_lens_traced`, and
+  `apply_real_lens_maslov` silently ignored mirrors in
+  `prescription['elements']`; for a folded `.zmx` this propagated
+  the unfolded-equivalent path with the mirror's curvature phase
+  and world-frame axis change dropped.  All three entry points now
+  raise `ValueError` unless the caller acknowledges via
+  `prescription['allow_unfolded_equivalent'] = True`.  New public
+  helpers `split_prescription_at_mirrors(rx)` and `has_mirrors(rx)`
+  support the segment-by-segment workflow (alternate
+  `apply_real_lens` with `apply_mirror` at each fold).
+
+### Wiki audit closeout
+
+The companion wiki underwent a comprehensive review pass: all 20
+critical, all 58 major, and ~290 of 294 medium findings addressed
+across 18 commits.  Highlights: ASM aliasing thresholds documented
+in Tutorial / Quickstart with `check_sampling_conditions` calls
+made explicit; test-count contradictions reconciled (34 files /
+~700 tests / 119 unit); Physics XII §1 / §5 photon-noise formulas
+corrected (`C_lim` non-inverted); Marechal-Strehl exponent fixed
+(`S ≈ exp(-σ_φ²)`, not `exp(-2σ_φ²)`); Fresnel-number aliasing
+criterion corrected from `N²/4` to `N/4`; new FR-Memory page
+documenting RAM + FFT-planner helpers; FR-Storage `replay_run`
+pre-3.7.x archive caveat; FR-Asymptotic `LGAberrationMerit`
+(±ell vortex orientations vs sin/cos clarification);
+Validation L8/L9 absolute-residual-scaling explainer.
+
+### Regression tests added
+
+* `tests/unit/test_optimize_merit_terms.py` — 5 tests covering
+  the afocal-target branch.
+* `tests/unit/test_ao_dm.py` — 9 tests covering DM cache modes
+  and `fit_phase` round-trip.
+* `tests/unit/test_folded_design_guard.py` — 9 tests covering
+  the silent-drop guard, `allow_unfolded_equivalent` escape hatch,
+  and `split_prescription_at_mirrors` / `has_mirrors` helpers.
+* `tests/unit/test_sources.py` augmented with point-source
+  sign-convention round-trips.
+
+---
+
 ## [4.7.0] — 2026-05-14
 
 **Polish-pass release + API-consistency pass.**  Implements the verified

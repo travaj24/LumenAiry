@@ -10,6 +10,72 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.8.0
+
+**Library-correctness pass triggered by the external wiki audit.**
+4.8 fixes three verified bugs surfaced by the audit and closes the
+two long-deferred items (`DeformableMirror._IF_basis` memory
+foot-gun from the 4.0.1 deferred list; folded-design wave-optics
+silent-drop from the 3.7.8 archive page).  All fixes ship with
+regression tests; 119 unit tests + 34 validation files pass.
+
+### Bug fixes
+
+* **`create_point_source` sign convention.**  The formula
+  `E = A * exp(+i*k*r) / r` was sign-independent in `z0` and always
+  produced a diverging wave even when the caller requested
+  converging.  Fixed: switch the exponent sign based on `z0` —
+  `z0 <= 0` → `exp(+i*k*r)/r` (diverging, source before grid),
+  `z0 > 0` → `exp(-i*k*r)/r` (converging, focus after grid).
+  **Behaviour change:** code that used `z0 > 0` to model an
+  *outgoing* wave needs to flip to `z0 < 0`.
+* **`FocalLengthMerit` / `BackFocalLengthMerit` afocal target.**
+  Docstring promised "pushing EFL toward infinity drives merit to
+  zero" but the code returned `weight * efl**2`, growing without
+  bound.  Switched the `target == 0` branch to penalise optical
+  power `(1/efl)^2`, so merit → 0 as `efl → ∞`.  Optimisers
+  targeting a collimator now have the correct gradient.
+
+### Long-deferred items now fixed
+
+* **`DeformableMirror._IF_basis` memory foot-gun.**  Eager
+  pre-allocation of the `(n_act, n_act, N, N)` influence-function
+  stack was 8 GB float64 for a 32×32 actuators × 1024×1024 pupil
+  config (deferred since the 4.0.1 audit).  New
+  `cache_basis = {'auto', True, False}` flag (default `'auto'`)
+  caches eagerly below a 512 MB ceiling and switches to on-demand
+  evaluation past that — same FLOP count, no large allocation.
+  New `DeformableMirror.fit_phase(target_phase)` public modal-to-
+  zonal projection helper, replacing the worked-example pattern
+  of reaching into the private `_IF_basis` attribute.
+* **Wave optics through folded designs silent-drop.**
+  `apply_real_lens`, `apply_real_lens_traced`, and
+  `apply_real_lens_maslov` walked `prescription['surfaces']`
+  (refracting-only) and silently ignored mirrors in
+  `prescription['elements']`; for a folded `.zmx` this propagated
+  the unfolded-equivalent path with the mirror's focusing phase
+  and world-frame axis change dropped.  All three entry points
+  now raise a `ValueError` with a clear message unless the caller
+  acknowledges the unfolded-equivalent treatment via
+  `prescription['allow_unfolded_equivalent'] = True`.  New public
+  helpers **`split_prescription_at_mirrors(rx)`** and
+  **`has_mirrors(rx)`** support the explicit segment-by-segment
+  workflow.
+
+### Wiki audit closeout (cross-cutting)
+
+The companion wiki underwent a comprehensive review pass: all 20
+critical, all 58 major, and ~290 of 294 medium findings addressed
+across 18 commits.  Highlights: ASM aliasing thresholds documented
+in Tutorial / Quickstart; test-count contradictions reconciled
+(34 files / ~700 tests / 119 unit); Physics XII §1 / §5 photon-noise
+formulas corrected; Marechal-Strehl exponent fixed; Fresnel-number
+aliasing criterion corrected `N²/4 → N/4`; new FR-Memory page
+documenting RAM + FFT-planner helpers.  The full audit response is
+documented in the wiki [Release Notes](../../wiki/Release-Notes#whats-new-in-4-8-0).
+
+---
+
 ## What's new in 4.7.0
 
 **Polish-pass release + API-consistency pass.**  4.7 implements the
