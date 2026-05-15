@@ -460,9 +460,17 @@ class FocalLengthMerit(MeritTerm):
     ``contribution = weight * (efl - target)^2 / target^2``
 
     When ``target == 0`` (afocal / collimator), the normalised-error
-    formula is ill-defined; this class falls back to a penalty on
-    ``efl^2`` scaled to unit metres so that pushing EFL toward
-    infinity (i.e. toward truly afocal) drives the merit to zero.
+    formula is ill-defined; the merit falls back to a penalty on the
+    *optical power* ``1/efl`` (in m^-1, equivalently dioptres).  This
+    drives the merit to zero as the system becomes truly afocal
+    (``efl -> infinity``) and grows without bound as ``efl -> 0``
+    (point-image collapse), which is the right gradient direction for
+    a collimator design.
+
+    Use ``target > 0`` for a finite-EFL target; use ``target == 0``
+    for an afocal / collimator target.  There is no use case for
+    ``target < 0`` (a virtual-image lens) -- pass the positive EFL
+    instead and rely on ABCD sign conventions in the prescription.
     """
 
     needs_wave = False
@@ -477,10 +485,13 @@ class FocalLengthMerit(MeritTerm):
         if not ctx_is_valid(ctx, 'efl'):
             return self.weight  # graceful large-but-finite penalty
         if self.target == 0.0:
-            # Collimator / afocal target: minimise |EFL| directly.  A
-            # metre-scaled unit keeps the contribution comparable to
-            # other unit-scaled merits.
-            return self.weight * efl * efl
+            # Afocal / collimator: minimise 1/|efl| so merit -> 0 as
+            # efl -> infinity.  Clamp efl below to keep the merit
+            # finite when the optimiser walks through near-zero EFL
+            # during the search.
+            efl_clamped = max(abs(efl), 1e-12)
+            power = 1.0 / efl_clamped  # dioptres
+            return self.weight * power * power
         err = (efl - self.target) / self.target
         return self.weight * err * err
 
@@ -488,7 +499,8 @@ class FocalLengthMerit(MeritTerm):
 class BackFocalLengthMerit(MeritTerm):
     """Penalise deviation from target back focal length.
 
-    Same zero-target behaviour as :class:`FocalLengthMerit`.
+    Same zero-target behaviour as :class:`FocalLengthMerit`: BFL ->
+    infinity drives the merit toward zero, BFL -> 0 explodes it.
     """
 
     needs_wave = False
@@ -503,7 +515,9 @@ class BackFocalLengthMerit(MeritTerm):
         if not ctx_is_valid(ctx, 'bfl'):
             return self.weight
         if self.target == 0.0:
-            return self.weight * bfl * bfl
+            bfl_clamped = max(abs(bfl), 1e-12)
+            power = 1.0 / bfl_clamped
+            return self.weight * power * power
         err = (bfl - self.target) / self.target
         return self.weight * err * err
 

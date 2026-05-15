@@ -510,21 +510,36 @@ def create_point_source(
     amplitude: float = 1.0,
     dy: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Create a diverging spherical wave from a point source at
-    ``(x0, y0, z0)`` evaluated at z=0.
+    """Create a spherical wave from a point at ``(x0, y0, z0)``
+    evaluated on the grid plane at z=0.
 
-    For ``z0 < 0`` the source is *before* the grid (diverging);
-    for ``z0 > 0`` it is *after* (converging).  ``z0 = 0`` gives
-    a delta at (x0, y0).
+    Sign of ``z0`` selects diverging vs converging:
+
+    - ``z0 < 0`` -- source is *before* the grid; the wavefront at z=0
+      is *diverging* (positive curvature) and uses ``exp(+i k r)/r``.
+    - ``z0 > 0`` -- target is *after* the grid; the wavefront at z=0
+      is *converging* (negative curvature) and uses ``exp(-i k r)/r``.
+      This is the field a perfect lens would put on the grid to focus
+      to a point at axial distance ``z0`` past it.
+    - ``z0 = 0`` -- 1/r singular profile in-plane (a diverging point
+      source coincident with the grid); the central pixel is clamped
+      to a finite floor.  Rarely the right tool; prefer a non-zero
+      ``z0`` to get a well-defined spherical wavefront.
+
+    The sign convention pairs with LumenAiry's ``exp(-i*omega*t)``
+    time-harmonic convention: ``exp(+i k r)/r`` is an outgoing
+    (diverging) spherical wave, ``exp(-i k r)/r`` is an incoming
+    (converging) one.
 
     Parameters
     ----------
     N, dx, wavelength : usual
     x0, y0 : float
-        Transverse position of the point source [m].
+        Transverse position of the point [m].
     z0 : float
-        Axial position of the point source [m] relative to the
-        grid plane at z=0.  Negative = source before grid (diverging).
+        Axial position of the point [m] relative to the grid plane.
+        Negative = source before grid (diverging), positive = focus
+        after grid (converging).
     amplitude : float
     dy : float, optional
 
@@ -541,7 +556,12 @@ def create_point_source(
     k0 = 2 * np.pi / wavelength
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2 + z0 ** 2)
     r = np.maximum(r, 1e-30)
-    E = amplitude * np.exp(1j * k0 * r) / r
+    # Sign convention under exp(-i*omega*t):
+    #   z0 < 0 (source before grid)   -> diverging, exp(+i*k*r)/r
+    #   z0 > 0 (focus after grid)     -> converging, exp(-i*k*r)/r
+    #   z0 == 0 (in-plane singularity)-> use the diverging form
+    sign = -1.0 if z0 > 0.0 else 1.0
+    E = amplitude * np.exp(1j * sign * k0 * r) / r
     return E, x, y
 
 
@@ -924,7 +944,13 @@ class Source:
                       *, x0: float = 0.0, y0: float = 0.0,
                       z0: float = 0.0, amplitude: float = 1.0,
                       name: _Optional[str] = None) -> 'Source':
-        """Diverging spherical wave from a point at (x0, y0, z0)."""
+        """Spherical wave from a point at ``(x0, y0, z0)``.
+
+        ``z0 < 0`` -> diverging wavefront (source before grid);
+        ``z0 > 0`` -> converging wavefront (focus after grid).
+        See :func:`create_point_source` for the sign-convention
+        details.
+        """
         E, _, _ = create_point_source(
             N, dx, wavelength, x0=x0, y0=y0, z0=z0,
             amplitude=amplitude)
