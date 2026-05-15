@@ -1264,6 +1264,11 @@ def apply_real_lens_traced(
     E_out : ndarray, complex, shape (N, N)
         Field at the exit-vertex plane of the last surface.
     """
+    # Folded-design silent-drop guard: same as apply_real_lens.
+    from ._lens_real import _check_no_silent_fold_drop
+    _check_no_silent_fold_drop(
+        prescription, fn_name='apply_real_lens_traced')
+
     # Internal references keep the legacy local name to avoid a
     # sprawling rename across this 1500-line function body.
     lens_prescription = prescription

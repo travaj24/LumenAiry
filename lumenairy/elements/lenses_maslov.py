@@ -114,6 +114,11 @@ def apply_real_lens_maslov(
     product fit assumes square pixels and will raise if
     ``dy != dx``.
     """
+    # Folded-design silent-drop guard: same as apply_real_lens.
+    from ._lens_real import _check_no_silent_fold_drop
+    _check_no_silent_fold_drop(
+        prescription, fn_name='apply_real_lens_maslov')
+
     # Internal references keep the legacy local name to avoid a
     # sprawling rename across the function body.
     lens_prescription = prescription

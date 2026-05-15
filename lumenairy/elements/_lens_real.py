@@ -136,6 +136,56 @@ def _check_apply_real_lens_kwarg_combination(
             f"apply_real_lens: seidel_poly_order={seidel_poly_order} "
             f"is too large; radial-polynomial fit conditioning "
             f"degrades above 12.")
+    _check_no_silent_fold_drop(prescription, fn_name='apply_real_lens')
+
+
+def _check_no_silent_fold_drop(prescription: dict,
+                                fn_name: str = 'apply_real_lens') -> None:
+    """Raise a precise ValueError if ``prescription`` contains fold
+    mirrors that the refractive-only ``apply_real_lens*`` family would
+    silently drop.
+
+    A prescription loaded from a .zmx file that contains a fold mirror
+    carries it in the ``elements`` list (full element sequence) but
+    NOT in the ``surfaces`` list (refracting-surface-only, the only
+    thing the apply_real_lens* family iterates over).  Running them on
+    the bare prescription propagates the wave along the *unfolded
+    equivalent* axis -- this is scalar-physics-correct on-axis when
+    every mirror is flat, but silently drops the mirror's curvature
+    phase (if any) and the world-frame axis change.
+
+    The caller picks one of two escape hatches:
+      (a) Acknowledge the unfolded-equivalent treatment by setting
+          ``prescription['allow_unfolded_equivalent'] = True``.
+      (b) Use :func:`lumenairy.io.split_prescription_at_mirrors` to
+          walk the wave segment-by-segment, applying :func:`apply_mirror`
+          at each fold.
+    """
+    elements = prescription.get('elements')
+    if elements is None:
+        return
+    mirror_count = sum(1 for el in elements
+                       if el.get('element_type') == 'mirror')
+    if mirror_count == 0:
+        return
+    if prescription.get('allow_unfolded_equivalent', False):
+        return
+    raise ValueError(
+        f"{fn_name}: prescription has {mirror_count} mirror "
+        f"element(s) but {fn_name} only walks refracting surfaces.  "
+        f"Running this prescription as-is would silently propagate "
+        f"the unfolded-equivalent path and skip the mirror's focusing "
+        f"phase (if curved) and world-frame axis change.  Two ways "
+        f"to proceed:\n"
+        f"  (a) Acknowledge the unfolded-equivalent treatment by "
+        f"setting prescription['allow_unfolded_equivalent'] = True.  "
+        f"Correct for scalar on-axis fields when every mirror is flat; "
+        f"otherwise lossy or wrong.\n"
+        f"  (b) Use lumenairy.io.split_prescription_at_mirrors(rx) "
+        f"to split the prescription at each fold, then alternate "
+        f"{fn_name} (each segment) with apply_mirror (each fold).  "
+        f"See Guide-Folded-Designs section 'Wave-optics through a "
+        f"fold'.")
 
 
 def apply_real_lens(

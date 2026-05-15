@@ -72,6 +72,12 @@ import numpy as np
 # Deformable mirror
 # =============================================================================
 
+# Default ceiling for eager basis caching.  At 512 MB float64 (= 6.7e7
+# values), a 32x32 DM on a 512x512 pupil grid (= 268 MB) caches eagerly;
+# a 32x32 DM on a 1024x1024 grid (= 1 GB) goes lazy automatically.
+_DEFAULT_CACHE_CEILING_BYTES = 512 * 1024 * 1024
+
+
 @dataclass
 class DeformableMirror:
     """Gaussian-influence-function deformable mirror on a Cartesian
@@ -105,6 +111,20 @@ class DeformableMirror:
         (0 = perfectly localised; 1 = no localisation).  Sets the
         influence-function width via
         ``sigma_IF = pitch / sqrt(-2 * ln(coupling))``.
+    cache_basis : {'auto', True, False}, default 'auto'
+        Controls the influence-function-stack caching strategy.
+
+        - ``'auto'`` (default): pre-compute the ``(n_act, n_act, N, N)``
+          basis if it fits under ``_DEFAULT_CACHE_CEILING_BYTES``
+          (~512 MB); otherwise compute each actuator's influence
+          on demand inside :meth:`phase` (no large allocation).
+        - ``True``: always pre-compute.  Fast ``phase()`` but watch
+          memory at large ``n_actuators * N`` (32 actuators x 1024 grid
+          eagerly caches 8 GB float64).
+        - ``False``: always compute on demand.  Slightly slower per
+          :meth:`phase` call but uses ~``N**2`` floats of scratch
+          memory regardless of ``n_actuators``.
+
     command : ndarray of shape (n_actuators, n_actuators)
         Current command amplitudes [radians of OPD].  Initialised to
         zero.
@@ -114,30 +134,46 @@ class DeformableMirror:
     dx: float
     N: int
     inter_actuator_coupling: float = 0.15
+    cache_basis: Any = 'auto'
     command: np.ndarray = _dc_field(init=False)
     _IF_basis: Optional[np.ndarray] = _dc_field(default=None, init=False, repr=False)
+    _act_centres: Optional[np.ndarray] = _dc_field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.command = np.zeros((self.n_actuators, self.n_actuators),
                                  dtype=np.float64)
         c = max(min(self.inter_actuator_coupling, 0.99), 1e-6)
         self._sigma_IF = self.pitch / np.sqrt(-2.0 * np.log(c))
-        self._build_IF_basis()
+        # Actuator centres on the pupil grid (cheap, always kept).
+        self._act_centres = (
+            (np.arange(self.n_actuators) - (self.n_actuators - 1) / 2)
+            * self.pitch
+        )
+        # Decide cache strategy.
+        want_cache = self.cache_basis
+        if want_cache == 'auto':
+            bytes_needed = (self.n_actuators ** 2) * (self.N ** 2) * 8
+            want_cache = bytes_needed <= _DEFAULT_CACHE_CEILING_BYTES
+        self._cache_active = bool(want_cache)
+        if self._cache_active:
+            self._build_IF_basis()
 
     def _build_IF_basis(self) -> None:
-        """Pre-compute the (n_act**2, N, N) influence-function stack."""
+        """Pre-compute the (n_act, n_act, N, N) influence-function stack.
+
+        Only called when ``cache_basis`` resolves to True at init time.
+        Memory: ``n_actuators**2 * N**2 * 8`` bytes (float64).
+        """
         N = self.N
         dx = self.dx
         n = self.n_actuators
         x = (np.arange(N) - N / 2) * dx
         y = (np.arange(N) - N / 2) * dx
         X, Y = np.meshgrid(x, y)
-        # Actuators centred on the pupil grid.
-        act_centres = (np.arange(n) - (n - 1) / 2) * self.pitch
         stack = np.empty((n, n, N, N), dtype=np.float64)
         s2 = self._sigma_IF ** 2
-        for i, xi in enumerate(act_centres):
-            for j, yj in enumerate(act_centres):
+        for i, xi in enumerate(self._act_centres):
+            for j, yj in enumerate(self._act_centres):
                 d2 = (X - xi) ** 2 + (Y - yj) ** 2
                 stack[j, i] = np.exp(-d2 / (2.0 * s2))
         self._IF_basis = stack
@@ -152,14 +188,101 @@ class DeformableMirror:
                 f"{self.n_actuators ** 2} values, got {c.size}.")
         self.command = c.reshape(self.n_actuators, self.n_actuators)
 
+    def fit_phase(self, target_phase: np.ndarray) -> np.ndarray:
+        """Project a target ``(N, N)`` phase map onto the actuator grid
+        via least squares against the influence-function basis.
+
+        Returns the fitted ``(n_actuators, n_actuators)`` command vector
+        and also stores it via :meth:`set_command`.  Use this instead
+        of reaching into the private ``_IF_basis`` attribute when
+        closing a modal-to-zonal projection in your control loop.
+
+        Always works regardless of ``cache_basis`` setting: streams
+        per-actuator IF rows in to a normal-equations solver, so peak
+        memory is ``n_actuators**2 * N**2 / chunk_size`` at most.
+        """
+        target = np.asarray(target_phase, dtype=np.float64).ravel()
+        n2 = self.n_actuators ** 2
+        # Build the design matrix A of shape (N**2, n_act**2).  For
+        # small DMs (n_act <= 16 say) materialising A directly is
+        # already < 1 GB; for larger DMs we stream rows and accumulate
+        # the n2 x n2 normal matrix instead.
+        bytes_design = (self.N ** 2) * n2 * 8
+        if bytes_design <= _DEFAULT_CACHE_CEILING_BYTES // 4:
+            # Materialise A and solve directly.
+            A = np.empty((self.N ** 2, n2), dtype=np.float64)
+            for k in range(n2):
+                A[:, k] = self._influence_function_kth(k).ravel()
+            coeffs, *_ = np.linalg.lstsq(A, target, rcond=None)
+        else:
+            # Streamed normal equations: AtA = sum_k a_k a_k^T,
+            # Atb = sum_k a_k * <target, a_k> -- both n2 x n2 / n2.
+            AtA = np.zeros((n2, n2), dtype=np.float64)
+            Atb = np.zeros(n2, dtype=np.float64)
+            cols = [self._influence_function_kth(k).ravel()
+                    for k in range(n2)]
+            for i in range(n2):
+                ci = cols[i]
+                Atb[i] = float(ci @ target)
+                for j in range(i, n2):
+                    AtA[i, j] = float(ci @ cols[j])
+                    AtA[j, i] = AtA[i, j]
+            coeffs = np.linalg.solve(AtA, Atb)
+        self.set_command(coeffs)
+        return self.command.copy()
+
+    def _influence_function_kth(self, k: int) -> np.ndarray:
+        """Return the k-th actuator's influence function as an (N, N)
+        array.  ``k`` indexes the flat ``(n_act, n_act)`` grid in
+        row-major (numpy) order."""
+        n = self.n_actuators
+        if self._IF_basis is not None:
+            j, i = divmod(k, n)
+            return self._IF_basis[j, i]
+        # Compute on demand.
+        j, i = divmod(k, n)
+        xi = self._act_centres[i]
+        yj = self._act_centres[j]
+        dx = self.dx
+        N = self.N
+        x = (np.arange(N) - N / 2) * dx
+        y = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, y)
+        d2 = (X - xi) ** 2 + (Y - yj) ** 2
+        return np.exp(-d2 / (2.0 * self._sigma_IF ** 2))
+
     def phase(self) -> np.ndarray:
         """Current DM phase map on the wavefront grid [radians of OPD].
 
         Sum of per-actuator influence functions weighted by the
         command vector.
+
+        When ``cache_basis`` is active, this is one ``einsum`` call
+        on the pre-computed basis.  Otherwise the contribution from
+        each actuator is added on the fly into a single ``(N, N)``
+        accumulator -- no large stack allocated.
         """
-        # (n_y_act, n_x_act, 1, 1) * (n_y_act, n_x_act, N, N) -> (N, N) via sum
-        return np.einsum('ij,ijkl->kl', self.command, self._IF_basis)
+        if self._cache_active and self._IF_basis is not None:
+            # (n_y_act, n_x_act) x (n_y_act, n_x_act, N, N) -> (N, N)
+            return np.einsum('ij,ijkl->kl', self.command, self._IF_basis)
+        # Lazy / on-demand path: stream per-actuator gaussians into the
+        # accumulator.  Skips actuators with command 0.0 for free.
+        out = np.zeros((self.N, self.N), dtype=np.float64)
+        dx = self.dx
+        N = self.N
+        x = (np.arange(N) - N / 2) * dx
+        y = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, y)
+        s2 = self._sigma_IF ** 2
+        cmd = self.command
+        for j, yj in enumerate(self._act_centres):
+            for i, xi in enumerate(self._act_centres):
+                a = cmd[j, i]
+                if a == 0.0:
+                    continue
+                d2 = (X - xi) ** 2 + (Y - yj) ** 2
+                out += a * np.exp(-d2 / (2.0 * s2))
+        return out
 
     def apply(self, E_in: np.ndarray, scale: float = 1.0) -> np.ndarray:
         """Apply the DM phase to a complex field.

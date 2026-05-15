@@ -451,6 +451,8 @@ from .io.prescriptions import (
     QUADOA_SCHEMA_VERSION,
     scale_prescription,
     normalize_prescription,
+    split_prescription_at_mirrors,
+    has_mirrors,
     THORLABS_CATALOG,
 )
 
@@ -727,6 +729,8 @@ __all__ = [
     'QUADOA_SCHEMA_VERSION',
     'scale_prescription',
     'normalize_prescription',
+    'split_prescription_at_mirrors',
+    'has_mirrors',
 
     # Lens / element models (apply on a field)
     'apply_thin_lens',

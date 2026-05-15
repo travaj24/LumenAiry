@@ -2603,3 +2603,147 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
 
     return rx
 
+
+# ============================================================================
+# Folded-design helpers
+# ============================================================================
+
+
+def split_prescription_at_mirrors(
+    prescription: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Split a folded-design prescription into per-segment legs at every
+    fold mirror.
+
+    The Zemax-loader emits both ``'surfaces'`` (refracting-only, what
+    :func:`apply_real_lens` consumes) and ``'elements'`` (full sequence
+    including mirrors).  For a folded design, walking ``'surfaces'``
+    propagates the wave along the *unfolded equivalent* axis -- correct
+    for scalar on-axis fields when every mirror is flat, but silently
+    wrong as soon as a curved mirror or a polarisation-sensitive field
+    enters the picture.  This helper returns the segment list so the
+    caller can alternate :func:`apply_real_lens` (each segment) with
+    :func:`apply_mirror` (each fold), keeping the physics explicit.
+
+    Parameters
+    ----------
+    prescription : dict
+        A prescription dict as returned by :func:`load_zemax_zmx`,
+        :func:`load_codev_seq`, or :func:`load_quadoa_qos` -- i.e.
+        carrying both ``'elements'`` and ``'all_thicknesses'``.  A
+        plain ``'surfaces'``-only prescription is returned unchanged
+        wrapped in a single-element list.
+
+    Returns
+    -------
+    legs : list of dict
+        One entry per leg, in propagation order.  Each entry is either:
+
+        - ``{'kind': 'refractive', 'prescription': sub_rx}`` -- a
+          refracting-only sub-prescription consumable by
+          :func:`apply_real_lens`.  ``sub_rx`` is the deep-copied
+          minimal schema ``{'surfaces', 'thicknesses',
+          'aperture_diameter', 'name'}``.
+        - ``{'kind': 'mirror', 'element': mirror_dict}`` -- the raw
+          mirror element from the original ``'elements'`` list.  Pass
+          its radius / conic / aperture into :func:`apply_mirror`.
+
+    Examples
+    --------
+    >>> rx = la.load_zemax_zmx('folded_design.zmx')
+    >>> legs = la.split_prescription_at_mirrors(rx)
+    >>> E = E_in
+    >>> for leg in legs:
+    ...     if leg['kind'] == 'refractive':
+    ...         E = la.apply_real_lens(E, prescription=leg['prescription'],
+    ...                                wavelength=wl, dx=dx)
+    ...     else:
+    ...         m = leg['element']
+    ...         E = la.apply_mirror(E, wavelength=wl, dx=dx,
+    ...                             radius=m.get('radius'),
+    ...                             conic=m.get('conic', 0.0),
+    ...                             aperture_diameter=m.get('clear_aperture'))
+
+    Notes
+    -----
+    For a *flat* fold mirror, :func:`apply_mirror` returns the field
+    unchanged apart from the aperture clip -- the propagation direction
+    flips but the field's complex-amplitude distribution is unaffected
+    in its own local +z frame.  For a *curved* fold mirror the focusing
+    phase is applied.  Neither case automatically rotates the field's
+    coordinate frame; callers writing 3-D world-frame analyses still
+    need to track which world-axis "+z" points in for each leg (see
+    :func:`world_surfaces_from_prescription` for the ray-side
+    counterpart).
+
+    Polarisation handling at fold mirrors (s/p phase / amplitude
+    response from a real coating) is not done by :func:`apply_mirror`;
+    if you need it, use a Jones-aware mirror wrapper of your own --
+    the segment list this function returns is the right scaffold to
+    insert it into.
+    """
+    elements = prescription.get('elements')
+    all_th = prescription.get('all_thicknesses')
+    if elements is None or all_th is None:
+        # Plain prescription without mirrors -- return as a single leg.
+        return [{'kind': 'refractive',
+                 'prescription': copy.deepcopy(prescription)}]
+
+    # Validate alignment of elements vs all_thicknesses.
+    if len(all_th) != max(len(elements) - 1, 0):
+        raise ValueError(
+            f"split_prescription_at_mirrors: prescription has "
+            f"{len(elements)} elements but {len(all_th)} thicknesses; "
+            f"expected {len(elements) - 1}.  Was the prescription "
+            f"loaded from a tool that doesn't emit a contiguous "
+            f"thickness list?  Try normalize_prescription first.")
+
+    aperture = prescription.get('aperture_diameter')
+    name = prescription.get('name')
+
+    legs: List[Dict[str, Any]] = []
+    seg_surfaces: List[Dict[str, Any]] = []
+    seg_thicknesses: List[float] = []
+    last_was_surface = False
+
+    def _flush_refractive() -> None:
+        if not seg_surfaces:
+            return
+        sub_rx = {
+            'surfaces': copy.deepcopy(seg_surfaces),
+            'thicknesses': list(seg_thicknesses),
+            'aperture_diameter': aperture,
+            'name': f"{name}:seg{len(legs)}" if name else None,
+        }
+        legs.append({'kind': 'refractive', 'prescription': sub_rx})
+        seg_surfaces.clear()
+        seg_thicknesses.clear()
+
+    for idx, el in enumerate(elements):
+        kind = el.get('element_type', 'surface')
+        if kind == 'mirror':
+            _flush_refractive()
+            legs.append({'kind': 'mirror',
+                         'element': copy.deepcopy(el)})
+            last_was_surface = False
+            continue
+        # Refractive surface.
+        if last_was_surface and idx > 0:
+            # Carry the thickness *into* this segment from the prior
+            # surface within the same refractive run.
+            seg_thicknesses.append(float(all_th[idx - 1]))
+        seg_surfaces.append(copy.deepcopy(el))
+        last_was_surface = True
+
+    _flush_refractive()
+    return legs
+
+
+def has_mirrors(prescription: Dict[str, Any]) -> bool:
+    """Return True iff ``prescription['elements']`` carries any entry
+    with ``element_type == 'mirror'``."""
+    elements = prescription.get('elements')
+    if elements is None:
+        return False
+    return any(el.get('element_type') == 'mirror' for el in elements)
+
