@@ -771,6 +771,23 @@ def compute_psf(
     the default and ``'peak'`` is opt-in.
     """
     xp = _xp_of(pupil)
+    # 4.11.2: enforce the (long-undocumented) square-pupil assumption.
+    # Pre-4.11.2 the function silently used ``pupil.shape[0]`` for
+    # both axes and applied an isotropic pad / Fraunhofer-grid scale,
+    # so rectangular inputs (Ny != Nx) produced wrong PSF dimensions
+    # and an anisotropically-mispadded transform.  Raise here so
+    # rectangular-aperture callers get a visible failure instead of
+    # silently wrong output; the underlying FFT handles non-square
+    # arrays fine, the pad / grid code does not.
+    if pupil.ndim != 2:
+        raise ValueError(
+            f"compute_psf: pupil must be 2-D; got shape {pupil.shape!r}.")
+    if pupil.shape[0] != pupil.shape[1]:
+        raise ValueError(
+            f"compute_psf: only square pupils are supported "
+            f"(pupil.shape = {pupil.shape!r}).  For rectangular "
+            f"apertures, embed the support in a square grid before "
+            f"calling this function.")
     Np = pupil.shape[0]
     if N_psf is None:
         N_psf = Np * oversample
@@ -1021,8 +1038,14 @@ def polychromatic_strehl(
 
     strehls = np.empty(len(wavelengths))
     z_bests = np.empty(len(wavelengths))
+    # 4.11.2: honour the global precision context (single vs double) by
+    # routing through get_default_complex_dtype() instead of hard-coding
+    # complex128.  Pre-4.11.2 this silently coerced single-precision
+    # users back to double.
+    from ..propagators.propagation import get_default_complex_dtype
+    cdtype = get_default_complex_dtype()
     if E_in is None:
-        E_in = np.ones((N, N), dtype=np.complex128)
+        E_in = np.ones((N, N), dtype=cdtype)
 
     for i, wl in enumerate(wavelengths):
         surfs = surfaces_from_prescription(prescription)
@@ -1185,8 +1208,11 @@ def polychromatic_psf(
         image_distance = float(bfl)
     image_distance = float(image_distance)
 
+    # 4.11.2: honour the global precision context (single vs double).
+    from ..propagators.propagation import get_default_complex_dtype
+    cdtype = get_default_complex_dtype()
     if E_in is None:
-        E_in = np.ones((N, N), dtype=np.complex128)
+        E_in = np.ones((N, N), dtype=cdtype)
 
     psf_acc = np.zeros((N, N), dtype=np.float64)
     per_peak = np.empty(wavelengths.size, dtype=np.float64)

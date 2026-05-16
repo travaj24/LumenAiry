@@ -363,21 +363,38 @@ def find_best_focus(
     """
     if metric == 'strehl':
         values = scan.strehl
-        best_idx = int(np.nanargmax(values))
+        maximize = True
     elif metric == 'peak_I':
         values = scan.peak_I
-        best_idx = int(np.nanargmax(values))
+        maximize = True
     elif metric == 'spot':
         values = 0.5 * (scan.d4sigma_x + scan.d4sigma_y)
-        best_idx = int(np.nanargmin(values))
+        maximize = False
     elif metric == 'rms':
         values = scan.rms_radius
-        best_idx = int(np.nanargmin(values))
+        maximize = False
     elif metric == 'bucket':
         values = scan.power_in_bucket
-        best_idx = int(np.nanargmax(values))
+        maximize = True
     else:
         raise ValueError(f"Unknown metric {metric!r}")
+
+    # 4.11.2: NaN guards.  ``np.nanargmax`` / ``np.nanargmin`` raise
+    # ``ValueError: All-NaN slice encountered`` when every value is
+    # NaN.  monte_carlo_tolerancing (and its linearised variant) call
+    # find_best_focus on per-trial scans that can degenerate to all-NaN
+    # for severely-aberrated perturbations -- pre-4.11.2 this poisoned
+    # the whole MC run instead of returning a graceful (nan, nan).
+    # v4.11.1 added per-merit guards; this hardens the underlying
+    # function so any caller benefits.
+    values = np.asarray(values, dtype=float)
+    finite = np.isfinite(values)
+    if not finite.any():
+        return float('nan'), float('nan')
+    if maximize:
+        best_idx = int(np.nanargmax(values))
+    else:
+        best_idx = int(np.nanargmin(values))
 
     return float(scan.z[best_idx]), float(values[best_idx])
 
@@ -1365,6 +1382,18 @@ def monte_carlo_tolerancing_linearized(
             # quadratic per knob: a_k = (S_nom - S(sigma)) / sigma^2
             # so the per-trial sum reads S_pred = S_nom - sum a_k xi_k^2.
             a_k = (S_nom - S_p) / (sigma * sigma)
+            # 4.11.2: Marechal invariant says S(perturbed) ≤ S_nom for
+            # any small perturbation, so a_k ≥ 0 is the physical
+            # constraint.  One-sided FD probes can occasionally yield
+            # S_p > S_nom (numerical noise, sign coincidence with the
+            # nominal aberration, or the FD step landing in a
+            # local-best-focus bucket), making a_k negative; pre-4.11.2
+            # that flipped the per-trial contribution sign and pushed
+            # S_pred above S_nom -- impossible under Marechal.  Clip
+            # at 0 so the worst case is "perturbation has zero effect"
+            # rather than "perturbation improves Strehl".  A two-sided
+            # FD probe would also work but doubles the probe budget.
+            a_k = max(a_k, 0.0)
             sensitivities.append((spec_idx, knob, sigma, a_k))
 
     # ----- Step 3: per-trial QUADRATIC superposition (Marechal) -----

@@ -1013,18 +1013,28 @@ class Source:
 
     # -- Factories that wrap the existing create_X functions ----------
 
+    # 4.11.2 (audit round-3): the classmethod factories below pass
+    # ``**factory_kwargs`` through to the underlying ``create_*`` calls
+    # so callers can configure ``dy=``, ``dtype=``, ``normalize=``,
+    # ``use_gpu=``, etc. without having to call the bare function
+    # directly.  Pre-4.11.2 these kwargs were not propagated, so
+    # anamorphic grids and single-precision fields silently fell back
+    # to the create_*'s defaults.
+
     @classmethod
     def gaussian(cls, w0: float, N: int, dx: float, wavelength: float,
                   *, x0: float = 0.0, y0: float = 0.0,
                   source_point: _Tuple[float, float] = (0.0, 0.0),
                   name: _Optional[str] = None,
-                  use_gpu: bool = False) -> 'Source':
+                  use_gpu: bool = False,
+                  **factory_kwargs) -> 'Source':
         """Gaussian beam at the waist.  ``w0`` is the 1/e^2 intensity
-        radius."""
+        radius.  Extra ``factory_kwargs`` (e.g. ``dy=``, ``dtype=``)
+        are forwarded to :func:`create_gaussian_beam`."""
         sigma = w0 / np.sqrt(2)
         E, _, _ = create_gaussian_beam(
             N, dx, wavelength, sigma=sigma, x0=x0, y0=y0,
-            use_gpu=use_gpu)
+            use_gpu=use_gpu, **factory_kwargs)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'Gaussian(w0={w0:.2g}m)')
@@ -1034,11 +1044,12 @@ class Source:
                     *, angle_x: float = 0.0, angle_y: float = 0.0,
                     amplitude: float = 1.0,
                     source_point: _Tuple[float, float] = (0.0, 0.0),
-                    name: _Optional[str] = None) -> 'Source':
+                    name: _Optional[str] = None,
+                    **factory_kwargs) -> 'Source':
         """Tilted plane wave (uses ``create_tilted_plane_wave``)."""
         E, _, _ = create_tilted_plane_wave(
             N, dx, wavelength, angle_x=angle_x, angle_y=angle_y,
-            amplitude=amplitude)
+            amplitude=amplitude, **factory_kwargs)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,
                    name=name or 'PlaneWave')
@@ -1047,7 +1058,8 @@ class Source:
     def point_source(cls, N: int, dx: float, wavelength: float,
                       *, x0: float = 0.0, y0: float = 0.0,
                       z0: float = 0.0, amplitude: float = 1.0,
-                      name: _Optional[str] = None) -> 'Source':
+                      name: _Optional[str] = None,
+                      **factory_kwargs) -> 'Source':
         """Spherical wave from a point at ``(x0, y0, z0)``.
 
         ``z0 < 0`` -> diverging wavefront (source before grid);
@@ -1057,7 +1069,7 @@ class Source:
         """
         E, _, _ = create_point_source(
             N, dx, wavelength, x0=x0, y0=y0, z0=z0,
-            amplitude=amplitude)
+            amplitude=amplitude, **factory_kwargs)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=(float(x0), float(y0)),
                    name=name or 'PointSource')
@@ -1066,10 +1078,12 @@ class Source:
     def top_hat(cls, diameter: float, N: int, dx: float, wavelength: float,
                   *, x0: float = 0.0, y0: float = 0.0,
                   source_point: _Tuple[float, float] = (0.0, 0.0),
-                  name: _Optional[str] = None) -> 'Source':
+                  name: _Optional[str] = None,
+                  **factory_kwargs) -> 'Source':
         """Uniform circular aperture beam."""
         E, _, _ = create_top_hat_beam(
-            N, dx, wavelength, diameter=diameter, x0=x0, y0=y0)
+            N, dx, wavelength, diameter=diameter, x0=x0, y0=y0,
+            **factory_kwargs)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'TopHat(D={diameter:.2g}m)')
@@ -1079,11 +1093,12 @@ class Source:
                     wavelength: float, *, x0: float = 0.0, y0: float = 0.0,
                     na: float = 0.12,
                     source_point: _Tuple[float, float] = (0.0, 0.0),
-                    name: _Optional[str] = None) -> 'Source':
+                    name: _Optional[str] = None,
+                    **factory_kwargs) -> 'Source':
         """Single-mode fiber output."""
         E, _, _ = create_fiber_mode(
             N, dx, wavelength, mode_field_diameter=mode_field_diameter,
-            x0=x0, y0=y0, na=na)
+            x0=x0, y0=y0, na=na, **factory_kwargs)
         return cls(E=E, dx=dx, wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'Fiber(MFD={mode_field_diameter:.2g}m)')

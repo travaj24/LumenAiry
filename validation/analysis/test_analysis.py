@@ -108,8 +108,11 @@ def t_strehl_perfect():
     x = (np.arange(N) - N/2) * dx
     X, Y = np.meshgrid(x, x)
     pupil = np.where(X**2 + Y**2 <= (D/2)**2, 1.0, 0.0).astype(np.complex128)
-    psf, dx_psf = la.compute_psf(pupil, lam, 50e-3, dx)
-    return psf.max() > 0.99, f'PSF peak = {psf.max():.4f}'
+    # v4.11.2: compute_psf default is 'power' (Parseval-conserving) since
+    # v3.1.1; request 'peak' explicitly here because this test checks
+    # the peak-equals-1 semantic.
+    psf, dx_psf = la.compute_psf(pupil, lam, 50e-3, dx, normalize='peak')
+    return abs(psf.max() - 1.0) < 1e-9, f'PSF peak = {psf.max():.6f}'
 
 
 H.run('Strehl: unaberrated pupil gives peak = 1.0', t_strehl_perfect)

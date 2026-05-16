@@ -697,9 +697,31 @@ def relative_illumination(
     -------
     RelativeIllumination
     """
+    from ..raytrace import first_order_data
     surfaces = _resolve_surfaces(system)
     semi_ap = _semi_aperture_from(system, semi_aperture)
     _, _, bfl, _ = system_abcd(surfaces, wavelength)
+    # 4.11.2: aim chief at the entrance pupil so off-axis fields with a
+    # mid-stop system land at the correct pupil position.  Pre-4.11.2
+    # this function relied on ``make_rings`` which generates rays at
+    # ``z=0`` (the first surface vertex) with direction
+    # ``(0, sin(fa), cos(fa))`` -- equivalent to aiming the chief at
+    # ``(0, 0, 0)`` regardless of where the EP actually is.  For
+    # mid-stop or rear-stop systems the chief then walks across the
+    # aperture as field angle grows, producing a vignetting curve that
+    # rolls off too quickly (rays exit the stop instead of being
+    # blocked by it) and an on-axis fraction that's not 1 because the
+    # bundle is laterally clipped.  H-AB-3-style fix.
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_z = float(getattr(fod, 'ep_z', 0.0))
+        ep_r = float(getattr(fod, 'ep_radius', semi_ap))
+        if not np.isfinite(ep_r) or ep_r <= 0:
+            ep_r = semi_ap
+    except Exception:
+        ep_z = 0.0
+        ep_r = semi_ap
+
     if not (surfaces[-1].label == 'Image' or
             (not np.isfinite(surfaces[-1].radius)
              and surfaces[-1].glass_before == surfaces[-1].glass_after)):
@@ -715,8 +737,26 @@ def relative_illumination(
     n_alive = np.zeros_like(fields_deg, dtype=int)
     for i, fa_deg in enumerate(fields_deg):
         fa_rad = float(np.radians(fa_deg))
-        rays = make_rings(semi_ap, num_rings, rays_per_ring,
+        # Build a ring bundle in EP coords (px, py) over [-ep_r, ep_r]
+        # then back-shift each ray onto z=0 so its chief lands on EP
+        # centre at (0, 0, ep_z) and its marginal rays land at
+        # (px*ep_r, py*ep_r, ep_z).  For an infinity-conjugate source
+        # at field-angle fa, every ray in the bundle has the same
+        # direction cosines (sin fa_y).
+        rays = make_rings(ep_r, num_rings, rays_per_ring,
                             fa_rad, wavelength)
+        # make_rings places rays at z=0 with direction (0, sin fa, cos fa).
+        # Translate each ray so it intersects the EP plane at its
+        # nominal (px, py, ep_z) target.  For an infinity source the
+        # required offset at z=0 is (0, -sin(fa)*ep_z, 0) -- the chief
+        # walks backward by that amount to land on the EP centre.
+        if abs(ep_z) > 0:
+            sin_fa = float(np.sin(fa_rad))
+            cos_fa = float(np.cos(fa_rad))
+            # Solve: (x_z0, y_z0, 0) + t * (0, sin fa, cos fa) =
+            #        (x_target, y_target, ep_z), t = ep_z / cos_fa.
+            t = ep_z / max(cos_fa, 1e-12)
+            rays.y = rays.y - sin_fa * t
         result = _trace(rays, surfaces, wavelength)
         n_launched[i] = rays.alive.size
         n_alive[i] = int(np.count_nonzero(result.image_rays.alive))
@@ -846,11 +886,27 @@ def field_aberration_sweep(
     seidel_field_sweep : paraxial third-order Hopkins-sum version.
     petzval_radius : the Petzval surface radius reported here.
     """
+    from ..raytrace import first_order_data
     surfaces = _resolve_surfaces(system)
     semi_ap = _semi_aperture_from(system, semi_aperture)
     _, efl, bfl, _ = system_abcd(surfaces, wavelength)
     if dz_search is None:
         dz_search = abs(bfl) / 20.0 if np.isfinite(bfl) else 1e-3
+
+    # 4.11.2: aim chief at the entrance pupil rather than the first
+    # surface vertex (H-AB-3-style fix; matches v4.10 fix in
+    # eval_image_plane_wfe).  For stop-at-front systems ep_z = 0 and
+    # ep_r = semi_ap so this is a no-op; for mid-stop systems the
+    # chief now correctly walks through the EP centre at angle fa.
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_z = float(getattr(fod, 'ep_z', 0.0))
+        ep_r = float(getattr(fod, 'ep_radius', semi_ap))
+        if not np.isfinite(ep_r) or ep_r <= 0:
+            ep_r = semi_ap
+    except Exception:
+        ep_z = 0.0
+        ep_r = semi_ap
 
     fields_deg = np.asarray(fields_deg, dtype=float)
     sag_shift = np.full_like(fields_deg, np.nan)
@@ -870,17 +926,22 @@ def field_aberration_sweep(
         # rays along x (perpendicular to meridional plane); tangential
         # fan spreads along y (in the meridional plane).
         sin_fa = float(np.sin(fa_rad))
+        cos_fa = float(np.cos(fa_rad))
+        # 4.11.2: chief-aim offset at z=0 so the bundle crosses the EP
+        # plane at the correct (px*ep_r, py*ep_r, ep_z) targets.  For
+        # ep_z = 0 the offset is zero (no-op for stop-at-front).
+        y_offset = -sin_fa * ep_z / max(cos_fa, 1e-12) if ep_z != 0.0 else 0.0
         t = np.linspace(-1.0, 1.0, n_fan)
         sag_rays = _make_bundle(
-            x=t * semi_ap,
-            y=np.zeros(n_fan),
+            x=t * ep_r,
+            y=np.full(n_fan, y_offset),
             L=np.zeros(n_fan),
             M=np.full(n_fan, sin_fa),
             wavelength=wavelength,
         )
         tan_rays = _make_bundle(
             x=np.zeros(n_fan),
-            y=t * semi_ap,
+            y=t * ep_r + y_offset,
             L=np.zeros(n_fan),
             M=np.full(n_fan, sin_fa),
             wavelength=wavelength,
@@ -922,10 +983,17 @@ def petzval_radius(
 ) -> float:
     """Paraxial Petzval surface radius [m].
 
-    Computes ``1 / R_p = sum_i (n2_i - n1_i) / (n1_i n2_i R_i)`` over
-    refracting surfaces.  Returns ``+inf`` if the sum is exactly zero
-    (a Petzval-flat system) and ``nan`` if any glass index can't be
-    resolved.
+    Computes (Born & Wolf §4.4 sign convention)
+
+    .. math::
+
+        \\frac{1}{R_p} = -\\sum_i \\frac{n_{2,i} - n_{1,i}}{n_{1,i}\\,n_{2,i}\\,R_i}
+
+    over refracting surfaces.  The leading minus sign matches the
+    convention that the Petzval surface curves AWAY from the lens for
+    a positive-power system.  Returns ``+inf`` if the sum is exactly
+    zero (a Petzval-flat system) and ``nan`` if any glass index can't
+    be resolved.
 
     Parameters
     ----------
@@ -937,6 +1005,13 @@ def petzval_radius(
     R_p : float
         Petzval radius [m].  Positive = curving toward the object
         side; negative = away.
+
+    Notes
+    -----
+    Pre-4.11.2 this docstring quoted the formula without the leading
+    minus sign, drifting from the implementation which (correctly,
+    per Born & Wolf) returned ``-1/inv_R``.  The code is unchanged in
+    v4.11.2; the docstring formula now matches.
     """
     from ..glass import get_glass_index
     surfaces = _resolve_surfaces(system)

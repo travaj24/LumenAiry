@@ -428,16 +428,36 @@ def zernike_modal_basis(
         Zx_m = zernike_polynomial(n_idx, m_idx, rho_x_m, the_x_m)
         Zy_p = zernike_polynomial(n_idx, m_idx, rho_y_p, the_y_p)
         Zy_m = zernike_polynomial(n_idx, m_idx, rho_y_m, the_y_m)
-        # One-sided fallback at the rim
+        # One-sided fallback at the rim.
+        # 4.11.2: pre-4.11.2 only checked the +x and +y rims
+        # (``rho_x_p > 1`` / ``rho_y_p > 1``) -- the SAME spurious
+        # 0-vs-finite FD spike appeared on the -x and -y rims because
+        # the backward probe (rho_x_m / rho_y_m) was unchecked.  Now
+        # we detect all four quadrants and switch to the appropriate
+        # one-sided FD:
+        #   rim_x_pos (rho_x_p > 1) -> use (Z_c - Zx_m) / eps (backward)
+        #   rim_x_neg (rho_x_m > 1) -> use (Zx_p - Z_c) / eps (forward)
+        # and analogously for y.  For interior lenslets both probes
+        # stay inside the disk and we use the standard centred FD.
         Z_centre_x = zernike_polynomial(n_idx, m_idx, rho, theta)
-        rim_x = rho_x_p > 1.0
-        rim_y = rho_y_p > 1.0
-        dWdx = np.where(rim_x,
-                        (Z_centre_x - Zx_m) / eps,
-                        (Zx_p - Zx_m) / (2.0 * eps))
-        dWdy = np.where(rim_y,
-                        (Z_centre_x - Zy_m) / eps,
-                        (Zy_p - Zy_m) / (2.0 * eps))
+        rim_x_pos = rho_x_p > 1.0
+        rim_x_neg = rho_x_m > 1.0
+        rim_y_pos = rho_y_p > 1.0
+        rim_y_neg = rho_y_m > 1.0
+        dWdx = np.where(
+            rim_x_pos,
+            (Z_centre_x - Zx_m) / eps,
+            np.where(
+                rim_x_neg,
+                (Zx_p - Z_centre_x) / eps,
+                (Zx_p - Zx_m) / (2.0 * eps)))
+        dWdy = np.where(
+            rim_y_pos,
+            (Z_centre_x - Zy_m) / eps,
+            np.where(
+                rim_y_neg,
+                (Zy_p - Z_centre_x) / eps,
+                (Zy_p - Zy_m) / (2.0 * eps)))
         # The Zernike gradient above is in normalised-pupil coords;
         # SH-WFS slopes are in physical units (dW/dx, dW/dy [m/m]).
         # Convert by 1/semi_aperture.

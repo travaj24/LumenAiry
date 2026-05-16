@@ -30,7 +30,30 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _LIB_ROOT = os.path.normpath(os.path.join(_HERE, '..'))
 if _LIB_ROOT not in sys.path:
     sys.path.insert(0, _LIB_ROOT)
-warnings.simplefilter('ignore')
+# v4.11.2 (audit round-3 test-quality #5): the previous blanket
+# ``warnings.simplefilter('ignore')`` silently swallowed every
+# ``RuntimeWarning`` (and every other category) emitted by library
+# code during validation runs.  This is the harness equivalent of a
+# bare ``except Exception: pass`` -- physics-correctness warnings
+# (overflow, invalid value, divide-by-zero in propagator chirps)
+# never reached the user.  Scope the suppression to the *noisy* and
+# *not-physically-meaningful* categories instead:
+#
+#   * ``DeprecationWarning`` and ``PendingDeprecationWarning`` --
+#     emitted by optional deps (matplotlib, scipy, jax) on import
+#     and during plotting, not by lumenairy physics code.
+#   * ``ResourceWarning`` -- benign tempfile / socket lifetime noise.
+#   * ``ImportWarning`` -- optional-dep probing.
+#
+# Everything else (``RuntimeWarning``, ``UserWarning``, ``FutureWarning``,
+# numerical / overflow warnings) propagates to the harness and is
+# visible at the validation summary.  If a validation file is now
+# noisy with a previously-suppressed warning, that's a *finding*, not
+# a regression: investigate the root cause rather than re-broadening
+# the filter here.
+for _cat in (DeprecationWarning, PendingDeprecationWarning,
+             ResourceWarning, ImportWarning):
+    warnings.simplefilter('ignore', _cat)
 
 
 class Harness:

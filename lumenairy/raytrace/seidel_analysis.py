@@ -154,12 +154,14 @@ def seidel_wfe(
     """Reconstruct the third-order wavefront error from Seidel totals.
 
     Uses the Hopkins / Welford expansion (in Lagrange-invariant
-    :math:`H^2` form):
+    :math:`H^2` form, with the field-curvature DC term written
+    explicitly):
 
     .. math::
         W(\\rho, \\theta) = \\tfrac{1}{8} S_1\\rho^4
                           + \\tfrac{1}{2} S_2\\rho^3 \\cos\\theta
                           + \\tfrac{1}{2} S_3\\rho^2 \\cos^2\\theta
+                          + \\tfrac{1}{4} S_3 \\rho^2
                           + \\tfrac{1}{4} S_4 H^2 \\rho^2
                           + \\tfrac{1}{2} S_5\\rho \\cos\\theta
 
@@ -172,6 +174,14 @@ def seidel_wfe(
     used :math:`H^2`, which equals :math:`\\sigma^2 \\, f_{\\rm eff}^2`
     in the small-angle limit but is the right invariant for
     finite-conjugate and stop-shifted systems.
+
+    The :math:`(1/4) S_3 \\rho^2` term is the field-curvature DC
+    companion to the astigmatism term (Welford eq. 7.11; in
+    Welford's mixed notation the FC DC reads :math:`(1/4)(S_{III}
+    + S_{IV})`).  Pre-4.11.2 this DC term was missing from both the
+    docstring and the implementation, so any synthetic / measured
+    S3 contributed to astigmatism (cos^2 theta) but not to the
+    rotationally symmetric field-curvature defocus.
 
     Parameters
     ----------
@@ -287,9 +297,16 @@ def seidel_wfe(
     rho2 = rho ** 2
     rho3 = rho2 * rho
     rho4 = rho3 * rho
+    # 4.11.2: include the field-curvature DC companion (1/4)*S3*rho^2.
+    # Welford eq. 7.11 expands the third-order WFE as
+    #   (1/2)*S3*rho^2*cos^2 theta  +  (1/4)*(S3 + S4)*rho^2
+    # (in Welford's H-folded notation; here S4 also needs H^2 to be
+    # dimensionally consistent with S3).  Pre-4.11.2 the FC DC was
+    # silently dropped.
     return ((1.0 / 8.0) * S1 * rho4
             + (1.0 / 2.0) * S2 * rho3 * cos_t
             + (1.0 / 2.0) * S3 * rho2 * cos_t ** 2
+            + (1.0 / 4.0) * S3 * rho2
             + (1.0 / 4.0) * S4 * H_sq * rho2
             + (1.0 / 2.0) * S5 * rho * cos_t)
 

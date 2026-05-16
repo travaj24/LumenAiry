@@ -1312,6 +1312,50 @@ def apply_real_lens_traced(
     thicknesses = lens_prescription['thicknesses']
     total_thickness = float(sum(thicknesses))
 
+    # 4.11.2: warn if the prescription specifies a stop_index other than
+    # the entrance (or carries a decentered stop).  ``apply_real_lens``
+    # honours ``stop_index`` (the aperture is applied at the indicated
+    # surface, possibly off-axis); but ``apply_real_lens_traced``'s
+    # ray-tracing path launches rays from the entrance plane and the
+    # final exit-aperture mask uses the entrance-aperture diameter.
+    # Porting the per-surface stop-application logic into the ray-trace
+    # leg is feature-scope; warn so the silent move-to-entrance is
+    # visible to callers who have written a stop_index into their
+    # prescription.
+    _stop_index = lens_prescription.get('stop_index')
+    if _stop_index is not None and int(_stop_index) != 0:
+        import warnings
+        warnings.warn(
+            f"apply_real_lens_traced: prescription specifies "
+            f"stop_index={_stop_index}, but the ray-traced phase leg "
+            "launches rays from the entrance pupil only; the aperture "
+            "stop is effectively applied at the entrance (index 0).  "
+            "For physically-correct stop behaviour on a non-entrance "
+            "stop, use apply_real_lens.",
+            RuntimeWarning, stacklevel=2,
+        )
+    else:
+        # Decentered entrance stop: warn similarly -- the inner amp
+        # path applies the stop centred at the surface's ``decenter``,
+        # but the ray-trace leg's launch geometry is centred on the
+        # optical axis.
+        _surfs = lens_prescription.get('surfaces') or []
+        if _surfs:
+            _stop_surf_idx = int(_stop_index) if _stop_index is not None else 0
+            if 0 <= _stop_surf_idx < len(_surfs):
+                _dec = _surfs[_stop_surf_idx].get('decenter') or (0.0, 0.0)
+                if _dec[0] != 0.0 or _dec[1] != 0.0:
+                    import warnings
+                    warnings.warn(
+                        f"apply_real_lens_traced: stop surface "
+                        f"{_stop_surf_idx} has decenter={_dec}; the "
+                        "ray-traced phase leg uses an on-axis launch "
+                        "geometry and will not see the off-axis stop "
+                        "correctly.  Use apply_real_lens for "
+                        "decentered-stop systems.",
+                        RuntimeWarning, stacklevel=2,
+                    )
+
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x)
 
@@ -1768,28 +1812,36 @@ def apply_real_lens_traced(
     # trace.  Used as the Newton initial guess: (xe, ye) ~ (Xw, Yw) / M.
     #
     # We read the central finite-difference slope of the forward map:
-    #     M_x = [x_out(i_c, i_c+1) - x_out(i_c, i_c-1)] / (2 * d_xs_in)
-    #     M_y = [y_out(i_c+1, i_c) - y_out(i_c-1, i_c)] / (2 * d_xs_in)
+    #     M_x = [x_out(i_c+1, i_c) - x_out(i_c-1, i_c)] / (2 * d_xs_in)
+    #     M_y = [y_out(i_c, i_c+1) - y_out(i_c, i_c-1)] / (2 * d_xs_in)
     # where (i_c, i_c) is the on-axis entrance grid point (exact sample
-    # because n_launch is odd).  The central-difference stencil uses a
-    # few-micron neighborhood so it captures the paraxial slope without
-    # aberration contamination from the pupil edge.
+    # because n_launch is odd).  4.11.2: the indices match the meshgrid
+    # at the launch step
+    #     ``Xs_in, Ys_in = np.meshgrid(xs_in, xs_in, indexing='ij')``
+    # which puts x along axis 0 and y along axis 1, so ∂x_out/∂x_in
+    # varies the FIRST index, not the second.  Pre-4.11.2 the indices
+    # were swapped, computing ∂x_out/∂y_in (~zero by rotational
+    # symmetry) instead of ∂x_out/∂x_in.  Newton still converged
+    # because the polynomial Jacobian is right, but every pixel started
+    # at the clipped-to-boundary initial guess (0.91-fallback) instead
+    # of the actual paraxial slope.
     #
-    # This is strictly better than the previous hard-coded 1.10 multiplier:
-    # the old heuristic assumed M ~ 0.91 (converging system "shrinks 10%")
-    # which is approximately right for singlets at their exit vertex (M ~ 1)
-    # but wildly off for compound systems with real imaging magnification
-    # (TX Design 36 full-system inversion would have M = 0.25; using 1.10
-    # as the guess puts Newton 4x from the answer and costs several extra
-    # iterations per pixel).  Zero additional compute -- the grid values
-    # are already in memory from the forward trace above.
+    # This stencil is strictly better than the previous hard-coded 1.10
+    # multiplier: the old heuristic assumed M ~ 0.91 (converging system
+    # "shrinks 10%") which is approximately right for singlets at their
+    # exit vertex (M ~ 1) but wildly off for compound systems with real
+    # imaging magnification (TX Design 36 full-system inversion would
+    # have M = 0.25; using 1.10 as the guess puts Newton 4x from the
+    # answer and costs several extra iterations per pixel).  Zero
+    # additional compute -- the grid values are already in memory from
+    # the forward trace above.
     i_c = n_launch // 2
     d_xs = float(xs_in[1] - xs_in[0])
     try:
-        M_x = (float(x_out_grid[i_c, i_c + 1])
-               - float(x_out_grid[i_c, i_c - 1])) / (2.0 * d_xs)
-        M_y = (float(y_out_grid[i_c + 1, i_c])
-               - float(y_out_grid[i_c - 1, i_c])) / (2.0 * d_xs)
+        M_x = (float(x_out_grid[i_c + 1, i_c])
+               - float(x_out_grid[i_c - 1, i_c])) / (2.0 * d_xs)
+        M_y = (float(y_out_grid[i_c, i_c + 1])
+               - float(y_out_grid[i_c, i_c - 1])) / (2.0 * d_xs)
     except (IndexError, ValueError):
         M_x = M_y = 0.91  # fallback to pre-3.1.3 heuristic (1/1.10)
     # Guard against NaNs from dead rays at the center (unlikely -- the

@@ -61,16 +61,18 @@ def t_subaperture_asymptotic_runs():
     x = (np.arange(N) - N/2 + 0.5) * dx
     X, Y = np.meshgrid(x, x, indexing='xy')
     E = np.exp(-(X*X + Y*Y) / (30e-6)**2).astype(np.complex128)
-    try:
-        out = propagate_subaperture_asymptotic(
-            E, dx, presc, wavelength=lam,
-            n_patches=(2, 2),
-            source_box_half=40e-6, pupil_box_half=2e-3,
-            n_field=6, n_pupil=6, poly_order=4,
-        )
-        return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), 'ok'
-    except Exception as e:
-        return True, f'skipped (fit failed: {type(e).__name__})'
+    # 4.11.2 (audit round-3 test-quality #6): the previous ``except``
+    # caught every exception and returned ``True``, hiding the same
+    # class of N5-style unpack regressions this validation file is
+    # supposed to detect.  Let the exception propagate so any actual
+    # failure surfaces as a fail with a traceback.
+    out = propagate_subaperture_asymptotic(
+        E, dx, presc, wavelength=lam,
+        n_patches=(2, 2),
+        source_box_half=40e-6, pupil_box_half=2e-3,
+        n_field=6, n_pupil=6, poly_order=4,
+    )
+    return out.shape == E.shape and bool(np.all(np.isfinite(np.abs(out)))), 'ok'
 
 
 def t_subaperture_window_sum_in_overlap_region_smooth():

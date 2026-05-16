@@ -126,9 +126,21 @@ def init_vector_paths_from_field(
 
     sx = Ex_in[iy_xp, ix_xp]
     sy = Ey_in[iy_xp, ix_xp]
+    # 4.11.2: full HF Kirchhoff weighting per Jones component (mirrors
+    # the scalar :func:`lumenairy.propagators.hfpi.init_paths_from_field`
+    # 4.10 fix).  Pre-4.11.2 the vector source weights carried only the
+    # cosθ·dx² obliquity factor -- the ``1/(iλ)`` prefactor and the
+    # Monte Carlo solid-angle weight ``2π(1-cosθ_max)/N_paths`` were
+    # absent, so absolute Jones amplitudes were unphysical by ~10^6 at
+    # visible wavelengths.  Relative polarization structure was
+    # unaffected (factor is global).
+    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n_paths)
+    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
+    kirchhoff = complex(inv_i_lambda) * solid_angle
     obl = cos_theta * (dx * dx)
-    Ex_paths = sx * obl
-    Ey_paths = sy * obl
+    obl_complex = obl.astype(sx.dtype) if hasattr(obl, 'astype') else obl
+    Ex_paths = sx * obl_complex * kirchhoff
+    Ey_paths = sy * obl_complex * kirchhoff
 
     opl = xp.zeros((n_paths,), dtype=xp.real(sx).dtype)
     alive = xp.ones((n_paths,), dtype=bool)
@@ -230,9 +242,21 @@ def apply_vector_aperture_diffraction(
     Nz = cos_theta
     new_directions = xp.stack([L, M, Nz], axis=-1)
 
-    obl = cos_theta.astype(paths.Ex.dtype)
-    new_Ex = paths.Ex * obl
-    new_Ey = paths.Ey * obl
+    # 4.11.2: include the Kirchhoff ``1/(iλ)·dΩ`` factor per
+    # re-emission, matching the scalar
+    # :func:`lumenairy.propagators.hfpi.apply_aperture_diffraction`
+    # 4.11.2 fix.  Pre-4.11.2 cascaded vector apertures dropped this
+    # global factor, so multi-aperture vector HFPI underweighted by
+    # ~10^6 per extra aperture at visible wavelengths.  Relative
+    # polarization / phase structure unaffected.
+    cos_theta_in = paths.directions[..., 2]
+    obliquity = 0.5 * (cos_theta_in + cos_theta)
+    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n)
+    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
+    kirchhoff = complex(inv_i_lambda) * solid_angle
+    obl = obliquity.astype(paths.Ex.dtype)
+    new_Ex = paths.Ex * obl * kirchhoff
+    new_Ey = paths.Ey * obl * kirchhoff
     new_opl = xp.zeros_like(paths.opl)
     return VectorPathBundle(
         positions=paths.positions,

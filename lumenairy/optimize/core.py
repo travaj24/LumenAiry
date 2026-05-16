@@ -2617,7 +2617,10 @@ def design_optimize(parameterization: Any,
         # Wave leg (only if any merit term needs it)
         if need_wave:
             if E_in is None:
-                E0 = np.ones((N, N), dtype=np.complex128)
+                # 4.11.2: honour precision='single' via
+                # get_default_complex_dtype() so the wave-leg input
+                # field matches the rest of the precision pipeline.
+                E0 = np.ones((N, N), dtype=get_default_complex_dtype())
             else:
                 E0 = E_in
             wp_kwargs = dict(wave_propagator_kwargs or {})

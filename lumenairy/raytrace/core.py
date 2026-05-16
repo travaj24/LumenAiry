@@ -2127,10 +2127,27 @@ def system_abcd(
     ffl : float
         Front focal length (distance from first surface to front focus) [m].
     """
-    # Build system matrix by multiplying surface-by-surface
+    # Build system matrix by multiplying surface-by-surface.
+    #
+    # Mirror sign convention (v4.11.2)
+    # ---------------------------------
+    # We adopt the Welford convention in which a mirror is treated as
+    # a refracting surface with ``n2 = -n1``.  In this convention the
+    # post-mirror "index" carries a sign flip; after the k-th mirror
+    # the effective index in every subsequent leg is multiplied by
+    # ``(-1)**mirror_parity`` (``mirror_parity = mirror_count % 2``).
+    # This brings ``system_abcd`` into agreement with
+    # ``seidel_coefficients`` -- pre-4.11.2 the two used opposite
+    # mirror-power signs, so a single concave mirror (R=-100mm) gave
+    # EFL=-0.05m from ``system_abcd`` and the equivalent of +0.05m
+    # from the seidel branch.  +0.05m is the conventional answer
+    # (concave mirror has positive focal length) and is the convention
+    # both codepaths now agree on.
     M = np.eye(2)
+    mirror_parity = 0  # 0 = unflipped, 1 = post-odd-mirror (n -> -n)
 
     for i, surf in enumerate(surfaces):
+        sign = 1.0 if mirror_parity == 0 else -1.0
         # 3.7.0: Skip the refraction matrix for coord-breaks (they're
         # frame transforms, not optical surfaces with power) but
         # still apply their thickness as an air-gap transfer so the
@@ -2140,14 +2157,16 @@ def system_abcd(
                 t = surf.thickness
                 # n_after is the medium of the post-cb leg; for a
                 # coord-break that's the same as the pre-cb medium.
-                n_after = get_glass_index(surf.glass_after, wavelength)
+                n_after = sign * get_glass_index(surf.glass_after, wavelength)
                 T_mat = np.array([[1.0, t / n_after],
                                   [0.0, 1.0]])
                 M = T_mat @ M
             continue
 
-        n1 = get_glass_index(surf.glass_before, wavelength)
-        n2 = get_glass_index(surf.glass_after, wavelength)
+        # Apply current mirror-parity sign so the post-odd-mirror
+        # medium correctly carries n -> -n through subsequent surfaces.
+        n1 = sign * get_glass_index(surf.glass_before, wavelength)
+        n2 = sign * get_glass_index(surf.glass_after, wavelength)
         R = surf.radius
 
         # Refraction matrix
@@ -2156,9 +2175,16 @@ def system_abcd(
             R_mat = np.array([[1.0, 0.0],
                               [-phi, 1.0]])
         elif surf.is_mirror and np.isfinite(R):
-            phi = 2.0 * n1 / R
+            # Welford mirror: n_after = -n_before.  Power is
+            # phi = (n2 - n1)/R = -2*n1/R.  This is the OPPOSITE sign
+            # from the pre-4.11.2 formula (phi = +2*n1/R) and matches
+            # seidel_coefficients's mirror branch.
+            n2 = -n1
+            phi = (n2 - n1) / R   # = -2 * n1 / R
             R_mat = np.array([[1.0, 0.0],
                               [-phi, 1.0]])
+            # Flip parity for the post-mirror legs.
+            mirror_parity ^= 1
         else:
             R_mat = np.eye(2)
 
@@ -3017,7 +3043,18 @@ def seidel_coefficients(
     S4 = np.zeros(n_surf)
     S5 = np.zeros(n_surf)
 
+    # 4.11.2: Track Welford mirror parity so multi-mirror systems
+    # carry the correct effective index sign through every surface
+    # downstream of an odd number of mirrors.  Pre-4.11.2 the v4.10
+    # mirror fix only applied ``n2 = -n1`` at the mirror surface
+    # itself; the next surface re-queried ``glass_before='air'`` and
+    # got ``n=+1`` instead of ``n=-1``, producing wrong Seidel sums
+    # beyond the first mirror in any catadioptric / Cassegrain
+    # / Schwarzschild design.
+    mirror_parity = 0  # 0 = unflipped, 1 = post-odd-mirror (n -> -n)
+
     for i, surf in enumerate(surfaces):
+        sign = 1.0 if mirror_parity == 0 else -1.0
         # 3.7.0: Coord-breaks contribute no Seidel power; transfer
         # the rays through their air-gap thickness and skip.
         if surf.is_coordbrk:
@@ -3027,14 +3064,14 @@ def seidel_coefficients(
             nu_c[i] = nu_val_c
             if i < n_surf - 1:
                 t = float(surf.thickness)
-                n_after = get_glass_index(surf.glass_after, wavelength)
-                if n_after > 0:
+                n_after = sign * get_glass_index(surf.glass_after, wavelength)
+                if abs(n_after) > 0:
                     y_val_m = y_val_m + (nu_val_m / n_after) * t
                     y_val_c = y_val_c + (nu_val_c / n_after) * t
             continue
 
-        n1 = get_glass_index(surf.glass_before, wavelength)
-        n2 = get_glass_index(surf.glass_after, wavelength)
+        n1 = sign * get_glass_index(surf.glass_before, wavelength)
+        n2 = sign * get_glass_index(surf.glass_after, wavelength)
         R = surf.radius
 
         # Store ray heights at this surface
@@ -3097,6 +3134,12 @@ def seidel_coefficients(
             # updated ray heights and never wrote S1..S5 -- every
             # catadioptric / reflective design silently reported zero
             # spherical, coma, astigmatism, Petzval, distortion.
+            #
+            # 4.11.2: ``n1`` already carries the running mirror-parity
+            # sign (from the ``sign`` multiplier above), so ``n2 = -n1``
+            # composes correctly across chained mirrors -- after two
+            # mirrors n1 returns to +1 (Cassegrain final leg), after
+            # three it's -1, etc.
             c = 1.0 / R
             n2 = -n1
             u_m = nu_val_m / n1
@@ -3126,6 +3169,11 @@ def seidel_coefficients(
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
+
+            # Flip parity for the post-mirror legs so subsequent
+            # ``glass_before``/``glass_after`` lookups (which return
+            # positive indices) get sign-corrected via ``sign``.
+            mirror_parity ^= 1
         else:
             # Flat refracting surface: c=0 but Δ(u/n) is still nonzero
             # for non-normal incidence (Snell's law: n1·u_m = n2·u_m_after,
@@ -3336,10 +3384,26 @@ def spot_diagram(
                  f'GEO = {spot_geo_radius(result) * scale:.3f} {label}')
     ax.set_title(title)
 
-    # Draw Airy disc for reference
-    airy_r = 1.22 * result.wavelength / (
-        2 * result.surfaces[0].semi_diameter) if np.isfinite(
-        result.surfaces[0].semi_diameter) else None
+    # Draw Airy disc for reference.
+    # 4.11.2: include the f_eff factor so the Airy disc is in image-
+    # plane metres, not radians.  Pre-4.11.2 the formula was
+    # ``1.22 * wavelength / (2 * semi_diameter)`` (a half-angle), which
+    # for a typical f/4 100mm-EFL singlet under-reported the Airy
+    # radius by ~25x relative to the spot-diagram axis (also in
+    # image-plane metres).
+    sd0 = result.surfaces[0].semi_diameter
+    if np.isfinite(sd0):
+        try:
+            _, _f_eff, _, _ = system_abcd(result.surfaces, result.wavelength)
+        except Exception:
+            _f_eff = float('nan')
+        if np.isfinite(_f_eff):
+            airy_r = 1.22 * result.wavelength * abs(_f_eff) / (2.0 * sd0)
+        else:
+            # Fall back to the half-angle form (legacy behaviour).
+            airy_r = 1.22 * result.wavelength / (2.0 * sd0)
+    else:
+        airy_r = None
     if airy_r is not None and airy_r * scale < ax.get_xlim()[1] * 5:
         circle = plt.Circle((0, 0), airy_r * scale,
                              fill=False, color='red', linestyle='--',
@@ -3388,8 +3452,25 @@ def ray_fan_data(
     res_y = trace(fan_y, surfaces, wavelength)
     img_y = res_y.image_rays
 
-    # Reference: chief ray position
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
+    # Reference: chief ray.  4.11.2 (audit H-AB-3 sibling): for off-
+    # axis fields the chief is launched at angle from the EP centre,
+    # not from (0,0,0).  Pre-4.11.2 the chief started at z=0 from the
+    # axis, so ``y_ref / x_ref`` did not match the canonical "chief
+    # passes through the EP centre" reference and the fan plots were
+    # offset by O(field_angle * z_EP).  Mirrors the v4.10 fix in
+    # ``eval_image_plane_wfe`` and v4.11.2-Track-F in
+    # ``relative_illumination`` / ``field_aberration_sweep``.
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_y = -fod.ep_z * np.tan(field_angle)
+        chief = make_ray(0, ep_y, fod.ep_z,
+                         np.sin(field_angle),
+                         wavelength=wavelength)
+    except Exception:
+        # No first-order pupil available (e.g. mirror-only stop-less
+        # system); fall back to legacy origin-launched chief.
+        chief = make_ray(0, 0, 0, np.sin(field_angle),
+                         wavelength=wavelength)
     res_chief = trace(chief, surfaces, wavelength)
     y_ref = res_chief.image_rays.y[0]
     x_ref = res_chief.image_rays.x[0]
@@ -3559,8 +3640,18 @@ def opd_fan_data(
     res_y = trace(fan_y, surfaces, wavelength)
     img_y = res_y.image_rays
 
-    # Chief ray reference OPD
-    chief = make_ray(0, 0, 0, np.sin(field_angle), wavelength=wavelength)
+    # Chief ray reference OPD.  4.11.2 (audit H-AB-3 sibling): chief
+    # is launched at the EP centre for off-axis fields, not (0,0,0).
+    # See ``ray_fan_data`` for the matching rationale.
+    try:
+        fod = first_order_data(surfaces, wavelength)
+        ep_y = -fod.ep_z * np.tan(field_angle)
+        chief = make_ray(0, ep_y, fod.ep_z,
+                         np.sin(field_angle),
+                         wavelength=wavelength)
+    except Exception:
+        chief = make_ray(0, 0, 0, np.sin(field_angle),
+                         wavelength=wavelength)
     res_chief = trace(chief, surfaces, wavelength)
     opd_ref = res_chief.image_rays.opd[0]
 
@@ -3856,10 +3947,22 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     print(f"  GEO radius:   {geo * scale:.4f} {label}")
 
     # Airy disc
+    # 4.11.2: report the image-plane Airy radius
+    #     r_Airy = 1.22 * lambda * f_eff / D
+    # rather than the half-angle 1.22 * lambda / D.  Pre-4.11.2 the
+    # "Airy radius" printed was a divergence half-angle in radians
+    # but compared against the spot RMS in metres -- "Spot/Airy" was
+    # off by a factor of f_eff [m^-1].
     sd = result.surfaces[0].semi_diameter
     if np.isfinite(sd):
-        na = sd  # approximate entrance pupil radius
-        airy = 1.22 * result.wavelength / (2 * na)
+        try:
+            _, f_eff, _, _ = system_abcd(result.surfaces, result.wavelength)
+        except Exception:
+            f_eff = float('nan')
+        if np.isfinite(f_eff):
+            airy = 1.22 * result.wavelength * abs(f_eff) / (2.0 * sd)
+        else:
+            airy = 1.22 * result.wavelength / (2.0 * sd)
         print(f"  Airy radius:  {airy * scale:.4f} {label}")
         print(f"  Spot/Airy:    {rms / airy:.2f}")
 

@@ -67,7 +67,11 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     x_focal, y_focal : ndarray
         1-D focal coordinate arrays [m].
     """
-    pupil = np.asarray(pupil, dtype=np.complex128)
+    # 4.11.2: honour precision='single' via the global default complex
+    # dtype.  Pre-4.11.2 the input was always promoted to complex128,
+    # silently negating ``set_default_complex_dtype(np.complex64)``.
+    from .propagation import get_default_complex_dtype as _gdct
+    pupil = np.asarray(pupil, dtype=_gdct())
     Np = pupil.shape[0]
     k = 2 * np.pi / wavelength
     theta_max = np.arcsin(min(NA, 0.9999))
@@ -187,9 +191,11 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
               + py * (sp ** 2 * ct + cp ** 2))
     Pz = P * (-px * cp * s - py * sp * s)
 
-    # Compute focal field via 2-D FFT for each z-plane
+    # Compute focal field via 2-D FFT for each z-plane.
+    # 4.11.2: allocate output in the input pupil's dtype so the
+    # precision='single' path stays complex64 end-to-end.
     n_z = len(z_planes)
-    Ex = np.zeros((n_z, N_focal, N_focal), dtype=np.complex128)
+    Ex = np.zeros((n_z, N_focal, N_focal), dtype=pupil.dtype)
     Ey = np.zeros_like(Ex)
     Ez = np.zeros_like(Ex)
 
@@ -213,12 +219,35 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         Ey[iz] = _fft_field(Py)
         Ez[iz] = _fft_field(Pz)
 
-    # 4.10: apply the Richards-Wolf scalar prefactor -i·k·f/(2π) · exp(-i·k·f)
-    # (Richards & Wolf 1959 Eq. 3.7).  Pre-4.10 omitted this, so absolute
-    # amplitudes were uncalibrated -- intensity was off by (k·f/2π)² and
-    # the global phase by exp(-i·k·f), breaking coherent superposition
-    # of the focal field with externally propagated reference arms.
-    rw_prefactor = (-1j * k * f / (2.0 * np.pi)) * np.exp(-1j * k * f)
+    # 4.11.2: Richards-Wolf scalar prefactor with the correct 1/f² intensity
+    # scaling AND the correct global-phase sign for the library's exp(-iωt)
+    # forward-propagation convention.
+    #
+    # The Richards-Wolf integral (Richards & Wolf 1959 Eq. 3.7) reads
+    #
+    #     E(P) = (-i k f / 2π) · exp(+i k f) ·
+    #             ∫∫ E_∞(θ,φ) exp(i k·r) sin θ dθ dφ
+    #
+    # The pre-4.11.2 code used `exp(-i k f)`, which is opposite-sign to
+    # every other forward-prop in the library (angular_spectrum_propagate,
+    # fresnel_propagate, ... all use exp(+i k z) under exp(-iωt)).
+    # Coherent superposition with a reference arm therefore picked up a
+    # spurious exp(-2 i k f) phase mismatch.
+    #
+    # When the angular integral is evaluated by FFT over a Cartesian
+    # pupil grid, the change of variables (θ,φ) → (k_x, k_y) with
+    # k_x = k sin θ cos φ, k_y = k sin θ sin φ introduces a Jacobian
+    # 1/(k² cos θ), and the pupil-to-aperture mapping x_pupil = f sin θ
+    # makes dk_x = (k/f) dx_pupil.  The two combined give
+    #
+    #     E(P) = (-i k / (2π f)) · exp(+i k f) · dx_pupil² · FFT[...]
+    #
+    # i.e. the prefactor scales as 1/f (amplitude) → 1/f² (intensity).
+    # Pre-4.11.2 the prefactor was (-i k f / 2π) · dx² · exp(-i k f),
+    # which scaled as f (amplitude) → f² (intensity) — the WRONG sign of
+    # the f-dependence: a 1 m focal length and a 1 cm focal length gave
+    # Airy peak intensities differing by 10⁴ in the wrong direction.
+    rw_prefactor = (-1j * k / (2.0 * np.pi * f)) * np.exp(1j * k * f)
     # Multiply by the Cartesian pupil area element (the FFT's implicit
     # discretisation factor).
     rw_prefactor = rw_prefactor * (dx_pupil * dx_pupil)

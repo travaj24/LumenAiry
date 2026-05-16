@@ -204,9 +204,27 @@ def apply_detector(
         ix0 = np.clip(np.floor(idx_fx).astype(int), 0, Nx - 1)
         iy0 = np.clip(np.floor(idx_fy).astype(int), 0, Ny - 1)
         IX, IY = np.meshgrid(ix0, iy0)
-        # Each detector-pixel value is the mean intensity in its
-        # local neighbourhood times the detector-pixel area.
-        image = avg[IY, IX] * (pixel_pitch ** 2)
+        # 4.11.2: scale by the actual fractional samples-per-pixel
+        # rather than the integer-rounded window size.  ``uniform_filter``
+        # with ``size=(win_y, win_x)`` returns the box-mean over a
+        # (win_y * dx_field) x (win_x * dx_field) field-grid area.
+        # Multiplying that by ``pixel_pitch**2`` gives the right
+        # answer when win_{y,x} == samples_per_pix_{y,x} exactly --
+        # but for a ratio like 2.5 the rounded window (3) over-samples
+        # the area by 20% and the result over-/undercounts photons
+        # proportionally.  The correct integration scale for "intensity
+        # per m² integrated over one detector pixel" is the actual
+        # detector-pixel area (``pixel_pitch**2``), not the window area,
+        # so the dominant correction is to keep the pixel_pitch**2
+        # factor but re-normalise the box mean back to the true
+        # samples-per-pixel.  Algebraically: avg * (samples/win) =
+        # mean over the true detector-pixel-sized region.  Note this is
+        # still a box-filter approximation -- for sub-pixel-accurate
+        # cases the caller should resample on a grid with an integer
+        # samples-per-pixel ratio.
+        scale_y = float(samples_per_pix_y) / float(win_y)
+        scale_x = float(samples_per_pix_x) / float(win_x)
+        image = avg[IY, IX] * (pixel_pitch ** 2) * (scale_y * scale_x)
 
     # Per-pixel QE map.  For a Bayer detector, the QE varies per-cell
     # on a 2x2 mosaic; otherwise QE is uniform.

@@ -683,6 +683,7 @@ def fit_canonical_polynomials(
     endpoint_anchored: bool = False,
     auto_bump_threshold_waves: Optional[float] = None,
     max_auto_poly_order: int = 10,
+    source_centre: Tuple[float, float] = (0.0, 0.0),
 ) -> CanonicalPolyFit:
     """Fit Chebyshev tensor-product polynomials to ``Phi(s2, v2)`` and
     ``s1(s2, v2)`` over a 4-D source x pupil grid.
@@ -798,8 +799,19 @@ def fit_canonical_polynomials(
 
     u_field = cheb_nodes(n_field)        # in (-1, 1)
     u_pupil = cheb_nodes(n_pupil)
-    s1x_axis = u_field * source_box_half
-    s1y_axis = u_field * source_box_half
+    # 4.11.2: shift source-sampling box by ``source_centre`` so the
+    # subaperture / patch-decomposition propagator can fit a local
+    # polynomial centred on each patch's object-plane footprint.
+    # Pre-4.11.2 the source box was hard-pinned to the origin, so the
+    # subaperture loop's per-patch fits were all identical and only
+    # the on-axis patch had meaningful chief-ray landings inside the
+    # output evaluation grid -- off-axis patches saw a fit whose
+    # ``s2x_centre`` / ``s2y_centre`` straddled the on-axis image and
+    # were therefore mostly out-of-box (``|u| > 1``) at the
+    # off-axis evaluation pixels, producing zero field.
+    cx_src, cy_src = float(source_centre[0]), float(source_centre[1])
+    s1x_axis = u_field * source_box_half + cx_src
+    s1y_axis = u_field * source_box_half + cy_src
     v1x_axis = u_pupil * pupil_box_half
     v1y_axis = u_pupil * pupil_box_half
 
@@ -938,6 +950,7 @@ def fit_canonical_polynomials(
             endpoint_anchored=endpoint_anchored,
             auto_bump_threshold_waves=auto_bump_threshold_waves,
             max_auto_poly_order=max_auto_poly_order,
+            source_centre=source_centre,
         )
 
     return CanonicalPolyFit(
@@ -1419,7 +1432,12 @@ def aberration_tensor(
     M_inv = np.linalg.inv(M)
     delta_star = 0.5 * (M_inv @ b)
     # 4.10: removed unused `Sigma = 0.5 * M_inv` (dead code).
-    sqrt_detM = np.sqrt(np.linalg.det(M))
+    # 4.11.2: route through the shared Maslov branch helper so this
+    # site stays consistent with ``propagate_modal_asymptotic`` and
+    # the JAX sibling evaluators.  Single-point evaluation defaults
+    # to the principal sqrt (caller has no branch history at one
+    # image point); see ``_maslov_branch_corrected_sqrt``.
+    sqrt_detM, _, _ = _maslov_branch_corrected_sqrt(np.linalg.det(M))
 
     # Leading amplitude
     A_lead = (detJ * (math.pi / sqrt_detM) * G0
@@ -1684,6 +1702,50 @@ def _polynomial_substitute_linear_2d(
 # Section 6 -- Modal asymptotic propagator (leading-order)
 # ===========================================================================
 
+def _maslov_branch_corrected_sqrt(det_M, last_arg_detM=None,
+                                   maslov_branch=0):
+    """Keller-Maslov branch-continuous ``sqrt(det M)``.
+
+    4.11.2: hoisted from ``propagate_modal_asymptotic`` (v4.10
+    branch-tracking machinery) so the four other asymptotic-evaluator
+    sites (``aberration_tensor``, ``aberration_tensor_lg00_jax``,
+    ``_modal_field_lg00_pixel_jax``, and any future evaluator) can
+    consume it without re-implementing the unwrap logic.
+
+    The function returns a 3-tuple
+    ``(sqrt_detM, new_last_arg_detM, new_maslov_branch)``.  Callers
+    walking a sequence of pixels thread the second and third return
+    values through successive calls; the first call may pass
+    ``last_arg_detM=None``, ``maslov_branch=0`` (which corresponds to
+    a principal sqrt with no caustic-crossing history).
+
+    Single-point evaluators (the JAX twins and ``aberration_tensor``)
+    call with defaults and get the principal sqrt -- the same value
+    they computed before this hoist -- but the helper now exists at
+    one canonical site so any future caustic-aware refinement (e.g.
+    pre-computing an external Maslov index, switching the JAX twins
+    to a closed-form complex sqrt with explicit branch cut) only
+    needs to be done in one place.
+    """
+    import math as _math
+    arg_detM = float(np.angle(det_M))
+    new_branch = maslov_branch
+    if last_arg_detM is not None:
+        d_arg = arg_detM - last_arg_detM
+        # Unwrap: if jump > +pi, we crossed -pi -> +pi (branch -1).
+        # If < -pi, we crossed +pi -> -pi (branch +1).
+        if d_arg > _math.pi:
+            new_branch = maslov_branch - 1
+        elif d_arg < -_math.pi:
+            new_branch = maslov_branch + 1
+    sqrt_principal = np.sqrt(det_M)
+    if new_branch % 2 != 0:
+        sqrt_detM = -sqrt_principal
+    else:
+        sqrt_detM = sqrt_principal
+    return sqrt_detM, arg_detM, new_branch
+
+
 def propagate_modal_asymptotic(
     fit: CanonicalPolyFit,
     *,
@@ -1695,6 +1757,7 @@ def propagate_modal_asymptotic(
     v2_centre: Tuple[float, float] = (0.0, 0.0),
     s2_grid_x: np.ndarray,
     s2_grid_y: np.ndarray,
+    maslov_tracking: str = 'row_reset',
 ) -> np.ndarray:
     """Evaluate the leading-order modal asymptotic propagator on a 2-D
     output grid.
@@ -1720,12 +1783,37 @@ def propagate_modal_asymptotic(
         Pupil centre in direction cosines.
     s2_grid_x, s2_grid_y : ndarray
         Output-plane sample points [m].  Same shape; iterated jointly.
+    maslov_tracking : str, optional
+        Strategy for the Keller-Maslov branch index of ``sqrt(det M)``:
+
+        * ``'principal'``  -- no unwrap; ``sqrt(det M)`` uses the
+          principal branch (pre-4.10 behaviour; introduces an
+          unphysical pi-phase jump every caustic crossing).
+        * ``'1d_raster'``  -- 4.10 behaviour: unwrap along the raster-
+          ordered pixel stream.  Works correctly along a single
+          row but spuriously flips the counter at every row wrap
+          because the raster jump in (x, y) is not a continuous path
+          in the actual output plane.
+        * ``'row_reset'``  -- 4.11.2 default: same as ``'1d_raster'``
+          but resets the unwrap state at the start of each row.  The
+          per-row reset costs the ability to detect a caustic that
+          crosses an entire row, but eliminates the row-wrap false
+          positive.  For grids whose caustic structure doesn't span
+          full rows this is the correct trade-off; for grids where
+          the caustic does run row-spanning, pass
+          ``maslov_tracking='1d_raster'`` and verify against a
+          ground-truth direct quadrature.
 
     Returns
     -------
     ndarray, complex, same shape as s2_grid_x
         Output field E(s_2).
     """
+    if maslov_tracking not in ('principal', '1d_raster', 'row_reset'):
+        raise ValueError(
+            f"propagate_modal_asymptotic: maslov_tracking must be "
+            f"'principal', '1d_raster', or 'row_reset', got "
+            f"{maslov_tracking!r}.")
     if source_amplitudes is None:
         source_amplitudes = {(0, 0): 1.0 + 0.0j}
     if pupil_amplitudes is None:
@@ -1759,11 +1847,24 @@ def propagate_modal_asymptotic(
     # counter `maslov_branch` whose role is the Keller-Maslov index:
     # the field picks up an extra exp(-i*pi/2) for each caustic
     # crossing (sign of det M changing).
+    #
+    # 4.11.2: ``maslov_tracking`` chooses between the v4.10
+    # 1-D-raster unwrap, the new default per-row reset, and the
+    # legacy principal sqrt.  See the docstring for the trade-off.
     last_arg_detM = None  # principal-branch arg of det M at the previous pixel
     maslov_branch = 0     # accumulated branch index (each +/-2pi adds 1)
+    # Per-row reset bookkeeping: when the raster sweeps to a new row,
+    # reset the unwrap state so the jump between (x_max, y_n) and
+    # (x_min, y_{n+1}) -- which is not a continuous path in the
+    # output plane -- doesn't artifactually advance the Maslov index.
+    Ny_grid, Nx_grid = s2x_arr.shape if s2x_arr.ndim >= 2 else (1, s2x_arr.size)
     for idx in range(flat_x.size):
         s2x_p = flat_x[idx]
         s2y_p = flat_y[idx]
+        if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
+                and Nx_grid > 0 and idx % Nx_grid == 0):
+            last_arg_detM = None
+            maslov_branch = 0
 
         # Skip points outside the fit's training box
         u1 = (s2x_p - fit.s2x_centre) / fit.s2x_halfrange
@@ -1799,29 +1900,24 @@ def propagate_modal_asymptotic(
         det_M = np.linalg.det(M)
         if not math.isfinite(abs(det_M)) or abs(det_M) < 1e-300:
             continue
-        # 4.10: track arg(det M) and adjust sqrt branch so the field
-        # phase is continuous across caustics (Keller-Maslov).
-        arg_detM = float(np.angle(det_M))
-        if last_arg_detM is not None:
-            d_arg = arg_detM - last_arg_detM
-            # Unwrap: if the jump is > +pi, we crossed -pi -> +pi (branch -1).
-            # If < -pi, we crossed +pi -> -pi (branch +1).
-            if d_arg > math.pi:
-                maslov_branch -= 1
-            elif d_arg < -math.pi:
-                maslov_branch += 1
-        last_arg_detM = arg_detM
-        # Use the unwrapped arg = arg_principal + 2*pi*maslov_branch
-        # for the sqrt: sqrt(r * exp(i*theta_unwrapped)) =
-        # sqrt(r) * exp(i*theta_unwrapped/2).  For an even branch this
-        # equals the principal sqrt; for an odd branch it picks up
-        # the extra -1 = exp(-i*pi/2)^2 from Keller-Maslov.
-        sqrt_detM_principal = np.sqrt(det_M)
-        # Apply the Keller-Maslov sign every other branch step.
-        if maslov_branch % 2 != 0:
-            sqrt_detM = -sqrt_detM_principal
+        # 4.10 / 4.11.2: track arg(det M) and adjust sqrt branch so
+        # the field phase is continuous across caustics (Keller-
+        # Maslov).  4.11.2 routes through the shared
+        # ``_maslov_branch_corrected_sqrt`` helper so the same logic
+        # is available to the sibling JAX evaluators and
+        # ``aberration_tensor`` -- see the helper's docstring.  The
+        # ``maslov_tracking='principal'`` mode bypasses the unwrap
+        # state (no branch correction, principal sqrt).
+        if maslov_tracking == 'principal':
+            sqrt_detM = np.sqrt(det_M)
         else:
-            sqrt_detM = sqrt_detM_principal
+            sqrt_detM, last_arg_detM, maslov_branch = (
+                _maslov_branch_corrected_sqrt(
+                    det_M,
+                    last_arg_detM=last_arg_detM,
+                    maslov_branch=maslov_branch,
+                )
+            )
         try:
             M_inv = np.linalg.inv(M)
         except np.linalg.LinAlgError:
@@ -2333,7 +2429,20 @@ def propagate_hf_chebyshev_quadrature(
     pixel_area = dx * dy
 
     S1X, S1Y = np.meshgrid(input_grid_x, input_grid_y, indexing='xy')
-    out = np.zeros((Ny_out, Nx_out), dtype=E_in.dtype)
+    # 4.11.2: force a complex output dtype so a real-valued E_in (e.g. a
+    # pure intensity mask) doesn't silently strip the imaginary part of
+    # the HF kernel during ``kernel.astype(E_in.dtype)`` and the
+    # subsequent multiply.  Pre-4.11.2 a real E_in produced a real-
+    # valued "field" with the imaginary half of the HF integrand
+    # summed away -- relative-intensity contrast was preserved but
+    # interference structure was destroyed.
+    if np.iscomplexobj(E_in):
+        out_dtype = E_in.dtype
+    elif E_in.dtype == np.float64:
+        out_dtype = np.complex128
+    else:
+        out_dtype = np.complex64
+    out = np.zeros((Ny_out, Nx_out), dtype=out_dtype)
 
     n_out = Ny_out * Nx_out
     for start in range(0, n_out, chunk_output):
@@ -2345,7 +2454,9 @@ def propagate_hf_chebyshev_quadrature(
             s2y = float(output_grid_y[iy])
 
             phi = fit.eval_phi(S1X, S1Y, s2x, s2y, include_linear=True)
-            kernel = np.exp(2j * np.pi * phi).astype(E_in.dtype)
+            # 4.11.2: cast kernel to the (complex) output dtype, not
+            # E_in.dtype (which may be real).
+            kernel = np.exp(2j * np.pi * phi).astype(out_dtype)
             if apply_van_vleck:
                 density = fit.eval_van_vleck_density(S1X, S1Y, s2x, s2y)
                 integrand = E_in * density * kernel
@@ -2656,6 +2767,13 @@ def aberration_tensor_lg00_jax(
     )
 
     M_inv = jnp.linalg.inv(M)
+    # 4.11.2: JAX single-point evaluator uses the principal sqrt, the
+    # same value the shared :func:`_maslov_branch_corrected_sqrt` returns
+    # with default arguments (no branch history -- there's no pixel
+    # loop in the JAX twin to carry one).  The hoist is documented so a
+    # future caller that pre-computes a Maslov index can supply a
+    # branch-corrected sign by multiplying ``sqrt_detM`` externally.
+    # See the NumPy ``aberration_tensor`` for the analogous code path.
     sqrt_detM = jnp.sqrt(jnp.linalg.det(M))
 
     if w_o is None:
@@ -2705,6 +2823,10 @@ def _modal_field_lg00_pixel_jax(fit, s2x, s2y, v2x, v2y,
         fit, s2x, s2y, v2x, v2y, src_x, src_y, w_s, w_p, v_cx, v_cy
     )
     M_inv = jnp.linalg.inv(M)
+    # 4.11.2: see comment in ``aberration_tensor_lg00_jax`` -- single-
+    # pixel JAX evaluator uses the principal sqrt; consistent with the
+    # shared NumPy helper :func:`_maslov_branch_corrected_sqrt` called
+    # with default branch arguments.
     sqrt_detM = jnp.sqrt(jnp.linalg.det(M))
     b_quad = 0.25 * (b @ M_inv @ b)
     A_lead = (detJ * (jnp.pi / sqrt_detM) * G0

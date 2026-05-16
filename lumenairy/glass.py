@@ -170,10 +170,16 @@ SELLMEIER_COEFFICIENTS = {
     'SF2':        ((1.40301821, 0.231767504, 0.939056586),
                    (1.05795466e-2, 4.93226978e-2, 1.12405955e2)),
     # Ohara S-LAH series ------------------------------------------------
-    'S-LAH64':    ((1.97644957, 0.345835202, 1.50865430),
-                   (9.06133603e-3, 3.31538835e-2, 9.96362760e1)),
-    'S-LAH79':    ((2.13713459, 0.302257453, 1.55230336),
-                   (1.07957653e-2, 4.94336323e-2, 1.21532852e2)),
+    # 4.11.2: the previously hard-coded Sellmeier coefficients for these
+    # two glasses produced n_d = 1.8458 (S-LAH64) and 1.8853 (S-LAH79)
+    # vs Ohara catalog n_d = 1.78800 and 2.00330 respectively -- off by
+    # 0.058 and 0.118.  The in-code coefficients appear to be misattri-
+    # buted from a different glass.  Removed from the in-code Sellmeier
+    # table and routed through the authoritative refractiveindex.info
+    # lookup via the '__sellmeier__' sentinel.  Requires ``pip install
+    # refractiveindex`` -- without it, a glass lookup for these names
+    # will fail with a clear error rather than silently returning a
+    # ~3% wrong index.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-1).
     # Common bulk materials ---------------------------------------------
     'CaF2':       ((0.5675888, 0.4710914, 3.8484723),
                    (2.526430e-3, 1.007833e-2, 1.200556e3)),

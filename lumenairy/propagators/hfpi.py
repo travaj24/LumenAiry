@@ -41,6 +41,52 @@ from ..backend import (
 )
 
 
+def _spawn_rng(rng, stream_index: int):
+    """Derive a per-aperture child RNG so consecutive diffraction
+    events draw independent samples.
+
+    4.11.2: HFPI prescription walks previously called
+    ``apply_aperture_diffraction(... rng=rng)`` with the same caller-
+    supplied ``rng`` at every aperture.  Because
+    :class:`lumenairy.backend.random.RandomState` rebuilds a fresh
+    NumPy ``default_rng(rng)`` on every construction when ``rng`` is
+    an integer (or None), passing the same int seed produced *the
+    same uniform draws at every aperture* -- perfectly correlated
+    diffraction events across the cascaded stack.  We derive a
+    distinct child seed per stream index by hashing the parent seed
+    with the stream counter.
+    """
+    if rng is None:
+        # Caller did not pin a seed; let each aperture pull from
+        # system entropy (RandomState(None) constructs a fresh
+        # generator from a non-deterministic seed).
+        return None
+    if isinstance(rng, (int, np.integer)):
+        # Mix the int seed with the stream index via a 64-bit hash.
+        ss = np.random.SeedSequence(entropy=[int(rng), int(stream_index)])
+        return int(ss.generate_state(1)[0])
+    if isinstance(rng, np.random.Generator):
+        # Use the generator's SeedSequence-spawn machinery if
+        # available; otherwise pull a child seed.
+        try:
+            spawned = rng.spawn(stream_index + 1)[-1]
+            return spawned
+        except AttributeError:
+            # NumPy < 1.25 -- fall back to drawing a 64-bit seed.
+            child_seed = int(rng.integers(0, 2 ** 63 - 1))
+            return np.random.default_rng(child_seed)
+    # JAX PRNGKey: caller-side splitting is the canonical pattern,
+    # but we can deterministically fold the stream index.
+    try:
+        import jax
+        if hasattr(jax.random, 'fold_in'):
+            return jax.random.fold_in(rng, stream_index)
+    except Exception:
+        pass
+    # Unknown rng type: return as-is (preserves prior behaviour).
+    return rng
+
+
 # ============================================================================
 # Path bundle
 # ============================================================================
@@ -244,7 +290,21 @@ def apply_aperture_diffraction(
     # arriving on-axis cos θ_in ≈ 1 and this reduces to the original.
     cos_theta_in = paths.directions[..., 2]
     obliquity = 0.5 * (cos_theta_in + cos_theta)
-    new_weights = paths.weights * obliquity.astype(paths.weights.dtype)
+    # 4.11.2: apply the Kirchhoff prefactor ``1/(iλ)·dΩ`` for each
+    # re-emission, matching the convention applied in
+    # :func:`init_paths_from_field`.  Pre-4.11.2 the per-aperture
+    # re-emission left the weights with only the obliquity factor,
+    # so each cascaded aperture under-weighted by ``2π(1-cosθ_max)
+    # / (iλ·n_paths)`` -- absolute amplitudes were off by ~10^6 per
+    # extra aperture at visible wavelengths.  The relative
+    # phase/contrast structure is unaffected because the factor is
+    # global per aperture.
+    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n)
+    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
+    kirchhoff = complex(inv_i_lambda) * solid_angle
+    new_weights = (paths.weights
+                   * obliquity.astype(paths.weights.dtype)
+                   * kirchhoff)
     new_opl = xp.zeros_like(paths.opl)
 
     return PathBundle(
@@ -393,11 +453,19 @@ def propagate_hfpi_freespace_aperture(
        :func:`propagate_hfpi` for the canonical
        ``(E_in, z, wavelength, dx)`` order.
     """
+    # 4.11.2: spawn a distinct child RNG for the aperture re-emission
+    # so the source-plane init draws and the aperture re-sample draws
+    # are statistically independent.  Pre-4.11.2 the same int ``rng``
+    # was reused; ``RandomState(rng=int)`` rebuilds default_rng(int)
+    # so both draws were identical (perfectly correlated init / re-
+    # emission).
+    rng_source = _spawn_rng(rng, 0)
+    rng_aperture = _spawn_rng(rng, 1)
     paths = init_paths_from_field(
         E_in, dx,
         n_paths=n_paths,
         wavelength=wavelength,
-        rng=rng,
+        rng=rng_source,
         z_input_plane=0.0,
     )
     paths = propagate_to_plane(paths, z_target=z_to_aperture,
@@ -408,7 +476,7 @@ def propagate_hfpi_freespace_aperture(
         centre=aperture_centre,
         shape=aperture_shape,
         wavelength=wavelength,
-        rng=rng,
+        rng=rng_aperture,
     )
     paths = propagate_to_plane(paths,
                                 z_target=z_to_aperture + z_aperture_to_output,
@@ -489,25 +557,23 @@ def init_paths_stratified(
     n_per = max(1, n_paths // n_total)
     n_paths_actual = n_per * n_total
 
-    # Build stratum index grid.
-    iy_strata = np.repeat(
-        np.arange(n_iy)[:, None, None, None],
-        n_ix * n_th * n_ph * n_per, axis=0).reshape(-1)
-    ix_strata = np.repeat(
-        np.arange(n_ix)[None, :, None, None],
-        n_iy * n_th * n_ph * n_per, axis=1).reshape(-1)
-    th_strata = np.repeat(
-        np.arange(n_th)[None, None, :, None],
-        n_iy * n_ix * n_ph * n_per, axis=2).reshape(-1)
-    ph_strata = np.repeat(
-        np.arange(n_ph)[None, None, None, :],
-        n_iy * n_ix * n_th * n_per, axis=3).reshape(-1)
-    # Tile by n_per.
-    if n_per > 1:
-        iy_strata = np.tile(iy_strata.reshape(-1, n_per), (1, 1)).reshape(-1)
-        ix_strata = np.tile(ix_strata.reshape(-1, n_per), (1, 1)).reshape(-1)
-        th_strata = np.tile(th_strata.reshape(-1, n_per), (1, 1)).reshape(-1)
-        ph_strata = np.tile(ph_strata.reshape(-1, n_per), (1, 1)).reshape(-1)
+    # Build stratum index grid.  4.11.2: enumerate the full 4-D
+    # cartesian product of stratum indices.  Pre-4.11.2 the
+    # ``np.repeat`` pattern broadcast a single-axis vector instead of
+    # iterating: ``np.repeat(np.arange(n_iy)[:, None, None, None],
+    # n_ix*n_th*n_ph*n_per, axis=0)`` produces ``[0]*n_block ++
+    # [1]*n_block ++ ...`` along axis 0 only, and the other strata
+    # vectors followed the same pattern on their own axes.  Calling
+    # ``.reshape(-1)`` then flattened to ``[0,0,...,1,1,...]`` for
+    # every axis, so the paired index quadruple ``(iy[k], ix[k],
+    # th[k], ph[k])`` only ever took values ``(0,0,0,0)`` then
+    # ``(1,1,1,1)`` -- 2 distinct cells out of n_iy*n_ix*n_th*n_ph.
+    # ``np.indices`` builds the true cartesian-product mesh.
+    idx_grid = np.indices((n_iy, n_ix, n_th, n_ph)).reshape(4, -1)
+    iy_strata = np.repeat(idx_grid[0], n_per)
+    ix_strata = np.repeat(idx_grid[1], n_per)
+    th_strata = np.repeat(idx_grid[2], n_per)
+    ph_strata = np.repeat(idx_grid[3], n_per)
 
     # Truncate to n_paths_actual if needed.
     iy_strata = iy_strata[:n_paths_actual]
@@ -661,19 +727,36 @@ def propagate_hfpi_through_prescription(
         output_dx = dx
     Ny_out, Nx_out = output_grid
 
-    # 1.  Initialise paths at the source plane.
+    # 2.  Resolve surface list and identify diffractors.
+    surfaces = surfaces_from_prescription(prescription)
+    object_distance = float(prescription.get('object_distance', 0.0))
+
+    # 1.  Initialise paths at the source plane.  4.11.2: paths are
+    # initialised AT z = -object_distance and travel forward through
+    # the system.  Pre-4.11.2 initialised at z=0 and then called
+    # ``propagate_to_plane(z_target=-object_distance)`` -- because the
+    # paths have +z-going directions, the implied geometric step is
+    # negative, ``t < 0``, and ``propagate_to_plane``'s ``t >= 0``
+    # alive mask killed every path on entry.  Finite-conjugate HFPI
+    # therefore returned an all-zero output.
+    #
+    # 4.11.2: spawn a per-aperture child RNG so cascaded diffractors
+    # draw statistically independent samples.  Pre-4.11.2 the same
+    # caller seed was passed to every ``apply_aperture_diffraction``
+    # call; ``RandomState(rng=int_seed)`` rebuilds the same NumPy
+    # generator each time, so every aperture in the cascade drew
+    # identical uniform sequences (perfectly correlated diffraction
+    # events).  We allocate stream 0 to the source init and the
+    # remaining streams sequentially to each diffractor.
+    rng_source = _spawn_rng(rng, 0)
     paths = init_paths_from_field(
         E_in, dx,
         n_paths=n_paths,
         wavelength=wavelength,
-        rng=rng,
+        rng=rng_source,
         cone_half_angle=cone_half_angle,
-        z_input_plane=0.0,
+        z_input_plane=-object_distance,
     )
-
-    # 2.  Resolve surface list and identify diffractors.
-    surfaces = surfaces_from_prescription(prescription)
-    object_distance = float(prescription.get('object_distance', 0.0))
 
     if diffracting_surfaces is None:
         diffracting_surfaces = []
@@ -683,13 +766,9 @@ def propagate_hfpi_through_prescription(
                 diffracting_surfaces.append(i)
     diffracting_surfaces = set(diffracting_surfaces)
 
-    # 3.  Walk from source plane (z = -object_distance) through each
-    # surface.  Group surfaces between diffractors into segments;
-    # trace each segment with the existing trace() machinery, then
-    # re-sample at the diffractor.
-    z_source = -object_distance
-    paths = propagate_to_plane(paths, z_target=z_source,
-                                wavelength=wavelength)
+    # 3.  Walk forward through each surface.  Group surfaces between
+    # diffractors into segments; trace each segment with the existing
+    # trace() machinery, then re-sample at the diffractor.
     # Hand off to trace for the whole stack at once if there are no
     # interior diffractors; otherwise per-segment.
     surf_indices = list(range(len(surfaces)))
@@ -703,6 +782,9 @@ def propagate_hfpi_through_prescription(
         # Per-segment trace, with HFPI resampling at each diffractor.
         sorted_diff = sorted(diffracting_surfaces)
         cursor = 0
+        # Stream counter for spawn_rng:  index 0 was used for source
+        # init, so per-aperture child seeds start at 1.
+        rng_stream = 1
         for diff_idx in sorted_diff:
             if diff_idx > cursor:
                 # Trace surfaces [cursor, diff_idx-1]
@@ -727,9 +809,11 @@ def propagate_hfpi_through_prescription(
             # Apply HFPI hard-aperture mask + resample directions.
             sd = getattr(surfaces[diff_idx], 'semi_diameter', None)
             if sd is not None and sd > 0 and sd < float('inf'):
+                rng_aperture = _spawn_rng(rng, rng_stream)
+                rng_stream += 1
                 paths = apply_aperture_diffraction(
                     paths, aperture_radius=float(sd),
-                    rng=rng, wavelength=wavelength,
+                    rng=rng_aperture, wavelength=wavelength,
                     cone_half_angle=cone_half_angle,
                 )
             cursor = diff_idx + 1

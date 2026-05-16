@@ -30,7 +30,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 from ..propagators.propagation import _fft2, _ifft2
@@ -197,6 +197,8 @@ def error_reduction(
     n_iter: int = 200,
     initial_guess: Optional[np.ndarray] = None,
     return_history: bool = False,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
     *,
     backend: str = 'numpy',
 ) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
@@ -239,21 +241,39 @@ def error_reduction(
 
     Pass ``backend='jax'`` to dispatch to the JAX-traced implementation
     (:func:`error_reduction_jax`).
+
+    Parameters (4.11.2 additions)
+    -----------------------------
+    seed : int, optional
+        Seeds the random initial-phase draw when ``initial_guess`` is
+        None.  Provides API parity with :func:`error_reduction_jax`.
+        Default ``None`` -> non-reproducible random initial phase.
+    dtype : complex dtype, optional
+        Complex dtype for the working state.  Default
+        ``np.complex128``.  Pass ``np.complex64`` for single-precision
+        parity with the JAX path.
     """
     if backend == 'jax':
-        return error_reduction_jax(measured_amplitude, support, n_iter=n_iter)
+        return error_reduction_jax(
+            measured_amplitude, support, n_iter=n_iter,
+            seed=seed, dtype=dtype)
     if backend != 'numpy':
         raise ValueError(
             f"error_reduction: backend must be 'numpy' or 'jax'; "
             f"got {backend!r}.")
     N = measured_amplitude.shape[0]
 
+    # 4.11.2: honour `seed` for reproducibility (pre-4.11.2 the kwarg
+    # didn't exist on this path; users wanting deterministic runs had
+    # to construct `initial_guess` manually).
+    cdtype = dtype if dtype is not None else np.complex128
     if initial_guess is None:
-        rng = np.random.default_rng()
+        rng = (np.random.default_rng() if seed is None
+               else np.random.default_rng(int(seed)))
         phase = rng.uniform(-np.pi, np.pi, size=measured_amplitude.shape)
-        obj = np.where(support, np.exp(1j * phase), 0.0 + 0.0j)
+        obj = np.where(support, np.exp(1j * phase), 0.0 + 0.0j).astype(cdtype)
     else:
-        obj = initial_guess.copy()
+        obj = np.asarray(initial_guess, dtype=cdtype).copy()
 
     history = []
 
@@ -277,6 +297,9 @@ def error_reduction(
     F = np.fft.fftshift(_fft2(np.fft.ifftshift(obj)))
     final_err = float(np.mean((np.abs(F) - measured_amplitude)**2))
 
+    # 4.11.2: honour the requested dtype on the returned array.
+    obj = np.asarray(obj, dtype=cdtype)
+
     if return_history:
         return obj, final_err, history
     return obj, final_err
@@ -293,6 +316,8 @@ def hybrid_input_output(
     beta: float = 0.9,
     initial_guess: Optional[np.ndarray] = None,
     return_history: bool = False,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
     *,
     backend: str = 'numpy',
 ) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
@@ -347,20 +372,34 @@ def hybrid_input_output(
 
     Pass ``backend='jax'`` to dispatch to the JAX-traced implementation
     (:func:`hybrid_input_output_jax`).
+
+    Parameters (4.11.2 additions)
+    -----------------------------
+    seed : int, optional
+        Seeds the random initial-phase draw when ``initial_guess`` is
+        None.  Provides API parity with :func:`hybrid_input_output_jax`.
+    dtype : complex dtype, optional
+        Complex dtype for the working state.  Default
+        ``np.complex128``.
     """
     if backend == 'jax':
         return hybrid_input_output_jax(
-            measured_amplitude, support, n_iter=n_iter, beta=beta)
+            measured_amplitude, support, n_iter=n_iter, beta=beta,
+            seed=seed, dtype=dtype)
     if backend != 'numpy':
         raise ValueError(
             f"hybrid_input_output: backend must be 'numpy' or 'jax'; "
             f"got {backend!r}.")
+    # 4.11.2: honour `seed` / `dtype` for reproducibility + precision
+    # control (pre-4.11.2 the kwargs didn't exist on this path).
+    cdtype = dtype if dtype is not None else np.complex128
     if initial_guess is None:
-        rng = np.random.default_rng()
+        rng = (np.random.default_rng() if seed is None
+               else np.random.default_rng(int(seed)))
         phase = rng.uniform(-np.pi, np.pi, size=measured_amplitude.shape)
-        obj = np.where(support, np.exp(1j * phase), 0.0 + 0.0j)
+        obj = np.where(support, np.exp(1j * phase), 0.0 + 0.0j).astype(cdtype)
     else:
-        obj = initial_guess.copy()
+        obj = np.asarray(initial_guess, dtype=cdtype).copy()
 
     history = []
 
@@ -384,6 +423,10 @@ def hybrid_input_output(
     F = np.fft.fftshift(_fft2(np.fft.ifftshift(obj)))
     final_err = float(np.mean((np.abs(F) - measured_amplitude)**2))
 
+    # 4.11.2: honour the requested dtype on the returned array even if
+    # the FFT backend silently promoted to complex128 inside the loop.
+    obj = np.asarray(obj, dtype=cdtype)
+
     if return_history:
         return obj, final_err, history
     return obj, final_err
@@ -399,6 +442,7 @@ def gerchberg_saxton_jax(
     n_iter: int = 200,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
+    initial_phase: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Gerchberg-Saxton iteration.
 
@@ -410,14 +454,20 @@ def gerchberg_saxton_jax(
     Parameters
     ----------
     seed : int, optional
-        4.10: accepted for API parity with the NumPy variant (the
-        deterministic JAX iteration doesn't actually need a seed
-        because there's no random initialisation, but accepting the
-        kwarg keeps the backends interchangeable).
+        4.11.2: now actually seeds the random initial-phase draw.
+        Pre-4.11.2 the kwarg was accepted but ignored (``_ = seed``
+        with no consumer), so two calls with different seeds produced
+        the same trajectory.  Pass ``None`` (default) for a uniformly-
+        zero initial phase (matches the historical deterministic
+        behaviour); pass an int to draw an i.i.d. uniform initial
+        phase that randomises the iteration start.
     dtype : numpy/jax float dtype, optional
         4.10: caller can request float64.  Default is float32 to match
         the historical JAX path.  Pass ``np.float64`` to bring the
         backend to NumPy parity (~1e-6 -> ~1e-14 residual error).
+    initial_phase : ndarray, optional
+        4.11.2: explicit initial-phase array.  Overrides ``seed``.
+        Mirrors the NumPy variant's API.
 
     Returns
     -------
@@ -435,10 +485,25 @@ def gerchberg_saxton_jax(
     import jax.numpy as jnp
     if dtype is None:
         dtype = jnp.float32
-    _ = seed  # accepted for API parity; no random state in this loop
 
     src = jnp.asarray(source_amplitude, dtype=dtype)
     tgt = jnp.asarray(target_amplitude, dtype=dtype)
+
+    # 4.11.2: actually consume `seed`.  Build the initial complex field
+    # from src amplitude plus a (possibly random) initial phase.  The
+    # JAX loop is deterministic given E0, so different seeds genuinely
+    # produce different trajectories (verified by the pinning test in
+    # tests/unit/test_audit_fixes_v4_11_2_analysis.py).
+    if initial_phase is not None:
+        phase0 = jnp.asarray(initial_phase, dtype=dtype)
+    elif seed is None:
+        # Historical behaviour: zero initial phase.
+        phase0 = jnp.zeros_like(src)
+    else:
+        key = jax.random.PRNGKey(int(seed))
+        phase0 = jax.random.uniform(
+            key, shape=src.shape, minval=-jnp.pi, maxval=jnp.pi,
+            dtype=dtype)
 
     def body(i, state):
         E_in, _ = state
@@ -452,7 +517,8 @@ def gerchberg_saxton_jax(
         E_next = src * jnp.exp(1j * jnp.angle(E_back))
         return (E_next, F)
 
-    E0 = src.astype(jnp.complex64)
+    # Combine source amplitude with the (possibly seeded) initial phase.
+    E0 = (src * jnp.exp(1j * phase0)).astype(jnp.complex64)
     E_final, F_final = jax.lax.fori_loop(0, int(n_iter), body, (E0, E0))
     phase = jnp.angle(E_final)
     err = float(jnp.mean((jnp.abs(F_final) - tgt) ** 2))

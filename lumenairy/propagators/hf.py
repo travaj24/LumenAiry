@@ -176,6 +176,16 @@ def propagate_huygens_fresnel_with_opl_callable(
             else:
                 out[iy, ix] = out_value
 
+    # 4.11.2: apply the Van Vleck-Morette asymptotic prefactor
+    # (2π)^(-d/2)·i^(-d/2) for d=2, which is -i/(2π).  The 2π part is
+    # absorbed in the Phi convention (phase = exp(2πi Phi)), leaving
+    # the global ``-1j`` Maslov factor.  The sibling
+    # :func:`propagate_hf_chebyshev_quadrature` already applies this
+    # (v4.10 C-AS-2 fix); without it the OPL-callable variant is 90°
+    # out of phase with the Fresnel kernel ``1/(iλz) = -i/(λz)``,
+    # producing incoherent superposition when stacking with
+    # ASM/Fresnel outputs.
+    out = out * (-1j)
     return out
 
 
@@ -198,6 +208,9 @@ def propagate_huygens_fresnel_through_prescription(
     n_pupil: int = 8,
     poly_order: int = 6,
     method: str = 'asymptotic',
+    source_lg_p_max: int = 3,
+    source_lg_ell_max: int = 3,
+    source_lg_amp_threshold: float = 1e-6,
 ) -> np.ndarray:
     """End-to-end Van-Vleck-corrected HF through a sequential
     prescription.
@@ -267,16 +280,20 @@ def propagate_huygens_fresnel_through_prescription(
         )
 
         # Evaluate the modal asymptotic propagator on an output
-        # grid.  This requires a source LG-mode decomposition of
-        # E_in; for the simplest case we approximate the source
-        # as a single fundamental Gaussian whose waist matches
-        # the input field's apparent waist.
+        # grid.  4.11.2: build the source LG-mode amplitudes by
+        # projecting ``E_in`` onto the LG basis (truncated at
+        # ``source_lg_p_max`` / ``source_lg_ell_max``).  Pre-4.11.2
+        # replaced ``E_in`` with a unit fundamental Gaussian and
+        # produced a Gaussian output regardless of the input
+        # field's structure -- a structured source (e.g. a vortex
+        # beam, off-axis Gaussian, Airy pattern) was silently
+        # discarded.
         from ..analysis.core import beam_d4sigma
+        from .asymptotic import decompose_lg
         cx, cy = output_centre
         out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
         out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy
         OX, OY = _np.meshgrid(out_x, out_y, indexing='xy')
-        output_grid_xy = _np.stack([OX, OY], axis=-1)
 
         # Estimate source waist from input field.
         try:
@@ -289,12 +306,32 @@ def propagate_huygens_fresnel_through_prescription(
         if w_s <= 0 or not _np.isfinite(w_s):
             w_s = source_box_half / 2
 
-        # Single-mode source LG amplitude {(0, 0): 1.0}; pupil
-        # amplitudes default to plane-wave (single-mode).
-        source_lg = {(0, 0): 1.0}
+        # Build input-plane coordinates for LG decomposition.
+        Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
+        in_x = (_np.arange(Nx_in) - Nx_in / 2 + 0.5) * dx
+        in_y = (_np.arange(Ny_in) - Ny_in / 2 + 0.5) * dx
+        IX, IY = _np.meshgrid(in_x, in_y, indexing='xy')
+        # Decompose E_in onto LG modes at the source plane.
+        try:
+            E_in_np = _np.asarray(E_in)
+            source_lg = decompose_lg(
+                E_in_np, IX, IY, w_s,
+                source_lg_p_max, source_lg_ell_max,
+                cx=0.0, cy=0.0,
+            )
+        except Exception:
+            source_lg = {(0, 0): 1.0 + 0.0j}
+        # Drop amplitudes below threshold (sparsity speedup).
+        max_amp = max((abs(a) for a in source_lg.values()), default=1.0)
+        if max_amp > 0:
+            source_lg = {k: v for k, v in source_lg.items()
+                         if abs(v) >= source_lg_amp_threshold * max_amp}
+        if not source_lg:
+            source_lg = {(0, 0): 1.0 + 0.0j}
+        # Pupil defaults to plane-wave (single-mode).
         pupil_lg = {(0, 0): 1.0}
 
-        # Source point at origin.
+        # Source point at origin (LG basis is centred there).
         source_point = (0.0, 0.0)
         w_p = pupil_box_half
         v2_centre = (0.0, 0.0)

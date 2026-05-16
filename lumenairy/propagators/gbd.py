@@ -571,22 +571,41 @@ def propagate_gbd_through_prescription(
     # Pre-4.11.1 ``axial_opl=`` was never populated so the per-beamlet
     # complex envelope lacked the system's axial phase reference and
     # multi-prescription reconstructions had the wrong piston relative
-    # to ASM / Fresnel cross-checks.  Use ``surfaces_from_prescription``
-    # to inspect each surface's thickness and refractive index.
+    # to ASM / Fresnel cross-checks.
+    #
+    # 4.11.2: the v4.11.1 implementation here was dead-on-arrival:
+    # ``surfaces_from_prescription`` returns ``List[Surface]`` (Surface
+    # is a @dataclass, not a dict), so ``_s.get('thickness', 0.0)``
+    # raised AttributeError on the first iteration -- silently swallowed
+    # by the surrounding bare ``except Exception`` and ``axial_opl``
+    # always defaulted to None.  Switched to attribute access on the
+    # Surface dataclass.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-8).
     try:
         from ..raytrace import surfaces_from_prescription
         from ..glass import get_glass_index
         _surfs = surfaces_from_prescription(prescription)
         axial_opl = 0.0
         for _s in _surfs:
-            _t = float(_s.get('thickness', 0.0) or 0.0)
-            _glass = _s.get('glass_after') or _s.get('glass') or 'air'
+            _t = float(getattr(_s, 'thickness', 0.0) or 0.0)
+            _glass = (getattr(_s, 'glass_after', None)
+                      or getattr(_s, 'glass_before', None)
+                      or 'air')
             try:
                 _n = float(get_glass_index(_glass, wavelength))
             except Exception:
                 _n = 1.0
             axial_opl += _n * _t
-    except Exception:
+    except Exception as _exc:
+        # Surface the failure rather than silently fall through to a
+        # missing axial-phase reference; reconstruction still proceeds
+        # without the piston.
+        import warnings as _w
+        _w.warn(
+            f"propagate_gbd_through_prescription: axial-OPL "
+            f"computation failed ({type(_exc).__name__}: {_exc}); "
+            f"reconstructed field will lack the absolute axial-phase "
+            f"reference and may not coherently superpose with other "
+            f"propagator outputs.", RuntimeWarning, stacklevel=2)
         axial_opl = None
 
     # Apply ABCD to every beamlet.

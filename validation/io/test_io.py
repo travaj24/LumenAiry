@@ -354,10 +354,17 @@ H.run('Quadoa .qos: units=MM round-trip', t_quadoa_qos_units_mm)
 def t_quadoa_qos_aspheric_and_semi_diameters():
     """Aspheric coeffs, semi_diameter, and biconic radius_y all
     round-trip through .qos JSON.
+
+    v4.11.2: canonical ``aspheric_coeffs`` is a dict keyed by total
+    power (``{4: a4, 6: a6, ...}``); the loader normalises to dict
+    form regardless of the wire format.
     """
     pres = la.make_singlet(50e-3, -30e-3, 3e-3, 'N-BK7', aperture=10e-3)
     pres['surfaces'][0]['conic'] = -0.5
-    pres['surfaces'][0]['aspheric_coeffs'] = [0.0, 1e-6, -2e-9, 3e-12]
+    # Canonical dict form: powers -> coefficients.
+    pres['surfaces'][0]['aspheric_coeffs'] = {
+        4: 1e-6, 6: -2e-9, 8: 3e-12,
+    }
     pres['surfaces'][0]['semi_diameter'] = 5.5e-3
     pres['surfaces'][1]['radius_y'] = -30.5e-3
     pres['surfaces'][1]['conic_y'] = 0.1
@@ -367,15 +374,16 @@ def t_quadoa_qos_aspheric_and_semi_diameters():
         loaded = la.load_quadoa_qos(p)
     s0 = loaded['surfaces'][0]
     s1 = loaded['surfaces'][1]
+    ac = s0['aspheric_coeffs']
     ok = (abs(s0['conic'] - (-0.5)) < 1e-12
-          and s0['aspheric_coeffs'] is not None
-          and len(s0['aspheric_coeffs']) == 4
-          and abs(s0['aspheric_coeffs'][2] - (-2e-9)) < 1e-18
+          and isinstance(ac, dict)
+          and len(ac) == 3
+          and abs(ac[6] - (-2e-9)) < 1e-18
           and abs(s0.get('semi_diameter', 0.0) - 5.5e-3) < 1e-12
           and abs(s1['radius_y'] - (-30.5e-3)) < 1e-12
           and abs(s1['conic_y'] - 0.1) < 1e-12)
     return ok, ('asph_coeffs + biconic Y + semi_diameter '
-                'round-trip lossless')
+                'round-trip lossless (dict form)')
 
 
 H.run('Quadoa .qos: asphere coeffs / semi_d / biconic round-trip',

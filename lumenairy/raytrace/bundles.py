@@ -5,17 +5,25 @@ plus inter-bundle conversion utilities.
 Three bundle types share a vocabulary in lumenairy:
 
 * :class:`lumenairy.raytrace.RayBundle` -- pure geometric rays
-  with positions / directions / OPL / alive flag.
+  stored as per-component arrays (``x, y, z, L, M, N, opd, alive``).
 * :class:`lumenairy.propagators.hfpi.PathBundle` -- ray bundle
   with a complex amplitude weight per path (HFPI Monte-Carlo).
+  Stored as ``positions``/``directions`` ``(N, 3)`` stacked arrays.
 * :class:`lumenairy.propagators.gbd.BeamletBundle` -- ray bundle
   with a complex beam parameter (Q) and amplitude per beamlet
-  (Gaussian Beamlet Decomposition).
+  (Gaussian Beamlet Decomposition).  Also ``positions``/``directions``.
 
-All three carry ``positions``, ``directions``, and a per-element
-``alive`` mask.  This module formalises that contract via
-:class:`BundleProtocol` and provides conversion helpers so users
-can switch between propagation methods mid-pipeline.
+PathBundle and BeamletBundle both carry the stacked
+``positions`` / ``directions`` form; RayBundle uses per-component
+arrays.  The conversion helpers below bridge those two layouts.
+
+History note (4.11.2): pre-4.11.2 the helpers below referenced
+``ray_bundle.positions`` / ``.directions`` -- attributes that
+``RayBundle`` does not expose -- so they raised ``AttributeError`` on
+the first call.  They are still re-exported from
+:mod:`lumenairy.raytrace.__init__` but no internal caller used them,
+so the bug never surfaced in CI.  4.11.2 fixes the attribute access
+to match the actual ``RayBundle`` schema (``x, y, z, L, M, N``).
 
 Author: Andrew Traverso
 """
@@ -39,8 +47,8 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class BundleProtocol(Protocol):
-    """Structural type satisfied by every ray-style bundle in
-    lumenairy: ``RayBundle``, ``PathBundle``, ``BeamletBundle``.
+    """Structural type satisfied by PathBundle and BeamletBundle
+    (the GBD/HFPI-side bundles).
 
     Required attributes
     -------------------
@@ -49,13 +57,33 @@ class BundleProtocol(Protocol):
     directions : array (N, 3)
         Per-element ``(L, M, N)`` unit direction cosines.
 
-    Other attributes (``opl``, ``alive``, ``weights``,
-    ``amplitude``, ``Q``, ``waist0``) are optional and bundle-type
-    specific.
+    :class:`lumenairy.raytrace.RayBundle` is NOT structurally a
+    BundleProtocol -- it uses per-component arrays
+    (``x, y, z, L, M, N``).  Convert via :func:`ray_to_path` or
+    :func:`ray_to_beamlet` to obtain a BundleProtocol-compatible
+    object.
     """
 
     positions: object
     directions: object
+
+
+def _raybundle_positions(ray_bundle: 'RayBundle') -> np.ndarray:
+    """Stack ``RayBundle.(x, y, z)`` into an ``(N, 3)`` positions
+    array.  Helper for the converters below; not part of the public
+    API."""
+    return np.stack([np.asarray(ray_bundle.x),
+                     np.asarray(ray_bundle.y),
+                     np.asarray(ray_bundle.z)], axis=-1)
+
+
+def _raybundle_directions(ray_bundle: 'RayBundle') -> np.ndarray:
+    """Stack ``RayBundle.(L, M, N)`` into an ``(N, 3)`` directions
+    array.  Helper for the converters below; not part of the public
+    API."""
+    return np.stack([np.asarray(ray_bundle.L),
+                     np.asarray(ray_bundle.M),
+                     np.asarray(ray_bundle.N)], axis=-1)
 
 
 def ray_to_path(
@@ -75,15 +103,18 @@ def ray_to_path(
     """
     from ..propagators.hfpi import PathBundle
 
-    n = ray_bundle.positions.shape[0]
+    positions = _raybundle_positions(ray_bundle)
+    directions = _raybundle_directions(ray_bundle)
+    n = positions.shape[0]
     if weights is None:
         weights = np.ones(n, dtype=np.complex128)
     return PathBundle(
-        positions=ray_bundle.positions,
-        directions=ray_bundle.directions,
+        positions=positions,
+        directions=directions,
         weights=weights,
-        opl=getattr(ray_bundle, 'opl', np.zeros(n)),
-        alive=getattr(ray_bundle, 'alive', np.ones(n, dtype=bool)),
+        opl=np.asarray(getattr(ray_bundle, 'opd', np.zeros(n))),
+        alive=np.asarray(getattr(ray_bundle, 'alive',
+                                  np.ones(n, dtype=bool))),
     )
 
 
@@ -106,15 +137,17 @@ def ray_to_beamlet(
     """
     from ..propagators.gbd import BeamletBundle
 
-    n = ray_bundle.positions.shape[0]
+    positions = _raybundle_positions(ray_bundle)
+    directions = _raybundle_directions(ray_bundle)
+    n = positions.shape[0]
     z_R = float(np.pi) * (waist0 ** 2) / wavelength
     Q = np.full(n, -1j / z_R, dtype=np.complex128)
     if amplitude is None:
         amplitude = np.ones(n, dtype=np.complex128)
     waist0_arr = np.full(n, float(waist0))
     return BeamletBundle(
-        positions=ray_bundle.positions,
-        directions=ray_bundle.directions,
+        positions=positions,
+        directions=directions,
         Q=Q,
         amplitude=amplitude,
         waist0=waist0_arr,
@@ -126,17 +159,32 @@ def path_to_ray(path_bundle: 'PathBundle') -> 'RayBundle':
     return its geometric :class:`RayBundle` core.
 
     Useful for piping HFPI paths into a downstream geometric raytrace
-    (where complex amplitude is irrelevant).
+    (where complex amplitude is irrelevant).  ``PathBundle.opl`` maps
+    to ``RayBundle.opd``; both are accumulated optical path length in
+    metres.  ``PathBundle`` does not carry a wavelength, so the
+    returned ``RayBundle`` is constructed with ``wavelength=0.0``
+    unless the path bundle has a ``wavelength`` attribute (a forward-
+    compatible fallback for future schemas).
     """
     from .core import RayBundle
 
-    n = path_bundle.positions.shape[0]
+    positions = np.asarray(path_bundle.positions)
+    directions = np.asarray(path_bundle.directions)
+    n = positions.shape[0]
+    x = positions[..., 0]
+    y = positions[..., 1]
+    z = positions[..., 2]
+    L = directions[..., 0]
+    M = directions[..., 1]
+    N = directions[..., 2]
+    opl = np.asarray(getattr(path_bundle, 'opl', np.zeros(n)))
+    alive = np.asarray(getattr(path_bundle, 'alive',
+                                np.ones(n, dtype=bool)))
     return RayBundle(
-        positions=path_bundle.positions,
-        directions=path_bundle.directions,
-        opl=getattr(path_bundle, 'opl', np.zeros(n)),
-        alive=getattr(path_bundle, 'alive', np.ones(n, dtype=bool)),
-        wavelength=getattr(path_bundle, 'wavelength', 0.0),
+        x=x, y=y, z=z, L=L, M=M, N=N,
+        wavelength=float(getattr(path_bundle, 'wavelength', 0.0)),
+        alive=alive,
+        opd=opl,
     )
 
 

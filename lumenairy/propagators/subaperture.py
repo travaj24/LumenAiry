@@ -261,6 +261,14 @@ def propagate_subaperture_asymptotic(
     for i in range(len(pg)):
         cx_i, cy_i = float(pg.centres[i, 0]), float(pg.centres[i, 1])
         # Fit centred on this patch's source point.
+        # 4.11.2: pass ``source_centre=(cx_i, cy_i)`` so the local
+        # polynomial fit samples the prescription on a Chebyshev grid
+        # *centred on this patch's object-plane footprint*.  Pre-
+        # 4.11.2 the per-patch fit had source_centre fixed at the
+        # origin -- every patch built the same on-axis fit, so the
+        # patch decomposition was effectively the on-axis fit alone
+        # and off-axis patches contributed zero field at any
+        # evaluation pixel outside the on-axis fit's training box.
         fit = fit_canonical_polynomials(
             prescription, wavelength,
             source_box_half=source_box_half,
@@ -268,6 +276,7 @@ def propagate_subaperture_asymptotic(
             n_field=n_field,
             n_pupil=n_pupil,
             poly_order=poly_order,
+            source_centre=(cx_i, cy_i),
         )
         # Propagate from this patch's source point.  4.10: the actual
         # `propagate_modal_asymptotic` signature uses

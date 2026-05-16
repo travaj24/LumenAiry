@@ -10,6 +10,45 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.11.2
+
+**Round-3 fresh-eyes audit response.**  An 11-agent fresh-eyes audit
+of v4.11.1 surfaced ~120 new substantive findings.  v4.11.2 closes
+~70 of the highest-impact findings across seven parallel work
+tracks plus reconciliation, and ships ~55 new pinning regression
+tests.
+
+Headline meta-finding: **the v4.10 "C-LR-1 fix" was itself wrong.**
+The pre-v4.10 sign on the Seidel-correction OPL inside
+`apply_real_lens` was correct; the round-1 audit's physics-reasoning
+step that justified flipping it was reversed.  v4.11.2 restores the
+original sign and pins it with a ground-truth regression test
+against `apply_real_lens_traced`.
+
+Other highest-impact fixes:
+
+* **GBD axial-OPL fix activated** (v4.11.1 version was calling `.get`
+  on a dataclass — silently swallowed AttributeError, axial_opl
+  always None).
+* **S-LAH64 / S-LAH79 Sellmeier coefficients removed** (in-code values
+  were off by 5-6% in n_d; now route through refractiveindex.info).
+* **Chained-mirror Seidel parity** tracked across `system_abcd` and
+  `seidel_coefficients`; Cassegrain / Schwarzschild correct now.
+* **EVENASPH PARM off-by-one** in Zemax loader fixed (every Zemax-
+  authored EVENASPH file previously lost its α₄ on load).
+* **Quadoa aspheric serializer** wrote powers instead of values.
+* **`normalize_prescription` mirror filter** was a no-op (wrong key).
+* **HFPI finite-conjugate path** was killing all rays; **stratified
+  sampler** was sampling only 2 of 16 strata.
+* **Richards-Wolf prefactor** `1/f²` + sign restored.
+* **`compute_psf` Parseval test** was passing for the wrong reason.
+
+~55 new regression tests; full validation suite (34 files, 314 tests)
+passes.
+
+See `CHANGELOG.md` and `AUDIT_ROUND3_2026_05_16.md` for the full
+per-finding breakdown.
+
 ## What's new in 4.11.1
 
 **Round-2 verification follow-up.**  An independent verification of

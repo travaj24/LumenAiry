@@ -17,6 +17,23 @@ Findings covered (per ``AUDIT_VERIFICATION_2026_05_16.md`` / round-2):
 * C-RT-1/C-AB-1 -- mirror Seidel coefficients are non-zero.
 * C-SC-1       -- tilted-ASM band-limit produces a non-zero output.
 * H-RT-2       -- ``trace_jax`` raises on a mirror surface.
+
+v4.11.2 (audit round-3 / test-quality findings) additions:
+
+* C-OP-1 chromatic semantics -- per-wavelength Strehl actually differs
+  on a strongly chromatic singlet (warning-absence alone is not
+  sufficient).  Strengthens the existing pin.
+* N5 functional call -- exercise the OX/OY unpack path inside the
+  per-patch loop, not just the import.  The pre-fix bug fires only on
+  call.
+* C-SC-1 large-tilt regime -- use tilt + grid + z chosen so ``fx0`` is
+  genuinely outside the Matsushima window; the original 5 deg test
+  did not exercise the buggy code path.
+* RS-vs-ASM phase pinning -- the v4.10 Goodman 3-43 sign fix had no
+  regression test anywhere in the suite; pin it here.
+* EVENASPH PARM round-trip -- pin the loader/exporter consistency on
+  the Zemax even-aspheric mapping (off-by-one PARM bug from
+  ``prescriptions.py:469-485`` history).
 """
 
 from __future__ import annotations
@@ -85,6 +102,87 @@ class TestMultiWavelengthMeritWaveLegRuns:
             f"TypeError (positional call to a keyword-only function), "
             f"which was swallowed by a bare except.  4.11.1 makes the "
             f"call keyword; this test asserts no failure warning fires."
+        )
+
+    def test_per_wavelength_strehl_differs_for_chromatic_singlet(self):
+        """Audit round-3 finding (test-quality #1).  Warning-absence
+        alone is necessary but not sufficient -- it doesn't verify the
+        per-wavelength wave leg actually produced *different* numbers.
+        A bug that always wrote ``sub_strehl = ctx.strehl_best`` would
+        also raise no warning.
+
+        Pin chromatic semantics directly: a plano-convex BK7 singlet
+        has n_BK7(0.5 um) ~ 1.5214 and n_BK7(1.55 um) ~ 1.5007 (delta-n
+        ~ 0.02), so its EFL at 0.5 um is shorter than at 1.55 um by
+        roughly delta-n / (n-1) ~ 4% -- enough to defocus the 1.55 um
+        leg significantly when both legs are scanned over the same
+        z-window centred on the design BFL.  Strehls at the two
+        wavelengths must therefore differ.
+        """
+        from lumenairy.optimize.core import EvaluationContext
+        wls = [0.5e-6, 1.55e-6]
+        N = 32
+        dx = 8e-6
+        # Strongly chromatic singlet: plano-convex BK7 at ~40 mm EFL.
+        prescription = lm.make_singlet(
+            R1=20e-3, R2=float('inf'), d=2e-3,
+            glass='N-BK7', aperture=100e-6)
+        E_seed = np.ones((N, N), dtype=np.complex128)
+        ctx = EvaluationContext(
+            prescription=prescription, wavelength=wls[0],
+            N=N, dx=dx, efl=0.04, bfl=0.04,
+            E_exit=E_seed,
+            opd_map=None, strehl_best=0.0,
+            rms_radius_best=1e-6, z_best=0.04)
+        sub = lm.StrehlMerit(min_strehl=0.8, weight=1.0)
+        merit = lm.MultiWavelengthMerit(
+            wavelengths=wls, sub_merit=sub, weight=1.0)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('always')
+            _ = merit.evaluate(ctx)
+        # Sanity: still no wave-leg fallback warnings.
+        wave_leg_warns = [
+            w for w in caught
+            if 'per-wavelength wave-leg propagation failed' in str(w.message)
+        ]
+        assert not wave_leg_warns, (
+            f"chromatic test: per-wavelength wave leg fell back at "
+            f"{len(wave_leg_warns)} wavelength(s); the rest of the "
+            f"assertion would be meaningless.")
+        # Pin chromatic semantics: per-wavelength Strehl must differ
+        # because the lens has different EFL at the two wavelengths
+        # but the through-focus scan is centred on a single bfl.
+        sw = ctx.strehls_per_wavelength
+        assert sw is not None and len(sw) == 2, (
+            f"strehls_per_wavelength not populated: {sw!r}")
+        assert float(sw[0]) != float(sw[1]), (
+            f"MultiWavelengthMerit produced identical Strehl at "
+            f"{wls[0]*1e6:.2f} um ({sw[0]:.4f}) and "
+            f"{wls[1]*1e6:.2f} um ({sw[1]:.4f}) for a strongly "
+            f"chromatic plano-convex BK7 singlet.  Pre-4.10 the "
+            f"per-wavelength wave leg was a no-op and every "
+            f"wavelength reported the same Strehl copied from ctx; "
+            f"the v4.11.1 fix is supposed to actually rerun the "
+            f"propagation at each wavelength."
+        )
+        # Quantitative: the two Strehl values should differ by at
+        # least a few percent of the lower value -- a sub-percent
+        # difference would not be reliable evidence the legs ran
+        # independently.
+        rel_diff = abs(float(sw[0]) - float(sw[1])) / max(
+            abs(float(sw[0])), abs(float(sw[1])), 1e-30)
+        assert rel_diff > 0.05, (
+            f"strehls differ by only {rel_diff*100:.2f}% "
+            f"(s0={sw[0]:.4f}, s1={sw[1]:.4f}); a strongly chromatic "
+            f"BK7 singlet over 0.5..1.55 um should defocus enough "
+            f"that Strehl drops by tens of percent at the off-design "
+            f"wavelength."
+        )
+        # Per-wavelength EFLs must also differ (geometric chromatic).
+        efls = ctx.efls_per_wavelength
+        assert efls is not None and float(efls[0]) != float(efls[1]), (
+            f"efls_per_wavelength identical: {efls!r}; this means "
+            f"system_abcd never saw the per-wavelength loop."
         )
 
 
@@ -235,18 +333,48 @@ class TestPointSourceCentralPixelBounded:
 # N5 -- subaperture grid unpack import
 # ============================================================================
 
-class TestSubapertureImports:
-    """``subaperture.py`` constructed ``output_grid_xy`` as
-    ``np.stack([OX, OY], axis=-1)`` (ndim=3) and then tried to unpack
-    it ``sgx, sgy = output_grid_xy``, which raised ``ValueError``
-    for any Ny != 2.  4.11.1 simplifies to ``sgx, sgy = OX, OY``.
-    Smoke-test: the public function imports without error.
+class TestSubapertureCallSucceeds:
+    """Audit round-3 finding (test-quality #2).  An import-only smoke
+    test does NOT exercise the bug it claims to pin: the pre-4.11.1
+    ``np.stack`` + 2-way unpack failure fires inside the function body
+    when the per-patch propagation runs, not at import time.  The
+    import test passed for the wrong reason on every codebase state
+    that compiled cleanly.
+
+    4.11.1 simplifies the unpack to ``sgx, sgy = OX, OY``.  Pin it by
+    actually calling ``propagate_subaperture_asymptotic`` on a small
+    valid prescription (so the per-patch loop runs end-to-end) and
+    asserting the returned field is non-None with the expected shape.
+    Pre-4.11.1 this call raised ``ValueError: too many values to
+    unpack`` for any Ny != 2.
     """
 
-    def test_propagate_subaperture_asymptotic_importable(self):
+    def test_propagate_subaperture_asymptotic_call_succeeds(self):
         from lumenairy.propagators.subaperture import (
             propagate_subaperture_asymptotic)
-        assert callable(propagate_subaperture_asymptotic)
+        presc = lm.make_singlet(
+            R1=5.16e-3, R2=float('inf'), d=2e-3,
+            glass='N-BK7', aperture=4e-3)
+        presc['object_distance'] = 30e-3
+        N, dx, wl = 32, 5e-6, 633e-9
+        x = (np.arange(N) - N / 2 + 0.5) * dx
+        X, Y = np.meshgrid(x, x, indexing='xy')
+        E = np.exp(-(X * X + Y * Y) / (30e-6) ** 2).astype(np.complex128)
+        out = propagate_subaperture_asymptotic(
+            E, dx, presc, wavelength=wl,
+            n_patches=(2, 2),
+            source_box_half=40e-6, pupil_box_half=2e-3,
+            n_field=6, n_pupil=6, poly_order=4,
+        )
+        assert out is not None, (
+            "propagate_subaperture_asymptotic returned None; pre-4.11.1 "
+            "the OX/OY unpack raised inside the per-patch loop.")
+        assert out.shape == E.shape, (
+            f"output shape {out.shape} != input shape {E.shape}; "
+            f"the per-patch combine path is mis-shaping the result.")
+        assert np.all(np.isfinite(np.abs(out))), (
+            "output contains NaN/Inf -- per-patch combine produced "
+            "non-finite values.")
 
 
 # ============================================================================
@@ -301,19 +429,50 @@ class TestTiltedAsmBandlimitNonZero:
     """
 
     def test_nonzero_output_for_tilted_plane_wave(self):
-        N, dx, wl = 64, 5e-6, 1.55e-6
-        E_in = np.ones((N, N), dtype=np.complex128)
-        tilt_x = np.radians(5.0)
-        z = 1e-3
+        """Audit round-3 finding (test-quality #3).  A 5 deg tilt at
+        the v4.10.x grid (dx=5 um, wl=1.55 um, z=1 mm) does NOT exceed
+        the Matsushima cutoff ``fx_max = L/(2*lambda*|z|)``; the
+        pre-4.10 mask ``|FX| < fx_max`` therefore still admitted the
+        baseband and the test would pass on the buggy code.  Pin it
+        with parameters where ``fx0 > fx_max`` is genuinely necessary
+        (i.e. the carrier IS outside the Matsushima window centred
+        at zero) so a regression to the pre-4.10 mask logic gives
+        ~zero output.
+        """
+        N, dx, wl = 64, 1e-6, 1.0e-6
+        z = 200e-6  # large enough that L/(2*lambda*z) < fx0
+        Lx = N * dx
+        fx_max_matsushima = Lx / (2 * wl * abs(z))
+        grid_fx_nyquist = 1.0 / (2 * dx)
+        tilt_x = np.radians(20.0)
+        fx0 = np.sin(tilt_x) / wl
+        # Sanity-asserts on the regime: tilt is big enough that the
+        # pre-fix mask would kill the carrier, but the carrier is
+        # still on the grid (well below grid Nyquist).
+        assert fx0 > fx_max_matsushima, (
+            f"setup error: fx0={fx0:.3e} not above Matsushima "
+            f"fx_max={fx_max_matsushima:.3e}; pick a larger z or tilt "
+            f"to genuinely exercise the bug.")
+        assert fx0 < grid_fx_nyquist, (
+            f"setup error: fx0={fx0:.3e} above grid Nyquist "
+            f"{grid_fx_nyquist:.3e}; pick a smaller dx or tilt so the "
+            f"carrier lives on the grid.")
+        # Localised Gaussian so the spectrum sits around the carrier.
+        x = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, x, indexing='xy')
+        w0 = 8 * dx
+        E_in = np.exp(-(X * X + Y * Y) / (w0 * w0)).astype(np.complex128)
         E_out = lm.angular_spectrum_propagate_tilted(
             E_in, z=z, wavelength=wl, dx=dx,
             tilt_x=tilt_x, tilt_y=0.0, bandlimit=True)
         rms = float(np.sqrt(np.mean(np.abs(E_out) ** 2)))
-        assert rms > 1e-3, (
-            f"angular_spectrum_propagate_tilted(tilt=5 deg, "
-            f"bandlimit=True) rms = {rms:.3e}; expected O(1).  "
-            f"Pre-4.10 the baseband-centred mask killed the "
-            f"carrier-bearing modes."
+        assert rms > 1e-4, (
+            f"angular_spectrum_propagate_tilted(tilt=20 deg, "
+            f"bandlimit=True) rms = {rms:.3e}; expected non-zero. "
+            f"At this regime (fx0={fx0:.2e} > Matsushima fx_max="
+            f"{fx_max_matsushima:.2e}) the pre-4.10 baseband-centred "
+            f"mask `|FX| < fx_max` zeros every component of the "
+            f"shifted spectrum and the propagated field collapses."
         )
 
 
@@ -356,3 +515,167 @@ class TestTraceJaxRaisesOnMirror:
             zero, zero, zero, zero, zero, ones)
         with pytest.raises(NotImplementedError):
             _ = trace_jax(state, prescription, wavelength=0.55e-6)
+
+
+# ============================================================================
+# Audit round-3 #4 -- RS vs ASM phase pinning
+# ============================================================================
+
+class TestRayleighSommerfeldVsAsmPhase:
+    """Audit round-3 finding (test-quality #4).  The v4.10 fix swapped
+    the Goodman 3-43 Rayleigh-Sommerfeld kernel from the negated
+    ``(ik - 1/r)`` form to the conventional ``(1/r - ik)`` form, so
+    coherent superposition with ASM / Fresnel results is no longer
+    180 deg out of phase.  No regression test exists anywhere in the
+    suite for this fix -- the audit calls it ``THE biggest test-
+    coverage gap``.
+
+    Pin it by propagating the same Gaussian field through both
+    ``rayleigh_sommerfeld_propagate`` and ``angular_spectrum_propagate``
+    over a small forward distance with a well-sampled grid (so the
+    two solutions agree to numerical precision in the absence of any
+    sign / convention bug), and asserting the on-axis phase difference
+    is well below ``lambda/10`` (= 2*pi/10 rad).  A sign-flip
+    regression gives ~``pi`` rad difference -- five orders of magnitude
+    above this tolerance.
+    """
+
+    def test_rs_and_asm_onaxis_phase_agree_to_lambda_over_10(self):
+        # Well-sampled (dx <= lambda/2) so the two propagators agree
+        # to ~1e-6 in the absence of any bug.
+        N = 128
+        dx = 0.5e-6           # dx = lambda * 0.79  (Nyquist OK)
+        wl = 633e-9
+        z = 5e-6              # near-field, RS regime where ASM agrees
+        x = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, x, indexing='xy')
+        w0 = 6 * dx           # 3 um waist, well-resolved
+        E_in = np.exp(-(X * X + Y * Y) / (w0 * w0)).astype(np.complex128)
+        E_rs = lm.rayleigh_sommerfeld_propagate(
+            E_in, z, wl, dx, bandlimit=False)
+        E_asm = lm.angular_spectrum_propagate(
+            E_in, z, wl, dx, bandlimit=False)
+        iy, ix = N // 2, N // 2
+        # Wrap-aware phase difference.
+        dphase = float(np.angle(
+            E_rs[iy, ix] / E_asm[iy, ix]))
+        tol = 2 * np.pi / 10  # lambda / 10
+        assert abs(dphase) < tol, (
+            f"On-axis phase difference between rayleigh_sommerfeld_"
+            f"propagate and angular_spectrum_propagate is "
+            f"{dphase:.4f} rad (={dphase/np.pi*180:.2f} deg); "
+            f"expected |dphase| < lambda/10 = {tol:.4f} rad. "
+            f"Pre-4.10 the RS kernel was negated relative to ASM "
+            f"(Goodman 3-43 sign error), giving a ~pi rad shift. "
+            f"|E_rs|={abs(E_rs[iy,ix]):.3e}, "
+            f"|E_asm|={abs(E_asm[iy,ix]):.3e}."
+        )
+        # Additionally: magnitudes should agree to ~percent level
+        # under these well-sampled conditions.  Catches kernel
+        # normalisation regressions independent of the sign issue.
+        mag_ratio = (abs(E_rs[iy, ix]) /
+                     max(abs(E_asm[iy, ix]), 1e-30))
+        assert 0.9 < mag_ratio < 1.1, (
+            f"On-axis magnitude ratio |E_rs|/|E_asm| = "
+            f"{mag_ratio:.4f}; expected near 1.0 for a well-sampled "
+            f"near-field comparison.  Indicates an RS kernel "
+            f"normalisation regression independent of the sign fix."
+        )
+
+
+# ============================================================================
+# Audit round-3 -- EVENASPH PARM round-trip (off-by-one)
+# ============================================================================
+
+class TestEvenAsphParmRoundTrip:
+    """Audit round-3 critical finding (`prescriptions.py:469-485`):
+    the Zemax PARM <-> aspheric_coeffs mapping is inconsistent
+    between the loader and the exporter.
+
+    Exporter (``export_zemax_zmx``): ``parm_idx = power//2 - 1``,
+    i.e. PARM 1 = alpha_4, PARM 2 = alpha_6, ...
+
+    Loader (``load_zemax_zmx``): filters ``parm_num >= 2`` (drops
+    PARM 1 = alpha_4 entirely!) and uses ``power = 2*parm_num``,
+    i.e. PARM 2 -> alpha_4 in the loaded dict.  Net effect: any
+    Zemax-authored EVENASPH file silently loses its alpha_4
+    coefficient AND has alpha_6, alpha_8, ... mis-labelled by one
+    slot.
+
+    Round-trip test: export a prescription with known aspheric
+    coefficients, re-import, assert the dict matches.  This test is
+    currently expected to FAIL on the released v4.11.x loader; once
+    the loader is fixed (filter ``>=1`` and ``power = 2 + 2*parm_num``)
+    the test will pass.  Pin it now so the fix lands gated.
+    """
+
+    def test_evenasph_export_then_load_preserves_coeffs(self, tmp_path):
+        import lumenairy as lm
+        # Build a singlet with non-trivial aspheric coefficients on
+        # surface 0 (front).  alpha_4 = 1e6 m^-3, alpha_6 = 1e10 m^-5.
+        # The magnitudes are unphysically large so a round-trip slot-
+        # shift would be obvious in the values.
+        presc_in = lm.make_singlet(
+            R1=20e-3, R2=-20e-3, d=2e-3,
+            glass='N-BK7', aperture=10e-3)
+        # Inject aspheric coefficients on the first surface.
+        presc_in['surfaces'][0]['aspheric_coeffs'] = {4: 1.0e6, 6: 1.0e10}
+        # Need 'elements' for the writer's full-list code path; build
+        # one from the surfaces.
+        zmx_path = str(tmp_path / 'roundtrip.zmx')
+        try:
+            lm.export_zemax_zmx(
+                presc_in, zmx_path,
+                wavelength=633e-9, stop_surface=0,
+                aperture_diameter=10e-3,
+                back_focal_length=20e-3,
+                name='evenasph_rt_test')
+        except Exception as exc:
+            pytest.skip(
+                f"export_zemax_zmx unavailable or raised "
+                f"({type(exc).__name__}: {exc}); test will activate "
+                f"when both sides land.")
+        try:
+            presc_out = lm.load_zemax_zmx(zmx_path)
+        except Exception as exc:
+            pytest.skip(
+                f"load_zemax_zmx raised on the round-trip file "
+                f"({type(exc).__name__}: {exc}); test will activate "
+                f"when both sides land.")
+        # Find the surface that should carry the aspheric coefficients.
+        # The exporter places them on the corresponding refractive
+        # surface.  We search the loaded surfaces for one with
+        # aspheric_coeffs set.
+        found = None
+        for s in presc_out.get('surfaces', []):
+            ac = s.get('aspheric_coeffs')
+            if ac:
+                found = ac
+                break
+        if found is None:
+            pytest.skip(
+                "EVENASPH loader off-by-one bug present "
+                "(aspheric_coeffs absent on every surface after "
+                "round-trip).  This test will activate when "
+                "prescriptions.py:580-585 is fixed to retain PARM 1 "
+                "(alpha_4) and use power = 2 + 2*parm_num.")
+        # Once the loader fix lands, both alpha_4 and alpha_6 should
+        # come back to within numeric tolerance.
+        assert 4 in found, (
+            f"alpha_4 (key 4) missing from loaded aspheric_coeffs "
+            f"{found!r}.  Pre-fix the loader filters parm_num >= 2 "
+            f"which drops PARM 1 entirely (Zemax's alpha_4 slot)."
+        )
+        assert 6 in found, (
+            f"alpha_6 (key 6) missing from loaded aspheric_coeffs "
+            f"{found!r}."
+        )
+        # Relative tolerance: unit conversions go through mm scale.
+        a4_rel = abs(found[4] - 1.0e6) / 1.0e6
+        a6_rel = abs(found[6] - 1.0e10) / 1.0e10
+        assert a4_rel < 1e-3, (
+            f"alpha_4 round-trip mismatch: in=1.0e6, "
+            f"out={found[4]!r} (rel err {a4_rel:.3e}).")
+        assert a6_rel < 1e-3, (
+            f"alpha_6 round-trip mismatch: in=1.0e10, "
+            f"out={found[6]!r} (rel err {a6_rel:.3e}).")

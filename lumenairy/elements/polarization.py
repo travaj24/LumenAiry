@@ -97,8 +97,20 @@ class JonesField:
         if Ex.shape != Ey.shape:
             raise ValueError(f"Ex and Ey must have the same shape, "
                              f"got {Ex.shape} and {Ey.shape}")
-        self.Ex = np.asarray(Ex, dtype=complex)
-        self.Ey = np.asarray(Ey, dtype=complex)
+        # 4.11.2: ``dtype=complex`` aliases to ``complex128`` and
+        # silently promoted complex64 inputs.  Preserve the caller's
+        # dtype if it's already complex; otherwise cast through the
+        # global default (which honours precision='single').
+        Ex_arr = np.asarray(Ex)
+        Ey_arr = np.asarray(Ey)
+        if np.iscomplexobj(Ex_arr) and np.iscomplexobj(Ey_arr):
+            self.Ex = Ex_arr
+            self.Ey = Ey_arr
+        else:
+            from ..propagators.propagation import get_default_complex_dtype
+            cdt = get_default_complex_dtype()
+            self.Ex = Ex_arr.astype(cdt)
+            self.Ey = Ey_arr.astype(cdt)
         self.dx = dx
         self.dy = dy if dy is not None else dx
 
@@ -462,11 +474,18 @@ def apply_waveplate(
     Notes
     -----
     The Jones matrix for a waveplate with fast axis at angle theta and
-    retardance phi is::
+    retardance phi (under the library's exp(-i omega t) convention) is::
 
-        J = R(-theta) * diag(1, exp(i*phi)) * R(theta)
+        J = R(theta) * diag(1, exp(-i*phi)) * R(-theta)
 
-    where R is the 2D rotation matrix.
+    where R(theta) = [[cos t, -sin t], [sin t, cos t]] is the 2D
+    rotation matrix.  The negative sign on ``exp(-i phi)`` reflects
+    the fact that the slow axis arrives *later* than the fast axis
+    under the engineering-physics ``exp(-i omega t)`` time-harmonic
+    convention.  (Pre-4.7 the code used ``exp(+i phi)`` and the
+    pre-4.11.2 docstring still showed the EE-convention form
+    ``R(-theta) * diag(1, exp(+i phi)) * R(theta)``, which was
+    inconsistent with the actual implementation.)
     """
     if angle_deg is not None:
         angle = float(np.radians(angle_deg))

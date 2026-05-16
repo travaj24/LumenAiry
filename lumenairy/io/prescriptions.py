@@ -576,12 +576,19 @@ def load_zemax_zmx(filepath: str,
             radius = (1.0 / curv) * unit_scale
 
         # Aspheric coefficients
+        # Zemax EVENASPH convention: PARM 1 = alpha_4 (dominant 4th-order
+        # term), PARM 2 = alpha_6, PARM N = alpha_(2*N+2).  Library
+        # canonical form is a dict keyed by total power: {4: a4, 6: a6, ...}.
+        # The exporter (export_zemax_zmx) round-trips with parm_idx =
+        # power//2 - 1, so loader must use power = 2 + 2*parm_num and
+        # accept parm_num >= 1.  (Pre-v4.11.2 dropped PARM 1 entirely
+        # and mis-labelled every higher coefficient by one slot.)
         asph_coeffs = None
         if s['aspheric_params']:
             asph_coeffs = {}
             for parm_num, parm_val in s['aspheric_params'].items():
-                if parm_num >= 2:
-                    power = 2 * parm_num
+                if parm_num >= 1:
+                    power = 2 + 2 * parm_num
                     asph_coeffs[power] = parm_val / (unit_scale ** (power - 1))
 
         # Per-surface clear semi-diameter [m]
@@ -1322,10 +1329,15 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     ``TYPE COORDBRK`` surfaces with ``PARM 1..6`` filled in,
     ``GLAS MIRROR`` rows for reflective surfaces, and standard
     refractive surfaces with the appropriate ``GLAS`` and curvature.
-    Thicknesses are converted from physical-positive (the GUI's
-    internal convention since 3.6.1 hotfix-6) back to Zemax-signed
-    (negative post-mirror so the unfolded cumulative z keeps moving
-    forward) by tracking mirror parity.
+
+    v4.11.2: the previous 3.6.1-hotfix-6 mirror-parity sign flip was
+    removed.  The canonical thickness convention (since GUI v3.7.4)
+    is **Zemax-signed**: thicknesses stored in ``all_thicknesses``
+    and ``coord_breaks[i]['thickness_m']`` already carry Zemax sign
+    (negative after a mirror).  Applying a parity flip on export
+    therefore double-negated thicknesses on mirror legs (mirror DISZ
+    came back positive instead of negative; coord-break DISZ after a
+    mirror was inverted twice).
 
     Used by :func:`export_zemax_zmx` when the prescription dict
     carries the new keys; the pre-3.7 lens-only path remains the
@@ -1392,8 +1404,9 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     # The GUI's to_prescription tags each cb with the surf_num it
     # sits at (i.e. the running counter increments AT the cb).
     surf_counter = 0   # we just emitted SURF 0 (object)
-    # Track how many mirrors we've crossed so we can flip thickness
-    # signs back to Zemax's convention.
+    # mirror_count is retained for diagnostics only.  Pre-v4.11.2 it
+    # drove a thickness sign-flip; that flip was removed because the
+    # canonical thicknesses are already Zemax-signed.
     mirror_count = 0
 
     # Build a flat list of (item_kind, payload, thickness_after_m)
@@ -1420,6 +1433,15 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     # all_thicknesses indexed by element index; cb's get thickness 0
     # (they don't advance, just transform the frame).
     elem_idx_in_full = 0
+    # Track the refracting-surface index separately so the STOP
+    # marker lands on the requested refracting surface even when
+    # coord-breaks and mirrors appear earlier in ``flat``.  The
+    # ``stop_surface`` parameter is documented as "zero-based index
+    # of the aperture stop **among refracting surfaces**".  Pre-v4.11.2
+    # this compared the global ``surf_counter`` (which includes
+    # coord-breaks and mirrors) so folded designs placed STOP on the
+    # wrong row.
+    refr_counter = -1
     for kind, payload, _ in flat:
         surf_counter += 1
         if kind == 'cb':
@@ -1433,9 +1455,9 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
             tz = float(cb.get('tilt_z_deg', 0.0))
             order = int(cb.get('order', 0) or 0)
             disz_mm = float(cb.get('thickness_m', 0.0)) * 1e3
-            # Apply mirror_count parity to flip sign back to Zemax.
-            if mirror_count % 2 == 1:
-                disz_mm = -disz_mm
+            # v4.11.2: no mirror-parity flip -- ``thickness_m`` is
+            # already Zemax-signed (loader copies raw DISZ * unit_scale
+            # without sign manipulation).
             lines.append(f'SURF {surf_counter}')
             lines.append('  TYPE COORDBRK')
             lines.append('  CURV 0.0 0 0.0 0.0 0')
@@ -1455,9 +1477,12 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         t_after_m = (all_thicknesses[elem_idx_in_full]
                       if elem_idx_in_full < len(all_thicknesses) else 0.0)
         elem_idx_in_full += 1
-        # Convert physical-positive back to Zemax-signed.
-        if mirror_count % 2 == 1:
-            t_after_m = -t_after_m
+        # v4.11.2: no mirror-parity flip.  Pre-fix code converted
+        # "physical-positive" back to Zemax-signed by negating every
+        # thickness after each mirror; but the loader stores raw
+        # Zemax-signed DISZ (no conversion) and the GUI (v3.7.4+)
+        # keeps Zemax-signed canonical, so the flip was always
+        # spurious here and destroyed mirror DISZ on round-trip.
         disz_mm = t_after_m * 1e3
 
         e_type = e.get('element_type', 'surface')
@@ -1482,8 +1507,9 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
             lines.append(f'  DIAM {sd_mm_e:.6f} 0 0 0 1 ""')
             mirror_count += 1
         else:
+            refr_counter += 1
             lines.append('  TYPE STANDARD')
-            if surf_counter == stop_surface + 1:
+            if refr_counter == stop_surface:
                 lines.append('  STOP')
             lines.append(f'  CURV {curv_val:.10f} 0 0 0 0 ""')
             lines.append(f'  DISZ {disz_mm:.8f}')
@@ -2102,9 +2128,48 @@ def _quadoa_serialize_radius(R, scale):
 
 
 def _quadoa_serialize_aspheric(coeffs):
+    """Serialise a library aspheric_coeffs dict ``{4: a4, 6: a6, ...}``
+    as a JSON-friendly dict with string keys (JSON requires string
+    keys).  ``None`` -> ``None``.  Pre-v4.11.2 this iterated dict keys
+    as if they were values, writing the powers [4.0, 6.0, ...] instead
+    of the coefficients.
+    """
     if coeffs is None:
         return None
-    return [float(c) for c in coeffs]
+    if isinstance(coeffs, dict):
+        return {str(int(p)): float(v) for p, v in coeffs.items()}
+    # Defensive: accept a list of (power, value) tuples or a sequence
+    # of values (legacy callers).  A bare sequence of numbers cannot
+    # be round-tripped without a power convention, so we refuse it.
+    try:
+        return {str(int(p)): float(v) for p, v in coeffs}
+    except (TypeError, ValueError):
+        raise TypeError(
+            "aspheric_coeffs must be a dict {power: value, ...}; got "
+            f"{type(coeffs).__name__}.")
+
+
+def _quadoa_deserialize_aspheric(obj):
+    """Inverse of :func:`_quadoa_serialize_aspheric`.
+
+    Accepts:
+
+    * ``None`` -> ``None``
+    * dict with string-or-int keys -> dict with int keys (canonical)
+    * legacy list of values [a4, a6, a8] -> dict {4: a4, 6: a6, 8: a8}
+      (the pre-v4.11.2 serializer wrote ``[4.0, 6.0, ...]`` -- those
+      values are uninterpretable, so a legacy list is read at face
+      value as coefficients starting from power=4).
+    """
+    if obj is None:
+        return None
+    if isinstance(obj, dict):
+        return {int(k): float(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return {4 + 2 * i: float(v) for i, v in enumerate(obj)}
+    raise TypeError(
+        "aspheric_coeffs in Quadoa JSON must be dict, list, or null; "
+        f"got {type(obj).__name__}.")
 
 
 def export_quadoa_qos(prescription: Dict[str, Any], path: str, *,
@@ -2296,14 +2361,14 @@ def load_quadoa_qos(filepath: str,
         surf = {
             'radius': _radius_in(s.get('radius')),
             'conic': float(s.get('conic', 0.0) or 0.0),
-            'aspheric_coeffs': (None if s.get('aspheric_coeffs') is None
-                                else list(s['aspheric_coeffs'])),
+            'aspheric_coeffs': _quadoa_deserialize_aspheric(
+                s.get('aspheric_coeffs')),
             'radius_y': (None if s.get('radius_y') is None
                          else _radius_in(s['radius_y'])),
             'conic_y': (None if s.get('conic_y') is None
                         else float(s['conic_y'])),
-            'aspheric_coeffs_y': (None if s.get('aspheric_coeffs_y') is None
-                                  else list(s['aspheric_coeffs_y'])),
+            'aspheric_coeffs_y': _quadoa_deserialize_aspheric(
+                s.get('aspheric_coeffs_y')),
             'glass_before': s.get('glass_before', 'air'),
             'glass_after': s.get('glass_after', 'air'),
         }
@@ -2578,9 +2643,14 @@ def normalize_prescription(prescription: Dict[str, Any]) -> Dict[str, Any]:
             "'surfaces' nor 'elements'.")
     if surfs is None:
         # Build surfaces from elements (drop pure-mirror entries that
-        # apply_real_lens cannot consume).
+        # apply_real_lens cannot consume).  The canonical mirror flag
+        # is ``element_type='mirror'`` -- pre-v4.11.2 this checked
+        # ``e.get('mirror')`` which is never set, making the filter a
+        # no-op (mirrors leaked through to apply_real_lens).
         surfs = [e for e in elems
-                 if not (isinstance(e, dict) and e.get('mirror'))]
+                 if not (isinstance(e, dict)
+                         and (e.get('element_type') == 'mirror'
+                              or e.get('mirror')))]
         rx['surfaces'] = surfs
     if elems is None:
         # Elements mirror surfaces verbatim (no mirrors in pure

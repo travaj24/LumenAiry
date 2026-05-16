@@ -500,7 +500,7 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
             lines.append('# ' + '-' * 70)
             for g in unknown:
                 lines.append(
-                    f"op.GLASS_REGISTRY['{g}'] = "
+                    f"la.GLASS_REGISTRY['{g}'] = "
                     f"('specs', 'CATALOG', 'PAGE')  # TODO: fill in correct path"
                 )
             lines.append('')
@@ -722,7 +722,7 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
     if unknown:
         for g in unknown:
             lines.append(
-                f"op.GLASS_REGISTRY['{g}'] = "
+                f"la.GLASS_REGISTRY['{g}'] = "
                 f"('specs', 'CATALOG', 'PAGE')  # TODO"
             )
         lines.append('')
@@ -765,8 +765,13 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
         elif step['type'] == 'mirror':
             r = step['radius']
             r_str = 'None' if np.isinf(r) else f'{step["radius"]:.17e}'
+            ap = step.get('aperture_diameter')
+            ap_str = (f'{ap:.17e}'
+                      if (ap is not None and float(ap) > 0)
+                      else 'None')
             lines.append(f"    {{'type': 'mirror', 'radius': {r_str}, "
-                         f"'conic': {step.get('conic', 0.0)}}},")
+                         f"'conic': {step.get('conic', 0.0)}, "
+                         f"'aperture_diameter': {ap_str}}},")
         elif step['type'] == 'aperture':
             d = step['diameter']
             lines.append(f"    {{'type': 'aperture', 'shape': 'circular', "

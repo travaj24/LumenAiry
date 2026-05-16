@@ -533,6 +533,30 @@ def apply_real_lens(
             h_sq = Xs ** 2 + Ys ** 2
 
         # ---- Base sag (conic + asphere; biconic if radius_y given) ----
+        # 4.11.2: warn when a freeform surface is encountered.
+        # ``apply_real_lens`` only computes conic+aspheric+biconic sag
+        # at the phase-screen step; it does NOT call
+        # ``surface_sag_freeform``, so any ``freeform_type`` entry
+        # (xy_polynomial, zernike, chebyshev) is silently DROPPED from
+        # the OPD.  The raytracer (``surfaces_from_prescription`` →
+        # ``_surface_sag_xy``) honours freeform correctly; the
+        # thin-element wave-optics path does not.  Switching from the
+        # raytraced/Maslov path to ``apply_real_lens`` therefore
+        # silently lops the freeform departure off the OPD, which can
+        # be tens-of-microns for a typical Zernike freeform.  Until the
+        # feature is properly added to this path, surface the omission
+        # so it isn't silent.
+        if surf.get('freeform_type') is not None:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens: surface {i} has freeform_type="
+                f"{surf.get('freeform_type')!r}; the freeform departure "
+                "is NOT included in the per-surface OPD by this "
+                "thin-element wave-optics path.  Use "
+                "apply_real_lens_traced (or apply_real_lens_maslov) "
+                "for a raytraced OPD that honours freeform_type.",
+                RuntimeWarning, stacklevel=2,
+            )
         if R_y is not None:
             sag = surface_sag_biconic(
                 Xs, Ys, R_x=R, R_y=R_y,
@@ -620,6 +644,19 @@ def apply_real_lens(
             opd = n2r * sag / cos_tt_safe - n1r * sag / cos_ti_safe
         else:
             opd = (n2r - n1r) * sag
+        # 4.11.2: mask the NaN sentinel returned by surface_sag_general
+        # for points outside the conic domain (norm >= 0.9999, i.e. where
+        # the surface is not defined for hyperbolic / oblate conics) and
+        # propagated through the slant/fresnel gradient pipeline.  Without
+        # this, ``exp(-i k0 NaN) = NaN`` poisons the entire downstream
+        # ASM step; the NaN >= comparisons used by the near-grazing TIR
+        # guard return False, so the warning never fires for those
+        # pixels.  We zero the OPD on undefined-surface pixels here; the
+        # caller's clear_aperture / aperture mask should already be zeroing
+        # the field on the same pixels, so a 0-OPD phase screen is a safe
+        # neutral.  Tracks both slant-corrected and paraxial OPD branches.
+        if bool(xp.any(xp.isnan(opd))):
+            opd = xp.where(xp.isnan(opd), 0.0, opd)
         if (xp is np and NUMEXPR_AVAILABLE
                 and E.size >= _NUMEXPR_MIN_SIZE
                 and _ensure_numexpr_loaded()):
@@ -829,12 +866,35 @@ def apply_real_lens(
                     (n2r_i - n1r_i) * sag_fan_i)
             i_ax = int(np.argmin(np.abs(h_alive)))
             delta_ray = opl_ray - opl_ray[i_ax]
-            # 4.10: the analytic thin-element phase is exp(-i k0 (n2-n1) sag),
-            # so the OPL it adds is +(n2-n1)*sag with the SAME sign as the
-            # geometric ray OPL stored in opl_ray.  Pre-4.10 negated this
-            # which made correction ≈ 2 * opl_analytic, doubling the
-            # Seidel correction in the wrong direction.  Drop the negation.
-            opl_wave_rel = opl_analytic - opl_analytic[i_ax]
+            # 4.11.2: REVERT THE v4.10 "C-LR-1 fix".
+            # The pre-v4.10 negation here was correct.  Walking the
+            # physics under the library's exp(-i*omega*t) convention
+            # (forward kernel exp(+i*kz*z), phase = exp(+i*k0*OPL)):
+            #   - The thin-element phase screen above is
+            #     exp(-i*k0*(n2-n1)*sag) per surface.  Under
+            #     phase = exp(+i*k0*OPL), this screen deposits
+            #     OPL_screen = -(n2-n1)*sag at each height -- NEGATIVE
+            #     at the rim of a positive lens (the wave "sees" less
+            #     optical path through the thinner glass at the rim).
+            #   - The geometric ray-trace delta_ray = opl_ray - opl_ray
+            #     [axis] is also negative at the rim of a positive lens
+            #     (rim has shorter optical path through the lens than
+            #     the thicker axis).
+            #   - For a paraxial lens both quantities agree at first
+            #     order, leaving only the desired high-order residual.
+            # The v4.10 patch dropped the negation based on the audit's
+            # incorrect sign reasoning; the resulting ``correction`` was
+            # approximately +2*(n-1)*sag at the rim (millimetres for a
+            # 100 mm BK7 singlet), which tripled the lens's analytic OPD
+            # and crashed the effective focal length by a factor of ~3.
+            # v4.11.1's 50nm-->5nm gate did not help because the bogus
+            # correction was mm-scale.  Restored original sign here so
+            # ``correction`` is the small high-order residual the
+            # polynomial fit is meant to capture, not a duplicate of
+            # the lens OPD.  Round-3 audit (AUDIT_ROUND3_2026_05_16.md,
+            # CRIT-1) flagged this; verified by hand against a BK7
+            # plano-convex test case.
+            opl_wave_rel = -(opl_analytic - opl_analytic[i_ax])
             correction = delta_ray - opl_wave_rel
             # Fit even-power polynomial in normalised pupil coord.
             rho = h_alive / r_pupil

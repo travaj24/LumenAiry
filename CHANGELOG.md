@@ -2,6 +2,222 @@
 
 All notable changes to the core library are documented here.
 
+## [4.11.2] — 2026-05-16
+
+**Round-3 fresh-eyes audit response.**  An 11-agent fresh-eyes audit
+of v4.11.1 (`AUDIT_ROUND3_2026_05_16.md`) surfaced ~120 new
+substantive findings.  v4.11.2 closes ~70 of the highest-impact
+findings across seven parallel work tracks plus a reconciliation
+sweep, and ships ~55 new pinning regression tests.
+
+The headline meta-finding is sobering: **the v4.10 "C-LR-1 fix" was
+itself wrong**.  The pre-v4.10 sign on the Seidel-correction OPL
+inside `apply_real_lens` was correct; the round-1 audit's
+physics-reasoning step that justified flipping it was reversed.
+v4.11.1's threshold tweak didn't help because the resulting bogus
+correction was millimetre-scale, not nm-scale.  Reverted in this
+release and pinned with a ground-truth regression test that compares
+the analytic-screen path against `apply_real_lens_traced`.
+
+### Critical-tier reversals and corrections
+
+* **C-LR-1 reverted** (`_lens_real.py:867-895`): restored the pre-
+  v4.10 negation `opl_wave_rel = -(opl_analytic - opl_analytic[i_ax])`.
+  The v4.10 patch had been producing a correction that approximately
+  tripled the lens's analytic OPD at the rim.  Comment now spells
+  out the physics under the library's `exp(-i*omega*t)` convention
+  so this can't happen again.
+* **GBD axial_opl** (`gbd.py:569-606`): v4.11.1's "dormant-fix
+  activation" called `.get('thickness', ...)` on `Surface` dataclass
+  instances (no `.get` method).  Switched to `getattr(_s, ...)`;
+  the bare-except is narrowed and now emits a `RuntimeWarning`.
+* **S-LAH64 / S-LAH79 Sellmeier coefficients** (`glass.py:172-182`):
+  in-code coefficients gave `n_d` off by +5.8% and -5.9% vs the
+  Ohara catalog.  Removed the misattributed entries; both glasses
+  now route through the `__sellmeier__` sentinel + refractiveindex
+  .info lookup.
+
+### Critical-tier physics fixes
+
+* **Chained-mirror Seidel parity** (`raytrace/core.py:2130-2192,
+  3014-3128`): the v4.10 mirror-Seidel fix only handled a single
+  mirror.  v4.11.2 tracks `mirror_parity = mirror_count % 2` through
+  both `system_abcd` and `seidel_coefficients` so post-mirror glass
+  indices carry the sign correctly.  Cassegrain / Schwarzschild /
+  any 2-mirror catadioptric system now produces correct Seidel
+  sums beyond the first mirror.
+* **`system_abcd` ↔ `seidel_coefficients` mirror sign agreement**
+  (`core.py:2130-2192`): both paths now use Welford's signed-R
+  convention with `n2 = -n1`.  For R = -100 mm concave mirror,
+  EFL = +50 mm (focusing) in both APIs.  Pre-v4.11.2 the two
+  disagreed by sign.  `apply_mirror` retains its own (magnitude-
+  based) `R > 0 = concave` convention -- documented in its
+  docstring; the user-facing wave-side API stays unchanged.
+* **`seidel_wfe` field-curvature DC term added** (`seidel_analysis.py:
+  158-187, 290-300`): the Hopkins/Welford expansion has BOTH
+  `(1/2)·S₃·ρ²·cos²θ` (astigmatism, already present) AND
+  `(1/4)·S₃·ρ²` (field-curvature DC, missing).  Both docstring and
+  implementation updated.
+* **EVENASPH PARM off-by-one in Zemax loader** (`prescriptions.py:
+  578-592`): pre-v4.11.2 the filter dropped `PARM 1` (the dominant
+  α₄) entirely and mis-labelled higher coefficients.  Every Zemax-
+  authored EVENASPH file ever loaded by Lumenairy had silently lost
+  its α₄.  The exporter at line 1506 was already correct (so a
+  round-trip via Lumenairy lost α₄ on load and then put zero in
+  the export); now both sides agree on `power = 2 + 2*parm_num` with
+  filter `>= 1`.  Tested with round-trip pin.
+* **Quadoa aspheric serializer** (`prescriptions.py:2130-2172`):
+  iterated `coeffs` (a dict) yielding keys not values, so the JSON
+  carried `[4.0, 6.0, 8.0]` (the powers) instead of the coefficient
+  amplitudes.  Rewrote to emit `{str(power): value}` dict + paired
+  deserializer; aspheric_coeffs now harmonised to dict form across
+  all loaders.
+* **`normalize_prescription` mirror filter** (`prescriptions.py:
+  2579-2584`): checked `e.get('mirror')` but the library uses
+  `element_type='mirror'`.  Filter was a no-op; mirror entries
+  flowed through to `apply_real_lens` un-flagged.  Fixed.
+* **Zemax exporter STOP marker on folded designs** (export path):
+  pre-v4.11.2 the STOP-index counter included coord-breaks and
+  mirrors; `stop_surface=N` (zero-based among refractives) landed
+  on the wrong surface for any folded design.  Now uses a separate
+  refractive-only counter.
+* **Mirror / coord-break DISZ round-trip** (export path): pre-v4.11.2
+  applied a `mirror_count`-parity flip that double-negated mirror
+  and post-mirror coord-break thicknesses.  Removed; canonical
+  thicknesses are Zemax-signed as of GUI v3.7.4 already.
+* **`propagate_hfpi_through_prescription` finite-conjugate dead
+  path** (`hfpi.py:690-692`): paths were initialised at z=0 then
+  back-propagated to `z=-object_distance`; the `t >= 0` mask killed
+  them all.  Function only "worked" for `object_distance=0`.  Now
+  initialises directly at `z_input_plane = -object_distance`.
+* **`init_paths_stratified` cartesian product** (`hfpi.py:493-505`):
+  the `np.repeat` pattern only enumerated `(0,0,0,0)` and
+  `(1,1,1,1)` of the 16 strata.  Replaced with
+  `np.indices(...).reshape(4, -1)`.
+* **Richards–Wolf prefactor** (`vector_diffraction.py:221`):
+  prefactor was `(-1j * k * f / (2π)) · exp(-ikf)` -- both the
+  multiplicative `f` (instead of `1/f`) and the `exp(-ikf)` sign
+  were wrong.  Fixed to `(-1j * k / (2π * f)) · exp(+ikf)`.
+  Intensity now scales as `1/f²` and the global phase matches the
+  rest of the library's forward propagators.
+* **`compute_psf` Parseval default broke `t_strehl_perfect`**:
+  test was asserting `psf.max() > 0.99` but with the `'power'`
+  default the peak was ~89795 (so the assertion was passing for
+  the wrong reason).  Kept `'power'` default (documented v3.1.1+
+  semantic); updated `t_strehl_perfect` to request `normalize='peak'`
+  explicitly and tightened the assertion to `abs(peak − 1) < 1e-9`.
+
+### High-tier dead-on-arrival / sibling-function omissions
+
+* **`propagate_huygens_fresnel_with_opl_callable`** missing `-1j`
+  Maslov prefactor (sibling of `propagate_hf_chebyshev_quadrature`).
+* **`propagate_huygens_fresnel_through_prescription(method=
+  'asymptotic')`** silently replaced `E_in` with a fundamental
+  Gaussian.  Now decomposes `E_in` to LG modes via `decompose_lg`
+  with kwargs `source_lg_p_max`, `source_lg_ell_max`,
+  `source_lg_amp_threshold`.
+* **HFPI Kirchhoff `1/(iλ)·dΩ`** added to `apply_aperture_diffraction`,
+  `init_vector_paths_from_field`, `apply_vector_aperture_diffraction`
+  (init_paths_from_field already had it from v4.10).
+* **HFPI RNG per-aperture** via `np.random.SeedSequence` /
+  `Generator.spawn` / `jax.random.fold_in`.  Pre-v4.11.2 the master
+  seed was re-used at every aperture, producing perfectly correlated
+  draws across diffraction events.
+* **Asymptotic Maslov branch-tracking** hoisted to a shared helper
+  (`_maslov_branch_corrected_sqrt`); `aberration_tensor` (NumPy)
+  routes through it.  JAX twins documented as principal-sqrt with
+  parity at the single-shot point.
+* **`maslov_tracking` kwarg** on `propagate_modal_asymptotic` with
+  `{'principal', '1d_raster', 'row_reset'}`; default `'row_reset'`
+  resets the unwrap state at every row to avoid the 2-D raster's
+  spurious row-wrap flips.
+* **Subaperture per-patch fit** now passes `source_centre=(cx_i, cy_i)`
+  so the polynomial is trained around each patch's centroid, not
+  globally (was producing zero-field outside the global axial box).
+* **Real-`E_in` dtype promote** in HF Chebyshev quadrature so the
+  kernel imaginary part isn't stripped.
+* **AO rim Zernike FD** extended to all four rim quadrants (was
+  +x/+y only).
+* **EP-aiming siblings**: ported the v4.10 H-AB-3 fix to
+  `relative_illumination`, `field_aberration_sweep`, `ray_fan_data`,
+  `opd_fan_data`.  Pre-v4.11.2 chief was launched at (0,0,0); now
+  aimed at the EP centre derived from `first_order_data` with a
+  legacy fall-back if pupils can't be computed.
+* **Phase-retrieval seed= parity**: `gerchberg_saxton_jax` actually
+  consumes `seed` via `jax.random.PRNGKey`; NumPy `error_reduction`
+  and `hybrid_input_output` accept `seed=` / `dtype=` and enforce
+  them.
+* **`apply_real_lens_traced` M_x / M_y indices** transposed
+  (`_lens_traced.py:1789-1792`).
+* **Freeform terms** in thin-element `apply_real_lens` emit a
+  `RuntimeWarning` instead of silently dropping (the ray-traced /
+  Maslov paths already honoured freeform through the Surface
+  dataclass's `freeform` field).
+* **`stop_index != 0`** in `apply_real_lens_traced` and
+  `apply_real_lens_maslov` warn instead of silently ignoring.
+* **NaN sentinel leak** from aspheric clamp masked to 0 before
+  `exp(-i·k·NaN)`.
+* **Coating `'avg'` mode** stores `eta_s`, `eta_p` separately per
+  polarization.
+* **`apply_waveplate` docstring** synced to match the actual
+  implementation `R(θ)·diag(1,exp(-iφ))·R(-θ)`.
+* **`spot_diagram` / `trace_summary` Airy radius** now includes
+  `|f_eff|` factor; pre-v4.11.2 was a half-angle in radians
+  mis-labelled as a length.
+* **`bundles.py` conversion helpers** rewritten to use the actual
+  `RayBundle` attributes (`x, y, z, L, M, N`); pre-v4.11.2 called
+  `.positions` / `.directions` which don't exist.
+* **`find_best_focus` NaN guard**, `monte_carlo_tolerancing_linearized`
+  clamp `a_k >= 0` (Marechal invariant), `compute_psf` non-square
+  pupil clear error, `apply_detector` non-integer pixel ratio area
+  scale correction, `polychromatic_strehl` / `polychromatic_psf`
+  honour `get_default_complex_dtype()`.
+* **codegen** `op.GLASS_REGISTRY` → `la.GLASS_REGISTRY`; system-list
+  style now emits `aperture_diameter` for mirrors.
+* **`load_material`** emits a `RuntimeWarning` when a saved
+  dispersion field is being dropped on load.
+* **`Source.*` classmethods** propagate `**factory_kwargs` to the
+  underlying create_* factories so `dy=`, `dtype=`, `normalize=`,
+  etc. work.
+
+### Test-suite + harness improvements
+
+* `tests/unit/test_audit_fixes_v4_11_2_*.py` — ~55 new pinning tests
+  across raytrace, IO, RW+lens, HFPI+HF+asymptotic, analysis,
+  and Track A (C-LR-1 / GBD / S-LAH).
+* Strengthened three v4.11.1 pinning tests that passed for the wrong
+  reason: MultiWavelengthMerit chromatic semantics (was warning-
+  absence only), Subaperture actual call (was import-only),
+  Tilted-ASM bandlimit (tilt too small to trigger pre-fix path).
+* New `RS-vs-ASM phase pinning test` at z > 0 with `bandlimit=True`
+  -- the single biggest test-coverage gap per the round-3 audit.
+* `validation/_harness.py:33` `warnings.simplefilter('ignore')`
+  scoped to `DeprecationWarning`, `PendingDeprecationWarning`,
+  `ResourceWarning`, `ImportWarning` only -- `RuntimeWarning`,
+  `UserWarning`, numerical/overflow warnings now propagate.
+* `validation/.../t_dammann_grating`, `t_prescription_hf_asymptotic`,
+  `t_subaperture_asymptotic_singlet` had bare `except: return True,
+  'skipped'` patterns that hid genuine failures.  Removed; tests
+  now propagate real exceptions and the Dammann test was rewritten
+  to current API.
+
+### Test results
+
+* All 243 unit tests pass.
+* Full `validation/run_all.py` (34 files, 314 tests).
+* Pre-existing failure in `validation/elements/test_elements.py`'s
+  "Mirror: f = R/2 for concave mirror" test resolved by switching
+  the test to Welford signed-R convention (the test was pinning the
+  legacy bug); the test now correctly asserts `EFL = +|R|/2` for a
+  signed-R = -100 mm concave mirror.
+
+### Documented limitations (carried over from v4.11.1)
+
+* `_transfer_jax` paraxial form retained (math-correct form
+  NaN-poisons `jax.grad` through `fit_canonical_polynomials_jax`).
+* `aberration_tensor` axial-multi-p ℓ=0 saddle-point degeneracy
+  emits a `RuntimeWarning`.
+
 ## [4.11.1] — 2026-05-16
 
 **Round-2 verification follow-up: close the residuals from

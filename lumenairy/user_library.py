@@ -157,6 +157,22 @@ def load_material(name: str) -> Dict[str, Any]:
         GLASS_REGISTRY[mat_name] = (data['shelf'], data['book'], data['page'])
 
     elif data['type'] == 'fixed':
+        # 4.11.2: ``save_material`` accepts a ``dispersion`` dict and
+        # writes it to JSON, but ``register_fixed_glass`` only honours
+        # the scalar ``n``.  Surface the silent drop so users do not
+        # assume their dispersion data round-trips.  Round-3 audit
+        # (AUDIT_ROUND3_2026_05_16.md, IO section).
+        if data.get('dispersion'):
+            import warnings as _w
+            _w.warn(
+                f"load_material({mat_name!r}): saved file includes a "
+                f"'dispersion' field but register_fixed_glass only "
+                f"honours the scalar ``n``; dispersion data is "
+                f"dropped on load.  Either re-save with explicit "
+                f"shelf/book/page (catalog dispatch via "
+                f"refractiveindex.info) or evaluate the dispersion "
+                f"externally and call register_fixed_glass per "
+                f"wavelength.", RuntimeWarning, stacklevel=2)
         register_fixed_glass(mat_name, data['n'])
 
     return data

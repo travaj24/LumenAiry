@@ -170,6 +170,42 @@ def apply_real_lens_maslov(
     if not surfaces:
         raise ValueError("Lens prescription has no surfaces.")
 
+    # 4.11.2: warn if a non-entrance or decentered stop is configured.
+    # ``apply_real_lens`` honours ``stop_index`` and per-surface
+    # ``decenter`` on the stop; the Maslov path traces a Chebyshev-node
+    # ray bundle launched on a centred (h, p) grid scaled by the
+    # entrance aperture, so a non-zero stop_index is silently moved to
+    # the entrance.
+    _stop_index = lens_prescription.get('stop_index')
+    if _stop_index is not None and int(_stop_index) != 0:
+        import warnings
+        warnings.warn(
+            f"apply_real_lens_maslov: prescription specifies "
+            f"stop_index={_stop_index}, but the Maslov ray bundle is "
+            "launched on a centred (h, p) Chebyshev grid scaled by the "
+            "entrance aperture; the aperture stop is effectively "
+            "applied at the entrance (index 0).  For physically-correct "
+            "stop behaviour on a non-entrance stop, use apply_real_lens.",
+            RuntimeWarning, stacklevel=2,
+        )
+    else:
+        _surfs_chk = lens_prescription.get('surfaces') or []
+        if _surfs_chk:
+            _stop_surf_idx = int(_stop_index) if _stop_index is not None else 0
+            if 0 <= _stop_surf_idx < len(_surfs_chk):
+                _dec = _surfs_chk[_stop_surf_idx].get('decenter') or (0.0, 0.0)
+                if _dec[0] != 0.0 or _dec[1] != 0.0:
+                    import warnings
+                    warnings.warn(
+                        f"apply_real_lens_maslov: stop surface "
+                        f"{_stop_surf_idx} has decenter={_dec}; the "
+                        "Maslov ray bundle is launched on a centred "
+                        "(h, p) grid and will not see the off-axis stop "
+                        "correctly.  Use apply_real_lens for "
+                        "decentered-stop systems.",
+                        RuntimeWarning, stacklevel=2,
+                    )
+
     aperture_m = lens_prescription.get('aperture_diameter', None)
     if aperture_m is None:
         sds = [s.semi_diameter for s in surfaces if np.isfinite(s.semi_diameter)]

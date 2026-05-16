@@ -84,33 +84,52 @@ H.run('Zernike aberration: applies phase variation',
 
 
 def t_dammann_grating():
-    try:
-        phase = la.makedammann2d(
-            periodx=100, periody=100, waveln_um=1.31,
-            wavsamp=0.5, phaselevels=4, phasesteps=2,
-            orders=(3, 3), itr=100, seed=42, verbose=False)
-        return phase is not None and phase.shape[0] > 0, \
-            f'Dammann shape = {phase.shape}'
-    except Exception as e:
-        return True, f'Dammann not fully configured (skip): {e}'
+    # 4.11.2 (audit round-3 test-quality #6): the previous handler
+    # caught every Exception and returned ``True``, papering over real
+    # configuration / numerics failures.  In particular it hid that
+    # the test was calling the pre-4.x API (``waveln_um``, ``orders``,
+    # ``verbose``) which no longer exists on ``makedammann2d``.  Use
+    # the current API (``waveln`` in microns, ``diforders`` as a 2-D
+    # target array, ``plot=False``) and let any exception propagate.
+    target_orders = np.ones((3, 3))
+    phase, _, _ = la.makedammann2d(
+        periodx=100, periody=100, waveln=1.31,
+        wavsamp=0.5, phaselevels=4, phasesteps=2,
+        diforders=target_orders, itr=20, seed=42, plot=False)
+    return phase is not None and phase.shape[0] > 0, \
+        f'Dammann shape = {phase.shape}'
 
 
 H.run('Dammann grating: produces phase array', t_dammann_grating)
 
 
 def t_curved_mirror_focus():
-    R = 100e-3; lam = 1.31e-6
+    # 4.11.2 (audit C-RT-3 follow-up): the sequential-trace Surface
+    # dataclass uses the Welford signed-R convention -- concave
+    # mirror in the *incoming-light* frame has R < 0; EFL = -R/2 =
+    # +|R|/2 (positive, focusing).  This now matches the convention
+    # used inside ``seidel_coefficients`` (which was pre-existing)
+    # and the post-Track-B ``system_abcd`` (which was reconciled in
+    # v4.11.2).  Note that ``apply_mirror`` -- a separate function
+    # that operates on a wave field directly -- uses the OPPOSITE
+    # magnitude convention ("R > 0 = concave", documented in its
+    # own docstring); apply_mirror's wave-side convention is not
+    # changed in v4.11.2 because it's been the user-facing form for
+    # many releases.
+    R = -100e-3  # signed: concave mirror in Welford convention
+    lam = 1.31e-6
     surfs = [Surface(radius=R, conic=0.0, semi_diameter=10e-3,
                      glass_before='air', glass_after='air',
                      is_mirror=True, thickness=0)]
     _, efl, _, _ = system_abcd(surfs, lam)
-    expected_f = R / 2
+    expected_f = -R / 2  # Welford: concave (R<0) -> EFL = +|R|/2 > 0
     err_pct = abs(efl - expected_f) / expected_f * 100
     return err_pct < 1, \
         f'mirror EFL={efl*1e3:.3f}mm, expected={expected_f*1e3:.3f}mm'
 
 
-H.run('Mirror: f = R/2 for concave mirror', t_curved_mirror_focus)
+H.run('Mirror: Welford signed-R, f = -R/2 for concave (R<0)',
+      t_curved_mirror_focus)
 
 
 def t_apply_mirror_convergence():

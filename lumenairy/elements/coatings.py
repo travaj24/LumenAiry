@@ -93,6 +93,19 @@ def coating_reflectance(
 
     for iw, lam in enumerate(wavelengths):
         rs, ts = [], []
+        # 4.11.2: save the substrate / ambient admittances per
+        # polarization so the 'avg' branch below uses the correct s-pol
+        # admittance for T_s and the correct p-pol admittance for T_p.
+        # Pre-4.11.2 the loop overwrote ``eta_sub`` / ``eta_amb`` and
+        # used the LAST iteration's value (always p-pol when
+        # polarization='avg', since pols = ['s','p']) for BOTH T_s and
+        # T_p, which made the averaged transmission silently wrong at
+        # non-normal incidence (eta_s and eta_p differ by cos_t² for
+        # most coatings).  At normal incidence the bug is invisible
+        # (eta_s == eta_p), so the regression test pins the equality
+        # at 0 deg as well as the asymmetry-fix at oblique AOI.
+        eta_sub_by_pol = {}
+        eta_amb_by_pol = {}
         for pol in pols:
             M = np.eye(2, dtype=np.complex128)
             theta_prev = angle
@@ -141,6 +154,8 @@ def coating_reflectance(
             else:
                 eta_sub = complex(n_substrate) / cos_sub
                 eta_amb = complex(n_ambient) / np.cos(angle)
+            eta_sub_by_pol[pol] = eta_sub
+            eta_amb_by_pol[pol] = eta_amb
             # Reflection coefficient
             # 4.10: dropped the dead `num` / `den` lines (kept the
             # correct `B`, `C`, `r` formulas).  Documented sign
@@ -162,12 +177,17 @@ def coating_reflectance(
             phase_val = 0.5 * (np.angle(rs[0]) + np.angle(rs[1]))
             # Power transmission via the amplitude coefficient (Macleod
             # eq. 2.99): T_s = Re(eta_sub) / Re(eta_amb) * |t|^2.
-            T_s = float((eta_sub.real / max(eta_amb.real, 1e-30))
-                         * abs(ts[0]) ** 2) if hasattr(eta_sub, 'real') \
-                  else float((eta_sub / eta_amb) * abs(ts[0]) ** 2)
-            T_p = float((eta_sub.real / max(eta_amb.real, 1e-30))
-                         * abs(ts[1]) ** 2) if hasattr(eta_sub, 'real') \
-                  else float((eta_sub / eta_amb) * abs(ts[1]) ** 2)
+            # 4.11.2: use the per-polarization admittances saved above.
+            _eta_sub_s = eta_sub_by_pol['s']
+            _eta_amb_s = eta_amb_by_pol['s']
+            _eta_sub_p = eta_sub_by_pol['p']
+            _eta_amb_p = eta_amb_by_pol['p']
+            T_s = float((_eta_sub_s.real / max(_eta_amb_s.real, 1e-30))
+                         * abs(ts[0]) ** 2) if hasattr(_eta_sub_s, 'real') \
+                  else float((_eta_sub_s / _eta_amb_s) * abs(ts[0]) ** 2)
+            T_p = float((_eta_sub_p.real / max(_eta_amb_p.real, 1e-30))
+                         * abs(ts[1]) ** 2) if hasattr(_eta_sub_p, 'real') \
+                  else float((_eta_sub_p / _eta_amb_p) * abs(ts[1]) ** 2)
             T_val = 0.5 * (T_s + T_p)
         else:
             R_val = abs(rs[0])**2
