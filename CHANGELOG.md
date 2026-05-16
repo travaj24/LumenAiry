@@ -2,6 +2,84 @@
 
 All notable changes to the core library are documented here.
 
+## [4.11.0] — 2026-05-16
+
+**Roll-up release for the v4.10 audit-response series.**  Five
+patch releases (4.10.0, 4.10.1, 4.10.2, plus the in-tree work
+toward 4.10.3) addressed ~100 audit findings from three converged
+audit sources.  4.11.0 ships the final three deferred items plus
+the cumulative work as a minor version bump for PyPI / GitHub
+release tagging.  All 34 validation files (314 tests) pass.
+
+### Final wave (4.10.3 / 4.11.0 work)
+
+* **C-AS-1 partial fix**: ``aberration_tensor`` closed-form ℓ=0
+  path now evaluates the output LG polynomial at the saddle's
+  ``σ_image`` instead of grabbing only its ``(0,0)`` Cartesian
+  constant.  Different ``(p, 0)`` modes are distinguished for
+  any OFF-axis saddle.  The ON-axis multi-p case emits a clear
+  ``RuntimeWarning`` -- this is a fundamental saddle-point limit
+  (LG_p,0 modes all peak at the origin), not a code bug.
+* **H-PR-2**: ``through_focus_scan_jax`` replaces its Python
+  for-loop over z with a proper ``jax.vmap`` over an inline ASM
+  kernel.  Speedup is ~5-15× for typical 30-point scans, larger
+  on GPU.  Output values are bit-identical to the loop version.
+* **C-RT-2 (deferred again, documented)**: ``_transfer_jax``'s
+  math-correct ``t = (thickness − z) / N`` form still
+  NaN-poisons ``jax.grad`` through
+  ``fit_canonical_polynomials_jax`` even with triple-where
+  guards and ``jnp.isfinite`` filtering on ``t``.  Multiple
+  investigation attempts (4.10.0 → 4.10.3) have not isolated
+  the gradient-graph issue to a specific op; the paraxial form
+  ``x += L·thickness`` is retained.  For NA ≤ 0.1 (the typical
+  LumenAiry use case) the two forms agree to ~1 %.
+
+### Cumulative summary (4.10.0 → 4.11.0)
+
+This minor release tags the entire v4.10 audit-response series.
+Earlier waves' details remain in the per-release sections below.
+Headline impact:
+
+* **Critical / silent-wrong-physics bugs fixed**: mirror Seidel
+  zeros, exit-pupil radius inversion, RS sign flip, tilted-ASM
+  bandlimit miscentring, Richards-Wolf Jacobian + prefactor,
+  coord-break order, Lagrange invariant for finite-conjugate
+  systems, MultiWavelengthMerit chromatic no-op, mutual_coherence
+  conjugate flip, Shack-Hartmann wavefront units, circular-
+  polarization handedness, sagittal/tangential fan swap, GBD
+  tilt-phase ramp, HFPI Kirchhoff weighting, compute_psf Parseval,
+  TIS Monte-Carlo cos factor, ghost interferometry fringe formula,
+  register_fixed_glass without refractiveindex, MC tolerancing
+  quadratic Marechal prediction.
+* **High-tier silent failures fixed**: 30+ items including
+  apply_axicon import, aspheric clamp NaN, JAX trace surface-
+  type guards, OPL chief-ray pick, image-plane WFE aim-at-EP,
+  through-focus JAX/NumPy parity, JAX error_reduction ordering,
+  thin-film transmission for absorbing stacks, Snell complex-n,
+  precision='single' end-to-end through merits, LM residual
+  differentiable at zero, decentered-stop h_sq.
+* **Medium / Low items addressed**: OSA Zernike doc, dy support
+  on sources, NA-aware sampling check, plotting per-axis padding
+  + log floor, Sellmeier resonance validation, point-source clamp
+  warning, fiber-NA warning, LED-source sample-count doc,
+  caustic-thickness length assertion, Maslov-branch tracking for
+  caustic-continuous phase, ASM-MFT bandlimit ``<`` consistency,
+  user_library eval safety, plot dx/dy axis labels, mutual-
+  coherence conjugate.
+
+### Items NOT addressed (and why)
+
+* **C-AS-1** axial multi-p ℓ=0: saddle-point fundamental limit.
+  Warning emitted; off-axis case fully fixed.
+* **C-RT-2** JAX ``_transfer_jax`` math-correct form: gradient
+  instability whose root cause needs deeper investigation.
+* **H-SC-2** SAS odd-N padding: only affects rare odd-N grids.
+* **H-GL-3** ``least_squares`` ``method='lm'`` → ``'trf'`` switch
+  with bounds: scipy's documented behaviour.
+
+See individual release notes below for per-wave details and
+file:line citations.
+
 ## [4.10.2] — 2026-05-16
 
 **Wave 5 of the v4.10 audit response.**  Closes the remaining

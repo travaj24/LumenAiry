@@ -10,6 +10,75 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.11.0
+
+**Multi-agent physics audit response — full series.**  4.11.0 closes
+the converged findings from three independent audit runs (one
+external 8-agent audit, two internal multi-agent audits) of the
+v4.9.0 codebase.  Across five patch releases (4.10.0 → 4.10.1 →
+4.10.2 → 4.10.3 → 4.11.0) **~100 audit findings** were addressed.
+All 34 validation files (314 tests) pass.
+
+### Highest-impact fixes
+
+* **Mirror Seidel coefficients no longer zero.**  Every reflective /
+  catadioptric system silently reported "diffraction-limited"
+  Seidel sums pre-4.11 because the mirror branch in
+  ``seidel_coefficients`` updated ray heights but never wrote
+  S1..S5.  Fixed via Welford form with n2 = -n1.
+* **Exit-pupil radius** uses transverse magnification 1/D (was D,
+  the angular magnification).  Off by 1/D² for non-trivial post-
+  stop systems.
+* **Tilted-ASM band-limit** now centred on the original-frame
+  spectrum FX + fx0.  Pre-4.11 the default ``bandlimit=True``
+  zeroed the propagated field for any non-trivial tilt.
+* **Rayleigh-Sommerfeld kernel sign** flipped to the Goodman 3-43
+  form (1/r − ik).  Coherent superposition of RS with ASM /
+  Fresnel was 180° out of phase pre-4.11.
+* **Richards-Wolf** adds the missing 1/√(cos θ) Jacobian and the
+  -ikf/(2π)·exp(-ikf) prefactor.  High-NA focal-plane amplitudes
+  are now physical.
+* **Coord-break order** matches Zemax PARM 6 default (decenter-
+  then-tilt).  Imported folded designs now get the correct frame
+  transform.
+* **``MultiWavelengthMerit``** actually re-propagates the wave leg
+  per wavelength (was a no-op chromatic constraint pre-4.11).
+* **``create_circular_polarized('right')``** returns the RHC Jones
+  vector (1, -i)/sqrt(2) under the library's exp(-i omega t)
+  convention.
+* **JAX trace correctness floor**: sign(R) on sag derivatives, TIR
+  double-where for finite ``jax.grad``, ``trace_jax`` raises on
+  unsupported surface types instead of treating them as flat
+  refractive.
+* **HFPI** Kirchhoff weighting now includes the 1/(i*lambda)
+  prefactor and solid-angle Monte-Carlo weight.  Absolute
+  amplitudes were unphysical by ~10^6 pre-4.11.
+* **Shack-Hartmann** drops the bogus wavelength/(2π) factor on
+  wavefronts; reference-centroid calibration pass added.
+* **``through_focus_scan_jax``** now uses ``jax.vmap`` (was a
+  Python for-loop) -- ~5-15x speedup, more on GPU.
+
+### New / improved API
+
+* ``ChromaticFocalShiftMerit(wavelengths=[...])`` is self-contained.
+* ``check_sampling_conditions(NA=...)`` for relaxed Nyquist.
+* ``register_fixed_glass`` works without ``refractiveindex`` installed.
+* Phase-retrieval functions accept ``seed=`` and ``dtype=``.
+* Source factories (``create_top_hat_beam``, ``create_annular_beam``,
+  ``create_bessel_beam``) accept ``dy`` for anamorphic grids.
+* ``apply_real_lens`` respects decentered stop apertures.
+
+### Documented limitations (carried forward)
+
+* ``_transfer_jax`` uses the paraxial form ``x += L·thickness``.
+  The math-correct ``t = (thickness − z)/N`` introduces a gradient
+  instability through ``fit_canonical_polynomials_jax`` whose root
+  cause needs deeper investigation.  Paraxial form is accurate to
+  ~1 % for NA ≤ 0.1.
+
+See [CHANGELOG.md](CHANGELOG.md) for the full per-release fix list
+and the explicit "not addressed" items with rationale.
+
 ## What's new in 4.9.0
 
 **External-audit response + scoped runtime-environment manager.**

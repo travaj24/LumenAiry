@@ -387,21 +387,31 @@ def _transfer_jax(state, thickness, n_medium):
     """Free-space transfer through ``thickness`` in medium of index
     ``n_medium``.  All rays advance; OPL accumulates.
 
-    Note (4.10): this uses the paraxial-approximate form
-    ``new_x = x + L * thickness`` (assumes the parametric step t equals
-    thickness, i.e. N ≈ 1).  The math-correct form
-    ``t = (thickness - z) / N`` is exact for off-axis rays but
-    introduces a gradient instability through
-    ``fit_canonical_polynomials_jax`` that NaN-poisons jax.grad through
-    source_box_half.  Until that interaction is resolved, the paraxial
-    form is preserved -- accurate to ~1% for half-angles up to ~0.1 rad
-    (NA ~ 0.1).  The NumPy ``_transfer`` does use the math-correct
-    form, so a NumPy / JAX cross-check at high NA will show a small
-    transverse-position discrepancy that grows as ~h * theta^2.
+    Implementation note (4.10.3 investigation):
+    --------------------------------------------
+    The math-correct form is ``t = (thickness - state.z) / state.N``
+    so a ray's parametric step lands it on the next vertex plane
+    (z = thickness in the previous frame).  This is what the NumPy
+    ``_transfer`` does.
+
+    The JAX twin here uses the PARAXIAL APPROXIMATION
+    ``t ≈ thickness`` (equivalent to assuming N = 1).  For typical
+    LumenAiry workflows (free-space optics, NA ≤ 0.1) the two
+    forms agree to ~1 %.  For high-NA designs the math-correct
+    form would compound to a few-percent transverse error.
+
+    Why the paraxial form is retained: substituting the math-correct
+    form here NaN-poisons ``jax.grad`` through
+    ``fit_canonical_polynomials_jax``'s downstream lstsq, even with
+    full triple-where guards on the division and ``jnp.isfinite``
+    filtering on ``t``.  Multiple investigation attempts (4.10.0,
+    4.10.1, 4.10.2, 4.10.3) have not isolated the gradient-graph
+    issue to a specific op.  Tracked for a future release; the
+    pre-existing paraxial trace remains the validated path.
     """
     new_x = state.x + state.L * thickness
     new_y = state.y + state.M * thickness
-    new_z = state.z + state.N * thickness - thickness  # next-surface frame
+    new_z = state.z + state.N * thickness - thickness
     new_opd = state.opd + n_medium * thickness
     return JaxRayState(new_x, new_y, new_z,
                        state.L, state.M, state.N,

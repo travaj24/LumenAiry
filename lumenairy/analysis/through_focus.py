@@ -853,19 +853,47 @@ def through_focus_scan_jax(
     z_arr = np.asarray(z_values, dtype=np.float64)
     n_z = z_arr.size
 
-    # angular_spectrum_propagate has Python branches on z (== 0, != 0)
-    # that prevent JIT/vmap with a tracer z.  We pass a Python-float z
-    # but a JAX-array E_in so the heavy FFT work runs through the JAX
-    # backend (cuFFT on GPU, jnp.fft on CPU).  Per-call tracing cost
-    # is negligible because the transfer-function cache in
-    # propagation.py is keyed on (z, wavelength, dx, shape).
+    # 4.10.3: proper jax.vmap over z instead of the Python for-loop.
+    # angular_spectrum_propagate has a Python branch on z so it can't
+    # be vmapped directly; replicate the ASM math inline with all
+    # branches lifted out of the per-z code, then vmap.
+    #
+    # Pre-compute the parts that don't depend on z:
+    #   E_fft = FFT(E_in)
+    #   kx, ky, kz_sq (and the band-limit mask, evaluated at each z
+    #   so it stays accurate -- bandlimit depends on z).
     E_jax = jnp.asarray(E_exit)
-    fields_list = [
-        angular_spectrum_propagate(
-            E_jax, float(z), wavelength, dx, bandlimit=bandlimit)
-        for z in z_arr
-    ]
-    fields = jnp.stack(fields_list, axis=0)   # (n_z, Ny, Nx)
+    Ny, Nx = E_jax.shape[-2:]
+    k = 2.0 * np.pi / wavelength
+    fx = (jnp.arange(Nx, dtype=jnp.float64) - Nx / 2) / (Nx * dx)
+    fy = (jnp.arange(Ny, dtype=jnp.float64) - Ny / 2) / (Ny * dx)
+    FX, FY = jnp.meshgrid(fx, fy)
+    kx = 2.0 * jnp.pi * FX
+    ky = 2.0 * jnp.pi * FY
+    kz_sq = k * k - kx * kx - ky * ky
+    kz_safe = jnp.sqrt(jnp.maximum(kz_sq, 0.0))
+    propagating = kz_sq > 0
+    E_fft_shifted = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_jax)))
+
+    def _asm_one_z(z):
+        H = jnp.exp(1j * kz_safe * z)
+        H = jnp.where(propagating, H, 0.0)
+        if bandlimit:
+            Lx = Nx * dx
+            Ly = Ny * dx
+            z_safe = jnp.where(jnp.abs(z) > 1e-30, z, 1e-30)
+            fx_max = Lx / (2.0 * wavelength * jnp.abs(z_safe))
+            fy_max = Ly / (2.0 * wavelength * jnp.abs(z_safe))
+            H = jnp.where(
+                (jnp.abs(fx)[None, :] < fx_max)
+                & (jnp.abs(fy)[:, None] < fy_max),
+                H, 0.0)
+        E_out = jnp.fft.fftshift(
+            jnp.fft.ifft2(jnp.fft.ifftshift(E_fft_shifted * H)))
+        return E_out
+
+    z_jax = jnp.asarray(z_arr)
+    fields = jax.vmap(_asm_one_z)(z_jax)   # (n_z, Ny, Nx)
 
     # Per-plane metrics.  Bring back to NumPy at the metric boundary
     # since the metrics package isn't JAX-vmapped.

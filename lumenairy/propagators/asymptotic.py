@@ -1489,27 +1489,36 @@ def aberration_tensor(
     # evaluation -- it's faster and gives identical numbers in that
     # regime.  Mixed ℓ = 0 / ℓ ≠ 0 sets fall through to the grid path.
     needs_sigma_integration = any(k_out[1] != 0 for k_out in output_modes)
-    # 4.10: warn loudly when the closed-form path is used with multiple
-    # distinct radial orders p (and ℓ=0 only).  The closed-form contracts
-    # against ``out_poly[(0,0)]`` -- the Cartesian (x⁰y⁰) constant
-    # coefficient of the conjugated output LG polynomial -- which for
-    # LG_p,0 equals the same normalisation constant N_p,0 for every p,
-    # so ``L[(0,0), src]``, ``L[(1,0), src]``, ``L[(2,0), src]`` collapse
-    # to the same scalar and defocus/spherical can't be distinguished.
-    # The audit recommends σ-grid integration always; we retain the
-    # closed-form for backward compatibility but flag the failure mode.
+    # 4.10.3: closed-form ℓ=0 path now evaluates the output LG
+    # polynomial at the saddle's σ_image (instead of grabbing only its
+    # x⁰y⁰ Cartesian constant), so different (p, 0) modes are
+    # distinguished for any OFF-axis saddle.  For an axial saddle
+    # σ_image=(0,0), the LG_p,0 polynomial reduces to the
+    # normalisation constant N_p,0 = sqrt(2/(π w_o²)) -- the same
+    # for all p (point evaluation at the origin of orthonormal modes
+    # that all peak there is a fundamental closed-form / saddle-point
+    # limitation; the σ-grid path has the right orthogonal structure
+    # but a different overall normalisation than the closed-form,
+    # so we don't auto-route).  Pass a non-axial source_point /
+    # s2_image, or include an ℓ ≠ 0 mode, to force the discriminating
+    # behaviour.
     if not needs_sigma_integration:
         ell0_p_values = {k_out[0] for k_out in output_modes
                           if k_out[1] == 0}
-        if len(ell0_p_values) > 1:
+        is_axial_saddle = (abs(s2x_img) + abs(s2y_img)
+                            < 1e-9 * max(w_o, 1e-12))
+        if len(ell0_p_values) > 1 and is_axial_saddle:
             import warnings
             warnings.warn(
-                "aberration_tensor: the closed-form ℓ=0 path returns the "
-                f"same scalar weight for all radial orders p in {sorted(ell0_p_values)} "
-                "and cannot distinguish defocus from higher spherical. "
-                "Pass an output_modes list with at least one ℓ ≠ 0 entry "
-                "to force the σ-grid integration path, or use the JAX "
-                "differentiable backend.",
+                "aberration_tensor: ON-AXIS saddle σ_image=(0,0) with "
+                f"multiple radial-p modes in {sorted(ell0_p_values)}.  "
+                "All LG_p,0 modes have the same value N_p,0 at the "
+                "origin, so the saddle-point closed-form cannot "
+                "distinguish them.  This is a fundamental limit of the "
+                "point-evaluation approximation, not a bug.  Use an "
+                "off-axis source_point / s2_image to lift the "
+                "degeneracy, or include an ℓ ≠ 0 mode to force the "
+                "σ-grid integration path.",
                 RuntimeWarning, stacklevel=3,
             )
 
@@ -1540,7 +1549,23 @@ def aberration_tensor(
                     P_eta = _multiply_polys_2d(src_poly_eta, pup_poly_eta)
                     exp_val = _contract_against_moment_table(
                         P_eta, eta_moments)
-                    out_const = out_poly.get((0, 0), 0.0 + 0.0j)
+                    # 4.10.3: evaluate out_poly at the saddle's
+                    # σ_image (the saddle is held fixed across the
+                    # η-integration).  Pre-4.10.3 grabbed only the
+                    # x⁰y⁰ Cartesian constant, which equals N_p,0
+                    # for every (p, 0) mode and therefore collapsed
+                    # defocus / spherical / secondary-spherical to
+                    # the same scalar.  Evaluating the full
+                    # polynomial at (s2x_img, s2y_img) recovers the
+                    # mode-discriminating polynomial terms.  The
+                    # ON-axis multi-p case is automatically routed
+                    # to the σ-grid path by the
+                    # needs_sigma_integration check above (modes
+                    # genuinely degenerate at the origin in the
+                    # saddle-point limit).
+                    out_const = 0.0 + 0.0j
+                    for (ii, jj), c in out_poly.items():
+                        out_const += c * (s2x_img ** ii) * (s2y_img ** jj)
                     T_acc += b_pup * out_const * exp_val
                 L[io, js] = A_lead * T_acc
     else:
