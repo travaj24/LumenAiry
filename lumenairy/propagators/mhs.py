@@ -368,6 +368,19 @@ def asm_subdomain(
     propagation between two Huygens surfaces."""
     from .propagation import angular_spectrum_propagate
 
+    # 4.10: ASM preserves grid pitch, so in_surface.dx must equal
+    # out_surface.dx.  Pre-4.10 silently ignored a mismatch and
+    # labelled the output field with out_surface.dx while the data
+    # was actually at in_surface.dx, corrupting any downstream
+    # subdomain that consumed the labelled coordinates.
+    if abs(in_surface.dx - out_surface.dx) > 1e-12 * in_surface.dx:
+        raise ValueError(
+            f"asm_subdomain: in_surface.dx ({in_surface.dx:.6e} m) "
+            f"differs from out_surface.dx ({out_surface.dx:.6e} m); "
+            f"ASM preserves grid pitch.  Use "
+            f"`angular_spectrum_propagate_mft` for a grid-changing "
+            f"variant, or insert an intermediate resample step.")
+
     def _prop(E, in_s, out_s, **kw):
         return angular_spectrum_propagate(
             E, z=out_s.z - in_s.z,

@@ -573,8 +573,10 @@ def M2(
     # spatial AND angular centroids.
     Ex = np.gradient(E, dx, axis=1)
     Ey = np.gradient(E, dy, axis=0)
-    cross_x = float((Xs * (np.conj(E) * Ex).imag).sum() / P) - cx_k * 0.0
-    cross_y = float((Ys * (np.conj(E) * Ey).imag).sum() / P) - cy_k * 0.0
+    # 4.10: removed dead `- cx_k * 0.0` / `- cy_k * 0.0` placeholders
+    # (the centring is already provided by `Xs = X - cx`).
+    cross_x = float((Xs * (np.conj(E) * Ex).imag).sum() / P)
+    cross_y = float((Ys * (np.conj(E) * Ey).imag).sum() / P)
 
     M2x_sq = max(4.0 * (sx2 * skx2 - cross_x ** 2), 0.0)
     M2y_sq = max(4.0 * (sy2 * sky2 - cross_y ** 2), 0.0)
@@ -587,6 +589,7 @@ def check_sampling_conditions(
     z: float,
     wavelength: float,
     feature_size: Optional[float] = None,
+    NA: Optional[float] = None,
     verbose: bool = True,
 ) -> Dict[str, Any]:
     """
@@ -608,6 +611,13 @@ def check_sampling_conditions(
     feature_size : float, optional
         Minimum feature size to resolve [m].  Required for the Fresnel
         aliasing check; if omitted that check is skipped.
+    NA : float, optional
+        4.10: when provided, the Nyquist criterion is relaxed to
+        ``dx < wavelength / (2 * NA)``, which is what's actually needed
+        to resolve the propagating cone within the specified NA.
+        The strict ``dx < wavelength/2`` criterion (i.e. NA = 1) is
+        only required if you also intend to resolve the full
+        evanescent spectrum.
     verbose : bool, default True
         If ``True``, print a human-readable diagnostic summary.
 
@@ -615,7 +625,8 @@ def check_sampling_conditions(
     -------
     dict
         ``'nyquist_ok'`` : bool
-            Whether the Nyquist condition (dx < lambda / 2) is satisfied.
+            Whether the Nyquist condition is satisfied (NA-aware if NA
+            is supplied).
         ``'fresnel_ok'`` : bool
             Whether the Fresnel aliasing condition is satisfied.
         ``'d_min'`` : float
@@ -626,8 +637,14 @@ def check_sampling_conditions(
     """
     L = N * dx  # Grid extent
 
-    # Condition 1: Nyquist (dx < lambda/2)
-    nyquist_limit = wavelength / 2
+    # Condition 1: Nyquist.  Strict form dx < lambda/2 is for the full
+    # angular spectrum (including evanescents); for a beam with max
+    # NA, dx < lambda/(2*NA) is sufficient.  Default to the strict
+    # form (NA = 1) for backward compatibility.
+    if NA is None or NA <= 0:
+        nyquist_limit = wavelength / 2
+    else:
+        nyquist_limit = wavelength / (2.0 * float(NA))
     nyquist_ok = dx < nyquist_limit
 
     # Condition 2: Fresnel aliasing (d_min = 2*lambda*z/L)
@@ -780,13 +797,19 @@ def compute_psf(
         if float(psf.max()) > 0:
             psf = psf / psf.max()
     elif normalize == 'power':
-        # Rescale so the total integrated intensity matches the pupil's
-        # (Parseval's theorem says this should already be true modulo
-        # the DFT's N^2 factor; we make it exact).
-        pupil_power = float(xp.sum(xp.abs(pupil_padded) ** 2))
-        psf_power = float(xp.sum(psf))
-        if psf_power > 0 and pupil_power > 0:
-            psf = psf * (pupil_power / psf_power)
+        # 4.10: Parseval-correct rescaling.  Physical Parseval says
+        #   ∫ |E_pupil(x)|^2 dA_pupil  ==  ∫ |E_psf(x)|^2 dA_psf
+        # i.e. sum(|E_pupil|^2) * dx_pupil^2 == sum(|E_psf|^2) * dx_psf^2.
+        # Pre-4.10 enforced equal pixel-sum (sum(psf) == sum(|pupil|^2))
+        # which differs from physical Parseval by (dx_pupil/dx_psf)^2.
+        # Strehl ratios cancel the constant so that doesn't notice; but
+        # users asking for absolute photon flux (also a documented
+        # use-case) were getting the wrong answer.
+        dx_psf_local = wavelength * f / (N_psf * dx_pupil)
+        pupil_power_area = float(xp.sum(xp.abs(pupil_padded) ** 2)) * (dx_pupil ** 2)
+        psf_power_area = float(xp.sum(psf)) * (dx_psf_local ** 2)
+        if psf_power_area > 0 and pupil_power_area > 0:
+            psf = psf * (pupil_power_area / psf_power_area)
     elif normalize == 'none':
         pass
     else:

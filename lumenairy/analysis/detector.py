@@ -142,40 +142,71 @@ def apply_detector(
     # integrated signal.  For integer ratios this agrees with block-sum
     # reshape to machine precision; for non-integer ratios it
     # interpolates cleanly.
-    from scipy.ndimage import zoom as _zoom
-    # zoom_factor = (output_size / input_size) along each axis; we want
-    # output_size = n_pixels along both axes.
-    zoom_y = n_pixels / Ny
-    zoom_x = n_pixels / Nx
-    # order=1 (linear) is area-preserving when combined with the dx_field^2
-    # weighting below; higher orders can ring and produce negatives.
-    # grid_mode=True anchors cells to edges (matches the physical binning
-    # contract), and prefilter=False avoids a spline prefilter that would
-    # introduce negative-going lobes.
-    try:
-        resampled = _zoom(I_field, (zoom_y, zoom_x), order=1,
-                          mode='constant', cval=0.0,
-                          grid_mode=True, prefilter=False)
-    except TypeError:
-        # Older scipy without grid_mode; fall back to plain zoom which
-        # is still much better than the integer-truncation approach.
-        resampled = _zoom(I_field, (zoom_y, zoom_x), order=1,
-                          mode='constant', cval=0.0, prefilter=False)
-    # Guarantee exact output shape (zoom can be off-by-one on some
-    # scipy versions when the zoom factor isn't a clean integer ratio).
-    if resampled.shape != (n_pixels, n_pixels):
-        out = np.zeros((n_pixels, n_pixels), dtype=np.float64)
-        ny_c = min(n_pixels, resampled.shape[0])
-        nx_c = min(n_pixels, resampled.shape[1])
-        out[:ny_c, :nx_c] = resampled[:ny_c, :nx_c]
-        resampled = out
-    # The resampled array is intensity (per unit area on the detector
-    # grid); multiplying by the detector pixel area converts to a per-
-    # pixel integrated signal in the same (photons/m^2/s * m^2 * s) units
-    # the old code produced, i.e. photons.  Note: pixel_pitch^2 is used
-    # (not dx_field^2) because we integrate over the detector pixel, not
-    # the field sample.
-    image = resampled * pixel_pitch ** 2
+    # 4.10: proper area integration of the intensity field onto the
+    # detector grid.  Pre-4.10 used scipy.ndimage.zoom(order=1), which
+    # is BILINEAR INTERPOLATION (point-sample at the new pixel
+    # centers), NOT area integration.  Multiplying that by pixel_pitch^2
+    # is dimensionally pixel_pitch^2 * intensity, NOT
+    # integral_over_pixel(intensity) * dx_field^2 -- so photon
+    # conservation fails for non-integer pixel_pitch/dx_field ratios
+    # and shot-noise calibration loses meaning.
+    #
+    # For integer ratios use block-sum via np.add.reduceat.  For
+    # non-integer ratios first uniform-filter to anti-alias, then
+    # sample at the new pixel centers, scaled by pixel_pitch^2 so the
+    # integral over each detector pixel is correctly represented.
+    px_per_pixel_y = float(pixel_pitch / (Ny / n_pixels * dx_field)) if Ny > 0 else 0
+    # Simpler: per-detector-pixel area in field samples.
+    samples_per_pix_y = (Ny / n_pixels) if n_pixels > 0 else 1.0
+    samples_per_pix_x = (Nx / n_pixels) if n_pixels > 0 else 1.0
+    if (abs(samples_per_pix_y - round(samples_per_pix_y)) < 1e-9
+            and abs(samples_per_pix_x - round(samples_per_pix_x)) < 1e-9):
+        # Integer ratio: block-sum is exact area integration.
+        spy = int(round(samples_per_pix_y))
+        spx = int(round(samples_per_pix_x))
+        # Use np.add.reduceat for the 2-D block-sum.  Trim trailing
+        # samples that don't fit a full block, then reduceat with the
+        # block-start indices.
+        Ny_trim = (Ny // spy) * spy
+        Nx_trim = (Nx // spx) * spx
+        I_trim = I_field[:Ny_trim, :Nx_trim]
+        starts_y = np.arange(0, Ny_trim, spy)
+        starts_x = np.arange(0, Nx_trim, spx)
+        # add.reduceat sums each segment.
+        block = np.add.reduceat(
+            np.add.reduceat(I_trim, starts_y, axis=0),
+            starts_x, axis=1)
+        image = np.zeros((n_pixels, n_pixels), dtype=np.float64)
+        block_h = min(block.shape[0], n_pixels)
+        block_w = min(block.shape[1], n_pixels)
+        image[:block_h, :block_w] = block[:block_h, :block_w]
+        image = image * (dx_field ** 2)
+    else:
+        # Non-integer ratio: uniform-filter then point-sample at the
+        # detector pixel centers.  uniform_filter computes the mean
+        # over a (2*radius+1) window; multiply by window area to get
+        # the integral over the detector-pixel-sized neighbourhood,
+        # which approximates the area integral up to the
+        # uniform-filter's box-filter response.
+        from scipy.ndimage import uniform_filter as _ufilt
+        win_y = max(1, int(round(samples_per_pix_y)))
+        win_x = max(1, int(round(samples_per_pix_x)))
+        avg = _ufilt(I_field, size=(win_y, win_x), mode='constant', cval=0.0)
+        # Sample at detector-pixel centres in field-grid coords.
+        # Field-grid pixel j corresponds to physical x = (j - Nx/2) * dx_field.
+        # Detector pixel k centre is at  (k - n_pixels/2 + 0.5) * pixel_pitch.
+        # Convert detector centre to a field-grid float index:
+        k = np.arange(n_pixels)
+        det_centres_x = (k - n_pixels / 2 + 0.5) * pixel_pitch
+        det_centres_y = (k - n_pixels / 2 + 0.5) * pixel_pitch
+        idx_fx = det_centres_x / dx_field + Nx / 2 - 0.5
+        idx_fy = det_centres_y / dx_field + Ny / 2 - 0.5
+        ix0 = np.clip(np.floor(idx_fx).astype(int), 0, Nx - 1)
+        iy0 = np.clip(np.floor(idx_fy).astype(int), 0, Ny - 1)
+        IX, IY = np.meshgrid(ix0, iy0)
+        # Each detector-pixel value is the mean intensity in its
+        # local neighbourhood times the detector-pixel area.
+        image = avg[IY, IX] * (pixel_pitch ** 2)
 
     # Per-pixel QE map.  For a Bayer detector, the QE varies per-cell
     # on a 2x2 mosaic; otherwise QE is uniform.
@@ -318,10 +349,15 @@ def shack_hartmann(
         n_lenslets = max(1, int(extent / lenslet_pitch))
 
     k0 = 2 * np.pi / wavelength
-    slopes_x = np.zeros((n_lenslets, n_lenslets))
-    slopes_y = np.zeros((n_lenslets, n_lenslets))
-    centroids_x = np.zeros((n_lenslets, n_lenslets))
-    centroids_y = np.zeros((n_lenslets, n_lenslets))
+    # 4.10: initialise slopes / centroids to NaN.  Pre-4.10 left
+    # out-of-bounds sub-apertures at 0, which propagated through the
+    # cumulative-sum wavefront reconstruction as if real measurements.
+    # NaN sentinels make OOB lenslets visible and inert in downstream
+    # least-squares solvers (Hudgin / Southwell) via np.isfinite() masks.
+    slopes_x = np.full((n_lenslets, n_lenslets), np.nan)
+    slopes_y = np.full((n_lenslets, n_lenslets), np.nan)
+    centroids_x = np.full((n_lenslets, n_lenslets), np.nan)
+    centroids_y = np.full((n_lenslets, n_lenslets), np.nan)
 
     # Sub-aperture size in pixels
     sa_pixels = int(round(lenslet_pitch / dx))
@@ -331,6 +367,35 @@ def shack_hartmann(
             f'({2*dx*1e6:.1f} um); increase grid resolution.')
 
     x0 = N // 2 - (n_lenslets * sa_pixels) // 2
+
+    # 4.10: reference-centroid pass on a flat-wavefront calibration field.
+    # Pre-4.10 reported raw centroid / lenslet_focal as the slope,
+    # baking in any per-lenslet centring bias from sa_pixels rounding
+    # / x0 offset as a fake tilt in EVERY measurement.  Compute the
+    # zero-slope reference centroids once from a unit-amplitude flat
+    # field and subtract.
+    E_flat = np.ones_like(E)
+    ref_centroids_x = np.zeros((n_lenslets, n_lenslets))
+    ref_centroids_y = np.zeros((n_lenslets, n_lenslets))
+    for iy_r in range(n_lenslets):
+        for ix_r in range(n_lenslets):
+            r0r = x0 + iy_r * sa_pixels
+            c0r = x0 + ix_r * sa_pixels
+            if r0r < 0 or r0r + sa_pixels > N or c0r < 0 or c0r + sa_pixels > N:
+                continue
+            E_sub_r = E_flat[r0r:r0r + sa_pixels, c0r:c0r + sa_pixels].copy()
+            xsa_r = (np.arange(sa_pixels) - sa_pixels / 2) * dx
+            Xsa_r, Ysa_r = np.meshgrid(xsa_r, xsa_r)
+            E_sub_r = E_sub_r * np.exp(-1j * k0 * (Xsa_r ** 2 + Ysa_r ** 2)
+                                       / (2 * lenslet_focal))
+            E_focus_r = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E_sub_r)))
+            I_focus_r = np.abs(E_focus_r) ** 2
+            total_r = float(np.sum(I_focus_r))
+            if total_r > 0:
+                ref_centroids_x[iy_r, ix_r] = float(
+                    np.sum(Xsa_r * I_focus_r) / total_r)
+                ref_centroids_y[iy_r, ix_r] = float(
+                    np.sum(Ysa_r * I_focus_r) / total_r)
 
     for iy in range(n_lenslets):
         for ix in range(n_lenslets):
@@ -352,9 +417,11 @@ def shack_hartmann(
             total = I_focus.sum()
             if total < 1e-30:
                 continue
-            # Centroid
-            cx = float(np.sum(Xsa * I_focus) / total)
-            cy = float(np.sum(Ysa * I_focus) / total)
+            # Centroid (calibrated against the flat-wavefront reference
+            # so per-lenslet centring biases from sa_pixels rounding /
+            # x0 offset don't masquerade as tilts).
+            cx = float(np.sum(Xsa * I_focus) / total) - ref_centroids_x[iy, ix]
+            cy = float(np.sum(Ysa * I_focus) / total) - ref_centroids_y[iy, ix]
             centroids_x[iy, ix] = cx
             centroids_y[iy, ix] = cy
             # Slope = centroid / focal_length [rad]
@@ -375,8 +442,12 @@ def shack_hartmann(
     # corner so they share an origin, then average.  Documented as an
     # approximation; users wanting full 2-D recon should call
     # `slope_to_modal()` directly on the (slopes_x, slopes_y) pair.
-    wf_x = np.cumsum(slopes_x, axis=1) * lenslet_pitch
-    wf_y = np.cumsum(slopes_y, axis=0) * lenslet_pitch
+    # 4.10: NaN-mask OOB lenslets before cumsum so they zero-out
+    # rather than NaN-poison the entire row / column of the integrator.
+    sx_safe = np.where(np.isfinite(slopes_x), slopes_x, 0.0)
+    sy_safe = np.where(np.isfinite(slopes_y), slopes_y, 0.0)
+    wf_x = np.cumsum(sx_safe, axis=1) * lenslet_pitch
+    wf_y = np.cumsum(sy_safe, axis=0) * lenslet_pitch
     # Anchor to (0, 0) corner
     wf_x = wf_x - wf_x[0, 0]
     wf_y = wf_y - wf_y[0, 0]

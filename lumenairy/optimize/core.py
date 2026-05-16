@@ -2006,29 +2006,54 @@ class MultiFieldMerit(MeritTerm):
 # =========================================================================
 
 class MinThicknessMerit(MeritTerm):
-    """Penalise any glass thickness below a minimum.
+    """Penalise any GLASS thickness below a minimum.
 
-    ``contribution = weight * sum_surfaces max(0, min_t - t_i)^2``
+    ``contribution = weight * sum_glass_thicknesses max(0, min_t - t_i)^2``
+
+    4.10: only glass thicknesses count; air gaps are skipped.  Pre-4.10
+    iterated every entry in ``prescription['thicknesses']`` which
+    included air gaps that legitimately need to be small (e.g. cemented
+    interfaces, near-zero gap between two surfaces).
 
     Parameters
     ----------
     min_thickness : float
-        Minimum acceptable glass/air-gap thickness [m].
+        Minimum acceptable GLASS thickness [m].  Use
+        ``MinAirGapMerit`` (if added) for air-gap constraints.
     weight : float
+    include_air : bool, optional
+        Set True to restore the pre-4.10 behaviour and also penalise
+        small air gaps.  Default False.
     """
 
     needs_wave = False
     name = 'MinThickness'
 
     def __init__(self, min_thickness: float = 1e-3,
-                 weight: float = 1.0) -> None:
+                 weight: float = 1.0,
+                 include_air: bool = False) -> None:
         self.min_thickness = float(min_thickness)
         self.weight = float(weight)
+        self.include_air = bool(include_air)
 
     def evaluate(self, ctx: Any) -> float:
         thicknesses = ctx.prescription.get('thicknesses', [])
+        surfaces = ctx.prescription.get('surfaces', [])
         total = 0.0
-        for t in thicknesses:
+        for i, t in enumerate(thicknesses):
+            if not self.include_air:
+                # Determine if this thickness sits between two glass
+                # interfaces: use the glass_after of the i-th surface
+                # (which is the material the i-th thickness sits in).
+                glass = 'air'
+                if i < len(surfaces):
+                    surf = surfaces[i]
+                    glass = (surf.get('glass_after', 'air')
+                              if isinstance(surf, dict)
+                              else getattr(surf, 'glass_after', 'air'))
+                if isinstance(glass, str) and glass.lower() in (
+                        'air', 'vacuum', '', None):
+                    continue
             deficit = max(0.0, self.min_thickness - float(t))
             total = total + deficit * deficit
         return self.weight * total
@@ -2584,21 +2609,41 @@ def design_optimize(parameterization: Any,
     other_terms = [m for m in merit_terms if m not in jax_grad_terms]
 
     def _fd_grad_for(terms, x, eps=1e-7):
-        """Forward-FD gradient of sum(t.evaluate(ctx)) for the
-        selected ``terms`` only."""
+        """Central-FD gradient of sum(t.evaluate(ctx)) for the
+        selected ``terms`` only.
+
+        4.10: step sized by parameter magnitude with a per-variable
+        floor pulled from ``parameterization.scale_floor`` (or the
+        magnitude itself for an absent floor).  Pre-4.10 the floor
+        ``max(|x|, 1.0)`` pinned the step at 1e-7 for radii /
+        thicknesses (~mm = ~0.01) AND indices (~1.5) alike, so
+        relative perturbations varied by 100× across variable types
+        and the Hessian estimate L-BFGS-B builds was biased.  Central
+        differences (vs forward) also halve the truncation error.
+        """
         if not terms:
             return np.zeros_like(x, dtype=np.float64)
         x = np.asarray(x, dtype=np.float64)
-        _, ctx0 = evaluate(x)
-        f0 = sum(t.evaluate(ctx0) for t in terms)
+        # Per-variable scale floor: parameterization may expose it
+        # explicitly; otherwise use a more conservative magnitude-
+        # proportional floor that doesn't pin sub-mm radii / thicknesses
+        # to 1e-7.
+        scale_floor = getattr(parameterization, 'scale_floor', None)
+        if scale_floor is None:
+            scale_floor = np.full_like(x, 1e-6)  # 1 micron default for radii/thicknesses
+        else:
+            scale_floor = np.broadcast_to(
+                np.asarray(scale_floor, dtype=np.float64), x.shape)
         g = np.zeros_like(x)
         for i in range(x.size):
-            x_pert = x.copy()
-            step = eps * max(abs(x[i]), 1.0)
-            x_pert[i] = x[i] + step
-            _, ctx_p = evaluate(x_pert)
+            step = eps * max(abs(x[i]), float(scale_floor[i]))
+            xp_plus = x.copy(); xp_plus[i] = x[i] + step
+            xp_minus = x.copy(); xp_minus[i] = x[i] - step
+            _, ctx_p = evaluate(xp_plus)
+            _, ctx_m = evaluate(xp_minus)
             fp = sum(t.evaluate(ctx_p) for t in terms)
-            g[i] = (fp - f0) / step
+            fm = sum(t.evaluate(ctx_m) for t in terms)
+            g[i] = (fp - fm) / (2.0 * step)
         return g
 
     def _merit_jac_auto(x):

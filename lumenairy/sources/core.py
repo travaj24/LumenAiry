@@ -596,6 +596,21 @@ def create_point_source(
     X, Y = np.meshgrid(x, y)
     k0 = 2 * np.pi / wavelength
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2 + z0 ** 2)
+    # 4.10: warn when |z0| < dx -- the 1e-30 floor below produces a
+    # central pixel with |E| ≈ 1e30, dominating any subsequent power
+    # integral.  The Fresnel-curvature representation of a point
+    # source assumes |z0| >> dx; without that the result is
+    # essentially a numerical singularity, not a physical field.
+    if abs(z0) < dx:
+        import warnings
+        warnings.warn(
+            f"create_point_source: |z0| = {abs(z0):.3e} m is comparable "
+            f"to dx = {dx:.3e} m; the resulting central pixel will "
+            f"dominate the integrated power.  Use |z0| >> dx (typical: "
+            f"10*dx or more) for a meaningful Fresnel-curvature "
+            f"representation.",
+            RuntimeWarning, stacklevel=2,
+        )
     r = np.maximum(r, 1e-30)
     # Sign convention under exp(-i*omega*t):
     #   z0 < 0 (source before grid)   -> diverging, exp(+i*k*r)/r
@@ -779,8 +794,14 @@ def create_fiber_mode(
     mode_field_diameter : float [m]
     x0, y0 : float
     na : float
-        Fiber numerical aperture (informational; the near-field
-        profile is MFD-determined).
+        Fiber numerical aperture.  4.10: This argument is accepted
+        but ONLY USED to emit a warning when NA > 0.2 (where the LP01
+        mode departs significantly from a Gaussian and the
+        MFD-Gaussian approximation breaks down by ~10 % in mode
+        shape).  The near-field amplitude profile is determined
+        entirely by ``mode_field_diameter``.  For high-NA fibres
+        (PCF, multimode-near-cutoff) use a full LP01 mode solver
+        externally and pass the result via ``Source.from_array``.
 
     Notes
     -----
@@ -791,6 +812,15 @@ def create_fiber_mode(
     -------
     E, x, y : ndarray
     """
+    if na is not None and na > 0.2:
+        import warnings
+        warnings.warn(
+            f"create_fiber_mode: NA={na:.3f} > 0.2 -- the LP01 mode is "
+            "no longer well-approximated by a Gaussian at this NA "
+            "(mode-shape error ~10%+).  For high-NA fibres use a "
+            "full LP01 solver.",
+            RuntimeWarning, stacklevel=2,
+        )
     w0 = mode_field_diameter / 2.0
     sigma = w0 / np.sqrt(2)
     return create_gaussian_beam(N, dx, wavelength, sigma=sigma,
@@ -831,7 +861,11 @@ def create_led_source(
         Amplitude envelope (uniform inside disk, zero outside).
     source_angles : list of (float, float)
         Suggested source angles for partial-coherence integration,
-        covering the divergence cone with ~21 samples.
+        covering the divergence cone with 37 angle samples (1 axial
+        + 6 + 12 + 18 = 37 for ``n_ring = 3``).  4.10: docstring
+        previously said "~21 samples" which underspecified the actual
+        count; downstream callers allocating output arrays should size
+        them at 37, not 21.
     x, y : ndarray
     """
     E, x, y = create_top_hat_beam(N, dx, wavelength, diameter=diameter,

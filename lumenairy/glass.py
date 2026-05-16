@@ -493,12 +493,39 @@ def get_glass_index_complex(glass_name: str,
     n_real = get_glass_index(glass_name, wavelength)
 
     # Extinction is optional -- many catalog entries (esp. SCHOTT specs) omit it.
+    # 4.10: warn once per (glass, wavelength) when kappa is unavailable,
+    # so callers that requested complex-n (e.g. `absorption=True`) know
+    # they're getting the lossless approximation.
     try:
         kappa = _glass_cache[glass_name].get_extinction_coefficient(
             wavelength * 1e9, unit='nm')
         if kappa is None:
+            _warn_missing_kappa_once(glass_name, wavelength)
             kappa = 0.0
     except (AttributeError, NotImplementedError, KeyError, ValueError, TypeError):
+        _warn_missing_kappa_once(glass_name, wavelength)
         kappa = 0.0
 
     return complex(n_real, float(kappa))
+
+
+_kappa_warned: set = set()
+
+
+def _warn_missing_kappa_once(glass_name, wavelength):
+    """4.10 helper: emit a one-time warning per (glass, wavelength) when
+    extinction data is unavailable, so absorbing-glass requests don't
+    silently fall back to the lossless approximation."""
+    key = (str(glass_name), round(float(wavelength) * 1e9, 1))
+    if key in _kappa_warned:
+        return
+    _kappa_warned.add(key)
+    import warnings
+    warnings.warn(
+        f"glass {glass_name!r}: no extinction coefficient available at "
+        f"{wavelength * 1e9:.1f} nm; treating as lossless (kappa = 0). "
+        f"For absorbing-glass simulations use a catalogue entry with "
+        f"complex-n data, or supply kappa explicitly via "
+        f"register_fixed_glass.",
+        RuntimeWarning, stacklevel=3,
+    )

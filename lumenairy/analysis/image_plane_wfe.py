@@ -435,12 +435,22 @@ def eval_image_plane_wfe(
         src_x = Hx * field_max_m
         src_y = Hy * field_max_m
 
-    # Each ray launches from (src_x, src_y, -obj_d) and aims at the
-    # pupil position (px*semi, py*semi, 0).  Direction-cosine of
-    # the displacement from source to pupil-grid point:
-    aim_x = px * semi - src_x
-    aim_y = py * semi - src_y
-    aim_z = obj_d_m  # always positive: from -obj_d to 0
+    # 4.10: aim rays at the entrance pupil (px*ep_radius, py*ep_radius,
+    # ep_z) instead of the first surface vertex (px*semi, py*semi, 0).
+    # For a stop-at-front system ep_z = 0 and ep_radius = semi, so the
+    # two coincide.  For stop-in-the-middle the EP is the IMAGE of the
+    # stop by the upstream sub-system, which sits at z = fod.ep_z away
+    # from surface 0 with radius fod.ep_radius.  Pre-4.10 always aimed
+    # at z=0 with the full aperture radius, so off-axis fields with a
+    # mid-stop system landed at the wrong pupil position and reported
+    # wrong WFE.
+    ep_z = float(getattr(fod, 'ep_z', 0.0))
+    ep_r = float(getattr(fod, 'ep_radius', semi))
+    if not np.isfinite(ep_r) or ep_r <= 0:
+        ep_r = semi
+    aim_x = px * ep_r - src_x
+    aim_y = py * ep_r - src_y
+    aim_z = obj_d_m + ep_z  # ray length from -obj_d to ep_z
     norm_aim = np.sqrt(aim_x ** 2 + aim_y ** 2 + aim_z ** 2)
     L = aim_x / norm_aim
     M = aim_y / norm_aim
@@ -455,8 +465,18 @@ def eval_image_plane_wfe(
     alive = np.asarray(f.alive, dtype=bool)
     opl = np.asarray(f.opd)
 
-    # Identify chief = ray closest to (0, 0) in pupil coords
-    chief = int(np.argmin(px ** 2 + py ** 2))
+    # 4.10: identify chief = ALIVE ray closest to (0, 0) in pupil
+    # coords.  Pre-4.10 could pick a dead vignetted on-axis ray (rare
+    # but possible for systems where the chief is geometrically
+    # blocked), which NaN-poisoned every downstream OPL calculation
+    # via opl[chief] = NaN.  Fall back to the unconstrained nearest
+    # if no rays survived (caller will see the all-NaN result anyway).
+    pup_r2 = px ** 2 + py ** 2
+    if alive.any():
+        pup_r2_alive = np.where(alive, pup_r2, np.inf)
+        chief = int(np.argmin(pup_r2_alive))
+    else:
+        chief = int(np.argmin(pup_r2))
 
     # Conv-A: chief-relative OPL at the last lens surface (in WAVES)
     opl_chief = opl[chief] if alive[chief] else float(
@@ -530,10 +550,21 @@ def eval_image_plane_wfe(
                 coefs, *_ = np.linalg.lstsq(A, rs_w[mask], rcond=None)
                 c1 = float(coefs[1])  # waves of defocus
                 r_pup = semi  # entrance-pupil semi-aperture [m]
-                inv_R_new = (1.0 / img_d_m
+                # 4.10: closed-form best-RMS uses the SPHERE radius
+                # (which depends on sphere_tangent), not img_d_m
+                # directly.  For 'exit_pupil' the sphere radius is
+                # img_d_m - fod.xp_z; pre-4.10 always used 1/img_d_m
+                # which is wrong for that branch.
+                R_old = _radius_for(img_d_m)
+                inv_R_new = (1.0 / R_old
                               + 2.0 * c1 * wavelength / r_pup ** 2)
                 if abs(inv_R_new) > 1e-30:
-                    img_d_m = 1.0 / inv_R_new
+                    R_new = 1.0 / inv_R_new
+                    # Back-solve for the new chief image distance.
+                    if sphere_tangent == 'exit_pupil':
+                        img_d_m = R_new + float(getattr(fod, 'xp_z', 0.0))
+                    else:
+                        img_d_m = R_new
         elif image_plane == 'best_pv':
             # 1-D numerical search over the longitudinal shift dz
             # that minimises PV.  Uses scipy.optimize when available;

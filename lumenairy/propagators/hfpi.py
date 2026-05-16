@@ -122,7 +122,18 @@ def init_paths_from_field(
     directions = xp.stack([L, M, N], axis=-1)
 
     sample = E_in[iy_xp, ix_xp]
-    weights = sample * cos_theta * (dx * dx)
+    # 4.10: HF Kirchhoff weighting.
+    #   w_path = E_in(x_s) * cos(theta) * (1/(i*lambda)) * dOmega
+    # with dOmega = 2*pi*(1-cos(theta_max)) / N_paths (uniform-cone MC).
+    # Pre-4.10 omitted both 1/(i*lambda) and the solid-angle weight,
+    # so absolute amplitudes were unphysical by ~10^6 per re-emission
+    # at visible wavelengths.  Intensity ratios across paths were
+    # unaffected (the missing factors are global), so existing relative-
+    # contrast results still hold; absolute-photometry use is new.
+    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n_paths)
+    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
+    weights = (sample * cos_theta * (dx * dx)
+               * complex(inv_i_lambda) * solid_angle)
 
     opl = xp.zeros((n_paths,), dtype=xp.real(sample).dtype)
     alive = xp.ones((n_paths,), dtype=bool)
@@ -531,7 +542,13 @@ def init_paths_stratified(
     directions = xp.stack([L, M, N], axis=-1)
 
     sample = E_in[iy_xp, ix_xp]
-    weights = sample * cos_theta * (dx * dx)
+    # 4.10: HF Kirchhoff weighting (see init_paths_from_field).  Use
+    # n_paths_actual for the solid-angle normalisation in the
+    # stratified variant.
+    solid_angle = 2.0 * float(np.pi) * (1.0 - cos_max) / float(n_paths_actual)
+    inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
+    weights = (sample * cos_theta * (dx * dx)
+               * complex(inv_i_lambda) * solid_angle)
     opl = xp.zeros((n_paths_actual,), dtype=xp.real(sample).dtype)
     alive = xp.ones((n_paths_actual,), dtype=bool)
 

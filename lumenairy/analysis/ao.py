@@ -47,7 +47,13 @@ Putting them together (typical AO loop):
     for t in range(50):
         residual_phase = screen - dm.phase()
         E_pup = pupil * np.exp(1j * residual_phase)
-        slopes = la.shack_hartmann(E_pup, dx, lenslet_pitch=0.0125, ...)
+        # 4.10: shack_hartmann returns a 5-tuple (slopes_x, slopes_y,
+        # wavefront, centroids_x, centroids_y).  slope_to_modal expects
+        # an (N_lens, 2) array of slopes, so stack the first two.
+        slopes_x, slopes_y, *_ = la.shack_hartmann(
+            E_pup, dx, wavelength=550e-9,
+            lenslet_pitch=0.0125, lenslet_focal=0.04)
+        slopes = np.column_stack([slopes_x.ravel(), slopes_y.ravel()])
         modes = la.slope_to_modal(slopes, basis)
         dm_command = integrator.update(modes)
         dm.set_command(dm_command)

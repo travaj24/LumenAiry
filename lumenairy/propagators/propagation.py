@@ -1172,9 +1172,13 @@ def angular_spectrum_propagate(
     h_key = None
     H = None
     if xp is np:
+        # 4.10: add 'ASM' tag string to the cache key so plain-ASM
+        # entries are guaranteed disjoint from ASM_TILTED / ASM_MFT /
+        # RS / SAS even if those keys ever evolve to the same tuple
+        # length.  Defensive future-proofing.
         h_key = (int(Ny), int(Nx), float(dy), float(dx),
                  float(wavelength), float(z), bool(bandlimit),
-                 np.dtype(target_cdtype).str)
+                 np.dtype(target_cdtype).str, 'ASM')
         H = _h_cache_lookup(h_key)
 
     if H is None and is_jax:
@@ -1879,8 +1883,12 @@ def angular_spectrum_propagate_mft(
             Ly_phys = Ny_in * dy_in
             fx_max = Lx_phys / (2.0 * wavelength * abs(z))
             fy_max = Ly_phys / (2.0 * wavelength * abs(z))
-            bl_mask = ((xp.abs(fx)[None, :] <= fx_max)
-                       & (xp.abs(fy)[:, None] <= fy_max))
+            # 4.10: use strict less-than (matches plain ASM at line
+            # 1200 and the Matsushima-Shimobaba paper, which uses an
+            # open-interval cutoff).  Pre-4.10 ASM-MFT used <= here,
+            # one-bin off from the ASM reference.
+            bl_mask = ((xp.abs(fx)[None, :] < fx_max)
+                       & (xp.abs(fy)[:, None] < fy_max))
             H = xp.where(bl_mask, H, 0.0).astype(target_cdtype)
     else:
         # NumPy / CuPy paths share a NumPy-host H cache; CuPy uploads

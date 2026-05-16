@@ -390,8 +390,18 @@ def plot_cross_section(
         fig = ax.get_figure()
 
     if log:
-        ax.semilogy(coords_disp, I_cut, 'r-', lw=1.2, label='Intensity')
-        ax.set_ylim(bottom=max(I.max() * 1e-6, 1e-20))
+        # 4.10: guard against all-zero / negative I_cut so semilogy
+        # doesn't raise on the boundary case where the entire cross-
+        # section is below the floor.
+        peak_for_floor = float(I.max())
+        if peak_for_floor <= 0:
+            # Fall back to linear plot for a degenerate input.
+            ax.plot(coords_disp, I_cut, 'r-', lw=1.2, label='Intensity')
+        else:
+            floor = max(peak_for_floor * 1e-6, 1e-20)
+            I_safe = np.where(I_cut > floor, I_cut, floor)
+            ax.semilogy(coords_disp, I_safe, 'r-', lw=1.2, label='Intensity')
+            ax.set_ylim(bottom=floor)
     else:
         ax.plot(coords_disp, I_cut, 'r-', lw=1.2, label='Intensity')
 
@@ -484,11 +494,16 @@ def plot_planes_grid(
             if np.any(rows_on) and np.any(cols_on):
                 r0, r1 = np.where(rows_on)[0][[0, -1]]
                 c0, c1 = np.where(cols_on)[0][[0, -1]]
-                pad = max((r1 - r0) * 0.15, 20)
-                r0 = max(0, int(r0 - pad))
-                r1 = min(Ny - 1, int(r1 + pad))
-                c0 = max(0, int(c0 - pad))
-                c1 = min(Nx - 1, int(c1 + pad))
+                # 4.10: pad each axis from its own extent so elongated
+                # beams get a sensible margin on both sides; pre-4.10
+                # used the row extent for both axes, leaving uneven
+                # margins or cropping into columnar features.
+                pad_r = max((r1 - r0) * 0.15, 20)
+                pad_c = max((c1 - c0) * 0.15, 20)
+                r0 = max(0, int(r0 - pad_r))
+                r1 = min(Ny - 1, int(r1 + pad_r))
+                c0 = max(0, int(c0 - pad_c))
+                c1 = min(Nx - 1, int(c1 + pad_c))
                 I = I[r0:r1 + 1, c0:c1 + 1]
                 x = (np.arange(Nx) - Nx / 2) * dx
                 y = (np.arange(Ny) - Ny / 2) * dy

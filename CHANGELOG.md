@@ -2,6 +2,122 @@
 
 All notable changes to the core library are documented here.
 
+## [4.10.1] — 2026-05-16
+
+**Wave 4 of the v4.10 audit response.**  After the first three waves
+landed, the user requested coverage of every High/Medium-tier finding
+that hadn't been addressed yet.  4.10.1 closes the remaining residual
+audit items.  All 34 validation files (314 tests) still pass; the
+fixes here primarily affect non-default code paths and edge cases.
+
+### Tier 1 fixes (silent wrong physics in feature-complete code)
+
+* **HFPI** (``propagators/hfpi.py``): Kirchhoff prefactor ``1/(i*lambda)``
+  and solid-angle Monte-Carlo weight ``2*pi*(1-cos(theta_max))/N_paths``
+  are now applied to each emitted path.  Absolute amplitudes were
+  unphysical by ~10⁶ per re-emission at visible wavelengths pre-4.10.1
+  (relative-contrast results within a single experiment were
+  unaffected; cross-experiment / absolute-photometry use is new).
+* **MHS ASM subdomain** (``propagators/mhs.py``): ``asm_subdomain`` now
+  raises ``ValueError`` when ``in_surface.dx != out_surface.dx``.  ASM
+  preserves pitch; pre-4.10.1 silently labelled the output field with
+  the wrong dx, corrupting any downstream subdomain that consumed the
+  labelled coordinates.
+* **Detector pixel integration** (``analysis/detector.py``): replaced
+  ``scipy.ndimage.zoom(order=1)`` (point-sample bilinear interpolation,
+  NOT area-preserving) with proper area integration -- block-sum
+  ``np.add.reduceat`` for integer pixel ratios, uniform-filter +
+  centred sample for non-integer ratios.  Photon conservation now
+  holds for arbitrary ``pixel_pitch/dx_field`` ratios.
+* **Image-plane WFE aim point** (``analysis/image_plane_wfe.py``): rays
+  now aim at the entrance pupil ``(px*ep_radius, py*ep_radius, ep_z)``
+  instead of ``(px*semi, py*semi, 0)``.  For stop-at-front systems the
+  two coincide; for mid-stop systems pre-4.10.1 landed off-axis rays
+  at the wrong pupil position and reported wrong WFE.  Also: chief-ray
+  pick now skips dead rays (was occasionally NaN-poisoning the full
+  result), and the best-RMS sphere shift uses the actual sphere radius
+  (``img_d_m - fod.xp_z`` for ``sphere_tangent='exit_pupil'``) instead
+  of ``img_d_m`` directly.
+* **``compute_psf`` Parseval correction** (``analysis/core.py``):
+  ``normalize='power'`` now enforces physical Parseval
+  ``sum(|E_pupil|^2)*dx_pupil^2 == sum(|E_psf|^2)*dx_psf^2``.  Pre-4.10.1
+  enforced equal pixel-sums, off by ``(dx_pupil/dx_psf)^2``.  Strehl
+  ratios cancel the constant; absolute-photon-flux consumers now
+  match the documented contract.
+
+### Tier 2 fixes (silent inconsistencies)
+
+* **Shack-Hartmann calibration** (``analysis/detector.py``): adds a
+  reference-centroid pass on a flat-wavefront field and subtracts the
+  per-lenslet bias from every measurement.  Out-of-bounds lenslets are
+  now NaN-flagged (not zero-filled).  Cumulative-integration step
+  zero-pads NaN slopes so OOB lenslets don't NaN-poison the wavefront.
+* **FD gradient step scaling** (``optimize/core.py``): central
+  differences (vs forward) and per-variable scale floors pulled from
+  ``parameterization.scale_floor`` (default 1 micron for radii /
+  thicknesses).  Pre-4.10.1 the ``max(|x|, 1.0)`` floor pinned all
+  steps at 1e-7 regardless of variable type, biasing L-BFGS-B's
+  Hessian estimate.
+* **``MinThicknessMerit`` air-gap exclusion**: by default only GLASS
+  thicknesses are penalised; air gaps that legitimately need to be
+  small (cemented interfaces) no longer trip the constraint.
+  ``include_air=True`` restores the pre-4.10.1 behaviour.
+* **``apply_real_lens`` cos-clamp warning**: 1e-3 ≈ 89.94° AOI floor
+  now emits a one-time ``RuntimeWarning`` when triggered on real
+  (non-TIR) rays, so kilo-radian-of-phase clipping no longer hides
+  silently.
+* **Phase-retrieval seed + dtype** (``analysis/phase_retrieval.py``):
+  NumPy and JAX variants accept ``seed=`` and ``dtype=`` so backends
+  are interchangeable and runs are reproducible.  Default dtype on
+  the JAX path remains float32 for back-compat; pass
+  ``dtype=np.float64`` for NumPy parity.
+* **AO docstring example** (``analysis/ao.py``): the module-doc
+  example now correctly unpacks ``shack_hartmann``'s 5-tuple return.
+* **Caustic-diagnostic length assertion** (``analysis/aberration.py``):
+  rejects mis-matched ``surfaces`` / ``thicknesses`` instead of
+  silently mis-placing sample planes via the cumulative-z table.
+* **NA-aware sampling check** (``analysis/core.py``):
+  ``check_sampling_conditions`` accepts ``NA=`` and relaxes the
+  Nyquist criterion to ``dx < lambda/(2*NA)`` (was hard-coded ``NA=1``,
+  flagging valid setups as under-sampled).
+
+### Tier 3 fixes (cosmetics / edge cases)
+
+* **Asymptotic** (``propagators/asymptotic.py``): Maslov-branch
+  tracking on ``sqrt(det M)`` across pixels so the reconstructed
+  field stays phase-continuous through caustics.  Newton stall check
+  rewritten as an explicit two-condition expression instead of the
+  buggy chained comparison.  Removed unused ``Sigma = 0.5 * M_inv``.
+* **Plain-ASM cache key** (``propagators/propagation.py``): added
+  ``'ASM'`` tag for parallelism with the other propagators' keys.
+  ASM-MFT bandlimit now uses strict ``<`` (Matsushima open-interval),
+  matching plain-ASM.
+* **Plotting** (``analysis/plotting.py``): ``auto_crop`` pads each
+  axis from its own extent (was using row extent for both axes).
+  ``plot_cross_section(log=True)`` guards against all-zero / NaN
+  intensity inputs.
+* **Source warnings** (``sources/core.py``): ``create_point_source``
+  warns when ``|z0| < dx`` (where the central-pixel clamp dominates
+  integrated power); ``create_fiber_mode`` warns when ``NA > 0.2``
+  (Gaussian-MFD approximation breaks down for LP01); LED source
+  docstring corrected to report 37 angle samples (not "~21").
+* **Glass** (``glass.py``): missing-extinction-coefficient catalogue
+  entries now emit a one-time per-glass ``RuntimeWarning`` instead
+  of silently falling back to ``kappa = 0``.
+
+### Known limitations
+
+* ``_transfer_jax`` retains the paraxial-approximate form ``new_x =
+  x + L*thickness`` (vs the math-correct ``t = (thickness - z)/N``).
+  The math-correct form introduces a gradient instability through
+  ``fit_canonical_polynomials_jax`` whose root cause is still being
+  investigated; the paraxial form is accurate to ~1 % for NA ~ 0.1.
+* ``aberration_tensor`` closed-form ``ℓ=0`` path emits a warning when
+  multiple radial orders ``p`` are in the output-mode list, but does
+  not auto-route to the σ-grid path (which would break JAX-backend
+  parity with the current closed-form).  Pass at least one ``ℓ ≠ 0``
+  mode to force the correct path manually.
+
 ## [4.10.0] — 2026-05-16
 
 **Multi-agent physics audit response.**  4.10 closes ~50 audit

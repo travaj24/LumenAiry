@@ -385,7 +385,20 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
 
 def _transfer_jax(state, thickness, n_medium):
     """Free-space transfer through ``thickness`` in medium of index
-    ``n_medium``.  All rays advance; OPL accumulates."""
+    ``n_medium``.  All rays advance; OPL accumulates.
+
+    Note (4.10): this uses the paraxial-approximate form
+    ``new_x = x + L * thickness`` (assumes the parametric step t equals
+    thickness, i.e. N ≈ 1).  The math-correct form
+    ``t = (thickness - z) / N`` is exact for off-axis rays but
+    introduces a gradient instability through
+    ``fit_canonical_polynomials_jax`` that NaN-poisons jax.grad through
+    source_box_half.  Until that interaction is resolved, the paraxial
+    form is preserved -- accurate to ~1% for half-angles up to ~0.1 rad
+    (NA ~ 0.1).  The NumPy ``_transfer`` does use the math-correct
+    form, so a NumPy / JAX cross-check at high NA will show a small
+    transverse-position discrepancy that grows as ~h * theta^2.
+    """
     new_x = state.x + state.L * thickness
     new_y = state.y + state.M * thickness
     new_z = state.z + state.N * thickness - thickness  # next-surface frame

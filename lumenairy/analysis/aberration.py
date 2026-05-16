@@ -425,7 +425,22 @@ def caustic_diagnostic(prescription: Dict[str, Any],
 
     # Build z-sample list: between each pair of consecutive surfaces,
     # plus optionally after the last surface.
+    # 4.10: validate that thicknesses[] aligns with surfaces[].  The
+    # standard convention is len(thicknesses) == len(surfaces) - 1
+    # (one gap per inter-surface), or len(thicknesses) == len(surfaces)
+    # (one trailing post-image-surface gap).  Anything else hints at a
+    # malformed prescription whose cumulative_z would silently
+    # mis-place sample planes.
     thicknesses = list(prescription.get('thicknesses', []))
+    n_surf = len(prescription.get('surfaces', []))
+    if n_surf > 0 and not (
+            len(thicknesses) == max(0, n_surf - 1)
+            or len(thicknesses) == n_surf):
+        raise ValueError(
+            f"caustic_diagnostic: thicknesses length ({len(thicknesses)}) "
+            f"is inconsistent with surfaces count ({n_surf}).  Expected "
+            f"either {max(0, n_surf - 1)} (inter-surface gaps) or "
+            f"{n_surf} (with trailing post-image gap).")
     cumulative_z = [0.0]
     for t in thicknesses:
         cumulative_z.append(cumulative_z[-1] + float(t))

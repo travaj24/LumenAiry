@@ -1051,8 +1051,20 @@ def solve_envelope_stationary(
         delta_v = np.array([v2x - v_cx, v2y - v_cy])
         residual = inv_ws2 * (J.T @ delta_s1) + inv_wp2 * delta_v
         rn = float(np.linalg.norm(residual))
-        if rn < tol or rn > 0.99 * last_norm > 1e-300:
-            # Converged or stalling -- stop.
+        # 4.10: stricter stall check.  Pre-4.10 the chained comparison
+        # `rn < tol or rn > 0.99 * last_norm > 1e-300` could fire on
+        # the FIRST iteration (since last_norm = inf initially makes
+        # 0.99*inf > rn trivially true on the right end of the chain
+        # while the left end is false, but the overall expression
+        # depends on Python's chaining semantics).  More importantly,
+        # the stall heuristic fired even when one of two consecutive
+        # iterations was sub-quadratic during a normal Newton
+        # warm-up.  Require AT LEAST 2 iterations before declaring
+        # a stall, and require BOTH halves of the chain to be true
+        # explicitly to avoid the chained-comparison surprise.
+        is_converged = rn < tol
+        is_stalling = (it >= 2 and rn > 0.9 * last_norm and last_norm > 1e-300)
+        if is_converged or is_stalling:
             return (v2x, v2y), it, rn
         last_norm = rn
 
@@ -1406,7 +1418,7 @@ def aberration_tensor(
     # Stationary shift delta* = 0.5 M^-1 b
     M_inv = np.linalg.inv(M)
     delta_star = 0.5 * (M_inv @ b)
-    Sigma = 0.5 * M_inv  # 2x2 complex covariance
+    # 4.10: removed unused `Sigma = 0.5 * M_inv` (dead code).
     sqrt_detM = np.sqrt(np.linalg.det(M))
 
     # Leading amplitude
@@ -1714,6 +1726,16 @@ def propagate_modal_asymptotic(
     flat_out = np.zeros(flat_x.size, dtype=np.complex128)
 
     last_v_star = (v_cx, v_cy)  # warm-start across pixels
+    # 4.10: track arg(det M) across pixels so 1 / sqrt(det M) stays
+    # branch-continuous through caustics.  Pre-4.10 used the
+    # principal sqrt branch, so arg(det M) sweeping past ±π flipped
+    # the sign of amp_lead and introduced a fake pi-phase jump in
+    # the reconstructed field.  We accumulate an integer branch
+    # counter `maslov_branch` whose role is the Keller-Maslov index:
+    # the field picks up an extra exp(-i*pi/2) for each caustic
+    # crossing (sign of det M changing).
+    last_arg_detM = None  # principal-branch arg of det M at the previous pixel
+    maslov_branch = 0     # accumulated branch index (each +/-2pi adds 1)
     for idx in range(flat_x.size):
         s2x_p = flat_x[idx]
         s2y_p = flat_y[idx]
@@ -1752,7 +1774,29 @@ def propagate_modal_asymptotic(
         det_M = np.linalg.det(M)
         if not math.isfinite(abs(det_M)) or abs(det_M) < 1e-300:
             continue
-        sqrt_detM = np.sqrt(det_M)
+        # 4.10: track arg(det M) and adjust sqrt branch so the field
+        # phase is continuous across caustics (Keller-Maslov).
+        arg_detM = float(np.angle(det_M))
+        if last_arg_detM is not None:
+            d_arg = arg_detM - last_arg_detM
+            # Unwrap: if the jump is > +pi, we crossed -pi -> +pi (branch -1).
+            # If < -pi, we crossed +pi -> -pi (branch +1).
+            if d_arg > math.pi:
+                maslov_branch -= 1
+            elif d_arg < -math.pi:
+                maslov_branch += 1
+        last_arg_detM = arg_detM
+        # Use the unwrapped arg = arg_principal + 2*pi*maslov_branch
+        # for the sqrt: sqrt(r * exp(i*theta_unwrapped)) =
+        # sqrt(r) * exp(i*theta_unwrapped/2).  For an even branch this
+        # equals the principal sqrt; for an odd branch it picks up
+        # the extra -1 = exp(-i*pi/2)^2 from Keller-Maslov.
+        sqrt_detM_principal = np.sqrt(det_M)
+        # Apply the Keller-Maslov sign every other branch step.
+        if maslov_branch % 2 != 0:
+            sqrt_detM = -sqrt_detM_principal
+        else:
+            sqrt_detM = sqrt_detM_principal
         try:
             M_inv = np.linalg.inv(M)
         except np.linalg.LinAlgError:

@@ -579,6 +579,24 @@ def apply_real_lens(
             del grad_sq
             sin2_tt = (n1r / n2r) ** 2 * sin2_ti
             cos_tt = xp.sqrt(xp.maximum(1.0 - sin2_tt, 0.0))
+            # 4.10: warn the FIRST time per call we clamp a real ray's
+            # cosine.  The 1e-3 floor (≈89.94°) was previously silent;
+            # for steep aspheres or strongly tilted bundles it acts on
+            # physical (non-TIR) rays before the TIR mask fires, and
+            # the resulting OPL = n * sag / cos_tt_safe blows up by
+            # ~1000× per clamped pixel.  See round-2 audit M-LR.
+            if bool(xp.any(cos_ti < 1e-3)) or bool(xp.any(cos_tt < 1e-3)):
+                import warnings
+                warnings.warn(
+                    "apply_real_lens: clamping near-grazing-incidence "
+                    "rays at cos(theta) < 1e-3 floor.  Steep asphere or "
+                    "tilted bundle exceeds the surface's physical AOI "
+                    "limit; OPD on clamped pixels is artificially "
+                    "capped and may differ from the true ray path by "
+                    "kilo-radians.  Reduce input tilt or check the "
+                    "surface profile.",
+                    RuntimeWarning, stacklevel=2,
+                )
             cos_ti_safe = xp.maximum(cos_ti, 1e-3)
             cos_tt_safe = xp.maximum(cos_tt, 1e-3)
             # cos_ti / cos_tt are no longer needed -- only the _safe

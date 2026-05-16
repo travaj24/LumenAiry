@@ -58,6 +58,7 @@ def gerchberg_saxton(
     n_iter: int = 200,
     initial_phase: Optional[np.ndarray] = None,
     return_history: bool = False,
+    seed: Optional[int] = None,
     *,
     backend: str = 'numpy',
 ) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
@@ -134,9 +135,11 @@ def gerchberg_saxton(
 
     N = source_amplitude.shape[0]
 
-    # Initial guess
+    # Initial guess (4.10: seeded for reproducibility; pass seed=None
+    # for the prior randomised-per-call behaviour).
     if initial_phase is None:
-        rng = np.random.default_rng()
+        rng = (np.random.default_rng() if seed is None
+               else np.random.default_rng(int(seed)))
         phase = rng.uniform(-np.pi, np.pi, size=source_amplitude.shape)
     else:
         phase = initial_phase.copy()
@@ -394,6 +397,8 @@ def gerchberg_saxton_jax(
     source_amplitude: np.ndarray,
     target_amplitude: np.ndarray,
     n_iter: int = 200,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Gerchberg-Saxton iteration.
 
@@ -401,6 +406,18 @@ def gerchberg_saxton_jax(
     inside ``jax.lax.fori_loop`` so the entire run is one fused JIT
     kernel.  Best speedup on GPU; CPU benefit is modest because the
     NumPy version already uses pyFFTW.
+
+    Parameters
+    ----------
+    seed : int, optional
+        4.10: accepted for API parity with the NumPy variant (the
+        deterministic JAX iteration doesn't actually need a seed
+        because there's no random initialisation, but accepting the
+        kwarg keeps the backends interchangeable).
+    dtype : numpy/jax float dtype, optional
+        4.10: caller can request float64.  Default is float32 to match
+        the historical JAX path.  Pass ``np.float64`` to bring the
+        backend to NumPy parity (~1e-6 -> ~1e-14 residual error).
 
     Returns
     -------
@@ -416,9 +433,12 @@ def gerchberg_saxton_jax(
             'use gerchberg_saxton() (NumPy).')
     import jax
     import jax.numpy as jnp
+    if dtype is None:
+        dtype = jnp.float32
+    _ = seed  # accepted for API parity; no random state in this loop
 
-    src = jnp.asarray(source_amplitude, dtype=jnp.float32)
-    tgt = jnp.asarray(target_amplitude, dtype=jnp.float32)
+    src = jnp.asarray(source_amplitude, dtype=dtype)
+    tgt = jnp.asarray(target_amplitude, dtype=dtype)
 
     def body(i, state):
         E_in, _ = state
@@ -439,16 +459,29 @@ def gerchberg_saxton_jax(
     return np.asarray(phase), err
 
 
+def _seed_to_rng(seed):
+    """Resolve an int seed to a numpy default_rng (4.10 helper)."""
+    if seed is None:
+        return np.random.default_rng(0)
+    return np.random.default_rng(int(seed))
+
+
 def error_reduction_jax(
     measured_amplitude: np.ndarray,
     support: np.ndarray,
     n_iter: int = 200,
     init_phase: Optional[np.ndarray] = None,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Error-Reduction phase retrieval (Fienup 1982).
 
     Mirror of :func:`error_reduction` -- alternating-projection on the
     Fourier-amplitude constraint and a real-space support constraint.
+
+    4.10: ``seed`` controls the random initial phase (was hard-coded
+    to seed=0 pre-4.10).  ``dtype`` selects float32 (default) or
+    float64 (matches NumPy precision).
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -456,12 +489,15 @@ def error_reduction_jax(
     import jax
     import jax.numpy as jnp
 
-    meas = jnp.asarray(measured_amplitude, dtype=jnp.float32)
+    if dtype is None:
+        dtype = jnp.float32
+    meas = jnp.asarray(measured_amplitude, dtype=dtype)
     sup = jnp.asarray(support, dtype=bool)
 
     if init_phase is None:
-        rng = np.random.default_rng(0)
-        init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(np.float32)
+        rng = _seed_to_rng(seed)
+        init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(
+            np.dtype(dtype))
         init_phase = jnp.asarray(init_phase_np)
 
     F0 = meas * jnp.exp(1j * init_phase)
@@ -494,12 +530,17 @@ def hybrid_input_output_jax(
     n_iter: int = 200,
     beta: float = 0.9,
     init_phase: Optional[np.ndarray] = None,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, float]:
     """JAX-jit'd Hybrid Input-Output phase retrieval.
 
     HIO swaps the support projection for an outside-support feedback
     update with parameter ``beta`` (typically 0.7-0.9).  Generally
     converges faster + less prone to local minima than ER.
+
+    4.10: ``seed`` controls the random initial phase; ``dtype``
+    selects float32 (default) or float64 for full NumPy parity.
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -507,13 +548,16 @@ def hybrid_input_output_jax(
     import jax
     import jax.numpy as jnp
 
-    meas = jnp.asarray(measured_amplitude, dtype=jnp.float32)
+    if dtype is None:
+        dtype = jnp.float32
+    meas = jnp.asarray(measured_amplitude, dtype=dtype)
     sup = jnp.asarray(support, dtype=bool)
-    beta_j = jnp.asarray(float(beta), dtype=jnp.float32)
+    beta_j = jnp.asarray(float(beta), dtype=dtype)
 
     if init_phase is None:
-        rng = np.random.default_rng(0)
-        init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(np.float32)
+        rng = _seed_to_rng(seed)
+        init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(
+            np.dtype(dtype))
         init_phase = jnp.asarray(init_phase_np)
 
     F0 = meas * jnp.exp(1j * init_phase)
