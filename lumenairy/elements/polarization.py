@@ -364,10 +364,31 @@ def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[
         y = (np.arange(field.shape[0]) - field.shape[0] / 2) * field.dy
         X, Y = np.meshgrid(x, y)
         J = matrix(X, Y)  # expect (2, 2, N, N)
+        # 4.10.2: validate shape.  Pre-4.10.2 silently broadcast any
+        # shape and produced wrong answers without an error.  The
+        # expected layout is (2, 2, Ny, Nx) so that J[0,0] is a 2-D
+        # array matching field.Ex.shape.
+        J = np.asarray(J)
+        expected = (2, 2, field.shape[0], field.shape[1])
+        if J.shape != expected:
+            # Permit the swapped layout (Ny, Nx, 2, 2) that some
+            # callers produce naturally with meshgrid -- transpose.
+            if J.shape == (field.shape[0], field.shape[1], 2, 2):
+                J = np.moveaxis(J, (-2, -1), (0, 1))
+            else:
+                raise ValueError(
+                    f"apply_jones_matrix: callable returned shape "
+                    f"{J.shape}, expected {expected} (2x2 Jones matrix "
+                    f"with per-pixel spatial extent).")
         Ex_new = J[0, 0] * field.Ex + J[0, 1] * field.Ey
         Ey_new = J[1, 0] * field.Ex + J[1, 1] * field.Ey
     else:
         J = np.asarray(matrix, dtype=complex)
+        if J.shape != (2, 2):
+            raise ValueError(
+                f"apply_jones_matrix: matrix array shape {J.shape}, "
+                f"expected (2, 2).  Use a callable for spatially-"
+                f"varying matrices.")
         Ex_new = J[0, 0] * field.Ex + J[0, 1] * field.Ey
         Ey_new = J[1, 0] * field.Ex + J[1, 1] * field.Ey
 

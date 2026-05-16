@@ -92,6 +92,11 @@ from ..analysis import wave_opd_2d, zernike_decompose
 from ..analysis.through_focus import (
     through_focus_scan, find_best_focus, diffraction_limited_peak,
 )
+# 4.10.2: pull get_default_complex_dtype to module scope so merit-leg
+# wave-propagation source fields (apply_real_lens inputs) can be
+# allocated at the runtime-selected precision -- preserves the
+# precision='single' choice through merit evaluations.
+from ..propagators.propagation import get_default_complex_dtype
 
 
 # =========================================================================
@@ -535,7 +540,17 @@ class SphericalSeidelMerit(MeritTerm):
         self.weight = float(weight)
 
     def evaluate(self, ctx: Any) -> float:
-        return self.weight * ctx.seidel[0] ** 2
+        # 4.10.2: guard against the NaN-filled sentinel that
+        # aberration_summary returns on failed Seidel computation
+        # (4.10.1).  Pre-4.10.2 read ctx.seidel[0] blindly and
+        # returned NaN, which scipy.optimize then refused as an
+        # invalid objective.  Treat invalid Seidel as a moderate
+        # penalty so the optimiser sees a finite value and can
+        # step away from the bad region.
+        s = ctx.seidel
+        if s is None or len(s) == 0 or not np.isfinite(s[0]):
+            return self.weight
+        return self.weight * float(s[0]) ** 2
 
 
 class StrehlMerit(MeritTerm):
@@ -891,11 +906,12 @@ class MatchIdealSystemMerit(MeritTerm):
             whatever source the factory produced, with
             ``k_x = 2 pi sin(theta_x) / wavelength``.
         """
+        cdtype = get_default_complex_dtype()  # 4.10.2: honour precision knob
         if self.source_fn is not None:
             E = self.source_fn(ctx.N, ctx.dx, wavelength)
-            E = np.asarray(E, dtype=np.complex128)
+            E = np.asarray(E, dtype=cdtype)
         else:
-            E = np.ones((ctx.N, ctx.N), dtype=np.complex128)
+            E = np.ones((ctx.N, ctx.N), dtype=cdtype)
             ap = (ctx.prescription.get('aperture_diameter')
                   if ctx.prescription else None)
             if ap is not None and np.isfinite(ap) and ap > 0:
@@ -1780,20 +1796,53 @@ class JaxMeritTerm(MeritTerm):
 class ChromaticFocalShiftMerit(MeritTerm):
     """Penalise focal-length variation across wavelengths.
 
-    Evaluates the EFL at each wavelength from the stored
-    ``efls_per_wavelength`` on the context and penalises the PV
-    (max - min).  For full use, call ``design_optimize`` with a
-    ``MultiWavelengthMerit`` wrapper that populates this field.
+    4.10.2: this term is now self-contained.  Pass the wavelengths
+    explicitly at construction.  Pre-4.10.2 it depended on
+    ``ctx.efls_per_wavelength`` being populated as a SIDE EFFECT of
+    a prior ``MultiWavelengthMerit.evaluate()`` call earlier in the
+    merit-term list -- if the ordering put this term first, the
+    constraint silently disabled.
+
+    Parameters
+    ----------
+    wavelengths : sequence of float, optional
+        Wavelengths [m] to evaluate the EFL at.  When ``None`` falls
+        back to the pre-4.10.2 behaviour of reading
+        ``ctx.efls_per_wavelength`` (which requires a
+        ``MultiWavelengthMerit`` to populate it earlier in the term
+        list).
     """
 
     needs_wave = False
     name = 'ChromaticFocalShift'
 
-    def __init__(self, weight: float = 1.0) -> None:
+    def __init__(self, weight: float = 1.0,
+                 wavelengths: Optional[Sequence[float]] = None) -> None:
         self.weight = float(weight)
+        self.wavelengths = ([float(w) for w in wavelengths]
+                            if wavelengths is not None else None)
 
     def evaluate(self, ctx: Any) -> float:
-        if ctx.efls_per_wavelength is None:
+        if self.wavelengths is not None:
+            # 4.10.2: self-contained per-wavelength EFL evaluation.
+            from ..raytrace import (surfaces_from_prescription,
+                                     system_abcd)
+            efls = []
+            for wl in self.wavelengths:
+                try:
+                    surfs = surfaces_from_prescription(ctx.prescription)
+                    _, efl, _, _ = system_abcd(surfs, wl)
+                    if np.isfinite(efl):
+                        efls.append(float(efl))
+                except Exception:
+                    pass
+            if len(efls) < 2:
+                return 0.0
+            pv = max(efls) - min(efls)
+            return self.weight * pv * pv
+        # Legacy fallback: read context-attached EFLs.
+        if (getattr(ctx, 'efls_per_wavelength', None) is None
+                or len(ctx.efls_per_wavelength) < 2):
             return 0.0
         pv = (np.max(ctx.efls_per_wavelength)
               - np.min(ctx.efls_per_wavelength))
@@ -2212,7 +2261,11 @@ class ToleranceAwareMerit(MeritTerm):
                 efl_p, bfl_p = ctx.efl, ctx.bfl
 
             # Re-run wave propagation for this perturbation
-            E_in = np.ones((ctx.N, ctx.N), dtype=np.complex128)
+            # 4.10.2: honour the runtime DEFAULT_COMPLEX_DTYPE so
+            # precision='single' actually halves the memory / FFT cost
+            # of merit-leg propagation.  Pre-4.10.2 the hard-coded
+            # complex128 silently negated the precision='single' knob.
+            E_in = np.ones((ctx.N, ctx.N), dtype=get_default_complex_dtype())
             E_exit = apply_real_lens(
                 E_in, prescription=pres_pert, wavelength=ctx.wavelength, dx=ctx.dx)
             sub_ctx = EvaluationContext(
@@ -2718,8 +2771,17 @@ def design_optimize(parameterization: Any,
                 frac,
                 f'eval {call_count[0]}: merit={value:.4g}  '
                 f'efl={ctx.efl*1e3:.3f}mm')
+            # 4.10.2: LM residual = sqrt(m.evaluate(ctx)) is non-
+            # differentiable at zero (sqrt'(0) = inf), which produces
+            # inf/nan columns in the FD Jacobian near a converged
+            # design.  Soft-floor with a tiny epsilon so the residual
+            # is differentiable everywhere; the floor is well below
+            # typical merit-term magnitudes so it doesn't affect the
+            # converged solution.
+            _LM_FLOOR = 1e-30
             return np.array(
-                [np.sqrt(max(m.evaluate(ctx), 0.0)) for m in merit_terms],
+                [np.sqrt(max(m.evaluate(ctx), 0.0) + _LM_FLOOR)
+                 for m in merit_terms],
                 dtype=np.float64)
         lb = np.array([b[0] if b else -np.inf for b in (bounds or [None] * n_params)])
         ub = np.array([b[1] if b else +np.inf for b in (bounds or [None] * n_params)])

@@ -2,6 +2,108 @@
 
 All notable changes to the core library are documented here.
 
+## [4.10.2] — 2026-05-16
+
+**Wave 5 of the v4.10 audit response.**  Closes the remaining
+Critical / High / Medium audit items that the first four waves left
+unaddressed (the user asked to bring "all changes from the converged
+audits" in; 4.10.2 covers the residuals).  All 34 validation files
+(314 tests) pass.
+
+### Critical residuals
+
+* **``register_fixed_glass`` works without refractiveindex**
+  (``glass.py``).  Pre-4.10.2 the user-registered ``('__user__',
+  '__fixed__', '__fixed__')`` sentinel fell through to the
+  refractiveindex.info dispatch branch and raised ``ImportError`` on
+  minimal installs.  The dispatch now recognises the sentinel and
+  returns from ``_glass_cache`` directly.
+* **Monte-Carlo tolerancing uses quadratic Marechal prediction**
+  (``analysis/through_focus.py``).  ``monte_carlo_tolerancing_linearized``
+  now fits a per-knob ``a_k = (S_nom − S(σ)) / σ²`` coefficient and
+  superposes ``S_pred = S_nom − Σ a_k · ξ_k²`` (Marechal:
+  ``S ≈ exp(−σ_φ²)``).  Pre-4.10.2 used a linear FD + linear
+  superposition that produced a mean-zero distribution around
+  ``S_nom`` -- the wrong physics.
+
+### High residuals
+
+* **GBD axial OPL phase** (``propagators/gbd.py``).
+  ``apply_abcd_to_beamlets`` accepts an ``axial_opl=`` kwarg that
+  injects ``exp(+i·k·L_chief)`` into ``qratio``.  ``propagate_gbd_
+  through_prescription`` should pass the system OPL for absolute-
+  phase reconstruction; pre-4.10.2 the phase was a constant piston
+  bug only visible against an external reference arm.
+* **GBD thin-lens slope/direction-cosine** (``propagators/gbd.py``).
+  ``apply_thin_lens_to_beamlets`` now does the lens kick on
+  paraxial slopes ``u = L/N`` and re-normalises to direction
+  cosines, not directly on direction cosines.  For NA ~ 0.05-0.1
+  this is a few-percent correction that compounds across
+  surfaces.
+* **HFPI symmetric obliquity** (``propagators/hfpi.py``).
+  ``apply_aperture_diffraction`` weights the secondary HF sources
+  by ``(cos θ_in + cos θ_out)/2``, the symmetric Kirchhoff form.
+  Pre-4.10.2 used only ``cos θ_out`` relative to +z -- correct for
+  a single normal-incidence aperture, wrong for cascaded apertures
+  with oblique paths.
+* **``apply_jones_matrix`` shape guard** (``elements/polarization.py``).
+  Now raises ``ValueError`` when a callable returns a non-
+  ``(2, 2, Ny, Nx)`` shape.  Permits the swapped
+  ``(Ny, Nx, 2, 2)`` layout via auto-transpose.  Pre-4.10.2
+  silently broadcast any shape and produced wrong answers.
+* **``SphericalSeidelMerit`` NaN guard** (``optimize/core.py``).
+  Reads ``ctx.seidel`` through ``np.isfinite`` and returns the
+  default weight (instead of NaN) when the upstream Seidel
+  computation produced the 4.10.1 NaN sentinel.  Prevents scipy
+  from refusing the objective.
+* **``ChromaticFocalShiftMerit`` decoupled** (``optimize/core.py``).
+  New ``wavelengths=`` constructor kwarg makes the term self-
+  contained -- per-wavelength EFL is computed from the
+  prescription via ``system_abcd``.  Pre-4.10.2 the term depended
+  on ``ctx.efls_per_wavelength`` being populated as a side effect
+  of a prior ``MultiWavelengthMerit.evaluate()`` call; ordering
+  the terms differently silently disabled the constraint.
+* **``precision='single'`` actually halves precision through
+  merits** (``optimize/core.py``).  ``MatchIdealSystemMerit`` and the
+  tolerancing inner loop allocate ``E_in`` at ``get_default_complex_
+  dtype()`` rather than the hard-coded ``np.complex128``.
+* **LM residual differentiable** (``optimize/core.py``).
+  ``np.sqrt(max(m.evaluate(ctx), 0.0))`` now uses a tiny ``1e-30``
+  floor before the sqrt so the residual is differentiable
+  everywhere; FD Jacobian no longer produces inf/nan columns
+  near a converged solution.
+
+### Medium residuals
+
+* **Decentered stop respected by ``apply_real_lens``**
+  (``elements/_lens_real.py``).  Stop aperture mask now uses
+  ``(x − xc_stop)² + (y − yc_stop)²`` when the stop surface has a
+  non-zero ``decenter_x_m`` / ``decenter_y_m``.  Pre-4.10.2 always
+  used the axis-centred ``h_sq_axis``, clipping the wrong region.
+
+### Items NOT addressed (with documented rationale)
+
+* **C-AS-1** (asymptotic closed-form ℓ=0 path): 4.10.0 added a
+  warning; the σ-grid would be the correct fix but breaks the
+  JAX-backend hard-coded twin's numerical parity with NumPy.
+  Tracked as a known limitation; pass at least one ``ℓ ≠ 0`` mode
+  to force the correct path manually.
+* **C-RT-2** (JAX ``_transfer_jax`` math-correct form): 4.10.0
+  documented as a known limitation -- the math-correct
+  ``t = (thickness − z) / N`` form introduces a gradient
+  instability through ``fit_canonical_polynomials_jax`` whose root
+  cause needs deeper investigation.  Paraxial form retained,
+  accurate to ~1 % for NA ≤ 0.1.
+* **H-SC-2** (SAS asymmetric padding for odd N): only affects
+  odd-N grids which are rare in LumenAiry workflows; cosmetic
+  half-pixel shift fixed by using even-N grids.
+* **H-PR-2** (``through_focus_scan_jax`` "vmap" is a Python loop):
+  performance issue, not correctness.  Pre-existing acknowledged
+  TODO.
+* **H-GL-3** (``least_squares`` ``method='lm'`` silently switches to
+  ``'trf'`` with bounds): documented behaviour of scipy itself;
+  4.10.2 leaves it as a non-issue.
+
 ## [4.10.1] — 2026-05-16
 
 **Wave 4 of the v4.10 audit response.**  After the first three waves

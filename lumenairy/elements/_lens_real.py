@@ -684,7 +684,19 @@ def apply_real_lens(
 
         # ---- Aperture stop applied at this surface --------------------
         if stop_index is not None and i == stop_index and aperture is not None:
-            E = xp.where(h_sq_axis <= (aperture / 2) ** 2, E, 0.0 + 0.0j)
+            # 4.10.2: respect the stop surface's decenter/displacement
+            # if any.  Pre-4.10.2 always used h_sq_axis (centred at the
+            # optical axis), so a decentered stop was modelled at the
+            # wrong location and clipped the wrong region of the beam.
+            xc_stop = float(getattr(surf, 'decenter_x_m', 0.0) or 0.0)
+            yc_stop = float(getattr(surf, 'decenter_y_m', 0.0) or 0.0)
+            if xc_stop == 0.0 and yc_stop == 0.0:
+                E = xp.where(h_sq_axis <= (aperture / 2) ** 2,
+                             E, 0.0 + 0.0j)
+            else:
+                h_sq_stop = (X - xc_stop) ** 2 + (Y - yc_stop) ** 2
+                E = xp.where(h_sq_stop <= (aperture / 2) ** 2,
+                             E, 0.0 + 0.0j)
 
         # ---- Propagate through glass to the next surface --------------
         if i < len(surfaces) - 1:

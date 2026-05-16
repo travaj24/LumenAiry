@@ -1328,22 +1328,33 @@ def monte_carlo_tolerancing_linearized(
                 _, S_p = find_best_focus(scan_p, 'strehl')
             except Exception:
                 S_p = S_nom   # sensitivity = 0 on failure
-            dS_dk = (S_p - S_nom) / sigma   # finite difference
-            sensitivities.append((spec_idx, knob, sigma, dS_dk))
+            # 4.10.2: Strehl is quadratic-around-nominal per the
+            # Marechal approximation S ≈ exp(-sigma_phi^2), so the
+            # linear coefficient is ~ 0 and the second-order
+            # coefficient dominates.  Pre-4.10.2 used dS/dk linear
+            # superposition which produced a MEAN-ZERO distribution
+            # around S_nom -- wrong for the actual physics.  Fit a
+            # quadratic per knob: a_k = (S_nom - S(sigma)) / sigma^2
+            # so the per-trial sum reads S_pred = S_nom - sum a_k xi_k^2.
+            a_k = (S_nom - S_p) / (sigma * sigma)
+            sensitivities.append((spec_idx, knob, sigma, a_k))
 
-    # ----- Step 3: per-trial linear superposition -----
+    # ----- Step 3: per-trial QUADRATIC superposition (Marechal) -----
     rng = np.random.default_rng(seed)
     strehls = np.empty(n_trials)
     trial_results = []
     for t in range(n_trials):
-        # Draw perturbations: each knob ~ N(0, sigma).
+        # Draw perturbations: each knob ~ N(0, sigma).  The Strehl
+        # contribution is -a_k * xi_k^2 (each independent aberration
+        # mode adds its variance to the total phase variance).
         S_pred = S_nom
-        for (spec_idx, knob, sigma, dS_dk) in sensitivities:
+        for (spec_idx, knob, sigma, a_k) in sensitivities:
             if sigma <= 0:
                 continue
             xi = rng.normal(0.0, sigma)
-            S_pred = S_pred + dS_dk * xi
-        # Clamp to [0, 1] -- linear extrap can predict negatives.
+            S_pred = S_pred - a_k * (xi * xi)
+        # Clamp to [0, 1] -- quadratic extrap can still predict
+        # negative for very large excursions.
         S_pred = float(max(0.0, min(1.0, S_pred)))
         strehls[t] = S_pred
         trial_results.append({'trial': t, 'strehl_peak': S_pred})

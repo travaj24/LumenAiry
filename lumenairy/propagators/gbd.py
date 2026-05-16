@@ -209,13 +209,22 @@ def apply_thin_lens_to_beamlets(
     L_old = beamlets.directions[..., 0]
     M_old = beamlets.directions[..., 1]
     N_old = beamlets.directions[..., 2]
-    L_new = L_old - x_off / focal_length
-    M_new = M_old - y_off / focal_length
+    # 4.10.2: the thin-lens kick acts on PARAXIAL SLOPES u = L/N, not on
+    # direction cosines.  Pre-4.10.2 subtracted x/f directly from L,
+    # which is only correct in the small-angle limit (N -> 1).  For
+    # moderately non-paraxial bundles (N ~ 0.95-0.99) this introduces
+    # a few-percent error per surface; for wide-angle fans the error
+    # compounds.  Convert to slope, apply the kick, re-normalise.
+    N_safe = xp.where(xp.abs(N_old) > 1e-30, N_old, 1e-30)
+    u_x_old = L_old / N_safe
+    u_y_old = M_old / N_safe
+    u_x_new = u_x_old - x_off / focal_length
+    u_y_new = u_y_old - y_off / focal_length
 
-    norm = xp.sqrt(L_new ** 2 + M_new ** 2 + N_old ** 2)
-    L_new = L_new / norm
-    M_new = M_new / norm
-    N_new = N_old / norm
+    norm = xp.sqrt(u_x_new ** 2 + u_y_new ** 2 + 1.0)
+    L_new = u_x_new / norm
+    M_new = u_y_new / norm
+    N_new = 1.0 / norm
     new_direction = xp.stack([L_new, M_new, N_new], axis=-1)
 
     k = 2 * float(np.pi) / wavelength
@@ -411,6 +420,7 @@ def apply_abcd_to_beamlets(
     C: float,
     D: float,
     wavelength: float,
+    axial_opl: Optional[float] = None,
 ) -> BeamletBundle:
     """Apply a paraxial 2x2 ABCD matrix to every beamlet.
 
@@ -469,6 +479,17 @@ def apply_abcd_to_beamlets(
     # amplitude conservation (the Q-parameter formulation absorbs
     # this as Q_out / Q_in).
     qratio = Q_new / Q_old
+    # 4.10.2: include the chief-ray axial OPL phase exp(+i*k*L_chief)
+    # when supplied.  The three-leg helpers (propagate_gbd_freespace,
+    # propagate_gbd_thin_lens) accumulate this leg-wise; the single-
+    # ABCD path doesn't see L_chief unless the caller passes it
+    # explicitly.  Missing this factor is a constant piston that
+    # only matters when interfering the GBD output with another
+    # (separately-propagated) reference arm.
+    if axial_opl is not None:
+        k0 = 2.0 * np.pi / wavelength
+        axial_phase = xp.exp(1j * k0 * float(axial_opl))
+        qratio = qratio * axial_phase
     new_amplitude = beamlets.amplitude * qratio
 
     return BeamletBundle(

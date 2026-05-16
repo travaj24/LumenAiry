@@ -416,6 +416,24 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
     if entry == '__thin_lens__':
         return 1.5
 
+    # 4.10.2: user-registered fixed-index glass (via register_fixed_glass).
+    # The registry entry is the sentinel tuple
+    # ('__user__', '__fixed__', '__fixed__') and the callable lives in
+    # _glass_cache.  Pre-4.10.2 this fell through to the tuple branch
+    # below, which raised ImportError if refractiveindex wasn't
+    # installed -- making register_fixed_glass unusable on minimal
+    # installs (the exact case where the feature is most useful).
+    if (isinstance(entry, tuple) and len(entry) == 3
+            and entry[0] == '__user__' and entry[1] == '__fixed__'
+            and entry[2] == '__fixed__'):
+        cached = _glass_cache.get(glass_name)
+        if cached is not None:
+            return float(cached.get_refractive_index(
+                wavelength * 1e9, unit='nm'))
+        raise ValueError(
+            f"Glass {glass_name!r} is flagged as user-fixed but has no "
+            f"_glass_cache entry.  Re-call register_fixed_glass().")
+
     # Tuple-style entry: dispatch to refractiveindex.info.
     if not _REFRACTIVEINDEX_AVAILABLE:
         # If we have Sellmeier coefficients bundled for the same name,

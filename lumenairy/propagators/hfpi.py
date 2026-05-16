@@ -234,7 +234,17 @@ def apply_aperture_diffraction(
     Nz = cos_theta
     new_directions = xp.stack([L, M, Nz], axis=-1)
 
-    new_weights = paths.weights * cos_theta.astype(paths.weights.dtype)
+    # 4.10.2: Kirchhoff obliquity must use the angle between the
+    # INCOMING ray direction and the surface normal (+z for a flat
+    # aperture), AVERAGED with the outgoing-ray cos as per the
+    # symmetric form (cos θ_in + cos θ_out)/2.  Pre-4.10.2 used only
+    # the outgoing-ray cos relative to +z, which made the obliquity
+    # weight anisotropic on tilted apertures or cascaded apertures
+    # with strong oblique paths.  For a flat aperture with light
+    # arriving on-axis cos θ_in ≈ 1 and this reduces to the original.
+    cos_theta_in = paths.directions[..., 2]
+    obliquity = 0.5 * (cos_theta_in + cos_theta)
+    new_weights = paths.weights * obliquity.astype(paths.weights.dtype)
     new_opl = xp.zeros_like(paths.opl)
 
     return PathBundle(
