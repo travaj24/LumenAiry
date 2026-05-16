@@ -104,7 +104,17 @@ def propagate_huygens_fresnel_with_opl_callable(
 
     Ny_out = output_grid_y.shape[0]
     Nx_out = output_grid_x.shape[0]
-    out = xp.zeros((Ny_out, Nx_out), dtype=E_in.dtype)
+    # 4.10: force a complex dtype so a real-valued E_in (e.g. a pure
+    # intensity mask) doesn't silently strip the imaginary part of the
+    # HF kernel during the multiply.  Pre-4.10 produced a real-valued
+    # "field" with the imaginary half summed into nothing.
+    if xp.iscomplexobj(E_in):
+        out_dtype = E_in.dtype
+    elif E_in.dtype == xp.float64:
+        out_dtype = xp.complex128
+    else:
+        out_dtype = xp.complex64
+    out = xp.zeros((Ny_out, Nx_out), dtype=out_dtype)
     pixel_area = input_grid_dx * input_grid_dx
     h = float(finite_diff_step)
 
@@ -152,7 +162,11 @@ def propagate_huygens_fresnel_with_opl_callable(
             else:
                 density = 1.0
 
-            kernel = xp.exp(2j * float(np.pi) * phi).astype(E_in.dtype)
+            # 4.10: cast to the complex output dtype, not E_in.dtype
+            # (which may be real -- see comment above the out-array
+            # allocation).  Pre-4.10 a real E_in stripped the imag
+            # part of the kernel before the multiply.
+            kernel = xp.exp(2j * float(np.pi) * phi).astype(out_dtype)
             integrand = E_in * density * kernel
             iy = k // Nx_out
             ix = k % Nx_out

@@ -70,12 +70,15 @@ def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
     center : tuple ``(xc_pix, yc_pix)``, optional
         Pixel coordinates of the coronagraphic chief.  Defaults to
         the brightest pixel of ``psf_ref`` (the un-blocked chief).
-    azimuthal : ``'mean'`` (default) / ``'median'`` / ``'rms'``
+    azimuthal : ``'mean'`` (default) / ``'median'`` / ``'rms'`` / ``'std'``
         Per-radius reduction over the azimuth.  ``'mean'`` is the
         textbook "average contrast curve"; ``'median'`` is robust
-        against bright residual speckles; ``'rms'`` reports
-        ``sqrt(mean(I^2))`` which is the standard 1-sigma
-        speckle-noise floor metric.
+        against bright residual speckles; ``'rms'`` reports the raw
+        ``sqrt(mean(I^2))``; ``'std'`` reports the mean-subtracted
+        ``sqrt(mean((I - mean(I))^2))`` -- the actual 1-sigma
+        speckle-noise floor metric.  4.10: pre-4.10 mis-described
+        ``'rms'`` as the 1-sigma metric (it includes any non-zero
+        residual bias).
 
     Returns
     -------
@@ -173,9 +176,14 @@ def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
             agg = float(np.median(vals))
         elif azimuthal == 'rms':
             agg = float(np.sqrt(np.mean(vals ** 2)))
+        elif azimuthal == 'std':
+            # 4.10: true 1-sigma metric -- variance about the mean,
+            # not the raw moment.
+            mu = float(np.mean(vals))
+            agg = float(np.sqrt(np.mean((vals - mu) ** 2)))
         else:
             raise ValueError(
-                f"azimuthal must be 'mean'/'median'/'rms'; got {azimuthal!r}")
+                f"azimuthal must be 'mean'/'median'/'rms'/'std'; got {azimuthal!r}")
         contrast[i] = agg / peak_ref
 
     return {

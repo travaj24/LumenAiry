@@ -1589,6 +1589,37 @@ def apply_real_lens_traced(
         L_in = L_in.ravel()
         M_in = M_in.ravel()
     else:
+        # 4.10: emit a one-time warning when the input field has a
+        # measurable transverse tilt and tilt_aware_rays=False.  The
+        # plane-wave reference OPD becomes inaccurate when the input
+        # tilt is comparable to lambda / aperture.  Estimate the
+        # transverse tilt as the RMS of grad(phase) / k0 over the
+        # support of |E_in|; cap the check via a try-except so degenerate
+        # input fields don't crash apply_real_lens_traced.
+        try:
+            E_arr = np.asarray(E_in)
+            mag = np.abs(E_arr)
+            mask = mag > 0.05 * mag.max()
+            if mask.any():
+                phase = np.angle(E_arr)
+                dpy, dpx = np.gradient(phase, dx, dx)
+                k0 = 2.0 * np.pi / wavelength
+                tilt_rms = float(np.sqrt(
+                    (np.mean((dpx[mask] / k0) ** 2)
+                     + np.mean((dpy[mask] / k0) ** 2))))
+                if tilt_rms > 1e-4:
+                    import warnings
+                    warnings.warn(
+                        "apply_real_lens_traced: tilt_aware_rays=False "
+                        f"with a non-trivial input-field tilt (RMS = "
+                        f"{tilt_rms:.2e} rad).  The plane-wave "
+                        "reference OPD is off by an amount proportional "
+                        "to (tilt * aperture); set tilt_aware_rays=True "
+                        "for tilt-sensitive analyses.",
+                        RuntimeWarning, stacklevel=3,
+                    )
+        except Exception:
+            pass
         L_in = np.zeros_like(h_x)
         M_in = np.zeros_like(h_x)
     rays = _make_bundle(x=h_x, y=h_y, L=L_in, M=M_in,

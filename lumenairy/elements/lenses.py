@@ -190,13 +190,19 @@ def surface_sag_general(
 
     if R is not None and not np.isinf(R):
         # Conic sag: h^2 / (R * (1 + sqrt(1 - (1+k)*h^2/R^2)))
+        # 4.10: outside the conic domain (norm >= 0.9999) the surface
+        # is not defined.  Pre-4.10 silently returned 0 sag there,
+        # which produced an apparently-flat ring at the surface edge
+        # for hyperbolic / oblate conics extending past the geometric
+        # rim.  Return NaN instead so downstream consumers either mask
+        # those pixels (via an aperture mask) or see the failure.
         norm = (1 + conic) * h_sq / R**2
         valid = norm < 0.9999
         denom_arg = xp.where(valid, 1 - norm, 0.01)
         conic_sag = xp.where(
             valid,
             h_sq / (R * (1 + xp.sqrt(denom_arg))),
-            0.0,
+            xp.nan,
         )
         sag = conic_sag
 

@@ -866,7 +866,11 @@ def plot_beam_profile(
         I_cut = I[:, i]
         coords = (np.arange(Ny) - Ny / 2) * dy
 
-    _, unit_label, scale = _auto_extent(len(coords), dx, unit)
+    # 4.10: use dy for the y-axis-pitch when axis='y' so the axis
+    # label / scaling matches the actual sample pitch on anamorphic
+    # grids (dx != dy).
+    axis_dx = dx if axis == 'x' else dy
+    _, unit_label, scale = _auto_extent(len(coords), axis_dx, unit)
     coords_disp = coords * scale
 
     if ax is None:

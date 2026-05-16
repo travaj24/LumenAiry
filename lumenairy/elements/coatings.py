@@ -99,8 +99,24 @@ def coating_reflectance(
             n_prev = complex(n_ambient)
             for n_layer, d in layers:
                 n_layer = complex(n_layer)
-                # Snell's law for this layer
+                # 4.10: warn when intra-stack TIR is silently capped.
+                # This module uses only n.real for the angle
+                # propagation (audit limitation, documented), so true
+                # complex-angle TIR is not supported here.  Until the
+                # full complex-Snell rewrite, surface the cap so users
+                # of polarising-beam-splitter / immersion coatings
+                # know they're seeing an approximation.
                 sin_t = n_prev.real * np.sin(theta_prev) / n_layer.real
+                if sin_t > 1.0:
+                    import warnings
+                    warnings.warn(
+                        f"thin_film_stack: intra-stack TIR at layer with "
+                        f"n_layer={n_layer.real:.3f}, sin_t={sin_t:.3f}; "
+                        f"capped at 0.9999 (real-Snell approximation).  "
+                        f"For accurate TIR / immersion behaviour use a "
+                        f"full complex-Snell solver.",
+                        RuntimeWarning, stacklevel=2,
+                    )
                 sin_t = min(sin_t, 0.9999)
                 cos_t = np.sqrt(1 - sin_t**2)
                 delta = 2 * np.pi * n_layer * d * cos_t / lam
@@ -126,25 +142,46 @@ def coating_reflectance(
                 eta_sub = complex(n_substrate) / cos_sub
                 eta_amb = complex(n_ambient) / np.cos(angle)
             # Reflection coefficient
-            num = M[0, 0] * eta_sub + M[0, 1] - eta_amb * (M[1, 0] * eta_sub + M[1, 1])
-            den = M[0, 0] * eta_sub + M[0, 1] + eta_amb * (M[1, 0] * eta_sub + M[1, 1])
-            # Actually the standard TMM formula:
-            # r = (M[0,0]*eta_sub + M[0,1]*eta_amb*eta_sub - M[1,0] - M[1,1]*eta_amb) /
-            #     (M[0,0]*eta_sub + M[0,1]*eta_amb*eta_sub + M[1,0] + M[1,1]*eta_amb)
-            # Simplified: use B = M[0,0]*eta_sub + M[0,1], C = M[1,0]*eta_sub + M[1,1]
+            # 4.10: dropped the dead `num` / `den` lines (kept the
+            # correct `B`, `C`, `r` formulas).  Documented sign
+            # convention: this uses the Macleod p-pol form (eta_p =
+            # n / cos_t), so r_p has the same sign as r_s at normal
+            # incidence.  Born & Wolf use the opposite p-sign; the
+            # reflectance R = |r|^2 is unaffected, but phase_r differs
+            # by pi from those references.
             B = M[0, 0] + M[0, 1] * eta_sub
             C = M[1, 0] + M[1, 1] * eta_sub
             r = (eta_amb * B - C) / (eta_amb * B + C)
+            # Amplitude transmission for absorbing/lossy stacks.
+            t_amp = 2.0 * eta_amb / (eta_amb * B + C)
+            ts.append(t_amp)
             rs.append(r)
 
         if polarization == 'avg':
             R_val = 0.5 * (abs(rs[0])**2 + abs(rs[1])**2)
             phase_val = 0.5 * (np.angle(rs[0]) + np.angle(rs[1]))
+            # Power transmission via the amplitude coefficient (Macleod
+            # eq. 2.99): T_s = Re(eta_sub) / Re(eta_amb) * |t|^2.
+            T_s = float((eta_sub.real / max(eta_amb.real, 1e-30))
+                         * abs(ts[0]) ** 2) if hasattr(eta_sub, 'real') \
+                  else float((eta_sub / eta_amb) * abs(ts[0]) ** 2)
+            T_p = float((eta_sub.real / max(eta_amb.real, 1e-30))
+                         * abs(ts[1]) ** 2) if hasattr(eta_sub, 'real') \
+                  else float((eta_sub / eta_amb) * abs(ts[1]) ** 2)
+            T_val = 0.5 * (T_s + T_p)
         else:
             R_val = abs(rs[0])**2
             phase_val = np.angle(rs[0])
+            T_val = float((eta_sub.real / max(eta_amb.real, 1e-30))
+                           * abs(ts[0]) ** 2) if hasattr(eta_sub, 'real') \
+                    else float((eta_sub / eta_amb) * abs(ts[0]) ** 2)
         R[iw] = R_val
-        T[iw] = max(0, 1 - R_val)  # lossless approximation
+        # 4.10: real transmission via the amplitude coefficient, so
+        # absorbing stacks correctly produce R + T < 1.  Pre-4.10 used
+        # T = 1 - R unconditionally which overstated transmission for
+        # any lossy material (the specific case where complex n is
+        # passed in, i.e. the only case where TMM matters).
+        T[iw] = max(0.0, T_val)
         phase_r[iw] = phase_val
 
     return R, T, phase_r

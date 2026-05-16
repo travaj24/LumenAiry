@@ -270,16 +270,29 @@ def propagate_subaperture_asymptotic(
             n_pupil=n_pupil,
             poly_order=poly_order,
         )
-        # Propagate from this patch's source point.
+        # Propagate from this patch's source point.  4.10: the actual
+        # `propagate_modal_asymptotic` signature uses
+        # `source_amplitudes` / `pupil_amplitudes` (not
+        # `source_lg_amps` / `pupil_lg_amps`) and `s2_grid_x` /
+        # `s2_grid_y` (not `output_grid`).  Pre-4.10 calls raised
+        # TypeError on first invocation -- the subaperture path was
+        # dead on import.  Convert the output grid centroid into the
+        # (s2_grid_x, s2_grid_y) meshgrids expected by the callee.
+        if hasattr(output_grid_xy, 'ndim') and output_grid_xy.ndim == 2:
+            sgx = output_grid_xy[0] if output_grid_xy.shape[0] == 2 else output_grid_xy
+            sgy = output_grid_xy[1] if output_grid_xy.shape[0] == 2 else output_grid_xy
+        else:
+            sgx, sgy = output_grid_xy
         F_i = propagate_modal_asymptotic(
             fit,
-            source_lg_amps={(0, 0): 1.0},
-            pupil_lg_amps={(0, 0): 1.0},
+            source_amplitudes={(0, 0): 1.0 + 0.0j},
+            pupil_amplitudes={(0, 0): 1.0 + 0.0j},
             source_point=(cx_i, cy_i),
             w_s=w_s,
             w_p=pupil_box_half,
             v2_centre=(0.0, 0.0),
-            output_grid=output_grid_xy,
+            s2_grid_x=sgx,
+            s2_grid_y=sgy,
         )
         patch_fields.append(F_i)
 

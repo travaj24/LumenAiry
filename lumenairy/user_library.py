@@ -442,10 +442,35 @@ def load_phase_mask(name: str,
         X, Y = np.meshgrid(x, x)
         R = np.sqrt(X ** 2 + Y ** 2)
         THETA = np.arctan2(Y, X)
-        k = 2 * np.pi / wavelength if wavelength else 1.0
+        # 4.10: require an explicit caller-supplied wavelength when one
+        # is needed by the expression.  Pre-4.10 silently defaulted to
+        # `wavelength = 1.0` (k = 2*pi rad/m), producing meaningless
+        # phase masks that "worked" without any failure.
+        if wavelength is None:
+            wavelength = data.get('wavelength')
+        if wavelength is None:
+            raise ValueError(
+                f"load_phase_mask({name!r}): expression-type mask requires a "
+                f"wavelength (pass `wavelength=...` or store it in the "
+                f"mask metadata).")
+        k = 2 * np.pi / wavelength
         pi = np.pi
 
-        # Evaluate with numpy namespace
+        # 4.10: eval() is a code-execution risk if anyone can write to
+        # ~/.lumenairy/library/phase_masks/*.json.  Restrict the
+        # globals to "no builtins" and use a whitelisted namespace of
+        # numpy primitives; reject any expression that contains
+        # underscore-prefixed names (typical attack surface) or
+        # uses dunder access.  This is a defence-in-depth measure;
+        # the real fix is to convert the expression DSL to a small
+        # symbolic-AST evaluator, tracked separately.
+        expr = str(data['expression'])
+        if ('__' in expr) or expr.startswith('_') or ('._' in expr):
+            raise ValueError(
+                "load_phase_mask: expression contains forbidden tokens "
+                "('__' / leading underscore / '._').  Phase-mask "
+                "expressions must use only the documented X, Y, R, THETA, "
+                "k, pi, np, sin, cos, ... whitelisted names.")
         ns = {
             'X': X, 'Y': Y, 'R': R, 'THETA': THETA,
             'k': k, 'pi': pi, 'np': np,
@@ -455,7 +480,7 @@ def load_phase_mask(name: str,
             'atan2': np.arctan2, 'arctan2': np.arctan2,
             'mod': np.mod, 'floor': np.floor, 'ceil': np.ceil,
         }
-        phase = eval(data['expression'], {"__builtins__": {}}, ns)
+        phase = eval(expr, {"__builtins__": {}}, ns)
         return np.exp(1j * phase)
 
     elif mask_type == 'array':

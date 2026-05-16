@@ -477,7 +477,17 @@ def create_fresnel_zone_plate(
     X, Y = np.meshgrid(x, y)
     r2 = X * X + Y * Y
 
-    lam_f = wavelength * abs(focal_length)
+    # 4.10: enforce positive focal length so the zone-plate behaves
+    # as the docstring says ("Positive = converging").  Negative
+    # focal_length used to silently strip the sign and produce an
+    # identical converging FZP; users wanting a diverging FZP can flip
+    # the sign of the applied phase elsewhere.
+    if focal_length <= 0:
+        raise ValueError(
+            f"create_fresnel_zone_plate: focal_length must be > 0 "
+            f"(got {focal_length}).  For a diverging zone plate, apply "
+            f"a negative-sign phase to the converging FZP output.")
+    lam_f = wavelength * focal_length
     zone_index = np.floor(r2 / lam_f).astype(int)
 
     if n_zones is not None:

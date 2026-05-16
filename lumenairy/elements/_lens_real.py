@@ -561,7 +561,11 @@ def apply_real_lens(
         # built.  At N=8192 this cuts peak refraction-step memory
         # from ~5 GB to ~1.5 GB without changing the math.
         if fresnel or slant_correction:
-            dsag_dy, dsag_dx = xp.gradient(sag, dx, dx)
+            # 4.10: pass dy for the y-axis spacing -- pre-4.10 used dx
+            # for both, which gave the wrong surface-normal direction on
+            # anamorphic grids (dx != dy).  np.gradient takes the spacing
+            # in the same order as the array axes (y, x).
+            dsag_dy, dsag_dx = xp.gradient(sag, dy, dx)
             grad_sq = dsag_dx ** 2 + dsag_dy ** 2
             # Free the gradient components -- only grad_sq is needed
             # for the rest of the refraction pipeline.

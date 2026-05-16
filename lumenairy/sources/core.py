@@ -666,6 +666,7 @@ def create_top_hat_beam(
     diameter: float,
     x0: float = 0,
     y0: float = 0,
+    dy: Optional[float] = None,
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Uniform-intensity circular beam (top-hat / flat-top).
@@ -691,13 +692,19 @@ def create_top_hat_beam(
     Prior to 4.7 the ordering was
     ``(N, dx, diameter, wavelength=None, ...)``.
     """
+    # 4.10: honour caller-supplied dy (anamorphic grid).  Pre-4.10
+    # hard-coded dy = dx and used dx**2 for the area element, silently
+    # ignoring caller-supplied dy on top-hat / annular / Bessel sources
+    # only.  Defaults to dy = dx for back-compat.
+    if dy is None:
+        dy = dx
     x = (np.arange(N) - N / 2) * dx
-    y = (np.arange(N) - N / 2) * dx
+    y = (np.arange(N) - N / 2) * dy
     X, Y = np.meshgrid(x, y)
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where(r <= diameter / 2, 1.0, 0.0).astype(
         _resolve_complex_dtype(dtype))
-    norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx ** 2)
+    norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx * dy)
     if norm > 0:
         E /= norm
     return E, x, y
@@ -712,6 +719,7 @@ def create_annular_beam(
     inner_diameter: float,
     x0: float = 0,
     y0: float = 0,
+    dy: Optional[float] = None,
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Annular (donut) beam.
@@ -733,13 +741,15 @@ def create_annular_beam(
     ``(N, dx, wavelength, *, outer_diameter, inner_diameter, ...)``
     since 4.7.
     """
+    if dy is None:
+        dy = dx
     x = (np.arange(N) - N / 2) * dx
-    y = (np.arange(N) - N / 2) * dx
+    y = (np.arange(N) - N / 2) * dy
     X, Y = np.meshgrid(x, y)
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where((r <= outer_diameter / 2) & (r >= inner_diameter / 2),
                   1.0, 0.0).astype(_resolve_complex_dtype(dtype))
-    norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx ** 2)
+    norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx * dy)
     if norm > 0:
         E /= norm
     return E, x, y
@@ -844,6 +854,7 @@ def create_bessel_beam(
     cone_angle: float,
     x0: float = 0,
     y0: float = 0,
+    dy: Optional[float] = None,
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Ideal Bessel beam (J_0 profile).
@@ -865,8 +876,10 @@ def create_bessel_beam(
     """
     from scipy.special import j0
 
+    if dy is None:
+        dy = dx
     x = (np.arange(N) - N / 2) * dx
-    y = (np.arange(N) - N / 2) * dx
+    y = (np.arange(N) - N / 2) * dy
     X, Y = np.meshgrid(x, y)
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     k_r = 2 * np.pi / wavelength * np.sin(cone_angle)

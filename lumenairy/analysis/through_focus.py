@@ -890,17 +890,30 @@ def through_focus_scan_jax(
                 d4x[i] = d4y[i] = float(d4)
         except Exception:
             pass
+        # 4.10: match NumPy semantics for parity.
+        # power_in_bucket: ABSOLUTE integrated intensity (J in arbitrary
+        # units of |E|^2 * area) about the intensity centroid, NOT a
+        # fraction.  Pre-4.10 the JAX twin returned fraction; calling
+        # find_best_focus(scan, 'bucket') gave different z best
+        # depending on backend.
+        I_sum = float(np.sum(I_z))
+        if I_sum > 0:
+            yy, xx = np.indices(I_z.shape)
+            cx_pix = float(np.sum(xx * I_z) / I_sum)
+            cy_pix = float(np.sum(yy * I_z) / I_sum)
+        else:
+            cy_pix, cx_pix = I_z.shape[0] / 2, I_z.shape[1] / 2
         if bucket_radius is not None and bucket_radius > 0:
             yy, xx = np.indices(I_z.shape)
-            r = np.hypot((xx - I_z.shape[1] / 2) * dx,
-                         (yy - I_z.shape[0] / 2) * dx)
+            r = np.hypot((xx - cx_pix) * dx, (yy - cy_pix) * dx)
             mask = r < bucket_radius
-            p_bucket[i] = float(np.sum(I_z[mask]) / max(np.sum(I_z), 1e-30))
-        # rms radius about peak
-        idx_max = np.unravel_index(int(np.argmax(I_z)), I_z.shape)
-        yy, xx = np.indices(I_z.shape)
-        r = np.hypot((xx - idx_max[1]) * dx, (yy - idx_max[0]) * dx)
-        rms_r[i] = float(np.sqrt(np.sum(r ** 2 * I_z) / max(np.sum(I_z), 1e-30)))
+            p_bucket[i] = float(np.sum(I_z[mask]) * dx * dx)
+        # rms radius: D4sigma/4 about centroid (matches NumPy path).
+        if I_sum > 0:
+            yy, xx = np.indices(I_z.shape)
+            r2 = ((xx - cx_pix) * dx) ** 2 + ((yy - cy_pix) * dx) ** 2
+            sigma_sq = float(np.sum(r2 * I_z) / I_sum)
+            rms_r[i] = float(np.sqrt(sigma_sq))
 
     best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
     best_spot = float(np.nanmin(rms_r))

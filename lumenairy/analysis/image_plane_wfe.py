@@ -117,7 +117,18 @@ class ImagePlaneWFE:
 
     @property
     def rms_waves(self) -> float:
-        """RMS OPD over alive rays, in waves."""
+        """RMS OPD over alive rays, in waves.
+
+        4.10: this is an UNWEIGHTED mean.  On a uniform-density pupil
+        grid that's the correct numerical RMS, but on edge-clustered
+        grids (Chebyshev / Gauss-Lobatto, exposed via
+        ``chebyshev_pupil_grid`` for OPDPy cross-checks) the rim is
+        over-counted and the Marechal-Strehl is biased.  For valid
+        Strehl on a non-uniform grid, fit a Zernike basis and recover
+        the rms-OPD from the Zernike coefficients
+        (``ImagePlaneWFE.zernike_fit`` ... TBD), or supply the field
+        on a uniform grid via ``zemax_pupil_grid``.
+        """
         v = self.opd_w[self.alive]
         v = v[np.isfinite(v)]
         return float(np.sqrt(np.mean(v ** 2))) if v.size else float('nan')

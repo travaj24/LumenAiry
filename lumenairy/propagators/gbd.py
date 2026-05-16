@@ -260,6 +260,17 @@ def reconstruct_field_from_beamlets(
     out = xp.zeros((Ny, Nx), dtype=beamlets.amplitude.dtype)
 
     n = int(beamlets.positions.shape[0])
+    # Per-beamlet direction cosines (paraxial tilt).  These produce a
+    # linear phase ramp `exp(i k (L dx + M dy))` from each beamlet's
+    # centroid -- needed for non-paraxial bundles to interfere
+    # correctly off-chief-ray.  Pre-4.10 omitted this ramp; the
+    # focal spot still focused correctly (the chief-ray phase is the
+    # same), but off-chief-ray interference patterns and PSF wings
+    # were degraded.  When the beamlets bundle was assembled with
+    # ``directions = (0, 0)`` (the default for axial-input decompositions)
+    # the ramp is zero so this fix is a no-op for that path.
+    has_dirs = (hasattr(beamlets, 'directions')
+                and beamlets.directions is not None)
     for start in range(0, n, chunk_beamlets):
         end = min(start + chunk_beamlets, n)
         x_b = beamlets.positions[start:end, 0]
@@ -270,6 +281,12 @@ def reconstruct_field_from_beamlets(
         rho2 = ((Xg[..., None] - x_b[None, None, :]) ** 2
                 + (Yg[..., None] - y_b[None, None, :]) ** 2)
         phase = xp.exp(-1j * k * Q_b[None, None, :] * rho2 / 2)
+        if has_dirs:
+            L_b = beamlets.directions[start:end, 0]
+            M_b = beamlets.directions[start:end, 1]
+            tilt = (L_b[None, None, :] * (Xg[..., None] - x_b[None, None, :])
+                    + M_b[None, None, :] * (Yg[..., None] - y_b[None, None, :]))
+            phase = phase * xp.exp(1j * k * tilt)
         contrib = a_b[None, None, :] * phase
         out = out + xp.sum(contrib, axis=-1)
 

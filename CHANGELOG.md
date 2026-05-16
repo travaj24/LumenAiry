@@ -2,6 +2,178 @@
 
 All notable changes to the core library are documented here.
 
+## [4.10.0] — 2026-05-16
+
+**Multi-agent physics audit response.**  4.10 closes ~50 audit
+findings drawn from three independent audit runs (one external,
+two internal multi-agent) of the 4.9.0 codebase.  Severities ranged
+from "silent wrong answer in a default code path" through "wrong
+units" to documentation drift.  Every fix is gated by the 34-file
+validation suite (314 tests passing, no regressions).  The full
+unified plan lives in ``CORRECTION_PLAN.md``.
+
+### Critical & high-impact fixes
+
+* **Mirror Seidel S1..S5 now populated** (``raytrace/core.py``).  The
+  mirror branch in ``seidel_coefficients`` previously updated only
+  ray heights, leaving S1..S5[i] = 0 for every reflective surface.
+  Every catadioptric / reflective system silently reported "well-
+  corrected"; that's now fixed using the Welford form with n2 = -n1.
+* **Exit-pupil radius**: was ``stop_radius * D_post`` (the angular
+  magnification), should be ``stop_radius * det(M) / D_post`` (the
+  transverse magnification, = 1/D for det = 1).  Every downstream
+  Seidel / vignetting / f/# consumer was off by 1/D² for non-trivial
+  post-stop systems.
+* **Coord-break order swapped** (Zemax PARM 6).  The 0 / 1 branches
+  for "decenter then tilt" vs "tilt then decenter" were inverted,
+  so every imported folded design with the Zemax default got the
+  wrong frame transform.
+* **Lagrange invariant for finite-conjugate stop-at-front** —
+  previously H was identically 0 (both y_m_init and y_c_init were 0),
+  zeroing the Petzval contribution.  The marginal-ray initial height
+  is now computed via T(d) ∘ M_pre.
+* **Rayleigh-Sommerfeld kernel sign flipped** (``propagators/
+  propagation.py``).  Goodman 3-43 gives ``(1/r − ik)``, code had
+  ``(ik − 1/r)`` — every coherent superposition of RS with ASM /
+  Fresnel was 180° out of phase.
+* **``apply_fresnel_curvature`` half-pixel offset dropped** — was
+  ``(arange − N/2 + 0.5) * dx``; every other propagator uses no
+  offset.  Visible as a small coma residual in OPDPy cross-checks.
+* **Tilted-ASM band-limit now centred on the original-frame spectrum
+  ``FX + fx0``** — pre-4.10 the mask on plain ``|FX|`` killed the
+  baseband DC and zeroed the propagated field for any non-trivial
+  tilt with the default ``bandlimit=True``.
+* **Fresnel / Fraunhofer honour complex64 input dtype** — pre-4.10
+  silently promoted to complex128 via Python-float constants.
+* **JAX trace correctness floor** (``raytrace/jax_trace.py``):
+  ``_sag_derivatives_jax`` carries sign(R) for concave surfaces;
+  Snell uses a double-where pattern at the TIR boundary so
+  ``jax.grad`` is finite; aspheric Newton uses double-where on
+  ``F/dF_dt`` for grazing rays; ``trace_jax`` raises
+  ``NotImplementedError`` on mirror / coord-break / biconic /
+  freeform surfaces instead of silently treating them as flat
+  refractive.
+* **JAX ``propagate_through_system`` aperture branch fixed**
+  (``system.py``).  Was reading ``elem.get('radius')`` while the
+  NumPy path uses ``{shape, params}``; every working NumPy
+  aperture spec was silently no-op'd in the JAX path.
+* **Richards-Wolf** (``propagators/vector_diffraction.py``): the FFT
+  fixes ``dx_focal = λf/(N·dx_pupil)`` regardless of caller value
+  (warning emitted if mismatched).  Adds the missing 1/√(cos θ)
+  Jacobian (was using cos^(3/2) instead of cos^(-1/2) apodisation)
+  and the Richards-Wolf prefactor ``−i k f/(2π) · exp(−i k f)``.
+* **Asymptotic ``aberration_tensor``**: warns when the closed-form
+  ℓ=0 path is used with multiple radial orders p — those collapse
+  to the same scalar weight under the Wick contraction.  Pass at
+  least one ℓ ≠ 0 to force the σ-grid path.  Also: HF Chebyshev
+  quadrature multiplies by the missing ``−i`` Maslov prefactor
+  so phase matches Fresnel; ``decompose_lg`` / ``decompose_hg``
+  accept 1-D coordinate axes.
+* **GBD reconstruction** now includes the per-beamlet tilt phase
+  ramp ``exp(i k (L Δx + M Δy))`` so off-chief-ray interference
+  patterns and PSF wings reconstruct correctly.
+* **Optimize merits**:
+  - ``evaluate()`` out-of-range-BFL branch returns ``(value, ctx)``
+    tuple instead of bare scalar (was ``TypeError`` mid-run).
+  - ``MultiWavelengthMerit`` now re-evaluates the wave leg at each
+    wavelength; pre-4.10 it averaged the same single-wavelength
+    field N times so chromatic merits were a no-op.
+  - ``MultiFieldMerit`` aperture-masks the tilted plane wave (was
+    grid-filling, biasing Strehl numbers).
+  - ``MinBackFocalLengthMerit`` / ``MaxFNumberMerit`` guard the
+    BFL = 1e9 sentinel via ``ctx_is_valid``.
+  - ``design_optimize`` uses a ``__del__``-based dtype guard that
+    fires even on scipy raise / KeyboardInterrupt (was leaking
+    complex64 globally to the rest of the process).
+* **Polarization**: ``create_circular_polarized('right')`` now
+  returns ``(1, −i)/√2`` (RHC under exp(−iωt)).  Pre-4.10 it
+  returned ``(1, +i)/√2`` (LHC); ``apply_waveplate`` /
+  ``stokes_parameters`` were already on the correct convention so
+  the round-trip was internally broken.
+* **``mutual_coherence``**: returns ``<E(x_i) conj(E(x_j))>`` as
+  documented (pre-4.10 returned the complex conjugate; Hermiticity
+  preserved so the bug was silent).
+* **Ghost TIS**: dropped the extra ``cos(θ)`` factor under
+  cos-weighted hemisphere sampling.
+* **Interferometry fringe formula**: now ``background * (1 +
+  visibility * cos(phase))`` so visibility=1 gives full contrast.
+* **Field aberration sweep**: ``field_aberration_sweep`` now builds
+  true sagittal / tangential fans at a +y field (pre-4.10 used two
+  *different* field directions and called them sag/tan).
+  ``petzval_radius`` returns ``−1/inv_R`` (Born & Wolf §4.4).
+* **Shack-Hartmann wavefront**: dropped the spurious
+  ``wavelength/(2π)`` factor (cumsum of slopes is already in
+  meters); both row- and column-integrals anchored to a common
+  origin before averaging.
+* **AO ``zernike_modal_basis``**: one-sided FD at the pupil rim
+  (was generating spurious spikes from ρ > 1 evaluations); slopes
+  divided by ``semi_aperture`` for physical-units consistency;
+  ``pinv`` regularised at ``rcond=1e-3``.
+* **Phase retrieval (JAX) error_reduction**: reordered to
+  FFT → magnitude → IFFT → support, matching NumPy.
+* **Tolerancing reproducibility**: replaced ``hash(knob)`` (Python-
+  3 process-randomised) with a deterministic knob-to-int map.
+* **Through-focus JAX backend now matches NumPy** for
+  ``rms_radius`` (D4σ about centroid) and ``power_in_bucket``
+  (absolute integrated intensity, not fraction).
+* **Real-lens (``elements/_lens_real.py``)**: Fresnel unpolarised
+  scalar throughput uses intensity averaging
+  ``√(0.5(|t_s|² + |t_p|²))``; Seidel correction drops the spurious
+  negation that doubled the applied polynomial; ``np.gradient``
+  honours ``dy`` for anamorphic grids.
+* **Thin-lens (``elements/_lens_thin.py``)**: ``apply_axicon``
+  imports ``get_glass_index`` (was missing → ``NameError`` for
+  string glass); aplanatic phase mask uses ``1+0j`` outside the
+  valid domain so the rim aperture mask alone controls amplitude;
+  ``apply_aspheric_lens`` NaN-propagates outside the conic domain.
+* **Coatings**: T computed via amplitude transmission t (Macleod
+  eq. 2.99) so absorbing stacks correctly give R + T < 1; intra-
+  stack TIR emits a warning instead of silently capping.  Dead
+  ``num``/``den`` code removed.
+* **Conic sag** at the edge: ``surface_sag_general`` returns NaN
+  outside the conic domain instead of silently 0 (so aperture
+  masks zero those pixels deterministically).
+* **DOE FZP**: ``create_fresnel_zone_plate`` raises on
+  ``focal_length ≤ 0`` (was silently stripping the sign).
+* **Glass**: ``_sellmeier_index`` validates against Sellmeier
+  resonances and refuses negative radicands instead of raising
+  opaque ``math domain error``.
+* **``user_library.load_phase_mask``**: requires explicit
+  wavelength (was silently defaulting to 1.0 m → useless phase);
+  ``eval()`` rejects expressions with ``__`` or leading ``_``
+  tokens as defence-in-depth.
+* **Top-hat / annular / Bessel** source factories now accept ``dy``
+  (were hard-coded to ``dy = dx``).
+* **Source generators ``use_gpu=True``** now calls
+  ``_ensure_cupy_loaded()`` (was ``AttributeError`` on first GPU call).
+
+### Behavioural changes that may need caller-side adjustments
+
+* ``richards_wolf_focus(dx_focal=...)`` now emits a ``RuntimeWarning``
+  if the caller-supplied value differs from the FFT-natural pitch;
+  the FFT pitch is used either way.
+* ``thin_film_stack`` reports physical absorptive ``T`` for lossy
+  stacks; if you were relying on ``T = 1 − R`` for an absorbing
+  multilayer, you'll see lower transmission than before.
+* ``apply_real_lens(..., fresnel=True)`` for unpolarised input
+  now uses intensity-mean transmission, slightly different from
+  the pre-4.10 amplitude-mean approximation.
+* ``apply_axicon('SOME_GLASS', ...)`` no longer raises NameError.
+* ``MultiWavelengthMerit`` actually evaluates chromatic Strehl /
+  RMS-OPD merits — if you had a "tuned" set of weights, expect the
+  optimal point to move now that the merit isn't a no-op.
+
+### Methodology notes
+
+This release was driven by three concurrent audit runs (one
+external 8-agent run, two internal 5-agent multi-agent audits).
+Findings were cross-checked across the three reports; each
+substantive bug appears in ``CORRECTION_PLAN.md`` with a
+file:line citation.  The full validation suite (34 files, 314
+tests) was run after every group of fixes; a small number of
+tests were updated to reflect the new behaviour (e.g.
+``apply_fresnel_curvature`` half-pixel offset removal).
+
 ## [4.9.0] — 2026-05-15
 
 **Bundled 4.8.1 + external-audit response.**  4.9 ships the scoped

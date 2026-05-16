@@ -361,10 +361,25 @@ def shack_hartmann(
             slopes_x[iy, ix] = cx / lenslet_focal
             slopes_y[iy, ix] = cy / lenslet_focal
 
-    # Wavefront reconstruction via cumulative integration
-    # Simple trapezoidal integration along x then y
+    # 4.10: Wavefront reconstruction
+    # slopes_x / slopes_y are OPD gradients in radians-of-tilt (m / m).
+    # cumsum(slopes) * lenslet_pitch is the cumulative OPD in METERS.
+    # Pre-4.10 multiplied by wavelength/(2 pi) (a radians-to-meters
+    # conversion) AFTER cumsum, producing units of m^2 (off by ~1e6 at
+    # visible wavelengths).  Drop that conversion.
+    #
+    # Also: averaging two cumulative-row and cumulative-column integrals
+    # is not a valid 2-D reconstruction (Southwell/Hudgin/Fried require
+    # an actual least-squares solve).  Cross-coupled aberrations like
+    # astigmatism mis-reconstruct.  Anchor both halves to the (0, 0)
+    # corner so they share an origin, then average.  Documented as an
+    # approximation; users wanting full 2-D recon should call
+    # `slope_to_modal()` directly on the (slopes_x, slopes_y) pair.
     wf_x = np.cumsum(slopes_x, axis=1) * lenslet_pitch
     wf_y = np.cumsum(slopes_y, axis=0) * lenslet_pitch
-    wavefront = 0.5 * (wf_x + wf_y) * wavelength / (2 * np.pi)
+    # Anchor to (0, 0) corner
+    wf_x = wf_x - wf_x[0, 0]
+    wf_y = wf_y - wf_y[0, 0]
+    wavefront = 0.5 * (wf_x + wf_y)
 
     return slopes_x, slopes_y, wavefront, centroids_x, centroids_y
