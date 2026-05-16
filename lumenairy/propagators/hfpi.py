@@ -316,6 +316,27 @@ def propagate_hfpi(
     Internally delegates to :func:`propagate_hfpi_freespace_aperture`
     (which retains its legacy
     ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)`` order).
+
+    .. warning::
+       **Phase-only stochastic propagator -- absolute amplitudes are
+       unnormalized** (audit #3.1).  This implementation samples paths
+       uniformly across the source grid and assigns each
+       ``exp(j·k·Δs)`` propagation phase, then bins to the output grid.
+       The full Fresnel-Kirchhoff integral
+
+           E(P) = (1/jλ) ∫∫ E(Q) · (cos θ / r) · exp(jkr) dS
+
+       carries three normalization factors that this code does **not**
+       apply: the ``1/(jλ)`` Kirchhoff prefactor, the per-path
+       ``1/r`` geometric-spreading attenuation, and the Monte Carlo
+       solid-angle weight ``2π·(1 − cos θ_max) / N_paths``.  The
+       returned field has the correct **phase structure** (fringe
+       positions, interference contrast, relative-intensity ratios
+       within a single experiment) but the absolute amplitude is
+       arbitrary.  Use it as a phase-structure / interference
+       diagnostic; do not interpret absolute coupling-efficiency
+       numbers across experiments without re-normalising against a
+       known-amplitude reference.
     """
     return propagate_hfpi_freespace_aperture(
         E_in, dx, z_to_aperture=z, wavelength=wavelength,

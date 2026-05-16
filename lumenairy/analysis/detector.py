@@ -43,6 +43,7 @@ def apply_detector(
     hot_pixel_map: Optional[np.ndarray] = None,
     cosmic_ray_rate: float = 0.0,
     cosmic_ray_amp_e: float = 5e4,
+    cosmic_ray_rate_per_m2_per_s: Optional[float] = None,
     bayer_pattern: Optional[str] = None,
     bayer_qe: Tuple[float, float, float] = (0.40, 0.55, 0.20),
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -79,12 +80,25 @@ def apply_detector(
         Boolean map of hot pixels: ``True`` pixels are saturated to
         ``full_well`` regardless of incident signal.  Useful for
         modelling a known defect map from detector characterisation.
-    cosmic_ray_rate : float, default 0  *(4.0+)*
-        Expected cosmic-ray strikes per ``exposure_time`` per
-        ``n_pixels^2`` array.  Strikes are Poisson-distributed in
-        count and uniformly distributed in pixel coordinates; each
-        strike adds ``cosmic_ray_amp_e`` electrons to the affected
-        pixel.
+    cosmic_ray_rate : float, default 0  *(4.0+; deprecated 4.9)*
+        Expected total cosmic-ray strikes for the whole exposure
+        on the whole array, ignoring detector size and exposure
+        time.  This is the historical (and physically wrong) form:
+        a 4096 × 4096 sensor at 10 s should see ~160× the strikes
+        of a 1024 × 1024 sensor at 1 s for the same camera, but
+        this parameter doesn't scale.  Prefer
+        ``cosmic_ray_rate_per_m2_per_s`` for physically-correct
+        scaling.  Retained for back-compat.
+    cosmic_ray_rate_per_m2_per_s : float, optional  *(4.9+)*
+        Physically-correct cosmic-ray rate density [strikes per m²
+        per second].  When provided, the expected number of strikes
+        per exposure is computed as
+        ``rate · (n_pixels · pixel_pitch)² · exposure_time``.  At
+        sea level the typical secondary-cosmic-ray flux is ~1 /m²/s;
+        at altitude / in space it scales upward (LEO ~ 10¹/m²/s,
+        deep space ~ 10²/m²/s) -- pick the value appropriate to
+        your detector environment.  Overrides ``cosmic_ray_rate``
+        when both are passed.
     cosmic_ray_amp_e : float, default 5e4  *(4.0+)*
         Charge per cosmic-ray strike [electrons].
     bayer_pattern : ``None`` (default) or ``'RGGB'`` / ``'BGGR'`` / ``'GRBG'`` / ``'GBRG'``  *(4.0+)*
@@ -201,8 +215,32 @@ def apply_detector(
         signal_e = signal_e + rng.normal(0, read_noise_e, signal_e.shape)
 
     # Cosmic-ray strikes: Poisson count of pixel-localised events.
-    if cosmic_ray_rate > 0:
-        n_strikes = rng.poisson(float(cosmic_ray_rate))
+    # 4.9 fix (audit #4.5): when ``cosmic_ray_rate_per_m2_per_s`` is
+    # given, scale by detector area · exposure time -- the physically
+    # correct way.  The legacy ``cosmic_ray_rate`` (which the audit
+    # called out as not scaling with detector size or exposure) is
+    # retained for back-compat but emits a deprecation warning when
+    # used.
+    effective_mean_strikes = 0.0
+    if cosmic_ray_rate_per_m2_per_s is not None:
+        area_m2 = (n_pixels * pixel_pitch) ** 2
+        effective_mean_strikes = (
+            float(cosmic_ray_rate_per_m2_per_s)
+            * area_m2 * float(exposure_time)
+        )
+    elif cosmic_ray_rate > 0:
+        import warnings
+        warnings.warn(
+            "simulate_detector_image: ``cosmic_ray_rate`` does not scale "
+            "with detector size or exposure time (the audit's finding "
+            "#4.5).  For physically-correct scaling pass "
+            "``cosmic_ray_rate_per_m2_per_s`` instead (typical sea-level "
+            "value ~ 1 /m²/s).  Legacy behaviour retained.",
+            DeprecationWarning, stacklevel=2,
+        )
+        effective_mean_strikes = float(cosmic_ray_rate)
+    if effective_mean_strikes > 0:
+        n_strikes = rng.poisson(effective_mean_strikes)
         if n_strikes > 0:
             ys = rng.integers(0, n_pixels, size=n_strikes)
             xs = rng.integers(0, n_pixels, size=n_strikes)

@@ -108,6 +108,20 @@ def set_max_ram(value: Optional[Union[int, float]]) -> None:
         _MAX_RAM_OVERRIDE = int(value)
 
 
+def get_max_ram() -> Optional[int]:
+    """Return the current manual RAM-budget override in bytes, or
+    ``None`` if no override is in effect (psutil auto-detection
+    applies).
+
+    Mirrors :func:`set_max_ram` exactly: round-trips through
+    ``set_max_ram(get_max_ram())`` are a no-op.  Use
+    :func:`get_ram_budget` instead when you want the *effective*
+    budget (override or auto-detected value).  Introduced in 4.8.1
+    to support :func:`lumenairy.lumenairy_context`.
+    """
+    return _MAX_RAM_OVERRIDE
+
+
 # ---------------------------------------------------------------------------
 # Memory queries
 # ---------------------------------------------------------------------------

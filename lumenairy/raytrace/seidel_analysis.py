@@ -211,7 +211,7 @@ def seidel_wfe(
     else:
         T = seidel_or_totals
 
-    # Resolve field_angle for the S4*sigma^2 term.
+    # Resolve field_angle for the S4·H² term.
     sigma = field_angle
     if sigma is None:
         if 'field_heights' in seidel_or_totals and field_index is not None:
@@ -238,7 +238,42 @@ def seidel_wfe(
     S3 = _pick(T['S3'])
     S4 = _pick(T['S4'])
     S5 = _pick(T['S5'])
-    sigma2 = sigma * sigma
+
+    # 4.9 fix: Petzval term needs |H|² (Lagrange invariant squared),
+    # NOT bare sigma².  S4 = -c·(n2-n1)/(n1·n2) is the H-less
+    # surface-property form; the WFE expansion's S4 contribution
+    # is (1/4)·S4·H²·ρ².  Pre-4.9 used sigma² alone, off by
+    # (y_pupil)² ≈ (D/2)² ≈ 1.6e-4 m² for a 25 mm singlet at
+    # f/4 -- producing ~4 orders of magnitude of phantom Petzval.
+    # Use the explicit lagrange_invariant carried by 4.9+
+    # seidel_coefficients results when available; fall back to
+    # f·sigma (image-height proxy, dimensionally correct for
+    # object-at-infinity) using the embedded ABCD if present;
+    # last resort, fall back to the legacy sigma² behaviour with
+    # a one-time warning so users notice the magnitude shift.
+    H_sq = None
+    if 'lagrange_invariant' in seidel_or_totals:
+        H_sq = float(seidel_or_totals['lagrange_invariant']) ** 2
+    elif 'abcd' in seidel_or_totals:
+        # Recover effective focal length from the embedded ABCD.
+        # H ≈ f · sigma for object at infinity, n_obj = 1.
+        abcd = np.asarray(seidel_or_totals['abcd'])
+        if abcd.shape == (2, 2) and abs(float(abcd[1, 0])) > 1e-30:
+            f_eff = -1.0 / float(abcd[1, 0])
+            H_sq = (f_eff * sigma) ** 2
+
+    if H_sq is None:
+        import warnings
+        warnings.warn(
+            "seidel_wfe: input dict carries neither 'lagrange_invariant' "
+            "nor 'abcd'; falling back to the pre-4.9 bare-sigma² Petzval "
+            "scaling.  Pass a 4.9+ seidel_coefficients() result to get "
+            "the corrected H² scaling.  The pre-4.9 result is off by "
+            "(y_pupil)² ≈ (D/2)² for typical singlets (often several "
+            "orders of magnitude).",
+            RuntimeWarning, stacklevel=2,
+        )
+        H_sq = sigma * sigma
 
     cos_t = np.cos(theta)
     rho2 = rho ** 2
@@ -247,7 +282,7 @@ def seidel_wfe(
     return ((1.0 / 8.0) * S1 * rho4
             + (1.0 / 2.0) * S2 * rho3 * cos_t
             + (1.0 / 2.0) * S3 * rho2 * cos_t ** 2
-            + (1.0 / 4.0) * S4 * sigma2 * rho2
+            + (1.0 / 4.0) * S4 * H_sq * rho2
             + (1.0 / 2.0) * S5 * rho * cos_t)
 
 

@@ -59,6 +59,29 @@ def coating_reflectance(
         Power transmittance at each wavelength.
     phase_r : ndarray
         Reflection phase [rad] at each wavelength.
+
+    Notes
+    -----
+    **Limitations (audit #2.4).**  Two assumptions in the internal
+    Snell-step deserve calling out:
+
+    1. **Complex index ``.imag`` is dropped at the Snell step.**
+       The propagated refraction angle uses ``n.real`` only --
+       fine for transparent dielectric AR / HR stacks where ``.imag``
+       is essentially zero, but underestimates the absorbing-layer
+       phase thickness for metallic mirrors or metal-dielectric
+       hybrids.  For accurate metal-bearing stacks use a TMM solver
+       that propagates the complex angle (e.g.
+       ``tmm.coh_tmm`` in the ``tmm`` package).
+    2. **TIR inside the stack is silently capped** via
+       ``sin_t = min(sin_t, 0.9999)``, masking total internal
+       reflection at intra-stack interfaces and reporting finite
+       transmittance through what should be a totally reflecting
+       interface.  Typical AR coatings don't reach TIR; high-AOI
+       polarizing-beam-splitter coatings can, and this function
+       will under-report their reflectance.
+
+    Both items are on the roadmap for a proper TMM rewrite.
     """
     wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
     n_wv = wavelengths.size

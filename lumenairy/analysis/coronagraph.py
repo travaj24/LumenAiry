@@ -20,7 +20,8 @@ import numpy as np
 
 
 def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
-                                  f_eff, *, n_radii=64, max_lam_over_D=20.0,
+                                  f_eff, *, pupil_diameter_m=None,
+                                  n_radii=64, max_lam_over_D=20.0,
                                   center=None, azimuthal='mean'):
     """Compute the post-coronagraph contrast curve vs angular separation.
 
@@ -48,14 +49,18 @@ def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
     wavelength : float
         Operating wavelength [m].
     f_eff : float
-        Effective focal length [m].  Together with the pupil
-        diameter (implicit in ``psf_ref``) this defines the
-        lambda*f/D scale.  The function does NOT depend on the
-        pupil diameter directly -- it normalises by the chief peak
-        of ``psf_ref`` so the angular scale comes from
-        ``lambda * f_eff / D = dx_focal * (N * dx_pupil / f_eff)``
-        through the Fraunhofer relation; pass ``f_eff`` to set the
-        x-axis units.
+        Effective focal length [m].
+    pupil_diameter_m : float, optional but recommended
+        Entrance-pupil diameter [m].  Together with ``wavelength``,
+        ``f_eff``, and ``dx_focal`` this sets the absolute λ·f/D
+        scale via ``pix_per_lam_over_D = λ · f_eff / (D · dx_focal)``.
+        Pre-4.9 the function assumed ``pix_per_lam_over_D = N`` (the
+        FFT-natural pitch with no zero-padding), which is correct
+        only for that one geometry and produces incorrect angular
+        scales for the oversampled / MFT-zoomed focal grids typical
+        in coronagraphy.  When ``pupil_diameter_m`` is omitted,
+        a ``RuntimeWarning`` is emitted and the legacy ``N``
+        approximation is used.
     n_radii : int, default 64
         Number of radial bins.
     max_lam_over_D : float, default 20.0
@@ -123,9 +128,28 @@ def coronagraph_contrast_curve(psf_coro, psf_ref, dx_focal, wavelength,
     if peak_ref <= 0:
         raise ValueError("psf_ref has no positive intensity.")
 
-    # For the natural-FFT-pitch grid 1 lambda/D = N pixels.  Expose
-    # r_pixels too so users with a non-FFT pupil geometry can rescale.
-    pix_per_lam_over_D = float(Nx)
+    # 4.9 fix (audit #2.3): compute the correct λ·f/D pixel scale
+    # from the supplied physical parameters.  Pre-4.9 hard-coded
+    # ``pix_per_lam_over_D = N`` which is right only for the natural
+    # FFT pitch geometry (no zero-padding, no oversampling); for the
+    # MFT-zoomed / oversampled focal grids typical in coronagraphy
+    # this was off by a factor of (D · dx_focal)/(λ · f) -- often
+    # several × and quietly mis-labelling the contrast-curve x-axis.
+    if pupil_diameter_m is not None:
+        D = float(pupil_diameter_m)
+        pix_per_lam_over_D = float(wavelength) * float(f_eff) / (
+            D * float(dx_focal))
+    else:
+        import warnings
+        warnings.warn(
+            "coronagraph_contrast_curve: pupil_diameter_m not supplied; "
+            "falling back to the pre-4.9 ``pix_per_lam_over_D = N`` "
+            "approximation, which is only correct for the natural FFT "
+            "pitch (no zero-padding, no MFT zoom).  Pass "
+            "pupil_diameter_m=... to get the correct λ·f/D scaling.",
+            RuntimeWarning, stacklevel=2,
+        )
+        pix_per_lam_over_D = float(Nx)
 
     y_grid = np.arange(Ny) - cy_pix
     x_grid = np.arange(Nx) - cx_pix

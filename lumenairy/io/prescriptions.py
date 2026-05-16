@@ -382,7 +382,13 @@ def load_zemax_zmx(filepath: str,
         tokens = line.strip().split()
         if tokens and tokens[0] == 'UNIT':
             unit_str = tokens[1].upper() if len(tokens) > 1 else 'MM'
-            unit_map = {'MM': 1e-3, 'CM': 1e-2, 'IN': 25.4e-3, 'M': 1.0}
+            # 4.9 fix (audit #4.4): some Zemax exports use the long
+            # spelling ``INCH`` / ``INCHES`` instead of the short
+            # ``IN``.  Accept both.
+            unit_map = {
+                'MM': 1e-3, 'CM': 1e-2, 'M': 1.0,
+                'IN': 25.4e-3, 'INCH': 25.4e-3, 'INCHES': 25.4e-3,
+            }
             unit_scale = unit_map.get(unit_str, 1e-3)
             break
 

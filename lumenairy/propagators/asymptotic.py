@@ -154,10 +154,13 @@ def lg_polynomial(p: int, ell: int, w: float) -> Dict[Tuple[int, int], complex]:
 
     with the normalisation convention
 
-        N_{p,l} = sqrt(2 * p! / (pi * (p + |l|)!))
+        N_{p,l} = sqrt(2 * p! / (pi * (p + |l|)!)) / w
 
     so that the modes are orthonormal under the L^2 inner product
     ``<f, g> = integral f^* g  dx dy`` (no extra envelope factor).
+    Pre-4.9 docstrings omitted the ``/ w`` factor; the code has
+    always carried it correctly (see the implementation a few lines
+    below).
 
     Parameters
     ----------
@@ -1285,6 +1288,8 @@ def aberration_tensor(
     w_p: float = 0.05,
     w_o: Optional[float] = None,
     v2_centre: Tuple[float, float] = (0.0, 0.0),
+    sigma_grid_n: Optional[int] = None,
+    sigma_grid_extent: Optional[float] = None,
 ) -> AberrationTensorResult:
     """LG aberration tensor at a single chief-ray image point.
 
@@ -1321,10 +1326,35 @@ def aberration_tensor(
         the local complex beam matrix (Maréchal-scale).
     v2_centre : (float, float), optional
         Pupil centre.
+    sigma_grid_n : int, optional
+        Output-plane grid size used for the σ-integration path when
+        any requested ``output_modes`` has ``ℓ ≠ 0``.  Default 64 is
+        accurate for LG modes up to ``(p, |ℓ|) ~ (3, 3)``; bump for
+        higher orders.  Ignored when all output modes have ``ℓ = 0``
+        (the fast closed-form chief-ray projection is used).
+    sigma_grid_extent : float, optional
+        Half-extent of the σ-grid [m].  Default ``4 · w_o`` captures
+        > 99.9 % of the LG tail mass.  Increase only if the output
+        beam has unusually long tails (large pupil aberrations).
 
     Returns
     -------
     AberrationTensorResult
+
+    Notes
+    -----
+    **Pre-4.9 limitation removed.**  Pre-4.9 the projection at the
+    chief image collapsed to the constant term of the LG output
+    polynomial, which is identically zero for any ``ℓ ≠ 0`` mode
+    ((σ_x + j·σ_y)^|ℓ| · Laguerre has no constant term).  That made
+    coma ``(1, ±1)``, astigmatism ``(0, ±2)``, tilt ``(0, ±1)``, and
+    every other ℓ ≠ 0 entry of the returned tensor silently zero,
+    even when the underlying aberration was present.  4.9 fixes this
+    by doing the actual σ-integration via a small output-plane grid
+    and a numerical LG projection (``propagate_modal_asymptotic`` +
+    ``decompose_lg``).  ℓ = 0 modes still use the fast closed-form
+    chief-ray path -- you get the new behaviour only when you ask
+    for an ℓ ≠ 0 output mode.
     """
     if source_modes is None:
         source_modes = [(0, 0)]
@@ -1422,67 +1452,102 @@ def aberration_tensor(
                    - np.array(v2_centre)
                    + np.array([delta_star[0], delta_star[1]]))
 
-    for io, k_out in enumerate(output_modes):
-        # Build output polynomial at sigma = 0 (we evaluate at the chief
-        # image point; sigma-dependence is absorbed into the leading
-        # amplitude's s2-Taylor expansion separately).
-        # For *one* image point evaluation we project the polynomial
-        # P_{n,m}(eta) (after Wick contraction) directly onto the
-        # output LG basis -- but at a single s2_image, the projection
-        # collapses to overlap weight at sigma = 0:  L_{k,n} corresponds
-        # to evaluating the integral once at s2_image and asking how it
-        # decomposes against output mode k.
-        #
-        # Practical implementation: for the field at
-        # s2_image + sigma = s2_image, the projection of I_{n,m} onto
-        # LG^out_k integrates the conjugate output polynomial against
-        # the leading Gaussian envelope.  At sigma = 0 the integral
-        # collapses to <p^out_k* p^src_n p^pup_m>_M up to scaling.  We
-        # compute that triple-product moment.
-        out_poly_full = lg_polynomial(k_out[0], k_out[1], w_o)
-        # Take complex conjugate (we project onto LG^out_k* * I_{n,m}
-        # in the output overlap integral).
-        out_poly = {key: c.conjugate() for key, c in out_poly_full.items()}
+    # ------------------------------------------------------------------
+    # 4.9 -- output-mode projection
+    # ------------------------------------------------------------------
+    # Pre-4.9 collapsed the output projection to ``out_poly.get((0, 0))``,
+    # which is the constant term of the LG output polynomial.  This
+    # zeroes out every ℓ ≠ 0 mode because
+    # ``(σ_x + j·σ_y)^|ℓ| · Laguerre`` has no constant term for |ℓ| ≥ 1
+    # -- silently producing zero coma/astigmatism/tilt tensor entries
+    # even when the physical aberrations were present.  The audit's
+    # action item #2.5 called this out and recommended either (a)
+    # restricting the API to ℓ = 0 or (b) implementing the actual
+    # σ-integration.  4.9 takes path (b).
+    #
+    # The σ-projection is exact at the leading-order asymptotic level:
+    # the field at ``s2 = s2_image + σ`` is given by the same
+    # saddle-point machinery that ``propagate_modal_asymptotic`` already
+    # evaluates pixel-by-pixel.  Building a small grid around the chief
+    # image and projecting numerically with ``decompose_lg`` does the
+    # output Gaussian-moment integral against the LG_o basis without
+    # collapsing the σ-dependence.
+    #
+    # For pure ℓ = 0 output sets we keep the closed-form chief-ray
+    # evaluation -- it's faster and gives identical numbers in that
+    # regime.  Mixed ℓ = 0 / ℓ ≠ 0 sets fall through to the grid path.
+    needs_sigma_integration = any(k_out[1] != 0 for k_out in output_modes)
+
+    if not needs_sigma_integration:
+        # ---- Closed-form chief-ray projection (ℓ = 0 only) -------------
+        for io, k_out in enumerate(output_modes):
+            out_poly_full = lg_polynomial(k_out[0], k_out[1], w_o)
+            out_poly = {key: c.conjugate()
+                        for key, c in out_poly_full.items()}
+            for js, k_src in enumerate(source_modes):
+                src_poly_r = lg_polynomial(k_src[0], k_src[1], w_s)
+                src_poly_eta = _polynomial_substitute_linear_2d(
+                    src_poly_r,
+                    A_xx=J_star[0, 0], A_xy=J_star[0, 1],
+                    A_yx=J_star[1, 0], A_yy=J_star[1, 1],
+                    b_x=r_const[0], b_y=r_const[1],
+                )
+                T_acc = 0.0 + 0.0j
+                for k_pup, b_pup in pupil_amplitudes.items():
+                    if abs(b_pup) < 1e-300:
+                        continue
+                    pup_poly_r = lg_polynomial(k_pup[0], k_pup[1], w_p)
+                    pup_poly_eta = _polynomial_under_affine_shift(
+                        pup_poly_r,
+                        shift_x=complex(pupil_const[0]),
+                        shift_y=complex(pupil_const[1]),
+                    )
+                    P_eta = _multiply_polys_2d(src_poly_eta, pup_poly_eta)
+                    exp_val = _contract_against_moment_table(
+                        P_eta, eta_moments)
+                    out_const = out_poly.get((0, 0), 0.0 + 0.0j)
+                    T_acc += b_pup * out_const * exp_val
+                L[io, js] = A_lead * T_acc
+    else:
+        # ---- Grid-based σ-integration (handles all ℓ) ------------------
+        # Grid extent: ~4·w_o each side captures > 99.9 % of the LG basis
+        # tail (the dominant ℓ_max scaling).  Sampling: 64 points across
+        # 8·w_o gives ~ w_o/8 resolution, plenty for accurate trapezoidal
+        # projection of LG modes up to (p, ℓ) ~ (3, 3).  Both knobs can
+        # be tuned via the new ``sigma_grid_n`` / ``sigma_grid_extent``
+        # kwargs added below for users who need higher orders or
+        # tighter accuracy.
+        n_grid = int(sigma_grid_n) if sigma_grid_n is not None else 64
+        extent = (float(sigma_grid_extent)
+                  if sigma_grid_extent is not None else 4.0 * w_o)
+        sx_arr = np.linspace(s2x_img - extent, s2x_img + extent, n_grid)
+        sy_arr = np.linspace(s2y_img - extent, s2y_img + extent, n_grid)
+        S2X, S2Y = np.meshgrid(sx_arr, sy_arr, indexing='xy')
+        SX_local = S2X - s2x_img
+        SY_local = S2Y - s2y_img
+
+        max_p_o = max((k_out[0] for k_out in output_modes), default=0)
+        max_ell_o = max((abs(k_out[1]) for k_out in output_modes),
+                        default=0)
 
         for js, k_src in enumerate(source_modes):
-            src_poly_r = lg_polynomial(k_src[0], k_src[1], w_s)
-            # Substitute r = J* eta + r_const into source polynomial
-            src_poly_eta = _polynomial_substitute_linear_2d(
-                src_poly_r,
-                A_xx=J_star[0, 0], A_xy=J_star[0, 1],
-                A_yx=J_star[1, 0], A_yy=J_star[1, 1],
-                b_x=r_const[0], b_y=r_const[1],
+            # Field on the grid for THIS source mode (with the
+            # caller's pupil_amplitudes weighting).
+            src_amps = {k_src: 1.0 + 0.0j}
+            field = propagate_modal_asymptotic(
+                fit,
+                source_point=(src_x, src_y),
+                source_amplitudes=src_amps,
+                pupil_amplitudes=pupil_amplitudes,
+                w_s=w_s, w_p=w_p, v2_centre=v2_centre,
+                s2_grid_x=S2X, s2_grid_y=S2Y,
             )
-
-            # Sum over pupil modes
-            T_acc = 0.0 + 0.0j
-            for k_pup, b_pup in pupil_amplitudes.items():
-                if abs(b_pup) < 1e-300:
-                    continue
-                pup_poly_r = lg_polynomial(k_pup[0], k_pup[1], w_p)
-                # Pupil arg is (v - v_c) + delta_star + eta = pupil_const + eta
-                pup_poly_eta = _polynomial_under_affine_shift(
-                    pup_poly_r,
-                    shift_x=complex(pupil_const[0]),
-                    shift_y=complex(pupil_const[1]),
-                )
-                # Multiply src(eta) * pup(eta) * out_conj(eta=0 shift)
-                # Output mode evaluated at sigma=0 contributes its
-                # constant-eta Wick projection.  But out_poly is in
-                # sigma not eta -- and at sigma = 0, the polynomial
-                # reduces to its constant term.  In the proper
-                # output-plane integral the sigma-dependence is
-                # integrated out separately; here we provide the
-                # SCALAR projection at the chief ray, which is what
-                # matters for the Seidel-name-meaning of the
-                # coefficients.  See
-                # discussion.
-                P_eta = _multiply_polys_2d(src_poly_eta, pup_poly_eta)
-                exp_val = _contract_against_moment_table(P_eta, eta_moments)
-                # Output projection coefficient (constant term of out_poly):
-                out_const = out_poly.get((0, 0), 0.0 + 0.0j)
-                T_acc += b_pup * out_const * exp_val
-            L[io, js] = A_lead * T_acc
+            overlaps = decompose_lg(
+                field, SX_local, SY_local,
+                w=w_o, p_max=max_p_o, ell_max=max_ell_o,
+            )
+            for io, k_out in enumerate(output_modes):
+                L[io, js] = overlaps.get(k_out, 0.0 + 0.0j)
 
     return AberrationTensorResult(
         L=L,

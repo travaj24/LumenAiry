@@ -2,6 +2,148 @@
 
 All notable changes to the core library are documented here.
 
+## [4.9.0] — 2026-05-15
+
+**Bundled 4.8.1 + external-audit response.**  4.9 ships the scoped
+runtime-environment manager planned for 4.8.1 alongside the
+correctness fixes from the v4.8.0 external audit
+(``LumenAiry_Audit_Report.md``).  All 7 verified physics bugs and the
+2 documentation gaps the audit flagged are closed; the high-impact
+Seidel formula correction (#2.1) cascades through Petzval (#4.6),
+Schwarzschild S5 (#4.7), and the optimization-hot-loop merit terms.
+170 unit tests (+ 16 new audit-regression tests, + 29 new
+context-manager tests, + 6 new ground-truth Seidel tests) and all 34
+validation files pass.
+
+### Scoped runtime-environment (4.8.1 work bundled in)
+
+* **``lumenairy_context``** -- a new context manager that snapshots
+  and restores the library's process-global runtime settings
+  (``complex_dtype``, ``pyfftw_planner``, ``fft_threads``,
+  ``max_ram``, ASM cache caps) for the duration of a ``with``
+  block.  Nests cleanly, restores on exception, optional
+  ``clear_caches_on_exit=True`` for hard experiment isolation.
+* **``dtype=`` kwarg on the 11 source factories** -- explicit
+  per-call dtype control: ``create_gaussian_beam(...,
+  dtype=np.complex64)`` allocates a complex64 field regardless of
+  ``DEFAULT_COMPLEX_DTYPE``.  Default ``dtype=None`` inherits from
+  the library default (4.9 also fixes the pre-existing
+  inconsistency where factories silently returned complex128
+  regardless of the global default).
+* **``atexit`` auto-restore** -- on first ``import lumenairy`` the
+  default runtime state is snapshotted and an atexit handler
+  restores it on process shutdown.  Catches the foot-gun where
+  ``set_default_complex_dtype`` / ``set_pyfftw_planner`` /etc.
+  called at module scope in a long-running session would otherwise
+  permanently leak state.
+* **New getters** to support the round-trip:
+  ``get_pyfftw_planner``, ``get_fft_threads``, ``get_asm_cache_size``,
+  ``get_max_ram``.
+
+### Audit-fix physics bugs
+
+* **#2.1 Seidel coefficient formula** -- ``seidel_coefficients`` was
+  using ``Δ(1/n) = 1/n2 − 1/n1`` where Welford's per-surface formula
+  requires ``Δ(u/n) = u_after/n2 − u_before/n1``.  The two differ by
+  a surface-geometry-dependent factor (typically 1.5×-5× per surface);
+  the buggy magnitudes propagated through ``seidel_wfe``,
+  ``seidel_field_sweep``, and ``SphericalSeidelMerit``.  Fix: use
+  the correct Welford ``Δ(u/n)``.  4.9 also fixes the flat-refracting-
+  surface branch which previously zeroed S1/S2/S3 (a plano-convex
+  singlet's flat back surface actually contributes nonzero S1 because
+  ``Δ(u/n) ≠ 0`` at non-normal incidence).
+* **#2.5 ``aberration_tensor`` ℓ ≠ 0 outputs** -- the pre-4.9 chief-ray
+  projection collapsed to the constant term of the LG output polynomial,
+  which is identically zero for any ℓ ≠ 0 mode ((σ_x + j·σ_y)^|ℓ| has
+  no constant term).  Coma ``(1, ±1)``, astigmatism ``(0, ±2)``, tilt
+  ``(0, ±1)``, and every other ℓ ≠ 0 output silently returned 0.  4.9
+  implements the full output-plane σ-integration via
+  ``propagate_modal_asymptotic`` + ``decompose_lg`` on a small grid
+  around the chief image -- ℓ ≠ 0 modes now carry real physical
+  meaning.  ℓ = 0 outputs keep the fast closed-form chief-ray path.
+  New ``sigma_grid_n`` / ``sigma_grid_extent`` kwargs tune the
+  projection accuracy.
+* **#4.6 / #4.7 ``seidel_wfe`` Petzval H²** -- the WFE expansion
+  used ``S4·sigma²·ρ²`` where Welford requires
+  ``S4·|H|²·ρ²`` (Lagrange invariant squared).  For a 100 mm BK7
+  singlet at f/4 this was off by ``(D/2)² = 1.6e-4 m²``,
+  producing ~100 mm of phantom Petzval WFE.  ``seidel_coefficients``
+  now returns ``'lagrange_invariant'`` in its result dict, and
+  ``seidel_wfe`` uses |H|² for the S4 term.  The Schwarzschild
+  relation ``S5 = −(A_c/A_m)·(S3 + H²·S4)`` also picks up the
+  missing H² factor for dimensional consistency.
+* **#2.2 GBD back-prop sign** -- ``propagate_beamlets_freespace``
+  used ``exp(1j·k·abs(t))``, which complex-conjugates the axial
+  phase on back-propagation.  Fix: ``exp(1j·k·t)`` (signed).
+  Forward propagation was unaffected; back-prop now round-trips.
+* **#2.3 Coronagraph λ/D scaling** --
+  ``coronagraph_contrast_curve`` hard-coded
+  ``pix_per_lam_over_D = float(Nx)``, ignoring the
+  ``wavelength``, ``f_eff``, ``dx_focal`` kwargs it accepted.
+  Only correct for the FFT-natural pitch (no zero-padding); for
+  oversampled / MFT-zoomed focal grids the angular-scale label
+  was wrong.  4.9 adds ``pupil_diameter_m`` and computes
+  ``pix_per_lam_over_D = λ · f_eff / (D · dx_focal)``.  Legacy
+  callers without ``pupil_diameter_m`` get a one-time
+  ``RuntimeWarning`` and the pre-4.9 approximation.
+* **#3.3 Fresnel / Fraunhofer / SAS z ≤ 0 guards** -- these
+  propagators are forward-only by construction; pre-4.9 silently
+  produced garbage on ``z ≤ 0``.  4.9 raises ``ValueError`` with
+  a pointer to ASM / RS (which do handle back-propagation).
+* **#3.5 TIR mask placement** -- the total-internal-reflection
+  mask in ``apply_real_lens`` was nested inside ``if fresnel:``,
+  so callers using ``slant_correction=True`` with ``fresnel=False``
+  got unphysical residual field in TIR regions.  4.9 runs the TIR
+  mask whenever either path computes ``sin2_tt``.
+* **#4.5 Cosmic-ray rate scaling** -- ``apply_detector``'s
+  ``cosmic_ray_rate`` kwarg was a single Poisson parameter for
+  the whole exposure, not scaled by detector area · exposure
+  time as the physics demands.  4.9 adds
+  ``cosmic_ray_rate_per_m2_per_s`` for physically-correct
+  scaling; legacy ``cosmic_ray_rate`` emits a
+  ``DeprecationWarning`` when used.
+
+### Audit-fix small items
+
+* **#4.3 ``dx > 1 mm`` validator loosened.**  Pre-4.9 raised on
+  ``dx > 1 mm`` (incorrectly rejecting large-aperture telescope
+  pupils at mm-scale sampling).  4.9 raises only on ``dx > 100 mm``;
+  the 1-100 mm range warns once but proceeds.
+* **#4.4 Zemax INCH / INCHES alias.**  The ``load_zemax_zmx`` unit
+  map gained INCH and INCHES aliases alongside IN.
+
+### Audit-fix documentation
+
+* **#2.4** -- ``coating_reflectance`` docstring now calls out the
+  Snell ``.real`` simplification (wrong for metal layers) and the
+  silent TIR cap inside the stack.
+* **#3.1** -- ``propagate_hfpi`` docstring documents the missing
+  ``1/(jλ)``, ``1/r``, and Monte Carlo normalization factors;
+  reframes as a phase-structure / interference diagnostic, not a
+  quantitative-amplitude propagator.
+* **#3.2** -- ``decompose_field_to_beamlets`` docstring documents
+  the position-only limitation (tilted-input fields are
+  reconstructed at the output via phase ramps, not direction shifts).
+* **#3.4** -- ``apply_real_lens`` scalar Fresnel transmission noted
+  as valid only for 45° linear polarisation at modest AOI.
+* **#4.2** -- ``lg_polynomial`` docstring now includes the ``/ w``
+  factor in the LG normalisation (the code always carried it
+  correctly).
+
+### Regression tests added
+
+* ``tests/unit/test_context_manager.py`` -- 29 tests for the new
+  context manager, factory ``dtype=`` kwarg, and atexit hook.
+* ``tests/unit/test_seidel_ground_truth.py`` -- 6 tests for the
+  Seidel formula fix, including the ground-truth ray-trace
+  vs OPD-fit comparison the audit recommended.
+* ``tests/unit/test_audit_fixes_v4_9.py`` -- 16 tests covering
+  each verified audit finding (GBD back-prop, coronagraph scaling,
+  Fresnel z<=0 guards, TIR mask, dx validator, Zemax INCH alias,
+  cosmic-ray scaling).
+
+---
+
 ## [4.8.0] — 2026-05-15
 
 **Library-correctness pass triggered by the external wiki audit.**

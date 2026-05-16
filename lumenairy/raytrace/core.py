@@ -2941,6 +2941,14 @@ def seidel_coefficients(
     y_val_c = y_c_init
     nu_val_c = nu_c_init
 
+    # Lagrange invariant H = y_c · nu_m - y_m · nu_c (system-wide
+    # constant).  Computed up-front so the S5 Schwarzschild relation
+    # below can fold in the H² that S_IV requires for unit consistency
+    # with S_III (audit fix #4.7: pre-4.9 added S3 [m] to S4 [1/m]
+    # directly, mixing dimensions and inheriting both bugs).
+    H_lagrange = float(y_c_init * nu_m_init - y_m_init * nu_c_init)
+    H_sq = H_lagrange ** 2
+
     # Per-surface Seidel contributions
     S1 = np.zeros(n_surf)
     S2 = np.zeros(n_surf)
@@ -2991,42 +2999,32 @@ def seidel_coefficients(
             u_m_after = nu_m_after / n2
             u_c_after = nu_c_after / n2
 
-            i_m_after = c * y_val_m + u_m_after
-            i_c_after = c * y_val_c + u_c_after
-
             # Abbe invariant
             A_m = n1 * i_m  # = n2 * i_m_after (Snell)
             A_c = n1 * i_c
 
-            # Delta(u/n): 1/n2 - 1/n1
-            delta_un = 1.0 / n2 - 1.0 / n1
-
-            # Seidel sums (Hopkins notation)
-            # S_I   = -A_m^2 * y_m * (u_m_after/n2 - u_m/n1)
+            # Welford / Hopkins per-surface Seidel sums (the Lagrange
+            # invariant H is factored out of the sum by convention, so
+            # each term carries A_m / A_c factors but no separate H
+            # multiplier).  Pre-4.9 used ``delta_un = 1/n2 - 1/n1``
+            # which is ``Δ(1/n)``, not ``Δ(u/n)`` -- the two differ by
+            # a factor that depends on the incidence angle and index
+            # (the multiplier ``(n1*i_before + u_before*n2)/n2``), so
+            # the buggy code reported magnitudes off by anywhere from
+            # 1.5× to >5× depending on surface geometry.  The fix
+            # below uses the standard Δ(u/n) = u_after/n_after −
+            # u_before/n_before formulation; cross-check against
+            # Welford ch. 8 Eqs. (8.46)–(8.50).
             h = y_val_m
-            hbar = y_val_c
+            delta_un = (u_m_after / n2) - (u_m / n1)
 
-            delta_un_m = u_m_after - u_m  # this is (nu_after - nu_before) * ...
-
-            # Standard Hopkins/Welford per-surface Seidel sums (the
-            # Lagrange-invariant H^2 factor is pulled out of the sum
-            # by convention, so each term is H^2-less):
-            #    S_I   = -A_m^2 * h * delta(u/n)           spherical
-            #    S_II  = -A_m A_c h * delta(u/n)           coma
-            #    S_III = -A_c^2 * h * delta(u/n)           astigmatism
-            #    S_IV  = -c * (n2 - n1) / (n1 * n2)        Petzval
-            #    S_V   = -(A_c / A_m) * (S_III + S_IV)     distortion
-            # The pre-3.1.8 code assigned S4[i] twice; the first line
-            # had (n2-n1) * (1/n2 - 1/n1) which squares the index
-            # difference and is wrong -- the second line, which wins,
-            # uses the correct -(n2-n1)/(n1 n2) * c form above.  The
-            # errant first line is removed to make the intent
-            # unambiguous.
             S1[i] = -(A_m ** 2) * h * delta_un
             S2[i] = -(A_m * A_c) * h * delta_un
             S3[i] = -(A_c ** 2) * h * delta_un
             S4[i] = -(1.0 / (n2 * n1)) * c * (n2 - n1)
-            S5[i] = -(A_c / A_m) * (S3[i] + S4[i]) if abs(A_m) > 1e-30 else 0.0
+            # S_V Schwarzschild: S_V_k = -(A_c/A) · (S_III_k + H²·S_IV_k).
+            # Pre-4.9 omitted H² on S4, mixing m and 1/m dimensions.
+            S5[i] = -(A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
@@ -3046,9 +3044,40 @@ def seidel_coefficients(
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
         else:
-            # Flat surface: no power, no aberration contribution
-            nu_m_after = nu_val_m - y_val_m * (n2 - n1) * 0  # zero power
-            nu_c_after = nu_val_c - y_val_c * (n2 - n1) * 0
+            # Flat refracting surface: c=0 but Δ(u/n) is still nonzero
+            # for non-normal incidence (Snell's law: n1·u_m = n2·u_m_after,
+            # so u_after/n2 = n1·u_m/n2² which is ≠ u_m/n1 unless n1=n2).
+            # Pre-4.9 zeroed S1/S2/S3 here -- but a flat surface inside
+            # a stack contributes to spherical / coma / astigmatism
+            # exactly as the audit's plano-convex hand calc showed:
+            # the R2=∞ surface of a plano-convex singlet has a real
+            # S1 contribution that the old branch dropped silently.
+            # Compute the full S1..S5 here too, with c=0 baked in.
+            u_m = nu_val_m / n1
+            u_c = nu_val_c / n1
+            i_m = u_m         # c=0, so i = u
+            i_c = u_c
+
+            # Refract: c=0 so no curvature shift, but Snell still
+            # changes the ray angle (handled paraxially as below).
+            nu_m_after = nu_val_m            # for c=0, refraction doesn't change nu in the paraxial limit
+            nu_c_after = nu_val_c            # because nu = n·u and (n1·u_before = n2·u_after) implies nu invariant
+            u_m_after = nu_m_after / n2
+            u_c_after = nu_c_after / n2
+
+            A_m = n1 * i_m
+            A_c = n1 * i_c
+            h = y_val_m
+            delta_un = (u_m_after / n2) - (u_m / n1)
+
+            S1[i] = -(A_m ** 2) * h * delta_un
+            S2[i] = -(A_m * A_c) * h * delta_un
+            S3[i] = -(A_c ** 2) * h * delta_un
+            S4[i] = 0.0           # flat: Petzval contribution exactly zero (c=0)
+            # S_V Schwarzschild: S_V_k = -(A_c/A) · (S_III_k + H²·S_IV_k).
+            # Pre-4.9 omitted H² on S4, mixing m and 1/m dimensions.
+            S5[i] = -(A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
+
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
 
@@ -3077,9 +3106,12 @@ def seidel_coefficients(
         'y_chief': y_c,
         'stop_index': stop_index,
         # 4.3.0: expose the field_angle used so seidel_wfe can apply
-        # the correct sigma^2 scaling to the Hopkins-S_IV (Petzval)
-        # term when reconstructing the wavefront expansion.
+        # the correct scaling to the Hopkins-S_IV (Petzval) term
+        # when reconstructing the wavefront expansion.
         'field_angle': float(field_angle),
+        # 4.9 fix: explicit Lagrange invariant for the seidel_wfe
+        # Petzval (S4·H²·ρ²) and distortion (S5·H³·ρ·cos) terms.
+        'lagrange_invariant': H_lagrange,
     }, abcd
 
 

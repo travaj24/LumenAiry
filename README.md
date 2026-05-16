@@ -10,6 +10,76 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.9.0
+
+**External-audit response + scoped runtime-environment manager.**
+4.9 bundles the 4.8.1 ``lumenairy_context`` work with correctness
+fixes from the v4.8.0 external audit
+(``LumenAiry_Audit_Report.md``).  170 unit tests + 34 validation
+files pass.
+
+### Audit fixes (physics)
+
+* **#2.1 Seidel formula** -- ``seidel_coefficients`` now uses
+  ``Δ(u/n) = u_after/n2 − u_before/n1`` (Welford 8.46), not the
+  pre-4.9 ``Δ(1/n)`` shorthand.  Buggy magnitudes were off by 1.5×-5×
+  per surface depending on incidence angle / index; the flat-
+  refracting-surface branch (which zeroed S1/S2/S3) is also fixed.
+* **#2.5 ``aberration_tensor`` ℓ ≠ 0 outputs** -- pre-4.9 the
+  chief-ray projection collapsed to the constant term of the LG
+  output polynomial, silently returning zero for any ℓ ≠ 0 mode
+  (coma, astigmatism, tilt).  4.9 does the full output-plane
+  σ-integration via ``propagate_modal_asymptotic`` + ``decompose_lg``;
+  ℓ ≠ 0 modes now carry real physical meaning.
+* **#4.6 / #4.7 ``seidel_wfe`` Petzval H²** -- uses the Lagrange
+  invariant ``|H|²`` instead of bare ``sigma²`` (off by (D/2)² ~
+  100× for a typical singlet); S5 Schwarzschild relation also
+  picks up the missing H² factor.
+* **#2.2 GBD axial phase** -- ``exp(1j·k·t)`` instead of
+  ``exp(1j·k·abs(t))``; back-propagation now round-trips.
+* **#2.3 Coronagraph λ/D scaling** -- ``coronagraph_contrast_curve``
+  now uses ``pupil_diameter_m`` to compute the correct
+  ``pix_per_lam_over_D = λ·f/(D·dx_focal)``; pre-4.9 hard-coded
+  ``N`` (correct only for FFT-natural pitch).
+* **#3.3 Fresnel/Fraunhofer/SAS z<=0 guards** -- these forward-only
+  propagators now raise ``ValueError`` on negative or zero z with
+  a pointer to ASM / RS for back-propagation.
+* **#3.5 TIR mask placement** -- runs for ``slant_correction=True``
+  even when ``fresnel=False``.
+* **#4.5 Cosmic-ray scaling** -- new
+  ``cosmic_ray_rate_per_m2_per_s`` kwarg scales by detector area ·
+  exposure time; legacy ``cosmic_ray_rate`` deprecation-warns.
+
+### Audit fixes (small / documentation)
+
+* **#4.3** ``dx > 1 mm`` validator loosened to ``dx > 100 mm``
+  (was rejecting large-telescope pupils).
+* **#4.4** Zemax INCH / INCHES aliases added.
+* **#2.4 / #3.1 / #3.2 / #3.4 / #4.2** docstring warnings on
+  coating Snell simplification, HFPI absolute-amplitude
+  non-normalisation, GBD position-only limitation, real-lens
+  scalar Fresnel applicability, and LG polynomial normalisation.
+
+### New (4.8.1 work bundled in)
+
+* **``lumenairy_context(**kwargs)``** -- scope a block of code
+  with isolated library runtime settings (``complex_dtype``,
+  ``pyfftw_planner``, ``fft_threads``, ``max_ram``, ASM cache
+  caps).  Nests cleanly, restores on exception, optional
+  ``clear_caches_on_exit=True``.
+* **``dtype=`` kwarg on the 11 source factories** --
+  ``create_gaussian_beam(..., dtype=np.complex64)`` allocates
+  explicitly; default ``dtype=None`` inherits from the global
+  default.
+* **``atexit`` auto-restore** -- import-time defaults snapshot
+  on first ``import lumenairy``; restored on process shutdown to
+  catch the long-Jupyter-session foot-gun where
+  ``set_default_complex_dtype`` would otherwise leak.
+* **New getters**: ``get_pyfftw_planner``, ``get_fft_threads``,
+  ``get_asm_cache_size``, ``get_max_ram``.
+
+---
+
 ## What's new in 4.8.0
 
 **Library-correctness pass triggered by the external wiki audit.**

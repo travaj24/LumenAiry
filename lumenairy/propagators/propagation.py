@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -710,6 +710,53 @@ def set_fft_threads(n: Optional[int]) -> None:
         SCIPY_FFT_WORKERS = max(1, int(n))
 
 
+def get_fft_threads() -> int:
+    """Return the current pyFFTW thread count.
+
+    Mirrors :func:`set_fft_threads`.  Returns the effective integer
+    actually being passed to pyFFTW (affinity-aware default or the
+    user override).  Companion accessor introduced in 4.8.1 alongside
+    the :func:`lumenairy.lumenairy_context` manager, which needs it
+    to snapshot/restore state.
+    """
+    return int(FFTW_THREADS)
+
+
+def get_pyfftw_planner() -> str:
+    """Return the current pyFFTW planner flag.
+
+    Mirrors :func:`set_pyfftw_planner`.  Returns one of
+    ``'FFTW_ESTIMATE'`` (the import-time default), ``'FFTW_MEASURE'``,
+    ``'FFTW_PATIENT'``, ``'FFTW_EXHAUSTIVE'``.  Companion accessor
+    introduced in 4.8.1 alongside :func:`lumenairy.lumenairy_context`.
+    """
+    return _PYFFTW_PLAN_FLAGS[0]
+
+
+def get_asm_cache_size() -> Dict[str, int]:
+    """Return the current ASM-cache bounds as a dict.
+
+    Returns the four knobs that :func:`set_asm_cache_size` accepts:
+
+    - ``h_cache`` : max H-cache entries (default 8)
+    - ``h_max_bytes_per_entry`` : per-entry byte cap (default 2 GB)
+    - ``h_max_total_bytes`` : total bytes across all H entries (default 8 GB)
+    - ``freq_cache`` / ``bandlimit_cache`` : entry counts on the two
+      ancillary caches
+
+    Snapshot-friendly: ``set_asm_cache_size(**get_asm_cache_size())``
+    is a round-trip.  Introduced in 4.8.1 to support
+    :func:`lumenairy.lumenairy_context`.
+    """
+    return {
+        'h_cache': int(_H_CACHE_SIZE),
+        'h_max_bytes_per_entry': int(_H_CACHE_MAX_BYTES_PER_ENTRY),
+        'h_max_total_bytes': int(_H_CACHE_MAX_TOTAL_BYTES),
+        'freq_cache': int(_FREQ_GRID_CACHE_SIZE),
+        'bandlimit_cache': int(_BANDLIMIT_CACHE_SIZE),
+    }
+
+
 # ============================================================================
 # FFT helper functions
 # ============================================================================
@@ -939,11 +986,27 @@ def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
             f'(LumenAiry uses metres; for a 2 um pixel pitch pass '
             f'dx = 2e-6, not 2.)'
         )
-    if dx_f > 1e-3:
+    # 4.9 fix (audit #4.3): the > 1 mm guard was over-strict.  Large
+    # telescope pupils (Hale-class ground apertures, JWST-scale segment
+    # arrays) are legitimately sampled at the mm scale.  Loosened to
+    # > 100 mm (above which a unit-error is far more likely than a
+    # genuine telescope-class problem); the legacy < 1 mm sanity floor
+    # downgrades to a one-time RuntimeWarning so users who really do
+    # have mm-scale pixel pitch see the warning once and proceed.
+    if dx_f > 1e-1:
         raise ValueError(
-            f'{fn_name}: dx = {dx_f!r} m looks suspicious (> 1 mm). '
+            f'{fn_name}: dx = {dx_f!r} m looks suspicious (> 100 mm). '
             f'LumenAiry uses SI metres for the grid pitch; for 2 um '
             f'pass dx = 2e-6, not dx = 2.'
+        )
+    elif dx_f > 1e-3:
+        import warnings
+        warnings.warn(
+            f"{fn_name}: dx = {dx_f!r} m is unusually large (> 1 mm) "
+            f"but allowed.  This is valid for large-aperture telescope "
+            f"pupils sampled at the mm scale; if you meant microns, "
+            f"pass dx = 2e-6 (not dx = 2e-3).",
+            RuntimeWarning, stacklevel=3,
         )
     # dy (optional)
     if dy is not None:
@@ -956,9 +1019,9 @@ def _validate_propagator_inputs(E_in, z, wavelength, dx, dy=None, *,
             raise ValueError(
                 f'{fn_name}: dy must be positive [m]; got {dy_f!r}.'
             )
-        if dy_f > 1e-3:
+        if dy_f > 1e-1:
             raise ValueError(
-                f'{fn_name}: dy = {dy_f!r} m looks suspicious (> 1 mm); '
+                f'{fn_name}: dy = {dy_f!r} m looks suspicious (> 100 mm); '
                 f'expected SI metres.'
             )
 
@@ -1944,6 +2007,21 @@ def fresnel_propagate(
     if dy is None:
         dy = dx
 
+    # 4.9 fix (audit #3.3): Fresnel is a forward-propagating paraxial
+    # kernel; z <= 0 is unphysical here (the FFT direction isn't
+    # flipped for back-prop, and the abs(z) in dx_out below mixes
+    # signs with the raw-z phase prefactor giving mathematically
+    # nonsense output rather than a back-propagated field).  Refuse
+    # with a clear error pointing at ASM or RS, both of which do
+    # handle back-propagation correctly for the propagating spectrum.
+    if z <= 0:
+        raise ValueError(
+            f"fresnel_propagate: z must be > 0 (got z={z}).  Fresnel "
+            f"is a forward-propagating paraxial kernel and does not "
+            f"support back-propagation.  Use angular_spectrum_propagate "
+            f"or rayleigh_sommerfeld_propagate (both handle negative z) "
+            f"if you need to back-propagate a field.")
+
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
 
@@ -1951,8 +2029,8 @@ def fresnel_propagate(
     x1 = (xp.arange(Nx) - Nx / 2) * dx
     y1 = (xp.arange(Ny) - Ny / 2) * dy
     X1, Y1 = xp.meshgrid(x1, y1, indexing='xy')
-    dx_out = wavelength * abs(z) / (Nx * dx)
-    dy_out = wavelength * abs(z) / (Ny * dy)
+    dx_out = wavelength * z / (Nx * dx)
+    dy_out = wavelength * z / (Ny * dy)
     x2 = (xp.arange(Nx) - Nx / 2) * dx_out
     y2 = (xp.arange(Ny) - Ny / 2) * dy_out
     X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
@@ -2142,6 +2220,14 @@ def fresnel_propagate_mft(
     """
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fresnel_propagate_mft')
+    # 4.9 fix (audit #3.3): forward-only -- see ``fresnel_propagate``.
+    if z <= 0:
+        raise ValueError(
+            f"fresnel_propagate_mft: z must be > 0 (got z={z}).  "
+            f"Fresnel-MFT is the focal-plane-zoomed variant of "
+            f"fresnel_propagate and inherits its forward-only "
+            f"restriction.  Use angular_spectrum_propagate_mft for "
+            f"back-propagation with arbitrary output grid.")
     # ----- backend dispatch -------------------------------------------------
     from ..backend import is_jax_array
     from ._bluestein import _bluestein_centred_2d
@@ -2311,12 +2397,22 @@ def fraunhofer_propagate(
     if dy is None:
         dy = dx
 
+    # 4.9 fix (audit #3.3): Fraunhofer is the far-field limit of
+    # Fresnel and inherits the same forward-only restriction.  See
+    # the matching check in ``fresnel_propagate``.
+    if z <= 0:
+        raise ValueError(
+            f"fraunhofer_propagate: z must be > 0 (got z={z}).  "
+            f"Fraunhofer is the far-field limit of Fresnel and is "
+            f"forward-only.  Use angular_spectrum_propagate or "
+            f"rayleigh_sommerfeld_propagate for back-propagation.")
+
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
 
     # Output grid spacing
-    dx_out = wavelength * abs(z) / (Nx * dx)
-    dy_out = wavelength * abs(z) / (Ny * dy)
+    dx_out = wavelength * z / (Nx * dx)
+    dy_out = wavelength * z / (Ny * dy)
 
     # Output coordinates
     x2 = (xp.arange(Nx) - Nx / 2) * dx_out
@@ -2403,6 +2499,13 @@ def fraunhofer_propagate_mft(
     """
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fraunhofer_propagate_mft')
+    # 4.9 fix (audit #3.3): forward-only -- see ``fraunhofer_propagate``.
+    if z <= 0:
+        raise ValueError(
+            f"fraunhofer_propagate_mft: z must be > 0 (got z={z}).  "
+            f"Fraunhofer-MFT is forward-only (it's the far-field "
+            f"limit of fresnel_propagate_mft).  Use "
+            f"angular_spectrum_propagate_mft for back-propagation.")
     from ..backend import is_jax_array
     from ._bluestein import _bluestein_centred_2d
 
@@ -2863,6 +2966,16 @@ def scalable_angular_spectrum_propagate(
     """
     _validate_propagator_inputs(E_in, z, wavelength, dx, None,
                                 fn_name='scalable_angular_spectrum_propagate')
+    # 4.9 fix (audit #3.3): SAS's exp(j·k·z·(h_AS - h_Fr)) precompensation
+    # factor can give exp(+real) blow-up for z < 0 with evanescent
+    # components, so back-propagation is not supported.
+    if z <= 0:
+        raise ValueError(
+            f"scalable_angular_spectrum_propagate: z must be > 0 "
+            f"(got z={z}).  SAS is a forward-only propagator (the "
+            f"precompensation phase isn't sign-symmetric).  Use "
+            f"angular_spectrum_propagate or rayleigh_sommerfeld_propagate "
+            f"for back-propagation.")
     # -- array library selection (NumPy vs. CuPy) ---------------------------
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         xp = cp

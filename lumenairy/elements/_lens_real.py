@@ -628,14 +628,31 @@ def apply_real_lens(
 
         # ---- Fresnel amplitude transmission ---------------------------
         if fresnel:
-            # s and p amplitude transmission, complex n supported
+            # s and p amplitude transmission, complex n supported.
+            # Note: averaging the AMPLITUDE coefficients ``0.5·(t_s+t_p)``
+            # is the correct scalar transmission only for 45° linear
+            # polarisation at modest angles of incidence (< ~10°).  For
+            # unpolarised light at high AOI the correct mean is on the
+            # INTENSITY coefficients ``0.5·(T_s+T_p)``; for s- or
+            # p-polarised inputs use the JonesField pipeline instead.
+            # See the docstring caveat (audit #3.4).
             denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
             denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
             t_s = 2.0 * n1c * cos_ti_safe / denom_s
             t_p = 2.0 * n1c * cos_ti_safe / denom_p
             # Scalar approximation: average the two amplitude coefficients
             E = E * 0.5 * (t_s + t_p)
-            # Suppress regions that went into TIR
+
+        # ---- TIR mask (audit #3.5: was inside `if fresnel:` pre-4.9) --
+        # Suppress regions that went into total internal reflection.
+        # This must fire whenever ``sin2_tt`` was computed -- i.e. for
+        # both ``fresnel=True`` and ``slant_correction=True`` paths,
+        # since the slant OPD divides by ``cos_tt_safe`` which is
+        # ill-defined where ``sin2_tt > 1``.  Pre-4.9 only ran this
+        # inside the Fresnel block, leaving slant_correction=True +
+        # fresnel=False users with unphysical residual field amplitude
+        # in TIR regions.
+        if fresnel or slant_correction:
             E = xp.where(sin2_tt < 1.0, E, 0.0 + 0.0j)
 
         # ---- Per-surface clear aperture (vignetting) ------------------

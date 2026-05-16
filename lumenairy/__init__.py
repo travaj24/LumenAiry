@@ -35,8 +35,10 @@ from .propagators.propagation import (
     set_default_complex_dtype,
     get_default_complex_dtype,
     set_asm_cache_size,
+    get_asm_cache_size,
     set_fft_plan_cache_size,
     set_pyfftw_planner,
+    get_pyfftw_planner,
     warmup_fft_plans,
     clear_asm_caches,
     reset_fft_backend,
@@ -50,6 +52,7 @@ from .propagators.propagation import (
     PYFFTW_AVAILABLE,
     CUPY_AVAILABLE,
     set_fft_threads,
+    get_fft_threads,
     set_fft_fallback,
     reset_fft_backend,
     # Precision configuration (complex64 vs complex128)
@@ -565,7 +568,24 @@ from .memory import (
     print_memory_report,
     get_ram_budget,
     set_max_ram,
+    get_max_ram,
 )
+
+# ── Scoped runtime-environment context (4.8.1) ──────────────────────────
+from ._context import (
+    lumenairy_context,
+    snapshot_globals,
+    apply_globals,
+    install_atexit_restore,
+)
+# Snapshot the import-time defaults and register an atexit handler that
+# restores them on process shutdown.  Catches the foot-gun where users
+# call set_default_complex_dtype / set_pyfftw_planner / etc. at module
+# scope inside a long-running process (Jupyter, test harnesses) and
+# expect a "clean" library state on the next unrelated run -- the
+# handler restores whatever the defaults were at the very first
+# ``import lumenairy``.
+install_atexit_restore()
 
 # ── Plotting utilities ─────────────────────────────────────────────────
 from .analysis.plotting import (
@@ -671,7 +691,7 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.8.0"
+__version__ = "4.9.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1253,6 +1273,7 @@ __all__ = [
     'JAX_AVAILABLE',
     'available_cpus',
     'set_fft_threads',
+    'get_fft_threads',
     'set_fft_fallback',
     'reset_fft_backend',
 
@@ -1261,8 +1282,10 @@ __all__ = [
     'get_default_complex_dtype',
     'DEFAULT_COMPLEX_DTYPE',
     'set_asm_cache_size',
+    'get_asm_cache_size',
     'set_fft_plan_cache_size',
     'set_pyfftw_planner',
+    'get_pyfftw_planner',
     'warmup_fft_plans',
     'clear_asm_caches',
 
@@ -1279,6 +1302,12 @@ __all__ = [
     'print_memory_report',
     'get_ram_budget',
     'set_max_ram',
+    'get_max_ram',
+
+    # Scoped runtime context (4.8.1)
+    'lumenairy_context',
+    'snapshot_globals',
+    'apply_globals',
 
     # Progress callback infrastructure
     'ProgressCallback',

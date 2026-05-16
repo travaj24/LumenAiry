@@ -33,6 +33,36 @@ def _ensure_cupy_loaded():
     return cp is not None
 
 
+def _resolve_complex_dtype(dtype: Optional[Any]) -> np.dtype:
+    """Resolve a user-provided dtype kwarg to a concrete complex dtype.
+
+    Convention shared by every ``create_*`` factory in this module
+    (4.8.1+):
+
+    - ``dtype=None``       -> :data:`lumenairy.DEFAULT_COMPLEX_DTYPE`
+      (the library-global default, controlled by
+      :func:`set_default_complex_dtype` and
+      :func:`lumenairy_context`).
+    - ``dtype=np.complex64`` / ``dtype=np.complex128`` -> the given
+      dtype, validated.
+    - Anything else -> ``ValueError``.
+
+    Centralised here so every factory honours the same precedence
+    rules and the same input validation.  Before 4.8.1 the factories
+    silently produced :class:`numpy.complex128` regardless of the
+    library default, which broke memory budgeting for users who set
+    :func:`set_default_complex_dtype` and then created a source.
+    """
+    from ..propagators.propagation import get_default_complex_dtype
+    if dtype is None:
+        return np.dtype(get_default_complex_dtype())
+    dt = np.dtype(dtype)
+    if dt not in (np.dtype(np.complex64), np.dtype(np.complex128)):
+        raise ValueError(
+            f"dtype must be np.complex64 or np.complex128; got {dt!r}.")
+    return dt
+
+
 # ---------------------------------------------------------------------------
 # Fundamental Gaussian beam
 # ---------------------------------------------------------------------------
@@ -48,6 +78,7 @@ def create_gaussian_beam(
     use_gpu: bool = False,
     dy: Optional[float] = None,
     normalize: str = 'peak',
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Gaussian beam field.
@@ -116,8 +147,9 @@ def create_gaussian_beam(
     X, Y = xp.meshgrid(x, y)
 
     # Gaussian amplitude: exp(-r^2 / (2 sigma^2))
+    target_dtype = _resolve_complex_dtype(dtype)
     E = xp.exp(-((X - x0)**2 + (Y - y0)**2) / (2 * sigma**2))
-    E = E.astype(complex)
+    E = E.astype(target_dtype)
 
     if normalize == 'peak':
         pass  # already peak == 1 from exp(0) at the centre
@@ -186,6 +218,7 @@ def create_hermite_gauss(
     y0: float = 0,
     dy: Optional[float] = None,
     normalize: str = 'power',
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Hermite-Gaussian (HG_mn) beam mode at the waist.
@@ -259,7 +292,7 @@ def create_hermite_gauss(
     Hn = hermite_physicist(n, v)
 
     gaussian = np.exp(-((X - x0)**2 + (Y - y0)**2) / w0**2)
-    E = (Hm * Hn * gaussian).astype(complex)
+    E = (Hm * Hn * gaussian).astype(_resolve_complex_dtype(dtype))
 
     if normalize == 'power':
         norm = np.sqrt(np.sum(np.abs(E)**2) * dx * dy)
@@ -334,6 +367,7 @@ def create_laguerre_gauss(
     y0: float = 0,
     dy: Optional[float] = None,
     normalize: str = 'power',
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Create a Laguerre-Gaussian (LG_pl) beam mode at the waist.
@@ -406,7 +440,8 @@ def create_laguerre_gauss(
     L = laguerre_generalized(p, abs(l), rho_sq)
 
     gaussian = np.exp(-r**2 / w0**2)
-    E = (rho**abs(l) * L * gaussian * np.exp(1j * l * theta))
+    E = (rho**abs(l) * L * gaussian
+         * np.exp(1j * l * theta)).astype(_resolve_complex_dtype(dtype))
 
     if normalize == 'power':
         norm = np.sqrt(np.sum(np.abs(E)**2) * dx * dy)
@@ -441,6 +476,7 @@ def create_tilted_plane_wave(
     *,
     angle_x_deg: Optional[float] = None,
     angle_y_deg: Optional[float] = None,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Create a tilted (off-axis) plane wave on an N x N grid.
 
@@ -496,7 +532,7 @@ def create_tilted_plane_wave(
     X, Y = np.meshgrid(x, y)
     k0 = 2 * np.pi / wavelength
     phase = k0 * (np.sin(angle_x) * X + np.sin(angle_y) * Y)
-    E = amplitude * np.exp(1j * phase)
+    E = (amplitude * np.exp(1j * phase)).astype(_resolve_complex_dtype(dtype))
     return E, x, y
 
 
@@ -509,6 +545,7 @@ def create_point_source(
     z0: float = 0.0,
     amplitude: float = 1.0,
     dy: Optional[float] = None,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Create a spherical wave from a point at ``(x0, y0, z0)``
     evaluated on the grid plane at z=0.
@@ -561,7 +598,8 @@ def create_point_source(
     #   z0 > 0 (focus after grid)     -> converging, exp(-i*k*r)/r
     #   z0 == 0 (in-plane singularity)-> use the diverging form
     sign = -1.0 if z0 > 0.0 else 1.0
-    E = amplitude * np.exp(1j * sign * k0 * r) / r
+    E = (amplitude * np.exp(1j * sign * k0 * r) / r).astype(
+        _resolve_complex_dtype(dtype))
     return E, x, y
 
 
@@ -572,6 +610,7 @@ def create_multi_field_sources(
     field_angles: Sequence[Union[float, Tuple[float, float]]],
     amplitude: float = 1.0,
     dy: Optional[float] = None,
+    dtype: Optional[Any] = None,
 ) -> Tuple[List[Tuple[np.ndarray, float, float]], np.ndarray, np.ndarray]:
     """Generate a list of tilted plane waves at the given field angles.
 
@@ -606,7 +645,7 @@ def create_multi_field_sources(
             ax, ay = 0.0, float(a)
         E, x, y = create_tilted_plane_wave(
             N, dx, wavelength, angle_x=ax, angle_y=ay,
-            amplitude=amplitude, dy=dy)
+            amplitude=amplitude, dy=dy, dtype=dtype)
         sources.append((E, ax, ay))
     return sources, x, y
 
@@ -623,6 +662,7 @@ def create_top_hat_beam(
     diameter: float,
     x0: float = 0,
     y0: float = 0,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Uniform-intensity circular beam (top-hat / flat-top).
 
@@ -651,7 +691,8 @@ def create_top_hat_beam(
     y = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, y)
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
-    E = np.where(r <= diameter / 2, 1.0, 0.0).astype(np.complex128)
+    E = np.where(r <= diameter / 2, 1.0, 0.0).astype(
+        _resolve_complex_dtype(dtype))
     norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx ** 2)
     if norm > 0:
         E /= norm
@@ -667,6 +708,7 @@ def create_annular_beam(
     inner_diameter: float,
     x0: float = 0,
     y0: float = 0,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Annular (donut) beam.
 
@@ -692,7 +734,7 @@ def create_annular_beam(
     X, Y = np.meshgrid(x, y)
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     E = np.where((r <= outer_diameter / 2) & (r >= inner_diameter / 2),
-                  1.0, 0.0).astype(np.complex128)
+                  1.0, 0.0).astype(_resolve_complex_dtype(dtype))
     norm = np.sqrt(np.sum(np.abs(E) ** 2) * dx ** 2)
     if norm > 0:
         E /= norm
@@ -708,6 +750,7 @@ def create_fiber_mode(
     x0: float = 0,
     y0: float = 0,
     na: float = 0.12,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Single-mode fiber output (Gaussian with NA-defined divergence).
 
@@ -737,7 +780,7 @@ def create_fiber_mode(
     w0 = mode_field_diameter / 2.0
     sigma = w0 / np.sqrt(2)
     return create_gaussian_beam(N, dx, wavelength, sigma=sigma,
-                                 x0=x0, y0=y0)
+                                 x0=x0, y0=y0, dtype=dtype)
 
 
 def create_led_source(
@@ -748,6 +791,7 @@ def create_led_source(
     wavelength: float,
     x0: float = 0,
     y0: float = 0,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, List[Tuple[float, float]], np.ndarray, np.ndarray]:
     """Lambertian LED source (incoherent; returns the intensity
     envelope as a complex field for use with partial-coherence
@@ -776,7 +820,8 @@ def create_led_source(
         covering the divergence cone with ~21 samples.
     x, y : ndarray
     """
-    E, x, y = create_top_hat_beam(N, dx, wavelength, diameter=diameter, x0=x0, y0=y0)
+    E, x, y = create_top_hat_beam(N, dx, wavelength, diameter=diameter,
+                                   x0=x0, y0=y0, dtype=dtype)
     # Generate suggested source angles
     n_ring = 3
     angles = [(0.0, 0.0)]
@@ -795,6 +840,7 @@ def create_bessel_beam(
     cone_angle: float,
     x0: float = 0,
     y0: float = 0,
+    dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Ideal Bessel beam (J_0 profile).
 
@@ -820,7 +866,7 @@ def create_bessel_beam(
     X, Y = np.meshgrid(x, y)
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     k_r = 2 * np.pi / wavelength * np.sin(cone_angle)
-    E = j0(k_r * r).astype(np.complex128)
+    E = j0(k_r * r).astype(_resolve_complex_dtype(dtype))
     return E, x, y
 
 

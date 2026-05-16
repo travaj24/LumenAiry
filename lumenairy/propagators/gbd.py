@@ -91,6 +91,22 @@ def decompose_field_to_beamlets(
     Each grid pixel becomes a beamlet centred at its physical
     coordinate, with on-axis amplitude ``E_in[i, j]``, propagating
     along ``+z``, and Gaussian waist ``w0 = waist_factor * dx``.
+
+    .. warning::
+       **Position-only decomposition -- the local k-content of the
+       input field is encoded in the beamlet AMPLITUDE, not its
+       DIRECTION** (audit #3.2).  Every beamlet is assigned the
+       on-axis direction ``(0, 0, +1)``; a tilted input plane wave
+       (linear-phase-ramp field) is therefore reconstructed at the
+       output plane as a phase-ramped sum of axial beamlets rather
+       than walked off in the tilted direction.  Works fine for
+       small-tilt / near-collimated / paraxial sources -- which is
+       the design target -- but fails for steeply diverging beams
+       or off-axis tilts large enough that the geometric drift
+       across the propagation distance exceeds the beamlet waist.
+       Proper "Husimi" GBD (position + direction sampling) is on
+       the roadmap; for now switch to HFPI or sub-aperture ASM for
+       strongly off-axis sources.
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
@@ -155,7 +171,14 @@ def propagate_beamlets_freespace(
     Q_new = Q_old / (1 + t.astype(Q_old.dtype) * Q_old)
 
     k = 2 * float(np.pi) / wavelength * n_medium
-    axial_phase = xp.exp(1j * k * xp.abs(t))
+    # 4.9 fix (audit #2.2): use raw ``t`` (signed) instead of
+    # ``abs(t)``.  Under the exp(-iωt) time convention forward
+    # propagation by distance z imparts exp(+i·k·z) -- correct for
+    # both signs of z.  Pre-4.9 ``abs(t)`` accidentally took the
+    # complex conjugate of the axial phase on back-propagation,
+    # giving wrong sign on the propagated wavefront.  Forward
+    # propagation was unaffected (because abs(positive) == positive).
+    axial_phase = xp.exp(1j * k * t)
     qratio = Q_new / Q_old
     new_amplitude = beamlets.amplitude * qratio * axial_phase.astype(Q_old.dtype)
 
