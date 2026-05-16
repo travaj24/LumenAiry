@@ -2,6 +2,163 @@
 
 All notable changes to the core library are documented here.
 
+## [4.11.1] — 2026-05-16
+
+**Round-2 verification follow-up: close the residuals from
+`AUDIT_VERIFICATION_2026_05_16.md`.**  The round-2 verification of
+the v4.10 / v4.11.0 fix wave identified five fixes that had landed
+dead-on-arrival (call-signature mistakes or wrong-API lookups), four
+new bugs the fix wave introduced, three unfixed silent-failure
+paths in the JAX trace, and one over-coarse threshold from the
+4.10 Seidel-correction sign fix.  4.11.1 closes all of these and
+ships the first round of pinning regression tests (zero new test
+files in the entire v4.10 series).  All 179 unit tests pass.
+
+### Dead-on-arrival fixes (4.10 series)
+
+* **C-OP-1 / N1**: `MultiWavelengthMerit` called the per-wavelength
+  `apply_real_lens(E, ctx.prescription, wl, dx_pix)` positionally,
+  but `apply_real_lens` is keyword-only after `E_in` since 4.7.
+  Every iteration raised `TypeError`, swallowed by a bare
+  `except Exception: pass`, so the per-wavelength wave-leg silently
+  reused the parent's single-wavelength values.  Chromatic
+  optimisation was a no-op for the entire v4.10 series.  4.11.1
+  passes by keyword and narrows the except to typed warnings so
+  the failure mode is visible if it ever recurs.
+  (`lumenairy/optimize/core.py:1927`)
+* **M-LR-1**: decentered-stop fix at `_lens_real.py:691-692` called
+  `getattr(surf, 'decenter_x_m', 0.0)` on a *dict*.  `getattr` on a
+  dict for a non-attribute name silently returns the default, so
+  the stop stayed on-axis.  4.11.1 reads `surf.get('decenter')`
+  (the actual key, value is a `(dx, dy)` tuple).
+* **C-PL-1**: the 4.10 swap of `create_circular_polarized` flipped
+  `'right'` to `(1, -i)/sqrt(2)`, which under the library's
+  `S3 = -2 Im(Ex Ey*)` convention gives `S3 = -1` -- contradicting
+  the docstring ("S3 > 0 for right"), `apply_waveplate(QWP, 45°)`
+  on a linear-x input (which produces `(1, +i)/sqrt(2)`), and
+  `vector_diffraction.py:147`'s hard-coded right-circular Jones
+  vector.  4.11.1 restores the consistent `(1, +i)/sqrt(2)` form
+  for `'right'` and updates the docstring.
+
+### New bugs introduced in v4.10
+
+* **N2**: Richards-Wolf rim mask `sin_theta <= sin(theta_max)` was
+  built *after* `sin_theta` was clipped to `sin(theta_max)`, so the
+  mask was identically `True` over the whole grid and the geometric
+  pupil went unenforced.  4.11.1 builds the mask from the unclipped
+  `sin_theta_raw = rho_p / f` before any clipping.
+  (`lumenairy/propagators/vector_diffraction.py:118,137`)
+* **N3**: `_sag_derivatives_param` lacked `sign(R)` (the C-RT-3
+  fix was applied only to the static `_sag_derivatives_jax` twin),
+  so concave conic / aspheric surfaces traced through the
+  differentiable `trace_jax_with_params` /
+  `fit_canonical_polynomials_jax` got the wrong transverse-normal
+  sign.  4.11.1 mirrors the fix using `jnp.where(R >= 0, 1, -1)`.
+* **N4**: `_intersect_jax_param` Newton step used the single-where
+  pattern `jnp.where(|dF_dt|>eps, F/dF_dt, 0.0)`, which still
+  evaluates the division on the False branch and NaN-poisons
+  `jax.grad` when `dF_dt → 0` at grazing rays.  4.11.1 uses the
+  double-where idiom (substitute `dF_dt = 1` on the stuck branch
+  *before* division), mirroring the static `_intersect_jax`.
+* **N5**: `subaperture.py:281-285` built `output_grid_xy =
+  np.stack([OX, OY], axis=-1)` (`ndim=3`) and then tried to unpack
+  it `sgx, sgy = output_grid_xy`, which raised `ValueError` for
+  any `Ny != 2` grid.  The subaperture-asymptotic path was dead
+  on call.  4.11.1 simplifies to `sgx, sgy = OX, OY`.
+* **N6**: `np.argmax(scan.strehl)` in `MultiWavelengthMerit` and
+  `MultiFieldMerit` (`optimize/core.py:1940, :2034`) was sensitive
+  to NaN slices.  4.11.1 uses `np.nanargmax` guarded by an explicit
+  `np.any(np.isfinite(...))` check.
+* **N7**: `MultiWavelengthMerit` and `MultiFieldMerit` hard-coded
+  `np.complex128` (`:1926, :2013`), silently negating the
+  `precision='single'` knob.  4.11.1 honours `get_default_complex_dtype()`.
+* **N8**: `aperture_diameter` fallback used `or` instead of an
+  explicit `is None` check (`:1924`), so an aperture set to `0.0`
+  (a legitimate sentinel) was silently overridden with the
+  grid-arbitrary default.
+* **N9**: bare `except Exception: pass` around the
+  `MultiWavelengthMerit` wave-leg block (`:1916, :1945-1946`)
+  hid C-OP-1 for the entire v4.10 series.  4.11.1 narrows to
+  `(TypeError, ValueError, RuntimeError)` and emits a
+  `RuntimeWarning` with the wavelength and exception text on
+  fallback.
+
+### Still-unfixed-despite-release-notes paths
+
+* **H-RT-5**: `_intersect_jax` had no `~isfinite(t)` mask, no
+  `disc < 0 → alive=False`, and no Newton-stuck → `alive=False`,
+  despite the 4.10 release-notes claim.  4.11.1 tracks a `miss`
+  flag through every branch and propagates it into the returned
+  `state.alive`.  Mirrored in `_intersect_jax_param`.
+* **H-RT-7**: `sqrt(maximum(disc, 0))` at `jax_trace.py:205` (and
+  `:691` in the param twin) has gradient `1/(2 sqrt(0)) → ∞` at
+  the disc=0 tangent-ray boundary, NaN-poisoning `jax.grad` for any
+  ray that grazes a sphere.  4.11.1 substitutes the double-where
+  idiom on both sites.
+* **M-RT-3**: `_refract` / `_reflect` stamped `RAY_NAN` into
+  `error_code` on direction-vector collapse but left `rays.alive
+  = True`, so the dead ray continued through subsequent surfaces
+  with its last-valid direction.  4.11.1 also clears `rays.alive`
+  on the degenerate mask.
+* **H-PR-4**: `create_point_source` clamped the singular `r` at
+  `1e-30`, producing `|E_central| = amplitude / 1e-30 ≈ 1e30` for
+  `|z0| < dx`.  4.11.1 clamps `r` at the pixel half-diagonal
+  `sqrt(dx²+dy²)/2`, capping `|E_central|` to `~ amplitude / dx`
+  (the physically correct discretisation-aware scale).
+
+### Dormant fix activated
+
+* **H-AS-1**: `apply_abcd_to_beamlets` has accepted `axial_opl=`
+  since 4.10.2, but `propagate_gbd_through_prescription` never
+  populated it.  4.11.1 computes
+  `axial_opl = sum_k n_k * thickness_k` over each segment using
+  `surfaces_from_prescription` + `get_glass_index` and passes it
+  through, so the reconstructed field carries the system's
+  absolute axial phase reference (matters for cross-method
+  comparisons with ASM / Fresnel).
+
+### Threshold / docstring follow-ups
+
+* **C-LR-1 follow-up**: the 50 nm Seidel-correction RMS gate in
+  `apply_real_lens` was set when the 4.10 sign-flip bug routinely
+  produced corrections of O(λ).  After the sign fix, real
+  residuals collapsed to a few-nm range and 50 nm silently skipped
+  every meaningful correction.  4.11.1 drops the gate to 5 nm.
+* **RS docstring**: the kernel formula at `propagation.py:2663`
+  still showed the pre-4.10 `(ik - 1/r)` form; the code uses the
+  correct Goodman 3-43 `(1/r - ik)`.  4.11.1 updates the docstring
+  to match.
+* **`seidel_wfe` docstring**: the displayed formula used
+  `σ²·ρ²`; the code has always used `H²·ρ²` (Lagrange invariant),
+  which equals `σ²·f_eff²` in the small-angle limit but is the
+  right invariant for finite-conjugate and stop-shifted systems.
+  Docstring corrected with a one-paragraph note on the relationship.
+* **`_transfer_jax` accuracy bound**: the documented "~1% for
+  NA ≤ 0.1" was a per-surface estimate; over a 5-surface trace the
+  error accumulates to ~2.5%.  Docstring updated to "~0.5% per
+  surface, accumulates" with the explicit
+  `~ thickness * NA² / 2` per-surface scaling.
+
+### Regression-test coverage
+
+* `tests/unit/test_audit_fixes_v4_11_1.py` adds 9 pinning tests:
+  - `MultiWavelengthMerit` does not silently fall back to parent
+    wave-leg values (positive test for C-OP-1 / N1).
+  - Decentered stop is honoured in `apply_real_lens` (clips at
+    the offset disk, not the optical axis).
+  - `create_circular_polarized('right')` has `S3 > 0`.
+  - `apply_quarter_wave_plate` on linear-x at fast-axis π/4
+    matches `create_circular_polarized('right')` handedness.
+  - `create_point_source` central pixel `|E| < 1e7` when
+    `|z0| < dx`.
+  - `propagate_subaperture_asymptotic` is importable.
+  - Concave mirror has non-zero `S4` (Petzval).
+  - Tilted-ASM bandlimit yields non-zero rms output.
+  - `trace_jax` raises `NotImplementedError` on a mirror surface.
+
+These were specifically called out as the "no test coverage" gap
+in the round-2 verification.
+
 ## [4.11.0] — 2026-05-16
 
 **Roll-up release for the v4.10 audit-response series.**  Five

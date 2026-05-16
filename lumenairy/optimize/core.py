@@ -78,6 +78,7 @@ from __future__ import annotations
 
 import copy
 import time
+import warnings
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -1916,16 +1917,26 @@ class MultiWavelengthMerit(MeritTerm):
                 try:
                     # Build a plane-wave input on ctx's grid and push
                     # through the prescription at this wavelength.
+                    # 4.11.1: keyword call (apply_real_lens is keyword-only
+                    # after E_in since 4.7); honour precision knob via
+                    # get_default_complex_dtype; explicit is-None check on
+                    # aperture_diameter so a deliberate 0 isn't shadowed
+                    # by the grid-arbitrary fallback.
                     N_pix = ctx.N
                     dx_pix = ctx.dx
                     Y, X = np.indices((N_pix, N_pix))
                     x = (X - N_pix / 2) * dx_pix
                     y = (Y - N_pix / 2) * dx_pix
-                    ap = ctx.prescription.get('aperture_diameter') or (0.4 * N_pix * dx_pix)
+                    ap = ctx.prescription.get('aperture_diameter')
+                    if ap is None:
+                        ap = 0.4 * N_pix * dx_pix
                     mask = (x ** 2 + y ** 2) <= (ap / 2.0) ** 2
-                    E_in_wl = mask.astype(np.complex128)
+                    E_in_wl = mask.astype(get_default_complex_dtype())
                     E_exit_wl = apply_real_lens(
-                        E_in_wl, ctx.prescription, wl, dx_pix)
+                        E_in_wl,
+                        prescription=ctx.prescription,
+                        wavelength=wl,
+                        dx=dx_pix)
                     sub_E_exit = E_exit_wl
                     half = max(abs(bfl) / 20.0, 1e-3)
                     z_vals = np.linspace(bfl - half, bfl + half, 7)
@@ -1937,13 +1948,26 @@ class MultiWavelengthMerit(MeritTerm):
                     z_b, sb = find_best_focus(scan, 'strehl')
                     sub_z = float(z_b)
                     sub_strehl = float(sb)
-                    i_b = int(np.argmax(scan.strehl))
-                    sub_rms = float(scan.rms_radius[i_b])
+                    # 4.11.1: nanargmax so a single NaN per-z slice does
+                    # not steal the argmax position.
+                    if np.any(np.isfinite(scan.strehl)):
+                        i_b = int(np.nanargmax(scan.strehl))
+                        sub_rms = float(scan.rms_radius[i_b])
                     _, _, sub_opd = wave_opd_2d(
                         E_exit_wl, dx_pix, wl, aperture=ap,
                         focal_length=bfl, f_ref=bfl)
-                except Exception:
-                    pass
+                except (TypeError, ValueError, RuntimeError) as exc:
+                    # 4.11.1: was a bare ``except Exception: pass`` which
+                    # silently swallowed call-signature mistakes (the
+                    # 4.10 positional-call regression hid here for the
+                    # entire v4.10 series).  Warn so the failure is
+                    # visible without aborting the optimizer.
+                    warnings.warn(
+                        f"MultiWavelengthMerit: per-wavelength wave-leg "
+                        f"propagation failed at wl={wl:.3e} m "
+                        f"({type(exc).__name__}: {exc}); falling back "
+                        f"to the parent context's wave-leg values.",
+                        RuntimeWarning, stacklevel=2)
             per_wl_strehl.append(sub_strehl)
             per_wl_rms.append(sub_rms)
             sub_ctx = EvaluationContext(
@@ -2009,8 +2033,10 @@ class MultiFieldMerit(MeritTerm):
             if ap_diam is None:
                 ap_diam = 0.4 * Nx * ctx.dx
             aperture_mask = (X * X + Y * Y) <= (float(ap_diam) / 2.0) ** 2
+            # 4.11.1: honour precision knob (was hard-coded complex128
+            # which silently demoted precision='single' configs).
             E_tilted = np.where(aperture_mask, np.exp(1j * tilt_phase),
-                                 0.0).astype(np.complex128)
+                                 0.0).astype(get_default_complex_dtype())
             E_exit = apply_real_lens(
                 E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
             # Build sub-context
@@ -2031,8 +2057,12 @@ class MultiFieldMerit(MeritTerm):
                         ideal_peak=ideal, verbose=False)
                     z_best, strehl_best = find_best_focus(scan, 'strehl')
                     sub_ctx.strehl_best = float(strehl_best)
-                    i_best = int(np.argmax(scan.strehl))
-                    sub_ctx.rms_radius_best = float(scan.rms_radius[i_best])
+                    # 4.11.1: nanargmax so a single NaN slice doesn't
+                    # steal the argmax.
+                    if np.any(np.isfinite(scan.strehl)):
+                        i_best = int(np.nanargmax(scan.strehl))
+                        sub_ctx.rms_radius_best = float(
+                            scan.rms_radius[i_best])
                 except Exception:
                     sub_ctx.strehl_best = 0.0
             # OPD map if needed

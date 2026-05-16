@@ -586,10 +586,16 @@ def create_circular_polarized(
     dx : float
         Grid spacing [m].
     handedness : {'right', 'left'}, default 'right'
-        Handedness of the circular polarization.
-        - 'right': RHC in the exp(-i omega t) optics convention --
-          Jones vector (1, -i)/sqrt(2); Ey LAGS Ex by pi/2.
-        - 'left':  LHC -- Jones vector (1, +i)/sqrt(2); Ey LEADS Ex.
+        Handedness of the circular polarization, defined by S3 sign
+        under the library's ``S3 = -2 Im(Ex Ey*)`` Stokes convention:
+        - 'right' (RHC): Jones vector ``(1, +i)/sqrt(2)``; S3 = +1.
+        - 'left'  (LHC): Jones vector ``(1, -i)/sqrt(2)``; S3 = -1.
+
+        This matches ``apply_waveplate(QWP, 45 deg)`` acting on a
+        linear x-polarized input (which produces ``(1, +i)/sqrt(2)``
+        under the library's ``exp(-i omega t)`` time convention) and
+        the ``vector_diffraction.richards_wolf_focus`` circular-pol
+        branch.
     dy : float, optional
 
     Returns
@@ -598,19 +604,21 @@ def create_circular_polarized(
 
     Notes
     -----
-    4.10: the handedness branches were swapped pre-4.10 (right was
-    producing (1, +i)/sqrt(2), the LHC Jones vector under the exp(-i
-    omega t) convention used throughout the library).  apply_waveplate
-    and stokes_parameters (S3 = -2 Im(Ex Ey*) ≡ "right positive") have
-    used the correct optics convention since 4.7.0, so this fixes the
-    inconsistency: a "right"-handed Jones field now obeys S3 > 0 and
-    survives a passive QWP@45° → linear → QWP@-45° round-trip.
+    4.11.1: the 4.10 "fix" to this function flipped the handedness
+    branches so that 'right' produced ``(1, -i)/sqrt(2)``, which gave
+    ``S3 = -1`` under the library's own Stokes formula and contradicted
+    both ``apply_waveplate`` (whose QWP@45° on (1,0) produces
+    ``(1, +i)/sqrt(2)``) and the hard-coded right-circular Jones vector
+    in ``vector_diffraction.py``.  4.11.1 restores the pre-4.10 form
+    where 'right' obeys ``S3 > 0``, ``apply_waveplate(QWP, 45 deg)``
+    on x-pol produces ``create_circular_polarized('right')``, and all
+    three Jones-vector sites in the library agree.
     """
     Ex = scalar_field / np.sqrt(2)
     if handedness.lower().startswith('r'):
-        Ey = scalar_field * (-1j) / np.sqrt(2)
-    else:
         Ey = scalar_field * 1j / np.sqrt(2)
+    else:
+        Ey = scalar_field * (-1j) / np.sqrt(2)
     return JonesField(Ex, Ey, dx, dy)
 
 

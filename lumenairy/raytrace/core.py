@@ -653,6 +653,11 @@ def _refract(rays, surface, n1, n2):
     if np.any(_degenerate):
         new_fault = _degenerate & (rays.error_code == RAY_OK)
         rays.error_code = np.where(new_fault, RAY_NAN, rays.error_code)
+        # 4.11.1: also flag the ray dead in ``alive`` -- pre-4.11.1
+        # only the error_code was set, so downstream alive-based masks
+        # treated NaN-direction rays as still active and propagated
+        # garbage through subsequent surfaces.
+        rays.alive = rays.alive & ~_degenerate
     mag = np.maximum(mag, 1e-30)
     rays.L /= mag
     rays.M /= mag
@@ -696,6 +701,8 @@ def _reflect(rays, surface):
     if np.any(_degenerate):
         new_fault = _degenerate & (rays.error_code == RAY_OK)
         rays.error_code = np.where(new_fault, RAY_NAN, rays.error_code)
+        # 4.11.1: also flag dead -- pre-4.11.1 only error_code was set.
+        rays.alive = rays.alive & ~_degenerate
     mag = np.maximum(mag, 1e-30)
     rays.L /= mag
     rays.M /= mag

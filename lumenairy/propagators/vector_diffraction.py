@@ -115,7 +115,15 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     Xp, Yp = np.meshgrid(x_p, y_p)
     rho_p = np.sqrt(Xp ** 2 + Yp ** 2)
     # Map pupil radius to convergence angle: sin(theta) = rho / f
-    sin_theta = np.clip(rho_p / f, 0, np.sin(theta_max))
+    # 4.11.1: build the rim mask from the UNCLIPPED sin_theta_raw so
+    # the geometric pupil is honoured.  Pre-4.11.1 clipped to
+    # sin(theta_max) *before* the mask was built, making the mask
+    # ``sin_theta <= sin(theta_max)`` identically True for every grid
+    # pixel and silently extending the exit pupil to the whole array
+    # (Richards-Wolf rim mask was effectively unenforced).
+    sin_theta_raw = rho_p / f
+    in_pupil = sin_theta_raw <= np.sin(theta_max)
+    sin_theta = np.clip(sin_theta_raw, 0, np.sin(theta_max))
     theta = np.arcsin(sin_theta)
     cos_theta = np.cos(theta)
     phi_p = np.arctan2(Yp, Xp)
@@ -133,8 +141,7 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     # toward the centre, missing energy at the high-NA rim.
     cos_safe = np.maximum(cos_theta, 1e-12)
     apod = 1.0 / np.sqrt(cos_safe)
-    # Mask to exit pupil
-    in_pupil = sin_theta <= np.sin(theta_max)
+    # Mask to exit pupil (in_pupil built from sin_theta_raw above).
     P = pupil * apod * in_pupil
 
     # Polarisation Jones vector

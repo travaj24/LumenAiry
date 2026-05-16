@@ -566,9 +566,33 @@ def propagate_gbd_through_prescription(
     A = float(M[0, 0]); B = float(M[0, 1])
     C = float(M[1, 0]); D = float(M[1, 1])
 
+    # 4.11.1 (H-AS-1): compute the axial OPL = sum_k n_k * t_k across
+    # every glass/air segment plus the BFL gap to the image plane.
+    # Pre-4.11.1 ``axial_opl=`` was never populated so the per-beamlet
+    # complex envelope lacked the system's axial phase reference and
+    # multi-prescription reconstructions had the wrong piston relative
+    # to ASM / Fresnel cross-checks.  Use ``surfaces_from_prescription``
+    # to inspect each surface's thickness and refractive index.
+    try:
+        from ..raytrace import surfaces_from_prescription
+        from ..glass import get_glass_index
+        _surfs = surfaces_from_prescription(prescription)
+        axial_opl = 0.0
+        for _s in _surfs:
+            _t = float(_s.get('thickness', 0.0) or 0.0)
+            _glass = _s.get('glass_after') or _s.get('glass') or 'air'
+            try:
+                _n = float(get_glass_index(_glass, wavelength))
+            except Exception:
+                _n = 1.0
+            axial_opl += _n * _t
+    except Exception:
+        axial_opl = None
+
     # Apply ABCD to every beamlet.
     bundle = apply_abcd_to_beamlets(bundle, A, B, C, D,
-                                     wavelength=wavelength)
+                                     wavelength=wavelength,
+                                     axial_opl=axial_opl)
 
     return reconstruct_field_from_beamlets(
         bundle, Ny=Ny, Nx=Nx, dx=output_dx,

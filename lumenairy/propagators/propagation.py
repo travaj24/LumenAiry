@@ -2658,11 +2658,16 @@ def rayleigh_sommerfeld_propagate(
     naturally captures near-field diffraction effects without the
     band-limiting approximation used in ASM.
 
-    The impulse response is:
+    The impulse response is (Goodman *Introduction to Fourier
+    Optics*, 3rd ed., eq. 3-43):
 
-        h(x, y, z) = (1 / 2pi) * (z / r^2) * (ik - 1/r) * exp(ikr)
+        h(x, y, z) = (1 / 2pi) * (z / r^2) * (1/r - ik) * exp(ikr)
 
     where ``r = sqrt(x^2 + y^2 + z^2)`` and ``k = 2*pi / lambda``.
+    Pre-4.10 the kernel used the negated ``(ik - 1/r)`` form, so
+    superposing RS with ASM / Fresnel results was 180-degrees out of
+    phase.  The docstring formula was updated in 4.11.1 to match the
+    corrected code.
 
     The convolution is computed as::
 

@@ -256,7 +256,6 @@ def propagate_subaperture_asymptotic(
     # centre, run asymptotic propagator, capture field on the global
     # output grid.
     OX, OY = _np.meshgrid(out_x, out_y, indexing='xy')
-    output_grid_xy = _np.stack([OX, OY], axis=-1)
 
     patch_fields = []
     for i in range(len(pg)):
@@ -276,13 +275,11 @@ def propagate_subaperture_asymptotic(
         # `source_lg_amps` / `pupil_lg_amps`) and `s2_grid_x` /
         # `s2_grid_y` (not `output_grid`).  Pre-4.10 calls raised
         # TypeError on first invocation -- the subaperture path was
-        # dead on import.  Convert the output grid centroid into the
-        # (s2_grid_x, s2_grid_y) meshgrids expected by the callee.
-        if hasattr(output_grid_xy, 'ndim') and output_grid_xy.ndim == 2:
-            sgx = output_grid_xy[0] if output_grid_xy.shape[0] == 2 else output_grid_xy
-            sgy = output_grid_xy[1] if output_grid_xy.shape[0] == 2 else output_grid_xy
-        else:
-            sgx, sgy = output_grid_xy
+        # dead on import.  4.11.1: feed the (Ny, Nx) meshgrids
+        # directly; the 4.10 patch built a 3-D ``np.stack(...,axis=-1)``
+        # array and then tried to unpack it 2-ways, which always raised
+        # ``ValueError: too many values to unpack`` for any Ny != 2.
+        sgx, sgy = OX, OY
         F_i = propagate_modal_asymptotic(
             fit,
             source_amplitudes={(0, 0): 1.0 + 0.0j},

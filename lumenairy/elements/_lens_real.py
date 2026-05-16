@@ -688,8 +688,14 @@ def apply_real_lens(
             # if any.  Pre-4.10.2 always used h_sq_axis (centred at the
             # optical axis), so a decentered stop was modelled at the
             # wrong location and clipped the wrong region of the beam.
-            xc_stop = float(getattr(surf, 'decenter_x_m', 0.0) or 0.0)
-            yc_stop = float(getattr(surf, 'decenter_y_m', 0.0) or 0.0)
+            # 4.11.1: the 4.10.2 patch used ``getattr(surf, ...)`` on a
+            # dict (always returns the default 0.0), and looked up the
+            # wrong keys (``decenter_x_m`` / ``decenter_y_m``).  The
+            # surface dict's actual key is ``decenter`` and the value
+            # is a ``(dx, dy)`` tuple -- mirror line 520 above.
+            _dec = surf.get('decenter') or (0.0, 0.0)
+            xc_stop = float(_dec[0])
+            yc_stop = float(_dec[1])
             if xc_stop == 0.0 and yc_stop == 0.0:
                 E = xp.where(h_sq_axis <= (aperture / 2) ** 2,
                              E, 0.0 + 0.0j)
@@ -837,11 +843,18 @@ def apply_real_lens(
             A = np.column_stack([rho ** p for p in even_powers])
             coeffs, *_ = np.linalg.lstsq(A, correction, rcond=None)
             # Suppress fitting noise: if the RMS correction across the
-            # fan is already well below typical simulation residual
-            # (~ a few nm), skip application to avoid injecting
-            # polynomial-fit artefacts into otherwise-clean fields.
+            # fan is already well below typical simulation residual,
+            # skip application to avoid injecting polynomial-fit
+            # artefacts into otherwise-clean fields.
+            # 4.11.1: after the C-LR-1 sign fix in 4.10 the typical
+            # residual collapsed to a few-nm range, so 50 nm silently
+            # skipped most real corrections.  Drop the gate to ~5 nm
+            # (well below the Marechal lambda/14 ~ 35 nm at visible
+            # wavelengths so meaningful corrections are still applied,
+            # while ~5 nm remains above the lstsq numerical noise floor
+            # for a 6th-order even-polynomial fit on ~50 fan samples).
             corr_rms = float(np.sqrt(np.mean(correction ** 2)))
-            if corr_rms > 50e-9:  # > 50 nm RMS to be worth applying
+            if corr_rms > 5e-9:  # > 5 nm RMS to be worth applying
                 # h_sq_axis is in the array backend (xp) already;
                 # coeffs came from a CPU lstsq so scalar-broadcast
                 # them into xp.  Final phase screen multiplies E on

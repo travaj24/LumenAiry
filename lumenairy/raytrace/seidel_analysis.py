@@ -153,21 +153,25 @@ def seidel_wfe(
 ) -> np.ndarray:
     """Reconstruct the third-order wavefront error from Seidel totals.
 
-    Uses the Hopkins / Welford expansion:
+    Uses the Hopkins / Welford expansion (in Lagrange-invariant
+    :math:`H^2` form):
 
     .. math::
         W(\\rho, \\theta) = \\tfrac{1}{8} S_1\\rho^4
                           + \\tfrac{1}{2} S_2\\rho^3 \\cos\\theta
                           + \\tfrac{1}{2} S_3\\rho^2 \\cos^2\\theta
-                          + \\tfrac{1}{4} S_4 \\sigma^2 \\rho^2
+                          + \\tfrac{1}{4} S_4 H^2 \\rho^2
                           + \\tfrac{1}{2} S_5\\rho \\cos\\theta
 
-    where :math:`\\sigma` is the chief-ray field angle used to compute
-    the Seidel sums.  S1, S2, S3, S5 already encode their appropriate
-    field-height powers (S2 ~ sigma, S3 ~ sigma^2, S5 ~ sigma or
-    sigma^3 depending on Hopkins convention); S4 is the
-    field-independent Petzval Hopkins sum and is multiplied by
-    sigma^2 inside this function.
+    where :math:`H = n_0 \\, y_c \\, u_m - n_0 \\, y_m \\, u_c` is the
+    Lagrange invariant (computed inside :func:`seidel_coefficients`).
+    S1, S2, S3, S5 already encode their appropriate field-height
+    powers; S4 is the field-independent Petzval Hopkins sum and is
+    multiplied by :math:`H^2` inside this function.  Pre-4.11 the
+    docstring showed :math:`\\sigma^2` here -- the code has always
+    used :math:`H^2`, which equals :math:`\\sigma^2 \\, f_{\\rm eff}^2`
+    in the small-angle limit but is the right invariant for
+    finite-conjugate and stop-shifted systems.
 
     Parameters
     ----------

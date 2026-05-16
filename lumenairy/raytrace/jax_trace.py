@@ -190,10 +190,19 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
     R_safe = 1.0 if R_is_inf else float(R)
     eps = 1e-30
 
+    # 4.11.1: track "ray missed surface" so the alive-mask gets
+    # propagated downstream instead of silently continuing with t=0
+    # and the parent's direction (H-RT-5).  Initialise to all-alive
+    # before each branch; tighten as we discover failures.
+    miss = jnp.zeros_like(state.alive, dtype=jnp.bool_)
+
     if R_is_inf and not has_aspheric:
         # Pure flat surface: t = -z / N.
         N_safe = jnp.where(jnp.abs(state.N) > eps, state.N, eps)
         t = -state.z / N_safe
+        # Grazing ray (N -> 0) means the ray is parallel to the flat
+        # surface and never intersects it.
+        miss = miss | (jnp.abs(state.N) <= eps)
     else:
         # Spherical initial guess (also exact for conic == 0 / no asph).
         dx = state.x
@@ -202,7 +211,13 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
         b_q = 2.0 * (state.L * dx + state.M * dy + state.N * dz)
         c_q = dx ** 2 + dy ** 2 + dz ** 2 - R_safe ** 2
         disc = b_q ** 2 - 4.0 * c_q
-        sqrt_disc = jnp.sqrt(jnp.maximum(disc, 0.0))
+        # 4.11.1 (H-RT-7): double-where on the sqrt-of-disc.  Single
+        # ``sqrt(maximum(disc, 0))`` has gradient 1/(2 sqrt(0)) -> inf
+        # at the tangent-ray (disc=0) boundary, which poisons
+        # jax.grad through every ray that ever grazes a sphere.
+        disc_pos = disc > 0
+        disc_safe = jnp.where(disc_pos, disc, 1.0)
+        sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
         t1 = (-b_q - sqrt_disc) / 2.0
         t2 = (-b_q + sqrt_disc) / 2.0
         if R_is_inf:
@@ -211,7 +226,9 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
             t0 = -state.z / N_safe
         else:
             t_pick = t1 if R_safe > 0 else t2
-            t0 = jnp.where(disc > 0, t_pick, 0.0)
+            t0 = jnp.where(disc_pos, t_pick, 0.0)
+            # disc<=0 means the ray missed the sphere entirely.
+            miss = miss | (~disc_pos)
 
         if has_aspheric:
             def body(_, t):
@@ -235,7 +252,12 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
         else:
             t = t0
 
-    t = jnp.where(state.alive, t, 0.0)
+    # 4.11.1 (H-RT-5): any ray that produced a non-finite t in Newton
+    # also counts as missed (filter for NaN/Inf rather than silently
+    # carrying them through to the next surface).
+    miss = miss | (~jnp.isfinite(t))
+    t = jnp.where(state.alive & ~miss, t, 0.0)
+    new_alive = state.alive & ~miss
 
     new_x = state.x + state.L * t
     new_y = state.y + state.M * t
@@ -244,7 +266,7 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
 
     return JaxRayState(new_x, new_y, new_z,
                        state.L, state.M, state.N,
-                       new_opd, state.alive)
+                       new_opd, new_alive)
 
 
 # ----------------------------------------------------------------------
@@ -395,9 +417,13 @@ def _transfer_jax(state, thickness, n_medium):
     ``_transfer`` does.
 
     The JAX twin here uses the PARAXIAL APPROXIMATION
-    ``t ≈ thickness`` (equivalent to assuming N = 1).  For typical
-    LumenAiry workflows (free-space optics, NA ≤ 0.1) the two
-    forms agree to ~1 %.  For high-NA designs the math-correct
+    ``t ≈ thickness`` (equivalent to assuming N = 1).  The per-surface
+    transverse error is ``~ thickness * (1 - N) ≈ thickness * NA^2 / 2``,
+    i.e. ~0.5 % per surface at NA = 0.1 and accumulates roughly
+    linearly across the prescription (~2.5 % over a 5-surface trace).
+    OPL error scales similarly.  For typical LumenAiry workflows
+    (free-space optics, NA <= 0.1) the cumulative error is below
+    plotting / fitting noise; for high-NA designs the math-correct
     form would compound to a few-percent transverse error.
 
     Why the paraxial form is retained: substituting the math-correct
@@ -656,8 +682,14 @@ def _sag_derivatives_param(x, y, R, conic, asph_powers, asph_coeffs):
     denom = R_finite * R_finite - (1.0 + conic) * h_sq
     denom_safe = jnp.where(denom > 1e-30, denom, 1e-30)
     sd = jnp.sqrt(denom_safe)
-    zx_conic = x / sd
-    zy_conic = y / sd
+    # 4.11.1: mirror the C-RT-3 fix in the static `_sag_derivatives_jax`
+    # twin -- sign(R) is required so concave (R<0) conic / aspheric
+    # surfaces get the correct transverse-normal direction.  Without
+    # this, ``trace_jax_with_params`` and ``fit_canonical_polynomials
+    # _jax`` refracted off concave surfaces in the wrong direction.
+    R_sign = jnp.where(R >= 0.0, 1.0, -1.0)
+    zx_conic = R_sign * x / sd
+    zy_conic = R_sign * y / sd
     is_flat = jnp.isinf(R) | (jnp.abs(R) > 1e15)
     zx = jnp.where(is_flat, jnp.zeros_like(x), zx_conic)
     zy = jnp.where(is_flat, jnp.zeros_like(y), zy_conic)
@@ -688,20 +720,33 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     b_q = 2.0 * (state.L * dx + state.M * dy + state.N * dz)
     c_q = dx ** 2 + dy ** 2 + dz ** 2 - R_finite ** 2
     disc = b_q ** 2 - 4.0 * c_q
-    sqrt_disc = jnp.sqrt(jnp.maximum(disc, 0.0))
+    # 4.11.1 (H-RT-7): double-where on sqrt(disc) so the disc=0
+    # gradient singularity doesn't NaN-poison jax.grad on tangent rays.
+    disc_pos = disc > 0
+    disc_safe = jnp.where(disc_pos, disc, 1.0)
+    sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
     t1 = (-b_q - sqrt_disc) / 2.0
     t2 = (-b_q + sqrt_disc) / 2.0
     t_sphere = jnp.where(R_finite > 0, t1, t2)
-    t_sphere = jnp.where(disc > 0, t_sphere, 0.0)
+    t_sphere = jnp.where(disc_pos, t_sphere, 0.0)
 
     # Flat initial guess.
     N_safe = jnp.where(jnp.abs(state.N) > eps, state.N, eps)
     t_flat = -state.z / N_safe
 
     t0 = jnp.where(is_flat, t_flat, t_sphere)
+    # 4.11.1 (H-RT-5): rays that missed the sphere (disc<=0) AND aren't
+    # on the flat branch are dead.  Flat rays parallel to the surface
+    # (|N| -> 0) are also dead.
+    miss = (~is_flat & ~disc_pos) | (is_flat & (jnp.abs(state.N) <= eps))
 
     # Newton refinement.  For pure-spherical/flat (no asph, conic=0)
     # this is essentially a no-op (1 iter to verify convergence).
+    # 4.11.1: double-where for the F / dF_dt step.  Single-where (the
+    # old pattern below) still evaluates the division on the False
+    # branch, so when dF_dt -> 0 the division produces NaN/Inf whose
+    # gradient propagates through ``jnp.where`` and poisons jax.grad.
+    # Mirrors the static `_intersect_jax` Newton body.
     def body(_, t):
         xi = state.x + state.L * t
         yi = state.y + state.M * t
@@ -712,11 +757,17 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
         dz_dx, dz_dy = _sag_derivatives_param(
             xi, yi, R, conic, asph_powers, asph_coeffs)
         dF_dt = state.N - dz_dx * state.L - dz_dy * state.M
-        step = jnp.where(jnp.abs(dF_dt) > eps, F / dF_dt, 0.0)
+        stuck = jnp.abs(dF_dt) <= eps
+        dF_safe = jnp.where(stuck, 1.0, dF_dt)
+        step = jnp.where(stuck, 0.0, F / dF_safe)
         return t - step
 
     t = jax.lax.fori_loop(0, _ASPHERIC_NEWTON_ITERS, body, t0)
-    t = jnp.where(state.alive, t, 0.0)
+    # 4.11.1 (H-RT-5): also catch non-finite Newton output (NaN/Inf
+    # from divergent surfaces) and propagate the kill into alive.
+    miss = miss | (~jnp.isfinite(t))
+    t = jnp.where(state.alive & ~miss, t, 0.0)
+    new_alive = state.alive & ~miss
 
     new_x = state.x + state.L * t
     new_y = state.y + state.M * t
@@ -724,7 +775,7 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     new_opd = state.opd + n_medium * t
     return JaxRayState(new_x, new_y, new_z,
                        state.L, state.M, state.N,
-                       new_opd, state.alive)
+                       new_opd, new_alive)
 
 
 def _refract_jax_param(state, R, conic, asph_powers, asph_coeffs, n1, n2):

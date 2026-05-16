@@ -596,22 +596,29 @@ def create_point_source(
     X, Y = np.meshgrid(x, y)
     k0 = 2 * np.pi / wavelength
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2 + z0 ** 2)
-    # 4.10: warn when |z0| < dx -- the 1e-30 floor below produces a
-    # central pixel with |E| ≈ 1e30, dominating any subsequent power
-    # integral.  The Fresnel-curvature representation of a point
-    # source assumes |z0| >> dx; without that the result is
-    # essentially a numerical singularity, not a physical field.
+    # 4.10: warn when |z0| < dx -- the central pixel sits at the
+    # spherical-wave singularity and any sub-pixel ``r`` is a pure
+    # discretisation artefact.  The Fresnel-curvature representation
+    # of a point source assumes |z0| >> dx; without that the result
+    # is essentially a numerical singularity, not a physical field.
     if abs(z0) < dx:
         import warnings
         warnings.warn(
             f"create_point_source: |z0| = {abs(z0):.3e} m is comparable "
-            f"to dx = {dx:.3e} m; the resulting central pixel will "
-            f"dominate the integrated power.  Use |z0| >> dx (typical: "
-            f"10*dx or more) for a meaningful Fresnel-curvature "
-            f"representation.",
+            f"to dx = {dx:.3e} m; the central pixel will dominate the "
+            f"integrated power.  Use |z0| >> dx (typical: 10*dx or "
+            f"more) for a meaningful Fresnel-curvature representation.",
             RuntimeWarning, stacklevel=2,
         )
-    r = np.maximum(r, 1e-30)
+    # 4.11.1 (H-PR-4): floor ``r`` at the local pixel half-diagonal
+    # rather than 1e-30.  Pre-4.11.1 the |E| = amplitude / r evaluation
+    # on the central pixel hit 1e30, dominating every downstream power
+    # integral.  The half-diagonal floor caps |E_central| at
+    # amplitude / (sqrt(dx**2+dy**2)/2), which is the largest distance
+    # any sub-pixel point can have from the cell centroid -- physically
+    # the right scale for a point source binned onto a finite grid.
+    r_floor = 0.5 * np.sqrt(dx * dx + dy * dy)
+    r = np.maximum(r, r_floor)
     # Sign convention under exp(-i*omega*t):
     #   z0 < 0 (source before grid)   -> diverging, exp(+i*k*r)/r
     #   z0 > 0 (focus after grid)     -> converging, exp(-i*k*r)/r

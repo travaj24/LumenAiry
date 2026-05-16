@@ -10,6 +10,41 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.11.1
+
+**Round-2 verification follow-up.**  An independent verification of
+the v4.10 / v4.11.0 fix wave identified five fixes that had landed
+dead-on-arrival (call-signature mistakes / wrong-API lookups),
+several new bugs the fix wave introduced, three unfixed JAX silent-
+failure paths, and one over-coarse threshold.  4.11.1 closes all of
+these and ships the first round of pinning regression tests.
+
+* **MultiWavelengthMerit** chromatic optimisation actually runs now
+  (was a no-op for the entire v4.10 series -- positional call to a
+  keyword-only `apply_real_lens` raised TypeError on every iteration,
+  swallowed by a bare except).
+* **Decentered aperture stop** is honoured (the 4.10.2 fix called
+  `getattr` on a dict with the wrong key names and was inoperative).
+* **Circular-polarisation handedness** consistent across
+  `create_circular_polarized`, `apply_waveplate`, `stokes_parameters`,
+  and `vector_diffraction.py` -- all three sites now agree on
+  `S3 > 0 = "right"`.
+* **Richards-Wolf rim mask** built before clipping (was identically
+  True over the whole grid -- geometric pupil unenforced).
+* **JAX intersect alive-masking** propagates disc<0, non-finite t,
+  and Newton-stuck rays into `state.alive`.
+* **`_refract` / `_reflect`** clear `rays.alive` (not only
+  `error_code`) on direction-vector collapse.
+* **`create_point_source`** central pixel is now bounded by
+  `amplitude / dx` (was 1e30 from a `1e-30` floor on r).
+* **GBD-through-prescription** populates `axial_opl`; reconstruction
+  carries the system's absolute axial phase reference.
+* **Test coverage**: 9 new pinning regression tests
+  (`tests/unit/test_audit_fixes_v4_11_1.py`).  All 179 unit tests
+  pass; the v4.10 series shipped with zero new test files.
+
+See `CHANGELOG.md` for the full per-finding breakdown.
+
 ## What's new in 4.11.0
 
 **Multi-agent physics audit response — full series.**  4.11.0 closes
