@@ -860,12 +860,31 @@ def field_aberration_sweep(
 
     for i, fa_deg in enumerate(fields_deg):
         fa_rad = float(np.radians(fa_deg))
-        sag_rays = make_fan(axis='x', semi_aperture=semi_ap,
-                              n_rays=n_fan, field_angle=fa_rad,
-                              wavelength=wavelength)
-        tan_rays = make_fan(axis='y', semi_aperture=semi_ap,
-                              n_rays=n_fan, field_angle=fa_rad,
-                              wavelength=wavelength)
+        # 4.10: build sagittal/tangential fans at a +y field.  Pre-4.10
+        # this used make_fan(axis='x', field_angle=fa) for "sag" and
+        # make_fan(axis='y', field_angle=fa) for "tan" -- but make_fan
+        # tilts the chief ray ALONG the fan axis, so both calls produced
+        # tangential fans at two *different* fields (x and y),
+        # reporting astigmatism between unrelated configurations.
+        # Correct convention: chief tilted in +y; sagittal fan spreads
+        # rays along x (perpendicular to meridional plane); tangential
+        # fan spreads along y (in the meridional plane).
+        sin_fa = float(np.sin(fa_rad))
+        t = np.linspace(-1.0, 1.0, n_fan)
+        sag_rays = _make_bundle(
+            x=t * semi_ap,
+            y=np.zeros(n_fan),
+            L=np.zeros(n_fan),
+            M=np.full(n_fan, sin_fa),
+            wavelength=wavelength,
+        )
+        tan_rays = _make_bundle(
+            x=np.zeros(n_fan),
+            y=t * semi_ap,
+            L=np.zeros(n_fan),
+            M=np.full(n_fan, sin_fa),
+            wavelength=wavelength,
+        )
         try:
             sag_res = _trace(sag_rays, surfaces, wavelength)
             tan_res = _trace(tan_rays, surfaces, wavelength)
@@ -936,7 +955,12 @@ def petzval_radius(
         inv_R += (n2 - n1) / (n1 * n2 * R)
     if inv_R == 0:
         return float('inf')
-    return 1.0 / inv_R
+    # 4.10: Born & Wolf §4.4 gives the Petzval surface radius as
+    #   1/R_p = -Σ (n2 - n1) / (n1 n2 R)
+    # with the leading minus sign by convention (Petzval surface
+    # curves AWAY from the lens for positive-power systems).  Pre-4.10
+    # returned +1/inv_R, flipping the sign.
+    return -1.0 / inv_R
 
 
 # ----------------------------------------------------------------------

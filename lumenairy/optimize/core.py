@@ -1831,25 +1831,82 @@ class MultiWavelengthMerit(MeritTerm):
         self.needs_wave = sub_merit.needs_wave
 
     def evaluate(self, ctx: Any) -> float:
+        # 4.10: re-evaluate the wave leg at each wavelength.  Pre-4.10
+        # only EFL/BFL changed per-wavelength while E_exit, opd_map,
+        # strehl_best, rms_radius_best were copied unchanged from ctx,
+        # so wrapping StrehlMerit / RMSWavefrontMerit / MatchTargetOPDMerit
+        # in MultiWavelengthMerit just averaged the same single-wavelength
+        # number N times -- the chromatic-aberration penalty was a
+        # no-op.  Now: for each wavelength, propagate the same input
+        # field through apply_real_lens at that wavelength, run a
+        # quick through-focus scan for Strehl, build an OPD map, and
+        # populate the sub-context with these per-wavelength wave
+        # quantities before delegating to the sub-merit.
+        from ..analysis.through_focus import (
+            through_focus_scan, find_best_focus, diffraction_limited_peak)
+        from ..analysis.core import wave_opd_2d
+        from ..elements import apply_real_lens
         efls = []
+        per_wl_strehl = []
+        per_wl_rms = []
         total = 0.0
         for wl in self.wavelengths:
-            # Geometric EFL at this wavelength
             surfs = surfaces_from_prescription(ctx.prescription)
             try:
                 _, efl, bfl, _ = system_abcd(surfs, wl)
             except Exception:
                 efl = bfl = 1e9
             efls.append(float(efl))
-            # Create a sub-context at this wavelength
+            sub_E_exit = ctx.E_exit
+            sub_opd = ctx.opd_map
+            sub_strehl = ctx.strehl_best
+            sub_rms = ctx.rms_radius_best
+            sub_z = ctx.z_best
+            if self.sub_merit.needs_wave and ctx.E_exit is not None and \
+               np.isfinite(bfl) and abs(bfl) < 10:
+                try:
+                    # Build a plane-wave input on ctx's grid and push
+                    # through the prescription at this wavelength.
+                    N_pix = ctx.N
+                    dx_pix = ctx.dx
+                    Y, X = np.indices((N_pix, N_pix))
+                    x = (X - N_pix / 2) * dx_pix
+                    y = (Y - N_pix / 2) * dx_pix
+                    ap = ctx.prescription.get('aperture_diameter') or (0.4 * N_pix * dx_pix)
+                    mask = (x ** 2 + y ** 2) <= (ap / 2.0) ** 2
+                    E_in_wl = mask.astype(np.complex128)
+                    E_exit_wl = apply_real_lens(
+                        E_in_wl, ctx.prescription, wl, dx_pix)
+                    sub_E_exit = E_exit_wl
+                    half = max(abs(bfl) / 20.0, 1e-3)
+                    z_vals = np.linspace(bfl - half, bfl + half, 7)
+                    ideal_pk = diffraction_limited_peak(
+                        E_exit_wl, wl, bfl, dx_pix)
+                    scan = through_focus_scan(
+                        E_exit_wl, dx_pix, wl, z_vals,
+                        ideal_peak=ideal_pk, verbose=False)
+                    z_b, sb = find_best_focus(scan, 'strehl')
+                    sub_z = float(z_b)
+                    sub_strehl = float(sb)
+                    i_b = int(np.argmax(scan.strehl))
+                    sub_rms = float(scan.rms_radius[i_b])
+                    _, _, sub_opd = wave_opd_2d(
+                        E_exit_wl, dx_pix, wl, aperture=ap,
+                        focal_length=bfl, f_ref=bfl)
+                except Exception:
+                    pass
+            per_wl_strehl.append(sub_strehl)
+            per_wl_rms.append(sub_rms)
             sub_ctx = EvaluationContext(
                 prescription=ctx.prescription, wavelength=wl,
                 N=ctx.N, dx=ctx.dx, efl=float(efl), bfl=float(bfl),
-                seidel=ctx.seidel, E_exit=ctx.E_exit,
-                opd_map=ctx.opd_map, strehl_best=ctx.strehl_best,
-                rms_radius_best=ctx.rms_radius_best, z_best=ctx.z_best)
+                seidel=ctx.seidel, E_exit=sub_E_exit,
+                opd_map=sub_opd, strehl_best=sub_strehl,
+                rms_radius_best=sub_rms, z_best=sub_z)
             total = total + self.sub_merit.evaluate(sub_ctx)
         ctx.efls_per_wavelength = np.array(efls)
+        ctx.strehls_per_wavelength = np.array(per_wl_strehl)
+        ctx.rms_per_wavelength = np.array(per_wl_rms)
         return self.weight * total
 
 
@@ -1886,16 +1943,25 @@ class MultiFieldMerit(MeritTerm):
     def evaluate(self, ctx: Any) -> float:
         total = 0.0
         for angle in self.field_angles:
-            # Build tilted plane wave
+            # Build tilted plane wave clipped to the lens aperture so
+            # the propagated intensity reflects the lens's actual
+            # acceptance.  Pre-4.10 the unclipped grid-filling plane
+            # wave fed every grid pixel through apply_real_lens, then
+            # Strehl was computed against a "grid-filling" reference
+            # which artificially lowered the value and biased the
+            # optimizer toward apertures larger than designed.
             Ny, Nx = ctx.N, ctx.N
             x = (np.arange(Nx) - Nx / 2) * ctx.dx
             y = (np.arange(Ny) - Ny / 2) * ctx.dx
             X, Y = np.meshgrid(x, y)
             k0 = 2 * np.pi / ctx.wavelength
-            # Tilt in y direction (tangential)
             tilt_phase = k0 * np.sin(angle) * Y
-            E_tilted = np.exp(1j * tilt_phase)
-            # Propagate through lens
+            ap_diam = ctx.prescription.get('aperture_diameter')
+            if ap_diam is None:
+                ap_diam = 0.4 * Nx * ctx.dx
+            aperture_mask = (X * X + Y * Y) <= (float(ap_diam) / 2.0) ** 2
+            E_tilted = np.where(aperture_mask, np.exp(1j * tilt_phase),
+                                 0.0).astype(np.complex128)
             E_exit = apply_real_lens(
                 E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
             # Build sub-context
@@ -2001,6 +2067,12 @@ class MinBackFocalLengthMerit(MeritTerm):
         self.weight = float(weight)
 
     def evaluate(self, ctx: Any) -> float:
+        # 4.10: ctx.bfl is set to the sentinel 1e9 when the ray leg
+        # fails.  Pre-4.10 deficit = max(0, min_bfl - 1e9) = 0, so
+        # invalid prescriptions silently scored as "satisfies clearance".
+        # Penalise them with a large finite value instead.
+        if not ctx_is_valid(ctx, 'bfl'):
+            return self.weight * (self.min_bfl ** 2)
         deficit = max(0.0, self.min_bfl - ctx.bfl)
         return self.weight * deficit * deficit
 
@@ -2017,6 +2089,12 @@ class MaxFNumberMerit(MeritTerm):
         self.weight = float(weight)
 
     def evaluate(self, ctx: Any) -> float:
+        # 4.10: guard against the ctx.efl = 1e9 sentinel.  Pre-4.10 a
+        # failed ray leg produced fnum = 1e9 / aperture ≈ 1e12, squared
+        # to ≈ 1e24 -- swamping every other merit term in the sum so the
+        # optimizer "saw" only this penalty when the ray leg failed.
+        if not ctx_is_valid(ctx, 'efl'):
+            return self.weight
         ap = ctx.prescription.get('aperture_diameter', 1e-3)
         fnum = abs(ctx.efl) / ap if ap > 0 else 1e9
         excess = max(0.0, fnum - self.max_f_number)
@@ -2341,6 +2419,20 @@ def design_optimize(parameterization: Any,
     _orig_complex_dtype = get_default_complex_dtype()
     if precision == 'single':
         set_default_complex_dtype(np.complex64)
+    # 4.10: register dtype restoration through a sentinel object so any
+    # exception (scipy raise, KeyboardInterrupt, etc.) before the
+    # success-path restore at the end still puts the global complex
+    # dtype back.  Without this, an interrupted `precision='single'`
+    # design_optimize() leaked complex64 to every subsequent call in
+    # the process.
+    class _RestoreDtype:
+        def __init__(self, dtype): self.dtype = dtype
+        def __del__(self):
+            try:
+                set_default_complex_dtype(self.dtype)
+            except Exception:
+                pass
+    _dtype_restore_guard = _RestoreDtype(_orig_complex_dtype)
 
     need_wave = any(m.needs_wave for m in merit_terms)
     n_params = parameterization.n_params
@@ -2442,8 +2534,14 @@ def design_optimize(parameterization: Any,
             ctx.E_exit = E_exit
             # Through-focus scan
             if not np.isfinite(ctx.bfl) or abs(ctx.bfl) > 10:
-                # Probably a bad prescription; skip wave metrics
-                return _sum_merits(ctx, merit_terms)
+                # 4.10: every other return path in evaluate() returns
+                # (value, ctx) and every caller unpacks it that way.
+                # Pre-4.10 this branch returned a bare scalar, so any
+                # prescription that briefly drove BFL out of range
+                # mid-optimisation raised "cannot unpack non-iterable
+                # float object" and killed the run instead of being
+                # penalised.
+                return _sum_merits(ctx, merit_terms), ctx
             if z_scan_range is None:
                 half = max(abs(ctx.bfl) / 20.0, 1e-3)
                 z0, z1 = -half, +half
@@ -2636,8 +2734,11 @@ def design_optimize(parameterization: Any,
                   f'converged: merit={final_value:.4g} '
                   f'({iter_tag}{call_count[0]} evals, {dt:.1f}s)')
 
-    # Restore the caller's default complex dtype (only matters when
-    # precision='single' was passed; no-op otherwise).
+    # 4.10: restoration handled by the _dtype_restore_guard at the top
+    # of the function (fires via __del__ on normal return AND on any
+    # exception path).  Force an early restore here on the success path
+    # for clarity; the guard re-restores on function exit which is a
+    # no-op.
     if precision == 'single':
         set_default_complex_dtype(_orig_complex_dtype)
 

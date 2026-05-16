@@ -66,7 +66,14 @@ def simulate_interferogram(
         y = (np.arange(Ny) - Ny / 2) * dx
         X, Y = np.meshgrid(x, y)
         phase = phase + 2 * np.pi * (tilt_x * X + tilt_y * Y)
-    fringe = background + 0.5 * visibility * np.cos(phase)
+    # 4.10: classic Michelson fringe is
+    #   I = background * (1 + visibility * cos(phase))
+    # which produces Michelson contrast V = (Imax - Imin) / (Imax + Imin)
+    # = visibility (matching the kwarg semantics).  Pre-4.10 used
+    # `background + 0.5 * visibility * cos(phase)`, which produced
+    # contrast 0.5 even with visibility=1, breaking the docstring's
+    # round-trip claim.
+    fringe = background * (1.0 + visibility * np.cos(phase))
     fringe = np.where(np.isfinite(opd), fringe, 0.0)
     return fringe
 

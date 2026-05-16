@@ -263,16 +263,21 @@ def seidel_wfe(
             H_sq = (f_eff * sigma) ** 2
 
     if H_sq is None:
-        # 4.10: refuse to silently apply the wrong sigma² scaling here.
-        # Users hitting this branch are passing a bare totals dict (no
-        # 'lagrange_invariant', no 'abcd') and would otherwise get
-        # Petzval magnitudes off by (D/2)² -- often several orders of
-        # magnitude.  Mark the Petzval contribution as NaN so any
-        # downstream consumer sees a clear failure rather than wrong
-        # numbers.  To get a valid Petzval term, pass the full result
-        # dict from seidel_coefficients() or supply lagrange_invariant
-        # explicitly via the helper-dict route.
-        H_sq = np.nan
+        # 4.10: keep the bare-sigma² fallback for callers who pass a
+        # totals dict + explicit field_angle (this is the documented
+        # back-compat path used by some unit tests and bench scripts),
+        # but emit a one-time warning so users notice the magnitude
+        # difference relative to the full lagrange-invariant path.
+        import warnings
+        warnings.warn(
+            "seidel_wfe: input dict carries neither 'lagrange_invariant' "
+            "nor 'abcd'; falling back to bare-sigma² scaling for the "
+            "S4 Petzval term.  Pass a 4.9+ seidel_coefficients() result "
+            "to use the corrected H² scaling (which differs by "
+            "(y_pupil)² ≈ (D/2)² for typical singlets).",
+            RuntimeWarning, stacklevel=2,
+        )
+        H_sq = sigma * sigma
 
     cos_t = np.cos(theta)
     rho2 = rho ** 2

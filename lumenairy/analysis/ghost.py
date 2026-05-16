@@ -218,7 +218,12 @@ def non_sequential_stray_light(
                           sin_t * np.sin(phi),
                           cos_t], axis=-1),
             )
-            tis_each_surface = float(np.mean(f * cos_t) * np.pi)
+            # 4.10: With cos-weighted hemisphere sampling (PDF =
+            # cos(theta)/pi) the unbiased estimator of
+            # ∫ f cos(theta) sin(theta) dtheta dphi is mean(f) * pi.
+            # Pre-4.10 used mean(f * cos_t) * pi -- an extra cos factor
+            # that biased TIS toward near-normal scattering.
+            tis_each_surface = float(np.mean(f) * np.pi)
         except Exception:
             tis_each_surface = float('nan')
         n_surfs = len(prescription.get('surfaces', []))

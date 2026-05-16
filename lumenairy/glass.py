@@ -184,20 +184,40 @@ SELLMEIER_COEFFICIENTS = {
 }
 
 
-def _sellmeier_index(wavelength_m, coeffs):
+def _sellmeier_index(wavelength_m, coeffs, glass_name=None):
     """Three-term Sellmeier evaluator.
 
     ``coeffs`` is ``((B1, B2, B3), (C1, C2, C3))`` with ``C_i`` in
     um^2.  Returns the real refractive index at the given vacuum
     wavelength [m].
+
+    4.10: validates that the wavelength does not coincide with a
+    Sellmeier resonance (``lam² ≈ C_i``) and that the radicand stays
+    positive.  Pre-4.10 a wavelength near a resonance raised an opaque
+    ``math domain error``; this version raises ``ValueError`` with the
+    glass name and the offending wavelength.
     """
     lam2 = (wavelength_m * 1e6) ** 2  # wavelength^2 in um^2
     (B1, B2, B3), (C1, C2, C3) = coeffs
+    label = f" for glass {glass_name!r}" if glass_name else ""
+    for ci in (C1, C2, C3):
+        if abs(lam2 - ci) < 1e-12:
+            raise ValueError(
+                f"_sellmeier_index{label}: wavelength {wavelength_m*1e9:.3f} nm "
+                f"coincides with a Sellmeier resonance (lam² ≈ C_i = {ci:.6f} "
+                f"um²).  Use a wavelength away from the resonance, or "
+                f"select a different glass model that covers this range.")
     n_sq_minus_1 = (
         B1 * lam2 / (lam2 - C1)
         + B2 * lam2 / (lam2 - C2)
         + B3 * lam2 / (lam2 - C3)
     )
+    if n_sq_minus_1 <= -1.0:
+        raise ValueError(
+            f"_sellmeier_index{label}: extrapolation produced negative n² "
+            f"(n²-1 = {n_sq_minus_1:.6f}) at wavelength {wavelength_m*1e9:.3f} nm. "
+            f"This wavelength is likely outside the catalogue's valid "
+            f"range; pass a wavelength within the glass's specified band.")
     return _math.sqrt(1.0 + n_sq_minus_1)
 
 

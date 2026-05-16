@@ -468,14 +468,21 @@ def error_reduction_jax(
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
     def body(i, obj):
-        # Real-space: enforce support (zero outside)
-        obj = jnp.where(sup, obj, 0.0)
-        # Fourier-space: enforce amplitude
+        # 4.10: correct ER ordering is FFT -> magnitude swap -> IFFT
+        # -> support projection.  Pre-4.10 enforced support BEFORE the
+        # FFT and never re-applied it after the final IFFT, so the
+        # returned object violated the support constraint (the NumPy
+        # path at lines ~257-272 already does this in the right order;
+        # backends diverged).
         F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
         F = meas * jnp.exp(1j * jnp.angle(F))
-        return jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
+        obj_new = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
+        return jnp.where(sup, obj_new, 0.0)
 
     obj_final = jax.lax.fori_loop(0, int(n_iter), body, obj0)
+    # Final support projection (the loop already does it on the last
+    # iteration via the new ordering; this is belt-and-braces).
+    obj_final = jnp.where(sup, obj_final, 0.0)
     F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final)))
     err = float(jnp.mean((jnp.abs(F) - meas) ** 2))
     return np.asarray(obj_final), err

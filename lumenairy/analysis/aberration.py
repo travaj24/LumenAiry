@@ -180,10 +180,17 @@ def aberration_summary(
         else:
             seidel_total = np.asarray(raw, dtype=np.float64).ravel()
             if seidel_total.size != 5:
-                seidel_total = np.zeros(5)
+                # 4.10: NaN-propagate instead of silently zeroing -- a
+                # zero-filled array makes downstream Seidel merits think
+                # the design is diffraction-limited when in fact the
+                # computation just produced the wrong shape.
+                seidel_total = np.full(5, np.nan)
     except Exception as exc:
         notes.append(f"seidel_coefficients failed: {type(exc).__name__}: {exc}")
         _maybe_warn_glass(exc)
+        # 4.10: NaN-propagate the failure rather than returning the
+        # default zeros that would mislead optimisation merits.
+        seidel_total = np.full(5, np.nan)
 
     # --- Wave leg: LG aberration tensor -------------------------------
     lg_result = None

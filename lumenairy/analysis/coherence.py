@@ -188,7 +188,13 @@ def mutual_coherence(
     Ny, Nx = fields[0].shape
     cy = Ny // 2
     rows = np.array([f[cy, :] for f in fields])  # (N_ensemble, Nx)
-    # Gamma[i, j] = mean(E[i] * conj(E[j])) over ensemble
-    Gamma = rows.T.conj() @ rows / len(fields)
+    # Gamma[i, j] = < E(x_i) conj(E(x_j)) > over the ensemble.  4.10:
+    # pre-4.10 used rows.T.conj() @ rows which produces
+    # < conj(E(x_i)) E(x_j) > -- the complex conjugate of the
+    # documented quantity.  Hermiticity is still preserved (Gamma is
+    # always Hermitian), so the bug was silent, but any phase-sensitive
+    # consumer (degree of coherence, Wolf-Mandel imaging) saw the
+    # off-diagonals with flipped sign.
+    Gamma = rows.T @ rows.conj() / len(fields)
     x = (np.arange(Nx) - Nx / 2) * dx
     return Gamma, x

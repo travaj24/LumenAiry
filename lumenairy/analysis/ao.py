@@ -404,6 +404,12 @@ def zernike_modal_basis(
         # Use forward differences along x and y in normalised coords:
         x_norm = X[inside]
         y_norm = Y[inside]
+        # 4.10: Use one-sided FD at rim lenslets (rho_x_p > 1 or rho_y_p > 1)
+        # to avoid evaluating Zernike polynomials in the forbidden rho > 1
+        # region, where zernike_polynomial returns 0 and the centred FD
+        # picks up a spurious 0-vs-finite spike contaminating the
+        # influence matrix.  Switch to backward differences when the
+        # forward probe would escape the disk.
         rho_x_p = np.sqrt((x_norm + eps) ** 2 + y_norm ** 2)
         rho_x_m = np.sqrt((x_norm - eps) ** 2 + y_norm ** 2)
         the_x_p = np.arctan2(y_norm, x_norm + eps)
@@ -416,13 +422,31 @@ def zernike_modal_basis(
         Zx_m = zernike_polynomial(n_idx, m_idx, rho_x_m, the_x_m)
         Zy_p = zernike_polynomial(n_idx, m_idx, rho_y_p, the_y_p)
         Zy_m = zernike_polynomial(n_idx, m_idx, rho_y_m, the_y_m)
-        dWdx = (Zx_p - Zx_m) / (2.0 * eps)
-        dWdy = (Zy_p - Zy_m) / (2.0 * eps)
+        # One-sided fallback at the rim
+        Z_centre_x = zernike_polynomial(n_idx, m_idx, rho, theta)
+        rim_x = rho_x_p > 1.0
+        rim_y = rho_y_p > 1.0
+        dWdx = np.where(rim_x,
+                        (Z_centre_x - Zx_m) / eps,
+                        (Zx_p - Zx_m) / (2.0 * eps))
+        dWdy = np.where(rim_y,
+                        (Z_centre_x - Zy_m) / eps,
+                        (Zy_p - Zy_m) / (2.0 * eps))
+        # The Zernike gradient above is in normalised-pupil coords;
+        # SH-WFS slopes are in physical units (dW/dx, dW/dy [m/m]).
+        # Convert by 1/semi_aperture.
+        if semi_aperture > 0:
+            dWdx = dWdx / semi_aperture
+            dWdy = dWdy / semi_aperture
         M[:n_lens, k] = dWdx
         M[n_lens:, k] = dWdy
 
-    # Reconstructor = pseudo-inverse of M.
-    R = np.linalg.pinv(M)
+    # 4.10: regularize pinv to avoid noise amplification when M is
+    # ill-conditioned (low n_modes vs many lenslets, sparse-illumination
+    # patterns, etc.).  rcond=1e-3 is a conservative truncation; users
+    # who need different conditioning can post-process the reconstructor
+    # via SVD-based modes.
+    R = np.linalg.pinv(M, rcond=1e-3)
 
     return {
         'reconstructor': R,

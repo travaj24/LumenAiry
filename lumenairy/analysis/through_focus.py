@@ -1293,7 +1293,14 @@ def monte_carlo_tolerancing_linearized(
                 surface_index=spec['surface_index'],
                 decenter=decenter, tilt=tilt,
                 form_error_rms=form_rms,
-                random_seed=spec_idx * 100 + hash(knob) % 1000,
+                # 4.10: Python 3's `hash(str)` is randomised per process
+                # via PYTHONHASHSEED, so the form-error realisation
+                # drifted between runs even with the same `seed=`
+                # argument.  Use a deterministic knob-to-int mapping.
+                random_seed=spec_idx * 100 + (
+                    {'decenter_x': 1, 'decenter_y': 2,
+                     'tilt_x': 3, 'tilt_y': 4,
+                     'form_error': 5}.get(knob, 0)),
                 name=f'fd_{spec_idx}_{knob}',
             )
             pres_p = apply_perturbations(prescription, [pert], N=N, dx=dx)

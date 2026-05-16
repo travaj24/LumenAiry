@@ -33,6 +33,7 @@ import numpy as np
 # CuPy is lazy-loaded; this module accesses it via the lenses module's
 # lazy slot so a single load is shared across the package.
 from . import lenses as _lenses_module
+from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
 from .lenses import (
     surface_sag_general,
     surface_sag_biconic,
@@ -152,11 +153,17 @@ def apply_thin_lens(
         lens_phase = xp.exp(1j * k * (f - xp.sqrt(f ** 2 + r_sq)))
 
     elif lens_model == 'aplanatic':
+        # 4.10: replacing the outside-aperture region with 0+0j inside
+        # the PHASE-MASK array silently clipped the amplitude there.
+        # Use 1+0j (unit phase) outside the aplanatic domain so the
+        # multiplier leaves the field unchanged in the rim annulus;
+        # the lens aperture itself should be enforced via a separate
+        # aperture mask, not via the phase mask.
         r_over_f_sq = r_sq / f ** 2
         valid = r_over_f_sq < 1.0
         sqrt_term = xp.sqrt(xp.maximum(1.0 - r_over_f_sq, 0.0))
         phase = k * f * (1.0 - sqrt_term)
-        lens_phase = xp.where(valid, xp.exp(-1j * phase), 0.0 + 0.0j)
+        lens_phase = xp.where(valid, xp.exp(-1j * phase), 1.0 + 0.0j)
 
     elif lens_model == 'local_only':
         # Pure local focusing: the standard decentered quadratic minus the
@@ -398,9 +405,16 @@ def apply_aspheric_lens(
         R_abs = abs(R)
         norm_h_sq = h_sq / R_abs ** 2
         denom_arg = 1 - (1 + k_conic) * norm_h_sq
-        denom_arg_safe = xp.maximum(denom_arg, 1e-12)
+        # 4.10: clamp invalid (outside-conic-domain) pixels to NaN so a
+        # downstream aperture mask explicitly zeros them, rather than
+        # silently extrapolating a 1e-12 floor that produced
+        # near-singular sag (1e6 m for typical optics) outside the
+        # surface domain.
+        valid = denom_arg > 0
+        denom_arg_safe = xp.where(valid, denom_arg, 1.0)
         sag_unsigned = h_sq / (R_abs * (1 + xp.sqrt(denom_arg_safe)))
         sag = np.sign(R) * sag_unsigned
+        sag = xp.where(valid, sag, xp.nan)
 
         if A_coeffs:
             for power, coeff in A_coeffs.items():

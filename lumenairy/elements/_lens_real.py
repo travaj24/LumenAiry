@@ -628,20 +628,20 @@ def apply_real_lens(
 
         # ---- Fresnel amplitude transmission ---------------------------
         if fresnel:
-            # s and p amplitude transmission, complex n supported.
-            # Note: averaging the AMPLITUDE coefficients ``0.5·(t_s+t_p)``
-            # is the correct scalar transmission only for 45° linear
-            # polarisation at modest angles of incidence (< ~10°).  For
-            # unpolarised light at high AOI the correct mean is on the
-            # INTENSITY coefficients ``0.5·(T_s+T_p)``; for s- or
-            # p-polarised inputs use the JonesField pipeline instead.
-            # See the docstring caveat (audit #3.4).
+            # 4.10: average the INTENSITY coefficients for unpolarised
+            # scalar throughput, not the amplitude coefficients.  At
+            # Brewster's angle (or any high AOI), t_s and t_p have
+            # different phases; their amplitude sum can cancel where
+            # sqrt(0.5*(|t_s|^2+|t_p|^2)) correctly captures the
+            # incoherent average power.  Pre-4.10 used 0.5*(t_s+t_p)
+            # which only matches 45-deg linear polarisation at low AOI.
+            # For polarised inputs route through the Jones pipeline.
             denom_s = n1c * cos_ti_safe + n2c * cos_tt_safe
             denom_p = n2c * cos_ti_safe + n1c * cos_tt_safe
             t_s = 2.0 * n1c * cos_ti_safe / denom_s
             t_p = 2.0 * n1c * cos_ti_safe / denom_p
-            # Scalar approximation: average the two amplitude coefficients
-            E = E * 0.5 * (t_s + t_p)
+            T_eff = 0.5 * (xp.abs(t_s) ** 2 + xp.abs(t_p) ** 2)
+            E = E * xp.sqrt(T_eff)
 
         # ---- TIR mask (audit #3.5: was inside `if fresnel:` pre-4.9) --
         # Suppress regions that went into total internal reflection.
@@ -789,7 +789,12 @@ def apply_real_lens(
                     (n2r_i - n1r_i) * sag_fan_i)
             i_ax = int(np.argmin(np.abs(h_alive)))
             delta_ray = opl_ray - opl_ray[i_ax]
-            opl_wave_rel = -(opl_analytic - opl_analytic[i_ax])
+            # 4.10: the analytic thin-element phase is exp(-i k0 (n2-n1) sag),
+            # so the OPL it adds is +(n2-n1)*sag with the SAME sign as the
+            # geometric ray OPL stored in opl_ray.  Pre-4.10 negated this
+            # which made correction ≈ 2 * opl_analytic, doubling the
+            # Seidel correction in the wrong direction.  Drop the negation.
+            opl_wave_rel = opl_analytic - opl_analytic[i_ax]
             correction = delta_ray - opl_wave_rel
             # Fit even-power polynomial in normalised pupil coord.
             rho = h_alive / r_pupil

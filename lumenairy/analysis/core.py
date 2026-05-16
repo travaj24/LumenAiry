@@ -1260,7 +1260,11 @@ def polychromatic_psf(
 #   7  |  (3, -1) |  Vertical coma
 #   8  |  (3,  1) |  Horizontal coma
 #   9  |  (3,  3) |  Vertical trefoil
-#  10  |  (4,  0) |  Primary spherical
+#  10  |  (4, -4) |  Oblique quadrafoil
+#  11  |  (4, -2) |  Oblique secondary astigmatism
+#  12  |  (4,  0) |  Primary spherical
+#  13  |  (4,  2) |  Vertical secondary astigmatism
+#  14  |  (4,  4) |  Vertical quadrafoil
 #   ...
 #
 # All Zernikes are normalised so that the rms of each mode over the

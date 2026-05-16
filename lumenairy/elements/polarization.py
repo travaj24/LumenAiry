@@ -566,19 +566,30 @@ def create_circular_polarized(
         Grid spacing [m].
     handedness : {'right', 'left'}, default 'right'
         Handedness of the circular polarization.
-        - 'right': Ey leads Ex by pi/2 (RHC in optics convention)
-        - 'left':  Ey lags  Ex by pi/2 (LHC)
+        - 'right': RHC in the exp(-i omega t) optics convention --
+          Jones vector (1, -i)/sqrt(2); Ey LAGS Ex by pi/2.
+        - 'left':  LHC -- Jones vector (1, +i)/sqrt(2); Ey LEADS Ex.
     dy : float, optional
 
     Returns
     -------
     JonesField
+
+    Notes
+    -----
+    4.10: the handedness branches were swapped pre-4.10 (right was
+    producing (1, +i)/sqrt(2), the LHC Jones vector under the exp(-i
+    omega t) convention used throughout the library).  apply_waveplate
+    and stokes_parameters (S3 = -2 Im(Ex Ey*) ≡ "right positive") have
+    used the correct optics convention since 4.7.0, so this fixes the
+    inconsistency: a "right"-handed Jones field now obeys S3 > 0 and
+    survives a passive QWP@45° → linear → QWP@-45° round-trip.
     """
     Ex = scalar_field / np.sqrt(2)
     if handedness.lower().startswith('r'):
-        Ey = scalar_field * 1j / np.sqrt(2)
-    else:
         Ey = scalar_field * (-1j) / np.sqrt(2)
+    else:
+        Ey = scalar_field * 1j / np.sqrt(2)
     return JonesField(Ex, Ey, dx, dy)
 
 

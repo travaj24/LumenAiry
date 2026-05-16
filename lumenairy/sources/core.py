@@ -131,6 +131,10 @@ def create_gaussian_beam(
     ``sigma`` keyword-only.
     """
     if CUPY_AVAILABLE and use_gpu:
+        # 4.10: pre-4.10 reached for module-level ``cp`` without first
+        # calling _ensure_cupy_loaded(), so ``cp`` was still None and
+        # the first GPU call raised AttributeError on xp.arange(...).
+        _ensure_cupy_loaded()
         xp = cp
     else:
         xp = np
