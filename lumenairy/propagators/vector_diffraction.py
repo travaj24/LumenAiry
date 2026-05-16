@@ -74,14 +74,35 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
 
     if N_focal is None:
         N_focal = Np
-    if dx_focal is None:
-        dx_focal = wavelength / (4.0 * NA)
+
+    # 4.10: the underlying FFT fixes the focal-plane pitch to
+    # dx_focal_fft = λ·f / (N_focal·dx_pupil)
+    # regardless of any user-supplied dx_focal -- the latter only
+    # relabels the axes.  Compute the actual FFT pitch and warn loudly
+    # if the user passed a different value (was a silent mismatch
+    # pre-4.10).  A true free-pitch focal plane requires a chirp-z
+    # backend; see fresnel_propagate_mft / Bluestein.
+    dx_focal_fft = wavelength * f / (N_focal * dx_pupil)
+    if dx_focal is not None:
+        if abs(dx_focal - dx_focal_fft) > dx_focal_fft * 1e-6:
+            import warnings
+            warnings.warn(
+                f"richards_wolf_focus: caller-supplied dx_focal="
+                f"{dx_focal:.3e} m differs from the FFT-natural pitch "
+                f"{dx_focal_fft:.3e} m (= wavelength*f / (N_focal*dx_pupil)).  "
+                f"The FFT only resolves the natural pitch; the caller-"
+                f"supplied value is ignored.  For arbitrary focal pitch, "
+                f"use a Bluestein-backed propagator.",
+                RuntimeWarning, stacklevel=2,
+            )
+    dx_focal = dx_focal_fft
+
     if z_planes is None:
         z_planes = np.array([0.0])
     else:
         z_planes = np.atleast_1d(np.asarray(z_planes, dtype=np.float64))
 
-    # Focal coordinates
+    # Focal coordinates (at the actual FFT-natural pitch).
     x_f = (np.arange(N_focal) - N_focal / 2) * dx_focal
     y_f = (np.arange(N_focal) - N_focal / 2) * dx_focal
     Xf, Yf = np.meshgrid(x_f, y_f)
@@ -99,10 +120,21 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     cos_theta = np.cos(theta)
     phi_p = np.arctan2(Yp, Xp)
 
-    # Aplanatic apodisation factor: sqrt(cos(theta))
-    apod = np.sqrt(np.maximum(cos_theta, 0))
+    # Aplanatic apodisation factor: sqrt(cos(theta)) is the energy-
+    # conservation factor.  However, when we sample the pupil on a
+    # Cartesian (x_p, y_p) grid and use an FFT, we are implicitly using
+    # dx_p·dy_p as the area element.  The Richards-Wolf integral is
+    # over solid angle dΩ = sin θ dθ dφ; the Cartesian-to-angular
+    # Jacobian factor (∂(x_p,y_p)/∂Ω) is f²·cos θ.  Reconciling these,
+    # the pupil weight under an FFT representation is
+    #   sqrt(cos θ) (aplanatic) · 1/cos θ (Jacobian) = 1/sqrt(cos θ).
+    # Pre-4.10 used only the aplanatic factor, so the effective
+    # apodisation was cos^(3/2) θ instead of cos^(-1/2) θ -- biased
+    # toward the centre, missing energy at the high-NA rim.
+    cos_safe = np.maximum(cos_theta, 1e-12)
+    apod = 1.0 / np.sqrt(cos_safe)
     # Mask to exit pupil
-    in_pupil = sin_theta < np.sin(theta_max)
+    in_pupil = sin_theta <= np.sin(theta_max)
     P = pupil * apod * in_pupil
 
     # Polarisation Jones vector
@@ -173,6 +205,19 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         Ex[iz] = _fft_field(Px)
         Ey[iz] = _fft_field(Py)
         Ez[iz] = _fft_field(Pz)
+
+    # 4.10: apply the Richards-Wolf scalar prefactor -i·k·f/(2π) · exp(-i·k·f)
+    # (Richards & Wolf 1959 Eq. 3.7).  Pre-4.10 omitted this, so absolute
+    # amplitudes were uncalibrated -- intensity was off by (k·f/2π)² and
+    # the global phase by exp(-i·k·f), breaking coherent superposition
+    # of the focal field with externally propagated reference arms.
+    rw_prefactor = (-1j * k * f / (2.0 * np.pi)) * np.exp(-1j * k * f)
+    # Multiply by the Cartesian pupil area element (the FFT's implicit
+    # discretisation factor).
+    rw_prefactor = rw_prefactor * (dx_pupil * dx_pupil)
+    Ex = Ex * rw_prefactor
+    Ey = Ey * rw_prefactor
+    Ez = Ez * rw_prefactor
 
     # Squeeze single z-plane
     if n_z == 1:

@@ -131,10 +131,14 @@ def _sag_value_jax(x, y, R_is_inf, R_safe, conic, asph_items):
 def _sag_derivatives_jax(x, y, R_is_inf, R_safe, conic, asph_items):
     """Analytical derivatives dz/dx, dz/dy of the conic + aspheric sag.
 
-    For rotationally symmetric z(h) with h^2 = x^2 + y^2:
-      conic part:  dz/dx = x / sqrt(R^2 - (1+k) h^2)
-                   dz/dy = y / sqrt(R^2 - (1+k) h^2)
-      aspheric:    a_n * n * h^(n-2) * x   (and similarly for y)
+    For rotationally symmetric z(h) with h^2 = x^2 + y^2 the NumPy
+    reference (core.py:_surface_sag_derivative) uses
+        dz/dh = h / (R * sqrt(1 - (1+k) h^2 / R^2))
+    so that sign(dz/dh) follows sign(R) -- positive for convex (R>0),
+    negative for concave (R<0).  Pre-4.10 this JAX twin used
+    ``zx = x / sqrt(R^2 - (1+k) h^2)`` (always positive), so refracted
+    rays at concave conic/aspheric surfaces got the wrong transverse
+    direction sign.  Mirror the NumPy form here.
     """
     import jax.numpy as jnp
     h_sq = x * x + y * y
@@ -145,8 +149,15 @@ def _sag_derivatives_jax(x, y, R_is_inf, R_safe, conic, asph_items):
         denom = R_safe * R_safe - (1.0 + conic) * h_sq
         denom_safe = jnp.where(denom > 1e-30, denom, 1e-30)
         sd = jnp.sqrt(denom_safe)
-        zx = x / sd
-        zy = y / sd
+        # 4.10: NumPy reference uses dz/dh = h / (R · sqrt(1 - (1+k)h²/R²)),
+        # whose sign follows sign(R) -- positive for convex (R>0), negative
+        # for concave (R<0).  Pre-4.10 JAX form returned magnitude only,
+        # so concave conic/aspheric refraction gave the wrong transverse
+        # sign.  R_safe is a Python float (static for the trace), so
+        # R_sign is a build-time constant -- no gradient impact.
+        R_sign = 1.0 if R_safe >= 0 else -1.0
+        zx = R_sign * x / sd
+        zy = R_sign * y / sd
     for power, coeff in asph_items:
         # d/dx [a_n * h^n] = a_n * n * h^(n-2) * x
         if power == 2:
@@ -213,7 +224,11 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
                 dz_dx, dz_dy = _sag_derivatives_jax(
                     xi, yi, R_is_inf, R_safe, conic, asph_items)
                 dF_dt = state.N - dz_dx * state.L - dz_dy * state.M
-                step = jnp.where(jnp.abs(dF_dt) > eps, F / dF_dt, 0.0)
+                # Double-where pattern for grazing rays (dF_dt -> 0):
+                # naive F/dF_dt produces NaN that poisons jax.grad.
+                stuck = jnp.abs(dF_dt) <= eps
+                dF_safe = jnp.where(stuck, 1.0, dF_dt)
+                step = jnp.where(stuck, 0.0, F / dF_safe)
                 return t - step
 
             t = jax.lax.fori_loop(0, _ASPHERIC_NEWTON_ITERS, body, t0)
@@ -284,11 +299,19 @@ def _refract_jax(state, R, conic, asph_items, n1, n2):
     cos_i = -(state.L * nx + state.M * ny + state.N * nz)
     sin2_t = eta ** 2 * (1.0 - cos_i ** 2)
     tir = sin2_t > 1.0
-    cos_t = jnp.sqrt(jnp.maximum(1.0 - sin2_t, 0.0))
+    # 4.10: double-where so jax.grad doesn't trip on sqrt(0) at the TIR
+    # boundary.  TIR rays are also masked to keep their incoming direction
+    # so the math-direction substitution doesn't bleed into the output.
+    sin2_t_safe = jnp.where(tir, 0.0, sin2_t)
+    cos_t = jnp.sqrt(jnp.maximum(1.0 - sin2_t_safe, 0.0))
 
-    Lt = eta * state.L + (eta * cos_i - cos_t) * nx
-    Mt = eta * state.M + (eta * cos_i - cos_t) * ny
-    Nt = eta * state.N + (eta * cos_i - cos_t) * nz
+    Lt_r = eta * state.L + (eta * cos_i - cos_t) * nx
+    Mt_r = eta * state.M + (eta * cos_i - cos_t) * ny
+    Nt_r = eta * state.N + (eta * cos_i - cos_t) * nz
+
+    Lt = jnp.where(tir, state.L, Lt_r)
+    Mt = jnp.where(tir, state.M, Mt_r)
+    Nt = jnp.where(tir, state.N, Nt_r)
 
     new_alive = state.alive & ~tir
     return JaxRayState(state.x, state.y, state.z, Lt, Mt, Nt,
@@ -424,6 +447,35 @@ def trace_jax(
     aperture_d = prescription.get('aperture_diameter')
     default_semi = (aperture_d / 2.0
                     if aperture_d is not None else float('inf'))
+
+    # 4.10: refuse to silently pass mirrors / coord-breaks / biconic /
+    # freeform through as flat refractives.  These surface kinds are
+    # not yet implemented in the JAX trace; pre-4.10 the trace would
+    # happily pretend they were spherical refractors and return wrong
+    # answers.  Until proper implementations land, fail loud at build.
+    _UNSUPPORTED_BY_JAX = ('is_mirror', 'is_coordbrk', 'radius_y',
+                           'conic_y', 'aspheric_coeffs_y', 'freeform')
+    for i, s in enumerate(surfaces_raw):
+        unsupported = []
+        if s.get('is_mirror'):
+            unsupported.append('is_mirror')
+        if s.get('is_coordbrk'):
+            unsupported.append('is_coordbrk')
+        if s.get('radius_y') is not None:
+            unsupported.append('radius_y (biconic)')
+        if s.get('conic_y') is not None:
+            unsupported.append('conic_y (biconic)')
+        if s.get('aspheric_coeffs_y'):
+            unsupported.append('aspheric_coeffs_y (biconic)')
+        if s.get('freeform'):
+            unsupported.append('freeform')
+        if unsupported:
+            raise NotImplementedError(
+                f"trace_jax does not yet support surface {i} with "
+                f"{', '.join(unsupported)}.  Use the NumPy ``trace`` "
+                f"backend, or open an issue if you need JAX-traceable "
+                f"reflective / coord-broken / biconic / freeform support."
+            )
 
     # Pre-resolve glass indices and aspheric / aperture metadata.
     radii = [float(s.get('radius', float('inf'))) for s in surfaces_raw]
@@ -676,11 +728,19 @@ def _refract_jax_param(state, R, conic, asph_powers, asph_coeffs, n1, n2):
     cos_i = -(state.L * nx + state.M * ny + state.N * nz)
     sin2_t = eta ** 2 * (1.0 - cos_i ** 2)
     tir = sin2_t > 1.0
-    cos_t = jnp.sqrt(jnp.maximum(1.0 - sin2_t, 0.0))
+    # 4.10: double-where so jax.grad doesn't trip on sqrt(0) at the TIR
+    # boundary.  TIR rays are also masked to keep their incoming direction
+    # so the math-direction substitution doesn't bleed into the output.
+    sin2_t_safe = jnp.where(tir, 0.0, sin2_t)
+    cos_t = jnp.sqrt(jnp.maximum(1.0 - sin2_t_safe, 0.0))
 
-    Lt = eta * state.L + (eta * cos_i - cos_t) * nx
-    Mt = eta * state.M + (eta * cos_i - cos_t) * ny
-    Nt = eta * state.N + (eta * cos_i - cos_t) * nz
+    Lt_r = eta * state.L + (eta * cos_i - cos_t) * nx
+    Mt_r = eta * state.M + (eta * cos_i - cos_t) * ny
+    Nt_r = eta * state.N + (eta * cos_i - cos_t) * nz
+
+    Lt = jnp.where(tir, state.L, Lt_r)
+    Mt = jnp.where(tir, state.M, Mt_r)
+    Nt = jnp.where(tir, state.N, Nt_r)
 
     new_alive = state.alive & ~tir
     return JaxRayState(state.x, state.y, state.z, Lt, Mt, Nt,

@@ -1273,7 +1273,12 @@ def angular_spectrum_propagate(
         E_out = xp.fft.fftshift(xp.fft.ifft2(xp.fft.ifftshift(E_fft * H)))
 
     if return_transfer_function:
-        return E_out, H
+        # 4.10: return a copy of the cached H so a caller that does
+        # ``E_out, H = angular_spectrum_propagate(..., return_transfer_function=True)``
+        # then ``H *= mask`` cannot mutate the cached entry and corrupt
+        # every subsequent ASM call at the same key.
+        H_returned = H.copy() if hasattr(H, 'copy') else xp.asarray(H)
+        return E_out, H_returned
     else:
         return E_out
 
@@ -1354,13 +1359,22 @@ def apply_fresnel_curvature(
     """
     if dy is None:
         dy = dx
+    # R = 0 / inf / NaN is treated as a no-op so multi-element
+    # prescriptions where v-f is ill-defined (e.g. an afocal section)
+    # can pass through without curvature.  This is documented behaviour
+    # locked in by the test suite.
     if R == 0 or not np.isfinite(R):
         return E.copy()
     if sign not in (+1, -1):
         raise ValueError(f"sign must be +1 or -1, got {sign}")
     Ny, Nx = E.shape
-    ax_x = (np.arange(Nx) - Nx / 2 + 0.5) * dx
-    ax_y = (np.arange(Ny) - Ny / 2 + 0.5) * dy
+    # 4.10: drop the spurious +0.5 half-pixel offset.  Every other
+    # propagator in this file builds coordinates as (arange(N) - N/2)*dx
+    # (no +0.5).  The mismatch produced a half-pixel walk-off in the
+    # curvature centre relative to the propagated field grid, visible
+    # as a small coma-like residual in OPDPy cross-checks.
+    ax_x = (np.arange(Nx) - Nx / 2) * dx
+    ax_y = (np.arange(Ny) - Ny / 2) * dy
     Y, X = np.meshgrid(ax_y, ax_x, indexing='ij')
     r2 = X * X + Y * Y
     k = 2.0 * np.pi / wavelength
@@ -1677,20 +1691,24 @@ def angular_spectrum_propagate_tilted(
         H = np.exp(1j * kz * z)
         H = np.where(kz_sq > 0, H, 0)
 
-        # -- band-limiting on the BASEBAND (demodulated) spectrum --------
-        # The Matsushima-Shimobaba criterion bounds the frequency content
-        # of the field AS SAMPLED on the grid; after demodulation the
-        # tilted beam's energy lives around FX = 0 (baseband), so the
-        # mask must be centred there.  Applying it to FX_shifted
-        # (carrier-plus-baseband) kills the baseband DC mode for any
-        # meaningful tilt and zeros the whole propagated field.
+        # -- band-limiting on the ORIGINAL-FRAME spectrum ----------------
+        # Matsushima bounds the FREQUENCY OF THE CHIRP in the angular-
+        # spectrum kernel, which depends on the original (non-shifted)
+        # frequency (FX + fx0, FY + fy0): that's where the chirp's
+        # phase-derivative is taken.  The H built above is also
+        # evaluated at the shifted arguments, so the mask must use
+        # FX_shifted = FX + fx0 (and FY + fy0) -- otherwise it clips the
+        # *baseband* (around FX=0) and lets through the actual aliasing-
+        # prone high-(FX+fx0) bands.  Pre-4.10 used `|FX| < fx_max`,
+        # which for any non-trivial tilt killed the baseband DC and
+        # zeroed the propagated field.
         if bandlimit and z != 0:
             Lx = Nx * dx
             Ly = Ny * dy
             fx_max = Lx / (2 * wavelength * abs(z))
             fy_max = Ly / (2 * wavelength * abs(z))
-            H = np.where((np.abs(FX) < fx_max) &
-                          (np.abs(FY) < fy_max), H, 0)
+            H = np.where((np.abs(FX_shifted) < fx_max) &
+                          (np.abs(FY_shifted) < fy_max), H, 0)
 
         if H.dtype != target_cdtype:
             H = H.astype(target_cdtype)
@@ -2025,18 +2043,28 @@ def fresnel_propagate(
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
 
+    # 4.10: honour caller dtype so a complex64 E_in stays complex64
+    # through the Fresnel pipeline (pre-4.10 it was silently promoted
+    # to complex128 via the python-float `2 * np.pi` and `1j` constants).
+    if xp.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+    fdtype = np.float64 if np.dtype(target_cdtype) == np.complex128 else np.float32
+
     # -- input / output coordinates -----------------------------------------
-    x1 = (xp.arange(Nx) - Nx / 2) * dx
-    y1 = (xp.arange(Ny) - Ny / 2) * dy
+    x1 = (xp.arange(Nx, dtype=fdtype) - Nx / 2) * dx
+    y1 = (xp.arange(Ny, dtype=fdtype) - Ny / 2) * dy
     X1, Y1 = xp.meshgrid(x1, y1, indexing='xy')
     dx_out = wavelength * z / (Nx * dx)
     dy_out = wavelength * z / (Ny * dy)
-    x2 = (xp.arange(Nx) - Nx / 2) * dx_out
-    y2 = (xp.arange(Ny) - Ny / 2) * dy_out
+    x2 = (xp.arange(Nx, dtype=fdtype) - Nx / 2) * dx_out
+    y2 = (xp.arange(Ny, dtype=fdtype) - Ny / 2) * dy_out
     X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # -- quadratic phase in input plane --------------------------------------
-    E_mod = E_in * xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2))
+    phase_in = xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(target_cdtype)
+    E_mod = E_in.astype(target_cdtype) * phase_in
 
     # -- FFT -- use _fft for NumPy/CuPy fast path; jnp.fft for JAX -----------
     if is_jax:
@@ -2048,6 +2076,7 @@ def fresnel_propagate(
     prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
                  * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
+    prefactor = prefactor.astype(target_cdtype)
 
     E_out = prefactor * E_fft
 
@@ -2410,25 +2439,34 @@ def fraunhofer_propagate(
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
 
+    # 4.10: honour caller dtype (see fresnel_propagate for rationale).
+    if xp.iscomplexobj(E_in):
+        target_cdtype = E_in.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+    fdtype = np.float64 if np.dtype(target_cdtype) == np.complex128 else np.float32
+
     # Output grid spacing
     dx_out = wavelength * z / (Nx * dx)
     dy_out = wavelength * z / (Ny * dy)
 
     # Output coordinates
-    x2 = (xp.arange(Nx) - Nx / 2) * dx_out
-    y2 = (xp.arange(Ny) - Ny / 2) * dy_out
+    x2 = (xp.arange(Nx, dtype=fdtype) - Nx / 2) * dx_out
+    y2 = (xp.arange(Ny, dtype=fdtype) - Ny / 2) * dy_out
     X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # Single FFT of the input field
+    E_cast = E_in.astype(target_cdtype) if E_in.dtype != target_cdtype else E_in
     if is_jax:
-        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_in)))
+        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_cast)))
     else:
-        E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_in)))
+        E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_cast)))
 
     # Output quadratic phase + prefactor
     prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
                  * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
+    prefactor = prefactor.astype(target_cdtype)
 
     E_out = prefactor * E_fft
 
@@ -2765,11 +2803,16 @@ def rayleigh_sommerfeld_propagate(
 
     if H is None:
         # -- build the RS impulse response h(x, y, z) on the padded grid -------
+        # h = -(1/2π) ∂/∂z[exp(ikr)/r]
+        #   = (z / (2π r²)) · (1/r − ik) · exp(ikr)         (Goodman 3-43)
+        # Pre-4.10 implementation flipped this to (ik − 1/r), producing
+        # −h_correct.  Output amplitudes look fine for |E|² consumers but
+        # any coherent sum of RS with ASM/Fresnel was 180° out of phase.
         x = (xp.arange(Nx2) - Nx2 / 2) * dx
         y = (xp.arange(Ny2) - Ny2 / 2) * dy
         X, Y = xp.meshgrid(x, y, indexing='xy')
         r = xp.sqrt(X ** 2 + Y ** 2 + z ** 2)
-        h = (z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r) * (1j * k - 1.0 / r)
+        h = (z / (2 * np.pi * r ** 2)) * xp.exp(1j * k * r) * (1.0 / r - 1j * k)
         h = h * (dx * dy)
         if h.dtype != target_cdtype:
             h = h.astype(target_cdtype)

@@ -1477,6 +1477,29 @@ def aberration_tensor(
     # evaluation -- it's faster and gives identical numbers in that
     # regime.  Mixed ℓ = 0 / ℓ ≠ 0 sets fall through to the grid path.
     needs_sigma_integration = any(k_out[1] != 0 for k_out in output_modes)
+    # 4.10: warn loudly when the closed-form path is used with multiple
+    # distinct radial orders p (and ℓ=0 only).  The closed-form contracts
+    # against ``out_poly[(0,0)]`` -- the Cartesian (x⁰y⁰) constant
+    # coefficient of the conjugated output LG polynomial -- which for
+    # LG_p,0 equals the same normalisation constant N_p,0 for every p,
+    # so ``L[(0,0), src]``, ``L[(1,0), src]``, ``L[(2,0), src]`` collapse
+    # to the same scalar and defocus/spherical can't be distinguished.
+    # The audit recommends σ-grid integration always; we retain the
+    # closed-form for backward compatibility but flag the failure mode.
+    if not needs_sigma_integration:
+        ell0_p_values = {k_out[0] for k_out in output_modes
+                          if k_out[1] == 0}
+        if len(ell0_p_values) > 1:
+            import warnings
+            warnings.warn(
+                "aberration_tensor: the closed-form ℓ=0 path returns the "
+                f"same scalar weight for all radial orders p in {sorted(ell0_p_values)} "
+                "and cannot distinguish defocus from higher spherical. "
+                "Pass an output_modes list with at least one ℓ ≠ 0 entry "
+                "to force the σ-grid integration path, or use the JAX "
+                "differentiable backend.",
+                RuntimeWarning, stacklevel=3,
+            )
 
     if not needs_sigma_integration:
         # ---- Closed-form chief-ray projection (ℓ = 0 only) -------------
@@ -1821,15 +1844,27 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     dict
         ``{(p, ell): a_{p, ell}}``
     """
-    if field.shape != x.shape or field.shape != y.shape:
-        raise ValueError("field, x, y must have the same shape")
-    dx = float(np.mean(np.diff(x, axis=1)[:, 0]))
-    dy = float(np.mean(np.diff(y, axis=0)[0, :]))
+    # 4.10: accept both 1-D coordinate axes and 2-D meshgrids.  Pre-4.10
+    # required 2-D meshgrids (np.diff with axis= calls), so the natural
+    # pipeline of ``create_laguerre_gauss`` (returns 1-D x, y) into
+    # ``decompose_lg`` raised IndexError on the np.diff call.
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if x.ndim == 1 and y.ndim == 1:
+        X, Y = np.meshgrid(x, y, indexing='xy')
+        dx = float(np.mean(np.diff(x))) if x.size > 1 else 1.0
+        dy = float(np.mean(np.diff(y))) if y.size > 1 else 1.0
+    else:
+        if field.shape != x.shape or field.shape != y.shape:
+            raise ValueError("field, x, y must have the same shape")
+        X, Y = x, y
+        dx = float(np.mean(np.diff(x, axis=1)[:, 0]))
+        dy = float(np.mean(np.diff(y, axis=0)[0, :]))
     da = abs(dx * dy)
     out: Dict[Tuple[int, int], complex] = {}
     for p in range(p_max + 1):
         for ell in range(-ell_max, ell_max + 1):
-            mode = evaluate_lg_mode(p, ell, w, x, y, cx, cy)
+            mode = evaluate_lg_mode(p, ell, w, X, Y, cx, cy)
             out[(p, ell)] = complex(np.sum(np.conj(mode) * field) * da)
     return out
 
@@ -1843,15 +1878,25 @@ def decompose_hg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     ``decompose_lg`` for arguments."""
     if wy is None:
         wy = wx
-    if field.shape != x.shape or field.shape != y.shape:
-        raise ValueError("field, x, y must have the same shape")
-    dx = float(np.mean(np.diff(x, axis=1)[:, 0]))
-    dy = float(np.mean(np.diff(y, axis=0)[0, :]))
+    # 4.10: accept both 1-D coordinate axes and 2-D meshgrids (see
+    # decompose_lg for rationale).
+    x = np.asarray(x)
+    y = np.asarray(y)
+    if x.ndim == 1 and y.ndim == 1:
+        X, Y = np.meshgrid(x, y, indexing='xy')
+        dx = float(np.mean(np.diff(x))) if x.size > 1 else 1.0
+        dy = float(np.mean(np.diff(y))) if y.size > 1 else 1.0
+    else:
+        if field.shape != x.shape or field.shape != y.shape:
+            raise ValueError("field, x, y must have the same shape")
+        X, Y = x, y
+        dx = float(np.mean(np.diff(x, axis=1)[:, 0]))
+        dy = float(np.mean(np.diff(y, axis=0)[0, :]))
     da = abs(dx * dy)
     out: Dict[Tuple[int, int], complex] = {}
     for mi in range(m_max + 1):
         for nj in range(n_max + 1):
-            mode = evaluate_hg_mode(mi, nj, wx, wy, x, y, cx, cy)
+            mode = evaluate_hg_mode(mi, nj, wx, wy, X, Y, cx, cy)
             out[(mi, nj)] = complex(np.sum(np.conj(mode) * field) * da)
     return out
 # ===========================================================================
@@ -2238,6 +2283,13 @@ def propagate_hf_chebyshev_quadrature(
             else:
                 integrand = E_in * kernel
             out[iy, ix] = np.sum(integrand) * pixel_area
+    # 4.10: apply the Van Vleck-Morette asymptotic prefactor (2π)^(-d/2)·i^(-d/2)
+    # for d = 2: this is -i/(2π).  Pre-4.10 omitted the i^(-d/2) (the
+    # Maslov phase) so the result was off by a global 90° phase relative
+    # to the Fresnel kernel (which is 1/(iλz) = -i/(λz) in the paraxial
+    # limit).  Without this factor, coherent superposition of HF-quadrature
+    # output with ASM/Fresnel output is 90° out of phase.
+    out = out * (-1j)
     return out
 
 

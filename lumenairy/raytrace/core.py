@@ -515,13 +515,21 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             else:
                 t = t1 if R > 0 else t2
 
+            # Track rays whose initial-guess sphere intersection has no
+            # real root (disc < 0).  These never reach the surface; mark
+            # them as missed.  Pre-4.10 the t = 0 silent fallback caused
+            # such rays to land at z=0 with a residual sag, then masquerade
+            # as converged once Newton found |dt|<1e-15 at a stuck point.
+            missed_init = (disc < 0) & rays.alive
             t = np.where(disc > 0, t, 0.0)
         else:
+            missed_init = np.zeros(rays.n_rays, dtype=bool)
             # Flat surface with aspheric terms only: start at z=0
             with np.errstate(divide='ignore', invalid='ignore'):
                 t = np.where(np.abs(rays.N) > 1e-30, -rays.z / rays.N, 0.0)
 
         # Newton iterations
+        converged = np.zeros(rays.n_rays, dtype=bool)
         for _ in range(10):
             xi = rays.x + rays.L * t
             yi = rays.y + rays.M * t
@@ -536,12 +544,28 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             dz_dx, dz_dy = _surface_sag_derivatives_xy(xi, yi, surface)
             dF_dt = rays.N - dz_dx * rays.L - dz_dy * rays.M
 
-            # Newton step
-            dt = np.where(np.abs(dF_dt) > 1e-30, F / dF_dt, 0.0)
+            # Newton step.  When |dF_dt| < eps the ray is grazing or
+            # tangent to the surface; mark these as stuck rather than
+            # silently zero-stepping (which the < 1e-15 convergence
+            # check would then accept as "converged").
+            stuck = np.abs(dF_dt) <= 1e-30
+            dt = np.where(stuck, 0.0, F / np.where(stuck, 1.0, dF_dt))
             t = t - dt
 
-            if np.all(np.abs(dt) < 1e-15):
+            # Per-ray convergence: |dt| < 1e-15 AND not stuck-with-residual.
+            converged = (np.abs(dt) < 1e-15) & (~stuck | (np.abs(F) < 1e-12))
+            if converged.all():
                 break
+
+        # Rays that never converged (Newton stuck or disc<0) are missed.
+        missed_final = (~converged | missed_init) & rays.alive
+        if missed_final.any():
+            rays.alive = rays.alive & ~missed_final
+            if rays.error_code is not None:
+                first_failure = missed_final & (rays.error_code == RAY_OK)
+                rays.error_code = np.where(
+                    first_failure, RAY_MISSED_SURFACE, rays.error_code
+                )
 
     # Update ray positions
     t = np.where(rays.alive, t, 0.0)
@@ -718,8 +742,8 @@ def _apply_coord_break(rays, surface):
 
     Order follows Zemax PARM 6:
 
-    * 0 (default): tilts first, then decenter.
-    * 1          : decenter first, then tilts.
+    * 0 (default): decenter first, then tilts.
+    * 1          : tilts first, then decenter.
 
     This is purely a frame transform -- no propagation, no OPL, no
     intersection.  The trace loop should call this for surfaces
@@ -790,12 +814,18 @@ def _apply_coord_break(rays, surface):
         _rot_y(ty)
         _rot_z(tz)
 
+    # Zemax PARM 6 semantics (see Surface.coordbrk_order docstring):
+    #   0 -> decenter, then tilt (the default)
+    #   1 -> tilt, then decenter
+    # Pre-4.10 the two branches were swapped, so every imported folded
+    # design with the Zemax default got a tilt-then-decenter frame
+    # transform instead of decenter-then-tilt.
     if order == 1:
-        _decenter()
         _tilts()
+        _decenter()
     else:
-        _tilts()
         _decenter()
+        _tilts()
 
 
 # ============================================================================
@@ -2717,9 +2747,17 @@ def compute_pupils(
         # => z_xp = -B_post / D_post.
         if abs(D_post) > 1e-30:
             xp_z = -B_post / D_post
-            # Magnification for the image of the stop through post:
-            # m_post = D_post when B=0.  XP radius = stop_radius * m_post.
-            xp_radius = abs(stop_radius * D_post) if np.isfinite(stop_radius) else float('nan')
+            # After prepending T(z_xp) on the image side to enforce
+            # B+z·D = 0, the new matrix is [[A+z_xp·C, 0], [C, D]].  Its
+            # transverse magnification at imaging is m = det(M)/D =
+            # (AD−BC)/D = 1/D for air-to-air systems (det M = 1).  Pre-
+            # 4.10 used `stop_radius * D_post` (the angular magnification,
+            # not transverse) — every XP-radius downstream consumer
+            # (vignetting, f/#, Seidel) was wrong by 1/D² for non-trivial
+            # post-stop systems.
+            det_post = float(A_post * D_post - B_post * C_post)
+            xp_radius = (abs(det_post * stop_radius / D_post)
+                         if np.isfinite(stop_radius) else float('nan'))
         else:
             xp_z = float('inf')
             xp_radius = float('inf')
@@ -2913,8 +2951,24 @@ def seidel_coefficients(
         y_m_init = (r_stop / A_pre) if abs(A_pre) > 1e-30 else r_stop
         nu_m_init = 0.0
     else:
-        y_m_init = 0.0
-        nu_m_init = n_first * r_stop / object_distance
+        # Finite-conjugate marginal ray: launches from on-axis object
+        # point at z = -object_distance with some slope u_obj such that
+        # the ray fills the stop after traversing T(d) and M_pre.  In
+        # reduced coords T(d) is [[1, d/n_first],[0,1]], so
+        #   stop_y = (M_pre @ T(d) @ [0, n_first u_obj]^T)_y
+        #          = u_obj * (A_pre*d + B_pre*n_first)
+        # which we set equal to r_stop.  Pre-4.10 this branch hard-coded
+        # y_m_init = 0, which made the Lagrange invariant H identically
+        # zero for any finite-conjugate stop-at-front system (since
+        # y_c_init is also 0 at a front-stop), zeroing the Petzval
+        # contribution to seidel_wfe.
+        lever = A_pre * object_distance + B_pre * n_first
+        if abs(lever) > 1e-30:
+            u_obj = r_stop / lever
+        else:
+            u_obj = r_stop / object_distance
+        y_m_init = u_obj * object_distance
+        nu_m_init = n_first * u_obj
 
     # Chief ray: from edge of field (angle = field_angle), through
     # centre of stop (y_stop = 0).  system_abcd works in reduced
@@ -3030,16 +3084,38 @@ def seidel_coefficients(
             nu_val_c = nu_c_after
 
         elif surf.is_mirror and np.isfinite(R):
+            # Mirror in the Welford paraxial convention: treat as a
+            # refracting surface with n2 = -n1, so the same Welford
+            # Seidel sums apply.  Pre-4.10 the mirror branch only
+            # updated ray heights and never wrote S1..S5 -- every
+            # catadioptric / reflective design silently reported zero
+            # spherical, coma, astigmatism, Petzval, distortion.
             c = 1.0 / R
+            n2 = -n1
             u_m = nu_val_m / n1
             u_c = nu_val_c / n1
+
             i_m = c * y_val_m + u_m
             i_c = c * y_val_c + u_c
 
-            # Mirror refraction: n2 = -n1 (sign reversal)
-            phi = 2.0 * n1 * c
-            nu_m_after = nu_val_m - y_val_m * phi
-            nu_c_after = nu_val_c - y_val_c * phi
+            # Refract: phi = (n2 - n1) c = -2 n1 c
+            nu_m_after = nu_val_m - y_val_m * (n2 - n1) * c
+            nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
+
+            u_m_after = nu_m_after / n2
+            u_c_after = nu_c_after / n2
+
+            A_m = n1 * i_m   # = n2 * i_after (Snell)
+            A_c = n1 * i_c
+
+            h = y_val_m
+            delta_un = (u_m_after / n2) - (u_m / n1)
+
+            S1[i] = -(A_m ** 2) * h * delta_un
+            S2[i] = -(A_m * A_c) * h * delta_un
+            S3[i] = -(A_c ** 2) * h * delta_un
+            S4[i] = -(1.0 / (n2 * n1)) * c * (n2 - n1)
+            S5[i] = -(A_c / A_m) * (S3[i] + H_sq * S4[i]) if abs(A_m) > 1e-30 else 0.0
 
             nu_val_m = nu_m_after
             nu_val_c = nu_c_after
@@ -3058,10 +3134,11 @@ def seidel_coefficients(
             i_m = u_m         # c=0, so i = u
             i_c = u_c
 
-            # Refract: c=0 so no curvature shift, but Snell still
-            # changes the ray angle (handled paraxially as below).
-            nu_m_after = nu_val_m            # for c=0, refraction doesn't change nu in the paraxial limit
-            nu_c_after = nu_val_c            # because nu = n·u and (n1·u_before = n2·u_after) implies nu invariant
+            # Refract at flat surface: Snell in the paraxial limit gives
+            # n1·u_before = n2·u_after, so n·u is invariant.  Curvature
+            # shift is zero (c=0); only u changes (= nu/n with new n2).
+            nu_m_after = nu_val_m
+            nu_c_after = nu_val_c
             u_m_after = nu_m_after / n2
             u_c_after = nu_c_after / n2
 

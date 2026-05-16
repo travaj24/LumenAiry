@@ -306,11 +306,13 @@ def propagate_through_system(E_in: np.ndarray,
             has_tilt = (tilt_x != 0.0) or (tilt_y != 0.0)
 
             if prop_method == 'fresnel' and not has_tilt:
-                E, dx_new, dy_new = fresnel_propagate(
+                E, dx_new, _dy_new = fresnel_propagate(
                     E, z, wavelength, current_dx, current_dy)
                 # Resample back to the original grid spacing so
                 # downstream element phases (lenses, apertures) are
-                # computed on the correct coordinate system.
+                # computed on the correct coordinate system.  Both
+                # axes converge to current_dx since `resample_field`
+                # produces a square grid; current_dy stays in sync.
                 if abs(dx_new - current_dx) > current_dx * 1e-6:
                     if verbose:
                         print(f"    Fresnel dx changed: "
@@ -322,7 +324,7 @@ def propagate_through_system(E_in: np.ndarray,
                 from .propagators.propagation import scalable_angular_spectrum_propagate
                 pad = elem.get('pad', 2)
                 skip_final_phase = elem.get('skip_final_phase', False)
-                E, dx_new, dy_new = scalable_angular_spectrum_propagate(
+                E, dx_new, _dy_new = scalable_angular_spectrum_propagate(
                     E, z, wavelength, current_dx,
                     pad=pad, skip_final_phase=skip_final_phase,
                     use_gpu=use_gpu, verbose=verbose)
@@ -540,12 +542,44 @@ def propagate_through_system_jax(E_in: np.ndarray,
             E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
 
         elif etype == 'aperture':
-            r = elem.get('radius', None)
-            if r is not None:
-                xc = elem.get('xc', 0.0)
-                yc = elem.get('yc', 0.0)
-                mask = (((X - xc) ** 2 + (Y - yc) ** 2) <= r ** 2)
-                E = E * mask.astype(jnp.complex64)
+            # Mirror the NumPy schema: aperture is described by 'shape'
+            # + 'params', not a bare 'radius' key.  Pre-4.10 the JAX
+            # branch silently no-op'd for any working NumPy aperture
+            # spec because elem.get('radius') was always None.
+            shape = elem.get('shape', 'circular')
+            params = elem.get('params') or {}
+            xc = elem.get('xc', 0.0)
+            yc = elem.get('yc', 0.0)
+            dx_loc = X - xc
+            dy_loc = Y - yc
+            if shape == 'circular':
+                r = params.get('radius')
+                if r is None:
+                    r = elem.get('radius')  # legacy schema
+                if r is not None:
+                    mask = (dx_loc ** 2 + dy_loc ** 2) <= float(r) ** 2
+                    E = E * mask.astype(E.dtype)
+            elif shape == 'rectangular':
+                hx = float(params.get('half_width_x',
+                                       params.get('width', 0) / 2.0))
+                hy = float(params.get('half_width_y',
+                                       params.get('height', 0) / 2.0))
+                mask = (jnp.abs(dx_loc) <= hx) & (jnp.abs(dy_loc) <= hy)
+                E = E * mask.astype(E.dtype)
+            elif shape == 'annular':
+                r_o = float(params.get('outer_radius', 0))
+                r_i = float(params.get('inner_radius', 0))
+                rho2 = dx_loc ** 2 + dy_loc ** 2
+                mask = (rho2 <= r_o ** 2) & (rho2 >= r_i ** 2)
+                E = E * mask.astype(E.dtype)
+            else:
+                # Fall back to NumPy element for non-standard shapes.
+                from .system import propagate_through_system
+                E_np = np.asarray(E)
+                E_np, _ = propagate_through_system(
+                    E_np, [elem], wavelength, dx, dy=dy,
+                    method=method, verbose=False)
+                E = jnp.asarray(E_np)
 
         elif etype == 'mask':
             mask = jnp.asarray(elem['mask'])

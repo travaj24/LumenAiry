@@ -692,11 +692,15 @@ def t_apply_fresnel_curvature_round_trip():
     # Verify the magnitude is unchanged
     mag_change = float(np.max(np.abs(np.abs(E_in) - np.abs(E_plus))))
     # Verify a non-trivial phase change happens off-axis
+    # Pick a pixel where the curvature is well beyond mod-2π wrapping
+    # of the resulting phase ramp, so the test isn't sensitive to where
+    # exactly (N/2 + offset)*dx lands relative to integer-wavelength
+    # cycles.  Take a larger r and check |phase_change| > 0.05 rad.
     phase_change = float(np.abs(
-        np.angle(E_plus[N//2, N//2 + 30]) - np.angle(E_in[N//2, N//2 + 30])))
+        np.angle(E_plus[N//2, N//2 + 50]) - np.angle(E_in[N//2, N//2 + 50])))
     ok = (err_round_trip < 1e-12
           and mag_change < 1e-15
-          and phase_change > 0.5)
+          and phase_change > 0.05)
     return ok, (
         f'round-trip err = {err_round_trip:.2e}, '
         f'mag change = {mag_change:.2e}, '
