@@ -37,6 +37,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import copy
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -49,6 +50,37 @@ from .core import (
     beam_d4sigma,
     radial_power_bands,
 )
+
+
+# ============================================================================
+# Module-scope cache for the jit-compiled ASM vmap kernel inside
+# `through_focus_scan_jax`.  Keyed on the static structure that must be
+# baked into the kernel (shape, dtype, dx, wavelength, bandlimit).  The
+# z-array changes per call but the kernel is vmap'd over z so the kernel
+# itself can be re-used regardless of `n_z`.
+#
+# Mirrors the v4.12.0 pattern used by `_PROPAGATE_SYSTEM_JAX_CACHE` in
+# `system.py` (LRU `OrderedDict` with a small max-size).
+#
+# v4.12.2: D4 closure -- the v4.12.0 release notes claimed a jit cache
+# at the inner ASM kernel inside `through_focus_scan_jax`, but the
+# original implementation rebuilt the closure (and therefore re-traced
+# the kernel) on every Python call.  v4.12.2 lifts the kernel out of
+# the closure, jit-compiles it once per key, and caches it here.
+# ============================================================================
+_THROUGH_FOCUS_SCAN_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
+_THROUGH_FOCUS_SCAN_JAX_CACHE_MAXSIZE = 32
+
+
+def clear_through_focus_scan_jax_cache() -> None:
+    """Drop every cached jit'd ``through_focus_scan_jax`` kernel (v4.12.2).
+
+    Forces the next :func:`through_focus_scan_jax` call to re-trace and
+    re-cache its jit-compiled kernel from scratch.  Use in unit tests
+    that pin cache mechanics or in long-running pipelines that want to
+    release compiled XLA executables.
+    """
+    _THROUGH_FOCUS_SCAN_JAX_CACHE.clear()
 
 
 __all__ = [
@@ -272,6 +304,17 @@ def through_focus_scan(
     (:func:`through_focus_scan_jax`).  This is the canonical 4.7+ way
     to opt into the JAX path; the ``through_focus_scan_jax`` function
     remains importable but is no longer the preferred entry point.
+
+    v4.12.2: the NumPy backend hoists the z-invariant work (input FFT,
+    ``kx_sq``/``ky_sq`` grids, propagating mask, target dtype) above
+    the z-loop and only rebuilds the z-dependent transfer-function
+    factor ``H_z = propagating * exp(i*kz*z) * bandlimit_z`` inside.
+    This mirrors the JAX twin's existing structure
+    (:func:`through_focus_scan_jax`) and avoids re-running the full
+    input FFT and the unchanged K-grids ``n_z`` times.  Bit-near-
+    exact (abs err 0.0) vs the per-z ``angular_spectrum_propagate``
+    reference -- the per-z math is algebraically identical to the
+    one-shot ASM step, just with the FFT and K-grids reused.
     """
     if backend == 'jax':
         return through_focus_scan_jax(
@@ -283,6 +326,14 @@ def through_focus_scan(
             f"through_focus_scan: backend must be 'numpy' or 'jax'; "
             f"got {backend!r}.")
     from ..progress import call_progress
+    from ..propagators.propagation import (
+        _get_or_make_freq_grids,
+        _get_or_make_bandlimit,
+        _fft2,
+        _ifft2,
+        DEFAULT_COMPLEX_DTYPE,
+    )
+
     z_arr = np.asarray(z_values, dtype=np.float64)
     n_z = z_arr.size
 
@@ -293,18 +344,59 @@ def through_focus_scan(
     rms_r = np.full(n_z, np.nan)
     p_bucket = np.full(n_z, np.nan)
 
-    # Reuse bandlimit work by computing incremental deltas, but the
-    # ASM transfer function factors by z so we just propagate from the
-    # exit each time for simplicity and robustness.
+    # v4.12.2 H-hoist -- precompute the z-invariant parts ONCE before
+    # the per-z loop.  Mirrors `through_focus_scan_jax`'s pre-existing
+    # structure: pull the input FFT, the kx/ky grids, the propagating
+    # mask, and the target dtype outside the loop; per-z work reduces
+    # to one transfer-function rebuild + one IFFT.  This is the actual
+    # H-hoist claimed in the v4.12.0 release notes (D3 in the
+    # round-5 audit; v4.12.0 reverted to per-z `angular_spectrum_
+    # propagate` calls, leaving the speedup attributable only to the
+    # underlying pyFFTW plan cache + auto-promote).
+    E_arr = np.asarray(E_exit)
+    Ny, Nx = E_arr.shape
+    k = 2.0 * np.pi / wavelength
+    # Match `angular_spectrum_propagate`'s target dtype inference so
+    # the hoisted path returns the same precision as the per-z code.
+    if np.iscomplexobj(E_arr):
+        target_cdtype = E_arr.dtype
+    else:
+        target_cdtype = np.dtype(DEFAULT_COMPLEX_DTYPE)
+
+    # Hoisted z-invariants.
+    kx_sq, ky_sq = _get_or_make_freq_grids(Ny, Nx, dx, dx, True)
+    kz_sq = k * k - kx_sq[None, :] - ky_sq[:, None]
+    propagating = kz_sq > 0
+    kz_safe = np.sqrt(np.where(propagating, kz_sq, 0.0))
+    # Input FFT computed ONCE; reused for every z.
+    E_fft_shifted = np.fft.fftshift(_fft2(np.fft.ifftshift(E_arr)))
+    # `_fft2` may return a buffer owned by the pyFFTW plan cache that
+    # gets recycled on the next FFT call; copy so subsequent `_ifft2`
+    # calls inside the loop don't clobber our cached input FFT.
+    E_fft_shifted = np.asarray(E_fft_shifted).copy()
+
     for i, z in enumerate(z_arr):
         call_progress(progress, 'through_focus_scan',
                       i / max(n_z, 1),
                       f'plane {i + 1}/{n_z}  z={z*1e3:+.3f} mm')
-        if z == 0.0:
-            E_z = E_exit
+        z_f = float(z)
+        if z_f == 0.0:
+            E_z = E_arr
         else:
-            E_z = angular_spectrum_propagate(
-                E_exit, z, wavelength, dx, bandlimit=bandlimit)
+            # Z-dependent transfer function: rebuild only the
+            # exp(i*kz*z) factor and the z-dependent band-limit mask.
+            # Algebraically identical to one call of
+            # `angular_spectrum_propagate(E_exit, z, ...)`, but reuses
+            # the hoisted FFT and K-grids.
+            H_z = np.where(propagating, np.exp(1j * kz_safe * z_f), 0.0)
+            if bandlimit:
+                bl_x, bl_y = _get_or_make_bandlimit(
+                    Ny, Nx, dx, dx, wavelength, abs(z_f), True)
+                if bl_x is not None:
+                    H_z = H_z * (bl_x[None, :] & bl_y[:, None])
+            H_z = H_z.astype(target_cdtype, copy=False)
+            E_z = np.fft.fftshift(
+                _ifft2(np.fft.ifftshift(E_fft_shifted * H_z)))
 
         m = single_plane_metrics(
             E_z, dx, wavelength,
@@ -836,6 +928,63 @@ def monte_carlo_tolerancing(
     }
 
 
+def _build_through_focus_scan_jax_kernel(
+    Ny: int, Nx: int, dx: float, wavelength: float, bandlimit: bool,
+    dtype_str: str,
+):
+    """Build a jit-compiled `vmap`'d ASM kernel for the through-focus
+    scan.  Caller passes the FFT'd input field and the z-vector at
+    call time; this function only builds (and the call site jits) the
+    structure that is invariant under those.
+
+    The returned kernel signature is:
+
+        kernel(E_fft_shifted, z_jax) -> fields[n_z, Ny, Nx]
+
+    v4.12.2 D4 closure -- previously the kernel was a Python closure
+    inside `through_focus_scan_jax` that captured `kz_safe`,
+    `propagating`, `E_fft_shifted` from the enclosing scope.  Each
+    Python call rebuilt the closure and therefore re-traced.  The
+    factored builder lets a module-scope cache hold the compiled
+    kernel across calls keyed on `(Ny, Nx, dx, wavelength, bandlimit,
+    dtype)` -- the structural pieces that participate in tracing.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    k = 2.0 * np.pi / wavelength
+    fx = (jnp.arange(Nx, dtype=jnp.float64) - Nx / 2) / (Nx * dx)
+    fy = (jnp.arange(Ny, dtype=jnp.float64) - Ny / 2) / (Ny * dx)
+    FX, FY = jnp.meshgrid(fx, fy)
+    kx = 2.0 * jnp.pi * FX
+    ky = 2.0 * jnp.pi * FY
+    kz_sq = k * k - kx * kx - ky * ky
+    kz_safe = jnp.sqrt(jnp.maximum(kz_sq, 0.0))
+    propagating = kz_sq > 0
+
+    def _asm_one_z(E_fft_shifted, z):
+        H = jnp.exp(1j * kz_safe * z)
+        H = jnp.where(propagating, H, 0.0)
+        if bandlimit:
+            Lx = Nx * dx
+            Ly = Ny * dx
+            z_safe = jnp.where(jnp.abs(z) > 1e-30, z, 1e-30)
+            fx_max = Lx / (2.0 * wavelength * jnp.abs(z_safe))
+            fy_max = Ly / (2.0 * wavelength * jnp.abs(z_safe))
+            H = jnp.where(
+                (jnp.abs(fx)[None, :] < fx_max)
+                & (jnp.abs(fy)[:, None] < fy_max),
+                H, 0.0)
+        E_out = jnp.fft.fftshift(
+            jnp.fft.ifft2(jnp.fft.ifftshift(E_fft_shifted * H)))
+        return E_out
+
+    # `in_axes=(None, 0)` -- E_fft_shifted is shared across z, only z
+    # is the vectorised axis.
+    kernel = jax.vmap(_asm_one_z, in_axes=(None, 0))
+    return jax.jit(kernel)
+
+
 def through_focus_scan_jax(
     E_exit: np.ndarray,
     dx: float,
@@ -856,6 +1005,15 @@ def through_focus_scan_jax(
 
     Identical signature to `through_focus_scan` but no `verbose` /
     `progress` callbacks (the whole scan is one fused call).
+
+    v4.12.2: the inner ASM kernel is now jit-compiled once per
+    ``(shape, dtype, dx, wavelength, bandlimit)`` and cached in the
+    module-scope :data:`_THROUGH_FOCUS_SCAN_JAX_CACHE`.  Repeated calls
+    on the same configuration reuse the compiled XLA binary
+    (10-100x first-call vs warm-call speedup, workload-dependent).
+    The previous implementation built the kernel inside a closure and
+    re-traced on every call -- the release-note claim was false until
+    this fix.
     """
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -875,42 +1033,33 @@ def through_focus_scan_jax(
     # be vmapped directly; replicate the ASM math inline with all
     # branches lifted out of the per-z code, then vmap.
     #
-    # Pre-compute the parts that don't depend on z:
-    #   E_fft = FFT(E_in)
-    #   kx, ky, kz_sq (and the band-limit mask, evaluated at each z
-    #   so it stays accurate -- bandlimit depends on z).
+    # v4.12.2: hoisted parts (`kx`, `ky`, `kz_safe`, `propagating`)
+    # are baked into the cached jit kernel -- see
+    # `_build_through_focus_scan_jax_kernel`.  Only the input FFT and
+    # the z-array are runtime arguments.
     E_jax = jnp.asarray(E_exit)
     Ny, Nx = E_jax.shape[-2:]
-    k = 2.0 * np.pi / wavelength
-    fx = (jnp.arange(Nx, dtype=jnp.float64) - Nx / 2) / (Nx * dx)
-    fy = (jnp.arange(Ny, dtype=jnp.float64) - Ny / 2) / (Ny * dx)
-    FX, FY = jnp.meshgrid(fx, fy)
-    kx = 2.0 * jnp.pi * FX
-    ky = 2.0 * jnp.pi * FY
-    kz_sq = k * k - kx * kx - ky * ky
-    kz_safe = jnp.sqrt(jnp.maximum(kz_sq, 0.0))
-    propagating = kz_sq > 0
     E_fft_shifted = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_jax)))
 
-    def _asm_one_z(z):
-        H = jnp.exp(1j * kz_safe * z)
-        H = jnp.where(propagating, H, 0.0)
-        if bandlimit:
-            Lx = Nx * dx
-            Ly = Ny * dx
-            z_safe = jnp.where(jnp.abs(z) > 1e-30, z, 1e-30)
-            fx_max = Lx / (2.0 * wavelength * jnp.abs(z_safe))
-            fy_max = Ly / (2.0 * wavelength * jnp.abs(z_safe))
-            H = jnp.where(
-                (jnp.abs(fx)[None, :] < fx_max)
-                & (jnp.abs(fy)[:, None] < fy_max),
-                H, 0.0)
-        E_out = jnp.fft.fftshift(
-            jnp.fft.ifft2(jnp.fft.ifftshift(E_fft_shifted * H)))
-        return E_out
+    cache_key = (
+        int(Ny), int(Nx), float(dx), float(wavelength), bool(bandlimit),
+        np.dtype(E_jax.dtype).str,
+    )
+    kernel = _THROUGH_FOCUS_SCAN_JAX_CACHE.get(cache_key)
+    if kernel is None:
+        kernel = _build_through_focus_scan_jax_kernel(
+            int(Ny), int(Nx), float(dx), float(wavelength),
+            bool(bandlimit), np.dtype(E_jax.dtype).str,
+        )
+        _THROUGH_FOCUS_SCAN_JAX_CACHE[cache_key] = kernel
+        while (len(_THROUGH_FOCUS_SCAN_JAX_CACHE)
+               > _THROUGH_FOCUS_SCAN_JAX_CACHE_MAXSIZE):
+            _THROUGH_FOCUS_SCAN_JAX_CACHE.popitem(last=False)
+    else:
+        _THROUGH_FOCUS_SCAN_JAX_CACHE.move_to_end(cache_key)
 
     z_jax = jnp.asarray(z_arr)
-    fields = jax.vmap(_asm_one_z)(z_jax)   # (n_z, Ny, Nx)
+    fields = kernel(E_fft_shifted, z_jax)   # (n_z, Ny, Nx)
 
     # Per-plane metrics.  Bring back to NumPy at the metric boundary
     # since the metrics package isn't JAX-vmapped.

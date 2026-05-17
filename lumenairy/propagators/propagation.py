@@ -663,12 +663,31 @@ _ASM_CACHE_LOCK = threading.Lock()
 
 
 def clear_asm_caches() -> None:
-    """Drop the H, frequency-grid, and band-limit caches (Tier 1.1
-    + Tier 3 of the 3.2.14 perf pass)."""
+    """Drop the propagator-adjacent caches (v4.12.2: extended).
+
+    Clears:
+
+    - ``_FREQ_GRID_CACHE``  : kx_sq / ky_sq frequency-grid pairs.
+    - ``_BANDLIMIT_CACHE``  : ASM band-limit filter pairs.
+    - ``_H_CACHE``          : ASM transfer function H per shape/wavelength/z.
+    - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans (v4.12.2 add).
+    - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo (v4.12.2 add).
+
+    The original 3.2.14 perf-pass only cleared the first three.  v4.12.2
+    extends the function to ALSO drop the pyFFTW plan cache + bad-shape
+    memo so a single call leaves the propagation-layer state completely
+    pristine.  Companion ``clear_*`` helpers exist in sibling modules
+    for the Zernike basis cache, LG-polynomial cache, JAX trace cache,
+    JAX propagate-through-system cache, and phase-retrieval kernel
+    caches; :func:`lumenairy.lumenairy_context` with
+    ``clear_caches_on_exit=True`` invokes all of them.
+    """
     with _ASM_CACHE_LOCK:
         _FREQ_GRID_CACHE.clear()
         _BANDLIMIT_CACHE.clear()
         _H_CACHE.clear()
+        _PYFFTW_PLAN_CACHE.clear()
+        _PYFFTW_BAD_SHAPES.clear()
 
 
 def set_asm_cache_size(

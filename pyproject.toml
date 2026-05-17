@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "4.12.1"
+version = "4.12.2"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -92,6 +92,7 @@ all = [
 dev = [
     "pytest>=7.0",
     "pytest-cov",
+    "pytest-benchmark>=4.0",
 ]
 
 [project.urls]
@@ -140,6 +141,7 @@ markers = [
     "integration: full validation suite via subprocess (~30 min)",
     "regression: tests guarding against specific historical bugs",
     "slow: long-running physics simulations",
+    "bench: pytest-benchmark micro-perf tests (run with --benchmark-only)",
 ]
 addopts = [
     "-ra",

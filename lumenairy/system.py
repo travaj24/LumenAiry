@@ -11,6 +11,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import warnings
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -492,7 +493,25 @@ def propagate_through_system(E_in: np.ndarray,
 # ``aspheric_lens``, ``real_lens``, ``mirror``, etc.) still fall back
 # to the per-call NumPy boundary.
 
-_PROPAGATE_SYSTEM_JAX_CACHE: Dict[Any, Any] = {}
+#
+# v4.12.2: converted to an LRU-bounded ``OrderedDict`` (was an unbounded
+# plain dict) so long-running design sweeps over element lists do not
+# leak compiled XLA executables.  Accessed keys are moved to the end;
+# when ``len > _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE`` the oldest entry
+# is evicted.
+_PROPAGATE_SYSTEM_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
+_PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE = 32
+
+
+def clear_propagate_system_jax_cache() -> None:
+    """Drop every cached jit'd ``propagate_through_system_jax`` kernel (v4.12.2).
+
+    Forces the next :func:`propagate_through_system_jax` fast-path call
+    to rebuild and re-cache its jit-compiled kernel from scratch.  Use
+    in unit tests that pin cache mechanics or in long-running pipelines
+    that want to release compiled XLA executables.
+    """
+    _PROPAGATE_SYSTEM_JAX_CACHE.clear()
 
 
 # ----------------------------------------------------------------------
@@ -845,6 +864,12 @@ def propagate_through_system_jax(E_in: np.ndarray,
             kernel = _make_system_jax_kernel(
                 sigs_tuple, float(wavelength), float(dx), float(dy))
             _PROPAGATE_SYSTEM_JAX_CACHE[cache_key] = kernel
+            while (len(_PROPAGATE_SYSTEM_JAX_CACHE)
+                   > _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE):
+                _PROPAGATE_SYSTEM_JAX_CACHE.popitem(last=False)
+        else:
+            # LRU touch: keep recently-used kernels resident.
+            _PROPAGATE_SYSTEM_JAX_CACHE.move_to_end(cache_key)
         mask_arrays = tuple(
             jnp.asarray(elem['mask'])
             for elem, sig in zip(elements, elem_sigs)

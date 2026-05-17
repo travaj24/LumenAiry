@@ -366,20 +366,32 @@ class TestLeafDifferentiability:
 # ===========================================================================
 
 class TestCacheWarmSpeedup:
-    """Pin the 100x speedup expected from cache hits."""
+    """Pin the warm-call speedup expected from cache hits.
 
-    def test_warm_call_at_least_100x_faster_than_first(self, singlet):
-        """The 10th call must be at least 100x faster than the first
-        (compile-bound) call.  This is a sanity check that the cache
-        is actually doing something -- without the cache, calls land
-        at ~2.5 ms via JAX's internal dispatch tax, vs ~25 us once
-        cached (a ~100x speedup baseline)."""
+    v4.12.2: threshold tightened from >= 100x to >= 200x.  Fresh
+    measurement on a stable system state (1001-ray AC254-100-C-
+    equivalent doublet, median of 20 warm calls) reads roughly
+    140 ms cold -> 0.47 ms warm = ~300x.  The simpler BK7 singlet
+    used by this fixture lands at the same warm-call cost (~0.4 ms)
+    with a slightly smaller cold call (~105 ms / ~250x), so 200x is
+    the tighter floor that catches a true regression (a re-traced
+    kernel on every call would push warm above ~5 ms and the speedup
+    well below 50x).
+    """
+
+    def test_warm_call_at_least_200x_faster_than_first(self, singlet):
+        """The 10th call must be at least 200x faster than the first
+        (compile-bound) call.  Tightened from >= 100x in v4.12.2 to
+        match the freshly-measured ~250-300x speedup -- a future
+        regression (e.g. an accidental re-trace per call) drops the
+        warm call into the 2-5 ms range and the speedup well below
+        50x, which the looser bound used to accept silently."""
         state = _make_state()
         # Run once to warm any JAX-internal caches that aren't ours.
         trace_jax(state, singlet, 633e-9).x.block_until_ready()
         _TRACE_JAX_CACHE.clear()
 
-        n_iter = 15
+        n_iter = 20
         times = []
         for _ in range(n_iter):
             t0 = time.perf_counter()
@@ -388,13 +400,13 @@ class TestCacheWarmSpeedup:
             times.append(time.perf_counter() - t0)
 
         first = times[0]
-        # Use the median of calls 5-14 to absorb scheduling jitter.
+        # Use the median of calls 5-19 to absorb scheduling jitter.
         warm = float(np.median(times[5:]))
         speedup = first / max(warm, 1e-9)
-        assert speedup >= 100.0, (
+        assert speedup >= 200.0, (
             f"Cache speedup too small: first={first*1000:.1f}ms, "
             f"warm={warm*1000:.3f}ms, speedup={speedup:.0f}x "
-            f"(expected >= 100x).")
+            f"(expected >= 200x; v4.12.1 baseline ~250-300x).")
 
 
 # ===========================================================================

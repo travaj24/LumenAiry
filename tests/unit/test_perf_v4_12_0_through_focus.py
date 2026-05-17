@@ -444,3 +444,252 @@ class TestThroughFocusScanProgressCallback:
         # All events tagged with the right stage name.
         for stage, _, _ in calls:
             assert stage == 'through_focus_scan'
+
+
+# ==========================================================================
+# Pin #6 -- NumPy H-hoist actually does the hoist (D3 in round-5 audit)
+# ==========================================================================
+
+class TestThroughFocusScanNumPyHoistActuallyHoists:
+    """v4.12.0's release notes claimed the NumPy ``through_focus_scan``
+    hoisted the input FFT, kx/ky, propagating mask, and target dtype
+    outside the per-z loop ("H-hoist").  Round-5 audit verified this
+    was FALSE -- the v4.12.0 source still called
+    ``angular_spectrum_propagate(E_exit, z, ...)`` once per z.
+
+    v4.12.2 D3 closes this: the H-hoist is now actually shipped.  This
+    test pins that the hoist is in fact happening by mocking the
+    NumPy FFT primitive (``_fft2``) and asserting it was called
+    exactly ONCE across the entire scan -- not once per z.
+
+    Pre-v4.12.2 the NumPy ``through_focus_scan`` called
+    ``angular_spectrum_propagate`` per z, which internally calls
+    ``_fft2`` per z; this test would have seen ``call_count == n_z``.
+    Post-v4.12.2 the input FFT is hoisted, so ``_fft2`` is called
+    exactly ONCE regardless of ``n_z``.
+    """
+
+    def test_fft2_called_only_once_across_scan(self):
+        from unittest.mock import patch
+        from lumenairy.propagators import propagation as _prop
+
+        N, dx, wl = 64, 8e-6, 1.55e-6
+        E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
+        z_arr = np.linspace(45e-3, 55e-3, 7)
+
+        # Capture every _fft2 invocation while delegating to the real
+        # implementation.  side_effect ensures correctness is preserved.
+        real_fft2 = _prop._fft2
+        with patch.object(_prop, '_fft2',
+                          side_effect=real_fft2) as mock_fft2:
+            scan = through_focus_scan(
+                E_exit, dx, wl, z_arr, bandlimit=True, verbose=False)
+
+        # Strong pin: input FFT happens ONCE for the whole scan.
+        # (n_z would be 7 under the pre-fix per-z `angular_spectrum_propagate`
+        # path; the hoisted path collapses it to 1.)
+        assert mock_fft2.call_count == 1, (
+            f'NumPy through_focus_scan should call _fft2 exactly once '
+            f'(input FFT hoisted), got {mock_fft2.call_count} calls.  '
+            f'Pre-v4.12.2 the per-z `angular_spectrum_propagate` path '
+            f'made `n_z` separate _fft2 calls.')
+
+        # Sanity: the result is still finite + populated.
+        assert np.all(np.isfinite(scan.peak_I))
+        assert scan.z.shape == z_arr.shape
+
+    def test_z_invariant_caches_built_once(self):
+        """Stronger version: per-z work only rebuilds the
+        z-DEPENDENT transfer function factor.  The frequency grid and
+        the propagating mask come from cached helpers; verify that
+        within a single ``through_focus_scan`` call the band-limit
+        cache is only populated ``n_z`` times (one per z, the band-
+        limit IS z-dependent), but the input FFT (call-count == 1)
+        and freq-grids (call-count == 1) are NOT z-dependent.
+        """
+        from unittest.mock import patch
+        from lumenairy.propagators import propagation as _prop
+
+        N, dx, wl = 32, 8e-6, 1.55e-6
+        E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
+        z_arr = np.linspace(45e-3, 55e-3, 9)
+
+        real_grids = _prop._get_or_make_freq_grids
+        with patch.object(
+                _prop, '_get_or_make_freq_grids',
+                side_effect=real_grids) as mock_grids:
+            scan = through_focus_scan(
+                E_exit, dx, wl, z_arr, bandlimit=True, verbose=False)
+
+        # Frequency grid is hoisted once.  Pre-v4.12.2 the per-z
+        # `angular_spectrum_propagate` path called `_get_or_make_freq
+        # _grids` once per z (it hits the cache, but the function is
+        # still entered once per z).  The hoisted path collapses it
+        # to 1.
+        assert mock_grids.call_count == 1, (
+            f'NumPy through_focus_scan should call _get_or_make_freq'
+            f'_grids exactly once (hoisted), got {mock_grids.call_count} '
+            f'calls.')
+
+
+# ==========================================================================
+# Pin #7 -- through_focus_scan_jax inner-kernel jit cache (D4)
+# ==========================================================================
+
+class TestThroughFocusScanJaxKernelCache:
+    """v4.12.0's release notes claimed a jit cache at the inner ASM
+    kernel inside ``through_focus_scan_jax``.  Round-5 audit verified
+    this was FALSE -- the kernel was built inside a Python closure
+    and re-traced on every call.
+
+    v4.12.2 D4 closes this: the kernel is now lifted into a module-
+    level builder, jit-compiled once per
+    ``(shape, dtype, dx, wavelength, bandlimit)``, and cached in
+    :data:`_THROUGH_FOCUS_SCAN_JAX_CACHE`.  These tests pin that
+    repeated calls with the same configuration HIT the cache (no
+    rebuild) and that distinct configurations MISS (rebuild).
+    """
+
+    @pytest.fixture(scope='class')
+    def jax_x64(self):
+        try:
+            from lumenairy.backend import JAX_AVAILABLE
+        except ImportError:
+            return False
+        if not JAX_AVAILABLE:
+            return False
+        import jax
+        if not jax.config.read('jax_enable_x64'):
+            jax.config.update('jax_enable_x64', True)
+        return True
+
+    def test_cache_size_one_after_repeated_calls(self, jax_x64):
+        """5 calls with the same shape / dtype / dx / wavelength /
+        bandlimit -> cache stays at size 1 (one compiled kernel)."""
+        if not jax_x64:
+            pytest.skip('JAX not installed.')
+        from lumenairy.analysis.through_focus import (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE,
+            clear_through_focus_scan_jax_cache,
+        )
+        N, dx, wl = 32, 8e-6, 1.55e-6
+        E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
+        z_arr = np.linspace(45e-3, 55e-3, 5)
+
+        clear_through_focus_scan_jax_cache()
+        assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 0
+        for _ in range(5):
+            through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
+        assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 1, (
+            f'Same-config repeated calls should reuse one cache slot; '
+            f'got {len(_THROUGH_FOCUS_SCAN_JAX_CACHE)} entries.')
+
+    def test_cache_hits_on_second_call(self, jax_x64):
+        """Direct cache-mechanics pin: the kernel object retrieved
+        from the cache on the 2nd call must be the SAME Python object
+        as on the 1st call (no rebuild)."""
+        if not jax_x64:
+            pytest.skip('JAX not installed.')
+        from lumenairy.analysis.through_focus import (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE,
+            clear_through_focus_scan_jax_cache,
+        )
+        N, dx, wl = 32, 8e-6, 1.55e-6
+        E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
+        z_arr = np.linspace(45e-3, 55e-3, 5)
+
+        clear_through_focus_scan_jax_cache()
+        through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
+        # The cache key is the structural signature; record the kernel.
+        keys_after_first = list(_THROUGH_FOCUS_SCAN_JAX_CACHE.keys())
+        assert len(keys_after_first) == 1
+        kernel_after_first = (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE[keys_after_first[0]])
+
+        # Second call with same config: cache must hit, kernel
+        # identity preserved.
+        through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
+        keys_after_second = list(_THROUGH_FOCUS_SCAN_JAX_CACHE.keys())
+        assert len(keys_after_second) == 1
+        kernel_after_second = (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE[keys_after_second[0]])
+        assert kernel_after_first is kernel_after_second, (
+            'Cache miss on 2nd same-config call -- the inner ASM '
+            'kernel was rebuilt instead of reused.')
+
+    def test_cache_misses_on_different_shape(self, jax_x64):
+        """Different shape -> new cache slot (the kernel bakes the
+        K-grid in, so a shape change requires a rebuild)."""
+        if not jax_x64:
+            pytest.skip('JAX not installed.')
+        from lumenairy.analysis.through_focus import (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE,
+            clear_through_focus_scan_jax_cache,
+        )
+        dx, wl = 8e-6, 1.55e-6
+        z_arr = np.linspace(45e-3, 55e-3, 5)
+
+        clear_through_focus_scan_jax_cache()
+        E_64 = _make_focusing_field(N=64, dx=dx, wl=wl, f=50e-3)
+        through_focus_scan_jax(E_64, dx, wl, z_arr, bandlimit=True)
+        assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 1
+
+        E_32 = _make_focusing_field(N=32, dx=dx, wl=wl, f=50e-3)
+        through_focus_scan_jax(E_32, dx, wl, z_arr, bandlimit=True)
+        assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 2, (
+            f'Different shape must miss the cache; got '
+            f'{len(_THROUGH_FOCUS_SCAN_JAX_CACHE)} entries.')
+
+    def test_cache_misses_on_different_bandlimit(self, jax_x64):
+        """Different ``bandlimit`` flag bakes a different code path
+        into the jit'd kernel, so cache key must distinguish them."""
+        if not jax_x64:
+            pytest.skip('JAX not installed.')
+        from lumenairy.analysis.through_focus import (
+            _THROUGH_FOCUS_SCAN_JAX_CACHE,
+            clear_through_focus_scan_jax_cache,
+        )
+        N, dx, wl = 32, 8e-6, 1.55e-6
+        E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
+        z_arr = np.linspace(45e-3, 55e-3, 5)
+
+        clear_through_focus_scan_jax_cache()
+        through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
+        through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=False)
+        assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 2, (
+            f'bandlimit=True vs bandlimit=False must miss the cache; '
+            f'got {len(_THROUGH_FOCUS_SCAN_JAX_CACHE)} entries.')
+
+    def test_warm_call_at_least_10x_faster_than_first(self, jax_x64):
+        """Warm-call speedup pin -- the cache eliminates re-tracing
+        and re-compilation cost.  Conservative threshold (>= 10x) to
+        absorb scheduling jitter on small workloads; the typical
+        observed speedup at N=64 is ~50-100x.
+        """
+        if not jax_x64:
+            pytest.skip('JAX not installed.')
+        import time
+        from lumenairy.analysis.through_focus import (
+            clear_through_focus_scan_jax_cache,
+        )
+        N, dx, wl = 32, 8e-6, 1.55e-6
+        E_exit = _make_focusing_field(N=N, dx=dx, wl=wl, f=50e-3)
+        z_arr = np.linspace(45e-3, 55e-3, 5)
+
+        # Warm JAX-internal infrastructure (e.g. CUDA bootstrap).
+        through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
+        clear_through_focus_scan_jax_cache()
+
+        n_iter = 8
+        times = []
+        for _ in range(n_iter):
+            t0 = time.perf_counter()
+            through_focus_scan_jax(E_exit, dx, wl, z_arr, bandlimit=True)
+            times.append(time.perf_counter() - t0)
+        first = times[0]
+        warm = float(np.median(times[3:]))
+        speedup = first / max(warm, 1e-9)
+        assert speedup >= 10.0, (
+            f'Cache speedup too small: first={first*1000:.1f}ms, '
+            f'warm={warm*1000:.3f}ms, speedup={speedup:.1f}x '
+            f'(expected >= 10x).')

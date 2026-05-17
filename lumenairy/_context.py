@@ -233,8 +233,51 @@ def lumenairy_context(
             apply_globals(prior)
         finally:
             if clear_caches_on_exit:
+                # v4.12.2: clear EVERY propagator-adjacent cache the
+                # library can grow, not just ASM.  Each call is guarded
+                # so a missing optional dependency (JAX) or a future
+                # rename does not prevent the others from firing.
                 from .propagators.propagation import clear_asm_caches
-                clear_asm_caches()
+                try:
+                    clear_asm_caches()
+                except Exception:
+                    pass
+                try:
+                    from .analysis.core import clear_zernike_basis_cache
+                    clear_zernike_basis_cache()
+                except Exception:
+                    pass
+                try:
+                    from .propagators.asymptotic import (
+                        clear_lg_polynomial_cache,
+                    )
+                    clear_lg_polynomial_cache()
+                except Exception:
+                    pass
+                try:
+                    from .raytrace.jax_trace import clear_trace_jax_cache
+                    clear_trace_jax_cache()
+                except Exception:
+                    pass
+                try:
+                    from .system import clear_propagate_system_jax_cache
+                    clear_propagate_system_jax_cache()
+                except Exception:
+                    pass
+                try:
+                    from .analysis.phase_retrieval import (
+                        clear_phase_retrieval_caches,
+                    )
+                    clear_phase_retrieval_caches()
+                except Exception:
+                    pass
+                try:
+                    from .analysis.through_focus import (
+                        clear_through_focus_scan_jax_cache,
+                    )
+                    clear_through_focus_scan_jax_cache()
+                except Exception:
+                    pass
 
 
 def _atexit_restore(snapshot: dict) -> None:

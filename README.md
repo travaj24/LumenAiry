@@ -10,6 +10,75 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.12.2
+
+**Closes the round-5 / v4.12.1 pre-PyPI audit blockers.**  Three
+documentation-drift items become true (NumPy `through_focus_scan`
+H-hoist actually implemented, `through_focus_scan_jax` JIT cache
+actually implemented, 878× benchmark headline reconciled to
+~300×).  Cache hygiene infrastructure landed: `clear_asm_caches()`
+extended, unbounded jit caches converted to LRU(32), 4 new public
+`clear_*_cache()` helpers, all wired into `lumenairy_context
+(clear_caches_on_exit=True)`.  All 482 unit tests pass.
+
+### Pre-PyPI release blockers fixed
+
+* **`pytest-benchmark` added to `dev` extra** -- the release-notes
+  claim since v4.12.0 is now true; `pip install lumenairy[dev]`
+  installs it.
+* **`bench` pytest marker registered** so `pytest benchmarks/
+  --benchmark-only` collects under `--strict-markers`.
+* **Cache-clear / FFT-toggle helpers exposed at the top level** --
+  `la.set_fft_auto_promote`, `la.clear_zernike_basis_cache`,
+  `la.clear_lg_polynomial_cache`, and four new `la.clear_*_cache()`
+  helpers (trace_jax, through_focus_scan_jax,
+  propagate_through_system_jax, phase-retrieval).
+
+### Documentation drift made true
+
+* **NumPy `through_focus_scan` H-hoist actually implemented**.
+  Input FFT, kx/ky, propagating mask, and target dtype now hoisted
+  outside the z-loop.  v4.12.0's 4.7× speedup came from underlying
+  pyFFTW MEASURE; the H-hoist now stacks on top.
+* **`through_focus_scan_jax` JIT cache actually implemented**.
+  Module-scope OrderedDict + LRU(32) caches the compiled vmapped
+  kernel per signature.  First call ~150 ms; warm ~2 ms.  ~77× at
+  N=64.
+
+### Cache hygiene infrastructure
+
+* `clear_asm_caches()` extended to also drop `_PYFFTW_PLAN_CACHE`
+  + `_PYFFTW_BAD_SHAPES`.
+* `_PROPAGATE_SYSTEM_JAX_CACHE`, `_TRACE_JAX_CACHE`, and the three
+  phase-retrieval kernel caches converted from unbounded
+  `Dict[Any, Any]` to `OrderedDict` + LRU(32).  No more compiled-
+  XLA-binary leaks under iterative optimisation.
+* `lumenairy_context(clear_caches_on_exit=True)` now calls all six
+  `clear_*` helpers, each guarded.
+
+### 878× → ~300× benchmark reconciliation
+
+v4.12.1 release notes claimed `trace_jax` warm-call 878× at
+127 ms → 0.40 ms.  Those don't reconcile (`127/0.40 = 317×`).
+Fresh measurement: first **140 ms**, warm **0.47 ms**, speedup
+**~300×**.  Corrected everywhere.
+
+### Coverage test strengthened
+
+Zemax coord-break STOP-marker test now actually places the
+coord-break BEFORE the stop (exercises the pre-v4.11.2 off-by-one
+bug); the v4.12.1 version placed it after, which didn't.
+
+### Known limitations deferred to v4.13/v4.14
+
+CHANGELOG documents the silent-data-loss class (S1: `io/storage`
+append-side complex128 hardcode; S2: codegen aperture-stop drop +
+1.31 µm wavelength default; S3: `ghost.py` R convention conflict)
+and structural/latent items (L2: JAX complex64 hard-casts; L3:
+PropagationResult missing dy; L4: sibling-gap remnants; L5: 346
+`except Exception:` clauses; L6: `apply_mirror` array_namespace;
+L8: zarr thread-safety).
+
 ## What's new in 4.12.1
 
 **Closes the three perf items deferred from v4.12.0 plus the 14
@@ -18,13 +87,16 @@ tests pass; full validation suite (34 files / 314 tests) passes.
 
 ### Performance recovered
 
-* **`trace_jax` warm-call: 878x** (127 ms -> 0.40 ms) via a
-  pytree-registered `JaxPrescription` wrapper + tracer-detection
-  bypass that preserves `jax.grad` semantics.  v4.12.0 reverted
-  this because the flat-tuple cache produced `jax.grad = NaN`;
-  root cause turned out to be a JAX lstsq backward bug, not the
-  cache key.  Fix: bypass the jit-cache layer when any leaf is a
-  tracer.
+* **`trace_jax` warm-call: ~300x** (140 ms cold -> 0.47 ms
+  warm, median of 20 warm calls on a 1001-ray AC254-100-C
+  doublet) via a pytree-registered `JaxPrescription` wrapper +
+  tracer-detection bypass that preserves `jax.grad` semantics.
+  v4.12.0 reverted this because the flat-tuple cache produced
+  `jax.grad = NaN`; root cause turned out to be a JAX lstsq
+  backward bug, not the cache key.  Fix: bypass the jit-cache
+  layer when any leaf is a tracer.  (The pre-release notes
+  quoted 878x with inconsistent absolute timings; v4.12.2
+  reconciled this after re-running on a stable system state.)
 * **Raytrace Newton spherical fast-path: 1.50x** on 1k-ray
   doublet traces.  v4.12.0 attempted 1.64x by skipping Newton
   AND switching to the analytic spherical normal; the normal

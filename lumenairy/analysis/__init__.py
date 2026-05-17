@@ -50,6 +50,7 @@ from .core import (
     zernike_reconstruct,
     zernike_index_to_nm,
     zernike_nm_to_index,
+    clear_zernike_basis_cache,
 )
 from .detector import (
     apply_detector,
@@ -72,6 +73,7 @@ from .phase_retrieval import (
     gerchberg_saxton_jax,
     error_reduction_jax,
     hybrid_input_output_jax,
+    clear_phase_retrieval_caches,
 )
 from .coherence import (
     koehler_image,
@@ -161,6 +163,7 @@ __all__ = [
     'radial_power_bands',
     'zernike_polynomial', 'zernike_basis_matrix', 'zernike_decompose',
     'zernike_reconstruct', 'zernike_index_to_nm', 'zernike_nm_to_index',
+    'clear_zernike_basis_cache',
     # detector
     'apply_detector', 'shack_hartmann',
     # ghost
@@ -170,6 +173,7 @@ __all__ = [
     # phase retrieval
     'gerchberg_saxton', 'error_reduction', 'hybrid_input_output',
     'gerchberg_saxton_jax', 'error_reduction_jax', 'hybrid_input_output_jax',
+    'clear_phase_retrieval_caches',
     # coherence
     'koehler_image', 'extended_source_image', 'mutual_coherence',
     # through focus

@@ -39,6 +39,8 @@ from .propagators.propagation import (
     set_fft_plan_cache_size,
     set_pyfftw_planner,
     get_pyfftw_planner,
+    set_fft_auto_promote,
+    get_fft_auto_promote,
     warmup_fft_plans,
     clear_asm_caches,
     reset_fft_backend,
@@ -149,6 +151,7 @@ from .analysis.phase_retrieval import (
     gerchberg_saxton_jax,
     error_reduction_jax,
     hybrid_input_output_jax,
+    clear_phase_retrieval_caches,
 )
 from .analysis import (
     beam_centroid,
@@ -182,7 +185,11 @@ from .analysis import (
     zernike_reconstruct,
     zernike_index_to_nm,
     zernike_nm_to_index,
+    clear_zernike_basis_cache,
 )
+# v4.12.2: expose the through_focus_scan_jax kernel-cache clear helper
+# alongside the other clear_*_cache exports.
+from .analysis.through_focus import clear_through_focus_scan_jax_cache
 
 # ── Off-axis + extended source helpers ─────────────────────────────────
 from .sources import (
@@ -386,6 +393,7 @@ from .propagators.asymptotic import (
     JaxAberrationTensorResult,
     solve_envelope_stationary_jax_ift,
     fit_canonical_polynomials_jax,
+    clear_lg_polynomial_cache,
 )
 
 # ── DOE / Gratings / Phase I/O ──────────────────────────────────────────
@@ -520,7 +528,11 @@ from .raytrace import (
 )
 
 # ── System propagation ──────────────────────────────────────────────────
-from .system import propagate_through_system, propagate_through_system_jax
+from .system import (
+    propagate_through_system,
+    propagate_through_system_jax,
+    clear_propagate_system_jax_cache,
+)
 
 # ── Storage (unified HDF5 / Zarr) ────────────────────────────────────────
 from .io.storage import (
@@ -689,6 +701,7 @@ from .raytrace.jax_trace import (
     trace_jax,
     jax_state_to_raybundle,
     raybundle_to_jax_state,
+    clear_trace_jax_cache,
 )
 
 # ── Deprecated-alias shims ──────────────────────────────────────────────
@@ -714,7 +727,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.12.1"
+__version__ = "4.12.2"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1312,8 +1325,16 @@ __all__ = [
     'set_fft_plan_cache_size',
     'set_pyfftw_planner',
     'get_pyfftw_planner',
+    'set_fft_auto_promote',
+    'get_fft_auto_promote',
     'warmup_fft_plans',
     'clear_asm_caches',
+    'clear_zernike_basis_cache',
+    'clear_lg_polynomial_cache',
+    'clear_through_focus_scan_jax_cache',
+    'clear_trace_jax_cache',
+    'clear_propagate_system_jax_cache',
+    'clear_phase_retrieval_caches',
 
     # Memory-aware batching
     'available_memory_bytes',

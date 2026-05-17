@@ -743,6 +743,139 @@ class TestZemaxCoordBreakStopMarker:
             f"writer used the global counter, which would place STOP "
             f"differently in the presence of coord-breaks.")
 
+    def test_coord_break_at_index_0_does_not_bump_stop(self):
+        """Round-5 audit (Item 11 weakness): the original
+        ``test_coord_break_does_not_displace_stop_marker`` puts the
+        coord-break AFTER the stop_surface in the flat list, so the
+        global counter and the refractive counter still agree on the
+        STOP position -- the pre-fix bug is NOT exercised.
+
+        This test exercises the actual off-by-one: a coord-break
+        placed at index 0 in the emit list (BEFORE any refractive
+        surface), with ``stop_surface=1`` (the SECOND refractive).
+
+        Walk-through:
+          * SURF 0 -- object plane
+          * SURF 1 -- COORDBRK (cb.surf_num = 1, drained before
+                      the first element)
+          * SURF 2 -- first refractive (refr_counter = 0)
+          * SURF 3 -- second refractive (refr_counter = 1) -- STOP
+                      MUST LAND HERE
+          * SURF 4 -- third refractive (refr_counter = 2)
+          * SURF 5 -- fourth refractive (refr_counter = 3)
+
+        Pre-v4.11.2 (the bug) compared the global ``surf_counter``
+        against ``stop_surface`` directly, which at ``stop_surface=1``
+        would emit STOP on SURF 1 (the COORDBRK) -- a non-refractive
+        surface.  Post-fix the refractive-only counter puts STOP on
+        SURF 3 (the second refractive).
+        """
+        rx = {
+            'name': 'cb_at_zero_stop_test',
+            'aperture_diameter': 6e-3,
+            'elements': [
+                # First element targets surf_num=2 so the coord-break
+                # at surf_num=1 drains BEFORE it.
+                {'element_type': 'surface', 'radius': 50e-3,
+                 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': 'air', 'glass_after': 'N-BK7',
+                 'semi_diameter': 3e-3, 'surf_num': 2},
+                {'element_type': 'surface', 'radius': float('inf'),
+                 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': 'N-BK7', 'glass_after': 'air',
+                 'semi_diameter': 3e-3, 'surf_num': 3},
+                {'element_type': 'surface', 'radius': -50e-3,
+                 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': 'air', 'glass_after': 'N-BK7',
+                 'semi_diameter': 3e-3, 'surf_num': 4},
+                {'element_type': 'surface', 'radius': float('inf'),
+                 'conic': 0.0, 'aspheric_coeffs': None,
+                 'glass_before': 'N-BK7', 'glass_after': 'air',
+                 'semi_diameter': 3e-3, 'surf_num': 5},
+            ],
+            'all_thicknesses': [2e-3, 5e-3, 2e-3, 10e-3],
+            'coord_breaks': [
+                # surf_num=1 -> emitted BEFORE every element (which all
+                # have surf_num >= 2).
+                {'surf_num': 1, 'decenter_x_m': 0.0,
+                 'decenter_y_m': 0.0, 'tilt_x_deg': 0.0,
+                 'tilt_y_deg': 0.0, 'tilt_z_deg': 0.0,
+                 'order': 0, 'thickness_m': 0.0},
+            ],
+            'surfaces': [],
+            'thicknesses': [],
+        }
+        # stop_surface = 1 -> second refractive surface.
+        with tempfile.TemporaryDirectory() as td:
+            zmx_path = os.path.join(td, 'cb_at_zero_stop_test.zmx')
+            la.export_zemax_zmx(
+                rx, zmx_path, wavelength=1.31e-6, stop_surface=1)
+            with open(zmx_path, encoding='utf-8') as f:
+                txt = f.read()
+
+        lines = txt.splitlines()
+        surfs = []
+        cur = None
+        for ln in lines:
+            s = ln.strip()
+            if s.startswith('SURF '):
+                if cur is not None:
+                    surfs.append(cur)
+                cur = {'idx': int(s.split()[1]),
+                       'type': None,
+                       'is_stop': False}
+            elif cur is not None:
+                if s.startswith('TYPE '):
+                    cur['type'] = s.split()[1]
+                elif s == 'STOP':
+                    cur['is_stop'] = True
+        if cur is not None:
+            surfs.append(cur)
+
+        # Verify the surface layout matches our expectation BEFORE
+        # checking the STOP marker -- if the layout drifted, the
+        # pre-fix bug wouldn't actually exercise.
+        # SURF 0 = object, SURF 1 = COORDBRK, SURF 2..5 = refractive,
+        # SURF 6 = image.
+        cb_surfs = [s for s in surfs if s['type'] == 'COORDBRK']
+        std_surfs = [s for s in surfs if s['type'] == 'STANDARD']
+        assert len(cb_surfs) == 1, (
+            f"Expected exactly one COORDBRK; got {len(cb_surfs)} "
+            f"({[s['idx'] for s in cb_surfs]}).")
+        assert cb_surfs[0]['idx'] == 1, (
+            f"Coord-break should be at SURF 1 (so refractive surfaces "
+            f"start at SURF 2); got SURF {cb_surfs[0]['idx']}.")
+
+        stop_surfs = [s for s in surfs if s['is_stop']]
+        assert len(stop_surfs) == 1, (
+            f"Expected exactly one STOP marker; got {len(stop_surfs)} "
+            f"({[(s['idx'], s['type']) for s in stop_surfs]}).")
+        stop_surf = stop_surfs[0]
+
+        # The critical pin: STOP must land on a STANDARD (refractive)
+        # surface, NOT on the COORDBRK.  Pre-v4.11.2 the global
+        # surf_counter == stop_surface check would emit STOP on SURF 1
+        # (the COORDBRK) since coord-break came first.
+        assert stop_surf['type'] == 'STANDARD', (
+            f"STOP marker landed on a {stop_surf['type']} surface "
+            f"(SURF {stop_surf['idx']}); pre-v4.11.2 the global "
+            f"surf_counter compared directly against stop_surface "
+            f"would place STOP on the COORDBRK at SURF 1.  The "
+            f"refractive-only counter must skip non-refractive "
+            f"surfaces.")
+
+        # And it must be the SECOND refractive surface specifically
+        # (refr_counter=1 = stop_surface), which is SURF 3 in the
+        # emitted file (SURF 0=object, SURF 1=COORDBRK,
+        # SURF 2=first refr, SURF 3=second refr).
+        assert stop_surf['idx'] == 3, (
+            f"STOP marker on SURF {stop_surf['idx']}; expected SURF 3 "
+            f"(the second refractive surface, since the coord-break at "
+            f"SURF 1 must NOT bump the refractive counter).  Pre-fix "
+            f"the global counter would either land on SURF 1 (the "
+            f"COORDBRK) or SURF 2 (the first refractive), depending on "
+            f"the exact integer arithmetic used.")
+
 
 # ============================================================================
 # Item 12 -- JAX <-> NumPy phase-retrieval cross-parity

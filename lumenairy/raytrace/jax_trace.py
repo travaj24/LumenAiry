@@ -38,6 +38,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any, Dict, NamedTuple, Optional
 
 import numpy as np
@@ -858,7 +859,24 @@ def _trace_body_traced(state, jp, wavelength, surface_diffraction):
 # wavelength scalar.  The kernel signature is ``(state, jp_leaves...)`` so
 # leaf gradients flow through; under tracing we bypass this layer
 # entirely (see :func:`_running_under_trace`).
-_TRACE_JAX_CACHE: Dict[Any, Any] = {}
+#
+# v4.12.2: converted to an LRU-bounded ``OrderedDict`` so long-running
+# optimizers (e.g. design sweeps over hundreds of prescriptions) do not
+# leak compiled XLA executables.  Accessed keys are moved to the end;
+# when ``len > _TRACE_JAX_CACHE_MAXSIZE`` the oldest entry is evicted.
+_TRACE_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
+_TRACE_JAX_CACHE_MAXSIZE = 32  # tune; long-running optimizers may exceed
+
+
+def clear_trace_jax_cache() -> None:
+    """Drop every cached jit'd ``trace_jax`` kernel (v4.12.2).
+
+    Forces the next :func:`trace_jax` call to rebuild and re-cache its
+    jit-compiled kernel from scratch.  Useful in unit tests that pin
+    cache mechanics and in long-running notebooks / optimizers where
+    the user wants to release the underlying XLA executables.
+    """
+    _TRACE_JAX_CACHE.clear()
 
 
 def _make_jit_kernel(jp_aux, wavelength_float, surface_diffraction):
@@ -965,6 +983,11 @@ def trace_jax(
         kernel = _make_jit_kernel(
             jp.aux, float(wavelength), surface_diffraction)
         _TRACE_JAX_CACHE[cache_key] = kernel
+        while len(_TRACE_JAX_CACHE) > _TRACE_JAX_CACHE_MAXSIZE:
+            _TRACE_JAX_CACHE.popitem(last=False)
+    else:
+        # LRU touch: move this hit to the end so it survives eviction.
+        _TRACE_JAX_CACHE.move_to_end(cache_key)
     return kernel(initial_state, jp)
 
 

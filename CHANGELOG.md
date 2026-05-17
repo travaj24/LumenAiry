@@ -2,6 +2,191 @@
 
 All notable changes to the core library are documented here.
 
+## [4.12.2] — 2026-05-17
+
+**Closes the round-5 / v4.12.1 pre-PyPI audit blockers**
+(`AUDIT_V4_12_1_2026_05_16.md`).  Three documentation-drift items
+become true (NumPy `through_focus_scan` H-hoist actually
+implemented, `through_focus_scan_jax` JIT cache actually
+implemented, 878× benchmark headline reconciled to ~300×).  Cache
+hygiene infrastructure landed: `clear_asm_caches()` extended,
+unbounded jit caches converted to LRU(32), 4 new public
+`clear_*_cache()` helpers, all wired into
+`lumenairy_context(clear_caches_on_exit=True)`.  Two test pins
+strengthened, one coverage-test made bug-exercising, one benchmark
+stub replaced.  All 482 unit tests pass; full validation suite (34
+files / 314 tests) passes.
+
+### A1 / A2 — Build & test configuration (`pyproject.toml`)
+
+* `pytest-benchmark>=4.0` added to `[project.optional-dependencies]
+  .dev`.  Round-5 verified the release notes had claimed this since
+  v4.12.0 but the `dev` extra never gained it.  `pip install
+  lumenairy[dev]` now actually installs pytest-benchmark.
+* `bench` pytest marker registered in
+  `[tool.pytest.ini_options].markers`.  `benchmarks/conftest.py`
+  applies this marker to every collected benchmark; with
+  `--strict-markers` set, an unregistered marker fails collection.
+  Now collects cleanly.
+
+### A3 — Cache-clear / FFT-toggle symbols exposed at top level
+
+These existed in submodules but were not importable from
+`lumenairy`:
+
+* `set_fft_auto_promote`, `get_fft_auto_promote`
+* `clear_zernike_basis_cache`
+* `clear_lg_polynomial_cache`
+* `clear_trace_jax_cache` (NEW)
+* `clear_through_focus_scan_jax_cache` (NEW)
+* `clear_propagate_system_jax_cache` (NEW)
+* `clear_phase_retrieval_caches` (NEW)
+
+All exported via `lumenairy/__init__.py` and listed in `__all__`.
+`la.set_fft_auto_promote(False)` and the six `la.clear_*_cache()`
+helpers now work.
+
+### A5 — Cache hygiene infrastructure
+
+* `clear_asm_caches()` extended to also clear `_PYFFTW_PLAN_CACHE`
+  and `_PYFFTW_BAD_SHAPES` -- the pyFFTW double-buffer + auto-
+  promote work added in v4.12.0 now actually gets released when
+  callers ask for a fresh state.
+* Unbounded jit caches converted to `OrderedDict` + LRU
+  (`maxsize=32`).  Round-5 L1 + v4.12.1 cache-regression flagged
+  that `_PROPAGATE_SYSTEM_JAX_CACHE` (v4.12.0) and `_TRACE_JAX_CACHE`
+  (v4.12.1) were plain `Dict[Any, Any]` -- an optimizer iterating
+  over different prescriptions accumulated a compiled XLA binary
+  per iteration with no eviction.  Both converted; phase-retrieval
+  kernel caches given the same treatment.
+* `lumenairy_context(clear_caches_on_exit=True)` now calls all
+  six `clear_*` functions (each guarded with `try/except` so a
+  missing optional dependency, e.g. JAX, doesn't break context
+  exit).
+
+### D3 — NumPy `through_focus_scan` H-hoist actually implemented
+
+v4.12.0 release notes claimed `through_focus_scan` (NumPy backend)
+hoisted the input FFT, kx/ky, propagating mask, and target dtype
+outside the z-loop.  Source code did not.  v4.12.0's 4.7× speedup
+came from the underlying pyFFTW MEASURE auto-promote inherited via
+`angular_spectrum_propagate`, not from any per-z hoisting.
+
+v4.12.2 makes the claim true.  `through_focus_scan` (NumPy) now
+precomputes `E_fft_shifted`, `kz_safe`, `propagating`, and the
+target complex dtype once before the loop.  Per-z work reduces to
+`H_z = where(propagating, exp(1j*kz_safe*z), 0) * bl_mask_z` then
+`E_z = fftshift(ifft2(ifftshift(E_fft_shifted * H_z)))`.  Band-
+limit masks remain per-z (cached via the existing
+`_get_or_make_bandlimit`).
+
+Pinning tests
+(`tests/unit/test_perf_v4_12_0_through_focus.py::
+TestThroughFocusScanNumPyHoistActuallyHoists`):
+* `test_fft2_called_only_once_across_scan` -- mocks `_fft2` and
+  asserts `call_count == 1` (was `n_z` pre-fix).
+* `test_z_invariant_caches_built_once` -- mocks
+  `_get_or_make_freq_grids` and asserts `call_count == 1`.
+* All 13 pre-existing bit-near-exact pins still pass.
+
+### D4 — `through_focus_scan_jax` JIT cache actually implemented
+
+v4.12.0 release notes claimed `through_focus_scan_jax` jit-caches
+the inner ASM kernel.  Source code had no `@jax.jit` wrap and no
+module-scope cache; every Python call re-traced.
+
+v4.12.2 makes the claim true.  Factored the inner kernel out of
+the closure into `_build_through_focus_scan_jax_kernel(Ny, Nx, dx,
+wavelength, bandlimit, dtype_str)` which wraps `jax.vmap(_asm_one
+_z, in_axes=(None, 0))` with `jax.jit`.  Module-scope
+`_THROUGH_FOCUS_SCAN_JAX_CACHE: OrderedDict` (LRU `maxsize=32`)
+caches the compiled kernel per signature.  `clear_through_focus
+_scan_jax_cache()` exported.
+
+Benchmark (`benchmarks/test_bench_jax_jit.py`):
+* N=64, 7 z-planes, complex128: first **153 ms** -> warm **1.97
+  ms** = **~77×**.
+* N=128, 7 z-planes, complex128: first **128 ms** -> warm **4.95
+  ms** = **~26×**.
+
+### 878× → ~300× warm-call `trace_jax` benchmark reconciliation
+
+v4.12.1 release notes claimed `trace_jax` warm-call: **878×**
+(127 ms → 0.40 ms).  Those numbers don't reconcile (`127/0.40 =
+317×`, not 878×).  Fresh measurement on a stable system state
+(1001-ray AC254-100-C-equivalent doublet, median of 20 warm calls,
+5 passes): first **140 ms**, warm **0.47 ms**, speedup **~300×**.
+Updated in `CHANGELOG.md`, `README.md`,
+`.release_notes_v4.12.1.md`, and the wiki.  Regression pin
+threshold tightened from `>= 100×` to `>= 200×`.
+
+### Item 11 — Coverage test for Zemax coord-break STOP marker tightened
+
+The v4.12.1 test placed the coord-break AFTER `stop_surface=1`,
+which doesn't exercise the pre-v4.11.2 off-by-one bug.  New test
+`test_coord_break_at_index_0_does_not_bump_stop` places the
+coord-break at `surf_num=1` BEFORE the stop, exports + re-loads,
+asserts STOP lands on SURF 3 (second refractive), not SURF 1
+(the COORDBRK).  Pre-fix would have emitted STOP on SURF 1.
+
+### Replaced benchmark stub
+
+`benchmarks/test_bench_jax_jit.py` had a `trace_jax — deferred to
+v4.12.1` stub.  Replaced with a real `test_bench_trace_jax_first
+_vs_warm` benchmark.
+
+## Known limitations (deferred to v4.13 / v4.14)
+
+Audit `AUDIT_V4_12_1_2026_05_16.md` identified items below as
+non-blocking for the v4.12.x line.
+
+### Silent-data-loss class (S1-S3)
+
+* **S1 — `io/storage.py` append-side hardcodes `complex128`.**
+  Lines 282-283 and 342 use `np.asarray(field, dtype=np.complex128)`
+  unconditionally.  Single-shot save APIs honour `preserve_dtype`;
+  the append APIs (used by `MhsPipeline.run(store=...)` and
+  `replay_run`) do not.  A complex64 simulation streamed to disk
+  via the append path silently doubles its on-disk size.
+* **S2 — `io/codegen.py` aperture-stop drop + 1.31 µm wavelength
+  default.**  Zemax-to-Python codegen silently drops aperture-stop
+  surfaces during `_decompose_prescription` and defaults to
+  `wavelength = 1.31e-6` (1310 nm NIR) when none supplied.
+* **S3 — `analysis/ghost.py` `R_i`/`R_j` convention conflict.**
+  `focus_z_estimate` docstring uses `|R_i|, |R_j|` for curvature
+  radii while `R_i`, `R_j` elsewhere in the module denote Fresnel
+  reflectance.
+
+### Structural / latent (L1-L8)
+
+* **L2 — JAX path `complex64` hard-casts.**  `system.py:833` and
+  similar sites silently override `set_default_complex_dtype(np
+  .complex128)`.  JIT cache key does not include dtype.  Cross-
+  module inconsistent (`apply_real_lens_traced_jax` reads
+  `jax.config.jax_enable_x64`).
+* **L3 — `PropagationResult` missing `dy` field.**  `_coerce_field`
+  extracts `dx_out` from tuple-returning kernels but discards
+  `dy_out`.  Benign for `dx == dy`; lossy for anamorphic Fresnel.
+* **L4 — Sibling-gap remnants.**  Mirror-guard not applied to
+  `apply_real_lens_maslov`, `apply_real_lens_traced_jax`,
+  `apply_real_lens_maslov_jax`.  `error_reduction(backend='jax')`
+  and `hybrid_input_output(backend='jax')` dispatch don't forward
+  `initial_guess`.  `gerchberg_saxton(backend='jax',
+  return_history=True)` silently drops `return_history`.
+* **L5 — 346 `except Exception:` clauses remain in core scientific
+  code.**  Many `pass`/return-NaN without logging.
+* **L6 — `apply_mirror` doesn't use `array_namespace` dispatch.**
+  Every other `apply_*` in `elements.py` switched in 4.10/4.11.
+  CuPy/JAX inputs fall through to a NumPy code path silently.
+  Also missing `dy` parameter.
+* **L8 — `_open_zarr_group_safe` non-thread-safe `Path.mkdir`
+  monkey-patch.**  Two threads racing through `append_plane_h5`
+  can leave the monkey-patch in an inconsistent state.
+
+L1 and L7 are now resolved (jit cache eviction in A5; through_focus
+scan_jax cache exists post-D4 so the benchmark hygiene concern
+applies).
+
 ## [4.12.1] — 2026-05-16
 
 **Closes the three perf items deferred from v4.12.0, adds the
@@ -12,7 +197,12 @@ full validation suite (34 files / 314 tests) passes.
 ### Performance wins recovered from v4.12.0 deferrals
 
 * **`trace_jax` jit cache via pytree-registered prescription wrapper**
-  -- ~878x warm-call speedup (127 ms -> 0.40 ms steady-state).
+  -- ~300x warm-call speedup (140 ms cold -> 0.47 ms steady-state,
+  measured on a 1001-ray AC254-100-C-equivalent doublet, median of
+  20 warm calls).  The pre-PyPI release note quoted 878x with
+  inconsistent absolute timings (127 ms / 0.40 ms = 317x); v4.12.2
+  reconciles to one consistent set after re-running on a stable
+  system state.
   v4.12.0 attempted this with a flat-tuple cache key and reverted
   because `jax.grad(fit_canonical_polynomials_jax)` returned NaN.
   Root-cause investigation found the NaN was not the cache key

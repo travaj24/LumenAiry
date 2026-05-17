@@ -46,13 +46,49 @@ def _time_one(fn, *args, **kwargs):
 
 
 # ===========================================================================
-# trace_jax -- benchmark deferred to v4.12.1
+# trace_jax -- restored in v4.12.1 (cache; benchmark in v4.12.2)
 # ===========================================================================
-# The v4.12 audit included a ``trace_jax`` jit-cache benchmark, but the
-# cache was reverted before shipping because its flat-tuple signature
-# hashing broke jax.grad through ``fit_canonical_polynomials_jax``.
-# v4.12.1 will revisit with a gradient-safe pytree-keyed cache and
-# restore the benchmark.
+
+def test_bench_trace_jax_first_vs_warm(benchmark):
+    """``trace_jax`` first call (trace+compile) vs 10th call (cached
+    kernel reuse).  v4.12.1 ships the pytree-registered
+    :class:`JaxPrescription` cache; v4.12.2 reconciles the headline
+    claim by re-running this benchmark and replacing the placeholder
+    timings in the release notes.
+    """
+    from lumenairy.raytrace.jax_trace import (
+        _TRACE_JAX_CACHE,
+        make_jax_ray_state,
+        trace_jax,
+    )
+
+    # Standard 1001-ray fan into a BK7 singlet (matches the test
+    # fixture in test_audit_fixes_v4_12_1_trace_jax_cache.py).
+    singlet = lm.make_singlet(
+        R1=20e-3, R2=float('inf'), d=2e-3,
+        glass='N-BK7', aperture=4e-3)
+    rng = np.random.default_rng(0)
+    n_rays = 1001
+    rs = np.sqrt(rng.uniform(0, 1, n_rays)) * 2e-3
+    theta = rng.uniform(0, 2 * np.pi, n_rays)
+    x = jnp.asarray(rs * np.cos(theta))
+    y = jnp.asarray(rs * np.sin(theta))
+    state = make_jax_ray_state(
+        x=x, y=y, z=jnp.zeros(n_rays),
+        L=jnp.zeros(n_rays), M=jnp.zeros(n_rays),
+        N=jnp.ones(n_rays))
+    wl = 633e-9
+
+    _TRACE_JAX_CACHE.clear()
+    first_s = _time_one(trace_jax, state, singlet, wl)
+    for _ in range(9):
+        out = trace_jax(state, singlet, wl)
+        out.x.block_until_ready()
+    benchmark(lambda: trace_jax(state, singlet, wl).x.block_until_ready())
+    benchmark.extra_info['first_call_ms'] = first_s * 1e3
+    benchmark.extra_info['speedup_first_to_warm'] = (
+        first_s / benchmark.stats.stats.mean
+        if benchmark.stats.stats.mean > 0 else float('inf'))
 
 
 # ===========================================================================

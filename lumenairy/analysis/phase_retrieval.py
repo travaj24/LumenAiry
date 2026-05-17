@@ -30,6 +30,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -45,6 +46,8 @@ __all__ = [
     'gerchberg_saxton_jax',
     'error_reduction_jax',
     'hybrid_input_output_jax',
+    # Cache utilities (v4.12.2)
+    'clear_phase_retrieval_caches',
 ]
 
 
@@ -452,9 +455,31 @@ def hybrid_input_output(
 # dispatch each invocation.  With the module-scope cache, repeated
 # calls with the same n_iter reuse the same compiled XLA executable.
 
-_GS_KERNEL_CACHE: Dict[int, Any] = {}
-_ER_KERNEL_CACHE: Dict[int, Any] = {}
-_HIO_KERNEL_CACHE: Dict[int, Any] = {}
+#
+# v4.12.2: converted to LRU-bounded ``OrderedDict``s (were unbounded
+# plain dicts) so repeated calls with many distinct ``n_iter`` values
+# don't leak compiled XLA executables.  Accessed keys are moved to the
+# end; when ``len > _PR_KERNEL_CACHE_MAXSIZE`` the oldest entry is
+# evicted.
+_GS_KERNEL_CACHE: 'OrderedDict[int, Any]' = OrderedDict()
+_ER_KERNEL_CACHE: 'OrderedDict[int, Any]' = OrderedDict()
+_HIO_KERNEL_CACHE: 'OrderedDict[int, Any]' = OrderedDict()
+_PR_KERNEL_CACHE_MAXSIZE = 32
+
+
+def clear_phase_retrieval_caches() -> None:
+    """Drop every cached jit'd phase-retrieval kernel (v4.12.2).
+
+    Clears the GS / ER / HIO ``n_iter``-keyed kernel caches.  Forces
+    the next ``gerchberg_saxton_jax`` / ``error_reduction_jax`` /
+    ``hybrid_input_output_jax`` call to rebuild and re-cache its
+    jit-compiled kernel from scratch.  Useful in unit tests that pin
+    cache mechanics and in long-running pipelines that want to release
+    the underlying XLA executables.
+    """
+    _GS_KERNEL_CACHE.clear()
+    _ER_KERNEL_CACHE.clear()
+    _HIO_KERNEL_CACHE.clear()
 
 
 def _make_gs_kernel(n_iter_int: int):
@@ -604,6 +629,10 @@ def gerchberg_saxton_jax(
     if kernel is None:
         kernel = _make_gs_kernel(n_iter_int)
         _GS_KERNEL_CACHE[n_iter_int] = kernel
+        while len(_GS_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
+            _GS_KERNEL_CACHE.popitem(last=False)
+    else:
+        _GS_KERNEL_CACHE.move_to_end(n_iter_int)
     phase, err = kernel(E0, src, tgt)
     return np.asarray(phase), float(err)
 
@@ -657,6 +686,10 @@ def error_reduction_jax(
     if kernel is None:
         kernel = _make_er_kernel(n_iter_int)
         _ER_KERNEL_CACHE[n_iter_int] = kernel
+        while len(_ER_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
+            _ER_KERNEL_CACHE.popitem(last=False)
+    else:
+        _ER_KERNEL_CACHE.move_to_end(n_iter_int)
     obj_final, err = kernel(obj0, meas, sup)
     return np.asarray(obj_final), float(err)
 
@@ -705,5 +738,9 @@ def hybrid_input_output_jax(
     if kernel is None:
         kernel = _make_hio_kernel(n_iter_int)
         _HIO_KERNEL_CACHE[n_iter_int] = kernel
+        while len(_HIO_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
+            _HIO_KERNEL_CACHE.popitem(last=False)
+    else:
+        _HIO_KERNEL_CACHE.move_to_end(n_iter_int)
     obj_final, err = kernel(obj0, meas, sup, beta_j)
     return np.asarray(obj_final), float(err)
