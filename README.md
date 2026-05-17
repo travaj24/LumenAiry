@@ -10,6 +10,116 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.13.0
+
+**Three-phase bundle since v4.12.2: audit known-limitations closure
++ `except Exception:` sweep + Tier-2 perf wins.**  All 573 unit
+tests pass; 34/34 validation files pass.
+
+### Phase 1 — audit known-limitations closure
+
+Closes S1, S2, S3 + L2, L3, L4, L6, L8 from the v4.12.1 pre-PyPI
+audit:
+
+* **S1: `io.storage` complex-dtype preservation** -- `save_jones
+  _field_h5`, `append_plane_h5`, `_zarr_append_plane`, and the
+  unified `append_plane` dispatcher gained a `preserve_dtype`
+  parameter that threads through the write path.  Default
+  behaviour preserved (v4.12.x promotion).
+* **S2: `io.codegen` aperture-stop emission + wavelength sentinel**
+  -- `_decompose_prescription` now emits an `aperture` step
+  whenever `is_stop=True`; missing `wavelength_nm` raises
+  `ValueError` instead of silently defaulting to 1.31 µm.
+* **S3: `analysis.ghost` R/r convention** -- uppercase Fresnel
+  reflectance disambiguated from lowercase curvature radius;
+  locals renamed, public dict keys preserved.
+* **L2: JAX complex-dtype routing** -- auto-enables `jax_enable
+  _x64` with a one-shot RuntimeWarning when complex128 is
+  required; `_PROPAGATE_SYSTEM_JAX_CACHE` key now includes dtype
+  to prevent float32 → float64 cache aliasing.
+* **L3: `PropagationResult.dy` + `Source.dy`** -- anamorphic-grid
+  metadata round-trips end-to-end through the dispatch path.
+* **L4: sibling mirror-guards** -- `apply_real_lens_traced_jax`,
+  `apply_real_lens_maslov_jax`, and `lenses_maslov.apply_real_lens
+  _maslov` all reject `is_mirror=True` surfaces consistently.
+* **L6: `apply_mirror` xp + dy** -- backend dispatch via
+  `_xp_of(E_in)` and a `dy` parameter for anamorphic grids;
+  NumPy numba fast-path preserved.  `dy=None` reproduces v4.12.x
+  behaviour exactly.
+* **L8: zarr thread-safety** -- module-level `threading.Lock`
+  guards the `Path.mkdir` monkey-patch in `_open_zarr_group_safe`.
+
+### Phase 2 — `except Exception:` sweep
+
+Non-UI library files: 99 → 3 justified KEEP-AS-IS sites.
+
+* **~85 narrowed** to typed exception tuples covering the
+  documented failure modes (pyFFTW failures, cache-clear guards,
+  `system_abcd` fallbacks, glass-loader failures, etc.).
+* **3 WARN-BEFORE-PASS upgrades** surfacing previously-silent
+  degradations: `analysis/field.py petzval_radius` missing-glass,
+  `propagators/hf.py` LG-decomposition fallback, and
+  `design_optimize plane_logger` callback failures.
+* **Regression budget pin:** non-UI `except Exception:` count
+  must stay ≤ 15 (`tests/unit/test_audit_fixes_v4_13_0_except
+  _sweep.py`).
+
+### Phase 3 — Tier-2 performance wins
+
+Representative speedups (perf_counter on Win11 / Python 3.14):
+
+* **`bsdf.total_integrated_scatter`: 188x** -- per-(θ_i, θ_s)
+  loop replaced with vectorised meshgrid + `np.trapz`.
+* **Shack-Hartmann WFS (`analysis/detector.py`): 10.8x** --
+  per-lenslet FFT loops batched as a single `np.fft.fft2` on a
+  stacked `(n_lenslets², sa_pixels, sa_pixels)` array.
+* **`thin_grating_efficiency_1d`: 10.5x** -- per-diffraction-order
+  Python loop vectorised.
+* **`seidel_field_sweep`: 4 - 72x** -- analytical chief-ray
+  linearity (S1, S4 ∝ 1; S2, y_chief ∝ σ; S3 ∝ σ²; S5 ∝ σ³)
+  replaces the per-field re-trace.  All field-independent work
+  (glass indices, ABCD, marginal-ray trace) hoisted out of the
+  loop.  Machine-precision agreement with the pre-hoist reference.
+* **Freeform Chebyshev: 4.43x** -- `arccos(rho)` hoisted out of
+  the per-order loop; `T_i(rho)` factors cached per polynomial
+  order.
+* **Coating stack (50 layers): 3.26x** -- tournament matmul
+  reduction on a `(N, 2, 2)` per-layer tensor; scalar Snell chain
+  uses `math.sin`/`math.asin` (bit-identical via libm).
+* **`_fd_grad_pure` forward-FD opt-in: 2.23x** -- now accepts
+  `scheme='central'|'forward'`, default `'central'`.  Default
+  preserves bit-identical pre-v4.13 gradient values; forward
+  path trades O(h²) for O(h) for an N+1 eval count (or N when
+  `f0=<value>` is supplied).
+* **`wave_opd_2d`: 1.89x** -- two-pass `np.unwrap(axis=...)`
+  replaces the per-pixel Python unwrap loop.
+
+### `rcwa.py` → `thin_grating.py` rename (no back-compat shim)
+
+The file name "rcwa" was misleading: the function inside is the
+**analytical scalar thin-phase grating** formula, not rigorous
+coupled-wave analysis.  v4.4.0 renamed the public symbols
+(`thin_grating_efficiency_1d`, `grating_efficiency_vs_wavelength`);
+v4.13.0 finishes the rename at the file level:
+
+* `lumenairy/elements/rcwa.py` → `lumenairy/elements/thin_grating.py`
+* `lumenairy/ui/rcwa_dock.py` → `lumenairy/ui/thin_grating_dock.py`
+  (class `RCWADock` → `ThinGratingDock`)
+
+`import lumenairy.elements.rcwa` raises `ModuleNotFoundError`.
+
+### Stage gates worth knowing
+
+* **γ.1 (HFPI bincount swap) reverted before ship.**  NumPy ≥ 1.25
+  vectorised `np.add.at` for complex via
+  `_PyArray_UFuncBufferedAtVectorized`, making the bincount path
+  a perf wash (0.4 - 1.0x) on the shipping toolchain.  No
+  behavioural change vs v4.12.2 in `accumulate_to_grid`.
+* **β.3 (`_fd_grad_for`) parameterised, not switched.**  Default
+  stays `scheme='central'`; `design_optimize._merit_jac_auto`
+  keeps the default explicitly so existing optimisation runs see
+  no behavioural change.  Forward-FD is opt-in per call.
+
 ## What's new in 4.12.2
 
 **Closes the round-5 / v4.12.1 pre-PyPI audit blockers.**  Three
