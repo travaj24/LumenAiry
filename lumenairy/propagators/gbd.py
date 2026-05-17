@@ -289,6 +289,20 @@ def reconstruct_field_from_beamlets(
     # the ramp is zero so this fix is a no-op for that path.
     has_dirs = (hasattr(beamlets, 'directions')
                 and beamlets.directions is not None)
+    # v4.13.1 perf: fuse the two ``xp.exp`` calls into one (only on the
+    # has_dirs branch, where pre-v4.13.1 evaluated ``exp(-i*k*Q*rho2/2)``
+    # and ``exp(i*k*tilt)`` separately and multiplied them).  ``exp(A) *
+    # exp(B) == exp(A + B)`` analytically; in complex128 the round-off
+    # difference is ulp-level (<1e-15 relative) -- well within the
+    # propagator accuracy budget.  This roughly halves the per-chunk
+    # transcendental cost (exp dominates the inner-loop runtime on
+    # moderate grids).  Also switches the per-chunk reduction from
+    # ``out + sum(a_b * phase, axis=-1)`` to ``out += einsum('mnk,k->mn',
+    # phase, a_b)`` -- the ``a_b * phase`` intermediate is the
+    # largest 3-D buffer the loop allocates (chunk * Ny * Nx complex),
+    # so dropping it shrinks the working set noticeably for the
+    # default chunk_beamlets=4096 and saves one big allocation per
+    # chunk on numpy.
     for start in range(0, n, chunk_beamlets):
         end = min(start + chunk_beamlets, n)
         x_b = beamlets.positions[start:end, 0]
@@ -296,17 +310,38 @@ def reconstruct_field_from_beamlets(
         Q_b = beamlets.Q[start:end]
         a_b = beamlets.amplitude[start:end]
 
-        rho2 = ((Xg[..., None] - x_b[None, None, :]) ** 2
-                + (Yg[..., None] - y_b[None, None, :]) ** 2)
-        phase = xp.exp(-1j * k * Q_b[None, None, :] * rho2 / 2)
+        dX = Xg[..., None] - x_b[None, None, :]
+        dY = Yg[..., None] - y_b[None, None, :]
+        rho2 = dX * dX + dY * dY
         if has_dirs:
             L_b = beamlets.directions[start:end, 0]
             M_b = beamlets.directions[start:end, 1]
-            tilt = (L_b[None, None, :] * (Xg[..., None] - x_b[None, None, :])
-                    + M_b[None, None, :] * (Yg[..., None] - y_b[None, None, :]))
-            phase = phase * xp.exp(1j * k * tilt)
-        contrib = a_b[None, None, :] * phase
-        out = out + xp.sum(contrib, axis=-1)
+            # Fused phase argument: imag part of the complex factor in
+            # the original exp().  ``-Q_b * rho2 / 2 + (L_b * dX + M_b * dY)``
+            # is then multiplied by ``1j * k`` inside the single exp.
+            arg = (-0.5 * Q_b[None, None, :] * rho2
+                   + L_b[None, None, :] * dX + M_b[None, None, :] * dY)
+            phase = xp.exp(1j * k * arg)
+        else:
+            phase = xp.exp(-0.5j * k * Q_b[None, None, :] * rho2)
+        # ``out += einsum('mnk,k->mn', phase, a_b)`` if numpy; the
+        # operator is equivalent to ``sum(a_b * phase, axis=-1)``
+        # but avoids the (Ny, Nx, chunk) ``a_b * phase`` intermediate.
+        # JAX / CuPy also have einsum; fall back to the original
+        # pattern when einsum is unavailable.  In-place ``+=`` on
+        # numpy / cupy avoids the per-chunk (Ny, Nx) allocation that
+        # ``out = out + ...`` would create; JAX arrays are immutable
+        # so we keep the rebind form for that backend.
+        einsum = getattr(xp, 'einsum', None)
+        if einsum is not None:
+            contrib_sum = einsum('mnk,k->mn', phase, a_b)
+        else:
+            contrib = a_b[None, None, :] * phase
+            contrib_sum = xp.sum(contrib, axis=-1)
+        if is_jax_array(out):
+            out = out + contrib_sum
+        else:
+            out += contrib_sum
 
     return out
 

@@ -283,25 +283,82 @@ def accumulate_vector_to_grid(
     Returns
     -------
     Ex_out, Ey_out : tuple of arrays (Ny, Nx) complex
+
+    Notes
+    -----
+    v4.13.1 perf: shares pixel index computation (``ix``, ``iy``,
+    ``inside``, ``flat_idx``) between the Ex and Ey scatter-adds.
+    Pre-v4.13.1 routed through
+    :func:`hfpi.accumulate_to_grid` twice, recomputing the same
+    index arrays on each call.  The new path computes them once,
+    then runs two scatter-adds.  Numerically bit-identical to the
+    twice-routed version (same arithmetic, same scatter pattern).
+    On JAX the underlying ``out.at[flat_idx].add(...)`` runs
+    independently per component because JAX traces can't share
+    work the same way; we keep the original path for JAX inputs to
+    preserve tracing compatibility.
     """
     if output_dtype is None:
         output_dtype = paths.Ex.dtype
 
-    # Reuse the scalar accumulator twice -- once per Jones component.
-    from .hfpi import PathBundle, accumulate_to_grid as _scalar_acc
-    ex_paths = PathBundle(
-        positions=paths.positions, directions=paths.directions,
-        weights=paths.Ex, opl=paths.opl, alive=paths.alive,
-    )
-    ey_paths = PathBundle(
-        positions=paths.positions, directions=paths.directions,
-        weights=paths.Ey, opl=paths.opl, alive=paths.alive,
-    )
-    Ex_out = _scalar_acc(ex_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
-                          output_dtype=output_dtype)
-    Ey_out = _scalar_acc(ey_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
-                          output_dtype=output_dtype)
-    return Ex_out, Ey_out
+    xp = array_namespace(paths.positions)
+    # JAX path: keep the original double-call form so jax.jit / vmap
+    # over the pipeline can trace through it unchanged.
+    if is_jax_array(paths.positions):
+        from .hfpi import PathBundle, accumulate_to_grid as _scalar_acc
+        ex_paths = PathBundle(
+            positions=paths.positions, directions=paths.directions,
+            weights=paths.Ex, opl=paths.opl, alive=paths.alive,
+        )
+        ey_paths = PathBundle(
+            positions=paths.positions, directions=paths.directions,
+            weights=paths.Ey, opl=paths.opl, alive=paths.alive,
+        )
+        Ex_out = _scalar_acc(
+            ex_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
+            output_dtype=output_dtype)
+        Ey_out = _scalar_acc(
+            ey_paths, Ny=Ny, Nx=Nx, dx=dx, centre=centre,
+            output_dtype=output_dtype)
+        return Ex_out, Ey_out
+
+    # Shared-index NumPy / CuPy path.  Mirrors
+    # :func:`hfpi.accumulate_to_grid` bit-for-bit on each component
+    # but builds the (ix, iy, inside, flat_idx) tuple only once.
+    cx, cy = centre
+    x = paths.positions[..., 0] - cx
+    y = paths.positions[..., 1] - cy
+    ix = xp.floor(x / dx + Nx / 2).astype(xp.int64)
+    iy = xp.floor(y / dx + Ny / 2).astype(xp.int64)
+    inside = ((ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny)
+              & paths.alive)
+    flat_idx = xp.where(inside, iy * Nx + ix, 0)
+    Ex_masked = xp.where(inside, paths.Ex, 0)
+    Ey_masked = xp.where(inside, paths.Ey, 0)
+
+    N_flat = Ny * Nx
+    Ex_out_flat = xp.zeros(N_flat, dtype=output_dtype)
+    Ey_out_flat = xp.zeros(N_flat, dtype=output_dtype)
+    if hasattr(xp, 'add') and hasattr(xp.add, 'at'):
+        xp.add.at(Ex_out_flat, flat_idx, Ex_masked)
+        xp.add.at(Ey_out_flat, flat_idx, Ey_masked)
+    else:
+        # CuPy fallback: cupyx.scatter_add or NumPy round-trip.
+        try:
+            import cupyx
+            cupyx.scatter_add(Ex_out_flat, flat_idx, Ex_masked)
+            cupyx.scatter_add(Ey_out_flat, flat_idx, Ey_masked)
+        except (ImportError, AttributeError, TypeError, ValueError):
+            idx_h = to_numpy(flat_idx)
+            ex_h = to_numpy(Ex_masked)
+            ey_h = to_numpy(Ey_masked)
+            ex_host = np.zeros(N_flat, dtype=output_dtype)
+            ey_host = np.zeros(N_flat, dtype=output_dtype)
+            np.add.at(ex_host, idx_h, ex_h)
+            np.add.at(ey_host, idx_h, ey_h)
+            Ex_out_flat = xp.asarray(ex_host)
+            Ey_out_flat = xp.asarray(ey_host)
+    return Ex_out_flat.reshape(Ny, Nx), Ey_out_flat.reshape(Ny, Nx)
 
 
 def propagate_vector_hfpi_freespace_aperture(

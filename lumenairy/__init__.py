@@ -425,7 +425,10 @@ from .io.codegen import (
 )
 
 # ── Progress reporting (opt-in hook for long-running functions) ─────────
-from .progress import ProgressCallback, ProgressScaler, call_progress
+from .progress import (
+    ProgressCallback, ProgressScaler, call_progress,
+    CancellableProgress, is_cancelled,
+)
 
 # ── Polarization / Jones calculus ───────────────────────────────────────
 from .elements.polarization import (
@@ -727,7 +730,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.13.0"
+__version__ = "4.13.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1360,4 +1363,6 @@ __all__ = [
     'ProgressCallback',
     'ProgressScaler',
     'call_progress',
+    'CancellableProgress',
+    'is_cancelled',
 ]

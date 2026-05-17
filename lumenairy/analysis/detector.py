@@ -316,49 +316,6 @@ def apply_detector(
     return signal_e, x_det, y_det
 
 
-def _build_asm_H_for_lenslet(
-    sa_pixels: int,
-    dx: float,
-    wavelength: float,
-    z: float,
-    bandlimit: bool = True,
-    target_dtype: Any = None,
-) -> np.ndarray:
-    """Build a square (sa_pixels x sa_pixels) ASM transfer function.
-
-    Mirrors the geometry-only fft-shifted H used by
-    :func:`lumenairy.propagators.propagation.angular_spectrum_propagate`,
-    pre-fftshifted so it can be multiplied against an already-shifted
-    spectrum.  Internal helper for the batched Shack-Hartmann path; do
-    not consume from user code.  Equivalent to the propagator's H when
-    called with a single (sa_pixels, sa_pixels) square grid, dy == dx,
-    and the same bandlimit flag.
-    """
-    if target_dtype is None or not np.issubdtype(target_dtype, np.complexfloating):
-        target_dtype = np.complex128
-    N = sa_pixels
-    k = 2 * np.pi / wavelength
-    # Frequency grid -- centred (matches the propagator's
-    # _get_or_make_freq_grids output for square grids, which is
-    # arange(N) - N/2 / (N*dx)).
-    fx = (np.arange(N, dtype=np.float64) - N / 2) / (N * dx)
-    fy = fx  # square sub-aperture (dy == dx)
-    kx_sq = (2 * np.pi * fx) ** 2
-    ky_sq = (2 * np.pi * fy) ** 2
-    kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
-    prop = kz_sq > 0
-    kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
-    H = np.where(prop, np.exp(1j * kz * z), 0.0).astype(target_dtype)
-    if bandlimit and z != 0:
-        L = N * dx
-        f_max = L / (2 * wavelength * abs(z))
-        bl_x = np.abs(fx) < f_max
-        bl_y = np.abs(fy) < f_max
-        mask = bl_x[None, :] & bl_y[:, None]
-        H = H * mask.astype(target_dtype)
-    return H
-
-
 def shack_hartmann(
     E: np.ndarray,
     dx: float,
@@ -509,9 +466,10 @@ def shack_hartmann(
         # angular_spectrum_propagate in a loop, because the inline
         # version skips per-call fft2 overhead and applies the IFFT
         # to the whole batch in one np.fft.ifft2(axes=(-2, -1)) call.
-        H = _build_asm_H_for_lenslet(
-            sa_pixels, dx, wavelength, lenslet_focal,
-            bandlimit=True, target_dtype=E_batch.dtype)
+        from ..propagators.propagation import _build_asm_H_square
+        H = _build_asm_H_square(
+            sa_pixels, dx, lenslet_focal, wavelength,
+            dtype=E_batch.dtype, bandlimit=True)
         # E_out = fftshift(ifft2(ifftshift(fft2(ifftshift(E_in)) * H)))
         # Apply along the last two axes so the batch dimension passes
         # through unmolested.
@@ -545,15 +503,25 @@ def shack_hartmann(
         # Scatter results back into the (n_lenslets, n_lenslets) maps.
         # Only update lenslets where the batch propagation produced
         # finite intensity; leaves the NaN sentinels for failures.
-        for k in range(K):
-            if not ok[k]:
-                continue
-            iy = int(iy_idx[k])
-            ix = int(ix_idx[k])
-            centroids_x[iy, ix] = float(cx_arr[k])
-            centroids_y[iy, ix] = float(cy_arr[k])
-            slopes_x[iy, ix] = float(cx_arr[k]) / lenslet_focal
-            slopes_y[iy, ix] = float(cy_arr[k]) / lenslet_focal
+        #
+        # v4.13.1 perf: replace the per-lenslet python ``for k in range(K)``
+        # loop with vectorised fancy indexing.  Pre-v4.13.1 the loop ran
+        # ``int()`` and ``float()`` coercions plus four scalar
+        # assignments per ok lenslet -- ~50 us per lenslet at K=4096,
+        # ~200 ms for a 64x64 sensor.  Filtering ``iy_idx`` / ``ix_idx``
+        # / ``cx_arr`` by ``ok`` once and using fancy indexing collapses
+        # the whole scatter to four numpy calls.  Numerically identical
+        # (same arithmetic, same scalar values stored), bit-exact pin
+        # in tests/unit/test_audit_fixes_v4_13_1_perf_sh_scatter.py.
+        if ok.any():
+            iy_ok = iy_idx[ok]
+            ix_ok = ix_idx[ok]
+            cx_ok = cx_arr[ok]
+            cy_ok = cy_arr[ok]
+            centroids_x[iy_ok, ix_ok] = cx_ok
+            centroids_y[iy_ok, ix_ok] = cy_ok
+            slopes_x[iy_ok, ix_ok] = cx_ok / lenslet_focal
+            slopes_y[iy_ok, ix_ok] = cy_ok / lenslet_focal
 
     # 4.10: Wavefront reconstruction
     # slopes_x / slopes_y are OPD gradients in radians-of-tilt (m / m).

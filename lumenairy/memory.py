@@ -102,7 +102,20 @@ def set_max_ram(value: Optional[Union[int, float]]) -> None:
     global _MAX_RAM_OVERRIDE
     if value is None:
         _MAX_RAM_OVERRIDE = None
-    elif value < 1024:
+        return
+    # v4.14 (audit P3 #18): reject negative budgets explicitly.  Pre-
+    # v4.14 a negative value was silently accepted (treated as
+    # negative bytes); ``pick_batch_size`` then clamped via
+    # ``min_batch=1`` so the bug only surfaced as quiet single-batch
+    # processing on huge workloads.  Zero is also nonsensical (no
+    # work could ever fit) so reject it too.
+    if value <= 0:
+        raise ValueError(
+            f"set_max_ram: value must be positive (got {value!r}). "
+            f"Use a positive number of GB (< 1024) or a positive "
+            f"byte count (>= 1024), or pass None to revert to "
+            f"auto-detection.")
+    if value < 1024:
         _MAX_RAM_OVERRIDE = int(value * 1024**3)
     else:
         _MAX_RAM_OVERRIDE = int(value)
@@ -440,7 +453,7 @@ def available_cpus() -> int:
 
 
 __all__ = [
-    'get_ram_budget', 'set_max_ram',
+    'get_ram_budget', 'set_max_ram', 'get_max_ram',
     'available_memory_bytes', 'total_memory_bytes', 'memory_info',
     'bytes_per_element', 'array_bytes',
     'estimate_op_memory', 'pick_batch_size',

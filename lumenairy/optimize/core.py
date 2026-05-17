@@ -371,6 +371,32 @@ class MultiPrescriptionParameterization:
                     f"free_var {fv!r} refers to template index "
                     f"{fv[0]}, but only {len(self.templates)} templates "
                     f"were provided")
+        # v4.14 (audit P3 #19): duplicate (prescription_index, *path)
+        # entries silently get separate ``x[i]`` slots that all write
+        # to the same prescription field; the optimiser's gradient is
+        # split arbitrarily across the duplicates and the design is
+        # effectively over-parameterised.  Catch this at construction
+        # time so the user gets a clear error rather than a quietly
+        # wrong optimisation result.
+        seen_keys: Dict[Tuple[Any, ...], int] = {}
+        duplicates: List[Tuple[int, int, Tuple[Any, ...]]] = []
+        for i, fv in enumerate(self.free_vars):
+            # Normalise: cast prescription-index to plain int so
+            # numpy int / Python int compare equal in the dict key.
+            key = (int(fv[0]),) + tuple(fv[1:])
+            if key in seen_keys:
+                duplicates.append((seen_keys[key], i, key))
+            else:
+                seen_keys[key] = i
+        if duplicates:
+            dup_lines = '\n  '.join(
+                f"slots x[{a}] and x[{b}] both target {k!r}"
+                for a, b, k in duplicates)
+            raise ValueError(
+                f"MultiPrescriptionParameterization: duplicate "
+                f"(prescription_index, *path) entries in free_vars -- "
+                f"each prescription field can be a free variable at "
+                f"most once:\n  {dup_lines}")
         if self.bounds is not None:
             if len(self.bounds) != len(self.free_vars):
                 raise ValueError(
@@ -1897,6 +1923,18 @@ class MultiWavelengthMerit(MeritTerm):
     (computed geometrically, cheap).  The sub-merit is evaluated at
     each wavelength and the results are summed.
 
+    .. warning::
+        The off-wavelength wave-leg propagation in this merit's
+        ``evaluate`` always calls :func:`apply_real_lens` directly,
+        irrespective of the ``wave_propagator`` selected on the
+        enclosing :func:`design_optimize` call.  For high-NA designs
+        optimised with ``wave_propagator='gbd'`` (or any non-real-lens
+        backend) the off-nominal-wavelength penalty therefore exercises
+        a different physical model than the on-axis wave leg.  A
+        runtime warning fires from :func:`design_optimize` when this
+        mismatch is detected.  Threading the propagator through the
+        sub-merit is a v4.14+ feature -- see audit P2 #14.
+
     Parameters
     ----------
     wavelengths : sequence of float
@@ -2033,6 +2071,14 @@ class MultiFieldMerit(MeritTerm):
     At each field angle a tilted plane wave is built, propagated
     through the lens, and the sub-merit is evaluated on the
     resulting wave field.
+
+    .. warning::
+        The off-field wave-leg propagation always calls
+        :func:`apply_real_lens` directly, irrespective of the
+        ``wave_propagator`` setting on the enclosing
+        :func:`design_optimize` call.  See audit P2 #14 for context;
+        a runtime warning fires from :func:`design_optimize` when the
+        propagator mismatch is detected.
 
     Parameters
     ----------
@@ -2268,6 +2314,14 @@ class ToleranceAwareMerit(MeritTerm):
     Produces designs that are robust to manufacturing tolerances
     rather than fragile at the nominal but excellent on paper.
 
+    .. warning::
+        The perturbed wave-leg propagation always calls
+        :func:`apply_real_lens` directly, irrespective of the
+        ``wave_propagator`` setting on the enclosing
+        :func:`design_optimize` call.  See audit P2 #14; a runtime
+        warning fires from :func:`design_optimize` when the
+        propagator mismatch is detected.
+
     Parameters
     ----------
     sub_merit : MeritTerm
@@ -2460,6 +2514,7 @@ def _fd_grad_pure(
     scale_floor: Optional[np.ndarray] = None,
     f0: Optional[float] = None,
     scheme: str = 'central',
+    validate_f0: bool = False,
 ) -> np.ndarray:
     """Finite-difference gradient of a scalar callable ``f(x)``.
 
@@ -2467,6 +2522,23 @@ def _fd_grad_pure(
     FD-gradient core is testable without spinning up an optimization
     context.  Returns ``df/dx`` as an ndarray with the same shape as
     ``x``.
+
+    Caller contract for ``f0``
+    --------------------------
+    When ``scheme='forward'`` and the caller supplies ``f0``, **the
+    caller is responsible for the invariant ``f0 == f(x)`` at the
+    same ``x`` passed in**.  A stale ``f0`` silently produces a
+    wrong-direction gradient (the forward-difference quotient
+    ``(f(x + h*e_i) - f0) / h`` reduces to junk plus the gradient if
+    ``f0`` is off the true centre value).  This is by design -- the
+    perf saving from skipping the centre evaluation is the whole
+    reason ``f0`` exists.
+
+    Set ``validate_f0=True`` to opt into a defensive ``f(x)`` re-
+    evaluation that asserts the invariant; this halves the perf
+    saving but catches stale-cache bugs immediately.  Off by default
+    so the default path stays as cheap as the audit (P2 #11)
+    expected.
 
     Parameters
     ----------
@@ -2485,7 +2557,9 @@ def _fd_grad_pure(
         Pre-computed ``f(x)``.  Only consulted when ``scheme='forward'``;
         ignored otherwise.  When supplied for the forward path, the
         central-point evaluation is skipped, saving one call to ``f``
-        per gradient.
+        per gradient.  **The caller is responsible for ensuring
+        ``f0 == f(x)``** (see the caller contract above); a stale
+        value silently produces wrong gradients.
     scheme : {'central', 'forward'}, default 'central'
         Finite-difference scheme.  ``'central'`` evaluates ``f`` at
         ``x +/- h*e_i`` for each variable (2N evals, O(h^2) truncation
@@ -2495,6 +2569,14 @@ def _fd_grad_pure(
         evals, or N when ``f0`` is supplied) at the cost of O(h)
         truncation error.  Opt-in for perf-sensitive callers where
         the larger truncation is acceptable.
+    validate_f0 : bool, default False
+        Audit P2 #16 (v4.14): when ``True`` AND ``scheme='forward'``
+        AND ``f0`` is supplied, re-evaluate ``f(x)`` once and raise
+        ``ValueError`` if ``f0`` does not match within a tight
+        tolerance.  Off by default because the validation costs one
+        ``f`` call, which exactly cancels the saving from skipping
+        the centre evaluation.  Useful for debugging stale-cache
+        bugs in caller code.
 
     Returns
     -------
@@ -2525,6 +2607,19 @@ def _fd_grad_pure(
     else:  # forward
         if f0 is None:
             f0 = float(f(x))
+        elif validate_f0:
+            # v4.14 (audit P2 #16): opt-in stale-cache check.  Tight
+            # but not exact tol to allow for benign re-evaluation
+            # noise in non-deterministic merit functions.
+            f0_check = float(f(x))
+            tol = 1e-9 * max(abs(f0), abs(f0_check), 1.0)
+            if not np.isfinite(f0_check) or abs(f0 - f0_check) > tol:
+                raise ValueError(
+                    f"_fd_grad_pure: validate_f0=True caught a stale "
+                    f"f0 cache: f0={f0!r} but f(x) at the given x "
+                    f"is {f0_check!r}.  Forward-FD with a stale f0 "
+                    f"produces wrong gradients; the caller is "
+                    f"responsible for the f0 == f(x) invariant.")
         for i in range(N):
             step = eps * max(abs(x[i]), float(scale_floor[i]))
             xp_step = x.copy()
@@ -2672,17 +2767,66 @@ def design_optimize(parameterization: Any,
     # dtype back.  Without this, an interrupted `precision='single'`
     # design_optimize() leaked complex64 to every subsequent call in
     # the process.
+    #
+    # v4.14 (audit P2 #10): the dominant restore path is now an
+    # explicit ``try/finally`` around the optimization body so the
+    # cleanup is deterministic under ``KeyboardInterrupt`` and any
+    # exception (CPython refcount semantics in ``__del__`` are
+    # implementation-defined and can be deferred under PyPy / when a
+    # reference cycle survives garbage collection).  ``__del__`` is
+    # retained as a defensive safety net only -- the ``_restored``
+    # flag stops it firing twice on the normal path.
     class _RestoreDtype:
-        def __init__(self, dtype): self.dtype = dtype
+        def __init__(self, dtype):
+            self.dtype = dtype
+            self._restored = False
+        def restore(self):
+            """Explicitly restore the saved complex dtype.
+
+            Idempotent: subsequent calls are no-ops.  Call from a
+            ``finally:`` block to guarantee restoration on every exit
+            path (normal return, exception, ``KeyboardInterrupt``).
+            """
+            if self._restored:
+                return
+            self._restored = True
+            set_default_complex_dtype(self.dtype)
         def __del__(self):
+            # Safety net only: the explicit ``restore()`` call in the
+            # caller's ``finally:`` block is the primary path.
             # ``__del__`` runs at arbitrary points during interpreter
             # shutdown; broad-except is the standard pattern here
             # because the module-level globals may already be gone.
+            if self._restored:
+                return
             try:
                 set_default_complex_dtype(self.dtype)
             except Exception:
                 pass
     _dtype_restore_guard = _RestoreDtype(_orig_complex_dtype)
+
+    # v4.14 (audit P2 #14): warn if the user selected a non-default
+    # wave_propagator (e.g. 'gbd') AND any of the three Merit classes
+    # that hard-code apply_real_lens for off-nominal legs is in use.
+    # Threading the propagator through the sub-merit is a v4.14+
+    # feature; this warning surfaces the silent inconsistency.
+    if wave_propagator != 'real_lens':
+        _SENSITIVE = (MultiWavelengthMerit, MultiFieldMerit, ToleranceAwareMerit)
+        offenders = [type(m).__name__ for m in merit_terms
+                     if isinstance(m, _SENSITIVE)]
+        if offenders:
+            import warnings as _warn
+            _warn.warn(
+                f"design_optimize: wave_propagator={wave_propagator!r} "
+                f"selected but the following merit term(s) hard-code "
+                f"apply_real_lens for off-nominal legs and will NOT use "
+                f"that propagator: {offenders}.  The off-nominal "
+                f"(wavelength / field / perturbation) wave-leg "
+                f"penalties therefore exercise a different physical "
+                f"model than the on-axis wave leg.  See audit P2 #14 "
+                f"and the merit classes' docstrings; propagator "
+                f"threading is a v4.14+ feature.",
+                UserWarning, stacklevel=2)
 
     need_wave = any(m.needs_wave for m in merit_terms)
     n_params = parameterization.n_params
@@ -2904,13 +3048,28 @@ def design_optimize(parameterization: Any,
         g = np.zeros_like(np.asarray(x, dtype=np.float64))
         for t in jax_grad_terms:
             g = g + t.gradient_at_x(x)
-        # Finite-difference part: gradient of the remaining terms via
-        # central differences (default scheme).  Forward-difference
-        # mode is available on the inner helpers via ``scheme='forward'``
-        # as a perf opt-in, but is NOT the default here so optimization
-        # behaviour stays bit-identical with pre-v4.13.0.
+        # Finite-difference part: gradient of the remaining terms.
+        #
+        # v4.14 (audit P2 #11): switch to forward-FD with a cached
+        # ``f0`` for the other-terms sum.  scipy already evaluates
+        # ``merit_fn(x)`` before calling ``jac`` at the same ``x`` (the
+        # FULL merit, including JAX terms); we can't reuse that
+        # directly because ``_fd_grad_for`` operates on the
+        # ``other_terms`` subset only.  But evaluating once at ``x``
+        # to capture ``f0_other`` costs one evaluate() call and then
+        # saves ``N-1`` evaluations per gradient versus central FD
+        # (2N -> N+1 evals; net (2N) - (1+N) = N-1 saved per gradient).
+        #
+        # For large N (>=10 free vars), this halves the FD cost of
+        # the gradient and is the dominant runtime saving in design
+        # optimisation when ANY non-JAX merit term is present.  The
+        # O(h) truncation error of forward FD is well-tolerated by
+        # quasi-Newton line searches (L-BFGS-B etc.) at h~1e-7.
         if other_terms:
-            g = g + _fd_grad_for(other_terms, x)
+            _, ctx_f0 = evaluate(x)
+            f0_other = float(sum(t.evaluate(ctx_f0) for t in other_terms))
+            g = g + _fd_grad_for(other_terms, x, f0=f0_other,
+                                 scheme='forward')
         return g
 
     use_analytic_jac = (jac == 'auto' and len(jax_grad_terms) > 0)
@@ -2955,111 +3114,130 @@ def design_optimize(parameterization: Any,
                   f'strehl = {ctx.strehl_best:.4f}')
         return value
 
+    # v4.14 (audit P2 #13): honour the progress cancellation protocol
+    # (``progress.should_stop``).  scipy stops the optimiser when the
+    # callback returns ``True`` for L-BFGS-B / SLSQP / trust-constr /
+    # Nelder-Mead etc.; differential_evolution interprets a True
+    # return the same way; basin-hopping accepts True via its
+    # ``callback`` arg.  See :mod:`lumenairy.progress`.
+    from ..progress import is_cancelled
+
     def _scipy_cb_minimize(xk, *args, **kwargs):
         # Callback signature varies by method (some pass xk only,
         # trust-constr passes (xk, state), SLSQP passes xk).  Accept
         # anything.
         _emit_iter_progress()
+        if is_cancelled(progress):
+            return True
+        return None
 
     def _scipy_cb_de(xk, convergence):
         _emit_iter_progress()
+        if is_cancelled(progress):
+            return True
+        return None
 
     def _scipy_cb_basin(xk, f, accept):
         last_value[0] = float(f)
         _emit_iter_progress()
+        if is_cancelled(progress):
+            return True
+        return None
 
+    # v4.14 (audit P2 #10): wrap the dispatch + final evaluation in
+    # try/finally so the complex-dtype restore is deterministic even
+    # under KeyboardInterrupt / scipy raise.  The ``_dtype_restore_guard``
+    # ``__del__`` remains as a defensive safety net.
     t0 = time.time()
-    if method == 'lm':
-        # Gauss-Newton / Levenberg-Marquardt via least_squares.  No
-        # per-iteration callback is available, so emit progress from
-        # inside residuals() using the eval counter.
-        def residuals(x):
-            call_count[0] += 1
-            value, ctx = evaluate(x)
-            last_value[0] = float(value)
-            last_efl[0] = float(ctx.efl) if np.isfinite(ctx.efl) else 0.0
-            frac = call_count[0] / max(max_iter * 5, 1)
-            _emit_progress(
-                frac,
-                f'eval {call_count[0]}: merit={value:.4g}  '
-                f'efl={ctx.efl*1e3:.3f}mm')
-            # 4.10.2: LM residual = sqrt(m.evaluate(ctx)) is non-
-            # differentiable at zero (sqrt'(0) = inf), which produces
-            # inf/nan columns in the FD Jacobian near a converged
-            # design.  Soft-floor with a tiny epsilon so the residual
-            # is differentiable everywhere; the floor is well below
-            # typical merit-term magnitudes so it doesn't affect the
-            # converged solution.
-            _LM_FLOOR = 1e-30
-            return np.array(
-                [np.sqrt(max(m.evaluate(ctx), 0.0) + _LM_FLOOR)
-                 for m in merit_terms],
-                dtype=np.float64)
-        lb = np.array([b[0] if b else -np.inf for b in (bounds or [None] * n_params)])
-        ub = np.array([b[1] if b else +np.inf for b in (bounds or [None] * n_params)])
-        res = so.least_squares(
-            residuals, x0, method='lm' if not (bounds is not None) else 'trf',
-            bounds=(lb, ub) if bounds is not None else (-np.inf, np.inf),
-            max_nfev=max_iter, verbose=1 if verbose else 0)
-        x_opt = res.x
-    elif method in ('differential_evolution', 'de', 'global'):
-        # Differential evolution: stochastic global optimizer.
-        # Requires bounds for all variables.
-        if bounds is None:
-            raise ValueError(
-                'differential_evolution requires bounds for all variables.')
-        res = so.differential_evolution(
-            merit_fn, bounds, maxiter=max_iter, seed=42,
-            tol=1e-8, disp=verbose, polish=True,
-            callback=_scipy_cb_de)
-        x_opt = res.x
-    elif method == 'basin_hopping':
-        # Basin-hopping: global optimizer with local minimisation steps.
-        minimizer_kwargs = {
-            'method': 'L-BFGS-B',
-            'bounds': bounds,
-            'options': {'maxiter': 50},
-        }
-        res = so.basinhopping(
-            merit_fn, x0, niter=max_iter,
-            minimizer_kwargs=minimizer_kwargs, seed=42,
-            disp=verbose, callback=_scipy_cb_basin)
-        x_opt = res.x
-    elif method == 'dual_annealing':
-        if bounds is None:
-            raise ValueError(
-                'dual_annealing requires bounds for all variables.')
-        res = so.dual_annealing(
-            merit_fn, bounds, maxiter=max_iter, seed=42,
-            callback=lambda x, f, ctx: (
-                last_value.__setitem__(0, float(f)),
-                _emit_iter_progress()))
-        x_opt = res.x
-    else:
-        res = so.minimize(
-            merit_fn, x0, method=method,
-            jac=final_jac,
-            bounds=bounds if method in ('L-BFGS-B', 'SLSQP', 'trust-constr') else None,
-            options={'maxiter': max_iter, 'disp': verbose},
-            callback=_scipy_cb_minimize)
-        x_opt = res.x
+    try:
+        if method == 'lm':
+            # Gauss-Newton / Levenberg-Marquardt via least_squares.  No
+            # per-iteration callback is available, so emit progress from
+            # inside residuals() using the eval counter.
+            def residuals(x):
+                call_count[0] += 1
+                value, ctx = evaluate(x)
+                last_value[0] = float(value)
+                last_efl[0] = float(ctx.efl) if np.isfinite(ctx.efl) else 0.0
+                frac = call_count[0] / max(max_iter * 5, 1)
+                _emit_progress(
+                    frac,
+                    f'eval {call_count[0]}: merit={value:.4g}  '
+                    f'efl={ctx.efl*1e3:.3f}mm')
+                # 4.10.2: LM residual = sqrt(m.evaluate(ctx)) is non-
+                # differentiable at zero (sqrt'(0) = inf), which produces
+                # inf/nan columns in the FD Jacobian near a converged
+                # design.  Soft-floor with a tiny epsilon so the residual
+                # is differentiable everywhere; the floor is well below
+                # typical merit-term magnitudes so it doesn't affect the
+                # converged solution.
+                _LM_FLOOR = 1e-30
+                return np.array(
+                    [np.sqrt(max(m.evaluate(ctx), 0.0) + _LM_FLOOR)
+                     for m in merit_terms],
+                    dtype=np.float64)
+            lb = np.array([b[0] if b else -np.inf for b in (bounds or [None] * n_params)])
+            ub = np.array([b[1] if b else +np.inf for b in (bounds or [None] * n_params)])
+            res = so.least_squares(
+                residuals, x0, method='lm' if not (bounds is not None) else 'trf',
+                bounds=(lb, ub) if bounds is not None else (-np.inf, np.inf),
+                max_nfev=max_iter, verbose=1 if verbose else 0)
+            x_opt = res.x
+        elif method in ('differential_evolution', 'de', 'global'):
+            # Differential evolution: stochastic global optimizer.
+            # Requires bounds for all variables.
+            if bounds is None:
+                raise ValueError(
+                    'differential_evolution requires bounds for all variables.')
+            res = so.differential_evolution(
+                merit_fn, bounds, maxiter=max_iter, seed=42,
+                tol=1e-8, disp=verbose, polish=True,
+                callback=_scipy_cb_de)
+            x_opt = res.x
+        elif method == 'basin_hopping':
+            # Basin-hopping: global optimizer with local minimisation steps.
+            minimizer_kwargs = {
+                'method': 'L-BFGS-B',
+                'bounds': bounds,
+                'options': {'maxiter': 50},
+            }
+            res = so.basinhopping(
+                merit_fn, x0, niter=max_iter,
+                minimizer_kwargs=minimizer_kwargs, seed=42,
+                disp=verbose, callback=_scipy_cb_basin)
+            x_opt = res.x
+        elif method == 'dual_annealing':
+            if bounds is None:
+                raise ValueError(
+                    'dual_annealing requires bounds for all variables.')
+            res = so.dual_annealing(
+                merit_fn, bounds, maxiter=max_iter, seed=42,
+                callback=lambda x, f, ctx: (
+                    last_value.__setitem__(0, float(f)),
+                    _emit_iter_progress()))
+            x_opt = res.x
+        else:
+            res = so.minimize(
+                merit_fn, x0, method=method,
+                jac=final_jac,
+                bounds=bounds if method in ('L-BFGS-B', 'SLSQP', 'trust-constr') else None,
+                options={'maxiter': max_iter, 'disp': verbose},
+                callback=_scipy_cb_minimize)
+            x_opt = res.x
 
-    # Final evaluation for the returned context
-    final_value, final_ctx = evaluate(x_opt)
-    dt = time.time() - t0
-    iter_tag = (f'{iter_count[0]} iters, '
-                if iter_count[0] > 0 else '')
-    call_progress(progress, 'design_optimize', 1.0,
-                  f'converged: merit={final_value:.4g} '
-                  f'({iter_tag}{call_count[0]} evals, {dt:.1f}s)')
-
-    # 4.10: restoration handled by the _dtype_restore_guard at the top
-    # of the function (fires via __del__ on normal return AND on any
-    # exception path).  Force an early restore here on the success path
-    # for clarity; the guard re-restores on function exit which is a
-    # no-op.
-    if precision == 'single':
-        set_default_complex_dtype(_orig_complex_dtype)
+        # Final evaluation for the returned context
+        final_value, final_ctx = evaluate(x_opt)
+        dt = time.time() - t0
+        iter_tag = (f'{iter_count[0]} iters, '
+                    if iter_count[0] > 0 else '')
+        call_progress(progress, 'design_optimize', 1.0,
+                      f'converged: merit={final_value:.4g} '
+                      f'({iter_tag}{call_count[0]} evals, {dt:.1f}s)')
+    finally:
+        # v4.14 (audit P2 #10): explicit deterministic restore.  Runs on
+        # normal return AND on every exception path (scipy raise, user
+        # KeyboardInterrupt, MemoryError from a huge FFT, etc.).
+        _dtype_restore_guard.restore()
 
     return DesignResult(
         x=x_opt,

@@ -408,6 +408,48 @@ def apply_real_lens(
         prescription=prescription,
     )
 
+    # v4.13.0 audit P1-A: explicit mirror-in-surfaces guard.  The
+    # shared ``_check_no_silent_fold_drop`` only inspects the
+    # prescription's ``elements`` list (the full element sequence,
+    # populated by ``load_zemax_zmx``); a hand-built prescription that
+    # puts a mirror directly into ``surfaces`` (via ``is_mirror=True``
+    # or ``glass_after='MIRROR'``) and omits the ``elements`` key
+    # slips past the shared check, and ``apply_real_lens`` would
+    # silently treat the mirror as a refractor with the wrong sign.
+    # The v4.13.0 L4a sweep ported this guard to the 4 sibling
+    # ``apply_real_lens_*`` variants (``_traced``, ``_traced_jax``,
+    # ``_maslov``, ``_maslov_jax``) but missed the parent itself;
+    # this guard closes the audit P1-A gap.  Fail loudly with a
+    # mirror-specific message before any sag / refraction maths
+    # touches the field.
+    _surfaces_list = prescription.get('surfaces') or []
+    _mirror_surf_idx = []
+    for _i, _s in enumerate(_surfaces_list):
+        if not isinstance(_s, dict):
+            continue
+        _gl_after = _s.get('glass_after')
+        _is_mirror = bool(_s.get('is_mirror', False)) or (
+            isinstance(_gl_after, str)
+            and _gl_after.upper() == 'MIRROR'
+        )
+        if _is_mirror:
+            _mirror_surf_idx.append(_i)
+    if _mirror_surf_idx:
+        raise ValueError(
+            f"apply_real_lens: prescription has "
+            f"{len(_mirror_surf_idx)} mirror surface(s) at "
+            f"indices {_mirror_surf_idx} -- apply_real_lens only "
+            f"walks refracting surfaces.  Running this prescription "
+            f"as-is would silently treat the mirror as a refractor "
+            f"(wrong sign / wrong focusing phase) and propagate "
+            f"along the unfolded-equivalent axis.  Use the "
+            f"per-segment pattern for folded designs: call "
+            f"lumenairy.io.split_prescription_at_mirrors(rx) to "
+            f"split the prescription at each fold, then alternate "
+            f"apply_real_lens (each segment) with apply_mirror "
+            f"(each fold).  See Guide-Folded-Designs section "
+            f"'Wave-optics through a fold'.")
+
     # Pre-flight grid vs prescription-aperture check.  If any surface's
     # semi-aperture exceeds the simulation grid, ASM will silently
     # truncate the field at the grid edge and lose energy that the real

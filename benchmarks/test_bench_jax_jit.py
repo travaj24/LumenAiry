@@ -184,6 +184,9 @@ def test_bench_error_reduction_jax_first_vs_warm(benchmark):
 def test_bench_through_focus_scan_jax_first_vs_warm(benchmark):
     """``through_focus_scan_jax`` first call vs 10th call (the inner
     ASM kernel jit cache is the load-bearing piece)."""
+    from lumenairy.analysis.through_focus import (
+        _THROUGH_FOCUS_SCAN_JAX_CACHE,
+    )
     N, dx, wl = 64, 5e-6, 1.55e-6
     sigma = 10e-6
     x = (np.arange(N) - N/2) * dx
@@ -191,6 +194,10 @@ def test_bench_through_focus_scan_jax_first_vs_warm(benchmark):
     E = np.exp(-(X**2 + Y**2) / (2*sigma**2)).astype(np.complex64)
     zs = np.linspace(-1e-3, 1e-3, 7)
 
+    # v4.13.1 (L7): clear the jit cache before the first-call timing so
+    # a re-run inside the same process actually measures the cold
+    # (trace+compile) path, matching the four sibling benchmarks above.
+    _THROUGH_FOCUS_SCAN_JAX_CACHE.clear()
     first_s = _time_one(
         lm.through_focus_scan_jax,
         E, dx=dx, wavelength=wl, z_values=zs,

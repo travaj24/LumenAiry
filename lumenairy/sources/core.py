@@ -1025,10 +1025,20 @@ class Source:
             **kwargs,
         )
         out_dx = kwargs.get('output_dx', self.dx) or self.dx
+        # v4.13.0 audit P1-C: preserve the anamorphic y-pitch across
+        # ``Source.propagate``.  Pre-fix the wrapped result advertised
+        # ``dy == dx`` (via the ``Source.__post_init__`` default) even
+        # when the underlying field carried a distinct y-pitch -- the
+        # v4.13.0 L3 sweep added the ``dy`` field to ``Source`` but
+        # missed threading it through this dispatcher and the 5
+        # classmethod factories.  Use the caller's ``output_dy`` kwarg
+        # when given (matches ``output_dx`` precedence), else fall
+        # through to ``self.dy``.
+        out_dy = kwargs.get('output_dy', self.dy) or self.dy
         new_name = (self.name or 'Source')
         new_name = f'{new_name}->{method}'
         return Source(
-            E=E_out, dx=out_dx, wavelength=self.wavelength,
+            E=E_out, dx=out_dx, dy=out_dy, wavelength=self.wavelength,
             source_point=self.source_point, name=new_name,
         )
 
@@ -1056,7 +1066,14 @@ class Source:
         E, _, _ = create_gaussian_beam(
             N, dx, wavelength, sigma=sigma, x0=x0, y0=y0,
             use_gpu=use_gpu, **factory_kwargs)
-        return cls(E=E, dx=dx, wavelength=wavelength,
+        # v4.13.0 audit P1-C: preserve anamorphic ``dy`` on the
+        # returned Source.  ``create_gaussian_beam`` already consumed
+        # ``dy`` from ``factory_kwargs`` to build the field on the
+        # anamorphic grid; the pre-fix ``cls(...)`` call omitted ``dy``
+        # so the wrapped Source advertised ``dy == dx`` even when the
+        # E-field was shaped on a rectangular pitch.
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'Gaussian(w0={w0:.2g}m)')
 
@@ -1071,7 +1088,9 @@ class Source:
         E, _, _ = create_tilted_plane_wave(
             N, dx, wavelength, angle_x=angle_x, angle_y=angle_y,
             amplitude=amplitude, **factory_kwargs)
-        return cls(E=E, dx=dx, wavelength=wavelength,
+        # v4.13.0 audit P1-C: thread ``dy`` to the wrapped Source.
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
                    source_point=source_point,
                    name=name or 'PlaneWave')
 
@@ -1091,7 +1110,9 @@ class Source:
         E, _, _ = create_point_source(
             N, dx, wavelength, x0=x0, y0=y0, z0=z0,
             amplitude=amplitude, **factory_kwargs)
-        return cls(E=E, dx=dx, wavelength=wavelength,
+        # v4.13.0 audit P1-C: thread ``dy`` to the wrapped Source.
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
                    source_point=(float(x0), float(y0)),
                    name=name or 'PointSource')
 
@@ -1105,7 +1126,9 @@ class Source:
         E, _, _ = create_top_hat_beam(
             N, dx, wavelength, diameter=diameter, x0=x0, y0=y0,
             **factory_kwargs)
-        return cls(E=E, dx=dx, wavelength=wavelength,
+        # v4.13.0 audit P1-C: thread ``dy`` to the wrapped Source.
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'TopHat(D={diameter:.2g}m)')
 
@@ -1120,7 +1143,9 @@ class Source:
         E, _, _ = create_fiber_mode(
             N, dx, wavelength, mode_field_diameter=mode_field_diameter,
             x0=x0, y0=y0, na=na, **factory_kwargs)
-        return cls(E=E, dx=dx, wavelength=wavelength,
+        # v4.13.0 audit P1-C: thread ``dy`` to the wrapped Source.
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'Fiber(MFD={mode_field_diameter:.2g}m)')
 

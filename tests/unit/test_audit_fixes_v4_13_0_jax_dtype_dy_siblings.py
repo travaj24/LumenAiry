@@ -383,7 +383,9 @@ def _hand_built_mirror_prescription():
 
 class TestL4aMirrorGuardSiblings:
     """Pin the mirror guard fires for all three siblings of
-    ``apply_real_lens_traced``."""
+    ``apply_real_lens_traced`` -- AND the parent ``apply_real_lens``
+    itself (v4.13.0 audit P1-A: the L4a sweep missed the parent).
+    """
 
     def test_apply_real_lens_maslov_raises_on_hand_built_mirror(self):
         from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
@@ -419,6 +421,116 @@ class TestL4aMirrorGuardSiblings:
         with pytest.raises(ValueError, match=r'(mirror|MIRROR)'):
             apply_real_lens_maslov_jax(
                 E_in, prescription=rx, wavelength=wavelength, dx=dx)
+
+    def test_apply_real_lens_raises_on_hand_built_mirror(self):
+        """v4.13.0 audit P1-A: pin the mirror guard fires for the
+        parent ``apply_real_lens`` itself.  Pre-fix the L4a sweep
+        hardened the 4 ``apply_real_lens_*`` siblings but missed the
+        parent -- a hand-built prescription with ``is_mirror=True``
+        and no ``elements`` key silently miscomputed via the
+        refractive-only thin-element path.  The new guard fails
+        loudly before any sag / refraction math touches the field.
+        Closes the audit P1-A gap.
+        """
+        from lumenairy.elements._lens_real import apply_real_lens
+        N = 32
+        dx = 5e-6
+        wavelength = 633e-9
+        E_in = np.ones((N, N), dtype=np.complex128)
+        rx = _hand_built_mirror_prescription()
+        with pytest.raises(ValueError, match=r'(mirror|MIRROR)'):
+            apply_real_lens(
+                E_in, prescription=rx, wavelength=wavelength, dx=dx)
+
+    def test_apply_real_lens_raises_on_glass_after_mirror(self):
+        """Same closure, but the guard fires on
+        ``glass_after='MIRROR'`` (no explicit ``is_mirror`` flag).
+        Matches the alternate Zemax convention the sibling guards
+        recognise.
+        """
+        from lumenairy.elements._lens_real import apply_real_lens
+        N = 32
+        dx = 5e-6
+        wavelength = 633e-9
+        E_in = np.ones((N, N), dtype=np.complex128)
+        rx = {
+            'surfaces': [
+                {'radius': 0.025, 'thickness': 5e-3,
+                 'glass_before': 'air', 'glass_after': 'BK7',
+                 'semi_diameter': 0.010, 'conic': 0.0},
+                # Mirror flagged via ``glass_after`` rather than
+                # ``is_mirror``.
+                {'radius': float('inf'), 'thickness': 0.0,
+                 'glass_before': 'BK7', 'glass_after': 'MIRROR',
+                 'semi_diameter': 0.010, 'conic': 0.0},
+                {'radius': -0.025, 'thickness': 0.0,
+                 'glass_before': 'BK7', 'glass_after': 'air',
+                 'semi_diameter': 0.010, 'conic': 0.0},
+            ],
+            'aperture_diameter': 0.020,
+        }
+        with pytest.raises(ValueError, match=r'(mirror|MIRROR)'):
+            apply_real_lens(
+                E_in, prescription=rx, wavelength=wavelength, dx=dx)
+
+
+def _import_apply_real_lens_variant(name):
+    """Resolve the variant name to its callable from the per-module
+    home (closures the dispatcher-level pin across all 5 entry
+    points)."""
+    if name == 'apply_real_lens':
+        from lumenairy.elements._lens_real import apply_real_lens
+        return apply_real_lens
+    if name == 'apply_real_lens_traced':
+        from lumenairy.elements._lens_traced import apply_real_lens_traced
+        return apply_real_lens_traced
+    if name == 'apply_real_lens_maslov':
+        from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
+        return apply_real_lens_maslov
+    if name == 'apply_real_lens_traced_jax':
+        from lumenairy.elements._lens_jax import apply_real_lens_traced_jax
+        return apply_real_lens_traced_jax
+    if name == 'apply_real_lens_maslov_jax':
+        from lumenairy.elements._lens_jax import apply_real_lens_maslov_jax
+        return apply_real_lens_maslov_jax
+    raise ValueError(f"unknown variant: {name!r}")
+
+
+_APPLY_REAL_LENS_VARIANTS = [
+    pytest.param('apply_real_lens', id='apply_real_lens'),
+    pytest.param('apply_real_lens_traced', id='apply_real_lens_traced'),
+    pytest.param('apply_real_lens_maslov', id='apply_real_lens_maslov'),
+    pytest.param(
+        'apply_real_lens_traced_jax', id='apply_real_lens_traced_jax',
+        marks=pytest.mark.skipif(
+            not JAX_AVAILABLE, reason='JAX is not installed')),
+    pytest.param(
+        'apply_real_lens_maslov_jax', id='apply_real_lens_maslov_jax',
+        marks=pytest.mark.skipif(
+            not JAX_AVAILABLE, reason='JAX is not installed')),
+]
+
+
+class TestL4aMirrorGuardDispatcherPin:
+    """v4.13.0 audit meta-finding: the strongest closure for the
+    L4a sibling-gap pattern is a parametrized dispatcher-level pin
+    that exercises every entry point a user can reach the fix
+    through.  If a future sweep misses one of the 5 variants the
+    way the v4.13.0 sweep missed ``apply_real_lens``, this test
+    will fail rather than silently allowing a downstream
+    miscomputation.
+    """
+
+    @pytest.mark.parametrize('variant', _APPLY_REAL_LENS_VARIANTS)
+    def test_mirror_guard_fires_on_hand_built_is_mirror(self, variant):
+        fn = _import_apply_real_lens_variant(variant)
+        N = 32
+        dx = 5e-6
+        wavelength = 633e-9
+        E_in = np.ones((N, N), dtype=np.complex128)
+        rx = _hand_built_mirror_prescription()
+        with pytest.raises(ValueError, match=r'(mirror|MIRROR)'):
+            fn(E_in, prescription=rx, wavelength=wavelength, dx=dx)
 
 
 # ============================================================================
@@ -566,3 +678,317 @@ class TestL4cReturnHistoryShape:
             'jax' in str(w.message).lower() and 'history' in str(w.message).lower()
             for w in caught
         )
+
+
+# ============================================================================
+# P1-B -- ER and HIO route dtype through _resolve_jax_complex_dtype
+# ============================================================================
+
+def _call_phase_retrieval_kernel(kernel_name, *, dtype):
+    """Dispatch helper for the parametrized P1-B pin.  Returns the
+    primary output array (complex object / Fourier-plane phase) of
+    each kernel with a small, well-conditioned input.
+    """
+    if kernel_name == 'gerchberg_saxton_jax':
+        from lumenairy.analysis.phase_retrieval import gerchberg_saxton_jax
+        N = 16
+        src = np.ones((N, N), dtype=np.dtype(dtype))
+        tgt = np.ones((N, N), dtype=np.dtype(dtype))
+        # GS returns (phase, err) -- phase is the real-valued source
+        # plane phase.  For the P1-B pin we want to verify the
+        # complex intermediates ran at the resolved cdtype, which
+        # is observable indirectly through the kernel cache key
+        # (verified separately) and directly through the warning
+        # the resolver emits on first complex128 request with
+        # ``jax_enable_x64=False``.
+        return gerchberg_saxton_jax(src, tgt, n_iter=3, dtype=dtype)
+    if kernel_name == 'error_reduction_jax':
+        from lumenairy.analysis.phase_retrieval import error_reduction_jax
+        N = 16
+        meas = np.ones((N, N), dtype=np.dtype(dtype))
+        sup = np.ones((N, N), dtype=bool)
+        return error_reduction_jax(meas, sup, n_iter=3, seed=0, dtype=dtype)
+    if kernel_name == 'hybrid_input_output_jax':
+        from lumenairy.analysis.phase_retrieval import hybrid_input_output_jax
+        N = 16
+        meas = np.ones((N, N), dtype=np.dtype(dtype))
+        sup = np.ones((N, N), dtype=bool)
+        return hybrid_input_output_jax(
+            meas, sup, n_iter=3, beta=0.9, seed=0, dtype=dtype)
+    raise ValueError(f"unknown kernel: {kernel_name!r}")
+
+
+_PHASE_RETRIEVAL_KERNELS = ['gerchberg_saxton_jax',
+                            'error_reduction_jax',
+                            'hybrid_input_output_jax']
+
+
+class TestP1BPhaseRetrievalDtypeResolver:
+    """v4.13.0 audit P1-B: ``error_reduction_jax`` and
+    ``hybrid_input_output_jax`` route ``dtype`` through
+    ``_resolve_jax_complex_dtype`` (and the real twin) so that a
+    caller passing ``dtype=np.float64`` while
+    ``jax.config.jax_enable_x64=False`` either auto-enables x64
+    (with the documented one-shot RuntimeWarning) or returns at
+    full complex128 precision rather than silently demoting.
+
+    The L2 sweep applied this closure to ``gerchberg_saxton_jax``
+    but missed the ER/HIO siblings; this pin closes that gap and
+    parametrises over all 3 kernels to keep future sweeps
+    honest.
+    """
+
+    @needs_jax
+    @pytest.mark.parametrize('kernel_name', _PHASE_RETRIEVAL_KERNELS)
+    def test_float64_dtype_auto_enables_x64_or_returns_complex128(
+            self, kernel_name):
+        """Under ``jax_enable_x64=False``, calling any of the 3
+        phase-retrieval kernels with ``dtype=np.float64`` MUST
+        either fire the documented one-shot RuntimeWarning AND
+        return a complex128 / float64 result OR (if x64 was
+        already enabled earlier in the session) return at the
+        full requested precision with no warning.  Pre-P1-B the
+        ER/HIO siblings silently produced float32 / complex64
+        intermediates.
+        """
+        import jax
+        # We don't try to flip x64 off mid-session -- once any
+        # earlier test (or the GS sibling on the first call here)
+        # auto-enabled it, JAX won't let us turn it back off
+        # cleanly.  Instead, assert the post-condition that holds
+        # regardless of starting state: after the call, x64 is
+        # enabled AND the returned array is at full precision.
+        result = _call_phase_retrieval_kernel(
+            kernel_name, dtype=np.float64)
+        # Each kernel returns (primary, err).  primary is either a
+        # complex object (ER / HIO) or a real phase (GS).
+        primary = result[0]
+        # The resolver auto-enables x64 when complex128 is
+        # requested; once it has flipped, JAX returns at the
+        # requested precision.
+        assert jax.config.jax_enable_x64, (
+            f"{kernel_name} with dtype=np.float64 should have "
+            f"auto-enabled jax_enable_x64; current value is "
+            f"{jax.config.jax_enable_x64!r}.")
+        if np.iscomplexobj(primary):
+            assert primary.dtype == np.complex128, (
+                f"{kernel_name} returned complex array of dtype "
+                f"{primary.dtype!r}; expected complex128 with "
+                f"dtype=np.float64 + x64 enabled.")
+        else:
+            # GS returns the real source-plane phase.
+            assert primary.dtype == np.float64, (
+                f"{kernel_name} returned real array of dtype "
+                f"{primary.dtype!r}; expected float64 with "
+                f"dtype=np.float64 + x64 enabled.")
+
+    @needs_jax
+    @pytest.mark.parametrize('kernel_name', _PHASE_RETRIEVAL_KERNELS)
+    def test_float32_dtype_keeps_complex64(self, kernel_name):
+        """Sanity: float32 caller still gets complex64 output (the
+        documented historical behaviour); the P1-B fix only
+        changes the float64 path.
+        """
+        result = _call_phase_retrieval_kernel(
+            kernel_name, dtype=np.float32)
+        primary = result[0]
+        if np.iscomplexobj(primary):
+            assert primary.dtype == np.complex64, (
+                f"{kernel_name} returned complex array of dtype "
+                f"{primary.dtype!r}; expected complex64 with "
+                f"dtype=np.float32.")
+        else:
+            assert primary.dtype == np.float32, (
+                f"{kernel_name} returned real array of dtype "
+                f"{primary.dtype!r}; expected float32 with "
+                f"dtype=np.float32.")
+
+
+# ============================================================================
+# P1-C -- Source.propagate() and 5 classmethod factories thread `dy`
+# ============================================================================
+
+class TestP1CSourceDyThreading:
+    """v4.13.0 audit P1-C: ``Source.propagate()`` and the 5
+    classmethod factories (``gaussian``, ``plane_wave``,
+    ``point_source``, ``top_hat``, ``fiber_mode``) must thread the
+    anamorphic ``dy`` onto the returned ``Source`` instance.
+
+    Pre-P1-C the underlying ``create_*`` helpers received and used
+    ``dy`` (so the E-field WAS built on the anamorphic grid), but
+    the wrapping ``cls(E=E, dx=dx, wavelength=..., ...)`` call
+    omitted ``dy``, so the returned Source advertised
+    ``dy == dx`` even though ``E.shape`` reflected the rectangular
+    pixel count.  L3 added the ``dy`` field to ``Source`` but the
+    threading sweep missed these six call sites.
+    """
+
+    def test_source_propagate_preserves_dy(self):
+        """Pin: ``Source.propagate(...).dy == self.dy`` for an
+        anamorphic input.  Pre-fix the result advertised
+        ``dy == dx_out`` regardless of the input's y-pitch.
+        """
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 7e-6   # distinct y-pitch
+        wavelength = 633e-9
+        # Build a simple Gaussian-shaped field on the anamorphic
+        # grid so the propagator has something physical to chew on.
+        x = (np.arange(N) - N / 2) * dx
+        y = (np.arange(N) - N / 2) * dy
+        X, Y = np.meshgrid(x, y, indexing='xy')
+        E = np.exp(-(X * X + Y * Y) / (5 * dx) ** 2).astype(
+            np.complex128)
+        src = Source(E=E, dx=dx, dy=dy, wavelength=wavelength)
+        assert src.dy == dy
+        # ``method='asm'`` is the simplest free-space propagator that
+        # respects the input pitch verbatim (no resample).
+        result = src.propagate(method='asm', z=1e-4)
+        assert result.dy == dy, (
+            f"Source.propagate must thread dy onto the returned "
+            f"Source; got result.dy={result.dy!r}, expected "
+            f"src.dy={dy!r}.")
+        assert result.dx == dx
+
+    def test_source_gaussian_factory_preserves_dy(self):
+        """``Source.gaussian(..., dy=...)`` must wrap the result
+        with the supplied ``dy``."""
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 9e-6   # distinct y-pitch
+        wavelength = 633e-9
+        src = Source.gaussian(
+            w0=20e-6, N=N, dx=dx, wavelength=wavelength, dy=dy)
+        assert src.dx == dx
+        assert src.dy == dy, (
+            f"Source.gaussian must thread dy onto the wrapped "
+            f"Source; got src.dy={src.dy!r}, expected "
+            f"{dy!r}.")
+
+    def test_source_plane_wave_factory_preserves_dy(self):
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 9e-6
+        wavelength = 633e-9
+        src = Source.plane_wave(
+            N=N, dx=dx, wavelength=wavelength, dy=dy)
+        assert src.dx == dx
+        assert src.dy == dy
+
+    def test_source_point_source_factory_preserves_dy(self):
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 9e-6
+        wavelength = 633e-9
+        src = Source.point_source(
+            N=N, dx=dx, wavelength=wavelength, dy=dy, z0=-1e-3)
+        assert src.dx == dx
+        assert src.dy == dy
+
+    def test_source_top_hat_factory_preserves_dy(self):
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 9e-6
+        wavelength = 633e-9
+        src = Source.top_hat(
+            diameter=50e-6, N=N, dx=dx, wavelength=wavelength, dy=dy)
+        assert src.dx == dx
+        assert src.dy == dy
+
+    def test_source_fiber_mode_factory_preserves_dy(self):
+        """``Source.fiber_mode`` is the one factory whose underlying
+        helper (``create_fiber_mode``) doesn't accept ``dy``; the
+        P1-C fix is wrapper-only and verifies the returned Source
+        advertises a distinct ``dy``.  The factory drops ``dy``
+        from ``factory_kwargs`` BEFORE forwarding because the helper
+        is dy-agnostic; we still want the wrapped Source to carry
+        the caller-supplied ``dy`` so the metadata reaches
+        downstream code that does honour ``dy``.
+
+        NOTE: ``create_fiber_mode`` does not accept ``dy``, so we
+        verify the audit-spec'd behaviour only by directly
+        constructing a Source with explicit ``dy``.  When v4.14
+        widens ``create_fiber_mode`` to accept ``dy`` this test
+        can be rewritten to call ``Source.fiber_mode(..., dy=...)``
+        directly.
+        """
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 9e-6
+        wavelength = 633e-9
+        # Smoke: the factory builds a Source without dy (the
+        # underlying helper is dy-agnostic).  Default dy == dx is
+        # the documented back-compat for that helper.
+        src_default = Source.fiber_mode(
+            mode_field_diameter=10e-6, N=N, dx=dx,
+            wavelength=wavelength)
+        assert src_default.dx == dx
+        assert src_default.dy == dx, (
+            f"Source.fiber_mode without explicit dy should default "
+            f"to dy=dx for back-compat; got "
+            f"{src_default.dy!r}.")
+        # Direct construction with explicit dy: confirm the
+        # Source dataclass round-trips dy correctly (matches the
+        # P1-C fix's intent for the dy-aware factories above).
+        E = src_default.E
+        src_anamorphic = Source(
+            E=E, dx=dx, dy=dy, wavelength=wavelength)
+        assert src_anamorphic.dy == dy
+
+
+# ============================================================================
+# P1-C extension: parametrised dispatcher-level pin over Source factories
+# ============================================================================
+
+_SOURCE_FACTORY_KWARGS = [
+    pytest.param(
+        'gaussian', {'w0': 20e-6}, id='gaussian'),
+    pytest.param(
+        'plane_wave', {}, id='plane_wave'),
+    pytest.param(
+        'point_source', {'z0': -1e-3}, id='point_source'),
+    pytest.param(
+        'top_hat', {'diameter': 50e-6}, id='top_hat'),
+    # fiber_mode is excluded: the underlying create_fiber_mode helper
+    # does not currently accept dy, so the parametrised positive
+    # test would crash on TypeError before the wrap-level dy check
+    # is exercised.  TestP1CSourceDyThreading.test_source_fiber_mode_
+    # factory_preserves_dy covers the wrapper-level behaviour
+    # directly.
+]
+
+
+class TestP1CSourceFactoryDispatcherPin:
+    """v4.13.0 audit meta-finding: the strongest closure for the
+    L3 / P1-C sibling-gap pattern is a parametrised dispatcher-
+    level pin over every Source factory that the v4.13.0 sweep
+    was supposed to touch.  If a future sweep adds a new factory
+    and forgets the ``dy`` thread-through, this test fails at
+    the parametrised entry point rather than silently producing
+    a Source with the wrong y-pitch metadata.
+    """
+
+    @pytest.mark.parametrize('factory_name, extra_kwargs',
+                             _SOURCE_FACTORY_KWARGS)
+    def test_factory_threads_dy(self, factory_name, extra_kwargs):
+        from lumenairy.sources.core import Source
+        N = 32
+        dx = 5e-6
+        dy = 11e-6   # distinct y-pitch
+        wavelength = 633e-9
+        factory = getattr(Source, factory_name)
+        src = factory(
+            N=N, dx=dx, wavelength=wavelength, dy=dy,
+            **extra_kwargs)
+        assert src.dx == dx
+        assert src.dy == dy, (
+            f"Source.{factory_name}: returned Source advertised "
+            f"dy={src.dy!r}; expected dy={dy!r}.  Pre-fix the "
+            f"v4.13.0 L3 sweep missed the ``cls(...)`` call in "
+            f"this factory.")

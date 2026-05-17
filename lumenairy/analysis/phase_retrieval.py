@@ -793,22 +793,51 @@ def error_reduction_jax(
 
     if dtype is None:
         dtype = jnp.float32
-    meas = jnp.asarray(measured_amplitude, dtype=dtype)
+    # v4.13.0 audit P1-B: route ``dtype`` through
+    # ``_resolve_jax_complex_dtype`` / ``_resolve_jax_real_dtype`` so a
+    # caller passing ``dtype=np.float64`` while ``jax_enable_x64=False``
+    # auto-enables x64 (with the one-shot RuntimeWarning) instead of
+    # silently demoting intermediates to float32 / complex64.  This is
+    # the same closure the v4.13.0 L2 sweep applied to
+    # ``gerchberg_saxton_jax`` but missed on the ER/HIO siblings.  The
+    # real dtype is paired with the complex dtype: float32 with
+    # complex64, float64 with complex128.
+    from ..propagators.propagation import (
+        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+    )
+    np_real = np.dtype(dtype)
+    if np_real == np.dtype(np.float64):
+        cdtype = _resolve_jax_complex_dtype(np.complex128)
+        rdtype = _resolve_jax_real_dtype(np.complex128)
+    elif np_real == np.dtype(np.float32):
+        cdtype = _resolve_jax_complex_dtype(np.complex64)
+        rdtype = _resolve_jax_real_dtype(np.complex64)
+    else:
+        # Defensive: fall back to library-wide default for unrecognised
+        # real dtypes (e.g. float16).
+        cdtype = _resolve_jax_complex_dtype()
+        rdtype = _resolve_jax_real_dtype()
+    meas = jnp.asarray(measured_amplitude, dtype=rdtype)
     sup = jnp.asarray(support, dtype=bool)
 
     if init_phase is None:
         rng = _seed_to_rng(seed)
         init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(
-            np.dtype(dtype))
-        init_phase = jnp.asarray(init_phase_np)
+            np.dtype(rdtype))
+        init_phase = jnp.asarray(init_phase_np, dtype=rdtype)
+    else:
+        init_phase = jnp.asarray(init_phase, dtype=rdtype)
 
-    F0 = meas * jnp.exp(1j * init_phase)
+    F0 = (meas * jnp.exp(1j * init_phase)).astype(cdtype)
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
     n_iter_int = int(n_iter)
     # v4.13.0 (audit L2): include dtype in the cache key so the kernel
-    # caches don't share an entry across precision changes.
-    cache_key = (n_iter_int, str(np.dtype(dtype)))
+    # caches don't share an entry across precision changes.  Pin the
+    # key to the resolved complex dtype (was real dtype pre-audit-P1-B)
+    # so a caller that asked for float64 but got x64-disabled actually
+    # caches under complex128 once the resolver auto-enables x64.
+    cache_key = (n_iter_int, str(np.dtype(cdtype)))
     kernel = _ER_KERNEL_CACHE.get(cache_key)
     if kernel is None:
         kernel = _make_er_kernel(n_iter_int)
@@ -847,23 +876,46 @@ def hybrid_input_output_jax(
 
     if dtype is None:
         dtype = jnp.float32
-    meas = jnp.asarray(measured_amplitude, dtype=dtype)
+    # v4.13.0 audit P1-B: route ``dtype`` through
+    # ``_resolve_jax_complex_dtype`` / ``_resolve_jax_real_dtype`` so a
+    # caller passing ``dtype=np.float64`` while ``jax_enable_x64=False``
+    # auto-enables x64 (with the one-shot RuntimeWarning) instead of
+    # silently demoting intermediates to float32 / complex64.  Same
+    # closure as the GS path; was missed by the v4.13.0 L2 sweep on
+    # this sibling.
+    from ..propagators.propagation import (
+        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+    )
+    np_real = np.dtype(dtype)
+    if np_real == np.dtype(np.float64):
+        cdtype = _resolve_jax_complex_dtype(np.complex128)
+        rdtype = _resolve_jax_real_dtype(np.complex128)
+    elif np_real == np.dtype(np.float32):
+        cdtype = _resolve_jax_complex_dtype(np.complex64)
+        rdtype = _resolve_jax_real_dtype(np.complex64)
+    else:
+        cdtype = _resolve_jax_complex_dtype()
+        rdtype = _resolve_jax_real_dtype()
+    meas = jnp.asarray(measured_amplitude, dtype=rdtype)
     sup = jnp.asarray(support, dtype=bool)
-    beta_j = jnp.asarray(float(beta), dtype=dtype)
+    beta_j = jnp.asarray(float(beta), dtype=rdtype)
 
     if init_phase is None:
         rng = _seed_to_rng(seed)
         init_phase_np = rng.uniform(-np.pi, np.pi, meas.shape).astype(
-            np.dtype(dtype))
-        init_phase = jnp.asarray(init_phase_np)
+            np.dtype(rdtype))
+        init_phase = jnp.asarray(init_phase_np, dtype=rdtype)
+    else:
+        init_phase = jnp.asarray(init_phase, dtype=rdtype)
 
-    F0 = meas * jnp.exp(1j * init_phase)
+    F0 = (meas * jnp.exp(1j * init_phase)).astype(cdtype)
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
     n_iter_int = int(n_iter)
     # v4.13.0 (audit L2): include dtype in the cache key so the kernel
-    # caches don't share an entry across precision changes.
-    cache_key = (n_iter_int, str(np.dtype(dtype)))
+    # caches don't share an entry across precision changes.  Keyed on
+    # the resolved complex dtype (matches GS / ER post-audit-P1-B).
+    cache_key = (n_iter_int, str(np.dtype(cdtype)))
     kernel = _HIO_KERNEL_CACHE.get(cache_key)
     if kernel is None:
         kernel = _make_hio_kernel(n_iter_int)

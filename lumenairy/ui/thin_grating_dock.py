@@ -58,14 +58,32 @@ class ThinGratingDock(QWidget):
         self.spin_duty.setToolTip('Fraction of the period in the high state '
                                    '(binary profile only).')
         form.addRow('Duty cycle:', self.spin_duty)
+        self.spin_n_ridge = QDoubleSpinBox()
+        self.spin_n_ridge.setRange(1.0, 5.0)
+        self.spin_n_ridge.setValue(1.5)
+        self.spin_n_ridge.setDecimals(3)
+        self.spin_n_ridge.setToolTip('Refractive index of the ridge '
+                                      '(high-index) region.')
+        form.addRow('Ridge material n:', self.spin_n_ridge)
         self.spin_n_groove = QDoubleSpinBox()
         self.spin_n_groove.setRange(1.0, 5.0)
-        self.spin_n_groove.setValue(1.5)
+        self.spin_n_groove.setValue(1.0)
+        self.spin_n_groove.setDecimals(3)
+        self.spin_n_groove.setToolTip('Refractive index of the groove '
+                                       '(low-index / air) region.')
         form.addRow('Groove material n:', self.spin_n_groove)
         self.spin_n_substrate = QDoubleSpinBox()
         self.spin_n_substrate.setRange(1.0, 5.0)
-        self.spin_n_substrate.setValue(1.0)
+        self.spin_n_substrate.setValue(1.5)
+        self.spin_n_substrate.setDecimals(3)
         form.addRow('Substrate n:', self.spin_n_substrate)
+        self.spin_n_superstrate = QDoubleSpinBox()
+        self.spin_n_superstrate.setRange(1.0, 5.0)
+        self.spin_n_superstrate.setValue(1.0)
+        self.spin_n_superstrate.setDecimals(3)
+        self.spin_n_superstrate.setToolTip('Refractive index of the '
+                                            'superstrate (incident medium).')
+        form.addRow('Superstrate n:', self.spin_n_superstrate)
         self.combo_pol = QComboBox()
         self.combo_pol.addItems(['TE', 'TM'])
         form.addRow('Polarization:', self.combo_pol)
@@ -135,30 +153,98 @@ class ThinGratingDock(QWidget):
             s.set_color('#334054')
         self.canvas.draw_idle()
 
+    def _collect_inputs(self) -> dict:
+        """Snapshot every UI widget's current value into a plain dict.
+
+        Decoupled from the Qt run handler so the compute path can be
+        unit-tested without round-tripping through a live ``QApplication``.
+        """
+        return {
+            'period_m': float(self.spin_period.value()) * 1e-6,
+            'depth_m': float(self.spin_depth.value()) * 1e-6,
+            'duty_cycle': float(self.spin_duty.value()),
+            'n_ridge': float(self.spin_n_ridge.value()),
+            'n_groove': float(self.spin_n_groove.value()),
+            'n_substrate': float(self.spin_n_substrate.value()),
+            'n_superstrate': float(self.spin_n_superstrate.value()),
+            'polarization': self.combo_pol.currentText().lower(),
+            'aoi_rad': float(self.spin_aoi.value()) * np.pi / 180.0,
+            'n_orders': int(self.spin_orders.value()),
+            'wl_min_m': float(self.spin_wl_min.value()) * 1e-9,
+            'wl_max_m': float(self.spin_wl_max.value()) * 1e-9,
+            'wl_n': int(self.spin_wl_n.value()),
+        }
+
+    @staticmethod
+    def _compute_efficiency_data(inputs: dict) -> dict:
+        """Pure compute helper -- no Qt, no instance state.
+
+        Takes the dict produced by :meth:`_collect_inputs` and returns a
+        result dict::
+
+            {
+                'wavelengths': ndarray (n_wl,),
+                'orders':      ndarray (n_orders,),
+                'efficiencies': ndarray (n_orders, n_wl),
+                'summary':     str  -- human-readable summary line.
+            }
+
+        Uses :func:`lumenairy.thin_grating_efficiency_1d` directly so we
+        get the full per-order efficiency matrix in one pass (the
+        single-order helper ``grating_efficiency_vs_wavelength`` would
+        require N_orders independent sweeps).
+        """
+        import lumenairy as la
+        wavelengths = np.linspace(
+            inputs['wl_min_m'], inputs['wl_max_m'], inputs['wl_n'])
+        n_orders = int(inputs['n_orders'])
+        # thin_grating_efficiency_1d returns 2*n_orders+1 entries (-n..+n).
+        # The dock's "# orders kept" spinbox is the *total* count, so
+        # convert to the half-width parameter the analytical function
+        # actually expects.
+        half_w = max(1, n_orders // 2)
+        n_total = 2 * half_w + 1
+        efficiencies = np.empty((n_total, wavelengths.size))
+        orders_idx = None
+        for j, wl in enumerate(wavelengths):
+            orders, _R, T = la.thin_grating_efficiency_1d(
+                period=inputs['period_m'],
+                n_ridge=inputs['n_ridge'],
+                n_groove=inputs['n_groove'],
+                n_substrate=inputs['n_substrate'],
+                n_superstrate=inputs['n_superstrate'],
+                depth=inputs['depth_m'],
+                duty_cycle=inputs['duty_cycle'],
+                wavelength=float(wl),
+                angle=inputs['aoi_rad'],
+                polarization=inputs['polarization'],
+                n_orders=half_w)
+            if orders_idx is None:
+                orders_idx = orders
+            efficiencies[:, j] = T
+        total_T = efficiencies.sum(axis=0)
+        summary = (
+            f'Computed {n_total} order(s) over {wavelengths.size} '
+            f'wavelengths.  '
+            f'Sum(T) range: [{total_T.min():.4f}, {total_T.max():.4f}].')
+        return {
+            'wavelengths': wavelengths,
+            'orders': orders_idx,
+            'efficiencies': efficiencies,
+            'summary': summary,
+        }
+
     def _run(self):
         try:
-            import lumenairy as la
-            wavelengths = np.linspace(
-                self.spin_wl_min.value(),
-                self.spin_wl_max.value(),
-                int(self.spin_wl_n.value())) * 1e-9
-            res = la.grating_efficiency_vs_wavelength(
-                period=float(self.spin_period.value()) * 1e-6,
-                depth=float(self.spin_depth.value()) * 1e-6,
-                duty_cycle=float(self.spin_duty.value()),
-                groove_index=float(self.spin_n_groove.value()),
-                substrate_index=float(self.spin_n_substrate.value()),
-                wavelengths=wavelengths,
-                profile=self.combo_profile.currentText().lower().split()[0],
-                polarization=self.combo_pol.currentText(),
-                angle=float(self.spin_aoi.value()),
-                n_orders=int(self.spin_orders.value()))
-        except Exception as exc:
+            inputs = self._collect_inputs()
+            data = self._compute_efficiency_data(inputs)
+        except (TypeError, ValueError, RuntimeError,
+                AttributeError, ImportError) as exc:
             self.summary.setPlainText(
-                f'grating_efficiency_vs_wavelength failed: '
+                f'thin_grating_efficiency_1d failed: '
                 f'{type(exc).__name__}: {exc}')
             return
-        self._draw_result(wavelengths, res)
+        self._draw_result(data['wavelengths'], data)
 
     def _draw_result(self, wavelengths, res):
         self.fig.clear()
@@ -168,22 +254,36 @@ class ThinGratingDock(QWidget):
         for s in ax.spines.values():
             s.set_color('#334054')
         try:
-            efficiencies = (res.efficiencies if hasattr(res, 'efficiencies')
-                            else np.asarray(res))
+            if isinstance(res, dict):
+                efficiencies = np.asarray(res['efficiencies'])
+                orders = res.get('orders')
+                summary = res.get('summary', '')
+            else:
+                # Fallback for legacy callers passing a raw ndarray.
+                efficiencies = (res.efficiencies
+                                if hasattr(res, 'efficiencies')
+                                else np.asarray(res))
+                orders = None
+                summary = ''
             efficiencies = np.atleast_2d(efficiencies)
             if efficiencies.shape[0] == len(wavelengths):
                 efficiencies = efficiencies.T
             for i, eff in enumerate(efficiencies):
-                ax.plot(wavelengths * 1e9, eff, label=f'order {i}')
+                label = (f'm={int(orders[i])}'
+                         if orders is not None and i < len(orders)
+                         else f'order {i}')
+                ax.plot(wavelengths * 1e9, eff, label=label)
             ax.set_xlabel('Wavelength [nm]', color='#dde8f8',
                           fontfamily='monospace')
             ax.set_ylabel('Diffraction efficiency',
                           color='#dde8f8', fontfamily='monospace')
             ax.legend(fontsize=8)
-            self.summary.setPlainText(
-                f'Computed {efficiencies.shape[0]} order(s) over '
-                f'{len(wavelengths)} wavelengths.')
-        except Exception as exc:
+            if not summary:
+                summary = (f'Computed {efficiencies.shape[0]} order(s) '
+                           f'over {len(wavelengths)} wavelengths.')
+            self.summary.setPlainText(summary)
+        except (TypeError, ValueError, KeyError,
+                AttributeError, IndexError) as exc:
             self.summary.setPlainText(
                 f'Could not unpack thin-grating result: '
                 f'{type(exc).__name__}: {exc}')

@@ -144,14 +144,21 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
         X, Y = xp.meshgrid(x, y)
         h_sq = (X - xc) ** 2 + (Y - yc) ** 2
 
-    # Apply aperture (with anamorphic-aware grid via dy).  This is the
-    # geometric ellipse-aperture form: a point (x, y) is inside the
-    # clear aperture when ((x-xc)/dx_scale)^2 + ((y-yc)/dy_scale)^2 lies
-    # within the squared half-diameter (per the existing semi-axis
-    # interpretation when dx == dy this collapses to the previous
-    # circular mask).
+    # Apply aperture: a CIRCULAR clear aperture in physical (x, y)
+    # coordinates.  ``h_sq`` above is built as ``(X - xc)^2 + (Y -
+    # yc)^2`` directly from the physical coordinate grids (which
+    # already incorporate ``dx`` / ``dy`` spacing), so a point (x, y)
+    # is inside the aperture when its physical radius from the mirror
+    # centre stays within ``aperture_diameter / 2``.  ``dy != dx``
+    # (rectangular pixel grid) produces a stretched pixel sampling
+    # but does NOT make the aperture itself elliptical -- the
+    # aperture is geometrically a circle on the physical grid.  For
+    # an elliptical clear aperture supply :func:`apply_aperture` with
+    # ``shape='rectangular'`` or wrap with a pre-mask of the desired
+    # ellipse.
     if aperture_diameter is not None:
-        E = xp.where(h_sq <= (aperture_diameter / 2) ** 2, E, 0.0 + 0.0j)
+        E = xp.where(h_sq <= (aperture_diameter / 2) ** 2,
+                     E, xp.zeros((), dtype=E.dtype))
 
     # Curved mirror: apply focusing phase
     if radius is not None and not np.isinf(radius):
@@ -261,7 +268,10 @@ def apply_aperture(E_in, dx, shape='circular', params=None, xc=0, yc=0,
         raise ValueError(f"Unknown aperture shape: {shape!r}. "
                          f"Use 'circular', 'annular', or 'rectangular'.")
 
-    return xp.where(mask, E_in, 0.0 + 0.0j)
+    # v4.14 (audit P3 #21): use a dtype-aware zero so a JAX x32
+    # input stays complex64 rather than being silently upcast by the
+    # complex128 literal ``0.0 + 0.0j``.
+    return xp.where(mask, E_in, xp.zeros((), dtype=E_in.dtype))
 
 
 # =============================================================================

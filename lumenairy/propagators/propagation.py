@@ -910,6 +910,90 @@ def _get_or_make_bandlimit(Ny, Nx, dy, dx, wavelength, abs_z, xp_is_numpy):
     return bl_x, bl_y
 
 
+def _build_asm_H_square(
+    N,
+    dx,
+    z,
+    wavelength,
+    dtype=None,
+    bandlimit=True,
+):
+    """Build a square (N x N) band-limited Angular-Spectrum transfer
+    function on the canonical centered frequency grid.
+
+    This is the single source of truth for the centered ASM ``H``
+    construction used by:
+
+    * :func:`angular_spectrum_propagate` (square-grid path / JAX path
+      / one-shot fallback when chunking is not needed).
+    * :func:`lumenairy.analysis.detector.shack_hartmann` (per-lenslet
+      sub-aperture propagation).
+
+    Conventions
+    -----------
+    * Output is **centered** (not ``fftshift``-ed), matching the
+      ``E_fft = fftshift(fft2(ifftshift(E))) ; E_out = fftshift(
+      ifft2(ifftshift(E_fft * H)))`` propagation idiom both call sites
+      use.
+    * Frequency grid is ``(arange(N) - N/2) / (N * dx)``, i.e. the
+      same centered convention as :func:`_get_or_make_freq_grids`
+      with square ``dy == dx``.
+    * Evanescent modes (``kz_sq <= 0``) are zeroed.
+    * When ``bandlimit`` is True and ``z != 0`` the
+      Matsushima 1-D mask (``|f| < L / (2*lambda*|z|)``) is applied
+      as the outer product of the per-axis masks.
+    * ``z == 0`` short-circuits to ``H = 1`` (with bandlimit ignored,
+      matching the canonical propagator).
+
+    Parameters
+    ----------
+    N : int
+        Square grid size (Ny == Nx == N).
+    dx : float
+        Pixel pitch (m).  ``dy == dx`` is assumed.
+    z : float
+        Propagation distance (m).  May be negative for back-propagation.
+    wavelength : float
+        Vacuum wavelength (m).
+    dtype : numpy dtype, optional
+        Target complex dtype.  Defaults to ``np.complex128``.  Real
+        dtypes are promoted to ``np.complex128``.
+    bandlimit : bool, default True
+        Apply the Matsushima 1-D bandlimit mask.
+
+    Returns
+    -------
+    H : ndarray, shape (N, N), dtype as requested
+        The centered ASM transfer function.
+
+    Notes
+    -----
+    Numerical equivalence to the inline path is bit-exact for
+    matching ``N``, ``dx``, ``z``, ``wavelength``, and ``bandlimit``
+    arguments (same arithmetic; no caching / chunking detour).
+    """
+    if dtype is None or not np.issubdtype(dtype, np.complexfloating):
+        dtype = np.complex128
+    N = int(N)
+    k = 2.0 * np.pi / wavelength
+    fx = (np.arange(N, dtype=np.float64) - N / 2) / (N * dx)
+    fy = fx  # square sub-aperture (dy == dx)
+    kx_sq = (2 * np.pi * fx) ** 2
+    ky_sq = (2 * np.pi * fy) ** 2
+    kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
+    prop = kz_sq > 0
+    kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
+    H = np.where(prop, np.exp(1j * kz * z), 0.0).astype(dtype)
+    if bandlimit and z != 0:
+        L = N * dx
+        f_max = L / (2 * wavelength * abs(z))
+        bl_x = np.abs(fx) < f_max
+        bl_y = np.abs(fy) < f_max
+        mask = bl_x[None, :] & bl_y[:, None]
+        H = H * mask.astype(dtype)
+    return H
+
+
 def _h_cache_lookup(key):
     with _ASM_CACHE_LOCK:
         if key in _H_CACHE:

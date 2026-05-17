@@ -126,11 +126,26 @@ class BSDFModel(ABC):
         S[..., 2] = np.cos(T)
         inc = np.array([0.0, 0.0, -1.0])
         B = np.asarray(self.evaluate(inc, S), dtype=np.float64)
-        # If a subclass evaluator returned a scalar or rank-1 result
-        # (e.g. forgot to broadcast), promote it to the integration
-        # grid so the cos/sin weights apply elementwise.
+        # v4.14 (audit P2 #17): require the subclass evaluator to
+        # return a result whose shape matches the integration grid.
+        # Pre-v4.14 a silent ``np.broadcast_to(B, T.shape)`` masked
+        # subclass bugs (returning a scalar / rank-1 / wrong-axis
+        # result), producing a TIS value that quietly drifted from
+        # what the implementor intended.  Surface the mismatch as a
+        # clear ValueError so the subclass is fixed at definition
+        # time rather than during downstream physics analysis.
         if B.shape != T.shape:
-            B = np.broadcast_to(B, T.shape)
+            raise ValueError(
+                f"BSDFModel.evaluate returned shape {B.shape!r}, but "
+                f"total_integrated_scatter expected shape "
+                f"{T.shape!r} (the integration grid: n_theta="
+                f"{n_theta}, n_phi={n_phi}).  Subclass evaluators "
+                f"must broadcast against the (n_theta, n_phi, 3) "
+                f"scattered-direction grid and return a (n_theta, "
+                f"n_phi) array of BSDF values.  Either fix the "
+                f"evaluator's broadcasting, or override "
+                f"total_integrated_scatter() with a closed-form "
+                f"expression.")
         dth = theta[1] - theta[0]
         dph = phi[1] - phi[0]
         # Hemisphere integrand: BSDF(theta, phi) * cos(theta) * sin(theta).

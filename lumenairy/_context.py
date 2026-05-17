@@ -237,10 +237,14 @@ def lumenairy_context(
                 # library can grow, not just ASM.  Each call is guarded
                 # so a missing optional dependency (JAX) or a future
                 # rename does not prevent the others from firing.
-                from .propagators.propagation import clear_asm_caches
+                # v4.13.1 (P1-E): import moved INSIDE the try block so
+                # an ImportError (rename / circular / partial install)
+                # falls through to the next clear-cache block instead
+                # of bypassing all 6 of them.
                 try:
+                    from .propagators.propagation import clear_asm_caches
                     clear_asm_caches()
-                except (RuntimeError, AttributeError):
+                except (ImportError, RuntimeError, AttributeError):
                     pass
                 try:
                     from .analysis.core import clear_zernike_basis_cache

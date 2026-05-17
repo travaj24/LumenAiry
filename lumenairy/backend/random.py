@@ -140,22 +140,59 @@ class RandomState:
             return self._rng.choice(n, size=shape, replace=replace, p=p)
         import jax
         self._key, sub = jax.random.split(self._key)
+        # v4.13.1 (P1-F): honour replace=False on the JAX backend.
+        # Previously the ``p is None`` branch dispatched to
+        # ``jax.random.randint``, which is always with-replacement; a
+        # caller passing ``replace=False`` silently got with-replacement
+        # samples.  Route through ``jax.random.choice(..., replace=False)``
+        # whenever ``replace=False`` so the without-replacement contract
+        # is honoured for both weighted and unweighted draws.
+        if not replace:
+            return jax.random.choice(sub, n, shape=shape,
+                                     replace=False, p=p)
         if p is None:
             return jax.random.randint(sub, shape, 0, n)
-        if not replace:
-            raise NotImplementedError(
-                "RandomState.choice with replace=False and weights is "
-                "not implemented for the JAX backend.")
         return jax.random.choice(sub, n, shape=shape, p=p)
 
 
 def _is_jax_prng_key(x) -> bool:
+    """Detect a JAX PRNG key in either the legacy uint32 form or the
+    JAX 0.4.20+ opaque-dtype form (``jax.random.key(...)``).
+
+    v4.13.1 (P3 #20): extended to recognise opaque keys.  The legacy
+    typed form returns shape ``(..., 2)`` with dtype uint32; the opaque
+    form returns scalar shape with a custom dtype whose ``name``
+    starts with ``'key<'`` (e.g. ``'key<fry>'``).  When available,
+    ``jax.dtypes.issubdtype(d, jax.dtypes.prng_key)`` is the canonical
+    check and is preferred.
+    """
     if not JAX_AVAILABLE:
         return False
     import jax
     if hasattr(jax.random, 'KeyArray') and isinstance(x, jax.random.KeyArray):
         return True
     if is_jax_array(x):
+        # First, try the canonical opaque-key check via jax.dtypes.
+        # This is the preferred path on JAX 0.4.20+.
+        try:
+            dtypes_mod = getattr(jax, 'dtypes', None)
+            if (dtypes_mod is not None
+                    and hasattr(dtypes_mod, 'prng_key')
+                    and hasattr(dtypes_mod, 'issubdtype')):
+                if dtypes_mod.issubdtype(x.dtype, dtypes_mod.prng_key):
+                    return True
+        except (AttributeError, TypeError):
+            pass
+        # Fallback string check for opaque-key dtypes when the canonical
+        # API is unavailable -- the dtype.name is ``key<impl>`` (e.g.
+        # ``key<fry>``).
+        try:
+            dt_name = getattr(x.dtype, 'name', '')
+            if isinstance(dt_name, str) and dt_name.startswith('key<'):
+                return True
+        except (AttributeError, TypeError):
+            pass
+        # Legacy typed (uint32, shape-trailing-2) form.
         try:
             return x.dtype == jax.numpy.uint32 and x.shape[-1] == 2
         except (AttributeError, IndexError, TypeError):
