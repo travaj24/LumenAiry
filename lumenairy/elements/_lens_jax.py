@@ -567,11 +567,16 @@ def apply_real_lens_traced_jax(
     # (``set_default_complex_dtype``) rather than reading the JAX
     # global ``jax_enable_x64``.  Two different knobs for the same
     # decision is exactly the divergence audit L2 flagged.
+    # v4.14.0: pass ``E_in.dtype`` so the input dtype is honoured.
+    # Pre-v4.14 the resolver returned the library default, silently
+    # upcasting a complex64 input to complex128 whenever
+    # ``jax_enable_x64=True``.  Caught by parametrized dispatcher pin
+    # in v4.14.0 Agent 6.
     from ..propagators.propagation import (
         _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
     )
-    cdtype = _resolve_jax_complex_dtype()
-    rdtype = _resolve_jax_real_dtype()
+    cdtype = _resolve_jax_complex_dtype(E_in.dtype)
+    rdtype = _resolve_jax_real_dtype(E_in.dtype)
     k0 = 2.0 * jnp.pi / float(wavelength)
     valid = jnp.isfinite(opl_map)
     phase = jnp.where(valid, k0 * opl_map, 0.0)
@@ -813,11 +818,13 @@ def apply_real_lens_maslov_jax(
 
     # ---- Combine OPL + Maslov phase with amplitude ------------------
     # v4.13.0 (audit L2): unify on the library-wide default dtype.
+    # v4.14.0: pass ``E_in.dtype`` so the input dtype is honoured
+    # (caught by parametrized dispatcher pin in v4.14.0 Agent 6).
     from ..propagators.propagation import (
         _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
     )
-    cdtype = _resolve_jax_complex_dtype()
-    rdtype = _resolve_jax_real_dtype()
+    cdtype = _resolve_jax_complex_dtype(E_in.dtype)
+    rdtype = _resolve_jax_real_dtype(E_in.dtype)
     k0 = 2.0 * jnp.pi / float(wavelength)
     valid = jnp.isfinite(opl_map)
     phase = jnp.where(valid, k0 * opl_map + phase_maslov, 0.0)

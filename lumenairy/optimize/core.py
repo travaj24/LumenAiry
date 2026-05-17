@@ -79,6 +79,7 @@ from __future__ import annotations
 import copy
 import time
 import warnings
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -98,6 +99,10 @@ from ..analysis.through_focus import (
 # allocated at the runtime-selected precision -- preserves the
 # precision='single' choice through merit evaluations.
 from ..propagators.propagation import get_default_complex_dtype
+# v4.14.0: imported as a module alias so the wrapper-merit cache can
+# monkey-patch ``clear_asm_caches`` to also clear its own state (see
+# ``_clear_asm_caches_with_wrapper_merit`` further down).
+from ..propagators import propagation as _propagation_module
 
 
 # =========================================================================
@@ -1946,6 +1951,208 @@ class ChromaticFocalShiftMerit(MeritTerm):
 
 
 # =========================================================================
+# Wrapper-merit meshgrid cache (v4.14.0 perf)
+# =========================================================================
+#
+# MultiWavelengthMerit, MultiFieldMerit, and ToleranceAwareMerit each
+# rebuild np.indices / meshgrid arrays + aperture mask on every per-
+# wavelength / per-field / per-trial leg.  For a 5 wavelengths x 5
+# fields x 40 FD evals run at N=512 that is up to 1000 N x N meshgrid
+# builds per optimisation step, none of which depend on the parameter
+# vector being differenced.
+#
+# This module-level LRU cache memoises the wavelength/field/trial-
+# invariant payload keyed on (Ny, Nx, dx, aperture_hash, dtype_str).
+# Per-leg cost reduces to a single np.exp(1j * sin_a * cached_k0_Y) *
+# cached_aperture_mask (MultiFieldMerit) or a single .copy() (the
+# other two) plus the apply_real_lens call.
+#
+# Eval-count pin: the counter _WRAPPER_MERIT_MESHGRID_BUILDS records
+# every actual meshgrid build (NOT cache hits) so tests can assert
+# exactly one build per (N, dx, aperture) signature per optimisation
+# run.
+
+_WRAPPER_MERIT_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
+_WRAPPER_MERIT_CACHE_SIZE = 32
+_WRAPPER_MERIT_MESHGRID_BUILDS = 0
+
+
+def _wrapper_merit_aperture_key(aperture: Any) -> tuple:
+    """Build a hashable key fragment representing the aperture state.
+
+    Three branches:
+      - ``None``  -> ``('none',)``.
+      - ndarray   -> ``('arr', shape, dtype, content_hash)``.
+        ``hash(np.ascontiguousarray(a).tobytes())`` captures content
+        cheaply (a single ~N^2 byte scan; for N=512^2 complex128 that
+        is ~4 MB which hashes in <1 ms).
+      - scalar    -> ``('scalar', float)`` covering the common case of
+        a single aperture_diameter taken from ``prescription``.
+    """
+    if aperture is None:
+        return ('none',)
+    if isinstance(aperture, np.ndarray):
+        arr = np.ascontiguousarray(aperture)
+        return ('arr', arr.shape, str(arr.dtype),
+                hash(arr.tobytes()))
+    # Scalar aperture: a Python int/float/np.floating.  Forced to a
+    # plain float so np.float64(1.0) and 1.0 share the same cache key.
+    return ('scalar', float(aperture))
+
+
+def _get_wrapper_merit_cache(
+    N: int, dx: float, aperture: Any, dtype: Any,
+) -> Dict[str, Any]:
+    """Return the cached (Y, X, mask, k0_Y_factor) payload for these
+    grid + aperture parameters.
+
+    The payload is a dict with keys ``'X'``, ``'Y'``, ``'mask'``,
+    ``'Y_factor'`` where:
+
+    - ``X``, ``Y``: the meshgrid coordinate arrays (shape (N, N),
+      dtype float64).
+    - ``mask``: boolean aperture mask (or ``None`` when ``aperture``
+      is ``None``-or-zero).
+    - ``Y_factor``: the wavelength-independent ``2*pi * Y / 1`` such
+      that the per-wavelength tilt phase is
+      ``(Y_factor / wavelength) * sin(theta_y)``.  Cached so the
+      MultiFieldMerit per-leg work is one np.exp + one multiply.
+    - ``r_squared``: ``X*X + Y*Y`` (cached for callers that need to
+      build their own custom aperture masks against the same grid).
+
+    The cache is LRU-bounded at 32 entries (``_WRAPPER_MERIT_CACHE_SIZE``).
+    A meshgrid build increments ``_WRAPPER_MERIT_MESHGRID_BUILDS``;
+    cache hits do NOT increment.  Use this counter in tests to pin
+    the invariance contract.
+    """
+    global _WRAPPER_MERIT_MESHGRID_BUILDS
+
+    Ny = Nx = int(N)
+    dx_f = float(dx)
+    # dtype may arrive as numpy dtype object, dtype string, or
+    # np.complex128 type.  ``str(np.dtype(x))`` normalises to a
+    # canonical short name ('complex128', 'complex64', ...).
+    try:
+        _dtype_obj = np.dtype(dtype)
+        dtype_str = str(_dtype_obj)
+    except TypeError:
+        _dtype_obj = np.complex128
+        dtype_str = str(dtype)
+    ap_key = _wrapper_merit_aperture_key(aperture)
+    key = (Ny, Nx, dx_f, ap_key, dtype_str)
+
+    entry = _WRAPPER_MERIT_CACHE.get(key)
+    if entry is not None:
+        # LRU bookkeeping: refresh recency.
+        _WRAPPER_MERIT_CACHE.move_to_end(key)
+        return entry
+
+    # Cache miss: build the grid + mask + Y-factor once and store.
+    _WRAPPER_MERIT_MESHGRID_BUILDS += 1
+    Y_idx, X_idx = np.indices((Ny, Nx))
+    X = (X_idx - Nx / 2) * dx_f
+    Y = (Y_idx - Ny / 2) * dx_f
+    r_squared = X * X + Y * Y
+
+    if isinstance(aperture, np.ndarray):
+        # Custom user-supplied aperture array; assume boolean-coercible.
+        mask = np.asarray(aperture, dtype=bool)
+        if mask.shape != (Ny, Nx):
+            raise ValueError(
+                f"_get_wrapper_merit_cache: aperture array shape "
+                f"{mask.shape} != grid shape ({Ny}, {Nx})")
+    elif aperture is None:
+        mask = None
+    else:
+        # Scalar aperture_diameter; build the circular mask.
+        ap_diam = float(aperture)
+        if ap_diam > 0:
+            mask = r_squared <= (ap_diam / 2.0) ** 2
+        else:
+            mask = None
+
+    # Wavelength-independent Y-tilt factor: 2*pi * Y.  Per-leg the
+    # tilt phase is (Y_factor / wavelength) * sin(theta_y) plus the
+    # analogous X term.  Materialised so the per-leg cost is a
+    # single multiply.
+    Y_factor = (2.0 * np.pi) * Y
+    X_factor = (2.0 * np.pi) * X
+
+    # Cached np.ones array for ToleranceAwareMerit's per-trial
+    # source field.  Stored once per (N, dtype); per-trial just
+    # .copy() this and feed apply_real_lens.  apply_real_lens
+    # never writes its input, but downstream merit code paths may
+    # so the .copy() at call site preserves correctness.  Uses the
+    # ``_dtype_obj`` computed at the head of the function.
+    E_ones = np.ones((Ny, Nx), dtype=_dtype_obj)
+
+    entry = {
+        'X': X,
+        'Y': Y,
+        'mask': mask,
+        'Y_factor': Y_factor,
+        'X_factor': X_factor,
+        'r_squared': r_squared,
+        'E_ones': E_ones,
+    }
+    _WRAPPER_MERIT_CACHE[key] = entry
+    while len(_WRAPPER_MERIT_CACHE) > _WRAPPER_MERIT_CACHE_SIZE:
+        _WRAPPER_MERIT_CACHE.popitem(last=False)
+    return entry
+
+
+def _clear_wrapper_merit_cache() -> None:
+    """Drop the wrapper-merit meshgrid cache and reset the build counter.
+
+    Called automatically from :func:`clear_asm_caches` (the propagation
+    module's clear-all entry point is monkey-patched to also invoke
+    this), so the cache is part of the standard "leave the library
+    pristine" lifecycle hook.  Also callable directly from tests.
+    """
+    global _WRAPPER_MERIT_MESHGRID_BUILDS
+    _WRAPPER_MERIT_CACHE.clear()
+    _WRAPPER_MERIT_MESHGRID_BUILDS = 0
+
+
+# Monkey-patch ``clear_asm_caches`` so callers (including the
+# ``lumenairy_context(clear_caches_on_exit=True)`` hook in
+# ``_context.py``) drop this cache too without having to add another
+# entry to the per-module clear-helper list.  The replacement is a
+# thin wrapper that calls the original first then clears ours.
+_orig_clear_asm_caches = _propagation_module.clear_asm_caches
+
+
+def _clear_asm_caches_with_wrapper_merit() -> None:
+    """Composite cache-clear: delegates to the propagator-layer
+    ``clear_asm_caches`` and then drops the optimize-layer wrapper-
+    merit meshgrid cache.
+
+    Replaces ``propagators.propagation.clear_asm_caches`` so a single
+    call leaves both layers pristine.  Idempotent.
+    """
+    _orig_clear_asm_caches()
+    _clear_wrapper_merit_cache()
+
+
+_propagation_module.clear_asm_caches = _clear_asm_caches_with_wrapper_merit
+# The top-level ``lumenairy`` package re-exports clear_asm_caches by
+# rebinding it at import time; rebind there too so
+# ``lumenairy.clear_asm_caches()`` picks up the composite version.
+# Guarded so the import order does not matter -- when optimize/core
+# is imported before lumenairy/__init__.py finishes, the rebind is a
+# no-op and the package init will pick up our patched reference via
+# the ``from .propagators.propagation import clear_asm_caches`` line.
+try:
+    import lumenairy as _lumenairy_pkg
+    if hasattr(_lumenairy_pkg, 'clear_asm_caches'):
+        _lumenairy_pkg.clear_asm_caches = _clear_asm_caches_with_wrapper_merit
+except ImportError:
+    # Partial import during package bootstrap; the top-level
+    # re-export will pick up the patched reference once it runs.
+    pass
+
+
+# =========================================================================
 # Multi-wavelength support
 # =========================================================================
 
@@ -2033,16 +2240,30 @@ class MultiWavelengthMerit(MeritTerm):
                     # get_default_complex_dtype; explicit is-None check on
                     # aperture_diameter so a deliberate 0 isn't shadowed
                     # by the grid-arbitrary fallback.
+                    # v4.14.0: reuse the cached aperture mask /
+                    # coordinate grids (see _get_wrapper_merit_cache);
+                    # rebuilding np.indices on every per-wavelength
+                    # leg was the dominant cost for 5+ wavelengths *
+                    # 2N+1 FD evals per outer iteration.
                     N_pix = ctx.N
                     dx_pix = ctx.dx
-                    Y, X = np.indices((N_pix, N_pix))
-                    x = (X - N_pix / 2) * dx_pix
-                    y = (Y - N_pix / 2) * dx_pix
                     ap = ctx.prescription.get('aperture_diameter')
                     if ap is None:
                         ap = 0.4 * N_pix * dx_pix
-                    mask = (x ** 2 + y ** 2) <= (ap / 2.0) ** 2
-                    E_in_wl = mask.astype(get_default_complex_dtype())
+                    _cdtype = get_default_complex_dtype()
+                    _cache = _get_wrapper_merit_cache(
+                        N_pix, dx_pix, ap, _cdtype)
+                    mask = _cache['mask']
+                    # ``mask`` is None only when the caller passed
+                    # aperture<=0 / None to the cache.  We already
+                    # guarded `ap is None` above by substituting the
+                    # 0.4*N*dx default, so a None mask here means a
+                    # deliberate 0-diameter request; downstream code
+                    # treats it as no-aperture (broadcasting 1.0).
+                    if mask is None:
+                        E_in_wl = np.ones((N_pix, N_pix), dtype=_cdtype)
+                    else:
+                        E_in_wl = mask.astype(_cdtype)
                     E_exit_wl = apply_real_lens(
                         E_in_wl,
                         prescription=ctx.prescription,
@@ -2165,6 +2386,31 @@ class MultiFieldMerit(MeritTerm):
 
     def evaluate(self, ctx: Any) -> float:
         total = 0.0
+        # v4.14.0: aperture mask + coordinate grids + the
+        # wavelength-independent k0*Y / k0*X factors are invariant
+        # across field angles and FD-eval perturbations.  Cache them
+        # module-level keyed on (N, dx, aperture, dtype).  Per-leg
+        # cost reduces to a single np.exp + np.where over the cached
+        # mask + tilt phase; meshgrid_build_count drops from
+        # n_fields * 2N_FD to 1 per optimisation run.
+        Ny, Nx = ctx.N, ctx.N
+        ap_diam = ctx.prescription.get('aperture_diameter')
+        if ap_diam is None:
+            ap_diam = 0.4 * Nx * ctx.dx
+        _cdtype = get_default_complex_dtype()
+        _cache = _get_wrapper_merit_cache(
+            ctx.N, ctx.dx, float(ap_diam), _cdtype)
+        # Wavelength-independent factors: per-field the tilt phase
+        # is sin(theta_x) * (k0_X_factor / wavelength) +
+        # sin(theta_y) * (k0_Y_factor / wavelength).  Pre-fold the
+        # 1/wavelength into the wavelength-dependent multiplier
+        # below.  Note ``ctx.wavelength`` IS invariant across
+        # MultiFieldMerit's loop (the field sweep is the loop axis),
+        # so we form k_X/k_Y just once.
+        _wl = float(ctx.wavelength)
+        k_X = _cache['X_factor'] / _wl
+        k_Y = _cache['Y_factor'] / _wl
+        aperture_mask = _cache['mask']
         for theta_x, theta_y in self.field_angles:
             # Build tilted plane wave clipped to the lens aperture so
             # the propagated intensity reflects the lens's actual
@@ -2173,22 +2419,16 @@ class MultiFieldMerit(MeritTerm):
             # Strehl was computed against a "grid-filling" reference
             # which artificially lowered the value and biased the
             # optimizer toward apertures larger than designed.
-            Ny, Nx = ctx.N, ctx.N
-            x = (np.arange(Nx) - Nx / 2) * ctx.dx
-            y = (np.arange(Ny) - Ny / 2) * ctx.dx
-            X, Y = np.meshgrid(x, y)
-            k0 = 2 * np.pi / ctx.wavelength
             # v4.13.2 (C-P0-2): generic off-axis tilt with both X and
             # Y components.  Pre-fix the X term was silently dropped.
-            tilt_phase = k0 * (np.sin(theta_x) * X + np.sin(theta_y) * Y)
-            ap_diam = ctx.prescription.get('aperture_diameter')
-            if ap_diam is None:
-                ap_diam = 0.4 * Nx * ctx.dx
-            aperture_mask = (X * X + Y * Y) <= (float(ap_diam) / 2.0) ** 2
+            tilt_phase = np.sin(theta_x) * k_X + np.sin(theta_y) * k_Y
             # 4.11.1: honour precision knob (was hard-coded complex128
             # which silently demoted precision='single' configs).
-            E_tilted = np.where(aperture_mask, np.exp(1j * tilt_phase),
-                                 0.0).astype(get_default_complex_dtype())
+            if aperture_mask is None:
+                E_tilted = np.exp(1j * tilt_phase).astype(_cdtype)
+            else:
+                E_tilted = np.where(aperture_mask, np.exp(1j * tilt_phase),
+                                     0.0).astype(_cdtype)
             E_exit = apply_real_lens(
                 E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
             # Build sub-context.  v4.13.2 (C-P1-2): thread ctx.x so
@@ -2473,7 +2713,18 @@ class ToleranceAwareMerit(MeritTerm):
             # precision='single' actually halves the memory / FFT cost
             # of merit-leg propagation.  Pre-4.10.2 the hard-coded
             # complex128 silently negated the precision='single' knob.
-            E_in = np.ones((ctx.N, ctx.N), dtype=get_default_complex_dtype())
+            # v4.14.0: route through the shared wrapper-merit cache
+            # so the (Ny, Nx, dx) grid-build invariants are
+            # established once per design_optimize run.  The cache
+            # also memoises the np.ones source array against
+            # mutation by apply_real_lens (which never writes its
+            # input), so per-trial we just .copy() the cached
+            # template.
+            _cdtype = get_default_complex_dtype()
+            _ap = ctx.prescription.get('aperture_diameter')
+            _cache = _get_wrapper_merit_cache(
+                ctx.N, ctx.dx, _ap, _cdtype)
+            E_in = _cache['E_ones'].copy()
             E_exit = apply_real_lens(
                 E_in, prescription=pres_pert, wavelength=ctx.wavelength, dx=ctx.dx)
             # v4.13.2 (C-P1-2): thread ctx.x so JaxMeritTerm sub-

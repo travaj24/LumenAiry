@@ -84,184 +84,184 @@ def coating_reflectance(
 
     Both items are on the roadmap for a proper TMM rewrite.
     """
-    wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
+    # 4.14.0 (Tier-2 perf, audit group): track scalar-input back-compat
+    # before the np.atleast_1d promotion.  When a scalar wavelength is
+    # passed in we still return scalar R/T/phase, not length-1 arrays.
+    _wv_in = np.asarray(wavelengths, dtype=np.float64)
+    _scalar_in = (_wv_in.ndim == 0)
+    wavelengths = np.atleast_1d(_wv_in)
     n_wv = wavelengths.size
+
+    pols = ['s', 'p'] if polarization == 'avg' else [polarization]
+
+    # The Snell-angle chain is intrinsically sequential per layer (each
+    # layer's sin_t depends on the previous after the TIR cap), but it
+    # does NOT depend on wavelength -- the real-Snell approximation
+    # documented in the docstring drops n.imag and lambda from the
+    # angle propagation entirely.  So we walk the layer stack once,
+    # collecting (cos_t, eta_s, eta_p) per layer, then build a
+    # (n_wv, n_layers, 2, 2) characteristic-matrix stack in one
+    # vectorised pass.
+    #
+    # 4.13.0 (preserved): the inner Snell loop uses ``math.sin`` /
+    # ``math.asin`` for ~10x speedup over the numpy ufuncs on
+    # 50-layer-scale stacks; the result is bit-identical because both
+    # routes go through libm.
+    theta_prev = angle
+    n_prev = complex(n_ambient)
+    layer_cos_t: List[float] = []
+    layer_n: List[complex] = []
+    layer_d: List[float] = []
+    for n_layer, d in layers:
+        n_layer = complex(n_layer)
+        sin_t = n_prev.real * math.sin(theta_prev) / n_layer.real
+        if sin_t > 1.0:
+            import warnings
+            warnings.warn(
+                f"thin_film_stack: intra-stack TIR at layer with "
+                f"n_layer={n_layer.real:.3f}, sin_t={sin_t:.3f}; "
+                f"capped at 0.9999 (real-Snell approximation).  "
+                f"For accurate TIR / immersion behaviour use a "
+                f"full complex-Snell solver.",
+                RuntimeWarning, stacklevel=2,
+            )
+        sin_t = min(sin_t, 0.9999)
+        cos_t = math.sqrt(1 - sin_t * sin_t)
+        layer_cos_t.append(cos_t)
+        layer_n.append(n_layer)
+        layer_d.append(d)
+        theta_prev = math.asin(sin_t)
+        n_prev = n_layer
+
+    n_layers = len(layer_cos_t)
+    # Substrate / ambient angles (also wavelength-independent in the
+    # real-Snell approximation).
+    sin_sub = (n_prev.real * math.sin(theta_prev)
+               / complex(n_substrate).real)
+    sin_sub = min(sin_sub, 0.9999)
+    cos_sub = math.sqrt(1 - sin_sub * sin_sub)
+    cos_angle = math.cos(angle)
+
+    # Layer arrays (n_layers,)
+    if n_layers:
+        n_arr = np.asarray(layer_n, dtype=np.complex128)
+        d_arr = np.asarray(layer_d, dtype=np.float64)
+        cos_t_arr = np.asarray(layer_cos_t, dtype=np.float64)
+        # delta = 2*pi * n * d * cos_t / lambda
+        # Broadcast wavelength: (n_wv, 1) * (n_layers,) -> (n_wv, n_layers)
+        delta_all = (2.0 * math.pi
+                     * (n_arr * d_arr * cos_t_arr)[None, :]
+                     / wavelengths[:, None])  # (n_wv, n_layers) complex
+    else:
+        delta_all = np.empty((n_wv, 0), dtype=np.complex128)
+
     R = np.empty(n_wv)
     T = np.empty(n_wv)
     phase_r = np.empty(n_wv)
 
-    pols = ['s', 'p'] if polarization == 'avg' else [polarization]
+    rs_by_pol: dict = {}
+    ts_by_pol: dict = {}
+    eta_sub_by_pol: dict = {}
+    eta_amb_by_pol: dict = {}
 
-    for iw, lam in enumerate(wavelengths):
-        rs, ts = [], []
-        # 4.11.2: save the substrate / ambient admittances per
-        # polarization so the 'avg' branch below uses the correct s-pol
-        # admittance for T_s and the correct p-pol admittance for T_p.
-        # Pre-4.11.2 the loop overwrote ``eta_sub`` / ``eta_amb`` and
-        # used the LAST iteration's value (always p-pol when
-        # polarization='avg', since pols = ['s','p']) for BOTH T_s and
-        # T_p, which made the averaged transmission silently wrong at
-        # non-normal incidence (eta_s and eta_p differ by cos_t² for
-        # most coatings).  At normal incidence the bug is invisible
-        # (eta_s == eta_p), so the regression test pins the equality
-        # at 0 deg as well as the asymmetry-fix at oblique AOI.
-        eta_sub_by_pol = {}
-        eta_amb_by_pol = {}
-        for pol in pols:
-            # v4.13.0 (Tier-2 perf, audit group alpha): build all
-            # per-layer 2x2 characteristic matrices in vectorised form,
-            # then reduce with ``functools.reduce(np.matmul, ...)``.
-            # Snell's real-only angle chain is still scalar (each
-            # layer's sin_t depends on the previous after the
-            # TIR-cap), but the array-build + reduction now dominates
-            # over the per-iteration Python overhead of the old
-            # ``M = M @ Mj`` loop.
-            theta_prev = angle
-            n_prev = complex(n_ambient)
-            cos_t_list: List[float] = []
-            delta_list: List[complex] = []
-            eta_list: List[complex] = []
-            # 4.13.0: switch the scalar Snell chain from ``np.sin`` /
-            # ``np.arcsin`` to ``math.sin`` / ``math.asin``.  Each
-            # numpy ufunc call dispatches through ndarray creation +
-            # type promotion machinery; on a 50-layer stack that costs
-            # ~10x what the math module does.  The result is bit-
-            # identical because both routes go through the same
-            # underlying libm implementations.
-            for n_layer, d in layers:
-                n_layer = complex(n_layer)
-                # 4.10: warn when intra-stack TIR is silently capped.
-                # This module uses only n.real for the angle
-                # propagation (audit limitation, documented), so true
-                # complex-angle TIR is not supported here.  Until the
-                # full complex-Snell rewrite, surface the cap so users
-                # of polarising-beam-splitter / immersion coatings
-                # know they're seeing an approximation.
-                sin_t = n_prev.real * math.sin(theta_prev) / n_layer.real
-                if sin_t > 1.0:
-                    import warnings
-                    warnings.warn(
-                        f"thin_film_stack: intra-stack TIR at layer with "
-                        f"n_layer={n_layer.real:.3f}, sin_t={sin_t:.3f}; "
-                        f"capped at 0.9999 (real-Snell approximation).  "
-                        f"For accurate TIR / immersion behaviour use a "
-                        f"full complex-Snell solver.",
-                        RuntimeWarning, stacklevel=2,
-                    )
-                sin_t = min(sin_t, 0.9999)
-                cos_t = math.sqrt(1 - sin_t * sin_t)
-                delta = 2 * math.pi * n_layer * d * cos_t / lam
-                if pol == 's':
-                    eta = n_layer * cos_t
-                else:
-                    eta = n_layer / cos_t
-                cos_t_list.append(cos_t)
-                delta_list.append(delta)
-                eta_list.append(eta)
-                theta_prev = math.asin(sin_t)
-                n_prev = n_layer
-            # Vectorised characteristic-matrix build.  Each layer's M_j
-            # is shape (2, 2); stacked we get (N_layers, 2, 2).  Apply
-            # a log2(N) "tournament" reduction: at each round, pair up
-            # adjacent matrices and multiply (a single batched
-            # np.matmul over the pair axis).  For N=50 this is ~6
-            # batched matmuls instead of 50 sequential ones, which
-            # outperforms the Python-iterated reduce(matmul, ...) on
-            # short stacks where matmul-launch overhead dominates over
-            # FLOP count.
-            n_layers = len(cos_t_list)
-            if n_layers:
-                deltas = np.asarray(delta_list, dtype=np.complex128)
-                etas = np.asarray(eta_list, dtype=np.complex128)
-                cos_d = np.cos(deltas)
-                sin_d = np.sin(deltas)
-                Mj = np.empty((n_layers, 2, 2), dtype=np.complex128)
-                Mj[:, 0, 0] = cos_d
-                Mj[:, 0, 1] = -1j * sin_d / etas
-                Mj[:, 1, 0] = -1j * etas * sin_d
-                Mj[:, 1, 1] = cos_d
-                # Tournament reduction preserves left-to-right order:
-                # at each round, pair Mj[0]@Mj[1], Mj[2]@Mj[3], ...
-                # If the stack has odd length, the trailing matrix is
-                # carried into the next round unchanged.
-                stack = Mj
-                while stack.shape[0] > 1:
-                    n = stack.shape[0]
-                    even_n = n - (n & 1)  # largest even <= n
-                    left = stack[0:even_n:2]
-                    right = stack[1:even_n:2]
-                    paired = left @ right
-                    if n & 1:
-                        # carry the unpaired trailing matrix forward
-                        stack = np.concatenate(
-                            [paired, stack[even_n:even_n + 1]], axis=0)
-                    else:
-                        stack = paired
-                M = stack[0]
-            else:
-                M = np.eye(2, dtype=np.complex128)
-            # Substrate admittance
-            sin_sub = (n_prev.real * math.sin(theta_prev)
-                       / complex(n_substrate).real)
-            sin_sub = min(sin_sub, 0.9999)
-            cos_sub = math.sqrt(1 - sin_sub * sin_sub)
-            cos_angle = math.cos(angle)
+    for pol in pols:
+        if n_layers:
             if pol == 's':
-                eta_sub = complex(n_substrate) * cos_sub
-                eta_amb = complex(n_ambient) * cos_angle
+                eta_arr = n_arr * cos_t_arr  # (n_layers,)
             else:
-                eta_sub = complex(n_substrate) / cos_sub
-                eta_amb = complex(n_ambient) / cos_angle
-            eta_sub_by_pol[pol] = eta_sub
-            eta_amb_by_pol[pol] = eta_amb
-            # Reflection coefficient
-            # 4.10: dropped the dead `num` / `den` lines (kept the
-            # correct `B`, `C`, `r` formulas).  Documented sign
-            # convention: this uses the Macleod p-pol form (eta_p =
-            # n / cos_t), so r_p has the same sign as r_s at normal
-            # incidence.  Born & Wolf use the opposite p-sign; the
-            # reflectance R = |r|^2 is unaffected, but phase_r differs
-            # by pi from those references.
-            B = M[0, 0] + M[0, 1] * eta_sub
-            C = M[1, 0] + M[1, 1] * eta_sub
-            r = (eta_amb * B - C) / (eta_amb * B + C)
-            # Amplitude transmission for absorbing/lossy stacks.
-            t_amp = 2.0 * eta_amb / (eta_amb * B + C)
-            ts.append(t_amp)
-            rs.append(r)
-
-        if polarization == 'avg':
-            R_val = 0.5 * (abs(rs[0])**2 + abs(rs[1])**2)
-            phase_val = 0.5 * (np.angle(rs[0]) + np.angle(rs[1]))
-            # Power transmission via the amplitude coefficient (Macleod
-            # eq. 2.99): T_s = Re(eta_sub) / Re(eta_amb) * |t|^2.
-            # 4.11.2: use the per-polarization admittances saved above.
-            _eta_sub_s = eta_sub_by_pol['s']
-            _eta_amb_s = eta_amb_by_pol['s']
-            _eta_sub_p = eta_sub_by_pol['p']
-            _eta_amb_p = eta_amb_by_pol['p']
-            T_s = float((_eta_sub_s.real / max(_eta_amb_s.real, 1e-30))
-                         * abs(ts[0]) ** 2) if hasattr(_eta_sub_s, 'real') \
-                  else float((_eta_sub_s / _eta_amb_s) * abs(ts[0]) ** 2)
-            T_p = float((_eta_sub_p.real / max(_eta_amb_p.real, 1e-30))
-                         * abs(ts[1]) ** 2) if hasattr(_eta_sub_p, 'real') \
-                  else float((_eta_sub_p / _eta_amb_p) * abs(ts[1]) ** 2)
-            T_val = 0.5 * (T_s + T_p)
+                eta_arr = n_arr / cos_t_arr
+            # Build (n_wv, n_layers, 2, 2) characteristic-matrix stack.
+            # cos_d / sin_d are (n_wv, n_layers); etas broadcast to
+            # (1, n_layers).
+            cos_d = np.cos(delta_all)
+            sin_d = np.sin(delta_all)
+            eta_b = eta_arr[None, :]  # (1, n_layers)
+            Mj = np.empty((n_wv, n_layers, 2, 2), dtype=np.complex128)
+            Mj[:, :, 0, 0] = cos_d
+            Mj[:, :, 0, 1] = -1j * sin_d / eta_b
+            Mj[:, :, 1, 0] = -1j * eta_b * sin_d
+            Mj[:, :, 1, 1] = cos_d
+            # Tournament reduction over the layer axis (axis=1).
+            # Preserves left-to-right order: each round pairs
+            # Mj[:,0]@Mj[:,1], Mj[:,2]@Mj[:,3], ...  Odd trailing slab
+            # carries forward unchanged.  Batched np.matmul on the
+            # leading wavelength axis costs ~log2(n_layers) matmuls
+            # of (n_wv, k, 2, 2) shape, vs n_wv * n_layers scalar
+            # matmuls in the old per-wavelength loop.
+            stack = Mj
+            while stack.shape[1] > 1:
+                n = stack.shape[1]
+                even_n = n - (n & 1)
+                left = stack[:, 0:even_n:2]
+                right = stack[:, 1:even_n:2]
+                paired = left @ right
+                if n & 1:
+                    stack = np.concatenate(
+                        [paired, stack[:, even_n:even_n + 1]], axis=1)
+                else:
+                    stack = paired
+            M = stack[:, 0]  # (n_wv, 2, 2)
         else:
-            R_val = abs(rs[0])**2
-            phase_val = np.angle(rs[0])
-            T_val = float((eta_sub.real / max(eta_amb.real, 1e-30))
-                           * abs(ts[0]) ** 2) if hasattr(eta_sub, 'real') \
-                    else float((eta_sub / eta_amb) * abs(ts[0]) ** 2)
-        R[iw] = R_val
-        # 4.10: real transmission via the amplitude coefficient, so
-        # absorbing stacks correctly produce R + T < 1.  Pre-4.10 used
-        # T = 1 - R unconditionally which overstated transmission for
-        # any lossy material (the specific case where complex n is
-        # passed in, i.e. the only case where TMM matters).
-        T[iw] = max(0.0, T_val)
-        phase_r[iw] = phase_val
+            M = np.broadcast_to(np.eye(2, dtype=np.complex128),
+                                 (n_wv, 2, 2)).copy()
 
+        # Substrate / ambient admittance (scalar per pol, wavelength-
+        # independent in this approximation).
+        if pol == 's':
+            eta_sub = complex(n_substrate) * cos_sub
+            eta_amb = complex(n_ambient) * cos_angle
+        else:
+            eta_sub = complex(n_substrate) / cos_sub
+            eta_amb = complex(n_ambient) / cos_angle
+        eta_sub_by_pol[pol] = eta_sub
+        eta_amb_by_pol[pol] = eta_amb
+
+        # Reflection / transmission coefficients, vectorised over
+        # wavelength.  M is (n_wv, 2, 2); slicing the four corners
+        # yields (n_wv,) complex arrays.  Same algebra as the scalar
+        # form -- Macleod p-pol sign convention (audit-documented).
+        B = M[:, 0, 0] + M[:, 0, 1] * eta_sub
+        C = M[:, 1, 0] + M[:, 1, 1] * eta_sub
+        denom = eta_amb * B + C
+        r = (eta_amb * B - C) / denom
+        t_amp = 2.0 * eta_amb / denom
+        rs_by_pol[pol] = r
+        ts_by_pol[pol] = t_amp
+
+    if polarization == 'avg':
+        r_s = rs_by_pol['s']
+        r_p = rs_by_pol['p']
+        t_s = ts_by_pol['s']
+        t_p = ts_by_pol['p']
+        R[:] = 0.5 * (np.abs(r_s) ** 2 + np.abs(r_p) ** 2)
+        phase_r[:] = 0.5 * (np.angle(r_s) + np.angle(r_p))
+        # Power transmission via the amplitude coefficient (Macleod
+        # eq. 2.99): T_s = Re(eta_sub) / Re(eta_amb) * |t|^2.  Use the
+        # per-polarization admittances (4.11.2 fix).
+        _eta_sub_s = eta_sub_by_pol['s']
+        _eta_amb_s = eta_amb_by_pol['s']
+        _eta_sub_p = eta_sub_by_pol['p']
+        _eta_amb_p = eta_amb_by_pol['p']
+        T_s = ((_eta_sub_s.real / max(_eta_amb_s.real, 1e-30))
+                * np.abs(t_s) ** 2)
+        T_p = ((_eta_sub_p.real / max(_eta_amb_p.real, 1e-30))
+                * np.abs(t_p) ** 2)
+        T[:] = np.maximum(0.0, 0.5 * (T_s + T_p))
+    else:
+        r0 = rs_by_pol[pols[0]]
+        t0 = ts_by_pol[pols[0]]
+        eta_sub0 = eta_sub_by_pol[pols[0]]
+        eta_amb0 = eta_amb_by_pol[pols[0]]
+        R[:] = np.abs(r0) ** 2
+        phase_r[:] = np.angle(r0)
+        T_val = ((eta_sub0.real / max(eta_amb0.real, 1e-30))
+                  * np.abs(t0) ** 2)
+        T[:] = np.maximum(0.0, T_val)
+
+    # 4.14.0: preserve scalar-input back-compat.  When the caller
+    # passed a 0-d wavelength, return scalar (not length-1) outputs.
+    if _scalar_in:
+        return float(R[0]), float(T[0]), float(phase_r[0])
     return R, T, phase_r
 
 

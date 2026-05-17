@@ -155,6 +155,7 @@ from .analysis.phase_retrieval import (
 from .analysis import (
     beam_centroid,
     beam_d4sigma,
+    beam_diameter,
     beam_power,
     strehl_ratio,
     strehl_marechal,
@@ -169,6 +170,10 @@ from .analysis import (
     compute_otf,
     compute_mtf,
     mtf_radial,
+    mtf_cutoff,
+    encircled_energy_curve,
+    encircled_energy_radius,
+    depth_of_focus,
     remove_wavefront_modes,
     opd_pv_rms,
     wave_opd_1d,
@@ -614,6 +619,7 @@ from .analysis.plotting import (
     plot_stokes,
     plot_polarization_ellipses,
     plot_beam_profile,
+    plot_wavefront,
     plot_jones_pupil,
     compute_jones_pupil,
     plot_lens_layout,
@@ -729,7 +735,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.13.2"
+__version__ = "4.14.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1030,6 +1036,7 @@ __all__ = [
     # Beam analysis (Strehl, PSF, MTF, OPD, Zernike)
     'beam_centroid',
     'beam_d4sigma',
+    'beam_diameter',
     'coupling_efficiency',
     'M2',
     'caustic_diagnostic',
@@ -1044,6 +1051,10 @@ __all__ = [
     'compute_otf',
     'compute_mtf',
     'mtf_radial',
+    'mtf_cutoff',
+    'encircled_energy_curve',
+    'encircled_energy_radius',
+    'depth_of_focus',
     'remove_wavefront_modes',
     'opd_pv_rms',
     'wave_opd_1d',
@@ -1297,6 +1308,7 @@ __all__ = [
     'plot_stokes',
     'plot_polarization_ellipses',
     'plot_beam_profile',
+    'plot_wavefront',
     'plot_jones_pupil',
     'compute_jones_pupil',
     'plot_lens_layout',

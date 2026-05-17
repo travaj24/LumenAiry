@@ -491,6 +491,7 @@ def apply_real_lens_maslov(
             sample_E_bilinear,
             stationary_newton_iter, stationary_newton_tol,
             _progress, verbose,
+            out_dtype=E_in.dtype,
         )
     elif integration_method == 'local_quadrature':
         E_out_coarse = _integrate_local_quadrature(
@@ -503,6 +504,7 @@ def apply_real_lens_maslov(
             stationary_newton_iter, stationary_newton_tol,
             local_n_samples, local_window_sigma,
             _progress, verbose,
+            out_dtype=E_in.dtype,
         )
     else:
         E_out_coarse = _integrate_quadrature(
@@ -514,6 +516,7 @@ def apply_real_lens_maslov(
             sample_E_bilinear,
             use_numexpr, _progress,
             _lenses_module,
+            out_dtype=E_in.dtype,
         )
 
     # -----------------------------------------------------------------
@@ -557,7 +560,10 @@ def apply_real_lens_maslov(
             cols = min(a.shape[1], N)
             out[:rows, :cols] = a[:rows, :cols]
             return out
-        E_out = _fit(E_out_re) + 1j * _fit(E_out_im)
+        # v4.14.0: ``1j * float64`` returns complex128; cast back to
+        # E_in.dtype so complex64 inputs are preserved through the
+        # final re-fit step.
+        E_out = (_fit(E_out_re) + 1j * _fit(E_out_im)).astype(E_in.dtype)
     else:
         E_out = E_out_coarse
 
@@ -582,6 +588,13 @@ def apply_real_lens_maslov(
     else:
         raise ValueError(f"normalize_output={normalize_output!r}; "
                           f"expected 'power', 'peak', 'none', or scalar")
+
+    # v4.14.0: final dtype cast back to E_in.dtype.  The normalization
+    # multiplies above promote complex64 -> complex128 because the
+    # scalar scale factor is a python float (float64).  Cast once at
+    # the end to preserve the input-dtype contract.
+    if E_out.dtype != E_in.dtype:
+        E_out = E_out.astype(E_in.dtype)
 
     _progress('done', 1.0,
               f'total {time.perf_counter()-t0:.1f}s')
@@ -608,8 +621,13 @@ def _integrate_quadrature(
     sample_E_bilinear,
     use_numexpr, _progress,
     _lenses_module,
+    out_dtype=np.complex128,
 ):
-    """Uniform Tukey-windowed quadrature on the (v2x, v2y) grid."""
+    """Uniform Tukey-windowed quadrature on the (v2x, v2y) grid.
+
+    v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
+    compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+    """
     n_v2 = len(u_v2x_samples)
     n_v2_total = n_v2 * n_v2
 
@@ -653,7 +671,7 @@ def _integrate_quadrature(
         chunk_v2 = n_v2_total
     chunk_v2 = min(chunk_v2, n_v2_total)
 
-    E_out_flat = np.zeros(N_out_coarse * N_out_coarse, dtype=np.complex128)
+    E_out_flat = np.zeros(N_out_coarse * N_out_coarse, dtype=out_dtype)
     t_int_start = time.perf_counter()
 
     for c_start in range(0, n_v2_total, chunk_v2):
@@ -712,8 +730,13 @@ def _integrate_stationary_phase(
     sample_E_bilinear,
     newton_iter, newton_tol,
     _progress, verbose,
+    out_dtype=np.complex128,
 ):
-    """Leading-order stationary-phase (Gaussian-moment) evaluation."""
+    """Leading-order stationary-phase (Gaussian-moment) evaluation.
+
+    v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
+    compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+    """
     M = len(mi)
     t_int_start = time.perf_counter()
     _progress('integrate', 0.65,
@@ -818,11 +841,14 @@ def _integrate_stationary_phase(
 
     Eobj_star = sample_E_bilinear(s1x_star, s1y_star)
 
+    # v4.14.0: cast to ``out_dtype`` (=E_in.dtype from caller) so a
+    # complex64 input doesn't get silently upcast to complex128 by
+    # the float64-phase * complex128-exp multiply.
     E_flat = (Eobj_star
               * np.exp(2j * np.pi * opd_star)
               * abs_J
               * amp_sp
-              * phase_sp)
+              * phase_sp).astype(out_dtype)
 
     not_conv = ~converged_mask
     if not_conv.any():
@@ -851,8 +877,13 @@ def _integrate_local_quadrature(
     newton_iter, newton_tol,
     n_samples, window_sigma,
     _progress, verbose,
+    out_dtype=np.complex128,
 ):
-    """Hybrid stationary-phase + local quadrature."""
+    """Hybrid stationary-phase + local quadrature.
+
+    v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
+    compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+    """
     M = len(mi)
     t_int_start = time.perf_counter()
     _progress('integrate', 0.60,
@@ -955,7 +986,7 @@ def _integrate_local_quadrature(
     _progress('integrate', 0.78,
               f'evaluating integrand on {N_px*n_s2:,} (pixel,sample) pairs')
 
-    E_flat = np.zeros(N_px, dtype=np.complex128)
+    E_flat = np.zeros(N_px, dtype=out_dtype)
     w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2)
 
     PX_CHUNK = max(1, min(N_px, 1024 * 64 // max(1, n_s2 // 16)))

@@ -450,11 +450,24 @@ def shack_hartmann(
         # (K, sa, sa) batch and propagate in a single shot.
         iy_idx, ix_idx = np.where(valid_mask)  # both shape (K,)
         K = iy_idx.size
-        E_batch = np.empty((K, sa_pixels, sa_pixels), dtype=E.dtype)
-        for k in range(K):
-            r0 = r0_grid[iy_idx[k]]
-            c0 = c0_grid[ix_idx[k]]
-            E_batch[k] = E[r0:r0 + sa_pixels, c0:c0 + sa_pixels]
+        # v4.14.0 perf (Agent 3 / 3B): vectorise the per-lenslet gather.
+        # Pre-v4.14 the ``for k in range(K)`` loop took K array slices,
+        # each copying sa_pixels * sa_pixels = 64 elements -- at
+        # K=4096 lenslets that's 4096 Python iterations of slice+copy
+        # overhead.  Fancy indexing builds the (K, sa, sa) batch in
+        # one numpy call.  Bit-exact preservation of the original
+        # gather semantics (same source pixels copied for the same
+        # (iy, ix) entries) is pinned in
+        # ``test_audit_fixes_v4_14_0_agent_3.py``.  NaN-OOB sentinels
+        # are unaffected because they were set before the gather and
+        # are scattered back AFTER the propagation (the gather only
+        # operates on the K in-bounds lenslets).
+        r0_valid = r0_grid[iy_idx]  # (K,)
+        c0_valid = c0_grid[ix_idx]  # (K,)
+        sa_arange = np.arange(sa_pixels)
+        rows = r0_valid[:, None, None] + sa_arange[None, :, None]   # (K, sa, 1)
+        cols = c0_valid[:, None, None] + sa_arange[None, None, :]   # (K, 1, sa)
+        E_batch = E[rows, cols]  # (K, sa, sa) -- broadcasts to full grid
         # Apply the (shared) lenslet focusing phase across the batch.
         E_batch = E_batch * lenslet_phase[None, :, :]
 

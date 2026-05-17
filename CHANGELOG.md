@@ -2,6 +2,224 @@
 
 All notable changes to the core library are documented here.
 
+## [4.14.0] — 2026-05-17
+
+**Phase B of the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`).**
+v4.13.2 closed Tier-0 (the 12 P1s + 5 cross-survey P0s + thin-lens
+sibling sweep).  v4.14.0 closes Tier-1: the 7 Tier-1 perf wins from
+audit Part 3, the top user-facing API gaps from the cross-survey,
+and the 3 parametrized dispatcher pin families that close out the
+sibling-gap audit-meta-finding.  All 858 unit tests pass; 34/34
+validation files pass.
+
+### Breaking changes — none
+
+No user-facing breakage in v4.14.0.  All additions are net-new
+public functions or internal perf optimisations behind unchanged
+signatures.
+
+### Performance wins (Tier-1 from audit Part 3)
+
+| Hot path | Workload | Old | New | Speedup |
+|---|---|---|---|---|
+| `coating_reflectance` wavelength batch | 50 layers × 200 wv | 78.6 ms | 3.19 ms | **24.6×** |
+| `decompose_lg` / `decompose_hg` cache (warm) | 256², p_max=3, ell_max=3 | 270 ms | 3.5 ms | **77×** |
+| `MultiWavelengthMerit` meshgrid cache | N=512, 5 wl, 20 FD | (ref) | (ref/6.17) | **6.17×** |
+| `_evaluate_polynomial_4d_and_grad34` | M=70, 16×16 grid | 646 µs | 171 µs | **4.6×** (typical configs) |
+| `MultiWavelengthMerit` meshgrid cache (small) | N=128, 3 wl, 5 FD | (ref) | (ref/4.16) | **4.16×** |
+| `ToleranceAwareMerit` meshgrid cache | N=128 | (ref) | (ref/3.17) | **3.17×** |
+| Shack-Hartmann gather loop | K=4096, sa=8 | 7.2 ms | 3.2 ms | **2.27×** |
+| Phase-retrieval `np.angle`/`np.exp` round-trip | GS, N=256, 50 iters | 1230 ms | 543 ms | **2.26×** |
+| Phase-retrieval (ER variant) | same workload | 380 ms | 205 ms | **1.85×** |
+| Phase-retrieval (HIO variant) | same workload | 426 ms | 268 ms | **1.59×** |
+| `MultiFieldMerit` (limited by `np.exp`/`np.where`) | N=128 | (ref) | (ref/1.20) | **1.19×** |
+
+**Meshgrid build count** in `Multi*Merit` / `ToleranceAwareMerit`:
+from `O(n_wl × n_field × FD_evals)` (~1025 at N=512, 5 wl, 5 field,
+20 FD) to **1 per `(N, dx, aperture)` signature** for the entire
+optimisation run.  Cache cleared by `clear_asm_caches()`.
+
+**Coating Snell-chain hoist** — the documented `n.imag-dropped-at-
+Snell-step` approximation makes the per-layer chain wavelength-
+independent.  v4.14 walks it ONCE outside the polarisation loop
+instead of `n_wv × n_pol` times.  This is what unlocks the 24×
+batched speedup.
+
+**LG/HG mode-stack cache** (`_LG_MODE_STACK_CACHE` +
+`_HG_MODE_STACK_CACHE`, both `OrderedDict` + LRU(32)) keyed on
+`(p_max/m_max, ell_max/n_max, Ny, Nx, w[s], cx, cy, dtype_str)`.
+Wired into `clear_asm_caches()` and `lumenairy_context(clear_caches
+_on_exit=True)`.  Public `clear_lg_mode_stack_cache()` for explicit
+flushes.
+
+**Phase-retrieval algebraic identity.**
+`exp(1j * np.angle(F)) == F / np.abs(F)` for nonzero `F`.  v4.14
+replaces the two-transcendental round-trip in the NumPy paths of
+GS / ER / HIO with the divide, eliminating ~4 trig ops per pixel per
+iteration.  JAX paths already had the optimisation; only NumPy
+paths were touched.
+
+### Modal asymptotic per-pixel vectorisation — NOT shipped publicly
+
+Audit opportunity #1 (target 20-100×) was investigated and turned
+out to be **subtler than the audit estimate**.  The brief asked to
+vectorise `propagate_modal_asymptotic`'s per-pixel Newton solve.
+The vectorised cold-start batched Newton finds the physical saddle
+uniformly across all output pixels; the pre-v4.14 warm-started
+Newton chains the previous pixel's `v_star` and at grid-edge pixels
+lands in a **wrong-saddle basin** that produces `|b_quad| > 700`,
+which the overflow guard zeros.
+
+The pre-v4.14 behaviour is pinned bit-equal by `tests/unit/test_perf
+_v4_12_0_asymptotic.py::TestPropagateModalAsymptoticCorrectness` (16
+tests at `1e-10 rel`).  The vectorised cold-start produces strictly
+more non-zero pixels (physically more correct) but breaks the
+existing pin.  **This is a real physics finding** worth a coordinated
+v4.15+ release that updates the test pin alongside the algorithm
+change.
+
+Shipped in v4.14.0: 6 new private vectorised helpers
+(`_solve_envelope_stationary_batch`, `_compute_M_b_batch`,
+`_phi_v2_hessian_batch`, `_gaussian_moment_table_2d_batch`,
+`_batched_polynomial_substitute_linear_2d`, `_batched_polynomial
+_under_affine_shift`).  The public `propagate_modal_asymptotic` body
+is unchanged.  The new helpers ARE consumed by the LG/HG mode-stack
+cache (the 77× warm win).
+
+### New public API (cross-library survey gaps)
+
+Six new functions exposed at `lumenairy.*` and in the appropriate
+`__all__` tier:
+
+* **`encircled_energy_curve(E, dx, *, dy=None, radii=None,
+  centroid=None, n_radii=64) -> (radii, ee)`** — fraction of total
+  power within radius `r` of the centroid.  Standard spec-sheet
+  metric.  (Tier 4: Analyse.)
+* **`encircled_energy_radius(E, dx, *, dy=None, threshold=0.84,
+  centroid=None) -> float`** — radius enclosing the threshold
+  fraction.  Default 0.84 matches the "84% encircled radius" lens
+  spec convention.
+* **`mtf_cutoff(mtf_profile, freq, *, threshold=0.5) -> float`** —
+  spatial frequency at which a 1D MTF drops below threshold.
+  Returns `np.inf` if the MTF stays above threshold for all
+  frequencies.
+* **`beam_diameter(E, dx, *, dy=None, threshold='1/e^2',
+  centroid=None) -> float`** — diameter at which intensity drops
+  below threshold.  String thresholds: `'1/e^2'`, `'1/e'`, `'FWHM'`,
+  `'D4sigma'` (forwards to `beam_d4sigma` and returns geometric
+  mean).
+* **`depth_of_focus(wavelength, f_number, *, formula='rayleigh')
+  -> float`** — one-sided depth of focus.  `'rayleigh'`:
+  `±4 f#² λ`.  `'marechal'`: `±λ / NA²`.  Note: both formulas
+  reduce to `4 f#² λ` (since `NA = 1/(2 f#)`); kept as separate
+  named entries for derivation-clarity, cross-validated by test.
+* **`plot_wavefront(opd, dx, *, dy=None, aperture=None,
+  units='waves', wavelength=None, cmap='RdBu_r', show_stats=True,
+  ax=None, fig=None, title=None) -> (fig, ax)`** — Zemax-style
+  wavefront map: NaN outside the aperture, divergent colormap
+  centred at zero, PV/RMS overlay annotation.  (Tier 9: Plotting.)
+
+All six honour `dy` from the start (defaulting `dy=None → dy=dx`,
+area integrations use `dx*dy`).
+
+### Sibling-gap parametrized dispatcher pins (audit meta-finding closure)
+
+The audit's recurring meta-finding ("fix swept N sites, missed
+N+1") is closed for three family classes via parametrized pins.
+**80 new dispatcher pins across 3 test files**.  Each pin enumerates
+every reachable variant and asserts the same property; a future fix
+that misses one variant fails CI at test-time.
+
+* **`(scalar, vectorial) HFPI`** — 29 pins (`tests/unit/test_v4_14
+  _0_dispatcher_pin_hfpi.py`).  Properties: `_spawn_rng`
+  independence; grazing-ray `inf`/`NaN` guard; alive-mask
+  correctness in `accumulate_*_to_grid`; public-surface
+  importability across 13 names.
+* **`(NumPy, JAX) apply_real_lens` family** — 35 pins (`tests/unit
+  /test_v4_14_0_dispatcher_pin_apply_lens.py`).  Properties:
+  `glass_after='MIRROR'` case-insensitive guard (15 parametrisations
+  covering upper/lower/mixed-case); `dy=None` acceptance; `dy != dx`
+  honour-vs-raise contract; complex64 dtype preservation across all
+  5 variants.
+* **Welford-mirror convention** — 16 pins (`tests/unit/test_v4_14
+  _0_dispatcher_pin_welford_mirror.py`).  Properties: hand-computed
+  analytical match for `seidel_coefficients` and `petzval_radius`;
+  no-NaN for `aberration_summary` and `chromatic_focal_shift`;
+  no-raise for `distortion_grid`, `field_aberration_sweep`,
+  `eval_image_plane_wfe`; algebraic equivalence to the Welford
+  formula.
+
+### Sibling-gaps discovered by the dispatcher pins (now fixed)
+
+The complex64 dtype-preservation pin tripped on 3 of 5
+`apply_real_lens` variants — a previously-undetected sibling-gap
+from the v4.13.2 B.4/B.5 thin-lens sweep.  Fixed in this release:
+
+* **`apply_real_lens_maslov`** — `lenses_maslov.py`:
+  - `_integrate_quadrature` (line 663) and `_integrate_local
+    _quadrature` (line 970) and `_integrate_stationary_phase` (line
+    828) all hardcoded `dtype=np.complex128` allocations.  Each now
+    accepts an `out_dtype` kwarg defaulting to `np.complex128` for
+    back-compat; `apply_real_lens_maslov` threads `E_in.dtype`.
+  - The post-quadrature re-fit at line 562 multiplied by `1j`
+    (complex128) which promoted the result; now cast back to
+    `E_in.dtype`.
+  - Final `normalize_output` step multiplied by a python float
+    (float64) which silently promoted complex64 → complex128; final
+    cast back to `E_in.dtype` added.
+* **`apply_real_lens_traced_jax`** — `_lens_jax.py:573`: was calling
+  `cdtype = _resolve_jax_complex_dtype()` which returns the library-
+  default complex dtype (complex128 when `jax_enable_x64=True`),
+  silently upcasting complex64 inputs.  v4.14 passes `E_in.dtype` to
+  the resolver so the user's input dtype is honoured.
+* **`apply_real_lens_maslov_jax`** — `_lens_jax.py:819`: same fix.
+
+### Cache invalidation hygiene
+
+`clear_lg_mode_stack_cache()` (new in v4.14 from the decompose_lg
+cache work) wired into `lumenairy_context(clear_caches_on_exit=
+True)` to match the existing pattern for the other 7 cache-clear
+helpers.
+
+### Test counts
+
+* Pre-v4.14.0 baseline (v4.13.2): 710 unit tests.
+* v4.14.0 additions:
+  - Agent 1 (asymptotic): 15 tests in `test_audit_fixes_v4_14_0_agent_1.py`
+  - Agent 2 (coatings + polynomial): 10 tests in `..._agent_2.py`
+  - Agent 3 (phase-retrieval + SH): 13 tests in `..._agent_3.py`
+  - Agent 4 (Multi*Merit cache): 18 tests in `..._agent_4.py`
+  - Agent 5 (API gaps): 12 tests in `..._agent_5.py`
+  - Agent 6 (dispatcher pins): 80 tests across 3 files (`test_v4_14
+    _0_dispatcher_pin_hfpi.py`, `..._apply_lens.py`, `..._welford
+    _mirror.py`)
+* Final: **858 unit tests passing**, **34/34 validation files
+  passing**.
+
+### Deferred to v4.15+
+
+* **Modal asymptotic per-pixel vectorisation** (audit opportunity
+  #1).  The wrong-saddle-basin physics finding noted above needs a
+  coordinated test-pin update alongside the algorithm change.
+  Vectorised helpers shipped privately for future use.
+* **Source factory signature normalisation** (audit Stream B #10) —
+  `Source.gaussian(w0, N, ...)` puts beam-size first; `Source.plane
+  _wave(N, ...)` puts N first.  Picking a canonical order requires
+  a deprecation window; rolling into v4.15 to coordinate with other
+  Source-related cleanups.
+* **`system.evaluate(prescription, source, ...)` ergonomic entry**
+  — closes a one-liner UX gap (`propagate_through_system` currently
+  takes an element list, not a prescription dict).
+
+### Deferred to v5.0
+
+Tier-2/3/4 structural items unchanged from v4.13.2 entry: six file
+splits; CI gates; back-compat shim removal; shared Chebyshev
+helpers extraction; audit-fix test-file consolidation by topic;
+constrained optimisation; checkpoint/resume; CDGM/Hikari/Sumita
+glass catalogues; off-axis conics in surface frame; Q-type
+freeform.
+
 ## [4.13.2] — 2026-05-17
 
 **Closes the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`) plus its

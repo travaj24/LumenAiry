@@ -28,6 +28,7 @@ import numpy as np
 __all__ = [
     # beam statistics
     'beam_centroid', 'beam_d4sigma', 'beam_power', 'radial_power_bands',
+    'beam_diameter',
     # Strehl
     'strehl_ratio', 'strehl_marechal', 'strehl_phase_integral',
     # coupling + beam quality
@@ -36,6 +37,11 @@ __all__ = [
     'check_sampling_conditions', 'check_opd_sampling',
     # PSF / OTF / MTF
     'compute_psf', 'compute_otf', 'compute_mtf', 'mtf_radial',
+    'mtf_cutoff',
+    # Encircled energy / spec-sheet metrics (v4.14.0)
+    'encircled_energy_curve', 'encircled_energy_radius',
+    # Depth of focus (v4.14.0)
+    'depth_of_focus',
     # polychromatic
     'chromatic_focal_shift', 'polychromatic_strehl', 'polychromatic_psf',
     # Zernike basis + decomposition
@@ -980,6 +986,594 @@ def mtf_radial(
     n_max = N // 2
     freq = np.arange(n_max) * df * 1e-3  # cycles per mm
     return freq, radial_profile[:n_max]
+
+
+# ============================================================================
+# Spec-sheet metrics (v4.14.0): encircled energy, beam diameter,
+# MTF cutoff, depth of focus
+# ============================================================================
+
+def encircled_energy_curve(
+    E: np.ndarray,
+    dx: float,
+    *,
+    dy: Optional[float] = None,
+    radii: Optional[np.ndarray] = None,
+    centroid: Optional[Tuple[float, float]] = None,
+    n_radii: int = 64,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Encircled-energy curve of an intensity distribution.
+
+    Returns ``(radii, ee)`` where ``ee[i]`` is the fraction of total
+    power within a circle of radius ``radii[i]`` of the centroid (or
+    a user-supplied centre).  This is the standard spec-sheet metric
+    used to characterise focal-spot containment (e.g. the canonical
+    "84% encircled energy" radius reported on lens spec sheets).
+
+    Parameters
+    ----------
+    E : ndarray, complex, shape (Ny, Nx)
+        Complex electric-field distribution.  The intensity is
+        ``|E|**2``; if ``E`` is real-valued it is treated as an
+        amplitude.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    radii : ndarray, optional
+        Radii at which to evaluate the curve [m].  If ``None``, a
+        linear sweep of ``n_radii`` samples from ``0`` to the maximum
+        in-grid radius (corner distance) is used.
+    centroid : (cx, cy), optional
+        Centre of the encircled-energy circles [m] measured from the
+        grid origin (pixel ``(Nx/2, Ny/2)``).  Defaults to the
+        intensity centroid via :func:`beam_centroid`.
+    n_radii : int, default 64
+        Number of radii to sample when ``radii`` is ``None``.
+
+    Returns
+    -------
+    radii : ndarray, shape (n,)
+        Radii at which the curve is evaluated [m] (sorted ascending).
+    ee : ndarray, shape (n,)
+        Fraction of total in-grid power encircled, monotonically
+        non-decreasing and converging to ``~1.0`` (less the power that
+        falls outside the grid).
+
+    Notes
+    -----
+    Implementation sorts the per-pixel intensities by radial distance
+    and uses :func:`numpy.cumsum` to build the encircled-power curve,
+    then linearly interpolates onto the requested ``radii``.  This is
+    far cheaper than the naive ``O(N^2 * R)`` mask-and-sum loop and
+    gives the same answer to floating-point precision when the
+    requested radii are coarser than the pixel pitch.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import encircled_energy_curve
+    >>> N, dx = 256, 1e-6
+    >>> x = (np.arange(N) - N/2) * dx
+    >>> X, Y = np.meshgrid(x, x)
+    >>> w0 = 30e-6
+    >>> E = np.exp(-(X**2 + Y**2) / w0**2).astype(complex)
+    >>> r, ee = encircled_energy_curve(E, dx, n_radii=8)
+    >>> bool(np.all(np.diff(ee) >= -1e-12))
+    True
+    """
+    if dy is None:
+        dy = dx
+    if E.ndim != 2:
+        raise ValueError(
+            f"encircled_energy_curve: E must be 2-D; got shape "
+            f"{E.shape!r}.")
+    if n_radii < 2:
+        raise ValueError(
+            f"encircled_energy_curve: n_radii must be >= 2; got "
+            f"{n_radii!r}.")
+
+    Ny, Nx = E.shape
+
+    if centroid is None:
+        cx, cy = beam_centroid(E, dx, dy)
+    else:
+        cx, cy = float(centroid[0]), float(centroid[1])
+
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    R = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+
+    I = np.abs(np.asarray(E)) ** 2
+    pixel_area = float(dx) * float(dy)
+    total = float(I.sum()) * pixel_area
+    if total <= 0:
+        # Degenerate input -- emit a zero curve over the requested
+        # (or default) radii grid so downstream callers don't have to
+        # special-case the empty-field branch.
+        if radii is None:
+            r_max = float(R.max())
+            radii_out = np.linspace(0.0, r_max if r_max > 0 else 1.0,
+                                    n_radii)
+        else:
+            radii_out = np.asarray(radii, dtype=float)
+            radii_out = np.sort(radii_out)
+        return radii_out, np.zeros_like(radii_out)
+
+    # Sort pixels by radial distance and build the cumulative power
+    # curve once.  The same cumulative curve is sampled at every
+    # requested radius via np.searchsorted, which keeps the cost at
+    # O(N log N) regardless of how many radii are asked for.
+    r_flat = R.ravel()
+    i_flat = I.ravel() * pixel_area
+    order = np.argsort(r_flat)
+    r_sorted = r_flat[order]
+    p_cum = np.cumsum(i_flat[order]) / total
+
+    if radii is None:
+        r_max = float(r_sorted[-1])
+        radii_out = np.linspace(0.0, r_max, n_radii)
+    else:
+        radii_out = np.asarray(radii, dtype=float)
+        # Sort + validate -- the contract says the returned curve is
+        # monotonically non-decreasing in radius.
+        if not np.all(np.isfinite(radii_out)) or np.any(radii_out < 0):
+            raise ValueError(
+                "encircled_energy_curve: radii must be finite and "
+                "non-negative.")
+        radii_out = np.sort(radii_out)
+
+    # Interpolate the cumulative-power curve onto the requested
+    # radii.  np.searchsorted gives the insertion index; linear
+    # interpolation between adjacent samples removes the pixel-grid
+    # staircase.
+    idx = np.searchsorted(r_sorted, radii_out, side='right')
+    ee = np.empty_like(radii_out)
+    for i, (r, j) in enumerate(zip(radii_out, idx)):
+        if j == 0:
+            ee[i] = 0.0 if r < r_sorted[0] else float(p_cum[0])
+        elif j >= r_sorted.size:
+            ee[i] = float(p_cum[-1])
+        else:
+            r_lo, r_hi = r_sorted[j - 1], r_sorted[j]
+            p_lo, p_hi = p_cum[j - 1], p_cum[j]
+            if r_hi == r_lo:
+                ee[i] = float(p_hi)
+            else:
+                t = (r - r_lo) / (r_hi - r_lo)
+                ee[i] = float(p_lo + t * (p_hi - p_lo))
+
+    # Numerical-safety clamp -- np.cumsum can drift very slightly
+    # below zero on degenerate inputs but the curve is bounded in
+    # [0, 1] by definition.
+    np.clip(ee, 0.0, 1.0, out=ee)
+    return radii_out, ee
+
+
+def encircled_energy_radius(
+    E: np.ndarray,
+    dx: float,
+    *,
+    dy: Optional[float] = None,
+    threshold: float = 0.84,
+    centroid: Optional[Tuple[float, float]] = None,
+) -> float:
+    """Radius within which a given fraction of the total power is
+    encircled.
+
+    Returns the radius (in meters) at which the encircled-energy curve
+    of :func:`encircled_energy_curve` first crosses ``threshold``.  The
+    default ``0.84`` matches the conventional "84% encircled energy"
+    radius reported on most lens spec sheets (close to the Airy first-
+    null at ``1.22 * lambda * f_number``).
+
+    Parameters
+    ----------
+    E : ndarray, complex
+        Complex electric-field distribution.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    threshold : float, default 0.84
+        Encircled-power fraction in ``(0, 1]``.
+    centroid : (cx, cy), optional
+        Centroid coordinates [m].  Defaults to the intensity centroid.
+
+    Returns
+    -------
+    radius : float
+        Encircled-energy radius [m].  Linearly interpolated between
+        the two grid samples that straddle ``threshold``.  Returns the
+        maximum in-grid radius if the curve never reaches the
+        threshold (e.g. the beam clips the grid).
+
+    See Also
+    --------
+    encircled_energy_curve : the underlying curve.
+    beam_diameter : intensity-drop diameter (e.g. 1/e^2, FWHM).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import encircled_energy_radius
+    >>> # 2-D Gaussian: 86.5% encircled at r = w0 (the 1/e^2 radius)
+    >>> N, dx = 256, 1e-6
+    >>> x = (np.arange(N) - N/2) * dx
+    >>> X, Y = np.meshgrid(x, x)
+    >>> w0 = 20e-6
+    >>> E = np.exp(-(X**2 + Y**2) / w0**2).astype(complex)
+    >>> r84 = encircled_energy_radius(E, dx, threshold=0.865)
+    >>> bool(abs(r84 - w0) / w0 < 0.05)
+    True
+    """
+    if not (0.0 < threshold <= 1.0):
+        raise ValueError(
+            f"encircled_energy_radius: threshold must be in (0, 1]; "
+            f"got {threshold!r}.")
+
+    # Dense grid so the threshold crossing has good interpolation
+    # support.  256 samples is well below the typical pixel count yet
+    # gives sub-percent accuracy on the threshold crossing.
+    radii, ee = encircled_energy_curve(
+        E, dx, dy=dy, centroid=centroid, n_radii=256)
+
+    # If the curve never reaches the threshold (beam clips the grid
+    # or threshold > max(ee)), return the maximum radius.
+    if ee[-1] < threshold:
+        return float(radii[-1])
+
+    # First index where ee >= threshold.  The first sample (radius 0)
+    # is always ee = 0, so idx >= 1 always when threshold > 0.
+    idx = int(np.searchsorted(ee, threshold, side='left'))
+    if idx <= 0:
+        return float(radii[0])
+    r_lo, r_hi = radii[idx - 1], radii[idx]
+    e_lo, e_hi = ee[idx - 1], ee[idx]
+    if e_hi == e_lo:
+        return float(r_hi)
+    t = (threshold - e_lo) / (e_hi - e_lo)
+    return float(r_lo + t * (r_hi - r_lo))
+
+
+def mtf_cutoff(
+    mtf_profile: np.ndarray,
+    freq: np.ndarray,
+    *,
+    threshold: float = 0.5,
+) -> float:
+    """Spatial frequency at which a 1-D MTF profile first drops below a
+    threshold.
+
+    The "useful cutoff" reported on most lens spec sheets is the
+    frequency at which MTF = 0.5; this function returns that crossing
+    (or any other user-supplied threshold) by linearly interpolating
+    across the two adjacent samples.
+
+    Parameters
+    ----------
+    mtf_profile : ndarray, shape (N,)
+        1-D MTF values.  Typically the radial / azimuthally-averaged
+        profile returned by :func:`mtf_radial`.  Assumed to start at
+        DC and be ordered with monotonically increasing frequency.
+    freq : ndarray, shape (N,)
+        Spatial frequencies corresponding to each MTF sample.  Must be
+        the same length as ``mtf_profile`` and strictly increasing.
+    threshold : float, default 0.5
+        MTF threshold in ``(0, 1]``.  ``0.5`` is the classical "useful
+        cutoff" used on lens spec sheets.
+
+    Returns
+    -------
+    f_cutoff : float
+        Spatial frequency at which the MTF first crosses below the
+        threshold, in the same units as ``freq``.  Returns
+        ``numpy.inf`` if the MTF stays above the threshold for every
+        frequency in the supplied array.
+
+    See Also
+    --------
+    compute_mtf : 2-D MTF from a PSF.
+    mtf_radial : azimuthally-averaged 1-D MTF profile.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import mtf_cutoff
+    >>> freq = np.linspace(0.0, 100.0, 101)        # cyc/mm
+    >>> mtf = np.exp(-freq / 30.0)                 # synthetic falloff
+    >>> # MTF = 0.5 at freq = 30 * ln(2) ~ 20.79 cyc/mm
+    >>> bool(abs(mtf_cutoff(mtf, freq) - 30.0 * np.log(2)) < 0.5)
+    True
+    """
+    mtf_arr = np.asarray(mtf_profile, dtype=float)
+    f_arr = np.asarray(freq, dtype=float)
+    if mtf_arr.ndim != 1 or f_arr.ndim != 1:
+        raise ValueError(
+            f"mtf_cutoff: both mtf_profile and freq must be 1-D; got "
+            f"shapes {mtf_arr.shape!r} and {f_arr.shape!r}.")
+    if mtf_arr.shape != f_arr.shape:
+        raise ValueError(
+            f"mtf_cutoff: mtf_profile and freq must be the same length;"
+            f" got {mtf_arr.size} and {f_arr.size}.")
+    if mtf_arr.size < 2:
+        raise ValueError(
+            f"mtf_cutoff: need at least 2 samples; got "
+            f"{mtf_arr.size}.")
+    if not (0.0 < threshold <= 1.0):
+        raise ValueError(
+            f"mtf_cutoff: threshold must be in (0, 1]; got "
+            f"{threshold!r}.")
+
+    # If the MTF starts below the threshold (i.e. DC is already
+    # below), interpret that as a zero-cutoff system rather than
+    # +inf.  The contract in the docstring says "stays above for
+    # ALL frequencies" gives +inf, which is the opposite case.
+    if mtf_arr[0] < threshold:
+        return float(f_arr[0])
+    # If every sample stays above the threshold, the cutoff is
+    # outside the supplied range -- return +inf per the docstring.
+    if np.all(mtf_arr >= threshold):
+        return float(np.inf)
+
+    # First index at which the MTF dips below threshold.
+    below = np.where(mtf_arr < threshold)[0]
+    j = int(below[0])
+    if j == 0:
+        return float(f_arr[0])
+    m_lo, m_hi = mtf_arr[j - 1], mtf_arr[j]
+    f_lo, f_hi = f_arr[j - 1], f_arr[j]
+    if m_lo == m_hi:
+        return float(f_hi)
+    # Linear interp: MTF(f) = m_lo + (f - f_lo) / (f_hi - f_lo) *
+    #                          (m_hi - m_lo) = threshold  ->  solve for f.
+    t = (threshold - m_lo) / (m_hi - m_lo)
+    return float(f_lo + t * (f_hi - f_lo))
+
+
+def beam_diameter(
+    E: np.ndarray,
+    dx: float,
+    *,
+    dy: Optional[float] = None,
+    threshold: Union[float, str] = '1/e^2',
+    centroid: Optional[Tuple[float, float]] = None,
+) -> float:
+    """Beam diameter at a specified intensity threshold.
+
+    Returns the diameter (in meters) at which the radially-averaged
+    intensity drops below ``threshold * peak``.  The radial average is
+    computed from the supplied centroid (or the intensity centroid by
+    default) and the first crossing is found by linear interpolation.
+
+    Parameters
+    ----------
+    E : ndarray, complex, shape (Ny, Nx)
+        Complex electric-field distribution.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    threshold : float or {'1/e^2', '1/e', 'FWHM', 'D4sigma'}, default '1/e^2'
+        Either a numeric fractional intensity in ``(0, 1]`` relative
+        to the peak, or one of the named conventions:
+
+        * ``'1/e^2'`` (default): intensity = 1/e**2 ~ 0.1353.  Gives
+          the classical Gaussian-beam diameter ``2 * w_0``.
+        * ``'1/e'``: intensity = 1/e ~ 0.3679.
+        * ``'FWHM'``: intensity = 0.5 (full-width-half-max).
+        * ``'D4sigma'``: forwards to :func:`beam_d4sigma` and returns
+          ``sqrt(d4x * d4y)`` (the geometric-mean second-moment
+          diameter -- the closest scalar analogue to a radial
+          measure).
+    centroid : (cx, cy), optional
+        Centre of the radial average [m].  Defaults to the intensity
+        centroid via :func:`beam_centroid`.
+
+    Returns
+    -------
+    diameter : float
+        Beam diameter [m].
+
+    Notes
+    -----
+    Algorithm (numeric thresholds):
+
+    1. Compute ``I = |E|**2``.
+    2. Build a radial profile by sorting pixels by distance from the
+       centroid and averaging within radial bins.
+    3. Find the first radius at which the smoothed radial intensity
+       crosses ``threshold * peak`` from above; linearly interpolate
+       between the two adjacent samples.
+    4. Return ``2 * radius``.
+
+    The radial-average step washes out azimuthal asymmetry, so this
+    function reports a single scalar diameter even for elliptical
+    beams.  For full per-axis widths on an elliptical or anamorphic
+    beam, use :func:`beam_d4sigma` directly.
+
+    See Also
+    --------
+    beam_d4sigma : ISO 11146 second-moment diameter (per-axis).
+    encircled_energy_radius : encircled-power radius.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import beam_diameter
+    >>> N, dx = 256, 1e-6
+    >>> x = (np.arange(N) - N/2) * dx
+    >>> X, Y = np.meshgrid(x, x)
+    >>> w0 = 25e-6
+    >>> E = np.exp(-(X**2 + Y**2) / w0**2).astype(complex)
+    >>> d = beam_diameter(E, dx, threshold='1/e^2')
+    >>> bool(abs(d - 2 * w0) / (2 * w0) < 0.05)
+    True
+    """
+    if dy is None:
+        dy = dx
+    if E.ndim != 2:
+        raise ValueError(
+            f"beam_diameter: E must be 2-D; got shape {E.shape!r}.")
+
+    # Named-threshold dispatch.
+    named = {
+        '1/e^2': float(np.exp(-2.0)),
+        '1/e': float(np.exp(-1.0)),
+        'FWHM': 0.5,
+    }
+    if isinstance(threshold, str):
+        if threshold == 'D4sigma':
+            d4x, d4y = beam_d4sigma(E, dx, dy)
+            # Geometric mean of per-axis D4sigma so callers get a
+            # single scalar; users who want per-axis widths should
+            # call beam_d4sigma directly.
+            return float(np.sqrt(max(d4x, 0.0) * max(d4y, 0.0)))
+        if threshold not in named:
+            raise ValueError(
+                f"beam_diameter: unknown threshold name "
+                f"{threshold!r}; expected one of "
+                f"{sorted(named) + ['D4sigma']} or a numeric value "
+                "in (0, 1].")
+        thr = named[threshold]
+    else:
+        thr = float(threshold)
+        if not (0.0 < thr <= 1.0):
+            raise ValueError(
+                f"beam_diameter: numeric threshold must be in (0, 1]; "
+                f"got {thr!r}.")
+
+    Ny, Nx = E.shape
+    if centroid is None:
+        cx, cy = beam_centroid(E, dx, dy)
+    else:
+        cx, cy = float(centroid[0]), float(centroid[1])
+
+    x = (np.arange(Nx) - Nx / 2) * dx
+    y = (np.arange(Ny) - Ny / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    R = np.sqrt((X - cx) ** 2 + (Y - cy) ** 2)
+    I = np.abs(np.asarray(E)) ** 2
+    peak = float(I.max())
+    if peak <= 0:
+        return 0.0
+
+    # Radial-average: bin pixels by integer radial-pixel index and
+    # average the intensity within each bin.  Bin pitch follows the
+    # smaller of dx / dy so the averaging window matches the finer
+    # pixel pitch on anamorphic grids.
+    dr = min(float(dx), float(dy))
+    r_bin = np.floor(R / dr).astype(np.int64)
+    n_bins = int(r_bin.max()) + 1
+    tbin = np.bincount(r_bin.ravel(), weights=I.ravel(),
+                       minlength=n_bins)
+    cbin = np.bincount(r_bin.ravel(), minlength=n_bins)
+    with np.errstate(invalid='ignore', divide='ignore'):
+        I_radial = np.where(cbin > 0, tbin / np.maximum(cbin, 1), 0.0)
+    radial_r = (np.arange(n_bins) + 0.5) * dr
+
+    target = thr * peak
+    # Find the first bin at which the radial-average intensity drops
+    # below target.  Pre-target peak occurs at small r (well within
+    # the beam); if the radial average never dips below target, the
+    # beam is wider than the grid and the best estimate is the
+    # maximum in-grid radius.
+    below = np.where(I_radial < target)[0]
+    if below.size == 0:
+        return float(2.0 * radial_r[-1])
+    j = int(below[0])
+    if j == 0:
+        # The very first bin (centroid) is already below the
+        # threshold -- this is the degenerate "empty beam" case.
+        return 0.0
+    r_lo, r_hi = radial_r[j - 1], radial_r[j]
+    I_lo, I_hi = I_radial[j - 1], I_radial[j]
+    if I_lo == I_hi:
+        return float(2.0 * r_hi)
+    t = (target - I_lo) / (I_hi - I_lo)
+    r_cross = r_lo + t * (r_hi - r_lo)
+    return float(2.0 * r_cross)
+
+
+def depth_of_focus(
+    wavelength: float,
+    f_number: float,
+    *,
+    formula: str = 'rayleigh',
+) -> float:
+    """One-sided depth of focus [m] for a diffraction-limited system.
+
+    Two standard formulas are supported:
+
+    * ``'rayleigh'`` (default): ``+/- 4 * f_number**2 * wavelength``.
+      The classical Rayleigh quarter-wave (``lambda/4`` OPD) limit at
+      the marginal ray.
+    * ``'marechal'``: ``+/- wavelength / NA**2`` with
+      ``NA = 1 / (2 * f_number)`` (the paraxial NA-from-f# conversion).
+      The Marechal-criterion DOF that keeps Strehl > 0.8 -- a tighter
+      bound than Rayleigh for high-quality imaging.
+
+    The full depth-of-focus range is ``+/-`` the returned value, so the
+    total axial tolerance is ``2 * depth_of_focus(...)``.
+
+    Parameters
+    ----------
+    wavelength : float
+        Vacuum wavelength [m].
+    f_number : float
+        System f-number ``f / D``.  Must be > 0.
+    formula : {'rayleigh', 'marechal'}, default 'rayleigh'
+        Which DOF expression to evaluate.
+
+    Returns
+    -------
+    dof : float
+        Half-range depth of focus [m].
+
+    Notes
+    -----
+    With ``NA = 1 / (2 * f#)`` both formulas evaluate to
+    ``4 * f#**2 * wavelength`` -- they are mathematically equivalent.
+    The two named entries are retained because optical-design
+    practice distinguishes them by *derivation* (Rayleigh: OPD margin;
+    Marechal: Strehl criterion), and downstream tools may want to
+    annotate the choice in reports.
+
+    Examples
+    --------
+    >>> from lumenairy.analysis import depth_of_focus
+    >>> # f/2 at 550 nm, Rayleigh: 4 * 4 * 550e-9 = 8.8 um
+    >>> float(depth_of_focus(550e-9, 2.0))
+    8.8e-06
+    >>> # Same system, Marechal: 550e-9 / (1/4)**2 = 8.8 um
+    >>> float(depth_of_focus(550e-9, 2.0, formula='marechal'))
+    8.8e-06
+    """
+    if not np.isfinite(wavelength) or wavelength <= 0:
+        raise ValueError(
+            f"depth_of_focus: wavelength must be positive and finite; "
+            f"got {wavelength!r}.")
+    if not np.isfinite(f_number) or f_number <= 0:
+        raise ValueError(
+            f"depth_of_focus: f_number must be positive and finite; "
+            f"got {f_number!r}.")
+
+    f = float(f_number)
+    wl = float(wavelength)
+    if formula == 'rayleigh':
+        return 4.0 * f * f * wl
+    if formula == 'marechal':
+        # NA = 1 / (2 * f#) gives DOF = wavelength / NA**2 =
+        # 4 * f#**2 * wavelength.  This matches the Rayleigh
+        # expression with a factor of 1 instead of 4 because the
+        # Marechal criterion is tighter; the standard textbook form
+        # is wavelength / NA**2.
+        NA = 1.0 / (2.0 * f)
+        return wl / (NA * NA)
+    raise ValueError(
+        f"depth_of_focus: formula must be 'rayleigh' or 'marechal'; "
+        f"got {formula!r}.")
 
 
 # ============================================================================

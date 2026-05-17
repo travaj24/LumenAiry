@@ -282,6 +282,15 @@ def lumenairy_context(
                     clear_through_focus_scan_jax_cache()
                 except (ImportError, RuntimeError, AttributeError):
                     pass
+                try:
+                    # v4.14.0: LG/HG mode-stack cache shared between
+                    # decompose_lg and decompose_hg.
+                    from .propagators.asymptotic import (
+                        clear_lg_mode_stack_cache,
+                    )
+                    clear_lg_mode_stack_cache()
+                except (ImportError, RuntimeError, AttributeError):
+                    pass
 
 
 def _atexit_restore(snapshot: dict) -> None:

@@ -10,6 +10,98 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.14.0
+
+**Phase B of the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`).**
+v4.13.2 closed Tier-0; v4.14.0 closes Tier-1: 7 perf wins, 6 new
+user-facing API functions, and 80 dispatcher pins that close out
+the recurring sibling-gap audit-meta-finding.  All 858 unit tests
+pass; 34/34 validation files pass.
+
+### Performance wins
+
+| Hot path | Speedup |
+|---|---|
+| `coating_reflectance` wavelength batch (50 layers × 200 wv) | **24.6×** |
+| `decompose_lg` / `decompose_hg` cache (warm, 256², 28 modes) | **77×** |
+| `MultiWavelengthMerit` meshgrid cache (N=512, 5 wl, 20 FD) | **6.17×** |
+| `_evaluate_polynomial_4d_and_grad34` (typical configs) | **4.6×** |
+| `MultiWavelengthMerit` meshgrid cache (N=128, 3 wl, 5 FD) | **4.16×** |
+| `ToleranceAwareMerit` meshgrid cache | **3.17×** |
+| Shack-Hartmann scatter-gather loop | **2.27×** |
+| Phase-retrieval `angle`/`exp` round-trip (GS) | **2.26×** |
+| Phase-retrieval (ER / HIO) | 1.85× / 1.59× |
+
+`Multi*Merit` meshgrid build count drops from `O(n_wl × n_field ×
+FD)` to **1 per `(N, dx, aperture)` signature** for an entire
+optimisation run.  LG/HG mode-stack cache wired into
+`clear_asm_caches()` and `lumenairy_context()`.
+
+**Coating Snell-chain hoist** is what unlocks the 24× batched
+speedup: the documented `n.imag-dropped-at-Snell-step` approximation
+makes the per-layer chain wavelength-independent, walked ONCE
+outside the polarisation loop.
+
+**Modal asymptotic vectorisation** (audit target 20-100×) was
+investigated but NOT shipped publicly — the cold-start batched
+Newton finds the physical saddle uniformly across pixels, while the
+pre-v4.14 warm-started Newton lands in wrong-saddle basins at grid
+edges that the overflow guard zeros.  The existing test pin bit-
+equals the (subtly wrong-at-edges) warm-start behaviour.  This is a
+**real physics finding** worth a coordinated v4.15+ release that
+updates the test pin alongside the algorithm change.  The
+vectorised helpers ship privately and are consumed by the
+`decompose_lg`/`decompose_hg` cache (the 77× warm win).
+
+### New user-facing API
+
+Six new functions exposed at `lumenairy.*`:
+
+* `encircled_energy_curve(E, dx, *, dy=None, radii=None, ...)`
+  returns `(radii, ee)` where `ee[i]` is the fraction of total
+  power within `radii[i]` of the centroid.
+* `encircled_energy_radius(E, dx, *, threshold=0.84, ...)` —
+  standard "84% encircled radius" lens spec metric.
+* `mtf_cutoff(mtf_profile, freq, *, threshold=0.5)` — spatial
+  frequency at which a 1D MTF drops below threshold; returns
+  `np.inf` if the MTF stays above threshold everywhere.
+* `beam_diameter(E, dx, *, threshold='1/e^2', ...)` — diameter at
+  intensity threshold.  String thresholds: `'1/e^2'`, `'1/e'`,
+  `'FWHM'`, `'D4sigma'`.
+* `depth_of_focus(wavelength, f_number, *, formula='rayleigh')` —
+  Rayleigh / Marechal depth of focus.
+* `plot_wavefront(opd, dx, *, dy=None, aperture=None,
+  units='waves', wavelength=None, ...)` — Zemax-style wavefront
+  map: NaN outside aperture, divergent colormap, PV/RMS overlay.
+
+All six honour `dy` from the start; `dy=None` defaults to `dx`.
+
+### Sibling-gap parametrized dispatcher pins (audit meta-finding closure)
+
+80 new pins across 3 test files, closing out the recurring
+"fix swept N sites, missed N+1" pattern for three sibling families:
+
+* `(scalar, vectorial) HFPI` — 29 pins covering `_spawn_rng`
+  independence, grazing-ray inf/NaN guards, alive-mask correctness.
+* `(NumPy, JAX) apply_real_lens` family — 35 pins covering case-
+  insensitive `glass_after='MIRROR'`, `dy` handling, dtype
+  preservation across all 5 variants.
+* Welford-mirror convention — 16 pins across `seidel_coefficients`,
+  `petzval_radius`, `aberration_summary`, `chromatic_focal_shift`,
+  `distortion_grid`, `field_aberration_sweep`,
+  `eval_image_plane_wfe`.
+
+**Sibling-gaps DISCOVERED and fixed in this release** by the new
+pins (the meta-finding self-closing): complex64 dtype preservation
+was broken on `apply_real_lens_maslov` (3 sites in
+`lenses_maslov.py`) and both JAX twins (`_lens_jax.py:573, 819`).
+Fixed by threading `out_dtype=E_in.dtype` through the maslov
+helpers (`_integrate_quadrature`, `_integrate_local_quadrature`,
+`_integrate_stationary_phase`) and routing `_resolve_jax_complex
+_dtype(E_in.dtype)` instead of the library-default.  A final
+post-normalisation `.astype(E_in.dtype)` catches the python-float
+multiply that promotes complex64 → complex128.
+
 ## What's new in 4.13.2
 
 **Closes the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`) plus its

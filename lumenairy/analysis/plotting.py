@@ -49,6 +49,8 @@ __all__ = [
     'plot_psf',
     'plot_mtf',
     'plot_beam_profile',
+    # wavefront map (v4.14.0)
+    'plot_wavefront',
     # polarization
     'plot_stokes',
     'plot_polarization_ellipses',
@@ -922,6 +924,197 @@ def plot_beam_profile(
     ax.legend(loc='upper right', fontsize=9)
     if title:
         ax.set_title(title)
+    return fig, ax
+
+
+# =============================================================================
+# WAVEFRONT MAP (v4.14.0)
+# =============================================================================
+
+def plot_wavefront(
+    opd: np.ndarray,
+    dx: float,
+    *,
+    dy: Optional[float] = None,
+    aperture: Optional[np.ndarray] = None,
+    units: str = 'waves',
+    wavelength: Optional[float] = None,
+    cmap: str = 'RdBu_r',
+    show_stats: bool = True,
+    ax: Optional[Any] = None,
+    fig: Optional[Any] = None,
+    title: Optional[str] = None,
+) -> Tuple[Any, Any]:
+    """Plot a 2-D wavefront / OPD map (Zemax-style).
+
+    Renders an OPD array with a divergent colormap centred at zero, the
+    grid axes labelled in physical units, and (optionally) a PV / RMS
+    annotation overlaid on the plot.  Pixels outside the supplied
+    ``aperture`` mask are rendered as ``NaN`` so they show as the
+    figure's background colour (matching standard wavefront-map
+    conventions in Zemax / Code V / Synopsys CODE V).
+
+    Parameters
+    ----------
+    opd : ndarray, shape (Ny, Nx)
+        Optical-path-difference map.  Units are interpreted via the
+        ``units`` / ``wavelength`` kwargs.  ``NaN`` entries are passed
+        through unchanged so callers that have pre-masked their OPD
+        can still annotate stats correctly.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    aperture : ndarray bool, optional
+        Boolean (or 0/1) mask the same shape as ``opd``.  Pixels with
+        ``aperture == False`` are set to ``NaN`` before plotting so
+        they are visually suppressed.  If ``None``, the full grid is
+        rendered.
+    units : {'waves', 'nm', 'um', 'm'}, default 'waves'
+        Units for the colour scale and the PV / RMS annotation.
+        ``'waves'`` requires a ``wavelength`` keyword; the input OPD
+        is divided by ``wavelength`` to convert metres to waves.  The
+        other unit choices apply a fixed scale factor to the OPD
+        before plotting (``'nm'`` x 1e9, ``'um'`` x 1e6).
+    wavelength : float, optional
+        Vacuum wavelength [m].  Required when ``units == 'waves'``.
+    cmap : str, default ``'RdBu_r'``
+        Matplotlib colormap.  Divergent colormaps are recommended so
+        zero OPD shows as a neutral mid-tone.
+    show_stats : bool, default True
+        Overlay a "PV: ..., RMS: ..." annotation in the upper-left of
+        the plot.  Stats are computed on the (masked) OPD in the
+        chosen display units.
+    ax : matplotlib Axes, optional
+        Plot onto an existing axes.  A new figure is created if
+        ``ax`` is ``None``.
+    fig : matplotlib Figure, optional
+        Existing figure handle.  Used when ``ax`` is also supplied
+        from the same figure; otherwise derived from ``ax`` or a new
+        figure.
+    title : str, optional
+        Plot title.
+
+    Returns
+    -------
+    fig : matplotlib Figure
+    ax : matplotlib Axes
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import plot_wavefront
+    >>> import matplotlib
+    >>> matplotlib.use('Agg')
+    >>> N = 64
+    >>> x = (np.arange(N) - N / 2) / (N / 2)
+    >>> X, Y = np.meshgrid(x, x)
+    >>> ap = (X**2 + Y**2) <= 1.0
+    >>> opd = 0.5 * (X**2 + Y**2)               # defocus, in waves
+    >>> fig, ax = plot_wavefront(
+    ...     opd, dx=1e-6, aperture=ap,
+    ...     units='waves', wavelength=632.8e-9)  # doctest: +SKIP
+    """
+    _require_mpl()
+    if dy is None:
+        dy = dx
+    if opd.ndim != 2:
+        raise ValueError(
+            f"plot_wavefront: opd must be 2-D; got shape {opd.shape!r}.")
+
+    # Resolve display units.
+    if units == 'waves':
+        if wavelength is None or not np.isfinite(wavelength) \
+                or wavelength <= 0:
+            raise ValueError(
+                "plot_wavefront: units='waves' requires a positive "
+                "'wavelength' keyword [m].")
+        scale = 1.0 / float(wavelength)
+        units_label = 'waves'
+    elif units == 'nm':
+        scale = 1e9
+        units_label = 'nm'
+    elif units == 'um':
+        scale = 1e6
+        units_label = 'um'
+    elif units == 'm':
+        scale = 1.0
+        units_label = 'm'
+    else:
+        raise ValueError(
+            f"plot_wavefront: units must be one of "
+            f"{{'waves', 'nm', 'um', 'm'}}; got {units!r}.")
+
+    opd_disp = np.asarray(opd, dtype=float) * scale
+
+    # Aperture masking -- set pixels outside the aperture to NaN so
+    # they're suppressed in the imshow.
+    if aperture is not None:
+        if aperture.shape != opd.shape:
+            raise ValueError(
+                f"plot_wavefront: aperture shape {aperture.shape!r} "
+                f"!= opd shape {opd.shape!r}.")
+        mask = np.asarray(aperture).astype(bool)
+        opd_disp = np.where(mask, opd_disp, np.nan)
+
+    # Figure / axes plumbing -- match plot_intensity / plot_phase.
+    if ax is None:
+        if fig is None:
+            fig, ax = plt.subplots(figsize=(6, 5))
+        else:
+            ax = fig.add_subplot(111)
+    else:
+        if fig is None:
+            fig = ax.get_figure()
+
+    Ny, Nx = opd_disp.shape
+    extent, unit_label, _ = _auto_extent(Nx, dx, 'auto')
+    extent_y, _, _ = _auto_extent(Ny, dy, 'auto')
+    full_extent = (extent[0], extent[1], extent_y[2], extent_y[3])
+
+    # Symmetric colour limits about zero so the divergent colormap
+    # reads as "positive vs negative OPD".  Use TwoSlopeNorm to keep
+    # the centre at exactly zero even when the data is asymmetric;
+    # fall back to a symmetric vmin/vmax for all-NaN inputs.
+    finite = opd_disp[np.isfinite(opd_disp)]
+    if finite.size == 0:
+        vlim = 1.0
+    else:
+        vlim = float(np.nanmax(np.abs(finite)))
+        if vlim == 0.0 or not np.isfinite(vlim):
+            vlim = 1.0
+
+    im = ax.imshow(opd_disp, extent=full_extent, origin='lower',
+                   cmap=cmap, vmin=-vlim, vmax=vlim, aspect='equal')
+
+    ax.set_xlabel(f'x [{unit_label}]')
+    ax.set_ylabel(f'y [{unit_label}]')
+    if title:
+        ax.set_title(title)
+
+    cbar = fig.colorbar(im, ax=ax, shrink=0.85)
+    cbar.set_label(f'OPD [{units_label}]')
+
+    if show_stats:
+        # Compute PV / RMS on the *displayed* (masked, scaled) array
+        # so the annotation matches the colour-bar units.  Use NaN-
+        # aware reductions so masked pixels don't leak in.
+        if finite.size > 0:
+            pv = float(np.nanmax(opd_disp) - np.nanmin(opd_disp))
+            rms = float(np.sqrt(np.nanmean(
+                (opd_disp - np.nanmean(opd_disp)) ** 2)))
+            ax.text(
+                0.02, 0.98,
+                f'PV: {pv:.3g} {units_label}\n'
+                f'RMS: {rms:.3g} {units_label}',
+                transform=ax.transAxes,
+                ha='left', va='top',
+                fontsize=9,
+                bbox=dict(boxstyle='round,pad=0.3',
+                          facecolor='white', alpha=0.75,
+                          edgecolor='gray', lw=0.5),
+            )
+
     return fig, ax
 
 
