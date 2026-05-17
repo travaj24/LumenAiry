@@ -30,7 +30,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 from ..propagators.propagation import _fft2, _ifft2
@@ -59,6 +59,7 @@ def gerchberg_saxton(
     initial_phase: Optional[np.ndarray] = None,
     return_history: bool = False,
     seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
     *,
     backend: str = 'numpy',
 ) -> Union[Tuple[np.ndarray, float], Tuple[np.ndarray, float, List[float]]]:
@@ -124,8 +125,15 @@ def gerchberg_saxton(
     implementation (:func:`gerchberg_saxton_jax`).
     """
     if backend == 'jax':
+        # 4.12.0 (audit round-4 B2-6): forward all reproducibility /
+        # precision kwargs to the JAX path.  Pre-4.12 the dispatcher
+        # only passed ``n_iter``, silently dropping ``seed``,
+        # ``initial_phase``, and ``dtype``.  Function-level kwargs on
+        # gerchberg_saxton_jax were wired correctly internally; the
+        # unified front door just didn't forward them.
         return gerchberg_saxton_jax(
-            source_amplitude, target_amplitude, n_iter=n_iter)
+            source_amplitude, target_amplitude, n_iter=n_iter,
+            seed=seed, initial_phase=initial_phase, dtype=dtype)
     if backend != 'numpy':
         raise ValueError(
             f"gerchberg_saxton: backend must be 'numpy' or 'jax'; "
@@ -435,6 +443,89 @@ def hybrid_input_output(
 # ----------------------------------------------------------------------
 # JAX-jit'd phase-retrieval variants
 # ----------------------------------------------------------------------
+#
+# v4.12 perf: each outer driver below builds its iteration kernel at
+# module scope (parameterised via a small cache keyed on n_iter and any
+# scalar Python knobs).  Pre-4.12 the iteration body lived inside a
+# closure that was re-created on every call -- the ``lax.fori_loop``
+# inside was jit-traced by JAX, but the outer wrapper paid a fresh
+# dispatch each invocation.  With the module-scope cache, repeated
+# calls with the same n_iter reuse the same compiled XLA executable.
+
+_GS_KERNEL_CACHE: Dict[int, Any] = {}
+_ER_KERNEL_CACHE: Dict[int, Any] = {}
+_HIO_KERNEL_CACHE: Dict[int, Any] = {}
+
+
+def _make_gs_kernel(n_iter_int: int):
+    """Build (and cache) the jit'd GS iteration kernel for one n_iter."""
+    import jax
+    import jax.numpy as jnp
+
+    @jax.jit
+    def _run(E0_, src_, tgt_):
+        def body(i, state):
+            E_in, _ = state
+            F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_in)))
+            E_target = tgt_ * jnp.exp(1j * jnp.angle(F))
+            E_back = jnp.fft.fftshift(
+                jnp.fft.ifft2(jnp.fft.ifftshift(E_target)))
+            E_next = src_ * jnp.exp(1j * jnp.angle(E_back))
+            return (E_next, F)
+
+        E_final_, F_final_ = jax.lax.fori_loop(
+            0, n_iter_int, body, (E0_, E0_))
+        phase_ = jnp.angle(E_final_)
+        err_ = jnp.mean((jnp.abs(F_final_) - tgt_) ** 2)
+        return phase_, err_
+
+    return _run
+
+
+def _make_er_kernel(n_iter_int: int):
+    """Build (and cache) the jit'd ER iteration kernel for one n_iter."""
+    import jax
+    import jax.numpy as jnp
+
+    @jax.jit
+    def _run(obj0_, meas_, sup_):
+        def body(i, obj):
+            F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
+            F = meas_ * jnp.exp(1j * jnp.angle(F))
+            obj_new = jnp.fft.fftshift(
+                jnp.fft.ifft2(jnp.fft.ifftshift(F)))
+            return jnp.where(sup_, obj_new, 0.0)
+
+        obj_final_ = jax.lax.fori_loop(
+            0, n_iter_int, body, obj0_)
+        obj_final_ = jnp.where(sup_, obj_final_, 0.0)
+        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final_)))
+        err_ = jnp.mean((jnp.abs(F) - meas_) ** 2)
+        return obj_final_, err_
+
+    return _run
+
+
+def _make_hio_kernel(n_iter_int: int):
+    """Build (and cache) the jit'd HIO iteration kernel for one n_iter."""
+    import jax
+    import jax.numpy as jnp
+
+    @jax.jit
+    def _run(obj0_, meas_, sup_, beta_):
+        def body(i, obj):
+            F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
+            F = meas_ * jnp.exp(1j * jnp.angle(F))
+            g = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
+            return jnp.where(sup_, g, obj - beta_ * g)
+
+        obj_final_ = jax.lax.fori_loop(
+            0, n_iter_int, body, obj0_)
+        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final_)))
+        err_ = jnp.mean((jnp.abs(F) - meas_) ** 2)
+        return obj_final_, err_
+
+    return _run
 
 def gerchberg_saxton_jax(
     source_amplitude: np.ndarray,
@@ -505,24 +596,16 @@ def gerchberg_saxton_jax(
             key, shape=src.shape, minval=-jnp.pi, maxval=jnp.pi,
             dtype=dtype)
 
-    def body(i, state):
-        E_in, _ = state
-        # Source -> target FFT
-        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(E_in)))
-        # Replace amplitude with target, keep phase
-        E_target = tgt * jnp.exp(1j * jnp.angle(F))
-        # Inverse FFT
-        E_back = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(E_target)))
-        # Replace amplitude with source, keep phase (next iter input)
-        E_next = src * jnp.exp(1j * jnp.angle(E_back))
-        return (E_next, F)
-
     # Combine source amplitude with the (possibly seeded) initial phase.
     E0 = (src * jnp.exp(1j * phase0)).astype(jnp.complex64)
-    E_final, F_final = jax.lax.fori_loop(0, int(n_iter), body, (E0, E0))
-    phase = jnp.angle(E_final)
-    err = float(jnp.mean((jnp.abs(F_final) - tgt) ** 2))
-    return np.asarray(phase), err
+
+    n_iter_int = int(n_iter)
+    kernel = _GS_KERNEL_CACHE.get(n_iter_int)
+    if kernel is None:
+        kernel = _make_gs_kernel(n_iter_int)
+        _GS_KERNEL_CACHE[n_iter_int] = kernel
+    phase, err = kernel(E0, src, tgt)
+    return np.asarray(phase), float(err)
 
 
 def _seed_to_rng(seed):
@@ -569,25 +652,13 @@ def error_reduction_jax(
     F0 = meas * jnp.exp(1j * init_phase)
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
-    def body(i, obj):
-        # 4.10: correct ER ordering is FFT -> magnitude swap -> IFFT
-        # -> support projection.  Pre-4.10 enforced support BEFORE the
-        # FFT and never re-applied it after the final IFFT, so the
-        # returned object violated the support constraint (the NumPy
-        # path at lines ~257-272 already does this in the right order;
-        # backends diverged).
-        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
-        F = meas * jnp.exp(1j * jnp.angle(F))
-        obj_new = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
-        return jnp.where(sup, obj_new, 0.0)
-
-    obj_final = jax.lax.fori_loop(0, int(n_iter), body, obj0)
-    # Final support projection (the loop already does it on the last
-    # iteration via the new ordering; this is belt-and-braces).
-    obj_final = jnp.where(sup, obj_final, 0.0)
-    F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final)))
-    err = float(jnp.mean((jnp.abs(F) - meas) ** 2))
-    return np.asarray(obj_final), err
+    n_iter_int = int(n_iter)
+    kernel = _ER_KERNEL_CACHE.get(n_iter_int)
+    if kernel is None:
+        kernel = _make_er_kernel(n_iter_int)
+        _ER_KERNEL_CACHE[n_iter_int] = kernel
+    obj_final, err = kernel(obj0, meas, sup)
+    return np.asarray(obj_final), float(err)
 
 
 def hybrid_input_output_jax(
@@ -629,14 +700,10 @@ def hybrid_input_output_jax(
     F0 = meas * jnp.exp(1j * init_phase)
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
-    def body(i, obj):
-        F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj)))
-        F = meas * jnp.exp(1j * jnp.angle(F))
-        g = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F)))
-        # HIO: keep inside support, feedback correction outside
-        return jnp.where(sup, g, obj - beta_j * g)
-
-    obj_final = jax.lax.fori_loop(0, int(n_iter), body, obj0)
-    F = jnp.fft.fftshift(jnp.fft.fft2(jnp.fft.ifftshift(obj_final)))
-    err = float(jnp.mean((jnp.abs(F) - meas) ** 2))
-    return np.asarray(obj_final), err
+    n_iter_int = int(n_iter)
+    kernel = _HIO_KERNEL_CACHE.get(n_iter_int)
+    if kernel is None:
+        kernel = _make_hio_kernel(n_iter_int)
+        _HIO_KERNEL_CACHE[n_iter_int] = kernel
+    obj_final, err = kernel(obj0, meas, sup, beta_j)
+    return np.asarray(obj_final), float(err)

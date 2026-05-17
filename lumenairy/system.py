@@ -10,6 +10,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -476,6 +477,254 @@ def propagate_through_system(E_in: np.ndarray,
     return E, intermediates
 
 
+# ----------------------------------------------------------------------
+# v4.12 perf: jit cache for propagate_through_system_jax
+# ----------------------------------------------------------------------
+#
+# The hot path is the sequence of pure-JAX element handlers
+# (``propagate`` / ``lens`` / ``aperture`` / ``mask``).  When every
+# element in ``elements`` is one of these AND there are no callable /
+# array-bearing dict values that would defeat hashing, we cache a
+# jit-compiled kernel keyed on the static signature (etype, scalar
+# params, mask shapes).  Mask DATA is threaded in as a positional JAX
+# arg so different mask arrays don't trigger re-tracing -- only mask
+# shape changes do.  Other element types (``spherical_lens``,
+# ``aspheric_lens``, ``real_lens``, ``mirror``, etc.) still fall back
+# to the per-call NumPy boundary.
+
+_PROPAGATE_SYSTEM_JAX_CACHE: Dict[Any, Any] = {}
+
+
+# ----------------------------------------------------------------------
+# Traceable element types for propagate_through_system_jax (B1-2 fix)
+# ----------------------------------------------------------------------
+#
+# These are the only element types that ``propagate_through_system_jax``
+# can route fully through JAX (i.e. through jit-compiled / grad-able
+# code paths).  Any element not in this set forces a NumPy boundary
+# (``np.asarray(E)`` on the field), which raises
+# ``TracerArrayConversionError`` under ``jax.jit`` / ``jax.grad`` and
+# breaks end-to-end traceability.
+#
+# Programmatic users can read this set to decide whether an element
+# list is JAX-traceable before calling.
+_TRACEABLE_ELEMENT_TYPES = frozenset({
+    'propagate',     # angular_spectrum_propagate (JAX backend)
+    'lens',          # thin-lens phase screen
+    'aperture',      # boolean mask multiplication
+    'mask',          # arbitrary mask multiplication
+})
+
+
+# One-shot deprecation warning state for the legacy JAX aperture schema.
+# B1-1: pre-v4.12 ``propagate_through_system_jax`` read ``params.get(
+# 'radius')`` / ``params.get('half_width_x')`` / ``params.get(
+# 'inner_radius')`` while the NumPy ``apply_aperture`` reads
+# ``params.get('diameter')`` / ``params.get('width_x')`` / ``params.get(
+# 'inner_diameter')``.  A working NumPy element list ported to the JAX
+# path had every aperture silently no-op'd.  v4.12 unifies on the NumPy
+# canonical schema and falls back to the legacy form with a one-shot
+# ``DeprecationWarning``.
+_LEGACY_APERTURE_SCHEMA_WARNED = False
+
+
+def _resolve_aperture_params(elem: Dict[str, Any]
+                              ) -> Optional[Tuple[str, Tuple[float, ...]]]:
+    """Resolve an aperture element to canonical JAX-kernel params.
+
+    Accepts BOTH:
+
+    * the canonical NumPy schema (preferred; matches ``apply_aperture``):
+      ``params={'diameter': D}`` for circular,
+      ``params={'inner_diameter': Di, 'outer_diameter': Do}`` for
+      annular, ``params={'width_x': Wx, 'width_y': Wy}`` for
+      rectangular.
+
+    * the legacy pre-v4.12 JAX-only schema (deprecated; one-shot
+      ``DeprecationWarning`` on first hit):
+      ``params={'radius': r}`` or top-level ``elem['radius']`` for
+      circular, ``params={'half_width_x': hx, 'half_width_y': hy}`` for
+      rectangular, ``params={'inner_radius': ri, 'outer_radius': ro}``
+      for annular.
+
+    Returns
+    -------
+    (shape, halves) : tuple
+        ``shape`` is ``'circular'`` / ``'rectangular'`` / ``'annular'``;
+        ``halves`` is a tuple of half-extents (radius / half-widths)
+        ready to feed the JAX kernel.  Returns ``None`` if the aperture
+        shape is unsupported or required params are missing.
+    """
+    global _LEGACY_APERTURE_SCHEMA_WARNED
+
+    shape = elem.get('shape', 'circular')
+    params = elem.get('params') or {}
+
+    def _warn_legacy(field: str) -> None:
+        global _LEGACY_APERTURE_SCHEMA_WARNED
+        if _LEGACY_APERTURE_SCHEMA_WARNED:
+            return
+        _LEGACY_APERTURE_SCHEMA_WARNED = True
+        warnings.warn(
+            "propagate_through_system_jax aperture element used the "
+            f"legacy {field!r} schema (pre-v4.12 JAX-only form).  "
+            "The library now reads the canonical NumPy schema "
+            "(``params={'diameter': ...}`` / ``params={'width_x', "
+            "'width_y'}`` / ``params={'inner_diameter', "
+            "'outer_diameter'}``), so JAX and NumPy element lists "
+            "are interchangeable.  The legacy form still works for "
+            "one release but will be removed; please migrate your "
+            "element dicts to the canonical schema.",
+            DeprecationWarning, stacklevel=3,
+        )
+
+    if shape == 'circular':
+        # Canonical: diameter.
+        D = params.get('diameter')
+        if D is not None:
+            return ('circular', (float(D) / 2.0,))
+        # Legacy: radius (params or top-level).
+        r = params.get('radius')
+        if r is None:
+            r = elem.get('radius')
+        if r is not None:
+            _warn_legacy('radius')
+            return ('circular', (float(r),))
+        return None
+
+    if shape == 'rectangular':
+        # Canonical: width_x / width_y (full widths).
+        Wx = params.get('width_x')
+        Wy = params.get('width_y')
+        if Wx is not None or Wy is not None:
+            hx = float(Wx) / 2.0 if Wx is not None else float('inf')
+            hy = float(Wy) / 2.0 if Wy is not None else float('inf')
+            return ('rectangular', (hx, hy))
+        # Legacy: half_width_x / half_width_y (or 'width'/'height' as
+        # half-extents in the pre-v4.12 JAX schema).
+        hx = params.get('half_width_x')
+        hy = params.get('half_width_y')
+        if hx is None and 'width' in params:
+            hx = float(params['width']) / 2.0
+        if hy is None and 'height' in params:
+            hy = float(params['height']) / 2.0
+        if hx is not None or hy is not None:
+            _warn_legacy('half_width_x/half_width_y')
+            return ('rectangular',
+                    (float(hx) if hx is not None else float('inf'),
+                     float(hy) if hy is not None else float('inf')))
+        return None
+
+    if shape == 'annular':
+        # Canonical: inner_diameter / outer_diameter.
+        Di = params.get('inner_diameter')
+        Do = params.get('outer_diameter')
+        if Di is not None or Do is not None:
+            r_i = float(Di) / 2.0 if Di is not None else 0.0
+            r_o = float(Do) / 2.0 if Do is not None else float('inf')
+            return ('annular', (r_o, r_i))
+        # Legacy: inner_radius / outer_radius.
+        r_i = params.get('inner_radius')
+        r_o = params.get('outer_radius')
+        if r_i is not None or r_o is not None:
+            _warn_legacy('inner_radius/outer_radius')
+            return ('annular',
+                    (float(r_o) if r_o is not None else float('inf'),
+                     float(r_i) if r_i is not None else 0.0))
+        return None
+
+    return None
+
+
+def _system_element_signature(elem: Dict[str, Any]) -> Optional[Tuple]:
+    """Return a hashable static signature for a JAX-compatible element,
+    or None if the element should bypass the jit cache (falls back to
+    the per-call Python branch / NumPy boundary).
+    """
+    etype = elem.get('type', '')
+    if etype == 'propagate':
+        return ('propagate', float(elem['z']),
+                bool(elem.get('bandlimit', True)))
+    if etype == 'lens':
+        return ('lens', float(elem['f']),
+                float(elem.get('xc', 0.0)),
+                float(elem.get('yc', 0.0)))
+    if etype == 'aperture':
+        xc = float(elem.get('xc', 0.0))
+        yc = float(elem.get('yc', 0.0))
+        resolved = _resolve_aperture_params(elem)
+        if resolved is None:
+            return None
+        shape, halves = resolved
+        if shape == 'circular':
+            return ('aperture_circular', halves[0], xc, yc)
+        if shape == 'rectangular':
+            return ('aperture_rect', halves[0], halves[1], xc, yc)
+        if shape == 'annular':
+            return ('aperture_annular', halves[0], halves[1], xc, yc)
+        return None
+    if etype == 'mask':
+        m = elem.get('mask')
+        if m is None:
+            return None
+        shape = tuple(np.asarray(m).shape)
+        dtype = str(np.asarray(m).dtype)
+        return ('mask', shape, dtype)
+    # spherical_lens / aspheric_lens / real_lens / mirror / etc.
+    return None
+
+
+def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
+    """Build a jit'd kernel for one static element sequence.
+
+    ``elem_sigs`` is a tuple of element signatures (from
+    :func:`_system_element_signature`).  Mask elements are passed as
+    additional positional JAX arrays to the returned closure.
+    """
+    import jax
+    import jax.numpy as jnp
+
+    mask_indices = [i for i, sig in enumerate(elem_sigs) if sig[0] == 'mask']
+
+    def _kernel(E, *mask_arrays):
+        Ny, Nx = E.shape[-2:]
+        x = (jnp.arange(Nx) - Nx / 2) * dx
+        y = (jnp.arange(Ny) - Ny / 2) * dy
+        X, Y = jnp.meshgrid(x, y, indexing='xy')
+        k0 = 2.0 * jnp.pi / wavelength
+        mask_iter = iter(mask_arrays)
+        for sig in elem_sigs:
+            tag = sig[0]
+            if tag == 'propagate':
+                _, z, bandlimit = sig
+                from .propagators.propagation import angular_spectrum_propagate
+                E = angular_spectrum_propagate(
+                    E, z, wavelength, dx, bandlimit=bandlimit)
+            elif tag == 'lens':
+                _, f, xc, yc = sig
+                r2 = (X - xc) ** 2 + (Y - yc) ** 2
+                E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
+            elif tag == 'aperture_circular':
+                _, r, xc, yc = sig
+                mask = ((X - xc) ** 2 + (Y - yc) ** 2) <= r * r
+                E = E * mask.astype(E.dtype)
+            elif tag == 'aperture_rect':
+                _, hx, hy, xc, yc = sig
+                mask = (jnp.abs(X - xc) <= hx) & (jnp.abs(Y - yc) <= hy)
+                E = E * mask.astype(E.dtype)
+            elif tag == 'aperture_annular':
+                _, r_o, r_i, xc, yc = sig
+                rho2 = (X - xc) ** 2 + (Y - yc) ** 2
+                mask = (rho2 <= r_o * r_o) & (rho2 >= r_i * r_i)
+                E = E * mask.astype(E.dtype)
+            elif tag == 'mask':
+                m = next(mask_iter)
+                E = E * m
+        return E
+
+    return jax.jit(_kernel)
+
+
 def propagate_through_system_jax(E_in: np.ndarray,
                                  elements: Sequence[Dict[str, Any]],
                                  wavelength: float,
@@ -485,25 +734,63 @@ def propagate_through_system_jax(E_in: np.ndarray,
                                  verbose: bool = False) -> Any:
     """JAX-traceable variant of :func:`propagate_through_system`.
 
-    Element-by-element walk where each element type is dispatched to
-    its JAX-compatible handler when one exists:
-      * ``propagate``       -> ``angular_spectrum_propagate`` (JAX)
-      * ``lens`` (paraxial) -> JAX-traceable thin-lens phase screen
-      * ``aperture``        -> JAX boolean mask multiplication
-      * ``mask``            -> JAX phase / amplitude mask multiplication
+    Element-by-element walk where each element type is dispatched to a
+    JAX-compatible handler.
 
-    Element types without a JAX path
-    (``spherical_lens``, ``aspheric_lens``, ``real_lens``, ``mirror``)
-    fall back to NumPy at the element boundary -- the field is
-    converted via ``np.asarray`` for the element call, then back to
-    ``jnp.asarray`` for the next propagation step.  This loses
-    differentiability through the NumPy element, but lets the rest of
-    the chain stay in JAX.
+    Supported (traceable) element types
+    -----------------------------------
+    The set of element types with a fully JAX-traceable code path is
+    exposed as the module-level constant
+    :data:`lumenairy.system._TRACEABLE_ELEMENT_TYPES`:
+
+      * ``'propagate'``  -> ``angular_spectrum_propagate`` (JAX backend)
+      * ``'lens'``       -> paraxial thin-lens phase screen
+      * ``'aperture'``   -> hard boolean mask multiplication (circular /
+        rectangular / annular).  Uses the same canonical NumPy schema
+        as :func:`apply_aperture` (``params={'diameter': ...}`` etc.);
+        the pre-v4.12 JAX-only schema (``params={'radius': ...}``) is
+        still accepted with a one-shot ``DeprecationWarning``.  See
+        :func:`_resolve_aperture_params`.
+      * ``'mask'``       -> phase / amplitude mask multiplication
+
+    Unsupported element types
+    -------------------------
+    Element types NOT in :data:`_TRACEABLE_ELEMENT_TYPES`
+    (``spherical_lens``, ``aspheric_lens``, ``real_lens``,
+    ``real_lens_traced``, ``mirror``, ``cylindrical_lens``, ``axicon``,
+    ``grin_lens``, ``propagate_tilted``, ``turbulence``, ``zernike``,
+    ``gaussian_aperture``, ...) DO NOT have a JAX handler.  Pre-v4.12
+    this function silently fell back to NumPy at the element boundary
+    (``np.asarray(E)`` then back to ``jnp.asarray``), which works for
+    eager calls but raises ``TracerArrayConversionError`` under
+    ``jax.jit`` / ``jax.grad`` -- i.e. the function was NOT actually
+    JAX-end-to-end-traceable as advertised.
+
+    v4.12 fail-fast: if any element in ``elements`` is not in
+    :data:`_TRACEABLE_ELEMENT_TYPES`, this function now raises
+    :class:`NotImplementedError` at call time with the list of
+    offending element types.  Use :func:`propagate_through_system`
+    (NumPy) for those element types, or implement a JAX handler.
+
+    Performance
+    -----------
+    When every element is traceable, the full chain is cached as one
+    compiled XLA graph keyed on the sequence of
+    ``(etype, scalar params, mask shapes/dtypes)``.  Repeated calls
+    with the same element layout reuse the cached executable.
 
     Returns
     -------
     E_out : JAX array, complex
         Field after the full element chain.
+
+    Raises
+    ------
+    NotImplementedError
+        If any element in ``elements`` has a ``'type'`` not in
+        :data:`_TRACEABLE_ELEMENT_TYPES`.
+    ImportError
+        If JAX is not installed.
     """
     from .backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
@@ -516,7 +803,60 @@ def propagate_through_system_jax(E_in: np.ndarray,
     if dy is None:
         dy = dx
 
+    # ------------------------------------------------------------------
+    # B1-2 fix: fail-fast on non-traceable elements.
+    # ------------------------------------------------------------------
+    # Pre-v4.12 the slow path tried to ``np.asarray(E)`` on a (possibly
+    # traced) JAX array, which raises ``TracerArrayConversionError``
+    # under ``jax.jit`` / ``jax.grad``.  Rather than leak that confusing
+    # JAX-internal traceback, scan the element types up front and raise
+    # an explicit, actionable error listing exactly which element types
+    # have no JAX path.
+    bad_types: List[str] = []
+    seen: set = set()
+    for elem in elements:
+        etype = elem.get('type', '')
+        if etype not in _TRACEABLE_ELEMENT_TYPES and etype not in seen:
+            seen.add(etype)
+            bad_types.append(etype)
+    if bad_types:
+        raise NotImplementedError(
+            "propagate_through_system_jax: element type(s) "
+            f"{bad_types!r} have no JAX-traceable handler.  Supported "
+            f"types are {sorted(_TRACEABLE_ELEMENT_TYPES)}.  Use "
+            "lumenairy.system.propagate_through_system() (NumPy) for "
+            "an element list containing these types, or check "
+            "lumenairy.system._TRACEABLE_ELEMENT_TYPES to filter your "
+            "element list programmatically before calling."
+        )
+
     E = jnp.asarray(E_in, dtype=jnp.complex64)
+
+    # ------------------------------------------------------------------
+    # Fast path: all elements have a static signature -> single jit'd
+    # kernel for the whole chain.
+    # ------------------------------------------------------------------
+    elem_sigs = [_system_element_signature(elem) for elem in elements]
+    if all(sig is not None for sig in elem_sigs) and not verbose:
+        sigs_tuple = tuple(elem_sigs)
+        cache_key = (sigs_tuple, float(wavelength), float(dx), float(dy))
+        kernel = _PROPAGATE_SYSTEM_JAX_CACHE.get(cache_key)
+        if kernel is None:
+            kernel = _make_system_jax_kernel(
+                sigs_tuple, float(wavelength), float(dx), float(dy))
+            _PROPAGATE_SYSTEM_JAX_CACHE[cache_key] = kernel
+        mask_arrays = tuple(
+            jnp.asarray(elem['mask'])
+            for elem, sig in zip(elements, elem_sigs)
+            if sig[0] == 'mask'
+        )
+        return kernel(E, *mask_arrays)
+
+    # ------------------------------------------------------------------
+    # Slow path: at least one element falls back to NumPy.  Keep the
+    # legacy per-call Python branch loop so unsupported elements still
+    # work.
+    # ------------------------------------------------------------------
     Ny, Nx = E.shape[-2:]
     x = (jnp.arange(Nx) - Nx / 2) * dx
     y = (jnp.arange(Ny) - Ny / 2) * dy
@@ -542,56 +882,50 @@ def propagate_through_system_jax(E_in: np.ndarray,
             E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
 
         elif etype == 'aperture':
-            # Mirror the NumPy schema: aperture is described by 'shape'
-            # + 'params', not a bare 'radius' key.  Pre-4.10 the JAX
-            # branch silently no-op'd for any working NumPy aperture
-            # spec because elem.get('radius') was always None.
-            shape = elem.get('shape', 'circular')
-            params = elem.get('params') or {}
+            # Resolve to canonical half-extents accepting both the
+            # NumPy schema (diameter / width_x / inner_diameter) and
+            # the legacy JAX-only schema (radius / half_width_x /
+            # inner_radius), with a one-shot deprecation warning on
+            # the latter (B1-1 fix).
             xc = elem.get('xc', 0.0)
             yc = elem.get('yc', 0.0)
             dx_loc = X - xc
             dy_loc = Y - yc
-            if shape == 'circular':
-                r = params.get('radius')
-                if r is None:
-                    r = elem.get('radius')  # legacy schema
-                if r is not None:
+            resolved = _resolve_aperture_params(elem)
+            if resolved is not None:
+                shape, halves = resolved
+                if shape == 'circular':
+                    r = halves[0]
                     mask = (dx_loc ** 2 + dy_loc ** 2) <= float(r) ** 2
                     E = E * mask.astype(E.dtype)
-            elif shape == 'rectangular':
-                hx = float(params.get('half_width_x',
-                                       params.get('width', 0) / 2.0))
-                hy = float(params.get('half_width_y',
-                                       params.get('height', 0) / 2.0))
-                mask = (jnp.abs(dx_loc) <= hx) & (jnp.abs(dy_loc) <= hy)
-                E = E * mask.astype(E.dtype)
-            elif shape == 'annular':
-                r_o = float(params.get('outer_radius', 0))
-                r_i = float(params.get('inner_radius', 0))
-                rho2 = dx_loc ** 2 + dy_loc ** 2
-                mask = (rho2 <= r_o ** 2) & (rho2 >= r_i ** 2)
-                E = E * mask.astype(E.dtype)
-            else:
-                # Fall back to NumPy element for non-standard shapes.
-                from .system import propagate_through_system
-                E_np = np.asarray(E)
-                E_np, _ = propagate_through_system(
-                    E_np, [elem], wavelength, dx, dy=dy,
-                    method=method, verbose=False)
-                E = jnp.asarray(E_np)
+                elif shape == 'rectangular':
+                    hx, hy = halves
+                    mask = ((jnp.abs(dx_loc) <= float(hx)) &
+                            (jnp.abs(dy_loc) <= float(hy)))
+                    E = E * mask.astype(E.dtype)
+                elif shape == 'annular':
+                    r_o, r_i = halves
+                    rho2 = dx_loc ** 2 + dy_loc ** 2
+                    mask = ((rho2 <= float(r_o) ** 2) &
+                            (rho2 >= float(r_i) ** 2))
+                    E = E * mask.astype(E.dtype)
+            # No-op silently if aperture params are missing (matches
+            # NumPy ``apply_aperture`` default of all-infinity).
 
         elif etype == 'mask':
             mask = jnp.asarray(elem['mask'])
             E = E * mask
 
         else:
-            # Fallback: NumPy element at the boundary.
-            from .system import propagate_through_system
-            E_np = np.asarray(E)
-            E_np, _ = propagate_through_system(
-                E_np, [elem], wavelength, dx, dy=dy,
-                method=method, verbose=False)
-            E = jnp.asarray(E_np)
+            # Unreachable: the up-front _TRACEABLE_ELEMENT_TYPES gate
+            # raises NotImplementedError for any other type before we
+            # get here.  Keep a defensive fallback for forward
+            # compatibility (new traceable types added later).
+            raise NotImplementedError(
+                f"propagate_through_system_jax: element type {etype!r} "
+                "reached the per-element dispatch with no handler "
+                "(internal error: _TRACEABLE_ELEMENT_TYPES gate "
+                "should have caught this)."
+            )
 
     return E

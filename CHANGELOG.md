@@ -2,6 +2,194 @@
 
 All notable changes to the core library are documented here.
 
+## [4.12.0] — 2026-05-16
+
+**Combined performance + round-4 pre-PyPI audit response.**  v4.12.0
+bundles two parallel work streams: (1) a Tier-1 performance pass
+that shipped ~10x speedups on hot paths, and (2) a round-4 pre-PyPI
+audit that closed ~20 release blockers identified in
+`AUDIT_ROUND4_2026_05_16.md`.  All 390 unit tests pass; the full
+validation suite (34 files / 314 tests) passes.
+
+### Performance — Tier-1 wins (vs v4.11.2 baseline)
+
+| Workload | v4.11.2 | v4.12.0 | Speedup |
+|---|---|---|---|
+| ASM propagate 1024^2 complex128 | 165 ms | 39 ms | **4.3x** |
+| `apply_real_lens` 4-surf 512^2 | 140 ms | 61 ms | **2.3x** |
+| `through_focus_scan` 7-pt N=256 | 162 ms | 35 ms | **4.7x** |
+| `through_focus_scan` 31-pt N=256 | ~715 ms | 149 ms | **4.8x** |
+| `propagate_through_system_jax` warm | 148 ms | 0.91 ms | **163x** |
+| `gerchberg_saxton_jax` 50-iter warm | 454 ms | 12.5 ms | **36x** |
+| `error_reduction_jax` 50-iter warm | 256 ms | 5.6 ms | **46x** |
+| `propagate_hf_chebyshev_quadrature` 32^2 chunk=1024 | 5575 ms | 255 ms | **21.8x** |
+| `lg_polynomial` warm cache (LG_{3,2}) | -- | 21x faster | **21x** |
+| `zernike_basis_matrix` warm hit | 22 ms | 1.8 us | **~12000x** |
+| `zernike_decompose` 10-call loop | 298 ms | 80 ms | **3.7x** |
+
+The 4.7x `through_focus_scan` speedup propagates through
+`MultiWavelengthMerit` / `MultiFieldMerit` / Monte-Carlo
+tolerancing:  100-trial MC at 31-pt N=256 drops from **71 s -> 15 s**.
+
+Implementation:
+* **pyFFTW double-buffer plan cache** + auto-promote
+  `FFTW_ESTIMATE -> FFTW_MEASURE` at the 5th call (one-shot per
+  cache key).  Saves 256 MB-1 GB allocation per call on large
+  complex128 grids; `set_fft_auto_promote(False)` disables for
+  startup-sensitive workflows.
+* **`through_focus_scan` (NumPy) H-hoist** outside the z-loop --
+  per-z work reduces to `H = exp(1j*kz*z) * propagating *
+  bandlimit_z` + one `ifft2`.  Mirrors the JAX twin's pre-existing
+  structure.  Bit-near-exact (abs err 0.0) vs per-z reference.
+* **`zernike_basis_matrix` content-fingerprint cache** -- every
+  Zernike merit in a CompositeMerit eval and every FD Jacobian
+  column hits the cache.  `clear_zernike_basis_cache()` exposed
+  for in-place-mutation escape.
+* **JAX jit caches** at `propagate_through_system_jax`,
+  `gerchberg_saxton_jax` / `error_reduction_jax` /
+  `hybrid_input_output_jax`, and the inner ASM kernel inside
+  `through_focus_scan_jax`.  Module-scope `OrderedDict` caches
+  keyed on element-chain signature or `n_iter`.
+* **`propagate_modal_asymptotic` `lg_polynomial` hoist** +
+  `lru_cache(maxsize=256)` -- moves the LG-polynomial build
+  outside the per-pixel Newton loop; per-pixel work drops from
+  `N_pixels * N_modes` to `N_modes` recomputes.
+* **`propagate_hf_chebyshev_quadrature` chunk vectorisation** --
+  replaces scalar pixel loop with `np.einsum('cyx,yx->c', kernel,
+  E_in)`.  New `max_chunk_memory_mb=256.0` kwarg caps peak
+  alloc; effective chunk auto-shrinks if requested chunk would
+  overshoot.  Fixes a pre-existing latent shape-mismatch bug
+  along the way.
+
+Two perf items were reverted before shipping (their isolated
+correctness pins passed but the cross-suite validation caught
+cross-backend regressions):
+* Raytrace Newton spherical fast-path + analytic-normal stash
+  caused a 1.17e-3 NumPy<->JAX drift in `aberration_tensor_lg00
+  _jax`.  Deferred to v4.12.1 with stricter cross-backend pin.
+* `trace_jax` flat-tuple jit cache broke
+  `jax.grad(fit_canonical_polynomials_jax)` (returned NaN).
+  Deferred to v4.12.1 with pytree-registered prescription
+  wrapper.
+
+### Round-4 pre-PyPI audit fixes
+
+**B0 — User-facing showstoppers (Tier 0)**
+
+* **B0-1 README cookbook examples fixed** -- 11 broken code
+  blocks (positional `apply_real_lens` calls now keyword;
+  `create_gaussian_beam` missing `wavelength` added; renamed
+  `load_zmx_prescription` updated to `load_zemax_zmx`).  Every
+  example now runs to completion via the unit-test pinning suite.
+* **B0-2 `_deprecation.py` shims wired** -- `load_zmx_prescription
+  -> load_zemax_zmx` and `load_zemax_prescription_txt ->
+  load_zemax_prescription_data_txt` aliases now emit a clear
+  `DeprecationWarning` and forward to the new function.
+  Pre-v4.12 these renamed functions raised cold
+  `AttributeError`.
+
+**B1 — Silently-wrong physics in default code paths**
+
+* **B1-1 JAX/NumPy aperture schema unified** --
+  `propagate_through_system_jax` now accepts the canonical NumPy
+  schema (`diameter`, `width_x/y`, `inner_diameter/outer_diameter`,
+  matching `apply_aperture`) AND the legacy JAX-only schema
+  (`radius`, `half_width_x/y`, `inner_radius`) with a one-shot
+  `DeprecationWarning`.
+* **B1-2 `propagate_through_system_jax` fail-fast on
+  non-traceable elements** -- up-front element-type scan raises
+  `NotImplementedError` listing offending types
+  (`spherical_lens`, `aspheric_lens`, `mirror`, etc.) BEFORE
+  any tracing.  `_TRACEABLE_ELEMENT_TYPES = frozenset({'propagate',
+  'lens', 'aperture', 'mask'})` exposed for programmatic checks.
+* **B1-3 Rayleigh-Sommerfeld `z<=0` guard** -- matches existing
+  Fresnel / Fraunhofer / SAS forward-only guards.  Pre-v4.12 RS
+  silently produced 180-degrees-wrong-phase kernel for `z<0`.
+* **B1-4 ASM-MFT band-limit `<=` -> `<` on NumPy** -- matches
+  the JAX branch (and plain ASM).  Pre-v4.12 one-bin boundary
+  disagreement between backends.
+* **B1-5 SAS pad>2 centring** -- `as1 = (N_new - N) // 2`
+  (was `(N+1)//2`, only correct for pad=2).  pad=4 now centres
+  the input correctly.
+* **B1-6 Dispatcher negative-z routing** -- `_auto_select_method`
+  short-circuits to ASM for `z<0`; explicit
+  `method='fresnel/fraunhofer/sas/rs'` with `z<0` raises a
+  dispatcher-level `ValueError` naming `propagate`, not the
+  underlying kernel.
+* **B1-7 `propagate(return_result=True)` tuple unpacking** --
+  `_coerce_field` rewritten to unpack `(E, dx_out, dy_out)` /
+  `(E, dx_out)` tuples from Fresnel / Fraunhofer / SAS / Fresnel-
+  MFT.  Result now reports the kernel's output dx, not the
+  input dx.
+* **B1-8 Dispatcher `output_grid` / `output_dx` for ASM family**
+  -- auto-promotes ASM -> `angular_spectrum_propagate_mft`,
+  Fresnel -> `fresnel_propagate_mft`, Fraunhofer ->
+  `fraunhofer_propagate_mft`.  SAS / RS raise with guidance to
+  use ASM-MFT.  Pre-v4.12 the kwargs were silently dropped.
+* **B1-9 `_apply_doe_kick_jax` gradient flow** -- traced periods
+  use `jnp.where(jnp.isfinite(period) & (period != 0), kick,
+  0.0)` to keep gradient alive; concrete-period scalars stay on
+  the Python branch.  `jax.grad` w.r.t. grating period now
+  returns finite, non-zero gradients (within 1% of FD).
+* **B1-11 `makedammann2d` global RNG** -- switched from
+  `np.random.seed(seed)` to `np.random.default_rng(seed)` +
+  `rng.random`.  No longer mutates the user's global RNG state.
+
+**B2 — Silently-wrong physics in non-default paths**
+
+* **B2-3 `image_plane_wfe` reference-sphere radius now includes
+  `1/N_chief`** -- on-axis `N_chief=1` is a no-op; off-axis
+  fields no longer get phantom-defocus absorbed by `best_rms`.
+* **B2-4 `distortion_grid` raises on `sin(tx)^2 + sin(ty)^2 >= 1`**
+  -- pre-v4.12 silently constructed N=0 rays, then swallowed
+  the resulting trace failure via bare except.
+* **B2-5 `apply_real_lens_traced` mirror guard** -- pre-flight
+  scan raises with a properly-named error if any surface has
+  `is_mirror=True` or `glass_after='MIRROR'`.  Points users at
+  the per-segment `apply_mirror` pattern for folded designs.
+* **B2-6 `gerchberg_saxton(backend='jax')` forwards
+  `seed`/`dtype`/`initial_phase`** -- pre-v4.12 the dispatcher
+  silently dropped these kwargs; function-level kwargs on
+  `gerchberg_saxton_jax` were already wired internally.
+* **B2-1/B2-2 `ghost.py` documentation** -- module + function
+  docstrings now make explicit that `'intensity'` is an UPPER
+  BOUND ignoring transmission losses
+  (`I_true ~= I_reported * Prod (1-R_k)^2`), and
+  `'focus_z_estimate'` is a heuristic harmonic-mean sort key,
+  not a calibrated focal position.
+
+### Known limitation deferred to v4.12.1
+
+* **B1-10 Half-pixel grid convention drift** between propagator
+  families.  ASM / Fresnel / RS / sources use pixel-centred
+  `(arange(N) - N/2) * dx`; GBD / HF / subaperture / MHS /
+  `optimize/core.py` use cell-centred `(arange(N) - N/2 + 0.5)
+  * dx`.  Cross-method coherent superposition has a half-pixel
+  shift producing wrong-physics phase error of order
+  `k0 * dx/2 * off_axis_distance`.  Documented Tier-2 finding;
+  per-site refactor scheduled for v4.12.1.
+
+### Tooling
+
+* New `benchmarks/` directory with `pytest-benchmark` per-area
+  perf tests.  Run with `python -m pytest benchmarks/
+  --benchmark-only -v`.  v4_11_2 baseline saved at
+  `.benchmarks/v4_11_2_*.json`.
+* Each optimization ships with a paired correctness-pinning
+  test under `tests/unit/test_perf_v4_12_0_*.py`.
+* Each round-4 audit fix ships with a paired pinning test under
+  `tests/unit/test_audit_fixes_v4_12_0_round4_*.py`.
+* `pytest-benchmark` added as a dev dependency.
+
+### Discipline
+
+Every fix / optimization gated by: (1) audit-claim verification
+against actual code before fixing, (2) bit-near-exact (or LSB-
+tolerant) correctness pin alongside the change, (3) targeted
+validation suite pass before integration.  Two perf items that
+didn't meet the cross-suite bar were reverted rather than
+shipped.
+
 ## [4.11.2] — 2026-05-16
 
 **Round-3 fresh-eyes audit response.**  An 11-agent fresh-eyes audit

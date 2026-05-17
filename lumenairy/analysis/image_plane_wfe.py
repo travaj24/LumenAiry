@@ -493,18 +493,51 @@ def eval_image_plane_wfe(
     Nd = np.asarray(f.N)
     z_chief = s2z[chief]
 
+    # 4.12.0 (B2-3): the reference-sphere radius is the chief ray's
+    # PATH LENGTH from the tangent point (last-surface vertex chief
+    # intersect or exit-pupil chief intersect) to the chief image,
+    # not the axial distance.  For an off-axis chief with direction
+    # cosines ``(L, M, N)`` and ``N = N_chief < 1`` the path length is
+    # ``axial_distance / N_chief`` -- the same factor used in
+    # ``_chief_image_xy`` to land the chief at the image plane.
+    #
+    # Pre-4.12.0 only the chief-image landing got the 1/N_chief factor
+    # (the v4.11.2 fix); the sphere radius was left at the axial
+    # ``img_d_m``, so for off-axis fields the sphere no longer passed
+    # through the chief and the resulting quadratic shape error was
+    # absorbed as phantom defocus by ``best_rms``.  On-axis (N=1) this
+    # is a no-op.
+    if alive[chief]:
+        _N_chief = float(Nd[chief])
+        if abs(_N_chief) < 1e-12:
+            N_chief_for_R = 1.0
+        else:
+            N_chief_for_R = _N_chief
+    else:
+        N_chief_for_R = 1.0
+
     # Compute the reference-sphere radius from img_d_m + the
     # tangent-point choice.  Sphere centre is always at the chief
-    # image intersect (0, 0, z_chief + img_d_m).
+    # image intersect (cx, cy, z_chief + img_d_m).
     def _radius_for(d):
-        """Signed sphere radius for chief image distance ``d``."""
+        """Signed sphere radius for chief image distance ``d``.
+
+        Returns the chief ray's path length from the tangent point
+        (last-surface vertex for ``vertex``, exit-pupil chief
+        intersect for ``exit_pupil``) to the chief image at axial
+        distance ``d`` past the last surface.  The ``1/N_chief``
+        factor maps axial distance to ray-arc length and is
+        consistent with ``_chief_image_xy``'s ``t_advance = d /
+        N_chief`` -- without it the sphere doesn't pass through the
+        chief for off-axis fields (B2-3 fix, 4.12.0+).
+        """
         if sphere_tangent == 'vertex':
-            return d
+            return d / N_chief_for_R
         # exit_pupil: tangent at chief intersection with XP plane.
         # xp_z is the SIGNED offset from last vertex (negative when
-        # XP is inside the lens).  R = (image - XP), measured along
-        # the chief: img_d_m - xp_z.
-        return d - fod.xp_z
+        # XP is inside the lens).  Axial separation (image - XP) is
+        # (d - xp_z); divide by N_chief for ray-arc length.
+        return (d - fod.xp_z) / N_chief_for_R
 
     R = _radius_for(img_d_m)
     cz = z_chief + img_d_m
@@ -561,10 +594,15 @@ def eval_image_plane_wfe(
                 if abs(inv_R_new) > 1e-30:
                     R_new = 1.0 / inv_R_new
                     # Back-solve for the new chief image distance.
+                    # 4.12.0 (B2-3): invert the `1/N_chief` factor
+                    # applied in ``_radius_for`` so the new axial
+                    # ``img_d_m`` stays self-consistent for off-axis
+                    # fields.  On-axis (N_chief = 1) this is a no-op.
                     if sphere_tangent == 'exit_pupil':
-                        img_d_m = R_new + float(getattr(fod, 'xp_z', 0.0))
+                        img_d_m = (R_new * N_chief_for_R
+                                   + float(getattr(fod, 'xp_z', 0.0)))
                     else:
-                        img_d_m = R_new
+                        img_d_m = R_new * N_chief_for_R
         elif image_plane == 'best_pv':
             # 1-D numerical search over the longitudinal shift dz
             # that minimises PV.  Uses scipy.optimize when available;

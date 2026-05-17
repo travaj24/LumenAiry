@@ -691,7 +691,30 @@ from .raytrace.jax_trace import (
     raybundle_to_jax_state,
 )
 
-__version__ = "4.11.2"
+# ── Deprecated-alias shims ──────────────────────────────────────────────
+#
+# 4.12.0: wire ``_deprecation.deprecated_alias`` (added in 4.7 but never
+# imported anywhere -- a Round-4 audit finding) into the top-level
+# namespace so users with pre-4.7 code can keep calling the historical
+# names with a one-cycle ``DeprecationWarning`` instead of a cold
+# ``AttributeError``.  Each shim forwards to the canonical new name.
+from ._deprecation import deprecated_alias as _deprecated_alias
+
+# C.2 (v4.7): Zemax-loader renames.
+load_zmx_prescription = _deprecated_alias(
+    load_zemax_zmx,
+    old_name='load_zmx_prescription',
+    version_added='4.7',
+    version_removed='5.0',
+)
+load_zemax_prescription_txt = _deprecated_alias(
+    load_zemax_prescription_data_txt,
+    old_name='load_zemax_prescription_txt',
+    version_added='4.7',
+    version_removed='5.0',
+)
+
+__version__ = "4.12.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -740,6 +763,9 @@ __all__ = [
     'THORLABS_CATALOG',
     'load_zemax_zmx',
     'load_zemax_prescription_data_txt',
+    # Deprecated aliases (v4.7 rename, v5.0 removal target)
+    'load_zmx_prescription',
+    'load_zemax_prescription_txt',
     'export_zemax_lens_data',
     'export_zemax_zmx',
     'load_codev_seq',

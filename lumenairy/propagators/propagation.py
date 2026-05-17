@@ -237,10 +237,23 @@ def get_default_complex_dtype() -> Any:
 # threads)`` lets several recently-used plans stay resident, with
 # bounded memory because old entries fall out the back of the LRU.
 #
-# Entry layout: OrderedDict[key] = (plan, buf, lock).  ``buf`` is
-# bound as both input and output of ``plan`` (in-place); the lock
-# serialises concurrent execution on the shared buffer.
-_PYFFTW_PLAN_CACHE: 'OrderedDict[tuple, tuple]' = OrderedDict()
+# Entry layout (4.12 double-buffer):
+#   OrderedDict[key] = {
+#       'plans':   [plan_a, plan_b],   # one in-place pyFFTW plan per slot
+#       'bufs':    [buf_a,  buf_b],    # aligned workspaces, plan_i bound to bufs[i]
+#       'lock':    threading.Lock(),   # serialises execution across slots
+#       'idx':     int,                # next slot to use, toggled each call
+#       'flag':    'FFTW_ESTIMATE' | 'FFTW_MEASURE' | ... (per-entry planner)
+#       'calls':   int,                # call count for auto-promote tracking
+#       'promoted':bool,               # True once promoted to MEASURE
+#   }
+# The two-buffer ping-pong lets ``_fft2`` / ``_ifft2`` return ``bufs[idx]``
+# directly instead of paying for a buf.copy(); the next call at the same
+# key writes into ``bufs[1 - idx]`` so the previous caller's reference
+# stays valid until they release it (or call _fft2/_ifft2 again at the
+# same key, in which case they MUST have consumed the prior result -- see
+# the docstring on _fft2 / _ifft2).
+_PYFFTW_PLAN_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
 _PYFFTW_PLAN_CACHE_SIZE = 8       # # of plans to keep resident
 _PYFFTW_PLAN_LOCK = threading.Lock()
 
@@ -251,6 +264,16 @@ _PYFFTW_PLAN_LOCK = threading.Lock()
 # times.  FFTW_PATIENT (~10-60 s plan) gives a few more % beyond
 # MEASURE.  Switch at runtime via ``set_pyfftw_planner()``.
 _PYFFTW_PLAN_FLAGS = ('FFTW_ESTIMATE',)
+
+# 4.12 auto-promote: when an ESTIMATE-flagged plan key gets called this
+# many times, the plan is evicted and rebuilt with FFTW_MEASURE so the
+# steady-state hot path benefits from the better planner without making
+# the user opt in explicitly.  Below the threshold the one-shot MEASURE
+# planning cost (~0.1-1 s on a 4k grid) isn't recouped, so we stay with
+# ESTIMATE.  Disable globally via ``set_fft_auto_promote(False)`` for
+# bit-for-bit deterministic-output workflows.
+_PYFFTW_AUTO_PROMOTE = True
+_PYFFTW_AUTO_PROMOTE_THRESHOLD = 5
 
 
 def set_pyfftw_planner(planner: str = 'FFTW_ESTIMATE') -> None:
@@ -273,7 +296,7 @@ def set_pyfftw_planner(planner: str = 'FFTW_ESTIMATE') -> None:
     script start with ``'FFTW_MEASURE'`` is the recommended
     production setup.
     """
-    global _PYFFTW_PLAN_FLAGS
+    global _PYFFTW_PLAN_FLAGS, _PYFFTW_AUTO_PROMOTE_LOGGED
     valid = {'FFTW_ESTIMATE', 'FFTW_MEASURE',
              'FFTW_PATIENT', 'FFTW_EXHAUSTIVE'}
     if planner not in valid:
@@ -284,6 +307,11 @@ def set_pyfftw_planner(planner: str = 'FFTW_ESTIMATE') -> None:
     # Clear the plan cache so subsequent calls re-plan with the new flag.
     with _PYFFTW_PLAN_LOCK:
         _PYFFTW_PLAN_CACHE.clear()
+    # Reset the auto-promote log gate: a user-driven planner change
+    # is the start of a fresh planning regime, so any subsequent
+    # promotion (which will only fire if the user re-selected
+    # ESTIMATE) should be announced again.
+    _PYFFTW_AUTO_PROMOTE_LOGGED = False
 
 
 def reset_fft_backend() -> None:
@@ -295,10 +323,15 @@ def reset_fft_backend() -> None:
     scipy fallback.  Also drops every cached plan, freeing all
     aligned workspaces.
     """
-    global _PYFFTW_BAD_SHAPES
+    global _PYFFTW_BAD_SHAPES, _PYFFTW_AUTO_PROMOTE_LOGGED
     _PYFFTW_BAD_SHAPES = set()
     with _PYFFTW_PLAN_LOCK:
         _PYFFTW_PLAN_CACHE.clear()
+    # Reset the auto-promote one-shot log gate so that the next
+    # ESTIMATE->MEASURE promotion (if any) is announced again --
+    # useful when a long-running notebook session calls
+    # reset_fft_backend() between experiments.
+    _PYFFTW_AUTO_PROMOTE_LOGGED = False
     # Also flush the H / kxky / bandlimit caches -- they are sized
     # for "what was just being computed" so dropping them on backend
     # reset matches the user's mental model.
@@ -386,26 +419,131 @@ def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional
     return n
 
 
+# Whether we have emitted the first-promote info log this process.
+_PYFFTW_AUTO_PROMOTE_LOGGED = False
+
+
+def _build_plan_entry(direction, shape_t, dt, threads, flag):
+    """Build a fresh double-buffered plan entry.
+
+    Allocates two aligned workspaces and one in-place pyFFTW plan per
+    buffer (each plan is bound to its own buffer so the two can be
+    used in alternation without any ``update_arrays`` overhead).
+    Returns the cache-entry dict; the caller is responsible for
+    storing it under the appropriate key.
+
+    Note: on ``flag = 'FFTW_MEASURE'`` (or stronger), the pyFFTW
+    constructor runs the planner against the supplied buffer, which
+    overwrites its contents.  That's fine here because the buffers
+    are freshly allocated by this function and aren't visible to any
+    caller until we return.
+    """
+    if len(shape_t) <= 2:
+        axes = (0, 1)
+    else:
+        axes = (len(shape_t) - 2, len(shape_t) - 1)
+    direction_flag = 'FFTW_FORWARD' if direction == 'fwd' else 'FFTW_BACKWARD'
+
+    bufs = [pyfftw.empty_aligned(shape_t, dtype=dt),
+            pyfftw.empty_aligned(shape_t, dtype=dt)]
+    plans = [
+        pyfftw.FFTW(
+            bufs[0], bufs[0],
+            axes=axes,
+            direction=direction_flag,
+            flags=(flag,),
+            threads=max(1, int(threads)),
+        ),
+        pyfftw.FFTW(
+            bufs[1], bufs[1],
+            axes=axes,
+            direction=direction_flag,
+            flags=(flag,),
+            threads=max(1, int(threads)),
+        ),
+    ]
+    return {
+        'plans': plans,
+        'bufs': bufs,
+        'lock': threading.Lock(),
+        'idx': 0,
+        'flag': str(flag),
+        'calls': 0,
+        'promoted': False,
+    }
+
+
+def _promote_entry_to_measure(entry, direction, shape_t, dt, threads):
+    """Rebuild the cache entry under FFTW_MEASURE in-place.
+
+    Returns the new entry (a fresh dict produced by
+    :func:`_build_plan_entry`).  Caller holds ``_PYFFTW_PLAN_LOCK`` and
+    is responsible for updating the cache.  Emits a one-time info log
+    so users see "lumenairy: promoting (..., MEASURE) ..." the first
+    time any key promotes.
+    """
+    import logging
+    _log = logging.getLogger('lumenairy')
+    if not _PYFFTW_AUTO_PROMOTE_LOGGED:
+        _log.info(
+            "lumenairy: promoting (%s, %s, %s, %d-thread) FFT plan from "
+            "ESTIMATE to MEASURE (will pay one-shot planning cost; "
+            "disable with lumenairy.set_fft_auto_promote(False))",
+            shape_t, direction, dt.str, int(threads))
+        # Mark logged so subsequent promotions at other keys don't
+        # spam (one info per key family is enough to make the
+        # behaviour visible).  Promoted keys are tracked individually
+        # via entry['promoted'] = True so we don't promote twice.
+        globals()['_PYFFTW_AUTO_PROMOTE_LOGGED'] = True
+    new_entry = _build_plan_entry(direction, shape_t, dt, threads,
+                                    'FFTW_MEASURE')
+    new_entry['promoted'] = True
+    return new_entry
+
+
 def _get_or_make_plan(direction, shape, dtype, threads):
-    """Return a cached in-place pyFFTW plan for ``direction`` ('fwd' or
-    'inv') at the requested ``shape`` / ``dtype`` / ``threads``.
+    """Return a cached in-place pyFFTW plan slot for ``direction``
+    ('fwd' or 'inv') at the requested ``shape`` / ``dtype`` /
+    ``threads``.
 
     Multi-slot LRU: each (direction, shape, dtype, threads) combination
-    has its own resident plan.  On hit the entry is moved to the
-    front of the LRU; on miss a fresh plan + aligned buffer is built
-    and the oldest entry is evicted if the cache is full.
+    has its own resident entry with **two** aligned workspaces (a
+    double-buffer ping-pong).  Each call alternates between slots, so
+    the buffer returned to the previous caller is not clobbered by
+    the current call -- the wrapper can return ``buf`` directly
+    instead of paying for a ``.copy()``.
 
     Returns
     -------
     plan : pyfftw.FFTW
-        Bound to ``buf`` as both input and output (in-place transform).
+        The plan bound to ``buf`` for this call.  In-place transform.
     buf : ndarray
-        Aligned workspace.  Callers must ``np.copyto(buf, data)``
-        before executing and ``buf.copy()`` the result out before
-        the next call on the same plan clobbers ``buf``.
+        Aligned workspace for this call.  Caller must
+        ``np.copyto(buf, data)`` before executing ``plan()``.  The
+        returned ``buf`` IS the result after ``plan()``; callers may
+        return it directly to their own callers without ``.copy()``
+        **as long as they accept that this buffer will be overwritten
+        on the *second* subsequent call at the same key** (the first
+        such call writes into the alternate slot and leaves this one
+        alone).
     lock : threading.Lock
-        Per-plan lock; serialises concurrent execution on the shared
-        buffer.
+        Per-key lock; serialises concurrent execution at this key.
+        Two threads at the same key still don't get to interleave on
+        the same slot.
+
+    Notes
+    -----
+    Callers that hold the returned buffer reference across more than
+    one subsequent FFT call at the same key (e.g. caching the raw
+    pyFFTW output for long-term reuse) must explicitly ``buf.copy()``
+    or otherwise materialise an independent array before the third
+    call.  See :func:`_fft2` / :func:`_ifft2` docstrings for the
+    contract.
+
+    Auto-promote: when ``_PYFFTW_AUTO_PROMOTE`` is True (default), an
+    entry whose plan was built with ``FFTW_ESTIMATE`` is rebuilt with
+    ``FFTW_MEASURE`` after its 5th call.  See
+    :func:`set_fft_auto_promote`.
     """
     shape_t = tuple(int(s) for s in shape)
     dt = np.dtype(dtype)
@@ -415,9 +553,43 @@ def _get_or_make_plan(direction, shape, dtype, threads):
         if key in _PYFFTW_PLAN_CACHE:
             entry = _PYFFTW_PLAN_CACHE[key]
             _PYFFTW_PLAN_CACHE.move_to_end(key)
-            plan, buf, lock = entry
-            if buf.shape == shape_t and buf.dtype == dt:
-                return plan, buf, lock
+            # Sanity check: buffer must still have the requested shape
+            # / dtype.  Should never fail, but if it does (rare,
+            # defensive) we drop and rebuild.
+            buf0 = entry['bufs'][0]
+            if buf0.shape == shape_t and buf0.dtype == dt:
+                # Bump call count and check for auto-promote.  The
+                # explicit user planner override
+                # (set_pyfftw_planner(...)) is honored ahead of
+                # auto-promote: if the user has globally selected a
+                # planner stronger than (or equal to) MEASURE, we
+                # don't promote ESTIMATE entries built before that
+                # user override -- but since set_pyfftw_planner
+                # clears the cache, the next call after the override
+                # will rebuild under the new flag and we won't enter
+                # this branch with a stale ESTIMATE entry anyway.
+                entry['calls'] += 1
+                if (_PYFFTW_AUTO_PROMOTE
+                        and not entry['promoted']
+                        and entry['flag'] == 'FFTW_ESTIMATE'
+                        and _PYFFTW_PLAN_FLAGS[0] == 'FFTW_ESTIMATE'
+                        and entry['calls'] >= _PYFFTW_AUTO_PROMOTE_THRESHOLD):
+                    # Promote: build MEASURE plans, swap into the
+                    # cache, and use the new entry for this call.
+                    # Promotion is one-shot; subsequent hits at this
+                    # key use the MEASURE plan without re-planning.
+                    _ensure_pyfftw_loaded()
+                    new_entry = _promote_entry_to_measure(
+                        entry, direction, shape_t, dt, threads)
+                    new_entry['calls'] = entry['calls']
+                    _PYFFTW_PLAN_CACHE[key] = new_entry
+                    entry = new_entry
+                # Advance ping-pong slot under the cache lock so two
+                # threads contending at the same key can't both grab
+                # the same slot.
+                slot = entry['idx']
+                entry['idx'] = 1 - slot
+                return entry['plans'][slot], entry['bufs'][slot], entry['lock']
             # Buffer mutated under us (rare; defensive); fall through
             # and rebuild.
             del _PYFFTW_PLAN_CACHE[key]
@@ -427,28 +599,16 @@ def _get_or_make_plan(direction, shape, dtype, threads):
     # the threaded kernel.  pyfftw.FFTW.__call__ on the same buf is
     # not thread-safe -- the per-plan lock guards that.
     _ensure_pyfftw_loaded()
-    buf = pyfftw.empty_aligned(shape_t, dtype=dt)
-    direction_flag = 'FFTW_FORWARD' if direction == 'fwd' else 'FFTW_BACKWARD'
-    # Choose FFT axes: for 2-D shapes use (0, 1); for higher-D shapes
-    # (e.g. batched (B, Ny, Nx) JonesField propagation) FFT only the
-    # last two axes.
-    if len(shape_t) <= 2:
-        axes = (0, 1)
-    else:
-        axes = (len(shape_t) - 2, len(shape_t) - 1)
-    plan = pyfftw.FFTW(
-        buf, buf,
-        axes=axes,
-        direction=direction_flag,
-        flags=_PYFFTW_PLAN_FLAGS,
-        threads=max(1, int(threads)),
-    )
-    lock = threading.Lock()
+    new_entry = _build_plan_entry(direction, shape_t, dt, threads,
+                                    _PYFFTW_PLAN_FLAGS[0])
+    new_entry['calls'] = 1
     with _PYFFTW_PLAN_LOCK:
-        _PYFFTW_PLAN_CACHE[key] = (plan, buf, lock)
+        _PYFFTW_PLAN_CACHE[key] = new_entry
         while len(_PYFFTW_PLAN_CACHE) > _PYFFTW_PLAN_CACHE_SIZE:
             _PYFFTW_PLAN_CACHE.popitem(last=False)
-    return plan, buf, lock
+        slot = new_entry['idx']
+        new_entry['idx'] = 1 - slot
+    return new_entry['plans'][slot], new_entry['bufs'][slot], new_entry['lock']
 
 
 # ----------------------------------------------------------------------------
@@ -733,6 +893,49 @@ def get_pyfftw_planner() -> str:
     return _PYFFTW_PLAN_FLAGS[0]
 
 
+def set_fft_auto_promote(enabled: bool) -> None:
+    """Enable or disable automatic ESTIMATE -> MEASURE plan promotion (4.12).
+
+    When enabled (the default), the pyFFTW plan cache tracks the
+    call count for every ``(direction, shape, dtype, threads)`` key
+    that was built under :data:`_PYFFTW_PLAN_FLAGS` =
+    ``'FFTW_ESTIMATE'`` (i.e. the library default).  After the 5th
+    call at the same key, the plan is rebuilt with ``FFTW_MEASURE``
+    so that the steady-state hot path benefits from FFTW's more
+    aggressive algorithm choice (~1.3-2x faster execution on common
+    optics shapes, in exchange for a one-shot ~100-1000 ms planning
+    cost at the promotion call).
+
+    Promotion is one-shot per key and survives until the next
+    :func:`reset_fft_backend` / :func:`set_pyfftw_planner` /
+    :func:`set_fft_plan_cache_size` call that clears the cache.
+    Eviction from the LRU restarts the call counter from zero, so a
+    rarely-used key won't keep paying the MEASURE cost on rebuild.
+
+    Pass ``False`` for bit-for-bit reproducibility across runs: the
+    FFTW MEASURE planner can pick a different algorithm than
+    ESTIMATE, and while the change is at the float-LSB level it can
+    perturb the final ULP of cumulative-sum outputs.  Disable also
+    if you have an explicit :func:`set_pyfftw_planner` strategy
+    (e.g. ``'FFTW_PATIENT'``) and want to control the planner
+    yourself.
+
+    Companion to :func:`get_fft_auto_promote`.  No-op when pyFFTW
+    is not installed.
+    """
+    global _PYFFTW_AUTO_PROMOTE
+    _PYFFTW_AUTO_PROMOTE = bool(enabled)
+
+
+def get_fft_auto_promote() -> bool:
+    """Return whether auto-promote of ESTIMATE -> MEASURE is on (4.12).
+
+    Mirrors :func:`set_fft_auto_promote`.  Defaults to ``True`` at
+    import time.
+    """
+    return bool(_PYFFTW_AUTO_PROMOTE)
+
+
 def get_asm_cache_size() -> Dict[str, int]:
     """Return the current ASM-cache bounds as a dict.
 
@@ -818,7 +1021,7 @@ def _fft2(x):
 
     Priority order:
         1. CuPy (if input is a CuPy array)
-        2. pyFFTW via the single-slot cached plan (if USE_PYFFTW, array
+        2. pyFFTW via the multi-slot cached plan (if USE_PYFFTW, array
            large enough, shape not in the bad-shape blacklist).  Hits
            :func:`_get_or_make_plan` which reuses an existing plan
            when ``(shape, dtype, threads)`` matches exactly, otherwise
@@ -830,6 +1033,31 @@ def _fft2(x):
     allocation (common on very large grids under memory pressure)
     falls back to scipy.fft rather than propagating the error.  See
     :data:`PYFFTW_FALLBACK_ON_ERROR`.
+
+    Returned-buffer ownership (4.12 double-buffer)
+    ----------------------------------------------
+    On the pyFFTW path the returned array IS one of the two ping-pong
+    workspace buffers held inside the plan cache, not a fresh
+    allocation.  This skips the ~256 MB-1 GB per-call copy at 4k-8k
+    grids in exchange for one constraint on callers:
+
+    * **The returned buffer stays stable across exactly ONE
+      subsequent FFT call at the same (direction, shape, dtype,
+      threads) key**.  The next call writes into the alternate slot
+      and leaves yours untouched.  The call *after* that recycles
+      your slot.
+
+    * Almost every in-library caller consumes the result immediately
+      (multiply, IFFT, or fftshift) before issuing another FFT call
+      at the same key, so the contract is satisfied for free.
+
+    * Callers that need a longer-lived independent copy (e.g. caching
+      the raw FFT output for reuse across many subsequent FFTs, as
+      :func:`rayleigh_sommerfeld_propagate` does with its kernel
+      transfer function) must explicitly ``.copy()`` the result
+      themselves.  The scipy / numpy fallback path always returns a
+      fresh array, so a defensive ``.copy()`` is a no-op on
+      non-pyFFTW backends.
     """
     if _is_cupy_array(x):
         return cp.fft.fft2(x)
@@ -840,15 +1068,17 @@ def _fft2(x):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
         try:
             plan, buf, lock = _get_or_make_plan('fwd', shape, x.dtype, threads)
-            # Hold the lock across copy-in, execute, and copy-out so
-            # a concurrent ``_fft2`` / ``_ifft2`` caller can't race
-            # on the shared bound buffer.
+            # Hold the lock across copy-in and execute so a
+            # concurrent ``_fft2`` / ``_ifft2`` caller at the same
+            # key can't race on this slot's buffer.  The ping-pong
+            # slot index has already been advanced under the cache
+            # lock, so the next caller at this key receives the
+            # ALTERNATE buffer; this slot stays valid until the call
+            # after next.  See module docstring for the contract.
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                # Copy out so the next _fft2/_ifft2 call (which will
-                # overwrite ``buf``) can't corrupt the caller's result.
-                return buf.copy()
+                return buf
         except Exception as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
@@ -861,10 +1091,16 @@ def _ifft2(x):
     """
     2-D inverse FFT dispatcher.
 
-    Same priority as :func:`_fft2`.  Uses a separate single-slot
-    cached plan for the inverse direction; ``pyfftw.FFTW`` with
+    Same priority as :func:`_fft2`.  Uses a separate cache slot for
+    the inverse direction; ``pyfftw.FFTW`` with
     ``direction='FFTW_BACKWARD'`` normalises by ``N`` by default,
     matching ``numpy.fft.ifft2`` semantics.
+
+    Returned-buffer ownership: same contract as :func:`_fft2` -- the
+    pyFFTW path returns a reference to one of two ping-pong
+    workspace buffers, stable across exactly one subsequent
+    ``_ifft2`` call at the same key.  Callers caching the result for
+    multiple subsequent FFT calls must ``.copy()``.
     """
     if _is_cupy_array(x):
         return cp.fft.ifft2(x)
@@ -878,7 +1114,7 @@ def _ifft2(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf.copy()
+                return buf
         except Exception as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
@@ -1490,7 +1726,13 @@ def angular_spectrum_propagate_batch(
 def _fft2_nd(x):
     """N-D forward 2-D FFT over the last two axes.  Uses pyFFTW for
     contiguous (B, Ny, Nx) shapes when large enough; falls back to
-    scipy.fft / numpy for everything else."""
+    scipy.fft / numpy for everything else.
+
+    Returned-buffer ownership follows the same double-buffer
+    contract as :func:`_fft2`: the pyFFTW path returns a reference
+    to one of two ping-pong workspace buffers.  Callers caching the
+    result across multiple subsequent FFT calls at this shape must
+    ``.copy()`` defensively."""
     if _is_cupy_array(x):
         return cp.fft.fft2(x, axes=(-2, -1))
     shape = tuple(x.shape)
@@ -1504,7 +1746,7 @@ def _fft2_nd(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf.copy()
+                return buf
         except Exception as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
@@ -1515,6 +1757,10 @@ def _fft2_nd(x):
 
 
 def _ifft2_nd(x):
+    """N-D inverse 2-D FFT.  Same priority chain as :func:`_fft2_nd`
+    and same double-buffer ownership contract: pyFFTW returns a
+    reference into a ping-pong slot; callers caching across
+    multiple subsequent calls must ``.copy()``."""
     if _is_cupy_array(x):
         return cp.fft.ifft2(x, axes=(-2, -1))
     shape = tuple(x.shape)
@@ -1528,7 +1774,7 @@ def _ifft2_nd(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf.copy()
+                return buf
         except Exception as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
@@ -1864,9 +2110,9 @@ def angular_spectrum_propagate_mft(
     # below.  Cache H on the input-geometry signature so repeat calls
     # at the same input plane onto different output grids share one
     # H build.  ``'ASM_MFT'`` tag keeps these entries disjoint from
-    # plain ASM, since this builder uses ``fx <= fx_max`` (closed
-    # interval) where ASM uses ``fx < fx_max`` -- a one-bin boundary
-    # difference we preserve to avoid changing documented behaviour.
+    # plain ASM.  4.12.0: both backends now use ``fx < fx_max`` (open
+    # interval, matching the Matsushima-Shimobaba paper and plain ASM);
+    # pre-4.12 the NumPy branch used `<=` (one-bin off from JAX).
     if is_jax:
         # JAX path: build under the tracer (no host-side cache).
         fx = (xp.arange(Nx_in, dtype=xp.float64) - Nx_in / 2.0) / (Nx_in * dx_in)
@@ -1914,8 +2160,12 @@ def angular_spectrum_propagate_mft(
                 Ly_phys = Ny_in * dy_in
                 fx_max = Lx_phys / (2.0 * wavelength * abs(z))
                 fy_max = Ly_phys / (2.0 * wavelength * abs(z))
-                bl_mask = ((np.abs(fx)[None, :] <= fx_max)
-                           & (np.abs(fy)[:, None] <= fy_max))
+                # 4.12.0 (audit round-4 B1-4): use strict `<` to match
+                # the JAX branch above (and plain ASM at line ~1200).
+                # Pre-4.12 NumPy used `<=` -- one-bin disagreement
+                # between backends at the band-limit boundary.
+                bl_mask = ((np.abs(fx)[None, :] < fx_max)
+                           & (np.abs(fy)[:, None] < fy_max))
                 H_np = np.where(bl_mask, H_np, 0.0).astype(target_cdtype)
             _h_cache_store(h_key, H_np)
         H = H_np if xp is np else xp.asarray(H_np)
@@ -2761,6 +3011,18 @@ def rayleigh_sommerfeld_propagate(
     >>>
     >>> E_out = rayleigh_sommerfeld_propagate(E_in, z=1e-3, wavelength=wv, dx=dx)
     """
+    # 4.12.0 (audit round-4 B1-3): RS is forward-only.  Pre-4.12 the
+    # function accepted z <= 0 silently and computed a 180-degrees-
+    # wrong-phase kernel for the back-propagation case.  Match the
+    # existing Fresnel / Fraunhofer / SAS guards: hard error with
+    # guidance to use ASM / ASM-MFT for back-propagation.
+    if z <= 0:
+        raise ValueError(
+            f"rayleigh_sommerfeld_propagate: z must be > 0 (got "
+            f"{z!r}).  RS is forward-only; use "
+            f"angular_spectrum_propagate or "
+            f"angular_spectrum_propagate_mft for back-propagation "
+            f"(those handle the z < 0 case correctly).")
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='rayleigh_sommerfeld_propagate')
 
@@ -2844,10 +3106,18 @@ def rayleigh_sommerfeld_propagate(
                       f"{type(_exc).__name__}>")
 
         # -- FFT the kernel ----------------------------------------------------
+        # The result is cached via _h_cache_store below and reused
+        # across many subsequent _fft2/_ifft2 calls; under the 4.12
+        # double-buffer contract on _fft2, we must take an explicit
+        # copy here so the cached H survives the third subsequent
+        # call at this shape (which would recycle the slot).  The
+        # bandlimit branch below already produces a fresh array via
+        # H * mask_c, but the non-bandlimit path would otherwise
+        # alias the plan workspace; copy unconditionally for clarity.
         if is_jax:
             H = xp.fft.fft2(xp.fft.ifftshift(h))
         elif xp is np:
-            H = _fft2(np.fft.ifftshift(h))
+            H = _fft2(np.fft.ifftshift(h)).copy()
         else:
             H = xp.fft.fft2(xp.fft.ifftshift(h))
 
@@ -3088,8 +3358,13 @@ def scalable_angular_spectrum_propagate(
                      if target_cdtype == np.complex64 else np.float64)
 
     # -- zero-pad the input, centred ----------------------------------------
+    # 4.12.0 (audit round-4 B1-5): `as1 = (N + 1) // 2` was only
+    # correct for pad=2 (then `N_new = 2*N` and `(N_new - N)//2 = N/2`
+    # ≈ `(N+1)//2`).  For pad=4 with N=512, `(N+1)//2 = 256` but
+    # `N_new/2 = 1024` -- input ends up off-centre by ~N/4 pixels.
+    # The correct centring is `(N_new - N) // 2`.
     psi_p = xp.zeros((N_new, N_new), dtype=target_cdtype)
-    as1 = (N + 1) // 2
+    as1 = (N_new - N) // 2
     psi_p[as1:as1 + N, as1:as1 + N] = E_in
 
     # ── Kernel cache (NumPy backend) ────────────────────────────────

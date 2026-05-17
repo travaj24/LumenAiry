@@ -77,6 +77,27 @@ def propagate(
             paraxial-violating systems).
 
         Has no effect when ``method`` is set to a specific string.
+    output_grid, output_dx : tuple / float, optional
+        Request an output grid that differs from the input pitch.
+
+        - GBD / HFPI / HF forward these to their underlying
+          (prescription-driven) propagators directly.
+        - ASM / Fresnel / Fraunhofer auto-promote to their MFT
+          variants (:func:`angular_spectrum_propagate_mft`,
+          :func:`fresnel_propagate_mft`,
+          :func:`fraunhofer_propagate_mft`) when ``output_grid`` or
+          ``output_dx`` is given.
+        - SAS / RS do not support arbitrary output-grid sampling and
+          raise ``ValueError`` (pointing at the ASM-MFT entry point)
+          if ``output_grid`` / ``output_dx`` is passed.
+
+        ``output_grid`` may be a ``(N_out, dx_out)`` tuple or a
+        ``{'N': ..., 'dx': ...}`` dict.  ``output_dx`` is a shortcut
+        when only the pitch needs to change (``N_out`` defaults to
+        the input ``N``).  Pre-4.12 the ASM family silently dropped
+        these kwargs and returned a bare-grid output at the input
+        pitch -- a quiet wrong-physics path that audit round-4 B1-8
+        flagged.
     return_result : bool, default False
         When True, wrap the output in a
         :class:`lumenairy.propagators.PropagationResult` carrying
@@ -84,6 +105,12 @@ def propagate(
         ``metadata`` dict.  When False (default), return the bare
         propagator output (typically a complex ndarray) -- preserving
         backward compatibility and zero-overhead fast loops.
+
+        4.12: for tuple-returning kernels (Fresnel / Fraunhofer / SAS
+        return ``(E, dx_out, dy_out)``) the wrapped result now reports
+        the kernel's **output** dx, not the input dx.  Pre-4.12 audit
+        round-4 B1-7: tuple unpacking silently failed, ``field`` was
+        ``None``, and ``dx`` was the input pitch.
     """
     if method not in VALID_METHODS:
         raise ValueError(
@@ -107,16 +134,26 @@ def propagate(
         return out
 
     from .result import PropagationResult
-    out_dx = output_dx if output_dx is not None else dx
+    default_out_dx = output_dx if output_dx is not None else dx
     # Best-effort: bare ndarray -> wrap directly; tuple / list / other
-    # -> stash into metadata so callers can still introspect.
+    # -> unpack the field and record the propagator-reported output
+    # pitch when present.  4.12 fix (audit round-4 B1-7): kernels like
+    # fresnel_propagate / fraunhofer_propagate / scalable_angular_spectrum_propagate
+    # return ``(E, dx_out, dy_out)``; pre-4.12 the tuple path went
+    # through _coerce_field which silently dropped to None and reported
+    # the INPUT dx instead of the kernel's output dx.
     if isinstance(out, np.ndarray):
         return PropagationResult(
-            field=out, dx=out_dx, wavelength=wavelength,
+            field=out, dx=default_out_dx, wavelength=wavelength,
             z=z, method=method, metadata={},
         )
+    # PropagationResult passthrough (some propagators may already wrap).
+    if isinstance(out, PropagationResult):
+        return out
+    field_arr, dx_from_kernel = _coerce_field(out)
+    out_dx = dx_from_kernel if dx_from_kernel is not None else default_out_dx
     return PropagationResult(
-        field=getattr(out, 'field', None) or _coerce_field(out),
+        field=field_arr,
         dx=out_dx, wavelength=wavelength,
         z=z, method=method,
         metadata={'native_return': out},
@@ -124,16 +161,40 @@ def propagate(
 
 
 def _coerce_field(x):
-    """Coerce a non-ndarray propagator return into a complex array
-    if possible -- otherwise return ``None`` and stash the raw value
-    in metadata for inspection."""
+    """Coerce a non-ndarray propagator return into a (field, dx_out)
+    pair when possible.
+
+    Returns ``(ndarray | None, dx_out | None)``.  ``dx_out`` is the
+    propagator-reported output grid pitch if the kernel returns a
+    ``(E, dx_out, ...)`` tuple, else ``None``.  The two-value return
+    lets the dispatcher record the **output** pitch on
+    :class:`PropagationResult.dx` rather than the input pitch.
+    4.12 fix (audit round-4 B1-7): pre-4.12 the tuple-returning
+    propagators (fresnel/fraunhofer/SAS) silently yielded
+    ``field=None`` and ``dx=<input pitch>`` instead of the kernel's
+    real output.
+    """
+    # Tuple / list returned by fresnel_propagate, fraunhofer_propagate,
+    # scalable_angular_spectrum_propagate -- shape ``(E, dx_out, dy_out)``
+    # for the all-FFT methods; ``(E, dx_out)`` for the resample helper.
+    if isinstance(x, (tuple, list)) and len(x) >= 1:
+        first = x[0]
+        if isinstance(first, np.ndarray):
+            dx_out = None
+            if len(x) >= 2:
+                try:
+                    dx_out = float(x[1])
+                except (TypeError, ValueError):
+                    dx_out = None
+            return first, dx_out
+        return None, None
     try:
         arr = np.asarray(x)
         if np.iscomplexobj(arr) or arr.dtype.kind == 'f':
-            return arr
+            return arr, None
     except Exception:
         pass
-    return None
+    return None, None
 
 
 def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
@@ -218,6 +279,16 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
     abs_z = abs(z)
     if abs_z == 0:
         return 'asm'
+    # 4.12 fix (audit round-4 B1-6): for z < 0 (back-propagation) the
+    # forward-only kernels (Fresnel / Fraunhofer / SAS / RS) all raise
+    # ValueError.  Restrict the regime check to the back-propagating
+    # methods (ASM is the only auto-selectable option) so the dispatcher
+    # never silently routes the user into a hard-raise from a kernel
+    # they didn't pick by name.  Users who need MFT-style back-propagation
+    # at custom output pitch should call angular_spectrum_propagate_mft
+    # directly (the auto-selector here only routes between bare-z kernels).
+    if z < 0:
+        return 'asm'
     N_F = a * a / (wavelength * abs_z)
     if N_F < 0.1:
         return 'fraunhofer'
@@ -230,10 +301,138 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
     return 'asm'
 
 
+_FORWARD_ONLY_METHODS = ('sas', 'fresnel', 'fraunhofer', 'rs')
+
+
+def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
+                                     output_grid, output_dx, **kwargs):
+    """Route a bare-grid method (asm/fresnel/fraunhofer/sas/rs) to the
+    correct MFT variant when the caller asks for an output-pitch /
+    output-grid that differs from the natural FFT output.
+
+    4.12 fix (audit round-4 B1-8).  Behaviour:
+      - ``asm`` -> :func:`angular_spectrum_propagate_mft` (forward or
+        back-prop -- ASM-MFT supports any sign of z).
+      - ``fresnel`` -> :func:`fresnel_propagate_mft` (forward-only).
+      - ``fraunhofer`` -> :func:`fraunhofer_propagate_mft` (forward-only).
+      - ``sas`` / ``rs`` -> ValueError; no MFT analogue in 4.12.
+
+    ``output_grid`` can be ``(N_out, dx_out)`` or a dict
+    ``{'N': ..., 'dx': ...}``.  ``output_dx`` short-circuits and uses
+    the input N for the MFT N_out.
+    """
+    if z is None:
+        raise ValueError(
+            f"propagate(method={method!r}, output_grid/output_dx=...): "
+            f"z is required for an MFT-style output-grid call.")
+
+    # Resolve N_out, dx_out from output_grid or output_dx.
+    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
+    N_in = max(Ny, Nx)
+    dx_out = None
+    N_out = None
+    if output_grid is not None:
+        if isinstance(output_grid, dict):
+            N_out = output_grid.get('N')
+            dx_out = output_grid.get('dx')
+        elif isinstance(output_grid, (tuple, list)) and len(output_grid) >= 2:
+            N_out, dx_out = output_grid[0], output_grid[1]
+        else:
+            raise ValueError(
+                f"propagate(method={method!r}, output_grid=...): "
+                f"output_grid must be a (N_out, dx_out) tuple or "
+                f"{{'N': ..., 'dx': ...}} dict, got {type(output_grid).__name__}.")
+    if output_dx is not None:
+        dx_out = output_dx
+    if dx_out is None:
+        raise ValueError(
+            f"propagate(method={method!r}, output_grid=...): could not "
+            f"resolve an output dx from output_grid={output_grid!r} "
+            f"or output_dx={output_dx!r}.")
+    if N_out is None:
+        N_out = N_in
+    N_out = int(N_out)
+    dx_out = float(dx_out)
+
+    if method == 'asm':
+        from .propagation import angular_spectrum_propagate_mft
+        return angular_spectrum_propagate_mft(
+            E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
+    if method == 'fresnel':
+        from .propagation import fresnel_propagate_mft
+        return fresnel_propagate_mft(
+            E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
+    if method == 'fraunhofer':
+        from .propagation import fraunhofer_propagate_mft
+        return fraunhofer_propagate_mft(
+            E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
+    if method == 'sas':
+        raise ValueError(
+            f"propagate(method='sas', output_grid/output_dx=...): "
+            f"SAS does not support arbitrary output-grid sampling.  Its "
+            f"output pitch is fixed by `dx_out = lambda*z/(pad*N*dx)`.  "
+            f"Use method='asm' (auto-promotes to angular_spectrum_propagate_mft) "
+            f"for explicit output-pitch sampling, or method='fresnel' for "
+            f"the paraxial-MFT path.")
+    if method == 'rs':
+        raise ValueError(
+            f"propagate(method='rs', output_grid/output_dx=...): "
+            f"Rayleigh-Sommerfeld does not support arbitrary output-grid "
+            f"sampling in 4.12 (no MFT variant).  Use method='asm' "
+            f"(auto-promotes to angular_spectrum_propagate_mft) for "
+            f"output-pitch sampling.")
+    raise NotImplementedError(
+        f"_dispatch_bare_grid_with_output: method {method!r} not "
+        f"covered.")
+
+
 def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
                         prescription, output_grid, output_dx,
                         **kwargs):
-    """Call the chosen propagator with the appropriate signature."""
+    """Call the chosen propagator with the appropriate signature.
+
+    4.12 fix (audit round-4 B1-6): when the user explicitly picks a
+    forward-only method (Fresnel / Fraunhofer / SAS / RS) with z < 0,
+    raise a dispatcher-level ValueError naming :func:`propagate` rather
+    than letting the kernel raise a confusing error that mentions the
+    underlying function the user didn't call by name.  ASM is the only
+    auto-supported back-propagation kernel here; users who need
+    MFT-style back-prop at a custom output pitch should call
+    :func:`angular_spectrum_propagate_mft` directly.
+
+    4.12 fix (audit round-4 B1-8): when the caller passes
+    ``output_grid`` / ``output_dx`` and the chosen method is not an MFT
+    variant, raise a clear ValueError pointing at the right MFT entry
+    point rather than silently dropping the user's request.  The ASM /
+    Fresnel / Fraunhofer / SAS / RS kernels in this dispatcher accept
+    only the natural FFT output grid; explicit output-pitch sampling
+    needs the MFT family (angular_spectrum_propagate_mft,
+    fresnel_propagate_mft, fraunhofer_propagate_mft).  GBD / HFPI / HF
+    forward ``output_grid`` / ``output_dx`` directly to their
+    underlying propagators.
+    """
+    if method in _FORWARD_ONLY_METHODS and z is not None and float(z) < 0:
+        raise ValueError(
+            f"propagate(method={method!r}): z must be > 0 (got z={z}).  "
+            f"This method is a forward-only propagator.  Use "
+            f"method='asm' (or call angular_spectrum_propagate_mft "
+            f"directly for custom output-pitch sampling) for "
+            f"back-propagation.")
+
+    # Bare-grid methods (no prescription) do not honour output_grid /
+    # output_dx -- they always produce the natural FFT output grid.
+    # When the caller supplies an output-grid request, route them to
+    # the MFT variant or raise a clear ValueError.  Free-space GBD /
+    # HFPI / HF *do* take output_grid / output_dx and forward them
+    # through their own dispatch below.
+    _BARE_GRID_METHODS = ('asm', 'sas', 'fresnel', 'fraunhofer', 'rs')
+    if method in _BARE_GRID_METHODS and (output_grid is not None
+                                          or output_dx is not None):
+        return _dispatch_bare_grid_with_output(
+            method, E_in, z=z, wavelength=wavelength, dx=dx,
+            output_grid=output_grid, output_dx=output_dx, **kwargs,
+        )
+
     if method == 'asm':
         from .propagation import angular_spectrum_propagate
         if z is None:

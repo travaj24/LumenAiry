@@ -98,8 +98,14 @@ def propagate_huygens_fresnel_with_opl_callable(
     xp = array_namespace(E_in)
 
     Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
-    s1_x = (xp.arange(Nx_in, dtype=xp.float64) - Nx_in / 2 + 0.5) * input_grid_dx
-    s1_y = (xp.arange(Ny_in, dtype=xp.float64) - Ny_in / 2 + 0.5) * input_grid_dx
+    # v4.12.0 (B1-10): switch from cell-centred `(arange(N) - N/2 + 0.5)*dx`
+    # to pixel-centred `(arange(N) - N/2)*dx`, matching the library-wide
+    # convention (ASM, Fresnel, RS, sources, ``apply_fresnel_curvature``).
+    # The OPL callable is evaluated on input-plane coordinates so they
+    # must match the grid that ``E_in`` was sampled on by upstream
+    # propagators / source builders.
+    s1_x = (xp.arange(Nx_in, dtype=xp.float64) - Nx_in / 2) * input_grid_dx
+    s1_y = (xp.arange(Ny_in, dtype=xp.float64) - Ny_in / 2) * input_grid_dx
     S1X, S1Y = xp.meshgrid(s1_x, s1_y, indexing='xy')
 
     Ny_out = output_grid_y.shape[0]
@@ -291,8 +297,11 @@ def propagate_huygens_fresnel_through_prescription(
         from ..analysis.core import beam_d4sigma
         from .asymptotic import decompose_lg
         cx, cy = output_centre
-        out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
-        out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy
+        # v4.12.0 (B1-10): pixel-centred grid (drop the `+0.5`),
+        # matches ASM/Fresnel/RS/sources so subsequent through-focus
+        # scans and overlays stay coherent across propagator families.
+        out_x = (_np.arange(Nx) - Nx / 2) * output_dx + cx
+        out_y = (_np.arange(Ny) - Ny / 2) * output_dx + cy
         OX, OY = _np.meshgrid(out_x, out_y, indexing='xy')
 
         # Estimate source waist from input field.
@@ -307,9 +316,14 @@ def propagate_huygens_fresnel_through_prescription(
             w_s = source_box_half / 2
 
         # Build input-plane coordinates for LG decomposition.
+        # v4.12.0 (B1-10): pixel-centred grid (drop the `+0.5`).  The
+        # input field ``E_in`` was sampled by upstream propagators /
+        # source builders on the library-standard `(arange(N) - N/2)*dx`
+        # grid; the LG decomposition must use the same coordinates so
+        # the projected mode amplitudes correctly represent ``E_in``.
         Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
-        in_x = (_np.arange(Nx_in) - Nx_in / 2 + 0.5) * dx
-        in_y = (_np.arange(Ny_in) - Ny_in / 2 + 0.5) * dx
+        in_x = (_np.arange(Nx_in) - Nx_in / 2) * dx
+        in_y = (_np.arange(Ny_in) - Ny_in / 2) * dx
         IX, IY = _np.meshgrid(in_x, in_y, indexing='xy')
         # Decompose E_in onto LG modes at the source plane.
         try:
@@ -366,12 +380,14 @@ def propagate_huygens_fresnel_through_prescription(
         )
 
         # Build input and output grids.
+        # v4.12.0 (B1-10): pixel-centred grid (drop the `+0.5`),
+        # matches ASM/Fresnel/RS/sources.
         Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
-        in_x = (_np.arange(Nx_in) - Nx_in / 2 + 0.5) * dx
-        in_y = (_np.arange(Ny_in) - Ny_in / 2 + 0.5) * dx
+        in_x = (_np.arange(Nx_in) - Nx_in / 2) * dx
+        in_y = (_np.arange(Ny_in) - Ny_in / 2) * dx
         cx, cy = output_centre
-        out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
-        out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy
+        out_x = (_np.arange(Nx) - Nx / 2) * output_dx + cx
+        out_y = (_np.arange(Ny) - Ny / 2) * output_dx + cy
 
         return propagate_hf_chebyshev_quadrature(
             hf_fit, E_in,

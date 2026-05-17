@@ -19,6 +19,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -41,6 +42,7 @@ __all__ = [
     'zernike_index_to_nm', 'zernike_nm_to_index',
     'zernike_polynomial', 'zernike_basis_matrix',
     'zernike_decompose', 'zernike_reconstruct',
+    'clear_zernike_basis_cache',
     # OPD extraction / mode removal
     'remove_wavefront_modes', 'opd_pv_rms',
     'wave_opd_1d', 'wave_opd_2d',
@@ -1406,6 +1408,105 @@ def zernike_polynomial(
     return Z
 
 
+# ---------------------------------------------------------------------
+# Zernike basis-matrix cache (audit perf #7, v4.12.0)
+# ---------------------------------------------------------------------
+#
+# ``zernike_basis_matrix`` is hot during ``design_optimize`` runs:
+# every Zernike-using merit term (RMSWavefrontMerit,
+# MatchIdealThinLensMerit, MatchTargetOPDMerit, ZernikeCoefficientMerit,
+# EvaluationContext.rms_wavefront_waves) rebuilds it on every call, and
+# ``CompositeMerit`` evaluates several of these per ``evaluate(x)``.
+# Across a finite-difference Jacobian sweep that's 60-100x rebuild of
+# the same basis on the same grid -- ~20 ms each at 256x256, 21 modes.
+#
+# Cache strategy: content-fingerprint key.  The pupil grids X, Y are
+# deterministic functions of (N, dx) -- so two distinct arrays with
+# matching shape, dtype, and corner values are guaranteed (to within
+# floating-point noise of the meshgrid arithmetic) to describe the
+# same pupil.  Keying on the fingerprint (NOT on ``id()``) lets fresh
+# ``np.meshgrid`` outputs across successive ``zernike_decompose`` /
+# ``EvaluationContext.rms_wavefront_waves`` calls all hit the same
+# cached basis.
+#
+# Trade-off: if a caller mutates an input array in place but does not
+# change shape, dtype, or the first/last entries, the cache will
+# still hit and return the stale basis.  This is highly unlikely in
+# practice (pupil grids are rebuilt fresh each call) but documented
+# here.  Use ``clear_zernike_basis_cache()`` to force a rebuild.
+# ---------------------------------------------------------------------
+
+_ZERNIKE_BASIS_CACHE: "OrderedDict[Any, Tuple[np.ndarray, np.ndarray]]" = OrderedDict()
+_ZERNIKE_BASIS_CACHE_MAXSIZE = 32
+
+
+def _zernike_basis_cache_key(
+    n_modes: int,
+    X: np.ndarray,
+    Y: np.ndarray,
+    pupil_radius: float,
+) -> Tuple[Any, ...]:
+    """Build a (cheap) cache key for ``zernike_basis_matrix``.
+
+    Uses a small content fingerprint -- shape, dtype, and the first +
+    last entries of the grid -- as the cache key.  This intentionally
+    *omits* object identity so that two distinct arrays produced by
+    independent ``np.meshgrid`` calls (the common case in
+    ``zernike_decompose`` and ``EvaluationContext.rms_wavefront_waves``)
+    hit the same cache entry as long as their structure agrees.
+
+    Trade-off: if a caller mutates the input arrays in place but does
+    not change shape, dtype, or the corner values, the cache will
+    still hit and return a stale basis.  This is unlikely in practice
+    (pupil grids are rebuilt fresh each call) but documented for
+    completeness.  Call ``clear_zernike_basis_cache()`` to force a
+    rebuild.
+    """
+    # Coerce to ndarray for shape/dtype/corner access without copying.
+    Xa = np.asarray(X)
+    Ya = np.asarray(Y)
+    return (
+        int(n_modes),
+        Xa.shape, Xa.dtype.str,
+        Ya.shape, Ya.dtype.str,
+        float(Xa.flat[0]), float(Xa.flat[-1]),
+        float(Ya.flat[0]), float(Ya.flat[-1]),
+        float(pupil_radius),
+    )
+
+
+def clear_zernike_basis_cache() -> None:
+    """Drop every cached Zernike basis matrix.
+
+    Useful when the caller has mutated a coordinate grid in place and
+    wants the next ``zernike_basis_matrix`` call to recompute from
+    scratch.  Also handy in unit tests that pin cache behaviour.
+    """
+    _ZERNIKE_BASIS_CACHE.clear()
+
+
+def _zernike_basis_matrix_build(
+    n_modes: int,
+    X: np.ndarray,
+    Y: np.ndarray,
+    pupil_radius: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Uncached build of the Zernike basis matrix.  See
+    :func:`zernike_basis_matrix` for the public, cached entry point.
+    """
+    r_sq = (X ** 2 + Y ** 2) / (pupil_radius ** 2)
+    pupil_mask = r_sq <= 1.0
+    rho = np.sqrt(r_sq[pupil_mask])
+    theta = np.arctan2(Y[pupil_mask], X[pupil_mask])
+
+    n_pixels = rho.size
+    basis = np.empty((n_pixels, n_modes), dtype=np.float64)
+    for j in range(n_modes):
+        n, m = zernike_index_to_nm(j)
+        basis[:, j] = zernike_polynomial(n, m, rho, theta)
+    return basis, pupil_mask
+
+
 def zernike_basis_matrix(
     n_modes: int,
     X: np.ndarray,
@@ -1433,17 +1534,34 @@ def zernike_basis_matrix(
     basis : ndarray, shape (N_pixels, n_modes)
     pupil_mask : ndarray of bool, same shape as X
         True where pixels are inside the pupil (= rows of ``basis``).
-    """
-    r_sq = (X ** 2 + Y ** 2) / (pupil_radius ** 2)
-    pupil_mask = r_sq <= 1.0
-    rho = np.sqrt(r_sq[pupil_mask])
-    theta = np.arctan2(Y[pupil_mask], X[pupil_mask])
 
-    n_pixels = rho.size
-    basis = np.empty((n_pixels, n_modes), dtype=np.float64)
-    for j in range(n_modes):
-        n, m = zernike_index_to_nm(j)
-        basis[:, j] = zernike_polynomial(n, m, rho, theta)
+    Notes
+    -----
+    Results are cached (LRU, ``maxsize=32``) keyed on a small content
+    fingerprint of the input grids (shape, dtype, first + last
+    entries) plus ``n_modes`` and ``pupil_radius``.  Two structurally
+    identical grids hit the same cache entry even if they are distinct
+    array objects -- this is the common case under
+    ``design_optimize``.  The same underlying arrays are returned on a
+    cache hit -- treat the returned ``basis`` and ``pupil_mask`` as
+    immutable; copy first if you need to modify them.  Call
+    :func:`clear_zernike_basis_cache` to drop the cache (e.g. after
+    mutating a grid in place).
+    """
+    key = _zernike_basis_cache_key(n_modes, X, Y, pupil_radius)
+    cached = _ZERNIKE_BASIS_CACHE.get(key)
+    if cached is not None:
+        # LRU bump: mark as most recently used.
+        _ZERNIKE_BASIS_CACHE.move_to_end(key)
+        return cached
+
+    basis, pupil_mask = _zernike_basis_matrix_build(
+        n_modes, X, Y, pupil_radius)
+
+    _ZERNIKE_BASIS_CACHE[key] = (basis, pupil_mask)
+    # Evict LRU entries until we're at or below the cap.
+    while len(_ZERNIKE_BASIS_CACHE) > _ZERNIKE_BASIS_CACHE_MAXSIZE:
+        _ZERNIKE_BASIS_CACHE.popitem(last=False)
     return basis, pupil_mask
 
 

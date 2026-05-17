@@ -10,6 +10,74 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.12.0
+
+**Combined performance pass + round-4 pre-PyPI audit.**
+
+### Performance — Tier-1 speedups (vs v4.11.2)
+
+* **ASM propagate 1024^2: 4.3x** -- pyFFTW double-buffer cache +
+  auto-promote ESTIMATE -> MEASURE.
+* **`through_focus_scan` 7-pt N=256: 4.7x** -- input FFT and
+  kx/ky hoisted outside the z-loop.
+* **`propagate_through_system_jax` warm: 163x** -- module-scope
+  jit caches at the JAX system entry.
+* **`gerchberg_saxton_jax` / `error_reduction_jax`: 36-46x**
+  steady-state -- jit-cached iteration kernel.
+* **`propagate_hf_chebyshev_quadrature`: up to 22x** -- replaced
+  scalar pixel loop with vectorised chunk broadcast +
+  `np.einsum`.
+* **`zernike_basis_matrix` warm cache: ~12000x** (22 ms -> 1.8 us);
+  `zernike_decompose` 10-call loop: 3.7x.
+
+The 4.7x `through_focus_scan` speedup propagates through
+`MultiWavelengthMerit` / `MultiFieldMerit` / Monte-Carlo
+tolerancing: **100-trial MC at 31-pt N=256 drops from 71 s to
+15 s**.
+
+### Round-4 audit: ~20 PyPI release blockers fixed
+
+* **README cookbook examples now runnable** -- 11 broken
+  positional / renamed / missing-kwarg calls fixed.
+* **Back-compat deprecation shims** for `load_zmx_prescription`
+  and `load_zemax_prescription_txt`.
+* **JAX `propagate_through_system_jax`** unified aperture
+  schema with NumPy; raises `NotImplementedError` up-front for
+  non-traceable element types.
+* **Rayleigh-Sommerfeld `z<=0` guard** matches Fresnel /
+  Fraunhofer / SAS.
+* **Dispatcher negative-z routing** and **`output_grid` for
+  ASM family** correctly auto-promote / raise.
+* **`_apply_doe_kick_jax` gradient flow** preserved.
+* **`makedammann2d` global RNG** no longer mutated.
+* **`image_plane_wfe` reference-sphere `1/N_chief`** for off-
+  axis fields.
+* **`distortion_grid` `L^2+M^2 < 1` guard**.
+* **`apply_real_lens_traced` mirror guard** with a properly
+  named error.
+* **`gerchberg_saxton(backend='jax')`** forwards
+  `seed`/`dtype`/`initial_phase` end-to-end.
+* **`ghost.py` docstring** clarifies the `'intensity'`
+  upper-bound caveat.
+
+### Deferred to v4.12.1
+
+* Raytrace Newton spherical fast-path (caused a 1.17e-3
+  NumPy<->JAX drift).
+* `trace_jax` jit cache (broke `jax.grad(fit_canonical
+  _polynomials_jax)`).
+* B1-10 half-pixel grid convention drift between propagator
+  families.
+
+### Tooling
+
+* New `benchmarks/` directory with `pytest-benchmark` per-area
+  perf tests.
+* All 390 unit tests pass; full validation suite (34 files /
+  314 tests) passes.
+
+See `CHANGELOG.md` for the full per-finding breakdown.
+
 ## What's new in 4.11.2
 
 **Round-3 fresh-eyes audit response.**  An 11-agent fresh-eyes audit
@@ -491,7 +559,7 @@ warnings.**  Mostly additive; one breaking name change.
   GUI's `SystemModel`.  4.4 lifts that translation into the library:
 
   ```python
-  presc = la.load_zmx_prescription('folded_design.zmx')
+  presc = la.load_zemax_zmx('folded_design.zmx')
   surfaces = la.world_surfaces_from_prescription(presc)
   result = la.trace_world(rays, surfaces, 1.31e-6)
   ```
@@ -2408,14 +2476,14 @@ The library is wide -- pick a question and the table tells you where to start.
 | Need a specific output grid pitch (focal-plane zoom, MFT) | `la.fresnel_propagate_mft(...)` or `la.fraunhofer_propagate_mft(...)` |
 | Long-z (z*lambda/(N*dx) > 1, plain ASM would need an oversized grid) | `la.scalable_angular_spectrum_propagate(...)` |
 | Far-field | `la.fraunhofer_propagate(E, z, wl, dx)` |
-| Through one ideal thin lens | `la.apply_thin_lens(E, f, wl, dx)` |
+| Through one ideal thin lens | `la.apply_thin_lens(E, f=f, wavelength=wl, dx=dx)` |
 
 ### I have a lens prescription (Zemax `.zmx`, Thorlabs catalog, or a dict)
 
 | Situation | Use |
 |---|---|
-| Default fast wave model | `la.apply_real_lens(E, presc, wl, dx)` |
-| Sub-nm OPD on cemented doublets or multi-surface curved-interface systems | `la.apply_real_lens_traced(E, presc, wl, dx)` |
+| Default fast wave model | `la.apply_real_lens(E, prescription=presc, wavelength=wl, dx=dx)` |
+| Sub-nm OPD on cemented doublets or multi-surface curved-interface systems | `la.apply_real_lens_traced(E, prescription=presc, wavelength=wl, dx=dx)` |
 | Inside a JAX-autodiff design loop, or near a caustic | `la.apply_real_lens_maslov(...)` / `la.apply_real_lens_maslov_jax(...)` |
 | Just want a spot diagram | `la.trace_prescription(presc, wl, num_rings=8)` |
 | Paraxial EFL / BFL / first-order data | `la.first_order_data(presc, wl)` |
@@ -2457,13 +2525,13 @@ The library is wide -- pick a question and the table tells you where to start.
 ```python
 # 1. Free-space propagation, smart dispatch -- works for any geometry.
 import lumenairy as la
-E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, sigma=50e-6)
-E_focus = la.propagate(E, z=0.1, wavelength=1.31e-6, dx=2e-6)
+E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, wavelength=1.31e-6, sigma=50e-6)
+E_focus = la.angular_spectrum_propagate(E, z=1e-3, wavelength=1.31e-6, dx=2e-6)
 print('centroid =', la.beam_centroid(E_focus, 2e-6))
 
 # 2. A Thorlabs lens, end-to-end.
 presc = la.thorlabs_lens('AC254-100-C')
-E_out = la.apply_real_lens(E, presc, wavelength=1.31e-6, dx=2e-6)
+E_out = la.apply_real_lens(E, prescription=presc, wavelength=1.31e-6, dx=2e-6)
 
 # 3. Ray-trace the same lens for a spot RMS.
 result = la.trace_prescription(presc, wavelength=1.31e-6, num_rings=8)
@@ -2486,7 +2554,7 @@ import numpy as np
 import lumenairy as la
 
 # Create a Gaussian beam
-E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, sigma=50e-6)
+E, x, y = la.create_gaussian_beam(N=512, dx=2e-6, wavelength=1.3e-6, sigma=50e-6)
 
 # Propagate 10 cm through free space
 E_prop = la.angular_spectrum_propagate(E, z=0.1, wavelength=1.3e-6, dx=2e-6)
@@ -2533,16 +2601,17 @@ result, surfs = la.raytrace_system(elements, 1.31e-6, semi_aperture=5e-3)
 
 ```python
 # Load a lens prescription from a Zemax .zmx file
-rx = la.load_zmx_prescription('path/to/lens.zmx')
+rx = la.load_zemax_zmx('path/to/lens.zmx')
 
 # Or use a Thorlabs catalog lens
 rx = la.thorlabs_lens('AC254-200-C')
 
 # Fast analytic thin-element model (default)
-E_out = la.apply_real_lens(E_in, rx, wavelength=1.3e-6, dx=2e-6)
+E_out = la.apply_real_lens(E_in, prescription=rx, wavelength=1.3e-6, dx=2e-6)
 
 # Higher-accuracy hybrid wave/ray model -- sub-nm OPD on doublets
-E_out = la.apply_real_lens_traced(E_in, rx, wavelength=1.3e-6, dx=2e-6,
+E_out = la.apply_real_lens_traced(E_in, prescription=rx,
+                                   wavelength=1.3e-6, dx=2e-6,
                                    ray_subsample=4)
 ```
 
@@ -2552,7 +2621,7 @@ E_out = la.apply_real_lens_traced(E_in, rx, wavelength=1.3e-6, dx=2e-6,
 # Turn a Zemax .zmx into a self-contained Python sim script
 import lumenairy as la
 
-rx = la.load_zmx_prescription('AC254-100-C.zmx')
+rx = la.load_zemax_zmx('AC254-100-C.zmx')
 code = la.generate_simulation_script(
     rx,
     wavelength=1.31e-6,
@@ -2577,20 +2646,23 @@ collaborator.
 ```python
 # Cylindrical lens (focuses in x only)
 pres = la.make_cylindrical(R_focus=50e-3, d=3e-3, glass='N-BK7', axis='x')
-E_line_focus = la.apply_real_lens(E_in, pres, wavelength=1.3e-6, dx=2e-6)
+E_line_focus = la.apply_real_lens(E_in, prescription=pres,
+                                   wavelength=1.3e-6, dx=2e-6)
 
 # Biconic singlet (independent x and y curvatures)
 pres = la.make_biconic(R1_x=50e-3, R1_y=70e-3,
                         R2_x=-30e-3, R2_y=-40e-3,
                         d=4e-3, glass='N-BK7')
-E_anam = la.apply_real_lens(E_in, pres, wavelength=1.3e-6, dx=2e-6)
+E_anam = la.apply_real_lens(E_in, prescription=pres,
+                             wavelength=1.3e-6, dx=2e-6)
 ```
 
 ### Zernike decomposition of an OPD map
 
 ```python
 # Extract the OPD map from a wave field
-E_exit = la.apply_real_lens(E_in, prescription, wavelength, dx)
+E_exit = la.apply_real_lens(E_in, prescription=prescription,
+                             wavelength=wavelength, dx=dx)
 X, Y, opd = la.wave_opd_2d(E_exit, dx, wavelength,
                             aperture=10e-3, focal_length=100e-3,
                             f_ref=100e-3)
@@ -2668,7 +2740,7 @@ def cb(stage, fraction, message=''):
 
 # Wave-optics pipeline
 E_out = la.apply_real_lens_traced(
-    E_in, prescription, wavelength=1.31e-6, dx=2e-6,
+    E_in, prescription=prescription, wavelength=1.31e-6, dx=2e-6,
     ray_subsample=4, progress=cb)
 E_out, _ = la.propagate_through_system(
     E_in, elements, wavelength=1.31e-6, dx=2e-6, progress=cb)
@@ -2703,7 +2775,8 @@ protocol.
 
 ```python
 # Run a 21-plane through-focus scan
-E_exit = la.apply_real_lens(E_in, prescription, wavelength, dx)
+E_exit = la.apply_real_lens(E_in, prescription=prescription,
+                             wavelength=wavelength, dx=dx)
 ideal_peak = la.diffraction_limited_peak(E_exit, wavelength, bfl, dx)
 z_values = bfl + np.linspace(-1e-3, +1e-3, 21)
 scan = la.through_focus_scan(E_exit, dx, wavelength, z_values,
@@ -2729,7 +2802,7 @@ results = la.tolerancing_sweep(prescription, wavelength, N, dx,
 
 ```python
 # Create a right-hand circularly polarized Gaussian beam
-scalar, _, _ = la.create_gaussian_beam(256, 2e-6, 30e-6)
+scalar, _, _ = la.create_gaussian_beam(256, 2e-6, 1.3e-6, sigma=30e-6)
 field = la.create_circular_polarized(scalar, dx=2e-6, handedness='right')
 
 # Propagate through a half-wave plate at 22.5°

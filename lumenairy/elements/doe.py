@@ -604,8 +604,16 @@ def makedammann2d(
         diforders = np.ones((12, 12))
     diforders = np.asarray(diforders, dtype=float)
 
-    if seed is not None:
-        np.random.seed(seed)
+    # 4.12.0 (B1-11): use a local Generator (np.random.default_rng)
+    # instead of seeding the global ``np.random`` state.  Pre-4.12.0
+    # the call ``np.random.seed(seed)`` perturbed the user's process-
+    # wide RNG state -- a high-severity library anti-pattern, since
+    # any other code in the same Python session that depended on
+    # legacy ``np.random`` reproducibility silently lost it after a
+    # ``makedammann2d`` call.  The local generator gives the same
+    # bit-for-bit output for a given ``seed=`` while leaving the
+    # global RNG untouched.
+    rng = np.random.default_rng(seed)
 
     # -- Grid sizing -------------------------------------------------------
     ndifordersx = int(np.ceil(periodx / (wavsamp * waveln) * 0.5)) * 2
@@ -634,8 +642,8 @@ def makedammann2d(
 
     # -- Initial near-field (separable random phase) -----------------------
     phsx, phsy = np.meshgrid(
-        np.random.rand(ndifordersx),
-        np.random.rand(ndifordersy),
+        rng.random(ndifordersx),
+        rng.random(ndifordersy),
         indexing='ij',
     )
     nearfield = np.exp(2j * np.pi * (phsx + phsy) - 1j * np.pi)

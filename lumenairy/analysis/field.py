@@ -398,6 +398,33 @@ def distortion_grid(
     ths = np.linspace(-max_field_deg, max_field_deg, int(n_grid))
     ths_rad = np.radians(ths)
 
+    # 4.12.0 (B2-4): fail-fast guard against unphysical (L^2 + M^2 >= 1)
+    # ray directions.  Pre-4.12.0 the per-cell construction
+    # ``L=sin(tx), M=sin(ty)`` allowed any combination, including
+    # ``tx = ty = 45`` deg where ``L^2 + M^2 = 1`` and ``N = 0`` --
+    # the chief then propagates perpendicular to the optical axis,
+    # the image-plane transfer ``t = z / N`` blows up, and the
+    # downstream ray trace fails inside the ``except: pass`` swallow
+    # below.  Catch invalid (tx, ty) pairs up front so the user sees
+    # a clear error instead of an all-NaN distortion grid.
+    _Tx, _Ty = np.meshgrid(ths_rad, ths_rad, indexing='xy')
+    _LL = np.sin(_Tx) ** 2 + np.sin(_Ty) ** 2
+    if np.any(_LL >= 1.0):
+        _bad = []
+        for _iy in range(_LL.shape[0]):
+            for _ix in range(_LL.shape[1]):
+                if _LL[_iy, _ix] >= 1.0:
+                    _bad.append((float(ths[_ix]), float(ths[_iy])))
+        raise ValueError(
+            f"distortion_grid: {len(_bad)} of {n_grid * n_grid} field "
+            f"directions have sin(tx)^2 + sin(ty)^2 >= 1 (N <= 0, "
+            f"ray parallel to or grazing past the optical axis); "
+            f"image-plane transfer t = z/N would blow up.  Bad "
+            f"(theta_x_deg, theta_y_deg) pairs: {_bad[:5]}"
+            f"{'...' if len(_bad) > 5 else ''}.  Reduce max_field_deg "
+            f"below 45 deg or use a smaller n_grid that excludes "
+            f"the diagonal corners.")
+
     actual_x = np.full((n_grid, n_grid), np.nan)
     actual_y = np.full((n_grid, n_grid), np.nan)
     for ix, tx in enumerate(ths_rad):

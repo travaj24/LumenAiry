@@ -1264,6 +1264,44 @@ def apply_real_lens_traced(
     E_out : ndarray, complex, shape (N, N)
         Field at the exit-vertex plane of the last surface.
     """
+    # 4.12.0 (B2-5): explicit mirror-in-surfaces guard.  The shared
+    # ``_check_no_silent_fold_drop`` only looks at the prescription's
+    # ``elements`` list (the full element sequence, populated by
+    # ``load_zemax_zmx``); a hand-built prescription that puts a
+    # mirror directly into ``surfaces`` (via ``is_mirror=True`` or
+    # ``glass_after='MIRROR'``) would slip past the shared check, and
+    # the ray-traced OPL leg would silently treat the mirror as a
+    # refractor with the wrong sign.  Fail loudly with a
+    # mirror-specific message before the trace begins.
+    _surfaces_list = prescription.get('surfaces') or []
+    _mirror_surf_idx = []
+    for _i, _s in enumerate(_surfaces_list):
+        if not isinstance(_s, dict):
+            continue
+        _gl_after = _s.get('glass_after')
+        _is_mirror = bool(_s.get('is_mirror', False)) or (
+            isinstance(_gl_after, str)
+            and _gl_after.upper() == 'MIRROR'
+        )
+        if _is_mirror:
+            _mirror_surf_idx.append(_i)
+    if _mirror_surf_idx:
+        raise ValueError(
+            f"apply_real_lens_traced: prescription has "
+            f"{len(_mirror_surf_idx)} mirror surface(s) at "
+            f"indices {_mirror_surf_idx} -- apply_real_lens_traced "
+            f"only walks refracting surfaces.  Running this "
+            f"prescription as-is would silently treat the mirror as "
+            f"a refractor (wrong sign / wrong focusing phase) and "
+            f"propagate along the unfolded-equivalent axis.  Use "
+            f"the per-segment trace + apply_mirror pattern for "
+            f"folded designs: call "
+            f"lumenairy.io.split_prescription_at_mirrors(rx) to "
+            f"split the prescription at each fold, then alternate "
+            f"apply_real_lens_traced (each segment) with "
+            f"apply_mirror (each fold).  See Guide-Folded-Designs "
+            f"section 'Wave-optics through a fold'.")
+
     # Folded-design silent-drop guard: same as apply_real_lens.
     from ._lens_real import _check_no_silent_fold_drop
     _check_no_silent_fold_drop(

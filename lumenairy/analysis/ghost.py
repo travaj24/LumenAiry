@@ -10,6 +10,35 @@ This module traces each 2-bounce ghost path, computes the ghost
 image intensity (including Fresnel reflection losses), and returns
 a map of the dominant ghosts for stray-light assessment.
 
+Important caveats (4.12.0 / B2-1, B2-2)
+---------------------------------------
+
+* **Reported ghost ``'intensity'`` values are UPPER BOUNDS.**  The
+  product ``R_i * R_j`` captures only the two normal-incidence
+  Fresnel REFLECTIONS at the bouncing surfaces; it OMITS the
+  transmission losses ``Prod_k (1 - R_k)`` over every other surface
+  the ghost ray crosses (typically two passes through each non-
+  bouncing surface).  For a 10-surface system the omitted factor
+  is roughly ``(1 - 0.04)^16 ~= 0.52``, so the reported magnitude
+  over-estimates the true relative intensity by about 2x.  A more
+  accurate estimate is::
+
+      I_true ~= I_reported * Prod_{k not in (i, j)} (1 - R_k)^2
+
+  where each non-bouncing surface contributes ``(1 - R_k)^2`` (one
+  forward pass + one return pass).  For final stray-light sign-off
+  use a non-sequential trace (FRED, ASAP) with the prescription
+  exported via :func:`export_zemax_zmx`.
+
+* **``'focus_z_estimate'`` is a HEURISTIC, not a physical focal
+  distance.**  The value is a harmonic mean of ``|R_i|`` and
+  ``|R_j|`` (see :func:`ghost_analysis` body) -- a dimensionally
+  arbitrary quick-rank scalar useful for sorting ghost paths by
+  "this one is roughly near-focus vs that one is roughly out-of-
+  focus", NOT a calibrated position relative to the detector.
+  Treat it as a sort key; for a physical focus position run a full
+  retro-trace of the (i, j) path.
+
 Author: Andrew Traverso
 """
 from __future__ import annotations
@@ -70,8 +99,30 @@ def ghost_analysis(
     -------
     ghosts : list of dict
         One entry per ghost path with keys:
-        ``'path'`` (i, j), ``'intensity'`` (relative to transmitted),
-        ``'focus_z'`` (ghost image axial position [m]).
+
+        * ``'path'`` -- ``(i, j)`` tuple of bouncing surface indices.
+        * ``'R_i'`` / ``'R_j'`` -- normal-incidence Fresnel
+          reflectance at each bouncing surface.
+        * ``'intensity'`` -- UPPER BOUND on the ghost's relative
+          intensity.  Computed as ``R_i * R_j`` only; does NOT
+          include the transmission losses
+          ``Prod_{k not in (i, j)} (1 - R_k)^2`` over the non-
+          bouncing surfaces the ghost ray crosses twice (once
+          forward, once on return).  For a 10-surface system this
+          factor is ~0.5, so the reported magnitude overestimates
+          the true intensity by ~2x.  See the module docstring for
+          the correction formula.
+        * ``'focus_z_estimate'`` -- HEURISTIC quick-rank scalar,
+          the harmonic mean of ``|R_i|`` and ``|R_j|``.  Useful as
+          a sort key (near-focus vs out-of-focus); NOT a physical
+          axial position.  For a calibrated focus location run a
+          full retro-trace of the path.
+
+    Notes
+    -----
+    See the module docstring (4.12.0 / B2-1, B2-2) for the
+    upper-bound semantics on ``'intensity'`` and the heuristic
+    semantics on ``'focus_z_estimate'``.
     """
     surfs = surfaces_from_prescription(prescription)
     n_surfs = len(surfs)
@@ -101,7 +152,9 @@ def ghost_analysis(
         R_i_val = surfs[i].radius if np.isfinite(surfs[i].radius) else 1e10
         R_j_val = surfs[j].radius if np.isfinite(surfs[j].radius) else 1e10
         f_ghost = abs(R_i_val * R_j_val) / (abs(R_i_val) + abs(R_j_val) + 1e-30)
-        # Very rough estimate — actual position needs full retro-trace
+        # Very rough estimate -- actual position needs full retro-trace
+        # (and the value is reported as a HEURISTIC sort key, not a
+        # calibrated focal distance; see module docstring B2-2).
 
         ghosts.append({
             'path': (i, j),
@@ -172,7 +225,9 @@ def non_sequential_stray_light(
         ``ghosts`` -- list of dicts as returned by
         :func:`ghost_analysis`, truncated to ``top_n``.
         ``ghost_total_intensity`` -- sum of relative intensities
-        across ALL ghost paths (not just top_n).
+        across ALL ghost paths (not just top_n).  Note: each entry
+        is the same UPPER BOUND described in :func:`ghost_analysis`;
+        the sum inherits the same caveat (B2-1).
         ``scatter_tis_per_surface`` -- per-surface TIS contribution
         if ``bsdf_model`` was given, else ``None``.
         ``stray_light_fraction`` -- conservative upper bound:
@@ -220,7 +275,7 @@ def non_sequential_stray_light(
             )
             # 4.10: With cos-weighted hemisphere sampling (PDF =
             # cos(theta)/pi) the unbiased estimator of
-            # ∫ f cos(theta) sin(theta) dtheta dphi is mean(f) * pi.
+            # int f cos(theta) sin(theta) dtheta dphi is mean(f) * pi.
             # Pre-4.10 used mean(f * cos_t) * pi -- an extra cos factor
             # that biased TIS toward near-normal scattering.
             tis_each_surface = float(np.mean(f) * np.pi)

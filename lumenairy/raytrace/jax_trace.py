@@ -370,18 +370,60 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
 
     Direction cosines are shifted by ``m * wavelength / period`` along
     each axis, and the corresponding linear OPL is added at the
-    intersection point ``(x, y)``.  Use ``np.inf`` for ``period_y`` to
-    disable the y-axis grating (1-D grating along x).
+    intersection point ``(x, y)``.  Use ``np.inf`` (or ``jnp.inf``) for
+    ``period_y`` to disable the y-axis grating (1-D grating along x).
 
     Rays whose post-kick transverse direction cosines exceed unity
     (evanescent orders) are marked dead.
+
+    Gradient support
+    ----------------
+    ``period_x`` / ``period_y`` may be either Python scalars (cheap
+    path, no allocation) or JAX scalars / 0-D arrays (so users can
+    ``jax.grad`` w.r.t. grating period).  Pre-v4.12 used
+    ``float(period_*)`` which stripped the JAX trace -> silent zero
+    gradient under ``jax.grad``; ``np.isfinite`` on a traced value
+    further raised ``TracerArrayConversionError``.  v4.12 keeps the
+    trace alive via ``jnp.where`` whenever the period argument is
+    JAX-traced.
     """
+    import jax
     import jax.numpy as jnp
 
-    dL = float(order_x) * wavelength / float(period_x) \
-        if np.isfinite(period_x) and period_x != 0 else 0.0
-    dM = float(order_y) * wavelength / float(period_y) \
-        if np.isfinite(period_y) and period_y != 0 else 0.0
+    def _is_traced(x):
+        """True if ``x`` is a JAX tracer or JAX array (gradient flow
+        required); False for Python int / float / NumPy 0-D scalar."""
+        if isinstance(x, (int, float)):
+            return False
+        if isinstance(x, np.ndarray) and x.ndim == 0:
+            return False
+        # JAX arrays / tracers / anything else with shape: keep the
+        # trace alive (jnp.where instead of Python-level branch).
+        return hasattr(x, 'shape')
+
+    def _kick(order, period):
+        """Compute ``order * wavelength / period`` keeping the JAX
+        trace alive if ``period`` is traced.  Returns 0.0 when
+        ``period`` is non-finite or zero (effectively no grating along
+        that axis)."""
+        if _is_traced(period):
+            # JAX path: ``np.isfinite`` would raise on a tracer; use
+            # ``jnp.where`` to keep the trace alive.  Guard the divide
+            # so a non-finite or zero period yields the no-grating
+            # branch (dL=0) without poisoning gradients with NaN.
+            period_j = jnp.asarray(period)
+            valid = jnp.isfinite(period_j) & (period_j != 0)
+            safe = jnp.where(valid, period_j, 1.0)
+            kick = float(order) * wavelength / safe
+            return jnp.where(valid, kick, 0.0)
+        # Concrete-period path: cheap, no JAX op.
+        p = float(period)
+        if np.isfinite(p) and p != 0:
+            return float(order) * wavelength / p
+        return 0.0
+
+    dL = _kick(order_x, period_x)
+    dM = _kick(order_y, period_y)
 
     L_new = state.L + dL
     M_new = state.M + dM
