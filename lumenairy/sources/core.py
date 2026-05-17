@@ -951,7 +951,15 @@ class Source:
     E : ndarray, complex
         Field on a (Ny, Nx) grid.
     dx : float
-        Sample spacing [m].
+        Sample spacing along x [m].
+    dy : float, optional
+        Sample spacing along y [m].  v4.13.0 (audit L3): defaults to
+        ``dx`` for square-grid sources, preserving back-compat for
+        every existing caller.  Anamorphic grids (e.g. cylindrical
+        beams sampled on rectangular pixels) can now thread a distinct
+        y-pitch through the Source -> propagate -> PropagationResult
+        chain without silently losing the metadata at the Source
+        boundary.
     wavelength : float
         Vacuum wavelength [m].
     source_point : (float, float), default (0, 0)
@@ -965,13 +973,26 @@ class Source:
     wavelength: float
     source_point: _Tuple[float, float] = (0.0, 0.0)
     name: _Optional[str] = None
+    # v4.13.0 (audit L3): anamorphic pitch on the y-axis.  ``None``
+    # falls through to ``dx`` (square grid).  Placed last so existing
+    # callers using positional args (``Source(E, dx, wavelength)``)
+    # remain compatible.
+    dy: _Optional[float] = None
+
+    def __post_init__(self) -> None:
+        # v4.13.0 (audit L3): default ``dy`` to ``dx`` so the
+        # post-init attribute is always non-None for downstream code.
+        if self.dy is None:
+            self.dy = self.dx
 
     @property
     def shape(self) -> Tuple[int, ...]:
         return tuple(self.E.shape[-2:])
 
     def __repr__(self) -> str:
-        return (f"Source(shape={self.shape}, dx={self.dx:.3g}m, "
+        dy_part = (f", dy={self.dy:.3g}m"
+                    if self.dy is not None and self.dy != self.dx else "")
+        return (f"Source(shape={self.shape}, dx={self.dx:.3g}m{dy_part}, "
                 f"wavelength={self.wavelength*1e9:.1f}nm, "
                 f"source_point={self.source_point}, "
                 f"name={self.name!r})")

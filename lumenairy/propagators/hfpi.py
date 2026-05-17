@@ -110,7 +110,9 @@ class PathBundle:
     def __len__(self) -> int:
         try:
             return int(self.positions.shape[0])
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
+            # positions may be None, a non-array sentinel, or 0-D --
+            # all of which mean "no paths".
             return 0
 
     @property
@@ -356,17 +358,29 @@ def accumulate_to_grid(
         out = out.at[flat_idx].add(w_masked)
         return out.reshape(Ny, Nx)
 
-    out = xp.zeros(Ny * Nx, dtype=output_dtype)
+    # Scatter-add into the output grid.  ``np.add.at`` is the canonical
+    # NumPy operation for unbuffered scatter-add; CuPy does not expose
+    # the same ``xp.add.at`` interface, so we fall through to
+    # ``cupyx.scatter_add`` or a NumPy host round-trip in that case.
+    N_flat = Ny * Nx
+    out = xp.zeros(N_flat, dtype=output_dtype)
     if hasattr(xp, 'add') and hasattr(xp.add, 'at'):
         xp.add.at(out, flat_idx, w_masked)
     else:
         try:
             import cupyx
             cupyx.scatter_add(out, flat_idx, w_masked)
-        except Exception:
+        except (ImportError, AttributeError, TypeError, ValueError):
+            # ImportError: cupyx unavailable in the active env.
+            # AttributeError: older cupyx without scatter_add.
+            # TypeError/ValueError: dtype or shape disagreement
+            # between out / flat_idx / w_masked (e.g. on JAX
+            # arrays routed here by mistake).  Fall back to a
+            # NumPy scatter round-trip; correctness preserved
+            # at the cost of a device->host hop.
             idx_h = to_numpy(flat_idx)
             w_h = to_numpy(w_masked)
-            out_h = np.zeros(Ny * Nx, dtype=output_dtype)
+            out_h = np.zeros(N_flat, dtype=output_dtype)
             np.add.at(out_h, idx_h, w_h)
             out = xp.asarray(out_h)
     return out.reshape(Ny, Nx)

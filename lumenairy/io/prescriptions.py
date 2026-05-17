@@ -603,6 +603,7 @@ def load_zemax_zmx(filepath: str,
                 'semi_diameter': semi_dia_m,
                 'surf_num': s['surf_num'],
                 'comment': s.get('comment', ''),
+                'is_stop': bool(s.get('is_stop', False)),
             })
         else:
             # Determine glass before and after this surface
@@ -622,6 +623,7 @@ def load_zemax_zmx(filepath: str,
                 'semi_diameter': semi_dia_m,
                 'surf_num': s['surf_num'],
                 'comment': s.get('comment', ''),
+                'is_stop': bool(s.get('is_stop', False)),
             })
 
     # ------------------------------------------------------------------
@@ -1064,6 +1066,7 @@ def load_zemax_prescription_data_txt(filepath: str,
                 'semi_diameter': s['semi_diameter'],
                 'surf_num': s['surf_num'],
                 'comment': s.get('comment', ''),
+                'is_stop': bool(s.get('is_stop', False)),
             })
         else:
             if i == 0:
@@ -1082,6 +1085,7 @@ def load_zemax_prescription_data_txt(filepath: str,
                 'semi_diameter': s['semi_diameter'],
                 'surf_num': s['surf_num'],
                 'comment': s.get('comment', ''),
+                'is_stop': bool(s.get('is_stop', False)),
             })
 
     # All-element thicknesses (one fewer than elements)

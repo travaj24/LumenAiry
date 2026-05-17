@@ -1082,7 +1082,12 @@ def through_focus_scan_jax(
                 d4x[i], d4y[i] = float(d4[0]), float(d4[1])
             else:
                 d4x[i] = d4y[i] = float(d4)
-        except Exception:
+        except (TypeError, ValueError, RuntimeError, ZeroDivisionError,
+                IndexError):
+            # beam_d4sigma can fail on near-zero intensity (divide by
+            # zero on the normalisation) or on a propagated field
+            # that's just numerical noise; leave d4x/d4y at NaN for
+            # this z and let downstream filtering mask it.
             pass
         # 4.10: match NumPy semantics for parity.
         # power_in_bucket: ABSOLUTE integrated intensity (J in arbitrary
@@ -1520,7 +1525,13 @@ def monte_carlo_tolerancing_linearized(
                     bucket_radius=bucket_radius, ideal_peak=ideal_peak,
                     verbose=False)
                 _, S_p = find_best_focus(scan_p, 'strehl')
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, AttributeError,
+                    TypeError):
+                # Perturbation trace can fail (tolerancing pushes the
+                # design into a degenerate corner); treat the
+                # perturbed Strehl as nominal so the local sensitivity
+                # is zero rather than NaN.
                 S_p = S_nom   # sensitivity = 0 on failure
             # 4.10.2: Strehl is quadratic-around-nominal per the
             # Marechal approximation S ≈ exp(-sigma_phi^2), so the

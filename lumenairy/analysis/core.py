@@ -1648,8 +1648,10 @@ def zernike_decompose(
         from scipy.linalg import lstsq as _slstsq
         coeffs, _residuals_sq, _rank, _sv = _slstsq(
             basis, opd_flat, lapack_driver='gelsy')
-    except Exception:
+    except (ImportError, ValueError, np.linalg.LinAlgError):
         # Fallback to numpy if scipy lstsq is unavailable
+        # (ImportError) or rejects the inputs / diverges
+        # (ValueError, LinAlgError).
         coeffs, *_ = np.linalg.lstsq(basis, opd_flat, rcond=None)
 
     names = [_zernike_classical_name(*zernike_index_to_nm(j))
@@ -2176,11 +2178,11 @@ def wave_opd_2d(
 
     # Row-then-column unwrap.  Crude but adequate when the residual
     # phase is smooth and the aperture is simply connected.
-    phase_unwrapped = np.empty_like(phase)
-    for j in range(Ny):
-        phase_unwrapped[j, :] = np.unwrap(phase[j, :])
-    for i in range(Nx):
-        phase_unwrapped[:, i] = np.unwrap(phase_unwrapped[:, i])
+    # v4.13.0 perf: np.unwrap accepts axis=, so the Python row-and-
+    # column double-loop collapses into two compiled C calls.  Same
+    # 2-D path-integral unwrap, ~5-10x faster on N>=512.
+    phase_unwrapped = np.unwrap(phase, axis=1)
+    phase_unwrapped = np.unwrap(phase_unwrapped, axis=0)
 
     opd = phase_unwrapped / k0
     if f_ref is not None and np.isfinite(f_ref) and f_ref != 0.0:

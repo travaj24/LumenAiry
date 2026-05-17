@@ -308,7 +308,13 @@ def propagate_huygens_fresnel_through_prescription(
         try:
             d4 = beam_d4sigma(E_in, dx=dx)
             w_s = float(d4) / 4.0
-        except Exception:
+        except (TypeError, ValueError, RuntimeError, ZeroDivisionError):
+            # beam_d4sigma can raise: TypeError on non-array E_in,
+            # ValueError on empty / wrong-rank inputs, RuntimeError
+            # when the moments diverge, ZeroDivisionError on a zero
+            # total-power normalisation.  Fall back to the explicit
+            # second-moment estimate (which is numerically stable for
+            # any finite |E|^2 distribution).
             w_s = float(_np.sqrt(_np.sum(_np.abs(E_in) ** 2 *
                                           (_np.arange(Nx) - Nx / 2) ** 2 * dx ** 2)
                                   / max(_np.sum(_np.abs(E_in) ** 2), 1e-30)))
@@ -333,7 +339,22 @@ def propagate_huygens_fresnel_through_prescription(
                 source_lg_p_max, source_lg_ell_max,
                 cx=0.0, cy=0.0,
             )
-        except Exception:
+        except (TypeError, ValueError, RuntimeError) as _exc:
+            # decompose_lg fails on TypeError (non-array E_in or bad
+            # dtypes), ValueError (shape mismatch with IX/IY or w_s<=0),
+            # and RuntimeError (singular projection matrix on a
+            # degenerate field).  Surface the failure so the silent
+            # plane-wave fallback below doesn't hide a real upstream
+            # bug -- the asymptotic propagator is essentially useless
+            # without a valid LG decomposition.
+            import warnings as _w
+            _w.warn(
+                f"propagate_hf: source LG decomposition failed "
+                f"({type(_exc).__name__}: {_exc}); falling back to a "
+                f"single (p=0, l=0) plane-wave mode.  This may "
+                f"indicate a bug; please report at "
+                f"https://github.com/travaj24/LumenAiry/issues",
+                RuntimeWarning, stacklevel=2)
             source_lg = {(0, 0): 1.0 + 0.0j}
         # Drop amplitudes below threshold (sparsity speedup).
         max_amp = max((abs(a) for a in source_lg.values()), default=1.0)

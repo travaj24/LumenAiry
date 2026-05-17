@@ -106,35 +106,73 @@ def seidel_field_sweep(
             f"field_heights must be a scalar or 1-D array; got shape "
             f"{heights.shape}")
 
-    per_field = []
-    abcd = None
-    for h in heights:
-        s, m = seidel_coefficients(
-            surfaces, wavelength,
-            object_distance=object_distance,
-            stop_index=stop_index,
-            field_angle=float(h),
-        )
-        per_field.append(s)
-        if abcd is None:
-            abcd = m
+    # 4.13.0 Phase 3 perf: hoist the entire field-independent workload
+    # (glass-index lookups, pre-stop ABCD, marginal-ray trace, system
+    # ABCD, per-surface S1/S4) out of the field loop.  The paraxial
+    # Seidel formalism is exactly linear in the chief-ray initial
+    # conditions, and those scale linearly in ``field_angle``:
+    #
+    #     y_c, nu_c, A_c, H_lagrange   propto field_angle
+    #     S1, S4                       field-independent
+    #     S2 = -(A_m A_c) h delta_un   propto field_angle
+    #     S3 = -(A_c^2) h delta_un     propto field_angle^2
+    #     S5 = -(A_c/A_m)(S3 + H^2 S4) propto field_angle^3
+    #
+    # A single call to ``seidel_coefficients(..., field_angle=1.0)``
+    # captures all per-surface marginal/chief data at unit field; the
+    # analytical scaling below reproduces every per-field result to
+    # machine precision.  This replaces a length-N_fields Python loop
+    # (each iteration re-runs the marginal trace + system_abcd) with
+    # one call plus vectorised scaling, giving an N_fields-fold
+    # speedup on the seidel-sweep step.
+    ref, abcd = seidel_coefficients(
+        surfaces, wavelength,
+        object_distance=object_distance,
+        stop_index=stop_index,
+        field_angle=1.0,
+    )
 
-    keys = ('S1', 'S2', 'S3', 'S4', 'S5')
+    sigma = heights                       # (N_fields,)
+    sigma2 = sigma * sigma
+    sigma3 = sigma2 * sigma
+
+    # Per-surface scaling: row = surface index, col = field index.
+    # S1 / S4 are field-independent; broadcast onto (N_surf, N_fields).
+    n_surf = ref['S1'].shape[0]
+    n_fields = sigma.size
+    S1_arr = np.broadcast_to(
+        ref['S1'][:, None], (n_surf, n_fields)).copy()
+    S2_arr = ref['S2'][:, None] * sigma[None, :]
+    S3_arr = ref['S3'][:, None] * sigma2[None, :]
+    S4_arr = np.broadcast_to(
+        ref['S4'][:, None], (n_surf, n_fields)).copy()
+    S5_arr = ref['S5'][:, None] * sigma3[None, :]
+    y_chief_arr = ref['y_chief'][:, None] * sigma[None, :]
+
     result = {
         'field_heights': heights,
-        'labels': per_field[0]['labels'],
-        'stop_index': per_field[0]['stop_index'],
+        'labels': ref['labels'],
+        'stop_index': ref['stop_index'],
         # Field-independent: marginal-ray heights are the same in
-        # every per-field call; report the first as representative.
-        'y_marginal': per_field[0]['y_marginal'],
-        # Field-dependent: stack chief-ray heights as
-        # (N_surfaces, N_fields).
-        'y_chief': np.stack([s['y_chief'] for s in per_field], axis=-1),
+        # every per-field call.
+        'y_marginal': ref['y_marginal'],
+        # Field-dependent: chief-ray heights scale linearly in field.
+        'y_chief': y_chief_arr,
+        'S1': S1_arr,
+        'S2': S2_arr,
+        'S3': S3_arr,
+        'S4': S4_arr,
+        'S5': S5_arr,
     }
-    for k in keys:
-        result[k] = np.stack([s[k] for s in per_field], axis=-1)
+    # Totals follow the same field-angle scaling as the per-surface
+    # arrays since np.sum commutes with the broadcast multiplication.
+    ref_total = ref['total']
     result['total'] = {
-        k: np.array([s['total'][k] for s in per_field]) for k in keys
+        'S1': np.full(n_fields, float(ref_total['S1'])),
+        'S2': float(ref_total['S2']) * sigma,
+        'S3': float(ref_total['S3']) * sigma2,
+        'S4': np.full(n_fields, float(ref_total['S4'])),
+        'S5': float(ref_total['S5']) * sigma3,
     }
     return result, abcd
 

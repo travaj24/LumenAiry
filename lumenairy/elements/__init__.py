@@ -15,7 +15,8 @@ Submodules:
 * :mod:`lumenairy.elements.elements` -- catalog of canonical
   optical elements (mirror, aperture, mask, Zernike phase plate,
   turbulence screen).
-* :mod:`lumenairy.elements.rcwa` -- 1-D thin-grating RCWA.
+* :mod:`lumenairy.elements.thin_grating` -- 1-D thin-grating
+  diffraction efficiencies (analytical scalar thin-phase model).
 * :mod:`lumenairy.elements.polarization` -- Jones-pupil
   polarization, Jones-field operations.
 * :mod:`lumenairy.elements.bsdf` -- BSDF surface scatter for
@@ -75,7 +76,7 @@ from .elements import (
     coronagraph_contrast_curve,
     generate_turbulence_screen,
 )
-from .rcwa import (
+from .thin_grating import (
     thin_grating_efficiency_1d,
     grating_efficiency_vs_wavelength,
 )
@@ -130,7 +131,7 @@ __all__ = [
     'apply_lyot_stop', 'apply_apodized_pupil',
     'coronagraph_contrast_curve',
     'generate_turbulence_screen',
-    # rcwa
+    # thin-grating diffraction efficiency (analytical scalar model)
     'thin_grating_efficiency_1d',
     'grating_efficiency_vs_wavelength',
     # polarization

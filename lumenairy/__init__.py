@@ -299,7 +299,7 @@ from .elements.bsdf import (
 # The function is named for what it actually computes: an analytical
 # scalar thin-phase-grating diffraction-efficiency formula.  A future
 # release may add a separate full RCWA path.
-from .elements.rcwa import (
+from .elements.thin_grating import (
     thin_grating_efficiency_1d,
     grating_efficiency_vs_wavelength,
 )
@@ -727,7 +727,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.12.2"
+__version__ = "4.13.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -739,7 +739,7 @@ __version__ = "4.12.2"
 #                       tolerancing, ghost, coherence, detector, etc.)
 #   Tier 5 -- Optimize (parameterizations, merit terms, design_optimize)
 #   Tier 6 -- Asymptotic / LG (polynomial fits, LG/HG, aberration tensor)
-#   Tier 7 -- Specialized physics (RCWA, BSDF, coatings, vector
+#   Tier 7 -- Specialized physics (thin-grating, BSDF, coatings, vector
 #                                    diffraction, vectorial HFPI)
 #   Tier 8 -- I/O (prescription formats, HDF5/Zarr, code generation)
 #   Tier 9 -- Plotting

@@ -35,7 +35,7 @@ def _xp_of(*arrays):
 # =============================================================================
 
 def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
-                 aperture_diameter=None, xc=0, yc=0):
+                 aperture_diameter=None, xc=0, yc=0, dy=None):
     """
     Apply a mirror reflection to an optical field.
 
@@ -46,19 +46,32 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
 
     Parameters
     ----------
-    E_in : ndarray (complex, N×N)
-        Input electric field.
+    E_in : ndarray (complex, Ny x Nx)
+        Input electric field.  May be a NumPy, CuPy, or JAX array;
+        the namespace is dispatched via :func:`array_namespace`
+        (v4.13.0 / L6), so the returned ``E_out`` lives on the same
+        backend as ``E_in``.
 
     wavelength : float
         Free-space wavelength [m].
 
     dx : float
-        Grid spacing [m].
+        Grid spacing in x [m].
 
     radius : float or None
         Radius of curvature of the mirror [m].
         Positive = concave (focusing), negative = convex (diverging).
         None or inf = flat mirror.
+
+        Note: this is the **wave-side** ``radius`` convention used by
+        this user-facing function (R > 0 = concave focusing).  It is
+        the OPPOSITE sign convention from the Welford signed-R used
+        by :func:`system_abcd` / :func:`seidel_coefficients` (where
+        a concave mirror in the incoming-light frame has R < 0).  The
+        wave-side convention has been the API for many releases and
+        is intentionally preserved here -- see
+        ``validation/elements/test_elements.py``::``t_curved_mirror_focus``
+        for the reconciliation against the Welford side.
 
     conic : float, default 0.0
         Conic constant of the mirror surface (0=sphere, -1=paraboloid).
@@ -69,17 +82,26 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
     xc, yc : float, default 0
         Mirror center offset [m].
 
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square grid, the
+        library's usual case).  Provide explicitly for rectangular
+        (non-square) grids so the aperture and sag aren't silently
+        stretched along y.  Added in v4.13.0 (L6) to match the rest
+        of the ``apply_*`` family.
+
     Returns
     -------
-    E_out : ndarray (complex, N×N)
-        Reflected field. After this call, subsequent ASM propagation
-        models the return path (caller is responsible for using the
-        correct propagation distances and sign conventions).
+    E_out : ndarray (complex, Ny x Nx)
+        Reflected field on the same array backend as ``E_in``.  After
+        this call, subsequent ASM propagation models the return path
+        (caller is responsible for using the correct propagation
+        distances and sign conventions).
 
     Notes
     -----
-    A concave mirror with radius R acts like a converging lens with
-    focal length f = R/2. The reflected phase is:
+    A concave mirror with radius R (wave-side convention, R > 0)
+    acts like a converging lens with focal length f = R/2. The
+    reflected phase is:
 
         phi(x,y) = -2 * (2*pi/lambda) * sag(x,y)
 
@@ -94,36 +116,73 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
     For parabolic mirrors (conic=-1), the reflection is aberration-free
     for on-axis collimated input.
     """
+    if dy is None:
+        dy = dx
+    xp = _xp_of(E_in)
+    # NumPy short-circuit retains the legacy code path that the helper
+    # ``_surface_sag_general`` exercises (numba-accelerated aspherics);
+    # JAX / CuPy take the xp-native inline path below since the helper
+    # silently demotes JAX -> NumPy (round-tripping through the host).
+    is_numpy_backend = xp is np
+
     Ny, Nx = E_in.shape
     k = 2 * np.pi / wavelength
 
-    E = E_in.copy()
+    # JAX arrays are immutable so ``.copy()`` doesn't actually copy
+    # (it returns a new view); for NumPy / CuPy this ensures we don't
+    # mutate the caller's buffer when subsequently masking it.
+    E = E_in.copy() if hasattr(E_in, 'copy') else xp.array(E_in)
 
-    # Apply aperture
+    # Build the coordinate grid once on the right backend if either
+    # the aperture mask or the sag phase is needed.
+    need_grid = (aperture_diameter is not None) or (
+        radius is not None and not np.isinf(radius)
+    )
+    if need_grid:
+        x = (xp.arange(Nx) - Nx / 2) * dx
+        y = (xp.arange(Ny) - Ny / 2) * dy
+        X, Y = xp.meshgrid(x, y)
+        h_sq = (X - xc) ** 2 + (Y - yc) ** 2
+
+    # Apply aperture (with anamorphic-aware grid via dy).  This is the
+    # geometric ellipse-aperture form: a point (x, y) is inside the
+    # clear aperture when ((x-xc)/dx_scale)^2 + ((y-yc)/dy_scale)^2 lies
+    # within the squared half-diameter (per the existing semi-axis
+    # interpretation when dx == dy this collapses to the previous
+    # circular mask).
     if aperture_diameter is not None:
-        x = (np.arange(Nx) - Nx / 2) * dx
-        y = (np.arange(Ny) - Ny / 2) * dx
-        X, Y = np.meshgrid(x, y)
-        h_sq = (X - xc)**2 + (Y - yc)**2
-        E = np.where(h_sq <= (aperture_diameter / 2)**2, E, 0.0 + 0.0j)
+        E = xp.where(h_sq <= (aperture_diameter / 2) ** 2, E, 0.0 + 0.0j)
 
     # Curved mirror: apply focusing phase
     if radius is not None and not np.isinf(radius):
-        x = (np.arange(Nx) - Nx / 2) * dx
-        y = (np.arange(Ny) - Ny / 2) * dx
-        X, Y = np.meshgrid(x, y)
-        h_sq = (X - xc)**2 + (Y - yc)**2
-
-        # Compute surface sag
-        sag = _surface_sag_general(h_sq, radius, conic)
+        if is_numpy_backend:
+            # Keep the legacy NumPy / numba-aspheric helper for the
+            # CPU path; bit-near-exact identical to v4.12.1.
+            sag = _surface_sag_general(h_sq, radius, conic)
+        else:
+            # Inline xp-native sag (no aspherics in apply_mirror's
+            # public signature, so just the conic term).
+            #   sag = h_sq / (R * (1 + sqrt(1 - (1+k)*h_sq/R^2)))
+            # Outside the conic domain ((1+k)*h_sq/R^2 >= 0.9999) the
+            # surface is undefined; return NaN there so a downstream
+            # aperture mask can hide those pixels (matching the
+            # NumPy helper's v4.10 contract).
+            norm = (1 + conic) * h_sq / radius ** 2
+            valid = norm < 0.9999
+            denom_arg = xp.where(valid, 1 - norm, 0.01)
+            sag = xp.where(
+                valid,
+                h_sq / (radius * (1 + xp.sqrt(denom_arg))),
+                xp.nan,
+            )
 
         # Double-pass OPD: ray travels sag down to the surface and sag
         # back up, so total extra path = 2 * sag.
         # Phase delay (negative sign, same convention as apply_real_lens).
         phase = -2 * k * sag
-        # Compute exp() in complex128 for phase precision, then cast
+        # Compute exp() in the high-precision dtype first, then cast
         # back to E's dtype so a complex64 input stays complex64.
-        phase_exp = np.exp(1j * phase)
+        phase_exp = xp.exp(1j * phase)
         if phase_exp.dtype != E.dtype:
             phase_exp = phase_exp.astype(E.dtype)
         E = E * phase_exp

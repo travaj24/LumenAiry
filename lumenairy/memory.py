@@ -411,7 +411,9 @@ def available_cpus() -> int:
             n = os.process_cpu_count()
             if n:
                 return int(n)
-        except Exception:
+        except (OSError, AttributeError, NotImplementedError):
+            # Python < 3.13 may have the attribute as a stub that
+            # raises NotImplementedError on some platforms.
             pass
 
     if hasattr(os, 'sched_getaffinity'):
@@ -419,7 +421,9 @@ def available_cpus() -> int:
             n = len(os.sched_getaffinity(0))
             if n > 0:
                 return int(n)
-        except Exception:
+        except (OSError, AttributeError, NotImplementedError):
+            # sched_getaffinity is POSIX-only; missing on Windows /
+            # macOS where the hasattr check still passes via shim.
             pass
 
     try:
@@ -427,7 +431,9 @@ def available_cpus() -> int:
         n = len(psutil.Process().cpu_affinity())
         if n > 0:
             return int(n)
-    except Exception:
+    except (ImportError, AttributeError, OSError,
+            NotImplementedError) as _exc:
+        # psutil missing or cpu_affinity unsupported (macOS).
         pass
 
     return max(1, int(os.cpu_count() or 1))

@@ -240,43 +240,43 @@ def lumenairy_context(
                 from .propagators.propagation import clear_asm_caches
                 try:
                     clear_asm_caches()
-                except Exception:
+                except (RuntimeError, AttributeError):
                     pass
                 try:
                     from .analysis.core import clear_zernike_basis_cache
                     clear_zernike_basis_cache()
-                except Exception:
+                except (ImportError, RuntimeError, AttributeError):
                     pass
                 try:
                     from .propagators.asymptotic import (
                         clear_lg_polynomial_cache,
                     )
                     clear_lg_polynomial_cache()
-                except Exception:
+                except (ImportError, RuntimeError, AttributeError):
                     pass
                 try:
                     from .raytrace.jax_trace import clear_trace_jax_cache
                     clear_trace_jax_cache()
-                except Exception:
+                except (ImportError, RuntimeError, AttributeError):
                     pass
                 try:
                     from .system import clear_propagate_system_jax_cache
                     clear_propagate_system_jax_cache()
-                except Exception:
+                except (ImportError, RuntimeError, AttributeError):
                     pass
                 try:
                     from .analysis.phase_retrieval import (
                         clear_phase_retrieval_caches,
                     )
                     clear_phase_retrieval_caches()
-                except Exception:
+                except (ImportError, RuntimeError, AttributeError):
                     pass
                 try:
                     from .analysis.through_focus import (
                         clear_through_focus_scan_jax_cache,
                     )
                     clear_through_focus_scan_jax_cache()
-                except Exception:
+                except (ImportError, RuntimeError, AttributeError):
                     pass
 
 
@@ -289,6 +289,11 @@ def _atexit_restore(snapshot: dict) -> None:
     the file system / external state in a clean shape, not to enforce
     library invariants on the way out.
     """
+    # KEEP-AS-IS broad-except: atexit handlers must NEVER let an
+    # exception propagate -- the module-level globals (including
+    # ``apply_globals`` itself) may already be torn down by the
+    # interpreter shutdown sequence, so even AttributeError /
+    # NameError needs to be tolerated here.
     try:
         apply_globals(snapshot)
     except Exception:

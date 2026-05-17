@@ -2,6 +2,297 @@
 
 All notable changes to the core library are documented here.
 
+## [4.13.0] — 2026-05-17
+
+**Bundle of three internal phases since v4.12.2 (PyPI-published):**
+
+* Phase 1 — closes audit known-limitations S1, S2, S3 and L2, L3,
+  L4, L6, L8 from `AUDIT_V4_12_1_2026_05_16.md` (storage dtype
+  preservation, codegen aperture-stop + wavelength sentinel, ghost
+  R/r convention, JAX dtype + `jax_enable_x64`, `PropagationResult.dy`
+  + `Source.dy`, sibling mirror-guards, `apply_mirror` xp + dy,
+  zarr thread-safety).
+* Phase 2 — sweeps `except Exception:` clauses across the non-UI
+  codebase from 99 → 3 justified sites (typed exceptions
+  everywhere else, three WARN-BEFORE-PASS upgrades).
+* Phase 3 — Tier-2 perf wins from the same audit: 10× thin-grating,
+  188× BSDF TIS, 4.43× Chebyshev freeform, 3.26× coating-stack,
+  10.8× Shack-Hartmann FFT batching, 4–72× Seidel field sweep,
+  smaller wins on `wave_opd_2d` and `_fd_grad`.  Also: rcwa.py →
+  thin_grating.py file rename with no back-compat shim (sole-user
+  waiver).
+
+All 573 unit tests pass; 34/34 validation files pass.
+
+### Phase 1 — Audit known-limitations closure
+
+**S1 — `io.storage` complex-dtype preservation through append.**
+`save_jones_field_h5`, `append_plane_h5`, `_zarr_append_plane`, and
+the unified `append_plane` dispatcher gained a `preserve_dtype`
+parameter that is threaded down through the write path.  Previously
+the append-side stack silently promoted complex64 inputs to
+complex128 on every plane after the first.  Default behaviour is
+preserved: callers that omit `preserve_dtype` continue to see the
+v4.12.x promotion.
+
+**S2 — `io.codegen` aperture-stop emission + wavelength sentinel.**
+`_decompose_prescription` now emits an `{'type': 'aperture', ...}`
+step before mirrors / dummy planes / real-lens groups whenever
+`is_stop=True` on the source surface.  The Zemax loader threads the
+`is_stop` flag through `prescriptions.py` so the stop reaches
+codegen with its identity intact.  Separately, the silent default of
+`wavelength_nm = 1.31e-6` was replaced with a `ValueError`; callers
+that previously got NIR by accident now get a clear failure at
+codegen time.
+
+**S3 — `analysis.ghost` `R` vs `r` convention disambiguation.**
+A top-of-module convention block now disambiguates uppercase `R`
+(Fresnel reflectance) from lowercase `r` (curvature radius).
+Local variables renamed accordingly (`R_i_val → r_i`,
+`R_j_val → r_j`).  Public dict keys are unchanged for back-compat
+consumers.
+
+**L2 — JAX complex-dtype routing.**
+Added `_resolve_jax_complex_dtype()` and `_resolve_jax_real_dtype()`
+helpers in `propagators/propagation.py`.  When complex128 is
+required, the helper auto-enables `jax_enable_x64` with a one-shot
+`RuntimeWarning` rather than silently truncating.  Threaded through
+`system.py:propagate_system_jax`, `_lens_jax.py` (three call
+sites), and `analysis/phase_retrieval.py`.  The
+`_PROPAGATE_SYSTEM_JAX_CACHE` key now includes `str(np.dtype(cdtype))`
+so a float32-then-float64 sweep stops aliasing onto a single XLA
+binary.
+
+**L3 — `PropagationResult.dy` and `Source.dy` fields.**
+`PropagationResult` gained a `dy` field (defaults to `dx` in
+`__post_init__`); `dy_out` / `dx_out` aliases preserved.
+`_coerce_field` in `propagators/dispatch.py` now returns
+`(field, dx_out, dy_out)`; threading carried through every internal
+caller.  `Source` (in `sources/core.py`) gained a matching `dy` that
+`to_source()` forwards.  Anamorphic-grid propagation can now round-
+trip metadata without losing the second axis.
+
+**L4 — Sibling mirror-guards in `apply_real_lens_*` variants.**
+`apply_real_lens_traced_jax`, `apply_real_lens_maslov_jax`, and
+`lenses_maslov.apply_real_lens_maslov` all gained the pre-flight
+`is_mirror=True` guard previously only present in
+`apply_real_lens`.  Calls into a folded prescription that should
+have been split now raise `ValueError` consistently across the
+trio + maslov.
+
+* L4b — `phase_retrieval.py` raises `NotImplementedError` when an
+  `initial_guess` is passed on the JAX backend (the JAX path does
+  not currently honour it); migration message included.
+* L4c — `phase_retrieval.py` warns + synthesises an empty history
+  list when `return_history=True` is requested on the JAX backend.
+
+**L6 — `apply_mirror` xp dispatch + `dy` parameter.**
+`elements/elements.py:apply_mirror` now resolves the backend
+namespace via `_xp_of(E_in)` and accepts a `dy` parameter for
+anamorphic grids.  NumPy short-circuit retained for the
+numba-aspheric fast path; JAX and CuPy take the xp-native inline-sag
+branch.  Backwards compatible: `dy=None` reproduces the v4.12.x
+square-grid behaviour exactly.
+
+**L8 — Zarr thread-safety guard.**
+Added a module-level `_ZARR_MKDIR_PATCH_LOCK = threading.Lock()` in
+`io/storage.py` to guard the `Path.mkdir` monkey-patch in
+`_open_zarr_group_safe`.  Concurrent writers no longer race on
+patch-install vs patch-restore.
+
+### Phase 2 — `except Exception:` sweep
+
+Non-UI library files contained 99 `except Exception:` clauses
+(audit's "242" figure swept the full repo including tests,
+validation, and commentary; the real non-UI count was 99).  After
+the sweep:
+
+* 3 KEEP-AS-IS, justified inline:
+  * `_context.py:299` — atexit handler tolerating module-level
+    global teardown.
+  * `optimize/core.py:2602` — `_RestoreDtype.__del__` cleanup
+    tolerating shutdown.
+  * `propagators/hfpi.py:84` — optional-dep guard around
+    `import jax`.
+* ~85 narrowed to typed tuples covering the documented failure
+  modes (e.g. `(RuntimeError, MemoryError, ValueError, TypeError,
+  AttributeError)` for pyFFTW failures; `(ImportError, RuntimeError,
+  AttributeError)` for cache-clear guards; `(ValueError,
+  RuntimeError, ZeroDivisionError, np.linalg.LinAlgError,
+  IndexError)` for `system_abcd` fallbacks; etc.).
+* 3 WARN-BEFORE-PASS upgrades — surfaces in failure paths that
+  would previously have silently degraded:
+  * `analysis/field.py petzval_radius` — a missing glass entry was
+    returning NaN, which downstream could be confused with "the
+    field is perfectly flat."  Now warns explicitly with the glass
+    name + wavelength.
+  * `propagators/hf.py` LG decomposition fallback — falling back to
+    a single `(p=0, l=0)` plane-wave mode makes the asymptotic
+    propagator essentially useless; failure is now surfaced.
+  * `optimize/core.py design_optimize plane_logger` callback — was
+    silently swallowing all logger failures for the duration of an
+    optimization run.  Promoted to WARN-BEFORE-PASS so users see
+    telemetry-callback bugs immediately instead of an empty log
+    file at the end.
+
+Pinning test:
+`tests/unit/test_audit_fixes_v4_13_0_except_sweep.py` with 6 tests
+including a regression budget guard (non-UI `except Exception:` count
+≤ 15) and three behavioural pins (`petzval_radius` warns,
+`design_optimize plane_logger` warns, narrow tuples drop on
+expected failures).
+
+### Phase 3 — Tier-2 performance wins
+
+Three disjoint-scope agent groups (elements/UI, analysis/optimize,
+propagators/raytrace) executed in parallel.  Measured speedups
+(`time.perf_counter`, representative workloads on Win11 / Python
+3.14):
+
+#### Group α — elements + UI
+
+| Hot path | Old | New | Speedup |
+|---|---|---|---|
+| `thin_grating_efficiency_1d` (n_orders=25) | 198 us | 18.9 us | **10.5×** |
+| `bsdf.total_integrated_scatter` (256×128) | 384 ms | 2.05 ms | **188×** |
+| coating-stack matmul chain (50 layers) | 0.48 ms | 0.15 ms | **3.26×** |
+| freeform Chebyshev (64×64, 16 coeffs) | 1.63 ms | 0.37 ms | **4.43×** |
+
+**`elements/rcwa.py` → `elements/thin_grating.py` rename.**  The
+file name "rcwa" was misleading: the function inside is the
+analytical scalar thin-phase grating formula, not rigorous coupled-
+wave analysis.  The functions themselves were renamed in v4.4.0
+(`thin_grating_efficiency_1d`, `grating_efficiency_vs_wavelength`);
+v4.13.0 finishes the rename at the file level:
+
+* `lumenairy/elements/rcwa.py` → `lumenairy/elements/thin_grating.py`
+* `lumenairy/ui/rcwa_dock.py` → `lumenairy/ui/thin_grating_dock.py`
+  (class `RCWADock` → `ThinGratingDock`)
+* `lumenairy/__init__.py` import path + Tier-7 comment updated.
+* `lumenairy/elements/__init__.py` module docstring updated.
+* `lumenairy/ui/main_window.py` (4 references) +
+  `lumenairy/ui/workspace.py` (dock-key mapping) updated.
+
+**No back-compat shim** is installed at either old path
+(`import lumenairy.elements.rcwa` raises `ModuleNotFoundError`).
+This is per the explicit waiver from the sole user of the library.
+
+**`bsdf.total_integrated_scatter`** is now a fully-vectorised 2D
+meshgrid + single `np.trapz` reduction rather than a per-(θ_i, θ_s)
+inner-product loop.  This is the biggest single-call speedup in the
+v4.13.0 batch.
+
+**Coating-stack matmul** moved from a Python `M = M @ M_layer` loop
+to a tournament reduction over a `(N, 2, 2)` per-layer tensor.  The
+agent also switched the inner Snell-chain math from `np.sin/arcsin`
+to `math.sin/asin` for scalar wavelengths — bit-identical through
+libm — lifting the win from 1.5× into the 3-5× target band.
+
+**Freeform Chebyshev** hoists the `arccos(rho)` out of the per-order
+loop and caches the `T_i(rho)` factors keyed by polynomial order,
+exploiting the fact that many `(i, j)` coefficient pairs share an
+`i` or `j` so 2N cos calls collapse to roughly `2 sqrt(N_coeffs)`.
+
+#### Group β — analysis + optimize
+
+| Hot path | Old | New | Speedup |
+|---|---|---|---|
+| Shack-Hartmann WFS (16² lenslets, 256² grid) | 72.9 ms | 6.76 ms | **10.8×** |
+| `wave_opd_2d` (512²) | 52.5 ms | 27.7 ms | **1.89×** |
+| `_fd_grad_pure` (N=20 quadratic, forward) | 0.159 ms | 0.071 ms | **2.23×** |
+
+**Shack-Hartmann FFT batching.**  `analysis/detector.py:simulate
+_shack_hartmann` previously ran two nested per-lenslet double-loops
+(reference + measurement), each computing an `np.fft.fft2` on a
+single sub-aperture.  The reference path is now a single fft2 on a
+stacked `(n_lenslets², sa_pixels, sa_pixels)` 3D array; the
+measurement path is the same.  A new `_build_asm_H_for_lenslet`
+helper inside `detector.py` duplicates a thin slice of the
+angular-spectrum H-build logic for the sub-aperture geometry,
+avoiding a scope-crossing edit into `propagators/`.  NaN sentinels
+for OOB lenslets and the `dx < pitch/2` warning are preserved.
+
+**`wave_opd_2d` axis unwrap.**  `analysis/core.py:wave_opd_2d`
+replaces the row-then-column per-pixel Python unwrap loop with
+`np.unwrap(opd, axis=0)` then `np.unwrap(..., axis=1)`.  At N=512
+the Python iteration overhead was about half the run time; the
+inner unwrap step itself was already compiled, so the 1.89× win is
+real but below the speculative 5-10× target.  Correctness preserved
+to 1e-12 on smooth quadratics, twice-wrapping tilts, and masked
+NaN regions.
+
+**`_fd_grad_pure` / `_fd_grad_for` central-vs-forward scheme.**
+Pre-v4.13 the helper used central differences (2N evals,
+`f(x ± h*e_i)`).  The audit's request to "reuse the centre value"
+was based on a forward-FD model — central FD has no `f(x)` to
+reuse, so the perf win required switching the scheme.  v4.13.0
+parameterises this:
+
+* `_fd_grad_pure(...)` and `_fd_grad_for(...)` accept
+  `scheme='central'|'forward'`, default `'central'`.
+* `scheme='central'` (the default) preserves bit-identical
+  gradient values with pre-v4.13 behaviour at 2N evals,
+  O(h²) truncation.
+* `scheme='forward'` is the opt-in perf path (N+1 evals, or N with
+  the optional `f0=<known value>`).  O(h) truncation.
+
+`design_optimize._merit_jac_auto` keeps the default `'central'`
+explicitly, so no existing optimisation run sees a behavioural
+change.  Callers that prefer speed can opt into `'forward'` at the
+helper level.
+
+#### Group γ — propagators + raytrace
+
+| Hot path | Old | New | Speedup |
+|---|---|---|---|
+| `seidel_field_sweep` (5 fields, singlet) | (ref) | (ref/4) | **4.2×** |
+| `seidel_field_sweep` (50 fields, singlet) | (ref) | (ref/37) | **37.5×** |
+| `seidel_field_sweep` (100 fields, singlet) | (ref) | (ref/72) | **72.0×** |
+
+**`raytrace/seidel_analysis.py:seidel_field_sweep` per-field hoist.**
+The paraxial Seidel formalism is exactly linear in the chief-ray
+initial conditions, and those scale linearly with field angle.  The
+sweep now does a single `seidel_coefficients(... field_angle=1.0)`
+call and applies the analytical per-field scaling (`S1, S4 ∝ 1`;
+`S2, y_chief ∝ σ`; `S3 ∝ σ²`; `S5 ∝ σ³`).  All field-independent
+work — glass-index lookups, pre-stop ABCD, marginal-ray trace, full
+`system_abcd` — is hoisted out of the loop.  Element-by-element
+agreement with the pre-hoist reference is at machine precision
+(< 1e-20 absolute for the singlet test case).
+
+**γ.1 — HFPI bincount swap reverted before ship.**  The initial
+agent run replaced the `np.add.at(out, flat_idx, w_masked)` scatter
+in `propagators/hfpi.py:accumulate_to_grid` with a `np.bincount`-
+based path on the premise that `add.at` was a Python-level loop.
+That premise pre-dated NumPy 1.25; NumPy ≥ 1.25 has vectorised
+`add.at` for complex via `_PyArray_UFuncBufferedAtVectorized`.
+Measured speedup on the actually-shipping NumPy was 0.4–1.0×
+(a wash, leaning regression), so the patch was reverted.  No
+behavioural change vs v4.12.2 in this path.
+
+### Bug-fix and discipline notes
+
+* Phase 2 audit count discrepancy resolved.  Audit reported 346
+  `except Exception:` clauses; the real non-UI count was 99 (the
+  audit swept tests, validation, and prose into the same `grep`).
+* Phase 3 Group α / γ race observed mid-run: Group γ briefly
+  imported a non-existent `elements/rcwa.py` reference while
+  Group α was mid-rename.  Resolved by Group α's completion; no
+  artefact in shipped code.
+* `tests/unit/test_audit_fixes_v4_12_0_round4_dispatch.py` had a
+  Phase-1 deselected test (the v4.12.0 pin on `_coerce_field`'s
+  2-tuple return signature) because L3 changed that signature to
+  a 3-tuple `(field, dx_out, dy_out)`.  The intended replacement
+  pin is the v4.13.0 dy-siblings test file.
+
+### Test counts
+
+* Pre-Phase-3 baseline (Phase 1 + 2 landed): 536 unit tests.
+* Phase 3 additions: 12 perf pins (α) + 12 (β) + 7 (γ) = 31, minus
+  6 bincount tests deleted with the γ.1 revert + net 0 from the
+  fd_grad test rewrite.  Final: **573 unit tests passing**,
+  **34/34 validation files passing**.
+
 ## [4.12.2] — 2026-05-17
 
 **Closes the round-5 / v4.12.1 pre-PyPI audit blockers**

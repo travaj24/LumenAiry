@@ -280,7 +280,9 @@ def beam_expander_prescription(M: float, f_objective: float, *,
     try:
         pres['thicknesses'][1] = _zero_C_air_gap(
             pres, gap_slot_index=1, wavelength=wavelength)
-    except Exception:
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            IndexError, TypeError):
+        # Air-gap solve failed (degenerate ABCD, missing glass).
         # Fall back to the thin-lens separation on error.
         pass
     return pres
@@ -339,7 +341,9 @@ def keplerian_telescope(f_objective: float, f_eyepiece: float, *,
     try:
         pres['thicknesses'][1] = _zero_C_air_gap(
             pres, gap_slot_index=1, wavelength=wavelength)
-    except Exception:
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            IndexError, TypeError):
+        # Air-gap solve failed (degenerate ABCD, missing glass).
         # Fall back to the thin-lens separation on error.
         pass
     return pres

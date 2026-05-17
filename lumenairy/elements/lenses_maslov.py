@@ -114,6 +114,43 @@ def apply_real_lens_maslov(
     product fit assumes square pixels and will raise if
     ``dy != dx``.
     """
+    # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
+    # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
+    # with ``surfaces[i]['is_mirror']=True`` (or ``glass_after='MIRROR'``)
+    # would slip past the shared ``_check_no_silent_fold_drop`` (which
+    # only inspects ``prescription['elements']``), and the Maslov leg
+    # would silently treat the mirror as a refractor with the wrong
+    # sign.  Fail loudly with the same mirror-specific message as
+    # ``apply_real_lens_traced``.
+    _surfaces_list = prescription.get('surfaces') or []
+    _mirror_surf_idx = []
+    for _i, _s in enumerate(_surfaces_list):
+        if not isinstance(_s, dict):
+            continue
+        _gl_after = _s.get('glass_after')
+        _is_mirror = bool(_s.get('is_mirror', False)) or (
+            isinstance(_gl_after, str)
+            and _gl_after.upper() == 'MIRROR'
+        )
+        if _is_mirror:
+            _mirror_surf_idx.append(_i)
+    if _mirror_surf_idx:
+        raise ValueError(
+            f"apply_real_lens_maslov: prescription has "
+            f"{len(_mirror_surf_idx)} mirror surface(s) at "
+            f"indices {_mirror_surf_idx} -- apply_real_lens_maslov "
+            f"only walks refracting surfaces.  Running this "
+            f"prescription as-is would silently treat the mirror as "
+            f"a refractor (wrong sign / wrong focusing phase) and "
+            f"propagate along the unfolded-equivalent axis.  Use "
+            f"the per-segment trace + apply_mirror pattern for "
+            f"folded designs: call "
+            f"lumenairy.io.split_prescription_at_mirrors(rx) to "
+            f"split the prescription at each fold, then alternate "
+            f"apply_real_lens_maslov (each segment) with "
+            f"apply_mirror (each fold).  See Guide-Folded-Designs "
+            f"section 'Wave-optics through a fold'.")
+
     # Folded-design silent-drop guard: same as apply_real_lens.
     from ._lens_real import _check_no_silent_fold_drop
     _check_no_silent_fold_drop(
@@ -145,7 +182,9 @@ def apply_real_lens_maslov(
     try:
         _warn_if_aperture_exceeds_grid(
             lens_prescription, N, dx, source='apply_real_lens_maslov')
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError):
+        # Aperture-check failure is informational only; the
+        # propagator still runs.
         pass
 
     def _progress(phase, frac, note=''):
@@ -253,7 +292,10 @@ def apply_real_lens_maslov(
                 lens_total_thickness = sum(s.thickness for s in surfaces)
                 na_proxy = r_aperture / max(lens_total_thickness,
                                              r_aperture * 10)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                np.linalg.LinAlgError, IndexError, TypeError):
+            # system_abcd_prescription failure -- fall back to a
+            # thickness-based NA proxy (geometric heuristic).
             lens_total_thickness = sum(s.thickness for s in surfaces)
             na_proxy = r_aperture / max(lens_total_thickness,
                                          r_aperture * 10)

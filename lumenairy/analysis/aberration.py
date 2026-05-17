@@ -140,7 +140,11 @@ def aberration_summary(
         _, efl, bfl, _ = system_abcd(surfs, wavelength)
         efl_v = float(efl) if np.isfinite(efl) else None
         bfl_v = float(bfl) if np.isfinite(bfl) else None
-    except Exception as exc:
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            np.linalg.LinAlgError, IndexError, TypeError) as exc:
+        # system_abcd failures: ValueError (degenerate prescription),
+        # KeyError (unknown glass), LinAlgError / ZeroDivision
+        # (ill-conditioned ABCD), IndexError (short surface list).
         notes.append(f"system_abcd failed: {type(exc).__name__}: {exc}")
         _maybe_warn_glass(exc)
         efl_v = bfl_v = None
@@ -185,7 +189,8 @@ def aberration_summary(
                 # the design is diffraction-limited when in fact the
                 # computation just produced the wrong shape.
                 seidel_total = np.full(5, np.nan)
-    except Exception as exc:
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            np.linalg.LinAlgError, IndexError, TypeError) as exc:
         notes.append(f"seidel_coefficients failed: {type(exc).__name__}: {exc}")
         _maybe_warn_glass(exc)
         # 4.10: NaN-propagate the failure rather than returning the
@@ -240,7 +245,14 @@ def aberration_summary(
                     w_s=w_s, w_p=w_p,
                     v2_centre=(fit.v2x_centre, fit.v2y_centre),
                 )
-        except Exception as exc:
+        except (ImportError, ValueError, RuntimeError, ZeroDivisionError,
+                KeyError, np.linalg.LinAlgError, IndexError,
+                TypeError) as exc:
+            # LG-tensor failures: ImportError (JAX absent in
+            # differentiable mode), ValueError / RuntimeError
+            # (envelope solve / canonical fit divergence),
+            # LinAlgError (singular projection), KeyError (missing
+            # prescription entry).
             notes.append(
                 f"LG tensor unavailable: {type(exc).__name__}: {exc}")
             lg_result = None

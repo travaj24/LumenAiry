@@ -38,9 +38,23 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import os
+import threading
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
+
+# Module-level lock guarding the ``Path.mkdir`` monkey-patch inside
+# :func:`_open_zarr_group_safe`.  Two threads racing through
+# ``append_plane_h5`` -> ``_open_zarr_group_safe`` previously could
+# leave the patch installed indefinitely if one thread restored its
+# saved ``_orig_mkdir`` while the other was still running, or both
+# could call ``_orig_mkdir = _PL.mkdir`` simultaneously and end up
+# saving the patched version as the "original" -- making the patch
+# permanent and corrupting every later mkdir call.  L8 fix (v4.13.0):
+# serialise the patch install/restore window.  The lock is process-
+# scoped (one per import) so it imposes no overhead on the common
+# single-threaded code path.
+_ZARR_MKDIR_PATCH_LOCK = threading.Lock()
 
 # =========================================================================
 # HDF5 backend
@@ -276,11 +290,41 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
                         label: Optional[str] = None,
                         metadata: Optional[Dict[str, Any]] = None,
                         compression: Optional[str] = 'gzip',
-                        compression_opts: Optional[int] = 4) -> None:
-    """Save a JonesField (polarized field) to an HDF5 file."""
+                        compression_opts: Optional[int] = 4,
+                        preserve_dtype: bool = False) -> None:
+    """Save a JonesField (polarized field) to an HDF5 file.
+
+    Parameters
+    ----------
+    filepath : str
+        Output ``.h5`` file path.
+    jones_field : JonesField
+        Polarized field carrying ``Ex``, ``Ey``, ``dx``, ``dy``.
+    wavelength : float, optional
+        Optical wavelength [m].
+    label : str, optional
+        Human-readable label for the field.
+    metadata : dict, optional
+        Additional attributes to store.
+    compression : str or None, default ``'gzip'``
+        HDF5 compression filter.
+    compression_opts : int, default 4
+        Compression level (for gzip, 1-9).
+    preserve_dtype : bool, default False
+        If True, store ``Ex`` / ``Ey`` at their native complex precision
+        (``complex64`` or ``complex128``).  If False (the historical
+        default), coerce to ``complex128`` for storage.  See
+        :func:`save_field_h5` for the same flag.  v4.13.0 onward.
+    """
     _require_h5py()
-    Ex = np.asarray(jones_field.Ex, dtype=np.complex128)
-    Ey = np.asarray(jones_field.Ey, dtype=np.complex128)
+    Ex_in = jones_field.Ex
+    Ey_in = jones_field.Ey
+    if preserve_dtype:
+        Ex = np.asarray(Ex_in)
+        Ey = np.asarray(Ey_in)
+    else:
+        Ex = np.asarray(Ex_in, dtype=np.complex128)
+        Ey = np.asarray(Ey_in, dtype=np.complex128)
     with h5py.File(filepath, 'w') as f:
         grp = f.create_group('jones')
         grp.attrs['dx'] = float(jones_field.dx)
@@ -334,12 +378,43 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                     metadata: Optional[Dict[str, Any]] = None,
                     compression: Optional[str] = 'gzip',
                     compression_opts: Optional[int] = 4,
-                    chunk_size: int = 1024) -> None:
-    """Append a single plane to a multi-plane HDF5 file (or create one)."""
+                    chunk_size: int = 1024,
+                    preserve_dtype: bool = False) -> None:
+    """Append a single plane to a multi-plane HDF5 file (or create one).
+
+    Parameters
+    ----------
+    filepath : str
+        Path to the multi-plane HDF5 file (created on first append).
+    field : ndarray (complex, Ny x Nx)
+        Complex electric field.  CuPy / JAX arrays are accepted and
+        converted to NumPy for storage.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    z, label, metadata
+        Per-plane stored attributes.
+    compression, compression_opts
+        HDF5 compression filter and level.
+    chunk_size : int, default 1024
+        HDF5 chunk-size cap (clipped to the field extent).
+    preserve_dtype : bool, default False
+        If True, store ``field`` at its native complex precision
+        (``complex64`` or ``complex128``).  If False (the historical
+        default), coerce to ``complex128`` for storage.  See
+        :func:`save_field_h5` for the same flag.  v4.13.0 onward.
+    """
     _require_h5py()
     if dy is None:
         dy = dx
-    E = np.asarray(field, dtype=np.complex128)
+    from ..backend import to_numpy
+    field_np = (to_numpy(field) if not isinstance(field, np.ndarray)
+                else field)
+    if preserve_dtype:
+        E = np.asarray(field_np)
+    else:
+        E = np.asarray(field_np, dtype=np.complex128)
     with h5py.File(filepath, 'a') as f:
         if 'planes' not in f:
             grp = f.create_group('planes')
@@ -358,6 +433,7 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
         dset = grp.create_dataset(name, data=E, **ds_kwargs)
         dset.attrs['dx'] = float(dx)
         dset.attrs['dy'] = float(dy)
+        dset.attrs['dtype'] = str(E.dtype)
         if z is not None:
             dset.attrs['z'] = float(z)
         if label is not None:
@@ -599,6 +675,16 @@ def _open_zarr_group_safe(zarr_mod, filepath, writable=False):
     patch is scoped to the duration of the zarr call and restored in
     the finally block, so it never leaks to other code paths.
 
+    Thread-safety (L8 fix, v4.13.0): the install / restore pair is
+    serialised through a module-level :class:`threading.Lock`
+    (``_ZARR_MKDIR_PATCH_LOCK``).  Two threads racing through
+    ``append_plane_h5`` -> ``_open_zarr_group_safe`` previously could
+    save the patched ``mkdir`` as the "original" and never restore
+    the real implementation, permanently corrupting ``Path.mkdir`` for
+    the whole process.  The lock is contended only on Windows where
+    the patch is needed at all, and is uncontended on the (vastly more
+    common) single-threaded code path.
+
     Parameters
     ----------
     zarr_mod : module
@@ -618,39 +704,52 @@ def _open_zarr_group_safe(zarr_mod, filepath, writable=False):
     # Python semantics promise but Windows + Python 3.14 currently
     # break.
     from pathlib import Path as _PL
-    _orig_mkdir = _PL.mkdir
 
-    def _patched_mkdir(self, mode=0o777, parents=False, exist_ok=False):
-        try:
-            return _orig_mkdir(self, mode=mode, parents=parents,
-                                exist_ok=exist_ok)
-        except FileExistsError:
-            if exist_ok and self.is_dir():
-                return None    # documented exist_ok semantics
-            raise
+    # Acquire the module-level lock before the install/restore window
+    # to keep the original mkdir reference single-source.  If a second
+    # thread arrives here it will block until we restore.
+    with _ZARR_MKDIR_PATCH_LOCK:
+        _orig_mkdir = _PL.mkdir
 
-    _PL.mkdir = _patched_mkdir
-    try:
-        # Writable path: prefer r+ when the store already exists so
-        # the patched mkdir is only needed as a safety net.
-        if os.path.isdir(str(filepath)):
+        def _patched_mkdir(self, mode=0o777, parents=False,
+                           exist_ok=False):
             try:
-                return zarr_mod.open_group(str(filepath), mode='r+')
-            except (FileNotFoundError, KeyError):
-                # Directory exists but no zarr metadata yet -> fall
-                # through to creating mode.
-                pass
-        return zarr_mod.open_group(str(filepath), mode='a')
-    finally:
-        _PL.mkdir = _orig_mkdir
+                return _orig_mkdir(self, mode=mode, parents=parents,
+                                   exist_ok=exist_ok)
+            except FileExistsError:
+                if exist_ok and self.is_dir():
+                    return None    # documented exist_ok semantics
+                raise
+
+        _PL.mkdir = _patched_mkdir
+        try:
+            # Writable path: prefer r+ when the store already exists so
+            # the patched mkdir is only needed as a safety net.
+            if os.path.isdir(str(filepath)):
+                try:
+                    return zarr_mod.open_group(str(filepath), mode='r+')
+                except (FileNotFoundError, KeyError):
+                    # Directory exists but no zarr metadata yet -> fall
+                    # through to creating mode.
+                    pass
+            return zarr_mod.open_group(str(filepath), mode='a')
+        finally:
+            _PL.mkdir = _orig_mkdir
 
 
 def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
-                       metadata=None, chunk_size=1024, **_kwargs):
+                       metadata=None, chunk_size=1024,
+                       preserve_dtype=False, **_kwargs):
     zarr = _require_zarr()
     if dy is None:
         dy = dx
-    E = np.asarray(field, dtype=np.complex128)
+    from ..backend import to_numpy
+    field_np = (to_numpy(field) if not isinstance(field, np.ndarray)
+                else field)
+    if preserve_dtype:
+        E = np.asarray(field_np)
+    else:
+        E = np.asarray(field_np, dtype=np.complex128)
     Ny, Nx = E.shape
     chunks = (min(chunk_size, Ny), min(chunk_size, Nx))
     # Windows + Python 3.14 + zarr v3 workaround: ``open_group(mode='a')``
@@ -869,11 +968,18 @@ def append_plane(filepath: str, field: np.ndarray, dx: float,
                  label: Optional[str] = None,
                  metadata: Optional[Dict[str, Any]] = None,
                  chunk_size: int = 1024,
+                 preserve_dtype: bool = False,
                  **kwargs: Any) -> None:
     """Append a plane to a multi-plane file (HDF5 or Zarr, auto-dispatch).
 
     Backend detection precedence: existing file inspected first; then
-    path extension (``.zarr`` -> zarr); else global ``_BACKEND``."""
+    path extension (``.zarr`` -> zarr); else global ``_BACKEND``.
+
+    ``preserve_dtype`` (v4.13.0 onward) forwards to the chosen backend's
+    append impl so ``complex64`` inputs round-trip without being
+    silently promoted to ``complex128``.  Default ``False`` matches the
+    historical single-shot behaviour.
+    """
     if os.path.exists(filepath):
         backend = _detect_backend(filepath)
     elif str(filepath).endswith('.zarr'):
@@ -882,10 +988,12 @@ def append_plane(filepath: str, field: np.ndarray, dx: float,
         backend = _BACKEND
     if backend == 'zarr':
         _zarr_append_plane(filepath, field, dx, dy=dy, z=z, label=label,
-                           metadata=metadata, chunk_size=chunk_size)
+                           metadata=metadata, chunk_size=chunk_size,
+                           preserve_dtype=preserve_dtype)
     else:
         append_plane_h5(filepath, field, dx, dy=dy, z=z, label=label,
-                        metadata=metadata, chunk_size=chunk_size, **kwargs)
+                        metadata=metadata, chunk_size=chunk_size,
+                        preserve_dtype=preserve_dtype, **kwargs)
 
 
 def load_planes(filepath: str,

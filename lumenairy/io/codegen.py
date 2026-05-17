@@ -39,6 +39,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -87,8 +88,10 @@ def generate_simulation_script(
 
     wavelength : float or None
         Operating wavelength [m].  If None, uses the wavelength stored
-        in the prescription dict (if present), otherwise defaults to
-        1.31e-6 m (1310 nm).
+        in the prescription dict (if present).  If neither is supplied,
+        a :class:`ValueError` is raised so that visible-band Zemax
+        files do not silently convert to a 1310 nm NIR script
+        (v4.13.0 onward; pre-v4.13.0 this defaulted to 1.31e-6).
 
     N : int, default 2048
         Grid size for the simulation (N x N).
@@ -146,10 +149,25 @@ def generate_simulation_script(
     # ------------------------------------------------------------------
     # Resolve parameters
     # ------------------------------------------------------------------
+    # S2b (v4.13.0): Pre-fix this silently defaulted to 1310 nm whenever
+    # neither the user nor the prescription supplied a wavelength.  A
+    # visible-band Zemax file converted to a NIR script with no warning.
+    # The less-surprising behaviour is to raise: the simulation
+    # downstream is wavelength-sensitive at every refraction, so a
+    # bogus default produces a wrong-but-plausible output rather than
+    # an outright error.
     if wavelength is None:
-        wavelength = prescription.get('wavelength', 1.31e-6)
+        wavelength = prescription.get('wavelength')
     if wavelength is None:
-        wavelength = 1.31e-6
+        raise ValueError(
+            "generate_simulation_script: no wavelength supplied and the "
+            "prescription dict has no 'wavelength' key.  Pass "
+            "``wavelength=<value_in_meters>`` explicitly (e.g. "
+            "``wavelength=587.6e-9`` for the d-line, ``wavelength=1.31e-6`` "
+            "for telecom O-band).  Pre-v4.13.0 this defaulted to 1.31e-6 "
+            "(1310 nm) silently, which silently mis-modelled visible-band "
+            "designs."
+        )
 
     aperture = prescription.get('aperture_diameter', 25.4e-3)
     sys_name = prescription.get('name', 'Zemax System')
@@ -273,10 +291,52 @@ def _decompose_prescription(prescription):
         - ``'type': 'real_lens'`` → ``'prescription'``: lens prescription dict
         - ``'type': 'mirror'``    → ``'radius'``, ``'conic'``, etc.
         - ``'type': 'aperture'``  → ``'diameter'``: aperture diameter [m]
+
+    Stop emission (S2a, v4.13.0)
+    ----------------------------
+
+    Any element flagged ``is_stop=True`` in the input ``elements`` list
+    causes a ``{'type': 'aperture', 'params': {'diameter': D}}`` step
+    to be inserted *immediately before* the element it belongs to.  The
+    stop diameter ``D`` comes from the element's ``semi_diameter * 2``
+    if available, otherwise from the prescription-level
+    ``aperture_diameter`` field.  Pre-v4.13.0 the stop flag was dropped
+    silently and Zemax designs with a STOP surface produced scripts
+    whose generated simulation never clipped the beam at the design's
+    real aperture.
     """
     elements = prescription['elements']
     all_thicknesses = prescription['all_thicknesses']
     aperture = prescription.get('aperture_diameter', 25.4e-3)
+
+    # Loader compatibility: if the prescription was produced before
+    # v4.13.0 (loader didn't propagate ``is_stop`` into elements but
+    # did populate a top-level ``stop_index`` -- e.g. .qos / .seq
+    # loaders), translate the stop_index into a synthetic is_stop on
+    # the matching refracting element.  ``stop_index`` is documented as
+    # "zero-based index of the aperture stop **among refracting
+    # surfaces**".
+    stop_index = prescription.get('stop_index')
+
+    def _is_stop_elem(idx, elem):
+        if elem.get('is_stop'):
+            return True
+        if stop_index is None:
+            return False
+        # Count refracting surfaces up to (and including) idx.
+        if elem.get('element_type') != 'surface':
+            return False
+        refr_count = sum(
+            1 for k, e in enumerate(elements)
+            if k <= idx and e.get('element_type') == 'surface'
+        )
+        return refr_count - 1 == stop_index
+
+    def _stop_diameter(elem):
+        sd = elem.get('semi_diameter', 0) or 0
+        if sd > 0:
+            return float(sd) * 2.0
+        return float(aperture)
 
     steps = []
 
@@ -289,6 +349,15 @@ def _decompose_prescription(prescription):
         elem = elements[i]
 
         if elem['element_type'] == 'mirror':
+            # S2a: emit aperture step before the mirror if this element
+            # is the stop surface.
+            if _is_stop_elem(i, elem):
+                steps.append({
+                    'type': 'aperture',
+                    'diameter': _stop_diameter(elem),
+                    'surf_num': elem.get('surf_num', -1),
+                    'comment': 'Aperture stop (from STOP marker)',
+                })
             steps.append({
                 'type': 'mirror',
                 'radius': elem['radius'],
@@ -320,6 +389,16 @@ def _decompose_prescription(prescription):
                 asph = elem.get('aspheric_coeffs')
                 surf_num = elem.get('surf_num', -1)
 
+                # S2a: stop on an air-to-air surface (the common case
+                # for a thin dummy STOP plane).  Emit aperture step.
+                if _is_stop_elem(i, elem):
+                    steps.append({
+                        'type': 'aperture',
+                        'diameter': _stop_diameter(elem),
+                        'surf_num': surf_num,
+                        'comment': 'Aperture stop (from STOP marker)',
+                    })
+
                 if asph:
                     # Has aspheric/diffractive phase — emit as a DOE placeholder
                     steps.append({
@@ -341,6 +420,35 @@ def _decompose_prescription(prescription):
 
                 i += 1
                 continue
+
+            # S2a: emit aperture step before the lens group if the
+            # group's first surface is the STOP.  Stops on later
+            # surfaces of a group are unusual in Zemax practice (the
+            # stop is generally placed on a dedicated dummy or on the
+            # group's front face); for robustness we still scan all
+            # surfaces of the upcoming group and emit an aperture step
+            # immediately before this lens-group step if any matches.
+            # (One aperture step per group at most; the diameter is
+            # taken from the stop-flagged surface.)
+            group_stop_elem = None
+            j_scan = i
+            while j_scan < n_elem:
+                cand = elements[j_scan]
+                if cand.get('element_type') != 'surface':
+                    break
+                if _is_stop_elem(j_scan, cand):
+                    group_stop_elem = cand
+                    break
+                if cand.get('glass_after', 'air').lower() == 'air':
+                    break
+                j_scan += 1
+            if group_stop_elem is not None:
+                steps.append({
+                    'type': 'aperture',
+                    'diameter': _stop_diameter(group_stop_elem),
+                    'surf_num': group_stop_elem.get('surf_num', -1),
+                    'comment': 'Aperture stop (from STOP marker)',
+                })
 
             # Start of a real lens group: collect contiguous refracting surfaces
             group_start = i

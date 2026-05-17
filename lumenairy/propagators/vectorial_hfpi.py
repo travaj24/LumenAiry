@@ -59,7 +59,7 @@ class VectorPathBundle:
     def __len__(self) -> int:
         try:
             return int(self.positions.shape[0])
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             return 0
 
     @property

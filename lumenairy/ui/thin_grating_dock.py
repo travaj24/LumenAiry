@@ -1,5 +1,5 @@
 """
-RCWA / grating-efficiency dock (3.6).
+Thin-grating / grating-efficiency dock (3.6).
 
 Wraps :func:`lumenairy.thin_grating_efficiency_1d` and
 :func:`lumenairy.grating_efficiency_vs_wavelength` so users can
@@ -24,8 +24,9 @@ from matplotlib.figure import Figure
 from .model import SystemModel
 
 
-class RCWADock(QWidget):
-    """Rigorous-coupled-wave grating analyser."""
+class ThinGratingDock(QWidget):
+    """Thin-grating diffraction-efficiency analyser (analytical
+    scalar thin-phase model)."""
 
     def __init__(self, system_model: SystemModel, parent=None):
         super().__init__(parent)
@@ -100,7 +101,7 @@ class RCWADock(QWidget):
         sform.addRow('# samples:', self.spin_wl_n)
         outer.addWidget(sweep_group)
 
-        self.btn_run = QPushButton('▶ Compute RCWA efficiency')
+        self.btn_run = QPushButton('▶ Compute grating efficiency')
         self.btn_run.setObjectName('run_button')
         self.btn_run.clicked.connect(self._run)
         outer.addWidget(self.btn_run)
@@ -125,7 +126,7 @@ class RCWADock(QWidget):
         ax = self.fig.add_subplot(111)
         ax.set_facecolor('#0a0c10')
         ax.text(0.5, 0.5,
-                'Rigorous-coupled-wave analysis of a 1-D grating.\n'
+                'Analytical scalar thin-phase grating efficiencies.\n'
                 'Sweeps wavelength to plot per-order efficiency.',
                 color='#7a94b8', ha='center', va='center',
                 transform=ax.transAxes, fontfamily='monospace')
@@ -184,6 +185,7 @@ class RCWADock(QWidget):
                 f'{len(wavelengths)} wavelengths.')
         except Exception as exc:
             self.summary.setPlainText(
-                f'Could not unpack RCWA result: {type(exc).__name__}: {exc}')
+                f'Could not unpack thin-grating result: '
+                f'{type(exc).__name__}: {exc}')
         self.fig.tight_layout()
         self.canvas.draw_idle()

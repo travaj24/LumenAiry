@@ -120,7 +120,10 @@ def _check_apply_real_lens_kwarg_combination(
     if seidel_correction:
         try:
             n_surf = len(prescription.get('surfaces', []))
-        except Exception:
+        except (AttributeError, TypeError):
+            # prescription may not be a dict, or surfaces may be
+            # non-len-able; treat as no surfaces and let the
+            # length check below raise.
             n_surf = 0
         if n_surf < 2:
             raise ValueError(
@@ -414,7 +417,8 @@ def apply_real_lens(
         N_grid = int(np.shape(E_in)[0])
         _warn_if_aperture_exceeds_grid(
             prescription, N_grid, dx, source='apply_real_lens')
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError, IndexError):
+        # Aperture-check failure is informational only.
         pass
 
     # Select the array namespace: numpy by default; cupy if the caller

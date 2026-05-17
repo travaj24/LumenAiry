@@ -280,7 +280,11 @@ def distortion_vs_field(
             result = _trace(rays, surfaces, wavelength)
             if result.image_rays.alive[0]:
                 h_chief[i] = float(result.image_rays.y[0])
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                IndexError, AttributeError):
+            # _trace can refuse single-ray bundles at extreme fields
+            # (clipped at every surface); leave h_chief[i] at NaN and
+            # let the downstream filter mask it.
             pass
 
     h_paraxial = efl * np.tan(thetas_rad)
@@ -440,7 +444,10 @@ def distortion_grid(
                 if r.image_rays.alive[0]:
                     actual_x[iy, ix] = float(r.image_rays.x[0])
                     actual_y[iy, ix] = float(r.image_rays.y[0])
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    IndexError, AttributeError):
+                # Distortion-grid corner rays often clip the system;
+                # leave actual_x/y at NaN and let the caller mask.
                 pass
 
     para_x = (efl * np.tan(ths_rad))[None, :].repeat(n_grid, axis=0)
@@ -527,7 +534,8 @@ def footprint_per_surface(
         if image_distance is None:
             try:
                 _, _, bfl, _ = system_abcd(surfaces, wavelength)
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, TypeError):
                 bfl = None
             if bfl is not None and np.isfinite(bfl) and bfl > 0:
                 image_distance = bfl
@@ -550,7 +558,8 @@ def footprint_per_surface(
             rays = make_rings(semi_ap, num_rings, rays_per_ring,
                                 fa_rad, wavelength)
             result = _trace(rays, surfaces, wavelength)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                IndexError, AttributeError):
             for entry in out:
                 entry.fields.append(FieldFootprint(
                     field_deg=fa_deg,
@@ -640,12 +649,14 @@ def spot_diagram_vs_field(
             try:
                 rms, _ = spot_rms(result)
                 rms = float(rms)
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError,
+                    IndexError, TypeError):
                 rms = float('nan')
             try:
                 geo, _ = spot_geo_radius(result)
                 geo = float(geo)
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError,
+                    IndexError, TypeError):
                 geo = float('nan')
         else:
             cx = cy = float('nan')
@@ -745,7 +756,11 @@ def relative_illumination(
         ep_r = float(getattr(fod, 'ep_radius', semi_ap))
         if not np.isfinite(ep_r) or ep_r <= 0:
             ep_r = semi_ap
-    except Exception:
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            np.linalg.LinAlgError, IndexError, AttributeError, TypeError):
+        # No first-order pupil available (mirror-only / stop-less);
+        # fall back to origin-launched chief with the semi-aperture
+        # as the EP radius.
         ep_z = 0.0
         ep_r = semi_ap
 
@@ -931,7 +946,11 @@ def field_aberration_sweep(
         ep_r = float(getattr(fod, 'ep_radius', semi_ap))
         if not np.isfinite(ep_r) or ep_r <= 0:
             ep_r = semi_ap
-    except Exception:
+    except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+            np.linalg.LinAlgError, IndexError, AttributeError, TypeError):
+        # No first-order pupil available (mirror-only / stop-less);
+        # fall back to origin-launched chief with the semi-aperture
+        # as the EP radius.
         ep_z = 0.0
         ep_r = semi_ap
 
@@ -976,7 +995,11 @@ def field_aberration_sweep(
         try:
             sag_res = _trace(sag_rays, surfaces, wavelength)
             tan_res = _trace(tan_rays, surfaces, wavelength)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                IndexError, AttributeError):
+            # Tangential / sagittal fan failed to trace (rays clipped
+            # at every surface); skip this field point and leave its
+            # entry as NaN.
             continue
 
         sag_rms = np.array([_propagate_rms(sag_res, bfl + dz)
@@ -1050,7 +1073,24 @@ def petzval_radius(
         try:
             n1 = float(get_glass_index(s.glass_before, wavelength))
             n2 = float(get_glass_index(s.glass_after, wavelength))
-        except Exception:
+        except (KeyError, ValueError, TypeError) as _exc:
+            # get_glass_index raises KeyError on unknown glass /
+            # catalogue, ValueError on out-of-range wavelength, and
+            # TypeError on a non-string glass identifier.  Any of
+            # those would make the Petzval sum nonsensical -- warn
+            # and propagate NaN so the caller sees the failure
+            # instead of silently mistaking it for a fully-flat field.
+            import warnings as _w
+            _w.warn(
+                f"petzval_radius: glass index lookup failed at "
+                f"surface (glass_before={s.glass_before!r}, "
+                f"glass_after={s.glass_after!r}, "
+                f"wavelength={wavelength!r}): "
+                f"{type(_exc).__name__}: {_exc}.  Returning NaN.  "
+                f"This may indicate a missing-glass bug; please "
+                f"report at "
+                f"https://github.com/travaj24/LumenAiry/issues",
+                RuntimeWarning, stacklevel=2)
             return float('nan')
         if n1 == n2:
             continue
@@ -1149,7 +1189,13 @@ def sensitivity_ranking(
         try:
             fp = float(merit_fn(xp))
             fm = float(merit_fn(xm))
-        except Exception:
+        except (TypeError, ValueError, RuntimeError, ZeroDivisionError,
+                ArithmeticError):
+            # Merit-function failure at this perturbation pair --
+            # leave deriv[i] at 0 (sentinel) and skip to the next
+            # variable.  This routine is a sensitivity-screening
+            # heuristic so a missing entry is preferable to a
+            # blown-up exception.
             continue
         if np.isfinite(fp) and np.isfinite(fm):
             deriv[i] = (fp - fm) / (2 * step)

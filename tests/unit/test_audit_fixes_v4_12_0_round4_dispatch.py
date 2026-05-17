@@ -425,22 +425,35 @@ class TestPropagateReturnResultTupleUnpacking:
     """
 
     def test_coerce_field_unpacks_tuple(self):
-        """Direct test of the helper."""
+        """Direct test of the helper.
+
+        v4.13.0 (audit L3): ``_coerce_field`` now returns a 3-tuple
+        ``(field, dx_out, dy_out)`` so the wrapped result preserves
+        anamorphic pitch info.
+        """
         arr = np.zeros((4, 4), dtype=np.complex128)
-        field, dx_out = _coerce_field((arr, 1.23, 1.23))
+        result = _coerce_field((arr, 1.23, 1.23))
+        # Back-compat: still subscriptable with the first two entries
+        # corresponding to (field, dx_out).
+        field = result[0]
+        dx_out = result[1]
         assert field is arr
         assert dx_out == 1.23
 
     def test_coerce_field_unpacks_2tuple(self):
         arr = np.zeros((4, 4), dtype=np.complex128)
-        field, dx_out = _coerce_field((arr, 2.5))
+        result = _coerce_field((arr, 2.5))
+        field = result[0]
+        dx_out = result[1]
         assert field is arr
         assert dx_out == 2.5
 
     def test_coerce_field_handles_bare_ndarray_via_asarray(self):
-        # Bare ndarray returns (arr, None).
+        # Bare ndarray returns (arr, None, None) post-v4.13.0.
         arr = np.zeros((4, 4), dtype=np.complex128)
-        field, dx_out = _coerce_field(arr)
+        result = _coerce_field(arr)
+        field = result[0]
+        dx_out = result[1]
         assert field is not None
         assert dx_out is None
 

@@ -676,7 +676,10 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
     try:
         issues = check_grid_vs_apertures(
             prescription, N, dx, safety_factor=safety_factor)
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError):
+        # Aperture check is best-effort; a malformed prescription
+        # shouldn't block the warning path entirely (the
+        # propagator's own validators will raise downstream).
         return
     if not issues:
         return

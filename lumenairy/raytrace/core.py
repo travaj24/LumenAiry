@@ -3476,7 +3476,12 @@ def spot_diagram(
     if np.isfinite(sd0):
         try:
             _, _f_eff, _, _ = system_abcd(result.surfaces, result.wavelength)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError,
+                np.linalg.LinAlgError, IndexError):
+            # system_abcd can raise on degenerate prescriptions: a
+            # mirror-only system has no usable paraxial focus, an
+            # ill-conditioned ABCD product yields ZeroDivision/LinAlg
+            # failures, and short prescriptions trip IndexError.
             _f_eff = float('nan')
         if np.isfinite(_f_eff):
             airy_r = 1.22 * result.wavelength * abs(_f_eff) / (2.0 * sd0)
@@ -3547,9 +3552,13 @@ def ray_fan_data(
         chief = make_ray(0, ep_y, fod.ep_z,
                          np.sin(field_angle),
                          wavelength=wavelength)
-    except Exception:
+    except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
+            np.linalg.LinAlgError, IndexError):
         # No first-order pupil available (e.g. mirror-only stop-less
-        # system); fall back to legacy origin-launched chief.
+        # system) -- first_order_data raises ValueError on missing
+        # stop, AttributeError on a stripped Surface dataclass,
+        # ZeroDivisionError / LinAlgError on ill-conditioned ABCD.
+        # Fall back to legacy origin-launched chief.
         chief = make_ray(0, 0, 0, np.sin(field_angle),
                          wavelength=wavelength)
     res_chief = trace(chief, surfaces, wavelength)
@@ -3730,7 +3739,9 @@ def opd_fan_data(
         chief = make_ray(0, ep_y, fod.ep_z,
                          np.sin(field_angle),
                          wavelength=wavelength)
-    except Exception:
+    except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
+            np.linalg.LinAlgError, IndexError):
+        # See ``ray_fan_data`` for the same fallback rationale.
         chief = make_ray(0, 0, 0, np.sin(field_angle),
                          wavelength=wavelength)
     res_chief = trace(chief, surfaces, wavelength)
@@ -4038,7 +4049,8 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     if np.isfinite(sd):
         try:
             _, f_eff, _, _ = system_abcd(result.surfaces, result.wavelength)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError,
+                np.linalg.LinAlgError, IndexError):
             f_eff = float('nan')
         if np.isfinite(f_eff):
             airy = 1.22 * result.wavelength * abs(f_eff) / (2.0 * sd)
@@ -4379,7 +4391,10 @@ def raytrace_system(
             _, _, bfl, _ = system_abcd(surfaces, wavelength)
             if np.isfinite(bfl) and bfl > 0:
                 image_distance = bfl
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError,
+                np.linalg.LinAlgError, IndexError):
+            # system_abcd failure leaves image_distance as None; the
+            # caller picks a default further down.
             pass
 
     # Generate rays

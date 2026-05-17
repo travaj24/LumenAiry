@@ -211,7 +211,10 @@ def _get_persistent_worker_pool(n_workers):
             # n_workers changed: tear down the existing pool.
             try:
                 _PERSISTENT_POOL.shutdown(wait=False)
-            except Exception:
+            except (RuntimeError, OSError, BrokenPipeError):
+                # Pool already torn down by atexit / signal handler,
+                # or worker pipe broke under shutdown -- safe to
+                # discard the reference.
                 pass
             _PERSISTENT_POOL = None
         from concurrent.futures import ProcessPoolExecutor
@@ -235,7 +238,8 @@ def close_worker_pool() -> None:
     if _PERSISTENT_POOL is not None:
         try:
             _PERSISTENT_POOL.shutdown(wait=True)
-        except Exception:
+        except (RuntimeError, OSError, BrokenPipeError):
+            # Same shutdown-race tolerance as ``_get_pool``.
             pass
         _PERSISTENT_POOL = None
         _PERSISTENT_POOL_NWORKERS = None
@@ -1325,7 +1329,8 @@ def apply_real_lens_traced(
         _warn_if_aperture_exceeds_grid(
             lens_prescription, int(np.shape(E_in)[0]), dx,
             source='apply_real_lens_traced')
-    except Exception:
+    except (KeyError, ValueError, TypeError, AttributeError):
+        # Aperture-check failure is informational only.
         pass
 
     Ny, Nx = E_in.shape
@@ -1457,9 +1462,10 @@ def apply_real_lens_traced(
             _free_gb = _psutil.virtual_memory().available / 1e9
             if _free_gb < parallel_amp_min_free_gb:
                 _use_parallel_amp = False
-        except Exception:
-            # psutil missing -- leave parallel_amp enabled but the
-            # user can still force off via the kwarg.
+        except (ImportError, AttributeError, OSError):
+            # psutil missing or virtual_memory query failed --
+            # leave parallel_amp enabled but the user can still
+            # force off via the kwarg.
             pass
 
     amp_cb = ProgressScaler(progress, 'real_lens_traced',
@@ -1700,7 +1706,11 @@ def apply_real_lens_traced(
                         "for tilt-sensitive analyses.",
                         RuntimeWarning, stacklevel=3,
                     )
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
+                AttributeError, TypeError):
+            # tilt-RMS estimation is best-effort; suppressing the
+            # warning when it can't be computed is preferable to
+            # blowing up the traced-lens path.
             pass
         L_in = np.zeros_like(h_x)
         M_in = np.zeros_like(h_x)
@@ -2133,10 +2143,13 @@ def apply_real_lens_traced(
                     sub_progress(
                         frac,
                         f'newton chunk {done}/{len(args_list)} done')
-        except Exception:
-            # Any pool failure (Windows antivirus, spawn error, ...)
-            # falls through to the serial path so the caller isn't
-            # left without a result.
+        except (RuntimeError, OSError, BrokenPipeError, EOFError,
+                ImportError, ValueError, MemoryError):
+            # Any pool failure (Windows antivirus blocking spawn,
+            # broken worker pipe, ImportError under pickled
+            # closures, MemoryError on a tight box) falls through
+            # to the serial path so the caller isn't left without
+            # a result.
             return _invert_newton(Xw, Yw, sub_progress=sub_progress)
 
         opl_flat = np.concatenate(results)

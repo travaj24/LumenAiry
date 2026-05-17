@@ -224,6 +224,113 @@ def get_default_complex_dtype() -> Any:
     return DEFAULT_COMPLEX_DTYPE
 
 
+def _resolve_jax_complex_dtype(dtype: Any = None) -> Any:
+    """Resolve a JAX complex dtype that honours ``set_default_complex_dtype``.
+
+    v4.13.0 (audit L2): JAX-side code historically hard-cast to
+    ``jnp.complex64`` (or read ``jax.config.jax_enable_x64`` directly),
+    which silently overrides the user's
+    :func:`set_default_complex_dtype` setting and gives float32-precision
+    answers with no warning.  This helper centralises the
+    NumPy-default-dtype -> JAX-dtype mapping so every JAX entry point
+    obeys the same configuration knob.
+
+    Parameters
+    ----------
+    dtype : numpy / jax complex dtype, optional
+        When given, takes precedence (per-call override).  Must resolve
+        to ``np.complex64`` or ``np.complex128``.  Pass ``None`` (the
+        default) to read the library-wide default via
+        :func:`get_default_complex_dtype`.
+
+    Returns
+    -------
+    jax_dtype : ``jnp.complex64`` or ``jnp.complex128``
+
+    Notes
+    -----
+    Imports ``jax.numpy`` lazily so this module stays importable
+    without JAX.  ``ImportError`` is raised when JAX is unavailable
+    and the caller asks for a JAX dtype.
+
+    When ``complex128`` is requested but JAX's ``jax_enable_x64`` is
+    False, auto-enable it with a one-shot :class:`RuntimeWarning`
+    (matches the long-standing behaviour in
+    :func:`fit_canonical_polynomials_jax` -- without ``x64`` enabled
+    JAX silently truncates every ``complex128`` allocation back to
+    ``complex64``).
+    """
+    try:
+        import jax
+        import jax.numpy as jnp
+    except ImportError as exc:
+        raise ImportError(
+            "_resolve_jax_complex_dtype: JAX is not installed."
+        ) from exc
+    target = np.dtype(dtype) if dtype is not None else np.dtype(
+        DEFAULT_COMPLEX_DTYPE)
+    if target == np.dtype(np.complex64):
+        return jnp.complex64
+    if target == np.dtype(np.complex128):
+        if not jax.config.jax_enable_x64:
+            import warnings as _warnings
+            _warnings.warn(
+                "_resolve_jax_complex_dtype: complex128 requested but "
+                "jax_enable_x64 is False.  JAX silently truncates "
+                "complex128 to complex64 unless x64 is enabled.  "
+                "Auto-enabling via jax.config.update('jax_enable_x64', "
+                "True) for the rest of this Python session so "
+                "set_default_complex_dtype(np.complex128) actually "
+                "yields double precision on the JAX path.",
+                RuntimeWarning, stacklevel=2,
+            )
+            jax.config.update('jax_enable_x64', True)
+        return jnp.complex128
+    raise ValueError(
+        f"_resolve_jax_complex_dtype: dtype must resolve to "
+        f"np.complex64 or np.complex128, got {target!r}.")
+
+
+def _resolve_jax_real_dtype(dtype: Any = None) -> Any:
+    """Resolve a JAX real dtype paired with the default complex dtype.
+
+    v4.13.0 (audit L2 companion): real-valued JAX kernels (phase
+    arrays, masks, prefactors) also need a precision twin to match the
+    complex dtype.  Returns ``jnp.float64`` when the default complex
+    dtype is ``np.complex128`` and ``jnp.float32`` for
+    ``np.complex64``.
+
+    Parameters mirror :func:`_resolve_jax_complex_dtype`.  Auto-
+    enables ``jax_enable_x64`` (with a one-shot warning) when the
+    request needs float64.
+    """
+    try:
+        import jax
+        import jax.numpy as jnp
+    except ImportError as exc:
+        raise ImportError(
+            "_resolve_jax_real_dtype: JAX is not installed."
+        ) from exc
+    target = np.dtype(dtype) if dtype is not None else np.dtype(
+        DEFAULT_COMPLEX_DTYPE)
+    if target == np.dtype(np.complex64):
+        return jnp.float32
+    if target == np.dtype(np.complex128):
+        if not jax.config.jax_enable_x64:
+            import warnings as _warnings
+            _warnings.warn(
+                "_resolve_jax_real_dtype: float64 paired with complex128 "
+                "requested but jax_enable_x64 is False.  Auto-enabling "
+                "for the rest of this Python session.",
+                RuntimeWarning, stacklevel=2,
+            )
+            jax.config.update('jax_enable_x64', True)
+        return jnp.float64
+    raise ValueError(
+        f"_resolve_jax_real_dtype: dtype must resolve to "
+        f"np.complex64 or np.complex128, got {target!r}.")
+
+
 # ----------------------------------------------------------------------------
 # Multi-slot pyFFTW plan cache (3.2.14)
 # ----------------------------------------------------------------------------
@@ -341,7 +448,7 @@ def reset_fft_backend() -> None:
             pyfftw.interfaces.cache.disable()
             pyfftw.interfaces.cache.enable()
             pyfftw.interfaces.cache.set_keepalive_time(30.0)
-        except Exception as _exc:
+        except (RuntimeError, ValueError, AttributeError, MemoryError) as _exc:
             # pyfftw can fail to reset its cache on bad PyFFTW
             # internal state; surface the failure as a warning instead
             # of swallowing it silently (audit feedback 3.5.4).
@@ -1015,7 +1122,7 @@ def _handle_pyfftw_failure(x, op_name, exc):
             pyfftw.interfaces.cache.disable()
             pyfftw.interfaces.cache.enable()
             pyfftw.interfaces.cache.set_keepalive_time(30.0)
-        except Exception as _cache_exc:
+        except (RuntimeError, ValueError, AttributeError, MemoryError) as _cache_exc:
             warnings.warn(
                 f"pyfftw cache reset after FFT failure threw "
                 f"{type(_cache_exc).__name__}: {_cache_exc}.  Continuing "
@@ -1098,7 +1205,15 @@ def _fft2(x):
                 np.copyto(buf, x, casting='no')
                 plan()
                 return buf
-        except Exception as e:
+        except (RuntimeError, MemoryError, ValueError, TypeError,
+                AttributeError) as e:
+            # pyFFTW failure modes: RuntimeError (planner internal
+            # error), MemoryError (aligned-buffer allocation failed
+            # under pressure), ValueError (shape/stride/dtype
+            # rejected), TypeError (passing a non-ndarray), and
+            # AttributeError (pyfftw.FFTW callable lost across a
+            # plan-cache reset under threads).  Anything else is a
+            # real upstream bug we want to propagate.
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
             _handle_pyfftw_failure(x, 'fft2', e)
@@ -1134,7 +1249,10 @@ def _ifft2(x):
                 np.copyto(buf, x, casting='no')
                 plan()
                 return buf
-        except Exception as e:
+        except (RuntimeError, MemoryError, ValueError, TypeError,
+                AttributeError) as e:
+            # Same pyFFTW failure spectrum as ``_fft2``; see comment
+            # there for the rationale.
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
             _handle_pyfftw_failure(x, 'ifft2', e)
@@ -1766,7 +1884,8 @@ def _fft2_nd(x):
                 np.copyto(buf, x, casting='no')
                 plan()
                 return buf
-        except Exception as e:
+        except (RuntimeError, MemoryError, ValueError, TypeError,
+                AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
             _handle_pyfftw_failure(x, 'fft2_nd', e)
@@ -1794,7 +1913,8 @@ def _ifft2_nd(x):
                 np.copyto(buf, x, casting='no')
                 plan()
                 return buf
-        except Exception as e:
+        except (RuntimeError, MemoryError, ValueError, TypeError,
+                AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
                 raise
             _handle_pyfftw_failure(x, 'ifft2_nd', e)
@@ -3117,10 +3237,11 @@ def rayleigh_sommerfeld_propagate(
             print(f"  Wavelength: {wavelength*1e9:.1f} nm")
             try:
                 print(f"  Kernel max |h|: {float(xp.max(xp.abs(h))):.4e}")
-            except Exception as _exc:
+            except (TypeError, ValueError, RuntimeError) as _exc:
                 # xp.max + float() can fail under JAX tracing where h is
-                # an abstract array.  Cosmetic print failure -- demote to
-                # a brief diagnostic so debug runs surface the cause.
+                # an abstract array (TypeError on the float()
+                # conversion).  Cosmetic print failure -- demote to a
+                # brief diagnostic so debug runs surface the cause.
                 print(f"  Kernel max |h|: <unavailable: "
                       f"{type(_exc).__name__}>")
 

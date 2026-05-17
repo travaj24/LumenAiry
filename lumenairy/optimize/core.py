@@ -699,7 +699,12 @@ class MatchIdealThinLensMerit(MeritTerm):
         try:
             coeffs, _ = zernike_decompose(
                 diff_clean, ctx.dx, ap, n_modes=self.n_modes)
-        except Exception:
+        except (ValueError, RuntimeError, np.linalg.LinAlgError,
+                ZeroDivisionError):
+            # zernike_decompose can fail on under-sampled pupils
+            # (ValueError) or singular bases (LinAlgError); the
+            # convention is to return a 0 merit so the optimizer
+            # doesn't get derailed.
             return 0.0
         higher = coeffs[self.exclude_low_order:]
         rms_m = float(np.sqrt(np.sum(higher ** 2)))
@@ -1001,7 +1006,13 @@ class MatchIdealSystemMerit(MeritTerm):
                 try:
                     p = self._evaluate_one(ctx, wavelength=float(wl),
                                             field_angle=tuple(fa))
-                except Exception:
+                except (ValueError, RuntimeError, ZeroDivisionError,
+                        KeyError, np.linalg.LinAlgError, IndexError,
+                        AttributeError, TypeError):
+                    # Per-(wavelength, field) evaluation can fail at
+                    # extreme corners; substitute the worst-case
+                    # weight so the optimizer steers away rather than
+                    # crashing.
                     p = self.weight
                 penalties.append(p)
         # Arithmetic mean across all (wavelength, field) combinations.
@@ -1226,7 +1237,8 @@ class MatchTargetOPDMerit(MeritTerm):
         try:
             coeffs, _ = zernike_decompose(
                 diff_clean, ctx.dx, ap, n_modes=self.n_modes)
-        except Exception:
+        except (ValueError, RuntimeError, np.linalg.LinAlgError,
+                ZeroDivisionError):
             return 0.0
         higher = coeffs[self.exclude_low_order:]
         rms_m = float(np.sqrt(np.sum(higher ** 2)))
@@ -1276,7 +1288,8 @@ class ZernikeCoefficientMerit(MeritTerm):
         try:
             coeffs, _ = zernike_decompose(
                 opd_clean, ctx.dx, ap, n_modes=self.n_modes)
-        except Exception:
+        except (ValueError, RuntimeError, np.linalg.LinAlgError,
+                ZeroDivisionError):
             return 0.0
         total = 0.0
         for j, target in self.targets.items():
@@ -1409,7 +1422,9 @@ class LGAberrationMerit(MeritTerm):
                 cache_key = (float(ctx.wavelength),
                              repr(sorted(self.fit_kwargs.items(),
                                          key=lambda kv: kv[0])))
-            except Exception:
+            except (TypeError, ValueError, AttributeError):
+                # Unhashable / unsortable fit_kwargs (rare -- user
+                # passed a non-stringifiable value).  Skip caching.
                 cache_key = None
         if cache_key is not None and cache_key in cache:
             fit = cache[cache_key]
@@ -1424,7 +1439,9 @@ class LGAberrationMerit(MeritTerm):
                     wavelength=ctx.wavelength,
                     **self.fit_kwargs,
                 )
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, AttributeError,
+                    TypeError):
                 # If the fit can't be built (e.g., aperture clipping
                 # kills too many rays for the current prescription),
                 # assign a large penalty so the optimiser steers away.
@@ -1459,7 +1476,12 @@ class LGAberrationMerit(MeritTerm):
                     output_modes=output_modes,
                     w_s=self.w_s, w_p=self.w_p, w_o=self.w_o,
                 )
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, AttributeError,
+                    TypeError):
+                # Aberration tensor evaluation can diverge on
+                # singular pupil sums or out-of-domain field points;
+                # max-penalty so the optimizer steers away.
                 return 1e20
             # Index of each target in output_modes
             idx_map = {m: i for i, m in enumerate(output_modes)}
@@ -1766,7 +1788,10 @@ class JaxMeritTerm(MeritTerm):
         try:
             import numpy as _np
             arr = _np.asarray(val)
-        except Exception:
+        except (TypeError, ValueError):
+            # val is a non-array-like scalar (e.g. a Python float
+            # returned from a non-JAX merit); fall through to the
+            # scalar coercion path below.
             return self.weight * float(val)
         if self.real_part:
             return self.weight * float(arr.real)
@@ -1841,7 +1866,12 @@ class ChromaticFocalShiftMerit(MeritTerm):
                     _, efl, _, _ = system_abcd(surfs, wl)
                     if np.isfinite(efl):
                         efls.append(float(efl))
-                except Exception:
+                except (ValueError, RuntimeError, ZeroDivisionError,
+                        KeyError, np.linalg.LinAlgError, IndexError,
+                        AttributeError, TypeError):
+                    # EFL unobtainable at this wavelength (degenerate
+                    # ABCD / missing glass entry); drop from the
+                    # spread accumulator.
                     pass
             if len(efls) < 2:
                 return 0.0
@@ -1910,7 +1940,11 @@ class MultiWavelengthMerit(MeritTerm):
             surfs = surfaces_from_prescription(ctx.prescription)
             try:
                 _, efl, bfl, _ = system_abcd(surfs, wl)
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, TypeError):
+                # Degenerate ABCD at this wavelength; sentinel-large
+                # EFL/BFL nudges the wave leg toward the fallback
+                # branch downstream.
                 efl = bfl = 1e9
             efls.append(float(efl))
             sub_E_exit = ctx.E_exit
@@ -2069,7 +2103,12 @@ class MultiFieldMerit(MeritTerm):
                         i_best = int(np.nanargmax(scan.strehl))
                         sub_ctx.rms_radius_best = float(
                             scan.rms_radius[i_best])
-                except Exception:
+                except (ValueError, RuntimeError, ZeroDivisionError,
+                        KeyError, np.linalg.LinAlgError, IndexError,
+                        AttributeError, TypeError):
+                    # Field-leg through-focus scan failed; zero
+                    # Strehl is a safe sentinel (the optimizer treats
+                    # it as a very-bad design).
                     sub_ctx.strehl_best = 0.0
             # OPD map if needed
             ap = ctx.prescription.get('aperture_diameter')
@@ -2080,7 +2119,12 @@ class MultiFieldMerit(MeritTerm):
                         E_exit, ctx.dx, ctx.wavelength,
                         aperture=ap, focal_length=ctx.bfl, f_ref=ctx.bfl)
                     sub_ctx.opd_map = opd
-                except Exception:
+                except (ValueError, RuntimeError, ZeroDivisionError,
+                        np.linalg.LinAlgError, IndexError, AttributeError,
+                        TypeError):
+                    # OPD-map extraction failed (aperture mismatch /
+                    # singular least-squares fit); leave None so
+                    # downstream Zernike merits return 0 contribution.
                     sub_ctx.opd_map = None
             total = total + self.sub_merit.evaluate(sub_ctx)
         return self.weight * total / max(len(self.field_angles), 1)
@@ -2293,7 +2337,11 @@ class ToleranceAwareMerit(MeritTerm):
                 _, efl_p, bfl_p, _ = system_abcd(surfs_p, ctx.wavelength)
                 efl_p = float(efl_p) if np.isfinite(efl_p) else ctx.efl
                 bfl_p = float(bfl_p) if np.isfinite(bfl_p) else ctx.bfl
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, TypeError):
+                # Perturbed ABCD failed -- fall back to nominal
+                # focus, which will under-estimate the Strehl drop
+                # but is a stable sentinel.
                 efl_p, bfl_p = ctx.efl, ctx.bfl
 
             # Re-run wave propagation for this perturbation
@@ -2320,7 +2368,11 @@ class ToleranceAwareMerit(MeritTerm):
                         ideal_peak=ideal, verbose=False)
                     z_best, strehl_best = find_best_focus(scan, 'strehl')
                     sub_ctx.strehl_best = float(strehl_best)
-                except Exception:
+                except (ValueError, RuntimeError, ZeroDivisionError,
+                        KeyError, np.linalg.LinAlgError, IndexError,
+                        AttributeError, TypeError):
+                    # Tolerancing trial through-focus failed; treat
+                    # this perturbation as worst-case (Strehl=0).
                     sub_ctx.strehl_best = 0.0
             total = total + self.sub_merit.evaluate(sub_ctx)
         return self.weight * total / max(self.n_trials, 1)
@@ -2399,6 +2451,87 @@ class DesignResult:
     # Populated when a MultiPrescriptionParameterization was used.
     # Otherwise None (use ``prescription`` for the single-lens case).
     prescriptions: Optional[List[Dict[str, Any]]] = None
+
+
+def _fd_grad_pure(
+    f: Callable,
+    x: np.ndarray,
+    eps: float = 1e-7,
+    scale_floor: Optional[np.ndarray] = None,
+    f0: Optional[float] = None,
+    scheme: str = 'central',
+) -> np.ndarray:
+    """Finite-difference gradient of a scalar callable ``f(x)``.
+
+    Pure-function helper extracted from :func:`design_optimize` so the
+    FD-gradient core is testable without spinning up an optimization
+    context.  Returns ``df/dx`` as an ndarray with the same shape as
+    ``x``.
+
+    Parameters
+    ----------
+    f : callable
+        Scalar function of the parameter vector.
+    x : ndarray, shape (N,)
+        Evaluation point.
+    eps : float, default 1e-7
+        Relative step parameter.  The actual step in coordinate ``i``
+        is ``eps * max(|x[i]|, scale_floor[i])``.
+    scale_floor : ndarray, shape (N,), optional
+        Per-variable absolute step floor.  Defaults to 1 micron per
+        variable (matches the legacy ``_fd_grad_for`` default for radii
+        / thicknesses).
+    f0 : float, optional
+        Pre-computed ``f(x)``.  Only consulted when ``scheme='forward'``;
+        ignored otherwise.  When supplied for the forward path, the
+        central-point evaluation is skipped, saving one call to ``f``
+        per gradient.
+    scheme : {'central', 'forward'}, default 'central'
+        Finite-difference scheme.  ``'central'`` evaluates ``f`` at
+        ``x +/- h*e_i`` for each variable (2N evals, O(h^2) truncation
+        error); this is the historical default and preserves bit-
+        identical gradient values with pre-v4.13.0 behaviour.
+        ``'forward'`` evaluates ``f`` at ``x`` and ``x + h*e_i`` (N+1
+        evals, or N when ``f0`` is supplied) at the cost of O(h)
+        truncation error.  Opt-in for perf-sensitive callers where
+        the larger truncation is acceptable.
+
+    Returns
+    -------
+    g : ndarray, shape (N,)
+        Finite-difference gradient.
+    """
+    if scheme not in ('central', 'forward'):
+        raise ValueError(
+            f"scheme must be 'central' or 'forward', got {scheme!r}")
+    x = np.asarray(x, dtype=np.float64)
+    N = x.size
+    if scale_floor is None:
+        scale_floor = np.full(N, 1e-6, dtype=np.float64)
+    else:
+        scale_floor = np.broadcast_to(
+            np.asarray(scale_floor, dtype=np.float64), (N,))
+    g = np.zeros(N, dtype=np.float64)
+    if scheme == 'central':
+        for i in range(N):
+            step = eps * max(abs(x[i]), float(scale_floor[i]))
+            xp_step = x.copy()
+            xm_step = x.copy()
+            xp_step[i] = x[i] + step
+            xm_step[i] = x[i] - step
+            fp = float(f(xp_step))
+            fm = float(f(xm_step))
+            g[i] = (fp - fm) / (2.0 * step)
+    else:  # forward
+        if f0 is None:
+            f0 = float(f(x))
+        for i in range(N):
+            step = eps * max(abs(x[i]), float(scale_floor[i]))
+            xp_step = x.copy()
+            xp_step[i] = x[i] + step
+            fp = float(f(xp_step))
+            g[i] = (fp - f0) / step
+    return g
 
 
 def design_optimize(parameterization: Any,
@@ -2542,6 +2675,9 @@ def design_optimize(parameterization: Any,
     class _RestoreDtype:
         def __init__(self, dtype): self.dtype = dtype
         def __del__(self):
+            # ``__del__`` runs at arbitrary points during interpreter
+            # shutdown; broad-except is the standard pattern here
+            # because the module-level globals may already be gone.
             try:
                 set_default_complex_dtype(self.dtype)
             except Exception:
@@ -2601,7 +2737,11 @@ def design_optimize(parameterization: Any,
         surfs = surfaces_from_prescription(pres)
         try:
             _, efl, bfl, _ = system_abcd(surfs, wavelength)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                np.linalg.LinAlgError, IndexError, TypeError):
+            # Degenerate / mirror-only / short prescription -- the
+            # downstream sentinel filter (np.isfinite check) caps
+            # these at 1e9.
             efl = bfl = float('inf')
         try:
             seidel_raw = seidel_coefficients(surfs, wavelength)
@@ -2615,7 +2755,11 @@ def design_optimize(parameterization: Any,
                     for k in range(1, 6)], dtype=np.float64)
             else:
                 seidel = np.asarray(seidel_raw, dtype=np.float64)
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                np.linalg.LinAlgError, IndexError, AttributeError,
+                TypeError):
+            # Seidel sum unavailable -- zero-fill so the optimizer
+            # sees no aberration contribution from this iteration.
             seidel = np.zeros(5)
         ctx.efl = float(efl) if np.isfinite(efl) else 1e9
         ctx.bfl = float(bfl) if np.isfinite(bfl) else 1e9
@@ -2682,7 +2826,11 @@ def design_optimize(parameterization: Any,
                     E_exit, dx, wavelength, aperture=ap,
                     focal_length=ctx.bfl, f_ref=ctx.bfl)
                 ctx.opd_map = opd_map
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError,
+                    np.linalg.LinAlgError, IndexError, AttributeError,
+                    TypeError):
+                # Unwrap / least-squares fit failed in wave_opd_2d;
+                # leave opd_map None so Zernike merits contribute 0.
                 ctx.opd_map = None
 
         return _sum_merits(ctx, merit_terms), ctx
@@ -2700,8 +2848,8 @@ def design_optimize(parameterization: Any,
     ]
     other_terms = [m for m in merit_terms if m not in jax_grad_terms]
 
-    def _fd_grad_for(terms, x, eps=1e-7):
-        """Central-FD gradient of sum(t.evaluate(ctx)) for the
+    def _fd_grad_for(terms, x, eps=1e-7, f0=None, scheme='central'):
+        """Finite-difference gradient of sum(t.evaluate(ctx)) for the
         selected ``terms`` only.
 
         4.10: step sized by parameter magnitude with a per-variable
@@ -2709,9 +2857,25 @@ def design_optimize(parameterization: Any,
         magnitude itself for an absent floor).  Pre-4.10 the floor
         ``max(|x|, 1.0)`` pinned the step at 1e-7 for radii /
         thicknesses (~mm = ~0.01) AND indices (~1.5) alike, so
-        relative perturbations varied by 100× across variable types
-        and the Hessian estimate L-BFGS-B builds was biased.  Central
-        differences (vs forward) also halve the truncation error.
+        relative perturbations varied by 100x across variable types
+        and the Hessian estimate L-BFGS-B builds was biased.
+
+        Parameters
+        ----------
+        terms : sequence of MeritTerm
+        x : array-like
+            Current parameter vector.
+        eps : float
+            Relative step parameter.
+        f0 : float, optional
+            Pre-computed ``sum(t.evaluate(ctx)) for t in terms`` at the
+            current ``x``.  Only consulted when ``scheme='forward'``.
+        scheme : {'central', 'forward'}, default 'central'
+            Forwarded to :func:`_fd_grad_pure`.  Central differences
+            (the default) preserve bit-identical gradient values with
+            pre-v4.13.0 behaviour at 2N evaluations per gradient.
+            Forward differences are an opt-in perf option (N+1 evals,
+            or N with ``f0``) at the cost of O(h) truncation.
         """
         if not terms:
             return np.zeros_like(x, dtype=np.float64)
@@ -2726,24 +2890,25 @@ def design_optimize(parameterization: Any,
         else:
             scale_floor = np.broadcast_to(
                 np.asarray(scale_floor, dtype=np.float64), x.shape)
-        g = np.zeros_like(x)
-        for i in range(x.size):
-            step = eps * max(abs(x[i]), float(scale_floor[i]))
-            xp_plus = x.copy(); xp_plus[i] = x[i] + step
-            xp_minus = x.copy(); xp_minus[i] = x[i] - step
-            _, ctx_p = evaluate(xp_plus)
-            _, ctx_m = evaluate(xp_minus)
-            fp = sum(t.evaluate(ctx_p) for t in terms)
-            fm = sum(t.evaluate(ctx_m) for t in terms)
-            g[i] = (fp - fm) / (2.0 * step)
-        return g
+
+        def _f_terms(xv):
+            _, ctx_ = evaluate(xv)
+            return sum(t.evaluate(ctx_) for t in terms)
+
+        return _fd_grad_pure(_f_terms, x, eps=eps,
+                             scale_floor=scale_floor, f0=f0,
+                             scheme=scheme)
 
     def _merit_jac_auto(x):
         # Analytic part: sum gradient_at_x for JAX terms.
         g = np.zeros_like(np.asarray(x, dtype=np.float64))
         for t in jax_grad_terms:
             g = g + t.gradient_at_x(x)
-        # Finite-difference part: gradient of the remaining terms.
+        # Finite-difference part: gradient of the remaining terms via
+        # central differences (default scheme).  Forward-difference
+        # mode is available on the inner helpers via ``scheme='forward'``
+        # as a perf opt-in, but is NOT the default here so optimization
+        # behaviour stays bit-identical with pre-v4.13.0.
         if other_terms:
             g = g + _fd_grad_for(other_terms, x)
         return g
@@ -2763,8 +2928,16 @@ def design_optimize(parameterization: Any,
         if plane_logger is not None:
             try:
                 plane_logger(call_count[0], ctx)
-            except Exception:
-                pass  # logger errors must not derail optimization
+            except (TypeError, ValueError, RuntimeError, KeyError,
+                    AttributeError, IndexError, OSError) as _exc:
+                # logger errors must not derail optimization, but
+                # warn once so silent telemetry gaps are visible.
+                import warnings as _w
+                _w.warn(
+                    f"design_optimize: plane_logger callback failed "
+                    f"({type(_exc).__name__}: {_exc}); continuing "
+                    f"without telemetry for this iteration.",
+                    RuntimeWarning, stacklevel=2)
         # Fallback eval-counter progress for methods without a per-
         # iteration callback hook (Powell, DE, dual_annealing, basin-
         # hopping).  For methods with a scipy callback we also emit

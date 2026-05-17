@@ -1,26 +1,18 @@
 """
 Diffraction efficiencies for 1-D binary phase gratings.
 
-.. warning::
+This is the **analytical scalar thin-phase grating** model: a
+closed-form Fourier-series solution that is correct and
+energy-conserving for low-contrast gratings with periods much larger
+than the wavelength.  The module name reflects the physics actually
+implemented; a true Rigorous Coupled-Wave Analysis (RCWA) -- which
+would handle high-contrast / sub-wavelength gratings with polarisation
+and AOI effects -- is not implemented here.  Reflection is assumed zero
+(exact for a lossless thin phase grating, an approximation for deep /
+high-contrast gratings).
 
-   The current implementation is an **analytical scalar thin-phase
-   grating** formula, not the full Rigorous Coupled-Wave Analysis
-   algorithm.  It is correct and energy-conserving for low-contrast
-   gratings and grating periods much larger than the wavelength,
-   where the scalar approximation holds.  For high-contrast
-   (n_ridge / n_groove > ~1.3) or sub-wavelength gratings, where
-   polarisation and angle-of-incidence effects are significant, the
-   results are **approximate**.
-
-   The Fourier-space eigendecomposition is set up
-   inside the function for future use but the interface S-matrix
-   matching required to finish a true RCWA calculation is not yet
-   implemented.  Reflection is assumed zero (valid for a lossless
-   thin phase grating), which is accurate for the thin-scalar regime
-   but wrong in the high-contrast / deep-grating regime.
-
-The analytical formula implemented here is standard Fourier-series
-thin-grating diffraction:
+The analytical formula implemented here is the standard Fourier-series
+thin-grating result:
 
     t_m = f * exp(i*phi) * f * sinc(pi m f) + (1-f) * sinc(pi m (1-f))
           * ...  (see code for exact form)
@@ -135,20 +127,25 @@ def thin_grating_efficiency_1d(
     # and we compute the Fourier coefficients t_m analytically.
     phi_r = k0 * (complex(n_ridge)  - n_substrate) * depth
     phi_g = k0 * (complex(n_groove) - n_substrate) * depth
+    exp_r = np.exp(1j * phi_r)
+    exp_g = np.exp(1j * phi_g)
 
-    # Analytical Fourier coefficients of t(x):
-    # For m == 0: t_0 = f * exp(i*phi_r) + (1-f) * exp(i*phi_g)
-    # For m != 0: t_m = [(exp(i*phi_r) - exp(i*phi_g)) *
-    #                   (exp(-i*2*pi*m*f) - 1) /
-    #                   (-i * 2 * pi * m)]
-    tm = np.zeros(N, dtype=np.complex128)
-    for idx, m in enumerate(orders):
-        if m == 0:
-            tm[idx] = f * np.exp(1j * phi_r) + (1 - f) * np.exp(1j * phi_g)
-        else:
-            tm[idx] = ((np.exp(1j * phi_r) - np.exp(1j * phi_g))
-                        * (np.exp(-1j * 2 * np.pi * m * f) - 1)
-                        / (-1j * 2 * np.pi * m))
+    # Analytical Fourier coefficients of t(x), vectorised across m:
+    #   m == 0:  t_0 = f * exp(i*phi_r) + (1-f) * exp(i*phi_g)
+    #   m != 0:  t_m = (exp(i*phi_r) - exp(i*phi_g))
+    #                 * (exp(-i*2*pi*m*f) - 1) / (-i * 2 * pi * m)
+    # The m != 0 expression is evaluated over the full orders vector
+    # then patched at the m == 0 index, which is faster than a Python
+    # loop for the order counts the GUI / sweeps typically use
+    # (n_orders >= 11, i.e. >= 23 evaluations).
+    m_nonzero = np.where(orders == 0, 1, orders)  # avoid divide-by-zero
+    tm = ((exp_r - exp_g)
+          * (np.exp(-1j * 2 * np.pi * m_nonzero * f) - 1)
+          / (-1j * 2 * np.pi * m_nonzero))
+    # Patch the m == 0 entry (analytical limit of the above as m -> 0
+    # is f*exp(i*phi_r) + (1-f)*exp(i*phi_g)).
+    zero_idx = n_orders  # orders[n_orders] == 0 by construction
+    tm[zero_idx] = f * exp_r + (1 - f) * exp_g
 
     # Propagating vs evanescent split.  An order is propagating when
     # |kx_m|^2 < (k0 * n_substrate)^2.

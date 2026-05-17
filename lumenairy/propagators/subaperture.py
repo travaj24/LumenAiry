@@ -46,7 +46,7 @@ class PatchGrid:
     def __len__(self) -> int:
         try:
             return int(self.centres.shape[0])
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
             return 0
 
 
@@ -254,7 +254,9 @@ def propagate_subaperture_asymptotic(
     try:
         d4 = beam_d4sigma(E_in, dx=dx)
         w_s = float(d4) / 4.0
-    except Exception:
+    except (TypeError, ValueError, RuntimeError, ZeroDivisionError):
+        # beam_d4sigma rejects non-array / empty E_in or diverging
+        # moments; fall back to a half-box estimate.
         w_s = source_box_half / 2
 
     # Per-patch evaluation: build a local fit centred on each patch

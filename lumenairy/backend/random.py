@@ -158,7 +158,7 @@ def _is_jax_prng_key(x) -> bool:
     if is_jax_array(x):
         try:
             return x.dtype == jax.numpy.uint32 and x.shape[-1] == 2
-        except Exception:
+        except (AttributeError, IndexError, TypeError):
             return False
     return False
 
@@ -169,7 +169,8 @@ def _is_cupy_generator(x) -> bool:
     try:
         import cupy as cp
         return isinstance(x, cp.random.Generator)
-    except Exception:
+    except (ImportError, AttributeError):
+        # cupy import-time guard for stale CUPY_AVAILABLE flag.
         return False
 
 

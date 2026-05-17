@@ -68,7 +68,8 @@ class BeamletBundle:
     def __len__(self) -> int:
         try:
             return int(self.positions.shape[0])
-        except Exception:
+        except (AttributeError, TypeError, IndexError):
+            # positions may be None, a non-array sentinel, or 0-D.
             return 0
 
 
@@ -600,13 +601,25 @@ def propagate_gbd_through_prescription(
                       or 'air')
             try:
                 _n = float(get_glass_index(_glass, wavelength))
-            except Exception:
+            except (KeyError, ValueError, TypeError):
+                # get_glass_index can raise: KeyError on unknown
+                # catalogue / glass name, ValueError on
+                # outside-Sellmeier-range wavelength, TypeError on
+                # a malformed (non-string) glass identifier.  Fall
+                # back to n=1.0 (air); this matches the v4.11.2
+                # behaviour but no longer hides AttributeError /
+                # ImportError from the broader try.
                 _n = 1.0
             axial_opl += _n * _t
-    except Exception as _exc:
+    except (ImportError, AttributeError, TypeError, ValueError,
+            KeyError) as _exc:
         # Surface the failure rather than silently fall through to a
         # missing axial-phase reference; reconstruction still proceeds
-        # without the piston.
+        # without the piston.  Errors we expect from the inner block:
+        # ImportError (raytrace / glass modules missing),
+        # AttributeError (Surface dataclass missing expected field),
+        # TypeError/ValueError (thickness/glass coercion failures),
+        # KeyError (catalogue lookup re-raised).
         import warnings as _w
         _w.warn(
             f"propagate_gbd_through_prescription: axial-OPL "

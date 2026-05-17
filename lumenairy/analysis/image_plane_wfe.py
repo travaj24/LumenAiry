@@ -631,8 +631,10 @@ def eval_image_plane_wfe(
                     method='brent',
                     options={'xtol': 1e-9})
                 img_d_m = float(img_d_m + res_opt.x)
-            except Exception:
-                # 21-point coarse scan as fallback
+            except (ImportError, ValueError, RuntimeError, AttributeError):
+                # ImportError: scipy unavailable.  ValueError / RuntimeError:
+                # bracket invalid or Brent failed to converge.
+                # 21-point coarse scan as fallback.
                 shifts = np.linspace(-dz_max, dz_max, 21)
                 pvs = [_pv_at(img_d_m + dz) for dz in shifts]
                 img_d_m = float(img_d_m + shifts[int(np.argmin(pvs))])
@@ -864,7 +866,12 @@ def field_grid_wfe(
                 rms[iy, ix] = wfe.rms_waves
                 strehl[iy, ix] = wfe.strehl
                 img_d[iy, ix] = wfe.img_d_m
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, AttributeError,
+                    TypeError):
+                # Per-field WFE eval can fail at extreme field
+                # corners where the chief ray clips out -- leave the
+                # entry at NaN and continue building the grid.
                 wfe = None
             wfes.append(wfe)
 

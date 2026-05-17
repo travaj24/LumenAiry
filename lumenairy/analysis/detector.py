@@ -316,6 +316,49 @@ def apply_detector(
     return signal_e, x_det, y_det
 
 
+def _build_asm_H_for_lenslet(
+    sa_pixels: int,
+    dx: float,
+    wavelength: float,
+    z: float,
+    bandlimit: bool = True,
+    target_dtype: Any = None,
+) -> np.ndarray:
+    """Build a square (sa_pixels x sa_pixels) ASM transfer function.
+
+    Mirrors the geometry-only fft-shifted H used by
+    :func:`lumenairy.propagators.propagation.angular_spectrum_propagate`,
+    pre-fftshifted so it can be multiplied against an already-shifted
+    spectrum.  Internal helper for the batched Shack-Hartmann path; do
+    not consume from user code.  Equivalent to the propagator's H when
+    called with a single (sa_pixels, sa_pixels) square grid, dy == dx,
+    and the same bandlimit flag.
+    """
+    if target_dtype is None or not np.issubdtype(target_dtype, np.complexfloating):
+        target_dtype = np.complex128
+    N = sa_pixels
+    k = 2 * np.pi / wavelength
+    # Frequency grid -- centred (matches the propagator's
+    # _get_or_make_freq_grids output for square grids, which is
+    # arange(N) - N/2 / (N*dx)).
+    fx = (np.arange(N, dtype=np.float64) - N / 2) / (N * dx)
+    fy = fx  # square sub-aperture (dy == dx)
+    kx_sq = (2 * np.pi * fx) ** 2
+    ky_sq = (2 * np.pi * fy) ** 2
+    kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
+    prop = kz_sq > 0
+    kz = np.where(prop, np.sqrt(np.where(prop, kz_sq, 0.0)), 0.0)
+    H = np.where(prop, np.exp(1j * kz * z), 0.0).astype(target_dtype)
+    if bandlimit and z != 0:
+        L = N * dx
+        f_max = L / (2 * wavelength * abs(z))
+        bl_x = np.abs(fx) < f_max
+        bl_y = np.abs(fy) < f_max
+        mask = bl_x[None, :] & bl_y[:, None]
+        H = H * mask.astype(target_dtype)
+    return H
+
+
 def shack_hartmann(
     E: np.ndarray,
     dx: float,
@@ -386,65 +429,131 @@ def shack_hartmann(
 
     x0 = N // 2 - (n_lenslets * sa_pixels) // 2
 
-    # 4.10: reference-centroid pass on a flat-wavefront calibration field.
-    # Pre-4.10 reported raw centroid / lenslet_focal as the slope,
-    # baking in any per-lenslet centring bias from sa_pixels rounding
-    # / x0 offset as a fake tilt in EVERY measurement.  Compute the
-    # zero-slope reference centroids once from a unit-amplitude flat
-    # field and subtract.
-    E_flat = np.ones_like(E)
-    ref_centroids_x = np.zeros((n_lenslets, n_lenslets))
-    ref_centroids_y = np.zeros((n_lenslets, n_lenslets))
-    for iy_r in range(n_lenslets):
-        for ix_r in range(n_lenslets):
-            r0r = x0 + iy_r * sa_pixels
-            c0r = x0 + ix_r * sa_pixels
-            if r0r < 0 or r0r + sa_pixels > N or c0r < 0 or c0r + sa_pixels > N:
-                continue
-            E_sub_r = E_flat[r0r:r0r + sa_pixels, c0r:c0r + sa_pixels].copy()
-            xsa_r = (np.arange(sa_pixels) - sa_pixels / 2) * dx
-            Xsa_r, Ysa_r = np.meshgrid(xsa_r, xsa_r)
-            E_sub_r = E_sub_r * np.exp(-1j * k0 * (Xsa_r ** 2 + Ysa_r ** 2)
-                                       / (2 * lenslet_focal))
-            E_focus_r = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E_sub_r)))
-            I_focus_r = np.abs(E_focus_r) ** 2
-            total_r = float(np.sum(I_focus_r))
-            if total_r > 0:
-                ref_centroids_x[iy_r, ix_r] = float(
-                    np.sum(Xsa_r * I_focus_r) / total_r)
-                ref_centroids_y[iy_r, ix_r] = float(
-                    np.sum(Ysa_r * I_focus_r) / total_r)
+    # v4.13.0 perf: batch the per-lenslet FFT step.  Pre-4.13 the loop
+    # called np.fft.fft2 (reference pass) and angular_spectrum_propagate
+    # (measurement pass) once per lenslet, with all of the FFT overhead
+    # (planning, broadcast setup, fftshift) paid per iteration.  All
+    # sub-apertures share the same sa_pixels x sa_pixels grid, so they
+    # can be stacked into a single (K, sa, sa) array and FFT'd in one
+    # shot along axes=(-2, -1).  Also: the ASM transfer function H only
+    # depends on (sa_pixels, dx, wavelength, lenslet_focal, bandlimit),
+    # which is identical for every lenslet -- so it's pre-built once
+    # outside the batch instead of relying on the H cache to deduplicate.
+    # Per-lenslet semantics (NaN sentinels for OOB, reference subtraction)
+    # are preserved bit-for-bit.
 
+    # Build the sub-aperture coordinate grid (shared by all lenslets).
+    xsa = (np.arange(sa_pixels) - sa_pixels / 2) * dx
+    Xsa, Ysa = np.meshgrid(xsa, xsa)
+    lenslet_phase = np.exp(-1j * k0 * (Xsa ** 2 + Ysa ** 2)
+                            / (2 * lenslet_focal))
+
+    # Enumerate lenslets and pre-classify valid (in-bounds) ones.
+    # The (n_lenslets**2,) flat indices preserve row-major iteration
+    # order, so [iy, ix] -> iy * n_lenslets + ix.
+    valid_mask = np.zeros((n_lenslets, n_lenslets), dtype=bool)
+    r0_grid = x0 + np.arange(n_lenslets) * sa_pixels  # row origins
+    c0_grid = x0 + np.arange(n_lenslets) * sa_pixels  # col origins
     for iy in range(n_lenslets):
         for ix in range(n_lenslets):
-            # Extract sub-aperture
-            r0 = x0 + iy * sa_pixels
-            c0 = x0 + ix * sa_pixels
-            if r0 < 0 or r0 + sa_pixels > N or c0 < 0 or c0 + sa_pixels > N:
+            r0 = r0_grid[iy]
+            c0 = c0_grid[ix]
+            valid_mask[iy, ix] = (
+                r0 >= 0 and r0 + sa_pixels <= N
+                and c0 >= 0 and c0 + sa_pixels <= N)
+
+    if not np.any(valid_mask):
+        # No valid lenslets at all: skip both passes and fall through
+        # to wavefront reconstruction (which NaN-zeros the slope grid).
+        pass
+    else:
+        # ---- reference-centroid pass on a flat-wavefront calibration field.
+        # 4.10: pre-4.10 reported raw centroid / lenslet_focal as the slope,
+        # baking in any per-lenslet centring bias from sa_pixels rounding
+        # / x0 offset as a fake tilt in EVERY measurement.  Compute the
+        # zero-slope reference centroids once from a unit-amplitude flat
+        # field and subtract.
+        # v4.13.0: a flat (ones) field produces an IDENTICAL sub-aperture
+        # for every lenslet, so the reference centroid is the same value
+        # at every valid (iy_r, ix_r).  Compute ONCE and broadcast.
+        E_sub_ref = lenslet_phase  # ones * phase = phase
+        E_focus_ref = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E_sub_ref)))
+        I_focus_ref = np.abs(E_focus_ref) ** 2
+        total_ref = float(np.sum(I_focus_ref))
+        if total_ref > 0:
+            cx_ref = float(np.sum(Xsa * I_focus_ref) / total_ref)
+            cy_ref = float(np.sum(Ysa * I_focus_ref) / total_ref)
+        else:
+            cx_ref = 0.0
+            cy_ref = 0.0
+        ref_centroids_x = np.where(valid_mask, cx_ref, 0.0)
+        ref_centroids_y = np.where(valid_mask, cy_ref, 0.0)
+
+        # ---- measurement pass: gather valid sub-apertures into one
+        # (K, sa, sa) batch and propagate in a single shot.
+        iy_idx, ix_idx = np.where(valid_mask)  # both shape (K,)
+        K = iy_idx.size
+        E_batch = np.empty((K, sa_pixels, sa_pixels), dtype=E.dtype)
+        for k in range(K):
+            r0 = r0_grid[iy_idx[k]]
+            c0 = c0_grid[ix_idx[k]]
+            E_batch[k] = E[r0:r0 + sa_pixels, c0:c0 + sa_pixels]
+        # Apply the (shared) lenslet focusing phase across the batch.
+        E_batch = E_batch * lenslet_phase[None, :, :]
+
+        # Batched angular-spectrum propagation to the focal plane.
+        # The transfer function H is the same for every lenslet
+        # (geometry-only: sa_pixels, dx, wavelength, lenslet_focal,
+        # bandlimit=True).  Build once, multiply across batch axis.
+        # We inline the ASM math here rather than calling
+        # angular_spectrum_propagate in a loop, because the inline
+        # version skips per-call fft2 overhead and applies the IFFT
+        # to the whole batch in one np.fft.ifft2(axes=(-2, -1)) call.
+        H = _build_asm_H_for_lenslet(
+            sa_pixels, dx, wavelength, lenslet_focal,
+            bandlimit=True, target_dtype=E_batch.dtype)
+        # E_out = fftshift(ifft2(ifftshift(fft2(ifftshift(E_in)) * H)))
+        # Apply along the last two axes so the batch dimension passes
+        # through unmolested.
+        E_batch_shifted = np.fft.ifftshift(E_batch, axes=(-2, -1))
+        E_batch_fft = np.fft.fft2(E_batch_shifted, axes=(-2, -1))
+        E_batch_fft = np.fft.fftshift(E_batch_fft, axes=(-2, -1))
+        # H is built fftshifted to match the existing ASM convention.
+        E_batch_fft = E_batch_fft * H[None, :, :]
+        E_batch_fft = np.fft.ifftshift(E_batch_fft, axes=(-2, -1))
+        E_focus_batch = np.fft.ifft2(E_batch_fft, axes=(-2, -1))
+        E_focus_batch = np.fft.fftshift(E_focus_batch, axes=(-2, -1))
+
+        # Per-slice intensity and centroid.
+        I_focus_batch = np.abs(E_focus_batch) ** 2  # (K, sa, sa)
+        total_batch = I_focus_batch.sum(axis=(-2, -1))  # (K,)
+        # Guard zero-total slices (echoes the pre-4.13 `if total < 1e-30`
+        # check that left those lenslets at the NaN sentinel).
+        ok = total_batch >= 1e-30
+        # Suppress divide warning for ok==False slices; replace later.
+        with np.errstate(divide='ignore', invalid='ignore'):
+            sum_Xsa_I = (Xsa[None, :, :] * I_focus_batch).sum(axis=(-2, -1))
+            sum_Ysa_I = (Ysa[None, :, :] * I_focus_batch).sum(axis=(-2, -1))
+            cx_raw = sum_Xsa_I / total_batch
+            cy_raw = sum_Ysa_I / total_batch
+
+        # Calibrated centroids (subtract the (single) reference value
+        # computed above for the valid lenslets).
+        cx_arr = cx_raw - cx_ref
+        cy_arr = cy_raw - cy_ref
+
+        # Scatter results back into the (n_lenslets, n_lenslets) maps.
+        # Only update lenslets where the batch propagation produced
+        # finite intensity; leaves the NaN sentinels for failures.
+        for k in range(K):
+            if not ok[k]:
                 continue
-            E_sub = E[r0:r0 + sa_pixels, c0:c0 + sa_pixels].copy()
-            # Apply lenslet focusing phase
-            xsa = (np.arange(sa_pixels) - sa_pixels / 2) * dx
-            Xsa, Ysa = np.meshgrid(xsa, xsa)
-            E_sub = E_sub * np.exp(-1j * k0 * (Xsa ** 2 + Ysa ** 2)
-                                     / (2 * lenslet_focal))
-            # Propagate to focal plane
-            E_focus = angular_spectrum_propagate(
-                E_sub, lenslet_focal, wavelength, dx, bandlimit=True)
-            I_focus = np.abs(E_focus) ** 2
-            total = I_focus.sum()
-            if total < 1e-30:
-                continue
-            # Centroid (calibrated against the flat-wavefront reference
-            # so per-lenslet centring biases from sa_pixels rounding /
-            # x0 offset don't masquerade as tilts).
-            cx = float(np.sum(Xsa * I_focus) / total) - ref_centroids_x[iy, ix]
-            cy = float(np.sum(Ysa * I_focus) / total) - ref_centroids_y[iy, ix]
-            centroids_x[iy, ix] = cx
-            centroids_y[iy, ix] = cy
-            # Slope = centroid / focal_length [rad]
-            slopes_x[iy, ix] = cx / lenslet_focal
-            slopes_y[iy, ix] = cy / lenslet_focal
+            iy = int(iy_idx[k])
+            ix = int(ix_idx[k])
+            centroids_x[iy, ix] = float(cx_arr[k])
+            centroids_y[iy, ix] = float(cy_arr[k])
+            slopes_x[iy, ix] = float(cx_arr[k]) / lenslet_focal
+            slopes_y[iy, ix] = float(cy_arr[k]) / lenslet_focal
 
     # 4.10: Wavefront reconstruction
     # slopes_x / slopes_y are OPD gradients in radians-of-tilt (m / m).

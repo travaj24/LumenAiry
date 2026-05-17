@@ -556,12 +556,19 @@ def load_all_materials() -> None:
     for name in list_materials():
         try:
             load_material(name)
-        except Exception:
+        except (OSError, ValueError, KeyError, RuntimeError, ImportError):
+            # Corrupted / partially-written user material file; skip
+            # it and continue loading the others.
             pass
 
 
 # Auto-load on import
 try:
     load_all_materials()
-except Exception:
+except (OSError, ValueError, KeyError, RuntimeError, ImportError):
+    # Library import must never fail because of a broken user-library
+    # store -- the directory may be missing, permission-locked, or
+    # contain corrupted entries.  Library functions still work; the
+    # user just won't see their saved materials until they fix the
+    # underlying issue.
     pass

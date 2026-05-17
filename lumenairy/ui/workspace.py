@@ -379,7 +379,7 @@ def default_dock_titles():
         'coherence': 'Partial coherence (Köhler)',
         'shack_hartmann': 'Shack-Hartmann',
         'lg_aberration': 'LG aberration tensor',
-        'rcwa': 'RCWA grating',
+        'thin_grating': 'Thin grating',
         'materials': 'Materials',
         'glassmap': 'Glass Map',
         'diagnostics': 'Diagnostics',

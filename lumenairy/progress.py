@@ -56,8 +56,12 @@ def call_progress(cb: Optional[ProgressCallback],
         return
     try:
         cb(stage, float(fraction), message)
-    except Exception:
+    except (TypeError, ValueError, RuntimeError, AttributeError,
+            KeyError, IndexError, OSError):
         # Don't let a broken progress bar crash the simulation.
+        # Caught: TypeError (wrong-arity callback), ValueError
+        # (bad-format f-string), RuntimeError / OSError (GUI thread
+        # / pipe failures).
         pass
 
 

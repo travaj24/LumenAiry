@@ -21,6 +21,7 @@ from .propagators.propagation import (
     angular_spectrum_propagate_tilted,
     fresnel_propagate,
     resample_field,
+    _resolve_jax_complex_dtype,
 )
 from .elements.lenses import (
     apply_thin_lens,
@@ -849,7 +850,16 @@ def propagate_through_system_jax(E_in: np.ndarray,
             "element list programmatically before calling."
         )
 
-    E = jnp.asarray(E_in, dtype=jnp.complex64)
+    # v4.13.0 (audit L2): pre-fix this hard-cast to ``jnp.complex64``
+    # silently overrode ``set_default_complex_dtype(np.complex128)``.
+    # Now goes through ``_resolve_jax_complex_dtype`` which reads the
+    # library-wide default.  Complex inputs honour their own dtype; only
+    # real inputs fall back to the configured default.
+    if np.iscomplexobj(np.asarray(E_in)):
+        cdtype = _resolve_jax_complex_dtype(np.asarray(E_in).dtype)
+    else:
+        cdtype = _resolve_jax_complex_dtype()
+    E = jnp.asarray(E_in, dtype=cdtype)
 
     # ------------------------------------------------------------------
     # Fast path: all elements have a static signature -> single jit'd
@@ -858,7 +868,13 @@ def propagate_through_system_jax(E_in: np.ndarray,
     elem_sigs = [_system_element_signature(elem) for elem in elements]
     if all(sig is not None for sig in elem_sigs) and not verbose:
         sigs_tuple = tuple(elem_sigs)
-        cache_key = (sigs_tuple, float(wavelength), float(dx), float(dy))
+        # v4.13.0 (audit L2): include dtype in the cache key so calls
+        # at complex64 and complex128 don't share the same compiled XLA
+        # kernel.  Pre-fix the cache key omitted dtype entirely, so the
+        # first call to win the race fixed the kernel precision for
+        # every subsequent call regardless of the active default.
+        cache_key = (sigs_tuple, float(wavelength), float(dx), float(dy),
+                     str(np.dtype(cdtype)))
         kernel = _PROPAGATE_SYSTEM_JAX_CACHE.get(cache_key)
         if kernel is None:
             kernel = _make_system_jax_kernel(

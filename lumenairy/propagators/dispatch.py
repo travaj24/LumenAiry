@@ -150,29 +150,44 @@ def propagate(
     # PropagationResult passthrough (some propagators may already wrap).
     if isinstance(out, PropagationResult):
         return out
-    field_arr, dx_from_kernel = _coerce_field(out)
+    field_arr, dx_from_kernel, dy_from_kernel = _coerce_field(out)
     out_dx = dx_from_kernel if dx_from_kernel is not None else default_out_dx
+    # v4.13.0 (audit L3): thread the kernel-reported ``dy_out`` onto
+    # the wrapped result.  For square-grid kernels that only return
+    # ``dx_out`` (or a bare ndarray) ``dy`` falls back to ``out_dx``,
+    # preserving back-compat.  Pre-fix the y-pitch was silently
+    # discarded for anamorphic Fresnel / Fraunhofer / SAS calls.
+    out_dy = dy_from_kernel if dy_from_kernel is not None else out_dx
     return PropagationResult(
         field=field_arr,
-        dx=out_dx, wavelength=wavelength,
+        dx=out_dx, dy=out_dy, wavelength=wavelength,
         z=z, method=method,
         metadata={'native_return': out},
     )
 
 
 def _coerce_field(x):
-    """Coerce a non-ndarray propagator return into a (field, dx_out)
-    pair when possible.
+    """Coerce a non-ndarray propagator return into a (field, dx_out,
+    dy_out) triple when possible.
 
-    Returns ``(ndarray | None, dx_out | None)``.  ``dx_out`` is the
-    propagator-reported output grid pitch if the kernel returns a
-    ``(E, dx_out, ...)`` tuple, else ``None``.  The two-value return
-    lets the dispatcher record the **output** pitch on
-    :class:`PropagationResult.dx` rather than the input pitch.
-    4.12 fix (audit round-4 B1-7): pre-4.12 the tuple-returning
-    propagators (fresnel/fraunhofer/SAS) silently yielded
-    ``field=None`` and ``dx=<input pitch>`` instead of the kernel's
-    real output.
+    Returns ``(ndarray | None, dx_out | None, dy_out | None)``.
+
+    * ``dx_out`` / ``dy_out`` are the propagator-reported output grid
+      pitches if the kernel returns a ``(E, dx_out, ...)`` /
+      ``(E, dx_out, dy_out)`` tuple, else ``None``.
+    * v4.13.0 (audit L3): the triple-return is the closure for the
+      anamorphic Fresnel info-loss bug -- pre-fix ``_coerce_field``
+      ignored the third tuple element, silently discarding the y-axis
+      pitch for any anamorphic Fresnel / Fraunhofer / SAS propagation.
+    * 4.12 fix (audit round-4 B1-7): pre-4.12 the tuple-returning
+      propagators (fresnel/fraunhofer/SAS) silently yielded
+      ``field=None`` and ``dx=<input pitch>`` instead of the kernel's
+      real output.
+
+    The dispatcher records ``dx_out`` on :attr:`PropagationResult.dx`
+    and ``dy_out`` on :attr:`PropagationResult.dy`; when the kernel
+    returns only ``dx_out`` (or only the bare ndarray) the dispatcher
+    falls back to ``dy = dx`` for back-compat.
     """
     # Tuple / list returned by fresnel_propagate, fraunhofer_propagate,
     # scalable_angular_spectrum_propagate -- shape ``(E, dx_out, dy_out)``
@@ -181,20 +196,30 @@ def _coerce_field(x):
         first = x[0]
         if isinstance(first, np.ndarray):
             dx_out = None
+            dy_out = None
             if len(x) >= 2:
                 try:
                     dx_out = float(x[1])
                 except (TypeError, ValueError):
                     dx_out = None
-            return first, dx_out
-        return None, None
+            if len(x) >= 3:
+                try:
+                    dy_out = float(x[2])
+                except (TypeError, ValueError):
+                    dy_out = None
+            return first, dx_out, dy_out
+        return None, None, None
     try:
         arr = np.asarray(x)
         if np.iscomplexobj(arr) or arr.dtype.kind == 'f':
-            return arr, None
-    except Exception:
+            return arr, None, None
+    except (TypeError, ValueError):
+        # np.asarray rejects non-array-like inputs with TypeError;
+        # ragged / inhomogeneous sequences raise ValueError.  Either
+        # way the kernel return doesn't look like a field and we fall
+        # through to the (None, None, None) sentinel below.
         pass
-    return None, None
+    return None, None, None
 
 
 def _auto_select_method(E_in, *, z, wavelength, dx, prescription,

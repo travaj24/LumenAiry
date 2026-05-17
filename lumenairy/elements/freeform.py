@@ -117,11 +117,21 @@ def surface_sag_chebyshev(X, Y, R=np.inf, conic=0.0,
         outside = (np.abs(xn_raw) > 1.0) | (np.abs(yn_raw) > 1.0)
         xn = np.clip(xn_raw, -1, 1)
         yn = np.clip(yn_raw, -1, 1)
+        # v4.13.0 (Tier-2 perf, audit group alpha): hoist arccos out
+        # of the per-coefficient loop -- it depends only on the grid,
+        # not on (i, j) -- and additionally cache T_i(xn) / T_j(yn) by
+        # polynomial order.  At typical freeform coefficient counts
+        # (8-32 terms) many (i, j) pairs share an i or j, so the cos
+        # evaluations get reused across the dictionary.
+        theta_x = np.arccos(xn)
+        theta_y = np.arccos(yn)
+        unique_i = {i for (i, _) in cheb_coeffs.keys()}
+        unique_j = {j for (_, j) in cheb_coeffs.keys()}
+        Ti_cache = {i: np.cos(i * theta_x) for i in unique_i}
+        Tj_cache = {j: np.cos(j * theta_y) for j in unique_j}
         departure = np.zeros_like(sag)
         for (i, j), c in cheb_coeffs.items():
-            Ti = np.cos(i * np.arccos(xn))
-            Tj = np.cos(j * np.arccos(yn))
-            departure = departure + c * Ti * Tj
+            departure = departure + c * Ti_cache[i] * Tj_cache[j]
         sag = sag + np.where(outside, 0.0, departure)
     return sag
 

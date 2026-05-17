@@ -134,6 +134,30 @@ def gerchberg_saxton(
         # ``initial_phase``, and ``dtype``.  Function-level kwargs on
         # gerchberg_saxton_jax were wired correctly internally; the
         # unified front door just didn't forward them.
+        #
+        # v4.13.0 (audit L4c): the JAX twin returns ``(phase, err)`` --
+        # it does not support host-side per-iteration error capture
+        # (``return_history=True``).  Pre-fix the dispatcher silently
+        # dropped ``return_history``, so a user expecting a 3-tuple
+        # received a 2-tuple with no warning.  Now we emit a
+        # ``RuntimeWarning`` and synthesise an empty history list so
+        # the return shape always matches the NumPy API.  Users who
+        # need real history must use ``backend='numpy'``.
+        if return_history:
+            import warnings as _warnings
+            _warnings.warn(
+                "gerchberg_saxton(backend='jax', return_history=True): "
+                "the JAX kernel runs the entire iteration inside "
+                "``jax.lax.fori_loop`` and does not expose per-iteration "
+                "errors to the host.  Returning a synthetic 3-tuple "
+                "with an empty history list.  Use backend='numpy' for "
+                "real iteration-by-iteration history.",
+                RuntimeWarning, stacklevel=2,
+            )
+            phase_out, err_out = gerchberg_saxton_jax(
+                source_amplitude, target_amplitude, n_iter=n_iter,
+                seed=seed, initial_phase=initial_phase, dtype=dtype)
+            return phase_out, err_out, []
         return gerchberg_saxton_jax(
             source_amplitude, target_amplitude, n_iter=n_iter,
             seed=seed, initial_phase=initial_phase, dtype=dtype)
@@ -265,6 +289,49 @@ def error_reduction(
         parity with the JAX path.
     """
     if backend == 'jax':
+        # v4.13.0 (audit L4b): the NumPy API takes ``initial_guess``
+        # (a complex object-field starting point); the JAX twin
+        # ``error_reduction_jax`` takes ``init_phase`` (a real-valued
+        # initial Fourier-phase array).  Converting between them is
+        # lossy: phase = np.angle(initial_guess) discards amplitude
+        # info and changes the iteration trajectory.  Rather than
+        # silently demote, raise ``NotImplementedError`` so the user
+        # makes an explicit choice.  Pre-fix the kwarg was silently
+        # dropped, so two calls with different ``initial_guess``
+        # produced identical (random-init) trajectories.
+        if initial_guess is not None:
+            raise NotImplementedError(
+                "error_reduction(backend='jax', initial_guess=...): "
+                "the JAX twin (error_reduction_jax) takes an "
+                "``init_phase`` array (real Fourier-plane initial "
+                "phase), not a complex ``initial_guess`` object-plane "
+                "field.  The two are not interchangeable -- converting "
+                "via np.angle(initial_guess) discards amplitude info "
+                "and would silently change the iteration trajectory.  "
+                "To run a JAX iteration from a specific phase seed, "
+                "call error_reduction_jax(..., init_phase=...) "
+                "directly.  Use backend='numpy' for the complex-field "
+                "``initial_guess`` semantics."
+            )
+        # v4.13.0 (audit L4c sibling): ER + HIO JAX twins return
+        # ``(obj, err)`` and do not expose per-iteration history.
+        # Match the GS dispatcher's RuntimeWarning + synthetic
+        # empty-history behaviour.
+        if return_history:
+            import warnings as _warnings
+            _warnings.warn(
+                "error_reduction(backend='jax', return_history=True): "
+                "the JAX kernel runs the entire iteration inside "
+                "``jax.lax.fori_loop`` and does not expose per-iteration "
+                "errors to the host.  Returning a synthetic 3-tuple "
+                "with an empty history list.  Use backend='numpy' for "
+                "real iteration-by-iteration history.",
+                RuntimeWarning, stacklevel=2,
+            )
+            obj_out, err_out = error_reduction_jax(
+                measured_amplitude, support, n_iter=n_iter,
+                seed=seed, dtype=dtype)
+            return obj_out, err_out, []
         return error_reduction_jax(
             measured_amplitude, support, n_iter=n_iter,
             seed=seed, dtype=dtype)
@@ -394,6 +461,40 @@ def hybrid_input_output(
         ``np.complex128``.
     """
     if backend == 'jax':
+        # v4.13.0 (audit L4b): see ``error_reduction`` for the
+        # ``initial_guess`` -> ``init_phase`` mapping rationale.  The
+        # JAX twin takes a real Fourier-phase array; the NumPy API
+        # takes a complex object-plane field.  Refuse to silently
+        # demote.
+        if initial_guess is not None:
+            raise NotImplementedError(
+                "hybrid_input_output(backend='jax', initial_guess=...): "
+                "the JAX twin (hybrid_input_output_jax) takes an "
+                "``init_phase`` array (real Fourier-plane initial "
+                "phase), not a complex ``initial_guess`` object-plane "
+                "field.  The two are not interchangeable.  Call "
+                "hybrid_input_output_jax(..., init_phase=...) directly "
+                "for a JAX-side phase seed, or use backend='numpy' "
+                "for the complex-field ``initial_guess`` semantics."
+            )
+        # v4.13.0 (audit L4c sibling): synthesize a 3-tuple on the
+        # JAX path when ``return_history=True``.
+        if return_history:
+            import warnings as _warnings
+            _warnings.warn(
+                "hybrid_input_output(backend='jax', return_history="
+                "True): the JAX kernel runs the entire iteration "
+                "inside ``jax.lax.fori_loop`` and does not expose "
+                "per-iteration errors to the host.  Returning a "
+                "synthetic 3-tuple with an empty history list.  Use "
+                "backend='numpy' for real iteration-by-iteration "
+                "history.",
+                RuntimeWarning, stacklevel=2,
+            )
+            obj_out, err_out = hybrid_input_output_jax(
+                measured_amplitude, support, n_iter=n_iter, beta=beta,
+                seed=seed, dtype=dtype)
+            return obj_out, err_out, []
         return hybrid_input_output_jax(
             measured_amplitude, support, n_iter=n_iter, beta=beta,
             seed=seed, dtype=dtype)
@@ -461,9 +562,14 @@ def hybrid_input_output(
 # don't leak compiled XLA executables.  Accessed keys are moved to the
 # end; when ``len > _PR_KERNEL_CACHE_MAXSIZE`` the oldest entry is
 # evicted.
-_GS_KERNEL_CACHE: 'OrderedDict[int, Any]' = OrderedDict()
-_ER_KERNEL_CACHE: 'OrderedDict[int, Any]' = OrderedDict()
-_HIO_KERNEL_CACHE: 'OrderedDict[int, Any]' = OrderedDict()
+# v4.13.0 (audit L2): cache keys are now ``(n_iter, dtype_str)`` tuples
+# so that calls at complex64 and complex128 don't share the same
+# compiled XLA executable.  Test scaffolds may still insert plain int
+# keys directly into these dicts; the OrderedDict / LRU contract is
+# unchanged.
+_GS_KERNEL_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
+_ER_KERNEL_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
+_HIO_KERNEL_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _PR_KERNEL_CACHE_MAXSIZE = 32
 
 
@@ -622,17 +728,35 @@ def gerchberg_saxton_jax(
             dtype=dtype)
 
     # Combine source amplitude with the (possibly seeded) initial phase.
-    E0 = (src * jnp.exp(1j * phase0)).astype(jnp.complex64)
+    # v4.13.0 (audit L2): pre-fix this hard-cast to ``jnp.complex64``
+    # silently demoted the iteration state to single precision even when
+    # the user passed ``dtype=np.float64`` for ground-truth comparison.
+    # The complex dtype is paired with the real ``dtype``: complex64
+    # for float32, complex128 for float64.
+    from ..propagators.propagation import _resolve_jax_complex_dtype
+    np_real = np.dtype(dtype)
+    if np_real == np.dtype(np.float64):
+        cdtype = _resolve_jax_complex_dtype(np.complex128)
+    elif np_real == np.dtype(np.float32):
+        cdtype = _resolve_jax_complex_dtype(np.complex64)
+    else:
+        # Defensive: fall back to the library-wide default if the
+        # caller passed an unrecognised real dtype (e.g. float16).
+        cdtype = _resolve_jax_complex_dtype()
+    E0 = (src * jnp.exp(1j * phase0)).astype(cdtype)
 
     n_iter_int = int(n_iter)
-    kernel = _GS_KERNEL_CACHE.get(n_iter_int)
+    # v4.13.0 (audit L2): include dtype in the cache key so calls at
+    # complex64 vs complex128 don't collide on a cached kernel.
+    cache_key = (n_iter_int, str(np.dtype(cdtype)))
+    kernel = _GS_KERNEL_CACHE.get(cache_key)
     if kernel is None:
         kernel = _make_gs_kernel(n_iter_int)
-        _GS_KERNEL_CACHE[n_iter_int] = kernel
+        _GS_KERNEL_CACHE[cache_key] = kernel
         while len(_GS_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
             _GS_KERNEL_CACHE.popitem(last=False)
     else:
-        _GS_KERNEL_CACHE.move_to_end(n_iter_int)
+        _GS_KERNEL_CACHE.move_to_end(cache_key)
     phase, err = kernel(E0, src, tgt)
     return np.asarray(phase), float(err)
 
@@ -682,14 +806,17 @@ def error_reduction_jax(
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
     n_iter_int = int(n_iter)
-    kernel = _ER_KERNEL_CACHE.get(n_iter_int)
+    # v4.13.0 (audit L2): include dtype in the cache key so the kernel
+    # caches don't share an entry across precision changes.
+    cache_key = (n_iter_int, str(np.dtype(dtype)))
+    kernel = _ER_KERNEL_CACHE.get(cache_key)
     if kernel is None:
         kernel = _make_er_kernel(n_iter_int)
-        _ER_KERNEL_CACHE[n_iter_int] = kernel
+        _ER_KERNEL_CACHE[cache_key] = kernel
         while len(_ER_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
             _ER_KERNEL_CACHE.popitem(last=False)
     else:
-        _ER_KERNEL_CACHE.move_to_end(n_iter_int)
+        _ER_KERNEL_CACHE.move_to_end(cache_key)
     obj_final, err = kernel(obj0, meas, sup)
     return np.asarray(obj_final), float(err)
 
@@ -734,13 +861,16 @@ def hybrid_input_output_jax(
     obj0 = jnp.fft.fftshift(jnp.fft.ifft2(jnp.fft.ifftshift(F0)))
 
     n_iter_int = int(n_iter)
-    kernel = _HIO_KERNEL_CACHE.get(n_iter_int)
+    # v4.13.0 (audit L2): include dtype in the cache key so the kernel
+    # caches don't share an entry across precision changes.
+    cache_key = (n_iter_int, str(np.dtype(dtype)))
+    kernel = _HIO_KERNEL_CACHE.get(cache_key)
     if kernel is None:
         kernel = _make_hio_kernel(n_iter_int)
-        _HIO_KERNEL_CACHE[n_iter_int] = kernel
+        _HIO_KERNEL_CACHE[cache_key] = kernel
         while len(_HIO_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
             _HIO_KERNEL_CACHE.popitem(last=False)
     else:
-        _HIO_KERNEL_CACHE.move_to_end(n_iter_int)
+        _HIO_KERNEL_CACHE.move_to_end(cache_key)
     obj_final, err = kernel(obj0, meas, sup, beta_j)
     return np.asarray(obj_final), float(err)

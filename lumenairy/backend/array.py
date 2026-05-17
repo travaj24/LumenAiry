@@ -127,7 +127,8 @@ def is_jax_array(x: Any) -> bool:
         return True
     try:
         return isinstance(x, jax_mod.core.Tracer)
-    except Exception:
+    except AttributeError:
+        # Older JAX versions did not expose ``jax_mod.core.Tracer``.
         return False
 
 

@@ -234,11 +234,21 @@ def _amp_callback_jax_linear(E_in, lens_prescription, wavelength, dx,
     import jax
     import jax.numpy as jnp
 
-    x64 = jax.config.jax_enable_x64
-    cdtype = jnp.complex128 if x64 else jnp.complex64
-    rdtype = jnp.float64 if x64 else jnp.float32
-    target_c = np.complex128 if x64 else np.complex64
-    target_r = np.float64 if x64 else np.float32
+    # v4.13.0 (audit L2): unify on the library-wide default dtype rather
+    # than reading ``jax.config.jax_enable_x64``.  Pre-fix users who set
+    # ``set_default_complex_dtype(np.complex128)`` could still hit
+    # complex64 here when ``jax_enable_x64`` was left at its default
+    # False -- inconsistent with the NumPy-side ``apply_real_lens``.
+    from ..propagators.propagation import (
+        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+        get_default_complex_dtype,
+    )
+    cdtype = _resolve_jax_complex_dtype()
+    rdtype = _resolve_jax_real_dtype()
+    target_c = np.dtype(get_default_complex_dtype()).type
+    target_r = (np.float32
+                 if np.dtype(get_default_complex_dtype()) == np.dtype(np.complex64)
+                 else np.float64)
 
     def _cb_full(E_in_arr):
         E_in_np = np.asarray(E_in_arr)
@@ -389,6 +399,40 @@ def apply_real_lens_traced_jax(
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
     from ..glass import get_glass_index
 
+    # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
+    # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
+    # with ``surfaces[i]['is_mirror']=True`` would slip past, and the
+    # ray-traced OPD leg would silently treat the mirror as a refractor
+    # with the wrong sign.
+    _surfaces_list = prescription.get('surfaces') or []
+    _mirror_surf_idx = []
+    for _i, _s in enumerate(_surfaces_list):
+        if not isinstance(_s, dict):
+            continue
+        _gl_after = _s.get('glass_after')
+        _is_mirror = bool(_s.get('is_mirror', False)) or (
+            isinstance(_gl_after, str)
+            and _gl_after.upper() == 'MIRROR'
+        )
+        if _is_mirror:
+            _mirror_surf_idx.append(_i)
+    if _mirror_surf_idx:
+        raise ValueError(
+            f"apply_real_lens_traced_jax: prescription has "
+            f"{len(_mirror_surf_idx)} mirror surface(s) at "
+            f"indices {_mirror_surf_idx} -- apply_real_lens_traced_jax "
+            f"only walks refracting surfaces.  Running this "
+            f"prescription as-is would silently treat the mirror as "
+            f"a refractor (wrong sign / wrong focusing phase) and "
+            f"propagate along the unfolded-equivalent axis.  Use "
+            f"the per-segment trace + apply_mirror pattern for "
+            f"folded designs: call "
+            f"lumenairy.io.split_prescription_at_mirrors(rx) to "
+            f"split the prescription at each fold, then alternate "
+            f"apply_real_lens_traced_jax (each segment) with "
+            f"apply_mirror (each fold).  See Guide-Folded-Designs "
+            f"section 'Wave-optics through a fold'.")
+
     # Local alias preserves the legacy name used throughout this
     # function body (sprawling references; cheaper to rebind than
     # rename everywhere).
@@ -495,9 +539,15 @@ def apply_real_lens_traced_jax(
     opl_map = jnp.where(inside, opl_map, jnp.nan)
 
     # ---- Combine OPL with amplitude ---------------------------------
-    x64 = jax.config.jax_enable_x64
-    cdtype = jnp.complex128 if x64 else jnp.complex64
-    rdtype = jnp.float64 if x64 else jnp.float32
+    # v4.13.0 (audit L2): unify on the library-wide default dtype
+    # (``set_default_complex_dtype``) rather than reading the JAX
+    # global ``jax_enable_x64``.  Two different knobs for the same
+    # decision is exactly the divergence audit L2 flagged.
+    from ..propagators.propagation import (
+        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+    )
+    cdtype = _resolve_jax_complex_dtype()
+    rdtype = _resolve_jax_real_dtype()
     k0 = 2.0 * jnp.pi / float(wavelength)
     valid = jnp.isfinite(opl_map)
     phase = jnp.where(valid, k0 * opl_map, 0.0)
@@ -569,6 +619,37 @@ def apply_real_lens_maslov_jax(
     import jax.numpy as jnp
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
     from ..glass import get_glass_index
+
+    # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
+    # from ``apply_real_lens_traced``.
+    _surfaces_list = prescription.get('surfaces') or []
+    _mirror_surf_idx = []
+    for _i, _s in enumerate(_surfaces_list):
+        if not isinstance(_s, dict):
+            continue
+        _gl_after = _s.get('glass_after')
+        _is_mirror = bool(_s.get('is_mirror', False)) or (
+            isinstance(_gl_after, str)
+            and _gl_after.upper() == 'MIRROR'
+        )
+        if _is_mirror:
+            _mirror_surf_idx.append(_i)
+    if _mirror_surf_idx:
+        raise ValueError(
+            f"apply_real_lens_maslov_jax: prescription has "
+            f"{len(_mirror_surf_idx)} mirror surface(s) at "
+            f"indices {_mirror_surf_idx} -- apply_real_lens_maslov_jax "
+            f"only walks refracting surfaces.  Running this "
+            f"prescription as-is would silently treat the mirror as "
+            f"a refractor (wrong sign / wrong focusing phase) and "
+            f"propagate along the unfolded-equivalent axis.  Use "
+            f"the per-segment trace + apply_mirror pattern for "
+            f"folded designs: call "
+            f"lumenairy.io.split_prescription_at_mirrors(rx) to "
+            f"split the prescription at each fold, then alternate "
+            f"apply_real_lens_maslov_jax (each segment) with "
+            f"apply_mirror (each fold).  See Guide-Folded-Designs "
+            f"section 'Wave-optics through a fold'.")
 
     # Local alias preserves the legacy name used in this function body.
     lens_prescription = prescription
@@ -695,9 +776,12 @@ def apply_real_lens_maslov_jax(
     phase_maslov = -0.5 * jnp.pi * maslov_count.astype(opl_map.dtype)
 
     # ---- Combine OPL + Maslov phase with amplitude ------------------
-    x64 = jax.config.jax_enable_x64
-    cdtype = jnp.complex128 if x64 else jnp.complex64
-    rdtype = jnp.float64 if x64 else jnp.float32
+    # v4.13.0 (audit L2): unify on the library-wide default dtype.
+    from ..propagators.propagation import (
+        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+    )
+    cdtype = _resolve_jax_complex_dtype()
+    rdtype = _resolve_jax_real_dtype()
     k0 = 2.0 * jnp.pi / float(wavelength)
     valid = jnp.isfinite(opl_map)
     phase = jnp.where(valid, k0 * opl_map + phase_maslov, 0.0)

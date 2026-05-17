@@ -10,13 +10,39 @@ This module traces each 2-bounce ghost path, computes the ghost
 image intensity (including Fresnel reflection losses), and returns
 a map of the dominant ghosts for stray-light assessment.
 
+Naming convention (v4.13.0 / audit S3)
+--------------------------------------
+
+Two distinct optical quantities both share the letter ``R`` in the
+classical optics literature.  This module uses a strict
+upper/lowercase split to keep them disambiguated:
+
+* **Uppercase ``R``** (e.g. ``R_i``, ``R_j``, ``R_k``) -- the
+  *normal-incidence Fresnel reflectance* at surface ``i`` (or
+  ``j``, ``k``).  Dimensionless, in [0, 1].  Used in
+  ``intensity = R_i * R_j``, in the dictionary keys
+  ``'R_i'`` / ``'R_j'`` returned by :func:`ghost_analysis`, and in
+  the upper-bound formulae throughout this docstring.
+
+* **Lowercase ``r``** (e.g. ``r_i``, ``r_j``) -- the *radius of
+  curvature* of surface ``i`` (or ``j``).  In metres, signed in the
+  Welford convention (positive = centre of curvature on the
+  outgoing side).  Only used inside :func:`ghost_analysis` to build
+  the heuristic ``'focus_z_estimate'``.
+
+Where a docstring mentions ``R`` without an explicit qualifier the
+prose disambiguates explicitly (e.g. "Fresnel reflectance at
+surface i" vs "curvature radius of surface i").
+
 Important caveats (4.12.0 / B2-1, B2-2)
 ---------------------------------------
 
 * **Reported ghost ``'intensity'`` values are UPPER BOUNDS.**  The
-  product ``R_i * R_j`` captures only the two normal-incidence
-  Fresnel REFLECTIONS at the bouncing surfaces; it OMITS the
-  transmission losses ``Prod_k (1 - R_k)`` over every other surface
+  product ``R_i * R_j`` (Fresnel reflectance at surface i times
+  Fresnel reflectance at surface j) captures only the two normal-
+  incidence Fresnel REFLECTIONS at the bouncing surfaces; it OMITS
+  the transmission losses ``Prod_k (1 - R_k)`` (where each ``R_k``
+  is the Fresnel reflectance of surface k) over every other surface
   the ghost ray crosses (typically two passes through each non-
   bouncing surface).  For a 10-surface system the omitted factor
   is roughly ``(1 - 0.04)^16 ~= 0.52``, so the reported magnitude
@@ -31,8 +57,10 @@ Important caveats (4.12.0 / B2-1, B2-2)
   exported via :func:`export_zemax_zmx`.
 
 * **``'focus_z_estimate'`` is a HEURISTIC, not a physical focal
-  distance.**  The value is a harmonic mean of ``|R_i|`` and
-  ``|R_j|`` (see :func:`ghost_analysis` body) -- a dimensionally
+  distance.**  The value is a harmonic mean of the *curvature radii*
+  ``|r_i|`` and ``|r_j|`` of the two bouncing surfaces (lowercase
+  ``r`` -- see :func:`ghost_analysis` body; NOT to be confused with
+  the Fresnel-reflectance ``R_i``/``R_j``).  It is a dimensionally
   arbitrary quick-rank scalar useful for sorting ghost paths by
   "this one is roughly near-focus vs that one is roughly out-of-
   focus", NOT a calibrated position relative to the detector.
@@ -101,28 +129,37 @@ def ghost_analysis(
         One entry per ghost path with keys:
 
         * ``'path'`` -- ``(i, j)`` tuple of bouncing surface indices.
-        * ``'R_i'`` / ``'R_j'`` -- normal-incidence Fresnel
-          reflectance at each bouncing surface.
+        * ``'R_i'`` / ``'R_j'`` -- *Fresnel reflectance* (uppercase
+          ``R``, dimensionless, in [0, 1]) at each bouncing surface
+          at normal incidence.  NOT the radius of curvature; see
+          module docstring for the naming convention.
         * ``'intensity'`` -- UPPER BOUND on the ghost's relative
-          intensity.  Computed as ``R_i * R_j`` only; does NOT
-          include the transmission losses
-          ``Prod_{k not in (i, j)} (1 - R_k)^2`` over the non-
+          intensity.  Computed as ``R_i * R_j`` (Fresnel reflectance
+          at surface i times Fresnel reflectance at surface j) only;
+          does NOT include the transmission losses
+          ``Prod_{k not in (i, j)} (1 - R_k)^2`` (where each ``R_k``
+          is the Fresnel reflectance of surface k) over the non-
           bouncing surfaces the ghost ray crosses twice (once
           forward, once on return).  For a 10-surface system this
           factor is ~0.5, so the reported magnitude overestimates
           the true intensity by ~2x.  See the module docstring for
           the correction formula.
         * ``'focus_z_estimate'`` -- HEURISTIC quick-rank scalar,
-          the harmonic mean of ``|R_i|`` and ``|R_j|``.  Useful as
-          a sort key (near-focus vs out-of-focus); NOT a physical
-          axial position.  For a calibrated focus location run a
-          full retro-trace of the path.
+          the harmonic mean of the *curvature radii* ``|r_i|`` and
+          ``|r_j|`` of the two bouncing surfaces (lowercase ``r``,
+          in metres; NOT the Fresnel reflectance ``R_i``/``R_j``
+          above).  Useful as a sort key (near-focus vs out-of-
+          focus); NOT a physical axial position.  For a calibrated
+          focus location run a full retro-trace of the path.
 
     Notes
     -----
     See the module docstring (4.12.0 / B2-1, B2-2) for the
     upper-bound semantics on ``'intensity'`` and the heuristic
-    semantics on ``'focus_z_estimate'``.
+    semantics on ``'focus_z_estimate'``.  See the module docstring
+    Naming-convention block (v4.13.0 / S3) for the upper-/lowercase
+    ``R``/``r`` split between Fresnel reflectance and curvature
+    radius.
     """
     surfs = surfaces_from_prescription(prescription)
     n_surfs = len(surfs)
@@ -146,12 +183,15 @@ def ghost_analysis(
         intensity = float(R_i * R_j)
 
         # Estimate ghost focus position using the thin-lens approximation:
-        # each reflecting surface acts as a mirror with f = R/2.  The ghost
-        # image is formed by the combination of these two "mirrors" plus
-        # the intervening glass.
-        R_i_val = surfs[i].radius if np.isfinite(surfs[i].radius) else 1e10
-        R_j_val = surfs[j].radius if np.isfinite(surfs[j].radius) else 1e10
-        f_ghost = abs(R_i_val * R_j_val) / (abs(R_i_val) + abs(R_j_val) + 1e-30)
+        # each reflecting surface acts as a mirror with f = r/2 (where ``r``
+        # is the surface curvature radius -- lowercase to disambiguate from
+        # the uppercase Fresnel reflectances ``R_i``/``R_j`` above; see
+        # module docstring "Naming convention").  The ghost image is formed
+        # by the combination of these two "mirrors" plus the intervening
+        # glass.
+        r_i = surfs[i].radius if np.isfinite(surfs[i].radius) else 1e10
+        r_j = surfs[j].radius if np.isfinite(surfs[j].radius) else 1e10
+        f_ghost = abs(r_i * r_j) / (abs(r_i) + abs(r_j) + 1e-30)
         # Very rough estimate -- actual position needs full retro-trace
         # (and the value is reported as a HEURISTIC sort key, not a
         # calibrated focal distance; see module docstring B2-2).
@@ -279,7 +319,12 @@ def non_sequential_stray_light(
             # Pre-4.10 used mean(f * cos_t) * pi -- an extra cos factor
             # that biased TIS toward near-normal scattering.
             tis_each_surface = float(np.mean(f) * np.pi)
-        except Exception:
+        except (TypeError, ValueError, RuntimeError, AttributeError):
+            # BSDF model can reject the sampling directions (TypeError
+            # on a duck-typed model with wrong signature, ValueError
+            # on shape mismatch, AttributeError when ``evaluate`` is
+            # missing entirely) -- NaN-propagate so the stray-light
+            # tally clearly flags the missing TIS contribution.
             tis_each_surface = float('nan')
         n_surfs = len(prescription.get('surfaces', []))
         scatter_tis_per_surface = [tis_each_surface] * n_surfs

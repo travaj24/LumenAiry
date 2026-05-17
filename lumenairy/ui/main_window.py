@@ -308,7 +308,7 @@ class MainWindow(QMainWindow):
         # 3.6: five new specialty docks landing the bulk of the
         # remaining library coverage (Richards-Wolf vector
         # diffraction, Köhler partial coherence, Shack-Hartmann
-        # sensing, LG aberration tensor, RCWA grating efficiency).
+        # sensing, LG aberration tensor, thin-grating efficiency).
         # All ride in the appropriate workspace via DEFAULT_WORKSPACES.
         from .richards_wolf_dock import RichardsWolfDock
         self.richards_wolf_widget = RichardsWolfDock(self.model)
@@ -334,11 +334,11 @@ class MainWindow(QMainWindow):
             'LG aberration tensor', self.lg_widget,
             Qt.BottomDockWidgetArea, 'lg_aberration')
 
-        from .rcwa_dock import RCWADock
-        self.rcwa_widget = RCWADock(self.model)
-        self.rcwa_dock = dock(
-            'RCWA grating', self.rcwa_widget,
-            Qt.BottomDockWidgetArea, 'rcwa')
+        from .thin_grating_dock import ThinGratingDock
+        self.thin_grating_widget = ThinGratingDock(self.model)
+        self.thin_grating_dock = dock(
+            'Thin grating', self.thin_grating_widget,
+            Qt.BottomDockWidgetArea, 'thin_grating')
 
         from .psf_mtf_dock import PSFMTFDock
         self.psfmtf_widget = PSFMTFDock(self.model)
@@ -1152,8 +1152,8 @@ class MainWindow(QMainWindow):
                      lambda: self._show_and_raise(self.sh_dock))
         am.addAction('LG aberration tensor',
                      lambda: self._show_and_raise(self.lg_dock))
-        am.addAction('RCWA grating',
-                     lambda: self._show_and_raise(self.rcwa_dock))
+        am.addAction('Thin grating',
+                     lambda: self._show_and_raise(self.thin_grating_dock))
         am.addSeparator()
         am.addAction('Chromatic focal shift (dialog)', self._run_chromatic)
         am.addAction('Quick Zernikes from ray-trace OPD',
@@ -1206,7 +1206,7 @@ class MainWindow(QMainWindow):
                   self.interferometry_dock, self.phase_retrieval_dock,
                   self.ghost_dock, self.jones_pupil_dock,
                   self.richards_wolf_dock, self.coherence_dock,
-                  self.sh_dock, self.lg_dock, self.rcwa_dock]:
+                  self.sh_dock, self.lg_dock, self.thin_grating_dock]:
             vm.addAction(d.toggleViewAction())
         vm.addSeparator()
         # ── Materials, optimization, utilities ──

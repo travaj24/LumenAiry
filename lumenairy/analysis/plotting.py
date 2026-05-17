@@ -1291,7 +1291,8 @@ def plot_lens_layout(
             image_z = float(find_paraxial_focus(surfaces, wavelength))
             if not np.isfinite(image_z):
                 image_z = None
-        except Exception:
+        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                np.linalg.LinAlgError, IndexError, TypeError):
             image_z = None
 
     if show_image_plane and image_z is not None:
@@ -1316,7 +1317,11 @@ def plot_lens_layout(
                     semi_aperture=semi_diameter, n_rays=int(rays_per_fan),
                     field_angle=fa_rad, wavelength=wavelength)
                 r = trace(fan, surfaces, wavelength)
-            except Exception:
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    IndexError, AttributeError, TypeError):
+                # Layout-overlay ray trace failed for this field
+                # angle (vignetted at every surface or invalid
+                # input); skip the overlay and continue.
                 continue
             for k in range(int(rays_per_fan)):
                 if not r.image_rays.alive[k]:
@@ -1409,7 +1414,9 @@ def abbe_diagram(
             n_d = float(get_glass_index(name, lam_d))
             n_F = float(get_glass_index(name, lam_F))
             n_C = float(get_glass_index(name, lam_C))
-        except Exception:
+        except (KeyError, ValueError, TypeError):
+            # Glass not in registry or wavelength out of Sellmeier
+            # range -- silently drop from the Abbe diagram.
             continue
         if (n_F - n_C) == 0:
             continue
@@ -1480,7 +1487,10 @@ def plot_glass_map(
         for wl in wl_grid:
             try:
                 ns.append(float(get_glass_index(name, wl)))
-            except Exception:
+            except (KeyError, ValueError, TypeError):
+                # Glass not in registry or wavelength out of Sellmeier
+                # range -- NaN entry will be hidden by the isfinite
+                # filter on the plot.
                 ns.append(np.nan)
         ns = np.array(ns)
         if np.isfinite(ns).any():
