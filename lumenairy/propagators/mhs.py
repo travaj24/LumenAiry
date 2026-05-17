@@ -77,8 +77,14 @@ class HuygensSurface:
     def grid(self) -> Tuple[np.ndarray, np.ndarray]:
         """Return ``(X, Y)`` meshgrid arrays for this surface."""
         cx, cy = self.centre
-        x = (np.arange(self.Nx) - self.Nx / 2 + 0.5) * self.dx + cx
-        y = (np.arange(self.Ny) - self.Ny / 2 + 0.5) * self.dx + cy
+        # v4.12.1 (B1-10): pixel-centred `(arange(N) - N/2)*dx`, matching
+        # the library-wide convention (ASM, Fresnel, RS, sources,
+        # ``apply_fresnel_curvature``).  A Huygens surface's grid is the
+        # physical grid that the propagated field is sampled on, so it
+        # must match the upstream / downstream propagator grids exactly
+        # to keep coherent overlays phase-aligned.
+        x = (np.arange(self.Nx) - self.Nx / 2) * self.dx + cx
+        y = (np.arange(self.Ny) - self.Ny / 2) * self.dx + cy
         return np.meshgrid(x, y, indexing='xy')
 
 
@@ -417,8 +423,11 @@ def aperture_subdomain(
     def _prop(E, in_s, out_s, **kw):
         xp = array_namespace(E)
         cx, cy = centre
-        x = (xp.arange(in_s.Nx) - in_s.Nx / 2 + 0.5) * in_s.dx + in_s.centre[0]
-        y = (xp.arange(in_s.Ny) - in_s.Ny / 2 + 0.5) * in_s.dx + in_s.centre[1]
+        # v4.12.1 (B1-10): pixel-centred grid (drop the `+0.5`), matches
+        # ``HuygensSurface.grid`` and the library-wide convention so the
+        # aperture mask aligns 1:1 with the field sample positions.
+        x = (xp.arange(in_s.Nx) - in_s.Nx / 2) * in_s.dx + in_s.centre[0]
+        y = (xp.arange(in_s.Ny) - in_s.Ny / 2) * in_s.dx + in_s.centre[1]
         X, Y = xp.meshgrid(x, y, indexing='xy')
         if shape == 'circular':
             mask = (X - cx) ** 2 + (Y - cy) ** 2 <= aperture_radius ** 2

@@ -376,34 +376,79 @@ class TestHfChebyshevQuadratureRealEinPreservesImag:
     out_dtype to complex when E_in is real.
     """
 
-    def test_real_E_in_yields_complex_out_via_dtype_introspection(self):
-        # The v4.11.2 fix to ``propagate_hf_chebyshev_quadrature`` is
-        # the ``out_dtype`` allocation -- ``E_in.dtype`` was used pre-
-        # v4.11.2, which is real for a real input and silently strips
-        # the kernel imag part.  Verify the fix at the source level by
-        # inspecting the function source, since the polynomial
-        # evaluator has a pre-existing shape-mismatch bug when ``s2``
-        # is passed as a scalar and ``s1`` is a 2-D meshgrid (an
-        # unrelated issue, not introduced by v4.11.2).
-        import inspect
-        src = inspect.getsource(propagate_hf_chebyshev_quadrature)
-        # Pre-v4.11.2 the allocation read ``out = np.zeros(...,
-        # dtype=E_in.dtype)``.  v4.11.2 introduces an ``out_dtype``
-        # local that is unconditionally complex when E_in is real.
-        assert 'out_dtype' in src, (
-            "v4.11.2 fix expected to introduce an 'out_dtype' local "
-            "in propagate_hf_chebyshev_quadrature -- the source does "
-            "not contain it.  The kernel-cast fix is missing."
+    def test_real_E_in_yields_complex_out_with_nonzero_imag(self):
+        # v4.12.1: replaced the inspect-based source-string check with
+        # a behavioural pin.  Pass a REAL E_in (float64) into
+        # propagate_hf_chebyshev_quadrature on a real HF polynomial
+        # fit; the v4.11.2 fix promotes ``out_dtype`` to complex when
+        # the input is real, so the output dtype must be complex and
+        # its imaginary part must be non-trivially non-zero (the
+        # Maslov prefactor + kernel phase are imaginary so a
+        # field-strength multiply with a real input still carries the
+        # kernel's imag part through to the output).  Pre-v4.11.2 the
+        # ``out = np.zeros(..., dtype=E_in.dtype)`` allocation kept
+        # the output real-valued, silently stripping the imag part of
+        # the HF integrand.
+        rx = _make_fit_rx()
+        wavelength = 1.0e-6
+        # Small fit so the test runs quickly.
+        fit = fit_hf_polynomials(
+            rx, wavelength,
+            source_box_half=20e-6, pupil_box_half=0.01,
+            n_field=6, n_pupil=6, poly_order=4,
         )
-        # The kernel cast must now target out_dtype, not E_in.dtype.
-        assert '.astype(out_dtype)' in src, (
-            "v4.11.2 fix expected ``kernel.astype(out_dtype)`` -- "
-            "source still casts to E_in.dtype."
+        # Build a small input/output grid centred on the fit's
+        # (s1, s2) regions.
+        N_in = 12
+        N_out = 6
+        ax = (np.linspace(-0.4, 0.4, N_in) * fit.s1x_halfrange
+              + fit.s1x_centre)
+        ay = (np.linspace(-0.4, 0.4, N_in) * fit.s1y_halfrange
+              + fit.s1y_centre)
+        bx = (np.linspace(-0.3, 0.3, N_out) * fit.s2x_halfrange
+              + fit.s2x_centre)
+        by = (np.linspace(-0.3, 0.3, N_out) * fit.s2y_halfrange
+              + fit.s2y_centre)
+        # REAL E_in (float64), centred Gaussian.
+        AX, AY = np.meshgrid(ax, ay, indexing='xy')
+        w = max(abs(fit.s1x_halfrange), 1e-6) * 0.3
+        E_in_real = np.exp(-(AX ** 2 + AY ** 2) / (w ** 2)).astype(
+            np.float64)
+        assert not np.iscomplexobj(E_in_real), (
+            "Test setup: E_in should be real float64.")
+
+        out = propagate_hf_chebyshev_quadrature(
+            fit, E_in_real, ax, ay, bx, by,
+            apply_van_vleck=True, chunk_output=4,
         )
-        # Confirm the (-1j) Maslov prefactor is still applied (v4.10
-        # fix retained).
-        assert 'out * (-1j)' in src or 'out = out * (-1j)' in src, (
-            "v4.10 Maslov prefactor must still apply in v4.11.2."
+
+        # v4.11.2 fix: output must be complex-typed.
+        assert np.iscomplexobj(out), (
+            f"propagate_hf_chebyshev_quadrature returned a "
+            f"non-complex array (dtype={out.dtype}) for a real "
+            f"E_in.  Pre-v4.11.2 the out allocation used E_in.dtype "
+            f"which silently stripped the imaginary kernel half.  "
+            f"v4.11.2 promotes out_dtype to complex when E_in is real."
+        )
+        # And the imaginary part must be non-trivially non-zero
+        # (the HF kernel is exp(2*pi*i*Phi); the kernel + Maslov
+        # prefactor (-1j) produce an imag part whose RMS is comparable
+        # to the real part).
+        out_imag_rms = float(np.sqrt(np.mean(out.imag ** 2)))
+        out_real_rms = float(np.sqrt(np.mean(out.real ** 2)))
+        max_abs = max(out_imag_rms, out_real_rms)
+        assert max_abs > 0, (
+            "propagate_hf_chebyshev_quadrature returned an all-zero "
+            "output -- the HF integrand is genuinely zero on this "
+            "fit, so the imag-vs-real test is moot.")
+        # If imag was silently stripped the imag RMS would be zero;
+        # any non-zero imag RMS confirms the imaginary half survived.
+        assert out_imag_rms > 1e-6 * max_abs, (
+            f"propagate_hf_chebyshev_quadrature returned imag RMS "
+            f"{out_imag_rms:.3e} vs real RMS {out_real_rms:.3e} -- "
+            f"the imag part appears to have been silently stripped. "
+            f"Pre-v4.11.2 ``out = np.zeros(..., dtype=E_in.dtype)`` "
+            f"forced the output to be real-valued for a real E_in."
         )
 
 

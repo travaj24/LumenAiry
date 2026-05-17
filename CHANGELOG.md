@@ -2,6 +2,120 @@
 
 All notable changes to the core library are documented here.
 
+## [4.12.1] — 2026-05-16
+
+**Closes the three perf items deferred from v4.12.0, adds the
+14 missing regression tests round-4 audit identified, and lands
+the B1-10 half-pixel grid drift fix.**  All 453 unit tests pass;
+full validation suite (34 files / 314 tests) passes.
+
+### Performance wins recovered from v4.12.0 deferrals
+
+* **`trace_jax` jit cache via pytree-registered prescription wrapper**
+  -- ~878x warm-call speedup (127 ms -> 0.40 ms steady-state).
+  v4.12.0 attempted this with a flat-tuple cache key and reverted
+  because `jax.grad(fit_canonical_polynomials_jax)` returned NaN.
+  Root-cause investigation found the NaN was not the cache key
+  but a JAX bug: `jax.jit` wrap + downstream `jnp.linalg.lstsq`
+  backward produces NaN in `dot_general` on near-rank-deficient
+  matrices (the canonical-poly 4-D Chebyshev basis triggers it).
+  v4.12.1 fix: `JaxPrescription` pytree wrapper class for clean
+  cache mechanics, plus `_running_under_trace` guard that
+  bypasses the jit-cache layer whenever any pytree leaf is a
+  `jax.core.Tracer`.  Under `jax.grad`/`jax.jit`/`jax.vmap` the
+  calling transform owns the trace and the extra jit wrap is
+  redundant; bypassing preserves v4.11.2 grad semantics.  Pin:
+  `jax.grad through fit_canonical_polynomials_jax is finite`
+  passes with `grad=1.0274e+04` (was NaN in v4.12.0).
+
+* **Raytrace Newton spherical fast-path** -- 1.50x speedup on
+  1k-ray doublet trace (735 us -> 491 us).  v4.12.0 attempted
+  this with BOTH (a) Newton skip AND (b) analytic spherical
+  normal `(x/R, y/R, (z-R)/R)`; the analytic normal compounded
+  a 1.17e-3 rel error through the Maslov asymptotic chain.
+  v4.12.1 ships only (a) -- pure-spherical surfaces
+  (`conic == 0`, no aspheric/biconic/freeform, finite radius)
+  skip Newton via the analytic quadratic root; `_refract`/
+  `_reflect` keep using the numerical-radial-derivative-based
+  `_surface_normal` so LSB rounding is bit-identical to v4.11.2.
+  Smaller speedup (1.50x vs the 1.64x v4.12.0 attempted) but
+  the cross-backend correctness pin
+  `aberration_tensor_lg00_jax matches NumPy` now passes with
+  rel_err = 4.53e-04 (was 1.17e-3 broken; 4.83e-4 baseline).
+
+* **B1-10 half-pixel grid drift unified** -- five propagator
+  files (`gbd.py`, `mhs.py` x2 sites, `subaperture.py`,
+  `optimize/core.py`) switched from `(arange(N) - N/2 + 0.5)*dx`
+  cell-centred to `(arange(N) - N/2)*dx` pixel-centred so they
+  match the library-wide ASM / Fresnel / RS / sources
+  convention.  GBD self-roundtrip half-pixel walk-off
+  eliminated; ASM <-> GBD centroid agreement now within
+  `0.1*dx` (was `0.5*dx`).  Legitimate `+0.5` usages
+  (Chebyshev nodes, DOE diffraction orders, hardware detector
+  pixel centres) confirmed and left untouched.
+
+### Test coverage gaps closed
+
+Round-4 audit identified 14 v4.11.2 fixes that landed in code
+but lacked regression pins.  v4.12.1 closes all 14 in
+`tests/unit/test_audit_fixes_v4_12_1_coverage.py` (21 new tests
+across 14 classes):
+
+* `compute_psf` non-square pupil error
+* `apply_detector` non-integer pixel ratio area scaling
+* `find_best_focus` all-NaN guard
+* `monte_carlo_tolerancing_linearized` `a_k >= 0` clamp
+* `load_material` RuntimeWarning on dropped dispersion
+* `Source.*` `**factory_kwargs` propagation
+* `apply_real_lens_traced` M_x / M_y transpose
+* NaN sentinel mask in `apply_real_lens`
+* `stop_index != 0` warns in `_traced` / `_maslov` paths
+* Freeform-terms `RuntimeWarning` in thin-element
+* Zemax coord-break STOP marker (was only mirror tested)
+* JAX <-> NumPy phase-retrieval cross-backend parity
+* Cassegrain S1 / S2 / S3 / S5 hand-derivation (S4 was already
+  hand-pinned in v4.11.2; now all five totals are pinned)
+* Richards-Wolf first-null vs paraxial Airy at low NA
+
+### Weak tests strengthened
+
+* `test_real_E_in_yields_complex_out` -- replaced
+  `inspect.getsource` source-string scanning with a behavioural
+  pin: pass a real `E_in` through the HF Chebyshev quadrature,
+  assert `out.dtype` is complex and `out.imag` RMS > 0.
+* `test_axial_opl_path_does_not_emit_failure_warning` --
+  retained as smoke test; added `test_axial_opl_is_actually
+  _non_zero` which monkey-patches `apply_abcd_to_beamlets` to
+  capture the `axial_opl` kwarg and asserts it is finite and
+  > 1 mm (matches `n_BK7 * 2 mm thickness` for the test
+  singlet).
+
+### Test harness cleanup
+
+* `validation/io/test_io.py:196` bare `except: return True,
+  'skipped'` removed.  The exporter+loader contract has been
+  round-trippable since v3.7.0; a raise from `load_zemax_zmx`
+  on an exported file is a real regression and should fail
+  loudly.
+
+### Validation: 34/34 files / 314 tests pass
+
+Including the two cross-backend pins that caught the v4.12.0
+regressions:
+* `aberration_tensor_lg00_jax matches NumPy` -- rel_err = 4.53e-04
+* `jax.grad through fit_canonical_polynomials_jax is finite` --
+  grad = 1.0274e+04
+
+### Tooling
+
+* `JaxPrescription` pytree wrapper now exported from
+  `lumenairy.raytrace.jax_trace` -- users who want to benefit
+  from the warm-call cache can build a JaxPrescription once
+  and pass it into `trace_jax` directly.
+* All new pinning tests added to `tests/unit/` follow the
+  v4.11.2+ naming convention
+  (`test_audit_fixes_v4_12_1_*.py`).
+
 ## [4.12.0] — 2026-05-16
 
 **Combined performance + round-4 pre-PyPI audit response.**  v4.12.0

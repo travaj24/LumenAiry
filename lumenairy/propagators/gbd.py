@@ -118,8 +118,16 @@ def decompose_field_to_beamlets(
     Ix = Ix.reshape(-1)
     n = Iy.shape[0]
 
-    x_b = (Ix - Nx / 2 + 0.5) * dx
-    y_b = (Iy - Ny / 2 + 0.5) * dx
+    # v4.12.1 (B1-10): switch from cell-centred `(arange(N) - N/2 + 0.5)*dx`
+    # to pixel-centred `(arange(N) - N/2)*dx`, matching the library-wide
+    # convention (ASM, Fresnel, RS, sources, ``apply_fresnel_curvature``).
+    # ``reconstruct_field_from_beamlets`` (line ~264) already uses the
+    # pixel-centred grid, so prior to this fix a coherent self-roundtrip
+    # walked the beamlet centres half a pixel relative to the
+    # reconstruction grid -- producing a `k_0 * dx / 2 * off-axis` phase
+    # error that grew with NA and field angle.
+    x_b = (Ix - Nx / 2) * dx
+    y_b = (Iy - Ny / 2) * dx
     z_b = xp.full((n,), float(z_input_plane), dtype=x_b.dtype)
     positions = xp.stack([x_b, y_b, z_b], axis=-1)
 

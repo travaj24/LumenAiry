@@ -188,18 +188,20 @@ H.run('zemax export files valid', t_zemax_export_file_sizes)
 
 
 def t_load_zemax_zmx():
+    # v4.12.1 (audit round-4): removed the bare ``except Exception:
+    # return True, 'acceptable for minimal zmx'`` wrap that previously
+    # swallowed every loader failure.  The exporter+loader pair has
+    # been a round-trippable contract since v3.7.0; if it raises, that's
+    # a real regression and the validation harness should surface the
+    # exception (via the Harness ``run()`` traceback path).
     pres = la.make_singlet(50e-3, np.inf, 4e-3, 'N-BK7',
                            aperture=10e-3)
     with tempfile.TemporaryDirectory() as td:
         zmx = os.path.join(td, 'test.zmx')
         la.export_zemax_zmx(pres, zmx, wavelength=lam)
-        try:
-            rx = la.load_zemax_zmx(zmx)
-            return 'surfaces' in rx, \
-                f'loaded {len(rx.get("surfaces", []))} surfaces'
-        except Exception as e:
-            return True, \
-                f'load_zmx raised {type(e).__name__} (acceptable for minimal zmx)'
+        rx = la.load_zemax_zmx(zmx)
+    return 'surfaces' in rx, \
+        f'loaded {len(rx.get("surfaces", []))} surfaces'
 
 
 H.run('Zemax: load_zemax_zmx on generated file',

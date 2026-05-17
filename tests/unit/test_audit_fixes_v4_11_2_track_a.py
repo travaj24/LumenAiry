@@ -183,6 +183,66 @@ class TestGbdAxialOplPopulated:
             "dataclass has regressed.  See AUDIT_ROUND3_2026_05_16.md "
             "CRIT-8.")
 
+    def test_axial_opl_is_actually_non_zero(self):
+        """v4.12.1 (audit round-4): the warning-absence test above can
+        pass even if ``axial_opl`` silently fell through to None (the
+        warn is suppressed inside the try/except but the actual OPL
+        wasn't computed).  Pin a stronger condition by monkey-patching
+        ``apply_abcd_to_beamlets`` and capturing the ``axial_opl``
+        kwarg, then asserting the captured value is non-trivially
+        non-zero (it should equal n_glass * t_glass for the N-BK7
+        singlet, ~1.51 * 2e-3 = ~3e-3 m).
+        """
+        from lumenairy.propagators import gbd as _gbd_mod
+        wavelength = 1.0e-6
+        N = 32
+        dx = 8e-6
+        prescription = lm.make_singlet(
+            R1=20e-3, R2=-20e-3, d=2e-3,
+            glass='N-BK7', aperture=100e-6)
+        E_in = np.ones((N, N), dtype=np.complex128)
+
+        captured = {'axial_opl': '__unset__'}
+        original = _gbd_mod.apply_abcd_to_beamlets
+
+        def _spy(beamlets, A, B, C, D, *, wavelength, axial_opl=None,
+                 **kw):
+            captured['axial_opl'] = axial_opl
+            return original(
+                beamlets, A, B, C, D, wavelength=wavelength,
+                axial_opl=axial_opl, **kw)
+
+        _gbd_mod.apply_abcd_to_beamlets = _spy
+        try:
+            _ = lm.propagate_gbd_through_prescription(
+                E_in, dx=dx, wavelength=wavelength,
+                prescription=prescription)
+        finally:
+            _gbd_mod.apply_abcd_to_beamlets = original
+
+        assert captured['axial_opl'] != '__unset__', (
+            "apply_abcd_to_beamlets was not called -- monkey-patch "
+            "spy missed the call site.")
+        opl = captured['axial_opl']
+        assert opl is not None, (
+            "propagate_gbd_through_prescription passed axial_opl=None "
+            "to apply_abcd_to_beamlets -- the v4.11.1 silent fallthrough "
+            "regressed.  v4.11.2 expects a finite numeric value "
+            "(sum n_k * t_k).")
+        assert np.isfinite(float(opl)), (
+            f"axial_opl was non-finite: {opl!r}.")
+        # For the BK7 singlet (n_d ~ 1.51 at 1 um) of thickness 2 mm
+        # the OPL is approximately 1.51 * 2e-3 = 3.02e-3 m.  Pin
+        # ``axial_opl > 1e-3`` so a regression to silent-zero (or
+        # n*t = 1*0 = 0) is caught loudly without being fragile to
+        # the precise glass-index value.
+        assert float(opl) > 1e-3, (
+            f"axial_opl = {opl!r} m, expected > 1e-3 m for an N-BK7 "
+            f"singlet of thickness 2 mm (~3e-3 m).  Pre-v4.11.2 the "
+            f"bare-except in propagate_gbd_through_prescription "
+            f"silently fell through to axial_opl=0 (or None which "
+            f"the kernel treats as no piston).")
+
 
 # ============================================================================
 # S-LAH64 / S-LAH79 -- in-code Sellmeier removed, routed via sentinel

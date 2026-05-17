@@ -10,6 +10,55 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.12.1
+
+**Closes the three perf items deferred from v4.12.0 plus the 14
+missing regression tests from the round-4 audit.**  All 453 unit
+tests pass; full validation suite (34 files / 314 tests) passes.
+
+### Performance recovered
+
+* **`trace_jax` warm-call: 878x** (127 ms -> 0.40 ms) via a
+  pytree-registered `JaxPrescription` wrapper + tracer-detection
+  bypass that preserves `jax.grad` semantics.  v4.12.0 reverted
+  this because the flat-tuple cache produced `jax.grad = NaN`;
+  root cause turned out to be a JAX lstsq backward bug, not the
+  cache key.  Fix: bypass the jit-cache layer when any leaf is a
+  tracer.
+* **Raytrace Newton spherical fast-path: 1.50x** on 1k-ray
+  doublet traces.  v4.12.0 attempted 1.64x by skipping Newton
+  AND switching to the analytic spherical normal; the normal
+  change compounded a 1.17e-3 NumPy<->JAX drift through Maslov
+  asymptotic.  v4.12.1 ships only the Newton skip; the normal
+  computation stays bit-identical to v4.11.2.
+* **B1-10 half-pixel grid drift unified** -- five propagator-
+  family files (gbd, mhs x2, subaperture, optimize/core) switched
+  from cell-centred to pixel-centred convention, matching the
+  library-wide ASM / Fresnel / RS / sources standard.
+
+### 14 round-4 coverage-gap tests added
+
+Each v4.11.2 fix that landed in code without a pin now has one:
+`compute_psf` non-square pupil, `apply_detector` non-integer
+ratio, `find_best_focus` NaN guard, MC tolerancing `a_k>=0`
+clamp, `load_material` dispersion-drop warning, `Source.*`
+`**factory_kwargs`, `apply_real_lens_traced` M_x/M_y, NaN
+sentinel mask, `stop_index` warns, freeform RuntimeWarning,
+Zemax coord-break STOP, JAX<->NumPy phase-retrieval parity,
+Cassegrain S1/S2/S3/S5 hand-derived, Richards-Wolf vs paraxial
+Airy at low NA.
+
+### Other
+
+* 2 weak v4.11.2 tests strengthened (behavioural pins replace
+  source-string scans).
+* Residual `try/except: skipped` removed from
+  `validation/io/test_io.py:196`.
+* Both cross-backend critical tests that caught v4.12.0's reverts
+  now pass: `aberration_tensor_lg00_jax matches NumPy`
+  rel_err = 4.53e-04; `jax.grad through fit_canonical_polynomials
+  _jax is finite` grad = 1.0274e+04.
+
 ## What's new in 4.12.0
 
 **Combined performance pass + round-4 pre-PyPI audit.**

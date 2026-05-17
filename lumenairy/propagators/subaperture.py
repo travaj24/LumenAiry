@@ -242,8 +242,13 @@ def propagate_subaperture_asymptotic(
     # Output grid (used both for evaluation and for window
     # construction).
     cx, cy = output_centre
-    out_x = (_np.arange(Nx) - Nx / 2 + 0.5) * output_dx + cx
-    out_y = (_np.arange(Ny) - Ny / 2 + 0.5) * output_dx + cy
+    # v4.12.1 (B1-10): pixel-centred `(arange(N) - N/2)*dx`, matches the
+    # library-wide convention (ASM, Fresnel, RS, sources,
+    # ``apply_fresnel_curvature``).  The sub-aperture output is intended
+    # to be stacked / overlaid with ASM/HF outputs, so the grid must
+    # align pixel-for-pixel.
+    out_x = (_np.arange(Nx) - Nx / 2) * output_dx + cx
+    out_y = (_np.arange(Ny) - Ny / 2) * output_dx + cy
 
     # Estimate source waist for the asymptotic propagator.
     try:

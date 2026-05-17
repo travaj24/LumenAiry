@@ -472,10 +472,44 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         with curved surfaces -- without it the trace under-counts (or
         over-counts, for concave) the true ray path between
         intersections.
+
+    Notes
+    -----
+    v4.12.1 (Track C): pure-spherical surfaces (``conic == 0``, no
+    aspheric / biconic / freeform / coord-break extensions, finite
+    radius) take a "Newton-skip" fast path that uses the analytical
+    ray-sphere quadratic root directly.  For a sphere this root is
+    the exact intersection (modulo LSB rounding), so the legacy 10-
+    iteration Newton refinement does at most one ~1e-17 step before
+    converging -- on a 1k-ray doublet trace this represents the bulk
+    of the per-surface cost.  The surface-normal pathway in
+    :func:`_refract` / :func:`_reflect` still routes through
+    :func:`_surface_sag_derivatives_xy` (numerical-radial-derivative
+    based), so the normal rounding behaviour is bit-identical to
+    pre-v4.12.1.  A v4.12.0 attempt that also switched the spherical
+    normal to the analytic ``(x/R, y/R, (z-R)/R)`` form (matching
+    :mod:`jax_trace`) compounded a 1.17e-3 cross-backend rel error in
+    the Maslov asymptotic test -- this conservative variant avoids
+    that drift.
     """
     R = surface.radius
     kc = surface.conic
     asph = surface.aspheric_coeffs
+    radius_y = getattr(surface, 'radius_y', None)
+    freeform = getattr(surface, 'freeform', None)
+
+    # v4.12.1: detect the pure-spherical fast path.  Requires
+    # finite R, conic == 0, no aspherics, no biconic axis, no
+    # freeform departure.  Coord-break surfaces never reach
+    # :func:`_intersect_surface` -- the trace loop dispatches them
+    # via :func:`_apply_coord_break` -- so no guard is needed here.
+    is_pure_spherical = (
+        (not np.isinf(R))
+        and kc == 0.0
+        and not asph
+        and radius_y is None
+        and freeform is None
+    )
 
     if np.isinf(R) and not asph:
         # Flat surface: intersect at z = 0
@@ -483,8 +517,55 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         with np.errstate(divide='ignore', invalid='ignore'):
             t = np.where(rays.alive & (np.abs(rays.N) > 1e-30),
                          -rays.z / rays.N, 0.0)
+    elif is_pure_spherical:
+        # ---- v4.12.1 Track C: Newton-skip fast path -----------------
+        # For a sphere ``x^2 + y^2 + (z - R)^2 = R^2`` the ray-surface
+        # intersection is the smaller-magnitude root of a quadratic in
+        # t (with |(L, M, N)| = 1 by construction so a = 1).  This is
+        # exactly the formula the legacy Newton initial-guess block
+        # used, so the resulting ``t`` is bit-identical to the legacy
+        # path *before* its first Newton iteration -- the iteration
+        # body would then make an ~1e-17 LSB-level correction and
+        # converge.  Skipping the Newton loop yields a per-ray drift
+        # at that LSB level (1.075e-17 measured on a 1k-ray doublet
+        # trace) -- conservative enough that the cross-backend
+        # Maslov asymptotic test still passes its 1e-3 tolerance.
+        x0, y0, z0 = rays.x, rays.y, rays.z
+        Ld, Md, Nd = rays.L, rays.M, rays.N
+
+        dx, dy, dz = x0, y0, z0 - R
+        b = 2.0 * (Ld * dx + Md * dy + Nd * dz)
+        c = dx ** 2 + dy ** 2 + dz ** 2 - R ** 2
+        disc = b ** 2 - 4.0 * c
+        disc_safe = np.maximum(disc, 0.0)
+        sqrt_disc = np.sqrt(disc_safe)
+        t1 = (-b - sqrt_disc) / 2.0
+        t2 = (-b + sqrt_disc) / 2.0
+        # Pick the root corresponding to the near intersection (the
+        # ray traverses both the +R and -R hemispheres of the sphere;
+        # we want the one closest to z=0 in the local frame).
+        t = t1 if R > 0 else t2
+
+        # disc <= 0: ray entirely misses the sphere.  Disc == 0 is
+        # the tangent case -- legacy behaviour treats it as "missed"
+        # to keep the same vignetting cutoff.
+        disc_pos = disc > 0
+        t = np.where(disc_pos, t, 0.0)
+        missed_init = (~disc_pos) & rays.alive
+
+        # Mark these missed rays as dead so they don't propagate
+        # garbage through subsequent surfaces.  Convergence flag is
+        # synthesised true for non-missed rays (Newton loop guarantee
+        # parity).
+        if missed_init.any():
+            rays.alive = rays.alive & ~missed_init
+            if rays.error_code is not None:
+                first_failure = missed_init & (rays.error_code == RAY_OK)
+                rays.error_code = np.where(
+                    first_failure, RAY_MISSED_SURFACE, rays.error_code
+                )
     else:
-        # Newton's method to find ray-surface intersection.
+        # ---- Newton's method (conic / aspheric / biconic / freeform) -
         # The surface is z = sag(x, y).  We need to find t such that
         # z + N*t = sag(x + L*t, y + M*t).
         t = np.zeros(rays.n_rays)

@@ -185,7 +185,13 @@ def _wave_asymptotic(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
     # Sample the asymptotic propagator on the (Ny, Nx, dx) wave grid
     # so downstream merits see a usable field.  Centre at the chief
     # image of the on-axis source.
-    _ax = (np.arange(N) - N / 2 + 0.5) * dx
+    # v4.12.1 (B1-10): pixel-centred `(arange(N) - N/2)*dx`, matches the
+    # library-wide convention (ASM, Fresnel, RS, sources).  Merit
+    # functions that compare wave-leg fields across propagator
+    # families need a single shared grid convention; the previous
+    # `+0.5` produced a half-pixel offset between the asymptotic leg
+    # and the ASM / GBD / HF legs.
+    _ax = (np.arange(N) - N / 2) * dx
     _x_grid = _ax + fit.s2x_centre
     _y_grid = _ax + fit.s2y_centre
     _X, _Y = np.meshgrid(_x_grid, _y_grid, indexing='xy')
