@@ -175,8 +175,15 @@ def _scalar_pixel_reference_propagate_modal(fit, *,
         s2y_p = flat_y[idx]
         if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
                 and Nx_grid > 0 and idx % Nx_grid == 0):
+            # v4.14.1 (P1-NEW-5):  ``row_reset`` also resets the
+            # Newton warm-start at each row wrap (eliminating the
+            # cross-row chain that plausibly entered wrong-saddle
+            # basins near grid edges).  This reference loop is kept
+            # in lock-step with the public path in
+            # propagators/asymptotic.py so the 1e-10 rel pins hold.
             last_arg_detM = None
             maslov_branch = 0
+            last_v_star = (v_cx, v_cy)
 
         u1 = (s2x_p - fit.s2x_centre) / fit.s2x_halfrange
         u2 = (s2y_p - fit.s2y_centre) / fit.s2y_halfrange

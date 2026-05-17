@@ -39,21 +39,17 @@ Four audit items are pinned:
   ``converged_mask`` must be ``False``.
 
 * **P1-NEW-5** -- ``propagate_modal_asymptotic``'s ``row_reset``
-  branch resets ``last_arg_detM`` and ``maslov_branch`` but NOT
-  ``last_v_star``, so the Newton warm-start chain spans the
-  discontinuous raster jump from (x_max, y_n) to (x_min, y_{n+1}).
-  This is the v4.14.0 wrong-saddle-basin mechanism deferred to
-  v4.15+.  v4.14.1 chose **option (b) -- docstring-only** because
-  v4.14.0 ships a bit-equal pin
-  (``test_lg00_single_mode_bit_equal`` in
-  ``test_audit_fixes_v4_14_0_agent_1.py``) against a reference that
-  does NOT reset ``last_v_star`` either; changing both at once is
-  out of scope for the v4.14.1 patch pass.  The pinning test
-  asserts the **current** behaviour:  ``last_v_star`` is NOT reset
-  at row wrap (so the bit-equal pin keeps holding) and a follow-up
-  docstring note explicitly documents the deferral.  When v4.15+
-  flips to option (a), this test plus the v4.14.0 pin both need
-  to be updated together.
+  branch resets ``last_arg_detM`` and ``maslov_branch`` AND, as of
+  v4.14.1, also resets the Newton warm-start ``last_v_star``.
+  This eliminates the cross-row Newton chain that spans the
+  discontinuous raster jump from (x_max, y_n) to (x_min,
+  y_{n+1}) -- plausibly the v4.14.0 wrong-saddle-basin mechanism
+  near grid edges (largest jump in s_2).  v4.14.1 implemented
+  option (a) (the full reset) in coordination with updating the
+  v4.14.0 bit-equal pin (``test_lg00_single_mode_bit_equal`` in
+  ``test_audit_fixes_v4_14_0_agent_1.py``) so the reference loop
+  resets ``last_v_star`` too.  The pinning test asserts the new
+  behaviour:  ``last_v_star`` IS reset at row wrap.
 
 Author:  Agent A -- v4.14.1.
 """
@@ -426,35 +422,36 @@ class TestSolveEnvelopeStationaryBatchContract:
 # ===========================================================================
 
 
-class TestRowResetDoesNotResetWarmStart:
+class TestRowResetResetsWarmStart:
     """Pin the v4.14.1 ``row_reset`` documented behaviour:  resets
-    Maslov-branch state but does NOT reset the Newton warm-start.
+    Maslov-branch state AND resets the Newton warm-start at each row
+    wrap.
 
-    This pins option (b) -- docstring-only -- of the audit's P1-NEW-5.
-    The natural fix (option (a):  also reset ``last_v_star`` at row
-    wrap) is deferred to v4.15+ because the v4.14.0 bit-equal pin
-    captures pre-v4.14.0 behaviour where the warm-start chains across
-    the row wrap.  See the docstring of
-    :func:`propagate_modal_asymptotic` for the deferral rationale.
+    This pins option (a) -- the full reset -- of the audit's P1-NEW-5.
+    v4.14.1 implemented option (a) in coordination with updating the
+    v4.14.0 bit-equal reference (``test_lg00_single_mode_bit_equal``
+    in ``test_audit_fixes_v4_14_0_agent_1.py``) so the bit-equality
+    holds against the new physics-correct reference.
 
-    When v4.15+ flips to option (a), THIS test plus the v4.14.0 pin
-    (``test_audit_fixes_v4_14_0_agent_1.py::test_lg00_single_mode_bit_equal``)
-    both need to be updated together.
+    The previous behaviour (resetting only Maslov-branch state,
+    leaving ``last_v_star`` to chain across the row wrap) was the
+    plausible mechanism behind the v4.14.0 wrong-saddle-basin
+    finding near grid edges.
     """
 
-    def test_row_reset_does_not_reset_warm_start(self, monkeypatch):
+    def test_row_reset_resets_warm_start(self, monkeypatch):
         """Patch :func:`solve_envelope_stationary` to record the
         ``v2_initial`` argument it sees on every call.  Drive the
         propagator on a tiny 3x3 grid with
         ``maslov_tracking='row_reset'`` and confirm that the
-        ``v2_initial`` at the row-wrap pixel (idx=3) is the
-        ``v_star`` from the *previous* row's final pixel (idx=2),
-        NOT the pupil centre.
+        ``v2_initial`` at the row-wrap pixel (idx=3) is the pupil
+        centre ``(v_cx, v_cy)``, NOT the ``v_star`` from the
+        previous row's final pixel (idx=2).
 
-        This pins the documented v4.14.1 contract.  Should v4.15+
-        flip to option (a) (also reset ``last_v_star``), the assert
-        flips:  ``v2_initial`` at idx=3 will then equal
-        ``(v_cx, v_cy)``.
+        v4.14.1 closes P1-NEW-5 option (a):  the row wrap resets
+        the Newton warm-start to the pupil centre, eliminating the
+        cross-row chain that plausibly entered wrong-saddle basins
+        near grid edges.
         """
         # Build a real (but cheap) CanonicalPolyFit so the propagator
         # has something to run against.
@@ -514,9 +511,9 @@ class TestRowResetDoesNotResetWarmStart:
         )
 
         # The grid rasters in row-major order; idx=0,1,2 is row 0,
-        # idx=3 is the row-wrap into row 1.  The current (v4.14.1)
-        # contract is that idx=3 sees v2_initial == v_star from
-        # idx=2 (warm-start carries across row wrap), NOT (v_cx, v_cy).
+        # idx=3 is the row-wrap into row 1.  The v4.14.1 contract
+        # is that idx=3 sees v2_initial == (v_cx, v_cy) (warm-start
+        # reset at row wrap), NOT the v_star from idx=2.
         assert len(calls) >= 4, (
             f'expected at least 4 solver calls; got {len(calls)}'
         )
@@ -527,29 +524,29 @@ class TestRowResetDoesNotResetWarmStart:
             f'pixel 0: v2_initial[0] {vi_first[0]} != v_cx {v_cx}'
         )
         # Pre-condition for this pin:  the last pixel of row 0
-        # converged off-centre, so warm-start carrying gives a
-        # measurably different v2_initial at the row-wrap pixel.
+        # converged off-centre, so if the warm-start were
+        # incorrectly carrying (pre-v4.14.1 behaviour) we would
+        # see v2_initial at idx=3 different from the centre.
         last_row0_v_star = return_values[2]
         assert (abs(last_row0_v_star[0] - v_cx) > 1e-30
                 or abs(last_row0_v_star[1] - v_cy) > 1e-30), (
             'test setup failure:  row 0 v_star never moved off centre'
         )
         # The row-wrap pixel (idx=3) must currently see
-        # v2_initial == v_star from idx=2.
+        # v2_initial == (v_cx, v_cy).
         vi_wrap = calls[3]['v2_initial']
         assert vi_wrap is not None, (
             'pixel 3 (row wrap): v2_initial was None'
         )
-        assert abs(vi_wrap[0] - last_row0_v_star[0]) < 1e-30, (
-            f'P1-NEW-5 (option b):  pixel 3 v2_initial[0] '
-            f'{vi_wrap[0]} != last_row0_v_star[0] '
-            f'{last_row0_v_star[0]}.  Did v4.15+ flip to option (a)?  '
-            f'If so, also update '
-            f'test_audit_fixes_v4_14_0_agent_1.py::'
-            f'test_lg00_single_mode_bit_equal.'
+        assert abs(vi_wrap[0] - v_cx) < 1e-30, (
+            f'P1-NEW-5 (option a, v4.14.1):  pixel 3 v2_initial[0] '
+            f'{vi_wrap[0]} != v_cx {v_cx}.  row_reset must reset '
+            f'the Newton warm-start to the pupil centre at each '
+            f'row wrap.  If this test fails after v4.14.1, the '
+            f'row_reset block in propagators/asymptotic.py is '
+            f'missing the ``last_v_star = (v_cx, v_cy)`` line.'
         )
-        assert abs(vi_wrap[1] - last_row0_v_star[1]) < 1e-30, (
-            f'P1-NEW-5 (option b):  pixel 3 v2_initial[1] '
-            f'{vi_wrap[1]} != last_row0_v_star[1] '
-            f'{last_row0_v_star[1]}'
+        assert abs(vi_wrap[1] - v_cy) < 1e-30, (
+            f'P1-NEW-5 (option a, v4.14.1):  pixel 3 v2_initial[1] '
+            f'{vi_wrap[1]} != v_cy {v_cy}'
         )

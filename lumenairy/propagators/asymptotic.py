@@ -2489,26 +2489,21 @@ def propagate_modal_asymptotic(
           ``maslov_tracking='1d_raster'`` and verify against a
           ground-truth direct quadrature.
 
-          v4.14.1 (P1-NEW-5) note:  ``row_reset`` resets ONLY the
+          v4.14.1 (P1-NEW-5) closure:  ``row_reset`` resets BOTH the
           Maslov-branch state (``last_arg_detM``, ``maslov_branch``)
-          at each row wrap; it does NOT reset the Newton warm-start
-          ``last_v_star``.  The warm-start chain therefore spans the
-          discontinuous raster jump from (x_max, y_n) to (x_min,
-          y_{n+1}), which is plausibly the mechanism behind the
-          v4.14.0 "wrong-saddle-basin" finding near grid edges
-          (largest jump in s_2).  Resetting the warm-start at row
-          wrap is the natural fix but is deferred to v4.15+ because
-          the v4.14.0 bit-equal pin
+          AND the Newton warm-start ``last_v_star`` at each row
+          wrap.  The previous (pre-v4.14.1) behaviour left the
+          Newton chain spanning the discontinuous raster jump from
+          (x_max, y_n) to (x_min, y_{n+1}), which is plausibly the
+          mechanism behind the v4.14.0 "wrong-saddle-basin" finding
+          near grid edges (largest jump in s_2).  Resetting the
+          warm-start to the pupil centre at each row wrap eliminates
+          that cross-row chain.  The v4.14.0 bit-equal pin
           (:func:`test_lg00_single_mode_bit_equal` in
-          ``test_audit_fixes_v4_14_0_agent_1.py``) captures the
-          pre-v4.14.0 reference whose ``row_reset`` does not reset
-          ``last_v_star`` either; updating both at once is out of
-          scope for the v4.14.1 patch pass.  Callers worried about
-          the wrong-saddle basin should pass
-          ``maslov_tracking='principal'`` (no warm-start
-          continuity needed since no unwrap state) or stick with
-          per-row warm-starts if they verify their grid does not
-          enter the basin.
+          ``test_audit_fixes_v4_14_0_agent_1.py``) was updated to
+          the new behaviour in the same v4.14.1 patch (the
+          reference loop now resets ``last_v_star`` at row wrap
+          too).
 
     Returns
     -------
@@ -2614,30 +2609,26 @@ def propagate_modal_asymptotic(
         s2y_p = flat_y[idx]
         if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
                 and Nx_grid > 0 and idx % Nx_grid == 0):
-            # v4.14.1 (P1-NEW-5):  ``row_reset`` deliberately resets
-            # ONLY the Maslov-branch state at the start of each row;
-            # the Newton warm-start ``last_v_star`` is intentionally
-            # left carrying across the raster row-wrap.  Resetting
-            # ``last_v_star`` is the natural fix for the v4.14.0
-            # wrong-saddle-basin finding (the warm-start chain
-            # spans the discontinuous raster jump from (x_max, y_n)
-            # to (x_min, y_{n+1}), which is plausibly where the
-            # wrong saddle is entered) but is deferred to v4.15+
-            # because v4.14.0 ships a bit-equal pin
+            # v4.14.1 (P1-NEW-5):  ``row_reset`` resets ALL warm-start
+            # state at the start of each raster row -- the Maslov-branch
+            # state (``last_arg_detM``, ``maslov_branch``) AND the
+            # Newton warm-start ``last_v_star``.  The previous
+            # behaviour (resetting only the Maslov-branch state) left
+            # the Newton chain spanning the discontinuous raster jump
+            # from (x_max, y_n) to (x_min, y_{n+1}), which is
+            # plausibly where wrong-saddle basins were entered.
+            # Resetting ``last_v_star`` to the pupil centre at each
+            # row wrap eliminates that cross-row chain.
+            #
+            # The v4.14.0 bit-equal pin
             # (``test_lg00_single_mode_bit_equal`` in
-            # ``test_audit_fixes_v4_14_0_agent_1.py``) against the
-            # pre-v4.14.0 scalar reference whose ``row_reset`` branch
-            # does NOT reset ``last_v_star`` either.  Changing this
-            # behaviour here would break the pin without updating
-            # the reference, which is out of scope for the v4.14.1
-            # patch (the reference is itself a snapshot of the
-            # pre-v4.14.0 propagator and lives in the test file).
-            # When the v4.15 wrong-saddle-basin investigation
-            # concludes, this branch should add
-            # ``last_v_star = (v_cx, v_cy)`` and the v4.14.0 pin
-            # should be updated to the new physics-correct reference.
+            # ``test_audit_fixes_v4_14_0_agent_1.py``) was updated to
+            # the new behaviour as part of v4.14.1 (the reference
+            # loop in that test file also resets ``last_v_star`` at
+            # row wrap so the bit-equality holds).
             last_arg_detM = None
             maslov_branch = 0
+            last_v_star = (v_cx, v_cy)
 
         # Skip points outside the fit's training box
         u1 = (s2x_p - fit.s2x_centre) / fit.s2x_halfrange

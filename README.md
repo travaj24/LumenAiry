@@ -16,7 +16,7 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 v4.14.0 shipped 7 perf wins + 6 new public functions + 80
 parametrized dispatcher pins, but the audit found 1 P0 silent-
 wrong-physics bug in the 77× LG/HG mode-stack cache key plus 6
-P1s.  v4.14.1 closes the P0 + 5 of 6 P1s + the top-priority P2s.
+P1s.  **v4.14.1 closes the P0 + all 6 P1s + the top-priority P2s.**
 911 unit tests pass (up from 858); 34/34 validation files pass.
 
 ### P0 closure — LG/HG mode-stack cache key
@@ -60,9 +60,13 @@ optimisation loops where `dx` is a free variable.  v4.14.1 adds
   `ee[0] = 0 always` is false; `ee[0]` equals the centre-pixel
   intensity contribution.
 
-* **Deferred to v4.15+ (P1-NEW-5)** — `row_reset` Newton warm-
-  start coordinated update (the existing v4.14.0 bit-equal pin
-  would break by ~2.9e-9 rel).
+* **`row_reset` resets the Newton warm-start (P1-NEW-5)** — the
+  `row_reset` branch now resets `last_v_star = (v_cx, v_cy)` at
+  each raster row wrap, eliminating the cross-row Newton chain
+  that plausibly entered wrong-saddle basins near grid edges.
+  Coordinated with the fix, the bit-equal pin and the older
+  1e-10 rel pins both had their inline scalar references updated
+  to reset `last_v_star` at row wrap too.
 
 ### Tier-2 follow-ups
 

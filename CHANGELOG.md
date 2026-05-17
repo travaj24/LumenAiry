@@ -7,14 +7,14 @@ All notable changes to the core library are documented here.
 **Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**  The
 audit found 1 P0 (silent-wrong physics in the 77× LG/HG mode-stack
 cache key) + 6 P1s + 10 P2s + 8 P3s + 7 doc-drift items.  v4.14.1
-closes the P0, 5 of 6 P1s (the 6th — `row_reset` Newton warm-start
-— deferred to v4.15+ with an explicit docstring note + xfail-style
-marker), the top-priority P2s (cache locks, monkey-patch removal,
-final `0+0j`/`1+0j` sweep, `fiber_mode` in the dispatcher pin),
-and all 7 doc-drift items (4 retroactively corrected in the
-v4.14.0 entry below; 3 closed by the v4.14.1 fixes themselves).
-**911 unit tests pass** (up from 858); 34/34 validation files
-pass.
+closes the P0, **all 6 P1s** (including P1-NEW-5 `row_reset`
+Newton warm-start via the coordinated option-(a) fix across the
+public path and 3 reference-loop pins), the top-priority P2s (cache
+locks, monkey-patch removal, final `0+0j`/`1+0j` sweep,
+`fiber_mode` in the dispatcher pin), and all 7 doc-drift items (4
+retroactively corrected in the v4.14.0 entry below; 3 closed by the
+v4.14.1 fixes themselves).  **911 unit tests pass** (up from 858);
+34/34 validation files pass.
 
 ### Breaking changes — none
 
@@ -91,15 +91,25 @@ p_max, ell_max` but different `dx` return distinct mode stacks.
   pinning test exercises a delta-like centre-pixel input and
   confirms the threshold-zero short-circuit returns 0.
 
-* **P1-NEW-5 deferred to v4.15+** — `row_reset` doesn't reset
-  `last_v_star` in the Maslov tracking.  Option (a) (also reset
-  `v_star`) breaks the existing `test_lg00_single_mode_bit_equal`
-  pin by ~2.9e-9 rel.  Option (b) (docstring-only deferral) is
-  the v4.14.1 path: explicit docstring note + an inline comment at
-  the row-wrap branch documenting the deferral.  Pinning test
-  asserts the CURRENT (warm-start carries across row wrap)
-  behaviour with a clear marker telling v4.15+ to flip the
-  assertion when the coordinated public-path update lands.
+* **P1-NEW-5: `row_reset` resets the Newton warm-start.**
+  v4.14.0's `row_reset` branch reset Maslov-branch state
+  (`last_arg_detM`, `maslov_branch`) at each raster row wrap but
+  left the Newton warm-start `last_v_star` chaining across the
+  discontinuous jump from (x_max, y_n) to (x_min, y_{n+1}) —
+  plausibly the mechanism behind the v4.14.0 "wrong-saddle-basin"
+  finding near grid edges (largest jump in s_2).  v4.14.1 chooses
+  **option (a)** of the audit recommendation: the `row_reset`
+  branch now resets `last_v_star = (v_cx, v_cy)` at each row wrap
+  too.  Coordinated with the fix, the bit-equal pin in
+  `test_audit_fixes_v4_14_0_agent_1.py::test_lg00_single_mode
+  _bit_equal` and the older 1e-10 rel pins in
+  `test_perf_v4_12_0_asymptotic.py::TestPropagateModalAsymptotic
+  Correctness` were updated — their inline scalar references
+  also reset `last_v_star` at row wrap so the bit-equality holds
+  against the new physics-correct behaviour.  The v4.14.1 marker
+  test (formerly `TestRowResetDoesNotResetWarmStart`, now
+  `TestRowResetResetsWarmStart`) flipped its assertion to pin the
+  new contract.
 
 ### Tier-2 closures
 
@@ -166,8 +176,7 @@ accurate.
 
 ### Deferred to v4.15+
 
-`row_reset` Newton warm-start coordinated update (P1-NEW-5),
-modal asymptotic per-pixel vectorisation public switch, Source
+Modal asymptotic per-pixel vectorisation public switch, Source
 factory signature normalisation, `system.evaluate(prescription,
 source, ...)` ergonomic entry.  See [`ROADMAP.md`](ROADMAP.md)
 for the full forward plan.

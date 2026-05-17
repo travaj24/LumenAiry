@@ -356,8 +356,16 @@ class Test1APropagateModalAsymptoticStillBitEqual:
             s2x_p = flat_x[idx]
             s2y_p = flat_y[idx]
             if s2x_arr.ndim >= 2 and idx % Nx_grid == 0:
+                # v4.14.1 (P1-NEW-5): the public ``row_reset`` branch
+                # in propagators/asymptotic.py was updated to also
+                # reset ``last_v_star`` at each row wrap (eliminating
+                # the cross-row Newton warm-start chain that
+                # plausibly entered wrong-saddle basins near grid
+                # edges).  This reference loop is kept in lock-step
+                # so the bit-equal pin continues to hold.
                 last_arg_detM = None
                 maslov_branch = 0
+                last_v_star = (v_cx, v_cy)
             u1 = (s2x_p - fit.s2x_centre) / fit.s2x_halfrange
             u2 = (s2y_p - fit.s2y_centre) / fit.s2y_halfrange
             if abs(u1) > 1.0 or abs(u2) > 1.0:
