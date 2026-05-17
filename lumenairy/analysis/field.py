@@ -1066,13 +1066,25 @@ def petzval_radius(
     from ..glass import get_glass_index
     surfaces = _resolve_surfaces(system)
     inv_R = 0.0
+    # 4.13.2 (P1-NEW-C): track Welford mirror parity so multi-mirror
+    # systems carry the correct effective index sign through every
+    # surface downstream of an odd number of mirrors.  Mirrors the
+    # canonical convention in
+    # :func:`lumenairy.raytrace.seidel_analysis.seidel_coefficients`.
+    # Pre-4.13.2 ``surfaces_from_prescription`` returned mirrors with
+    # ``glass_before == glass_after`` (so ``n1 == n2``) and the
+    # skip-on-equal-index branch silently dropped every mirror's
+    # Petzval contribution -- 100% wrong for any catadioptric /
+    # Cassegrain / Schwarzschild design.
+    mirror_parity = 0  # 0 = unflipped, 1 = post-odd-mirror (n -> -n)
     for s in surfaces:
         R = s.radius
         if not np.isfinite(R) or R == 0:
             continue
+        sign = 1.0 if mirror_parity == 0 else -1.0
         try:
-            n1 = float(get_glass_index(s.glass_before, wavelength))
-            n2 = float(get_glass_index(s.glass_after, wavelength))
+            n1 = sign * float(get_glass_index(s.glass_before, wavelength))
+            n2 = sign * float(get_glass_index(s.glass_after, wavelength))
         except (KeyError, ValueError, TypeError) as _exc:
             # get_glass_index raises KeyError on unknown glass /
             # catalogue, ValueError on out-of-range wavelength, and
@@ -1092,6 +1104,16 @@ def petzval_radius(
                 f"https://github.com/travaj24/LumenAiry/issues",
                 RuntimeWarning, stacklevel=2)
             return float('nan')
+        # Welford mirror handling: treat a mirror as a refracting
+        # surface with ``n_after = -n_before`` so the Petzval sum
+        # picks up the reflective contribution.  After the mirror,
+        # flip the parity so all downstream legs use the negated
+        # effective index.
+        if getattr(s, 'is_mirror', False):
+            n2 = -n1
+            inv_R += (n2 - n1) / (n1 * n2 * R)
+            mirror_parity ^= 1
+            continue
         if n1 == n2:
             continue
         inv_R += (n2 - n1) / (n1 * n2 * R)

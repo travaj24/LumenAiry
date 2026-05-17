@@ -1908,6 +1908,11 @@ def load_codev_seq(filepath: str,
     surfaces_raw = []
     current = None
     stop_index_raw = None
+    # v4.13.2 (C-P0-4): also capture the optional SI image-plane block
+    # so callers can recover the BFL from a `.seq` file that uses the
+    # standard CODE V convention of encoding the back-focal length on
+    # the image-plane THI.
+    image_plane_thi = None
 
     def _unit_to_meters(v):
         if v is None:
@@ -1916,9 +1921,14 @@ def load_codev_seq(filepath: str,
                 'IN': 0.0254}[units] * float(v)
 
     def _flush():
-        nonlocal current
-        if current is not None and current.get('kind') == 'refracting':
-            surfaces_raw.append(current)
+        nonlocal current, image_plane_thi
+        if current is not None:
+            if current.get('kind') == 'refracting':
+                surfaces_raw.append(current)
+            elif current.get('kind') == 'image':
+                # Preserve the image-plane THI for BFL recovery.
+                if current.get('thickness') is not None:
+                    image_plane_thi = current.get('thickness')
         current = None
 
     i = 0
@@ -2070,7 +2080,13 @@ def load_codev_seq(filepath: str,
     # not the prescription's `thicknesses` list (library convention is
     # that `thicknesses[i]` is the gap AFTER surface i, stopping at the
     # last refracting surface; the final image-plane gap is the BFL and
-    # not part of the prescription).
+    # not part of the prescription).  v4.13.2 (C-P0-4): capture the
+    # last surface's THI as ``back_focal_length`` (image distance) so
+    # externally-authored `.seq` files where the BFL is encoded as the
+    # last surface's THI -- a legitimate CODE V convention -- no longer
+    # silently drop the BFL on read.  Round-trips through
+    # :func:`export_codev_seq` are now lossless.
+    last_surface_thickness = 0.0
     for i, s in enumerate(surfaces_raw):
         surf_dict = {
             'radius': s.get('radius', float('inf')),
@@ -2084,6 +2100,8 @@ def load_codev_seq(filepath: str,
         surfaces.append(surf_dict)
         if i < len(surfaces_raw) - 1:
             thicknesses.append(s.get('thickness', 0.0))
+        else:
+            last_surface_thickness = s.get('thickness', 0.0)
         prev_glass = s.get('glass', 'air')
 
     # Figure out the stop index (0-based among refracting surfaces).
@@ -2103,6 +2121,15 @@ def load_codev_seq(filepath: str,
         result['wavelength'] = wavelength_m
     if stop_index is not None:
         result['stop_index'] = stop_index
+    # v4.13.2 (C-P0-4): preserve the BFL.  Prefer the SI image-plane
+    # THI if present (matches what :func:`export_codev_seq` writes);
+    # otherwise fall back to the last refracting surface's THI, which
+    # is the convention used by some external CODE V authors.
+    bfl = image_plane_thi
+    if bfl is None or bfl == 0.0:
+        bfl = last_surface_thickness
+    if bfl is not None and bfl != 0.0 and np.isfinite(bfl):
+        result['back_focal_length'] = float(bfl)
     return result
 
 
@@ -2351,6 +2378,10 @@ def load_quadoa_qos(filepath: str,
     thicknesses = []
     stop_index = None
     semi_diameters = []
+    # v4.13.2 (C-P0-5): track the last surface's THI as a BFL
+    # fallback for foreign `.qos` files that don't write the top-level
+    # ``back_focal_length`` field.
+    last_surface_thickness = 0.0
     known_keys = {
         'index', 'radius', 'radius_y', 'conic', 'conic_y',
         'aspheric_coeffs', 'aspheric_coeffs_y',
@@ -2385,8 +2416,15 @@ def load_quadoa_qos(filepath: str,
         if extras:
             surf['_extras'] = extras
         surfaces.append(surf)
+        # v4.13.2 (C-P0-5): capture the last surface's THI as the
+        # fallback BFL so externally-authored `.qos` files that encode
+        # the BFL on the final surface (instead of the top-level
+        # ``back_focal_length`` field) do not silently drop it on read.
         if i < len(raw) - 1:
             thicknesses.append(float(s.get('thickness', 0.0)) * inv_scale)
+        else:
+            last_surface_thickness = (
+                float(s.get('thickness', 0.0)) * inv_scale)
         if s.get('is_stop'):
             stop_index = i
 
@@ -2413,6 +2451,22 @@ def load_quadoa_qos(filepath: str,
         result['stop_index'] = stop_index
     if semi_diameters:
         result['has_semi_diameters'] = True
+    # v4.13.2 (C-P0-5): preserve the BFL.  Prefer the top-level
+    # ``back_focal_length`` field (what :func:`export_quadoa_qos`
+    # writes); otherwise fall back to the last surface's THI for
+    # foreign `.qos` files that follow the trailing-THI convention.
+    bfl_raw = doc.get('back_focal_length')
+    if bfl_raw is not None:
+        try:
+            bfl_val = float(bfl_raw) * inv_scale
+            if np.isfinite(bfl_val) and bfl_val != 0.0:
+                result['back_focal_length'] = bfl_val
+        except (TypeError, ValueError):
+            pass
+    if 'back_focal_length' not in result:
+        if (last_surface_thickness != 0.0
+                and np.isfinite(last_surface_thickness)):
+            result['back_focal_length'] = float(last_surface_thickness)
     return result
 
 

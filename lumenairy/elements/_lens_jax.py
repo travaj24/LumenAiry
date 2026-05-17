@@ -23,7 +23,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -311,6 +311,7 @@ def apply_real_lens_traced_jax(
     prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     ray_subsample: int = 8,
     cheb_order: int = 10,
     newton_iters: int = 12,
@@ -350,6 +351,15 @@ def apply_real_lens_traced_jax(
         Same format as :func:`apply_real_lens`.
     wavelength : float
     dx : float
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.  Accepted for API
+        symmetry with the rest of the lens family; the JAX traced
+        ray-subsample / Chebyshev fit / Newton inversion paths
+        currently require ``dy == dx`` and will raise otherwise.  Use
+        :func:`apply_real_lens` (NumPy) for anamorphic grids -- it
+        honours ``dy != dx`` end-to-end.  Added in v4.13.2 (audit
+        P1-NEW-E) to close the JAX-side gap left by the v4.13.0 L3
+        sweep.
     ray_subsample : int, default 8
         Coarse-grid subsampling factor for the entrance ray launch.
         Identical meaning to the NumPy version.
@@ -443,6 +453,20 @@ def apply_real_lens_traced_jax(
     if Ny != Nx:
         raise ValueError("apply_real_lens_traced_jax requires a square grid")
     N = int(Nx)
+
+    # v4.13.2 (audit P1-NEW-E): the JAX twin's ray-subsample +
+    # Chebyshev tensor-product fit + Newton inversion paths all
+    # assume an isotropic square grid (dx == dy).  Enforce the same
+    # contract the NumPy ``apply_real_lens_traced`` documents so
+    # anamorphic dy is rejected loudly rather than silently squared
+    # to dx.
+    if dy is None:
+        dy = dx
+    if abs(float(dy) - float(dx)) > 1e-15 * max(abs(float(dx)), 1.0):
+        raise ValueError(
+            "apply_real_lens_traced_jax: dy != dx not supported on the "
+            f"JAX path (got dx={dx!r}, dy={dy!r}); use the NumPy variant "
+            "apply_real_lens for anamorphic grids.")
 
     aperture = lens_prescription.get('aperture_diameter')
     pres_no_ap = dict(lens_prescription)
@@ -580,6 +604,7 @@ def apply_real_lens_maslov_jax(
     prescription: Dict[str, Any],
     wavelength: float,
     dx: float,
+    dy: Optional[float] = None,
     ray_subsample: int = 8,
     cheb_order: int = 10,
     newton_iters: int = 12,
@@ -659,6 +684,17 @@ def apply_real_lens_maslov_jax(
     if Ny != Nx:
         raise ValueError("apply_real_lens_maslov_jax requires a square grid")
     N = int(Nx)
+
+    # v4.13.2 (audit P1-NEW-E): same square-grid constraint as the
+    # traced twin -- the Chebyshev fit + Newton inversion + Maslov
+    # radial sampler all assume isotropic dx == dy.
+    if dy is None:
+        dy = dx
+    if abs(float(dy) - float(dx)) > 1e-15 * max(abs(float(dx)), 1.0):
+        raise ValueError(
+            "apply_real_lens_maslov_jax: dy != dx not supported on the "
+            f"JAX path (got dx={dx!r}, dy={dy!r}); use the NumPy variant "
+            "apply_real_lens for anamorphic grids.")
 
     aperture = lens_prescription.get('aperture_diameter')
     pres_no_ap = dict(lens_prescription)

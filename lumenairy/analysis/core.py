@@ -283,7 +283,12 @@ def radial_power_bands(
     return powers
 
 
-def strehl_ratio(E: np.ndarray, E_ref: np.ndarray, dx: float) -> float:
+def strehl_ratio(
+    E: np.ndarray,
+    E_ref: np.ndarray,
+    dx: float,
+    dy: Optional[float] = None,
+) -> float:
     """
     Compute the Strehl ratio of a field relative to a reference field.
 
@@ -292,12 +297,18 @@ def strehl_ratio(E: np.ndarray, E_ref: np.ndarray, dx: float) -> float:
 
     Parameters
     ----------
-    E : ndarray, complex, shape (N, N)
+    E : ndarray, complex, shape (Ny, Nx)
         Aberrated field (e.g. at the focal plane).
-    E_ref : ndarray, complex, shape (N, N)
+    E_ref : ndarray, complex, shape (Ny, Nx)
         Reference (diffraction-limited) field at the same plane.
     dx : float
-        Grid spacing [m].
+        Grid spacing along x [m].
+    dy : float, optional
+        Grid spacing along y [m].  Defaults to ``dx`` (square grid).
+        v4.13.2 added this kwarg so anamorphic / non-square grids no
+        longer mis-scale the per-pixel area in the total-power
+        normalisation.  Backward compatible: callers that omit ``dy``
+        get identical behaviour to v4.13.1.
 
     Returns
     -------
@@ -308,14 +319,30 @@ def strehl_ratio(E: np.ndarray, E_ref: np.ndarray, dx: float) -> float:
     Notes
     -----
     ``Strehl = max(|E|^2) / max(|E_ref|^2)`` after both fields have been
-    normalised to equal total power.
+    normalised to equal total power.  The Strehl ratio is dimensionless
+    and the ``dx * dy`` factor cancels in the ratio, but using the
+    correct pixel area keeps any external comparison consistent.
     """
     xp = _xp_of(E, E_ref)
     I = xp.abs(E) ** 2
     I_ref = xp.abs(E_ref) ** 2
 
-    P = float(xp.sum(I) * dx ** 2)
-    P_ref = float(xp.sum(I_ref) * dx ** 2)
+    # 4.13.2 (C-P1-1): use ``dx * dy`` for the pixel area when ``dy``
+    # is explicitly provided.  Pre-4.13.2 the v4.13.0 L3 sweep missed
+    # this site and any anamorphic / non-square grid produced a wrong
+    # total-power normalisation.  When ``dy`` is omitted we keep the
+    # historical ``dx ** 2`` form bit-for-bit so callers that did not
+    # pass a ``dy`` see exactly identical numerics to v4.13.1 (the
+    # Strehl ratio is dimensionless and ``dx ** 2 == dx * dx`` is
+    # numerically equal but uses a different IEEE rounding pathway
+    # than ``dx * dy``; preserving the form keeps a small floating-
+    # point identity that downstream tests rely on).
+    if dy is None:
+        pixel_area = dx ** 2
+    else:
+        pixel_area = dx * dy
+    P = float(xp.sum(I) * pixel_area)
+    P_ref = float(xp.sum(I_ref) * pixel_area)
 
     if P_ref == 0 or P == 0:
         return 0.0
@@ -1078,6 +1105,7 @@ def polychromatic_psf(
     normalize: str = 'power',
     bandlimit: bool = True,
     return_components: bool = False,
+    dy: Optional[float] = None,
 ) -> Tuple[np.ndarray, float, Dict[str, Any]]:
     """Accumulate a polychromatic PSF on a common image-plane grid.
 
@@ -1245,8 +1273,18 @@ def polychromatic_psf(
         if components is not None:
             components[i] = I
 
+    # 4.13.2 (C-P1-1): use ``dx * dy`` for the pixel-area normalisation
+    # when ``dy`` is explicitly provided; fall back to ``dx ** 2`` when
+    # the caller omits ``dy`` to preserve bit-for-bit backward
+    # compatibility with the v4.13.1 default-square path.  Pre-4.13.2
+    # the v4.13.0 L3 sweep missed this site and anamorphic input
+    # grids mis-scaled the integrated PSF power.
+    if dy is None:
+        pixel_area = dx ** 2
+    else:
+        pixel_area = dx * dy
     if normalize == 'power':
-        total = float(psf_acc.sum() * dx ** 2)
+        total = float(psf_acc.sum() * pixel_area)
         if total > 0:
             psf_out = psf_acc / total
         else:

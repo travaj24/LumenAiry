@@ -186,7 +186,20 @@ def apply_mirror(E_in, wavelength, dx, radius=None, conic=0.0,
         # Double-pass OPD: ray travels sag down to the surface and sag
         # back up, so total extra path = 2 * sag.
         # Phase delay (negative sign, same convention as apply_real_lens).
-        phase = -2 * k * sag
+        opd = 2.0 * sag
+        # v4.13.2 (audit P1-NEW-F): zero the OPD on undefined-surface
+        # pixels (NaN sentinel from the conic-domain check above for
+        # hyperbolic conics where (1+k)*h_sq/R^2 >= 0.9999, or from
+        # _surface_sag_general on the NumPy path with the same
+        # contract).  Without this, ``exp(1j * NaN) = NaN`` poisons
+        # E and propagates NaN to every pixel during the next ASM
+        # step.  Matches the apply_real_lens NaN guard at
+        # _lens_real.py:704-705.  The caller's aperture mask should
+        # already zero the field on the same pixels, so a 0-OPD
+        # phase screen is a safe neutral.
+        if bool(xp.any(xp.isnan(opd))):
+            opd = xp.where(xp.isnan(opd), 0.0, opd)
+        phase = -k * opd
         # Compute exp() in the high-precision dtype first, then cast
         # back to E's dtype so a complex64 input stays complex64.
         phase_exp = xp.exp(1j * phase)

@@ -1625,6 +1625,31 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
         field_points = [(0.0, 0.0)]
 
     targets_kv = [(tuple(k), float(v)) for k, v in targets.items()]
+    # v4.13.2 (C-P0-1): aberration_tensor_lg00_jax only computes the
+    # (0, 0) -> (0, 0) -> (0, 0) coefficient.  General (p, ell)
+    # targets need a full aberration_tensor_jax that does not yet
+    # exist.  Reject non-(0, 0) targets at construction time with a
+    # clear migration message so the silent ``pass``-only loop bug
+    # (the merit returning the same piston sum regardless of the
+    # ``targets`` dict) cannot recur.
+    non_piston = [k for k, _ in targets_kv if k != (0, 0)]
+    if non_piston:
+        raise NotImplementedError(
+            f"make_lg_aberration_merit_jax: targets other than "
+            f"(0, 0) are not supported in the JAX path "
+            f"(got {non_piston}).  aberration_tensor_lg00_jax "
+            f"computes the (0, 0) Strehl amplitude only.  Use the "
+            f"NumPy sibling :class:`LGAberrationMerit` for general "
+            f"(p, ell) targets, or restrict ``targets`` to "
+            f"``{{(0, 0): wgt}}``.")
+    # Piston weight: default to 1.0 if (0, 0) is absent so the merit
+    # still has well-defined semantics (matches the LGAberrationMerit
+    # behaviour of always including piston in output_modes).
+    piston_weight = 1.0
+    for k, w in targets_kv:
+        if k == (0, 0):
+            piston_weight = float(w)
+            break
     nominal_w_s = float(w_s)
     nominal_w_p = float(w_p)
     nominal_lambda = float(wavelength)
@@ -1632,6 +1657,12 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
     # Use these defaults for any None placeholders in build_args.
     nominal = (nominal_lambda, 50e-6, 0.05, nominal_obj_d,
                 nominal_w_s, nominal_w_p)
+
+    # Import the IFT-based envelope solver so v_star is JAX-traceable
+    # (required positional argument of aberration_tensor_lg00_jax).
+    from ..propagators.asymptotic import (
+        solve_envelope_stationary_jax_ift,
+    )
 
     def fn(*args):
         # Resolve None placeholders to nominals.
@@ -1651,22 +1682,24 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
                 s2_img = image_points[ifp]
             else:
                 s2_img = (fit.s2x_centre, fit.s2y_centre)
-            for (p, ell), wgt in targets_kv:
-                if (p, ell) == (0, 0):
-                    # Skip piston -- it's already part of the
-                    # output_modes default in the wrapper.
-                    pass
-                # aberration_tensor_lg00_jax returns the (0,0)
-                # element only; for general (p, ell) we'd need a
-                # full aberration_tensor_jax.  For now restrict
-                # targets to (p, ell) == (0, 0) (Strehl).  Anything
-                # else falls back to FD via the regular merit.
-            res = aberration_tensor_lg00_jax(
-                fit, s2_image=s2_img, source_point=tuple(src),
+            # v_star is required positionally; compute via the
+            # IFT-based solver so gradients still flow back through
+            # build_args inputs (w_s, w_p, s2, source_point).
+            v_star = solve_envelope_stationary_jax_ift(
+                fit, s2_img, tuple(src),
                 w_s=w_s_local, w_p=w_p_local,
                 v2_centre=(fit.v2x_centre, fit.v2y_centre))
-            # res is a complex scalar (the L_{(0,0),(0,0)} element)
-            total = total + jnp.abs(res) ** 2
+            res = aberration_tensor_lg00_jax(
+                fit, s2_img, v_star,
+                source_point=tuple(src),
+                w_s=w_s_local, w_p=w_p_local,
+                v2_centre=(fit.v2x_centre, fit.v2y_centre))
+            # res is a complex scalar (the L_{(0,0),(0,0)} element);
+            # weight by the user-supplied piston weight so changing
+            # ``targets={(0, 0): w}`` actually scales the merit
+            # linearly in w (the pre-fix code ignored ``wgt`` and
+            # always returned the same |L|^2 sum).
+            total = total + piston_weight * (jnp.abs(res) ** 2)
         return total
 
     return JaxMeritTerm(
@@ -2048,12 +2081,16 @@ class MultiWavelengthMerit(MeritTerm):
                         RuntimeWarning, stacklevel=2)
             per_wl_strehl.append(sub_strehl)
             per_wl_rms.append(sub_rms)
+            # v4.13.2 (C-P1-2): thread ctx.x so JaxMeritTerm sub-
+            # merits with build_args reach the analytic-gradient
+            # path instead of legacy fn(ctx) -> FD.
             sub_ctx = EvaluationContext(
                 prescription=ctx.prescription, wavelength=wl,
                 N=ctx.N, dx=ctx.dx, efl=float(efl), bfl=float(bfl),
                 seidel=ctx.seidel, E_exit=sub_E_exit,
                 opd_map=sub_opd, strehl_best=sub_strehl,
-                rms_radius_best=sub_rms, z_best=sub_z)
+                rms_radius_best=sub_rms, z_best=sub_z,
+                x=getattr(ctx, 'x', None))
             total = total + self.sub_merit.evaluate(sub_ctx)
         ctx.efls_per_wavelength = np.array(efls)
         ctx.strehls_per_wavelength = np.array(per_wl_strehl)
@@ -2082,26 +2119,53 @@ class MultiFieldMerit(MeritTerm):
 
     Parameters
     ----------
-    field_angles : sequence of float
+    field_angles : sequence of float OR sequence of (theta_x, theta_y)
         Field angles in radians (half-angle from optical axis).
-        ``0`` = on-axis.
+        ``0`` = on-axis.  A scalar entry is interpreted as a pure
+        Y-axis tilt (preserved for back-compatibility); a
+        ``(theta_x, theta_y)`` tuple is interpreted as an off-axis
+        plane wave with independent X and Y tilts.  The scalar form
+        emits a one-shot :class:`DeprecationWarning`.
     sub_merit : MeritTerm
         Wave-based merit term to evaluate at each field.
     weight : float
     """
 
     name = 'MultiField'
+    # Class-level flag so the deprecation warning fires exactly once
+    # per process (not once per instance, not once per evaluate()).
+    _scalar_warning_issued = False
 
-    def __init__(self, field_angles: Sequence[float],
+    def __init__(self, field_angles: Sequence[Any],
                  sub_merit: MeritTerm, weight: float = 1.0) -> None:
-        self.field_angles = [float(a) for a in field_angles]
+        # v4.13.2 (C-P0-2): accept EITHER scalars (back-compat:
+        # Y-axis tilt) OR (theta_x, theta_y) tuples.  Detect the
+        # form per-entry so a mixed list still works.
+        normalised: List[Tuple[float, float]] = []
+        had_scalar = False
+        for a in field_angles:
+            if isinstance(a, (tuple, list)) and len(a) == 2:
+                tx, ty = a
+                normalised.append((float(tx), float(ty)))
+            else:
+                had_scalar = True
+                normalised.append((0.0, float(a)))
+        if had_scalar and not MultiFieldMerit._scalar_warning_issued:
+            warnings.warn(
+                "MultiFieldMerit: scalar ``field_angles`` entries are "
+                "interpreted as Y-axis tilt only.  Pass "
+                "(theta_x, theta_y) tuples to control both axes; the "
+                "scalar form will keep working but is deprecated.",
+                DeprecationWarning, stacklevel=2)
+            MultiFieldMerit._scalar_warning_issued = True
+        self.field_angles = normalised
         self.sub_merit = sub_merit
         self.weight = float(weight)
         self.needs_wave = True
 
     def evaluate(self, ctx: Any) -> float:
         total = 0.0
-        for angle in self.field_angles:
+        for theta_x, theta_y in self.field_angles:
             # Build tilted plane wave clipped to the lens aperture so
             # the propagated intensity reflects the lens's actual
             # acceptance.  Pre-4.10 the unclipped grid-filling plane
@@ -2114,7 +2178,9 @@ class MultiFieldMerit(MeritTerm):
             y = (np.arange(Ny) - Ny / 2) * ctx.dx
             X, Y = np.meshgrid(x, y)
             k0 = 2 * np.pi / ctx.wavelength
-            tilt_phase = k0 * np.sin(angle) * Y
+            # v4.13.2 (C-P0-2): generic off-axis tilt with both X and
+            # Y components.  Pre-fix the X term was silently dropped.
+            tilt_phase = k0 * (np.sin(theta_x) * X + np.sin(theta_y) * Y)
             ap_diam = ctx.prescription.get('aperture_diameter')
             if ap_diam is None:
                 ap_diam = 0.4 * Nx * ctx.dx
@@ -2125,12 +2191,16 @@ class MultiFieldMerit(MeritTerm):
                                  0.0).astype(get_default_complex_dtype())
             E_exit = apply_real_lens(
                 E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
-            # Build sub-context
+            # Build sub-context.  v4.13.2 (C-P1-2): thread ctx.x so
+            # JaxMeritTerm(build_args=...) sub-merits route through
+            # the analytic-gradient path instead of falling back to
+            # legacy fn(ctx) (which would silently degrade analytic
+            # gradients to FD).
             sub_ctx = EvaluationContext(
                 prescription=ctx.prescription,
                 wavelength=ctx.wavelength, N=ctx.N, dx=ctx.dx,
                 efl=ctx.efl, bfl=ctx.bfl, seidel=ctx.seidel,
-                E_exit=E_exit)
+                E_exit=E_exit, x=getattr(ctx, 'x', None))
             # Through-focus for this field
             if np.isfinite(ctx.bfl) and abs(ctx.bfl) < 10:
                 half = max(abs(ctx.bfl) / 20.0, 1e-3)
@@ -2406,9 +2476,13 @@ class ToleranceAwareMerit(MeritTerm):
             E_in = np.ones((ctx.N, ctx.N), dtype=get_default_complex_dtype())
             E_exit = apply_real_lens(
                 E_in, prescription=pres_pert, wavelength=ctx.wavelength, dx=ctx.dx)
+            # v4.13.2 (C-P1-2): thread ctx.x so JaxMeritTerm sub-
+            # merits with build_args reach the analytic-gradient
+            # path instead of legacy fn(ctx) -> FD.
             sub_ctx = EvaluationContext(
                 prescription=pres_pert, wavelength=ctx.wavelength,
-                N=ctx.N, dx=ctx.dx, efl=efl_p, bfl=bfl_p)
+                N=ctx.N, dx=ctx.dx, efl=efl_p, bfl=bfl_p,
+                x=getattr(ctx, 'x', None))
             # Through-focus scan around the PERTURBED BFL, not the
             # nominal BFL.
             if np.isfinite(bfl_p) and abs(bfl_p) < 10:
@@ -3144,6 +3218,19 @@ def design_optimize(parameterization: Any,
             return True
         return None
 
+    # v4.13.2 (P1-NEW-L): dual_annealing's callback was an inline
+    # lambda that did NOT poll ``is_cancelled(progress)`` -- a Qt
+    # ``Stop`` press during a dual_annealing run was silently
+    # ignored.  Promote to a named callback matching the pattern of
+    # the other three scipy callbacks; returning True asks
+    # dual_annealing to terminate the run.
+    def _scipy_cb_da(x, f, context):
+        last_value[0] = float(f)
+        _emit_iter_progress()
+        if is_cancelled(progress):
+            return True
+        return None
+
     # v4.14 (audit P2 #10): wrap the dispatch + final evaluation in
     # try/finally so the complex-dtype restore is deterministic even
     # under KeyboardInterrupt / scipy raise.  The ``_dtype_restore_guard``
@@ -3212,9 +3299,7 @@ def design_optimize(parameterization: Any,
                     'dual_annealing requires bounds for all variables.')
             res = so.dual_annealing(
                 merit_fn, bounds, maxiter=max_iter, seed=42,
-                callback=lambda x, f, ctx: (
-                    last_value.__setitem__(0, float(f)),
-                    _emit_iter_progress()))
+                callback=_scipy_cb_da)
             x_opt = res.x
         else:
             res = so.minimize(

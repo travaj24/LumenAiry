@@ -139,6 +139,7 @@ class RandomState:
         if self._backend == 'cupy':
             return self._rng.choice(n, size=shape, replace=replace, p=p)
         import jax
+        import jax.numpy as jnp
         self._key, sub = jax.random.split(self._key)
         # v4.13.1 (P1-F): honour replace=False on the JAX backend.
         # Previously the ``p is None`` branch dispatched to
@@ -148,10 +149,27 @@ class RandomState:
         # whenever ``replace=False`` so the without-replacement contract
         # is honoured for both weighted and unweighted draws.
         if not replace:
-            return jax.random.choice(sub, n, shape=shape,
-                                     replace=False, p=p)
+            # v4.13.2 (P1-NEW-K): wrap the replace=False dispatch in
+            # a try/except so pre-0.4.x JAX builds that lacked
+            # ``replace=False`` on ``jax.random.choice`` raise a
+            # clear migration error instead of a bare TypeError.
+            # The v4.13.1 CHANGELOG promised this safety net; v4.13.2
+            # ships it.
+            try:
+                return jax.random.choice(sub, n, shape=shape,
+                                         replace=False, p=p)
+            except TypeError as e:
+                raise RuntimeError(
+                    "RandomState.choice(replace=False) on JAX "
+                    "requires JAX >= 0.4.0 (got TypeError).  Update "
+                    "JAX or switch to backend='numpy'.") from e
+        # v4.13.2 (P1-NEW-I): pin the int dtype to int64 so the JAX
+        # branch matches the NumPy branch.  ``jax.random.randint``
+        # defaults to int32 (and on x32-only JAX builds int64 is
+        # silently demoted, but on x64-enabled builds the difference
+        # broke cross-backend pipelines that downcast to int32).
         if p is None:
-            return jax.random.randint(sub, shape, 0, n)
+            return jax.random.randint(sub, shape, 0, n, dtype=jnp.int64)
         return jax.random.choice(sub, n, shape=shape, p=p)
 
 

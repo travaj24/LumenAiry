@@ -1029,8 +1029,24 @@ def load_plane_by_label(filepath: str, label_substring: str, *,
 
 
 def load_plane_slice(filepath: str, plane_index: int,
-                     y_slice: slice, x_slice: slice) -> np.ndarray:
-    """Load a rectangular slice of a plane (auto-detected format)."""
+                     y_slice: slice, x_slice: slice
+                     ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    """Load a rectangular slice of a plane (auto-detected format).
+
+    Returns
+    -------
+    arr : ndarray
+        The requested rectangular slice of the plane dataset.
+    attrs : dict
+        The full attribute dictionary of the plane dataset (label,
+        coordinates, units, etc.), decoded to native Python types.
+
+    Notes
+    -----
+    The ``(arr, attrs)`` tuple shape is shared between the HDF5 and
+    Zarr backends; v4.13.2 pinned the docstring to match the
+    long-standing dispatcher behaviour.
+    """
     backend = _detect_backend(filepath)
     if backend == 'zarr':
         return _zarr_load_plane_slice(filepath, plane_index,

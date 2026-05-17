@@ -31,7 +31,7 @@ import numpy as np
 from ..backend import (
     array_namespace, is_jax_array, to_numpy, RandomState,
 )
-from .hfpi import accumulate_to_grid
+from .hfpi import accumulate_to_grid, _spawn_rng
 
 
 @dataclass
@@ -176,6 +176,10 @@ def propagate_vector_to_plane(
     eps = 1e-30
     t = (z_target - z_curr) / xp.where(xp.abs(Nz) > eps, Nz, eps)
     new_alive = paths.alive & (t >= 0) & (xp.abs(Nz) > eps)
+    # 4.13.2 (P1-NEW-H): zero the step for grazing / dead rays so their
+    # position update is a no-op.  Mirrors the scalar hfpi fix; see
+    # :func:`lumenairy.propagators.hfpi.propagate_to_plane` for details.
+    t = xp.where(new_alive, t, 0.0)
     new_positions = paths.positions + t[..., None] * paths.directions
     delta_opl = n_medium * xp.abs(t)
     new_opl = paths.opl + delta_opl
@@ -385,10 +389,19 @@ def propagate_vector_hfpi_freespace_aperture(
     -------
     Ex_out, Ey_out : tuple of arrays (Ny, Nx) complex
     """
+    # 4.13.2 (P1-NEW-A): spawn a distinct child RNG for the aperture
+    # re-emission so source-plane init and aperture re-sample are
+    # statistically independent.  Mirrors the scalar
+    # :func:`hfpi.propagate_hfpi_freespace_aperture` 4.11.2 fix.
+    # Pre-4.13.2 the same int ``rng`` was reused at both sites;
+    # ``RandomState(rng=int)`` rebuilds default_rng(int) so init and
+    # re-emission drew identical samples (perfectly correlated).
+    rng_source = _spawn_rng(rng, 0)
+    rng_aperture = _spawn_rng(rng, 1)
     paths = init_vector_paths_from_field(
         Ex_in, Ey_in, dx,
         n_paths=n_paths,
-        wavelength=wavelength, rng=rng,
+        wavelength=wavelength, rng=rng_source,
         z_input_plane=0.0,
     )
     paths = propagate_vector_to_plane(paths, z_target=z_to_aperture,
@@ -396,7 +409,7 @@ def propagate_vector_hfpi_freespace_aperture(
     paths = apply_vector_aperture_diffraction(
         paths, aperture_radius=aperture_radius,
         centre=aperture_centre, shape=aperture_shape,
-        wavelength=wavelength, rng=rng,
+        wavelength=wavelength, rng=rng_aperture,
     )
     paths = propagate_vector_to_plane(
         paths, z_target=z_to_aperture + z_aperture_to_output,

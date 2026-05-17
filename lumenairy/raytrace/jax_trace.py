@@ -646,9 +646,21 @@ def _build_jax_prescription(prescription, wavelength,
     # not yet implemented in the JAX trace; pre-4.10 the trace would
     # happily pretend they were spherical refractors and return wrong
     # answers.  Until proper implementations land, fail loud at build.
+    #
+    # 4.13.2 (P1-NEW-D): also reject Welford-style mirrors signalled
+    # via ``glass_after='MIRROR'`` (case-insensitive).  The v4.13.1
+    # P1-A apply_real_lens fix added both guards together; the JAX
+    # prescription builder only got the ``is_mirror=True`` half, so
+    # hand-built mirrors with ``glass_after='MIRROR'`` slipped through
+    # and were silently traced as refractive air->air.
     for i, s in enumerate(surfaces_raw):
         unsupported = []
-        if s.get('is_mirror'):
+        gl_after = s.get('glass_after')
+        is_mirror_field = bool(s.get('is_mirror', False)) or (
+            isinstance(gl_after, str)
+            and gl_after.upper() == 'MIRROR'
+        )
+        if is_mirror_field:
             unsupported.append('is_mirror')
         if s.get('is_coordbrk'):
             unsupported.append('is_coordbrk')

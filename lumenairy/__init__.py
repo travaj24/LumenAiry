@@ -43,7 +43,6 @@ from .propagators.propagation import (
     get_fft_auto_promote,
     warmup_fft_plans,
     clear_asm_caches,
-    reset_fft_backend,
     rayleigh_sommerfeld_propagate,
     resample_field,
     apply_fresnel_curvature,
@@ -730,7 +729,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.13.1"
+__version__ = "4.13.2"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -802,6 +801,8 @@ __all__ = [
     'apply_real_lens_traced',
     'close_worker_pool',
     'apply_real_lens_maslov',
+    'apply_real_lens_traced_jax',
+    'apply_real_lens_maslov_jax',
     'apply_cylindrical_lens',
     'apply_grin_lens',
     'apply_axicon',
@@ -1082,6 +1083,9 @@ __all__ = [
     'apply_perturbations',
     'tolerancing_sweep',
     'monte_carlo_tolerancing',
+    'monte_carlo_tolerancing_jax',
+    'monte_carlo_tolerancing_linearized',
+    'tolerancing_report',
 
     # Coherence / extended-source imaging
     'koehler_image',
@@ -1208,11 +1212,6 @@ __all__ = [
     'JaxAberrationTensorResult',
     'solve_envelope_stationary_jax_ift',
     'fit_canonical_polynomials_jax',
-    'apply_real_lens_traced_jax',
-    'apply_real_lens_maslov_jax',
-    'monte_carlo_tolerancing_jax',
-    'monte_carlo_tolerancing_linearized',
-    'tolerancing_report',
 
     # ============================================================
     # Tier 7 -- Specialized physics

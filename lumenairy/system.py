@@ -361,19 +361,27 @@ def propagate_through_system(E_in: np.ndarray,
             xc = elem.get('xc', 0)
             yc = elem.get('yc', 0)
             model = elem.get('lens_model', 'paraxial')
-            E = apply_thin_lens(E, f=f, wavelength=wavelength, dx=dx, dy=dy, xc=xc, yc=yc,
+            # v4.13.2 (C-P1-3): thread current_dx/current_dy instead of
+            # the original dx/dy so anamorphic grids (dx != dy) and any
+            # mid-pipeline pitch changes propagate through every
+            # element-handler call, not just the propagate_* steps.
+            E = apply_thin_lens(E, f=f, wavelength=wavelength,
+                                dx=current_dx, dy=current_dy,
+                                xc=xc, yc=yc,
                                 use_gpu=use_gpu, lens_model=model)
 
         elif elem['type'] == 'spherical_lens':
             E = apply_spherical_lens(E, R1=elem['R1'], R2=elem['R2'], d=elem['d'],
-                                n_lens=elem['n_lens'], wavelength=wavelength, dx=dx, dy=dy,
+                                n_lens=elem['n_lens'], wavelength=wavelength,
+                                dx=current_dx, dy=current_dy,
                                 aperture_diameter=elem.get('aperture_diameter'),
                                 xc=elem.get('xc', 0), yc=elem.get('yc', 0),
                                 use_gpu=use_gpu)
 
         elif elem['type'] == 'aspheric_lens':
             E = apply_aspheric_lens(E, R1=elem['R1'], R2=elem['R2'], d=elem['d'],
-                                n_lens=elem['n_lens'], wavelength=wavelength, dx=dx, dy=dy,
+                                n_lens=elem['n_lens'], wavelength=wavelength,
+                                dx=current_dx, dy=current_dy,
                                 k1=elem.get('k1', 0), k2=elem.get('k2', 0),
                                 A1=elem.get('A1'), A2=elem.get('A2'),
                                 aperture_diameter=elem.get('aperture_diameter'),
@@ -382,7 +390,8 @@ def propagate_through_system(E_in: np.ndarray,
 
         elif elem['type'] == 'real_lens':
             E = apply_real_lens(
-                E, prescription=elem['prescription'], wavelength=wavelength, dx=dx,
+                E, prescription=elem['prescription'], wavelength=wavelength,
+                dx=current_dx, dy=current_dy,
                 bandlimit=elem.get('bandlimit', True),
                 slant_correction=elem.get('slant_correction', False),
                 fresnel=elem.get('fresnel', False),
@@ -393,7 +402,8 @@ def propagate_through_system(E_in: np.ndarray,
 
         elif elem['type'] == 'real_lens_traced':
             E = apply_real_lens_traced(
-                E, prescription=elem['prescription'], wavelength=wavelength, dx=dx,
+                E, prescription=elem['prescription'], wavelength=wavelength,
+                dx=current_dx, dy=current_dy,
                 bandlimit=elem.get('bandlimit', True),
                 ray_subsample=elem.get('ray_subsample', 1),
                 progress=(lambda stage, frac, msg='': sub_cb(frac, msg))
@@ -401,32 +411,36 @@ def propagate_through_system(E_in: np.ndarray,
             )
 
         elif elem['type'] == 'mirror':
-            E = apply_mirror(E, wavelength, dx,
+            E = apply_mirror(E, wavelength, current_dx,
                              radius=elem.get('radius'),
                              conic=elem.get('conic', 0.0),
                              aperture_diameter=elem.get('aperture_diameter'),
-                             xc=elem.get('xc', 0), yc=elem.get('yc', 0))
+                             xc=elem.get('xc', 0), yc=elem.get('yc', 0),
+                             dy=current_dy)
 
         elif elem['type'] == 'aperture':
-            E = apply_aperture(E, dx,
+            E = apply_aperture(E, current_dx,
                                shape=elem.get('shape', 'circular'),
                                params=elem.get('params', {}),
-                               xc=elem.get('xc', 0), yc=elem.get('yc', 0))
+                               xc=elem.get('xc', 0), yc=elem.get('yc', 0),
+                               dy=current_dy)
 
         elif elem['type'] == 'cylindrical_lens':
-            E = apply_cylindrical_lens(E, f=elem['f'], wavelength=wavelength, dx=dx, dy=dy,
+            E = apply_cylindrical_lens(E, f=elem['f'], wavelength=wavelength,
+                                       dx=current_dx, dy=current_dy,
                                        axis=elem.get('axis', 'x'),
                                        xc=elem.get('xc', 0),
                                        yc=elem.get('yc', 0))
 
         elif elem['type'] == 'axicon':
             E = apply_axicon(E, elem['alpha'], elem['n_axicon'],
-                             wavelength, dx, dy,
+                             wavelength, current_dx, current_dy,
                              xc=elem.get('xc', 0), yc=elem.get('yc', 0))
 
         elif elem['type'] == 'grin_lens':
             E = apply_grin_lens(E, n0=elem['n0'], g=elem['g'], d=elem['d'],
-                                wavelength=wavelength, dx=dx, dy=dy,
+                                wavelength=wavelength,
+                                dx=current_dx, dy=current_dy,
                                 xc=elem.get('xc', 0), yc=elem.get('yc', 0))
 
         elif elem['type'] == 'mask':
@@ -444,7 +458,7 @@ def propagate_through_system(E_in: np.ndarray,
 
         elif elem['type'] == 'turbulence':
             screen = generate_turbulence_screen(
-                E.shape[0], dx,
+                E.shape[0], current_dx,
                 r0=elem['r0'],
                 L0=elem.get('L0', np.inf),
                 l0=elem.get('l0', 0.0),
@@ -452,15 +466,17 @@ def propagate_through_system(E_in: np.ndarray,
             E = E * np.exp(1j * screen)
 
         elif elem['type'] == 'zernike':
-            E = apply_zernike_aberration(E, dx,
+            E = apply_zernike_aberration(E, current_dx,
                                          coefficients=elem['coefficients'],
-                                         aperture_radius=elem['aperture_radius'])
+                                         aperture_radius=elem['aperture_radius'],
+                                         dy=current_dy)
 
         elif elem['type'] == 'gaussian_aperture':
-            E = apply_gaussian_aperture(E, dx,
+            E = apply_gaussian_aperture(E, current_dx,
                                         sigma=elem['sigma'],
                                         xc=elem.get('xc', 0),
-                                        yc=elem.get('yc', 0))
+                                        yc=elem.get('yc', 0),
+                                        dy=current_dy)
 
         else:
             raise ValueError(f"Unknown element type: {elem['type']}")
@@ -473,7 +489,8 @@ def propagate_through_system(E_in: np.ndarray,
     if return_result:
         from .propagators.result import PropagationResult
         return PropagationResult(
-            field=E, dx=current_dx, wavelength=float(wavelength),
+            field=E, dx=current_dx, dy=current_dy,
+            wavelength=float(wavelength),
             method='system', history=history_entries,
         )
     return E, intermediates

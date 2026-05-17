@@ -172,6 +172,9 @@ def propagate_subaperture_asymptotic(
     n_patches: Tuple[int, int] = (3, 3),
     patch_overlap: float = 0.25,
     edge_smoothness: float = 0.15,
+    source_lg_p_max: int = 3,
+    source_lg_ell_max: int = 3,
+    source_lg_amp_threshold: float = 1e-6,
 ) -> np.ndarray:
     """Wide-field deterministic asymptotic propagator using
     subaperture (patch) decomposition.
@@ -219,6 +222,7 @@ def propagate_subaperture_asymptotic(
     from .asymptotic import (
         fit_canonical_polynomials,
         propagate_modal_asymptotic,
+        decompose_lg,
     )
     from ..analysis.core import beam_d4sigma
     import numpy as _np
@@ -226,6 +230,19 @@ def propagate_subaperture_asymptotic(
     Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
     if output_dx is None:
         output_dx = dx
+
+    # 4.13.2 (P1-NEW-B): build the source-plane coordinate grid for
+    # E_in so we can project the actual input field onto the LG basis
+    # per patch.  Pre-4.13.2 ``E_in`` was silently replaced by a unit
+    # fundamental Gaussian at every patch -- structured input (off-
+    # axis Gaussian, vortex, Airy) was completely discarded.  Mirrors
+    # the v4.11.2 fix in
+    # :func:`hf.propagate_huygens_fresnel_through_prescription`.
+    E_in_np = _np.asarray(E_in)
+    Ny_in, Nx_in = E_in_np.shape[-2], E_in_np.shape[-1]
+    in_x = (_np.arange(Nx_in) - Nx_in / 2) * dx
+    in_y = (_np.arange(Ny_in) - Ny_in / 2) * dx
+    IX, IY = _np.meshgrid(in_x, in_y, indexing='xy')
 
     # Build the patch grid.  Total source box = n_patches *
     # patch_size * (1 - overlap) + patch_size.
@@ -296,9 +313,42 @@ def propagate_subaperture_asymptotic(
         # array and then tried to unpack it 2-ways, which always raised
         # ``ValueError: too many values to unpack`` for any Ny != 2.
         sgx, sgy = OX, OY
+        # 4.13.2 (P1-NEW-B): project the *actual* input field onto the
+        # LG basis centred at this patch's source point.  Pre-4.13.2
+        # the source_amplitudes were hard-coded to a unit LG_{0,0},
+        # so any structured E_in was silently replaced by a fundamental
+        # Gaussian and the function returned a Gaussian output
+        # regardless of the input.  Mirrors v4.11.2 hf.py fix.
+        try:
+            source_lg = decompose_lg(
+                E_in_np, IX, IY, w_s,
+                source_lg_p_max, source_lg_ell_max,
+                cx=cx_i, cy=cy_i,
+            )
+        except (TypeError, ValueError, RuntimeError) as _exc:
+            # decompose_lg may fail on a degenerate / singular field
+            # (TypeError on non-array E_in, ValueError on shape
+            # mismatch or w_s<=0, RuntimeError on singular projection
+            # matrix).  Warn so the silent plane-wave fallback below
+            # doesn't hide a real bug.
+            import warnings as _w
+            _w.warn(
+                f"propagate_subaperture_asymptotic: source LG "
+                f"decomposition failed for patch ({cx_i}, {cy_i}) "
+                f"({type(_exc).__name__}: {_exc}); falling back to "
+                f"a single (p=0, l=0) plane-wave mode for this patch.",
+                RuntimeWarning, stacklevel=2)
+            source_lg = {(0, 0): 1.0 + 0.0j}
+        # Drop amplitudes below threshold (sparsity speedup).
+        max_amp = max((abs(a) for a in source_lg.values()), default=1.0)
+        if max_amp > 0:
+            source_lg = {k: v for k, v in source_lg.items()
+                         if abs(v) >= source_lg_amp_threshold * max_amp}
+        if not source_lg:
+            source_lg = {(0, 0): 1.0 + 0.0j}
         F_i = propagate_modal_asymptotic(
             fit,
-            source_amplitudes={(0, 0): 1.0 + 0.0j},
+            source_amplitudes=source_lg,
             pupil_amplitudes={(0, 0): 1.0 + 0.0j},
             source_point=(cx_i, cy_i),
             w_s=w_s,

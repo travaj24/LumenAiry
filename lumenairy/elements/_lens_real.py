@@ -529,8 +529,11 @@ def apply_real_lens(
             E = E_in.astype(DEFAULT_COMPLEX_DTYPE)
 
     # Entrance aperture (only if no explicit stop surface specified)
+    # v4.13.2 (audit C-P1-4): dtype-aware zero to preserve complex64
+    # E (the ``0.0 + 0.0j`` literal silently upcast to complex128).
     if aperture is not None and stop_index is None:
-        E = xp.where(h_sq_axis <= (aperture / 2) ** 2, E, 0.0 + 0.0j)
+        E = xp.where(h_sq_axis <= (aperture / 2) ** 2, E,
+                     xp.zeros((), dtype=E.dtype))
 
     # Resolve glass names once.  Use complex form so we can recover kappa for
     # absorption while still having the real part for geometry/Snell.
@@ -758,12 +761,15 @@ def apply_real_lens(
         # fresnel=False users with unphysical residual field amplitude
         # in TIR regions.
         if fresnel or slant_correction:
-            E = xp.where(sin2_tt < 1.0, E, 0.0 + 0.0j)
+            # v4.13.2 (audit C-P1-4): dtype-aware zero.
+            E = xp.where(sin2_tt < 1.0, E, xp.zeros((), dtype=E.dtype))
 
         # ---- Per-surface clear aperture (vignetting) ------------------
         clear_ap = surf.get('clear_aperture')
         if clear_ap is not None:
-            E = xp.where(h_sq <= (clear_ap / 2) ** 2, E, 0.0 + 0.0j)
+            # v4.13.2 (audit C-P1-4): dtype-aware zero.
+            E = xp.where(h_sq <= (clear_ap / 2) ** 2, E,
+                         xp.zeros((), dtype=E.dtype))
 
         # ---- Aperture stop applied at this surface --------------------
         if stop_index is not None and i == stop_index and aperture is not None:
@@ -776,16 +782,17 @@ def apply_real_lens(
             # wrong keys (``decenter_x_m`` / ``decenter_y_m``).  The
             # surface dict's actual key is ``decenter`` and the value
             # is a ``(dx, dy)`` tuple -- mirror line 520 above.
+            # v4.13.2 (audit C-P1-4): dtype-aware zero for both branches.
             _dec = surf.get('decenter') or (0.0, 0.0)
             xc_stop = float(_dec[0])
             yc_stop = float(_dec[1])
             if xc_stop == 0.0 and yc_stop == 0.0:
                 E = xp.where(h_sq_axis <= (aperture / 2) ** 2,
-                             E, 0.0 + 0.0j)
+                             E, xp.zeros((), dtype=E.dtype))
             else:
                 h_sq_stop = (X - xc_stop) ** 2 + (Y - yc_stop) ** 2
                 E = xp.where(h_sq_stop <= (aperture / 2) ** 2,
-                             E, 0.0 + 0.0j)
+                             E, xp.zeros((), dtype=E.dtype))
 
         # ---- Propagate through glass to the next surface --------------
         if i < len(surfaces) - 1:

@@ -2,6 +2,253 @@
 
 All notable changes to the core library are documented here.
 
+## [4.13.2] — 2026-05-17
+
+**Closes the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`) plus its
+Part 10 consolidation with a parallel 6-agent cross-library survey.**
+The v4.13.1 audit identified 12 new P1s (5 sibling-gap recurrences +
+5 fresh-eyes bugs + 2 partial-closure follow-ups) plus 17 perf
+opportunities and 22 structural recommendations.  The parallel
+cross-library survey turned up an additional 5 P0s (in `optimize/`
+and `io/`) and 7 P1s (mostly `dy` convention drift across analysis +
+system + lens family).  v4.13.2 closes the full consolidated Tier-0
+set.  All 710 unit tests pass; 34/34 validation files pass.
+
+### Breaking changes — none
+
+No user-facing breakage in v4.13.2.
+
+### P0 closures (cross-library survey)
+
+* **`make_lg_aberration_merit_jax` no longer silently ignores its
+  `targets` dict.**  The function's inner loop body was literally
+  `pass`; `wgt` was captured but never multiplied; the aberration-
+  tensor call was outside the loop.  Public API exported from
+  `lumenairy.__init__` — the function was returning the same
+  `(0,0)`-piston sum regardless of input weights.  v4.13.2: now
+  weights the `(0,0)` target correctly; non-`(0,0)` targets raise
+  `NotImplementedError` with a clear migration message (the
+  underlying `aberration_tensor_lg00_jax` only computes the piston
+  coefficient).
+* **`MultiFieldMerit.field_angles` accepts both scalars and `(theta_x,
+  theta_y)` tuples.**  v4.13.1 applied Y-axis tilt only despite the
+  docstring implying generic off-axis angle; `MatchIdealSystemMerit`
+  took `(theta_x, theta_y)`.  v4.13.2 widens `field_angles` to accept
+  both forms with a one-shot `DeprecationWarning` on the scalar form;
+  internal storage normalises to tuples so the evaluate loop is
+  uniform.  Non-zero `theta_x` now actually produces an X-axis tilt.
+* **`load_plane_slice` documented return type matches actual.**
+  Documented to return slice array; actually returns `(arr, attrs)`
+  tuple in both HDF5 and Zarr paths.  Docstring + type annotation
+  corrected to `Tuple[ndarray, Dict[str, Any]]`.
+* **CODE V `.seq` round-trip preserves BFL.**  Reader was dropping the
+  last refracting surface's `THI` (a legitimate CODE V BFL
+  convention).  New top-level `'back_focal_length'` prescription key
+  (float, SI meters) carries the BFL through round-trip; populated by
+  both readers and exporters.
+* **Quadoa `.qos` round-trip preserves BFL** (same fix as CODE V).
+
+### Sibling-gap P1 closures (the audit's headline pattern recurring)
+
+Five new "fix-swept-N-sites-missed-N+1" instances closed.  All five
+have parametrized dispatcher-level pin tests preventing future
+recurrence within the same family.
+
+* **`vectorial_hfpi` RNG-correlation sibling.**  v4.11.2 fixed the
+  scalar `hfpi.propagate_hfpi_freespace_aperture` via `_spawn_rng`;
+  the vectorial sibling at `vectorial_hfpi.py:399` still passed the
+  same `rng` to source-init AND aperture re-emission, perfectly
+  correlating the diffraction events.  v4.13.2 ports `_spawn_rng`.
+* **`subaperture` `decompose_lg(E_in, ...)` sibling.**  v4.11.2 fixed
+  `hf.propagate_huygens_fresnel_through_prescription` to decompose
+  the input field per-patch; `subaperture.propagate_subaperture
+  _asymptotic` still passed `source_amplitudes={(0,0): 1.0+0.0j}`
+  — every patch got an identical plane-wave-equivalent unit
+  fundamental, ignoring `E_in` beyond a waist estimate.  v4.13.2
+  ports the per-patch LG decomposition with three new kwargs
+  (`source_lg_p_max=3`, `source_lg_ell_max=3`,
+  `source_lg_amp_threshold=1e-6`) and amplitude-threshold pruning.
+* **`petzval_radius` Welford-mirror convention sibling.**
+  `seidel_coefficients` was fixed in v4.11.2 with the Welford `n2 =
+  -n1` convention for mirrors; `analysis/field.py:petzval_radius`
+  still skipped every mirror (because `n1 == n2` after the loader
+  set `glass_after == glass_before`), silently dropping every
+  mirror's Petzval contribution.  **Wrong by 100% for catadioptric /
+  Cassegrain designs.**  v4.13.2 applies the Welford-parity
+  convention; Cassegrain regression test pins against the analytic
+  Mahajan formula.
+* **`_build_jax_prescription` `glass_after='MIRROR'` sibling.**
+  v4.13.1 P1-A added BOTH `is_mirror=True` AND case-insensitive
+  `glass_after='MIRROR'` guards to `apply_real_lens`; the JAX
+  prescription builder at `raytrace/jax_trace.py:649-669` only got
+  the first.  Hand-built prescriptions with Welford-style mirror-
+  via-glass-string slip through and are silently traced as
+  refractive air→air.  v4.13.2 adds the second guard.
+* **JAX lens twins thread `dy`.**  The two NumPy `apply_real_lens`
+  variants accept `dy=None`; the JAX twins (`apply_real_lens_traced
+  _jax`, `apply_real_lens_maslov_jax`) did not.  Anamorphic round-
+  trip through `Source.dy → propagate_through_system_jax →
+  apply_real_lens_traced_jax` silently dropped y-pitch at the JAX
+  boundary.  v4.13.2: both JAX twins accept `dy=None` and raise
+  `ValueError` on `dy != dx` (matching the existing NumPy
+  precedent on the square-grid contract).
+
+### Fresh-eyes P1 closures (audit Part 2.2)
+
+* **`apply_mirror` NaN propagation.**  For a hyperbolic mirror with
+  conic such that `(1+k)*h²/R² >= 0.9999`, sag → NaN → phase → NaN →
+  `E *= NaN` poisons every pixel of the subsequent ASM step.
+  `apply_real_lens:704-705` had the equivalent NaN-zeroing guard;
+  `apply_mirror` did not.  v4.13.2 mirrors the guard.
+* **`_zero_C_air_gap` raises on degenerate ABCD.**  When `abs(C1 -
+  C0) < 1e-30`, the function silently returned the placeholder
+  thickness from the input prescription (a non-afocal beam expander
+  with zero combined power).  Callers (`beam_expander_prescription`,
+  `keplerian_telescope`) catch `RuntimeError`; v4.13.2 raises it
+  explicitly so the fallback fires.
+* **`propagate_to_plane` inf/NaN positions guarded.**  For `Nz ≈ 0`
+  and `z_target != z_curr`, the divisor went to `1e-30` →
+  `t ≈ 1e30` → positions += inf.  The alive-mask correctly tagged
+  these dead, but `paths.positions` still contained inf/NaN —
+  downstream code reading positions without masking by `alive` was
+  poisoned (e.g. `_hfpi_segment_trace`).  v4.13.2 zeroes the step on
+  dead/grazing rays in BOTH `hfpi.propagate_to_plane` and
+  `vectorial_hfpi.propagate_vector_to_plane`.
+* **`RandomState.choice` int dtype aligned across backends.**  JAX
+  path returned int32 (default for `jax.random.randint`); NumPy
+  path returned int64.  v4.13.2 dispatches `jax.random.randint(...,
+  dtype=jnp.int64)` so both backends agree.
+* **`trace_prescription` uses `_surface_copy_with` instead of
+  mutating shared `Surface.thickness`.**  When `image_distance=` was
+  supplied, the function mutated the input prescription's last
+  surface in place.  The `Surface` dataclass is shared with
+  `surfaces_from_prescription`; downstream calls reused corrupted
+  thickness.  v4.13.2 clones via `_surface_copy_with` (matching the
+  pattern at `lens_abcd`).
+
+### Partial-closure follow-ups from v4.13.1
+
+* **`dual_annealing` callback wired into cancellation protocol.**
+  v4.13.1 P2 #13 wired `CancellableProgress` into 4 scipy callbacks;
+  the `dual_annealing` site used an unnamed inline lambda that did
+  NOT poll `is_cancelled(progress)`.  Cancellation latency was
+  unbounded for that one method.  v4.13.2 replaces the lambda with
+  a named callback matching the pattern in the other three.
+* **`RandomState.choice` old-JAX safety net.**  v4.13.1 P1-F closed
+  the `replace=False` regression on JAX 0.10.0+ but the CHANGELOG
+  promised a graceful old-JAX safety net the code lacked.  v4.13.2
+  wraps the dispatch in `try/except TypeError` with a `RuntimeError`
+  raising a clear "JAX >= 0.4.0 required" message.
+
+### Cross-library survey P1 closures
+
+* **`strehl_ratio` + `polychromatic_psf` accept `dy=`.**  The
+  v4.13.0 L3 sweep added `dy` to `Source` / `PropagationResult` /
+  free-space propagators but missed both Strehl helpers (using
+  `dx**2` not `dx*dy`).  v4.13.2 adds `dy: Optional[float] = None`
+  to both; back-compat preserved bit-for-bit when `dy is None`
+  (the historic `dx**2` form is retained so existing tests with
+  the FP-identity assumption stay green).
+* **Wrapper-merit context threads `x=ctx.x`.**  `MultiWavelengthMerit`,
+  `MultiFieldMerit`, `ToleranceAwareMerit` built sub-`Evaluation
+  Context`s without `x=ctx.x`.  A `JaxMeritTerm(build_args=...)`
+  wrapped inside any of these silently fell back to legacy
+  `fn(ctx)` mode, degrading the analytic-gradient path to FD.
+  v4.13.2 threads `x=ctx.x` across all three.
+* **`propagate_through_system` element handlers thread `dy`.**
+  Every element handler (lens, aperture, mask, zernike, mirror,
+  etc.) passed `dx=dx` only — anamorphic `dy` was silently squared
+  to `dx` on every non-`propagate_*` element.  v4.13.2 routes
+  `current_dx` AND `current_dy` through all 13 element handlers.
+* **`Source.fiber_mode` accepts `dy=` end-to-end.**  v4.13.1 P1-C
+  threaded `dy` through 5 of 6 Source factories; `fiber_mode`
+  remained a dead-`dy=` code path because `create_fiber_mode`
+  didn't accept `dy=`.  v4.13.2 widens `create_fiber_mode` to
+  accept `dy=` (forwarding to `create_gaussian_beam`); the
+  dispatcher pin in `TestP1CSourceFactoryDispatcherPin` now covers
+  all 6 factories.
+
+### Thin-lens family sibling-gap sweep (cross-library survey)
+
+The cross-library survey turned up additional sibling-gaps in the
+thin-lens family — same v4.13.1 P3 #21 dtype-aware-zero fix that
+landed in `apply_mirror` + `apply_aperture`, but missed across
+multiple sites:
+
+* **9 sites of `0.0+0.0j` complex128 literal** in `_lens_thin.py` (4
+  sites) + `_lens_real.py` (5 sites).  Each was a `xp.where(..., E,
+  0+0j)` clear-aperture or stop-mask construct that silently
+  upcast complex64 → complex128.  v4.13.2 replaces each with
+  `xp.zeros((), dtype=E.dtype)`.
+* **6 thin-lens functions** (`apply_thin_lens`, `apply_spherical
+  _lens`, `apply_aspheric_lens`, `apply_cylindrical_lens`, `apply
+  _grin_lens`, `apply_axicon`) constructed `xp.exp(1j * phase)`
+  from float64 phase without dtype matching against the input
+  field.  Same complex64→complex128 upcast as the `0+0j` literal,
+  at a different call site.  v4.13.2 adds the dtype-coercion line
+  to all 6 functions, matching the v4.13.0 L6 pattern in
+  `apply_mirror`.
+* **3 thin-lens functions** (`apply_cylindrical_lens`, `apply_grin
+  _lens`, `apply_axicon`) lacked the documented `use_gpu` parameter
+  entirely.  v4.13.2 adds the parameter and the canonical CuPy-
+  dispatch pattern to all three.
+* **Latent CuPy dispatch bug fixed in the other 3 thin-lens
+  functions.**  `apply_thin_lens`, `apply_spherical_lens`,
+  `apply_aspheric_lens` had the `use_gpu` parameter from v3.5.5
+  but the CuPy dispatch was broken because the function bodies
+  referenced bare `cp` — Python's LEGB name resolution doesn't
+  consult module-level PEP 562 `__getattr__` for function-local
+  lookups.  v4.13.2 routes all three through `_lenses_module.cp`
+  (matching the working pattern in `apply_cylindrical_lens`).
+
+### Quick wins
+
+* **5 mis-tiered names in `__init__.py.__all__`** moved to correct
+  tiers: `apply_real_lens_traced_jax`, `apply_real_lens_maslov_jax`
+  → Tier 1 (Build a system); `monte_carlo_tolerancing_jax`,
+  `monte_carlo_tolerancing_linearized`, `tolerancing_report` →
+  Tier 4 (Analyse).
+* **Duplicate `reset_fft_backend` import** removed from `__init__.py`
+  (was imported at both line 46 and line 59).
+* **Wiki Release-Notes.md broken anchor** fixed:
+  `[4.13.1](#whats-new-in-4-14-0)` → `[4.13.1](#whats-new-in-4-13-1)`
+  (stale from the v4.14→v4.13.1 rename script during v4.13.1 ship).
+
+### Test counts
+
+* Pre-v4.13.2 baseline: 654 unit tests.
+* v4.13.2 audit-response additions: 56 new tests across 4 new files
+  (Agent A: 12 in `test_audit_fixes_v4_13_2_agent_a.py`; Agent B:
+  20 in `..._agent_b.py`; Agent C: 14 in `..._agent_c.py`; Agent
+  D: 10 in `..._agent_d.py`).
+* Final: **710 unit tests passing**, **34/34 validation files
+  passing**.
+
+### Deferred to v4.14.0
+
+Tier-1 perf opportunities from the v4.13.1 audit Part 3 (modal
+asymptotic per-pixel loop 20-100×; multi-merit meshgrid cache
+5-10×; phase-retrieval `angle`/`exp` round-trip 2-4×; coating
+reflectance wavelength batch 5-15×; decompose_lg/hg per-mode
+rebuild 3-8×; Shack-Hartmann gather loop 5-15×; `_evaluate
+_polynomial_4d_and_grad34` 3-5×) plus the cross-library survey's
+top user-facing API gaps (encircled energy, MTF cutoff frequency,
+depth of focus, plot_wavefront, beam diameter at threshold) plus
+parametrized dispatcher pins for the three audit-recommended
+sibling families (`(scalar, vectorial) HFPI`, `(NumPy, JAX)
+apply_*`, Welford-mirror convention).
+
+### Deferred to v5.0
+
+Tier-2/3/4 structural items: six file splits (`raytrace/core.py`
+4422 LOC, `propagation.py` 3710, `asymptotic.py` 3597, `optimize
+/core.py` 3258, `io/prescriptions.py` 2829, `analysis/core.py`
+2196); CI gates (`ruff`, `mypy --strict`, unit-test PR job);
+back-compat shim removal; shared Chebyshev helpers extraction;
+audit-fix test-file consolidation by topic; constrained
+optimisation; checkpoint/resume; CDGM/Hikari/Sumita glass
+catalogues; off-axis conics in surface frame; Q-type freeform.
+
 ## [4.13.1] — 2026-05-17
 
 **Closes the v4.13.0 audit (`AUDIT_V4_13_0_2026_05_17.md`) plus an

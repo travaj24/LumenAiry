@@ -786,6 +786,7 @@ def create_fiber_mode(
     x0: float = 0,
     y0: float = 0,
     na: float = 0.12,
+    dy: Optional[float] = None,
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Single-mode fiber output (Gaussian with NA-defined divergence).
@@ -809,6 +810,12 @@ def create_fiber_mode(
         entirely by ``mode_field_diameter``.  For high-NA fibres
         (PCF, multimode-near-cutoff) use a full LP01 mode solver
         externally and pass the result via ``Source.from_array``.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.  v4.13.2 added the
+        keyword so :meth:`Source.fiber_mode` can pass an anamorphic
+        ``dy`` through to the underlying Gaussian without erroring
+        (the historical signature only accepted ``dx``, so a user-
+        supplied ``dy=`` was silently squared via ``factory_kwargs``).
 
     Notes
     -----
@@ -831,7 +838,7 @@ def create_fiber_mode(
     w0 = mode_field_diameter / 2.0
     sigma = w0 / np.sqrt(2)
     return create_gaussian_beam(N, dx, wavelength, sigma=sigma,
-                                 x0=x0, y0=y0, dtype=dtype)
+                                 x0=x0, y0=y0, dy=dy, dtype=dtype)
 
 
 def create_led_source(

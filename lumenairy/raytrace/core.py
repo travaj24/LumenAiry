@@ -2095,7 +2095,17 @@ def trace_prescription(
     if image_distance is not None and surfaces:
         # Determine the medium after the last optical surface
         last_glass = surfaces[-1].glass_after
-        surfaces[-1].thickness = image_distance
+        # v4.13.2 (audit P1-NEW-J): clone the last surface with the new
+        # thickness instead of mutating it in place.  The Surface
+        # dataclass is not frozen and surfaces_from_prescription
+        # builds the list from a possibly-shared prescription -- an
+        # in-place mutation here was a tripwire for shared-state bugs
+        # in callers that reuse the prescription across multiple
+        # trace_prescription invocations with different image_distance
+        # arguments.  Matches the lens_abcd ``_surface_copy_with``
+        # pattern at raytrace/core.py:2510.
+        surfaces[-1] = _surface_copy_with(
+            surfaces[-1], thickness=image_distance)
         surfaces.append(Surface(
             radius=np.inf, conic=0.0,
             semi_diameter=np.inf,

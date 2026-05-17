@@ -204,7 +204,17 @@ def _zero_C_air_gap(prescription, gap_slot_index, wavelength=550e-9):
     pres['thicknesses'][gap_slot_index] = g1
     C1 = system_abcd(surfaces_from_prescription(pres), wavelength)[0][1, 0]
     if abs(C1 - C0) < 1e-30:
-        return g1     # degenerate; fall back to the guess
+        # v4.13.2 (P1-NEW-G): a silent ``return g1`` here disguised
+        # geometries whose combined ABCD ``C`` element is independent
+        # of the air gap (e.g. two identical lenses with no power
+        # between them).  In those geometries no afocal gap exists,
+        # so the caller's placeholder thickness was wrongly accepted
+        # and the resulting prescription was non-afocal.  Raise
+        # explicitly; both callers (beam_expander_prescription,
+        # keplerian_telescope) already catch RuntimeError.
+        raise RuntimeError(
+            "afocal gap solve is degenerate; ABCD's C element is "
+            "field-independent in this geometry")
     # C(gap) = C0 + (C1 - C0) * gap / g1  =>  gap_zero = -C0 * g1 / (C1 - C0)
     gap_zero = -C0 * g1 / (C1 - C0)
     return float(max(gap_zero, 0.0))

@@ -216,6 +216,14 @@ def propagate_to_plane(
 
     new_alive = paths.alive & (t >= 0) & (xp.abs(Nz) > eps)
 
+    # 4.13.2 (P1-NEW-H): zero the step for grazing / dead rays so their
+    # position update is a no-op.  Pre-4.13.2 grazing rays with
+    # ``|Nz| <= eps`` and ``z_target != z_curr`` produced ``t ~ 1e30``
+    # which poisoned ``new_positions`` with +/-inf even though
+    # ``new_alive`` correctly tagged them dead.  Downstream consumers
+    # that read ``paths.positions`` without re-masking by ``alive``
+    # (e.g. _hfpi_segment_trace) then carried inf/NaN into the trace.
+    t = xp.where(new_alive, t, 0.0)
     new_positions = paths.positions + t[..., None] * paths.directions
     delta_opl = n_medium * xp.abs(t)
     new_opl = paths.opl + delta_opl
