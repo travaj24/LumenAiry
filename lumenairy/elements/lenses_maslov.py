@@ -445,7 +445,11 @@ def apply_real_lens_maslov(
                + wx * (1 - wy) * e10
                + (1 - wx) * wy * e01
                + wx * wy * e11)
-        val = np.where(ok, val, 0.0 + 0.0j)
+        # v4.14.1 (audit P2-6): dtype-aware out-of-bounds sentinel so
+        # a complex64 E_in stays complex64 through the bilinear sample
+        # (was silently upcasting via the ``0.0 + 0.0j`` complex128
+        # literal).  Matches the v4.13.2 canonical pattern.
+        val = np.where(ok, val, np.zeros((), dtype=val.dtype))
         return val
 
     # -----------------------------------------------------------------

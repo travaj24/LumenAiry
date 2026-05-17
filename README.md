@@ -10,6 +10,83 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.14.1
+
+**Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**
+v4.14.0 shipped 7 perf wins + 6 new public functions + 80
+parametrized dispatcher pins, but the audit found 1 P0 silent-
+wrong-physics bug in the 77× LG/HG mode-stack cache key plus 6
+P1s.  v4.14.1 closes the P0 + 5 of 6 P1s + the top-priority P2s.
+911 unit tests pass (up from 858); 34/34 validation files pass.
+
+### P0 closure — LG/HG mode-stack cache key
+
+The 77× perf win in v4.14.0 had a silent-wrong-physics bug.  The
+cache key omitted `dx, dy` — two calls with the same shape but
+different physical pitch (e.g. `dx=1e-6` then `dx=2e-6`, both at
+N=256) **collided on this key**, returning the FIRST grid's modes
+evaluated against the second call's field.  Silently wrong on
+multi-resolution analysis, wavelength-adaptive grid sweeps, and
+optimisation loops where `dx` is a free variable.  v4.14.1 adds
+`dx, dy` to both keys with a regression pin.
+
+### P1 closures
+
+* **Aperture=0 semantics regression fixed.**  v4.14.0's wrapper-
+  merit cache mapped `aperture <= 0` to `mask=None`, which downstream
+  interpreted as "no clipping, full grid plane wave."  v4.14.1 adds
+  a `_ZeroApertureMaskSentinel` so callers can distinguish "no
+  aperture specified" from "aperture explicitly zero (block all
+  light)."  Pre-v4.14 semantics restored.
+* **Brewster-angle phase aggregation bug** in `coatings.py` (the
+  v4.13.1 audit flagged it; v4.14.0's wavelength-batch rewrite
+  inherited the bug).  `0.5 * (angle(r_s) + angle(r_p))` is wrong
+  by π/2 or π at Brewster.  v4.14.1 changes to `np.angle(0.5 *
+  (r_s + r_p))` (complex sum then angle — robust to π
+  discontinuities).
+* **`_solve_envelope_stationary_batch` contract violation** —
+  function promised `converged=False` for failed pixels but set
+  `True` to drop them from the active set.  Separate `finished`
+  mask added; `converged` now matches the docstring.
+* **`clear_lg_mode_stack_cache` now in top-level `__all__`** —
+  v4.14.0's CHANGELOG claimed this was "Public" but the import
+  wasn't in `lumenairy/__init__.py`.  The audit-meta-finding
+  recurring on the very release that shipped 80 dispatcher pins.
+  v4.14.1 closes the gap AND adds a structural counter-measure: a
+  **cache-clear dispatcher pin** that walks every submodule's
+  `__all__` for `clear_*` names and asserts each is re-exported
+  at top level.  Future cache-clear additions can't regress this.
+* **`encircled_energy_radius` docstring corrected** — claim
+  `ee[0] = 0 always` is false; `ee[0]` equals the centre-pixel
+  intensity contribution.
+
+* **Deferred to v4.15+ (P1-NEW-5)** — `row_reset` Newton warm-
+  start coordinated update (the existing v4.14.0 bit-equal pin
+  would break by ~2.9e-9 rel).
+
+### Tier-2 follow-ups
+
+* **Thread-safety locks** on the three new v4.14.0 caches.
+* **Monkey-patch removed** in `optimize/core.py` — `clear_asm_caches()`
+  now lazy-imports and calls `_clear_wrapper_merit_cache` +
+  `clear_lg_mode_stack_cache` directly, eliminating re-import
+  recursion risk.
+* **LG/HG mode-stack cache now wired into `clear_asm_caches()`**
+  (v4.14.0 only wired it into `lumenairy_context()`).
+* **Final `0+0j` / `1+0j` literal sweep** — 2 missed sites
+  (`lenses_maslov.py:448`, `_lens_thin.py:173`).
+* **`fiber_mode` added** to `TestP1CSourceFactoryDispatcherPin`
+  parametrize list (stale exclusion from v4.13.2).
+
+### Doc-trust hygiene
+
+4 confirmed doc-drift items from the audit retroactively
+corrected in the v4.14.0 CHANGELOG entry below: "16 tests at 1e-10
+rel" (→ 3 in cited class), "6 batched helpers consumed by 77×
+win" (→ helpers have zero production consumers, reserved for
+v4.15+), HG cache key `w[s]` shorthand (→ both `wx`, `wy`),
+`lenses_maslov.py` line drift.
+
 ## What's new in 4.14.0
 
 **Phase B of the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`).**

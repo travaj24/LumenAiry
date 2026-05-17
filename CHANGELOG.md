@@ -2,6 +2,176 @@
 
 All notable changes to the core library are documented here.
 
+## [4.14.1] — 2026-05-17
+
+**Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**  The
+audit found 1 P0 (silent-wrong physics in the 77× LG/HG mode-stack
+cache key) + 6 P1s + 10 P2s + 8 P3s + 7 doc-drift items.  v4.14.1
+closes the P0, 5 of 6 P1s (the 6th — `row_reset` Newton warm-start
+— deferred to v4.15+ with an explicit docstring note + xfail-style
+marker), the top-priority P2s (cache locks, monkey-patch removal,
+final `0+0j`/`1+0j` sweep, `fiber_mode` in the dispatcher pin),
+and all 7 doc-drift items (4 retroactively corrected in the
+v4.14.0 entry below; 3 closed by the v4.14.1 fixes themselves).
+**911 unit tests pass** (up from 858); 34/34 validation files
+pass.
+
+### Breaking changes — none
+
+No user-facing breakage.  Aperture-zero semantics restored to the
+pre-v4.14.0 behaviour (which had silently flipped) — see P1-NEW-1
+below.
+
+### P0 closure — `_LG_MODE_STACK_CACHE` / `_HG_MODE_STACK_CACHE` cache key
+
+The 77× perf win in v4.14.0 had a silent-wrong-physics bug.  The
+cache key omitted `dx, dy` — only `(p_max, ell_max, Ny, Nx, w, cx,
+cy, dtype_str)`.  Two calls with the same shape but different
+physical pitch (e.g. `dx=1e-6` then `dx=2e-6`, both at N=256)
+collided on this key: **the second call returned the FIRST grid's
+modes evaluated against the second call's field.**  Silently wrong
+overlaps on:
+
+* wavelength-adaptive grid sweeps (re-pitch the grid per
+  wavelength to keep `λ/dx` constant)
+* multi-resolution analysis (debug at coarse `dx`, then fine `dx`)
+* optimisation loops where `dx` is a free variable
+
+**Fix:** `dx, dy` added to both LG and HG mode-stack cache keys.
+Regression pin asserts that two calls at the same `N, w, cx, cy,
+p_max, ell_max` but different `dx` return distinct mode stacks.
+
+### P1 closures
+
+* **P1-NEW-1: aperture=0 semantics regression.**  v4.14.0's
+  `_get_wrapper_merit_cache` mapped `aperture <= 0` to `mask=None`,
+  which downstream callers interpreted as "no clipping, full grid
+  plane wave."  **Semantics flipped 180°** from the pre-v4.14
+  behaviour where `aperture=0` produced an all-False mask (block
+  all light).  v4.14.1 adds a `_ZeroApertureMaskSentinel` singleton;
+  `_get_wrapper_merit_cache` returns the sentinel for `ap <= 0` and
+  `None` for `ap is None`; callers compare via `is` and route the
+  sentinel through an explicit all-zeros path.  Three callers
+  (`_get_wrapper_merit_cache`, `MultiWavelengthMerit.evaluate`,
+  `MultiFieldMerit.evaluate`) updated.
+* **P1-NEW-2: Brewster-angle phase aggregation bug** in
+  `coatings.py` carried into v4.14.0's wavelength batch.  The
+  v4.13.1 audit flagged that `0.5 * (np.angle(r_s) + np.angle(r_p))`
+  is off by π/2 or π at Brewster (~56°) because `r_p` sign-flips
+  through zero.  v4.14.0's wavelength-batch rewrite inherited the
+  bug verbatim.  v4.14.1 changes the aggregation to
+  `np.angle(0.5 * (r_s + r_p))` (complex sum then angle — robust
+  to π-discontinuities).  Reference helper in
+  `test_audit_fixes_v4_14_0_agent_2.py` also updated to match
+  (the audit explicitly anticipated this collateral update).
+* **P1-NEW-3: `_solve_envelope_stationary_batch` contract
+  violation.**  The function's docstring promised
+  `converged_mask=False` for failed pixels (singular Hessian or
+  non-finite update) but the code set `True` to drop them from the
+  active set.  Currently dead production code; the contract is
+  preserved for future callers.  v4.14.1 introduces a separate
+  `finished` mask for active-set tracking, leaving `converged`
+  to mean what the docstring says.
+* **P1-NEW-4: `clear_lg_mode_stack_cache` now in top-level `__all__`.**
+  v4.14.0's CHANGELOG claimed this was "Public" but the import
+  wasn't in `lumenairy/__init__.py` — the audit-meta-finding
+  ("fix N sites, miss N+1") recurring on the very release that
+  shipped 80 dispatcher pins.  v4.14.1 closes the loop AND adds a
+  new structural counter-measure: a parametrized **cache-clear
+  dispatcher pin** (`tests/unit/test_v4_14_1_dispatcher_pin_cache
+  _clears.py`) that walks every submodule's `__all__` for
+  `clear_*` names and asserts each is re-exported at top level
+  AND callable from `la.*`.  Future cache-clear additions can
+  no longer regress this gap.
+* **P1-NEW-6: `encircled_energy_radius` docstring** corrected.
+  v4.14.0 claimed `ee[0] = 0 always` (in an inline comment, not
+  the docstring).  Reality: `ee[0]` equals the cumulative power
+  at radius 0 (the centre-pixel intensity contribution).  Docstring
+  expanded to document the hot-centre behaviour explicitly;
+  pinning test exercises a delta-like centre-pixel input and
+  confirms the threshold-zero short-circuit returns 0.
+
+* **P1-NEW-5 deferred to v4.15+** — `row_reset` doesn't reset
+  `last_v_star` in the Maslov tracking.  Option (a) (also reset
+  `v_star`) breaks the existing `test_lg00_single_mode_bit_equal`
+  pin by ~2.9e-9 rel.  Option (b) (docstring-only deferral) is
+  the v4.14.1 path: explicit docstring note + an inline comment at
+  the row-wrap branch documenting the deferral.  Pinning test
+  asserts the CURRENT (warm-start carries across row wrap)
+  behaviour with a clear marker telling v4.15+ to flip the
+  assertion when the coordinated public-path update lands.
+
+### Tier-2 closures
+
+* **Thread-safety locks** on the three new v4.14.0 caches.
+  `_LG_MODE_STACK_CACHE`, `_HG_MODE_STACK_CACHE`, and
+  `_WRAPPER_MERIT_CACHE` now have module-level `threading.Lock`
+  guards on their read-modify-write ops, mirroring the
+  `_ASM_CACHE_LOCK` precedent in `propagation.py`.  Concurrent
+  `OrderedDict.move_to_end` / `popitem(last=False)` from parallel
+  `design_optimize` threads no longer race.
+* **Monkey-patch removed** in `optimize/core.py`.  The v4.14.0
+  pattern monkey-patched `propagation.clear_asm_caches` to chain
+  in `_clear_wrapper_merit_cache`; v4.14.1 replaces this with a
+  lazy-import + call inside `propagation.clear_asm_caches()`
+  itself.  Eliminates re-import recursion risk and the case
+  where importing `propagation` without `optimize` leaves the
+  wrapper-merit cache resident.
+* **LG/HG mode-stack cache wired into `clear_asm_caches()`** (not
+  just `lumenairy_context()` as v4.14.0 had).  Same lazy-import
+  pattern.  CHANGELOG claim from v4.14.0 now matches code.
+* **Final `0+0j`/`1+0j` literal sweep**: 2 sites caught by the
+  audit — `lenses_maslov.py:448` (in `sample_E_bilinear`) and
+  `_lens_thin.py:173` (aplanatic branch, actually `1.0+0.0j` not
+  `0.0+0.0j` — replaced with `xp.ones((), dtype=...)`).
+* **`fiber_mode` added** to
+  `TestP1CSourceFactoryDispatcherPin` parametrize list (v4.13.2's
+  `create_fiber_mode` dy-widening was complete but the test
+  list was stale).
+
+### Retroactive CHANGELOG corrections to v4.14.0 entry
+
+4 confirmed doc-drift items from the audit corrected in the
+v4.14.0 entry below:
+
+* "16 tests at 1e-10 rel" → 3 tests in the cited class
+  (`TestPropagateModalAsymptoticCorrectness`), 16 across the
+  file overall.
+* "6 batched helpers consumed by 77× win" → helpers ship privately
+  but currently have zero production consumers; reserved for the
+  v4.15+ coordinated public switch.
+* HG cache key documented as `w[s]` shorthand → both LG and HG
+  keys spelled out (HG has both `wx` AND `wy`; v4.14.1 adds
+  `dx, dy`).
+* `lenses_maslov.py` line cites — drifted 4-10 lines since
+  v4.14.0 ship; in-line correction note added.
+
+The 3 other doc-drift items (LG cache wired into `clear_asm
+_caches`, public `clear_lg_mode_stack_cache`, "dispatcher pin
+covers all 6 factories") **became true** in v4.14.1 — no
+retroactive edit needed; the v4.14.0 entry's claims are now
+accurate.
+
+### Test counts
+
+* Pre-v4.14.1 baseline (v4.14.0): 858 unit tests.
+* v4.14.1 additions:
+  - Agent A (asymptotic): 8 tests
+  - Agent B (optimize + propagation): 11 tests
+  - Agent C (coatings + lens sweep): 8 tests
+  - Agent D (exports + meta-pin): 25 tests + 1 parametrize entry
+    + 17 cache-clear meta-pins
+* Final: **911 unit tests passing**, **34/34 validation files
+  passing**.
+
+### Deferred to v4.15+
+
+`row_reset` Newton warm-start coordinated update (P1-NEW-5),
+modal asymptotic per-pixel vectorisation public switch, Source
+factory signature normalisation, `system.evaluate(prescription,
+source, ...)` ergonomic entry.  See [`ROADMAP.md`](ROADMAP.md)
+for the full forward plan.
+
 ## [4.14.0] — 2026-05-17
 
 **Phase B of the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`).**
@@ -46,11 +216,17 @@ instead of `n_wv × n_pol` times.  This is what unlocks the 24×
 batched speedup.
 
 **LG/HG mode-stack cache** (`_LG_MODE_STACK_CACHE` +
-`_HG_MODE_STACK_CACHE`, both `OrderedDict` + LRU(32)) keyed on
-`(p_max/m_max, ell_max/n_max, Ny, Nx, w[s], cx, cy, dtype_str)`.
-Wired into `clear_asm_caches()` and `lumenairy_context(clear_caches
-_on_exit=True)`.  Public `clear_lg_mode_stack_cache()` for explicit
-flushes.
+`_HG_MODE_STACK_CACHE`, both `OrderedDict` + LRU(32)).  LG key is
+`(p_max, ell_max, Ny, Nx, w, cx, cy, dtype_str)`; HG key has both
+`wx` AND `wy` (9-element tuple).  **Correction (v4.14.1):** v4.14.0
+omitted `dx, dy` from these keys, producing silently-wrong overlaps
+on multi-resolution or wavelength-adaptive grid sweeps; v4.14.1
+adds `dx, dy` to both keys and wires the caches into
+`clear_asm_caches()` (v4.14.0 only wired them into
+`lumenairy_context(clear_caches_on_exit=True)`).  Public
+`clear_lg_mode_stack_cache()` for explicit flushes (became
+top-level-importable as `lumenairy.clear_lg_mode_stack_cache` in
+v4.14.1).
 
 **Phase-retrieval algebraic identity.**
 `exp(1j * np.angle(F)) == F / np.abs(F)` for nonzero `F`.  v4.14
@@ -71,8 +247,9 @@ lands in a **wrong-saddle basin** that produces `|b_quad| > 700`,
 which the overflow guard zeros.
 
 The pre-v4.14 behaviour is pinned bit-equal by `tests/unit/test_perf
-_v4_12_0_asymptotic.py::TestPropagateModalAsymptoticCorrectness` (16
-tests at `1e-10 rel`).  The vectorised cold-start produces strictly
+_v4_12_0_asymptotic.py::TestPropagateModalAsymptoticCorrectness` (3
+tests in the cited class, 16 in the file overall, all at `1e-10
+rel`).  The vectorised cold-start produces strictly
 more non-zero pixels (physically more correct) but breaks the
 existing pin.  **This is a real physics finding** worth a coordinated
 v4.15+ release that updates the test pin alongside the algorithm
@@ -83,8 +260,11 @@ Shipped in v4.14.0: 6 new private vectorised helpers
 `_phi_v2_hessian_batch`, `_gaussian_moment_table_2d_batch`,
 `_batched_polynomial_substitute_linear_2d`, `_batched_polynomial
 _under_affine_shift`).  The public `propagate_modal_asymptotic` body
-is unchanged.  The new helpers ARE consumed by the LG/HG mode-stack
-cache (the 77× warm win).
+is unchanged.  **Correction (v4.14.1):** the helpers ship privately
+but currently have zero production consumers; the 77× LG/HG mode-
+stack cache reaches into `lg_polynomial`/`hg_polynomial`/`_evaluate
+_poly2d` directly, not through the batched helpers.  The helpers
+are reserved for the v4.15+ coordinated public switch.
 
 ### New public API (cross-library survey gaps)
 
@@ -157,11 +337,16 @@ from the v4.13.2 B.4/B.5 thin-lens sweep.  Fixed in this release:
 
 * **`apply_real_lens_maslov`** — `lenses_maslov.py`:
   - `_integrate_quadrature` (line 663) and `_integrate_local
-    _quadrature` (line 970) and `_integrate_stationary_phase` (line
-    828) all hardcoded `dtype=np.complex128` allocations.  Each now
+    _quadrature` (line 993) and `_integrate_stationary_phase` (line
+    737) all hardcoded `dtype=np.complex128` allocations.  Each now
     accepts an `out_dtype` kwarg defaulting to `np.complex128` for
     back-compat; `apply_real_lens_maslov` threads `E_in.dtype`.
-  - The post-quadrature re-fit at line 562 multiplied by `1j`
+    (CHANGELOG correction in v4.14.1: original v4.14.0 entry cited
+    pre-landing line numbers 562/663/828/970; actual post-landing
+    sites in the v4.14.0 tag are 566/624/733/880/989, drifted
+    further to 678/737/884/993 after v4.14.1 lock + key-tuple
+    additions.)
+  - The post-quadrature re-fit at line 566 multiplied by `1j`
     (complex128) which promoted the result; now cast back to
     `E_in.dtype`.
   - Final `normalize_output` step multiplied by a python float

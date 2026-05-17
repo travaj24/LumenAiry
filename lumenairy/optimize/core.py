@@ -77,6 +77,7 @@ Typical usage
 from __future__ import annotations
 
 import copy
+import threading
 import time
 import warnings
 from collections import OrderedDict
@@ -99,10 +100,11 @@ from ..analysis.through_focus import (
 # allocated at the runtime-selected precision -- preserves the
 # precision='single' choice through merit evaluations.
 from ..propagators.propagation import get_default_complex_dtype
-# v4.14.0: imported as a module alias so the wrapper-merit cache can
-# monkey-patch ``clear_asm_caches`` to also clear its own state (see
-# ``_clear_asm_caches_with_wrapper_merit`` further down).
-from ..propagators import propagation as _propagation_module
+# v4.14.1 (P2-3): the v4.14.0 monkey-patch of
+# ``_propagation_module.clear_asm_caches`` has been retired in favour
+# of a lazy reverse-direction import inside
+# ``propagation.clear_asm_caches()`` itself.  See
+# :func:`_clear_wrapper_merit_cache` and the comment in propagation.py.
 
 
 # =========================================================================
@@ -1975,6 +1977,33 @@ class ChromaticFocalShiftMerit(MeritTerm):
 _WRAPPER_MERIT_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
 _WRAPPER_MERIT_CACHE_SIZE = 32
 _WRAPPER_MERIT_MESHGRID_BUILDS = 0
+# v4.14.1 (P2-1): guard concurrent get / move_to_end / __setitem__ /
+# popitem(last=False) on _WRAPPER_MERIT_CACHE.  Follows the
+# _ASM_CACHE_LOCK precedent in propagators/propagation.py.  Without
+# this two threads racing through _get_wrapper_merit_cache could see a
+# torn OrderedDict.
+_WRAPPER_MERIT_CACHE_LOCK = threading.Lock()
+
+
+# v4.14.1 (P1-NEW-1): sentinel meaning "aperture explicitly zero, block
+# all light."  Distinguished from ``mask is None`` ("no aperture
+# specified, use full grid").  Pre-v4.14.0 a scalar
+# ``aperture_diameter=0`` produced an all-False boolean mask, which
+# downstream apply_real_lens treated as "block all light"; v4.14.0
+# collapsed that branch into ``mask=None``, flipping the semantics so
+# ``aperture_diameter=0`` instead produced a grid-filling plane wave.
+# Callers compare ``mask is _ZERO_APERTURE_MASK`` to detect the
+# deliberate-zero case and zero their field accordingly.
+class _ZeroApertureMaskSentinel:
+    """Singleton sentinel for aperture explicitly zero / blocked."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return '<_ZERO_APERTURE_MASK>'
+
+
+_ZERO_APERTURE_MASK = _ZeroApertureMaskSentinel()
 
 
 def _wrapper_merit_aperture_key(aperture: Any) -> tuple:
@@ -2041,13 +2070,16 @@ def _get_wrapper_merit_cache(
     ap_key = _wrapper_merit_aperture_key(aperture)
     key = (Ny, Nx, dx_f, ap_key, dtype_str)
 
-    entry = _WRAPPER_MERIT_CACHE.get(key)
-    if entry is not None:
-        # LRU bookkeeping: refresh recency.
-        _WRAPPER_MERIT_CACHE.move_to_end(key)
-        return entry
+    with _WRAPPER_MERIT_CACHE_LOCK:
+        entry = _WRAPPER_MERIT_CACHE.get(key)
+        if entry is not None:
+            # LRU bookkeeping: refresh recency.
+            _WRAPPER_MERIT_CACHE.move_to_end(key)
+            return entry
 
     # Cache miss: build the grid + mask + Y-factor once and store.
+    # The build itself is pure-CPU numpy and re-entrant; only the
+    # OrderedDict get/move_to_end/set/popitem operations need the lock.
     _WRAPPER_MERIT_MESHGRID_BUILDS += 1
     Y_idx, X_idx = np.indices((Ny, Nx))
     X = (X_idx - Nx / 2) * dx_f
@@ -2062,14 +2094,25 @@ def _get_wrapper_merit_cache(
                 f"_get_wrapper_merit_cache: aperture array shape "
                 f"{mask.shape} != grid shape ({Ny}, {Nx})")
     elif aperture is None:
+        # "No aperture specified" -- callers treat mask=None as
+        # "full grid, no clipping."
         mask = None
     else:
-        # Scalar aperture_diameter; build the circular mask.
+        # Scalar aperture_diameter.
         ap_diam = float(aperture)
         if ap_diam > 0:
             mask = r_squared <= (ap_diam / 2.0) ** 2
         else:
-            mask = None
+            # v4.14.1 (P1-NEW-1): aperture explicitly <= 0 means
+            # "block all light."  Distinct from the ``None`` branch
+            # above (which means "no aperture specified, use full
+            # grid").  Pre-v4.14.0 a scalar 0 produced an all-False
+            # boolean mask; v4.14.0 erroneously collapsed it to None
+            # and the downstream callers then treated the deliberate
+            # zero as "no aperture -> full plane wave," flipping the
+            # semantics.  Use a sentinel so callers can detect this
+            # case via ``is`` and zero their fields explicitly.
+            mask = _ZERO_APERTURE_MASK
 
     # Wavelength-independent Y-tilt factor: 2*pi * Y.  Per-leg the
     # tilt phase is (Y_factor / wavelength) * sin(theta_y) plus the
@@ -2095,61 +2138,28 @@ def _get_wrapper_merit_cache(
         'r_squared': r_squared,
         'E_ones': E_ones,
     }
-    _WRAPPER_MERIT_CACHE[key] = entry
-    while len(_WRAPPER_MERIT_CACHE) > _WRAPPER_MERIT_CACHE_SIZE:
-        _WRAPPER_MERIT_CACHE.popitem(last=False)
+    with _WRAPPER_MERIT_CACHE_LOCK:
+        _WRAPPER_MERIT_CACHE[key] = entry
+        while len(_WRAPPER_MERIT_CACHE) > _WRAPPER_MERIT_CACHE_SIZE:
+            _WRAPPER_MERIT_CACHE.popitem(last=False)
     return entry
 
 
 def _clear_wrapper_merit_cache() -> None:
     """Drop the wrapper-merit meshgrid cache and reset the build counter.
 
-    Called automatically from :func:`clear_asm_caches` (the propagation
-    module's clear-all entry point is monkey-patched to also invoke
-    this), so the cache is part of the standard "leave the library
-    pristine" lifecycle hook.  Also callable directly from tests.
+    v4.14.1 (P2-3): now invoked from
+    :func:`lumenairy.propagators.propagation.clear_asm_caches` via a
+    lazy import inside that function (the v4.14.0 monkey-patch is
+    gone).  The reverse-direction dependency keeps optimize/core
+    free of propagation-layer side-effects at import time while still
+    leaving both caches pristine on a single ``clear_asm_caches()``
+    call.  Also callable directly from tests.
     """
     global _WRAPPER_MERIT_MESHGRID_BUILDS
-    _WRAPPER_MERIT_CACHE.clear()
+    with _WRAPPER_MERIT_CACHE_LOCK:
+        _WRAPPER_MERIT_CACHE.clear()
     _WRAPPER_MERIT_MESHGRID_BUILDS = 0
-
-
-# Monkey-patch ``clear_asm_caches`` so callers (including the
-# ``lumenairy_context(clear_caches_on_exit=True)`` hook in
-# ``_context.py``) drop this cache too without having to add another
-# entry to the per-module clear-helper list.  The replacement is a
-# thin wrapper that calls the original first then clears ours.
-_orig_clear_asm_caches = _propagation_module.clear_asm_caches
-
-
-def _clear_asm_caches_with_wrapper_merit() -> None:
-    """Composite cache-clear: delegates to the propagator-layer
-    ``clear_asm_caches`` and then drops the optimize-layer wrapper-
-    merit meshgrid cache.
-
-    Replaces ``propagators.propagation.clear_asm_caches`` so a single
-    call leaves both layers pristine.  Idempotent.
-    """
-    _orig_clear_asm_caches()
-    _clear_wrapper_merit_cache()
-
-
-_propagation_module.clear_asm_caches = _clear_asm_caches_with_wrapper_merit
-# The top-level ``lumenairy`` package re-exports clear_asm_caches by
-# rebinding it at import time; rebind there too so
-# ``lumenairy.clear_asm_caches()`` picks up the composite version.
-# Guarded so the import order does not matter -- when optimize/core
-# is imported before lumenairy/__init__.py finishes, the rebind is a
-# no-op and the package init will pick up our patched reference via
-# the ``from .propagators.propagation import clear_asm_caches`` line.
-try:
-    import lumenairy as _lumenairy_pkg
-    if hasattr(_lumenairy_pkg, 'clear_asm_caches'):
-        _lumenairy_pkg.clear_asm_caches = _clear_asm_caches_with_wrapper_merit
-except ImportError:
-    # Partial import during package bootstrap; the top-level
-    # re-export will pick up the patched reference once it runs.
-    pass
 
 
 # =========================================================================
@@ -2254,13 +2264,20 @@ class MultiWavelengthMerit(MeritTerm):
                     _cache = _get_wrapper_merit_cache(
                         N_pix, dx_pix, ap, _cdtype)
                     mask = _cache['mask']
-                    # ``mask`` is None only when the caller passed
-                    # aperture<=0 / None to the cache.  We already
-                    # guarded `ap is None` above by substituting the
-                    # 0.4*N*dx default, so a None mask here means a
-                    # deliberate 0-diameter request; downstream code
-                    # treats it as no-aperture (broadcasting 1.0).
-                    if mask is None:
+                    # Three branches:
+                    #   mask is None             -> "no aperture
+                    #     specified" (ap was None above, but the
+                    #     0.4*N*dx fallback rules that out here).
+                    #     Treat as full grid for completeness.
+                    #   mask is _ZERO_APERTURE_MASK -> deliberate
+                    #     aperture_diameter <= 0; block all light
+                    #     (v4.14.1 P1-NEW-1 fix; v4.14.0 erroneously
+                    #     mapped this to "full grid plane wave").
+                    #   mask is an ndarray       -> circular boolean
+                    #     mask for the requested aperture diameter.
+                    if mask is _ZERO_APERTURE_MASK:
+                        E_in_wl = np.zeros((N_pix, N_pix), dtype=_cdtype)
+                    elif mask is None:
                         E_in_wl = np.ones((N_pix, N_pix), dtype=_cdtype)
                     else:
                         E_in_wl = mask.astype(_cdtype)
@@ -2424,7 +2441,16 @@ class MultiFieldMerit(MeritTerm):
             tilt_phase = np.sin(theta_x) * k_X + np.sin(theta_y) * k_Y
             # 4.11.1: honour precision knob (was hard-coded complex128
             # which silently demoted precision='single' configs).
-            if aperture_mask is None:
+            # v4.14.1 (P1-NEW-1): three branches -- None means "no
+            # aperture specified, full grid"; _ZERO_APERTURE_MASK
+            # means "aperture explicitly zero, block all light";
+            # ndarray means "circular boolean mask."  Pre-v4.14.0 the
+            # zero-diameter case was an all-False ndarray (correctly
+            # zeroing the field); v4.14.0 collapsed it into the None
+            # branch (full-grid plane wave), flipping the semantics.
+            if aperture_mask is _ZERO_APERTURE_MASK:
+                E_tilted = np.zeros((Ny, Nx), dtype=_cdtype)
+            elif aperture_mask is None:
                 E_tilted = np.exp(1j * tilt_phase).astype(_cdtype)
             else:
                 E_tilted = np.where(aperture_mask, np.exp(1j * tilt_phase),

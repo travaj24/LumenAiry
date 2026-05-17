@@ -398,6 +398,7 @@ from .propagators.asymptotic import (
     solve_envelope_stationary_jax_ift,
     fit_canonical_polynomials_jax,
     clear_lg_polynomial_cache,
+    clear_lg_mode_stack_cache,
 )
 
 # ── DOE / Gratings / Phase I/O ──────────────────────────────────────────
@@ -735,7 +736,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.14.0"
+__version__ = "4.14.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1345,6 +1346,7 @@ __all__ = [
     'clear_asm_caches',
     'clear_zernike_basis_cache',
     'clear_lg_polynomial_cache',
+    'clear_lg_mode_stack_cache',
     'clear_through_focus_scan_jax_cache',
     'clear_trace_jax_cache',
     'clear_propagate_system_jax_cache',

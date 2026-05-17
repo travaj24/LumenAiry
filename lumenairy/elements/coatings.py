@@ -234,7 +234,14 @@ def coating_reflectance(
         t_s = ts_by_pol['s']
         t_p = ts_by_pol['p']
         R[:] = 0.5 * (np.abs(r_s) ** 2 + np.abs(r_p) ** 2)
-        phase_r[:] = 0.5 * (np.angle(r_s) + np.angle(r_p))
+        # v4.14.1 (audit P1-NEW-2): aggregate the s/p reflection phases
+        # via the complex sum (then angle), not the arithmetic mean of
+        # the two individual angles.  ``r_p`` sign-flips through zero
+        # at Brewster (~56 deg for fused silica at visible), and the
+        # unwrapped arithmetic mean of two angles separated by ~pi is
+        # off by pi/2 (or pi at the singularity).  The complex-sum
+        # formulation is robust to that branch cut.
+        phase_r[:] = np.angle(0.5 * (r_s + r_p))
         # Power transmission via the amplitude coefficient (Macleod
         # eq. 2.99): T_s = Re(eta_sub) / Re(eta_amb) * |t|^2.  Use the
         # per-polarization admittances (4.11.2 fix).

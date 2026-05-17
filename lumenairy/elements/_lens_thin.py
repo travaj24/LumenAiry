@@ -170,7 +170,15 @@ def apply_thin_lens(
         valid = r_over_f_sq < 1.0
         sqrt_term = xp.sqrt(xp.maximum(1.0 - r_over_f_sq, 0.0))
         phase = k * f * (1.0 - sqrt_term)
-        lens_phase = xp.where(valid, xp.exp(-1j * phase), 1.0 + 0.0j)
+        # v4.14.1 (audit P2-6): dtype-aware unit-phase sentinel so the
+        # ``xp.where`` doesn't pin lens_phase to complex128 via the
+        # ``1.0 + 0.0j`` complex128 literal (matches v4.13.2 canonical
+        # pattern for the ``0.0 + 0.0j`` sweep).
+        lens_phase_valid = xp.exp(-1j * phase)
+        lens_phase = xp.where(
+            valid, lens_phase_valid,
+            xp.ones((), dtype=lens_phase_valid.dtype)
+        )
 
     elif lens_model == 'local_only':
         # Pure local focusing: the standard decentered quadratic minus the

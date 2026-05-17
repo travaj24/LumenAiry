@@ -1189,6 +1189,19 @@ def encircled_energy_radius(
         maximum in-grid radius if the curve never reaches the
         threshold (e.g. the beam clips the grid).
 
+        The encircled-energy curve sampled by
+        :func:`encircled_energy_curve` is NOT guaranteed to start at
+        ``ee[0] = 0``.  When the requested radii grid starts at
+        ``radii[0] = 0`` and at least one pixel sits exactly at the
+        centre (``r_sorted[0] = 0``), the cumulative-power lookup at
+        radius 0 picks up that centre-pixel contribution and
+        ``ee[0] = p_cum[0]`` (i.e. the centre-pixel's fractional
+        intensity).  If ``threshold`` is small enough that the
+        centre-pixel contribution alone already exceeds it (the
+        "hot-centre" case: a delta-like input concentrated at the
+        centre pixel), the short-circuit returns ``radii[0] = 0`` m,
+        which is the physically reasonable answer for that input.
+
     See Also
     --------
     encircled_energy_curve : the underlying curve.
@@ -1224,8 +1237,13 @@ def encircled_energy_radius(
     if ee[-1] < threshold:
         return float(radii[-1])
 
-    # First index where ee >= threshold.  The first sample (radius 0)
-    # is always ee = 0, so idx >= 1 always when threshold > 0.
+    # First index where ee >= threshold.  ``ee[0]`` is NOT always 0
+    # -- when ``radii[0] = 0`` collides with a centre-pixel at
+    # ``r_sorted[0] = 0`` (delta-like inputs), the cumulative-power
+    # lookup at radius 0 picks up the centre-pixel contribution and
+    # ``ee[0] = p_cum[0]``.  When ``threshold <= ee[0]`` the
+    # short-circuit below returns ``radii[0]`` (= 0 m), the
+    # physically-reasonable hot-centre answer.
     idx = int(np.searchsorted(ee, threshold, side='left'))
     if idx <= 0:
         return float(radii[0])

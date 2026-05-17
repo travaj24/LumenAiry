@@ -108,7 +108,14 @@ def _scalar_loop_coating_reference(layers, wavelengths, angle=0.0,
             ts.append(t_amp)
         if polarization == 'avg':
             R_val = 0.5 * (abs(rs[0]) ** 2 + abs(rs[1]) ** 2)
-            phase_val = 0.5 * (np.angle(rs[0]) + np.angle(rs[1]))
+            # v4.14.1 (audit P1-NEW-2): aggregate phases via complex
+            # sum before taking the angle.  Pre-v4.14.1 form
+            # ``0.5 * (np.angle(rs[0]) + np.angle(rs[1]))`` is off by
+            # +/-pi at Brewster because r_p sign-flips through zero;
+            # the unwrapped arithmetic average of two angles separated
+            # by ~pi is wrong.  This reference helper has been updated
+            # to match the corrected coatings.py implementation.
+            phase_val = np.angle(0.5 * (rs[0] + rs[1]))
             _eta_sub_s = eta_sub_by_pol['s']
             _eta_amb_s = eta_amb_by_pol['s']
             _eta_sub_p = eta_sub_by_pol['p']

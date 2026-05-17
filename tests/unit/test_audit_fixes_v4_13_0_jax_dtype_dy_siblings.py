@@ -955,12 +955,14 @@ _SOURCE_FACTORY_KWARGS = [
         'point_source', {'z0': -1e-3}, id='point_source'),
     pytest.param(
         'top_hat', {'diameter': 50e-6}, id='top_hat'),
-    # fiber_mode is excluded: the underlying create_fiber_mode helper
-    # does not currently accept dy, so the parametrised positive
-    # test would crash on TypeError before the wrap-level dy check
-    # is exercised.  TestP1CSourceDyThreading.test_source_fiber_mode_
-    # factory_preserves_dy covers the wrapper-level behaviour
-    # directly.
+    # fiber_mode: v4.13.2 widened ``create_fiber_mode`` to accept the
+    # ``dy=`` kwarg (it forwards through to ``create_gaussian_beam``),
+    # so the dispatcher pin now covers all 5 factories.  The v4.14.0
+    # audit P2-9 flagged that the v4.13.2 CHANGELOG claim of "covers
+    # all factories" was off-by-one because this parametrize list had
+    # never been updated.  v4.14.1 closes that gap.
+    pytest.param(
+        'fiber_mode', {'mode_field_diameter': 10e-6}, id='fiber_mode'),
 ]
 
 

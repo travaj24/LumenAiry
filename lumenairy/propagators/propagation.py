@@ -779,6 +779,12 @@ def clear_asm_caches() -> None:
     - ``_H_CACHE``          : ASM transfer function H per shape/wavelength/z.
     - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans (v4.12.2 add).
     - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo (v4.12.2 add).
+    - LG / HG mode-stack cache (v4.14.1; was claimed in v4.14.0 CHANGELOG
+      but not wired up -- only :func:`lumenairy.lumenairy_context` cleared
+      it).
+    - optimize/core wrapper-merit meshgrid cache (v4.14.1; replaces the
+      v4.14.0 monkey-patch indirection -- the cache is now drained via a
+      reverse-direction lazy import below).
 
     The original 3.2.14 perf-pass only cleared the first three.  v4.12.2
     extends the function to ALSO drop the pyFFTW plan cache + bad-shape
@@ -795,6 +801,29 @@ def clear_asm_caches() -> None:
         _H_CACHE.clear()
         _PYFFTW_PLAN_CACHE.clear()
         _PYFFTW_BAD_SHAPES.clear()
+    # v4.14.1 (Tier-0 #5): chain in the LG/HG mode-stack cache.  Lazy-
+    # imported to avoid a hard dependency on the asymptotic module at
+    # propagation-import time.  Errors are swallowed so a partial
+    # install (e.g. tests stubbing out the asymptotic module) does not
+    # break the propagation-layer clear path.  Phase 2 of v4.13.0
+    # narrowed bare ``except Exception:`` to specific classes; preserve
+    # that here.
+    try:
+        from .asymptotic import clear_lg_mode_stack_cache
+        clear_lg_mode_stack_cache()
+    except (ImportError, RuntimeError, AttributeError):
+        pass
+    # v4.14.1 (P2-3): chain in the optimize-layer wrapper-merit
+    # meshgrid cache.  Same lazy-import pattern; replaces the v4.14.0
+    # monkey-patch in optimize/core.py that re-bound this very
+    # function.  The reverse-direction import path keeps the wrapper-
+    # merit cache resident even when optimize/core has not yet been
+    # imported (it simply has nothing to clear in that case).
+    try:
+        from ..optimize.core import _clear_wrapper_merit_cache
+        _clear_wrapper_merit_cache()
+    except (ImportError, RuntimeError, AttributeError):
+        pass
 
 
 def set_asm_cache_size(

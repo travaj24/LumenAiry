@@ -93,6 +93,7 @@ from __future__ import annotations
 import copy
 import functools
 import math
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, NamedTuple, Optional, Tuple
@@ -307,9 +308,18 @@ def clear_lg_polynomial_cache() -> None:
 # reduction.  Cleared explicitly via :func:`clear_lg_mode_stack_cache`.
 _LG_MODE_STACK_CACHE: 'OrderedDict[Any, Tuple[Tuple[Tuple[int, int], ...], np.ndarray]]' = OrderedDict()
 _LG_MODE_STACK_CACHE_MAX = 32
+# v4.14.1 (P2-1): thread-safety lock for ``_LG_MODE_STACK_CACHE``.
+# Concurrent ``design_optimize`` threads can race on the
+# ``OrderedDict.get`` / ``move_to_end`` / ``popitem(last=False)``
+# read-modify-write sequence in :func:`_lg_mode_conj_stack`.  Follows
+# the ``_ASM_CACHE_LOCK`` precedent in :mod:`propagators.propagation`.
+_LG_MODE_STACK_LOCK = threading.Lock()
 
 _HG_MODE_STACK_CACHE: 'OrderedDict[Any, Tuple[Tuple[Tuple[int, int], ...], np.ndarray]]' = OrderedDict()
 _HG_MODE_STACK_CACHE_MAX = 32
+# v4.14.1 (P2-1): thread-safety lock for ``_HG_MODE_STACK_CACHE``; see
+# ``_LG_MODE_STACK_LOCK``.
+_HG_MODE_STACK_LOCK = threading.Lock()
 
 
 def clear_lg_mode_stack_cache() -> None:
@@ -317,17 +327,24 @@ def clear_lg_mode_stack_cache() -> None:
     :func:`decompose_lg` / :func:`decompose_hg`.
 
     Each entry is a stack of ``(N_modes, Ny, Nx)`` complex arrays keyed
-    on ``(p_max, ell_max, Ny, Nx, w, cx, cy, dtype_str)`` (LG) or
-    ``(m_max, n_max, Ny, Nx, wx, wy, cx, cy, dtype_str)`` (HG).  Safe to
-    call at any time; subsequent decompose calls rebuild and re-cache.
+    on ``(p_max, ell_max, Ny, Nx, w, cx, cy, dx, dy, dtype_str)`` (LG) or
+    ``(m_max, n_max, Ny, Nx, wx, wy, cx, cy, dx, dy, dtype_str)`` (HG).
+    The ``dx, dy`` entries were added in v4.14.1 (P0-NEW-1) -- pre-v4.14.1
+    keys captured only the grid shape, so two calls at the same N but
+    different physical pitch silently collided on the cached entry.
+    Safe to call at any time; subsequent decompose calls rebuild and
+    re-cache.
     """
-    _LG_MODE_STACK_CACHE.clear()
-    _HG_MODE_STACK_CACHE.clear()
+    with _LG_MODE_STACK_LOCK:
+        _LG_MODE_STACK_CACHE.clear()
+    with _HG_MODE_STACK_LOCK:
+        _HG_MODE_STACK_CACHE.clear()
 
 
 def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
                          p_max: int, ell_max: int,
-                         cx: float, cy: float
+                         cx: float, cy: float,
+                         dx: float, dy: float,
                          ) -> Tuple[Tuple[Tuple[int, int], ...], np.ndarray]:
     """Build / fetch the conjugated LG mode stack used by
     :func:`decompose_lg`.
@@ -337,9 +354,16 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     ``(N_modes, Ny, Nx)`` array whose first axis is in the same order
     as ``keys``.  Each slice is ``np.conj(LG_{p, ell}(X, Y; w, cx, cy))``.
 
-    Cache key includes the grid shape, all basis parameters, and the
-    dtype of the (X, Y) sample arrays so cached entries are only reused
-    when the result would be bit-equal.
+    Cache key includes the grid shape, the physical pitch ``(dx, dy)``,
+    all basis parameters, and the dtype of the (X, Y) sample arrays so
+    cached entries are only reused when the result would be bit-equal.
+
+    v4.14.1 (P0-NEW-1):  ``dx, dy`` are included in the cache key.
+    Pre-v4.14.1 keys captured only ``(Ny, Nx)``, so two calls with the
+    same shape but different physical pitch (e.g. ``dx=1e-6`` then
+    ``dx=2e-6`` at N=256) collided on the cache and the second call
+    silently received the first call's modes evaluated against the
+    second call's field.  Thread-safe via ``_LG_MODE_STACK_LOCK``.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -348,13 +372,15 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     dtype_str = str(np.result_type(X.dtype, Y.dtype, np.float64))
     cache_key = (
         int(p_max), int(ell_max), Ny, Nx,
-        float(w), float(cx), float(cy), dtype_str,
+        float(w), float(cx), float(cy),
+        float(dx), float(dy), dtype_str,
     )
-    cached = _LG_MODE_STACK_CACHE.get(cache_key)
-    if cached is not None:
-        # LRU touch: move to most-recent end.
-        _LG_MODE_STACK_CACHE.move_to_end(cache_key)
-        return cached
+    with _LG_MODE_STACK_LOCK:
+        cached = _LG_MODE_STACK_CACHE.get(cache_key)
+        if cached is not None:
+            # LRU touch: move to most-recent end.
+            _LG_MODE_STACK_CACHE.move_to_end(cache_key)
+            return cached
 
     rx = X - cx
     ry = Y - cy
@@ -371,19 +397,27 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
         # Conjugate once here so the einsum reduction is direct.
         stack[idx] = np.conj(polynomial * envelope)
     keys_t = tuple(keys)
-    _LG_MODE_STACK_CACHE[cache_key] = (keys_t, stack)
-    while len(_LG_MODE_STACK_CACHE) > _LG_MODE_STACK_CACHE_MAX:
-        _LG_MODE_STACK_CACHE.popitem(last=False)
+    with _LG_MODE_STACK_LOCK:
+        _LG_MODE_STACK_CACHE[cache_key] = (keys_t, stack)
+        while len(_LG_MODE_STACK_CACHE) > _LG_MODE_STACK_CACHE_MAX:
+            _LG_MODE_STACK_CACHE.popitem(last=False)
     return keys_t, stack
 
 
 def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
                          wx: float, wy: float,
                          m_max: int, n_max: int,
-                         cx: float, cy: float
+                         cx: float, cy: float,
+                         dx: float, dy: float,
                          ) -> Tuple[Tuple[Tuple[int, int], ...], np.ndarray]:
     """Build / fetch the conjugated HG mode stack used by
-    :func:`decompose_hg`.  See :func:`_lg_mode_conj_stack`."""
+    :func:`decompose_hg`.  See :func:`_lg_mode_conj_stack`.
+
+    v4.14.1 (P0-NEW-1):  ``dx, dy`` are included in the cache key for
+    the same reason as the LG variant -- same shape at different
+    physical pitch must not collide.  Thread-safe via
+    ``_HG_MODE_STACK_LOCK``.
+    """
     X = np.asarray(X)
     Y = np.asarray(Y)
     Ny = int(X.shape[0])
@@ -391,12 +425,14 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
     dtype_str = str(np.result_type(X.dtype, Y.dtype, np.float64))
     cache_key = (
         int(m_max), int(n_max), Ny, Nx,
-        float(wx), float(wy), float(cx), float(cy), dtype_str,
+        float(wx), float(wy), float(cx), float(cy),
+        float(dx), float(dy), dtype_str,
     )
-    cached = _HG_MODE_STACK_CACHE.get(cache_key)
-    if cached is not None:
-        _HG_MODE_STACK_CACHE.move_to_end(cache_key)
-        return cached
+    with _HG_MODE_STACK_LOCK:
+        cached = _HG_MODE_STACK_CACHE.get(cache_key)
+        if cached is not None:
+            _HG_MODE_STACK_CACHE.move_to_end(cache_key)
+            return cached
 
     rx = X - cx
     ry = Y - cy
@@ -412,9 +448,10 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
         polynomial = _evaluate_poly2d(poly, rx, ry)
         stack[idx] = np.conj(polynomial * envelope)
     keys_t = tuple(keys)
-    _HG_MODE_STACK_CACHE[cache_key] = (keys_t, stack)
-    while len(_HG_MODE_STACK_CACHE) > _HG_MODE_STACK_CACHE_MAX:
-        _HG_MODE_STACK_CACHE.popitem(last=False)
+    with _HG_MODE_STACK_LOCK:
+        _HG_MODE_STACK_CACHE[cache_key] = (keys_t, stack)
+        while len(_HG_MODE_STACK_CACHE) > _HG_MODE_STACK_CACHE_MAX:
+            _HG_MODE_STACK_CACHE.popitem(last=False)
     return keys_t, stack
 
 
@@ -2282,13 +2319,24 @@ def _solve_envelope_stationary_batch(
 
     Returns ``(v2x_star, v2y_star, converged_mask)``.  Pixels that
     fail (singular Hessian or non-finite update) carry the last
-    finite iterate and ``converged_mask=False``.
+    finite iterate and ``converged_mask=False``.  ``converged_mask`` is
+    ``True`` only for pixels whose residual fell below ``tol``;
+    stalled and singular pixels remain ``False`` so callers can branch
+    on the failure mode.
 
     All pixels iterate in lockstep starting from ``(v_cx, v_cy)``;
     converged pixels still consume CPU on subsequent iterations but
     that cost is amortised across the batch.  The math matches the
     scalar Gauss-Newton-like solver bit-for-bit at the stationary
     point (where the neglected s_1 Hessian piece vanishes).
+
+    v4.14.1 (P1-NEW-3):  prior to v4.14.1 the loop set
+    ``converged[idx[done & ~is_conv]] = True`` to drop stalled /
+    singular pixels from the active set, which silently flagged
+    failures as successes -- contrary to the documented contract.
+    The function now uses a separate ``finished`` mask for the
+    active-set bookkeeping and writes ``True`` to ``converged`` only
+    for genuinely-converged pixels (``rn < tol``).
     """
     s2x = np.asarray(s2x, dtype=np.float64)
     s2y = np.asarray(s2y, dtype=np.float64)
@@ -2296,6 +2344,12 @@ def _solve_envelope_stationary_batch(
     v2x = np.full(N, v_cx, dtype=np.float64)
     v2y = np.full(N, v_cy, dtype=np.float64)
     converged = np.zeros(N, dtype=bool)
+    # v4.14.1 (P1-NEW-3): ``finished`` is the active-set bookkeeping
+    # mask -- it covers BOTH genuinely-converged pixels and pixels
+    # dropped due to stall / singularity / non-finite step.
+    # ``converged`` (returned to the caller) is only set on residual-
+    # passes-tol so the docstring contract holds.
+    finished = np.zeros(N, dtype=bool)
     inv_ws2 = 1.0 / (w_s * w_s)
     inv_wp2 = 1.0 / (w_p * w_p)
     last_norm = np.full(N, np.inf, dtype=np.float64)
@@ -2303,7 +2357,7 @@ def _solve_envelope_stationary_batch(
     vc = np.array([v_cx, v_cy], dtype=np.float64)
     eye2 = np.eye(2, dtype=np.float64)
     for it in range(max_iter):
-        active = ~converged
+        active = ~finished
         if not np.any(active):
             break
         # Evaluate s1, J on the *active* subset; this keeps cost down
@@ -2360,8 +2414,8 @@ def _solve_envelope_stationary_batch(
         # Stalled pixels with non-finite step also done.
         bad = ~np.isfinite(step[:, 0]) | ~np.isfinite(step[:, 1])
         done = done | bad
-        # Update.  Pixels marked converged at this iteration also get
-        # the converged flag set globally.
+        # v4.14.1 (P1-NEW-3): ``converged`` is the user-facing success
+        # flag; only set it for residual-passes-tol pixels.
         converged[idx[is_conv]] = True
         # Non-done pixels: take the Newton step.
         update_mask = ~done
@@ -2369,10 +2423,11 @@ def _solve_envelope_stationary_batch(
         v2y[idx[update_mask]] = vy[update_mask] - step[update_mask, 1]
         # Stalled / singular: don't move (mirrors scalar early return).
         last_norm[idx] = rn
-        # Mark stalled / singular as "done converged" so they drop out
-        # of the active set on the next iter; their box-check below
-        # will still validate them.
-        converged[idx[done & ~is_conv]] = True
+        # ``finished`` is the active-set drop flag -- mark ALL done
+        # pixels (converged, stalled, singular, non-finite) so they
+        # leave the active set, but DO NOT promote stall/singular into
+        # ``converged``.
+        finished[idx[done]] = True
     return v2x, v2y, converged
 
 
@@ -2433,6 +2488,27 @@ def propagate_modal_asymptotic(
           the caustic does run row-spanning, pass
           ``maslov_tracking='1d_raster'`` and verify against a
           ground-truth direct quadrature.
+
+          v4.14.1 (P1-NEW-5) note:  ``row_reset`` resets ONLY the
+          Maslov-branch state (``last_arg_detM``, ``maslov_branch``)
+          at each row wrap; it does NOT reset the Newton warm-start
+          ``last_v_star``.  The warm-start chain therefore spans the
+          discontinuous raster jump from (x_max, y_n) to (x_min,
+          y_{n+1}), which is plausibly the mechanism behind the
+          v4.14.0 "wrong-saddle-basin" finding near grid edges
+          (largest jump in s_2).  Resetting the warm-start at row
+          wrap is the natural fix but is deferred to v4.15+ because
+          the v4.14.0 bit-equal pin
+          (:func:`test_lg00_single_mode_bit_equal` in
+          ``test_audit_fixes_v4_14_0_agent_1.py``) captures the
+          pre-v4.14.0 reference whose ``row_reset`` does not reset
+          ``last_v_star`` either; updating both at once is out of
+          scope for the v4.14.1 patch pass.  Callers worried about
+          the wrong-saddle basin should pass
+          ``maslov_tracking='principal'`` (no warm-start
+          continuity needed since no unwrap state) or stick with
+          per-row warm-starts if they verify their grid does not
+          enter the basin.
 
     Returns
     -------
@@ -2538,6 +2614,28 @@ def propagate_modal_asymptotic(
         s2y_p = flat_y[idx]
         if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
                 and Nx_grid > 0 and idx % Nx_grid == 0):
+            # v4.14.1 (P1-NEW-5):  ``row_reset`` deliberately resets
+            # ONLY the Maslov-branch state at the start of each row;
+            # the Newton warm-start ``last_v_star`` is intentionally
+            # left carrying across the raster row-wrap.  Resetting
+            # ``last_v_star`` is the natural fix for the v4.14.0
+            # wrong-saddle-basin finding (the warm-start chain
+            # spans the discontinuous raster jump from (x_max, y_n)
+            # to (x_min, y_{n+1}), which is plausibly where the
+            # wrong saddle is entered) but is deferred to v4.15+
+            # because v4.14.0 ships a bit-equal pin
+            # (``test_lg00_single_mode_bit_equal`` in
+            # ``test_audit_fixes_v4_14_0_agent_1.py``) against the
+            # pre-v4.14.0 scalar reference whose ``row_reset`` branch
+            # does NOT reset ``last_v_star`` either.  Changing this
+            # behaviour here would break the pin without updating
+            # the reference, which is out of scope for the v4.14.1
+            # patch (the reference is itself a snapshot of the
+            # pre-v4.14.0 propagator and lives in the test file).
+            # When the v4.15 wrong-saddle-basin investigation
+            # concludes, this branch should add
+            # ``last_v_star = (v_cx, v_cy)`` and the v4.14.0 pin
+            # should be updated to the new physics-correct reference.
             last_arg_detM = None
             maslov_branch = 0
 
@@ -2712,7 +2810,7 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     # mode rebuilt the (Ny, Nx) array, recomputing the shared Gaussian
     # envelope ``exp(-(rx^2+ry^2)/w^2)`` 28 times for (p_max=3, ell_max=3).
     keys, modes_conj_stack = _lg_mode_conj_stack(
-        X, Y, w, p_max, ell_max, cx, cy,
+        X, Y, w, p_max, ell_max, cx, cy, dx, dy,
     )
     # Convert field to complex (cheap if already complex; required by einsum
     # since modes are complex).
@@ -2754,7 +2852,7 @@ def decompose_hg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
     # signature and collapse all overlaps to one ``einsum``.  See
     # :func:`decompose_lg` for rationale.
     keys, modes_conj_stack = _hg_mode_conj_stack(
-        X, Y, wx, wy, m_max, n_max, cx, cy,
+        X, Y, wx, wy, m_max, n_max, cx, cy, dx, dy,
     )
     field_c = np.asarray(field)
     if not np.iscomplexobj(field_c):
