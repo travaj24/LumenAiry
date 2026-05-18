@@ -585,35 +585,79 @@ def apply_real_lens(
         # 4.11.2: warn when a freeform surface is encountered.
         # ``apply_real_lens`` only computes conic+aspheric+biconic sag
         # at the phase-screen step; it does NOT call
-        # ``surface_sag_freeform``, so any ``freeform_type`` entry
-        # (xy_polynomial, zernike, chebyshev) is silently DROPPED from
-        # the OPD.  The raytracer (``surfaces_from_prescription`` →
-        # ``_surface_sag_xy``) honours freeform correctly; the
-        # thin-element wave-optics path does not.  Switching from the
-        # raytraced/Maslov path to ``apply_real_lens`` therefore
-        # silently lops the freeform departure off the OPD, which can
-        # be tens-of-microns for a typical Zernike freeform.  Until the
-        # feature is properly added to this path, surface the omission
-        # so it isn't silent.
-        if surf.get('freeform_type') is not None:
-            import warnings
-            warnings.warn(
-                f"apply_real_lens: surface {i} has freeform_type="
-                f"{surf.get('freeform_type')!r}; the freeform departure "
-                "is NOT included in the per-surface OPD by this "
-                "thin-element wave-optics path.  Use "
-                "apply_real_lens_traced (or apply_real_lens_maslov) "
-                "for a raytraced OPD that honours freeform_type.",
-                RuntimeWarning, stacklevel=2,
-            )
-        if R_y is not None:
-            sag = surface_sag_biconic(
-                Xs, Ys, R_x=R, R_y=R_y,
-                conic_x=kc, conic_y=kc_y,
-                aspheric_coeffs=asph,
-                aspheric_coeffs_y=asph_y)
+        # ``surface_sag_freeform`` for xy_polynomial / zernike /
+        # chebyshev (those remain silently dropped pending a separate
+        # fix), so the warning continues to fire for them.
+        #
+        # v4.15.1 (P3-NEW-A): Forbes Q-bfs / Q-con sag is a 2-D scalar
+        # phase contribution exactly analogous to the (forthcoming)
+        # xy-polynomial / Zernike / Chebyshev wave-optics paths and is
+        # explicitly delegated to this module for closure -- so for
+        # ``freeform_type in ('q_bfs', 'q_con')`` we compute the
+        # freeform departure here and ADD it to the base conic sag.
+        # The dispatch goes through ``surface_sag_freeform`` so it
+        # honours the v4.15.1 P1-F1-1 radial clip + P1-F1-2 required-
+        # ``r_max`` guards.  Other freeform types still warn-and-skip
+        # for now (Agent F scope).
+        ft = surf.get('freeform_type')
+        if ft in ('q_bfs', 'q_con'):
+            # Build a minimal surface dict for the dispatcher.  Use the
+            # decentered (Xs, Ys) grid so the freeform departure
+            # rides on the same local-coordinate frame as the rest of
+            # the per-surface OPD.  surface_sag_freeform internally
+            # adds its OWN base conic sag (radius/conic from the
+            # dict), so we'd double-count if we added the dispatcher
+            # result to ``sag`` below.  Instead, REPLACE the base sag
+            # with the dispatcher result -- the dispatcher returns
+            # the full ``z_bfs(r) + departure`` (Q-bfs) or
+            # ``z_conic(r) + departure`` (Q-con) per its docstring.
+            #
+            # NB: ``surface_sag_freeform`` only honours rotationally
+            # symmetric base conics, not biconic; combining Q-bfs /
+            # Q-con with a biconic radius_y is an unsupported edge
+            # case so we keep the original biconic sag and warn
+            # instead.
+            if R_y is not None:
+                import warnings
+                warnings.warn(
+                    f"apply_real_lens: surface {i} combines "
+                    f"freeform_type={ft!r} with biconic radius_y; "
+                    "the freeform departure is dropped from this "
+                    "wave-optics path.  Use apply_real_lens_traced "
+                    "for biconic + Forbes Q.",
+                    RuntimeWarning, stacklevel=2,
+                )
+                sag = surface_sag_biconic(
+                    Xs, Ys, R_x=R, R_y=R_y,
+                    conic_x=kc, conic_y=kc_y,
+                    aspheric_coeffs=asph,
+                    aspheric_coeffs_y=asph_y)
+            else:
+                from .freeform import surface_sag_freeform
+                # The surf dict already carries the q_bfs_coeffs /
+                # q_con_coeffs / r_max / norm_x / norm_y / radius /
+                # conic keys; pass it through directly.
+                sag = surface_sag_freeform(Xs, Ys, surf)
         else:
-            sag = _surface_sag_general(h_sq, R, kc, asph)
+            if ft is not None:
+                import warnings
+                warnings.warn(
+                    f"apply_real_lens: surface {i} has freeform_type="
+                    f"{ft!r}; the freeform departure "
+                    "is NOT included in the per-surface OPD by this "
+                    "thin-element wave-optics path.  Use "
+                    "apply_real_lens_traced (or apply_real_lens_maslov) "
+                    "for a raytraced OPD that honours freeform_type.",
+                    RuntimeWarning, stacklevel=2,
+                )
+            if R_y is not None:
+                sag = surface_sag_biconic(
+                    Xs, Ys, R_x=R, R_y=R_y,
+                    conic_x=kc, conic_y=kc_y,
+                    aspheric_coeffs=asph,
+                    aspheric_coeffs_y=asph_y)
+            else:
+                sag = _surface_sag_general(h_sq, R, kc, asph)
 
         # ---- Tilt (small-angle linear ramp added to sag) --------------
         tilt = surf.get('tilt') or (0.0, 0.0)

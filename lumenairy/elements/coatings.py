@@ -115,15 +115,32 @@ def coating_reflectance(
     for n_layer, d in layers:
         n_layer = complex(n_layer)
         sin_t = n_prev.real * math.sin(theta_prev) / n_layer.real
+        # v4.15.1 (P3-4 / Agent E): always-emit TIR cap warning.
+        # Physics: when ``sin_t > 1.0`` Snell's law has no real
+        # solution -- the wave is totally internally reflected and
+        # the transmitted amplitude is evanescent (purely imaginary
+        # cos_t).  Capping ``sin_t`` at 0.9999 produces a finite
+        # real cos_t and so a finite transmittance, which is
+        # physically WRONG at TIR -- R should be 1.0, T should be
+        # 0.0 in the steady state.  The warning category is
+        # ``UserWarning`` (always-visible by Python's default
+        # filters) rather than ``RuntimeWarning`` (which some test
+        # frameworks / IDE notebooks silently filter) so the user
+        # always sees the cap firing.
         if sin_t > 1.0:
             import warnings
             warnings.warn(
                 f"thin_film_stack: intra-stack TIR at layer with "
                 f"n_layer={n_layer.real:.3f}, sin_t={sin_t:.3f}; "
                 f"capped at 0.9999 (real-Snell approximation).  "
-                f"For accurate TIR / immersion behaviour use a "
-                f"full complex-Snell solver.",
-                RuntimeWarning, stacklevel=2,
+                f"The reported R/T at this layer is NOT physically "
+                f"correct at TIR -- the steady-state R is 1.0 and "
+                f"T is 0.0, but the real-Snell approximation forces "
+                f"a finite transmittance.  For accurate TIR / "
+                f"immersion behaviour use a full complex-Snell "
+                f"solver (e.g. ``tmm.coh_tmm`` in the ``tmm`` "
+                f"package).",
+                UserWarning, stacklevel=2,
             )
         sin_t = min(sin_t, 0.9999)
         cos_t = math.sqrt(1 - sin_t * sin_t)
@@ -138,6 +155,23 @@ def coating_reflectance(
     # real-Snell approximation).
     sin_sub = (n_prev.real * math.sin(theta_prev)
                / complex(n_substrate).real)
+    # v4.15.1 (P3-4 / Agent E): substrate TIR cap warning.  Pre-
+    # v4.15.1 this site silently capped ``sin_sub`` with no
+    # diagnostic, so a high-AOI polarizing-beam-splitter coating
+    # where the substrate medium had a lower n than the final
+    # layer could exhibit TIR at the substrate interface and the
+    # caller would never know.  Mirrors the intra-stack cap above.
+    if sin_sub > 1.0:
+        import warnings
+        warnings.warn(
+            f"thin_film_stack: substrate TIR at the final interface "
+            f"(n_substrate={complex(n_substrate).real:.3f}, "
+            f"sin_sub={sin_sub:.3f}); capped at 0.9999 (real-Snell "
+            f"approximation).  Same physics caveat as the intra-stack "
+            f"TIR warning above -- use a complex-Snell solver for "
+            f"accurate TIR R/T.",
+            UserWarning, stacklevel=2,
+        )
     sin_sub = min(sin_sub, 0.9999)
     cos_sub = math.sqrt(1 - sin_sub * sin_sub)
     cos_angle = math.cos(angle)

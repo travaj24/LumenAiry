@@ -101,6 +101,9 @@ from .world import (
     paraxial_focus_world,
 )
 
+# v4.15.1 (Cluster B Item 6): bridge a coherent field into a RayBundle.
+from .from_field import rays_from_field
+
 
 __all__ = [
     'RayBundle',
@@ -166,4 +169,6 @@ __all__ = [
     'f_number',
     'defocus_waves_to_zernike',
     'astigmatism_waves_to_zernike',
+    # v4.15.1 wave -> ray bridge (Cluster B Item 6)
+    'rays_from_field',
 ]

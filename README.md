@@ -10,6 +10,108 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.15.1
+
+**Closes the v4.15.0 audit (`docs/audits/AUDIT_V4_15_0_2026_05_18.md`)
+through P3 + ships 2 additive features from
+`docs/audits/CLUSTER_B_SPEC.md`.**  The audit was the highest-yield
+in the series (2 P0s + 12 P1s + many P2/P3 on the +13 kLOC v4.15.0
+release).  v4.15.1 closes both P0s + all Tier-0 P1s + the P2/P3
+sweep + adds 800+ LOC of new CLUSTER_B surface.  1625 unit tests
+pass (up from 1425); 34/34 validation files pass.
+
+### P0 closures
+
+* **`make_off_axis_parabola` factory fix (doubly broken).**  Decenter
+  formula corrected `f*tan(alpha) -> 2*f*tan(alpha)` (chief-ray
+  geometry on parent paraboloid).  Tilt 3-tuple convention pinned to
+  `apply_real_lens_traced` — docstring loudly warns against use with
+  paraxial `apply_real_lens`.  New end-to-end raytrace test pins
+  off-axis focal-point location to 1% at 45° fold.
+* **Schell-family redesign — hybrid ensemble + MCF.**  v4.15.0
+  collapsed the `n_realizations` ensemble into a single coherent
+  field before return; the partial-coherence contract was
+  unfulfillable.  v4.15.1 returns the `(n_realizations, Ny, Nx)`
+  ensemble by default (caller iterates + averages intensities for
+  physically-correct partial coherence) plus an opt-in
+  `return_kind='mcf'` mode returning a new `PartialCoherenceMCF`
+  dataclass with coherent-mode decomposition (Wolf 1982 JOSA).
+  Random-phase RMS-normalization bug fixed:  Schell-kernel
+  `sigma_g` now actually controls coherence length
+  (`sigma_g -> 0` recovers incoherent; `sigma_g -> infinity`
+  recovers coherent).
+
+### P1 closures (10)
+
+* `sparrow_resolution` rewritten to canonical two-source dip-vanishing
+  root-finding (was 15% low on Airy; now matches analytical
+  `0.947 * lambda * f/#` to <5%).
+* 7 UI Source-factory deprecation callsites migrated to kwarg-only
+  form (the v4.15.0 release that introduced the deprecation now
+  also migrates its own internal UI consumers).
+* Forbes Q consumer paths closed:  raytrace flat-keys allowlist
+  extended with `q_bfs_coeffs`/`q_con_coeffs`/`r_max`; Zemax `.zmx`
+  QBFS/QCON SURFTYPE parsing added; wave-optics `apply_real_lens`
+  now properly applies Q-bfs/Q-con sag (previously silently
+  warning-and-skipped); Q-bfs/Q-con rectangular clip replaced
+  with radial `r <= r_max` clip; `surface_sag_freeform` now
+  requires `r_max` for q_bfs/q_con (eliminates the silent
+  `r_max=1.0` unit-mismatch).
+* `strehl_vector` default-reference removed (breaking) — produced
+  unity for any uniform field of equal power AND Strehl > 1 on
+  focused PSFs; now requires explicit `reference=`.
+* `rayleigh_resolution` Gaussian-PSF false-positive fixed —
+  Gaussian-like PSFs (no true zero) now return NaN with
+  `RuntimeWarning`.
+* `astigmatism_mag_angle` docstring range correction
+  (`(-pi/4, pi/4]` -> `(-pi/2, pi/2]`).
+* `system.evaluate` mixed-shape prescription now raises `ValueError`
+  rather than silently picking a schema (small behaviour change for
+  Zemax-loader output passthrough).
+
+### P2 closures
+
+* `__all__` symmetry — `surface_sag_q_bfs`, `surface_sag_q_con`
+  re-exported from `lumenairy/elements/__init__.py`;
+  `make_off_axis_parabola` from `lumenairy/io/__init__.py`.
+* Sentinel consolidation — `_ZeroApertureMaskSentinel` and
+  `_AngleUnsetSentinel` now inherit from `_deprecation._Sentinel`
+  base; pickle-safe `__reduce__` + name-keyed registry so
+  unpickling returns the singleton instance.
+* `system.evaluate` Zemax-shape round-trip test added.
+
+### P3 closures
+
+`n=1.0` consistency between `_resolve_lens_glass_index` and
+`register_fixed_glass`; codegen major-version-bump `UserWarning`;
+LambertianBSDF surface-frame `RuntimeWarning`; coatings TIR-cap
+always-emit warning; Forbes Q orthonormalizer docstring formula
+correction; line-citation drift refresh.
+
+### CLUSTER_B Item 6 — `rays_from_field` bridge
+
+New top-level `lumenairy.rays_from_field(E, *, dx, wavelength, ...)
+-> RayBundle`.  Samples a coherent field into a geometric ray
+bundle for hybrid wave/ray analysis.  3 placement modes (cdf,
+rejection, uniform); 2 angle methods (complex_gradient,
+unwrap_gradient).  Bridges `propagators/` <-> `raytrace/` for users
+who want to overlay ray traces on coherent-field plots, seed a
+Maslov/GBD bundle from a measured pupil field, or hand a coherent
+field into the geometric ray tracer.
+
+### CLUSTER_B Item 2 — Operator algebra
+
+New `lumenairy/algebra/` subpackage implementing Nazarathy/Shamir
+operator algebra (JOSA 70 (2), 1980).  9 new top-level symbols:
+`Operator`, `CompositeOperator`, `FreeSpace`, `ThinLens`,
+`CylindricalLens`, `Magnify`, `FourierTransform`, `Aperture`,
+`GaussianAperture`.  Build optical systems symbolically with `*`
+composition; ABCD readable without applying to a field; or apply
+to a `Source` to walk the chain.  `Operator.from_prescription(...)`
+factory produces a `CompositeOperator` whose ABCD matches
+`system_abcd(...)` to 1e-12 absolute.  Paraxial-only — for high-NA
+prescriptions use `propagate_through_system` directly.
+
 ## What's new in 4.15.0
 
 **Major minor release** rolling together carryover P1s from the

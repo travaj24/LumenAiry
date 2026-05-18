@@ -1505,10 +1505,21 @@ def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
         # prescription-level freeform helpers.
         ff = ps.get('freeform')
         if ff is None and ps.get('freeform_type') is not None:
+            # v4.15.1 P1-NEW-D: include Forbes Q-bfs / Q-con keys
+            # (``q_bfs_coeffs``, ``q_con_coeffs``, ``r_max``) in the
+            # flat-keys gather so a prescription with
+            # ``freeform_type='q_bfs'`` and ``q_bfs_coeffs=[...]``
+            # actually carries its coefficients into the Surface
+            # dataclass.  Pre-v4.15.1 the dispatcher routed the
+            # freeform_type correctly but the coefficient list was
+            # silently dropped, making Forbes Q a no-op on flat-keys
+            # prescriptions (the unified-dict shape worked).
             ff = {k: v for k, v in ps.items()
                   if k in ('freeform_type', 'xy_coeffs',
                            'zernike_coeffs', 'cheb_coeffs',
-                           'norm_radius', 'norm_x', 'norm_y')}
+                           'q_bfs_coeffs', 'q_con_coeffs',
+                           'norm_radius', 'norm_x', 'norm_y',
+                           'r_max')}
 
         # Aperture-stop flag.  Zemax parsers store the STOP keyword
         # on the per-surface dict ('is_stop': True); the prescription

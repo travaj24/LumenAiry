@@ -55,10 +55,21 @@ def _resolve_lens_glass_index(glass: str, wavelength: float) -> float:
     try:
         from ..glass import get_glass_index
         n = float(get_glass_index(glass, wavelength))
-        if not (1.0 < n < 5.0):  # sanity envelope; visible/IR glasses
+        # v4.15.1 (P3-1 / Agent E): consistency with
+        # :func:`user_library.register_fixed_glass`, which accepts
+        # ``n=1.0`` inclusively (vacuum / air; the canonical zero-
+        # phase reference).  Pre-v4.15.1 this bounds check was
+        # exclusive (``1.0 < n < 5.0``), so an "air" Sellmeier entry
+        # at n=1.0 exactly was rejected with a misleading "outside
+        # expected range" message.  Upper bound widened to 4.0 to
+        # match user_library; high-index semiconductors (Si ~3.4,
+        # Ge ~4.0) live at the upper edge.  Anything above n=4.0 is
+        # almost certainly a typo or unit-mismatch (mm vs m vs um
+        # in a custom dispersion callable).
+        if not (1.0 <= n <= 4.0):
             raise ValueError(
                 f"get_glass_index({glass!r}, {wavelength!r}) -> {n!r} "
-                f"is outside the expected (1.0, 5.0) range.")
+                f"is outside the expected [1.0, 4.0] range.")
         return n
     except (ValueError, KeyError, ImportError, RuntimeError, TypeError) as exc:
         warnings.warn(

@@ -3115,16 +3115,15 @@ def strehl_vector(
     Ey: np.ndarray,
     Ez: Optional[np.ndarray] = None,
     *,
-    reference: Optional[Sequence[np.ndarray]] = None,
+    reference: Sequence[np.ndarray],
 ) -> float:
-    r"""Vector (polarisation-aware) Strehl ratio for a 2-D vector PSF.
+    r"""Scalar Strehl-like metric over the vector-field components.
 
-    Generalises :func:`strehl_ratio` to a Jones field with optional
-    z-component, as needed for high-NA / Richards-Wolf imaging where
-    the longitudinal component is non-negligible.  The convention used
-    here is the peak-intensity ratio of the **total** vector intensity
-    ``|Ex|^2 + |Ey|^2 + |Ez|^2`` over the aberrated and reference
-    fields, after normalising both to equal total power:
+    Generalises :func:`strehl_ratio` to a Jones field with an
+    optional z-component.  The metric is the peak-intensity ratio of
+    the **total** vector intensity ``|Ex|^2 + |Ey|^2 + |Ez|^2`` over
+    the input field vs an explicit reference field, after
+    normalising both to equal total power:
 
     .. math::
         S = \frac{\max(|E_x|^2 + |E_y|^2 + |E_z|^2)}{P}
@@ -3133,10 +3132,7 @@ def strehl_vector(
 
     This matches the scalar :func:`strehl_ratio` definition mode-for-
     mode when ``Ey = Ez = 0`` (so a single linear polarisation
-    coincides exactly with the scalar Strehl), and reduces to
-    Mahajan's vector Strehl (Mahajan, "Aberration Theory Made Simple",
-    2nd ed., §8) when the reference is the polarisation-matched
-    diffraction-limited focus.
+    coincides exactly with the scalar Strehl).
 
     Parameters
     ----------
@@ -3144,30 +3140,32 @@ def strehl_vector(
         Transverse vector-field components.  Must be 2-D arrays of
         matching shape.
     Ez : ndarray (complex, Ny x Nx), optional
-        Longitudinal component for high-NA fields.  When ``None``,
-        treated as identically zero -- equivalent to passing a
-        zero-array of the same shape.
-    reference : tuple of arrays, optional
+        Longitudinal component.  When ``None``, treated as
+        identically zero -- equivalent to passing a zero-array of the
+        same shape.
+    reference : tuple of arrays, required (keyword-only)
         ``(Ex_ref, Ey_ref)`` or ``(Ex_ref, Ey_ref, Ez_ref)`` for the
         diffraction-limited reference field, sampled on the same grid
-        as the aberrated input.  If ``None`` (default), the reference
-        is taken to be a uniform plane wave with the same total power
-        and the same polarisation distribution as ``(Ex, Ey, Ez)`` --
-        i.e. the reference peak equals the total power divided by the
-        grid area, which makes the Strehl an "aberration-only" metric
-        when ``(Ex, Ey, Ez)`` is itself the aberrated focus of a
-        finite aperture.
+        as the input.  The reference is mandatory: without an
+        explicit aperture-truncated reference, the
+        equal-total-power-normalised ratio is unbounded above 1.0
+        for any field more peaked than uniform (audit V4.15.0
+        P1-F1-3).  Pass the unaberrated propagation result for the
+        same aperture / system.
 
     Returns
     -------
     strehl : float
-        Vector Strehl ratio in ``[0, 1]``.  Returns ``0.0`` if either
-        the aberrated or reference field has zero total power.
+        Vector Strehl-like metric.  ``1.0`` when ``(Ex, Ey, Ez) ==
+        (Ex_ref, Ey_ref, Ez_ref)``; ``< 1.0`` for an aberrated input
+        relative to its unaberrated reference.  Returns ``0.0`` if
+        either the input or reference field has zero total power.
 
     Raises
     ------
     ValueError
-        If any input array is not 2-D, or if shapes do not match.
+        If any input array is not 2-D, if shapes do not match, or if
+        ``reference`` is missing / not a 2-tuple or 3-tuple.
 
     See Also
     --------
@@ -3176,14 +3174,22 @@ def strehl_vector(
 
     Notes
     -----
-    The "plane-wave default reference" branch evaluates the maximum of
-    a uniform total-intensity map, which equals ``P_total / (N_y N_x)``
-    over a uniformly-illuminated grid; it is the right reference for a
-    *no-aberration / no-aperture* limit but it is NOT the right
-    reference if you want to measure aberration over an aperture-
-    truncated diffraction PSF.  In that case pass an explicit
-    ``reference`` from the unaberrated propagation.
+    Breaking change at v4.15.1: the previous default
+    ``reference=None`` branch (uniform plane wave of matching total
+    power) was removed because it produced ``S > 1`` for any focused
+    PSF -- a focused PSF concentrates more power into its peak than a
+    uniform field of equal total power.  Callers must now supply the
+    diffraction-limited reference explicitly.  The simplest
+    replacement is to propagate the same aperture / system without
+    aberrations and pass the resulting ``(Ex_ref, Ey_ref[, Ez_ref])``.
     """
+    if reference is None:
+        raise ValueError(
+            "strehl_vector: 'reference' is required since v4.15.1.  "
+            "Pass the diffraction-limited reference field tuple "
+            "(Ex_ref, Ey_ref) or (Ex_ref, Ey_ref, Ez_ref); the prior "
+            "default plane-wave reference returned Strehl > 1 for "
+            "any focused PSF (audit V4.15.0 P1-F1-3).")
     _validate_vector_field_shapes(
         Ex, Ey, Ez, name='strehl_vector')
     xp = _xp_of(Ex, Ey) if Ez is None else _xp_of(Ex, Ey, Ez)
@@ -3197,46 +3203,41 @@ def strehl_vector(
         return 0.0
     I_max = float(xp.max(I_total))
 
-    if reference is None:
-        # Plane-wave reference: uniform total intensity equal to
-        # P/(Ny*Nx) over the same grid.  Peak equals the mean.
-        Ny, Nx = Ex.shape
-        n_pix = int(Ny * Nx)
-        if n_pix <= 0:
-            return 0.0
-        I_ref_max = P / float(n_pix)
-        # Plane-wave total power equals P by construction.
-        return float(I_max / I_ref_max) * 1.0  # ratio after equal-power norm
+    # User-supplied reference.  Accept (Ex_ref, Ey_ref) or
+    # (Ex_ref, Ey_ref, Ez_ref).
+    try:
+        n_ref = len(reference)
+    except TypeError:
+        raise ValueError(
+            f"strehl_vector: reference must be a 2- or 3-tuple of "
+            f"vector components; got non-sequence {type(reference).__name__!r}.")
+    if n_ref == 2:
+        Ex_ref, Ey_ref = reference
+        Ez_ref = None
+    elif n_ref == 3:
+        Ex_ref, Ey_ref, Ez_ref = reference
     else:
-        # User-supplied reference.  Accept (Ex_ref, Ey_ref) or
-        # (Ex_ref, Ey_ref, Ez_ref).
-        if len(reference) == 2:
-            Ex_ref, Ey_ref = reference
-            Ez_ref = None
-        elif len(reference) == 3:
-            Ex_ref, Ey_ref, Ez_ref = reference
-        else:
-            raise ValueError(
-                f"strehl_vector: reference must be a 2- or 3-tuple of "
-                f"vector components; got length {len(reference)}.")
-        _validate_vector_field_shapes(
-            xp.asarray(Ex_ref), xp.asarray(Ey_ref),
-            None if Ez_ref is None else xp.asarray(Ez_ref),
-            name='strehl_vector (reference)')
-        if Ex_ref.shape != Ex.shape:
-            raise ValueError(
-                f"strehl_vector: reference shape {Ex_ref.shape!r} "
-                f"does not match input shape {Ex.shape!r}.")
-        I_ref = xp.abs(Ex_ref) ** 2 + xp.abs(Ey_ref) ** 2
-        if Ez_ref is not None:
-            I_ref = I_ref + xp.abs(Ez_ref) ** 2
-        P_ref = float(xp.sum(I_ref))
-        I_ref_max = float(xp.max(I_ref))
-        if P_ref <= 0.0 or I_ref_max <= 0.0:
-            return 0.0
-        # Equal-total-power normalisation, identical to scalar
-        # strehl_ratio convention.
-        return float(I_max / P) * float(P_ref / I_ref_max)
+        raise ValueError(
+            f"strehl_vector: reference must be a 2- or 3-tuple of "
+            f"vector components; got length {n_ref}.")
+    _validate_vector_field_shapes(
+        xp.asarray(Ex_ref), xp.asarray(Ey_ref),
+        None if Ez_ref is None else xp.asarray(Ez_ref),
+        name='strehl_vector (reference)')
+    if Ex_ref.shape != Ex.shape:
+        raise ValueError(
+            f"strehl_vector: reference shape {Ex_ref.shape!r} "
+            f"does not match input shape {Ex.shape!r}.")
+    I_ref = xp.abs(Ex_ref) ** 2 + xp.abs(Ey_ref) ** 2
+    if Ez_ref is not None:
+        I_ref = I_ref + xp.abs(Ez_ref) ** 2
+    P_ref = float(xp.sum(I_ref))
+    I_ref_max = float(xp.max(I_ref))
+    if P_ref <= 0.0 or I_ref_max <= 0.0:
+        return 0.0
+    # Equal-total-power normalisation, identical to scalar
+    # strehl_ratio convention.
+    return float(I_max / P) * float(P_ref / I_ref_max)
 
 
 def coupling_efficiency_vector(
@@ -3344,6 +3345,7 @@ def _psf_1d_profile(
     dx: float,
     *,
     axis: str,
+    dy: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Internal: extract a 1-D profile through the peak of a 2-D PSF.
 
@@ -3351,6 +3353,12 @@ def _psf_1d_profile(
     centred on the PSF peak.  ``axis='x'`` returns a row cut,
     ``axis='y'`` a column cut, ``axis='radial'`` an azimuthally
     averaged radial profile.
+
+    When ``dy is None`` (default) the y-spacing is taken equal to
+    ``dx`` (square pixels).  Passing ``dy != dx`` selects an
+    anamorphic grid: the row / column cuts scale by their own axis
+    spacing, and the radial profile bins by true Euclidean distance
+    ``sqrt((dx*Δi)^2 + (dy*Δj)^2)`` rather than pixel index.
     """
     if not isinstance(psf, np.ndarray):
         psf_arr = np.asarray(psf)
@@ -3361,6 +3369,9 @@ def _psf_1d_profile(
             f"PSF profile: expected 2-D PSF; got shape "
             f"{psf_arr.shape!r} (ndim={psf_arr.ndim}).")
 
+    dx_f = float(dx)
+    dy_f = float(dy) if dy is not None else dx_f
+
     Ny, Nx = psf_arr.shape
     # Locate the peak.  For radially-symmetric Airy-like PSFs the
     # peak lives near the grid centre; we locate it explicitly to
@@ -3369,31 +3380,105 @@ def _psf_1d_profile(
     py, px = divmod(peak_idx, Nx)
 
     if axis == 'x':
-        r = (np.arange(Nx) - px) * float(dx)
+        r = (np.arange(Nx) - px) * dx_f
         profile = psf_arr[py, :].astype(np.float64)
         return r, profile
     if axis == 'y':
-        r = (np.arange(Ny) - py) * float(dx)
+        r = (np.arange(Ny) - py) * dy_f
         profile = psf_arr[:, px].astype(np.float64)
         return r, profile
     if axis == 'radial':
-        # Azimuthal average centred on the peak, on integer-radius
-        # bins (same approach as mtf_radial).  Returns r >= 0.
+        # Radial profile by binning true Euclidean distance
+        # ``sqrt((dx*(i-px))^2 + (dy*(j-py))^2)`` so anamorphic grids
+        # produce a metric-correct azimuthal average.  The bin grid is
+        # chosen so the radial step matches the geometric mean of dx
+        # and dy (so square grids reduce to the classical pixel-step
+        # binning).
         y_idx, x_idx = np.indices(psf_arr.shape)
-        rr = np.sqrt((x_idx - px) ** 2 + (y_idx - py) ** 2)
-        r_int = np.rint(rr).astype(int)
+        rr = np.sqrt(((x_idx - px) * dx_f) ** 2 +
+                     ((y_idx - py) * dy_f) ** 2)
+        d_bin = float(np.sqrt(dx_f * dy_f))
+        r_int = np.rint(rr / d_bin).astype(int)
         tbin = np.bincount(r_int.ravel(),
                             weights=psf_arr.ravel().astype(np.float64))
         nbin = np.bincount(r_int.ravel())
         # Trim trailing all-empty bins
         radial_profile = np.where(
             nbin > 0, tbin / np.maximum(nbin, 1), 0.0)
-        r = np.arange(radial_profile.size, dtype=np.float64) * float(dx)
+        r = np.arange(radial_profile.size, dtype=np.float64) * d_bin
         return r, radial_profile
 
     raise ValueError(
         f"PSF profile: axis must be 'x', 'y', or 'radial'; got "
         f"{axis!r}.")
+
+
+def _to_numpy_host(arr) -> np.ndarray:
+    """Internal: coerce a backend-array (numpy / cupy / jax / etc.)
+    to a host numpy array via an explicit dispatch.
+
+    Used by the resolution-metric functions (``rayleigh_resolution``,
+    ``sparrow_resolution``, ``fwhm_resolution``) which take a host-
+    side scalar exit so a single host transfer is acceptable.  CuPy
+    arrays raise on the implicit ``np.asarray`` path and must be
+    pulled with ``.get()``; JAX arrays support the ``__array__``
+    protocol.
+    """
+    if isinstance(arr, np.ndarray):
+        return arr
+    if hasattr(arr, 'get') and callable(getattr(arr, 'get')):
+        return arr.get()
+    return np.asarray(arr)
+
+
+def _radial_profile_subpixel(
+    psf_arr: np.ndarray,
+    dx: float,
+    dy: float,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Internal: high-fidelity azimuthally-averaged radial profile.
+
+    Uses ``scipy.ndimage.map_coordinates`` to sample the 2-D PSF on a
+    fine polar grid, then azimuthally averages.  This avoids the bias
+    inherent in integer-pixel-bin radial averaging at small r and
+    delivers a smooth profile suitable for spline / curvature root-
+    finding.  Used by ``sparrow_resolution(axis='radial')``.
+
+    Returns ``(r, profile)`` with ``r >= 0`` and a fine radial step.
+    """
+    from scipy.ndimage import map_coordinates
+
+    Ny, Nx = psf_arr.shape
+    peak_idx = int(np.argmax(psf_arr))
+    py, px = divmod(peak_idx, Nx)
+    # Maximum integer-pixel radius that stays inside the array.
+    r_max_pixels = float(min(py, Ny - 1 - py, px, Nx - 1 - px))
+    if r_max_pixels < 4.0:
+        # Insufficient grid for radial averaging.
+        return (np.zeros(0, dtype=np.float64),
+                np.zeros(0, dtype=np.float64))
+    # Sub-pixel radial step (4 samples per pixel) and 64 azimuthal
+    # samples; both balance accuracy vs cost.
+    n_r = int(r_max_pixels * 4)
+    r_pixels = np.linspace(0.0, r_max_pixels, n_r + 1)
+    n_phi = 64
+    phi = np.linspace(0.0, 2.0 * np.pi, n_phi, endpoint=False)
+    # Anamorphic conversion: the sample radius r is in metres on the
+    # canonical isotropic axis ``r_metric = pixel * sqrt(dx*dy)``,
+    # while map_coordinates uses pixel-index coordinates.
+    xs_all = px + r_pixels[:, None] * np.cos(phi)[None, :]
+    ys_all = py + r_pixels[:, None] * np.sin(phi)[None, :]
+    samples_all = map_coordinates(
+        psf_arr.astype(np.float64),
+        [ys_all.ravel(), xs_all.ravel()],
+        order=3, mode='constant', cval=0.0).reshape(n_r + 1, n_phi)
+    radial = samples_all.mean(axis=1)
+    # Convert the integer-pixel radii to a metric distance using the
+    # isotropic-average pixel size (sqrt(dx*dy)).  For square grids
+    # this reduces to ``r = i * dx``.
+    d_bin = float(np.sqrt(float(dx) * float(dy)))
+    r = r_pixels * d_bin
+    return r.astype(np.float64), radial.astype(np.float64)
 
 
 def rayleigh_resolution(
@@ -3402,6 +3487,7 @@ def rayleigh_resolution(
     wavelength: float,
     *,
     axis: str = 'radial',
+    dy: Optional[float] = None,
 ) -> float:
     """Rayleigh diffraction-limit resolution from a 2-D PSF.
 
@@ -3422,19 +3508,26 @@ def rayleigh_resolution(
     psf : ndarray (real, 2-D)
         Intensity PSF.
     dx : float
-        PSF-plane grid spacing [m].
+        PSF-plane grid spacing in x [m].
     wavelength : float
         Wavelength [m].  Currently used only as a numerical anchor
         for the small-separation tolerance; the first-zero search
         does not require it explicitly.
     axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
         Profile axis to scan for the first zero.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square grid).
+        For anamorphic grids (``dy != dx``) the radial profile uses
+        true Euclidean distance ``sqrt((dx*Δi)^2 + (dy*Δj)^2)``.
 
     Returns
     -------
     d_rayleigh : float
         Rayleigh resolution [m].  ``NaN`` if no zero can be located
-        (e.g. flat / zero-intensity input).
+        (e.g. flat / zero-intensity input, or a Gaussian-like PSF
+        with no true first-ring minimum -- a ``RuntimeWarning`` is
+        emitted in the latter case directing the user to
+        :func:`fwhm_resolution` or :func:`sparrow_resolution`).
 
     See Also
     --------
@@ -3449,12 +3542,25 @@ def rayleigh_resolution(
     zero).  Some texts report the diameter (twice this value); we
     pin the radius form because it matches the standard
     ``1.22 lambda f/#`` formula directly.
+
+    The first-zero search requires a *true* local minimum (strict
+    inequality on at least one side).  Gaussian-like PSFs whose
+    radial profile decreases monotonically into the noise / underflow
+    floor without crossing a true minimum return ``NaN`` and emit a
+    ``RuntimeWarning`` -- the Rayleigh criterion is not defined for
+    PSFs without a first-ring zero.
     """
+    import warnings
+    xp = _xp_of(psf)
+    # Coerce backend arrays to numpy for the host-side scan; the
+    # resolution metric is a scalar so a single host transfer is fine.
+    psf_np = _to_numpy_host(psf)
+    del xp  # consumed for dispatch-trace; no array math beyond here
     if not np.isfinite(float(wavelength)) or float(wavelength) <= 0.0:
         raise ValueError(
             f"rayleigh_resolution: wavelength must be positive and "
             f"finite; got {wavelength!r}.")
-    r, profile = _psf_1d_profile(psf, dx, axis=axis)
+    r, profile = _psf_1d_profile(psf_np, dx, axis=axis, dy=dy)
 
     # Sanity check the profile -- a flat / zero PSF has no resolvable
     # first zero.
@@ -3471,7 +3577,10 @@ def rayleigh_resolution(
     # Use a threshold proportional to peak; first-zero of a clean
     # Airy is identically zero, but numerical PSFs from compute_psf
     # have ~1e-3..1e-4 floor at the first zero.  Hunt for the first
-    # local minimum below 5% of peak.
+    # true local minimum below 5% of peak: strict inequality is
+    # required on at least one side so a monotonically-decreasing-to-
+    # underflow Gaussian profile does NOT spawn a false minimum at
+    # the floor-of-zeros plateau (audit V4.15.0 P1-F1-4).
     if axis == 'radial':
         peak_idx = 0
         scan_range = range(1, profile.size - 1)
@@ -3480,20 +3589,68 @@ def rayleigh_resolution(
         peak_idx = int(np.argmax(profile))
         scan_range = range(peak_idx + 1, profile.size - 1)
 
+    # First-zero must be a true minimum that is followed by a
+    # secondary maximum (the first Airy ring).  A Gaussian PSF
+    # decreases monotonically into the float-underflow floor without
+    # ever turning back up; on its radial profile the "first sample
+    # below 0.05" satisfies the trivial three-point inequality
+    # ``a >= b <= c`` only because c == 0 == b on the underflow
+    # plateau.  We REQUIRE a strict subsequent rise: somewhere in
+    # the lookahead window the profile must exceed the candidate
+    # minimum by an absolute margin scaled to the Airy first-ring
+    # height (~1.75% of peak).  This rejects Gaussian-style monotone
+    # decay (post_max == 0 for an underflow tail) and accepts true
+    # Airy first rings.
     first_zero_idx: Optional[int] = None
-    for i in scan_range:
-        # First sample below threshold AND a local minimum
-        if profile_norm[i] < 0.05 and profile_norm[i] <= profile_norm[i - 1] \
-                and profile_norm[i] <= profile_norm[i + 1]:
+    # A clean Airy first ring is ~1.75% of peak; require the post-
+    # min lookahead to exceed the candidate by >= 0.5% of peak to
+    # confirm an actual ring.  A monotonically-decreasing-to-zero
+    # Gaussian profile fails this because the post-min lookahead is
+    # all zeros (or float-denormal values orders of magnitude below
+    # the candidate threshold).
+    ring_margin = 5.0e-3  # 0.5% of normalised peak
+    scan_list = list(scan_range)
+    if scan_list:
+        scan_start = scan_list[0]
+    else:
+        scan_start = 1
+    for i in scan_list:
+        if not (profile_norm[i] < 0.05
+                 and profile_norm[i] <= profile_norm[i - 1]
+                 and profile_norm[i] <= profile_norm[i + 1]):
+            continue
+        # Strict inequality on at least one side: equal-zero plateaus
+        # have BOTH neighbours equal; a real first ring has the
+        # incoming side strictly greater (curve was dropping).
+        if not (profile_norm[i] < profile_norm[i - 1]
+                 or profile_norm[i] < profile_norm[i + 1]):
+            continue
+        # Look ahead for a secondary rise: window is at least 6
+        # samples or twice the distance from the scan start.
+        window = max(int(2 * (i - scan_start) + 4), 6)
+        end_look = min(i + window, profile.size)
+        if end_look <= i + 1:
+            continue
+        post_max = float(np.max(profile_norm[i + 1:end_look]))
+        if post_max > profile_norm[i] + ring_margin:
             first_zero_idx = i
             break
 
     if first_zero_idx is None:
+        warnings.warn(
+            "rayleigh_resolution: no true first-ring minimum located "
+            "in the radial profile (the criterion is not defined for "
+            "Gaussian-like PSFs without a true first zero).  Use "
+            "fwhm_resolution or sparrow_resolution for PSFs without "
+            "a Rayleigh first ring.",
+            RuntimeWarning, stacklevel=2)
         return float('nan')
 
     # Sub-pixel refinement via parabolic interpolation around the
     # local minimum (3-point form).  Falls back to the integer index
-    # if the parabola is degenerate.
+    # if the parabola is degenerate.  The horizontal step is the
+    # radial bin step (sqrt(dx*dy) for the radial profile, dx / dy
+    # for the row / column cut).
     j = first_zero_idx
     a = profile[j - 1]
     b = profile[j]
@@ -3505,9 +3662,11 @@ def rayleigh_resolution(
     else:
         sub = 0.5 * (a - c) / denom
     sub = max(-1.0, min(1.0, float(sub)))
-    j_refined = j + sub
+    # Step between adjacent samples of ``r`` (constant by
+    # construction in _psf_1d_profile).
+    r_step = float(r[1] - r[0]) if r.size > 1 else float(dx)
     return float(abs(r[j] - r[peak_idx]) +
-                 sub * float(dx) * (1.0 if r[j] >= r[peak_idx] else -1.0))
+                 sub * r_step * (1.0 if r[j] >= r[peak_idx] else -1.0))
 
 
 def sparrow_resolution(
@@ -3515,103 +3674,132 @@ def sparrow_resolution(
     dx: float,
     *,
     axis: str = 'radial',
+    dy: Optional[float] = None,
 ) -> float:
-    """Empirical Sparrow resolution criterion from a 2-D PSF.
+    r"""Canonical Sparrow resolution criterion from a 2-D PSF.
 
-    The Sparrow criterion defines the two-point separation at which
-    the dip between two overlapping point-source PSFs just vanishes:
-    the second derivative of the summed intensity at the midpoint
-    crosses zero.  For an Airy pattern this is empirically
-    ``~0.95 lambda f/#`` -- slightly smaller than the Rayleigh
-    separation (``1.22 lambda f/#``).
+    The Sparrow criterion defines the two-point separation ``d`` at
+    which the dip between two overlapping point-source PSFs just
+    vanishes:
 
-    This implementation searches over a range of separations ``d``
-    for the one at which ``f(0) = PSF(-d/2) + PSF(+d/2)`` has zero
-    curvature at the origin (using the discrete second derivative
-    ``f(d/2) - 2 f(0) + f(-d/2)``, which by construction reduces to
-    ``2 [PSF(d) - PSF(0)]`` on a centred profile).  We then refine
-    via linear interpolation between the two bracketing samples.
+    .. math::
+        \left.\frac{d^2}{dr^2}\left[I(r - d/2) + I(r + d/2)\right]
+        \right|_{r=0} = 0
+
+    For a radially symmetric :math:`I(r)`, even-symmetry of
+    :math:`I''` reduces this to :math:`I''(d/2) = 0`, i.e. ``d/2`` is
+    the first inflection point of the single-source intensity
+    profile.  For an Airy pattern this evaluates to
+    ``d_sparrow ~= 0.947 * lambda * f/#`` -- slightly smaller than the
+    Rayleigh separation (``1.22 * lambda * f/#``).
+
+    Implementation
+    --------------
+    The radial profile is built either from a row / column cut
+    (``axis='x'`` / ``'y'``) or from a sub-pixel azimuthally-averaged
+    polar resample (``axis='radial'``, via
+    :func:`scipy.ndimage.map_coordinates`).  A natural-boundary cubic
+    spline is fit to the profile, its analytical second derivative is
+    evaluated, and :func:`scipy.optimize.brentq` brackets the first
+    sign change of :math:`I''` in :math:`r \in (dx/2,\, N\,dx/2)`.
+    The returned value is twice that root.
 
     Parameters
     ----------
     psf : ndarray (real, 2-D)
         Intensity PSF.
     dx : float
-        PSF-plane grid spacing [m].
+        PSF-plane grid spacing in x [m].
     axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
-        Profile axis to scan.
+        Profile axis.  ``'radial'`` uses the sub-pixel azimuthal
+        average; ``'x'`` / ``'y'`` use pixel-aligned cuts through the
+        peak.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square grid).
+        Anamorphic grids (``dy != dx``) use the metric average
+        ``sqrt(dx*dy)`` for the radial step.
 
     Returns
     -------
     d_sparrow : float
-        Sparrow resolution [m].  ``NaN`` if no zero-curvature
-        separation can be located.
+        Sparrow resolution [m].  ``NaN`` if no valid first inflection
+        can be located (e.g. flat / zero-intensity input or a
+        severely undersampled PSF).
     """
-    r, profile = _psf_1d_profile(psf, dx, axis=axis)
+    from scipy.interpolate import CubicSpline
+    from scipy.optimize import brentq
 
-    peak = float(profile.max())
-    if peak <= 0.0 or not np.all(np.isfinite(profile)):
-        return float('nan')
-    profile_norm = profile / peak
+    xp = _xp_of(psf)
+    psf_np = _to_numpy_host(psf)
+    del xp  # backend probe; metric is host-side
 
-    # The Sparrow condition on the dip is equivalent to PSF(d) ==
-    # PSF(0) at the half-separation: the two superposed PSFs have
-    # zero second derivative at the midpoint when their tail value
-    # at the midpoint equals their peak.  Equivalently, we look for
-    # the smallest d such that PSF(d/2) drops below the curvature
-    # threshold.
-    #
-    # We follow the canonical numerical definition: search for d at
-    # which the second derivative of the dual-source profile at the
-    # midpoint changes sign.  In our centred profiles the midpoint is
-    # at r=0 (the peak), and the candidate dual-source profile has
-    # ``f_dual(0; d) = 2 * PSF(d/2)`` and
-    # ``f_dual(+/- dx; d) = PSF(d/2 - dx) + PSF(d/2 + dx)``.  The
-    # discrete second derivative at 0 is therefore
-    # ``f_dual(+dx; d) + f_dual(-dx; d) - 2 f_dual(0; d) ==
-    #  PSF(d/2 - dx) + PSF(d/2 + dx) - 2 PSF(d/2)``,
-    # which is exactly the central second-derivative of PSF at d/2.
-    # The Sparrow criterion is the smallest d at which this quantity
-    # is zero (zero curvature) starting from negative (dip) and
-    # crossing to positive (no dip).
+    if psf_np.ndim != 2:
+        raise ValueError(
+            f"sparrow_resolution: expected 2-D PSF; got shape "
+            f"{psf_np.shape!r} (ndim={psf_np.ndim}).")
+    dx_f = float(dx)
+    dy_f = float(dy) if dy is not None else dx_f
 
     if axis == 'radial':
-        peak_idx = 0
+        r_arr, prof = _radial_profile_subpixel(psf_np, dx_f, dy_f)
+        if r_arr.size == 0:
+            return float('nan')
+    elif axis in ('x', 'y'):
+        r_full, prof_full = _psf_1d_profile(
+            psf_np, dx_f, axis=axis, dy=dy_f)
+        peak_idx = int(np.argmax(prof_full))
+        # Right-of-peak half (r >= 0).
+        sel = np.arange(prof_full.size) >= peak_idx
+        r_arr = (r_full[sel] - r_full[peak_idx]).astype(np.float64)
+        prof = prof_full[sel].astype(np.float64)
     else:
-        peak_idx = int(np.argmax(profile))
+        raise ValueError(
+            f"sparrow_resolution: axis must be 'x', 'y', or "
+            f"'radial'; got {axis!r}.")
 
-    # Second derivative of the radial profile.  np.gradient twice
-    # gives a smooth-enough estimate for our discrete data.
-    d_profile = np.gradient(profile, float(dx))
-    dd_profile = np.gradient(d_profile, float(dx))
+    peak = float(prof.max())
+    if peak <= 0.0 or not np.all(np.isfinite(prof)):
+        return float('nan')
+    prof_n = (prof / peak).astype(np.float64)
 
-    # Scan outward from the peak for the first zero crossing of the
-    # second derivative (curvature goes from concave-down at the peak
-    # to concave-up in the wings).
-    if axis == 'radial':
-        scan = range(1, profile.size - 1)
-    else:
-        scan = range(peak_idx + 1, profile.size - 1)
-
-    half_d_idx: Optional[int] = None
-    for i in scan:
-        if dd_profile[i - 1] < 0.0 <= dd_profile[i]:
-            half_d_idx = i
-            break
-
-    if half_d_idx is None:
+    if r_arr.size < 4:
         return float('nan')
 
-    # Linear interpolation across the zero crossing for sub-pixel
-    # refinement.
-    j = half_d_idx
-    y_lo = dd_profile[j - 1]
-    y_hi = dd_profile[j]
-    if y_hi == y_lo:
-        t = 0.0
-    else:
-        t = (0.0 - y_lo) / (y_hi - y_lo)
-    half_d = abs(r[j - 1] - r[peak_idx]) + t * float(dx)
+    # Cubic-spline interpolant with analytical second derivative.
+    try:
+        cs = CubicSpline(r_arr, prof_n, bc_type='natural',
+                          extrapolate=False)
+    except Exception:
+        return float('nan')
+
+    def _ipp(rr: float) -> float:
+        return float(cs(rr, 2))
+
+    # Bracket: just past the peak (dx/2) out to half the array span
+    # so the brentq search stays inside the well-sampled region.
+    r_min = max(0.5 * dx_f, 0.5 * float(r_arr[1] - r_arr[0]))
+    r_max = float(r_arr[-1]) * 0.5
+    if not (r_max > r_min):
+        return float('nan')
+    n_scan = 200
+    rs = np.linspace(r_min, r_max, n_scan)
+    vals = np.array([_ipp(rr) for rr in rs], dtype=np.float64)
+
+    half_d: Optional[float] = None
+    for i in range(len(rs) - 1):
+        if not (np.isfinite(vals[i]) and np.isfinite(vals[i + 1])):
+            continue
+        # First crossing from concave-down (I''<0 near peak) to
+        # concave-up (I''>=0 in the wings).
+        if vals[i] < 0.0 <= vals[i + 1]:
+            try:
+                half_d = float(brentq(_ipp, rs[i], rs[i + 1]))
+                break
+            except Exception:
+                continue
+
+    if half_d is None or not np.isfinite(half_d):
+        return float('nan')
     return float(2.0 * half_d)
 
 
@@ -3620,6 +3808,7 @@ def fwhm_resolution(
     dx: float,
     *,
     axis: str = 'radial',
+    dy: Optional[float] = None,
 ) -> float:
     """Twice the full-width-at-half-maximum half-radius of the central
     peak.
@@ -3635,9 +3824,11 @@ def fwhm_resolution(
     psf : ndarray (real, 2-D)
         Intensity PSF.
     dx : float
-        PSF-plane grid spacing [m].
+        PSF-plane grid spacing in x [m].
     axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
         Profile axis to scan.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square grid).
 
     Returns
     -------
@@ -3651,7 +3842,10 @@ def fwhm_resolution(
     ``profile(r) <= 0.5 * profile.max()``.  Linear interpolation
     across the crossing gives sub-pixel accuracy.
     """
-    r, profile = _psf_1d_profile(psf, dx, axis=axis)
+    xp = _xp_of(psf)
+    psf_np = _to_numpy_host(psf)
+    del xp
+    r, profile = _psf_1d_profile(psf_np, dx, axis=axis, dy=dy)
 
     peak = float(profile.max())
     if peak <= 0.0 or not np.all(np.isfinite(profile)):
@@ -3685,7 +3879,8 @@ def fwhm_resolution(
         t = 0.0
     else:
         t = (half - y_lo) / (y_hi - y_lo)
-    r_half = abs(r[j - 1] - r[peak_idx]) + t * float(dx)
+    r_step = float(r[1] - r[0]) if r.size > 1 else float(dx)
+    r_half = abs(r[j - 1] - r[peak_idx]) + t * r_step
     return float(2.0 * r_half)
 
 
@@ -3716,9 +3911,13 @@ def astigmatism_mag_angle(
         \theta = \tfrac{1}{2} \, \mathrm{atan2}(c_3, c_5).
 
     Because astigmatism has C2 symmetry, the principal-axis angle
-    ``theta`` is unique modulo :math:`\pi/2`; the formula gives a
-    value in :math:`(-\pi/4, \pi/4]` via the half-angle of a full
-    :math:`(-\pi, \pi]` atan2.
+    ``theta`` is unique modulo :math:`\pi/2` (any whole-:math:`\pi/2`
+    multiple maps the figure onto itself).  The formula returns a
+    value in :math:`(-\pi/2,\, \pi/2]` -- the half-angle of a full
+    :math:`(-\pi,\, \pi]` ``atan2`` range -- which spans a full
+    period of the principal-axis ambiguity.  Callers who want a
+    canonical-quadrant orientation should fold ``theta`` into
+    ``[0, pi/2)`` by adding :math:`\pi/2` when ``theta < 0``.
 
     Parameters
     ----------

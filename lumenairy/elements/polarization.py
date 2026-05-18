@@ -383,7 +383,14 @@ class JonesField:
 # and so the sentinel can carry a ``__reduce__`` if it ever needs to
 # cross a pickle boundary (no current callsite does -- the sentinel is
 # function-local default-value plumbing).
-class _AngleUnsetSentinel:
+# v4.15.1 (Agent E): now inherits from ``_deprecation._Sentinel`` to
+# share the singleton-name registry + pickle-safe ``__reduce__``
+# protocol.  See ``_deprecation.py`` and the migration note on
+# ``_ZeroApertureMaskSentinel`` in ``optimize/core.py``.
+from .._deprecation import _Sentinel as _Sentinel
+
+
+class _AngleUnsetSentinel(_Sentinel):
     """Singleton sentinel meaning "the caller did not supply this angle".
 
     Used by :func:`apply_polarizer`, :func:`apply_waveplate`,
@@ -399,8 +406,9 @@ class _AngleUnsetSentinel:
 
     __slots__ = ()
 
-    def __repr__(self) -> str:
-        return '<_ANGLE_UNSET>'
+    def __init__(self) -> None:
+        # Use the existing repr-friendly name as the singleton key.
+        super().__init__('_ANGLE_UNSET')
 
 
 _ANGLE_UNSET = _AngleUnsetSentinel()

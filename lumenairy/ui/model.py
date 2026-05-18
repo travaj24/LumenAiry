@@ -156,11 +156,18 @@ class SourceDefinition:
         from lumenairy import Source as _Source
         wavelength = self.wavelength_nm * 1e-9
 
+        # v4.15.1 (P1-NEW-C / Agent E): migrated to the canonical
+        # kwarg-only ``Source.method(*, N, dx, wavelength, ...)`` form.
+        # Pre-v4.15.1 these 7 callsites used the legacy positional form
+        # (e.g. ``Source.gaussian(w0, N, dx, wavelength)``) and so
+        # emitted ``DeprecationWarning`` at v4.15.0 startup -- the
+        # release that introduced the deprecation shim didn't migrate
+        # its own internal UI consumers.
         if self.source_type == 'plane_wave':
             ax = _np.deg2rad(self.field_angle_x_deg)
             ay = _np.deg2rad(self.field_angle_y_deg)
             src = _Source.plane_wave(
-                N, dx_m, wavelength,
+                N=N, dx=dx_m, wavelength=wavelength,
                 angle_x=ax, angle_y=ay,
                 name=f'Plane wave ({self.wavelength_nm:.0f} nm)')
             if epd_m and epd_m > 0:
@@ -173,32 +180,33 @@ class SourceDefinition:
         if self.source_type == 'gaussian':
             w0 = self.beam_diameter_mm * 1e-3 / 2
             return _Source.gaussian(
-                w0, N, dx_m, wavelength,
+                N=N, dx=dx_m, wavelength=wavelength, w0=w0,
                 name=f'Gaussian (d={self.beam_diameter_mm:.3f} mm)')
 
         if self.source_type == 'gaussian_aperture':
             w0 = self.sigma_mm * 1e-3
             return _Source.gaussian(
-                w0, N, dx_m, wavelength,
+                N=N, dx=dx_m, wavelength=wavelength, w0=w0,
                 name=f'Gaussian-aperture (sigma={self.sigma_mm:.2f} mm)')
 
         if self.source_type == 'top_hat':
             d = self.top_hat_diameter_mm * 1e-3
             return _Source.top_hat(
-                d, N, dx_m, wavelength,
+                N=N, dx=dx_m, wavelength=wavelength, diameter=d,
                 name=f'Top-hat (d={self.top_hat_diameter_mm:.3f} mm)')
 
         if self.source_type == 'fiber_mode':
             mfd = self.fiber_mfd_um * 1e-6
             return _Source.fiber_mode(
-                mfd, N, dx_m, wavelength, na=self.fiber_NA,
+                N=N, dx=dx_m, wavelength=wavelength,
+                mode_field_diameter=mfd, na=self.fiber_NA,
                 name=f'Fiber mode (MFD={self.fiber_mfd_um:.1f} um, '
                      f'NA={self.fiber_NA:.3f})')
 
         if self.source_type == 'point_source':
             z0 = -self.object_distance_mm * 1e-3
             return _Source.point_source(
-                N, dx_m, wavelength, z0=z0,
+                N=N, dx=dx_m, wavelength=wavelength, z0=z0,
                 name=f'Point source ({self.object_distance_mm:.1f} mm)')
 
         if self.source_type == 'emitter_array':
@@ -225,7 +233,7 @@ class SourceDefinition:
         # Unknown type — fall through to a unit plane wave so callers
         # always get a valid Source rather than None.
         return _Source.plane_wave(
-            N, dx_m, wavelength,
+            N=N, dx=dx_m, wavelength=wavelength,
             name=f'(unknown source_type={self.source_type!r})')
 
 

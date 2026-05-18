@@ -21,9 +21,12 @@ from .core import (
     create_bessel_beam,
     # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent
     # partial-coherence source factories.
+    # v4.15.1 (P0-NEW-2): the 3 factories now return ensembles (or
+    # a PartialCoherenceMCF) and actually deliver partial coherence.
     create_gaussian_schell_source,
     create_schell_model_source,
     create_annular_incoherent_source,
+    PartialCoherenceMCF,
 )
 
 
@@ -45,4 +48,5 @@ __all__ = [
     'create_gaussian_schell_source',
     'create_schell_model_source',
     'create_annular_incoherent_source',
+    'PartialCoherenceMCF',
 ]

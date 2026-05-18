@@ -12,13 +12,25 @@ Covers four ROADMAP v4.16 user-facing API gaps closed in v4.15.0:
   primary astigmatism magnitude + orientation from an OSA-indexed
   Zernike coefficient array.
 
+v4.15.1 -- per audit ``AUDIT_V4_15_0_2026_05_18.md`` meta-finding
+("property-only test pins miss algorithm-correctness regressions")
+the three resolution-metric property pins (sparrow < rayleigh,
+fwhm < rayleigh) are upgraded to analytical-value pins against the
+canonical Airy constants (0.947 / 1.029 / 1.22 * lambda * f/#) at
++/- 5%.  ``strehl_vector`` no longer supports a default plane-wave
+reference (audit P1-F1-3); the previously-tautological "unity for
+plane wave" pin is replaced with an explicit-reference round-trip
+pin + a breaking-change pin that the default path now raises.  See
+``test_v4_15_1_agent_c.py`` for the v4.15.1 patch tests proper.
+
 Convention pins (documented in :mod:`lumenairy.analysis.core`):
 
 * ``ee_polychromatic`` accepts ``N`` / ``output_grid`` and ``dx`` /
   ``output_dx`` aliases.  Passing both forms raises ``ValueError``.
 * ``strehl_vector`` reduces to the scalar peak-ratio Strehl when
-  ``Ey == Ez == 0`` and falls back to a plane-wave reference of
-  matching total power when no ``reference`` is supplied.
+  ``Ey == Ez == 0``.  ``reference=`` is required (v4.15.1 breaking
+  change; the v4.15.0 default plane-wave reference returned
+  Strehl > 1 for any focused PSF).
 * Resolution metrics return distances in metres; ``rayleigh`` is the
   first-zero radius, ``sparrow`` is the dual-source separation,
   ``fwhm`` is the FWHM diameter (twice the half-max radius).
@@ -26,7 +38,7 @@ Convention pins (documented in :mod:`lumenairy.analysis.core`):
   :func:`zernike_decompose`: ``coeffs[3] = c3 = oblique``,
   ``coeffs[5] = c5 = vertical``; ``theta = 0.5 * atan2(c3, c5)``.
 
-Author: Andrew Traverso -- v4.15.0 / Agent C
+Author: Andrew Traverso -- v4.15.0 / Agent C (v4.15.1 patch updates)
 """
 from __future__ import annotations
 
@@ -208,18 +220,52 @@ class TestEePolychromatic:
 # ============================================================================
 
 class TestStrehlVector:
-    """Vector (polarisation-aware) Strehl ratio."""
+    """Vector (polarisation-aware) Strehl ratio.
 
-    def test_c2_strehl_vector_plane_wave_vs_default_reference_is_unity(self):
-        """A uniform plane wave compared against the default plane-wave
-        reference must give Strehl = 1.0 to roundoff."""
+    NOTE (v4.15.1): the v4.15.0 default-reference branch (uniform
+    plane wave of matching total power) was removed because it
+    produced Strehl > 1 on any focused PSF.  Tests below now require
+    explicit `reference=(Ex_ref, Ey_ref[, Ez_ref])`.  The original
+    `plane_wave_vs_default_reference_is_unity` pin was tautological
+    (uniform field vs uniform reference of equal power is
+    identically 1.0 by construction) and has been replaced with an
+    analytical-value pin on a diffraction-limited reference plus an
+    explicit `ValueError` pin for the removed default branch.
+    """
+
+    def test_c2_strehl_vector_unaberrated_against_diffraction_ref_is_unity(
+            self):
+        """A diffraction-limited focused field compared against itself
+        (same field as reference) must yield Strehl = 1.0 to roundoff.
+        Analytical pin (audit V4.15.0 meta-finding): replaces the
+        prior tautological uniform-vs-uniform pin with a meaningful
+        diffraction-limited-reference assertion."""
+        N_pupil = 32
+        dx = 50e-6
+        D = 1e-3
+        x = (np.arange(N_pupil) - N_pupil / 2) * dx
+        X, Y = np.meshgrid(x, x)
+        aperture = ((X ** 2 + Y ** 2) <= (D / 2) ** 2).astype(np.complex128)
+        psf, _ = la.compute_psf(aperture, 600e-9, 50e-3, dx, oversample=2)
+        Ex_ref = np.sqrt(psf).astype(np.complex128)
+        Ey_ref = np.zeros_like(Ex_ref)
+        s = strehl_vector(
+            Ex_ref.copy(), Ey_ref.copy(),
+            reference=(Ex_ref, Ey_ref))
+        assert abs(s - 1.0) < 1e-12, (
+            f"strehl_vector(field, reference=field) -> {s!r}; "
+            f"expected 1.0.")
+
+    def test_c2_strehl_vector_default_reference_path_now_raises(self):
+        """v4.15.1 breaking change: omitting ``reference`` raises
+        ValueError (previously returned a tautological 1.0 for uniform
+        fields and produced Strehl > 1 for focused PSFs)."""
         N = 16
         Ex = np.ones((N, N), dtype=np.complex128)
         Ey = np.zeros_like(Ex)
-        s = strehl_vector(Ex, Ey)
-        assert abs(s - 1.0) < 1e-12, (
-            f"plane-wave vs plane-wave default reference -> S = {s!r}; "
-            f"expected 1.0.")
+        with pytest.raises((ValueError, TypeError),
+                            match="reference"):
+            strehl_vector(Ex, Ey)
 
     def test_c2_strehl_vector_monotone_decreasing_under_defocus(self):
         """Adding more defocus to the same field should *not* increase
@@ -291,10 +337,15 @@ class TestStrehlVector:
 
     def test_c2_strehl_vector_1d_field_rejected(self):
         """1-D inputs must raise ``ValueError`` -- we explicitly do
-        not accept ravelled vector fields."""
+        not accept ravelled vector fields.  v4.15.1: reference is
+        also required, so we pass a 2-D reference and let the 1-D
+        input trigger the shape-validation error."""
+        Ex_ref = np.ones((16, 16), dtype=complex)
+        Ey_ref = np.zeros((16, 16), dtype=complex)
         with pytest.raises(ValueError, match='must be 2-D'):
             strehl_vector(np.ones(16, dtype=complex),
-                          np.zeros(16, dtype=complex))
+                          np.zeros(16, dtype=complex),
+                          reference=(Ex_ref, Ey_ref))
 
 
 class TestCouplingEfficiencyVector:
@@ -411,42 +462,56 @@ class TestResolutionMetrics:
             f"expected {d_expected*1e6:.4f} um "
             f"(rel error {rel*100:.2f}% > 5%).")
 
-    def test_c3_sparrow_less_than_rayleigh(self):
-        """Sparrow resolution is the dip-vanishing separation,
-        empirically smaller than the Rayleigh first-zero radius for an
-        Airy pattern (~0.95 lambda f/# vs 1.22 lambda f/#)."""
-        wavelength = 600e-9
-        psf, dx_psf, _ = _make_airy_psf(wavelength=wavelength)
-        d_rayleigh = rayleigh_resolution(
-            psf, dx_psf, wavelength, axis='radial')
-        d_sparrow = sparrow_resolution(psf, dx_psf, axis='radial')
-        assert np.isfinite(d_sparrow) and d_sparrow > 0, (
-            f"sparrow_resolution returned non-finite/non-positive "
-            f"value: {d_sparrow!r}.")
-        assert d_sparrow < d_rayleigh, (
-            f"Sparrow should be smaller than Rayleigh for Airy; "
-            f"got Sparrow = {d_sparrow*1e6:.4f} um, "
-            f"Rayleigh = {d_rayleigh*1e6:.4f} um.")
+    def test_c3_sparrow_resolution_on_airy_analytical_value(self):
+        """Sparrow resolution on a clean Airy PSF must match the
+        analytical ``0.947 * lambda * f/#`` to within 5%.
 
-    def test_c3_fwhm_less_than_rayleigh(self):
-        """FWHM diameter of the Airy central peak is smaller than the
-        Rayleigh first-zero radius (~1.029 lambda f/# vs 1.22 lambda
-        f/#).  The spec's ``fwhm < sparrow`` ordering does NOT hold
-        for a clean Airy (FWHM ~ 1.029 > Sparrow ~ 0.947), so we pin
-        the physically-correct ordering ``fwhm < rayleigh`` and
-        document the spec divergence in the v4.15 release notes."""
+        v4.15.1 (audit V4.15.0 meta-finding): replaces the prior
+        property-only ``sparrow < rayleigh`` pin with an analytical-
+        value pin against the canonical Sparrow constant
+        (the dip-vanishing separation for a circular-aperture Airy
+        pattern).  The old property-only pin masked the 15%
+        algorithmic error that the audit caught."""
         wavelength = 600e-9
-        psf, dx_psf, _ = _make_airy_psf(wavelength=wavelength)
+        psf, dx_psf, f_number = _make_airy_psf(wavelength=wavelength)
+        d_sparrow = sparrow_resolution(psf, dx_psf, axis='radial')
+        d_expected = 0.947 * wavelength * f_number
+        rel = abs(d_sparrow - d_expected) / d_expected
+        assert rel < 0.05, (
+            f"sparrow_resolution on Airy: got {d_sparrow*1e6:.4f} um, "
+            f"expected {d_expected*1e6:.4f} um (0.947 * lam * f/#); "
+            f"rel error {rel*100:.2f}% > 5%.")
+        # Property pin kept as a sanity check on top of the
+        # analytical pin: Sparrow < Rayleigh on a clean Airy.
         d_rayleigh = rayleigh_resolution(
             psf, dx_psf, wavelength, axis='radial')
+        assert d_sparrow < d_rayleigh, (
+            f"Sparrow {d_sparrow*1e6:.4f} um should be smaller than "
+            f"Rayleigh {d_rayleigh*1e6:.4f} um for an Airy.")
+
+    def test_c3_fwhm_resolution_on_airy_analytical_value(self):
+        """FWHM diameter on a clean Airy PSF must match the
+        analytical ``1.029 * lambda * f/#`` to within 5%.
+
+        v4.15.1 (audit V4.15.0 meta-finding): replaces the prior
+        property-only ``fwhm < rayleigh`` pin with an analytical-
+        value pin against the canonical Airy FWHM constant."""
+        wavelength = 600e-9
+        psf, dx_psf, f_number = _make_airy_psf(wavelength=wavelength)
         d_fwhm = fwhm_resolution(psf, dx_psf, axis='radial')
-        assert np.isfinite(d_fwhm) and d_fwhm > 0, (
-            f"fwhm_resolution returned non-finite/non-positive: "
-            f"{d_fwhm!r}.")
+        d_expected = 1.029 * wavelength * f_number
+        rel = abs(d_fwhm - d_expected) / d_expected
+        assert rel < 0.05, (
+            f"fwhm_resolution on Airy: got {d_fwhm*1e6:.4f} um, "
+            f"expected {d_expected*1e6:.4f} um (1.029 * lam * f/#); "
+            f"rel error {rel*100:.2f}% > 5%.")
+        # Property pin kept as a sanity check: FWHM < Rayleigh on a
+        # clean Airy.
+        d_rayleigh = rayleigh_resolution(
+            psf, dx_psf, wavelength, axis='radial')
         assert d_fwhm < d_rayleigh, (
-            f"FWHM should be less than Rayleigh for an Airy; got "
-            f"FWHM = {d_fwhm*1e6:.4f} um, "
-            f"Rayleigh = {d_rayleigh*1e6:.4f} um.")
+            f"FWHM {d_fwhm*1e6:.4f} um should be less than Rayleigh "
+            f"{d_rayleigh*1e6:.4f} um for an Airy.")
 
     def test_c3_axis_x_vs_radial_both_finite(self):
         """Both ``axis='x'`` and ``axis='radial'`` produce finite,

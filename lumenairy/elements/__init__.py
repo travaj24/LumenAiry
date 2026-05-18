@@ -60,6 +60,8 @@ from .freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
     surface_sag_chebyshev,
+    surface_sag_q_bfs,
+    surface_sag_q_con,
     surface_sag_freeform,
 )
 from .elements import (
@@ -123,7 +125,9 @@ __all__ = [
     'coating_reflectance', 'quarter_wave_ar', 'broadband_ar_v_coat',
     # freeform
     'surface_sag_xy_polynomial', 'surface_sag_zernike_freeform',
-    'surface_sag_chebyshev', 'surface_sag_freeform',
+    'surface_sag_chebyshev',
+    'surface_sag_q_bfs', 'surface_sag_q_con',
+    'surface_sag_freeform',
     # elements
     'apply_mirror', 'apply_aperture', 'apply_gaussian_aperture',
     'apply_mask', 'zernike', 'apply_zernike_aberration',

@@ -1357,7 +1357,390 @@ def create_bessel_beam(
 
 # ---------------------------------------------------------------------------
 # Schell-model partial-coherence sources (v4.15, ROADMAP v4.16 #9)
+#
+# v4.15.1 (P0-NEW-2): redesigned to actually deliver partial coherence.
+# The v4.15.0 release of these factories collapsed the ensemble to a
+# single complex field ``E = sqrt(<I>) * exp(i * angle(<E>))`` before
+# return; the resulting single field has fully-coherent MCF
+# ``J(r1, r2) = E*(r1) * E(r2)``, NOT the documented Schell-model
+# factorisation ``sqrt(I(r1) I(r2)) * mu(r1 - r2)``.  The audit
+# (docs/audits/AUDIT_V4_15_0_2026_05_18.md, P0-NEW-2, 3-way confirmed)
+# also flagged a unit-RMS phase normalisation that forced
+# ``sigma_phi == 1`` regardless of ``sigma_g``, so neither the
+# ``sigma_g -> 0`` (incoherent) nor the ``sigma_g -> infinity``
+# (coherent) limit was recovered.
+#
+# The redesigned recipe (per Goodman, _Statistical Optics_, Sec 5.5 and
+# Wolf 1982 JOSA 72 343) is:
+#
+#   1. For each realisation k = 1..n_realizations, draw circular-Gaussian
+#      complex white noise W_k(r) on the grid.
+#   2. Multiply by the Fourier-space filter
+#      ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)`` and inverse-FFT to obtain
+#      the band-limited complex random field ``phi_k(r)``.
+#   3. Normalise ``phi_k`` so ``<|phi_k(r)|^2>_r == 1`` (unit mean
+#      intensity).  The two-point correlation of the resulting field is
+#      ``<phi(r1) * conj(phi(r2))> = exp(-|r1-r2|^2 / (2 sigma_g^2))``
+#      -- the canonical Gaussian Schell kernel.
+#   4. The k-th ensemble realisation is ``E_k(r) = sqrt(I(r)) * phi_k(r)``
+#      so the ensemble MCF
+#      ``J(r1, r2) = <E(r1) * conj(E(r2))>
+#                  = sqrt(I(r1) I(r2)) * exp(-|r1-r2|^2 / (2 sigma_g^2))``
+#      which is the Schell-model factorisation with Gaussian kernel.
+#
+# Return contract: ``return_kind='ensemble'`` (default) yields the raw
+# ``(n_realizations, Ny, Nx)`` complex ensemble plus ``dx``, ``dy``,
+# ``wavelength``.  ``return_kind='mcf'`` yields a ``PartialCoherenceMCF``
+# instance (full N^2 x N^2 storage for small N, coherent-mode
+# decomposition for large N).  The v4.15.0 single-field return is gone
+# -- user is sole consumer, no shim needed; the migration is documented
+# in the release notes.
 # ---------------------------------------------------------------------------
+
+import dataclasses as _dataclasses
+
+
+@_dataclasses.dataclass
+class PartialCoherenceMCF:
+    """Mutual coherence function ``J(r1, r2) = <E(r1) * conj(E(r2))>``
+    for a partially-coherent source.
+
+    Two storage forms are supported, selected automatically by
+    :meth:`from_ensemble` based on grid size:
+
+    * **Full** -- the dense ``(Ny*Nx, Ny*Nx)`` MCF matrix ``J_full``.
+      Used when ``Ny*Nx <= max_full_N**2`` (default
+      ``max_full_N == 64``, i.e. up to ``64 x 64`` grids).  Exact;
+      every two-point query reads the matrix directly.
+    * **Modal** -- a coherent-mode decomposition (Mandel & Wolf,
+      _Optical Coherence and Quantum Optics_, Section 4.7;
+      Wolf 1982 JOSA 72 343).  Stores the leading ``K`` eigenmodes
+      ``modes[k, :, :]`` and eigenvalues ``eigenvalues[k]`` such that
+      ``J(r1, r2) ~= sum_k lambda_k * mode_k(r1) * conj(mode_k(r2))``.
+      ``K`` defaults to the smallest number of modes whose cumulative
+      eigenvalue sum exceeds 99% of the total (the standard
+      Karhunen-Loeve truncation threshold).  Used for large N where
+      full storage is infeasible.
+
+    The decomposition is computed via SVD of the ensemble matrix
+    ``E_mat`` of shape ``(n_realizations, Ny*Nx)``: the eigenmodes of
+    ``J = (1/K) * E_mat^H @ E_mat`` are the right-singular vectors of
+    ``E_mat``, and the eigenvalues are ``s_i^2 / n_realizations``.
+    This avoids ever materialising the dense MCF for large N.
+
+    Attributes
+    ----------
+    shape : (int, int)
+        Spatial shape ``(Ny, Nx)`` of each mode / of the underlying
+        ensemble realisation.
+    dx, dy : float
+        Pixel pitches [m].
+    wavelength : float
+        Vacuum wavelength [m].
+    J_full : ndarray (Ny*Nx, Ny*Nx), complex, optional
+        Full MCF matrix; populated when the grid is small enough.
+    modes : ndarray (K, Ny, Nx), complex, optional
+        Leading-K coherent modes (orthonormal under the standard L2
+        inner product on the grid); populated in modal storage.
+    eigenvalues : ndarray (K,), real >= 0, optional
+        Eigenvalues of ``J`` corresponding to ``modes``, in descending
+        order; populated in modal storage.
+    n_realizations : int, optional
+        Number of ensemble realisations used to build the MCF.
+        Informational only.
+
+    Notes
+    -----
+    MCF-aware downstream propagators (Koehler-/Hopkins-style coherent-
+    mode propagation, MCF transport through the system) are NOT in
+    v4.15.1 scope and are deferred to v4.16+.  The current
+    :class:`PartialCoherenceMCF` is consumable for inspection and
+    analysis only (intensity, two-point coherence, coherent-mode
+    extraction).
+    """
+    shape: Tuple[int, int]
+    dx: float
+    dy: float
+    wavelength: float
+    J_full: Optional[np.ndarray] = None
+    modes: Optional[np.ndarray] = None
+    eigenvalues: Optional[np.ndarray] = None
+    n_realizations: Optional[int] = None
+
+    # -----------------------------------------------------------------
+    # Construction
+    # -----------------------------------------------------------------
+
+    @classmethod
+    def from_ensemble(
+        cls,
+        ensemble: np.ndarray,
+        *,
+        dx: float,
+        dy: float,
+        wavelength: float,
+        max_full_N: int = 64,
+        n_modes: Optional[int] = None,
+        energy_threshold: float = 0.99,
+    ) -> 'PartialCoherenceMCF':
+        """Build an MCF object from an ``(n_realizations, Ny, Nx)`` ensemble.
+
+        Parameters
+        ----------
+        ensemble : ndarray (n_realizations, Ny, Nx), complex
+            Stack of independent random-phase realisations.
+        dx, dy : float
+            Pixel pitches [m].
+        wavelength : float
+            Vacuum wavelength [m].
+        max_full_N : int, default 64
+            Grids with ``Ny * Nx <= max_full_N**2`` get the dense
+            ``J_full`` storage form; larger grids fall back to modal
+            storage (no dense ``J``).
+        n_modes : int, optional
+            Override the truncation rank for modal storage.  ``None``
+            uses ``energy_threshold`` to pick the smallest ``K`` with
+            cumulative eigenvalue mass >= the threshold (default 99%).
+        energy_threshold : float, default 0.99
+            Truncation threshold for the cumulative eigenvalue ratio
+            in modal storage.  Ignored when ``n_modes`` is explicit.
+        """
+        if not isinstance(ensemble, np.ndarray) or ensemble.ndim != 3:
+            raise ValueError(
+                "PartialCoherenceMCF.from_ensemble: ensemble must be a "
+                "3-D ndarray of shape (n_realizations, Ny, Nx); got "
+                f"shape {getattr(ensemble, 'shape', None)!r}.")
+        nr, Ny, Nx = ensemble.shape
+        if nr < 1:
+            raise ValueError(
+                "PartialCoherenceMCF.from_ensemble: ensemble must "
+                f"contain at least 1 realisation; got {nr}.")
+        N_pix = int(Ny) * int(Nx)
+        # Flatten to (n_realizations, N_pix) for SVD / dense build.
+        E_mat = ensemble.reshape(nr, N_pix).astype(np.complex128, copy=False)
+
+        if N_pix <= int(max_full_N) ** 2:
+            # Dense MCF: J = (1/nr) * E_mat^H @ E_mat   (N_pix x N_pix)
+            # Hermitian, positive semi-definite.
+            J_full = (E_mat.conj().T @ E_mat) / float(nr)
+            return cls(
+                shape=(int(Ny), int(Nx)),
+                dx=float(dx), dy=float(dy), wavelength=float(wavelength),
+                J_full=J_full,
+                modes=None, eigenvalues=None,
+                n_realizations=int(nr),
+            )
+
+        # Modal storage via SVD of the ensemble matrix.
+        # E_mat = U @ diag(s) @ Vh,  shape (nr, N_pix).
+        # The eigenmodes of J = (1/nr) * E_mat^H @ E_mat are Vh[k, :].conj()
+        # (the right-singular vectors of E_mat), with eigenvalues s_k^2 / nr.
+        # SVD with full_matrices=False yields at most ``min(nr, N_pix)``
+        # singular values -- exactly the non-zero spectrum of J.
+        U, s, Vh = np.linalg.svd(E_mat, full_matrices=False)
+        eigvals = (s ** 2) / float(nr)
+        # Truncation rank K.
+        if n_modes is not None:
+            K = int(n_modes)
+            if K < 1 or K > eigvals.size:
+                raise ValueError(
+                    "PartialCoherenceMCF.from_ensemble: n_modes must be in "
+                    f"[1, {eigvals.size}]; got {n_modes!r}.")
+        else:
+            total = float(np.sum(eigvals))
+            if total <= 0.0:
+                K = 1  # degenerate -- keep one mode
+            else:
+                cum = np.cumsum(eigvals) / total
+                # First index where cumulative >= threshold; +1 for count.
+                idx = int(np.searchsorted(cum, float(energy_threshold)))
+                K = min(max(1, idx + 1), eigvals.size)
+        # Each row of Vh is a right-singular vector of E_mat;
+        # mode_k(r) corresponds to Vh[k, :] in the (Ny, Nx) layout.
+        modes = Vh[:K, :].reshape(K, int(Ny), int(Nx)).astype(np.complex128)
+        eigenvalues = eigvals[:K].astype(np.float64)
+        return cls(
+            shape=(int(Ny), int(Nx)),
+            dx=float(dx), dy=float(dy), wavelength=float(wavelength),
+            J_full=None,
+            modes=modes, eigenvalues=eigenvalues,
+            n_realizations=int(nr),
+        )
+
+    # -----------------------------------------------------------------
+    # Queries
+    # -----------------------------------------------------------------
+
+    def intensity(self) -> np.ndarray:
+        """Return the ``(Ny, Nx)`` intensity diagonal of ``J``.
+
+        ``I(r) = J(r, r) = sum_k lambda_k * |mode_k(r)|^2`` in the
+        modal form, or ``I = diag(J_full)`` reshaped to ``(Ny, Nx)``
+        in the dense form.
+        """
+        Ny, Nx = self.shape
+        if self.J_full is not None:
+            return np.real(np.diag(self.J_full)).reshape(Ny, Nx)
+        if self.modes is not None and self.eigenvalues is not None:
+            # sum_k lambda_k * |phi_k|^2
+            mod2 = (np.abs(self.modes) ** 2)  # (K, Ny, Nx)
+            return np.tensordot(self.eigenvalues, mod2, axes=(0, 0))
+        raise RuntimeError(
+            "PartialCoherenceMCF: neither J_full nor (modes, eigenvalues) "
+            "is populated; the object is in an inconsistent state.")
+
+    def coherence_at(
+        self,
+        ix1: int, iy1: int,
+        ix2: int, iy2: int,
+    ) -> complex:
+        """Return the complex coherence factor
+
+            ``mu(r1, r2) = J(r1, r2) / sqrt(I(r1) * I(r2))``
+
+        between the two grid points ``r1 = (ix1, iy1)`` and ``r2 =
+        (ix2, iy2)``.  ``|mu|`` is bounded by 1 (Schwarz inequality);
+        ``|mu| == 1`` is fully coherent, ``|mu| == 0`` fully incoherent.
+
+        Note: the index convention is ``(ix, iy)`` (column, row), so
+        ``(ix=0, iy=0)`` is the top-left pixel.
+        """
+        Ny, Nx = self.shape
+        for label, ix, iy in (('1', ix1, iy1), ('2', ix2, iy2)):
+            if not (0 <= int(ix) < Nx and 0 <= int(iy) < Ny):
+                raise IndexError(
+                    f"PartialCoherenceMCF.coherence_at: point {label} "
+                    f"(ix={ix}, iy={iy}) is out of bounds for grid "
+                    f"shape (Ny={Ny}, Nx={Nx}).")
+        flat1 = int(iy1) * int(Nx) + int(ix1)
+        flat2 = int(iy2) * int(Nx) + int(ix2)
+        if self.J_full is not None:
+            J12 = complex(self.J_full[flat1, flat2])
+            I1 = float(np.real(self.J_full[flat1, flat1]))
+            I2 = float(np.real(self.J_full[flat2, flat2]))
+        else:
+            if self.modes is None or self.eigenvalues is None:
+                raise RuntimeError(
+                    "PartialCoherenceMCF.coherence_at: object is in an "
+                    "inconsistent state (no J_full and no modes).")
+            modes_flat = self.modes.reshape(self.modes.shape[0], -1)
+            phi1 = modes_flat[:, flat1]
+            phi2 = modes_flat[:, flat2]
+            J12 = complex(np.sum(self.eigenvalues * phi1 * np.conj(phi2)))
+            I1 = float(np.sum(self.eigenvalues * (np.abs(phi1) ** 2)))
+            I2 = float(np.sum(self.eigenvalues * (np.abs(phi2) ** 2)))
+        denom = float(np.sqrt(I1 * I2))
+        if denom <= 0.0:
+            return 0.0 + 0.0j
+        return J12 / denom
+
+    def coherent_modes(self) -> Tuple[np.ndarray, np.ndarray]:
+        """Return ``(modes, eigenvalues)`` of the coherent-mode
+        decomposition.
+
+        In the modal storage form, returns the stored arrays directly.
+        In the dense (``J_full``) form, computes the decomposition on
+        demand via Hermitian eigendecomposition of ``J_full``.
+
+        Returns
+        -------
+        modes : ndarray (K, Ny, Nx), complex
+            Orthonormal coherent modes, ordered by descending
+            eigenvalue.
+        eigenvalues : ndarray (K,), real >= 0
+            Eigenvalues of ``J``, descending.
+        """
+        Ny, Nx = self.shape
+        if self.modes is not None and self.eigenvalues is not None:
+            return self.modes, self.eigenvalues
+        if self.J_full is None:
+            raise RuntimeError(
+                "PartialCoherenceMCF.coherent_modes: neither modal nor "
+                "dense storage is populated.")
+        # Hermitian eigendecomposition; eigh returns ascending.
+        w, V = np.linalg.eigh(self.J_full)
+        # Reverse to descending; clip tiny negatives from round-off.
+        w = np.maximum(w[::-1], 0.0)
+        V = V[:, ::-1]
+        K = w.size
+        modes = (V.T.reshape(K, Ny, Nx)).astype(np.complex128)
+        return modes, w.astype(np.float64)
+
+
+def _validate_return_kind(value: Any, fn_name: str) -> str:
+    """Validate the ``return_kind`` kwarg shared by the 3 Schell
+    factories.  Returns the canonicalised string."""
+    if not isinstance(value, str):
+        raise ValueError(
+            f"{fn_name}: return_kind must be 'ensemble' or 'mcf'; got "
+            f"{value!r} ({type(value).__name__}).")
+    canon = value.lower().strip()
+    if canon not in ('ensemble', 'mcf'):
+        raise ValueError(
+            f"{fn_name}: return_kind must be 'ensemble' or 'mcf'; got "
+            f"{value!r}.")
+    return canon
+
+
+def _schell_phase_realizations(
+    *,
+    N: int,
+    Ny: int,
+    Nx: int,
+    dx: float,
+    dy: float,
+    coherence_length: float,
+    n_realizations: int,
+    rng: np.random.Generator,
+) -> np.ndarray:
+    """Generate ``n_realizations`` band-limited complex random fields
+    with the Gaussian Schell kernel as their two-point correlation.
+
+    The recipe (Goodman, _Statistical Optics_, Sec 5.5):
+
+    1. For each realisation, draw circular-Gaussian complex white
+       noise ``W(r)`` on the grid (independent N(0, 1/2) real and
+       imaginary parts).
+    2. Multiply by the Fourier-space filter
+       ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)`` and inverse-FFT.  The
+       resulting complex field ``phi(r)`` has spatial correlation
+       ``<phi(r1) conj(phi(r2))> ~ exp(-|r1-r2|^2 / (2 sigma_g^2))``.
+    3. Normalise so the mean intensity is unity:
+       ``phi <- phi / sqrt(<|phi|^2>)``.  ``|phi|^2`` then averages to
+       1; the resulting field acts as the random "phase + speckle"
+       factor of the Schell-model decomposition.
+
+    Returns
+    -------
+    phi : ndarray (n_realizations, Ny, Nx), complex128
+        Unit-mean-intensity band-limited noise stack.
+    """
+    kx = 2.0 * np.pi * np.fft.fftfreq(Nx, d=dx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(Ny, d=dy)
+    KX, KY = np.meshgrid(kx, ky)
+    # Fourier-space Gaussian filter.  Variance of |phi(r)|^2 in real
+    # space scales as integral of |H(k)|^2 dk; we re-normalise to
+    # unit mean intensity per realisation below, so the absolute
+    # amplitude of H here is irrelevant.
+    sigma_g = float(coherence_length)
+    spec_filter = np.exp(-(KX * KX + KY * KY) * (sigma_g ** 2) / 4.0)
+
+    out = np.empty((int(n_realizations), int(Ny), int(Nx)),
+                   dtype=np.complex128)
+    inv_sqrt2 = 1.0 / np.sqrt(2.0)
+    for k in range(int(n_realizations)):
+        # Circular-Gaussian complex white noise.
+        w_re = rng.standard_normal((Ny, Nx))
+        w_im = rng.standard_normal((Ny, Nx))
+        W = (w_re + 1j * w_im) * inv_sqrt2
+        Phi = np.fft.ifft2(np.fft.fft2(W) * spec_filter)
+        # Normalise to unit mean intensity per realisation.
+        mean_I = float(np.mean(np.abs(Phi) ** 2))
+        if mean_I > 0.0:
+            Phi = Phi / np.sqrt(mean_I)
+        out[k] = Phi
+    return out
+
 
 def create_gaussian_schell_source(
     *,
@@ -1370,23 +1753,25 @@ def create_gaussian_schell_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Spatially-incoherent Gaussian-Schell beam.
+    return_kind: str = 'ensemble',
+    max_full_N: int = 64,
+    n_modes: Optional[int] = None,
+) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
+    """Gaussian-Schell partial-coherence source.
 
-    Returns the ensemble-averaged amplitude envelope (square root of
-    the time-averaged intensity) of ``n_realizations`` independent
-    Gaussian beams whose phases are draws from a band-limited random
-    field with coherence length ``sigma_g``.  Suitable as the input
-    "source" amplitude for partial-coherence imaging routines that
-    treat the source as an ensemble of mutually-incoherent
-    realizations.
+    v4.15.1 (P0-NEW-2): redesigned to deliver actual partial coherence.
+    Returns either the raw ``(n_realizations, Ny, Nx)`` complex
+    ensemble (the canonical contract; caller averages intensities
+    downstream) or a :class:`PartialCoherenceMCF` object exposing the
+    mutual coherence function and its coherent-mode decomposition.
 
     A Gaussian-Schell beam has Gaussian intensity profile (1/e^2
     radius ``w0``) and Gaussian coherence kernel
     ``mu(r1, r2) = exp(-|r1-r2|^2 / (2 sigma_g^2))``.  In the
-    fully-coherent limit ``sigma_g -> infinity`` the beam reduces to a
-    deterministic Gaussian with waist ``w0``; in the fully-incoherent
-    limit ``sigma_g -> 0`` each pixel has independent phase.
+    fully-coherent limit ``sigma_g -> infinity`` the MCF approaches
+    rank 1 (a deterministic Gaussian with waist ``w0``); in the
+    fully-incoherent limit ``sigma_g -> 0`` the off-diagonal MCF
+    decays to zero.
 
     Parameters
     ----------
@@ -1400,31 +1785,45 @@ def create_gaussian_schell_source(
         Gaussian 1/e^2 intensity radius of the beam envelope [m].
     sigma_g : float
         Gaussian transverse coherence length [m].  Must be > 0;
-        ``sigma_g >> w0`` approaches the coherent limit.
+        ``sigma_g >> w0`` approaches the coherent limit;
+        ``sigma_g << dx`` approaches the incoherent limit.
     n_realizations : int, default 16
-        Number of independent ensemble draws to average.  Larger
-        values give a smoother intensity envelope at the cost of
-        compute time.  Must be >= 1.
+        Number of independent ensemble draws.  Must be >= 1.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     seed : int, optional
-        RNG seed for reproducibility.  ``None`` leaves the local
-        Generator unseeded.
+        RNG seed for reproducibility.
     dtype : optional
-        Complex dtype.
+        Complex dtype for the returned ensemble (default: library
+        default).  Ignored when ``return_kind='mcf'`` -- the MCF
+        always uses complex128 internally.
+    return_kind : {'ensemble', 'mcf'}, default 'ensemble'
+        ``'ensemble'`` (default): return ``(E_ensemble, dx, dy,
+        wavelength)`` where ``E_ensemble`` is a ``(n_realizations, Ny,
+        Nx)`` complex array.
+        ``'mcf'``: return a :class:`PartialCoherenceMCF` instance.
+    max_full_N : int, default 64
+        Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
+        ``return_kind='mcf'``.  Grids with ``Ny * Nx > max_full_N**2``
+        get the modal-storage form.
+    n_modes : int, optional
+        Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
+        ``return_kind='mcf'``.  ``None`` selects modes by the default
+        99%-energy threshold.
 
     Returns
     -------
-    E : ndarray (complex)
-        Amplitude envelope (sqrt of the ensemble-averaged intensity),
-        cast to the requested complex dtype.  The phase is the phase
-        of the ensemble mean of E_realizations -- not physically
-        meaningful in the partial-coherence limit but kept for
-        downstream type-uniformity.
-    x : ndarray
-        1-D x-coordinate array [m].
-    y : ndarray
-        1-D y-coordinate array [m].
+    With ``return_kind='ensemble'`` (default):
+        ``(E_ensemble, dx, dy, wavelength)`` where ``E_ensemble`` is a
+        ``(n_realizations, Ny, Nx)`` complex array.
+    With ``return_kind='mcf'``:
+        :class:`PartialCoherenceMCF` instance.
+
+    Notes
+    -----
+    The pre-v4.15.1 single-field return is gone; callers expecting
+    ``(E_2d, x, y)`` must migrate.  See ``docs/release_notes/
+    .release_notes_v4_15_1_agent_b.md`` for the migration guide.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_gaussian_schell_source')
@@ -1441,6 +1840,8 @@ def create_gaussian_schell_source(
         raise ValueError(
             f"create_gaussian_schell_source: n_realizations must be a "
             f"positive integer; got {n_realizations!r}.")
+    rk = _validate_return_kind(
+        return_kind, fn_name='create_gaussian_schell_source')
 
     if dy is None:
         dy = dx
@@ -1449,48 +1850,25 @@ def create_gaussian_schell_source(
     X, Y = np.meshgrid(x, y)
     target_dtype = _resolve_complex_dtype(dtype)
 
-    # Gaussian intensity envelope (amplitude is sqrt of intensity).
-    sigma_int = w0 / 2.0  # 1/e^2 intensity radius -> Gaussian sigma
-    amp = np.exp(-(X * X + Y * Y) / (2.0 * sigma_int ** 2))
+    # Gaussian intensity envelope.  amp = sqrt(I_target).  The 1/e^2
+    # *intensity* radius is w0, so I = exp(-2 r^2 / w0^2) and
+    # amp = exp(-r^2 / w0^2).
+    amp = np.exp(-(X * X + Y * Y) / (w0 ** 2))
 
-    # Random-phase ensemble: each realization multiplies the deterministic
-    # Gaussian amplitude by a unit-modulus random phase whose two-point
-    # correlation is controlled by sigma_g.  Standard recipe: build a
-    # white-noise array and convolve (multiplicatively in Fourier) with
-    # a Gaussian kernel of width 1/sigma_g; the result has correlation
-    # length sigma_g in the spatial domain.
     rng = np.random.default_rng(seed)
-    # Gaussian filter in k-space whose spatial coherence length is sigma_g.
-    kx = 2.0 * np.pi * np.fft.fftfreq(N, d=dx)
-    ky = 2.0 * np.pi * np.fft.fftfreq(N, d=dy)
-    KX, KY = np.meshgrid(kx, ky)
-    spec_filter = np.exp(-(KX * KX + KY * KY) * (sigma_g ** 2) / 2.0)
+    phi = _schell_phase_realizations(
+        N=int(N), Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
+        coherence_length=float(sigma_g),
+        n_realizations=int(n_realizations), rng=rng)
+    # E_k(r) = sqrt(I(r)) * phi_k(r).
+    E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
 
-    intensity_sum = np.zeros_like(amp, dtype=np.float64)
-    coherent_sum = np.zeros_like(amp, dtype=np.complex128)
-    nr = int(n_realizations)
-    for _ in range(nr):
-        # White-noise random field (real-valued normal), filter, take phase.
-        white = rng.standard_normal((N, N))
-        filtered_k = np.fft.fft2(white) * spec_filter
-        filtered = np.real(np.fft.ifft2(filtered_k))
-        # Normalise to unit RMS so the phase scale is sigma_g-independent.
-        rms = np.sqrt(np.mean(filtered ** 2))
-        if rms > 0:
-            filtered = filtered / rms
-        phase = filtered  # treat as the random phase, modulo 2 pi
-        E_real = amp * np.exp(1j * phase)
-        intensity_sum += np.abs(E_real) ** 2
-        coherent_sum += E_real
-
-    intensity_mean = intensity_sum / nr
-    # Use the phase of the coherent mean to keep the output complex-valued
-    # (useful for type-uniformity); the amplitude is the ensemble-averaged
-    # intensity envelope.
-    coherent_phase = np.angle(coherent_sum / nr)
-    E = (np.sqrt(intensity_mean) * np.exp(1j * coherent_phase)).astype(
-        target_dtype)
-    return E, x, y
+    if rk == 'mcf':
+        return PartialCoherenceMCF.from_ensemble(
+            E_ensemble,
+            dx=float(dx), dy=float(dy), wavelength=float(wavelength),
+            max_full_N=int(max_full_N), n_modes=n_modes)
+    return E_ensemble, float(dx), float(dy), float(wavelength)
 
 
 def create_schell_model_source(
@@ -1504,15 +1882,17 @@ def create_schell_model_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    return_kind: str = 'ensemble',
+    max_full_N: int = 64,
+    n_modes: Optional[int] = None,
+) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Generic Schell-model source with user-supplied intensity profile.
 
-    A Schell-model source factors the mutual coherence function into
-    an intensity term and a translation-invariant coherence kernel:
-    ``J(r1, r2) = sqrt(I(r1)) sqrt(I(r2)) mu(r1 - r2)``.  This factory
-    samples ``n_realizations`` random-phase realizations consistent
-    with a Gaussian coherence kernel of width ``coherence_length`` and
-    the supplied ``intensity_profile``.
+    v4.15.1 (P0-NEW-2): redesigned to deliver actual partial coherence.
+    The MCF factorises as
+    ``J(r1, r2) = sqrt(I(r1) I(r2)) * mu(r1 - r2)`` with the Gaussian
+    coherence kernel
+    ``mu(Delta_r) = exp(-|Delta_r|^2 / (2 coherence_length^2))``.
 
     Parameters
     ----------
@@ -1522,9 +1902,8 @@ def create_schell_model_source(
         Grid spacing in x [m].
     wavelength : float
         Vacuum wavelength [m].
-    intensity_profile : ndarray (N, N), real
-        Time-averaged intensity profile of the source (any units;
-        normalisation is preserved through to the output).
+    intensity_profile : ndarray (N, N), real >= 0
+        Time-averaged intensity profile of the source.
     coherence_length : float
         Gaussian transverse coherence length [m]; must be > 0.
     n_realizations : int, default 16
@@ -1534,15 +1913,15 @@ def create_schell_model_source(
     seed : int, optional
         RNG seed.
     dtype : optional
-        Complex dtype.
+        Complex dtype for the ensemble form; ignored for ``'mcf'``.
+    return_kind : {'ensemble', 'mcf'}, default 'ensemble'
+        See :func:`create_gaussian_schell_source`.
+    max_full_N, n_modes
+        See :meth:`PartialCoherenceMCF.from_ensemble`.
 
     Returns
     -------
-    E : ndarray (complex)
-        Amplitude envelope of the ensemble-averaged intensity, cast to
-        the requested complex dtype.
-    x, y : ndarray
-        1-D coordinate axes [m].
+    Same contract as :func:`create_gaussian_schell_source`.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_schell_model_source')
@@ -1564,41 +1943,27 @@ def create_schell_model_source(
         raise ValueError(
             "create_schell_model_source: intensity_profile must be "
             "non-negative.")
+    rk = _validate_return_kind(
+        return_kind, fn_name='create_schell_model_source')
 
     if dy is None:
         dy = dx
-    x = (np.arange(N) - N / 2) * dx
-    y = (np.arange(N) - N / 2) * dy
     target_dtype = _resolve_complex_dtype(dtype)
     amp = np.sqrt(I)
 
     rng = np.random.default_rng(seed)
-    kx = 2.0 * np.pi * np.fft.fftfreq(N, d=dx)
-    ky = 2.0 * np.pi * np.fft.fftfreq(N, d=dy)
-    KX, KY = np.meshgrid(kx, ky)
-    spec_filter = np.exp(
-        -(KX * KX + KY * KY) * (coherence_length ** 2) / 2.0)
+    phi = _schell_phase_realizations(
+        N=int(N), Ny=int(N), Nx=int(N), dx=float(dx), dy=float(dy),
+        coherence_length=float(coherence_length),
+        n_realizations=int(n_realizations), rng=rng)
+    E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
 
-    intensity_sum = np.zeros_like(amp, dtype=np.float64)
-    coherent_sum = np.zeros_like(amp, dtype=np.complex128)
-    nr = int(n_realizations)
-    for _ in range(nr):
-        white = rng.standard_normal((N, N))
-        filtered_k = np.fft.fft2(white) * spec_filter
-        filtered = np.real(np.fft.ifft2(filtered_k))
-        rms = np.sqrt(np.mean(filtered ** 2))
-        if rms > 0:
-            filtered = filtered / rms
-        phase = filtered
-        E_real = amp * np.exp(1j * phase)
-        intensity_sum += np.abs(E_real) ** 2
-        coherent_sum += E_real
-
-    intensity_mean = intensity_sum / nr
-    coherent_phase = np.angle(coherent_sum / nr)
-    E = (np.sqrt(intensity_mean) * np.exp(1j * coherent_phase)).astype(
-        target_dtype)
-    return E, x, y
+    if rk == 'mcf':
+        return PartialCoherenceMCF.from_ensemble(
+            E_ensemble,
+            dx=float(dx), dy=float(dy), wavelength=float(wavelength),
+            max_full_N=int(max_full_N), n_modes=n_modes)
+    return E_ensemble, float(dx), float(dy), float(wavelength)
 
 
 def create_annular_incoherent_source(
@@ -1612,16 +1977,25 @@ def create_annular_incoherent_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Annular (ring) source with non-zero source size for partial-
-    coherence integration (v4.15, ROADMAP v4.16 #11).
+    return_kind: str = 'ensemble',
+    max_full_N: int = 64,
+    n_modes: Optional[int] = None,
+) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
+    """Annular (ring) source -- spatially-incoherent at the source
+    plane (v4.15, ROADMAP v4.16 #11; v4.15.1 P0-NEW-2 redesign).
 
     Distinct from :func:`create_annular_beam`, which returns the
     deterministic coherent annular field.  This factory samples
-    ``n_realizations`` independent random-phase realizations whose
-    common amplitude is the unit-norm annular indicator function;
-    the returned ``E`` is the amplitude envelope (sqrt of the
-    ensemble-averaged intensity).
+    independent random-phase realisations whose common amplitude is
+    the unit-norm annular indicator function; each pixel has its own
+    independent uniform-(-pi, pi) phase (i.e. fully incoherent at the
+    source plane, the classic "non-zero source size for partial-
+    coherence integration" recipe).
+
+    v4.15.1 (P0-NEW-2): the factory no longer collapses the ensemble
+    into a single complex field; it returns either the raw ensemble or
+    a :class:`PartialCoherenceMCF` (diagonal MCF reflecting the
+    incoherent-source character).
 
     Parameters
     ----------
@@ -1643,13 +2017,14 @@ def create_annular_incoherent_source(
         RNG seed.
     dtype : optional
         Complex dtype.
+    return_kind : {'ensemble', 'mcf'}, default 'ensemble'
+        See :func:`create_gaussian_schell_source`.
+    max_full_N, n_modes
+        See :meth:`PartialCoherenceMCF.from_ensemble`.
 
     Returns
     -------
-    E : ndarray (complex)
-        Amplitude envelope of the ensemble-averaged intensity.
-    x, y : ndarray
-        1-D coordinate axes [m].
+    Same contract as :func:`create_gaussian_schell_source`.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_annular_incoherent_source')
@@ -1671,6 +2046,8 @@ def create_annular_incoherent_source(
         raise ValueError(
             f"create_annular_incoherent_source: n_realizations must be "
             f"a positive integer; got {n_realizations!r}.")
+    rk = _validate_return_kind(
+        return_kind, fn_name='create_annular_incoherent_source')
 
     if dy is None:
         dy = dx
@@ -1681,29 +2058,27 @@ def create_annular_incoherent_source(
     r = np.sqrt(X * X + Y * Y)
     mask = (r >= inner_radius) & (r <= outer_radius)
     amp = mask.astype(np.float64)
-    # Normalise so the integrated power is 1, matching create_annular_beam.
+    # Normalise so the integrated power per realisation is 1.
     norm = np.sqrt(np.sum(amp ** 2) * dx * dy)
     if norm > 0:
         amp = amp / norm
 
     rng = np.random.default_rng(seed)
-    intensity_sum = np.zeros_like(amp, dtype=np.float64)
-    coherent_sum = np.zeros_like(amp, dtype=np.complex128)
     nr = int(n_realizations)
-    for _ in range(nr):
-        # Independent uniform phase per pixel (i.e. fully spatially
-        # incoherent at the source plane -- the standard "non-zero
-        # source size for partial-coherence integration" recipe).
-        phase = rng.uniform(-np.pi, np.pi, (N, N))
-        E_real = amp * np.exp(1j * phase)
-        intensity_sum += np.abs(E_real) ** 2
-        coherent_sum += E_real
+    E_ensemble = np.empty((nr, int(N), int(N)), dtype=target_dtype)
+    for k in range(nr):
+        # Independent uniform-(-pi, pi) phase per pixel: the source
+        # is spatially incoherent (coherence kernel == delta function
+        # at the pixel scale).
+        phase = rng.uniform(-np.pi, np.pi, (int(N), int(N)))
+        E_ensemble[k] = (amp * np.exp(1j * phase)).astype(target_dtype)
 
-    intensity_mean = intensity_sum / nr
-    coherent_phase = np.angle(coherent_sum / nr)
-    E = (np.sqrt(intensity_mean) * np.exp(1j * coherent_phase)).astype(
-        target_dtype)
-    return E, x, y
+    if rk == 'mcf':
+        return PartialCoherenceMCF.from_ensemble(
+            E_ensemble,
+            dx=float(dx), dy=float(dy), wavelength=float(wavelength),
+            max_full_N=int(max_full_N), n_modes=n_modes)
+    return E_ensemble, float(dx), float(dy), float(wavelength)
 
 
 # ---------------------------------------------------------------------------
@@ -2271,24 +2646,46 @@ class Source:
                          source_point: _Tuple[float, float] = (0.0, 0.0),
                          name: _Optional[str] = None,
                          seed: _Optional[int] = None,
-                         **factory_kwargs) -> 'Source':
+                         return_kind: str = 'ensemble',
+                         **factory_kwargs) -> Any:
         """Gaussian-Schell partial-coherence source.
 
-        Wraps :func:`create_gaussian_schell_source`.  Returns a
-        :class:`Source` whose ``E`` is the ensemble-averaged amplitude
-        envelope (intensity sqrt) over ``n_realizations`` independent
-        random-phase Gaussian draws -- suitable for downstream
-        partial-coherence integration.
+        Wraps :func:`create_gaussian_schell_source`.
+
+        v4.15.1 (P0-NEW-2): the underlying factory now returns either
+        a ``(n_realizations, Ny, Nx)`` ensemble or a
+        :class:`PartialCoherenceMCF`, depending on ``return_kind``.
+
+        * ``return_kind='ensemble'`` (default): the wrapped
+          :class:`Source` carries the full ensemble as ``E`` (shape
+          ``(n_realizations, Ny, Nx)``).  Downstream callers iterate
+          over ``E[k]`` and average intensities to get the partial-
+          coherence response.
+        * ``return_kind='mcf'``: returns the bare
+          :class:`PartialCoherenceMCF` object (NOT wrapped in a
+          :class:`Source`, since the propagator pipeline currently
+          consumes only a single complex field).
+
+        Notes
+        -----
+        MCF-aware downstream propagators are not in v4.15.1 scope.
+        The MCF object is consumable for inspection / analysis only.
         """
-        E, _, _ = create_gaussian_schell_source(
+        result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
-            n_realizations=n_realizations, seed=seed, **factory_kwargs)
-        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+            n_realizations=n_realizations, seed=seed,
+            return_kind=return_kind, **factory_kwargs)
+        if return_kind == 'mcf' or isinstance(result, PartialCoherenceMCF):
+            return result
+        E_ensemble, _dx, _dy, _wl = result
+        return cls(E=E_ensemble, dx=dx,
+                   dy=factory_kwargs.get('dy', dx),
                    wavelength=wavelength,
                    source_point=source_point,
                    name=name or (
                        f'GaussianSchell(w0={w0:.2g}m, '
-                       f'sigma_g={sigma_g:.2g}m)'))
+                       f'sigma_g={sigma_g:.2g}m, '
+                       f'n_real={int(n_realizations)})'))
 
     @classmethod
     def schell_model(cls, *, N: int, dx: float, wavelength: float,
@@ -2298,23 +2695,28 @@ class Source:
                       source_point: _Tuple[float, float] = (0.0, 0.0),
                       name: _Optional[str] = None,
                       seed: _Optional[int] = None,
-                      **factory_kwargs) -> 'Source':
+                      return_kind: str = 'ensemble',
+                      **factory_kwargs) -> Any:
         """Generic Schell-model partial-coherence source.
 
-        Wraps :func:`create_schell_model_source`.  Returns a
-        :class:`Source` whose ``E`` is the ensemble-averaged amplitude
-        envelope under a user-supplied intensity profile and Gaussian
-        coherence kernel.
+        Wraps :func:`create_schell_model_source`.  See
+        :meth:`Source.gaussian_schell` for the ensemble/MCF return
+        convention.
         """
-        E, _, _ = create_schell_model_source(
+        result = create_schell_model_source(
             N=N, dx=dx, wavelength=wavelength,
             intensity_profile=intensity_profile,
             coherence_length=coherence_length,
             n_realizations=n_realizations, seed=seed,
-            **factory_kwargs)
-        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+            return_kind=return_kind, **factory_kwargs)
+        if return_kind == 'mcf' or isinstance(result, PartialCoherenceMCF):
+            return result
+        E_ensemble, _dx, _dy, _wl = result
+        return cls(E=E_ensemble, dx=dx,
+                   dy=factory_kwargs.get('dy', dx),
                    wavelength=wavelength,
                    source_point=source_point,
                    name=name or (
-                       f'SchellModel(lc={coherence_length:.2g}m)'))
+                       f'SchellModel(lc={coherence_length:.2g}m, '
+                       f'n_real={int(n_realizations)})'))
 

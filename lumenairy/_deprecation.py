@@ -35,6 +35,10 @@ __all__ = [
     'warn_renamed_function',
     'warn_deprecated_default',
     'warn_deprecated_signature',
+    # v4.15.1 (Agent E): pickle-safe sentinel helpers; the unpickler
+    # must be importable by name at the module top level for the
+    # ``_Sentinel.__reduce__`` protocol to round-trip cleanly.
+    '_sentinel_unpickle',
 ]
 
 
@@ -44,17 +48,74 @@ class _Sentinel:
     ``arg=_NO_DEFAULT`` lets callers distinguish "didn't pass a value"
     from "passed None" -- needed to warn-on-default-use without
     breaking explicit ``None`` callers.
+
+    v4.15.1 (Agent E): pickle-safe singleton via a name-keyed registry
+    + ``__reduce__``.  Subclasses register themselves on instantiation
+    and unpickle through :func:`_sentinel_unpickle` so the result is
+    ``is``-identical to the registry singleton (rather than a fresh
+    instance).  This is the canonical Python pattern for singleton
+    sentinels that cross pickle boundaries (e.g. distributed merit
+    evaluation, multiprocessing workers, joblib caches).
     """
     __slots__ = ('_name',)
 
     def __init__(self, name: str) -> None:
         self._name = name
+        # Register this instance as the canonical sentinel for its
+        # name.  Re-registration is allowed (idempotent on the same
+        # name -- last writer wins) so module reloads / test isolation
+        # don't break the invariant.  The registry survives pickle
+        # round-trips because :func:`_sentinel_unpickle` reads from
+        # it.
+        _SENTINEL_REGISTRY[name] = self
 
     def __repr__(self) -> str:
         return f'<{self._name}>'
 
     def __bool__(self) -> bool:  # noqa: D401 — sentinel is always falsy
         return False
+
+    def __reduce__(self):
+        """Pickle as a name lookup so unpickling returns the singleton.
+
+        Returns the tuple ``(_sentinel_unpickle, (self._name,))`` --
+        the standard ``copyreg``-style reconstructor protocol.  When
+        the pickle is loaded, Python calls
+        ``_sentinel_unpickle(self._name)`` which looks up the existing
+        instance in :data:`_SENTINEL_REGISTRY` instead of creating a
+        new one.  Result: ``pickle.loads(pickle.dumps(x)) is x`` holds
+        for every ``_Sentinel`` subclass instance.
+        """
+        return (_sentinel_unpickle, (self._name,))
+
+
+# v4.15.1 (Agent E): name-keyed registry of every ``_Sentinel`` instance
+# ever constructed.  Used by :func:`_sentinel_unpickle` to return the
+# pre-existing singleton on unpickle rather than constructing a fresh
+# instance (which would break ``is`` identity).  Module-level (not
+# class-level) so subclasses share the same registry.
+_SENTINEL_REGISTRY: dict = {}
+
+
+def _sentinel_unpickle(name: str) -> '_Sentinel':
+    """Return the singleton ``_Sentinel`` registered under ``name``.
+
+    Used as the reconstructor target of ``_Sentinel.__reduce__``.  If
+    the registry lookup fails (e.g. the sentinel's defining module was
+    not imported on the receiving side), falls back to constructing a
+    plain ``_Sentinel(name)`` -- the result will still ``repr`` and
+    ``bool`` correctly, but ``is``-identity with the original is lost.
+    Calling code that relies on ``is``-identity (the common case for
+    singleton sentinels) MUST ensure the defining module is imported
+    on the receiving side before unpickling.
+    """
+    inst = _SENTINEL_REGISTRY.get(name)
+    if inst is not None:
+        return inst
+    # Fall-through: construct a fresh instance.  This registers the new
+    # instance in the registry so subsequent unpickles return it
+    # consistently.
+    return _Sentinel(name)
 
 
 _NO_DEFAULT = _Sentinel('NO_DEFAULT')

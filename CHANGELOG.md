@@ -2,6 +2,245 @@
 
 All notable changes to the core library are documented here.
 
+## [4.15.1] — 2026-05-18
+
+**Closes the v4.15.0 audit (`docs/audits/AUDIT_V4_15_0_2026_05_18.md`)
+through P3 + ships 2 additive features from
+`docs/audits/CLUSTER_B_SPEC.md` (operator algebra + rays-from-field
+bridge).**  The audit found 2 P0s + 12 P1s + many P2/P3 (highest-yield
+audit in the series).  v4.15.1 closes both P0s + all Tier-0 P1s + the
+P2/P3 sweep + adds 800+ LOC of new CLUSTER_B surface.  **1625 unit
+tests pass** (up from 1425; +200 net), 1 documented skip, 1
+documented xfail; **34/34 validation files pass**.
+
+### P0 closures
+
+**P0-NEW-1 — `make_off_axis_parabola` factory fix (doubly broken):**
+Decenter formula corrected `f*tan(alpha)` -> `2*f*tan(alpha)` (chief-
+ray geometry on parent paraboloid).  Tilt remains 3-tuple
+`(off_axis_angle, 0.0, 0.0)`; factory docstring now loudly documents
+that the OAP prescription is **intended for `apply_real_lens_traced`
+exclusively** — the paraxial `apply_real_lens` cannot interpret the
+3-tuple tilt correctly.  New end-to-end raytrace test
+(`test_end_to_end_raytrace_focuses_at_offset`) pins the off-axis
+focal-point location to within 1% of the chief-ray geometric
+prediction at 45° fold.  P3 carryover: `vertex_radius` now
+validated (must be `None` or finite positive).
+
+**P0-NEW-2 — Schell-family factories redesign:**  The v4.15.0
+factories collapsed the `n_realizations` ensemble into a single
+fully-coherent complex field before return — the documented
+partial-coherence contract was unfulfillable.  v4.15.1 introduces a
+hybrid:
+
+* Default `return_kind='ensemble'`:  factory returns
+  `(ensemble, dx, dy, wavelength)` where `ensemble` has shape
+  `(n_realizations, Ny, Nx)`.  Caller iterates over realizations and
+  averages intensities downstream — physically-correct partial
+  coherence.
+* Opt-in `return_kind='mcf'`:  factory returns a new
+  `PartialCoherenceMCF` dataclass with `.intensity()`,
+  `.coherence_at(...)`, and `.coherent_modes()` methods.  For small
+  grids (`Ny*Nx <= 64**2`), stores the full `J(r1, r2)`; for larger
+  grids, stores the leading K coherent modes (Wolf 1982 JOSA
+  decomposition) via SVD of the ensemble matrix.  Truncation
+  threshold:  smallest K with `cumsum(eigvals)/sum(eigvals) >= 0.99`
+  (Karhunen-Loève default).
+* **Physics fix:**  the random-phase RMS normalization (which forced
+  `sigma_phi = 1` regardless of `sigma_g`) is replaced with the
+  spec-correct Fourier-filtered Gaussian-noise recipe.  Now `sigma_g
+  -> 0` actually approaches incoherent (off-diagonal MCF -> 0) and
+  `sigma_g -> infinity` approaches coherent (rank-1 MCF).
+
+Affected factories: `create_gaussian_schell_source`,
+`create_schell_model_source`, `create_annular_incoherent_source` +
+matching `Source.gaussian_schell` / `Source.schell_model`
+classmethods.  Note: MCF-aware downstream propagators are deferred
+to v4.16+; the `PartialCoherenceMCF` object is consumable for
+analysis / inspection in v4.15.1.
+
+### P1 closures (Tier 0 audit recommendations)
+
+* **P1-NEW-A: `sparrow_resolution` canonical Sparrow root-finding.**
+  Implementation rewritten to true two-source dip-vanishing condition
+  `d²/dr² [PSF(r-d/2) + PSF(r+d/2)]_{r=0} = 0` via
+  `scipy.ndimage.map_coordinates` sub-pixel azimuthal averaging +
+  cubic-spline 2nd derivative + `scipy.optimize.brentq` root-finder.
+  Now returns 2.273 µm vs expected 2.273 µm at lambda=600nm, f/#=4
+  (previously 1.93 µm, 15% low).
+* **P1-NEW-C: 7 UI Source-factory deprecation callsites migrated** to
+  kwarg-only canonical form in `lumenairy/ui/model.py`.  The v4.15.0
+  release that introduced the deprecation shim now also migrates its
+  own internal UI consumers.
+* **P1-NEW-D: Raytrace flat-keys allowlist** at `raytrace/core.py:
+  1507-1521` extended with `q_bfs_coeffs`, `q_con_coeffs`, `r_max`.
+  Forbes Q prescriptions in flat-keys form no longer silently drop
+  the coefficients at the gather step.
+* **P1-NEW-E: Zemax `.zmx` QBFS/QCON parsing** added to
+  `io/prescriptions.py`.  `.zmx` files with Q-type freeforms now
+  load with `freeform_type='q_bfs'` or `'q_con'` + coefficients +
+  `r_max` (parsed from `DIAM` / `PARM` lines), instead of silently
+  degrading to base conic.
+* **P1-F1-1: Q-bfs/Q-con radial-clip alignment.**  v4.15.0's
+  rectangular `|X| <= norm_x AND |Y| <= norm_y` clip let pixels at
+  `(0.9*r_max, 0.9*r_max)` (radial `r = 1.27*r_max`) through — outside
+  the Forbes domain.  v4.15.1 uses a radial primary clip
+  `r <= r_max` with the rectangular `(norm_x, norm_y)` box as
+  secondary aperture.
+* **P1-F1-2: `surface_sag_freeform` requires `r_max`** for
+  `freeform_type in ('q_bfs', 'q_con')`.  Previously defaulted
+  silently to `r_max=1.0` (a unit-mismatch bug — user passing X/Y
+  in metres got sag computed on a sub-pixel of the actual aperture).
+  Now raises `TypeError` with a clear message.
+* **P1-F1-3: `strehl_vector` default-reference removed** (breaking).
+  v4.15.0's default plane-wave reference produced unity for ANY
+  uniform field of equal power AND Strehl > 1 on focused PSFs
+  (more peaked than plane-wave at equal total power).  v4.15.1
+  requires explicit `reference=` and softens the docstring
+  (drops unverified "Richards-Wolf high-NA" claim).
+* **P1-F1-4: `rayleigh_resolution` Gaussian-PSF false-positive fixed.**
+  Now requires a strict subsequent rise above the candidate minimum
+  by >=0.5% of peak before declaring first zero; Gaussian-like PSFs
+  (no true zero) return NaN + `RuntimeWarning` advising
+  `fwhm_resolution` / `sparrow_resolution` instead.
+* **P1-F1-5: `astigmatism_mag_angle` docstring range correction** —
+  `(-pi/4, pi/4]` -> `(-pi/2, pi/2]` (the actual range from
+  `0.5 * atan2(c3, c5)`).
+* **P1-F1-6: `system.evaluate` mixed-shape `ValueError`** — a
+  prescription with both `surfaces`+`thicknesses` AND
+  `elements`+`all_thicknesses` keys is now rejected at the
+  validator with a clear message rather than silently picking a
+  schema.  Behaviour change: callers passing raw Zemax-loader
+  output need to filter the surfaces keys (`{k:v for k,v in rx.items()
+  if k not in ('surfaces','thicknesses')}`).
+* **P3-NEW-A: Forbes Q wave-optics path** — v4.15.0's
+  `apply_real_lens` silently `RuntimeWarning`d and skipped the
+  Forbes Q freeform contribution.  v4.15.1 routes Q-bfs / Q-con
+  through `surface_sag_freeform` properly (option (a) of the audit
+  recommendation), inheriting P1-F1-1 + P1-F1-2 guards.
+
+### P2 closures
+
+* **`__all__` symmetry**:  `surface_sag_q_bfs`,
+  `surface_sag_q_con` re-exported from
+  `lumenairy/elements/__init__.py`; `make_off_axis_parabola` from
+  `lumenairy/io/__init__.py`.  `from lumenairy.elements import
+  surface_sag_q_bfs` now works.
+* **Sentinel consolidation**:  `_ZeroApertureMaskSentinel`
+  (`optimize/core.py`) and `_AngleUnsetSentinel`
+  (`elements/polarization.py`) now inherit from `_deprecation._Sentinel`
+  base class.  `_Sentinel` gained pickle-safe `__reduce__` + name-keyed
+  `_SENTINEL_REGISTRY` + `_sentinel_unpickle` reconstructor so
+  pickle round-trips return the singleton instance (not a fresh
+  sentinel).
+* **`system.evaluate` Zemax-shape test** added (the audit's "headline
+  ergonomic claim was untested" finding closed).
+
+### P3 closures
+
+* `n=1.0` consistency:  `optimize/multiconfig._resolve_lens_glass_index`
+  bounds widened from exclusive `(1.0, 5.0)` to inclusive
+  `[1.0, 4.0]` matching `register_fixed_glass`.
+* Codegen runtime version pin gains an upper-bound major-version
+  warning (`UserWarning` if running on `lumenairy >= 5.0.0`).
+* `LambertianBSDF.evaluate` gains explicit surface-frame docstring
+  + `RuntimeWarning` if `incident_direction` is non-axially-aligned
+  without explicit frame transform.
+* Coatings TIR cap warnings promoted from filtered `RuntimeWarning`
+  to always-emit `UserWarning`.
+* Forbes Q orthonormalizer docstring formula corrected:
+  `c_n = sqrt((2n+3)(n+2)/(n+1)^2)` -> `c_n = sqrt((2n+3)(n+2)/(n+1))`
+  (the implementation was already correct; only the docstring lied).
+* `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
+* CHANGELOG/release-notes:  `optimize/core.py:2790-2795` -> `:2805-2810`
+  refreshed after Agent E's `_Sentinel` base-class refactor pushed
+  lines downward.
+
+### CLUSTER_B Item 6 — `rays_from_field` bridge function
+
+New `lumenairy.rays_from_field(E, *, dx, wavelength, dy=None,
+n_rays=200, placement='cdf', angle_method='complex_gradient',
+intensity_threshold=1e-4, z0=0.0, random_state=None) -> RayBundle`
+samples a coherent field into a geometric ray bundle.  Bridges
+`propagators/` (wave) <-> `raytrace/` (ray) so users can overlay
+ray traces on coherent-field plots, seed a Maslov/GBD bundle from a
+measured pupil field, or hand a coherent field into the geometric
+ray tracer for hybrid analysis.
+
+Placement modes: `'cdf'` (separable inverse-CDF, fast),
+`'rejection'` (true 2-D rejection, exact), `'uniform'` (grid + threshold
+mask).  Angle methods: `'complex_gradient'` (phase-ratio central
+difference, singularity-safe — adapted from spec for correct
+behaviour at Nyquist), `'unwrap_gradient'` (np.unwrap-based, fragile
+near vortices).  Evanescent rays (`L² + M² > 1`) flagged with
+`RAY_EVANESCENT` and `alive=False`.
+
+13 tests + 1 runnable example
+(`examples/rays_from_pupil_field.py`).  Implementation note: 3
+spec deviations (phase-ratio central difference instead of literal
+`Im(grad E / E)`; evanescent test samples 6x Nyquist to avoid
+spectral aliasing; OPD test uses wrap-free phase slope) all
+documented in the agent's release notes.
+
+### CLUSTER_B Item 2 — Operator algebra
+
+New `lumenairy/algebra/` subpackage implementing Nazarathy/Shamir
+operator algebra (JOSA 70 (2), 1980).  9 new symbols at top level:
+
+* `Operator`, `CompositeOperator` — base classes; ABCD-tracking
+  algebraic composition.
+* `FreeSpace(d, *, method='auto')`, `ThinLens(f)`,
+  `CylindricalLens(f_x, f_y)`, `Magnify(a_x, a_y)`,
+  `FourierTransform(f_focal)` — primitive operators.
+* `Aperture(diameter, shape)`, `GaussianAperture(sigma)` — passive
+  aperture operators (identity ABCD).
+* `Operator.from_prescription(prescription, wavelength)` —
+  prescription-dict -> CompositeOperator factory.  Paraxial-only;
+  produces ABCD identical to `system_abcd(...)` to within 1e-12 abs.
+
+Composition: `A * B` means "first B, then A".  ABCD of `A * B` is
+`A.abcd @ B.abcd`.  Application: `sys(source) -> Source`, or
+`sys.apply(E, dx=..., wavelength=...)`.  Anamorphic support via
+separate `_abcd_x` / `_abcd_y`.
+
+91 tests + 2 runnable examples (`examples/algebra_4f_system.py`,
+`examples/algebra_anamorphic.py`).  Spec deviation: `Magnify._apply`
+uses closed-form `sqrt(a_x*a_y)` amplitude prefactor instead of
+spec's `resample_field` recipe (the spec recipe had an energy-
+conservation bug; closed-form preserves energy per-pixel by
+construction).  Phase 2 symbolic reduction (FreeSpace+ThinLens+
+FreeSpace collapse, etc.) explicitly deferred to a future PR.
+
+### Test counts
+
+* Pre-v4.15.1 baseline (v4.15.0): 1425 unit tests + 1 skip + 1 xfail.
+* v4.15.1 additions: A=18, B=20+migrated, C=13+migrated, D=18,
+  E=20, F=13, G=91; net ~200 added (the +200 number nets out test
+  migrations: agents B and C migrated v4.15.0 property pins to
+  v4.15.1 ensemble / analytical-value pins).
+* Final: **1625 unit tests passing, 1 skipped, 1 xfailed**; **34/34
+  validation files passing**.
+
+### Deferred to v4.16+
+
+* Modal-asymptotic independent ground-truth pin against
+  `propagate_hf_chebyshev_quadrature(method='direct')` (audit
+  P1-NEW-B, Tier 1).  v4.15.0 replaced known-buggy warm-start with
+  unverified cold-start; this pin closes the verification gap.
+* 4 remaining V2 meta-pin candidates (sentinel-aware branch
+  propagation, `_xp_of` dispatch, `dy` parameter threading,
+  `__all__` symmetry walker).
+* MCF-aware downstream propagators (consume `PartialCoherenceMCF`
+  through propagation chains).
+* Multi-process atomic-append for `storage.py` (HDF5 SWMR + Zarr
+  distributed lock).
+* `MultiPrescriptionParameterization.scale_floor` (v4.13.1 P1-I
+  carryover).
+* Forbes Q-2D-asymmetric variant (Forbes 2012) for full 2-D
+  freeform support.
+
+---
+
 ## [4.15.0] — 2026-05-18
 
 **Major minor release** rolling together carryover P1s from the
@@ -514,11 +753,11 @@ if any `'__sellmeier__'` entry is missing from
   v4.14.1).  The v4.14.1 sentinel fix updated 3 callers
   (`_get_wrapper_merit_cache`, `MultiWavelengthMerit.evaluate`,
   `MultiFieldMerit.evaluate`) but missed 2:
-  `ToleranceAwareMerit.evaluate` (`optimize/core.py:2790-2795`,
-  refreshed v4.15.0 -- pre-v4.15 entries cited the pre-drift
-  range `2750-2755`) and `MatchIdealSystem._make_source`
-  (`optimize/core.py:977-991`, refreshed v4.15.0 -- pre-v4.15
-  entries cited the pre-drift range `958-966`).
+  `ToleranceAwareMerit.evaluate` (`optimize/core.py:2805-2810`,
+  refreshed v4.15.1 -- earlier ranges drifted by ~15 lines after
+  Agent E's `_Sentinel` base-class refactor) and
+  `MatchIdealSystem._make_source` (`optimize/core.py:977-991`,
+  refreshed v4.15.0).
   Both used `_cache['E_ones'].copy()` without the `mask is
   _ZERO_APERTURE_MASK` branch, producing a full-grid plane wave
   instead of zero on `aperture_diameter=0`.  v4.14.2 adds the

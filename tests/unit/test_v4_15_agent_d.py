@@ -112,7 +112,8 @@ class TestForbesQbfsSagShape:
     def test_q_bfs_pure_a0_known_shape(self):
         """Single-coefficient case ``a_0 != 0``: the departure must
         match the direct formula ``u^2 (1 - u^2) * a_0 * Q_0(u^2)``
-        exactly."""
+        exactly, with the v4.15.1 P1-F1-1 radial clip
+        ``r > r_max`` applied (departure zeroed there)."""
         X, Y = _build_2d_grid()
         r_max = 4e-3
         a0 = 2.5e-7
@@ -120,10 +121,13 @@ class TestForbesQbfsSagShape:
             X, Y, radius=np.inf,
             coefficients=[a0],
             r_max=r_max, dx=1e-4, dy=1e-4,
-            norm_x=1.0, norm_y=1.0,  # no rectangular clipping
+            norm_x=1.0, norm_y=1.0,  # rectangular clip non-restrictive
         )
         u_sq = (X ** 2 + Y ** 2) / (r_max * r_max)
-        expected = u_sq * (1.0 - u_sq) * a0 * _q_bfs_eval(u_sq, 0)
+        departure = u_sq * (1.0 - u_sq) * a0 * _q_bfs_eval(u_sq, 0)
+        # v4.15.1 P1-F1-1: radial clip zeros pixels outside the
+        # Forbes unit disc ``u <= 1``.
+        expected = np.where(u_sq > 1.0, 0.0, departure)
         diff = np.max(np.abs(sag - expected))
         assert diff < 1e-15, (
             f"Pure-a0 Q-bfs sag mismatch: {diff:.3e}.")
@@ -238,7 +242,8 @@ class TestForbesQconSagShape:
 
     def test_q_con_pure_a0_known_shape(self):
         """Single-coefficient case: departure must equal
-        ``u^4 * a_0 * Q_0^con(u^2)`` directly."""
+        ``u^4 * a_0 * Q_0^con(u^2)`` directly, with v4.15.1 P1-F1-1
+        radial clip applied outside ``u <= 1``."""
         X, Y = _build_2d_grid()
         r_max = 4e-3
         a0 = 5e-7
@@ -249,7 +254,9 @@ class TestForbesQconSagShape:
             norm_x=1.0, norm_y=1.0,
         )
         u_sq = (X ** 2 + Y ** 2) / (r_max * r_max)
-        expected = u_sq * u_sq * a0 * _q_con_eval(u_sq, 0)
+        departure = u_sq * u_sq * a0 * _q_con_eval(u_sq, 0)
+        # v4.15.1 P1-F1-1 radial clip.
+        expected = np.where(u_sq > 1.0, 0.0, departure)
         # Base sag for R=inf is identically zero, so the comparison is
         # against the freeform departure alone.
         diff = np.max(np.abs(sag - expected))
@@ -376,8 +383,11 @@ class TestOffAxisParabolaFactory:
         assert surf['conic'] == pytest.approx(-1.0)
         # Vertex radius = 2 f.
         assert surf['radius'] == pytest.approx(2.0 * f)
-        # Decenter.
-        dx_expected = f * math.tan(theta)
+        # Decenter -- v4.15.1 (P0-NEW-1 Bug 2): the chief-ray launch
+        # radius on the parent paraboloid is 2*f*tan(alpha), where
+        # alpha is the surface-normal off-axis angle.  Pre-v4.15.1
+        # this assertion pinned the buggy ``f*tan(theta)`` form.
+        dx_expected = 2.0 * f * math.tan(theta)
         assert surf['decenter'][0] == pytest.approx(dx_expected)
         assert surf['decenter'][1] == pytest.approx(0.0)
         # Tilt (3-tuple per task spec).

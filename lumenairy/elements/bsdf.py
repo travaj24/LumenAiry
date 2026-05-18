@@ -167,11 +167,56 @@ class LambertianBSDF(BSDFModel):
     ``rho`` is the **diffuse reflectance** (0 = perfect absorber,
     1 = perfect diffuser).  The TIS of a Lambertian surface equals
     ``rho`` exactly.
+
+    Frame assumption
+    ----------------
+    The ``incident_dir`` and ``scattered_dir`` arguments are assumed
+    to be expressed in the **surface-local frame** where ``+z`` is
+    the outward surface normal.  The "hemisphere" check used by
+    :meth:`evaluate` is a sign test on the z-component of
+    ``scattered_dir`` -- a non-local frame (e.g. world-coordinates
+    with the surface tilted away from z) will mis-classify rays.
+    Callers responsible for the global -> surface-local rotation
+    BEFORE calling :meth:`evaluate`.
+
+    v4.15.1 (P3-3 / Agent E): :meth:`evaluate` now emits a
+    ``RuntimeWarning`` if the ``incident_dir`` has a non-trivial
+    x/y component (|x|+|y| > 0.3) but its z-component is close to
+    +1 -- a signature that the caller is likely passing a
+    world-frame direction without applying the surface-frame
+    rotation.  The warning is advisory; the result is still
+    returned because Monte-Carlo paths that DO pre-rotate produce
+    consistent z-aligned ``incident_dir`` and won't trip it.
     """
     rho: float = 1.0
     kind: str = 'lambertian'
 
     def evaluate(self, incident_dir: np.ndarray, scattered_dir: np.ndarray) -> np.ndarray:
+        # v4.15.1 (P3-3 / Agent E): frame-assumption advisory.  The
+        # Lambertian BSDF is invariant under azimuth in the
+        # surface-local frame, but the hemisphere check (``sd[z] > 0``)
+        # IS frame-sensitive.  Catch the common mistake of passing
+        # an off-axis incident direction without applying the
+        # surface-frame rotation.
+        inc = np.asarray(incident_dir, dtype=float)
+        if inc.ndim == 1 and inc.size == 3:
+            ix, iy, iz = float(inc[0]), float(inc[1]), float(inc[2])
+            if abs(ix) + abs(iy) > 0.3 and iz > 0.7:
+                import warnings as _w
+                _w.warn(
+                    "LambertianBSDF.evaluate: incident_dir "
+                    f"({ix:.3f}, {iy:.3f}, {iz:.3f}) has a large "
+                    f"transverse component (|x|+|y|={abs(ix)+abs(iy):.3f}) "
+                    "while z>+0.7; this is a signature of a world-frame "
+                    "direction being passed without applying the "
+                    "surface-frame rotation (which would yield "
+                    "incident_dir~=(0,0,+/-1)).  The Lambertian BSDF "
+                    "assumes the surface frame has +z = outward "
+                    "normal; mis-framed inputs mis-classify the "
+                    "hemisphere check.  See the class docstring for "
+                    "the canonical frame convention.",
+                    RuntimeWarning, stacklevel=2,
+                )
         sd = np.asarray(scattered_dir)
         if sd.ndim == 1:
             in_hemi = sd[2] > 0

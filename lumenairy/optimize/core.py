@@ -2019,13 +2019,26 @@ _WRAPPER_MERIT_CACHE_LOCK = threading.Lock()
 # ``aperture_diameter=0`` instead produced a grid-filling plane wave.
 # Callers compare ``mask is _ZERO_APERTURE_MASK`` to detect the
 # deliberate-zero case and zero their field accordingly.
-class _ZeroApertureMaskSentinel:
+#
+# v4.15.1 (Agent E): now inherits from ``_deprecation._Sentinel`` to
+# share the singleton-name registry + pickle-safe ``__reduce__``
+# protocol.  Pre-v4.15.1 this class duplicated the singleton plumbing
+# in 3 places (here, ``_AngleUnsetSentinel`` in ``polarization.py``,
+# and ``_Sentinel`` in ``_deprecation.py``); none carried a
+# ``__reduce__``, so pickling a sentinel produced a NEW instance on
+# the receiving side and broke ``is``-identity checks in distributed
+# merit evaluation / joblib caches.
+from .._deprecation import _Sentinel as _Sentinel
+
+
+class _ZeroApertureMaskSentinel(_Sentinel):
     """Singleton sentinel for aperture explicitly zero / blocked."""
 
     __slots__ = ()
 
-    def __repr__(self) -> str:
-        return '<_ZERO_APERTURE_MASK>'
+    def __init__(self) -> None:
+        # Use the existing repr-friendly name as the singleton key.
+        super().__init__('_ZERO_APERTURE_MASK')
 
 
 _ZERO_APERTURE_MASK = _ZeroApertureMaskSentinel()

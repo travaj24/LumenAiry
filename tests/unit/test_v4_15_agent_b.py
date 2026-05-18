@@ -199,44 +199,63 @@ class TestB2SystemEvaluate:
 # ============================================================================
 
 class TestB3SchellSources:
-    """Validate the new Schell-model / Gaussian-Schell factories."""
+    """Validate the new Schell-model / Gaussian-Schell factories.
+
+    v4.15.1 (P0-NEW-2) migration: the 3 factories now return the raw
+    ``(n_realizations, Ny, Nx)`` ensemble instead of a collapsed
+    single complex field.  These tests have been migrated to the new
+    ensemble contract.  The original v4.15.0 single-field tests are
+    preserved-by-comment for traceability.
+    """
 
     def test_gaussian_schell_produces_n_realizations(self):
-        """The ensemble-averaged amplitude envelope must be smoother
-        (lower variance) as ``n_realizations`` grows.  A small
-        regression check: 4 realizations vs 16 realizations must give
-        a strictly lower std on the radial profile."""
+        """The ensemble-mean intensity must be smoother (lower
+        variance) as ``n_realizations`` grows.
+
+        v4.15.0 single-field return; migrated to v4.15.1 ensemble
+        contract: pre-v4.15.1 the factory returned a single complex
+        field whose intensity envelope was ``mean(|E|^2)``; v4.15.1
+        returns the raw ensemble and the test averages explicitly.
+        """
         rng_kwargs = dict(N=32, dx=10e-6, wavelength=633e-9,
                           w0=80e-6, sigma_g=40e-6, seed=42)
-        E_few, _, _ = create_gaussian_schell_source(
+        ens_few, _, _, _ = create_gaussian_schell_source(
             n_realizations=4, **rng_kwargs)
-        E_many, _, _ = create_gaussian_schell_source(
+        ens_many, _, _, _ = create_gaussian_schell_source(
             n_realizations=16, **rng_kwargs)
-        # Both have the right shape + dtype.
-        assert E_few.shape == (32, 32)
-        assert E_many.shape == (32, 32)
-        # Smoothness check: radial-profile-std should decrease as
-        # n_realizations grows for the same seed.
-        var_few = float(np.var(np.abs(E_few) ** 2))
-        var_many = float(np.var(np.abs(E_many) ** 2))
+        # Ensemble shape includes the realisation axis now.
+        assert ens_few.shape == (4, 32, 32)
+        assert ens_many.shape == (16, 32, 32)
+        # Smoothness check: variance of the ensemble-mean intensity
+        # should decrease as n_realizations grows for the same seed.
+        I_few = np.mean(np.abs(ens_few) ** 2, axis=0)
+        I_many = np.mean(np.abs(ens_many) ** 2, axis=0)
+        var_few = float(np.var(I_few))
+        var_many = float(np.var(I_many))
         # Allow equality at the limits but the relationship must be at
-        # least non-increasing.
+        # least non-increasing (within 50% slack for the small-sample
+        # statistical fluctuation).
         assert var_many <= var_few * 1.5, (
             f"More realizations should give smoother (lower-variance) "
             f"intensity; got var_few={var_few}, var_many={var_many}.")
 
     def test_schell_model_honours_intensity_profile_and_coherence(self):
-        """The output ensemble-averaged intensity must follow the
-        user-supplied intensity profile up to a normalisation."""
+        """The ensemble-mean intensity must follow the user-supplied
+        intensity profile up to a normalisation.
+
+        v4.15.0 single-field return; migrated to v4.15.1 ensemble
+        contract: ``I_out`` was ``|E_single|^2`` pre-v4.15.1; now it
+        is ``mean(|ens|^2, axis=0)``.
+        """
         N = 32
         xs = np.linspace(-1, 1, N)
         I_target = np.exp(-(xs[:, None] ** 2 + xs[None, :] ** 2) / 0.25)
-        E, _, _ = create_schell_model_source(
+        ens, _, _, _ = create_schell_model_source(
             N=N, dx=10e-6, wavelength=633e-9,
             intensity_profile=I_target,
             coherence_length=20e-6,
             n_realizations=16, seed=0)
-        I_out = np.abs(E) ** 2
+        I_out = np.mean(np.abs(ens) ** 2, axis=0)
         # Compute correlation -- must be high since the source amplitude
         # is sqrt(I_target) up to phase + ensemble noise.
         corr = float(np.corrcoef(I_out.ravel(), I_target.ravel())[0, 1])
@@ -270,13 +289,21 @@ class TestB3SchellSources:
                 coherence_length=20e-6)
 
     def test_source_gaussian_schell_classmethod(self):
-        """``Source.gaussian_schell`` must build a Source and forward kwargs."""
+        """``Source.gaussian_schell`` must build a Source and forward kwargs.
+
+        v4.15.0 single-field return; migrated to v4.15.1 ensemble
+        contract: ``Source.shape`` returns ``E.shape[-2:]``, which is
+        still ``(N, N)`` even though the underlying ``E`` is now
+        ``(n_realizations, N, N)``.
+        """
         src = Source.gaussian_schell(
             N=32, dx=10e-6, wavelength=633e-9,
             w0=80e-6, sigma_g=40e-6, n_realizations=4, seed=0)
         assert isinstance(src, Source)
         assert src.shape == (32, 32)
         assert src.wavelength == 633e-9
+        # New invariant: the underlying E now carries the full ensemble.
+        assert src.E.shape == (4, 32, 32)
 
 
 # ============================================================================
@@ -284,23 +311,37 @@ class TestB3SchellSources:
 # ============================================================================
 
 class TestB4AnnularIncoherent:
-    """Validate the new annular-incoherent factory."""
+    """Validate the new annular-incoherent factory.
+
+    v4.15.1 (P0-NEW-2) migration: the factory now returns the raw
+    ``(n_realizations, Ny, Nx)`` ensemble.  Tests have been migrated
+    accordingly; obsolete v4.15.0 single-field semantics are marked.
+    """
 
     def test_annular_inco_honours_inner_outer_radii(self):
         """Pixels inside ``inner_radius`` and outside ``outer_radius``
-        must have near-zero intensity; pixels within the annulus must
-        have non-trivial intensity."""
+        must have near-zero ensemble-mean intensity; pixels within the
+        annulus must have non-trivial intensity.
+
+        v4.15.0 single-field return; migrated to v4.15.1 ensemble
+        contract: ``I = |E_single|^2`` pre-v4.15.1; now
+        ``I = mean(|ens|^2, axis=0)``.  The factory return tuple is
+        ``(ens, dx, dy, wavelength)``; we rebuild ``x``, ``y`` locally.
+        """
         N = 64
         dx = 5e-6
         inner = 50e-6
         outer = 120e-6
-        E, x, y = create_annular_incoherent_source(
+        ens, _, _, _ = create_annular_incoherent_source(
             N=N, dx=dx, wavelength=633e-9,
             inner_radius=inner, outer_radius=outer,
             n_realizations=8, seed=0)
+        # Rebuild coordinate axes (the factory no longer returns them).
+        x = (np.arange(N) - N / 2) * dx
+        y = (np.arange(N) - N / 2) * dx
         X, Y = np.meshgrid(x, y)
         r = np.sqrt(X * X + Y * Y)
-        I = np.abs(E) ** 2
+        I = np.mean(np.abs(ens) ** 2, axis=0)
         # Inside the inner radius -- intensity must be ~0.
         inside_mask = r < inner * 0.9
         assert float(I[inside_mask].max()) < float(I.max()) * 0.1, (
@@ -315,34 +356,34 @@ class TestB4AnnularIncoherent:
         annulus_mask = (r >= inner) & (r <= outer)
         assert float(I[annulus_mask].mean()) > 0.0
 
-    def test_annular_inco_ensemble_averages_incoherently(self):
-        """The phase of the ensemble-averaged amplitude must NOT match
-        any single realization (the ensemble average kills the random
-        phase down to ~1/sqrt(N) baseline)."""
+    def test_annular_inco_per_realisation_phase_uniformity(self):
+        """Each independent realisation of the incoherent annular
+        source must carry full-(-pi, pi) random phase across the
+        annulus support.
+
+        v4.15.0 single-field return; migrated to v4.15.1 ensemble
+        contract: the pre-v4.15.1 test inspected the phase of the
+        ensemble-averaged single field (which concentrates near 0 by
+        coherent-mean-phase collapse), but that collapse is exactly
+        the P0-NEW-2 bug we are fixing.  The migrated test checks the
+        physical property: each *individual* realisation carries
+        independent uniform phase across the annulus, which is the
+        defining property of the incoherent source.
+        """
         kw = dict(N=32, dx=10e-6, wavelength=633e-9,
                   inner_radius=80e-6, outer_radius=140e-6, seed=0)
-        E_1, _, _ = create_annular_incoherent_source(
-            n_realizations=1, **kw)
-        E_64, _, _ = create_annular_incoherent_source(
-            n_realizations=64, **kw)
-        # Compute the std of the phase distribution within the annulus
-        # for each.  The single-realization version has wide phase
-        # spread; the 64-realization average has near-zero coherent
-        # phase (the random sum's phase tends to a tight value as N
-        # grows).
-        mask = np.abs(E_1) > np.abs(E_1).max() * 0.5
-        phase_1 = np.angle(E_1)[mask]
-        phase_64 = np.angle(E_64[mask])
-        # The single-realization phase covers the full [-pi, pi];
-        # the averaged phase is concentrated near 0 (coherent-mean phase).
-        ptp_1 = float(np.ptp(phase_1))
-        ptp_64 = float(np.ptp(phase_64))
-        # The single realization should span most of (-pi, pi); the
-        # 64-realization average has a narrower phase spread.
-        assert ptp_1 > 0.5
-        # Note: this is a stochastic property; we use a soft
-        # tolerance.  The point is that incoherent averaging concentrates
-        # the coherent-mean phase, NOT that it should be deterministic.
+        ens, _, _, _ = create_annular_incoherent_source(
+            n_realizations=4, **kw)
+        # Inspect each realisation independently.
+        for k in range(ens.shape[0]):
+            mask = np.abs(ens[k]) > np.abs(ens[k]).max() * 0.5
+            phase = np.angle(ens[k])[mask]
+            # Random uniform-(-pi, pi) phase across the annulus support
+            # should cover most of the range.
+            ptp = float(np.ptp(phase))
+            assert ptp > np.pi, (
+                f"Realisation {k}: phase peak-to-peak = {ptp:.3f}, "
+                f"expected > pi for uniform-(-pi, pi) draws.")
 
 
 # ============================================================================
@@ -427,7 +468,13 @@ class TestP2FacFactoryValidationMetaPin:
     def test_plain_factory_validates_N_dx_wavelength(self, factory_name,
                                                       extra_kwargs):
         """Each top-level factory accepts the canonical N / dx /
-        wavelength tuple and produces an output of the right shape."""
+        wavelength tuple and produces an output of the right shape.
+
+        v4.15.1 (P0-NEW-2) migration: the 3 Schell-family factories
+        now return ``(ensemble, dx, dy, wavelength)`` (4-tuple, with
+        a ``(n_realizations, Ny, Nx)`` ensemble) instead of the
+        v4.15.0 single-field ``(E, x, y)``.
+        """
         N = 32
         dx = 5e-6
         wavelength = 633e-9
@@ -440,6 +487,13 @@ class TestP2FacFactoryValidationMetaPin:
             assert len(sources) == 2
             for E, ax, ay in sources:
                 assert E.shape == (N, N)
+        elif factory_name in ('create_gaussian_schell_source',
+                              'create_schell_model_source',
+                              'create_annular_incoherent_source'):
+            # v4.15.1 ensemble contract: (ens, dx, dy, wavelength).
+            ens, _dx, _dy, _wl = result
+            nr = int(extra_kwargs.get('n_realizations', 16))
+            assert ens.shape == (nr, N, N)
         else:
             E, x, y = result
             assert E.shape == (N, N)

@@ -676,6 +676,29 @@ def _prescription_to_elements(
             "/ make_doublet shape); got keys "
             f"{sorted(prescription.keys())}.")
 
+    # v4.15.1 (P1-F1-6 / Agent E): the two prescription shapes are
+    # mutually exclusive.  Pre-v4.15.1 a dict carrying BOTH
+    # ``surfaces``+``thicknesses`` AND ``elements``+``all_thicknesses``
+    # silently routed through the Zemax branch with no warning -- a
+    # genuine user error (e.g. starting from make_singlet output then
+    # hand-grafting an ``elements`` list on top) had no diagnostic and
+    # produced wrong-system propagation.  Make the precedence explicit:
+    # if both shapes are present, raise ValueError.  Callers wanting
+    # the Zemax shape should strip the ``surfaces`` / ``thicknesses``
+    # keys; callers wanting the factory shape should strip the
+    # ``elements`` / ``all_thicknesses`` keys.
+    if has_elements and has_surfaces:
+        raise ValueError(
+            "lumenairy.system.evaluate: prescription contains BOTH "
+            "``'elements'`` + ``'all_thicknesses'`` (Zemax-loader shape) "
+            "AND ``'surfaces'`` + ``'thicknesses'`` (factory shape).  "
+            "These two shapes are mutually exclusive -- mixing them is "
+            "ambiguous (which shape should drive the propagation?).  "
+            "Pick one: for the Zemax shape, drop ``'surfaces'`` / "
+            "``'thicknesses'`` from the dict; for the factory shape, "
+            "drop ``'elements'`` / ``'all_thicknesses'``.  "
+            f"Got keys {sorted(prescription.keys())}.")
+
     elements_list: List[Dict[str, Any]] = []
 
     if has_elements:

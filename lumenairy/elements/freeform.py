@@ -57,10 +57,35 @@ def _xp_of(*arrays):
 # (Abramowitz & Stegun 22.7.1 / Forbes 2010 Sec. 3) on the shifted
 # coordinate ``t = 2x - 1`` and applies the closed-form L2 norm to
 # convert the unnormalised Jacobi P_m^(alpha, beta) into the
-# orthonormal Q_m.  For (alpha, beta) = (1, 1) (Q-bfs) the norm is
-# ``sqrt(8 (n+2) / ((2n+3)(n+1)^2))`` and for (0, 2) (Q-con) it is
-# ``sqrt(8 / (2n+3))``; reciprocals give the orthonormalisation
-# multiplier ``c_n`` applied to P_n.
+# orthonormal Q_m.  The closed-form on [0, 1] is obtained from the
+# standard A&S 22.2.1 norm on [-1, 1] divided by the Jacobian factor
+# ``2^(alpha + beta + 1)`` that maps the weight to [0, 1]:
+#
+#   h_n_[0, 1] = G(n+alpha+1) G(n+beta+1)
+#                / ((2n+alpha+beta+1) n! G(n+alpha+beta+1))
+#
+# so the orthonormalisation multiplier is ``c_n = 1 / sqrt(h_n_[0, 1])``.
+# Specialisations:
+#
+# * Q-bfs (alpha = beta = 1): ``h_n_[0, 1] = (n+1) / ((2n+3)(n+2))``,
+#   giving ``c_n = sqrt((2n+3)(n+2) / (n+1))`` -- note the
+#   ``(n+1)^1`` denominator (no spurious factor of 8; no power of 2
+#   on ``(n+1)``).
+# * Q-con (alpha = 0, beta = 2): ``h_n_[0, 1] = 1 / (2n+3)``,
+#   giving ``c_n = sqrt(2n+3)``.
+#
+# v4.15.1 (P3 doc-formula fix): pre-v4.15.1 versions of this comment
+# block and the CHANGELOG stated the Q-bfs multiplier as
+# ``sqrt((2n+3)(n+2) / (n+1)^2)`` (or equivalently the norm as
+# ``sqrt(8(n+2) / ((2n+3)(n+1)^2))``).  Both forms are wrong on the
+# ``(n+1)`` power and carry a spurious factor of 8 inherited from
+# the unmapped [-1, 1] norm.  The implementation
+# (``_jacobi_norm_factor`` below) is correct -- only the prose lied;
+# the numerical orthonormality check in
+# ``test_v4_15_agent_d.TestForbesQbfsOrthonormality`` and the new
+# ``test_orthonormalizer_docstring_matches_code`` regression pin
+# both verify the implementation, leaving this docstring block as
+# the single source of truth for the closed-form formula.
 
 
 def _jacobi_norm_factor(n, alpha, beta):
@@ -363,11 +388,16 @@ def surface_sag_q_bfs(X, Y, *, radius, coefficients, r_max,
     Section 3.2 ("Robust, efficient computational methods for axially
     symmetric optical aspheres", Opt. Express 18(13), 13851-13862).
 
-    Outside the rectangular domain
-    ``[-norm_x, norm_x] x [-norm_y, norm_y]`` the freeform departure
-    is zeroed (matching the v4.14.2 ``surface_sag_chebyshev`` /
-    ``surface_sag_xy_polynomial`` behaviour) so the ray tracer does
-    not see a discontinuity at the rim.
+    Domain clipping (v4.15.1 P1-F1-1 alignment).  The Q-bfs basis is
+    defined on the *radial* coordinate ``u = r / r_max`` over the unit
+    disc, so the PRIMARY clip is radial: pixels with ``r > r_max``
+    have their freeform departure zeroed.  The ``norm_x`` / ``norm_y``
+    kwargs act as a SECONDARY rectangular pupil-clip; both clips
+    apply, so a pixel must lie inside *both* ``r <= r_max`` and
+    ``|x| <= norm_x AND |y| <= norm_y`` to receive a non-zero
+    departure.  Pre-v4.15.1 used only the rectangular box, which let
+    corner pixels at ``(0.9 r_max, 0.9 r_max)`` through despite
+    having ``r ~ 1.27 r_max`` outside the Forbes domain.
 
     Parameters
     ----------
@@ -384,6 +414,8 @@ def surface_sag_q_bfs(X, Y, *, radius, coefficients, r_max,
     r_max : float
         Normalisation radius for ``u = r / r_max`` [m].  Typically the
         clear-aperture semi-diameter.  Must be positive and finite.
+        Acts as the primary radial-domain clip: pixels with
+        ``r > r_max`` are zeroed.
     dx : float
         Grid spacing in x [m].  Must be positive and finite.  Retained
         in the signature for consistency with other ``surface_sag_*``
@@ -392,11 +424,12 @@ def surface_sag_q_bfs(X, Y, *, radius, coefficients, r_max,
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     norm_x, norm_y : float, default 1.0
-        Half-extents [m] of the rectangular domain over which the
-        freeform departure is non-zero.  Outside, the contribution is
-        zeroed.  Match the v4.14.3 ``P1-NEW-11`` convention: negative
-        or zero values are rejected at the call site rather than
-        silently masking the freeform away.
+        Secondary rectangular pupil-clip half-extents [m]; pixels
+        outside ``|x| <= norm_x`` or ``|y| <= norm_y`` are zeroed in
+        addition to the radial ``r > r_max`` clip.  The v4.14.3
+        ``P1-NEW-11`` negative-half-extent guard applies.  Default
+        ``1.0 m`` is a non-restrictive box that lets the radial clip
+        dominate when the caller cares only about the Forbes domain.
 
     Returns
     -------
@@ -456,7 +489,15 @@ def surface_sag_q_bfs(X, Y, *, radius, coefficients, r_max,
         Q_m = _q_bfs_eval(u_sq, m)
         departure = departure + a_m * Q_m
     departure = prefactor * departure
-    outside = (xp.abs(X) > norm_x) | (xp.abs(Y) > norm_y)
+    # v4.15.1 P1-F1-1: PRIMARY clip is radial (Forbes domain
+    # ``u <= 1`` <=> ``r <= r_max``), SECONDARY clip is the rectangular
+    # ``[-norm_x, norm_x] x [-norm_y, norm_y]`` pupil box.  Both clips
+    # apply -- a pixel must lie inside both to keep its freeform
+    # departure.  Pre-v4.15.1 used only the rectangular box, which
+    # let pixels at ``(0.9 r_max, 0.9 r_max)`` (radial 1.27 r_max,
+    # outside the Forbes domain) through with the Q-bfs prefactor
+    # going through its sign-flip at ``u^2 = 1``.
+    outside = (u_sq > 1.0) | (xp.abs(X) > norm_x) | (xp.abs(Y) > norm_y)
     sag = sag + xp.where(outside, xp.zeros((), dtype=departure.dtype),
                          departure)
     return sag
@@ -484,10 +525,12 @@ def surface_sag_q_con(X, Y, *, radius, conic, coefficients, r_max,
     Jacobi recurrence with ``(alpha, beta) = (0, 2)`` per Forbes 2010
     Section 3.1.
 
-    Outside the rectangular domain
-    ``[-norm_x, norm_x] x [-norm_y, norm_y]`` the freeform departure
-    is zeroed; the v4.14.3 ``P1-NEW-11`` negative-half-extent guard
-    applies.
+    Domain clipping (v4.15.1 P1-F1-1 alignment).  As for ``surface_sag_q_bfs``,
+    the PRIMARY clip is radial (``r <= r_max``) because the Q-con
+    basis is defined on the unit disc; the SECONDARY rectangular
+    ``[-norm_x, norm_x] x [-norm_y, norm_y]`` pupil box also applies.
+    Pre-v4.15.1 used only the rectangular box.  The v4.14.3
+    ``P1-NEW-11`` negative-half-extent guard applies.
 
     Parameters
     ----------
@@ -501,14 +544,16 @@ def surface_sag_q_con(X, Y, *, radius, conic, coefficients, r_max,
         ``a_m`` coefficients in Eq. 6 above, in meters.
         ``coefficients[m]`` corresponds to ``a_m``.
     r_max : float
-        Normalisation radius for ``u = r / r_max`` [m].
+        Normalisation radius for ``u = r / r_max`` [m].  Acts as the
+        primary radial-domain clip: pixels with ``r > r_max`` are
+        zeroed.
     dx : float
         Grid spacing in x [m].  Retained for API consistency.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
     norm_x, norm_y : float, default 1.0
-        Rectangular-domain half-extents [m]; outside, the freeform
-        contribution is zeroed.
+        Secondary rectangular pupil-clip half-extents [m]; pixels
+        outside the box are zeroed in addition to the radial clip.
 
     Returns
     -------
@@ -557,7 +602,9 @@ def surface_sag_q_con(X, Y, *, radius, conic, coefficients, r_max,
         Q_m = _q_con_eval(u_sq, m)
         departure = departure + a_m * Q_m
     departure = prefactor * departure
-    outside = (xp.abs(X) > norm_x) | (xp.abs(Y) > norm_y)
+    # v4.15.1 P1-F1-1: PRIMARY radial clip + SECONDARY rectangular box;
+    # see surface_sag_q_bfs above for the rationale.
+    outside = (u_sq > 1.0) | (xp.abs(X) > norm_x) | (xp.abs(Y) > norm_y)
     sag = sag + xp.where(outside, xp.zeros((), dtype=departure.dtype),
                          departure)
     return sag
@@ -612,10 +659,27 @@ def surface_sag_freeform(X, Y, surface_dict):
             # Best-effort fallback: derive from the X column stride.
             _dx = float(abs(X[0, 1] - X[0, 0])) if X.ndim == 2 \
                 and X.shape[1] > 1 else 1.0
+        # v4.15.1 P1-F1-2: require ``r_max`` explicitly for Q-bfs /
+        # Q-con.  Pre-v4.15.1 silently defaulted to ``r_max=1.0``,
+        # which for a user passing X/Y in metres meant the Forbes
+        # domain shrank to a 1 m disc -- typically far larger than
+        # the actual aperture, so the polynomial got evaluated on a
+        # sub-pixel of the surface and the freeform departure was
+        # effectively a no-op.  Raise so the unit-mismatch surfaces
+        # at the call site rather than as silently-wrong sag.
+        if 'r_max' not in surface_dict:
+            raise TypeError(
+                "surface_sag_freeform: 'r_max' is required when "
+                "freeform_type='q_bfs' (the Forbes Q-bfs basis is "
+                "defined on the radial coordinate u = r / r_max; "
+                "pre-v4.15.1 silently defaulted to r_max=1.0 which "
+                "caused a units mismatch when X/Y were passed in "
+                "metres).  Pass r_max=<clear-aperture-semi-diameter> "
+                "in the same units as X/Y.")
         return surface_sag_q_bfs(
             X, Y, radius=R,
             coefficients=surface_dict.get('q_bfs_coeffs', []),
-            r_max=surface_dict.get('r_max', 1.0),
+            r_max=surface_dict['r_max'],
             dx=_dx,
             dy=surface_dict.get('dy'),
             norm_x=surface_dict.get('norm_x', 1.0),
@@ -626,10 +690,20 @@ def surface_sag_freeform(X, Y, surface_dict):
         if _dx is None:
             _dx = float(abs(X[0, 1] - X[0, 0])) if X.ndim == 2 \
                 and X.shape[1] > 1 else 1.0
+        # v4.15.1 P1-F1-2: see q_bfs branch above for rationale.
+        if 'r_max' not in surface_dict:
+            raise TypeError(
+                "surface_sag_freeform: 'r_max' is required when "
+                "freeform_type='q_con' (the Forbes Q-con basis is "
+                "defined on the radial coordinate u = r / r_max; "
+                "pre-v4.15.1 silently defaulted to r_max=1.0 which "
+                "caused a units mismatch when X/Y were passed in "
+                "metres).  Pass r_max=<clear-aperture-semi-diameter> "
+                "in the same units as X/Y.")
         return surface_sag_q_con(
             X, Y, radius=R, conic=kc,
             coefficients=surface_dict.get('q_con_coeffs', []),
-            r_max=surface_dict.get('r_max', 1.0),
+            r_max=surface_dict['r_max'],
             dx=_dx,
             dy=surface_dict.get('dy'),
             norm_x=surface_dict.get('norm_x', 1.0),

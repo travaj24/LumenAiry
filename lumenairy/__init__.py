@@ -214,9 +214,12 @@ from .sources import (
     create_bessel_beam,
     # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent
     # partial-coherence source factories.
+    # v4.15.1 (P0-NEW-2): the factories now return ensembles (or a
+    # PartialCoherenceMCF) and actually deliver partial coherence.
     create_gaussian_schell_source,
     create_schell_model_source,
     create_annular_incoherent_source,
+    PartialCoherenceMCF,
 )
 
 # ── High-NA vector diffraction (Richards-Wolf) ─────────────────────────
@@ -548,6 +551,8 @@ from .raytrace import (
     prescription_summary,
     surfaces_from_elements,
     raytrace_system,
+    # v4.15.1 (Cluster B Item 6): wave -> ray bridge.
+    rays_from_field,
 )
 
 # ── System propagation ──────────────────────────────────────────────────
@@ -732,6 +737,25 @@ from .raytrace.jax_trace import (
     clear_trace_jax_cache,
 )
 
+# ── Operator algebra (4.15.1, Cluster B Item 2) ─────────────────────────
+# Nazarathy/Shamir-style optical operator algebra over the existing
+# array-first propagator infrastructure.  Composable optical primitives
+# (FreeSpace, ThinLens, CylindricalLens, Magnify, FourierTransform,
+# Aperture, GaussianAperture) with closed-form ABCDs and chain-and-
+# delegate field application.  See ``lumenairy.algebra`` and
+# ``docs/audits/CLUSTER_B_SPEC.md`` §3.
+from .algebra import (
+    Operator,
+    CompositeOperator,
+    FreeSpace,
+    ThinLens,
+    CylindricalLens,
+    Magnify,
+    FourierTransform,
+    Aperture,
+    GaussianAperture,
+)
+
 # ── Deprecated-alias shims ──────────────────────────────────────────────
 #
 # 4.12.0: wire ``_deprecation.deprecated_alias`` (added in 4.7 but never
@@ -755,7 +779,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.15.0"
+__version__ = "4.15.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -793,9 +817,11 @@ __all__ = [
     'create_led_source',
     'create_bessel_beam',
     # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent.
+    # v4.15.1 (P0-NEW-2): factories now return ensembles + new MCF class.
     'create_gaussian_schell_source',
     'create_schell_model_source',
     'create_annular_incoherent_source',
+    'PartialCoherenceMCF',
     'hermite_physicist',
     'laguerre_generalized',
 
@@ -902,6 +928,21 @@ __all__ = [
     # ============================================================
     # Tier 2 -- Propagate (dispatcher + propagator families)
     # ============================================================
+
+    # Operator algebra (4.15.1, Cluster B Item 2): Nazarathy/Shamir-
+    # style symbolic optical-system construction layered over the
+    # existing propagators.  Each primitive carries a closed-form
+    # 2x2 ABCD and delegates field application to the canonical
+    # LumenAiry function.  See ``lumenairy.algebra`` for details.
+    'Operator',
+    'CompositeOperator',
+    'FreeSpace',
+    'ThinLens',
+    'CylindricalLens',
+    'Magnify',
+    'FourierTransform',
+    'Aperture',
+    'GaussianAperture',
 
     # Top-level smart-method propagator
     'propagate',
@@ -1042,6 +1083,8 @@ __all__ = [
     'f_number',
     'defocus_waves_to_zernike',
     'astigmatism_waves_to_zernike',
+    # v4.15.1 (Cluster B Item 6): wave -> ray bridge.
+    'rays_from_field',
 
     # Per-ray diagnostic codes
     'RAY_OK',
