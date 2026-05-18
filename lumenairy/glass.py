@@ -283,10 +283,43 @@ GLASS_REGISTRY = {
     'F2':           '__sellmeier__',
     'F5':           '__sellmeier__',
     'SF2':          '__sellmeier__',
-    'S-LAH64':      '__sellmeier__',
-    'S-LAH79':      '__sellmeier__',
+    # 4.14.2 (P0-NEW-1): S-LAH64 / S-LAH79 were flagged '__sellmeier__'
+    # in v4.7 but their Sellmeier rows were REMOVED in v4.11.2 after
+    # round-3 audit CRIT-3 found the bundled coefficients were
+    # misattributed (off by ~6% and ~12% vs Ohara catalogue n_d).
+    # The dispatcher then raised ValueError on every lookup; the
+    # v4.11.2 fix forgot to re-route GLASS_REGISTRY at the authorita-
+    # tive refractiveindex.info catalogue.  Restored via the tuple
+    # form here so prescriptions referencing S-LAH64 / S-LAH79 (e.g.
+    # the ui/ "known-good preset" path) work again, falling back to
+    # ImportError with a clear message if the optional ``refractive-
+    # index`` package is not installed.
+    'S-LAH64':      ('specs', 'OHARA-optical', 'S-LAH64'),
+    'S-LAH79':      ('specs', 'OHARA-optical', 'S-LAH79'),
     'BaF2':         '__sellmeier__',
 }
+
+
+def _check_glass_registry_consistency():
+    """4.14.2 (P0-NEW-1 meta-pattern): convert the class-of-bug
+    (``GLASS_REGISTRY`` entry flagged ``'__sellmeier__'`` but absent
+    from :data:`SELLMEIER_COEFFICIENTS`) into a fail-fast at module
+    load, so a future drift can never re-surface as a silent
+    ``ValueError`` at first call.  Walks every ``'__sellmeier__'``-
+    flagged entry and asserts the coefficient row exists.
+    """
+    for name, entry in GLASS_REGISTRY.items():
+        if entry == '__sellmeier__' and name not in SELLMEIER_COEFFICIENTS:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift: {name!r} flagged "
+                f"'__sellmeier__' but missing from "
+                f"SELLMEIER_COEFFICIENTS.  Either add the Sellmeier "
+                f"coefficients or change the registry entry to a "
+                f"(shelf, book, page) tuple / callable."
+            )
+
+
+_check_glass_registry_consistency()
 
 
 def list_glasses() -> List[str]:

@@ -2,6 +2,206 @@
 
 All notable changes to the core library are documented here.
 
+## [4.14.2] — 2026-05-17
+
+**Closes the v4.14.1 audit (`AUDIT_V4_14_1_2026_05_17.md`).**  The
+audit found 1 NEW P0 (a v4.11.2 regression carryover: `glass.py`
+S-LAH64/S-LAH79 dispatch broken for 3 releases) plus 10 new P1s
+(4 of which are "fix N, miss N+1" recurrences on v4.14.1 itself —
+the aperture=0 sentinel missed 2 of 4 call sites, 7 older caches
+still unlocked, 4 residual `0+0j` literal sites, `clear_asm_caches`
+chain narrower than docstring) plus 6 P1s in under-examined modules
+(freeform domain guard, makedammann unit drift, polarization API
+inconsistencies, source factory validation gaps).  v4.14.2 closes
+the P0 and all 10 P1s, adds **two new structural meta-pins** to
+extend the v4.14.1 cache-clear dispatcher-pin pattern (cache↔lock
+pairing + `0+0j` literal sweep), and closes a follow-up cache-lock
+gap discovered by Agent C's meta-pin.  **1190 unit tests pass** (up
+from 911); 34/34 validation files pass.
+
+### Breaking changes — none
+
+Two near-breaking output deltas with deprecation warnings:
+
+* **`makedammann2d` is now SI metres throughout** (per-parameter
+  deprecation heuristic detects legacy µm input and warns).  Pure-
+  legacy calls and hybrid `periodx=20.0 (legacy µm) +
+  waveln=1.31e-6 (already SI)` calls both continue to work; a
+  `DeprecationWarning` directs users to migrate.
+* **`create_led_source` signature reordered** to v4.7-canonical
+  `(N, dx, wavelength, *, diameter, divergence_angle, dy=None, ...)`
+  with a legacy-positional shim that emits a `DeprecationWarning`.
+
+Neither breaks existing scripts but both warn on the legacy form.
+
+### P0 closure — `glass.py` S-LAH64 / S-LAH79 dispatch
+
+**3-release carryover regression.**  v4.11.2 (round-3 audit, CRIT-3)
+removed S-LAH64 / S-LAH79 from `SELLMEIER_COEFFICIENTS` after
+discovering the in-code coefficients were off by ±5.8% vs the Ohara
+catalog, intending to route them through `refractiveindex.info` —
+but `GLASS_REGISTRY` was never updated.  Both glasses remained
+flagged `'__sellmeier__'`, and the dispatcher at `glass.py:410-415`
+raised `ValueError` on every call.  `ui/main_window.py:1552`
+references S-LAH64 as a "known-good preset" — UI broken for 3
+releases.
+
+**Fix:** Routed both to `('specs', 'OHARA-optical', '<name>')` tuple
+form (correct catalogue book name verified by introspection;
+`'OHARA'` was a wrong first attempt).  Numerical verification:
+n_d=1.7880 matches Ohara catalog n_d=1.78800 to 5e-5 for S-LAH64;
+S-LAH79 returns n_d=2.0033 matching the catalog 2.00330.
+
+**Structural counter-measure:** Module-load consistency check at the
+end of `glass.py` walks `GLASS_REGISTRY` and raises `RuntimeError`
+if any `'__sellmeier__'` entry is missing from
+`SELLMEIER_COEFFICIENTS`.  Future drift fails fast at import time.
+
+### P1 closures — sibling-gap recurrences on v4.14.1
+
+* **P1-NEW-1: aperture=0 sentinel finish** (was incomplete in
+  v4.14.1).  The v4.14.1 sentinel fix updated 3 callers
+  (`_get_wrapper_merit_cache`, `MultiWavelengthMerit.evaluate`,
+  `MultiFieldMerit.evaluate`) but missed 2:
+  `ToleranceAwareMerit._evaluate_perturbed` (`optimize/core.py:
+  2750-2755`) and `MatchIdealSystem._make_source` (`:958-966`).
+  Both used `_cache['E_ones'].copy()` without the `mask is
+  _ZERO_APERTURE_MASK` branch, producing a full-grid plane wave
+  instead of zero on `aperture_diameter=0`.  v4.14.2 adds the
+  sentinel-aware branch (option (b) of the audit recommendation —
+  explicit-per-call-site, matches the canonical 2 already-fixed
+  sites).  **Investigation finding:** `apply_perturbations` only
+  mutates per-surface `decenter` / `tilt` / `form_error`, NEVER
+  the prescription-level `aperture_diameter`, so the audit's worry
+  about perturbed-to-zero apertures is not triggered by existing
+  code — pinned the contract via
+  `test_apply_perturbations_does_not_modify_aperture`.
+* **P1-NEW-2: 7 older caches now locked** following the v4.14.1
+  pattern.  Locks added to `_ZERNIKE_BASIS_CACHE`,
+  `_THROUGH_FOCUS_SCAN_JAX_CACHE`, `_PROPAGATE_SYSTEM_JAX_CACHE`,
+  `_GS_KERNEL_CACHE`, `_ER_KERNEL_CACHE`, `_HIO_KERNEL_CACHE`,
+  `_TRACE_JAX_CACHE`.  Lock-scope discipline matches v4.14.1: lock
+  held for `get` / `move_to_end` ops, released before expensive XLA
+  jit-compile / numpy basis build, re-acquired for insert + evict.
+  Concurrent 4-thread tests confirm no exceptions, no `RuntimeError:
+  dictionary changed size during iteration`, final state consistent.
+* **P1-NEW-3: `clear_asm_caches()` chain expanded** to 5 sibling
+  caches via lazy-import + call (`clear_zernike_basis_cache`,
+  `clear_through_focus_scan_jax_cache`,
+  `clear_propagate_system_jax_cache`, `clear_phase_retrieval_caches`,
+  `clear_trace_jax_cache`).  Docstring rewritten to honestly list
+  all caches the function now clears.  Pinning test populates each
+  cache then calls `clear_asm_caches()` and asserts emptiness.
+* **P1-NEW-4: 2 P1-severity residual `0+0j` sites** swept
+  (`optimize/core.py:966` via Agent B's P1-NEW-1 work + `analysis
+  /phase_retrieval.py:402`).  Now use the `np.zeros((), dtype=...)`
+  pattern.  **Structural pin (new meta-pin):**
+  `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` walks
+  every `lumenairy/*.py` file (117 modules) and asserts no
+  unallowlisted `np.where(..., 0+0j)` literal — three exemption
+  layers (pure-comment lines, trailing `.astype()` recovery
+  pattern, explicit P3 allowlist for `ui/psf_mtf_dock.py:230`).
+
+### P1 closures — under-examined modules
+
+* **P1-NEW-5: `surface_sag_xy_polynomial` domain guard** added.
+  v4.14.1's freeform XY polynomial branch evaluated `c * X**i *
+  Y**j` for every pixel — a high-order term like `(2,0): 1e3` on a
+  50-mm half-grid produced 2.5 m of sag at the corner, propagating
+  into raytraced rays outside the physical aperture.  v4.14.2 adds
+  `norm_x, norm_y` kwargs + an `xp.where(<inside_box>, sag, 0.0)`
+  clip matching the Chebyshev branch.  Backward-compatible (default
+  `norm_x = norm_y = 1.0` plus raw-coordinate polynomial evaluation
+  — no coefficient rescaling).
+* **P1-NEW-6: `makedammann2d` SI conversion** with per-parameter
+  deprecation heuristic.  See "Breaking changes" above.
+* **P1-NEW-7: `apply_rotator` accepts `angle_deg=`** kwarg-only,
+  matching the v4.7 polarization-family convention.  Conflict-
+  resolution policy: `angle_deg` and non-zero `angle` (radians)
+  with disagreement → `ValueError`.
+* **P1-NEW-8: `JonesField.__init__` input validation**.  Added
+  positive-finite `dx, dy` checks + 2-D shape check.  A 1-D field
+  accidentally passed in now raises a clear `ValueError` at
+  construction time, not an opaque FFT failure downstream.
+* **P1-NEW-9: `create_led_source` signature drift** closed.  See
+  "Breaking changes" above.  Underlying `create_top_hat_beam`
+  handles `dy != dx` natively, so no `ValueError`-on-anisotropy
+  raise was needed (unlike the JAX-twin precedent).
+* **P1-NEW-10: `_validate_grid_params` helper** added at the top of
+  `sources/core.py`.  Applied to all 10 factories
+  (`create_gaussian_beam`, `create_hermite_gauss`,
+  `create_laguerre_gauss`, `create_top_hat_beam`,
+  `create_annular_beam`, `create_fiber_mode`, `create_led_source`,
+  `create_bessel_beam`, `create_point_source`,
+  `create_tilted_plane_wave`).  60 parametrized tests confirm
+  `ValueError` on N≤0, dx≤0, wavelength≤0, non-finite inputs.
+
+### Follow-up sibling-gap closed in same release
+
+The v4.14.2 cache↔lock meta-pin (Agent C's new structural pin)
+discovered a previously-unflagged single-cell lazy-init cache in
+`propagators/asymptotic.py:_JAX_IFT_SOLVER_CACHE`.  Race window
+on first concurrent call decorates the JAX `custom_vjp` solver
+twice.  v4.14.2 closes the gap in the same release: added
+`_JAX_IFT_SOLVER_CACHE_LOCK` with double-check locking pattern
+(fast path no lock for the common populated-cache case; slow path
+acquires lock, re-checks, delegates the actual build to
+`_build_jax_ift_solver_impl`).  Meta-pin's
+`_KNOWN_CACHE_SIBLING_GAPS` set is now empty — future regressions
+land there.
+
+### Two new structural meta-pins
+
+Extending v4.14.1's cache-clear dispatcher-pin pattern to two more
+sibling-gap classes the audit identified:
+
+* **`test_v4_14_2_dispatcher_pin_cache_locks.py`** (38 tests) —
+  walks every library module via `pkgutil.walk_packages`, finds
+  names matching `^_.*_CACHE$`, asserts each has a corresponding
+  lock (accepts both `_FOO_LOCK` and `_FOO_CACHE_LOCK` naming
+  conventions).  Reverse check: every `_LOCK` has a corresponding
+  cache (or matches the documented `_PATCH_LOCK` exemption for
+  `_ZARR_MKDIR_PATCH_LOCK`).
+* **`test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py`** (123 tests)
+  — walks all `lumenairy/*.py` files for `np.where(.*, 0+0j)`
+  literals.  Exemption layers for pure-comment lines, trailing
+  `.astype()` dtype-recovery pattern, and explicit P3 allowlist for
+  `ui/psf_mtf_dock.py:230` (audit-rated low-priority UI site).
+
+### Retroactive doc-drift corrections to v4.14.1 entry
+
+Per audit Part 1.3:
+
+* "Agent D 25 tests" → 8 tests (bottom-line 911 was correct).
+* "all 6 factories" → 5 factories (in 3 CHANGELOG sites).
+* `lenses_maslov.py` line-drift correction note refreshed.
+
+### Test counts
+
+* Pre-v4.14.2 baseline (v4.14.1): 911 unit tests.
+* v4.14.2 additions:
+  - Agent A (glass + freeform + polarization): 13 tests
+  - Agent B (aperture=0 sentinel finish): 10 tests
+  - Agent C (7-cache locks + clear_asm scope + meta-pin): 57
+    tests (19 fix-pins + 38 meta-pin parametrizations)
+  - Agent D (sources + DOE + meta-pin): 199 tests (76 fix-pins +
+    123 meta-pin parametrizations)
+* Final: **1190 unit tests passing, 1 skipped** (the documented
+  `_ZARR_MKDIR_PATCH_LOCK` exemption), **34/34 validation files
+  passing**.
+
+### Deferred to v4.15+
+
+Row_reset physics pin against `propagate_hf_chebyshev_quadrature
+(method='direct')` (audit Tier-1 #12 — contract-pinned in v4.14.1,
+not numerically-pinned).  Backend dispatch (`_xp_of`) on the 6 new
+v4.14.0 analysis functions.  Modal asymptotic per-pixel
+vectorisation public switch.  Source factory signature
+normalisation (the LED factory landed in v4.14.2; the rest still
+have mixed positional/keyword conventions).  `system.evaluate
+(prescription, source, ...)` ergonomic entry.  See
+[`ROADMAP.md`](ROADMAP.md) for the full forward plan.
+
 ## [4.14.1] — 2026-05-17
 
 **Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**  The

@@ -956,14 +956,39 @@ class MatchIdealSystemMerit(MeritTerm):
             E = self.source_fn(ctx.N, ctx.dx, wavelength)
             E = np.asarray(E, dtype=cdtype)
         else:
-            E = np.ones((ctx.N, ctx.N), dtype=cdtype)
+            # v4.14.2 (P1-NEW-1): three branches matching the canonical
+            # _ZERO_APERTURE_MASK semantics shared by
+            # ``MultiWavelengthMerit.evaluate``,
+            # ``MultiFieldMerit.evaluate``, and
+            # ``ToleranceAwareMerit.evaluate``:
+            #   * ``ap`` finite and > 0   -> circular boolean mask.
+            #   * ``ap`` finite and <= 0  -> deliberate-zero aperture;
+            #     block all light by zeroing E entirely.  Pre-v4.14.2
+            #     the ``ap > 0`` check silently fell through to the
+            #     ``else`` branch and produced a full-grid plane wave,
+            #     which apply_real_lens would then propagate as a
+            #     bright on-axis "source" -- the exact bug v4.14.1
+            #     fixed in the wrapper-merit cache but missed at this
+            #     pre-existing site.
+            #   * ``ap`` is None or non-finite -> no aperture specified;
+            #     full-grid plane wave (unchanged behaviour).
             ap = (ctx.prescription.get('aperture_diameter')
                   if ctx.prescription else None)
             if ap is not None and np.isfinite(ap) and ap > 0:
+                E = np.ones((ctx.N, ctx.N), dtype=cdtype)
                 x = (np.arange(ctx.N) - ctx.N / 2) * ctx.dx
                 X, Y = np.meshgrid(x, x)
                 mask = (X * X + Y * Y) <= (ap / 2.0) ** 2
-                E = np.where(mask, E, 0.0 + 0.0j)
+                # v4.14.2 (P1-NEW-4): dtype-aware zero so a complex64
+                # cdtype is not silently upcast to complex128 by the
+                # 0.0+0.0j literal.  Mirrors the v4.13.2 sweep at
+                # apply_aperture / apply_mirror / _lens_thin /
+                # _lens_real.
+                E = np.where(mask, E, np.zeros((), dtype=cdtype))
+            elif ap is not None and np.isfinite(ap) and ap <= 0:
+                E = np.zeros((ctx.N, ctx.N), dtype=cdtype)
+            else:
+                E = np.ones((ctx.N, ctx.N), dtype=cdtype)
 
         # Field-angle tilt: apply a linear phase ramp for off-axis
         # illumination.  Identity for on-axis (0, 0).
@@ -2748,9 +2773,26 @@ class ToleranceAwareMerit(MeritTerm):
             # template.
             _cdtype = get_default_complex_dtype()
             _ap = ctx.prescription.get('aperture_diameter')
+            # v4.14.2 (P1-NEW-1): the perturbed prescription preserves
+            # ``aperture_diameter`` from the nominal, so a nominal-zero
+            # aperture flows through to the per-trial wave-leg unchanged.
+            # ``apply_perturbations`` itself does NOT call
+            # ``validate_prescription``, so the validation-time rejection
+            # of ``aperture_diameter <= 0`` cannot be relied upon to gate
+            # this code path.  Honour the ``_ZERO_APERTURE_MASK`` sentinel
+            # placed in ``_cache['mask']`` by ``_get_wrapper_merit_cache``
+            # so a deliberate-zero aperture produces a zero E_in rather
+            # than the cached full-ones template (which would otherwise
+            # propagate a grid-filling plane wave through ``apply_real_lens``
+            # and silently mis-score the perturbed trial).  Matches the
+            # canonical branch at ``MultiWavelengthMerit.evaluate`` and
+            # ``MultiFieldMerit.evaluate``.
             _cache = _get_wrapper_merit_cache(
                 ctx.N, ctx.dx, _ap, _cdtype)
-            E_in = _cache['E_ones'].copy()
+            if _cache['mask'] is _ZERO_APERTURE_MASK:
+                E_in = np.zeros((ctx.N, ctx.N), dtype=_cdtype)
+            else:
+                E_in = _cache['E_ones'].copy()
             E_exit = apply_real_lens(
                 E_in, prescription=pres_pert, wavelength=ctx.wavelength, dx=ctx.dx)
             # v4.13.2 (C-P1-2): thread ctx.x so JaxMeritTerm sub-

@@ -97,6 +97,31 @@ class JonesField:
         if Ex.shape != Ey.shape:
             raise ValueError(f"Ex and Ey must have the same shape, "
                              f"got {Ex.shape} and {Ey.shape}")
+        # v4.14.2 (P1-NEW-8): validate that ``Ex`` / ``Ey`` are 2-D
+        # and that ``dx`` / ``dy`` are positive finite reals.  Pre-
+        # v4.14.2 a 1-D field or a non-positive pitch propagated all
+        # the way to the FFT in :meth:`propagate`, which raised an
+        # opaque shape / value error far from the construction site.
+        # Match the input-guard pattern used in
+        # :func:`_validate_grid_params` in
+        # :mod:`lumenairy.propagators.propagation`.
+        if Ex.ndim != 2:
+            raise ValueError(
+                f"JonesField: Ex / Ey must be 2-D arrays; got "
+                f"Ex.ndim={Ex.ndim} with shape {Ex.shape}.  "
+                f"Polarized propagation expects a (Ny, Nx) grid.")
+        dx_f = float(dx)
+        if not np.isfinite(dx_f) or dx_f <= 0.0:
+            raise ValueError(
+                f"JonesField: dx must be a positive finite real "
+                f"[m]; got dx={dx!r}.  (LumenAiry uses metres; for "
+                f"a 2 um pitch pass dx=2e-6, not 2.)")
+        if dy is not None:
+            dy_f = float(dy)
+            if not np.isfinite(dy_f) or dy_f <= 0.0:
+                raise ValueError(
+                    f"JonesField: dy must be a positive finite real "
+                    f"[m] or None; got dy={dy!r}.")
         # 4.11.2: ``dtype=complex`` aliases to ``complex128`` and
         # silently promoted complex64 inputs.  Preserve the caller's
         # dtype if it's already complex; otherwise cast through the
@@ -111,8 +136,8 @@ class JonesField:
             cdt = get_default_complex_dtype()
             self.Ex = Ex_arr.astype(cdt)
             self.Ey = Ey_arr.astype(cdt)
-        self.dx = dx
-        self.dy = dy if dy is not None else dx
+        self.dx = dx_f
+        self.dy = float(dy) if dy is not None else dx_f
 
     @property
     def shape(self) -> Tuple[int, ...]:
@@ -531,7 +556,12 @@ def apply_quarter_wave_plate(
     return apply_waveplate(field, np.pi / 2, angle)
 
 
-def apply_rotator(field: 'JonesField', angle: float) -> 'JonesField':
+def apply_rotator(
+    field: 'JonesField',
+    angle: float = 0.0,
+    *,
+    angle_deg: Optional[float] = None,
+) -> 'JonesField':
     """
     Apply a polarization rotator (e.g. Faraday rotator).
 
@@ -542,13 +572,44 @@ def apply_rotator(field: 'JonesField', angle: float) -> 'JonesField':
     ----------
     field : JonesField
         Input field.
-    angle : float
+    angle : float, default 0
         Rotation angle [radians].
+    angle_deg : float, optional
+        Rotation angle in degrees; when supplied, takes precedence
+        over the radian ``angle``.  4.7+ convention: ``_deg`` is the
+        canonical user-facing angle unit.  Matches the
+        ``apply_polarizer`` / ``apply_waveplate`` /
+        ``apply_half_wave_plate`` / ``apply_quarter_wave_plate``
+        signatures; pre-v4.14.2 ``apply_rotator`` was the only
+        angle-taking helper missing this kwarg (sibling-gap caught
+        by AUDIT_V4_14_1_2026_05_17 P1-NEW-7).
 
     Returns
     -------
     JonesField
+
+    Raises
+    ------
+    ValueError
+        If both ``angle`` and ``angle_deg`` are supplied with values
+        that disagree (i.e. ``angle != radians(angle_deg)``).  Passing
+        ``angle_deg`` alongside the default ``angle=0`` is accepted.
     """
+    # v4.14.2 (P1-NEW-7): if both are supplied, validate they agree
+    # within float tolerance rather than silently letting ``angle_deg``
+    # win -- a user who passes both with conflicting values almost
+    # certainly has a bug.  ``angle == 0.0`` (the default) is treated
+    # as "not supplied" so the common ``apply_rotator(field,
+    # angle_deg=45)`` call is accepted.
+    if angle_deg is not None:
+        angle_from_deg = float(np.radians(angle_deg))
+        if angle != 0.0 and not np.isclose(angle, angle_from_deg,
+                                            rtol=0.0, atol=1e-12):
+            raise ValueError(
+                f"apply_rotator: conflicting angle specification -- "
+                f"angle={angle} rad and angle_deg={angle_deg} "
+                f"(=> {angle_from_deg} rad) disagree.  Pass only one.")
+        angle = angle_from_deg
     c = np.cos(angle)
     s = np.sin(angle)
     J = np.array([[c, -s],

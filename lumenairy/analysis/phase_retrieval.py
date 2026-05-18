@@ -30,6 +30,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -398,8 +399,14 @@ def error_reduction(
         # Inverse: Fourier -> object
         obj_new = np.fft.fftshift(_ifft2(np.fft.ifftshift(F)))
 
-        # Real-space constraint: zero outside support
-        obj = np.where(support, obj_new, 0.0 + 0.0j)
+        # Real-space constraint: zero outside support.
+        # v4.14.2 (P1-NEW-4 / Agent C): dtype-aware zero so a
+        # complex64 ``obj_new`` survives the np.where without a
+        # silent upcast to complex128 via the bare ``0.0+0.0j``
+        # Python complex literal.  Mirrors the v4.13.2 dtype-aware
+        # pattern; the sibling site above (line ~367) already uses
+        # ``.astype(cdtype)`` trailing recovery.
+        obj = np.where(support, obj_new, np.zeros((), dtype=obj_new.dtype))
 
     F = np.fft.fftshift(_fft2(np.fft.ifftshift(obj)))
     final_err = float(np.mean((np.abs(F) - measured_amplitude)**2))
@@ -606,6 +613,22 @@ _GS_KERNEL_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _ER_KERNEL_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _HIO_KERNEL_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _PR_KERNEL_CACHE_MAXSIZE = 32
+# v4.14.2 (P1-NEW-2 / Agent C): thread-safety locks for the three
+# phase-retrieval kernel caches.  Without these, two threads racing
+# through :func:`gerchberg_saxton_jax` / :func:`error_reduction_jax` /
+# :func:`hybrid_input_output_jax` at the same ``(n_iter, dtype)`` key
+# could see a torn OrderedDict (``get`` -> ``__setitem__`` ->
+# ``popitem`` is a read-modify-write).  Follows the ``_ASM_CACHE_LOCK``
+# precedent in :mod:`propagators.propagation`.  Lock-scope discipline:
+# the per-kernel build (``_make_*_kernel``) compiles a fresh
+# ``@jax.jit`` decorator wrapper; that decoration runs OUTSIDE the
+# lock since the actual XLA trace happens on first call to the kernel,
+# not at build time, but we keep build outside-of-lock for consistency
+# with the sibling locks.  One lock per kernel cache so concurrent
+# GS / ER / HIO calls don't serialise on a single lock.
+_GS_KERNEL_CACHE_LOCK = threading.Lock()
+_ER_KERNEL_CACHE_LOCK = threading.Lock()
+_HIO_KERNEL_CACHE_LOCK = threading.Lock()
 
 
 def clear_phase_retrieval_caches() -> None:
@@ -618,9 +641,12 @@ def clear_phase_retrieval_caches() -> None:
     cache mechanics and in long-running pipelines that want to release
     the underlying XLA executables.
     """
-    _GS_KERNEL_CACHE.clear()
-    _ER_KERNEL_CACHE.clear()
-    _HIO_KERNEL_CACHE.clear()
+    with _GS_KERNEL_CACHE_LOCK:
+        _GS_KERNEL_CACHE.clear()
+    with _ER_KERNEL_CACHE_LOCK:
+        _ER_KERNEL_CACHE.clear()
+    with _HIO_KERNEL_CACHE_LOCK:
+        _HIO_KERNEL_CACHE.clear()
 
 
 def _make_gs_kernel(n_iter_int: int):
@@ -784,14 +810,19 @@ def gerchberg_saxton_jax(
     # v4.13.0 (audit L2): include dtype in the cache key so calls at
     # complex64 vs complex128 don't collide on a cached kernel.
     cache_key = (n_iter_int, str(np.dtype(cdtype)))
-    kernel = _GS_KERNEL_CACHE.get(cache_key)
+    with _GS_KERNEL_CACHE_LOCK:
+        kernel = _GS_KERNEL_CACHE.get(cache_key)
+        if kernel is not None:
+            _GS_KERNEL_CACHE.move_to_end(cache_key)
     if kernel is None:
+        # Build OUTSIDE the lock.  Two threads may double-build on a
+        # cold cache for the same key -- benign waste; the second
+        # insert just overwrites the first.
         kernel = _make_gs_kernel(n_iter_int)
-        _GS_KERNEL_CACHE[cache_key] = kernel
-        while len(_GS_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
-            _GS_KERNEL_CACHE.popitem(last=False)
-    else:
-        _GS_KERNEL_CACHE.move_to_end(cache_key)
+        with _GS_KERNEL_CACHE_LOCK:
+            _GS_KERNEL_CACHE[cache_key] = kernel
+            while len(_GS_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
+                _GS_KERNEL_CACHE.popitem(last=False)
     phase, err = kernel(E0, src, tgt)
     return np.asarray(phase), float(err)
 
@@ -873,14 +904,19 @@ def error_reduction_jax(
     # so a caller that asked for float64 but got x64-disabled actually
     # caches under complex128 once the resolver auto-enables x64.
     cache_key = (n_iter_int, str(np.dtype(cdtype)))
-    kernel = _ER_KERNEL_CACHE.get(cache_key)
+    with _ER_KERNEL_CACHE_LOCK:
+        kernel = _ER_KERNEL_CACHE.get(cache_key)
+        if kernel is not None:
+            _ER_KERNEL_CACHE.move_to_end(cache_key)
     if kernel is None:
+        # Build OUTSIDE the lock.  Two threads may double-build on a
+        # cold cache for the same key -- benign waste; the second
+        # insert just overwrites the first.
         kernel = _make_er_kernel(n_iter_int)
-        _ER_KERNEL_CACHE[cache_key] = kernel
-        while len(_ER_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
-            _ER_KERNEL_CACHE.popitem(last=False)
-    else:
-        _ER_KERNEL_CACHE.move_to_end(cache_key)
+        with _ER_KERNEL_CACHE_LOCK:
+            _ER_KERNEL_CACHE[cache_key] = kernel
+            while len(_ER_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
+                _ER_KERNEL_CACHE.popitem(last=False)
     obj_final, err = kernel(obj0, meas, sup)
     return np.asarray(obj_final), float(err)
 
@@ -951,13 +987,18 @@ def hybrid_input_output_jax(
     # caches don't share an entry across precision changes.  Keyed on
     # the resolved complex dtype (matches GS / ER post-audit-P1-B).
     cache_key = (n_iter_int, str(np.dtype(cdtype)))
-    kernel = _HIO_KERNEL_CACHE.get(cache_key)
+    with _HIO_KERNEL_CACHE_LOCK:
+        kernel = _HIO_KERNEL_CACHE.get(cache_key)
+        if kernel is not None:
+            _HIO_KERNEL_CACHE.move_to_end(cache_key)
     if kernel is None:
+        # Build OUTSIDE the lock.  Two threads may double-build on a
+        # cold cache for the same key -- benign waste; the second
+        # insert just overwrites the first.
         kernel = _make_hio_kernel(n_iter_int)
-        _HIO_KERNEL_CACHE[cache_key] = kernel
-        while len(_HIO_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
-            _HIO_KERNEL_CACHE.popitem(last=False)
-    else:
-        _HIO_KERNEL_CACHE.move_to_end(cache_key)
+        with _HIO_KERNEL_CACHE_LOCK:
+            _HIO_KERNEL_CACHE[cache_key] = kernel
+            while len(_HIO_KERNEL_CACHE) > _PR_KERNEL_CACHE_MAXSIZE:
+                _HIO_KERNEL_CACHE.popitem(last=False)
     obj_final, err = kernel(obj0, meas, sup, beta_j)
     return np.asarray(obj_final), float(err)

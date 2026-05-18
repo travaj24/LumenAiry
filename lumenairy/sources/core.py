@@ -33,6 +33,106 @@ def _ensure_cupy_loaded():
     return cp is not None
 
 
+def _validate_grid_params(
+    N: Union[int, Tuple[int, int]],
+    dx: float,
+    wavelength: float,
+    *,
+    dy: Optional[float] = None,
+    fn_name: str = 'create_*',
+) -> None:
+    """Validate grid-size + sample-spacing + wavelength for source factories.
+
+    v4.14.2 (P1-NEW-10): Centralised at the top of ``sources/core.py``
+    so every ``create_*`` factory raises identical, named errors on
+    physically-impossible inputs.  Pre-v4.14.2 only the DOE family
+    (``create_diffractive_lens``, ``create_kinoform``,
+    ``create_fresnel_zone_plate``) validated these; the 10 factories
+    in ``sources/core.py`` silently accepted ``N=0`` (empty grid,
+    cryptic ``ValueError`` from ``meshgrid``), ``dx<=0`` (negative or
+    zero pixel pitch produces a flipped or singular coordinate
+    system), and ``wavelength<=0`` (divide-by-zero in ``k0 = 2*pi /
+    wavelength``).
+
+    Parameters
+    ----------
+    N : int or (Ny, Nx)
+        Grid size.  Tuple form is for rectangular grids.
+    dx : float
+        Sample spacing in x [m].
+    wavelength : float
+        Vacuum wavelength [m].
+    dy : float, optional
+        Sample spacing in y [m].  ``None`` is valid (the factory
+        defaults to ``dy = dx``).
+    fn_name : str
+        Factory name, embedded into every error message so the
+        caller knows which entry point raised.
+    """
+    # ``N`` -- positive integer, or a 2-tuple of positive integers.
+    if isinstance(N, (tuple, list)):
+        if len(N) != 2:
+            raise ValueError(
+                f"{fn_name}: N tuple form must be (Ny, Nx); got "
+                f"length-{len(N)} sequence {N!r}.")
+        Ny, Nx = N
+        for label, n in (('Ny', Ny), ('Nx', Nx)):
+            if not isinstance(n, (int, np.integer)):
+                raise ValueError(
+                    f"{fn_name}: {label} must be a positive integer, "
+                    f"got {type(n).__name__} ({n!r}).")
+            if int(n) <= 0:
+                raise ValueError(
+                    f"{fn_name}: {label} must be a positive integer, "
+                    f"got {int(n)}.")
+    else:
+        if not isinstance(N, (int, np.integer)):
+            raise ValueError(
+                f"{fn_name}: N must be a positive integer "
+                f"(or (Ny, Nx) tuple), got {type(N).__name__} ({N!r}).")
+        if int(N) <= 0:
+            raise ValueError(
+                f"{fn_name}: N must be a positive integer, got {int(N)}.")
+
+    # ``dx`` -- positive finite float.  ``np.float64`` ``bool`` etc.
+    # all support comparison; only reject NaN / inf / non-numeric.
+    try:
+        dx_f = float(dx)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{fn_name}: dx must be a positive finite number [m], "
+            f"got {dx!r} ({type(dx).__name__}).") from exc
+    if not np.isfinite(dx_f) or dx_f <= 0.0:
+        raise ValueError(
+            f"{fn_name}: dx must be a positive finite number [m], "
+            f"got {dx_f}.")
+
+    # ``dy`` -- None (square grid) or positive finite float.
+    if dy is not None:
+        try:
+            dy_f = float(dy)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                f"{fn_name}: dy must be None or a positive finite "
+                f"number [m], got {dy!r} ({type(dy).__name__}).") from exc
+        if not np.isfinite(dy_f) or dy_f <= 0.0:
+            raise ValueError(
+                f"{fn_name}: dy must be None or a positive finite "
+                f"number [m], got {dy_f}.")
+
+    # ``wavelength`` -- positive finite float.
+    try:
+        wl_f = float(wavelength)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"{fn_name}: wavelength must be a positive finite number "
+            f"[m], got {wavelength!r} ({type(wavelength).__name__}).") from exc
+    if not np.isfinite(wl_f) or wl_f <= 0.0:
+        raise ValueError(
+            f"{fn_name}: wavelength must be a positive finite number "
+            f"[m], got {wl_f}.")
+
+
 def _resolve_complex_dtype(dtype: Optional[Any]) -> np.dtype:
     """Resolve a user-provided dtype kwarg to a concrete complex dtype.
 
@@ -130,6 +230,8 @@ def create_gaussian_beam(
     slot (matching every other source factory) and makes
     ``sigma`` keyword-only.
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_gaussian_beam')
     if CUPY_AVAILABLE and use_gpu:
         # 4.10: pre-4.10 reached for module-level ``cp`` without first
         # calling _ensure_cupy_loaded(), so ``cp`` was still None and
@@ -279,6 +381,8 @@ def create_hermite_gauss(
     can grow.  Use the analytical asymptotic-module normalisation
     when chaining HG modes through the modal asymptotic propagator.
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_hermite_gauss')
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -424,6 +528,8 @@ def create_laguerre_gauss(
     asymptotic propagator over passing this function's output
     through ``propagate_modal_asymptotic``.
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_laguerre_gauss')
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -525,6 +631,8 @@ def create_tilted_plane_wave(
     x, y : ndarray
         1-D coordinate arrays [m].
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_tilted_plane_wave')
     if angle_x_deg is not None:
         angle_x = float(np.radians(angle_x_deg))
     if angle_y_deg is not None:
@@ -589,6 +697,8 @@ def create_point_source(
     E : ndarray, complex, shape (N, N)
     x, y : ndarray
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_point_source')
     if dy is None:
         dy = dx
     x = (np.arange(N) - N / 2) * dx
@@ -714,6 +824,8 @@ def create_top_hat_beam(
     Prior to 4.7 the ordering was
     ``(N, dx, diameter, wavelength=None, ...)``.
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_top_hat_beam')
     # 4.10: honour caller-supplied dy (anamorphic grid).  Pre-4.10
     # hard-coded dy = dx and used dx**2 for the area element, silently
     # ignoring caller-supplied dy on top-hat / annular / Bessel sources
@@ -763,6 +875,8 @@ def create_annular_beam(
     ``(N, dx, wavelength, *, outer_diameter, inner_diameter, ...)``
     since 4.7.
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_annular_beam')
     if dy is None:
         dy = dx
     x = (np.arange(N) - N / 2) * dx
@@ -826,6 +940,8 @@ def create_fiber_mode(
     -------
     E, x, y : ndarray
     """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_fiber_mode')
     if na is not None and na > 0.2:
         import warnings
         warnings.warn(
@@ -844,9 +960,11 @@ def create_fiber_mode(
 def create_led_source(
     N: int,
     dx: float,
-    diameter: float,
-    divergence_angle: float,
-    wavelength: float,
+    wavelength: Optional[float] = None,
+    *args: Any,
+    diameter: Optional[float] = None,
+    divergence_angle: Optional[float] = None,
+    dy: Optional[float] = None,
     x0: float = 0,
     y0: float = 0,
     dtype: Optional[Any] = None,
@@ -863,11 +981,25 @@ def create_led_source(
     Parameters
     ----------
     N, dx : int, float
-    diameter : float [m]
-        Emitting area diameter.
-    divergence_angle : float [rad]
-        Half-angle of the emission cone.
+        Grid size + sample spacing.
     wavelength : float [m]
+        Vacuum wavelength.  Now in the canonical 3rd positional slot
+        (since v4.14.2) -- matches every other ``create_*`` factory in
+        ``sources/core.py``.
+    diameter : float [m]
+        Emitting area diameter.  Keyword-only since v4.14.2.
+    divergence_angle : float [rad]
+        Half-angle of the emission cone.  Keyword-only since v4.14.2.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx`` (square grid).
+        v4.14.2 added the kwarg so anamorphic grids can thread a
+        distinct y-pitch through this factory like the rest of the
+        v4.13.0+ Source family.
+    x0, y0 : float, default 0
+        Center of the emitting disk [m].
+    dtype : optional
+        Complex dtype (``np.complex64`` / ``np.complex128``); defaults
+        to the library-global ``DEFAULT_COMPLEX_DTYPE``.
 
     Returns
     -------
@@ -881,9 +1013,132 @@ def create_led_source(
         count; downstream callers allocating output arrays should size
         them at 37, not 21.
     x, y : ndarray
+        1-D coordinate axes [m].
+
+    Notes
+    -----
+    Signature is ``(N, dx, wavelength, *, diameter, divergence_angle,
+    dy=None, x0=0, y0=0, dtype=None)`` since v4.14.2.  Pre-v4.14.2 the
+    ordering was ``(N, dx, diameter, divergence_angle, wavelength,
+    x0=0, y0=0, dtype=None)`` -- ``diameter`` and ``divergence_angle``
+    were positional and the function neither accepted ``dy=`` nor a
+    ``*`` keyword-only separator.  This broke the post-v4.7 convention
+    of keyword-only physical parameters with ``wavelength`` in the
+    canonical 3rd positional slot.
+
+    The legacy positional form is still accepted for one release with a
+    ``DeprecationWarning``.  Migrate to the keyword-only form before
+    the deprecation grace period ends::
+
+        # Old (deprecated, still works with a warning)
+        E, angles, x, y = create_led_source(64, 16e-6, 100e-6, 0.3, 1.31e-6)
+
+        # New (canonical)
+        E, angles, x, y = create_led_source(
+            64, 16e-6, 1.31e-6,
+            diameter=100e-6, divergence_angle=0.3)
     """
+    # v4.14.2 (P1-NEW-9): backward-compat shim for the pre-v4.14.2
+    # positional ``(N, dx, diameter, divergence_angle, wavelength,
+    # x0, y0, dtype)`` form.  We detect it via ``*args``: under the
+    # new signature ``*args`` must be empty (everything after
+    # ``wavelength`` is keyword-only).  If any positional surplus
+    # arrives, treat the call as legacy:
+    #   - ``wavelength`` (the 3rd positional under the new sig) is
+    #     actually the legacy ``diameter``;
+    #   - ``args[0]`` is the legacy ``divergence_angle``;
+    #   - ``args[1]`` is the legacy ``wavelength``;
+    #   - ``args[2..3]``, if present, are legacy ``x0``, ``y0``;
+    #   - ``args[4]``, if present, is legacy ``dtype``.
+    if args:
+        import warnings
+        warnings.warn(
+            "create_led_source: positional call form "
+            "``(N, dx, diameter, divergence_angle, wavelength, ...)`` "
+            "is deprecated since v4.14.2.  Use the keyword-only form "
+            "``create_led_source(N, dx, wavelength, *, diameter=..., "
+            "divergence_angle=..., ...)`` instead.  The legacy "
+            "positional form will be removed in a future release.",
+            DeprecationWarning, stacklevel=2,
+        )
+        # Re-map legacy positionals.  ``wavelength`` is the 3rd
+        # positional under the new sig but the legacy ``diameter``
+        # under the old sig.
+        _legacy_diameter = wavelength
+        _legacy_divergence = args[0]
+        _legacy_wavelength = args[1] if len(args) > 1 else None
+        if _legacy_wavelength is None:
+            raise TypeError(
+                "create_led_source (legacy positional form): "
+                "expected 5+ positional arguments "
+                "``(N, dx, diameter, divergence_angle, wavelength, ...)``; "
+                "got only 4.  Migrate to the new keyword-only form: "
+                "``create_led_source(N, dx, wavelength, *, "
+                "diameter=..., divergence_angle=...)``.")
+        # Promote legacy positionals into the canonical kwargs, but do
+        # not overwrite kwargs the caller explicitly supplied (that's
+        # an unambiguous error).
+        if diameter is not None:
+            raise TypeError(
+                "create_led_source: 'diameter' supplied both "
+                "positionally (legacy form) and as a keyword.")
+        if divergence_angle is not None:
+            raise TypeError(
+                "create_led_source: 'divergence_angle' supplied both "
+                "positionally (legacy form) and as a keyword.")
+        diameter = _legacy_diameter
+        divergence_angle = _legacy_divergence
+        wavelength = _legacy_wavelength
+        # x0, y0, dtype are still positional-or-keyword under both
+        # forms.  Pre-v4.14.2 they sat at positions 5, 6, 7 (after
+        # wavelength); only consume them from ``args`` if the caller
+        # actually passed positional surplus past wavelength.
+        if len(args) > 2:
+            x0 = args[2]
+        if len(args) > 3:
+            y0 = args[3]
+        if len(args) > 4:
+            dtype = args[4]
+        if len(args) > 5:
+            raise TypeError(
+                "create_led_source (legacy positional form): too many "
+                f"positional arguments; got {3 + len(args)} positional, "
+                f"max 8 (legacy) or 3 (canonical, with kwargs).")
+
+    # Validate the required keyword-only physical parameters
+    # post-shim so the error path is the same for both call forms.
+    if diameter is None:
+        raise TypeError(
+            "create_led_source: missing required keyword argument "
+            "'diameter' (the LED emitting-area diameter in metres).")
+    if divergence_angle is None:
+        raise TypeError(
+            "create_led_source: missing required keyword argument "
+            "'divergence_angle' (the half-angle of the emission cone, "
+            "radians).")
+    if wavelength is None:
+        raise TypeError(
+            "create_led_source: missing required positional argument "
+            "'wavelength' (vacuum wavelength in metres).")
+
+    # v4.14.2 (P1-NEW-10): centralised input validation -- catches
+    # N<=0, dx<=0, dy<=0, wavelength<=0, non-finite, etc., with a
+    # clear error message that names the factory.
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_led_source')
+    # Negative or zero diameter / divergence_angle would silently
+    # produce a degenerate (empty / inside-out) source -- raise loud.
+    if not (np.isfinite(diameter) and diameter > 0):
+        raise ValueError(
+            "create_led_source: diameter must be a positive finite "
+            f"number [m], got {diameter}.")
+    if not (np.isfinite(divergence_angle) and divergence_angle > 0):
+        raise ValueError(
+            "create_led_source: divergence_angle must be a positive "
+            f"finite number [rad], got {divergence_angle}.")
+
     E, x, y = create_top_hat_beam(N, dx, wavelength, diameter=diameter,
-                                   x0=x0, y0=y0, dtype=dtype)
+                                   x0=x0, y0=y0, dy=dy, dtype=dtype)
     # Generate suggested source angles
     n_ring = 3
     angles = [(0.0, 0.0)]
@@ -924,6 +1179,8 @@ def create_bessel_beam(
     """
     from scipy.special import j0
 
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_bessel_beam')
     if dy is None:
         dy = dx
     x = (np.arange(N) - N / 2) * dx

@@ -511,9 +511,9 @@ def create_fresnel_zone_plate(
 # ============================================================================
 
 def makedammann2d(
-    periodx: float = 61.0,
-    periody: float = 61.0,
-    waveln: float = 1.31,
+    periodx: float = 61e-6,
+    periody: float = 61e-6,
+    waveln: float = 1.31e-6,
     wavsamp: float = 0.5,
     phaselevels: int = 8,
     phasesteps: int = 4,
@@ -534,14 +534,29 @@ def makedammann2d(
     of diffraction orders.  Phase quantisation is progressively tightened over
     the iterations (simulated-annealing style).
 
+    .. versionchanged:: 4.14.2
+        Units are now SI metres throughout (was micrometres).  ``periodx``,
+        ``periody`` and ``waveln`` are expected in **metres**; the returned
+        ``cell_pixel_size`` is in metres and matches them directly (no
+        internal ``* 1e-6`` rescale).  Pre-4.14.2 callers passing
+        ``periodx=61.0`` / ``waveln=1.31`` (micrometres) hit a thousand-
+        fold drift in ``samplingx`` that was silently masked by an
+        output ``* 1e-6`` rescale.  v4.14.2 emits a ``DeprecationWarning``
+        when ``periodx``, ``periody`` or ``waveln`` look like micrometres
+        (heuristic: ``periodx > 1e-3 m`` or ``waveln > 1e-3 m``, i.e.
+        larger than 1 mm) and treats the inputs as legacy micrometre
+        values; remove the warning by converting your call sites to SI
+        (multiply old values by ``1e-6``).
+
     Parameters
     ----------
     periodx : float
-        Grating period in x (um).
+        Grating period in x [m].  Default ``61e-6`` (61 um).
     periody : float
-        Grating period in y (um).
+        Grating period in y [m].  Default ``61e-6`` (61 um).
     waveln : float
-        Design wavelength (um).
+        Design wavelength [m].  Default ``1.31e-6`` (1.31 um, telecom
+        O-band).
     wavsamp : float
         Spatial sampling expressed in wavelengths (e.g. 0.5 -> half-wavelength).
     phaselevels : int
@@ -578,17 +593,17 @@ def makedammann2d(
     farfield : np.ndarray (complex)
         Far-field (Fourier plane) distribution at the last iteration.
     cell_pixel_size : tuple of (float, float)
-        Physical pixel spacing (dx, dy) of the near-field array [m].
-        For square gratings (periodx == periody), both values are equal.
+        Physical pixel spacing ``(dx, dy)`` of the near-field array [m].
+        For square gratings (``periodx == periody``), both values are equal.
 
     Examples
     --------
-    >>> # Default 12x12 spot array at 1.31 um
+    >>> # Default 12x12 spot array at 1.31 um -- SI metres throughout
     >>> nf, ff, cell_dx = makedammann2d(plot=False)
     >>>
     >>> # Custom 8x8 array, visible wavelength, fewer phase levels
     >>> nf, ff, cell_dx = makedammann2d(
-    ...     periodx=80, periody=80, waveln=0.633,
+    ...     periodx=80e-6, periody=80e-6, waveln=633e-9,
     ...     diforders=np.ones((8, 8)),
     ...     phaselevels=4, itr=1000, plot=False, seed=42,
     ... )
@@ -599,6 +614,51 @@ def makedammann2d(
     implementation (makedammann2d.m) by Daniel Marks.
     """
     from numpy.fft import fft2, ifft2, fftshift, ifftshift
+
+    # v4.14.2 (P1-NEW-6): the function historically took ``periodx``,
+    # ``periody`` and ``waveln`` in micrometres while the rest of the
+    # library is SI metres.  The mismatch silently produced a thousand-
+    # fold drift in ``samplingx`` that the output's ``* 1e-6`` rescale
+    # masked.  v4.14.2 standardises on SI metres throughout but accepts
+    # legacy micrometre inputs for one release with a
+    # ``DeprecationWarning``.  Heuristic, applied per-parameter: a
+    # parameter larger than 1 mm (1e-3 m) is implausibly large for a
+    # Dammann grating period or design wavelength -- the only
+    # realistic way to land there is a caller still supplying the
+    # old micrometre values (e.g. ``periodx=61.0``, ``waveln=1.31``).
+    # Each parameter is checked independently so hybrid calls
+    # (mostly-SI but one stray legacy value, or vice versa) are
+    # migrated cleanly without over-correcting the SI-form
+    # parameters.
+    _periodx_legacy = periodx > 1e-3
+    _periody_legacy = periody > 1e-3
+    _waveln_legacy = waveln > 1e-3
+    _legacy_um = _periodx_legacy or _periody_legacy or _waveln_legacy
+    if _legacy_um:
+        import warnings
+        warnings.warn(
+            "makedammann2d: positional input(s) appear to be in "
+            "micrometres "
+            f"(periodx={periodx}{' [legacy um]' if _periodx_legacy else ''}, "
+            f"periody={periody}{' [legacy um]' if _periody_legacy else ''}, "
+            f"waveln={waveln}{' [legacy um]' if _waveln_legacy else ''}); "
+            "since v4.14.2 the function uses SI metres throughout "
+            "(library-wide convention).  Multiply legacy micrometre "
+            "values by 1e-6 to migrate: ``periodx=61e-6, waveln=1.31e-6``. "
+            "The legacy micrometre interpretation will be removed in a "
+            "future release.",
+            DeprecationWarning, stacklevel=2,
+        )
+        # Per-parameter rescale: only convert the ones that actually
+        # look like legacy um.  This keeps a hybrid call (e.g.
+        # ``periodx=20.0`` legacy + ``waveln=1.31e-6`` already SI)
+        # from over-correcting and ending up at picometre scale.
+        if _periodx_legacy:
+            periodx = periodx * 1e-6
+        if _periody_legacy:
+            periody = periody * 1e-6
+        if _waveln_legacy:
+            waveln = waveln * 1e-6
 
     if diforders is None:
         diforders = np.ones((12, 12))
@@ -702,9 +762,14 @@ def makedammann2d(
             for ax in axes:
                 ax.clear()
 
+            # v4.14.2: ``rxscal``/``ryscal`` are now in SI metres
+            # (post-SI conversion); scale to micrometres for display
+            # so the plot axes match the historical user expectation.
+            _um = 1e6
             axes[0].imshow(
                 np.angle(nearfield).T,
-                extent=[rxscal[0], rxscal[-1], ryscal[-1], ryscal[0]],
+                extent=[rxscal[0] * _um, rxscal[-1] * _um,
+                        ryscal[-1] * _um, ryscal[0] * _um],
                 aspect='auto',
             )
             axes[0].set_title(f'Phase Levels {phaselevelscur}')
@@ -713,7 +778,8 @@ def makedammann2d(
 
             axes[1].imshow(
                 np.abs(nearfield).T,
-                extent=[rxscal[0], rxscal[-1], ryscal[-1], ryscal[0]],
+                extent=[rxscal[0] * _um, rxscal[-1] * _um,
+                        ryscal[-1] * _um, ryscal[0] * _um],
                 aspect='auto',
             )
             axes[1].set_title('Absolute value')
@@ -750,19 +816,28 @@ def makedammann2d(
     )
     nearfield = np.exp(1j * final_phase)
 
-    # Physical pixel size
-    cell_pixel_size_x = samplingx * 1e-6  # convert um to meters
-    cell_pixel_size_y = samplingy * 1e-6
+    # Physical pixel size [m] -- v4.14.2 (P1-NEW-6): the internal math
+    # now operates in SI metres end-to-end (``periodx``/``periody`` are
+    # the SI inputs after the legacy-um normalisation above), so
+    # ``samplingx`` already carries the metre unit and the legacy
+    # ``* 1e-6`` um->m rescale is gone.
+    cell_pixel_size_x = samplingx
+    cell_pixel_size_y = samplingy
     cell_pixel_size = cell_pixel_size_x  # for square gratings; both returned below
 
     # Save to file if requested
     if save_path is not None:
+        # ``cell_pixel_size`` is already in SI metres; ``save_phase_file``
+        # handles the um conversion for human-readable header lines.
+        # Metadata records the *period* and *wavelength* in micrometres
+        # for backward-compatibility with older readers that expected
+        # the ``_um`` suffix.
         save_phase_file(save_path, final_phase, cell_pixel_size=cell_pixel_size,
                         metadata={
                             'phaselevels': phaselevels,
-                            'periodx_um': periodx,
-                            'periody_um': periody,
-                            'wavelength_um': waveln,
+                            'periodx_um': periodx * 1e6,
+                            'periody_um': periody * 1e6,
+                            'wavelength_um': waveln * 1e6,
                             'diforders': f'{diforders.shape[0]}x{diforders.shape[1]}',
                         })
 

@@ -10,6 +10,114 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.14.2
+
+**Closes the v4.14.1 audit (`docs/audits/AUDIT_V4_14_1_2026_05_17.md`).**
+The audit found 1 NEW P0 (a 3-release carryover: `glass.py`
+S-LAH64/S-LAH79 dispatch broken since v4.11.2) + 10 new P1s,
+including 4 "fix N, miss N+1" recurrences on v4.14.1 itself
+(aperture=0 sentinel missed 2 sites; 7 older caches still unlocked;
+4 residual `0+0j` literal sites; `clear_asm_caches` chain narrower
+than docstring) and 6 P1s in under-examined modules (freeform
+domain guard, makedammann unit drift, polarization API gaps,
+source factory validation).  **v4.14.2 closes the P0 + all 10 P1s
++ a follow-up cache-lock gap discovered by Agent C's new meta-pin.**
+1190 unit tests pass; 34/34 validation files pass.
+
+### Documentation reorganisation
+
+* `docs/audits/` — all audit reports and `CORRECTION_PLAN.md` moved
+  from repo root.
+* `docs/release_notes/` — all `.release_notes_v*.md` per-release
+  drafts moved from repo root.
+
+Repo root now contains only the primary project docs:
+`README.md`, `CHANGELOG.md`, `ROADMAP.md`, `CONTRIBUTING.md`,
+`GUI_README.md`, `GUI_CHANGELOG.md`, `REAL_LENS_CHANGES.md`.
+
+### P0 closure — `glass.py` S-LAH64 / S-LAH79 dispatch
+
+3-release carryover regression.  v4.11.2 removed both glasses from
+`SELLMEIER_COEFFICIENTS` after discovering the in-code coefficients
+were off by ±5.8% vs the Ohara catalog — but **never updated
+`GLASS_REGISTRY`**, leaving both flagged `'__sellmeier__'`.  The
+dispatcher raised `ValueError` on every call.  UI's "known-good
+preset" path broken for 3 releases.
+
+v4.14.2 routes both to `('specs', 'OHARA-optical', '<name>')` tuple
+form (catalogue book name verified by introspection).  Numerical
+agreement vs Ohara catalog: 5e-5.  Module-load consistency check
+added that fails fast at import time on any future
+`GLASS_REGISTRY` ↔ `SELLMEIER_COEFFICIENTS` drift.
+
+### P1 closures — sibling-gap recurrences on v4.14.1
+
+* **Aperture=0 sentinel finish** — v4.14.1 missed `ToleranceAware
+  Merit._evaluate_perturbed` and `MatchIdealSystem._make_source`.
+  Both now use the canonical `is _ZERO_APERTURE_MASK` branch.
+  Investigation finding: `apply_perturbations` doesn't mutate
+  prescription-level `aperture_diameter` (only per-surface
+  `decenter`/`tilt`/`form_error`), so the audit's worry about
+  perturbed-to-zero apertures is not triggered — pinned the
+  invariant as a regression guard.
+* **7 older caches now locked** (`_ZERNIKE_BASIS_CACHE`,
+  `_THROUGH_FOCUS_SCAN_JAX_CACHE`, `_PROPAGATE_SYSTEM_JAX_CACHE`,
+  `_GS_KERNEL_CACHE`, `_ER_KERNEL_CACHE`, `_HIO_KERNEL_CACHE`,
+  `_TRACE_JAX_CACHE`).  Lock-scope discipline matches v4.14.1
+  (hold for `OrderedDict` ops only, release before expensive
+  kernel build).  Concurrent 4-thread tests confirm no
+  exceptions.
+* **`clear_asm_caches()` chain expanded** to 5 sibling caches via
+  lazy-import + call.  Docstring rewritten to honestly enumerate
+  all caches it clears.
+* **2 P1-severity residual `0+0j` literal sites** swept
+  (`optimize/core.py:966`, `phase_retrieval.py:402`).
+
+### P1 closures — under-examined modules
+
+* **`surface_sag_xy_polynomial` domain guard** added (matches the
+  Chebyshev-branch precedent).
+* **`makedammann2d` SI metres** with per-parameter deprecation
+  heuristic — handles pure-legacy and hybrid µm/SI calls without
+  breaking existing tests.
+* **`apply_rotator` accepts `angle_deg=`** (matches v4.7
+  polarization-family convention).
+* **`JonesField.__init__` input validation** (2-D shape +
+  positive-finite `dx, dy`).
+* **`create_led_source` signature normalised** to v4.7-canonical
+  `(N, dx, wavelength, *, diameter, divergence_angle, dy=None, ...)`
+  with legacy-positional deprecation shim.
+* **`_validate_grid_params` helper** + applied to all 10 `create_*`
+  factories in `sources/core.py`.
+
+### Follow-up cache-lock gap closed
+
+The new cache↔lock meta-pin discovered `_JAX_IFT_SOLVER_CACHE` in
+`propagators/asymptotic.py` — a single-cell lazy-init cache
+without a lock.  Race window on first concurrent call would
+double-decorate the JAX `custom_vjp` solver.  v4.14.2 closes the
+gap in the same release via double-check locking pattern:
+fast-path no-lock for the common populated case; slow-path
+acquires lock, re-checks, delegates the actual build to
+`_build_jax_ift_solver_impl` (worker function).  Meta-pin's
+known-gap set is now empty.
+
+### Two new structural meta-pins
+
+Extending v4.14.1's cache-clear dispatcher-pin pattern to two
+more sibling-gap classes:
+
+* **`test_v4_14_2_dispatcher_pin_cache_locks.py`** (38 tests) —
+  every module-level `_<NAME>_CACHE` must have a corresponding
+  lock.  Accepts both `_FOO_LOCK` and `_FOO_CACHE_LOCK` naming
+  conventions.  Reverse check on `_LOCK` names + documented
+  `_PATCH_LOCK` exemption.
+* **`test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py`** (123 tests)
+  — walks all 117 `lumenairy/*.py` files for
+  `np.where(.*, 0+0j)` literals.  Three exemption layers
+  (comment lines, trailing `.astype()` recovery, explicit P3
+  allowlist).
+
 ## What's new in 4.14.1
 
 **Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**

@@ -16,10 +16,13 @@ from .lenses import surface_sag_general, surface_sag_biconic
 
 
 def surface_sag_xy_polynomial(X, Y, R=np.inf, conic=0.0,
-                               xy_coeffs=None):
+                               xy_coeffs=None,
+                               norm_x=1.0, norm_y=1.0):
     """XY polynomial freeform surface sag.
 
-    ``z(x, y) = base_conic_sag(r) + sum_{i,j} c_{ij} x^i y^j``
+    ``z(x, y) = base_conic_sag(r) + sum_{i,j} c_{ij} x^i y^j``  for
+    ``|x| <= norm_x`` and ``|y| <= norm_y``; outside this box the
+    freeform departure is zeroed.
 
     Parameters
     ----------
@@ -34,6 +37,17 @@ def surface_sag_xy_polynomial(X, Y, R=np.inf, conic=0.0,
         values are coefficients in meters (same units as sag).
         Example: ``{(2, 0): 1e-6, (0, 2): -1e-6}`` adds an
         astigmatic departure.
+    norm_x, norm_y : float, default 1.0
+        Half-extents [m] of the rectangular domain over which the
+        polynomial is valid.  Outside ``|x| <= norm_x``,
+        ``|y| <= norm_y`` the freeform departure is zeroed (matching
+        the Chebyshev branch's out-of-domain guard), so the raytracer
+        does not see a discontinuous step at the aperture rim from
+        high-order terms.  Defaults to a 1-m unit box, which keeps
+        the polynomial evaluation in raw metres (identical to the
+        pre-v4.14.2 behaviour) while still zeroing pathological
+        out-of-domain pixels.  Set to the physical clear-aperture
+        half-extent for a tighter guard.
 
     Returns
     -------
@@ -42,8 +56,21 @@ def surface_sag_xy_polynomial(X, Y, R=np.inf, conic=0.0,
     h_sq = X ** 2 + Y ** 2
     sag = surface_sag_general(h_sq, R, conic)
     if xy_coeffs:
+        # v4.14.2 (P1-NEW-5): zero the polynomial departure outside
+        # the (norm_x, norm_y) domain, matching the Chebyshev branch's
+        # ``np.where(outside, 0.0, departure)`` pattern below.  Without
+        # this guard a high-order coefficient ``(2, 0): 1e3`` on a
+        # 50 mm half-grid produces a 2.5 m corner sag applied to
+        # pixels outside the physical aperture, and downstream
+        # raytracing sees a discontinuity at the rim.  The polynomial
+        # is still evaluated in raw (X, Y) so the coefficient
+        # semantics are unchanged from pre-v4.14.2; ``norm_x``/
+        # ``norm_y`` only define the rectangular clip region.
+        outside = (np.abs(X) > norm_x) | (np.abs(Y) > norm_y)
+        departure = np.zeros_like(sag)
         for (i, j), c in xy_coeffs.items():
-            sag = sag + c * (X ** i) * (Y ** j)
+            departure = departure + c * (X ** i) * (Y ** j)
+        sag = sag + np.where(outside, 0.0, departure)
     return sag
 
 
@@ -161,7 +188,9 @@ def surface_sag_freeform(X, Y, surface_dict):
     if ft == 'xy_polynomial':
         return surface_sag_xy_polynomial(
             X, Y, R=R, conic=kc,
-            xy_coeffs=surface_dict.get('xy_coeffs'))
+            xy_coeffs=surface_dict.get('xy_coeffs'),
+            norm_x=surface_dict.get('norm_x', 1.0),
+            norm_y=surface_dict.get('norm_y', 1.0))
     elif ft == 'zernike':
         return surface_sag_zernike_freeform(
             X, Y, R=R, conic=kc,

@@ -38,6 +38,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
 from typing import Any, Dict, NamedTuple, Optional
 
@@ -878,6 +879,16 @@ def _trace_body_traced(state, jp, wavelength, surface_diffraction):
 # when ``len > _TRACE_JAX_CACHE_MAXSIZE`` the oldest entry is evicted.
 _TRACE_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _TRACE_JAX_CACHE_MAXSIZE = 32  # tune; long-running optimizers may exceed
+# v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
+# ``_TRACE_JAX_CACHE``.  Without this two threads racing through
+# :func:`trace_jax` could see a torn OrderedDict (``get`` ->
+# ``__setitem__`` -> ``popitem`` is a read-modify-write sequence).
+# Follows the ``_ASM_CACHE_LOCK`` precedent in
+# :mod:`propagators.propagation`.  Lock-scope discipline: the
+# jit-compile step (``_make_jit_kernel``) is expensive (XLA compile)
+# and runs OUTSIDE the lock so a concurrent cache hit on a different
+# key isn't blocked.
+_TRACE_JAX_CACHE_LOCK = threading.Lock()
 
 
 def clear_trace_jax_cache() -> None:
@@ -888,7 +899,8 @@ def clear_trace_jax_cache() -> None:
     cache mechanics and in long-running notebooks / optimizers where
     the user wants to release the underlying XLA executables.
     """
-    _TRACE_JAX_CACHE.clear()
+    with _TRACE_JAX_CACHE_LOCK:
+        _TRACE_JAX_CACHE.clear()
 
 
 def _make_jit_kernel(jp_aux, wavelength_float, surface_diffraction):
@@ -990,16 +1002,24 @@ def trace_jax(
     # but DOE-kick wavelength would still be different).
     diff_aux = jp.aux[-1]
     cache_key = (jp.aux, float(wavelength), diff_aux)
-    kernel = _TRACE_JAX_CACHE.get(cache_key)
+    with _TRACE_JAX_CACHE_LOCK:
+        kernel = _TRACE_JAX_CACHE.get(cache_key)
+        if kernel is not None:
+            # LRU touch: move this hit to the end so it survives eviction.
+            _TRACE_JAX_CACHE.move_to_end(cache_key)
     if kernel is None:
+        # Build OUTSIDE the lock -- jit tracing is the expensive step
+        # (XLA compile) and holding the lock here would serialise
+        # every concurrent trace_jax caller even when their cache
+        # keys differ.  Two threads may double-build on a cold cache
+        # for the same key -- benign waste; the second insert just
+        # overwrites the first.
         kernel = _make_jit_kernel(
             jp.aux, float(wavelength), surface_diffraction)
-        _TRACE_JAX_CACHE[cache_key] = kernel
-        while len(_TRACE_JAX_CACHE) > _TRACE_JAX_CACHE_MAXSIZE:
-            _TRACE_JAX_CACHE.popitem(last=False)
-    else:
-        # LRU touch: move this hit to the end so it survives eviction.
-        _TRACE_JAX_CACHE.move_to_end(cache_key)
+        with _TRACE_JAX_CACHE_LOCK:
+            _TRACE_JAX_CACHE[cache_key] = kernel
+            while len(_TRACE_JAX_CACHE) > _TRACE_JAX_CACHE_MAXSIZE:
+                _TRACE_JAX_CACHE.popitem(last=False)
     return kernel(initial_state, jp)
 
 

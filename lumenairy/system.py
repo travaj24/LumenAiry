@@ -10,6 +10,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import threading
 import warnings
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -519,6 +520,16 @@ def propagate_through_system(E_in: np.ndarray,
 # is evicted.
 _PROPAGATE_SYSTEM_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE = 32
+# v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
+# ``_PROPAGATE_SYSTEM_JAX_CACHE``.  Without this two threads racing
+# through :func:`propagate_through_system_jax` could see a torn
+# OrderedDict (``get`` -> ``__setitem__`` -> ``popitem`` is a
+# read-modify-write sequence).  Follows the ``_ASM_CACHE_LOCK``
+# precedent in :mod:`propagators.propagation`.  Lock-scope discipline:
+# the jit-compile step (``_make_system_jax_kernel``) is expensive
+# (10-100ms+ XLA trace) and runs OUTSIDE the lock so a concurrent
+# cache hit on a different key isn't blocked.
+_PROPAGATE_SYSTEM_JAX_CACHE_LOCK = threading.Lock()
 
 
 def clear_propagate_system_jax_cache() -> None:
@@ -529,7 +540,8 @@ def clear_propagate_system_jax_cache() -> None:
     in unit tests that pin cache mechanics or in long-running pipelines
     that want to release compiled XLA executables.
     """
-    _PROPAGATE_SYSTEM_JAX_CACHE.clear()
+    with _PROPAGATE_SYSTEM_JAX_CACHE_LOCK:
+        _PROPAGATE_SYSTEM_JAX_CACHE.clear()
 
 
 # ----------------------------------------------------------------------
@@ -892,17 +904,25 @@ def propagate_through_system_jax(E_in: np.ndarray,
         # every subsequent call regardless of the active default.
         cache_key = (sigs_tuple, float(wavelength), float(dx), float(dy),
                      str(np.dtype(cdtype)))
-        kernel = _PROPAGATE_SYSTEM_JAX_CACHE.get(cache_key)
+        with _PROPAGATE_SYSTEM_JAX_CACHE_LOCK:
+            kernel = _PROPAGATE_SYSTEM_JAX_CACHE.get(cache_key)
+            if kernel is not None:
+                # LRU touch: keep recently-used kernels resident.
+                _PROPAGATE_SYSTEM_JAX_CACHE.move_to_end(cache_key)
         if kernel is None:
+            # Build OUTSIDE the lock -- jit tracing is the expensive
+            # step (XLA compile) and holding the lock here would
+            # serialise every concurrent caller even on cache hits at
+            # different keys.  Two threads may double-build for the
+            # same cold key -- benign waste; the second insert just
+            # overwrites the first.
             kernel = _make_system_jax_kernel(
                 sigs_tuple, float(wavelength), float(dx), float(dy))
-            _PROPAGATE_SYSTEM_JAX_CACHE[cache_key] = kernel
-            while (len(_PROPAGATE_SYSTEM_JAX_CACHE)
-                   > _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE):
-                _PROPAGATE_SYSTEM_JAX_CACHE.popitem(last=False)
-        else:
-            # LRU touch: keep recently-used kernels resident.
-            _PROPAGATE_SYSTEM_JAX_CACHE.move_to_end(cache_key)
+            with _PROPAGATE_SYSTEM_JAX_CACHE_LOCK:
+                _PROPAGATE_SYSTEM_JAX_CACHE[cache_key] = kernel
+                while (len(_PROPAGATE_SYSTEM_JAX_CACHE)
+                       > _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE):
+                    _PROPAGATE_SYSTEM_JAX_CACHE.popitem(last=False)
         mask_arrays = tuple(
             jnp.asarray(elem['mask'])
             for elem, sig in zip(elements, elem_sigs)

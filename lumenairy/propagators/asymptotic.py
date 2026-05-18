@@ -3882,16 +3882,45 @@ def propagate_modal_asymptotic_lg00_jax(
 # calling the function requires JAX.
 
 # Module-level cache for the decorated solver; populated on first call.
+# v4.14.2: paired with ``_JAX_IFT_SOLVER_CACHE_LOCK`` per the cache-lock
+# meta-pin requirement.  Race window is only on first concurrent call
+# after import; subsequent calls are read-only.  The lock guards the
+# build-and-publish race so two threads don't both run the JAX
+# custom_vjp decoration.
 _JAX_IFT_SOLVER_CACHE = None
+_JAX_IFT_SOLVER_CACHE_LOCK = threading.Lock()
 
 
 def _build_jax_ift_solver():
     """Construct (and cache) the @jax.custom_vjp-decorated Newton-IFT
-    solver.  Lazy: imports JAX inside, runs at most once per process."""
+    solver.  Lazy: imports JAX inside, runs at most once per process.
+
+    v4.14.2: double-check locking pattern.  Fast path (no lock) for the
+    common case where the cache is already populated; slow path
+    (with lock) re-checks inside the lock and delegates the actual
+    build to :func:`_build_jax_ift_solver_impl`.  Guards the
+    build-and-publish race so two threads don't both run the JAX
+    custom_vjp decoration on first concurrent call.
+    """
     global _JAX_IFT_SOLVER_CACHE
+    # Fast path -- common case after first call.
     if _JAX_IFT_SOLVER_CACHE is not None:
         return _JAX_IFT_SOLVER_CACHE
+    # Slow path -- first call (or first concurrent call from a fresh
+    # process).  Acquire the lock; re-check inside; build under lock.
+    with _JAX_IFT_SOLVER_CACHE_LOCK:
+        if _JAX_IFT_SOLVER_CACHE is None:
+            _JAX_IFT_SOLVER_CACHE = _build_jax_ift_solver_impl()
+        return _JAX_IFT_SOLVER_CACHE
 
+
+def _build_jax_ift_solver_impl():
+    """Worker for :func:`_build_jax_ift_solver` -- runs the actual JAX
+    ``custom_vjp`` decoration.  Called under
+    ``_JAX_IFT_SOLVER_CACHE_LOCK`` exactly once per process even
+    under concurrent first calls (the wrapper handles the double-
+    check + assignment).
+    """
     if not JAX_AVAILABLE:
         raise ImportError(
             "JAX is not installed; install with `pip install jax`.")
@@ -3976,7 +4005,9 @@ def _build_jax_ift_solver():
         return grad_s2, grad_src, grad_ws, grad_wp, grad_vc
 
     _solve.defvjp(_fwd, _bwd)
-    _JAX_IFT_SOLVER_CACHE = _solve
+    # v4.14.2: the cache assignment moved to the wrapper
+    # (_build_jax_ift_solver) so it happens atomically under the
+    # lock.  Just return the decorated solver here.
     return _solve
 
 

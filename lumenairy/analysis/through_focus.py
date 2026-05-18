@@ -37,6 +37,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import copy
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
@@ -70,6 +71,16 @@ from .core import (
 # ============================================================================
 _THROUGH_FOCUS_SCAN_JAX_CACHE: 'OrderedDict[Any, Any]' = OrderedDict()
 _THROUGH_FOCUS_SCAN_JAX_CACHE_MAXSIZE = 32
+# v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
+# ``_THROUGH_FOCUS_SCAN_JAX_CACHE``.  Without this two threads racing
+# through :func:`through_focus_scan_jax` could see a torn OrderedDict
+# (the ``get`` -> ``__setitem__`` -> ``popitem`` sequence is a
+# read-modify-write).  Follows the ``_ASM_CACHE_LOCK`` precedent in
+# :mod:`propagators.propagation`.  Lock-scope discipline: the
+# jit-compile step (``_build_through_focus_scan_jax_kernel``) runs
+# OUTSIDE the lock so a concurrent cache hit on a different key isn't
+# blocked on a 100ms+ trace.
+_THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK = threading.Lock()
 
 
 def clear_through_focus_scan_jax_cache() -> None:
@@ -80,7 +91,8 @@ def clear_through_focus_scan_jax_cache() -> None:
     that pin cache mechanics or in long-running pipelines that want to
     release compiled XLA executables.
     """
-    _THROUGH_FOCUS_SCAN_JAX_CACHE.clear()
+    with _THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK:
+        _THROUGH_FOCUS_SCAN_JAX_CACHE.clear()
 
 
 __all__ = [
@@ -1045,18 +1057,26 @@ def through_focus_scan_jax(
         int(Ny), int(Nx), float(dx), float(wavelength), bool(bandlimit),
         np.dtype(E_jax.dtype).str,
     )
-    kernel = _THROUGH_FOCUS_SCAN_JAX_CACHE.get(cache_key)
+    with _THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK:
+        kernel = _THROUGH_FOCUS_SCAN_JAX_CACHE.get(cache_key)
+        if kernel is not None:
+            _THROUGH_FOCUS_SCAN_JAX_CACHE.move_to_end(cache_key)
     if kernel is None:
+        # Build OUTSIDE the lock -- jit tracing is the expensive step
+        # (10-100ms for 1k+ grids) and holding the lock here would
+        # serialise every concurrent through_focus_scan_jax caller
+        # even when their cache keys differ.  Two threads may
+        # double-build on a cold cache for the same key -- benign
+        # waste; the second insert just overwrites the first.
         kernel = _build_through_focus_scan_jax_kernel(
             int(Ny), int(Nx), float(dx), float(wavelength),
             bool(bandlimit), np.dtype(E_jax.dtype).str,
         )
-        _THROUGH_FOCUS_SCAN_JAX_CACHE[cache_key] = kernel
-        while (len(_THROUGH_FOCUS_SCAN_JAX_CACHE)
-               > _THROUGH_FOCUS_SCAN_JAX_CACHE_MAXSIZE):
-            _THROUGH_FOCUS_SCAN_JAX_CACHE.popitem(last=False)
-    else:
-        _THROUGH_FOCUS_SCAN_JAX_CACHE.move_to_end(cache_key)
+        with _THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK:
+            _THROUGH_FOCUS_SCAN_JAX_CACHE[cache_key] = kernel
+            while (len(_THROUGH_FOCUS_SCAN_JAX_CACHE)
+                   > _THROUGH_FOCUS_SCAN_JAX_CACHE_MAXSIZE):
+                _THROUGH_FOCUS_SCAN_JAX_CACHE.popitem(last=False)
 
     z_jax = jnp.asarray(z_arr)
     fields = kernel(E_fft_shifted, z_jax)   # (n_z, Ny, Nx)

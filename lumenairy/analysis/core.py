@@ -19,6 +19,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import threading
 from collections import OrderedDict
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -2088,6 +2089,15 @@ def zernike_polynomial(
 
 _ZERNIKE_BASIS_CACHE: "OrderedDict[Any, Tuple[np.ndarray, np.ndarray]]" = OrderedDict()
 _ZERNIKE_BASIS_CACHE_MAXSIZE = 32
+# v4.14.2 (P1-NEW-2 / Agent C): thread-safety lock for
+# ``_ZERNIKE_BASIS_CACHE``.  Without this two threads racing through
+# :func:`zernike_basis_matrix` could see a torn OrderedDict (``get`` ->
+# ``__setitem__`` -> ``popitem`` is a read-modify-write sequence).
+# Follows the ``_ASM_CACHE_LOCK`` precedent in
+# :mod:`propagators.propagation`; the build itself (``_zernike_basis_
+# matrix_build``) is pure-CPU numpy and re-entrant so it runs OUTSIDE
+# the lock -- only the OrderedDict ops need guarding.
+_ZERNIKE_BASIS_CACHE_LOCK = threading.Lock()
 
 
 def _zernike_basis_cache_key(
@@ -2132,7 +2142,8 @@ def clear_zernike_basis_cache() -> None:
     wants the next ``zernike_basis_matrix`` call to recompute from
     scratch.  Also handy in unit tests that pin cache behaviour.
     """
-    _ZERNIKE_BASIS_CACHE.clear()
+    with _ZERNIKE_BASIS_CACHE_LOCK:
+        _ZERNIKE_BASIS_CACHE.clear()
 
 
 def _zernike_basis_matrix_build(
@@ -2199,19 +2210,26 @@ def zernike_basis_matrix(
     mutating a grid in place).
     """
     key = _zernike_basis_cache_key(n_modes, X, Y, pupil_radius)
-    cached = _ZERNIKE_BASIS_CACHE.get(key)
-    if cached is not None:
-        # LRU bump: mark as most recently used.
-        _ZERNIKE_BASIS_CACHE.move_to_end(key)
-        return cached
+    with _ZERNIKE_BASIS_CACHE_LOCK:
+        cached = _ZERNIKE_BASIS_CACHE.get(key)
+        if cached is not None:
+            # LRU bump: mark as most recently used.
+            _ZERNIKE_BASIS_CACHE.move_to_end(key)
+            return cached
 
+    # Cache miss: build the basis OUTSIDE the lock (pure-CPU numpy,
+    # re-entrant; lock-scope discipline keeps expensive work off the
+    # critical section).  Two threads may double-build on a cold
+    # cache for the same key -- benign waste, the second insert just
+    # overwrites the first.
     basis, pupil_mask = _zernike_basis_matrix_build(
         n_modes, X, Y, pupil_radius)
 
-    _ZERNIKE_BASIS_CACHE[key] = (basis, pupil_mask)
-    # Evict LRU entries until we're at or below the cap.
-    while len(_ZERNIKE_BASIS_CACHE) > _ZERNIKE_BASIS_CACHE_MAXSIZE:
-        _ZERNIKE_BASIS_CACHE.popitem(last=False)
+    with _ZERNIKE_BASIS_CACHE_LOCK:
+        _ZERNIKE_BASIS_CACHE[key] = (basis, pupil_mask)
+        # Evict LRU entries until we're at or below the cap.
+        while len(_ZERNIKE_BASIS_CACHE) > _ZERNIKE_BASIS_CACHE_MAXSIZE:
+            _ZERNIKE_BASIS_CACHE.popitem(last=False)
     return basis, pupil_mask
 
 
