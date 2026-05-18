@@ -53,6 +53,24 @@ def surface_sag_xy_polynomial(X, Y, R=np.inf, conic=0.0,
     -------
     sag : ndarray
     """
+    # v4.14.3 (P1-NEW-11): reject non-positive ``norm_x`` / ``norm_y``.
+    # A negative value (e.g. typo ``norm_x = -0.05`` on a 50 mm half-
+    # aperture) makes ``outside = abs(X) > -0.05`` true at every pixel
+    # and the freeform contribution becomes invisible -- a silent
+    # data-loss bug.  Validate at function entry so the typo surfaces
+    # at the call site, not as a baffling "freeform did nothing"
+    # downstream.
+    if not (np.isfinite(norm_x) and norm_x > 0):
+        raise ValueError(
+            f"surface_sag_xy_polynomial: norm_x must be a positive "
+            f"finite half-extent [m]; got norm_x={norm_x!r}.  A "
+            f"negative or zero value would make the out-of-domain "
+            f"mask true everywhere and zero the freeform "
+            f"contribution silently.")
+    if not (np.isfinite(norm_y) and norm_y > 0):
+        raise ValueError(
+            f"surface_sag_xy_polynomial: norm_y must be a positive "
+            f"finite half-extent [m]; got norm_y={norm_y!r}.")
     h_sq = X ** 2 + Y ** 2
     sag = surface_sag_general(h_sq, R, conic)
     if xy_coeffs:
@@ -130,6 +148,23 @@ def surface_sag_chebyshev(X, Y, R=np.inf, conic=0.0,
     -------
     sag : ndarray
     """
+    # v4.14.3 (P1-NEW-11): reject non-positive ``norm_x`` / ``norm_y``.
+    # ``xn_raw = X / norm_x`` with ``norm_x < 0`` flips the polynomial
+    # domain sign (so ``T_n(x/norm_x)`` evaluates on the mirror-imaged
+    # input and the resulting sag silently has wrong parity for odd
+    # n).  Validate at entry to match the ``surface_sag_xy_polynomial``
+    # guard and surface typos at the callsite.
+    if not (np.isfinite(norm_x) and norm_x > 0):
+        raise ValueError(
+            f"surface_sag_chebyshev: norm_x must be a positive "
+            f"finite half-extent [m]; got norm_x={norm_x!r}.  A "
+            f"negative or zero value would mirror-image the "
+            f"polynomial domain and silently flip the sign of "
+            f"odd-order Chebyshev terms.")
+    if not (np.isfinite(norm_y) and norm_y > 0):
+        raise ValueError(
+            f"surface_sag_chebyshev: norm_y must be a positive "
+            f"finite half-extent [m]; got norm_y={norm_y!r}.")
     h_sq = X ** 2 + Y ** 2
     sag = surface_sag_general(h_sq, R, conic)
     if cheb_coeffs:

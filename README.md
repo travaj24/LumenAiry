@@ -10,6 +10,88 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.14.3
+
+**Closes the v4.14.2 audit (`docs/audits/AUDIT_V4_14_2_2026_05_17.md`).**
+The audit found 2 NEW P0s + 21 P1s + 18 P2 + 12 P3.  The
+"fix N, miss N+1" sibling-gap meta-finding recurred 5 ways on
+v4.14.2.  **v4.14.3 closes both P0s + the 5 sibling-gap
+recurrences + 11 latent-bug P1s (including 1 real physics error
+in `multiconfig.py`) + all 3 doc-drift P1s.**  1265 unit tests
+pass (up from 1190); 34/34 validation files pass.
+
+### P0 closures
+
+* **`storage.py` `n_planes` atomicity.**  `append_plane_h5` and
+  `_zarr_append_plane` previously bumped `n_planes` AFTER
+  `create_dataset`; an interrupt between the two left an orphan
+  dataset that the next append silently clobbered on the Zarr
+  path (`overwrite=True`).  Concurrent appenders could race on
+  `n_planes=N` and both write to `plane_{N:02d}`.  v4.14.3
+  inverts the ordering (attr first, dataset second, try/except
+  rollback) and drops `overwrite=True` on the Zarr path so
+  orphan re-use now raises rather than silently destroys data.
+  Multi-process locking deferred to v4.15+ (documented
+  restriction).
+* **`makedammann2d` >1m upper-bound** plus explicit
+  `_legacy_units='auto'|'um'|'SI'` opt-in kwarg.  v4.14.2's
+  `value > 1e-3` heuristic silently mangled legitimate mm-scale
+  SI gratings (coarse industrial Dammann, THz/MMW) by 1e-6.
+  v4.14.3 rejects any unit-bearing input > 1.0 m in `'auto'` /
+  `'SI'` mode with a clear `ValueError` and provides explicit-
+  `_legacy_units` escape hatches in both directions.
+
+### P1 closures — sibling-gap recurrences (5)
+
+* **`clear_asm_caches()` LG-polynomial chain** — adds the 8th
+  cache (`_lg_polynomial_items`) v4.14.2 missed.
+* **`apply_rotator` symmetry across 5 polarization helpers** —
+  `_AngleUnsetSentinel` + a single `_resolve_angle` helper
+  used by `apply_polarizer`, `apply_waveplate`,
+  `apply_half_wave_plate`, `apply_quarter_wave_plate`, and
+  `apply_rotator`.  The explicit-`angle=0` + `angle_deg=90`
+  conflict (which v4.14.2's `angle != 0.0` check silently let
+  through) now raises uniformly.
+* **`create_led_source` legacy-shim scale-inversion check** —
+  the canonical-order positional mistake that previously
+  silently mis-routed `wavelength` into the `diameter` position
+  now raises `TypeError`.
+* **`_validate_grid_params` `support_tuple_N: bool` gating** —
+  the 3 factories with genuine 2-D grid support opt in; the
+  other 7 reject tuple-N at validation time with a clear
+  `TypeError` instead of an opaque downstream `np.arange`
+  crash.
+
+### P1 closures — under-examined modules (6)
+
+* **`multiconfig.py` hardcoded `n=1.5` (REAL physics error)** —
+  multi-config beam-expander / Keplerian-telescope builders
+  computed lens powers via lensmaker formula with a hardcoded
+  BK7-ish index, producing wrong focal lengths for any non-BK7
+  glass.  v4.14.3 routes through `glass.get_glass_index()`
+  with documented `UserWarning` + bounded fallback for unknown
+  labels.
+* **`create_bessel_beam` cone_angle constraint** (`0 < a < pi/2`).
+* **`create_fiber_mode` `mode_field_diameter > 0`** constraint.
+* **`surface_sag_xy_polynomial` / `surface_sag_chebyshev`
+  negative-`norm_x`/`norm_y` rejection** at function entry.
+* **`ghost.py` IndexError on `elements`-key prescriptions** —
+  new `_ghost_surfaces` adapter routes both `elements`-style
+  schemas through the canonical surface-expansion path.
+* **`register_fixed_glass` input validation** — non-empty
+  string name, finite `n` in `[1.0, 4.0]`, `UserWarning` on
+  overwrite.
+
+### P1 closures — doc-drift (retroactive to v4.14.2)
+
+3 retroactive corrections promised in v4.14.2 but not delivered
+(Agent D test count `25` → `8`; `6 factories` → `5` in 3
+sites; `lenses_maslov.py` line drift refreshed
+`678/737/884/993` → `619/728/874`).  11 `AUDIT_V4_*.md`
+references now carry the `docs/audits/` prefix.  Cache-locks
+meta-pin count corrected `38` → `39 (38 pass + 1 documented
+skip)`.
+
 ## What's new in 4.14.2
 
 **Closes the v4.14.1 audit (`docs/audits/AUDIT_V4_14_1_2026_05_17.md`).**
@@ -107,7 +189,7 @@ known-gap set is now empty.
 Extending v4.14.1's cache-clear dispatcher-pin pattern to two
 more sibling-gap classes:
 
-* **`test_v4_14_2_dispatcher_pin_cache_locks.py`** (38 tests) —
+* **`test_v4_14_2_dispatcher_pin_cache_locks.py`** — 39 collected (38 pass + 1 documented `_ZARR_MKDIR_PATCH_LOCK` skip):
   every module-level `_<NAME>_CACHE` must have a corresponding
   lock.  Accepts both `_FOO_LOCK` and `_FOO_CACHE_LOCK` naming
   conventions.  Reverse check on `_LOCK` names + documented
@@ -120,7 +202,7 @@ more sibling-gap classes:
 
 ## What's new in 4.14.1
 
-**Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**
+**Closes the v4.14.0 audit (`docs/audits/AUDIT_V4_14_0_2026_05_17.md`).**
 v4.14.0 shipped 7 perf wins + 6 new public functions + 80
 parametrized dispatcher pins, but the audit found 1 P0 silent-
 wrong-physics bug in the 77× LG/HG mode-stack cache key plus 6
@@ -201,7 +283,7 @@ v4.15+), HG cache key `w[s]` shorthand (→ both `wx`, `wy`),
 
 ## What's new in 4.14.0
 
-**Phase B of the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`).**
+**Phase B of the v4.13.1 audit (`docs/audits/AUDIT_V4_13_1_2026_05_17.md`).**
 v4.13.2 closed Tier-0; v4.14.0 closes Tier-1: 7 perf wins, 6 new
 user-facing API functions, and 80 dispatcher pins that close out
 the recurring sibling-gap audit-meta-finding.  All 858 unit tests
@@ -293,7 +375,7 @@ multiply that promotes complex64 → complex128.
 
 ## What's new in 4.13.2
 
-**Closes the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`) plus its
+**Closes the v4.13.1 audit (`docs/audits/AUDIT_V4_13_1_2026_05_17.md`) plus its
 Part 10 consolidation with a parallel cross-library survey.**  v4.13.1
 audit identified 12 new P1s (5 sibling-gap recurrences + 5 fresh-eyes
 bugs + 2 partial-closure follow-ups); the cross-library survey turned
@@ -399,7 +481,7 @@ family:
 
 ## What's new in 4.13.1
 
-**Closes the v4.13.0 audit (`AUDIT_V4_13_0_2026_05_17.md`) plus an
+**Closes the v4.13.0 audit (`docs/audits/AUDIT_V4_13_0_2026_05_17.md`) plus an
 additional perf-survey pass.**  v4.13.0 was tagged in git but never
 published to PyPI; that audit identified 7 P1 (latent bug), 9 P2
 (code smell), and 6 P3 (cleanup) findings.  v4.13.1 closes every

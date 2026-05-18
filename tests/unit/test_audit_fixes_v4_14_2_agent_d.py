@@ -132,15 +132,21 @@ class TestP1New6MakedammannSiUnits:
             f"rescale).")
 
     def test_makedammann2d_micrometre_input_warns(self):
-        """Calling with the legacy micrometre form
-        ``periodx=61.0, waveln=1.31`` must trigger a
+        """Calling with the legacy micrometre form in the auto-detect
+        range (``1e-3 < value <= 1.0``) must trigger a
         ``DeprecationWarning`` with a migration message that names
         the SI-metres replacement.
+
+        v4.14.3 note: values above 1 m now raise ``ValueError`` (the
+        P0-NEW-2 fix), so this test exercises mid-range values
+        (0.5 < x <= 1.0 m) that the heuristic still catches.  For
+        explicit legacy-um migration above that bound, callers should
+        pass ``_legacy_units='um'``.
         """
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter('always')
             _, _, _ = makedammann2d(
-                periodx=61.0, periody=61.0, waveln=1.31,
+                periodx=0.5, periody=0.5, waveln=0.01,
                 phaselevels=2, phasesteps=1,
                 diforders=np.ones((2, 2)),
                 itr=2, plot=False, seed=42,
@@ -150,7 +156,7 @@ class TestP1New6MakedammannSiUnits:
             assert len(depwarns) >= 1, (
                 "Expected at least one DeprecationWarning when "
                 "makedammann2d is called with legacy micrometre "
-                "values periodx=61.0, waveln=1.31.  Got: "
+                "values periodx=0.5, waveln=0.01.  Got: "
                 f"{[r.message for r in w]}")
             msg = str(depwarns[0].message)
             # The message must explain the SI migration concretely.
@@ -167,6 +173,12 @@ class TestP1New6MakedammannSiUnits:
         they used to (the legacy-um path internally rescales to SI metres
         for the math, then returns ``samplingx`` which carries the same
         physical metre value as the old ``samplingx * 1e-6`` did).
+
+        v4.14.3 note: ``periodx=61.0`` now exceeds the 1 m hard upper
+        bound and would raise.  Callers wanting the legacy interpretation
+        must pass ``_legacy_units='um'`` (which bypasses the upper
+        bound for explicit-legacy callers).  Both forms below produce
+        the same SI-equivalent result.
         """
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', category=DeprecationWarning)
@@ -175,6 +187,7 @@ class TestP1New6MakedammannSiUnits:
                 phaselevels=2, phasesteps=1,
                 diforders=np.ones((2, 2)),
                 itr=2, plot=False, seed=42,
+                _legacy_units='um',
             )
             _, _, (si_dx, _) = makedammann2d(
                 periodx=61e-6, periody=61e-6, waveln=1.31e-6,
@@ -466,8 +479,12 @@ class TestP1New10SourceFactoryInputValidation:
         _validate_grid_params(64, 16e-6, 1.31e-6)
         # Anamorphic grid
         _validate_grid_params(64, 16e-6, 1.31e-6, dy=8e-6)
-        # Tuple (Ny, Nx) form
-        _validate_grid_params((64, 128), 16e-6, 1.31e-6)
+        # Tuple (Ny, Nx) form -- v4.14.3 narrowed this contract: tuple-N
+        # is now opt-in via ``support_tuple_N=True`` (only the 3 mode-
+        # family factories pass it; the other 7 inherit the default
+        # ``False`` and reject tuples up-front with a clear error).
+        _validate_grid_params((64, 128), 16e-6, 1.31e-6,
+                                support_tuple_N=True)
 
     def test_validate_grid_params_rejects_non_finite(self):
         """Non-finite dx / wavelength must raise too (not just <= 0)."""
@@ -491,10 +508,16 @@ class TestP1New10SourceFactoryInputValidation:
                                    fn_name='test_fn')
 
     def test_validate_grid_params_rejects_bad_tuple(self):
-        """``N`` as a 3-element tuple is invalid."""
+        """``N`` as a 3-element tuple is invalid even when tuple-N is
+        enabled (only 2-tuples (Ny, Nx) are valid).  v4.14.3: pass
+        ``support_tuple_N=True`` so the helper reaches the
+        ``len(N) != 2`` branch instead of the default tuple-reject
+        branch (which raises TypeError, not ValueError).
+        """
         with pytest.raises(ValueError, match='tuple'):
             _validate_grid_params((64, 64, 64), 16e-6, 1.31e-6,
-                                   fn_name='test_fn')
+                                   fn_name='test_fn',
+                                   support_tuple_N=True)
 
 
 if __name__ == '__main__':

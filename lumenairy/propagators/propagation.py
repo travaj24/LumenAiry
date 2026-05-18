@@ -791,6 +791,11 @@ def clear_asm_caches() -> None:
       :func:`lumenairy.propagators.asymptotic.clear_lg_mode_stack_cache`
       (v4.14.1; was claimed in v4.14.0 CHANGELOG but not wired up --
       only :func:`lumenairy.lumenairy_context` cleared it).
+    - LG polynomial coefficient cache via
+      :func:`lumenairy.propagators.asymptotic.clear_lg_polynomial_cache`
+      (v4.14.3; the v4.14.2 expansion missed this sibling -- only
+      :func:`lumenairy.lumenairy_context` cleared it, leaving a
+      single-cache asymmetry between the two drain entry points).
     - optimize/core wrapper-merit meshgrid cache via
       :func:`lumenairy.optimize.core._clear_wrapper_merit_cache`
       (v4.14.1; replaces the v4.14.0 monkey-patch indirection -- the
@@ -839,6 +844,17 @@ def clear_asm_caches() -> None:
     try:
         from .asymptotic import clear_lg_mode_stack_cache
         clear_lg_mode_stack_cache()
+    except (ImportError, RuntimeError, AttributeError):
+        pass
+    # v4.14.3 (P1-NEW-1 / Agent A A.3): chain in the LG polynomial
+    # coefficient cache.  Missed by the v4.14.2 sweep -- only
+    # ``lumenairy_context`` cleared it (``_context.py:255-260``), which
+    # left an 8th sibling cache that ``clear_asm_caches`` failed to
+    # drain.  Same lazy-import + narrowed-except pattern as the
+    # mode-stack chain above.
+    try:
+        from .asymptotic import clear_lg_polynomial_cache
+        clear_lg_polynomial_cache()
     except (ImportError, RuntimeError, AttributeError):
         pass
     # v4.14.1 (P2-3): chain in the optimize-layer wrapper-merit

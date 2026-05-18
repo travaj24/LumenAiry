@@ -198,11 +198,64 @@ def register_fixed_glass(name: str, n: float) -> None:
     Parameters
     ----------
     name : str
-        Glass name.
+        Glass name.  Must be a non-empty string after stripping
+        whitespace; cannot be ``''`` or ``'   '``.
     n : float
-        Refractive index (constant for all wavelengths).
+        Refractive index (constant for all wavelengths).  Must be in
+        ``[1.0, 4.0]``: 1.0 is vacuum / "air", and the upper bound
+        comfortably covers high-index semiconductors used in mid-IR
+        / THz design (Si ~3.4, Ge ~4.0).  Values outside this range
+        are almost certainly a typo or unit mistake.
+
+    Raises
+    ------
+    ValueError
+        If ``name`` is not a string or strips to empty, or if ``n``
+        is outside the physical ``[1.0, 4.0]`` range.
+
+    Warns
+    -----
+    UserWarning
+        If ``name`` is already in :data:`glass.GLASS_REGISTRY`; the
+        existing entry is overwritten anyway (sometimes that is the
+        caller's intent -- e.g. re-registering a tweaked test glass
+        -- but the audit P1-GL-2 noted that pre-v4.14.3 the overwrite
+        was silent and could clobber catalog glasses like ``'N-BK7'``
+        without warning).
     """
+    # v4.14.3 (P1-GL-2): input validation.  Pre-v4.14.3 accepted any
+    # name string (including ``''``) and any ``n`` (including
+    # ``n < 1.0``, which is unphysical for ordinary materials), and
+    # silently clobbered existing registry entries.
+    if not isinstance(name, str) or not name.strip():
+        raise ValueError(
+            f"register_fixed_glass: name must be a non-empty string; "
+            f"got name={name!r}.")
+    try:
+        n_f = float(n)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"register_fixed_glass: n must be a real number; got "
+            f"n={n!r}.") from exc
+    if not (np.isfinite(n_f) and 1.0 <= n_f <= 4.0):
+        raise ValueError(
+            f"register_fixed_glass: n={n_f} unphysical; expected "
+            f"1.0 <= n <= 4.0.  (n < 1 is left-medium / metamaterial "
+            f"territory and not supported by the scalar transmission "
+            f"path; the upper bound covers Si ~3.4, Ge ~4.0, and any "
+            f"common semiconductor used in mid-IR / THz design.)")
+
     from .glass import GLASS_REGISTRY, _glass_cache
+
+    if name in GLASS_REGISTRY:
+        import warnings as _w
+        _w.warn(
+            f"register_fixed_glass: overwriting existing entry "
+            f"{name!r} in GLASS_REGISTRY.  If you meant to add a new "
+            f"glass, choose a unique name; if the overwrite is "
+            f"intentional, silence this warning with "
+            f"warnings.simplefilter.",
+            UserWarning, stacklevel=2)
 
     class _FixedIndex:
         def __init__(self, n_val):
@@ -211,7 +264,7 @@ def register_fixed_glass(name: str, n: float) -> None:
             return self._n
 
     GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
-    _glass_cache[name] = _FixedIndex(n)
+    _glass_cache[name] = _FixedIndex(n_f)
 
 
 # ════════════════════════════════════════════════════════════════════════

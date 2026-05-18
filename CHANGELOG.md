@@ -2,9 +2,205 @@
 
 All notable changes to the core library are documented here.
 
+## [4.14.3] — 2026-05-17
+
+**Closes the v4.14.2 audit (`docs/audits/AUDIT_V4_14_2_2026_05_17.md`).**
+The audit found 2 NEW P0 findings (`storage.py` non-atomic
+`n_planes` increment → silent data loss in concurrent / Zarr
+streaming; `makedammann2d` >1mm SI heuristic silently mangles
+legitimate mm-scale gratings), 21 NEW P1s, 18 P2s and 12 P3s.
+The "fix N, miss N+1" sibling-gap meta-finding recurred 5 ways
+on v4.14.2.  v4.14.3 closes both P0s, the 5 sibling-gap
+recurrences, 11 latent-bug P1s (1 real physics error in
+`multiconfig.py`), and all 3 doc-drift P1s.  **1265 unit tests
+pass** (up from 1190); **34/34 validation files pass**.
+
+### Breaking changes — none
+
+Two near-breaking deltas with explicit opt-in / opt-out:
+
+* **`makedammann2d` accepts `_legacy_units='auto'|'um'|'SI'`** (default
+  `'auto'` preserves the v4.14.2 per-parameter deprecation heuristic).
+  The `'auto'` and `'SI'` modes now raise `ValueError` on any
+  unit-bearing kwarg > 1.0 m (rejects nm-scale-garbage from the
+  silent-mangling regime).  Legitimate >1m / mm-scale SI gratings
+  set `_legacy_units='SI'` to bypass the legacy heuristic
+  entirely.  Pure-legacy callers can set `_legacy_units='um'` to
+  rescale all unit-bearing inputs by 1e-6 without firing the
+  deprecation warning.
+* **`create_led_source` legacy-positional shim hardened** with a
+  scale-inversion sanity check: a canonical-order positional
+  call (`N, dx, wavelength, diameter, divergence`) that
+  accidentally slots a wavelength into the `_legacy_diameter`
+  position now raises `TypeError` with a migration message
+  instead of producing 633 nm "diameter" / 0.1 m "wavelength"
+  garbage.
+
+### P0 closures
+
+**P0-NEW-1: `storage.py` n_planes atomicity** — `append_plane_h5`
+(`io/storage.py:444`) and `_zarr_append_plane` (`:782`) bumped
+`grp.attrs['n_planes']` AFTER `create_dataset`.  A crash between
+the two operations left an orphan dataset; the next append used
+the stale `n` to compute `plane_{N:02d}` and on Zarr (`overwrite=
+True` at line 769) the orphan was silently clobbered.  Concurrent
+appenders racing on `n_planes=N` both wrote `plane_{N:02d}`, the
+second silently winning.  v4.14.3 inverts the ordering — attr
+written BEFORE dataset create, try/except rollback on failure —
+and drops `overwrite=True` on the Zarr path so the orphan case
+now raises rather than silently destroying data.  Single-process
+atomicity is documented; multi-process locking (HDF5 SWMR /
+distributed Zarr lock) deferred to v4.15+.  3 regression tests
+pin attr-write ordering, docstring contract, and the no-silent-
+clobber invariant.
+
+**P0-NEW-2: `makedammann2d` >1m upper-bound** — v4.14.2's
+`value > 1e-3` heuristic silently rescaled mm-scale SI gratings
+(coarse industrial Dammann, THz/MMW) by 1e-6 → nm-scale garbage.
+v4.14.3 adds a `_legacy_units` kwarg (see "Breaking changes"
+above) plus an explicit `ValueError` for any unit-bearing input
+> 1.0 m in `'auto'`/`'SI'` mode.  3 regression tests cover the
+upper bound, explicit `'SI'` mm-scale pass-through, and explicit
+`'um'` rescale without `DeprecationWarning`.  3 historical test
+sites that relied on the silent rescale were migrated to
+`_legacy_units='um'`; one validation case (`test_elements.py`'s
+100 µm legacy-µm Dammann) likewise opts in explicitly.
+
+### P1 closures — sibling-gap recurrences (5)
+
+* **P1-NEW-1: `clear_asm_caches()` LG-polynomial chain.**  v4.14.2
+  chained 5 sibling caches but missed `_lg_polynomial_items`
+  (`asymptotic.py:284`).  v4.14.3 adds the lazy-import + call
+  pattern to `clear_asm_caches`, expanding its docstring to list
+  all 8 caches it now drains.  Combined-drain test extended to
+  assert `_lg_polynomial_items.cache_info().currsize == 0` after
+  `clear_asm_caches()`.
+* **P1-NEW-2: `apply_rotator` conflict-resolution symmetrised
+  across 5 polarization helpers.**  v4.14.2 added `angle_deg=`
+  conflict detection to `apply_rotator` only, leaving 4 sibling
+  helpers (`apply_polarizer`, `apply_waveplate`,
+  `apply_half_wave_plate`, `apply_quarter_wave_plate`) silently
+  letting `angle_deg` overwrite `angle`.  v4.14.3 introduces a
+  module-level `_AngleUnsetSentinel` singleton (matching the
+  v4.14.1 `_ZeroApertureMaskSentinel` pattern) and a single
+  `_resolve_angle(func_name, angle, angle_deg)` helper used by
+  all 5 helpers.  The "explicit `angle=0` + `angle_deg=90`"
+  conflict (which the v4.14.2 `angle != 0.0` check missed) now
+  raises `ValueError` from a single canonical site.  19
+  regression tests including a 5-way parametrized conflict
+  matrix.
+* **P1-NEW-4: `create_led_source` `*args` footgun closed** via
+  scale-inversion sanity check in the legacy-positional shim.
+  Rejected PEP 570 positional-only marker because it would have
+  broken every existing kwarg-based call site (including the
+  v4.14.2 audit-test infrastructure).  The new check fires on
+  `apparent_wavelength > 10 * apparent_diameter` — catches the
+  canonical-order mistake (`0.3 > 1.31e-6 * 10`) without
+  triggering on legitimate legacy `(diameter, divergence,
+  wavelength)` calls (real LED diameters > 10x their wavelength).
+* **P1-NEW-5: `_validate_grid_params` tuple-N gating.**  v4.14.2's
+  helper accepted both `int` and `(Ny, Nx)` tuples, but 7 of 10
+  factories used `np.arange(N)` downstream and crashed with an
+  opaque `np.arange` TypeError.  v4.14.3 adds a `support_tuple_N:
+  bool = False` parameter; the 3 factories with genuine 2-D
+  grid support (`gaussian_beam`, `hermite_gauss`,
+  `laguerre_gauss`) opt in, the other 7 reject tuple-N with a
+  clear `TypeError` at validation time.  10 parametrized tests
+  across all 10 factories.
+
+### P1 closures — under-examined modules (6)
+
+* **P1-MC (real physics error): `multiconfig.py` hardcoded `n=1.5`**
+  in the thin-lens / lensmaker formulae at `:265` and `:327`.
+  Beam-expander and Keplerian-telescope multi-config builders
+  computed lens powers assuming BK7-ish refractive index for
+  every glass, silently producing wrong focal lengths for
+  flint, SF, S-LAH, fused-silica, or any non-`n≈1.5` glass.
+  v4.14.3 introduces `_resolve_lens_glass_index(name)` that
+  routes through the canonical `glass.get_glass_index()` lookup
+  with a documented `UserWarning` + bounded fallback (`n=1.5`)
+  for genuinely unknown labels and bounds-check on custom
+  callable returns (`1.0 < n < 5.0`).  Catches `(ValueError,
+  KeyError, ImportError, RuntimeError, TypeError)` only —
+  preserves the v4.13.0 Phase-2 narrowed-exception discipline.
+* **P1-NEW-9: `create_bessel_beam` `cone_angle` constraint.**
+  Now enforces `0 < cone_angle < pi/2` at construction time;
+  `cone_angle = pi` previously produced `sin(pi) ≈ 0` and a DC
+  field silently labelled "Bessel".
+* **P1-NEW-10: `create_fiber_mode` `mode_field_diameter > 0`.**
+  Now rejected at construction; negative MFD previously yielded
+  a sign-flipped Gaussian, MFD=0 yielded an all-ones field.
+* **P1-NEW-11: `surface_sag_xy_polynomial` / `surface_sag_chebyshev`
+  negative-`norm_x`/`norm_y` rejection.**  `norm_x = -0.05`
+  (typo on a 50 mm half-aperture) made `outside = abs(X) >
+  -0.05` true everywhere, silently zeroing the entire freeform
+  contribution.  Both branches now reject negative norms at
+  function entry with a clear `ValueError`.
+* **P1-GH-2: `ghost.py` IndexError on `elements`-key
+  prescriptions.**  `ghost_analysis` and
+  `non_sequential_stray_light` previously crashed on the two
+  `elements`-style prescription schemas (surface-style entries
+  with `'element_type'` and propagate-style entries with
+  `'type'`).  v4.14.3 introduces a `_ghost_surfaces(prescription,
+  wavelength)` adapter that detects each schema and routes
+  through the appropriate canonical surface-expansion path.
+  5 regression tests across all three schemas + missing-keys
+  error path.
+* **P1-GL-2: `register_fixed_glass` input validation.**  Name
+  must be a non-empty string; `n` must be finite and in
+  `[1.0, 4.0]`; overwriting an existing entry emits a
+  `UserWarning`.  Si (n=3.4) and Ge (n=4.0) verified accepted;
+  invalid forms rejected.
+
+### P1 closures — doc-drift (3, retroactive to v4.14.2)
+
+Per the v4.14.2 audit Part 2 / P1-NEW-6/7/8:
+
+* **Agent D test count** (CHANGELOG line 374): `25 tests` →
+  `8 tests + 1 parametrize entry`.
+* **"6 factories" → "5 factories"** in 3 CHANGELOG sites
+  describing the v4.13.x source-factory dispatcher pin.
+* **`lenses_maslov.py` line-drift correction note** refreshed
+  (`678/737/884/993` → `619/728/874`; verified against the
+  current module via def-header grep).  Recorded that one of
+  the 4 prior sites was consolidated away.
+* **Audit-path references** (11 expected → 11 fixed): all
+  `` `AUDIT_V4_*.md` `` in CHANGELOG (8 sites) and README (3
+  sites) now carry the `docs/audits/` prefix added by the
+  v4.14.2 doc reorganization.
+* **Cache-locks meta-pin count** corrected `38 tests` → `39
+  collected (38 pass + 1 documented `_ZARR_MKDIR_PATCH_LOCK`
+  skip)` in CHANGELOG lines 158 / 186 and README line 110.
+
+### Test counts
+
+* Pre-v4.14.3 baseline (v4.14.2): 1190 unit tests.
+* v4.14.3 additions:
+  - Agent A (storage + makedammann + LG chain): 9 tests.
+  - Agent B (sources + multiconfig): 25 tests.
+  - Agent C (polarization + freeform + ghost + user_library):
+    41 tests.
+  - Agent D (doc corrections): 0 (paper-only).
+* Final: **1265 unit tests passing, 1 skipped** (the documented
+  `_ZARR_MKDIR_PATCH_LOCK` exemption), **34/34 validation
+  files passing**.
+
+### Deferred to v4.15+
+
+* Multi-process atomic-append for `storage.py` (HDF5 SWMR
+  client + distributed Zarr lock).  v4.14.3 documents single-
+  process guarantees and the multi-process restriction; the
+  full multi-writer story is a v4.15+ ergonomics item.
+* 18 P2 + 12 P3 findings from the v4.14.2 audit (UI module
+  audit, codegen ergonomics, secondary doc-drift, additional
+  factory validation gaps).  These remain catalogued in
+  `docs/audits/AUDIT_V4_14_2_2026_05_17.md` for v4.15+ triage.
+
+---
+
 ## [4.14.2] — 2026-05-17
 
-**Closes the v4.14.1 audit (`AUDIT_V4_14_1_2026_05_17.md`).**  The
+**Closes the v4.14.1 audit (`docs/audits/AUDIT_V4_14_1_2026_05_17.md`).**  The
 audit found 1 NEW P0 (a v4.11.2 regression carryover: `glass.py`
 S-LAH64/S-LAH79 dispatch broken for 3 releases) plus 10 new P1s
 (4 of which are "fix N, miss N+1" recurrences on v4.14.1 itself —
@@ -155,7 +351,7 @@ land there.
 Extending v4.14.1's cache-clear dispatcher-pin pattern to two more
 sibling-gap classes the audit identified:
 
-* **`test_v4_14_2_dispatcher_pin_cache_locks.py`** (38 tests) —
+* **`test_v4_14_2_dispatcher_pin_cache_locks.py`** — 39 collected (38 pass + 1 documented `_ZARR_MKDIR_PATCH_LOCK` skip):
   walks every library module via `pkgutil.walk_packages`, finds
   names matching `^_.*_CACHE$`, asserts each has a corresponding
   lock (accepts both `_FOO_LOCK` and `_FOO_CACHE_LOCK` naming
@@ -172,8 +368,8 @@ sibling-gap classes the audit identified:
 
 Per audit Part 1.3:
 
-* "Agent D 25 tests" → 8 tests (bottom-line 911 was correct).
-* "all 6 factories" → 5 factories (in 3 CHANGELOG sites).
+* Agent D test count (v4.14.1 line ~372): 25 → 8 (bottom-line 911 was correct).
+* Source-factory dispatcher count: previously claimed "all 6" → corrected to 5 factories (3 CHANGELOG sites updated).
 * `lenses_maslov.py` line-drift correction note refreshed.
 
 ### Test counts
@@ -183,7 +379,9 @@ Per audit Part 1.3:
   - Agent A (glass + freeform + polarization): 13 tests
   - Agent B (aperture=0 sentinel finish): 10 tests
   - Agent C (7-cache locks + clear_asm scope + meta-pin): 57
-    tests (19 fix-pins + 38 meta-pin parametrizations)
+    tests pass (19 fix-pins + 39 meta-pin parametrizations
+    collected, of which 38 pass + 1 documented
+    _ZARR_MKDIR_PATCH_LOCK skip)
   - Agent D (sources + DOE + meta-pin): 199 tests (76 fix-pins +
     123 meta-pin parametrizations)
 * Final: **1190 unit tests passing, 1 skipped** (the documented
@@ -204,7 +402,7 @@ have mixed positional/keyword conventions).  `system.evaluate
 
 ## [4.14.1] — 2026-05-17
 
-**Closes the v4.14.0 audit (`AUDIT_V4_14_0_2026_05_17.md`).**  The
+**Closes the v4.14.0 audit (`docs/audits/AUDIT_V4_14_0_2026_05_17.md`).**  The
 audit found 1 P0 (silent-wrong physics in the 77× LG/HG mode-stack
 cache key) + 6 P1s + 10 P2s + 8 P3s + 7 doc-drift items.  v4.14.1
 closes the P0, **all 6 P1s** (including P1-NEW-5 `row_reset`
@@ -358,7 +556,7 @@ v4.14.0 entry below:
 
 The 3 other doc-drift items (LG cache wired into `clear_asm
 _caches`, public `clear_lg_mode_stack_cache`, "dispatcher pin
-covers all 6 factories") **became true** in v4.14.1 — no
+covers all 5 factories") **became true** in v4.14.1 — no
 retroactive edit needed; the v4.14.0 entry's claims are now
 accurate.
 
@@ -369,7 +567,7 @@ accurate.
   - Agent A (asymptotic): 8 tests
   - Agent B (optimize + propagation): 11 tests
   - Agent C (coatings + lens sweep): 8 tests
-  - Agent D (exports + meta-pin): 25 tests + 1 parametrize entry
+  - Agent D (exports + meta-pin): 8 tests + 1 parametrize entry
     + 17 cache-clear meta-pins
 * Final: **911 unit tests passing**, **34/34 validation files
   passing**.
@@ -383,7 +581,7 @@ for the full forward plan.
 
 ## [4.14.0] — 2026-05-17
 
-**Phase B of the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`).**
+**Phase B of the v4.13.1 audit (`docs/audits/AUDIT_V4_13_1_2026_05_17.md`).**
 v4.13.2 closed Tier-0 (the 12 P1s + 5 cross-survey P0s + thin-lens
 sibling sweep).  v4.14.0 closes Tier-1: the 7 Tier-1 perf wins from
 audit Part 3, the top user-facing API gaps from the cross-survey,
@@ -545,16 +743,16 @@ The complex64 dtype-preservation pin tripped on 3 of 5
 from the v4.13.2 B.4/B.5 thin-lens sweep.  Fixed in this release:
 
 * **`apply_real_lens_maslov`** — `lenses_maslov.py`:
-  - `_integrate_quadrature` (line 663) and `_integrate_local
-    _quadrature` (line 993) and `_integrate_stationary_phase` (line
-    737) all hardcoded `dtype=np.complex128` allocations.  Each now
+  - `_integrate_quadrature` (line 619) and `_integrate_stationary
+    _phase` (line 728) and `_integrate_local_quadrature` (line 874)
+    all hardcoded `dtype=np.complex128` allocations.  Each now
     accepts an `out_dtype` kwarg defaulting to `np.complex128` for
     back-compat; `apply_real_lens_maslov` threads `E_in.dtype`.
-    (CHANGELOG correction in v4.14.1: original v4.14.0 entry cited
-    pre-landing line numbers 562/663/828/970; actual post-landing
-    sites in the v4.14.0 tag are 566/624/733/880/989, drifted
-    further to 678/737/884/993 after v4.14.1 lock + key-tuple
-    additions.)
+    (CHANGELOG line-cite refreshed in v4.14.2: prior CHANGELOG
+    revisions cited drifted post-landing line numbers from the
+    v4.14.0 tag and a further-drifted set from v4.14.1.  Current
+    v4.14.2 def-header sites are 619/728/874 — one prior site was
+    consolidated away during subsequent edits, leaving 3.)
   - The post-quadrature re-fit at line 566 multiplied by `1j`
     (complex128) which promoted the result; now cast back to
     `E_in.dtype`.
@@ -616,7 +814,7 @@ freeform.
 
 ## [4.13.2] — 2026-05-17
 
-**Closes the v4.13.1 audit (`AUDIT_V4_13_1_2026_05_17.md`) plus its
+**Closes the v4.13.1 audit (`docs/audits/AUDIT_V4_13_1_2026_05_17.md`) plus its
 Part 10 consolidation with a parallel 6-agent cross-library survey.**
 The v4.13.1 audit identified 12 new P1s (5 sibling-gap recurrences +
 5 fresh-eyes bugs + 2 partial-closure follow-ups) plus 17 perf
@@ -773,12 +971,12 @@ recurrence within the same family.
   to `dx` on every non-`propagate_*` element.  v4.13.2 routes
   `current_dx` AND `current_dy` through all 13 element handlers.
 * **`Source.fiber_mode` accepts `dy=` end-to-end.**  v4.13.1 P1-C
-  threaded `dy` through 5 of 6 Source factories; `fiber_mode`
+  threaded `dy` through 4 of 5 Source factories; `fiber_mode`
   remained a dead-`dy=` code path because `create_fiber_mode`
   didn't accept `dy=`.  v4.13.2 widens `create_fiber_mode` to
   accept `dy=` (forwarding to `create_gaussian_beam`); the
   dispatcher pin in `TestP1CSourceFactoryDispatcherPin` now covers
-  all 6 factories.
+  all 5 factories.
 
 ### Thin-lens family sibling-gap sweep (cross-library survey)
 
@@ -863,7 +1061,7 @@ catalogues; off-axis conics in surface frame; Q-type freeform.
 
 ## [4.13.1] — 2026-05-17
 
-**Closes the v4.13.0 audit (`AUDIT_V4_13_0_2026_05_17.md`) plus an
+**Closes the v4.13.0 audit (`docs/audits/AUDIT_V4_13_0_2026_05_17.md`) plus an
 additional perf-survey pass.**  v4.13.0 was tagged in git but never
 published to PyPI; that audit identified 7 P1 (latent bug), 9 P2
 (code smell), and 6 P3 (cleanup) findings — most importantly 3
@@ -1137,7 +1335,7 @@ because v4.12.2 is already on PyPI.
 **Bundle of three internal phases since v4.12.2 (PyPI-published):**
 
 * Phase 1 — closes audit known-limitations S1, S2, S3 and L2, L3,
-  L4, L6, L8 from `AUDIT_V4_12_1_2026_05_16.md` (storage dtype
+  L4, L6, L8 from `docs/audits/AUDIT_V4_12_1_2026_05_16.md` (storage dtype
   preservation, codegen aperture-stop + wavelength sentinel, ghost
   R/r convention, JAX dtype + `jax_enable_x64`, `PropagationResult.dy`
   + `Source.dy`, sibling mirror-guards, `apply_mirror` xp + dy,
@@ -1458,7 +1656,7 @@ behavioural change vs v4.12.2 in this path.
 ## [4.12.2] — 2026-05-17
 
 **Closes the round-5 / v4.12.1 pre-PyPI audit blockers**
-(`AUDIT_V4_12_1_2026_05_16.md`).  Three documentation-drift items
+(`docs/audits/AUDIT_V4_12_1_2026_05_16.md`).  Three documentation-drift items
 become true (NumPy `through_focus_scan` H-hoist actually
 implemented, `through_focus_scan_jax` JIT cache actually
 implemented, 878× benchmark headline reconciled to ~300×).  Cache
@@ -1590,7 +1788,7 @@ _vs_warm` benchmark.
 
 ## Known limitations (deferred to v4.13 / v4.14)
 
-Audit `AUDIT_V4_12_1_2026_05_16.md` identified items below as
+Audit `docs/audits/AUDIT_V4_12_1_2026_05_16.md` identified items below as
 non-blocking for the v4.12.x line.
 
 ### Silent-data-loss class (S1-S3)

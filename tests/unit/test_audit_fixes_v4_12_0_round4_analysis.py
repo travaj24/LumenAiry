@@ -411,10 +411,11 @@ class TestMakedammann2dNoGlobalRngMutation:
         # Tiny run -- we only care about the RNG side-effects, not
         # the design quality.  itr=2 keeps it fast.
         _ = makedammann2d(
-            periodx=20.0, periody=20.0,
+            periodx=20.0, periody=20.0, waveln=1.31,
             phaselevels=2, phasesteps=1,
             diforders=np.ones((2, 2)),
             itr=2, plot=False, seed=42,
+            _legacy_units='um',
         )
         state_after = np.random.get_state()
         # Compare every element of the state tuple (state[0] is the
@@ -436,10 +437,11 @@ class TestMakedammann2dNoGlobalRngMutation:
         _ = np.random.rand(5)
         state_before = np.random.get_state()
         _ = makedammann2d(
-            periodx=20.0, periody=20.0,
+            periodx=20.0, periody=20.0, waveln=1.31,
             phaselevels=2, phasesteps=1,
             diforders=np.ones((2, 2)),
             itr=2, plot=False, seed=None,
+            _legacy_units='um',
         )
         state_after = np.random.get_state()
         # The global state must be unchanged: makedammann2d
@@ -454,16 +456,16 @@ class TestMakedammann2dNoGlobalRngMutation:
         output (the API guarantee preserved through the fix)."""
         from lumenairy.elements.doe import makedammann2d
         nf_a, ff_a, dx_a = makedammann2d(
-            periodx=20.0, periody=20.0,
+            periodx=20.0, periody=20.0, waveln=1.31,
             phaselevels=2, phasesteps=1,
             diforders=np.ones((2, 2)),
-            itr=3, plot=False, seed=123,
+            itr=3, plot=False, _legacy_units='um', seed=123,
         )
         nf_b, ff_b, dx_b = makedammann2d(
-            periodx=20.0, periody=20.0,
+            periodx=20.0, periody=20.0, waveln=1.31,
             phaselevels=2, phasesteps=1,
             diforders=np.ones((2, 2)),
-            itr=3, plot=False, seed=123,
+            itr=3, plot=False, _legacy_units='um', seed=123,
         )
         assert np.array_equal(nf_a, nf_b), (
             "Same seed must give identical near-field output.")
@@ -475,16 +477,16 @@ class TestMakedammann2dNoGlobalRngMutation:
         (the seed is actually consumed by the local generator)."""
         from lumenairy.elements.doe import makedammann2d
         nf_a, _, _ = makedammann2d(
-            periodx=20.0, periody=20.0,
+            periodx=20.0, periody=20.0, waveln=1.31,
             phaselevels=2, phasesteps=1,
             diforders=np.ones((2, 2)),
-            itr=3, plot=False, seed=7,
+            itr=3, plot=False, _legacy_units='um', seed=7,
         )
         nf_b, _, _ = makedammann2d(
-            periodx=20.0, periody=20.0,
+            periodx=20.0, periody=20.0, waveln=1.31,
             phaselevels=2, phasesteps=1,
             diforders=np.ones((2, 2)),
-            itr=3, plot=False, seed=11,
+            itr=3, plot=False, _legacy_units='um', seed=11,
         )
         assert not np.array_equal(nf_a, nf_b), (
             "Different seeds must produce different near-field "

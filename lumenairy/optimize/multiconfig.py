@@ -15,8 +15,62 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 import copy
+import warnings
 
 from ..raytrace import surfaces_from_prescription, system_abcd
+
+
+def _resolve_lens_glass_index(glass: str, wavelength: float) -> float:
+    """Resolve the refractive index of a lensmaker glass.
+
+    v4.14.3 (P1-MC / Agent B): pre-v4.14.3 both
+    :func:`beam_expander_prescription` and :func:`keplerian_telescope`
+    hardcoded ``n=1.5`` in the thin-lens lensmaker formula
+    ``R = f*(n-1)*2``.  For ``glass='N-LASF9'`` (n ~ 1.85 at 587.6 nm)
+    that produced surface radii 17% off from the requested focal
+    length; the downstream ``_zero_C_air_gap`` correction made the
+    system afocal but the focal lengths feeding it were wrong.  Real
+    physics error -- this helper centralises the canonical lookup.
+
+    Parameters
+    ----------
+    glass : str
+        Glass name registered in :data:`lumenairy.glass.GLASS_REGISTRY`
+        (e.g. ``'N-BK7'``, ``'N-LASF9'``).
+    wavelength : float
+        Vacuum wavelength [m] at which to evaluate the index.
+
+    Returns
+    -------
+    n : float
+        Real refractive index at the given wavelength.
+
+    Notes
+    -----
+    On any unknown-glass / lookup failure the function falls back to
+    ``n=1.5`` AND emits a :class:`UserWarning`, so the prescription
+    builder remains usable but the caller knows the radii are
+    approximate.
+    """
+    try:
+        from ..glass import get_glass_index
+        n = float(get_glass_index(glass, wavelength))
+        if not (1.0 < n < 5.0):  # sanity envelope; visible/IR glasses
+            raise ValueError(
+                f"get_glass_index({glass!r}, {wavelength!r}) -> {n!r} "
+                f"is outside the expected (1.0, 5.0) range.")
+        return n
+    except (ValueError, KeyError, ImportError, RuntimeError, TypeError) as exc:
+        warnings.warn(
+            f"_resolve_lens_glass_index: failed to look up "
+            f"glass={glass!r} at wavelength={wavelength!r} "
+            f"({type(exc).__name__}: {exc}); falling back to n=1.5.  "
+            f"The resulting lens surface radii will be approximate; "
+            f"register the glass in lumenairy.glass.GLASS_REGISTRY or "
+            f"pass a supported glass name to avoid this.",
+            UserWarning, stacklevel=3,
+        )
+        return 1.5
 
 
 # =====================================================================
@@ -255,7 +309,13 @@ def beam_expander_prescription(M: float, f_objective: float, *,
     """
     f_eye = -f_objective / M  # negative for Galilean
 
-    n = 1.5  # approximate
+    # v4.14.3 (P1-MC / Agent B): use the prescription's actual glass
+    # at its design wavelength rather than the hardcoded ``n=1.5``
+    # approximation.  For ``glass='N-LASF9'`` (n ~ 1.85 at 587.6 nm)
+    # the hardcoded value put the lensmaker formula off by ~17% in
+    # surface radius; the downstream ``_zero_C_air_gap`` correction
+    # could not recover the underlying focal-length error.
+    n = _resolve_lens_glass_index(glass, wavelength)
     # Equi-shaped singlets on both sides so the thin-lens focal
     # length formula R = f*(n-1)*2 holds.  Build the eyepiece as
     # equi-concave ([R, -R] with R<0) rather than plano-concave so
@@ -324,7 +384,11 @@ def keplerian_telescope(f_objective: float, f_eyepiece: float, *,
     -------
     prescription : dict
     """
-    n = 1.5
+    # v4.14.3 (P1-MC / Agent B): see ``beam_expander_prescription``
+    # for the rationale -- replace hardcoded ``n=1.5`` with a
+    # glass+wavelength-aware lookup so high-index glasses (N-LASF9,
+    # N-SF6HT) get correct surface radii.
+    n = _resolve_lens_glass_index(glass, wavelength)
     R_obj = f_objective * (n - 1) * 2
     R_eye = f_eyepiece * (n - 1) * 2
 

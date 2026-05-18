@@ -86,6 +86,130 @@ __all__ = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Prescription-schema adapter (v4.14.3 / P1-GH-2)
+# ---------------------------------------------------------------------------
+
+def _ghost_surfaces(
+    prescription: Dict[str, Any],
+    wavelength: float,
+) -> List[Any]:
+    """Return a sequential ``Surface`` list for ghost analysis.
+
+    Accepts both prescription schemas:
+
+    * **Legacy ``'surfaces'``-key prescription** (``make_singlet`` /
+      ``make_doublet`` / ``thorlabs_lens`` /
+      ``load_zemax_prescription_data_txt`` -- all carry the
+      ``'surfaces'`` mirror, which is the primary ray-tracing path).
+
+    * **Modern ``'elements'``-key prescription** without the
+      ``'surfaces'`` mirror -- the surface-style element list (each
+      entry carries ``'element_type': 'surface'`` / ``'mirror'`` and
+      its own ``'radius'``/``'glass_before'``/``'glass_after'``
+      fields) produced by the UI ``LensModel.to_prescription()``
+      export and by ``load_zemax_*`` ``return``.  When ``'surfaces'``
+      is absent the surface mirror is reconstructed in-line from the
+      refracting entries of ``elements`` and the result is routed
+      back through :func:`surfaces_from_prescription` so all
+      downstream validation / freeform / coord-break handling stays
+      uniform with the legacy path.
+
+    * **Propagate-style ``'elements'`` list** (``'type': 'propagate'``
+      / ``'real_lens'`` / ``'mirror'``, as consumed by
+      ``propagate_through_system`` and friends) is dispatched
+      through :func:`raytrace.surfaces_from_elements`, which has
+      its own surface-expansion logic and threads ``wavelength``
+      through embedded ``real_lens`` sub-prescriptions.
+
+    Pre-v4.14.3 :func:`non_sequential_stray_light` did
+    ``len(prescription.get('surfaces', []))`` and silently produced
+    ``n_surfs = 0`` for the elements-only schema, then later
+    indexed into ``prescription['surfaces'][i]`` and raised
+    ``IndexError`` with a message that gave no hint about the
+    schema mismatch (audit P1-GH-2).
+
+    Parameters
+    ----------
+    prescription : dict
+        Must contain ``'surfaces'`` OR ``'elements'``.
+    wavelength : float
+        Used only when expanding propagate-style ``'elements'``
+        lists containing embedded ``real_lens`` entries; ignored on
+        the legacy ``'surfaces'`` path and on the surface-style
+        elements reconstruction path.
+
+    Returns
+    -------
+    surfaces : list of Surface
+        Sequential surface list compatible with the rest of the
+        ghost analysis code.
+
+    Raises
+    ------
+    ValueError
+        If ``prescription`` has neither ``'surfaces'`` nor
+        ``'elements'``.
+    """
+    if 'surfaces' in prescription:
+        return surfaces_from_prescription(prescription)
+    if 'elements' in prescription:
+        elements = prescription['elements']
+        # Disambiguate the two element-list formats.  Surface-style
+        # entries (from .zmx parsers / UI export) carry
+        # ``'element_type'``; propagate-style entries (from
+        # ``propagate_through_system``) carry ``'type'``.  A mixed
+        # list violates both schemas and falls through to the
+        # propagate path which will raise on the first missing key.
+        is_surface_style = bool(elements) and all(
+            ('element_type' in e) for e in elements)
+        if is_surface_style:
+            # Reconstruct the lens-only ``'surfaces'`` /
+            # ``'thicknesses'`` mirror from the refracting subset of
+            # the element list (mirrors are excluded -- ghost
+            # analysis treats them separately and the lens-only
+            # mirror is what ``surfaces_from_prescription`` /
+            # ``validate_prescription`` expect).  This mirrors the
+            # logic in ``io/prescriptions.py:654-677`` that builds
+            # the same ``'surfaces'`` slot on .zmx load.
+            refr = [e for e in elements
+                    if e.get('element_type') == 'surface']
+            rebuilt_surfaces = []
+            for e in refr:
+                rebuilt_surfaces.append({
+                    'radius': e['radius'],
+                    'conic': e.get('conic', 0.0),
+                    'aspheric_coeffs': e.get('aspheric_coeffs'),
+                    'glass_before': e.get('glass_before', 'air'),
+                    'glass_after': e.get('glass_after', 'air'),
+                })
+            # Thicknesses: prefer an explicit ``'thicknesses'`` slot
+            # if the caller supplied one alongside elements; else
+            # default to zero gaps (ghost analysis cares about
+            # surface curvatures and indices, not paraxial paths).
+            thicknesses = prescription.get(
+                'thicknesses',
+                [0.0] * max(0, len(rebuilt_surfaces) - 1))
+            rebuilt_rx = {
+                'surfaces': rebuilt_surfaces,
+                'thicknesses': thicknesses,
+            }
+            if 'aperture_diameter' in prescription:
+                rebuilt_rx['aperture_diameter'] = (
+                    prescription['aperture_diameter'])
+            return surfaces_from_prescription(rebuilt_rx)
+        # Propagate-style: defer to surfaces_from_elements.  Defer
+        # the import to avoid an analysis -> raytrace import cycle
+        # at module-load time.
+        from ..raytrace.core import surfaces_from_elements
+        return surfaces_from_elements(elements, wavelength)
+    raise ValueError(
+        "ghost analysis: prescription has neither 'surfaces' nor "
+        "'elements' key.  Build the prescription via make_singlet, "
+        "make_doublet, thorlabs_lens, load_zemax_prescription_data_txt, "
+        "or the UI 'Save prescription' export.")
+
+
 def enumerate_ghost_paths(n_surfaces: int) -> List[Tuple[int, int]]:
     """List all unique 2-bounce ghost reflection paths.
 
@@ -161,7 +285,13 @@ def ghost_analysis(
     ``R``/``r`` split between Fresnel reflectance and curvature
     radius.
     """
-    surfs = surfaces_from_prescription(prescription)
+    # v4.14.3 (P1-GH-2): tolerate both prescription schemas.  Pre-
+    # v4.14.3 this was a bare ``surfaces_from_prescription`` call
+    # which fails on the modern ``'elements'``-key schema with a
+    # validation ``ValueError`` mentioning a "missing 'surfaces' key"
+    # -- accurate in the lexical sense but confusing because the
+    # equivalent ``'elements'`` list IS present.
+    surfs = _ghost_surfaces(prescription, wavelength)
     n_surfs = len(surfs)
     if semi_aperture is None:
         ap = prescription.get('aperture_diameter', 25.4e-3)
@@ -326,7 +456,14 @@ def non_sequential_stray_light(
             # missing entirely) -- NaN-propagate so the stray-light
             # tally clearly flags the missing TIS contribution.
             tis_each_surface = float('nan')
-        n_surfs = len(prescription.get('surfaces', []))
+        # v4.14.3 (P1-GH-2): use the schema-adaptive helper rather
+        # than a raw ``prescription.get('surfaces', [])`` lookup --
+        # the latter silently returned ``[]`` (and therefore
+        # ``n_surfs = 0`` here, dropping the entire TIS contribution)
+        # for modern ``'elements'``-key prescriptions.  Routing
+        # through ``_ghost_surfaces`` makes the count consistent
+        # with what ``ghost_analysis`` saw above.
+        n_surfs = len(_ghost_surfaces(prescription, wavelength))
         scatter_tis_per_surface = [tis_each_surface] * n_surfs
 
     stray_light_fraction = ghost_total

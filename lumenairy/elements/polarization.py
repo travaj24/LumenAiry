@@ -374,6 +374,66 @@ class JonesField:
 # POLARIZATION-DEPENDENT ELEMENTS
 # =============================================================================
 
+# v4.14.3 (P1-NEW-2): canonical "argument-not-supplied" sentinel for the
+# five polarization helpers' (``angle``, ``angle_deg``) conflict-detection
+# branch.  Matches the v4.14.1 ``_ZeroApertureMaskSentinel`` ``__slots__=()``
+# singleton pattern documented in ``optimize/core.py:2022-2031``.  We use
+# a dedicated class (rather than the more common ``_UNSET = object()``)
+# so the ``repr`` is informative if it ever leaks into an error message,
+# and so the sentinel can carry a ``__reduce__`` if it ever needs to
+# cross a pickle boundary (no current callsite does -- the sentinel is
+# function-local default-value plumbing).
+class _AngleUnsetSentinel:
+    """Singleton sentinel meaning "the caller did not supply this angle".
+
+    Used by :func:`apply_polarizer`, :func:`apply_waveplate`,
+    :func:`apply_half_wave_plate`, :func:`apply_quarter_wave_plate`, and
+    :func:`apply_rotator` to distinguish "user explicitly passed
+    ``angle=0.0``" from "user passed nothing".  The former plus an
+    ``angle_deg=N`` second kwarg with ``N != 0`` is a conflict and must
+    raise; the latter accepts ``angle_deg=N`` silently.  Pre-v4.14.3
+    the conflict check tested ``if angle != 0.0`` and so silently
+    accepted ``angle=0.0, angle_deg=90`` as a 90-degree rotation,
+    discarding the explicit ``angle=0`` half of the request.
+    """
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return '<_ANGLE_UNSET>'
+
+
+_ANGLE_UNSET = _AngleUnsetSentinel()
+
+
+def _resolve_angle(
+    func_name: str,
+    angle: Any,
+    angle_deg: Optional[float],
+) -> float:
+    """Resolve ``(angle, angle_deg)`` to a single radian value.
+
+    Shared helper for the 5 ``apply_*`` polarization helpers.  Returns
+    ``0.0`` when neither is supplied; otherwise returns the (radian)
+    value of whichever was supplied.  If both are supplied with
+    disagreeing numeric values raises :class:`ValueError`; agreement
+    is checked to ``atol=1e-12`` rad.
+    """
+    angle_supplied = angle is not _ANGLE_UNSET
+    if angle_deg is None:
+        return float(angle) if angle_supplied else 0.0
+    angle_from_deg = float(np.radians(angle_deg))
+    if angle_supplied:
+        # Both supplied -- they must agree to floating tolerance.
+        if not np.isclose(float(angle), angle_from_deg,
+                          rtol=0.0, atol=1e-12):
+            raise ValueError(
+                f"{func_name}: conflicting angle specification -- "
+                f"angle={angle} rad and angle_deg={angle_deg} "
+                f"(=> {angle_from_deg} rad) disagree.  Pass only one.")
+    return angle_from_deg
+
+
 def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[np.ndarray, np.ndarray], np.ndarray]]) -> 'JonesField':
     """
     Apply an arbitrary 2×2 Jones matrix to a JonesField.
@@ -436,7 +496,7 @@ def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[
 
 def apply_polarizer(
     field: 'JonesField',
-    angle: float = 0.0,
+    angle: Any = _ANGLE_UNSET,
     *,
     angle_deg: Optional[float] = None,
 ) -> 'JonesField':
@@ -457,9 +517,17 @@ def apply_polarizer(
     Returns
     -------
     JonesField
+
+    Raises
+    ------
+    ValueError
+        If both ``angle`` and ``angle_deg`` are supplied with values
+        that disagree (i.e. ``angle != radians(angle_deg)``).  Passing
+        ``angle_deg`` alone is accepted.  v4.14.3 (P1-NEW-2): symmetric
+        with :func:`apply_rotator` / :func:`apply_waveplate` and the
+        half/quarter-wave-plate wrappers.
     """
-    if angle_deg is not None:
-        angle = float(np.radians(angle_deg))
+    angle = _resolve_angle('apply_polarizer', angle, angle_deg)
     c = np.cos(angle)
     s = np.sin(angle)
     # Projection matrix for linear polarizer
@@ -471,7 +539,7 @@ def apply_polarizer(
 def apply_waveplate(
     field: 'JonesField',
     retardance: float,
-    angle: float = 0.0,
+    angle: Any = _ANGLE_UNSET,
     *,
     angle_deg: Optional[float] = None,
 ) -> 'JonesField':
@@ -496,6 +564,15 @@ def apply_waveplate(
     -------
     JonesField
 
+    Raises
+    ------
+    ValueError
+        If both ``angle`` and ``angle_deg`` are supplied with values
+        that disagree (i.e. ``angle != radians(angle_deg)``).  Passing
+        ``angle_deg`` alone is accepted.  v4.14.3 (P1-NEW-2): symmetric
+        with :func:`apply_rotator` / :func:`apply_polarizer` and the
+        half/quarter-wave-plate wrappers.
+
     Notes
     -----
     The Jones matrix for a waveplate with fast axis at angle theta and
@@ -512,8 +589,7 @@ def apply_waveplate(
     ``R(-theta) * diag(1, exp(+i phi)) * R(theta)``, which was
     inconsistent with the actual implementation.)
     """
-    if angle_deg is not None:
-        angle = float(np.radians(angle_deg))
+    angle = _resolve_angle('apply_waveplate', angle, angle_deg)
     c = np.cos(angle)
     s = np.sin(angle)
     # Under the library's exp(-i omega t) time-harmonic convention,
@@ -534,31 +610,45 @@ def apply_waveplate(
 
 def apply_half_wave_plate(
     field: 'JonesField',
-    angle: float = 0.0,
+    angle: Any = _ANGLE_UNSET,
     *,
     angle_deg: Optional[float] = None,
 ) -> 'JonesField':
-    """Convenience wrapper: half-wave plate (retardance = pi)."""
-    if angle_deg is not None:
-        angle = float(np.radians(angle_deg))
+    """Convenience wrapper: half-wave plate (retardance = pi).
+
+    Raises
+    ------
+    ValueError
+        If both ``angle`` and ``angle_deg`` are supplied with values
+        that disagree.  v4.14.3 (P1-NEW-2): symmetric with the other
+        polarization helpers.
+    """
+    angle = _resolve_angle('apply_half_wave_plate', angle, angle_deg)
     return apply_waveplate(field, np.pi, angle)
 
 
 def apply_quarter_wave_plate(
     field: 'JonesField',
-    angle: float = 0.0,
+    angle: Any = _ANGLE_UNSET,
     *,
     angle_deg: Optional[float] = None,
 ) -> 'JonesField':
-    """Convenience wrapper: quarter-wave plate (retardance = pi/2)."""
-    if angle_deg is not None:
-        angle = float(np.radians(angle_deg))
+    """Convenience wrapper: quarter-wave plate (retardance = pi/2).
+
+    Raises
+    ------
+    ValueError
+        If both ``angle`` and ``angle_deg`` are supplied with values
+        that disagree.  v4.14.3 (P1-NEW-2): symmetric with the other
+        polarization helpers.
+    """
+    angle = _resolve_angle('apply_quarter_wave_plate', angle, angle_deg)
     return apply_waveplate(field, np.pi / 2, angle)
 
 
 def apply_rotator(
     field: 'JonesField',
-    angle: float = 0.0,
+    angle: Any = _ANGLE_UNSET,
     *,
     angle_deg: Optional[float] = None,
 ) -> 'JonesField':
@@ -593,23 +683,20 @@ def apply_rotator(
     ValueError
         If both ``angle`` and ``angle_deg`` are supplied with values
         that disagree (i.e. ``angle != radians(angle_deg)``).  Passing
-        ``angle_deg`` alongside the default ``angle=0`` is accepted.
+        ``angle_deg`` alone is accepted.
+
+        v4.14.3 (P1-NEW-2): the pre-v4.14.3 check used ``if angle !=
+        0.0`` as a proxy for "angle was supplied", which silently
+        accepted ``apply_rotator(field, angle=0.0, angle_deg=90)`` as
+        a 90-degree rotation and discarded the explicit ``angle=0``
+        half of the request.  v4.14.3 switches to the
+        :data:`_ANGLE_UNSET` singleton sentinel so explicit zeros are
+        distinguished from defaults; the same sentinel is now used by
+        the four sibling helpers (``apply_polarizer``,
+        ``apply_waveplate``, ``apply_half_wave_plate``,
+        ``apply_quarter_wave_plate``) for API consistency.
     """
-    # v4.14.2 (P1-NEW-7): if both are supplied, validate they agree
-    # within float tolerance rather than silently letting ``angle_deg``
-    # win -- a user who passes both with conflicting values almost
-    # certainly has a bug.  ``angle == 0.0`` (the default) is treated
-    # as "not supplied" so the common ``apply_rotator(field,
-    # angle_deg=45)`` call is accepted.
-    if angle_deg is not None:
-        angle_from_deg = float(np.radians(angle_deg))
-        if angle != 0.0 and not np.isclose(angle, angle_from_deg,
-                                            rtol=0.0, atol=1e-12):
-            raise ValueError(
-                f"apply_rotator: conflicting angle specification -- "
-                f"angle={angle} rad and angle_deg={angle_deg} "
-                f"(=> {angle_from_deg} rad) disagree.  Pass only one.")
-        angle = angle_from_deg
+    angle = _resolve_angle('apply_rotator', angle, angle_deg)
     c = np.cos(angle)
     s = np.sin(angle)
     J = np.array([[c, -s],

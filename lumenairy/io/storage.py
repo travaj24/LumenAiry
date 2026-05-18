@@ -404,6 +404,32 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
         (``complex64`` or ``complex128``).  If False (the historical
         default), coerce to ``complex128`` for storage.  See
         :func:`save_field_h5` for the same flag.  v4.13.0 onward.
+
+    Notes
+    -----
+    **Atomicity (v4.14.3, P0-NEW-1).**  The ``n_planes`` attribute is
+    bumped to ``n + 1`` *before* the dataset is created and rolled back
+    to ``n`` if the create fails.  Pre-4.14.3 the order was reversed
+    (create first, then bump), which had two failure modes: (1) a
+    crash between create and bump left an orphan dataset and a stale
+    ``n_planes`` so the next append would compute the same dataset
+    name and fail; (2) two concurrent appenders read the same
+    ``n_planes`` and one silently overwrote the other (silent data
+    loss).  The new order keeps the slot reserved even if create
+    crashes: a subsequent append computes ``n + 1`` and skips the
+    orphan.  The load path tolerates a "reserved but absent" slot
+    (see :func:`_h5_list_planes`'s ``if name not in grp: continue``).
+
+    **Multi-process restriction (v4.14.3).**  The single-process
+    atomicity above is sufficient for the canonical sequential
+    streaming-write path (HFPI, Monte-Carlo, ``MhsPipeline.run``).
+    True multi-process concurrent appenders still require platform
+    locking (HDF5 SWMR mode or a Zarr distributed lock).  Do not
+    call ``append_plane_h5`` against the same file from multiple
+    processes simultaneously.  HDF5 enforces single-writer semantics
+    at the file-handle level so a concurrent ``File(..., 'a')`` will
+    raise ``BlockingIOError`` on most platforms -- but this is a
+    side-effect of the underlying library, not a guarantee.
     """
     _require_h5py()
     if dy is None:
@@ -421,7 +447,7 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
             grp.attrs['n_planes'] = 0
         else:
             grp = f['planes']
-        n = int(grp.attrs['n_planes'])
+        n = int(grp.attrs.get('n_planes', 0))
         name = f'plane_{n:02d}'
         Ny, Nx = E.shape
         chunks = (min(chunk_size, Ny), min(chunk_size, Nx))
@@ -430,18 +456,35 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
             ds_kwargs['compression'] = compression
             if compression_opts is not None:
                 ds_kwargs['compression_opts'] = compression_opts
-        dset = grp.create_dataset(name, data=E, **ds_kwargs)
-        dset.attrs['dx'] = float(dx)
-        dset.attrs['dy'] = float(dy)
-        dset.attrs['dtype'] = str(E.dtype)
-        if z is not None:
-            dset.attrs['z'] = float(z)
-        if label is not None:
-            dset.attrs['label'] = str(label)
-        if metadata:
-            for k, v in metadata.items():
-                dset.attrs[str(k)] = v
+        # v4.14.3 (P0-NEW-1): reserve the slot atomically by bumping
+        # ``n_planes`` BEFORE the dataset is created.  If
+        # ``create_dataset`` crashes (disk full, dtype mismatch, etc.)
+        # the increment is rolled back so a subsequent append re-uses
+        # this same slot rather than skipping it.  The reverse order
+        # (create, then bump) left an orphan dataset on crash that
+        # collided with the next append's computed name.
         grp.attrs['n_planes'] = n + 1
+        try:
+            dset = grp.create_dataset(name, data=E, **ds_kwargs)
+            dset.attrs['dx'] = float(dx)
+            dset.attrs['dy'] = float(dy)
+            dset.attrs['dtype'] = str(E.dtype)
+            if z is not None:
+                dset.attrs['z'] = float(z)
+            if label is not None:
+                dset.attrs['label'] = str(label)
+            if metadata:
+                for k, v in metadata.items():
+                    dset.attrs[str(k)] = v
+        except Exception:
+            # Roll back the slot-reservation so a re-try lands on the
+            # same name (don't strand the slot).  Narrow the exception
+            # tuple to (RuntimeError, OSError, ValueError, TypeError)
+            # would be ideal but the h5py create-dataset path can raise
+            # anything from the HDF5 native layer; preserve the
+            # original Exception class for the user via ``raise``.
+            grp.attrs['n_planes'] = n
+            raise
 
 
 def _h5_list_planes(filepath):
@@ -740,6 +783,19 @@ def _open_zarr_group_safe(zarr_mod, filepath, writable=False):
 def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
                        metadata=None, chunk_size=1024,
                        preserve_dtype=False, **_kwargs):
+    """Append one plane to a Zarr store, ``planes/plane_NN`` dataset.
+
+    See :func:`append_plane_h5` for the atomicity contract.  Same
+    fix: bump ``n_planes`` first, roll back on create failure.  In
+    addition the Zarr code path historically passed
+    ``overwrite=True`` to ``create_array``, which combined with the
+    pre-fix attribute-after-create order meant a crashed-then-restarted
+    appender would *silently clobber* the orphan dataset.  v4.14.3
+    drops ``overwrite=True``: the attribute-before-create order leaves
+    the orphan slot reserved (next append computes ``n + 1``), and if
+    a stale ``plane_NN`` already exists at the computed slot the
+    create now raises rather than silently overwriting.
+    """
     zarr = _require_zarr()
     if dy is None:
         dy = dx
@@ -763,23 +819,34 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
         planes_grp.attrs['n_planes'] = 0
     else:
         planes_grp = store['planes']
-    n = int(planes_grp.attrs['n_planes'])
+    n = int(planes_grp.attrs.get('n_planes', 0))
     name = f'plane_{n:02d}'
-    ds = planes_grp.create_array(
-        name=name, data=E, chunks=chunks, overwrite=True)
-    ds.attrs['dx'] = float(dx)
-    ds.attrs['dy'] = float(dy)
-    if z is not None:
-        ds.attrs['z'] = float(z)
-    if label is not None:
-        ds.attrs['label'] = str(label)
-    if metadata:
-        for k, v in metadata.items():
-            try:
-                ds.attrs[str(k)] = v
-            except TypeError:
-                ds.attrs[str(k)] = str(v)
+    # v4.14.3 (P0-NEW-1): same attribute-before-create discipline as
+    # the HDF5 path.  Roll back on any create failure so the slot is
+    # not stranded.  ``overwrite=False`` (the default) is now required
+    # to detect-and-raise on a stale orphan rather than silently
+    # clobber it.
     planes_grp.attrs['n_planes'] = n + 1
+    try:
+        ds = planes_grp.create_array(
+            name=name, data=E, chunks=chunks)
+        ds.attrs['dx'] = float(dx)
+        ds.attrs['dy'] = float(dy)
+        if z is not None:
+            ds.attrs['z'] = float(z)
+        if label is not None:
+            ds.attrs['label'] = str(label)
+        if metadata:
+            for k, v in metadata.items():
+                try:
+                    ds.attrs[str(k)] = v
+                except TypeError:
+                    ds.attrs[str(k)] = str(v)
+    except Exception:
+        # Roll back the slot reservation so a retry re-uses the same
+        # name.  Re-raise the original exception class unchanged.
+        planes_grp.attrs['n_planes'] = n
+        raise
 
 
 def _zarr_load_planes(filepath, indices=None):

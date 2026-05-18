@@ -95,7 +95,8 @@ def t_dammann_grating():
     phase, _, _ = la.makedammann2d(
         periodx=100, periody=100, waveln=1.31,
         wavsamp=0.5, phaselevels=4, phasesteps=2,
-        diforders=target_orders, itr=20, seed=42, plot=False)
+        diforders=target_orders, itr=20, seed=42, plot=False,
+        _legacy_units='um')
     return phase is not None and phase.shape[0] > 0, \
         f'Dammann shape = {phase.shape}'
 

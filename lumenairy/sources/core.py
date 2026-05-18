@@ -40,6 +40,7 @@ def _validate_grid_params(
     *,
     dy: Optional[float] = None,
     fn_name: str = 'create_*',
+    support_tuple_N: bool = False,
 ) -> None:
     """Validate grid-size + sample-spacing + wavelength for source factories.
 
@@ -57,7 +58,8 @@ def _validate_grid_params(
     Parameters
     ----------
     N : int or (Ny, Nx)
-        Grid size.  Tuple form is for rectangular grids.
+        Grid size.  Tuple form is only accepted when
+        ``support_tuple_N=True``.
     dx : float
         Sample spacing in x [m].
     wavelength : float
@@ -68,9 +70,29 @@ def _validate_grid_params(
     fn_name : str
         Factory name, embedded into every error message so the
         caller knows which entry point raised.
+    support_tuple_N : bool, default False
+        Whether the calling factory accepts ``(Ny, Nx)`` tuple-form
+        ``N``.  Only the mode-family helpers
+        (``create_gaussian_beam``, ``create_hermite_gauss``,
+        ``create_laguerre_gauss``) unpack tuples internally; every
+        other ``create_*`` factory in ``sources/core.py`` calls
+        ``np.arange(N)`` on the raw input and crashes on tuple-N
+        with an obscure ``np.arange`` ``TypeError``.  v4.14.3
+        (P1-NEW-5): the validator now rejects tuple-N up-front
+        with a named error when the factory doesn't support it,
+        so callers get a clear message instead of an inscrutable
+        downstream crash.
     """
-    # ``N`` -- positive integer, or a 2-tuple of positive integers.
+    # ``N`` -- positive integer, or a 2-tuple of positive integers
+    # (only when the calling factory unpacks tuples).
     if isinstance(N, (tuple, list)):
+        if not support_tuple_N:
+            raise TypeError(
+                f"{fn_name}: tuple-form N=(Ny, Nx) is not supported by "
+                f"this factory; got {N!r}.  Pass a single positive "
+                f"integer for a square N x N grid.  Tuple-form N is "
+                f"currently supported only by create_gaussian_beam, "
+                f"create_hermite_gauss, and create_laguerre_gauss.")
         if len(N) != 2:
             raise ValueError(
                 f"{fn_name}: N tuple form must be (Ny, Nx); got "
@@ -87,9 +109,10 @@ def _validate_grid_params(
                     f"got {int(n)}.")
     else:
         if not isinstance(N, (int, np.integer)):
+            tuple_hint = (' (or (Ny, Nx) tuple)' if support_tuple_N else '')
             raise ValueError(
-                f"{fn_name}: N must be a positive integer "
-                f"(or (Ny, Nx) tuple), got {type(N).__name__} ({N!r}).")
+                f"{fn_name}: N must be a positive integer"
+                f"{tuple_hint}, got {type(N).__name__} ({N!r}).")
         if int(N) <= 0:
             raise ValueError(
                 f"{fn_name}: N must be a positive integer, got {int(N)}.")
@@ -231,7 +254,8 @@ def create_gaussian_beam(
     ``sigma`` keyword-only.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
-                          fn_name='create_gaussian_beam')
+                          fn_name='create_gaussian_beam',
+                          support_tuple_N=True)
     if CUPY_AVAILABLE and use_gpu:
         # 4.10: pre-4.10 reached for module-level ``cp`` without first
         # calling _ensure_cupy_loaded(), so ``cp`` was still None and
@@ -382,7 +406,8 @@ def create_hermite_gauss(
     when chaining HG modes through the modal asymptotic propagator.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
-                          fn_name='create_hermite_gauss')
+                          fn_name='create_hermite_gauss',
+                          support_tuple_N=True)
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -529,7 +554,8 @@ def create_laguerre_gauss(
     through ``propagate_modal_asymptotic``.
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
-                          fn_name='create_laguerre_gauss')
+                          fn_name='create_laguerre_gauss',
+                          support_tuple_N=True)
     if dy is None:
         dy = dx
     if isinstance(N, (tuple, list)):
@@ -942,6 +968,22 @@ def create_fiber_mode(
     """
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_fiber_mode')
+    # v4.14.3 (P1-NEW-10 / Agent B): reject non-physical MFD.
+    # ``mode_field_diameter <= 0`` silently flips sigma's sign (yielding
+    # an exponential field that grows away from the centre -- not a
+    # mode but a numerical singularity) or hits divide-by-zero in
+    # ``sigma = w0/sqrt(2)`` when MFD=0.  Raise loudly so the caller
+    # sees a clear error instead of an inf/NaN-laced output array.
+    try:
+        mfd_f = float(mode_field_diameter)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"create_fiber_mode: mode_field_diameter must be a positive "
+            f"finite number [m]; got {mode_field_diameter!r}.") from exc
+    if not np.isfinite(mfd_f) or mfd_f <= 0.0:
+        raise ValueError(
+            f"create_fiber_mode: mode_field_diameter must be a positive "
+            f"finite number [m]; got {mfd_f}.")
     if na is not None and na > 0.2:
         import warnings
         warnings.warn(
@@ -1050,17 +1092,22 @@ def create_led_source(
     #   - ``args[1]`` is the legacy ``wavelength``;
     #   - ``args[2..3]``, if present, are legacy ``x0``, ``y0``;
     #   - ``args[4]``, if present, is legacy ``dtype``.
+    #
+    # v4.14.3 (P1-NEW-4 / Agent B): the bare ``*args`` collector is a
+    # silent footgun if a user passes 5 positional arguments in the
+    # NEW canonical order ``(N, dx, wavelength, diameter,
+    # divergence_angle)``: the shim re-routes ``wavelength`` (e.g.
+    # 633e-9) as ``diameter`` and ``divergence_angle`` (e.g. 0.3 rad)
+    # as ``wavelength``, producing a 633 nm-wide LED with a 0.3 m
+    # "wavelength" -- and only a misleading DeprecationWarning.  The
+    # post-remap scale-inversion check below catches the canonical-
+    # order mistake by spotting the diameter/wavelength magnitude
+    # inversion that distinguishes the two call forms.  PEP 570
+    # ``/`` was considered but does not gate the ``*args`` collector
+    # so adds no safety here, while it would force every existing
+    # kwarg-based caller (incl. the v4.14.2 audit test
+    # infrastructure) to drop N/dx/wavelength out of kwargs.
     if args:
-        import warnings
-        warnings.warn(
-            "create_led_source: positional call form "
-            "``(N, dx, diameter, divergence_angle, wavelength, ...)`` "
-            "is deprecated since v4.14.2.  Use the keyword-only form "
-            "``create_led_source(N, dx, wavelength, *, diameter=..., "
-            "divergence_angle=..., ...)`` instead.  The legacy "
-            "positional form will be removed in a future release.",
-            DeprecationWarning, stacklevel=2,
-        )
         # Re-map legacy positionals.  ``wavelength`` is the 3rd
         # positional under the new sig but the legacy ``diameter``
         # under the old sig.
@@ -1075,6 +1122,49 @@ def create_led_source(
                 "got only 4.  Migrate to the new keyword-only form: "
                 "``create_led_source(N, dx, wavelength, *, "
                 "diameter=..., divergence_angle=...)``.")
+        # v4.14.3 (P1-NEW-4): scale-inversion sanity check.  In a
+        # legitimate legacy call ``_legacy_diameter`` is an emitting-
+        # area diameter (typically 10-1000 um, i.e. 1e-5..1e-3 m) and
+        # ``_legacy_wavelength`` is a vacuum wavelength (1e-7..3e-6 m
+        # over the UV-MWIR range).  If a user instead passes 5
+        # positionals in the NEW canonical order, ``_legacy_diameter
+        # = wavelength`` (1e-7..3e-6) and ``_legacy_wavelength =
+        # divergence_angle`` (typically O(0.1) rad).  The flag
+        # ``_legacy_wavelength > _legacy_diameter * 10`` separates
+        # the two forms: legacy callers never feed a wavelength 10x
+        # larger than the diameter (a 1 um LED at 10 um wavelength
+        # is a thermal emitter, not an "LED"), but the canonical-
+        # order mistake yields divergence/wavelength = 0.3/633e-9 ~
+        # 5e5, which trips the check loudly.
+        try:
+            _diam_f = float(_legacy_diameter)
+            _wl_f = float(_legacy_wavelength)
+        except (TypeError, ValueError):
+            _diam_f = _wl_f = None
+        if (_diam_f is not None and _wl_f is not None
+                and _diam_f > 0 and _wl_f > _diam_f * 10):
+            raise TypeError(
+                "create_led_source: detected scale-inverted positional "
+                "arguments (apparent wavelength {:.3e} m > 10x apparent "
+                "diameter {:.3e} m).  This usually means the call was "
+                "made in the NEW canonical positional order "
+                "``create_led_source(N, dx, wavelength, diameter, "
+                "divergence_angle)``, which is rejected since v4.14.3: "
+                "the canonical form requires ``diameter`` and "
+                "``divergence_angle`` to be passed as keyword "
+                "arguments.  Use ``create_led_source(N, dx, "
+                "wavelength, diameter=..., divergence_angle=...)``."
+                .format(_wl_f, _diam_f))
+        import warnings
+        warnings.warn(
+            "create_led_source: positional call form "
+            "``(N, dx, diameter, divergence_angle, wavelength, ...)`` "
+            "is deprecated since v4.14.2.  Use the keyword-only form "
+            "``create_led_source(N, dx, wavelength, *, diameter=..., "
+            "divergence_angle=..., ...)`` instead.  The legacy "
+            "positional form will be removed in a future release.",
+            DeprecationWarning, stacklevel=2,
+        )
         # Promote legacy positionals into the canonical kwargs, but do
         # not overwrite kwargs the caller explicitly supplied (that's
         # an unambiguous error).
@@ -1181,6 +1271,29 @@ def create_bessel_beam(
 
     _validate_grid_params(N, dx, wavelength, dy=dy,
                           fn_name='create_bessel_beam')
+    # v4.14.3 (P1-NEW-9 / Agent B): reject non-physical cone angles
+    # that produce silent zero / evanescent fields.
+    # ``cone_angle <= 0`` -> ``sin(theta) <= 0`` -> uniform DC field
+    # mis-labelled "Bessel beam".
+    # ``cone_angle == pi/2`` -> ``k_r = k0`` (grazing -- non-propagating).
+    # ``cone_angle > pi/2`` -> ``sin(theta)`` decreases again, so any
+    # value > pi/2 is aliased to the same physical k_r as some smaller
+    # angle (e.g. 2*pi/3 -> sin=sqrt(3)/2 same as pi/3) BUT it
+    # represents an evanescent ``k_r > k0`` regime once the user
+    # presumed the literal angle.  Enforce the strictly-propagating
+    # window ``(0, pi/2)``.
+    try:
+        cone_f = float(cone_angle)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            f"create_bessel_beam: cone_angle must be a finite number "
+            f"in (0, pi/2) rad; got {cone_angle!r}.") from exc
+    if not np.isfinite(cone_f) or not (0.0 < cone_f < np.pi / 2.0):
+        raise ValueError(
+            f"create_bessel_beam: cone_angle={cone_f} must be in "
+            f"(0, pi/2) rad to produce a propagating Bessel beam.  "
+            f"Got sin(cone_angle)={np.sin(cone_f):.3e}, "
+            f"k_r/k0={np.sin(cone_f):.3e}.")
     if dy is None:
         dy = dx
     x = (np.arange(N) - N / 2) * dx
