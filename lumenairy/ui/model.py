@@ -712,10 +712,18 @@ class SystemModel(QObject):
         else:
             return
         prev = self.elements[elem_idx - 1]
-        prev_back = prev.origin.copy()
-        if prev.surfaces:
-            internal = sum(float(s.thickness) for s in prev.surfaces)
-            prev_back = prev_back + internal * prev.R[:, 2]
+        # v4.15 (P1-UI-4): route both call sites through one helper so
+        # they can't drift on this calculation again.  Pre-4.15 this
+        # used ``sum(all surfaces)`` while :meth:`set_display_distance`
+        # used ``Element.internal_thickness_mm`` (``sum(surfaces[:-1])``).
+        # Same value for Thorlabs / freshly-inserted singlets (where the
+        # back surface has thickness=0), but the two diverge for
+        # elements whose back-surface thickness was explicitly written
+        # to non-zero (e.g. by ``_build_trace_surfaces_internal``
+        # transient state or a ungroup-then-edit workflow), giving the
+        # absolute-position editor and the absolute-distance setter
+        # different back-vertex Z's for the same element.
+        prev_back = self._prev_element_back_vertex_world(prev)
         delta = cur_origin - prev_back
         new_distance = float(np.dot(delta, prev.R[:, 2]))
         # Subtract the axial component to get the perpendicular
@@ -736,6 +744,33 @@ class SystemModel(QObject):
         else:
             return self.element_z_positions_mm()[elem_index]
 
+    @staticmethod
+    def _prev_element_back_vertex_world(prev):
+        """v4.15 (P1-UI-4): world-coords back vertex of ``prev`` element.
+
+        Single source of truth for "where is element N-1's back-vertex
+        in world space?", consumed by:
+
+        * :meth:`_apply_absolute_position_edit` -- to back-derive the
+          new ``distance_mm`` from a user-entered absolute Z;
+        * :meth:`set_display_distance` -- to convert the absolute-mode
+          column value into the element's relative gap.
+
+        Pre-4.15 those two places computed this independently with a
+        subtle difference: the first used ``sum(all surface
+        thicknesses) * R[:,2]``, the second used the
+        :attr:`Element.internal_thickness_mm` property which is
+        ``sum(surfaces[:-1])`` (i.e. excludes any non-zero thickness
+        on the back surface).  The slicing form is correct for the
+        "back vertex of THIS element" question -- the back-surface's
+        thickness, when non-zero, encodes the air gap *to the next
+        element*, not internal glass path -- so we standardise on it
+        everywhere now.
+        """
+        if not prev.surfaces:
+            return prev.origin.copy()
+        return prev.origin + prev.internal_thickness_mm * prev.R[:, 2]
+
     def set_display_distance(self, elem_index, value):
         """Set distance from display value, handling coordinate mode."""
         if elem_index == 0:
@@ -744,10 +779,14 @@ class SystemModel(QObject):
         if self._coordinate_mode == 'relative':
             self.elements[elem_index].distance_mm = max(0, value)
         else:
-            # Absolute mode: convert to relative
+            # Absolute mode: convert to relative.  v4.15 (P1-UI-4):
+            # the previous-element back vertex is now expressed in the
+            # SAME world-frame coords the absolute display column uses
+            # (front-vertex Z accumulated via element_z_positions_mm).
+            # ``_prev_element_back_vertex_world`` returns a 3-vector;
+            # we project its Z component since the column is 1-D.
             positions = self.element_z_positions_mm()
             prev_z = positions[elem_index - 1]
-            # Add internal thickness of previous element
             prev_elem = self.elements[elem_index - 1]
             prev_back = prev_z + prev_elem.internal_thickness_mm
             self.elements[elem_index].distance_mm = max(0, value - prev_back)
@@ -1291,7 +1330,18 @@ class SystemModel(QObject):
     # ── Undo / redo ────────────────────────────────────────────────
 
     def _capture_state(self):
-        """Return a deep-copied snapshot of everything undo/redo cares about."""
+        """Return a deep-copied snapshot of everything undo/redo cares about.
+
+        v4.15 (P1-UI-3): added ``wavelength_weights``, ``field_weights``,
+        and ``lens_options`` to the snapshot.  Pre-4.15 these three
+        fields were excluded from the capture, so editing them and then
+        hitting Ctrl+Z left the model in an orphan state: the elements
+        list rolled back but the per-wavelength weights / per-field
+        weights / per-lens-function kwargs stayed at their post-edit
+        values.  All three are now snapshotted via list/dict copies
+        (no need for deepcopy because each is a flat container of
+        immutables -- floats and strings).
+        """
         return {
             'elements': copy.deepcopy(self.elements),
             'wavelength_nm': self.wavelength_nm,
@@ -1300,6 +1350,14 @@ class SystemModel(QObject):
             'field_angles_deg': list(self.field_angles_deg),
             'coordinate_mode': self._coordinate_mode,
             'opt_variables': list(self.opt_variables),
+            # v4.15 (P1-UI-3) additions:
+            'wavelength_weights': (list(self.wavelength_weights)
+                                    if self.wavelength_weights is not None
+                                    else None),
+            'field_weights': (list(self.field_weights)
+                               if self.field_weights is not None
+                               else None),
+            'lens_options': copy.deepcopy(self.lens_options),
         }
 
     def _restore_state(self, state):
@@ -1313,6 +1371,22 @@ class SystemModel(QObject):
             self.field_angles_deg = list(state['field_angles_deg'])
             self._coordinate_mode = state['coordinate_mode']
             self.opt_variables = list(state['opt_variables'])
+            # v4.15 (P1-UI-3): restore the three fields that v4.14.x
+            # silently dropped on undo/redo.  ``.get(...)`` keeps the
+            # restore tolerant of older snapshots that lack the keys
+            # (e.g. snapshots captured from a Snapshots-dock save that
+            # was serialised before v4.15) -- we leave the live values
+            # alone in that legacy case rather than NULL-blanking them.
+            if 'wavelength_weights' in state:
+                self.wavelength_weights = (
+                    list(state['wavelength_weights'])
+                    if state['wavelength_weights'] is not None else None)
+            if 'field_weights' in state:
+                self.field_weights = (
+                    list(state['field_weights'])
+                    if state['field_weights'] is not None else None)
+            if 'lens_options' in state:
+                self.lens_options = copy.deepcopy(state['lens_options'])
             self._invalidate()
             self.system_changed.emit()
         finally:

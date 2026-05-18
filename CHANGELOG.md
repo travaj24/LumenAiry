@@ -2,6 +2,261 @@
 
 All notable changes to the core library are documented here.
 
+## [4.15.0] — 2026-05-18
+
+**Major minor release** rolling together carryover P1s from the
+v4.14.2 audit (the "v4.14.4" patch scope) + ROADMAP v4.15 + ROADMAP
+v4.16 into a single coordinated ship.  **1425 unit tests pass** (up
+from 1265; +160 net new pins), **1 documented skip**, **1 documented
+xfail** (`create_led_source` validation entry-point exemption);
+**34/34 validation files pass**.
+
+### Headline: modal-asymptotic 19.4x perf win + wrong-saddle physics fix
+
+`propagate_modal_asymptotic` switches from a per-pixel warm-started
+Newton loop to a single batched cold-start
+`_solve_envelope_stationary_batch` + `_compute_M_b_batch` path
+(the private helpers v4.14.0 shipped but did not consume on the
+public path).  Closes the v4.14.0 audit's "wrong-saddle basin"
+physics finding (warm-start chain entered wrong-saddle basins at
+grid edges, silently zeroing those pixels via the `|b_quad| > 700`
+overflow guard).  Cascade impact: any caller that builds on
+`propagate_modal_asymptotic` (aberration tensor sigma-integration
+grid path, through-focus / polychromatic helpers per focus or
+wavelength point) gains the perf win and the grid-edge correctness
+in one step.
+
+Output is **bit-different** from v4.14.x at grid edges (strictly
+more non-zero pixels because the cold-start finds the physical
+saddle uniformly).  Four bit-equal pins migrated to property
+pins (1e-8 abs vs cold-start reference + 5% energy + nz-count
+>= warm-start ref):
+`test_lg00_single_mode_matches_reference`, `test_multimode_matches_reference`
+in `test_perf_v4_12_0_asymptotic.py`, plus
+`test_lg00_single_mode_bit_equal` and `test_lg_p0_4mode_prescription_bit_equal`
+in `test_audit_fixes_v4_14_0_agent_1.py`.  The v4.14.1 row-reset
+warm-start pin (`test_row_reset_resets_warm_start`) was retargeted
+to the v4.15 stronger structural guarantee:  the scalar
+`solve_envelope_stationary` is no longer invoked by the public
+path in any `maslov_tracking` mode (the warm-start chain is
+structurally deleted, not just reset).
+
+Measured: **19.4x** speedup at N=128 LG_(0,0); +52 non-zero
+pixels recovered on the same grid (15918 vs 15866).
+
+### Source factory normalisation + ergonomic system entry
+
+Pre-v4.15 the 5 `Source.method` classmethod factories had
+inconsistent positional order — some put size-arg first, others
+N first.  v4.15 picks the canonical order
+`Source.method(*, N, dx, wavelength, <size_kwargs>)` (kwarg-only).
+The legacy positional form still works for one release with a
+`DeprecationWarning` routed through the new
+`_deprecation.warn_deprecated_signature` helper with
+`version_removed='5.0'`.  Affected factories: `Source.gaussian`,
+`Source.plane_wave`, `Source.point_source`, `Source.top_hat`,
+`Source.fiber_mode`.
+
+New ergonomic entry `lumenairy.system.evaluate(prescription,
+source, *, output_grid=None, output_dx=None, ...)` (also
+top-level `lumenairy.evaluate`).  Accepts both Zemax-loader
+prescription shape (`elements` + `all_thicknesses` keys) and
+factory shape (`surfaces` + `thicknesses` keys).  Users loading
+a `.zmx` file no longer have to build the element list manually
+before propagating.
+
+### 7 new public-API functions (ROADMAP v4.16 closure)
+
+* `ee_polychromatic(prescription, wavelengths, weights, radii, ...)`
+  — convenience chain over `polychromatic_psf` +
+  `encircled_energy_radius`.
+* `strehl_vector(Ex, Ey, Ez=None, *, reference=None)` —
+  vector Strehl with optional `Ez` z-component (Richards-Wolf
+  high-NA case).
+* `coupling_efficiency_vector(Ex, Ey, Ez=None, *, mode_Ex,
+  mode_Ey, mode_Ez=None, dx)` — vector overlap integral with a
+  vector mode.
+* `rayleigh_resolution(psf, dx, wavelength, *, axis='radial')`
+  — first-zero-of-PSF Rayleigh diffraction limit.
+* `sparrow_resolution(psf, dx, *, axis='radial')` — empirical
+  Sparrow criterion (dip-just-vanishes for two overlapping
+  point sources).
+* `fwhm_resolution(psf, dx, *, axis='radial')` — twice the
+  FWHM half-radius of the central peak.
+* `astigmatism_mag_angle(coeffs)` — Mahajan §8.2 conversion of
+  Zernike `(c3, c5)` to `(|astig|, theta)` in the
+  OSA/ANSI convention matching `zernike_decompose`.
+
+All 7 are top-level exports in `lumenairy.__all__`.
+
+### 3 new source factories (partial-coherence + ring incoherent)
+
+* `create_gaussian_schell_source(*, N, dx, wavelength, w0,
+  sigma_g, n_realizations=16, ...)` — spatially-incoherent
+  Gaussian-Schell beam via random-phase ensemble.
+* `create_schell_model_source(*, N, dx, wavelength,
+  intensity_profile, coherence_length, n_realizations=16, ...)`
+  — generic Schell-model (caller supplies intensity profile).
+* `create_annular_incoherent_source(*, N, dx, wavelength,
+  inner_radius, outer_radius, n_realizations=16, ...)` —
+  angular-spectrum ensemble with finite source extent for
+  partial-coherence integration (distinct from existing
+  monochromatic-coherent `create_annular_beam`).
+
+Matching `Source.gaussian_schell(...)` / `Source.schell_model(...)`
+classmethods.  All 3 call `_validate_grid_params` in the first
+10 lines (per the v4.14.2 audit's input-validation entry-point
+meta-pin candidate).
+
+### Forbes Q-type freeform basis + off-axis parabola factory
+
+* `surface_sag_q_bfs(X, Y, *, radius, coefficients, r_max, ...)`
+  — Forbes Q-bfs basis (Forbes 2007, *Opt. Express* 15(8) 5218,
+  eq. 13).  Best-fit-sphere subtracted; orthonormal on the
+  weight `u^2 (1-u^2) d(u^2)` over `[0, 1]`.
+* `surface_sag_q_con(X, Y, *, radius, conic, coefficients,
+  r_max, ...)` — Forbes Q-con basis (Forbes 2010,
+  *Opt. Express* 18(13) 13851, eq. 6).  Conic-subtracted;
+  orthonormal on weight `u^4 d(u^2)`.
+
+Implementation uses the shifted-Jacobi 3-term recurrence
+(A&S 22.7.1) on `t = 2x - 1` for `x = u^2 in [0, 1]`:
+Q-bfs `(alpha, beta) = (1, 1)` with orthonormaliser
+`c_n = sqrt((2n+3)(n+2)/(n+1)^2)`; Q-con `(alpha, beta) =
+(0, 2)` with `c_n = sqrt(2n+3)`.  Orthonormality verified
+numerically to <1e-6 over the first 5 orders for both bases.
+
+* `make_off_axis_parabola(focal_length, off_axis_angle,
+  clear_aperture, *, glass='__MIRROR__', vertex_radius=None,
+  name=None) -> dict` — prescription factory for OAP segments.
+  Single parabolic surface (conic `k = -1`, vertex radius
+  `R = 2*focal_length`) with `decenter` and `tilt` set to the
+  parent-axis offset and local-frame tilt.
+
+### v4.14.2 carryover P1s closed (the "v4.14.4" scope)
+
+**UI subpackage (P1-UI-1 through P1-UI-7):**
+* `main_window.py` glass table now includes `N-LASF9` and
+  `S-NPH1` (P1-UI-1) and `_nudge_distance` routes through
+  `set_display_distance` (P1-UI-2, coordinate-mode aware).
+* `model.py` undo state-capture now includes
+  `wavelength_weights`, `field_weights`, `lens_options`
+  (P1-UI-3).  Back-vertex calculation consolidated into a
+  single `_prev_element_back_vertex_world` helper to prevent
+  drift between the 717-718 vs 752 sites (P1-UI-4).
+* `waveoptics_dock.py` re-parent now guarded by
+  `shiboken6.isValid(original_parent)` to avoid the
+  mid-dialog segfault risk (P1-UI-5).
+* `psf_mtf_dock.py` ray-traced OPD now accumulates via
+  `np.add.at(... mean)` instead of last-write-wins per pixel
+  (P1-UI-6); out-of-aperture rays are filtered by a bounds
+  mask before indexing instead of `np.clip(...).astype(int)`
+  silently snapping to the pupil edge (P1-UI-7).
+
+**Codegen + ghost + glass:**
+* P1-CG: generated scripts now embed a runtime version pin
+  (`if tuple(...) < (4, 15, 0): raise RuntimeError(...)`) plus
+  a `lumenairy_version:` comment stamp.
+* P1-GH-1: `non_sequential_stray_light` accepts a `seed: int |
+  None = None` kwarg (default `None` uses system entropy so MC
+  produces a real uncertainty band; pass a fixed integer to
+  pin reproducibility).
+* P1-GL-1: bundled Sellmeier rows for `SiO2` / `F_SILICA` /
+  `FUSED_SILICA` (Malitson 1965 fused-silica coefficients) and
+  `S-LAH64` / `S-LAH79` (OHARA Zemax 2017-11-30 catalog from
+  the refractiveindex.info-database YAML).  Minimal installs
+  without `refractiveindex` now resolve these glasses through
+  the bundled Sellmeier fallback.
+
+### Exhaustive P2/P3 sweep + meta-pin candidate #3
+
+User-requested exhaustive enumeration of the v4.14.2 audit's
+18 P2 + 12 P3 findings.  Net closure tally:
+
+* 7-8 of 18 P2 closed (4 by Agent F directly: `lumenairy_context`
+  6/7 redundant clears, `create_multi_field_sources` factory-
+  validation list, ROADMAP refresh, HDF5/Zarr `lumenairy_version`
+  attr stamping; 3 by other agents in this release:
+  `_validate_grid_params` bool reject, deprecation-shim
+  `_deprecation.py` migration with `version_removed`, codegen
+  version pin; 1 partial: artifact version pinning — HDF5+Zarr
+  done, codegen done).  10-11 P2 deferred (architectural items
+  reserved for v4.16+ or v5.0).
+* 4 of 12 P3 closed by Agent F: CHANGELOG line-citation drift
+  (3 stale `optimize/core.py:...` ranges in the v4.14.2 entry
+  refreshed to current line numbers — see commit diff for the
+  exact pre/post values); `create_led_source` legacy-shim
+  error-message clarity; README `makedammann2d _legacy_units='SI'`
+  migration example; README cookbook section with examples for
+  the 6 v4.14.0 public functions.
+
+**New structural meta-pin (V2 candidate #3):**
+`tests/unit/test_v4_15_dispatcher_pin_validate_grid_params.py`
+walks every `create_*` factory and asserts `_validate_grid_params`
+appears in the first 15 body lines.  17 PASS + 1 documented
+xfail (`create_led_source` legacy-shim positions validator past
+the head window — pinned via `xfail(strict=True)` so future
+refactors that lift the validator forward flip to XPASS and
+the exemption is removed).
+
+### Version-stamping on HDF5 / Zarr writes
+
+`io/storage.py` now writes a `lumenairy_version` attr on every
+`create_dataset` / `create_array` / `create_group` site (7
+locations).  Future-proof for cross-version field-file
+compatibility checks.
+
+### Bundled-glass registry reverse-direction consistency check
+
+The v4.14.2 `_check_glass_registry_consistency` only walked
+registry-entry -> `SELLMEIER_COEFFICIENTS` (forward).  v4.15
+adds the reverse walk: every key in `SELLMEIER_COEFFICIENTS`
+must appear in `GLASS_REGISTRY` (with `'__sellmeier__'` flag
+if it's pure Sellmeier).  Coefficient rows added without a
+registry entry would have remained silent dead code; this
+catches them at module load.
+
+### ROADMAP refresh
+
+`ROADMAP.md` updated to v4.15.0 baseline.  v4.14.1 / v4.14.2 /
+v4.14.3 / v4.15.0 entries added to Shipped highlights;
+items closed in v4.15 removed from v4.15 + v4.16 target lists
+and renumbered.  v4.16+ target list reseeded with the items
+deferred from the v4.14.2 audit + the 5 V2 meta-pin
+candidates.
+
+### Test counts
+
+* Pre-v4.15 baseline (v4.14.3): 1265 unit tests.
+* v4.15 additions: A=8, B=40, C=26, D=23, E=27, F=36
+  parametrized tests across two new files; net 160 added.
+* Final: **1425 unit tests passing, 1 skipped, 1 xfailed**
+  (`_ZARR_MKDIR_PATCH_LOCK` exemption + `create_led_source`
+  validation-entry exemption); **34/34 validation files
+  passing**.
+
+### Deferred to v4.16+
+
+* 4 V2 meta-pin candidates still standing (sentinel-aware
+  branch propagation, `_xp_of` cross-backend dispatch,
+  `dy` parameter threading, `__all__` symmetry).  Input-
+  validation entry-point candidate #3 is shipped this
+  release.
+* Multi-process atomic-append for `storage.py` (HDF5 SWMR
+  + distributed Zarr lock).  Single-process atomicity is
+  documented in v4.14.3.
+* `MultiPrescriptionParameterization.scale_floor` (v4.13.1
+  P1-I carryover).
+* Modal-asymptotic JAX-twin lift to use the v4.15 batched
+  helpers.
+* Forbes Q-2D-asymmetric variant (Forbes 2012) for full 2-D
+  freeform support beyond the rotationally-symmetric Q-bfs /
+  Q-con bases shipped here.
+* Architectural items reserved for v5.0 (file splits, CI
+  gates, shim removal — see ROADMAP).
+
+---
+
 ## [4.14.3] — 2026-05-17
 
 **Closes the v4.14.2 audit (`docs/audits/AUDIT_V4_14_2_2026_05_17.md`).**
@@ -259,8 +514,11 @@ if any `'__sellmeier__'` entry is missing from
   v4.14.1).  The v4.14.1 sentinel fix updated 3 callers
   (`_get_wrapper_merit_cache`, `MultiWavelengthMerit.evaluate`,
   `MultiFieldMerit.evaluate`) but missed 2:
-  `ToleranceAwareMerit._evaluate_perturbed` (`optimize/core.py:
-  2750-2755`) and `MatchIdealSystem._make_source` (`:958-966`).
+  `ToleranceAwareMerit.evaluate` (`optimize/core.py:2790-2795`,
+  refreshed v4.15.0 -- pre-v4.15 entries cited the pre-drift
+  range `2750-2755`) and `MatchIdealSystem._make_source`
+  (`optimize/core.py:977-991`, refreshed v4.15.0 -- pre-v4.15
+  entries cited the pre-drift range `958-966`).
   Both used `_cache['E_ones'].copy()` without the `mask is
   _ZERO_APERTURE_MASK` branch, producing a full-grid plane wave
   instead of zero on `aperture_diameter=0`.  v4.14.2 adds the
@@ -289,9 +547,10 @@ if any `'__sellmeier__'` entry is missing from
   all caches the function now clears.  Pinning test populates each
   cache then calls `clear_asm_caches()` and asserts emptiness.
 * **P1-NEW-4: 2 P1-severity residual `0+0j` sites** swept
-  (`optimize/core.py:966` via Agent B's P1-NEW-1 work + `analysis
-  /phase_retrieval.py:402`).  Now use the `np.zeros((), dtype=...)`
-  pattern.  **Structural pin (new meta-pin):**
+  (`optimize/core.py:987` via Agent B's P1-NEW-1 work + `analysis
+  /phase_retrieval.py:402`; the optimize/core citation was
+  refreshed `966 -> 987` in v4.15.0 to match the post-v4.14.2
+  drift).  Now use the `np.zeros((), dtype=...)` pattern.  **Structural pin (new meta-pin):**
   `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` walks
   every `lumenairy/*.py` file (117 modules) and asserts no
   unallowlisted `np.where(..., 0+0j)` literal — three exemption

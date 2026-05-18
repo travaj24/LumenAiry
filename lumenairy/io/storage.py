@@ -56,6 +56,28 @@ import numpy as np
 # single-threaded code path.
 _ZARR_MKDIR_PATCH_LOCK = threading.Lock()
 
+
+def _get_lumenairy_version() -> str:
+    """Return the installed lumenairy version string.
+
+    v4.15.0 (P2-VERSTAMP from v4.14.2 audit): every HDF5
+    ``create_dataset`` and Zarr ``create_array`` site stamps a
+    ``lumenairy_version`` attribute so a future reader can
+    distinguish data written by different library versions
+    (e.g. for migration paths around schema changes or to flag
+    data written by a known-buggy release).  Lazy import + cached
+    via the parent module's ``__version__`` attribute so the
+    storage layer doesn't pay a top-level-import cost on every
+    write call.  Falls back to the literal ``'unknown'`` if the
+    parent package can't be imported (which would only happen if
+    storage.py were copied out of the package and used standalone).
+    """
+    try:
+        from .. import __version__
+        return str(__version__)
+    except (ImportError, AttributeError):
+        return 'unknown'
+
 # =========================================================================
 # HDF5 backend
 # =========================================================================
@@ -146,6 +168,9 @@ def save_field_h5(filepath: str, E: np.ndarray, dx: float,
         dset.attrs['dx'] = float(dx)
         dset.attrs['dy'] = float(dy)
         dset.attrs['dtype'] = str(E_np.dtype)
+        # v4.15.0 (P2-VERSTAMP): writer version stamp for migration /
+        # known-buggy-release traceability.  See _get_lumenairy_version.
+        dset.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             dset.attrs['wavelength'] = float(wavelength)
         if label is not None:
@@ -218,6 +243,9 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
     with h5py.File(filepath, 'w') as f:
         grp = f.create_group('planes')
         grp.attrs['n_planes'] = n
+        # v4.15.0 (P2-VERSTAMP): group-level stamp covers the whole
+        # batch, complementing per-dataset stamps below.
+        grp.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             grp.attrs['wavelength'] = float(wavelength)
         if metadata:
@@ -245,6 +273,8 @@ def save_planes_h5(filepath: str, planes: Sequence[Dict[str, Any]],
             if 'dy' not in plane:
                 dset.attrs['dy'] = float(plane['dx'])
             dset.attrs['dtype'] = str(E.dtype)
+            # v4.15.0 (P2-VERSTAMP): per-plane writer-version stamp.
+            dset.attrs['lumenairy_version'] = _get_lumenairy_version()
 
 
 def load_planes_h5(filepath: str,
@@ -329,6 +359,9 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
         grp = f.create_group('jones')
         grp.attrs['dx'] = float(jones_field.dx)
         grp.attrs['dy'] = float(jones_field.dy)
+        # v4.15.0 (P2-VERSTAMP): single group-level stamp for the
+        # Jones-field pair so the (Ex, Ey) provenance is consistent.
+        grp.attrs['lumenairy_version'] = _get_lumenairy_version()
         if wavelength is not None:
             grp.attrs['wavelength'] = float(wavelength)
         if label is not None:
@@ -336,12 +369,14 @@ def save_jones_field_h5(filepath: str, jones_field: Any,
         if metadata:
             for k, v in metadata.items():
                 grp.attrs[str(k)] = v
-        grp.create_dataset(
+        dset_ex = grp.create_dataset(
             'Ex', data=Ex,
             compression=compression, compression_opts=compression_opts)
-        grp.create_dataset(
+        dset_ex.attrs['lumenairy_version'] = _get_lumenairy_version()
+        dset_ey = grp.create_dataset(
             'Ey', data=Ey,
             compression=compression, compression_opts=compression_opts)
+        dset_ey.attrs['lumenairy_version'] = _get_lumenairy_version()
 
 
 def load_jones_field_h5(filepath: str) -> Tuple[Any, Dict[str, Any]]:
@@ -445,6 +480,13 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
         if 'planes' not in f:
             grp = f.create_group('planes')
             grp.attrs['n_planes'] = 0
+            # v4.15.0 (P2-VERSTAMP): group-level stamp on first-touch.
+            # Note we don't overwrite the stamp on a re-open (the
+            # ``else`` branch below) so the value remains the version
+            # that *created* the file.  Per-plane stamps below carry
+            # the version that wrote each plane, so multi-version
+            # appends are still resolvable from the per-dataset attr.
+            grp.attrs['lumenairy_version'] = _get_lumenairy_version()
         else:
             grp = f['planes']
         n = int(grp.attrs.get('n_planes', 0))
@@ -469,6 +511,8 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
             dset.attrs['dx'] = float(dx)
             dset.attrs['dy'] = float(dy)
             dset.attrs['dtype'] = str(E.dtype)
+            # v4.15.0 (P2-VERSTAMP): per-plane writer stamp.
+            dset.attrs['lumenairy_version'] = _get_lumenairy_version()
             if z is not None:
                 dset.attrs['z'] = float(z)
             if label is not None:
@@ -658,6 +702,10 @@ class TempFieldStore:
                                     compression=None)
             if dx is not None:
                 dset.attrs['dx'] = float(dx)
+            # v4.15.0 (P2-VERSTAMP): temp-store stamps too, so a
+            # crash-recovered process can detect cross-version temp
+            # files if a job-runner reused the temp dir.
+            dset.attrs['lumenairy_version'] = _get_lumenairy_version()
         return name
 
     def load(self, handle: str) -> np.ndarray:
@@ -817,6 +865,10 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
     if 'planes' not in store:
         planes_grp = store.create_group('planes')
         planes_grp.attrs['n_planes'] = 0
+        # v4.15.0 (P2-VERSTAMP): mirror the HDF5 group-level stamp.
+        # Only set on initial create; per-plane stamps below cover
+        # appended-by-different-version planes.
+        planes_grp.attrs['lumenairy_version'] = _get_lumenairy_version()
     else:
         planes_grp = store['planes']
     n = int(planes_grp.attrs.get('n_planes', 0))
@@ -832,6 +884,8 @@ def _zarr_append_plane(filepath, field, dx, dy=None, z=None, label=None,
             name=name, data=E, chunks=chunks)
         ds.attrs['dx'] = float(dx)
         ds.attrs['dy'] = float(dy)
+        # v4.15.0 (P2-VERSTAMP): per-plane stamp.
+        ds.attrs['lumenairy_version'] = _get_lumenairy_version()
         if z is not None:
             ds.attrs['z'] = float(z)
         if label is not None:

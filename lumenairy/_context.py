@@ -233,64 +233,85 @@ def lumenairy_context(
             apply_globals(prior)
         finally:
             if clear_caches_on_exit:
-                # v4.12.2: clear EVERY propagator-adjacent cache the
-                # library can grow, not just ASM.  Each call is guarded
-                # so a missing optional dependency (JAX) or a future
-                # rename does not prevent the others from firing.
-                # v4.13.1 (P1-E): import moved INSIDE the try block so
-                # an ImportError (rename / circular / partial install)
-                # falls through to the next clear-cache block instead
-                # of bypassing all 6 of them.
+                # v4.15.0 (P2-CTX-1): a single call to
+                # ``clear_asm_caches`` is now the canonical drain
+                # entry point.  v4.14.3 finished wiring all 8
+                # sibling caches into the chain (LG/HG mode-stack,
+                # LG polynomial coefficients, wrapper-merit meshgrid,
+                # Zernike basis, through-focus JAX scan, propagate-
+                # through-system JAX, phase-retrieval kernels,
+                # raytrace JAX), so on a healthy install the chain
+                # walks all 7 sibling clearers internally.  Pre-v4.15
+                # this block also OPEN-CODED ``clear_asm_caches`` +
+                # 7 sibling fan-out calls; each sibling re-acquired
+                # its own cache lock, costing 6+ redundant lock
+                # acquisitions per context-manager exit.  v4.15
+                # routes the happy path through a single call to
+                # ``clear_asm_caches`` and falls back to the per-
+                # sibling fan-out **only if the canonical chain
+                # path failed** (preserving the v4.13.1 P1-E
+                # defence-in-depth guarantee that an ImportError
+                # in ``propagation`` does not silently strand the
+                # other 7 cache clearers).
+                _chain_called = False
                 try:
                     from .propagators.propagation import clear_asm_caches
                     clear_asm_caches()
+                    _chain_called = True
                 except (ImportError, RuntimeError, AttributeError):
                     pass
-                try:
-                    from .analysis.core import clear_zernike_basis_cache
-                    clear_zernike_basis_cache()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-                try:
-                    from .propagators.asymptotic import (
-                        clear_lg_polynomial_cache,
-                    )
-                    clear_lg_polynomial_cache()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-                try:
-                    from .raytrace.jax_trace import clear_trace_jax_cache
-                    clear_trace_jax_cache()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-                try:
-                    from .system import clear_propagate_system_jax_cache
-                    clear_propagate_system_jax_cache()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-                try:
-                    from .analysis.phase_retrieval import (
-                        clear_phase_retrieval_caches,
-                    )
-                    clear_phase_retrieval_caches()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-                try:
-                    from .analysis.through_focus import (
-                        clear_through_focus_scan_jax_cache,
-                    )
-                    clear_through_focus_scan_jax_cache()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
-                try:
-                    # v4.14.0: LG/HG mode-stack cache shared between
-                    # decompose_lg and decompose_hg.
-                    from .propagators.asymptotic import (
-                        clear_lg_mode_stack_cache,
-                    )
-                    clear_lg_mode_stack_cache()
-                except (ImportError, RuntimeError, AttributeError):
-                    pass
+                if not _chain_called:
+                    # v4.13.1 (P1-E) defence-in-depth fallback:
+                    # canonical chain path unavailable (partial
+                    # install / rename / circular import).  Fire
+                    # each sibling clearer independently so a single
+                    # rotten link in the propagation chain does not
+                    # take down the rest of the cache hygiene.
+                    # Each block guarded with the same narrowed-
+                    # except tuple as v4.13.0 Phase-2.
+                    try:
+                        from .analysis.core import clear_zernike_basis_cache
+                        clear_zernike_basis_cache()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
+                    try:
+                        from .propagators.asymptotic import (
+                            clear_lg_polynomial_cache,
+                        )
+                        clear_lg_polynomial_cache()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
+                    try:
+                        from .raytrace.jax_trace import clear_trace_jax_cache
+                        clear_trace_jax_cache()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
+                    try:
+                        from .system import clear_propagate_system_jax_cache
+                        clear_propagate_system_jax_cache()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
+                    try:
+                        from .analysis.phase_retrieval import (
+                            clear_phase_retrieval_caches,
+                        )
+                        clear_phase_retrieval_caches()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
+                    try:
+                        from .analysis.through_focus import (
+                            clear_through_focus_scan_jax_cache,
+                        )
+                        clear_through_focus_scan_jax_cache()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
+                    try:
+                        from .propagators.asymptotic import (
+                            clear_lg_mode_stack_cache,
+                        )
+                        clear_lg_mode_stack_cache()
+                    except (ImportError, RuntimeError, AttributeError):
+                        pass
 
 
 def _atexit_restore(snapshot: dict) -> None:

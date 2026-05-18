@@ -85,6 +85,21 @@ def _validate_grid_params(
     """
     # ``N`` -- positive integer, or a 2-tuple of positive integers
     # (only when the calling factory unpacks tuples).
+    #
+    # v4.15 (P2-VAL-1 / v4.14.2 carryover): explicitly reject ``bool``.
+    # ``isinstance(True, (int, np.integer))`` returns True so the
+    # pre-v4.15 check accepted ``N=True`` / ``N=False`` as 1 / 0.
+    # ``N=False`` then hit the ``int(N) <= 0`` guard with a confusing
+    # "N=0" error; ``N=True`` (a Boolean grid size, plainly wrong)
+    # silently produced a 1x1 grid.  Boolean ``N`` is almost certainly
+    # a caller bug (passing ``N=large_grid_flag and 1024`` -> 1024 only
+    # when flag is truthy; ``N=use_gpu and 256`` -> ``False`` when GPU
+    # is off; etc.), so the loudest correct action is a TypeError.
+    if isinstance(N, bool):
+        raise TypeError(
+            f"{fn_name}: N must be a positive integer, got bool ({N!r}).  "
+            f"This is almost certainly a caller bug (e.g. "
+            f"``N=flag and grid_size``); pass an explicit integer.")
     if isinstance(N, (tuple, list)):
         if not support_tuple_N:
             raise TypeError(
@@ -99,6 +114,11 @@ def _validate_grid_params(
                 f"length-{len(N)} sequence {N!r}.")
         Ny, Nx = N
         for label, n in (('Ny', Ny), ('Nx', Nx)):
+            # v4.15: same bool short-circuit per-axis.
+            if isinstance(n, bool):
+                raise TypeError(
+                    f"{fn_name}: {label} must be a positive integer, "
+                    f"got bool ({n!r}).")
             if not isinstance(n, (int, np.integer)):
                 raise ValueError(
                     f"{fn_name}: {label} must be a positive integer, "
@@ -798,6 +818,14 @@ def create_multi_field_sources(
     x, y : ndarray
         Shared 1-D coordinate arrays.
     """
+    # v4.15.0 (P2-VAL-2 from v4.14.2 audit): centralised input
+    # validation at the entry point so failures here name THIS
+    # factory.  Pre-v4.15 the helper transitively validated through
+    # ``create_tilted_plane_wave``, but the error message named the
+    # internal callee rather than ``create_multi_field_sources``,
+    # leaking an internal name in user-facing tracebacks.
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_multi_field_sources')
     sources = []
     x = y = None
     for a in field_angles:
@@ -1155,15 +1183,24 @@ def create_led_source(
                 "arguments.  Use ``create_led_source(N, dx, "
                 "wavelength, diameter=..., divergence_angle=...)``."
                 .format(_wl_f, _diam_f))
-        import warnings
-        warnings.warn(
-            "create_led_source: positional call form "
-            "``(N, dx, diameter, divergence_angle, wavelength, ...)`` "
-            "is deprecated since v4.14.2.  Use the keyword-only form "
-            "``create_led_source(N, dx, wavelength, *, diameter=..., "
-            "divergence_angle=..., ...)`` instead.  The legacy "
-            "positional form will be removed in a future release.",
-            DeprecationWarning, stacklevel=2,
+        # v4.15 (P2-DEP-1): route the legacy-positional warning through
+        # the shared ``_deprecation.warn_deprecated_signature`` helper
+        # instead of inline ``warnings.warn``.  Same DeprecationWarning
+        # category, same message intent; the helper guarantees a
+        # consistent format (``... is deprecated since v4.14.2, will be
+        # removed in v5.0; use ...``) and pin-tested removal version.
+        from .._deprecation import warn_deprecated_signature
+        warn_deprecated_signature(
+            function='create_led_source',
+            old_signature=(
+                'create_led_source(N, dx, diameter, divergence_angle, '
+                'wavelength, ...)'),
+            new_signature=(
+                'create_led_source(N, dx, wavelength, *, diameter=..., '
+                'divergence_angle=..., ...)'),
+            version_added='4.14.2',
+            version_removed='5.0',
+            stacklevel=3,
         )
         # Promote legacy positionals into the canonical kwargs, but do
         # not overwrite kwargs the caller explicitly supplied (that's
@@ -1190,10 +1227,23 @@ def create_led_source(
         if len(args) > 4:
             dtype = args[4]
         if len(args) > 5:
+            # v4.15.0 (P3-MSG from v4.14.2 audit): rewrite the "max 8
+            # (legacy) or 3 (canonical)" wording.  The canonical form
+            # caps positionals at 3 (``N, dx, wavelength``) and the
+            # legacy form caps at 8 (``N, dx, diameter,
+            # divergence_angle, wavelength, x0, y0, dtype``); the
+            # previous message conflated the two limits in a single
+            # opaque sentence.  Spell them out separately.
             raise TypeError(
-                "create_led_source (legacy positional form): too many "
-                f"positional arguments; got {3 + len(args)} positional, "
-                f"max 8 (legacy) or 3 (canonical, with kwargs).")
+                "create_led_source: too many positional arguments "
+                f"({3 + len(args)}).  The legacy positional form "
+                "accepts at most 8 positionals: ``(N, dx, diameter, "
+                "divergence_angle, wavelength, x0, y0, dtype)``.  "
+                "The canonical form accepts at most 3 positionals: "
+                "``(N, dx, wavelength)`` -- ``diameter``, "
+                "``divergence_angle``, and the other physical "
+                "parameters are keyword-only.  Migrate any extras "
+                "to keyword arguments.")
 
     # Validate the required keyword-only physical parameters
     # post-shim so the error path is the same for both call forms.
@@ -1302,6 +1352,357 @@ def create_bessel_beam(
     r = np.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
     k_r = 2 * np.pi / wavelength * np.sin(cone_angle)
     E = j0(k_r * r).astype(_resolve_complex_dtype(dtype))
+    return E, x, y
+
+
+# ---------------------------------------------------------------------------
+# Schell-model partial-coherence sources (v4.15, ROADMAP v4.16 #9)
+# ---------------------------------------------------------------------------
+
+def create_gaussian_schell_source(
+    *,
+    N: int,
+    dx: float,
+    wavelength: float,
+    w0: float,
+    sigma_g: float,
+    n_realizations: int = 16,
+    dy: Optional[float] = None,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Spatially-incoherent Gaussian-Schell beam.
+
+    Returns the ensemble-averaged amplitude envelope (square root of
+    the time-averaged intensity) of ``n_realizations`` independent
+    Gaussian beams whose phases are draws from a band-limited random
+    field with coherence length ``sigma_g``.  Suitable as the input
+    "source" amplitude for partial-coherence imaging routines that
+    treat the source as an ensemble of mutually-incoherent
+    realizations.
+
+    A Gaussian-Schell beam has Gaussian intensity profile (1/e^2
+    radius ``w0``) and Gaussian coherence kernel
+    ``mu(r1, r2) = exp(-|r1-r2|^2 / (2 sigma_g^2))``.  In the
+    fully-coherent limit ``sigma_g -> infinity`` the beam reduces to a
+    deterministic Gaussian with waist ``w0``; in the fully-incoherent
+    limit ``sigma_g -> 0`` each pixel has independent phase.
+
+    Parameters
+    ----------
+    N : int
+        Square grid size (N x N).
+    dx : float
+        Grid spacing in x [m].
+    wavelength : float
+        Vacuum wavelength [m].
+    w0 : float
+        Gaussian 1/e^2 intensity radius of the beam envelope [m].
+    sigma_g : float
+        Gaussian transverse coherence length [m].  Must be > 0;
+        ``sigma_g >> w0`` approaches the coherent limit.
+    n_realizations : int, default 16
+        Number of independent ensemble draws to average.  Larger
+        values give a smoother intensity envelope at the cost of
+        compute time.  Must be >= 1.
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+    seed : int, optional
+        RNG seed for reproducibility.  ``None`` leaves the local
+        Generator unseeded.
+    dtype : optional
+        Complex dtype.
+
+    Returns
+    -------
+    E : ndarray (complex)
+        Amplitude envelope (sqrt of the ensemble-averaged intensity),
+        cast to the requested complex dtype.  The phase is the phase
+        of the ensemble mean of E_realizations -- not physically
+        meaningful in the partial-coherence limit but kept for
+        downstream type-uniformity.
+    x : ndarray
+        1-D x-coordinate array [m].
+    y : ndarray
+        1-D y-coordinate array [m].
+    """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_gaussian_schell_source')
+    if not (np.isfinite(w0) and w0 > 0):
+        raise ValueError(
+            f"create_gaussian_schell_source: w0 must be a positive "
+            f"finite number [m]; got {w0}.")
+    if not (np.isfinite(sigma_g) and sigma_g > 0):
+        raise ValueError(
+            f"create_gaussian_schell_source: sigma_g must be a "
+            f"positive finite number [m]; got {sigma_g}.")
+    if not isinstance(n_realizations, (int, np.integer)) or \
+            isinstance(n_realizations, bool) or int(n_realizations) < 1:
+        raise ValueError(
+            f"create_gaussian_schell_source: n_realizations must be a "
+            f"positive integer; got {n_realizations!r}.")
+
+    if dy is None:
+        dy = dx
+    x = (np.arange(N) - N / 2) * dx
+    y = (np.arange(N) - N / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    target_dtype = _resolve_complex_dtype(dtype)
+
+    # Gaussian intensity envelope (amplitude is sqrt of intensity).
+    sigma_int = w0 / 2.0  # 1/e^2 intensity radius -> Gaussian sigma
+    amp = np.exp(-(X * X + Y * Y) / (2.0 * sigma_int ** 2))
+
+    # Random-phase ensemble: each realization multiplies the deterministic
+    # Gaussian amplitude by a unit-modulus random phase whose two-point
+    # correlation is controlled by sigma_g.  Standard recipe: build a
+    # white-noise array and convolve (multiplicatively in Fourier) with
+    # a Gaussian kernel of width 1/sigma_g; the result has correlation
+    # length sigma_g in the spatial domain.
+    rng = np.random.default_rng(seed)
+    # Gaussian filter in k-space whose spatial coherence length is sigma_g.
+    kx = 2.0 * np.pi * np.fft.fftfreq(N, d=dx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(N, d=dy)
+    KX, KY = np.meshgrid(kx, ky)
+    spec_filter = np.exp(-(KX * KX + KY * KY) * (sigma_g ** 2) / 2.0)
+
+    intensity_sum = np.zeros_like(amp, dtype=np.float64)
+    coherent_sum = np.zeros_like(amp, dtype=np.complex128)
+    nr = int(n_realizations)
+    for _ in range(nr):
+        # White-noise random field (real-valued normal), filter, take phase.
+        white = rng.standard_normal((N, N))
+        filtered_k = np.fft.fft2(white) * spec_filter
+        filtered = np.real(np.fft.ifft2(filtered_k))
+        # Normalise to unit RMS so the phase scale is sigma_g-independent.
+        rms = np.sqrt(np.mean(filtered ** 2))
+        if rms > 0:
+            filtered = filtered / rms
+        phase = filtered  # treat as the random phase, modulo 2 pi
+        E_real = amp * np.exp(1j * phase)
+        intensity_sum += np.abs(E_real) ** 2
+        coherent_sum += E_real
+
+    intensity_mean = intensity_sum / nr
+    # Use the phase of the coherent mean to keep the output complex-valued
+    # (useful for type-uniformity); the amplitude is the ensemble-averaged
+    # intensity envelope.
+    coherent_phase = np.angle(coherent_sum / nr)
+    E = (np.sqrt(intensity_mean) * np.exp(1j * coherent_phase)).astype(
+        target_dtype)
+    return E, x, y
+
+
+def create_schell_model_source(
+    *,
+    N: int,
+    dx: float,
+    wavelength: float,
+    intensity_profile: np.ndarray,
+    coherence_length: float,
+    n_realizations: int = 16,
+    dy: Optional[float] = None,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Generic Schell-model source with user-supplied intensity profile.
+
+    A Schell-model source factors the mutual coherence function into
+    an intensity term and a translation-invariant coherence kernel:
+    ``J(r1, r2) = sqrt(I(r1)) sqrt(I(r2)) mu(r1 - r2)``.  This factory
+    samples ``n_realizations`` random-phase realizations consistent
+    with a Gaussian coherence kernel of width ``coherence_length`` and
+    the supplied ``intensity_profile``.
+
+    Parameters
+    ----------
+    N : int
+        Square grid size (N x N).
+    dx : float
+        Grid spacing in x [m].
+    wavelength : float
+        Vacuum wavelength [m].
+    intensity_profile : ndarray (N, N), real
+        Time-averaged intensity profile of the source (any units;
+        normalisation is preserved through to the output).
+    coherence_length : float
+        Gaussian transverse coherence length [m]; must be > 0.
+    n_realizations : int, default 16
+        Number of independent ensemble draws.
+    dy : float, optional
+        Grid spacing in y [m].
+    seed : int, optional
+        RNG seed.
+    dtype : optional
+        Complex dtype.
+
+    Returns
+    -------
+    E : ndarray (complex)
+        Amplitude envelope of the ensemble-averaged intensity, cast to
+        the requested complex dtype.
+    x, y : ndarray
+        1-D coordinate axes [m].
+    """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_schell_model_source')
+    if not (np.isfinite(coherence_length) and coherence_length > 0):
+        raise ValueError(
+            f"create_schell_model_source: coherence_length must be a "
+            f"positive finite number [m]; got {coherence_length}.")
+    if not isinstance(n_realizations, (int, np.integer)) or \
+            isinstance(n_realizations, bool) or int(n_realizations) < 1:
+        raise ValueError(
+            f"create_schell_model_source: n_realizations must be a "
+            f"positive integer; got {n_realizations!r}.")
+    I = np.asarray(intensity_profile, dtype=float)
+    if I.shape != (N, N):
+        raise ValueError(
+            f"create_schell_model_source: intensity_profile must have "
+            f"shape (N, N) = ({N}, {N}); got {I.shape}.")
+    if np.any(I < 0):
+        raise ValueError(
+            "create_schell_model_source: intensity_profile must be "
+            "non-negative.")
+
+    if dy is None:
+        dy = dx
+    x = (np.arange(N) - N / 2) * dx
+    y = (np.arange(N) - N / 2) * dy
+    target_dtype = _resolve_complex_dtype(dtype)
+    amp = np.sqrt(I)
+
+    rng = np.random.default_rng(seed)
+    kx = 2.0 * np.pi * np.fft.fftfreq(N, d=dx)
+    ky = 2.0 * np.pi * np.fft.fftfreq(N, d=dy)
+    KX, KY = np.meshgrid(kx, ky)
+    spec_filter = np.exp(
+        -(KX * KX + KY * KY) * (coherence_length ** 2) / 2.0)
+
+    intensity_sum = np.zeros_like(amp, dtype=np.float64)
+    coherent_sum = np.zeros_like(amp, dtype=np.complex128)
+    nr = int(n_realizations)
+    for _ in range(nr):
+        white = rng.standard_normal((N, N))
+        filtered_k = np.fft.fft2(white) * spec_filter
+        filtered = np.real(np.fft.ifft2(filtered_k))
+        rms = np.sqrt(np.mean(filtered ** 2))
+        if rms > 0:
+            filtered = filtered / rms
+        phase = filtered
+        E_real = amp * np.exp(1j * phase)
+        intensity_sum += np.abs(E_real) ** 2
+        coherent_sum += E_real
+
+    intensity_mean = intensity_sum / nr
+    coherent_phase = np.angle(coherent_sum / nr)
+    E = (np.sqrt(intensity_mean) * np.exp(1j * coherent_phase)).astype(
+        target_dtype)
+    return E, x, y
+
+
+def create_annular_incoherent_source(
+    *,
+    N: int,
+    dx: float,
+    wavelength: float,
+    inner_radius: float,
+    outer_radius: float,
+    n_realizations: int = 16,
+    dy: Optional[float] = None,
+    seed: Optional[int] = None,
+    dtype: Optional[Any] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Annular (ring) source with non-zero source size for partial-
+    coherence integration (v4.15, ROADMAP v4.16 #11).
+
+    Distinct from :func:`create_annular_beam`, which returns the
+    deterministic coherent annular field.  This factory samples
+    ``n_realizations`` independent random-phase realizations whose
+    common amplitude is the unit-norm annular indicator function;
+    the returned ``E`` is the amplitude envelope (sqrt of the
+    ensemble-averaged intensity).
+
+    Parameters
+    ----------
+    N : int
+        Square grid size (N x N).
+    dx : float
+        Grid spacing in x [m].
+    wavelength : float
+        Vacuum wavelength [m].
+    inner_radius : float
+        Annulus inner radius [m]; must be >= 0.
+    outer_radius : float
+        Annulus outer radius [m]; must be > inner_radius and finite.
+    n_realizations : int, default 16
+        Number of independent ensemble draws.
+    dy : float, optional
+        Grid spacing in y [m].
+    seed : int, optional
+        RNG seed.
+    dtype : optional
+        Complex dtype.
+
+    Returns
+    -------
+    E : ndarray (complex)
+        Amplitude envelope of the ensemble-averaged intensity.
+    x, y : ndarray
+        1-D coordinate axes [m].
+    """
+    _validate_grid_params(N, dx, wavelength, dy=dy,
+                          fn_name='create_annular_incoherent_source')
+    if not (np.isfinite(inner_radius) and inner_radius >= 0):
+        raise ValueError(
+            f"create_annular_incoherent_source: inner_radius must be a "
+            f"non-negative finite number [m]; got {inner_radius}.")
+    if not (np.isfinite(outer_radius) and outer_radius > 0):
+        raise ValueError(
+            f"create_annular_incoherent_source: outer_radius must be a "
+            f"positive finite number [m]; got {outer_radius}.")
+    if outer_radius <= inner_radius:
+        raise ValueError(
+            f"create_annular_incoherent_source: outer_radius "
+            f"({outer_radius}) must be strictly greater than "
+            f"inner_radius ({inner_radius}).")
+    if not isinstance(n_realizations, (int, np.integer)) or \
+            isinstance(n_realizations, bool) or int(n_realizations) < 1:
+        raise ValueError(
+            f"create_annular_incoherent_source: n_realizations must be "
+            f"a positive integer; got {n_realizations!r}.")
+
+    if dy is None:
+        dy = dx
+    x = (np.arange(N) - N / 2) * dx
+    y = (np.arange(N) - N / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    target_dtype = _resolve_complex_dtype(dtype)
+    r = np.sqrt(X * X + Y * Y)
+    mask = (r >= inner_radius) & (r <= outer_radius)
+    amp = mask.astype(np.float64)
+    # Normalise so the integrated power is 1, matching create_annular_beam.
+    norm = np.sqrt(np.sum(amp ** 2) * dx * dy)
+    if norm > 0:
+        amp = amp / norm
+
+    rng = np.random.default_rng(seed)
+    intensity_sum = np.zeros_like(amp, dtype=np.float64)
+    coherent_sum = np.zeros_like(amp, dtype=np.complex128)
+    nr = int(n_realizations)
+    for _ in range(nr):
+        # Independent uniform phase per pixel (i.e. fully spatially
+        # incoherent at the source plane -- the standard "non-zero
+        # source size for partial-coherence integration" recipe).
+        phase = rng.uniform(-np.pi, np.pi, (N, N))
+        E_real = amp * np.exp(1j * phase)
+        intensity_sum += np.abs(E_real) ** 2
+        coherent_sum += E_real
+
+    intensity_mean = intensity_sum / nr
+    coherent_phase = np.angle(coherent_sum / nr)
+    E = (np.sqrt(intensity_mean) * np.exp(1j * coherent_phase)).astype(
+        target_dtype)
     return E, x, y
 
 
@@ -1429,39 +1830,184 @@ class Source:
     # anamorphic grids and single-precision fields silently fell back
     # to the create_*'s defaults.
 
+    # -----------------------------------------------------------------
+    # v4.15 (ROADMAP v4.15 #2): size-arg normalisation on the 5
+    # Source.* factory classmethods.
+    #
+    # Pre-v4.15 the 5 factories had inconsistent positional order:
+    #   - ``Source.gaussian(w0, N, dx, wavelength)``  -- size first
+    #   - ``Source.plane_wave(N, dx, wavelength)``    -- N first
+    #   - ``Source.point_source(N, dx, wavelength)``  -- N first
+    #   - ``Source.top_hat(diameter, N, dx, wavelength)`` -- size first
+    #   - ``Source.fiber_mode(mfd, N, dx, wavelength)``  -- size first
+    #
+    # v4.15 picks the canonical order
+    # ``Source.method(*, N, dx, wavelength, <size_kwargs>)`` (kwarg-only
+    # with the ``*`` separator).  The legacy positional form is still
+    # accepted for one release with a ``DeprecationWarning`` routed
+    # through ``_deprecation.warn_deprecated_signature``; removal is
+    # scheduled for v5.0.
+    #
+    # The three already-kwarg-only factories (``plane_wave``,
+    # ``point_source``) keep their existing signature; the only change
+    # for them is that they now appear under the canonical
+    # ``Source.method(*, N, dx, wavelength, ...)`` umbrella in the
+    # docs and the factory-validation parametrize list.
+    # -----------------------------------------------------------------
+
     @classmethod
-    def gaussian(cls, w0: float, N: int, dx: float, wavelength: float,
-                  *, x0: float = 0.0, y0: float = 0.0,
+    def gaussian(cls, *args,
+                  w0: _Optional[float] = None,
+                  N: _Optional[int] = None,
+                  dx: _Optional[float] = None,
+                  wavelength: _Optional[float] = None,
+                  x0: float = 0.0, y0: float = 0.0,
                   source_point: _Tuple[float, float] = (0.0, 0.0),
                   name: _Optional[str] = None,
                   use_gpu: bool = False,
                   **factory_kwargs) -> 'Source':
-        """Gaussian beam at the waist.  ``w0`` is the 1/e^2 intensity
-        radius.  Extra ``factory_kwargs`` (e.g. ``dy=``, ``dtype=``)
-        are forwarded to :func:`create_gaussian_beam`."""
+        """Gaussian beam at the waist.
+
+        Canonical signature (v4.15+):
+            ``Source.gaussian(*, N, dx, wavelength, w0, ...)``
+
+        ``w0`` is the 1/e^2 intensity radius.  Extra
+        ``factory_kwargs`` (e.g. ``dy=``, ``dtype=``) are forwarded to
+        :func:`create_gaussian_beam`.
+
+        Legacy signature (deprecated since v4.15, removal v5.0):
+            ``Source.gaussian(w0, N, dx, wavelength, ...)``
+        """
+        # Legacy positional shim: pre-v4.15 callers passed
+        # ``(w0, N, dx, wavelength)`` positionally.  Detect via *args
+        # and emit a DeprecationWarning before remapping.
+        if args:
+            from .._deprecation import warn_deprecated_signature
+            warn_deprecated_signature(
+                function='Source.gaussian',
+                old_signature='Source.gaussian(w0, N, dx, wavelength, ...)',
+                new_signature=(
+                    'Source.gaussian(*, N, dx, wavelength, w0, ...)'),
+                version_added='4.15',
+                version_removed='5.0',
+                stacklevel=3,
+            )
+            if len(args) > 4:
+                raise TypeError(
+                    "Source.gaussian (legacy positional form): too many "
+                    f"positional arguments; got {len(args)}, max 4 "
+                    "(w0, N, dx, wavelength).")
+            legacy = (None, None, None, None)
+            legacy = args + legacy[len(args):]
+            _l_w0, _l_N, _l_dx, _l_wl = legacy
+            # Reject overlap with canonical kwargs.
+            if w0 is not None and _l_w0 is not None:
+                raise TypeError("Source.gaussian: 'w0' supplied both "
+                                "positionally and as keyword.")
+            if N is not None and _l_N is not None:
+                raise TypeError("Source.gaussian: 'N' supplied both "
+                                "positionally and as keyword.")
+            if dx is not None and _l_dx is not None:
+                raise TypeError("Source.gaussian: 'dx' supplied both "
+                                "positionally and as keyword.")
+            if wavelength is not None and _l_wl is not None:
+                raise TypeError("Source.gaussian: 'wavelength' supplied "
+                                "both positionally and as keyword.")
+            if w0 is None:
+                w0 = _l_w0
+            if N is None:
+                N = _l_N
+            if dx is None:
+                dx = _l_dx
+            if wavelength is None:
+                wavelength = _l_wl
+        if w0 is None:
+            raise TypeError(
+                "Source.gaussian: missing required keyword argument "
+                "'w0' (the 1/e^2 intensity radius in metres).")
+        if N is None:
+            raise TypeError(
+                "Source.gaussian: missing required keyword argument 'N'.")
+        if dx is None:
+            raise TypeError(
+                "Source.gaussian: missing required keyword argument 'dx'.")
+        if wavelength is None:
+            raise TypeError(
+                "Source.gaussian: missing required keyword argument "
+                "'wavelength'.")
         sigma = w0 / np.sqrt(2)
         E, _, _ = create_gaussian_beam(
             N, dx, wavelength, sigma=sigma, x0=x0, y0=y0,
             use_gpu=use_gpu, **factory_kwargs)
         # v4.13.0 audit P1-C: preserve anamorphic ``dy`` on the
-        # returned Source.  ``create_gaussian_beam`` already consumed
-        # ``dy`` from ``factory_kwargs`` to build the field on the
-        # anamorphic grid; the pre-fix ``cls(...)`` call omitted ``dy``
-        # so the wrapped Source advertised ``dy == dx`` even when the
-        # E-field was shaped on a rectangular pitch.
+        # returned Source.
         return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
                    wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'Gaussian(w0={w0:.2g}m)')
 
     @classmethod
-    def plane_wave(cls, N: int, dx: float, wavelength: float,
-                    *, angle_x: float = 0.0, angle_y: float = 0.0,
+    def plane_wave(cls, *args,
+                    N: _Optional[int] = None,
+                    dx: _Optional[float] = None,
+                    wavelength: _Optional[float] = None,
+                    angle_x: float = 0.0, angle_y: float = 0.0,
                     amplitude: float = 1.0,
                     source_point: _Tuple[float, float] = (0.0, 0.0),
                     name: _Optional[str] = None,
                     **factory_kwargs) -> 'Source':
-        """Tilted plane wave (uses ``create_tilted_plane_wave``)."""
+        """Tilted plane wave (uses ``create_tilted_plane_wave``).
+
+        Canonical signature (v4.15+):
+            ``Source.plane_wave(*, N, dx, wavelength, ...)``
+
+        Legacy signature (deprecated since v4.15, removal v5.0):
+            ``Source.plane_wave(N, dx, wavelength, ...)``
+        """
+        if args:
+            from .._deprecation import warn_deprecated_signature
+            warn_deprecated_signature(
+                function='Source.plane_wave',
+                old_signature='Source.plane_wave(N, dx, wavelength, ...)',
+                new_signature=(
+                    'Source.plane_wave(*, N, dx, wavelength, ...)'),
+                version_added='4.15',
+                version_removed='5.0',
+                stacklevel=3,
+            )
+            if len(args) > 3:
+                raise TypeError(
+                    "Source.plane_wave (legacy positional form): too "
+                    f"many positional arguments; got {len(args)}, max 3 "
+                    "(N, dx, wavelength).")
+            legacy = (None, None, None)
+            legacy = args + legacy[len(args):]
+            _l_N, _l_dx, _l_wl = legacy
+            if N is not None and _l_N is not None:
+                raise TypeError("Source.plane_wave: 'N' supplied both "
+                                "positionally and as keyword.")
+            if dx is not None and _l_dx is not None:
+                raise TypeError("Source.plane_wave: 'dx' supplied both "
+                                "positionally and as keyword.")
+            if wavelength is not None and _l_wl is not None:
+                raise TypeError("Source.plane_wave: 'wavelength' "
+                                "supplied both positionally and as keyword.")
+            if N is None:
+                N = _l_N
+            if dx is None:
+                dx = _l_dx
+            if wavelength is None:
+                wavelength = _l_wl
+        if N is None:
+            raise TypeError(
+                "Source.plane_wave: missing required keyword argument 'N'.")
+        if dx is None:
+            raise TypeError(
+                "Source.plane_wave: missing required keyword argument 'dx'.")
+        if wavelength is None:
+            raise TypeError(
+                "Source.plane_wave: missing required keyword argument "
+                "'wavelength'.")
         E, _, _ = create_tilted_plane_wave(
             N, dx, wavelength, angle_x=angle_x, angle_y=angle_y,
             amplitude=amplitude, **factory_kwargs)
@@ -1472,18 +2018,70 @@ class Source:
                    name=name or 'PlaneWave')
 
     @classmethod
-    def point_source(cls, N: int, dx: float, wavelength: float,
-                      *, x0: float = 0.0, y0: float = 0.0,
+    def point_source(cls, *args,
+                      N: _Optional[int] = None,
+                      dx: _Optional[float] = None,
+                      wavelength: _Optional[float] = None,
+                      x0: float = 0.0, y0: float = 0.0,
                       z0: float = 0.0, amplitude: float = 1.0,
                       name: _Optional[str] = None,
                       **factory_kwargs) -> 'Source':
         """Spherical wave from a point at ``(x0, y0, z0)``.
 
+        Canonical signature (v4.15+):
+            ``Source.point_source(*, N, dx, wavelength, ...)``
+
+        Legacy signature (deprecated since v4.15, removal v5.0):
+            ``Source.point_source(N, dx, wavelength, ...)``
+
         ``z0 < 0`` -> diverging wavefront (source before grid);
         ``z0 > 0`` -> converging wavefront (focus after grid).
-        See :func:`create_point_source` for the sign-convention
-        details.
+        See :func:`create_point_source` for the sign-convention details.
         """
+        if args:
+            from .._deprecation import warn_deprecated_signature
+            warn_deprecated_signature(
+                function='Source.point_source',
+                old_signature='Source.point_source(N, dx, wavelength, ...)',
+                new_signature=(
+                    'Source.point_source(*, N, dx, wavelength, ...)'),
+                version_added='4.15',
+                version_removed='5.0',
+                stacklevel=3,
+            )
+            if len(args) > 3:
+                raise TypeError(
+                    "Source.point_source (legacy positional form): "
+                    f"too many positional arguments; got {len(args)}, "
+                    "max 3 (N, dx, wavelength).")
+            legacy = (None, None, None)
+            legacy = args + legacy[len(args):]
+            _l_N, _l_dx, _l_wl = legacy
+            if N is not None and _l_N is not None:
+                raise TypeError("Source.point_source: 'N' supplied both "
+                                "positionally and as keyword.")
+            if dx is not None and _l_dx is not None:
+                raise TypeError("Source.point_source: 'dx' supplied "
+                                "both positionally and as keyword.")
+            if wavelength is not None and _l_wl is not None:
+                raise TypeError("Source.point_source: 'wavelength' "
+                                "supplied both positionally and as keyword.")
+            if N is None:
+                N = _l_N
+            if dx is None:
+                dx = _l_dx
+            if wavelength is None:
+                wavelength = _l_wl
+        if N is None:
+            raise TypeError(
+                "Source.point_source: missing required keyword argument 'N'.")
+        if dx is None:
+            raise TypeError(
+                "Source.point_source: missing required keyword argument 'dx'.")
+        if wavelength is None:
+            raise TypeError(
+                "Source.point_source: missing required keyword argument "
+                "'wavelength'.")
         E, _, _ = create_point_source(
             N, dx, wavelength, x0=x0, y0=y0, z0=z0,
             amplitude=amplitude, **factory_kwargs)
@@ -1494,12 +2092,76 @@ class Source:
                    name=name or 'PointSource')
 
     @classmethod
-    def top_hat(cls, diameter: float, N: int, dx: float, wavelength: float,
-                  *, x0: float = 0.0, y0: float = 0.0,
+    def top_hat(cls, *args,
+                  diameter: _Optional[float] = None,
+                  N: _Optional[int] = None,
+                  dx: _Optional[float] = None,
+                  wavelength: _Optional[float] = None,
+                  x0: float = 0.0, y0: float = 0.0,
                   source_point: _Tuple[float, float] = (0.0, 0.0),
                   name: _Optional[str] = None,
                   **factory_kwargs) -> 'Source':
-        """Uniform circular aperture beam."""
+        """Uniform circular aperture beam.
+
+        Canonical signature (v4.15+):
+            ``Source.top_hat(*, N, dx, wavelength, diameter, ...)``
+
+        Legacy signature (deprecated since v4.15, removal v5.0):
+            ``Source.top_hat(diameter, N, dx, wavelength, ...)``
+        """
+        if args:
+            from .._deprecation import warn_deprecated_signature
+            warn_deprecated_signature(
+                function='Source.top_hat',
+                old_signature='Source.top_hat(diameter, N, dx, wavelength, ...)',
+                new_signature=(
+                    'Source.top_hat(*, N, dx, wavelength, diameter, ...)'),
+                version_added='4.15',
+                version_removed='5.0',
+                stacklevel=3,
+            )
+            if len(args) > 4:
+                raise TypeError(
+                    "Source.top_hat (legacy positional form): too many "
+                    f"positional arguments; got {len(args)}, max 4 "
+                    "(diameter, N, dx, wavelength).")
+            legacy = (None, None, None, None)
+            legacy = args + legacy[len(args):]
+            _l_diameter, _l_N, _l_dx, _l_wl = legacy
+            if diameter is not None and _l_diameter is not None:
+                raise TypeError("Source.top_hat: 'diameter' supplied "
+                                "both positionally and as keyword.")
+            if N is not None and _l_N is not None:
+                raise TypeError("Source.top_hat: 'N' supplied both "
+                                "positionally and as keyword.")
+            if dx is not None and _l_dx is not None:
+                raise TypeError("Source.top_hat: 'dx' supplied both "
+                                "positionally and as keyword.")
+            if wavelength is not None and _l_wl is not None:
+                raise TypeError("Source.top_hat: 'wavelength' supplied "
+                                "both positionally and as keyword.")
+            if diameter is None:
+                diameter = _l_diameter
+            if N is None:
+                N = _l_N
+            if dx is None:
+                dx = _l_dx
+            if wavelength is None:
+                wavelength = _l_wl
+        if diameter is None:
+            raise TypeError(
+                "Source.top_hat: missing required keyword argument "
+                "'diameter' (beam diameter in metres).")
+        if N is None:
+            raise TypeError(
+                "Source.top_hat: missing required keyword argument 'N'.")
+        if dx is None:
+            raise TypeError(
+                "Source.top_hat: missing required keyword argument 'dx'.")
+        if wavelength is None:
+            raise TypeError(
+                "Source.top_hat: missing required keyword argument "
+                "'wavelength'.")
         E, _, _ = create_top_hat_beam(
             N, dx, wavelength, diameter=diameter, x0=x0, y0=y0,
             **factory_kwargs)
@@ -1510,13 +2172,84 @@ class Source:
                    name=name or f'TopHat(D={diameter:.2g}m)')
 
     @classmethod
-    def fiber_mode(cls, mode_field_diameter: float, N: int, dx: float,
-                    wavelength: float, *, x0: float = 0.0, y0: float = 0.0,
+    def fiber_mode(cls, *args,
+                    mode_field_diameter: _Optional[float] = None,
+                    N: _Optional[int] = None,
+                    dx: _Optional[float] = None,
+                    wavelength: _Optional[float] = None,
+                    x0: float = 0.0, y0: float = 0.0,
                     na: float = 0.12,
                     source_point: _Tuple[float, float] = (0.0, 0.0),
                     name: _Optional[str] = None,
                     **factory_kwargs) -> 'Source':
-        """Single-mode fiber output."""
+        """Single-mode fiber output.
+
+        Canonical signature (v4.15+):
+            ``Source.fiber_mode(*, N, dx, wavelength,
+            mode_field_diameter, ...)``
+
+        Legacy signature (deprecated since v4.15, removal v5.0):
+            ``Source.fiber_mode(mode_field_diameter, N, dx, wavelength,
+            ...)``
+        """
+        if args:
+            from .._deprecation import warn_deprecated_signature
+            warn_deprecated_signature(
+                function='Source.fiber_mode',
+                old_signature=(
+                    'Source.fiber_mode(mode_field_diameter, N, dx, '
+                    'wavelength, ...)'),
+                new_signature=(
+                    'Source.fiber_mode(*, N, dx, wavelength, '
+                    'mode_field_diameter, ...)'),
+                version_added='4.15',
+                version_removed='5.0',
+                stacklevel=3,
+            )
+            if len(args) > 4:
+                raise TypeError(
+                    "Source.fiber_mode (legacy positional form): too "
+                    f"many positional arguments; got {len(args)}, max "
+                    "4 (mode_field_diameter, N, dx, wavelength).")
+            legacy = (None, None, None, None)
+            legacy = args + legacy[len(args):]
+            _l_mfd, _l_N, _l_dx, _l_wl = legacy
+            if mode_field_diameter is not None and _l_mfd is not None:
+                raise TypeError(
+                    "Source.fiber_mode: 'mode_field_diameter' supplied "
+                    "both positionally and as keyword.")
+            if N is not None and _l_N is not None:
+                raise TypeError("Source.fiber_mode: 'N' supplied both "
+                                "positionally and as keyword.")
+            if dx is not None and _l_dx is not None:
+                raise TypeError("Source.fiber_mode: 'dx' supplied both "
+                                "positionally and as keyword.")
+            if wavelength is not None and _l_wl is not None:
+                raise TypeError("Source.fiber_mode: 'wavelength' "
+                                "supplied both positionally and as keyword.")
+            if mode_field_diameter is None:
+                mode_field_diameter = _l_mfd
+            if N is None:
+                N = _l_N
+            if dx is None:
+                dx = _l_dx
+            if wavelength is None:
+                wavelength = _l_wl
+        if mode_field_diameter is None:
+            raise TypeError(
+                "Source.fiber_mode: missing required keyword argument "
+                "'mode_field_diameter' (the 1/e^2 intensity diameter "
+                "in metres).")
+        if N is None:
+            raise TypeError(
+                "Source.fiber_mode: missing required keyword argument 'N'.")
+        if dx is None:
+            raise TypeError(
+                "Source.fiber_mode: missing required keyword argument 'dx'.")
+        if wavelength is None:
+            raise TypeError(
+                "Source.fiber_mode: missing required keyword argument "
+                "'wavelength'.")
         E, _, _ = create_fiber_mode(
             N, dx, wavelength, mode_field_diameter=mode_field_diameter,
             x0=x0, y0=y0, na=na, **factory_kwargs)
@@ -1525,4 +2258,63 @@ class Source:
                    wavelength=wavelength,
                    source_point=source_point,
                    name=name or f'Fiber(MFD={mode_field_diameter:.2g}m)')
+
+    # -----------------------------------------------------------------
+    # v4.15 (ROADMAP v4.16 #9, #11): two new partial-coherence factories
+    # for the Schell-model family and the annular-incoherent source.
+    # -----------------------------------------------------------------
+
+    @classmethod
+    def gaussian_schell(cls, *, N: int, dx: float, wavelength: float,
+                         w0: float, sigma_g: float,
+                         n_realizations: int = 16,
+                         source_point: _Tuple[float, float] = (0.0, 0.0),
+                         name: _Optional[str] = None,
+                         seed: _Optional[int] = None,
+                         **factory_kwargs) -> 'Source':
+        """Gaussian-Schell partial-coherence source.
+
+        Wraps :func:`create_gaussian_schell_source`.  Returns a
+        :class:`Source` whose ``E`` is the ensemble-averaged amplitude
+        envelope (intensity sqrt) over ``n_realizations`` independent
+        random-phase Gaussian draws -- suitable for downstream
+        partial-coherence integration.
+        """
+        E, _, _ = create_gaussian_schell_source(
+            N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
+            n_realizations=n_realizations, seed=seed, **factory_kwargs)
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
+                   source_point=source_point,
+                   name=name or (
+                       f'GaussianSchell(w0={w0:.2g}m, '
+                       f'sigma_g={sigma_g:.2g}m)'))
+
+    @classmethod
+    def schell_model(cls, *, N: int, dx: float, wavelength: float,
+                      intensity_profile: np.ndarray,
+                      coherence_length: float,
+                      n_realizations: int = 16,
+                      source_point: _Tuple[float, float] = (0.0, 0.0),
+                      name: _Optional[str] = None,
+                      seed: _Optional[int] = None,
+                      **factory_kwargs) -> 'Source':
+        """Generic Schell-model partial-coherence source.
+
+        Wraps :func:`create_schell_model_source`.  Returns a
+        :class:`Source` whose ``E`` is the ensemble-averaged amplitude
+        envelope under a user-supplied intensity profile and Gaussian
+        coherence kernel.
+        """
+        E, _, _ = create_schell_model_source(
+            N=N, dx=dx, wavelength=wavelength,
+            intensity_profile=intensity_profile,
+            coherence_length=coherence_length,
+            n_realizations=n_realizations, seed=seed,
+            **factory_kwargs)
+        return cls(E=E, dx=dx, dy=factory_kwargs.get('dy', dx),
+                   wavelength=wavelength,
+                   source_point=source_point,
+                   name=name or (
+                       f'SchellModel(lc={coherence_length:.2g}m)'))
 

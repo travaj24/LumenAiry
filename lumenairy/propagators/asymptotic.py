@@ -2489,26 +2489,39 @@ def propagate_modal_asymptotic(
           ``maslov_tracking='1d_raster'`` and verify against a
           ground-truth direct quadrature.
 
-          v4.14.1 (P1-NEW-5) closure:  ``row_reset`` resets BOTH the
-          Maslov-branch state (``last_arg_detM``, ``maslov_branch``)
-          AND the Newton warm-start ``last_v_star`` at each row
-          wrap.  The previous (pre-v4.14.1) behaviour left the
-          Newton chain spanning the discontinuous raster jump from
-          (x_max, y_n) to (x_min, y_{n+1}), which is plausibly the
-          mechanism behind the v4.14.0 "wrong-saddle-basin" finding
-          near grid edges (largest jump in s_2).  Resetting the
-          warm-start to the pupil centre at each row wrap eliminates
-          that cross-row chain.  The v4.14.0 bit-equal pin
-          (:func:`test_lg00_single_mode_bit_equal` in
-          ``test_audit_fixes_v4_14_0_agent_1.py``) was updated to
-          the new behaviour in the same v4.14.1 patch (the
-          reference loop now resets ``last_v_star`` at row wrap
-          too).
+          v4.14.1 (P1-NEW-5) closure (HISTORICAL):  pre-v4.15
+          ``row_reset`` reset BOTH the Maslov-branch state AND the
+          Newton warm-start ``last_v_star`` at each row wrap.  That
+          was a partial mitigation of the wrong-saddle-basin chain
+          finding; v4.15 closes the loop fully by switching to
+          cold-start batched Newton (see below).
 
     Returns
     -------
     ndarray, complex, same shape as s2_grid_x
         Output field E(s_2).
+
+    Notes
+    -----
+    **v4.15 vectorisation closure.**  Prior to v4.15 this function
+    used a per-pixel Python loop with a warm-started Newton chain.
+    The chain landed in *wrong-saddle basins* near the grid edges,
+    where the overflow guard ``|b_quad| > 700`` silently zeroed those
+    pixels.  v4.15 switches to a single batched call into
+    :func:`_solve_envelope_stationary_batch` followed by
+    :func:`_compute_M_b_batch` and the batched polynomial-substitution
+    helpers (cold-start Newton for every pixel from ``v2_centre``).
+    The new body finds the physical saddle uniformly and produces
+    strictly more non-zero pixels at grid edges -- physically MORE
+    correct, but breaks the pre-v4.15 bit-equal pin against the
+    warm-start reference (the v4.12.0 and v4.14.0 bit-equal pins
+    were relaxed to property pins in the same v4.15 patch; see
+    ``docs/audits/AUDIT_V4_14_2_2026_05_17.md`` Part 3.5 closure and
+    ``docs/release_notes/.release_notes_v4_15_agent_a.md``).
+
+    The Maslov branch-unwrap is still a sequential O(N) pass over
+    the valid pixels (the unwrap is fundamentally serial; only the
+    Newton + M/b + polynomial-substitution work is batched).
     """
     if maslov_tracking not in ('principal', '1d_raster', 'row_reset'):
         raise ValueError(
@@ -2560,189 +2573,370 @@ def propagate_modal_asymptotic(
     flat_x = s2x_arr.ravel()
     flat_y = s2y_arr.ravel()
     flat_out = np.zeros(flat_x.size, dtype=np.complex128)
+    N_pix = flat_x.size
+    if N_pix == 0:
+        return flat_out.reshape(s2x_arr.shape)
 
-    last_v_star = (v_cx, v_cy)  # warm-start across pixels
-    # 4.10: track arg(det M) across pixels so 1 / sqrt(det M) stays
-    # branch-continuous through caustics.  Pre-4.10 used the
-    # principal sqrt branch, so arg(det M) sweeping past +/-pi flipped
-    # the sign of amp_lead and introduced a fake pi-phase jump in
-    # the reconstructed field.  We accumulate an integer branch
-    # counter `maslov_branch` whose role is the Keller-Maslov index:
-    # the field picks up an extra exp(-i*pi/2) for each caustic
-    # crossing (sign of det M changing).
+    Ny_grid, Nx_grid = (s2x_arr.shape if s2x_arr.ndim >= 2
+                         else (1, s2x_arr.size))
+
+    # ------------------------------------------------------------------
+    # v4.15 (ROADMAP #1) -- batched cold-start Newton + batched M/b/poly
+    # ------------------------------------------------------------------
+    # Pre-v4.15 used a per-pixel Python loop whose Newton warm-start
+    # chain entered wrong-saddle basins near grid edges (the
+    # ``|b_quad| > 700`` overflow guard then silently zeroed those
+    # pixels).  v4.15 deletes the warm-start chain and cold-starts every
+    # pixel from ``(v_cx, v_cy)`` via the existing batched helpers
+    # introduced by v4.14.0 (perf 1A).  The result is strictly more
+    # non-zero pixels at grid edges, physically MORE correct, and a
+    # 5-20x perf win on typical N=128 grids.  See
+    # ``docs/release_notes/.release_notes_v4_15_agent_a.md`` for the
+    # bit-equality -> property-pin migration and the full physics
+    # rationale.
     #
-    # 4.11.2: ``maslov_tracking`` chooses between the v4.10
-    # 1-D-raster unwrap, the new default per-row reset, and the
-    # legacy principal sqrt.  See the docstring for the trade-off.
-    last_arg_detM = None  # principal-branch arg of det M at the previous pixel
-    maslov_branch = 0     # accumulated branch index (each +/-2pi adds 1)
-    # Per-row reset bookkeeping: when the raster sweeps to a new row,
-    # reset the unwrap state so the jump between (x_max, y_n) and
-    # (x_min, y_{n+1}) -- which is not a continuous path in the
-    # output plane -- doesn't artifactually advance the Maslov index.
-    Ny_grid, Nx_grid = s2x_arr.shape if s2x_arr.ndim >= 2 else (1, s2x_arr.size)
-    # v4.14.0 (perf 1A judgment call): the per-pixel Python loop
-    # below is kept INTACT against the brief's batched-Newton target
-    # because the saddle-point Newton iteration here has *two* basins
-    # of attraction (the physical saddle and an unphysical wrong-
-    # saddle from the warm-start chain).  The pre-v4.14.0 scalar code
-    # warm-starts from the previous pixel's v_star; that warm-start
-    # carries the Newton into the wrong-saddle basin near the grid
-    # edges, producing |b_quad| > 700 that the overflow guard rejects
-    # and zeroes the pixel.  Cold-start batched Newton finds the
-    # physical saddle uniformly, yielding finite b_quad everywhere
-    # and a strictly larger non-zero pixel set -- physically MORE
-    # correct, but breaks the v4.12.0 ``test_lg00_single_mode_matches_reference``
-    # bit-equal pin against the warm-start scalar reference (which
-    # is itself in :mod:`tests/unit/test_perf_v4_12_0_asymptotic.py`
-    # and out of scope for this agent).  Until that test is updated
-    # to a physics-correct reference, this path stays sequential.
-    # v4.14.0 *does* introduce private batched helpers
-    # (:func:`_solve_envelope_stationary_batch`,
-    # :func:`_compute_M_b_batch`, :func:`_gaussian_moment_table_2d_batch`,
-    # :func:`_batched_polynomial_substitute_linear_2d`,
-    # :func:`_batched_polynomial_under_affine_shift`) used by the 1B
-    # path (:func:`decompose_lg`) and available for any future caller
-    # that doesn't need the warm-start saddle-selection.
-    for idx in range(flat_x.size):
-        s2x_p = flat_x[idx]
-        s2y_p = flat_y[idx]
-        if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
-                and Nx_grid > 0 and idx % Nx_grid == 0):
-            # v4.14.1 (P1-NEW-5):  ``row_reset`` resets ALL warm-start
-            # state at the start of each raster row -- the Maslov-branch
-            # state (``last_arg_detM``, ``maslov_branch``) AND the
-            # Newton warm-start ``last_v_star``.  The previous
-            # behaviour (resetting only the Maslov-branch state) left
-            # the Newton chain spanning the discontinuous raster jump
-            # from (x_max, y_n) to (x_min, y_{n+1}), which is
-            # plausibly where wrong-saddle basins were entered.
-            # Resetting ``last_v_star`` to the pupil centre at each
-            # row wrap eliminates that cross-row chain.
-            #
-            # The v4.14.0 bit-equal pin
-            # (``test_lg00_single_mode_bit_equal`` in
-            # ``test_audit_fixes_v4_14_0_agent_1.py``) was updated to
-            # the new behaviour as part of v4.14.1 (the reference
-            # loop in that test file also resets ``last_v_star`` at
-            # row wrap so the bit-equality holds).
-            last_arg_detM = None
-            maslov_branch = 0
-            last_v_star = (v_cx, v_cy)
+    # Per-pixel ``continue`` from the scalar path becomes element-wise
+    # ``valid`` masking here:
+    #   * fit-box skip ``|u1| > 1 or |u2| > 1`` -> ``in_box_s2`` mask
+    #   * Newton-wandered ``|u3| > 1 or |u4| > 1`` -> ``in_box_v`` mask
+    #   * non-finite ``M`` / ``b`` -> ``finite_Mb`` mask
+    #   * ``|det M| < 1e-300`` -> ``ok_det`` mask
+    #   * non-finite ``M_inv`` -> ``ok_inv`` mask
+    #   * ``|b_quad.real| > 700`` -> ``ok_bquad`` mask
+    #   * non-finite ``amp_lead`` -> ``ok_amp`` mask
+    # All masks are AND-combined into ``valid`` before any downstream
+    # work; only ``valid`` pixels are scattered back into ``flat_out``.
 
-        # Skip points outside the fit's training box
-        u1 = (s2x_p - fit.s2x_centre) / fit.s2x_halfrange
-        u2 = (s2y_p - fit.s2y_centre) / fit.s2y_halfrange
-        if abs(u1) > 1.0 or abs(u2) > 1.0:
-            continue
+    # ---- Fit-box mask on s2 ------------------------------------------
+    u1 = (flat_x - fit.s2x_centre) / fit.s2x_halfrange
+    u2 = (flat_y - fit.s2y_centre) / fit.s2y_halfrange
+    in_box_s2 = (np.abs(u1) <= 1.0) & (np.abs(u2) <= 1.0)
 
-        try:
-            v_star, n_iter, residual = solve_envelope_stationary(
-                fit, (s2x_p, s2y_p), (src_x, src_y),
-                w_s=w_s, w_p=w_p, v2_centre=v2_centre,
-                v2_initial=last_v_star,
+    # ---- Batched cold-start Newton solve ----------------------------
+    # Newton failures (singular Hessian / stalls) surface in
+    # ``converged=False``; we keep the last-iterate v_star regardless
+    # so the v-box check below can discard out-of-domain pixels.  The
+    # converged flag is treated as "OK to proceed" -- callers further
+    # down ALSO check the v-box and finite-ness, so a non-converged
+    # pixel that happens to land in-box still gets evaluated (matches
+    # the scalar path which used ``last_v_star`` regardless of
+    # convergence).
+    try:
+        v2x_star, v2y_star, _conv = _solve_envelope_stationary_batch(
+            fit, flat_x, flat_y, src_x, src_y,
+            w_s=w_s, w_p=w_p, v_cx=v_cx, v_cy=v_cy,
+        )
+    except (np.linalg.LinAlgError, ValueError, OverflowError):
+        # Should not happen; the batch helper is structured to mask
+        # element-wise failures.  If it does propagate up we degrade
+        # to all-zero output (matches per-pixel ``continue`` semantics
+        # for every pixel).
+        return flat_out.reshape(s2x_arr.shape)
+
+    # Replace any non-finite Newton outputs with v_centre to keep the
+    # downstream M/b batch evaluation in-domain (the in_box_v mask
+    # below masks them out anyway, but the underlying polynomial
+    # evaluation chokes on NaN inputs in some build configurations).
+    bad_v = (~np.isfinite(v2x_star)) | (~np.isfinite(v2y_star))
+    if np.any(bad_v):
+        v2x_star = np.where(bad_v, v_cx, v2x_star)
+        v2y_star = np.where(bad_v, v_cy, v2y_star)
+
+    u3 = (v2x_star - fit.v2x_centre) / fit.v2x_halfrange
+    u4 = (v2y_star - fit.v2y_centre) / fit.v2y_halfrange
+    in_box_v = ((np.abs(u3) <= 1.0) & (np.abs(u4) <= 1.0)
+                & np.isfinite(u3) & np.isfinite(u4)
+                & (~bad_v))
+
+    valid = in_box_s2 & in_box_v
+    if not np.any(valid):
+        return flat_out.reshape(s2x_arr.shape)
+
+    # ---- Batched M, b, J*, phi*, G0, detJ ---------------------------
+    # Evaluate on the FULL grid so the per-pixel index alignment stays
+    # simple; out-of-mask pixels carry whatever the helper produces and
+    # are filtered by the masks before any field-write.
+    try:
+        M_all, b_all, s1_star_all, J_all, phi_star_all, G0_all, detJ_all = (
+            _compute_M_b_batch(
+                fit, flat_x, flat_y, v2x_star, v2y_star,
+                src_x, src_y, w_s, w_p, v_cx, v_cy,
             )
-        except (np.linalg.LinAlgError, ValueError, OverflowError):
-            continue
-        # If Newton wandered outside the fit box, fall back to v_centre
-        # (otherwise we'll evaluate the polynomial fit out-of-domain).
-        u3 = (v_star[0] - fit.v2x_centre) / fit.v2x_halfrange
-        u4 = (v_star[1] - fit.v2y_centre) / fit.v2y_halfrange
-        if abs(u3) > 1.0 or abs(u4) > 1.0 or not (math.isfinite(u3) and math.isfinite(u4)):
-            continue
-        last_v_star = v_star
+        )
+    except (np.linalg.LinAlgError, ValueError, OverflowError):
+        return flat_out.reshape(s2x_arr.shape)
 
-        try:
-            M, b, s1_star, J_star, phi_star, G0, detJ = _compute_M_b(
-                fit, s2x_p, s2y_p, v_star[0], v_star[1],
-                src_x, src_y, w_s, w_p, v_cx, v_cy
-            )
-        except (np.linalg.LinAlgError, ValueError, OverflowError):
-            continue
-        if not (np.all(np.isfinite(M)) and np.all(np.isfinite(b))):
-            continue
-        det_M = np.linalg.det(M)
-        if not math.isfinite(abs(det_M)) or abs(det_M) < 1e-300:
-            continue
-        # 4.10 / 4.11.2: track arg(det M) and adjust sqrt branch so
-        # the field phase is continuous across caustics (Keller-
-        # Maslov).  4.11.2 routes through the shared
-        # ``_maslov_branch_corrected_sqrt`` helper so the same logic
-        # is available to the sibling JAX evaluators and
-        # ``aberration_tensor`` -- see the helper's docstring.  The
-        # ``maslov_tracking='principal'`` mode bypasses the unwrap
-        # state (no branch correction, principal sqrt).
-        if maslov_tracking == 'principal':
-            sqrt_detM = np.sqrt(det_M)
-        else:
-            sqrt_detM, last_arg_detM, maslov_branch = (
-                _maslov_branch_corrected_sqrt(
-                    det_M,
-                    last_arg_detM=last_arg_detM,
-                    maslov_branch=maslov_branch,
-                )
-            )
-        try:
-            M_inv = np.linalg.inv(M)
-        except np.linalg.LinAlgError:
-            continue
-        if not np.all(np.isfinite(M_inv)):
-            continue
-        delta_star = 0.5 * (M_inv @ b)
+    finite_M = np.all(np.isfinite(M_all.real) & np.isfinite(M_all.imag),
+                      axis=(-2, -1))
+    finite_b = np.all(np.isfinite(b_all.real) & np.isfinite(b_all.imag),
+                      axis=-1)
+    valid = valid & finite_M & finite_b
+    if not np.any(valid):
+        return flat_out.reshape(s2x_arr.shape)
 
-        # Leading amplitude.  Guard against complex-Gaussian overflow in
-        # the b^T M^-1 b exponent: cap at large magnitude (the integrand
-        # is genuinely negligible if the exponent goes to -inf, but a
-        # +inf would NaN the field).
-        b_quad = 0.25 * (b @ M_inv @ b)
-        if not math.isfinite(abs(b_quad)) or abs(b_quad.real) > 700:
-            continue
-        amp_lead = (detJ * (math.pi / sqrt_detM) * G0
-                    * np.exp(2j * math.pi * phi_star)
-                    * np.exp(b_quad))
-        if not math.isfinite(abs(amp_lead)):
-            continue
+    # ---- Closed-form 2x2 det / inverse with sentinel masking --------
+    a00 = M_all[:, 0, 0]
+    a01 = M_all[:, 0, 1]
+    a10 = M_all[:, 1, 0]
+    a11 = M_all[:, 1, 1]
+    det_M = a00 * a11 - a01 * a10
+    abs_det = np.abs(det_M)
+    ok_det = np.isfinite(abs_det) & (abs_det >= 1e-300)
+    valid = valid & ok_det
+    if not np.any(valid):
+        return flat_out.reshape(s2x_arr.shape)
 
-        # Moment table on this pixel's covariance
-        eta_moments = gaussian_moment_table_2d(M, max_order_needed)
+    # 2x2 inverse: M^-1 = 1/det * [[a11, -a01], [-a10, a00]].  Use a
+    # safe-divide guard for the not-yet-masked pixels so we don't
+    # propagate ``inf`` into ``M_inv`` (the valid mask above already
+    # excludes ``|det| < 1e-300`` from any field-write, but the unsafe
+    # division is enough to trip NumPy's invalid warnings on some
+    # builds).
+    safe_det = np.where(ok_det, det_M, 1.0 + 0.0j)
+    inv_det = 1.0 / safe_det
+    M_inv_all = np.empty_like(M_all)
+    M_inv_all[:, 0, 0] = a11 * inv_det
+    M_inv_all[:, 0, 1] = -a01 * inv_det
+    M_inv_all[:, 1, 0] = -a10 * inv_det
+    M_inv_all[:, 1, 1] = a00 * inv_det
+    finite_Minv = np.all(np.isfinite(M_inv_all.real)
+                          & np.isfinite(M_inv_all.imag),
+                          axis=(-2, -1))
+    valid = valid & finite_Minv
 
-        r_const = s1_star + J_star @ np.array([delta_star[0], delta_star[1]]) \
-                  - np.array([src_x, src_y])
-        pupil_const = (np.array([v_star[0], v_star[1]])
-                       - np.array([v_cx, v_cy])
-                       + np.array([delta_star[0], delta_star[1]]))
+    # ---- b_quad = 0.25 * b^T M^-1 b ---------------------------------
+    Minv_b = np.einsum('nij,nj->ni', M_inv_all, b_all)
+    b_quad = 0.25 * (b_all[:, 0] * Minv_b[:, 0]
+                      + b_all[:, 1] * Minv_b[:, 1])
+    # delta_star = 0.5 * M^-1 b
+    delta_star_all = 0.5 * Minv_b
+    ok_bquad = np.isfinite(np.abs(b_quad)) & (np.abs(b_quad.real) <= 700.0)
+    valid = valid & ok_bquad
+    if not np.any(valid):
+        return flat_out.reshape(s2x_arr.shape)
 
-        # Sum over (n, m) modes
-        # 4.12.0 (perf #5): ``src_poly_r`` / ``pup_poly_r`` are pulled
-        # from the hoisted ``*_poly_r_cache`` instead of rebuilt via
-        # :func:`lg_polynomial` every pixel.  The affine substitutions
-        # below DO depend on the per-pixel ``J_star`` / ``r_const`` /
-        # ``pupil_const``, so they remain inside the pixel loop.
-        E_pixel = 0.0 + 0.0j
-        for k_src, a_src in source_amplitudes.items():
-            if abs(a_src) < 1e-300:
+    # ---- sqrt(det M) with Maslov-branch unwrap ----------------------
+    # The branch unwrap is fundamentally sequential (each pixel's
+    # branch depends on its predecessor's principal arg), so we run a
+    # fast O(N_valid) Python pass over the valid pixels.  For
+    # ``'principal'`` mode we skip the unwrap entirely (vectorised
+    # principal-branch sqrt).
+    if maslov_tracking == 'principal':
+        sqrt_detM_all = np.sqrt(det_M)
+    else:
+        # For '1d_raster' / 'row_reset' we accumulate the branch
+        # counter along raster order (the ``flat_x`` ordering matches
+        # ``s2_grid_x.ravel()``).  ``row_reset`` resets the branch
+        # state at the start of each row (idx % Nx_grid == 0).
+        sqrt_detM_all = np.empty_like(det_M)
+        last_arg = None
+        branch_counter = 0
+        for idx in range(N_pix):
+            if (maslov_tracking == 'row_reset' and s2x_arr.ndim >= 2
+                    and Nx_grid > 0 and idx % Nx_grid == 0):
+                last_arg = None
+                branch_counter = 0
+            if not valid[idx]:
+                # Don't advance the branch counter on invalid pixels;
+                # they don't carry physical content and shouldn't
+                # corrupt the unwrap state.  This matches the scalar
+                # path's ``continue`` semantics (which also skipped
+                # the branch update on per-pixel guard hits).
+                sqrt_detM_all[idx] = np.sqrt(det_M[idx])
                 continue
-            src_poly_r = src_poly_r_cache[k_src]
-            src_poly_eta = _polynomial_substitute_linear_2d(
-                src_poly_r,
-                A_xx=J_star[0, 0], A_xy=J_star[0, 1],
-                A_yx=J_star[1, 0], A_yy=J_star[1, 1],
-                b_x=r_const[0], b_y=r_const[1],
-            )
-            for k_pup, b_pup in pupil_amplitudes.items():
-                if abs(b_pup) < 1e-300:
-                    continue
-                pup_poly_r = pup_poly_r_cache[k_pup]
-                pup_poly_eta = _polynomial_under_affine_shift(
-                    pup_poly_r,
-                    shift_x=complex(pupil_const[0]),
-                    shift_y=complex(pupil_const[1]),
+            sqrt_val, last_arg, branch_counter = (
+                _maslov_branch_corrected_sqrt(
+                    det_M[idx],
+                    last_arg_detM=last_arg,
+                    maslov_branch=branch_counter,
                 )
-                P_eta = _multiply_polys_2d(src_poly_eta, pup_poly_eta)
-                exp_val = _contract_against_moment_table(P_eta, eta_moments)
-                E_pixel += a_src * b_pup * exp_val
+            )
+            sqrt_detM_all[idx] = sqrt_val
 
-        flat_out[idx] = amp_lead * E_pixel
+    # ---- amp_lead = detJ * pi/sqrt(det M) * G0 * exp(2*pi*i*phi) * exp(b_quad)
+    # Substitute safe sentinel values where the per-pixel guards have
+    # already invalidated the pixel.  This keeps ``np.exp`` from
+    # raising overflow warnings on pixels whose ``b_quad`` exceeds the
+    # cap (those pixels are masked out by ``ok_bquad`` and discarded
+    # at scatter-time).
+    # v4.14.2 ``test_no_unguarded_zero_plus_zeroj_in_np_where``
+    # meta-pin compliance: use a dtype-aware sentinel
+    # (``np.zeros((), dtype=...)``) instead of the bare ``0.0 +
+    # 0.0j`` literal so backend-dispatched callers don't silently
+    # cast to a different complex dtype.  See
+    # AUDIT_V4_14_1_2026_05_17.md P1-NEW-4.
+    sqrt_dtype = sqrt_detM_all.dtype
+    bquad_dtype = b_quad.dtype
+    phi_dtype = phi_star_all.dtype
+    safe_sqrt = np.where(sqrt_detM_all != 0, sqrt_detM_all,
+                          np.ones((), dtype=sqrt_dtype))
+    safe_bquad = np.where(ok_bquad, b_quad,
+                           np.zeros((), dtype=bquad_dtype))
+    safe_phi = np.where(np.isfinite(phi_star_all), phi_star_all,
+                         np.zeros((), dtype=phi_dtype))
+    amp_lead_all = (detJ_all
+                    * (math.pi / safe_sqrt)
+                    * G0_all
+                    * np.exp(2j * math.pi * safe_phi)
+                    * np.exp(safe_bquad))
+    ok_amp = np.isfinite(np.abs(amp_lead_all))
+    valid = valid & ok_amp
+    if not np.any(valid):
+        return flat_out.reshape(s2x_arr.shape)
+
+    # ---- Batched eta moment table -----------------------------------
+    # ``_gaussian_moment_table_2d_batch`` consumes M_all directly; we
+    # only need the moments on the valid subset, so we mask M_all
+    # first to keep the batch helper from doing more work than needed.
+    valid_idx = np.where(valid)[0]
+    if valid_idx.size == 0:
+        return flat_out.reshape(s2x_arr.shape)
+    M_valid = M_all[valid_idx]
+    moment_keys, moment_table_valid = _gaussian_moment_table_2d_batch(
+        M_valid, max_order_needed,
+    )
+    # Build a dense ``(N_valid, max_i+1, max_j+1)`` array for the
+    # contraction below.  ``max_order_needed`` bounds the joint degree
+    # in eta_x + eta_y, so individual axes max at ``max_order_needed``.
+    if moment_keys:
+        max_i_mom = max(k[0] for k in moment_keys)
+        max_j_mom = max(k[1] for k in moment_keys)
+    else:
+        max_i_mom = 0
+        max_j_mom = 0
+    N_valid = valid_idx.size
+    moment_arr = np.zeros((N_valid, max_i_mom + 1, max_j_mom + 1),
+                           dtype=np.complex128)
+    for q, (a, b_ord) in enumerate(moment_keys):
+        moment_arr[:, a, b_ord] = moment_table_valid[:, q]
+
+    # ---- r_const, pupil_const on valid subset -----------------------
+    # r_const = s1_star + J_star @ delta_star - source
+    # pupil_const = v_star - v_centre + delta_star
+    J_valid = J_all[valid_idx]
+    delta_valid = delta_star_all[valid_idx]
+    s1_valid = s1_star_all[valid_idx]
+    v2x_valid = v2x_star[valid_idx]
+    v2y_valid = v2y_star[valid_idx]
+    # J @ delta per pixel
+    J_dot_delta = np.einsum('nij,nj->ni', J_valid.astype(np.complex128),
+                              delta_valid)
+    src_vec = np.array([src_x, src_y], dtype=np.complex128)
+    r_const = (s1_valid.astype(np.complex128) + J_dot_delta - src_vec)
+    pupil_const = np.empty((N_valid, 2), dtype=np.complex128)
+    pupil_const[:, 0] = v2x_valid + delta_valid[:, 0] - v_cx
+    pupil_const[:, 1] = v2y_valid + delta_valid[:, 1] - v_cy
+
+    # ---- Sum over LG mode pairs via batched polynomial helpers ------
+    # Per (k_src, k_pup) mode pair, build the per-pixel eta polynomial
+    # (source-side affine substitution + pupil-side affine shift),
+    # multiply, and contract against the moment table.
+    # We do the multiply-and-contract as a single direct sum over
+    # (i_src, j_src, i_pup, j_pup) -> i_eta=i_src+i_pup, j_eta=
+    # j_src+j_pup -- avoids forming the explicit ``P_eta`` 2-D array
+    # per pixel.
+    E_pixel = np.zeros(N_valid, dtype=np.complex128)
+    # Cache the source-polynomial array form once per (k_src) since
+    # the dense array conversion is the same for every pixel.
+    src_arr_cache: Dict[Tuple[int, int], np.ndarray] = {}
+    pup_arr_cache: Dict[Tuple[int, int], np.ndarray] = {}
+    for k_src in src_poly_r_cache:
+        src_d = src_poly_r_cache[k_src]
+        if not src_d:
+            continue
+        ix_max = max(k[0] for k in src_d)
+        iy_max = max(k[1] for k in src_d)
+        src_arr_cache[k_src] = _poly_dict_to_array(src_d, ix_max, iy_max)
+    for k_pup in pup_poly_r_cache:
+        pup_d = pup_poly_r_cache[k_pup]
+        if not pup_d:
+            continue
+        ix_max = max(k[0] for k in pup_d)
+        iy_max = max(k[1] for k in pup_d)
+        pup_arr_cache[k_pup] = _poly_dict_to_array(pup_d, ix_max, iy_max)
+
+    # Per-pixel A matrix and b_const offset for the source-side
+    # substitution.  A = J*, b_const = r_const.
+    A_valid = J_valid.astype(np.complex128)  # (N_valid, 2, 2)
+
+    for k_src, a_src in source_amplitudes.items():
+        if abs(a_src) < 1e-300:
+            continue
+        if k_src not in src_arr_cache:
+            continue
+        src_arr = src_arr_cache[k_src]
+        src_poly_eta_batch = _batched_polynomial_substitute_linear_2d(
+            src_arr, A_valid, r_const,
+        )  # (N_valid, Ox_src+1, Oy_src+1)
+        for k_pup, b_pup in pupil_amplitudes.items():
+            if abs(b_pup) < 1e-300:
+                continue
+            if k_pup not in pup_arr_cache:
+                continue
+            pup_arr = pup_arr_cache[k_pup]
+            pup_poly_eta_batch = _batched_polynomial_under_affine_shift(
+                pup_arr, pupil_const[:, 0], pupil_const[:, 1],
+            )  # (N_valid, Ix_pup+1, Iy_pup+1)
+            # Direct contraction:
+            #   exp_val[k] = sum_{a,b,c,d}
+            #       src[k,a,b] * pup[k,c,d] * moment_arr[k, a+c, b+d]
+            # We trim ``moment_arr`` to the joint degree we actually
+            # need: (Ix_src + Ix_pup, Iy_src + Iy_pup), bounded by the
+            # moment table's own size.
+            Ix_src = src_poly_eta_batch.shape[1] - 1
+            Iy_src = src_poly_eta_batch.shape[2] - 1
+            Ix_pup = pup_poly_eta_batch.shape[1] - 1
+            Iy_pup = pup_poly_eta_batch.shape[2] - 1
+            need_i = Ix_src + Ix_pup
+            need_j = Iy_src + Iy_pup
+            # Defensive: moment_arr may be smaller than (need_i, need_j)
+            # if max_order_needed didn't bound it (shouldn't happen
+            # since max_order_needed = max(2p+|l|) sum, but be safe).
+            have_i = moment_arr.shape[1] - 1
+            have_j = moment_arr.shape[2] - 1
+            if need_i > have_i or need_j > have_j:
+                # Build a padded copy that's large enough.  Out-of-
+                # range entries are zero (those moments are zero by
+                # convention for total order > max_order_needed).
+                padded = np.zeros(
+                    (N_valid, max(have_i + 1, need_i + 1),
+                     max(have_j + 1, need_j + 1)),
+                    dtype=np.complex128,
+                )
+                padded[:, :have_i + 1, :have_j + 1] = moment_arr
+                mom_used = padded
+            else:
+                mom_used = moment_arr
+            # Per-pixel sum over (a, b, c, d).  For typical
+            # source_amplitudes / pupil_amplitudes / poly orders this
+            # is a small fixed sum (Ix, Iy <= 6 each), so a 4-level
+            # Python loop accumulating into an N-vector is fine; each
+            # inner iteration is one vectorised N-length multiply.
+            exp_val = np.zeros(N_valid, dtype=np.complex128)
+            for a in range(Ix_src + 1):
+                for b_idx in range(Iy_src + 1):
+                    src_coef = src_poly_eta_batch[:, a, b_idx]
+                    if not np.any(src_coef):
+                        continue
+                    for c in range(Ix_pup + 1):
+                        for d in range(Iy_pup + 1):
+                            pup_coef = pup_poly_eta_batch[:, c, d]
+                            if not np.any(pup_coef):
+                                continue
+                            exp_val += (src_coef * pup_coef
+                                         * mom_used[:, a + c, b_idx + d])
+            E_pixel += a_src * b_pup * exp_val
+
+    # ---- Scatter back to the full output grid -----------------------
+    flat_out[valid_idx] = amp_lead_all[valid_idx] * E_pixel
+    # Final per-pixel finiteness guard: any NaN/Inf slipped through
+    # (e.g. polynomial overflow on a pathological pixel) becomes zero.
+    # v4.14.2 ``test_no_unguarded_zero_plus_zeroj_in_np_where``
+    # meta-pin compliance: dtype-aware sentinel (see comment above
+    # for ``safe_bquad`` / ``safe_phi`` / ``safe_sqrt``).
+    finite_out = np.isfinite(flat_out.real) & np.isfinite(flat_out.imag)
+    flat_out = np.where(finite_out, flat_out,
+                         np.zeros((), dtype=flat_out.dtype))
 
     return flat_out.reshape(s2x_arr.shape)
 

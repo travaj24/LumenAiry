@@ -10,6 +10,92 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.15.0
+
+**Major minor release** rolling together carryover P1s from the
+v4.14.2 audit + ROADMAP v4.15 + ROADMAP v4.16 into a single
+coordinated ship.  1425 unit tests pass (up from 1265); 34/34
+validation files pass.
+
+### Headline: 19.4x modal-asymptotic perf win + wrong-saddle fix
+
+`propagate_modal_asymptotic` switches to a single batched cold-start
+`_solve_envelope_stationary_batch` + `_compute_M_b_batch` path.
+Closes the v4.14.0 audit's "wrong-saddle basin" finding (the warm-
+start chain entered wrong-saddle basins at grid edges, silently
+zeroing those pixels via the `|b_quad| > 700` overflow guard).
+**Output is bit-different from v4.14.x** at grid edges — strictly
+more non-zero pixels because the cold-start finds the physical
+saddle uniformly.  Four bit-equal pins migrated to property pins
+(`1e-8` abs vs cold-start ref + 5% energy + nz-count >= warm-start);
+the v4.14.1 row-reset pin retargeted to the v4.15 stronger
+structural guarantee.  Measured 19.4x at N=128 LG_(0,0).
+
+### New public API (10 functions)
+
+* **Analysis (7):** `ee_polychromatic`, `strehl_vector`,
+  `coupling_efficiency_vector`, `rayleigh_resolution`,
+  `sparrow_resolution`, `fwhm_resolution`, `astigmatism_mag_angle`.
+* **Sources (3):** `create_gaussian_schell_source`,
+  `create_schell_model_source`, `create_annular_incoherent_source`
+  (random-phase ensemble for partial coherence).  Matching
+  `Source.gaussian_schell` / `Source.schell_model` classmethods.
+* **System entry:** `lumenairy.system.evaluate(prescription,
+  source, ...)` — accepts both Zemax-loader and factory-shape
+  prescriptions; users loading a `.zmx` file no longer have to
+  build the element list manually.
+* **Freeform / geometry (3):** `surface_sag_q_bfs` and
+  `surface_sag_q_con` (Forbes 2007 / Forbes 2010 orthonormal
+  bases via shifted-Jacobi 3-term recurrence; orthonormality
+  verified to <1e-6 for the first 5 orders); `make_off_axis_parabola`
+  prescription factory.
+
+### Source factory normalisation
+
+5 `Source.*` classmethod factories migrated to canonical
+`Source.method(*, N, dx, wavelength, <size_kwargs>)` (kwarg-only).
+Legacy positional form works for one release with a
+`DeprecationWarning` routed through the new
+`_deprecation.warn_deprecated_signature` helper
+(`version_removed='5.0'`).
+
+### v4.14.2 carryover P1s closed
+
+* **UI subpackage:** 7 findings fixed (glass-table N-LASF9 / S-NPH1,
+  coordinate-mode-aware nudge, undo state-capture for
+  wavelength/field weights + lens_options, back-vertex helper
+  consolidation, waveoptics-dock re-parent shiboken guard, OPD
+  mean-per-pixel accumulation, in-bounds mask before pupil
+  indexing).
+* **Codegen version pin** stamps `lumenairy_version` + a runtime
+  `>= (4, 15, 0)` gate in generated scripts.
+* **Ghost MC** accepts `seed: int | None = None` (default `None`
+  for real uncertainty bands).
+* **Glass Sellmeier bundle** for `SiO2` / `F_SILICA` /
+  `FUSED_SILICA` / `S-LAH64` / `S-LAH79` so minimal installs
+  without `refractiveindex` work.
+
+### Exhaustive P2/P3 sweep + new meta-pin
+
+User-requested exhaustive sweep of the v4.14.2 audit's 18 P2 + 12
+P3.  7-8 of 18 P2 + 4 of 12 P3 closed; 10-11 P2 + 8 P3 deferred
+(architectural for v4.16+ / v5.0).  New input-validation
+entry-point meta-pin walks every `create_*` factory and asserts
+`_validate_grid_params` in first 15 body lines (17 PASS + 1
+documented `create_led_source` xfail).
+
+### Version-stamping on HDF5 / Zarr writes
+
+Every `create_dataset` / `create_array` / `create_group` site
+now stamps `lumenairy_version` (7 locations).  Future-proof for
+cross-version field-file compatibility.
+
+### ROADMAP refresh
+
+`ROADMAP.md` updated to v4.15.0 baseline.  v4.14.1 / v4.14.2 /
+v4.14.3 / v4.15.0 shipped highlights added; closed items moved
+out of v4.15 / v4.16 target lists; remaining items renumbered.
+
 ## What's new in 4.14.3
 
 **Closes the v4.14.2 audit (`docs/audits/AUDIT_V4_14_2_2026_05_17.md`).**
@@ -91,6 +177,152 @@ sites; `lenses_maslov.py` line drift refreshed
 references now carry the `docs/audits/` prefix.  Cache-locks
 meta-pin count corrected `38` → `39 (38 pass + 1 documented
 skip)`.
+
+## Cookbook
+
+Short, self-contained examples for the six public functions
+added in v4.14.0.  Each block is a runnable snippet (assumes a
+prior `import lumenairy as la` and a populated complex field
+`E` on an `N x N` grid with pixel pitch `dx`).
+
+### Encircled energy curve
+
+`encircled_energy_curve(E, dx, *, dy=None, radii=None,
+centroid=None, n_radii=64)` returns the fraction of total power
+within radius `r` of the centroid as a 1-D curve.
+
+```python
+import numpy as np
+import lumenairy as la
+
+N, dx = 256, 2e-6
+x = (np.arange(N) - N / 2) * dx
+X, Y = np.meshgrid(x, x)
+E = np.exp(-(X * X + Y * Y) / (2 * (10e-6) ** 2)).astype(np.complex128)
+
+radii, ee = la.encircled_energy_curve(E, dx, n_radii=64)
+print(f"50% encircled radius ~= {radii[np.searchsorted(ee, 0.5)] * 1e6:.2f} um")
+```
+
+### Encircled energy radius
+
+`encircled_energy_radius(E, dx, *, dy=None, threshold=0.84,
+centroid=None)` returns the radius enclosing the given
+threshold fraction (default 0.84 -- the standard "84% encircled
+radius" lens-spec convention).
+
+```python
+import numpy as np
+import lumenairy as la
+
+N, dx = 256, 2e-6
+x = (np.arange(N) - N / 2) * dx
+X, Y = np.meshgrid(x, x)
+E = np.exp(-(X * X + Y * Y) / (2 * (10e-6) ** 2)).astype(np.complex128)
+
+r84 = la.encircled_energy_radius(E, dx, threshold=0.84)
+print(f"r84 = {r84 * 1e6:.2f} um")
+```
+
+### MTF cutoff
+
+`mtf_cutoff(mtf_profile, freq, *, threshold=0.5)` returns the
+spatial frequency at which a 1-D MTF profile drops below
+`threshold`.  Returns `np.inf` if the MTF stays above the
+threshold for all frequencies.
+
+```python
+import numpy as np
+import lumenairy as la
+
+# Synthetic Gaussian MTF profile.
+freq = np.linspace(0, 1000, 200)  # cycles/mm
+mtf = np.exp(-(freq / 300.0) ** 2)
+f50 = la.mtf_cutoff(mtf, freq, threshold=0.5)
+print(f"50% MTF cutoff = {f50:.1f} cycles/mm")
+```
+
+### Beam diameter
+
+`beam_diameter(E, dx, *, dy=None, threshold='1/e^2',
+centroid=None)` returns the diameter at which the intensity
+drops below the named threshold.  Accepts `'1/e^2'`, `'1/e'`,
+`'FWHM'`, or `'D4sigma'`.
+
+```python
+import numpy as np
+import lumenairy as la
+
+N, dx = 256, 2e-6
+x = (np.arange(N) - N / 2) * dx
+X, Y = np.meshgrid(x, x)
+E = np.exp(-(X * X + Y * Y) / (2 * (10e-6) ** 2)).astype(np.complex128)
+
+d_1e2 = la.beam_diameter(E, dx, threshold='1/e^2')
+d_4s = la.beam_diameter(E, dx, threshold='D4sigma')
+print(f"1/e^2 diameter = {d_1e2 * 1e6:.2f} um; D4sigma = {d_4s * 1e6:.2f} um")
+```
+
+### Depth of focus
+
+`depth_of_focus(wavelength, f_number, *, formula='rayleigh')`
+returns the one-sided depth of focus.  `'rayleigh'` evaluates
+`+/-4 f# ** 2 * lambda`; `'marechal'` evaluates `+/-lambda /
+NA ** 2`.
+
+```python
+import lumenairy as la
+
+# F/2.8 lens at 633 nm.
+dof = la.depth_of_focus(wavelength=633e-9, f_number=2.8,
+                        formula='rayleigh')
+print(f"Rayleigh depth of focus = +/-{dof * 1e6:.2f} um")
+```
+
+### Wavefront map plot
+
+`plot_wavefront(opd, dx, *, dy=None, aperture=None,
+units='waves', wavelength=None, cmap='RdBu_r',
+show_stats=True, ax=None, fig=None, title=None)` produces a
+Zemax-style wavefront map: NaN outside the aperture, divergent
+colormap centred on zero, PV/RMS overlay.
+
+```python
+import numpy as np
+import lumenairy as la
+
+N, dx = 128, 4e-6
+x = (np.arange(N) - N / 2) * dx
+X, Y = np.meshgrid(x, x)
+# Synthetic OPD: 1/2 wave of defocus across a 200 um aperture.
+opd = 0.5 * 633e-9 * (X * X + Y * Y) / (100e-6) ** 2
+aperture = (X * X + Y * Y) <= (100e-6) ** 2
+
+# Headless backend so the example runs in CI without a display.
+import matplotlib
+matplotlib.use('Agg')
+fig, ax = la.plot_wavefront(opd, dx, aperture=aperture,
+                            units='waves', wavelength=633e-9,
+                            title='Defocus')
+```
+
+### Anamorphic-grid (`dy`) migration example for `makedammann2d`
+
+A short worked example for users migrating off the legacy
+`makedammann2d` µm-units form to the v4.14.3+ explicit
+`_legacy_units='SI'` opt-in.  Required reading for THz / MMW
+DOE designers with mm-scale periods.
+
+```python
+import lumenairy as la
+
+# Pre-v4.14.3 (legacy) -- silent µm-units rescale at value > 1e-3.
+# T = la.makedammann2d(periodx=100, periody=100, waveln=1.31)
+
+# v4.14.3+ canonical SI form -- explicit opt-in, no rescale.
+T = la.makedammann2d(periodx=100e-6, periody=100e-6,
+                     waveln=1.31e-6, _legacy_units='SI')
+```
 
 ## What's new in 4.14.2
 

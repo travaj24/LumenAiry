@@ -310,12 +310,34 @@ class Test1ABatchedHelpersMatchScalar:
 
 
 class Test1APropagateModalAsymptoticStillBitEqual:
-    """The public :func:`propagate_modal_asymptotic` is intentionally
-    *unchanged* in v4.14.0 (the batched helpers are private; see this
-    module's docstring for why).  Pin that the LG_(0,0) and 4-mode
-    LG_{0,0..2,0} prescriptions still return the same values they
-    did pre-v4.14.0 by comparing against an inline scalar copy of
-    the pre-v4.14.0 algorithm.
+    """Property pins for :func:`propagate_modal_asymptotic`.
+
+    **v4.14.0 history.**  The public function was intentionally
+    UNCHANGED in v4.14.0 -- it kept its pre-v4.14.0 warm-started
+    Newton loop because the chain selects a different
+    envelope-stationary saddle than a cold-start batched Newton
+    would.  v4.14.0 pinned LG_(0,0) and 4-mode LG_{0,0..2,0}
+    bit-equal against the warm-start reference.
+
+    **v4.15 closure.**  v4.15 (ROADMAP item #1) switched the public
+    function to the batched cold-start path.  Cold-start finds the
+    physical saddle uniformly (the warm-start chain landed in
+    wrong-saddle basins at grid edges; see
+    ``docs/release_notes/.release_notes_v4_15_agent_a.md`` and
+    ``docs/audits/AUDIT_V4_14_2_2026_05_17.md`` Part 3.5).
+
+    The two ``*_bit_equal`` tests below were RELAXED in v4.15 from
+    bit-equality (``rel < 1e-12``) against the warm-start reference
+    to property pins:
+      * Per-pixel agreement vs a fresh cold-start scalar reference
+        at 1e-8 absolute (the canonical algorithm comparison).
+      * Total energy preserved within 5% of the warm-start
+        reference.
+      * Non-zero pixel count >= the warm-start reference count.
+
+    These property pins capture the physics direction of the
+    wrong-saddle finding without prescribing bit-by-bit
+    reproducibility against an algorithmically-different reference.
     """
 
     @pytest.fixture(scope='class')
@@ -456,7 +478,150 @@ class Test1APropagateModalAsymptoticStillBitEqual:
             flat_out[idx] = amp_lead * E_pixel
         return flat_out.reshape(s2x_arr.shape)
 
+    def _cold_start_reference_propagate_modal_asymptotic(
+            self, fit, source_amplitudes, pupil_amplitudes,
+            w_s, w_p, s2_grid_x, s2_grid_y):
+        """v4.15 cold-start scalar reference (canonical algorithm).
+
+        Identical to :meth:`_reference_propagate_modal_asymptotic`
+        EXCEPT it cold-starts the Newton from ``v2_centre`` on every
+        pixel (no warm-start chain).  This is the algorithm the
+        v4.15 public batched path implements; we use it to pin
+        per-pixel agreement at 1e-8 absolute.  The two paths differ
+        only in micro-rounding (closed-form 2x2 inverse vs
+        ``np.linalg.inv``, einsum vs ``J.T @ J``, etc).
+        """
+        src_x = src_y = v_cx = v_cy = 0.0
+        s2x_arr = np.asarray(s2_grid_x, dtype=np.float64)
+        s2y_arr = np.asarray(s2_grid_y, dtype=np.float64)
+        max_order_src = max(
+            (2 * p + abs(l) for (p, l) in source_amplitudes), default=0)
+        max_order_pup = max(
+            (2 * p + abs(l) for (p, l) in pupil_amplitudes), default=0)
+        max_order_needed = max(max_order_src + max_order_pup, 0)
+        src_poly_r_cache = {
+            k: lg_polynomial(k[0], k[1], w_s)
+            for k in source_amplitudes
+            if abs(source_amplitudes[k]) >= 1e-300
+        }
+        pup_poly_r_cache = {
+            k: lg_polynomial(k[0], k[1], w_p)
+            for k in pupil_amplitudes
+            if abs(pupil_amplitudes[k]) >= 1e-300
+        }
+        flat_x = s2x_arr.ravel()
+        flat_y = s2y_arr.ravel()
+        flat_out = np.zeros(flat_x.size, dtype=np.complex128)
+        Nx_grid = s2x_arr.shape[1] if s2x_arr.ndim >= 2 else s2x_arr.size
+        last_arg_detM = None
+        maslov_branch = 0
+        from lumenairy.propagators.asymptotic import (
+            _maslov_branch_corrected_sqrt,
+        )
+        for idx in range(flat_x.size):
+            s2x_p = flat_x[idx]
+            s2y_p = flat_y[idx]
+            if s2x_arr.ndim >= 2 and idx % Nx_grid == 0:
+                last_arg_detM = None
+                maslov_branch = 0
+            u1 = (s2x_p - fit.s2x_centre) / fit.s2x_halfrange
+            u2 = (s2y_p - fit.s2y_centre) / fit.s2y_halfrange
+            if abs(u1) > 1.0 or abs(u2) > 1.0:
+                continue
+            try:
+                # v4.15 cold-start: v2_initial=v2_centre (no
+                # warm-start chain).  This is the only physical
+                # difference from the pre-v4.15 warm-start reference.
+                v_star, _, _ = solve_envelope_stationary(
+                    fit, (s2x_p, s2y_p), (src_x, src_y),
+                    w_s=w_s, w_p=w_p, v2_centre=(v_cx, v_cy),
+                    v2_initial=(v_cx, v_cy),
+                )
+            except (np.linalg.LinAlgError, ValueError, OverflowError):
+                continue
+            u3 = (v_star[0] - fit.v2x_centre) / fit.v2x_halfrange
+            u4 = (v_star[1] - fit.v2y_centre) / fit.v2y_halfrange
+            if (abs(u3) > 1.0 or abs(u4) > 1.0
+                    or not (math.isfinite(u3) and math.isfinite(u4))):
+                continue
+            try:
+                M, b, s1_star, J_star, phi_star, G0, detJ = _compute_M_b(
+                    fit, s2x_p, s2y_p, v_star[0], v_star[1],
+                    src_x, src_y, w_s, w_p, v_cx, v_cy,
+                )
+            except (np.linalg.LinAlgError, ValueError, OverflowError):
+                continue
+            if not (np.all(np.isfinite(M)) and np.all(np.isfinite(b))):
+                continue
+            det_M = np.linalg.det(M)
+            if not math.isfinite(abs(det_M)) or abs(det_M) < 1e-300:
+                continue
+            sqrt_detM, last_arg_detM, maslov_branch = (
+                _maslov_branch_corrected_sqrt(
+                    det_M, last_arg_detM=last_arg_detM,
+                    maslov_branch=maslov_branch,
+                )
+            )
+            try:
+                M_inv = np.linalg.inv(M)
+            except np.linalg.LinAlgError:
+                continue
+            if not np.all(np.isfinite(M_inv)):
+                continue
+            delta_star = 0.5 * (M_inv @ b)
+            b_quad = 0.25 * (b @ M_inv @ b)
+            if (not math.isfinite(abs(b_quad))
+                    or abs(b_quad.real) > 700):
+                continue
+            amp_lead = (detJ * (math.pi / sqrt_detM) * G0
+                          * np.exp(2j * math.pi * phi_star)
+                          * np.exp(b_quad))
+            if not math.isfinite(abs(amp_lead)):
+                continue
+            eta_moments = gaussian_moment_table_2d(M, max_order_needed)
+            r_const = (s1_star
+                        + J_star @ np.array([delta_star[0], delta_star[1]])
+                        - np.array([src_x, src_y]))
+            pupil_const = (np.array([v_star[0], v_star[1]])
+                             - np.array([v_cx, v_cy])
+                             + np.array([delta_star[0], delta_star[1]]))
+            E_pixel = 0.0 + 0.0j
+            for k_src, a_src in source_amplitudes.items():
+                if abs(a_src) < 1e-300:
+                    continue
+                src_poly_r = src_poly_r_cache[k_src]
+                src_poly_eta = _polynomial_substitute_linear_2d(
+                    src_poly_r,
+                    A_xx=J_star[0, 0], A_xy=J_star[0, 1],
+                    A_yx=J_star[1, 0], A_yy=J_star[1, 1],
+                    b_x=r_const[0], b_y=r_const[1],
+                )
+                for k_pup, b_pup in pupil_amplitudes.items():
+                    if abs(b_pup) < 1e-300:
+                        continue
+                    pup_poly_r = pup_poly_r_cache[k_pup]
+                    pup_poly_eta = _polynomial_under_affine_shift(
+                        pup_poly_r,
+                        shift_x=complex(pupil_const[0]),
+                        shift_y=complex(pupil_const[1]),
+                    )
+                    P_eta = _multiply_polys_2d(
+                        src_poly_eta, pup_poly_eta)
+                    exp_val = _contract_against_moment_table(
+                        P_eta, eta_moments)
+                    E_pixel += a_src * b_pup * exp_val
+            flat_out[idx] = amp_lead * E_pixel
+        return flat_out.reshape(s2x_arr.shape)
+
     def test_lg00_single_mode_bit_equal(self, fit):
+        """v4.15 property pin (relaxed from pre-v4.15
+        ``rel < 1e-12`` bit-equal pin against the warm-start
+        reference).
+
+        See :class:`Test1APropagateModalAsymptoticStillBitEqual`
+        docstring for the bit-equality -> property-pin migration
+        history.
+        """
         N = 32
         s2x = np.linspace(-5e-6, 5e-6, N)
         s2y = np.linspace(-5e-6, 5e-6, N)
@@ -468,22 +633,52 @@ class Test1APropagateModalAsymptoticStillBitEqual:
             w_s=50e-6, w_p=0.02, v2_centre=(0.0, 0.0),
             s2_grid_x=S2X, s2_grid_y=S2Y,
         )
-        ref = self._reference_propagate_modal_asymptotic(
+        # ---- Pin 1: per-pixel agreement vs cold-start reference.
+        cold_ref = self._cold_start_reference_propagate_modal_asymptotic(
             fit,
             {(0, 0): 1.0 + 0.0j}, {(0, 0): 1.0 + 0.0j},
             50e-6, 0.02, S2X, S2Y,
         )
-        peak = float(np.max(np.abs(ref)))
-        max_diff = float(np.max(np.abs(new - ref)))
-        rel = max_diff / max(peak, 1e-300)
-        assert rel < 1e-12, (
-            f'LG_(0,0) drifted: max|new - ref| = {max_diff:.3e}, '
-            f'peak = {peak:.3e}, rel = {rel:.3e}'
+        cold_peak = float(np.max(np.abs(cold_ref)))
+        max_abs = float(np.max(np.abs(new - cold_ref)))
+        assert max_abs < 1e-8 * max(cold_peak, 1.0), (
+            f'LG_(0,0) vs cold-start reference: max|new - cold_ref| = '
+            f'{max_abs:.3e}, cold_peak = {cold_peak:.3e}'
+        )
+
+        # ---- Pin 2: total-energy preservation vs warm-start ref.
+        warm_ref = self._reference_propagate_modal_asymptotic(
+            fit,
+            {(0, 0): 1.0 + 0.0j}, {(0, 0): 1.0 + 0.0j},
+            50e-6, 0.02, S2X, S2Y,
+        )
+        warm_peak = float(np.max(np.abs(warm_ref)))
+        if warm_peak == 0:
+            pytest.skip('warm-start reference produced no signal')
+        new_energy = float(np.sum(np.abs(new) ** 2))
+        warm_energy = float(np.sum(np.abs(warm_ref) ** 2))
+        rel_e_diff = abs(new_energy - warm_energy) / warm_energy
+        assert rel_e_diff < 0.05, (
+            f'LG_(0,0) total-energy mismatch: new={new_energy:.3e}, '
+            f'warm={warm_energy:.3e}, rel diff={rel_e_diff:.3e}'
+        )
+        # ---- Pin 3: non-zero pixel count comparison.
+        new_nz = int(np.sum(new != 0))
+        warm_nz = int(np.sum(warm_ref != 0))
+        assert new_nz >= warm_nz, (
+            f'v4.15 cold-start produced FEWER non-zero pixels '
+            f'({new_nz}) than warm-start reference ({warm_nz}).'
         )
 
     def test_lg_p0_4mode_prescription_bit_equal(self, fit):
-        """Hand-built 4-mode LG_{0,0..2,0} prescription as required by
-        the v4.14.0 audit brief."""
+        """v4.15 property pin (relaxed from pre-v4.15
+        ``rel < 1e-12`` bit-equal pin) for the hand-built 4-mode
+        LG_{0,0..2,0} prescription from the v4.14.0 audit brief.
+
+        See :class:`Test1APropagateModalAsymptoticStillBitEqual`
+        docstring for the bit-equality -> property-pin migration
+        history.
+        """
         N = 32
         s2x = np.linspace(-5e-6, 5e-6, N)
         s2y = np.linspace(-5e-6, 5e-6, N)
@@ -504,16 +699,39 @@ class Test1APropagateModalAsymptoticStillBitEqual:
             w_s=50e-6, w_p=0.02, v2_centre=(0.0, 0.0),
             s2_grid_x=S2X, s2_grid_y=S2Y,
         )
-        ref = self._reference_propagate_modal_asymptotic(
+        # ---- Pin 1: per-pixel agreement vs cold-start reference.
+        cold_ref = self._cold_start_reference_propagate_modal_asymptotic(
             fit, source_amps, pupil_amps,
             50e-6, 0.02, S2X, S2Y,
         )
-        peak = float(np.max(np.abs(ref)))
-        max_diff = float(np.max(np.abs(new - ref)))
-        rel = max_diff / max(peak, 1e-300)
-        assert rel < 1e-12, (
-            f'4-mode LG_p0 drifted: max|new - ref| = {max_diff:.3e}, '
-            f'peak = {peak:.3e}, rel = {rel:.3e}'
+        cold_peak = float(np.max(np.abs(cold_ref)))
+        max_abs = float(np.max(np.abs(new - cold_ref)))
+        assert max_abs < 1e-8 * max(cold_peak, 1.0), (
+            f'4-mode LG_p0 vs cold-start reference: max|new - cold_ref| '
+            f'= {max_abs:.3e}, cold_peak = {cold_peak:.3e}'
+        )
+
+        # ---- Pin 2: total-energy preservation vs warm-start ref.
+        warm_ref = self._reference_propagate_modal_asymptotic(
+            fit, source_amps, pupil_amps,
+            50e-6, 0.02, S2X, S2Y,
+        )
+        warm_peak = float(np.max(np.abs(warm_ref)))
+        if warm_peak == 0:
+            pytest.skip('warm-start reference produced no signal')
+        new_energy = float(np.sum(np.abs(new) ** 2))
+        warm_energy = float(np.sum(np.abs(warm_ref) ** 2))
+        rel_e_diff = abs(new_energy - warm_energy) / warm_energy
+        assert rel_e_diff < 0.05, (
+            f'4-mode LG_p0 total-energy mismatch: new={new_energy:.3e}, '
+            f'warm={warm_energy:.3e}, rel diff={rel_e_diff:.3e}'
+        )
+        # ---- Pin 3: non-zero pixel count comparison.
+        new_nz = int(np.sum(new != 0))
+        warm_nz = int(np.sum(warm_ref != 0))
+        assert new_nz >= warm_nz, (
+            f'v4.15 cold-start produced FEWER non-zero pixels '
+            f'({new_nz}) than warm-start reference ({warm_nz}).'
         )
 
 

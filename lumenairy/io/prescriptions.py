@@ -211,6 +211,138 @@ def make_doublet(R1: float, R2: float, R3: float,
     }
 
 
+def make_off_axis_parabola(
+        focal_length: float,
+        off_axis_angle: float,
+        clear_aperture: float,
+        *,
+        glass: str = '__MIRROR__',
+        vertex_radius: Optional[float] = None,
+        name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build a prescription dict for an off-axis parabola (OAP).
+
+    An OAP is a section of a parent paraboloid cut at an off-axis
+    distance ``h = focal_length * tan(off_axis_angle)``.  The returned
+    prescription consists of a single paraboloidal surface (``conic =
+    -1``) with vertex radius ``R = 2 * focal_length`` (geometric
+    relation for the parent parabola), shifted laterally by the
+    decenter so the parent-axis vertex sits off the simulation grid,
+    and tilted in the local frame by the off-axis angle.
+
+    Parameters
+    ----------
+    focal_length : float
+        Parent-parabola effective focal length [m].  Must be positive.
+    off_axis_angle : float
+        Off-axis angle [rad], measured from the parent optical axis to
+        the chief ray reflected by the OAP.  Must lie in
+        ``(0, pi/2)``.
+    clear_aperture : float
+        Clear aperture diameter at the OAP face [m].  Must be
+        positive.
+    glass : str, default ``'__MIRROR__'``
+        Glass / material specifier.  The default ``'__MIRROR__'``
+        sentinel marks the surface as reflective (consistent with the
+        ``is_mirror`` convention elsewhere in this module).  Set to a
+        glass name (e.g. ``'N-BK7'``) for a refractive parabolic
+        element instead.
+    vertex_radius : float, optional
+        Override the geometrically-derived vertex radius
+        ``2 * focal_length``.  Defaults to ``None`` (use the geometric
+        relation).  Provided for advanced use cases where the parent
+        parabola is specified by some other prescription convention.
+    name : str, optional
+        Human-readable label.  Defaults to ``"OAP (f={focal_length},
+        theta={off_axis_angle})"``.
+
+    Returns
+    -------
+    prescription : dict
+        Prescription dict suitable for ``apply_real_lens`` /
+        ``propagate_through_system``.  Contains a single-surface list
+        with the parabolic geometry, the decenter (parent-axis
+        offset), the local-frame tilt, and the clear-aperture
+        diameter.
+
+    Notes
+    -----
+    Off-axis parabolas obey the geometric relations:
+
+    * Parent vertex radius: ``R = 2 f`` (paraboloid focal length).
+    * Parent conic constant: ``k = -1``.
+    * Off-axis decenter (parent-axis offset of the OAP centre):
+      ``h = f * tan(theta)``.
+    * Local-frame tilt (chief-ray fold angle): ``theta``.
+
+    These match the OAP definitions in Thorlabs / Edmund Optics
+    catalogue specifications (e.g. the MPD-series OAPs).
+
+    Examples
+    --------
+    >>> oap = make_off_axis_parabola(focal_length=152.4e-3,
+    ...                              off_axis_angle=np.deg2rad(90.0/2),
+    ...                              clear_aperture=50.8e-3)
+    >>> oap['surfaces'][0]['conic']
+    -1.0
+    """
+    import math
+    # Input validation (per task spec: positive f, 0 < theta < pi/2,
+    # positive clear aperture).
+    if not (np.isfinite(focal_length) and focal_length > 0):
+        raise ValueError(
+            f"make_off_axis_parabola: focal_length must be a positive "
+            f"finite value [m]; got focal_length={focal_length!r}.")
+    if not (np.isfinite(off_axis_angle)
+            and 0.0 < off_axis_angle < math.pi / 2):
+        raise ValueError(
+            f"make_off_axis_parabola: off_axis_angle must lie in the "
+            f"open interval (0, pi/2) [rad]; got off_axis_angle="
+            f"{off_axis_angle!r}.")
+    if not (np.isfinite(clear_aperture) and clear_aperture > 0):
+        raise ValueError(
+            f"make_off_axis_parabola: clear_aperture must be a "
+            f"positive finite diameter [m]; got clear_aperture="
+            f"{clear_aperture!r}.")
+
+    # Parent-parabola vertex radius: geometric relation R = 2 f
+    # unless the caller overrides via ``vertex_radius``.
+    if vertex_radius is None:
+        R = 2.0 * focal_length
+    else:
+        R = float(vertex_radius)
+
+    # Off-axis decenter: parent-axis offset to the OAP centre.
+    h_decenter = focal_length * math.tan(off_axis_angle)
+
+    is_mirror = (glass == '__MIRROR__')
+
+    surface: Dict[str, Any] = {
+        'radius': R,
+        'conic': -1.0,
+        'aspheric_coeffs': None,
+        'radius_y': None,
+        'conic_y': None,
+        'aspheric_coeffs_y': None,
+        'glass_before': 'air',
+        'glass_after': 'air' if is_mirror else glass,
+        'decenter': (h_decenter, 0.0),
+        'tilt': (off_axis_angle, 0.0, 0.0),
+        'clear_aperture': clear_aperture,
+        'is_mirror': is_mirror,
+    }
+
+    return {
+        'name': name or (
+            f"OAP (f={focal_length:.4g} m, "
+            f"theta={off_axis_angle:.4g} rad)"
+        ),
+        'aperture_diameter': clear_aperture,
+        'surfaces': [surface],
+        'thicknesses': [],
+    }
+
+
 # ============================================================================
 # Thorlabs catalog lens presets
 # ============================================================================

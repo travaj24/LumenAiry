@@ -34,6 +34,7 @@ __all__ = [
     'deprecated_alias',
     'warn_renamed_function',
     'warn_deprecated_default',
+    'warn_deprecated_signature',
 ]
 
 
@@ -204,5 +205,48 @@ def warn_deprecated_default(
         f"{function}: relying on the default value of '{arg_name}' "
         f"({default_value!r}) is deprecated since v{version_added}"
         f"{removal}; pass it explicitly.",
+        stacklevel=stacklevel,
+    )
+
+
+def warn_deprecated_signature(
+    *,
+    function: str,
+    old_signature: str,
+    new_signature: str,
+    version_added: str = '4.15',
+    version_removed: Optional[str] = None,
+    stacklevel: int = 3,
+) -> None:
+    """Warn that a legacy positional call form is deprecated.
+
+    Used when a function has been re-shaped (e.g. legacy positional
+    ``f(size, N, dx, wavelength)`` -> canonical kwarg-only
+    ``f(*, N, dx, wavelength, size)``) and the old call form is still
+    accepted with a back-compat shim.
+
+    Parameters
+    ----------
+    function : str
+        Fully qualified name of the function being called.
+    old_signature : str
+        Human-readable representation of the deprecated call form
+        (e.g. ``"Source.gaussian(w0, N, dx, wavelength)"``).
+    new_signature : str
+        Human-readable representation of the canonical call form
+        (e.g. ``"Source.gaussian(*, N, dx, wavelength, w0)"``).
+    version_added : str
+        Version in which this deprecation began.
+    version_removed : str, optional
+        Version in which removal is scheduled (only stated if known).
+    stacklevel : int
+        Passed through to ``warnings.warn``.
+    """
+    removal = (f', will be removed in v{version_removed}'
+               if version_removed else '')
+    _emit(
+        f"{function}: legacy positional call form "
+        f"``{old_signature}`` is deprecated since v{version_added}"
+        f"{removal}; use the canonical form ``{new_signature}`` instead.",
         stacklevel=stacklevel,
     )

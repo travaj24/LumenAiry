@@ -245,40 +245,60 @@ class TestGbdAxialOplPopulated:
 
 
 # ============================================================================
-# S-LAH64 / S-LAH79 -- in-code Sellmeier removed, routed via sentinel
+# S-LAH64 / S-LAH79 -- coefficients re-bundled in v4.15 (P1-GL-1)
 # ============================================================================
 
 class TestSLahGlassesRoutedViaSentinel:
-    """The Sellmeier coefficients in-code for S-LAH64 and S-LAH79
-    were wrong by 5-6% in n_d -- almost certainly misattributed from
-    a different glass.  v4.11.2 removes the in-code entries; lookups
-    now go through the ``'__sellmeier__'`` sentinel which dispatches
-    to ``refractiveindex.info`` (requires ``pip install
-    refractiveindex``).
+    """v4.11.2 history: the original in-code Sellmeier coefficients for
+    S-LAH64 and S-LAH79 were wrong by 5-6% in n_d (misattributed from
+    a different glass).  v4.11.2 *removed* the in-code entries so that
+    lookups would route through ``refractiveindex.info`` exclusively.
 
-    This test verifies the entries are no longer in the in-code
-    Sellmeier table.  Whether the refractiveindex lookup succeeds in
-    a given environment depends on whether the optional dep is
-    installed -- not tested here.
+    v4.15 (P1-GL-1) re-bundles correct OHARA coefficients (sourced
+    verbatim from the ``refractiveindex.info-database`` YAML for the
+    OHARA Zemax 2017-11-30 catalog) so that minimal installs without
+    the ``refractiveindex`` Python package can still resolve these
+    glasses via the dispatcher's ``__sellmeier__`` fallback path.
+    The new coefficients agree with refractiveindex.info to ~1e-10
+    (S-LAH64) and ~4e-7 (S-LAH79) at n_d.
+
+    This test class was originally written to pin the v4.11.2 absence;
+    v4.15 inverts the contract: the entries are present AND accurate.
     """
 
-    def test_s_lah64_not_in_in_code_sellmeier_table(self):
-        from lumenairy.glass import SELLMEIER_COEFFICIENTS
-        assert 'S-LAH64' not in SELLMEIER_COEFFICIENTS, (
-            f"S-LAH64 should not have hard-coded Sellmeier coefficients "
-            f"-- pre-v4.11.2 they were misattributed (n_d off by "
-            f"+5.8% vs Ohara catalog).  Removed in v4.11.2; route via "
-            f"refractiveindex.info instead."
+    def test_s_lah64_in_table_with_correct_n_d(self):
+        """v4.15 (P1-GL-1): S-LAH64 has bundled Sellmeier coefficients
+        matching the Ohara catalog n_d=1.78800 within 5e-5."""
+        from lumenairy.glass import SELLMEIER_COEFFICIENTS, _sellmeier_index
+        assert 'S-LAH64' in SELLMEIER_COEFFICIENTS, (
+            "v4.15 (P1-GL-1): S-LAH64 should be bundled now to support "
+            "minimal installs without the ``refractiveindex`` package."
         )
+        n_d = _sellmeier_index(
+            wavelength_m=0.58756e-6,
+            coeffs=SELLMEIER_COEFFICIENTS['S-LAH64'],
+            glass_name='S-LAH64')
+        assert abs(n_d - 1.788001) < 5e-5, (
+            f"S-LAH64 bundled Sellmeier n_d={n_d:.6f}; Ohara catalog "
+            f"is 1.788001.  Coefficients may be misattributed -- the "
+            f"v4.11.2 audit (CRIT-1) caught this exact problem with "
+            f"the previous in-code values.")
 
-    def test_s_lah79_not_in_in_code_sellmeier_table(self):
-        from lumenairy.glass import SELLMEIER_COEFFICIENTS
-        assert 'S-LAH79' not in SELLMEIER_COEFFICIENTS, (
-            f"S-LAH79 should not have hard-coded Sellmeier coefficients "
-            f"-- pre-v4.11.2 they were misattributed (n_d off by "
-            f"-5.9% vs Ohara catalog).  Removed in v4.11.2; route via "
-            f"refractiveindex.info instead."
+    def test_s_lah79_in_table_with_correct_n_d(self):
+        """v4.15 (P1-GL-1): S-LAH79 has bundled Sellmeier coefficients
+        matching the Ohara catalog n_d=2.00330 within 5e-5."""
+        from lumenairy.glass import SELLMEIER_COEFFICIENTS, _sellmeier_index
+        assert 'S-LAH79' in SELLMEIER_COEFFICIENTS, (
+            "v4.15 (P1-GL-1): S-LAH79 should be bundled now to support "
+            "minimal installs without the ``refractiveindex`` package."
         )
+        n_d = _sellmeier_index(
+            wavelength_m=0.58756e-6,
+            coeffs=SELLMEIER_COEFFICIENTS['S-LAH79'],
+            glass_name='S-LAH79')
+        assert abs(n_d - 2.003300) < 5e-5, (
+            f"S-LAH79 bundled Sellmeier n_d={n_d:.6f}; Ohara catalog "
+            f"is 2.003300.")
 
     def test_in_code_sellmeier_n_d_within_1e3_of_catalog_for_a_known_good_glass(
             self):

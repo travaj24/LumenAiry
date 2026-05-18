@@ -219,22 +219,60 @@ class PSFMTFDock(QWidget):
         ap = float(self.sm.epd_m)
         N = 256
         dx = ap / N
-        opd_grid = np.full((N, N), np.nan, dtype=np.float64)
-        ix = np.clip(((x / dx) + N / 2).astype(int), 0, N - 1)
-        iy = np.clip(((y / dx) + N / 2).astype(int), 0, N - 1)
-        opd_grid[iy, ix] = opl
-        valid = np.isfinite(opd_grid)
-        opd_grid = np.where(valid, opd_grid, 0.0)
+        # v4.15 (P1-UI-7): bounds-mask the rays BEFORE indexing so any
+        # ray landing outside the pupil grid is dropped rather than
+        # snapped to the boundary via ``np.clip``.  Pre-4.15 the clip
+        # silently piled out-of-aperture rays onto the {0, N-1} edges
+        # and polluted the pupil edge with garbage OPDs unrelated to
+        # the actual aperture clipping; geometric residue from a wide-
+        # angle trace would corrupt the apparent rim of the pupil.
+        ix_raw = ((x / dx) + N / 2).astype(int)
+        iy_raw = ((y / dx) + N / 2).astype(int)
+        in_bounds = ((ix_raw >= 0) & (ix_raw < N)
+                     & (iy_raw >= 0) & (iy_raw < N))
+        ix = ix_raw[in_bounds]
+        iy = iy_raw[in_bounds]
+        opl_in = opl[in_bounds]
+        # v4.15 (P1-UI-6): accumulate mean OPD per pixel rather than
+        # last-write-wins.  The pre-4.15 ``opd_grid[iy, ix] = opl``
+        # depended on numpy's right-to-left iteration order, so for
+        # any pixel hit by multiple rays the stored OPD was the LAST
+        # ray to map there -- physically meaningless (a function of
+        # the ray-loop order, not the optics).  Following the
+        # ``analysis/core.py`` accumulator pattern (lines 986-988,
+        # ``np.bincount`` with weights divided by count), we
+        # accumulate sum-of-OPL and ray-count per pixel via
+        # ``np.add.at`` and divide at the end.  Median was the other
+        # option mentioned in the audit; mean matches the analysis
+        # module's azimuthal-average idiom and behaves identically
+        # for the 1-ray-per-pixel case.
+        sum_grid = np.zeros((N, N), dtype=np.float64)
+        cnt_grid = np.zeros((N, N), dtype=np.int64)
+        np.add.at(sum_grid, (iy, ix), opl_in)
+        np.add.at(cnt_grid, (iy, ix), 1)
+        valid = cnt_grid > 0
+        opd_grid = np.zeros((N, N), dtype=np.float64)
+        opd_grid[valid] = sum_grid[valid] / cnt_grid[valid]
         k0 = 2 * np.pi / (self.sm.wavelength_nm * 1e-9)
         phase = k0 * opd_grid
-        self._pupil = np.where(valid, np.exp(1j * phase), 0.0 + 0.0j)
+        # v4.15: dtype-aware sentinel migration.  Pre-4.15 the
+        # ``0.0 + 0.0j`` literal forced a complex128 upcast via numpy's
+        # mixed-dtype rules (P3-rated in AUDIT_V4_14_1_2026_05_17.md
+        # P1-NEW-4); explicit ``.astype(complex_t)`` recovery makes the
+        # pupil dtype deterministic regardless of which numpy version
+        # the user is running.
+        _pupil_full = np.exp(1j * phase)
+        self._pupil = np.where(valid, _pupil_full,
+                                np.zeros((), dtype=_pupil_full.dtype))
         self._dx = dx
         self._wavelength = self.sm.wavelength_nm * 1e-9
         self._focal_length = float(bfl) if np.isfinite(bfl) else float(efl)
+        n_dropped = int(np.sum(~in_bounds))
+        drop_msg = f', {n_dropped} out-of-bounds' if n_dropped else ''
         self.summary.append(
             f'Ray-trace pupil built: {self._pupil.shape}, '
             f'dx={dx*1e6:.2f} um, f={self._focal_length*1e3:.2f} mm, '
-            f'{int(np.sum(valid))} rays')
+            f'{int(np.sum(valid))} pixels filled{drop_msg}')
 
     # ------------------------------------------------------------------
     # PSF + MTF

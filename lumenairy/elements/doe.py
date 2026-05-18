@@ -739,25 +739,29 @@ def makedammann2d(
         _legacy_um = (_periodx_legacy or _periody_legacy
                       or _waveln_legacy)
         if _legacy_um:
-            import warnings
-            warnings.warn(
-                "makedammann2d: positional input(s) appear to be in "
-                "micrometres "
-                f"(periodx={periodx}"
-                f"{' [legacy um]' if _periodx_legacy else ''}, "
-                f"periody={periody}"
-                f"{' [legacy um]' if _periody_legacy else ''}, "
-                f"waveln={waveln}"
-                f"{' [legacy um]' if _waveln_legacy else ''}); "
-                "since v4.14.2 the function uses SI metres throughout "
-                "(library-wide convention).  Multiply legacy "
-                "micrometre values by 1e-6 to migrate: "
-                "``periodx=61e-6, waveln=1.31e-6``.  For THz / MMW "
-                "designs with genuine mm-scale SI inputs, pass "
-                "``_legacy_units='SI'`` to bypass this heuristic. "
-                "The legacy micrometre interpretation will be removed "
-                "in a future release.",
-                DeprecationWarning, stacklevel=2,
+            # v4.15 (P2-DEP-1): route through the shared
+            # ``_deprecation.warn_deprecated_signature`` helper.  The
+            # legacy form is a *unit-system* shim rather than a
+            # signature change, so the helper's
+            # ``old_signature``/``new_signature`` slots are used to
+            # advertise the micrometre -> SI migration and the message
+            # carries the same v4.14.2 + v5.0 dates as before.
+            from .._deprecation import warn_deprecated_signature
+            warn_deprecated_signature(
+                function='makedammann2d',
+                old_signature=(
+                    f'makedammann2d(periodx={periodx} [um? legacy], '
+                    f'periody={periody}'
+                    f"{' [legacy um]' if _periody_legacy else ''}, "
+                    f"waveln={waveln}"
+                    f"{' [legacy um]' if _waveln_legacy else ''})"),
+                new_signature=(
+                    'makedammann2d(periodx=61e-6, periody=61e-6, '
+                    "waveln=1.31e-6)  # SI metres; or pass "
+                    "``_legacy_units='SI'`` for THz/MMW"),
+                version_added='4.14.2',
+                version_removed='5.0',
+                stacklevel=3,
             )
             # Per-parameter rescale: only convert the ones that
             # actually look like legacy um.  This keeps a hybrid call

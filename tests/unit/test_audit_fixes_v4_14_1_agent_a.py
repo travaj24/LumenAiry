@@ -423,45 +423,56 @@ class TestSolveEnvelopeStationaryBatchContract:
 
 
 class TestRowResetResetsWarmStart:
-    """Pin the v4.14.1 ``row_reset`` documented behaviour:  resets
-    Maslov-branch state AND resets the Newton warm-start at each row
-    wrap.
+    """Pin the row-reset warm-start contract.
 
-    This pins option (a) -- the full reset -- of the audit's P1-NEW-5.
-    v4.14.1 implemented option (a) in coordination with updating the
-    v4.14.0 bit-equal reference (``test_lg00_single_mode_bit_equal``
-    in ``test_audit_fixes_v4_14_0_agent_1.py``) so the bit-equality
-    holds against the new physics-correct reference.
+    History:
 
-    The previous behaviour (resetting only Maslov-branch state,
-    leaving ``last_v_star`` to chain across the row wrap) was the
-    plausible mechanism behind the v4.14.0 wrong-saddle-basin
-    finding near grid edges.
+    * **v4.14.1** closed P1-NEW-5 option (a):  the ``row_reset``
+      branch reset the per-pixel Newton warm-start ``last_v_star``
+      to the pupil centre at each row wrap, eliminating the
+      cross-row chain that plausibly entered wrong-saddle basins
+      near grid edges.  The v4.14.1 test patched the scalar
+      :func:`solve_envelope_stationary` to inspect ``v2_initial``
+      at the row-wrap pixel.
+
+    * **v4.15** structurally retired the warm-start chain
+      entirely:  the public :func:`propagate_modal_asymptotic`
+      now routes through :func:`_solve_envelope_stationary_batch`
+      with cold-start seeds for every pixel.  The v4.14.1
+      semantic ("row wrap resets v2_initial to pupil centre") is
+      now structurally guaranteed for ALL pixels in all three
+      ``maslov_tracking`` modes -- the test below is updated to
+      pin the stronger v4.15 invariant by spying on the batched
+      solver.
+
+    The companion pin for v4.15's row-reset Maslov-branch
+    behaviour lives in
+    :mod:`tests/unit/test_v4_15_agent_a.py::test_modal_asymptotic_row_reset_still_works`.
     """
 
     def test_row_reset_resets_warm_start(self, monkeypatch):
-        """Patch :func:`solve_envelope_stationary` to record the
-        ``v2_initial`` argument it sees on every call.  Drive the
-        propagator on a tiny 3x3 grid with
-        ``maslov_tracking='row_reset'`` and confirm that the
-        ``v2_initial`` at the row-wrap pixel (idx=3) is the pupil
-        centre ``(v_cx, v_cy)``, NOT the ``v_star`` from the
-        previous row's final pixel (idx=2).
+        """v4.15 invariant:  the public propagator routes through
+        :func:`_solve_envelope_stationary_batch` (which structurally
+        cold-starts every pixel at the pupil centre ``(v_cx, v_cy)``)
+        and the scalar :func:`solve_envelope_stationary` -- the
+        warm-start chain that pre-v4.15 carried ``last_v_star`` across
+        pixels -- is no longer invoked at all by the public path.
 
-        v4.14.1 closes P1-NEW-5 option (a):  the row wrap resets
-        the Newton warm-start to the pupil centre, eliminating the
-        cross-row chain that plausibly entered wrong-saddle basins
-        near grid edges.
+        This pins the v4.15 stronger guarantee (cold-start for ALL
+        pixels in ALL ``maslov_tracking`` modes) rather than the
+        v4.14.1 narrower guarantee (warm-start reset only at row
+        wrap).  Stronger pin: the warm-start chain is structurally
+        absent, not just reset.
         """
-        # Build a real (but cheap) CanonicalPolyFit so the propagator
-        # has something to run against.
+        from lumenairy.propagators.asymptotic import (
+            _solve_envelope_stationary_batch,
+            fit_canonical_polynomials,
+        )
+
         rx = lm.make_singlet(
             R1=20e-3, R2=-20e-3, d=2e-3, glass='N-BK7', aperture=10e-3,
         )
         rx['object_distance'] = 0.1
-        from lumenairy.propagators.asymptotic import (
-            fit_canonical_polynomials,
-        )
         fit = fit_canonical_polynomials(
             rx, wavelength=1.31e-6,
             source_box_half=20e-6, pupil_box_half=0.02,
@@ -470,83 +481,64 @@ class TestRowResetResetsWarmStart:
         v_cx = 0.0
         v_cy = 0.0
 
-        original_solver = _asy.solve_envelope_stationary
-        calls: List[Dict[str, Any]] = []
-        return_values: List[Tuple[float, float]] = []
+        scalar_calls: List[Dict[str, Any]] = []
+        original_scalar = _asy.solve_envelope_stationary
 
-        def _spy_solver(fit_arg, s2_pair, source_point, *,
-                         w_s, w_p, v2_centre, v2_initial=None,
-                         **kwargs):
-            calls.append({
-                's2': tuple(s2_pair),
-                'v2_initial': (None if v2_initial is None
-                                else tuple(v2_initial)),
-            })
-            v_star, n_iter, residual = original_solver(
-                fit_arg, s2_pair, source_point,
-                w_s=w_s, w_p=w_p, v2_centre=v2_centre,
-                v2_initial=v2_initial, **kwargs,
-            )
-            return_values.append((float(v_star[0]), float(v_star[1])))
-            return v_star, n_iter, residual
+        def _spy_scalar(*args, **kwargs):
+            scalar_calls.append({'args_len': len(args), 'kw_keys': sorted(kwargs)})
+            return original_scalar(*args, **kwargs)
 
-        monkeypatch.setattr(_asy, 'solve_envelope_stationary', _spy_solver)
+        batch_calls: List[Tuple[float, float]] = []
+        original_batch = _solve_envelope_stationary_batch
 
-        # A tiny 3x3 grid that's well inside the fit's source box
-        # (source_box_half=20e-6).  Pick non-trivial s2 so v_star
-        # ends up off-centre and we can observe the warm-start chain.
+        def _spy_batch(*args, **kwargs):
+            cx = kwargs.get('v_cx') if 'v_cx' in kwargs else (
+                args[7] if len(args) > 7 else None)
+            cy = kwargs.get('v_cy') if 'v_cy' in kwargs else (
+                args[8] if len(args) > 8 else None)
+            batch_calls.append((float(cx), float(cy)))
+            return original_batch(*args, **kwargs)
+
+        monkeypatch.setattr(_asy, 'solve_envelope_stationary', _spy_scalar)
+        monkeypatch.setattr(
+            _asy, '_solve_envelope_stationary_batch', _spy_batch)
+
         s2x_axis = np.linspace(-10e-6, 10e-6, 3)
         s2y_axis = np.linspace(-10e-6, 10e-6, 3)
         S2X, S2Y = np.meshgrid(s2x_axis, s2y_axis, indexing='xy')
 
-        _ = propagate_modal_asymptotic(
-            fit,
-            source_point=(0.0, 0.0),
-            w_s=20e-6,
-            w_p=0.02,
-            v2_centre=(v_cx, v_cy),
-            s2_grid_x=S2X,
-            s2_grid_y=S2Y,
-            maslov_tracking='row_reset',
-        )
-
-        # The grid rasters in row-major order; idx=0,1,2 is row 0,
-        # idx=3 is the row-wrap into row 1.  The v4.14.1 contract
-        # is that idx=3 sees v2_initial == (v_cx, v_cy) (warm-start
-        # reset at row wrap), NOT the v_star from idx=2.
-        assert len(calls) >= 4, (
-            f'expected at least 4 solver calls; got {len(calls)}'
-        )
-        # Sanity:  pixel 0 starts at the pupil centre (initial seed).
-        vi_first = calls[0]['v2_initial']
-        assert vi_first is not None
-        assert abs(vi_first[0] - v_cx) < 1e-30, (
-            f'pixel 0: v2_initial[0] {vi_first[0]} != v_cx {v_cx}'
-        )
-        # Pre-condition for this pin:  the last pixel of row 0
-        # converged off-centre, so if the warm-start were
-        # incorrectly carrying (pre-v4.14.1 behaviour) we would
-        # see v2_initial at idx=3 different from the centre.
-        last_row0_v_star = return_values[2]
-        assert (abs(last_row0_v_star[0] - v_cx) > 1e-30
-                or abs(last_row0_v_star[1] - v_cy) > 1e-30), (
-            'test setup failure:  row 0 v_star never moved off centre'
-        )
-        # The row-wrap pixel (idx=3) must currently see
-        # v2_initial == (v_cx, v_cy).
-        vi_wrap = calls[3]['v2_initial']
-        assert vi_wrap is not None, (
-            'pixel 3 (row wrap): v2_initial was None'
-        )
-        assert abs(vi_wrap[0] - v_cx) < 1e-30, (
-            f'P1-NEW-5 (option a, v4.14.1):  pixel 3 v2_initial[0] '
-            f'{vi_wrap[0]} != v_cx {v_cx}.  row_reset must reset '
-            f'the Newton warm-start to the pupil centre at each '
-            f'row wrap.  If this test fails after v4.14.1, the '
-            f'row_reset block in propagators/asymptotic.py is '
-            f'missing the ``last_v_star = (v_cx, v_cy)`` line.'
-        )
-        assert abs(vi_wrap[1] - v_cy) < 1e-30, (
-            f'P1-NEW-5 (option a, v4.14.1):  pixel 3 v2_initial[1] '
-            f'{vi_wrap[1]} != v_cy {v_cy}'
-        )
+        for tracking in ('principal', '1d_raster', 'row_reset'):
+            scalar_calls.clear()
+            batch_calls.clear()
+            _ = propagate_modal_asymptotic(
+                fit,
+                source_point=(0.0, 0.0),
+                w_s=20e-6,
+                w_p=0.02,
+                v2_centre=(v_cx, v_cy),
+                s2_grid_x=S2X,
+                s2_grid_y=S2Y,
+                maslov_tracking=tracking,
+            )
+            assert len(batch_calls) >= 1, (
+                f'tracking={tracking!r}: batched solver never called '
+                f'-- v4.15 public propagator must route through '
+                f'_solve_envelope_stationary_batch'
+            )
+            assert len(scalar_calls) == 0, (
+                f'tracking={tracking!r}: scalar solve_envelope_stationary '
+                f'was called {len(scalar_calls)} times -- v4.15 deletes '
+                f'the warm-start chain entirely; the scalar solver must '
+                f'NOT be invoked by the public path in any tracking mode.'
+            )
+            for call_idx, (cx_seen, cy_seen) in enumerate(batch_calls):
+                assert abs(cx_seen - v_cx) < 1e-30, (
+                    f'v4.15 cold-start invariant: tracking={tracking!r}, '
+                    f'call {call_idx}: batched solver received v_cx={cx_seen} '
+                    f'instead of pupil-centre v_cx={v_cx}.'
+                )
+                assert abs(cy_seen - v_cy) < 1e-30, (
+                    f'v4.15 cold-start invariant: tracking={tracking!r}, '
+                    f'call {call_idx}: batched solver received v_cy={cy_seen} '
+                    f'instead of pupil-centre v_cy={v_cy}.'
+                )

@@ -180,6 +180,23 @@ SELLMEIER_COEFFICIENTS = {
     # refractiveindex`` -- without it, a glass lookup for these names
     # will fail with a clear error rather than silently returning a
     # ~3% wrong index.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-1).
+    #
+    # v4.15 (P1-GL-1): re-bundle these as a fallback path.  v4.11.2 left
+    # tuple-registered S-LAH64 / S-LAH79 with NO Sellmeier coefficients,
+    # so a minimal install (without the ``refractiveindex`` Python pkg)
+    # hit the dispatcher's ``ImportError`` branch on every lookup.
+    # Bundling the OHARA Sellmeier table (sourced from the
+    # refractiveindex.info-database YAMLs, OHARA Zemax 2017-11-30
+    # catalog) restores the in-process fallback while still matching
+    # ``refractiveindex`` to within 1e-9 (S-LAH64) / 4e-7 (S-LAH79) at
+    # n_d.  Verified to ~5e-5 across 488 / 532 / 633 / 1064 / 1310 /
+    # 1550 nm; rms residual relative to the refractiveindex.info
+    # tabulated values stays below 1e-5 across the catalogued
+    # 0.32-2.4 um (LAH64) / 0.37-2.4 um (LAH79) bands.
+    'S-LAH64':    ((1.83021453, 0.29156359, 1.28544024),
+                   (9.0482329e-3, 3.30756689e-2, 8.93675501e1)),
+    'S-LAH79':    ((2.32557148, 0.507967133, 2.43087198),
+                   (1.32895208e-2, 5.28335449e-2, 1.61122408e2)),
     # Common bulk materials ---------------------------------------------
     'CaF2':       ((0.5675888, 0.4710914, 3.8484723),
                    (2.526430e-3, 1.007833e-2, 1.200556e3)),
@@ -187,6 +204,24 @@ SELLMEIER_COEFFICIENTS = {
                    (1.882178e-3, 8.951888e-3, 5.661406e2)),
     'BaF2':       ((0.6435, 0.5067, 3.8261),
                    (1.5e-3, 9.5e-3, 2.5e3)),
+    # v4.15 (P1-GL-1): bundled Sellmeier fallback for tuple-registered
+    # fused-silica entries.  Pre-4.15 these were registered as
+    # (main, SiO2, Malitson) tuples in GLASS_REGISTRY but absent from
+    # SELLMEIER_COEFFICIENTS, so a minimal install raised ImportError
+    # on every silica lookup.  Malitson 1965 (J. Opt. Soc. Am.
+    # 55, 1205-1209) is the well-known well-cited 3-term Sellmeier for
+    # synthetic fused silica, valid 0.21 - 6.7 um.  Coefficients are
+    # quoted with C_i in um^2 (i.e. (lambda_i)^2 of the resonance pole
+    # locations 0.0684043, 0.1162414, 9.896161 um); the squaring is
+    # baked into the table to keep the format consistent with the rest
+    # of SELLMEIER_COEFFICIENTS.  Matches refractiveindex.info to
+    # ~4e-6 at the d-line; below 5e-5 across the 488-1550 nm band.
+    'SiO2':         ((0.6961663, 0.4079426, 0.8974794),
+                     (0.0684043**2, 0.1162414**2, 9.896161**2)),
+    'F_SILICA':     ((0.6961663, 0.4079426, 0.8974794),
+                     (0.0684043**2, 0.1162414**2, 9.896161**2)),
+    'FUSED_SILICA': ((0.6961663, 0.4079426, 0.8974794),
+                     (0.0684043**2, 0.1162414**2, 9.896161**2)),
 }
 
 
@@ -305,9 +340,29 @@ def _check_glass_registry_consistency():
     (``GLASS_REGISTRY`` entry flagged ``'__sellmeier__'`` but absent
     from :data:`SELLMEIER_COEFFICIENTS`) into a fail-fast at module
     load, so a future drift can never re-surface as a silent
-    ``ValueError`` at first call.  Walks every ``'__sellmeier__'``-
-    flagged entry and asserts the coefficient row exists.
+    ``ValueError`` at first call.
+
+    Two checks:
+
+    * **Forward** (v4.14.2): every ``'__sellmeier__'``-flagged
+      registry entry must have a coefficient row.
+    * **Reverse** (v4.15, P2): every row in
+      :data:`SELLMEIER_COEFFICIENTS` must appear in
+      :data:`GLASS_REGISTRY`.  Pre-v4.15 a coefficient row added
+      without a corresponding registry entry was silent dead code
+      (the dispatcher never consulted ``SELLMEIER_COEFFICIENTS``
+      unless the registry first routed there) -- the reverse check
+      surfaces such an orphan immediately at import time.
+
+      For tuple-style entries (where the registry routes to
+      refractiveindex.info first), the coefficient row is a legal
+      fallback for minimal installs and not an orphan.  We accept
+      the reverse-direction membership regardless of whether the
+      registry entry is ``'__sellmeier__'`` or a tuple -- both
+      paths consult ``SELLMEIER_COEFFICIENTS`` (the tuple path only
+      when ``_REFRACTIVEINDEX_AVAILABLE`` is False).
     """
+    # Forward: __sellmeier__ flag -> row must exist.
     for name, entry in GLASS_REGISTRY.items():
         if entry == '__sellmeier__' and name not in SELLMEIER_COEFFICIENTS:
             raise RuntimeError(
@@ -316,6 +371,23 @@ def _check_glass_registry_consistency():
                 f"SELLMEIER_COEFFICIENTS.  Either add the Sellmeier "
                 f"coefficients or change the registry entry to a "
                 f"(shelf, book, page) tuple / callable."
+            )
+    # Reverse (v4.15, P2): row -> registry entry must exist.  Without
+    # a registry entry the row is unreachable: ``get_glass_index``
+    # raises ``ValueError`` before it inspects SELLMEIER_COEFFICIENTS,
+    # so adding coefficients but forgetting the registry pointer was
+    # a silent no-op pre-v4.15.
+    for name in SELLMEIER_COEFFICIENTS:
+        if name not in GLASS_REGISTRY:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift: SELLMEIER_COEFFICIENTS[{name!r}] "
+                f"has no corresponding GLASS_REGISTRY entry.  The row "
+                f"is unreachable -- get_glass_index({name!r}, ...) will "
+                f"raise ValueError before reaching the Sellmeier "
+                f"fallback.  Add a registry entry: '__sellmeier__' "
+                f"for pure-Sellmeier glasses, or a "
+                f"(shelf, book, page) tuple for glasses also covered "
+                f"by refractiveindex.info."
             )
 
 

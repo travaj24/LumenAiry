@@ -160,7 +160,9 @@ from .analysis import (
     strehl_ratio,
     strehl_marechal,
     strehl_phase_integral,
+    strehl_vector,
     coupling_efficiency,
+    coupling_efficiency_vector,
     M2,
     caustic_diagnostic,
     plot_caustic_diagnostic,
@@ -173,6 +175,10 @@ from .analysis import (
     mtf_cutoff,
     encircled_energy_curve,
     encircled_energy_radius,
+    ee_polychromatic,
+    rayleigh_resolution,
+    sparrow_resolution,
+    fwhm_resolution,
     depth_of_focus,
     remove_wavefront_modes,
     opd_pv_rms,
@@ -189,6 +195,7 @@ from .analysis import (
     zernike_reconstruct,
     zernike_index_to_nm,
     zernike_nm_to_index,
+    astigmatism_mag_angle,
     clear_zernike_basis_cache,
 )
 # v4.12.2: expose the through_focus_scan_jax kernel-cache clear helper
@@ -205,6 +212,11 @@ from .sources import (
     create_fiber_mode,
     create_led_source,
     create_bessel_beam,
+    # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent
+    # partial-coherence source factories.
+    create_gaussian_schell_source,
+    create_schell_model_source,
+    create_annular_incoherent_source,
 )
 
 # ── High-NA vector diffraction (Richards-Wolf) ─────────────────────────
@@ -279,6 +291,8 @@ from .elements.freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
     surface_sag_chebyshev,
+    surface_sag_q_bfs,
+    surface_sag_q_con,
     surface_sag_freeform,
 )
 
@@ -458,6 +472,7 @@ from .io.prescriptions import (
     make_doublet,
     make_cylindrical,
     make_biconic,
+    make_off_axis_parabola,
     thorlabs_lens,
     load_zemax_zmx,
     load_zemax_prescription_data_txt,
@@ -540,6 +555,10 @@ from .system import (
     propagate_through_system,
     propagate_through_system_jax,
     clear_propagate_system_jax_cache,
+    # v4.15 (ROADMAP v4.15 #3): ergonomic prescription + Source ->
+    # PropagationResult one-call entry, exposed at top level so users
+    # can also call ``lumenairy.evaluate(rx, source)`` directly.
+    evaluate,
 )
 
 # ── Storage (unified HDF5 / Zarr) ────────────────────────────────────────
@@ -736,7 +755,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.14.3"
+__version__ = "4.15.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -773,6 +792,10 @@ __all__ = [
     'create_fiber_mode',
     'create_led_source',
     'create_bessel_beam',
+    # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent.
+    'create_gaussian_schell_source',
+    'create_schell_model_source',
+    'create_annular_incoherent_source',
     'hermite_physicist',
     'laguerre_generalized',
 
@@ -781,6 +804,7 @@ __all__ = [
     'make_doublet',
     'make_cylindrical',
     'make_biconic',
+    'make_off_axis_parabola',
     'thorlabs_lens',
     'THORLABS_CATALOG',
     'load_zemax_zmx',
@@ -825,6 +849,8 @@ __all__ = [
     'surface_sag_xy_polynomial',
     'surface_sag_zernike_freeform',
     'surface_sag_chebyshev',
+    'surface_sag_q_bfs',
+    'surface_sag_q_con',
     'surface_sag_freeform',
 
     # Polarization / Jones calculus
@@ -954,6 +980,8 @@ __all__ = [
     # Element-walking system propagator
     'propagate_through_system',
     'propagate_through_system_jax',
+    # v4.15 (ROADMAP v4.15 #3): ergonomic prescription -> result entry.
+    'evaluate',
 
     # ============================================================
     # Tier 3 -- Trace (geometric + JAX-traceable)
@@ -1039,6 +1067,7 @@ __all__ = [
     'beam_d4sigma',
     'beam_diameter',
     'coupling_efficiency',
+    'coupling_efficiency_vector',
     'M2',
     'caustic_diagnostic',
     'plot_caustic_diagnostic',
@@ -1047,6 +1076,7 @@ __all__ = [
     'strehl_ratio',
     'strehl_marechal',
     'strehl_phase_integral',
+    'strehl_vector',
     'check_sampling_conditions',
     'compute_psf',
     'compute_otf',
@@ -1055,6 +1085,10 @@ __all__ = [
     'mtf_cutoff',
     'encircled_energy_curve',
     'encircled_energy_radius',
+    'ee_polychromatic',
+    'rayleigh_resolution',
+    'sparrow_resolution',
+    'fwhm_resolution',
     'depth_of_focus',
     'remove_wavefront_modes',
     'opd_pv_rms',
@@ -1071,6 +1105,7 @@ __all__ = [
     'zernike_reconstruct',
     'zernike_index_to_nm',
     'zernike_nm_to_index',
+    'astigmatism_mag_angle',
 
     # Unified aberration analysis (Seidel + LG tensor)
     'AberrationSummary',

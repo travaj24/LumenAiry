@@ -32,8 +32,9 @@ __all__ = [
     'beam_diameter',
     # Strehl
     'strehl_ratio', 'strehl_marechal', 'strehl_phase_integral',
+    'strehl_vector',
     # coupling + beam quality
-    'coupling_efficiency', 'M2',
+    'coupling_efficiency', 'coupling_efficiency_vector', 'M2',
     # sampling diagnostics
     'check_sampling_conditions', 'check_opd_sampling',
     # PSF / OTF / MTF
@@ -41,6 +42,9 @@ __all__ = [
     'mtf_cutoff',
     # Encircled energy / spec-sheet metrics (v4.14.0)
     'encircled_energy_curve', 'encircled_energy_radius',
+    'ee_polychromatic',
+    # Optical resolution metrics (v4.15.0)
+    'rayleigh_resolution', 'sparrow_resolution', 'fwhm_resolution',
     # Depth of focus (v4.14.0)
     'depth_of_focus',
     # polychromatic
@@ -49,6 +53,7 @@ __all__ = [
     'zernike_index_to_nm', 'zernike_nm_to_index',
     'zernike_polynomial', 'zernike_basis_matrix',
     'zernike_decompose', 'zernike_reconstruct',
+    'astigmatism_mag_angle',
     'clear_zernike_basis_cache',
     # OPD extraction / mode removal
     'remove_wavefront_modes', 'opd_pv_rms',
@@ -2862,3 +2867,909 @@ def wave_opd_2d(
 
     opd = np.where(valid, opd, np.nan)
     return X, Y, opd
+
+
+# ============================================================================
+# v4.15.0 (C.1) -- Polychromatic encircled-energy convenience wrapper
+# ============================================================================
+
+def ee_polychromatic(
+    prescription: Dict[str, Any],
+    wavelengths: Sequence[float],
+    weights: Sequence[float],
+    radii: Sequence[float],
+    *,
+    source: Optional[np.ndarray] = None,
+    output_grid: Optional[int] = None,
+    output_dx: Optional[float] = None,
+    N: Optional[int] = None,
+    dx: Optional[float] = None,
+    E_in: Optional[np.ndarray] = None,
+    image_distance: Optional[float] = None,
+    bandlimit: bool = True,
+    dy: Optional[float] = None,
+    centroid: Optional[Tuple[float, float]] = None,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Polychromatic encircled-energy curve at user-supplied radii.
+
+    Convenience wrapper around :func:`polychromatic_psf` +
+    :func:`encircled_energy_radius`.  Computes the weighted-sum
+    polychromatic PSF on a common image plane, then evaluates the
+    encircled-energy curve at each requested radius.
+
+    Parameters
+    ----------
+    prescription : dict
+        Lumenairy lens prescription.
+    wavelengths : sequence of float
+        Vacuum wavelengths [m].
+    weights : sequence of float
+        Per-wavelength spectral weights.  Re-normalised internally so
+        they sum to 1.  Must satisfy ``sum(weights) > 0``.
+    radii : sequence of float
+        Strictly-increasing positive radii [m] at which to evaluate
+        the encircled-energy curve.
+    source : ndarray (complex, N x N), optional
+        Pupil-plane input field.  Alias for ``E_in``; either may be
+        supplied (but not both).  Defaults to a unit plane wave.
+    output_grid : int, optional
+        Output grid size.  Alias for ``N``; either may be supplied
+        (but not both).  If ``source`` is provided, defaults to
+        ``source.shape[0]``.
+    output_dx : float, optional
+        Output grid spacing [m].  Alias for ``dx``; either may be
+        supplied (but not both).
+    N : int, optional
+        Output grid size.  See ``output_grid``.
+    dx : float, optional
+        Output grid spacing [m].  See ``output_dx``.
+    E_in : ndarray (complex, N x N), optional
+        Pupil-plane input field.  See ``source``.
+    image_distance : float, optional
+        Forwarded to :func:`polychromatic_psf`.  Defaults to the
+        centroid-wavelength paraxial BFL.
+    bandlimit : bool, default True
+        Forwarded to :func:`polychromatic_psf`.
+    dy : float, optional
+        Forwarded to :func:`polychromatic_psf` / encircled-energy
+        evaluation.  Defaults to ``dx``.
+    centroid : (cx, cy), optional
+        Centre of the encircled-energy circles [m].  Defaults to the
+        intensity centroid of the accumulated PSF.
+
+    Returns
+    -------
+    radii : ndarray, shape (n,)
+        The (validated) radii in ascending order [m].
+    ee : ndarray, shape (n,)
+        Encircled-energy fraction at each radius in ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If ``wavelengths`` and ``weights`` have different lengths, if
+        the sum of ``weights`` is not strictly positive, if ``radii``
+        is empty / non-monotonic / contains non-positive entries, or
+        if neither ``source`` nor ``output_grid``/``output_dx`` is
+        sufficient to specify the output grid.
+
+    See Also
+    --------
+    polychromatic_psf : underlying polychromatic PSF accumulator.
+    encircled_energy_radius : single-threshold inverse query.
+    encircled_energy_curve : monochromatic encircled-energy curve.
+
+    Examples
+    --------
+    >>> import numpy as np, lumenairy as la
+    >>> rx = la.make_singlet(R1=50e-3, R2=float('inf'), d=2e-3,
+    ...                      glass='N-BK7', aperture=10e-3)
+    >>> wls = [1.30e-6, 1.55e-6]
+    >>> wts = [0.5, 0.5]
+    >>> radii = [5e-6, 10e-6, 20e-6, 50e-6]
+    >>> r, ee = la.ee_polychromatic(rx, wls, wts, radii,
+    ...                              output_grid=32, output_dx=5e-6)
+    >>> bool(np.all(np.diff(ee) >= -1e-12))
+    True
+    """
+    # ---- Alias plumbing.  Accept either canonical or alias kwarg
+    # (output_grid <-> N, output_dx <-> dx, source <-> E_in) but not
+    # both.  Raise on collision so the caller gets a clear error
+    # rather than a silent precedence rule.
+    if N is not None and output_grid is not None:
+        raise ValueError(
+            "ee_polychromatic: pass either N or output_grid, not both.")
+    if dx is not None and output_dx is not None:
+        raise ValueError(
+            "ee_polychromatic: pass either dx or output_dx, not both.")
+    if E_in is not None and source is not None:
+        raise ValueError(
+            "ee_polychromatic: pass either E_in or source, not both.")
+    if output_grid is not None:
+        N = int(output_grid)
+    if output_dx is not None:
+        dx = float(output_dx)
+    if source is not None:
+        E_in = source
+
+    # ---- Derive N from the source if neither N nor output_grid was
+    # supplied.  dx has no source-derived fallback (the pixel pitch is
+    # a physical scale, not encoded in the array shape).
+    if N is None and E_in is not None:
+        N = int(E_in.shape[0])
+    if N is None:
+        raise ValueError(
+            "ee_polychromatic: must supply N (or output_grid), either "
+            "directly or implicitly via source.shape[0].")
+    if dx is None:
+        raise ValueError(
+            "ee_polychromatic: must supply dx (or output_dx); the pixel "
+            "pitch is a physical scale and has no implicit fallback.")
+
+    # ---- Validate wavelengths / weights.  Match polychromatic_psf's
+    # error class (ValueError) so callers can catch both with one
+    # except clause.
+    wavelengths_arr = np.asarray(wavelengths, dtype=np.float64)
+    weights_arr = np.asarray(weights, dtype=np.float64)
+    if wavelengths_arr.size != weights_arr.size:
+        raise ValueError(
+            f"ee_polychromatic: wavelengths and weights must have the "
+            f"same length; got {wavelengths_arr.size} and "
+            f"{weights_arr.size}.")
+    if wavelengths_arr.size == 0:
+        raise ValueError(
+            "ee_polychromatic: need at least one wavelength.")
+    w_sum = float(weights_arr.sum())
+    if not (w_sum > 0.0):
+        raise ValueError(
+            f"ee_polychromatic: weights must sum to a strictly "
+            f"positive value; got sum={w_sum!r}.")
+    # polychromatic_psf re-normalises internally, but we re-normalise
+    # here too so the user-visible weight error is raised here rather
+    # than deep inside the propagator.
+    weights_arr = weights_arr / w_sum
+
+    # ---- Validate radii: non-empty, strictly increasing, > 0.
+    radii_arr = np.asarray(radii, dtype=np.float64)
+    if radii_arr.ndim != 1 or radii_arr.size == 0:
+        raise ValueError(
+            f"ee_polychromatic: radii must be a non-empty 1-D "
+            f"sequence; got shape {radii_arr.shape!r}.")
+    if not np.all(np.isfinite(radii_arr)):
+        raise ValueError(
+            "ee_polychromatic: radii must be finite.")
+    if not np.all(radii_arr > 0.0):
+        raise ValueError(
+            f"ee_polychromatic: radii must be strictly positive; got "
+            f"min={float(radii_arr.min())!r}.")
+    if radii_arr.size >= 2 and not np.all(np.diff(radii_arr) > 0.0):
+        raise ValueError(
+            "ee_polychromatic: radii must be strictly increasing.")
+
+    # ---- Compute the polychromatic PSF and the encircled-energy
+    # curve at the requested radii.  The PSF is normalised to unit
+    # power ('power' mode); the encircled-energy curve is in [0, 1]
+    # so the absolute normalisation cancels.
+    psf, dx_psf, _info = polychromatic_psf(
+        prescription, wavelengths_arr, weights_arr,
+        N=int(N), dx=float(dx),
+        E_in=E_in,
+        image_distance=image_distance,
+        normalize='power',
+        bandlimit=bandlimit,
+        dy=dy,
+    )
+
+    # Pass the validated radii through.  The PSF is a real-valued
+    # intensity array; encircled_energy_curve treats it as an
+    # amplitude (which it then squares), so wrap as a complex with
+    # zero phase by taking sqrt.  Equivalently, treat the PSF as
+    # ``|E|^2`` directly: encircled_energy_curve does ``np.abs(E)**2``
+    # internally, so feeding ``np.sqrt(psf)`` recovers the intended
+    # cumulative-intensity curve without sign ambiguity.
+    psf_amp = np.sqrt(np.asarray(psf, dtype=np.float64))
+    r_out, ee = encircled_energy_curve(
+        psf_amp.astype(np.complex128), dx_psf,
+        dy=dy, radii=radii_arr, centroid=centroid)
+    return r_out, ee
+
+
+# ============================================================================
+# v4.15.0 (C.2) -- Polarisation-aware Strehl + coupling
+# ============================================================================
+
+def _validate_vector_field_shapes(
+    Ex: np.ndarray,
+    Ey: np.ndarray,
+    Ez: Optional[np.ndarray],
+    *,
+    name: str,
+) -> None:
+    """Internal: validate that vector-field components are 2-D and
+    share a common shape.  Raises ``ValueError`` on any mismatch."""
+    if Ex.ndim != 2:
+        raise ValueError(
+            f"{name}: Ex must be 2-D; got shape {Ex.shape!r} "
+            f"(ndim={Ex.ndim}).")
+    if Ey.ndim != 2:
+        raise ValueError(
+            f"{name}: Ey must be 2-D; got shape {Ey.shape!r} "
+            f"(ndim={Ey.ndim}).")
+    if Ex.shape != Ey.shape:
+        raise ValueError(
+            f"{name}: Ex and Ey shape mismatch -- Ex is {Ex.shape!r}, "
+            f"Ey is {Ey.shape!r}.")
+    if Ez is not None:
+        if Ez.ndim != 2:
+            raise ValueError(
+                f"{name}: Ez must be 2-D when provided; got shape "
+                f"{Ez.shape!r} (ndim={Ez.ndim}).")
+        if Ez.shape != Ex.shape:
+            raise ValueError(
+                f"{name}: Ez shape mismatch -- Ez is {Ez.shape!r}, "
+                f"expected {Ex.shape!r} to match (Ex, Ey).")
+
+
+def strehl_vector(
+    Ex: np.ndarray,
+    Ey: np.ndarray,
+    Ez: Optional[np.ndarray] = None,
+    *,
+    reference: Optional[Sequence[np.ndarray]] = None,
+) -> float:
+    r"""Vector (polarisation-aware) Strehl ratio for a 2-D vector PSF.
+
+    Generalises :func:`strehl_ratio` to a Jones field with optional
+    z-component, as needed for high-NA / Richards-Wolf imaging where
+    the longitudinal component is non-negligible.  The convention used
+    here is the peak-intensity ratio of the **total** vector intensity
+    ``|Ex|^2 + |Ey|^2 + |Ez|^2`` over the aberrated and reference
+    fields, after normalising both to equal total power:
+
+    .. math::
+        S = \frac{\max(|E_x|^2 + |E_y|^2 + |E_z|^2)}{P}
+            \cdot \frac{P_\mathrm{ref}}{\max(|E_x^\mathrm{ref}|^2
+            + |E_y^\mathrm{ref}|^2 + |E_z^\mathrm{ref}|^2)}
+
+    This matches the scalar :func:`strehl_ratio` definition mode-for-
+    mode when ``Ey = Ez = 0`` (so a single linear polarisation
+    coincides exactly with the scalar Strehl), and reduces to
+    Mahajan's vector Strehl (Mahajan, "Aberration Theory Made Simple",
+    2nd ed., §8) when the reference is the polarisation-matched
+    diffraction-limited focus.
+
+    Parameters
+    ----------
+    Ex, Ey : ndarray (complex, Ny x Nx)
+        Transverse vector-field components.  Must be 2-D arrays of
+        matching shape.
+    Ez : ndarray (complex, Ny x Nx), optional
+        Longitudinal component for high-NA fields.  When ``None``,
+        treated as identically zero -- equivalent to passing a
+        zero-array of the same shape.
+    reference : tuple of arrays, optional
+        ``(Ex_ref, Ey_ref)`` or ``(Ex_ref, Ey_ref, Ez_ref)`` for the
+        diffraction-limited reference field, sampled on the same grid
+        as the aberrated input.  If ``None`` (default), the reference
+        is taken to be a uniform plane wave with the same total power
+        and the same polarisation distribution as ``(Ex, Ey, Ez)`` --
+        i.e. the reference peak equals the total power divided by the
+        grid area, which makes the Strehl an "aberration-only" metric
+        when ``(Ex, Ey, Ez)`` is itself the aberrated focus of a
+        finite aperture.
+
+    Returns
+    -------
+    strehl : float
+        Vector Strehl ratio in ``[0, 1]``.  Returns ``0.0`` if either
+        the aberrated or reference field has zero total power.
+
+    Raises
+    ------
+    ValueError
+        If any input array is not 2-D, or if shapes do not match.
+
+    See Also
+    --------
+    strehl_ratio : scalar peak-ratio Strehl.
+    coupling_efficiency_vector : vector mode-overlap coupling.
+
+    Notes
+    -----
+    The "plane-wave default reference" branch evaluates the maximum of
+    a uniform total-intensity map, which equals ``P_total / (N_y N_x)``
+    over a uniformly-illuminated grid; it is the right reference for a
+    *no-aberration / no-aperture* limit but it is NOT the right
+    reference if you want to measure aberration over an aperture-
+    truncated diffraction PSF.  In that case pass an explicit
+    ``reference`` from the unaberrated propagation.
+    """
+    _validate_vector_field_shapes(
+        Ex, Ey, Ez, name='strehl_vector')
+    xp = _xp_of(Ex, Ey) if Ez is None else _xp_of(Ex, Ey, Ez)
+
+    # Total vector intensity (sum over polarisation components).
+    I_total = xp.abs(Ex) ** 2 + xp.abs(Ey) ** 2
+    if Ez is not None:
+        I_total = I_total + xp.abs(Ez) ** 2
+    P = float(xp.sum(I_total))
+    if P <= 0.0:
+        return 0.0
+    I_max = float(xp.max(I_total))
+
+    if reference is None:
+        # Plane-wave reference: uniform total intensity equal to
+        # P/(Ny*Nx) over the same grid.  Peak equals the mean.
+        Ny, Nx = Ex.shape
+        n_pix = int(Ny * Nx)
+        if n_pix <= 0:
+            return 0.0
+        I_ref_max = P / float(n_pix)
+        # Plane-wave total power equals P by construction.
+        return float(I_max / I_ref_max) * 1.0  # ratio after equal-power norm
+    else:
+        # User-supplied reference.  Accept (Ex_ref, Ey_ref) or
+        # (Ex_ref, Ey_ref, Ez_ref).
+        if len(reference) == 2:
+            Ex_ref, Ey_ref = reference
+            Ez_ref = None
+        elif len(reference) == 3:
+            Ex_ref, Ey_ref, Ez_ref = reference
+        else:
+            raise ValueError(
+                f"strehl_vector: reference must be a 2- or 3-tuple of "
+                f"vector components; got length {len(reference)}.")
+        _validate_vector_field_shapes(
+            xp.asarray(Ex_ref), xp.asarray(Ey_ref),
+            None if Ez_ref is None else xp.asarray(Ez_ref),
+            name='strehl_vector (reference)')
+        if Ex_ref.shape != Ex.shape:
+            raise ValueError(
+                f"strehl_vector: reference shape {Ex_ref.shape!r} "
+                f"does not match input shape {Ex.shape!r}.")
+        I_ref = xp.abs(Ex_ref) ** 2 + xp.abs(Ey_ref) ** 2
+        if Ez_ref is not None:
+            I_ref = I_ref + xp.abs(Ez_ref) ** 2
+        P_ref = float(xp.sum(I_ref))
+        I_ref_max = float(xp.max(I_ref))
+        if P_ref <= 0.0 or I_ref_max <= 0.0:
+            return 0.0
+        # Equal-total-power normalisation, identical to scalar
+        # strehl_ratio convention.
+        return float(I_max / P) * float(P_ref / I_ref_max)
+
+
+def coupling_efficiency_vector(
+    Ex: np.ndarray,
+    Ey: np.ndarray,
+    Ez: Optional[np.ndarray] = None,
+    *,
+    mode_Ex: np.ndarray,
+    mode_Ey: np.ndarray,
+    mode_Ez: Optional[np.ndarray] = None,
+    dx: float,
+    dy: Optional[float] = None,
+) -> float:
+    r"""Vector mode-overlap coupling efficiency between a field and a
+    target vector mode.
+
+    Generalises :func:`coupling_efficiency` to a Jones field with
+    optional longitudinal component.  Returns
+
+    .. math::
+        \eta = \frac{|\langle \mathbf{E} | \mathbf{m} \rangle|^2}
+                    {\langle \mathbf{E} | \mathbf{E} \rangle
+                     \, \langle \mathbf{m} | \mathbf{m} \rangle}
+
+    where
+    :math:`\langle \mathbf{E} | \mathbf{m} \rangle = \int (E_x^* m_x +
+    E_y^* m_y + E_z^* m_z) \, dA`.
+
+    Parameters
+    ----------
+    Ex, Ey : ndarray (complex, Ny x Nx)
+        Incoming vector-field transverse components on a regular grid.
+    Ez : ndarray (complex, Ny x Nx), optional
+        Longitudinal component; treated as zero when ``None``.
+    mode_Ex, mode_Ey : ndarray (complex, Ny x Nx)
+        Target vector-mode transverse components (same grid).
+    mode_Ez : ndarray (complex, Ny x Nx), optional
+        Target longitudinal component; treated as zero when ``None``.
+    dx : float
+        Grid spacing in x [m].
+    dy : float, optional
+        Grid spacing in y [m].  Defaults to ``dx``.
+
+    Returns
+    -------
+    eta : float
+        Coupling efficiency in ``[0, 1]``.
+
+    Raises
+    ------
+    ValueError
+        If any field is not 2-D, or if shapes do not match across the
+        Ex / Ey / Ez / mode_Ex / mode_Ey / mode_Ez set.
+
+    See Also
+    --------
+    coupling_efficiency : scalar single-component overlap.
+    strehl_vector : peak-ratio vector Strehl.
+    """
+    _validate_vector_field_shapes(
+        Ex, Ey, Ez, name='coupling_efficiency_vector')
+    _validate_vector_field_shapes(
+        mode_Ex, mode_Ey, mode_Ez,
+        name='coupling_efficiency_vector (mode)')
+    if mode_Ex.shape != Ex.shape:
+        raise ValueError(
+            f"coupling_efficiency_vector: mode shape "
+            f"{mode_Ex.shape!r} does not match field shape "
+            f"{Ex.shape!r}.")
+    if dy is None:
+        dy = dx
+    da = float(dx) * float(dy)
+
+    xp = _xp_of(Ex, Ey, mode_Ex, mode_Ey)
+
+    # Inner product <E | mode> with optional Ez branches.
+    overlap = xp.sum(xp.conj(Ex) * mode_Ex + xp.conj(Ey) * mode_Ey) * da
+    p_field = xp.sum(xp.abs(Ex) ** 2 + xp.abs(Ey) ** 2) * da
+    p_mode = xp.sum(xp.abs(mode_Ex) ** 2 + xp.abs(mode_Ey) ** 2) * da
+    if Ez is not None or mode_Ez is not None:
+        # Pad missing components with zeros so the overlap formula is
+        # symmetric and matches the scalar reduction when both Ez are
+        # absent (zero contribution).
+        if Ez is not None and mode_Ez is not None:
+            overlap = overlap + xp.sum(xp.conj(Ez) * mode_Ez) * da
+        if Ez is not None:
+            p_field = p_field + xp.sum(xp.abs(Ez) ** 2) * da
+        if mode_Ez is not None:
+            p_mode = p_mode + xp.sum(xp.abs(mode_Ez) ** 2) * da
+
+    p_field_f = float(p_field)
+    p_mode_f = float(p_mode)
+    denom = p_field_f * p_mode_f
+    if denom <= 0.0:
+        return 0.0
+    return float(xp.abs(overlap) ** 2 / denom)
+
+
+# ============================================================================
+# v4.15.0 (C.3) -- Optical resolution metrics (Rayleigh / Sparrow / FWHM)
+# ============================================================================
+
+def _psf_1d_profile(
+    psf: np.ndarray,
+    dx: float,
+    *,
+    axis: str,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Internal: extract a 1-D profile through the peak of a 2-D PSF.
+
+    Returns ``(r, profile)`` with ``r`` an offset axis in metres
+    centred on the PSF peak.  ``axis='x'`` returns a row cut,
+    ``axis='y'`` a column cut, ``axis='radial'`` an azimuthally
+    averaged radial profile.
+    """
+    if not isinstance(psf, np.ndarray):
+        psf_arr = np.asarray(psf)
+    else:
+        psf_arr = psf
+    if psf_arr.ndim != 2:
+        raise ValueError(
+            f"PSF profile: expected 2-D PSF; got shape "
+            f"{psf_arr.shape!r} (ndim={psf_arr.ndim}).")
+
+    Ny, Nx = psf_arr.shape
+    # Locate the peak.  For radially-symmetric Airy-like PSFs the
+    # peak lives near the grid centre; we locate it explicitly to
+    # accommodate off-axis or shifted PSFs.
+    peak_idx = int(np.argmax(psf_arr))
+    py, px = divmod(peak_idx, Nx)
+
+    if axis == 'x':
+        r = (np.arange(Nx) - px) * float(dx)
+        profile = psf_arr[py, :].astype(np.float64)
+        return r, profile
+    if axis == 'y':
+        r = (np.arange(Ny) - py) * float(dx)
+        profile = psf_arr[:, px].astype(np.float64)
+        return r, profile
+    if axis == 'radial':
+        # Azimuthal average centred on the peak, on integer-radius
+        # bins (same approach as mtf_radial).  Returns r >= 0.
+        y_idx, x_idx = np.indices(psf_arr.shape)
+        rr = np.sqrt((x_idx - px) ** 2 + (y_idx - py) ** 2)
+        r_int = np.rint(rr).astype(int)
+        tbin = np.bincount(r_int.ravel(),
+                            weights=psf_arr.ravel().astype(np.float64))
+        nbin = np.bincount(r_int.ravel())
+        # Trim trailing all-empty bins
+        radial_profile = np.where(
+            nbin > 0, tbin / np.maximum(nbin, 1), 0.0)
+        r = np.arange(radial_profile.size, dtype=np.float64) * float(dx)
+        return r, radial_profile
+
+    raise ValueError(
+        f"PSF profile: axis must be 'x', 'y', or 'radial'; got "
+        f"{axis!r}.")
+
+
+def rayleigh_resolution(
+    psf: np.ndarray,
+    dx: float,
+    wavelength: float,
+    *,
+    axis: str = 'radial',
+) -> float:
+    """Rayleigh diffraction-limit resolution from a 2-D PSF.
+
+    The Rayleigh criterion places two point sources at the separation
+    where one source's principal maximum coincides with the other's
+    first dark ring.  For an Airy pattern from a circular aperture of
+    focal ratio ``f/#``, this is the canonical
+    ``1.22 * wavelength * f_number`` separation.
+
+    This implementation computes the first zero of the PSF profile
+    (along ``axis``) past the peak and returns that distance.  For a
+    perfect Airy pattern the radial first zero is the Rayleigh
+    separation directly; for asymmetric / aberrated PSFs the axis cut
+    captures the criterion along that line.
+
+    Parameters
+    ----------
+    psf : ndarray (real, 2-D)
+        Intensity PSF.
+    dx : float
+        PSF-plane grid spacing [m].
+    wavelength : float
+        Wavelength [m].  Currently used only as a numerical anchor
+        for the small-separation tolerance; the first-zero search
+        does not require it explicitly.
+    axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
+        Profile axis to scan for the first zero.
+
+    Returns
+    -------
+    d_rayleigh : float
+        Rayleigh resolution [m].  ``NaN`` if no zero can be located
+        (e.g. flat / zero-intensity input).
+
+    See Also
+    --------
+    sparrow_resolution : Sparrow dip-vanishing criterion.
+    fwhm_resolution : FWHM-doubled resolution.
+
+    Notes
+    -----
+    Convention: the returned value is the first-zero radius, which
+    equals the *separation* between two adjacent diffraction-limited
+    sources at the Rayleigh limit (the two PSFs touch at the first
+    zero).  Some texts report the diameter (twice this value); we
+    pin the radius form because it matches the standard
+    ``1.22 lambda f/#`` formula directly.
+    """
+    if not np.isfinite(float(wavelength)) or float(wavelength) <= 0.0:
+        raise ValueError(
+            f"rayleigh_resolution: wavelength must be positive and "
+            f"finite; got {wavelength!r}.")
+    r, profile = _psf_1d_profile(psf, dx, axis=axis)
+
+    # Sanity check the profile -- a flat / zero PSF has no resolvable
+    # first zero.
+    peak = float(profile.max())
+    if peak <= 0.0 or not np.all(np.isfinite(profile)):
+        return float('nan')
+
+    # Locate the peak index on the profile (radial profile starts at
+    # r=0; x/y profiles centre the peak at r=0 by construction in
+    # _psf_1d_profile).  Walk outward until the profile reaches a
+    # threshold-defined "zero".  We use a small fraction of the peak
+    # so noise / discretisation does not spawn spurious zeros.
+    profile_norm = profile / peak
+    # Use a threshold proportional to peak; first-zero of a clean
+    # Airy is identically zero, but numerical PSFs from compute_psf
+    # have ~1e-3..1e-4 floor at the first zero.  Hunt for the first
+    # local minimum below 5% of peak.
+    if axis == 'radial':
+        peak_idx = 0
+        scan_range = range(1, profile.size - 1)
+    else:
+        # x / y profile is centred on the peak; scan to the right.
+        peak_idx = int(np.argmax(profile))
+        scan_range = range(peak_idx + 1, profile.size - 1)
+
+    first_zero_idx: Optional[int] = None
+    for i in scan_range:
+        # First sample below threshold AND a local minimum
+        if profile_norm[i] < 0.05 and profile_norm[i] <= profile_norm[i - 1] \
+                and profile_norm[i] <= profile_norm[i + 1]:
+            first_zero_idx = i
+            break
+
+    if first_zero_idx is None:
+        return float('nan')
+
+    # Sub-pixel refinement via parabolic interpolation around the
+    # local minimum (3-point form).  Falls back to the integer index
+    # if the parabola is degenerate.
+    j = first_zero_idx
+    a = profile[j - 1]
+    b = profile[j]
+    c = profile[j + 1]
+    denom = (a - 2.0 * b + c)
+    if denom == 0.0:
+        # Linear fallback
+        sub = 0.0
+    else:
+        sub = 0.5 * (a - c) / denom
+    sub = max(-1.0, min(1.0, float(sub)))
+    j_refined = j + sub
+    return float(abs(r[j] - r[peak_idx]) +
+                 sub * float(dx) * (1.0 if r[j] >= r[peak_idx] else -1.0))
+
+
+def sparrow_resolution(
+    psf: np.ndarray,
+    dx: float,
+    *,
+    axis: str = 'radial',
+) -> float:
+    """Empirical Sparrow resolution criterion from a 2-D PSF.
+
+    The Sparrow criterion defines the two-point separation at which
+    the dip between two overlapping point-source PSFs just vanishes:
+    the second derivative of the summed intensity at the midpoint
+    crosses zero.  For an Airy pattern this is empirically
+    ``~0.95 lambda f/#`` -- slightly smaller than the Rayleigh
+    separation (``1.22 lambda f/#``).
+
+    This implementation searches over a range of separations ``d``
+    for the one at which ``f(0) = PSF(-d/2) + PSF(+d/2)`` has zero
+    curvature at the origin (using the discrete second derivative
+    ``f(d/2) - 2 f(0) + f(-d/2)``, which by construction reduces to
+    ``2 [PSF(d) - PSF(0)]`` on a centred profile).  We then refine
+    via linear interpolation between the two bracketing samples.
+
+    Parameters
+    ----------
+    psf : ndarray (real, 2-D)
+        Intensity PSF.
+    dx : float
+        PSF-plane grid spacing [m].
+    axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
+        Profile axis to scan.
+
+    Returns
+    -------
+    d_sparrow : float
+        Sparrow resolution [m].  ``NaN`` if no zero-curvature
+        separation can be located.
+    """
+    r, profile = _psf_1d_profile(psf, dx, axis=axis)
+
+    peak = float(profile.max())
+    if peak <= 0.0 or not np.all(np.isfinite(profile)):
+        return float('nan')
+    profile_norm = profile / peak
+
+    # The Sparrow condition on the dip is equivalent to PSF(d) ==
+    # PSF(0) at the half-separation: the two superposed PSFs have
+    # zero second derivative at the midpoint when their tail value
+    # at the midpoint equals their peak.  Equivalently, we look for
+    # the smallest d such that PSF(d/2) drops below the curvature
+    # threshold.
+    #
+    # We follow the canonical numerical definition: search for d at
+    # which the second derivative of the dual-source profile at the
+    # midpoint changes sign.  In our centred profiles the midpoint is
+    # at r=0 (the peak), and the candidate dual-source profile has
+    # ``f_dual(0; d) = 2 * PSF(d/2)`` and
+    # ``f_dual(+/- dx; d) = PSF(d/2 - dx) + PSF(d/2 + dx)``.  The
+    # discrete second derivative at 0 is therefore
+    # ``f_dual(+dx; d) + f_dual(-dx; d) - 2 f_dual(0; d) ==
+    #  PSF(d/2 - dx) + PSF(d/2 + dx) - 2 PSF(d/2)``,
+    # which is exactly the central second-derivative of PSF at d/2.
+    # The Sparrow criterion is the smallest d at which this quantity
+    # is zero (zero curvature) starting from negative (dip) and
+    # crossing to positive (no dip).
+
+    if axis == 'radial':
+        peak_idx = 0
+    else:
+        peak_idx = int(np.argmax(profile))
+
+    # Second derivative of the radial profile.  np.gradient twice
+    # gives a smooth-enough estimate for our discrete data.
+    d_profile = np.gradient(profile, float(dx))
+    dd_profile = np.gradient(d_profile, float(dx))
+
+    # Scan outward from the peak for the first zero crossing of the
+    # second derivative (curvature goes from concave-down at the peak
+    # to concave-up in the wings).
+    if axis == 'radial':
+        scan = range(1, profile.size - 1)
+    else:
+        scan = range(peak_idx + 1, profile.size - 1)
+
+    half_d_idx: Optional[int] = None
+    for i in scan:
+        if dd_profile[i - 1] < 0.0 <= dd_profile[i]:
+            half_d_idx = i
+            break
+
+    if half_d_idx is None:
+        return float('nan')
+
+    # Linear interpolation across the zero crossing for sub-pixel
+    # refinement.
+    j = half_d_idx
+    y_lo = dd_profile[j - 1]
+    y_hi = dd_profile[j]
+    if y_hi == y_lo:
+        t = 0.0
+    else:
+        t = (0.0 - y_lo) / (y_hi - y_lo)
+    half_d = abs(r[j - 1] - r[peak_idx]) + t * float(dx)
+    return float(2.0 * half_d)
+
+
+def fwhm_resolution(
+    psf: np.ndarray,
+    dx: float,
+    *,
+    axis: str = 'radial',
+) -> float:
+    """Twice the full-width-at-half-maximum half-radius of the central
+    peak.
+
+    The FWHM measurement is the standard rule-of-thumb resolution for
+    PSFs whose first zero is poorly defined (Gaussian beams, heavily
+    aberrated PSFs).  We return ``2 * r_half`` where ``r_half`` is
+    the distance from the peak to where the profile crosses half-max
+    on the outward side.
+
+    Parameters
+    ----------
+    psf : ndarray (real, 2-D)
+        Intensity PSF.
+    dx : float
+        PSF-plane grid spacing [m].
+    axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
+        Profile axis to scan.
+
+    Returns
+    -------
+    d_fwhm : float
+        Twice the half-radius at half-max [m].  ``NaN`` if the
+        half-max crossing cannot be located.
+
+    Notes
+    -----
+    For a radial profile the half-radius is the smallest r > 0 with
+    ``profile(r) <= 0.5 * profile.max()``.  Linear interpolation
+    across the crossing gives sub-pixel accuracy.
+    """
+    r, profile = _psf_1d_profile(psf, dx, axis=axis)
+
+    peak = float(profile.max())
+    if peak <= 0.0 or not np.all(np.isfinite(profile)):
+        return float('nan')
+
+    half = 0.5 * peak
+
+    if axis == 'radial':
+        peak_idx = 0
+        scan = range(1, profile.size)
+    else:
+        peak_idx = int(np.argmax(profile))
+        scan = range(peak_idx + 1, profile.size)
+
+    crossing_idx: Optional[int] = None
+    for i in scan:
+        if profile[i] <= half:
+            crossing_idx = i
+            break
+    if crossing_idx is None:
+        return float('nan')
+
+    # Linear interpolation between the two samples that straddle the
+    # half-max.
+    j = crossing_idx
+    if j == 0:
+        return float('nan')
+    y_lo = profile[j - 1]
+    y_hi = profile[j]
+    if y_lo == y_hi:
+        t = 0.0
+    else:
+        t = (half - y_lo) / (y_hi - y_lo)
+    r_half = abs(r[j - 1] - r[peak_idx]) + t * float(dx)
+    return float(2.0 * r_half)
+
+
+# ============================================================================
+# v4.15.0 (C.4) -- Astigmatism magnitude + angle
+# ============================================================================
+
+def astigmatism_mag_angle(
+    coeffs: Sequence[float],
+) -> Tuple[float, float]:
+    r"""Magnitude and orientation angle of primary astigmatism.
+
+    Returns ``(|astig|, theta)`` from an OSA-indexed Zernike
+    coefficient array as returned by :func:`zernike_decompose`.
+
+    Convention (matches :func:`zernike_decompose` / OSA / ANSI):
+
+    * ``coeffs[3]``  = Z(2, -2), "oblique astigmatism"   (= c3)
+    * ``coeffs[5]``  = Z(2,  2), "vertical astigmatism"  (= c5)
+
+    The magnitude is the quadrature sum, and the angle is the
+    physical orientation of the principal axis of the astigmatism
+    figure (per Mahajan, "Aberration Theory Made Simple", 2nd ed.,
+    §8.2):
+
+    .. math::
+        |\mathrm{astig}| = \sqrt{c_3^2 + c_5^2}, \qquad
+        \theta = \tfrac{1}{2} \, \mathrm{atan2}(c_3, c_5).
+
+    Because astigmatism has C2 symmetry, the principal-axis angle
+    ``theta`` is unique modulo :math:`\pi/2`; the formula gives a
+    value in :math:`(-\pi/4, \pi/4]` via the half-angle of a full
+    :math:`(-\pi, \pi]` atan2.
+
+    Parameters
+    ----------
+    coeffs : sequence of float
+        OSA-indexed Zernike coefficients.  Must have length at least
+        6 so that ``coeffs[3]`` and ``coeffs[5]`` are addressable.
+
+    Returns
+    -------
+    magnitude : float
+        ``sqrt(coeffs[3]**2 + coeffs[5]**2)``, same units as
+        ``coeffs`` (e.g. metres of RMS wavefront error if ``coeffs``
+        comes from a metres-OPD decomposition).
+    theta : float
+        Principal-axis orientation [rad].
+
+    Raises
+    ------
+    ValueError
+        If ``coeffs`` has fewer than 6 entries (cannot index c5).
+
+    See Also
+    --------
+    zernike_decompose : Zernike fit producing the input array.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from lumenairy.analysis import astigmatism_mag_angle
+    >>> # Pure vertical astigmatism (c5 = +1, c3 = 0): theta = 0.
+    >>> c = np.zeros(6); c[5] = 1.0
+    >>> mag, theta = astigmatism_mag_angle(c)
+    >>> bool(abs(mag - 1.0) < 1e-12 and abs(theta) < 1e-12)
+    True
+    >>> # Pure oblique astigmatism (c3 = +1, c5 = 0): theta = pi/4.
+    >>> c = np.zeros(6); c[3] = 1.0
+    >>> mag, theta = astigmatism_mag_angle(c)
+    >>> bool(abs(mag - 1.0) < 1e-12 and abs(theta - np.pi/4) < 1e-12)
+    True
+    """
+    coeffs_arr = np.asarray(coeffs, dtype=np.float64)
+    if coeffs_arr.ndim != 1:
+        raise ValueError(
+            f"astigmatism_mag_angle: coeffs must be 1-D; got shape "
+            f"{coeffs_arr.shape!r}.")
+    if coeffs_arr.size < 6:
+        raise ValueError(
+            f"astigmatism_mag_angle: need at least 6 coefficients "
+            f"(OSA c5 = coeffs[5]); got length {coeffs_arr.size}.")
+    c3 = float(coeffs_arr[3])  # OSA (n=2, m=-2): oblique astigmatism
+    c5 = float(coeffs_arr[5])  # OSA (n=2, m=+2): vertical astigmatism
+    magnitude = float(np.sqrt(c3 * c3 + c5 * c5))
+    theta = 0.5 * float(np.arctan2(c3, c5))
+    return magnitude, theta

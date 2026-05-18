@@ -355,6 +355,7 @@ def non_sequential_stray_light(
     semi_aperture: Optional[float] = None,
     top_n: int = 10,
     bsdf_model: Optional[Any] = None,
+    seed: Optional[int] = None,
     verbose: bool = True,
 ) -> Dict[str, Any]:
     """Combined ghost + scatter stray-light report for a prescription.
@@ -387,6 +388,16 @@ def non_sequential_stray_light(
         reflected-ghost intensity to give a worst-case stray-light
         fraction.  When ``None`` (default), only ghost reflections
         are reported.
+    seed : int or None, default None
+        Seed for the BSDF-integration Monte Carlo.  v4.15 (P1-GH-1):
+        pre-4.15 this was hard-coded to ``0``, which made the TIS
+        estimate fully deterministic with no uncertainty band -- you
+        could not estimate the Monte-Carlo variance because every
+        call returned identical numbers.  Pass an ``int`` (e.g.
+        ``seed=0``) for the old reproducible behaviour; pass
+        ``None`` (the new default) to draw fresh randomness from
+        system entropy so repeated calls give a sample-to-sample
+        spread you can use as a stand-in for the integration error.
     verbose : bool
 
     Returns
@@ -426,7 +437,11 @@ def non_sequential_stray_light(
         # Integrate the BSDF over the upper hemisphere to get TIS.
         # Use a small Monte-Carlo: sample 2k uniform-hemisphere
         # directions, weight by cos(theta), average.
-        rng = np.random.default_rng(0)
+        # v4.15 (P1-GH-1): RNG now seeded from the user-supplied
+        # ``seed`` kwarg (None = system entropy = different samples
+        # each call).  Pre-4.15 ``default_rng(0)`` pinned the TIS
+        # number to a single sample, hiding the Monte-Carlo error.
+        rng = np.random.default_rng(seed)
         n_samples = 2000
         # Uniform on upper hemisphere via 2 cos-weighted samples.
         u = rng.random(n_samples)

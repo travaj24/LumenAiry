@@ -2114,10 +2114,22 @@ class WaveOpticsDock(QWidget):
         ``self.spin_N_out``, ``self.spin_cx``, ``self.spin_cy``)
         stay valid -- no duplication / write-back gymnastics
         needed.
+
+        v4.15 (P1-UI-5): the post-exec re-parent back to the original
+        parent now guards against the parent having been destroyed
+        while the dialog was open.  If the user closed the parent dock
+        or the surrounding workspace tab during ``dlg.exec()``, the
+        QWidget Python proxy is still alive on Python's side but the
+        underlying C++ widget has been deleted -- a ``setParent(dead)``
+        call would dereference freed memory and segfault.  We check
+        the C++ object via :func:`shiboken6.isValid` (the canonical
+        PySide6 idiom for "is the C++ side still here?") and skip the
+        re-parent / log a diagnostic if it isn't.
         """
         from PySide6.QtWidgets import (
             QDialog, QVBoxLayout, QDialogButtonBox, QLabel,
         )
+        import shiboken6
         dlg = QDialog(self)
         dlg.setWindowTitle('MFT focal-plane zoom options')
         dlg.setModal(True)
@@ -2146,7 +2158,28 @@ class WaveOpticsDock(QWidget):
             # again.  The run path reads spinbox values directly
             # via ``self.spin_*``, so visibility / layout
             # placement after close don't affect behaviour.
-            self.grp_mft.setParent(original_parent)
+            #
+            # v4.15 (P1-UI-5): guard against the parent's C++ side
+            # having been destroyed while the dialog was open.
+            # ``setParent(None)`` is a safe fallback that reparents
+            # grp_mft to the top level (no segfault) and keeps the
+            # widget alive so the user can re-dock manually; we also
+            # publish a diagnostic so the issue surfaces during QA.
+            parent_alive = (original_parent is not None
+                            and shiboken6.isValid(original_parent))
+            if parent_alive:
+                self.grp_mft.setParent(original_parent)
+            else:
+                self.grp_mft.setParent(None)
+                try:
+                    from .diagnostics import diag
+                    diag.report(
+                        'mft-options-dialog',
+                        RuntimeError(
+                            'original_parent destroyed before dialog '
+                            'close; grp_mft kept alive at top level'))
+                except Exception:
+                    pass
             self.grp_mft.setVisible(False)
 
     def _update_forecast(self):

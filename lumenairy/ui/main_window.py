@@ -1548,9 +1548,23 @@ class MainWindow(QMainWindow):
                 if kind == 'singlet':
                     R1 = entry['R1']
                     R2 = entry['R2']
+                    # v4.15 (P1-UI-1): high-index glass table for the
+                    # menu-sort heuristic.  The table used to list only
+                    # ('S-LAH64', 'N-SF11') -- so Thorlabs parts carrying
+                    # N-LASF9 or S-NPH1 fell back to the n_d=1.5168 N-BK7
+                    # estimate and sorted alongside crown singlets despite
+                    # having ~10-15% shorter EFLs at the same radii.
+                    # Bundle approximate n_d's so the menu sort lands them
+                    # in the right bucket; the actual physics still uses
+                    # the proper dispersion lookup via get_glass_index.
                     n = 1.5168     # N-BK7 visible -- close enough to sort
-                    if 'glass' in entry and entry['glass'] in ('S-LAH64', 'N-SF11'):
-                        n = 1.785
+                    if 'glass' in entry:
+                        if entry['glass'] in ('S-LAH64', 'N-SF11'):
+                            n = 1.785
+                        elif entry['glass'] == 'N-LASF9':
+                            n = 1.85
+                        elif entry['glass'] == 'S-NPH1':
+                            n = 1.81
                     inv = (n - 1) * (1.0 / R1 - 1.0 / R2)
                     return 1.0 / inv if inv else float('inf')
                 if kind == 'doublet':
@@ -1631,16 +1645,30 @@ class MainWindow(QMainWindow):
         This is a pragmatic keyboard nudge that works from anywhere in
         the window -- the user doesn't have to click into the Distance
         cell first.  Undo-safe (goes through the model's _checkpoint).
+
+        v4.15 (P1-UI-2): routed through ``set_display_distance`` so the
+        nudge respects the current coordinate-display mode.  Pre-4.15
+        the bump mutated ``Element.distance_mm`` directly, which is
+        the relative-gap field; in 'absolute' display mode the value
+        in the Distance column is the front-vertex Z, so a Shift-Up /
+        Shift-Down keystroke was meant to nudge that Z (and shift this
+        element AND every downstream element by ``delta_mm``).  Both
+        coordinate modes end up shifting downstream elements the same
+        way -- in absolute mode by ``set_display_distance``'s relative
+        back-derivation, in relative mode by the direct relative
+        assignment -- so the keyboard contract is now consistent
+        with whichever value the column is showing.
         """
         try:
             idx = self.element_editor.table.currentIndex().row()
             if idx <= 0 or idx >= len(self.model.elements):
                 return
-            self.model._checkpoint()
-            self.model.elements[idx].distance_mm = max(
-                0.0, self.model.elements[idx].distance_mm + delta_mm)
-            self.model._invalidate()
-            self.model.system_changed.emit()
+            # Read whatever the Distance column currently displays
+            # (relative gap OR absolute front-vertex Z), add delta_mm,
+            # and write it back through the coord-mode-aware setter.
+            cur_display = self.model.get_display_distance(idx)
+            new_display = max(0.0, cur_display + delta_mm)
+            self.model.set_display_distance(idx, new_display)
             self.status_label.setText(
                 f'Nudged E{idx} distance by {delta_mm:+.2f} mm '
                 f'(now {self.model.elements[idx].distance_mm:.3f} mm)')

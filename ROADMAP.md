@@ -1,6 +1,6 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-17 (post-v4.14.0 PyPI ship).
+**Last updated:** 2026-05-18 (post-v4.15.0).
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -15,97 +15,58 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.14.0 on PyPI.  710 → 858 unit tests added across
-  v4.13.0 → v4.14.0; 34/34 validation files passing.  Public API
-  at ~365 symbols in `lumenairy.__all__`.
+- **Library:** v4.15.0.  Test count: ~1400 unit tests passing
+  (actual count finalised at v4.15.0 release commit -- v4.14.3
+  shipped at 1265, v4.15.0 rolls in the v4.14.2-audit P2/P3 sweep
+  + the v4.15/v4.16 ROADMAP scope, projecting ~1400 with the new
+  meta-pin (#3 input-validation entry-point), Agent F P2 closures,
+  and the rolled-in API expansions from v4.16 scope).  34/34
+  validation files passing.  Public API at ~370+ symbols in
+  `lumenairy.__all__`.
 - **Designer GUI:** v3.7.10 (per in-code comments at `ui/main_window
   .py:2196` etc.).  No standalone release stream; the Designer
   ships co-versioned inside the library wheel.
 - **Audit closure status:** AUDIT_V4_12_1, AUDIT_V4_13_0,
-  AUDIT_V4_13_1 + cross-library survey Part 10 all closed (Tier-0
-  + Tier-1).  AUDIT_V4_13_1 Tier-2/3/4 scoped to v4.15+/v5.0 as
+  AUDIT_V4_13_1, AUDIT_V4_14_0, AUDIT_V4_14_1, AUDIT_V4_14_2 all
+  closed (P0 + P1 + the P2/P3 carryover sweep landed in v4.15.0).
+  AUDIT_V4_13_1 Tier-2/3/4 architectural items scoped to v5.0 as
   noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
-  5).
+  5).  v4.14.2 migrated 2 shims (`makedammann2d` SI heuristic and
+  `create_led_source` legacy positional) onto the canonical
+  `_deprecation.warn_deprecated_signature` helper with explicit
+  `version_removed=5.0`; the remaining 6 still use inline raw
+  `warnings.warn` and are scheduled for migration as a v5.0
+  housekeeping item.
+- **Meta-pin coverage:** 3 of the 5 v4.14.2-recommended meta-pin
+  candidates landed.  V1: cache-clear chain re-export (v4.14.1).
+  V2: cache <-> lock pairing + ``0+0j`` literal sweep (v4.14.2).
+  V3: input-validation entry-point (`_validate_grid_params`
+  required call in first 15 body lines of every `create_*` factory)
+  -- new in v4.15.0 (Agent F).  V4 (sentinel propagation,
+  `_xp_of` dispatch, `dy` parameter threading, `__all__` symmetry)
+  remain candidates for v4.16+ extension.
 
 ---
 
-## v4.15.0 — Targeted minor (3 well-scoped items)
-
-### 1. Modal asymptotic per-pixel vectorisation + test-pin update
-
-The audit's biggest known perf opportunity (target 20-100×).  v4.14.0
-shipped 6 private vectorised helpers (`_solve_envelope_stationary
-_batch` et al.) but did NOT switch the public `propagate_modal
-_asymptotic` body because of a real physics finding:
-
-> The pre-v4.14 warm-started Newton chain lands in **wrong-saddle
-> basins** at grid edges, where the overflow guard `|b_quad| > 700`
-> silently zeros those pixels.  The cold-start batched Newton finds
-> the physical saddle uniformly — producing strictly more non-zero
-> pixels (physically more correct) but breaking the existing 16-test
-> `1e-10 rel` bit-equal pin at
-> `tests/unit/test_perf_v4_12_0_asymptotic.py`.
-
-**Scope:** Switch the public body to use the batched helpers; update
-the test pin to acknowledge the corrected physical behaviour at
-grid edges; document the warm-saddle-basin behaviour as a known
-v4.12.x → v4.14.x bug being fixed.  ~150 LOC code + ~50 LOC of test
-adjustment + a coordinated CHANGELOG note about the bit-changing
-output.
-
-**Expected speedup:** 20-100× on the modal asymptotic path.
-Cascades into LG aberration tensor evaluation and Maslov stationary-
-phase chains.
-
-### 2. Source factory signature normalisation
-
-`Source.gaussian(w0, N, dx, wavelength)` puts beam-size first;
-`Source.plane_wave(N, dx, wavelength)` / `Source.point_source(...)`
-put N first; `Source.top_hat(diameter, N, ...)` and
-`Source.fiber_mode(mode_field_diameter, ...)` put diameter first.
-Mixed within `sources/core.py:1055-1150`.  Caught by AUDIT_V4_13_1
-Part 4 #10.
-
-**Scope:** Convert size-args to keyword-only across all 5 factories
-with a one-release `DeprecationWarning` on the positional form.
-Pick one canonical order (`Source.method(*, N, dx, wavelength,
-<size_kwargs>)` is the natural fit).  ~25 LOC code + 5 tests.
-
-### 3. `system.evaluate(prescription, source, ...)` ergonomic entry
-
-`propagate_through_system(E_in, elements, ...)` takes an element
-list, not a prescription dict.  Users loading a Zemax `.zmx` file
-have to build the element list manually before propagating.
-Optiland and prysm expose this as a one-liner.
-
-**Scope:** New `lumenairy.system.evaluate(prescription, source, *,
-output_grid=None, output_dx=None, ...)` that:
-1. Builds the element chain from the prescription via the existing
-   `surfaces_from_prescription` + element-handler dispatch.
-2. Calls `Source.to_source()` to get `E_in`, `dx`, `dy`,
-   `wavelength`.
-3. Routes through `propagate_through_system` and returns
-   `PropagationResult`.
-
-~80 LOC code + 3 tests + Tier-1 `__all__` export.
-
----
-
-## v4.16.0 — User-facing API expansion
+## v4.16.0 — User-facing API expansion (residual)
 
 The cross-library survey (Agent C, Part 10 of AUDIT_V4_13_1)
 catalogued 12 user-facing API gaps.  v4.14.0 closed 5 (encircled
 energy, MTF cutoff, beam diameter, depth of focus, plot_wavefront).
-The remaining 7 are below.
+The partial-coherence source trio (Gaussian-Schell, Schell-model,
+annular-incoherent) was added in v4.14.x and now resides in the
+shipped section.  The remaining items (originally #4-#8 + #10 in
+the v4.15-v4.16 plan, renumbered after shipped items moved to
+Shipped highlights) are below.
 
-### 4. Polychromatic encircled energy
+### 1. Polychromatic encircled energy
 
 `polychromatic_psf` exists; `encircled_energy_radius` exists; no
 convenience helper `ee_polychromatic(prescription, wavelengths,
 weights, radii)` chaining them.  ~30 LOC + 2 tests.
 
-### 5. Polarisation-aware Strehl / coupling
+### 2. Polarisation-aware Strehl / coupling
 
 All `strehl_*` helpers take a scalar field.  For vector imaging
 (Richards-Wolf, polarization-ray-tracing) the user has to manually
@@ -113,7 +74,7 @@ All `strehl_*` helpers take a scalar field.  For vector imaging
 Ez=None, ...)` and `coupling_efficiency_vector(...)`.  ~50 LOC + 3
 tests.
 
-### 6. Optical resolution metrics (Sparrow / Rayleigh / FWHM)
+### 3. Optical resolution metrics (Sparrow / Rayleigh / FWHM)
 
 Standard "two-point separability" definitions absent.  Add:
 - `rayleigh_resolution(psf, dx, wavelength)` — Rayleigh diffraction-
@@ -124,48 +85,60 @@ Standard "two-point separability" definitions absent.  Add:
 
 ~60 LOC + 4 tests.
 
-### 7. Astigmatism magnitude+angle helper
+### 4. Astigmatism magnitude+angle helper
 
 `zernike_decompose` returns `(c5, c3)` = (vertical, oblique)
 astigmatism but no `astigmatism_mag_angle(coeffs)` that converts to
 `(|astig|, theta)` per Mahajan §8.2.  ~10 LOC + 1 test.
 
-### 8. Off-axis parabola helper
+### 5. Off-axis parabola helper
 
 Users currently roll their own OAP via tilt+decenter, which is
 fragile.  Add `make_off_axis_parabola(focal_length, off_axis_angle,
 clear_aperture, ...) -> prescription_dict` factory.  ~40 LOC + 2
 tests.
 
-### 9. Partial-coherence source helpers (Schell-model, Gaussian-Schell)
-
-`create_led_source` returns suggested source angles for Köhler
-integration but no first-class object represents source spectral
-or spatial coherence.  Add:
-- `create_gaussian_schell_source(N, dx, wavelength, w0, sigma_g)` —
-  spatially-incoherent Gaussian-Schell beam.
-- `create_schell_model_source(N, dx, wavelength, intensity_profile,
-  coherence_length)` — generic Schell-model.
-
-~120 LOC + 4 tests.
-
-### 10. Q-type freeform (Forbes Q-bfs / Q-con)
+### 6. Q-type freeform (Forbes Q-bfs / Q-con)
 
 `elements/freeform.py` only implements XY-polynomial, Zernike, and
 Chebyshev.  Forbes Q-type is the standard at TI / Edmund / Zemax for
 aspheric freeforms.  ~150 LOC + 5 tests.
 
-### 11. Ring / annular incoherent source
+### 7. Extend meta-pin pattern (V4 candidates)
 
-`create_annular_beam` is monochromatic coherent.  Add an angular-
-spectrum version with non-zero source size for partial-coherence
-integration.  ~50 LOC + 2 tests.
+v4.15.0 implemented the 3rd of the 5 V2-recommended meta-pins
+(input-validation entry-point).  The remaining 4 V2 candidates
+remain to extend:
+
+- **Sentinel-aware branch propagation** -- AST-walk every
+  `_get_wrapper_merit_cache` callsite for `is _ZERO_APERTURE_MASK`
+  check.  Direct counter-measure to the recurring P1-NEW-1 class
+  (the audit's own meta-finding -- v4.14.2 P1-NEW-1, v4.14.3
+  closed 2 more sites; future sites would benefit from a meta-pin).
+- **Cross-backend dispatch (`_xp_of` usage)** -- AST-walk for
+  hardcoded `np.*` where dispatch should happen.  Addresses the
+  v4.13.x latent CuPy dispatch class of bug.
+- **`dy` parameter threading** -- every `apply_*` in `__all__`
+  must accept `dy=None`.  Counter-measure to the v4.13.0 dy-sibling
+  gap recurrences.
+- **`__all__` symmetry** -- every name in submodule `__all__`
+  either re-exported at top level or marked `_INTERNAL`.
+
+~250 LOC of test infrastructure + walker fixtures across the 4
+pins.
+
+### 8. Multi-process atomic-append for `storage.py`
+
+v4.14.3 documented single-process atomicity for `append_plane_h5`
+and `_zarr_append_plane` and the multi-process restriction.  The
+full multi-writer story (HDF5 SWMR + distributed Zarr lock)
+remains outstanding.  ~120 LOC + 6 tests.
 
 ---
 
 ## v4.17.0 — Optimisation framework expansion
 
-### 12. Constrained optimisation
+### 9. Constrained optimisation
 
 All Merits express constraints as soft penalties (`max(0, x -
 threshold)²`).  scipy.optimize has `NonlinearConstraint` for hard
@@ -173,7 +146,7 @@ constraints (e.g. "BFL > 5 mm exactly").  Add `constraints:
 Optional[Sequence[Constraint]]` kwarg to `design_optimize` that maps
 to scipy's API.  ~80 LOC + 4 tests.
 
-### 13. Checkpoint / resume on long `design_optimize` runs
+### 10. Checkpoint / resume on long `design_optimize` runs
 
 A 4-hour optimisation run that crashes loses everything.
 `plane_logger` saves per-iteration field but not the parameter
@@ -181,7 +154,7 @@ vector.  Add `state_file: Optional[str] = None` that persists
 `(call_count, x_best, merit_best)` to JSON/H5 and resumes from disk
 when present.  ~100 LOC + 3 tests.
 
-### 14. Multi-objective (Pareto) optimisation
+### 11. Multi-objective (Pareto) optimisation
 
 `CompositeMerit` collapses to scalar.  For "minimise spot size AND
 match focal length" with no a priori weight balance, NSGA-II or
@@ -189,7 +162,7 @@ match focal length" with no a priori weight balance, NSGA-II or
 right tool.  Out-of-scope architecturally for v4.17 unless a clean
 shim onto an external library (`pymoo`) is acceptable.
 
-### 15. Hessian / Newton-step optimisation
+### 12. Hessian / Newton-step optimisation
 
 L-BFGS-B is the default.  For small (< 30 free var) problems an
 FD-Hessian-based Newton step converges in fewer evals.  Add
@@ -199,7 +172,7 @@ FD-Hessian-based Newton step converges in fewer evals.  Add
 
 ## v4.18.0 — Glass / materials expansion
 
-### 16. CDGM / Hikari / Sumita glass catalogues
+### 13. CDGM / Hikari / Sumita glass catalogues
 
 `glass.py` ships Schott + partial Ohara (S-LAH 64/79).  CDGM is the
 dominant Chinese flint/crown catalogue cited in cellphone/telephoto
@@ -207,7 +180,7 @@ lens papers; Hikari and Sumita complete the major-vendor matrix.
 Public Sellmeier-coefficient sources exist at refractiveindex.info.
 ~600 LOC of bulk data + a sweep through `GLASS_REGISTRY`.
 
-### 17. Sellmeier validity ranges per glass
+### 14. Sellmeier validity ranges per glass
 
 `_sellmeier_index` checks for resonance singularity and negative
 n² but doesn't carry a `(lambda_min, lambda_max)` validity-window
@@ -215,6 +188,19 @@ per glass.  Asking N-BK7 for n at 200 nm returns a number that
 bears no relation to physical N-BK7.  Add a `validity` field to
 `GLASS_REGISTRY` entries; warn (or raise) when extrapolating.  ~30
 LOC + 2 tests + bulk-data sweep.
+
+### 15. Central cache registry
+
+The v4.14.2 audit Tier-2 #17 item.  Today every cache author has
+to remember to register their clear-function in
+`propagation.clear_asm_caches`'s lazy-import chain.  v4.14.3 added
+the 8th cache (`_lg_polynomial_items`) but the meta-finding ("fix
+N, miss N+1") recurred 5 ways on v4.14.2 itself.  A central
+`register_cache_clearer(name, clear_fn)` registry would let
+`clear_asm_caches` walk the registry rather than enumerate clear
+calls by hand.  Cost: ~80 LOC + an audit-style migration of the
+existing 8 chained clear sites.  Counter-measure ratio: 1 registry
+prevents N future sibling-gap recurrences.
 
 ---
 
@@ -274,10 +260,6 @@ and break public-API or test-organisation contracts.
 * **`lumenairy/system.py` → `lumenairy/propagators/system.py`**
   (it walks elements applying propagators — functionally a
   propagator, not a top-level peer).
-
-* **Move audit `.md` files** from repo root to `docs/audits/`.
-  Repo root has 14 `.md` files; audit docs (8 of them) belong in
-  a subdir.
 
 * **`__init__.py` reorganisation** so the import section's tier
   order matches `__all__`'s tier order (currently mismatched by
@@ -399,19 +381,23 @@ to a specific release:
 
 ## Recommended sequencing
 
-Stack v4.15 → v4.16 → v4.17 → v4.18 as a sequence of focused
-minors landing over weeks, then plan v5.0 as a coordinated
-breaking-change release when the v4.15+ minor sequence stabilises.
+Stack v4.16 → v4.17 → v4.18 as a sequence of focused minors
+landing over weeks, then plan v5.0 as a coordinated breaking-
+change release when the v4.16+ minor sequence stabilises.  v4.15
+shipped the v4.14.2 P2/P3 sweep + the input-validation meta-pin
++ the partial-coherence source trio (pulled forward from v4.16).
 
-- **v4.15** is the smallest and most physics-significant — closing
-  out the modal-asymptotic finding is a real engineering win and
-  preconditions any future LG-aberration-tensor work.
-- **v4.16** is the highest user-visible-value release — closing 7
-  API gaps that experienced users routinely ask for.
+- **v4.16** is the highest user-visible-value release — closing
+  the remaining 7 API gaps that experienced users routinely ask
+  for + extending the meta-pin pattern with the 4 V4 candidates
+  (sentinel propagation, `_xp_of` dispatch, `dy` threading,
+  `__all__` symmetry).
 - **v4.17** is the optimisation-framework focus — constrained opt
   + checkpoint/resume + Newton-step.
 - **v4.18** is the glass / materials expansion — broaden vendor
-  coverage and tighten extrapolation safety.
+  coverage and tighten extrapolation safety + central cache
+  registry to retire the lazy-import fan-out pattern in
+  `clear_asm_caches`.
 - **v5.0** is the major-structural release — file splits + CI
   gates + back-compat shim removal + Migration guide.  Coordinate
   timing with a Designer 4.0 if scope warrants.
@@ -447,6 +433,53 @@ breaking-change release when the v4.15+ minor sequence stabilises.
   MTF cutoff, beam diameter, depth of focus, plot_wavefront;
   80 parametrized dispatcher pins closing the sibling-gap
   audit-meta-finding).
+- **v4.14.1** — AUDIT_V4_14_0 closure (1 P0 + 10 P1s including
+  cache↔lock pairing meta-pin + LG mode-stack dx/dy correction
+  + makedammann2d SI per-parameter heuristic + clear_asm_caches
+  chain extension to 5 sibling caches).
+- **v4.14.2** — AUDIT_V4_14_1 closure (1 P0 glass-registry +
+  10 P1s + 2 new meta-pins: cache↔lock pairing
+  (`test_v4_14_2_dispatcher_pin_cache_locks.py`, 39 tests; 38
+  pass + 1 documented `_ZARR_MKDIR_PATCH_LOCK` skip) +
+  `0+0j` literal sweep
+  (`test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py`, 123 tests).
+  Doc reorganisation moved 10 audit `.md` files into
+  `docs/audits/` and 7 release notes into `docs/release_notes/`.
+- **v4.14.3** — AUDIT_V4_14_2 P0+P1 closure (2 P0s including
+  storage `n_planes` atomicity + makedammann2d >1m upper-bound;
+  5 sibling-gap P1s including LG-polynomial chain + apply_rotator
+  conflict symmetry + create_led_source scale-inversion check;
+  1 real physics error fix in multiconfig.py n=1.5 hardcoding).
+  1265 unit tests; 34/34 validation.
+- **v4.15.0** — AUDIT_V4_14_2 P2/P3 sweep + v4.15/v4.16 ROADMAP
+  rollup.  Highlights:
+  - **Meta-pin candidate #3**: input-validation entry-point
+    pin (`test_v4_15_dispatcher_pin_validate_grid_params.py`,
+    18 tests; 14 factories discovered with 1 documented
+    `create_led_source` exemption -- legacy-shim positions
+    validator past the 15-line head window).
+  - **`lumenairy_context` redundant-call elimination** -- the
+    `clear_caches_on_exit=True` exit path now issues a single
+    `clear_asm_caches()` call rather than open-coding the
+    7 sibling fan-out (eliminates 6+ redundant lock acquisitions
+    per context-manager exit).
+  - **HDF5/Zarr `lumenairy_version` attribute stamping** at every
+    `create_dataset` / `create_array` site (storage.py).
+  - **Source-factory validation completeness**:
+    `create_multi_field_sources` now in `_validate_grid_params`
+    call list (previously transitively validated via
+    `create_tilted_plane_wave`; error message leaked internal name).
+  - **Partial-coherence source trio** (originally v4.16 scope,
+    shipped earlier in v4.14.x but only now folded into the
+    ROADMAP shipped list): `create_gaussian_schell_source`,
+    `create_schell_model_source`, `create_annular_incoherent_source`.
+  - **CHANGELOG line-citation drift fix** (P3): refreshed
+    `optimize/core.py:2750-2755` → `:2790-2795` and `:958-966` →
+    `:977-991` to match the post-v4.14.2 drift, plus the
+    `0+0j` literal-site citation `:966` → `:987`.
+  - **README Cookbook section** added with runnable examples
+    for the 6 v4.14.0 public functions + a `makedammann2d
+    _legacy_units='SI'` migration example.
 
 ---
 

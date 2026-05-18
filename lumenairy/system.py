@@ -498,6 +498,238 @@ def propagate_through_system(E_in: np.ndarray,
 
 
 # ----------------------------------------------------------------------
+# v4.15 (ROADMAP v4.15 #3): ergonomic prescription -> result entry
+# ----------------------------------------------------------------------
+
+def evaluate(
+    prescription: Dict[str, Any],
+    source: 'Source',
+    *,
+    output_grid: Optional[Union[int, Tuple[int, int]]] = None,
+    output_dx: Optional[float] = None,
+    method: str = 'asm',
+    use_gpu: bool = False,
+    verbose: bool = False,
+    progress: Optional[Callable] = None,
+) -> 'PropagationResult':
+    """Ergonomic one-call entry: prescription + Source -> PropagationResult.
+
+    v4.15 fills the gap where users loading a ``.zmx`` file currently
+    have to (a) call :func:`load_zemax_zmx` to get a prescription,
+    (b) hand-decompose the prescription into a
+    :func:`propagate_through_system` element list, and (c) build the
+    input field separately.  :func:`evaluate` collapses (a)-(c) into a
+    single call.
+
+    Parameters
+    ----------
+    prescription : dict
+        A lens prescription dict (the same shape produced by
+        :func:`load_zemax_zmx`, :func:`load_zemax_prescription_data_txt`,
+        :func:`make_singlet`, :func:`make_doublet`, etc.).  Must
+        contain ``'elements'`` + ``'all_thicknesses'`` keys (the Zemax
+        loaders' canonical shape) OR ``'surfaces'`` + ``'thicknesses'``
+        keys (the :func:`make_*` factory shape -- normalised to the
+        Zemax shape internally).
+    source : Source
+        Input :class:`Source`.  The field, grid spacing, and
+        wavelength are read from the Source instance.  No call to
+        ``to_source()`` is needed -- the Source dataclass already
+        bundles ``E``, ``dx``, ``dy``, and ``wavelength``.
+    output_grid : int or (Ny, Nx), optional
+        Reserved for future use.  Currently accepts the kwarg without
+        resampling so callers can future-proof their code; if you pass
+        anything other than ``None`` or ``source.E.shape``, the
+        argument is ignored with a ``RuntimeWarning``.
+    output_dx : float, optional
+        Reserved for future use.  Currently accepts the kwarg without
+        resampling.
+    method : str, default 'asm'
+        Free-space propagation method, forwarded to
+        :func:`propagate_through_system`.
+    use_gpu, verbose, progress :
+        Forwarded to :func:`propagate_through_system`.
+
+    Returns
+    -------
+    result : PropagationResult
+        The exit-plane field plus per-element history.
+
+    Raises
+    ------
+    ValueError
+        If ``source`` is ``None`` or not a :class:`Source` instance;
+        if ``prescription`` is missing the keys needed by either
+        prescription shape.
+
+    Examples
+    --------
+    >>> import lumenairy as la
+    >>> rx = la.load_zemax_zmx('AC254-200-C.zmx')
+    >>> src = la.Source.gaussian(
+    ...     N=512, dx=10e-6, wavelength=632.8e-9, w0=5e-3)
+    >>> result = la.system.evaluate(rx, src)
+    >>> result.field.shape
+    (512, 512)
+    """
+    # Lazy import to avoid a top-level circular dependency on
+    # ``lumenairy.sources``.
+    from .sources.core import Source as _SourceCls
+    from .propagators.result import PropagationResult
+
+    if source is None:
+        raise ValueError(
+            "lumenairy.system.evaluate: 'source' is required; got None.  "
+            "Pass a Source instance (e.g. ``la.Source.gaussian(N=256, "
+            "dx=10e-6, wavelength=633e-9, w0=2e-3)``).")
+    if not isinstance(source, _SourceCls):
+        raise ValueError(
+            "lumenairy.system.evaluate: 'source' must be a "
+            f"lumenairy.Source instance; got {type(source).__name__}.")
+    if not isinstance(prescription, dict):
+        raise ValueError(
+            "lumenairy.system.evaluate: 'prescription' must be a dict; "
+            f"got {type(prescription).__name__}.")
+    if output_grid is not None:
+        # Future-proofed; currently a no-op.  Emit a soft warning so
+        # the caller knows the kwarg is accepted but inert.
+        out_shape = tuple(source.E.shape[-2:])
+        target_shape = (
+            (output_grid, output_grid)
+            if isinstance(output_grid, (int, np.integer))
+                and not isinstance(output_grid, bool)
+            else tuple(output_grid))
+        if target_shape != out_shape:
+            warnings.warn(
+                "lumenairy.system.evaluate: output_grid resampling is "
+                "reserved for a future release; the kwarg is accepted "
+                "but currently does not resample the exit-plane field.  "
+                f"Got output_grid={target_shape!r}, source.E.shape="
+                f"{out_shape!r}.",
+                RuntimeWarning, stacklevel=2,
+            )
+    if output_dx is not None and float(output_dx) != float(source.dx):
+        warnings.warn(
+            "lumenairy.system.evaluate: output_dx resampling is "
+            "reserved for a future release; the kwarg is accepted but "
+            "currently does not resample the exit-plane field.",
+            RuntimeWarning, stacklevel=2,
+        )
+
+    # Build the element list from the prescription.  Accept both
+    # shapes seen across the loader / factory family:
+    #
+    #   1. Zemax-loader shape: ``elements`` + ``all_thicknesses``
+    #      (what :func:`load_zemax_zmx` returns).  This is the shape
+    #      that :func:`io.codegen._decompose_prescription` was
+    #      designed for, so we route it through that helper.
+    #
+    #   2. Factory shape: ``surfaces`` + ``thicknesses``
+    #      (what :func:`make_singlet`, :func:`make_doublet` return).
+    #      We wrap it as a one-group ``real_lens`` element so the
+    #      rest of the pipeline is uniform.
+    elements_list = _prescription_to_elements(prescription)
+
+    # Route through propagate_through_system with return_result=True so
+    # the caller gets a structured PropagationResult back.
+    result = propagate_through_system(
+        E_in=source.E,
+        elements=elements_list,
+        wavelength=float(source.wavelength),
+        dx=float(source.dx),
+        dy=float(source.dy) if source.dy is not None else None,
+        method=method,
+        use_gpu=use_gpu,
+        verbose=verbose,
+        progress=progress,
+        return_result=True,
+    )
+    return result
+
+
+def _prescription_to_elements(
+    prescription: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """Convert a prescription dict into a ``propagate_through_system``
+    element list.
+
+    Accepts two prescription shapes:
+
+    1. Zemax-loader shape -- ``elements`` + ``all_thicknesses`` keys --
+       routed through :func:`io.codegen._decompose_prescription`.
+    2. Factory shape -- ``surfaces`` + ``thicknesses`` keys -- wrapped
+       as a single ``{'type': 'real_lens', 'prescription': ...}``
+       element with no free-space gap (the caller can prepend / append
+       ``{'type': 'propagate', 'z': ...}`` elements via
+       :func:`propagate_through_system` directly if needed).
+    """
+    has_elements = 'elements' in prescription and \
+        'all_thicknesses' in prescription
+    has_surfaces = 'surfaces' in prescription and \
+        'thicknesses' in prescription
+
+    if not (has_elements or has_surfaces):
+        raise ValueError(
+            "lumenairy.system.evaluate: prescription must contain "
+            "either ``'elements'`` + ``'all_thicknesses'`` (Zemax-loader "
+            "shape) or ``'surfaces'`` + ``'thicknesses'`` (make_singlet "
+            "/ make_doublet shape); got keys "
+            f"{sorted(prescription.keys())}.")
+
+    elements_list: List[Dict[str, Any]] = []
+
+    if has_elements:
+        # Zemax loader shape -- decompose into propagate / real_lens /
+        # mirror / aperture steps.
+        from .io.codegen import _decompose_prescription
+        steps = _decompose_prescription(prescription)
+        for step in steps:
+            stype = step['type']
+            if stype == 'propagate':
+                elements_list.append({'type': 'propagate',
+                                       'z': step['z']})
+            elif stype == 'real_lens':
+                elements_list.append({
+                    'type': 'real_lens',
+                    'prescription': step['prescription'],
+                })
+            elif stype == 'mirror':
+                elements_list.append({
+                    'type': 'mirror',
+                    'radius': step.get('radius'),
+                    'conic': step.get('conic', 0.0),
+                    'aperture_diameter': step.get('aperture_diameter'),
+                })
+            elif stype == 'aperture':
+                D = step.get('diameter')
+                elements_list.append({
+                    'type': 'aperture',
+                    'shape': 'circular',
+                    'params': {'diameter': D},
+                })
+            elif stype == 'doe_placeholder':
+                # Air-to-air aspheric / DOE surfaces -- no element-handler
+                # currently exists for raw DOE phase, so skip silently.
+                # Future versions can plug a DOE handler here.
+                continue
+            else:
+                raise ValueError(
+                    "lumenairy.system.evaluate: unknown decomposition "
+                    f"step type {stype!r}.")
+    else:
+        # Factory shape -- single real_lens element with the prescription
+        # as-is.  No leading / trailing free-space gaps; the caller
+        # threads those in by chaining :func:`propagate_through_system`
+        # calls or by augmenting the prescription dict.
+        elements_list.append({
+            'type': 'real_lens',
+            'prescription': prescription,
+        })
+
+    return elements_list
+
+
+# ----------------------------------------------------------------------
 # v4.12 perf: jit cache for propagate_through_system_jax
 # ----------------------------------------------------------------------
 #

@@ -19,6 +19,11 @@ from .core import (
     create_fiber_mode,
     create_led_source,
     create_bessel_beam,
+    # v4.15 (ROADMAP v4.16 #9, #11): Schell-model + annular-incoherent
+    # partial-coherence source factories.
+    create_gaussian_schell_source,
+    create_schell_model_source,
+    create_annular_incoherent_source,
 )
 
 
@@ -37,4 +42,7 @@ __all__ = [
     'create_fiber_mode',
     'create_led_source',
     'create_bessel_beam',
+    'create_gaussian_schell_source',
+    'create_schell_model_source',
+    'create_annular_incoherent_source',
 ]
