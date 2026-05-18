@@ -10,6 +10,91 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.15.2
+
+**Closes the v4.15.1 audit (`docs/audits/AUDIT_V4_15_1_2026_05_18.md`)
+through P3.**  1 P0 + 9 P1 + ~12 P2 + ~10 P3 — most were downstream-
+integration gaps from the rapid v4.15.1 expansion (new types shipped
+without updating consumers; breaking changes shipped without CHANGELOG
+flagging; primitive APIs asymmetric).  1732 unit tests pass (up from
+1625); 34/34 validation files pass.
+
+### Breaking changes (with one-release deprecation warning)
+
+* **Schell-family factories** now emit `DeprecationWarning` on the
+  default `return_kind` path.  v4.15.1 silently changed the return
+  shape from `(E_2d, x, y)` to `(E_3d, dx, dy, wavelength)` 4-tuple
+  without warning.  v4.15.2 requires callers to pass
+  `return_kind='ensemble'` or `return_kind='mcf'` explicitly;
+  `version_removed='5.0'`.
+* **`Source.gaussian_schell` / `Source.schell_model`** classmethods
+  now return the factory's 4-tuple verbatim instead of wrapping the
+  3-D ensemble in a `Source` (which broke the canonical 2-D
+  `Source.E` contract).
+
+### P0 closure
+
+`_RETURN_KIND_UNSET` sentinel detects the Schell default-path entry;
+`_warn_schell_return_kind_default` helper routes through the
+canonical `_deprecation.warn_deprecated_signature` machinery.
+
+### P1 closures (9)
+
+* **`FourierTransform` 3-stage rewrite** — `_apply` now runs the
+  literal `FreeSpace(f) -> ThinLens(f) -> FreeSpace(f)` chain so the
+  ABCD claim and the field implementation finally agree (Goodman §5.2).
+  ~2x slower than v4.15.1's 2-stage shortcut; users wanting hardware-
+  realistic back-focal-plane semantics can compose `ThinLens(f) *
+  FreeSpace(f)` directly.
+* **`from_prescription` flat-mirror parity** now matches `system_abcd`
+  (only curved mirrors flip parity).  Folded-prescription test cases
+  pin the 1e-12 ABCD parity for folded systems.
+* **`FreeSpace._apply` threads `dy`** — anamorphic chains
+  `Magnify(a_x, a_y) * FreeSpace(d)` no longer silently propagate on
+  the wrong grid.
+* **`rays_from_field` `'cdf'` placement pixel-wise threshold** —
+  consistent with `'rejection'` and `'uniform'` modes.
+* **10 propagator entry points guarded** against `PartialCoherenceMCF`
+  (clear `TypeError` with v4.16+ scope message) and 3-D ensemble
+  shape (clear `ValueError` with iterate-over-ensemble pattern):
+  `propagate_through_system`, `propagate` dispatcher, 5 wave-propagator
+  entry points, 3 lens entry points.
+* **CHANGELOG `### Breaking changes` subhead** added to v4.15.1
+  entry retroactively (Schell return / `strehl_vector` default ref /
+  `system.evaluate` mixed-shape).
+* **`rays_from_field` short-return `RuntimeWarning`** when
+  `n_actual < n_rays`; `n_rays = 0` early-return honoured.
+* **ROADMAP refresh** to v4.15.2 / 1732-test baseline.
+
+### P2 closures
+
+* `_sentinel_unpickle` fallback raises clear `ImportError` for
+  unknown subclasses (distributed-pipeline safety).
+* **3 additional `optimize/core.py` sentinels** migrated to inherit
+  from `_deprecation._Sentinel`: `_InvalidFocalLengthSentinel`,
+  `_FailedScanStrehlSentinel`, `_PerturbedABCDFallbackSentinel`.
+  `_NO_DEFAULT` promoted to dedicated `_NoDefaultSentinel` subclass.
+  All registered for pickle round-trip safety.
+* **`PartialCoherenceMCF.coherence_at` Hermiticity test** added.
+* **UI runtime test** under `-W error::DeprecationWarning` —
+  catches the static-grep escape class.
+* **`rays_from_field` top-of-file docstring** Madelung → phase-ratio.
+* **`Magnify` docstring direction** inverted to match code
+  (Nazarathy/Shamir `V[a]` convention: `a > 1` shrinks).  Dead
+  `operators.py:556-577` reference removed.
+* **`'uniform'` + `'unwrap_gradient'` modes** in `rays_from_field`
+  gain direct test coverage (vortex direction-recovery, anamorphic
+  direction-cosines, cdf reproducibility).
+
+### P3 closures
+
+Sparrow tolerance pin tightened 5% → 1% (measured 0.017% on canonical
+Airy); Forbes Q-bfs end-to-end OPD analytical pin; `lumenairy.algebra`
+exports moved from Tier-2 to Tier-1 (build-time surface);
+CHANGELOG line-citation refreshes; `energy_threshold` forwarded
+through all 3 Schell factories; stray `C:tmpsources_diff.txt`
+(44 KB git-diff dump) deleted.
+
 ## What's new in 4.15.1
 
 **Closes the v4.15.0 audit (`docs/audits/AUDIT_V4_15_0_2026_05_18.md`)

@@ -376,21 +376,40 @@ class TestReturnKindValidation:
 # ============================================================================
 
 class TestSourceClassmethodMigration:
-    """``Source.gaussian_schell`` / ``Source.schell_model`` wrap the
-    new contract."""
+    """``Source.gaussian_schell`` / ``Source.schell_model`` return the
+    ensemble tuple (v4.15.2+) or the bare ``PartialCoherenceMCF`` --
+    NOT a :class:`Source`-wrapped 3-D ensemble.
 
-    def test_source_gaussian_schell_returns_source_with_ensemble_E(self):
-        src = Source.gaussian_schell(
+    v4.15.2 (AUDIT_V4_15_1 P2 closure): the v4.15.1-era contract that
+    wrapped a 3-D ensemble inside a :class:`Source` whose ``E`` was
+    3-D broke the Source contract (every other ``Source.*``
+    classmethod produces a 2-D field).  v4.15.2 aligns the classmethod
+    return type with the top-level factory --
+    :meth:`Source.gaussian_schell` now returns the same 4-tuple
+    ``(ensemble, dx, dy, wavelength)`` as
+    :func:`create_gaussian_schell_source`.
+    """
+
+    def test_source_gaussian_schell_returns_ensemble_tuple(self):
+        """v4.15.2 return contract: 4-tuple matching the top-level
+        factory.  No :class:`Source` wrapping of the 3-D ensemble."""
+        result = Source.gaussian_schell(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,
             n_realizations=4, seed=0)
-        assert isinstance(src, Source)
-        # Source.shape comes from the trailing two dims, so it's
-        # (16, 16) regardless of the ensemble leading dim.
-        assert src.shape == (16, 16)
-        # But the underlying E carries the full ensemble.
-        assert src.E.shape == (4, 16, 16)
-        assert np.iscomplexobj(src.E)
+        assert not isinstance(result, Source), (
+            "v4.15.2: Source.gaussian_schell must NOT wrap a 3-D "
+            "ensemble in a Source (every other Source.* produces a "
+            "2-D field; partial-coherence is a different abstraction).")
+        # Must be the (ensemble, dx, dy, wavelength) 4-tuple.
+        assert isinstance(result, tuple)
+        assert len(result) == 4
+        ens, _dx, _dy, _wl = result
+        assert isinstance(ens, np.ndarray)
+        assert ens.shape == (4, 16, 16)
+        assert np.iscomplexobj(ens)
+        assert _dx == pytest.approx(2e-6)
+        assert _wl == pytest.approx(633e-9)
 
     def test_source_gaussian_schell_with_return_kind_mcf(self):
         """``return_kind='mcf'`` returns the bare ``PartialCoherenceMCF``,
@@ -404,18 +423,24 @@ class TestSourceClassmethodMigration:
         assert isinstance(result, PartialCoherenceMCF)
         assert result.shape == (16, 16)
 
-    def test_source_schell_model_returns_source_with_ensemble_E(self):
+    def test_source_schell_model_returns_ensemble_tuple(self):
+        """``Source.schell_model`` follows the same v4.15.2 contract
+        as ``Source.gaussian_schell`` -- ensemble tuple, no Source
+        wrapping."""
         N = 16
         xs = np.linspace(-1, 1, N)
         I = np.exp(-(xs[:, None] ** 2 + xs[None, :] ** 2) / 0.25)
-        src = Source.schell_model(
+        result = Source.schell_model(
             N=N, dx=2e-6, wavelength=633e-9,
             intensity_profile=I,
             coherence_length=8e-6,
             n_realizations=4, seed=0)
-        assert isinstance(src, Source)
-        assert src.shape == (N, N)
-        assert src.E.shape == (4, N, N)
+        assert not isinstance(result, Source)
+        assert isinstance(result, tuple)
+        assert len(result) == 4
+        ens, _, _, _ = result
+        assert isinstance(ens, np.ndarray)
+        assert ens.shape == (4, N, N)
 
 
 # ============================================================================
@@ -474,3 +499,95 @@ class TestAnnularIncoherentSupport:
                 f"Annular realisation {k} leaks inside inner_radius.")
             assert float(np.abs(ens[k][outside_mask]).max()) < peak * 0.05, (
                 f"Annular realisation {k} leaks outside outer_radius.")
+
+
+# ============================================================================
+# v4.15.2 (AUDIT_V4_15_1 P2 closure): coherence_at Hermiticity unit test
+# ============================================================================
+
+class TestMCFCoherenceAtHermiticity:
+    """``PartialCoherenceMCF.coherence_at(r1, r2)`` must satisfy the
+    Hermiticity property
+
+        ``mu(r1, r2) == conj(mu(r2, r1))``
+
+    for every grid-point pair (Mandel & Wolf, Optical Coherence and
+    Quantum Optics Section 4.2; Goodman Statistical Optics Section
+    5.2).  v4.15.1 shipped ``coherence_at`` without a direct
+    Hermiticity unit test (the audit's V4 finding noted "property
+    holds by construction; uncovered").  This pin covers the
+    property on a small grid where every pair can be checked
+    exhaustively.
+    """
+
+    def test_mcf_coherence_at_hermitian_dense_branch(self):
+        """N=8 grid; dense ``J_full`` storage path.  Iterate over
+        several ``(r1, r2)`` pairs and verify
+        ``mu(r1, r2) == conj(mu(r2, r1))`` to machine precision."""
+        ens, _, _, _ = create_gaussian_schell_source(
+            N=8, dx=2e-6, wavelength=633e-9,
+            w0=10e-6, sigma_g=4e-6,
+            n_realizations=12, seed=0)
+        mcf = PartialCoherenceMCF.from_ensemble(
+            ens, dx=2e-6, dy=2e-6, wavelength=633e-9)
+        # The 8x8 grid is small enough to default to dense J_full.
+        assert mcf.J_full is not None, (
+            "Expected dense J_full storage at N=8 < max_full_N.")
+        # Spot-check 6 grid-pairs spanning the dynamic range:
+        # near-diagonal (correlated), far-diagonal (low |mu|), and
+        # a couple of mid-distance points.
+        pairs = [
+            ((0, 0), (0, 0)),       # diagonal -- mu == 1 by definition
+            ((0, 0), (1, 0)),       # adjacent -- near-1 |mu|
+            ((0, 0), (2, 2)),       # close
+            ((0, 0), (7, 7)),       # corner-to-corner (low |mu|)
+            ((3, 4), (5, 2)),       # arbitrary interior pair
+            ((1, 6), (6, 1)),       # off-diagonal symmetric pair
+        ]
+        for (ix1, iy1), (ix2, iy2) in pairs:
+            mu_12 = mcf.coherence_at(ix1, iy1, ix2, iy2)
+            mu_21 = mcf.coherence_at(ix2, iy2, ix1, iy1)
+            err = abs(mu_12 - np.conj(mu_21))
+            assert err < 1e-10, (
+                f"Hermiticity violated for pair "
+                f"r1=({ix1},{iy1}) r2=({ix2},{iy2}): "
+                f"mu_12={mu_12}, mu_21={mu_21}, "
+                f"|mu_12 - conj(mu_21)|={err} > 1e-10.")
+        # Also check the diagonal is exactly 1+0j (or 0 if I=0).
+        for ix in range(8):
+            for iy in range(8):
+                mu_dd = mcf.coherence_at(ix, iy, ix, iy)
+                if abs(mu_dd) > 0.0:
+                    assert abs(mu_dd - 1.0) < 1e-10, (
+                        f"mu(r,r) should be 1+0j; got {mu_dd} at "
+                        f"(ix={ix}, iy={iy}).")
+
+    def test_mcf_coherence_at_hermitian_modal_branch(self):
+        """N=80 forces modal storage (``J_full`` is None, eigenvectors
+        + eigenvalues populated).  Same Hermiticity property -- the
+        modal-branch ``coherence_at`` builds ``J(r1, r2)`` from
+        ``sum_k lambda_k phi_k(r1) phi_k(r2)^*`` which is Hermitian by
+        construction; the pin asserts the construction is honoured."""
+        result = create_gaussian_schell_source(
+            N=80, dx=2e-6, wavelength=633e-9,
+            w0=80e-6, sigma_g=30e-6,
+            n_realizations=8, seed=0,
+            return_kind='mcf')
+        # max_full_N defaults to 64 so N=80 should be modal.
+        assert result.J_full is None, (
+            "Expected modal storage at N=80 > max_full_N=64.")
+        assert result.modes is not None
+        # A handful of pairs in the modal branch.
+        pairs = [
+            ((0, 0), (10, 10)),
+            ((20, 5), (40, 30)),
+            ((39, 39), (40, 40)),
+            ((10, 70), (70, 10)),
+        ]
+        for (ix1, iy1), (ix2, iy2) in pairs:
+            mu_12 = result.coherence_at(ix1, iy1, ix2, iy2)
+            mu_21 = result.coherence_at(ix2, iy2, ix1, iy1)
+            err = abs(mu_12 - np.conj(mu_21))
+            assert err < 1e-10, (
+                f"Modal-branch Hermiticity violated for pair "
+                f"r1=({ix1},{iy1}) r2=({ix2},{iy2}): err={err}.")

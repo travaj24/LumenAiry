@@ -1,6 +1,6 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-18 (post-v4.15.0).
+**Last updated:** 2026-05-18 (post-v4.15.2).
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -15,22 +15,23 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.15.0.  Test count: ~1400 unit tests passing
-  (actual count finalised at v4.15.0 release commit -- v4.14.3
-  shipped at 1265, v4.15.0 rolls in the v4.14.2-audit P2/P3 sweep
-  + the v4.15/v4.16 ROADMAP scope, projecting ~1400 with the new
-  meta-pin (#3 input-validation entry-point), Agent F P2 closures,
-  and the rolled-in API expansions from v4.16 scope).  34/34
-  validation files passing.  Public API at ~370+ symbols in
-  `lumenairy.__all__`.
+- **Library:** v4.15.2 baseline (~1700 unit tests; actual count
+  finalised at v4.15.2 release commit).  v4.14.3 shipped at 1265,
+  v4.15.0 rolled in the v4.14.2-audit P2/P3 sweep + the v4.15/v4.16
+  ROADMAP scope, v4.15.1 shipped the CLUSTER_B operator algebra +
+  ``rays_from_field`` ray-bridge + 11 audit P0/P1 closures (1625
+  tests), and v4.15.2 closes the remaining v4.15.1 audit P1/P2/P3
+  (sentinel migration completion + ROADMAP refresh + Hermiticity /
+  Forbes-Q-OPD analytical pins).  34/34 validation files passing.
+  Public API at ~380+ symbols in `lumenairy.__all__`.
 - **Designer GUI:** v3.7.10 (per in-code comments at `ui/main_window
   .py:2196` etc.).  No standalone release stream; the Designer
   ships co-versioned inside the library wheel.
 - **Audit closure status:** AUDIT_V4_12_1, AUDIT_V4_13_0,
-  AUDIT_V4_13_1, AUDIT_V4_14_0, AUDIT_V4_14_1, AUDIT_V4_14_2 all
-  closed (P0 + P1 + the P2/P3 carryover sweep landed in v4.15.0).
-  AUDIT_V4_13_1 Tier-2/3/4 architectural items scoped to v5.0 as
-  noted below.
+  AUDIT_V4_13_1, AUDIT_V4_14_0, AUDIT_V4_14_1, AUDIT_V4_14_2,
+  AUDIT_V4_15_0, AUDIT_V4_15_1 all closed (P0 + P1 + the P2/P3
+  carryover sweep landed in v4.15.x).  AUDIT_V4_13_1 Tier-2/3/4
+  architectural items scoped to v5.0 as noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
   5).  v4.14.2 migrated 2 shims (`makedammann2d` SI heuristic and
   `create_led_source` legacy positional) onto the canonical
@@ -480,6 +481,54 @@ shipped the v4.14.2 P2/P3 sweep + the input-validation meta-pin
   - **README Cookbook section** added with runnable examples
     for the 6 v4.14.0 public functions + a `makedammann2d
     _legacy_units='SI'` migration example.
+- **v4.15.1** — AUDIT_V4_15_0 closure + CLUSTER_B operator-algebra
+  rollout.  Highlights:
+  - **CLUSTER_B Item 2 — `lumenairy.algebra` operator algebra**:
+    Nazarathy/Shamir-style symbolic optical-system construction
+    (`Operator`, `CompositeOperator`, `FreeSpace`, `ThinLens`,
+    `CylindricalLens`, `Magnify`, `FourierTransform`, `Aperture`,
+    `GaussianAperture`) with closed-form 2x2 ABCD and chain-and-
+    delegate field application onto the canonical LumenAiry
+    propagators.
+  - **CLUSTER_B Item 3 — `rays_from_field` bridge**: phase-ratio
+    direction-cosine extractor that lifts a complex 2-D field
+    into a packed ``Rays`` bundle for the geometric raytracer.
+    Multiple placement modes (`'centroid'`, `'uniform'`, `'cdf'`)
+    and three angle methods (`'phase_ratio'`, `'unwrap_gradient'`,
+    `'autocorr'`).
+  - **Partial-coherence redesign (P0-NEW-2)**: the 3 Schell
+    factories now return raw ensembles by default
+    (`return_kind='ensemble'`) and gain a `return_kind='mcf'`
+    branch that produces a `PartialCoherenceMCF` object with
+    Wolf-1982 coherent-mode decomposition for N > 64.
+  - **Forbes Q surface dispatcher** (P1-F1-1 alignment): radial
+    primary clip + rectangular secondary clip + dx threading.
+  - **Sentinel consolidation (Agent E)**:
+    `_ZeroApertureMaskSentinel` and `_AngleUnsetSentinel` now
+    inherit from `_deprecation._Sentinel`; pickle round-trip
+    preserves singleton identity via `_SENTINEL_REGISTRY` +
+    `__reduce__`.
+  - **`make_off_axis_parabola` P0 fix**: chief-ray launch radius
+    corrected to `2 f tan(alpha)` (was `f tan(alpha)`, factor-of-2
+    error at 30-deg surface-normal off-axis angle).
+  - 1625 unit tests; 34/34 validation.
+- **v4.15.2** — AUDIT_V4_15_1 P1/P2/P3 closure (placeholder; actual
+  shipping summary populated at release commit time).  Highlights
+  (Agent E scope): ROADMAP refresh to v4.15.1+ baseline; strict
+  `_sentinel_unpickle` fallback (ImportError on unknown subclass);
+  remaining `optimize/core.py` scalar-sentinel patterns promoted
+  to `_Sentinel` subclasses for pickle safety;
+  `PartialCoherenceMCF.coherence_at` Hermiticity unit test;
+  end-to-end Forbes Q-bfs OPD analytical pin against
+  `phi(r) = -k sag(r)`; `_NO_DEFAULT` upgraded to dedicated
+  `_NoDefaultSentinel` for sentinel-class consistency; UI runtime
+  test under `-W error::DeprecationWarning`; `Source.gaussian_schell`
+  classmethod return-type aligned with the top-level factory
+  (returns ensemble tuple instead of wrapping a 3-D ensemble in a
+  `Source` whose `E` is 3-D); `lumenairy.algebra` exports moved
+  from Tier-2 (Propagate) to Tier-1 (Build a system); sparrow
+  tolerance pin tightened to <1% (achievable 0.02%) to match the
+  analytical-value claim.
 
 ---
 

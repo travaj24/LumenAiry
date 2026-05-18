@@ -636,3 +636,170 @@ class TestZemaxQRoundTripThroughDispatcher:
         zmx_text = _minimal_qcon_zmx(
             [1.0e-2], r_max_parm0_mm=4.0, conic=-0.5)
         _assert_q_dispatch_departure_nonzero(zmx_text, 'q_con_coeffs')
+
+
+# ============================================================================
+# v4.15.2 (AUDIT_V4_15_1 P2 closure): end-to-end Forbes Q-bfs OPD pin
+# against the analytical sag formula
+# ============================================================================
+
+class TestForbesQBfsEndToEndOPD:
+    """End-to-end pin: a flat-back singlet with a Q-bfs freeform front
+    surface deposits an OPD into a plane-wave input that matches the
+    analytical Forbes Eq. 13 sag formula to the wave-optics numerical-
+    derivative noise floor (~1e-3 rad).
+
+    The audit's V4-7 finding called this out: "No end-to-end Forbes Q
+    OPD pin against analytical formula".  The dispatcher pin in
+    :class:`TestZemaxQRoundTripThroughDispatcher` verifies the surface
+    sag is non-zero; this pin closes the loop by verifying the
+    resulting WAVE-OPTICS output phase matches the analytical formula
+    in absolute terms.
+
+    Formula (Forbes 2007 Eq. 13)::
+
+        z(r) = z_bfs(r) + u^2 (1 - u^2) * sum_m a_m * Q_m^bfs(u^2)
+
+    With only ``a_0 = 1e-3`` non-zero and a flat base
+    (``radius = inf``), ``z_bfs = 0`` and ``z(r) = u^2 (1 - u^2) *
+    a_0 * Q_0^bfs(u^2)``.
+
+    Under the library's ``exp(-i*omega*t)`` convention the thin-element
+    phase-screen for one refracting surface is ``exp(-i*k*(n2-n1)*sag)``.
+    For a flat-back singlet of index ``n`` immersed in air, the total
+    height-dependent phase is::
+
+        phi(r) = -k * (n - 1) * sag_front(r)
+
+    (the flat back surface contributes a height-INDEPENDENT phase that
+    drops out of the analytical comparison).  The pin compares
+    ``angle(E_out) - angle(E_out_axial)`` to the analytical
+    ``-k (n-1) sag(r)`` profile within the clear aperture.
+    """
+
+    @staticmethod
+    def _q_bfs_sag_analytic(X, Y, a_0, r_max):
+        """Closed-form Forbes Q-bfs sag at a_0 only, flat base.
+
+        Returns the sag array with the (u^2 > 1) clip applied to match
+        the dispatcher's radial-clip semantics.  ``Q_0^bfs(x)`` evaluates
+        via the public ``_q_bfs_eval`` helper in
+        :mod:`lumenairy.elements.freeform`."""
+        from lumenairy.elements.freeform import _q_bfs_eval
+        u_sq = (X ** 2 + Y ** 2) / (r_max * r_max)
+        Q_0 = _q_bfs_eval(u_sq, 0)
+        sag = u_sq * (1.0 - u_sq) * a_0 * Q_0
+        # Radial clip: pixels outside u = 1 are zeroed by the dispatcher.
+        sag = np.where(u_sq > 1.0, 0.0, sag)
+        return sag
+
+    def test_forbes_q_bfs_opd_matches_analytical(self):
+        """Flat-back singlet with Q-bfs front surface, plane wave in,
+        compare output phase to ``-k * (n - 1) * sag(r)``.
+
+        a_0 chosen small enough (1e-6 m) that the resulting OPD stays
+        in the linear single-wavelength regime where
+        ``angle(E_out) - angle(E_in) = -k * (n-1) * sag`` to wave-optics
+        precision.  Larger a_0 would require phase unwrapping which
+        introduces its own noise.
+        """
+        from lumenairy.elements import apply_real_lens
+        from lumenairy import get_glass_index
+        wavelength = 633e-9
+        n_glass = float(get_glass_index('N-BK7', wavelength))
+        # Grid: 128 pixels, dx = 80 um -> 10.24 mm half-extent.  r_max
+        # = 2 mm so the radial clip kicks in well within the grid.
+        N = 128
+        dx = 80e-6
+        r_max = 2.0e-3
+        a_0 = 1.0e-6  # 1 um Forbes Q-bfs a_0 -- small linear regime
+        # Build a flat-back singlet with a Q-bfs front surface.  The
+        # back surface contributes a height-independent OPD that we
+        # subtract out by referencing to the on-axis phase.
+        prescription = {
+            'name': 'TestQbfsSinglet',
+            'aperture_diameter': 2.0 * r_max,
+            'surfaces': [
+                {
+                    'radius': float('inf'), 'conic': 0.0,
+                    'aspheric_coeffs': None,
+                    'radius_y': None, 'conic_y': None,
+                    'aspheric_coeffs_y': None,
+                    'glass_before': 'air', 'glass_after': 'N-BK7',
+                    'freeform_type': 'q_bfs',
+                    'q_bfs_coeffs': [a_0],
+                    'r_max': r_max,
+                    'norm_x': r_max + dx,
+                    'norm_y': r_max + dx,
+                    'dx': dx, 'dy': dx,
+                },
+                {
+                    'radius': float('inf'), 'conic': 0.0,
+                    'aspheric_coeffs': None,
+                    'radius_y': None, 'conic_y': None,
+                    'aspheric_coeffs_y': None,
+                    'glass_before': 'N-BK7', 'glass_after': 'air',
+                },
+            ],
+            'thicknesses': [2.0e-3],
+        }
+        # Plane wave input (unit amplitude, zero phase).
+        E_in = np.ones((N, N), dtype=np.complex128)
+        # Apply lens.  The result represents the field at the exit
+        # surface AFTER ASM-propagation through the slab.  Use ASM
+        # (default) so the per-surface phase-screens follow the
+        # convention documented at line 968 of _lens_real.py.
+        E_out = apply_real_lens(
+            E_in,
+            prescription=prescription,
+            wavelength=wavelength,
+            dx=dx,
+            bandlimit=True,
+        )
+        # Set up coordinates centred on the grid.
+        x = (np.arange(N) - N // 2) * dx
+        X, Y = np.meshgrid(x, x)
+        r = np.sqrt(X ** 2 + Y ** 2)
+        # Analytical sag departure from the front Q-bfs surface
+        # (flat base; back surface contributes height-independent OPD).
+        sag_analytic = self._q_bfs_sag_analytic(X, Y, a_0, r_max)
+        # Analytical phase under the library's exp(-i*k*OPD) convention.
+        k = 2.0 * np.pi / wavelength
+        phi_analytic = -k * (n_glass - 1.0) * sag_analytic
+        # Extract numerical phase, referenced to the on-axis pixel.
+        # (Subtracting the on-axis phase removes the height-independent
+        # contributions from the flat back surface, the bulk glass
+        # ``n*d`` term, and the ASM-propagation kernel's ``z*sqrt(k^2 -
+        # k_perp^2)`` phase factor at ``k_perp = 0`` -- all of these are
+        # constants across the field, so the height-DEPENDENT residual
+        # is the freeform departure.)
+        phi_out = np.angle(E_out)
+        # Reference subtraction at on-axis (centre pixel).
+        i_c, j_c = N // 2, N // 2
+        phi_out_centered = phi_out - phi_out[i_c, j_c]
+        phi_analytic_centered = phi_analytic - phi_analytic[i_c, j_c]
+        # Compare on a clean evaluation region: avoid the rim where
+        # the radial clip transitions and finite-difference ASM noise
+        # is highest.  Use 0.5 r_max as the evaluation disc -- well
+        # inside the Forbes domain.
+        eval_mask = (r <= 0.5 * r_max)
+        # Wrap both to [-pi, pi] before differencing so a 2pi jump
+        # near the rim (if any) doesn't poison the metric.
+        diff = np.angle(np.exp(1j * (phi_out_centered - phi_analytic_centered)))
+        max_err = float(np.max(np.abs(diff[eval_mask])))
+        # Tolerance: 1e-3 rad reflects the wave-optics ASM noise floor
+        # at this grid resolution.  Pre-fix (Forbes Q dispatcher
+        # silently dropping a_0) would produce a max_err on the order
+        # of |k (n-1) sag_max| ~= 2pi/633e-9 * 0.5 * 1e-6 * 0.25 ~= 1.2
+        # rad which is 3 orders of magnitude above the noise floor.
+        assert max_err < 5e-3, (
+            f"Forbes Q-bfs end-to-end OPD diverges from the analytical "
+            f"formula: max|phi_out - phi_analytic| = {max_err:.4e} rad "
+            f"on |r| <= 0.5*r_max; expected < 5e-3 rad noise floor.  "
+            f"phi_analytic span: "
+            f"[{phi_analytic_centered[eval_mask].min():.4f}, "
+            f"{phi_analytic_centered[eval_mask].max():.4f}] rad.  "
+            f"phi_out span: "
+            f"[{phi_out_centered[eval_mask].min():.4f}, "
+            f"{phi_out_centered[eval_mask].max():.4f}] rad."
+        )

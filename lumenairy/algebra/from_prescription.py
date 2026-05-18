@@ -165,13 +165,17 @@ def from_prescription(
             # Toggle mirror parity for the post-mirror legs.
             mirror_parity ^= 1
         else:
-            # Flat refractive or flat mirror: no power contribution.
-            # The flat mirror still flips parity.
-            if surf.is_mirror:
-                # Flat mirror: glass_after side flips sign but no
-                # power (R = inf, so phi = 0 even with n2 = -n1).
-                # Toggle parity to match system_abcd's behaviour.
-                mirror_parity ^= 1
+            # Flat refractive or flat mirror: no power contribution,
+            # no parity flip.  v4.15.2 (audit P1-NEW-B): mirror_parity
+            # is ONLY toggled for curved mirrors, matching
+            # ``raytrace.system_abcd`` (raytrace/core.py:2275-2291).
+            # In ``system_abcd`` a flat mirror falls into the
+            # ``R_mat = np.eye(2)`` branch and does not modify
+            # ``mirror_parity``.  Pre-v4.15.2 the algebra layer
+            # flipped parity unconditionally for ``is_mirror=True``,
+            # producing off-sign ABCDs on folded prescriptions with
+            # any flat fold mirror.
+            pass
 
         # Thickness gap to next surface.  ``n2`` here already
         # reflects any mirror sign flip on this surface.

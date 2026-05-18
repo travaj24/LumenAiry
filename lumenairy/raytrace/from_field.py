@@ -18,14 +18,26 @@ Math reference
 * Position: pixel ``(ix, iy)`` is sampled from ``|E|^2`` via one of
   three strategies (``cdf``, ``rejection``, ``uniform``); see
   :func:`_place_cdf`, :func:`_place_rejection`, :func:`_place_uniform`.
+  All three placement modes apply ``intensity_threshold`` *per-pixel*
+  against the global maximum (``|E|^2 / max(|E|^2) > threshold``)
+  so that sub-threshold noise cannot leak through marginal sums --
+  see :func:`_place_cdf` for the historical pixel-vs-marginal
+  v4.15.2 fix (P1-NEW-D in the v4.15.1 audit).
 * Direction: ``k_perp`` is computed from the *phase ratio* of
-  adjacent field samples ``k_x = arg(E[i,j+1] * conj(E[i,j-1])) /
-  (2 dx)`` (the singularity-safe ``complex_gradient`` mode, default)
-  or from the gradient of the unwrapped phase ``k_perp =
-  grad(unwrap(angle E))`` (the ``unwrap_gradient`` mode).  The first
-  form is preferred because it avoids phase unwrapping entirely,
-  tolerates vortex cores, and is exact for plane waves with
-  ``|k_x dx| < pi``.
+  adjacent field samples
+  ``k_x = arg(E[i,j+1] * conj(E[i,j-1])) / (2 dx)``
+  (the singularity-safe ``complex_gradient`` mode, default) or from
+  the gradient of the unwrapped phase ``k_perp = grad(unwrap(angle
+  E))`` (the ``unwrap_gradient`` mode).  The phase-ratio form is the
+  *discrete analogue* of the continuous Madelung formula
+  ``k_perp = Im(grad E / E)`` (CLUSTER_B_SPEC.md §4.4) but is exact
+  for plane waves whenever ``|k_x dx| < pi`` whereas the literal
+  central-difference ``Im(grad E / E)`` carries a
+  ``sinc(k_x dx / pi)`` discretisation bias.  The phase-ratio form
+  is also automatically singularity-safe because ``np.angle(.)`` is
+  bounded in ``(-pi, pi]`` regardless of how small either factor is.
+  See the inline docstring on :func:`_angle_complex_gradient` for
+  the full derivation and the spec-deviation rationale.
   Direction cosines follow from ``L = k_x / k0``, ``M = k_y / k0``,
   ``N = sqrt(1 - L^2 - M^2)``.  Rays whose ``L^2 + M^2 > 1`` correspond
   to evanescent k-vectors and are marked ``alive = False`` /
@@ -41,9 +53,15 @@ Anamorphic grids (``dx != dy``) are supported transparently; default
 ``dy = dx`` for square grids.
 
 Author: Andrew Traverso -- v4.15.1 / Agent F (Cluster B Item 6).
+v4.15.2 -- Agent D: ``_place_cdf`` thresholds pixel-wise (was
+marginal-wise); ``rays_from_field`` warns on short-return; top-of-file
+docstring updated to phase-ratio formulation; ``n_rays=0`` returns an
+empty bundle cleanly; ``'uniform'`` deduplicates collided sub-grid
+pixels so ``n_rays > N^2`` is capped at ``N^2``.
 """
 from __future__ import annotations
 
+import warnings
 from typing import Optional, Tuple, Union
 
 import numpy as np
@@ -96,9 +114,16 @@ def rays_from_field(
     dy : float, optional
         Grid pitch in y [m].  Defaults to ``dx`` (square grid).
     n_rays : int, default 200
-        Target number of rays.  The returned bundle has
-        ``n_rays`` rays (some may be flagged as evanescent and
-        ``alive = False``).  Must be positive.
+        Target number of rays.  Must be non-negative.  ``n_rays == 0``
+        returns an empty bundle cleanly.  The returned bundle has
+        *at most* ``n_rays`` rays (some may be flagged as evanescent
+        and ``alive = False``).  If the placement step returns fewer
+        than ``n_rays`` (e.g. ``'rejection'`` exhausting its
+        50 * ``n_rays`` candidate budget, or ``'uniform'`` returning
+        fewer survivors than the sub-grid count due to thresholding
+        / pixel collision), a ``RuntimeWarning`` is emitted
+        indicating ``n_actual`` vs the requested ``n_rays``; the
+        partial bundle is still returned for downstream use.
     placement : {'cdf', 'rejection', 'uniform'}, default 'cdf'
         Strategy for placing ray origins.
 
@@ -106,14 +131,23 @@ def rays_from_field(
           y marginals.  Fast.  Exact for separable intensity
           distributions (e.g. Gaussian beams aligned to the axes);
           approximate for strongly non-separable intensities (e.g.
-          azimuthal lattices).  Use for visualisation.
+          azimuthal lattices).  ``intensity_threshold`` is applied
+          *pixel-wise* (``|E|^2 / max(|E|^2) > threshold``) BEFORE
+          the marginal sums are formed, so sub-threshold noise
+          cannot accumulate across the marginal axis and contaminate
+          the CDF.  (v4.15.2 fix; see P1-NEW-D in the v4.15.1 audit.)
+          Use for visualisation.
         * ``'rejection'`` -- true 2-D rejection sampling from
           ``|E|^2``.  Slower but exact regardless of separability.
-          Use for vortex beams, complicated holograms, etc.
+          ``intensity_threshold`` is applied pixel-wise.  Use for
+          vortex beams, complicated holograms, etc.
         * ``'uniform'`` -- uniform placement on a regular sub-grid,
           dropping pixels whose intensity falls below
-          ``intensity_threshold``.  Returns up to ``n_rays`` survivors
-          (could be fewer if the supporting region is too small).
+          ``intensity_threshold``.  ``intensity_threshold`` is
+          applied pixel-wise.  Returns up to ``n_rays`` survivors
+          (could be fewer if the supporting region is too small or
+          the sub-grid count exceeds the number of unique grid
+          pixels; see also the ``RuntimeWarning`` on short return).
           Use when you want a deterministic ray fan.
 
     angle_method : {'complex_gradient', 'unwrap_gradient'}, default 'complex_gradient'
@@ -130,9 +164,11 @@ def rays_from_field(
 
     intensity_threshold : float, default 1e-4
         Relative threshold ``|E|^2 / max(|E|^2)``.  Pixels below the
-        threshold are excluded from placement (for ``'cdf'`` and
-        ``'rejection'``).  For ``angle_method='complex_gradient'`` the
-        threshold also clamps the denominator of ``grad E / E``.
+        threshold are excluded from placement for ALL three modes
+        (``'cdf'``, ``'rejection'``, ``'uniform'``); the threshold is
+        applied pixel-wise rather than against any marginal sum.
+        For ``angle_method='complex_gradient'`` the threshold also
+        clamps the denominator of ``grad E / E``.
     z0 : float, default 0.0
         Axial position of all ray origins [m].
     random_state : int or np.random.Generator or None, optional
@@ -143,10 +179,13 @@ def rays_from_field(
     Returns
     -------
     RayBundle
-        Bundle with ``n_rays`` rays.  Per-ray fields:
+        Bundle with at most ``n_rays`` rays (typically exactly
+        ``n_rays``, see the ``RuntimeWarning`` clause on the
+        ``n_rays`` parameter for the short-return case).  Per-ray
+        fields:
 
         * ``x, y`` -- sampled origin coordinates [m]
-        * ``z`` -- ``np.full(n_rays, z0)`` [m]
+        * ``z`` -- ``np.full(n_actual, z0)`` [m]
         * ``L, M, N`` -- direction cosines, with ``L^2 + M^2 + N^2 =
           1`` for living rays; ``N = 0`` for evanescent rays.
         * ``alive`` -- ``True`` for non-evanescent rays, ``False``
@@ -159,8 +198,15 @@ def rays_from_field(
     ------
     ValueError
         If ``E`` is not a 2-D complex / real array, ``dx`` or
-        ``wavelength`` is non-positive, ``n_rays < 1``, or
+        ``wavelength`` is non-positive, ``n_rays < 0``, or
         ``placement`` / ``angle_method`` are unrecognised.
+
+    Warns
+    -----
+    RuntimeWarning
+        If the placement step returns fewer than ``n_rays`` rays
+        (e.g. ``'rejection'`` exhausted its candidate budget or
+        ``'uniform'`` returned fewer survivors than requested).
 
     Examples
     --------
@@ -213,9 +259,9 @@ def rays_from_field(
             f'rays_from_field: wavelength must be positive and finite; '
             f'got {wavelength!r}.'
         )
-    if not isinstance(n_rays, (int, np.integer)) or n_rays < 1:
+    if not isinstance(n_rays, (int, np.integer)) or n_rays < 0:
         raise ValueError(
-            f'rays_from_field: n_rays must be a positive integer; '
+            f'rays_from_field: n_rays must be a non-negative integer; '
             f'got {n_rays!r}.'
         )
     if placement not in ('cdf', 'rejection', 'uniform'):
@@ -255,6 +301,21 @@ def rays_from_field(
         )
 
     # ------------------------------------------------------------------
+    # Edge case -- n_rays == 0 returns an empty bundle cleanly.
+    # ------------------------------------------------------------------
+    if n_rays == 0:
+        empty_f = np.array([], dtype=np.float64)
+        empty_b = np.array([], dtype=bool)
+        empty_u8 = np.array([], dtype=np.uint8)
+        return RayBundle(
+            x=empty_f, y=empty_f, z=empty_f,
+            L=empty_f, M=empty_f, N=empty_f,
+            wavelength=float(wavelength),
+            alive=empty_b, opd=empty_f,
+            error_code=empty_u8,
+        )
+
+    # ------------------------------------------------------------------
     # 1. Place rays in (x, y) according to |E|^2.
     # ------------------------------------------------------------------
     if placement == 'cdf':
@@ -276,6 +337,17 @@ def rays_from_field(
             'rays_from_field: no pixels survived intensity thresholding -- '
             'the field may be entirely below the threshold or the supporting '
             'region is too small for the requested n_rays.'
+        )
+    if n_actual < n_rays:
+        warnings.warn(
+            f"rays_from_field: placement '{placement}' returned "
+            f"{n_actual} rays vs requested {n_rays}. This may indicate "
+            f"intensity_threshold is too aggressive, or the placement "
+            f"budget (rejection-mode tries = 50*n_rays; uniform-mode "
+            f"sub-grid pixels deduplicated to <= N^2) was exhausted "
+            f"before n_rays was reached.",
+            RuntimeWarning,
+            stacklevel=2,
         )
 
     # ------------------------------------------------------------------
@@ -336,19 +408,32 @@ def _place_cdf(
     """Separable inverse-CDF placement.
 
     Builds 1-D cumulative distributions from the row- and column-sum
-    intensity marginals, then inverts each via :func:`numpy.searchsorted`.
+    intensity marginals (computed on a PIXEL-WISE-THRESHOLDED copy of
+    ``|E|^2``), then inverts each via :func:`numpy.searchsorted`.
     Independent draws in x and y give a separable joint distribution
     -- exact for separable ``|E|^2`` (e.g. axially aligned Gaussians)
     and a fast approximation otherwise.
+
+    v4.15.2 fix (P1-NEW-D in the v4.15.1 audit) -- threshold is now
+    applied pixel-wise BEFORE the marginal sums.  Previously the
+    threshold was applied to the marginal sums themselves
+    (``Ix.sum(axis=0) > threshold * Ix.max()``), which let sub-
+    threshold background noise accumulate across rows / columns and
+    contaminate the CDF.  Pixel-wise thresholding makes ``'cdf'``
+    consistent with ``'rejection'`` and ``'uniform'``.
     """
     I = np.abs(E) ** 2
-    I = I / I.max()
+    I_norm = I / I.max()
+    # Pixel-wise threshold: zero out any pixel whose normalised
+    # intensity is at or below the threshold, BEFORE forming the
+    # marginal sums.  This matches the spec docstring's claim of a
+    # pixel-wise threshold and lines up with the other two modes.
+    I_thresh = np.where(I_norm > threshold, I, 0.0)
 
     Ny, Nx = E.shape
 
-    # x-marginal (sum over y)
-    Ix = I.sum(axis=0)
-    Ix = np.where(Ix > threshold * Ix.max(), Ix, 0.0)
+    # x-marginal (sum over y) of the pixel-thresholded intensity.
+    Ix = I_thresh.sum(axis=0)
     if Ix.sum() == 0.0:
         # All intensity below threshold -- nothing to sample.
         return (np.array([]), np.array([]),
@@ -357,9 +442,8 @@ def _place_cdf(
     cdf_x = np.cumsum(Ix)
     cdf_x = cdf_x / cdf_x[-1]
 
-    # y-marginal (sum over x)
-    Iy = I.sum(axis=1)
-    Iy = np.where(Iy > threshold * Iy.max(), Iy, 0.0)
+    # y-marginal (sum over x) of the pixel-thresholded intensity.
+    Iy = I_thresh.sum(axis=1)
     if Iy.sum() == 0.0:
         return (np.array([]), np.array([]),
                 np.array([], dtype=np.intp),
@@ -436,7 +520,15 @@ def _place_uniform(
     the field extent, takes the nearest pixel to each sub-grid point,
     and drops the ones whose ``|E|^2`` falls below ``threshold *
     max(|E|^2)``.  Deterministic -- no rng dependence.  Returns up to
-    ``n_rays`` survivors.
+    ``n_rays`` survivors (or ``N_pixels`` survivors, whichever is
+    smaller -- duplicate sub-grid landings on the same pixel are
+    deduplicated so this helper never returns more rays than there
+    are unique grid pixels passing the threshold).
+
+    v4.15.2 (P3 from the v4.15.1 audit): when ``n_rays`` exceeds the
+    number of unique pixels in the grid, the sub-grid pixelisation
+    used to produce duplicate ``(iy, ix)`` entries; we now dedupe in
+    a stable manner.
     """
     I = np.abs(E) ** 2
     Imax = I.max()
@@ -444,7 +536,9 @@ def _place_uniform(
         return (np.array([]), np.array([]),
                 np.array([], dtype=np.intp),
                 np.array([], dtype=np.intp))
-    mask = I >= threshold * Imax
+    # Pixel-wise threshold mask (matches the docstring "Pixels below
+    # the threshold are excluded from placement").
+    mask = (I / Imax) > threshold
 
     Ny, Nx = E.shape
 
@@ -463,6 +557,17 @@ def _place_uniform(
     iy_grid, ix_grid = np.meshgrid(iy_pixels, ix_pixels, indexing='ij')
     iy_flat = iy_grid.ravel()
     ix_flat = ix_grid.ravel()
+
+    # Dedupe sub-grid landings stably so the helper never returns
+    # more rays than there are unique grid pixels.  np.unique with
+    # return_index guarantees stable ordering by first-occurrence.
+    if iy_flat.size > 0:
+        composite = iy_flat.astype(np.int64) * np.int64(Nx) + \
+            ix_flat.astype(np.int64)
+        _, first_idx = np.unique(composite, return_index=True)
+        first_idx.sort()  # preserve original sub-grid traversal order
+        iy_flat = iy_flat[first_idx]
+        ix_flat = ix_flat[first_idx]
 
     keep = mask[iy_flat, ix_flat]
     iy_arr = iy_flat[keep][:n_rays].astype(np.intp)

@@ -112,6 +112,37 @@ def propagate(
         round-4 B1-7: tuple unpacking silently failed, ``field`` was
         ``None``, and ``dx`` was the input pitch.
     """
+    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
+    # introduced by v4.15.1 that are NOT yet supported by the existing
+    # propagator chain.  These run FIRST (before any method-validation
+    # or auto-select) so the user gets a clear, actionable error rather
+    # than a downstream AttributeError or a silent wrong-axis FFT.
+    # Lazy-import PartialCoherenceMCF to avoid a circular dependency
+    # between sources/ and propagators/.
+    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
+    if isinstance(E_in, _PartialCoherenceMCF):
+        raise TypeError(
+            "propagate: PartialCoherenceMCF inputs are not yet supported "
+            "by this propagator (v4.15+). MCF-aware downstream "
+            "propagators are scheduled for v4.16+. To propagate a "
+            "partially-coherent field via ensemble averaging, iterate "
+            "over the ensemble realizations:\n"
+            "  for k in range(ensemble.shape[0]):\n"
+            "      E_out_k = propagate(ensemble[k], ...)\n"
+            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
+        )
+    _ndim = getattr(E_in, 'ndim', None)
+    if _ndim is not None and _ndim != 2:
+        raise ValueError(
+            f"propagate: expected 2-D complex field of shape (Ny, Nx); "
+            f"got {_ndim}-D array of shape "
+            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
+            f"of realizations from create_*_schell_source(), iterate "
+            f"over the leading axis:\n"
+            f"  for k in range(ensemble.shape[0]):\n"
+            f"      E_out_k = propagate(ensemble[k], ...)"
+        )
+
     if method not in VALID_METHODS:
         raise ValueError(
             f"propagate: method must be one of {VALID_METHODS}, "

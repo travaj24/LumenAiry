@@ -779,7 +779,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.15.1"
+__version__ = "4.15.2"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -925,15 +925,16 @@ __all__ = [
     'check_grid_vs_apertures',
     'recommend_grid_for_prescription',
 
-    # ============================================================
-    # Tier 2 -- Propagate (dispatcher + propagator families)
-    # ============================================================
-
-    # Operator algebra (4.15.1, Cluster B Item 2): Nazarathy/Shamir-
-    # style symbolic optical-system construction layered over the
-    # existing propagators.  Each primitive carries a closed-form
-    # 2x2 ABCD and delegates field application to the canonical
-    # LumenAiry function.  See ``lumenairy.algebra`` for details.
+    # Operator algebra (4.15.1, Cluster B Item 2; tier moved to Tier-1
+    # in v4.15.2 per AUDIT_V4_15_1 P3): Nazarathy/Shamir-style
+    # symbolic optical-system construction layered over the existing
+    # propagators.  Each primitive carries a closed-form 2x2 ABCD and
+    # delegates field application to the canonical LumenAiry function.
+    # Operator algebra is a BUILD-TIME construction surface
+    # (composing primitives into a system), not a propagation surface
+    # -- the dispatcher and the propagator families still live in
+    # Tier-2 and consume the field after the build-time composition.
+    # See ``lumenairy.algebra`` for details.
     'Operator',
     'CompositeOperator',
     'FreeSpace',
@@ -943,6 +944,10 @@ __all__ = [
     'FourierTransform',
     'Aperture',
     'GaussianAperture',
+
+    # ============================================================
+    # Tier 2 -- Propagate (dispatcher + propagator families)
+    # ============================================================
 
     # Top-level smart-method propagator
     'propagate',

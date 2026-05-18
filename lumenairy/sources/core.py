@@ -1682,6 +1682,46 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
     return canon
 
 
+# v4.15.2 (P0-NEW-1): the 3 Schell factories changed default return
+# shape from ``(E_2d, x, y)`` (v4.15.0) to
+# ``(ensemble_3d, dx, dy, wavelength)`` (v4.15.1).  Emit a one-release
+# ``DeprecationWarning`` on the default path so pre-v4.15.0 callers
+# doing ``E, x, y = create_gaussian_schell_source(...)`` (which now
+# silently binds ``E.ndim==3`` and ``x`` to a scalar ``dx``) get a
+# loud heads-up rather than a propagation-time wrong-shape failure.
+# Detect the default via a per-module sentinel: when the caller
+# leaves ``return_kind`` unset, the factory sees the sentinel and
+# warns; explicit ``return_kind='ensemble'`` or ``'mcf'`` is silent.
+from .._deprecation import _Sentinel as _DeprecationSentinel
+_RETURN_KIND_UNSET: Any = _DeprecationSentinel('_SCHELL_RETURN_KIND_UNSET')
+
+
+def _warn_schell_return_kind_default(fn_name: str) -> None:
+    """Emit the v4.15.0 -> v4.15.1 return-shape ``DeprecationWarning``.
+
+    Routed through the shared ``_deprecation.warn_deprecated_signature``
+    helper so the warning message format matches the rest of the
+    library and is silenceable with a single ``warnings.filterwarnings``
+    incantation.  ``version_removed='5.0'`` documents the one-release
+    deprecation horizon.
+    """
+    from .._deprecation import warn_deprecated_signature
+    warn_deprecated_signature(
+        function=fn_name,
+        old_signature=(
+            f'{fn_name}(...)  # v4.15.0 returned (E_2d, x, y)'),
+        new_signature=(
+            f"{fn_name}(..., return_kind='ensemble')  "
+            "# v4.15.1 default returns (ensemble_3d, dx, dy, "
+            "wavelength); pass return_kind='ensemble' (preserve "
+            "current 4-tuple) or return_kind='mcf' (opt into "
+            "PartialCoherenceMCF) explicitly"),
+        version_added='4.15.1',
+        version_removed='5.0',
+        stacklevel=4,
+    )
+
+
 def _schell_phase_realizations(
     *,
     N: int,
@@ -1753,9 +1793,10 @@ def create_gaussian_schell_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-    return_kind: str = 'ensemble',
+    return_kind: Any = _RETURN_KIND_UNSET,
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
+    energy_threshold: float = 0.99,
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Gaussian-Schell partial-coherence source.
 
@@ -1802,14 +1843,28 @@ def create_gaussian_schell_source(
         wavelength)`` where ``E_ensemble`` is a ``(n_realizations, Ny,
         Nx)`` complex array.
         ``'mcf'``: return a :class:`PartialCoherenceMCF` instance.
+
+        v4.15.2 (P0-NEW-1): the default path emits a
+        ``DeprecationWarning`` reminding callers of the v4.15.0 ->
+        v4.15.1 return-shape change (``(E_2d, x, y)`` ->
+        ``(ensemble_3d, dx, dy, wavelength)``); pass ``return_kind``
+        explicitly to silence.  Removal scheduled for v5.0.
     max_full_N : int, default 64
         Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
         ``return_kind='mcf'``.  Grids with ``Ny * Nx > max_full_N**2``
         get the modal-storage form.
     n_modes : int, optional
         Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
-        ``return_kind='mcf'``.  ``None`` selects modes by the default
-        99%-energy threshold.
+        ``return_kind='mcf'``.  ``None`` selects modes by
+        ``energy_threshold``.
+    energy_threshold : float, default 0.99
+        Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
+        ``return_kind='mcf'`` and ``n_modes is None``: the smallest
+        ``K`` with cumulative eigenvalue mass ``>= energy_threshold``
+        is kept.  Accepted on the ``return_kind='ensemble'`` path for
+        signature symmetry but a no-op there (no modal truncation
+        occurs).  v4.15.2 (P2): added to close the kwarg-forwarding
+        gap flagged by the v4.15.1 audit.
 
     Returns
     -------
@@ -1840,6 +1895,14 @@ def create_gaussian_schell_source(
         raise ValueError(
             f"create_gaussian_schell_source: n_realizations must be a "
             f"positive integer; got {n_realizations!r}.")
+    # v4.15.2 (P0-NEW-1): detect the default-path call (caller didn't
+    # pass ``return_kind`` explicitly) and emit the one-release
+    # ``DeprecationWarning`` flagging the v4.15.0 -> v4.15.1
+    # return-shape change.  Explicit ``return_kind='ensemble'`` or
+    # ``'mcf'`` calls are silent.
+    if return_kind is _RETURN_KIND_UNSET:
+        _warn_schell_return_kind_default('create_gaussian_schell_source')
+        return_kind = 'ensemble'
     rk = _validate_return_kind(
         return_kind, fn_name='create_gaussian_schell_source')
 
@@ -1864,10 +1927,15 @@ def create_gaussian_schell_source(
     E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
 
     if rk == 'mcf':
+        # v4.15.2 (P2): forward ``energy_threshold`` to close the
+        # audit-flagged kwarg gap.  Truncation only fires here on
+        # modal storage; the ``ensemble`` branch ignores the kwarg
+        # by design (no truncation step there).
         return PartialCoherenceMCF.from_ensemble(
             E_ensemble,
             dx=float(dx), dy=float(dy), wavelength=float(wavelength),
-            max_full_N=int(max_full_N), n_modes=n_modes)
+            max_full_N=int(max_full_N), n_modes=n_modes,
+            energy_threshold=float(energy_threshold))
     return E_ensemble, float(dx), float(dy), float(wavelength)
 
 
@@ -1882,9 +1950,10 @@ def create_schell_model_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-    return_kind: str = 'ensemble',
+    return_kind: Any = _RETURN_KIND_UNSET,
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
+    energy_threshold: float = 0.99,
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Generic Schell-model source with user-supplied intensity profile.
 
@@ -1915,9 +1984,15 @@ def create_schell_model_source(
     dtype : optional
         Complex dtype for the ensemble form; ignored for ``'mcf'``.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
-        See :func:`create_gaussian_schell_source`.
+        See :func:`create_gaussian_schell_source`.  v4.15.2 (P0-NEW-1):
+        the default path emits a ``DeprecationWarning``; pass
+        ``return_kind`` explicitly to silence.
     max_full_N, n_modes
         See :meth:`PartialCoherenceMCF.from_ensemble`.
+    energy_threshold : float, default 0.99
+        See :func:`create_gaussian_schell_source`.  v4.15.2 (P2):
+        forwarded to :meth:`PartialCoherenceMCF.from_ensemble` on the
+        ``return_kind='mcf'`` path; ignored otherwise.
 
     Returns
     -------
@@ -1943,6 +2018,12 @@ def create_schell_model_source(
         raise ValueError(
             "create_schell_model_source: intensity_profile must be "
             "non-negative.")
+    # v4.15.2 (P0-NEW-1): see :func:`create_gaussian_schell_source` --
+    # default-path callers get a one-release ``DeprecationWarning``;
+    # explicit ``return_kind`` is silent.
+    if return_kind is _RETURN_KIND_UNSET:
+        _warn_schell_return_kind_default('create_schell_model_source')
+        return_kind = 'ensemble'
     rk = _validate_return_kind(
         return_kind, fn_name='create_schell_model_source')
 
@@ -1959,10 +2040,13 @@ def create_schell_model_source(
     E_ensemble = (amp[None, :, :] * phi).astype(target_dtype)
 
     if rk == 'mcf':
+        # v4.15.2 (P2): forward ``energy_threshold`` -- see
+        # :func:`create_gaussian_schell_source` for the rationale.
         return PartialCoherenceMCF.from_ensemble(
             E_ensemble,
             dx=float(dx), dy=float(dy), wavelength=float(wavelength),
-            max_full_N=int(max_full_N), n_modes=n_modes)
+            max_full_N=int(max_full_N), n_modes=n_modes,
+            energy_threshold=float(energy_threshold))
     return E_ensemble, float(dx), float(dy), float(wavelength)
 
 
@@ -1977,9 +2061,10 @@ def create_annular_incoherent_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-    return_kind: str = 'ensemble',
+    return_kind: Any = _RETURN_KIND_UNSET,
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
+    energy_threshold: float = 0.99,
 ) -> Union[Tuple[np.ndarray, float, float, float], 'PartialCoherenceMCF']:
     """Annular (ring) source -- spatially-incoherent at the source
     plane (v4.15, ROADMAP v4.16 #11; v4.15.1 P0-NEW-2 redesign).
@@ -2018,9 +2103,15 @@ def create_annular_incoherent_source(
     dtype : optional
         Complex dtype.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
-        See :func:`create_gaussian_schell_source`.
+        See :func:`create_gaussian_schell_source`.  v4.15.2 (P0-NEW-1):
+        the default path emits a ``DeprecationWarning``; pass
+        ``return_kind`` explicitly to silence.
     max_full_N, n_modes
         See :meth:`PartialCoherenceMCF.from_ensemble`.
+    energy_threshold : float, default 0.99
+        See :func:`create_gaussian_schell_source`.  v4.15.2 (P2):
+        forwarded to :meth:`PartialCoherenceMCF.from_ensemble` on the
+        ``return_kind='mcf'`` path; ignored otherwise.
 
     Returns
     -------
@@ -2046,6 +2137,12 @@ def create_annular_incoherent_source(
         raise ValueError(
             f"create_annular_incoherent_source: n_realizations must be "
             f"a positive integer; got {n_realizations!r}.")
+    # v4.15.2 (P0-NEW-1): see :func:`create_gaussian_schell_source` --
+    # default-path callers get a one-release ``DeprecationWarning``;
+    # explicit ``return_kind`` is silent.
+    if return_kind is _RETURN_KIND_UNSET:
+        _warn_schell_return_kind_default('create_annular_incoherent_source')
+        return_kind = 'ensemble'
     rk = _validate_return_kind(
         return_kind, fn_name='create_annular_incoherent_source')
 
@@ -2074,10 +2171,13 @@ def create_annular_incoherent_source(
         E_ensemble[k] = (amp * np.exp(1j * phase)).astype(target_dtype)
 
     if rk == 'mcf':
+        # v4.15.2 (P2): forward ``energy_threshold`` -- see
+        # :func:`create_gaussian_schell_source` for the rationale.
         return PartialCoherenceMCF.from_ensemble(
             E_ensemble,
             dx=float(dx), dy=float(dy), wavelength=float(wavelength),
-            max_full_N=int(max_full_N), n_modes=n_modes)
+            max_full_N=int(max_full_N), n_modes=n_modes,
+            energy_threshold=float(energy_threshold))
     return E_ensemble, float(dx), float(dy), float(wavelength)
 
 
@@ -2652,40 +2752,61 @@ class Source:
 
         Wraps :func:`create_gaussian_schell_source`.
 
-        v4.15.1 (P0-NEW-2): the underlying factory now returns either
-        a ``(n_realizations, Ny, Nx)`` ensemble or a
-        :class:`PartialCoherenceMCF`, depending on ``return_kind``.
+        v4.15.2 (Agent E, AUDIT_V4_15_1 P2): the return type now
+        matches the top-level factory's return-type convention
+        verbatim -- ``return_kind='ensemble'`` yields the raw
+        ``(ensemble, dx, dy, wavelength)`` 4-tuple (NOT a
+        :class:`Source`-wrapped 3-D ensemble).  Pre-v4.15.2 this
+        classmethod wrapped the 3-D ensemble inside a :class:`Source`
+        whose ``E`` was 3-D, breaking the :class:`Source` contract
+        (every other ``Source.*`` classmethod produces a 2-D field)
+        and surprising downstream ``src.intensity()`` callers with
+        broadcasting axis mismatches.
 
-        * ``return_kind='ensemble'`` (default): the wrapped
-          :class:`Source` carries the full ensemble as ``E`` (shape
-          ``(n_realizations, Ny, Nx)``).  Downstream callers iterate
-          over ``E[k]`` and average intensities to get the partial-
-          coherence response.
+        Return contract (v4.15.2+)
+        --------------------------
+        * ``return_kind='ensemble'`` (default): returns
+          ``(E_ensemble, dx, dy, wavelength)`` -- the *same* 4-tuple
+          as :func:`create_gaussian_schell_source`.  No
+          :class:`Source` wrapping.  Downstream callers iterate over
+          ``E_ensemble[k]`` and average intensities for the partial-
+          coherence response, or wrap each realisation in a
+          per-realisation :class:`Source` themselves when feeding a
+          fully-coherent propagator chain.
         * ``return_kind='mcf'``: returns the bare
           :class:`PartialCoherenceMCF` object (NOT wrapped in a
           :class:`Source`, since the propagator pipeline currently
           consumes only a single complex field).
 
-        Notes
-        -----
-        MCF-aware downstream propagators are not in v4.15.1 scope.
-        The MCF object is consumable for inspection / analysis only.
+        Inconsistency note: this differs from :meth:`Source.gaussian`
+        (which returns a :class:`Source` wrapping a 2-D field).  The
+        inconsistency is honest -- Schell is partial-coherence,
+        fundamentally different from coherent single-source, and
+        wrapping a 3-D ensemble in a 2-D-field abstraction silently
+        breaks the abstraction.  The MCF object is consumable for
+        inspection / analysis only; MCF-aware downstream propagators
+        are not in v4.15.x scope.
         """
         result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
             n_realizations=n_realizations, seed=seed,
             return_kind=return_kind, **factory_kwargs)
-        if return_kind == 'mcf' or isinstance(result, PartialCoherenceMCF):
-            return result
-        E_ensemble, _dx, _dy, _wl = result
-        return cls(E=E_ensemble, dx=dx,
-                   dy=factory_kwargs.get('dy', dx),
-                   wavelength=wavelength,
-                   source_point=source_point,
-                   name=name or (
-                       f'GaussianSchell(w0={w0:.2g}m, '
-                       f'sigma_g={sigma_g:.2g}m, '
-                       f'n_real={int(n_realizations)})'))
+        # v4.15.2 (Agent E): pass the factory's return value through
+        # verbatim -- either the (ensemble, dx, dy, wavelength) tuple
+        # or the bare PartialCoherenceMCF.  The pre-v4.15.2 path
+        # wrapped the 3-D ensemble in a Source with a 3-D ``E``, which
+        # broke the Source contract.  Downstream callers that want a
+        # per-realisation Source wrap should do so explicitly:
+        #     ens, _dx, _dy, _wl = Source.gaussian_schell(...)
+        #     sources = [Source(E=ens[k], dx=_dx, dy=_dy,
+        #                       wavelength=_wl) for k in range(len(ens))]
+        # The ``source_point`` / ``name`` kwargs are accepted for API
+        # symmetry with the coherent classmethods but are unused in
+        # the ensemble-tuple return path.
+        del source_point, name  # surface "unused" lint at the API
+                                # boundary; v4.16+ may re-introduce a
+                                # per-realisation wrapper that uses them.
+        return result
 
     @classmethod
     def schell_model(cls, *, N: int, dx: float, wavelength: float,
@@ -2700,8 +2821,10 @@ class Source:
         """Generic Schell-model partial-coherence source.
 
         Wraps :func:`create_schell_model_source`.  See
-        :meth:`Source.gaussian_schell` for the ensemble/MCF return
-        convention.
+        :meth:`Source.gaussian_schell` for the v4.15.2 return-type
+        convention (ensemble tuple by default, MCF object on
+        ``return_kind='mcf'``; NOT a :class:`Source`-wrapped 3-D
+        ensemble).
         """
         result = create_schell_model_source(
             N=N, dx=dx, wavelength=wavelength,
@@ -2709,14 +2832,9 @@ class Source:
             coherence_length=coherence_length,
             n_realizations=n_realizations, seed=seed,
             return_kind=return_kind, **factory_kwargs)
-        if return_kind == 'mcf' or isinstance(result, PartialCoherenceMCF):
-            return result
-        E_ensemble, _dx, _dy, _wl = result
-        return cls(E=E_ensemble, dx=dx,
-                   dy=factory_kwargs.get('dy', dx),
-                   wavelength=wavelength,
-                   source_point=source_point,
-                   name=name or (
-                       f'SchellModel(lc={coherence_length:.2g}m, '
-                       f'n_real={int(n_realizations)})'))
+        # v4.15.2 (Agent E): same return-type contract as
+        # ``Source.gaussian_schell`` -- pass the factory return through
+        # verbatim; do not wrap the 3-D ensemble in a Source.
+        del source_point, name
+        return result
 

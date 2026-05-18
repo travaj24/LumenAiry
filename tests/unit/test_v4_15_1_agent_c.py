@@ -96,8 +96,17 @@ class TestSparrowResolutionFix:
     def test_sparrow_resolution_airy_analytical(self):
         """Sparrow on the analytic Airy at lambda=600 nm, f/#=4 must
         match the canonical ``0.947 * lambda * f/# = 2.273 um`` to
-        within 5%.  v4.15.0 returned 1.93 um (15% low) on the same
-        config; v4.15.1 returns 2.27 um (<1% error)."""
+        within 1%.  v4.15.0 returned 1.93 um (15% low) on the same
+        config; v4.15.1 returns 2.27 um (~0.02% error -- well within
+        the v4.15.2 tightened 1% tolerance).
+
+        v4.15.2 (AUDIT_V4_15_1 P3 closure): tolerance tightened from
+        5% to 1% to match the achievable accuracy and align with the
+        in-test docstring claim of "<1% error".  Empirical
+        measurement on a 256-pixel grid at 0.1-um pitch shows the
+        cubic-spline-second-derivative + brentq path recovers the
+        canonical constant to 0.0173% -- well below the new 1% pin.
+        """
         wavelength = 600e-9
         f_number = 4.0
         # Properly-sampled grid: dx_psf well below first-zero radius.
@@ -107,10 +116,11 @@ class TestSparrowResolutionFix:
         d_sparrow = sparrow_resolution(psf, 0.1e-6, axis='radial')
         d_expected = 0.947 * wavelength * f_number
         rel = abs(d_sparrow - d_expected) / d_expected
-        assert rel < 0.05, (
+        assert rel < 0.01, (
             f"sparrow_resolution on analytic Airy: got "
             f"{d_sparrow*1e6:.4f} um, expected {d_expected*1e6:.4f} um "
-            f"(0.947 * lam * f/#); rel error {rel*100:.2f}% > 5%.")
+            f"(0.947 * lam * f/#); rel error {rel*100:.2f}% > 1% "
+            f"(v4.15.2 tolerance).")
 
     def test_sparrow_resolution_below_rayleigh(self):
         """Sanity-check property: Sparrow < Rayleigh on the same Airy

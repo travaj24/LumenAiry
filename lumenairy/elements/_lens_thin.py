@@ -127,6 +127,37 @@ def apply_thin_lens(
     makes the call order non-load-bearing and prevents typos that
     silently swap ``wavelength`` and ``dx`` (both ~1e-6).
     """
+    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
+    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
+    # actionable error rather than a downstream AttributeError on
+    # ``E_in.shape`` (PartialCoherenceMCF is a dataclass without
+    # ndarray semantics) or a silent wrong-axis broadcast (3-D
+    # ensemble multiplied against a 2-D phase mask).  Lazy-import
+    # PartialCoherenceMCF to avoid a circular dep with sources/.
+    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
+    if isinstance(E_in, _PartialCoherenceMCF):
+        raise TypeError(
+            "apply_thin_lens: PartialCoherenceMCF inputs are not yet "
+            "supported by this propagator (v4.15+). MCF-aware "
+            "downstream propagators are scheduled for v4.16+. To "
+            "propagate a partially-coherent field via ensemble "
+            "averaging, iterate over the ensemble realizations:\n"
+            "  for k in range(ensemble.shape[0]):\n"
+            "      E_out_k = apply_thin_lens(ensemble[k], ...)\n"
+            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
+        )
+    _ndim = getattr(E_in, 'ndim', None)
+    if _ndim is not None and _ndim != 2:
+        raise ValueError(
+            f"apply_thin_lens: expected 2-D complex field of shape "
+            f"(Ny, Nx); got {_ndim}-D array of shape "
+            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
+            f"of realizations from create_*_schell_source(), iterate "
+            f"over the leading axis:\n"
+            f"  for k in range(ensemble.shape[0]):\n"
+            f"      E_out_k = apply_thin_lens(ensemble[k], ...)"
+        )
+
     # Determine array library.  PEP 562 ``__getattr__`` cannot
     # resolve bare ``cp`` inside a function body (LEGB rules skip
     # module-level __getattr__), so we go through the lenses-module
@@ -550,6 +581,35 @@ def apply_cylindrical_lens(
     Produces a line focus (orthogonal to the focusing axis) instead of a
     point focus.
     """
+    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
+    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
+    # actionable error rather than a downstream AttributeError on
+    # ``E_in.shape`` or a silent wrong-axis broadcast.  Lazy-import
+    # PartialCoherenceMCF to avoid a circular dep with sources/.
+    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
+    if isinstance(E_in, _PartialCoherenceMCF):
+        raise TypeError(
+            "apply_cylindrical_lens: PartialCoherenceMCF inputs are "
+            "not yet supported by this propagator (v4.15+). MCF-aware "
+            "downstream propagators are scheduled for v4.16+. To "
+            "propagate a partially-coherent field via ensemble "
+            "averaging, iterate over the ensemble realizations:\n"
+            "  for k in range(ensemble.shape[0]):\n"
+            "      E_out_k = apply_cylindrical_lens(ensemble[k], ...)\n"
+            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
+        )
+    _ndim = getattr(E_in, 'ndim', None)
+    if _ndim is not None and _ndim != 2:
+        raise ValueError(
+            f"apply_cylindrical_lens: expected 2-D complex field of "
+            f"shape (Ny, Nx); got {_ndim}-D array of shape "
+            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
+            f"of realizations from create_*_schell_source(), iterate "
+            f"over the leading axis:\n"
+            f"  for k in range(ensemble.shape[0]):\n"
+            f"      E_out_k = apply_cylindrical_lens(ensemble[k], ...)"
+        )
+
     # v4.13.2 (audit C-P1-6): dispatch through CuPy when use_gpu=True
     # or E_in is already a CuPy array.  Resolve ``cp`` via the
     # _lenses_module lazy slot rather than a bare global (which is

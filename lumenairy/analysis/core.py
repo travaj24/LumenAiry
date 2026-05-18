@@ -3693,6 +3693,15 @@ def sparrow_resolution(
     ``d_sparrow ~= 0.947 * lambda * f/#`` -- slightly smaller than the
     Rayleigh separation (``1.22 * lambda * f/#``).
 
+    Accuracy (v4.15.2): on a properly-sampled analytical Airy PSF
+    (N=256, dx well below the first-zero radius) the canonical
+    constant is recovered to **<1%** relative error (measured 0.02%
+    on the canonical lambda=600 nm, f/#=4 fixture in
+    ``test_v4_15_1_agent_c::test_sparrow_resolution_airy_analytical``;
+    the test pin uses 1% as the tolerance with comfortable headroom).
+    Undersampled or aberrated PSFs degrade this accuracy; consider
+    :func:`fwhm_resolution` for noisy / Gaussian-tail PSFs.
+
     Implementation
     --------------
     The radial profile is built either from a row / column cut

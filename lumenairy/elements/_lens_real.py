@@ -400,6 +400,37 @@ def apply_real_lens(
     parameter name is ``prescription`` -- the 4.6 alias
     ``lens_prescription`` was removed in 4.7.
     """
+    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
+    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
+    # actionable error rather than a downstream AttributeError on
+    # ``E_in.shape`` (PartialCoherenceMCF is a dataclass without
+    # ndarray semantics) or a silent wrong-axis broadcast (3-D
+    # ensemble multiplied against a 2-D phase mask).  Lazy-import
+    # PartialCoherenceMCF to avoid a circular dep with sources/.
+    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
+    if isinstance(E_in, _PartialCoherenceMCF):
+        raise TypeError(
+            "apply_real_lens: PartialCoherenceMCF inputs are not yet "
+            "supported by this propagator (v4.15+). MCF-aware "
+            "downstream propagators are scheduled for v4.16+. To "
+            "propagate a partially-coherent field via ensemble "
+            "averaging, iterate over the ensemble realizations:\n"
+            "  for k in range(ensemble.shape[0]):\n"
+            "      E_out_k = apply_real_lens(ensemble[k], ...)\n"
+            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
+        )
+    _ndim = getattr(E_in, 'ndim', None)
+    if _ndim is not None and _ndim != 2:
+        raise ValueError(
+            f"apply_real_lens: expected 2-D complex field of shape "
+            f"(Ny, Nx); got {_ndim}-D array of shape "
+            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
+            f"of realizations from create_*_schell_source(), iterate "
+            f"over the leading axis:\n"
+            f"  for k in range(ensemble.shape[0]):\n"
+            f"      E_out_k = apply_real_lens(ensemble[k], ...)"
+        )
+
     _check_apply_real_lens_kwarg_combination(
         wave_propagator=wave_propagator,
         slant_correction=slant_correction,

@@ -2044,6 +2044,106 @@ class _ZeroApertureMaskSentinel(_Sentinel):
 _ZERO_APERTURE_MASK = _ZeroApertureMaskSentinel()
 
 
+# v4.15.2 (Agent E, AUDIT_V4_15_1 P2): three additional pre-existing
+# sentinel patterns in this module are promoted to ``_Sentinel``
+# subclasses for pickle-safety + ``is``-identity discoverability.  Pre-
+# v4.15.2 these were bare scalar fallbacks (``1e9`` for invalid focal
+# length, ``0.0`` for failed-scan Strehl, and a "fall-back-to-nominal"
+# marker for perturbed-ABCD failures).  Scalar storage is preserved at
+# the call sites for arithmetic compatibility; the dedicated sentinel
+# classes here register in ``_SENTINEL_REGISTRY`` so downstream consumers
+# can perform identity checks (``ctx.efl is _INVALID_FL_SENTINEL_OBJ``)
+# without breaking the existing magnitude-based ``ctx_is_valid`` path.
+# Each carries a ``.value`` attribute holding its canonical scalar
+# fallback so call sites that want the numeric form can ``float(s)`` or
+# ``s.value``.  All three inherit ``__bool__ -> False`` from the base
+# ``_Sentinel`` (matching ``_ZeroApertureMaskSentinel`` semantics).
+#
+# Naming convention: ``_<Concept>Sentinel`` for the class +
+# ``_<CONCEPT>_SENTINEL_OBJ`` for the singleton.  ``_OBJ`` suffix
+# distinguishes the new class-instance singletons from the pre-existing
+# ``_INVALID_FL_SENTINEL = 1e9`` scalar at module top (kept for
+# arithmetic uses in ``ctx_is_valid``).
+
+
+class _InvalidFocalLengthSentinel(_Sentinel):
+    """Identity-checkable singleton for "ABCD extraction failed -- focal
+    length collapsed to the ``1e9`` magnitude-flag fallback".
+
+    Used at line 2271 (the wave-leg ABCD failure branch).  Pre-v4.15.2
+    that branch wrote a bare scalar ``efl = bfl = 1e9``; the magnitude-
+    check downstream (``ctx_is_valid`` at line 467) recovered the
+    "invalid" semantics by comparing ``abs(v) >= _INVALID_FL_SENTINEL *
+    0.5``.  v4.15.2 keeps the scalar write (arithmetic stability) and
+    adds this singleton so a future caller wanting a strict identity
+    check (``ctx.efl is _INVALID_FL_SENTINEL_OBJ``) can opt in without
+    breaking the existing magnitude path.
+    """
+    __slots__ = ()
+
+    value: float = 1e9
+
+    def __init__(self) -> None:
+        super().__init__('_INVALID_FL_SENTINEL_OBJ')
+
+    def __float__(self) -> float:
+        return float(self.value)
+
+
+_INVALID_FL_SENTINEL_OBJ = _InvalidFocalLengthSentinel()
+
+
+class _FailedScanStrehlSentinel(_Sentinel):
+    """Identity-checkable singleton for "through-focus Strehl scan
+    failed -- Strehl collapsed to the safe ``0.0`` fallback".
+
+    Used at line 2530 (the through-focus-scan exception branch).  Pre-
+    v4.15.2 the branch wrote ``sub_ctx.strehl_best = 0.0``; the
+    optimizer treats ``0.0`` as "very bad design" so the merit-leg
+    contribution sinks into the noise floor without dragging the
+    parameter vector further than the dispatcher's adaptive-step
+    safeguards allow.  v4.15.2 keeps the scalar write and adds this
+    singleton for identity discoverability.
+    """
+    __slots__ = ()
+
+    value: float = 0.0
+
+    def __init__(self) -> None:
+        super().__init__('_FAILED_SCAN_STREHL_SENTINEL_OBJ')
+
+    def __float__(self) -> float:
+        return float(self.value)
+
+
+_FAILED_SCAN_STREHL_SENTINEL_OBJ = _FailedScanStrehlSentinel()
+
+
+class _PerturbedABCDFallbackSentinel(_Sentinel):
+    """Identity-checkable singleton for "perturbed ABCD extraction
+    failed -- fall back to nominal ``(ctx.efl, ctx.bfl)``".
+
+    Used at line 2772 (the tolerance-perturbation ABCD failure branch).
+    Pre-v4.15.2 the branch wrote ``efl_p, bfl_p = ctx.efl, ctx.bfl``
+    -- a "stable but probably wrong" fallback that under-estimates the
+    perturbed Strehl drop.  v4.15.2 keeps the scalar fallback writes
+    and adds this singleton so a downstream consumer (e.g. a future
+    tolerance-confidence wrapper) can detect that the perturbation's
+    ABCD propagation degenerated to the nominal channel.
+    """
+    __slots__ = ()
+
+    # No single ``.value`` here -- the fallback is a tuple-pattern, not
+    # a single scalar.  Consumers either use this for ``is``-identity
+    # or query ``ctx.efl`` / ``ctx.bfl`` for the actual numeric values.
+
+    def __init__(self) -> None:
+        super().__init__('_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ')
+
+
+_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ = _PerturbedABCDFallbackSentinel()
+
+
 def _wrapper_merit_aperture_key(aperture: Any) -> tuple:
     """Build a hashable key fragment representing the aperture state.
 

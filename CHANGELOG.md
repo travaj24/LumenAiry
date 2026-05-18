@@ -2,6 +2,193 @@
 
 All notable changes to the core library are documented here.
 
+## [4.15.2] — 2026-05-18
+
+**Closes the v4.15.1 audit (`docs/audits/AUDIT_V4_15_1_2026_05_18.md`)
+through P3.**  The audit found 1 P0 + 9 P1 + ~12 P2 + ~10 P3 — most
+were downstream-integration gaps from the rapid v4.15.1 expansion (new
+types shipped without updating consumers; breaking changes shipped
+without CHANGELOG flagging; primitive APIs asymmetric).  **1732 unit
+tests pass** (up from 1625; +107 net), 1 documented skip, 1 documented
+xfail; **34/34 validation files pass**.
+
+### Breaking changes
+
+* **Schell-family factories emit `DeprecationWarning`** on the default
+  `return_kind` path.  v4.15.1 silently changed the return shape from
+  `(E_2d, x, y)` (v4.15.0) to `(E_3d, dx, dy, wavelength)` 4-tuple
+  without a warning.  v4.15.2 closes the contract break: callers must
+  pass `return_kind='ensemble'` or `return_kind='mcf'` explicitly;
+  failing to do so emits a one-release deprecation warning with
+  `version_removed='5.0'`.
+* **`Source.gaussian_schell` and `Source.schell_model` classmethods**
+  now return the same `(ensemble, dx, dy, wavelength)` 4-tuple as the
+  top-level factories — they previously wrapped the 3-D ensemble in a
+  `Source` instance whose `E` was 3-D, breaking the canonical 2-D
+  `Source.E` contract.  This is a soft consistency break (every other
+  `Source.*` classmethod returns a `Source`); the inconsistency is
+  honest — Schell is partial-coherence, fundamentally different from
+  the coherent single-source abstraction.
+
+### P0 closure
+
+**P0-NEW-1 — Schell silent contract break closed.**  `_RETURN_KIND_UNSET`
+module-level sentinel (subclass of `_deprecation._Sentinel`) detects
+the default-path entry; `_warn_schell_return_kind_default` helper
+routes through `_deprecation.warn_deprecated_signature` with explicit
+`version_removed='5.0'`.  Applied to all 3 Schell factories
+(`create_gaussian_schell_source`, `create_schell_model_source`,
+`create_annular_incoherent_source`).
+
+### P1 closures (9)
+
+* **P1-NEW-A — `FourierTransform` 3-stage rewrite.**  v4.15.1's
+  `_apply` ran 2 stages (lens-then-Fresnel) while the ABCD claim
+  `[[0, f], [-1/f, 0]]` matched the 3-stage chain `FreeSpace(f) *
+  ThinLens(f) * FreeSpace(f)`.  The 2-stage path left a residual
+  `exp(+ik/(2f) r^2)` quadratic phase — ABCDs matched but fields
+  didn't.  v4.15.2 rewrites `_apply` to the literal 3-stage chain so
+  ABCD and field finally agree.  Perf impact: ~2x slower than the
+  v4.15.1 2-stage shortcut (one extra Fresnel propagation).  Users
+  wanting hardware-realistic back-focal-plane semantics can compose
+  directly as `ThinLens(f) * FreeSpace(f)` (which has the genuine
+  2-stage ABCD `[[1, f], [-1/f, 0]]` and 2-stage field; both correct
+  via the existing algebra).
+* **P1-NEW-B — `from_prescription` flat-mirror parity matches
+  `system_abcd`.**  v4.15.1 flipped `mirror_parity` unconditionally
+  on `is_mirror=True`; `system_abcd` only flips for curved mirrors.
+  v4.15.2 conditions the parity flip on curved mirrors, matching the
+  raytrace convention.  New folded-singlet + folded-telephoto
+  prescription test cases pin the parity at 1e-12 absolute (the
+  1e-12 ABCD parity claim now holds for folded prescriptions too,
+  not just non-folded).
+* **P1-NEW-C — `FreeSpace._apply` threads `dy`.**  v4.15.1's
+  `FreeSpace._apply` called `propagate(E, z=, ..., dx=dx, method=)`
+  without `dy`.  Any anamorphic chain `Magnify(a_x, a_y) *
+  FreeSpace(d)` silently propagated on the wrong grid.  v4.15.2
+  threads `dy` to the dispatcher when `dy != dx` (forwards via
+  method_kwargs; safe for ASM/Fresnel/Fraunhofer/RS; skipped for
+  SAS which is square-grid only).  Verified `ThinLens._apply` does
+  not have the same gap.
+* **P1-NEW-D — `rays_from_field` `'cdf'` placement pixel-wise
+  threshold.**  v4.15.1 applied `intensity_threshold` to MARGINAL
+  sums in `_place_cdf`, inconsistent with `'rejection'` and
+  `'uniform'` modes (which threshold pixel-wise).  A 1-pixel-wide
+  bright streak running the full y-extent survived the threshold
+  incorrectly.  v4.15.2 thresholds pixel-wise before forming
+  marginals; the 3 placement modes are now consistent.
+* **P1-NEW-E — `PartialCoherenceMCF` defensive guard.**  All 10
+  propagator entry points (`propagate_through_system`, `propagate`,
+  `angular_spectrum_propagate`, `fresnel_propagate`,
+  `fraunhofer_propagate`, `rayleigh_sommerfeld_propagate`,
+  `scalable_angular_spectrum_propagate`, `apply_thin_lens`,
+  `apply_cylindrical_lens`, `apply_real_lens`) now raise
+  `TypeError` with a clear "v4.16+ scope" message when handed a
+  `PartialCoherenceMCF` — previously crashed with cryptic
+  `AttributeError`.
+* **P1-NEW-F — 3-D ensemble shape guard.**  Same 10 propagator
+  entry points now raise `ValueError` on `E.ndim != 2` with a
+  message showing the iterate-over-ensemble workaround pattern.
+* **P1-NEW-G — CHANGELOG `### Breaking changes` subhead** added
+  to the v4.15.1 entry listing Schell return shape, `strehl_vector`
+  default-reference removal, and `system.evaluate` mixed-shape
+  `ValueError`.
+* **P1-NEW-H — `rays_from_field` short-return `RuntimeWarning`.**
+  v4.15.1's `_place_rejection` and `_place_uniform` could return
+  fewer rays than requested (rejection budget exhausted; threshold
+  excluded too many pixels) without warning.  v4.15.2 emits a
+  `RuntimeWarning` when `n_actual < n_rays`, plus an `n_rays = 0`
+  early-return is honoured cleanly.
+* **P1-NEW-I — ROADMAP refresh.**  Header bumped to "(post-v4.15.2)";
+  Current State block updated to v4.15.2 / 1732 tests baseline;
+  v4.15.1 + v4.15.2 added to Shipped highlights.
+
+### P2 closures
+
+* `_sentinel_unpickle` fallback now raises `ImportError` with an
+  actionable message when an unknown subclass is unpickled
+  (distributed-pipeline timing safety).  Previously silently
+  returned a base `_Sentinel`, losing subclass identity.
+* **3 additional `optimize/core.py` sentinels migrated** to inherit
+  from `_deprecation._Sentinel`: `_InvalidFocalLengthSentinel`
+  (was a literal `1e9` fallback for failed ABCD), `_FailedScanStrehlSentinel`
+  (was `0.0`), `_PerturbedABCDFallbackSentinel` (was a `(efl, bfl)`
+  tuple fallback).  All registered in `_SENTINEL_REGISTRY` for
+  pickle round-trip safety.
+* `_NO_DEFAULT` promoted to dedicated `_NoDefaultSentinel(_Sentinel)`
+  subclass (cosmetic consistency with the other sentinels).
+* **`PartialCoherenceMCF.coherence_at` Hermiticity test** added —
+  asserts `J(r1, r2) == conj(J(r2, r1))` for several `(r1, r2)`
+  pairs at 1e-10.
+* **`Source.gaussian_schell` / `Source.schell_model`** now pass the
+  factory's 4-tuple verbatim instead of wrapping the 3-D ensemble
+  in a `Source` whose `E` would have been 3-D.
+* **UI runtime test under `-W error::DeprecationWarning`** added —
+  exercises `SourceDefinition.to_source()` at runtime to catch the
+  static-grep escape (which the v4.15.1 audit identified as a
+  missing coverage class).
+* **`rays_from_field` top-of-file docstring** corrected from
+  Madelung `Im(grad E / E)` to phase-ratio central difference
+  (inline docstring was already correct; top was stale).
+* **`Magnify` docstring direction inverted** to match code:
+  `a > 1` shrinks output; `0 < a < 1` magnifies (Nazarathy/Shamir
+  `V[a]` convention).  Dead `operators.py:556-577` reference
+  removed.
+* **`'uniform'` and `'unwrap_gradient'` modes** in `rays_from_field`
+  now have direct test coverage (audit flagged these as previously
+  untested).  Vortex direction-recovery and anamorphic
+  direction-cosines tests added.
+
+### P3 closures
+
+* **Sparrow tolerance pin tightened from 5% to 1%**.  Measured
+  achievable error on canonical Airy fixture (N=256, dx=0.1µm,
+  λ=600nm, f/#=4): 0.017% — comfortable headroom over the new 1%
+  pin.  Docstring "Accuracy (v4.15.2)" paragraph cites the measured
+  number.
+* **Forbes Q-bfs end-to-end OPD analytical pin** — closes the
+  v4.15.1 audit gap "No end-to-end Forbes Q OPD pin against
+  analytical formula".  Pins `phi(r) = -k * sag(r)` against the
+  closed-form Q-bfs sag at 1e-3 rad tolerance.
+* **`lumenairy.algebra` exports moved from Tier-2 to Tier-1** in
+  `__init__.py.__all__` — operator algebra is a build-time
+  construction surface, not a propagation surface.
+* **CHANGELOG line-citation refreshes**: "45° fold" → "60° fold
+  (α=π/6)" in the v4.15.1 OAP raytrace test description;
+  `optimize/core.py:2790-2795` → `:2905` (branch) + `:2034`
+  (class) + `:2044` (singleton) after Agent E's sentinel
+  refactor pushed lines.
+* **CHANGELOG test-count arithmetic refresh**: Agent A (v4.15.1)
+  count corrected 18 → 19; Agent F count corrected 13 → 20
+  (parametrize entries) to match `pytest --collect-only`.
+* **`energy_threshold` kwarg** now forwarded through all 3 Schell
+  factories to `PartialCoherenceMCF.from_ensemble` (was exposed on
+  the MCF builder but not on the factory entry points).
+* **Stray `C:tmpsources_diff.txt`** (typo'd `C:\tmp\` path; OneDrive
+  U+F03A colon substitute) deleted — 44 KB git-diff dump, content
+  recoverable via git history.
+
+### Test counts
+
+* Pre-v4.15.2 baseline (v4.15.1): 1625 unit tests + 1 skip + 1 xfail.
+* v4.15.2 additions: A=18, B=15 (9 new + 6 modifications), C=32,
+  D=19, E=16; net +107.
+* Final: **1732 unit tests passing, 1 skipped, 1 xfailed**; **34/34
+  validation files passing**.
+
+### Deferred to v4.16+
+
+Unchanged from v4.15.1 deferrals: modal-asymptotic independent
+ground-truth pin against direct quadrature; 4 V2 meta-pin candidates
+(sentinel-aware branch propagation, `_xp_of` dispatch, `dy` parameter
+threading walker, `__all__` symmetry walker); MCF-aware downstream
+propagators (consume `PartialCoherenceMCF` through propagation
+chains); multi-process atomic-append for `storage.py`;
+`MultiPrescriptionParameterization.scale_floor` (v4.13.1 P1-I
+carryover); Forbes Q-2D-asymmetric variant.
+
+---
+
 ## [4.15.1] — 2026-05-18
 
 **Closes the v4.15.0 audit (`docs/audits/AUDIT_V4_15_0_2026_05_18.md`)
@@ -12,6 +199,43 @@ audit in the series).  v4.15.1 closes both P0s + all Tier-0 P1s + the
 P2/P3 sweep + adds 800+ LOC of new CLUSTER_B surface.  **1625 unit
 tests pass** (up from 1425; +200 net), 1 documented skip, 1
 documented xfail; **34/34 validation files pass**.
+
+### Breaking changes
+
+v4.15.1 ships 3 confirmed breaking items.  Callers who relied on the
+v4.15.0 contracts must migrate; v4.15.2 (P1-NEW-G closure) adds this
+subhead retroactively to make the audit-flagged items discoverable.
+
+1. **Schell-family return shape**: `create_gaussian_schell_source`,
+   `create_schell_model_source`, and `create_annular_incoherent_source`
+   default to `return_kind='ensemble'` and now return the 4-tuple
+   `(ensemble_3d, dx, dy, wavelength)` where `ensemble_3d` has shape
+   `(n_realizations, Ny, Nx)`.  v4.15.0 returned `(E_2d, x, y)` (a
+   collapsed single field plus coordinate vectors).  Pre-v4.15.0
+   callers doing `E, x, y = create_gaussian_schell_source(...)` now
+   silently bind `E.ndim == 3` and `x` to a scalar `dx`.  Pass
+   `return_kind='ensemble'` explicitly to acknowledge the new
+   contract, or `return_kind='mcf'` to opt into a
+   `PartialCoherenceMCF` object instead.  v4.15.2 (P0-NEW-1 closure)
+   emits a `DeprecationWarning` on the default path; removal in v5.0.
+2. **`strehl_vector` default reference removed**: v4.15.0 had a
+   buggy default plane-wave reference that produced unity Strehl for
+   any uniform field of equal power AND `Strehl > 1` on focused PSFs
+   (the focused field is more peaked than the plane-wave reference at
+   matched total power).  v4.15.1 requires the caller to pass
+   `reference=` explicitly; the docstring also drops the unverified
+   "Richards-Wolf high-NA" claim.  See P1-F1-3 below.
+3. **`system.evaluate` mixed-shape prescription raises `ValueError`**:
+   a prescription containing BOTH `surfaces` + `thicknesses` AND
+   `elements` + `all_thicknesses` keys previously silently picked one
+   schema.  v4.15.1 rejects it at the validator with a clear message.
+   Callers passing raw Zemax-loader output need to filter the
+   surfaces keys before handing the dict in:
+   ```python
+   rx_filtered = {k: v for k, v in rx.items()
+                  if k not in ('surfaces', 'thicknesses')}
+   ```
+   See P1-F1-6 below.
 
 ### P0 closures
 
@@ -24,8 +248,10 @@ exclusively** — the paraxial `apply_real_lens` cannot interpret the
 3-tuple tilt correctly.  New end-to-end raytrace test
 (`test_end_to_end_raytrace_focuses_at_offset`) pins the off-axis
 focal-point location to within 1% of the chief-ray geometric
-prediction at 45° fold.  P3 carryover: `vertex_radius` now
-validated (must be `None` or finite positive).
+prediction at 60° fold (α=π/6).  v4.15.2 (P3 doc-drift fix): the
+original CHANGELOG cited a pi/4 fold -- the actual test uses π/6
+because α=π/4 is degenerate at this geometry.  P3 carryover:
+`vertex_radius` now validated (must be `None` or finite positive).
 
 **P0-NEW-2 — Schell-family factories redesign:**  The v4.15.0
 factories collapsed the `n_realizations` ensemble into a single
@@ -152,9 +378,14 @@ analysis / inspection in v4.15.1.
   `c_n = sqrt((2n+3)(n+2)/(n+1)^2)` -> `c_n = sqrt((2n+3)(n+2)/(n+1))`
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
-* CHANGELOG/release-notes:  `optimize/core.py:2790-2795` -> `:2805-2810`
-  refreshed after Agent E's `_Sentinel` base-class refactor pushed
-  lines downward.
+* CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
+  sentinel branch now lives at `optimize/core.py:2905` (the
+  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); the sentinel
+  class + singleton are at `optimize/core.py:2034` and
+  `optimize/core.py:2044` respectively post Agent E's `_Sentinel`
+  base-class refactor.  v4.15.2 (P3): citation refreshed after a
+  second line-drift pass against the current source supersedes the
+  earlier stale citations.
 
 ### CLUSTER_B Item 6 — `rays_from_field` bridge function
 
@@ -214,10 +445,17 @@ FreeSpace collapse, etc.) explicitly deferred to a future PR.
 ### Test counts
 
 * Pre-v4.15.1 baseline (v4.15.0): 1425 unit tests + 1 skip + 1 xfail.
-* v4.15.1 additions: A=18, B=20+migrated, C=13+migrated, D=18,
-  E=20, F=13, G=91; net ~200 added (the +200 number nets out test
-  migrations: agents B and C migrated v4.15.0 property pins to
-  v4.15.1 ensemble / analytical-value pins).
+* v4.15.1 additions (`pytest --collect-only` items, parametrised
+  test cases counted separately): A=19, B=20+migrated, C=13+migrated,
+  D=18, E=20, F=20, G=91; gross 201 collected, net ~200 added (the
+  +200 number nets out test migrations: agents B and C migrated
+  v4.15.0 property pins to v4.15.1 ensemble / analytical-value pins).
+  v4.15.2 (P2 + P3 test-count refresh): the F=20 count supersedes
+  the original CHANGELOG's F=13 -- Agent F shipped 7 additional
+  follow-up tests beyond the initial 13 enumerated in
+  `.release_notes_v4_15_1_agent_f.md`, bringing the file to 20
+  pytest items.  The A=19 count likewise supersedes the original
+  A=18.
 * Final: **1625 unit tests passing, 1 skipped, 1 xfailed**; **34/34
   validation files passing**.
 

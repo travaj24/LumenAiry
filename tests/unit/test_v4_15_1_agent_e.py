@@ -139,6 +139,53 @@ class TestE1UIModelNoDeprecatedSourceCalls:
             f"emitted {len(dep)} Source-related DeprecationWarning(s): "
             f"{[str(w.message) for w in dep[:2]]}")
 
+    @pytest.mark.parametrize('source_type,extra_kwargs', [
+        ('gaussian', {'beam_diameter_mm': 0.040}),
+        ('top_hat', {'top_hat_diameter_mm': 0.080}),
+        ('fiber_mode', {'fiber_mfd_um': 10.0, 'fiber_NA': 0.14}),
+        ('plane_wave', {}),
+        ('point_source', {'object_distance_mm': 100.0}),
+    ])
+    def test_build_source_runs_without_deprecation_warning(
+            self, source_type, extra_kwargs):
+        """v4.15.2 (AUDIT_V4_15_1 P2 closure): in addition to the
+        static source-scan pin above, exercise the UI source-build
+        path at RUNTIME under ``simplefilter('error',
+        DeprecationWarning)``.  The static scan catches positional
+        callsites; this runtime pin catches every other deprecation
+        path the static-substring matcher might miss (e.g. a
+        positional call buried inside a fallback ``try/except``, a
+        kwarg-rename deprecation, or a downstream ``Source.__init__``
+        positional-form warning).
+
+        Audits up to AUDIT_V4_15_1 noted this gap explicitly: the UI
+        test "does NOT exercise ``build_source`` at runtime under
+        ``pytest -W error::DeprecationWarning``".
+        """
+        from lumenairy.ui.model import SourceDefinition
+        sd = SourceDefinition(
+            source_type=source_type,
+            wavelength_nm=633.0,
+            **extra_kwargs,
+        )
+        with warnings.catch_warnings():
+            warnings.simplefilter('error', DeprecationWarning)
+            # If any DeprecationWarning fires on the runtime build
+            # path, this raises -- the test fails with the warning
+            # message visible.
+            try:
+                src = sd.to_source(N=64, dx_m=1e-6)
+            except DeprecationWarning as dw:
+                raise AssertionError(
+                    f"to_source({source_type!r}) emitted "
+                    f"DeprecationWarning at runtime: {dw!s}"
+                ) from dw
+            # Smoke-check the returned Source.
+            assert src is not None
+            assert hasattr(src, 'E')
+            assert src.E.ndim == 2
+            assert src.E.shape == (64, 64)
+
 
 # ============================================================================
 # E.2 -- P1-F1-6: mixed-shape precedence in system.evaluate

@@ -289,21 +289,28 @@ class TestB3SchellSources:
                 coherence_length=20e-6)
 
     def test_source_gaussian_schell_classmethod(self):
-        """``Source.gaussian_schell`` must build a Source and forward kwargs.
+        """``Source.gaussian_schell`` must build a partial-coherence
+        ensemble and forward kwargs to the top-level factory.
 
         v4.15.0 single-field return; migrated to v4.15.1 ensemble
-        contract: ``Source.shape`` returns ``E.shape[-2:]``, which is
-        still ``(N, N)`` even though the underlying ``E`` is now
-        ``(n_realizations, N, N)``.
+        contract; v4.15.2 (AUDIT_V4_15_1 P2) further migrated to the
+        top-level-factory-aligned RETURN TUPLE form
+        ``(ensemble, dx, dy, wavelength)`` -- the classmethod no longer
+        wraps the 3-D ensemble in a Source whose ``E`` is 3-D (which
+        broke the Source contract; every other ``Source.*`` produces
+        a 2-D field).
         """
-        src = Source.gaussian_schell(
+        result = Source.gaussian_schell(
             N=32, dx=10e-6, wavelength=633e-9,
             w0=80e-6, sigma_g=40e-6, n_realizations=4, seed=0)
-        assert isinstance(src, Source)
-        assert src.shape == (32, 32)
-        assert src.wavelength == 633e-9
-        # New invariant: the underlying E now carries the full ensemble.
-        assert src.E.shape == (4, 32, 32)
+        # v4.15.2: ensemble tuple, not a Source.
+        assert not isinstance(result, Source)
+        assert isinstance(result, tuple)
+        assert len(result) == 4
+        ens, dx, dy, wavelength = result
+        assert ens.shape == (4, 32, 32)
+        assert dx == 10e-6
+        assert wavelength == 633e-9
 
 
 # ============================================================================

@@ -19,9 +19,10 @@ Primitives
   :func:`lumenairy.resample_field` with a ``sqrt(a_x * a_y)``
   amplitude prefactor.
 - :class:`FourierTransform` -- physical optical Fourier transform
-  realized at the back focal plane of a thin lens; delegates to
-  :func:`lumenairy.apply_thin_lens` + :func:`lumenairy.fresnel_propagate`
-  (the spec-§3.3.3 option (a)).
+  realized as the literal 3-stage chain
+  ``FreeSpace(f) * ThinLens(f) * FreeSpace(f)`` (Goodman §5.2).
+  v4.15.2 closes a field-vs-ABCD inconsistency in v4.15.1 where
+  the ABCD claimed 3-stage but ``_apply`` ran only 2 stages.
 
 References
 ----------
@@ -112,12 +113,27 @@ class FreeSpace(Operator):
         if self.distance == 0.0:
             return E, dx, dy
         from ..propagators.dispatch import propagate
+        # v4.15.2 (audit P1-NEW-C): thread ``dy`` into the dispatcher
+        # when it differs from ``dx``, so anamorphic chains (e.g.
+        # ``Magnify(a_x, a_y) * FreeSpace(d)``) propagate on the
+        # correct y-axis grid pitch.  Pre-fix the call dropped
+        # ``dy`` and the underlying kernel silently defaulted to
+        # ``dy = dx``.  ``propagate`` forwards ``**method_kwargs``
+        # to the chosen kernel; ASM / Fresnel / Fraunhofer / RS all
+        # accept ``dy`` (Optional[float] = None, defaulting to dx).
+        # SAS does NOT accept ``dy`` (square-grid kernel) -- we only
+        # forward the kwarg when needed so the common ``dy == dx``
+        # case continues to work with any auto-selected method.
+        kw = {}
+        if dy is not None and float(dy) != float(dx):
+            kw['dy'] = float(dy)
         out = propagate(
             E,
             z=self.distance,
             wavelength=wavelength,
             dx=dx,
             method=self.method,
+            **kw,
         )
         return _coerce_propagation_output(
             out, dx_default=dx, dy_default=dy,
@@ -315,9 +331,13 @@ class Magnify(Operator):
         [[1/a, 0],
          [0,   a]]
 
-    Rescales the field's grid pitch by ``a`` so the physical extent
-    scales as ``a * (N * dx)`` while preserving total power.  For
-    anamorphic stretches, pass distinct ``a_x`` and ``a_y``.
+    Rescales the field's grid pitch from ``dx`` to ``dx / a`` (and
+    ``dy`` to ``dy / a``).  Under the Nazarathy/Shamir 1980
+    ``V[a]`` convention, ``V[a]: (x, y) -> (x/a, y/a)``, so the
+    output is **shrunk by a factor of ``a``** when ``a > 1`` and
+    **magnified by a factor of ``1/a``** when ``0 < a < 1``.
+
+    For anamorphic stretches, pass distinct ``a_x`` and ``a_y``.
 
     Parameters
     ----------
@@ -326,25 +346,43 @@ class Magnify(Operator):
     a_y : float, optional
         Magnification along y.  Defaults to ``a_x`` (isotropic).
 
+    Output grid
+    -----------
+    On an ``N``-sample fixed grid, the output pixel pitch becomes::
+
+        new_dx = dx / a_x,   new_dy = dy / a_y
+
+    and the output extent is::
+
+        N * new_dx = N * dx / a_x,   N * new_dy = N * dy / a_y
+
+    Thus:
+
+    - ``a > 1``: output is **shrunk** by ``a`` (demagnifier in
+      optical-system terms).  Pitch is ``dx/a`` (finer);
+      extent is ``N*dx/a`` (smaller).
+    - ``0 < a < 1``: output is **magnified** by ``1/a``.  Pitch is
+      ``dx/a`` (coarser); extent is ``N*dx/a`` (larger).
+
     Notes
     -----
-    Delegates :meth:`_apply` to
-    :func:`lumenairy.resample_field` (interpolation onto the new
-    grid pitch ``dx_out = dx_in / a``) and applies the
-    ``sqrt(a_x * a_y)`` amplitude prefactor required for energy
-    conservation:
+    Application is a unitary rescale on a fixed-N grid: the field
+    values are multiplied by ``sqrt(a_x * a_y)`` and the announced
+    output pitch contracts by ``a``.  This preserves total power::
 
         |E_out|^2 * dx_out * dy_out  ==  |E_in|^2 * dx_in * dy_in.
+
+    No interpolation onto a coarser/finer support is performed --
+    the field values stay at the same array indices and only the
+    grid-pitch metadata changes (see the implementation note inside
+    :meth:`_apply`).
 
     The ABCD ``diag(1/a, a)`` is the **corrected** Nazarathy/Shamir
     form -- the original 1980 paper had a transcription slip in
     the off-diagonal sign; the corrected diagonal form is what
-    matches a physical magnifier (image is ``a`` times bigger in
-    real-space coordinates, so the ABCD ``[A, B; C, D]`` reads
-    ``A = 1/a`` because object-plane height scales to image-plane
-    height as ``y' = (1/a) * y`` for the conjugate of an ``a``-
-    times-bigger output region).  See lens-designer reference at
-    ``operators.py:556-577`` for the corresponding closure form.
+    matches a physical magnifier in the operator algebra (the
+    height-to-angle off-diagonal is zero because pure magnification
+    doesn't bend rays).
     """
 
     def __init__(self, a_x: float, a_y: Optional[float] = None) -> None:
@@ -428,9 +466,9 @@ class Magnify(Operator):
 
 
 class FourierTransform(Operator):
-    """Physical optical Fourier transform (back-focal-plane 2f setup).
+    """Physical optical Fourier transform (3-stage ``2f-lens-2f`` setup).
 
-    ABCD (2f setup ``FreeSpace(f) * ThinLens(f) * FreeSpace(f)``)::
+    ABCD (3-stage ``FreeSpace(f) * ThinLens(f) * FreeSpace(f)``)::
 
         [[0,    f],
          [-1/f, 0]]
@@ -443,20 +481,43 @@ class FourierTransform(Operator):
 
     Notes
     -----
-    The pure mathematical Fourier transform is dimensionally
-    inconsistent in physical units; we therefore deliberately
-    require a focal length.  The chosen implementation (spec
-    §3.3.3 option (a)) applies a thin-lens phase to the input and
-    then Fresnel-propagates by ``f_focal``, which collapses the
-    2f setup into a single FFT.  This matches the back-focal-plane
-    Fourier output of a single lens of focal length ``f`` placed
-    at distance ``f`` from the input plane.
+    Implements the canonical 3-stage Fourier-transforming geometry
+    of Goodman §5.2 ("Fourier Transforming Properties of a Thin
+    Lens"): the input plane sits one focal length before a lens
+    of focal length ``f``, and the output plane is read one focal
+    length after the lens.  In this geometry the field at the
+    output plane is the **pure** scaled optical Fourier transform
+    of the input field with no residual quadratic-phase factor --
+    only this 3-stage geometry achieves that on both ABCD and
+    field axes simultaneously.
 
-    The ABCD is the ABCD of the **2f setup** (``[FreeSpace(f),
-    ThinLens(f), FreeSpace(f)]`` composed), not the abstract
-    mathematical FT -- composition with subsequent operators is
-    therefore correct (verified in
-    ``test_v4_15_1_agent_g_abcd.py``).
+    Realization
+    -----------
+    The v4.15.2 ``_apply`` implementation invokes the literal
+    3-stage chain ``FreeSpace(f) -> ThinLens(f) -> FreeSpace(f)``
+    by delegating to those primitives.  Earlier (v4.15.1) shipped a
+    2-stage shortcut ``ThinLens(f) -> fresnel_propagate(f)`` which
+    matched the 3-stage ABCD but left a residual
+    ``exp(+i*k/(2f)*r^2)`` quadratic phase on the output -- the
+    field-vs-ABCD inconsistency closed by audit P1-NEW-A.
+
+    Performance note: the 3-stage path runs one additional Fresnel
+    propagation compared to the 2-stage shortcut.  For a single
+    Fourier transform the cost is ~2 FFTs (the two FreeSpace
+    legs) plus one phase multiply.  Users who want the 2-stage
+    ``ThinLens(f) -> propagate(f)`` "lens-then-propagate"
+    hardware semantics (back-focal-plane shortcut, with the
+    output-plane quadratic phase) can compose the operators
+    directly as ``ThinLens(f) * FreeSpace(f)`` -- this is a
+    genuine 2-stage chain whose ABCD is ``[[1, f], [-1/f, 0]]``
+    (not ``[[0, f], [-1/f, 0]]``) and whose field carries the
+    expected output-plane quadratic phase.
+
+    References
+    ----------
+    Goodman, J. W., *Introduction to Fourier Optics*, 4th ed.,
+    §5.2.3 "Fourier Transforming Properties of a Thin Lens"
+    (W. H. Freeman, 2017).
     """
 
     def __init__(self, f_focal: float) -> None:
@@ -473,6 +534,13 @@ class FourierTransform(Operator):
                 f"finite (got {ff})."
             )
         self.f = ff
+        # v4.15.2: the propagator backend for the two FreeSpace legs
+        # is fixed to ``'auto'`` so the dispatcher chooses Fresnel
+        # (the natural choice for z = f at typical optical scales);
+        # users who want a specific kernel can compose
+        # FreeSpace(f, method='asm') * ThinLens(f) * FreeSpace(f, method='asm')
+        # by hand.
+        self.method = 'auto'
         M = _validate_abcd(
             [[0.0, ff], [-1.0 / ff, 0.0]], 'FourierTransform',
         )
@@ -490,19 +558,26 @@ class FourierTransform(Operator):
         dy: float,
         wavelength: float,
     ) -> Tuple[np.ndarray, float, float]:
-        # Spec §3.3.3 option (a): lens phase then Fresnel propagate
-        # by f.  This is the "single-lens 2f" physical realization
-        # of the optical Fourier transform: input -> lens(f) ->
-        # propagate(f) -> back-focal-plane FT.
-        from ..elements.lenses import apply_thin_lens
-        from ..propagators.propagation import fresnel_propagate
-        E1 = apply_thin_lens(
-            E, f=self.f, wavelength=wavelength, dx=dx, dy=dy,
+        # v4.15.2 (audit P1-NEW-A): invoke the literal 3-stage chain
+        # ``FreeSpace(f) -> ThinLens(f) -> FreeSpace(f)`` so the
+        # output field matches the ABCD claim (Goodman §5.2).  The
+        # v4.15.1 2-stage shortcut (``ThinLens(f) -> fresnel(f)``)
+        # left a residual ``exp(+i*k/(2f)*r^2)`` quadratic phase on
+        # the output, so users composing ``FourierTransform(f)`` with
+        # phase-sensitive downstream operators got different fields
+        # than the equivalent 3-stage chain.
+        fs = FreeSpace(self.f, method=self.method)
+        tl = ThinLens(self.f)
+        E1, dx1, dy1 = fs._apply(
+            E, dx=dx, dy=dy, wavelength=wavelength,
         )
-        E_out, dx_out, dy_out = fresnel_propagate(
-            E1, z=self.f, wavelength=wavelength, dx=dx, dy=dy,
+        E2, dx2, dy2 = tl._apply(
+            E1, dx=dx1, dy=dy1, wavelength=wavelength,
         )
-        return E_out, float(dx_out), float(dy_out)
+        E3, dx3, dy3 = fs._apply(
+            E2, dx=dx2, dy=dy2, wavelength=wavelength,
+        )
+        return E3, float(dx3), float(dy3)
 
 
 __all__ = [

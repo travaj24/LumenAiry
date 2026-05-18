@@ -102,23 +102,55 @@ def _sentinel_unpickle(name: str) -> '_Sentinel':
 
     Used as the reconstructor target of ``_Sentinel.__reduce__``.  If
     the registry lookup fails (e.g. the sentinel's defining module was
-    not imported on the receiving side), falls back to constructing a
-    plain ``_Sentinel(name)`` -- the result will still ``repr`` and
-    ``bool`` correctly, but ``is``-identity with the original is lost.
-    Calling code that relies on ``is``-identity (the common case for
-    singleton sentinels) MUST ensure the defining module is imported
-    on the receiving side before unpickling.
+    not imported on the receiving side) we raise :class:`ImportError`
+    with an actionable message rather than silently constructing a
+    fresh base :class:`_Sentinel`.  The pre-v4.15.2 fallback path
+    produced a *base* ``_Sentinel`` that compared ``False`` under
+    ``isinstance`` checks against the original subclass (e.g.
+    ``_ZeroApertureMaskSentinel``), silently downgrading caller
+    semantics on receivers where the subclass-defining module had not
+    yet been imported.  The audit (AUDIT_V4_15_1, P2) flagged this as
+    a latent bug in distributed pipelines with delayed imports
+    (joblib workers, dask distributed, multiprocessing Pool workers
+    that ``cloudpickle`` a callable referencing the sentinel before
+    the worker has imported the module).  Strict raise surfaces the
+    timing issue at the unpickle site instead of letting the silent
+    downgrade propagate downstream.
     """
     inst = _SENTINEL_REGISTRY.get(name)
     if inst is not None:
         return inst
-    # Fall-through: construct a fresh instance.  This registers the new
-    # instance in the registry so subsequent unpickles return it
-    # consistently.
-    return _Sentinel(name)
+    raise ImportError(
+        f"_sentinel_unpickle: no _Sentinel registered under "
+        f"name={name!r}.  The defining module has likely not been "
+        f"imported on the receiving side.  To unpickle a "
+        f"{name!r}-class sentinel, import its defining module "
+        f"first (e.g. ``import lumenairy.optimize.core`` for "
+        f"``_ZERO_APERTURE_MASK``, ``import lumenairy.elements."
+        f"polarization`` for ``_ANGLE_UNSET``, ``import lumenairy."
+        f"_deprecation`` for ``NO_DEFAULT``).  See AUDIT_V4_15_1 P2 "
+        f"closure for the v4.15.2 strict-raise rationale."
+    )
 
 
-_NO_DEFAULT = _Sentinel('NO_DEFAULT')
+class _NoDefaultSentinel(_Sentinel):
+    """Singleton sentinel for "argument was not explicitly passed".
+
+    v4.15.2 (Agent E, P3): dedicated subclass for consistency with
+    :class:`_ZeroApertureMaskSentinel` and :class:`_AngleUnsetSentinel`.
+    Pre-v4.15.2 ``_NO_DEFAULT`` was a bare ``_Sentinel('NO_DEFAULT')``
+    instance, which differed cosmetically from the other two sentinels.
+    No behaviour change: the new subclass overrides nothing and the
+    singleton instance is still keyed by the ``'NO_DEFAULT'`` registry
+    name.
+    """
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__('NO_DEFAULT')
+
+
+_NO_DEFAULT = _NoDefaultSentinel()
 
 
 def _emit(msg: str, *, stacklevel: int = 3) -> None:

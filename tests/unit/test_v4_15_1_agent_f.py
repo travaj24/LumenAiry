@@ -392,3 +392,266 @@ def test_anamorphic_dy_passes_through():
     # grid and the extent would be at most ~32 um.  With dy=5um
     # they should range out to ~160 um.
     assert np.max(np.abs(rays.y)) > 30e-6
+
+
+# ============================================================================
+# v4.15.2 Agent D backfill -- audit-closure coverage for the
+# previously-untested paths flagged in
+# ``docs/audits/AUDIT_V4_15_1_2026_05_18.md`` Part 3 P2 / P3
+# (``'uniform'`` placement; ``'unwrap_gradient'`` angle method; vortex
+# per-pixel direction recovery; anamorphic direction-cosine pitches;
+# ``'cdf'`` placement reproducibility).
+# ============================================================================
+
+def test_uniform_placement_returns_grid_pixels_above_threshold():
+    """``placement='uniform'`` should sample the field on a regular
+    sub-grid, retaining only pixels whose intensity exceeds the
+    threshold.
+
+    Build a separable Gaussian; uniform placement should yield ray
+    origins on pixels of the underlying grid whose intensity exceeds
+    ``intensity_threshold * max(|E|^2)``.  Pin both: (a) ray origins
+    are integer multiples of ``(dx, dy)`` shifted by ``N // 2``, and
+    (b) ``|E(x_ray, y_ray)|^2 / max(|E|^2)`` exceeds the threshold
+    for every ray.
+
+    A wide-enough Gaussian keeps the survivor count >= n_rays so no
+    short-return ``RuntimeWarning`` fires; the short-return path is
+    covered separately in :func:`test_short_return_emits_warning`.
+    """
+    import warnings as _w
+    N, dx, lam = 64, 1e-6, 633e-9
+    w = 30e-6  # wide enough that 100 sub-grid cells comfortably survive
+    x = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(x, x)
+    I_arr = np.exp(-(X * X + Y * Y) / (w * w))
+    E = I_arr.astype(complex)
+    threshold = 1e-4
+
+    with _w.catch_warnings():
+        _w.simplefilter('error', RuntimeWarning)  # no warning expected
+        rays = la.rays_from_field(
+            E, dx=dx, wavelength=lam, n_rays=64,
+            placement='uniform', intensity_threshold=threshold,
+        )
+    # (a) ray origins land on grid pixels (no rounding error to
+    # within numerical tol).
+    ix = np.round(rays.x / dx).astype(int) + N // 2
+    iy = np.round(rays.y / dx).astype(int) + N // 2
+    assert np.all((ix >= 0) & (ix < N))
+    assert np.all((iy >= 0) & (iy < N))
+    assert np.allclose(rays.x, (ix - N // 2) * dx, atol=1e-15)
+    assert np.allclose(rays.y, (iy - N // 2) * dx, atol=1e-15)
+    # (b) every ray's pixel passes the pixel-wise threshold.
+    intensity_at_origin = np.abs(E[iy, ix]) ** 2
+    Imax = (np.abs(E) ** 2).max()
+    assert np.all(intensity_at_origin / Imax > threshold)
+
+
+def test_uniform_placement_handles_below_threshold_pixels():
+    """``placement='uniform'`` with a thin bright spot in a dark
+    background should land ALL rays on the bright-spot pixels.
+
+    Backfills the v4.15.1 audit gap: ``'uniform'`` was completely
+    untested.  A 4x4 bright square in an otherwise zero field should
+    confine the sub-grid survivors to the bright square -- nothing
+    leaks into the dark region even though the sub-grid has many
+    times more cells than the survivor count.  Because almost all
+    sub-grid cells fall in the dark region, a ``RuntimeWarning`` for
+    short-return is expected; the test catches and ignores it (the
+    short-return contract itself is pinned by
+    :func:`test_short_return_emits_warning`).
+    """
+    import warnings as _w
+    N, dx, lam = 64, 1e-6, 633e-9
+    E = np.zeros((N, N), dtype=complex)
+    # 4x4 bright square at the centre.
+    E[30:34, 30:34] = 1.0
+    with _w.catch_warnings():
+        _w.simplefilter('ignore', RuntimeWarning)
+        rays = la.rays_from_field(
+            E, dx=dx, wavelength=lam, n_rays=8,
+            placement='uniform', intensity_threshold=1e-4,
+        )
+    # Every surviving ray must land on a bright-square pixel.
+    ix = np.round(rays.x / dx).astype(int) + N // 2
+    iy = np.round(rays.y / dx).astype(int) + N // 2
+    assert np.all((ix >= 30) & (ix < 34))
+    assert np.all((iy >= 30) & (iy < 34))
+
+
+def test_unwrap_gradient_on_smooth_phase():
+    """``angle_method='unwrap_gradient'`` on a smooth tilted plane
+    wave should agree with ``'complex_gradient'`` to machine
+    precision and recover ``L = sin(theta)``.
+
+    Backfills the v4.15.1 audit gap: ``'unwrap_gradient'`` was
+    completely untested.
+    """
+    N, dx, lam = 256, 1e-6, 633e-9
+    k0 = 2.0 * np.pi / lam
+    theta = np.deg2rad(5.0)
+    kx_expected = k0 * np.sin(theta)
+    x = (np.arange(N) - N // 2) * dx
+    X, _ = np.meshgrid(x, x)
+    E = np.exp(1j * kx_expected * X)
+
+    rays_uw = la.rays_from_field(
+        E, dx=dx, wavelength=lam, n_rays=200, random_state=42,
+        angle_method='unwrap_gradient',
+    )
+    rays_cg = la.rays_from_field(
+        E, dx=dx, wavelength=lam, n_rays=200, random_state=42,
+        angle_method='complex_gradient',
+    )
+    # Both methods recover L = sin(theta) and disagree by at most
+    # 1e-6 on every pixel.
+    assert np.allclose(rays_uw.L, np.sin(theta), atol=1e-6)
+    assert np.allclose(rays_uw.L, rays_cg.L, atol=1e-6)
+    assert np.allclose(rays_uw.M, rays_cg.M, atol=1e-6)
+
+
+def test_unwrap_gradient_finite_on_vortex():
+    """``angle_method='unwrap_gradient'`` on a vortex field should
+    produce a non-NaN result.
+
+    Backfills the v4.15.1 audit gap: ``'unwrap_gradient'`` was
+    completely untested AND the vortex test only checked
+    ``isfinite`` for ``'complex_gradient'``.  Empirically the two
+    methods agree to ~1e-15 on this LG-like vortex because
+    ``np.unwrap`` along x / y rows independently does NOT cross the
+    branch cut at the origin in a way that diverges from the
+    phase-ratio result -- both produce finite, comparable values
+    away from the singularity core.
+    """
+    N, dx, lam = 128, 1e-6, 633e-9
+    x = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(x, x)
+    R = np.sqrt(X * X + Y * Y)
+    Theta = np.arctan2(Y, X)
+    w = 30e-6
+    E = (R / w) * np.exp(1j * Theta) * np.exp(-(R / w) ** 2)
+    rays_uw = la.rays_from_field(
+        E, dx=dx, wavelength=lam, n_rays=200, random_state=42,
+        angle_method='unwrap_gradient',
+    )
+    # No NaNs / Infs anywhere -- the headline behaviour pin.
+    assert np.all(np.isfinite(rays_uw.L))
+    assert np.all(np.isfinite(rays_uw.M))
+    assert np.all(np.isfinite(rays_uw.N))
+    assert np.all(np.isfinite(rays_uw.opd))
+
+
+def test_complex_gradient_vortex_direction_recovery_per_pixel():
+    """Per-pixel direction recovery on a vortex field should point
+    azimuthally to within 5%.
+
+    Backfills the v4.15.1 audit gap: the existing vortex test only
+    checked ``isfinite``.  The vortex phase is
+    ``phi = atan2(y, x)`` so ``grad(phi) = (-y, x) / r^2`` and
+    ``(L, M) = (-y, x) / (r^2 * k0)``.  For pixels safely outside
+    the vortex core (``r > 2 * dx``) the recovered direction must
+    be tangential to the radial direction (cos(angle between
+    radial and ray direction) ~ 0) and magnitude must follow
+    ``1 / (r k0)``.
+    """
+    N, dx, lam = 128, 1e-6, 633e-9
+    k0 = 2.0 * np.pi / lam
+    x = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(x, x)
+    R = np.sqrt(X * X + Y * Y)
+    Theta = np.arctan2(Y, X)
+    w = 30e-6
+    E = (R / w) * np.exp(1j * Theta) * np.exp(-(R / w) ** 2)
+
+    rays = la.rays_from_field(
+        E, dx=dx, wavelength=lam, n_rays=400, random_state=42,
+        placement='rejection', angle_method='complex_gradient',
+    )
+    r_ray = np.sqrt(rays.x ** 2 + rays.y ** 2)
+    far_mask = r_ray > 2.0 * dx
+    assert far_mask.sum() > 50  # need a sane sample size
+    # Tangential direction unit vector: (-y, x) / r.
+    tangent_x = -rays.y[far_mask] / r_ray[far_mask]
+    tangent_y = rays.x[far_mask] / r_ray[far_mask]
+    # Ray direction in the (x, y) plane normalised by its in-plane
+    # magnitude.
+    L = rays.L[far_mask]
+    M = rays.M[far_mask]
+    mag = np.sqrt(L * L + M * M)
+    # Avoid divide-by-zero for any (truly impossible) zero-direction
+    # ray, but the vortex always has non-zero in-plane k.
+    mag = np.where(mag > 0, mag, 1.0)
+    ray_dir_x = L / mag
+    ray_dir_y = M / mag
+    # The ray direction in the transverse plane should be parallel
+    # (or anti-parallel) to the tangent vector.  cos(angle) is +-1.
+    dot = ray_dir_x * tangent_x + ray_dir_y * tangent_y
+    assert np.all(np.abs(np.abs(dot) - 1.0) < 5e-2)
+
+
+def test_anamorphic_direction_cosines_use_correct_pitches():
+    """A tilted plane wave on an anamorphic ``dx != dy`` grid must
+    yield direction cosines ``L = kx / k0`` and ``M = ky / k0`` --
+    each computed with the correct per-axis pitch.
+
+    Backfills the v4.15.1 audit gap: anamorphic ``dx != dy`` was
+    only tested for positions, not direction cosines.
+
+    The Gaussian envelope concentrates the placement well inside the
+    grid so boundary one-sided differences (at ``ix == 0`` or
+    ``ix == Nx-1`` the phase-ratio uses the clamped neighbour and
+    halves the recovered ``kx``) do not contaminate the test.
+    """
+    N, dx, dy, lam = 128, 1e-6, 3e-6, 633e-9
+    k0 = 2.0 * np.pi / lam
+    theta_x = np.deg2rad(4.0)
+    theta_y = np.deg2rad(2.0)
+    kx = k0 * np.sin(theta_x)
+    ky = k0 * np.sin(theta_y)
+    x = (np.arange(N) - N // 2) * dx
+    y = (np.arange(N) - N // 2) * dy
+    X, Y = np.meshgrid(x, y)
+    # Gaussian envelope so that the CDF placement concentrates well
+    # inside the grid; the boundary clamp effect on the phase-ratio
+    # would otherwise halve the gradient at edge pixels.
+    Xnorm = X / ((N // 2) * dx * 0.25)
+    Ynorm = Y / ((N // 2) * dy * 0.25)
+    env = np.exp(-(Xnorm ** 2 + Ynorm ** 2) / 2.0)
+    E = env * np.exp(1j * (kx * X + ky * Y))
+    rays = la.rays_from_field(
+        E, dx=dx, dy=dy, wavelength=lam, n_rays=200, random_state=42,
+    )
+    # Independent recovery of L and M (the test would fail if the
+    # angle helper used dx everywhere instead of dx for x, dy for
+    # y).  Phase-ratio is exact for |k*pitch| < pi.
+    assert np.allclose(rays.L, np.sin(theta_x), atol=1e-3)
+    assert np.allclose(rays.M, np.sin(theta_y), atol=1e-3)
+
+
+def test_cdf_placement_reproducibility_with_integer_seed():
+    """``placement='cdf'`` with ``random_state=42`` must be
+    bit-identical on two successive calls.
+
+    Backfills the v4.15.1 audit gap: ``'cdf'`` reproducibility was
+    unpinned (only ``'rejection'`` was).
+    """
+    N, dx, lam = 128, 1e-6, 633e-9
+    w = 30e-6
+    x = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(x, x)
+    E = np.exp(-(X * X + Y * Y) / (w * w)).astype(complex)
+    rays_a = la.rays_from_field(
+        E, dx=dx, wavelength=lam, n_rays=300,
+        placement='cdf', random_state=42,
+    )
+    rays_b = la.rays_from_field(
+        E, dx=dx, wavelength=lam, n_rays=300,
+        placement='cdf', random_state=42,
+    )
+    np.testing.assert_array_equal(rays_a.x, rays_b.x)
+    np.testing.assert_array_equal(rays_a.y, rays_b.y)
+    np.testing.assert_array_equal(rays_a.L, rays_b.L)
+    np.testing.assert_array_equal(rays_a.M, rays_b.M)
+    np.testing.assert_array_equal(rays_a.N, rays_b.N)
+    np.testing.assert_array_equal(rays_a.opd, rays_b.opd)

@@ -330,9 +330,111 @@ class TestFourierTransformApplication:
         out = op(src)
         assert np.all(np.isfinite(out.E))
         assert np.sum(np.abs(out.E) ** 2) > 0.0
-        # Fresnel-FT changes the grid pitch: new dx = lam * f / (N * dx_in)
-        expected_dx = src.wavelength * 0.1 / (256 * src.dx)
-        assert np.isclose(out.dx, expected_dx, rtol=1e-6)
+
+    def test_fourier_transform_field_matches_3_stage_chain(self) -> None:
+        """v4.15.2 (audit P1-NEW-A): ``FourierTransform(f)(src)`` must
+        match the literal 3-stage chain ``FreeSpace(f) * ThinLens(f) *
+        FreeSpace(f)`` applied to the same source, on the FIELD side
+        not just the ABCD side.
+
+        Pre-v4.15.2 the 2-stage shortcut left a residual
+        ``exp(+i*k/(2f)*r^2)`` quadratic phase, so this test failed
+        with a non-trivial pointwise mismatch in the output field.
+        """
+        # Off-axis Gaussian: shifts the energy off-axis so the
+        # residual quadratic phase (centered at the origin) produces
+        # a measurable field-level mismatch in the 2-stage shortcut,
+        # not just a global phase rotation that would be invisible to
+        # a magnitude-only comparison.
+        f = 0.1
+        src = la.Source.gaussian(
+            N=256, dx=2e-6, wavelength=633e-9, w0=100e-6, x0=80e-6,
+        )
+        op = FourierTransform(f)
+        chain = FreeSpace(f) * ThinLens(f) * FreeSpace(f)
+        out_op = op(src)
+        out_chain = chain(src)
+        # Both should produce the same output pitch since the 3-stage
+        # invocation IS the chain.
+        assert np.isclose(out_op.dx, out_chain.dx, rtol=1e-12)
+        # And the FIELD itself must match bit-for-bit (or to a tight
+        # numerical tolerance accounting for FFT roundoff across two
+        # independent invocations of the same primitive sequence).
+        assert np.allclose(out_op.E, out_chain.E, rtol=1e-10, atol=1e-12), (
+            f"FourierTransform field does not match 3-stage chain: "
+            f"max abs diff = "
+            f"{np.max(np.abs(out_op.E - out_chain.E)):.3e}"
+        )
+
+
+# ============================================================================
+# FreeSpace dy threading (v4.15.2 audit P1-NEW-C)
+# ============================================================================
+
+
+class TestFreeSpaceDyThreading:
+
+    def test_freespace_threads_dy_for_anamorphic_chain(self) -> None:
+        """v4.15.2 (audit P1-NEW-C): ``FreeSpace._apply`` must thread
+        ``dy`` into the underlying propagator so anamorphic chains
+        starting with ``Magnify(a_x, a_y) * FreeSpace(d)`` propagate
+        on the correct grid.
+
+        Pre-v4.15.2 the call dropped ``dy`` and the kernel silently
+        defaulted to ``dy = dx``.  This test exercises the bare-tuple
+        anamorphic entry point so the input ``dy != dx`` reaches the
+        underlying propagator.
+        """
+        # Build an anamorphic input grid: dy = 2*dx.
+        src = _build_test_source(N=64, dx=2e-6, w0=50e-6)
+        dx_in = float(src.dx)
+        dy_in = 2.0 * dx_in
+        op = FreeSpace(0.05, method='asm')
+        # 4-tuple anamorphic entry point threads dy into _apply.
+        E_out, dx_out, dy_out, wl_out = op(
+            (src.E, dx_in, dy_in, src.wavelength)
+        )
+        assert E_out.shape == src.E.shape
+        assert np.all(np.isfinite(E_out))
+        # ASM preserves pitch (no rescaling kernel), so the output
+        # pitches should match the input.
+        assert np.isclose(dx_out, dx_in, rtol=1e-12)
+        assert np.isclose(dy_out, dy_in, rtol=1e-12), (
+            f"FreeSpace dropped dy: input dy={dy_in:.3e}, output "
+            f"dy={dy_out:.3e} (expected {dy_in:.3e} since ASM preserves "
+            f"pitch)"
+        )
+        # Sanity: the output is not the same as the dy=dx (square-
+        # grid) propagation, because the y-axis kernel uses a
+        # different sampling grid.
+        E_out_square, _, _ = op._apply(
+            src.E, dx=dx_in, dy=dx_in, wavelength=src.wavelength,
+        )
+        # Some pixel must differ between the two (the y-axis kernel
+        # differs).  A pure on-axis Gaussian might give nearly-equal
+        # results within roundoff; verify the y-axis is actually
+        # threaded by checking the kernel produces a different
+        # output when dy != dx.
+        # Use an off-axis Gaussian so the y-axis kernel matters.
+        src_off = la.Source.gaussian(
+            N=64, dx=dx_in, wavelength=src.wavelength, w0=20e-6,
+            y0=15e-6,
+        )
+        E_anam, _, dy_anam = op._apply(
+            src_off.E, dx=dx_in, dy=dy_in, wavelength=src.wavelength,
+        )
+        E_iso, _, dy_iso = op._apply(
+            src_off.E, dx=dx_in, dy=dx_in, wavelength=src.wavelength,
+        )
+        # The anamorphic output must differ from the isotropic one;
+        # if dy were silently dropped, both calls would yield the
+        # same field.
+        assert dy_anam != dy_iso
+        assert not np.allclose(E_anam, E_iso, atol=1e-12), (
+            "FreeSpace silently dropped dy: anamorphic and isotropic "
+            "kernels produced identical fields, suggesting dy did not "
+            "reach the underlying propagator."
+        )
 
 
 # ============================================================================
