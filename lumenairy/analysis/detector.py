@@ -119,6 +119,16 @@ def apply_detector(
     x_det, y_det : ndarray
         Detector pixel center coordinates [m].
     """
+    # v4.15.4 (P2-NEW-3WAY-2): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  v4.15.3 scoped the walker
+    # to ``propagators/`` + ``elements/`` only; this ``analysis/``
+    # sibling was missed.  Runs FIRST so PartialCoherenceMCF /
+    # 3-D ensemble inputs get a clear v4.16-roadmap message rather
+    # than the cryptic ``ValueError: too many values to unpack`` at
+    # the ``Ny, Nx = E.shape`` line below.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'apply_detector')
+
     Ny, Nx = E.shape
     I_field = np.abs(E) ** 2  # intensity [per m^2 if field is normalised]
 

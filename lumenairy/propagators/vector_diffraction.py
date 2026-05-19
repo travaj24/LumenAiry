@@ -67,6 +67,19 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     x_focal, y_focal : ndarray
         1-D focal coordinate arrays [m].
     """
+    # v4.15.4 (P2-NEW-V2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  v4.15.3's walker visited
+    # this file but the name regex (``apply_*`` / ``*_propagate*`` /
+    # ``propagate``) did NOT match ``richards_wolf_focus``; v4.15.4
+    # broadens the discovery via ``__all__`` so this site is now in
+    # scope of the meta-pin.  Runs FIRST -- before the lazy import
+    # of ``get_default_complex_dtype`` and the ``np.asarray(pupil)``
+    # cast -- so PartialCoherenceMCF / 3-D ensemble inputs get the
+    # canonical v4.16-roadmap message rather than a downstream
+    # ``np.asarray`` cast error.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(pupil, 'richards_wolf_focus')
+
     # 4.11.2: honour precision='single' via the global default complex
     # dtype.  Pre-4.11.2 the input was always promoted to complex128,
     # silently negating ``set_default_complex_dtype(np.complex64)``.
@@ -278,6 +291,15 @@ def debye_wolf_psf(pupil, wavelength, NA, f, dx_pupil,
         (N_z, N_focal, N_focal).
     x_focal, y_focal : ndarray
     """
+    # v4.15.4 (P2-NEW-V2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Runs FIRST so the
+    # PartialCoherenceMCF / 3-D ensemble message is returned
+    # from ``debye_wolf_psf`` (with the right function name in
+    # the error) rather than being raised at the downstream
+    # ``richards_wolf_focus`` callsite with a wrong fn_name.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(pupil, 'debye_wolf_psf')
+
     Ex, Ey, Ez, x_f, y_f = richards_wolf_focus(
         pupil, wavelength, NA, f, dx_pupil,
         N_focal=N_focal, dx_focal=dx_focal,

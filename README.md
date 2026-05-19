@@ -10,6 +10,68 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.15.4
+
+**Closes the v4.15.3 audit (`docs/audits/AUDIT_V4_15_3_2026_05_18.md`)
+through P3 + adds two user-facing OPD plotting functions.**  0 P0 +
+1 P1 + 6 P2 + 5 P3 — cleanest audit yield in the v4.15.x series.
+1858 unit pass (up from 1822); 34/34 validation pass.
+
+### Headline: walker scope refactor + 2 new OPD plotting functions
+
+v4.15.3 shipped a structural counter-measure (`_check_2d_scalar_field`
+helper + dispatcher meta-pin) to retire the recurring sibling-gap
+meta-pattern.  But the walker scoped only to two packages — leaving
+6 sibling entry points outside its view.  v4.15.4 makes discovery
+`__all__`-based and broadens the name filter; the walker now
+discovers all 49 candidate entry points and guards the 6 newly-
+found siblings:
+
+* `propagate_through_system_jax` (P1)
+* `apply_dm`, `apply_detector` (in `analysis/`)
+* `richards_wolf_focus`, `debye_wolf_psf` (vector diffraction)
+* `apply_perturbations` documented exempt (first arg is a
+  prescription dict, not a 2-D scalar field)
+
+Plus a **fake-violation counter-pin** that injects a synthetic
+unguarded function and asserts the meta-pin fires — making walker
+correctness a positive signal rather than a count-floor heuristic.
+
+### New OPD plotting functions
+
+Two new public functions in `lumenairy.analysis.plotting` (matching
+the visual style of the `OPDPy_Lumenairy_Crosscheck` figures):
+
+* **`plot_opd_fan(py, opd_y, px, opd_x, *, wavelength=None,
+  units='waves', ...)`** — 2-panel tangential + sagittal OPD fans.
+  Inputs match `raytrace.opd_fan_data` return tuple.  Solid line +
+  zero-reference + PV/RMS annotation.
+* **`plot_opd_summary(opd_2d, dx, *, ...)`** — 4-panel: 2-D heatmap
+  (delegates to `plot_wavefront`), radial RMS profile, tangential
+  fan, sagittal fan.  Fan args optional — auto-extracts from 2-D
+  OPD's central row/column when not provided.
+
+Runnable example at `examples/plot_opd_summary_singlet.py`.
+
+### P1/P2/P3 closures
+
+* `_validation.py` lazy-import hoisted to module scope (~1 µs/call
+  saved; the cited circular dep was hypothetical).
+* `_PerturbedABCDFallbackSentinel` deleted (was dead code with only
+  a docstring marker).
+* 63 v4.15.3 tests previously failing under `-W error::DeprecationWarning`
+  now pass (per-module `pytestmark` filter for the documented Schell
+  `return_kind` warning).
+* CHANGELOG corrections to the v4.15.3 entry: SAS-anamorphic wording
+  ("regardless" → "when self.method=='auto'"); stacklevel breakdown
+  acknowledges `create_led_source` as factory-not-classmethod;
+  dispatcher meta-pin count 17 guarded / 26 exempt (was 18/25);
+  test-count arithmetic reconciled with documented +1 attribution-
+  vs-collection gap.
+* ROADMAP refreshed: test count → actual 1824; AUDIT_V4_15_2 +
+  AUDIT_V4_15_3 added to closed list; meta-pin coverage 3 of 5 →
+  4 of 5.
+
 ## What's new in 4.15.3
 
 **Closes the v4.15.2 audit (`docs/audits/AUDIT_V4_15_2_2026_05_18.md`)

@@ -2,6 +2,140 @@
 
 All notable changes to the core library are documented here.
 
+## [4.15.4] — 2026-05-19
+
+**Closes the v4.15.3 audit (`docs/audits/AUDIT_V4_15_3_2026_05_18.md`)
+through P3 + adds two user-facing OPD plotting functions.**  The audit
+found 0 P0 + 1 P1 + 6 P2 + 5 P3 — the cleanest yield in the v4.15.x
+series.  The single P1 is the recurring "fix N, miss N+1" meta-
+pattern re-emerging one level of indirection higher than v4.15.3
+closed it: the dispatcher meta-pin's `_TARGET_PACKAGES` scope itself
+was a sibling gap.  **1858 unit tests pass** (up from 1822; +36 net),
+1 documented skip, 1 documented xfail; **34/34 validation files pass**.
+
+### Headline: walker scope refactor closes the meta-pattern at the package level
+
+v4.15.3 shipped the `_check_2d_scalar_field` helper + dispatcher meta-
+pin.  But the walker scoped only to
+`('lumenairy/propagators', 'lumenairy/elements')`, missing 4 public
+entry points outside that scope.  v4.15.4 makes discovery
+`__all__`-based:
+
+* **`_walk_entry_points` refactored** to walk `lumenairy.__all__`
+  membership via `inspect.getsourcefile`; survives future refactors
+  that move functions between subpackages.  Package-walk retained as
+  a fallback.  43 entry points -> 49 after the refactor.
+* **Name filter broadened** with `name.startswith('propagate_')` to
+  catch `propagate_through_system` + `propagate_through_system_jax`
+  (which contain `propagate_` at the start but not `_propagate` in
+  the middle — the v4.15.3 filter missed both).
+* **6 newly-found sibling entry points guarded** via the v4.15.3
+  helper: `propagate_through_system_jax` (P1), `apply_dm`,
+  `apply_detector`, `richards_wolf_focus`, `debye_wolf_psf`; plus
+  `apply_perturbations` documented exempt (first positional arg is
+  a prescription dict, not a 2-D scalar field).
+* **Fake-violation counter-pin** added to the dispatcher meta-pin:
+  injecting a synthetic unguarded function via `monkeypatch.setattr`
+  must trigger the meta-pin's `AssertionError`.  Walker correctness
+  now pins on a positive signal.
+
+### P1 closure (1)
+
+* **P1-NEW-3WAY-1** walker scope completeness — closed via
+  `__all__`-based discovery + extended `_TARGET_PACKAGES`.
+
+### P2 closures (6)
+
+* Walker name-regex broadening + 3 unguarded `analysis/` siblings
+  guarded (covered under headline).
+* SAS-anamorphic CHANGELOG wording corrected retroactively in the
+  v4.15.3 entry: `"forces method='asm' regardless of self.method"`
+  -> `"forces method='asm' when self.method == 'auto' and dy != dx;
+  explicit method='sas' on anamorphic grids still crashes (user's
+  responsibility)"`.
+* `_validation.py` lazy-import hoisted to module scope.  The
+  v4.15.3 code used a lazy import citing a hypothetical circular
+  dep; audit grep-verified no actual circular dep exists.  Saves
+  ~1 µs/call (1-10 ms per merit eval in optimization loops with
+  thousands of propagator calls).
+* Dead `_PerturbedABCDFallbackSentinel` deleted.  v4.15.3 marked
+  it dead via `_v4_15_3_dead_code = True` class attribute
+  (informational only — no static analyzer honors it).  v4.15.4
+  deletes the class + singleton (~58 LOC).  v4.15.2 test pin
+  updated in the same commit.
+* ROADMAP refreshed: post-v4.15.3 test count ~1750 → actual 1824;
+  AUDIT_V4_15_2 + AUDIT_V4_15_3 added to closed-audits list; meta-
+  pin coverage 3 of 5 → 4 of 5 with the V5 entry describing
+  `_check_2d_scalar_field`.
+
+### P3 closures (5)
+
+* CHANGELOG dispatcher meta-pin count drift fixed (18/25 → 17/26;
+  43 total).
+* Fake-violation counter-pin added (covered above).
+* CHANGELOG stacklevel wording: "6 Source classmethod shims" → "5
+  `Source.*` classmethod shims at `:2424, 2510, 2587, 2661, 2750`
+  plus the module-level `create_led_source` factory shim at
+  `:1209`".
+* `-W error::DeprecationWarning` test hygiene: 63 v4.15.3 tests
+  previously failed under the strict flag (they exercised the
+  documented Schell `return_kind` default-path warning without
+  shielding).  v4.15.4 adds `pytestmark =
+  pytest.mark.filterwarnings('default::DeprecationWarning')` to 6
+  affected test files.  Failures: 63 → 0.
+* CHANGELOG test-count arithmetic reconciled: v4.15.3 baseline
+  1732 → 1733; per-agent attribution sum 88 documented alongside
+  actual collected delta 89 with explicit explanation of the +1
+  attribution-vs-collection gap.  Removed the false claim about a
+  ROADMAP update that wasn't actually performed in v4.15.3.
+
+### New: OPD plotting functions
+
+Two new public functions in `lumenairy/analysis/plotting.py`, visually
+matching the `OPDPy_Lumenairy_Crosscheck` `fig_variety_L*.png` style:
+
+* **`plot_opd_fan(py, opd_y, px, opd_x, *, wavelength=None,
+  units='waves', show_stats=True, title=None, fig=None, axes=None)`**
+  — 2-panel tangential + sagittal OPD fans.  Inputs match
+  `lumenairy.raytrace.opd_fan_data`'s return tuple.  Solid-line
+  plots with zero-reference axhline, in-axes PV/RMS annotation,
+  units kwarg matches `plot_wavefront` (waves / nm / um / m).
+  Returns `(fig, (ax_y, ax_x))`.  147 LOC.
+* **`plot_opd_summary(opd_2d, dx, *, dy=None, aperture=None,
+  wavelength=None, py=None, opd_y=None, px=None, opd_x=None,
+  units='waves', cmap='RdBu_r', show_stats=True, title=None,
+  fig=None)`** — 4-panel summary: 2-D heatmap (delegates to
+  `plot_wavefront`), radial RMS profile (32 annular bins),
+  tangential fan, sagittal fan.  Fan panels use the provided
+  `(py, opd_y, px, opd_x)` if supplied (preferred — raytrace data
+  has chief-ray reference built in) or auto-extract from the 2-D
+  OPD's central row/column otherwise.  Returns `(fig, ((ax_hm,
+  ax_rms), (ax_y, ax_x)))`.  204 LOC.
+
+Both added to `lumenairy.__all__` (analysis tier).  10 unit tests +
+runnable example at `examples/plot_opd_summary_singlet.py` (singlet
+OPD via `apply_real_lens_traced` + `opd_fan_data`; PV ≈ 2.93 / RMS
+≈ 1.33 waves at λ=587.56 nm).
+
+### Test counts
+
+* Pre-v4.15.4 baseline (v4.15.3): 1822 unit pass + 1 skip + 1 xfail.
+* v4.15.4 additions: A=8 + 1 counter-pin in the meta-pin file,
+  B=11, C=7, D=10.  Net +36.
+* Final: **1858 unit pass + 1 skip + 1 xfail; 34/34 validation**.
+
+### Deferred to v4.16+
+
+Unchanged from prior releases: modal-asymptotic independent
+ground-truth pin; 4 V2 meta-pin candidates still standing
+(sentinel-aware branch propagation, `_xp_of` dispatch, `dy`
+parameter threading walker, `__all__` symmetry walker); MCF-aware
+downstream propagators; multi-process atomic-append for
+`storage.py`; `MultiPrescriptionParameterization.scale_floor`;
+Forbes Q-2D-asymmetric variant.
+
+---
+
 ## [4.15.3] — 2026-05-18
 
 **Closes the v4.15.2 audit (`docs/audits/AUDIT_V4_15_2_2026_05_18.md`)
@@ -10,9 +144,9 @@ mostly the recurring "fix N, miss N+1" sibling-gap meta-pattern that
 has appeared in every audit round from v4.13.x onward.  v4.15.3
 closes the P0 with a **structural counter-measure** (shared
 validation helper + dispatcher meta-pin) that makes the recurrence
-impossible going forward.  **1822 unit tests pass** (up from 1732;
-+90 net), 1 documented skip, 1 documented xfail; **34/34 validation
-files pass**.
+impossible going forward.  **1822 unit tests pass** (up from 1733;
++89 collected vs v4.15.2 HEAD), 1 documented skip, 1 documented
+xfail; **34/34 validation files pass**.
 
 ### Headline: structural counter-measure for the sibling-gap meta-pattern
 
@@ -38,8 +172,8 @@ v4.15.3 fixes this **structurally**:
    AST-walks every `def apply_*` and `def *_propagate*` in
    `lumenairy/propagators/` and `lumenairy/elements/`; asserts
    `_check_2d_scalar_field` is the first executable statement of
-   each function body.  **43 entry points discovered, 18 guarded,
-   25 documented exemptions** (GBD beamlets, HFPI/HF state objects,
+   each function body.  **43 entry points discovered, 17 guarded,
+   26 documented exemptions** (GBD beamlets, HFPI/HF state objects,
    batched 3-D variants, JAX-traceable lens kernels, polarization
    helpers, etc.).  Adding a new public entry point in the at-risk
    modules WITHOUT the helper call now fails CI.
@@ -77,18 +211,22 @@ counter-pin against accidentally-removed guards).
 * **P1-NEW-F1-1 — `FreeSpace._apply` SAS-anamorphic crash fixed.**
   When `dy != dx` and `method='auto'`, the dispatcher routed to SAS
   (square-grid-only); the v4.15.2 dy-threading fix passed `dy` to
-  SAS which doesn't accept it.  v4.15.3 forces `method='asm'`
-  regardless of `self.method` when `dy != dx` — `auto` is now a
-  hint, not a contract.  `FourierTransform._apply` inherits the
-  fix by composition (the 3-stage rewrite creates `FreeSpace`
-  instances internally).
+  SAS which doesn't accept it.  v4.15.3 forces `method='asm'` when
+  `self.method == 'auto'` and `dy != dx` — `auto` is now a hint,
+  not a contract.  Explicit `method='sas'` on anamorphic grids
+  still crashes (user's responsibility — the in-code comment at
+  `algebra/primitives.py:142-147` documents this gating).
+  `FourierTransform._apply` inherits the fix by composition (the
+  3-stage rewrite creates `FreeSpace` instances internally).
 * **P1-NEW-F1-2 — Schell `DeprecationWarning` stacklevel fixed.**
   `_warn_schell_return_kind_default` had `stacklevel=4`; the call
   chain is 5 frames deep (warnings.warn → warn_deprecated_signature
   → _warn_schell_return_kind_default → factory → user).  Bumped to
   5.  Library-wide sweep of `_warn_*` helpers found 6 additional
-  off-by-one stacklevels in `sources/core.py` Source classmethod
-  shims; all bumped 3 → 4.
+  off-by-one stacklevels in `sources/core.py` (5 `Source.*`
+  classmethod shims at `:2424, 2510, 2587, 2661, 2750` plus the
+  module-level `create_led_source` factory shim at `:1209`); all
+  bumped 3 → 4.
 * **P1-NEW-F1-3 — 3 dead `optimize/core.py` sentinels wired.**
   v4.15.2 added `_InvalidFocalLengthSentinel`,
   `_FailedScanStrehlSentinel`, `_PerturbedABCDFallbackSentinel`
@@ -147,21 +285,39 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/core.py:2980` (was `:2905` in the
-  v4.15.2 entry).
+  branch now at `optimize/core.py:2938` (was `:2980` pre-v4.15.4
+  Agent B `_PerturbedABCDFallbackSentinel` deletion; was `:2905`
+  in the v4.15.2 entry).
 * **Test count reconciliation**:
   `pytest --collect-only` → 1735 collected at v4.15.2 HEAD
   (was reported as "1732 pass + 1 skip + 1 xfail = 1734" in
-  CHANGELOG, off by 1); reconciled.  ROADMAP "~1700" → updated
-  to the v4.15.3 baseline 1822 + 1 skip + 1 xfail.
+  CHANGELOG, off by 1); reconciled in this entry's `### Test
+  counts` block below.  The ROADMAP refresh originally claimed in
+  this bullet ("~1700 → 1822 baseline") did NOT land in v4.15.3
+  — that drift is documented in `AUDIT_V4_15_3` P2-NEW-V3-3 and is
+  closed by v4.15.4 (Agent C scope).
 
 ### Test counts
 
-* Pre-v4.15.3 baseline (v4.15.2): 1732 unit pass + 1 skip + 1 xfail.
-* v4.15.3 additions: A=37 (7 meta-pin + 30 regression), B=24,
-  C=19 (12 new file + 4 4-fold + 3 Gaussian-waist), D=8 (7 doc
-  +1 boundary-regression).  Net +90.
-* Final: **1822 unit pass + 1 skip + 1 xfail**; **34/34 validation**.
+* Pre-v4.15.3 baseline (v4.15.2): 1733 unit pass + 1 skip + 1 xfail
+  = 1735 collected (per the corrected v4.15.2 entry's
+  `pytest --collect-only` reconciliation; pre-v4.15.3 the v4.15.3
+  block transcribed this baseline as "1732" — a one-off carry-over
+  of the same off-by-one the v4.15.2 entry self-corrected).
+* v4.15.3 additions, per-agent attribution: A=37 (7 meta-pin + 30
+  regression), B=24, C=19 (12 new file + 4 4-fold + 3
+  Gaussian-waist), D=8 (7 doc + 1 boundary-regression).  Per-agent
+  sum: **88** (pre-v4.15.4 corrected from "Net +90" — neither the
+  per-agent sum nor the collected delta were ever 90).
+* Actual `pytest --collect-only` delta against the v4.15.2 baseline
+  (1735) at v4.15.3 HEAD sha `7808107`: **+89 collected** (1824
+  collected at v4.15.3 HEAD); the +1 gap between the per-agent
+  attribution sum (88) and the collected delta (89) is a
+  parametrize-expansion / fixture-collection artifact that does
+  not cleanly attribute to a single agent; the canonical number is
+  the collected delta.
+* Final: **1822 unit pass + 1 skip + 1 xfail = 1824 collected**;
+  **34/34 validation**.
 
 ### Deferred to v4.16+
 
@@ -584,14 +740,17 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/core.py:2980` (the
-  `if _cache['mask'] is _ZERO_APERTURE_MASK` line) post v4.15.3
-  sentinel-wiring work; the sentinel class + singleton are at
-  `optimize/core.py:2034` and `optimize/core.py:2044` respectively
-  post Agent E's `_Sentinel`
+  sentinel branch now lives at `optimize/core.py:2938` (the
+  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:2980`
+  pre-v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion
+  (~55 lines removed at the top of the sentinel block), and
+  `:2905` pre-v4.15.3 sentinel-wiring work.  The remaining
+  sentinel class + singleton (`_ZeroApertureMaskSentinel` /
+  `_ZERO_APERTURE_MASK`) are at `optimize/core.py:2034` and
+  `optimize/core.py:2044` respectively post Agent E's `_Sentinel`
   base-class refactor.  v4.15.2 (P3): citation refreshed after a
-  second line-drift pass against the current source supersedes the
-  earlier stale citations.
+  second line-drift pass against the current source supersedes
+  the earlier stale citations.
 
 ### CLUSTER_B Item 6 — `rays_from_field` bridge function
 

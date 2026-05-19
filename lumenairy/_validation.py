@@ -22,6 +22,22 @@ from __future__ import annotations
 
 from typing import Any
 
+# Module-level import -- v4.15.3 used a lazy import inside the function
+# body, citing a (hypothetical) circular dependency with
+# ``sources.core``.  ``sources.core`` does NOT actually import from
+# ``_validation`` (it only imports from ``_deprecation``), so the
+# circular-dep claim was inaccurate and the lazy import wasted ~1 us
+# per propagator call (1-10 ms per merit eval in optimisation loops).
+# v4.15.4 hoists the import to module scope.
+#
+# If a future refactor introduces a ``sources.core`` -> ``_validation``
+# import path, switch to a ``TYPE_CHECKING`` import + duck-typed
+# predicate (e.g. ``hasattr(E, 'mcf_matrix')`` or
+# ``type(E).__name__ == 'PartialCoherenceMCF'``) instead of restoring
+# the lazy import -- the duck-typed predicate is free of import-order
+# constraints AND keeps the helper hot-loop cheap.
+from lumenairy.sources.core import PartialCoherenceMCF as _MCF
+
 
 def _check_2d_scalar_field(E: Any, fn_name: str) -> None:
     """Reject ``PartialCoherenceMCF`` and non-2-D inputs at the
@@ -51,10 +67,6 @@ def _check_2d_scalar_field(E: Any, fn_name: str) -> None:
         propagator.  The error message shows the canonical
         iterate-and-average pattern.
     """
-    # Lazy import avoids a circular dependency from
-    # ``sources.core`` (which imports from ``_deprecation``).
-    from lumenairy.sources.core import PartialCoherenceMCF as _MCF
-
     if isinstance(E, _MCF):
         raise TypeError(
             f"{fn_name}: PartialCoherenceMCF inputs are not yet "

@@ -71,9 +71,20 @@ from lumenairy.optimize.core import (
     _FailedScanStrehlSentinel,
     _INVALID_FL_SENTINEL_OBJ,
     _InvalidFocalLengthSentinel,
-    _PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ,
-    _PerturbedABCDFallbackSentinel,
 )
+# v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a): the
+# ``_PerturbedABCDFallbackSentinel`` class and its singleton
+# ``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ`` were DELETED in v4.15.4 as
+# dead code (never wired; the perturbed-ABCD fallback is a 2-tuple,
+# which is not single-sentinel-friendly).  The
+# ``TestPerturbedABCDSentinelDeadCode`` class below (which asserted
+# the v4.15.3 class-attribute marker and AST-unwiredness) is
+# superseded by the v4.15.4 deletion-existence pin in
+# ``test_v4_15_2_agent_e.py
+# ::TestOptimizeCoreSentinelMigration
+# ::test_perturbed_abcd_fallback_sentinel_deleted_v4_15_4`` and is
+# converted into a single non-existence pin here for the v4.15.3
+# scope's own record.
 
 
 # ============================================================================
@@ -420,106 +431,40 @@ class TestDownstreamConsumersHandleSentinel:
 # ============================================================================
 
 
-class TestPerturbedABCDSentinelDeadCode:
-    """v4.15.3 (audit P1-NEW-F1-3): per the brief's option (b), the
-    ``_PerturbedABCDFallbackSentinel`` singleton is NOT wired (the
-    underlying fallback is a 2-tuple ``(efl_p, bfl_p)`` not a scalar
-    -- wrapping a tuple breaks downstream unpacking).  v4.15.3
-    documents this fact via a class-level
-    ``_v4_15_3_dead_code = True`` marker and an explicit deprecation
-    docstring.
+class TestPerturbedABCDSentinelDeletedV4_15_4:
+    """v4.15.4 supersedes the v4.15.3 ``TestPerturbedABCDSentinelDeadCode``
+    class.  The v4.15.3 closure marked the ``_PerturbedABCDFallbackSentinel``
+    class as dead code via a class-level ``_v4_15_3_dead_code = True``
+    attribute and an explicit deprecation docstring -- but the marker
+    was data-only, not honoured by any static analyser.  v4.15.4
+    deletes the class outright (AUDIT_V4_15_3 P2-NEW-F1-B option a).
 
-    The class is KEPT (rather than removed) so the v4.15.2 test pin
-    in ``test_v4_15_2_agent_e.py::TestOptimizeCoreSentinelMigration``
-    continues to pass without touching files outside the Agent-C
-    scope.
+    This collapsed class records the v4.15.4 deletion from the
+    v4.15.3 scope's vantage point.  The canonical v4.15.4 deletion
+    pin lives at ``test_v4_15_2_agent_e.py
+    ::TestOptimizeCoreSentinelMigration
+    ::test_perturbed_abcd_fallback_sentinel_deleted_v4_15_4``.
     """
 
-    def test_perturbed_abcd_sentinel_marked_dead(self) -> None:
-        """Class-level ``_v4_15_3_dead_code`` marker is present and
-        truthy."""
-        assert getattr(
-            _PerturbedABCDFallbackSentinel,
-            '_v4_15_3_dead_code',
-            False,
-        ) is True, (
-            "Expected _PerturbedABCDFallbackSentinel to carry a "
-            "class-level _v4_15_3_dead_code = True marker that "
-            "documents its removal-as-dead-code per audit "
-            "P1-NEW-F1-3 (option b -- tuple fallback shape is not "
-            "single-sentinel-friendly).  See the class docstring "
-            "for the rationale."
-        )
-
-    def test_perturbed_abcd_sentinel_docstring_marks_dead(self) -> None:
-        """Class docstring mentions ``deprecated`` or ``dead code``
-        so a casual reader sees the marker without having to find
-        the class-attribute."""
-        doc = _PerturbedABCDFallbackSentinel.__doc__ or ''
-        keywords = ('deprecated', 'dead code', 'Dead code', 'DEAD CODE')
-        assert any(kw in doc for kw in keywords), (
-            f"Expected _PerturbedABCDFallbackSentinel docstring to "
-            f"announce its dead-code status (one of "
-            f"{keywords!r}); got docstring:\n{doc!r}."
-        )
-
-    def test_perturbed_abcd_sentinel_not_referenced_at_callsite(
-        self,
-    ) -> None:
-        """Audit closure: confirm callsite 3 (the
-        ``ToleranceAwareMerit.evaluate`` perturbed-ABCD failure
-        branch, v4.15.3 line ~2873) is NOT wired to the singleton.
-
-        Sweep the AST of ``lumenairy.optimize.core`` for ALL
-        ``Name`` node loads (RHS read-references) of the singleton
-        ``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ``.  The audit
-        requires that this singleton be unwired -- i.e. NO live
-        runtime read-reference of the singleton's identifier should
-        exist anywhere in the module.
-
-        The singleton's BINDING site
-        (``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ = ...``) is a
-        ``Store`` context and is permitted.  The constructor call
-        ``super().__init__('_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ')``
-        is a string literal (not an identifier reference) and is
-        also permitted.
-
-        The previous v4.15.2 docstring's class comment block
-        contained references like ``ctx.efl is
-        _PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ`` but those live in a
-        triple-quoted docstring (an ``Expr`` ``Constant`` node), not
-        an executable load -- AST-walking on ``Name`` nodes ignores
-        them automatically.
-        """
-        import ast as _ast
+    def test_perturbed_abcd_sentinel_class_no_longer_exists(self) -> None:
+        """The class is no longer importable from
+        ``lumenairy.optimize.core``."""
         from lumenairy.optimize import core as oc
-        import inspect as _inspect
+        assert not hasattr(oc, '_PerturbedABCDFallbackSentinel'), (
+            "optimize/core.py still exposes _PerturbedABCDFallbackSentinel; "
+            "v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a) deleted the "
+            "class outright as unwired dead code."
+        )
 
-        src = _inspect.getsource(oc)
-        tree = _ast.parse(src)
-        sentinel_name = '_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ'
-        offenders = []
-        for node in _ast.walk(tree):
-            # ``Name`` node in a ``Load`` context = read reference
-            # to the binding.  ``Store`` context = the binding site
-            # itself (permitted).  ``Del`` context = deletion (would
-            # be permitted too, though none exist).
-            if (isinstance(node, _ast.Name)
-                    and node.id == sentinel_name
-                    and isinstance(node.ctx, _ast.Load)):
-                offenders.append(node.lineno)
-        if offenders:
-            pytest.fail(
-                f"Found {len(offenders)} live runtime "
-                f"read-references to {sentinel_name!r} at lines "
-                f"{offenders!r}.  v4.15.3 (audit P1-NEW-F1-3 option "
-                f"b) requires that this singleton remain unwired -- "
-                f"the perturbed-ABCD fallback is a tuple "
-                f"``(efl_p, bfl_p)``, not a scalar, and wrapping it "
-                f"in a single sentinel breaks downstream unpacking. "
-                f" See the _PerturbedABCDFallbackSentinel docstring "
-                f"for the dead-code rationale."
-            )
+    def test_perturbed_abcd_singleton_no_longer_exists(self) -> None:
+        """The singleton is no longer importable from
+        ``lumenairy.optimize.core``."""
+        from lumenairy.optimize import core as oc
+        assert not hasattr(oc, '_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ'), (
+            "optimize/core.py still exposes "
+            "_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ; v4.15.4 "
+            "(AUDIT_V4_15_3 P2-NEW-F1-B option a) deleted the singleton."
+        )
 
 
 # ============================================================================
@@ -574,17 +519,12 @@ class TestSentinelPickleRoundTrip:
         # ``float()`` still yields ``0.0`` after the round-trip.
         assert float(recovered) == pytest.approx(0.0)
 
-    def test_perturbed_abcd_sentinel_pickle_round_trip_still_works(
-        self,
-    ) -> None:
-        """Sanity: even though the perturbed-ABCD sentinel is
-        documented as dead code, the singleton's pickle protocol
-        still works (the v4.15.2 test pin would already catch a
-        regression here -- this is just a v4.15.3-side cross-check).
-        """
-        recovered = pickle.loads(
-            pickle.dumps(_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ))
-        assert recovered is _PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ
+    # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a): the
+    # ``test_perturbed_abcd_sentinel_pickle_round_trip_still_works``
+    # cross-check was removed because v4.15.4 deleted the
+    # ``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ`` singleton outright.
+    # Pickle-round-trip identity for the remaining two wired sentinels
+    # (above) is unaffected.
 
 
 if __name__ == '__main__':

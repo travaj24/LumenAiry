@@ -318,6 +318,14 @@ def apply_dm(
 ) -> np.ndarray:
     """Module-level convenience: apply a ``DeformableMirror`` phase
     to ``E_in``.  Equivalent to ``dm.apply(E_in, scale)``."""
+    # v4.15.4 (P2-NEW-3WAY-2): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  v4.15.3 scoped the walker
+    # to ``propagators/`` + ``elements/`` only; this ``analysis/``
+    # sibling was missed.  Runs FIRST so PartialCoherenceMCF /
+    # 3-D ensemble inputs get a clear v4.16-roadmap message rather
+    # than a downstream ``AttributeError`` inside ``dm.apply``.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_dm')
     return dm.apply(E_in, scale=scale)
 
 

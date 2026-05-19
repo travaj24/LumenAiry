@@ -39,6 +39,17 @@ import pytest
 
 import lumenairy as la
 
+# v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): the
+# ``test_too_many_positional_message_spells_both_forms`` test
+# legitimately invokes ``create_led_source(...)`` with the legacy
+# positional default to verify the v4.14.2 ``DeprecationWarning``
+# message body.  Pin DeprecationWarning back to ``default`` for this
+# module so the suite stays clean under strict
+# ``-W error::DeprecationWarning``.
+pytestmark = pytest.mark.filterwarnings(
+    'default::DeprecationWarning',
+)
+
 
 # ============================================================================
 # Helpers

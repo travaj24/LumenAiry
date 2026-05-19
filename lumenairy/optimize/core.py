@@ -2127,62 +2127,21 @@ class _FailedScanStrehlSentinel(_Sentinel):
 _FAILED_SCAN_STREHL_SENTINEL_OBJ = _FailedScanStrehlSentinel()
 
 
-class _PerturbedABCDFallbackSentinel(_Sentinel):
-    """Identity-checkable singleton for "perturbed ABCD extraction
-    failed -- fall back to nominal ``(ctx.efl, ctx.bfl)``".
-
-    .. deprecated:: 4.15.3
-        **Dead code (per ``AUDIT_V4_15_2`` P1-NEW-F1-3 closure).**
-        Defined in v4.15.2 alongside :class:`_InvalidFocalLengthSentinel`
-        and :class:`_FailedScanStrehlSentinel`, but NEVER wired at the
-        intended callsite (the tolerance-perturbation ABCD failure
-        branch at ``ToleranceAwareMerit.evaluate`` -- v4.15.3 line
-        ~2948).  The branch writes a **tuple** fallback
-        ``(efl_p, bfl_p) = (ctx.efl, ctx.bfl)`` rather than a single
-        scalar, and wrapping the tuple in a single sentinel singleton
-        breaks downstream unpacking of ``efl_p, bfl_p`` (and would
-        change the shape of every consumer that expects the tuple
-        form).  v4.15.3 ratifies the v4.15.2 reality: callsite 3 stays
-        UNWIRED, and the sibling sentinels
-        :class:`_InvalidFocalLengthSentinel` /
-        :class:`_FailedScanStrehlSentinel` are wired per the audit's
-        option (a).
-
-    The class and its singleton instance are KEPT in v4.15.3 so the
-    v4.15.2 test pin (``test_v4_15_2_agent_e.py
-    ::TestOptimizeCoreSentinelMigration``) continues to pass without
-    touching tests outside the Agent-C scope.  Future callers MUST
-    NOT use this sentinel: it is not reachable from any callsite in
-    ``optimize/core.py``.  A migration to a proper tuple-aware
-    sentinel (or a removal of this class) is queued for v4.16+.
-
-    Pre-v4.15.3 docstring (for context only):
-
-        Used at line 2772 (the tolerance-perturbation ABCD failure
-        branch).  Pre-v4.15.2 the branch wrote ``efl_p, bfl_p =
-        ctx.efl, ctx.bfl`` -- a "stable but probably wrong" fallback
-        that under-estimates the perturbed Strehl drop.  v4.15.2
-        keeps the scalar fallback writes and adds this singleton so
-        a downstream consumer (e.g. a future tolerance-confidence
-        wrapper) can detect that the perturbation's ABCD propagation
-        degenerated to the nominal channel.
-    """
-    __slots__ = ()
-
-    # No single ``.value`` here -- the fallback is a tuple-pattern, not
-    # a single scalar.  Consumers either use this for ``is``-identity
-    # or query ``ctx.efl`` / ``ctx.bfl`` for the actual numeric values.
-    #
-    # v4.15.3 (P1-NEW-F1-3): explicit marker that this class is dead
-    # code per the audit closure.  See the class docstring for the
-    # rationale; downstream code MUST NOT introduce new uses.
-    _v4_15_3_dead_code: bool = True
-
-    def __init__(self) -> None:
-        super().__init__('_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ')
-
-
-_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ = _PerturbedABCDFallbackSentinel()
+# v4.15.4 (audit AUDIT_V4_15_3 P2-NEW-F1-B option a): the previously
+# defined ``_PerturbedABCDFallbackSentinel`` class and its singleton
+# ``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ`` were dead code -- never
+# wired at the intended callsite (the tolerance-perturbation ABCD
+# failure branch at ``ToleranceAwareMerit.evaluate``).  The branch
+# writes a 2-tuple fallback ``(efl_p, bfl_p) = (ctx.efl, ctx.bfl)``
+# rather than a single scalar, and wrapping the tuple in a single
+# sentinel singleton would break downstream unpacking of
+# ``efl_p, bfl_p`` (and would change the shape of every consumer that
+# expects the tuple form).  v4.15.3 marked the class as dead code via
+# a ``_v4_15_3_dead_code = True`` class attribute, but the marker was
+# data-only and not honoured by any static analyser.  v4.15.4 deletes
+# the class + singleton outright (option a from the audit).  The
+# v4.15.2 and v4.15.3 test pins that asserted the class existed are
+# updated in the same release to assert non-existence.
 
 
 def _wrapper_merit_aperture_key(aperture: Any) -> tuple:
@@ -2940,11 +2899,10 @@ class ToleranceAwareMerit(MeritTerm):
                 # sentinel singleton would break downstream
                 # ``sub_ctx.efl=efl_p``/``sub_ctx.bfl=bfl_p`` usage
                 # (the consumer expects two floats, not a tuple).
-                # The defunct
-                # :class:`_PerturbedABCDFallbackSentinel` class
-                # remains DEFINED above for v4.15.2 test-pin
-                # compatibility but is documented as dead code; see
-                # its docstring for the audit rationale.
+                # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a) deleted
+                # the defunct ``_PerturbedABCDFallbackSentinel`` class
+                # outright; see the audit closure block above the
+                # ``_wrapper_merit_aperture_key`` helper definition.
                 efl_p, bfl_p = ctx.efl, ctx.bfl
 
             # Re-run wave propagation for this perturbation

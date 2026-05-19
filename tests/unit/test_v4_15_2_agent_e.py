@@ -49,6 +49,17 @@ import pytest
 
 import lumenairy as la
 
+# v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): the
+# ``TestSourceGaussianSchellEnsembleTuple`` tests below legitimately
+# invoke ``Source.gaussian_schell(...)`` / ``Source.schell_model(...)``
+# with the legacy positional default to verify the 4-tuple ensemble
+# return shape.  Pin DeprecationWarning back to ``default`` for this
+# module so the suite stays clean under strict
+# ``-W error::DeprecationWarning``.
+pytestmark = pytest.mark.filterwarnings(
+    'default::DeprecationWarning',
+)
+
 
 # ============================================================================
 # E.1 (P1-NEW-I) -- ROADMAP references the v4.15.1+ baseline
@@ -192,7 +203,18 @@ class TestOptimizeCoreSentinelMigration:
         '_ZeroApertureMaskSentinel',          # v4.15.1 (line 2034)
         '_InvalidFocalLengthSentinel',        # v4.15.2 (line 2271 site)
         '_FailedScanStrehlSentinel',          # v4.15.2 (line 2530 site)
-        '_PerturbedABCDFallbackSentinel',     # v4.15.2 (line 2772 site)
+        # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a):
+        # ``_PerturbedABCDFallbackSentinel`` was DELETED as dead code
+        # (never wired; tuple-shaped fallback is not single-sentinel-
+        # friendly).  See the v4.15.4 Agent-B release notes and the
+        # new ``test_perturbed_abcd_fallback_sentinel_deleted_v4_15_4``
+        # pin below.
+    )
+
+    # v4.15.4: pin the absence of the deleted class + singleton names.
+    DELETED_NAMES_V4_15_4 = (
+        '_PerturbedABCDFallbackSentinel',
+        '_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ',
     )
 
     def test_optimize_core_sentinels_inherit_from_sentinel(self):
@@ -222,7 +244,6 @@ class TestOptimizeCoreSentinelMigration:
             '_ZERO_APERTURE_MASK',
             '_INVALID_FL_SENTINEL_OBJ',
             '_FAILED_SCAN_STREHL_SENTINEL_OBJ',
-            '_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ',
         ):
             inst = getattr(oc, inst_name, None)
             assert inst is not None, (
@@ -251,13 +272,28 @@ class TestOptimizeCoreSentinelMigration:
             '_ZERO_APERTURE_MASK',
             '_INVALID_FL_SENTINEL_OBJ',
             '_FAILED_SCAN_STREHL_SENTINEL_OBJ',
-            '_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ',
         ):
             inst = getattr(oc, inst_name)
             data = pickle.dumps(inst)
             restored = pickle.loads(data)
             assert restored is inst, (
                 f"Pickle round-trip lost identity for {inst_name}.")
+
+    def test_perturbed_abcd_fallback_sentinel_deleted_v4_15_4(self):
+        """v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a):
+        ``_PerturbedABCDFallbackSentinel`` and its singleton are
+        DELETED -- the class was dead code (never wired, see the
+        v4.15.3 deprecation docstring history) and the v4.15.3
+        class-attribute marker was data-only.  This pin asserts the
+        deletion stuck."""
+        import lumenairy.optimize.core as oc
+        for name in self.DELETED_NAMES_V4_15_4:
+            assert not hasattr(oc, name), (
+                f"optimize/core.py still exposes {name!r}; v4.15.4 "
+                f"(AUDIT_V4_15_3 P2-NEW-F1-B option a) deleted the "
+                f"unwired perturbed-ABCD fallback sentinel class + "
+                f"singleton.  See the v4.15.4 Agent-B release notes."
+            )
 
 
 # ============================================================================

@@ -1107,6 +1107,20 @@ def propagate_through_system_jax(E_in: np.ndarray,
     ImportError
         If JAX is not installed.
     """
+    # v4.15.4 (P1-NEW-3WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  v4.15.3 scoped the walker
+    # to ``propagators/`` + ``elements/`` only; the JAX sibling of
+    # the (already-guarded) ``propagate_through_system`` in the SAME
+    # file at :47 was missed.  Runs FIRST so PartialCoherenceMCF /
+    # 3-D ensemble inputs get a clear v4.16-roadmap message rather
+    # than a confusing ``TracerArrayConversionError`` or silent
+    # wrong-axis broadcast at the ``jnp.asarray(E_in, ...)`` cast
+    # below.  ``E_in`` is contractually a numpy array at the entry
+    # point (it is wrapped via ``jnp.asarray`` further down), so
+    # the helper's ``getattr(E, 'ndim', None)`` path is well-defined.
+    from ._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'propagate_through_system_jax')
+
     from .backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError(

@@ -52,6 +52,18 @@ from lumenairy.sources.core import (
     create_schell_model_source,
 )
 
+# v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): under ``pytest -W
+# error::DeprecationWarning`` the v4.15.1 Schell-family default-path
+# ``return_kind`` DeprecationWarning fires while this file's tests
+# legitimately invoke the legacy positional default to verify it
+# returns the ``(ensemble, dx, dy, wavelength)`` shape.  Pin the
+# warning back to ``default`` for this module so the test suite stays
+# clean under strict ``-W error::DeprecationWarning`` while leaving
+# every other module's promotion-to-error untouched.
+pytestmark = pytest.mark.filterwarnings(
+    'default::DeprecationWarning',
+)
+
 
 # ============================================================================
 # Ensemble contract: shape, dtype, return-value layout

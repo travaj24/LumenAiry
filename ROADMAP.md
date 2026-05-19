@@ -1,8 +1,8 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-18 (post-v4.15.2).  In-flight v4.15.3 audit
+**Last updated:** 2026-05-19 (post-v4.15.3).  In-flight v4.15.4 audit
 closure -- test-count claim refined to actual `pytest --collect-only`
-output at v4.15.2 HEAD per AUDIT_V4_15_2 P2 finding.
+output at v4.15.3 HEAD per AUDIT_V4_15_3 P2-NEW-V3-3 finding.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -17,29 +17,37 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.15.2 baseline (1735 unit tests collected per
-  `pytest --collect-only -q tests/unit` at v4.15.2 release commit
-  `672051c` -- 1733 passing + 1 skip + 1 xfail).  v4.14.3 shipped
+- **Library:** v4.15.3 baseline (1824 unit tests collected per
+  `pytest --collect-only -q tests/unit` at v4.15.3 release commit
+  `7808107` -- 1822 passing + 1 skip + 1 xfail).  v4.14.3 shipped
   at 1265, v4.15.0 rolled in the v4.14.2-audit P2/P3 sweep + the
   v4.15/v4.16 ROADMAP scope, v4.15.1 shipped the CLUSTER_B operator
   algebra + ``rays_from_field`` ray-bridge + 11 audit P0/P1 closures
   (1625 tests), v4.15.2 closes the remaining v4.15.1 audit P1/P2/P3
   (sentinel migration completion + ROADMAP refresh + Hermiticity /
-  Forbes-Q-OPD analytical pins).  v4.15.3 (in-flight at the time of
-  this update) closes the v4.15.2 audit's 1 P0 + 4 P1 sweep
-  (defensive-guard sibling-gap + SAS-anamorphic dispatcher + Schell
-  classmethod parity + stacklevel correction + sentinel callsite
-  wiring); post-v4.15.3 unit-test count is expected to land at
-  ~1750 (refine at v4.15.3 tag time).  34/34 validation files
-  passing.  Public API at ~380+ symbols in `lumenairy.__all__`.
+  Forbes-Q-OPD analytical pins) at 1735 collected, v4.15.3 closes
+  the v4.15.2 audit's 1 P0 + 4 P1 sweep (defensive-guard sibling-gap
+  + SAS-anamorphic dispatcher + Schell classmethod parity +
+  stacklevel correction + sentinel callsite wiring) with a
+  structural counter-measure (shared `_check_2d_scalar_field` helper
+  + AST-walking dispatcher meta-pin) and ships the 5th meta-pin
+  candidate.  v4.15.4 (in-flight at the time of this update) closes
+  the v4.15.3 audit's 1 P1 + 6 P2 (meta-pin walker scope extension
+  to `system.py` + `analysis/`, name-discovery broadening for
+  `richards_wolf_focus` / `debye_wolf_psf`, CHANGELOG corrections
+  for the SAS-anamorphic and stacklevel bullets, ROADMAP refresh,
+  `_validation.py` lazy-import hoist, `_PerturbedABCDFallback`
+  dead-class deletion, OPD-fan plotting helper).  34/34 validation
+  files passing.  Public API at ~380+ symbols in `lumenairy.__all__`.
 - **Designer GUI:** v3.7.10 (per in-code comments at `ui/main_window
   .py:2196` etc.).  No standalone release stream; the Designer
   ships co-versioned inside the library wheel.
 - **Audit closure status:** AUDIT_V4_12_1, AUDIT_V4_13_0,
   AUDIT_V4_13_1, AUDIT_V4_14_0, AUDIT_V4_14_1, AUDIT_V4_14_2,
-  AUDIT_V4_15_0, AUDIT_V4_15_1 all closed (P0 + P1 + the P2/P3
-  carryover sweep landed in v4.15.x).  AUDIT_V4_13_1 Tier-2/3/4
-  architectural items scoped to v5.0 as noted below.
+  AUDIT_V4_15_0, AUDIT_V4_15_1, AUDIT_V4_15_2, AUDIT_V4_15_3 all
+  closed (P0 + P1 + the P2/P3 carryover sweep landed in v4.15.x).
+  AUDIT_V4_13_1 Tier-2/3/4 architectural items scoped to v5.0 as
+  noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
   5).  v4.14.2 migrated 2 shims (`makedammann2d` SI heuristic and
   `create_led_source` legacy positional) onto the canonical
@@ -47,14 +55,21 @@ are preserved in git history; this file is forward-only.
   `version_removed=5.0`; the remaining 6 still use inline raw
   `warnings.warn` and are scheduled for migration as a v5.0
   housekeeping item.
-- **Meta-pin coverage:** 3 of the 5 v4.14.2-recommended meta-pin
+- **Meta-pin coverage:** 4 of the 5 v4.14.2-recommended meta-pin
   candidates landed.  V1: cache-clear chain re-export (v4.14.1).
   V2: cache <-> lock pairing + ``0+0j`` literal sweep (v4.14.2).
   V3: input-validation entry-point (`_validate_grid_params`
   required call in first 15 body lines of every `create_*` factory)
   -- new in v4.15.0 (Agent F).  V4 (sentinel propagation,
   `_xp_of` dispatch, `dy` parameter threading, `__all__` symmetry)
-  remain candidates for v4.16+ extension.
+  remain candidates for v4.16+ extension.  V5 (the 5th meta-pin
+  candidate, recommended by AUDIT_V4_15_2): `_check_2d_scalar_field`
+  AST-walker pinning the `PartialCoherenceMCF` + 3-D-ensemble
+  defensive-guard call as the first executable statement in every
+  public 2-D-scalar-field entry point under `lumenairy/propagators/`,
+  `lumenairy/elements/`, `lumenairy/analysis/`, and the package-root
+  `lumenairy/system.py` -- new in v4.15.3 (Agent A), walker scope
+  extended in v4.15.4 (P1-NEW-3WAY-1 + P2-NEW-3WAY-2 closure).
 
 ---
 

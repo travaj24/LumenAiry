@@ -62,6 +62,15 @@ from lumenairy.sources.core import (
 )
 from lumenairy.system import propagate_through_system
 
+# v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): the helper fixtures here
+# legitimately invoke ``create_gaussian_schell_source(...)`` with the
+# legacy positional default to obtain a 3-D ensemble for negative-path
+# tests.  Pin DeprecationWarning back to ``default`` for this module so
+# the suite stays clean under strict ``-W error::DeprecationWarning``.
+pytestmark = pytest.mark.filterwarnings(
+    'default::DeprecationWarning',
+)
+
 
 # ============================================================================
 # Helpers

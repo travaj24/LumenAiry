@@ -1,8 +1,10 @@
-"""Dispatcher meta-pin (v4.15.3): every public ``def apply_*`` and
-``def *_propagate*`` in ``lumenairy/propagators/`` and
-``lumenairy/elements/`` must call ``_check_2d_scalar_field(E, ...)``
-as its first executable statement (after the docstring and any
-helper-import statements).
+"""Dispatcher meta-pin (v4.15.3 / extended v4.15.4): every public
+``def apply_*`` / ``def *_propagate*`` / ``def richards_wolf*`` /
+``def debye_wolf*`` in ``lumenairy/propagators/``,
+``lumenairy/elements/``, ``lumenairy/analysis/``, and the
+file-at-package-root ``lumenairy/system.py`` must call
+``_check_2d_scalar_field(E, ...)`` as its first executable
+statement (after the docstring and any helper-import statements).
 
 Counter-measure to the recurring 'fix N, miss N+1' meta-pattern
 the v4.15.0 -> v4.15.2 audit rounds repeatedly identified.
@@ -10,33 +12,64 @@ v4.15.2 hand-guarded 10 entry points; v4.15.3 closes 9 more
 siblings and pins the invariant structurally so the 20th entry
 point can't be added unguarded.
 
+v4.15.4 closes the meta-pattern recurrence the v4.15.3 audit
+identified one level of indirection higher: the walker had scoped
+only to ``propagators/`` + ``elements/``, missing 4 public entry
+points in ``system.py`` (``propagate_through_system_jax``) and
+``analysis/`` (``apply_dm``, ``apply_detector``,
+``apply_perturbations``) plus 2 functions in scope but missed by
+the name regex (``richards_wolf_focus``, ``debye_wolf_psf``).
+v4.15.4 broadens discovery via ``lumenairy.__all__`` membership
+(robust against future module reorganisation) AND extends the
+package-walk scope so non-``__all__`` siblings are still caught.
+
 The walker discovers top-level public ``def apply_*`` /
-``def *_propagate*`` functions across the propagator and lens
-packages.  Every discovered function must EITHER call
-``_check_2d_scalar_field`` early in its body OR appear in the
+``def *_propagate*`` / ``def richards_wolf*`` / ``def debye_wolf*``
+functions across the propagator, lens, analysis, and
+system-at-root packages.  Every discovered function must EITHER
+call ``_check_2d_scalar_field`` early in its body OR appear in the
 documented ``_GUARD_EXEMPTIONS`` set with a cited reason.
 
 The exemption set lists every discovered function that legitimately
 does NOT accept a bare 2-D coherent scalar field (e.g.
 ``apply_thin_lens_to_beamlets`` takes a ``BeamletBundle``,
 ``angular_spectrum_propagate_batch`` requires a 3-D stack,
-JonesField methods operate on Jones-vector fields).  Adding the
-exemption with a comment is how a new non-scalar entry point lands
+``apply_perturbations`` takes a prescription dict, JonesField
+methods operate on Jones-vector fields).  Adding the exemption
+with a comment is how a new non-scalar entry point lands
 without tripping the pin; adding a new scalar entry point WITHOUT
 guarding it is the failure mode this pin catches.
 
 Author: Andrew Traverso -- v4.15.3 / Agent A
+                          v4.15.4 / Agent A (scope extension)
 """
 from __future__ import annotations
 
 import ast
+import importlib
+import inspect
 from pathlib import Path
 
 import pytest
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
-_TARGET_PACKAGES = ('lumenairy/propagators', 'lumenairy/elements')
+
+# v4.15.4 (P1-NEW-3WAY-1 + P2-NEW-3WAY-2): walker scope extended.
+# v4.15.3 was ``('lumenairy/propagators', 'lumenairy/elements')``;
+# the v4.15.3 audit found 4 public entry points outside that scope
+# accepting 2-D scalar fields.  v4.15.4 adds ``lumenairy/analysis``
+# (subpackage) and ``lumenairy/system.py`` (a file at package
+# root -- the walker handles both cases via ``rglob`` of a
+# directory and direct visit of a file).
+#
+# This is now a FALLBACK scope: primary discovery uses
+# ``lumenairy.__all__`` (see ``_walk_entry_points``); the package
+# walk catches any sibling not exported via ``__all__``.
+_TARGET_PACKAGES = ('lumenairy/propagators',
+                    'lumenairy/elements',
+                    'lumenairy/analysis',
+                    'lumenairy/system.py')
 
 
 # ============================================================================
@@ -161,6 +194,41 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/elements/polarization.py', 'apply_half_wave_plate'),
     ('lumenairy/elements/polarization.py', 'apply_quarter_wave_plate'),
     ('lumenairy/elements/polarization.py', 'apply_rotator'),
+
+    # ---- analysis/through_focus.py (v4.15.4 NEW) ---------------------------
+    # ``apply_perturbations(prescription, perturbations, N, dx)`` takes
+    # a prescription DICT (not a 2-D scalar field) and returns a
+    # deep-copied perturbed prescription.  It is matched by the
+    # walker's ``apply_*`` name filter, but the first positional arg
+    # has no ``.ndim`` and is not the kind of object the guard checks.
+    # Adding the guard would make every legitimate call raise
+    # ``ValueError`` at the first line.  Documented exempt.
+    ('lumenairy/analysis/through_focus.py', 'apply_perturbations'),
+
+    # ---- system.py (v4.15.4 NEW) -------------------------------------------
+    # ``clear_propagate_system_jax_cache()`` takes NO arguments -- it
+    # is a cache-clearing helper, not a propagator.  The walker
+    # discovers it because the name contains the substring
+    # ``_propagate``.  Documented exempt.
+    ('lumenairy/system.py', 'clear_propagate_system_jax_cache'),
+
+    # ---- raytrace/core.py (v4.15.4 NEW) ------------------------------------
+    # ``apply_doe_phase_traced(rays, ...)`` takes a ``RayBundle``
+    # (geometric-ray representation, NOT a 2-D scalar field).  The
+    # v4.15.4 ``__all__``-membership pass discovers it because
+    # ``apply_doe_phase_traced`` is in ``lumenairy.__all__``.  The
+    # 2-D scalar guard would reject every legitimate caller --
+    # ``RayBundle`` has no ``.ndim``.  Documented exempt.
+    ('lumenairy/raytrace/core.py', 'apply_doe_phase_traced'),
+
+    # ---- _context.py (v4.15.4 NEW) -----------------------------------------
+    # ``apply_globals(state: dict) -> None`` applies a globals
+    # snapshot to library-wide knobs (FFT threads, max RAM, cache
+    # sizes).  Takes a dict of name -> value, NOT a 2-D scalar
+    # field.  The v4.15.4 ``__all__``-membership pass discovers it
+    # because ``apply_globals`` is in ``lumenairy.__all__``.
+    # Documented exempt.
+    ('lumenairy/_context.py', 'apply_globals'),
 })
 
 
@@ -168,34 +236,178 @@ _GUARD_EXEMPTIONS = frozenset({
 # Discovery walker -- top-level public defs only
 # ============================================================================
 
-def _walk_entry_points():
-    """Yield (path, ast.FunctionDef) for every public top-level def in
-    scope.  Class methods are intentionally excluded -- the guard
-    contract is for the top-level public API; per-class wrapper methods
-    delegate to the guarded scalar functions.
+def _name_matches_entry_point_filter(name: str) -> bool:
+    """True iff ``name`` should be treated as a 2-D-scalar-field
+    entry-point candidate by the walker.
+
+    v4.15.4 (P2-NEW-V2-1) broadens the v4.15.3 filter to include
+    ``richards_wolf_*`` and ``debye_wolf_*`` -- the
+    ``propagators/vector_diffraction.py`` siblings that accept
+    2-D pupils but didn't match the v4.15.3 regex.
+    """
+    if name.startswith('_'):
+        return False
+    if name.startswith('apply_'):
+        return True
+    if '_propagate' in name:
+        return True
+    if name == 'propagate':
+        return True
+    # v4.15.4 follow-up: ``propagate_through_system`` and its JAX
+    # sibling ``propagate_through_system_jax`` don't contain the
+    # underscore-prefix ``_propagate`` substring, so the v4.15.3
+    # filter missed them.  Catch the ``propagate_<something>``
+    # family explicitly.
+    if name.startswith('propagate_'):
+        return True
+    if name.startswith('richards_wolf'):
+        return True
+    if name.startswith('debye_wolf'):
+        return True
+    return False
+
+
+def _iter_target_py_files():
+    """Yield every ``.py`` file in the walker's scope.
+
+    Handles both directory-shaped targets (``lumenairy/propagators``)
+    and file-shaped targets (``lumenairy/system.py``).  The latter is
+    new in v4.15.4: ``system.py`` is a single file at the package
+    root, not a subpackage.
     """
     for pkg_rel in _TARGET_PACKAGES:
-        pkg_root = _REPO_ROOT / pkg_rel
-        for py in sorted(pkg_root.rglob('*.py')):
+        pkg_path = _REPO_ROOT / pkg_rel
+        if pkg_path.is_file():
+            # File-shaped target (e.g. ``lumenairy/system.py``).
+            yield pkg_path
+            continue
+        if not pkg_path.is_dir():
+            # Misconfigured path -- emit nothing for this entry rather
+            # than raising; the count-floor test will catch a
+            # walker-wide collapse.
+            continue
+        for py in sorted(pkg_path.rglob('*.py')):
             if py.name.startswith('_') and 'lens' not in py.name:
                 # Skip private modules but keep _lens_*.py
                 continue
-            src = py.read_text(encoding='utf-8', errors='replace')
-            tree = ast.parse(src, filename=str(py))
-            # Top-level FunctionDef only.  Class methods are walked
-            # separately by the per-class delegation pattern and are
-            # not in scope for this pin.
-            for node in tree.body:
-                if not isinstance(node, ast.FunctionDef):
-                    continue
-                name = node.name
-                if name.startswith('_'):
-                    continue
-                if not (name.startswith('apply_')
-                        or '_propagate' in name
-                        or name == 'propagate'):
-                    continue
-                yield py, node
+            yield py
+
+
+def _file_to_ast(py):
+    """Parse ``py`` (a ``pathlib.Path``) and return the module AST.
+
+    Uses cp1252-tolerant decoding to match the file-write contract.
+    """
+    src = py.read_text(encoding='utf-8', errors='replace')
+    return ast.parse(src, filename=str(py))
+
+
+def _public_top_level_function_defs(tree, py):
+    """Yield ``(py, node)`` pairs for every public top-level
+    ``FunctionDef`` in ``tree`` whose name passes the entry-point
+    filter.  Class methods are intentionally excluded -- the guard
+    contract is for the top-level public API; per-class wrapper
+    methods delegate to the guarded scalar functions.
+    """
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not _name_matches_entry_point_filter(node.name):
+            continue
+        yield py, node
+
+
+def _walk_via_all_membership():
+    """Yield (py, ast.FunctionDef) for every entry point reachable
+    via ``lumenairy.__all__`` whose name passes the entry-point
+    filter.
+
+    v4.15.4 (P2-NEW-V2-1 fix): refactored from package-only walk to
+    ``__all__``-based discovery so future module reorganisations
+    that move a function between submodules don't silently drop it
+    from the walker's scope.  Pairs with the fallback package walk
+    below to also catch non-``__all__`` siblings.
+    """
+    try:
+        la = importlib.import_module('lumenairy')
+    except Exception:  # pragma: no cover -- catastrophic import failure
+        return
+    all_names = getattr(la, '__all__', None)
+    if not all_names:
+        return
+    for name in all_names:
+        if not _name_matches_entry_point_filter(name):
+            continue
+        obj = getattr(la, name, None)
+        if obj is None or not callable(obj):
+            continue
+        try:
+            src_file = inspect.getsourcefile(obj)
+        except TypeError:
+            continue
+        if src_file is None:
+            continue
+        py = Path(src_file).resolve()
+        # Only yield if the source file is inside the repo (so
+        # vendored / installed copies don't leak in).
+        try:
+            py.relative_to(_REPO_ROOT)
+        except ValueError:
+            continue
+        try:
+            tree = _file_to_ast(py)
+        except OSError:
+            continue
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if node.name != name:
+                continue
+            yield py, node
+            break
+
+
+def _walk_via_package_scan():
+    """Yield (py, ast.FunctionDef) for every entry point found by
+    walking ``_TARGET_PACKAGES``.
+
+    Kept as a fallback (after v4.15.4) so a function that is NOT in
+    ``lumenairy.__all__`` but still lives in a target package and
+    matches the name filter is still caught.  Example future use:
+    a public-by-convention helper at top of module that wasn't yet
+    promoted to the package-level ``__all__``.
+    """
+    for py in _iter_target_py_files():
+        try:
+            tree = _file_to_ast(py)
+        except OSError:
+            continue
+        for pair in _public_top_level_function_defs(tree, py):
+            yield pair
+
+
+def _walk_entry_points():
+    """Yield (path, ast.FunctionDef) for every public top-level def in
+    scope, deduped across the ``__all__``-membership pass and the
+    package-walk fallback.
+
+    Class methods are intentionally excluded -- the guard contract
+    is for the top-level public API; per-class wrapper methods
+    delegate to the guarded scalar functions.
+    """
+    seen: set = set()
+    for py, node in _walk_via_all_membership():
+        key = (str(py.resolve()), node.name)
+        if key in seen:
+            continue
+        seen.add(key)
+        yield py, node
+    for py, node in _walk_via_package_scan():
+        key = (str(py.resolve()), node.name)
+        if key in seen:
+            continue
+        seen.add(key)
+        yield py, node
 
 
 def _first_executable_statement(body):
@@ -247,16 +459,21 @@ def _is_helper_call(stmt):
 # ============================================================================
 
 def test_minimum_entry_points_discovered():
-    """Sanity floor: at least 19 entry points must be discoverable.
+    """Sanity floor: at least 25 entry points must be discoverable.
 
-    The v4.15.3 closure migrates 10 v4.15.2-guarded sites + 9 new
-    siblings, plus the walker will also discover roughly 30 exempt
-    siblings (BeamletBundle / Jones-field / generic-element /
-    JAX-lens etc.).  Below 19 means the walker is broken.
+    The v4.15.3 closure migrated 10 v4.15.2-guarded sites + 9 new
+    siblings (~19 total).  v4.15.4 broadens the walker scope to
+    cover ``analysis/`` + ``system.py`` (file-at-root) plus the
+    ``richards_wolf_*`` / ``debye_wolf_*`` name family in
+    ``propagators/vector_diffraction.py`` -- adding 6 new sites
+    (5 guarded + 1 exempt ``apply_perturbations``) plus the
+    cache-clearer ``clear_propagate_system_jax_cache`` (exempt).
+    So the post-v4.15.4 floor is ~25 (was 19).  Below this means
+    the walker is broken.
     """
     count = sum(1 for _ in _walk_entry_points())
-    assert count >= 19, (
-        f"Walker found only {count} entry points; expected >= 19. "
+    assert count >= 25, (
+        f"Walker found only {count} entry points; expected >= 25. "
         f"The discovery walker may need updating if the package "
         f"layout has changed.")
 
@@ -369,6 +586,77 @@ def test_helper_accepts_2d_complex_array():
     E = np.zeros((16, 16), dtype=np.complex128)
     # Should not raise.
     _check_2d_scalar_field(E, 'unit_test_fn')
+
+
+# ============================================================================
+# Counter-pin: a fake unguarded propagator must trip the meta-pin.
+# v4.15.4 (P3-NEW-F2-3) -- pins that the walker's correctness relies
+# on a POSITIVE signal (helper-call detection), not just on
+# ``_walk_entry_points`` returning enough entries.  Modeled on the
+# v4.15.0 ``_validate_grid_params`` pin's
+# ``test_counter_pin_fake_unvalidated_factory_fails``.
+# ============================================================================
+
+def test_counter_pin_fake_unguarded_propagate_fails(monkeypatch):
+    """Inject a synthetic unguarded propagator AST node into the
+    walker output and assert the meta-pin assertion fires.
+
+    Without this counter-pin a silent walker regression -- e.g. a
+    name-regex bug that excludes ``apply_*`` siblings -- could
+    pass even though it would have hidden every real
+    unguarded-sibling failure.  This test verifies that the
+    meta-pin's ``test_all_entry_points_call_helper_first`` only
+    passes because the discovered functions actually call the
+    helper, not because the walker silently elided them.
+    """
+    # ---- 1. Build a fake AST representing an unguarded propagator. -----
+    fake_source = (
+        '"""Fake module for counter-pin."""\n'
+        'def fake_unguarded_propagate(E, wavelength, dx):\n'
+        '    """Fake docstring."""\n'
+        '    return E * 2.0\n'  # NO _check_2d_scalar_field call
+    )
+    fake_tree = ast.parse(fake_source, filename='<fake>')
+    fake_node = None
+    for stmt in fake_tree.body:
+        if (isinstance(stmt, ast.FunctionDef)
+                and stmt.name == 'fake_unguarded_propagate'):
+            fake_node = stmt
+            break
+    assert fake_node is not None, (
+        "Counter-pin setup error: failed to build fake FunctionDef "
+        "AST node.")
+
+    fake_path = _REPO_ROOT / 'lumenairy' / 'propagators' / 'fake_propagator.py'
+
+    # ---- 2. Monkey-patch _walk_entry_points to include the fake. -------
+    # Patch the module-level binding so when
+    # ``test_all_entry_points_call_helper_first`` resolves the name
+    # ``_walk_entry_points`` at call time it picks up the wrapper.
+    import sys as _sys
+    this_module = _sys.modules[__name__]
+    real_walker = this_module._walk_entry_points
+
+    def _walker_with_fake():
+        # Yield everything the real walker yields...
+        for py, node in real_walker():
+            yield py, node
+        # ...then append the synthetic unguarded entry.
+        yield fake_path, fake_node
+
+    monkeypatch.setattr(this_module, '_walk_entry_points',
+                        _walker_with_fake)
+
+    # ---- 3. Re-run the main pin and assert it now fails. ---------------
+    with pytest.raises(AssertionError) as excinfo:
+        test_all_entry_points_call_helper_first()
+    msg = str(excinfo.value)
+    assert 'fake_unguarded_propagate' in msg, (
+        f"Counter-pin: meta-pin failed but its error message does "
+        f"not name the injected unguarded function. Got:\n{msg}")
+    assert 'fake_propagator.py' in msg, (
+        f"Counter-pin: meta-pin failed but its error message does "
+        f"not name the injected file. Got:\n{msg}")
 
 
 # ============================================================================

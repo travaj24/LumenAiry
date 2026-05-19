@@ -228,13 +228,18 @@ def test_changelog_v4_15_2_sentinel_line_citations_refreshed():
             actual_lines['_InvalidFocalLengthSentinel'] = i
         elif line.lstrip().startswith('class _FailedScanStrehlSentinel'):
             actual_lines['_FailedScanStrehlSentinel'] = i
-        elif line.lstrip().startswith(
-                'class _PerturbedABCDFallbackSentinel'):
-            actual_lines['_PerturbedABCDFallbackSentinel'] = i
 
-    assert len(actual_lines) == 3, (
-        f'Expected to find all 3 sentinel class definitions in '
-        f'optimize/core.py; found {sorted(actual_lines)}.')
+    # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a): the third sentinel
+    # class ``_PerturbedABCDFallbackSentinel`` was deleted in v4.15.4
+    # as dead code (never wired; tuple-shaped fallback is not single-
+    # sentinel-friendly).  Pre-v4.15.4 this test expected 3 class
+    # definitions; post-v4.15.4 it expects the 2 remaining wired
+    # subclasses.
+    assert len(actual_lines) == 2, (
+        f'Expected to find the 2 remaining v4.15.4 sentinel class '
+        f'definitions in optimize/core.py (_InvalidFocalLengthSentinel '
+        f'and _FailedScanStrehlSentinel; _PerturbedABCDFallbackSentinel '
+        f'was deleted in v4.15.4); found {sorted(actual_lines)}.')
 
     # Parse ALL ``optimize/core.py:NNNN`` and ``:NNNN-MMMM`` line
     # citations from the bullet.

@@ -645,6 +645,8 @@ from .analysis.plotting import (
     plot_polarization_ellipses,
     plot_beam_profile,
     plot_wavefront,
+    plot_opd_fan,
+    plot_opd_summary,
     plot_jones_pupil,
     compute_jones_pupil,
     plot_lens_layout,
@@ -779,7 +781,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.15.3"
+__version__ = "4.15.4"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1393,6 +1395,8 @@ __all__ = [
     'plot_polarization_ellipses',
     'plot_beam_profile',
     'plot_wavefront',
+    'plot_opd_fan',
+    'plot_opd_summary',
     'plot_jones_pupil',
     'compute_jones_pupil',
     'plot_lens_layout',

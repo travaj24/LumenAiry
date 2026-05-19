@@ -51,6 +51,9 @@ __all__ = [
     'plot_beam_profile',
     # wavefront map (v4.14.0)
     'plot_wavefront',
+    # OPD fan + summary panels (v4.15.4)
+    'plot_opd_fan',
+    'plot_opd_summary',
     # polarization
     'plot_stokes',
     'plot_polarization_ellipses',
@@ -1116,6 +1119,494 @@ def plot_wavefront(
             )
 
     return fig, ax
+
+
+# =============================================================================
+# OPD FAN + SUMMARY PANELS (v4.15.4)
+# =============================================================================
+
+
+def _resolve_opd_units(
+    units: str,
+    wavelength: Optional[float],
+    *,
+    fn_name: str = 'plot_opd_fan',
+) -> Tuple[float, str]:
+    """Convert ``units`` kwarg to a (scale, units_label) pair.
+
+    Mirrors the unit-resolution block inside :func:`plot_wavefront` so
+    the OPD-fan helpers display data on the same axes.  ``scale``
+    multiplies the input OPD (assumed in metres) to land in the chosen
+    display unit.
+    """
+    if units == 'waves':
+        if wavelength is None or not np.isfinite(wavelength) \
+                or wavelength <= 0:
+            raise ValueError(
+                f"{fn_name}: units='waves' requires a positive "
+                "'wavelength' keyword [m].")
+        return 1.0 / float(wavelength), 'waves'
+    if units == 'nm':
+        return 1e9, 'nm'
+    if units == 'um':
+        return 1e6, 'um'
+    if units == 'm':
+        return 1.0, 'm'
+    raise ValueError(
+        f"{fn_name}: units must be one of "
+        f"{{'waves', 'nm', 'um', 'm'}}; got {units!r}.")
+
+
+def _opd_pv_rms_1d(arr: np.ndarray) -> Tuple[float, float]:
+    """Compute (PV, RMS) of a 1-D OPD fan over its finite (alive)
+    samples.  Returns ``(nan, nan)`` if no finite values exist.
+
+    PV = max - min over the finite mask; RMS is the unbiased
+    deviation about the in-aperture mean (matches the convention in
+    :func:`plot_wavefront`).
+    """
+    arr = np.asarray(arr, dtype=float)
+    finite = arr[np.isfinite(arr)]
+    if finite.size == 0:
+        return float('nan'), float('nan')
+    pv = float(finite.max() - finite.min())
+    rms = float(np.sqrt(np.mean((finite - finite.mean()) ** 2)))
+    return pv, rms
+
+
+def _render_opd_fan_panel(
+    ax: Any,
+    p: np.ndarray,
+    opd: np.ndarray,
+    units_label: str,
+    title: str,
+    show_stats: bool,
+) -> None:
+    """Render a single OPD-fan panel onto an existing matplotlib axis.
+
+    Internal helper used by both :func:`plot_opd_fan` and
+    :func:`plot_opd_summary` so the panels share a consistent look
+    (solid line, zero reference, grid, optional PV / RMS overlay).
+    """
+    ax.plot(p, opd, color='C0', lw=1.5)
+    ax.axhline(0.0, color='gray', lw=0.5, alpha=0.5)
+    ax.grid(alpha=0.3)
+    ax.set_xlabel('Normalised pupil coordinate')
+    ax.set_ylabel(f'OPD ({units_label})')
+    ax.set_title(title)
+
+    if show_stats:
+        pv, rms = _opd_pv_rms_1d(opd)
+        if np.isfinite(pv) and np.isfinite(rms):
+            ax.text(
+                0.02, 0.98,
+                f'PV: {pv:.3g} {units_label}\n'
+                f'RMS: {rms:.3g} {units_label}',
+                transform=ax.transAxes,
+                ha='left', va='top',
+                fontsize=9,
+                bbox=dict(boxstyle='round,pad=0.3',
+                          facecolor='white', alpha=0.75,
+                          edgecolor='gray', lw=0.5),
+            )
+
+
+def plot_opd_fan(
+    py: np.ndarray,
+    opd_y: np.ndarray,
+    px: np.ndarray,
+    opd_x: np.ndarray,
+    *,
+    wavelength: Optional[float] = None,
+    units: str = 'waves',
+    show_stats: bool = True,
+    title: Optional[str] = None,
+    fig: Optional[Any] = None,
+    axes: Optional[Tuple[Any, Any]] = None,
+) -> Tuple[Any, Tuple[Any, Any]]:
+    """Plot OPD ray-fan curves (tangential + sagittal).
+
+    Renders the canonical two-panel OPD-vs-pupil diagram used in
+    classical Fourier-optics references and in the cross-check
+    figures at ``OPDPy_Lumenairy_Crosscheck/fig_variety_L*.png``.
+    The left panel shows the tangential (y-fan, ``opd_y`` vs ``py``);
+    the right panel shows the sagittal (x-fan, ``opd_x`` vs ``px``).
+
+    Parameters
+    ----------
+    py : ndarray, shape (n_rays,)
+        Normalised pupil y-coordinate of the tangential fan in
+        ``[-1, 1]``.
+    opd_y : ndarray, shape (n_rays,)
+        Tangential-fan OPD samples in METRES.  ``NaN`` entries (rays
+        outside the aperture, vignetted, or TIR'd) are passed through
+        unchanged so the PV / RMS overlay reports stats over the in-
+        aperture portion only.
+    px : ndarray, shape (n_rays,)
+        Normalised pupil x-coordinate of the sagittal fan in
+        ``[-1, 1]``.
+    opd_x : ndarray, shape (n_rays,)
+        Sagittal-fan OPD samples in METRES.  Same unit handling as
+        ``opd_y``.
+    wavelength : float, optional
+        Vacuum wavelength [m].  Required when ``units == 'waves'``.
+    units : {'waves', 'nm', 'um', 'm'}, default 'waves'
+        Display unit for the y-axis and the PV / RMS overlay.
+        ``'waves'`` requires a positive ``wavelength`` and divides
+        the (metre-valued) input by it; ``'nm'`` / ``'um'`` apply a
+        fixed scale factor; ``'m'`` is the identity.  NOTE: the
+        canonical data source
+        :func:`lumenairy.raytrace.opd_fan_data` returns OPD already
+        in **waves**, not metres -- multiply by the trace wavelength
+        before passing here when ``units != 'waves'``, OR pre-scale
+        and call with ``units='m'``.
+    show_stats : bool, default True
+        Overlay a "PV: ..., RMS: ..." annotation in the upper-left of
+        each panel, computed over the finite (alive) samples.
+    title : str, optional
+        Optional figure-level suptitle (passed to ``fig.suptitle``).
+        Per-panel titles are always "y-fan (tangential)" and
+        "x-fan (sagittal)".
+    fig : matplotlib Figure, optional
+        Existing figure handle.  When supplied without ``axes``, two
+        new subplots are added to it.  Otherwise a new ``(12, 4.5)``
+        figure is created.
+    axes : tuple of 2 Axes, optional
+        Existing ``(ax_y, ax_x)`` axes to render into.  Both must
+        belong to the same figure (``fig`` is inferred from
+        ``axes[0]`` when not supplied).
+
+    Returns
+    -------
+    fig : matplotlib Figure
+    axes : tuple ``(ax_y, ax_x)``
+        ``ax_y`` is the tangential panel, ``ax_x`` is the sagittal
+        panel.
+
+    See Also
+    --------
+    lumenairy.raytrace.opd_fan_data : compute the input fans.
+    plot_opd_summary : 4-panel 2-D heatmap + radial RMS + 2 fans.
+    plot_wavefront : 2-D OPD heatmap.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import matplotlib
+    >>> matplotlib.use('Agg')
+    >>> from lumenairy.analysis import plot_opd_fan
+    >>> n = 51
+    >>> p = np.linspace(-1, 1, n)
+    >>> opd_y = 0.5 * p ** 2  # defocus, in waves
+    >>> opd_x = 0.5 * p ** 2
+    >>> fig, (ax_y, ax_x) = plot_opd_fan(
+    ...     p, opd_y, p, opd_x,
+    ...     units='waves', wavelength=633e-9)  # doctest: +SKIP
+    """
+    _require_mpl()
+
+    py = np.asarray(py, dtype=float)
+    opd_y_arr = np.asarray(opd_y, dtype=float)
+    px = np.asarray(px, dtype=float)
+    opd_x_arr = np.asarray(opd_x, dtype=float)
+
+    if py.ndim != 1 or opd_y_arr.ndim != 1 \
+            or px.ndim != 1 or opd_x_arr.ndim != 1:
+        raise ValueError(
+            "plot_opd_fan: py, opd_y, px, opd_x must all be 1-D arrays; "
+            f"got shapes {py.shape!r}, {opd_y_arr.shape!r}, "
+            f"{px.shape!r}, {opd_x_arr.shape!r}.")
+    if py.shape != opd_y_arr.shape:
+        raise ValueError(
+            f"plot_opd_fan: py and opd_y must have the same shape; "
+            f"got {py.shape!r} vs {opd_y_arr.shape!r}.")
+    if px.shape != opd_x_arr.shape:
+        raise ValueError(
+            f"plot_opd_fan: px and opd_x must have the same shape; "
+            f"got {px.shape!r} vs {opd_x_arr.shape!r}.")
+
+    scale, units_label = _resolve_opd_units(units, wavelength,
+                                            fn_name='plot_opd_fan')
+    opd_y_disp = opd_y_arr * scale
+    opd_x_disp = opd_x_arr * scale
+
+    if axes is not None:
+        ax_y, ax_x = axes
+        if fig is None:
+            fig = ax_y.get_figure()
+    else:
+        if fig is None:
+            fig, (ax_y, ax_x) = plt.subplots(1, 2, figsize=(12, 4.5))
+        else:
+            ax_y = fig.add_subplot(1, 2, 1)
+            ax_x = fig.add_subplot(1, 2, 2)
+
+    _render_opd_fan_panel(ax_y, py, opd_y_disp, units_label,
+                          'y-fan (tangential)', show_stats)
+    _render_opd_fan_panel(ax_x, px, opd_x_disp, units_label,
+                          'x-fan (sagittal)', show_stats)
+
+    if title:
+        fig.suptitle(title)
+
+    try:
+        fig.tight_layout()
+    except (ValueError, RuntimeError):
+        # tight_layout can refuse on degenerate layouts (e.g. an
+        # already-laid-out parent figure passed in by the caller).
+        # The figure is still returned and renderable.
+        pass
+
+    return fig, (ax_y, ax_x)
+
+
+def _radial_rms_profile(
+    opd: np.ndarray,
+    dx: float,
+    dy: float,
+    aperture: Optional[np.ndarray],
+    n_bins: int = 32,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute RMS(OPD) as a function of normalised pupil radius.
+
+    Bins the (masked) 2-D OPD into ``n_bins`` annular rings between
+    radius 0 and 1 (normalised by the maximum in-aperture radius).
+    Returns ``(r_centres, rms_per_bin)`` with NaN-handling for empty
+    or all-NaN bins.
+
+    Internal helper used by :func:`plot_opd_summary`.
+    """
+    Ny, Nx = opd.shape
+    yy, xx = np.mgrid[0:Ny, 0:Nx]
+    cy = (Ny - 1) / 2.0
+    cx = (Nx - 1) / 2.0
+    rx = (xx - cx) * dx
+    ry = (yy - cy) * dy
+    r = np.sqrt(rx ** 2 + ry ** 2)
+
+    if aperture is not None:
+        mask = np.asarray(aperture, dtype=bool)
+    else:
+        mask = np.isfinite(opd)
+
+    if not np.any(mask):
+        edges = np.linspace(0.0, 1.0, n_bins + 1)
+        centres = 0.5 * (edges[:-1] + edges[1:])
+        return centres, np.full(n_bins, np.nan)
+
+    r_max = float(r[mask].max())
+    if r_max <= 0.0 or not np.isfinite(r_max):
+        edges = np.linspace(0.0, 1.0, n_bins + 1)
+        centres = 0.5 * (edges[:-1] + edges[1:])
+        return centres, np.full(n_bins, np.nan)
+
+    r_norm = r / r_max
+    edges = np.linspace(0.0, 1.0, n_bins + 1)
+    centres = 0.5 * (edges[:-1] + edges[1:])
+
+    out = np.full(n_bins, np.nan, dtype=float)
+    for i in range(n_bins):
+        bin_mask = mask & (r_norm >= edges[i]) & (r_norm < edges[i + 1])
+        if i == n_bins - 1:
+            # Include the right endpoint in the last bin.
+            bin_mask = mask & (r_norm >= edges[i]) & (r_norm <= edges[i + 1])
+        values = opd[bin_mask]
+        values = values[np.isfinite(values)]
+        if values.size > 0:
+            out[i] = float(np.sqrt(np.mean(values ** 2)))
+    return centres, out
+
+
+def plot_opd_summary(
+    opd_2d: np.ndarray,
+    dx: float,
+    *,
+    dy: Optional[float] = None,
+    aperture: Optional[np.ndarray] = None,
+    wavelength: Optional[float] = None,
+    py: Optional[np.ndarray] = None,
+    opd_y: Optional[np.ndarray] = None,
+    px: Optional[np.ndarray] = None,
+    opd_x: Optional[np.ndarray] = None,
+    units: str = 'waves',
+    cmap: str = 'RdBu_r',
+    show_stats: bool = True,
+    title: Optional[str] = None,
+    fig: Optional[Any] = None,
+) -> Tuple[Any, Tuple[Tuple[Any, Any], Tuple[Any, Any]]]:
+    """Plot a 4-panel OPD summary: heatmap + radial RMS + 2 fans.
+
+    Lays out a 2x2 grid:
+
+    +-----------------------+----------------------+
+    | (0, 0) 2-D OPD map    | (0, 1) Radial RMS    |
+    +-----------------------+----------------------+
+    | (1, 0) Tangential fan | (1, 1) Sagittal fan  |
+    +-----------------------+----------------------+
+
+    The heatmap panel delegates to :func:`plot_wavefront`; the fan
+    panels delegate to the same internal renderer used by
+    :func:`plot_opd_fan`.  When ``(py, opd_y, px, opd_x)`` are all
+    supplied (e.g., from :func:`lumenairy.raytrace.opd_fan_data`) the
+    fans are taken from those arrays directly -- preferred because
+    the ray-trace pipeline already references the chief ray.  If the
+    fan arrays are not supplied, the function falls back to the
+    central row and column of ``opd_2d`` so the figure still
+    populates for callers that only have the 2-D OPD.
+
+    Parameters
+    ----------
+    opd_2d : ndarray, shape (Ny, Nx)
+        2-D OPD map (same convention as :func:`plot_wavefront`).
+        Inputs are interpreted in the ``units`` system.
+    dx : float
+        Pupil grid spacing in x [m].
+    dy : float, optional
+        Pupil grid spacing in y [m].  Defaults to ``dx``.
+    aperture : ndarray bool, optional
+        Boolean mask the same shape as ``opd_2d``.  Used both for
+        the heatmap (passed through to :func:`plot_wavefront`) and
+        for the radial-RMS binning (rays outside the mask are
+        ignored).
+    wavelength : float, optional
+        Vacuum wavelength [m].  Required when ``units == 'waves'``.
+    py, opd_y, px, opd_x : ndarray, optional
+        Pre-computed tangential / sagittal fans.  When all four are
+        supplied they are rendered directly.  When any of them is
+        ``None`` the function extracts the central row + column of
+        ``opd_2d`` as a fallback.
+    units : {'waves', 'nm', 'um', 'm'}, default 'waves'
+        Display units for all panels (passed through to
+        :func:`plot_wavefront` and to the fan unit conversion).
+    cmap : str, default ``'RdBu_r'``
+        Colormap for the 2-D heatmap panel.
+    show_stats : bool, default True
+        Overlay PV / RMS annotations on the heatmap and on each fan
+        panel.
+    title : str, optional
+        Figure-level suptitle.
+    fig : matplotlib Figure, optional
+        Existing figure handle.  When supplied, four new subplots are
+        added in a 2x2 grid.  Otherwise a new ``(12, 10)`` figure is
+        created.
+
+    Returns
+    -------
+    fig : matplotlib Figure
+    axes : tuple of tuples
+        ``((ax_hm, ax_rms), (ax_y, ax_x))`` -- the 2x2 axes grid.
+
+    See Also
+    --------
+    plot_wavefront : 2-D OPD heatmap (used internally for the (0, 0)
+        panel).
+    plot_opd_fan : 2-panel OPD fan plot (the rendering logic for the
+        (1, 0) and (1, 1) panels).
+    lumenairy.raytrace.opd_fan_data : compute the fan inputs.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import matplotlib
+    >>> matplotlib.use('Agg')
+    >>> from lumenairy.analysis import plot_opd_summary
+    >>> N = 64
+    >>> x = (np.arange(N) - N / 2) / (N / 2)
+    >>> X, Y = np.meshgrid(x, x)
+    >>> ap = (X ** 2 + Y ** 2) <= 1.0
+    >>> opd = 0.5 * (X ** 2 + Y ** 2)  # defocus, waves
+    >>> fig, axes = plot_opd_summary(
+    ...     opd, dx=1e-6, aperture=ap,
+    ...     units='waves', wavelength=633e-9)  # doctest: +SKIP
+    """
+    _require_mpl()
+
+    if opd_2d.ndim != 2:
+        raise ValueError(
+            f"plot_opd_summary: opd_2d must be 2-D; got shape "
+            f"{opd_2d.shape!r}.")
+    if dy is None:
+        dy = dx
+
+    scale, units_label = _resolve_opd_units(units, wavelength,
+                                            fn_name='plot_opd_summary')
+
+    # Decide whether to use supplied fans or extract from the 2-D OPD.
+    fan_sources = (py, opd_y, px, opd_x)
+    use_supplied_fans = all(a is not None for a in fan_sources)
+
+    if use_supplied_fans:
+        py_arr = np.asarray(py, dtype=float)
+        opd_y_arr = np.asarray(opd_y, dtype=float)
+        px_arr = np.asarray(px, dtype=float)
+        opd_x_arr = np.asarray(opd_x, dtype=float)
+    else:
+        # Extract central row and column of opd_2d as a fallback.
+        Ny, Nx = opd_2d.shape
+        col_centre = Nx // 2
+        row_centre = Ny // 2
+        py_arr = (np.arange(Ny) - (Ny - 1) / 2.0) / max((Ny - 1) / 2.0, 1.0)
+        px_arr = (np.arange(Nx) - (Nx - 1) / 2.0) / max((Nx - 1) / 2.0, 1.0)
+        opd_y_arr = np.asarray(opd_2d, dtype=float)[:, col_centre]
+        opd_x_arr = np.asarray(opd_2d, dtype=float)[row_centre, :]
+        if aperture is not None:
+            ap_arr = np.asarray(aperture, dtype=bool)
+            opd_y_arr = np.where(ap_arr[:, col_centre], opd_y_arr, np.nan)
+            opd_x_arr = np.where(ap_arr[row_centre, :], opd_x_arr, np.nan)
+
+    # Build figure with 2x2 grid.
+    if fig is None:
+        fig, axarr = plt.subplots(2, 2, figsize=(12, 10))
+        ax_hm, ax_rms = axarr[0, 0], axarr[0, 1]
+        ax_y, ax_x = axarr[1, 0], axarr[1, 1]
+    else:
+        ax_hm = fig.add_subplot(2, 2, 1)
+        ax_rms = fig.add_subplot(2, 2, 2)
+        ax_y = fig.add_subplot(2, 2, 3)
+        ax_x = fig.add_subplot(2, 2, 4)
+
+    # Panel (0, 0): 2-D heatmap -- delegate to plot_wavefront.
+    plot_wavefront(
+        opd_2d, dx=dx, dy=dy,
+        aperture=aperture,
+        units=units,
+        wavelength=wavelength,
+        cmap=cmap,
+        show_stats=show_stats,
+        ax=ax_hm,
+        fig=fig,
+        title='OPD map',
+    )
+
+    # Panel (0, 1): radial RMS profile.
+    r_centres, rms_radial = _radial_rms_profile(
+        opd_2d, dx, dy, aperture, n_bins=32)
+    rms_disp = rms_radial * scale  # convert metres -> display units
+    ax_rms.plot(r_centres, rms_disp, color='C0', lw=1.5)
+    ax_rms.set_xlabel('Normalised pupil radius')
+    ax_rms.set_ylabel(f'RMS OPD ({units_label})')
+    ax_rms.set_title('Radial RMS profile')
+    ax_rms.grid(alpha=0.3)
+    ax_rms.set_xlim(0.0, 1.0)
+
+    # Panels (1, 0) and (1, 1): fan plots.
+    opd_y_disp = opd_y_arr * scale
+    opd_x_disp = opd_x_arr * scale
+
+    _render_opd_fan_panel(ax_y, py_arr, opd_y_disp, units_label,
+                          'y-fan (tangential)', show_stats)
+    _render_opd_fan_panel(ax_x, px_arr, opd_x_disp, units_label,
+                          'x-fan (sagittal)', show_stats)
+
+    if title:
+        fig.suptitle(title)
+
+    try:
+        fig.tight_layout()
+    except (ValueError, RuntimeError):
+        pass
+
+    return fig, ((ax_hm, ax_rms), (ax_y, ax_x))
 
 
 # =============================================================================

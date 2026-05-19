@@ -57,6 +57,16 @@ from lumenairy.sources.core import (
     create_schell_model_source,
 )
 
+# v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): the Schell-family tests below
+# legitimately invoke the factories with the legacy positional default
+# (the v4.15.1 ``return_kind`` default-path triggers a
+# DeprecationWarning).  Pin DeprecationWarning back to ``default`` for
+# this module so the suite stays clean under strict
+# ``-W error::DeprecationWarning``.
+pytestmark = pytest.mark.filterwarnings(
+    'default::DeprecationWarning',
+)
+
 
 # ============================================================================
 # B.1 -- Source.* size-arg normalisation
