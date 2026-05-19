@@ -248,6 +248,18 @@ def rays_from_field(
     lumenairy.propagators.gbd.decompose_field_to_beamlets : analogous
         bridge for GBD beamlets.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  v4.15.1 added an inline
+    # ``E.ndim != 2`` check below; that catches 3-D ensembles with a
+    # tailored message, but a ``PartialCoherenceMCF`` input fails at
+    # ``np.asarray(E)`` with the unhelpful Python TypeError instead
+    # of the canonical v4.16-roadmap message.  Hoist the guard to
+    # the absolute entry so MCF inputs are rejected first; the
+    # downstream ``E.ndim != 2`` check is preserved for diagnostic
+    # symmetry (its message is more specific to the rays-from-field
+    # use case).  Input kind: 'field'.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'rays_from_field')
     # ------------------------------------------------------------------
     # Input validation -- audit posture: fail loudly at the boundary.
     # ------------------------------------------------------------------

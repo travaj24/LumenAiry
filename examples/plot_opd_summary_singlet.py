@@ -77,13 +77,20 @@ def main() -> None:
 
     # ------------------------------------------------------------------
     # 4. Print PV / RMS, then render and save the 4-panel summary.
+    #    v4.15.5 (P2-NEW-V2-4): RMS uses the centered form
+    #    ``sqrt(mean((finite - finite.mean())**2))`` so this print
+    #    reconciles with the centered RMS the heatmap annotation
+    #    reports.  Pre-v4.15.5 printed the uncentered raw RMS
+    #    ``sqrt(mean(finite**2))``, which disagreed with the heatmap
+    #    by ~50 % for this strongly-piston-loaded singlet OPD.
     # ------------------------------------------------------------------
     finite = opd_w_2d[np.isfinite(opd_w_2d)]
     pv_w = float(finite.max() - finite.min())
-    rms_w = float(np.sqrt(np.mean(finite ** 2)))
+    rms_w = float(np.sqrt(np.mean((finite - finite.mean()) ** 2)))
     print(f"Singlet N-BK7 R1=+50/R2=-50 mm, d=4 mm, A=10 mm, "
           f"lambda = {wavelength*1e9:.0f} nm")
-    print(f"  2-D OPD: PV = {pv_w:.4f} waves, RMS = {rms_w:.4f} waves")
+    print(f"  2-D OPD: PV = {pv_w:.4f} waves, "
+          f"centered RMS = {rms_w:.4f} waves")
 
     fig, axes = la.plot_opd_summary(
         opd_m_2d, dx=dx, aperture=aperture,

@@ -39,7 +39,12 @@ from typing import Any
 from lumenairy.sources.core import PartialCoherenceMCF as _MCF
 
 
-def _check_2d_scalar_field(E: Any, fn_name: str) -> None:
+def _check_2d_scalar_field(
+    E: Any,
+    fn_name: str,
+    *,
+    input_kind: str = 'field',
+) -> None:
     """Reject ``PartialCoherenceMCF`` and non-2-D inputs at the
     entry point of any coherent-field propagator or lens kernel.
 
@@ -51,6 +56,17 @@ def _check_2d_scalar_field(E: Any, fn_name: str) -> None:
     fn_name : str
         Name of the calling function -- used in error messages so
         the user knows which entry point rejected their input.
+    input_kind : str, default ``'field'``
+        Semantic name of the rejected argument -- used in the error
+        message wording so callers passing a non-conforming
+        ``pupil`` (``richards_wolf_focus``, ``debye_wolf_psf``) or
+        ``psf`` (``compute_otf`` / ``compute_mtf`` if Agent A wires
+        them up) see "expected 2-D complex pupil" / "psf" instead
+        of the literal "field" string.  Conventional values:
+        ``'field'`` (default), ``'pupil'``, ``'psf'``.  v4.15.5
+        (P2-NEW-F1-3): parameterised after the v4.15.4 audit noted
+        that the vector-diffraction sites took a pupil, not a field,
+        but the error message hardcoded "field".
 
     Raises
     ------
@@ -107,7 +123,7 @@ def _check_2d_scalar_field(E: Any, fn_name: str) -> None:
                 "supported."
             )
         raise ValueError(
-            f"{fn_name}: expected 2-D complex field of shape "
+            f"{fn_name}: expected 2-D complex {input_kind} of shape "
             f"(Ny, Nx); got {ndim}-D array of shape "
             f"{shape_str}.\n"
             f"{hint}"

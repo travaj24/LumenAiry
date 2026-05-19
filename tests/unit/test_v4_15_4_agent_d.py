@@ -280,3 +280,122 @@ def test_top_level_imports():
     from lumenairy.analysis import plot_opd_summary as pos_sub
     assert paf_sub is la.plot_opd_fan
     assert pos_sub is la.plot_opd_summary
+
+
+# ----------------------------------------------------------------------------
+# v4.15.5 carry-forward updates -- centered-RMS convention + ``opd_fan_data``
+# end-to-end regression
+# ----------------------------------------------------------------------------
+
+
+def test_v4_15_5_plot_opd_fan_default_fan_units_is_metres_backcompat():
+    """v4.15.5 -- ``plot_opd_fan`` default ``fan_units='m'`` preserves
+    the v4.15.4 contract: a metres-valued input + ``units='waves'``
+    divides by wavelength exactly once.  Pins the back-compat default
+    so a future flip to ``fan_units='waves'`` cannot land silently.
+    """
+    py, oy, px, ox, wl = _make_defocus_fans(peak_waves=1.0)
+    fig, (ax_y, ax_x) = plot_opd_fan(
+        py, oy, px, ox,
+        wavelength=wl, units='waves', show_stats=False)
+    y_plotted = ax_y.get_lines()[0].get_ydata()
+    expected = oy / wl  # metres -> waves, one division
+    np.testing.assert_allclose(y_plotted, expected, rtol=1e-12)
+    plt.close(fig)
+
+
+def test_v4_15_5_plot_opd_fan_opd_fan_data_pipeline_end_to_end():
+    """v4.15.5 (P1-NEW-V2-1) -- end-to-end ``opd_fan_data ->
+    plot_opd_fan`` regression.
+
+    The canonical workflow is:
+
+        py, oy, px, ox = la.opd_fan_data(surfaces, wl, semi_ap)
+        plot_opd_fan(py, oy, px, ox,
+                     units='waves', wavelength=wl,
+                     fan_units='waves')
+
+    Because ``opd_fan_data`` returns OPD already in WAVES, the
+    ``fan_units='waves'`` branch must skip the second
+    division-by-wavelength.  Pre-v4.15.5 the only way to use this
+    pipeline correctly was to manually multiply by ``wavelength``.
+    This test pins that the rendered values match the original
+    waves output to numerical precision (no double conversion).
+    """
+    rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=4e-3, glass='N-BK7',
+                          aperture=10e-3)
+    rx['object_distance'] = 1.0
+    surfaces = la.surfaces_from_prescription(rx)
+    semi_aperture = rx['aperture_diameter'] / 2.0
+    wavelength = 633e-9
+    py_w, opd_y_w, px_w, opd_x_w = la.opd_fan_data(
+        surfaces, wavelength, semi_aperture, field_angle=0.0, n_rays=51)
+
+    fig, (ax_y, ax_x) = plot_opd_fan(
+        py_w, opd_y_w, px_w, opd_x_w,
+        units='waves', wavelength=wavelength,
+        fan_units='waves', show_stats=False)
+    y_plotted = ax_y.get_lines()[0].get_ydata()
+    x_plotted = ax_x.get_lines()[0].get_ydata()
+    # Rendered values must equal the WAVES output of ``opd_fan_data``
+    # (no division by wavelength).
+    np.testing.assert_allclose(y_plotted, opd_y_w, rtol=1e-12,
+                               equal_nan=True)
+    np.testing.assert_allclose(x_plotted, opd_x_w, rtol=1e-12,
+                               equal_nan=True)
+    plt.close(fig)
+
+
+def test_v4_15_5_plot_opd_summary_radial_rms_centered_convention():
+    """v4.15.5 (P1-NEW-V2-2) -- the radial-RMS profile in the (0, 1)
+    panel of ``plot_opd_summary`` reports the *centered* RMS about
+    the in-aperture mean, matching ``plot_wavefront``'s 2-D heatmap
+    annotation.
+
+    Pre-v4.15.5 used ``sqrt(mean(opd**2))`` per bin (uncentered);
+    the 4-panel figure showed two different RMS numbers for the
+    same OPD.  Pin the centered convention so any future regression
+    that re-introduces piston into the radial profile fails this
+    test rather than silently splitting the two reductions.
+    """
+    opd_m, ap, dx, wl = _make_defocus_2d(N=64, peak_waves=0.5)
+    fig, ((ax_hm, ax_rms), (ax_y, ax_x)) = plot_opd_summary(
+        opd_m, dx=dx, aperture=ap, units='waves', wavelength=wl)
+
+    # Heatmap PV / RMS annotation -- parse the centered RMS from
+    # the rendered text artist.
+    import re
+    hm_texts = '\n'.join(t.get_text() for t in ax_hm.texts)
+    m_rms = re.search(r'RMS:\s*([0-9eE\.\-\+]+)', hm_texts)
+    assert m_rms is not None, (
+        f"could not parse heatmap RMS annotation: {hm_texts!r}")
+    rms_2d = float(m_rms.group(1))
+
+    # Radial-RMS profile line: the outer-rim bin should be close to
+    # the heatmap RMS (within a factor of ~3 because the outer-rim
+    # annulus values are larger than the global RMS for defocus,
+    # but BOTH must use the centered convention).  Pre-v4.15.5 the
+    # outer bin was dominated by piston squared and exceeded the
+    # heatmap RMS by an order of magnitude.
+    rms_line = ax_rms.get_lines()[0].get_ydata()
+    finite = rms_line[np.isfinite(rms_line)]
+    assert finite.size > 0
+    rms_outer_bin = float(finite[-1])
+
+    # For pure defocus over [-1, 1] disk, the in-aperture mean is
+    # ~0.25 waves, the centered RMS about that mean is ~0.144 waves,
+    # and the outer-bin centered RMS (annulus at r~1, opd~0.5)
+    # equals |0.5 - 0.25| = 0.25.  Pre-v4.15.5 the outer-bin
+    # uncentered RMS was ~0.5, well separated from the heatmap.
+    # The centered ratio outer / heatmap is ~1.7; the uncentered
+    # ratio would be ~3.5.  We pin the ratio <= 3.0 as a robust
+    # discriminator between the two conventions.
+    assert rms_2d > 0
+    ratio = rms_outer_bin / rms_2d
+    assert ratio <= 3.0, (
+        f"plot_opd_summary radial-RMS outer bin / heatmap RMS = "
+        f"{ratio:.2f}, expected <= 3.0 under the centered "
+        f"convention.  rms_outer_bin = {rms_outer_bin:.4g}, "
+        f"rms_heatmap = {rms_2d:.4g}.  Did _radial_rms_profile "
+        f"regress to the uncentered ``sqrt(mean(opd**2))`` form?")
+    plt.close(fig)

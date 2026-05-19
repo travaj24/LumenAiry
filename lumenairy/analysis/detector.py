@@ -371,6 +371,15 @@ def shack_hartmann(
     centroids_x, centroids_y : ndarray
         Raw centroid positions [m] at each sub-aperture.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
+    # ensemble input failed at ``E.shape[0]`` (3-D returned a wrong
+    # ``N``) or attribute access (MCF), then propagated wrong slopes
+    # / centroids through the lenslet loop.  Routes both to the
+    # canonical v4.16 message via the V6 walker.  Input kind:
+    # 'pupil' (the SH-WFS measures a complex pupil-plane field).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'shack_hartmann')
     N = E.shape[0]
     extent = N * dx
     if n_lenslets is None:

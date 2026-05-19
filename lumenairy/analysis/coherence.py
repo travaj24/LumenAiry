@@ -76,6 +76,15 @@ def koehler_image(
     I_image : ndarray, real, shape (N, N)
         Partially-coherent image intensity.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
+    # ensemble object failed at ``object_field.shape[0]`` indexing
+    # (3-D returned a meaningful but wrong N) or attribute access
+    # (MCF).  Routes both to the canonical v4.16 message via the V6
+    # walker.  Input kind: 'field' (the object transmission is a
+    # 2-D scalar complex field on the object plane).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(object_field, 'koehler_image')
     N = object_field.shape[0]
     k0 = 2 * np.pi / wavelength
     x = (np.arange(N) - N / 2) * dx
@@ -135,6 +144,11 @@ def extended_source_image(
     -------
     I_image : ndarray, shape (N, N)
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (sibling of ``koehler_image``).
+    # Input kind: 'field' (object transmission).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(object_field, 'extended_source_image')
     N = object_field.shape[0]
     k0 = 2 * np.pi / wavelength
     x = (np.arange(N) - N / 2) * dx

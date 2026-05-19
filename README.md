@@ -10,6 +10,85 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.15.5
+
+**Closes the v4.15.4 audit (`docs/audits/AUDIT_V4_15_4_2026_05_19.md`)
+through P3.**  0 P0 + 4 P1 + 6 P2 + 5 P3.  Three of the 4 P1s closed
+via a **V6 dispatcher meta-pin walker refactor** — discovery now
+keys off the function's first-positional-parameter name (via AST
+inspection) rather than a hand-curated name-prefix list, plus the
+walker now descends into class bodies.  The remaining P1 cluster
+closed by fixing two user-facing pitfalls in v4.15.4's OPD plotting
+functions.  1922 unit pass (up from 1858); 34/34 validation pass.
+
+### Headline: V6 walker (first-positional-param-name discovery)
+
+v4.15.3/4 used a hand-curated name-prefix filter (`apply_*` /
+`propagate_*` / `richards_wolf_*` / `debye_wolf_*`); 30+ public
+`__all__` functions with 2-D `E`/`field`/`pupil` first positional
+fell outside that filter.  v4.15.5 walks `__all__` and inspects
+each function's `ast.arguments.args[0].arg` — if the name is in
+`{'E', 'E_in', 'field', 'pupil', 'object_field', 'psf'}`, requires
+`_check_2d_scalar_field` OR `_GUARD_EXEMPTIONS` entry.  Discovery
+is grounded in the actual signature.
+
+Plus class-body descent: `DeformableMirror.apply` was a 3-line
+non-delegating phase-screen multiply hiding behind the walker's
+v4.15.4 blanket class-method exclusion.  v4.15.5 guards it
+directly and documents legitimate-delegators
+(`ThinLens.apply`, `FreeSpace.apply`, etc.) in
+`_DELEGATING_CLASS_METHODS`.
+
+Walker entry-point count: **96 top-level + 3 class methods** (was
+72 at v4.15.4).  39 guarded (was 25).  `_file_to_ast` cached →
+walker wall time 1.5s → 0.03s warm (~30× speedup).
+
+### P1 closures (4)
+
+* `DeformableMirror.apply` 1-line guard + walker class-body descent
+* 13 newly-guarded analyzers: `wave_opd_2d`, `M2`, `strehl_ratio`,
+  `beam_d4sigma`, `coupling_efficiency`, `compute_psf/otf/mtf`,
+  `encircled_energy_curve`, `koehler_image`, `extended_source_image`,
+  `shack_hartmann`, `rays_from_field`, `resample_field`
+* `plot_opd_fan` `fan_units='m'|'waves'` kwarg — closes the
+  silent ~6e5 double-conversion trap when users pipe
+  `opd_fan_data` output (which returns waves) into the plotter
+  (which expected metres)
+* `_radial_rms_profile` switched to centered RMS — matches the
+  1-D fan + 2-D heatmap RMS convention.  Same OPD on the 4-panel
+  summary now produces reconcilable numbers.  Example
+  `plot_opd_summary_singlet.py` RMS now reports 0.8901 waves
+  (was 1.3347 uncentered); PV unchanged at 2.9318 waves.
+
+### P2 closures
+
+* `_check_2d_scalar_field` gains `input_kind: str = 'field'`
+  parameter — `richards_wolf_focus`, `debye_wolf_psf`,
+  `compute_psf/otf/mtf` etc. get accurate "expected 2-D complex
+  pupil" error messages.
+* `plot_opd_summary` docstring corrected to explicitly state
+  `opd_2d` is in metres.
+* `plot_opd_summary` even-N central-row/col aligned via
+  `(N - 1) // 2`.
+* CHANGELOG v4.15.4 walker count refreshed (43→49 → actual 72 at
+  v4.15.4 HEAD).
+
+### P3 closures
+
+`_file_to_ast` `@lru_cache` (~30× walker speedup); `plot_opd_fan`
+docstring specifies "centered RMS"; `n_bins` exposed as
+`radial_rms_n_bins='auto'` with auto-clamp for tiny grids; CHANGELOG
+57-vs-63 reconcile; per-agent +1 footnote; wavelength annotation
+fixed (587.56→633 nm).
+
+### ROADMAP cleanup
+
+6 items that shipped in v4.15.0/v4.15.1 moved from "v4.16 residual"
+to "Shipped highlights" (polychromatic EE, vector Strehl,
+resolution metrics, astigmatism mag+angle, OAP factory, Forbes
+Q-type).  True v4.16 residual is now 2 items: V4 meta-pin
+candidates + multi-process atomic-append for `storage.py`.
+
 ## What's new in 4.15.4
 
 **Closes the v4.15.3 audit (`docs/audits/AUDIT_V4_15_3_2026_05_18.md`)
@@ -24,8 +103,8 @@ helper + dispatcher meta-pin) to retire the recurring sibling-gap
 meta-pattern.  But the walker scoped only to two packages — leaving
 6 sibling entry points outside its view.  v4.15.4 makes discovery
 `__all__`-based and broadens the name filter; the walker now
-discovers all 49 candidate entry points and guards the 6 newly-
-found siblings:
+discovers **72 candidate entry points (25 guarded + 47 documented
+exempt)** and guards the 6 newly-found siblings:
 
 * `propagate_through_system_jax` (P1)
 * `apply_dm`, `apply_detector` (in `analysis/`)

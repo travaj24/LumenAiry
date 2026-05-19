@@ -73,66 +73,31 @@ are preserved in git history; this file is forward-only.
 
 ---
 
-## v4.16.0 — User-facing API expansion (residual)
+## v4.16.0 — Residual scope (post-v4.15.x sweep)
 
 The cross-library survey (Agent C, Part 10 of AUDIT_V4_13_1)
 catalogued 12 user-facing API gaps.  v4.14.0 closed 5 (encircled
 energy, MTF cutoff, beam diameter, depth of focus, plot_wavefront).
 The partial-coherence source trio (Gaussian-Schell, Schell-model,
-annular-incoherent) was added in v4.14.x and now resides in the
-shipped section.  The remaining items (originally #4-#8 + #10 in
-the v4.15-v4.16 plan, renumbered after shipped items moved to
-Shipped highlights) are below.
+annular-incoherent) shipped in v4.14.x.  **v4.15.0 + v4.15.1 closed
+the remaining 6 user-facing API items** (polychromatic encircled
+energy, polarisation-aware Strehl, resolution metrics, astigmatism
+magnitude+angle, off-axis parabola, Forbes Q-type freeform) -- they
+now reside in the Shipped highlights section below.
 
-### 1. Polychromatic encircled energy
+The true v4.16 residual is **2 items**: the 4 V4 meta-pin candidates
+and the multi-process atomic-append for `storage.py`.  (The v4.15.5
+audit also recommends a 6th meta-pin candidate -- V6 walker
+first-positional-param filter -- pending the v4.15.5 dispatch
+work; if shipped in v4.15.5, that closes the meta-pin trajectory at
+the public-API surface and this section reduces to 1 item.)
 
-`polychromatic_psf` exists; `encircled_energy_radius` exists; no
-convenience helper `ee_polychromatic(prescription, wavelengths,
-weights, radii)` chaining them.  ~30 LOC + 2 tests.
-
-### 2. Polarisation-aware Strehl / coupling
-
-All `strehl_*` helpers take a scalar field.  For vector imaging
-(Richards-Wolf, polarization-ray-tracing) the user has to manually
-`sqrt(|Ex|² + |Ey|²)` first.  Add an explicit `strehl_vector(Ex, Ey,
-Ez=None, ...)` and `coupling_efficiency_vector(...)`.  ~50 LOC + 3
-tests.
-
-### 3. Optical resolution metrics (Sparrow / Rayleigh / FWHM)
-
-Standard "two-point separability" definitions absent.  Add:
-- `rayleigh_resolution(psf, dx, wavelength)` — Rayleigh diffraction-
-  limit two-point separation.
-- `sparrow_resolution(psf, dx)` — empirical Sparrow criterion
-  (dip-just-vanishes).
-- `fwhm_resolution(psf, dx)` — twice the FWHM half-radius.
-
-~60 LOC + 4 tests.
-
-### 4. Astigmatism magnitude+angle helper
-
-`zernike_decompose` returns `(c5, c3)` = (vertical, oblique)
-astigmatism but no `astigmatism_mag_angle(coeffs)` that converts to
-`(|astig|, theta)` per Mahajan §8.2.  ~10 LOC + 1 test.
-
-### 5. Off-axis parabola helper
-
-Users currently roll their own OAP via tilt+decenter, which is
-fragile.  Add `make_off_axis_parabola(focal_length, off_axis_angle,
-clear_aperture, ...) -> prescription_dict` factory.  ~40 LOC + 2
-tests.
-
-### 6. Q-type freeform (Forbes Q-bfs / Q-con)
-
-`elements/freeform.py` only implements XY-polynomial, Zernike, and
-Chebyshev.  Forbes Q-type is the standard at TI / Edmund / Zemax for
-aspheric freeforms.  ~150 LOC + 5 tests.
-
-### 7. Extend meta-pin pattern (V4 candidates)
+### 1. Extend meta-pin pattern (V4 candidates)
 
 v4.15.0 implemented the 3rd of the 5 V2-recommended meta-pins
-(input-validation entry-point).  The remaining 4 V2 candidates
-remain to extend:
+(input-validation entry-point); v4.15.3 added the 4th
+(`_check_2d_scalar_field` dispatcher); v4.15.4 extended the 4th's
+walker scope.  The remaining 4 V2 candidates still stand:
 
 - **Sentinel-aware branch propagation** -- AST-walk every
   `_get_wrapper_merit_cache` callsite for `is _ZERO_APERTURE_MASK`
@@ -151,7 +116,7 @@ remain to extend:
 ~250 LOC of test infrastructure + walker fixtures across the 4
 pins.
 
-### 8. Multi-process atomic-append for `storage.py`
+### 2. Multi-process atomic-append for `storage.py`
 
 v4.14.3 documented single-process atomicity for `append_plane_h5`
 and `_zarr_append_plane` and the multi-process restriction.  The
@@ -162,7 +127,7 @@ remains outstanding.  ~120 LOC + 6 tests.
 
 ## v4.17.0 — Optimisation framework expansion
 
-### 9. Constrained optimisation
+### 3. Constrained optimisation
 
 All Merits express constraints as soft penalties (`max(0, x -
 threshold)²`).  scipy.optimize has `NonlinearConstraint` for hard
@@ -170,7 +135,7 @@ constraints (e.g. "BFL > 5 mm exactly").  Add `constraints:
 Optional[Sequence[Constraint]]` kwarg to `design_optimize` that maps
 to scipy's API.  ~80 LOC + 4 tests.
 
-### 10. Checkpoint / resume on long `design_optimize` runs
+### 4. Checkpoint / resume on long `design_optimize` runs
 
 A 4-hour optimisation run that crashes loses everything.
 `plane_logger` saves per-iteration field but not the parameter
@@ -178,7 +143,7 @@ vector.  Add `state_file: Optional[str] = None` that persists
 `(call_count, x_best, merit_best)` to JSON/H5 and resumes from disk
 when present.  ~100 LOC + 3 tests.
 
-### 11. Multi-objective (Pareto) optimisation
+### 5. Multi-objective (Pareto) optimisation
 
 `CompositeMerit` collapses to scalar.  For "minimise spot size AND
 match focal length" with no a priori weight balance, NSGA-II or
@@ -186,7 +151,7 @@ match focal length" with no a priori weight balance, NSGA-II or
 right tool.  Out-of-scope architecturally for v4.17 unless a clean
 shim onto an external library (`pymoo`) is acceptable.
 
-### 12. Hessian / Newton-step optimisation
+### 6. Hessian / Newton-step optimisation
 
 L-BFGS-B is the default.  For small (< 30 free var) problems an
 FD-Hessian-based Newton step converges in fewer evals.  Add
@@ -196,7 +161,7 @@ FD-Hessian-based Newton step converges in fewer evals.  Add
 
 ## v4.18.0 — Glass / materials expansion
 
-### 13. CDGM / Hikari / Sumita glass catalogues
+### 7. CDGM / Hikari / Sumita glass catalogues
 
 `glass.py` ships Schott + partial Ohara (S-LAH 64/79).  CDGM is the
 dominant Chinese flint/crown catalogue cited in cellphone/telephoto
@@ -204,7 +169,7 @@ lens papers; Hikari and Sumita complete the major-vendor matrix.
 Public Sellmeier-coefficient sources exist at refractiveindex.info.
 ~600 LOC of bulk data + a sweep through `GLASS_REGISTRY`.
 
-### 14. Sellmeier validity ranges per glass
+### 8. Sellmeier validity ranges per glass
 
 `_sellmeier_index` checks for resonance singularity and negative
 n² but doesn't carry a `(lambda_min, lambda_max)` validity-window
@@ -213,7 +178,7 @@ bears no relation to physical N-BK7.  Add a `validity` field to
 `GLASS_REGISTRY` entries; warn (or raise) when extrapolating.  ~30
 LOC + 2 tests + bulk-data sweep.
 
-### 15. Central cache registry
+### 9. Central cache registry
 
 The v4.14.2 audit Tier-2 #17 item.  Today every cache author has
 to remember to register their clear-function in
@@ -411,11 +376,15 @@ change release when the v4.16+ minor sequence stabilises.  v4.15
 shipped the v4.14.2 P2/P3 sweep + the input-validation meta-pin
 + the partial-coherence source trio (pulled forward from v4.16).
 
-- **v4.16** is the highest user-visible-value release — closing
-  the remaining 7 API gaps that experienced users routinely ask
-  for + extending the meta-pin pattern with the 4 V4 candidates
-  (sentinel propagation, `_xp_of` dispatch, `dy` threading,
-  `__all__` symmetry).
+- **v4.16** is a slim residual release after the v4.15.x sweep
+  closed the user-facing API expansion: extend the meta-pin
+  pattern with the 4 V4 candidates (sentinel propagation, `_xp_of`
+  dispatch, `dy` threading, `__all__` symmetry) and finish the
+  multi-process atomic-append story for `storage.py`.  v4.15.0 +
+  v4.15.1 already shipped the 6 user-facing API items originally
+  scoped here (polychromatic encircled energy, polarisation-aware
+  Strehl, resolution metrics, astigmatism mag+angle, off-axis
+  parabola, Forbes Q-type freeform); see Shipped highlights.
 - **v4.17** is the optimisation-framework focus — constrained opt
   + checkpoint/resume + Newton-step.
 - **v4.18** is the glass / materials expansion — broaden vendor
@@ -497,6 +466,29 @@ shipped the v4.14.2 P2/P3 sweep + the input-validation meta-pin
     shipped earlier in v4.14.x but only now folded into the
     ROADMAP shipped list): `create_gaussian_schell_source`,
     `create_schell_model_source`, `create_annular_incoherent_source`.
+  - **6 v4.16-scope user-facing API items shipped early** (closes
+    AUDIT_V4_13_1 cross-library-survey items #4-#8 + #10; v4.15.5
+    Agent C moved these from the "v4.16 residual" ROADMAP section
+    to Shipped highlights -- the duplicate-counting drift flagged
+    in multiple recent audits):
+    - `ee_polychromatic(rx, wavelengths, weights, radii, ...)` --
+      polychromatic encircled-energy convenience helper chaining
+      `polychromatic_psf` + `encircled_energy_radius`.
+    - `strehl_vector(Ex, Ey, Ez=None, *, reference=None)` and
+      `coupling_efficiency_vector(...)` -- polarisation-aware
+      Strehl / coupling for Richards-Wolf / vector-imaging paths.
+    - `rayleigh_resolution(psf, dx, wavelength, *, axis='radial')`,
+      `sparrow_resolution(psf, dx)`, `fwhm_resolution(psf, dx)` --
+      standard two-point separability definitions.
+    - `astigmatism_mag_angle(coeffs)` -- Mahajan §8.2 conversion
+      of `(c5, c3)` Zernike astigmatism to `(|astig|, theta)`.
+    - `make_off_axis_parabola(focal_length, off_axis_angle,
+      clear_aperture, ...)` -- OAP factory replacing manual
+      tilt+decenter (v4.15.1 P0 fix corrected chief-ray launch to
+      `2 f tan(alpha)`).
+    - `surface_sag_q_bfs(X, Y, *, radius, coefficients, r_max, ...)`
+      -- Forbes Q-bfs aspheric freeform (radial; the asymmetric
+      2-D variant remains a v4.16+ deferral).
   - **CHANGELOG line-citation drift fix** (P3): refreshed
     `optimize/core.py:2750-2755` → `:2790-2795` and `:958-966` →
     `:977-991` to match the post-v4.14.2 drift, plus the

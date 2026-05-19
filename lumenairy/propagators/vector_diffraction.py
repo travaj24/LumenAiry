@@ -78,7 +78,8 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     # canonical v4.16-roadmap message rather than a downstream
     # ``np.asarray`` cast error.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(pupil, 'richards_wolf_focus')
+    _check_2d_scalar_field(pupil, 'richards_wolf_focus',
+                           input_kind='pupil')
 
     # 4.11.2: honour precision='single' via the global default complex
     # dtype.  Pre-4.11.2 the input was always promoted to complex128,
@@ -298,7 +299,8 @@ def debye_wolf_psf(pupil, wavelength, NA, f, dx_pupil,
     # the error) rather than being raised at the downstream
     # ``richards_wolf_focus`` callsite with a wrong fn_name.
     from .._validation import _check_2d_scalar_field
-    _check_2d_scalar_field(pupil, 'debye_wolf_psf')
+    _check_2d_scalar_field(pupil, 'debye_wolf_psf',
+                           input_kind='pupil')
 
     Ex, Ey, Ez, x_f, y_f = richards_wolf_focus(
         pupil, wavelength, NA, f, dx_pupil,

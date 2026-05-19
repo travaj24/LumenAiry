@@ -1219,6 +1219,7 @@ def plot_opd_fan(
     *,
     wavelength: Optional[float] = None,
     units: str = 'waves',
+    fan_units: str = 'm',
     show_stats: bool = True,
     title: Optional[str] = None,
     fig: Optional[Any] = None,
@@ -1238,31 +1239,52 @@ def plot_opd_fan(
         Normalised pupil y-coordinate of the tangential fan in
         ``[-1, 1]``.
     opd_y : ndarray, shape (n_rays,)
-        Tangential-fan OPD samples in METRES.  ``NaN`` entries (rays
-        outside the aperture, vignetted, or TIR'd) are passed through
-        unchanged so the PV / RMS overlay reports stats over the in-
-        aperture portion only.
+        Tangential-fan OPD samples.  Interpreted in the unit
+        selected by ``fan_units`` (METRES by default, or WAVES if
+        ``fan_units='waves'``).  ``NaN`` entries (rays outside the
+        aperture, vignetted, or TIR'd) are passed through unchanged
+        so the PV / RMS overlay reports stats over the in-aperture
+        portion only.
     px : ndarray, shape (n_rays,)
         Normalised pupil x-coordinate of the sagittal fan in
         ``[-1, 1]``.
     opd_x : ndarray, shape (n_rays,)
-        Sagittal-fan OPD samples in METRES.  Same unit handling as
-        ``opd_y``.
+        Sagittal-fan OPD samples.  Same unit handling as ``opd_y``.
     wavelength : float, optional
-        Vacuum wavelength [m].  Required when ``units == 'waves'``.
+        Vacuum wavelength [m].  Required when ``units == 'waves'``
+        or when ``fan_units == 'waves'`` and ``units != 'waves'``.
     units : {'waves', 'nm', 'um', 'm'}, default 'waves'
-        Display unit for the y-axis and the PV / RMS overlay.
-        ``'waves'`` requires a positive ``wavelength`` and divides
-        the (metre-valued) input by it; ``'nm'`` / ``'um'`` apply a
-        fixed scale factor; ``'m'`` is the identity.  NOTE: the
-        canonical data source
-        :func:`lumenairy.raytrace.opd_fan_data` returns OPD already
-        in **waves**, not metres -- multiply by the trace wavelength
-        before passing here when ``units != 'waves'``, OR pre-scale
-        and call with ``units='m'``.
+        DISPLAY unit for the y-axis and the PV / RMS overlay.
+        Controls how the (already-converted-to-metres) OPD is
+        re-scaled before plotting.  ``'waves'`` requires a positive
+        ``wavelength`` and divides by it; ``'nm'`` / ``'um'`` apply
+        a fixed scale factor; ``'m'`` is the identity.
+    fan_units : {'m', 'waves'}, default ``'m'``
+        INPUT unit of ``opd_y`` / ``opd_x``.  ``'m'`` (the v4.15.4
+        default; preserved here for back-compatibility) interprets
+        the arrays as metres.  ``'waves'`` interprets them as waves
+        of the trace wavelength -- this matches what
+        :func:`lumenairy.raytrace.opd_fan_data` returns natively, so
+        the canonical pipeline
+
+            py, opd_y, px, opd_x = la.opd_fan_data(...)
+            plot_opd_fan(py, opd_y, px, opd_x,
+                         units='waves', wavelength=wl,
+                         fan_units='waves')
+
+        renders without the silent double-conversion trap.  Common
+        pitfall (v4.15.4 audit): mixing ``opd_fan_data`` (returns
+        waves) with the default ``fan_units='m'`` divides by
+        ``wavelength`` twice, producing values smaller by ~6e5 than
+        intended.  v4.15.5 (P1-NEW-V2-1): introduce ``fan_units``
+        so the trap is callable-out via a single kwarg.
     show_stats : bool, default True
-        Overlay a "PV: ..., RMS: ..." annotation in the upper-left of
-        each panel, computed over the finite (alive) samples.
+        Overlay a "PV: ..., RMS: ..." annotation in the upper-left
+        of each panel, computed over the finite (alive) samples.
+        PV: max - min over finite (in-aperture) pixels.
+        RMS: centered RMS about the in-aperture mean (matches
+        :func:`plot_wavefront` convention so the 2-D heatmap and
+        the 1-D fan RMS numbers reconcile).
     title : str, optional
         Optional figure-level suptitle (passed to ``fig.suptitle``).
         Per-panel titles are always "y-fan (tangential)" and
@@ -1285,7 +1307,8 @@ def plot_opd_fan(
 
     See Also
     --------
-    lumenairy.raytrace.opd_fan_data : compute the input fans.
+    lumenairy.raytrace.opd_fan_data : compute the input fans (returns
+        OPD in WAVES; pass ``fan_units='waves'`` here).
     plot_opd_summary : 4-panel 2-D heatmap + radial RMS + 2 fans.
     plot_wavefront : 2-D OPD heatmap.
 
@@ -1301,9 +1324,15 @@ def plot_opd_fan(
     >>> opd_x = 0.5 * p ** 2
     >>> fig, (ax_y, ax_x) = plot_opd_fan(
     ...     p, opd_y, p, opd_x,
-    ...     units='waves', wavelength=633e-9)  # doctest: +SKIP
+    ...     units='waves', wavelength=633e-9,
+    ...     fan_units='waves')  # doctest: +SKIP
     """
     _require_mpl()
+
+    if fan_units not in ('m', 'waves'):
+        raise ValueError(
+            f"plot_opd_fan: fan_units must be 'm' or 'waves'; "
+            f"got {fan_units!r}.")
 
     py = np.asarray(py, dtype=float)
     opd_y_arr = np.asarray(opd_y, dtype=float)
@@ -1324,6 +1353,22 @@ def plot_opd_fan(
         raise ValueError(
             f"plot_opd_fan: px and opd_x must have the same shape; "
             f"got {px.shape!r} vs {opd_x_arr.shape!r}.")
+
+    # v4.15.5 (P1-NEW-V2-1): pre-convert ``fan_units='waves'`` inputs
+    # to metres so the existing metres-based ``_resolve_opd_units``
+    # branch stays the single source of truth for display scaling.
+    # ``fan_units='waves'`` requires a positive wavelength regardless
+    # of the display ``units`` (we need it to go waves -> metres
+    # first), so we validate it explicitly here.
+    if fan_units == 'waves':
+        if (wavelength is None or not np.isfinite(wavelength)
+                or wavelength <= 0):
+            raise ValueError(
+                "plot_opd_fan: fan_units='waves' requires a positive "
+                "'wavelength' keyword [m] to convert input waves to "
+                "metres before the display-units conversion.")
+        opd_y_arr = opd_y_arr * float(wavelength)
+        opd_x_arr = opd_x_arr * float(wavelength)
 
     scale, units_label = _resolve_opd_units(units, wavelength,
                                             fn_name='plot_opd_fan')
@@ -1367,12 +1412,25 @@ def _radial_rms_profile(
     aperture: Optional[np.ndarray],
     n_bins: int = 32,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Compute RMS(OPD) as a function of normalised pupil radius.
+    """Compute centered RMS(OPD) as a function of normalised pupil radius.
 
     Bins the (masked) 2-D OPD into ``n_bins`` annular rings between
     radius 0 and 1 (normalised by the maximum in-aperture radius).
     Returns ``(r_centres, rms_per_bin)`` with NaN-handling for empty
     or all-NaN bins.
+
+    v4.15.5 (P1-NEW-V2-2): the per-bin reduction is centered about
+    the SINGLE in-aperture mean of the entire OPD (the same baseline
+    used by :func:`plot_wavefront`'s 2-D RMS annotation and by the
+    1-D fan RMS in :func:`_opd_pv_rms_1d`).  Pre-v4.15.5 used the
+    uncentered form ``sqrt(mean(opd**2))`` per bin, which made the
+    radial curve piston-dominated and irreconcilable with the
+    heatmap annotation on the same 4-panel figure.
+
+    Using the GLOBAL in-aperture mean (rather than a per-annulus
+    local mean) preserves the radial structure: a per-bin local mean
+    would zero-out every annulus by construction, returning a flat
+    line at machine epsilon for any axisymmetric OPD.
 
     Internal helper used by :func:`plot_opd_summary`.
     """
@@ -1404,6 +1462,15 @@ def _radial_rms_profile(
     edges = np.linspace(0.0, 1.0, n_bins + 1)
     centres = 0.5 * (edges[:-1] + edges[1:])
 
+    # v4.15.5: compute the in-aperture mean ONCE so every annulus is
+    # centered about the same baseline (matches plot_wavefront RMS
+    # and the 1-D fan RMS).
+    in_aperture_values = opd[mask]
+    in_aperture_values = in_aperture_values[np.isfinite(in_aperture_values)]
+    if in_aperture_values.size == 0:
+        return centres, np.full(n_bins, np.nan)
+    in_aperture_mean = float(in_aperture_values.mean())
+
     out = np.full(n_bins, np.nan, dtype=float)
     for i in range(n_bins):
         bin_mask = mask & (r_norm >= edges[i]) & (r_norm < edges[i + 1])
@@ -1413,8 +1480,24 @@ def _radial_rms_profile(
         values = opd[bin_mask]
         values = values[np.isfinite(values)]
         if values.size > 0:
-            out[i] = float(np.sqrt(np.mean(values ** 2)))
+            centered = values - in_aperture_mean
+            out[i] = float(np.sqrt(np.mean(centered ** 2)))
     return centres, out
+
+
+def _auto_n_bins(n_in_aperture: int, ceiling: int = 32) -> int:
+    """Pick a sensible ``n_bins`` for :func:`_radial_rms_profile`.
+
+    v4.15.5 (P3-NEW-F1-5): on tiny pupil grids (e.g. 16x16) a fixed
+    32-bin radial profile produces a visibly fragmented line because
+    11 of 32 bins are empty.  Clamp to ``min(ceiling,
+    int(sqrt(N_in_aperture)) // 2)`` so the resolution scales with
+    the available pixel count.  Always returns ``>= 1``.
+    """
+    if n_in_aperture <= 0:
+        return 1
+    candidate = int(np.sqrt(float(n_in_aperture))) // 2
+    return max(1, min(int(ceiling), candidate))
 
 
 def plot_opd_summary(
@@ -1433,6 +1516,7 @@ def plot_opd_summary(
     show_stats: bool = True,
     title: Optional[str] = None,
     fig: Optional[Any] = None,
+    radial_rms_n_bins: Any = 'auto',
 ) -> Tuple[Any, Tuple[Tuple[Any, Any], Tuple[Any, Any]]]:
     """Plot a 4-panel OPD summary: heatmap + radial RMS + 2 fans.
 
@@ -1457,8 +1541,17 @@ def plot_opd_summary(
     Parameters
     ----------
     opd_2d : ndarray, shape (Ny, Nx)
-        2-D OPD map (same convention as :func:`plot_wavefront`).
-        Inputs are interpreted in the ``units`` system.
+        2-D OPD map in METRES (same convention as
+        :func:`plot_wavefront`).
+
+        .. note::
+
+           The input is in METRES regardless of the ``units`` kwarg.
+           ``units`` controls only the DISPLAY conversion -- it does
+           NOT alter the interpretation of ``opd_2d``.  v4.15.4
+           docstring said "interpreted in the units system" which
+           was misleading; v4.15.5 (P2-NEW-V2-3) corrects the
+           wording.
     dx : float
         Pupil grid spacing in x [m].
     dy : float, optional
@@ -1471,30 +1564,56 @@ def plot_opd_summary(
     wavelength : float, optional
         Vacuum wavelength [m].  Required when ``units == 'waves'``.
     py, opd_y, px, opd_x : ndarray, optional
-        Pre-computed tangential / sagittal fans.  When all four are
-        supplied they are rendered directly.  When any of them is
-        ``None`` the function extracts the central row + column of
-        ``opd_2d`` as a fallback.
+        Pre-computed tangential / sagittal fans IN METRES.  When
+        all four are supplied they are rendered directly.  When any
+        of them is ``None`` the function extracts the central row +
+        column of ``opd_2d`` as a fallback.  If you are working
+        directly from :func:`lumenairy.raytrace.opd_fan_data` (which
+        returns WAVES) and want sub-pixel-accurate chief-ray
+        referencing, prefer :func:`plot_opd_fan` with
+        ``fan_units='waves'`` over this 2-D fallback.
     units : {'waves', 'nm', 'um', 'm'}, default 'waves'
-        Display units for all panels (passed through to
+        DISPLAY units for all panels (passed through to
         :func:`plot_wavefront` and to the fan unit conversion).
+        The 2-D OPD is always interpreted in metres internally.
     cmap : str, default ``'RdBu_r'``
         Colormap for the 2-D heatmap panel.
     show_stats : bool, default True
         Overlay PV / RMS annotations on the heatmap and on each fan
-        panel.
+        panel.  RMS is the centered RMS about the in-aperture mean
+        (matches :func:`plot_wavefront`); PV is max - min over
+        finite (in-aperture) pixels.
     title : str, optional
         Figure-level suptitle.
     fig : matplotlib Figure, optional
         Existing figure handle.  When supplied, four new subplots are
         added in a 2x2 grid.  Otherwise a new ``(12, 10)`` figure is
         created.
+    radial_rms_n_bins : int or ``'auto'``, default ``'auto'``
+        Number of radial bins in the (0, 1) profile panel.
+        ``'auto'`` (v4.15.5 default) clamps to
+        ``min(32, int(sqrt(N_in_aperture)) // 2)`` so the resolution
+        scales with the in-aperture pixel count; a fixed integer
+        overrides the auto-clamp.  Coarser grids look smoother;
+        finer grids preserve the historic v4.15.4 behaviour.
 
     Returns
     -------
     fig : matplotlib Figure
     axes : tuple of tuples
         ``((ax_hm, ax_rms), (ax_y, ax_x))`` -- the 2x2 axes grid.
+
+    Notes
+    -----
+    Central-row / column fallback (when explicit fans are omitted):
+    the fallback uses ``(Nx - 1) // 2`` and ``(Ny - 1) // 2`` so the
+    extracted index lines up with the same geometric centre that
+    :func:`_radial_rms_profile` uses for ``(Nx - 1) / 2.0`` /
+    ``(Ny - 1) / 2.0``.  For odd N the result is the unique central
+    sample; for even N it picks the lower of the two centre-adjacent
+    indices.  For sub-pixel-accurate chief-ray referencing, prefer
+    explicit ``(py, opd_y, px, opd_x)`` from
+    :func:`lumenairy.raytrace.opd_fan_data`.
 
     See Also
     --------
@@ -1541,10 +1660,17 @@ def plot_opd_summary(
         px_arr = np.asarray(px, dtype=float)
         opd_x_arr = np.asarray(opd_x, dtype=float)
     else:
-        # Extract central row and column of opd_2d as a fallback.
+        # v4.15.5 (P2-NEW-V2-5): align the central-row / column index
+        # to ``(N - 1) // 2`` so it matches the geometric centre used
+        # by ``_radial_rms_profile`` (``(N - 1) / 2.0``) on both odd
+        # and even N.  Pre-v4.15.5 used ``N // 2`` which sat one
+        # half-pixel right of centre on even N (a 3% offset for
+        # N = 32); the new convention picks the lower of the two
+        # centre-adjacent samples on even N, sub-pixel error <= 0.5
+        # pixel either way.
         Ny, Nx = opd_2d.shape
-        col_centre = Nx // 2
-        row_centre = Ny // 2
+        col_centre = (Nx - 1) // 2
+        row_centre = (Ny - 1) // 2
         py_arr = (np.arange(Ny) - (Ny - 1) / 2.0) / max((Ny - 1) / 2.0, 1.0)
         px_arr = (np.arange(Nx) - (Nx - 1) / 2.0) / max((Nx - 1) / 2.0, 1.0)
         opd_y_arr = np.asarray(opd_2d, dtype=float)[:, col_centre]
@@ -1579,8 +1705,22 @@ def plot_opd_summary(
     )
 
     # Panel (0, 1): radial RMS profile.
+    # v4.15.5 (P3-NEW-F1-5): resolve ``radial_rms_n_bins`` -- auto-
+    # clamp on tiny grids to avoid the fragmented-line UX failure.
+    if isinstance(radial_rms_n_bins, str) and radial_rms_n_bins == 'auto':
+        if aperture is not None:
+            n_in_ap = int(np.count_nonzero(np.asarray(aperture, dtype=bool)))
+        else:
+            n_in_ap = int(np.count_nonzero(np.isfinite(opd_2d)))
+        n_bins_eff = _auto_n_bins(n_in_ap, ceiling=32)
+    else:
+        n_bins_eff = int(radial_rms_n_bins)
+        if n_bins_eff < 1:
+            raise ValueError(
+                f"plot_opd_summary: radial_rms_n_bins must be 'auto' "
+                f"or a positive integer; got {radial_rms_n_bins!r}.")
     r_centres, rms_radial = _radial_rms_profile(
-        opd_2d, dx, dy, aperture, n_bins=32)
+        opd_2d, dx, dy, aperture, n_bins=n_bins_eff)
     rms_disp = rms_radial * scale  # convert metres -> display units
     ax_rms.plot(r_centres, rms_disp, color='C0', lw=1.5)
     ax_rms.set_xlabel('Normalised pupil radius')

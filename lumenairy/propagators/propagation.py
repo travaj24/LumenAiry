@@ -2747,6 +2747,17 @@ def resample_field(
     - For downsampling (dx_out > dx_in), consider anti-alias filtering first.
     - The field is assumed to be on a centered grid: x = (arange(N) - N/2) * dx.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
+    # ensemble input failed at ``E_in.shape`` unpacking
+    # (``ValueError: too many values to unpack`` for 3-D) or
+    # attribute access (MCF) -- routes both to the canonical v4.16
+    # message via the V6 walker.  ``resample_field`` was missed by
+    # the v4.15.4 walker (name doesn't start with ``apply_`` or
+    # contain ``_propagate``); the V6 first-positional-name filter
+    # catches it via ``E_in``.  Input kind: 'field'.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'resample_field')
     from scipy.ndimage import map_coordinates
 
     Ny_in, Nx_in = E_in.shape

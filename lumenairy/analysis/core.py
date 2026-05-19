@@ -133,6 +133,17 @@ def beam_d4sigma(
     d4s_y : float
         D4sigma beam diameter in y [m].
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Previously a
+    # ``PartialCoherenceMCF`` input failed downstream at
+    # ``np.abs(E)`` with ``TypeError: bad operand type for abs()``;
+    # a 3-D ensemble would have produced a wrong (3-D) variance
+    # estimate via NumPy broadcasting.  The V6 walker now discovers
+    # this entry via first-positional-name ``E``; the inline guard
+    # routes both failure modes to the canonical v4.16 message.
+    # Input kind: 'field' (2-D scalar complex amplitude).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'beam_d4sigma')
     if dy is None:
         dy = dx
     xp = _xp_of(E)
@@ -335,6 +346,15 @@ def strehl_ratio(
     and the ``dx * dy`` factor cancels in the ratio, but using the
     correct pixel area keeps any external comparison consistent.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guards via the shared
+    # ``_check_2d_scalar_field`` helper on BOTH input fields.
+    # Previously an MCF / 3-D ensemble input (either ``E`` or
+    # ``E_ref``) failed downstream at ``xp.abs(...)`` with an
+    # unhelpful Python TypeError.  Input kind: 'field' (both args
+    # are 2-D scalar complex amplitudes).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'strehl_ratio')
+    _check_2d_scalar_field(E_ref, 'strehl_ratio')
     xp = _xp_of(E, E_ref)
     I = xp.abs(E) ** 2
     I_ref = xp.abs(E_ref) ** 2
@@ -502,6 +522,17 @@ def coupling_efficiency(
     The function is :class:`numpy.float`-conservative: if the mode
     or field is identically zero, returns 0.0.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guards via the shared
+    # ``_check_2d_scalar_field`` helper on both fields.  Previously
+    # an MCF / 3-D ensemble input failed at the ``.shape`` attribute
+    # access (for MCF) or produced a wrong (3-D) overlap (for an
+    # ensemble).  The V6 walker discovers this entry via the first-
+    # positional-name ``E``; the inline guard routes both failure
+    # modes to the canonical v4.16 message.  Input kind: 'field'
+    # (both args are 2-D scalar complex amplitudes).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'coupling_efficiency')
+    _check_2d_scalar_field(mode, 'coupling_efficiency')
     if E.shape != mode.shape:
         raise ValueError(
             f"coupling_efficiency: shape mismatch -- E is {E.shape}, "
@@ -572,6 +603,15 @@ def M2(
     discrete-grid sampling error (a few times 1e-3 at N=128, scaling
     as ~ 1/N for fine grids).
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D
+    # ensemble input failed at ``E.shape`` unpacking with
+    # ``ValueError: too many values to unpack`` (for 3-D) or at the
+    # ``.shape`` attribute access (for MCF).  Routes both failure
+    # modes to the canonical v4.16 message via the V6 walker.
+    # Input kind: 'field'.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'M2')
     _ = float(wavelength)  # validation only; wavelength cancels out
     if dy is None:
         dy = dx
@@ -811,6 +851,18 @@ def compute_psf(
     broke the canonical Strehl calculation pattern; ``'power'`` is now
     the default and ``'peak'`` is opt-in.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D
+    # ensemble pupil failed downstream at ``pupil.ndim`` /
+    # ``pupil.shape`` and produced an unhelpful TypeError /
+    # ValueError instead of the canonical v4.16 message.  Input
+    # kind: 'pupil' (the function consumes a 2-D pupil amplitude *
+    # phase product and does a single Fraunhofer FT to the PSF
+    # plane).  Note: ``input_kind='pupil'`` would be ideal once
+    # Agent B's parameterised ``_check_2d_scalar_field`` lands;
+    # the default form here is correct in the interim.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(pupil, 'compute_psf')
     xp = _xp_of(pupil)
     # 4.11.2: enforce the (long-undocumented) square-pupil assumption.
     # Pre-4.11.2 the function silently used ``pupil.shape[0]`` for
@@ -904,6 +956,17 @@ def compute_otf(psf: np.ndarray) -> np.ndarray:
     of the pupil function. Both approaches give the same result for
     coherent imaging systems.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Previously an MCF / 3-D
+    # ensemble psf failed downstream at ``xp.fft.fft2`` (which would
+    # FFT along the last two axes of a 3-D stack -- silently wrong
+    # output shape).  Input kind: 'psf' (a real-valued intensity
+    # PSF; the helper still accepts it because the only invariant
+    # checked is ``.ndim == 2`` plus the MCF rejection).  Routes
+    # both failure modes to the canonical v4.16 message via the V6
+    # walker.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(psf, 'compute_otf')
     xp = _xp_of(psf)
     otf = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(psf)))
     # Normalize so DC component = 1
@@ -942,6 +1005,13 @@ def compute_mtf(psf: np.ndarray) -> np.ndarray:
     To get radial MTF profiles (tangential/sagittal or azimuthal
     average), take cuts or radial averages of this 2D array.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard at the entry point
+    # so the canonical message names ``compute_mtf`` rather than
+    # the inner ``compute_otf``.  The downstream ``compute_otf``
+    # call would catch the same failure mode but with a less
+    # informative call-site name.  Input kind: 'psf'.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(psf, 'compute_mtf')
     xp = _xp_of(psf)
     return xp.abs(compute_otf(psf))
 
@@ -1068,6 +1138,17 @@ def encircled_energy_curve(
     >>> bool(np.all(np.diff(ee) >= -1e-12))
     True
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Pre-existing inline
+    # ``if E.ndim != 2`` check (below) caught the 3-D / 1-D ensemble
+    # case but did NOT catch a ``PartialCoherenceMCF`` input (no
+    # ``.ndim`` attribute), which failed at the bare ``E.ndim``
+    # access with ``AttributeError``.  Routes both MCF and 3-D /
+    # 1-D ensembles to the canonical v4.16 message via the V6
+    # walker.  Input kind: 'field' (or 'psf' if user passed an
+    # intensity PSF -- the function detects both).
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'encircled_energy_curve')
     if dy is None:
         dy = dx
     if E.ndim != 2:
@@ -2810,6 +2891,14 @@ def wave_opd_2d(
     column unwrap is adequate; for large, noisy, or vortex-containing
     wavefronts use a dedicated 2-D unwrap library.
     """
+    # v4.15.5 (P1-NEW-2WAY-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  Pre-v4.15.5 an MCF / 3-D
+    # ensemble input failed at ``E.shape`` unpacking with
+    # ``ValueError: too many values to unpack`` (3-D) or
+    # ``AttributeError`` (MCF) -- routes both to the canonical
+    # v4.16 message via the V6 walker.  Input kind: 'field'.
+    from lumenairy._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E, 'wave_opd_2d')
     if dy is None:
         dy = dx
 

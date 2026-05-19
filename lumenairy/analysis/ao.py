@@ -303,6 +303,19 @@ class DeformableMirror:
             for stepping through a simulated DM excursion without
             re-allocating the IF basis.
         """
+        # v4.15.5 (P1-NEW-F2-2): defensive guard via the shared
+        # ``_check_2d_scalar_field`` helper.  v4.15.4's walker
+        # excluded class methods on the documented assumption that
+        # "per-class wrapper methods delegate to the guarded scalar
+        # functions"; this method is a direct ``E_in * np.exp(1j * phi)``
+        # multiply with NO delegation, so without this guard an MCF /
+        # 3-D ensemble silently broadcasts (e.g.
+        # ``dm.apply(np.random.randn(4, 16, 16).astype(complex))``
+        # returns a (4, 16, 16) array via NumPy broadcasting instead
+        # of raising).  Paired with the v4.15.5 walker descent into
+        # class bodies (P2-NEW-F2-4).
+        from lumenairy._validation import _check_2d_scalar_field
+        _check_2d_scalar_field(E_in, 'DeformableMirror.apply')
         phi = scale * self.phase()
         return E_in * np.exp(1j * phi)
 

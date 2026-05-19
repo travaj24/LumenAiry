@@ -2,6 +2,168 @@
 
 All notable changes to the core library are documented here.
 
+## [4.15.5] — 2026-05-19
+
+**Closes the v4.15.4 audit (`docs/audits/AUDIT_V4_15_4_2026_05_19.md`)
+through P3.**  The audit found 0 P0 + 4 P1 + 6 P2 + 5 P3.  Three of
+the 4 P1s closed via a **V6 dispatcher meta-pin walker refactor**:
+discovery now keys off the function's **first-positional-parameter
+name** (via AST inspection of `ast.arguments`) rather than a hand-
+curated name-prefix list, plus the walker now **descends into class
+bodies** for non-delegating methods like `DeformableMirror.apply`.
+The remaining P1 cluster (2 user-facing pitfalls in v4.15.4's new OPD
+plotting functions) closed via a `fan_units` kwarg + centered-RMS
+metric consistency.  **1922 unit tests pass** (up from 1858; +64
+net), 1 documented skip, 1 documented xfail; **34/34 validation
+files pass**.
+
+### Headline: V6 walker (first-positional-param-name discovery)
+
+The v4.15.3/4 dispatcher meta-pin walker used a hand-curated name-
+prefix filter (`apply_*` / `propagate_*` / `richards_wolf_*` /
+`debye_wolf_*`).  v4.15.4 audit found 30+ public `__all__`
+functions outside the filter that take 2-D `E`/`field`/`pupil`
+first positional args — the meta-pattern recurred at one indirection
+level higher.
+
+v4.15.5 refactors discovery:
+
+* **Primary filter is now AST-based first-positional-param name.**
+  Walks `lumenairy.__all__`; for each public function, inspects
+  `ast.arguments.args[0].arg`; if the name is in
+  `_FIELD_PARAM_NAMES = frozenset({'E', 'E_in', 'field', 'pupil',
+  'object_field', 'psf'})`, requires `_check_2d_scalar_field` call
+  OR `_GUARD_EXEMPTIONS` entry.  Discovery is now grounded in the
+  actual function signature rather than a string match.
+* **Legacy name-prefix filter retained as fallback** — v4.15.4
+  coverage preserved bit-for-bit; V6 only ADDS entries.
+* **Class-body descent** — the walker now visits class methods
+  named `apply` / `propagate` / similar.  `_DELEGATING_CLASS_METHODS`
+  exemption set documents which classes legitimately delegate to
+  module-level guarded functions (operator-algebra: `ThinLens.apply`,
+  `FreeSpace.apply`, `CylindricalLens.apply`, `Magnify.apply`,
+  `FourierTransform.apply`, `Aperture.apply`, `GaussianAperture.apply`,
+  `CompositeOperator.apply`).
+* **`_file_to_ast` `lru_cache`d** (P3-NEW-F1-2) — 11 sibling
+  functions in `_lens_thin.py` previously triggered 11 re-parses
+  of the same file; cache cuts that to 1.  Walker test wall time:
+  **~1.5s → ~0.03s warm (~30× speedup)**; cache stats `hits=180,
+  misses=42, currsize=42` on a full walk (81% hit rate).
+
+Post-refactor walker discovery:  **96 top-level entry points + 3
+class methods** = 99 candidates (was 72 at v4.15.4 HEAD).  Of the
+96 top-level: 39 guarded (was 25), 47 exempt (unchanged), 10 newly-
+flagged for v4.16+ inline guard sweep (HFPI initialisers,
+decomposition helpers, low-priority `analysis/core.py` analyzers).
+
+### P1 closures (4)
+
+* **P1-NEW-F2-2 — `DeformableMirror.apply` 1-line guard.**  The
+  module-level `apply_dm` was guarded in v4.15.4; the class method
+  was a 3-line `E_in * np.exp(1j * phi)` with no `_check_2d_scalar_field`
+  call.  Walker's blanket class-method exclusion (v4.15.4 docstring
+  asserted methods "delegate to guarded scalar functions") was true
+  for Cluster-B operator algebra, false here.  v4.15.5 closes both:
+  inline guard on the method + walker descent into class bodies.
+* **P1-NEW-2WAY-1 — V6 walker refactor** (covered under headline)
+  + **inline guards on the 13 highest-traffic unguarded analyzers**:
+  `wave_opd_2d`, `M2`, `strehl_ratio`, `beam_d4sigma`,
+  `coupling_efficiency`, `compute_psf`, `compute_otf`, `compute_mtf`,
+  `encircled_energy_curve`, `koehler_image`, `extended_source_image`,
+  `shack_hartmann`, `rays_from_field`, `resample_field`.  34
+  regression tests pin each guard via direct `MCF` / 3-D ensemble
+  rejection.
+* **P1-NEW-V2-1 — `plot_opd_fan` `fan_units` kwarg.**
+  `raytrace.opd_fan_data` returns OPD in **waves**;
+  `plot_opd_fan` expected **metres**.  The canonical pipeline
+  `plot_opd_fan(*opd_fan_data(...), units='waves', wavelength=wl)`
+  divided by `wavelength` a second time → silently wrong by ~6e5.
+  v4.15.5 adds `fan_units: str = 'm'` (default `'m'` preserves
+  v4.15.4 callers; pass `fan_units='waves'` for the
+  `opd_fan_data` pipeline).  End-to-end regression test pins
+  `opd_fan_data → plot_opd_fan(fan_units='waves', units='waves',
+  wavelength=wl)` does not double-convert.
+* **P1-NEW-V2-2 — `_radial_rms_profile` centered RMS.**  v4.15.4
+  `_radial_rms_profile` used `sqrt(mean(opd²))` (variance about
+  zero) while the 1-D fan RMS and 2-D heatmap RMS used
+  `sqrt(mean((opd - mean)²))` (centered, wavefront-error
+  convention).  On a pure-defocus OPD, the radial-RMS curve was
+  piston-dominated and looked like r²; the heatmap annotation was
+  the much smaller centered RMS.  Numbers on the same figure did
+  not reconcile.  v4.15.5 switches to centered RMS using the in-
+  aperture mean computed once for the entire OPD.  Example
+  `plot_opd_summary_singlet.py` RMS now reports **0.8901 waves**
+  (was 1.3347 waves uncentered); PV unchanged at 2.9318 waves.
+
+### P2 closures (6)
+
+* `_check_2d_scalar_field` parameterized with `input_kind:
+  str = 'field'` — `richards_wolf_focus` / `debye_wolf_psf` /
+  `compute_psf` / `compute_otf` / `compute_mtf` etc. pass
+  `input_kind='pupil'` or `'psf'`, getting accurate error
+  messages ("expected 2-D complex pupil" instead of "field").
+* `plot_opd_summary` docstring corrected to explicitly state
+  `opd_2d` input is in **metres** (matching `plot_wavefront`'s
+  convention).
+* Example `plot_opd_summary_singlet.py` RMS print switched to
+  centered form (matches heatmap annotation).
+* `plot_opd_summary` even-N central-row/col fallback: aligned
+  using `(N - 1) // 2` consistently.
+* Walker descends into class bodies (covered under headline).
+* CHANGELOG v4.15.4 entry-point count refresh (43→49 → actual
+  72 at v4.15.4 HEAD; v4.15.5 numbers 96 + 3 class methods are
+  documented in this entry).
+
+### P3 closures (5)
+
+* `_file_to_ast` `@lru_cache` (covered under headline).
+* `plot_opd_fan` docstring now explicitly states "centered RMS
+  (about the in-aperture mean); PV (max - min)".
+* `n_bins` kwarg exposed on `plot_opd_summary` as
+  `radial_rms_n_bins: int | str = 'auto'` with auto-clamping for
+  tiny grids (`min(32, int(sqrt(N_in_aperture)) // 2)`).
+* CHANGELOG `-W error::DeprecationWarning` failure count drift
+  (57 vs 63) reconciled — canonical at v4.15.4 commit time was
+  63; v4.15.3 audit's 57 reflects pre-dispatch count, drift
+  documented inline.
+* CHANGELOG per-agent attribution arithmetic +1 footnote added
+  (per the standard pattern from v4.15.3 hygiene fix).
+* CHANGELOG wavelength annotation drift fixed (587.56 nm → 633
+  nm to match the example).
+* ROADMAP duplicate-counting drift cleaned up: 6 already-shipped
+  items moved from "v4.16 residual" to "Shipped highlights"
+  (polychromatic encircled energy, polarisation-aware Strehl,
+  resolution metrics, astigmatism mag+angle, OAP, Forbes Q-type
+  — all landed in v4.15.0 / v4.15.1).  True v4.16 residual is
+  now 2 items: V4 meta-pin candidates + multi-process atomic-
+  append for `storage.py`.  Remaining v4.17/v4.18 items
+  renumbered.
+
+### Test counts
+
+* Pre-v4.15.5 baseline (v4.15.4): 1858 unit pass + 1 skip + 1 xfail.
+* v4.15.5 additions: A=34 regression + 4 V6/class-method pins
+  (38 total), B=17 + 3 carry-forward (20 total), C=4.  Net +64.
+* Final: **1922 unit pass + 1 skip + 1 xfail; 34/34 validation**.
+
+### Deferred to v4.16+
+
+Unchanged from prior releases: modal-asymptotic independent
+ground-truth pin; 4 V2 meta-pin candidates still standing
+(sentinel-aware branch propagation, `_xp_of` dispatch, `dy`
+parameter threading walker, `__all__` symmetry walker; the V6
+first-positional-param-name candidate landed in v4.15.5);
+MCF-aware downstream propagators; multi-process atomic-append
+for `storage.py`; `MultiPrescriptionParameterization.scale_floor`;
+Forbes Q-2D-asymmetric variant.  Plus: **10 newly-flagged
+unguarded analyzers** for v4.16+ inline-guard sweep (HFPI
+initialisers, decomposition helpers, lower-priority
+`analysis/core.py` analyzers like `beam_centroid`,
+`beam_diameter`, `radial_power_bands`, `wave_opd_1d`,
+`strehl_phase_integral`, resolution metrics, `single_plane_metrics`).
+
+---
+
 ## [4.15.4] — 2026-05-19
 
 **Closes the v4.15.3 audit (`docs/audits/AUDIT_V4_15_3_2026_05_18.md`)
@@ -24,7 +186,15 @@ entry points outside that scope.  v4.15.4 makes discovery
 * **`_walk_entry_points` refactored** to walk `lumenairy.__all__`
   membership via `inspect.getsourcefile`; survives future refactors
   that move functions between subpackages.  Package-walk retained as
-  a fallback.  43 entry points -> 49 after the refactor.
+  a fallback.  Walker discovery at v4.15.4 HEAD: **72 total entry
+  points (25 guarded + 47 documented exempt)**.  (The pre-correction
+  CHANGELOG bullet cited "43 -> 49 after the refactor", which
+  reflected the `__all__`-pass-only count without the package-walk
+  fallback dedup; v4.15.5 / Agent C refreshed this from the live
+  diagnostic per AUDIT_V4_15_4 P2-NEW-3WAY-3.  TODO: the v4.15.5 V6
+  walker refactor (Agent A scope) will change this number again at
+  integration time; Agent C populated this with v4.15.4 HEAD numbers
+  and integration will update with v4.15.5 V6-refactored numbers.)
 * **Name filter broadened** with `name.startswith('propagate_')` to
   catch `propagate_through_system` + `propagate_through_system_jax`
   (which contain `propagate_` at the start but not `_propagate` in
@@ -82,7 +252,13 @@ entry points outside that scope.  v4.15.4 makes discovery
   documented Schell `return_kind` default-path warning without
   shielding).  v4.15.4 adds `pytestmark =
   pytest.mark.filterwarnings('default::DeprecationWarning')` to 6
-  affected test files.  Failures: 63 → 0.
+  affected test files.  Failures: 63 → 0.  *(Note: the v4.15.3
+  audit's P3-NEW-F2-4 cited 57 failing tests; the discrepancy with
+  this CHANGELOG's 63 reflects pre/post-v4.15.4 dispatch-test-file
+  additions between when the audit was filed and v4.15.4 commit
+  time.  Canonical count at v4.15.4 commit time was 63; closure
+  verified to 0 escalations regardless of which baseline is right.
+  Documented per AUDIT_V4_15_4 P3-NEW-V3-1 / v4.15.5 Agent C.)*
 * CHANGELOG test-count arithmetic reconciled: v4.15.3 baseline
   1732 → 1733; per-agent attribution sum 88 documented alongside
   actual collected delta 89 with explicit explanation of the +1
@@ -115,13 +291,24 @@ matching the `OPDPy_Lumenairy_Crosscheck` `fig_variety_L*.png` style:
 Both added to `lumenairy.__all__` (analysis tier).  10 unit tests +
 runnable example at `examples/plot_opd_summary_singlet.py` (singlet
 OPD via `apply_real_lens_traced` + `opd_fan_data`; PV ≈ 2.93 / RMS
-≈ 1.33 waves at λ=587.56 nm).
+≈ 1.33 waves at λ=633 nm).  *(Pre-v4.15.5 wording cited
+λ=587.56 nm, contradicting the example's actual ``wavelength =
+633e-9``; corrected per AUDIT_V4_15_4 / v4.15.5 Agent C.)*
 
 ### Test counts
 
 * Pre-v4.15.4 baseline (v4.15.3): 1822 unit pass + 1 skip + 1 xfail.
-* v4.15.4 additions: A=8 + 1 counter-pin in the meta-pin file,
-  B=11, C=7, D=10.  Net +36.
+* v4.15.4 additions, per-agent attribution: A=8 + 1 counter-pin in
+  the meta-pin file (=9), B=11, C=7, D=10.  Per-agent sum: **37**.
+* Actual `pytest --collect-only` delta: 1858 - 1822 = **+36**
+  (canonical post-release number).  The +1 attribution-vs-collection
+  gap reflects the standard parametrize/fixture artifact (one of
+  the new tests expands to 2 collected items via `parametrize`, or
+  a fixture-only addition isn't cleanly attributed to a single
+  agent).  Same pattern documented in the v4.15.3 entry; pinned by
+  `test_changelog_per_agent_breakdown_sums_to_net_delta` in
+  `test_v4_15_4_agent_c.py`.  Documented per AUDIT_V4_15_4
+  P3-NEW-V3-2 / v4.15.5 Agent C.
 * Final: **1858 unit pass + 1 skip + 1 xfail; 34/34 validation**.
 
 ### Deferred to v4.16+
