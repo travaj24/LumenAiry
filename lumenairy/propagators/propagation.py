@@ -1688,35 +1688,15 @@ def angular_spectrum_propagate(
         spectrum method for numerical simulation of free-space propagation
         in far and near fields." Opt. Express 17(22): 19662-19673.
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST (before any input validation
-    # or backend dispatch) so the user gets a clear, actionable error
-    # rather than a downstream AttributeError or a silent wrong-axis
-    # FFT.  Lazy-import PartialCoherenceMCF to avoid a circular
-    # dependency between sources/ and propagators/.
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "angular_spectrum_propagate: PartialCoherenceMCF inputs are "
-            "not yet supported by this propagator (v4.15+). MCF-aware "
-            "downstream propagators are scheduled for v4.16+. To "
-            "propagate a partially-coherent field via ensemble "
-            "averaging, iterate over the ensemble realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = angular_spectrum_propagate(ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"angular_spectrum_propagate: expected 2-D complex field of "
-            f"shape (Ny, Nx); got {_ndim}-D array of shape "
-            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
-            f"of realizations from create_*_schell_source(), iterate "
-            f"over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = angular_spectrum_propagate(ensemble[k], ...)"
-        )
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper.  v4.15.2 inlined the guard
+    # here; v4.15.3 routes through the helper so future entry points
+    # can't be added unguarded.  Runs FIRST (before any input
+    # validation or backend dispatch) so the user gets a clear,
+    # actionable error rather than a downstream AttributeError or a
+    # silent wrong-axis FFT.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='angular_spectrum_propagate')
@@ -2230,6 +2210,12 @@ def angular_spectrum_propagate_tilted(
     the canonical user-facing angle unit (see the polish-pass note in
     :ref:`Release Notes`).
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate_tilted')
+
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='angular_spectrum_propagate_tilted')
     if tilt_x_deg is not None:
@@ -2417,6 +2403,12 @@ def angular_spectrum_propagate_mft(
     fresnel_propagate_mft : paraxial Fresnel with arbitrary output grid.
     fraunhofer_propagate_mft : far-field with arbitrary output grid.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'angular_spectrum_propagate_mft')
+
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='angular_spectrum_propagate_mft')
     from ..backend import is_jax_array
@@ -2633,33 +2625,12 @@ def fresnel_propagate(
     For very long distances (small Fresnel number), this becomes equivalent
     to the Fraunhofer approximation.
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
-    # actionable error rather than a downstream AttributeError or a
-    # silent wrong-axis FFT.  Lazy-import to avoid circular dep.
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "fresnel_propagate: PartialCoherenceMCF inputs are not yet "
-            "supported by this propagator (v4.15+). MCF-aware "
-            "downstream propagators are scheduled for v4.16+. To "
-            "propagate a partially-coherent field via ensemble "
-            "averaging, iterate over the ensemble realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = fresnel_propagate(ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"fresnel_propagate: expected 2-D complex field of shape "
-            f"(Ny, Nx); got {_ndim}-D array of shape "
-            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
-            f"of realizations from create_*_schell_source(), iterate "
-            f"over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = fresnel_propagate(ensemble[k], ...)"
-        )
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
+    # guard).  Runs FIRST so the user gets a clear, actionable error
+    # rather than a downstream AttributeError or silent wrong-axis FFT.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'fresnel_propagate')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='fresnel_propagate')
@@ -2892,6 +2863,12 @@ def fresnel_propagate_mft(
     fraunhofer_propagate_mft : far-field counterpart.
     angular_spectrum_propagate_mft : exact ASM with arbitrary output grid.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'fresnel_propagate_mft')
+
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fresnel_propagate_mft')
     # 4.9 fix (audit #3.3): forward-only -- see ``fresnel_propagate``.
@@ -3062,33 +3039,11 @@ def fraunhofer_propagate(
     Fraunhofer is the standard approach: place the input field at the lens,
     set z = focal length, and the output is the focal-plane field.
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
-    # actionable error rather than a downstream AttributeError or a
-    # silent wrong-axis FFT.  Lazy-import to avoid circular dep.
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "fraunhofer_propagate: PartialCoherenceMCF inputs are not "
-            "yet supported by this propagator (v4.15+). MCF-aware "
-            "downstream propagators are scheduled for v4.16+. To "
-            "propagate a partially-coherent field via ensemble "
-            "averaging, iterate over the ensemble realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = fraunhofer_propagate(ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"fraunhofer_propagate: expected 2-D complex field of "
-            f"shape (Ny, Nx); got {_ndim}-D array of shape "
-            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
-            f"of realizations from create_*_schell_source(), iterate "
-            f"over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = fraunhofer_propagate(ensemble[k], ...)"
-        )
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
+    # guard).
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'fraunhofer_propagate')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, dy,
                                 fn_name='fraunhofer_propagate')
@@ -3208,6 +3163,12 @@ def fraunhofer_propagate_mft(
     fresnel_propagate_mft : near-field counterpart, includes input-plane
         quadratic phase.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'fraunhofer_propagate_mft')
+
     _validate_propagator_inputs(E_in, z, wavelength, dx_in, dy_in,
                                 fn_name='fraunhofer_propagate_mft')
     # 4.9 fix (audit #3.3): forward-only -- see ``fraunhofer_propagate``.
@@ -3426,36 +3387,11 @@ def rayleigh_sommerfeld_propagate(
     >>>
     >>> E_out = rayleigh_sommerfeld_propagate(E_in, z=1e-3, wavelength=wv, dx=dx)
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
-    # actionable error rather than a downstream AttributeError or a
-    # silent wrong-axis FFT.  Lazy-import to avoid circular dep.
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "rayleigh_sommerfeld_propagate: PartialCoherenceMCF inputs "
-            "are not yet supported by this propagator (v4.15+). "
-            "MCF-aware downstream propagators are scheduled for "
-            "v4.16+. To propagate a partially-coherent field via "
-            "ensemble averaging, iterate over the ensemble "
-            "realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = rayleigh_sommerfeld_propagate("
-            "ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"rayleigh_sommerfeld_propagate: expected 2-D complex "
-            f"field of shape (Ny, Nx); got {_ndim}-D array of shape "
-            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
-            f"of realizations from create_*_schell_source(), iterate "
-            f"over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = rayleigh_sommerfeld_propagate("
-            f"ensemble[k], ...)"
-        )
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
+    # guard).
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'rayleigh_sommerfeld_propagate')
 
     # 4.12.0 (audit round-4 B1-3): RS is forward-only.  Pre-4.12 the
     # function accepted z <= 0 silently and computed a 180-degrees-
@@ -3737,40 +3673,14 @@ def scalable_angular_spectrum_propagate(
     [2] Reference PyTorch implementation:
         https://github.com/bionanoimaging/Scalable-Angular-Spectrum-Method-SAS
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
-    # actionable error rather than a downstream AttributeError or a
-    # silent wrong-axis FFT.  Lazy-import to avoid circular dep.
-    # (SAS already had an ``E_in.ndim != 2`` check downstream; the
-    # explicit guard here surfaces the same error with the canonical
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
+    # guard).  (SAS already had an ``E_in.ndim != 2`` check downstream;
+    # this surfaces the same error with the canonical
     # iterate-over-ensemble message and runs *before* any other input
     # validation.)
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "scalable_angular_spectrum_propagate: PartialCoherenceMCF "
-            "inputs are not yet supported by this propagator "
-            "(v4.15+). MCF-aware downstream propagators are scheduled "
-            "for v4.16+. To propagate a partially-coherent field via "
-            "ensemble averaging, iterate over the ensemble "
-            "realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = scalable_angular_spectrum_propagate("
-            "ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"scalable_angular_spectrum_propagate: expected 2-D "
-            f"complex field of shape (Ny, Nx); got {_ndim}-D array of "
-            f"shape {getattr(E_in, 'shape', None)!r}. If this is an "
-            f"ensemble of realizations from create_*_schell_source(), "
-            f"iterate over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = scalable_angular_spectrum_propagate("
-            f"ensemble[k], ...)"
-        )
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'scalable_angular_spectrum_propagate')
 
     _validate_propagator_inputs(E_in, z, wavelength, dx, None,
                                 fn_name='scalable_angular_spectrum_propagate')

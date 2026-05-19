@@ -1190,6 +1190,12 @@ def create_led_source(
         # consistent format (``... is deprecated since v4.14.2, will be
         # removed in v5.0; use ...``) and pin-tested removal version.
         from .._deprecation import warn_deprecated_signature
+        # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 selects the
+        # user-code frame.  Chain: warnings.warn (in _emit) [1] ->
+        # _emit body [2] -> warn_deprecated_signature body [3] ->
+        # create_led_source body [4] -> user code [5 = target].
+        # Pre-v4.15.3 stacklevel=3 landed inside create_led_source
+        # itself.
         warn_deprecated_signature(
             function='create_led_source',
             old_signature=(
@@ -1200,7 +1206,7 @@ def create_led_source(
                 'divergence_angle=..., ...)'),
             version_added='4.14.2',
             version_removed='5.0',
-            stacklevel=3,
+            stacklevel=4,
         )
         # Promote legacy positionals into the canonical kwargs, but do
         # not overwrite kwargs the caller explicitly supplied (that's
@@ -1692,8 +1698,45 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
 # Detect the default via a per-module sentinel: when the caller
 # leaves ``return_kind`` unset, the factory sees the sentinel and
 # warns; explicit ``return_kind='ensemble'`` or ``'mcf'`` is silent.
+#
+# v4.15.3 (audit P2-NEW): promoted from a bare ``_Sentinel`` instance
+# to a dedicated ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass
+# for consistency with the other sentinel patterns in the codebase
+# (``_ZeroApertureMaskSentinel`` in ``optimize/core.py``,
+# ``_AngleUnsetSentinel`` in ``elements/polarization.py``,
+# ``_NoDefaultSentinel`` in ``_deprecation.py``).  The subclass-identity
+# pattern lets downstream code do ``isinstance(x,
+# _SchellReturnKindUnsetSentinel)`` without false positives from other
+# bare ``_Sentinel`` instances that share the same registry.  Singleton
+# instance still keyed by the ``_SCHELL_RETURN_KIND_UNSET`` registry
+# name; pickle round-trip via ``_SENTINEL_REGISTRY`` lookup is
+# unchanged.
 from .._deprecation import _Sentinel as _DeprecationSentinel
-_RETURN_KIND_UNSET: Any = _DeprecationSentinel('_SCHELL_RETURN_KIND_UNSET')
+
+
+class _SchellReturnKindUnsetSentinel(_DeprecationSentinel):
+    """Singleton sentinel for "Schell ``return_kind`` argument was not
+    explicitly passed by the caller".
+
+    v4.15.3 (audit P2-NEW): dedicated subclass for consistency with
+    :class:`_ZeroApertureMaskSentinel` (in ``optimize/core.py``),
+    :class:`_AngleUnsetSentinel` (in ``elements/polarization.py``),
+    :class:`_NoDefaultSentinel` (in ``_deprecation.py``).  No behaviour
+    change relative to the pre-v4.15.3 bare ``_Sentinel``: the new
+    subclass overrides nothing, the singleton is still keyed by the
+    ``_SCHELL_RETURN_KIND_UNSET`` registry name, and the
+    ``_SENTINEL_REGISTRY`` round-trip is identical.  The benefit is
+    discoverability: ``isinstance(x, _SchellReturnKindUnsetSentinel)``
+    works as a strict type-narrowing predicate without false positives
+    from sibling bare ``_Sentinel`` instances.
+    """
+    __slots__ = ()
+
+    def __init__(self) -> None:
+        super().__init__('_SCHELL_RETURN_KIND_UNSET')
+
+
+_RETURN_KIND_UNSET: Any = _SchellReturnKindUnsetSentinel()
 
 
 def _warn_schell_return_kind_default(fn_name: str) -> None:
@@ -1704,6 +1747,16 @@ def _warn_schell_return_kind_default(fn_name: str) -> None:
     library and is silenceable with a single ``warnings.filterwarnings``
     incantation.  ``version_removed='5.0'`` documents the one-release
     deprecation horizon.
+
+    v4.15.3 (audit P1-NEW-F1-2): ``stacklevel=5`` selects the user's
+    call frame; pre-v4.15.3 ``stacklevel=4`` landed one frame inside
+    the library (the factory body).  Frame chain (innermost first):
+
+      1. ``warnings.warn`` (inside ``_emit`` body)
+      2. ``_emit`` -> ``warn_deprecated_signature``
+      3. ``warn_deprecated_signature`` -> ``_warn_schell_return_kind_default``
+      4. ``_warn_schell_return_kind_default`` -> factory body
+      5. factory body -> user code  <-- target of stacklevel
     """
     from .._deprecation import warn_deprecated_signature
     warn_deprecated_signature(
@@ -1718,7 +1771,7 @@ def _warn_schell_return_kind_default(fn_name: str) -> None:
             "PartialCoherenceMCF) explicitly"),
         version_added='4.15.1',
         version_removed='5.0',
-        stacklevel=4,
+        stacklevel=5,
     )
 
 
@@ -2358,6 +2411,9 @@ class Source:
         # and emit a DeprecationWarning before remapping.
         if args:
             from .._deprecation import warn_deprecated_signature
+            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
+            # code (chain: _emit [1] -> warn_deprecated_signature [2]
+            # -> Source.gaussian classmethod body [3] -> user [4]).
             warn_deprecated_signature(
                 function='Source.gaussian',
                 old_signature='Source.gaussian(w0, N, dx, wavelength, ...)',
@@ -2365,7 +2421,7 @@ class Source:
                     'Source.gaussian(*, N, dx, wavelength, w0, ...)'),
                 version_added='4.15',
                 version_removed='5.0',
-                stacklevel=3,
+                stacklevel=4,
             )
             if len(args) > 4:
                 raise TypeError(
@@ -2441,6 +2497,9 @@ class Source:
         """
         if args:
             from .._deprecation import warn_deprecated_signature
+            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
+            # code (chain: _emit [1] -> warn_deprecated_signature [2]
+            # -> Source.plane_wave classmethod body [3] -> user [4]).
             warn_deprecated_signature(
                 function='Source.plane_wave',
                 old_signature='Source.plane_wave(N, dx, wavelength, ...)',
@@ -2448,7 +2507,7 @@ class Source:
                     'Source.plane_wave(*, N, dx, wavelength, ...)'),
                 version_added='4.15',
                 version_removed='5.0',
-                stacklevel=3,
+                stacklevel=4,
             )
             if len(args) > 3:
                 raise TypeError(
@@ -2515,6 +2574,9 @@ class Source:
         """
         if args:
             from .._deprecation import warn_deprecated_signature
+            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
+            # code (chain: _emit [1] -> warn_deprecated_signature [2]
+            # -> Source.point_source classmethod body [3] -> user [4]).
             warn_deprecated_signature(
                 function='Source.point_source',
                 old_signature='Source.point_source(N, dx, wavelength, ...)',
@@ -2522,7 +2584,7 @@ class Source:
                     'Source.point_source(*, N, dx, wavelength, ...)'),
                 version_added='4.15',
                 version_removed='5.0',
-                stacklevel=3,
+                stacklevel=4,
             )
             if len(args) > 3:
                 raise TypeError(
@@ -2586,6 +2648,9 @@ class Source:
         """
         if args:
             from .._deprecation import warn_deprecated_signature
+            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
+            # code (chain: _emit [1] -> warn_deprecated_signature [2]
+            # -> Source.top_hat classmethod body [3] -> user [4]).
             warn_deprecated_signature(
                 function='Source.top_hat',
                 old_signature='Source.top_hat(diameter, N, dx, wavelength, ...)',
@@ -2593,7 +2658,7 @@ class Source:
                     'Source.top_hat(*, N, dx, wavelength, diameter, ...)'),
                 version_added='4.15',
                 version_removed='5.0',
-                stacklevel=3,
+                stacklevel=4,
             )
             if len(args) > 4:
                 raise TypeError(
@@ -2669,6 +2734,9 @@ class Source:
         """
         if args:
             from .._deprecation import warn_deprecated_signature
+            # v4.15.3 (audit P1-NEW-F1-2 sweep): stacklevel=4 -> user
+            # code (chain: _emit [1] -> warn_deprecated_signature [2]
+            # -> Source.fiber_mode classmethod body [3] -> user [4]).
             warn_deprecated_signature(
                 function='Source.fiber_mode',
                 old_signature=(
@@ -2679,7 +2747,7 @@ class Source:
                     'mode_field_diameter, ...)'),
                 version_added='4.15',
                 version_removed='5.0',
-                stacklevel=3,
+                stacklevel=4,
             )
             if len(args) > 4:
                 raise TypeError(
@@ -2746,7 +2814,7 @@ class Source:
                          source_point: _Tuple[float, float] = (0.0, 0.0),
                          name: _Optional[str] = None,
                          seed: _Optional[int] = None,
-                         return_kind: str = 'ensemble',
+                         return_kind: Any = _RETURN_KIND_UNSET,
                          **factory_kwargs) -> Any:
         """Gaussian-Schell partial-coherence source.
 
@@ -2762,6 +2830,17 @@ class Source:
         (every other ``Source.*`` classmethod produces a 2-D field)
         and surprising downstream ``src.intensity()`` callers with
         broadcasting axis mismatches.
+
+        v4.15.3 (audit P1-NEW-F1-4): default ``return_kind`` now
+        routes through ``_RETURN_KIND_UNSET`` sentinel so the
+        classmethod emits the same ``DeprecationWarning`` as the
+        top-level :func:`create_gaussian_schell_source` factory on
+        the v4.15.0 -> v4.15.1 return-shape change.  Pre-v4.15.3 the
+        literal default ``return_kind: str = 'ensemble'`` silently
+        bypassed the sentinel path, so pre-v4.15.0 callers using
+        this classmethod got a 4-tuple silently (no
+        ``DeprecationWarning``).  Explicit ``return_kind='ensemble'``
+        or ``'mcf'`` is silent.
 
         Return contract (v4.15.2+)
         --------------------------
@@ -2786,7 +2865,34 @@ class Source:
         breaks the abstraction.  The MCF object is consumable for
         inspection / analysis only; MCF-aware downstream propagators
         are not in v4.15.x scope.
+
+        2-D ``Source.E`` invariant break (intentional)
+        ----------------------------------------------
+        The 4-tuple return shape ``(E_ensemble, dx, dy, wavelength)``
+        has ``E_ensemble.shape == (n_realizations, Ny, Nx)`` -- a
+        3-D array, NOT the 2-D ``Source.E`` invariant the other
+        ``Source.*`` classmethods uphold.  This is intentional --
+        Schell is partial-coherence, fundamentally different from
+        coherent single-source, and wrapping the ensemble inside a
+        single :class:`Source` would silently break the 2-D
+        abstraction.  Users who want a per-source iterator should
+        unpack the ensemble explicitly:
+
+            ens, _dx, _dy, _wl = Source.gaussian_schell(...)
+            sources = [Source(E=ens[k], dx=_dx, dy=_dy,
+                              wavelength=_wl) for k in range(len(ens))]
+
+        A future ``Source.realizations()`` per-realization iterator
+        is in scope for v4.16+ but is NOT shipped in v4.15.3.
         """
+        # v4.15.3 (audit P1-NEW-F1-4): route the sentinel through to
+        # the top-level factory so the same DeprecationWarning chain
+        # fires.  Pre-v4.15.3 the literal default 'ensemble' here
+        # short-circuited the sentinel path and silently bypassed the
+        # warning for callers of this classmethod.
+        if return_kind is _RETURN_KIND_UNSET:
+            _warn_schell_return_kind_default('Source.gaussian_schell')
+            return_kind = 'ensemble'
         result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
             n_realizations=n_realizations, seed=seed,
@@ -2816,7 +2922,7 @@ class Source:
                       source_point: _Tuple[float, float] = (0.0, 0.0),
                       name: _Optional[str] = None,
                       seed: _Optional[int] = None,
-                      return_kind: str = 'ensemble',
+                      return_kind: Any = _RETURN_KIND_UNSET,
                       **factory_kwargs) -> Any:
         """Generic Schell-model partial-coherence source.
 
@@ -2825,7 +2931,29 @@ class Source:
         convention (ensemble tuple by default, MCF object on
         ``return_kind='mcf'``; NOT a :class:`Source`-wrapped 3-D
         ensemble).
+
+        v4.15.3 (audit P1-NEW-F1-4): same sentinel-default routing
+        as :meth:`Source.gaussian_schell`.  Default ``return_kind``
+        emits a ``DeprecationWarning`` on the v4.15.0 -> v4.15.1
+        return-shape change (one-release horizon, removal v5.0);
+        explicit ``return_kind='ensemble'`` or ``'mcf'`` is silent.
+
+        2-D ``Source.E`` invariant break (intentional): the 4-tuple
+        return has ``E_ensemble.shape == (n_realizations, Ny, Nx)``
+        (3-D), breaking the 2-D-``E`` invariant other ``Source.*``
+        classmethods uphold.  This is intentional -- Schell is
+        partial-coherence, fundamentally different from coherent
+        single-source.  See :meth:`Source.gaussian_schell` docstring
+        for the full rationale and the v4.16+ ``Source.realizations()``
+        per-realization-iterator plan.
         """
+        # v4.15.3 (audit P1-NEW-F1-4): route the sentinel through to
+        # the top-level factory so the same DeprecationWarning chain
+        # fires on the default path.  See Source.gaussian_schell for
+        # the rationale.
+        if return_kind is _RETURN_KIND_UNSET:
+            _warn_schell_return_kind_default('Source.schell_model')
+            return_kind = 'ensemble'
         result = create_schell_model_source(
             N=N, dx=dx, wavelength=wavelength,
             intensity_profile=intensity_profile,

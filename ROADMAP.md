@@ -1,6 +1,8 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-18 (post-v4.15.2).
+**Last updated:** 2026-05-18 (post-v4.15.2).  In-flight v4.15.3 audit
+closure -- test-count claim refined to actual `pytest --collect-only`
+output at v4.15.2 HEAD per AUDIT_V4_15_2 P2 finding.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -15,15 +17,21 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.15.2 baseline (~1700 unit tests; actual count
-  finalised at v4.15.2 release commit).  v4.14.3 shipped at 1265,
-  v4.15.0 rolled in the v4.14.2-audit P2/P3 sweep + the v4.15/v4.16
-  ROADMAP scope, v4.15.1 shipped the CLUSTER_B operator algebra +
-  ``rays_from_field`` ray-bridge + 11 audit P0/P1 closures (1625
-  tests), and v4.15.2 closes the remaining v4.15.1 audit P1/P2/P3
+- **Library:** v4.15.2 baseline (1735 unit tests collected per
+  `pytest --collect-only -q tests/unit` at v4.15.2 release commit
+  `672051c` -- 1733 passing + 1 skip + 1 xfail).  v4.14.3 shipped
+  at 1265, v4.15.0 rolled in the v4.14.2-audit P2/P3 sweep + the
+  v4.15/v4.16 ROADMAP scope, v4.15.1 shipped the CLUSTER_B operator
+  algebra + ``rays_from_field`` ray-bridge + 11 audit P0/P1 closures
+  (1625 tests), v4.15.2 closes the remaining v4.15.1 audit P1/P2/P3
   (sentinel migration completion + ROADMAP refresh + Hermiticity /
-  Forbes-Q-OPD analytical pins).  34/34 validation files passing.
-  Public API at ~380+ symbols in `lumenairy.__all__`.
+  Forbes-Q-OPD analytical pins).  v4.15.3 (in-flight at the time of
+  this update) closes the v4.15.2 audit's 1 P0 + 4 P1 sweep
+  (defensive-guard sibling-gap + SAS-anamorphic dispatcher + Schell
+  classmethod parity + stacklevel correction + sentinel callsite
+  wiring); post-v4.15.3 unit-test count is expected to land at
+  ~1750 (refine at v4.15.3 tag time).  34/34 validation files
+  passing.  Public API at ~380+ symbols in `lumenairy.__all__`.
 - **Designer GUI:** v3.7.10 (per in-code comments at `ui/main_window
   .py:2196` etc.).  No standalone release stream; the Designer
   ships co-versioned inside the library wheel.

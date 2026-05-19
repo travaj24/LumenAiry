@@ -10,6 +10,65 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.15.3
+
+**Closes the v4.15.2 audit (`docs/audits/AUDIT_V4_15_2_2026_05_18.md`)
+through P3.**  1 P0 + 4 P1 + ~6 P2 + ~4 P3.  The P0 was the recurring
+"fix N, miss N+1" sibling-gap meta-pattern; v4.15.3 fixes it
+**structurally** with a shared validation helper + dispatcher meta-pin.
+1822 unit tests pass (up from 1732); 34/34 validation files pass.
+
+### Headline: structural counter-measure for the sibling-gap pattern
+
+v4.15.2 guarded 10 propagator/lens entry points; this audit found 9
+more siblings (`*_propagate_mft`, `*_propagate_tilted`,
+`apply_spherical/aspheric/grin/axicon/real_lens_traced/real_lens_maslov`).
+v4.15.3 closes all 9 AND ships:
+
+* **`lumenairy/_validation.py`** with `_check_2d_scalar_field(E, fn_name)` —
+  shared guard helper replacing ~240 LOC of duplicated boilerplate.
+* **Dispatcher meta-pin** that AST-walks `propagators/` + `elements/`
+  for `def apply_*` and `def *_propagate*` and asserts the helper is
+  the first executable statement of each entry point.  43 entry
+  points discovered, 18 guarded, 25 documented exemptions.  Adding a
+  new entry point without the helper now fails CI.
+
+This is the 5th structural meta-pin: cache-clear (v4.14.1),
+cache-locks + 0+0j (v4.14.2), `_validate_grid_params` (v4.15.0),
+`_check_2d_scalar_field` (v4.15.3).
+
+### P1 closures (4)
+
+* **`FreeSpace._apply` SAS-anamorphic crash fixed** — when `dy != dx`
+  and `method='auto'`, the dispatcher routed to SAS which doesn't
+  accept `dy`.  v4.15.3 forces `method='asm'` when `dy != dx`.
+  `FourierTransform` inherits the fix by composition.
+* **Schell `DeprecationWarning` stacklevel** corrected from 4 → 5;
+  library-wide sweep bumped 6 additional Source classmethod
+  shim warnings from 3 → 4.
+* **3 dead `optimize/core.py` sentinels wired** at their callsites
+  (or marked dead-code with `_v4_15_3_dead_code = True` for the
+  tuple-shape case that didn't sentinel cleanly).
+* **`Source.gaussian_schell` / `Source.schell_model` classmethods**
+  now route through `_RETURN_KIND_UNSET` sentinel (previously
+  bypassed the v4.15.2 DeprecationWarning).
+
+### P2 closures
+
+`_RETURN_KIND_UNSET` promoted to dedicated `_SchellReturnKindUnsetSentinel`
+subclass; rays_from_field threshold-comparison consistency (all 3
+placement modes now `>=`); non-tautological FourierTransform pin via
+Gaussian-beam waist relation `w_out = lambda*f/(pi*w_in)` (Saleh & Teich
+§3.2.2, <0.0001% measured error); 4-fold mirror Cassegrain folded-
+prescription test cases; library-wide `_warn_*` stacklevel sweep.
+
+### P3 closures
+
+CHANGELOG Forbes Q OPD bullet corrected (tolerance 1e-3 → 5e-3;
+formula gains `(n-1)` factor); sentinel-migration line citations
+refreshed post-drift; test-count reconciliation across pytest,
+CHANGELOG, and ROADMAP.
+
 ## What's new in 4.15.2
 
 **Closes the v4.15.1 audit (`docs/audits/AUDIT_V4_15_1_2026_05_18.md`)

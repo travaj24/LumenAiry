@@ -655,3 +655,115 @@ def test_cdf_placement_reproducibility_with_integer_seed():
     np.testing.assert_array_equal(rays_a.M, rays_b.M)
     np.testing.assert_array_equal(rays_a.N, rays_b.N)
     np.testing.assert_array_equal(rays_a.opd, rays_b.opd)
+
+
+# ============================================================================
+# v4.15.3 Agent D backfill -- threshold-boundary regression (audit P2:
+# ``_place_cdf`` / ``_place_uniform`` used strict ``>`` while
+# ``_place_rejection`` used ``>=``; pixels at exactly the threshold
+# survived in 1 mode and were dropped in 2.  v4.15.3 makes all three
+# inclusive (``>=``).
+# ============================================================================
+
+def test_threshold_boundary_inclusive_all_modes():
+    """Pixels whose normalised intensity is exactly
+    ``intensity_threshold`` must be retained in ALL three placement
+    modes after v4.15.3.
+
+    Pre-v4.15.3 ``_place_cdf`` and ``_place_uniform`` used strict
+    ``>`` while ``_place_rejection`` used ``>=``; the boundary pixel
+    survived in one mode but was dropped in two.  v4.15.3 picks
+    ``>=`` (inclusive) as the canonical "pixel intensity meets
+    threshold" convention; the regression pin asserts the boundary
+    pixel is retained in every mode.
+    """
+    import warnings as _w
+    # Construct a field with one peak (= max(|E|)) and a few boundary
+    # pixels whose |E|^2 / max(|E|^2) is exactly the threshold.
+    N = 16
+    threshold = 0.01  # exact value so the boundary pixel survives.
+    boundary_amp = np.sqrt(threshold)  # |E|^2 / max(|E|^2) == threshold
+    E = np.zeros((N, N), dtype=complex)
+    E[N // 2, N // 2] = 1.0  # peak (sets max(|E|^2) = 1)
+    # Plant boundary pixels at known locations that land in the
+    # support region of the sub-grid that ``_place_uniform`` samples.
+    boundary_pixels = [(2, 2), (5, 5), (8, 8), (11, 11), (14, 14)]
+    for iy, ix in boundary_pixels:
+        E[iy, ix] = boundary_amp
+
+    dx, lam = 1e-6, 633e-9
+
+    # 'rejection' -- always inclusive (>=) historically; should keep
+    # working unchanged.
+    with _w.catch_warnings():
+        _w.simplefilter('ignore', RuntimeWarning)
+        rays_rej = la.rays_from_field(
+            E, dx=dx, wavelength=lam, n_rays=200,
+            placement='rejection',
+            intensity_threshold=threshold, random_state=42,
+        )
+    # The peak + boundary pixels must all be reachable in rejection
+    # mode.  Convert ray positions back to pixel indices and check
+    # that at least one ray lands on a boundary pixel.
+    ix_rej = np.round(rays_rej.x / dx).astype(int) + N // 2
+    iy_rej = np.round(rays_rej.y / dx).astype(int) + N // 2
+    boundary_set = set(boundary_pixels)
+    hit_pixels_rej = {(int(iy), int(ix))
+                       for iy, ix in zip(iy_rej, ix_rej)}
+    assert hit_pixels_rej & boundary_set, (
+        'rejection mode failed to land any ray on a boundary pixel; '
+        'the ``>=`` convention should retain pixels at exactly the '
+        'threshold.')
+
+    # 'cdf' -- post-v4.15.3 inclusive (was strict ``>``).  Verify
+    # the marginal sums see non-zero intensity at the boundary rows
+    # / columns by sampling enough rays that the boundary pixels
+    # have a finite probability of being hit.
+    with _w.catch_warnings():
+        _w.simplefilter('ignore', RuntimeWarning)
+        rays_cdf = la.rays_from_field(
+            E, dx=dx, wavelength=lam, n_rays=2000,
+            placement='cdf',
+            intensity_threshold=threshold, random_state=42,
+        )
+    ix_cdf = np.round(rays_cdf.x / dx).astype(int) + N // 2
+    iy_cdf = np.round(rays_cdf.y / dx).astype(int) + N // 2
+    # CDF is separable so the boundary pixels (which sit on the
+    # diagonal) won't always be hit pixel-for-pixel.  Verify the
+    # boundary ROWS / COLUMNS have non-zero ray density -- pre-v4.15.3
+    # the rows / cols containing only boundary pixels would have been
+    # zeroed by the strict ``>``.
+    rows_hit = set(iy_cdf.tolist())
+    cols_hit = set(ix_cdf.tolist())
+    boundary_rows = {iy for iy, _ in boundary_pixels}
+    boundary_cols = {ix for _, ix in boundary_pixels}
+    assert (rows_hit & boundary_rows) or (cols_hit & boundary_cols), (
+        'cdf mode (post-v4.15.3 inclusive ``>=``) failed to populate '
+        'any boundary row or column; the boundary pixels should '
+        'survive the threshold and contribute to the marginal CDFs.')
+
+    # 'uniform' -- post-v4.15.3 inclusive (was strict ``>``).  This
+    # is the cleanest pin because uniform mode samples a deterministic
+    # sub-grid and either keeps or drops each pixel by the mask.
+    # Build a 2-D mask matching the per-pixel threshold and verify the
+    # boundary pixels pass.
+    with _w.catch_warnings():
+        _w.simplefilter('ignore', RuntimeWarning)
+        rays_uni = la.rays_from_field(
+            E, dx=dx, wavelength=lam, n_rays=N * N,
+            placement='uniform',
+            intensity_threshold=threshold,
+        )
+    ix_uni = np.round(rays_uni.x / dx).astype(int) + N // 2
+    iy_uni = np.round(rays_uni.y / dx).astype(int) + N // 2
+    hit_pixels_uni = {(int(iy), int(ix))
+                       for iy, ix in zip(iy_uni, ix_uni)}
+    # All boundary pixels are on the diagonal of a 16x16 grid and a
+    # uniform sub-grid of 256 cells visits every pixel.  Each must
+    # appear in the placement after v4.15.3.
+    for boundary_pix in boundary_pixels:
+        assert boundary_pix in hit_pixels_uni, (
+            f'uniform mode (post-v4.15.3 inclusive ``>=``) failed to '
+            f'place a ray at boundary pixel {boundary_pix}; the '
+            f'pixel\'s normalised intensity is exactly the threshold '
+            f'so the inclusive convention must retain it.')

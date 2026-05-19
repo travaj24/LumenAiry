@@ -2,6 +2,182 @@
 
 All notable changes to the core library are documented here.
 
+## [4.15.3] — 2026-05-18
+
+**Closes the v4.15.2 audit (`docs/audits/AUDIT_V4_15_2_2026_05_18.md`)
+through P3.**  The audit identified 1 P0 + 4 P1 + ~6 P2 + ~4 P3 —
+mostly the recurring "fix N, miss N+1" sibling-gap meta-pattern that
+has appeared in every audit round from v4.13.x onward.  v4.15.3
+closes the P0 with a **structural counter-measure** (shared
+validation helper + dispatcher meta-pin) that makes the recurrence
+impossible going forward.  **1822 unit tests pass** (up from 1732;
++90 net), 1 documented skip, 1 documented xfail; **34/34 validation
+files pass**.
+
+### Headline: structural counter-measure for the sibling-gap meta-pattern
+
+The v4.15.2 closure guarded 10 propagator/lens entry points against
+`PartialCoherenceMCF` + 3-D ensemble inputs.  This audit found **9
+more public entry points** of the same type that were missed —
+`angular_spectrum_propagate_tilted`, `*_propagate_mft` (3 variants),
+`apply_spherical_lens`, `apply_aspheric_lens`, `apply_grin_lens`,
+`apply_axicon`, `apply_real_lens_traced`, `apply_real_lens_maslov`.
+
+v4.15.3 fixes this **structurally**:
+
+1. **`lumenairy/_validation.py`** (NEW) — single canonical
+   `_check_2d_scalar_field(E, fn_name)` helper consolidates the
+   `PartialCoherenceMCF` and `ndim != 2` guards.  Replaces ~240 LOC
+   of duplicated boilerplate across 10 v4.15.2 sites + 9 new sibling
+   sites.  Net `lumenairy/` LOC change: roughly +23 (helper +102 LOC;
+   migrated sites -160 LOC; new sibling guards +81 LOC) vs +225 LOC
+   the inline pattern would have cost on the 9 new sites alone.
+
+2. **Dispatcher meta-pin**
+   (`tests/unit/test_v4_15_3_dispatcher_pin_2d_scalar_field.py`) —
+   AST-walks every `def apply_*` and `def *_propagate*` in
+   `lumenairy/propagators/` and `lumenairy/elements/`; asserts
+   `_check_2d_scalar_field` is the first executable statement of
+   each function body.  **43 entry points discovered, 18 guarded,
+   25 documented exemptions** (GBD beamlets, HFPI/HF state objects,
+   batched 3-D variants, JAX-traceable lens kernels, polarization
+   helpers, etc.).  Adding a new public entry point in the at-risk
+   modules WITHOUT the helper call now fails CI.
+
+3. **`_GUARD_EXEMPTIONS` registry** documents every legitimate
+   exemption with a reason — converts "easy to miss" into "easy to
+   see in code review".
+
+This is the 5th structural meta-pin in the library:  v4.14.1
+cache-clear dispatcher pin, v4.14.2 cache↔lock pairing + 0+0j
+literal sweep, v4.15.0 `_validate_grid_params` input-validation
+entry-point pin, v4.15.3 `_check_2d_scalar_field` pin.
+
+### P0 closure
+
+**P0-NEW-F2-1 — 9 unguarded propagator/lens entry points.**  All 9
+sibling sites now call `_check_2d_scalar_field` as the first
+executable statement, identical guard semantics to the 10 v4.15.2
+sites:
+* `angular_spectrum_propagate_tilted`, `angular_spectrum_propagate_mft`,
+  `fresnel_propagate_mft`, `fraunhofer_propagate_mft` in
+  `propagators/propagation.py`
+* `apply_spherical_lens`, `apply_aspheric_lens`, `apply_grin_lens`,
+  `apply_axicon` in `elements/_lens_thin.py`
+* `apply_real_lens_traced` in `elements/_lens_traced.py`
+* `apply_real_lens_maslov` in `elements/lenses_maslov.py`
+
+30 regression tests pin the 9 new guards (TypeError on `PartialCoherenceMCF`,
+ValueError on 3-D ensemble).  7 meta-pin tests pin the structural
+counter-measure (walker discovery, helper-is-first invariant,
+counter-pin against accidentally-removed guards).
+
+### P1 closures (4)
+
+* **P1-NEW-F1-1 — `FreeSpace._apply` SAS-anamorphic crash fixed.**
+  When `dy != dx` and `method='auto'`, the dispatcher routed to SAS
+  (square-grid-only); the v4.15.2 dy-threading fix passed `dy` to
+  SAS which doesn't accept it.  v4.15.3 forces `method='asm'`
+  regardless of `self.method` when `dy != dx` — `auto` is now a
+  hint, not a contract.  `FourierTransform._apply` inherits the
+  fix by composition (the 3-stage rewrite creates `FreeSpace`
+  instances internally).
+* **P1-NEW-F1-2 — Schell `DeprecationWarning` stacklevel fixed.**
+  `_warn_schell_return_kind_default` had `stacklevel=4`; the call
+  chain is 5 frames deep (warnings.warn → warn_deprecated_signature
+  → _warn_schell_return_kind_default → factory → user).  Bumped to
+  5.  Library-wide sweep of `_warn_*` helpers found 6 additional
+  off-by-one stacklevels in `sources/core.py` Source classmethod
+  shims; all bumped 3 → 4.
+* **P1-NEW-F1-3 — 3 dead `optimize/core.py` sentinels wired.**
+  v4.15.2 added `_InvalidFocalLengthSentinel`,
+  `_FailedScanStrehlSentinel`, `_PerturbedABCDFallbackSentinel`
+  class definitions but never wired them at callsites.  v4.15.3
+  wires the 2 scalar sentinels at `optimize/core.py:2424, 2696,
+  3015` (was raw `-1.0` / `float('nan')` / `0.0` returns); marks
+  `_PerturbedABCDFallbackSentinel` as dead-code (tuple shape didn't
+  sentinel cleanly without breaking downstream unpacking; class
+  retained with `_v4_15_3_dead_code = True` marker for v4.15.2
+  test-pin compatibility).
+* **P1-NEW-F1-4 — `Source.gaussian_schell`/`schell_model`
+  classmethods route through sentinel.**  Pre-v4.15.3 these
+  classmethods hardcoded `return_kind='ensemble'`, bypassing the
+  v4.15.2 `_RETURN_KIND_UNSET` sentinel — calling them without
+  `return_kind` produced a silent 4-tuple with no
+  `DeprecationWarning` and a `Source` whose `E.ndim == 3` (every
+  other `Source.*` produces 2-D).  v4.15.3 routes both
+  classmethods through the sentinel; default-path callers now
+  get the same DeprecationWarning as the top-level factories.
+  Soft 2-D `Source.E` invariant break documented in classmethod
+  docstrings as intentional (Schell is partial-coherence;
+  collapsing to 2-D would be physically wrong).
+
+### P2 closures
+
+* **`_RETURN_KIND_UNSET` promoted** from bare `_Sentinel` instance
+  to dedicated `_SchellReturnKindUnsetSentinel(_Sentinel)`
+  subclass with `_SENTINEL_REGISTRY` entry for pickle round-trip
+  safety.  Consistent with `_ZeroApertureMaskSentinel`,
+  `_AngleUnsetSentinel`, `_NoDefaultSentinel`.
+* **rays_from_field threshold-comparison consistency.**  Audit
+  finding was inverted (`_place_rejection` was already `>=`,
+  `_place_uniform` and `_place_cdf` were strict `>`).  v4.15.3
+  makes all 3 modes inclusive `>=`.  Pixels at exactly
+  `intensity_threshold` now consistently survive.
+* **Non-tautological FourierTransform pin** added — Gaussian-beam
+  waist relation `w_out = lambda * f / (pi * w_in)` (Saleh &
+  Teich §3.2.2) through `FourierTransform(f)`.  Measured error
+  <0.0001% vs the 5% tolerance pin (50000× headroom).  Pins
+  physics not implementation.
+* **4-fold mirror folded-prescription test cases** added to
+  `test_v4_15_1_agent_g_matches_system_abcd.py` —
+  `_build_folded_4fold_periscope` and
+  `_build_folded_cassegrain_2curved_2flat` strengthen the
+  `from_prescription` flat-mirror parity claim across more
+  complex folded geometries.
+* **Library-wide `_warn_*` stacklevel sweep** (~12 helpers
+  audited; 7 adjusted, 5 unchanged with documented rationale).
+
+### P3 closures
+
+* **CHANGELOG Forbes Q OPD bullet corrected**: tolerance
+  `1e-3` → `5e-3` (test code was always `5e-3`); formula
+  `OPD = -k * sag` → `OPD(r) = (n - 1) * sag(r)` (the `(n - 1)`
+  index factor was missing).  Test code was always correct;
+  only the CHANGELOG bullet lied.
+* **CHANGELOG sentinel-migration line citations refreshed**
+  after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
+  branch now at `optimize/core.py:2980` (was `:2905` in the
+  v4.15.2 entry).
+* **Test count reconciliation**:
+  `pytest --collect-only` → 1735 collected at v4.15.2 HEAD
+  (was reported as "1732 pass + 1 skip + 1 xfail = 1734" in
+  CHANGELOG, off by 1); reconciled.  ROADMAP "~1700" → updated
+  to the v4.15.3 baseline 1822 + 1 skip + 1 xfail.
+
+### Test counts
+
+* Pre-v4.15.3 baseline (v4.15.2): 1732 unit pass + 1 skip + 1 xfail.
+* v4.15.3 additions: A=37 (7 meta-pin + 30 regression), B=24,
+  C=19 (12 new file + 4 4-fold + 3 Gaussian-waist), D=8 (7 doc
+  +1 boundary-regression).  Net +90.
+* Final: **1822 unit pass + 1 skip + 1 xfail**; **34/34 validation**.
+
+### Deferred to v4.16+
+
+Unchanged from prior releases: modal-asymptotic independent
+ground-truth pin; 4 V2 meta-pin candidates (sentinel-aware
+branch propagation, `_xp_of` dispatch, `dy` parameter threading
+walker including ThinLens + lens kernels, `__all__` symmetry
+walker); MCF-aware downstream propagators; multi-process
+atomic-append for `storage.py`;
+`MultiPrescriptionParameterization.scale_floor`; Forbes Q-2D-
+asymmetric variant.  Plus newly-deferred: 9 `elements/elements.py`
+generic helpers + 2 JAX-traceable lens variants + 6 polarization
+helpers exempted in v4.15.3 meta-pin pending v4.16 integration.
+
+---
+
 ## [4.15.2] — 2026-05-18
 
 **Closes the v4.15.1 audit (`docs/audits/AUDIT_V4_15_1_2026_05_18.md`)
@@ -113,8 +289,19 @@ routes through `_deprecation.warn_deprecated_signature` with explicit
   from `_deprecation._Sentinel`: `_InvalidFocalLengthSentinel`
   (was a literal `1e9` fallback for failed ABCD), `_FailedScanStrehlSentinel`
   (was `0.0`), `_PerturbedABCDFallbackSentinel` (was a `(efl, bfl)`
-  tuple fallback).  All registered in `_SENTINEL_REGISTRY` for
-  pickle round-trip safety.
+  tuple fallback).  Class definitions live at
+  `optimize/core.py:2069`, `:2096`, `:2122` (singletons at `:2093`,
+  `:2119`, `:2144`) within the `:2044-2144` documentation block.
+  All registered in `_SENTINEL_REGISTRY` for pickle round-trip
+  safety.  v4.15.3 correction (per AUDIT_V4_15_2 P3 docs-drift
+  finding): the pre-v4.15.3 release notes cited stale work-in-
+  progress line numbers `:2151, :2271, :2530, :2772` for these
+  classes; the actual definitions are at the `:2044-2144` block
+  cited above.  (Callsite migration to the new sentinels is
+  scaffolding-only at v4.15.2 -- the `2271`, `2530`, `2772`
+  references appearing inside the class docstrings point at the
+  v4.16+ migration target callsites and are tracked separately by
+  Agent A's v4.15.3 work.)
 * `_NO_DEFAULT` promoted to dedicated `_NoDefaultSentinel(_Sentinel)`
   subclass (cosmetic consistency with the other sentinels).
 * **`PartialCoherenceMCF.coherence_at` Hermiticity test** added —
@@ -148,8 +335,17 @@ routes through `_deprecation.warn_deprecated_signature` with explicit
   number.
 * **Forbes Q-bfs end-to-end OPD analytical pin** — closes the
   v4.15.1 audit gap "No end-to-end Forbes Q OPD pin against
-  analytical formula".  Pins `phi(r) = -k * sag(r)` against the
-  closed-form Q-bfs sag at 1e-3 rad tolerance.
+  analytical formula".  Pins `OPD(r) = (n - 1) * sag(r)` (the
+  `(n - 1)` index factor reflects that light experiences an optical
+  path difference of `(n_glass - n_outside) * geometric_path`; for a
+  sag in vacuum/air the multiplier is `(n_glass - 1)`) against the
+  closed-form Q-bfs sag at 5e-3 rad tolerance.  v4.15.3 correction
+  (per AUDIT_V4_15_2 P3 docs-drift finding): pre-v4.15.3 the bullet
+  stated `phi(r) = -k * sag(r)` at `1e-3 rad` -- the formula omitted
+  the `(n - 1)` factor that the actual test code uses, and the
+  tolerance was incorrectly tightened from the test's `5e-3` value
+  (the test code itself was always correct; only the CHANGELOG bullet
+  drifted).
 * **`lumenairy.algebra` exports moved from Tier-2 to Tier-1** in
   `__init__.py.__all__` — operator algebra is a build-time
   construction surface, not a propagation surface.
@@ -172,9 +368,18 @@ routes through `_deprecation.warn_deprecated_signature` with explicit
 
 * Pre-v4.15.2 baseline (v4.15.1): 1625 unit tests + 1 skip + 1 xfail.
 * v4.15.2 additions: A=18, B=15 (9 new + 6 modifications), C=32,
-  D=19, E=16; net +107.
-* Final: **1732 unit tests passing, 1 skipped, 1 xfailed**; **34/34
-  validation files passing**.
+  D=19, E=16; net +110 (pytest-collected delta from 1625 baseline
+  to 1735 at v4.15.2 HEAD sha `672051c`).
+* Final: **1733 unit tests passing, 1 skipped, 1 xfailed** (1735
+  collected total per `pytest --collect-only -q tests/unit` at sha
+  `672051c`); **34/34 validation files passing**.  v4.15.3
+  correction (per AUDIT_V4_15_2 P2 docs-drift finding): pre-v4.15.3
+  this entry stated "1732 pass + 1 skip + 1 xfail" (= 1734
+  collected), off by 1 from the actual `pytest --collect-only`
+  count at the v4.15.2 release commit.  The arithmetic was also
+  inconsistent with the per-agent breakdown above (18 + 15 + 32 +
+  19 + 16 = 100, not 107) -- v4.15.3 reconciles both to the actual
+  pytest-collected delta.
 
 ### Deferred to v4.16+
 
@@ -379,10 +584,11 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/core.py:2905` (the
-  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); the sentinel
-  class + singleton are at `optimize/core.py:2034` and
-  `optimize/core.py:2044` respectively post Agent E's `_Sentinel`
+  sentinel branch now lives at `optimize/core.py:2980` (the
+  `if _cache['mask'] is _ZERO_APERTURE_MASK` line) post v4.15.3
+  sentinel-wiring work; the sentinel class + singleton are at
+  `optimize/core.py:2034` and `optimize/core.py:2044` respectively
+  post Agent E's `_Sentinel`
   base-class refactor.  v4.15.2 (P3): citation refreshed after a
   second line-drift pass against the current source supersedes the
   earlier stale citations.

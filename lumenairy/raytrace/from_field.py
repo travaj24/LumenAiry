@@ -19,10 +19,12 @@ Math reference
   three strategies (``cdf``, ``rejection``, ``uniform``); see
   :func:`_place_cdf`, :func:`_place_rejection`, :func:`_place_uniform`.
   All three placement modes apply ``intensity_threshold`` *per-pixel*
-  against the global maximum (``|E|^2 / max(|E|^2) > threshold``)
+  against the global maximum (``|E|^2 / max(|E|^2) >= threshold``)
   so that sub-threshold noise cannot leak through marginal sums --
   see :func:`_place_cdf` for the historical pixel-vs-marginal
-  v4.15.2 fix (P1-NEW-D in the v4.15.1 audit).
+  v4.15.2 fix (P1-NEW-D in the v4.15.1 audit) and the v4.15.3
+  ``>=`` consistency fix that aligned ``_place_cdf`` and
+  ``_place_uniform`` with the ``_place_rejection`` convention.
 * Direction: ``k_perp`` is computed from the *phase ratio* of
   adjacent field samples
   ``k_x = arg(E[i,j+1] * conj(E[i,j-1])) / (2 dx)``
@@ -58,6 +60,13 @@ marginal-wise); ``rays_from_field`` warns on short-return; top-of-file
 docstring updated to phase-ratio formulation; ``n_rays=0`` returns an
 empty bundle cleanly; ``'uniform'`` deduplicates collided sub-grid
 pixels so ``n_rays > N^2`` is capped at ``N^2``.
+v4.15.3 -- Agent D: intensity-threshold comparison made consistent
+across the 3 placement modes; all three now use the inclusive
+``|E|^2 / max(|E|^2) >= intensity_threshold`` convention.  Pre-v4.15.3
+only ``_place_rejection`` used ``>=``; ``_place_cdf`` and
+``_place_uniform`` used strict ``>``, dropping boundary-exact pixels.
+This is a numerical behaviour change for inputs at the exact threshold
+boundary -- see ``docs/release_notes/.release_notes_v4_15_3_agent_d.md``.
 """
 from __future__ import annotations
 
@@ -132,11 +141,12 @@ def rays_from_field(
           distributions (e.g. Gaussian beams aligned to the axes);
           approximate for strongly non-separable intensities (e.g.
           azimuthal lattices).  ``intensity_threshold`` is applied
-          *pixel-wise* (``|E|^2 / max(|E|^2) > threshold``) BEFORE
+          *pixel-wise* (``|E|^2 / max(|E|^2) >= threshold``) BEFORE
           the marginal sums are formed, so sub-threshold noise
           cannot accumulate across the marginal axis and contaminate
-          the CDF.  (v4.15.2 fix; see P1-NEW-D in the v4.15.1 audit.)
-          Use for visualisation.
+          the CDF.  (v4.15.2 fix; see P1-NEW-D in the v4.15.1 audit.
+          v4.15.3 -- ``>=`` is the canonical convention; pre-v4.15.3
+          used strict ``>``.)  Use for visualisation.
         * ``'rejection'`` -- true 2-D rejection sampling from
           ``|E|^2``.  Slower but exact regardless of separability.
           ``intensity_threshold`` is applied pixel-wise.  Use for
@@ -163,12 +173,18 @@ def rays_from_field(
           phase singularities; use only for smooth phase profiles.
 
     intensity_threshold : float, default 1e-4
-        Relative threshold ``|E|^2 / max(|E|^2)``.  Pixels below the
-        threshold are excluded from placement for ALL three modes
-        (``'cdf'``, ``'rejection'``, ``'uniform'``); the threshold is
-        applied pixel-wise rather than against any marginal sum.
-        For ``angle_method='complex_gradient'`` the threshold also
-        clamps the denominator of ``grad E / E``.
+        Relative threshold ``|E|^2 / max(|E|^2)``.  Pixels strictly
+        below the threshold are excluded from placement for ALL three
+        modes (``'cdf'``, ``'rejection'``, ``'uniform'``); the
+        threshold is applied pixel-wise rather than against any
+        marginal sum.  The comparison is inclusive
+        (``|E|^2 / max(|E|^2) >= threshold``) so a pixel whose
+        normalised intensity is exactly ``intensity_threshold`` is
+        retained.  v4.15.3 -- the three modes are now consistent;
+        pre-v4.15.3 only ``_place_rejection`` used the inclusive
+        comparison while ``_place_cdf`` and ``_place_uniform`` used
+        strict ``>``.  For ``angle_method='complex_gradient'`` the
+        threshold also clamps the denominator of ``grad E / E``.
     z0 : float, default 0.0
         Axial position of all ray origins [m].
     random_state : int or np.random.Generator or None, optional
@@ -421,14 +437,21 @@ def _place_cdf(
     threshold background noise accumulate across rows / columns and
     contaminate the CDF.  Pixel-wise thresholding makes ``'cdf'``
     consistent with ``'rejection'`` and ``'uniform'``.
+
+    v4.15.3 -- threshold comparison is inclusive (``>=``) so pixels at
+    exactly ``intensity_threshold`` are retained, matching the
+    canonical "pixel intensity meets threshold" convention used in
+    ``_place_rejection`` and now also ``_place_uniform``.  Pre-v4.15.3
+    used strict ``>``.  Documented in the v4.15.3 release notes.
     """
     I = np.abs(E) ** 2
     I_norm = I / I.max()
     # Pixel-wise threshold: zero out any pixel whose normalised
-    # intensity is at or below the threshold, BEFORE forming the
+    # intensity is strictly below the threshold, BEFORE forming the
     # marginal sums.  This matches the spec docstring's claim of a
     # pixel-wise threshold and lines up with the other two modes.
-    I_thresh = np.where(I_norm > threshold, I, 0.0)
+    # v4.15.3 -- ``>=`` is the canonical "meets threshold" convention.
+    I_thresh = np.where(I_norm >= threshold, I, 0.0)
 
     Ny, Nx = E.shape
 
@@ -479,6 +502,15 @@ def _place_rejection(
     Caps iterations at ``50 * n_rays`` to guarantee termination on
     pathological inputs; if the cap is reached the function returns
     the rays accepted so far (caller will resize the bundle).
+
+    v4.15.3 -- threshold comparison is inclusive (``>=``) here as in
+    all three placement modes; the canonical convention is "pixel
+    intensity meets threshold" so a pixel whose normalised intensity
+    is exactly ``intensity_threshold`` is retained.  Pre-v4.15.3 only
+    this mode used ``>=`` (which became the chosen convention); the
+    other two modes (``_place_cdf``, ``_place_uniform``) used strict
+    ``>``.  The behaviour change for inputs at the exact threshold
+    boundary is documented in the v4.15.3 release notes.
     """
     I = np.abs(E) ** 2
     I = I / I.max()
@@ -529,6 +561,12 @@ def _place_uniform(
     number of unique pixels in the grid, the sub-grid pixelisation
     used to produce duplicate ``(iy, ix)`` entries; we now dedupe in
     a stable manner.
+
+    v4.15.3 -- threshold comparison is inclusive (``>=``) so pixels at
+    exactly ``intensity_threshold`` are retained, matching the
+    canonical "pixel intensity meets threshold" convention used in
+    ``_place_rejection`` and now also ``_place_cdf``.  Pre-v4.15.3
+    used strict ``>``.  Documented in the v4.15.3 release notes.
     """
     I = np.abs(E) ** 2
     Imax = I.max()
@@ -537,8 +575,9 @@ def _place_uniform(
                 np.array([], dtype=np.intp),
                 np.array([], dtype=np.intp))
     # Pixel-wise threshold mask (matches the docstring "Pixels below
-    # the threshold are excluded from placement").
-    mask = (I / Imax) > threshold
+    # the threshold are excluded from placement").  v4.15.3 -- ``>=``
+    # is the canonical "meets threshold" convention.
+    mask = (I / Imax) >= threshold
 
     Ny, Nx = E.shape
 

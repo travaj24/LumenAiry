@@ -127,36 +127,13 @@ def apply_thin_lens(
     makes the call order non-load-bearing and prevents typos that
     silently swap ``wavelength`` and ``dx`` (both ~1e-6).
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
-    # actionable error rather than a downstream AttributeError on
-    # ``E_in.shape`` (PartialCoherenceMCF is a dataclass without
-    # ndarray semantics) or a silent wrong-axis broadcast (3-D
-    # ensemble multiplied against a 2-D phase mask).  Lazy-import
-    # PartialCoherenceMCF to avoid a circular dep with sources/.
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "apply_thin_lens: PartialCoherenceMCF inputs are not yet "
-            "supported by this propagator (v4.15+). MCF-aware "
-            "downstream propagators are scheduled for v4.16+. To "
-            "propagate a partially-coherent field via ensemble "
-            "averaging, iterate over the ensemble realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = apply_thin_lens(ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"apply_thin_lens: expected 2-D complex field of shape "
-            f"(Ny, Nx); got {_ndim}-D array of shape "
-            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
-            f"of realizations from create_*_schell_source(), iterate "
-            f"over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = apply_thin_lens(ensemble[k], ...)"
-        )
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
+    # guard).  Runs FIRST so the user gets a clear, actionable error
+    # rather than a downstream AttributeError or silent wrong-axis
+    # broadcast.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_thin_lens')
 
     # Determine array library.  PEP 562 ``__getattr__`` cannot
     # resolve bare ``cp`` inside a function body (LEGB rules skip
@@ -307,6 +284,12 @@ def apply_spherical_lens(
     which reduces to ``-k/(2f) * h**2`` in the paraxial limit with
     ``1/f = (n-1) * (1/R1 - 1/R2)`` (lensmaker's equation).
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_spherical_lens')
+
     # See apply_thin_lens for the ``_lenses_module.cp`` rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         if _lenses_module.cp is None:
@@ -444,6 +427,12 @@ def apply_aspheric_lens(
     A plano-convex lens with ``k1 = -n_lens**2`` on the curved surface
     eliminates third-order spherical aberration for collimated input.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_aspheric_lens')
+
     # See apply_thin_lens for the ``_lenses_module.cp`` rationale.
     if CUPY_AVAILABLE and (use_gpu or _is_cupy_array(E_in)):
         if _lenses_module.cp is None:
@@ -581,34 +570,11 @@ def apply_cylindrical_lens(
     Produces a line focus (orthogonal to the focusing axis) instead of a
     point focus.
     """
-    # v4.15.2 (P1-NEW-E / P1-NEW-F): defensive guards for new types
-    # introduced by v4.15.1 -- run FIRST so the user gets a clear,
-    # actionable error rather than a downstream AttributeError on
-    # ``E_in.shape`` or a silent wrong-axis broadcast.  Lazy-import
-    # PartialCoherenceMCF to avoid a circular dep with sources/.
-    from ..sources.core import PartialCoherenceMCF as _PartialCoherenceMCF
-    if isinstance(E_in, _PartialCoherenceMCF):
-        raise TypeError(
-            "apply_cylindrical_lens: PartialCoherenceMCF inputs are "
-            "not yet supported by this propagator (v4.15+). MCF-aware "
-            "downstream propagators are scheduled for v4.16+. To "
-            "propagate a partially-coherent field via ensemble "
-            "averaging, iterate over the ensemble realizations:\n"
-            "  for k in range(ensemble.shape[0]):\n"
-            "      E_out_k = apply_cylindrical_lens(ensemble[k], ...)\n"
-            "  I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
-        )
-    _ndim = getattr(E_in, 'ndim', None)
-    if _ndim is not None and _ndim != 2:
-        raise ValueError(
-            f"apply_cylindrical_lens: expected 2-D complex field of "
-            f"shape (Ny, Nx); got {_ndim}-D array of shape "
-            f"{getattr(E_in, 'shape', None)!r}. If this is an ensemble "
-            f"of realizations from create_*_schell_source(), iterate "
-            f"over the leading axis:\n"
-            f"  for k in range(ensemble.shape[0]):\n"
-            f"      E_out_k = apply_cylindrical_lens(ensemble[k], ...)"
-        )
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper (replaces the v4.15.2 inline
+    # guard).
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_cylindrical_lens')
 
     # v4.13.2 (audit C-P1-6): dispatch through CuPy when use_gpu=True
     # or E_in is already a CuPy array.  Resolve ``cp`` via the
@@ -713,6 +679,12 @@ def apply_grin_lens(
     Quarter-pitch (g*d = pi/2) collimates a point source at the front face;
     half-pitch (g*d = pi) reimages 1:1 inverted.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_grin_lens')
+
     # v4.13.2 (audit C-P1-6): CuPy dispatch (was previously numpy-only).
     # See apply_cylindrical_lens above for the _lenses_module.cp
     # resolution rationale.
@@ -799,6 +771,12 @@ def apply_axicon(
     extending over ``z_max ~ w0 / ((n - 1) * alpha)`` where *w0* is the
     input beam radius.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_axicon')
+
     # v4.13.2 (audit C-P1-6): CuPy dispatch.  See
     # apply_cylindrical_lens above for the _lenses_module.cp
     # resolution rationale.

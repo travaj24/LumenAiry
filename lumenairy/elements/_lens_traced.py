@@ -1268,6 +1268,12 @@ def apply_real_lens_traced(
     E_out : ndarray, complex, shape (N, N)
         Field at the exit-vertex plane of the last surface.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_traced')
+
     # 4.12.0 (B2-5): explicit mirror-in-surfaces guard.  The shared
     # ``_check_no_silent_fold_drop`` only looks at the prescription's
     # ``elements`` list (the full element sequence, populated by

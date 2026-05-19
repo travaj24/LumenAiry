@@ -254,9 +254,102 @@ def _build_folded_telephoto() -> dict:
     }
 
 
+def _build_folded_4fold_periscope() -> dict:
+    """Four-flat-fold-mirror periscope chain (v4.15.3 audit P3 / Tier-1).
+
+    Four flat fold mirrors in sequence with a refractive singlet
+    interleaved between the second and third fold.  This doubles the
+    2-fold ``_build_folded_singlet`` case to exercise the
+    flat-mirror-parity path **four times** in a single prescription
+    -- each flat fold must NOT flip ``mirror_parity`` in either
+    layer (algebra or ``system_abcd``).
+
+    Geometry mirrors a real-world periscope: a beam enters, bounces
+    off four flat folds, traverses a refractive singlet, and exits.
+    Total mirror count: 4; refractive elements: 1 (BK7 singlet).
+    """
+    glass = 'N-BK7'
+    return {
+        'name': 'Folded4FoldPeriscope',
+        'aperture_diameter': 25.4e-3,
+        'surfaces': [
+            # Fold mirror 1 (flat).
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+            # Fold mirror 2 (flat).
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+            # Refractive singlet (BK7) -- the only powered element.
+            {'radius': 60e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': glass},
+            {'radius': -60e-3, 'conic': 0.0, 'aspheric_coeffs': None,
+             'glass_before': glass, 'glass_after': 'air'},
+            # Fold mirror 3 (flat).
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+            # Fold mirror 4 (flat).
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+        ],
+        'thicknesses': [15e-3, 15e-3, 4e-3, 25e-3, 15e-3, 0.0],
+    }
+
+
+def _build_folded_cassegrain_2curved_2flat() -> dict:
+    """Cassegrain-style 4-mirror system (v4.15.3 audit P3 / Tier-1).
+
+    Two CURVED mirrors (primary concave + secondary convex) plus two
+    FLAT fold mirrors after the cassegrain group.  This is the
+    canonical mixed-mirror geometry: ``system_abcd`` and
+    ``from_prescription`` must agree even when CURVED mirrors flip
+    parity twice (cancelling) and FLAT mirrors don't flip parity at
+    all.  The cumulative parity at the output is therefore even (no
+    net flip) -- the parity bookkeeping is non-trivial but the
+    algebra layer must still match the ground truth.
+
+    Surface count: 4 mirrors.  Refractive elements: 0.
+    """
+    return {
+        'name': 'FoldedCassegrain2Curved2Flat',
+        'aperture_diameter': 25.4e-3,
+        'surfaces': [
+            # Primary mirror: concave R = -200 mm (Welford convention).
+            {'radius': -200e-3, 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+            # Secondary mirror: convex R = +50 mm (Welford convention
+            # for the rear-going leg after the primary flip).
+            {'radius': 50e-3, 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+            # Flat fold mirror 1 (post-secondary).
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+            # Flat fold mirror 2.
+            {'radius': float('inf'), 'conic': 0.0,
+             'aspheric_coeffs': None,
+             'glass_before': 'air', 'glass_after': 'MIRROR'},
+        ],
+        # Thicknesses (note the negative leg for the rear-going
+        # post-primary reflection): primary -> secondary (back),
+        # secondary -> fold 1 (forward), fold 1 -> fold 2, fold 2 ->
+        # exit.
+        'thicknesses': [-180e-3, 200e-3, 20e-3, 0.0],
+    }
+
+
 FOLDED_PRESCRIPTIONS = [
     ('folded_singlet', _build_folded_singlet),
     ('folded_telephoto', _build_folded_telephoto),
+    # v4.15.3 (audit P3 / Tier-1): 4-fold mirror parity coverage.
+    ('folded_4fold_periscope', _build_folded_4fold_periscope),
+    ('folded_cassegrain_2curved_2flat',
+     _build_folded_cassegrain_2curved_2flat),
 ]
 
 
@@ -268,15 +361,19 @@ def test_from_prescription_matches_system_abcd_folded(
     wl_label: str,
     wavelength: float,
 ) -> None:
-    """v4.15.2 (audit P1-NEW-B): the operator-algebra
-    ``from_prescription`` must match ``system_abcd`` on FOLDED
-    prescriptions that contain at least one flat fold mirror.
+    """v4.15.2 (audit P1-NEW-B) + v4.15.3 (audit P3 / Tier-1): the
+    operator-algebra ``from_prescription`` must match ``system_abcd``
+    on FOLDED prescriptions that contain at least one flat fold
+    mirror.
 
     Pre-v4.15.2 ``from_prescription`` unconditionally flipped
     ``mirror_parity`` on every ``is_mirror=True`` surface, while
     ``system_abcd`` only flips parity for CURVED mirrors.  A
     folded design with a flat fold mirror therefore got an off-sign
     ABCD from the algebra layer.
+
+    v4.15.3 (Tier-1): adds 4-fold-mirror coverage (periscope and
+    cassegrain-style) per the v4.15.2 audit P3 recommendation.
 
     Acceptance criterion: composite ABCD must match
     ``system_abcd(surfaces_from_prescription(p), lam)[0]`` to within

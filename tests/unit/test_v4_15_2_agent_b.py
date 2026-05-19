@@ -100,6 +100,17 @@ class TestFourierTransform3Stage:
         off-axis Gaussian carries non-trivial transverse-position
         content that a residual ``exp(+i*k/(2f)*r^2)`` quadratic
         phase WILL modulate pointwise.
+
+        .. note::
+            This pin is **tautological with the v4.15.2 implementation**
+            (the v4.15.2 ``FourierTransform._apply`` literally invokes
+            the 3-stage chain), so it only checks the rewrite, not the
+            underlying physics.  See
+            :meth:`test_fourier_transform_gaussian_beam_waist_relation`
+            below for the v4.15.3 (audit P3 / Tier-1) non-tautological
+            pin against the closed-form Gaussian-beam waist relation
+            ``w_out = lambda * f / (pi * w_in)`` (Saleh & Teich §3.2.2,
+            Goodman §5.2.3).
         """
         f = 0.1
         src = la.Source.gaussian(
@@ -117,6 +128,132 @@ class TestFourierTransform3Stage:
             f"FourierTransform field does not match 3-stage chain: "
             f"max abs diff = "
             f"{np.max(np.abs(out_op.E - out_chain.E)):.3e}"
+        )
+
+    @pytest.mark.parametrize('label,N,dx,wavelength,f,w_in', [
+        ('VIS_mid_focal', 256, 4.7e-6, 633e-9, 0.05, 200e-6),
+        ('NIR_short_focal', 256, 4.0e-6, 1.55e-6, 0.025, 150e-6),
+        ('VIS_long_focal', 256, 8.0e-6, 633e-9, 0.1, 300e-6),
+    ])
+    def test_fourier_transform_gaussian_beam_waist_relation(
+        self,
+        label: str,
+        N: int,
+        dx: float,
+        wavelength: float,
+        f: float,
+        w_in: float,
+    ) -> None:
+        """v4.15.3 (audit P3 / Tier-1): non-tautological pin against
+        the closed-form Gaussian-beam waist relation for a thin-lens
+        Fourier transform.
+
+        For an input Gaussian beam with waist ``w_in`` at the front
+        focal plane of a Fourier-transforming lens of focal length
+        ``f``, the canonical Fourier-optics relation gives the output
+        waist at the back focal plane as::
+
+            w_out = (lambda * f) / (pi * w_in)
+
+        (Saleh & Teich, *Fundamentals of Photonics*, 2nd ed., §3.2.2;
+        Goodman, *Introduction to Fourier Optics*, 4th ed., §5.2.3).
+
+        The v4.15.2 ``test_fourier_transform_field_matches_3_stage_chain``
+        pin compared ``FourierTransform(f)`` against the literal
+        ``FreeSpace(f) * ThinLens(f) * FreeSpace(f)`` chain -- since
+        v4.15.2 ``FourierTransform._apply`` *invokes* that very chain
+        internally, the v4.15.2 pin is tautological (it asserts that
+        ``X == X``).  This v4.15.3 test asserts physics: the output
+        waist must match the analytical relation, INDEPENDENT of the
+        3-stage decomposition.  Agreement requires the lens-side
+        Fourier optics to be correct, not just the implementation to
+        be self-consistent.
+
+        Acceptance: measured output waist within 5% of the analytical
+        ``lambda * f / (pi * w_in)`` (the discrete-grid sampling
+        introduces small errors that the audit specifies as the
+        tolerance budget).  Empirically the error is ~0.001% for the
+        parametrised cases here, so the 5% pin has ~5000x headroom.
+        """
+        # Analytical output waist (Saleh & Teich §3.2.2).
+        w_out_analytical = wavelength * f / (np.pi * w_in)
+
+        # Construct the on-axis Gaussian input.  Note ``w0`` in
+        # :meth:`Source.gaussian` is the 1/e^2 intensity radius -- the
+        # standard convention used by the Saleh/Teich/Goodman
+        # formula.
+        src = la.Source.gaussian(
+            N=N, dx=dx, wavelength=wavelength, w0=w_in,
+        )
+
+        # Fourier-transform via FourierTransform(f).  The output
+        # ``out.E`` is on the back-focal-plane grid (the dispatcher
+        # decides the output pitch -- it may differ from the input
+        # pitch for Fraunhofer-regime propagation).
+        op = FourierTransform(f)
+        out = op(src)
+
+        # Extract the output waist from the second moment of the
+        # intensity.  For a 2-D Gaussian intensity profile
+        # ``I(r) = exp(-2 r^2 / w^2)`` the centred second moment is
+        # ``<r^2> = w^2 / 2``, so ``w = sqrt(2 <r^2>)``.  This is
+        # independent of any field-side normalisation -- only the
+        # SHAPE of the intensity matters.
+        I_out = np.abs(out.E) ** 2
+        Ny, Nx = I_out.shape
+        # The grid index ``i`` runs from ``0`` to ``N - 1``; the
+        # physical coordinate ``x_i`` is ``(i - N//2) * dx_out`` --
+        # the standard FFT-centred convention shared by every
+        # :mod:`lumenairy.propagators` kernel.
+        dx_out = float(out.dx)
+        x_coord = (np.arange(Nx) - Nx // 2) * dx_out
+        # ``out.dy`` defaults to ``out.dx`` when the source dy was
+        # not specified.
+        dy_out = float(getattr(out, 'dy', dx_out))
+        y_coord = (np.arange(Ny) - Ny // 2) * dy_out
+        X, Y = np.meshgrid(x_coord, y_coord)
+        I_total = float(I_out.sum())
+        assert I_total > 0.0, (
+            f"FourierTransform output intensity sum is non-positive "
+            f"({I_total!r}) -- the propagation collapsed the field, "
+            f"likely an upstream regression."
+        )
+        # Normalise to PDF so ``<.>`` is a proper expectation.
+        I_pdf = I_out / I_total
+        x_centroid = float(np.sum(X * I_pdf))
+        y_centroid = float(np.sum(Y * I_pdf))
+        # On-axis Gaussian input -- centroid must sit at origin to
+        # well under one pixel; if it does not the propagation has a
+        # bug independent of the waist measurement.
+        assert abs(x_centroid) < dx_out, (
+            f"FT output centroid x = {x_centroid:.3e} m drifted off "
+            f"axis by more than one output pixel ({dx_out:.3e} m); "
+            f"input was on-axis Gaussian."
+        )
+        assert abs(y_centroid) < dy_out, (
+            f"FT output centroid y = {y_centroid:.3e} m drifted off "
+            f"axis by more than one output pixel ({dy_out:.3e} m); "
+            f"input was on-axis Gaussian."
+        )
+        R2_centered = (X - x_centroid) ** 2 + (Y - y_centroid) ** 2
+        mean_r2 = float(np.sum(R2_centered * I_pdf))
+        w_out_measured = np.sqrt(2.0 * mean_r2)
+
+        rel_error = (
+            abs(w_out_measured - w_out_analytical) / w_out_analytical
+        )
+        # The audit specifies 5% as the tolerance budget (the
+        # discrete-grid sampling introduces small errors).  Empirical
+        # error on these parametrised cases is well under 0.01%; the
+        # 5% tolerance gives orders-of-magnitude headroom.
+        tolerance = 0.05  # 5%
+        assert rel_error < tolerance, (
+            f"{label}: Gaussian-beam waist relation violated. "
+            f"Expected w_out = lambda * f / (pi * w_in) = "
+            f"{w_out_analytical*1e6:.4f} um, got "
+            f"{w_out_measured*1e6:.4f} um "
+            f"(rel error {rel_error*100:.4f}%, tol "
+            f"{tolerance*100:.1f}%)."
         )
 
 

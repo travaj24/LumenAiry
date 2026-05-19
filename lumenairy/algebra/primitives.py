@@ -125,14 +125,35 @@ class FreeSpace(Operator):
         # forward the kwarg when needed so the common ``dy == dx``
         # case continues to work with any auto-selected method.
         kw = {}
-        if dy is not None and float(dy) != float(dx):
+        anamorphic = (dy is not None and float(dy) != float(dx))
+        if anamorphic:
             kw['dy'] = float(dy)
+        # v4.15.3 (audit P1-NEW-F1-1): when ``dy != dx`` (anamorphic
+        # input), the SAS kernel does NOT accept the ``dy`` kwarg --
+        # it is a square-grid-only kernel.  With ``self.method ==
+        # 'auto'`` (the default), the dispatcher routes to SAS in the
+        # far-field regime (``Q = N*dx**2/(lambda*z) > 1``), and the
+        # forwarded ``dy`` kwarg raises
+        # ``TypeError: sas_propagate() got an unexpected keyword
+        # argument 'dy'``.  Force ``method='asm'`` whenever ``dy !=
+        # dx``: ASM is anamorphic-aware and round-trips correctly on
+        # non-square grids.  The user implicitly opted into
+        # anamorphic support by passing ``dy``; making ``auto`` a
+        # hint (not a contract) is the cleanest fix.  If the user
+        # explicitly chose ``method='sas'`` on an anamorphic grid,
+        # we still forward ``dy`` so the underlying kernel's own
+        # error is what surfaces -- the explicit ``method=`` choice
+        # is the user's responsibility to keep in sync with the
+        # input geometry.
+        method = self.method
+        if anamorphic and method == 'auto':
+            method = 'asm'
         out = propagate(
             E,
             z=self.distance,
             wavelength=wavelength,
             dx=dx,
-            method=self.method,
+            method=method,
             **kw,
         )
         return _coerce_propagation_output(
@@ -566,6 +587,16 @@ class FourierTransform(Operator):
         # the output, so users composing ``FourierTransform(f)`` with
         # phase-sensitive downstream operators got different fields
         # than the equivalent 3-stage chain.
+        #
+        # v4.15.3 (audit P1-NEW-F1-1): the two FreeSpace legs below
+        # carry ``self.method == 'auto'`` -- the dispatcher's regime-
+        # dependent kernel pick.  ``FreeSpace._apply`` itself now
+        # forces ``method='asm'`` whenever the input grid is
+        # anamorphic (``dy != dx``), so this 3-stage chain is
+        # anamorphic-safe by composition: passing a non-square input
+        # grid no longer triggers the SAS-anamorphic
+        # ``TypeError: sas_propagate() got an unexpected keyword
+        # argument 'dy'`` crash that the v4.15.2 closure exposed.
         fs = FreeSpace(self.f, method=self.method)
         tl = ThinLens(self.f)
         E1, dx1, dy1 = fs._apply(

@@ -114,6 +114,12 @@ def apply_real_lens_maslov(
     product fit assumes square pixels and will raise if
     ``dy != dx``.
     """
+    # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
+    # ``_check_2d_scalar_field`` helper -- siblings missed by the
+    # v4.15.2 closure now share the same first-line guard.
+    from .._validation import _check_2d_scalar_field
+    _check_2d_scalar_field(E_in, 'apply_real_lens_maslov')
+
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
     # with ``surfaces[i]['is_mirror']=True`` (or ``glass_after='MIRROR'``)
