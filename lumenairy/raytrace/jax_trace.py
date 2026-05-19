@@ -903,6 +903,22 @@ def clear_trace_jax_cache() -> None:
         _TRACE_JAX_CACHE.clear()
 
 
+# v4.16.0 (ROADMAP #15): register the raytrace-JAX clearer with the
+# central registry at module-import time.  ``clear_asm_caches`` now
+# walks the registry rather than enumerating clear calls by hand.
+# Late-binding closure preserves ``mock.patch.object`` test semantic.
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'trace_jax',
+        lambda: getattr(_this_mod, 'clear_trace_jax_cache')(),
+    )
+except ImportError:
+    pass
+
+
 def _make_jit_kernel(jp_aux, wavelength_float, surface_diffraction):
     """Build a jit-compiled kernel keyed on ``jp_aux`` (static aux).
 

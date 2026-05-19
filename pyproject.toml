@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "4.15.5"
+version = "4.16.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -55,8 +55,13 @@ dependencies = [
 fft = ["pyfftw>=0.13"]
 gpu = ["cupy>=11.0"]
 fits = ["astropy>=5.0"]
-hdf5 = ["h5py>=3.0"]
-zarr = ["zarr>=2.14"]
+# v4.16.0: filelock is required for cross-process atomic append in
+# lumenairy/io/storage.py (Agent B scope).  Filelock is a tiny pure-
+# Python package (~10 KB) and is NOT a transitive dep of h5py or zarr
+# (verified against h5py 3.16.0 / zarr 3.1.6), so we add it
+# explicitly here.
+hdf5 = ["h5py>=3.0", "filelock>=3.0"]
+zarr = ["zarr>=2.14", "filelock>=3.0"]
 # JAX (CPU): enables automatic differentiation of any function written
 # against the array-namespace dispatch (lumenairy.backend), JIT
 # compilation via XLA, and free GPU/TPU acceleration if the user
@@ -73,6 +78,15 @@ perf = ["numexpr>=2.8"]
 # Numba JIT for the aspheric-coefficient sum and the Maslov Chebyshev
 # evaluator.  Library falls back to NumPy paths when missing.
 numba = ["numba>=0.58"]
+# v4.16 (ROADMAP #11): pymoo wraps NSGA-II for multi-objective Pareto
+# optimisation in ``lumenairy.optimize.multi_objective``.  Strictly
+# opt-in: the wrapper module imports without pymoo (so users can
+# discover the function via tab-complete / docs), and only the actual
+# ``design_optimize_multi_objective(...)`` call raises ImportError if
+# pymoo is missing.  pymoo's transitive deps (autograd, deap, cma)
+# are heavier than the existing optional groups, so it is NOT bundled
+# into the ``all`` group below.
+multi_objective = ["pymoo>=0.6"]
 # LumenAiry Designer GUI: PySide6 + 3D viewer + storage backend.
 gui = [
     "PySide6>=6.5",
@@ -88,6 +102,7 @@ all = [
     "h5py>=3.0",
     "zarr>=2.14",
     "jax>=0.4.20",
+    "filelock>=3.0",
 ]
 dev = [
     "pytest>=7.0",

@@ -98,6 +98,8 @@ from .glass import (
     get_glass_index_complex,
     GLASS_REGISTRY,
     SELLMEIER_COEFFICIENTS,
+    # v4.16.0 (ROADMAP #14): per-glass Sellmeier validity ranges.
+    GLASS_VALIDITY,
     list_glasses,
     search_glasses,
 )
@@ -383,10 +385,21 @@ from .optimize import (
     ToleranceAwareMerit,
     EvaluationContext,
     DesignResult,
+    Constraint,
     design_optimize,
     WAVE_PROPAGATOR_REGISTRY,
     register_wave_propagator,
     unregister_wave_propagator,
+    # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
+    ParetoResult,
+    design_optimize_multi_objective,
+    # v4.16.0 (Agent A __all__-symmetry walker): the pymoo
+    # availability flag is the canonical "is the optional Pareto
+    # backend installed?" probe.  Sibling to JAX_AVAILABLE /
+    # CUPY_AVAILABLE / NUMEXPR_AVAILABLE / PYFFTW_AVAILABLE.  Was
+    # in the multi_objective submodule __all__ but never re-
+    # exported at top level.
+    PYMOO_AVAILABLE,
 )
 
 # ── Phase-space asymptotic propagator + LG aberration tensor ────────────
@@ -622,6 +635,19 @@ from ._context import (
     apply_globals,
     install_atexit_restore,
 )
+
+# ── Central cache-clearer registry (4.16.0) ─────────────────────────────
+# v4.16.0 (ROADMAP #15): retires the lazy-import fan-out in
+# ``clear_asm_caches`` in favour of a central registry.  Each cache-
+# owning module registers its clear function at import time;
+# ``clear_asm_caches`` walks the registry rather than enumerating
+# calls by hand.  Counter-measure to the "fix N, miss N+1" sibling-
+# gap meta-pattern that recurred 5 ways inside v4.14.2 and again at
+# v4.14.3.
+from ._cache_registry import (
+    register_cache_clearer,
+    list_registered_cache_clearers,
+)
 # Snapshot the import-time defaults and register an atexit handler that
 # restores them on process shutdown.  Catches the foot-gun where users
 # call set_default_complex_dtype / set_pyfftw_planner / etc. at module
@@ -781,7 +807,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.15.5"
+__version__ = "4.16.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -901,6 +927,8 @@ __all__ = [
     'get_glass_index_complex',
     'GLASS_REGISTRY',
     'SELLMEIER_COEFFICIENTS',
+    # v4.16.0 (ROADMAP #14): per-glass Sellmeier validity ranges.
+    'GLASS_VALIDITY',
     'list_glasses',
     'search_glasses',
 
@@ -1234,7 +1262,12 @@ __all__ = [
     'MultiPrescriptionParameterization',
     'EvaluationContext',
     'DesignResult',
+    'Constraint',
     'design_optimize',
+    # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
+    'ParetoResult',
+    'design_optimize_multi_objective',
+    'PYMOO_AVAILABLE',
     'WAVE_PROPAGATOR_REGISTRY',
     'register_wave_propagator',
     'unregister_wave_propagator',
@@ -1418,6 +1451,23 @@ __all__ = [
     'set_fft_fallback',
     'reset_fft_backend',
 
+    # v4.16.0 (Agent A __all__-symmetry walker): the backend
+    # dispatch helpers below were imported at top level since
+    # v3.4.0 but never listed in __all__.  Each is the canonical
+    # high-traffic entry point for user code that wants to inspect
+    # / dispatch on the array backend explicitly (e.g.
+    # ``xp = la.array_namespace(E)``).  Promoted into __all__ so
+    # ``from lumenairy import *`` includes them and the v4.14.0
+    # P1-NEW-4 sibling-gap meta-pin doesn't re-flag them.
+    'array_namespace',
+    'is_numpy_array',
+    'is_cupy_array',
+    'is_jax_array',
+    'backend_name',
+    'to_numpy',
+    'to_backend',
+    'RandomState',
+
     # Precision configuration
     'set_default_complex_dtype',
     'get_default_complex_dtype',
@@ -1438,6 +1488,9 @@ __all__ = [
     'clear_trace_jax_cache',
     'clear_propagate_system_jax_cache',
     'clear_phase_retrieval_caches',
+    # v4.16.0 (ROADMAP #15): central cache-clearer registry.
+    'register_cache_clearer',
+    'list_registered_cache_clearers',
 
     # Memory-aware batching
     'available_memory_bytes',

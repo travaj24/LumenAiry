@@ -341,6 +341,37 @@ def clear_lg_mode_stack_cache() -> None:
         _HG_MODE_STACK_CACHE.clear()
 
 
+# v4.16.0 (ROADMAP #15): register the LG/HG mode-stack and LG
+# polynomial clearers with the central registry at module-import
+# time.  ``clear_asm_caches`` now walks the registry rather than
+# enumerating clear calls by hand.
+#
+# Each registered entry is a *late-binding* lambda that re-resolves
+# the clear-function from the module's current namespace at call
+# time.  This preserves the pre-v4.16 ``mock.patch.object`` semantic:
+# tests that monkey-patch ``analysis.core.clear_zernike_basis_cache``
+# still observe their counter increment when ``clear_asm_caches``
+# walks the registry.  The cost is one attribute lookup per cache
+# per drain -- negligible vs. the actual cache-clear work.
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'lg_mode_stack',
+        lambda: getattr(_this_mod, 'clear_lg_mode_stack_cache')(),
+    )
+    _register_cache_clearer(
+        'lg_polynomial_items',
+        lambda: getattr(_this_mod, 'clear_lg_polynomial_cache')(),
+    )
+except ImportError:
+    # Defensive: if the registry module is unavailable (shouldn't be,
+    # but a partial install or a reload sequence could expose it),
+    # fall back to the v4.15 lazy-import fan-out in clear_asm_caches.
+    pass
+
+
 def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
                          p_max: int, ell_max: int,
                          cx: float, cy: float,

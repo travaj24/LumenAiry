@@ -649,6 +649,23 @@ def clear_phase_retrieval_caches() -> None:
         _HIO_KERNEL_CACHE.clear()
 
 
+# v4.16.0 (ROADMAP #15): register the phase-retrieval kernel clearer
+# with the central registry at module-import time.
+# ``clear_asm_caches`` now walks the registry rather than enumerating
+# clear calls by hand.  Late-binding closure preserves
+# ``mock.patch.object`` test semantic.
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'phase_retrieval_kernels',
+        lambda: getattr(_this_mod, 'clear_phase_retrieval_caches')(),
+    )
+except ImportError:
+    pass
+
+
 def _make_gs_kernel(n_iter_int: int):
     """Build (and cache) the jit'd GS iteration kernel for one n_iter."""
     import jax

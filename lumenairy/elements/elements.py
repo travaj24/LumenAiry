@@ -428,9 +428,19 @@ def zernike(n, m, rho, theta):
     if abs(m) > n:
         raise ValueError(f"|m| must be <= n: n={n}, m={m}")
 
+    # v4.16.0 (Agent A xp-dispatch walker): dispatch on rho's backend
+    # so a CuPy / JAX rho input stays on its backend.  Pre-v4.16.0
+    # the radial polynomial and azimuthal builders hardcoded
+    # ``np.zeros_like`` / ``np.cos`` / ``np.where`` which (for the
+    # constructor) silently produced a host NumPy array when the
+    # caller passed a CuPy / JAX rho via apply_zernike_aberration.
+    # ``np.sqrt`` on a scalar ``(n+1)`` remains a host scalar -- not
+    # an array-construction call, so left as ``np.sqrt`` for the
+    # normalisation factor.
+    xp = _xp_of(rho)
     # Radial polynomial R_n^|m|
     m_abs = abs(m)
-    R = np.zeros_like(rho)
+    R = xp.zeros_like(rho)
     for s in range((n - m_abs) // 2 + 1):
         coeff = ((-1)**s * factorial(n - s)
                  / (factorial(s) * factorial((n + m_abs) // 2 - s)
@@ -439,13 +449,14 @@ def zernike(n, m, rho, theta):
 
     # Azimuthal part
     if m > 0:
-        Z = R * np.cos(m * theta)
+        Z = R * xp.cos(m * theta)
     elif m < 0:
-        Z = R * np.sin(-m * theta)
+        Z = R * xp.sin(-m * theta)
     else:
         Z = R
 
-    # Normalization (Born & Wolf convention)
+    # Normalization (Born & Wolf convention); scalar np.sqrt on a
+    # Python int is a host scalar -- safe.
     if m == 0:
         norm = np.sqrt(n + 1)
     else:
@@ -454,7 +465,7 @@ def zernike(n, m, rho, theta):
     Z = norm * Z
 
     # Zero outside unit circle
-    Z = np.where(rho <= 1.0, Z, 0.0)
+    Z = xp.where(rho <= 1.0, Z, 0.0)
 
     return Z
 
@@ -510,20 +521,31 @@ def apply_zernike_aberration(E_in, dx, coefficients, aperture_radius,
     """
     if dy is None:
         dy = dx
+    # v4.16.0 (Agent A xp-dispatch walker): route through ``_xp_of``
+    # so CuPy / JAX field inputs stay on the dispatched backend.
+    # Pre-v4.16.0 the coordinate grid + phase accumulator were
+    # ``np.arange`` / ``np.meshgrid`` / ``np.zeros``, which silently
+    # demoted any non-NumPy input to host NumPy and back.  The
+    # ``zernike`` helper itself remains NumPy-only (it indexes into
+    # polynomial coefficient tables that are NumPy-backed); the
+    # phase tensor is built on ``xp`` and then the final
+    # ``xp.exp(1j * 2 * pi * phase)`` and ``E_in * ...`` keep the
+    # output on the dispatched backend.
+    xp = _xp_of(E_in)
     Ny, Nx = E_in.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
 
-    rho = np.sqrt(X**2 + Y**2) / aperture_radius
-    theta = np.arctan2(Y, X)
+    rho = xp.sqrt(X**2 + Y**2) / aperture_radius
+    theta = xp.arctan2(Y, X)
 
-    phase = np.zeros((Ny, Nx))
+    phase = xp.zeros((Ny, Nx))
     for (n, m), amplitude in coefficients.items():
-        phase += amplitude * zernike(n, m, rho, theta)
+        phase = phase + amplitude * zernike(n, m, rho, theta)
 
     # Convert from waves to radians
-    return E_in * np.exp(1j * 2 * np.pi * phase)
+    return E_in * xp.exp(1j * 2 * np.pi * phase)
 
 
 # =============================================================================
@@ -627,22 +649,29 @@ def apply_lyot_focal_plane_mask(E_in, dx, mask_diameter, *,
     """
     if dy is None:
         dy = dx
+    # v4.16.0 (Agent A xp-dispatch walker): route through ``_xp_of``
+    # so CuPy / JAX focal-plane inputs stay on the dispatched
+    # backend.  Pre-v4.16.0 the coordinate grid + transmission
+    # tensor were ``np.arange`` / ``np.meshgrid`` / ``np.where``,
+    # silently demoting any non-NumPy E_in to host NumPy and back.
+    # ``np.pi`` remains as a host scalar.
+    xp = _xp_of(E_in)
     Ny, Nx = E_in.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
-    R = np.sqrt((X - xc) ** 2 + (Y - yc) ** 2)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
+    R = xp.sqrt((X - xc) ** 2 + (Y - yc) ** 2)
     R_mask = mask_diameter / 2.0
 
     if profile == 'hard':
-        T = np.where(R <= R_mask, 0.0, 1.0)
+        T = xp.where(R <= R_mask, 0.0, 1.0)
     elif profile == 'gaussian':
         sig = sigma if sigma is not None else mask_diameter / 6.0
-        T = 1.0 - np.exp(-R ** 2 / (2.0 * sig ** 2))
+        T = 1.0 - xp.exp(-R ** 2 / (2.0 * sig ** 2))
     elif profile == 'sin2':
         inside = R <= R_mask
-        T = np.where(inside,
-                     np.sin(np.pi * R / mask_diameter) ** 2,
+        T = xp.where(inside,
+                     xp.sin(np.pi * R / mask_diameter) ** 2,
                      1.0)
     else:
         raise ValueError(
@@ -702,19 +731,25 @@ def apply_vortex_phase_mask(E_in, dx, *, charge=2, xc=0.0, yc=0.0,
     """
     if dy is None:
         dy = dx
+    # v4.16.0 (Agent A xp-dispatch walker): route through ``_xp_of``
+    # so CuPy / JAX inputs stay on the dispatched backend.
+    # Pre-v4.16.0 the coordinate grid + transmission tensor were
+    # ``np.arange`` / ``np.meshgrid`` / ``np.where``, silently
+    # demoting non-NumPy E_in to host NumPy and back.
+    xp = _xp_of(E_in)
     Ny, Nx = E_in.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
     Xc = X - xc
     Yc = Y - yc
 
-    theta = np.arctan2(Yc, Xc)
+    theta = xp.arctan2(Yc, Xc)
     # Zero out the centre pixel to avoid the arctan2 discontinuity.
-    centre = (np.abs(Xc) < 0.5 * dx) & (np.abs(Yc) < 0.5 * dy)
-    phase = np.where(centre, 0.0, int(charge) * theta)
+    centre = (xp.abs(Xc) < 0.5 * dx) & (xp.abs(Yc) < 0.5 * dy)
+    phase = xp.where(centre, 0.0, int(charge) * theta)
 
-    return E_in * np.exp(1j * phase)
+    return E_in * xp.exp(1j * phase)
 
 
 def apply_lyot_stop(E_in, dx, *, outer_diameter, inner_diameter=0.0,
@@ -840,29 +875,35 @@ def apply_apodized_pupil(E_in, dx, diameter, *,
     """
     if dy is None:
         dy = dx
+    # v4.16.0 (Agent A xp-dispatch walker): route through ``_xp_of``
+    # so CuPy / JAX pupil inputs stay on the dispatched backend.
+    # Pre-v4.16.0 the coordinate grid + transmission tensor were
+    # ``np.arange`` / ``np.meshgrid`` / ``np.where``, silently
+    # demoting non-NumPy E_in to host NumPy and back.
+    xp = _xp_of(E_in)
     Ny, Nx = E_in.shape
-    x = (np.arange(Nx) - Nx / 2) * dx
-    y = (np.arange(Ny) - Ny / 2) * dy
-    X, Y = np.meshgrid(x, y)
-    R = np.sqrt((X - xc) ** 2 + (Y - yc) ** 2)
+    x = (xp.arange(Nx) - Nx / 2) * dx
+    y = (xp.arange(Ny) - Ny / 2) * dy
+    X, Y = xp.meshgrid(x, y)
+    R = xp.sqrt((X - xc) ** 2 + (Y - yc) ** 2)
     R_max = diameter / 2.0
     rho = R / R_max
     inside = rho <= 1.0
 
     if apodization == 'cos2':
-        T = np.where(inside, np.cos(0.5 * np.pi * rho) ** 2, 0.0)
+        T = xp.where(inside, xp.cos(0.5 * np.pi * rho) ** 2, 0.0)
     elif apodization == 'cos_power':
-        T = np.where(inside,
-                     np.cos(0.5 * np.pi * rho) ** float(exponent),
+        T = xp.where(inside,
+                     xp.cos(0.5 * np.pi * rho) ** float(exponent),
                      0.0)
     elif apodization == 'gaussian':
         sig = sigma if sigma is not None else diameter / 6.0
-        T = np.where(inside,
-                     np.exp(-R ** 2 / (2.0 * sig ** 2)),
+        T = xp.where(inside,
+                     xp.exp(-R ** 2 / (2.0 * sig ** 2)),
                      0.0)
     elif apodization == 'sonine':
-        T = np.where(inside,
-                     np.clip(1.0 - rho ** 2, 0.0, 1.0) ** float(exponent),
+        T = xp.where(inside,
+                     xp.clip(1.0 - rho ** 2, 0.0, 1.0) ** float(exponent),
                      0.0)
     else:
         raise ValueError(

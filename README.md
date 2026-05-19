@@ -10,6 +10,119 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.16.0
+
+**Major minor release** rolling up the entire v4.16 + v4.17 + v4.18
+ROADMAP into one ship.  Four large feature buckets: the remaining 4
+V4 meta-pin candidates; multi-process atomic-append for `storage.py`;
+the full optimisation framework expansion (constrained opt,
+checkpoint/resume, Newton-step, multi-objective pymoo); glass +
+materials + central cache registry.  2106 unit tests pass (up from
+1922; +184 net); 34/34 validation pass.
+
+### Bucket 1 — Structural counter-measures complete (4 V4 meta-pin walkers)
+
+The audit's standing V4 recommendation lands in full.  The library
+now ships **9 active dispatcher meta-pins** (cache-clears, cache↔lock,
+0+0j, validate_grid_params, check_2d_scalar_field, sentinel-propagation,
+xp-dispatch, dy-threading, __all__-symmetry).  The "fix N, miss N+1"
+sibling-gap meta-pattern at the public-API surface is now
+structurally retired across all known classes.
+
+* **Sentinel-aware branch propagation** — 3 sites discovered, all
+  clean.
+* **`_xp_of` cross-backend dispatch** — 94 candidates; 5 inline
+  fixes in `elements/elements.py`; 56 documented exemptions.
+* **`dy` parameter threading** — 36 `apply_*` candidates; 26
+  already threading, 10 documented exemptions.
+* **`__all__` symmetry** — 752 submodule entries; 717 re-exported;
+  35 documented exemptions; 9 inline fixes (8 backend helpers +
+  `PYMOO_AVAILABLE` lifted to top-level).
+
+### Bucket 2 — Multi-process atomic-append for `storage.py`
+
+HDF5 SWMR + filelock-based distributed Zarr lock close the
+multi-writer story v4.14.3 documented as a single-process
+restriction.  `append_plane_h5(..., swmr=True, lock_timeout=30.0)`
++ `_zarr_append_plane(..., lock_timeout=30.0)`.  Subprocess
+multi-writer tests via `multiprocessing.get_context('spawn')`
+(Linux + Windows portable).  Single-process v4.14.3 atomicity
+guarantees preserved bit-for-bit.  Measured overhead: ~5×
+slowdown 4-writer contended; <5% lock overhead on large planes
+where I/O dominates.  `filelock>=3.0` added to `hdf5` and `zarr`
+optional-dependency groups.
+
+### Bucket 3 — Optimisation framework expansion
+
+Four additions to `lumenairy.optimize`:
+
+* **Constrained optimisation** — `Constraint` dataclass +
+  `design_optimize(..., constraints=[...])`.  Method-compat
+  validator rejects L-BFGS-B / `lm` / `differential_evolution` /
+  `basin_hopping` / `dual_annealing` (which silently ignore
+  constraints in scipy's core API) and points users at SLSQP /
+  trust-constr.
+* **Checkpoint / resume** — `design_optimize(..., state_file=...,
+  state_save_every=1)`.  JSON state with atomic-replace write;
+  resume from persisted `x_best` on restart.  Gated on
+  `state_file` non-None for backward compatibility.
+* **Multi-objective Pareto via pymoo NSGA-II** —
+  `lumenairy.optimize.multi_objective.design_optimize_multi_objective(...)`
+  with `ParetoResult` dataclass.  Optional `multi_objective`
+  extras group: `pip install lumenairy[multi_objective]`.  Module
+  imports unconditionally; only the function call raises
+  ImportError if pymoo is missing.
+* **Hessian / Newton-step** — `design_optimize(..., method='newton')`
+  dispatches to scipy `trust-ncg` with FD-Jacobian-of-FD-gradient
+  Hessian.  `UserWarning` recommends L-BFGS-B for `n_params > 30`.
+
+4 new top-level exports: `Constraint`, `ParetoResult`,
+`design_optimize_multi_objective`, `PYMOO_AVAILABLE`.
+
+### Bucket 4 — Glass + materials + central cache registry
+
+* **CDGM + Hikari + Sumita Sellmeier catalogues** — 32 new
+  glasses; `GLASS_REGISTRY` 46 → 78.  Every entry n_d cross-
+  checked against the official datasheet (or refractiveindex.info
+  as proxy) at 5e-5 tolerance (matching v4.14.2 S-LAH64/79
+  precedent).  Zero cross-check failures.
+* **Per-glass Sellmeier validity ranges** — new `GLASS_VALIDITY`
+  table with 77 entries.  Extrapolating outside the range emits
+  `UserWarning` (does not raise — extrapolation is sometimes
+  acceptable for design-space exploration).
+* **Central cache registry** — new `lumenairy/_cache_registry.py`
+  exposes `register_cache_clearer(name, clear_fn)` /
+  `list_registered_cache_clearers()` /
+  `clear_all_registered_caches()`.  Retires the lazy-import
+  fan-out in `clear_asm_caches`.  9 caches migrated to the
+  registry.  `clear_asm_caches` external contract preserved
+  bit-for-bit; internal dispatch is now registry-walking instead
+  of hand-enumerated.  Structural counter-measure to the cache-
+  clear "fix N, miss N+1" pattern.
+
+### Test counts
+
+A=30, B=15, C=13, D=127.  Net +184.  Final: 2106 unit pass + 5
+skip + 1 xfail; 34/34 validation.
+
+### ROADMAP status post-v4.16.0
+
+* **v4.16, v4.17, v4.18 — all items shipped**.
+* **v5.0 — immediate horizon**.  Major structural release:
+  6 file splits, CI gates, remove 8 active back-compat shims,
+  shared Chebyshev helpers extraction, audit-fix test-file
+  consolidation, off-axis conic in surface frame, bump
+  `requires-python` to >=3.10, docs.
+
+### Known issues / flagged for v4.16.1
+
+Bundled Sellmeier formula-3 (polynomial) evaluator — Hikari,
+Sumita, and 4 CDGM glasses use refractiveindex.info formula 3.
+v4.16.0's `_sellmeier_index` only supports formula 2.  Minimal
+installs without `refractiveindex` raise `ImportError` on these
+26 entries with a clear install hint.  v4.16.1 candidate: add
+`_polynomial_index` evaluator.
+
 ## What's new in 4.15.5
 
 **Closes the v4.15.4 audit (`docs/audits/AUDIT_V4_15_4_2026_05_19.md`)

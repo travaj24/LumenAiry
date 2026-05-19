@@ -78,6 +78,17 @@ _LOCK_WITHOUT_CACHE_EXEMPTIONS = frozenset({
     # NOT an exemption -- listed here as documentation of the
     # canonical pair to clarify the walker's intent.  Kept out of
     # the actual frozenset.
+    # v4.16.0 (ROADMAP #15): ``_REGISTRY_LOCK`` in
+    # ``lumenairy._cache_registry`` guards the central cache-clearer
+    # registry (a ``_CACHE_CLEARERS`` dict of name -> callable, NOT
+    # a numerical / array cache).  The dict's name intentionally
+    # doesn't end in ``_CACHE`` because the dispatcher pin in this
+    # test would then treat it as a real numerical cache and demand
+    # an entry-clear discipline that doesn't apply to a registry of
+    # clear-functions.  The lock is real (threading.Lock) and the
+    # state it guards is the registry membership itself; documenting
+    # here that the pair is intentional.
+    '_REGISTRY_LOCK',
 })
 
 # Pattern-based exemption: ``_<X>_PATCH_LOCK`` guards an in-place

@@ -95,6 +95,22 @@ def clear_through_focus_scan_jax_cache() -> None:
         _THROUGH_FOCUS_SCAN_JAX_CACHE.clear()
 
 
+# v4.16.0 (ROADMAP #15): register the through-focus JAX clearer with
+# the central registry at module-import time.  ``clear_asm_caches``
+# now walks the registry rather than enumerating clear calls by hand.
+# Late-binding closure preserves ``mock.patch.object`` test semantic.
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'through_focus_scan_jax',
+        lambda: getattr(_this_mod, 'clear_through_focus_scan_jax_cache')(),
+    )
+except ImportError:
+    pass
+
+
 __all__ = [
     # single-plane / through-focus
     'single_plane_metrics',

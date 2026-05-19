@@ -7,10 +7,15 @@ Submodules:
 * :mod:`lumenairy.optimize.core` -- ``DesignParameterization``,
   the merit-term hierarchy (focal length, BFL, Seidel, Strehl,
   RMS wavefront, spot size, chromatic shift, target-OPD, etc.),
-  and ``design_optimize``.
+  ``design_optimize``, and the v4.16 :class:`Constraint`
+  hard-constraint wrapper.
 * :mod:`lumenairy.optimize.multiconfig` -- multi-configuration
   parameterization, zoom configs, afocal angular magnification,
   beam-expander / Keplerian-telescope helpers.
+* :mod:`lumenairy.optimize.multi_objective` -- v4.16 multi-
+  objective Pareto optimisation via pymoo NSGA-II (optional
+  dependency; install with ``pip install lumenairy[multi_objective]``
+  or ``pip install pymoo>=0.6``).
 """
 
 from .core import (
@@ -42,6 +47,7 @@ from .core import (
     ToleranceAwareMerit,
     EvaluationContext,
     DesignResult,
+    Constraint,
     design_optimize,
     WAVE_PROPAGATOR_REGISTRY,
     register_wave_propagator,
@@ -54,6 +60,20 @@ from .multiconfig import (
     afocal_angular_magnification,
     beam_expander_prescription,
     keplerian_telescope,
+)
+# v4.16 (ROADMAP #11): multi-objective Pareto via pymoo NSGA-II.
+# The module imports unconditionally (so users can ``from
+# lumenairy.optimize.multi_objective import design_optimize_multi_objective``
+# regardless of whether pymoo is installed); ``design_optimize_multi_objective``
+# raises ``ImportError`` only when actually called without pymoo.
+from .multi_objective import (
+    ParetoResult,
+    design_optimize_multi_objective,
+    # v4.16.0 (Agent A __all__-symmetry walker): pymoo availability
+    # flag re-exported so callers can probe via ``la.PYMOO_AVAILABLE``
+    # without an explicit ``lumenairy.optimize.multi_objective`` import.
+    # Sibling to CUPY_AVAILABLE / JAX_AVAILABLE.
+    PYMOO_AVAILABLE,
 )
 
 
@@ -87,6 +107,7 @@ __all__ = [
     'ToleranceAwareMerit',
     'EvaluationContext',
     'DesignResult',
+    'Constraint',
     'design_optimize',
     'WAVE_PROPAGATOR_REGISTRY',
     'register_wave_propagator',
@@ -98,4 +119,8 @@ __all__ = [
     'afocal_angular_magnification',
     'beam_expander_prescription',
     'keplerian_telescope',
+    # multi-objective Pareto (v4.16, pymoo-optional)
+    'ParetoResult',
+    'design_optimize_multi_objective',
+    'PYMOO_AVAILABLE',
 ]

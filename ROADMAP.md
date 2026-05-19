@@ -1,8 +1,8 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-19 (post-v4.15.3).  In-flight v4.15.4 audit
-closure -- test-count claim refined to actual `pytest --collect-only`
-output at v4.15.3 HEAD per AUDIT_V4_15_3 P2-NEW-V3-3 finding.
+**Last updated:** 2026-05-19 (post-v4.16.0).  v4.16 + v4.17 + v4.18
+ROADMAP scope all shipped in v4.16.0 mega-rollup; v5.0 is now the
+immediate horizon.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -17,179 +17,86 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.15.3 baseline (1824 unit tests collected per
-  `pytest --collect-only -q tests/unit` at v4.15.3 release commit
-  `7808107` -- 1822 passing + 1 skip + 1 xfail).  v4.14.3 shipped
-  at 1265, v4.15.0 rolled in the v4.14.2-audit P2/P3 sweep + the
-  v4.15/v4.16 ROADMAP scope, v4.15.1 shipped the CLUSTER_B operator
-  algebra + ``rays_from_field`` ray-bridge + 11 audit P0/P1 closures
-  (1625 tests), v4.15.2 closes the remaining v4.15.1 audit P1/P2/P3
-  (sentinel migration completion + ROADMAP refresh + Hermiticity /
-  Forbes-Q-OPD analytical pins) at 1735 collected, v4.15.3 closes
-  the v4.15.2 audit's 1 P0 + 4 P1 sweep (defensive-guard sibling-gap
-  + SAS-anamorphic dispatcher + Schell classmethod parity +
-  stacklevel correction + sentinel callsite wiring) with a
-  structural counter-measure (shared `_check_2d_scalar_field` helper
-  + AST-walking dispatcher meta-pin) and ships the 5th meta-pin
-  candidate.  v4.15.4 (in-flight at the time of this update) closes
-  the v4.15.3 audit's 1 P1 + 6 P2 (meta-pin walker scope extension
-  to `system.py` + `analysis/`, name-discovery broadening for
-  `richards_wolf_focus` / `debye_wolf_psf`, CHANGELOG corrections
-  for the SAS-anamorphic and stacklevel bullets, ROADMAP refresh,
-  `_validation.py` lazy-import hoist, `_PerturbedABCDFallback`
-  dead-class deletion, OPD-fan plotting helper).  34/34 validation
-  files passing.  Public API at ~380+ symbols in `lumenairy.__all__`.
-- **Designer GUI:** v3.7.10 (per in-code comments at `ui/main_window
-  .py:2196` etc.).  No standalone release stream; the Designer
-  ships co-versioned inside the library wheel.
-- **Audit closure status:** AUDIT_V4_12_1, AUDIT_V4_13_0,
-  AUDIT_V4_13_1, AUDIT_V4_14_0, AUDIT_V4_14_1, AUDIT_V4_14_2,
-  AUDIT_V4_15_0, AUDIT_V4_15_1, AUDIT_V4_15_2, AUDIT_V4_15_3 all
-  closed (P0 + P1 + the P2/P3 carryover sweep landed in v4.15.x).
-  AUDIT_V4_13_1 Tier-2/3/4 architectural items scoped to v5.0 as
-  noted below.
+- **Library:** v4.16.0 baseline (2106 unit tests passing + 5
+  documented skips + 1 documented xfail).  v4.16.0 mega-rollup
+  shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release:
+  4 V4 meta-pin walkers (sentinel propagation, `_xp_of` dispatch,
+  `dy` threading, `__all__` symmetry); multi-process atomic-append
+  for `storage.py` (HDF5 SWMR + filelock Zarr lock); full
+  optimisation framework expansion (constrained opt + checkpoint/
+  resume + Newton-step + pymoo NSGA-II); glass + materials
+  expansion (CDGM + Hikari + Sumita catalogues + per-glass Sellmeier
+  validity ranges + central cache registry).  34/34 validation files
+  passing.  Public API at ~400+ symbols in `lumenairy.__all__`.
+- **Designer GUI:** v3.7.10 (per in-code comments at
+  `ui/main_window.py:2196` etc.).  No standalone release stream; the
+  Designer ships co-versioned inside the library wheel.
+- **Audit closure status:** AUDIT_V4_12_1 through AUDIT_V4_15_4
+  all closed.  AUDIT_V4_13_1 Tier-2/3/4 architectural items
+  scoped to v5.0 as noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
-  5).  v4.14.2 migrated 2 shims (`makedammann2d` SI heuristic and
-  `create_led_source` legacy positional) onto the canonical
+  5).  v4.14.2 migrated 2 shims onto the canonical
   `_deprecation.warn_deprecated_signature` helper with explicit
   `version_removed=5.0`; the remaining 6 still use inline raw
   `warnings.warn` and are scheduled for migration as a v5.0
   housekeeping item.
-- **Meta-pin coverage:** 4 of the 5 v4.14.2-recommended meta-pin
-  candidates landed.  V1: cache-clear chain re-export (v4.14.1).
-  V2: cache <-> lock pairing + ``0+0j`` literal sweep (v4.14.2).
-  V3: input-validation entry-point (`_validate_grid_params`
-  required call in first 15 body lines of every `create_*` factory)
-  -- new in v4.15.0 (Agent F).  V4 (sentinel propagation,
-  `_xp_of` dispatch, `dy` parameter threading, `__all__` symmetry)
-  remain candidates for v4.16+ extension.  V5 (the 5th meta-pin
-  candidate, recommended by AUDIT_V4_15_2): `_check_2d_scalar_field`
-  AST-walker pinning the `PartialCoherenceMCF` + 3-D-ensemble
-  defensive-guard call as the first executable statement in every
-  public 2-D-scalar-field entry point under `lumenairy/propagators/`,
-  `lumenairy/elements/`, `lumenairy/analysis/`, and the package-root
-  `lumenairy/system.py` -- new in v4.15.3 (Agent A), walker scope
-  extended in v4.15.4 (P1-NEW-3WAY-1 + P2-NEW-3WAY-2 closure).
+- **Meta-pin coverage:** ALL 9 dispatcher meta-pins active and
+  clean:
+  - V1: cache-clear chain re-export (v4.14.1).
+  - V2: cache <-> lock pairing (v4.14.2).
+  - V3: 0+0j literal sweep (v4.14.2).
+  - V4: input-validation entry-point (`_validate_grid_params`,
+    v4.15.0).
+  - V5: `_check_2d_scalar_field` 2-D-scalar-field guard (v4.15.3
+    + scope extension in v4.15.4 + V6 first-positional-param
+    discovery in v4.15.5).
+  - **V6 (NEW v4.16.0)**: sentinel-aware branch propagation
+    walker.
+  - **V7 (NEW v4.16.0)**: `_xp_of` cross-backend dispatch
+    walker.
+  - **V8 (NEW v4.16.0)**: `dy` parameter threading walker for
+    `apply_*` in `__all__`.
+  - **V9 (NEW v4.16.0)**: `__all__` symmetry walker (submodule
+    `__all__` must be re-exported at top level OR marked
+    `_INTERNAL`).
+  The "fix N, miss N+1" sibling-gap meta-pattern at the public-API
+  surface is now structurally retired across all known classes.
 
 ---
 
-## v4.16.0 — Residual scope (post-v4.15.x sweep)
+## v4.16.0 + v4.17.0 + v4.18.0 — ALL SHIPPED in v4.16.0 mega-rollup
 
-The cross-library survey (Agent C, Part 10 of AUDIT_V4_13_1)
-catalogued 12 user-facing API gaps.  v4.14.0 closed 5 (encircled
-energy, MTF cutoff, beam diameter, depth of focus, plot_wavefront).
-The partial-coherence source trio (Gaussian-Schell, Schell-model,
-annular-incoherent) shipped in v4.14.x.  **v4.15.0 + v4.15.1 closed
-the remaining 6 user-facing API items** (polychromatic encircled
-energy, polarisation-aware Strehl, resolution metrics, astigmatism
-magnitude+angle, off-axis parabola, Forbes Q-type freeform) -- they
-now reside in the Shipped highlights section below.
+The 9 items previously catalogued under v4.16 (2) + v4.17 (4) +
+v4.18 (3) all shipped in the v4.16.0 mega-release.  See the
+"Shipped highlights" section below for the per-item summary.
+Quick recap:
 
-The true v4.16 residual is **2 items**: the 4 V4 meta-pin candidates
-and the multi-process atomic-append for `storage.py`.  (The v4.15.5
-audit also recommends a 6th meta-pin candidate -- V6 walker
-first-positional-param filter -- pending the v4.15.5 dispatch
-work; if shipped in v4.15.5, that closes the meta-pin trajectory at
-the public-API surface and this section reduces to 1 item.)
+* **v4.16 items (2)**: V4 meta-pin walkers (4 walkers — sentinel
+  propagation, `_xp_of` dispatch, `dy` threading, `__all__`
+  symmetry) + multi-process atomic-append for `storage.py` (HDF5
+  SWMR + filelock Zarr lock).
+* **v4.17 items (4)**: Constrained optimisation
+  (`Constraint` dataclass + scipy `NonlinearConstraint`);
+  checkpoint/resume (`state_file=` + atomic JSON write);
+  multi-objective Pareto via pymoo NSGA-II (optional
+  `multi_objective` extras group); Hessian / Newton-step
+  (`method='newton'` + scipy `trust-ncg`).
+* **v4.18 items (3)**: CDGM + Hikari + Sumita Sellmeier
+  catalogues (32 new glasses; `GLASS_REGISTRY` 46 → 78);
+  per-glass Sellmeier validity ranges (`GLASS_VALIDITY`);
+  central cache registry (`register_cache_clearer` + 9 caches
+  migrated; retires the lazy-import fan-out).
 
-### 1. Extend meta-pin pattern (V4 candidates)
+The next horizon is v5.0 — major structural release.
 
-v4.15.0 implemented the 3rd of the 5 V2-recommended meta-pins
-(input-validation entry-point); v4.15.3 added the 4th
-(`_check_2d_scalar_field` dispatcher); v4.15.4 extended the 4th's
-walker scope.  The remaining 4 V2 candidates still stand:
+### Known issues flagged for v4.16.x
 
-- **Sentinel-aware branch propagation** -- AST-walk every
-  `_get_wrapper_merit_cache` callsite for `is _ZERO_APERTURE_MASK`
-  check.  Direct counter-measure to the recurring P1-NEW-1 class
-  (the audit's own meta-finding -- v4.14.2 P1-NEW-1, v4.14.3
-  closed 2 more sites; future sites would benefit from a meta-pin).
-- **Cross-backend dispatch (`_xp_of` usage)** -- AST-walk for
-  hardcoded `np.*` where dispatch should happen.  Addresses the
-  v4.13.x latent CuPy dispatch class of bug.
-- **`dy` parameter threading** -- every `apply_*` in `__all__`
-  must accept `dy=None`.  Counter-measure to the v4.13.0 dy-sibling
-  gap recurrences.
-- **`__all__` symmetry** -- every name in submodule `__all__`
-  either re-exported at top level or marked `_INTERNAL`.
-
-~250 LOC of test infrastructure + walker fixtures across the 4
-pins.
-
-### 2. Multi-process atomic-append for `storage.py`
-
-v4.14.3 documented single-process atomicity for `append_plane_h5`
-and `_zarr_append_plane` and the multi-process restriction.  The
-full multi-writer story (HDF5 SWMR + distributed Zarr lock)
-remains outstanding.  ~120 LOC + 6 tests.
-
----
-
-## v4.17.0 — Optimisation framework expansion
-
-### 3. Constrained optimisation
-
-All Merits express constraints as soft penalties (`max(0, x -
-threshold)²`).  scipy.optimize has `NonlinearConstraint` for hard
-constraints (e.g. "BFL > 5 mm exactly").  Add `constraints:
-Optional[Sequence[Constraint]]` kwarg to `design_optimize` that maps
-to scipy's API.  ~80 LOC + 4 tests.
-
-### 4. Checkpoint / resume on long `design_optimize` runs
-
-A 4-hour optimisation run that crashes loses everything.
-`plane_logger` saves per-iteration field but not the parameter
-vector.  Add `state_file: Optional[str] = None` that persists
-`(call_count, x_best, merit_best)` to JSON/H5 and resumes from disk
-when present.  ~100 LOC + 3 tests.
-
-### 5. Multi-objective (Pareto) optimisation
-
-`CompositeMerit` collapses to scalar.  For "minimise spot size AND
-match focal length" with no a priori weight balance, NSGA-II or
-`scipy.optimize.differential_evolution` with vector merit is the
-right tool.  Out-of-scope architecturally for v4.17 unless a clean
-shim onto an external library (`pymoo`) is acceptable.
-
-### 6. Hessian / Newton-step optimisation
-
-L-BFGS-B is the default.  For small (< 30 free var) problems an
-FD-Hessian-based Newton step converges in fewer evals.  Add
-`method='newton'` to `design_optimize`.  ~60 LOC + 2 tests.
-
----
-
-## v4.18.0 — Glass / materials expansion
-
-### 7. CDGM / Hikari / Sumita glass catalogues
-
-`glass.py` ships Schott + partial Ohara (S-LAH 64/79).  CDGM is the
-dominant Chinese flint/crown catalogue cited in cellphone/telephoto
-lens papers; Hikari and Sumita complete the major-vendor matrix.
-Public Sellmeier-coefficient sources exist at refractiveindex.info.
-~600 LOC of bulk data + a sweep through `GLASS_REGISTRY`.
-
-### 8. Sellmeier validity ranges per glass
-
-`_sellmeier_index` checks for resonance singularity and negative
-n² but doesn't carry a `(lambda_min, lambda_max)` validity-window
-per glass.  Asking N-BK7 for n at 200 nm returns a number that
-bears no relation to physical N-BK7.  Add a `validity` field to
-`GLASS_REGISTRY` entries; warn (or raise) when extrapolating.  ~30
-LOC + 2 tests + bulk-data sweep.
-
-### 9. Central cache registry
-
-The v4.14.2 audit Tier-2 #17 item.  Today every cache author has
-to remember to register their clear-function in
-`propagation.clear_asm_caches`'s lazy-import chain.  v4.14.3 added
-the 8th cache (`_lg_polynomial_items`) but the meta-finding ("fix
-N, miss N+1") recurred 5 ways on v4.14.2 itself.  A central
-`register_cache_clearer(name, clear_fn)` registry would let
-`clear_asm_caches` walk the registry rather than enumerate clear
-calls by hand.  Cost: ~80 LOC + an audit-style migration of the
-existing 8 chained clear sites.  Counter-measure ratio: 1 registry
-prevents N future sibling-gap recurrences.
+* **Bundled Sellmeier formula-3 (polynomial) evaluator**.
+  Hikari, Sumita, and 4 CDGM glasses use refractiveindex.info
+  formula 3.  v4.16.0's `_sellmeier_index` only supports formula
+  2.  Minimal installs without `refractiveindex` raise
+  `ImportError` on these 26 entries with a clear install hint.
+  v4.16.1 candidate: add `_polynomial_index` evaluator.
 
 ---
 
@@ -544,6 +451,55 @@ shipped the v4.14.2 P2/P3 sweep + the input-validation meta-pin
   from Tier-2 (Propagate) to Tier-1 (Build a system); sparrow
   tolerance pin tightened to <1% (achievable 0.02%) to match the
   analytical-value claim.
+- **v4.15.3** — AUDIT_V4_15_2 closure with structural counter-
+  measure (shared `_check_2d_scalar_field` helper + AST-walking
+  dispatcher meta-pin V5).
+- **v4.15.4** — AUDIT_V4_15_3 closure + meta-pin walker scope
+  extension to `system.py` + `analysis/` + V5 broadening for
+  `richards_wolf_focus`/`debye_wolf_psf`; `plot_opd_fan` +
+  `plot_opd_summary` shipped.
+- **v4.15.5** — AUDIT_V4_15_4 closure + V6 walker
+  (first-positional-param-name discovery via AST inspection)
+  closes the meta-pattern at the public-API surface; class-body
+  descent with `_DELEGATING_CLASS_METHODS` exemption; 13 newly-
+  guarded analyzers; `plot_opd_fan` `fan_units` kwarg +
+  `_radial_rms_profile` centered RMS.
+- **v4.16.0** — Mega-rollup: entire v4.16 + v4.17 + v4.18 ROADMAP
+  shipped in one release.  Highlights:
+  - **4 remaining V4 meta-pin walkers** land (sentinel
+    propagation, `_xp_of` dispatch, `dy` threading, `__all__`
+    symmetry).  Library now ships 9 active dispatcher meta-pins;
+    sibling-gap meta-pattern at the public-API surface is
+    structurally retired.  14 inline fixes across the 4 walker
+    scans.
+  - **Multi-process atomic-append for `storage.py`**: HDF5 SWMR
+    mode + filelock-based distributed Zarr lock.  Subprocess
+    multi-writer tests via `multiprocessing.get_context('spawn')`
+    (Linux + Windows portable).  Single-process v4.14.3
+    atomicity guarantees preserved bit-for-bit.  `filelock>=3.0`
+    added to `hdf5` and `zarr` extras groups.
+  - **Optimisation framework expansion**: `Constraint` dataclass
+    + `design_optimize(constraints=...)` mapping to scipy
+    `NonlinearConstraint`; checkpoint/resume via
+    `state_file=` + atomic JSON write; `method='newton'`
+    dispatching to scipy `trust-ncg` with FD-Hessian; multi-
+    objective Pareto via pymoo NSGA-II wrapper
+    (`design_optimize_multi_objective`) as optional
+    `multi_objective` extras group.
+  - **Glass + materials expansion**: 32 new glasses across CDGM
+    (12) + Hikari (10) + Sumita (10); `GLASS_REGISTRY` 46 → 78;
+    zero n_d cross-check failures at the 5e-5 tolerance.  Per-
+    glass Sellmeier validity ranges (`GLASS_VALIDITY`, 77
+    entries) with `UserWarning` on extrapolation.
+  - **Central cache registry** (`lumenairy/_cache_registry.py`):
+    `register_cache_clearer` + `list_registered_cache_clearers`
+    + `clear_all_registered_caches`.  Retires the lazy-import
+    fan-out in `clear_asm_caches`.  9 caches migrated.
+    `clear_asm_caches` external contract preserved bit-for-bit.
+    Counter-measure to the cache-clear "fix N, miss N+1"
+    pattern.
+  - 12 new top-level exports.  2106 unit tests pass (+184 net);
+    34/34 validation files pass.
 
 ---
 

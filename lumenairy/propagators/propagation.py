@@ -769,13 +769,12 @@ _H_CACHE_MAX_TOTAL_BYTES = 8 * 1024 * 1024 * 1024       # 8 GB
 _ASM_CACHE_LOCK = threading.Lock()
 
 
-def clear_asm_caches() -> None:
-    """Drop every propagator-adjacent cache the library can grow.
+def _clear_local_asm_caches() -> None:
+    """Drop the local propagation.py LRU caches under
+    :data:`_ASM_CACHE_LOCK`.
 
-    Clears (in two groups):
-
-    **Local (propagation.py) caches** -- drained directly under
-    :data:`_ASM_CACHE_LOCK`:
+    Called by the central cache-clearer registry (registered as
+    ``'asm_local'`` in v4.16.0).  Drains:
 
     - ``_FREQ_GRID_CACHE``  : kx_sq / ky_sq frequency-grid pairs.
     - ``_BANDLIMIT_CACHE``  : ASM band-limit filter pairs.
@@ -783,50 +782,8 @@ def clear_asm_caches() -> None:
     - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans (v4.12.2 add).
     - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo (v4.12.2 add).
 
-    **Sibling-module caches** -- chained via lazy import + call,
-    each guarded so a partial install or optional-dependency miss
-    (e.g. JAX) doesn't break the propagation-layer drain path:
-
-    - LG / HG mode-stack cache via
-      :func:`lumenairy.propagators.asymptotic.clear_lg_mode_stack_cache`
-      (v4.14.1; was claimed in v4.14.0 CHANGELOG but not wired up --
-      only :func:`lumenairy.lumenairy_context` cleared it).
-    - LG polynomial coefficient cache via
-      :func:`lumenairy.propagators.asymptotic.clear_lg_polynomial_cache`
-      (v4.14.3; the v4.14.2 expansion missed this sibling -- only
-      :func:`lumenairy.lumenairy_context` cleared it, leaving a
-      single-cache asymmetry between the two drain entry points).
-    - optimize/core wrapper-merit meshgrid cache via
-      :func:`lumenairy.optimize.core._clear_wrapper_merit_cache`
-      (v4.14.1; replaces the v4.14.0 monkey-patch indirection -- the
-      cache is now drained via a reverse-direction lazy import below).
-    - Zernike basis cache via
-      :func:`lumenairy.analysis.core.clear_zernike_basis_cache`
-      (v4.14.2).
-    - Through-focus JAX scan cache via
-      :func:`lumenairy.analysis.through_focus.clear_through_focus_scan_jax_cache`
-      (v4.14.2).
-    - Propagate-through-system JAX cache via
-      :func:`lumenairy.system.clear_propagate_system_jax_cache`
-      (v4.14.2).
-    - Phase-retrieval GS / ER / HIO kernel caches via
-      :func:`lumenairy.analysis.phase_retrieval.clear_phase_retrieval_caches`
-      (v4.14.2).
-    - Ray-trace JAX kernel cache via
-      :func:`lumenairy.raytrace.jax_trace.clear_trace_jax_cache`
-      (v4.14.2).
-
-    The original 3.2.14 perf-pass only cleared the first three local
-    caches.  v4.12.2 extended this to drop the pyFFTW plan cache +
-    bad-shape memo.  v4.14.1 chained the LG/HG mode-stack and
-    wrapper-merit caches.  v4.14.2 (AUDIT_V4_14_1_2026_05_17.md
-    P1-NEW-3 / Agent C) closes the remaining gap by chaining the
-    five additional sibling caches above so a single
-    ``clear_asm_caches()`` call leaves the entire propagator-adjacent
-    state completely pristine -- matching what
-    :func:`lumenairy.lumenairy_context` with
-    ``clear_caches_on_exit=True`` accomplishes via direct submodule
-    imports.
+    Public API users should call :func:`clear_asm_caches` instead so
+    every sibling cache is drained in the same operation.
     """
     with _ASM_CACHE_LOCK:
         _FREQ_GRID_CACHE.clear()
@@ -834,73 +791,82 @@ def clear_asm_caches() -> None:
         _H_CACHE.clear()
         _PYFFTW_PLAN_CACHE.clear()
         _PYFFTW_BAD_SHAPES.clear()
-    # v4.14.1 (Tier-0 #5): chain in the LG/HG mode-stack cache.  Lazy-
-    # imported to avoid a hard dependency on the asymptotic module at
-    # propagation-import time.  Errors are swallowed so a partial
-    # install (e.g. tests stubbing out the asymptotic module) does not
-    # break the propagation-layer clear path.  Phase 2 of v4.13.0
-    # narrowed bare ``except Exception:`` to specific classes; preserve
-    # that here.
-    try:
-        from .asymptotic import clear_lg_mode_stack_cache
-        clear_lg_mode_stack_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    # v4.14.3 (P1-NEW-1 / Agent A A.3): chain in the LG polynomial
-    # coefficient cache.  Missed by the v4.14.2 sweep -- only
-    # ``lumenairy_context`` cleared it (``_context.py:255-260``), which
-    # left an 8th sibling cache that ``clear_asm_caches`` failed to
-    # drain.  Same lazy-import + narrowed-except pattern as the
-    # mode-stack chain above.
-    try:
-        from .asymptotic import clear_lg_polynomial_cache
-        clear_lg_polynomial_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    # v4.14.1 (P2-3): chain in the optimize-layer wrapper-merit
-    # meshgrid cache.  Same lazy-import pattern; replaces the v4.14.0
-    # monkey-patch in optimize/core.py that re-bound this very
-    # function.  The reverse-direction import path keeps the wrapper-
-    # merit cache resident even when optimize/core has not yet been
-    # imported (it simply has nothing to clear in that case).
-    try:
-        from ..optimize.core import _clear_wrapper_merit_cache
-        _clear_wrapper_merit_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    # v4.14.2 (P1-NEW-3 / Agent C): chain in the remaining 5 sibling
-    # caches that the v4.14.1 dispatcher pin (test_v4_14_1_dispatcher_
-    # pin_cache_clears.py) showed were already in every submodule's
-    # __all__ but were NOT being drained by clear_asm_caches.  Same
-    # lazy-import + narrowed-except pattern.  Each block independent
-    # so one optional-dep failure doesn't skip the rest.
-    try:
-        from ..analysis.core import clear_zernike_basis_cache
-        clear_zernike_basis_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    try:
-        from ..analysis.through_focus import (
-            clear_through_focus_scan_jax_cache,
-        )
-        clear_through_focus_scan_jax_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    try:
-        from ..system import clear_propagate_system_jax_cache
-        clear_propagate_system_jax_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    try:
-        from ..analysis.phase_retrieval import clear_phase_retrieval_caches
-        clear_phase_retrieval_caches()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
-    try:
-        from ..raytrace.jax_trace import clear_trace_jax_cache
-        clear_trace_jax_cache()
-    except (ImportError, RuntimeError, AttributeError):
-        pass
+
+
+# v4.16.0 (ROADMAP #15): register the local-ASM clearer with the
+# central registry at module-import time.  ``clear_asm_caches`` now
+# walks the registry rather than enumerating clear calls by hand.
+from .._cache_registry import (
+    register_cache_clearer as _register_cache_clearer,
+    clear_all_registered_caches as _clear_all_registered_caches,
+)
+_register_cache_clearer('asm_local', _clear_local_asm_caches)
+
+
+def clear_asm_caches() -> None:
+    """Drop every propagator-adjacent cache the library can grow.
+
+    v4.16.0 retires the lazy-import fan-out that this function used
+    pre-v4.15 in favour of the central cache-clearer registry (see
+    :mod:`lumenairy._cache_registry`).  Each cache-owning module
+    registers its own clear function at import time via
+    :func:`lumenairy.register_cache_clearer`, and this function simply
+    walks the registry.
+
+    The external contract is preserved bit-for-bit: every cache that
+    was drained pre-v4.16 is still drained, and the same narrowed-
+    except classes (``ImportError``, ``RuntimeError``,
+    ``AttributeError``) are swallowed so a partial install does not
+    strand the rest of the chain.
+
+    Caches drained on a typical install:
+
+    **Local (propagation.py) caches** -- registered as ``'asm_local'``:
+
+    - ``_FREQ_GRID_CACHE``  : kx_sq / ky_sq frequency-grid pairs.
+    - ``_BANDLIMIT_CACHE``  : ASM band-limit filter pairs.
+    - ``_H_CACHE``          : ASM transfer function H per shape/wavelength/z.
+    - ``_PYFFTW_PLAN_CACHE``: jit-built pyFFTW plans (v4.12.2 add).
+    - ``_PYFFTW_BAD_SHAPES``: pyFFTW "skip this shape" memo (v4.12.2 add).
+
+    **Sibling-module caches** -- each registered at the owning
+    module's import time.  Cross-references to the underlying
+    clear-function names are kept for grep-discoverability:
+
+    - LG / HG mode-stack cache (``'lg_mode_stack'`` --
+      :func:`lumenairy.propagators.asymptotic.clear_lg_mode_stack_cache`).
+    - LG polynomial coefficient cache (``'lg_polynomial_items'`` --
+      :func:`lumenairy.propagators.asymptotic.clear_lg_polynomial_cache`).
+    - optimize/core wrapper-merit meshgrid cache
+      (``'wrapper_merit_meshgrid'`` --
+      :func:`lumenairy.optimize.core._clear_wrapper_merit_cache`).
+    - Zernike basis cache (``'zernike_basis'`` --
+      :func:`lumenairy.analysis.core.clear_zernike_basis_cache`).
+    - Through-focus JAX scan cache (``'through_focus_scan_jax'`` --
+      :func:`lumenairy.analysis.through_focus.clear_through_focus_scan_jax_cache`).
+    - Propagate-through-system JAX cache (``'propagate_system_jax'``
+      -- :func:`lumenairy.system.clear_propagate_system_jax_cache`).
+    - Phase-retrieval GS / ER / HIO kernel caches
+      (``'phase_retrieval_kernels'`` --
+      :func:`lumenairy.analysis.phase_retrieval.clear_phase_retrieval_caches`).
+    - Ray-trace JAX kernel cache (``'trace_jax'`` --
+      :func:`lumenairy.raytrace.jax_trace.clear_trace_jax_cache`).
+
+    Use :func:`lumenairy.list_registered_cache_clearers` to introspect
+    the live registry contents (useful for the meta-pin
+    ``test_all_known_caches_are_registered``).
+
+    Historical notes:
+        The original 3.2.14 perf-pass only cleared the first three
+        local caches.  v4.12.2 extended this to drop the pyFFTW plan
+        cache + bad-shape memo.  v4.14.1 chained the LG/HG mode-stack
+        and wrapper-merit caches.  v4.14.2 (AUDIT_V4_14_1_2026_05_17
+        P1-NEW-3 / Agent C) chained the five additional sibling caches.
+        v4.14.3 chained the LG polynomial coefficient cache (8th
+        sibling).  v4.16.0 retires the lazy-import fan-out entirely
+        in favour of the central registry.
+    """
+    _clear_all_registered_caches()
 
 
 def set_asm_cache_size(

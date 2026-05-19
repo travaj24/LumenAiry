@@ -222,6 +222,64 @@ SELLMEIER_COEFFICIENTS = {
                      (0.0684043**2, 0.1162414**2, 9.896161**2)),
     'FUSED_SILICA': ((0.6961663, 0.4079426, 0.8974794),
                      (0.0684043**2, 0.1162414**2, 9.896161**2)),
+
+    # ============================================================
+    # v4.16.0 (ROADMAP #13) -- CDGM Sellmeier bundled fallback
+    # ============================================================
+    #
+    # CDGM (Tianjin Lingxin Glass) catalogue entries that use the
+    # SCHOTT-style Sellmeier-2 dispersion formula (refractiveindex.info
+    # "formula 2"):
+    #
+    #     n² - 1 = sum_i B_i * lam² / (lam² - C_i)
+    #
+    # where C_i is in um² (i.e. already the squared resonance
+    # location, NOT the bare wavelength).  Coefficients sourced from
+    # the CDGM Zemax 2022-06 catalogue YAMLs distributed with the
+    # refractiveindex.info database (CC0 1.0 public domain).
+    # Source: https://refractiveindex.info/?shelf=specs&book=CDGM-optical
+    #
+    # CDGM glasses using formula 3 (polynomial) are NOT bundled here
+    # -- they are registered as tuple-style entries in GLASS_REGISTRY
+    # and require the ``refractiveindex`` package for lookup.  Each
+    # bundled entry's n_d is cross-checked to 5e-5 in
+    # ``tests/unit/test_v4_16_0_agent_d_glass_catalogues.py``.
+
+    # H-K9L -- BK7-equivalent crown (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.516800, V_d = 64.20, range 0.302-2.325 um
+    'H-K9L':       ((0.614555251, 0.656775017, 1.02699346),
+                    (0.0145987884, 0.00287769588, 107.653051)),
+    # H-LAK52 -- lanthanum crown (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.729160, V_d = 54.68, range 0.302-2.325 um
+    'H-LAK52':     ((0.648528792, 1.28450424, 1.23774593),
+                    (0.000165816179, 0.0158113883, 85.7406109)),
+    # H-LAK53A -- lanthanum crown (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.755000, V_d = 52.32, range 0.302-2.325 um
+    'H-LAK53A':    ((1.21007394, 1.19495815, 0.806533246),
+                    (0.00521679919, 83.5557501, 0.02008035)),
+    # H-ZK9B -- zinc crown (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.613750, V_d = 50.40, range 0.302-2.325 um
+    'H-ZK9B':      ((0.874918734, 0.7096273, 1.09453882),
+                    (0.00373965378, 0.0163972089, 100.204324)),
+    # H-ZF12 -- zinc heavy flint (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.673000, V_d = 32.16, range 0.4047-2.325 um
+    'H-ZF12':      ((0.323730379, 1.65668629, 2.1214152),
+                    (0.0598308169, 0.0120542686, 174.18792)),
+    # D-ZK3 -- zinc crown (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.589130, V_d = 61.18, range 0.302-2.325 um
+    'D-ZK3':       ((1.33936811, 0.148690268, 1.00954033),
+                    (0.00760612309, 0.0238444644, 89.0419787)),
+    # D-LAK52 -- lanthanum crown (formula 2 in CDGM 2022 catalog)
+    # n_d = 1.729160, V_d = 54.84, range 0.302-2.325 um.
+    # Note: dispatch sheet requested 'D-ZLAK52' which does not exist
+    # in the CDGM catalogue; D-LAK52 is the corresponding family
+    # member.
+    'D-LAK52':     ((1.04647517, 0.889910862, 1.23173612),
+                    (0.0173536556, 0.00298398431, 87.1100488)),
+    # H-ZLAF52A -- zinc lanthanum flint (formula 2 in CDGM 2022)
+    # n_d = 1.796800, V_d = 45.39, range 0.365-2.325 um
+    'H-ZLAF52A':   ((1.85313688, 0.317938591, 1.16396318),
+                    (0.00985534639, 0.0392611678, 93.1032763)),
 }
 
 
@@ -332,7 +390,236 @@ GLASS_REGISTRY = {
     'S-LAH64':      ('specs', 'OHARA-optical', 'S-LAH64'),
     'S-LAH79':      ('specs', 'OHARA-optical', 'S-LAH79'),
     'BaF2':         '__sellmeier__',
+
+    # ============================================================
+    # v4.16.0 (ROADMAP #13) -- CDGM / Hikari / Sumita catalogues
+    # ============================================================
+    # Each entry resolves via refractiveindex.info when the optional
+    # ``refractiveindex`` package is installed.  CDGM Sellmeier-2
+    # entries also have bundled coefficients in SELLMEIER_COEFFICIENTS
+    # as a fallback for minimal installs.  CDGM polynomial entries
+    # (formula 3) and all Hikari / Sumita entries require the
+    # ``refractiveindex`` package -- formula 3 is not currently in
+    # the bundled fallback (v4.16.1 candidate).
+
+    # ----- CDGM (Tianjin Lingxin / China Daheng Group) -----
+    # Sellmeier-2 entries (also have bundled Sellmeier coefficients):
+    'H-K9L':        ('specs', 'CDGM-optical', 'H-K9L'),
+    'H-LAK52':      ('specs', 'CDGM-optical', 'H-LAK52'),
+    'H-LAK53A':     ('specs', 'CDGM-optical', 'H-LAK53A'),
+    'H-ZK9B':       ('specs', 'CDGM-optical', 'H-ZK9B'),
+    'H-ZF12':       ('specs', 'CDGM-optical', 'H-ZF12'),
+    'D-ZK3':        ('specs', 'CDGM-optical', 'D-ZK3'),
+    'D-LAK52':      ('specs', 'CDGM-optical', 'D-LAK52'),
+    'H-ZLAF52A':    ('specs', 'CDGM-optical', 'H-ZLAF52A'),
+    # CDGM polynomial-formula entries (refractiveindex required):
+    'H-ZK7':        ('specs', 'CDGM-optical', 'H-ZK7'),
+    'H-ZF52A':      ('specs', 'CDGM-optical', 'H-ZF52A'),
+    'F1-CDGM':      ('specs', 'CDGM-optical', 'F1'),
+    'F2-CDGM':      ('specs', 'CDGM-optical', 'F2'),
+
+    # ----- Hikari Glass Co. Ltd -----
+    # All Hikari entries below use formula 3 (polynomial) in the
+    # refractiveindex.info catalogue and require the optional
+    # ``refractiveindex`` package for lookup.
+    'E-LASF016':    ('specs', 'HIKARI-optical', 'E-LASF016'),
+    'E-SK16':       ('specs', 'HIKARI-optical', 'E-SK16'),
+    'E-LAK7':       ('specs', 'HIKARI-optical', 'E-LAK7'),
+    'E-LAK04':      ('specs', 'HIKARI-optical', 'E-LAK04'),
+    'E-BAK1':       ('specs', 'HIKARI-optical', 'E-BAK1'),
+    'J-FK01A':      ('specs', 'HIKARI-optical', 'J-FK01A'),
+    'J-LASF09A':    ('specs', 'HIKARI-optical', 'J-LASF09A'),
+    'J-LAK7':       ('specs', 'HIKARI-optical', 'J-LAK7'),
+    'J-BASF7':      ('specs', 'HIKARI-optical', 'J-BASF7'),
+    'E-F2':         ('specs', 'HIKARI-optical', 'E-F2'),
+
+    # ----- Sumita Optical Glass, Inc. -----
+    # All Sumita entries below use formula 3 (polynomial) in the
+    # refractiveindex.info catalogue and require the optional
+    # ``refractiveindex`` package for lookup.
+    #
+    # NOTE: Sumita uses a mixed-case naming convention in their
+    # catalogue (e.g. K-LaK10, K-LaSFn10).  v4.16.0 canonicalises
+    # these to all-uppercase in GLASS_REGISTRY (e.g. K-LAK10,
+    # K-LASFN10) to keep names consistent with the Schott / Ohara
+    # convention and to match user expectations when grepping
+    # ``search_glasses('LASF')``.  The third tuple element retains
+    # the catalogue's mixed-case page name so the
+    # refractiveindex.info lookup still resolves.
+    'K-VC78':       ('specs', 'SUMITA-optical', 'K-VC78'),
+    'K-LAK10':      ('specs', 'SUMITA-optical', 'K-LaK10'),
+    'K-LASFN10':    ('specs', 'SUMITA-optical', 'K-LaSFn10'),
+    'K-SK4':        ('specs', 'SUMITA-optical', 'K-SK4'),
+    'K-PFK90':      ('specs', 'SUMITA-optical', 'K-PFK90'),
+    'K-PBK40':      ('specs', 'SUMITA-optical', 'K-PBK40'),
+    'K-BK7':        ('specs', 'SUMITA-optical', 'K-BK7'),
+    'K-PSKN2':      ('specs', 'SUMITA-optical', 'K-PSKn2'),
+    'K-FK5':        ('specs', 'SUMITA-optical', 'K-FK5'),
+    'K-LAFN3':      ('specs', 'SUMITA-optical', 'K-LaFn3'),
 }
+
+
+# ---------------------------------------------------------------------------
+# v4.16.0 (ROADMAP #14) -- Sellmeier validity ranges per glass
+# ---------------------------------------------------------------------------
+#
+# Each ``GLASS_VALIDITY[name]`` is a tuple ``(lambda_min, lambda_max)``
+# in METRES specifying the wavelength range over which the bundled
+# Sellmeier / refractiveindex.info dispersion fit is documented as
+# valid.  When ``get_glass_index(name, wavelength)`` is called with a
+# wavelength OUTSIDE this range, a ``UserWarning`` is emitted -- but
+# the value is still returned (extrapolation is sometimes acceptable
+# for design-space exploration).
+#
+# Sources:
+# * Schott / Ohara entries: SCHOTT TIE-29 "Refractive index and
+#   dispersion" catalogue ranges (typically 0.30-2.5 um for crown
+#   and flint; 0.36-2.4 um for lanthanum-flint due to UV cutoff).
+# * Bundled fused-silica: Malitson 1965, J. Opt. Soc. Am. 55, 1205
+#   (valid 0.21-6.7 um; we restrict to 0.21-3.7 um where the fit
+#   stays within 5e-5 of the tabulated values).
+# * CDGM / Hikari / Sumita entries: the ``wavelength_range`` field
+#   from the corresponding refractiveindex.info YAML (sourced from
+#   the CDGM 2022-06 / HIKARI 2017-11 / SUMITA 2017-02 Zemax
+#   catalogue exports).
+#
+# Glasses without an explicit entry default to ``(0.0, np.inf)`` --
+# no warning ever fires.  Documented exemptions: ``'air'``, the
+# ``'__thin_lens__'`` sentinel, and user-registered callables.
+
+_DEFAULT_VALIDITY = (0.0, float('inf'))  # no warning if not in dict
+
+GLASS_VALIDITY = {
+    # ----- Schott N-series (catalog range 0.30-2.5 um typical) -----
+    'N-BK7':      (0.30e-6, 2.5e-6),
+    'N-K5':       (0.31e-6, 2.5e-6),
+    'N-BAF10':    (0.31e-6, 2.5e-6),
+    'N-BAK4':     (0.31e-6, 2.5e-6),
+    'N-BAF52':    (0.31e-6, 2.5e-6),
+    'N-FK51A':    (0.30e-6, 2.5e-6),
+    'N-PSK53A':   (0.31e-6, 2.5e-6),
+    # LaK / LaF / LaSF -- higher UV cutoff due to lanthanum content.
+    'N-LAK22':    (0.36e-6, 2.4e-6),
+    'N-LAK33A':   (0.36e-6, 2.4e-6),
+    'N-LAK33B':   (0.36e-6, 2.4e-6),
+    'N-SK11':     (0.31e-6, 2.5e-6),
+    'N-SK16':     (0.31e-6, 2.5e-6),
+    'N-SSK2':     (0.31e-6, 2.5e-6),
+    'N-SSK8':     (0.31e-6, 2.5e-6),
+    'N-F2':       (0.32e-6, 2.5e-6),
+    'N-SF2':      (0.32e-6, 2.5e-6),
+    'N-SF5':      (0.36e-6, 2.5e-6),
+    'N-SF6':      (0.37e-6, 2.5e-6),
+    'N-SF6HT':    (0.37e-6, 2.5e-6),
+    'N-SF10':     (0.38e-6, 2.5e-6),
+    'N-SF11':     (0.40e-6, 2.5e-6),
+    'N-SF14':     (0.40e-6, 2.5e-6),
+    'N-SF15':     (0.36e-6, 2.5e-6),
+    'N-SF57':     (0.40e-6, 2.5e-6),
+    'N-LASF31A':  (0.36e-6, 2.4e-6),
+    'N-LASF40':   (0.40e-6, 2.4e-6),
+    'N-LASF41':   (0.36e-6, 2.4e-6),
+    'N-LASF44':   (0.36e-6, 2.4e-6),
+    'N-LASF45':   (0.40e-6, 2.4e-6),
+    'N-LASF46A':  (0.40e-6, 2.4e-6),
+    'N-LASF46B':  (0.40e-6, 2.4e-6),
+    'N-LASF9':    (0.36e-6, 2.4e-6),
+    # ----- Legacy Schott flints / SF (pre-N series) -----
+    'F2':         (0.36e-6, 2.5e-6),
+    'F5':         (0.36e-6, 2.5e-6),
+    'SF2':        (0.36e-6, 2.5e-6),
+    # ----- Ohara S-LAH (range from refractiveindex.info YAML) -----
+    'S-LAH64':    (0.32e-6, 2.4e-6),
+    'S-LAH79':    (0.37e-6, 2.4e-6),
+    # ----- Generic materials -----
+    'CaF2':       (0.13e-6, 9.4e-6),
+    'MgF2':       (0.12e-6, 7.0e-6),
+    'BaF2':       (0.15e-6, 12.0e-6),
+    'SiO2':       (0.21e-6, 3.7e-6),     # Malitson 1965 (valid to 6.7 um)
+    'F_SILICA':   (0.21e-6, 3.7e-6),
+    'FUSED_SILICA': (0.21e-6, 3.7e-6),
+    'SILICA':     (0.21e-6, 3.7e-6),
+    'SILICON':    (1.20e-6, 14.0e-6),    # Li-293K range
+    # ----- CDGM (v4.16.0, range from refractiveindex.info YAML) -----
+    'H-K9L':      (0.302e-6, 2.325e-6),
+    'H-LAK52':    (0.302e-6, 2.325e-6),
+    'H-LAK53A':   (0.302e-6, 2.325e-6),
+    'H-ZK9B':     (0.302e-6, 2.325e-6),
+    'H-ZF12':     (0.4047e-6, 2.325e-6),
+    'D-ZK3':      (0.302e-6, 2.325e-6),
+    'D-LAK52':    (0.302e-6, 2.325e-6),
+    'H-ZLAF52A':  (0.365e-6, 2.325e-6),
+    'H-ZK7':      (0.365e-6, 1.014e-6),
+    'H-ZF52A':    (0.4047e-6, 1.014e-6),
+    'F1-CDGM':    (0.365e-6, 0.7065e-6),
+    'F2-CDGM':    (0.365e-6, 1.014e-6),
+    # ----- Hikari (v4.16.0, range from refractiveindex.info YAML) -----
+    # Hikari E-* / J-* glasses use formula 3 in their YAML with a
+    # wavelength_range typically 0.4-0.7 um for the polynomial fit;
+    # below the lower bound the polynomial extrapolation diverges.
+    'E-LASF016':  (0.4e-6, 0.7e-6),
+    'E-SK16':     (0.4e-6, 0.7e-6),
+    'E-LAK7':     (0.4e-6, 0.7e-6),
+    'E-LAK04':    (0.4e-6, 0.7e-6),
+    'E-BAK1':     (0.4e-6, 0.7e-6),
+    'J-FK01A':    (0.4e-6, 0.7e-6),
+    'J-LASF09A':  (0.4e-6, 0.7e-6),
+    'J-LAK7':     (0.4e-6, 0.7e-6),
+    'J-BASF7':    (0.4e-6, 0.7e-6),
+    'E-F2':       (0.4e-6, 0.7e-6),
+    # ----- Sumita (v4.16.0, range from refractiveindex.info YAML) -----
+    # Sumita polynomial fits documented 0.36-1.55 um.  Names are
+    # canonicalised to all-uppercase per the GLASS_REGISTRY note
+    # above.
+    'K-VC78':     (0.36e-6, 1.55e-6),
+    'K-LAK10':    (0.36e-6, 1.55e-6),
+    'K-LASFN10':  (0.36e-6, 1.55e-6),
+    'K-SK4':      (0.36e-6, 1.55e-6),
+    'K-PFK90':    (0.36e-6, 1.55e-6),
+    'K-PBK40':    (0.36e-6, 1.55e-6),
+    'K-BK7':      (0.36e-6, 1.55e-6),
+    'K-PSKN2':    (0.36e-6, 1.55e-6),
+    'K-FK5':      (0.36e-6, 1.55e-6),
+    'K-LAFN3':    (0.36e-6, 1.55e-6),
+}
+
+
+# v4.16.0: one-shot warn-once memo for out-of-range Sellmeier
+# extrapolations.  Pre-v4.16 the dispatcher emitted no signal when
+# the user asked for a wavelength outside the documented Sellmeier
+# fit band (e.g. ``get_glass_index('N-BK7', 200e-9)``), silently
+# returning an extrapolated number that has no physical meaning.
+# v4.16 warns the first time per (glass, wavelength_nm) pair.
+_validity_warned: set = set()
+
+
+def _maybe_warn_outside_validity(glass_name, wavelength_m):
+    """Emit a one-shot ``UserWarning`` if ``wavelength_m`` falls
+    outside the documented Sellmeier validity range for ``glass_name``.
+
+    No-op if the glass has no explicit entry in ``GLASS_VALIDITY``
+    (default ``(0.0, np.inf)`` -- no warning ever fires) or if the
+    wavelength is inside the documented range.
+
+    The warning is rate-limited to one emission per
+    ``(glass_name, wavelength_nm)`` pair to avoid log churn in
+    parameter sweeps that scan a few discrete wavelengths.
+    """
+    lmin, lmax = GLASS_VALIDITY.get(glass_name, _DEFAULT_VALIDITY)
+    if lmin <= float(wavelength_m) <= lmax:
+        return
+    key = (str(glass_name), round(float(wavelength_m) * 1e9, 1))
+    if key in _validity_warned:
+        return
+    _validity_warned.add(key)
+    import warnings
+    warnings.warn(
+        f"get_glass_index: {glass_name} Sellmeier validity is "
+        f"[{lmin:.3e}, {lmax:.3e}] m; got wavelength "
+        f"{wavelength_m:.3e} m.  Extrapolated value may not be "
+        f"physical.",
+        UserWarning, stacklevel=3,
+    )
 
 
 def _check_glass_registry_consistency():
@@ -505,11 +792,20 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
 
     # User-supplied dispersion callable: f(wavelength_m) -> n_real or
     # n_complex.  We strip any imaginary part for the real-only API.
+    # No validity check -- user-supplied callables define their own
+    # valid band.
     if callable(entry):
         n = entry(wavelength)
         if isinstance(n, complex):
             return float(n.real)
         return float(n)
+
+    # v4.16.0 (ROADMAP #14): validity-range warning.  Emitted before
+    # the actual lookup so the caller sees the warning even if the
+    # lookup returns successfully.  Skipped for non-physical entries
+    # (callables, '__thin_lens__', user-fixed) which are handled
+    # above / below.
+    _maybe_warn_outside_validity(glass_name, wavelength)
 
     # Bundled Sellmeier coefficients (no external dependency).
     if entry == '__sellmeier__':

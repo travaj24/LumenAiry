@@ -77,6 +77,8 @@ Typical usage
 from __future__ import annotations
 
 import copy
+import json as _json
+import os as _os
 import threading
 import time
 import warnings
@@ -2286,18 +2288,36 @@ def _get_wrapper_merit_cache(
 def _clear_wrapper_merit_cache() -> None:
     """Drop the wrapper-merit meshgrid cache and reset the build counter.
 
-    v4.14.1 (P2-3): now invoked from
-    :func:`lumenairy.propagators.propagation.clear_asm_caches` via a
-    lazy import inside that function (the v4.14.0 monkey-patch is
-    gone).  The reverse-direction dependency keeps optimize/core
-    free of propagation-layer side-effects at import time while still
-    leaving both caches pristine on a single ``clear_asm_caches()``
-    call.  Also callable directly from tests.
+    v4.14.1 (P2-3): invoked from
+    :func:`lumenairy.propagators.propagation.clear_asm_caches`.  Pre-
+    v4.16 this was a lazy import inside ``clear_asm_caches``; v4.16
+    routes the call through the central cache-clearer registry (see
+    ``_cache_registry.py``).  Either way the reverse-direction
+    dependency keeps optimize/core free of propagation-layer side-
+    effects at import time while still leaving both caches pristine
+    on a single ``clear_asm_caches()`` call.  Also callable directly
+    from tests.
     """
     global _WRAPPER_MERIT_MESHGRID_BUILDS
     with _WRAPPER_MERIT_CACHE_LOCK:
         _WRAPPER_MERIT_CACHE.clear()
     _WRAPPER_MERIT_MESHGRID_BUILDS = 0
+
+
+# v4.16.0 (ROADMAP #15): register the wrapper-merit clearer with the
+# central registry at module-import time.  ``clear_asm_caches`` now
+# walks the registry rather than enumerating clear calls by hand.
+# Late-binding closure preserves ``mock.patch.object`` test semantic.
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'wrapper_merit_meshgrid',
+        lambda: getattr(_this_mod, '_clear_wrapper_merit_cache')(),
+    )
+except ImportError:
+    pass
 
 
 # =========================================================================
@@ -3036,6 +3056,91 @@ class EvaluationContext:
 # =========================================================================
 
 @dataclass
+class Constraint:
+    """Hard nonlinear constraint for :func:`design_optimize` (v4.16 #9).
+
+    Each ``Constraint`` wraps a scalar (or vector) callable
+    ``f(x) -> scalar | ndarray`` plus inclusive lower/upper bounds
+    ``(lb, ub)``.  The optimiser enforces ``lb <= f(x) <= ub`` as a
+    hard constraint via :class:`scipy.optimize.NonlinearConstraint`,
+    rather than via the soft ``max(0, x - threshold)**2`` penalty
+    pattern used by the merit terms.
+
+    Hard constraints are honoured exactly by SciPy methods
+    ``'SLSQP'`` and ``'trust-constr'``.  They are NOT supported by
+    ``'L-BFGS-B'`` / Powell / Nelder-Mead / the global methods (DE,
+    basin-hopping, dual_annealing) and ``design_optimize`` will raise
+    a clear ``ValueError`` recommending SLSQP / trust-constr in those
+    cases.
+
+    Attributes
+    ----------
+    fun : callable
+        ``f(x) -> scalar | ndarray``.  Receives the current parameter
+        vector and returns the constraint quantity.
+    lb : float or None
+        Inclusive lower bound on ``f(x)``.  ``None`` means ``-inf``.
+    ub : float or None
+        Inclusive upper bound on ``f(x)``.  ``None`` means ``+inf``.
+    label : str, default ''
+        Human-readable label for the constraint (e.g.
+        ``'BFL >= 5 mm'``).  Appears in progress-callback messages.
+    jac : callable, optional
+        Analytic Jacobian of ``f`` w.r.t. ``x`` if available.  Passed
+        through to ``NonlinearConstraint`` as-is.  Default ``None``
+        uses scipy's FD Jacobian.
+
+    Example
+    -------
+    >>> from lumenairy.optimize import Constraint
+    >>> # Require BFL >= 5 mm exactly (computed from the prescription
+    >>> # built at the current parameter vector).
+    >>> def _bfl(x, *, param, wavelength):
+    ...     from lumenairy.raytrace import system_abcd, surfaces_from_prescription
+    ...     pres = param.build(x)
+    ...     surfs = surfaces_from_prescription(pres)
+    ...     _, _, bfl, _ = system_abcd(surfs, wavelength)
+    ...     return float(bfl)
+    >>> bfl_constraint = Constraint(
+    ...     fun=lambda x: _bfl(x, param=param, wavelength=1.31e-6),
+    ...     lb=5e-3, ub=None, label='BFL >= 5 mm')
+    """
+
+    fun: Callable
+    lb: Optional[float] = None
+    ub: Optional[float] = None
+    label: str = ''
+    jac: Optional[Callable] = None
+
+    def __post_init__(self) -> None:
+        if not callable(self.fun):
+            raise TypeError(
+                f"Constraint.fun must be callable, got "
+                f"{type(self.fun).__name__}")
+        if self.lb is None and self.ub is None:
+            raise ValueError(
+                f"Constraint(label={self.label!r}): at least one of "
+                f"lb / ub must be supplied (both None is unbounded "
+                f"and the constraint is a no-op).")
+
+    def to_scipy(self):
+        """Return a :class:`scipy.optimize.NonlinearConstraint`."""
+        import scipy.optimize as so
+        lb = -np.inf if self.lb is None else float(self.lb)
+        ub = +np.inf if self.ub is None else float(self.ub)
+        kwargs: Dict[str, Any] = {'fun': self.fun, 'lb': lb, 'ub': ub}
+        if self.jac is not None:
+            kwargs['jac'] = self.jac
+        return so.NonlinearConstraint(**kwargs)
+
+
+# Methods that support scipy.optimize.NonlinearConstraint via
+# scipy.optimize.minimize.  Any OTHER method passed with non-empty
+# ``constraints=`` raises a clear ValueError pointing to these two.
+_METHODS_SUPPORTING_CONSTRAINTS = ('SLSQP', 'trust-constr')
+
+
+@dataclass
 class DesignResult:
     x: np.ndarray
     prescription: Dict[str, Any]
@@ -3187,10 +3292,14 @@ def design_optimize(parameterization: Any,
                     z_scan_range: Optional[Tuple[float, float]] = None,
                     z_scan_n: int = 31,
                     jac: Any = 'auto',
+                    hess: Any = None,
                     precision: str = 'double',
                     plane_logger: Optional[Callable] = None,
                     verbose: bool = True,
-                    progress: Optional[Callable] = None) -> DesignResult:
+                    progress: Optional[Callable] = None,
+                    constraints: Optional[Sequence['Constraint']] = None,
+                    state_file: Optional[str] = None,
+                    state_save_every: int = 1) -> DesignResult:
     """Optimize a lens prescription against a set of merit terms.
 
     Parameters
@@ -3217,6 +3326,15 @@ def design_optimize(parameterization: Any,
         default), ``'trust-constr'``, ``'SLSQP'``, or ``'Powell'``.
         For Gauss-Newton / LM treatment, pass ``'lm'`` and the
         optimizer will switch to ``least_squares``.
+
+        v4.16 (ROADMAP #12): ``method='newton'`` dispatches to
+        :func:`scipy.optimize.minimize` with ``method='trust-ncg'``
+        and a finite-difference Hessian estimator (built from
+        :func:`_fd_grad_pure` of the merit gradient).  Recommended
+        for **small (<30 free var)** problems where the FD-Hessian
+        cost is amortised by the faster Newton convergence rate
+        relative to L-BFGS-B.  A ``UserWarning`` is issued when the
+        problem exceeds 30 free variables.
     max_iter : int
         Maximum outer iterations.
     wave_traced : bool, default False
@@ -3271,6 +3389,58 @@ def design_optimize(parameterization: Any,
         evaluation.  Useful for streaming intermediate
         prescriptions / E_exit / OPD maps to a unified store; see
         :func:`lumenairy.io.storage.append_plane`.
+    constraints : sequence of Constraint, optional
+        v4.16 (ROADMAP #9).  Hard nonlinear constraints applied via
+        :class:`scipy.optimize.NonlinearConstraint`.  Each
+        :class:`Constraint` wraps a callable ``f(x) -> scalar``
+        plus inclusive bounds ``(lb, ub)`` and an optional label
+        used in progress-callback messages.  Only ``method='SLSQP'``
+        and ``method='trust-constr'`` honour hard constraints; any
+        other method passed with non-empty ``constraints=`` raises
+        ``ValueError`` recommending one of those two.  Example:
+
+        >>> from lumenairy.optimize import Constraint
+        >>> # Require BFL >= 5 mm exactly.
+        >>> c = Constraint(fun=_bfl_fn, lb=5e-3, ub=None,
+        ...                label='BFL >= 5 mm')
+        >>> result = design_optimize(param, merits, ...,
+        ...     method='SLSQP', constraints=[c])
+
+    state_file : str, optional
+        v4.16 (ROADMAP #10).  Path to a JSON file persisting
+        optimisation state for checkpoint/resume.  When provided:
+
+          * On startup, if the file exists and parses as a valid
+            state dict, the optimiser **resumes from the persisted
+            ``x_best``** instead of ``parameterization.initial_values()``.
+            ``call_count`` is restored so the in-memory eval counter
+            stays consistent with the file.
+          * After every merit evaluation (modulo ``state_save_every``),
+            the current ``(call_count, x_best, merit_best, history)``
+            is written to disk, atomically replacing the previous file.
+
+        Designed for long (multi-hour) runs where a crash, OOM, or
+        SIGKILL would otherwise lose all progress.  The on-disk
+        format is JSON (small, human-inspectable, no h5py
+        dependency).
+
+    state_save_every : int, default 1
+        v4.16 (ROADMAP #10).  How often to write ``state_file``
+        (in merit-function evaluations).  Larger values reduce I/O
+        overhead at the cost of more lost progress on crash.  Set
+        ``state_save_every=5`` to write every 5 evals; the default
+        of ``1`` writes on every eval (maximum durability, ~1 ms
+        I/O overhead per eval).
+
+    hess : 'fd' | callable, optional
+        v4.16 (ROADMAP #12).  Hessian strategy for Newton-step
+        methods (``method='newton'`` and the upstream scipy
+        ``'trust-ncg'`` / ``'Newton-CG'`` / ``'trust-exact'``).
+        ``'fd'`` builds a finite-difference Hessian from
+        :func:`_fd_grad_pure` of the merit gradient.  ``None``
+        (default) defers to scipy's BFGS-update Hessian when the
+        method requires one but doesn't strictly demand explicit
+        Hessian (e.g. ``Newton-CG`` accepts ``None``).
     verbose : bool
     progress : callable, optional
         ``ProgressCallback`` (see :mod:`lumenairy.progress`).
@@ -3375,6 +3545,122 @@ def design_optimize(parameterization: Any,
     n_params = parameterization.n_params
     x0 = parameterization.initial_values()
     bounds = parameterization.bounds
+
+    # v4.16 (ROADMAP #9): hard-constraint validation + method-compat
+    # check.  We accept zero or more :class:`Constraint` objects; each
+    # is translated to scipy's :class:`NonlinearConstraint` and threaded
+    # through ``scipy.optimize.minimize``.  Only SLSQP / trust-constr
+    # honour hard constraints -- any other method raises here with a
+    # clear hint instead of silently dropping the constraints.
+    constraint_seq: Tuple[Constraint, ...] = tuple(constraints or ())
+    if constraint_seq:
+        for _ci, _c in enumerate(constraint_seq):
+            if not isinstance(_c, Constraint):
+                raise TypeError(
+                    f"design_optimize: constraints[{_ci}] must be a "
+                    f"Constraint instance, got {type(_c).__name__}.  "
+                    f"Wrap your callable with "
+                    f"`Constraint(fun=..., lb=..., ub=..., label=...)` "
+                    f"from `lumenairy.optimize`.")
+        if method not in _METHODS_SUPPORTING_CONSTRAINTS:
+            raise ValueError(
+                f"design_optimize: method={method!r} does not support "
+                f"hard constraints via "
+                f"scipy.optimize.NonlinearConstraint.  Use one of "
+                f"{list(_METHODS_SUPPORTING_CONSTRAINTS)} "
+                f"(SLSQP for small-to-medium problems with smooth "
+                f"merits, trust-constr for larger / non-smooth ones), "
+                f"or remove the constraints= argument and re-encode "
+                f"them as soft penalties via MinThicknessMerit / "
+                f"MinBackFocalLengthMerit / similar.")
+
+    # v4.16 (ROADMAP #10): state-file checkpoint/resume.  Persist the
+    # tuple ``(call_count, x_best, merit_best, history)`` to JSON so a
+    # crashed multi-hour run can resume from disk on the next start.
+    # When ``state_file`` points at an existing readable JSON file with
+    # the right shape, we override ``x0`` with the persisted ``x_best``
+    # and restore ``call_count``; otherwise we start from scratch and
+    # create the file on the first eval.
+
+    def _state_load() -> Optional[Dict[str, Any]]:
+        if not state_file:
+            return None
+        try:
+            if not _os.path.isfile(state_file):
+                return None
+            with open(state_file, 'r', encoding='utf-8') as _fh:
+                payload = _json.load(_fh)
+        except (OSError, ValueError, TypeError):
+            return None
+        if not isinstance(payload, dict):
+            return None
+        if 'x_best' not in payload or 'merit_best' not in payload:
+            return None
+        try:
+            x_best_arr = np.asarray(payload['x_best'], dtype=np.float64)
+        except (TypeError, ValueError):
+            return None
+        if x_best_arr.shape != (n_params,):
+            # Shape mismatch -- silently start fresh; the new run will
+            # overwrite the file with the correct shape after the first
+            # save.
+            return None
+        payload['x_best'] = x_best_arr
+        return payload
+
+    _state_io_count = [0]
+
+    def _state_save(*, force: bool = False) -> None:
+        if not state_file:
+            return
+        _state_io_count[0] += 1
+        if not force and (_state_io_count[0] % max(int(state_save_every), 1)) != 0:
+            return
+        payload = {
+            'version': '4.16.0',
+            'call_count': int(call_count[0]),
+            'x_best': x_best[0].tolist() if x_best[0] is not None else None,
+            'merit_best': (float(merit_best[0])
+                           if np.isfinite(merit_best[0]) else None),
+            'history': list(history),
+        }
+        # Atomic-ish replace: write to temp then rename.  Avoids
+        # truncated files on a SIGKILL mid-write.
+        tmp = state_file + '.tmp'
+        try:
+            with open(tmp, 'w', encoding='utf-8') as _fh:
+                _json.dump(payload, _fh)
+            _os.replace(tmp, state_file)
+        except OSError:
+            # I/O errors must not derail the optimisation.  The user
+            # will see ``state_file`` empty / stale; the in-memory run
+            # continues.  Warn once so silent persistence gaps are
+            # visible (analog of plane_logger graceful-degrade).
+            import warnings as _w
+            _w.warn(
+                f"design_optimize: failed to write state_file "
+                f"{state_file!r}; continuing without checkpoint.",
+                RuntimeWarning, stacklevel=2)
+
+    # Track the best parameter vector seen so far for the state-file
+    # plus best-merit-seen logic.  ``x_best`` is the actual returned
+    # solution from the (potentially-resumed) optimisation.
+    x_best: List[Optional[np.ndarray]] = [None]
+    merit_best = [float('inf')]
+    history: List[Dict[str, Any]] = []
+
+    _resumed = _state_load()
+    if _resumed is not None:
+        x0 = _resumed['x_best']
+        if _resumed.get('merit_best') is not None:
+            merit_best[0] = float(_resumed['merit_best'])
+        if _resumed.get('call_count') is not None:
+            # Note: call_count is informational only; the optimisation
+            # restart still does max_iter outer iterations.
+            pass
+        x_best[0] = np.asarray(x0, dtype=np.float64).copy()
+        if isinstance(_resumed.get('history'), list):
+            history.extend(_resumed['history'])
 
     call_count = [0]
     iter_count = [0]
@@ -3640,6 +3926,42 @@ def design_optimize(parameterization: Any,
                     f"({type(_exc).__name__}: {_exc}); continuing "
                     f"without telemetry for this iteration.",
                     RuntimeWarning, stacklevel=2)
+        # v4.16 (ROADMAP #10): track best-merit-seen for checkpoint /
+        # resume.  The optimiser is guaranteed to call merit_fn at the
+        # actual converged x_opt at the end (in the final
+        # evaluate() block), so x_best is monotonic-improving.
+        # Gated on state_file being non-None so pre-v4.16 callers see
+        # byte-identical behaviour (no per-eval bookkeeping cost).
+        if state_file:
+            if np.isfinite(value) and float(value) < merit_best[0]:
+                merit_best[0] = float(value)
+                x_best[0] = np.asarray(x, dtype=np.float64).copy()
+            # Append a compact history row for the state file.  Limit
+            # to the most-recent 1000 entries to bound the JSON
+            # payload size on multi-hour runs.
+            history.append({
+                'call': int(call_count[0]),
+                'merit': float(value) if np.isfinite(value) else None,
+                'efl': (float(ctx.efl)
+                        if np.isfinite(ctx.efl) else None),
+            })
+            if len(history) > 1000:
+                del history[: len(history) - 1000]
+        # Constraint diagnostics for progress callback (v4.16 #9): show
+        # the first constraint's label + current value in the eval msg
+        # when constraints are active.  scipy enforces them via its own
+        # machinery; this is purely diagnostic.
+        _con_tag = ''
+        if constraint_seq:
+            try:
+                _c0 = constraint_seq[0]
+                _cv0 = float(_c0.fun(x))
+                _label = _c0.label or f'constraint[0]'
+                _con_tag = f'  [{_label}={_cv0:.4g}]'
+            except (TypeError, ValueError, RuntimeError,
+                    ZeroDivisionError, OverflowError):
+                _con_tag = '  [constraint=err]'
+        _state_save()
         # Fallback eval-counter progress for methods without a per-
         # iteration callback hook (Powell, DE, dual_annealing, basin-
         # hopping).  For methods with a scipy callback we also emit
@@ -3650,7 +3972,7 @@ def design_optimize(parameterization: Any,
         _emit_progress(
             frac,
             f'eval {call_count[0]}: merit={value:.4g}  '
-            f'efl={ctx.efl*1e3:.3f}mm')
+            f'efl={ctx.efl*1e3:.3f}mm{_con_tag}')
         if verbose and call_count[0] % 5 == 1:
             print(f'  iter {call_count[0]}: merit = {value:.6g}  '
                   f'efl = {ctx.efl*1e3:.3f} mm  '
@@ -3770,17 +4092,117 @@ def design_optimize(parameterization: Any,
                 merit_fn, bounds, maxiter=max_iter, seed=42,
                 callback=_scipy_cb_da)
             x_opt = res.x
-        else:
+        elif method == 'newton':
+            # v4.16 (ROADMAP #12): Hessian / Newton-step.  For small
+            # (<30 free var) problems an FD-Hessian-based Newton step
+            # converges in fewer outer evaluations than L-BFGS-B.  We
+            # dispatch to scipy's 'trust-ncg' / 'Newton-CG' with an
+            # FD-Jacobian-of-the-FD-gradient Hessian estimator.
+            #
+            # 'trust-ncg' demands an explicit Hessian callable; we
+            # build one via _fd_grad_pure of the merit gradient.
+            # 'Newton-CG' tolerates None (uses BFGS update internally),
+            # which is the safer choice for larger problems.
+            #
+            # For >30 free vars, the FD-Hessian (O(N^2) merit-fn calls
+            # per Newton step) becomes prohibitive; we warn but allow.
+            if n_params > 30:
+                import warnings as _w
+                _w.warn(
+                    f"design_optimize: method='newton' selected with "
+                    f"n_params={n_params} > 30 free variables.  The "
+                    f"FD-Hessian costs O(N^2) merit evaluations per "
+                    f"Newton step, which scales poorly above ~30 "
+                    f"variables.  Consider method='L-BFGS-B' "
+                    f"(the default) for larger problems; it uses an "
+                    f"L-BFGS Hessian approximation that costs O(N) "
+                    f"per iteration.",
+                    UserWarning, stacklevel=2)
+
+            # Build merit-gradient and Hessian closures.
+            def _grad_for_newton(xv):
+                # Use the existing analytic-when-possible jac path
+                # when available; otherwise FD the full merit.
+                if final_jac is not None:
+                    return np.asarray(final_jac(xv), dtype=np.float64)
+                return _fd_grad_pure(
+                    merit_fn,
+                    np.asarray(xv, dtype=np.float64),
+                    eps=1e-6, scheme='central')
+
+            def _hess_for_newton(xv):
+                # FD-Hessian = FD-Jacobian-of-FD-gradient.  Central
+                # difference on each component of the gradient.  Costs
+                # O(N) gradient evaluations; each gradient itself costs
+                # O(N) merit-fn evals for the FD path, so the Hessian
+                # is O(N^2) merit calls.  Justified for small N where
+                # the faster Newton convergence rate amortises it.
+                x_arr = np.asarray(xv, dtype=np.float64)
+                Nv = x_arr.size
+                H = np.zeros((Nv, Nv), dtype=np.float64)
+                # Use a slightly coarser step on the outer FD to keep
+                # the truncation error manageable -- the inner gradient
+                # is already O(h) at h=1e-6, so the outer step should
+                # be ~1e-4 for a balanced O(h)+O(h^2) trade-off.
+                eps_outer = 1e-4
+                for i in range(Nv):
+                    step = eps_outer * max(abs(x_arr[i]), 1e-6)
+                    xp_step = x_arr.copy()
+                    xp_step[i] = x_arr[i] + step
+                    xm_step = x_arr.copy()
+                    xm_step[i] = x_arr[i] - step
+                    gp = _grad_for_newton(xp_step)
+                    gm = _grad_for_newton(xm_step)
+                    H[:, i] = (gp - gm) / (2.0 * step)
+                # Symmetrise to suppress FD-asymmetry noise; the true
+                # Hessian is symmetric.
+                H = 0.5 * (H + H.T)
+                return H
+
+            _scipy_method = 'trust-ncg'
+            _hess_fn = _hess_for_newton if (hess is None or hess == 'fd') else hess
             res = so.minimize(
-                merit_fn, x0, method=method,
-                jac=final_jac,
-                bounds=bounds if method in ('L-BFGS-B', 'SLSQP', 'trust-constr') else None,
+                merit_fn, x0, method=_scipy_method,
+                jac=_grad_for_newton,
+                hess=_hess_fn,
                 options={'maxiter': max_iter, 'disp': verbose},
                 callback=_scipy_cb_minimize)
+            x_opt = res.x
+        else:
+            # v4.16 (ROADMAP #9): thread hard constraints through
+            # scipy.optimize.minimize.  Method compatibility was
+            # validated up-front; here we just translate each
+            # :class:`Constraint` to a scipy NonlinearConstraint.
+            _scipy_constraints = [c.to_scipy() for c in constraint_seq]
+            _minimize_kwargs: Dict[str, Any] = {
+                'jac': final_jac,
+                'bounds': bounds if method in ('L-BFGS-B', 'SLSQP',
+                                                'trust-constr') else None,
+                'options': {'maxiter': max_iter, 'disp': verbose},
+                'callback': _scipy_cb_minimize,
+            }
+            if _scipy_constraints:
+                _minimize_kwargs['constraints'] = _scipy_constraints
+            if hess is not None and method in (
+                    'Newton-CG', 'trust-ncg', 'trust-exact',
+                    'trust-krylov'):
+                _minimize_kwargs['hess'] = hess
+            res = so.minimize(
+                merit_fn, x0, method=method, **_minimize_kwargs)
             x_opt = res.x
 
         # Final evaluation for the returned context
         final_value, final_ctx = evaluate(x_opt)
+        # v4.16 (ROADMAP #10): also force-save the final state so the
+        # checkpoint file reflects the converged solution, regardless
+        # of where state_save_every left the rolling-save counter.
+        # Gated on state_file so pre-v4.16 callers see byte-identical
+        # behaviour.
+        if state_file:
+            if np.isfinite(final_value) and float(final_value) < merit_best[0]:
+                merit_best[0] = float(final_value)
+                x_best[0] = np.asarray(x_opt, dtype=np.float64).copy()
+            _state_save(force=True)
         dt = time.time() - t0
         iter_tag = (f'{iter_count[0]} iters, '
                     if iter_count[0] > 0 else '')

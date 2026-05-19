@@ -810,6 +810,23 @@ def clear_propagate_system_jax_cache() -> None:
         _PROPAGATE_SYSTEM_JAX_CACHE.clear()
 
 
+# v4.16.0 (ROADMAP #15): register the propagate-system JAX clearer
+# with the central registry at module-import time.
+# ``clear_asm_caches`` now walks the registry rather than enumerating
+# clear calls by hand.  Late-binding closure preserves
+# ``mock.patch.object`` test semantic.
+try:
+    from ._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'propagate_system_jax',
+        lambda: getattr(_this_mod, 'clear_propagate_system_jax_cache')(),
+    )
+except ImportError:
+    pass
+
+
 # ----------------------------------------------------------------------
 # Traceable element types for propagate_through_system_jax (B1-2 fix)
 # ----------------------------------------------------------------------

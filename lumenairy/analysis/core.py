@@ -2232,6 +2232,22 @@ def clear_zernike_basis_cache() -> None:
         _ZERNIKE_BASIS_CACHE.clear()
 
 
+# v4.16.0 (ROADMAP #15): register the Zernike-basis clearer with the
+# central registry at module-import time.  ``clear_asm_caches`` now
+# walks the registry rather than enumerating clear calls by hand.
+# Late-binding closure preserves ``mock.patch.object`` test semantic.
+try:
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    import sys as _sys
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'zernike_basis',
+        lambda: getattr(_this_mod, 'clear_zernike_basis_cache')(),
+    )
+except ImportError:
+    pass
+
+
 def _zernike_basis_matrix_build(
     n_modes: int,
     X: np.ndarray,
