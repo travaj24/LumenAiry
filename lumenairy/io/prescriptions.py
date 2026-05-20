@@ -1016,11 +1016,17 @@ def load_zemax_zmx(filepath: str,
                 if g != 'air' and g not in GLASS_REGISTRY:
                     unknown_glasses.add(g)
     if unknown_glasses:
+        # v4.16.1 (audit ORG-2 / C.7): explicit UserWarning category +
+        # stacklevel=2 so the warning points at the caller (the user
+        # invoking load_zemax_zmx / similar) rather than at this line.
         warnings.warn(
             f"Glasses not in GLASS_REGISTRY: {unknown_glasses}. "
             f"Add them before calling apply_real_lens. Example:\n"
             f"  GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')\n"
-            f"Browse refractiveindex.info to find the correct path.")
+            f"Browse refractiveindex.info to find the correct path.",
+            UserWarning,
+            stacklevel=2,
+        )
 
     # ------------------------------------------------------------------
     # Coordinate breaks
@@ -1467,11 +1473,16 @@ def load_zemax_prescription_data_txt(filepath: str,
                 if g != 'air' and g not in GLASS_REGISTRY:
                     unknown_glasses.add(g)
     if unknown_glasses:
+        # v4.16.1 (audit ORG-2 / C.7): explicit UserWarning category +
+        # stacklevel=2 so the warning points at the caller rather than
+        # at this line.
         warnings.warn(
             f"Glasses not in GLASS_REGISTRY: {unknown_glasses}. "
             f"Add them before calling apply_real_lens. Example:\n"
             f"  GLASS_REGISTRY['GLASS_NAME'] = ('specs', 'CATALOG', 'PAGE')\n"
-            f"Browse refractiveindex.info to find the correct path."
+            f"Browse refractiveindex.info to find the correct path.",
+            UserWarning,
+            stacklevel=2,
         )
 
     return {

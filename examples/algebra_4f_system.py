@@ -93,7 +93,13 @@ def main() -> None:
         ax.set_yticks([])
     fig.suptitle('algebra_4f_system.py -- operator-algebra 4f imaging')
     plt.tight_layout()
-    out_path = 'algebra_4f_system.png'
+    # v4.16.1 (audit item 21): write to examples/output/ alongside the
+    # other example PNGs rather than the current working directory.
+    import os as _os
+    out_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            'output')
+    _os.makedirs(out_dir, exist_ok=True)
+    out_path = _os.path.join(out_dir, 'algebra_4f_system.png')
     fig.savefig(out_path, dpi=120)
     print(f"Figure saved to {out_path}")
 

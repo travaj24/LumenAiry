@@ -79,6 +79,11 @@ from .dispatch import (
     which_propagator,
     ASM_FAMILY,
 )
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP P5/P0-1): partial-coherence
+# ensemble propagator helper.  Closes the half-shipped Schell-model
+# workflow by giving callers a one-line "propagate this ensemble and
+# give me the partial-coherence intensity" entry point.
+from .ensemble import propagate_ensemble
 from .vectorial_hfpi import (
     VectorPathBundle,
     init_vector_paths_from_field,
@@ -132,6 +137,7 @@ __all__ = [
     'asm_propagate',
     'which_propagator',
     'ASM_FAMILY',
+    'propagate_ensemble',
     'VectorPathBundle',
     'init_vector_paths_from_field',
     'propagate_vector_to_plane',

@@ -1313,9 +1313,43 @@ def default_extension() -> str:
 
 
 def _detect_backend(path):
-    """Auto-detect backend from file extension or path structure."""
-    if path.endswith('.zarr') or os.path.isdir(path):
+    """Auto-detect backend from file extension or path structure.
+
+    Supports both ``str`` and ``pathlib.Path`` inputs.  Returns
+    ``'zarr'`` when the path either (a) has a ``.zarr`` extension, or
+    (b) is an existing directory containing a Zarr store marker
+    (``zarr.json`` for Zarr v3 at the group root, or ``.zarray`` for
+    Zarr v2 at the array root).  Returns ``'hdf5'`` otherwise.
+
+    v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-3-1) fix:
+
+    1. ``str(path)`` cast added so ``pathlib.Path`` inputs no longer
+       raise ``AttributeError`` on ``.endswith``.  The dispatcher
+       docstrings advertise Path support; this enforces it.
+
+    2. Directory-routing restricted to actual Zarr stores via the
+       canonical store-marker file (``zarr.json`` per the Zarr v3
+       spec at the group root, or ``.zarray`` per Zarr v2 at the
+       array root).  Pre-v4.16.1 any directory at ``path`` silently
+       routed to the Zarr backend, so a stale ``output.h5/``
+       directory next to ``output.h5`` would re-route subsequent
+       reads to Zarr and silently produce a wrong-backend error
+       trace.
+    """
+    s = str(path)
+    if s.endswith('.zarr'):
         return 'zarr'
+    if os.path.isdir(s):
+        # Restrict directory-routing to a real Zarr store via the
+        # canonical store-marker files.  Zarr v3 group root:
+        # ``zarr.json``.  Zarr v2 array root: ``.zarray``.  Without a
+        # marker file the directory is treated as a non-Zarr
+        # directory and dispatched to HDF5 (which will then raise a
+        # clear "not an HDF5 file" error if the user pointed at a
+        # generic directory).
+        if (os.path.exists(os.path.join(s, 'zarr.json'))
+                or os.path.exists(os.path.join(s, '.zarray'))):
+            return 'zarr'
     return 'hdf5'
 
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "4.16.0"
+version = "4.16.1"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -45,7 +45,6 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20",
-    "refractiveindex>=1.0",
     "scipy>=1.7",
     "matplotlib>=3.5",
     "psutil>=5.0",
@@ -55,13 +54,25 @@ dependencies = [
 fft = ["pyfftw>=0.13"]
 gpu = ["cupy>=11.0"]
 fits = ["astropy>=5.0"]
+# v4.16.1 (audit M-1): refractiveindex pulled from the hard
+# dependency block to align with the optional / lazy-import handling
+# in ``lumenairy/glass.py``.  When this group is NOT installed the
+# library transparently falls back to bundled Sellmeier coefficients
+# in ``SELLMEIER_COEFFICIENTS`` for the common catalog entries; only
+# tuple-style ``(shelf, book, page)`` glasses without a bundled
+# Sellmeier raise a clear ImportError on first lookup.
+glass = ["refractiveindex>=1.0"]
 # v4.16.0: filelock is required for cross-process atomic append in
 # lumenairy/io/storage.py (Agent B scope).  Filelock is a tiny pure-
 # Python package (~10 KB) and is NOT a transitive dep of h5py or zarr
 # (verified against h5py 3.16.0 / zarr 3.1.6), so we add it
 # explicitly here.
 hdf5 = ["h5py>=3.0", "filelock>=3.0"]
-zarr = ["zarr>=2.14", "filelock>=3.0"]
+# v4.16.1 (audit M-3): bumped from ``zarr>=2.14`` to ``zarr>=3.0``.
+# ``lumenairy/io/storage.py`` uses ``Group.create_array``, a Zarr-v3
+# API.  Users pinning ``zarr==2.x`` hit ``AttributeError`` on the
+# Group object; bumping the floor matches the actual API in use.
+zarr = ["zarr>=3.0", "filelock>=3.0"]
 # JAX (CPU): enables automatic differentiation of any function written
 # against the array-namespace dispatch (lumenairy.backend), JIT
 # compilation via XLA, and free GPU/TPU acceleration if the user
@@ -100,9 +111,15 @@ all = [
     "numba>=0.58",
     "astropy>=5.0",
     "h5py>=3.0",
-    "zarr>=2.14",
+    # v4.16.1 (audit M-3): aligned with the standalone ``zarr`` extras
+    # group: floor bumped to Zarr v3 (Group.create_array API).
+    "zarr>=3.0",
     "jax>=0.4.20",
     "filelock>=3.0",
+    # v4.16.1 (audit M-1): refractiveindex bundled into ``all`` so the
+    # one-shot ``pip install lumenairy[all]`` continues to pull it
+    # along with every other optional accelerator.
+    "refractiveindex>=1.0",
 ]
 dev = [
     "pytest>=7.0",

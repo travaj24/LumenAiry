@@ -796,11 +796,28 @@ def _clear_local_asm_caches() -> None:
 # v4.16.0 (ROADMAP #15): register the local-ASM clearer with the
 # central registry at module-import time.  ``clear_asm_caches`` now
 # walks the registry rather than enumerating clear calls by hand.
+#
+# v4.16.1 (audit P1-NEW-F1-2 / C.5): late-binding lambda matching
+# the canonical pattern used by the other 8 cache-owning modules.
+# The registered entry re-resolves ``_clear_local_asm_caches`` from
+# the module's current namespace at call time -- this preserves the
+# pre-v4.16 ``mock.patch.object`` semantic where tests that monkey-
+# patch the clear-function still observe their counter increment
+# when ``clear_asm_caches`` walks the registry.  Pre-v4.16.1 the
+# registration captured the function object directly (early-binding),
+# which silently bypassed ``mock.patch.object`` -- a tester-visible
+# inconsistency vs the other 8 caches.  The cost is one attribute
+# lookup per cache per drain (negligible vs the cache-clear work).
 from .._cache_registry import (
     register_cache_clearer as _register_cache_clearer,
     clear_all_registered_caches as _clear_all_registered_caches,
 )
-_register_cache_clearer('asm_local', _clear_local_asm_caches)
+import sys as _sys
+_this_mod = _sys.modules[__name__]
+_register_cache_clearer(
+    'asm_local',
+    lambda: getattr(_this_mod, '_clear_local_asm_caches')(),
+)
 
 
 def clear_asm_caches() -> None:

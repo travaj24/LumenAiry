@@ -1181,8 +1181,23 @@ def propagate_through_system_jax(E_in: np.ndarray,
     # Now goes through ``_resolve_jax_complex_dtype`` which reads the
     # library-wide default.  Complex inputs honour their own dtype; only
     # real inputs fall back to the configured default.
-    if np.iscomplexobj(np.asarray(E_in)):
-        cdtype = _resolve_jax_complex_dtype(np.asarray(E_in).dtype)
+    #
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 7 / P3 / DEEP-4 MEDIUM-2):
+    # the pre-v4.16.1 dtype probe used ``np.iscomplexobj(np.asarray(E_in))``
+    # which raises ``jax.errors.TracerArrayConversionError`` when this
+    # function is wrapped in ``jax.jit`` or ``jax.grad`` -- but this
+    # function is explicitly named ``propagate_through_system_jax`` and
+    # the docstring touts end-to-end jit'd caching.  The fix mirrors
+    # the v4.15.3 ``_check_2d_scalar_field`` JAX-safe ``getattr(E,
+    # 'attr', None)`` idiom: read the dtype via duck-typing (works for
+    # NumPy arrays, JAX tracers, CuPy arrays, and the typed scalars
+    # that the JAX cast accepts).  When the dtype attribute is missing
+    # or non-complex, fall back to the library-default complex dtype
+    # for the cast -- the real-input branch is exercised by tests that
+    # build a real Gaussian envelope and rely on the autopromote.
+    probe_dtype = getattr(E_in, 'dtype', None)
+    if probe_dtype is not None and 'complex' in str(probe_dtype):
+        cdtype = _resolve_jax_complex_dtype(probe_dtype)
     else:
         cdtype = _resolve_jax_complex_dtype()
     E = jnp.asarray(E_in, dtype=cdtype)

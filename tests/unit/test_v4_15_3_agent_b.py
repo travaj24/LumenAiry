@@ -6,6 +6,20 @@ This module pins the v4.15.3 closures for audit findings P1-NEW-F1-1,
 P1-NEW-F1-2, P1-NEW-F1-4, and the P2 sentinel-subclass-promotion item
 from ``docs/audits/AUDIT_V4_15_2_2026_05_18.md``.
 
+v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path Schell
+``DeprecationWarning`` is retired now that the v4.15.0 -> v4.15.1
+return-shape change has had four subsequent releases of exposure.
+``TestSchellDeprecationWarningStacklevel`` and the two
+``TestSourceSchellClassmethodSentinel.test_*_default_emits_*`` methods
+have been inverted from "warning fires" assertions to "warning does
+NOT fire" assertions.  The ``_warn_schell_return_kind_default`` helper
++ ``_RETURN_KIND_UNSET`` sentinel + ``_SchellReturnKindUnsetSentinel``
+subclass are all preserved for back-compat (test pins below import
+them); only the default-path call-site invocations were removed.  The
+``TestLibraryWideStacklevelSweep`` (5 Source.* legacy-positional
+classmethods) and ``TestReturnKindUnsetSubclassSentinel`` test
+classes are unchanged -- they test orthogonal back-compat surfaces.
+
 Scope
 -----
 
@@ -337,83 +351,81 @@ class TestFreeSpaceAnamorphicSAS:
 
 # ============================================================================
 # B.2 -- P1-NEW-F1-2: Schell DeprecationWarning stacklevel one short
+#
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+# DeprecationWarning was retired now that the v4.15.0 -> v4.15.1
+# return-shape change has had multiple releases of exposure.  The
+# tests below were originally written to verify the warning's
+# ``stacklevel`` lands at user code; v4.16.1 inverts them to assert
+# the warning no longer fires on the default path.  The underlying
+# ``_warn_schell_return_kind_default`` helper is preserved (the
+# stacklevel meta-pin elsewhere in the file imports it) -- only the
+# default-path call-site invocations were removed.
 # ============================================================================
 
 
 class TestSchellDeprecationWarningStacklevel:
-    """v4.15.3 (audit P1-NEW-F1-2): the Schell default-return-kind
-    DeprecationWarning must point at user code (the call site of
-    ``create_gaussian_schell_source`` /
-    ``create_schell_model_source`` /
-    ``create_annular_incoherent_source``), NOT at the factory body
-    inside the library.
-
-    Frame chain when the warning fires:
-      1. ``warnings.warn`` (innermost, inside ``_emit``)
-      2. ``_emit`` body
-      3. ``warn_deprecated_signature`` body
-      4. ``_warn_schell_return_kind_default`` body
-      5. Factory body (e.g., ``create_gaussian_schell_source``)
-      6. User code  <-- target
-
-    Required ``stacklevel`` value to land at user code = 5.
-    Pre-v4.15.3 ``stacklevel=4`` landed at frame 4 (factory body) --
-    one frame inside the library.
+    """v4.16.1 contract: the Schell default-return-kind path must NOT
+    emit the historic v4.15.0 -> v4.15.1 return-shape
+    DeprecationWarning.  The pre-v4.16.1 contract (warning fires with
+    ``stacklevel=5`` pointing at user code) was retired in line with
+    audit item 6 once the new ensemble contract had multiple releases
+    of exposure.  Pin the new contract so a re-introduction of the
+    warning is loud.
     """
 
-    def test_gaussian_schell_warning_points_at_user_code(self):
-        """Trigger the DeprecationWarning by calling
-        ``create_gaussian_schell_source`` without ``return_kind``.
-        The reported filename must be THIS test file (the user's
-        call site), not ``sources/core.py``.
+    def test_gaussian_schell_default_no_deprecation_warning(self):
+        """Call ``create_gaussian_schell_source`` without
+        ``return_kind``.  No ``return_kind`` DeprecationWarning may
+        fire; the call returns the canonical 4-tuple ensemble form.
         """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            create_gaussian_schell_source(**_GAUSSIAN_SCHELL_KW)
+            result = create_gaussian_schell_source(**_GAUSSIAN_SCHELL_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'create_gaussian_schell_source' in str(w.message)]
-        assert len(dep) >= 1, (
-            f"Default-return_kind call must emit DeprecationWarning; "
-            f"got {[str(w.message) for w in caught]}.")
-        # The reported filename must be THIS test file -- not the
-        # library file.
-        fn = dep[0].filename
-        assert __file__.replace('\\', '/').lower() in fn.replace(
-            '\\', '/').lower(), (
-            f"Schell DeprecationWarning must point at user code "
-            f"(this test file: {__file__!r}); got "
-            f"filename={fn!r}.")
+               and 'create_gaussian_schell_source' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == [], (
+            f"v4.16.1: default-return_kind call must NOT emit "
+            f"DeprecationWarning; got "
+            f"{[str(w.message) for w in dep]}.")
+        ens, dx, dy, wl = result
+        assert ens.shape == (4, 16, 16)
 
-    def test_schell_model_warning_points_at_user_code(self):
+    def test_schell_model_default_no_deprecation_warning(self):
         """Same contract for ``create_schell_model_source``."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            create_schell_model_source(**_SCHELL_MODEL_KW)
+            result = create_schell_model_source(**_SCHELL_MODEL_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'create_schell_model_source' in str(w.message)]
-        assert len(dep) >= 1
-        fn = dep[0].filename
-        assert __file__.replace('\\', '/').lower() in fn.replace(
-            '\\', '/').lower(), (
-            f"Schell DeprecationWarning must point at user code; "
-            f"got filename={fn!r}.")
+               and 'create_schell_model_source' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == []
+        ens, dx, dy, wl = result
+        assert ens.shape == (4, 16, 16)
 
-    def test_schell_warning_does_not_point_inside_library(self):
-        """Belt-and-braces: the warning's filename must NOT include
-        ``sources/core.py`` (the library factory body)."""
+    def test_warn_helper_still_callable_for_back_compat(self):
+        """The ``_warn_schell_return_kind_default`` helper is
+        preserved as a deprecated-but-importable symbol for back-
+        compat (the in-file ``LibraryWideStacklevelSweep`` pin and
+        any external user code that wired the helper into a custom
+        Schell wrapper).  v4.16.1 must NOT remove the symbol --
+        only the default-path call-site invocations.
+        """
+        from lumenairy.sources.core import _warn_schell_return_kind_default
+        assert callable(_warn_schell_return_kind_default)
+        # When invoked explicitly, the helper still emits the warning
+        # (used by callers maintaining their own custom Schell
+        # wrappers that opt into the legacy contract).
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            create_gaussian_schell_source(**_GAUSSIAN_SCHELL_KW)
+            _warn_schell_return_kind_default('user_custom_factory')
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'create_gaussian_schell_source' in str(w.message)]
-        fn_norm = dep[0].filename.replace('\\', '/').lower()
-        assert 'sources/core.py' not in fn_norm and \
-               'lumenairy/sources/core.py' not in fn_norm, (
-            f"Schell DeprecationWarning must NOT point inside the "
-            f"library (sources/core.py); got filename={dep[0].filename!r}.")
+               and 'user_custom_factory' in str(w.message)]
+        assert len(dep) >= 1
 
 
 # ============================================================================
@@ -501,49 +513,51 @@ class TestLibraryWideStacklevelSweep:
 
 class TestSourceSchellClassmethodSentinel:
     """v4.15.3 (audit P1-NEW-F1-4): the two ``Source.*`` Schell
-    classmethods (``gaussian_schell``, ``schell_model``) must route
+    classmethods (``gaussian_schell``, ``schell_model``) route
     through the same ``_RETURN_KIND_UNSET`` sentinel logic as the 3
-    top-level factories.  Pre-v4.15.3 they hardcoded
-    ``return_kind: str = 'ensemble'`` and bypassed the
-    DeprecationWarning path entirely.
+    top-level factories.
+
+    v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+    DeprecationWarning emitted by the classmethods on the sentinel
+    path is retired in line with the top-level factories.  The two
+    tests below were originally written to assert the warning fires;
+    v4.16.1 inverts them to pin the new silent contract.  The
+    ensemble-tuple return shape pin is unchanged.
     """
 
-    def test_source_gaussian_schell_default_emits_deprecation_warning(
+    def test_source_gaussian_schell_default_no_deprecation_warning(
         self,
     ):
-        """``Source.gaussian_schell(...)`` without ``return_kind``
-        must emit a DeprecationWarning mentioning the v4.15.0 ->
-        v4.15.1 return-shape change.  Pre-v4.15.3 the classmethod
-        bypassed the warning entirely."""
+        """v4.16.1: ``Source.gaussian_schell(...)`` without
+        ``return_kind`` must NOT emit the historic v4.15.2-era
+        return-shape DeprecationWarning.  The call still returns the
+        canonical 4-tuple ensemble form (NOT a Source-wrapped 3-D
+        field)."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             result = la.Source.gaussian_schell(**_GAUSSIAN_SCHELL_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'Source.gaussian_schell' in str(w.message)]
-        assert len(dep) >= 1, (
-            f"Default-return_kind call must emit DeprecationWarning "
-            f"mentioning Source.gaussian_schell; got "
-            f"{[str(w.message) for w in caught]}.")
-        msg = str(dep[0].message)
-        assert 'return_kind' in msg
-        assert 'v4.15.0' in msg and 'v4.15.1' in msg
-        # Behaviour: still get the 4-tuple ensemble return.
+               and 'Source.gaussian_schell' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == [], (
+            f"v4.16.1: default-return_kind classmethod call must NOT "
+            f"emit DeprecationWarning; got "
+            f"{[str(w.message) for w in dep]}.")
+        # Behaviour pin: still get the 4-tuple ensemble return.
         ens, dx, dy, wl = result
         assert ens.shape == (4, 16, 16)
 
-    def test_source_schell_model_default_emits_deprecation_warning(self):
+    def test_source_schell_model_default_no_deprecation_warning(self):
         """Same contract for ``Source.schell_model``."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             result = la.Source.schell_model(**_SCHELL_MODEL_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'Source.schell_model' in str(w.message)]
-        assert len(dep) >= 1
-        msg = str(dep[0].message)
-        assert 'return_kind' in msg
-        assert 'v4.15.0' in msg and 'v4.15.1' in msg
+               and 'Source.schell_model' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == []
         ens, dx, dy, wl = result
         assert ens.shape == (4, 16, 16)
 

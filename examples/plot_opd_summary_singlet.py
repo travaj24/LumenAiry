@@ -12,7 +12,8 @@ Run::
 
     python examples/plot_opd_summary_singlet.py
 
-Produces ``singlet_opd_summary.png`` in the current working directory.
+Produces ``singlet_opd_summary.png`` in ``examples/output/``
+(v4.16.1: previously written to the current working directory).
 
 Author: Andrew Traverso -- v4.15.4 / Agent D.
 """
@@ -99,7 +100,13 @@ def main() -> None:
         units='waves', wavelength=wavelength,
         title='N-BK7 singlet -- 4-panel OPD summary')
 
-    out_path = 'singlet_opd_summary.png'
+    # v4.16.1 (audit item 21): write to examples/output/ alongside the
+    # other example PNGs rather than the current working directory.
+    import os as _os
+    out_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            'output')
+    _os.makedirs(out_dir, exist_ok=True)
+    out_path = _os.path.join(out_dir, 'singlet_opd_summary.png')
     fig.savefig(out_path, dpi=120, bbox_inches='tight')
     plt.close(fig)
     print(f"  wrote {out_path}")

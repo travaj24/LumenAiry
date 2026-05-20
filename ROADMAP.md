@@ -1,8 +1,9 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-19 (post-v4.16.0).  v4.16 + v4.17 + v4.18
-ROADMAP scope all shipped in v4.16.0 mega-rollup; v5.0 is now the
-immediate horizon.
+**Last updated:** 2026-05-19 (post-v4.16.1).  v4.16 + v4.17 + v4.18
+ROADMAP scope all shipped in v4.16.0 mega-rollup; v4.16.1 closes the
+v4.16.0 deep audit (4 silent-wrong-answer bugs + Schell/JAX cluster +
+hygiene).  v5.0 is now the immediate horizon.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -17,23 +18,29 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.16.0 baseline (2106 unit tests passing + 5
+- **Library:** v4.16.1 baseline (2208 unit tests passing + 5
   documented skips + 1 documented xfail).  v4.16.0 mega-rollup
-  shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release:
-  4 V4 meta-pin walkers (sentinel propagation, `_xp_of` dispatch,
-  `dy` threading, `__all__` symmetry); multi-process atomic-append
-  for `storage.py` (HDF5 SWMR + filelock Zarr lock); full
-  optimisation framework expansion (constrained opt + checkpoint/
-  resume + Newton-step + pymoo NSGA-II); glass + materials
-  expansion (CDGM + Hikari + Sumita catalogues + per-glass Sellmeier
-  validity ranges + central cache registry).  34/34 validation files
-  passing.  Public API at ~400+ symbols in `lumenairy.__all__`.
+  shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
+  v4.16.1 closes the v4.16.0 deep audit through P3: 4 silent-wrong-
+  answer correctness bugs (`MultiWavelengthMerit` SUM→AVG,
+  `shack_hartmann` pitch quantisation, `_detect_backend` directory
+  misclassification, LM `bounds` None-endpoint); the Schell-model
+  partial-coherence cluster (new `propagate_ensemble(...)` helper +
+  retired default factory `DeprecationWarning` + MCF rejection
+  message refresh); JAX-traceable dtype probe + high-NA UserWarning;
+  10th cache-registry meta-pin walker; glass / compat / UX cleanup
+  (`refractiveindex` moved to optional `[glass]` extras, `zarr>=3.0`
+  floor, 4 stale `n_d` inline comments fixed, `ProcessPoolExecutor`
+  spawn-context, new `examples/06_schell_propagation.py` +
+  `examples/07_zemax_load_trace.py`, new `CONVENTIONS.md`).  34/34
+  validation files passing.  Public API at ~400+ symbols in
+  `lumenairy.__all__`.
 - **Designer GUI:** v3.7.10 (per in-code comments at
   `ui/main_window.py:2196` etc.).  No standalone release stream; the
   Designer ships co-versioned inside the library wheel.
-- **Audit closure status:** AUDIT_V4_12_1 through AUDIT_V4_15_4
-  all closed.  AUDIT_V4_13_1 Tier-2/3/4 architectural items
-  scoped to v5.0 as noted below.
+- **Audit closure status:** AUDIT_V4_12_1 through
+  AUDIT_V4_16_0_DEEP all closed.  AUDIT_V4_13_1 Tier-2/3/4
+  architectural items scoped to v5.0 as noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
   5).  v4.14.2 migrated 2 shims onto the canonical
   `_deprecation.warn_deprecated_signature` helper with explicit
@@ -91,12 +98,15 @@ The next horizon is v5.0 — major structural release.
 
 ### Known issues flagged for v4.16.x
 
-* **Bundled Sellmeier formula-3 (polynomial) evaluator**.
-  Hikari, Sumita, and 4 CDGM glasses use refractiveindex.info
-  formula 3.  v4.16.0's `_sellmeier_index` only supports formula
-  2.  Minimal installs without `refractiveindex` raise
-  `ImportError` on these 26 entries with a clear install hint.
-  v4.16.1 candidate: add `_polynomial_index` evaluator.
+* **Bundled Sellmeier formula-3 (polynomial) evaluator** (NOT
+  addressed in v4.16.1; deferred to v5.0).  Hikari, Sumita, and
+  4 CDGM glasses use refractiveindex.info formula 3.  The bundled
+  `_sellmeier_index` still only supports formula 2.  v4.16.1
+  reduced the user-facing impact by moving `refractiveindex` to the
+  optional `[glass]` extras group (so a minimal install no longer
+  pretends to support these 26 entries — users who want formula-3
+  glasses pip-install the extras).  A native formula-3 evaluator
+  in the bundle is a v5.0 candidate.
 
 ---
 

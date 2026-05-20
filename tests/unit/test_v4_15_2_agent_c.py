@@ -154,7 +154,9 @@ class TestPartialCoherenceMCFRejection:
                 mcf, elements, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
         assert 'propagate_through_system' in msg
 
     def test_propagate_dispatcher_rejects_partial_coherence_mcf(self):
@@ -164,7 +166,9 @@ class TestPartialCoherenceMCFRejection:
                        method='asm')
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_angular_spectrum_propagate_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -173,7 +177,9 @@ class TestPartialCoherenceMCFRejection:
                                         wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_fresnel_propagate_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -181,7 +187,9 @@ class TestPartialCoherenceMCFRejection:
             fresnel_propagate(mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_fraunhofer_propagate_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -189,7 +197,9 @@ class TestPartialCoherenceMCFRejection:
             fraunhofer_propagate(mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_rayleigh_sommerfeld_propagate_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -198,7 +208,9 @@ class TestPartialCoherenceMCFRejection:
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_scalable_angular_spectrum_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -207,7 +219,9 @@ class TestPartialCoherenceMCFRejection:
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_apply_thin_lens_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -215,7 +229,9 @@ class TestPartialCoherenceMCFRejection:
             apply_thin_lens(mcf, f=10e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_apply_cylindrical_lens_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -224,7 +240,9 @@ class TestPartialCoherenceMCFRejection:
                 mcf, f=10e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
     def test_apply_real_lens_rejects_partial_coherence_mcf(self):
         mcf = _make_mcf()
@@ -234,7 +252,9 @@ class TestPartialCoherenceMCFRejection:
                 mcf, prescription=rx, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in msg
 
 
 # ============================================================================
@@ -455,9 +475,12 @@ class TestErrorMessageContract:
             with pytest.raises(TypeError) as excinfo:
                 call()
             msg = str(excinfo.value)
-            assert 'v4.16' in msg, (
-                f"TypeError text is missing the v4.16 scope marker: "
-                f"{msg!r}")
+            # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+            # retired; rejection now points at propagate_ensemble.
+            assert 'propagate_ensemble' in msg, (
+                f"TypeError text is missing the propagate_ensemble "
+                f"hint (v4.16.1 audit item 5b replaces the prior "
+                f"'v4.16+' scope marker): {msg!r}")
 
     def test_error_messages_show_iteration_pattern_for_ensemble(self):
         """Every ValueError raised on a 3-D ensemble input must show

@@ -106,7 +106,13 @@ def main() -> None:
     axes[1].set_ylabel('y [mm]')
     fig.suptitle('algebra_anamorphic.py -- cylindrical line focus')
     plt.tight_layout()
-    out_path = 'algebra_anamorphic.png'
+    # v4.16.1 (audit item 21): write to examples/output/ alongside the
+    # other example PNGs rather than the current working directory.
+    import os as _os
+    out_dir = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)),
+                            'output')
+    _os.makedirs(out_dir, exist_ok=True)
+    out_path = _os.path.join(out_dir, 'algebra_anamorphic.png')
     fig.savefig(out_path, dpi=120)
     print(f"Figure saved to {out_path}")
 

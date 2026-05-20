@@ -557,7 +557,7 @@ def shack_hartmann(
 
     # 4.10: Wavefront reconstruction
     # slopes_x / slopes_y are OPD gradients in radians-of-tilt (m / m).
-    # cumsum(slopes) * lenslet_pitch is the cumulative OPD in METERS.
+    # cumsum(slopes) * pitch is the cumulative OPD in METERS.
     # Pre-4.10 multiplied by wavelength/(2 pi) (a radians-to-meters
     # conversion) AFTER cumsum, producing units of m^2 (off by ~1e6 at
     # visible wavelengths).  Drop that conversion.
@@ -573,8 +573,21 @@ def shack_hartmann(
     # rather than NaN-poison the entire row / column of the integrator.
     sx_safe = np.where(np.isfinite(slopes_x), slopes_x, 0.0)
     sy_safe = np.where(np.isfinite(slopes_y), slopes_y, 0.0)
-    wf_x = np.cumsum(sx_safe, axis=1) * lenslet_pitch
-    wf_y = np.cumsum(sy_safe, axis=0) * lenslet_pitch
+    # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-2-1): use the ACTUAL on-grid
+    # quantized pitch for the slope-to-wavefront integration, not the
+    # requested ``lenslet_pitch``.  ``sa_pixels = int(round(lenslet_pitch
+    # / dx))`` quantizes the sub-aperture to an integer pixel count;
+    # the slopes are measured between sub-aperture centers spaced by
+    # exactly ``sa_pixels * dx`` (not ``lenslet_pitch``).  The
+    # integration step delta_phi = slope * pitch must use the same
+    # pitch as the slope-measurement geometry, i.e. the on-grid
+    # ``sa_pixels * dx``.  Pre-v4.16.1 used the requested
+    # ``lenslet_pitch``, biasing the reconstructed wavefront amplitude
+    # by ``(sa_pixels * dx) / lenslet_pitch``.  For
+    # ``lenslet_pitch / dx = 1.7`` the amplitude was off by ~18%.
+    pitch_actual = sa_pixels * dx
+    wf_x = np.cumsum(sx_safe, axis=1) * pitch_actual
+    wf_y = np.cumsum(sy_safe, axis=0) * pitch_actual
     # Anchor to (0, 0) corner
     wf_x = wf_x - wf_x[0, 0]
     wf_y = wf_y - wf_y[0, 0]

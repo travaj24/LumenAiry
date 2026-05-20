@@ -1688,20 +1688,28 @@ def _validate_return_kind(value: Any, fn_name: str) -> str:
     return canon
 
 
-# v4.15.2 (P0-NEW-1): the 3 Schell factories changed default return
-# shape from ``(E_2d, x, y)`` (v4.15.0) to
-# ``(ensemble_3d, dx, dy, wavelength)`` (v4.15.1).  Emit a one-release
-# ``DeprecationWarning`` on the default path so pre-v4.15.0 callers
-# doing ``E, x, y = create_gaussian_schell_source(...)`` (which now
-# silently binds ``E.ndim==3`` and ``x`` to a scalar ``dx``) get a
-# loud heads-up rather than a propagation-time wrong-shape failure.
-# Detect the default via a per-module sentinel: when the caller
-# leaves ``return_kind`` unset, the factory sees the sentinel and
-# warns; explicit ``return_kind='ensemble'`` or ``'mcf'`` is silent.
+# v4.15.2 (P0-NEW-1) - v4.15.5: the 3 Schell factories changed default
+# return shape from ``(E_2d, x, y)`` (v4.15.0) to
+# ``(ensemble_3d, dx, dy, wavelength)`` (v4.15.1).  A one-release
+# ``DeprecationWarning`` was emitted on the default path so pre-v4.15.0
+# callers doing ``E, x, y = create_gaussian_schell_source(...)`` would
+# see a loud heads-up rather than a propagation-time wrong-shape
+# failure.  Detection used a per-module sentinel: when the caller left
+# ``return_kind`` unset, the factory saw the sentinel and warned;
+# explicit ``return_kind='ensemble'`` or ``'mcf'`` was silent.
 #
-# v4.15.3 (audit P2-NEW): promoted from a bare ``_Sentinel`` instance
-# to a dedicated ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass
-# for consistency with the other sentinel patterns in the codebase
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path warning
+# is retired -- the v4.15.0 -> v4.15.1 transition has had four
+# subsequent releases of exposure (v4.15.2 / v4.15.3 / v4.15.4 /
+# v4.15.5 / v4.16.0).  The kwarg default is now plain ``'ensemble'``;
+# the sentinel branch at each call site is preserved as a no-op for
+# back-compat (callers explicitly forwarding ``_RETURN_KIND_UNSET``
+# still resolve cleanly).  Sentinel + ``_warn_schell_return_kind_default``
+# helper are slated for removal in v5.0.
+#
+# v4.15.3 (audit P2-NEW): the sentinel itself is a dedicated
+# ``_SchellReturnKindUnsetSentinel(_Sentinel)`` subclass for
+# consistency with the other sentinel patterns in the codebase
 # (``_ZeroApertureMaskSentinel`` in ``optimize/core.py``,
 # ``_AngleUnsetSentinel`` in ``elements/polarization.py``,
 # ``_NoDefaultSentinel`` in ``_deprecation.py``).  The subclass-identity
@@ -1737,20 +1745,38 @@ class _SchellReturnKindUnsetSentinel(_DeprecationSentinel):
 
 
 _RETURN_KIND_UNSET: Any = _SchellReturnKindUnsetSentinel()
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the singleton + the
+# subclass are retained as deprecated public-symbol attributes for
+# back-compat with the v4.15.3 test pins
+# (``tests/unit/test_v4_15_3_agent_b.py`` imports both names).  The
+# subclass remains pickle-safe via the shared
+# ``_SENTINEL_REGISTRY``; the singleton continues to compare
+# ``False`` and stringify with the canonical registry name.  Targeted
+# for removal in v5.0 alongside the rest of the deprecated-default
+# scaffolding.
 
 
 def _warn_schell_return_kind_default(fn_name: str) -> None:
     """Emit the v4.15.0 -> v4.15.1 return-shape ``DeprecationWarning``.
 
+    v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path call
+    sites no longer invoke this helper -- the 3 factories +
+    ``Source.gaussian_schell`` / ``Source.schell_model`` classmethods
+    now default ``return_kind='ensemble'`` directly, with no warning
+    on the default path.  The helper itself is preserved for back-
+    compat -- the v4.15.3 stacklevel meta-pin in
+    ``tests/unit/test_v4_15_3_agent_b.py`` imports it -- and remains
+    invocable by external callers who want to surface the warning
+    manually (e.g. in custom Schell wrappers that still maintain the
+    pre-v4.15.1 single-field return signature).
+
     Routed through the shared ``_deprecation.warn_deprecated_signature``
     helper so the warning message format matches the rest of the
     library and is silenceable with a single ``warnings.filterwarnings``
-    incantation.  ``version_removed='5.0'`` documents the one-release
-    deprecation horizon.
+    incantation.  ``version_removed='5.0'`` documents the deprecation
+    horizon (sentinel + helper are slated for removal in v5.0).
 
-    v4.15.3 (audit P1-NEW-F1-2): ``stacklevel=5`` selects the user's
-    call frame; pre-v4.15.3 ``stacklevel=4`` landed one frame inside
-    the library (the factory body).  Frame chain (innermost first):
+    Frame chain (innermost first), when invoked from a factory body:
 
       1. ``warnings.warn`` (inside ``_emit`` body)
       2. ``_emit`` -> ``warn_deprecated_signature``
@@ -1846,7 +1872,7 @@ def create_gaussian_schell_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-    return_kind: Any = _RETURN_KIND_UNSET,
+    return_kind: Any = 'ensemble',
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
     energy_threshold: float = 0.99,
@@ -1897,11 +1923,15 @@ def create_gaussian_schell_source(
         Nx)`` complex array.
         ``'mcf'``: return a :class:`PartialCoherenceMCF` instance.
 
-        v4.15.2 (P0-NEW-1): the default path emits a
-        ``DeprecationWarning`` reminding callers of the v4.15.0 ->
-        v4.15.1 return-shape change (``(E_2d, x, y)`` ->
-        ``(ensemble_3d, dx, dy, wavelength)``); pass ``return_kind``
-        explicitly to silence.  Removal scheduled for v5.0.
+        v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+        ``DeprecationWarning`` (v4.15.2 -> v4.15.5) flagging the
+        v4.15.0 -> v4.15.1 return-shape change is retired now that
+        the new ensemble contract has had multiple releases of
+        exposure.  The default is ``'ensemble'`` and the call is
+        silent.  Callers can still inspect the sentinel via
+        ``_RETURN_KIND_UNSET`` for back-compat (it is treated as
+        ``'ensemble'``; sentinel + helper are slated for removal in
+        v5.0).
     max_full_N : int, default 64
         Forwarded to :meth:`PartialCoherenceMCF.from_ensemble` when
         ``return_kind='mcf'``.  Grids with ``Ny * Nx > max_full_N**2``
@@ -1948,13 +1978,14 @@ def create_gaussian_schell_source(
         raise ValueError(
             f"create_gaussian_schell_source: n_realizations must be a "
             f"positive integer; got {n_realizations!r}.")
-    # v4.15.2 (P0-NEW-1): detect the default-path call (caller didn't
-    # pass ``return_kind`` explicitly) and emit the one-release
-    # ``DeprecationWarning`` flagging the v4.15.0 -> v4.15.1
-    # return-shape change.  Explicit ``return_kind='ensemble'`` or
-    # ``'mcf'`` calls are silent.
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+    # ``DeprecationWarning`` (v4.15.2 -> v4.15.5) is retired now that
+    # the v4.15.0 return-shape change has had multiple releases of
+    # exposure.  The kwarg default is plain ``'ensemble'``; the
+    # sentinel branch below is preserved as a no-op for back-compat
+    # so callers explicitly passing ``return_kind=_RETURN_KIND_UNSET``
+    # (rare; flagged by the v4.15.3 meta-pin) keep working.
     if return_kind is _RETURN_KIND_UNSET:
-        _warn_schell_return_kind_default('create_gaussian_schell_source')
         return_kind = 'ensemble'
     rk = _validate_return_kind(
         return_kind, fn_name='create_gaussian_schell_source')
@@ -2003,7 +2034,7 @@ def create_schell_model_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-    return_kind: Any = _RETURN_KIND_UNSET,
+    return_kind: Any = 'ensemble',
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
     energy_threshold: float = 0.99,
@@ -2037,9 +2068,9 @@ def create_schell_model_source(
     dtype : optional
         Complex dtype for the ensemble form; ignored for ``'mcf'``.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
-        See :func:`create_gaussian_schell_source`.  v4.15.2 (P0-NEW-1):
-        the default path emits a ``DeprecationWarning``; pass
-        ``return_kind`` explicitly to silence.
+        See :func:`create_gaussian_schell_source`.  v4.16.1 (audit
+        item 6): the default-path ``DeprecationWarning`` is retired;
+        the default is plain ``'ensemble'`` and the call is silent.
     max_full_N, n_modes
         See :meth:`PartialCoherenceMCF.from_ensemble`.
     energy_threshold : float, default 0.99
@@ -2071,11 +2102,10 @@ def create_schell_model_source(
         raise ValueError(
             "create_schell_model_source: intensity_profile must be "
             "non-negative.")
-    # v4.15.2 (P0-NEW-1): see :func:`create_gaussian_schell_source` --
-    # default-path callers get a one-release ``DeprecationWarning``;
-    # explicit ``return_kind`` is silent.
+    # v4.16.1: default-path warning retired; sentinel kept for back-
+    # compat (see :func:`create_gaussian_schell_source` for the
+    # rationale).
     if return_kind is _RETURN_KIND_UNSET:
-        _warn_schell_return_kind_default('create_schell_model_source')
         return_kind = 'ensemble'
     rk = _validate_return_kind(
         return_kind, fn_name='create_schell_model_source')
@@ -2114,7 +2144,7 @@ def create_annular_incoherent_source(
     dy: Optional[float] = None,
     seed: Optional[int] = None,
     dtype: Optional[Any] = None,
-    return_kind: Any = _RETURN_KIND_UNSET,
+    return_kind: Any = 'ensemble',
     max_full_N: int = 64,
     n_modes: Optional[int] = None,
     energy_threshold: float = 0.99,
@@ -2156,9 +2186,9 @@ def create_annular_incoherent_source(
     dtype : optional
         Complex dtype.
     return_kind : {'ensemble', 'mcf'}, default 'ensemble'
-        See :func:`create_gaussian_schell_source`.  v4.15.2 (P0-NEW-1):
-        the default path emits a ``DeprecationWarning``; pass
-        ``return_kind`` explicitly to silence.
+        See :func:`create_gaussian_schell_source`.  v4.16.1 (audit
+        item 6): the default-path ``DeprecationWarning`` is retired;
+        the default is plain ``'ensemble'`` and the call is silent.
     max_full_N, n_modes
         See :meth:`PartialCoherenceMCF.from_ensemble`.
     energy_threshold : float, default 0.99
@@ -2190,11 +2220,10 @@ def create_annular_incoherent_source(
         raise ValueError(
             f"create_annular_incoherent_source: n_realizations must be "
             f"a positive integer; got {n_realizations!r}.")
-    # v4.15.2 (P0-NEW-1): see :func:`create_gaussian_schell_source` --
-    # default-path callers get a one-release ``DeprecationWarning``;
-    # explicit ``return_kind`` is silent.
+    # v4.16.1: default-path warning retired; sentinel kept for back-
+    # compat (see :func:`create_gaussian_schell_source` for the
+    # rationale).
     if return_kind is _RETURN_KIND_UNSET:
-        _warn_schell_return_kind_default('create_annular_incoherent_source')
         return_kind = 'ensemble'
     rk = _validate_return_kind(
         return_kind, fn_name='create_annular_incoherent_source')
@@ -2814,7 +2843,7 @@ class Source:
                          source_point: _Tuple[float, float] = (0.0, 0.0),
                          name: _Optional[str] = None,
                          seed: _Optional[int] = None,
-                         return_kind: Any = _RETURN_KIND_UNSET,
+                         return_kind: Any = 'ensemble',
                          **factory_kwargs) -> Any:
         """Gaussian-Schell partial-coherence source.
 
@@ -2831,16 +2860,14 @@ class Source:
         and surprising downstream ``src.intensity()`` callers with
         broadcasting axis mismatches.
 
-        v4.15.3 (audit P1-NEW-F1-4): default ``return_kind`` now
-        routes through ``_RETURN_KIND_UNSET`` sentinel so the
-        classmethod emits the same ``DeprecationWarning`` as the
-        top-level :func:`create_gaussian_schell_source` factory on
-        the v4.15.0 -> v4.15.1 return-shape change.  Pre-v4.15.3 the
-        literal default ``return_kind: str = 'ensemble'`` silently
-        bypassed the sentinel path, so pre-v4.15.0 callers using
-        this classmethod got a 4-tuple silently (no
-        ``DeprecationWarning``).  Explicit ``return_kind='ensemble'``
-        or ``'mcf'`` is silent.
+        v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+        ``DeprecationWarning`` (v4.15.2 -> v4.15.5) for the v4.15.0
+        -> v4.15.1 return-shape change is retired.  The default is
+        plain ``'ensemble'`` and the call is silent.  The sentinel
+        ``_RETURN_KIND_UNSET`` is preserved as a deprecated
+        compatibility shim (treated as ``'ensemble'`` at the
+        classmethod boundary); both sentinel + helper are slated for
+        removal in v5.0.
 
         Return contract (v4.15.2+)
         --------------------------
@@ -2885,13 +2912,11 @@ class Source:
         A future ``Source.realizations()`` per-realization iterator
         is in scope for v4.16+ but is NOT shipped in v4.15.3.
         """
-        # v4.15.3 (audit P1-NEW-F1-4): route the sentinel through to
-        # the top-level factory so the same DeprecationWarning chain
-        # fires.  Pre-v4.15.3 the literal default 'ensemble' here
-        # short-circuited the sentinel path and silently bypassed the
-        # warning for callers of this classmethod.
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+        # DeprecationWarning is retired; the sentinel pass-through is
+        # preserved so callers explicitly forwarding the sentinel
+        # (rare; the v4.15.3 meta-pin path) still resolve cleanly.
         if return_kind is _RETURN_KIND_UNSET:
-            _warn_schell_return_kind_default('Source.gaussian_schell')
             return_kind = 'ensemble'
         result = create_gaussian_schell_source(
             N=N, dx=dx, wavelength=wavelength, w0=w0, sigma_g=sigma_g,
@@ -2922,7 +2947,7 @@ class Source:
                       source_point: _Tuple[float, float] = (0.0, 0.0),
                       name: _Optional[str] = None,
                       seed: _Optional[int] = None,
-                      return_kind: Any = _RETURN_KIND_UNSET,
+                      return_kind: Any = 'ensemble',
                       **factory_kwargs) -> Any:
         """Generic Schell-model partial-coherence source.
 
@@ -2932,11 +2957,12 @@ class Source:
         ``return_kind='mcf'``; NOT a :class:`Source`-wrapped 3-D
         ensemble).
 
-        v4.15.3 (audit P1-NEW-F1-4): same sentinel-default routing
-        as :meth:`Source.gaussian_schell`.  Default ``return_kind``
-        emits a ``DeprecationWarning`` on the v4.15.0 -> v4.15.1
-        return-shape change (one-release horizon, removal v5.0);
-        explicit ``return_kind='ensemble'`` or ``'mcf'`` is silent.
+        v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+        ``DeprecationWarning`` is retired in line with
+        :meth:`Source.gaussian_schell`.  The default is plain
+        ``'ensemble'`` and the call is silent.  The sentinel is
+        preserved for back-compat (see :meth:`Source.gaussian_schell`
+        docstring).
 
         2-D ``Source.E`` invariant break (intentional): the 4-tuple
         return has ``E_ensemble.shape == (n_realizations, Ny, Nx)``
@@ -2947,12 +2973,9 @@ class Source:
         for the full rationale and the v4.16+ ``Source.realizations()``
         per-realization-iterator plan.
         """
-        # v4.15.3 (audit P1-NEW-F1-4): route the sentinel through to
-        # the top-level factory so the same DeprecationWarning chain
-        # fires on the default path.  See Source.gaussian_schell for
-        # the rationale.
+        # v4.16.1: default-path DeprecationWarning retired; sentinel
+        # pass-through preserved (see Source.gaussian_schell).
         if return_kind is _RETURN_KIND_UNSET:
-            _warn_schell_return_kind_default('Source.schell_model')
             return_kind = 'ensemble'
         result = create_schell_model_source(
             N=N, dx=dx, wavelength=wavelength,

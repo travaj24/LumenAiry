@@ -258,11 +258,19 @@ SELLMEIER_COEFFICIENTS = {
     'H-LAK53A':    ((1.21007394, 1.19495815, 0.806533246),
                     (0.00521679919, 83.5557501, 0.02008035)),
     # H-ZK9B -- zinc crown (formula 2 in CDGM 2022 catalog)
-    # n_d = 1.613750, V_d = 50.40, range 0.302-2.325 um
+    # n_d = 1.62041 (computed; v4.16.1 audit AUDIT_V4_16_0_DEEP Part 7
+    #   4-way convergent: stale inline comment claimed 1.613750.
+    #   Coefficients are bit-for-bit correct against refractiveindex.info
+    #   CDGM 2022-06 YAML; comment was the lie).
+    # V_d = 50.40, range 0.302-2.325 um
     'H-ZK9B':      ((0.874918734, 0.7096273, 1.09453882),
                     (0.00373965378, 0.0163972089, 100.204324)),
     # H-ZF12 -- zinc heavy flint (formula 2 in CDGM 2022 catalog)
-    # n_d = 1.673000, V_d = 32.16, range 0.4047-2.325 um
+    # n_d = 1.76182 (computed; v4.16.1 audit AUDIT_V4_16_0_DEEP Part 7
+    #   4-way convergent: stale inline comment claimed 1.673 -- 6% off,
+    #   the most egregious drift in the block.  Coefficients bit-for-bit
+    #   correct against refractiveindex.info CDGM 2022-06 YAML).
+    # V_d = 32.16, range 0.4047-2.325 um
     'H-ZF12':      ((0.323730379, 1.65668629, 2.1214152),
                     (0.0598308169, 0.0120542686, 174.18792)),
     # D-ZK3 -- zinc crown (formula 2 in CDGM 2022 catalog)
@@ -270,14 +278,22 @@ SELLMEIER_COEFFICIENTS = {
     'D-ZK3':       ((1.33936811, 0.148690268, 1.00954033),
                     (0.00760612309, 0.0238444644, 89.0419787)),
     # D-LAK52 -- lanthanum crown (formula 2 in CDGM 2022 catalog)
-    # n_d = 1.729160, V_d = 54.84, range 0.302-2.325 um.
+    # n_d = 1.73050 (computed; v4.16.1 audit AUDIT_V4_16_0_DEEP Part 7
+    #   4-way convergent: stale inline comment claimed 1.729160.
+    #   Coefficients bit-for-bit correct against refractiveindex.info
+    #   CDGM 2022-06 YAML).
+    # V_d = 54.84, range 0.302-2.325 um.
     # Note: dispatch sheet requested 'D-ZLAK52' which does not exist
     # in the CDGM catalogue; D-LAK52 is the corresponding family
     # member.
     'D-LAK52':     ((1.04647517, 0.889910862, 1.23173612),
                     (0.0173536556, 0.00298398431, 87.1100488)),
     # H-ZLAF52A -- zinc lanthanum flint (formula 2 in CDGM 2022)
-    # n_d = 1.796800, V_d = 45.39, range 0.365-2.325 um
+    # n_d = 1.80610 (computed; v4.16.1 audit AUDIT_V4_16_0_DEEP Part 7
+    #   4-way convergent: stale inline comment claimed 1.796800.
+    #   Coefficients bit-for-bit correct against refractiveindex.info
+    #   CDGM 2022-06 YAML).
+    # V_d = 45.39, range 0.365-2.325 um
     'H-ZLAF52A':   ((1.85313688, 0.317938591, 1.16396318),
                     (0.00985534639, 0.0392611678, 93.1032763)),
 }
@@ -622,6 +638,24 @@ def _maybe_warn_outside_validity(glass_name, wavelength_m):
     )
 
 
+# v4.16.1 (audit P1-NEW-F2-1 / C.3): documented exemptions from the
+# GLASS_REGISTRY -> GLASS_VALIDITY direction.  These registry entries
+# legitimately have no GLASS_VALIDITY entry and the consistency check
+# must skip them rather than treating their absence as drift.
+#
+# * ``'air'`` -- callable; uses Edlen-form ambient model with no
+#   single physical Sellmeier validity range to pin.
+# * ``'__thin_lens__'`` -- internal marker, not a real glass.
+# * ``'__MIRROR__'`` -- internal marker, not a real glass.
+# * ``'vacuum'`` -- callable; returns n=1.0 at every wavelength.
+_GLASS_VALIDITY_REGISTRY_EXEMPTIONS = frozenset({
+    'air',
+    '__thin_lens__',
+    '__MIRROR__',
+    'vacuum',
+})
+
+
 def _check_glass_registry_consistency():
     """4.14.2 (P0-NEW-1 meta-pattern): convert the class-of-bug
     (``GLASS_REGISTRY`` entry flagged ``'__sellmeier__'`` but absent
@@ -629,7 +663,8 @@ def _check_glass_registry_consistency():
     load, so a future drift can never re-surface as a silent
     ``ValueError`` at first call.
 
-    Two checks:
+    Four checks (v4.14.2 forward + v4.15 reverse + v4.16.1
+    GLASS_VALIDITY -> GLASS_REGISTRY + v4.16.1 tuple well-formedness).
 
     * **Forward** (v4.14.2): every ``'__sellmeier__'``-flagged
       registry entry must have a coefficient row.
@@ -648,6 +683,21 @@ def _check_glass_registry_consistency():
       registry entry is ``'__sellmeier__'`` or a tuple -- both
       paths consult ``SELLMEIER_COEFFICIENTS`` (the tuple path only
       when ``_REFRACTIVEINDEX_AVAILABLE`` is False).
+    * **GLASS_VALIDITY -> GLASS_REGISTRY** (v4.16.1 audit P1-NEW-F2-1
+      / C.3): every key in :data:`GLASS_VALIDITY` must appear in
+      :data:`GLASS_REGISTRY`.  A validity entry without a registry
+      entry is unreachable -- the validity warn helper looks up by
+      registry name, so an orphan GLASS_VALIDITY row never fires
+      its warning.  (The reverse direction
+      GLASS_REGISTRY -> GLASS_VALIDITY is intentionally NOT enforced
+      as a hard requirement -- missing validity defaults to the
+      no-warning sentinel ``(0.0, inf)``.  Users registering a custom
+      callable glass typically do not declare a wavelength range.)
+    * **Tuple well-formedness** (v4.16.1 audit P1-NEW-F2-1 / C.3):
+      each GLASS_VALIDITY entry must be a 2-tuple
+      ``(lambda_min, lambda_max)`` with ``lambda_min < lambda_max``
+      and both finite-non-negative.  A malformed tuple would silently
+      pass or always-fire on the dispatch path.
     """
     # Forward: __sellmeier__ flag -> row must exist.
     for name, entry in GLASS_REGISTRY.items():
@@ -675,6 +725,58 @@ def _check_glass_registry_consistency():
                 f"for pure-Sellmeier glasses, or a "
                 f"(shelf, book, page) tuple for glasses also covered "
                 f"by refractiveindex.info."
+            )
+    # v4.16.1 (audit P1-NEW-F2-1 / C.3): GLASS_VALIDITY -> GLASS_REGISTRY.
+    # An entry in GLASS_VALIDITY without a GLASS_REGISTRY counterpart is
+    # unreachable -- the warn helper looks up by registry name.
+    for name in GLASS_VALIDITY:
+        if name in _GLASS_VALIDITY_REGISTRY_EXEMPTIONS:
+            continue
+        if name not in GLASS_REGISTRY:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift (v4.16.1): "
+                f"GLASS_VALIDITY[{name!r}] has no corresponding "
+                f"GLASS_REGISTRY entry.  The validity range is "
+                f"unreachable -- the warn helper looks up by "
+                f"registry name, so the warning would never fire "
+                f"for {name!r}.  Add a registry entry, or remove "
+                f"the validity row, or list {name!r} in "
+                f"_GLASS_VALIDITY_REGISTRY_EXEMPTIONS with a cited "
+                f"rationale."
+            )
+    # v4.16.1 (audit P1-NEW-F2-1 / C.3): tuple well-formedness for every
+    # GLASS_VALIDITY entry.  Each must be a 2-tuple
+    # (lambda_min, lambda_max) with lmin < lmax and both finite,
+    # non-negative.
+    for name, value in GLASS_VALIDITY.items():
+        if not isinstance(value, tuple) or len(value) != 2:
+            raise RuntimeError(
+                f"GLASS_VALIDITY drift (v4.16.1): "
+                f"GLASS_VALIDITY[{name!r}] = {value!r} is not a "
+                f"2-tuple (lambda_min, lambda_max).  Fix the entry "
+                f"format."
+            )
+        lmin, lmax = value
+        if not (isinstance(lmin, (int, float))
+                and isinstance(lmax, (int, float))):
+            raise RuntimeError(
+                f"GLASS_VALIDITY drift (v4.16.1): "
+                f"GLASS_VALIDITY[{name!r}] = {value!r} must be a "
+                f"2-tuple of numeric (int / float) bounds; got types "
+                f"({type(lmin).__name__}, {type(lmax).__name__})."
+            )
+        if not (lmin < lmax):
+            raise RuntimeError(
+                f"GLASS_VALIDITY drift (v4.16.1): "
+                f"GLASS_VALIDITY[{name!r}] = ({lmin!r}, {lmax!r}) "
+                f"requires lambda_min < lambda_max."
+            )
+        if lmin < 0.0 or lmax <= 0.0:
+            raise RuntimeError(
+                f"GLASS_VALIDITY drift (v4.16.1): "
+                f"GLASS_VALIDITY[{name!r}] = ({lmin!r}, {lmax!r}) "
+                f"requires non-negative lambda_min and positive "
+                f"lambda_max."
             )
 
 
@@ -851,9 +953,10 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
         raise ImportError(
             f"Glass {glass_name!r} requires the 'refractiveindex' "
             f"package for live lookup, but it is not installed.  "
-            f"Either install it (`pip install refractiveindex`) or "
-            f"register a callable / Sellmeier coefficients for this "
-            f"glass in GLASS_REGISTRY / SELLMEIER_COEFFICIENTS.")
+            f"Either install it (`pip install refractiveindex` or "
+            f"`pip install lumenairy[glass]`) or register a callable / "
+            f"Sellmeier coefficients for this glass in GLASS_REGISTRY / "
+            f"SELLMEIER_COEFFICIENTS.")
     _ensure_refractiveindex_loaded()
 
     if glass_name not in _glass_cache:

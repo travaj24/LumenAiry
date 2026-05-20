@@ -121,6 +121,19 @@ _GUARD_EXEMPTIONS = frozenset({
     # delegated.  Not in the v4.15.3 P0-NEW-F2-1 list.
     ('lumenairy/propagators/dispatch.py', 'asm_propagate'),
 
+    # ---- propagators/ensemble.py -------------------------------------------
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP P5 / P0-1): ``propagate_ensemble``
+    # is the canonical partial-coherence-propagation entry point.  Its
+    # contract REQUIRES ``ensemble.ndim == 3`` (the Schell-family
+    # ``(n_realizations, Ny, Nx)`` form); the 2-D scalar-field guard
+    # would invert the invariant and reject the only valid input shape.
+    # ``propagate_ensemble`` has its own dedicated 3-D shape check at
+    # the entry point + an explicit error pointing back at the guard
+    # for users who pass a single 2-D field by mistake.  Symmetric to
+    # the ``angular_spectrum_propagate_batch`` exemption two entries
+    # below.
+    ('lumenairy/propagators/ensemble.py', 'propagate_ensemble'),
+
     # ---- propagators/propagation.py ----------------------------------------
     # ``apply_fresnel_curvature`` takes a 2-D field but is a phase
     # multiplication helper (not a propagator); it is not in the
@@ -1020,8 +1033,14 @@ def test_all_class_methods_call_helper_first():
 # ============================================================================
 
 def test_helper_rejects_mcf_with_v4_16_message():
-    """``_check_2d_scalar_field`` must raise ``TypeError`` with a
-    ``v4.16``-scope marker when handed a ``PartialCoherenceMCF``.
+    """``_check_2d_scalar_field`` must raise ``TypeError`` on
+    ``PartialCoherenceMCF`` inputs.  v4.16.1 (audit
+    AUDIT_V4_16_0_DEEP item 5b): the prior ``"v4.16+"`` scope
+    marker was retired (the library version IS v4.16.x at the
+    time of the audit, leaving the deferral wording stale); the
+    new message points the user at the ``propagate_ensemble``
+    helper and notes that MCF-aware downstream propagators are
+    a v5.0+ architectural change.
     """
     from lumenairy._validation import _check_2d_scalar_field
     from lumenairy.sources.core import create_gaussian_schell_source
@@ -1034,13 +1053,23 @@ def test_helper_rejects_mcf_with_v4_16_message():
         _check_2d_scalar_field(mcf, 'unit_test_fn')
     msg = str(excinfo.value)
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1: the message now cites the ``propagate_ensemble``
+    # helper as the canonical workflow (the prior ``"v4.16+"``
+    # scope marker was stale at v4.16.0).
+    assert 'propagate_ensemble' in msg
+    # And the rejection still mentions the v5.0+ horizon for
+    # MCF-aware downstream propagators (so users grepping for the
+    # MCF feature still find the rejection).
+    assert 'v5.0' in msg
     assert 'unit_test_fn' in msg
 
 
 def test_helper_rejects_3d_ensemble_with_iteration_hint():
-    """``_check_2d_scalar_field`` must raise ``ValueError`` with the
-    canonical iterate-over-ensemble hint when handed a 3-D ensemble.
+    """``_check_2d_scalar_field`` must raise ``ValueError`` on a 3-D
+    Schell ensemble.  v4.16.1 (audit item 5b follow-up): the
+    canonical hint now points at the ``propagate_ensemble`` helper
+    AND retains the bare iterate-over-realizations pattern as a
+    fallback for users with custom propagator pipelines.
     """
     import numpy as np
 
@@ -1052,6 +1081,10 @@ def test_helper_rejects_3d_ensemble_with_iteration_hint():
     msg = str(excinfo.value)
     assert '3-D' in msg
     assert 'unit_test_fn' in msg
+    # v4.16.1: hint now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
+    # The bare iterate pattern is retained as a fallback for
+    # custom propagator pipelines.
     assert 'for k in range(ensemble.shape[0])' in msg
 
 

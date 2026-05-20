@@ -39,6 +39,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import threading
+import warnings
 from collections import OrderedDict
 from typing import Any, Dict, NamedTuple, Optional
 
@@ -46,6 +47,28 @@ import numpy as np
 
 from ..backend import JAX_AVAILABLE
 from ..glass import get_glass_index
+
+
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 8 / P3 / DEEP-4 MEDIUM-1):
+# threshold below which the JAX-path paraxial transfer approximation
+# (``t ~= thickness``) starts producing visible transverse error
+# relative to the math-correct NumPy ``trace(...)`` path.  Per-surface
+# transverse error scales as ``thickness * (1 - N) ~ thickness * NA^2
+# / 2``; at min |N| = 0.95 the per-surface error is ~5% of the
+# free-space gap, which is well above plotting noise for high-NA
+# designs.  Below this threshold the JAX path is still numerically
+# stable (no NaN-gradient regressions; the autodiff cycle is intact),
+# but the high-NA user needs to know to prefer the NumPy ``trace(...)``
+# path for accuracy-critical work.
+_TRANSFER_JAX_NA_WARN_THRESHOLD = 0.95
+
+# Idempotence latch -- the warning is emitted at most once per Python
+# process to avoid log-spam in tight forward loops (the JAX trace cache
+# means a single optimisation iteration may call ``_transfer_jax`` once
+# per surface, with the same ``(thickness, NA)`` signature, hundreds of
+# times during a sweep).  Users can re-arm the warning by clearing the
+# latch via the public ``_reset_transfer_jax_warning()`` helper below.
+_TRANSFER_JAX_WARNING_EMITTED = False
 
 
 # Number of Newton iterations for aspheric ray-surface intersection.
@@ -461,8 +484,8 @@ def _transfer_jax(state, thickness, n_medium):
     ``_transfer`` does.
 
     The JAX twin here uses the PARAXIAL APPROXIMATION
-    ``t ≈ thickness`` (equivalent to assuming N = 1).  The per-surface
-    transverse error is ``~ thickness * (1 - N) ≈ thickness * NA^2 / 2``,
+    ``t ~= thickness`` (equivalent to assuming N = 1).  The per-surface
+    transverse error is ``~ thickness * (1 - N) ~= thickness * NA^2 / 2``,
     i.e. ~0.5 % per surface at NA = 0.1 and accumulates roughly
     linearly across the prescription (~2.5 % over a 5-surface trace).
     OPL error scales similarly.  For typical LumenAiry workflows
@@ -478,7 +501,25 @@ def _transfer_jax(state, thickness, n_medium):
     4.10.1, 4.10.2, 4.10.3) have not isolated the gradient-graph
     issue to a specific op.  Tracked for a future release; the
     pre-existing paraxial trace remains the validated path.
+
+    v4.16.1 (audit AUDIT_V4_16_0_DEEP item 8 / P3 / DEEP-4 MEDIUM-1):
+    high-NA users get an explicit one-shot ``RuntimeWarning`` when
+    ``min |N| < _TRANSFER_JAX_NA_WARN_THRESHOLD`` (default 0.95;
+    equivalent to NA > ~0.31).  The warning quantifies the per-
+    surface transverse error and points users at the NumPy
+    ``trace(...)`` path.  The warning is emitted at most once per
+    Python process to avoid log-spam in tight forward loops; clear
+    via ``_reset_transfer_jax_warning()``.  The check itself is
+    skipped under JAX tracing -- inspecting tracer values mid-trace
+    would either fail with ``ConcretizationTypeError`` (eager
+    ``float()`` cast) or silently no-op (the conditional collapses
+    inside the traced graph).  The audit's recommended approach
+    "emit warning during eager execution but skip during tracing"
+    is implemented via an explicit type check: only NumPy
+    ``ndarray`` direction-cosines trigger the eager check; JAX
+    tracer leaves skip past.
     """
+    _maybe_warn_transfer_jax_high_na(state.N, thickness)
     new_x = state.x + state.L * thickness
     new_y = state.y + state.M * thickness
     new_z = state.z + state.N * thickness - thickness
@@ -486,6 +527,104 @@ def _transfer_jax(state, thickness, n_medium):
     return JaxRayState(new_x, new_y, new_z,
                        state.L, state.M, state.N,
                        new_opd, state.alive)
+
+
+def _maybe_warn_transfer_jax_high_na(direction_n, thickness):
+    """Eager-mode high-NA detection for the JAX-path paraxial transfer.
+
+    Inspects ``min |N|`` (the smallest absolute direction cosine along
+    the optical axis) for the ray bundle and emits a one-shot
+    ``RuntimeWarning`` when the value falls below
+    :data:`_TRANSFER_JAX_NA_WARN_THRESHOLD`.  The warning quantifies
+    the per-surface transverse error
+    ``thickness * (1 - min|N|^2) / 2`` (the cumulative paraxial-bias
+    estimate) and points the user at the math-correct NumPy
+    ``trace(...)`` path.
+
+    The check is skipped when ``direction_n`` is a JAX tracer
+    (inspecting tracer values mid-trace would force concretisation
+    and break the autodiff path); the eager NumPy path still surfaces
+    the warning the first time the user runs a forward trace, which
+    is the targeted user-onboarding moment.  The latch
+    :data:`_TRANSFER_JAX_WARNING_EMITTED` is set after first emission
+    so optimisation loops calling ``_transfer_jax`` hundreds of times
+    don't spam the warning channel.
+
+    Parameters
+    ----------
+    direction_n : ndarray or JAX tracer
+        ``state.N`` (the optical-axis direction-cosine per ray).
+    thickness : float
+        Forward gap [m] being traversed.
+
+    Notes
+    -----
+    Implementation detail: we deliberately avoid ``jnp.min(...).item()``
+    inside the JAX trace path -- ``.item()`` would force concretisation
+    and trigger ``ConcretizationTypeError`` under ``jax.jit``.  The
+    function's argument types (NumPy vs JAX tracer) are stable across
+    each call -- the eager NumPy forward-trace path always sees a
+    NumPy ndarray here, and the jit-compiled / grad-traced path sees a
+    JAX tracer.  The ``isinstance(..., np.ndarray)`` predicate cleanly
+    separates these two regimes.
+    """
+    global _TRANSFER_JAX_WARNING_EMITTED
+    if _TRANSFER_JAX_WARNING_EMITTED:
+        return
+    # Skip tracers cleanly -- JAX arrays in eager mode are
+    # ``jax.numpy.ndarray`` instances, but JAX tracers (under jit /
+    # grad / vmap) are ``jax.core.Tracer`` subclasses.  We only need
+    # the eager-NumPy case: that's the regime where the user typically
+    # runs a forward trace and would benefit from seeing the warning.
+    if not isinstance(direction_n, np.ndarray):
+        return
+    try:
+        n_abs = np.abs(np.asarray(direction_n))
+        if n_abs.size == 0:
+            return
+        n_min = float(np.min(n_abs))
+    except (TypeError, ValueError):
+        # Probe failed; bail without warning.  Better to under-report
+        # than to surface a confusing exception from the warning
+        # machinery.
+        return
+    if not np.isfinite(n_min) or n_min >= _TRANSFER_JAX_NA_WARN_THRESHOLD:
+        return
+    # Per-surface transverse-error estimate.  The geometric form is
+    # ``t_exact - t_paraxial = thickness * (1/N - 1) ~= thickness *
+    # (1 - N) / N``.  For N close to 1, ``(1 - N) ~= NA^2 / 2`` (the
+    # paraxial expansion), so the estimate below is the canonical
+    # "thickness * NA^2 / 2" leading-order term the audit cites.
+    delta_t = float(thickness) * (1.0 - n_min ** 2) / 2.0
+    warnings.warn(
+        "_transfer_jax: JAX-traceable transfer uses the paraxial "
+        "approximation (t ~= thickness); the math-correct NumPy "
+        "trace(...) form is ``t = (thickness - z) / N``.  Per-surface "
+        "transverse error scales as ``thickness * NA^2 / 2`` and the "
+        "current ray bundle has min |N| = {:.3f} (NA ~= {:.3f}); "
+        "expected per-surface drift ~= {:.2e} m for thickness={:.3e} "
+        "m.  For high-NA designs (NA > 0.3) prefer the NumPy "
+        "`lumenairy.raytrace.trace(...)` path; the JAX path is "
+        "intended for low-NA autodiff workflows where the paraxial "
+        "approximation is below plotting / fitting noise.  This "
+        "warning is emitted once per process; clear via "
+        "``lumenairy.raytrace.jax_trace._reset_transfer_jax_warning()`` "
+        "to re-arm.".format(
+            n_min, float(np.sqrt(max(1.0 - n_min ** 2, 0.0))),
+            delta_t, float(thickness)),
+        RuntimeWarning, stacklevel=4)
+    _TRANSFER_JAX_WARNING_EMITTED = True
+
+
+def _reset_transfer_jax_warning() -> None:
+    """Clear the one-shot latch on the ``_transfer_jax`` high-NA
+    warning.
+
+    Useful for unit tests that pin the warning emission and for users
+    who want to re-arm the warning between optimisation sweeps.
+    """
+    global _TRANSFER_JAX_WARNING_EMITTED
+    _TRANSFER_JAX_WARNING_EMITTED = False
 
 
 # ----------------------------------------------------------------------

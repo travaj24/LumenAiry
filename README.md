@@ -10,6 +10,95 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.16.1
+
+**Closes the v4.16.0 deep audit
+(`docs/audits/AUDIT_V4_16_0_DEEP_2026_05_19.md`) through P3** — the
+first audit to actively hunt silent-wrong-answer correctness bugs
+alongside the usual structural / UX cleanup.  4 agents, disjoint
+scopes.  2208 unit tests pass (up from 2106; +102 net); 34/34
+validation pass.
+
+### Correctness bugs (4 fixed)
+
+* **`MultiWavelengthMerit` SUM → AVG** — the wrapper summed instead
+  of averaging sub-merit results across wavelengths; documented
+  semantics + both sibling classes already divided by `len(...)`.
+  Bug was localised to this one class.
+* **`shack_hartmann` pitch quantisation** — the slope-to-wavefront
+  cumsum used the user-requested `lenslet_pitch` instead of the
+  on-grid `sa_pixels * dx`.  At `lenslet_pitch / dx = 1.7` the
+  reconstructed amplitude was biased ~17.6% low.
+* **`_detect_backend` directory misclassification** — any directory
+  was silently routed to Zarr regardless of whether a Zarr store was
+  actually present; `pathlib.Path` callers hit `AttributeError`.
+  Fix gates on the canonical `zarr.json` (v3) / `.zarray` (v2) marker
+  files + `str(path)` cast.
+* **LM `bounds` parser** — `(None, 1.0)` is truthy, so `None` leaked
+  into the float array and scipy raised an opaque downstream error.
+  Explicit `_resolve_bound` helper now routes `None` to `±np.inf`.
+
+### Half-shipped clusters closed
+
+* **`propagate_ensemble(...)` helper** — new
+  `lumenairy.propagate_ensemble` iterates a Schell-family
+  `(n_realizations, Ny, Nx)` ensemble through any coherent propagator
+  and returns `I_partial = <|E_k|^2>_k`.  Memory-efficient
+  accumulator default; opt-in `return_ensemble=True` for the full
+  stack.  Smoothing factor measured at ~6.95× on the new
+  `examples/06_schell_propagation.py`.
+* **Default Schell-factory `DeprecationWarning` retired** — 4
+  releases of exposure since the v4.15.0 → v4.15.1 return-shape
+  change; the warning now produces more confusion noise than
+  migration value.  Sentinel + helper preserved as deprecated
+  symbols (the v4.15.3 promotion meta-pin imports them); targeted
+  for removal in v5.0.
+* **JAX-traceable dtype probe** — duck-typed `getattr(E_in, 'dtype',
+  None)` so `propagate_through_system_jax` survives `jax.jit` /
+  `jax.grad` tracing.
+* **High-NA `_transfer_jax` UserWarning** — eager-only guard fires
+  at `min |N| < 0.95` (where the paraxial autodiff-stable
+  approximation begins to diverge from the NumPy reference); tracer
+  path unchanged.
+
+### API + meta-pins
+
+* **`Constraint` API narrowed to scalar-return** + lambda
+  `UserWarning` for parallel-workers configs (lambdas crash
+  pymoo's `float(_f(xv))` coercion + aren't picklable).
+* **10th cache-registry meta-pin walker** — AST-walks every
+  `@lru_cache`-decorated module-level function and asserts a paired
+  `_cache_registry` enrollment.  15 caches, 0 orphans.  Continues
+  the V1–V9 structural-counter-measure trajectory.
+* **`_check_glass_registry_consistency()` extends to GLASS_VALIDITY**
+  — every validity key must appear in `GLASS_REGISTRY` (and be a
+  valid `(λ_min, λ_max)` 2-tuple).
+
+### Compat + glass + UX
+
+* **`refractiveindex` moved from hard deps to `[glass]` extras** —
+  aligns the wheel with the lazy-import + `SELLMEIER_COEFFICIENTS`
+  fallback already in `lumenairy/glass.py`.
+* **`zarr>=2.14` floor bumped to `zarr>=3.0`** — `io/storage.py`
+  uses `Group.create_array` (Zarr v3 API); the v2 floor was a
+  latent `AttributeError`.
+* **4 stale `n_d` inline comments fixed** in `lumenairy/glass.py`
+  (H-ZK9B, H-ZF12, D-LAK52, H-ZLAF52A).  No runtime change — the
+  actual Sellmeier coefficients were always correct; only the
+  comments were stale.
+* **`ProcessPoolExecutor` now passes `mp_context='spawn'`** in
+  `_lens_traced.py` — matches the README + v4.16.0 claim that
+  `spawn` is used (was `fork` on Linux).
+* **`examples/06_schell_propagation.py` +
+  `examples/07_zemax_load_trace.py`** added.  `CONVENTIONS.md`
+  added at the repo root documenting the `create_*` vs `make_*`
+  factory verb contract + 9 related conventions.
+
+### Test counts
+
+A=11, B=26, C=20+6, D=22, walker=6.  Net +91 new tests; final 2208
+unit pass + 5 skip + 1 xfail; 34/34 validation.
+
 ## What's new in 4.16.0
 
 **Major minor release** rolling up the entire v4.16 + v4.17 + v4.18

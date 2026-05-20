@@ -86,7 +86,10 @@ def test_propagate_through_system_jax_rejects_mcf():
             mcf, elements, wavelength=633e-9, dx=2e-6)
     msg = str(excinfo.value)
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
     assert 'propagate_through_system_jax' in msg
 
 
@@ -130,7 +133,10 @@ def test_apply_dm_rejects_mcf_and_3d_ensemble():
         apply_dm(mcf, dm)
     msg = str(excinfo.value)
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
     assert 'apply_dm' in msg
 
     # ---- 3-D ensemble rejection (ValueError, iteration hint) -----------
@@ -164,7 +170,10 @@ def test_apply_detector_rejects_mcf_and_3d_ensemble():
         apply_detector(mcf, dx_field=2e-6, pixel_pitch=4e-6)
     msg = str(excinfo.value)
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
     assert 'apply_detector' in msg
 
     # ---- 3-D ensemble rejection (ValueError, iteration hint) -----------
@@ -242,7 +251,10 @@ def test_richards_wolf_focus_rejects_mcf_and_3d_ensemble():
             mcf, wavelength=633e-9, NA=0.5, f=1e-3, dx_pupil=2e-6)
     msg = str(excinfo.value)
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
     assert 'richards_wolf_focus' in msg
 
     # ---- 3-D ensemble rejection (ValueError, iteration hint) -----------
@@ -275,7 +287,10 @@ def test_debye_wolf_psf_rejects_mcf_and_3d_ensemble():
             mcf, wavelength=633e-9, NA=0.5, f=1e-3, dx_pupil=2e-6)
     msg = str(excinfo.value)
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
     # Crucially: ``debye_wolf_psf`` raises with its OWN name, not
     # the downstream ``richards_wolf_focus``.  This is the value of
     # guarding both functions independently rather than only the

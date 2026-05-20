@@ -2329,7 +2329,13 @@ class MultiWavelengthMerit(MeritTerm):
 
     Populates ``ctx.efls_per_wavelength`` with per-wavelength EFLs
     (computed geometrically, cheap).  The sub-merit is evaluated at
-    each wavelength and the results are summed.
+    each wavelength and the results are averaged (weight * total /
+    n_wavelengths).  v4.16.1 closes the SUM-vs-AVG discrepancy at
+    the return: pre-v4.16.1 this class summed rather than averaged,
+    silently tripling the chromatic merit contribution for a
+    3-wavelength configuration vs a 1-wavelength one.  Matches the
+    sibling :class:`MultiFieldMerit` and :class:`ToleranceAwareMerit`
+    averaging shape.
 
     .. warning::
         The off-wavelength wave-leg propagation in this merit's
@@ -2506,7 +2512,17 @@ class MultiWavelengthMerit(MeritTerm):
         ctx.efls_per_wavelength = np.array(efls)
         ctx.strehls_per_wavelength = np.array(per_wl_strehl)
         ctx.rms_per_wavelength = np.array(per_wl_rms)
-        return self.weight * total
+        # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-1-1): SUM -> AVG.
+        # The docstring documents this class as "average" of the
+        # sub-merit across wavelengths, and BOTH sibling classes
+        # ``MultiFieldMerit`` and ``ToleranceAwareMerit`` divide by
+        # ``len(...)`` at their return.  Pre-v4.16.1 this method
+        # silently summed the per-wavelength contributions, so adding
+        # a 3rd wavelength tripled the chromatic merit's weight
+        # contribution relative to a 1-wavelength configuration.
+        # Fix: divide by ``max(len(self.wavelengths), 1)`` to match
+        # the documented behaviour and sibling-class averaging shape.
+        return self.weight * total / max(len(self.wavelengths), 1)
 
 
 # =========================================================================
@@ -3059,8 +3075,8 @@ class EvaluationContext:
 class Constraint:
     """Hard nonlinear constraint for :func:`design_optimize` (v4.16 #9).
 
-    Each ``Constraint`` wraps a scalar (or vector) callable
-    ``f(x) -> scalar | ndarray`` plus inclusive lower/upper bounds
+    Each ``Constraint`` wraps a SCALAR callable
+    ``f(x) -> float`` plus inclusive lower/upper bounds
     ``(lb, ub)``.  The optimiser enforces ``lb <= f(x) <= ub`` as a
     hard constraint via :class:`scipy.optimize.NonlinearConstraint`,
     rather than via the soft ``max(0, x - threshold)**2`` penalty
@@ -3073,11 +3089,39 @@ class Constraint:
     a clear ``ValueError`` recommending SLSQP / trust-constr in those
     cases.
 
+    Scalar-only contract (v4.16.1)
+    ------------------------------
+    ``fun`` MUST return a scalar (Python ``float`` / ``int`` / 0-d
+    ndarray).  Vector-valued constraints are not supported by the
+    pymoo wrapper (``design_optimize_multi_objective``) because the
+    wrapper coerces each constraint result via ``float(...)``, which
+    raises ``TypeError: only length-1 arrays can be converted to
+    Python scalars`` on a ``(K,)``-shaped ndarray.  A defensive
+    probe in :meth:`__post_init__` calls ``fun(np.zeros(1))`` (and
+    silently passes if the callable rejects that probe) -- a
+    detected vector return raises ``TypeError`` at construction
+    time rather than at the first optimisation evaluation.
+
+    Pickle-safety contract (v4.16.1)
+    --------------------------------
+    Lambdas (``lambda x: ...``) are NOT picklable, so a
+    ``Constraint(fun=lambda x: ...)`` instance breaks
+    :func:`scipy.optimize.differential_evolution(..., workers>1)`
+    and the joblib-parallelised FD-gradient path
+    (``PicklingError: Can't pickle <function <lambda>>``).  The
+    construction-time check below emits a ``UserWarning`` when
+    ``fun`` is detected as a lambda; for parallel-workers code,
+    define ``fun`` as a module-level function (or use
+    :func:`functools.partial` on a module-level function -- those
+    ARE picklable on Python 3.8+).
+
     Attributes
     ----------
-    fun : callable
-        ``f(x) -> scalar | ndarray``.  Receives the current parameter
-        vector and returns the constraint quantity.
+    fun : Callable[[np.ndarray], float]
+        ``f(x) -> float``.  Receives the current parameter vector
+        and returns the constraint quantity as a scalar.  Must
+        return a 0-d array / Python float / int; ndarrays of shape
+        ``(K,)`` are rejected at construction time.
     lb : float or None
         Inclusive lower bound on ``f(x)``.  ``None`` means ``-inf``.
     ub : float or None
@@ -3094,13 +3138,16 @@ class Constraint:
     -------
     >>> from lumenairy.optimize import Constraint
     >>> # Require BFL >= 5 mm exactly (computed from the prescription
-    >>> # built at the current parameter vector).
+    >>> # built at the current parameter vector).  Use a module-level
+    >>> # function (NOT a lambda) for pickle-safety with workers > 1.
     >>> def _bfl(x, *, param, wavelength):
     ...     from lumenairy.raytrace import system_abcd, surfaces_from_prescription
     ...     pres = param.build(x)
     ...     surfs = surfaces_from_prescription(pres)
     ...     _, _, bfl, _ = system_abcd(surfs, wavelength)
     ...     return float(bfl)
+    >>> # For SLSQP / trust-constr (single-process), a lambda is OK
+    >>> # but will emit a UserWarning recommending a module-level fn.
     >>> bfl_constraint = Constraint(
     ...     fun=lambda x: _bfl(x, param=param, wavelength=1.31e-6),
     ...     lb=5e-3, ub=None, label='BFL >= 5 mm')
@@ -3122,6 +3169,66 @@ class Constraint:
                 f"Constraint(label={self.label!r}): at least one of "
                 f"lb / ub must be supplied (both None is unbounded "
                 f"and the constraint is a no-op).")
+
+        # v4.16.1 (audit P1-NEW C.2): warn on lambda fun.  Lambdas
+        # aren't picklable, which silently breaks
+        # ``differential_evolution(workers>1)`` and joblib-parallelised
+        # FD-gradients with ``PicklingError``.  We emit a UserWarning
+        # rather than rejecting -- single-process SLSQP / trust-constr
+        # works fine with lambda fun, so the friendlier behaviour is to
+        # warn the user that they may hit pickling issues on a parallel
+        # path rather than break the common single-process case.
+        fun_name = getattr(self.fun, '__name__', None)
+        if fun_name == '<lambda>':
+            warnings.warn(
+                f"Constraint(label={self.label!r}): ``fun`` is a "
+                f"lambda; lambdas aren't picklable and will fail "
+                f"under ``differential_evolution(workers>1)`` / "
+                f"joblib-parallelised FD-gradient with PicklingError. "
+                f"For parallel-workers code, define ``fun`` as a "
+                f"module-level function (or use functools.partial on "
+                f"a module-level function).  Single-process SLSQP / "
+                f"trust-constr works with lambdas without issue.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        # v4.16.1 (audit P1-NEW C.1): probe fun on a small synthetic
+        # array and reject if the return is ndarray-shaped (not 0-d).
+        # The pymoo wrapper in ``multi_objective.py:269,273`` coerces
+        # each constraint evaluation via ``float(_f(xv))``, which
+        # raises ``TypeError`` for ``(K,)``-shaped returns.  Catching
+        # this at construction time turns a confusing runtime
+        # TypeError into a clear contract violation at definition.
+        #
+        # Wrap the probe in try/except so a fun that legitimately
+        # rejects the synthetic ``np.zeros(1)`` input (e.g. because it
+        # requires a specific parameter-vector shape) does NOT break
+        # dataclass construction -- we only flag a positive vector
+        # return, not the absence of a return.
+        try:
+            _probe_x = np.zeros(1, dtype=np.float64)
+            _probe_result = self.fun(_probe_x)
+        except Exception:  # noqa: BLE001 -- probe is best-effort
+            # The fun rejected our synthetic probe.  This is fine --
+            # at evaluation time the optimizer will hand it a properly
+            # shaped parameter vector.  We can't pre-validate the
+            # return shape in this case; skip the check.
+            return
+        if isinstance(_probe_result, np.ndarray):
+            if _probe_result.shape != ():
+                raise TypeError(
+                    f"Constraint(label={self.label!r}): ``fun`` "
+                    f"returned an ndarray of shape "
+                    f"{_probe_result.shape!r}; only scalar (0-d) "
+                    f"returns are supported.  The pymoo wrapper "
+                    f"(design_optimize_multi_objective) coerces each "
+                    f"constraint via float(...) which raises TypeError "
+                    f"on (K,)-shaped returns.  Either:\n"
+                    f"  1. Reduce the vector return to a single scalar "
+                    f"(e.g. ``np.max(...)`` or ``np.sum(...)``), OR\n"
+                    f"  2. Split into K separate Constraint objects, "
+                    f"one per component.")
 
     def to_scipy(self):
         """Return a :class:`scipy.optimize.NonlinearConstraint`."""
@@ -4054,8 +4161,31 @@ def design_optimize(parameterization: Any,
                     [np.sqrt(max(m.evaluate(ctx), 0.0) + _LM_FLOOR)
                      for m in merit_terms],
                     dtype=np.float64)
-            lb = np.array([b[0] if b else -np.inf for b in (bounds or [None] * n_params)])
-            ub = np.array([b[1] if b else +np.inf for b in (bounds or [None] * n_params)])
+            # v4.16.1 (AUDIT_V4_16_0_DEEP P1-DEEP-1-2): explicit
+            # ``None``-aware unpacking.  Pre-v4.16.1 used
+            # ``b[0] if b else -np.inf``, where ``b`` is a 2-tuple
+            # ``(lb_i, ub_i)``; a non-empty tuple is ALWAYS truthy in
+            # Python, so the conditional never fired even when either
+            # endpoint was ``None`` (the "no bound on this side"
+            # idiom).  ``None`` then leaked into ``np.array(...)``,
+            # producing an object-dtype array that scipy's
+            # ``least_squares`` rejects with an opaque downstream
+            # error.  scipy's ``bounds=(lb, ub)`` spec requires each
+            # endpoint to be either a finite float or +/-inf, not
+            # ``None``.  Explicit per-endpoint check below honours the
+            # idiom and produces a clean float64 array.
+            def _resolve_bound(b, i, default):
+                if b is None:
+                    return default
+                v = b[i]
+                if v is None:
+                    return default
+                return float(v)
+            _bounds_iter = bounds if bounds is not None else [None] * n_params
+            lb = np.array([_resolve_bound(b, 0, -np.inf) for b in _bounds_iter],
+                          dtype=np.float64)
+            ub = np.array([_resolve_bound(b, 1, +np.inf) for b in _bounds_iter],
+                          dtype=np.float64)
             res = so.least_squares(
                 residuals, x0, method='lm' if not (bounds is not None) else 'trf',
                 bounds=(lb, ub) if bounds is not None else (-np.inf, np.inf),

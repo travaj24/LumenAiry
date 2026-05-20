@@ -738,6 +738,14 @@ from .propagators.dispatch import (
     which_propagator,
     ASM_FAMILY,
 )
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP P5 / P0-1): partial-coherence
+# ensemble propagator helper.  Closes the Schell-model workflow that
+# v4.15.x left half-shipped (factories returned ensembles, but no
+# downstream helper propagated them; coherent propagators rejected
+# 3-D inputs via :func:`_check_2d_scalar_field`).  The helper
+# iterates each realisation through a coherent propagator and
+# returns the partial-coherence intensity ``< |E_k|^2 >_k``.
+from .propagators.ensemble import propagate_ensemble
 from .propagators.result import PropagationResult
 from .propagators.mhs import (
     HuygensSurface,
@@ -807,7 +815,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.16.0"
+__version__ = "4.16.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -986,6 +994,8 @@ __all__ = [
     'which_propagator',
     'ASM_FAMILY',
     'PropagationResult',
+    # v4.16.1: partial-coherence ensemble propagator helper.
+    'propagate_ensemble',
 
     # Free-space propagators (low-level)
     'angular_spectrum_propagate',

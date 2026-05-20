@@ -218,7 +218,23 @@ def _get_persistent_worker_pool(n_workers):
                 pass
             _PERSISTENT_POOL = None
         from concurrent.futures import ProcessPoolExecutor
-        _PERSISTENT_POOL = ProcessPoolExecutor(max_workers=int(n_workers))
+        # v4.16.1 (audit M-2): force the ``spawn`` start method.  The
+        # default on Linux is ``fork``, which inherits the parent's
+        # FFT plan caches and threading state -- both of which are
+        # unsafe to share between forked processes (pyFFTW's plan
+        # cache holds module-private locks that the forked child
+        # cannot release; numpy/MKL spin up a duplicate thread pool
+        # that races with the parent).  ``spawn`` is portable across
+        # Linux + macOS + Windows and matches the v4.16.0 CHANGELOG
+        # claim that the library uses spawn (which was previously
+        # only true of the multi-process storage tests, not the
+        # library worker pool itself).
+        import multiprocessing as _mp
+        _spawn_ctx = _mp.get_context('spawn')
+        _PERSISTENT_POOL = ProcessPoolExecutor(
+            max_workers=int(n_workers),
+            mp_context=_spawn_ctx,
+        )
         _PERSISTENT_POOL_NWORKERS = int(n_workers)
         # Register atexit handler exactly once.
         import atexit

@@ -17,7 +17,14 @@ The P2 closure adds ``energy_threshold`` to every factory signature
 and forwards it through to ``PartialCoherenceMCF.from_ensemble`` on
 the MCF return path.
 
-Author: Andrew Traverso -- v4.15.2 / Agent A
+v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+``DeprecationWarning`` is retired.  The
+``TestSchellDefaultDeprecationWarning`` test class below was inverted
+from "must emit the warning" to "must NOT emit the warning" to track
+the new contract.  The other test classes (explicit-return_kind
+silence, energy_threshold forwarding, etc.) are unchanged.
+
+Author: Andrew Traverso -- v4.15.2 / Agent A (v4.16.1 inversion notes)
 """
 from __future__ import annotations
 
@@ -65,85 +72,96 @@ _ANNULAR_KW = dict(
 
 # ======================================================================
 # A.1 -- P0-NEW-1 DeprecationWarning on the default-return_kind path
+#
+# v4.16.1 (audit AUDIT_V4_16_0_DEEP item 6): the default-path
+# DeprecationWarning that v4.15.2 introduced was retired now that the
+# v4.15.0 -> v4.15.1 return-shape change has had multiple releases of
+# exposure.  The tests below were originally written to assert the
+# warning fires on the default path; v4.16.1 inverts them to assert
+# the warning does NOT fire (the contract is now: default call is
+# silent and returns the ensemble tuple).  The remaining shape +
+# kwarg-forwarding pins are preserved.
 # ======================================================================
 
 class TestSchellDefaultDeprecationWarning:
-    """The 3 Schell factories must emit a ``DeprecationWarning``
-    flagging the v4.15.0 -> v4.15.1 return-shape change when called
-    with the default ``return_kind`` (caller didn't pass it
-    explicitly).  Explicit ``return_kind='ensemble'`` / ``'mcf'`` is
-    silent.  The message must reference both the change horizon
-    (``v4.15.0 -> v4.15.1``) and the kwarg name (``return_kind``) so
-    the user can grep for either when migrating.
+    """The 3 Schell factories must NOT emit the v4.15.2-era
+    ``DeprecationWarning`` flagging the v4.15.0 -> v4.15.1 return-shape
+    change on the default ``return_kind`` path (v4.16.1: retired).
+    Default calls are silent and still return the ensemble tuple.
+    Explicit ``return_kind='ensemble'`` / ``'mcf'`` remains silent
+    (unchanged from v4.15.2).
+
+    These tests pin the v4.16.1 contract; if the deprecation is
+    re-introduced (or a different default-path warning is added) the
+    tests fail and the audit-driven rollback is loud.
     """
 
-    def test_gaussian_schell_default_emits_deprecation_warning(self):
-        """Calling without ``return_kind`` must emit a
-        ``DeprecationWarning`` whose message mentions ``return_kind``
-        and the v4.15.0 -> v4.15.1 transition."""
+    def test_gaussian_schell_default_no_deprecation_warning(self):
+        """Calling without ``return_kind`` must NOT emit a
+        ``return_kind`` ``DeprecationWarning`` (v4.16.1: warning
+        retired).  The call still returns the canonical 4-tuple
+        ensemble form."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             result = create_gaussian_schell_source(**_GAUSSIAN_SCHELL_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'create_gaussian_schell_source' in str(w.message)]
-        assert len(dep) >= 1, (
-            f"Default-return_kind call must emit "
-            f"DeprecationWarning; got "
-            f"{[str(w.message) for w in caught]}.")
-        msg = str(dep[0].message)
-        assert 'return_kind' in msg, (
-            f"DeprecationWarning must mention the kwarg name "
-            f"'return_kind'; got {msg!r}.")
-        assert ('v4.15.0' in msg and 'v4.15.1' in msg), (
-            f"DeprecationWarning must reference both v4.15.0 and "
-            f"v4.15.1 (the return-shape change horizon); got {msg!r}.")
+               and 'create_gaussian_schell_source' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == [], (
+            f"v4.16.1: default-path call must NOT emit a "
+            f"return_kind DeprecationWarning; got "
+            f"{[str(w.message) for w in dep]}.")
         # Still get the v4.15.1 ensemble-tuple return shape by default.
         ens, dx, dy, wl = result
         assert ens.shape == (4, 16, 16)
 
-    def test_schell_model_default_emits_deprecation_warning(self):
+    def test_schell_model_default_no_deprecation_warning(self):
         """Same contract for ``create_schell_model_source``."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             result = create_schell_model_source(**_SCHELL_MODEL_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'create_schell_model_source' in str(w.message)]
-        assert len(dep) >= 1
-        msg = str(dep[0].message)
-        assert 'return_kind' in msg
-        assert ('v4.15.0' in msg and 'v4.15.1' in msg)
+               and 'create_schell_model_source' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == []
         ens, dx, dy, wl = result
         assert ens.shape == (4, 16, 16)
 
-    def test_annular_incoherent_default_emits_deprecation_warning(self):
+    def test_annular_incoherent_default_no_deprecation_warning(self):
         """Same contract for ``create_annular_incoherent_source``."""
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             result = create_annular_incoherent_source(**_ANNULAR_KW)
         dep = [w for w in caught
                if issubclass(w.category, DeprecationWarning)
-               and 'create_annular_incoherent_source' in str(w.message)]
-        assert len(dep) >= 1
-        msg = str(dep[0].message)
-        assert 'return_kind' in msg
-        assert ('v4.15.0' in msg and 'v4.15.1' in msg)
+               and 'create_annular_incoherent_source' in str(w.message)
+               and 'return_kind' in str(w.message)]
+        assert dep == []
         ens, dx, dy, wl = result
         assert ens.shape == (4, 16, 16)
 
-    def test_deprecation_warning_mentions_v5_0_removal(self):
-        """The warning must document the one-release deprecation
-        horizon (removal in v5.0) so migrators know how long they
-        have to update before the default-path becomes an error."""
+    def test_default_path_emits_no_warnings_at_all(self):
+        """v4.16.1: the retired DeprecationWarning was the only
+        warning the default path produced for nominal kwargs.  Pin
+        that a clean default-kwarg call is fully silent across all
+        warning categories (UserWarning, DeprecationWarning, etc.).
+        """
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
             create_gaussian_schell_source(**_GAUSSIAN_SCHELL_KW)
-        dep = [w for w in caught
-               if issubclass(w.category, DeprecationWarning)]
-        assert any('5.0' in str(w.message) for w in dep), (
-            f"DeprecationWarning must reference v5.0 removal; got "
-            f"{[str(w.message) for w in dep]}.")
+        # Filter out anything not originating from lumenairy itself
+        # (e.g. numpy / scipy internal deprecation warnings that may
+        # bubble through unrelated transitive code paths).
+        lib_warnings = [
+            w for w in caught
+            if 'lumenairy' in (w.filename or '').replace('\\', '/').lower()
+        ]
+        assert lib_warnings == [], (
+            f"v4.16.1: nominal default-kwarg Schell call must be "
+            f"fully silent; got "
+            f"{[(w.category.__name__, str(w.message)) for w in lib_warnings]}.")
 
 
 # ======================================================================

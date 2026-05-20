@@ -144,7 +144,11 @@ class TestNewSibling_angular_spectrum_propagate_tilted:
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'angular_spectrum_propagate_tilted' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -167,7 +171,11 @@ class TestNewSibling_angular_spectrum_propagate_mft:
                 dx_in=DX, dx_out=DX, N_out=N)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'angular_spectrum_propagate_mft' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -191,7 +199,11 @@ class TestNewSibling_fresnel_propagate_mft:
                 dx_in=DX, dx_out=DX, N_out=N)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'fresnel_propagate_mft' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -215,7 +227,11 @@ class TestNewSibling_fraunhofer_propagate_mft:
                 dx_in=DX, dx_out=DX, N_out=N)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'fraunhofer_propagate_mft' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -240,7 +256,11 @@ class TestNewSibling_apply_spherical_lens:
                 wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'apply_spherical_lens' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -266,7 +286,11 @@ class TestNewSibling_apply_aspheric_lens:
                 wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'apply_aspheric_lens' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -291,7 +315,11 @@ class TestNewSibling_apply_grin_lens:
                 wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'apply_grin_lens' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -315,7 +343,11 @@ class TestNewSibling_apply_axicon:
                 wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'apply_axicon' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -340,7 +372,11 @@ class TestNewSibling_apply_real_lens_traced:
                 wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'apply_real_lens_traced' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -366,7 +402,11 @@ class TestNewSibling_apply_real_lens_maslov:
                 wavelength=WAVELENGTH, dx=DX)
         msg = str(excinfo.value)
         assert 'PartialCoherenceMCF' in msg
-        assert 'v4.16' in msg
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the
+        # rejection message no longer cites the stale "v4.16+"
+        # scope marker; it now points at the propagate_ensemble
+        # helper.  Pin against the new canonical hint.
+        assert 'propagate_ensemble' in msg
         assert 'apply_real_lens_maslov' in msg
 
     def test_rejects_3d_ensemble(self):
@@ -400,7 +440,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             propagate_through_system(
                 mcf, elements, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             propagate_through_system(
@@ -412,7 +454,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             propagate(mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX,
                       method='asm')
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             propagate(ens, z=1e-3, wavelength=WAVELENGTH, dx=DX,
@@ -424,7 +468,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             angular_spectrum_propagate(
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             angular_spectrum_propagate(
@@ -436,7 +482,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             fresnel_propagate(
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             fresnel_propagate(
@@ -448,7 +496,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             fraunhofer_propagate(
                 mcf, z=1.0, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             fraunhofer_propagate(
@@ -460,7 +510,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             rayleigh_sommerfeld_propagate(
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             rayleigh_sommerfeld_propagate(
@@ -472,7 +524,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             scalable_angular_spectrum_propagate(
                 mcf, z=1e-3, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             scalable_angular_spectrum_propagate(
@@ -483,7 +537,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         mcf = _make_mcf()
         with pytest.raises(TypeError) as excinfo:
             apply_thin_lens(mcf, f=10e-3, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             apply_thin_lens(ens, f=10e-3, wavelength=WAVELENGTH, dx=DX)
@@ -494,7 +550,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
         with pytest.raises(TypeError) as excinfo:
             apply_cylindrical_lens(
                 mcf, f=10e-3, wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             apply_cylindrical_lens(
@@ -508,7 +566,9 @@ class TestMigrationSanityV4_15_2GuardedSitesIntact:
             apply_real_lens(
                 mcf, prescription=rx,
                 wavelength=WAVELENGTH, dx=DX)
-        assert 'v4.16' in str(excinfo.value)
+        # v4.16.1 (audit item 5b): stale "v4.16+" scope marker
+        # retired; rejection now points at propagate_ensemble.
+        assert 'propagate_ensemble' in str(excinfo.value)
         ens = _make_ensemble()
         with pytest.raises(ValueError) as excinfo:
             apply_real_lens(

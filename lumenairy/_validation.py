@@ -72,28 +72,49 @@ def _check_2d_scalar_field(
     ------
     TypeError
         If ``E`` is a :class:`lumenairy.PartialCoherenceMCF`
-        instance.  MCF-aware downstream propagators are deferred
-        to v4.16+; the error message points the user at the
-        v4.16-roadmap entry and gives the ensemble-iteration
-        workaround.
+        instance.  MCF-aware downstream propagators are an
+        architectural change tracked in ROADMAP v5.0+ (the prior
+        "v4.16+" deferral was retired in v4.16.1 once the actual
+        v4.16.0 release shipped without MCF-aware propagators).
+        For partial-coherence propagation today, the error message
+        points the user at the v4.16.1 ``propagate_ensemble`` helper
+        which iterates a Schell-family ensemble through any coherent
+        propagator and returns ``< |E_k|^2 >_k``.
     ValueError
         If ``E.ndim != 2``.  Common cause: the user passed a
         v4.15.1+ Schell-family ensemble (shape
         ``(n_realizations, Ny, Nx)``) directly to a coherent
-        propagator.  The error message shows the canonical
-        iterate-and-average pattern.
+        propagator.  The error message points at
+        :func:`lumenairy.propagate_ensemble` (v4.16.1) for the
+        canonical workflow.
     """
     if isinstance(E, _MCF):
+        # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the prior
+        # rejection message cited "v4.16+ scope" -- but the library
+        # version was v4.16.0 at the time of the audit, leaving the
+        # message stale.  Replace with an honest pointer to the
+        # ``propagate_ensemble`` helper (which actually solves the
+        # caller's partial-coherence-propagation need) and note that
+        # MCF-aware downstream propagators are a v5.0+ architectural
+        # change rather than a near-term feature.
         raise TypeError(
             f"{fn_name}: PartialCoherenceMCF inputs are not yet "
-            f"supported by this propagator (v4.15+).  MCF-aware "
-            f"downstream propagators are scheduled for v4.16+.  "
-            f"To propagate a partially-coherent field via "
-            f"ensemble averaging, iterate over the ensemble "
-            f"realizations:\n"
-            f"    for k in range(ensemble.shape[0]):\n"
-            f"        E_out_k = {fn_name}(ensemble[k], ...)\n"
-            f"    I_partial = np.mean(np.abs(out_stack)**2, axis=0)"
+            f"supported by this propagator.  MCF-aware downstream "
+            f"propagators are an architectural change tracked in "
+            f"ROADMAP v5.0+; for partial-coherence propagation today, "
+            f"use ``lumenairy.propagate_ensemble(ensemble, ...)`` "
+            f"instead.  Build the ensemble via "
+            f"``create_gaussian_schell_source(..., "
+            f"return_kind='ensemble')`` (or one of the sibling Schell "
+            f"factories), then:\n"
+            f"    I_partial = propagate_ensemble(\n"
+            f"        ensemble, dx=dx, wavelength=wl,\n"
+            f"        propagator={fn_name!r},  # or any callable\n"
+            f"        # forwarded kwargs (e.g. z=...) here\n"
+            f"    )\n"
+            f"``propagate_ensemble`` returns ``< |E_k|^2 >_k`` -- the "
+            f"canonical Wolf coherence-theory partial-coherence "
+            f"intensity for a Schell-model source."
         )
 
     ndim = getattr(E, "ndim", None)
@@ -102,12 +123,27 @@ def _check_2d_scalar_field(
         # the suggestion text by ndim so the message is useful.
         shape_str = getattr(E, "shape", "(unknown shape)")
         if ndim == 3:
+            # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b follow-up):
+            # the ensemble hint now points at the
+            # :func:`propagate_ensemble` helper rather than the bare
+            # iterate-pattern.  The bare iterate still works (and is
+            # left as a fallback below for users with custom
+            # propagator pipelines), but ``propagate_ensemble`` is
+            # the canonical entry point.
             hint = (
                 "  If this is an ensemble of realizations from "
-                "create_*_schell_source(), iterate over the leading "
-                "axis:\n"
+                "create_*_schell_source(), use the v4.16.1 "
+                "``propagate_ensemble`` helper:\n"
+                "    import lumenairy as la\n"
+                f"    I_partial = la.propagate_ensemble(\n"
+                f"        ensemble, dx=dx, wavelength=wl,\n"
+                f"        propagator={fn_name!r},  # or any callable\n"
+                f"    )\n"
+                "  Or iterate manually for a custom propagator chain:\n"
                 f"    for k in range(ensemble.shape[0]):\n"
-                f"        E_out_k = {fn_name}(ensemble[k], ...)"
+                f"        E_out_k = {fn_name}(ensemble[k], ...)\n"
+                "    I_partial = "
+                "np.mean(np.abs(out_stack)**2, axis=0)"
             )
         elif ndim is None or ndim < 2:
             hint = (

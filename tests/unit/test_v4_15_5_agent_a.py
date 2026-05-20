@@ -95,7 +95,10 @@ def test_deformable_mirror_apply_rejects_mcf(mcf_2_realisations):
     msg = str(excinfo.value)
     assert 'DeformableMirror.apply' in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 def test_deformable_mirror_apply_rejects_3d_ensemble(ensemble_3d):
@@ -195,7 +198,10 @@ def test_core_analyzer_rejects_mcf(name, fn, mcf_2_realisations):
     msg = str(excinfo.value)
     assert name in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 @pytest.mark.parametrize('name,fn', _CORE_ANALYZERS)
@@ -240,7 +246,10 @@ def test_koehler_image_rejects_mcf(mcf_2_realisations):
     msg = str(excinfo.value)
     assert 'koehler_image' in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 def test_koehler_image_rejects_3d_ensemble(ensemble_3d):
@@ -268,7 +277,10 @@ def test_extended_source_image_rejects_mcf(mcf_2_realisations):
     msg = str(excinfo.value)
     assert 'extended_source_image' in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 def test_extended_source_image_rejects_3d_ensemble(ensemble_3d):
@@ -300,7 +312,10 @@ def test_shack_hartmann_rejects_mcf(mcf_2_realisations):
     msg = str(excinfo.value)
     assert 'shack_hartmann' in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 def test_shack_hartmann_rejects_3d_ensemble(ensemble_3d):
@@ -337,7 +352,10 @@ def test_rays_from_field_rejects_mcf(mcf_2_realisations):
     msg = str(excinfo.value)
     assert 'rays_from_field' in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 def test_rays_from_field_rejects_3d_ensemble(ensemble_3d):
@@ -364,7 +382,10 @@ def test_resample_field_rejects_mcf(mcf_2_realisations):
     msg = str(excinfo.value)
     assert 'resample_field' in msg
     assert 'PartialCoherenceMCF' in msg
-    assert 'v4.16' in msg
+    # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 5b): the rejection
+    # message no longer cites the stale "v4.16+" scope marker;
+    # it now points at the propagate_ensemble helper.
+    assert 'propagate_ensemble' in msg
 
 
 def test_resample_field_rejects_3d_ensemble(ensemble_3d):

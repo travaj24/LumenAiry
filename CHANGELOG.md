@@ -2,6 +2,198 @@
 
 All notable changes to the core library are documented here.
 
+## [4.16.1] — 2026-05-19
+
+**Closes the v4.16.0 deep audit
+(`docs/audits/AUDIT_V4_16_0_DEEP_2026_05_19.md`) through P3.**  The
+audit was the first "deep" audit to actively hunt silent-wrong-answer
+correctness bugs alongside the usual structural/UX cleanup; 4 real
+physical-correctness defects surfaced, plus the previously half-shipped
+Schell-model partial-coherence cluster, plus 8 hygiene items.  4 agents
+worked in disjoint scopes (`A: correctness bugs`, `B: Schell + JAX
+paths`, `C: constraints + meta-pins + warn hygiene`, `D: glass + compat
++ UX`).  **2208 unit tests pass** (up from 2106; +102 net), 5
+documented skips (4 pymoo + 1 ZARR_MKDIR_PATCH), 1 documented xfail;
+**34/34 validation files pass**.
+
+### P0 / P1 closures — correctness bugs (Agent A)
+
+Four real silent-wrong-answer defects at user-relevant configurations
+that the prior verification-style audits missed.  Each ships with an
+empirical regression test pinning the failure mode and a sibling-gap
+sweep confirming no other sites carry the same pattern.
+
+* **Bug 1 — `MultiWavelengthMerit.evaluate` SUM -> AVG.**
+  `lumenairy/optimize/core.py`: the wrapper's tail `return self.weight
+  * total` summed sub-merit results across wavelengths rather than
+  averaging.  Documented semantics + both sibling classes
+  (`MultiFieldMerit`, `ToleranceAwareMerit`) divide by `len(...)` at
+  the return; the bug was localised to this one class.  Fixed:
+  `return self.weight * total / max(len(self.wavelengths), 1)`.  A
+  3-wavelength merit now returns the same value as a 1-wavelength
+  merit on the same sub-merit + constant field (was returning `3x`).
+* **Bug 2 — `shack_hartmann` wavefront pitch quantisation.**
+  `lumenairy/analysis/detector.py`: the slope-to-wavefront integration
+  multiplied the cumsum by the user-requested `lenslet_pitch`, but the
+  on-grid pitch is the integer-pixel quantised `sa_pixels * dx`.  At
+  `lenslet_pitch / dx = 1.7` (`sa_pixels = 2`), the reconstructed
+  wavefront amplitude was biased by `8.5 / 10 = 0.85` (17.6% low
+  relative to the post-fix amplitude).  Fix: use `pitch_actual =
+  sa_pixels * dx` for the cumsum step.  Empirically pinned by
+  `test_bug2_shack_hartmann_amplitude_ratio_physics_pin`.
+* **Bug 3 — `_detect_backend` directory misclassification.**
+  `lumenairy/io/storage.py`: the auto-detect routed *any* directory
+  path to Zarr regardless of whether a Zarr store was actually present
+  (`if path.endswith('.zarr') or os.path.isdir(path)`).  A bare
+  directory matching a typical HDF5 sibling layout was silently
+  misrouted, and `pathlib.Path` callers hit `AttributeError` on the
+  string-only `.endswith` check.  Fix: `str(path)` cast +
+  directory-routing restricted to actual Zarr stores via the canonical
+  `zarr.json` (v3) / `.zarray` (v2) marker files.
+* **Bug 4 — LM `bounds` parser accepts `None` endpoints.**
+  `lumenairy/optimize/core.py`: the `method='lm'` branch built
+  `lb`/`ub` arrays via `b[0] if b else -np.inf`; `b = (None, 1.0)` is
+  truthy, so `None` leaked into `np.array([None, 0.0, ...])` (object
+  dtype), and scipy raised an opaque downstream error.  Fix: explicit
+  `_resolve_bound` helper that routes any `None` (per-side or
+  per-tuple) to `+/-np.inf` and produces a clean `float64` array.
+
+### P1 closures — half-shipped clusters (Agent B)
+
+* **`propagate_ensemble(...)` helper added** (audit Part 5 P0-1).
+  New module `lumenairy/propagators/ensemble.py`, exported at the
+  top-level as `lumenairy.propagate_ensemble`.  Iterates a Schell-family
+  `(n_realizations, Ny, Nx)` ensemble through any coherent propagator
+  (`'asm'` / `'fresnel'` / `'fraunhofer'` / `'rs'` / `'sas'` or a
+  user-supplied callable) and returns `I_partial = <|E_k|^2>_k` (the
+  canonical Wolf-coherence-theory result).  `return_ensemble=False` by
+  default for memory efficiency; opt-in `return_ensemble=True` for the
+  full propagated stack.  Shape-mismatch + 2-D-field-instead-of-
+  ensemble cases raise informative `ValueError`s.  New example
+  `examples/06_schell_propagation.py` measures a `~6.95x` smoothing
+  factor (coherent-peak / partial-peak) on a 256x256 grid at
+  `sigma_g / w0 = 0.3`, consistent with the Wolf-Carter far-field
+  scaling.
+* **Default Schell-factory `DeprecationWarning` retired.**  The 3
+  top-level factories (`create_gaussian_schell_source`,
+  `create_schell_model_source`, `create_annular_incoherent_source`)
+  and 2 `Source.*` classmethods now default `return_kind='ensemble'`
+  directly.  The `_RETURN_KIND_UNSET` sentinel + warning helper are
+  preserved as deprecated public symbols (the v4.15.3 sentinel-
+  promotion meta-pin imports them); targeted for removal in v5.0.
+* **MCF rejection message refreshed.**  `lumenairy/_validation.py`:
+  the "MCF planned for v4.16+" wording was stale at v4.16.0.  Updated
+  to cite v5.0+ and point callers at the new `propagate_ensemble`
+  helper for the partial-coherence path that lands now.
+* **JAX-traceable dtype probe.**  `lumenairy/system.py` ~line 1184:
+  swapped the `np.asarray(E_in).dtype` probe for duck-typing
+  `getattr(E_in, 'dtype', None)` so the `propagate_through_system_jax`
+  path no longer breaks under `jax.jit` / `jax.grad` tracers (which
+  refuse the `np.asarray` cast).
+* **High-NA `_transfer_jax` user warning.**
+  `lumenairy/raytrace/jax_trace.py`: added an eager-only guard
+  (`isinstance(direction_n, np.ndarray)`-gated) that emits a
+  `UserWarning` when `min |N| < 0.95` — the regime where the paraxial
+  small-angle approximation preserved for autodiff stability begins to
+  diverge from the NumPy reference.  Tracer-time path is unchanged
+  (no warning, preserves `jit` / `grad` purity).
+
+### P2 closures — API consistency + meta-pins (Agent C)
+
+* **`Constraint` API narrowed to scalar-return.**  Vector-return
+  callables crashed inside the pymoo wrapper's `float(_f(xv))` coercion
+  with an opaque `TypeError`.  Docstring narrowed to `f(x) -> scalar`
+  and `__post_init__` adds a best-effort scalar-shape probe.  3-test
+  pin block exercises both the accept (scalar) and reject (ndarray of
+  shape `(K,)`) paths.
+* **`Constraint(fun=lambda x: ...)` UserWarning for parallel workers.**
+  Lambdas aren't picklable; `differential_evolution(workers>1)` /
+  joblib-parallelised FD-gradient fails with `PicklingError`.  Soft
+  heads-up at `__post_init__` when `fun.__name__ == '<lambda>'`;
+  single-process SLSQP / trust-constr is unaffected.
+* **`_clear_local_asm_caches` late-binding-lambda registration.**
+  `lumenairy/propagators/propagation.py:~803`: the cache registry
+  enrollment used an early-binding partial, diverging from the
+  canonical late-binding-lambda pattern of the other 8 cache
+  enrollments.  Switched to `lambda: _clear_local_asm_caches()` for
+  pattern parity.
+* **10th cache-registry meta-pin walker.**
+  `tests/unit/test_v4_16_1_dispatcher_pin_cache_registry_enrollment.py`:
+  AST-walks every `@lru_cache`-decorated module-level function and
+  asserts a paired `_cache_registry` enrollment.  15 caches discovered,
+  0 orphans — closes the V4-bucket sibling-gap structurally
+  (continuing the V1-V9 meta-pin trajectory).
+* **`_check_glass_registry_consistency()` extends to GLASS_VALIDITY.**
+  Every `GLASS_VALIDITY` key now must appear in `GLASS_REGISTRY` (and
+  must be a `(lambda_min, lambda_max)` 2-tuple with `lambda_min <
+  lambda_max`, both finite, non-negative).
+* **`warnings.warn(..., stacklevel=2)` hygiene** added at the 2 sites
+  flagged in `lumenairy/io/prescriptions.py` (lines ~1019 / ~1470).
+
+### P3 closures — compat + glass / materials + UX (Agent D)
+
+* **4 stale `n_d` inline comments in `lumenairy/glass.py` corrected**
+  to match the actually-computed Sellmeier values.  Multi-way
+  convergent finding across audit perspectives (V5 + DEEP-3 + F1 +
+  PHYS-2):
+  * H-ZK9B: `1.613750` -> `1.62041`
+  * H-ZF12: `1.673000` -> `1.76182`   (the most egregious — 6% off)
+  * D-LAK52: `1.729160` -> `1.73050`
+  * H-ZLAF52A: `1.796800` -> `1.80610`
+  No runtime behaviour change — the actual Sellmeier coefficients were
+  always correct; only the comments were stale.
+* **`refractiveindex` moved to optional `[glass]` extras group.**
+  `pyproject.toml`: dropped from hard `[project.dependencies]`,
+  promoted to `glass = ["refractiveindex>=1.0"]`, and bundled into the
+  existing `all` group.  Aligns the wheel with the lazy-import +
+  `SELLMEIER_COEFFICIENTS` fallback already in place in
+  `lumenairy/glass.py`.
+* **`zarr>=2.14` floor bumped to `zarr>=3.0`** in the `zarr` and `all`
+  extras groups.  `lumenairy/io/storage.py` uses `Group.create_array`
+  (a Zarr v3 API); the v2 floor was a latent `AttributeError` waiting
+  for any zarr=2.x user.
+* **`ProcessPoolExecutor` `spawn` mp_context.**
+  `lumenairy/elements/_lens_traced.py:~220`: explicit
+  `mp_context=multiprocessing.get_context('spawn')` kwarg on the
+  module-level worker pool.  Matches the README + v4.16.0 CHANGELOG
+  claim that `spawn` is used (previously `fork` on Linux — unsafe
+  with cached FFT plans and worker threads).
+* **`examples/06_schell_propagation.py`** + **`examples/07_zemax_load_trace.py`** added.  The Zemax-loader example
+  closes audit UX item 22 (no prior example exercised
+  `la.load_zemax_zmx` end-to-end); loads the Thorlabs AC254-100-C
+  achromat fixture and falls back to a programmatic N-BK7 singlet via
+  `la.make_singlet` if the .zmx file is missing.
+* **`CONVENTIONS.md`** added at the repo root — ~10 short sections
+  documenting the `create_*` (-> field/Source) vs `make_*` (->
+  prescription / bundle / non-field) factory verb contract, error-
+  message prefix discipline, RNG kwarg name, and 7 related
+  conventions that previously lived only in informal precedent.
+* **Stray repo-root artifacts cleaned up.**  3 example PNGs moved
+  from the repo root to `examples/output/` (the 3 producing scripts
+  updated to write there); stray `C:tmpoptimize_diff.txt` echo-
+  redirect artifact deleted (same cleanup pattern as v4.14.3's
+  `C:tmpv4_14_1_changelog.md`).
+
+### Tests + CI
+
+* **2208 pass / 5 skip / 1 xfail** (up from 2106 pass at v4.16.0;
+  +102 tests across the 4 agents).
+* New test modules:
+  * `tests/unit/test_v4_16_1_agent_a.py` (11 tests)
+  * `tests/unit/test_v4_16_1_agent_b.py` (26 tests)
+  * `tests/unit/test_v4_16_1_agent_c.py` (20 tests)
+  * `tests/unit/test_v4_16_1_dispatcher_pin_cache_registry_enrollment.py`
+    (6 walker tests — the 10th meta-pin)
+  * `tests/unit/test_v4_16_1_agent_d.py` (22 tests)
+* CHANGELOG line-citation refresh: `_ZERO_APERTURE_MASK` branch site
+  drifted `:2958` -> `:2974` after Agent A's Bug 1 SUM->AVG line
+  additions; the v4.15.3 + v4.15.4 entries' "now at :2958" cites are
+  refreshed to `:2974` (the v4.15 line-citation pin
+  `TestF5ChangelogLineCitations` verifies a citation within +/-5 of
+  the live site exists in CHANGELOG).
+
+---
+
 ## [4.16.0] — 2026-05-19
 
 **Major minor release** rolling up the entire v4.16 + v4.17 + v4.18
@@ -708,9 +900,10 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/core.py:2958` (was `:2980` pre-v4.15.4
-  Agent B `_PerturbedABCDFallbackSentinel` deletion; was `:2905`
-  in the v4.15.2 entry).
+  branch now at `optimize/core.py:2974` (was `:2958` pre-v4.16.1
+  Agent A MultiWavelengthMerit `SUM`->`AVG` refactor; was `:2980`
+  pre-v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion;
+  was `:2905` in the v4.15.2 entry).
 * **Test count reconciliation**:
   `pytest --collect-only` → 1735 collected at v4.15.2 HEAD
   (was reported as "1732 pass + 1 skip + 1 xfail = 1734" in
@@ -1163,15 +1356,18 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/core.py:2958` (the
-  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:2980`
-  pre-v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion
-  (~55 lines removed at the top of the sentinel block), and
-  `:2905` pre-v4.15.3 sentinel-wiring work.  The remaining
-  sentinel class + singleton (`_ZeroApertureMaskSentinel` /
-  `_ZERO_APERTURE_MASK`) are at `optimize/core.py:2034` and
-  `optimize/core.py:2044` respectively post Agent E's `_Sentinel`
-  base-class refactor.  v4.15.2 (P3): citation refreshed after a
+  sentinel branch now lives at `optimize/core.py:2974` (the
+  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:2958`
+  pre-v4.16.1 Agent A MultiWavelengthMerit `SUM`->`AVG` refactor
+  (~16 lines added in the merit-aggregation block above the
+  sentinel branch); was `:2980` pre-v4.15.4 Agent B
+  `_PerturbedABCDFallbackSentinel` deletion (~55 lines removed at
+  the top of the sentinel block); and `:2905` pre-v4.15.3
+  sentinel-wiring work.  The remaining sentinel class + singleton
+  (`_ZeroApertureMaskSentinel` / `_ZERO_APERTURE_MASK`) are at
+  `optimize/core.py:2044` and `optimize/core.py:2054` respectively
+  post Agent E's `_Sentinel` base-class refactor.  v4.15.2 (P3):
+  citation refreshed after a
   second line-drift pass against the current source supersedes
   the earlier stale citations.
 
