@@ -31,10 +31,16 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
+        # v5.0.1 fix: the v5.0 workflow installed ``[all]`` which omits
+        # ``pytest`` (lives in the ``[dev]`` extras group), so pytest
+        # itself wasn't available -- every test job failed at the
+        # ``python -m pytest`` invocation.  ``[all,dev]`` is the
+        # canonical CI install.  ``tomli`` is the 3.10 backport for
+        # the V11 dispatcher-pin walker (3.11+ has tomllib in stdlib).
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[all]"
-          pip install tomli  # for the 3.10 dispatcher-pin walker path
+          pip install -e ".[all,dev]"
+          pip install tomli
 
       - name: Run unit tests
         run: |
@@ -76,9 +82,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
+        # v5.0.1 fix: ``[all]`` omits pytest; switch to ``[all,dev]``.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[all]"
+          pip install -e ".[all,dev]"
 
       - name: Run public-API smoke
         run: python -m pytest tests/unit/test_public_api.py -v
