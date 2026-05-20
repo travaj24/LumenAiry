@@ -244,16 +244,76 @@ def get_default_complex_dtype() -> Any:
 #         dy = _resolve_default_dy(dy)
 #         ...
 #
-# At v4.16.2 ship, the full library-wide rollout of these resolvers is
-# intentionally staged for v5.0 (the file-split release); v4.16.2
-# ships the SET / GET API surface + a representative sample of
-# consumer wirings.
+# v4.16.3 (audit P2-NEW-F1-3 + P2-NEW-F1-4) status of consumer rollout:
+#
+#   * ``DEFAULT_REAL_DTYPE``       -- consumed at one site
+#     (``propagate_ensemble``'s no-input-dtype real-accumulator
+#     fallback, ``ensemble.py:~347``).  v4.16.2 shipped this consumer
+#     behind an unreachable ``except`` branch; v4.16.3 re-shapes the
+#     consumer so the ``in_dtype is None`` path is the canonical
+#     fallback.
+#   * ``DEFAULT_WAVE_PROPAGATOR``  -- API ONLY in v4.16.2/v4.16.3.  No
+#     library code reads it yet.  Setter emits a one-shot UserWarning.
+#     Consumer wiring (resolver in ``apply_real_lens`` /
+#     ``apply_real_lens_traced`` / ``propagate``) lands in v5.0
+#     alongside the file-split work.
+#   * ``DEFAULT_DY``               -- API ONLY in v4.16.2/v4.16.3.
+#     Same status as ``DEFAULT_WAVE_PROPAGATOR``.
+#
+# Multiprocess / fork notes (v4.16.3, audit P3-NEW-F1-2 + P3-NEW-F1-3)
+# --------------------------------------------------------------------
+# The three ``DEFAULT_*`` module-level globals below are PLAIN PYTHON
+# globals -- they live in the parent process's import of this module.
+# Two correctness corollaries follow:
+#
+# 1. **Pickle / fork-safety**: under
+#    ``multiprocessing.get_context('spawn')`` (the only context that
+#    works portably on Windows + macOS Python 3.8+) child workers
+#    RE-IMPORT this module from scratch.  Each child sees the
+#    library-default ``DEFAULT_*`` values -- NOT whatever the parent
+#    set them to via the ``set_default_*`` accessors.  A parent that
+#    calls ``set_default_real_dtype(np.float32)`` then submits work to
+#    a ``ProcessPoolExecutor`` (default = spawn on Windows / macOS)
+#    silently loses the override in each worker.  Workaround until v5.0
+#    rolls out a shared-state mechanism: re-call ``set_default_*`` at
+#    the top of each worker callable, or pass the value explicitly per
+#    call.
+# 2. **One-shot latch fork-safety**: the
+#    ``_DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED`` and
+#    ``_DEFAULT_DY_NO_CONSUMER_WARNED`` latches (and the sibling
+#    ``_MULTIWL_AVG_WARNED`` in ``optimize.core``,
+#    ``_TRANSFER_JAX_WARNING_EMITTED`` in ``raytrace.jax_trace``) reset
+#    to ``False`` per worker on spawn.  An optimisation loop running
+#    ``differential_evolution(workers=8)`` will see each worker re-emit
+#    the one-shot warning the first time it triggers the underlying
+#    condition -- up to N copies of the warning across N workers
+#    instead of one across the process tree.  Not a correctness bug
+#    (each emission is still capped at one per worker process) but
+#    documented here so the user isn't surprised.
+#
+# Neither limitation is fixed in v4.16.3.  The fixes require either a
+# ``multiprocessing.Manager``-backed shared dict (heavy) or a stamped
+# environment-variable handshake (fragile across the spawn boundary);
+# both push out into the v5.0 default-config-knob consumer-wiring
+# scope.
 
 DEFAULT_REAL_DTYPE = np.float64
 
 DEFAULT_WAVE_PROPAGATOR = 'asm'
 
 DEFAULT_DY = None  # None means "match dx"
+
+# v4.16.3 (audit P2-NEW-F1-4): module-level latches so the
+# "API-only in v4.16.2/v4.16.3; consumer wiring follows in v5.0"
+# notice fires only once per process (parallel to
+# ``_MULTIWL_AVG_WARNED`` in ``optimize.core``).
+#
+# v4.16.3 (audit P3-NEW-F1-2): these latches are NOT fork-safe under
+# ``multiprocessing.get_context('spawn')``; each worker re-imports the
+# module and re-emits the notice once.  See the "Multiprocess / fork
+# notes" block above for the full discussion.
+_DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED = False
+_DEFAULT_DY_NO_CONSUMER_WARNED = False
 
 
 def set_default_real_dtype(dtype: Any) -> None:
@@ -296,7 +356,7 @@ def set_default_wave_propagator(name: str) -> None:
     propagator``.  v4.16.2 ships the SET / GET API surface; the full
     library-wide rollout of resolver wirings is staged for v5.0.
     """
-    global DEFAULT_WAVE_PROPAGATOR
+    global DEFAULT_WAVE_PROPAGATOR, _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED
     _VALID = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
     if not isinstance(name, str):
         raise ValueError(
@@ -307,6 +367,25 @@ def set_default_wave_propagator(name: str) -> None:
             f"set_default_wave_propagator: unknown propagator "
             f"{name!r}.  Valid choices: {_VALID}.")
     DEFAULT_WAVE_PROPAGATOR = name
+    # v4.16.3 (audit P2-NEW-F1-4): one-shot UserWarning that the knob
+    # is API-only at v4.16.2/v4.16.3 -- no library consumer reads it
+    # yet.  Latched at module scope so optimisation loops calling the
+    # setter repeatedly don't flood the warning channel.
+    if not _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED:
+        _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED = True
+        import warnings as _warnings
+        _warnings.warn(
+            "set_default_wave_propagator: stores the default but no "
+            "library consumer reads it yet in v4.16.2/v4.16.3 (zero "
+            "downstream readers across the lumenairy package).  "
+            "Consumer wiring at apply_real_lens / "
+            "apply_real_lens_traced / propagate is staged for v5.0 "
+            "alongside the file-split work.  In the interim, pass "
+            "``wave_propagator=`` per-call.  Silence this notice via "
+            "``warnings.filterwarnings('ignore', category=UserWarning, "
+            "module='lumenairy.propagators.propagation')``.",
+            UserWarning, stacklevel=2,
+        )
 
 
 def get_default_wave_propagator() -> str:
@@ -326,21 +405,39 @@ def set_default_dy(value: Any) -> None:
     time.  v4.16.2 ships the SET / GET API surface; the full
     library-wide rollout of resolver wirings is staged for v5.0.
     """
-    global DEFAULT_DY
+    global DEFAULT_DY, _DEFAULT_DY_NO_CONSUMER_WARNED
     if value is None:
         DEFAULT_DY = None
-        return
-    try:
-        v = float(value)
-    except (TypeError, ValueError) as e:
-        raise ValueError(
-            f"set_default_dy: value must be None or a positive float, "
-            f"got {type(value).__name__}: {value!r} ({e!s}).") from None
-    if not (v > 0.0 and np.isfinite(v)):
-        raise ValueError(
-            f"set_default_dy: value must be None or a positive finite "
-            f"float, got {v!r}.")
-    DEFAULT_DY = v
+    else:
+        try:
+            v = float(value)
+        except (TypeError, ValueError) as e:
+            raise ValueError(
+                f"set_default_dy: value must be None or a positive float, "
+                f"got {type(value).__name__}: {value!r} ({e!s}).") from None
+        if not (v > 0.0 and np.isfinite(v)):
+            raise ValueError(
+                f"set_default_dy: value must be None or a positive finite "
+                f"float, got {v!r}.")
+        DEFAULT_DY = v
+    # v4.16.3 (audit P2-NEW-F1-4): one-shot UserWarning that the knob
+    # is API-only at v4.16.2/v4.16.3 -- no library consumer reads it
+    # yet.  Latched at module scope so optimisation loops calling the
+    # setter repeatedly don't flood the warning channel.
+    if not _DEFAULT_DY_NO_CONSUMER_WARNED:
+        _DEFAULT_DY_NO_CONSUMER_WARNED = True
+        import warnings as _warnings
+        _warnings.warn(
+            "set_default_dy: stores the default but no library "
+            "consumer reads it yet in v4.16.2/v4.16.3 (zero "
+            "downstream readers across the lumenairy package).  "
+            "Consumer wiring at apply_real_lens / propagate / etc. is "
+            "staged for v5.0 alongside the file-split work.  In the "
+            "interim, pass ``dy=`` per-call.  Silence this notice via "
+            "``warnings.filterwarnings('ignore', category=UserWarning, "
+            "module='lumenairy.propagators.propagation')``.",
+            UserWarning, stacklevel=2,
+        )
 
 
 def get_default_dy() -> Any:

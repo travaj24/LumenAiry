@@ -10,6 +10,83 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.16.3
+
+**Closes the v4.16.2 audit (`docs/audits/AUDIT_V4_16_2_2026_05_20.md`)
+through P3.**  Audit found zero P0; 2 P1 + 6 P2 + 8 P3 concentrated
+around v4.16.2's pre-v5.0 prep features being mostly scaffolding
+without real consumers, plus 2 structural-bypass issues inside the
+new V11 doc-consistency walker itself.  4 agents in disjoint scopes.
+**2327 unit pass / 5 skip / 1 xfail = 2333 collected** (up from 2270
+at v4.16.2; +57 net); 34/34 validation.
+
+### P1 closures (2)
+
+* **V11 walker pyproject parsing → `tomllib`.**  v4.16.2's regex
+  silently mis-parsed `jax-gpu = ["jax[cuda12]>=0.4.20"]` and
+  comment-bracket content in `all = [...]`.  Replaced with
+  `tomllib` (Python 3.11+) / `tomli` (3.9/3.10 backport).  Two
+  anti-regression pins assert the broken regex + hardcoded version
+  tuple don't reappear.
+* **Migration-Guide §4.16.2 rewrite.**  The v4.16.2 recipe demo'd
+  `set_default_wave_propagator('fresnel')` followed by
+  `apply_real_lens(...)` -- but the latter hardcodes `'asm'` and
+  doesn't consult the knob.  Replaced with a recipe using
+  `set_default_complex_dtype` + `set_default_real_dtype` (knobs
+  with real consumers); explicit "API-only in v4.16.2/v4.16.3"
+  limitation note added.
+
+### P2 closures (6)
+
+* **`get_default_real_dtype` consumer fixed** -- the v4.16.2
+  "representative wiring" was structurally unreachable dead code;
+  refactored so the knob is reachable via the
+  `getattr(ensemble, 'dtype', None)` default path.
+* **`set_default_wave_propagator` + `set_default_dy` one-shot
+  `UserWarning`** -- both knobs store values no library code reads
+  at v4.16.3; setters now warn that the knob is "API-only;
+  consumer wiring lands in v5.0".  Sibling-gap pin asserts zero
+  consumers -- FAILS LOUDLY when v5.0 wires the first.
+* **V11 version list → CHANGELOG-driven scan.**  Was hardcoded
+  `('4.13.0', '4.15.1', '4.16.1', '4.16.2')`; now extracts
+  `## [X.Y.Z]` headings from CHANGELOG with breaking-change marker
+  detection.  Future v4.17.0+ breaking entries auto-included.
+* **V11 → CHANGELOG↔Migration-Guide drift coverage.**  New test
+  enforces `>= 200 chars of non-whitespace body` per Migration-Guide
+  version section.
+* **`Constraint` auto-probe DeprecationWarning** (one-cycle, latched)
+  -- pattern-parallel to v4.16.2's MultiWavelengthMerit FutureWarning
+  treatment.  Removed in v5.0.
+* **`pickle.dumps` probe catch widened** from
+  `(PicklingError, AttributeError, TypeError)` to `Exception` --
+  catches `RecursionError`, `RuntimeError` from custom `__reduce__`,
+  `MemoryError`, and arbitrary `__reduce__` / `__getstate__`
+  exceptions.
+
+### P3 closures (8)
+
+* **`__polynomial__` sentinel** parallel to `__sellmeier__` in
+  glass.py; polynomial-formula glasses can now opt in to the bundled
+  evaluator even with refractiveindex installed.
+* **`DEFAULT_REAL_DTYPE` / `DEFAULT_WAVE_PROPAGATOR` / `DEFAULT_DY`
+  re-exported at top level** for parity with `DEFAULT_COMPLEX_DTYPE`.
+* **Per-surface thickness in high-NA hoist message** (was citing
+  `max(thickness)`).
+* **Multiprocess / fork-safety documented** for one-shot latches +
+  `DEFAULT_*` globals (spawn-mode workers re-import + reset).
+* **`psutil>=5.0`** promoted to Required in requirements.txt
+  (parity with pyproject.toml hard dep).
+* **"Structurally retired" claim softened** in CHANGELOG + ROADMAP
+  (honest framing: "all currently-known classes; new classes will
+  continue to surface").
+* **CHANGELOG sentinel line citation** refreshed `:3015` → `:3032`.
+* **POLYNOMIAL/SELLMEIER dispatch order** doc/code reconciled.
+
+### Test counts
+
+A=17, B=16, C=8, D=15, walker-extra=1.  Sum: **57**.  Final
+2327 pass / 5 skip / 1 xfail = 2333 collected; 34/34 validation.
+
 ## What's new in 4.16.2
 
 **Closes the v4.16.1 audit

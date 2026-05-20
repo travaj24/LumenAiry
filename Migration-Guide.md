@@ -149,37 +149,61 @@ Ohara S-, CDGM Sellmeier-2 entries, and v4.16.2+ formula-3 entries
 as they're ingested) work on a minimal install without the
 extras.
 
-## 4.16.2 -- Default-config knobs
+## 4.16.2 -- Default-config knobs (API-only; v5.0 rollout)
 
 Three new library-wide setter functions land alongside the existing
 `set_default_complex_dtype`:
 
 * `set_default_real_dtype(np.float32 | np.float64)` -- real-array
-  precision.
+  precision.  v4.16.3 wires this knob through `propagate_ensemble`'s
+  no-input-dtype real-accumulator fallback (the canonical
+  `in_dtype is None` path); full library-wide rollout follows in v5.0.
 * `set_default_wave_propagator(name)` -- default `wave_propagator`
   for `propagate_through_system` / `apply_real_lens` / etc.
+  **API ONLY in v4.16.2/v4.16.3**: stored but not yet read by any
+  library code.  Setter emits a one-shot `UserWarning` (v4.16.3+).
 * `set_default_dy(value)` -- default anamorphic grid spacing.
+  **API ONLY in v4.16.2/v4.16.3**: same status as
+  `set_default_wave_propagator`.
 
-**Recipe -- replace per-call kwargs with one-shot app-init calls:**
+> **v4.16.2/v4.16.3 limitation note.**  Two of the three new knobs
+> (`set_default_wave_propagator`, `set_default_dy`) store the default
+> but have **zero downstream consumers** in `lumenairy/` at v4.16.2
+> ship.  Entry points like `apply_real_lens` continue to hardcode
+> `wave_propagator='asm'` and accept `wave_propagator=...` / `dy=...`
+> as per-call keyword arguments.  The library-wide resolver rollout
+> that makes these setters actually steer the default at every entry
+> point is staged for v5.0 alongside the file-split work.  Until
+> then, the setters store the value the getter reads back, but
+> downstream propagator dispatch is unaffected.  v4.16.3+ surfaces
+> this honestly via a one-shot `UserWarning` from each setter.
+
+**Recipe -- precision knob (the one with real consumers):**
 
 ```python
-# Old (per-call kwarg every entry point):
+import numpy as np
+import lumenairy as la
+
+# Old (per-call dtype every entry point):
+field = la.apply_real_lens(field, prescription=pres, wavelength=wl,
+                            dx=dx, wave_propagator='fresnel')
+
+# New (one-shot at app initialization).  `set_default_complex_dtype`
+# is honored library-wide; `set_default_real_dtype` is honored at the
+# `propagate_ensemble` no-input-dtype real fallback site (v4.16.3+):
+la.set_default_complex_dtype(np.complex64)
+la.set_default_real_dtype(np.float32)
+
+# Per-call `wave_propagator=` still required until v5.0 (the setter
+# is API-only at v4.16.2/v4.16.3; see limitation note above):
 field = la.apply_real_lens(field, prescription=pres, wavelength=wl,
                             dx=dx, wave_propagator='fresnel')
 field = la.apply_real_lens_traced(field, ..., wave_propagator='fresnel')
-
-# New (one-shot at app initialization):
-la.set_default_wave_propagator('fresnel')
-field = la.apply_real_lens(field, prescription=pres, wavelength=wl, dx=dx)
-field = la.apply_real_lens_traced(field, ...)
 ```
 
 The full library-wide resolver rollout (replacing hardcoded `'asm'`
 / `np.float64` / `dx` defaults at every entry point) is staged for
-v5.0 alongside the file-split work.  In v4.16.2 the knobs are
-honored at a representative single site (`propagate_ensemble`'s
-no-input-dtype real fallback path); the rest of the rollout follows
-v5.0 file splits.
+v5.0 alongside the file-split work.
 
 ---
 

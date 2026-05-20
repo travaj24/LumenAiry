@@ -64,6 +64,15 @@ from .propagators.propagation import (
     reset_fft_backend,
     # Precision configuration (complex64 vs complex128)
     DEFAULT_COMPLEX_DTYPE,
+    # v4.16.3 (audit P3-NEW-F2-LOW-1): sibling re-exports for the
+    # v4.16.2 default-config knob globals -- ``DEFAULT_COMPLEX_DTYPE``
+    # has been at top level since v4.14, but the three v4.16.2
+    # globals were only reachable via ``lumenairy.propagators.
+    # propagation.DEFAULT_*`` despite the matching setter/getter
+    # accessors being top-level since v4.16.2.
+    DEFAULT_REAL_DTYPE,
+    DEFAULT_WAVE_PROPAGATOR,
+    DEFAULT_DY,
 )
 
 # ── Optional optimisation-backend availability flags ────────────────────
@@ -821,7 +830,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.16.2"
+__version__ = "4.16.3"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1490,6 +1499,12 @@ __all__ = [
     'DEFAULT_COMPLEX_DTYPE',
     'set_default_real_dtype',
     'get_default_real_dtype',
+    # v4.16.3 (audit P3-NEW-F2-LOW-1): sibling parity with
+    # ``DEFAULT_COMPLEX_DTYPE`` -- the v4.16.2 default-config knob
+    # module-level globals are now first-class at top level.
+    'DEFAULT_REAL_DTYPE',
+    'DEFAULT_WAVE_PROPAGATOR',
+    'DEFAULT_DY',
     'set_default_wave_propagator',
     'get_default_wave_propagator',
     'set_default_dy',

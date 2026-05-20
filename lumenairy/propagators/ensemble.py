@@ -340,19 +340,32 @@ def propagate_ensemble(
     Ny, Nx = ensemble.shape[1], ensemble.shape[2]
 
     # Map the input's complex dtype to its real counterpart for the
-    # accumulator.  Falls through to ``float64`` for non-complex or
-    # exotic dtypes.  Using the matching real dtype preserves backend
-    # parity (e.g. JAX's complex64 -> float32 default; CuPy's
-    # complex128 -> float64).
+    # accumulator.  Falls through to ``get_default_real_dtype()`` (the
+    # library-wide knob set via ``set_default_real_dtype``) for the
+    # no-input-dtype fallback path.  Using the matching real dtype
+    # preserves backend parity (e.g. JAX's complex64 -> float32
+    # default; CuPy's complex128 -> float64).
+    #
+    # v4.16.3 (audit P2-NEW-F1-3): re-shape the fallback so
+    # ``get_default_real_dtype()`` is the canonical ``in_dtype is None``
+    # path rather than an unreachable ``except`` branch.  Pre-v4.16.3
+    # the earlier ``hasattr(ensemble, 'dtype')`` gate + ``np.asarray``
+    # coercion (lines ~287-302) guaranteed ``getattr(ensemble, 'dtype',
+    # None)`` always returned a valid numpy dtype by the time control
+    # reached this site, so the ``except (TypeError, ValueError)``
+    # branch was structurally dead and the ``set_default_real_dtype``
+    # knob had no reachable consumer library-wide.  The ``try/except``
+    # is retained as a belt-and-suspenders guard for the exotic-dtype
+    # case (e.g. a future numpy dtype that doesn't expose ``.real``).
+    from .propagation import get_default_real_dtype
     in_dtype = getattr(ensemble, 'dtype', None)
-    try:
-        real_dtype = np.dtype(in_dtype).type(0).real.dtype
-    except (TypeError, ValueError):
-        # v4.16.2 (pre-v5.0 prep): honour set_default_real_dtype for
-        # the no-input-dtype fallback path.  Was hardcoded to
-        # ``np.float64`` pre-v4.16.2.
-        from .propagation import get_default_real_dtype
+    if in_dtype is None:
         real_dtype = get_default_real_dtype()
+    else:
+        try:
+            real_dtype = np.dtype(in_dtype).type(0).real.dtype
+        except (TypeError, ValueError):
+            real_dtype = get_default_real_dtype()
 
     # Accumulator buffer for the partial-coherence intensity.  Built
     # on the matching xp so GPU / JAX paths stay on the backend.

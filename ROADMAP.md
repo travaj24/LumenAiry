@@ -1,11 +1,12 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-20 (post-v4.16.2).  v4.16 + v4.17 + v4.18
+**Last updated:** 2026-05-20 (post-v4.16.3).  v4.16 + v4.17 + v4.18
 ROADMAP scope all shipped in v4.16.0 mega-rollup; v4.16.1 closes the
 v4.16.0 deep audit; v4.16.2 closes the v4.16.1 audit + lands the
-pre-v5.0 prep features (formula-3 Sellmeier evaluator infrastructure,
-3 default-config knobs, Migration-Guide.md skeleton, 11th
-doc-consistency meta-pin walker).  v5.0 is now the immediate horizon.
+pre-v5.0 prep features; v4.16.3 closes the v4.16.2 audit (V11 walker
+hardening via `tomllib`, Migration-Guide §4.16.2 correction,
+`__polynomial__` sentinel, default-knob honesty warnings).  v5.0 is
+now the immediate horizon.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -20,8 +21,8 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.16.2 baseline (2270 unit tests passing + 5
-  documented skips + 1 documented xfail = 2276 collected).
+- **Library:** v4.16.3 baseline (2327 unit tests passing + 5
+  documented skips + 1 documented xfail = 2333 collected).
   v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
   v4.16.1 closes the v4.16.0 deep audit through P3: 4 silent-wrong-
@@ -42,7 +43,7 @@ are preserved in git history; this file is forward-only.
   `ui/main_window.py:2196` etc.).  No standalone release stream; the
   Designer ships co-versioned inside the library wheel.
 - **Audit closure status:** AUDIT_V4_12_1 through
-  AUDIT_V4_16_1 all closed.  AUDIT_V4_13_1 Tier-2/3/4
+  AUDIT_V4_16_2 all closed.  AUDIT_V4_13_1 Tier-2/3/4
   architectural items scoped to v5.0 as noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
   5).  v4.14.2 migrated 2 shims onto the canonical
@@ -83,8 +84,10 @@ are preserved in git history; this file is forward-only.
     for dependency-declaration drift.  Closes the
     v4.16.1-identified documentation-surface sibling-gap pattern.
   The "fix N, miss N+1" sibling-gap meta-pattern is now structurally
-  retired across all known classes -- both code surfaces (V1-V10)
-  and documentation surfaces (V11).
+  retired across all currently-known classes -- both code surfaces
+  (V1-V10) and documentation surfaces (V11); new classes will
+  continue to surface and be added to the V-walker family as
+  identified.
 
 ---
 

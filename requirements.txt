@@ -12,9 +12,13 @@
 numpy>=1.20
 scipy>=1.7                # resample_field (Fresnel grid resampling), optimization
 matplotlib>=3.5           # plotting (spot_diagram, ray_fan_plot, plot_field, etc.)
-
-# === Recommended (psutil is also a hard dep in pyproject.toml) ===
-psutil>=5.0               # accurate memory detection (falls back to 4 GB default without it)
+# v4.16.3 (audit P3-NEW-F1-5): psutil is a hard dep in pyproject.toml
+# [project.dependencies]; the v4.16.2 "Recommended" placement was a
+# requirements.txt-vs-pyproject drift (the package does not crash on
+# import without psutil, but `memory_info()` silently falls back to a
+# 4 GB default which can mis-size batch allocations).  Promoted to
+# Required for parity with pyproject.toml.
+psutil>=5.0               # accurate memory detection (silent 4 GB fallback if absent)
 
 # === Optional (uncomment as needed -- mirrors pyproject.toml extras) ===
 # h5py>=3.0               # HDF5 field storage (save_field_h5, save_planes_h5, etc.); [hdf5] / [gui] extras

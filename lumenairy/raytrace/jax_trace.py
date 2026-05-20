@@ -529,7 +529,8 @@ def _transfer_jax(state, thickness, n_medium):
                        new_opd, state.alive)
 
 
-def _maybe_warn_transfer_jax_high_na(direction_n, thickness):
+def _maybe_warn_transfer_jax_high_na(direction_n, thickness,
+                                     surface_index=None):
     """Eager-mode high-NA detection for the JAX-path paraxial transfer.
 
     Inspects ``min |N|`` (the smallest absolute direction cosine along
@@ -610,14 +611,21 @@ def _maybe_warn_transfer_jax_high_na(direction_n, thickness):
     # paraxial expansion), so the estimate below is the canonical
     # "thickness * NA^2 / 2" leading-order term the audit cites.
     delta_t = float(thickness) * (1.0 - n_min ** 2) / 2.0
+    # v4.16.3 (audit P3-NEW-F1-4): cite the SPECIFIC surface index +
+    # thickness that produced the worst-case drift (replaces the v4.16.2
+    # max-of-all-thicknesses figure, which overstated worst-case drift
+    # for prescriptions with one long gap).
+    surf_clause = (f"surface index {surface_index} (thickness={float(thickness):.3e} m)"
+                   if surface_index is not None
+                   else f"thickness={float(thickness):.3e} m")
     warnings.warn(
         "_transfer_jax: JAX-traceable transfer uses the paraxial "
         "approximation (t ~= thickness); the math-correct NumPy "
         "trace(...) form is ``t = (thickness - z) / N``.  Per-surface "
         "transverse error scales as ``thickness * NA^2 / 2`` and the "
         "current ray bundle has min |N| = {:.3f} (NA ~= {:.3f}); "
-        "expected per-surface drift ~= {:.2e} m for thickness={:.3e} "
-        "m.  For high-NA designs (NA > 0.3) prefer the NumPy "
+        "expected per-surface drift ~= {:.2e} m at worst-case "
+        "{}.  For high-NA designs (NA > 0.3) prefer the NumPy "
         "`lumenairy.raytrace.trace(...)` path; the JAX path is "
         "intended for low-NA autodiff workflows where the paraxial "
         "approximation is below plotting / fitting noise.  This "
@@ -625,7 +633,7 @@ def _maybe_warn_transfer_jax_high_na(direction_n, thickness):
         "``lumenairy.raytrace.jax_trace._reset_transfer_jax_warning()`` "
         "to re-arm.".format(
             n_min, float(np.sqrt(max(1.0 - n_min ** 2, 0.0))),
-            delta_t, float(thickness)),
+            delta_t, surf_clause),
         RuntimeWarning, stacklevel=4)
     _TRANSFER_JAX_WARNING_EMITTED = True
 
@@ -1164,14 +1172,31 @@ def trace_jax(
     # rare case where a caller pre-wraps in ``jax.jit`` (then
     # ``initial_state.N`` is already a tracer and the probe skips).
     if not _TRANSFER_JAX_WARNING_EMITTED:
+        # v4.16.3 (audit P3-NEW-F1-4): cite the worst-case PER-SURFACE
+        # thickness rather than the prescription-wide max.  Pre-v4.16.3
+        # the hoist passed ``max(|thickness|)`` to the drift estimator,
+        # which inflated the cited ``thickness * NA^2 / 2`` figure for
+        # prescriptions with one long air-gap (e.g. a long EFL backfocal
+        # distance).  Honest reporting is: the surface whose own
+        # |thickness| is largest produced the largest per-surface drift
+        # contribution; cite ITS index + thickness.  (We retain
+        # |thickness|-driven worst-casing rather than ``thickness *
+        # min|N|^2`` because ``initial_state.N`` is bundle-wide -- not
+        # per-surface -- at the hoist point, so the only quantity that
+        # varies across surfaces here is thickness.)
         thicks_py = jp.aux[7]
         if thicks_py:
             try:
-                t_repr = float(max(abs(float(t)) for t in thicks_py))
+                abs_thicks = [abs(float(t)) for t in thicks_py]
             except (TypeError, ValueError):
-                t_repr = 0.0
-            if t_repr > 0.0:
-                _maybe_warn_transfer_jax_high_na(initial_state.N, t_repr)
+                abs_thicks = []
+            if abs_thicks:
+                worst_idx = max(range(len(abs_thicks)),
+                                key=lambda i: abs_thicks[i])
+                t_worst = abs_thicks[worst_idx]
+                if t_worst > 0.0:
+                    _maybe_warn_transfer_jax_high_na(
+                        initial_state.N, t_worst, surface_index=worst_idx)
 
     # Bypass the jit-cache layer if anything looks like a tracer.  The
     # cached jit'd kernel triggers a JAX bug in lstsq backward (see the

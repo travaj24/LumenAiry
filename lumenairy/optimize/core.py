@@ -2338,6 +2338,23 @@ except ImportError:
 _MULTIWL_AVG_WARNED = False
 
 
+# v4.16.3 (audit P2-NEW-F1-1): one-cycle DeprecationWarning latched at
+# module level, pattern parity with v4.16.2 MultiWavelengthMerit.
+# v4.16.1 shipped a ``Constraint.__post_init__`` auto-probe that called
+# ``fun(np.zeros(1))`` to shape-check the return.  v4.16.2 silently
+# removed it (the probe was expensive for BFL-style ``fun`` callables
+# that internally ran a full ray-trace) and moved the contract to an
+# opt-in :meth:`Constraint.validate` method.  Compare to the v4.16.1
+# SUM->AVG transition which DID get a FutureWarning in v4.16.2 -- same
+# silent-behaviour-shift treated inconsistently.  Emit a one-cycle
+# DeprecationWarning so callers that came to rely on the v4.16.1
+# auto-probe (1 release of exposure) notice the change and call
+# ``.validate()`` explicitly.  Latched at module level so an
+# optimisation loop that builds many ``Constraint(...)`` objects
+# doesn't flood the warning channel.
+_CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED = False
+
+
 class MultiWavelengthMerit(MeritTerm):
     """Evaluate a sub-merit at multiple wavelengths and average.
 
@@ -3227,10 +3244,23 @@ class Constraint:
         # was meant to prevent.  A direct ``pickle.dumps(self.fun)``
         # probe catches all three patterns at construction time
         # cheaply (most ``fun`` callables are tens of bytes pickled).
+        #
+        # v4.16.3 (audit P2-NEW-F1-2): widen the catch list from
+        # ``(pickle.PicklingError, AttributeError, TypeError)`` to
+        # ``Exception``.  The narrow tuple missed ``RecursionError``
+        # (deep object graph), ``RuntimeError`` (raised by a custom
+        # ``__reduce__``), ``MemoryError`` (huge object), and arbitrary
+        # exceptions from ``__reduce__`` / ``__getstate__``.  A ``fun``
+        # whose ``__reduce__`` raises ``RuntimeError`` propagates out of
+        # ``Constraint(...)`` construction, defeating the warning's
+        # "friendlier than rejecting" intent.  Pickling is a
+        # best-effort heuristic; any failure is a "not safely
+        # picklable" signal.  ``BaseException`` (``KeyboardInterrupt`` /
+        # ``SystemExit``) is intentionally left to propagate.
         import pickle
         try:
             pickle.dumps(self.fun)
-        except (pickle.PicklingError, AttributeError, TypeError) as e:
+        except Exception as e:  # noqa: BLE001 -- best-effort probe
             warnings.warn(
                 f"Constraint(label={self.label!r}): ``fun`` is not "
                 f"picklable ({type(e).__name__}: {e!s}); this will "
@@ -3253,6 +3283,32 @@ class Constraint:
         # who want the shape check can call ``self.validate()``
         # explicitly after construction; see :meth:`validate` for
         # the same scalar-only contract.
+        #
+        # v4.16.3 (audit P2-NEW-F1-1): one-cycle DeprecationWarning
+        # latched at module level, pattern parity with v4.16.2
+        # MultiWavelengthMerit.  Callers that came to rely on the
+        # v4.16.1 auto-probe (1 release of exposure) now silently push
+        # vector-returning ``fun``s through the optimiser and hit the
+        # old runtime ``TypeError``.  Scheduled for removal in v5.0.
+        global _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED
+        if not _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED:
+            _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED = True
+            warnings.warn(
+                "Constraint.__post_init__ no longer auto-probes "
+                "``fun(np.zeros(1))`` since v4.16.2: the probe was "
+                "expensive for BFL-style callables that internally "
+                "run a full ray-trace, and caught exceptions were "
+                "swallowed silently.  Callers that relied on the "
+                "v4.16.1 auto-probe behaviour should now call "
+                "``Constraint.validate()`` explicitly after "
+                "construction for the same best-effort scalar-shape "
+                "check.  This transitional DeprecationWarning is "
+                "scheduled for removal in v5.0.  Silence via "
+                "``warnings.filterwarnings('ignore', "
+                "category=DeprecationWarning, "
+                "module='lumenairy.optimize.core')``.",
+                DeprecationWarning, stacklevel=2,
+            )
 
     def validate(self) -> None:
         """Best-effort scalar-shape check by probing ``fun(np.zeros(1))``.

@@ -741,11 +741,19 @@ def _check_glass_registry_consistency():
     load, so a future drift can never re-surface as a silent
     ``ValueError`` at first call.
 
-    Four checks (v4.14.2 forward + v4.15 reverse + v4.16.1
-    GLASS_VALIDITY -> GLASS_REGISTRY + v4.16.1 tuple well-formedness).
+    Six checks (v4.14.2 forward + v4.15 reverse + v4.16.1
+    GLASS_VALIDITY -> GLASS_REGISTRY + v4.16.1 tuple well-formedness +
+    v4.16.3 polynomial forward/reverse).
 
     * **Forward** (v4.14.2): every ``'__sellmeier__'``-flagged
       registry entry must have a coefficient row.
+    * **Polynomial forward** (v4.16.3, audit P3-NEW-F1-1): every
+      ``'__polynomial__'``-flagged registry entry must have a
+      :data:`POLYNOMIAL_COEFFICIENTS` row.  Sibling to the Sellmeier
+      forward check.
+    * **Polynomial reverse** (v4.16.3, audit P3-NEW-F1-1): every row
+      in :data:`POLYNOMIAL_COEFFICIENTS` must appear in
+      :data:`GLASS_REGISTRY`.  Sibling to the Sellmeier reverse check.
     * **Reverse** (v4.15, P2): every row in
       :data:`SELLMEIER_COEFFICIENTS` must appear in
       :data:`GLASS_REGISTRY`.  Pre-v4.15 a coefficient row added
@@ -787,6 +795,17 @@ def _check_glass_registry_consistency():
                 f"coefficients or change the registry entry to a "
                 f"(shelf, book, page) tuple / callable."
             )
+    # v4.16.3 (audit P3-NEW-F1-1): Forward for __polynomial__ flag ->
+    # row must exist.  Sibling to the __sellmeier__ forward check above.
+    for name, entry in GLASS_REGISTRY.items():
+        if entry == '__polynomial__' and name not in POLYNOMIAL_COEFFICIENTS:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift: {name!r} flagged "
+                f"'__polynomial__' but missing from "
+                f"POLYNOMIAL_COEFFICIENTS.  Either add the polynomial "
+                f"coefficients or change the registry entry to a "
+                f"(shelf, book, page) tuple / callable."
+            )
     # Reverse (v4.15, P2): row -> registry entry must exist.  Without
     # a registry entry the row is unreachable: ``get_glass_index``
     # raises ``ValueError`` before it inspects SELLMEIER_COEFFICIENTS,
@@ -801,6 +820,24 @@ def _check_glass_registry_consistency():
                 f"raise ValueError before reaching the Sellmeier "
                 f"fallback.  Add a registry entry: '__sellmeier__' "
                 f"for pure-Sellmeier glasses, or a "
+                f"(shelf, book, page) tuple for glasses also covered "
+                f"by refractiveindex.info."
+            )
+    # v4.16.3 (audit P3-NEW-F1-1): Reverse for POLYNOMIAL_COEFFICIENTS.
+    # Without a registry entry the row is unreachable -- get_glass_index
+    # raises ValueError before consulting POLYNOMIAL_COEFFICIENTS.  A
+    # tuple-style entry that also routes here on the refractiveindex-
+    # unavailable fallback is accepted (parallel to the Sellmeier
+    # reverse check's tuple acceptance above).
+    for name in POLYNOMIAL_COEFFICIENTS:
+        if name not in GLASS_REGISTRY:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift: POLYNOMIAL_COEFFICIENTS[{name!r}] "
+                f"has no corresponding GLASS_REGISTRY entry.  The row "
+                f"is unreachable -- get_glass_index({name!r}, ...) will "
+                f"raise ValueError before reaching the polynomial "
+                f"fallback.  Add a registry entry: '__polynomial__' "
+                f"for pure-polynomial glasses, or a "
                 f"(shelf, book, page) tuple for glasses also covered "
                 f"by refractiveindex.info."
             )
@@ -995,6 +1032,13 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
     _maybe_warn_outside_validity(glass_name, wavelength)
 
     # Bundled Sellmeier coefficients (no external dependency).
+    # v4.16.3 (audit P3-NEW-V3-1): dispatch order is SELLMEIER -> POLYNOMIAL,
+    # NOT the "POLYNOMIAL -> SELLMEIER" wording that drifted into the
+    # v4.16.2 CHANGELOG / release notes.  Both sentinels are disjoint at
+    # the GLASS_REGISTRY level (a name carries one or the other) and the
+    # consistency check enforces the row exists, so the order is
+    # cosmetic for correctness; it matters only for documentation
+    # truthfulness.
     if entry == '__sellmeier__':
         if glass_name not in SELLMEIER_COEFFICIENTS:
             raise ValueError(
@@ -1003,6 +1047,27 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
                 f"SELLMEIER_COEFFICIENTS.")
         return _sellmeier_index(wavelength,
                                 SELLMEIER_COEFFICIENTS[glass_name])
+
+    # v4.16.3 (audit P3-NEW-F1-1): __polynomial__ sentinel parallel to
+    # __sellmeier__.  Pre-v4.16.3 the bundled formula-3 polynomial
+    # evaluator was reachable ONLY via the refractiveindex-unavailable
+    # fallback below -- which means a user who followed the
+    # ``pip install lumenairy[glass]`` recommendation in the README
+    # could never hit the bundled polynomial path.  The sentinel makes
+    # the polynomial dispatch first-class: any glass registered as
+    # ``'__polynomial__'`` is resolved via POLYNOMIAL_COEFFICIENTS
+    # regardless of whether refractiveindex is installed.  Sibling
+    # parity with the __sellmeier__ branch above (error wording,
+    # consistency-check coverage).
+    if entry == '__polynomial__':
+        if glass_name not in POLYNOMIAL_COEFFICIENTS:
+            raise ValueError(
+                f"Glass {glass_name!r} is flagged '__polynomial__' in "
+                f"GLASS_REGISTRY but has no entry in "
+                f"POLYNOMIAL_COEFFICIENTS.")
+        return _polynomial_index(wavelength,
+                                 POLYNOMIAL_COEFFICIENTS[glass_name],
+                                 glass_name=glass_name)
 
     # Internal thin-lens placeholder marker (used by the thin-lens
     # helpers); should never reach a propagation path, but if a user
@@ -1104,9 +1169,10 @@ def get_glass_index_complex(glass_name: str,
             return n
         return complex(float(n), 0.0)
 
-    # Sellmeier / sentinel paths have no extinction data; return
-    # kappa = 0 explicitly.
-    if entry in ('__sellmeier__', '__thin_lens__'):
+    # Sellmeier / polynomial / sentinel paths have no extinction data;
+    # return kappa = 0 explicitly.  v4.16.3 (audit P3-NEW-F1-1):
+    # __polynomial__ added parallel to __sellmeier__.
+    if entry in ('__sellmeier__', '__polynomial__', '__thin_lens__'):
         return complex(get_glass_index(glass_name, wavelength), 0.0)
 
     # Tuple-style path: try refractiveindex.info for both n and kappa.

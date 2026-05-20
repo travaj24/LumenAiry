@@ -2,6 +2,168 @@
 
 All notable changes to the core library are documented here.
 
+## [4.16.3] — 2026-05-20
+
+**Closes the v4.16.2 audit
+(`docs/audits/AUDIT_V4_16_2_2026_05_20.md`) through P3.**  Audit
+found zero P0 + 2 P1 + 6 P2 + 8 P3, concentrated around v4.16.2's
+pre-v5.0 prep features being mostly scaffolding without real
+consumers, plus 2 structural-bypass issues inside the new V11
+doc-consistency walker (the very walker designed to retire the
+documentation-surface sibling-gap meta-pattern contained that
+pattern itself).  4 agents in disjoint scopes (`A: V11 walker
+hardening`, `B: default-knob consumer wiring + Migration-Guide
+correction`, `C: optimize/core.py P2 polish`, `D: P3 cluster +
+soften "structurally retired" claim`).
+
+**2327 unit tests pass** (collected = 2333 = pass + 5 skip + 1
+xfail), up from 2270 at v4.16.2; **+57 net** (per-agent: A=17,
+B=16, C=8, D=15, walker-extra=1 = 57).  **34/34 validation pass**.
+
+### P1 closures (2)
+
+* **V11 walker pyproject parsing -> `tomllib`** (Agent A; audit
+  P1-NEW-F1-2).  The v4.16.2 11th meta-pin walker used the regex
+  `r'^([a-zA-Z_][a-zA-Z0-9_-]*)\s*=\s*\[(.*?)\]'` -- non-greedy,
+  stopping at the first `]`.  Silently mis-parsed
+  `jax-gpu = ["jax[cuda12]>=0.4.20"]` (captured only `"jax[cuda12`)
+  and the `all = [...]` block when its body contained
+  ` `lumenairy[all]` ` comment-bracket text.  The walker passed
+  vacuously because `refractiveindex` was independently captured
+  via `[glass]`; if a future maintainer removed the dedicated
+  `[glass]` group keeping the dep only in `[all]`, drift would
+  go green WITH drift.  Replaced regex parsing with `tomllib`
+  (Python 3.11+) / `tomli` (3.9/3.10 backport) graceful fallback.
+  Two anti-regression pins assert the literal v4.16.2 strings no
+  longer appear in the walker source.
+* **Migration-Guide.md §4.16.2 corrected** (Agent B; audit
+  P1-NEW-F1-1).  The v4.16.2 recipe used
+  `set_default_wave_propagator('fresnel')` followed by
+  `apply_real_lens(...)` -- but `apply_real_lens` hardcodes
+  `wave_propagator: str = 'asm'` and does NOT consult the default
+  knob.  A user copy-pasting silently used ASM.  Rewrote the §4.16.2
+  section: explicit "API-only in v4.16.2/v4.16.3" limitation note;
+  replaced the misleading recipe with one using `set_default_complex_
+  dtype` + `set_default_real_dtype` (knobs with real consumers);
+  retained `wave_propagator=` per-call kwarg on the apply_real_lens
+  example.
+
+### P2 closures (6)
+
+* **`get_default_real_dtype` consumer wiring fixed** (Agent B;
+  audit P2-NEW-F1-3).  v4.16.2's "representative wiring" at
+  `propagators/ensemble.py:347-355` was structurally unreachable
+  dead code -- the `except (TypeError, ValueError)` branch could
+  never fire because the earlier shape check at `:308-330` already
+  guaranteed `ensemble.dtype` was a valid numpy dtype.  Refactored
+  so `get_default_real_dtype()` is the canonical `in_dtype is None`
+  fallback path (now reachable via the `getattr(ensemble, 'dtype',
+  None)` default).  The knob is now narrowly consumed at one
+  reachable site, preserving the v4.16.2 CHANGELOG claim of at least
+  one wired consumer.
+* **`set_default_wave_propagator` + `set_default_dy` no-consumer
+  `UserWarning`** (Agent B; audit P2-NEW-F1-4).  Both knobs store
+  values no library code reads at v4.16.3.  Setters now emit a
+  one-shot module-level-latched `UserWarning` informing users that
+  the knob is "API-only at v4.16.2/v4.16.3; consumer wiring at
+  `apply_real_lens` / `apply_real_lens_traced` / `propagate` lands
+  in v5.0".  Sibling-gap pin asserts these knobs have zero
+  consumers library-wide -- when v5.0 adds the first consumer, the
+  pin FAILS LOUDLY prompting removal of the stale warning + the
+  Migration-Guide limitation note.
+* **V11 version list -> CHANGELOG-driven** (Agent A; audit
+  P2-NEW-F2-MED-1).  v4.16.2's `test_migration_guide_has_known_
+  version_sections` hardcoded `('4.13.0', '4.15.1', '4.16.1',
+  '4.16.2')` -- when v4.17.0 ships with a breaking change, walker
+  would pass silently unless someone manually edited the tuple.
+  Replaced with `_versions_with_breaking_changes_from_changelog()`
+  scan extracting `## [X.Y.Z]` headings; high-precision markers
+  only (`silent semantics change`, `SUM->AVG`, etc.) plus
+  `### Breaking changes` heading detection; documented `_MIGRATION_
+  GUIDE_SIBLING_COVERED` allowlist for v4.15.2 (its migration recipe
+  lives under v4.15.1's Migration-Guide section).
+* **V11 extends to CHANGELOG↔Migration-Guide drift coverage**
+  (Agent A; audit P2-NEW-F2-MED-2).  New
+  `test_migration_guide_sections_are_non_trivial` test enforces
+  each `## X.Y.Z` section has >=200 chars of non-whitespace body.
+  Future CHANGELOG entries flagged "breaking" must come with a
+  substantive Migration-Guide entry or the walker fails.
+* **`Constraint` auto-probe DeprecationWarning** (Agent C; audit
+  P2-NEW-F1-1).  v4.16.1 shipped a `Constraint.__post_init__`
+  auto-probe; v4.16.2 silently removed it.  v4.16.3 emits a
+  one-cycle DeprecationWarning via module-level latch, pattern-
+  parallel to the v4.16.2 `MultiWavelengthMerit` `FutureWarning`
+  latch.  Scheduled for removal in v5.0.
+* **`pickle.dumps` probe catch widened** (Agent C; audit
+  P2-NEW-F1-2).  v4.16.2's `except (pickle.PicklingError,
+  AttributeError, TypeError)` missed `RecursionError` (deep object
+  graph), `RuntimeError` (custom `__reduce__`), `MemoryError`,
+  and arbitrary `__reduce__` / `__getstate__` exceptions.  Widened
+  to `except Exception` -- pickling is best-effort heuristic; any
+  failure is "not safely picklable" signal.  `BaseException`
+  (`KeyboardInterrupt` / `SystemExit`) intentionally still
+  propagates.
+
+### P3 closures (8)
+
+* **`__polynomial__` sentinel** parallel to `__sellmeier__` (Agent D;
+  audit P3-NEW-F1-1).  `POLYNOMIAL_COEFFICIENTS` dispatch was
+  fallback-only when refractiveindex was unavailable; with the
+  sentinel, polynomial-formula glasses can opt in to the bundled
+  evaluator even with refractiveindex installed.  Extended
+  `_check_glass_registry_consistency` with forward + reverse
+  polynomial checks; `get_glass_index_complex` updated to include
+  `__polynomial__` in the no-extinction sentinel tuple.
+* **POLYNOMIAL/SELLMEIER dispatch order doc/code reconcile**
+  (Agent D; audit P3-NEW-V3-1).  Code does SELLMEIER -> POLYNOMIAL;
+  v4.16.2 docs claimed the opposite.  Inline comment added citing
+  the actual order.
+* **`DEFAULT_*` constants re-exported at top level** (Agent D;
+  audit P3-NEW-F2-LOW-1).  `DEFAULT_COMPLEX_DTYPE` was already
+  exported via `lumenairy/__init__.py`; the v4.16.2 new globals
+  (`DEFAULT_REAL_DTYPE`, `DEFAULT_WAVE_PROPAGATOR`, `DEFAULT_DY`)
+  were not -- sibling-gap.  Added to both the import block and
+  `__all__`.
+* **Per-surface (not max) thickness in high-NA hoist message**
+  (Agent D; audit P3-NEW-F1-4).  `_maybe_warn_transfer_jax_high_na`
+  now accepts `surface_index`; hoist loops surfaces to find the
+  worst |N| and cites THAT surface's thickness in the user-facing
+  message (was overstating worst-case drift via `max(thickness)`).
+* **Multiprocess / fork-safety documentation** (Agent D; audit
+  P3-NEW-F1-2 + P3-NEW-F1-3).  Added a "Multiprocess / fork notes"
+  section near the top of `propagators/propagation.py` documenting
+  that the one-shot latches AND the `DEFAULT_*` module-level globals
+  are NOT pickle/fork-safe -- spawn-mode workers re-import the
+  module and reset to defaults / re-emit warnings.  Not fixing the
+  semantics (would need shared-state); just documenting honestly.
+* **`psutil` promoted to Required in requirements.txt** (Agent D;
+  audit P3-NEW-F1-5).  `psutil>=5.0` is a hard dep in
+  pyproject.toml but the v4.16.2 requirements.txt listed it under
+  "Recommended".  Promoted for parity.
+* **"Structurally retired" claim softened** (Agent D; audit
+  P3-NEW-F2-LOW-2).  CHANGELOG + ROADMAP both said "structurally
+  retired across all known classes"; honest framing is "retired
+  across all currently-known classes; new classes will continue to
+  surface".
+* **CHANGELOG sentinel line citation refresh** `:3015` -> `:3032`
+  (~17 lines added by Agent C's `Constraint` DeprecationWarning
+  latch + pickle catch widening).
+
+### Tests + CI
+
+* **2327 pass / 5 skip / 1 xfail = 2333 collected** (up from
+  2270 / 5 / 1 = 2276 at v4.16.2; +57 net).  Per-agent breakdown:
+  A=17, B=16, C=8, D=15, walker-extra=1.  Sum: 57.
+* New test modules:
+  * `tests/unit/test_v4_16_3_agent_a.py` (17 tests)
+  * `tests/unit/test_v4_16_3_agent_b.py` (16 tests)
+  * `tests/unit/test_v4_16_3_agent_c.py` (8 tests)
+  * `tests/unit/test_v4_16_3_agent_d.py` (15 tests)
+* V11 walker grew from 7 to 8 tests (`test_migration_guide_sections_
+  are_non_trivial` added).
+
+---
+
 ## [4.16.2] — 2026-05-20
 
 **Closes the v4.16.1 audit
@@ -146,7 +308,9 @@ canonical `pyproject.toml`:
 * Migration-Guide.md exists with known version sections
 
 The sibling-gap meta-pattern is now structurally retired at BOTH
-code surfaces (V1-V10) AND documentation surfaces (V11).
+code surfaces (V1-V10) AND documentation surfaces (V11) across all
+currently-known classes; new classes will continue to surface and
+be added to the V-walker family as identified.
 
 ### NEW -- Pre-v5.0 prep features (Agent C)
 
@@ -469,7 +633,9 @@ now active and green** (cache-clears, cache↔lock, 0+0j,
 validate_grid_params, check_2d_scalar_field, sentinel-propagation,
 xp-dispatch, dy-threading, __all__-symmetry).  The "fix N, miss N+1"
 sibling-gap meta-pattern at the public-API surface is now
-structurally retired across all known classes.
+structurally retired across all currently-known classes; new
+classes will continue to surface and be added to the V-walker
+family as identified.
 
 ### Bucket 2 — Multi-process atomic-append for `storage.py`
 
@@ -1119,9 +1285,11 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/core.py:3015` (was `:2974` pre-v4.16.2
-  Agent B `MultiWavelengthMerit` `FutureWarning` latch + Constraint
-  probe move + lambda pickle-probe; was `:2958` pre-v4.16.1 Agent A
+  branch now at `optimize/core.py:3032` (was `:3015` pre-v4.16.3
+  Agent C `Constraint` auto-probe DeprecationWarning latch + pickle
+  catch widening; was `:2974` pre-v4.16.2 Agent B
+  `MultiWavelengthMerit` `FutureWarning` latch + Constraint probe
+  move + lambda pickle-probe; was `:2958` pre-v4.16.1 Agent A
   `MultiWavelengthMerit` `SUM`->`AVG` refactor; was `:2980` pre-
   v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion; was
   `:2905` in the v4.15.2 entry).
@@ -1577,16 +1745,19 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/core.py:3015` (the
-  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:2974`
-  pre-v4.16.2 Agent B `MultiWavelengthMerit` `FutureWarning` latch
-  + Constraint-probe move + lambda pickle-probe (~41 lines added
-  above the sentinel branch); was `:2958` pre-v4.16.1 Agent A
-  `MultiWavelengthMerit` `SUM`->`AVG` refactor (~16 lines added in
-  the merit-aggregation block above the sentinel branch); was
-  `:2980` pre-v4.15.4 Agent B `_PerturbedABCDFallbackSentinel`
-  deletion (~55 lines removed at the top of the sentinel block);
-  and `:2905` pre-v4.15.3 sentinel-wiring work.  The remaining
+  sentinel branch now lives at `optimize/core.py:3032` (the
+  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:3015`
+  pre-v4.16.3 Agent C `Constraint` auto-probe DeprecationWarning
+  latch + pickle catch widening (~17 lines added above the
+  sentinel branch); was `:2974` pre-v4.16.2 Agent B
+  `MultiWavelengthMerit` `FutureWarning` latch + Constraint-probe
+  move + lambda pickle-probe (~41 lines added above the sentinel
+  branch); was `:2958` pre-v4.16.1 Agent A `MultiWavelengthMerit`
+  `SUM`->`AVG` refactor (~16 lines added in the merit-aggregation
+  block above the sentinel branch); was `:2980` pre-v4.15.4 Agent
+  B `_PerturbedABCDFallbackSentinel` deletion (~55 lines removed
+  at the top of the sentinel block); and `:2905` pre-v4.15.3
+  sentinel-wiring work.  The remaining
   sentinel class + singleton (`_ZeroApertureMaskSentinel` /
   `_ZERO_APERTURE_MASK`) are at `optimize/core.py:2044` and
   `optimize/core.py:2054` respectively post Agent E's `_Sentinel`

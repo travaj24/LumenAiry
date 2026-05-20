@@ -167,18 +167,32 @@ class TestSetDefaultRealDtype:
 class TestSetDefaultWavePropagator:
     @pytest.fixture(autouse=True)
     def _restore_default(self):
-        original = get_default_wave_propagator()
-        yield
-        set_default_wave_propagator(original)
+        # v4.16.3 (audit P2-NEW-F1-4): the setter now emits a one-shot
+        # ``UserWarning`` that the knob is API-only at v4.16.2/v4.16.3.
+        # Suppress here so the v4.16.2 set/get validation tests stay
+        # focused on the storage contract; the warning's behaviour is
+        # pinned in tests/unit/test_v4_16_3_agent_b.py.
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", UserWarning)
+            original = get_default_wave_propagator()
+            yield
+            set_default_wave_propagator(original)
 
     # feature: pre-v5.0 prep -- set_default_wave_propagator
     def test_set_and_get_asm(self):
-        set_default_wave_propagator('asm')
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", UserWarning)
+            set_default_wave_propagator('asm')
         assert get_default_wave_propagator() == 'asm'
 
     # feature: pre-v5.0 prep -- set_default_wave_propagator
     def test_set_and_get_fresnel(self):
-        set_default_wave_propagator('fresnel')
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", UserWarning)
+            set_default_wave_propagator('fresnel')
         assert get_default_wave_propagator() == 'fresnel'
 
     # feature: pre-v5.0 prep -- set_default_wave_propagator validation
@@ -204,18 +218,29 @@ class TestSetDefaultWavePropagator:
 class TestSetDefaultDy:
     @pytest.fixture(autouse=True)
     def _restore_default(self):
-        original = get_default_dy()
-        yield
-        set_default_dy(original)
+        # v4.16.3 (audit P2-NEW-F1-4): see TestSetDefaultWavePropagator
+        # fixture; matching latch-suppression on the dy setter.
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", UserWarning)
+            original = get_default_dy()
+            yield
+            set_default_dy(original)
 
     # feature: pre-v5.0 prep -- set_default_dy
     def test_set_none(self):
-        set_default_dy(None)
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", UserWarning)
+            set_default_dy(None)
         assert get_default_dy() is None
 
     # feature: pre-v5.0 prep -- set_default_dy
     def test_set_positive_float(self):
-        set_default_dy(5e-6)
+        import warnings as _w
+        with _w.catch_warnings():
+            _w.simplefilter("ignore", UserWarning)
+            set_default_dy(5e-6)
         assert get_default_dy() == pytest.approx(5e-6)
 
     # feature: pre-v5.0 prep -- set_default_dy validation
