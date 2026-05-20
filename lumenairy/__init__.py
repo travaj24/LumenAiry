@@ -1,5 +1,5 @@
 """
-lumenairy — Coherent Optical Field Propagation Library
+lumenairy â€” Coherent Optical Field Propagation Library
 ================================================================
 
 A comprehensive library for simulating coherent optical beam propagation
@@ -25,7 +25,7 @@ For more granular imports, use the submodules::
 Author: Andrew Traverso
 """
 
-# ── Propagation ──────────────────────────────────────────────────────────
+# â”€â”€ Propagation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .propagators.propagation import (
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
@@ -75,17 +75,17 @@ from .propagators.propagation import (
     DEFAULT_DY,
 )
 
-# ── Optional optimisation-backend availability flags ────────────────────
+# â”€â”€ Optional optimisation-backend availability flags â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Users / runners can inspect these before toggling tunables that
 # depend on the optional backends (e.g. the numexpr-fused phase-screen
 # path inside apply_real_lens).  Truthy if the package is importable
 # in the current environment.
 from .elements.lenses import NUMEXPR_AVAILABLE
 
-# ── Backend / runtime helpers ────────────────────────────────────────────
+# â”€â”€ Backend / runtime helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .memory import available_cpus
 
-# ── Lenses ───────────────────────────────────────────────────────────────
+# â”€â”€ Lenses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.lenses import (
     apply_thin_lens,
     apply_spherical_lens,
@@ -107,7 +107,7 @@ from .elements.lenses import (
     apply_real_lens_maslov_jax,
 )
 
-# ── Glass catalog ────────────────────────────────────────────────────────
+# â”€â”€ Glass catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .glass import (
     get_glass_index,
     get_glass_index_complex,
@@ -119,7 +119,7 @@ from .glass import (
     search_glasses,
 )
 
-# ── Optical elements ─────────────────────────────────────────────────────
+# â”€â”€ Optical elements â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements import (
     apply_mirror,
     apply_aperture,
@@ -139,7 +139,7 @@ from .elements import (
 # import shim for back-compat.
 from .analysis.coronagraph import coronagraph_contrast_curve
 
-# ── Sources ──────────────────────────────────────────────────────────────
+# â”€â”€ Sources â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .sources import (
     Source,
     create_gaussian_beam,
@@ -149,7 +149,7 @@ from .sources import (
     laguerre_generalized,
 )
 
-# ── Beam analysis ────────────────────────────────────────────────────────
+# â”€â”€ Beam analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.aberration import (
     AberrationSummary,
     aberration_summary,
@@ -219,7 +219,7 @@ from .analysis import (
 # alongside the other clear_*_cache exports.
 from .analysis.through_focus import clear_through_focus_scan_jax_cache
 
-# ── Off-axis + extended source helpers ─────────────────────────────────
+# â”€â”€ Off-axis + extended source helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .sources import (
     create_tilted_plane_wave,
     create_point_source,
@@ -239,26 +239,26 @@ from .sources import (
     PartialCoherenceMCF,
 )
 
-# ── High-NA vector diffraction (Richards-Wolf) ─────────────────────────
+# â”€â”€ High-NA vector diffraction (Richards-Wolf) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .propagators.vector_diffraction import (
     richards_wolf_focus,
     debye_wolf_psf,
 )
 
-# ── Partial coherence / extended-source imaging ────────────────────────
+# â”€â”€ Partial coherence / extended-source imaging â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.coherence import (
     koehler_image,
     extended_source_image,
     mutual_coherence,
 )
 
-# ── Detector model / wavefront sensing ─────────────────────────────────
+# â”€â”€ Detector model / wavefront sensing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.detector import (
     apply_detector,
     shack_hartmann,
 )
 
-# ── Adaptive optics primitives ─────────────────────────────────────────
+# â”€â”€ Adaptive optics primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # AO moved to analysis/ao.py in 4.3.0; lumenairy.ao still works via
 # a back-compat shim.
 from .analysis.ao import (
@@ -269,7 +269,7 @@ from .analysis.ao import (
     LeakyIntegrator,
 )
 
-# ── Field-resolved analyses (4.4.0) ────────────────────────────────────
+# â”€â”€ Field-resolved analyses (4.4.0) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Lifted from ui/<dock>.py so distortion / footprint / spot-by-field /
 # sensitivity ranking are reachable from scripts.  GUI docks now call
 # these public functions and render the result.
@@ -292,21 +292,21 @@ from .analysis.field import (
     sensitivity_ranking,
 )
 
-# ── Thin-film coatings ────────────────────────────────────────────────
+# â”€â”€ Thin-film coatings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.coatings import (
     coating_reflectance,
     quarter_wave_ar,
     broadband_ar_v_coat,
 )
 
-# ── Interferometry ────────────────────────────────────────────────────
+# â”€â”€ Interferometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.interferometry import (
     simulate_interferogram,
     phase_shift_extract,
     fringe_spacing,
 )
 
-# ── Freeform surfaces ─────────────────────────────────────────────────
+# â”€â”€ Freeform surfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
@@ -316,14 +316,14 @@ from .elements.freeform import (
     surface_sag_freeform,
 )
 
-# ── Ghost analysis ────────────────────────────────────────────────────
+# â”€â”€ Ghost analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.ghost import (
     enumerate_ghost_paths,
     ghost_analysis,
     non_sequential_stray_light,
 )
 
-# ── BSDF surface scatter (stray-light analysis) ─────────────────────────
+# â”€â”€ BSDF surface scatter (stray-light analysis) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.bsdf import (
     BSDFModel,
     LambertianBSDF,
@@ -333,7 +333,7 @@ from .elements.bsdf import (
     sample_scatter_rays,
 )
 
-# ── Grating diffraction efficiency (thin-grating scalar approx) ───────
+# â”€â”€ Grating diffraction efficiency (thin-grating scalar approx) â”€â”€â”€â”€â”€â”€â”€
 # The function is named for what it actually computes: an analytical
 # scalar thin-phase-grating diffraction-efficiency formula.  A future
 # release may add a separate full RCWA path.
@@ -342,7 +342,7 @@ from .elements.thin_grating import (
     grating_efficiency_vs_wavelength,
 )
 
-# ── Multi-configuration + afocal mode ─────────────────────────────────
+# â”€â”€ Multi-configuration + afocal mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .optimize.multiconfig import (
     Configuration,
     multi_config_merit,
@@ -352,7 +352,7 @@ from .optimize.multiconfig import (
     keplerian_telescope,
 )
 
-# ── Through-focus / tolerancing ─────────────────────────────────────────
+# â”€â”€ Through-focus / tolerancing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.through_focus import (
     single_plane_metrics,
     diffraction_limited_peak,
@@ -370,7 +370,7 @@ from .analysis.through_focus import (
     tolerancing_report,
 )
 
-# ── Hybrid wave/ray design optimization ────────────────────────────────
+# â”€â”€ Hybrid wave/ray design optimization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .optimize import (
     DesignParameterization,
     MultiPrescriptionParameterization,
@@ -417,7 +417,7 @@ from .optimize import (
     PYMOO_AVAILABLE,
 )
 
-# ── Phase-space asymptotic propagator + LG aberration tensor ────────────
+# â”€â”€ Phase-space asymptotic propagator + LG aberration tensor â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .propagators.asymptotic import (
     CanonicalPolyFit,
     HFPolyFit,
@@ -446,7 +446,7 @@ from .propagators.asymptotic import (
     clear_lg_mode_stack_cache,
 )
 
-# ── DOE / Gratings / Phase I/O ──────────────────────────────────────────
+# â”€â”€ DOE / Gratings / Phase I/O â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.doe import (
     create_periodic_phase_mask,
     create_microlens_array,
@@ -460,27 +460,27 @@ from .elements.doe import (
     save_fits_field,
 )
 
-# ── Phase retrieval ─────────────────────────────────────────────────────
+# â”€â”€ Phase retrieval â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.phase_retrieval import (
     gerchberg_saxton,
     error_reduction,
     hybrid_input_output,
 )
 
-# ── Code generation: prescription -> standalone simulation script ───────
+# â”€â”€ Code generation: prescription -> standalone simulation script â”€â”€â”€â”€â”€â”€â”€
 from .io.codegen import (
     generate_simulation_script,
     generate_script_from_zmx,
     generate_script_from_txt,
 )
 
-# ── Progress reporting (opt-in hook for long-running functions) ─────────
+# â”€â”€ Progress reporting (opt-in hook for long-running functions) â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .progress import (
     ProgressCallback, ProgressScaler, call_progress,
     CancellableProgress, is_cancelled,
 )
 
-# ── Polarization / Jones calculus ───────────────────────────────────────
+# â”€â”€ Polarization / Jones calculus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.polarization import (
     JonesField,
     apply_jones_matrix,
@@ -497,7 +497,7 @@ from .elements.polarization import (
     polarization_ellipse,
 )
 
-# ── Lens prescriptions ──────────────────────────────────────────────────
+# â”€â”€ Lens prescriptions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .io.prescriptions import (
     make_singlet,
     make_doublet,
@@ -521,7 +521,7 @@ from .io.prescriptions import (
     THORLABS_CATALOG,
 )
 
-# ── Geometric ray tracing ────────────────────────────────────────────────
+# â”€â”€ Geometric ray tracing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .raytrace import (
     RayBundle,
     Surface,
@@ -583,8 +583,8 @@ from .raytrace import (
     rays_from_field,
 )
 
-# ── System propagation ──────────────────────────────────────────────────
-from .system import (
+# â”€â”€ System propagation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+from .propagators.system import (
     propagate_through_system,
     propagate_through_system_jax,
     clear_propagate_system_jax_cache,
@@ -594,7 +594,7 @@ from .system import (
     evaluate,
 )
 
-# ── Storage (unified HDF5 / Zarr) ────────────────────────────────────────
+# â”€â”€ Storage (unified HDF5 / Zarr) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .io.storage import (
     # Unified dispatch API
     set_storage_backend,
@@ -626,7 +626,7 @@ from .io.storage import (
     TempFieldStore,
 )
 
-# ── Memory-aware batching helpers ───────────────────────────────────────
+# â”€â”€ Memory-aware batching helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .memory import (
     available_memory_bytes,
     total_memory_bytes,
@@ -643,7 +643,7 @@ from .memory import (
     get_max_ram,
 )
 
-# ── Scoped runtime-environment context (4.8.1) ──────────────────────────
+# â”€â”€ Scoped runtime-environment context (4.8.1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from ._context import (
     lumenairy_context,
     snapshot_globals,
@@ -651,7 +651,7 @@ from ._context import (
     install_atexit_restore,
 )
 
-# ── Central cache-clearer registry (4.16.0) ─────────────────────────────
+# â”€â”€ Central cache-clearer registry (4.16.0) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # v4.16.0 (ROADMAP #15): retires the lazy-import fan-out in
 # ``clear_asm_caches`` in favour of a central registry.  Each cache-
 # owning module registers its clear function at import time;
@@ -672,7 +672,7 @@ from ._cache_registry import (
 # ``import lumenairy``.
 install_atexit_restore()
 
-# ── Plotting utilities ─────────────────────────────────────────────────
+# â”€â”€ Plotting utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .analysis.plotting import (
     plot_intensity,
     plot_phase,
@@ -695,7 +695,7 @@ from .analysis.plotting import (
     plot_glass_map,
 )
 
-# ── Multi-backend infrastructure (3.4.0) ─────────────────────────────
+# â”€â”€ Multi-backend infrastructure (3.4.0) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Foundation for first-class NumPy / CuPy / JAX backend support.
 from .backend import (
     array_namespace,
@@ -709,7 +709,7 @@ from .backend import (
     RandomState,
 )
 
-# ── New propagators (3.4.0) ──────────────────────────────────────────
+# â”€â”€ New propagators (3.4.0) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .propagators.hfpi import (
     PathBundle,
     init_paths_from_field,
@@ -788,13 +788,13 @@ from .raytrace.jax_trace import (
     clear_trace_jax_cache,
 )
 
-# ── Operator algebra (4.15.1, Cluster B Item 2) ─────────────────────────
+# â”€â”€ Operator algebra (4.15.1, Cluster B Item 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Nazarathy/Shamir-style optical operator algebra over the existing
 # array-first propagator infrastructure.  Composable optical primitives
 # (FreeSpace, ThinLens, CylindricalLens, Magnify, FourierTransform,
 # Aperture, GaussianAperture) with closed-form ABCDs and chain-and-
 # delegate field application.  See ``lumenairy.algebra`` and
-# ``docs/audits/CLUSTER_B_SPEC.md`` §3.
+# ``docs/audits/CLUSTER_B_SPEC.md`` Â§3.
 from .algebra import (
     Operator,
     CompositeOperator,
@@ -807,7 +807,7 @@ from .algebra import (
     GaussianAperture,
 )
 
-# ── Deprecated-alias shims ──────────────────────────────────────────────
+# â”€â”€ Deprecated-alias shims â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 #
 # 4.12.0: wire ``_deprecation.deprecated_alias`` (added in 4.7 but never
 # imported anywhere -- a Round-4 audit finding) into the top-level
@@ -830,7 +830,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.16.3"
+__version__ = "5.0.0"
 
 #
 # __all__ is grouped by user-journey tier:

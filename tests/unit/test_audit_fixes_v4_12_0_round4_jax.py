@@ -55,7 +55,7 @@ jnp = pytest.importorskip('jax.numpy')
 
 
 import lumenairy as lm  # noqa: E402  (after importorskip)
-from lumenairy.system import (  # noqa: E402
+from lumenairy.propagators.system import (  # noqa: E402
     _PROPAGATE_SYSTEM_JAX_CACHE,
     _TRACEABLE_ELEMENT_TYPES,
     propagate_through_system_jax,
@@ -79,14 +79,9 @@ class TestB1_1_ApertureSchemaUnification:
         E = np.ones((N, N), dtype=np.complex64)
         return E, dx, wl
 
-    @pytest.fixture(autouse=True)
-    def _reset_one_shot_warn(self):
-        """Reset the module-level one-shot deprecation latch so each
-        test gets a fresh warning emission."""
-        import lumenairy.system as lms
-        lms._LEGACY_APERTURE_SCHEMA_WARNED = False
-        yield
-        lms._LEGACY_APERTURE_SCHEMA_WARNED = False
+    # v5.0: ``_LEGACY_APERTURE_SCHEMA_WARNED`` latch removed alongside
+    # the legacy schema; tests that previously reset it no longer need
+    # the fixture (kept as a no-op for forward compatibility).
 
     # ---- circular ----------------------------------------------------
 
@@ -116,47 +111,17 @@ class TestB1_1_ApertureSchemaUnification:
             f"Canonical schema must not emit DeprecationWarning; "
             f"got: {[str(wi.message)[:80] for wi in dep]}")
 
-    def test_circular_radius_legacy_warns_once(self, field):
-        """``params={'radius': r}`` is the legacy JAX-only schema:
-        still works but emits a one-shot DeprecationWarning."""
+    def test_circular_radius_legacy_now_raises_in_v5_0(self, field):
+        """v5.0 (honest break): ``params={'radius': r}`` was deprecated
+        in v4.12 and removed in v5.0.  Now raises ``ValueError`` with
+        the canonical-schema migration hint."""
         E, dx, wl = field
         elements = [
             {'type': 'aperture', 'shape': 'circular',
              'params': {'radius': 50e-6}},
         ]
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
-            E_out = propagate_through_system_jax(E, elements, wl, dx)
-        E_np = np.asarray(E_out)
-        n_zero = int(np.sum(np.abs(E_np) < 1e-9))
-        assert n_zero > 0, "Legacy 'radius' schema must still clip the field."
-        dep = [wi for wi in w if issubclass(wi.category, DeprecationWarning)]
-        assert len(dep) >= 1, (
-            "Legacy schema must emit at least one DeprecationWarning.")
-        msg = str(dep[0].message)
-        assert 'radius' in msg or 'legacy' in msg.lower(), (
-            f"Deprecation message should mention 'radius'/'legacy'; got: {msg}")
-
-    def test_circular_canonical_and_legacy_agree(self, field):
-        """The same circular aperture expressed either way must
-        produce the same clipped field (within float tolerance)."""
-        E, dx, wl = field
-        radius = 50e-6
-        diameter = 2 * radius
-
-        E_canon = propagate_through_system_jax(
-            E, [{'type': 'aperture', 'shape': 'circular',
-                 'params': {'diameter': diameter}}],
-            wl, dx)
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore', DeprecationWarning)
-            E_leg = propagate_through_system_jax(
-                E, [{'type': 'aperture', 'shape': 'circular',
-                     'params': {'radius': radius}}],
-                wl, dx)
-
-        np.testing.assert_allclose(np.asarray(E_canon),
-                                    np.asarray(E_leg), atol=1e-7)
+        with pytest.raises(ValueError, match="legacy.*radius.*removed in v5\\.0"):
+            propagate_through_system_jax(E, elements, wl, dx)
 
     # ---- rectangular -------------------------------------------------
 
@@ -181,23 +146,16 @@ class TestB1_1_ApertureSchemaUnification:
         dep = [wi for wi in w if issubclass(wi.category, DeprecationWarning)]
         assert not dep, "Canonical schema must not emit DeprecationWarning."
 
-    def test_rectangular_half_width_legacy_warns(self, field):
-        """``params={'half_width_x', 'half_width_y'}`` is the legacy
-        JAX schema (half-widths) -- must warn."""
+    def test_rectangular_half_width_legacy_now_raises_in_v5_0(self, field):
+        """v5.0 (honest break): the legacy ``half_width_x/half_width_y``
+        schema raises ValueError."""
         E, dx, wl = field
         elements = [
             {'type': 'aperture', 'shape': 'rectangular',
              'params': {'half_width_x': 20e-6, 'half_width_y': 30e-6}},
         ]
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
-            E_out = propagate_through_system_jax(E, elements, wl, dx)
-        E_np = np.asarray(E_out)
-        # The corner pixel is outside the half-extents -> zero.
-        assert abs(E_np[0, 0]) < 1e-9
-        dep = [wi for wi in w if issubclass(wi.category, DeprecationWarning)]
-        assert len(dep) >= 1, (
-            "Legacy half_width schema must emit DeprecationWarning.")
+        with pytest.raises(ValueError, match="legacy.*removed in v5\\.0"):
+            propagate_through_system_jax(E, elements, wl, dx)
 
     # ---- annular -----------------------------------------------------
 
@@ -224,20 +182,16 @@ class TestB1_1_ApertureSchemaUnification:
         dep = [wi for wi in w if issubclass(wi.category, DeprecationWarning)]
         assert not dep
 
-    def test_annular_radius_legacy_warns(self, field):
-        """``params={'inner_radius', 'outer_radius'}`` is the legacy
-        schema -- must warn."""
+    def test_annular_radius_legacy_now_raises_in_v5_0(self, field):
+        """v5.0 (honest break): the legacy
+        ``inner_radius/outer_radius`` schema raises ValueError."""
         E, dx, wl = field
         elements = [
             {'type': 'aperture', 'shape': 'annular',
              'params': {'inner_radius': 20e-6, 'outer_radius': 100e-6}},
         ]
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter('always')
+        with pytest.raises(ValueError, match="legacy.*removed in v5\\.0"):
             propagate_through_system_jax(E, elements, wl, dx)
-        dep = [wi for wi in w if issubclass(wi.category, DeprecationWarning)]
-        assert len(dep) >= 1, (
-            "Legacy annular schema must emit DeprecationWarning.")
 
     # ---- cross-backend agreement -------------------------------------
 
@@ -428,7 +382,7 @@ class TestB1_9_DoeKickJaxGradient:
 
         def trace_and_reduce(period_x):
             """Apply DOE kick with traced period_x; return a scalar
-            function of the result so we can grad it.  Sum of x²+y²
+            function of the result so we can grad it.  Sum of xÂ²+yÂ²
             after a transfer step makes the result period-dependent."""
             order_x, order_y = 1, 0
             period_y = jnp.inf

@@ -241,7 +241,7 @@ class TestPropagateSystemJaxCacheLru:
     """Same LRU contract for ``_PROPAGATE_SYSTEM_JAX_CACHE``."""
 
     def test_lru_eviction(self):
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             _PROPAGATE_SYSTEM_JAX_CACHE,
             _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE,
         )
@@ -264,7 +264,7 @@ class TestPropagateSystemJaxCacheLru:
 
     def test_is_ordered_dict(self):
         from collections import OrderedDict
-        from lumenairy.system import _PROPAGATE_SYSTEM_JAX_CACHE
+        from lumenairy.propagators.system import _PROPAGATE_SYSTEM_JAX_CACHE
         assert isinstance(_PROPAGATE_SYSTEM_JAX_CACHE, OrderedDict), (
             "_PROPAGATE_SYSTEM_JAX_CACHE must be an OrderedDict for LRU; "
             f"got {type(_PROPAGATE_SYSTEM_JAX_CACHE).__name__}.")
@@ -389,7 +389,7 @@ class TestLumenairyContextClearsAll:
             _HIO_KERNEL_CACHE,
         )
         from lumenairy.raytrace.jax_trace import _TRACE_JAX_CACHE
-        from lumenairy.system import _PROPAGATE_SYSTEM_JAX_CACHE
+        from lumenairy.propagators.system import _PROPAGATE_SYSTEM_JAX_CACHE
 
         with la.lumenairy_context(clear_caches_on_exit=True):
             # Populate each cache with a sentinel entry.

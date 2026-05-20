@@ -93,7 +93,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 # v4.15.3 was ``('lumenairy/propagators', 'lumenairy/elements')``;
 # the v4.15.3 audit found 4 public entry points outside that scope
 # accepting 2-D scalar fields.  v4.15.4 adds ``lumenairy/analysis``
-# (subpackage) and ``lumenairy/system.py`` (a file at package
+# (subpackage) and ``lumenairy/propagators/system.py`` (a file at package
 # root -- the walker handles both cases via ``rglob`` of a
 # directory and direct visit of a file).
 #
@@ -103,7 +103,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 _TARGET_PACKAGES = ('lumenairy/propagators',
                     'lumenairy/elements',
                     'lumenairy/analysis',
-                    'lumenairy/system.py')
+                    'lumenairy/propagators/system.py')
 
 
 # ============================================================================
@@ -257,7 +257,7 @@ _GUARD_EXEMPTIONS = frozenset({
     # is a cache-clearing helper, not a propagator.  The walker
     # discovers it because the name contains the substring
     # ``_propagate``.  Documented exempt.
-    ('lumenairy/system.py', 'clear_propagate_system_jax_cache'),
+    ('lumenairy/propagators/system.py', 'clear_propagate_system_jax_cache'),
 
     # ---- raytrace/core.py (v4.15.4 NEW) ------------------------------------
     # ``apply_doe_phase_traced(rays, ...)`` takes a ``RayBundle``
@@ -596,14 +596,14 @@ def _iter_target_py_files():
     """Yield every ``.py`` file in the walker's scope.
 
     Handles both directory-shaped targets (``lumenairy/propagators``)
-    and file-shaped targets (``lumenairy/system.py``).  The latter is
+    and file-shaped targets (``lumenairy/propagators/system.py``).  The latter is
     new in v4.15.4: ``system.py`` is a single file at the package
     root, not a subpackage.
     """
     for pkg_rel in _TARGET_PACKAGES:
         pkg_path = _REPO_ROOT / pkg_rel
         if pkg_path.is_file():
-            # File-shaped target (e.g. ``lumenairy/system.py``).
+            # File-shaped target (e.g. ``lumenairy/propagators/system.py``).
             yield pkg_path
             continue
         if not pkg_path.is_dir():

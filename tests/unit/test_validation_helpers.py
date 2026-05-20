@@ -316,11 +316,14 @@ class TestPackagingHygiene:
                 assert hasattr(mod, name), \
                     f'{mod.__name__}.__all__ lists {name!r} but module has none'
 
-    def test_analysis_dot_analysis_shim_back_compat(self):
-        """``from lumenairy.analysis.analysis import beam_centroid`` still works."""
-        from lumenairy.analysis.analysis import beam_centroid as bc1
-        from lumenairy.analysis.core import beam_centroid as bc2
-        assert bc1 is bc2
+    def test_analysis_dot_analysis_shim_removed_in_v5_0(self):
+        """v5.0 (honest break): the v4.7 back-compat shim
+        ``lumenairy.analysis.analysis`` was removed.  Importing from
+        the old path must raise ``ImportError`` / ``ModuleNotFoundError``
+        with a clear pointer to the new home."""
+        import pytest
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            from lumenairy.analysis.analysis import beam_centroid  # noqa: F401
 
     def test_validate_prescription_exported_at_top_level(self):
         assert hasattr(la, 'validate_prescription')

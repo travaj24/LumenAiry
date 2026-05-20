@@ -71,7 +71,7 @@ Grep result for ``def _warn_`` / ``def warn_deprecated_`` in
       - ``warn_deprecated_default`` (default ``stacklevel=3``)
       - ``warn_deprecated_signature`` (default ``stacklevel=3``)
       - ``warn_renamed_function`` (default ``stacklevel=3``)
-  * ``lumenairy/system.py``:
+  * ``lumenairy/propagators/system.py``:
       - ``_warn_legacy`` (nested in ``_resolve_aperture_params``;
         direct ``warnings.warn(stacklevel=3)``)
   * ``lumenairy/glass.py``:

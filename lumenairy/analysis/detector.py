@@ -41,7 +41,6 @@ def apply_detector(
     full_well: float = np.inf,
     seed: Optional[int] = None,
     hot_pixel_map: Optional[np.ndarray] = None,
-    cosmic_ray_rate: float = 0.0,
     cosmic_ray_amp_e: float = 5e4,
     cosmic_ray_rate_per_m2_per_s: Optional[float] = None,
     bayer_pattern: Optional[str] = None,
@@ -274,12 +273,15 @@ def apply_detector(
         signal_e = signal_e + rng.normal(0, read_noise_e, signal_e.shape)
 
     # Cosmic-ray strikes: Poisson count of pixel-localised events.
-    # 4.9 fix (audit #4.5): when ``cosmic_ray_rate_per_m2_per_s`` is
-    # given, scale by detector area · exposure time -- the physically
-    # correct way.  The legacy ``cosmic_ray_rate`` (which the audit
-    # called out as not scaling with detector size or exposure) is
-    # retained for back-compat but emits a deprecation warning when
-    # used.
+    # 4.9 fix (audit #4.5): scale by detector area * exposure time
+    # via ``cosmic_ray_rate_per_m2_per_s``.  v5.0 (honest break): the
+    # legacy ``cosmic_ray_rate`` kwarg (which the audit called out as
+    # not scaling with detector size or exposure) was deprecated in
+    # v4.9 and removed in v5.0.  Migration:
+    #   cosmic_ray_rate=R  ->  cosmic_ray_rate_per_m2_per_s=R/A/T
+    # where A = (n_pixels * pixel_pitch)^2 is the detector area and
+    # T is the exposure time in seconds.  Typical sea-level reference
+    # value: ~1 /m^2/s.
     effective_mean_strikes = 0.0
     if cosmic_ray_rate_per_m2_per_s is not None:
         area_m2 = (n_pixels * pixel_pitch) ** 2
@@ -287,17 +289,6 @@ def apply_detector(
             float(cosmic_ray_rate_per_m2_per_s)
             * area_m2 * float(exposure_time)
         )
-    elif cosmic_ray_rate > 0:
-        import warnings
-        warnings.warn(
-            "simulate_detector_image: ``cosmic_ray_rate`` does not scale "
-            "with detector size or exposure time (the audit's finding "
-            "#4.5).  For physically-correct scaling pass "
-            "``cosmic_ray_rate_per_m2_per_s`` instead (typical sea-level "
-            "value ~ 1 /m²/s).  Legacy behaviour retained.",
-            DeprecationWarning, stacklevel=2,
-        )
-        effective_mean_strikes = float(cosmic_ray_rate)
     if effective_mean_strikes > 0:
         n_strikes = rng.poisson(effective_mean_strikes)
         if n_strikes > 0:

@@ -326,7 +326,7 @@ H.run('seidel runs without error', t_seidel_runs_without_error)
 
 
 def t_system_biconic_plus_freespace():
-    from lumenairy.system import propagate_through_system
+    from lumenairy.propagators.system import propagate_through_system
     N = 256; dx = 16e-6; lam = 1.31e-6
     pres = la.make_biconic(50e-3, 60e-3, float('inf'), float('inf'),
                            3e-3, 'N-BK7', aperture=3e-3)
@@ -365,7 +365,7 @@ H.run('all optional features together', t_all_optional_features_together)
 
 
 def t_multi_element_system_chain():
-    from lumenairy.system import propagate_through_system
+    from lumenairy.propagators.system import propagate_through_system
     N = 128; dx = 16e-6; lam = 1.31e-6
     E_in = np.ones((N, N), dtype=np.complex128)
     elements = [

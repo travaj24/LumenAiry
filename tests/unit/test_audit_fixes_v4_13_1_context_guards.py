@@ -118,7 +118,7 @@ def _install_counting_replacements(monkeypatch):
 
     # system.clear_propagate_system_jax_cache
     try:
-        import lumenairy.system as sys_mod
+        import lumenairy.propagators.system as sys_mod
         counters['propagate_system_jax'] = {'count': 0}
 
         def _bump_propagate():

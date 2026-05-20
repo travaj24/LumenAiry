@@ -12,7 +12,7 @@ Agent B scope for the v4.15 dispatch:
   ``DeprecationWarning`` routed through
   ``_deprecation.warn_deprecated_signature`` (``version_removed='5.0'``).
 
-* **B.2 / ROADMAP v4.15 #3** -- ``lumenairy.system.evaluate`` ergonomic
+* **B.2 / ROADMAP v4.15 #3** -- ``lumenairy.propagators.system.evaluate`` ergonomic
   one-call entry: build the element chain from a prescription dict,
   pull ``E`` / ``dx`` / ``dy`` / ``wavelength`` off a :class:`Source`,
   route through :func:`propagate_through_system`, return a
@@ -152,7 +152,7 @@ class TestB1SourceFactoryNormalisation:
 # ============================================================================
 
 class TestB2SystemEvaluate:
-    """Validate the ergonomic ``lumenairy.system.evaluate`` entry."""
+    """Validate the ergonomic ``lumenairy.propagators.system.evaluate`` entry."""
 
     def test_factory_prescription_routes_through(self):
         """A factory-built singlet prescription routes through
@@ -163,7 +163,7 @@ class TestB2SystemEvaluate:
                               w0=2e-3)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
-            result = la.system.evaluate(rx, src)
+            result = la.propagators.system.evaluate(rx, src)
         from lumenairy.propagators.result import PropagationResult
         assert isinstance(result, PropagationResult)
         assert result.field.shape == (128, 128)
@@ -175,7 +175,7 @@ class TestB2SystemEvaluate:
         rx = la.make_singlet(R1=50e-3, R2=-50e-3, d=2e-3, glass='N-BK7',
                              aperture=10e-3)
         with pytest.raises(ValueError) as info:
-            la.system.evaluate(rx, None)
+            la.propagators.system.evaluate(rx, None)
         msg = str(info.value).lower()
         assert 'source' in msg
 
@@ -191,12 +191,12 @@ class TestB2SystemEvaluate:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
             warnings.simplefilter('error', RuntimeWarning)
-            result = la.system.evaluate(rx, src, output_grid=128)
+            result = la.propagators.system.evaluate(rx, src, output_grid=128)
         assert result.field.shape == (128, 128)
         # Mismatched output_grid -- emits a soft warning, still returns.
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            result2 = la.system.evaluate(rx, src, output_grid=256)
+            result2 = la.propagators.system.evaluate(rx, src, output_grid=256)
         rw = [w for w in caught
               if issubclass(w.category, RuntimeWarning)
               and 'output_grid' in str(w.message)]

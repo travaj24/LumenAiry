@@ -363,7 +363,7 @@ def t_propagate_through_system_matches_manual_real_lens_plus_asm():
     the same on-axis intensity at the focus as apply_real_lens followed
     by ASM propagation."""
     import lumenairy as la
-    from lumenairy.system import propagate_through_system
+    from lumenairy.propagators.system import propagate_through_system
     from lumenairy.raytrace import (
         surfaces_from_prescription, find_paraxial_focus,
     )
@@ -428,7 +428,7 @@ def t_propagate_through_system_aperture_then_asm_keeps_disk_area():
     """propagate_through_system with [circular aperture, propagate]
     keeps the total transmitted power equal to pi (D/2)^2."""
     import lumenairy as la
-    from lumenairy.system import propagate_through_system
+    from lumenairy.propagators.system import propagate_through_system
     N, dx, lam = 256, 8e-6, 1.31e-6
     D = 1e-3
     E = np.ones((N, N), dtype=np.complex128)

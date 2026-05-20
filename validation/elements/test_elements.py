@@ -727,22 +727,29 @@ H.run('apply_detector: Bayer mosaic gives correct per-cell QE ratios',
 
 
 def t_detector_cosmic_ray_increases_pixel_signal():
-    """cosmic_ray_rate > 0 adds bright pixels not seen in baseline."""
+    """v5.0: cosmic_ray_rate_per_m2_per_s > 0 adds bright pixels not
+    seen in baseline.  v4.9 deprecated ``cosmic_ray_rate`` (no
+    area/exposure scaling); v5.0 removed it."""
     N, dx = 64, 4e-6
     E = np.zeros((N, N), dtype=complex)
     img_baseline, _, _ = la.apply_detector(
         E, dx_field=dx, pixel_pitch=dx * 2, n_pixels=32,
-        cosmic_ray_rate=0.0, seed=42)
+        cosmic_ray_rate_per_m2_per_s=0.0, seed=42)
+    # Pick a flux that gives ~50 strikes over a 32 x (dx*2) m detector
+    # area at exposure_time=1.0:
+    #   strikes = rate * (n_pixels * pixel_pitch)^2 * exposure_time
+    #   50 = rate * (32 * 8e-6)^2 * 1.0  ->  rate ~ 7.6e8 /m^2/s.
     img_rays, _, _ = la.apply_detector(
         E, dx_field=dx, pixel_pitch=dx * 2, n_pixels=32,
-        cosmic_ray_rate=50.0, cosmic_ray_amp_e=5e4, seed=42)
+        cosmic_ray_rate_per_m2_per_s=7.6e8, cosmic_ray_amp_e=5e4,
+        seed=42)
     # With cosmic rays added, total signal must increase.
     return float(img_rays.sum()) > float(img_baseline.sum()) + 1e5, \
         (f'baseline sum={float(img_baseline.sum()):.3e}, '
          f'with rays sum={float(img_rays.sum()):.3e}')
 
 
-H.run('apply_detector: cosmic_ray_rate adds extra charge',
+H.run('apply_detector: cosmic_ray_rate_per_m2_per_s adds extra charge',
       t_detector_cosmic_ray_increases_pixel_signal)
 
 

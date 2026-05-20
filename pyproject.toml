@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "4.16.3"
+version = "5.0.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 authors = [
     { name = "Andrew Traverso" },
 ]
@@ -27,13 +27,12 @@ keywords = [
     "zemax",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -181,3 +180,48 @@ addopts = [
     "--strict-config",
     "-m", "not integration",
 ]
+
+# v5.0: ruff lint configuration -- minimal first-pass adoption.  Heavier
+# rule sets (PT, RET, SIM, etc.) come in v5.1 once the existing code
+# has been swept clean of the v5.0 baseline issues.
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = [
+    "validation/",
+    "docs/",
+    "examples/",
+    "lumenairy/ui/",  # GUI code uses different idioms; defer to v5.1
+]
+
+[tool.ruff.lint]
+# Conservative initial rule set: errors only (E), pyflakes (F), import
+# sorting (I).  No style nits at v5.0 to keep the diff manageable;
+# additional categories opt in per-module via per-file-ignores.
+select = ["E", "F", "I"]
+ignore = [
+    "E501",  # line too long: many legitimate long-string fail-message lines
+    "E741",  # ambiguous variable name: physics symbols (l, I, O) collide
+    "E402",  # module-level import not at top: lazy imports + try-import-as
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["F401", "F811"]  # test files re-import + redefine fixtures freely
+"lumenairy/__init__.py" = ["F401", "F403"]  # re-export hub
+
+# v5.0: mypy --strict incremental adoption.  Starts with the small,
+# self-contained modules per ROADMAP plan; expanding module-by-module
+# in v5.1+.
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = [
+    "lumenairy/backend",
+    "lumenairy/_deprecation.py",
+    "lumenairy/_context.py",
+    "lumenairy/progress.py",
+    "lumenairy/memory.py",
+]
+# Everything else stays untyped at v5.0 (no strict checking outside the
+# whitelist).  Expand the ``files`` list as modules are typed.
+ignore_missing_imports = true

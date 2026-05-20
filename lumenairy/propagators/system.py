@@ -17,14 +17,14 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from .propagators.propagation import (
+from .propagation import (
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
     fresnel_propagate,
     resample_field,
     _resolve_jax_complex_dtype,
 )
-from .elements.lenses import (
+from ..elements.lenses import (
     apply_thin_lens,
     apply_spherical_lens,
     apply_aspheric_lens,
@@ -34,7 +34,7 @@ from .elements.lenses import (
     apply_grin_lens,
     apply_axicon,
 )
-from .elements import (
+from ..elements import (
     apply_mirror,
     apply_aperture,
     apply_gaussian_aperture,
@@ -271,12 +271,12 @@ def propagate_through_system(E_in: np.ndarray,
     # (before any input copy / dx bookkeeping) so the user gets a
     # clear, actionable error rather than a downstream AttributeError
     # or a silent wrong-axis FFT.
-    from ._validation import _check_2d_scalar_field
+    from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'propagate_through_system')
 
-    from .progress import call_progress, ProgressScaler
+    from ..progress import call_progress, ProgressScaler
     if store is not None:
-        from .io.storage import append_plane
+        from ..io.storage import append_plane
 
     history_entries = []  # list of (label, field, dx) for return_result
 
@@ -336,7 +336,7 @@ def propagate_through_system(E_in: np.ndarray,
                     E, _ = resample_field(E, dx_new, current_dx,
                                           N_out=E_in.shape[-1])
             elif prop_method == 'sas' and not has_tilt:
-                from .propagators.propagation import scalable_angular_spectrum_propagate
+                from .propagation import scalable_angular_spectrum_propagate
                 pad = elem.get('pad', 2)
                 skip_final_phase = elem.get('skip_final_phase', False)
                 E, dx_new, _dy_new = scalable_angular_spectrum_propagate(
@@ -499,7 +499,7 @@ def propagate_through_system(E_in: np.ndarray,
 
     call_progress(progress, 'system', 1.0, 'done')
     if return_result:
-        from .propagators.result import PropagationResult
+        from .result import PropagationResult
         return PropagationResult(
             field=E, dx=current_dx, dy=current_dy,
             wavelength=float(wavelength),
@@ -585,21 +585,21 @@ def evaluate(
     """
     # Lazy import to avoid a top-level circular dependency on
     # ``lumenairy.sources``.
-    from .sources.core import Source as _SourceCls
-    from .propagators.result import PropagationResult
+    from ..sources.core import Source as _SourceCls
+    from .result import PropagationResult
 
     if source is None:
         raise ValueError(
-            "lumenairy.system.evaluate: 'source' is required; got None.  "
+            "lumenairy.propagators.system.evaluate: 'source' is required; got None.  "
             "Pass a Source instance (e.g. ``la.Source.gaussian(N=256, "
             "dx=10e-6, wavelength=633e-9, w0=2e-3)``).")
     if not isinstance(source, _SourceCls):
         raise ValueError(
-            "lumenairy.system.evaluate: 'source' must be a "
+            "lumenairy.propagators.system.evaluate: 'source' must be a "
             f"lumenairy.Source instance; got {type(source).__name__}.")
     if not isinstance(prescription, dict):
         raise ValueError(
-            "lumenairy.system.evaluate: 'prescription' must be a dict; "
+            "lumenairy.propagators.system.evaluate: 'prescription' must be a dict; "
             f"got {type(prescription).__name__}.")
     if output_grid is not None:
         # Future-proofed; currently a no-op.  Emit a soft warning so
@@ -612,7 +612,7 @@ def evaluate(
             else tuple(output_grid))
         if target_shape != out_shape:
             warnings.warn(
-                "lumenairy.system.evaluate: output_grid resampling is "
+                "lumenairy.propagators.system.evaluate: output_grid resampling is "
                 "reserved for a future release; the kwarg is accepted "
                 "but currently does not resample the exit-plane field.  "
                 f"Got output_grid={target_shape!r}, source.E.shape="
@@ -621,7 +621,7 @@ def evaluate(
             )
     if output_dx is not None and float(output_dx) != float(source.dx):
         warnings.warn(
-            "lumenairy.system.evaluate: output_dx resampling is "
+            "lumenairy.propagators.system.evaluate: output_dx resampling is "
             "reserved for a future release; the kwarg is accepted but "
             "currently does not resample the exit-plane field.",
             RuntimeWarning, stacklevel=2,
@@ -681,7 +681,7 @@ def _prescription_to_elements(
 
     if not (has_elements or has_surfaces):
         raise ValueError(
-            "lumenairy.system.evaluate: prescription must contain "
+            "lumenairy.propagators.system.evaluate: prescription must contain "
             "either ``'elements'`` + ``'all_thicknesses'`` (Zemax-loader "
             "shape) or ``'surfaces'`` + ``'thicknesses'`` (make_singlet "
             "/ make_doublet shape); got keys "
@@ -700,7 +700,7 @@ def _prescription_to_elements(
     # ``elements`` / ``all_thicknesses`` keys.
     if has_elements and has_surfaces:
         raise ValueError(
-            "lumenairy.system.evaluate: prescription contains BOTH "
+            "lumenairy.propagators.system.evaluate: prescription contains BOTH "
             "``'elements'`` + ``'all_thicknesses'`` (Zemax-loader shape) "
             "AND ``'surfaces'`` + ``'thicknesses'`` (factory shape).  "
             "These two shapes are mutually exclusive -- mixing them is "
@@ -715,7 +715,7 @@ def _prescription_to_elements(
     if has_elements:
         # Zemax loader shape -- decompose into propagate / real_lens /
         # mirror / aperture steps.
-        from .io.codegen import _decompose_prescription
+        from ..io.codegen import _decompose_prescription
         steps = _decompose_prescription(prescription)
         for step in steps:
             stype = step['type']
@@ -748,7 +748,7 @@ def _prescription_to_elements(
                 continue
             else:
                 raise ValueError(
-                    "lumenairy.system.evaluate: unknown decomposition "
+                    "lumenairy.propagators.system.evaluate: unknown decomposition "
                     f"step type {stype!r}.")
     else:
         # Factory shape -- single real_lens element with the prescription
@@ -816,7 +816,7 @@ def clear_propagate_system_jax_cache() -> None:
 # clear calls by hand.  Late-binding closure preserves
 # ``mock.patch.object`` test semantic.
 try:
-    from ._cache_registry import register_cache_clearer as _register_cache_clearer
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
@@ -848,36 +848,30 @@ _TRACEABLE_ELEMENT_TYPES = frozenset({
 })
 
 
-# One-shot deprecation warning state for the legacy JAX aperture schema.
-# B1-1: pre-v4.12 ``propagate_through_system_jax`` read ``params.get(
-# 'radius')`` / ``params.get('half_width_x')`` / ``params.get(
-# 'inner_radius')`` while the NumPy ``apply_aperture`` reads
-# ``params.get('diameter')`` / ``params.get('width_x')`` / ``params.get(
-# 'inner_diameter')``.  A working NumPy element list ported to the JAX
-# path had every aperture silently no-op'd.  v4.12 unifies on the NumPy
-# canonical schema and falls back to the legacy form with a one-shot
-# ``DeprecationWarning``.
-_LEGACY_APERTURE_SCHEMA_WARNED = False
+# v5.0 (audit_v4_13_1 Part 5 / honest break): the legacy pre-v4.12 JAX
+# aperture schema (``radius`` / ``half_width_x`` / ``inner_radius``)
+# emitted a ``DeprecationWarning`` from v4.12 through v4.16.3.  v5.0
+# removes the legacy branches; the canonical NumPy schema (``diameter``
+# / ``width_x`` / ``inner_diameter``) is now the ONLY accepted form.
+# Migration: ``radius=r`` -> ``diameter=2*r``; ``inner_radius=ri`` ->
+# ``inner_diameter=2*ri``; ``half_width_x=hx`` -> ``width_x=2*hx``.
+# See Migration-Guide.md section 5.0.0 for the recipe.
 
 
 def _resolve_aperture_params(elem: Dict[str, Any]
                               ) -> Optional[Tuple[str, Tuple[float, ...]]]:
     """Resolve an aperture element to canonical JAX-kernel params.
 
-    Accepts BOTH:
+    Accepts the canonical NumPy schema (matches ``apply_aperture``):
+    ``params={'diameter': D}`` for circular,
+    ``params={'inner_diameter': Di, 'outer_diameter': Do}`` for
+    annular, ``params={'width_x': Wx, 'width_y': Wy}`` for
+    rectangular.
 
-    * the canonical NumPy schema (preferred; matches ``apply_aperture``):
-      ``params={'diameter': D}`` for circular,
-      ``params={'inner_diameter': Di, 'outer_diameter': Do}`` for
-      annular, ``params={'width_x': Wx, 'width_y': Wy}`` for
-      rectangular.
-
-    * the legacy pre-v4.12 JAX-only schema (deprecated; one-shot
-      ``DeprecationWarning`` on first hit):
-      ``params={'radius': r}`` or top-level ``elem['radius']`` for
-      circular, ``params={'half_width_x': hx, 'half_width_y': hy}`` for
-      rectangular, ``params={'inner_radius': ri, 'outer_radius': ro}``
-      for annular.
+    The pre-v4.12 JAX-only schema (``radius`` / ``half_width_x`` /
+    ``inner_radius``) was deprecated in v4.12 and is **removed in v5.0**.
+    Pass the canonical NumPy schema; the legacy keys raise
+    ``ValueError`` with the migration recipe.
 
     Returns
     -------
@@ -887,79 +881,54 @@ def _resolve_aperture_params(elem: Dict[str, Any]
         ready to feed the JAX kernel.  Returns ``None`` if the aperture
         shape is unsupported or required params are missing.
     """
-    global _LEGACY_APERTURE_SCHEMA_WARNED
-
     shape = elem.get('shape', 'circular')
     params = elem.get('params') or {}
 
-    def _warn_legacy(field: str) -> None:
-        global _LEGACY_APERTURE_SCHEMA_WARNED
-        if _LEGACY_APERTURE_SCHEMA_WARNED:
-            return
-        _LEGACY_APERTURE_SCHEMA_WARNED = True
-        warnings.warn(
-            "propagate_through_system_jax aperture element used the "
-            f"legacy {field!r} schema (pre-v4.12 JAX-only form).  "
-            "The library now reads the canonical NumPy schema "
-            "(``params={'diameter': ...}`` / ``params={'width_x', "
-            "'width_y'}`` / ``params={'inner_diameter', "
-            "'outer_diameter'}``), so JAX and NumPy element lists "
-            "are interchangeable.  The legacy form still works for "
-            "one release but will be removed; please migrate your "
-            "element dicts to the canonical schema.",
-            DeprecationWarning, stacklevel=3,
+    def _reject_legacy(legacy_key: str, canonical_msg: str) -> None:
+        raise ValueError(
+            f"propagate_through_system_jax aperture element used the "
+            f"legacy pre-v4.12 JAX-only {legacy_key!r} schema.  This "
+            f"schema was deprecated in v4.12 and removed in v5.0.  "
+            f"Migrate to the canonical NumPy schema: {canonical_msg}.  "
+            f"See Migration-Guide.md section 5.0.0 for details."
         )
 
     if shape == 'circular':
-        # Canonical: diameter.
         D = params.get('diameter')
         if D is not None:
             return ('circular', (float(D) / 2.0,))
-        # Legacy: radius (params or top-level).
-        r = params.get('radius')
-        if r is None:
-            r = elem.get('radius')
-        if r is not None:
-            _warn_legacy('radius')
-            return ('circular', (float(r),))
+        # Legacy schema -> hard error.
+        if 'radius' in params or 'radius' in elem:
+            _reject_legacy('radius', "params={'diameter': 2*radius}")
         return None
 
     if shape == 'rectangular':
-        # Canonical: width_x / width_y (full widths).
         Wx = params.get('width_x')
         Wy = params.get('width_y')
         if Wx is not None or Wy is not None:
             hx = float(Wx) / 2.0 if Wx is not None else float('inf')
             hy = float(Wy) / 2.0 if Wy is not None else float('inf')
             return ('rectangular', (hx, hy))
-        # Legacy: half_width_x / half_width_y (or 'width'/'height' as
-        # half-extents in the pre-v4.12 JAX schema).
-        hx = params.get('half_width_x')
-        hy = params.get('half_width_y')
-        if hx is None and 'width' in params:
-            hx = float(params['width']) / 2.0
-        if hy is None and 'height' in params:
-            hy = float(params['height']) / 2.0
-        if hx is not None or hy is not None:
-            _warn_legacy('half_width_x/half_width_y')
-            return ('rectangular',
-                    (float(hx) if hx is not None else float('inf'),
-                     float(hy) if hy is not None else float('inf')))
+        if ('half_width_x' in params or 'half_width_y' in params
+                or 'width' in params or 'height' in params):
+            _reject_legacy(
+                'half_width_x/half_width_y/width/height',
+                "params={'width_x': 2*half_width_x, "
+                "'width_y': 2*half_width_y}")
         return None
 
     if shape == 'annular':
-        # Canonical: inner_diameter / outer_diameter.
         Di = params.get('inner_diameter')
         Do = params.get('outer_diameter')
         if Di is not None or Do is not None:
             r_i = float(Di) / 2.0 if Di is not None else 0.0
             r_o = float(Do) / 2.0 if Do is not None else float('inf')
             return ('annular', (r_o, r_i))
-        # Legacy: inner_radius / outer_radius.
-        r_i = params.get('inner_radius')
-        r_o = params.get('outer_radius')
-        if r_i is not None or r_o is not None:
-            _warn_legacy('inner_radius/outer_radius')
+        if 'inner_radius' in params or 'outer_radius' in params:
+            _reject_legacy(
+                'inner_radius/outer_radius',
+                "params={'inner_diameter': 2*inner_radius, "
+                "'outer_diameter': 2*outer_radius}")
             return ('annular',
                     (float(r_o) if r_o is not None else float('inf'),
                      float(r_i) if r_i is not None else 0.0))
@@ -1029,7 +998,7 @@ def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
             tag = sig[0]
             if tag == 'propagate':
                 _, z, bandlimit = sig
-                from .propagators.propagation import angular_spectrum_propagate
+                from .propagation import angular_spectrum_propagate
                 E = angular_spectrum_propagate(
                     E, z, wavelength, dx, bandlimit=bandlimit)
             elif tag == 'lens':
@@ -1073,7 +1042,7 @@ def propagate_through_system_jax(E_in: np.ndarray,
     -----------------------------------
     The set of element types with a fully JAX-traceable code path is
     exposed as the module-level constant
-    :data:`lumenairy.system._TRACEABLE_ELEMENT_TYPES`:
+    :data:`lumenairy.propagators.system._TRACEABLE_ELEMENT_TYPES`:
 
       * ``'propagate'``  -> ``angular_spectrum_propagate`` (JAX backend)
       * ``'lens'``       -> paraxial thin-lens phase screen
@@ -1135,16 +1104,16 @@ def propagate_through_system_jax(E_in: np.ndarray,
     # below.  ``E_in`` is contractually a numpy array at the entry
     # point (it is wrapped via ``jnp.asarray`` further down), so
     # the helper's ``getattr(E, 'ndim', None)`` path is well-defined.
-    from ._validation import _check_2d_scalar_field
+    from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'propagate_through_system_jax')
 
-    from .backend import JAX_AVAILABLE
+    from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError(
             'JAX is not installed; install with `pip install jax` or '
             'use propagate_through_system() (NumPy).')
     import jax.numpy as jnp
-    from .propagators.propagation import angular_spectrum_propagate
+    from .propagation import angular_spectrum_propagate
 
     if dy is None:
         dy = dx
@@ -1170,9 +1139,9 @@ def propagate_through_system_jax(E_in: np.ndarray,
             "propagate_through_system_jax: element type(s) "
             f"{bad_types!r} have no JAX-traceable handler.  Supported "
             f"types are {sorted(_TRACEABLE_ELEMENT_TYPES)}.  Use "
-            "lumenairy.system.propagate_through_system() (NumPy) for "
+            "lumenairy.propagators.system.propagate_through_system() (NumPy) for "
             "an element list containing these types, or check "
-            "lumenairy.system._TRACEABLE_ELEMENT_TYPES to filter your "
+            "lumenairy.propagators.system._TRACEABLE_ELEMENT_TYPES to filter your "
             "element list programmatically before calling."
         )
 

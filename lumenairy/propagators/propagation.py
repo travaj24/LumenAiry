@@ -1085,7 +1085,7 @@ def clear_asm_caches() -> None:
     - Through-focus JAX scan cache (``'through_focus_scan_jax'`` --
       :func:`lumenairy.analysis.through_focus.clear_through_focus_scan_jax_cache`).
     - Propagate-through-system JAX cache (``'propagate_system_jax'``
-      -- :func:`lumenairy.system.clear_propagate_system_jax_cache`).
+      -- :func:`lumenairy.propagators.system.clear_propagate_system_jax_cache`).
     - Phase-retrieval GS / ER / HIO kernel caches
       (``'phase_retrieval_kernels'`` --
       :func:`lumenairy.analysis.phase_retrieval.clear_phase_retrieval_caches`).

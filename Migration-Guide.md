@@ -207,21 +207,125 @@ v5.0 alongside the file-split work.
 
 ---
 
-## v5.0 (planned)
+## 5.0.0 -- Major structural release
 
-v5.0 is the major-structural release.  Migration items expected:
+v5.0 is the coordinated breaking-change release.  Each item below
+documents what changed, why, and how to migrate user code.
 
-* 6 large-file splits (no public API change; `git blame`-only
-  reorg).
-* Removal of 8 active back-compat shims (most are 4+ versions old).
-* `lumenairy/system.py` -> `lumenairy/propagators/system.py`.
-* `requires-python` bump from `>=3.9` to `>=3.10`.
-* `MCF` object with `coherence_at(...)` (the explicit-MCF
-  alternative to the ensemble path).
-* Off-axis conic in surface frame (proper coordinate transformation;
-  current `decenter`+`tilt` work in field frame).
-* Full library-wide rollout of the v4.16.2 default-config knob
-  resolvers.
+### 5.0.0 -- Python 3.9 dropped (`requires-python = ">=3.10"`)
 
-When v5.0 ships, this guide will gain a v5.0 section with concrete
-recipes for each migration point.
+Python 3.9 reached end-of-life on 2025-10.  v5.0 bumps the floor to
+3.10.  Users still on 3.9 see a `pip` install-time error and must
+upgrade their interpreter.
+
+No code change required if you're already on 3.10+.
+
+### 5.0.0 -- `lumenairy/system.py` -> `lumenairy/propagators/system.py`
+
+The sequential-propagation entry points (`propagate_through_system`,
+`propagate_through_system_jax`, the JAX cache primitives) functionally
+ARE a propagator -- they walk elements applying per-element
+propagators.  v5.0 moves them under `lumenairy/propagators/` so the
+package layout matches the conceptual role.
+
+**Public-namespace users see no change.**  `import lumenairy as la`
+and `la.propagate_through_system(...)` continue to work bit-for-bit.
+
+**If you imported the private path directly:**
+
+```python
+# Old (pre-5.0):
+from lumenairy.system import propagate_through_system
+from lumenairy.system import _PROPAGATE_SYSTEM_JAX_CACHE  # private
+
+# New (5.0+):
+from lumenairy import propagate_through_system   # (preferred)
+# or
+from lumenairy.propagators.system import propagate_through_system
+```
+
+### 5.0.0 -- Back-compat shim removal
+
+The following shims that had been carried 3-9 releases past their
+deprecation cycle are removed in v5.0:
+
+* `lumenairy.analysis.analysis` -- v4.7 rename shim.  **Removed.**
+  Migrate: `from lumenairy.analysis.analysis import X` ->
+  `from lumenairy.analysis import X` (or `lumenairy.analysis.core`).
+  Old path now raises `ModuleNotFoundError`.
+* `lumenairy.ao` -- v4.3 shim.  **Removed.**  Migrate:
+  `from lumenairy.ao import DeformableMirror` ->
+  `from lumenairy.analysis.ao import DeformableMirror` (or the
+  top-level re-exports such as `lumenairy.DeformableMirror`).
+  Old path now raises `ModuleNotFoundError`.
+* `lumenairy.io.hdf5` -- shim.  **Removed.**  Migrate:
+  `from lumenairy.io.hdf5 import save_field_h5` ->
+  `from lumenairy.io.storage import save_field_h5` (or
+  `from lumenairy import save_field_h5`).  Old path now raises
+  `ModuleNotFoundError`.
+* `propagate_through_system_jax` legacy aperture schema.
+  **Removed.**  Pre-v4.12 aperture element params used
+  `radius` / `half_width_x` / `inner_radius`; v4.12 deprecated
+  them in favour of the canonical NumPy schema
+  (`diameter` / `width_x` / `inner_diameter`).  v5.0 removes the
+  legacy keys; they now raise `ValueError` with the migration
+  recipe inline.  Migration: double the value and rename
+  (`radius=r` -> `diameter=2*r`, `inner_radius=ri` ->
+  `inner_diameter=2*ri`, etc.).
+* `simulate_detector_image(..., cosmic_ray_rate=...)` -- v4.9
+  deprecated kwarg.  **Removed.**  The legacy `cosmic_ray_rate`
+  did not scale with detector area or exposure time.  Migrate:
+  `cosmic_ray_rate=R` -> `cosmic_ray_rate_per_m2_per_s=R/A/T`
+  where `A = (n_pixels * pixel_pitch)^2` is the detector area
+  and `T` is the exposure time.  Typical sea-level reference
+  value ~1 /m^2/s.  Old kwarg now raises `TypeError`
+  (unexpected keyword argument).
+
+**Shims preserved as legitimate public API surface** (not removed
+despite ROADMAP suggestion -- they're useful re-exports, not
+deprecation shims):
+* `lumenairy.elements.lenses.apply_*_lens` re-exports.  These
+  provide a coherent one-stop import surface for lens-related
+  functions; the underlying split into `_lens_thin.py` /
+  `_lens_real.py` / `_lens_traced.py` is an internal
+  organisational choice, not a user-facing API surface change.
+
+---
+
+## Items deferred from v5.0.0 to v5.1+
+
+The ROADMAP originally scoped the following items into v5.0
+alongside the breaking changes.  v5.0 ships the breaking changes
+in isolation to keep the migration surface tight; the items below
+follow in v5.1.x patch releases as time and review cycles allow.
+
+* **6 large-file splits** (`raytrace/core.py`,
+  `propagators/propagation.py`, `propagators/asymptotic.py`,
+  `optimize/core.py`, `io/prescriptions.py`, `analysis/core.py`).
+  No public API change -- mechanical reorganisation visible only
+  to `git blame`.  Deferred so v5.0's diff stays reviewable.
+* **Library-wide default-config knob resolver rollout.**  The 3
+  v4.16.2 knobs (`set_default_wave_propagator`, `set_default_dy`,
+  `set_default_real_dtype`) remain API-only at v5.0 ship.  The
+  v4.16.3 one-shot `UserWarning` ("API-only; consumer wiring
+  lands in v5.0") is **kept in place** for v5.0 and removed in
+  v5.1 when the resolver rollout actually lands.
+* **MCF `coherence_at(...)` object** -- the explicit-MCF
+  alternative to the v4.16.1 `propagate_ensemble` path.
+  Deferred to v5.1.  Current users continue with the ensemble
+  helper.
+* **Off-axis conic in surface frame** -- coordinate-frame
+  transformation for tilted/displaced aspheres.  Deferred to
+  v5.1.  Current `decenter` / `tilt` keys continue to apply in
+  field frame as in v4.x.
+* **26 formula-3 glass coefficients** -- per-glass vendor-source
+  ingestion of Hikari E-/J-, Sumita K-, 4 CDGM polynomial
+  glasses.  `POLYNOMIAL_COEFFICIENTS = {}` remains empty at v5.0;
+  the evaluator infrastructure shipped in v4.16.2 is unchanged.
+  Per-glass ingestion is a v5.1 work item.
+* **5 new examples** (multi-config / zoom, tolerancing,
+  coronagraph workflow, AO closed-loop, ghost / stray-light).
+  Deferred to v5.1.
+* **57 audit-fix test-file consolidation.**  Mechanical merge of
+  the `test_audit_fixes_v<X>_<Y>_*.py` files into topical
+  homes.  No behaviour change.  Deferred to v5.1.

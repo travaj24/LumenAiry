@@ -408,12 +408,13 @@ class TestMigrationGuideNonTriviality:
         """The sibling-covered allowlist must remain minimal -- it is
         itself a sibling-gap surface.  Any future addition must be a
         deliberate choice with an inline comment in the walker source.
-        v4.16.3 baseline: only v4.15.2 is sibling-covered (its
-        migration recipe is bundled into v4.15.1's section).
+        v5.0 baseline (was v4.16.3 + 4.16.3): both v4.15.2 (sibling of
+        v4.15.1) and v4.16.3 (soft DeprecationWarning, migration recipe
+        inline in the warning text + CHANGELOG) are sibling-covered.
         """
-        assert _MIGRATION_GUIDE_SIBLING_COVERED == frozenset({'4.15.2'}), (
-            f"The sibling-covered allowlist drifted from the v4.16.3 "
-            f"baseline {{'4.15.2'}} to "
+        assert _MIGRATION_GUIDE_SIBLING_COVERED == frozenset({'4.15.2', '4.16.3'}), (
+            f"The sibling-covered allowlist drifted from the v5.0 "
+            f"baseline {{'4.15.2', '4.16.3'}} to "
             f"{_MIGRATION_GUIDE_SIBLING_COVERED}.  Any addition must be "
             f"documented in the walker module docstring with the "
             f"sibling version whose Migration-Guide recipe covers the "

@@ -2,6 +2,122 @@
 
 All notable changes to the core library are documented here.
 
+## [5.0.0] — 2026-05-20
+
+**Major release.**  v5.0 is the coordinated breaking-change release:
+removes back-compat shims that had been carried 3-9 releases past
+their deprecation cycle, bumps the Python floor to 3.10, moves
+`lumenairy/system.py` under `propagators/` where it functionally
+belongs, and adds the CI infrastructure (ruff lint, mypy strict
+incremental, fast-PR unit-test gate, public-API smoke test) that
+the structural cleanup needs.
+
+**Scope discipline:** the v4.16.x ROADMAP scoped a wider v5.0 ("6
+file splits + library-wide resolver rollout + MCF coherence object
++ formula-3 coefficient ingestion + off-axis conic + 5 new
+examples + 57-file test consolidation").  Those non-breaking items
+move to **v5.1+** so the v5.0 diff stays reviewable.  See
+`ROADMAP.md` for the v5.1 horizon.
+
+### Breaking changes
+
+* **Python 3.10+ required.**  `requires-python = ">=3.10"` in
+  `pyproject.toml`.  Python 3.9 reached EOL on 2025-10.
+* **`lumenairy.system` -> `lumenairy.propagators.system`.**  The
+  sequential-propagation entry points functionally ARE a
+  propagator -- they walk elements applying per-element
+  propagators -- not a top-level peer of `propagators/` and
+  `elements/`.  Public namespace (`import lumenairy as la;
+  la.propagate_through_system(...)`) unchanged.  Direct imports
+  of the private path break: `from lumenairy.system import X` ->
+  `from lumenairy import X` (preferred) or `from
+  lumenairy.propagators.system import X`.
+* **5 back-compat shims removed**:
+  * `lumenairy.analysis.analysis` (v4.7 rename shim) -- now
+    raises `ModuleNotFoundError`.  Use `lumenairy.analysis`.
+  * `lumenairy.ao` (v4.3 shim) -- now raises
+    `ModuleNotFoundError`.  Use `lumenairy.analysis.ao` or the
+    top-level `lumenairy.DeformableMirror`.
+  * `lumenairy.io.hdf5` (rename shim) -- now raises
+    `ModuleNotFoundError`.  Use `lumenairy.io.storage` or the
+    top-level re-exports.
+  * `propagate_through_system_jax` legacy aperture schema
+    (pre-v4.12; deprecated v4.12, removed v5.0).  Legacy params
+    `radius` / `half_width_x` / `inner_radius` now raise
+    `ValueError` with the canonical-schema migration recipe
+    inline.  Migrate: double the value and rename
+    (`radius=r` -> `diameter=2*r`, etc.).
+  * `simulate_detector_image(..., cosmic_ray_rate=...)` (v4.9
+    deprecated kwarg; did not scale with detector area or
+    exposure) -- removed; now raises `TypeError` (unexpected
+    keyword argument).  Migrate to
+    `cosmic_ray_rate_per_m2_per_s=R/A/T` where `A` is the
+    detector area and `T` is the exposure time.
+* **Shims preserved as legitimate public API surface** (not
+  removed despite the ROADMAP's audit-V4_13_1 suggestion):
+  * `lumenairy.elements.lenses.apply_*_lens` re-exports.  These
+    provide a coherent one-stop import surface; the underlying
+    file-split into `_lens_thin.py` / `_lens_real.py` /
+    `_lens_traced.py` is an internal organisational choice
+    rather than a deprecation cycle.
+
+### CI gates + infrastructure
+
+* **NEW `.github/workflows/unit-tests.yml`** -- fast PR feedback
+  gate.  Runs `pytest tests/unit -m "not integration"` on Python
+  3.10, 3.11, 3.12, 3.13; `ruff check` on the library + unit
+  tests; the new public-API smoke test.
+* **NEW `[tool.ruff]` config** in `pyproject.toml`.  Conservative
+  initial rule set (E, F, I) with documented per-file ignores;
+  excludes `validation/`, `docs/`, `examples/`, `ui/` from the
+  v5.0 baseline.
+* **NEW `[tool.mypy]` config** -- incremental adoption starting
+  with the small self-contained modules (`backend/`,
+  `_deprecation.py`, `_context.py`, `progress.py`, `memory.py`).
+  Everything else stays untyped for v5.0.
+* **NEW `tests/unit/test_public_api.py`** -- asserts every name
+  listed in `lumenairy.__all__` is resolvable via
+  `getattr(lumenairy, name)`.  Catches "exported but not
+  imported" / "imported but not exported" sibling-gap at the
+  facade.  536 entries verified at v5.0 ship.
+
+### Migration-Guide.md
+
+`Migration-Guide.md` adds a v5.0.0 section with concrete
+old->new recipes for each breaking change.  The deferred v5.1+
+items are listed honestly so users know what to expect.
+
+### Tests + CI
+
+* **2858 unit pass / 5 skip / 1 xfail = 2864 collected** (was
+  2327 at v4.16.3; +531 net -- the v5.0 work landed alongside
+  cumulative v4.16.x test additions in this session).
+* **34/34 validation pass.**
+* Updated callers across `lumenairy/` and `tests/` to the new
+  `lumenairy.propagators.system` import path.
+* Updated v4.12 aperture-schema tests + v4.9 cosmic_ray_rate
+  test from "must warn" to "must raise" semantics.
+
+### Deferred from v5.0 to v5.1+ (see ROADMAP.md)
+
+* 6 large-file splits (`raytrace/core.py`,
+  `propagators/propagation.py`, `propagators/asymptotic.py`,
+  `optimize/core.py`, `io/prescriptions.py`,
+  `analysis/core.py`).  Pure mechanical reorganisation; no
+  public API change.
+* Library-wide default-config knob resolver rollout (`set_default_
+  wave_propagator`, `set_default_dy`, `set_default_real_dtype`
+  remain API-only at v5.0; the v4.16.3 one-shot UserWarning stays
+  in place).
+* `MCF.coherence_at(...)` partial-coherence object.
+* Off-axis conic in surface frame.
+* 26 formula-3 (polynomial) glass coefficients.
+* 5 new examples (multi-config / zoom, tolerancing, coronagraph
+  workflow, AO closed-loop, ghost / stray-light).
+* 57-file `test_audit_fixes_*` consolidation into topical homes.
+
+---
+
 ## [4.16.3] — 2026-05-20
 
 **Closes the v4.16.2 audit

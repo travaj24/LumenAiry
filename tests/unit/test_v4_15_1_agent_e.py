@@ -235,7 +235,7 @@ class TestE2SystemEvaluateMixedShape:
         }
         src = Source.gaussian(N=64, dx=40e-6, wavelength=587.6e-9, w0=2e-3)
         with pytest.raises(ValueError) as info:
-            la.system.evaluate(rx, src)
+            la.propagators.system.evaluate(rx, src)
         msg = str(info.value).lower()
         # Diagnostic must name BOTH shapes so the user knows which
         # keys to strip.
@@ -300,7 +300,7 @@ class TestE3SystemEvaluateZemaxBranch:
         src = Source.gaussian(N=64, dx=40e-6, wavelength=587.6e-9, w0=2e-3)
         with warnings.catch_warnings():
             warnings.simplefilter('ignore', UserWarning)
-            result = la.system.evaluate(rx, src)
+            result = la.propagators.system.evaluate(rx, src)
         assert isinstance(result, PropagationResult), (
             f"P2-NEW-A: system.evaluate must return PropagationResult "
             f"for the Zemax branch; got {type(result).__name__}")
@@ -501,10 +501,10 @@ class TestE5P3CodegenMajorVersionWarning:
             style='unrolled')
         # The upper-bound check uses `>= (X, 0, 0)` with X = next
         # major.  The lower-bound check uses `< (a, b, c)`.
-        assert ('>= (5, 0, 0)' in script or '>=(5, 0, 0)' in script
-                or '>= (5,0,0)' in script), (
+        assert ('>= (6, 0, 0)' in script or '>=(6, 0, 0)' in script
+                or '>= (6,0,0)' in script), (
             "P3-2: unrolled script missing upper-bound "
-            "major-version check `>= (5, 0, 0)`; got first 80 "
+            "major-version check `>= (6, 0, 0)`; got first 80 "
             "lines:\n" + '\n'.join(script.split('\n')[:80]))
         assert 'UserWarning' in script, (
             "P3-2: unrolled script must emit UserWarning on "
@@ -524,10 +524,10 @@ class TestE5P3CodegenMajorVersionWarning:
             source_sigma=2e-3, output_path=None,
             include_plotting=False, include_analysis=False,
             style='system')
-        assert ('>= (5, 0, 0)' in script or '>=(5, 0, 0)' in script
-                or '>= (5,0,0)' in script), (
+        assert ('>= (6, 0, 0)' in script or '>=(6, 0, 0)' in script
+                or '>= (6,0,0)' in script), (
             "P3-2: system-style script missing upper-bound "
-            "major-version check `>= (5, 0, 0)`")
+            "major-version check `>= (6, 0, 0)`")
         assert 'UserWarning' in script, (
             "P3-2: system-style script must emit UserWarning on "
             "major-version bump")

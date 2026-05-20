@@ -388,7 +388,7 @@ _V4_14_2_EXPECTED_PAIRS = [
      '_ER_KERNEL_CACHE', '_ER_KERNEL_CACHE_LOCK'),
     ('lumenairy.analysis.phase_retrieval',
      '_HIO_KERNEL_CACHE', '_HIO_KERNEL_CACHE_LOCK'),
-    ('lumenairy.system',
+    ('lumenairy.propagators.system',
      '_PROPAGATE_SYSTEM_JAX_CACHE',
      '_PROPAGATE_SYSTEM_JAX_CACHE_LOCK'),
     ('lumenairy.raytrace.jax_trace',

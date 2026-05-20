@@ -616,7 +616,7 @@ class TestPropagateThroughSystemJaxGradSafe:
         """
         import jax
         import jax.numpy as _jnp
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )
@@ -667,7 +667,7 @@ class TestPropagateThroughSystemJaxGradSafe:
         """
         import jax
         import jax.numpy as _jnp
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )

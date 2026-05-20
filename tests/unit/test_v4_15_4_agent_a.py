@@ -1,4 +1,4 @@
-"""v4.15.4 / Agent A — regression tests for the 6 newly-guarded
+"""v4.15.4 / Agent A â€” regression tests for the 6 newly-guarded
 entry points that the v4.15.3 audit (3-way agent convergence)
 identified as siblings missed by the v4.15.3 walker scope.
 
@@ -77,7 +77,7 @@ def test_propagate_through_system_jax_rejects_mcf():
     canonical v4.16-deferred message.
     """
     pytest.importorskip('jax')
-    from lumenairy.system import propagate_through_system_jax
+    from lumenairy.propagators.system import propagate_through_system_jax
 
     mcf = _make_mcf()
     elements = [{'type': 'propagate', 'z': 0.0}]
@@ -98,7 +98,7 @@ def test_propagate_through_system_jax_rejects_3d_ensemble():
     with the iterate-over-ensemble hint when handed a 3-D ensemble.
     """
     pytest.importorskip('jax')
-    from lumenairy.system import propagate_through_system_jax
+    from lumenairy.propagators.system import propagate_through_system_jax
 
     ensemble = _make_3d_ensemble()
     elements = [{'type': 'propagate', 'z': 0.0}]
@@ -310,14 +310,14 @@ def test_debye_wolf_psf_rejects_mcf_and_3d_ensemble():
 
 # ============================================================================
 # Walker scope extension pin: v4.15.4's _TARGET_PACKAGES now includes
-# ``lumenairy/analysis`` and the file-at-package-root ``lumenairy/system.py``.
+# ``lumenairy/analysis`` and the file-at-package-root ``lumenairy/propagators/system.py``.
 # This test pins that the package-walk fallback actually discovers files
 # from both new scopes (so a future revert of _TARGET_PACKAGES would fail).
 # ============================================================================
 
 def test_walker_now_visits_system_py_and_analysis_package():
     """The dispatcher meta-pin's walker must now visit
-    ``lumenairy/system.py`` and the ``lumenairy/analysis/``
+    ``lumenairy/propagators/system.py`` and the ``lumenairy/analysis/``
     subpackage.
 
     Pin enforced via two channels:
@@ -342,9 +342,9 @@ def test_walker_now_visits_system_py_and_analysis_package():
         "_TARGET_PACKAGES must include 'lumenairy/analysis' so the "
         "v4.15.3 sibling-gap finding (analysis/ao.py::apply_dm etc.) "
         "cannot recur.")
-    assert 'lumenairy/system.py' in _TARGET_PACKAGES, (
+    assert 'lumenairy/propagators/system.py' in _TARGET_PACKAGES, (
         "_TARGET_PACKAGES must include the file-at-package-root "
-        "'lumenairy/system.py' so the v4.15.3 sibling-gap finding "
+        "'lumenairy/propagators/system.py' so the v4.15.3 sibling-gap finding "
         "(propagate_through_system_jax in the SAME file as the "
         "guarded propagate_through_system) cannot recur.")
 
@@ -357,8 +357,8 @@ def test_walker_now_visits_system_py_and_analysis_package():
         f"Package walk did not yield any file in lumenairy/analysis/. "
         f"Got: {visited_rel}")
     # The system.py file itself
-    assert 'lumenairy/system.py' in visited_rel, (
-        f"Package walk did not yield lumenairy/system.py as a "
+    assert 'lumenairy/propagators/system.py' in visited_rel, (
+        f"Package walk did not yield lumenairy/propagators/system.py as a "
         f"file-at-package-root target. Got: {visited_rel}")
 
     # ---- Pin (c): _walk_entry_points discovers known new entries -------
@@ -367,10 +367,10 @@ def test_walker_now_visits_system_py_and_analysis_package():
         rel = py.relative_to(_REPO_ROOT).as_posix()
         discovered_names.add((rel, node.name))
     # propagate_through_system_jax (system.py)
-    assert ('lumenairy/system.py',
+    assert ('lumenairy/propagators/system.py',
             'propagate_through_system_jax') in discovered_names, (
         "Walker must discover propagate_through_system_jax in "
-        "lumenairy/system.py.")
+        "lumenairy/propagators/system.py.")
     # apply_dm (analysis/ao.py)
     assert ('lumenairy/analysis/ao.py',
             'apply_dm') in discovered_names, (

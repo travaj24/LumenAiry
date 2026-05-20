@@ -10,6 +10,50 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 5.0.0
+
+**Major release.**  v5.0 is the coordinated breaking-change release:
+removes back-compat shims that had been carried 3-9 releases past
+their deprecation, bumps the Python floor to 3.10, moves
+`lumenairy/system.py` under `propagators/`, and adds the CI
+infrastructure (ruff, mypy strict incremental, unit-test PR gate,
+public-API smoke test) that the structural cleanup needs.
+
+**Scope discipline:** the v4.16.x ROADMAP scoped a wider v5.0 (file
+splits, library-wide resolver rollout, MCF object, formula-3
+coefficient ingestion, off-axis conic, 5 new examples, test
+consolidation).  Those non-breaking items move to **v5.1+** so the
+v5.0 diff stays reviewable.  See `Migration-Guide.md` for v5.0
+migration recipes and `ROADMAP.md` for the v5.1 horizon.
+
+### Breaking changes
+
+* **Python 3.10+ required.**  Python 3.9 reached EOL 2025-10.
+* **`lumenairy.system` -> `lumenairy.propagators.system`.**  Public
+  namespace (`la.propagate_through_system(...)`) unchanged; direct
+  imports of the private path require migration.
+* **5 back-compat shims removed**: `lumenairy.analysis.analysis`,
+  `lumenairy.ao`, `lumenairy.io.hdf5`, the pre-v4.12 JAX aperture
+  schema (`radius` / `half_width_x` / `inner_radius` in
+  `propagate_through_system_jax`), and the v4.9 `cosmic_ray_rate`
+  kwarg in `simulate_detector_image`.  Each now raises
+  `ModuleNotFoundError` / `ValueError` / `TypeError` with the
+  migration recipe inline.
+
+### CI gates (NEW)
+
+* `pytest tests/unit -m "not integration"` job (fast PR feedback)
+  across Python 3.10-3.13.
+* `ruff check` lint gate.
+* `mypy --strict` incremental adoption.
+* `tests/test_public_api.py` smoke test: every `__all__` entry is
+  `getattr(lumenairy, name)`-resolvable.
+
+### Test counts
+
+**2858 unit pass / 5 skip / 1 xfail = 2864 collected**; **34/34
+validation pass**.
+
 ## What's new in 4.16.3
 
 **Closes the v4.16.2 audit (`docs/audits/AUDIT_V4_16_2_2026_05_20.md`)

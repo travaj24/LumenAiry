@@ -1,0 +1,77 @@
+name: Unit tests + lint
+
+# v5.0 (audit_v4_13_1 + ROADMAP): fast PR feedback gate.  Runs the
+# unit test suite (-m "not integration") plus ``ruff check`` on every
+# PR.  Lighter than ``validate.yml`` (which exercises the full
+# physics-validation suite via subprocess, ~3-5 minutes); this gate
+# is the first-pass review signal for incoming changes.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  unit:
+    name: Unit tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all]"
+          pip install tomli  # for the 3.10 dispatcher-pin walker path
+
+      - name: Run unit tests
+        run: |
+          python -m pytest tests/unit -m "not integration" -q --tb=short
+
+  lint:
+    name: Ruff lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Ruff check
+        run: ruff check lumenairy/ tests/unit/
+
+  public-api-smoke:
+    name: Public API smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[all]"
+
+      - name: Run public-API smoke
+        run: python -m pytest tests/unit/test_public_api.py -v

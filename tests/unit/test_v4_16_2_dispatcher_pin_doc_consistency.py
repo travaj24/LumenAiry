@@ -178,7 +178,13 @@ _BREAKING_BODY_MARKERS = (
 # * 4.15.2 emits a ``DeprecationWarning`` on the v4.15.1 Schell-family
 #   return-shape break; the migration recipe lives under the v4.15.1
 #   heading (see ``Migration-Guide.md`` ``## 4.15.1`` section).
-_MIGRATION_GUIDE_SIBLING_COVERED = frozenset({'4.15.2'})
+# * 4.16.3 emits a one-cycle ``DeprecationWarning`` on the v4.16.2
+#   ``Constraint.__post_init__`` auto-probe removal; the user-facing
+#   migration recipe ("call ``.validate()`` explicitly") is documented
+#   inline in the warning message itself and in the CHANGELOG v4.16.3
+#   entry.  Soft transitional, not a hard break; no Migration-Guide
+#   section needed.
+_MIGRATION_GUIDE_SIBLING_COVERED = frozenset({'4.15.2', '4.16.3'})
 
 
 def _version_tuple(ver_str: str) -> tuple[int, int, int]:

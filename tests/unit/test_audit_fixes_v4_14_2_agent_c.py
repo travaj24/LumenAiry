@@ -5,7 +5,7 @@ Scope: the 5 cache-host files plus ``propagators/propagation.py``:
 - ``lumenairy/analysis/core.py``           (Zernike basis cache)
 - ``lumenairy/analysis/through_focus.py``  (through-focus JAX scan cache)
 - ``lumenairy/analysis/phase_retrieval.py``(GS / ER / HIO kernel caches)
-- ``lumenairy/system.py``                  (propagate_through_system JAX cache)
+- ``lumenairy/propagators/system.py``                  (propagate_through_system JAX cache)
 - ``lumenairy/raytrace/jax_trace.py``      (trace_jax JAX kernel cache)
 - ``lumenairy/propagators/propagation.py`` (clear_asm_caches scope expansion)
 
@@ -70,7 +70,7 @@ class TestC1LocksPresent:
                           type(threading.Lock()))
 
     def test_propagate_system_jax_cache_lock_present(self):
-        from lumenairy import system as sys_mod
+        from lumenairy.propagators import system as sys_mod
         assert hasattr(sys_mod, '_PROPAGATE_SYSTEM_JAX_CACHE_LOCK')
         assert isinstance(sys_mod._PROPAGATE_SYSTEM_JAX_CACHE_LOCK,
                           type(threading.Lock()))
@@ -231,7 +231,7 @@ class TestC1ConcurrentAccessNoExceptions:
     def test_propagate_system_jax_cache_concurrent(self):
         """Same approach -- direct cache+lock contention without
         requiring JAX."""
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             _PROPAGATE_SYSTEM_JAX_CACHE,
             _PROPAGATE_SYSTEM_JAX_CACHE_LOCK,
             _PROPAGATE_SYSTEM_JAX_CACHE_MAXSIZE,
@@ -326,7 +326,7 @@ class TestC2ClearAsmCachesChainsAll:
         assert len(_THROUGH_FOCUS_SCAN_JAX_CACHE) == 0
 
     def test_clears_propagate_system_jax_cache(self):
-        from lumenairy.system import _PROPAGATE_SYSTEM_JAX_CACHE
+        from lumenairy.propagators.system import _PROPAGATE_SYSTEM_JAX_CACHE
         from lumenairy.propagators.propagation import clear_asm_caches
 
         _PROPAGATE_SYSTEM_JAX_CACHE[('fake-key',)] = lambda: None
@@ -385,7 +385,7 @@ class TestC2ClearAsmCachesChainsAll:
             clear_asm_caches,
         )
         from lumenairy.raytrace.jax_trace import _TRACE_JAX_CACHE
-        from lumenairy.system import _PROPAGATE_SYSTEM_JAX_CACHE
+        from lumenairy.propagators.system import _PROPAGATE_SYSTEM_JAX_CACHE
 
         # Populate every cache that does NOT require JAX.
         _GS_KERNEL_CACHE[('k',)] = lambda: None

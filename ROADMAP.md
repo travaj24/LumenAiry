@@ -1,12 +1,13 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-20 (post-v4.16.3).  v4.16 + v4.17 + v4.18
-ROADMAP scope all shipped in v4.16.0 mega-rollup; v4.16.1 closes the
-v4.16.0 deep audit; v4.16.2 closes the v4.16.1 audit + lands the
-pre-v5.0 prep features; v4.16.3 closes the v4.16.2 audit (V11 walker
-hardening via `tomllib`, Migration-Guide §4.16.2 correction,
-`__polynomial__` sentinel, default-knob honesty warnings).  v5.0 is
-now the immediate horizon.
+**Last updated:** 2026-05-20 (post-v5.0.0).  v4.16.x has shipped;
+v5.0.0 lands the breaking-change content (Python 3.10 floor; 5
+back-compat shims removed; `lumenairy.system` -> `lumenairy.propagators.system`;
+CI gates; public-API smoke test).  v5.0.0 explicitly defers the
+6 large-file splits, library-wide resolver rollout, MCF object,
+formula-3 coefficient ingestion, off-axis conic, 5 missing examples,
+and 57 audit-fix test consolidation -- those items move to the v5.1+
+horizon.  v5.1 is now the immediate horizon.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -21,8 +22,9 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.16.3 baseline (2327 unit tests passing + 5
-  documented skips + 1 documented xfail = 2333 collected).
+- **Library:** v5.0.0 baseline (2858 unit tests passing + 5
+  documented skips + 1 documented xfail = 2864 collected).
+  Python 3.10+ now required.
   v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
   v4.16.1 closes the v4.16.0 deep audit through P3: 4 silent-wrong-
@@ -44,7 +46,9 @@ are preserved in git history; this file is forward-only.
   Designer ships co-versioned inside the library wheel.
 - **Audit closure status:** AUDIT_V4_12_1 through
   AUDIT_V4_16_2 all closed.  AUDIT_V4_13_1 Tier-2/3/4
-  architectural items scoped to v5.0 as noted below.
+  architectural items now scoped to v5.1+ (the v5.0 release
+  shipped breaking changes only; the structural reorganisation
+  follows in v5.1 patch releases).
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
   5).  v4.14.2 migrated 2 shims onto the canonical
   `_deprecation.warn_deprecated_signature` helper with explicit
@@ -130,10 +134,13 @@ The next horizon is v5.0 — major structural release.
 
 ---
 
-## v5.0.0 — Major structural release (breaking changes coordinated)
+## v5.1.0 — Structural reorganisation (deferred from v5.0)
 
-Held back from incremental releases because they're cross-cutting
-and break public-API or test-organisation contracts.
+These items were originally scoped into v5.0 but deferred to v5.1
+so the v5.0.0 release diff stayed reviewable.  None of them are
+breaking changes (the breaking content all landed in v5.0); this
+is the "mechanical cleanup + new features that didn't fit the
+v5.0 window" release.
 
 ### Architecture / housekeeping
 

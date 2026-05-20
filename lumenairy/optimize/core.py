@@ -1054,7 +1054,7 @@ class MatchIdealSystemMerit(MeritTerm):
         return expanded
 
     def _propagate(self, elements, E_in, ctx, wavelength):
-        from ..system import propagate_through_system
+        from ..propagators.system import propagate_through_system
         E_out, _ = propagate_through_system(
             E_in, elements, wavelength, ctx.dx)
         return E_out
@@ -2881,8 +2881,8 @@ class MaxFNumberMerit(MeritTerm):
 
     def evaluate(self, ctx: Any) -> float:
         # 4.10: guard against the ctx.efl = 1e9 sentinel.  Pre-4.10 a
-        # failed ray leg produced fnum = 1e9 / aperture ≈ 1e12, squared
-        # to ≈ 1e24 -- swamping every other merit term in the sum so the
+        # failed ray leg produced fnum = 1e9 / aperture â‰ˆ 1e12, squared
+        # to â‰ˆ 1e24 -- swamping every other merit term in the sum so the
         # optimizer "saw" only this penalty when the ray leg failed.
         if not ctx_is_valid(ctx, 'efl'):
             return self.weight
@@ -3616,7 +3616,7 @@ def design_optimize(parameterization: Any,
         Passed to ``apply_real_lens_traced`` when used.
     z_scan_range : tuple, optional
         (``z_min``, ``z_max``) relative to the nominal back focal
-        length, for the through-focus scan.  Default: ±f/20.
+        length, for the through-focus scan.  Default: Â±f/20.
     z_scan_n : int, default 31
         Points in the through-focus scan.
     jac : 'auto' | 'fd' | callable, default 'auto'

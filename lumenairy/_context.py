@@ -287,7 +287,7 @@ def lumenairy_context(
                     except (ImportError, RuntimeError, AttributeError):
                         pass
                     try:
-                        from .system import clear_propagate_system_jax_cache
+                        from .propagators.system import clear_propagate_system_jax_cache
                         clear_propagate_system_jax_cache()
                     except (ImportError, RuntimeError, AttributeError):
                         pass

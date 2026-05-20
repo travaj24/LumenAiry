@@ -148,7 +148,7 @@ class TestL2JaxDtypeUnification:
         from lumenairy.propagators.propagation import (
             set_default_complex_dtype,
         )
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )
@@ -187,7 +187,7 @@ class TestL2JaxDtypeUnification:
         from lumenairy.propagators.propagation import (
             set_default_complex_dtype,
         )
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )
@@ -222,7 +222,7 @@ class TestL2JaxDtypeUnification:
         from lumenairy.propagators.propagation import (
             set_default_complex_dtype,
         )
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )

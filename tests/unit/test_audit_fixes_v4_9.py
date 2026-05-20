@@ -239,9 +239,12 @@ class TestCosmicRayScaling:
         # bright pixels above the saturation level.
         return np.ones((N, N), dtype=np.complex128)
 
-    def test_legacy_kwarg_deprecation_warns(self):
+    def test_legacy_kwarg_removed_in_v5_0(self):
+        """v5.0 (honest break): the v4.9-deprecated ``cosmic_ray_rate``
+        kwarg was removed.  Callers passing it now hit ``TypeError``
+        (unexpected keyword argument)."""
         E = self._make_field()
-        with pytest.warns(DeprecationWarning, match="cosmic_ray_rate"):
+        with pytest.raises(TypeError, match="cosmic_ray_rate"):
             lm.apply_detector(
                 E, dx_field=5e-6, pixel_pitch=5e-6,
                 exposure_time=1.0, cosmic_ray_rate=5.0,

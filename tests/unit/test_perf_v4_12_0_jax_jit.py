@@ -50,7 +50,7 @@ class TestPropagateThroughSystemJaxJit:
     @pytest.fixture
     def simple_chain(self):
         """A short ASM + lens + aperture chain."""
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )
@@ -96,7 +96,7 @@ class TestPropagateThroughSystemJaxJit:
 
         Uses ``aspheric_lens`` (no JAX handler) -> must raise.
         """
-        from lumenairy.system import (
+        from lumenairy.propagators.system import (
             propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
         )
