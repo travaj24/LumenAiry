@@ -413,11 +413,21 @@ def distortion_grid(
     # a clear error instead of an all-NaN distortion grid.
     _Tx, _Ty = np.meshgrid(ths_rad, ths_rad, indexing='xy')
     _LL = np.sin(_Tx) ** 2 + np.sin(_Ty) ** 2
-    if np.any(_LL >= 1.0):
+    # v5.0.1 (CI fix post-PyPI): floating-point boundary tolerance.
+    # At exactly tx = ty = 45 deg, ``sin(pi/4)**2 * 2`` differs in the
+    # last ULP across libc implementations -- Linux glibc evaluates to
+    # 0.9999999999999998 / Windows MSVCR to 1.0000000000000002, so
+    # a strict ``>= 1.0`` check fired on Windows but not on Linux.
+    # The physical guard intent is "N <= 0 OR N approximately zero
+    # (image-plane transfer blows up)"; widen the threshold by a few
+    # ULP so the guard fires consistently across platforms for any
+    # direction whose L^2 + M^2 is within ~1e-12 of unity.
+    _BOUNDARY_TOL = 1e-12
+    if np.any(_LL >= 1.0 - _BOUNDARY_TOL):
         _bad = []
         for _iy in range(_LL.shape[0]):
             for _ix in range(_LL.shape[1]):
-                if _LL[_iy, _ix] >= 1.0:
+                if _LL[_iy, _ix] >= 1.0 - _BOUNDARY_TOL:
                     _bad.append((float(ths[_ix]), float(ths[_iy])))
         raise ValueError(
             f"distortion_grid: {len(_bad)} of {n_grid * n_grid} field "

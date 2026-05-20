@@ -161,7 +161,21 @@ class TestE1UIModelNoDeprecatedSourceCalls:
         Audits up to AUDIT_V4_15_1 noted this gap explicitly: the UI
         test "does NOT exercise ``build_source`` at runtime under
         ``pytest -W error::DeprecationWarning``".
+
+        v5.0.1 (CI fix post-PyPI): skip when ``PySide6`` is not
+        installed -- ``lumenairy.ui.model`` imports the GUI stack
+        at module level, so this runtime pin can't run without the
+        ``[gui]`` extras.  The static-source-scan sibling pin
+        ``TestE1UIModelNoDeprecatedSourceCalls.test_no_*`` (this
+        same class, above) DOES run without PySide6 and covers the
+        deprecation surface; this parametrised pin is the
+        runtime-only belt-and-suspenders check.
         """
+        pytest.importorskip(
+            'PySide6',
+            reason='lumenairy.ui.model imports PySide6 at module load; '
+                   'install lumenairy[gui] to run this UI runtime pin.',
+        )
         from lumenairy.ui.model import SourceDefinition
         sd = SourceDefinition(
             source_type=source_type,
