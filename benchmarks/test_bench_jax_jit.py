@@ -97,7 +97,11 @@ def test_bench_trace_jax_first_vs_warm(benchmark):
 
 def test_bench_propagate_through_system_jax_first_vs_warm(benchmark):
     """``propagate_through_system_jax`` first call vs 10th call."""
-    from lumenairy.system import (
+    # v5.0 (audit P1-NEW-V3-1): lumenairy.system moved to
+    # lumenairy.propagators.system; legacy aperture schema
+    # (radius/half_width_x/inner_radius) replaced by canonical
+    # NumPy schema (diameter/width_x/inner_diameter).
+    from lumenairy.propagators.system import (
         propagate_through_system_jax,
         _PROPAGATE_SYSTEM_JAX_CACHE,
     )
@@ -107,7 +111,7 @@ def test_bench_propagate_through_system_jax_first_vs_warm(benchmark):
         {'type': 'propagate', 'z': 1e-3, 'bandlimit': True},
         {'type': 'lens', 'f': 5e-3},
         {'type': 'aperture', 'shape': 'circular',
-         'params': {'radius': 200e-6}},
+         'params': {'diameter': 400e-6}},
         {'type': 'propagate', 'z': 5e-3, 'bandlimit': True},
     ]
 

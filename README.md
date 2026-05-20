@@ -10,6 +10,68 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 5.0.1
+
+**Closes the v5.0.0 audit through P3.**  Zero P0; 3 P1 + 5 P2 + 8 P3
+across infrastructure (lint baseline, benchmarks drift, stale "v5.0"
+warning text, missing anti-regression pins, stale docstrings,
+ROADMAP drift).  **Zero physics regressions in 7 consecutive
+releases.**  3 agents, disjoint scopes.  **2889 unit pass / 5 skip /
+1 xfail = 2895 collected**; **34/34 validation pass**.
+
+### P1 closures (3)
+
+* **`set_default_*` UserWarning text v5.0 → v5.1.**  The v4.16.3
+  warning bodies said "Consumer wiring staged for v5.0" but the
+  v5.0 release deferred to v5.1.  At v5.0 HEAD users saw a warning
+  promising the bug was fixed "in v5.0" — *which IS v5.0*.
+  v5.0.1 updates the warning text + pinning test to cite v5.1.
+* **`benchmarks/test_bench_jax_jit.py` double-break fixed** —
+  used both the old `lumenairy.system` path (now
+  `lumenairy.propagators.system`) and the pre-v4.12 JAX aperture
+  schema (now removed).  Benchmarks aren't in unit-CI scope so
+  this slipped through v5.0.
+* **CI lint baseline: 4 real F821 forward-reference bugs fixed**
+  in `lumenairy/algebra/base.py` and `lumenairy/propagators/system.py`
+  via proper `TYPE_CHECKING` guards.  Lint job promoted to
+  advisory mode (`continue-on-error: true`); cosmetic 692-error
+  cleanup is a v5.1 mechanical-work item.
+
+### P2 closures (5)
+
+* `simulate_detector_image` → `apply_detector` doc-naming
+  consistency (the function is `apply_detector`; old name never
+  existed).
+* **5 shim-removal anti-regression pins** added — v5.0 only
+  pinned `lumenairy.analysis.analysis`; the other 4 closures
+  (`lumenairy.ao`, `lumenairy.io.hdf5`, top-level
+  `lumenairy.system`, JAX aperture legacy schema,
+  `cosmic_ray_rate` kwarg) now have parallel pins.
+* ROADMAP v5.1 section refresh — stripped v5.0-shipped items;
+  documented the 3 `apply_*_lens` re-exports preserved by design.
+* 2 stale docstrings fixed (`detector.py` `cosmic_ray_rate`
+  block; `propagators/system.py:582` `la.system.evaluate`
+  example).
+* `[tool.mypy]` gains `follow_imports = "silent"` (config prep;
+  CI activation deferred to v5.1).
+
+### P3 closures (8)
+
+* CHANGELOG `__all__` arithmetic (533 entries via 536 smoke tests,
+  not 536 entries).
+* Negative counter-pin for `test_public_api.py`.
+* Unreachable post-raise code removed.
+* MCF deferral clarification (`PartialCoherenceMCF` already
+  shipped v4.15.1; v5.1 adds the shorter `lumenairy.MCF`
+  top-level alias).
+* Python 3.14 classifier dropped (CI is 3.10-3.13).
+* Various stale-comment refreshes.
+
+### Test counts
+
+A=4, B=6, C=21.  Sum: **31**.  Final 2889 unit pass / 5 skip / 1
+xfail = 2895 collected; 34/34 validation.
+
 ## What's new in 5.0.0
 
 **Major release.**  v5.0 is the coordinated breaking-change release:
@@ -36,7 +98,7 @@ migration recipes and `ROADMAP.md` for the v5.1 horizon.
   `lumenairy.ao`, `lumenairy.io.hdf5`, the pre-v4.12 JAX aperture
   schema (`radius` / `half_width_x` / `inner_radius` in
   `propagate_through_system_jax`), and the v4.9 `cosmic_ray_rate`
-  kwarg in `simulate_detector_image`.  Each now raises
+  kwarg in `apply_detector`.  Each now raises
   `ModuleNotFoundError` / `ValueError` / `TypeError` with the
   migration recipe inline.
 

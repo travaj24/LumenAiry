@@ -86,7 +86,12 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
             msg = str(uw[0].message)
             assert 'set_default_wave_propagator' in msg
             assert 'API-only' in msg or 'no library consumer' in msg
-            assert 'v5.0' in msg
+            assert 'v5.1' in msg, (
+                f"Warning must cite v5.1 (the actual deferral target "
+                f"post-v5.0).  v5.0.1 audit P1-NEW-F1-2 closure: the "
+                f"v4.16.3 warning text said 'v5.0' but the v5.0 release "
+                f"explicitly deferred the rollout to v5.1+.  Got msg: "
+                f"{msg!r}")
         finally:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
@@ -175,7 +180,12 @@ class TestSetDefaultDyNoConsumerWarning:
             msg = str(uw[0].message)
             assert 'set_default_dy' in msg
             assert 'API-only' in msg or 'no library consumer' in msg
-            assert 'v5.0' in msg
+            assert 'v5.1' in msg, (
+                f"Warning must cite v5.1 (the actual deferral target "
+                f"post-v5.0).  v5.0.1 audit P1-NEW-F1-2 closure: the "
+                f"v4.16.3 warning text said 'v5.0' but the v5.0 release "
+                f"explicitly deferred the rollout to v5.1+.  Got msg: "
+                f"{msg!r}")
         finally:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
@@ -458,10 +468,12 @@ class TestMigrationGuideNoBrokenRecipe:
                 or 'api only' in section_l
                 or 'no library consumer' in section_l
                 or 'zero downstream consumer' in section_l
-                or 'staged for v5.0' in section_l), (
+                or 'staged for v5.0' in section_l
+                or 'staged for v5.1' in section_l), (
             "Migration-Guide.md §4.16.2 must include an honest "
             "limitation note that the wave-propagator / dy knobs are "
-            "API-only at v4.16.2/v4.16.3")
+            "API-only at v4.16.2 through v5.0.x (v5.0.1 corrects the "
+            "deferral target from v5.0 to v5.1 per audit P1-NEW-F1-2)")
 
 
 # ============================================================================

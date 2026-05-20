@@ -149,7 +149,7 @@ Ohara S-, CDGM Sellmeier-2 entries, and v4.16.2+ formula-3 entries
 as they're ingested) work on a minimal install without the
 extras.
 
-## 4.16.2 -- Default-config knobs (API-only; v5.0 rollout)
+## 4.16.2 -- Default-config knobs (API-only; v5.1 rollout)
 
 Three new library-wide setter functions land alongside the existing
 `set_default_complex_dtype`:
@@ -160,20 +160,20 @@ Three new library-wide setter functions land alongside the existing
   `in_dtype is None` path); full library-wide rollout follows in v5.0.
 * `set_default_wave_propagator(name)` -- default `wave_propagator`
   for `propagate_through_system` / `apply_real_lens` / etc.
-  **API ONLY in v4.16.2/v4.16.3**: stored but not yet read by any
+  **API ONLY in v4.16.2 through v5.0.x**: stored but not yet read by any
   library code.  Setter emits a one-shot `UserWarning` (v4.16.3+).
 * `set_default_dy(value)` -- default anamorphic grid spacing.
-  **API ONLY in v4.16.2/v4.16.3**: same status as
+  **API ONLY in v4.16.2 through v5.0.x**: same status as
   `set_default_wave_propagator`.
 
-> **v4.16.2/v4.16.3 limitation note.**  Two of the three new knobs
+> **v4.16.2 / v4.16.3 / v5.0 / v5.0.1 limitation note.**  Two of the three new knobs
 > (`set_default_wave_propagator`, `set_default_dy`) store the default
 > but have **zero downstream consumers** in `lumenairy/` at v4.16.2
 > ship.  Entry points like `apply_real_lens` continue to hardcode
 > `wave_propagator='asm'` and accept `wave_propagator=...` / `dy=...`
 > as per-call keyword arguments.  The library-wide resolver rollout
 > that makes these setters actually steer the default at every entry
-> point is staged for v5.0 alongside the file-split work.  Until
+> point is staged for v5.1 alongside the file-split work.  Until
 > then, the setters store the value the getter reads back, but
 > downstream propagator dispatch is unaffected.  v4.16.3+ surfaces
 > this honestly via a one-shot `UserWarning` from each setter.
@@ -195,7 +195,7 @@ la.set_default_complex_dtype(np.complex64)
 la.set_default_real_dtype(np.float32)
 
 # Per-call `wave_propagator=` still required until v5.0 (the setter
-# is API-only at v4.16.2/v4.16.3; see limitation note above):
+# is API-only at v4.16.2 / v4.16.3 / v5.0 / v5.0.1; see limitation note above):
 field = la.apply_real_lens(field, prescription=pres, wavelength=wl,
                             dx=dx, wave_propagator='fresnel')
 field = la.apply_real_lens_traced(field, ..., wave_propagator='fresnel')
@@ -272,7 +272,7 @@ deprecation cycle are removed in v5.0:
   recipe inline.  Migration: double the value and rename
   (`radius=r` -> `diameter=2*r`, `inner_radius=ri` ->
   `inner_diameter=2*ri`, etc.).
-* `simulate_detector_image(..., cosmic_ray_rate=...)` -- v4.9
+* `apply_detector(..., cosmic_ray_rate=...)` -- v4.9
   deprecated kwarg.  **Removed.**  The legacy `cosmic_ray_rate`
   did not scale with detector area or exposure time.  Migrate:
   `cosmic_ray_rate=R` -> `cosmic_ray_rate_per_m2_per_s=R/A/T`

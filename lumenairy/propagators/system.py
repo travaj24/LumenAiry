@@ -13,9 +13,18 @@ from __future__ import annotations
 import threading
 import warnings
 from collections import OrderedDict
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
+
+if TYPE_CHECKING:
+    # v5.0.1 (audit P1-NEW-V4-1): TYPE_CHECKING guard for forward references
+    # to ``Source`` and ``PropagationResult`` in ``evaluate(...)``.  Both
+    # are imported lazily inside the function body to avoid top-level
+    # circular dependencies; ruff F821 still needs a typing-time binding
+    # so the string-quoted annotations resolve.
+    from ..sources import Source
+    from .result import PropagationResult
 
 from .propagation import (
     angular_spectrum_propagate,
@@ -579,7 +588,7 @@ def evaluate(
     >>> rx = la.load_zemax_zmx('AC254-200-C.zmx')
     >>> src = la.Source.gaussian(
     ...     N=512, dx=10e-6, wavelength=632.8e-9, w0=5e-3)
-    >>> result = la.system.evaluate(rx, src)
+    >>> result = la.evaluate(rx, src)
     >>> result.field.shape
     (512, 512)
     """
@@ -929,9 +938,8 @@ def _resolve_aperture_params(elem: Dict[str, Any]
                 'inner_radius/outer_radius',
                 "params={'inner_diameter': 2*inner_radius, "
                 "'outer_diameter': 2*outer_radius}")
-            return ('annular',
-                    (float(r_o) if r_o is not None else float('inf'),
-                     float(r_i) if r_i is not None else 0.0))
+        # v5.0.1 (audit P3-NEW-F1-3): unreachable post-_reject_legacy
+        # tuple-return block removed; ``_reject_legacy`` always raises.
         return None
 
     return None
@@ -1241,11 +1249,12 @@ def propagate_through_system_jax(E_in: np.ndarray,
             E = E * jnp.exp(-1j * k0 * r2 / (2.0 * f))
 
         elif etype == 'aperture':
-            # Resolve to canonical half-extents accepting both the
-            # NumPy schema (diameter / width_x / inner_diameter) and
-            # the legacy JAX-only schema (radius / half_width_x /
-            # inner_radius), with a one-shot deprecation warning on
-            # the latter (B1-1 fix).
+            # Resolve to canonical half-extents from the NumPy schema
+            # (diameter / width_x / inner_diameter).  v5.0: the legacy
+            # JAX-only schema (radius / half_width_x / inner_radius)
+            # was removed; legacy keys now raise ValueError inside
+            # ``_resolve_aperture_params`` with the migration recipe
+            # inline.  See Migration-Guide.md §5.0.0.
             xc = elem.get('xc', 0.0)
             yc = elem.get('yc', 0.0)
             dx_loc = X - xc

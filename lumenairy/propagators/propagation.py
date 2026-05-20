@@ -328,7 +328,7 @@ def set_default_real_dtype(dtype: Any) -> None:
     The change applies to subsequent allocations; existing arrays
     keep their dtype.  v4.16.2 ships representative wirings (e.g.
     ``propagate_ensemble`` accumulator) that honour this default; the
-    full library-wide rollout is staged for v5.0.
+    full library-wide rollout is staged for v5.1.
     """
     global DEFAULT_REAL_DTYPE
     dt = np.dtype(dtype)
@@ -354,7 +354,7 @@ def set_default_wave_propagator(name: str) -> None:
     Consumers that honour this default (e.g. ``apply_real_lens``)
     resolve the name at call time via ``_resolve_default_wave_
     propagator``.  v4.16.2 ships the SET / GET API surface; the full
-    library-wide rollout of resolver wirings is staged for v5.0.
+    library-wide rollout of resolver wirings is staged for v5.1.
     """
     global DEFAULT_WAVE_PROPAGATOR, _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED
     _VALID = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
@@ -368,7 +368,7 @@ def set_default_wave_propagator(name: str) -> None:
             f"{name!r}.  Valid choices: {_VALID}.")
     DEFAULT_WAVE_PROPAGATOR = name
     # v4.16.3 (audit P2-NEW-F1-4): one-shot UserWarning that the knob
-    # is API-only at v4.16.2/v4.16.3 -- no library consumer reads it
+    # is API-only at v4.16.2 / v4.16.3 / v5.0 / v5.0.1 -- no library consumer reads it
     # yet.  Latched at module scope so optimisation loops calling the
     # setter repeatedly don't flood the warning channel.
     if not _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED:
@@ -379,7 +379,7 @@ def set_default_wave_propagator(name: str) -> None:
             "library consumer reads it yet in v4.16.2/v4.16.3 (zero "
             "downstream readers across the lumenairy package).  "
             "Consumer wiring at apply_real_lens / "
-            "apply_real_lens_traced / propagate is staged for v5.0 "
+            "apply_real_lens_traced / propagate is staged for v5.1 "
             "alongside the file-split work.  In the interim, pass "
             "``wave_propagator=`` per-call.  Silence this notice via "
             "``warnings.filterwarnings('ignore', category=UserWarning, "
@@ -403,7 +403,7 @@ def set_default_dy(value: Any) -> None:
     Consumers that honour this default (e.g. ``apply_real_lens``)
     resolve ``dy=None`` -> ``get_default_dy()`` -> ``dx`` at call
     time.  v4.16.2 ships the SET / GET API surface; the full
-    library-wide rollout of resolver wirings is staged for v5.0.
+    library-wide rollout of resolver wirings is staged for v5.1.
     """
     global DEFAULT_DY, _DEFAULT_DY_NO_CONSUMER_WARNED
     if value is None:
@@ -421,7 +421,7 @@ def set_default_dy(value: Any) -> None:
                 f"float, got {v!r}.")
         DEFAULT_DY = v
     # v4.16.3 (audit P2-NEW-F1-4): one-shot UserWarning that the knob
-    # is API-only at v4.16.2/v4.16.3 -- no library consumer reads it
+    # is API-only at v4.16.2 / v4.16.3 / v5.0 / v5.0.1 -- no library consumer reads it
     # yet.  Latched at module scope so optimisation loops calling the
     # setter repeatedly don't flood the warning channel.
     if not _DEFAULT_DY_NO_CONSUMER_WARNED:
@@ -432,7 +432,7 @@ def set_default_dy(value: Any) -> None:
             "consumer reads it yet in v4.16.2/v4.16.3 (zero "
             "downstream readers across the lumenairy package).  "
             "Consumer wiring at apply_real_lens / propagate / etc. is "
-            "staged for v5.0 alongside the file-split work.  In the "
+            "staged for v5.1 alongside the file-split work.  In the "
             "interim, pass ``dy=`` per-call.  Silence this notice via "
             "``warnings.filterwarnings('ignore', category=UserWarning, "
             "module='lumenairy.propagators.propagation')``.",

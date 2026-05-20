@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.0.0"
+version = "5.0.1"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -37,7 +37,11 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
+    # v5.0.1 (audit P3-NEW-V3-3): 3.14 dropped from classifiers --
+    # the canonical CI matrix runs 3.10-3.13 and 3.14 is too new for
+    # the optional accelerator dependencies (numba, jax, pyfftw) to
+    # have published wheels against.  When 3.14 wheels stabilise the
+    # CI matrix grows first, then the classifier returns.
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Image Processing",
 ]
@@ -212,6 +216,20 @@ ignore = [
 # v5.0: mypy --strict incremental adoption.  Starts with the small,
 # self-contained modules per ROADMAP plan; expanding module-by-module
 # in v5.1+.
+#
+# v5.0.1 (audit P2-NEW-V4-2): mypy activation deferred to v5.1
+# alongside the 63-error scope-local cleanup.  At v5.0 ship the
+# strict pass produced ~63 scope-local errors plus ~1889 cascade
+# errors when mypy followed imports into untyped downstream modules
+# (numpy, scipy, matplotlib, plus the un-annotated bulk of
+# ``lumenairy/``).  ``follow_imports = "silent"`` blocks the cascade
+# so a future activation only sees the 63 scope-local errors that
+# the v5.1 cleanup actually owns.  Per-file overrides are NOT needed
+# because the ``files`` whitelist below is already explicit (5
+# modules) -- mypy will not enter any other code from outside that
+# whitelist with ``follow_imports = "silent"``.  No CI wiring at
+# v5.0.1; ``unit-tests.yml`` keeps mypy unwired until v5.1's cleanup
+# lands.
 [tool.mypy]
 python_version = "3.10"
 strict = true
@@ -222,6 +240,10 @@ files = [
     "lumenairy/progress.py",
     "lumenairy/memory.py",
 ]
+# v5.0.1 (audit P2-NEW-V4-2): config preparation only -- prevents the
+# ~1889-error cascade into untyped downstream files so the v5.1
+# scope-local cleanup sees a clean 63-error starting baseline.
+follow_imports = "silent"
 # Everything else stays untyped at v5.0 (no strict checking outside the
 # whitelist).  Expand the ``files`` list as modules are typed.
 ignore_missing_imports = true

@@ -79,25 +79,21 @@ def apply_detector(
         Boolean map of hot pixels: ``True`` pixels are saturated to
         ``full_well`` regardless of incident signal.  Useful for
         modelling a known defect map from detector characterisation.
-    cosmic_ray_rate : float, default 0  *(4.0+; deprecated 4.9)*
-        Expected total cosmic-ray strikes for the whole exposure
-        on the whole array, ignoring detector size and exposure
-        time.  This is the historical (and physically wrong) form:
-        a 4096 × 4096 sensor at 10 s should see ~160× the strikes
-        of a 1024 × 1024 sensor at 1 s for the same camera, but
-        this parameter doesn't scale.  Prefer
-        ``cosmic_ray_rate_per_m2_per_s`` for physically-correct
-        scaling.  Retained for back-compat.
-    cosmic_ray_rate_per_m2_per_s : float, optional  *(4.9+)*
+    cosmic_ray_rate_per_m2_per_s : float, optional  *(4.9+; required in 5.0+)*
         Physically-correct cosmic-ray rate density [strikes per m²
-        per second].  When provided, the expected number of strikes
-        per exposure is computed as
-        ``rate · (n_pixels · pixel_pitch)² · exposure_time``.  At
-        sea level the typical secondary-cosmic-ray flux is ~1 /m²/s;
-        at altitude / in space it scales upward (LEO ~ 10¹/m²/s,
-        deep space ~ 10²/m²/s) -- pick the value appropriate to
-        your detector environment.  Overrides ``cosmic_ray_rate``
-        when both are passed.
+        per second].  The expected number of strikes per exposure is
+        computed as ``rate · (n_pixels · pixel_pitch)² · exposure_time``.
+        At sea level the typical secondary-cosmic-ray flux is ~1 /m²/s;
+        at altitude / in space it scales upward (LEO ~ 10¹ /m²/s,
+        deep space ~ 10² /m²/s) -- pick the value appropriate to
+        your detector environment.
+
+        *Removed in v5.0*: the legacy ``cosmic_ray_rate`` kwarg
+        (deprecated in v4.9; did not scale with detector size or
+        exposure time).  Migrate: ``cosmic_ray_rate=R`` ->
+        ``cosmic_ray_rate_per_m2_per_s=R/A/T`` where
+        ``A = (n_pixels · pixel_pitch)²`` is the detector area and
+        ``T`` is the exposure time.  See Migration-Guide.md §5.0.0.
     cosmic_ray_amp_e : float, default 5e4  *(4.0+)*
         Charge per cosmic-ray strike [electrons].
     bayer_pattern : ``None`` (default) or ``'RGGB'`` / ``'BGGR'`` / ``'GRBG'`` / ``'GBRG'``  *(4.0+)*

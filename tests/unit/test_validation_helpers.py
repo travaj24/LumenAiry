@@ -330,3 +330,99 @@ class TestPackagingHygiene:
         assert hasattr(la, 'list_glasses')
         assert hasattr(la, 'search_glasses')
         assert hasattr(la, 'SELLMEIER_COEFFICIENTS')
+
+
+# ---------------------------------------------------------------------------
+# v5.0.1 -- shim-removal anti-regression pin parity
+#
+# The v5.0 audit (AUDIT_V5_0_0_2026_05_20.md, P2-NEW-F2-1) found that only
+# one of five v5.0 honest-break closures had an anti-regression pin: the
+# ``test_analysis_dot_analysis_shim_removed_in_v5_0`` test above.  The
+# remaining four removals (``lumenairy.ao``, ``lumenairy.io.hdf5``,
+# top-level ``lumenairy.system``, JAX aperture legacy schema,
+# ``apply_detector(cosmic_ray_rate=)`` kwarg) had no pin -- a v5.1
+# maintainer could accidentally re-add any of them without a test failure.
+#
+# This class closes that sibling-gap with one pin per removal, each
+# modeled structurally on the existing analysis-shim pin.  The
+# ``match=`` patterns lock in the migration recipe so the error message
+# itself is regression-tested.
+# audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
+# ---------------------------------------------------------------------------
+
+class TestV5_0_ShimRemovalAntiRegression:
+    """Pins for the v5.0 honest-break closures that lacked
+    anti-regression coverage at v5.0 ship.
+
+    Each test asserts the removal still raises the documented error
+    class with the documented migration-recipe text.  If a future
+    maintainer accidentally re-introduces a removed shim or kwarg,
+    the corresponding test fails immediately.
+    """
+
+    def test_lumenairy_ao_shim_removed_in_v5_0(self):
+        """v5.0 (honest break): the v4.x back-compat shim
+        ``lumenairy.ao`` was removed.  Importing
+        ``DeformableMirror`` from the old top-level path must raise
+        ``ImportError`` / ``ModuleNotFoundError``; callers must use
+        ``lumenairy.analysis.ao`` (or the top-level re-export)."""
+        # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            from lumenairy.ao import DeformableMirror  # noqa: F401
+
+    def test_lumenairy_io_hdf5_shim_removed_in_v5_0(self):
+        """v5.0 (honest break): the v4.x back-compat shim
+        ``lumenairy.io.hdf5`` was removed.  Importing
+        ``save_field_h5`` from the old path must raise
+        ``ImportError`` / ``ModuleNotFoundError``; callers must use
+        ``lumenairy.io.storage`` (or the top-level re-export)."""
+        # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            from lumenairy.io.hdf5 import save_field_h5  # noqa: F401
+
+    def test_lumenairy_system_top_level_removed_in_v5_0(self):
+        """v5.0 (honest break): the top-level ``lumenairy.system``
+        module was moved to ``lumenairy.propagators.system``.  The
+        old top-level path must raise ``ImportError`` /
+        ``ModuleNotFoundError``; the canonical
+        ``lumenairy.propagate_through_system`` top-level facade
+        still works (verified separately via the public-API smoke
+        test)."""
+        # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
+        with pytest.raises((ImportError, ModuleNotFoundError)):
+            from lumenairy.system import propagate_through_system  # noqa: F401
+
+    def test_jax_aperture_legacy_schema_removed_in_v5_0(self):
+        """v5.0 (honest break): the legacy pre-v4.12 JAX-only
+        aperture schema (``params={'radius': ...}``) was deprecated
+        in v4.12 and is REMOVED in v5.0.  ``propagate_through_system_jax``
+        must raise ``ValueError`` whose message names both ``legacy``
+        and ``removed in v5.0`` so the migration recipe is regression-
+        tested alongside the raise."""
+        # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
+        jax = pytest.importorskip('jax')  # noqa: F841
+        from lumenairy.propagators.system import propagate_through_system_jax
+        N, dx, wl = 64, 5e-6, 1.55e-6
+        E = np.ones((N, N), dtype=np.complex64)
+        elements = [
+            {'type': 'aperture', 'shape': 'circular',
+             'params': {'radius': 50e-6}},
+        ]
+        with pytest.raises(ValueError, match=r"legacy.*removed in v5\.0"):
+            propagate_through_system_jax(E, elements, wl, dx)
+
+    def test_apply_detector_cosmic_ray_rate_kwarg_removed_in_v5_0(self):
+        """v5.0 (honest break): the v4.9-deprecated
+        ``cosmic_ray_rate=`` kwarg on ``apply_detector`` was removed
+        in v5.0.  Callers must pass ``cosmic_ray_rate_per_m2_per_s=``
+        instead.  Passing the legacy kwarg must raise ``TypeError``
+        (unexpected keyword argument) -- this is the kwarg-removal
+        analog of a shim removal."""
+        # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
+        E = np.ones((64, 64), dtype=np.complex128)
+        with pytest.raises(TypeError, match="cosmic_ray_rate"):
+            la.apply_detector(
+                E, dx_field=5e-6, pixel_pitch=5e-6,
+                exposure_time=1.0, cosmic_ray_rate=5.0,
+                seed=0,
+            )

@@ -56,3 +56,49 @@ def test_version_string_format():
     assert hasattr(la, '__version__')
     assert re.match(r'^\d+\.\d+\.\d+(a\d+|b\d+|rc\d+)?$', la.__version__), (
         f"__version__ = {la.__version__!r} is not PEP 440 conformant")
+
+
+def test_phantom_name_in_dunder_all_would_be_caught():
+    """Negative counter-pin: prove the public-API smoke assertion is
+    NOT vacuous.
+
+    Injects a synthetic phantom name into ``la.__all__`` that has no
+    backing attribute, then asserts ``hasattr(la, phantom) is False``.
+    The contract under test (``test_every_all_entry_is_resolvable``)
+    would observe this failure path and FAIL -- this test proves the
+    machinery works without leaving the phantom in place.
+
+    Pattern mirrors V11's ``_DISCOVERED_CALLSITES`` counter-pin work
+    from the v4.16.x walker series: every positive smoke assertion
+    deserves a counter-pin proving the assertion isn't trivially
+    satisfied.
+    """
+    # audit closure: P3-NEW-F1-4 (public-API smoke negative counter-pin)
+    phantom = '__lumenairy_phantom_for_audit_counter_pin__'
+    # Sanity: the phantom does NOT collide with a real attribute, and
+    # it is NOT already in __all__ (counter-pin must be idempotent).
+    assert not hasattr(la, phantom), (
+        f"Test invariant violated: {phantom!r} unexpectedly resolves "
+        f"on lumenairy.  Pick a more obscure name.")
+    assert phantom not in la.__all__
+
+    la.__all__.append(phantom)
+    try:
+        # The exact assertion that test_every_all_entry_is_resolvable
+        # would make for ``name=phantom`` -- it MUST observe False
+        # here.  If this ever flips True, the smoke assertion is
+        # vacuous (e.g. someone changed `hasattr` to `name in dir`,
+        # which would silently pass for any string).
+        assert hasattr(la, phantom) is False, (
+            f"Counter-pin failed: {phantom!r} is somehow resolvable on "
+            f"lumenairy -- the public-API smoke test would silently "
+            f"pass a broken __all__.  Investigate before trusting "
+            f"test_every_all_entry_is_resolvable.")
+    finally:
+        # Always clean up so subsequent parametrized smoke runs aren't
+        # contaminated.  Remove only OUR phantom; assert it was there.
+        assert phantom in la.__all__, (
+            "Phantom vanished from la.__all__ mid-test -- another "
+            "test or fixture is mutating __all__ behind our back.")
+        la.__all__.remove(phantom)
+        assert phantom not in la.__all__

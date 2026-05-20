@@ -24,12 +24,14 @@ documentation-surface meta-pattern.
 v4.16.3 hardening (audit AUDIT_V4_16_2_2026_05_20.md):
 
 * P1-NEW-F1-2: replaced the regex-based pyproject parser with
-  ``tomllib`` (``tomli`` fallback on Python 3.9/3.10).  The previous
-  non-greedy ``\\[(.*?)\\]`` capture mis-parsed nested brackets in
-  values like ``jax-gpu = ["jax[cuda12]>=0.4.20"]`` and any group
-  whose body contained a comment that mentioned ``lumenairy[all]``.
-  The walker designed to retire the documentation-surface sibling-
-  gap meta-pattern itself contained that pattern -- v4.16.3 closes.
+  ``tomllib`` (``tomli`` fallback on pre-3.11 interpreters; see
+  the v5.0.1 P3-NEW-F1-1 comment block at the import site for the
+  post-v5.0 floor).  The previous non-greedy ``\\[(.*?)\\]``
+  capture mis-parsed nested brackets in values like ``jax-gpu =
+  ["jax[cuda12]>=0.4.20"]`` and any group whose body contained a
+  comment that mentioned ``lumenairy[all]``.  The walker designed
+  to retire the documentation-surface sibling-gap meta-pattern
+  itself contained that pattern -- v4.16.3 closes.
 * P2-NEW-F2-MED-1: the breaking-change version list driving
   ``test_migration_guide_has_known_version_sections`` is now derived
   from a CHANGELOG ``## [X.Y.Z]`` per-release-block scan rather than
@@ -48,16 +50,21 @@ import pytest
 
 # v4.16.3 (audit P1-NEW-F1-2): tomllib parsing closes the regex
 # mis-parse pattern that V11 was supposed to retire but instead
-# contained.  Python 3.11+ ships ``tomllib`` in the stdlib; on 3.9 /
-# 3.10 (per pyproject ``requires-python = ">=3.9"``) we fall back to
-# the ``tomli`` backport.  ``tomli`` is NOT a hard dev dep, so a
-# missing-import in that interval becomes a clean ``pytest.skip``
-# rather than a hard failure.
+# contained.  Python 3.11+ ships ``tomllib`` in the stdlib; on Python
+# 3.10 (the library floor per pyproject ``requires-python = ">=3.10"``
+# as of v5.0) we fall back to the ``tomli`` backport.  ``tomli`` is
+# NOT a hard dev dep, so a missing-import on 3.10 becomes a clean
+# ``pytest.skip`` rather than a hard failure.
+# v5.0.1 (audit P3-NEW-F1-1): refreshed pre-3.10 references --
+# the library floor moved to 3.10 in v5.0, so the only fallback target
+# is now Python 3.10 (not the broader pre-3.11 interval the
+# v4.16.3 closure had originally documented when the library still
+# supported earlier 3.x versions).
 try:
     import tomllib  # type: ignore[import-not-found]  # Python 3.11+
     _TOMLLIB = tomllib
     _TOMLLIB_SKIP_REASON = None
-except ImportError:  # pragma: no cover -- exercised only on 3.9/3.10
+except ImportError:  # pragma: no cover -- exercised only on Python 3.10
     try:
         import tomli as _TOMLLIB  # type: ignore[import-not-found]
         _TOMLLIB_SKIP_REASON = None
@@ -65,7 +72,7 @@ except ImportError:  # pragma: no cover -- exercised only on 3.9/3.10
         _TOMLLIB = None
         _TOMLLIB_SKIP_REASON = (
             "Neither `tomllib` (Python 3.11+ stdlib) nor `tomli` "
-            "(Python 3.9/3.10 backport) is importable.  "
+            "(Python 3.10 backport) is importable.  "
             "Install `tomli` to run the V11 pyproject-consistency "
             "walker on this interpreter (`pip install tomli`)."
         )
