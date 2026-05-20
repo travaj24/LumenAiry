@@ -57,11 +57,25 @@ jobs:
         # ``-p no:cacheprovider`` avoids writing the pytest cache to
         # the readonly CI filesystem layout.  ``--maxfail=5`` surfaces
         # the first batch of failures clearly instead of running the
-        # full suite under a doomed condition.
+        # full suite under a doomed condition.  stdout/stderr tee'd
+        # to a file so the artifact upload (next step) has something
+        # concrete to surface on failure.
+        shell: bash
         run: |
-          python -m pytest tests/unit -m "not integration" -q --tb=short \
-            -p no:cacheprovider --maxfail=5
+          python -m pytest tests/unit -m "not integration" --tb=short \
+            -p no:cacheprovider --maxfail=5 -v 2>&1 \
+            | tee unit_test_output.txt
+          exit ${PIPESTATUS[0]}
         timeout-minutes: 15
+
+      - name: Upload unit-test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-output-py${{ matrix.python-version }}
+          path: unit_test_output.txt
+          if-no-files-found: warn
+          retention-days: 7
 
   lint:
     name: Ruff lint
