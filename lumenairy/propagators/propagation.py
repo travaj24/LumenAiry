@@ -224,6 +224,132 @@ def get_default_complex_dtype() -> Any:
     return DEFAULT_COMPLEX_DTYPE
 
 
+# ---------------------------------------------------------------------------
+# v4.16.2 (pre-v5.0 prep) -- 3 additional library-wide default-config knobs
+# ---------------------------------------------------------------------------
+#
+# Parallel to ``set_default_complex_dtype`` above.  Each knob:
+#   * stores its value in a module-level global,
+#   * has a paired ``get_default_*`` accessor,
+#   * is validated at set-time (raises ValueError on bad input),
+#   * is consumed via the canonical resolver function (e.g.
+#     ``_resolve_default_dy``) at function entry rather than via the
+#     def-time default-value evaluation pattern (which would freeze
+#     the global at import time and ignore later ``set_default_*``
+#     calls).
+#
+# Consumers honour the knob via the resolver pattern::
+#
+#     def apply_xxx(field, *, dy=None, ...):
+#         dy = _resolve_default_dy(dy)
+#         ...
+#
+# At v4.16.2 ship, the full library-wide rollout of these resolvers is
+# intentionally staged for v5.0 (the file-split release); v4.16.2
+# ships the SET / GET API surface + a representative sample of
+# consumer wirings.
+
+DEFAULT_REAL_DTYPE = np.float64
+
+DEFAULT_WAVE_PROPAGATOR = 'asm'
+
+DEFAULT_DY = None  # None means "match dx"
+
+
+def set_default_real_dtype(dtype: Any) -> None:
+    """Set the library-wide default real precision.
+
+    Parallel to :func:`set_default_complex_dtype` for real-valued
+    arrays (slope grids, intensity accumulators, OPD maps).  Pass
+    ``np.float32`` for ~2x memory headroom (matches the float32 noise
+    floor of the FFT kernels), or ``np.float64`` for double-precision
+    accumulators (the library default).
+
+    The change applies to subsequent allocations; existing arrays
+    keep their dtype.  v4.16.2 ships representative wirings (e.g.
+    ``propagate_ensemble`` accumulator) that honour this default; the
+    full library-wide rollout is staged for v5.0.
+    """
+    global DEFAULT_REAL_DTYPE
+    dt = np.dtype(dtype)
+    if dt not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise ValueError(
+            f"set_default_real_dtype: dtype must be np.float32 or "
+            f"np.float64, got {dt!r}.")
+    DEFAULT_REAL_DTYPE = dt
+
+
+def get_default_real_dtype() -> Any:
+    """Return the currently-configured default real dtype."""
+    return DEFAULT_REAL_DTYPE
+
+
+def set_default_wave_propagator(name: str) -> None:
+    """Set the library-wide default ``wave_propagator`` choice.
+
+    Avoids having to pass ``wave_propagator='gbd'`` (or any non-ASM
+    choice) to every entry point.  Valid names: ``'asm'``, ``'sas'``,
+    ``'fresnel'``, ``'rayleigh_sommerfeld'``, ``'rs'``.
+
+    Consumers that honour this default (e.g. ``apply_real_lens``)
+    resolve the name at call time via ``_resolve_default_wave_
+    propagator``.  v4.16.2 ships the SET / GET API surface; the full
+    library-wide rollout of resolver wirings is staged for v5.0.
+    """
+    global DEFAULT_WAVE_PROPAGATOR
+    _VALID = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
+    if not isinstance(name, str):
+        raise ValueError(
+            f"set_default_wave_propagator: name must be str, got "
+            f"{type(name).__name__}: {name!r}.")
+    if name not in _VALID:
+        raise ValueError(
+            f"set_default_wave_propagator: unknown propagator "
+            f"{name!r}.  Valid choices: {_VALID}.")
+    DEFAULT_WAVE_PROPAGATOR = name
+
+
+def get_default_wave_propagator() -> str:
+    """Return the currently-configured default wave_propagator name."""
+    return DEFAULT_WAVE_PROPAGATOR
+
+
+def set_default_dy(value: Any) -> None:
+    """Set the library-wide default ``dy`` (anamorphic grid spacing).
+
+    Pass ``None`` (the library default) to mean "match ``dx``" -- the
+    classic isotropic-grid behavior.  Pass a positive float to set a
+    library-wide anamorphic spacing without per-call kwarg.
+
+    Consumers that honour this default (e.g. ``apply_real_lens``)
+    resolve ``dy=None`` -> ``get_default_dy()`` -> ``dx`` at call
+    time.  v4.16.2 ships the SET / GET API surface; the full
+    library-wide rollout of resolver wirings is staged for v5.0.
+    """
+    global DEFAULT_DY
+    if value is None:
+        DEFAULT_DY = None
+        return
+    try:
+        v = float(value)
+    except (TypeError, ValueError) as e:
+        raise ValueError(
+            f"set_default_dy: value must be None or a positive float, "
+            f"got {type(value).__name__}: {value!r} ({e!s}).") from None
+    if not (v > 0.0 and np.isfinite(v)):
+        raise ValueError(
+            f"set_default_dy: value must be None or a positive finite "
+            f"float, got {v!r}.")
+    DEFAULT_DY = v
+
+
+def get_default_dy() -> Any:
+    """Return the currently-configured default ``dy`` (None means
+    "match dx").
+    """
+    return DEFAULT_DY
+
+
 def _resolve_jax_complex_dtype(dtype: Any = None) -> Any:
     """Resolve a JAX complex dtype that honours ``set_default_complex_dtype``.
 

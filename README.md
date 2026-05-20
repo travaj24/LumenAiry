@@ -10,13 +10,107 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 4.16.2
+
+**Closes the v4.16.1 audit
+(`docs/audits/AUDIT_V4_16_1_2026_05_19.md`) through P3** plus lands
+the user-requested **pre-v5.0 prep features**.  Audit found zero
+P0; 5 P1 + 8 P2 + 9 P3 split between 3 code-correctness items the
+v4.16.1 verifier audit missed (test pins bypassed the production
+path) and 4 documentation-surface drifts -- the sibling-gap
+meta-pattern v4.16.1 thought it had retired at code surfaces had
+migrated to doc surfaces.  4 agents, disjoint scopes.  **2270 unit
+pass / 5 skip / 1 xfail = 2276 collected** (up from 2198 at v4.16.1;
++78 net); 34/34 validation.
+
+### Code-correctness P1s (3)
+
+* **`_transfer_jax` high-NA `RuntimeWarning` now reaches users.**
+  v4.16.1's `isinstance(np.ndarray)` gate was structurally
+  unreachable in production (JAX 0.4+ `jax.Array` isn't a
+  `np.ndarray` subclass).  Replaced with a duck-typed gate +
+  hoisted eager-only probe at `trace_jax` entry (before the inner
+  `jax.jit` wrapper).  End-to-end integration test pins the
+  production-path firing.
+* **`propagate_ensemble` no longer silently downcasts
+  CuPy / JAX -> NumPy.**  `np.asarray(ensemble)` replaced with
+  `array_namespace` dispatch via `lumenairy.backend`.  GPU / JAX
+  ensembles stay on the backend.
+* **`MultiWavelengthMerit` SUM->AVG one-cycle `FutureWarning`.**
+  v4.16.1's silent semantics change now alerts users (once per
+  process via module-level latch) that existing 3-wavelength
+  weight calibrations may need re-scaling.
+
+### Doc-surface P1s + 11th meta-pin walker (4)
+
+* **README `Required` block** rewritten -- `refractiveindex`
+  moved to `Optional (via [glass] extras)`; quick-install command
+  uses `pip install lumenairy[glass]` instead of force-installing
+  the dep.  Test counts headline corrected.
+* **requirements.txt** rewritten -- `refractiveindex` dropped;
+  `h5py` moved to commented optional section; `zarr>=2.14` -> `>=3.0`;
+  full extras-group enumeration in commented form.
+* **ROADMAP V9 -> V11** -- V10 (cache-registry walker, shipped
+  v4.16.1 but missing from list) + V11 (NEW doc-consistency
+  walker, ships this release) added.
+* **NEW 11th meta-pin walker** at
+  `tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py`.
+  Scans README / requirements.txt / ROADMAP / CHANGELOG for drift
+  against pyproject.toml.  Closes the doc-surface sibling-gap
+  meta-pattern structurally.
+
+### Pre-v5.0 prep features
+
+* **Bundled Sellmeier formula-3 (polynomial) evaluator** at
+  `lumenairy/glass.py`.  Math infrastructure + dispatch wiring
+  ship in v4.16.2 (`_polynomial_index`, `POLYNOMIAL_COEFFICIENTS`
+  registry); per-glass coefficient ingestion for the 26 Hikari /
+  Sumita / formula-3 CDGM entries is staged for v5.0 (requires
+  vendor-source review + n_d cross-check per entry).
+* **3 default-config knobs** (parallel to existing
+  `set_default_complex_dtype`):
+  * `set_default_real_dtype(np.float32 | np.float64)`
+  * `set_default_wave_propagator('asm' | 'fresnel' | 'sas' |
+    'rayleigh_sommerfeld' | 'rs')`
+  * `set_default_dy(None | positive float)`
+  * Plus paired `get_default_*` accessors; all 6 functions
+    exported at top level.
+* **NEW `Migration-Guide.md`** at repo root.  Version-spanning
+  migration recipes for v4.13.0 / v4.15.1 / v4.16.1 / v4.16.2 +
+  forward-section for v5.0.
+
+### Hygiene + remaining P2/P3
+
+* `Constraint.__post_init__` probe -> opt-in `Constraint.validate()`
+  method (was running real user code on every instantiation).
+* Lambda detection -> `pickle.dumps` probe (now catches closures +
+  `functools.partial`).
+* `Constraint` tests in `test_v4_16_0_agent_c.py` migrated to
+  module-level functions.
+* 10th meta-pin walker hardened to require module-level
+  `register_cache_clearer` call.
+* `_resolve_bound` 3-tuple guard.
+* LM bounds method override (`'lm'` -> `'trf'`) now emits a
+  UserWarning.
+* `GLASS_VALIDITY` consistency check accepts numpy scalars.
+* CHANGELOG sentinel line citation `:2974` -> `:3015` (Agent B's
+  ~41-line addition to `optimize/core.py` drifted the
+  `_ZERO_APERTURE_MASK` branch).
+* CHANGELOG headline arithmetic + UserWarning -> RuntimeWarning
+  typo.
+
+### Test counts
+
+A=18, B=16, C=24, D=13+7=20. Sum: 78. Net +78 new tests; final
+2270 pass / 5 skip / 1 xfail = 2276 collected; 34/34 validation.
+
 ## What's new in 4.16.1
 
 **Closes the v4.16.0 deep audit
 (`docs/audits/AUDIT_V4_16_0_DEEP_2026_05_19.md`) through P3** — the
 first audit to actively hunt silent-wrong-answer correctness bugs
 alongside the usual structural / UX cleanup.  4 agents, disjoint
-scopes.  2208 unit tests pass (up from 2106; +102 net); 34/34
+scopes.  2198 unit tests pass (up from 2113; +85 net); 34/34
 validation pass.
 
 ### Correctness bugs (4 fixed)
@@ -96,7 +190,7 @@ validation pass.
 
 ### Test counts
 
-A=11, B=26, C=20+6, D=22, walker=6.  Net +91 new tests; final 2208
+A=11, B=26, C=20+6, D=22 = 85.  Net +85 new tests; final 2198
 unit pass + 5 skip + 1 xfail; 34/34 validation.
 
 ## What's new in 4.16.0
@@ -4084,42 +4178,63 @@ from lumenairy import angular_spectrum_propagate, JonesField
 
 ## Dependencies
 
+Canonical source: `pyproject.toml` `[project.dependencies]` and
+`[project.optional-dependencies]`.
+
 ### Required
 - `numpy` — core numerics
-- `refractiveindex` — glass catalog lookups (only needed if using
-  `get_glass_index`, `apply_real_lens`, or the Thorlabs/Zemax helpers)
+- `scipy` — Zernike decomposition (Householder QR), `design_optimize`,
+  multi-threaded FFTs (`USE_SCIPY_FFT = True`)
+- `matplotlib` — all plotting utilities
+- `psutil` — accurate memory detection (falls back to a 4 GB default
+  without it)
 
-### Optional
-- `scipy` — used by default for multi-threaded FFTs
-  (`USE_SCIPY_FFT = True`, `SCIPY_FFT_WORKERS = -1`), Zernike
-  decomposition (Householder QR), and `design_optimize`
-- `pyfftw` — extra ~10-20% on top of SciPy FFT (opt-in via
-  `op.propagation.USE_PYFFTW = True`); ~2× memory per FFT plan
-- `cupy` — GPU acceleration on **NVIDIA CUDA** or **AMD ROCm**
-  (auto-detected; pass `use_gpu=True` to supported functions).
+### Optional (install via extras)
+- `[glass]` — `refractiveindex>=1.0`.  Extended glass-catalog lookups
+  (Hikari, Sumita, formula-3 CDGM).  v4.16.1 moved this from hard
+  dep to an optional extras group; minimal installs transparently
+  fall back to the bundled Sellmeier (and v4.16.2+ formula-3)
+  evaluators for the 46+ glasses with bundled coefficients.
+- `[fft]` — `pyfftw>=0.13`.  Multi-threaded CPU FFT; extra ~10–20%
+  on top of SciPy FFT.
+- `[gpu]` — `cupy>=11.0`.  GPU acceleration on NVIDIA CUDA or AMD
+  ROCm (auto-detected; pass `use_gpu=True` to supported functions).
   Install the wheel that matches your hardware:
-  `pip install cupy-cuda12x` (CUDA 12.x) or
-  `pip install cupy-rocm-6-1` (ROCm 6.x).  See the
+  `pip install cupy-cuda12x` (CUDA 12.x) or `pip install
+  cupy-rocm-6-1` (ROCm 6.x).  See the
   [Installation wiki page](https://github.com/travaj24/LumenAiry/wiki/Installation#gpu-setup)
   for the full toolkit matrix and known-good GPU families.
-  Intel oneAPI / SYCL backends are not yet wired up because
-  CuPy doesn't ship an oneAPI wheel; the CPU path stays the
-  fallback on that hardware.
-- `astropy` — FITS file I/O for `load_fits_field` / `save_fits_field`
-- `h5py` — HDF5 field storage (`save_field_h5`, `save_planes_h5`, etc.)
-- `matplotlib` — all plotting utilities (`plot_intensity`, `plot_stokes`,
-  etc.) and the `makedammann2d` progress display
+- `[fits]` — `astropy>=5.0`.  FITS file I/O.
+- `[hdf5]` — `h5py>=3.0` + `filelock>=3.0`.  HDF5 field storage.
+- `[zarr]` — `zarr>=3.0` + `filelock>=3.0`.  Zarr storage backend
+  (alternative to HDF5).
+- `[jax]` — `jax>=0.4.20`.  Automatic differentiation (CPU).
+- `[jax-gpu]` — `jax[cuda12]>=0.4.20`.  JAX with CUDA wheels.
+- `[perf]` — `numexpr>=2.8`.  Fused phase-screen multiply
+  (1.5–2× speedup at large N).
+- `[numba]` — `numba>=0.58`.  JIT fastpath for traced-lens Newton-fit.
+- `[multi_objective]` — `pymoo>=0.6`.  NSGA-II for
+  `design_optimize_multi_objective`.
+- `[gui]` — `PySide6` + `pyvista` + `pyvistaqt` + `h5py`.  LumenAiry
+  Designer GUI.
+- `[all]` — every optional accelerator bundled together.
 
-Install the required dependencies:
+Install the core (no glass extension):
 
 ```bash
-pip install numpy refractiveindex
+pip install lumenairy
 ```
 
-Install optional dependencies as needed:
+Add the glass-catalog extension (Hikari / Sumita / formula-3 CDGM):
 
 ```bash
-pip install pyfftw astropy h5py matplotlib
+pip install lumenairy[glass]
+```
+
+Kitchen-sink install:
+
+```bash
+pip install lumenairy[all]
 ```
 
 ## Quick start: which function should I use?

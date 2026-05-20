@@ -552,6 +552,18 @@ def test_bug3_detect_backend_accepts_pathlib_path():
 # ============================================================================
 # Bug 4 -- LM bounds parsing
 # ============================================================================
+#
+# v4.16.2 (audit P3-NEW-F1-8 closure note): scipy's ``least_squares``
+# contract is that ``method='lm'`` does NOT accept bounds; passing
+# both forces a silent switch to ``method='trf'`` at
+# ``optimize/core.py:4190``.  v4.16.2 added a ``UserWarning`` at the
+# override point so users notice.  The Bug 4 tests below pass
+# ``method='lm'`` together with ``bounds=...`` (the original audit
+# scenario was "the LM bound-parsing helper trips on
+# ``None``-endpoints"), so they will now emit the override warning
+# on every call.  The tests' assertions don't depend on warnings,
+# so they continue to pass cleanly; the audit-closure pin for the
+# new warning lives in ``test_v4_16_2_agent_b.py``.
 
 
 def test_bug4_lm_bounds_with_none_lower():

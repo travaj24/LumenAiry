@@ -27,6 +27,8 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
+from ..backend import array_namespace
+
 
 # Canonical string-name -> propagator-callable mapping for the
 # ``propagator='asm'`` / ``'fresnel'`` / ... convenience surface.  The
@@ -74,37 +76,42 @@ def _resolve_propagator(propagator: Union[str, Callable]) -> Callable:
         f"expected one of {_STRING_PROPAGATORS!r} or a callable.")
 
 
-def _coerce_field_from_propagator_return(out: Any) -> np.ndarray:
+def _coerce_field_from_propagator_return(out: Any) -> Any:
     """Unwrap the per-realisation propagator return into a bare 2-D
     field array.
 
-    Some propagators return a bare ``ndarray`` (ASM, RS); others return
-    a ``(E, dx_out, dy_out)`` tuple (Fresnel, Fraunhofer, SAS).
+    Some propagators return a bare array (ASM, RS); others return a
+    ``(E, dx_out, dy_out)`` tuple (Fresnel, Fraunhofer, SAS).
     :class:`PropagationResult` wrappers expose ``.field``.  Anything
     else raises a clear :class:`TypeError`.
+
+    v4.16.2 (audit P1-NEW-F1-2): preserve the backend of the returned
+    field.  Pre-fix every branch coerced through ``np.asarray(...)``,
+    silently transferring CuPy / JAX returns to host NumPy.  Now we
+    return the underlying array as-is (NumPy, CuPy, or eager
+    ``jax.Array``); the per-realisation accumulator runs through the
+    matching ``xp.*`` namespace.
     """
-    if isinstance(out, np.ndarray):
+    # Bare backend array (NumPy / CuPy / JAX) -- duck-typed via .ndim +
+    # .shape + .dtype.
+    if (hasattr(out, 'ndim') and hasattr(out, 'shape')
+            and hasattr(out, 'dtype')):
         return out
     # PropagationResult passthrough (opt-in wrapped return).
     field_attr = getattr(out, 'field', None)
-    if field_attr is not None and isinstance(field_attr, np.ndarray):
+    if (field_attr is not None and hasattr(field_attr, 'ndim')
+            and hasattr(field_attr, 'shape')
+            and hasattr(field_attr, 'dtype')):
         return field_attr
-    # Tuple / list ``(E, dx_out, ...)`` -- accept the leading ndarray.
+    # Tuple / list ``(E, dx_out, ...)`` -- accept the leading array.
     if isinstance(out, (tuple, list)) and len(out) >= 1:
         first = out[0]
-        if isinstance(first, np.ndarray):
+        if (hasattr(first, 'ndim') and hasattr(first, 'shape')
+                and hasattr(first, 'dtype')):
             return first
-    # CuPy / JAX duck-types: anything with .ndim and .shape and a
-    # readable __array__ is acceptable for ensemble accumulation; we
-    # cast via np.asarray.
-    if hasattr(out, 'ndim') and hasattr(out, 'shape'):
-        try:
-            return np.asarray(out)
-        except (TypeError, ValueError):
-            pass
     raise TypeError(
         f"propagate_ensemble: unsupported propagator return type "
-        f"{type(out).__name__}.  Expected a 2-D ndarray, a "
+        f"{type(out).__name__}.  Expected a 2-D array, a "
         f"``(E, dx_out, ...)`` tuple, or a PropagationResult.  Use "
         f"a callable propagator that returns one of these forms.")
 
@@ -244,19 +251,56 @@ def propagate_ensemble(
       of the tuple are ignored.  Callers needing the output pitch
       should call the propagator directly on one realisation to recover
       it.
+    * Backend preservation (v4.16.2 / audit P1-NEW-F1-2): when
+      ``ensemble`` is a CuPy or JAX array, the accumulator runs on the
+      same backend.  Whether the per-realisation propagator preserves
+      that backend depends on the propagator: the canonical
+      ``angular_spectrum_propagate`` / ``fresnel_propagate`` accept and
+      return the input's backend; user-supplied callables are
+      responsible for their own backend handling.
     """
-    if not isinstance(ensemble, np.ndarray):
-        # Tolerate duck-typed array protocols (CuPy, JAX) by attempting
-        # asarray conversion; the per-realisation loop will surface any
-        # incompatibility cleanly at the first propagator call.
+    # v4.16.2 (audit P3-NEW-F1-2): explicit kwargs-collision check.
+    # Pre-fix a caller passing ``propagator_kwargs={'dx': ...}`` plus a
+    # positional ``dx=...`` triggered the bare Python ``TypeError: got
+    # multiple values for keyword argument 'dx'`` -- correct but
+    # confusing.  Raise a domain-level ``ValueError`` with a clear
+    # remediation pointer.
+    if propagator_kwargs is not None:
+        collisions = (set(propagator_kwargs)
+                      & {'dx', 'wavelength'})
+        if collisions:
+            raise ValueError(
+                f"propagate_ensemble: propagator_kwargs contains keys "
+                f"that collide with positional arguments: "
+                f"{sorted(collisions)}.  Pass dx / wavelength only via "
+                f"the top-level kwargs, not propagator_kwargs.")
+
+    # v4.16.2 (audit P1-NEW-F1-2): backend-preserving dispatch.
+    # Pre-fix the duck-typed ``np.asarray(ensemble)`` fallback below
+    # silently transferred CuPy ensembles to host NumPy and forced
+    # concretisation of JAX arrays, defeating any GPU / autodiff
+    # workflow the user built upstream.  Now we detect the backend via
+    # ``array_namespace`` and run the accumulator on the same xp.
+    # Inputs that aren't a NumPy / CuPy / JAX array (e.g. a Python
+    # list of 2-D arrays) fall back to ``np.asarray``; the warning
+    # below documents the coercion.
+    if not (hasattr(ensemble, 'ndim') and hasattr(ensemble, 'shape')
+            and hasattr(ensemble, 'dtype')):
         try:
             ensemble = np.asarray(ensemble)
         except (TypeError, ValueError) as exc:
             raise TypeError(
-                f"propagate_ensemble: ensemble must be a 3-D ndarray; "
+                f"propagate_ensemble: ensemble must be a 3-D array; "
                 f"got type={type(ensemble).__name__!r} which cannot be "
-                f"coerced to ndarray ({exc})."
+                f"coerced to an array ({exc})."
             ) from exc
+    try:
+        xp = array_namespace(ensemble)
+    except TypeError:
+        # Mixed-backend or unrecognised; fall back to NumPy and coerce.
+        ensemble = np.asarray(ensemble)
+        xp = np
+
     if ensemble.ndim != 3:
         raise ValueError(
             f"propagate_ensemble: ensemble must be a 3-D array of shape "
@@ -269,6 +313,17 @@ def propagate_ensemble(
             "propagate_ensemble: at least one of `return_intensity` "
             "or `return_ensemble` must be True (otherwise the call "
             "produces no output).")
+    # v4.16.2 (audit P3-NEW-F1-1): reject empty ensembles cleanly.
+    # ``shape=(0, Ny, Nx)`` passes the ndim check above; pre-fix the
+    # downstream ``I_acc / float(0)`` raised an opaque
+    # ``ZeroDivisionError`` (or NaN-poisoned the result depending on
+    # the dtype).  Surface the empty-ensemble case as a domain-level
+    # ``ValueError`` at the entry point.
+    if ensemble.shape[0] == 0:
+        raise ValueError(
+            "propagate_ensemble: empty ensemble (n_realizations=0).  "
+            "The partial-coherence intensity ``< |E_k|^2 >_k`` is "
+            "undefined without at least one realisation.")
 
     fn = _resolve_propagator(propagator)
     kw = dict(kwargs)
@@ -284,19 +339,37 @@ def propagate_ensemble(
     n_real = ensemble.shape[0]
     Ny, Nx = ensemble.shape[1], ensemble.shape[2]
 
-    # Accumulator buffer for the partial-coherence intensity.  Real
-    # float64 keeps numerical headroom for large-N ensembles where the
-    # per-realisation |E|^2 magnitudes can vary across many orders.
-    I_acc: Optional[np.ndarray] = None
-    if return_intensity:
-        I_acc = np.zeros((Ny, Nx), dtype=np.float64)
+    # Map the input's complex dtype to its real counterpart for the
+    # accumulator.  Falls through to ``float64`` for non-complex or
+    # exotic dtypes.  Using the matching real dtype preserves backend
+    # parity (e.g. JAX's complex64 -> float32 default; CuPy's
+    # complex128 -> float64).
+    in_dtype = getattr(ensemble, 'dtype', None)
+    try:
+        real_dtype = np.dtype(in_dtype).type(0).real.dtype
+    except (TypeError, ValueError):
+        # v4.16.2 (pre-v5.0 prep): honour set_default_real_dtype for
+        # the no-input-dtype fallback path.  Was hardcoded to
+        # ``np.float64`` pre-v4.16.2.
+        from .propagation import get_default_real_dtype
+        real_dtype = get_default_real_dtype()
 
-    ensemble_out: Optional[np.ndarray] = None
+    # Accumulator buffer for the partial-coherence intensity.  Built
+    # on the matching xp so GPU / JAX paths stay on the backend.
+    I_acc: Any = None
+    if return_intensity:
+        I_acc = xp.zeros((Ny, Nx), dtype=real_dtype)
+
+    ensemble_out: Any = None
     if return_ensemble:
-        # Use the same dtype as the input ensemble for the propagated
-        # ensemble buffer; the propagator may upcast (e.g. complex64 ->
-        # complex128) but we honour the caller's storage preference.
-        ensemble_out = np.empty(ensemble.shape, dtype=ensemble.dtype)
+        # Same xp + dtype as the input ensemble.  JAX is immutable so
+        # we collect realisations in a list and stack at the end; the
+        # NumPy / CuPy fast path uses an in-place ``empty`` buffer.
+        if xp is np or (hasattr(xp, '__name__')
+                        and 'cupy' in xp.__name__):
+            ensemble_out = xp.empty(ensemble.shape, dtype=ensemble.dtype)
+        else:
+            ensemble_out = []  # JAX -> list-then-stack
 
     for k in range(n_real):
         out_k = fn(ensemble[k], dx=dx, wavelength=wavelength, **kw)
@@ -319,18 +392,30 @@ def propagate_ensemble(
                 f"discover the output shape, then build an "
                 f"appropriate accumulator yourself.")
         if I_acc is not None:
-            # In-place accumulate to avoid allocating a temporary
-            # per realisation.  abs(E)**2 is the squared modulus.
-            I_acc += np.abs(E_out_k) ** 2
+            # |E|^2 squared modulus.  JAX is immutable so we re-bind
+            # (cheap: the xp.abs+square op is fused inside XLA); the
+            # NumPy / CuPy paths fold into a single in-place op.
+            sq = xp.abs(E_out_k) ** 2
+            if xp is np or (hasattr(xp, '__name__')
+                            and 'cupy' in xp.__name__):
+                I_acc += sq
+            else:
+                I_acc = I_acc + sq
         if ensemble_out is not None:
-            ensemble_out[k] = E_out_k
+            if isinstance(ensemble_out, list):
+                ensemble_out.append(E_out_k)
+            else:
+                ensemble_out[k] = E_out_k
+
+    if isinstance(ensemble_out, list):
+        ensemble_out = xp.stack(ensemble_out, axis=0)
 
     if I_acc is not None:
         # Ensemble average: < |E_k|^2 >_k = sum / n_realizations.
         # This is the canonical Wolf result for partial-coherence
         # propagation of a Schell-family source through a coherent
         # propagator.
-        I_partial: np.ndarray = I_acc / float(n_real)
+        I_partial: Any = I_acc / float(n_real)
 
     if return_intensity and return_ensemble:
         return I_partial, ensemble_out  # type: ignore[return-value]

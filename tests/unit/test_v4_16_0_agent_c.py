@@ -49,6 +49,25 @@ import pytest
 _PYMOO_AVAILABLE = _importlib_util.find_spec('pymoo') is not None
 
 
+# v4.16.2 (audit P2-NEW-F1-3): module-level constraint functions to
+# replace the four ``Constraint(fun=lambda x: ...)`` sites at lines
+# 169, 197, 219, 237 that started emitting a ``UserWarning`` on every
+# construction once the v4.16.1 lambda detector landed.  Suppressing
+# the warning at the test fixture would hide future drift; using
+# module-level functions is the same pickle-safe pattern the
+# warning explicitly recommends.
+def _sum_constraint(x):
+    """``sum(x)`` reduced to a Python float.  Used as the test
+    fixture constraint callable; picklable (module-level def) so
+    no Constraint(...) UserWarning."""
+    return float(np.sum(x))
+
+
+def _first_coord(x):
+    """``float(x[0])`` -- picklable companion to ``_sum_constraint``."""
+    return float(x[0])
+
+
 # ---------------------------------------------------------------------------
 # Shared minimal-parameterisation fixtures.
 # ---------------------------------------------------------------------------
@@ -164,9 +183,10 @@ class TestC1ConstrainedOptimisation:
         )
 
         param, merits = small_quadratic_offset_param
-        # Hard constraint: sum(x) >= 15.
+        # Hard constraint: sum(x) >= 15.  v4.16.2: module-level
+        # _sum_constraint to avoid the lambda-detector UserWarning.
         c = Constraint(
-            fun=lambda x: float(np.sum(x)),
+            fun=_sum_constraint,
             lb=15.0, ub=None,
             label='sum(x) >= 15',
         )
@@ -193,8 +213,10 @@ class TestC1ConstrainedOptimisation:
         )
 
         param, merits = small_quadratic_offset_param
+        # v4.16.2: module-level _sum_constraint to avoid the
+        # lambda-detector UserWarning.
         c = Constraint(
-            fun=lambda x: float(np.sum(x)),
+            fun=_sum_constraint,
             lb=15.0, ub=None, label='sum_constraint')
 
         with pytest.raises(ValueError, match=r'(SLSQP|trust-constr)'):
@@ -214,9 +236,10 @@ class TestC1ConstrainedOptimisation:
         with pytest.raises(TypeError, match=r'callable'):
             Constraint(fun=42.0, lb=0.0, ub=None, label='bad')  # type: ignore[arg-type]
 
-        # Both bounds None.
+        # Both bounds None.  v4.16.2: module-level _sum_constraint
+        # to avoid the lambda-detector UserWarning.
         with pytest.raises(ValueError, match=r'(lb|ub|unbounded|no-op)'):
-            Constraint(fun=lambda x: float(np.sum(x)),
+            Constraint(fun=_sum_constraint,
                        lb=None, ub=None, label='unbounded')
 
     def test_constraint_label_in_progress_output(
@@ -233,8 +256,10 @@ class TestC1ConstrainedOptimisation:
         )
 
         param, merits = small_quadratic_offset_param
+        # v4.16.2: module-level _sum_constraint to avoid the
+        # lambda-detector UserWarning.
         c = Constraint(
-            fun=lambda x: float(np.sum(x)),
+            fun=_sum_constraint,
             lb=15.0, ub=None,
             label='sum_test_label',
         )
@@ -515,8 +540,10 @@ class TestC3MultiObjectivePareto:
         def f1(x): return float(x[0])
         def f2(x): return float(1.0 - np.sqrt(max(x[0], 0.0)))
 
+        # v4.16.2: module-level _first_coord to avoid the
+        # lambda-detector UserWarning.
         c = Constraint(
-            fun=lambda x: float(x[0]),
+            fun=_first_coord,
             lb=0.5, ub=None,
             label='x0 >= 0.5')
 

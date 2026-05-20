@@ -34,6 +34,12 @@ from .propagators.propagation import (
     fraunhofer_propagate,
     set_default_complex_dtype,
     get_default_complex_dtype,
+    set_default_real_dtype,
+    get_default_real_dtype,
+    set_default_wave_propagator,
+    get_default_wave_propagator,
+    set_default_dy,
+    get_default_dy,
     set_asm_cache_size,
     get_asm_cache_size,
     set_fft_plan_cache_size,
@@ -815,7 +821,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "4.16.1"
+__version__ = "4.16.2"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1478,10 +1484,16 @@ __all__ = [
     'to_backend',
     'RandomState',
 
-    # Precision configuration
+    # Precision + default-config knobs
     'set_default_complex_dtype',
     'get_default_complex_dtype',
     'DEFAULT_COMPLEX_DTYPE',
+    'set_default_real_dtype',
+    'get_default_real_dtype',
+    'set_default_wave_propagator',
+    'get_default_wave_propagator',
+    'set_default_dy',
+    'get_default_dy',
     'set_asm_cache_size',
     'get_asm_cache_size',
     'set_fft_plan_cache_size',

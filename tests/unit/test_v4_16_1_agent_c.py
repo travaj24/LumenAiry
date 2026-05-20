@@ -53,6 +53,28 @@ def _two_element_vector_fn(x):
     return np.asarray([1.0, 2.0])
 
 
+# v4.16.2 (audit P2-NEW-F1-2): the following helpers were nested
+# closures inside the test bodies in v4.16.1.  The v4.16.1 lambda
+# detector used ``__name__ == '<lambda>'`` and missed closures (whose
+# ``__name__`` is the inner-def name), so the tests passed under
+# ``filterwarnings('error', UserWarning)``.  The v4.16.2 pickle-probe
+# correctly catches non-picklable closures, which would flip those
+# tests to ERROR.  Promote the helpers to module level so they pickle
+# cleanly and the tests continue to exercise their original intent
+# (probe-failure handling + 0-d ndarray acceptance) without colliding
+# with the pickle-probe.
+def _picky_fn(x):
+    """Rejects the synthetic np.zeros(1) probe; only accepts (5,)."""
+    if x.size != 5:
+        raise ValueError(f"requires 5-element x; got {x.size}")
+    return float(np.sum(x))
+
+
+def _zero_d_fn(x):
+    """Returns a 0-d ndarray -- legitimate scalar-like return."""
+    return np.array(np.sum(x))
+
+
 def test_constraint_scalar_module_level_fun_is_accepted():
     """A scalar-returning module-level fun must construct without
     raising or warning."""
@@ -65,11 +87,23 @@ def test_constraint_scalar_module_level_fun_is_accepted():
 
 
 def test_constraint_vector_return_is_rejected_in_post_init():
-    """A vector-returning fun must raise ``TypeError`` at construction
-    time (the C.1 closure)."""
-    with pytest.raises(TypeError) as excinfo:
-        Constraint(fun=_two_element_vector_fn, lb=0.0, ub=10.0,
+    """A vector-returning fun must raise ``TypeError`` when its shape
+    is checked (the C.1 closure).
+
+    v4.16.2 (audit P2-NEW-F1-1): the v4.16.1 auto-probe in
+    ``__post_init__`` was removed because it ran user code (e.g. a
+    full ray-trace for a BFL constraint) on every instantiation.
+    The shape check now lives in :meth:`Constraint.validate`; call
+    it explicitly to opt in to the v4.16.1 contract.  The test
+    name is preserved for git-blame continuity even though the
+    check is no longer in ``__post_init__`` per se.
+    """
+    # Construction must NOT raise (probe moved to validate()).
+    c = Constraint(fun=_two_element_vector_fn, lb=0.0, ub=10.0,
                    label='vector-bad')
+    # Explicit validate() raises TypeError with the same contract.
+    with pytest.raises(TypeError) as excinfo:
+        c.validate()
     msg = str(excinfo.value)
     assert 'ndarray' in msg
     assert 'scalar' in msg.lower() or '0-d' in msg
@@ -80,10 +114,15 @@ def test_constraint_vector_return_is_rejected_in_post_init():
 def test_constraint_vector_return_message_cites_label():
     """The vector-rejection error message must cite the constraint's
     label so a user can identify which Constraint failed when
-    multiple are defined."""
-    with pytest.raises(TypeError) as excinfo:
-        Constraint(fun=_two_element_vector_fn, lb=0.0, ub=10.0,
+    multiple are defined.
+
+    v4.16.2 (audit P2-NEW-F1-1): the shape check moved from
+    ``__post_init__`` to opt-in :meth:`Constraint.validate`.
+    """
+    c = Constraint(fun=_two_element_vector_fn, lb=0.0, ub=10.0,
                    label='BFL_constraint')
+    with pytest.raises(TypeError) as excinfo:
+        c.validate()
     assert 'BFL_constraint' in str(excinfo.value)
 
 
@@ -91,31 +130,41 @@ def test_constraint_probe_failure_does_not_block_construction():
     """If ``fun`` rejects the probe ``np.zeros(1)`` input (e.g.
     because it requires a specific parameter-vector shape), the
     Constraint must STILL construct successfully -- the probe is
-    best-effort, not a hard validation gate."""
-    def _picky_fn(x):
-        if x.size != 5:
-            raise ValueError(f"requires 5-element x; got {x.size}")
-        return float(np.sum(x))
+    best-effort, not a hard validation gate.
 
-    # Probe will raise; __post_init__ must catch and proceed.
+    v4.16.2 (audit P2-NEW-F1-1): the probe moved from ``__post_init__``
+    to opt-in :meth:`Constraint.validate`.  Construction is therefore
+    trivially side-effect-free; we additionally exercise validate()
+    explicitly to pin the probe's best-effort exception-swallowing.
+    v4.16.2 (audit P2-NEW-F1-2): ``_picky_fn`` promoted to module
+    scope so the new pickle-probe doesn't flag it.
+    """
     with warnings.catch_warnings():
         warnings.simplefilter('error', UserWarning)  # any warn fails
         c = Constraint(fun=_picky_fn, lb=0.0, ub=1.0,
                        label='picky')
     assert c.fun is _picky_fn
+    # Explicit validate() must also swallow the picky exception.
+    c.validate()
 
 
 def test_constraint_zero_d_ndarray_return_is_accepted():
     """A fun that returns a 0-d ndarray (``np.array(3.14)``) is a
     legitimate scalar-like return and must NOT trigger the
-    vector-rejection."""
-    def _zero_d_fn(x):
-        return np.array(np.sum(x))  # 0-d ndarray
+    vector-rejection.
 
+    v4.16.2 (audit P2-NEW-F1-1): shape-check moved to opt-in
+    :meth:`Constraint.validate`; verify both construction (no
+    warning) AND explicit validate() (no TypeError).
+    v4.16.2 (audit P2-NEW-F1-2): ``_zero_d_fn`` promoted to module
+    scope so the new pickle-probe doesn't flag it.
+    """
     with warnings.catch_warnings():
         warnings.simplefilter('error', UserWarning)  # any warn fails
         c = Constraint(fun=_zero_d_fn, lb=0.0, ub=10.0, label='0d')
     assert c.fun is _zero_d_fn
+    # Explicit validate() must also accept the 0-d ndarray return.
+    c.validate()
 
 
 # ===========================================================================

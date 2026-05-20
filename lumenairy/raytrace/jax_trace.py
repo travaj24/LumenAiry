@@ -509,15 +509,15 @@ def _transfer_jax(state, thickness, n_medium):
     surface transverse error and points users at the NumPy
     ``trace(...)`` path.  The warning is emitted at most once per
     Python process to avoid log-spam in tight forward loops; clear
-    via ``_reset_transfer_jax_warning()``.  The check itself is
-    skipped under JAX tracing -- inspecting tracer values mid-trace
-    would either fail with ``ConcretizationTypeError`` (eager
-    ``float()`` cast) or silently no-op (the conditional collapses
-    inside the traced graph).  The audit's recommended approach
-    "emit warning during eager execution but skip during tracing"
-    is implemented via an explicit type check: only NumPy
-    ``ndarray`` direction-cosines trigger the eager check; JAX
-    tracer leaves skip past.
+    via ``_reset_transfer_jax_warning()``.
+
+    v4.16.2 (audit P1-NEW-F1-1): the v4.16.1 eager-mode gate used
+    ``isinstance(direction_n, np.ndarray)`` which is structurally
+    unreachable in the production user flow -- :func:`make_jax_ray_state`
+    builds ``state.N`` via ``jnp.asarray(...)`` (``jax.Array``, NOT a
+    ``np.ndarray`` subclass).  Replaced with a duck-typed concreteness
+    probe (``np.asarray(...)`` succeeds for both NumPy arrays and eager
+    ``jax.Array``; raises ``TracerArrayConversionError`` on tracers).
     """
     _maybe_warn_transfer_jax_high_na(state.N, thickness)
     new_x = state.x + state.L * thickness
@@ -561,22 +561,35 @@ def _maybe_warn_transfer_jax_high_na(direction_n, thickness):
     -----
     Implementation detail: we deliberately avoid ``jnp.min(...).item()``
     inside the JAX trace path -- ``.item()`` would force concretisation
-    and trigger ``ConcretizationTypeError`` under ``jax.jit``.  The
-    function's argument types (NumPy vs JAX tracer) are stable across
-    each call -- the eager NumPy forward-trace path always sees a
-    NumPy ndarray here, and the jit-compiled / grad-traced path sees a
-    JAX tracer.  The ``isinstance(..., np.ndarray)`` predicate cleanly
-    separates these two regimes.
+    and trigger ``ConcretizationTypeError`` under ``jax.jit``.
+
+    v4.16.2 (audit P1-NEW-F1-1): the v4.16.1 gate used
+    ``isinstance(direction_n, np.ndarray)`` to separate the eager-NumPy
+    path from the JAX tracer path.  That predicate was correct in
+    principle but unreachable in the production user flow:
+    :func:`make_jax_ray_state` materialises ``state.N`` via
+    ``jnp.asarray(...)``, yielding a ``jax.Array`` -- NOT a subclass of
+    ``np.ndarray`` since JAX 0.4+.  Every ``trace_jax(...)`` call
+    therefore short-circuited the gate before the high-NA check could
+    fire.  The v4.16.1 B.5 tests pinned the warning by constructing
+    ``JaxRayState`` directly with ``np.array(...)``, bypassing the
+    production factory.  The fix is a duck-typed concreteness probe:
+    ``np.asarray(direction_n)`` succeeds for both NumPy arrays and
+    eager ``jax.Array`` instances but raises
+    ``TracerArrayConversionError`` (a subclass of ``TypeError``) on a
+    ``jax.core.Tracer`` -- exactly the eager-vs-traced split the gate
+    needs.
     """
     global _TRANSFER_JAX_WARNING_EMITTED
     if _TRANSFER_JAX_WARNING_EMITTED:
         return
-    # Skip tracers cleanly -- JAX arrays in eager mode are
-    # ``jax.numpy.ndarray`` instances, but JAX tracers (under jit /
-    # grad / vmap) are ``jax.core.Tracer`` subclasses.  We only need
-    # the eager-NumPy case: that's the regime where the user typically
-    # runs a forward trace and would benefit from seeing the warning.
-    if not isinstance(direction_n, np.ndarray):
+    # v4.16.2 (audit P1-NEW-F1-1): JAX-aware gate; was structurally
+    # unreachable for the ``make_jax_ray_state`` -> ``trace_jax`` flow.
+    # ``np.asarray`` succeeds eagerly on NumPy arrays and eager
+    # ``jax.Array``; raises on tracers -- the eager-vs-traced split we
+    # need.  Anything without ``__array__`` (Python scalars, dicts,
+    # mistyped inputs) we treat as non-concrete and skip.
+    if not hasattr(direction_n, '__array__'):
         return
     try:
         n_abs = np.abs(np.asarray(direction_n))
@@ -586,7 +599,8 @@ def _maybe_warn_transfer_jax_high_na(direction_n, thickness):
     except (TypeError, ValueError):
         # Probe failed; bail without warning.  Better to under-report
         # than to surface a confusing exception from the warning
-        # machinery.
+        # machinery.  Tracers raise ``TracerArrayConversionError``
+        # (subclass of ``TypeError``) here -- caught cleanly.
         return
     if not np.isfinite(n_min) or n_min >= _TRANSFER_JAX_NA_WARN_THRESHOLD:
         return
@@ -1138,6 +1152,26 @@ def trace_jax(
     else:
         jp = _build_jax_prescription(
             prescription, wavelength, surface_diffraction)
+
+    # v4.16.2 (audit P1-NEW-F1-1): hoist the high-NA probe to the eager
+    # entry point.  The cached eager path below wraps the inner kernel
+    # in ``jax.jit``, so ``state.N`` inside ``_trace_body_static`` is
+    # always a tracer and the per-call gate in
+    # ``_maybe_warn_transfer_jax_high_na`` short-circuits.  Probing here
+    # -- before any jit / cache layer -- catches the production user
+    # flow where ``initial_state.N`` is an eager ``jax.Array``.  The
+    # latch guarantees one-shot; the duck-typed gate handles the
+    # rare case where a caller pre-wraps in ``jax.jit`` (then
+    # ``initial_state.N`` is already a tracer and the probe skips).
+    if not _TRANSFER_JAX_WARNING_EMITTED:
+        thicks_py = jp.aux[7]
+        if thicks_py:
+            try:
+                t_repr = float(max(abs(float(t)) for t in thicks_py))
+            except (TypeError, ValueError):
+                t_repr = 0.0
+            if t_repr > 0.0:
+                _maybe_warn_transfer_jax_high_na(initial_state.N, t_repr)
 
     # Bypass the jit-cache layer if anything looks like a tracer.  The
     # cached jit'd kernel triggers a JAX bug in lstsq backward (see the

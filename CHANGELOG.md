@@ -2,6 +2,209 @@
 
 All notable changes to the core library are documented here.
 
+## [4.16.2] — 2026-05-20
+
+**Closes the v4.16.1 audit
+(`docs/audits/AUDIT_V4_16_1_2026_05_19.md`) through P3** -- a focused
+follow-up after v4.16.1 hit PyPI.  Audit found zero P0 / 5 P1 / 8 P2
+/ 9 P3, concentrated in (a) 3 code-correctness items the v4.16.1
+verifier audit missed because the test pins themselves bypassed the
+production path, and (b) 4 documentation-surface drifts that proved
+the sibling-gap meta-pattern had migrated from code surfaces
+(covered by V1-V10 walkers) to documentation surfaces (uncovered).
+4 agents in disjoint scopes (`A: JAX gate + ensemble dispatch`,
+`B: optimize/core.py`, `C: pre-v5.0 features + glass P3`,
+`D: doc-surface + 11th walker + Migration-Guide`).
+
+**Also lands the user-requested pre-v5.0 prep features**:
+* Bundled Sellmeier formula-3 (polynomial) evaluator infrastructure
+* 3 library-wide default-config knobs (`set_default_real_dtype`,
+  `set_default_wave_propagator`, `set_default_dy`)
+* `Migration-Guide.md` skeleton at the repo root
+
+**2270 unit tests pass** (collected = 2276 = pass + 5 skip + 1
+xfail), up from 2198 at v4.16.1; +78 net (per-agent: A=18, B=16,
+C=24, D=20 = 78 -- reconciles exactly).  **34/34 validation pass**.
+
+### P1 closures -- code findings (Agent A + Agent B)
+
+* **`_transfer_jax` high-NA warning structurally unreachable
+  in production** (Agent A; audit P1-NEW-F1-1).  The v4.16.1 gate
+  at `jax_trace.py:579` used `isinstance(direction_n, np.ndarray)`,
+  but `make_jax_ray_state(...)` calls `jnp.asarray(N)` which yields
+  `jax.Array` -- NOT a `np.ndarray` subclass since JAX 0.4+.  The
+  gate returned early on every production user-flow call.  Fix:
+  duck-typed gate (`np.asarray(direction_n)` probe; rejects
+  `jax.core.Tracer`), PLUS an eager-only one-shot probe hoisted
+  to the entry of `trace_jax` BEFORE the inner `jax.jit` wrapper
+  (the jit wrapper makes everything inside a Tracer, regardless of
+  the gate).  New integration test calls `trace_jax(...)` with
+  `make_jax_ray_state(N=0.5*np.ones(K))` end-to-end and asserts the
+  RuntimeWarning fires -- closes the production-path gap.
+* **`propagate_ensemble` silently downcasts CuPy/JAX to NumPy**
+  (Agent A; audit P1-NEW-F1-2).  `ensemble.py:253`'s
+  `np.asarray(ensemble)` triggered GPU->CPU transfer (CuPy) or
+  forced concretization (JAX), defeating the docstring's "tolerate
+  duck-typed array protocols" claim.  Fix: `array_namespace`
+  dispatch via `lumenairy.backend`; accumulator built on the
+  matching `xp` so the GPU / JAX paths stay on the backend.  Also
+  rewrites `_coerce_field_from_propagator_return` to preserve
+  backend.
+* **`MultiWavelengthMerit` SUM->AVG one-cycle `FutureWarning`**
+  (Agent B; audit P1-NEW-F1-3).  v4.16.1's SUM->AVG fix was correct
+  but silent -- existing user-calibrated 3-wavelength configs
+  silently dropped 3x.  v4.16.2 emits a one-cycle `FutureWarning`
+  via module-level latch when `len(wavelengths) > 1`, alerting
+  users to re-scale `weight` by `len(wavelengths)` if they tuned
+  against pre-v4.16.1 SUM behavior.  Latch ensures the warning
+  fires only ONCE per process (critical -- without the latch the
+  warning would flood optimization loops).
+* **README -> pyproject.toml dependency declaration sync**
+  (Agent D; audit P1-NEW-F2-HIGH-1).  README's `### Required`
+  block still listed `refractiveindex` as Required + `pip install
+  numpy refractiveindex` as the quick-install command; pyproject
+  moved it to `[glass]` extras in v4.16.1.  Full dependency block
+  rewritten: enumerates each pyproject extras group + `pip install
+  lumenairy[glass]` as the canonical install pattern.
+* **requirements.txt -> pyproject.toml sync** (Agent D; audit
+  P1-NEW-F2-HIGH-2).  Dropped uncommented `refractiveindex>=1.0`;
+  moved `h5py>=3.0` to commented section (it's only in `[hdf5]` /
+  `[gui]` extras); updated commented `zarr>=2.14` -> `zarr>=3.0`
+  to match v4.16.1's floor bump.  Added commented lines for every
+  optional-extras group + header note pointing at pyproject.toml
+  as the canonical source.
+
+### P2 closures (8) -- API consistency + meta-pins + doc hygiene
+
+* **`Constraint.__post_init__` probe -> opt-in `.validate()` method**
+  (Agent B; audit P2-NEW-F1-1).  v4.16.1's probe ran real user code
+  on instantiation (e.g. BFL constraint calling `system_abcd()` on
+  every `Constraint(...)` call).  Moved to opt-in `Constraint.
+  validate()` method; users who relied on the auto-probe call it
+  explicitly.
+* **Lambda warning -> `pickle.dumps` probe** (Agent B; audit
+  P2-NEW-F1-2).  v4.16.1's `__name__ == '<lambda>'` check missed
+  closures (`def inner(x): ...`) and `functools.partial(lambda,
+  ...)`.  Replaced with `pickle.dumps(self.fun)` probe; catches all
+  unpicklable callables.
+* **Existing v4.16.0 Constraint tests updated to module-level
+  functions** (Agent B; audit P2-NEW-F1-3).  Five lambda-Constraint
+  test sites in `test_v4_16_0_agent_c.py` migrated to module-level
+  `_sum_constraint` / `_first_coord` so the v4.16.1 lambda warning
+  doesn't pollute the warning channel.
+* **10th meta-pin walker hardened** (Agent D; audit P2-NEW-F1-4).
+  `_module_has_register_cache_clearer_call` rewritten to require
+  the call appear at **module level**, not nested inside a
+  function / class body / always-False `if` branch.  Canonical
+  top-level `try/except ImportError` enrollment idiom still
+  accepted.  4 new counter-pins (positive + negative) verify the
+  tightening.
+* **`_clear_local_asm_caches` late-binding-lambda registration**:
+  already landed in v4.16.1 (Agent C scope at that release).
+* **ROADMAP V9 -> V11 meta-pin enumeration** (Agent D; audit
+  P2-NEW-F2-MED-1).  "ALL 9 dispatcher meta-pins" -> "ALL 11
+  dispatcher meta-pins"; V10 + V11 entries added.  Updated the
+  sibling-gap retirement claim to cover documentation surfaces too.
+* **CHANGELOG test-count arithmetic** (Agent D; audit
+  P2-NEW-F2-MED-2).  v4.16.1 headline `2208 / +102 / 2106`
+  refreshed to `2198 / +85 / 2113` (collected metric, arithmetic
+  reconciles: 2113 + 85 = 2198 = pass=2192 + skip=5 + xfail=1).
+  Also corrected the Tests + CI tail section.  v4.16.2 audit note
+  added explaining the discrepancy.
+* **CHANGELOG `UserWarning` -> `RuntimeWarning` typo** (Agent D;
+  audit P2-NEW-V2-1).  The v4.16.1 entry's High-NA `_transfer_jax`
+  block said "emits a `UserWarning`" but implementation + tests
+  both use `RuntimeWarning`.
+
+### P3 closures (9)
+
+* `propagate_ensemble` empty 3-D ensemble -> `ValueError` (Agent A)
+* `propagate_ensemble` `dx`/`wavelength` kwargs collision -> clear
+  `ValueError` (Agent A)
+* `_resolve_bound` 3-tuple guard (Agent B)
+* `Constraint.fun` docstring example: lambda -> module-level
+  function (Agent B)
+* LM bounds `lm` -> `trf` override UserWarning added (Agent B)
+* `jax.grad` pin for B.4 dtype probe (Agent A)
+* `propagator_kwargs` precedence pin for B.1 (Agent A)
+* `GLASS_VALIDITY` consistency check accepts numpy scalars
+  (Agent C; audit P3-NEW-F1-4)
+* CHANGELOG sentinel line citation refresh `:2974` -> `:3015`
+  (Agent D)
+
+### NEW -- 11th meta-pin walker (doc-consistency)
+
+`tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py` (7
+tests): closes the v4.16.1-identified documentation-surface
+sibling-gap meta-pattern.  Scans 4 surfaces for drift vs the
+canonical `pyproject.toml`:
+* README.md `Required` block doesn't list optional-extras packages
+* README.md `pip install` command doesn't force optional-extras
+* requirements.txt uncommented lines match pyproject hard deps
+* ROADMAP.md `ALL N meta-pins` count matches V-enumeration
+* CHANGELOG.md v4.16.1 headline arithmetic reconciles
+* Migration-Guide.md exists with known version sections
+
+The sibling-gap meta-pattern is now structurally retired at BOTH
+code surfaces (V1-V10) AND documentation surfaces (V11).
+
+### NEW -- Pre-v5.0 prep features (Agent C)
+
+* **Bundled Sellmeier formula-3 (polynomial) evaluator**.
+  `lumenairy/glass.py`:
+  - NEW `_polynomial_index(wavelength_m, coeffs, glass_name=None)`
+    -- implements refractiveindex.info formula-3:
+    `n^2 = c0 + sum_i c_i * lam_um ** exp_i`.  Subsumes the Schott
+    6-coefficient polynomial form.
+  - NEW `POLYNOMIAL_COEFFICIENTS = {}` -- empty at ship.  v4.16.2
+    lands the evaluator + dispatch wiring; populating the 26
+    catalogue entries (Hikari E-/J-, Sumita K-, 4 CDGM polynomial)
+    requires per-glass vendor-source review + 5e-5 n_d cross-check
+    against refractiveindex.info YAML and is staged for v5.0.
+  - `get_glass_index` dispatch updated: when refractiveindex is
+    unavailable AND the glass is in POLYNOMIAL_COEFFICIENTS,
+    dispatches to `_polynomial_index` before raising ImportError.
+* **3 default-config knobs**, parallel to existing
+  `set_default_complex_dtype`:
+  - `set_default_real_dtype(dtype)` / `get_default_real_dtype()`
+    -- accepts `np.float32` / `np.float64`.
+  - `set_default_wave_propagator(name)` / `get_default_wave_
+    propagator()` -- accepts `'asm'`, `'sas'`, `'fresnel'`,
+    `'rayleigh_sommerfeld'`, `'rs'`.
+  - `set_default_dy(value)` / `get_default_dy()` -- accepts
+    `None` (means "match dx") or a positive finite float.
+  - All 6 functions exported at top level via `lumenairy/__init__.py`.
+  - Representative consumer wiring landed in
+    `propagators/ensemble.py` (no-input-dtype real fallback path
+    honours `get_default_real_dtype()`).  Full library-wide
+    resolver rollout staged for v5.0.
+* **`Migration-Guide.md` skeleton** at repo root.  Version-spanning
+  migration guide for v4.x; sections for v4.13.0 (rcwa.py rename,
+  wavelength-required), v4.15.1 (Schell ensemble return shape),
+  v4.16.1 (MultiWavelengthMerit SUM->AVG, refractiveindex
+  optional), v4.16.2 (default-config knobs).  Forward section for
+  v5.0 itemizing planned migration points.
+
+### Tests + CI
+
+* **2270 pass / 5 skip / 1 xfail = 2276 collected** (up from 2198
+  at v4.16.1; +78 net).  Per-agent breakdown: A=18, B=16, C=24,
+  D=13+7=20.  Sum: 18+16+24+20 = 78 (reconciles).
+* New test modules:
+  * `tests/unit/test_v4_16_2_agent_a.py` (18 tests)
+  * `tests/unit/test_v4_16_2_agent_b.py` (16 tests)
+  * `tests/unit/test_v4_16_2_agent_c.py` (24 tests)
+  * `tests/unit/test_v4_16_2_agent_d.py` (13 tests)
+  * `tests/unit/test_v4_16_2_dispatcher_pin_doc_consistency.py`
+    (7 walker tests -- the 11th meta-pin)
+* CHANGELOG line-citation refresh: `_ZERO_APERTURE_MASK` branch
+  site drifted `:2974` -> `:3015` after Agent B's
+  `MultiWavelengthMerit` `FutureWarning` latch + `Constraint`
+  probe move + lambda pickle-probe (~41 lines added above the
+  sentinel branch).
+
+---
+
 ## [4.16.1] — 2026-05-19
 
 **Closes the v4.16.0 deep audit
@@ -12,9 +215,14 @@ physical-correctness defects surfaced, plus the previously half-shipped
 Schell-model partial-coherence cluster, plus 8 hygiene items.  4 agents
 worked in disjoint scopes (`A: correctness bugs`, `B: Schell + JAX
 paths`, `C: constraints + meta-pins + warn hygiene`, `D: glass + compat
-+ UX`).  **2208 unit tests pass** (up from 2106; +102 net), 5
-documented skips (4 pymoo + 1 ZARR_MKDIR_PATCH), 1 documented xfail;
-**34/34 validation files pass**.
++ UX`).  **2198 unit tests pass** (up from 2113; +85 net) -- of
+those 2198, 2192 actively pass + 5 documented skips (4 pymoo +
+1 ZARR_MKDIR_PATCH) + 1 documented xfail.
+**34/34 validation files pass**.  (v4.16.2 audit P2-NEW-F2-MED-2
+correction: pre-v4.16.2 headline cited 2208 / +102 / baseline 2106 --
+off by 10 / +17 / -7; the corrected numbers (collected = pass +
+skip + xfail) reconcile to the empirical per-agent breakdown
+A=11 + B=26 + C=20+6 + D=22 = 85.)
 
 ### P0 / P1 closures — correctness bugs (Agent A)
 
@@ -90,13 +298,21 @@ sweep confirming no other sites carry the same pattern.
   `getattr(E_in, 'dtype', None)` so the `propagate_through_system_jax`
   path no longer breaks under `jax.jit` / `jax.grad` tracers (which
   refuse the `np.asarray` cast).
-* **High-NA `_transfer_jax` user warning.**
+* **High-NA `_transfer_jax` RuntimeWarning.**
   `lumenairy/raytrace/jax_trace.py`: added an eager-only guard
   (`isinstance(direction_n, np.ndarray)`-gated) that emits a
-  `UserWarning` when `min |N| < 0.95` — the regime where the paraxial
-  small-angle approximation preserved for autodiff stability begins to
-  diverge from the NumPy reference.  Tracer-time path is unchanged
-  (no warning, preserves `jit` / `grad` purity).
+  `RuntimeWarning` when `min |N| < 0.95` — the regime where the
+  paraxial small-angle approximation preserved for autodiff
+  stability begins to diverge from the NumPy reference.  Tracer-time
+  path is unchanged (no warning, preserves `jit` / `grad` purity).
+  (v4.16.2 audit P2-NEW-V2-1: pre-v4.16.2 bullet said "`UserWarning`"
+  -- code + tests use `RuntimeWarning`; corrected.)  (v4.16.2 audit
+  P1-NEW-F1-1: pre-v4.16.2 the `isinstance(np.ndarray)` gate was
+  structurally unreachable in production because `make_jax_ray_state`
+  converts to `jax.Array` which is not a `np.ndarray` subclass since
+  JAX 0.4+; v4.16.2 replaces the gate with a duck-typed
+  `np.asarray(...)` probe + hoists an eager-only check to the
+  `trace_jax` entry before the inner `jax.jit` wrapper.)
 
 ### P2 closures — API consistency + meta-pins (Agent C)
 
@@ -176,8 +392,11 @@ sweep confirming no other sites carry the same pattern.
 
 ### Tests + CI
 
-* **2208 pass / 5 skip / 1 xfail** (up from 2106 pass at v4.16.0;
-  +102 tests across the 4 agents).
+* **2192 pass / 5 skip / 1 xfail = 2198 collected** (up from 2113
+  collected at v4.16.0; +85 net across the 4 agents -- A=11, B=26,
+  C=20+6, D=22).  (v4.16.2 audit P2-NEW-F2-MED-2: pre-v4.16.2
+  headline cited 2208/+102/2106 -- arithmetic broken; refreshed
+  here to use the collected metric, which arithmetic-reconciles.)
 * New test modules:
   * `tests/unit/test_v4_16_1_agent_a.py` (11 tests)
   * `tests/unit/test_v4_16_1_agent_b.py` (26 tests)
@@ -900,10 +1119,12 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/core.py:2974` (was `:2958` pre-v4.16.1
-  Agent A MultiWavelengthMerit `SUM`->`AVG` refactor; was `:2980`
-  pre-v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion;
-  was `:2905` in the v4.15.2 entry).
+  branch now at `optimize/core.py:3015` (was `:2974` pre-v4.16.2
+  Agent B `MultiWavelengthMerit` `FutureWarning` latch + Constraint
+  probe move + lambda pickle-probe; was `:2958` pre-v4.16.1 Agent A
+  `MultiWavelengthMerit` `SUM`->`AVG` refactor; was `:2980` pre-
+  v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion; was
+  `:2905` in the v4.15.2 entry).
 * **Test count reconciliation**:
   `pytest --collect-only` → 1735 collected at v4.15.2 HEAD
   (was reported as "1732 pass + 1 skip + 1 xfail = 1734" in
@@ -1356,17 +1577,20 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/core.py:2974` (the
-  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:2958`
-  pre-v4.16.1 Agent A MultiWavelengthMerit `SUM`->`AVG` refactor
-  (~16 lines added in the merit-aggregation block above the
-  sentinel branch); was `:2980` pre-v4.15.4 Agent B
-  `_PerturbedABCDFallbackSentinel` deletion (~55 lines removed at
-  the top of the sentinel block); and `:2905` pre-v4.15.3
-  sentinel-wiring work.  The remaining sentinel class + singleton
-  (`_ZeroApertureMaskSentinel` / `_ZERO_APERTURE_MASK`) are at
-  `optimize/core.py:2044` and `optimize/core.py:2054` respectively
-  post Agent E's `_Sentinel` base-class refactor.  v4.15.2 (P3):
+  sentinel branch now lives at `optimize/core.py:3015` (the
+  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:2974`
+  pre-v4.16.2 Agent B `MultiWavelengthMerit` `FutureWarning` latch
+  + Constraint-probe move + lambda pickle-probe (~41 lines added
+  above the sentinel branch); was `:2958` pre-v4.16.1 Agent A
+  `MultiWavelengthMerit` `SUM`->`AVG` refactor (~16 lines added in
+  the merit-aggregation block above the sentinel branch); was
+  `:2980` pre-v4.15.4 Agent B `_PerturbedABCDFallbackSentinel`
+  deletion (~55 lines removed at the top of the sentinel block);
+  and `:2905` pre-v4.15.3 sentinel-wiring work.  The remaining
+  sentinel class + singleton (`_ZeroApertureMaskSentinel` /
+  `_ZERO_APERTURE_MASK`) are at `optimize/core.py:2044` and
+  `optimize/core.py:2054` respectively post Agent E's `_Sentinel`
+  base-class refactor.  v4.15.2 (P3):
   citation refreshed after a
   second line-drift pass against the current source supersedes
   the earlier stale citations.

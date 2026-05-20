@@ -287,29 +287,76 @@ def _discover_lru_cache_functions(tree):
 def _module_has_register_cache_clearer_call(tree):
     """True iff the module's AST contains at least one Call node whose
     ``.func`` resolves to ``register_cache_clearer`` (bare-name OR as
-    ``X.register_cache_clearer`` attribute).
+    ``X.register_cache_clearer`` attribute), AND the call appears at
+    **module level** (not nested inside a function / class / always-
+    False ``if`` branch).
 
-    Walks the whole module body (including inside try/except / if
-    blocks); the canonical pattern in v4.16.0 cache-owning modules is:
+    v4.16.2 hardening (audit P2-NEW-F1-4): pre-v4.16.2 this walker
+    walked the entire AST via ``ast.walk(tree)``, returning True on
+    the first match.  A cache-owning module could satisfy the check
+    with the call nested inside ``def some_test_only_function():``,
+    an ``if False:`` branch, or an unreachable ``try/except`` -- the
+    walker couldn't tell the difference.
 
-        try:
-            from .._cache_registry import register_cache_clearer as _register_cache_clearer
-            ...
-            _register_cache_clearer('foo', lambda: ...)
-        except ImportError:
-            pass
-
-    We don't care WHERE the call lives -- only that one is present in
-    the module's source.
+    The hardened walker only accepts the call at module level,
+    optionally inside a top-level ``try/except`` block (the
+    canonical v4.16.0 cache-enrollment idiom) or a top-level ``if``
+    block whose test is NOT a static-False (``False`` literal,
+    ``0``, ``None``).  Calls nested any deeper -- inside function
+    defs, class bodies, or always-False branches -- are rejected.
     """
     # Also accept the aliased name ``_register_cache_clearer`` which is
     # the canonical import-as in the v4.16.0 modules.
     canonical_names = {'register_cache_clearer', '_register_cache_clearer'}
-    for sub in ast.walk(tree):
-        if not isinstance(sub, ast.Call):
-            continue
-        terminal = _attr_terminal(sub.func)
-        if terminal in canonical_names:
+
+    def _stmt_is_or_contains_module_level_call(stmt):
+        """Recursively walk a module-level statement, but stop at
+        function/class boundaries.  Returns True iff the call lives
+        directly at module scope or inside a top-level
+        try/except / if-not-always-False block."""
+        if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)):
+            # Calls nested inside a def/class don't count.
+            return False
+        if isinstance(stmt, ast.If):
+            # Reject always-False branches: ``if False:`` / ``if 0:``
+            # / ``if None:``.  The body of the ``else`` (orelse) IS
+            # acceptable because Python evaluates it instead.
+            test = stmt.test
+            if (isinstance(test, ast.Constant)
+                    and not bool(test.value)):
+                # Always-False -- skip the body, walk orelse only.
+                for s in stmt.orelse:
+                    if _stmt_is_or_contains_module_level_call(s):
+                        return True
+                return False
+            # Otherwise walk both branches.
+            for s in (*stmt.body, *stmt.orelse):
+                if _stmt_is_or_contains_module_level_call(s):
+                    return True
+            return False
+        if isinstance(stmt, ast.Try):
+            # Top-level try is the canonical cache-enrollment idiom.
+            for s in (*stmt.body, *stmt.orelse, *stmt.finalbody):
+                if _stmt_is_or_contains_module_level_call(s):
+                    return True
+            # Skip handlers (the ImportError-pass branch is for
+            # failure, not for the enrollment call).
+            return False
+        # Leaf-level: walk the statement's expression tree for a
+        # qualifying Call.  This walks INTO Call args (so
+        # `foo(register_cache_clearer(...))` would match), but
+        # crucially does NOT walk INTO nested FunctionDef bodies
+        # (those would have been caught above).
+        for sub in ast.walk(stmt):
+            if isinstance(sub, ast.Call):
+                terminal = _attr_terminal(sub.func)
+                if terminal in canonical_names:
+                    return True
+        return False
+
+    for stmt in tree.body:
+        if _stmt_is_or_contains_module_level_call(stmt):
             return True
     return False
 

@@ -76,6 +76,10 @@ from typing import List
 # ---------------------------------------------------------------------------
 import importlib.util as _importlib_util
 import math as _math
+
+# v4.16.2 (audit P3-NEW-F1-4): import numpy at module scope to support
+# numpy-scalar acceptance in GLASS_VALIDITY well-formedness check.
+import numpy as np
 _REFRACTIVEINDEX_AVAILABLE = (
     _importlib_util.find_spec('refractiveindex') is not None)
 RefractiveIndexMaterial = None  # populated lazily on first use
@@ -297,6 +301,80 @@ SELLMEIER_COEFFICIENTS = {
     'H-ZLAF52A':   ((1.85313688, 0.317938591, 1.16396318),
                     (0.00985534639, 0.0392611678, 93.1032763)),
 }
+
+
+# ---------------------------------------------------------------------------
+# v4.16.2 (pre-v5.0 prep) -- formula-3 (polynomial) bundled evaluator
+# ---------------------------------------------------------------------------
+#
+# refractiveindex.info formula-3 (the "polynomial" dispersion form):
+#
+#     n^2 = c[0] + sum_i c[2i+1] * (lam_um) ** c[2i+2]
+#
+# i.e. a constant plus an even number of (coefficient, exponent) pairs.
+# Common exponent sets in the catalogues: {-2, -4, 2, 4, 6}.
+#
+# v4.16.0 introduced the catalogue entries (Hikari E-/J-, Sumita K-, 4
+# CDGM polynomial glasses) but routed them exclusively through the
+# optional ``refractiveindex`` package.  v4.16.2 lands the bundled
+# evaluator infrastructure so minimal installs no longer fail-fast on
+# these 26 entries; per-glass coefficient ingestion is staged for
+# v5.0 (one-shot import from the refractiveindex.info YAML dataset
+# requires a non-trivial vendor-source review for each catalogue).
+#
+# POLYNOMIAL_COEFFICIENTS layout: ``{name: (c0, [(coeff, exponent), ...])}``
+#
+# Adding a new entry::
+#
+#     POLYNOMIAL_COEFFICIENTS['CDGM-H-ZK7'] = (
+#         2.6273,
+#         [(-0.011, -2.0),
+#          (0.026, 2.0),
+#          (-0.00071, 4.0),
+#          (0.0000084, 6.0)],
+#     )
+#
+# Cross-check the result against refractiveindex.info's tabulated n_d
+# to 5e-5 (matches the v4.14.2 / v4.16.0 cross-check methodology).
+
+POLYNOMIAL_COEFFICIENTS = {
+    # Empty by default.  v4.16.2 ships the EVALUATOR + dispatch wiring
+    # but no per-glass coefficients.  Populating this dict for the 26
+    # formula-3 catalogue entries is staged for v5.0 (each entry
+    # requires vendor-source review against the corresponding
+    # refractiveindex.info YAML and a 5e-5 n_d cross-check).
+}
+
+
+def _polynomial_index(wavelength_m, coeffs, glass_name=None):
+    """refractiveindex.info formula-3 (polynomial) evaluator.
+
+    ``coeffs`` is ``(c0, [(c_i, exponent_i), ...])`` where ``c0`` is
+    the constant term in ``n^2`` and the list pairs each polynomial
+    coefficient with its lambda-exponent (in micron-units).  Returns
+    the real refractive index at the given vacuum wavelength [m].
+
+    The polynomial form is::
+
+        n^2 = c0 + sum_i c_i * (lam_um) ** exponent_i
+
+    which subsumes the Schott polynomial form
+    ``n^2 = a0 + a1*lam^2 + a2*lam^-2 + a3*lam^-4 + a4*lam^-6 +
+    a5*lam^-8``.
+    """
+    lam_um = wavelength_m * 1e6
+    label = f" for glass {glass_name!r}" if glass_name else ""
+    c0, pairs = coeffs
+    n_sq = float(c0)
+    for c_i, exponent_i in pairs:
+        n_sq = n_sq + float(c_i) * (lam_um ** float(exponent_i))
+    if n_sq <= 0.0:
+        raise ValueError(
+            f"_polynomial_index{label}: extrapolation produced non-"
+            f"positive n^2 = {n_sq:.6f} at wavelength "
+            f"{wavelength_m*1e9:.3f} nm.  This wavelength is likely "
+            f"outside the catalogue's valid range.")
+    return _math.sqrt(n_sq)
 
 
 def _sellmeier_index(wavelength_m, coeffs, glass_name=None):
@@ -757,12 +835,19 @@ def _check_glass_registry_consistency():
                 f"format."
             )
         lmin, lmax = value
-        if not (isinstance(lmin, (int, float))
-                and isinstance(lmax, (int, float))):
+        # v4.16.2 (audit P3-NEW-F1-4): accept numpy scalars in addition
+        # to native Python ``int`` / ``float``.  ``isinstance(np.int32(0),
+        # (int, float))`` is False on Python 3.10+; users passing
+        # ``GLASS_VALIDITY['X'] = (np.int32(300e-9), np.float32(700e-9))``
+        # are tripping the v4.16.1 well-formedness check.
+        _NUMERIC_TYPES = (int, float, np.integer, np.floating)
+        if not (isinstance(lmin, _NUMERIC_TYPES)
+                and isinstance(lmax, _NUMERIC_TYPES)):
             raise RuntimeError(
                 f"GLASS_VALIDITY drift (v4.16.1): "
                 f"GLASS_VALIDITY[{name!r}] = {value!r} must be a "
-                f"2-tuple of numeric (int / float) bounds; got types "
+                f"2-tuple of numeric (int / float / np.integer / "
+                f"np.floating) bounds; got types "
                 f"({type(lmin).__name__}, {type(lmax).__name__})."
             )
         if not (lmin < lmax):
@@ -950,6 +1035,13 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
         if glass_name in SELLMEIER_COEFFICIENTS:
             return _sellmeier_index(wavelength,
                                     SELLMEIER_COEFFICIENTS[glass_name])
+        # v4.16.2 (pre-v5.0 prep): formula-3 polynomial fallback for
+        # glasses whose coefficients have been ingested into
+        # POLYNOMIAL_COEFFICIENTS.  Empty at v4.16.2 ship; populating
+        # the 26 catalogue entries is staged for v5.0.
+        if glass_name in POLYNOMIAL_COEFFICIENTS:
+            return _polynomial_index(wavelength,
+                                     POLYNOMIAL_COEFFICIENTS[glass_name])
         raise ImportError(
             f"Glass {glass_name!r} requires the 'refractiveindex' "
             f"package for live lookup, but it is not installed.  "

@@ -1,9 +1,11 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-19 (post-v4.16.1).  v4.16 + v4.17 + v4.18
+**Last updated:** 2026-05-20 (post-v4.16.2).  v4.16 + v4.17 + v4.18
 ROADMAP scope all shipped in v4.16.0 mega-rollup; v4.16.1 closes the
-v4.16.0 deep audit (4 silent-wrong-answer bugs + Schell/JAX cluster +
-hygiene).  v5.0 is now the immediate horizon.
+v4.16.0 deep audit; v4.16.2 closes the v4.16.1 audit + lands the
+pre-v5.0 prep features (formula-3 Sellmeier evaluator infrastructure,
+3 default-config knobs, Migration-Guide.md skeleton, 11th
+doc-consistency meta-pin walker).  v5.0 is now the immediate horizon.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -18,8 +20,9 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v4.16.1 baseline (2208 unit tests passing + 5
-  documented skips + 1 documented xfail).  v4.16.0 mega-rollup
+- **Library:** v4.16.2 baseline (2270 unit tests passing + 5
+  documented skips + 1 documented xfail = 2276 collected).
+  v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
   v4.16.1 closes the v4.16.0 deep audit through P3: 4 silent-wrong-
   answer correctness bugs (`MultiWavelengthMerit` SUM→AVG,
@@ -39,7 +42,7 @@ are preserved in git history; this file is forward-only.
   `ui/main_window.py:2196` etc.).  No standalone release stream; the
   Designer ships co-versioned inside the library wheel.
 - **Audit closure status:** AUDIT_V4_12_1 through
-  AUDIT_V4_16_0_DEEP all closed.  AUDIT_V4_13_1 Tier-2/3/4
+  AUDIT_V4_16_1 all closed.  AUDIT_V4_13_1 Tier-2/3/4
   architectural items scoped to v5.0 as noted below.
 - **Active back-compat shims:** 8 (catalogued in AUDIT_V4_13_1 Part
   5).  v4.14.2 migrated 2 shims onto the canonical
@@ -47,7 +50,7 @@ are preserved in git history; this file is forward-only.
   `version_removed=5.0`; the remaining 6 still use inline raw
   `warnings.warn` and are scheduled for migration as a v5.0
   housekeeping item.
-- **Meta-pin coverage:** ALL 9 dispatcher meta-pins active and
+- **Meta-pin coverage:** ALL 11 dispatcher meta-pins active and
   clean:
   - V1: cache-clear chain re-export (v4.14.1).
   - V2: cache <-> lock pairing (v4.14.2).
@@ -66,8 +69,22 @@ are preserved in git history; this file is forward-only.
   - **V9 (NEW v4.16.0)**: `__all__` symmetry walker (submodule
     `__all__` must be re-exported at top level OR marked
     `_INTERNAL`).
-  The "fix N, miss N+1" sibling-gap meta-pattern at the public-API
-  surface is now structurally retired across all known classes.
+  - **V10 (NEW v4.16.1)**: `@lru_cache <-> _cache_registry`
+    enrollment walker -- AST-walks every `@lru_cache`-decorated
+    module-level function and asserts a paired
+    `_cache_registry` enrollment.  15 caches, 8 enrolled, 7
+    exempt, 0 orphans.  v4.16.2 hardened to require the
+    enrollment call appear at module level (not nested inside
+    a function or `if False:` branch).
+  - **V11 (NEW v4.16.2)**: doc-consistency walker -- scans
+    `README.md`, `requirements.txt`, `ROADMAP.md` and
+    `CHANGELOG.md` against `pyproject.toml`'s
+    `[project.dependencies]` / `[project.optional-dependencies]`
+    for dependency-declaration drift.  Closes the
+    v4.16.1-identified documentation-surface sibling-gap pattern.
+  The "fix N, miss N+1" sibling-gap meta-pattern is now structurally
+  retired across all known classes -- both code surfaces (V1-V10)
+  and documentation surfaces (V11).
 
 ---
 
