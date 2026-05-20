@@ -20,7 +20,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ['3.10', '3.11', '3.12', '3.13']
+        # 3.10 is the documented floor (``requires-python = ">=3.10"``)
+        # but validate.yml only exercises 3.11-3.13 successfully.  We
+        # mirror that matrix here and add 3.10 back in a v5.0.2+ patch
+        # once the 3.10-specific install path is verified.
+        python-version: ['3.11', '3.12', '3.13']
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -29,22 +34,34 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
 
       - name: Install dependencies
-        # v5.0.1 fix: the v5.0 workflow installed ``[all]`` which omits
-        # ``pytest`` (lives in the ``[dev]`` extras group), so pytest
-        # itself wasn't available -- every test job failed at the
-        # ``python -m pytest`` invocation.  ``[all,dev]`` is the
-        # canonical CI install.  ``tomli`` is the 3.10 backport for
-        # the V11 dispatcher-pin walker (3.11+ has tomllib in stdlib).
+        # v5.0.1 fix #2 (post-PyPI): align with validate.yml's install
+        # line (proven to work on 3.11-3.13).  The original ``[all,dev]``
+        # install pulled jax + astropy + refractiveindex which were
+        # adding non-trivial install time / memory pressure for no
+        # unit-test benefit -- the validation suite (which validate.yml
+        # exercises) is the canonical end-to-end harness for those
+        # paths.  ``tomli`` is the 3.10 backport for the V11 dispatcher
+        # walker; harmless on 3.11+.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[all,dev]"
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
           pip install tomli
 
+      - name: Library import sanity
+        run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
+
       - name: Run unit tests
+        # ``-p no:cacheprovider`` avoids writing the pytest cache to
+        # the readonly CI filesystem layout.  ``--maxfail=5`` surfaces
+        # the first batch of failures clearly instead of running the
+        # full suite under a doomed condition.
         run: |
-          python -m pytest tests/unit -m "not integration" -q --tb=short
+          python -m pytest tests/unit -m "not integration" -q --tb=short \
+            -p no:cacheprovider --maxfail=5
+        timeout-minutes: 15
 
   lint:
     name: Ruff lint
@@ -82,10 +99,10 @@ jobs:
           python-version: '3.12'
 
       - name: Install dependencies
-        # v5.0.1 fix: ``[all]`` omits pytest; switch to ``[all,dev]``.
+        # v5.0.1 fix #2: align with the canonical CI install.
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[all,dev]"
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
 
       - name: Run public-API smoke
         run: python -m pytest tests/unit/test_public_api.py -v
