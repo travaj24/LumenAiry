@@ -99,6 +99,7 @@ _skip_no_qt = pytest.mark.skipif(
 # E.1.1 -- P1-UI-1: stale Thorlabs glass-sort table
 # ============================================================================
 
+@_skip_no_qt
 class TestUI1ThorlabsGlassTable:
     """``main_window.py`` Thorlabs sort table covers N-LASF9 and S-NPH1.
 
@@ -134,6 +135,7 @@ class TestUI1ThorlabsGlassTable:
 # E.1.2 -- P1-UI-2: _nudge_distance routes via set_display_distance
 # ============================================================================
 
+@_skip_no_qt
 class TestUI2NudgeDistanceCoordinateModeAware:
     """``_nudge_distance`` is coord-mode-aware.
 
@@ -211,6 +213,7 @@ class TestUI2NudgeDistanceCoordinateModeAware:
 # ============================================================================
 
 @_skip_no_qt
+@_skip_no_qt
 class TestUI3UndoCapturesNewFields:
     """Round-trip undo/redo for the three previously-missed fields."""
 
@@ -248,6 +251,7 @@ class TestUI3UndoCapturesNewFields:
 # E.1.4 -- P1-UI-4: back-vertex helper unifies two call sites
 # ============================================================================
 
+@_skip_no_qt
 @_skip_no_qt
 class TestUI4BackVertexHelper:
     """``_prev_element_back_vertex_world`` is the single source of truth."""
@@ -303,8 +307,17 @@ class TestUI4BackVertexHelper:
 # E.1.5 -- P1-UI-5: waveoptics_dock re-parent guard
 # ============================================================================
 
+@_skip_no_qt
 class TestUI5WaveOpticsReparentGuard:
-    """``_open_mft_options_dialog`` guards against a dead parent."""
+    """``_open_mft_options_dialog`` guards against a dead parent.
+
+    v5.0.1 (CI fix post-PyPI): class-level ``@_skip_no_qt`` -- the
+    ``lumenairy.ui.waveoptics_dock`` import inside the test body
+    transitively imports PySide6, so without the ``[gui]`` extras
+    every test in this class hits ``ModuleNotFoundError``.  Source-
+    inspection content is still pinned by the structural sibling
+    pins in ``TestUI1`` through ``TestUI4`` above (which don't pull
+    Qt into the test process)."""
 
     def test_shiboken_guard_present(self):
         from lumenairy.ui import waveoptics_dock
@@ -327,8 +340,16 @@ class TestUI5WaveOpticsReparentGuard:
 # ============================================================================
 
 class TestUI6and7PsfMtfDockRayAccumulation:
-    """Mean-OPD-per-pixel + bounds-mask in ``_load_from_raytrace``."""
+    """Mean-OPD-per-pixel + bounds-mask in ``_load_from_raytrace``.
 
+    v5.0.1 (CI fix post-PyPI): two of the three tests below import
+    ``lumenairy.ui.psf_mtf_dock`` which transitively imports PySide6;
+    each is individually decorated with ``@_skip_no_qt``.  The
+    ``test_mean_accumulation_numerically`` test is a pure-NumPy
+    synthetic that doesn't touch the UI module and continues to run
+    without the ``[gui]`` extras."""
+
+    @_skip_no_qt
     def test_no_last_write_wins(self):
         from lumenairy.ui import psf_mtf_dock
         src = inspect.getsource(psf_mtf_dock)
@@ -351,6 +372,7 @@ class TestUI6and7PsfMtfDockRayAccumulation:
             "P1-UI-6 fix missing: no np.add.at accumulator in "
             "_load_from_raytrace (the analysis/core.py mean idiom)")
 
+    @_skip_no_qt
     def test_bounds_mask_present(self):
         from lumenairy.ui import psf_mtf_dock
         src = inspect.getsource(psf_mtf_dock)
