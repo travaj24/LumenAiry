@@ -89,6 +89,28 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Emit FAILED tests as annotations
+        if: failure()
+        shell: bash
+        run: |
+          # Annotations are visible via the public annotations API, so
+          # external observers can see test failure names without
+          # admin-level log access.  Print first 10 FAILED lines + any
+          # ERROR lines + the final "X failed, Y passed" summary line.
+          if [ -f unit_test_output.txt ]; then
+            grep -E "^FAILED |^ERROR |error |Error:" unit_test_output.txt \
+              | head -n 20 \
+              | while IFS= read -r line; do
+                  echo "::error::${line}"
+                done
+            # Final summary line(s)
+            tail -n 5 unit_test_output.txt | while IFS= read -r line; do
+              echo "::warning::TAIL: ${line}"
+            done
+          else
+            echo "::error::No unit_test_output.txt produced"
+          fi
+
   lint:
     name: Ruff lint
     runs-on: ubuntu-latest
