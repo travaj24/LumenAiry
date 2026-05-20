@@ -77,6 +77,18 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Dump tail to job summary on failure
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "## Unit test output -- Python ${{ matrix.python-version }} (last 200 lines)"
+            echo ""
+            echo '```'
+            tail -n 200 unit_test_output.txt || echo "(no output file)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
   lint:
     name: Ruff lint
     runs-on: ubuntu-latest
