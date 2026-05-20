@@ -319,21 +319,37 @@ def test_stray_pngs_not_at_repo_root(png_name):
 
 
 def test_examples_output_dir_exists_and_contains_pngs():
-    """The 3 PNGs should be present in `examples/output/`."""
-    output_dir = _EXAMPLES_DIR / 'output'
-    assert output_dir.is_dir(), (
-        'examples/output/ directory should exist after the v4.16.1 '
-        'Agent-D PNG move')
-    expected = {
-        'algebra_4f_system.png',
-        'algebra_anamorphic.png',
-        'singlet_opd_summary.png',
-    }
-    present = {p.name for p in output_dir.iterdir() if p.is_file()}
-    missing = expected - present
-    assert not missing, (
-        f'examples/output/ is missing {missing}; the v4.16.1 PNG move '
-        f'should have placed them here.')
+    """The 3 example PNGs should be writable to `examples/output/`.
+
+    v5.0.1 (CI fix post-PyPI): the v4.16.1 spec was that the 3 producing
+    scripts (``algebra_4f_system.py`` / ``algebra_anamorphic.py`` /
+    ``plot_opd_summary_singlet.py``) write their PNG output to
+    ``examples/output/``.  The directory + PNGs are both gitignored
+    (``output/`` and ``*.png`` in ``.gitignore``), so on a fresh CI
+    checkout the directory doesn't exist and the PNGs aren't present
+    -- this pin previously required a developer to run the examples
+    locally before the test would pass.
+
+    Refresh: assert the 3 producing scripts WOULD write to
+    ``examples/output/`` (structural source-inspection check, not a
+    filesystem-state check).  If a contributor runs the examples
+    locally, the PNGs land in the right place; CI doesn't need them
+    pre-built.
+    """
+    expected_scripts = (
+        'algebra_4f_system.py',
+        'algebra_anamorphic.py',
+        'plot_opd_summary_singlet.py',
+    )
+    for script_name in expected_scripts:
+        script = _EXAMPLES_DIR / script_name
+        assert script.is_file(), (
+            f'{script_name} is missing from examples/')
+        src = script.read_text(encoding='utf-8')
+        assert "examples/output" in src or "'output'" in src or '"output"' in src, (
+            f'{script_name} does not route its PNG output through '
+            f'examples/output/; the v4.16.1 Agent-D move was meant to '
+            f'centralise example outputs there.')
 
 
 # ============================================================================
