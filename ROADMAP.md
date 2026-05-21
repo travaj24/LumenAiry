@@ -59,8 +59,9 @@ are preserved in git history; this file is forward-only.
   per the v5.0 CHANGELOG "Shims preserved" decision -- a v5.2+
   audit that flags these for removal should be rejected with a
   pointer to the v5.0 CHANGELOG entry).
-- **Meta-pin coverage:** ALL 11 dispatcher meta-pins active and
-  clean:
+- **Meta-pin coverage:** ALL 15 dispatcher meta-pins active and
+  clean (V12-V15 added in v5.2; see the
+  "v5.2-class sibling-gap surfaces" note below):
   - V1: cache-clear chain re-export (v4.14.1).
   - V2: cache <-> lock pairing (v4.14.2).
   - V3: 0+0j literal sweep (v4.14.2).
@@ -91,11 +92,54 @@ are preserved in git history; this file is forward-only.
     `[project.dependencies]` / `[project.optional-dependencies]`
     for dependency-declaration drift.  Closes the
     v4.16.1-identified documentation-surface sibling-gap pattern.
-  The "fix N, miss N+1" sibling-gap meta-pattern is now structurally
-  retired across all currently-known classes -- both code surfaces
-  (V1-V10) and documentation surfaces (V11); new classes will
+  - **V12 (NEW v5.2)**: CHANGELOG-vs-changeset walker -- parses
+    the most-recent ``## [X.Y.Z]`` CHANGELOG block, asserts every
+    backticked file-path citation resolves, every audit-ID
+    citation resolves to ``docs/audits/``, the test-count
+    arithmetic reconciles, and the block advertises an audit-
+    closure verification mechanism.  Closes the v5.1.0-identified
+    CHANGELOG-vs-implementation sibling-gap pattern (the
+    "fabrication" class) at the file-existence + audit-ID level.
+    Content-level fabrications still require human review or the
+    companion ``scripts/verify_changelog_closures.py`` (v5.2+).
+  - **V13 (NEW v5.2)**: shell-vs-canonical-location walker --
+    for every name imported in a post-v5.1 file-split shell's
+    ``from .X import Y`` block, asserts ``Y.__module__`` is the
+    submodule (not the shell).  Catches the regression where a
+    function body silently moves back into the shell.  Documented
+    exemptions: ``propagate_modal_asymptotic`` (v4.14.1 monkey-
+    patch contract).
+  - **V14 (NEW v5.2)**: PEP-562 forwarding completeness walker --
+    enumerates ``fft_infra`` mutable globals (those rebound via
+    ``X = ...`` somewhere other than initial definition) and
+    asserts each appears in ``propagation._LIVE_FORWARD_NAMES``.
+    Counter-pin verifies the whitelist hasn't drifted in the
+    opposite direction (names removed from ``fft_infra``).
+    Catches the ``_PYFFTW_BAD_SHAPES``-class stale-snapshot
+    regression that v5.1.1 closed.
+  - **V15 (NEW v5.2)**: sentinel ``__reduce__`` structural
+    walker -- auto-discovers every ``_Sentinel`` subclass via
+    ``__subclasses__()``, asserts each defines ``__reduce__`` ->
+    ``(_sentinel_unpickle, (name,))`` with the name registered in
+    ``_SENTINEL_REGISTRY``, and verifies pickle round-trip
+    identity.  Replaces the v4.15.2 hardcoded
+    ``EXPECTED_SUBCLASSES`` tuple so new sentinels are auto-
+    pinned (closes the v5.1.0 P3-NEW-F1-3 counter-pin gap).
+
+  **v5.2 meta-pattern note**: At v4.16.2 the "fix N, miss N+1"
+  sibling-gap meta-pattern was claimed retired across all
+  currently-known surfaces.  v5.1.0 surfaced a NEW class
+  (CHANGELOG-vs-implementation fabrication) that V11 did not
+  cover; v5.2 closes it at the file-existence + audit-ID
+  level via V12, plus 3 additional structural surfaces (V13
+  shell-vs-canonical, V14 PEP-562 forwarding, V15 sentinel
+  __reduce__) that v5.1.0's audit identified as remaining gaps.
+  Honest current status: structurally retired across 15 currently-known sibling-gap surfaces; new classes will
   continue to surface and be added to the V-walker family as
-  identified.
+  identified, including CONTENT-LEVEL CHANGELOG fabrications
+  (where the cited file exists but the cited behavior is
+  missing) which V12 deliberately does NOT cover -- those need
+  the diff-aware companion script + human review.
 
 ---
 

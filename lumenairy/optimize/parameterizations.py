@@ -17,6 +17,87 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+# v5.2 (AUDIT_V4_13_1 P1-1 closure): per-variable-type scale floors used
+# by the driver's finite-difference Hessian estimator.  Without an
+# explicit floor a parameter near zero (e.g. a radius set to 0 for a
+# planar surface) collapses ``x_scale[i]`` to 0 and the optimiser's
+# step-size logic divides through to give a sub-eps relative
+# perturbation -- the FD gradient for that variable becomes numeric
+# noise.  Values are absolute (SI metres for length-like vars,
+# dimensionless for shape-like vars).
+_DEFAULT_SCALE_FLOORS = {
+    'radius':   1e-6,   # m  (1 um -- conservative for sub-mm lenses)
+    'radius_y': 1e-6,   # m  (anamorphic Ry mirror of ``radius``)
+    'thickness': 1e-6,  # m  (1 um -- sub-mm spacings stay perturbable)
+    'conic': 1e-3,      # dimensionless
+    # Aspheric / Forbes / freeform coefficient floors.  These are
+    # nominally dimensionless but each ``alpha_n`` carries an implicit
+    # ``r^(2n)`` factor in the sag formula; the floor below tracks the
+    # coefficient magnitude in its native units, leaving the radial
+    # rescale to the merit's natural sensitivity.
+    'aspheric': 1e-3,   # dimensionless per coeff
+    'alpha':    1e-3,   # dimensionless per coeff (Forbes Q-poly)
+    # Catch-all for unrecognised paths: 1 um was the historical hard-
+    # coded driver default (driver.py:756), matched here for back-
+    # compat on prescription fields we don't yet classify.
+    '_default': 1e-6,
+}
+
+
+def _classify_path_to_floor(path: Tuple[Any, ...]) -> float:
+    """v5.2 (AUDIT_V4_13_1 P1-1 closure): map a free-var path tuple to
+    the appropriate per-variable scale floor.
+
+    The path forms accepted are the same as those accepted by
+    :func:`_read_path` / :func:`_write_path`:
+
+    * ``('surfaces', i, key)`` -- per-surface field.  ``key`` is
+      classified by name (``radius`` -> ``1e-6``, ``conic`` -> ``1e-3``,
+      etc.).
+    * ``('thicknesses', i)`` -- always the thickness floor (1 um).
+    * ``('aperture_diameter',)`` -- classified as a length (uses the
+      thickness floor).
+    * Anything else -- the catch-all 1 um default.
+
+    Conic-like / aspheric-like detection uses substring matching so
+    Forbes Q-polys (``alpha0``, ``alpha1``, ...) and aspheric series
+    (``A4``, ``A6``, ``a_4``, ...) both land on the dimensionless
+    floor.
+    """
+    if not path:
+        return _DEFAULT_SCALE_FLOORS['_default']
+    head = path[0]
+    if head == 'thicknesses':
+        return _DEFAULT_SCALE_FLOORS['thickness']
+    if head == 'aperture_diameter':
+        return _DEFAULT_SCALE_FLOORS['thickness']
+    if head == 'surfaces':
+        # ('surfaces', i, key, ...)
+        if len(path) < 3:
+            return _DEFAULT_SCALE_FLOORS['_default']
+        key = path[2]
+        if not isinstance(key, str):
+            return _DEFAULT_SCALE_FLOORS['_default']
+        key_lc = key.lower()
+        # Radius family first -- ``radius``, ``radius_y``.
+        if key_lc.startswith('radius'):
+            return _DEFAULT_SCALE_FLOORS['radius']
+        # Conic constant.
+        if key_lc == 'conic' or key_lc == 'k':
+            return _DEFAULT_SCALE_FLOORS['conic']
+        # Aspheric / Forbes-Q polynomial coefficients.  Substring
+        # match catches ``alpha0`` / ``alpha_n`` / ``A4`` / ``a_8`` /
+        # ``aspheric_coeffs[3]`` etc.
+        if ('alpha' in key_lc or key_lc.startswith('a')
+                or 'aspheric' in key_lc or 'forbes' in key_lc):
+            return _DEFAULT_SCALE_FLOORS['aspheric']
+        # Per-surface thickness override (rare; in some prescriptions
+        # thickness is on the surface dict, not the top-level
+        # ``thicknesses`` list).
+        if 'thickness' in key_lc:
+            return _DEFAULT_SCALE_FLOORS['thickness']
+    return _DEFAULT_SCALE_FLOORS['_default']
+
 
 @dataclass
 class DesignParameterization:
@@ -44,6 +125,14 @@ class DesignParameterization:
     template: Dict[str, Any]
     free_vars: List[Tuple[Any, ...]]
     bounds: Optional[List[Optional[Tuple[float, float]]]] = None
+    # v5.2 (AUDIT_V4_13_1 P1-1 closure): per-parameter absolute scale
+    # floor used by the optimiser's finite-difference Hessian estimator
+    # (driver.py:754 reads this via ``getattr(parameterization,
+    # 'scale_floor', None)``).  ``None`` (default) auto-fills from
+    # :func:`_classify_path_to_floor` -- radii / thicknesses get 1 um,
+    # conics / aspherics get 1e-3.  Pass an explicit array of length
+    # ``len(free_vars)`` to override per-slot.
+    scale_floor: Optional[Any] = None
 
     def __post_init__(self) -> None:
         if self.bounds is not None:
@@ -51,6 +140,30 @@ class DesignParameterization:
                 raise ValueError(
                     f"bounds length {len(self.bounds)} != free_vars "
                     f"length {len(self.free_vars)}")
+        # v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve ``scale_floor`` to a
+        # length-``n_params`` ndarray.  When ``None``, infer from the
+        # path classification table; when a scalar or array, broadcast
+        # to the parameter count.
+        self.scale_floor = self._resolve_scale_floor(self.scale_floor)
+
+    def _resolve_scale_floor(self, value: Any) -> np.ndarray:
+        """v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve a user-supplied
+        ``scale_floor`` (``None`` / scalar / sequence) to an ndarray of
+        length ``n_params``."""
+        n = len(self.free_vars)
+        if value is None:
+            return np.array(
+                [_classify_path_to_floor(p) for p in self.free_vars],
+                dtype=np.float64,
+            )
+        arr = np.asarray(value, dtype=np.float64)
+        if arr.ndim == 0:
+            return np.full(n, float(arr), dtype=np.float64)
+        if arr.shape != (n,):
+            raise ValueError(
+                f"DesignParameterization.scale_floor length "
+                f"{arr.shape} does not match free_vars length {n}.")
+        return arr
 
     @property
     def n_params(self) -> int:
@@ -158,6 +271,13 @@ class MultiPrescriptionParameterization:
     templates: List[Dict[str, Any]]
     free_vars: List[Tuple[Any, ...]]
     bounds: Optional[List[Optional[Tuple[float, float]]]] = None
+    # v5.2 (AUDIT_V4_13_1 P1-1 closure): per-parameter absolute scale
+    # floor.  ``None`` (default) auto-fills from
+    # :func:`_classify_path_to_floor` applied to the inner-path tuple
+    # ``fv[1:]`` (the ``fv[0]`` prescription index is discarded for
+    # classification).  Pass an explicit array of length
+    # ``len(free_vars)`` to override per-slot.
+    scale_floor: Optional[Any] = None
 
     def __post_init__(self) -> None:
         for fv in self.free_vars:
@@ -201,6 +321,32 @@ class MultiPrescriptionParameterization:
                 raise ValueError(
                     f"bounds length {len(self.bounds)} != free_vars "
                     f"length {len(self.free_vars)}")
+        # v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve ``scale_floor`` to
+        # a length-``n_params`` ndarray using the inner path (the
+        # ``fv[0]`` prescription index has no bearing on the variable
+        # type).
+        self.scale_floor = self._resolve_scale_floor(self.scale_floor)
+
+    def _resolve_scale_floor(self, value: Any) -> np.ndarray:
+        """v5.2 (AUDIT_V4_13_1 P1-1 closure): resolve a user-supplied
+        ``scale_floor`` (``None`` / scalar / sequence) to an ndarray of
+        length ``n_params``.  Inner paths (``fv[1:]``) are passed to
+        :func:`_classify_path_to_floor`."""
+        n = len(self.free_vars)
+        if value is None:
+            return np.array(
+                [_classify_path_to_floor(tuple(fv[1:]))
+                 for fv in self.free_vars],
+                dtype=np.float64,
+            )
+        arr = np.asarray(value, dtype=np.float64)
+        if arr.ndim == 0:
+            return np.full(n, float(arr), dtype=np.float64)
+        if arr.shape != (n,):
+            raise ValueError(
+                f"MultiPrescriptionParameterization.scale_floor length "
+                f"{arr.shape} does not match free_vars length {n}.")
+        return arr
 
     @property
     def n_params(self) -> int:

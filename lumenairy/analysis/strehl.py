@@ -18,7 +18,6 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
-
 __all__ = [
     'strehl_ratio',
     'strehl_marechal',
@@ -29,10 +28,8 @@ __all__ = [
 ]
 
 
-def _xp_of(*arrays):
-    """Return the array namespace for the inputs (numpy / cupy / jax.numpy)."""
-    from ..backend import array_namespace
-    return array_namespace(*arrays)
+# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup): see beam_stats.py.
+from ..backend import array_namespace as _xp_of  # noqa: E402
 
 
 def strehl_ratio(

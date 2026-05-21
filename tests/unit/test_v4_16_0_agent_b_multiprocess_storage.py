@@ -64,7 +64,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 # ============================================================================
 # Module-level worker functions (required by mp.Pool on Windows spawn)
 # ============================================================================
@@ -422,6 +421,7 @@ class TestB4SingleProcessBackcompat:
         the open should NOT break this.
         """
         import h5py
+
         from lumenairy.io.storage import append_plane_h5
 
         path = str(tmp_path / 'crash.h5')
@@ -550,6 +550,7 @@ class TestB6SwmrFalseLegacyMode:
         the file with the DEFAULT ``swmr=False`` succeeds.
         """
         import h5py
+
         from lumenairy.io.storage import append_plane_h5
         path = str(tmp_path / 'legacy_libver.h5')
         E = np.ones((4, 4), dtype=np.complex128)

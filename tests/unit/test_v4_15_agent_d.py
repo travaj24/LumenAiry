@@ -32,13 +32,12 @@ import pytest
 from lumenairy.elements.freeform import (
     _q_bfs_eval,
     _q_con_eval,
+    surface_sag_freeform,
     surface_sag_q_bfs,
     surface_sag_q_con,
-    surface_sag_freeform,
 )
 from lumenairy.elements.lenses import surface_sag_general
 from lumenairy.io.prescriptions import make_off_axis_parabola
-
 
 # ============================================================================
 # Shared fixtures

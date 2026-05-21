@@ -28,20 +28,19 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
+# ============================================================================
+# Optional backend imports
+# ============================================================================
+# GPU acceleration via CuPy (lazy-loaded -- ~150 ms init cost on
+# CUDA-equipped boxes, none of which is needed for the NumPy / pyFFTW
+# default path).
+import importlib.util as _importlib_util_for_cupy
 import threading
 from collections import OrderedDict
 from typing import Any, Dict, Optional
 
 import numpy as np
 
-# ============================================================================
-# Optional backend imports
-# ============================================================================
-
-# GPU acceleration via CuPy (lazy-loaded -- ~150 ms init cost on
-# CUDA-equipped boxes, none of which is needed for the NumPy / pyFFTW
-# default path).
-import importlib.util as _importlib_util_for_cupy
 CUPY_AVAILABLE = _importlib_util_for_cupy.find_spec('cupy') is not None
 cp = None  # populated lazily on first use
 
@@ -75,6 +74,7 @@ def _is_cupy_array(x):
 # substantial native lib at import time, so we only load it when
 # something actually wants the pyFFTW path).
 import importlib.util as _importlib_util
+
 PYFFTW_AVAILABLE = _importlib_util.find_spec('pyfftw') is not None
 pyfftw = None  # populated lazily by _ensure_pyfftw_loaded()
 
@@ -100,7 +100,6 @@ except ImportError:
 # Affinity-aware CPU count -- respects cgroups / taskset / Python 3.13+
 # process_cpu_count so we don't oversubscribe a restricted machine.
 from ..memory import available_cpus as _available_cpus
-
 
 # ============================================================================
 # FFT backend configuration
@@ -1029,11 +1028,14 @@ def _clear_local_asm_caches() -> None:
 # ``_clear_local_asm_caches`` from this module, and the registry hook
 # below resolves the attribute on the ``propagation`` module
 # namespace so the legacy patch path stays intact.
+import sys as _sys
+
 from .._cache_registry import (
-    register_cache_clearer as _register_cache_clearer,
     clear_all_registered_caches as _clear_all_registered_caches,
 )
-import sys as _sys
+from .._cache_registry import (
+    register_cache_clearer as _register_cache_clearer,
+)
 
 
 def _resolve_asm_clearer():
@@ -1439,7 +1441,7 @@ def _handle_pyfftw_failure(x, op_name, exc):
     was_new = shape not in _PYFFTW_BAD_SHAPES
     _PYFFTW_BAD_SHAPES.add(shape)
     if was_new:
-        import sys, warnings
+        import warnings
         # Flush pyFFTW's plan cache so the failed buffers are freed
         # and subsequent SMALLER calls have room.  We keep caching
         # enabled so that unaffected shapes still get plan reuse.

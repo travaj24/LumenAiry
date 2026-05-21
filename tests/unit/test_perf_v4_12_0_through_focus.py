@@ -37,9 +37,9 @@ import pytest
 
 import lumenairy as lm
 from lumenairy.analysis.through_focus import (
+    single_plane_metrics,
     through_focus_scan,
     through_focus_scan_jax,
-    single_plane_metrics,
 )
 from lumenairy.propagators.propagation import angular_spectrum_propagate
 
@@ -471,6 +471,7 @@ class TestThroughFocusScanNumPyHoistActuallyHoists:
 
     def test_fft2_called_only_once_across_scan(self):
         from unittest.mock import patch
+
         from lumenairy.propagators import propagation as _prop
 
         N, dx, wl = 64, 8e-6, 1.55e-6
@@ -508,6 +509,7 @@ class TestThroughFocusScanNumPyHoistActuallyHoists:
         and freq-grids (call-count == 1) are NOT z-dependent.
         """
         from unittest.mock import patch
+
         from lumenairy.propagators import propagation as _prop
 
         N, dx, wl = 32, 8e-6, 1.55e-6
@@ -669,6 +671,7 @@ class TestThroughFocusScanJaxKernelCache:
         if not jax_x64:
             pytest.skip('JAX not installed.')
         import time
+
         from lumenairy.analysis.through_focus import (
             clear_through_focus_scan_jax_cache,
         )

@@ -43,16 +43,14 @@ Author: Andrew Traverso -- v4.14.0 / Agent 6
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List
-
 import warnings
+from typing import Any, Callable, Dict, List
 
 import numpy as np
 import pytest
 
 import lumenairy as la
 from lumenairy.raytrace.core import Surface
-
 
 # ============================================================================
 # Hand-built Cassegrain prescription (matches existing v4.12.1 / v4.13.2

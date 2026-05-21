@@ -43,7 +43,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _GLASS_PATH = _REPO_ROOT / 'lumenairy' / 'glass.py'
 _PYPROJECT = _REPO_ROOT / 'pyproject.toml'
@@ -341,17 +340,58 @@ def test_examples_output_dir_exists_and_contains_pngs():
         'algebra_anamorphic.py',
         'plot_opd_summary_singlet.py',
     )
-    # v5.1.1 (audit P1-NEW-2WAY-4): the prior disjunctive form
-    # ``"examples/output" in src or "'output'" in src or '"output"' in src``
-    # was loose -- the bare ``'output'`` literal matches incidental
-    # occurrences (a variable named ``output``, an unrelated path
-    # fragment, etc).  Tighten by requiring three structural elements
-    # to all co-occur: a ``'output'`` string-literal AST node, a
-    # ``makedirs(...)`` call, AND a reference to ``__file__`` (so the
-    # output directory is anchored to the script location, not the
-    # caller's cwd).  All three are present in the v4.16.1 wiring;
-    # any one missing means the script is no longer routing through
-    # ``examples/output/`` as designed.
+    # v5.2 (AUDIT_V5_1_1 Part 6 -- P2 tighten AST check):
+    # tightening of v5.1.1's three-signal
+    # check.  v5.1.1 required ``'output'`` literal + ``makedirs(...)``
+    # call + ``__file__`` reference each to appear SOMEWHERE in the
+    # file -- F1's v5.1.1 audit demonstrated this was gameable with
+    # the three signals scattered in unrelated parts of the source.
+    # v5.2 requires the ``'output'`` literal AND a ``__file__``
+    # reference to be CO-LOCATED with the ``makedirs(...)`` call,
+    # i.e. either nested inside the call's first-argument subtree
+    # OR present in the RHS of the assignment that binds the call's
+    # first argument variable.  Three scattered tokens are no longer
+    # enough; the data-flow has to actually connect.
+    def _walk_value(value, target):
+        """Return True iff ``target`` predicate matches anywhere in
+        the AST subtree rooted at ``value``."""
+        return any(target(n) for n in ast.walk(value))
+
+    def _is_output_literal(node):
+        return (isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node.value == 'output')
+
+    def _is_file_ref(node):
+        return isinstance(node, ast.Name) and node.id == '__file__'
+
+    def _is_makedirs_call(node):
+        if not isinstance(node, ast.Call):
+            return False
+        f = node.func
+        return ((isinstance(f, ast.Attribute) and f.attr == 'makedirs')
+                or (isinstance(f, ast.Name) and f.id == 'makedirs'))
+
+    def _resolve_arg_closure(call_node, tree):
+        """Return the AST nodes whose subtree defines the ``makedirs``
+        first argument's value.  If the arg is a literal expression
+        (e.g. ``os.path.join(..., 'output')``), return ``[arg]``.  If
+        the arg is a Name (e.g. ``out_dir``), return the RHS values
+        of every ``ast.Assign`` in the file that binds that Name.
+        """
+        if not call_node.args:
+            return []
+        arg = call_node.args[0]
+        if isinstance(arg, ast.Name):
+            name = arg.id
+            return [
+                a.value for a in ast.walk(tree)
+                if isinstance(a, ast.Assign)
+                and any(isinstance(t, ast.Name) and t.id == name
+                        for t in a.targets)
+            ]
+        return [arg]
+
     for script_name in expected_scripts:
         script = _EXAMPLES_DIR / script_name
         assert script.is_file(), (
@@ -359,38 +399,34 @@ def test_examples_output_dir_exists_and_contains_pngs():
         src = script.read_text(encoding='utf-8')
         tree = ast.parse(src, filename=str(script))
 
-        has_output_literal = any(
-            isinstance(node, ast.Constant)
-            and isinstance(node.value, str)
-            and node.value == 'output'
-            for node in ast.walk(tree))
-        has_makedirs_call = any(
-            isinstance(node, ast.Call)
-            and (
-                (isinstance(node.func, ast.Attribute)
-                 and node.func.attr == 'makedirs')
-                or (isinstance(node.func, ast.Name)
-                    and node.func.id == 'makedirs'))
-            for node in ast.walk(tree))
-        has_file_ref = any(
-            isinstance(node, ast.Name) and node.id == '__file__'
-            for node in ast.walk(tree))
-
-        assert has_output_literal, (
-            f'{script_name} has no `\'output\'` string literal; '
-            f'v4.16.1 Agent-D routed example PNGs through '
-            f'``examples/output/`` -- the literal directory name '
-            f'must appear in the source.')
-        assert has_makedirs_call, (
+        makedirs_calls = [n for n in ast.walk(tree) if _is_makedirs_call(n)]
+        assert makedirs_calls, (
             f'{script_name} does not call ``makedirs(...)``; '
             f'v4.16.1 wiring creates ``examples/output/`` on first '
             f'run via ``os.makedirs(out_dir, exist_ok=True)``.')
-        assert has_file_ref, (
-            f'{script_name} does not reference ``__file__``; '
-            f'v4.16.1 wiring anchors the output directory to the '
-            f'script location (``dirname(abspath(__file__))``) so '
-            f'PNGs land in ``examples/output/`` regardless of the '
-            f'caller\'s cwd.')
+
+        co_located = False
+        for call in makedirs_calls:
+            closures = _resolve_arg_closure(call, tree)
+            for value in closures:
+                has_output = _walk_value(value, _is_output_literal)
+                has_file = _walk_value(value, _is_file_ref)
+                if has_output and has_file:
+                    co_located = True
+                    break
+            if co_located:
+                break
+
+        assert co_located, (
+            f'{script_name} calls ``makedirs(...)`` but the first-'
+            f"argument's data-flow closure does not contain BOTH a "
+            f"``'output'`` literal AND a ``__file__`` reference.  "
+            f'v4.16.1 wiring binds '
+            f"``out_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'output')`` "
+            f'before passing ``out_dir`` to ``makedirs``; the two '
+            f'tokens must appear in the same assignment RHS (or be '
+            f"inline in the call's first arg).  Three scattered "
+            f'tokens elsewhere in the file no longer suffice.')
 
 
 # ============================================================================
@@ -480,6 +516,7 @@ def test_factory_verb_naming_contract():
     signature.
     """
     import inspect
+
     import lumenairy as la
 
     # Known-good exceptions:
@@ -526,6 +563,7 @@ def test_factory_verb_naming_contract():
 def test_lumenairy_imports_cleanly():
     """Smoke-check: `import lumenairy as la` after Agent-D edits."""
     import importlib
+
     import lumenairy
     importlib.reload(lumenairy)
     # If we got here, the import succeeded.

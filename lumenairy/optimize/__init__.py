@@ -19,63 +19,63 @@ Submodules:
 """
 
 from .core import (
-    DesignParameterization,
-    MultiPrescriptionParameterization,
-    MeritTerm,
-    FocalLengthMerit,
-    BackFocalLengthMerit,
-    SphericalSeidelMerit,
-    StrehlMerit,
-    RMSWavefrontMerit,
-    SpotSizeMerit,
-    ChromaticFocalShiftMerit,
-    MatchIdealThinLensMerit,
-    MatchIdealSystemMerit,
-    MatchTargetOPDMerit,
-    ZernikeCoefficientMerit,
-    LGAberrationMerit,
-    make_lg_aberration_merit_jax,
-    CompositeMerit,
-    CallableMerit,
-    JaxMeritTerm,
-    MultiWavelengthMerit,
-    MultiFieldMerit,
-    MinThicknessMerit,
-    MaxThicknessMerit,
-    MinBackFocalLengthMerit,
-    MaxFNumberMerit,
-    ToleranceAwareMerit,
-    EvaluationContext,
-    DesignResult,
-    Constraint,
-    design_optimize,
     WAVE_PROPAGATOR_REGISTRY,
+    BackFocalLengthMerit,
+    CallableMerit,
+    ChromaticFocalShiftMerit,
+    CompositeMerit,
+    Constraint,
+    DesignParameterization,
+    DesignResult,
+    EvaluationContext,
+    FocalLengthMerit,
+    JaxMeritTerm,
+    LGAberrationMerit,
+    MatchIdealSystemMerit,
+    MatchIdealThinLensMerit,
+    MatchTargetOPDMerit,
+    MaxFNumberMerit,
+    MaxThicknessMerit,
+    MeritTerm,
+    MinBackFocalLengthMerit,
+    MinThicknessMerit,
+    MultiFieldMerit,
+    MultiPrescriptionParameterization,
+    MultiWavelengthMerit,
+    RMSWavefrontMerit,
+    SphericalSeidelMerit,
+    SpotSizeMerit,
+    StrehlMerit,
+    ToleranceAwareMerit,
+    ZernikeCoefficientMerit,
+    design_optimize,
+    make_lg_aberration_merit_jax,
     register_wave_propagator,
     unregister_wave_propagator,
 )
-from .multiconfig import (
-    Configuration,
-    multi_config_merit,
-    create_zoom_configs,
-    afocal_angular_magnification,
-    beam_expander_prescription,
-    keplerian_telescope,
-)
+
 # v4.16 (ROADMAP #11): multi-objective Pareto via pymoo NSGA-II.
 # The module imports unconditionally (so users can ``from
 # lumenairy.optimize.multi_objective import design_optimize_multi_objective``
 # regardless of whether pymoo is installed); ``design_optimize_multi_objective``
 # raises ``ImportError`` only when actually called without pymoo.
 from .multi_objective import (
-    ParetoResult,
-    design_optimize_multi_objective,
     # v4.16.0 (Agent A __all__-symmetry walker): pymoo availability
     # flag re-exported so callers can probe via ``la.PYMOO_AVAILABLE``
     # without an explicit ``lumenairy.optimize.multi_objective`` import.
     # Sibling to CUPY_AVAILABLE / JAX_AVAILABLE.
     PYMOO_AVAILABLE,
+    ParetoResult,
+    design_optimize_multi_objective,
 )
-
+from .multiconfig import (
+    Configuration,
+    afocal_angular_magnification,
+    beam_expander_prescription,
+    create_zoom_configs,
+    keplerian_telescope,
+    multi_config_merit,
+)
 
 __all__ = [
     # core

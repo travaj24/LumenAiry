@@ -29,9 +29,12 @@ from typing import Any, Optional, Tuple, Union
 import numpy as np
 
 from ..backend import (
-    array_namespace, is_jax_array, to_numpy, RandomState,
+    RandomState,
+    array_namespace,
+    is_jax_array,
+    to_numpy,
 )
-from .hfpi import accumulate_to_grid, _spawn_rng
+from .hfpi import _spawn_rng
 
 
 @dataclass
@@ -309,7 +312,8 @@ def accumulate_vector_to_grid(
     # JAX path: keep the original double-call form so jax.jit / vmap
     # over the pipeline can trace through it unchanged.
     if is_jax_array(paths.positions):
-        from .hfpi import PathBundle, accumulate_to_grid as _scalar_acc
+        from .hfpi import PathBundle
+        from .hfpi import accumulate_to_grid as _scalar_acc
         ex_paths = PathBundle(
             positions=paths.positions, directions=paths.directions,
             weights=paths.Ex, opl=paths.opl, alive=paths.alive,

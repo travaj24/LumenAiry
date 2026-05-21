@@ -17,13 +17,11 @@ behaviour changes.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from ..analysis import zernike_decompose
 from .context import MeritTerm, ctx_is_valid
-
 
 # =========================================================================
 # Geometric merits (fast, no wave leg)
@@ -991,8 +989,7 @@ class LGAberrationMerit(MeritTerm):
 
     def evaluate(self, ctx: Any) -> float:
         # Lazy import to avoid bootstrap cycles.
-        from ..propagators.asymptotic import (fit_canonical_polynomials,
-                                  aberration_tensor)
+        from ..propagators.asymptotic import aberration_tensor, fit_canonical_polynomials
         # Canonical-fit cache: when a CompositeMerit contains several
         # LGAberrationMerit terms with the same fit_kwargs (typical:
         # one term per emitter class -- centre / edge / corner -- all
@@ -1179,8 +1176,7 @@ class ChromaticFocalShiftMerit(MeritTerm):
     def evaluate(self, ctx: Any) -> float:
         if self.wavelengths is not None:
             # 4.10.2: self-contained per-wavelength EFL evaluation.
-            from ..raytrace import (surfaces_from_prescription,
-                                     system_abcd)
+            from ..raytrace import surfaces_from_prescription, system_abcd
             efls = []
             for wl in self.wavelengths:
                 try:

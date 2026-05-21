@@ -19,16 +19,15 @@ from __future__ import annotations
 import numpy as np
 
 from .surface import (
-    RAY_OK,
-    RAY_TIR,
     RAY_APERTURE,
     RAY_MISSED_SURFACE,
     RAY_NAN,
-    _surface_sag_xy,
-    _surface_sag_derivatives_xy,
+    RAY_OK,
+    RAY_TIR,
     _surface_normal,
+    _surface_sag_derivatives_xy,
+    _surface_sag_xy,
 )
-
 
 # ============================================================================
 # Ray-surface intersection (Newton iteration)

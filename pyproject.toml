@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.1.1"
+version = "5.2.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -212,6 +212,28 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["F401", "F811"]  # test files re-import + redefine fixtures freely
 "lumenairy/__init__.py" = ["F401", "F403"]  # re-export hub
+# v5.2 (audit P3-NEW post-v5.1.0-split closure): the 6 file-split shells
+# do ``from .X import Y`` purely to re-export pre-v5.1.0 public symbols.
+# Without this ignore, ``ruff --fix`` removes the unused imports and
+# breaks every external ``from lumenairy.propagators.propagation import Y``
+# call site that pre-v5.1.0 worked.  V13 walker (shell-vs-canonical)
+# pins the contract structurally; this ignore prevents the linter from
+# regressing it cosmetically.
+"lumenairy/propagators/propagation.py" = ["F401", "F403"]
+"lumenairy/raytrace/core.py" = ["F401", "F403"]
+"lumenairy/propagators/asymptotic.py" = ["F401", "F403"]
+"lumenairy/optimize/core.py" = ["F401", "F403"]
+"lumenairy/io/prescriptions.py" = ["F401", "F403"]
+"lumenairy/analysis/core.py" = ["F401", "F403"]
+# Sub-package __init__.py files are also re-export hubs.
+"lumenairy/analysis/__init__.py" = ["F401", "F403"]
+"lumenairy/elements/__init__.py" = ["F401", "F403"]
+"lumenairy/optimize/__init__.py" = ["F401", "F403"]
+"lumenairy/propagators/__init__.py" = ["F401", "F403"]
+"lumenairy/raytrace/__init__.py" = ["F401", "F403"]
+"lumenairy/io/__init__.py" = ["F401", "F403"]
+"lumenairy/sources/__init__.py" = ["F401", "F403"]
+"lumenairy/backend/__init__.py" = ["F401", "F403"]
 
 # v5.0: mypy --strict incremental adoption.  Starts with the small,
 # self-contained modules per ROADMAP plan; expanding module-by-module

@@ -41,7 +41,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG = _REPO_ROOT / 'CHANGELOG.md'
 _ROADMAP = _REPO_ROOT / 'ROADMAP.md'
@@ -95,8 +94,8 @@ def _actual_walker_entry_point_count() -> tuple[int, int, int]:
     import time (the walker imports ``lumenairy``).
     """
     from tests.unit.test_v4_15_3_dispatcher_pin_2d_scalar_field import (
-        _walk_entry_points,
         _GUARD_EXEMPTIONS,
+        _walk_entry_points,
     )
     total = 0
     guarded = 0

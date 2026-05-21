@@ -45,7 +45,6 @@ import importlib
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Layer-1 / Layer-2 / Layer-3 import-path equality
 # ---------------------------------------------------------------------------
@@ -226,8 +225,7 @@ def _gaussian_field(N: int = 64, dx: float = 1.0e-6, w0: float = 10e-6):
 def test_beam_stats_smoke() -> None:
     """beam_centroid / beam_d4sigma / beam_power / beam_diameter / M2
     on a Gaussian return non-NaN, physically-reasonable scalars."""
-    from lumenairy.analysis.core import (
-        beam_centroid, beam_d4sigma, beam_power, beam_diameter, M2)
+    from lumenairy.analysis.core import M2, beam_centroid, beam_d4sigma, beam_diameter, beam_power
     E, dx, _, _ = _gaussian_field()
     cx, cy = beam_centroid(E, dx)
     assert abs(cx) < dx and abs(cy) < dx, (cx, cy)
@@ -248,8 +246,11 @@ def test_strehl_smoke() -> None:
     coupling_efficiency execute and produce values in [0, 1] on a
     Gaussian / unaberrated pupil."""
     from lumenairy.analysis.core import (
-        strehl_ratio, strehl_marechal, strehl_phase_integral,
-        coupling_efficiency)
+        coupling_efficiency,
+        strehl_marechal,
+        strehl_phase_integral,
+        strehl_ratio,
+    )
     E, dx, _, _ = _gaussian_field()
     # Strehl against itself should be 1.
     s_self = strehl_ratio(E, E, dx)
@@ -275,9 +276,16 @@ def test_psf_mtf_otf_smoke() -> None:
     encircled_energy_curve all execute on a flat-phase circular
     aperture."""
     from lumenairy.analysis.core import (
-        compute_psf, compute_otf, compute_mtf, mtf_radial,
-        encircled_energy_curve, encircled_energy_radius, mtf_cutoff,
-        rayleigh_resolution, fwhm_resolution)
+        compute_mtf,
+        compute_otf,
+        compute_psf,
+        encircled_energy_curve,
+        encircled_energy_radius,
+        fwhm_resolution,
+        mtf_cutoff,
+        mtf_radial,
+        rayleigh_resolution,
+    )
     N = 128
     dx_pupil = 10e-6  # 10 um
     x = (np.arange(N) - N / 2) * dx_pupil
@@ -326,9 +334,15 @@ def test_zernike_smoke() -> None:
     """Zernike round-trip: decompose then reconstruct on a synthetic
     OPD recovers the planted coefficients within fit noise."""
     from lumenairy.analysis.core import (
-        zernike_index_to_nm, zernike_nm_to_index, zernike_polynomial,
-        zernike_basis_matrix, zernike_decompose, zernike_reconstruct,
-        astigmatism_mag_angle, clear_zernike_basis_cache)
+        astigmatism_mag_angle,
+        clear_zernike_basis_cache,
+        zernike_basis_matrix,
+        zernike_decompose,
+        zernike_index_to_nm,
+        zernike_nm_to_index,
+        zernike_polynomial,
+        zernike_reconstruct,
+    )
     # OSA index <-> (n, m) round-trip pins.
     assert zernike_index_to_nm(0) == (0, 0)
     assert zernike_index_to_nm(4) == (2, 0)  # defocus
@@ -382,9 +396,14 @@ def test_opd_smoke() -> None:
     check_sampling_conditions / remove_wavefront_modes /
     depth_of_focus all execute without raising on a Gaussian beam."""
     from lumenairy.analysis.core import (
-        opd_pv_rms, wave_opd_1d, wave_opd_2d, check_opd_sampling,
-        check_sampling_conditions, remove_wavefront_modes,
-        depth_of_focus)
+        check_opd_sampling,
+        check_sampling_conditions,
+        depth_of_focus,
+        opd_pv_rms,
+        remove_wavefront_modes,
+        wave_opd_1d,
+        wave_opd_2d,
+    )
     E, dx, X, _ = _gaussian_field()
     pv, rms = opd_pv_rms(np.real(np.angle(E)))
     assert pv >= 0 and rms >= 0

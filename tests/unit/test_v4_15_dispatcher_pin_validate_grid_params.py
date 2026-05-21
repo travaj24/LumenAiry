@@ -67,7 +67,6 @@ import lumenairy as la
 from lumenairy import sources as _sources_pkg
 from lumenairy.sources import core as _sources_core
 
-
 # ============================================================================
 # Aliases that count as a valid validation call.  The meta-pin accepts
 # any of these in the first 15 body lines.

@@ -47,13 +47,12 @@ from typing import Any, Dict, List, Sequence, Tuple
 import numpy as np
 
 from .context import (
-    EvaluationContext,
-    MeritTerm,
     _FAILED_SCAN_STREHL_SENTINEL_OBJ,
     _INVALID_FL_SENTINEL_OBJ,
     _ZERO_APERTURE_MASK,
+    EvaluationContext,
+    MeritTerm,
 )
-
 
 # =========================================================================
 # Wrapper-merit meshgrid cache (v4.14.0 perf)
@@ -251,8 +250,9 @@ def _clear_wrapper_merit_cache() -> None:
 # walks the registry rather than enumerating clear calls by hand.
 # Late-binding closure preserves ``mock.patch.object`` test semantic.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'wrapper_merit_meshgrid',
@@ -765,8 +765,8 @@ class ToleranceAwareMerit(MeritTerm):
         self.needs_wave = sub_merit.needs_wave
 
     def evaluate(self, ctx: Any) -> float:
+        from ..analysis.through_focus import Perturbation, apply_perturbations
         from . import core as _core
-        from ..analysis.through_focus import apply_perturbations, Perturbation
 
         total = 0.0
         for t in range(self.n_trials):

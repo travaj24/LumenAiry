@@ -27,25 +27,29 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from . import scipy as scipy
 from .array import (
-    array_namespace,
-    is_numpy_array,
-    is_cupy_array,
-    is_jax_array,
-    backend_name,
-    to_numpy,
-    to_backend,
     CUPY_AVAILABLE,
     JAX_AVAILABLE,
+    array_namespace,
+    backend_name,
+    is_cupy_array,
+    is_jax_array,
+    is_numpy_array,
+    to_backend,
+    to_numpy,
 )
 from .fft import (
-    fft2, ifft2, fft, ifft,
-    fftshift, ifftshift, fftfreq,
+    fft,
+    fft2,
     fft_backend_for,
+    fftfreq,
+    fftshift,
+    ifft,
+    ifft2,
+    ifftshift,
 )
 from .random import RandomState
-from . import scipy as scipy
-
 
 __all__ = [
     'array_namespace',

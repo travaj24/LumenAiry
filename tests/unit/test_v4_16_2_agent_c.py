@@ -19,23 +19,22 @@ import pytest
 import lumenairy as la
 from lumenairy import glass as _glass
 from lumenairy.glass import (
-    POLYNOMIAL_COEFFICIENTS,
-    _polynomial_index,
-    _check_glass_registry_consistency,
     GLASS_VALIDITY,
+    POLYNOMIAL_COEFFICIENTS,
+    _check_glass_registry_consistency,
+    _polynomial_index,
 )
 from lumenairy.propagators.propagation import (
+    DEFAULT_DY,
     DEFAULT_REAL_DTYPE,
     DEFAULT_WAVE_PROPAGATOR,
-    DEFAULT_DY,
-    set_default_real_dtype,
+    get_default_dy,
     get_default_real_dtype,
-    set_default_wave_propagator,
     get_default_wave_propagator,
     set_default_dy,
-    get_default_dy,
+    set_default_real_dtype,
+    set_default_wave_propagator,
 )
-
 
 # ============================================================================
 # Feature 1 -- Sellmeier formula-3 (polynomial) evaluator

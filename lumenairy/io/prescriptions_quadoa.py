@@ -28,7 +28,6 @@ from typing import Any, Dict, Optional
 
 import numpy as np
 
-
 # ============================================================================
 # Quadoa Optikos .qos (JSON) file I/O -- best-effort
 # ============================================================================

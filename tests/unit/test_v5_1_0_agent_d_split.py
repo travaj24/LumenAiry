@@ -34,7 +34,6 @@ import importlib
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Smoke -- all previously-public names import from the shell
 # ---------------------------------------------------------------------------
@@ -337,6 +336,7 @@ def test_lg_polynomial_basic(_singlet_fit):
     equals ``N = sqrt(2 / (pi w^2))``.
     """
     import math
+
     from lumenairy.propagators.asymptotic import lg_polynomial
     w = 50e-6
     poly = lg_polynomial(0, 0, w)
@@ -409,10 +409,11 @@ def test_cache_lock_pairs_present_on_shell():
     ``_<NAME>_LOCK``s.  Verify the four pre-v5.1.0 caches survive at
     their new submodule homes AND remain visible on the shell.
     """
-    from lumenairy.propagators import asymptotic as shell
-    from lumenairy.propagators import asymptotic_modes as modes
-    from lumenairy.propagators import asymptotic_jax_twin as jt
     import threading
+
+    from lumenairy.propagators import asymptotic as shell
+    from lumenairy.propagators import asymptotic_jax_twin as jt
+    from lumenairy.propagators import asymptotic_modes as modes
 
     # Mode-stack caches/locks in asymptotic_modes (re-exported by shell)
     for cache_name, lock_name in [

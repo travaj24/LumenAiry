@@ -16,12 +16,9 @@ Author: Andrew Traverso
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
-
-from ..propagators.propagation import angular_spectrum_propagate
-
 
 __all__ = [
     'apply_detector',

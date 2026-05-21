@@ -78,129 +78,6 @@ Author:  Andrew Traverso
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Re-exports from the v5.1.0 infrastructure / kernel submodules.
-# ---------------------------------------------------------------------------
-#
-# The public surface of pre-v5.1.0 ``propagation.py`` is exactly the
-# union of the explicit names below.  Every external import path
-# ``from lumenairy.propagators.propagation import <NAME>`` resolves
-# through this re-export.
-#
-# Note on ``DEFAULT_*`` globals: ``from .fft_infra import
-# DEFAULT_COMPLEX_DTYPE`` binds the name HERE to whatever ``fft_infra``
-# has at this import moment.  Subsequent ``set_default_*`` calls mutate
-# ``fft_infra.DEFAULT_*`` but NOT this module's local binding -- which
-# matches the pre-v5.1.0 semantic (callers who did ``from
-# lumenairy.propagators.propagation import DEFAULT_COMPLEX_DTYPE`` got
-# a stale snapshot too).  For LIVE forwarding via attribute access
-# (``propagation.DEFAULT_COMPLEX_DTYPE``) the module-level
-# ``__getattr__`` at the bottom handles the lookup.
-
-from .fft_infra import (
-    # Backend flags + loaders
-    CUPY_AVAILABLE,
-    PYFFTW_AVAILABLE,
-    SCIPY_FFT_AVAILABLE,
-    cp,
-    pyfftw,
-    _ensure_cupy_loaded,
-    _ensure_pyfftw_loaded,
-    _is_cupy_array,
-    # FFT backend config (globals + setters)
-    FFTW_THREADS,
-    USE_PYFFTW,
-    USE_SCIPY_FFT,
-    SCIPY_FFT_WORKERS,
-    FFTW_MIN_SIZE,
-    PYFFTW_FALLBACK_ON_ERROR,
-    set_fft_fallback,
-    set_fft_threads,
-    get_fft_threads,
-    set_pyfftw_planner,
-    get_pyfftw_planner,
-    set_fft_plan_cache_size,
-    warmup_fft_plans,
-    set_fft_auto_promote,
-    get_fft_auto_promote,
-    reset_fft_backend,
-    # Default-config knobs
-    DEFAULT_COMPLEX_DTYPE,
-    DEFAULT_REAL_DTYPE,
-    DEFAULT_WAVE_PROPAGATOR,
-    DEFAULT_DY,
-    set_default_complex_dtype,
-    get_default_complex_dtype,
-    set_default_real_dtype,
-    get_default_real_dtype,
-    set_default_wave_propagator,
-    get_default_wave_propagator,
-    set_default_dy,
-    get_default_dy,
-    # JAX dtype resolvers
-    _resolve_jax_complex_dtype,
-    _resolve_jax_real_dtype,
-    # ASM caches + helpers
-    _FREQ_GRID_CACHE,
-    _BANDLIMIT_CACHE,
-    _H_CACHE,
-    _ASM_CACHE_LOCK,
-    clear_asm_caches,
-    _clear_local_asm_caches,
-    set_asm_cache_size,
-    get_asm_cache_size,
-    _get_or_make_freq_grids,
-    _get_or_make_bandlimit,
-    _h_cache_lookup,
-    _h_cache_store,
-    _entry_bytes,
-    # pyFFTW plan-cache internals
-    _PYFFTW_PLAN_CACHE,
-    _PYFFTW_PLAN_LOCK,
-    _PYFFTW_BAD_SHAPES,
-    _get_or_make_plan,
-    _build_plan_entry,
-    _promote_entry_to_measure,
-    # FFT dispatchers
-    _fft2, _ifft2, _fft2_nd, _ifft2_nd,
-    _scipy_or_numpy_fft2, _scipy_or_numpy_ifft2,
-    _handle_pyfftw_failure,
-    # Validation
-    _validate_propagator_inputs,
-    # Back-compat latches
-    _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED,
-    _DEFAULT_DY_NO_CONSUMER_WARNED,
-)
-
-from .asm import (
-    angular_spectrum_propagate,
-    angular_spectrum_propagate_tilted,
-    angular_spectrum_propagate_batch,
-    apply_fresnel_curvature,
-    _build_asm_H_square,
-)
-
-from .fresnel import (
-    fresnel_propagate,
-    fraunhofer_propagate,
-)
-
-from .rs import (
-    rayleigh_sommerfeld_propagate,
-)
-
-from .sas import (
-    scalable_angular_spectrum_propagate,
-)
-
-from .mft import (
-    angular_spectrum_propagate_mft,
-    fresnel_propagate_mft,
-    fraunhofer_propagate_mft,
-    resample_field,
-)
-
-
-# ---------------------------------------------------------------------------
 # Module-level __getattr__ for live attribute-access forwarding.
 # ---------------------------------------------------------------------------
 #
@@ -224,6 +101,126 @@ from .mft import (
 # names so attribute lookup falls through to ``__getattr__`` and
 # returns the current value rather than the import-time snapshot.
 from . import fft_infra as _fft_infra
+from .asm import (
+    _build_asm_H_square,
+    angular_spectrum_propagate,
+    angular_spectrum_propagate_batch,
+    angular_spectrum_propagate_tilted,
+    apply_fresnel_curvature,
+)
+
+# ---------------------------------------------------------------------------
+# Re-exports from the v5.1.0 infrastructure / kernel submodules.
+# ---------------------------------------------------------------------------
+#
+# The public surface of pre-v5.1.0 ``propagation.py`` is exactly the
+# union of the explicit names below.  Every external import path
+# ``from lumenairy.propagators.propagation import <NAME>`` resolves
+# through this re-export.
+#
+# Note on ``DEFAULT_*`` globals: ``from .fft_infra import
+# DEFAULT_COMPLEX_DTYPE`` binds the name HERE to whatever ``fft_infra``
+# has at this import moment.  Subsequent ``set_default_*`` calls mutate
+# ``fft_infra.DEFAULT_*`` but NOT this module's local binding -- which
+# matches the pre-v5.1.0 semantic (callers who did ``from
+# lumenairy.propagators.propagation import DEFAULT_COMPLEX_DTYPE`` got
+# a stale snapshot too).  For LIVE forwarding via attribute access
+# (``propagation.DEFAULT_COMPLEX_DTYPE``) the module-level
+# ``__getattr__`` at the bottom handles the lookup.
+from .fft_infra import (
+    _ASM_CACHE_LOCK,
+    _BANDLIMIT_CACHE,
+    _DEFAULT_DY_NO_CONSUMER_WARNED,
+    # Back-compat latches
+    _DEFAULT_WAVE_PROPAGATOR_NO_CONSUMER_WARNED,
+    # ASM caches + helpers
+    _FREQ_GRID_CACHE,
+    _H_CACHE,
+    _PYFFTW_BAD_SHAPES,
+    # pyFFTW plan-cache internals
+    _PYFFTW_PLAN_CACHE,
+    _PYFFTW_PLAN_LOCK,
+    # Backend flags + loaders
+    CUPY_AVAILABLE,
+    # Default-config knobs
+    DEFAULT_COMPLEX_DTYPE,
+    DEFAULT_DY,
+    DEFAULT_REAL_DTYPE,
+    DEFAULT_WAVE_PROPAGATOR,
+    FFTW_MIN_SIZE,
+    # FFT backend config (globals + setters)
+    FFTW_THREADS,
+    PYFFTW_AVAILABLE,
+    PYFFTW_FALLBACK_ON_ERROR,
+    SCIPY_FFT_AVAILABLE,
+    SCIPY_FFT_WORKERS,
+    USE_PYFFTW,
+    USE_SCIPY_FFT,
+    _build_plan_entry,
+    _clear_local_asm_caches,
+    _ensure_cupy_loaded,
+    _ensure_pyfftw_loaded,
+    _entry_bytes,
+    # FFT dispatchers
+    _fft2,
+    _fft2_nd,
+    _get_or_make_bandlimit,
+    _get_or_make_freq_grids,
+    _get_or_make_plan,
+    _h_cache_lookup,
+    _h_cache_store,
+    _handle_pyfftw_failure,
+    _ifft2,
+    _ifft2_nd,
+    _is_cupy_array,
+    _promote_entry_to_measure,
+    # JAX dtype resolvers
+    _resolve_jax_complex_dtype,
+    _resolve_jax_real_dtype,
+    _scipy_or_numpy_fft2,
+    _scipy_or_numpy_ifft2,
+    # Validation
+    _validate_propagator_inputs,
+    clear_asm_caches,
+    cp,
+    get_asm_cache_size,
+    get_default_complex_dtype,
+    get_default_dy,
+    get_default_real_dtype,
+    get_default_wave_propagator,
+    get_fft_auto_promote,
+    get_fft_threads,
+    get_pyfftw_planner,
+    pyfftw,
+    reset_fft_backend,
+    set_asm_cache_size,
+    set_default_complex_dtype,
+    set_default_dy,
+    set_default_real_dtype,
+    set_default_wave_propagator,
+    set_fft_auto_promote,
+    set_fft_fallback,
+    set_fft_plan_cache_size,
+    set_fft_threads,
+    set_pyfftw_planner,
+    warmup_fft_plans,
+)
+from .fresnel import (
+    fraunhofer_propagate,
+    fresnel_propagate,
+)
+from .mft import (
+    angular_spectrum_propagate_mft,
+    fraunhofer_propagate_mft,
+    fresnel_propagate_mft,
+    resample_field,
+)
+from .rs import (
+    rayleigh_sommerfeld_propagate,
+)
+from .sas import (
+    scalable_angular_spectrum_propagate,
+)
 
 # Names whose value can change at runtime via a setter.  Listed here
 # explicitly so we don't accidentally shadow unrelated module attrs.

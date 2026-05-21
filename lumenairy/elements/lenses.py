@@ -31,16 +31,16 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-import warnings
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
-
-import numpy as np
-
 # GPU backend ----------------------------------------------------------------
 # Lazy: only check availability via find_spec, defer the actual import
 # to first use.  Saves ~200 ms at lumenairy import time on machines
 # with CuPy installed.
 import importlib.util as _importlib_util
+import warnings
+from typing import Any, Dict, List, Optional, Tuple, Union
+
+import numpy as np
+
 CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
 cp = None  # populated by _ensure_cupy_loaded() on first use
 
@@ -74,7 +74,8 @@ def _ensure_numexpr_loaded():
 # (``_cheb2d_val_grad_numba``).  Both have pure-NumPy fallbacks below.
 try:
     import numba as _numba
-    from numba import njit as _njit, prange as _prange
+    from numba import njit as _njit
+    from numba import prange as _prange
     _NUMBA_AVAILABLE = True
 except ImportError:
     _numba = None
@@ -712,96 +713,22 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
 # ---------------------------------------------------------------------------
 # Shared Chebyshev helpers used by the Maslov and asymptotic propagators.
 #
-# Originally inlined here in v3.2.2 for the Maslov section that lived
-# in lenses.py; in v3.5.5 the Maslov implementation moved to
-# lumenairy.elements.lenses_maslov but these helpers stayed because
-# lumenairy.propagators.asymptotic also imports them.
+# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+# The three Chebyshev Vandermonde helpers that used to live here
+# (originally inlined in v3.2.2, kept here in v3.5.5 because
+# propagators/asymptotic.py imports them) have moved to
+# ``lumenairy/_math/chebyshev.py``.  The underscore-prefixed aliases
+# below preserve every existing internal call site in this module --
+# and every external import of the form
+# ``from lumenairy.elements.lenses import _chebyshev_vandermonde`` --
+# without forcing those callers to update their import paths.
 # ---------------------------------------------------------------------------
 
-
-def _chebyshev_vandermonde(u: np.ndarray, max_k: int) -> np.ndarray:
-    """
-    Build the Chebyshev Vandermonde-like array T[n](u) for n = 0..max_k.
-
-    Parameters
-    ----------
-    u : ndarray, any shape, values in [-1, 1]
-    max_k : int
-
-    Returns
-    -------
-    T : ndarray of shape (max_k+1,) + u.shape
-        T[n] is T_n(u), computed by the standard 3-term recurrence.
-    """
-    u = np.asarray(u)
-    T = np.empty((max_k + 1,) + u.shape, dtype=np.float64)
-    T[0] = 1.0
-    if max_k >= 1:
-        T[1] = u
-    for n in range(2, max_k + 1):
-        T[n] = 2.0 * u * T[n - 1] - T[n - 2]
-    return T
-
-
-def _chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int
-                                       ) -> np.ndarray:
-    """
-    Build T_n'(u) for n = 0..max_k.  Uses T_n'(x) = n * U_{n-1}(x),
-    where U is the Chebyshev polynomial of the second kind.
-
-    Returns
-    -------
-    Tp : ndarray of shape (max_k+1,) + u.shape
-    """
-    u = np.asarray(u)
-    Tp = np.zeros((max_k + 1,) + u.shape, dtype=np.float64)
-    if max_k < 1:
-        return Tp
-    # U_0(x) = 1, U_1(x) = 2x, U_{n+1} = 2x U_n - U_{n-1}
-    U = np.empty((max_k + 1,) + u.shape, dtype=np.float64)
-    U[0] = 1.0
-    if max_k >= 1:
-        U[1] = 2.0 * u
-    for n in range(2, max_k + 1):
-        U[n] = 2.0 * u * U[n - 1] - U[n - 2]
-    # T_n'(x) = n * U_{n-1}(x)  for n >= 1
-    for n in range(1, max_k + 1):
-        Tp[n] = float(n) * U[n - 1]
-    return Tp
-
-
-def _chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int
-                                              ) -> np.ndarray:
-    """
-    Build T_n''(u) for n = 0..max_k.
-
-    T''_n(x) can be derived from T_n and U_n via the identity
-        T''_n(x) = n * ((n+1) T_n(x) - U_n(x)) / (x^2 - 1)   (x != +/- 1)
-    but this has singular denominators at the endpoints.  A more stable
-    recurrence is obtained by differentiating the standard T recurrence
-    once more:
-        T''_0 = 0,  T''_1 = 0,  T''_2 = 4,
-        T''_{n+1} = 2 x T''_n + 4 T'_n - T''_{n-1}
-
-    Uses the same 3-term recurrence style as the first-derivative
-    helper, so the cost is O(max_k) per evaluation point.
-
-    Returns
-    -------
-    Tpp : ndarray of shape (max_k+1,) + u.shape
-    """
-    u = np.asarray(u)
-    shape = u.shape
-    Tpp = np.zeros((max_k + 1,) + shape, dtype=np.float64)
-    if max_k < 2:
-        return Tpp
-    # We'll need T'_n to drive the recurrence
-    Tp = _chebyshev_derivative_vandermonde(u, max_k)
-    # T''_0 = 0, T''_1 = 0, T''_2 = 4 (constant)
-    Tpp[2] = 4.0 * np.ones(shape, dtype=np.float64)
-    for n in range(2, max_k):
-        Tpp[n + 1] = 2.0 * u * Tpp[n] + 4.0 * Tp[n] - Tpp[n - 1]
-    return Tpp
+from .._math.chebyshev import (  # noqa: F401 -- back-compat alias re-export
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
+    chebyshev_vandermonde as _chebyshev_vandermonde,
+)
 
 
 def _multi_indices_total_degree(n_vars: int, max_order: int):
@@ -939,26 +866,16 @@ def _fit_normaliser(v: np.ndarray, pad: float = 0.05):
 # `from lumenairy.elements.lenses import apply_real_lens_maslov` imports.
 # ---------------------------------------------------------------------------
 
-from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402
-
-
-
 # ---------------------------------------------------------------------------
-# Thin-lens / single-element phase screens were moved to
-# lumenairy.elements._lens_thin in v3.5.5.  Re-exported here so existing
-# `from lumenairy.elements.lenses import apply_thin_lens` etc. continue
-# to work.
+# JAX-traceable real-lens propagators moved to
+# lumenairy.elements._lens_jax in v3.5.5.  Re-exported here so existing
+# `from lumenairy.elements.lenses import apply_real_lens_traced_jax` /
+# `apply_real_lens_maslov_jax` imports continue to work.
 # ---------------------------------------------------------------------------
-
-from ._lens_thin import (  # noqa: E402, F401
-    apply_thin_lens,
-    apply_spherical_lens,
-    apply_aspheric_lens,
-    apply_cylindrical_lens,
-    apply_axicon,
-    apply_grin_lens,
+from ._lens_jax import (  # noqa: E402, F401
+    apply_real_lens_maslov_jax,
+    apply_real_lens_traced_jax,
 )
-
 
 # ---------------------------------------------------------------------------
 # Analytic split-step real-lens propagator moved to
@@ -966,9 +883,22 @@ from ._lens_thin import (  # noqa: E402, F401
 # existing `from lumenairy.elements.lenses import apply_real_lens`
 # imports continue to work.
 # ---------------------------------------------------------------------------
-
 from ._lens_real import apply_real_lens  # noqa: E402, F401
 
+# ---------------------------------------------------------------------------
+# Thin-lens / single-element phase screens were moved to
+# lumenairy.elements._lens_thin in v3.5.5.  Re-exported here so existing
+# `from lumenairy.elements.lenses import apply_thin_lens` etc. continue
+# to work.
+# ---------------------------------------------------------------------------
+from ._lens_thin import (  # noqa: E402, F401
+    apply_aspheric_lens,
+    apply_axicon,
+    apply_cylindrical_lens,
+    apply_grin_lens,
+    apply_spherical_lens,
+    apply_thin_lens,
+)
 
 # ---------------------------------------------------------------------------
 # Per-pixel ray-traced apply_real_lens variant moved to
@@ -978,21 +908,8 @@ from ._lens_real import apply_real_lens  # noqa: E402, F401
 #   from lumenairy.elements.lenses import close_worker_pool
 # imports continue to work.
 # ---------------------------------------------------------------------------
-
 from ._lens_traced import (  # noqa: E402, F401
     apply_real_lens_traced,
     close_worker_pool,
 )
-
-
-# ---------------------------------------------------------------------------
-# JAX-traceable real-lens propagators moved to
-# lumenairy.elements._lens_jax in v3.5.5.  Re-exported here so existing
-# `from lumenairy.elements.lenses import apply_real_lens_traced_jax` /
-# `apply_real_lens_maslov_jax` imports continue to work.
-# ---------------------------------------------------------------------------
-
-from ._lens_jax import (  # noqa: E402, F401
-    apply_real_lens_traced_jax,
-    apply_real_lens_maslov_jax,
-)
+from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402

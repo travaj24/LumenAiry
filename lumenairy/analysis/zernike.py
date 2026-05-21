@@ -41,7 +41,6 @@ from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-
 __all__ = [
     'zernike_index_to_nm',
     'zernike_nm_to_index',
@@ -231,8 +230,9 @@ def clear_zernike_basis_cache() -> None:
 # walks the registry rather than enumerating clear calls by hand.
 # Late-binding closure preserves ``mock.patch.object`` test semantic.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'zernike_basis',

@@ -51,7 +51,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG = _REPO_ROOT / 'CHANGELOG.md'
 _ROADMAP = _REPO_ROOT / 'ROADMAP.md'

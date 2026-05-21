@@ -115,7 +115,9 @@ def aberration_summary(
     AberrationSummary
     """
     from ..raytrace import (
-        surfaces_from_prescription, system_abcd, seidel_coefficients,
+        seidel_coefficients,
+        surfaces_from_prescription,
+        system_abcd,
     )
 
     notes: List[str] = []
@@ -203,9 +205,9 @@ def aberration_summary(
     if include_lg_tensor:
         try:
             from ..propagators.asymptotic import (
+                aberration_tensor,
                 fit_canonical_polynomials,
                 solve_envelope_stationary,
-                aberration_tensor,
             )
             fk = dict(fit_kwargs or {})
             fk.setdefault('source_box_half', max(2.5 * w_s, 1e-5))
@@ -419,7 +421,9 @@ def caustic_diagnostic(prescription: Dict[str, Any],
     and compare the on-MS field intensities.
     """
     from ..raytrace import (
-        surfaces_from_prescription, _make_bundle, trace,
+        _make_bundle,
+        surfaces_from_prescription,
+        trace,
     )
 
     surfaces = surfaces_from_prescription(prescription)

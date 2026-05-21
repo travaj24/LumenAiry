@@ -16,23 +16,23 @@ implementations.
 
 from __future__ import annotations
 
-import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import numpy as np
+
 from ..glass import get_glass_index
+from .intersection import (
+    _intersect_surface,
+    _reflect,
+    _refract,
+)
 from .surface import (
-    RAY_OK,
     RAY_EVANESCENT,
+    RAY_OK,
     RayBundle,
     Surface,
     TraceResult,
 )
-from .intersection import (
-    _intersect_surface,
-    _refract,
-    _reflect,
-)
-
 
 # ============================================================================
 # 3.7.5: World-frame sequential trace

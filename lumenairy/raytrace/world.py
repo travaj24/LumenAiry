@@ -34,7 +34,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from .core import Surface, surfaces_from_prescription, system_abcd
+from .core import Surface, surfaces_from_prescription
 
 
 def _rot_x(rad: float) -> np.ndarray:
@@ -254,7 +254,7 @@ def paraxial_focus_world(
         else:
             aperture_radius = 1e-3
 
-    from .core import trace_world, _make_bundle
+    from .core import _make_bundle, trace_world
 
     # Both rays travel parallel to world +z at z = 0 (paraxial /
     # infinite-object setup).  Chief at (0, 0); marginal at

@@ -44,23 +44,22 @@ import numpy as np
 # Scalar propagation and element functions (dispatched per component)
 from ..propagators.propagation import (
     angular_spectrum_propagate,
-    angular_spectrum_propagate_tilted,
     angular_spectrum_propagate_batch,
-    fresnel_propagate,
+    angular_spectrum_propagate_tilted,
     fraunhofer_propagate,
+    fresnel_propagate,
     scalable_angular_spectrum_propagate,
 )
-from .lenses import (
-    apply_thin_lens,
-    apply_spherical_lens,
-    apply_real_lens,
-)
 from .elements import (
-    apply_mirror,
     apply_aperture,
     apply_mask,
+    apply_mirror,
 )
-
+from .lenses import (
+    apply_real_lens,
+    apply_spherical_lens,
+    apply_thin_lens,
+)
 
 # =============================================================================
 # JONES FIELD CLASS

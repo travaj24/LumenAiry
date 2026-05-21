@@ -145,15 +145,14 @@ from lumenairy.algebra import (
     ThinLens,
 )
 from lumenairy.sources.core import (
+    _RETURN_KIND_UNSET,
     PartialCoherenceMCF,
     Source,
-    _RETURN_KIND_UNSET,
     _SchellReturnKindUnsetSentinel,
     create_annular_incoherent_source,
     create_gaussian_schell_source,
     create_schell_model_source,
 )
-
 
 # Shared parameter bundles for Schell-family tests.
 _GAUSSIAN_SCHELL_KW = dict(

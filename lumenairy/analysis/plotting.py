@@ -27,11 +27,11 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+import importlib.util as _importlib_util
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-import importlib.util as _importlib_util
 _MPL_AVAILABLE = _importlib_util.find_spec('matplotlib') is not None
 plt = None
 Ellipse = Rectangle = None
@@ -75,11 +75,11 @@ def _require_mpl():
                           "Install with: pip install matplotlib")
     if plt is None:
         import matplotlib.pyplot as _plt
-        from matplotlib.patches import (
-            Ellipse as _Ellipse, Rectangle as _Rectangle)
-        from matplotlib.colors import (
-            LogNorm as _LogNorm, Normalize as _Normalize,
-            TwoSlopeNorm as _TwoSlopeNorm)
+        from matplotlib.colors import LogNorm as _LogNorm
+        from matplotlib.colors import Normalize as _Normalize
+        from matplotlib.colors import TwoSlopeNorm as _TwoSlopeNorm
+        from matplotlib.patches import Ellipse as _Ellipse
+        from matplotlib.patches import Rectangle as _Rectangle
         plt = _plt
         Ellipse, Rectangle = _Ellipse, _Rectangle
         LogNorm, Normalize, TwoSlopeNorm = _LogNorm, _Normalize, _TwoSlopeNorm
@@ -775,7 +775,7 @@ def plot_polarization_ellipses(
     fig, ax
     """
     _require_mpl()
-    from ..elements.polarization import polarization_ellipse, stokes_parameters
+    from ..elements.polarization import polarization_ellipse
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -2056,11 +2056,13 @@ def plot_lens_layout(
     Layout3DView for folded systems.
     """
     _require_mpl()
-    from ..raytrace import (
-        surfaces_from_prescription, trace, make_fan,
-        find_paraxial_focus,
-    )
     from ..elements.lenses import surface_sag_general
+    from ..raytrace import (
+        find_paraxial_focus,
+        make_fan,
+        surfaces_from_prescription,
+        trace,
+    )
 
     if ax is None:
         fig, ax = plt.subplots(figsize=(10, 4))

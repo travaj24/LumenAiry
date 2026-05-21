@@ -24,27 +24,27 @@ implementations.
 
 from __future__ import annotations
 
-import numpy as np
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
+import numpy as np
+
 from ..glass import get_glass_index
+from .intersection import (
+    _apply_coord_break,
+    _intersect_surface,
+    _reflect,
+    _refract,
+    _transfer,
+)
 from .surface import (
+    RAY_EVANESCENT,
     RAY_OK,
     RAY_TIR,
-    RAY_EVANESCENT,
     RayBundle,
     Surface,
     TraceResult,
     _surface_copy_with,
 )
-from .intersection import (
-    _intersect_surface,
-    _refract,
-    _reflect,
-    _transfer,
-    _apply_coord_break,
-)
-
 
 # ============================================================================
 # Sequential trace engine
@@ -930,6 +930,17 @@ def apply_doe_phase_traced(
     N_new = np.zeros_like(L_new)
     np.sqrt(np.maximum(1.0 - sum_sq, 0.0), out=N_new, where=propagating)
 
+    # v5.2 (AUDIT_V4_13_1 P1-G closure): preserve the sign of the
+    # longitudinal direction cosine.  The diffraction kick only shifts
+    # the transverse (L, M) components; the propagation direction along
+    # z is unchanged.  Pre-v5.2 ``apply_doe_phase_traced`` always
+    # returned a positive ``N_new`` while the inline DOE kick in
+    # :func:`trace` correctly preserved the sign (see line ~193:
+    # ``r.N = np.where(r.N < 0, -_N_new, _N_new)``).  Match the inline
+    # site so reverse-traced bundles (``N < 0``) keep their direction.
+    N_sign = np.where(rays.N.reshape(1, n_rays) < 0, -1.0, 1.0)
+    N_new = N_new * N_sign
+
     # Per-order alive / error_code grids.
     alive_in = np.asarray(rays.alive, dtype=bool).reshape(1, n_rays)
     alive_new = alive_in & propagating
@@ -1231,7 +1242,6 @@ def surfaces_from_elements(
 
             # Register the glass temporarily
             _glass_name = f'__spherical_{id(elem)}'
-            from ..glass import GLASS_REGISTRY, _glass_cache
             # Store a fixed-index material
             _register_fixed_index(_glass_name, n_lens, wavelength)
 

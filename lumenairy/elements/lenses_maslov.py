@@ -24,17 +24,29 @@ from typing import Any, Dict, Optional
 import numpy as np
 
 from .. import raytrace as rt
+from .._math.chebyshev import (
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+)
+from .._math.chebyshev import (
+    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
+)
 
-# Shared helpers that live in lenses.py because asymptotic.py imports
-# them too (Chebyshev infrastructure for the canonical-fit machinery).
+# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+# The three Chebyshev Vandermonde helpers moved from
+# ``lumenairy.elements.lenses`` to ``lumenairy._math.chebyshev``.  We
+# import the new public names and bind them to the legacy
+# underscore-prefixed locals so the rest of this module's call sites
+# (~10 references) keep working unchanged.
+from .._math.chebyshev import (
+    chebyshev_vandermonde as _chebyshev_vandermonde,
+)
+
+# Other shared helpers still live in lenses.py.
 from .lenses import (
-    _chebyshev_vandermonde,
-    _chebyshev_derivative_vandermonde,
-    _chebyshev_second_derivative_vandermonde,
-    _multi_indices_total_degree,
-    _fit_normaliser,
     NUMEXPR_AVAILABLE,
     _ensure_numexpr_loaded,
+    _fit_normaliser,
+    _multi_indices_total_degree,
     _warn_if_aperture_exceeds_grid,
 )
 

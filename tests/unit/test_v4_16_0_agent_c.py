@@ -44,7 +44,6 @@ from typing import Any, Callable, List, Optional, Tuple
 import numpy as np
 import pytest
 
-
 # pymoo availability flag.  C.3 tests gate on this.
 _PYMOO_AVAILABLE = _importlib_util.find_spec('pymoo') is not None
 
@@ -86,7 +85,8 @@ def small_quadratic_param():
     milliseconds.
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit,
+        CallableMerit,
+        DesignParameterization,
     )
 
     # 5-element template with 5 free params; each path reads the
@@ -132,7 +132,8 @@ def small_quadratic_offset_param():
     and lies inside the bound).
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit,
+        CallableMerit,
+        DesignParameterization,
     )
 
     template = {
@@ -179,7 +180,8 @@ class TestC1ConstrainedOptimisation:
         boundary at ``sum(x) = 15``, so merit > 0.
         """
         from lumenairy.optimize import (
-            Constraint, design_optimize,
+            Constraint,
+            design_optimize,
         )
 
         param, merits = small_quadratic_offset_param
@@ -209,7 +211,8 @@ class TestC1ConstrainedOptimisation:
         L-BFGS-B) must raise ``ValueError`` with a method-hint, not
         silently drop the constraints argument."""
         from lumenairy.optimize import (
-            Constraint, design_optimize,
+            Constraint,
+            design_optimize,
         )
 
         param, merits = small_quadratic_offset_param
@@ -252,7 +255,8 @@ class TestC1ConstrainedOptimisation:
         constraint's label.
         """
         from lumenairy.optimize import (
-            Constraint, design_optimize,
+            Constraint,
+            design_optimize,
         )
 
         param, merits = small_quadratic_offset_param
@@ -456,7 +460,8 @@ class TestC3MultiObjectivePareto:
         ImportError at call time (it may still fail for other
         reasons, but not this one)."""
         from lumenairy.optimize.multi_objective import (
-            design_optimize_multi_objective, PYMOO_AVAILABLE,
+            PYMOO_AVAILABLE,
+            design_optimize_multi_objective,
         )
 
         if PYMOO_AVAILABLE:
@@ -646,8 +651,11 @@ class TestC4NewtonStep:
         without crashing.
         """
         import warnings
+
         from lumenairy.optimize import (
-            DesignParameterization, CallableMerit, design_optimize,
+            CallableMerit,
+            DesignParameterization,
+            design_optimize,
         )
 
         # 50-variable template.  Quadratic merit; we don't actually

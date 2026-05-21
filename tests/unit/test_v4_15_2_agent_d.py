@@ -40,7 +40,6 @@ import pytest
 import lumenairy as la
 from lumenairy import RAY_OK
 
-
 # ============================================================================
 # D.4 -- 'uniform' placement test coverage
 # ============================================================================

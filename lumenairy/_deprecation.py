@@ -8,6 +8,18 @@ mechanics so each warning has a uniform message format and the
 warnings can all be silenced with a single ``warnings.simplefilter``
 incantation in user code.
 
+v5.2 (ROADMAP opportunistic item -- "_deprecation.py orphan helpers"):
+``warn_deprecated_kwarg``, ``warn_renamed_function``, and
+``warn_deprecated_default`` are not currently called by any internal
+site.  They remain exported (and exercised by the test suite via the
+``_NO_DEFAULT`` sentinel + the deprecated_alias decorator) because:
+(a) deletion would silently break any external caller importing them
+by name -- we have no telemetry on out-of-repo use; (b) they document
+the canonical message format for future deprecation cycles, so
+keeping them avoids re-inventing the contract.  If a future v5.x
+deprecation lands without using these helpers, that is itself a
+sibling-gap pattern flagged by audit cadence.
+
 The library raises ``DeprecationWarning`` (the standard since PEP 565
 restored the default-visible behaviour for ``__main__``).  Callers
 who want to suppress them temporarily during migration can do::
@@ -26,7 +38,6 @@ from __future__ import annotations
 import functools
 import warnings
 from typing import Any, Callable, Optional
-
 
 __all__ = [
     'warn_deprecated_kwarg',
@@ -75,7 +86,7 @@ class _Sentinel:
     def __bool__(self) -> bool:  # noqa: D401 — sentinel is always falsy
         return False
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple[Callable[[str], '_Sentinel'], tuple[str]]:
         """Pickle as a name lookup so unpickling returns the singleton.
 
         Returns the tuple ``(_sentinel_unpickle, (self._name,))`` --
@@ -94,7 +105,7 @@ class _Sentinel:
 # pre-existing singleton on unpickle rather than constructing a fresh
 # instance (which would break ``is`` identity).  Module-level (not
 # class-level) so subclasses share the same registry.
-_SENTINEL_REGISTRY: dict = {}
+_SENTINEL_REGISTRY: dict[str, '_Sentinel'] = {}
 
 
 def _sentinel_unpickle(name: str) -> '_Sentinel':
@@ -233,7 +244,7 @@ def deprecated_alias(
     new_name = getattr(new_func, '__qualname__', new_func.__name__)
 
     @functools.wraps(new_func)
-    def _shim(*args, **kwargs):
+    def _shim(*args: Any, **kwargs: Any) -> Any:
         warn_deprecated_alias(
             old_name, new_name,
             version_added=version_added,

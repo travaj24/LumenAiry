@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # v5.1.1 (audit P1-NEW-2WAY-2): 3.10 is the documented floor
+        # v5.1.1 (audit P2-NEW-3WAY-2): 3.10 is the documented floor
         # (``requires-python = ">=3.10"``).  v5.0.1 dropped it from CI
         # because validate.yml at the time only exercised 3.11-3.13;
         # but that left the documented floor un-tested -- a v5.0.2-class
@@ -96,7 +96,7 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          # v5.1.1 (audit P1-NEW-2WAY-6): rationale for ``::error::``
+          # v5.1.1 (audit P2-NEW-V4-E): rationale for ``::error::``
           # over ``::warning::`` for the failure lines.  The
           # ``::warning::`` annotation type would surface in the
           # Annotations API but is rendered yellow in the GitHub UI
@@ -151,6 +151,43 @@ jobs:
 
       - name: Ruff check
         run: ruff check lumenairy/ tests/unit/
+
+  mypy:
+    name: mypy strict (whitelist)
+    runs-on: ubuntu-latest
+    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 + ROADMAP v5.2 closure): wire the
+    # ``[tool.mypy]`` strict-mode whitelist into CI as a real gate.  The
+    # ``pyproject.toml`` ``files = [...]`` array drives which sources are
+    # checked (lumenairy/backend, _deprecation.py, _context.py,
+    # progress.py, memory.py); ``follow_imports = "silent"`` prevents
+    # the ~1889-error cascade into untyped downstream files.  v5.1
+    # closed the scope-local 63-error baseline; v5.2 makes the gate
+    # enforce 0 errors going forward.  Unlike ``lint`` (continue-on-
+    # error: true, advisory), this job blocks merge when the whitelist
+    # regresses.
+    continue-on-error: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        # Match the canonical CI install line from the unit job so the
+        # type-stub surface (numpy, scipy, optional fft / numba / hdf5 /
+        # zarr) matches what mypy resolves against in developer setups.
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
+          pip install mypy
+
+      - name: mypy strict (pyproject whitelist)
+        # No args: the ``[tool.mypy]`` ``files = [...]`` array in
+        # pyproject.toml drives the checked surface.  Expand that list
+        # as additional modules become type-clean.
+        run: mypy
 
   public-api-smoke:
     name: Public API smoke test

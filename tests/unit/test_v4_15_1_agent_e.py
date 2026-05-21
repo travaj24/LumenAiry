@@ -46,7 +46,6 @@ import warnings
 import numpy as np
 import pytest
 
-
 # ============================================================================
 # E.1 -- P1-NEW-C: UI consumer migration
 # ============================================================================
@@ -399,8 +398,8 @@ class TestE4SentinelPickleRoundTrip:
         pickle protocol + repr-name registry are uniform.
         """
         from lumenairy._deprecation import _Sentinel
-        from lumenairy.optimize.core import _ZeroApertureMaskSentinel
         from lumenairy.elements.polarization import _AngleUnsetSentinel
+        from lumenairy.optimize.core import _ZeroApertureMaskSentinel
         assert issubclass(_ZeroApertureMaskSentinel, _Sentinel), (
             "_ZeroApertureMaskSentinel must inherit from "
             "_deprecation._Sentinel (P2 sentinel consolidation)")
@@ -416,8 +415,8 @@ class TestE4SentinelPickleRoundTrip:
         # Import the three sentinels so they're guaranteed
         # registered.
         from lumenairy._deprecation import _NO_DEFAULT, _SENTINEL_REGISTRY
-        from lumenairy.optimize.core import _ZERO_APERTURE_MASK
         from lumenairy.elements.polarization import _ANGLE_UNSET
+        from lumenairy.optimize.core import _ZERO_APERTURE_MASK
         assert _SENTINEL_REGISTRY.get('NO_DEFAULT') is _NO_DEFAULT, (
             "_NO_DEFAULT missing from _SENTINEL_REGISTRY")
         assert (_SENTINEL_REGISTRY.get('_ZERO_APERTURE_MASK')
@@ -443,8 +442,8 @@ class TestE5P3NEqualOneConsistency:
         This was already the case pre-v4.15.1; the test pins the
         contract so a future bounds-tightening doesn't regress it.
         """
-        from lumenairy.user_library import register_fixed_glass
         from lumenairy.glass import GLASS_REGISTRY
+        from lumenairy.user_library import register_fixed_glass
         # Guard against test re-runs leaving a stale registry entry
         # from a previous run.
         if '__vacuum_pin__' in GLASS_REGISTRY:
@@ -461,9 +460,9 @@ class TestE5P3NEqualOneConsistency:
         a registered n=1.0 glass to 1.0 (was raising ValueError
         from the exclusive ``1.0 < n < 5.0`` bound pre-v4.15.1).
         """
-        from lumenairy.user_library import register_fixed_glass
-        from lumenairy.optimize.multiconfig import _resolve_lens_glass_index
         from lumenairy.glass import GLASS_REGISTRY
+        from lumenairy.optimize.multiconfig import _resolve_lens_glass_index
+        from lumenairy.user_library import register_fixed_glass
         if '__vacuum_resolve_pin__' in GLASS_REGISTRY:
             del GLASS_REGISTRY['__vacuum_resolve_pin__']
         with warnings.catch_warnings():

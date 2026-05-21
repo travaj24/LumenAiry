@@ -26,9 +26,8 @@ import numpy as np
 import pytest
 
 import lumenairy as la
-from lumenairy.optimize import Constraint
 from lumenairy import glass as glass_mod
-
+from lumenairy.optimize import Constraint
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -405,8 +404,9 @@ def test_clear_local_asm_caches_mock_patch_observed():
     object directly, silently bypassing ``mock.patch.object``.  C.5
     closes the gap.
     """
-    from lumenairy.propagators import propagation as prop_mod
     from unittest import mock
+
+    from lumenairy.propagators import propagation as prop_mod
 
     # Build a counting wrapper that delegates to the real clearer so
     # the caches still drain (otherwise the test would leak state into
@@ -604,8 +604,9 @@ def test_propagation_asm_cache_lock_still_paired():
     Cross-check that the C.5 late-binding refactor preserved the
     pre-existing lock-pairing invariant.
     """
-    from lumenairy.propagators import propagation as prop_mod
     import inspect as _inspect
+
+    from lumenairy.propagators import propagation as prop_mod
 
     src = _inspect.getsource(prop_mod._clear_local_asm_caches)
     assert '_ASM_CACHE_LOCK' in src, (

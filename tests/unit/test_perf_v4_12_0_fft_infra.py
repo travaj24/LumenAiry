@@ -28,11 +28,12 @@ import pytest
 from lumenairy.propagators import propagation as _prop
 from lumenairy.propagators.propagation import (
     PYFFTW_AVAILABLE,
-    _fft2, _ifft2,
-    set_fft_auto_promote, get_fft_auto_promote,
+    _fft2,
+    _ifft2,
+    get_fft_auto_promote,
     reset_fft_backend,
+    set_fft_auto_promote,
 )
-
 
 # Skip the whole pyFFTW-specific suite when pyFFTW isn't installed.
 # The scipy / numpy fallback paths always return fresh arrays, so the
@@ -306,7 +307,8 @@ class TestAutoPromote:
         that count rather than hardcoding 5.
         """
         from lumenairy.propagators.propagation import (
-            _PYFFTW_AUTO_PROMOTE_THRESHOLD, FFTW_THREADS,
+            _PYFFTW_AUTO_PROMOTE_THRESHOLD,
+            FFTW_THREADS,
         )
         set_fft_auto_promote(True)
         # Round-numbers, FFTW_MIN_SIZE-safe shape.  Use complex128
@@ -351,7 +353,8 @@ class TestAutoPromote:
         """``set_fft_auto_promote(False)`` keeps the plan on
         ESTIMATE regardless of call count."""
         from lumenairy.propagators.propagation import (
-            _PYFFTW_AUTO_PROMOTE_THRESHOLD, FFTW_THREADS,
+            _PYFFTW_AUTO_PROMOTE_THRESHOLD,
+            FFTW_THREADS,
         )
         set_fft_auto_promote(False)
         N = 256

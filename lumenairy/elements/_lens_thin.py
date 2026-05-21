@@ -26,17 +26,16 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
+
+from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
 
 # CuPy is lazy-loaded; this module accesses it via the lenses module's
 # lazy slot so a single load is shared across the package.
 from . import lenses as _lenses_module
-from ..glass import get_glass_index  # 4.10: was missing, broke apply_axicon
 from .lenses import (
-    surface_sag_general,
-    surface_sag_biconic,
     CUPY_AVAILABLE,
 )
 

@@ -31,7 +31,6 @@ import pytest
 import lumenairy as la
 from lumenairy.io import prescriptions as rx_mod
 
-
 # ---------------------------------------------------------------------------
 # Public-API surface: every previously-exported name must be importable
 # from ``lumenairy.io.prescriptions`` AND ``lumenairy`` (top-level

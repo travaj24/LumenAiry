@@ -16,11 +16,11 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+import importlib.util as _importlib_util
+from typing import Any, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-import importlib.util as _importlib_util
 CUPY_AVAILABLE = _importlib_util.find_spec('cupy') is not None
 cp = None  # populated lazily on first use
 
@@ -2268,8 +2268,9 @@ def create_annular_incoherent_source(
 # .propagate(...) and .from_X(...) factories
 # ---------------------------------------------------------------------------
 
-from dataclasses import dataclass, field as _dc_field
-from typing import Optional as _Optional, Tuple as _Tuple
+from dataclasses import dataclass
+from typing import Optional as _Optional
+from typing import Tuple as _Tuple
 
 
 @dataclass

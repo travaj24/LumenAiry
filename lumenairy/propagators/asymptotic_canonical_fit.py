@@ -23,22 +23,30 @@ existing call sites continue to work unchanged.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from .._math.chebyshev import (
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
+)
+
+# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+# Chebyshev helpers moved to lumenairy._math.chebyshev; binding the
+# new public names to the legacy underscore-prefixed locals keeps the
+# existing call sites in this module unchanged.
+from .._math.chebyshev import (
+    chebyshev_vandermonde as _chebyshev_vandermonde,
+)
+
+# Other helpers still live in elements.lenses.
 from ..elements.lenses import (
-    _chebyshev_vandermonde,
-    _chebyshev_derivative_vandermonde,
-    _chebyshev_second_derivative_vandermonde,
-    _multi_indices_total_degree,
     _evaluate_polynomial_4d,
     _evaluate_polynomial_4d_and_grad34,
     _fit_normaliser,
+    _multi_indices_total_degree,
 )
-
 
 __all__ = [
     'CanonicalPolyFit',
@@ -320,7 +328,7 @@ def fit_canonical_polynomials(
     RuntimeError
         If too many rays die for a meaningful fit.
     """
-    from ..raytrace import surfaces_from_prescription, _make_bundle, trace
+    from ..raytrace import _make_bundle, surfaces_from_prescription, trace
 
     if wavelength <= 0:
         raise ValueError(f"wavelength must be > 0, got {wavelength}")
@@ -844,7 +852,7 @@ def fit_hf_polynomials(
     -------
     HFPolyFit
     """
-    from ..raytrace import surfaces_from_prescription, _make_bundle, trace
+    from ..raytrace import _make_bundle, surfaces_from_prescription, trace
 
     if wavelength <= 0:
         raise ValueError("wavelength must be > 0")

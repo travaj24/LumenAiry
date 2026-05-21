@@ -19,9 +19,6 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
-import threading as _threading
-import time
-import warnings
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -65,7 +62,8 @@ _NUMEXPR_MIN_SIZE = 1 << 20
 # Optional Numba JIT.
 try:
     import numba as _numba
-    from numba import njit as _njit, prange as _prange
+    from numba import njit as _njit
+    from numba import prange as _prange
     _NUMBA_AVAILABLE = True
 except ImportError:
     _numba = None
@@ -85,16 +83,15 @@ _NEWTON_MAX_ITERS = 12
 
 # Helpers shared with lenses.py (single-element sag, aperture warning).
 from .lenses import (
-    surface_sag_general,
-    surface_sag_biconic,
     _warn_if_aperture_exceeds_grid,
+    surface_sag_general,
 )
+
 _surface_sag_general = surface_sag_general
 
 # Sibling-module imports.
-from ..propagators.propagation import angular_spectrum_propagate
-from ..glass import get_glass_index, get_glass_index_complex
-from ..progress import call_progress, ProgressScaler
+from ..glass import get_glass_index
+from ..progress import ProgressScaler, call_progress
 
 # apply_real_lens (analytic split-step) is the workhorse for the
 # amplitude leg of apply_real_lens_traced.  Lives in _lens_real.py
@@ -217,7 +214,6 @@ def _get_persistent_worker_pool(n_workers):
                 # discard the reference.
                 pass
             _PERSISTENT_POOL = None
-        from concurrent.futures import ProcessPoolExecutor
         # v4.16.1 (audit M-2): force the ``spawn`` start method.  The
         # default on Linux is ``fork``, which inherits the parent's
         # FFT plan caches and threading state -- both of which are
@@ -230,6 +226,7 @@ def _get_persistent_worker_pool(n_workers):
         # only true of the multi-process storage tests, not the
         # library worker pool itself).
         import multiprocessing as _mp
+        from concurrent.futures import ProcessPoolExecutor
         _spawn_ctx = _mp.get_context('spawn')
         _PERSISTENT_POOL = ProcessPoolExecutor(
             max_workers=int(n_workers),
@@ -262,15 +259,11 @@ def close_worker_pool() -> None:
 
 
 # Sibling-module imports (created separately in this package) ----------------
-from ..propagators.propagation import angular_spectrum_propagate
-from ..glass import get_glass_index, get_glass_index_complex
 
 # Typing: the Maslov section (merged in 3.2.2 from the former
 # lens_maslov.py) uses Any / Dict / Optional / Tuple in function
 # annotations.
-from typing import Any, Dict, Optional, Tuple
 # The Maslov section uses ``time`` for internal progress timing.
-import time  # noqa: F401
 
 
 # ---------------------------------------------------------------------------
@@ -961,7 +954,7 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
             compound systems with intermediate foci may behave
             unexpectedly.  **Labelled experimental.**
     """
-    from ..raytrace import surfaces_from_prescription, trace, _make_bundle
+    from ..raytrace import _make_bundle, surfaces_from_prescription, trace
 
     N = int(N_grid)
     sub = max(1, int(ray_subsample))
@@ -1360,10 +1353,10 @@ def apply_real_lens_traced(
 
     # Local import to avoid a circular dep at module load time
     from ..raytrace import (
-        surfaces_from_prescription, trace, _make_bundle,
+        _make_bundle,
+        surfaces_from_prescription,
+        trace,
     )
-    from ..propagators.propagation import angular_spectrum_propagate
-    from ..progress import call_progress, ProgressScaler
 
     call_progress(progress, 'real_lens_traced', 0.0, 'initialising')
 
@@ -2111,7 +2104,8 @@ def apply_real_lens_traced(
     # ``RectBivariateSpline.ev`` does not release the GIL in current
     # versions, so threading delivers no speedup.
 
-    from concurrent.futures import ProcessPoolExecutor, as_completed
+    from concurrent.futures import as_completed
+
     from ..memory import available_cpus
 
     # Affinity-aware: respect cgroup limits, taskset masks, Python 3.13+

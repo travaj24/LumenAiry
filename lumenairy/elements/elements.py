@@ -18,17 +18,16 @@ into several categories:
 Author: Andrew Traverso
 """
 
-import numpy as np
 from math import factorial
 
+import numpy as np
+
+# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup): this used to be a
+# 4-line wrapper duplicated in 5 files; consolidated to the canonical
+# backend helper.  The underscore-prefixed alias preserves existing
+# in-module references without touching call sites.
+from ..backend import array_namespace as _xp_of  # noqa: E402
 from .lenses import _surface_sag_general
-
-
-def _xp_of(*arrays):
-    """Return the array namespace appropriate for the inputs."""
-    from ..backend import array_namespace
-    return array_namespace(*arrays)
-
 
 # =============================================================================
 # MIRRORS

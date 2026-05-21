@@ -21,7 +21,6 @@ import pytest
 
 import lumenairy as lm
 
-
 # Test geometry: plano-convex BK7 singlet matched to the audit's hand
 # calc so the numerical comparison is one-to-one with the audit report.
 PRESCRIPTION = {

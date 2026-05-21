@@ -18,10 +18,10 @@ Author: Andrew Traverso -- v4.15.4 / Agent D.
 """
 from __future__ import annotations
 
+import matplotlib
 import numpy as np
 import pytest
 
-import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 
@@ -30,7 +30,6 @@ from lumenairy.analysis.plotting import (  # noqa: E402
     plot_opd_fan,
     plot_opd_summary,
 )
-
 
 # ----------------------------------------------------------------------------
 # Synthetic test data

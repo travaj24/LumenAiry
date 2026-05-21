@@ -68,11 +68,11 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as _dc_field
-from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass
+from dataclasses import field as _dc_field
+from typing import Any, Dict, Optional
 
 import numpy as np
-
 
 # =============================================================================
 # Deformable mirror
@@ -392,7 +392,8 @@ def zernike_modal_basis(
     closed-form Zernike-derivative formulas.
     """
     from .core import (
-        zernike_polynomial, zernike_index_to_nm,
+        zernike_index_to_nm,
+        zernike_polynomial,
     )
     if n_modes <= 0:
         raise ValueError("n_modes must be > 0")

@@ -21,20 +21,21 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
+from . import fft_infra as _state
 from .fft_infra import (
     CUPY_AVAILABLE,
-    _is_cupy_array,
-    _fft2, _ifft2,
     _ensure_cupy_loaded,
-    _h_cache_lookup, _h_cache_store,
+    _fft2,
+    _h_cache_lookup,
+    _h_cache_store,
+    _ifft2,
+    _is_cupy_array,
     _validate_propagator_inputs,
 )
-from . import fft_infra as _state
-
 
 __all__ = [
     'angular_spectrum_propagate_mft',

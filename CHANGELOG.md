@@ -2,6 +2,329 @@
 
 All notable changes to the core library are documented here.
 
+## [5.2.0] — 2026-05-20
+
+**Largest non-breaking release in the v5.x series.**  Closes the
+v5.1.1 audit (`docs/audits/AUDIT_V5_1_1_2026_05_20.md`) plus every
+remaining v5.x ROADMAP item.  Scope: 4 new meta-walkers, 6 deferred
+features, 7 structural cleanups, 5 physics-correctness fixes, ruff
++ mypy baseline closure.
+
+**Zero physics regressions in 10 consecutive releases.**
+
+**3741 unit tests pass** (collected = 3749 = pass + 7 skip + 1 xfail);
+**+113 net** vs v5.1.1 (3628).  **34/34 validation pass.**  Library
+public API: `len(lumenairy.__all__) = 534` (+1 over v5.1.1 -- the
+new `MCF` top-level alias).
+
+### v5.1.1 audit closures (5 items)
+
+* **Tighten `test_examples_output_dir` AST check** (audit P2 v5.2
+  candidate).  v5.1.1's check required three signals (`'output'`
+  literal + `makedirs(...)` + `__file__`) to appear ANYWHERE in
+  the file -- F1 demonstrated this was gameable with the signals
+  scattered.  v5.2 requires data-flow co-location: the `'output'`
+  literal AND `__file__` reference must appear inside the
+  `makedirs(...)` call's first-argument subtree, OR in the RHS of
+  the assignment binding the call's first argument.  Three
+  scattered tokens no longer suffice.
+* **Tighten Migration-Guide content-locks** (audit P2 v5.2
+  candidate).  v5.1.1 asserted `shim-name` + `**Removed.**` as
+  independent global substrings; F1 noted a `lumenairy.ao` quote
+  elsewhere in the guide could keep the pin green while the actual
+  removal section was deleted.  v5.2 anchors `**Removed.**` to
+  within 3 lines of the shim-name match (recipe-window pattern)
+  plus the new-import line within 9 lines.  Deletion-detection
+  now scales with section locality.
+* **V12 walker (CHANGELOG-vs-changeset verifier)** at
+  `tests/unit/test_v5_2_walker_changelog_changeset.py` (audit P1
+  v5.2 candidate).  Structural fix for the v5.1.0 fabrication
+  class.  Parses the most-recent `## [X.Y.Z]` block + asserts:
+  (a) every backticked file-path citation resolves to a real
+  repo file; (b) every audit-ID citation appears under
+  `docs/audits/`; (c) test-count arithmetic reconciles; (d) the
+  block advertises an audit-closure verification mechanism.  On
+  first run V12 immediately caught FIVE fabricated audit IDs in
+  the v5.1.1 CHANGELOG (the P1-2way-N family for N=2..6 which I
+  had invented).  Those IDs have been corrected to the audit's
+  actual
+  `P2-NEW-3WAY-2`, `P2-NEW-V4-G`, `P2-NEW-F1-3`, `P2-NEW-V2`,
+  `P2-NEW-V4-E` per the v5.1.0 audit's per-closure verdict table.
+  V12 paid for itself before it shipped.
+* **V13 walker (shell-vs-canonical-location uniqueness)** at
+  `tests/unit/test_v5_2_walker_shell_vs_canonical.py` (audit
+  P2-NEW-F2-1 #1).  For every name imported in a post-v5.1
+  file-split shell's `from .X import Y` block, asserts
+  `Y.__module__` is the submodule, not the shell.  Walks 6 shells
+  -- raytrace, propagation, asymptotic, optimize, prescriptions,
+  analysis -- and 243 raw / 334 expanded re-export claims.  One
+  documented exemption (`propagate_modal_asymptotic` v4.14.1
+  monkey-patch contract).  13/13 pass.
+* **V14 walker (PEP-562 forwarding completeness)** at
+  `tests/unit/test_v5_2_walker_pep562_forwarding.py` (audit
+  P2-NEW-F2-1 #2).  Enumerates `fft_infra` mutable globals
+  (those rebound via `X = ...`) and asserts each appears in
+  `propagation._LIVE_FORWARD_NAMES`.  Counter-pin verifies the
+  whitelist hasn't drifted in the opposite direction.  19
+  mutable globals discovered; 4 defensive whitelist entries
+  carried as harmless future-proofing.  4/4 pass.
+* **V15 walker (sentinel `__reduce__` structural)** at
+  `tests/unit/test_v5_2_walker_sentinel_reduce.py` (audit
+  P2-NEW-F2-1 #3 + P3-NEW-F1-3).  Auto-discovers every
+  `_Sentinel` subclass via `__subclasses__()` and asserts each
+  defines `__reduce__` -> `(_sentinel_unpickle, (name,))` with
+  the name registered in `_SENTINEL_REGISTRY`.  Discovered SIX
+  sentinels including `_SchellReturnKindUnsetSentinel` which was
+  NOT in the v4.15.2 hardcoded `EXPECTED_SUBCLASSES` tuple and
+  was silently missing pickle round-trip coverage -- exactly the
+  failure mode P3-NEW-F1-3 predicted.  V15 retroactively closed
+  that finding.  15/15 pass.
+
+### v5.1.0 audit carry-over (1 item)
+
+* **Prune 60 dead V7 walker exemption entries** (audit
+  P3-NEW-F1-2).  After the v5.1.0 6-file split, the 10
+  `propagators/propagation.py:*` and 26 `analysis/core.py:*`
+  exemption entries in
+  `tests/unit/test_v4_16_0_walker_xp_of_dispatch.py:179-375`
+  pointed at function bodies that had moved to topical submodules
+  (the shells now have zero function definitions).  v5.2 deletes
+  the 36 dead entries with a citation block explaining that V13
+  catches any future regression where a function body sneaks
+  back into a shell.  Walker auto-discovery re-finds the
+  dispatch sites at the new submodule paths.
+
+### Deferred v5.1.0 features (6 items)
+
+* **`MCF` top-level alias** for `PartialCoherenceMCF` (ROADMAP
+  v5.1 partial-coherence polish).  One-line addition + `__all__`
+  bullet so the partial-coherence import story is uniform with
+  `lumenairy.coherence_at` and `lumenairy.propagate_ensemble`.
+  The canonical class name `PartialCoherenceMCF` is unchanged.
+* **Formula-3 (polynomial) glass evaluator + 24-glass stub
+  manifest** in `lumenairy/glass.py` (ROADMAP v5.1 glass /
+  materials).  New `_polynomial_index(wavelength_m, coeffs)`
+  with a scalar fast-path mirroring `_sellmeier_index`'s
+  `math.sqrt` float-arithmetic plus a vectorized NumPy / JAX
+  path.  New `_POLYNOMIAL_STUB_NAMES` frozenset of 24 entries
+  (4 CDGM polynomial + 10 Hikari + 10 Sumita) -- coefficient
+  ingestion deferred to v5.2.1 to avoid fabricated values.
+  Minimal installs hitting a stubbed name raise
+  `NotImplementedError` with both the `lumenairy[glass]` install
+  path AND a v5.2.1 issue tracker reference.  Module-load
+  consistency invariants in `_check_glass_registry_consistency`
+  catch a v5.2.1 ingestion PR that forgets to remove the stub
+  entry.  20 new tests; 19 pass + 1 vacuous-skip at ship.
+* **Off-axis conic in surface frame for `apply_real_lens`**
+  (ROADMAP v5.1 off-axis conic).  New `surface_frame: bool =
+  False` kwarg.  When `True`, the per-surface `"decenter"` /
+  `"tilt"` are applied as a rigid-body transform: the field's
+  `(x, y)` maps to surface-frame `(x_s, y_s)` via
+  `R^T @ (x - dcx, y - dcy, 0)` (full rotation matrix, no
+  small-angle linearization), and sag is evaluated at `(x_s,
+  y_s)`.  The linear sag ramp is suppressed in this branch to
+  avoid double-counting.  Default `surface_frame=False`
+  preserves v5.1 behavior bit-for-bit (verified by 2
+  backwards-compat pins including one with active
+  decenter+tilt).  Migration-Guide.md gains a new v5.2.0
+  section with the physics rationale + Optiland/Zemax parity
+  notes.  5 new tests.
+* **5 new examples** -- `examples/08_multiconfig_zoom.py`,
+  `examples/09_tolerancing_monte_carlo.py`,
+  `examples/10_coronagraph_workflow.py`,
+  `examples/11_ao_closed_loop.py`,
+  `examples/12_ghost_stray_light.py` (ROADMAP v5.1 docs /
+  examples).  881 LOC total; each runs in < 60s, uses the
+  canonical v4.16.1 `examples/output/` wiring, has `main()` +
+  `__main__` guard, and is parsing-pinned at
+  `tests/unit/test_v5_2_new_examples.py` (20 tests).  Example
+  11 (AO closed loop) uses primitives + a documented
+  "build-it-yourself" idiom since no high-level
+  `ao_closed_loop` helper exists in the library yet -- v5.2.1
+  candidate.
+* **57-file `test_audit_fixes_*` consolidation** (ROADMAP v5.1
+  architecture / housekeeping).  57 files -> 10 topical homes:
+  `test_audit_analysis.py` (66 tests),
+  `test_audit_glass.py` (19),
+  `test_audit_io.py` (41),
+  `test_audit_lens.py` (52),
+  `test_audit_misc.py` (230),
+  `test_audit_optimize.py` (82),
+  `test_audit_polarization.py` (41),
+  `test_audit_propagation.py` (98),
+  `test_audit_raytrace.py` (61),
+  `test_audit_sources.py` (101).  791 tests preserved bit-for-bit;
+  zero behavior changes.  223 class-name attribution prefixes
+  (`TestAuditFixesV<ver>_<scope>_<orig>`) maintain git-blame
+  traceability.  9 `inspect.getsource` proxy-test sites
+  conservatively kept with `# TODO(v5.2.1): replace with
+  behavioral pin -- inspect.getsource proxy-test pattern (per
+  AUDIT_V4_13_1 Part 6.1)` comments; none deleted (audit
+  AUDIT_V4_13_1 Part 6.1 deferred to v5.2.1).
+* **Shared Chebyshev helpers extracted to `lumenairy/_math/chebyshev.py`**
+  (ROADMAP v5.1 architecture / housekeeping).  The 3 NumPy
+  helpers from `elements/lenses.py:722-810` plus the
+  xp-dispatched twin from `asymptotic_jax_twin.py:65` are now
+  in a single `chebyshev_vandermonde(u, max_k, xp=None)`
+  signature.  6 consumer sites updated (lenses, lenses_maslov,
+  4 asymptotic_*).  Back-compat aliases preserved at
+  `lumenairy.elements.lenses._chebyshev_*` so external imports
+  by the old underscore-prefixed names still work.  10 new
+  tests + 151 / 151 asymptotic+maslov tests + 406 / 406
+  lens-related tests all green; V13 walker still clean on the
+  updated asymptotic shell.
+
+### Structural cleanups (3 items)
+
+* **`_xp_of` deduplication** (ROADMAP opportunistic item).  5
+  copies of the 4-line wrapper `def _xp_of(*arrays): from
+  ..backend import array_namespace; return array_namespace(*arrays)`
+  (in `elements/elements.py`, `elements/freeform.py`,
+  `analysis/beam_stats.py`, `analysis/strehl.py`,
+  `analysis/psf_mtf_otf.py`) consolidated to a single
+  `from ..backend import array_namespace as _xp_of` alias.
+  All 5 call-site contracts preserved (the alias keeps the
+  module-local name); zero behavior change.
+* **`backend/fft.py` -> `propagators/propagation.py` inversion
+  fix** (ROADMAP opportunistic item).  Pre-v5.1, the FFT
+  plan-cache infra lived inside `propagators/propagation.py`
+  and `backend/fft.py` imported through that monolith
+  (inverted dependency).  v5.1 lifted the infra to
+  `fft_infra.py`; v5.2 routes the 5 `backend/fft.py` import
+  sites directly through `fft_infra` instead of the
+  `propagation` shell.  Removes the PEP-562 `__getattr__`
+  forwarding step from the hot FFT-dispatch path.
+* **`_deprecation.py` orphan helper documentation** (ROADMAP
+  opportunistic item).  `warn_deprecated_kwarg`,
+  `warn_renamed_function`, and `warn_deprecated_default` are
+  exported but have zero internal call sites.  v5.2 keeps them
+  (deletion would silently break any external by-name caller
+  -- we have no out-of-repo telemetry) with a module docstring
+  note explaining the orphan status + canonical-format-for-
+  future-deprecations rationale.
+
+### Documentation (2 items)
+
+* **CONVENTIONS.md sign-convention table** (ROADMAP v5.1
+  docs).  Section 7 gains a 12-row one-stop summary table
+  covering time / propagation / mirror radius / refraction
+  radius / OPD / lens phase / mirror phase pickup / aperture
+  transmission / decenter / tilt / polarization / refractive
+  index.  Future per-site contradictions resolve against the
+  table.
+* **`validation/README.md`** (ROADMAP v5.1 docs).  Decision
+  tree for `tests/unit/` vs `validation/`, layout reference,
+  running instructions, file-naming convention (`t_*.py` vs
+  `test_*.py`).  Closes the long-standing "contributors don't
+  know whether to add tests to `tests/unit/` or `validation/`"
+  gap.  README.md + CHANGELOG.md archive splits deferred to
+  v5.3 (high-link-breakage risk).
+
+### Physics-correctness fixes (5 items)
+
+All five are AUDIT_V4_13_1 deferred Tier-2 items.
+
+* **`apply_doe_phase_traced` sign preservation** (P1-G; ~10
+  LOC in `raytrace/trace.py`).  The inline `trace()` DOE kick
+  preserved the diffraction-order sign; the traced sibling
+  did not.  Fix mirrors the inline pattern.  Negative-order
+  diffraction now produces the correct phase advance/retard.
+  3 new tests.
+* **`MultiPrescriptionParameterization.scale_floor`** (P1-1;
+  `optimize/parameterizations.py`).  Added `scale_floor`
+  kwarg + per-parameter-type default table: radii /
+  thicknesses 1e-6 m, conics / aspheric `alpha_n` 1e-3.
+  Parameters near zero no longer collapse the optimizer's
+  `x_scale`.  Driver reads via existing
+  `getattr(parameterization, 'scale_floor', None)`; pre-v5.2
+  callers see no behavior change.  7 new tests.
+* **`output_grid` -> `output_shape` rename on sub-propagators**
+  (P1-A).  The dispatcher contract `output_grid=(N_out,
+  dx_out)` is canonical; 3 sub-propagators (gbd / hfpi / hf)
+  used the same kwarg name to mean `(Ny, Nx)`.  v5.2 renames
+  the sub-propagator kwarg to `output_shape` + adds a
+  back-compat shim emitting `DeprecationWarning` on the
+  legacy `output_grid` form.  Six entry points updated:
+  `propagate_gbd_freespace`, `propagate_gbd_thin_lens`,
+  `propagate_gbd_through_prescription`,
+  `propagate_hfpi_freespace_aperture`,
+  `propagate_hfpi_through_prescription`,
+  `propagate_huygens_fresnel_through_prescription`.  5 new
+  tests.  **Open caveat**: `dispatch.py` still forwards the
+  legacy form; deferred to v5.2.1 -- documented in
+  Migration-Guide.md.
+* **MHS subdomain grid-loss guard** (P1-C; `propagators/mhs.py`).
+  `prescription_subdomain(method='maslov')` silently ignored
+  `output_grid` and returned on the input grid.  v5.2 raises
+  `ValueError` with a clear migration recipe (use a different
+  method or accept the input-grid output explicitly).  3 new
+  tests.  Substantive maslov-branch grid resampling deferred
+  to v5.2.1.
+* **Partition-of-unity convention `UserWarning`** (P1-F;
+  `propagators/subaperture.py`).  `propagate_subaperture_asymptotic`
+  centered windows on source-plane positions, which is only
+  correct for unit-mag no-tilt systems.  v5.2 probes the
+  system ABCD's `|A - 1|` and emits `UserWarning` for
+  non-unit-magnification systems; the existing test for the
+  magnifying-singlet case now legitimately flags this.  New
+  optional `image_centres` / `image_half_widths` kwargs on
+  `combine_patch_fields` let callers with magnification info
+  pass image-plane patch coordinates explicitly.  3 new tests.
+  Full image-plane mapping inside
+  `propagate_subaperture_asymptotic` deferred to v5.2.1.
+
+### Lint / type baseline closure
+
+* **Ruff baseline cleanup** -- 917 errors (v5.1.1) -> 134
+  errors (v5.2).  85% reduction via safe `ruff --fix`.
+  Per-file ignores added for the 6 v5.1.0 file-split shells +
+  8 sub-package `__init__.py` files (re-export modules where
+  F401 unused-import is correct behavior, not a bug).
+  Remaining 134 errors are F841 unused-vars (70) + E702
+  semicolons (63) + 1 misc; all need `--unsafe-fixes` and
+  are advisory-only (`lint` job has
+  `continue-on-error: true`).  Deferred to v5.2.1 for the
+  unsafe-fix sweep.
+* **mypy strict baseline cleanup + CI activation** -- 76
+  errors (v5.1.1) -> 0 errors.  All scope-local errors in the
+  `[tool.mypy]` whitelist (`lumenairy/backend`,
+  `_deprecation.py`, `_context.py`, `progress.py`,
+  `memory.py`) cleaned.  `mypy` is now wired into
+  `unit-tests.yml` as a real gate (`continue-on-error: false`).
+
+### Meta-pattern note (v5.2 retirement state)
+
+The "fix N, miss N+1" sibling-gap meta-pattern is now structurally
+retired across 15 currently-known surfaces (V1-V15).  New classes
+will continue to surface and be added to the V-walker family as
+identified -- including CONTENT-LEVEL CHANGELOG fabrications
+(where the cited file exists but the cited behavior is missing)
+which V12 deliberately does NOT cover.  Those need the diff-aware
+companion script + human review; deferred to v5.3.
+
+### Items still deferred to v5.2.1 / v5.3+
+
+* 24 formula-3 glass coefficient ingestion (data, no library API
+  change).
+* `output_grid` dispatcher-forwarding fix (P1-A residual).
+* MHS subdomain maslov-branch substantive resampling (P1-C
+  residual).
+* Subaperture image-plane partition-of-unity full fix (P1-F
+  residual).
+* 9 `inspect.getsource` proxy tests -> behavioral pins
+  (AUDIT_V4_13_1 Part 6.1).
+* Ruff `--unsafe-fix` sweep (F841 + E702, 133 advisory errors).
+* `ao_closed_loop` high-level helper (example 11 currently
+  builds from primitives).
+* README.md + CHANGELOG.md archive splits.
+* CONTENT-LEVEL CHANGELOG-fabrication walker (companion to V12
+  using `git diff PREV_TAG..HEAD`).
+* `MultiFieldMerit` JIT compile (perf).
+* `logging` adoption sweep (42 `warnings.warn` -> structured
+  logging where appropriate).
+
+---
+
 ## [5.1.1] — 2026-05-20
 
 **Patch release closing the v5.1.0 audit
@@ -26,27 +349,29 @@ parallel-edit race is itself part of what this patch is fixing).
 ### v5.1.0 audit closures actually shipped in v5.1.1
 
 **P1 (1):**
-* **`publish.yml` release-process gate** (audit P1-NEW-2WAY-1).  New
-  pre-build `verify` job runs the unit suite + library-import sanity
-  on the tag's source across Python 3.11/3.12/3.13 BEFORE `build`
-  and `publish` fire (`build` depends on `verify`; `publish` depends
-  on both).  v5.0.0, v5.0.1, AND v5.1.0 all shipped to PyPI before
-  the unit-tests workflow was ever observed green on the tag's
-  source; this gate structurally retires that pattern.  The v5.1.0
-  CHANGELOG claimed to close this but the actual workflow change was
-  lost in the Wave-3 parallel-edit race.
+* **`publish.yml` release-process gate** (audit P1-NEW-3WAY-1; the
+  v5.1.0 audit's umbrella finding for the CHANGELOG fabrication
+  is P1-NEW-2WAY-1).  New pre-build `verify` job runs the unit suite
+  + library-import sanity on the tag's source across Python
+  3.11/3.12/3.13 BEFORE `build` and `publish` fire (`build` depends
+  on `verify`; `publish` depends on both).  v5.0.0, v5.0.1, AND
+  v5.1.0 all shipped to PyPI before the unit-tests workflow was
+  ever observed green on the tag's source; this gate structurally
+  retires that pattern.  The v5.1.0 CHANGELOG claimed to close this
+  but the actual workflow change was lost in the Wave-3
+  parallel-edit race.
 
 **P2 (5):**
 * **Python 3.10 re-added to the unit-tests CI matrix** (audit
-  P1-NEW-2WAY-2).  The documented floor
+  P2-NEW-3WAY-2).  The documented floor
   (`requires-python = ">=3.10"`) was un-tested between v5.0.1 and
   v5.1.0 because the v5.0.1 CI install dropped 3.10 pending a
   3.10-specific install path verification.  Re-adding so the
   documented minimum is exercised on every PR.
 * **Doubled `@_skip_no_qt` decorators removed** at
   `tests/unit/test_v4_15_agent_e.py:215` (TestUI3) and `:254`
-  (TestUI4) (audit P1-NEW-2WAY-3).
-* **`test_examples_output_dir` tightened** (audit P1-NEW-2WAY-4).
+  (TestUI4) (audit P2-NEW-V4-G).
+* **`test_examples_output_dir` tightened** (audit P2-NEW-F1-3).
   The previous disjunctive form
   `"examples/output" in src or "'output'" in src or '"output"' in src`
   was loose -- the bare `'output'` literal matched incidental
@@ -56,12 +381,12 @@ parallel-edit race is itself part of what this patch is fixing).
   output directory to the script location, not the caller's cwd).
 * **3 Migration-Guide content-lock assertions added** to the shim
   pins (`lumenairy.ao`, `lumenairy.io.hdf5`, `lumenairy.system` top
-  level) (audit P1-NEW-2WAY-5).  Each pin now reads
+  level) (audit P2-NEW-V2).  Each pin now reads
   `Migration-Guide.md` and asserts the removal line + new import
   path are both present.  Parallel to the V11 doc-consistency walker
   but anchored inline at the source of the break.
 * **`::error::` annotation choice documented inline** in
-  `unit-tests.yml` (audit P1-NEW-2WAY-6).  Rationale block explains
+  `unit-tests.yml` (audit P2-NEW-V4-E).  Rationale block explains
   why FAILED lines use `::error::` (red, contributes to public
   failed-checks count) while the TAIL summary lines use
   `::warning::` (yellow, diagnostic context, doesn't inflate the

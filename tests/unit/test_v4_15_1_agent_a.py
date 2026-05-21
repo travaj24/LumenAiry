@@ -63,7 +63,6 @@ from lumenairy.io.prescriptions import (
 )
 from lumenairy.raytrace import Surface, make_ray, trace
 
-
 # ============================================================================
 # A.1 -- ``make_off_axis_parabola`` audit closure (P0-NEW-1 + P3-F1-3)
 # ============================================================================
@@ -703,8 +702,8 @@ class TestForbesQBfsEndToEndOPD:
         precision.  Larger a_0 would require phase unwrapping which
         introduces its own noise.
         """
-        from lumenairy.elements import apply_real_lens
         from lumenairy import get_glass_index
+        from lumenairy.elements import apply_real_lens
         wavelength = 633e-9
         n_glass = float(get_glass_index('N-BK7', wavelength))
         # Grid: 128 pixels, dx = 80 um -> 10.24 mm half-extent.  r_max

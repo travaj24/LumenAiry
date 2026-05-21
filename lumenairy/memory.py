@@ -204,7 +204,7 @@ def bytes_per_element(dtype: Any) -> int:
     Accepts either a dtype object, a dtype string ('complex128'),
     or a Python type (complex, float, int).
     """
-    return np.dtype(dtype).itemsize
+    return int(np.dtype(dtype).itemsize)
 
 
 def array_bytes(shape: Union[int, Tuple[int, ...]],

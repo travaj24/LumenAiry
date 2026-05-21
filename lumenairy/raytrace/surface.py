@@ -14,12 +14,12 @@ implementations.
 
 from __future__ import annotations
 
-import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from ..elements.lenses import surface_sag_general, surface_sag_biconic
+import numpy as np
 
+from ..elements.lenses import surface_sag_biconic, surface_sag_general
 
 # ============================================================================
 # Data structures

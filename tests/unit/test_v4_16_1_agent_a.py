@@ -63,7 +63,6 @@ from typing import Any, List, Tuple
 import numpy as np
 import pytest
 
-
 # ============================================================================
 # Bug 1 -- ``MultiWavelengthMerit.evaluate`` SUM -> AVG
 # ============================================================================
@@ -96,8 +95,8 @@ def _build_singlet_ctx(wl: float):
     ABCD sentinel branch is NOT taken; the sub-merit then evaluates
     once per wavelength under the standard path.
     """
-    from lumenairy.optimize.core import EvaluationContext
     import lumenairy as la
+    from lumenairy.optimize.core import EvaluationContext
 
     pres = la.make_singlet(
         R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
@@ -178,10 +177,13 @@ def test_bug1_multiwavelength_merit_sibling_parity():
     All three returns must equal the (sub_merit_value * weight)
     constant; if any one of them sums instead the assertion fires.
     """
-    from lumenairy.optimize.core import (
-        MultiWavelengthMerit, MultiFieldMerit, ToleranceAwareMerit,
-        EvaluationContext)
     import lumenairy as la
+    from lumenairy.optimize.core import (
+        EvaluationContext,
+        MultiFieldMerit,
+        MultiWavelengthMerit,
+        ToleranceAwareMerit,
+    )
 
     const_value = 0.3
     sub = _ConstantMerit(value=const_value)
@@ -355,8 +357,8 @@ def test_bug2_shack_hartmann_non_integer_pitch_amplitude():
 
     P_measured = _measured_pitch_from_wf(wf, sx)
     assert np.isfinite(P_measured), (
-        f"could not recover P from wf/slopes (slope or wf "
-        f"degenerate).  Check input tilt magnitude.")
+        "could not recover P from wf/slopes (slope or wf "
+        "degenerate).  Check input tilt magnitude.")
 
     # Post-fix: P must equal sa_pixels * dx within 1%.
     rel_post = abs(P_measured - pitch_actual) / pitch_actual
@@ -499,8 +501,8 @@ def test_bug3_detect_backend_zarr_marker_routes_to_zarr():
         with open(os.path.join(v3_store, 'zarr.json'), 'w') as f:
             f.write('{}')
         assert _detect_backend(v3_store) == 'zarr', (
-            f"directory with zarr.json (Zarr v3 marker) should "
-            f"route to 'zarr'")
+            "directory with zarr.json (Zarr v3 marker) should "
+            "route to 'zarr'")
 
         # Zarr v2: .zarray at the array root.
         v2_store = os.path.join(tmpdir, 'run_v2')
@@ -508,15 +510,15 @@ def test_bug3_detect_backend_zarr_marker_routes_to_zarr():
         with open(os.path.join(v2_store, '.zarray'), 'w') as f:
             f.write('{}')
         assert _detect_backend(v2_store) == 'zarr', (
-            f"directory with .zarray (Zarr v2 marker) should "
-            f"route to 'zarr'")
+            "directory with .zarray (Zarr v2 marker) should "
+            "route to 'zarr'")
 
         # Bare directory: no marker.  Falls through to HDF5.
         bare = os.path.join(tmpdir, 'bare_dir')
         os.makedirs(bare)
         assert _detect_backend(bare) == 'hdf5', (
-            f"bare directory without any Zarr marker should "
-            f"route to 'hdf5'")
+            "bare directory without any Zarr marker should "
+            "route to 'hdf5'")
 
 
 def test_bug3_detect_backend_accepts_pathlib_path():
@@ -585,7 +587,9 @@ def test_bug4_lm_bounds_with_none_lower():
     a clean float64 array.
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit, design_optimize,
+        CallableMerit,
+        DesignParameterization,
+        design_optimize,
     )
 
     template = {
@@ -630,7 +634,9 @@ def test_bug4_lm_bounds_finite_respected():
     pre-v4.16.1 (no regression on the common path).
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit, design_optimize,
+        CallableMerit,
+        DesignParameterization,
+        design_optimize,
     )
 
     template = {

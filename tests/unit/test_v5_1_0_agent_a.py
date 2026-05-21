@@ -33,7 +33,6 @@ import warnings
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers + fixtures
 # ---------------------------------------------------------------------------
@@ -44,7 +43,8 @@ def restore_default_wave_propagator():
     """Save / restore ``DEFAULT_WAVE_PROPAGATOR`` so a test that
     changes the library-wide default does not leak into other tests."""
     from lumenairy.propagators.propagation import (
-        get_default_wave_propagator, set_default_wave_propagator,
+        get_default_wave_propagator,
+        set_default_wave_propagator,
     )
     original = get_default_wave_propagator()
     yield
@@ -54,7 +54,8 @@ def restore_default_wave_propagator():
 @pytest.fixture
 def restore_default_dy():
     from lumenairy.propagators.propagation import (
-        get_default_dy, set_default_dy,
+        get_default_dy,
+        set_default_dy,
     )
     original = get_default_dy()
     yield
@@ -64,7 +65,8 @@ def restore_default_dy():
 @pytest.fixture
 def restore_default_real_dtype():
     from lumenairy.propagators.propagation import (
-        get_default_real_dtype, set_default_real_dtype,
+        get_default_real_dtype,
+        set_default_real_dtype,
     )
     original = get_default_real_dtype()
     yield
@@ -540,6 +542,7 @@ class TestSetDefaultRealDtypeSteersGeometricLensPhase:
         ``get_default_real_dtype`` call inside the
         ``_geometric_lens_phase`` body."""
         import inspect
+
         from lumenairy.elements import _lens_traced as _lt
         src = inspect.getsource(_lt._geometric_lens_phase)
         assert 'get_default_real_dtype' in src, (

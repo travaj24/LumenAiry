@@ -65,11 +65,10 @@ Example
 from __future__ import annotations
 
 import importlib.util as _importlib_util
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 import numpy as np
-
 
 # pymoo availability flag.  Cheap module-level check so callers can
 # ``if PYMOO_AVAILABLE: ...`` without paying the import cost.
@@ -275,8 +274,8 @@ def design_optimize_multi_objective(
     n_constr = len(g_callables)
 
     # Build the pymoo ElementwiseProblem subclass.
-    from pymoo.core.problem import ElementwiseProblem
     from pymoo.algorithms.moo.nsga2 import NSGA2
+    from pymoo.core.problem import ElementwiseProblem
     from pymoo.optimize import minimize as pymoo_minimize
 
     eval_counter = [0]

@@ -39,19 +39,18 @@ from __future__ import annotations
 import copy
 import threading
 from collections import OrderedDict
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
-from ..propagators.propagation import angular_spectrum_propagate
 from ..elements.lenses import apply_real_lens
+from ..propagators.propagation import angular_spectrum_propagate
 from .core import (
     beam_centroid,
     beam_d4sigma,
     radial_power_bands,
 )
-
 
 # ============================================================================
 # Module-scope cache for the jit-compiled ASM vmap kernel inside
@@ -100,8 +99,9 @@ def clear_through_focus_scan_jax_cache() -> None:
 # now walks the registry rather than enumerating clear calls by hand.
 # Late-binding closure preserves ``mock.patch.object`` test semantic.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'through_focus_scan_jax',
@@ -355,11 +355,11 @@ def through_focus_scan(
             f"got {backend!r}.")
     from ..progress import call_progress
     from ..propagators.propagation import (
-        _get_or_make_freq_grids,
-        _get_or_make_bandlimit,
-        _fft2,
-        _ifft2,
         DEFAULT_COMPLEX_DTYPE,
+        _fft2,
+        _get_or_make_bandlimit,
+        _get_or_make_freq_grids,
+        _ifft2,
     )
 
     z_arr = np.asarray(z_values, dtype=np.float64)
@@ -761,7 +761,7 @@ def tolerancing_sweep(
         ``name, z_best, strehl_peak, d4sigma_min, rms_min,
         delta_strehl, delta_spot``.
     """
-    from ..progress import call_progress, ProgressScaler
+    from ..progress import ProgressScaler, call_progress
     if z_scan_range is None:
         z_scan_range = (-focal_length / 20.0, focal_length / 20.0)
     z_values = np.linspace(z_scan_range[0], z_scan_range[1], z_scan_n) \
@@ -1048,9 +1048,8 @@ def through_focus_scan_jax(
         raise ImportError(
             'JAX is not installed; install with `pip install jax` or '
             'use through_focus_scan() (NumPy).')
-    import jax
     import jax.numpy as jnp
-    from ..propagators.propagation import angular_spectrum_propagate
+
     from .core import beam_d4sigma
 
     z_arr = np.asarray(z_values, dtype=np.float64)
@@ -1218,10 +1217,11 @@ def monte_carlo_tolerancing_jax(
         raise ImportError(
             'JAX is not installed; install with `pip install jax` or '
             'use monte_carlo_tolerancing() (NumPy).')
-    from ..progress import call_progress
     from ..elements.lenses import (
-        apply_real_lens, apply_real_lens_traced_jax,
+        apply_real_lens,
+        apply_real_lens_traced_jax,
     )
+    from ..progress import call_progress
 
     if z_scan_range is None:
         z_scan_range = (-focal_length / 20.0, focal_length / 20.0)

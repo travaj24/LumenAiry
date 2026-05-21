@@ -24,10 +24,12 @@ implementations.
 
 from __future__ import annotations
 
-import numpy as np
 from typing import Any, List, Optional, Sequence, Tuple, Union
 
+import numpy as np
+
 from ..glass import get_glass_index
+from .seidel import first_order_data, system_abcd
 from .surface import Surface, TraceResult
 from .trace import (
     make_fan,
@@ -37,8 +39,6 @@ from .trace import (
     trace,
 )
 from .world_trace import trace_world
-from .seidel import first_order_data, system_abcd
-
 
 # ============================================================================
 # Analysis: spot diagram

@@ -39,7 +39,6 @@ import pytest
 
 import lumenairy as la
 
-
 JAX_AVAILABLE = False
 try:
     import jax  # noqa: F401

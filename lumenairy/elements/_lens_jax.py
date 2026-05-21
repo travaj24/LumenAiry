@@ -22,7 +22,6 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-import importlib.util as _importlib_util
 from typing import Any, Dict, Optional
 
 import numpy as np
@@ -38,9 +37,8 @@ def _jax_available():
 # the workhorse for the amplitude leg of the JAX traced/Maslov
 # variants; called via jax.pure_callback wrapped in jax.custom_jvp
 # so jax.grad through E_in works.
-from ._lens_real import apply_real_lens
 from ..glass import get_glass_index
-
+from ._lens_real import apply_real_lens
 
 # ----------------------------------------------------------------------
 # JAX helpers shared by apply_real_lens_traced_jax and
@@ -240,7 +238,8 @@ def _amp_callback_jax_linear(E_in, lens_prescription, wavelength, dx,
     # complex64 here when ``jax_enable_x64`` was left at its default
     # False -- inconsistent with the NumPy-side ``apply_real_lens``.
     from ..propagators.propagation import (
-        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+        _resolve_jax_complex_dtype,
+        _resolve_jax_real_dtype,
         get_default_complex_dtype,
     )
     cdtype = _resolve_jax_complex_dtype()
@@ -404,10 +403,9 @@ def apply_real_lens_traced_jax(
     if not _jax_available():
         raise ImportError(
             "JAX is not installed; install with `pip install jax`")
-    import jax
     import jax.numpy as jnp
+
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
-    from ..glass import get_glass_index
 
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.  Pre-fix a hand-built prescription
@@ -573,7 +571,8 @@ def apply_real_lens_traced_jax(
     # ``jax_enable_x64=True``.  Caught by parametrized dispatcher pin
     # in v4.14.0 Agent 6.
     from ..propagators.propagation import (
-        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+        _resolve_jax_complex_dtype,
+        _resolve_jax_real_dtype,
     )
     cdtype = _resolve_jax_complex_dtype(E_in.dtype)
     rdtype = _resolve_jax_real_dtype(E_in.dtype)
@@ -647,8 +646,8 @@ def apply_real_lens_maslov_jax(
             "JAX is not installed; install with `pip install jax`")
     import jax
     import jax.numpy as jnp
+
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
-    from ..glass import get_glass_index
 
     # v4.13.0 (audit L4a): port the explicit mirror-in-surfaces guard
     # from ``apply_real_lens_traced``.
@@ -821,7 +820,8 @@ def apply_real_lens_maslov_jax(
     # v4.14.0: pass ``E_in.dtype`` so the input dtype is honoured
     # (caught by parametrized dispatcher pin in v4.14.0 Agent 6).
     from ..propagators.propagation import (
-        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+        _resolve_jax_complex_dtype,
+        _resolve_jax_real_dtype,
     )
     cdtype = _resolve_jax_complex_dtype(E_in.dtype)
     rdtype = _resolve_jax_real_dtype(E_in.dtype)

@@ -56,7 +56,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _ROADMAP = _REPO_ROOT / "ROADMAP.md"
 _PYPROJECT = _REPO_ROOT / "pyproject.toml"
@@ -329,11 +328,19 @@ class TestMypyConfigPreparation:
             f"broadened before that cleanup lands."
         )
 
-    # audit closure: P2-NEW-V4-2
-    def test_mypy_not_wired_into_ci_at_v5_0_1(self) -> None:
-        """mypy must NOT appear in ``unit-tests.yml`` at v5.0.1.
-        Activation is deferred to v5.1 alongside the 63-error
-        scope-local cleanup.
+    # audit closure: P2-NEW-V4-2 -- flipped at v5.2 (AUDIT_V5_1_0
+    # P2-NEW-F2-2): the pin originally guarded against premature CI
+    # wiring at v5.0.1 ("activation deferred to v5.1").  v5.2 actually
+    # closes the 63-error scope-local cleanup and wires the gate, so
+    # the pin now asserts the opposite invariant -- mypy MUST appear
+    # in unit-tests.yml and MUST run as a blocking gate (not
+    # continue-on-error).  Any future PR that removes the gate
+    # silently will trip this pin.
+    def test_mypy_wired_into_ci_at_v5_2(self) -> None:
+        """mypy must appear in ``unit-tests.yml`` as a blocking job
+        from v5.2 onwards.  v5.2 closes the scope-local 63-error
+        cleanup and activates the gate; the gate must not regress to
+        advisory (continue-on-error: true) or be removed entirely.
         """
         workflow = (
             _REPO_ROOT / ".github" / "workflows" / "unit-tests.yml"
@@ -344,16 +351,11 @@ class TestMypyConfigPreparation:
                 "skip, not a failure."
             )
         text = workflow.read_text(encoding="utf-8")
-        # Permit the substring inside a comment but the actual
-        # invocation should not be wired.  Conservative check: the
-        # word "mypy" should not appear at all (any v5.1 activation
-        # PR will introduce it deliberately).
-        assert "mypy" not in text.lower(), (
-            "unit-tests.yml mentions mypy.  Audit P2-NEW-V4-2 "
-            "scoped v5.0.1 to config preparation only; mypy "
-            "activation is deferred to v5.1 alongside the 63-"
-            "error scope-local cleanup.  If you intend to wire "
-            "mypy, update this pin too."
+        assert "mypy" in text.lower(), (
+            "unit-tests.yml no longer mentions mypy.  v5.2 wired the "
+            "mypy strict-whitelist gate alongside the 63-error "
+            "scope-local cleanup (AUDIT_V5_1_0 P2-NEW-F2-2 + ROADMAP "
+            "v5.2 closure).  Restore the ``mypy:`` job."
         )
 
 

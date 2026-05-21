@@ -24,7 +24,6 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-
 # ============================================================================
 # Phase file I/O
 # ============================================================================
@@ -647,7 +646,7 @@ def makedammann2d(
     Ported to Python by Andrew Traverso from the original Octave/MATLAB
     implementation (makedammann2d.m) by Daniel Marks.
     """
-    from numpy.fft import fft2, ifft2, fftshift, ifftshift
+    from numpy.fft import fft2, fftshift, ifft2, ifftshift
 
     # v4.14.3: dispatch on ``_legacy_units``.  Three modes:
     #
@@ -968,6 +967,7 @@ def makedammann2d(
 # =============================================================================
 
 import importlib.util as _importlib_util
+
 _ASTROPY_AVAILABLE = _importlib_util.find_spec('astropy') is not None
 _fits = None  # populated lazily by _ensure_astropy_loaded()
 

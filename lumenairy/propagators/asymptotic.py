@@ -122,78 +122,78 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-# Re-export submodule contents so existing call sites continue to
-# work unchanged (``from lumenairy.propagators.asymptotic import X``).
-from .asymptotic_modes import (  # noqa: F401
-    # Public modal API
-    lg_polynomial,
-    clear_lg_polynomial_cache,
-    clear_lg_mode_stack_cache,
-    hg_polynomial,
-    evaluate_lg_mode,
-    evaluate_hg_mode,
-    decompose_lg,
-    decompose_hg,
-    lg_seidel_label,
-    gaussian_moment_2d,
-    gaussian_moment_table_2d,
-    # Private helpers / caches referenced by tests + internal sites.
-    _lg_polynomial_items,
-    _lg_mode_conj_stack,
-    _hg_mode_conj_stack,
-    _evaluate_poly2d,
-    _LG_MODE_STACK_CACHE,
-    _LG_MODE_STACK_CACHE_MAX,
-    _LG_MODE_STACK_LOCK,
-    _HG_MODE_STACK_CACHE,
-    _HG_MODE_STACK_CACHE_MAX,
-    _HG_MODE_STACK_LOCK,
+from .asymptotic_aberration_tensor import (  # noqa: F401
+    AberrationTensorResult,
+    _compute_M_b,
+    _contract_against_moment_table,
+    _multiply_polys_2d,
+    _phi_v2_hessian,
+    _polynomial_substitute_linear_2d,
+    _polynomial_under_affine_shift,
+    aberration_tensor,
 )
 from .asymptotic_canonical_fit import (  # noqa: F401
     CanonicalPolyFit,
     HFPolyFit,
+    _eval_4d_cross_deriv,
     fit_canonical_polynomials,
     fit_hf_polynomials,
-    solve_envelope_stationary,
     propagate_hf_chebyshev_quadrature,
-    _eval_4d_cross_deriv,
-)
-from .asymptotic_aberration_tensor import (  # noqa: F401
-    AberrationTensorResult,
-    aberration_tensor,
-    _multiply_polys_2d,
-    _polynomial_under_affine_shift,
-    _polynomial_substitute_linear_2d,
-    _contract_against_moment_table,
-    _compute_M_b,
-    _phi_v2_hessian,
-)
-from .asymptotic_maslov import (  # noqa: F401
-    _maslov_branch_corrected_sqrt,
-    _phi_v2_hessian_batch,
-    _compute_M_b_batch,
-    _gaussian_moment_table_2d_batch,
-    _poly_dict_to_array,
-    _batched_polynomial_substitute_linear_2d,
-    _batched_polynomial_under_affine_shift,
-    _solve_envelope_stationary_batch,
+    solve_envelope_stationary,
 )
 from .asymptotic_jax_twin import (  # noqa: F401
-    JaxAberrationTensorResult,
-    aberration_tensor_lg00_jax,
-    propagate_modal_asymptotic_lg00_jax,
-    solve_envelope_stationary_jax_ift,
-    fit_canonical_polynomials_jax,
-    _chebyshev_vandermonde_xp,
-    _evaluate_polynomial_4d_xp,
-    _compute_M_b_xp,
-    _modal_field_lg00_pixel_jax,
-    _build_jax_ift_solver,
-    _build_jax_ift_solver_impl,
     _JAX_IFT_SOLVER_CACHE,
     _JAX_IFT_SOLVER_CACHE_LOCK,
+    JaxAberrationTensorResult,
+    _build_jax_ift_solver,
+    _build_jax_ift_solver_impl,
+    _chebyshev_vandermonde_xp,
+    _compute_M_b_xp,
+    _evaluate_polynomial_4d_xp,
+    _modal_field_lg00_pixel_jax,
+    aberration_tensor_lg00_jax,
+    fit_canonical_polynomials_jax,
+    propagate_modal_asymptotic_lg00_jax,
+    solve_envelope_stationary_jax_ift,
+)
+from .asymptotic_maslov import (  # noqa: F401
+    _batched_polynomial_substitute_linear_2d,
+    _batched_polynomial_under_affine_shift,
+    _compute_M_b_batch,
+    _gaussian_moment_table_2d_batch,
+    _maslov_branch_corrected_sqrt,
+    _phi_v2_hessian_batch,
+    _poly_dict_to_array,
+    _solve_envelope_stationary_batch,
 )
 
+# Re-export submodule contents so existing call sites continue to
+# work unchanged (``from lumenairy.propagators.asymptotic import X``).
+from .asymptotic_modes import (  # noqa: F401
+    _HG_MODE_STACK_CACHE,
+    _HG_MODE_STACK_CACHE_MAX,
+    _HG_MODE_STACK_LOCK,
+    _LG_MODE_STACK_CACHE,
+    _LG_MODE_STACK_CACHE_MAX,
+    _LG_MODE_STACK_LOCK,
+    _evaluate_poly2d,
+    _hg_mode_conj_stack,
+    _lg_mode_conj_stack,
+    # Private helpers / caches referenced by tests + internal sites.
+    _lg_polynomial_items,
+    clear_lg_mode_stack_cache,
+    clear_lg_polynomial_cache,
+    decompose_hg,
+    decompose_lg,
+    evaluate_hg_mode,
+    evaluate_lg_mode,
+    gaussian_moment_2d,
+    gaussian_moment_table_2d,
+    hg_polynomial,
+    # Public modal API
+    lg_polynomial,
+    lg_seidel_label,
+)
 
 __all__ = [
     # Data containers

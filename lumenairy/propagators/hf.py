@@ -19,11 +19,47 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Dict, Callable, Optional, Tuple
+import warnings
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import numpy as np
 
 from ..backend import array_namespace, is_jax_array
+
+
+# v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): output-grid kwarg semantics
+# disambiguation; see :mod:`lumenairy.propagators.gbd` for full
+# rationale.
+def _resolve_output_shape(
+    output_shape: Optional[Tuple[int, int]],
+    output_grid: Optional[Any],
+    *,
+    fn_name: str,
+    default_shape: Tuple[int, int],
+) -> Tuple[int, int]:
+    """Resolve the (Ny, Nx) output shape from the v5.2 ``output_shape``
+    kwarg and the deprecated ``output_grid`` legacy kwarg."""
+    if output_shape is not None and output_grid is not None:
+        raise ValueError(
+            f"{fn_name}: both ``output_shape`` and ``output_grid`` were "
+            f"provided.  Pass only ``output_shape=(Ny, Nx)`` (v5.2+) or "
+            f"the dispatcher's ``output_grid=(N_out, dx_out)`` form via "
+            f"``propagate(method=...)``.")
+    if output_shape is not None:
+        return (int(output_shape[0]), int(output_shape[1]))
+    if output_grid is not None:
+        warnings.warn(
+            f"{fn_name}: the ``output_grid`` kwarg now (v5.2+) means "
+            f"the dispatcher's ``(N_out, dx_out)`` grid spec; on "
+            f"sub-propagators it has been renamed to ``output_shape`` "
+            f"for the ``(Ny, Nx)`` shape-only meaning.  Pass "
+            f"``output_shape=(Ny, Nx)`` to silence this warning, or "
+            f"call via ``propagate(method='hf', output_grid=(N_out, "
+            f"dx_out), ...)`` if you actually want grid resampling.",
+            DeprecationWarning, stacklevel=3,
+        )
+        return (int(output_grid[0]), int(output_grid[1]))
+    return default_shape
 
 
 def propagate_huygens_fresnel(
@@ -205,6 +241,7 @@ def propagate_huygens_fresnel_through_prescription(
     prescription: Dict[str, Any],
     *,
     wavelength: float,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -248,7 +285,15 @@ def propagate_huygens_fresnel_through_prescription(
         Source-grid pitch (m).
     prescription : dict
     wavelength : float
-    output_grid, output_dx, output_centre : grid geometry
+    output_shape : (int, int), optional
+        Output-grid (Ny, Nx) shape.  Defaults to ``E_in.shape``.  v5.2
+        rename of the legacy ``output_grid`` kwarg (AUDIT_V4_13_1 Part 2
+        P1-A); the dispatcher's :func:`propagate(output_grid=...)`
+        contract carries the ``(N_out, dx_out)`` semantics instead.
+    output_grid : (int, int), optional
+        Deprecated v5.2 alias for ``output_shape``.  Emits a
+        ``DeprecationWarning``.
+    output_dx, output_centre : grid geometry
     source_box_half, pupil_box_half : float
         Half-widths of the source / pupil sampling boxes for the
         polynomial fit.
@@ -263,14 +308,25 @@ def propagate_huygens_fresnel_through_prescription(
     -------
     array (Ny, Nx) complex
         Output-plane complex field.
+
+    .. versionchanged:: 5.2
+        ``output_grid`` -> ``output_shape`` rename (AUDIT_V4_13_1 Part 2
+        P1-A).
     """
+    import numpy as _np
+
     from .asymptotic import (
         fit_canonical_polynomials,
         propagate_modal_asymptotic,
     )
-    import numpy as _np
 
-    Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
+    # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): ``output_grid`` is now
+    # the deprecated spelling of ``output_shape``; see module helper.
+    Ny, Nx = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_huygens_fresnel_through_prescription',
+        default_shape=(E_in.shape[-2], E_in.shape[-1]),
+    )
     if output_dx is None:
         output_dx = dx
 
@@ -388,7 +444,8 @@ def propagate_huygens_fresnel_through_prescription(
 
     if method == 'direct':
         from .asymptotic import (
-            fit_hf_polynomials, propagate_hf_chebyshev_quadrature,
+            fit_hf_polynomials,
+            propagate_hf_chebyshev_quadrature,
         )
         # Build the HF-form polynomial fit Phi(s1, s2).
         hf_fit = fit_hf_polynomials(

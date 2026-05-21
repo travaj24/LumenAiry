@@ -33,7 +33,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 _LUMENAIRY_PKG_DIR = _REPO_ROOT / "lumenairy"
 

@@ -38,7 +38,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-
 # Names that pre-v5.1.0 ``propagation.py`` exported and that callers
 # (in-tree + tests + downstream) import via
 # ``from lumenairy.propagators.propagation import <name>``.
@@ -339,26 +338,26 @@ class TestSharedStateAcrossSplit:
     """
 
     def test_h_cache_is_one_object(self):
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         # Same OrderedDict instance (mutable state is shared, not
         # duplicated).
         assert propagation._H_CACHE is fft_infra._H_CACHE
 
     def test_freq_grid_cache_is_one_object(self):
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         assert propagation._FREQ_GRID_CACHE is fft_infra._FREQ_GRID_CACHE
 
     def test_bandlimit_cache_is_one_object(self):
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         assert propagation._BANDLIMIT_CACHE is fft_infra._BANDLIMIT_CACHE
 
     def test_pyfftw_plan_cache_is_one_object(self):
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         assert (propagation._PYFFTW_PLAN_CACHE
                 is fft_infra._PYFFTW_PLAN_CACHE)
 
     def test_asm_cache_lock_is_one_object(self):
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         assert propagation._ASM_CACHE_LOCK is fft_infra._ASM_CACHE_LOCK
 
     def test_set_default_complex_dtype_visible_via_propagation_attr(self):
@@ -367,7 +366,7 @@ class TestSharedStateAcrossSplit:
         reflect the new value (live forwarding through
         ``__getattr__``).
         """
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         original = fft_infra.DEFAULT_COMPLEX_DTYPE
         try:
             propagation.set_default_complex_dtype(np.complex64)
@@ -378,7 +377,7 @@ class TestSharedStateAcrossSplit:
             propagation.set_default_complex_dtype(original)
 
     def test_set_default_wave_propagator_visible_via_propagation(self):
-        from lumenairy.propagators import propagation, fft_infra
+        from lumenairy.propagators import fft_infra, propagation
         original = fft_infra.DEFAULT_WAVE_PROPAGATOR
         try:
             propagation.set_default_wave_propagator('fresnel')

@@ -19,10 +19,9 @@ lumenairy.analysis.psf_mtf_otf : PSF / MTF / OTF + spec-sheet metrics.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
-
 
 __all__ = [
     'beam_centroid',
@@ -33,10 +32,13 @@ __all__ = [
 ]
 
 
-def _xp_of(*arrays):
-    """Return the array namespace for the inputs (numpy / cupy / jax.numpy)."""
-    from ..backend import array_namespace
-    return array_namespace(*arrays)
+# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup):  this used to be a
+# 4-line wrapper duplicated in 5 files (elements/elements.py,
+# elements/freeform.py, analysis/beam_stats.py, analysis/strehl.py,
+# analysis/psf_mtf_otf.py).  Consolidated to the canonical backend
+# helper; the underscore-prefixed alias preserves the existing
+# in-module references without touching call sites.
+from ..backend import array_namespace as _xp_of  # noqa: E402
 
 
 def beam_centroid(

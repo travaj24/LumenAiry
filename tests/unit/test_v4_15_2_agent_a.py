@@ -42,7 +42,6 @@ from lumenairy.sources.core import (
     create_schell_model_source,
 )
 
-
 # ----------------------------------------------------------------------
 # Shared parameter bundles -- keep the per-factory kwargs minimal but
 # physically valid so every test in this module can re-use them.

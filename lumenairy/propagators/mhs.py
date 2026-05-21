@@ -414,7 +414,7 @@ def aperture_subdomain(
     """Build an MHS subdomain that applies a hard aperture mask in
     place (in_surface == out_surface; same z).  Useful as a thin
     "operator" subdomain between two propagation legs."""
-    if not (shape in ('circular', 'square')):
+    if shape not in ('circular', 'square'):
         raise ValueError(
             f"aperture_subdomain shape must be 'circular' or 'square', got {shape!r}.")
 
@@ -497,8 +497,52 @@ def prescription_subdomain(
 
     ``method`` is forwarded to
     :func:`lumenairy.propagators.dispatch.propagate`.
+
+    .. versionchanged:: 5.2
+        v5.2 (AUDIT_V4_13_1 Part 2 P1-C closure): when ``method='maslov'``
+        (the default) and the requested output grid (``out_surface``)
+        differs from the input grid (``in_surface``), this function now
+        raises ``ValueError`` with an actionable message.  Pre-v5.2 the
+        request was silently ignored -- the maslov dispatcher branch
+        does not honour ``output_grid`` / ``output_dx``, so the
+        propagation produced output on the INPUT grid (regardless of
+        what ``out_surface`` declared) and downstream MHS pipeline
+        stitching saw a silently-mis-shaped intermediate field.
+
+        To resample the maslov output onto a different output grid,
+        either chain a separate resampling step (e.g. an ``asm``
+        subdomain at zero distance with the desired output grid) or
+        choose a method that natively supports output-grid resampling
+        (``gbd`` / ``hfpi`` / ``hf``).
     """
     from .dispatch import propagate
+
+    # v5.2 (AUDIT_V4_13_1 Part 2 P1-C closure): the maslov dispatcher
+    # branch does not forward ``output_grid`` / ``output_dx`` to
+    # :func:`apply_real_lens_maslov`, so when the input and output
+    # Huygens surfaces declare different grids the maslov method
+    # silently drops the request.  Fail loudly at subdomain
+    # construction time so the pipeline author can pick a different
+    # method or insert an explicit resampling step.
+    if method == 'maslov':
+        same_shape = (int(in_surface.Ny) == int(out_surface.Ny)
+                      and int(in_surface.Nx) == int(out_surface.Nx))
+        same_dx = abs(float(in_surface.dx) - float(out_surface.dx)) < 1e-15
+        if not (same_shape and same_dx):
+            raise ValueError(
+                "prescription_subdomain(method='maslov'): the maslov "
+                "branch of the dispatcher does not honour an output "
+                "grid that differs from the input grid (input shape "
+                f"({in_surface.Ny}, {in_surface.Nx}) dx={in_surface.dx}, "
+                f"output shape ({out_surface.Ny}, {out_surface.Nx}) "
+                f"dx={out_surface.dx}).  Pre-v5.2 this request was "
+                "silently dropped and the propagation returned on the "
+                "INPUT grid.  Choose a method that natively supports "
+                "output-grid resampling (``method='gbd'`` / ``'hfpi'`` "
+                "/ ``'hf'``), or insert a separate resampling subdomain "
+                "(e.g. ``asm_subdomain(in_surface, out_surface, "
+                "z=0.0)``) downstream of the maslov stage."
+            )
 
     def _prop(E, in_s, out_s, **kw):
         return propagate(

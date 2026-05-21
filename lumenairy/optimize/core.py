@@ -118,7 +118,6 @@ from __future__ import annotations
 # call time, so mock.patch on this module's namespace remains the
 # canonical interception point.
 # ---------------------------------------------------------------------------
-
 # Standard-library aliases retained at this module path so tests that
 # monkey-patch ``core._json`` (e.g. counting state-file writes) or
 # ``core._os`` continue to intercept the calls inside
@@ -127,39 +126,42 @@ from __future__ import annotations
 import json as _json
 import os as _os
 
-from ..elements.lenses import apply_real_lens, apply_real_lens_traced
-from ..raytrace import (
-    surfaces_from_prescription, system_abcd, trace,
-    seidel_coefficients,
-)
-from ..analysis import wave_opd_2d, zernike_decompose
-from ..analysis.through_focus import (
-    through_focus_scan, find_best_focus, diffraction_limited_peak,
-)
-from ..propagators.propagation import get_default_complex_dtype
-
 # Re-export the shared _Sentinel base for historical compatibility.
 from .._deprecation import _Sentinel as _Sentinel
-
+from ..analysis import wave_opd_2d, zernike_decompose
+from ..analysis.through_focus import (
+    diffraction_limited_peak,
+    find_best_focus,
+    through_focus_scan,
+)
+from ..elements.lenses import apply_real_lens, apply_real_lens_traced
+from ..propagators.propagation import get_default_complex_dtype
+from ..raytrace import (
+    seidel_coefficients,
+    surfaces_from_prescription,
+    system_abcd,
+    trace,
+)
 
 # ---------------------------------------------------------------------------
 # Context / sentinels / constraint
 # ---------------------------------------------------------------------------
 from .context import (
+    _FAILED_SCAN_STREHL_SENTINEL_OBJ,
+    _INVALID_FL_SENTINEL,
+    _INVALID_FL_SENTINEL_OBJ,
+    _METHODS_SUPPORTING_CONSTRAINTS,
+    _ZERO_APERTURE_MASK,
     Constraint,
     DesignResult,
     EvaluationContext,
     MeritTerm,
-    _FAILED_SCAN_STREHL_SENTINEL_OBJ,
     _FailedScanStrehlSentinel,
-    _INVALID_FL_SENTINEL,
-    _INVALID_FL_SENTINEL_OBJ,
     _InvalidFocalLengthSentinel,
-    _METHODS_SUPPORTING_CONSTRAINTS,
-    _ZERO_APERTURE_MASK,
     _ZeroApertureMaskSentinel,
     ctx_is_valid,
 )
+
 # v5.1.0 split: ``_CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED`` is a
 # one-cycle warning latch.  Test fixtures reset it via
 # ``setattr(core, '_CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED', False)``.
@@ -173,14 +175,6 @@ _CONSTRAINT_AUTOPROBE_DEPRECATION_WARNED = False
 # ---------------------------------------------------------------------------
 # Parameterizations
 # ---------------------------------------------------------------------------
-from .parameterizations import (
-    DesignParameterization,
-    MultiPrescriptionParameterization,
-    _read_path,
-    _write_path,
-)
-
-
 # ---------------------------------------------------------------------------
 # Merit terms (leaf-level)
 # ---------------------------------------------------------------------------
@@ -204,7 +198,12 @@ from .merit_terms import (
     StrehlMerit,
     ZernikeCoefficientMerit,
 )
-
+from .parameterizations import (
+    DesignParameterization,
+    MultiPrescriptionParameterization,
+    _read_path,
+    _write_path,
+)
 
 # ---------------------------------------------------------------------------
 # Wrapper merits + meshgrid cache primitives
@@ -218,12 +217,12 @@ from .merit_terms import (
 # ``lumenairy.optimize.core._WRAPPER_MERIT_MESHGRID_BUILDS`` see the
 # up-to-date value rather than a stale snapshot bound at import time.
 from .wrapper_merits import (
-    MultiFieldMerit,
-    MultiWavelengthMerit,
-    ToleranceAwareMerit,
     _WRAPPER_MERIT_CACHE,
     _WRAPPER_MERIT_CACHE_LOCK,
     _WRAPPER_MERIT_CACHE_SIZE,
+    MultiFieldMerit,
+    MultiWavelengthMerit,
+    ToleranceAwareMerit,
     _clear_wrapper_merit_cache,
     _get_wrapper_merit_cache,
     _wrapper_merit_aperture_key,
@@ -242,12 +241,6 @@ _MULTIWL_AVG_WARNED = False
 # ---------------------------------------------------------------------------
 # JAX merits
 # ---------------------------------------------------------------------------
-from .jax_merits import (
-    JaxMeritTerm,
-    make_lg_aberration_merit_jax,
-)
-
-
 # ---------------------------------------------------------------------------
 # Driver (wave-propagator registry + design_optimize + helpers)
 # ---------------------------------------------------------------------------
@@ -264,7 +257,10 @@ from .driver import (
     register_wave_propagator,
     unregister_wave_propagator,
 )
-
+from .jax_merits import (
+    JaxMeritTerm,
+    make_lg_aberration_merit_jax,
+)
 
 # ---------------------------------------------------------------------------
 # Live-read of mutable submodule globals

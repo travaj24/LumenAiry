@@ -16,25 +16,22 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any, Callable, Optional, Tuple, cast
 
-import numpy as np
-
-import scipy.special as _sp_special
 import scipy.linalg as _sp_linalg
+import scipy.special as _sp_special
 
 from .array import (
     JAX_AVAILABLE,
-    CUPY_AVAILABLE,
-    is_jax_array,
     is_cupy_array,
+    is_jax_array,
 )
 
 _jax_special_cache = None
 _jax_linalg_cache = None
 
 
-def _get_jax_special():
+def _get_jax_special() -> Optional[Any]:
     global _jax_special_cache
     if _jax_special_cache is None and JAX_AVAILABLE:
         import jax.scipy.special as _m
@@ -42,7 +39,7 @@ def _get_jax_special():
     return _jax_special_cache
 
 
-def _get_jax_linalg():
+def _get_jax_linalg() -> Optional[Any]:
     global _jax_linalg_cache
     if _jax_linalg_cache is None and JAX_AVAILABLE:
         import jax.scipy.linalg as _m
@@ -55,10 +52,10 @@ def _get_jax_linalg():
 # behaviour mirrors the underlying module so getattr(default) calls
 # still work as before.
 class _LazyAttrProxy:
-    def __init__(self, getter):
+    def __init__(self, getter: Callable[[], Optional[Any]]) -> None:
         object.__setattr__(self, '_getter', getter)
 
-    def __getattr__(self, name):
+    def __getattr__(self, name: str) -> Any:
         # Avoid infinite recursion on internal attrs.
         if name.startswith('_'):
             raise AttributeError(name)
@@ -74,7 +71,7 @@ _jax_special = _LazyAttrProxy(_get_jax_special)
 _jax_linalg = _LazyAttrProxy(_get_jax_linalg)
 
 
-def _dispatch_special(name, x, *args, **kwargs):
+def _dispatch_special(name: str, x: Any, *args: Any, **kwargs: Any) -> Any:
     """Generic dispatch for ``scipy.special`` functions on input
     ``x``."""
     if is_jax_array(x):
@@ -150,13 +147,17 @@ def lstsq(A: Any, b: Any, **kwargs: Any) -> Any:
 
 def eigh(A: Any) -> Tuple[Any, Any]:
     """Hermitian eigendecomposition."""
+    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the backend
+    # ``eigh`` returns surface as ``Any`` (untyped backend modules under
+    # follow_imports=silent), but each is documented to be a 2-tuple of
+    # arrays.  Cast so the public return type is honoured.
     if is_jax_array(A):
         import jax.numpy as jnp
-        return jnp.linalg.eigh(A)
+        return cast(Tuple[Any, Any], jnp.linalg.eigh(A))
     if is_cupy_array(A):
         import cupy as cp
-        return cp.linalg.eigh(A)
-    return _sp_linalg.eigh(A)
+        return cast(Tuple[Any, Any], cp.linalg.eigh(A))
+    return cast(Tuple[Any, Any], _sp_linalg.eigh(A))
 
 
 __all__ = ['jv', 'erf', 'gammaln', 'expi', 'solve', 'lstsq', 'eigh']

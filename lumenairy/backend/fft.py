@@ -21,10 +21,19 @@ JAX FFT dispatch is added on top of the existing chain so that
 ``jax.grad`` / ``jax.jit``.
 
 This module is the public FFT entry point for new code.
-:mod:`lumenairy.propagation` still owns the pyFFTW plan cache, the
-scipy thread pool, and the bad-shape blacklist; this module
-delegates into that infrastructure for the NumPy / CuPy paths so
-the priority chain and caches are shared, not duplicated.
+``lumenairy.propagators.fft_infra`` (the post-v5.1-split home of the
+plan cache + scipy thread pool + bad-shape blacklist) owns the
+infrastructure; this module delegates into it for the NumPy / CuPy
+paths so the priority chain and caches are shared, not duplicated.
+
+v5.2 (ROADMAP "backend/fft.py -> propagators/propagation.py
+inversion" cleanup): pre-v5.1, the FFT infra lived inside
+``propagators/propagation.py`` and ``backend/fft.py`` had to import
+through that monolith.  v5.1 lifted the infra to ``fft_infra.py``;
+v5.2 routes ``backend/fft.py`` directly through ``fft_infra``
+(``from ..propagators import fft_infra as _prop``) so the inversion
+through the propagation shell is removed and ``__getattr__``
+forwarding (PEP-562) no longer sits in the hot FFT path.
 
 Author: Andrew Traverso
 """
@@ -37,17 +46,32 @@ import numpy as np
 
 from .array import (
     JAX_AVAILABLE,
-    is_jax_array,
-    is_cupy_array,
     _get_jnp,
+    is_cupy_array,
+    is_jax_array,
 )
 
 
-def _jnp_or_none():
+def _jnp_or_none() -> Optional[Any]:
     """Lazy accessor for jax.numpy.  Avoids loading JAX at import time
     when the FFT path doesn't actually run JAX (which is most of the
     time)."""
     return _get_jnp() if JAX_AVAILABLE else None
+
+
+def _jnp_required() -> Any:
+    """Return jax.numpy or assert -- used after :func:`is_jax_array`
+    has narrowed an argument to a JAX array (which guarantees JAX is
+    installed).  v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure):
+    centralises the None-narrow for the dispatch branches below so
+    each call site doesn't need its own ``assert is not None``.
+    """
+    jnp = _get_jnp()
+    assert jnp is not None, (
+        "_jnp_required: jax.numpy unavailable yet is_jax_array() "
+        "returned True -- inconsistent backend state."
+    )
+    return jnp
 
 
 # ============================================================================
@@ -65,18 +89,21 @@ def fft2(x: Any) -> Any:
       chain plus CuPy short-circuit.
     """
     if is_jax_array(x):
-        return _get_jnp().fft.fft2(x)
-    from ..propagators import propagation as _prop
-    return _prop._fft2(x)
+        return _jnp_required().fft.fft2(x)
+    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): fft_infra is
+    # not on the typed-files whitelist so its public callables surface
+    # as untyped under follow_imports=silent.
+    from ..propagators import fft_infra as _prop
+    return _prop._fft2(x)  # type: ignore[no-untyped-call]
 
 
 def ifft2(x: Any) -> Any:
     """Backend-aware 2-D inverse FFT.  Same priority chain as
     :func:`fft2`."""
     if is_jax_array(x):
-        return _get_jnp().fft.ifft2(x)
-    from ..propagators import propagation as _prop
-    return _prop._ifft2(x)
+        return _jnp_required().fft.ifft2(x)
+    from ..propagators import fft_infra as _prop
+    return _prop._ifft2(x)  # type: ignore[no-untyped-call]
 
 
 # ============================================================================
@@ -86,11 +113,11 @@ def ifft2(x: Any) -> Any:
 def fft(x: Any, axis: int = -1, n: Optional[int] = None) -> Any:
     """Backend-aware 1-D forward FFT."""
     if is_jax_array(x):
-        return _get_jnp().fft.fft(x, n=n, axis=axis)
+        return _jnp_required().fft.fft(x, n=n, axis=axis)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.fft(x, n=n, axis=axis)
-    from ..propagators import propagation as _prop
+    from ..propagators import fft_infra as _prop
     if _prop.USE_SCIPY_FFT and _prop.SCIPY_FFT_AVAILABLE:
         import scipy.fft as _sp
         return _sp.fft(x, n=n, axis=axis, workers=_prop.SCIPY_FFT_WORKERS)
@@ -100,11 +127,11 @@ def fft(x: Any, axis: int = -1, n: Optional[int] = None) -> Any:
 def ifft(x: Any, axis: int = -1, n: Optional[int] = None) -> Any:
     """Backend-aware 1-D inverse FFT."""
     if is_jax_array(x):
-        return _get_jnp().fft.ifft(x, n=n, axis=axis)
+        return _jnp_required().fft.ifft(x, n=n, axis=axis)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.ifft(x, n=n, axis=axis)
-    from ..propagators import propagation as _prop
+    from ..propagators import fft_infra as _prop
     if _prop.USE_SCIPY_FFT and _prop.SCIPY_FFT_AVAILABLE:
         import scipy.fft as _sp
         return _sp.ifft(x, n=n, axis=axis, workers=_prop.SCIPY_FFT_WORKERS)
@@ -119,7 +146,7 @@ def fftshift(x: Any,
              axes: Optional[Union[int, Sequence[int]]] = None) -> Any:
     """Backend-dispatched ``fft.fftshift``."""
     if is_jax_array(x):
-        return _get_jnp().fft.fftshift(x, axes=axes)
+        return _jnp_required().fft.fftshift(x, axes=axes)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.fftshift(x, axes=axes)
@@ -130,7 +157,7 @@ def ifftshift(x: Any,
               axes: Optional[Union[int, Sequence[int]]] = None) -> Any:
     """Backend-dispatched ``fft.ifftshift``."""
     if is_jax_array(x):
-        return _get_jnp().fft.ifftshift(x, axes=axes)
+        return _jnp_required().fft.ifftshift(x, axes=axes)
     if is_cupy_array(x):
         import cupy as cp
         return cp.fft.ifftshift(x, axes=axes)
@@ -161,7 +188,7 @@ def fft_backend_for(x: Any) -> str:
         return 'jax'
     if is_cupy_array(x):
         return 'cupy'
-    from ..propagators import propagation as _prop
+    from ..propagators import fft_infra as _prop
     shape = tuple(x.shape) if hasattr(x, 'shape') else ()
     if (_prop.USE_PYFFTW and _prop.PYFFTW_AVAILABLE
             and len(shape) >= 2

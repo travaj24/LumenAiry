@@ -43,7 +43,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -384,7 +383,7 @@ def test_representative_v4_15_x_modules_pass_under_deprecation_error():
         f"Modules sampled: {representative_modules!r}\n"
         f"stdout (tail):\n"
         + '\n'.join(proc.stdout.splitlines()[-25:])
-        + f"\nstderr (tail):\n"
+        + "\nstderr (tail):\n"
         + '\n'.join(proc.stderr.splitlines()[-25:])
     )
 

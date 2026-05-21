@@ -45,23 +45,22 @@ import pytest
 
 import lumenairy as la
 from lumenairy.propagators.hfpi import (
+    PathBundle,
     _spawn_rng,
     accumulate_to_grid,
     apply_aperture_diffraction,
     init_paths_from_field,
-    propagate_to_plane,
     propagate_hfpi_freespace_aperture,
-    PathBundle,
+    propagate_to_plane,
 )
 from lumenairy.propagators.vectorial_hfpi import (
+    VectorPathBundle,
     accumulate_vector_to_grid,
     apply_vector_aperture_diffraction,
     init_vector_paths_from_field,
-    propagate_vector_to_plane,
     propagate_vector_hfpi_freespace_aperture,
-    VectorPathBundle,
+    propagate_vector_to_plane,
 )
-
 
 # ============================================================================
 # Shared fixtures / parametrization helpers

@@ -38,7 +38,6 @@ import pytest
 import lumenairy as la
 from lumenairy import RAY_EVANESCENT, RAY_OK
 
-
 # ============================================================================
 # 1-7: Spec-derived tests (CLUSTER_B_SPEC.md §4.5)
 # ============================================================================

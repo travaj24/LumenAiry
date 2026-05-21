@@ -24,10 +24,10 @@ see :mod:`lumenairy.analysis.coronagraph`.
 """
 
 from .elements import (
-    apply_lyot_focal_plane_mask,
-    apply_vortex_phase_mask,
-    apply_lyot_stop,
     apply_apodized_pupil,
+    apply_lyot_focal_plane_mask,
+    apply_lyot_stop,
+    apply_vortex_phase_mask,
 )
 
 __all__ = [

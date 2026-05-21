@@ -12,10 +12,11 @@ replaces the focal length as the primary specification.
 Author: Andrew Traverso
 """
 from __future__ import annotations
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Sequence, Tuple
+
 import copy
 import warnings
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Sequence, Tuple
 
 from ..raytrace import surfaces_from_prescription, system_abcd
 
@@ -258,6 +259,7 @@ def _zero_C_air_gap(prescription, gap_slot_index, wavelength=550e-9):
         Air-gap thickness [m] giving the afocal condition.
     """
     import copy
+
     from ..raytrace import surfaces_from_prescription, system_abcd
     pres = copy.deepcopy(prescription)
     # Evaluate C at two gap values; C is exactly linear in gap so any

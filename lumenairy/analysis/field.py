@@ -41,7 +41,8 @@ public functions while preserving their fold-aware geometry.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field as _dc_field, fields as _dc_fields
+from dataclasses import dataclass
+from dataclasses import fields as _dc_fields
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -87,15 +88,14 @@ class _DictAttrMixin:
 from ..raytrace import (
     Surface,
     TraceResult,
+    make_rings,
+    spot_geo_radius,
+    spot_rms,
     surfaces_from_prescription,
     system_abcd,
-    make_rings,
-    make_fan,
-    spot_rms,
-    spot_geo_radius,
+    trace,
 )
-from ..raytrace.core import trace_world, _make_bundle
-from ..raytrace import trace
+from ..raytrace.core import _make_bundle, trace_world
 
 
 def _trace(rays, surfaces, wavelength):

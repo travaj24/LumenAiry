@@ -83,7 +83,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -360,8 +359,7 @@ def test_get_wrapper_merit_cache_returns_sentinel_on_zero_diameter():
     """
     import numpy as np
 
-    from lumenairy.optimize.core import (
-        _get_wrapper_merit_cache, _ZERO_APERTURE_MASK)
+    from lumenairy.optimize.core import _ZERO_APERTURE_MASK, _get_wrapper_merit_cache
 
     payload = _get_wrapper_merit_cache(
         N=16, dx=1e-6, aperture=0.0, dtype=np.complex128)
@@ -375,8 +373,7 @@ def test_get_wrapper_merit_cache_returns_none_for_no_aperture():
     full-grid case), distinct from the singleton."""
     import numpy as np
 
-    from lumenairy.optimize.core import (
-        _get_wrapper_merit_cache, _ZERO_APERTURE_MASK)
+    from lumenairy.optimize.core import _ZERO_APERTURE_MASK, _get_wrapper_merit_cache
 
     payload = _get_wrapper_merit_cache(
         N=16, dx=1e-6, aperture=None, dtype=np.complex128)

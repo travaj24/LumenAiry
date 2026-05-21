@@ -30,11 +30,10 @@ import pytest
 
 import lumenairy as la
 from lumenairy.glass import (
-    GLASS_VALIDITY,
     _DEFAULT_VALIDITY,
+    GLASS_VALIDITY,
     _validity_warned,
 )
-
 
 # ===========================================================================
 # Out-of-range warning behaviour (the headline)

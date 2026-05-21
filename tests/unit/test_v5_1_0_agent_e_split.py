@@ -42,7 +42,6 @@ import warnings
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # 1.  Public-API preservation
 # ---------------------------------------------------------------------------
@@ -65,37 +64,37 @@ class TestPublicApiPreserved:
         ``__all__`` are all importable from
         ``lumenairy.optimize`` (the top-level public namespace)."""
         from lumenairy.optimize import (
-            DesignParameterization,
-            MultiPrescriptionParameterization,
-            MeritTerm,
-            FocalLengthMerit,
-            BackFocalLengthMerit,
-            SphericalSeidelMerit,
-            StrehlMerit,
-            RMSWavefrontMerit,
-            SpotSizeMerit,
-            ChromaticFocalShiftMerit,
-            MatchIdealThinLensMerit,
-            MatchIdealSystemMerit,
-            MatchTargetOPDMerit,
-            ZernikeCoefficientMerit,
-            LGAberrationMerit,
-            make_lg_aberration_merit_jax,
-            CompositeMerit,
-            CallableMerit,
-            JaxMeritTerm,
-            MultiWavelengthMerit,
-            MultiFieldMerit,
-            MinThicknessMerit,
-            MaxThicknessMerit,
-            MinBackFocalLengthMerit,
-            MaxFNumberMerit,
-            ToleranceAwareMerit,
-            EvaluationContext,
-            DesignResult,
-            Constraint,
-            design_optimize,
             WAVE_PROPAGATOR_REGISTRY,
+            BackFocalLengthMerit,
+            CallableMerit,
+            ChromaticFocalShiftMerit,
+            CompositeMerit,
+            Constraint,
+            DesignParameterization,
+            DesignResult,
+            EvaluationContext,
+            FocalLengthMerit,
+            JaxMeritTerm,
+            LGAberrationMerit,
+            MatchIdealSystemMerit,
+            MatchIdealThinLensMerit,
+            MatchTargetOPDMerit,
+            MaxFNumberMerit,
+            MaxThicknessMerit,
+            MeritTerm,
+            MinBackFocalLengthMerit,
+            MinThicknessMerit,
+            MultiFieldMerit,
+            MultiPrescriptionParameterization,
+            MultiWavelengthMerit,
+            RMSWavefrontMerit,
+            SphericalSeidelMerit,
+            SpotSizeMerit,
+            StrehlMerit,
+            ToleranceAwareMerit,
+            ZernikeCoefficientMerit,
+            design_optimize,
+            make_lg_aberration_merit_jax,
             register_wave_propagator,
             unregister_wave_propagator,
         )
@@ -112,38 +111,38 @@ class TestPublicApiPreserved:
         ``lumenairy.optimize.core`` (the pre-v5.1.0 monolith) all
         still resolve."""
         from lumenairy.optimize.core import (
-            DesignParameterization,
-            MultiPrescriptionParameterization,
-            MeritTerm,
-            ctx_is_valid,
-            FocalLengthMerit,
+            WAVE_PROPAGATOR_REGISTRY,
             BackFocalLengthMerit,
-            SphericalSeidelMerit,
-            StrehlMerit,
-            RMSWavefrontMerit,
-            SpotSizeMerit,
-            MatchIdealThinLensMerit,
-            MatchIdealSystemMerit,
-            MatchTargetOPDMerit,
-            ZernikeCoefficientMerit,
-            LGAberrationMerit,
-            CompositeMerit,
             CallableMerit,
             ChromaticFocalShiftMerit,
-            MinThicknessMerit,
-            MaxThicknessMerit,
-            MinBackFocalLengthMerit,
-            MaxFNumberMerit,
-            MultiWavelengthMerit,
-            MultiFieldMerit,
-            ToleranceAwareMerit,
-            JaxMeritTerm,
-            make_lg_aberration_merit_jax,
-            EvaluationContext,
-            DesignResult,
+            CompositeMerit,
             Constraint,
+            DesignParameterization,
+            DesignResult,
+            EvaluationContext,
+            FocalLengthMerit,
+            JaxMeritTerm,
+            LGAberrationMerit,
+            MatchIdealSystemMerit,
+            MatchIdealThinLensMerit,
+            MatchTargetOPDMerit,
+            MaxFNumberMerit,
+            MaxThicknessMerit,
+            MeritTerm,
+            MinBackFocalLengthMerit,
+            MinThicknessMerit,
+            MultiFieldMerit,
+            MultiPrescriptionParameterization,
+            MultiWavelengthMerit,
+            RMSWavefrontMerit,
+            SphericalSeidelMerit,
+            SpotSizeMerit,
+            StrehlMerit,
+            ToleranceAwareMerit,
+            ZernikeCoefficientMerit,
+            ctx_is_valid,
             design_optimize,
-            WAVE_PROPAGATOR_REGISTRY,
+            make_lg_aberration_merit_jax,
             register_wave_propagator,
             unregister_wave_propagator,
         )
@@ -159,24 +158,24 @@ class TestPublicApiPreserved:
         propagation cache-clearer registry reference them by this
         path)."""
         from lumenairy.optimize.core import (
-            _fd_grad_pure,
-            _sum_merits,
-            _read_path,
-            _write_path,
-            _wrapper_merit_aperture_key,
-            _get_wrapper_merit_cache,
-            _clear_wrapper_merit_cache,
-            _WRAPPER_MERIT_CACHE,
-            _WRAPPER_MERIT_CACHE_SIZE,
-            _WRAPPER_MERIT_CACHE_LOCK,
-            _INVALID_FL_SENTINEL,
-            _ZERO_APERTURE_MASK,
-            _ZeroApertureMaskSentinel,
-            _INVALID_FL_SENTINEL_OBJ,
-            _InvalidFocalLengthSentinel,
             _FAILED_SCAN_STREHL_SENTINEL_OBJ,
-            _FailedScanStrehlSentinel,
+            _INVALID_FL_SENTINEL,
+            _INVALID_FL_SENTINEL_OBJ,
             _METHODS_SUPPORTING_CONSTRAINTS,
+            _WRAPPER_MERIT_CACHE,
+            _WRAPPER_MERIT_CACHE_LOCK,
+            _WRAPPER_MERIT_CACHE_SIZE,
+            _ZERO_APERTURE_MASK,
+            _clear_wrapper_merit_cache,
+            _FailedScanStrehlSentinel,
+            _fd_grad_pure,
+            _get_wrapper_merit_cache,
+            _InvalidFocalLengthSentinel,
+            _read_path,
+            _sum_merits,
+            _wrapper_merit_aperture_key,
+            _write_path,
+            _ZeroApertureMaskSentinel,
         )
         for name, obj in locals().items():
             if name == 'self':
@@ -246,9 +245,9 @@ class TestSentinelPickleRoundTrip:
         :class:`_Sentinel`, regardless of submodule location."""
         from lumenairy._deprecation import _Sentinel
         from lumenairy.optimize.core import (
-            _ZeroApertureMaskSentinel,
-            _InvalidFocalLengthSentinel,
             _FailedScanStrehlSentinel,
+            _InvalidFocalLengthSentinel,
+            _ZeroApertureMaskSentinel,
         )
         for cls in (_ZeroApertureMaskSentinel,
                     _InvalidFocalLengthSentinel,
@@ -275,8 +274,8 @@ class TestSentinelPickleRoundTrip:
         """The numeric sentinels still expose ``float(s)`` for
         downstream arithmetic compatibility."""
         from lumenairy.optimize.core import (
-            _INVALID_FL_SENTINEL_OBJ,
             _FAILED_SCAN_STREHL_SENTINEL_OBJ,
+            _INVALID_FL_SENTINEL_OBJ,
         )
         assert float(_INVALID_FL_SENTINEL_OBJ) == pytest.approx(1e9)
         assert float(_FAILED_SCAN_STREHL_SENTINEL_OBJ) == pytest.approx(0.0)
@@ -343,7 +342,9 @@ def test_design_optimize_smoke():
     """
     import lumenairy as la
     from lumenairy.optimize import (
-        DesignParameterization, design_optimize, FocalLengthMerit,
+        DesignParameterization,
+        FocalLengthMerit,
+        design_optimize,
     )
     pres = la.make_singlet(R1=50e-3, R2=-50e-3, d=3e-3,
                            glass='N-BK7', aperture=10e-3)

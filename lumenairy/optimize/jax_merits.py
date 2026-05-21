@@ -238,9 +238,10 @@ def make_lg_aberration_merit_jax(prescription: Dict[str, Any],
     import jax
     jax.config.update('jax_enable_x64', True)
     import jax.numpy as jnp
+
     from ..propagators.asymptotic import (
-        fit_canonical_polynomials_jax,
         aberration_tensor_lg00_jax,
+        fit_canonical_polynomials_jax,
     )
     if field_points is None:
         field_points = [(0.0, 0.0)]

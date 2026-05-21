@@ -45,24 +45,23 @@ import warnings
 import numpy as np
 import pytest
 
+from lumenairy.elements._lens_traced import apply_real_lens_traced
 from lumenairy.elements.freeform import (
     _jacobi_norm_factor,
     _q_bfs_eval,
     _q_con_eval,
+    surface_sag_freeform,
     surface_sag_q_bfs,
     surface_sag_q_con,
-    surface_sag_freeform,
 )
 from lumenairy.elements.lenses import (
     apply_real_lens,
     surface_sag_general,
 )
-from lumenairy.elements._lens_traced import apply_real_lens_traced
 from lumenairy.raytrace.core import (
-    surfaces_from_prescription,
     _surface_sag_xy,
+    surfaces_from_prescription,
 )
-
 
 # ============================================================================
 # Helpers
@@ -446,6 +445,7 @@ class TestAllSymmetry:
         """``from lumenairy.elements import surface_sag_q_bfs`` must
         work."""
         from lumenairy.elements import surface_sag_q_bfs as _q_bfs
+
         # And must be the same callable as the implementation.
         from lumenairy.elements.freeform import surface_sag_q_bfs as _qb_impl
         assert _q_bfs is _qb_impl

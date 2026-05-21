@@ -23,7 +23,6 @@ import warnings
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Latch-reset fixtures.  Parallel to v4.16.2 Agent B's
 # ``reset_multiwl_warn_latch`` -- restore the module-level boolean to its
@@ -77,8 +76,8 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
         at ``apply_real_lens`` / ``apply_real_lens_traced`` /
         ``propagate_through_system`` and the warning would be a lie."""
         from lumenairy.propagators.propagation import (
-            set_default_wave_propagator,
             get_default_wave_propagator,
+            set_default_wave_propagator,
         )
         original = get_default_wave_propagator()
         try:
@@ -104,8 +103,8 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
         """The latch must suppress all subsequent calls within the same
         process (avoid flooding optimisation loops)."""
         from lumenairy.propagators.propagation import (
-            set_default_wave_propagator,
             get_default_wave_propagator,
+            set_default_wave_propagator,
         )
         original = get_default_wave_propagator()
         try:
@@ -133,8 +132,8 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
         ``get_default_wave_propagator`` must return the just-set value
         even on the first (warning-emitting) call."""
         from lumenairy.propagators.propagation import (
-            set_default_wave_propagator,
             get_default_wave_propagator,
+            set_default_wave_propagator,
         )
         original = get_default_wave_propagator()
         try:
@@ -153,10 +152,10 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
         """A rejected setter call (ValueError) must NOT flip the latch
         -- otherwise a user typo would silently suppress the legitimate
         notice on the next valid call."""
+        import lumenairy.propagators.propagation as _prop
         from lumenairy.propagators.propagation import (
             set_default_wave_propagator,
         )
-        import lumenairy.propagators.propagation as _prop
         with pytest.raises(ValueError):
             set_default_wave_propagator('not_a_propagator')
         # Latch must still be False -- the ValueError fired BEFORE the
@@ -171,8 +170,8 @@ class TestSetDefaultDyNoConsumerWarning:
     # audit closure: v5.1.0 default-knob resolver rollout
     def test_first_call_emits_no_userwarning(self, reset_dy_latch):
         from lumenairy.propagators.propagation import (
-            set_default_dy,
             get_default_dy,
+            set_default_dy,
         )
         original = get_default_dy()
         try:
@@ -220,8 +219,8 @@ class TestSetDefaultDyNoConsumerWarning:
     # audit closure: P2-NEW-F1-4
     def test_second_call_emits_no_warning(self, reset_dy_latch):
         from lumenairy.propagators.propagation import (
-            set_default_dy,
             get_default_dy,
+            set_default_dy,
         )
         original = get_default_dy()
         try:
@@ -240,8 +239,8 @@ class TestSetDefaultDyNoConsumerWarning:
 
     # audit closure: P2-NEW-F1-4
     def test_validation_failure_no_warning(self, reset_dy_latch):
-        from lumenairy.propagators.propagation import set_default_dy
         import lumenairy.propagators.propagation as _prop
+        from lumenairy.propagators.propagation import set_default_dy
         with pytest.raises(ValueError):
             set_default_dy(-1.0)
         assert not _prop._DEFAULT_DY_NO_CONSUMER_WARNED
@@ -255,8 +254,8 @@ class TestSetDefaultRealDtypeDoesNotEmitNoConsumerWarning:
     # audit closure: P2-NEW-F1-3
     def test_no_userwarning_emitted(self):
         from lumenairy.propagators.propagation import (
-            set_default_real_dtype,
             get_default_real_dtype,
+            set_default_real_dtype,
         )
         original = get_default_real_dtype()
         try:
@@ -299,6 +298,7 @@ class TestEnsembleRealDtypeFallbackShape:
         by the time control reached the try-block).
         """
         import inspect
+
         from lumenairy.propagators import ensemble as _ens
         src = inspect.getsource(_ens)
         # Pin both: (a) the source mentions get_default_real_dtype,
@@ -513,6 +513,7 @@ class TestSiblingGapDefaultConfigKnobs:
         actually exists.
         """
         import inspect
+
         from lumenairy.propagators import ensemble as _ens
         src = inspect.getsource(_ens)
         assert 'get_default_real_dtype' in src
@@ -532,6 +533,7 @@ class TestSiblingGapDefaultConfigKnobs:
         Guide limitation note.
         """
         import os
+
         import lumenairy as la
         pkg_root = os.path.dirname(la.__file__)
         EXPECTED_CONSUMERS = {

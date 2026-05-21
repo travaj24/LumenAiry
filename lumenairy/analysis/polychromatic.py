@@ -25,7 +25,6 @@ from typing import Any, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 
-
 __all__ = [
     'chromatic_focal_shift',
     'polychromatic_strehl',
@@ -184,9 +183,8 @@ def polychromatic_strehl(
         Per-wavelength best-focus positions [m].
     """
     from ..elements.lenses import apply_real_lens
-    from .through_focus import (through_focus_scan, find_best_focus,
-                                diffraction_limited_peak)
     from ..raytrace import surfaces_from_prescription, system_abcd
+    from .through_focus import diffraction_limited_peak, find_best_focus, through_focus_scan
 
     wavelengths = np.asarray(wavelengths, dtype=np.float64)
     weights = np.asarray(weights, dtype=np.float64)

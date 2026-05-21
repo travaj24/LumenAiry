@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  # v5.1.1 (audit P1-NEW-2WAY-1): release-process gate.  v5.0.0,
+  # v5.1.1 (audit P1-NEW-3WAY-1): release-process gate.  v5.0.0,
   # v5.0.1, and v5.1.0 all shipped to PyPI before the unit-tests
   # workflow was ever observed green on the tag's source -- v5.0.0
   # audit V4 read the workflow YAML but didn't trigger it;

@@ -97,7 +97,6 @@ import pytest
 
 import lumenairy as la
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -326,8 +325,8 @@ def test_all_top_level_attrs_are_resolvable():
         if not hasattr(la, name):
             missing.append(name)
     assert not missing, (
-        f"Names listed in ``lumenairy.__all__`` but not present as "
-        f"attributes of ``la``:\n  - " + "\n  - ".join(missing))
+        "Names listed in ``lumenairy.__all__`` but not present as "
+        "attributes of ``la``:\n  - " + "\n  - ".join(missing))
 
 
 # ============================================================================

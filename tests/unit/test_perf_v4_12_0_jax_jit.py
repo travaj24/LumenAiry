@@ -38,7 +38,6 @@ jnp = pytest.importorskip('jax.numpy')
 
 import lumenairy as lm  # noqa: E402  (after importorskip)
 
-
 # ===========================================================================
 # propagate_through_system_jax
 # ===========================================================================
@@ -51,8 +50,8 @@ class TestPropagateThroughSystemJaxJit:
     def simple_chain(self):
         """A short ASM + lens + aperture chain."""
         from lumenairy.propagators.system import (
-            propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
+            propagate_through_system_jax,
         )
         N, dx, wl = 64, 5e-6, 1.55e-6
         E = np.ones((N, N), dtype=np.complex64)
@@ -97,8 +96,8 @@ class TestPropagateThroughSystemJaxJit:
         Uses ``aspheric_lens`` (no JAX handler) -> must raise.
         """
         from lumenairy.propagators.system import (
-            propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
+            propagate_through_system_jax,
         )
         N, dx, wl = 32, 5e-6, 1.55e-6
         E = np.ones((N, N), dtype=np.complex64)

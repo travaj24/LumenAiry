@@ -9,14 +9,20 @@ import pytest
 
 import lumenairy as lm
 from lumenairy import (
-    lumenairy_context, snapshot_globals, apply_globals,
-    get_default_complex_dtype, set_default_complex_dtype,
-    get_pyfftw_planner, set_pyfftw_planner,
-    get_fft_threads, set_fft_threads,
-    get_max_ram, set_max_ram,
-    get_asm_cache_size, set_asm_cache_size,
+    apply_globals,
+    get_asm_cache_size,
+    get_default_complex_dtype,
+    get_fft_threads,
+    get_max_ram,
+    get_pyfftw_planner,
+    lumenairy_context,
+    set_asm_cache_size,
+    set_default_complex_dtype,
+    set_fft_threads,
+    set_max_ram,
+    set_pyfftw_planner,
+    snapshot_globals,
 )
-
 
 # ============================================================================
 # Snapshot / apply round-trip
@@ -318,7 +324,8 @@ class TestAtexitHook:
 
     def test_install_is_idempotent(self):
         from lumenairy._context import (
-            install_atexit_restore, _ATEXIT_INSTALLED,
+            _ATEXIT_INSTALLED,
+            install_atexit_restore,
         )
         # Already installed at import time
         assert _ATEXIT_INSTALLED

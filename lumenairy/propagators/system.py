@@ -26,30 +26,30 @@ if TYPE_CHECKING:
     from ..sources import Source
     from .result import PropagationResult
 
+from ..elements import (
+    apply_aperture,
+    apply_gaussian_aperture,
+    apply_mask,
+    apply_mirror,
+    apply_zernike_aberration,
+    generate_turbulence_screen,
+)
+from ..elements.lenses import (
+    apply_aspheric_lens,
+    apply_axicon,
+    apply_cylindrical_lens,
+    apply_grin_lens,
+    apply_real_lens,
+    apply_real_lens_traced,
+    apply_spherical_lens,
+    apply_thin_lens,
+)
 from .propagation import (
+    _resolve_jax_complex_dtype,
     angular_spectrum_propagate,
     angular_spectrum_propagate_tilted,
     fresnel_propagate,
     resample_field,
-    _resolve_jax_complex_dtype,
-)
-from ..elements.lenses import (
-    apply_thin_lens,
-    apply_spherical_lens,
-    apply_aspheric_lens,
-    apply_real_lens,
-    apply_real_lens_traced,
-    apply_cylindrical_lens,
-    apply_grin_lens,
-    apply_axicon,
-)
-from ..elements import (
-    apply_mirror,
-    apply_aperture,
-    apply_gaussian_aperture,
-    apply_mask,
-    apply_zernike_aberration,
-    generate_turbulence_screen,
 )
 
 
@@ -283,7 +283,7 @@ def propagate_through_system(E_in: np.ndarray,
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'propagate_through_system')
 
-    from ..progress import call_progress, ProgressScaler
+    from ..progress import ProgressScaler, call_progress
     if store is not None:
         from ..io.storage import append_plane
 
@@ -384,8 +384,8 @@ def propagate_through_system(E_in: np.ndarray,
             elif has_tilt:
                 # Tilted ASM (always ASM — no tilted Fresnel variant)
                 if verbose and prop_method == 'fresnel':
-                    print(f"    tilt specified — using tilted ASM "
-                          f"instead of Fresnel")
+                    print("    tilt specified — using tilted ASM "
+                          "instead of Fresnel")
                 E = angular_spectrum_propagate_tilted(
                     E, z, wavelength, current_dx, current_dy,
                     tilt_x=tilt_x, tilt_y=tilt_y,
@@ -615,7 +615,6 @@ def evaluate(
     # Lazy import to avoid a top-level circular dependency on
     # ``lumenairy.sources``.
     from ..sources.core import Source as _SourceCls
-    from .result import PropagationResult
 
     if source is None:
         raise ValueError(
@@ -845,8 +844,9 @@ def clear_propagate_system_jax_cache() -> None:
 # clear calls by hand.  Late-binding closure preserves
 # ``mock.patch.object`` test semantic.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'propagate_system_jax',
@@ -1141,6 +1141,7 @@ def propagate_through_system_jax(E_in: np.ndarray,
             'JAX is not installed; install with `pip install jax` or '
             'use propagate_through_system() (NumPy).')
     import jax.numpy as jnp
+
     from .propagation import angular_spectrum_propagate
 
     if dy is None:

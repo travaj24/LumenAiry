@@ -10,7 +10,6 @@ and the main entry point :func:`design_optimize`.  Re-exported by
 
 from __future__ import annotations
 
-import os as _os
 import time
 import warnings
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
@@ -23,34 +22,26 @@ import numpy as np
 # tests that monkey-patch ``core._json`` / ``core._os`` to count I/O
 # calls continue to intercept the binding actually used by the
 # implementation.  See ``test_v4_16_0_agent_c::test_state_save_every_throttles_io``.
-
 from ..elements.lenses import apply_real_lens, apply_real_lens_traced
-from ..raytrace import (
-    surfaces_from_prescription, system_abcd, seidel_coefficients,
-)
-from ..analysis import wave_opd_2d
-from ..analysis.through_focus import (
-    through_focus_scan, find_best_focus, diffraction_limited_peak,
-)
+
 # 4.10.2: pull get_default_complex_dtype to module scope so merit-leg
 # wave-propagation source fields (apply_real_lens inputs) can be
 # allocated at the runtime-selected precision -- preserves the
 # precision='single' choice through merit evaluations.
-from ..propagators.propagation import get_default_complex_dtype
-
 from .context import (
+    _METHODS_SUPPORTING_CONSTRAINTS,
     Constraint,
     DesignResult,
     EvaluationContext,
     MeritTerm,
-    _METHODS_SUPPORTING_CONSTRAINTS,
 )
-from .parameterizations import MultiPrescriptionParameterization
 from .jax_merits import JaxMeritTerm
+from .parameterizations import MultiPrescriptionParameterization
 from .wrapper_merits import (
-    MultiFieldMerit, MultiWavelengthMerit, ToleranceAwareMerit,
+    MultiFieldMerit,
+    MultiWavelengthMerit,
+    ToleranceAwareMerit,
 )
-
 
 # =========================================================================
 # Wave-propagator registry
@@ -126,7 +117,8 @@ def _wave_hfpi(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
 
 def _wave_asymptotic(E0, pres, *, wavelength, dx, N, wp_kwargs, opts):
     from ..propagators.asymptotic import (
-        fit_canonical_polynomials, propagate_modal_asymptotic,
+        fit_canonical_polynomials,
+        propagate_modal_asymptotic,
     )
     # Fit the prescription (or reuse a pre-built fit if supplied).
     fit = wp_kwargs.pop('fit', None)
@@ -338,9 +330,12 @@ def design_optimize(parameterization: Any,
     behaviour contracts are unchanged.
     """
     import scipy.optimize as so
+
     from ..progress import call_progress
     from ..propagators.propagation import (
         get_default_complex_dtype as _gddt,
+    )
+    from ..propagators.propagation import (
         set_default_complex_dtype,
     )
 
@@ -849,7 +844,7 @@ def design_optimize(parameterization: Any,
             try:
                 _c0 = constraint_seq[0]
                 _cv0 = float(_c0.fun(x))
-                _label = _c0.label or f'constraint[0]'
+                _label = _c0.label or 'constraint[0]'
                 _con_tag = f'  [{_label}={_cv0:.4g}]'
             except (TypeError, ValueError, RuntimeError,
                     ZeroDivisionError, OverflowError):

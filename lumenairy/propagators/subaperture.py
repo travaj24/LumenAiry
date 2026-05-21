@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..backend import array_namespace, is_jax_array
+from ..backend import array_namespace
 
 
 @dataclass
@@ -120,9 +120,39 @@ def combine_patch_fields(
     output_grid_x: np.ndarray,
     output_grid_y: np.ndarray,
     edge_smoothness: float = 0.1,
+    image_centres: Optional[np.ndarray] = None,
+    image_half_widths: Optional[np.ndarray] = None,
 ) -> np.ndarray:
     """Coherent recombination of per-patch output fields into a
-    global output field via partition-of-unity weights."""
+    global output field via partition-of-unity weights.
+
+    .. versionchanged:: 5.2
+        v5.2 (AUDIT_V4_13_1 Part 2 P1-F closure): two new optional
+        kwargs ``image_centres`` and ``image_half_widths`` let the
+        caller pass image-plane (post-magnification + tilt) patch
+        coordinates that the partition-of-unity windows centre on.
+        Pre-v5.2 the windows were always centred on
+        ``patch_grid.centres``, which are SOURCE-plane positions --
+        correct only for unit-magnification, no-tilt geometries.  When
+        ``image_centres`` is ``None`` (default) the legacy
+        source-plane behaviour is preserved bit-for-bit; the caller
+        :func:`propagate_subaperture_asymptotic` emits a
+        ``UserWarning`` advising the user to supply mapped centres for
+        non-unit-magnification systems.
+
+    Parameters
+    ----------
+    image_centres : ndarray (N_patch, 2), optional
+        Image-plane (x, y) coordinates of each patch centre, after
+        the system magnification and tilt have been applied.  Defaults
+        to ``patch_grid.centres`` when ``None`` (the v5.1 / legacy
+        behaviour).
+    image_half_widths : ndarray (N_patch, 2), optional
+        Image-plane half-widths of each patch.  Defaults to
+        ``patch_grid.half_widths`` when ``None``.  For an isotropic
+        magnification ``m`` and no tilt, pass
+        ``patch_grid.half_widths * abs(m)``.
+    """
     if len(patch_fields) != len(patch_grid):
         raise ValueError(
             f"combine_patch_fields: got {len(patch_fields)} patch_fields "
@@ -131,6 +161,28 @@ def combine_patch_fields(
     if len(patch_fields) == 0:
         raise ValueError("combine_patch_fields: empty patch list.")
 
+    # v5.2 (AUDIT_V4_13_1 Part 2 P1-F closure): pick the centres /
+    # half-widths used for the partition-of-unity windows.  Legacy
+    # callers see ``None`` and inherit ``patch_grid.centres`` /
+    # ``patch_grid.half_widths`` -- the bit-for-bit pre-v5.2 path.
+    if image_centres is None:
+        centres_arr = patch_grid.centres
+    else:
+        centres_arr = np.asarray(image_centres)
+        if centres_arr.shape != (len(patch_grid), 2):
+            raise ValueError(
+                f"combine_patch_fields: image_centres has shape "
+                f"{centres_arr.shape}; expected ({len(patch_grid)}, 2).")
+    if image_half_widths is None:
+        half_widths_arr = patch_grid.half_widths
+    else:
+        half_widths_arr = np.asarray(image_half_widths)
+        if half_widths_arr.shape != (len(patch_grid), 2):
+            raise ValueError(
+                f"combine_patch_fields: image_half_widths has shape "
+                f"{half_widths_arr.shape}; expected "
+                f"({len(patch_grid)}, 2).")
+
     xp = array_namespace(patch_fields[0])
     X, Y = xp.meshgrid(output_grid_x, output_grid_y, indexing='xy')
 
@@ -138,10 +190,10 @@ def combine_patch_fields(
     weight_total = xp.zeros(out.shape, dtype=xp.real(patch_fields[0]).dtype)
 
     for i, F in enumerate(patch_fields):
-        centre = (float(patch_grid.centres[i, 0]),
-                  float(patch_grid.centres[i, 1]))
-        hw = (float(patch_grid.half_widths[i, 0]),
-              float(patch_grid.half_widths[i, 1]))
+        centre = (float(centres_arr[i, 0]),
+                  float(centres_arr[i, 1]))
+        hw = (float(half_widths_arr[i, 0]),
+              float(half_widths_arr[i, 1]))
         w = patch_window(X, Y, centre, hw,
                          edge_smoothness=edge_smoothness)
         out = out + F * w.astype(F.dtype)
@@ -219,17 +271,60 @@ def propagate_subaperture_asymptotic(
     array (Ny, Nx) complex
         Coherently recombined output field.
     """
+    import warnings as _warnings
+
+    import numpy as _np
+
+    from ..analysis.core import beam_d4sigma
     from .asymptotic import (
+        decompose_lg,
         fit_canonical_polynomials,
         propagate_modal_asymptotic,
-        decompose_lg,
     )
-    from ..analysis.core import beam_d4sigma
-    import numpy as _np
 
     Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
     if output_dx is None:
         output_dx = dx
+
+    # v5.2 (AUDIT_V4_13_1 Part 2 P1-F closure): the partition-of-unity
+    # windows that :func:`combine_patch_fields` builds below are centred
+    # on ``patch_grid.centres``, which are SOURCE-plane positions.  That
+    # is only correct for unit-magnification, no-tilt geometries -- a
+    # system with magnification ``m != 1`` maps each source patch to
+    # an image-plane footprint at ``m * (cx, cy)`` with half-width
+    # ``|m| * source_box_half``, and the current code window would
+    # tile the wrong location.  v5.2 surfaces this limitation as a
+    # ``UserWarning`` rather than silently producing a wrong field;
+    # the full fix (compute ``m`` from the prescription's system
+    # ABCD, pass mapped centres through :func:`combine_patch_fields`'s
+    # new ``image_centres`` / ``image_half_widths`` kwargs) is the
+    # v5.2.1 candidate per ROADMAP.  Heuristic for triggering: probe
+    # the system ABCD's ``A`` element (the linear magnification term);
+    # ``|A - 1| > 0.05`` means "not unit mag" and we warn.
+    try:
+        from ..raytrace import system_abcd_prescription
+        _abcd = system_abcd_prescription(prescription, wavelength)
+        _M = _abcd[0] if isinstance(_abcd, tuple) else _abcd
+        _A = float(_M[0, 0])
+        if abs(_A - 1.0) > 0.05:
+            _warnings.warn(
+                "propagate_subaperture_asymptotic: partition-of-unity "
+                "patch windows are centred on SOURCE-plane positions; "
+                f"this system has magnification |A|={abs(_A):.3g} "
+                "(non-unity), so the image-plane recombination weights "
+                "will tile the wrong locations and the result is "
+                "unreliable at off-axis patches.  Reliable for unit-"
+                "magnification, no-tilt geometries only.  See "
+                "AUDIT_V4_13_1 Part 2 P1-F; the full fix (image-plane "
+                "centre remapping) is tracked as a v5.2.1 candidate.",
+                UserWarning, stacklevel=2,
+            )
+    except (ImportError, RuntimeError, ValueError, KeyError, TypeError,
+            IndexError):
+        # ABCD probing can fail for prescriptions without a clean
+        # paraxial system_abcd path (e.g. coord-break-heavy designs).
+        # Don't block the propagator on an inability to assess magnification.
+        pass
 
     # 4.13.2 (P1-NEW-B): build the source-plane coordinate grid for
     # E_in so we can project the actual input field onto the LG basis

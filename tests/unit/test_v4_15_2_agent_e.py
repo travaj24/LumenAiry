@@ -173,8 +173,8 @@ class TestSentinelUnpickleStrictFallback:
         unpickle via the registry lookup -- the strict-raise change
         only affects the unregistered fall-through path."""
         from lumenairy._deprecation import (
-            _sentinel_unpickle,
             _NO_DEFAULT,
+            _sentinel_unpickle,
         )
         recovered = _sentinel_unpickle('NO_DEFAULT')
         assert recovered is _NO_DEFAULT, (
@@ -189,8 +189,8 @@ class TestSentinelUnpickleStrictFallback:
         # (lazy imports register via the ``__init__`` ->
         # ``_SENTINEL_REGISTRY[name] = self`` side-effect).
         from lumenairy._deprecation import _NO_DEFAULT
-        from lumenairy.optimize.core import _ZERO_APERTURE_MASK
         from lumenairy.elements.polarization import _ANGLE_UNSET
+        from lumenairy.optimize.core import _ZERO_APERTURE_MASK
 
         for sentinel in (_NO_DEFAULT, _ZERO_APERTURE_MASK, _ANGLE_UNSET):
             data = pickle.dumps(sentinel)
@@ -242,8 +242,8 @@ class TestOptimizeCoreSentinelMigration:
         ``optimize/core.py``, inherits from :class:`_Sentinel`, and
         instantiates a singleton with the canonical
         ``__repr__``/``__bool__`` behaviour."""
-        from lumenairy._deprecation import _Sentinel
         import lumenairy.optimize.core as oc
+        from lumenairy._deprecation import _Sentinel
 
         for cls_name in self.EXPECTED_SUBCLASSES:
             cls = getattr(oc, cls_name, None)
@@ -557,7 +557,7 @@ class TestSourceGaussianSchellEnsembleTuple:
         :class:`PartialCoherenceMCF` (NOT wrapped in a Source),
         same as v4.15.1.  Sanity check that the v4.15.2 contract
         change to the ensemble path did not break the MCF path."""
-        from lumenairy.sources.core import Source, PartialCoherenceMCF
+        from lumenairy.sources.core import PartialCoherenceMCF, Source
         result = Source.gaussian_schell(
             N=16, dx=2e-6, wavelength=633e-9,
             w0=20e-6, sigma_g=8e-6,

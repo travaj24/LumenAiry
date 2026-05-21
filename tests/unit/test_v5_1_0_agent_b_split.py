@@ -33,7 +33,6 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-
 # Names that pre-v5.1.0 ``lumenairy/raytrace/__init__.py`` explicitly
 # imported from ``.core`` and re-exposed (the public surface).  The
 # split MUST preserve every one of these as importable from
@@ -257,7 +256,10 @@ class TestSplitSmokeTrace:
 
     def test_singlet_trace_through_split_engine(self):
         from lumenairy.raytrace.core import (
-            Surface, make_ray, trace, system_abcd,
+            Surface,
+            make_ray,
+            system_abcd,
+            trace,
         )
 
         # Hand-built single-surface "lens" (one refracting interface).

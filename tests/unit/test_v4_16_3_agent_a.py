@@ -41,7 +41,6 @@ from tests.unit.test_v4_16_2_dispatcher_pin_doc_consistency import (
     _versions_with_breaking_changes_from_changelog,
 )
 
-
 # ----------------------------------------------------------------------
 # P1-NEW-F1-2 -- pyproject parser regression tests (tomllib closure)
 # ----------------------------------------------------------------------

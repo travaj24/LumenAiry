@@ -24,21 +24,9 @@ reorganisation -- see ``docs/release_notes/.release_notes_v5_1_0_agent_b.md``.
 
 from __future__ import annotations
 
-# ---------------------------------------------------------------------------
-# Star-import every submodule so the legacy ``from lumenairy.raytrace.core
-# import X`` (or the public ``from lumenairy.raytrace import X``) keeps
-# resolving for every symbol that used to live here.  Each submodule
-# defines its own ``__all__`` (or omits underscore-prefixed entries on
-# purpose); the union of the seven captures the legacy public surface.
-# ---------------------------------------------------------------------------
-
-from .surface import *           # noqa: F401,F403
-from .intersection import *      # noqa: F401,F403
-from .trace import *             # noqa: F401,F403
-from .world_trace import *       # noqa: F401,F403
-from .seidel import *            # noqa: F401,F403
-from .ray_fan import *           # noqa: F401,F403
-from .layout import *            # noqa: F401,F403
+from .intersection import *  # noqa: F401,F403
+from .layout import *  # noqa: F401,F403
+from .ray_fan import *  # noqa: F401,F403
 
 # Two world-frame analytics live in ``ray_fan`` but are kept off its
 # ``__all__`` to preserve the pre-v5.1.0 "module-attribute visible but
@@ -50,9 +38,21 @@ from .layout import *            # noqa: F401,F403
 # by explicit name keeps ``from lumenairy.raytrace.core import
 # ray_fan_data_world`` working bit-for-bit with pre-v5.1.0.
 from .ray_fan import (  # noqa: F401
-    ray_fan_data_world,
     opd_fan_data_world,
+    ray_fan_data_world,
 )
+from .seidel import *  # noqa: F401,F403
+
+# ---------------------------------------------------------------------------
+# Star-import every submodule so the legacy ``from lumenairy.raytrace.core
+# import X`` (or the public ``from lumenairy.raytrace import X``) keeps
+# resolving for every symbol that used to live here.  Each submodule
+# defines its own ``__all__`` (or omits underscore-prefixed entries on
+# purpose); the union of the seven captures the legacy public surface.
+# ---------------------------------------------------------------------------
+from .surface import *  # noqa: F401,F403
+from .trace import *  # noqa: F401,F403
+from .world_trace import *  # noqa: F401,F403
 
 # NB: this re-export shell deliberately does NOT define ``__all__``.
 # Pre-v5.1.0 ``core.py`` had no ``__all__`` either -- ``from

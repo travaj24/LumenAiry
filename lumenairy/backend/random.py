@@ -24,13 +24,13 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, Union
+from typing import Any, Optional, Tuple, Union, cast
 
 import numpy as np
 
 from .array import (
-    JAX_AVAILABLE,
     CUPY_AVAILABLE,
+    JAX_AVAILABLE,
     is_jax_array,
 )
 
@@ -47,6 +47,14 @@ class RandomState:
     draw via ``jax.random.split`` so chained calls don't repeat
     samples.
     """
+
+    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): annotate the
+    # backend-polymorphic attributes as ``Any`` -- they hold a
+    # numpy/cupy Generator OR a JAX PRNGKey depending on the dispatch
+    # branch selected in ``__init__``, which mypy cannot follow.
+    _backend: str
+    _rng: Any
+    _key: Any
 
     def __init__(self, rng: Optional[Union[int, object]] = None) -> None:
         if rng is None or isinstance(rng, (int, np.integer)):
@@ -127,7 +135,11 @@ class RandomState:
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
             dtype = jax.numpy.int32
-        return jax.random.randint(sub, shape, low, high, dtype=dtype)
+        # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the public
+        # contract is "high required for the JAX branch"; numpy/cupy
+        # accept high=None as "use dtype max" but jax.random.randint does
+        # not, so the runtime path is well-defined.  cast for mypy.
+        return jax.random.randint(sub, shape, low, cast(int, high), dtype=dtype)
 
     def choice(self, n: int, shape: Tuple[int, ...],
                p: Optional[Any] = None,
@@ -173,7 +185,7 @@ class RandomState:
         return jax.random.choice(sub, n, shape=shape, p=p)
 
 
-def _is_jax_prng_key(x) -> bool:
+def _is_jax_prng_key(x: Any) -> bool:
     """Detect a JAX PRNG key in either the legacy uint32 form or the
     JAX 0.4.20+ opaque-dtype form (``jax.random.key(...)``).
 
@@ -212,13 +224,13 @@ def _is_jax_prng_key(x) -> bool:
             pass
         # Legacy typed (uint32, shape-trailing-2) form.
         try:
-            return x.dtype == jax.numpy.uint32 and x.shape[-1] == 2
+            return bool(x.dtype == jax.numpy.uint32 and x.shape[-1] == 2)
         except (AttributeError, IndexError, TypeError):
             return False
     return False
 
 
-def _is_cupy_generator(x) -> bool:
+def _is_cupy_generator(x: Any) -> bool:
     if not CUPY_AVAILABLE:
         return False
     try:

@@ -52,7 +52,9 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+from .apertures import Aperture, GaussianAperture
 from .base import CompositeOperator, Operator
+from .from_prescription import from_prescription as _from_prescription
 from .primitives import (
     CylindricalLens,
     FourierTransform,
@@ -60,8 +62,6 @@ from .primitives import (
     Magnify,
     ThinLens,
 )
-from .apertures import Aperture, GaussianAperture
-from .from_prescription import from_prescription as _from_prescription
 
 
 # Attach `Operator.from_prescription` as a classmethod-style factory.

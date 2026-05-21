@@ -23,7 +23,6 @@ import numpy as np
 
 from ..glass import GLASS_REGISTRY
 
-
 # ============================================================================
 # Zemax .zmx file parser
 # ============================================================================
@@ -1089,7 +1088,7 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
     lines.append('#')
     lines.append('# Test conditions')
     lines.append(f'#   Primary wavelength: {wavelength*1e6:.4f} um')
-    lines.append(f'#   Source: collimated on-axis plane wave')
+    lines.append('#   Source: collimated on-axis plane wave')
     lines.append(f'#   Aperture: clear semi-diameter = '
                  f'{semi_dia_mm:.4f} mm (diameter {aperture_diameter*1e3:.4f} mm)')
     lines.append(f'#   Stop surface index: {stop_surface + 1}')

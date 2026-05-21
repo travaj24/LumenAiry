@@ -36,7 +36,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-
 __all__ = [
     'lg_polynomial',
     'clear_lg_polynomial_cache',
@@ -261,8 +260,9 @@ def clear_lg_mode_stack_cache() -> None:
 # walks the registry.  The cost is one attribute lookup per cache
 # per drain -- negligible vs. the actual cache-clear work.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'lg_mode_stack',

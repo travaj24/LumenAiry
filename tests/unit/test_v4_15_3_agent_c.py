@@ -61,17 +61,18 @@ import pytest
 
 import lumenairy as la
 from lumenairy.optimize.core import (
+    _FAILED_SCAN_STREHL_SENTINEL_OBJ,
+    _INVALID_FL_SENTINEL_OBJ,
     EvaluationContext,
     FocalLengthMerit,
     MultiFieldMerit,
     MultiWavelengthMerit,
     StrehlMerit,
     ToleranceAwareMerit,
-    _FAILED_SCAN_STREHL_SENTINEL_OBJ,
     _FailedScanStrehlSentinel,
-    _INVALID_FL_SENTINEL_OBJ,
     _InvalidFocalLengthSentinel,
 )
+
 # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a): the
 # ``_PerturbedABCDFallbackSentinel`` class and its singleton
 # ``_PERTURBED_ABCD_FALLBACK_SENTINEL_OBJ`` were DELETED in v4.15.4 as

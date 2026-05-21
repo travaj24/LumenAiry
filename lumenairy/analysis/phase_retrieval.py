@@ -32,11 +32,11 @@ from __future__ import annotations
 
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
-from ..propagators.propagation import _fft2, _ifft2
 
+from ..propagators.propagation import _fft2, _ifft2
 
 __all__ = [
     # NumPy reference implementations
@@ -655,8 +655,9 @@ def clear_phase_retrieval_caches() -> None:
 # clear calls by hand.  Late-binding closure preserves
 # ``mock.patch.object`` test semantic.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'phase_retrieval_kernels',
@@ -871,7 +872,6 @@ def error_reduction_jax(
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError('JAX is not installed.')
-    import jax
     import jax.numpy as jnp
 
     if dtype is None:
@@ -886,7 +886,8 @@ def error_reduction_jax(
     # real dtype is paired with the complex dtype: float32 with
     # complex64, float64 with complex128.
     from ..propagators.propagation import (
-        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+        _resolve_jax_complex_dtype,
+        _resolve_jax_real_dtype,
     )
     np_real = np.dtype(dtype)
     if np_real == np.dtype(np.float64):
@@ -959,7 +960,6 @@ def hybrid_input_output_jax(
     from ..backend import JAX_AVAILABLE
     if not JAX_AVAILABLE:
         raise ImportError('JAX is not installed.')
-    import jax
     import jax.numpy as jnp
 
     if dtype is None:
@@ -972,7 +972,8 @@ def hybrid_input_output_jax(
     # closure as the GS path; was missed by the v4.13.0 L2 sweep on
     # this sibling.
     from ..propagators.propagation import (
-        _resolve_jax_complex_dtype, _resolve_jax_real_dtype,
+        _resolve_jax_complex_dtype,
+        _resolve_jax_real_dtype,
     )
     np_real = np.dtype(dtype)
     if np_real == np.dtype(np.float64):

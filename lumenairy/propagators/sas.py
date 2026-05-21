@@ -15,18 +15,18 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Tuple
 
 import numpy as np
 
+from . import fft_infra as _state
 from .fft_infra import (
     CUPY_AVAILABLE,
+    _h_cache_lookup,
+    _h_cache_store,
     _is_cupy_array,
-    _h_cache_lookup, _h_cache_store,
     _validate_propagator_inputs,
 )
-from . import fft_infra as _state
-
 
 __all__ = [
     'scalable_angular_spectrum_propagate',

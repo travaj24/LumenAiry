@@ -31,14 +31,55 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
 
 from ..backend import (
-    array_namespace, is_jax_array, to_numpy, RandomState,
+    RandomState,
+    array_namespace,
+    is_jax_array,
+    to_numpy,
 )
+
+
+# v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): output-grid kwarg semantics
+# disambiguation; see :mod:`lumenairy.propagators.gbd` for the full
+# rationale.  ``output_grid`` is renamed to ``output_shape`` here for
+# the ``(Ny, Nx)`` shape-only meaning; the legacy ``output_grid``
+# spelling keeps working but emits a ``DeprecationWarning``.
+def _resolve_output_shape(
+    output_shape: Optional[Tuple[int, int]],
+    output_grid: Optional[Any],
+    *,
+    fn_name: str,
+    default_shape: Tuple[int, int],
+) -> Tuple[int, int]:
+    """Resolve the (Ny, Nx) output shape from the v5.2 ``output_shape``
+    kwarg and the deprecated ``output_grid`` legacy kwarg."""
+    if output_shape is not None and output_grid is not None:
+        raise ValueError(
+            f"{fn_name}: both ``output_shape`` and ``output_grid`` were "
+            f"provided.  Pass only ``output_shape=(Ny, Nx)`` (v5.2+) or "
+            f"the dispatcher's ``output_grid=(N_out, dx_out)`` form via "
+            f"``propagate(method=...)``.")
+    if output_shape is not None:
+        return (int(output_shape[0]), int(output_shape[1]))
+    if output_grid is not None:
+        warnings.warn(
+            f"{fn_name}: the ``output_grid`` kwarg now (v5.2+) means "
+            f"the dispatcher's ``(N_out, dx_out)`` grid spec; on "
+            f"sub-propagators it has been renamed to ``output_shape`` "
+            f"for the ``(Ny, Nx)`` shape-only meaning.  Pass "
+            f"``output_shape=(Ny, Nx)`` to silence this warning, or "
+            f"call via ``propagate(method='hfpi', output_grid=(N_out, "
+            f"dx_out), ...)`` if you actually want grid resampling.",
+            DeprecationWarning, stacklevel=3,
+        )
+        return (int(output_grid[0]), int(output_grid[1]))
+    return default_shape
 
 
 def _spawn_rng(rng, stream_index: int):
@@ -458,6 +499,7 @@ def propagate_hfpi_freespace_aperture(
     wavelength: float,
     n_paths: int,
     rng: Optional[Union[int, object]] = None,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -504,11 +546,15 @@ def propagate_hfpi_freespace_aperture(
                                 z_target=z_to_aperture + z_aperture_to_output,
                                 wavelength=wavelength)
 
-    if output_grid is None:
-        output_grid = E_in.shape[-2], E_in.shape[-1]
+    # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): see module docstring;
+    # ``output_grid`` is now the legacy spelling of ``output_shape``.
+    Ny, Nx = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_hfpi_freespace_aperture',
+        default_shape=(E_in.shape[-2], E_in.shape[-1]),
+    )
     if output_dx is None:
         output_dx = dx
-    Ny, Nx = output_grid
     return accumulate_to_grid(
         paths, Ny=Ny, Nx=Nx, dx=output_dx, centre=output_centre,
         output_dtype=E_in.dtype,
@@ -673,6 +719,7 @@ def propagate_hfpi_through_prescription(
     rng: Optional[Union[int, object]] = None,
     diffracting_surfaces: Optional[List[int]] = None,
     surface_diffraction: Optional[Dict[int, Any]] = None,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -737,17 +784,20 @@ def propagate_hfpi_through_prescription(
     into the path's complex weight).
     """
     from ..raytrace import (
-        surfaces_from_prescription, RayBundle, trace,
+        surfaces_from_prescription,
     )
-    from ..glass import get_glass_index
 
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
-    if output_grid is None:
-        output_grid = (Ny, Nx)
+    # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): see module helper;
+    # ``output_grid`` is now the deprecated spelling of ``output_shape``.
+    Ny_out, Nx_out = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_hfpi_through_prescription',
+        default_shape=(Ny, Nx),
+    )
     if output_dx is None:
         output_dx = dx
-    Ny_out, Nx_out = output_grid
 
     # 2.  Resolve surface list and identify diffractors.
     surfaces = surfaces_from_prescription(prescription)

@@ -35,7 +35,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -120,7 +119,7 @@ def test_apply_dm_rejects_mcf_and_3d_ensemble():
     v4.16 marker) and 3-D ensemble (ValueError, ensemble-iteration
     hint).  Both routed through ``_check_2d_scalar_field``.
     """
-    from lumenairy.analysis.ao import apply_dm, DeformableMirror
+    from lumenairy.analysis.ao import DeformableMirror, apply_dm
 
     # Small DM compatible with the field grids below.
     N = 16

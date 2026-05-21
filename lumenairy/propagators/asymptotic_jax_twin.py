@@ -8,7 +8,11 @@ change.  Holds:
   (``_chebyshev_vandermonde_xp`` / ``_evaluate_polynomial_4d_xp``)
   used by :class:`CanonicalPolyFit` / :class:`HFPolyFit`'s
   ``eval_phi_xp`` / ``eval_s1_xp`` methods (attached here via
-  monkey-patch at import time).
+  monkey-patch at import time).  v5.2 (ROADMAP v5.1 shared
+  Chebyshev helpers extraction): ``_chebyshev_vandermonde_xp`` is
+  now a thin back-compat alias for
+  :func:`lumenairy._math.chebyshev.chebyshev_vandermonde` called
+  with the ``xp`` kwarg.
 * The JAX path for :func:`aberration_tensor` restricted to the
   LG_{0,0} -> LG_{0,0} -> LG_{0,0} channel
   (:func:`aberration_tensor_lg00_jax`).
@@ -26,18 +30,20 @@ existing call sites continue to work unchanged.
 
 from __future__ import annotations
 
-import math
 import threading
 from typing import Any, Dict, NamedTuple, Optional, Tuple
 
 import numpy as np
 
+# v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+# Backend-aware Chebyshev Vandermonde now lives in
+# ``lumenairy._math.chebyshev`` with an ``xp`` kwarg.
+from .._math.chebyshev import chebyshev_vandermonde as _chebyshev_vandermonde_math
 from ..backend import JAX_AVAILABLE
 from ..elements.lenses import (
     _multi_indices_total_degree,
 )
 from .asymptotic_canonical_fit import CanonicalPolyFit, HFPolyFit
-
 
 __all__ = [
     'JaxAberrationTensorResult',
@@ -65,16 +71,16 @@ __all__ = [
 def _chebyshev_vandermonde_xp(u, max_k, xp):
     """Backend-aware Chebyshev Vandermonde T[n](u).
 
-    Returns a list of arrays (length max_k+1) rather than a single
-    stacked array, so JAX can build it functionally.
+    v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+    back-compat shim -- forwards to
+    :func:`lumenairy._math.chebyshev.chebyshev_vandermonde` with the
+    ``xp`` kwarg.  The returned array is now the same stacked-array
+    contract as the NumPy helper (shape ``(max_k + 1,) + u.shape``),
+    not the prior list-of-arrays form -- still JAX-traceable because
+    the canonical implementation uses functional construction +
+    ``xp.stack`` for non-NumPy backends.
     """
-    u_arr = xp.asarray(u)
-    T = [xp.ones_like(u_arr)]
-    if max_k >= 1:
-        T.append(u_arr)
-    for n in range(2, max_k + 1):
-        T.append(2.0 * u_arr * T[n - 1] - T[n - 2])
-    return T
+    return _chebyshev_vandermonde_math(u, max_k, xp=xp)
 
 
 def _evaluate_polynomial_4d_xp(coeffs, multi_indices, u1, u2, u3, u4,
@@ -85,21 +91,15 @@ def _evaluate_polynomial_4d_xp(coeffs, multi_indices, u1, u2, u3, u4,
     but routes through ``xp = array_namespace(u1, u2, u3, u4)`` so it
     works on NumPy / CuPy / JAX arrays uniformly.
     """
-    T1 = _chebyshev_vandermonde_xp(u1, max_order, xp)
-    T2 = _chebyshev_vandermonde_xp(u2, max_order, xp)
-    T3 = _chebyshev_vandermonde_xp(u3, max_order, xp)
-    T4 = _chebyshev_vandermonde_xp(u4, max_order, xp)
-    # 3.5.6: vectorised across basis terms.  Same shape contract as
-    # the looped version (~70 iters per call previously); ~3-5x
-    # faster on NumPy, removes a Python loop that interfered with
-    # `jax.jit` tracing on JAX.  ``_chebyshev_vandermonde_xp``
-    # returns a Python list (functional construction friendly to
-    # JAX); stack to an array so we can fancy-index with the
-    # multi-index columns.
-    T1_stack = xp.stack(T1)
-    T2_stack = xp.stack(T2)
-    T3_stack = xp.stack(T3)
-    T4_stack = xp.stack(T4)
+    # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+    # ``_chebyshev_vandermonde_xp`` (now a shim into _math.chebyshev)
+    # already returns the stacked array directly, so the previous
+    # ``xp.stack(T)`` step is gone.  3.5.6 vectorised-across-basis
+    # construction is preserved.
+    T1_stack = _chebyshev_vandermonde_xp(u1, max_order, xp)
+    T2_stack = _chebyshev_vandermonde_xp(u2, max_order, xp)
+    T3_stack = _chebyshev_vandermonde_xp(u3, max_order, xp)
+    T4_stack = _chebyshev_vandermonde_xp(u4, max_order, xp)
     import numpy as _np_local
     K = _np_local.asarray(multi_indices, dtype=_np_local.int64)
     K1, K2, K3, K4 = K[:, 0], K[:, 1], K[:, 2], K[:, 3]
@@ -558,9 +558,10 @@ def _build_jax_ift_solver_impl():
     if not JAX_AVAILABLE:
         raise ImportError(
             "JAX is not installed; install with `pip install jax`.")
+    from functools import partial as _partial
+
     import jax
     import jax.numpy as jnp
-    from functools import partial as _partial
 
     def _residual(v, s2, source, ws, wp, vc, fit):
         """Envelope-stationary residual
@@ -758,6 +759,7 @@ def fit_canonical_polynomials_jax(
             "JAX is not installed; install with `pip install jax`")
     import jax
     import jax.numpy as jnp
+
     from ..raytrace.jax_trace import make_jax_ray_state, trace_jax
 
     if wavelength <= 0:

@@ -34,7 +34,6 @@ import pytest
 import lumenairy as la
 from lumenairy import _cache_registry as _cr
 
-
 # ===========================================================================
 # Registration mechanics
 # ===========================================================================

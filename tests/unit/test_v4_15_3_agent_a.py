@@ -37,12 +37,12 @@ from lumenairy.elements._lens_thin import (
     apply_spherical_lens,
 )
 from lumenairy.elements._lens_traced import apply_real_lens_traced
-from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
 from lumenairy.elements.lenses import (
     apply_cylindrical_lens,
     apply_real_lens,
     apply_thin_lens,
 )
+from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
 from lumenairy.propagators.dispatch import propagate
 from lumenairy.propagators.propagation import (
     angular_spectrum_propagate,
@@ -55,11 +55,11 @@ from lumenairy.propagators.propagation import (
     rayleigh_sommerfeld_propagate,
     scalable_angular_spectrum_propagate,
 )
+from lumenairy.propagators.system import propagate_through_system
 from lumenairy.sources.core import (
     PartialCoherenceMCF,
     create_gaussian_schell_source,
 )
-from lumenairy.propagators.system import propagate_through_system
 
 # v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): the helper fixtures here
 # legitimately invoke ``create_gaussian_schell_source(...)`` with the

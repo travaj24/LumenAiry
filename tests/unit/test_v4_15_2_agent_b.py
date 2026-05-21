@@ -57,7 +57,6 @@ from lumenairy.algebra import (
 from lumenairy.algebra.primitives import Magnify as _MagnifyCls
 from lumenairy.raytrace.core import surfaces_from_prescription, system_abcd
 
-
 # ============================================================================
 # B.1 -- FourierTransform: ABCD and field both match the 3-stage chain
 # ============================================================================
@@ -506,8 +505,8 @@ class TestMagnifyDocstringDirection:
             f"must announce ``new_dx = dx / a_x`` to match the code."
         )
         assert shrunk_phrase in doc.lower(), (
-            f"v4.15.2 Magnify docstring missing the ``shrunk`` "
-            f"keyword that describes the ``a > 1`` direction."
+            "v4.15.2 Magnify docstring missing the ``shrunk`` "
+            "keyword that describes the ``a > 1`` direction."
         )
 
     def test_magnify_docstring_drops_dead_operators_reference(

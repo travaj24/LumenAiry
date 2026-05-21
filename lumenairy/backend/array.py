@@ -30,7 +30,7 @@ Author: Andrew Traverso
 from __future__ import annotations
 
 import importlib.util as _importlib_util
-from typing import Any
+from typing import Any, Optional, cast
 
 import numpy as np
 
@@ -56,7 +56,7 @@ _jnp = None
 _jax = None
 
 
-def _get_cupy():
+def _get_cupy() -> Optional[Any]:
     """Return the cupy module, importing on first call.  None if CuPy
     is not installed."""
     global _cp
@@ -66,7 +66,7 @@ def _get_cupy():
     return _cp
 
 
-def _get_jax():
+def _get_jax() -> Optional[Any]:
     """Return the jax module, importing on first call.  None if JAX is
     not installed."""
     global _jax
@@ -76,7 +76,7 @@ def _get_jax():
     return _jax
 
 
-def _get_jnp():
+def _get_jnp() -> Optional[Any]:
     """Return the jax.numpy module, importing on first call.  None if
     JAX is not installed."""
     global _jnp
@@ -198,10 +198,15 @@ def to_numpy(x: Any) -> np.ndarray:
     Use this at I/O boundaries (HDF5 / Zarr writes, plotting,
     .npy save) where downstream code expects a host NumPy array.
     """
+    # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the type
+    # predicates above narrow at runtime but mypy can't follow that;
+    # cast through ndarray on the explicit-narrow branches.
     if is_numpy_array(x):
-        return x
+        return cast(np.ndarray, x)
     if is_cupy_array(x):
-        return _get_cupy().asnumpy(x)
+        cp = _get_cupy()
+        assert cp is not None  # is_cupy_array guarantees CUPY_AVAILABLE
+        return cast(np.ndarray, cp.asnumpy(x))
     if is_jax_array(x):
         return np.asarray(x)
     return np.asarray(x)
@@ -219,11 +224,15 @@ def to_backend(x: Any, xp: Any) -> Any:
     if CUPY_AVAILABLE and xp is _get_cupy():
         if is_cupy_array(x):
             return x
-        return _get_cupy().asarray(to_numpy(x))
+        cp = _get_cupy()
+        assert cp is not None  # CUPY_AVAILABLE branch guarantees module
+        return cp.asarray(to_numpy(x))
     if JAX_AVAILABLE and xp is _get_jnp():
         if is_jax_array(x):
             return x
-        return _get_jnp().asarray(to_numpy(x))
+        jnp = _get_jnp()
+        assert jnp is not None  # JAX_AVAILABLE branch guarantees module
+        return jnp.asarray(to_numpy(x))
     raise TypeError(
         f"to_backend: unrecognised target namespace {xp!r}.  Expected "
         f"numpy, cupy, or jax.numpy.")

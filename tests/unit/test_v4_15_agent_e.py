@@ -67,7 +67,6 @@ import sys
 import numpy as np
 import pytest
 
-
 # ============================================================================
 # Qt offscreen setup (must come BEFORE PySide6 imports)
 # ============================================================================
@@ -80,10 +79,10 @@ os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 # [gui] extra skips the live-widget tests cleanly; locally the full
 # suite runs.
 try:
-    from PySide6.QtWidgets import QApplication  # noqa: F401
     import matplotlib  # noqa: F401
+    from PySide6.QtWidgets import QApplication  # noqa: F401
     matplotlib.use('Agg')
-    from lumenairy.ui.model import SystemModel, Element, SurfaceRow
+    from lumenairy.ui.model import Element, SurfaceRow, SystemModel
     _PYSIDE6_OK = True
 except ImportError as _e:
     _PYSIDE6_OK = False

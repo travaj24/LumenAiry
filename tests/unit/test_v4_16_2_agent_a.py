@@ -39,7 +39,6 @@ import lumenairy as la
 from lumenairy.propagators.ensemble import propagate_ensemble
 from lumenairy.sources.core import create_gaussian_schell_source
 
-
 # ----------------------------------------------------------------------
 # Optional JAX import (every JAX-touching test skips when missing).
 # ----------------------------------------------------------------------
@@ -123,9 +122,9 @@ class TestTransferJaxGateProductionReachability:
         the high-NA warning at min |N|=0.5.
         """
         from lumenairy.raytrace.jax_trace import (
-            make_jax_ray_state,
-            _transfer_jax,
             _reset_transfer_jax_warning,
+            _transfer_jax,
+            make_jax_ray_state,
         )
 
         _reset_transfer_jax_warning()
@@ -165,10 +164,10 @@ class TestTransferJaxGateProductionReachability:
         that the v4.16.1 closure was supposed to cover.
         """
         from lumenairy.raytrace.jax_trace import (
-            trace_jax,
-            make_jax_ray_state,
-            _reset_transfer_jax_warning,
             _TRACE_JAX_CACHE,
+            _reset_transfer_jax_warning,
+            make_jax_ray_state,
+            trace_jax,
         )
 
         _reset_transfer_jax_warning()
@@ -211,10 +210,10 @@ class TestTransferJaxGateProductionReachability:
         warning must NOT fire.  Counter-pin to the previous test.
         """
         from lumenairy.raytrace.jax_trace import (
-            trace_jax,
-            make_jax_ray_state,
-            _reset_transfer_jax_warning,
             _TRACE_JAX_CACHE,
+            _reset_transfer_jax_warning,
+            make_jax_ray_state,
+            trace_jax,
         )
 
         _reset_transfer_jax_warning()
@@ -252,11 +251,12 @@ class TestTransferJaxGateProductionReachability:
         ``ConcretizationTypeError``.
         """
         import jax
+
         from lumenairy.raytrace.jax_trace import (
-            trace_jax,
-            make_jax_ray_state,
-            _reset_transfer_jax_warning,
             _TRACE_JAX_CACHE,
+            _reset_transfer_jax_warning,
+            make_jax_ray_state,
+            trace_jax,
         )
 
         _reset_transfer_jax_warning()
@@ -301,6 +301,7 @@ class TestTransferJaxGateProductionReachability:
         """
         import jax
         import jax.numpy as _jnp
+
         from lumenairy.raytrace.jax_trace import (
             _maybe_warn_transfer_jax_high_na,
             _reset_transfer_jax_warning,
@@ -616,9 +617,10 @@ class TestPropagateThroughSystemJaxGradSafe:
         """
         import jax
         import jax.numpy as _jnp
+
         from lumenairy.propagators.system import (
-            propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
+            propagate_through_system_jax,
         )
 
         N = 16
@@ -667,9 +669,10 @@ class TestPropagateThroughSystemJaxGradSafe:
         """
         import jax
         import jax.numpy as _jnp
+
         from lumenairy.propagators.system import (
-            propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
+            propagate_through_system_jax,
         )
 
         N = 16

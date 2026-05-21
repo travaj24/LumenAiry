@@ -78,7 +78,7 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -166,6 +166,7 @@ def _get_lumenairy_version() -> str:
 # =========================================================================
 
 import importlib.util as _importlib_util
+
 _H5PY_AVAILABLE = _importlib_util.find_spec('h5py') is not None
 h5py = None  # populated lazily on first use
 

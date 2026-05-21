@@ -34,12 +34,63 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
 from ..backend import array_namespace, is_jax_array
+
+
+# v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): output-grid kwarg semantics
+# disambiguation.  Pre-v5.2 the sub-propagators below interpreted
+# ``output_grid`` as ``(Ny, Nx)`` (shape only) while the dispatcher's
+# ``propagate(output_grid=...)`` contract advertises ``(N_out, dx_out)``.
+# The mismatch silently produced wrong-shape output arrays when the
+# dispatcher forwarded the kwarg.  v5.2 keeps the dispatcher contract
+# as canonical and renames the sub-propagator kwarg to ``output_shape``
+# for the shape-only meaning.  The legacy ``output_grid`` kwarg on
+# the sub-propagators is preserved with a ``DeprecationWarning``.
+def _resolve_output_shape(
+    output_shape: Optional[Tuple[int, int]],
+    output_grid: Optional[Any],
+    *,
+    fn_name: str,
+    default_shape: Tuple[int, int],
+) -> Tuple[int, int]:
+    """Resolve the (Ny, Nx) output shape from the v5.2 ``output_shape``
+    kwarg and the deprecated ``output_grid`` legacy kwarg.
+
+    Both kwargs may be ``None`` (use the default).  Passing both raises
+    ``ValueError``.  Passing ``output_grid`` emits a
+    ``DeprecationWarning`` directing the caller to either
+    ``output_shape=(Ny, Nx)`` (the new name for this sub-propagator's
+    shape-only kwarg) or the dispatcher's ``output_grid=(N_out, dx_out)``
+    convention if they actually want grid resampling.
+    """
+    if output_shape is not None and output_grid is not None:
+        raise ValueError(
+            f"{fn_name}: both ``output_shape`` and ``output_grid`` were "
+            f"provided.  Pass only ``output_shape=(Ny, Nx)`` for the "
+            f"shape-only kwarg (v5.2+) or the dispatcher's "
+            f"``output_grid=(N_out, dx_out)`` form via "
+            f"``propagate(method=...)``.")
+    if output_shape is not None:
+        return (int(output_shape[0]), int(output_shape[1]))
+    if output_grid is not None:
+        warnings.warn(
+            f"{fn_name}: the ``output_grid`` kwarg now (v5.2+) means "
+            f"the dispatcher's ``(N_out, dx_out)`` grid spec; on "
+            f"sub-propagators it has been renamed to ``output_shape`` "
+            f"for the ``(Ny, Nx)`` shape-only meaning.  Pass "
+            f"``output_shape=(Ny, Nx)`` to silence this warning, or "
+            f"call via ``propagate(method='gbd', output_grid=(N_out, "
+            f"dx_out), ...)`` if you actually want grid resampling.",
+            DeprecationWarning, stacklevel=3,
+        )
+        return (int(output_grid[0]), int(output_grid[1]))
+    return default_shape
 
 
 # ============================================================================
@@ -377,6 +428,7 @@ def propagate_gbd_freespace(
     *,
     z: float,
     wavelength: float,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -393,8 +445,20 @@ def propagate_gbd_freespace(
        ``(E_in, z, wavelength, dx)`` order shared with
        :func:`angular_spectrum_propagate` and
        :func:`propagate_huygens_fresnel`.
+
+    .. versionchanged:: 5.2
+        ``output_grid`` was renamed to ``output_shape`` for the
+        ``(Ny, Nx)`` shape-only meaning -- the dispatcher's
+        ``propagate(output_grid=...)`` is canonical for the
+        ``(N_out, dx_out)`` grid spec (AUDIT_V4_13_1 Part 2 P1-A).
+        The legacy ``output_grid`` form still works but emits a
+        ``DeprecationWarning``.
     """
-    Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
+    Ny, Nx = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_gbd_freespace',
+        default_shape=(E_in.shape[-2], E_in.shape[-1]),
+    )
     if output_dx is None:
         output_dx = dx
 
@@ -420,6 +484,7 @@ def propagate_gbd_thin_lens(
     focal_length: float,
     z_lens_to_output: float,
     wavelength: float,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -429,8 +494,17 @@ def propagate_gbd_thin_lens(
     chunk_beamlets: int = 4096,
 ) -> np.ndarray:
     """End-to-end three-leg GBD: source -> free space -> thin lens
-    -> free space -> output (the canonical GBD validation case)."""
-    Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
+    -> free space -> output (the canonical GBD validation case).
+
+    .. versionchanged:: 5.2
+        ``output_grid`` -> ``output_shape`` rename (AUDIT_V4_13_1 Part 2
+        P1-A); see :func:`propagate_gbd_freespace`.
+    """
+    Ny, Nx = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_gbd_thin_lens',
+        default_shape=(E_in.shape[-2], E_in.shape[-1]),
+    )
     if output_dx is None:
         output_dx = dx
 
@@ -551,6 +625,7 @@ def propagate_gbd_through_prescription(
     prescription: Dict[str, Any],
     *,
     wavelength: float,
+    output_shape: Optional[Tuple[int, int]] = None,
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
@@ -587,10 +662,18 @@ def propagate_gbd_through_prescription(
     -------
     array (Ny, Nx) complex
         Output-plane reconstructed field.
+
+    .. versionchanged:: 5.2
+        ``output_grid`` -> ``output_shape`` rename (AUDIT_V4_13_1 Part 2
+        P1-A); see :func:`propagate_gbd_freespace`.
     """
     from ..raytrace import system_abcd_prescription
 
-    Ny, Nx = (E_in.shape[-2], E_in.shape[-1]) if output_grid is None else output_grid
+    Ny, Nx = _resolve_output_shape(
+        output_shape, output_grid,
+        fn_name='propagate_gbd_through_prescription',
+        default_shape=(E_in.shape[-2], E_in.shape[-1]),
+    )
     if output_dx is None:
         output_dx = dx
 
@@ -625,8 +708,8 @@ def propagate_gbd_through_prescription(
     # always defaulted to None.  Switched to attribute access on the
     # Surface dataclass.  Caught by AUDIT_ROUND3_2026_05_16.md (CRIT-8).
     try:
-        from ..raytrace import surfaces_from_prescription
         from ..glass import get_glass_index
+        from ..raytrace import surfaces_from_prescription
         _surfs = surfaces_from_prescription(prescription)
         axial_opl = 0.0
         for _s in _surfs:

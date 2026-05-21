@@ -69,7 +69,7 @@ def field_of_view(prescription: dict, wavelength: float,
     >>> p['object_distance'] = 0.5
     >>> theta_max, h_max = la.field_of_view(p, 1.31e-6)
     """
-    from .core import surfaces_from_prescription, system_abcd, find_paraxial_focus
+    from .core import surfaces_from_prescription, system_abcd
     surfs = surfaces_from_prescription(prescription)
     _, efl, _, _ = system_abcd(surfs, float(wavelength))
 

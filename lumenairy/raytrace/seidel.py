@@ -32,14 +32,14 @@ implementations.
 
 from __future__ import annotations
 
-import numpy as np
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+import numpy as np
+
 from ..glass import get_glass_index
 from .surface import Surface, _surface_copy_with
-from .trace import surfaces_from_prescription, find_stop
-
+from .trace import find_stop, surfaces_from_prescription
 
 # ============================================================================
 # Paraxial ray trace and ABCD matrix
@@ -532,7 +532,7 @@ class FirstOrderData:
         if units == 'm':
             s = 1.0; u = 'm'
         lines = [
-            f'First-order data:',
+            'First-order data:',
             f'  EFL = {self.efl*s:+.4f} {u}',
             f'  BFL = {self.bfl*s:+.4f} {u}   (last vertex -> rear focus)',
             f'  FFL = {self.ffl*s:+.4f} {u}   (first vertex -> front focus)',

@@ -27,13 +27,12 @@ import pytest
 
 import lumenairy as la
 from lumenairy.glass import (
-    GLASS_REGISTRY,
-    SELLMEIER_COEFFICIENTS,
-    GLASS_VALIDITY,
     _REFRACTIVEINDEX_AVAILABLE,
+    GLASS_REGISTRY,
+    GLASS_VALIDITY,
+    SELLMEIER_COEFFICIENTS,
     _sellmeier_index,
 )
-
 
 # d-line (Fraunhofer d-line, He I yellow doublet center).
 _D_LINE_M = 587.56e-9

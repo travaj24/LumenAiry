@@ -30,7 +30,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Optional, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -40,9 +40,9 @@ if TYPE_CHECKING:
     # :mod:`lumenairy.raytrace.core` which itself depends on this
     # module), so they are only loaded when a type checker
     # (mypy / pyright / pylance) is processing the file.
-    from .core import RayBundle
-    from ..propagators.hfpi import PathBundle
     from ..propagators.gbd import BeamletBundle
+    from ..propagators.hfpi import PathBundle
+    from .core import RayBundle
 
 
 @runtime_checkable

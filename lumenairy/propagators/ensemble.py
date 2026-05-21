@@ -29,7 +29,6 @@ import numpy as np
 
 from ..backend import array_namespace
 
-
 # Canonical string-name -> propagator-callable mapping for the
 # ``propagator='asm'`` / ``'fresnel'`` / ... convenience surface.  The
 # imports are intentionally lazy (inside :func:`_resolve_propagator`) to

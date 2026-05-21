@@ -77,7 +77,6 @@ import numpy as np
 
 from .core import RAY_EVANESCENT, RAY_OK, RayBundle
 
-
 __all__ = ['rays_from_field']
 
 

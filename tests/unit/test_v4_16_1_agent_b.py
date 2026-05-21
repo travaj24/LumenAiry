@@ -37,7 +37,6 @@ from lumenairy.sources.core import (
     create_schell_model_source,
 )
 
-
 # ----------------------------------------------------------------------
 # Optional JAX import (B.4 + B.5 tests skip if JAX is missing).
 # ----------------------------------------------------------------------
@@ -442,9 +441,10 @@ class TestPropagateThroughSystemJaxJitSafe:
         run a forward pass.  No ``TracerArrayConversionError``."""
         import jax
         import jax.numpy as _jnp
+
         from lumenairy.propagators.system import (
-            propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
+            propagate_through_system_jax,
         )
 
         N = 32
@@ -478,9 +478,10 @@ class TestPropagateThroughSystemJaxJitSafe:
         arrays and JAX tracers.  Verify a real-input call still
         falls through to the library default complex dtype."""
         import jax.numpy as _jnp
+
         from lumenairy.propagators.system import (
-            propagate_through_system_jax,
             _PROPAGATE_SYSTEM_JAX_CACHE,
+            propagate_through_system_jax,
         )
 
         N = 32
@@ -522,8 +523,8 @@ class TestTransferJaxHighNAWarning:
         cites the per-surface drift estimate."""
         from lumenairy.raytrace.jax_trace import (
             JaxRayState,
-            _transfer_jax,
             _reset_transfer_jax_warning,
+            _transfer_jax,
         )
 
         _reset_transfer_jax_warning()
@@ -566,8 +567,8 @@ class TestTransferJaxHighNAWarning:
         approximation error is below noise)."""
         from lumenairy.raytrace.jax_trace import (
             JaxRayState,
-            _transfer_jax,
             _reset_transfer_jax_warning,
+            _transfer_jax,
         )
 
         _reset_transfer_jax_warning()
@@ -602,8 +603,8 @@ class TestTransferJaxHighNAWarning:
         callers don't see log-spam."""
         from lumenairy.raytrace.jax_trace import (
             JaxRayState,
-            _transfer_jax,
             _reset_transfer_jax_warning,
+            _transfer_jax,
         )
 
         _reset_transfer_jax_warning()
@@ -636,10 +637,11 @@ class TestTransferJaxHighNAWarning:
         (and does not raise ``ConcretizationTypeError`` either)."""
         import jax
         import jax.numpy as _jnp
+
         from lumenairy.raytrace.jax_trace import (
             JaxRayState,
-            _transfer_jax,
             _reset_transfer_jax_warning,
+            _transfer_jax,
         )
 
         _reset_transfer_jax_warning()

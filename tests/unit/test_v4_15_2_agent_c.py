@@ -56,11 +56,11 @@ from lumenairy.propagators.propagation import (
     rayleigh_sommerfeld_propagate,
     scalable_angular_spectrum_propagate,
 )
+from lumenairy.propagators.system import propagate_through_system
 from lumenairy.sources.core import (
     PartialCoherenceMCF,
     create_gaussian_schell_source,
 )
-from lumenairy.propagators.system import propagate_through_system
 
 # v4.15.4 (AUDIT_V4_15_3 P3-NEW-F2-4): the helper fixtures here
 # legitimately invoke ``create_gaussian_schell_source(...)`` with the

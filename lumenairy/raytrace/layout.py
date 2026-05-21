@@ -20,20 +20,20 @@ implementations.
 
 from __future__ import annotations
 
-import numpy as np
 from typing import Any, Dict
 
+import numpy as np
+
+from .ray_fan import spot_geo_radius, spot_rms
+from .seidel import system_abcd
 from .surface import (
-    RAY_TIR,
     RAY_APERTURE,
     RAY_MISSED_SURFACE,
     RAY_NAN,
+    RAY_TIR,
     TraceResult,
 )
 from .trace import surfaces_from_prescription
-from .seidel import system_abcd
-from .ray_fan import spot_rms, spot_geo_radius
-
 
 # ============================================================================
 # Utility: trace summary
@@ -73,7 +73,7 @@ def trace_summary(result: 'TraceResult', units: str = 'mm') -> None:
     else:
         loss_detail = ''
 
-    print(f"Ray trace summary")
+    print("Ray trace summary")
     print(f"  Wavelength:   {result.wavelength * 1e9:.2f} nm")
     print(f"  Surfaces:     {len(result.surfaces)}")
     print(f"  Rays:         {n_alive}/{n_total} alive "
@@ -130,7 +130,7 @@ def prescription_summary(
     print(f"  EFL:          {efl * scale:.4f} {label}")
     print(f"  BFL:          {bfl * scale:.4f} {label}")
     print(f"  FFL:          {ffl * scale:.4f} {label}")
-    print(f"  ABCD matrix:")
+    print("  ABCD matrix:")
     print(f"    A = {abcd[0,0]:.6f}   B = {abcd[0,1] * scale:.6f} {label}")
     print(f"    C = {abcd[1,0] / scale:.6f} 1/{label}   D = {abcd[1,1]:.6f}")
 

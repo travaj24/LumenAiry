@@ -22,19 +22,12 @@ References
 Author: Andrew Traverso
 """
 from __future__ import annotations
+
 import numpy as np
-from .lenses import surface_sag_general, surface_sag_biconic
 
-
-def _xp_of(*arrays):
-    """Return the array namespace appropriate for the inputs.
-
-    Backend-dispatch helper matching the pattern used in
-    ``elements.elements`` and ``analysis.core``.
-    """
-    from ..backend import array_namespace
-    return array_namespace(*arrays)
-
+# v5.2 (ROADMAP "Duplicate `_xp_of`" cleanup): consolidated wrapper.
+from ..backend import array_namespace as _xp_of  # noqa: E402
+from .lenses import surface_sag_biconic, surface_sag_general
 
 # ============================================================================
 # Forbes Q-type orthonormal polynomial evaluators (v4.15)
@@ -102,7 +95,7 @@ def _jacobi_norm_factor(n, alpha, beta):
     = 2^(alpha+beta+1) (1-x)^alpha x^beta dx``), yielding
     ``int_0^1 P_n^2 (1-x)^alpha x^beta dx = h_n / 2^(alpha+beta+1)``.
     """
-    from math import lgamma, log, exp
+    from math import exp, lgamma, log
     # h_n on [-1, 1]:
     log_h_n = ((alpha + beta + 1) * log(2.0)
                - log(2 * n + alpha + beta + 1)
@@ -282,7 +275,7 @@ def surface_sag_zernike_freeform(X, Y, R=np.inf, conic=0.0,
     -------
     sag : ndarray
     """
-    from ..analysis import zernike_polynomial, zernike_index_to_nm
+    from ..analysis import zernike_index_to_nm, zernike_polynomial
 
     h_sq = X ** 2 + Y ** 2
     sag = surface_sag_general(h_sq, R, conic)

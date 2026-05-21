@@ -21,7 +21,6 @@ import pytest
 import lumenairy as la
 from lumenairy.raytrace.core import surfaces_from_prescription, system_abcd
 
-
 # ============================================================================
 # Prescription fixtures
 # ============================================================================

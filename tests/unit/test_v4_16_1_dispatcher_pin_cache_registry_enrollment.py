@@ -88,7 +88,6 @@ import pytest
 
 import lumenairy as la  # noqa: F401  -- import side-effects: register caches
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _PKG_ROOT = _REPO_ROOT / 'lumenairy'
 

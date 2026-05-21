@@ -69,17 +69,17 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import List
-
 # ---------------------------------------------------------------------------
 # Optional dependency
 # ---------------------------------------------------------------------------
 import importlib.util as _importlib_util
 import math as _math
+from typing import List
 
 # v4.16.2 (audit P3-NEW-F1-4): import numpy at module scope to support
 # numpy-scalar acceptance in GLASS_VALIDITY well-formedness check.
 import numpy as np
+
 _REFRACTIVEINDEX_AVAILABLE = (
     _importlib_util.find_spec('refractiveindex') is not None)
 RefractiveIndexMaterial = None  # populated lazily on first use
@@ -338,12 +338,90 @@ SELLMEIER_COEFFICIENTS = {
 # to 5e-5 (matches the v4.14.2 / v4.16.0 cross-check methodology).
 
 POLYNOMIAL_COEFFICIENTS = {
-    # Empty by default.  v4.16.2 ships the EVALUATOR + dispatch wiring
-    # but no per-glass coefficients.  Populating this dict for the 26
-    # formula-3 catalogue entries is staged for v5.0 (each entry
-    # requires vendor-source review against the corresponding
-    # refractiveindex.info YAML and a 5e-5 n_d cross-check).
+    # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+    # the structure-ready interface for the 24 formula-3 catalogue
+    # entries (4 CDGM + 10 Hikari + 10 Sumita) ships with the EVALUATOR
+    # + dispatch wiring + per-name stub manifest below
+    # (_POLYNOMIAL_STUB_NAMES).  Per-glass coefficient ingestion against
+    # the authoritative refractiveindex.info YAML dataset is deferred
+    # to v5.2.1 -- shipping fabricated coefficients would silently bias
+    # any downstream calculation (e.g. n_d catalog cross-checks) by an
+    # unbounded amount and is strictly worse than a fail-fast
+    # NotImplementedError that directs users to either install the
+    # optional ``refractiveindex`` extra or open a v5.2.1 issue
+    # requesting the specific coefficient ingestion.
+    #
+    # When ingesting a row, add it here with the documented
+    # ``{name: (c0, [(c_i, exp_i), ...])}`` layout (NOT to
+    # _POLYNOMIAL_STUB_NAMES, which is the "not yet ingested" manifest).
+    # Removing the name from _POLYNOMIAL_STUB_NAMES at the same commit
+    # is enforced by the v5.2 consistency check below.
 }
+
+
+# v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+# the 24 formula-3 polynomial glass names that are present in
+# GLASS_REGISTRY (as ``(shelf, book, page)`` tuples for the optional
+# refractiveindex live lookup) but NOT yet ingested into
+# POLYNOMIAL_COEFFICIENTS for the bundled-evaluator fallback.
+#
+# This set lets the dispatcher distinguish "user typo / unknown
+# glass" (ValueError with suggestions) from "known formula-3 glass
+# without bundled coefficients" (NotImplementedError directing the
+# user to install the [glass] extra or open a coefficient-ingestion
+# request).  Pre-v5.2 the latter path raised a generic ImportError
+# that conflated "package not installed" with "package installed but
+# this glass not yet covered", which made the v5.2.1 ingestion gap
+# invisible to users.
+#
+# Catalogue and validity ranges for each entry are recorded in
+# GLASS_REGISTRY / GLASS_VALIDITY (search by name).  Source of truth
+# for the eventual coefficient values: the corresponding
+# refractiveindex.info YAML at
+# https://refractiveindex.info/?shelf=specs&book=<CATALOG>&page=<NAME>.
+#
+# Layout below: catalogue grouping for human readability; the set is
+# iteration-order-independent at runtime.
+_POLYNOMIAL_STUB_NAMES = frozenset({
+    # ----- CDGM (China Daheng Group / Tianjin Lingxin) formula-3 -----
+    # 4 entries that use refractiveindex.info "formula 3" (polynomial)
+    # in the CDGM 2022-06 catalogue YAML.  The 8 CDGM Sellmeier-2
+    # entries (H-K9L, H-LAK52, H-LAK53A, H-ZK9B, H-ZF12, D-ZK3,
+    # D-LAK52, H-ZLAF52A) are bundled directly in
+    # SELLMEIER_COEFFICIENTS and are NOT in this set.
+    'H-ZK7',
+    'H-ZF52A',
+    'F1-CDGM',
+    'F2-CDGM',
+    # ----- Hikari Glass Co. Ltd. formula-3 -----
+    # 10 entries from the Hikari 2017-11 catalogue YAML.  All Hikari
+    # entries in GLASS_REGISTRY use formula-3.
+    'E-LASF016',
+    'E-SK16',
+    'E-LAK7',
+    'E-LAK04',
+    'E-BAK1',
+    'J-FK01A',
+    'J-LASF09A',
+    'J-LAK7',
+    'J-BASF7',
+    'E-F2',
+    # ----- Sumita Optical Glass, Inc. formula-3 -----
+    # 10 entries from the Sumita 2017-02 catalogue YAML.  Names are
+    # canonicalised to all-uppercase per the GLASS_REGISTRY note
+    # (Sumita uses mixed-case in their catalogue but we normalise for
+    # cross-vendor search consistency).
+    'K-VC78',
+    'K-LAK10',
+    'K-LASFN10',
+    'K-SK4',
+    'K-PFK90',
+    'K-PBK40',
+    'K-BK7',
+    'K-PSKN2',
+    'K-FK5',
+    'K-LAFN3',
+})
 
 
 def _polynomial_index(wavelength_m, coeffs, glass_name=None):
@@ -361,20 +439,50 @@ def _polynomial_index(wavelength_m, coeffs, glass_name=None):
     which subsumes the Schott polynomial form
     ``n^2 = a0 + a1*lam^2 + a2*lam^-2 + a3*lam^-4 + a4*lam^-6 +
     a5*lam^-8``.
+
+    v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+    accepts either a Python scalar (returns float, matching the v4.16.2
+    contract and the ``_sellmeier_index`` sibling) or an array-like
+    ``wavelength_m`` (returns an ndarray with the same shape).  Array
+    inputs follow the numpy convention -- JAX / CuPy callers can pass
+    their own arrays through and will receive numpy back; downstream
+    consumers in ``get_glass_index`` always call this with a scalar
+    so the contract stays narrow.
     """
-    lam_um = wavelength_m * 1e6
     label = f" for glass {glass_name!r}" if glass_name else ""
     c0, pairs = coeffs
-    n_sq = float(c0)
+    # Scalar fast-path: mirror _sellmeier_index's float math so the
+    # common get_glass_index('NAME', 587.6e-9) call stays a pure float
+    # round-trip (no numpy allocation).
+    if not hasattr(wavelength_m, '__len__') and not hasattr(
+            wavelength_m, 'shape'):
+        lam_um = float(wavelength_m) * 1e6
+        n_sq = float(c0)
+        for c_i, exponent_i in pairs:
+            n_sq = n_sq + float(c_i) * (lam_um ** float(exponent_i))
+        if n_sq <= 0.0:
+            raise ValueError(
+                f"_polynomial_index{label}: extrapolation produced non-"
+                f"positive n^2 = {n_sq:.6f} at wavelength "
+                f"{float(wavelength_m)*1e9:.3f} nm.  This wavelength is "
+                f"likely outside the catalogue's valid range.")
+        return _math.sqrt(n_sq)
+    # Vector path: lift via numpy.  Works for lists, tuples, numpy
+    # arrays, and (read-only) JAX arrays (which expose ``__array__``).
+    lam_um = np.asarray(wavelength_m, dtype=float) * 1e6
+    n_sq = np.full_like(lam_um, float(c0), dtype=float)
     for c_i, exponent_i in pairs:
         n_sq = n_sq + float(c_i) * (lam_um ** float(exponent_i))
-    if n_sq <= 0.0:
+    if np.any(n_sq <= 0.0):
+        bad_idx = int(np.argmin(n_sq))
+        bad_lam = float(np.asarray(wavelength_m, dtype=float).flat[bad_idx])
         raise ValueError(
             f"_polynomial_index{label}: extrapolation produced non-"
-            f"positive n^2 = {n_sq:.6f} at wavelength "
-            f"{wavelength_m*1e9:.3f} nm.  This wavelength is likely "
-            f"outside the catalogue's valid range.")
-    return _math.sqrt(n_sq)
+            f"positive n^2 = {float(n_sq.flat[bad_idx]):.6f} at "
+            f"wavelength {bad_lam*1e9:.3f} nm (one of {n_sq.size} "
+            f"inputs).  This wavelength is likely outside the "
+            f"catalogue's valid range.")
+    return np.sqrt(n_sq)
 
 
 def _sellmeier_index(wavelength_m, coeffs, glass_name=None):
@@ -841,6 +949,34 @@ def _check_glass_registry_consistency():
                 f"(shelf, book, page) tuple for glasses also covered "
                 f"by refractiveindex.info."
             )
+    # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+    # _POLYNOMIAL_STUB_NAMES well-formedness.  Every stub manifest entry
+    # must (a) be present in GLASS_REGISTRY (else the
+    # NotImplementedError dispatch arm is unreachable) and (b) NOT be
+    # present in POLYNOMIAL_COEFFICIENTS (else the dispatcher's
+    # POLYNOMIAL_COEFFICIENTS check would short-circuit before the
+    # stub check, producing a confusing "evaluator ran with empty
+    # coeffs" error instead of the documented migration text).  Both
+    # invariants caught at module load so a future ingestion PR that
+    # forgets to remove the stub entry surfaces immediately.
+    for name in _POLYNOMIAL_STUB_NAMES:
+        if name not in GLASS_REGISTRY:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift (v5.2): "
+                f"_POLYNOMIAL_STUB_NAMES[{name!r}] has no corresponding "
+                f"GLASS_REGISTRY entry.  The NotImplementedError "
+                f"migration dispatch is unreachable -- get_glass_index"
+                f"({name!r}, ...) raises ValueError (unknown-glass) "
+                f"before reaching the stub fallback.  Add a registry "
+                f"entry or remove {name!r} from _POLYNOMIAL_STUB_NAMES.")
+        if name in POLYNOMIAL_COEFFICIENTS:
+            raise RuntimeError(
+                f"GLASS_REGISTRY drift (v5.2): "
+                f"_POLYNOMIAL_STUB_NAMES[{name!r}] also appears in "
+                f"POLYNOMIAL_COEFFICIENTS.  These are mutually "
+                f"exclusive states (stubbed vs ingested) -- remove "
+                f"{name!r} from _POLYNOMIAL_STUB_NAMES at the same "
+                f"commit that lands the coefficient ingestion.")
     # v4.16.1 (audit P1-NEW-F2-1 / C.3): GLASS_VALIDITY -> GLASS_REGISTRY.
     # An entry in GLASS_VALIDITY without a GLASS_REGISTRY counterpart is
     # unreachable -- the warn helper looks up by registry name.
@@ -1103,10 +1239,35 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
         # v4.16.2 (pre-v5.0 prep): formula-3 polynomial fallback for
         # glasses whose coefficients have been ingested into
         # POLYNOMIAL_COEFFICIENTS.  Empty at v4.16.2 ship; populating
-        # the 26 catalogue entries is staged for v5.0.
+        # the 24 catalogue entries is staged for v5.2.1 (per-glass
+        # vendor-source review against refractiveindex.info YAML +
+        # 5e-5 n_d cross-check).
         if glass_name in POLYNOMIAL_COEFFICIENTS:
             return _polynomial_index(wavelength,
-                                     POLYNOMIAL_COEFFICIENTS[glass_name])
+                                     POLYNOMIAL_COEFFICIENTS[glass_name],
+                                     glass_name=glass_name)
+        # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+        # known-but-stubbed formula-3 glass.  Raise NotImplementedError
+        # (not ImportError) so callers can distinguish "package missing"
+        # (recoverable: install [glass]) from "glass coefficients not
+        # yet ingested in the bundle" (also recoverable but via a
+        # different remediation path: open a v5.2.1 issue or contribute
+        # the ingestion).
+        if glass_name in _POLYNOMIAL_STUB_NAMES:
+            raise NotImplementedError(
+                f"Glass {glass_name!r} is a known formula-3 (polynomial) "
+                f"catalogue entry but its coefficients have not yet been "
+                f"ingested into the bundled POLYNOMIAL_COEFFICIENTS "
+                f"table (deferred to v5.2.1).  Two remediations: "
+                f"(1) install the optional ``refractiveindex`` package "
+                f"(``pip install lumenairy[glass]``) for live "
+                f"refractiveindex.info lookup; or (2) open a v5.2.1 "
+                f"issue requesting coefficient ingestion for "
+                f"{glass_name!r} -- include the catalogue source "
+                f"(CDGM 2022-06 / HIKARI 2017-11 / SUMITA 2017-02) and "
+                f"the wavelength range you need.  See "
+                f"lumenairy.glass._POLYNOMIAL_STUB_NAMES for the full "
+                f"manifest of glasses awaiting ingestion.")
         raise ImportError(
             f"Glass {glass_name!r} requires the 'refractiveindex' "
             f"package for live lookup, but it is not installed.  "

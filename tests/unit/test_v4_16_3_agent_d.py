@@ -27,7 +27,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -57,7 +56,9 @@ class TestPolynomialSentinelParity:
         ``_REFRACTIVEINDEX_AVAILABLE``.
         """
         from lumenairy.glass import (
-            GLASS_REGISTRY, POLYNOMIAL_COEFFICIENTS, get_glass_index,
+            GLASS_REGISTRY,
+            POLYNOMIAL_COEFFICIENTS,
+            get_glass_index,
         )
         name = '__TEST_POLY_DISPATCH__'
         # Polynomial form: n^2 = 2.25 (constant) -> n = 1.5 at every
@@ -101,7 +102,8 @@ class TestPolynomialSentinelParity:
         ``_check_glass_registry_consistency``.
         """
         from lumenairy.glass import (
-            GLASS_REGISTRY, POLYNOMIAL_COEFFICIENTS,
+            GLASS_REGISTRY,
+            POLYNOMIAL_COEFFICIENTS,
             _check_glass_registry_consistency,
         )
         name = '__TEST_POLY_FORWARD__'
@@ -121,7 +123,8 @@ class TestPolynomialSentinelParity:
         must raise :class:`RuntimeError`.
         """
         from lumenairy.glass import (
-            GLASS_REGISTRY, POLYNOMIAL_COEFFICIENTS,
+            GLASS_REGISTRY,
+            POLYNOMIAL_COEFFICIENTS,
             _check_glass_registry_consistency,
         )
         name = '__TEST_POLY_REVERSE__'
@@ -142,7 +145,8 @@ class TestPolynomialSentinelParity:
         branch).
         """
         from lumenairy.glass import (
-            GLASS_REGISTRY, POLYNOMIAL_COEFFICIENTS,
+            GLASS_REGISTRY,
+            POLYNOMIAL_COEFFICIENTS,
             get_glass_index_complex,
         )
         name = '__TEST_POLY_COMPLEX__'
@@ -245,10 +249,10 @@ def test_high_na_warning_cites_surface_index_and_thickness():
     users can localise the offending gap in their prescription.
     """
     from lumenairy.raytrace.jax_trace import (
-        trace_jax,
-        make_jax_ray_state,
-        _reset_transfer_jax_warning,
         _TRACE_JAX_CACHE,
+        _reset_transfer_jax_warning,
+        make_jax_ray_state,
+        trace_jax,
     )
 
     _reset_transfer_jax_warning()

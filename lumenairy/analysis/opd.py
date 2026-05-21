@@ -22,7 +22,6 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
-
 __all__ = [
     'check_sampling_conditions',
     'check_opd_sampling',
@@ -303,8 +302,8 @@ def check_opd_sampling(
             f'Or reduce aperture below '
             f'{(wavelength * f / (2 * dx)) * 1e3:.3f} mm at current dx.')
         recommendations.append(
-            f'Or use f_ref in wave_opd_1d/2d to subtract the reference '
-            f'sphere before unwrapping.')
+            'Or use f_ref in wave_opd_1d/2d to subtract the reference '
+            'sphere before unwrapping.')
 
     if verbose:
         print('--- OPD sampling check ---')

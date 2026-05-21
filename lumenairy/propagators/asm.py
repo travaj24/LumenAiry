@@ -15,21 +15,24 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 
+from . import fft_infra as _state
 from .fft_infra import (
     CUPY_AVAILABLE,
-    cp,
+    _fft2,
+    _fft2_nd,
+    _get_or_make_bandlimit,
+    _get_or_make_freq_grids,
+    _h_cache_lookup,
+    _h_cache_store,
+    _ifft2,
+    _ifft2_nd,
     _is_cupy_array,
-    _fft2, _ifft2, _fft2_nd, _ifft2_nd,
-    _get_or_make_freq_grids, _get_or_make_bandlimit,
-    _h_cache_lookup, _h_cache_store,
     _validate_propagator_inputs,
 )
-from . import fft_infra as _state
-
 
 __all__ = [
     'angular_spectrum_propagate',
@@ -240,7 +243,7 @@ def angular_spectrum_propagate(
     # -- array library selection (NumPy / CuPy / JAX) ----------------------
     # JAX arrays bypass the chunked H construction and the host cache;
     # they take a one-shot all-NxN H and stay in the input backend.
-    from ..backend import is_jax_array, JAX_AVAILABLE
+    from ..backend import is_jax_array
     is_jax = is_jax_array(E_in)
     if is_jax:
         import jax.numpy as _jnp

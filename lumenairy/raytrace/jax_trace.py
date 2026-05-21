@@ -48,7 +48,6 @@ import numpy as np
 from ..backend import JAX_AVAILABLE
 from ..glass import get_glass_index
 
-
 # v4.16.1 (audit AUDIT_V4_16_0_DEEP item 8 / P3 / DEEP-4 MEDIUM-1):
 # threshold below which the JAX-path paraxial transfer approximation
 # (``t ~= thickness``) starts producing visible transverse error
@@ -376,7 +375,6 @@ def _apply_aperture_jax(state, semi_diameter):
     surface -- against the surface's ``semi_diameter``.  Rays do not
     have their geometric state modified; only the alive mask is updated.
     """
-    import jax.numpy as jnp
     if not np.isfinite(semi_diameter):
         return state
     h_sq = state.x * state.x + state.y * state.y
@@ -412,7 +410,6 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
     trace alive via ``jnp.where`` whenever the period argument is
     JAX-traced.
     """
-    import jax
     import jax.numpy as jnp
 
     def _is_traced(x):
@@ -923,7 +920,6 @@ def _leaves_are_concrete(jp):
     a tracer) and route through the always-Newton ``_intersect_jax_param``
     branch instead.
     """
-    import jax
     from jax.core import Tracer
     leaves = [jp.radii, jp.conics, jp.thicks]
     for c in jp.asph_coeffs:
@@ -1069,8 +1065,9 @@ def clear_trace_jax_cache() -> None:
 # walks the registry rather than enumerating clear calls by hand.
 # Late-binding closure preserves ``mock.patch.object`` test semantic.
 try:
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
     _this_mod = _sys.modules[__name__]
     _register_cache_clearer(
         'trace_jax',
@@ -1523,7 +1520,6 @@ def trace_jax_with_params(initial_state, prescription, wavelength,
     """
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
-    import jax
     import jax.numpy as jnp
 
     surfaces_raw = prescription.get('surfaces', [])

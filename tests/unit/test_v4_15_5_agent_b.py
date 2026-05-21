@@ -34,21 +34,20 @@ from __future__ import annotations
 
 import inspect
 
+import matplotlib
 import numpy as np
 import pytest
 
-import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt  # noqa: E402
 
 import lumenairy as la  # noqa: E402
 from lumenairy.analysis.plotting import (  # noqa: E402
+    _auto_n_bins,
+    _radial_rms_profile,
     plot_opd_fan,
     plot_opd_summary,
-    _radial_rms_profile,
-    _auto_n_bins,
 )
-
 
 # ----------------------------------------------------------------------------
 # Synthetic test data
@@ -453,6 +452,7 @@ def test_auto_n_bins_helper_returns_at_least_one():
 def test_lumenairy_imports_clean():
     """v4.15.5 -- ``import lumenairy`` is still side-effect-clean."""
     import importlib
+
     import lumenairy
     importlib.reload(lumenairy)
     assert hasattr(lumenairy, 'plot_opd_fan')

@@ -35,10 +35,9 @@ from __future__ import annotations
 
 import atexit
 import contextlib
-from typing import Any, Optional, Union
+from typing import Any, Iterator, Optional, Union
 
 import numpy as np
-
 
 __all__ = [
     'lumenairy_context',
@@ -48,7 +47,7 @@ __all__ = [
 ]
 
 
-def snapshot_globals() -> dict:
+def snapshot_globals() -> dict[str, Any]:
     """Return a dict of the library's current global state.
 
     Captures every knob that :func:`lumenairy_context` can scope:
@@ -63,11 +62,13 @@ def snapshot_globals() -> dict:
     :func:`apply_globals`.  Used internally by :func:`lumenairy_context`
     and by the atexit hook installed at import time.
     """
-    from .propagators.propagation import (
-        get_default_complex_dtype, get_pyfftw_planner,
-        get_fft_threads, get_asm_cache_size,
-    )
     from .memory import get_max_ram
+    from .propagators.propagation import (
+        get_asm_cache_size,
+        get_default_complex_dtype,
+        get_fft_threads,
+        get_pyfftw_planner,
+    )
 
     return {
         'complex_dtype': get_default_complex_dtype(),
@@ -78,7 +79,7 @@ def snapshot_globals() -> dict:
     }
 
 
-def apply_globals(state: dict) -> None:
+def apply_globals(state: dict[str, Any]) -> None:
     """Apply a globals snapshot produced by :func:`snapshot_globals`.
 
     Each field is optional in the dict; missing keys leave the
@@ -96,14 +97,17 @@ def apply_globals(state: dict) -> None:
     case when a context manager passes through state it doesn't
     actually want to change.
     """
-    import numpy as np
+    from .memory import get_max_ram, set_max_ram
     from .propagators.propagation import (
-        set_default_complex_dtype, set_pyfftw_planner,
-        set_fft_threads, set_asm_cache_size,
-        get_default_complex_dtype, get_pyfftw_planner,
-        get_fft_threads, get_asm_cache_size,
+        get_asm_cache_size,
+        get_default_complex_dtype,
+        get_fft_threads,
+        get_pyfftw_planner,
+        set_asm_cache_size,
+        set_default_complex_dtype,
+        set_fft_threads,
+        set_pyfftw_planner,
     )
-    from .memory import set_max_ram, get_max_ram
 
     if 'complex_dtype' in state:
         new = np.dtype(state['complex_dtype'])
@@ -133,7 +137,7 @@ def lumenairy_context(
     asm_cache_max_total_bytes: Optional[int] = None,
     asm_cache_max_bytes_per_entry: Optional[int] = None,
     clear_caches_on_exit: bool = False,
-):
+) -> Iterator[None]:
     """Scope a block of code with isolated library runtime settings.
 
     Every kwarg defaults to ``None`` meaning "leave that knob alone".
@@ -207,7 +211,7 @@ def lumenairy_context(
     """
     prior = snapshot_globals()
 
-    new_state: dict = {}
+    new_state: dict[str, Any] = {}
     if complex_dtype is not None:
         new_state['complex_dtype'] = complex_dtype
     if pyfftw_planner is not None:
@@ -314,7 +318,7 @@ def lumenairy_context(
                         pass
 
 
-def _atexit_restore(snapshot: dict) -> None:
+def _atexit_restore(snapshot: dict[str, Any]) -> None:
     """Restore a globals snapshot at process exit.
 
     Designed to swallow exceptions silently: an atexit handler that
@@ -335,7 +339,7 @@ def _atexit_restore(snapshot: dict) -> None:
 
 
 _ATEXIT_INSTALLED = False
-_ATEXIT_SNAPSHOT: Optional[dict] = None
+_ATEXIT_SNAPSHOT: Optional[dict[str, Any]] = None
 
 
 def install_atexit_restore() -> None:

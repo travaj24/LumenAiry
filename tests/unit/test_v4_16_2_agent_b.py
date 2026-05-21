@@ -71,7 +71,6 @@ from typing import Any, List, Tuple
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Module-level callables used in pickle-probe tests.  Each one is a
 # named def at module scope so pickle.dumps succeeds.
@@ -148,8 +147,8 @@ def _build_singlet_ctx(wl: float):
     prescription so MultiWavelengthMerit.evaluate hits the
     standard path (not the ABCD sentinel branch).
     """
-    from lumenairy.optimize.core import EvaluationContext
     import lumenairy as la
+    from lumenairy.optimize.core import EvaluationContext
     pres = la.make_singlet(
         R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
         aperture=12e-3)
@@ -451,10 +450,12 @@ def test_p2_v4_16_0_constraint_test_no_userwarning_in_construct():
     the warning on every construction and trip this test.
     """
     from lumenairy.optimize import Constraint
+
     # Use the same module-level helpers that the updated
     # test_v4_16_0_agent_c.py now imports.
     from tests.unit.test_v4_16_0_agent_c import (
-        _sum_constraint, _first_coord,
+        _first_coord,
+        _sum_constraint,
     )
 
     with warnings.catch_warnings(record=True) as w_list:
@@ -503,7 +504,9 @@ def test_p3_resolve_bound_rejects_3tuple():
     inside the ``method == 'lm'`` branch.
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit, design_optimize,
+        CallableMerit,
+        DesignParameterization,
+        design_optimize,
     )
 
     template = {
@@ -542,7 +545,9 @@ def test_p3_resolve_bound_2tuple_still_parses_cleanly():
     new lm->trf override warning, which we explicitly catch).
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit, design_optimize,
+        CallableMerit,
+        DesignParameterization,
+        design_optimize,
     )
 
     template = {
@@ -601,15 +606,15 @@ def test_p3_constraint_docstring_example_uses_def_not_lambda():
         f"{doc[doc.find('Example'):doc.find('Example')+400] if 'Example' in doc else doc[:400]!r}")
     # And the constructor call must reference the new fn, not lambda.
     assert 'fun=my_constraint' in doc, (
-        f"Constraint docstring example must use "
-        f"``fun=my_constraint`` (the module-level function).  "
-        f"Found a lambda reference instead in the example.")
+        "Constraint docstring example must use "
+        "``fun=my_constraint`` (the module-level function).  "
+        "Found a lambda reference instead in the example.")
     # Defensive: no ``fun=lambda`` in the docstring example block.
     if 'Example' in doc:
         example_block = doc[doc.find('Example'):]
         assert 'fun=lambda' not in example_block, (
-            f"Constraint docstring example still contains "
-            f"``fun=lambda`` -- audit P3-NEW-F1-7 fix incomplete.")
+            "Constraint docstring example still contains "
+            "``fun=lambda`` -- audit P3-NEW-F1-7 fix incomplete.")
 
 
 # ---------------------------------------------------------------------------
@@ -628,7 +633,9 @@ def test_p3_lm_bounds_emits_override_userwarning():
     still completes successfully (existing v4.16.1 tests pass).
     """
     from lumenairy.optimize import (
-        DesignParameterization, CallableMerit, design_optimize,
+        CallableMerit,
+        DesignParameterization,
+        design_optimize,
     )
 
     template = {

@@ -20,7 +20,6 @@ import pytest
 import lumenairy as la
 from lumenairy.propagators.propagation import _validate_propagator_inputs
 
-
 # ---------------------------------------------------------------------------
 # A.1 -- _validate_propagator_inputs
 # ---------------------------------------------------------------------------
@@ -293,15 +292,15 @@ class TestGlassRegistryEnhancements:
 class TestPackagingHygiene:
 
     def test_analysis_submodules_define_all(self):
-        import lumenairy.analysis.core
         import lumenairy.analysis.coherence
+        import lumenairy.analysis.core
         import lumenairy.analysis.detector
         import lumenairy.analysis.ghost
         import lumenairy.analysis.image_plane_wfe
-        import lumenairy.analysis.through_focus
         import lumenairy.analysis.interferometry
         import lumenairy.analysis.phase_retrieval
         import lumenairy.analysis.plotting
+        import lumenairy.analysis.through_focus
         for mod in (lumenairy.analysis.core,
                     lumenairy.analysis.coherence,
                     lumenairy.analysis.detector,
@@ -360,7 +359,7 @@ class TestV5_0_ShimRemovalAntiRegression:
     the corresponding test fails immediately.
     """
 
-    # v5.1.1 (audit P1-NEW-2WAY-5): content-lock helper.
+    # v5.1.1 (audit P2-NEW-V2): content-lock helper.
     # The bare ``ImportError`` pin only verifies the OLD path fails;
     # it does NOT verify the Migration Guide still documents the new
     # path.  A future maintainer could silently delete the
@@ -372,6 +371,19 @@ class TestV5_0_ShimRemovalAntiRegression:
     # consistency walker but anchored inline at the source of the
     # break, so a maintainer editing the shim pin sees the doc
     # dependency directly.
+    #
+    # v5.2 (AUDIT_V5_1_1 Part 6 -- P2 tighten Migration-Guide locks):
+    # the v5.1.1 form asserted ``shim-name``
+    # AND ``**Removed.**`` as two independent global substrings.  The
+    # file has 5 ``**Removed.**`` instances; F1 demonstrated that
+    # deleting one removal section while keeping the shim-name token
+    # alive elsewhere (a CHANGELOG quote, a recap table) would keep
+    # the pin green.  v5.2 anchors ``**Removed.**`` to within
+    # ``_MIGRATION_REMOVED_WINDOW_LINES`` lines AFTER the shim-name
+    # match (the recipe pattern is: shim-name on bullet line, then
+    # ``**Removed.**`` on the same line or the next 1-2 lines).
+    _MIGRATION_REMOVED_WINDOW_LINES = 3
+
     @staticmethod
     def _migration_guide_text():
         from pathlib import Path
@@ -382,6 +394,58 @@ class TestV5_0_ShimRemovalAntiRegression:
             f'shim-removal recipes have nowhere to live.')
         return guide.read_text(encoding='utf-8')
 
+    @classmethod
+    def _assert_removal_recipe_anchored(cls, guide_text, shim_name,
+                                        new_import, kind='shim'):
+        """Verify ``shim_name`` appears in Migration-Guide.md with
+        ``**Removed.**`` within ``_MIGRATION_REMOVED_WINDOW_LINES``
+        lines AND ``new_import`` appears within
+        ``_MIGRATION_REMOVED_WINDOW_LINES * 3`` lines of the same
+        match (slightly larger window because the new-import recipe
+        usually sits 1-4 lines below the removal token).
+
+        Raises AssertionError naming the failure mode + the line
+        numbers where the partial match was found so a maintainer
+        gets an actionable diagnostic.
+        """
+        lines = guide_text.splitlines()
+        removed_window = cls._MIGRATION_REMOVED_WINDOW_LINES
+        recipe_window = removed_window * 3
+
+        anchor_hits = [
+            i for i, ln in enumerate(lines) if shim_name in ln
+        ]
+        assert anchor_hits, (
+            f'Migration-Guide.md does not mention `{shim_name}` '
+            f'anywhere; the {kind}-removal recipe is missing.  '
+            f'A maintainer must restore the removal entry before '
+            f'this pin can pass.')
+
+        for idx in anchor_hits:
+            window = lines[idx: idx + 1 + removed_window]
+            if any('**Removed.**' in ln for ln in window):
+                # Found removal token close to the anchor; now check
+                # the new-import recipe is within the larger window.
+                recipe_band = lines[idx: idx + 1 + recipe_window]
+                if any(new_import in ln for ln in recipe_band):
+                    return
+                # removal token near anchor but new-import isn't.
+                raise AssertionError(
+                    f'Migration-Guide.md anchors `{shim_name}` + '
+                    f'``**Removed.**`` near line {idx + 1} but the '
+                    f'new-import recipe ``{new_import}`` is missing '
+                    f'within {recipe_window} lines.  The {kind} '
+                    f'removal entry exists but its migration recipe '
+                    f'has been deleted or moved out of band.')
+
+        raise AssertionError(
+            f'Migration-Guide.md mentions `{shim_name}` (lines '
+            f'{[i + 1 for i in anchor_hits]}) but ``**Removed.**`` '
+            f'is not within {removed_window} lines of any of them.  '
+            f'The {kind} appears in the guide as prose (CHANGELOG '
+            f'quote, recap table, etc) but its dedicated removal '
+            f'section is missing.')
+
     def test_lumenairy_ao_shim_removed_in_v5_0(self):
         """v5.0 (honest break): the v4.x back-compat shim
         ``lumenairy.ao`` was removed.  Importing
@@ -389,21 +453,16 @@ class TestV5_0_ShimRemovalAntiRegression:
         ``ImportError`` / ``ModuleNotFoundError``; callers must use
         ``lumenairy.analysis.ao`` (or the top-level re-export).
 
-        v5.1.1 (audit P1-NEW-2WAY-5): also content-lock the
-        Migration-Guide entry so the recipe cannot silently regress.
+        v5.1.1 + v5.2: also content-lock the Migration-Guide entry,
+        with v5.2 anchoring ``**Removed.**`` near the shim name.
         """
         # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from lumenairy.ao import DeformableMirror  # noqa: F401
         guide = self._migration_guide_text()
-        assert '`lumenairy.ao`' in guide and '**Removed.**' in guide, (
-            'Migration-Guide.md is missing the ``lumenairy.ao`` '
-            'removal entry; the shim raise is wired but callers '
-            'have no documented migration recipe.')
-        assert 'lumenairy.analysis.ao' in guide, (
-            'Migration-Guide.md no longer documents the new '
-            '``lumenairy.analysis.ao`` import path for the '
-            '``DeformableMirror`` migration.')
+        self._assert_removal_recipe_anchored(
+            guide, shim_name='`lumenairy.ao`',
+            new_import='lumenairy.analysis.ao')
 
     def test_lumenairy_io_hdf5_shim_removed_in_v5_0(self):
         """v5.0 (honest break): the v4.x back-compat shim
@@ -412,22 +471,16 @@ class TestV5_0_ShimRemovalAntiRegression:
         ``ImportError`` / ``ModuleNotFoundError``; callers must use
         ``lumenairy.io.storage`` (or the top-level re-export).
 
-        v5.1.1 (audit P1-NEW-2WAY-5): also content-lock the
-        Migration-Guide entry so the recipe cannot silently regress.
+        v5.1.1 + v5.2: also content-lock the Migration-Guide entry,
+        with v5.2 anchoring ``**Removed.**`` near the shim name.
         """
         # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from lumenairy.io.hdf5 import save_field_h5  # noqa: F401
         guide = self._migration_guide_text()
-        assert '`lumenairy.io.hdf5`' in guide and '**Removed.**' in guide, (
-            'Migration-Guide.md is missing the '
-            '``lumenairy.io.hdf5`` removal entry; the shim raise '
-            'is wired but callers have no documented migration '
-            'recipe.')
-        assert 'lumenairy.io.storage' in guide, (
-            'Migration-Guide.md no longer documents the new '
-            '``lumenairy.io.storage`` import path for the '
-            '``save_field_h5`` migration.')
+        self._assert_removal_recipe_anchored(
+            guide, shim_name='`lumenairy.io.hdf5`',
+            new_import='lumenairy.io.storage')
 
     def test_lumenairy_system_top_level_removed_in_v5_0(self):
         """v5.0 (honest break): the top-level ``lumenairy.system``
@@ -438,23 +491,40 @@ class TestV5_0_ShimRemovalAntiRegression:
         still works (verified separately via the public-API smoke
         test).
 
-        v5.1.1 (audit P1-NEW-2WAY-5): also content-lock the
-        Migration-Guide section so the move recipe cannot silently
-        regress.
+        v5.1.1 + v5.2: also content-lock the move recipe; the
+        ``system.py`` move is a heading-driven section in
+        Migration-Guide.md rather than a ``**Removed.**`` bullet,
+        so the v5.2 anchor uses the heading + import-line proximity
+        check directly (no general-helper call).
         """
         # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from lumenairy.system import propagate_through_system  # noqa: F401
         guide = self._migration_guide_text()
-        assert 'lumenairy/system.py' in guide and 'lumenairy/propagators/system.py' in guide, (
+        lines = guide.splitlines()
+        heading_hits = [
+            i for i, ln in enumerate(lines)
+            if 'lumenairy/system.py' in ln
+            and 'lumenairy/propagators/system.py' in ln
+        ]
+        assert heading_hits, (
             'Migration-Guide.md is missing the '
             '``lumenairy/system.py -> lumenairy/propagators/system.py`` '
             'move heading; the raise is wired but callers have no '
             'documented migration recipe.')
-        assert 'from lumenairy.propagators.system import propagate_through_system' in guide, (
-            'Migration-Guide.md no longer documents the new '
-            '``from lumenairy.propagators.system import '
-            'propagate_through_system`` import path.')
+        # The recipe sits ~21 lines below the section heading
+        # (prose + code-block fences); allow 30-line proximity.
+        window = self._MIGRATION_REMOVED_WINDOW_LINES * 10
+        recipe = 'from lumenairy.propagators.system import propagate_through_system'
+        found_recipe_near_heading = any(
+            any(recipe in ln for ln in lines[i: i + 1 + window])
+            for i in heading_hits)
+        assert found_recipe_near_heading, (
+            f'Migration-Guide.md has the ``system.py`` move heading '
+            f'(lines {[i + 1 for i in heading_hits]}) but the recipe '
+            f'``{recipe}`` is not within {window} lines of it.  The '
+            f'heading exists but the migration code block has been '
+            f'moved or deleted.')
 
     def test_jax_aperture_legacy_schema_removed_in_v5_0(self):
         """v5.0 (honest break): the legacy pre-v4.12 JAX-only

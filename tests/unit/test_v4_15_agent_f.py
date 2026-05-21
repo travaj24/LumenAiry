@@ -123,7 +123,9 @@ class TestF1LumenairyContextRedundantCallEliminated:
         # ``analysis.core`` re-export no longer intercepts.  Patch at
         # the canonical submodule location to match registry resolution.
         from lumenairy.analysis import zernike as zernike_mod
-        from lumenairy.propagators import asymptotic_modes as asym_mod  # v5.1.0 split: clear_lg_polynomial_cache moved here
+        from lumenairy.propagators import (
+            asymptotic_modes as asym_mod,  # v5.1.0 split: clear_lg_polynomial_cache moved here
+        )
         counter_z = {'n': 0}
         counter_lg = {'n': 0}
         real_z = zernike_mod.clear_zernike_basis_cache
@@ -194,9 +196,11 @@ class TestF1LumenairyContextRedundantCallEliminated:
         # sibling test above -- patch at the canonical submodule
         # location so the cache registry's late-binding lambda
         # picks up the mock.
-        from lumenairy.analysis import zernike as zernike_mod
-        from lumenairy.propagators import asymptotic_modes as asym_mod  # v5.1.0 split: clear_lg_polynomial_cache moved here
         from lumenairy.analysis import phase_retrieval as pr_mod
+        from lumenairy.analysis import zernike as zernike_mod
+        from lumenairy.propagators import (
+            asymptotic_modes as asym_mod,  # v5.1.0 split: clear_lg_polynomial_cache moved here
+        )
         # Counters for 3 representative sibling clearers.
         counts = {'z': 0, 'lg': 0, 'pr': 0}
         real_z = zernike_mod.clear_zernike_basis_cache
@@ -536,8 +540,8 @@ class TestF5ChangelogLineCitations:
         # finding the anchor strings regardless of which submodule
         # hosts them post-split.
         from lumenairy.optimize import core as opt_core
-        from lumenairy.optimize import wrapper_merits as opt_wm
         from lumenairy.optimize import merit_terms as opt_mt
+        from lumenairy.optimize import wrapper_merits as opt_wm
         actual_tolerance_line = None
         actual_match_ideal_line = None
         for _mod in (opt_wm, opt_mt, opt_core):

@@ -139,11 +139,35 @@ at every dispatcher.
 
 ## 7. Sign conventions
 
+**v5.2 one-stop table** (audit AUDIT_V5_1_0 deferred doc item):
+
+| Quantity                              | Convention                            | Source                                                |
+|---------------------------------------|---------------------------------------|-------------------------------------------------------|
+| Time                                  | ``exp(-i omega t)``                   | standard physics                                      |
+| Forward propagation                   | ``exp(+i k z)``                       | matches time convention                               |
+| Wave-side mirror radius               | ``R > 0`` -> concave (focusing)       | Welford signed-R; raytrace consistency since v4.10    |
+| Refraction-side surface radius        | ``R > 0`` -> convex (center of curvature behind surface, +z side) | Optiland / Zemax / Welford raytrace |
+| OPD sign                              | ``OPD > 0`` -> wavefront LEADS reference (phase advance) | ``opd_fan_data`` / ``plot_opd_summary``     |
+| Lens phase                            | ``phi = -k n_substrate * sag``        | thin / real lens kernels                              |
+| Reflective phase pickup               | ``+pi`` on normal-incidence mirror    | matches ``exp(+i k z)``                               |
+| Aperture transmission                 | ``E_out = E_in * t``, ``t in [0, 1]`` | no phase added by clear aperture                      |
+| Decenter axis convention              | ``decenter=(dx, dy)`` moves the SURFACE | (v5.2: ``frame='surface'`` opt-in; default = field-frame, v5.1 behavior) |
+| Tilt axis convention                  | ``tilt=(theta_x, theta_y, theta_z)`` radians, right-hand rotation around +x, +y, +z respectively | (v5.2 surface-frame branch) |
+| Polarization convention               | Jones / Stokes follow the Born-Wolf right-handed circular convention | ``polarization.py``                                   |
+| Refractive index                      | ``n_complex = n + 1j * kappa`` with ``kappa > 0`` for ABSORPTION (passive media) | ``glass.py`` registry                                 |
+
 * Time: ``exp(-i omega t)`` -- standard physics convention.
 * Forward propagation: ``exp(+i k z)``.
 * OPD sign: positive OPD means a phase advance (wavefront leads the
   reference sphere) -- see ``opd_fan_data`` / ``plot_opd_summary``
   documentation.
+
+The table above is the canonical one-stop summary; each entry is
+documented at the call site in the module that owns the convention.
+A future audit that finds a per-call-site contradiction with this
+table should treat the table as the source-of-truth and fix the
+call site (or, if the call-site is correct, refresh the table with
+the citation of the corrected call-site).
 
 ## 8. Top-level re-exports
 

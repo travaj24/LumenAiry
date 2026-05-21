@@ -10,9 +10,9 @@ from __future__ import annotations
 import numpy as np
 
 from lumenairy.optimize.core import (
+    BackFocalLengthMerit,
     EvaluationContext,
     FocalLengthMerit,
-    BackFocalLengthMerit,
 )
 
 

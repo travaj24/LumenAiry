@@ -25,14 +25,10 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Optional, Tuple, Union
 
-import math
-
 import numpy as np
-
-from ..backend import array_namespace
-
 
 VALID_METHODS = (
     'auto', 'asm', 'sas', 'fresnel', 'fraunhofer', 'rs',
@@ -403,19 +399,19 @@ def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
             E_in, z, wavelength, dx, dx_out, N_out, **kwargs)
     if method == 'sas':
         raise ValueError(
-            f"propagate(method='sas', output_grid/output_dx=...): "
-            f"SAS does not support arbitrary output-grid sampling.  Its "
-            f"output pitch is fixed by `dx_out = lambda*z/(pad*N*dx)`.  "
-            f"Use method='asm' (auto-promotes to angular_spectrum_propagate_mft) "
-            f"for explicit output-pitch sampling, or method='fresnel' for "
-            f"the paraxial-MFT path.")
+            "propagate(method='sas', output_grid/output_dx=...): "
+            "SAS does not support arbitrary output-grid sampling.  Its "
+            "output pitch is fixed by `dx_out = lambda*z/(pad*N*dx)`.  "
+            "Use method='asm' (auto-promotes to angular_spectrum_propagate_mft) "
+            "for explicit output-pitch sampling, or method='fresnel' for "
+            "the paraxial-MFT path.")
     if method == 'rs':
         raise ValueError(
-            f"propagate(method='rs', output_grid/output_dx=...): "
-            f"Rayleigh-Sommerfeld does not support arbitrary output-grid "
-            f"sampling in 4.12 (no MFT variant).  Use method='asm' "
-            f"(auto-promotes to angular_spectrum_propagate_mft) for "
-            f"output-pitch sampling.")
+            "propagate(method='rs', output_grid/output_dx=...): "
+            "Rayleigh-Sommerfeld does not support arbitrary output-grid "
+            "sampling in 4.12 (no MFT variant).  Use method='asm' "
+            "(auto-promotes to angular_spectrum_propagate_mft) for "
+            "output-pitch sampling.")
     raise NotImplementedError(
         f"_dispatch_bare_grid_with_output: method {method!r} not "
         f"covered.")
@@ -570,8 +566,7 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
         )
 
     if method == 'asymptotic':
-        from .asymptotic import (propagate_modal_asymptotic,
-                                  fit_canonical_polynomials)
+        from .asymptotic import fit_canonical_polynomials, propagate_modal_asymptotic
         # Caller may pass a pre-built fit via kwargs['fit'] or supply
         # a prescription that the dispatcher will fit on the fly.
         fit = kwargs.pop('fit', None)
@@ -780,10 +775,10 @@ def asm_propagate(
 
     from .propagation import (
         angular_spectrum_propagate,
-        angular_spectrum_propagate_tilted,
         angular_spectrum_propagate_mft,
-        scalable_angular_spectrum_propagate,
+        angular_spectrum_propagate_tilted,
         fraunhofer_propagate,
+        scalable_angular_spectrum_propagate,
     )
 
     if method == 'asm':

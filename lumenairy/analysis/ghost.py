@@ -75,9 +75,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from ..raytrace import surfaces_from_prescription
 from ..glass import get_glass_index
-
+from ..raytrace import surfaces_from_prescription
 
 __all__ = [
     'enumerate_ghost_paths',
@@ -487,7 +486,7 @@ def non_sequential_stray_light(
                                       if np.isfinite(s))
 
     if verbose:
-        print(f'Non-sequential stray-light report:')
+        print('Non-sequential stray-light report:')
         print(f'  Ghost paths: {len(ghosts)}, '
               f'top-{top_n} contribute '
               f'{sum(g["intensity"] for g in top_ghosts):.3e}')

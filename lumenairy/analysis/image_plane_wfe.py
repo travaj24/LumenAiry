@@ -39,13 +39,11 @@ from typing import Optional, Tuple
 import numpy as np
 
 from ..raytrace import (
+    _make_bundle,
+    first_order_data,
     surfaces_from_prescription,
     trace,
-    _make_bundle,
-    find_paraxial_focus,
-    first_order_data,
 )
-
 
 __all__ = [
     'ImagePlaneWFE',

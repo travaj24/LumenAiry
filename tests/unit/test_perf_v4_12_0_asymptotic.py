@@ -69,11 +69,13 @@ import pytest
 
 import lumenairy as lm
 from lumenairy.propagators.asymptotic import (
+    _compute_M_b,
+    _contract_against_moment_table,
     _lg_polynomial_items,
+    _maslov_branch_corrected_sqrt,
     _multiply_polys_2d,
     _polynomial_substitute_linear_2d,
     _polynomial_under_affine_shift,
-    _contract_against_moment_table,
     clear_lg_polynomial_cache,
     fit_canonical_polynomials,
     fit_hf_polynomials,
@@ -81,13 +83,8 @@ from lumenairy.propagators.asymptotic import (
     lg_polynomial,
     propagate_hf_chebyshev_quadrature,
     propagate_modal_asymptotic,
-)
-from lumenairy.propagators.asymptotic import (
-    _compute_M_b,
-    _maslov_branch_corrected_sqrt,
     solve_envelope_stationary,
 )
-
 
 # ----------------------------------------------------------------------
 # Helpers

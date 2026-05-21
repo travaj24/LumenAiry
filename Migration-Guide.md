@@ -317,7 +317,9 @@ follow in v5.1.x patch releases as time and review cycles allow.
 * **Off-axis conic in surface frame** -- coordinate-frame
   transformation for tilted/displaced aspheres.  Deferred to
   v5.1.  Current `decenter` / `tilt` keys continue to apply in
-  field frame as in v4.x.
+  field frame as in v4.x.  **Landed in v5.2 as an opt-in
+  `surface_frame=True` kwarg on `apply_real_lens` -- see the
+  v5.2 section below.**
 * **26 formula-3 glass coefficients** -- per-glass vendor-source
   ingestion of Hikari E-/J-, Sumita K-, 4 CDGM polynomial
   glasses.  `POLYNOMIAL_COEFFICIENTS = {}` remains empty at v5.0;
@@ -329,3 +331,251 @@ follow in v5.1.x patch releases as time and review cycles allow.
 * **57 audit-fix test-file consolidation.**  Mechanical merge of
   the `test_audit_fixes_v<X>_<Y>_*.py` files into topical
   homes.  No behaviour change.  Deferred to v5.1.
+
+---
+
+## 5.2.0 -- Off-axis conic in surface frame (`apply_real_lens`)
+
+v5.2 closes the ROADMAP item "Off-axis conic in surface frame
+(not just decenter+tilt)" deferred from v5.0.  The fix lands as
+a **non-breaking opt-in kwarg** on
+`lumenairy.elements._lens_real.apply_real_lens` (and the public
+`lumenairy.apply_real_lens` re-export):
+
+```python
+E_out = la.apply_real_lens(
+    E_in, prescription=prescription, wavelength=wl, dx=dx,
+    surface_frame=True,            # v5.2 opt-in
+)
+```
+
+The default `surface_frame=False` preserves v5.1 behavior
+**bit-for-bit** -- existing callers see no numerical change.
+
+### What changed
+
+The per-surface `"decenter"` / `"tilt"` keys have always been
+honored by `apply_real_lens`, but in v3.x -> v5.1 they were
+applied as a **field-frame** coordinate shift plus a linear sag
+ramp:
+
+```
+Xs = X - decenter_x
+Ys = Y - decenter_y
+sag(Xs, Ys) += tilt_x * Xs + tilt_y * Ys     # linear ramp
+```
+
+This is the textbook small-tilt / small-decenter alignment-
+tolerance approximation but is **not** what Optiland and Zemax
+do for a genuinely tilted / displaced asphere: those tools treat
+the surface's sag as a rigid body and rotate / translate the
+whole surface relative to the field's frame.  For a parabola
+tilted by 5 mrad the difference is a fundamentally different
+phase pattern -- a rotated parabola, not a parabola plus a
+linear ramp.
+
+The new `surface_frame=True` branch evaluates each surface's
+sag in its own rigid-body-transformed local frame.  The field's
+`(x, y)` grid is mapped to surface-frame coordinates via the
+inverse rigid-body transform:
+
+```
+(x_s, y_s, z_s) = R^T @ (x_f - dcx, y_f - dcy, 0)
+               where R = Rx(tilt_x) @ Ry(tilt_y)
+```
+
+The sag is then evaluated at `(x_s, y_s)` and contributes the
+same `-k0 * (n2 - n1) * sag(x_s, y_s)` phase as the field-frame
+branch -- only the coordinate at which sag is evaluated changes.
+The full rotation matrix is used (no small-angle linearisation),
+so arbitrary tilts are handled correctly.
+
+### When to use each branch
+
+* **Default `surface_frame=False`** -- use for small-tilt /
+  small-decenter alignment-tolerance studies where the linear
+  sag ramp is the textbook physics, and for backward
+  compatibility with v5.1 and earlier results.
+
+* **`surface_frame=True`** -- use for off-axis aspheres
+  (OAP-style mirrors expressed as a refractive surface,
+  decentered parabolic correctors, etc.) and any system where
+  the surface's coordinate frame meaningfully differs from the
+  field's grid frame.  Cross-checks against Optiland / Zemax
+  results on the same prescription require this branch.
+
+### Recipe -- no code change required (default preserved)
+
+If your v5.1 code does not pass the new kwarg, nothing changes:
+
+```python
+# v5.1 -- still works in v5.2, bit-for-bit identical
+E_out = la.apply_real_lens(
+    E_in, prescription=presc, wavelength=wl, dx=dx)
+```
+
+### Recipe -- opt in to surface-frame physics
+
+```python
+# v5.2 -- evaluate sag in each surface's rigid-body frame
+E_out = la.apply_real_lens(
+    E_in, prescription=presc, wavelength=wl, dx=dx,
+    surface_frame=True)
+```
+
+### Caveats and scope
+
+* The opt-in lives on `apply_real_lens` only.
+  `apply_real_lens_traced` already honors surface-frame
+  transforms via its raytrace phase leg (Optiland-equivalent
+  coord-break handling in `lumenairy.raytrace.world` /
+  `intersection.py`), so no parallel kwarg is needed there.
+  `apply_real_lens_maslov` predates this work and continues to
+  use the field-frame approximation.
+
+* The surface-frame branch evaluates sag at the surface-frame
+  footprint of the field-plane normal, dropping `z_s`.  This is
+  the same thin-element approximation the field-frame branch
+  makes; full per-pixel intersection requires
+  `apply_real_lens_traced`.
+
+* `"form_error"` maps are still treated in the field frame
+  (i.e. the measured figure error is applied to the same
+  `(x_s, y_s)` grid as the sag).  A future enhancement could
+  resample the form-error map under the rigid-body transform.
+
+---
+
+## 5.2.0 -- `output_grid` -> `output_shape` rename on GBD / HFPI / HF sub-propagators (AUDIT_V4_13_1 Part 2 P1-A)
+
+The `output_grid` kwarg on the prescription-aware sub-propagators
+collided with the dispatcher's `propagate(output_grid=...)` contract:
+
+* Dispatcher: `output_grid = (N_out, dx_out)`  (grid spec)
+* Sub-propagators: `output_grid = (Ny, Nx)`    (shape only)
+
+v5.2 keeps the dispatcher contract as canonical and renames the
+sub-propagator kwarg to `output_shape` for the shape-only meaning.
+The legacy `output_grid` spelling on the sub-propagators still works
+but emits a `DeprecationWarning` directing the caller to either the
+new `output_shape=(Ny, Nx)` kwarg or the dispatcher path
+`propagate(output_grid=(N_out, dx_out))`.
+
+**Affected sub-propagators (5):**
+
+* `lumenairy.propagators.gbd.propagate_gbd_freespace`
+* `lumenairy.propagators.gbd.propagate_gbd_thin_lens`
+* `lumenairy.propagators.gbd.propagate_gbd_through_prescription`
+* `lumenairy.propagators.hfpi.propagate_hfpi_freespace_aperture`
+* `lumenairy.propagators.hfpi.propagate_hfpi_through_prescription`
+* `lumenairy.propagators.hf.propagate_huygens_fresnel_through_prescription`
+
+**Recipe (legacy -> v5.2+):**
+
+```python
+# Old (pre-5.2, deprecated in v5.2):
+out = la.propagate_gbd_freespace(
+    E, dx=dx, z=z, wavelength=wl, output_grid=(Ny, Nx))
+
+# New (v5.2+):
+out = la.propagate_gbd_freespace(
+    E, dx=dx, z=z, wavelength=wl, output_shape=(Ny, Nx))
+
+# Or via the dispatcher (canonical (N_out, dx_out) form):
+out = la.propagate(
+    E, method='gbd', z=z, wavelength=wl, dx=dx,
+    output_grid=(N_out, dx_out))
+```
+
+> **Known dispatcher-forwarding caveat (v5.2).**  The dispatcher
+> forwards its `output_grid=(N_out, dx_out)` value directly to the
+> sub-propagator's `output_grid=` legacy kwarg, which will emit a
+> `DeprecationWarning` and then mis-interpret the tuple as
+> `(Ny=N_out, Nx=dx_out)`.  Calling the dispatcher with
+> `output_grid=(N, dx_out)` was already wrong physics pre-v5.2; the
+> v5.2 rename surfaces the issue as a warning but does not yet fix
+> the dispatcher's forwarding.  Until the dispatcher closure ships
+> (v5.2.1 candidate), call the sub-propagators directly with
+> `output_shape=(Ny, Nx)` for shape-only resampling.
+
+---
+
+## 5.2.0 -- `prescription_subdomain(method='maslov')` raises on grid mismatch (AUDIT_V4_13_1 Part 2 P1-C)
+
+Pre-v5.2 `lumenairy.propagators.mhs.prescription_subdomain` with the
+default `method='maslov'` silently returned the propagation on the
+INPUT grid, ignoring the output Huygens surface's declared grid.
+v5.2 raises `ValueError` at subdomain construction time when the
+input and output grids differ, instead of silently dropping the
+request.
+
+**Recipe -- if you relied on the silent same-grid behaviour:** no
+change needed (the input == output case still works).
+
+**Recipe -- if you legitimately need a different output grid through
+a `maslov` stage:**
+
+```python
+# Old (pre-5.2 -- silently returned input-grid output):
+sub = la.prescription_subdomain(in_surf, out_surf, presc,
+                                 wavelength=wl, method='maslov')
+
+# v5.2 -- pick a method that natively supports output-grid
+# resampling, or stage an explicit asm resampling step:
+sub_gbd = la.prescription_subdomain(in_surf, out_surf, presc,
+                                     wavelength=wl, method='gbd')
+
+# OR: maslov on same-grid, then an asm resampling subdomain:
+sub_maslov = la.prescription_subdomain(in_surf, in_surf, presc,
+                                        wavelength=wl, method='maslov')
+sub_resample = la.asm_subdomain(in_surf, out_surf, z=0.0,
+                                 wavelength=wl)
+```
+
+---
+
+## 5.2.0 -- `propagate_subaperture_asymptotic` UserWarning on non-unit magnification (AUDIT_V4_13_1 Part 2 P1-F)
+
+Pre-v5.2 the partition-of-unity windows in
+`lumenairy.propagators.subaperture.combine_patch_fields` were
+centred on `patch_grid.centres`, which are SOURCE-plane positions.
+This is only correct for unit-magnification, no-tilt geometries; a
+system with magnification `|A| != 1` maps each source patch to an
+image-plane footprint at `|A| * (cx, cy)` with corresponding scaled
+half-widths, and the legacy code window tiles the wrong location.
+
+v5.2 surfaces the limitation as a `UserWarning` when the system's
+paraxial ABCD `|A - 1| > 0.05`, plus exposes two new optional kwargs
+on `combine_patch_fields` -- `image_centres` and `image_half_widths`
+-- so callers with knowledge of the system magnification + tilt can
+supply the image-plane partition coordinates explicitly.
+
+**Recipe -- if you ran subaperture decomposition on a magnifying
+system before v5.2:** the result was unreliable at off-axis patches.
+Either suppress the warning if you accept the limitation, or supply
+image-plane centres:
+
+```python
+# Compute image-plane centres / half-widths from the system ABCD:
+abcd = la.system_abcd_prescription(presc, wavelength)
+M = abcd[0] if isinstance(abcd, tuple) else abcd
+mag = abs(float(M[0, 0]))
+img_centres = pg.centres * mag
+img_half_widths = pg.half_widths * mag
+
+# Build the per-patch fields the usual way (legacy
+# propagate_subaperture_asymptotic doesn't yet route image_centres
+# through; for v5.2 you must call combine_patch_fields directly):
+out = la.combine_patch_fields(
+    patch_fields, pg,
+    output_grid_x=ox, output_grid_y=oy,
+    image_centres=img_centres,
+    image_half_widths=img_half_widths,
+)
+```
+
+The full fix -- automatically computing the image-plane mapping
+inside `propagate_subaperture_asymptotic` so the warning never
+fires for legitimate magnifying systems -- is tracked as a v5.2.1
+candidate per ROADMAP.
+

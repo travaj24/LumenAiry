@@ -62,16 +62,16 @@ _NUMEXPR_MIN_SIZE = 1 << 20  # see lenses.py for rationale; sync if changed
 
 # Helpers shared with lenses.py / lenses_maslov.py.
 from .lenses import (
-    surface_sag_general,
-    surface_sag_biconic,
     _warn_if_aperture_exceeds_grid,
+    surface_sag_biconic,
+    surface_sag_general,
 )
+
 # Private alias used inside the function body (matches lenses.py convention).
 _surface_sag_general = surface_sag_general
-from ..propagators.propagation import angular_spectrum_propagate
 from ..glass import get_glass_index, get_glass_index_complex
 from ..progress import call_progress
-
+from ..propagators.propagation import angular_spectrum_propagate
 
 _VALID_WAVE_PROPAGATORS = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
 
@@ -207,6 +207,7 @@ def apply_real_lens(
     progress: Optional[Any] = None,
     use_gpu: bool = False,
     wave_propagator: Optional[str] = None,
+    surface_frame: bool = False,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -273,10 +274,39 @@ def apply_real_lens(
       this surface [m].  Field outside is zeroed (vignetting).
     * ``"decenter"`` -- ``(dx, dy)`` lateral offset of this surface [m].
     * ``"tilt"`` -- ``(tx, ty)`` small-angle surface tilt [rad].  Adds a
-      linear sag ramp ``tx*x + ty*y`` to the surface.
+      linear sag ramp ``tx*x + ty*y`` to the surface (field-frame default;
+      see ``surface_frame`` for the rigid-body alternative).
     * ``"form_error"`` -- 2D ndarray (same shape as the field) of additive
       sag perturbation [m].  Use to inject measured figure error or
       synthetic Zernike form error.
+
+    Field-frame vs surface-frame decenter / tilt (v5.2+)
+    ----------------------------------------------------
+    The default ``surface_frame=False`` honours ``decenter`` / ``tilt``
+    in the **field frame**: the field's ``(x, y)`` grid is shifted by
+    ``decenter`` (axis-symmetric sag still evaluated at the shifted
+    radius) and the tilt is approximated as a linear sag ramp
+    ``tx*x + ty*y``.  This is the v3.x -> v5.1 contract, kept as the
+    default so existing callers see no numerical change.
+
+    ``surface_frame=True`` (v5.2+) instead evaluates each surface's sag
+    in its own rigid-body-transformed local frame, matching the Optiland
+    / Zemax treatment of a tilted / displaced asphere.  The field's
+    ``(x, y)`` grid is mapped to surface-frame coordinates via the
+    inverse rigid-body transform: a translation by ``-decenter`` followed
+    by an inverse rotation ``R^T = Ry(-ty) @ Rx(-tx)`` (full rotation
+    matrix, no small-angle linearisation), then the sag is evaluated at
+    the resulting ``(x_s, y_s)``.  Phase contribution is the same
+    ``-k0 * (n2 - n1) * sag(x_s, y_s)`` thin-element formula as the
+    field-frame branch; only the coordinate at which sag is evaluated
+    changes.
+
+    Use ``surface_frame=True`` for off-axis aspheres, decentered
+    parabolas, and any system where the surface's own coordinate frame
+    differs meaningfully from the field's grid frame.  Use the default
+    field-frame branch for the small-tilt / small-decenter alignment-
+    tolerance regime where the linearised sag ramp is the textbook
+    physics.
 
     The prescription dict may also specify ``"stop_index"`` (int) to apply
     the global ``"aperture_diameter"`` at a specific surface (the aperture
@@ -362,6 +392,25 @@ def apply_real_lens(
         (``a*r^4``); order 8 includes 6th and 8th-order spherical
         terms; higher is rarely beneficial because the fit is limited
         by the 1-D sampling rather than by the polynomial basis.
+    surface_frame : bool, default False
+        v5.2+ opt-in.  When ``False`` (default), the per-surface
+        ``"decenter"`` / ``"tilt"`` keys are honoured in the **field
+        frame**: sag is evaluated on the field's ``(x, y)`` grid shifted
+        by ``decenter`` and a linear sag ramp ``tx*x + ty*y`` is added
+        for tilt.  This is the v3.x -> v5.1 contract and is preserved
+        bit-for-bit when the flag is left at its default.
+
+        When ``True``, the per-surface ``"decenter"`` / ``"tilt"`` are
+        applied as a rigid-body transformation of the surface itself
+        (Optiland / Zemax style).  The field's ``(x, y)`` grid is
+        mapped to surface-frame coordinates via the inverse rigid-body
+        transform (``-decenter`` then ``R^T = Ry(-ty) @ Rx(-tx)``
+        with the full rotation matrix, no small-angle linearisation)
+        and the sag is evaluated at the resulting ``(x_s, y_s)``.
+        Use for off-axis aspheres / decentered parabolas where the
+        sag's curvature must rotate with the surface, not just acquire
+        a linear ramp.  See the "Field-frame vs surface-frame
+        decenter / tilt" docstring section above for the physics.
 
     Returns
     -------
@@ -571,7 +620,6 @@ def apply_real_lens(
         resolved.append((n1c, n2c))
 
 
-    from ..progress import call_progress
     n_surf = len(surfaces)
     for i, surf in enumerate(surfaces):
         call_progress(progress, 'apply_real_lens',
@@ -589,8 +637,47 @@ def apply_real_lens(
         n1r, n2r = n1c.real, n2c.real
 
         # ---- Decenter --------------------------------------------------
+        # v5.2 (ROADMAP v5.1 off-axis conic in surface frame;
+        # AUDIT_V5_1_0 deferred feature): when ``surface_frame=True``
+        # the decenter+tilt pair is applied as a rigid-body transform
+        # of the surface itself (Optiland / Zemax convention) instead
+        # of as a field-frame coordinate shift + linear sag ramp.  The
+        # forward map (surface frame -> field frame) is
+        # ``(x_f, y_f, 0) = Rx(tx) @ Ry(ty) @ (x_s, y_s, z_s) +
+        # (dcx, dcy, 0)``; we invert it on the field-plane grid to get
+        # ``(x_s, y_s)`` at which sag is evaluated.  Uses the full
+        # rotation matrix (no small-angle linearisation) so arbitrary
+        # tilts are correct.  Falls back to the field-frame branch
+        # below when ``surface_frame=False`` (the default), preserving
+        # v5.1 numerics bit-for-bit.
         decenter = surf.get('decenter') or (0.0, 0.0)
-        if decenter[0] == 0.0 and decenter[1] == 0.0:
+        tilt_sf = surf.get('tilt') or (0.0, 0.0)
+        _sf_active = surface_frame and (
+            decenter[0] != 0.0 or decenter[1] != 0.0
+            or tilt_sf[0] != 0.0 or tilt_sf[1] != 0.0
+        )
+        if _sf_active:
+            # Inverse rigid-body transform of the field-plane grid into
+            # the surface frame.  R = Rx(tx) @ Ry(ty); the inverse
+            # applied to (x - dcx, y - dcy, 0) gives:
+            #   x_s = cy*dx_local + sx*sy*dy_local
+            #   y_s = cx*dy_local
+            # (z_s is discarded -- the thin-element approximation
+            # evaluates sag at the surface-frame footprint of the
+            # field-plane normal, the same simplification the
+            # field-frame branch makes when it skips the perpendicular-
+            # foot solve.)
+            tx_f = float(tilt_sf[0])
+            ty_f = float(tilt_sf[1])
+            cx_f = np.cos(tx_f); sx_f = np.sin(tx_f)
+            cy_f = np.cos(ty_f); sy_f = np.sin(ty_f)
+            _dx_local = X - decenter[0]
+            _dy_local = Y - decenter[1]
+            Xs = cy_f * _dx_local + sx_f * sy_f * _dy_local
+            Ys = cx_f * _dy_local
+            h_sq = Xs ** 2 + Ys ** 2
+            del _dx_local, _dy_local
+        elif decenter[0] == 0.0 and decenter[1] == 0.0:
             # Alias the axis-centered grids.  Downstream code only reads
             # Xs/Ys/h_sq and creates new arrays when combining them
             # (e.g. ``sag + tilt[0]*Xs``), so aliasing is safe.  Saves
@@ -683,8 +770,14 @@ def apply_real_lens(
                 sag = _surface_sag_general(h_sq, R, kc, asph)
 
         # ---- Tilt (small-angle linear ramp added to sag) --------------
+        # v5.2 (ROADMAP v5.1 off-axis conic in surface frame;
+        # AUDIT_V5_1_0 deferred feature): in the surface-frame branch
+        # the tilt is already encoded in the rotated (Xs, Ys), so the
+        # linear sag ramp is suppressed here to avoid double-counting.
+        # The field-frame branch (default) keeps the historical linear
+        # ramp -- this is the v3.x -> v5.1 contract.
         tilt = surf.get('tilt') or (0.0, 0.0)
-        if tilt[0] != 0.0 or tilt[1] != 0.0:
+        if (tilt[0] != 0.0 or tilt[1] != 0.0) and not _sf_active:
             sag = sag + tilt[0] * Xs + tilt[1] * Ys
 
         # ---- Form error map -------------------------------------------
@@ -889,7 +982,9 @@ def apply_real_lens(
             # the dispatcher.
             if wave_propagator == 'sas':
                 from ..propagators.propagation import (
-                    scalable_angular_spectrum_propagate, resample_field)
+                    resample_field,
+                    scalable_angular_spectrum_propagate,
+                )
                 # SAS is currently single-pitch (square-grid).  Fall
                 # back to the dx value -- callers wanting an
                 # anamorphic SAS path need to add a dy axis themselves.
@@ -899,8 +994,7 @@ def apply_real_lens(
                     E, _ = resample_field(
                         E, dx_new, dx, N_out=E.shape[-1])
             elif wave_propagator == 'fresnel':
-                from ..propagators.propagation import (
-                    fresnel_propagate, resample_field)
+                from ..propagators.propagation import fresnel_propagate, resample_field
                 E, dx_new, _ = fresnel_propagate(
                     E, thickness, lam_medium, dx, dy=dy)
                 if abs(dx_new - dx) > dx * 1e-6:
@@ -938,8 +1032,13 @@ def apply_real_lens(
     if seidel_correction and aperture is not None:
         # Local imports to avoid circular dep at module load
         from ..raytrace import (
-            trace as _rt_trace, _make_bundle as _rt_make_bundle,
+            _make_bundle as _rt_make_bundle,
+        )
+        from ..raytrace import (
             surfaces_from_prescription as _rt_surfaces_from_prescription,
+        )
+        from ..raytrace import (
+            trace as _rt_trace,
         )
         r_pupil = 0.5 * aperture
         n_fan = 41

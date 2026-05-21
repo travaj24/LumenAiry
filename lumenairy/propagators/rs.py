@@ -13,19 +13,20 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
 
 import numpy as np
 
+from . import fft_infra as _state
 from .fft_infra import (
     CUPY_AVAILABLE,
+    _fft2,
+    _h_cache_lookup,
+    _h_cache_store,
+    _ifft2,
     _is_cupy_array,
-    _fft2, _ifft2,
-    _h_cache_lookup, _h_cache_store,
     _validate_propagator_inputs,
 )
-from . import fft_infra as _state
-
 
 __all__ = [
     'rayleigh_sommerfeld_propagate',
@@ -178,7 +179,7 @@ def rayleigh_sommerfeld_propagate(
                                 fn_name='rayleigh_sommerfeld_propagate')
 
     # -- array library selection -----------------------------------------------
-    from ..backend import is_jax_array, JAX_AVAILABLE
+    from ..backend import is_jax_array
     is_jax = is_jax_array(E_in)
     if is_jax:
         import jax.numpy as _jnp

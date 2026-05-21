@@ -15,16 +15,15 @@ Author:  Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
+from . import fft_infra as _state
 from .fft_infra import (
     _fft2,
     _validate_propagator_inputs,
 )
-from . import fft_infra as _state
-
 
 __all__ = [
     'fresnel_propagate',

@@ -60,7 +60,6 @@ import warnings
 import numpy as np
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Module-level callables used in regression tests.  Module-level so
 # they pickle cleanly (the v4.16.2 ``pickle.dumps`` probe must NOT

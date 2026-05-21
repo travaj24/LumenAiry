@@ -36,18 +36,16 @@ from __future__ import annotations
 # their respective implementations; ``analysis/core.py`` is the
 # back-compat shim alone.
 from .beam_stats import *  # noqa: F401,F403
-from .strehl import *  # noqa: F401,F403
-from .psf_mtf_otf import *  # noqa: F401,F403
-from .polychromatic import *  # noqa: F401,F403
-from .zernike import *  # noqa: F401,F403
-from .opd import *  # noqa: F401,F403
-
 from .beam_stats import __all__ as _beam_stats_all
-from .strehl import __all__ as _strehl_all
-from .psf_mtf_otf import __all__ as _psf_mtf_otf_all
-from .polychromatic import __all__ as _polychromatic_all
-from .zernike import __all__ as _zernike_all
+from .opd import *  # noqa: F401,F403
 from .opd import __all__ as _opd_all
+from .polychromatic import *  # noqa: F401,F403
+from .polychromatic import __all__ as _polychromatic_all
+from .psf_mtf_otf import *  # noqa: F401,F403
+from .psf_mtf_otf import __all__ as _psf_mtf_otf_all
+from .strehl import *  # noqa: F401,F403
+from .strehl import __all__ as _strehl_all
+from .zernike import *  # noqa: F401,F403
 
 # v5.1.0 (Wave-4 integration): re-export private cache + lock objects
 # so legacy ``from lumenairy.analysis.core import _ZERNIKE_BASIS_CACHE``
@@ -59,6 +57,7 @@ from .zernike import (  # noqa: F401
     _ZERNIKE_BASIS_CACHE_MAXSIZE,
     _zernike_basis_matrix_build,
 )
+from .zernike import __all__ as _zernike_all
 
 __all__ = (
     list(_beam_stats_all)

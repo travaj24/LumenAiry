@@ -89,7 +89,6 @@ import pytest
 
 import lumenairy as la
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -248,20 +247,18 @@ _KNOWN_XP_DISPATCH_EXEMPTIONS = frozenset({
     ('lumenairy/elements/polarization.py', 'apply_rotator'),
 
     # ---- propagators/propagation.py ---------------------------------------
-    # The ASM propagators have been hand-audited for cross-backend
-    # dispatch in v4.11/v4.12; the few remaining ``np.*`` calls are
-    # scalar constants / dtype constructors (audit closure noted in
-    # ``test_audit_fixes_v4_12_0_round4_dispatch.py``).
-    ('lumenairy/propagators/propagation.py', 'angular_spectrum_propagate'),
-    ('lumenairy/propagators/propagation.py', 'angular_spectrum_propagate_tilted'),
-    ('lumenairy/propagators/propagation.py', 'angular_spectrum_propagate_mft'),
-    ('lumenairy/propagators/propagation.py', 'fraunhofer_propagate'),
-    ('lumenairy/propagators/propagation.py', 'fraunhofer_propagate_mft'),
-    ('lumenairy/propagators/propagation.py', 'fresnel_propagate'),
-    ('lumenairy/propagators/propagation.py', 'scaled_angular_spectrum_propagate'),
-    ('lumenairy/propagators/propagation.py', 'angular_spectrum_propagate_batch'),
-    ('lumenairy/propagators/propagation.py', 'resample_field'),
-    ('lumenairy/propagators/propagation.py', 'apply_fresnel_curvature'),
+    # v5.2 (audit P3-NEW-F1-2): the 10 entries previously listed here
+    # are DEAD post-v5.1 -- the v5.1.0 6-file split moved every
+    # function body out of ``propagators/propagation.py`` into the
+    # topical submodules (``asm.py``, ``fresnel.py``, ``rs.py``,
+    # ``sas.py``, ``mft.py``, ``fft_infra.py``).  The shell has zero
+    # function definitions at v5.1+; ``np.*`` calls there are
+    # impossible.  V13 walker (shell-vs-canonical-location) catches
+    # any future regression where a function body sneaks back into
+    # the shell.  The walker's auto-discovery re-finds the dispatch
+    # sites at the new submodule paths; the 3 ``v5.1.0
+    # split-surfaced exemptions`` at the top of this list
+    # (fresnel.py + psf_mtf_otf.py) are the new homes.
 
     # ---- propagators/* (sub-bundle propagators) ---------------------------
     # The HFPI / GBD / HF propagators take bundle objects (PathBundle,
@@ -290,37 +287,17 @@ _KNOWN_XP_DISPATCH_EXEMPTIONS = frozenset({
     # to_numpy'd by the caller).  Dispatch is at the caller's
     # discretion.  v4.13.0 + v4.14.0 audited each of these; their
     # ``np.*`` use is intentional.
-    ('lumenairy/analysis/core.py', 'beam_centroid'),
-    ('lumenairy/analysis/core.py', 'beam_widths'),
-    ('lumenairy/analysis/core.py', 'beam_d4sigma'),
-    ('lumenairy/analysis/core.py', 'beam_radius'),
-    ('lumenairy/analysis/core.py', 'M2'),
-    ('lumenairy/analysis/core.py', 'compute_psf'),
-    ('lumenairy/analysis/core.py', 'compute_otf'),
-    ('lumenairy/analysis/core.py', 'compute_mtf'),
-    ('lumenairy/analysis/core.py', 'encircled_energy'),
-    ('lumenairy/analysis/core.py', 'encircled_energy_curve'),
-    ('lumenairy/analysis/core.py', 'strehl_ratio'),
-    ('lumenairy/analysis/core.py', 'rms_phase_aberration'),
-    ('lumenairy/analysis/core.py', 'spot_diagram'),
-    ('lumenairy/analysis/core.py', 'wave_opd_1d'),
-    ('lumenairy/analysis/core.py', 'wave_opd_2d'),
-    ('lumenairy/analysis/core.py', 'remove_wavefront_modes'),
-    ('lumenairy/analysis/core.py', 'opd_pv_rms'),
-    ('lumenairy/analysis/core.py', 'zernike_decompose'),
-    ('lumenairy/analysis/core.py', 'zernike_reconstruct'),
-    ('lumenairy/analysis/core.py', 'astigmatism_mag_angle'),
-    ('lumenairy/analysis/core.py', 'coupling_efficiency'),
-    ('lumenairy/analysis/core.py', 'spectral_decompose'),
-    ('lumenairy/analysis/core.py', 'spectral_reconstruct'),
-    # ``sparrow_resolution`` / ``fwhm_resolution`` etc.: ``xp = _xp_of(psf)``
-    # is a backend probe but the function body uses scipy CubicSpline /
-    # brentq, both of which are NumPy-host-only.  The host-side
-    # ``np.linspace`` builds a bracketing scan for the root finder;
-    # legitimately NumPy.
-    ('lumenairy/analysis/core.py', 'sparrow_resolution'),
-    ('lumenairy/analysis/core.py', 'fwhm_resolution'),
-    ('lumenairy/analysis/core.py', 'rayleigh_resolution'),
+    #
+    # v5.2 (audit P3-NEW-F1-2): the 26 entries previously listed
+    # here under ``analysis/core.py:*`` are DEAD post-v5.1 -- the
+    # v5.1.0 6-file split moved every function body out of
+    # ``analysis/core.py`` into the topical submodules (``beam_stats``,
+    # ``strehl``, ``psf_mtf_otf``, ``polychromatic``, ``zernike``,
+    # ``opd``).  The shell has zero function definitions at v5.1+.
+    # Walker auto-discovery re-finds the legitimate ``np.*`` sites at
+    # the new submodule paths; if a regression introduces ``np.*``
+    # at the new locations, the walker flags it and the exemption
+    # can be re-added at the new path with a fresh audit rationale.
 
     # ---- analysis/coherence.py --------------------------------------------
     # Coherence / partial-coherence helpers operate on MCF objects

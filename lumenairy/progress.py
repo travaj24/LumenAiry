@@ -62,7 +62,7 @@ Author: Andrew Traverso
 
 from __future__ import annotations
 
-from typing import Callable, Optional
+from typing import Any, Callable, Optional, cast
 
 #: Callback type alias.  ``stage`` is a free-form string ('surface_1/4',
 #: 'raytrace', 'inversion', ...) that the caller can use for labeling
@@ -124,6 +124,8 @@ class ProgressScaler:
         # used when the scaler is passed as ``progress=`` to a core
         # function.  The scaler's own ``self.stage`` is used in both
         # cases; the inner function's stage label is discarded.
+        frac: object
+        msg: object
         if len(args) == 3:
             _stage, frac, msg = args
         elif len(args) == 2:
@@ -143,15 +145,19 @@ class ProgressScaler:
                 f'got {len(args)}')
         if self.parent is None:
             return
-        overall = self.lo + (self.hi - self.lo) * max(0.0, min(1.0, float(frac)))
-        call_progress(self.parent, self.stage, overall, msg)
+        # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): narrow the
+        # object-typed unpack targets before calling float() / passing as
+        # str -- mypy can't follow the runtime branch logic above.
+        overall = self.lo + (self.hi - self.lo) * max(
+            0.0, min(1.0, float(cast(Any, frac))))
+        call_progress(self.parent, self.stage, overall, cast(str, msg))
 
 
 # ---------------------------------------------------------------------------
 # Cancellation protocol (v4.14, audit P2 #13)
 # ---------------------------------------------------------------------------
 
-def is_cancelled(cb: Optional[Callable]) -> bool:
+def is_cancelled(cb: Optional[Callable[..., Any]]) -> bool:
     """Return True if a progress callback is signalling cancellation.
 
     Probes ``cb.should_stop`` (attribute or property) tolerantly.
