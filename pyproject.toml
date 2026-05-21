@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.2.1"
+version = "5.2.2"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -54,7 +54,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-fft = ["pyfftw>=0.13"]
+# v5.2.2: pyfftw 0.15.1 (released 2025) bumped its
+# ``requires-python`` to ``>=3.11`` while pyfftw 0.15.0 still
+# supports 3.10.  pip's resolver picks 0.15.1 on 3.10 and fails the
+# install entirely; cap to ``<0.15.1`` on 3.10 so 3.10 users still
+# get pyfftw (last 3.10-compatible release).
+fft = [
+    'pyfftw>=0.13,<0.15.1; python_version < "3.11"',
+    'pyfftw>=0.13; python_version >= "3.11"',
+]
 gpu = ["cupy>=11.0"]
 fits = ["astropy>=5.0"]
 # v4.16.1 (audit M-1): refractiveindex pulled from the hard
@@ -75,7 +83,18 @@ hdf5 = ["h5py>=3.0", "filelock>=3.0"]
 # ``lumenairy/io/storage.py`` uses ``Group.create_array``, a Zarr-v3
 # API.  Users pinning ``zarr==2.x`` hit ``AttributeError`` on the
 # Group object; bumping the floor matches the actual API in use.
-zarr = ["zarr>=3.0", "filelock>=3.0"]
+#
+# v5.2.2: zarr>=3.0 itself ``requires-python = ">=3.11"`` (zarr 3.1.6
+# confirmed via PyPI metadata).  ``pip install lumenairy[zarr]`` on
+# Python 3.10 (the library's documented floor) hits a resolver
+# conflict and fails the install entirely -- which broke the v5.1.1
+# re-added 3.10 CI matrix entry.  PEP 508 environment marker pins
+# the zarr line to Python >= 3.11 so the 3.10 install path
+# resolves; tests requiring zarr v3 already skip cleanly when
+# zarr is missing (per the v4.16.0 conftest pattern).  ``filelock``
+# stays unconditional so the storage-lock contract is exercisable
+# on 3.10 (against h5py only) too.
+zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]
 # JAX (CPU): enables automatic differentiation of any function written
 # against the array-namespace dispatch (lumenairy.backend), JIT
 # compilation via XLA, and free GPU/TPU acceleration if the user
@@ -109,14 +128,19 @@ gui = [
     "h5py>=3.0",
 ]
 all = [
-    "pyfftw>=0.13",
+    # v5.2.2: same env-marker split as the standalone ``fft`` extras
+    # group -- pyfftw 0.15.1+ requires Python 3.11+.
+    'pyfftw>=0.13,<0.15.1; python_version < "3.11"',
+    'pyfftw>=0.13; python_version >= "3.11"',
     "numexpr>=2.8",
     "numba>=0.58",
     "astropy>=5.0",
     "h5py>=3.0",
     # v4.16.1 (audit M-3): aligned with the standalone ``zarr`` extras
     # group: floor bumped to Zarr v3 (Group.create_array API).
-    "zarr>=3.0",
+    # v5.2.2: zarr v3 requires Python 3.11+; env marker skips it on
+    # 3.10 (storage-zarr tests skip on 3.10 in that case).
+    'zarr>=3.0; python_version >= "3.11"',
     "jax>=0.4.20",
     "filelock>=3.0",
     # v4.16.1 (audit M-1): refractiveindex bundled into ``all`` so the

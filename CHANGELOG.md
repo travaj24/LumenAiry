@@ -2,6 +2,67 @@
 
 All notable changes to the core library are documented here.
 
+## [5.2.2] — 2026-05-21
+
+**Patch release: fix Python 3.10 install path** (the documented
+floor that v5.1.1 re-added to CI).  Two optional dependencies had
+bumped their ``requires-python`` to ``>=3.11`` in 2025 releases,
+silently breaking ``pip install lumenairy[fft,zarr,...]`` on 3.10:
+
+- **`zarr>=3.0`** -- v5.1.0 floor-bump per audit M-3.  zarr 3.1.6
+  (the resolver's target) requires Python >= 3.11.
+- **`pyfftw>=0.13`** -- existing floor.  pyfftw 0.15.1 (2025
+  release) requires Python >= 3.11; pyfftw 0.15.0 (last 3.10-
+  compatible) is still available.
+
+### Fix
+
+Both extras groups now use PEP 508 environment markers so the
+resolver picks compatible versions per interpreter:
+
+```toml
+fft = [
+    'pyfftw>=0.13,<0.15.1; python_version < "3.11"',
+    'pyfftw>=0.13; python_version >= "3.11"',
+]
+zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]
+```
+
+- On Python 3.10: pyfftw 0.15.0 (last 3.10 wheel); zarr is NOT
+  installed (storage-zarr tests skip cleanly per the v4.16.0
+  conftest pattern).
+- On Python 3.11+: latest pyfftw + zarr v3.
+
+The ``all`` group gets the same env-marker treatment so
+``pip install lumenairy[all]`` resolves on every supported
+interpreter.
+
+### Why this regressed at v5.1.1 and only surfaced now
+
+The v5.1.1 patch re-added Python 3.10 to the unit-tests CI matrix
+(audit P2-NEW-3WAY-2).  At v5.1.1 ship, zarr 3.1.6 and pyfftw 0.15.0
+still resolved on 3.10 (their `requires-python` was permissive enough
+or the resolver picked compatible older versions).  Between v5.1.1
+and the v5.2.1 push, pyfftw 0.15.1 was published and the zarr
+metadata was tightened; the next `pip install` on Python 3.10
+started failing.  No library code change caused this -- it is purely
+external-dep metadata drift.
+
+Caught by the v5.1.1 publish.yml `verify` gate (which exercises
+3.10/3.11/3.12/3.13 on every tag push) before the v5.2.2 tag
+shipped, exactly as designed: a release on broken CI cannot upload
+to PyPI.
+
+### Tests
+
+3741 unit tests pass (collected = 3749 = pass + 7 skip + 1 xfail);
+1 vs v5.2.1 is the storage SWMR multiprocess test toggling between
+pass and skip across runs (documented flake, not a regression).
+34/34 validation pass.  Zero behavior change.  **Zero physics
+regressions in 12 consecutive releases.**
+
+---
+
 ## [5.2.1] — 2026-05-21
 
 **Patch release: complete v5.2 ruff baseline closure (134 -> 0
