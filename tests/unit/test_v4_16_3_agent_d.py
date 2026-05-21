@@ -298,26 +298,37 @@ def test_propagation_documents_multiprocess_fork_semantics():
     under ``multiprocessing.get_context('spawn')``; the file must
     document this honestly so users aren't surprised when their
     ``set_default_*`` calls silently fail to propagate to workers.
+
+    v5.1.0 split (Agent C): the ``DEFAULT_*`` globals and their
+    multiprocess/fork documentation moved from
+    ``propagators/propagation.py`` (now a thin re-export shell) to
+    ``propagators/fft_infra.py``.  The test reads both files so the
+    contract is anchored to wherever the documentation actually lives.
     """
-    src = (_REPO_ROOT / 'lumenairy' / 'propagators'
-           / 'propagation.py').read_text(encoding='utf-8')
+    candidates = [
+        _REPO_ROOT / 'lumenairy' / 'propagators' / 'fft_infra.py',
+        _REPO_ROOT / 'lumenairy' / 'propagators' / 'propagation.py',
+    ]
+    src = ''
+    for p in candidates:
+        if p.exists():
+            src += p.read_text(encoding='utf-8')
     # Section header (cited verbatim in the audit recommendation).
     assert 'Multiprocess / fork notes' in src, (
-        "propagation.py missing the `Multiprocess / fork notes` "
-        "section near the DEFAULT_* globals (audit P3-NEW-F1-2 + "
-        "P3-NEW-F1-3).")
+        "Neither propagation.py nor fft_infra.py contains the "
+        "`Multiprocess / fork notes` section near the DEFAULT_* "
+        "globals (audit P3-NEW-F1-2 + P3-NEW-F1-3).")
     # Must mention spawn explicitly (Windows + macOS default; the
     # context where the limitation is most surprising).
     assert 'spawn' in src.lower(), (
-        "propagation.py multiprocess section must mention `spawn` "
-        "explicitly -- the context where the DEFAULT_* re-import "
-        "drift is silent.")
+        "Multiprocess section must mention `spawn` explicitly -- "
+        "the context where the DEFAULT_* re-import drift is silent.")
     # Must mention the one-shot latch fork-safety corollary.
     assert ('latch' in src.lower()) and (
         'fork-safe' in src.lower() or 'fork safety' in src.lower()
         or 'fork-safety' in src.lower()), (
-        "propagation.py multiprocess section must mention the "
-        "one-shot latch fork-safety corollary (audit P3-NEW-F1-2).")
+        "Multiprocess section must mention the one-shot latch "
+        "fork-safety corollary (audit P3-NEW-F1-2).")
 
 
 # ============================================================================

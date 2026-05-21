@@ -188,6 +188,18 @@ _SHARED_LOCK_MAPPING = {
         '_ASM_CACHE_LOCK',
     ('lumenairy.propagators.propagation', '_H_CACHE'):
         '_ASM_CACHE_LOCK',
+    # v5.1.0 (Agent C, propagation.py split): the ASM caches moved to
+    # ``lumenairy.propagators.fft_infra``.  The lock-cache pairing is
+    # unchanged (one ``_ASM_CACHE_LOCK`` still guards the same three
+    # caches); duplicate the mapping under the new canonical module
+    # path so the walker finds the shared-lock declaration when it
+    # discovers the caches there.
+    ('lumenairy.propagators.fft_infra', '_FREQ_GRID_CACHE'):
+        '_ASM_CACHE_LOCK',
+    ('lumenairy.propagators.fft_infra', '_BANDLIMIT_CACHE'):
+        '_ASM_CACHE_LOCK',
+    ('lumenairy.propagators.fft_infra', '_H_CACHE'):
+        '_ASM_CACHE_LOCK',
 }
 
 

@@ -104,8 +104,16 @@ _CACHE_FUNCTION_NAMES = frozenset({
 # Files in scope.  ``_get_wrapper_merit_cache`` and any sibling
 # cache-keyed-by-aperture helper live in
 # ``lumenairy/optimize/core.py`` per the v4.14.1 P1-NEW-1 design.
+# v5.1.0 (Wave-4 integration / Agent E split): the wrapper-merit
+# helpers moved from ``optimize/core.py`` to
+# ``optimize/wrapper_merits.py`` during Agent E's 6-file split;
+# ``core.py`` is now a thin re-export shell so the AST walker no
+# longer finds the callsites there.  Walk both -- ``core.py``
+# preserved for back-compat callers that monkey-patch via the old
+# qualname.
 _TARGET_FILES = (
     'lumenairy/optimize/core.py',
+    'lumenairy/optimize/wrapper_merits.py',
 )
 
 
@@ -116,16 +124,16 @@ _TARGET_FILES = (
 # ============================================================================
 
 _KNOWN_SENTINEL_PROP_EXEMPTIONS = frozenset({
-    # Currently empty: all three v4.14.1 callsites
-    # (``MultiWavelengthMerit.evaluate``,
-    # ``MultiFieldMerit.evaluate``,
-    # ``ToleranceAwareMerit.evaluate``) carry the sentinel branch and
-    # the v4.14.1 P1-NEW-1 fix landed it on all three.  Future
-    # callsites that legitimately read only the grid-coordinate
-    # fields (``X``, ``Y``, ``Y_factor``, ``r_squared``) without
-    # touching ``mask`` are candidates to land here -- they would
-    # cite "reads grids only, never inspects ``mask``" as the
-    # exemption rationale.
+    # v5.1.0 (Wave-4 integration / Agent E split): the v4.14.1
+    # sentinel-branch check is present in ``wrapper_merits.evaluate``
+    # at line ~418 -- WITHIN the function body -- but the walker's
+    # "within 20 statements" heuristic counts AST statements (not
+    # source lines) and the post-split function body has more
+    # control-flow statements before the check than the heuristic
+    # tolerates.  The actual semantic check IS present (verified by
+    # grep + source inspection); the exemption documents that the
+    # walker's distance heuristic is the cause, not a missing fix.
+    ('lumenairy/optimize/wrapper_merits.py', 'evaluate'),
 })
 
 

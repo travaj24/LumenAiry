@@ -1,13 +1,14 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-20 (post-v5.0.0).  v4.16.x has shipped;
-v5.0.0 lands the breaking-change content (Python 3.10 floor; 5
-back-compat shims removed; `lumenairy.system` -> `lumenairy.propagators.system`;
-CI gates; public-API smoke test).  v5.0.0 explicitly defers the
-6 large-file splits, library-wide resolver rollout, MCF object,
-formula-3 coefficient ingestion, off-axis conic, 5 missing examples,
-and 57 audit-fix test consolidation -- those items move to the v5.1+
-horizon.  v5.1 is now the immediate horizon.
+**Last updated:** 2026-05-20 (post-v5.1.0).  v4.16.x + v5.0.x have
+shipped; v5.1.0 lands the two long-deferred structural items from
+v5.0's ROADMAP: the **library-wide default-config knob resolver
+rollout** + the **6 large-file splits** (~26K LOC reorganised into
+~35 topical submodules, public API bit-for-bit preserved).  v5.1
+explicitly defers MCF top-level alias, formula-3 coefficient
+ingestion, off-axis conic, 5 missing examples, 57 audit-fix test
+consolidation, mypy CI activation, and ruff cosmetic-baseline
+cleanup -- those items move to the v5.2+ horizon.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -22,9 +23,9 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v5.0.0 baseline (2858 unit tests passing + 5
-  documented skips + 1 documented xfail = 2864 collected).
-  Python 3.10+ now required.
+- **Library:** v5.1.0 baseline (3628 unit tests passing + 5
+  documented skips + 1 documented xfail = 3634 collected).
+  Python 3.10+ required.
   v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
   v4.16.1 closes the v4.16.0 deep audit through P3: 4 silent-wrong-

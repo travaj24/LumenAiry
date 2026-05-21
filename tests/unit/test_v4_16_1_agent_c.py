@@ -438,22 +438,31 @@ def test_clear_local_asm_caches_mock_patch_observed():
 
 
 def _parse_prescriptions_warn_calls():
-    """Parse ``io/prescriptions.py`` AST and return every
-    ``warnings.warn(...)`` Call node along with its source line."""
-    py = _REPO_ROOT / 'lumenairy' / 'io' / 'prescriptions.py'
-    src = py.read_text(encoding='utf-8', errors='replace')
-    tree = ast.parse(src, filename=str(py))
+    """Parse the prescription-I/O module(s) AST and return every
+    ``warnings.warn(...)`` Call node along with its source line.
+
+    v5.1.0 Agent F: the 3224-LOC ``io/prescriptions.py`` monolith was
+    split into ``prescriptions_builders.py`` / ``prescriptions_zemax.py``
+    / ``prescriptions_code_v.py`` / ``prescriptions_quadoa.py`` /
+    ``prescriptions_transforms.py``.  Walk every ``prescriptions*.py``
+    file under ``lumenairy/io/`` so the C.7 pin keeps catching a
+    regression regardless of which submodule the warn calls end up in.
+    """
+    io_dir = _REPO_ROOT / 'lumenairy' / 'io'
     warn_calls = []
-    for sub in ast.walk(tree):
-        if not isinstance(sub, ast.Call):
-            continue
-        func = sub.func
-        # ``warnings.warn(...)`` -- Attribute chain (warnings.warn).
-        if (isinstance(func, ast.Attribute)
-                and func.attr == 'warn'
-                and isinstance(func.value, ast.Name)
-                and func.value.id == 'warnings'):
-            warn_calls.append(sub)
+    for py in sorted(io_dir.glob('prescriptions*.py')):
+        src = py.read_text(encoding='utf-8', errors='replace')
+        tree = ast.parse(src, filename=str(py))
+        for sub in ast.walk(tree):
+            if not isinstance(sub, ast.Call):
+                continue
+            func = sub.func
+            # ``warnings.warn(...)`` -- Attribute chain (warnings.warn).
+            if (isinstance(func, ast.Attribute)
+                    and func.attr == 'warn'
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == 'warnings'):
+                warn_calls.append(sub)
     return warn_calls
 
 
@@ -521,41 +530,48 @@ def test_prescriptions_warn_calls_have_explicit_category_and_stacklevel():
 
 
 def test_prescriptions_specific_warn_lines_pinned():
-    """The two specific warn calls cited in the audit (lines ~1019,
-    ~1470 -- the 'Glasses not in GLASS_REGISTRY' siblings) MUST
-    carry stacklevel=2 + UserWarning.
+    """The two specific warn calls cited in the audit (originally at
+    ~lines 1019, 1470 in the v4.16.1 monolith -- the 'Glasses not in
+    GLASS_REGISTRY' siblings) MUST carry stacklevel=2 + UserWarning.
+
+    v5.1.0 Agent F: after the 6-file split these two siblings live in
+    ``prescriptions_zemax.py`` (one inside ``load_zemax_zmx``, one
+    inside ``load_zemax_prescription_data_txt``).  The pin walks every
+    ``prescriptions*.py`` file under ``lumenairy/io/`` so the audit
+    closure is preserved across the split.
 
     Name-anchored regression pin: a future revert of the C.7 fix that
     only touches the parametrized version of this test would be
     caught by this name-anchored check.
     """
-    py = _REPO_ROOT / 'lumenairy' / 'io' / 'prescriptions.py'
-    src = py.read_text(encoding='utf-8', errors='replace')
-    tree = ast.parse(src, filename=str(py))
+    io_dir = _REPO_ROOT / 'lumenairy' / 'io'
     glasses_warn_calls = []
-    for sub in ast.walk(tree):
-        if not isinstance(sub, ast.Call):
-            continue
-        func = sub.func
-        if not (isinstance(func, ast.Attribute)
-                and func.attr == 'warn'
-                and isinstance(func.value, ast.Name)
-                and func.value.id == 'warnings'):
-            continue
-        # Inspect the message string for the 'Glasses not in GLASS_REGISTRY'
-        # marker; both audit-cited lines share this phrasing.
-        if not sub.args:
-            continue
-        first = sub.args[0]
-        # The first arg is a JoinedStr (f-string).  Check whether any
-        # literal segment contains the marker substring.
-        if isinstance(first, ast.JoinedStr):
-            literal_str = ''.join(
-                seg.value for seg in first.values
-                if isinstance(seg, ast.Constant) and isinstance(seg.value, str)
-            )
-            if 'Glasses not in GLASS_REGISTRY' in literal_str:
-                glasses_warn_calls.append(sub)
+    for py in sorted(io_dir.glob('prescriptions*.py')):
+        src = py.read_text(encoding='utf-8', errors='replace')
+        tree = ast.parse(src, filename=str(py))
+        for sub in ast.walk(tree):
+            if not isinstance(sub, ast.Call):
+                continue
+            func = sub.func
+            if not (isinstance(func, ast.Attribute)
+                    and func.attr == 'warn'
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id == 'warnings'):
+                continue
+            # Inspect the message string for the 'Glasses not in GLASS_REGISTRY'
+            # marker; both audit-cited lines share this phrasing.
+            if not sub.args:
+                continue
+            first = sub.args[0]
+            # The first arg is a JoinedStr (f-string).  Check whether any
+            # literal segment contains the marker substring.
+            if isinstance(first, ast.JoinedStr):
+                literal_str = ''.join(
+                    seg.value for seg in first.values
+                    if isinstance(seg, ast.Constant) and isinstance(seg.value, str)
+                )
+                if 'Glasses not in GLASS_REGISTRY' in literal_str:
+                    glasses_warn_calls.append(sub)
     assert len(glasses_warn_calls) >= 2, (
         f"Expected >= 2 ``Glasses not in GLASS_REGISTRY`` warn calls; "
         f"found {len(glasses_warn_calls)}.  The audit cited two such "

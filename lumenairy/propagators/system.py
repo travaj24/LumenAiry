@@ -58,7 +58,7 @@ def propagate_through_system(E_in: np.ndarray,
                              wavelength: float,
                              dx: float,
                              dy: Optional[float] = None,
-                             method: str = 'asm',
+                             method: Optional[str] = None,
                              use_gpu: bool = False,
                              verbose: bool = False,
                              progress: Optional[Callable] = None,
@@ -300,6 +300,26 @@ def propagate_through_system(E_in: np.ndarray,
                 (f"{idx:03d}_{elem_type}",
                  field.copy() if hasattr(field, 'copy') else np.array(field),
                  float(dx_now)))
+
+    # v5.1.0 (default-knob resolver rollout): resolve ``method`` /
+    # ``dy`` from the library-wide defaults when callers leave them
+    # at the ``None`` sentinel.  Explicit values bypass the resolver.
+    if method is None:
+        from .propagation import get_default_wave_propagator
+        method = get_default_wave_propagator()
+    # ``propagate_through_system`` only supports the wave-propagator
+    # subset {'asm', 'sas', 'fresnel'} for its free-space ``propagate``
+    # element step; the consumer set rejects 'rs' / 'rayleigh_sommerfeld'.
+    if method in ('rs', 'rayleigh_sommerfeld'):
+        raise ValueError(
+            f"propagate_through_system: resolved method={method!r} from "
+            f"set_default_wave_propagator is not supported here.  "
+            f"Supported choices in this entry point: 'asm', 'sas', "
+            f"'fresnel'.  Pass ``method=`` explicitly or reset the "
+            f"default via ``set_default_wave_propagator('asm')``.")
+    if dy is None:
+        from .propagation import get_default_dy
+        dy = get_default_dy()
 
     E = E_in.copy() if hasattr(E_in, 'copy') else np.array(E_in)
     intermediates = []

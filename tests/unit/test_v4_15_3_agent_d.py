@@ -211,23 +211,39 @@ def test_changelog_v4_15_2_sentinel_line_citations_refreshed():
     entry = _v4_15_2_entry(text)
     bullet = _sentinel_migration_bullet(entry)
 
-    # Read optimize/core.py and find the actual class definitions.
+    # v5.1.0 (Wave-4 integration / Agent E split): the sentinel
+    # classes moved from ``optimize/core.py`` to ``optimize/context.py``;
+    # ``core.py`` retains a string-literal marker block at lines
+    # ~368-369 (the v5.1.0 Agent E "source-grep marker block") so this
+    # AST/grep-style citation pin keeps finding the anchor strings.
+    # The CHANGELOG can cite EITHER the new ``context.py`` line numbers
+    # OR the original ``core.py`` line numbers -- both are valid.
     p = Path(__file__).resolve()
     while p.parent != p:
         opt_core = p.parent / 'lumenairy' / 'optimize' / 'core.py'
+        opt_context = p.parent / 'lumenairy' / 'optimize' / 'context.py'
         if opt_core.exists():
             break
         p = p.parent
     else:
         pytest.fail('Could not locate lumenairy/optimize/core.py')
-    src_lines = opt_core.read_text(encoding='utf-8').splitlines()
 
     actual_lines = {}
-    for i, line in enumerate(src_lines, start=1):
-        if line.lstrip().startswith('class _InvalidFocalLengthSentinel'):
-            actual_lines['_InvalidFocalLengthSentinel'] = i
-        elif line.lstrip().startswith('class _FailedScanStrehlSentinel'):
-            actual_lines['_FailedScanStrehlSentinel'] = i
+    # Prefer ``context.py`` (canonical post-split home); fall back to
+    # ``core.py`` marker block.
+    for _src_path in (opt_context, opt_core):
+        if not _src_path.exists():
+            continue
+        src_lines = _src_path.read_text(encoding='utf-8').splitlines()
+        for i, line in enumerate(src_lines, start=1):
+            if (line.lstrip().startswith('class _InvalidFocalLengthSentinel')
+                    and '_InvalidFocalLengthSentinel' not in actual_lines):
+                actual_lines['_InvalidFocalLengthSentinel'] = i
+            elif (line.lstrip().startswith('class _FailedScanStrehlSentinel')
+                    and '_FailedScanStrehlSentinel' not in actual_lines):
+                actual_lines['_FailedScanStrehlSentinel'] = i
+        if len(actual_lines) == 2:
+            break
 
     # v4.15.4 (AUDIT_V4_15_3 P2-NEW-F1-B option a): the third sentinel
     # class ``_PerturbedABCDFallbackSentinel`` was deleted in v4.15.4
@@ -241,9 +257,14 @@ def test_changelog_v4_15_2_sentinel_line_citations_refreshed():
         f'and _FailedScanStrehlSentinel; _PerturbedABCDFallbackSentinel '
         f'was deleted in v4.15.4); found {sorted(actual_lines)}.')
 
-    # Parse ALL ``optimize/core.py:NNNN`` and ``:NNNN-MMMM`` line
-    # citations from the bullet.
-    cite_pattern = re.compile(r'optimize/core\.py:(\d+)(?:-(\d+))?')
+    # Parse ALL ``optimize/{core,context,wrapper_merits,merit_terms}.py:NNNN``
+    # and ``:NNNN-MMMM`` line citations from the bullet.  v5.1.0
+    # (Wave-4 integration / Agent E split): sentinel classes now live
+    # in ``optimize/context.py``; CHANGELOG cites context.py per the
+    # split's line-citation refresh.
+    cite_pattern = re.compile(
+        r'optimize/(?:core|context|wrapper_merits|merit_terms)\.py:'
+        r'(\d+)(?:-(\d+))?')
     matches = list(cite_pattern.finditer(bullet))
     assert matches, (
         'v4.15.2 sentinel-migration CHANGELOG bullet contains no '

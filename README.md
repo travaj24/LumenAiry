@@ -10,6 +10,64 @@ manipulation using the Angular Spectrum Method (ASM) and related techniques.
 
 **Author:** Andrew Traverso
 
+## What's new in 5.1.0
+
+**Major structural release.**  v5.1 lands the two long-deferred items
+from the v5.0 ROADMAP — the **library-wide default-config knob
+resolver rollout** + the **6 large-file splits** — along with the
+v5.0.1 audit closure.  7 agents in parallel disjoint scopes (A:
+resolver rollout; B-G: 6 file splits) + a Wave-4 integration sweep
+that closed cross-agent test breakage.
+
+**Zero physics regressions in 8 consecutive releases.**
+
+**3628 unit pass / 5 skip / 1 xfail = 3634 collected** (was 2895 at
+v5.0.1; +733 net); **34/34 validation pass**.
+
+### Default-config knob resolver rollout
+
+`set_default_wave_propagator(...)`, `set_default_dy(...)`, and
+`set_default_real_dtype(...)` — shipped as API-only stubs in v4.16.2
+— now actually steer downstream behaviour at `apply_real_lens`,
+`apply_real_lens_traced`, `propagate_through_system`, and
+`propagate_ensemble`.  The v4.16.3 no-consumer UserWarning latches
+are **retired** in v5.1.  v4.16.3's sibling-gap pin is now an
+inverse pin asserting the resolvers ARE consumed.
+
+### 6 large-file splits (no public API change)
+
+Six monolithic >2200 LOC files split into ~35 topical submodules via
+re-export shells:
+
+| Original (pre LOC) | New submodules |
+|---|---|
+| `raytrace/core.py` (4443) | surface / intersection / trace / world_trace / seidel / ray_fan / layout |
+| `propagators/propagation.py` (4103) | fft_infra / asm / fresnel / rs / sas / mft |
+| `propagators/asymptotic.py` (4561) | asymptotic_{modes / canonical_fit / aberration_tensor / maslov / jax_twin} |
+| `optimize/core.py` (4538) | parameterizations / merit_terms / wrapper_merits / context / driver / jax_merits |
+| `io/prescriptions.py` (3224) | prescriptions_{builders / zemax / code_v / quadoa / transforms} |
+| `analysis/core.py` (4088) | beam_stats / strehl / psf_mtf_otf / polychromatic / zernike / opd |
+
+Each split ships per-submodule regression tests verifying public-API
+survival via both old and new import paths.
+
+### v5.0.1 audit closures (11 items)
+
+* **`publish.yml` release-process gate** (P1) — `verify` job runs
+  the unit suite on the tag's source before `build` + `publish`.
+  v5.0.0/v5.0.1 ship-before-CI-green pattern structurally retired.
+* Python 3.10 re-added to unit-tests CI matrix.
+* 3 shim-removal pins gained Migration-Guide content-lock assertions.
+* `test_examples_output_dir` source-inspection tightened.
+* Stale `@_skip_no_qt` doublings + comments cleaned up.
+
+### Test counts
+
+A=17, B=141, C=122, D=85, E=14, F=87, G=217. Sum: **683 new tests
+across the 7 agents**.  Plus Wave-4 integration fix-ups + v5.0.1
+audit pins.  Final **3628 pass / 5 skip / 1 xfail = 3634 collected**;
+34/34 validation.
+
 ## What's new in 5.0.1
 
 **Closes the v5.0.0 audit through P3.**  Zero P0; 3 P1 + 5 P2 + 8 P3

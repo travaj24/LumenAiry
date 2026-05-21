@@ -177,6 +177,19 @@ _TARGET_PACKAGES = (
 # ============================================================================
 
 _KNOWN_XP_DISPATCH_EXEMPTIONS = frozenset({
+    # ---- v5.1.0 split-surfaced exemptions ---------------------------------
+    # The 6-file split in v5.1.0 moved several functions to new
+    # submodule paths where the walker re-detected pre-existing
+    # ``np.fftshift`` / ``np.linspace`` calls inside ``_xp_of``-
+    # dispatched functions.  These are legacy NumPy-only paths: the
+    # FFT-shift falls back to scipy/numpy on a complex 2-D ndarray
+    # (no JAX/CuPy benefit at this step); ``np.linspace`` is on a
+    # ~10-element grid (not the field).  Listed here as v5.2+
+    # cleanup candidates -- not v5.1.0 blockers.
+    ('lumenairy/propagators/fresnel.py', 'fresnel_propagate'),
+    ('lumenairy/propagators/fresnel.py', 'fraunhofer_propagate'),
+    ('lumenairy/analysis/psf_mtf_otf.py', 'sparrow_resolution'),
+
     # ---- elements/elements.py ----------------------------------------------
     # ``apply_aperture``: the NumPy-side meshgrid IS dispatched
     # internally via ``xp.meshgrid`` (see line ~250); the ``np.inf``

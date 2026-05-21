@@ -206,7 +206,7 @@ def apply_real_lens(
     seidel_poly_order: int = 6,
     progress: Optional[Any] = None,
     use_gpu: bool = False,
-    wave_propagator: str = 'asm',
+    wave_propagator: Optional[str] = None,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -407,6 +407,21 @@ def apply_real_lens(
     # broadcast.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens')
+
+    # v5.1.0 (default-knob resolver rollout): when ``wave_propagator``
+    # is left at the default ``None``, resolve via the library-wide
+    # default set by ``set_default_wave_propagator(...)``.  Explicit
+    # values bypass the resolver.
+    if wave_propagator is None:
+        from ..propagators.propagation import get_default_wave_propagator
+        wave_propagator = get_default_wave_propagator()
+    # v5.1.0 (default-knob resolver rollout): same for ``dy``.
+    # ``None -> get_default_dy() -> dx`` chain.
+    if dy is None:
+        from ..propagators.propagation import get_default_dy
+        dy = get_default_dy()
+        if dy is None:
+            dy = dx
 
     _check_apply_real_lens_kwarg_combination(
         wave_propagator=wave_propagator,

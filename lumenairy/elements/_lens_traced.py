@@ -670,7 +670,16 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
     X, Y = np.meshgrid(x, x, indexing='xy')
     k0 = 2.0 * np.pi / wavelength
 
-    phase = np.zeros((N, N), dtype=np.float64)
+    # v5.1.0 (default-knob resolver rollout): real-dtype OPL allocator
+    # honours ``set_default_real_dtype(...)`` -- this is one of the
+    # documented consumer wirings.  Falls back to np.float64 if the
+    # propagators module is mid-load (defensive).
+    try:
+        from ..propagators.propagation import get_default_real_dtype
+        _real_dtype = get_default_real_dtype()
+    except ImportError:
+        _real_dtype = np.float64
+    phase = np.zeros((N, N), dtype=_real_dtype)
 
     # Accumulate per-surface sag phase: phi += -k0 * (n_after - n_before) * sag(x, y)
     # This matches the thin-element OPD used inside apply_real_lens's
@@ -1072,7 +1081,7 @@ def apply_real_lens_traced(
     newton_poly_order: int = 6,
     use_gpu: bool = False,
     amp_use_gpu: bool = False,
-    wave_propagator: str = 'asm',
+    wave_propagator: Optional[str] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -1289,6 +1298,18 @@ def apply_real_lens_traced(
     # v4.15.2 closure now share the same first-line guard.
     from .._validation import _check_2d_scalar_field
     _check_2d_scalar_field(E_in, 'apply_real_lens_traced')
+
+    # v5.1.0 (default-knob resolver rollout): resolve ``wave_propagator``
+    # / ``dy`` from the library-wide defaults when callers leave them
+    # at the ``None`` sentinel.  Explicit values bypass the resolver.
+    if wave_propagator is None:
+        from ..propagators.propagation import get_default_wave_propagator
+        wave_propagator = get_default_wave_propagator()
+    if dy is None:
+        from ..propagators.propagation import get_default_dy
+        dy = get_default_dy()
+        if dy is None:
+            dy = dx
 
     # 4.12.0 (B2-5): explicit mirror-in-surfaces guard.  The shared
     # ``_check_no_silent_fold_drop`` only looks at the prescription's

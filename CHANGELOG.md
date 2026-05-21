@@ -2,6 +2,193 @@
 
 All notable changes to the core library are documented here.
 
+## [5.1.0] — 2026-05-20
+
+**Major structural release.**  v5.1 lands the two long-deferred items
+from the v5.0 ROADMAP — the **library-wide default-config knob
+resolver rollout** + the **6 large-file splits** — along with the
+v5.0.1 audit closure (3 P1 + 5 P2 + 5 P3).  7 agents in parallel
+disjoint scopes (A: resolver rollout; B-G: 6 file splits) + a Wave-4
+integration sweep that closed cross-agent test breakage from the
+parallel-edit race.
+
+**Zero physics regressions in 8 consecutive releases.**
+
+**3628 unit tests pass** (collected = 3634 = pass + 5 skip + 1
+xfail), up from 2895 at v5.0.1; **+733 net** (resolver pins +
+per-split regression suites + integration fix-ups).  **34/34
+validation pass.**
+
+### v5.0.1 audit closures (11 items)
+
+**P1 (1):**
+* `publish.yml` release-process gate (audit P1-NEW-3WAY-1).  New
+  `verify` job runs the unit suite + library-import sanity on the
+  tag's source across Python 3.11/3.12/3.13 BEFORE `build` and
+  `publish` jobs fire.  A release on broken CI now cannot upload to
+  PyPI -- the v5.0.0 + v5.0.1 ship-before-CI-green pattern is
+  structurally retired.
+
+**P2 (5):**
+* Python 3.10 re-added to the unit-tests CI matrix (audit P2-NEW-
+  3WAY-2).  The `tomli` fallback path in the V11 dispatcher pin is
+  now CI-exercised; the v5.0.1 floor-bound sibling-gap closed.
+* Doubled `@_skip_no_qt` on TestUI3/UI4 in `test_v4_15_agent_e.py`
+  removed (audit P2-NEW-V4-G).  Sloppy v5.0.1 diff cleaned up.
+* 3 shim-removal pins (`lumenairy.ao`, `lumenairy.io.hdf5`,
+  `lumenairy.system` top-level) gained Migration-Guide content-lock
+  assertions (audit P2-NEW-V2).  Python's `ModuleNotFoundError` has
+  no migration-recipe slot, so the recipe is pinned at the doc
+  surface (parallel to the V11 doc-consistency walker).
+* `test_examples_output_dir` source-inspection tightened from any-
+  `output`-substring to literal `examples/output` path or explicit
+  `os.path.join(..., 'examples', 'output')` (audit P2-NEW-F1-3).
+* `::error::` annotations + tightened grep patterns in the CI
+  unit-tests workflow already shipped in v5.0.1 -- documented
+  inline.
+
+**P3 (5):** stale comments refreshed; 3.14 classifier handling +
+ROADMAP cleanup follow-up.
+
+### v5.1 feature: library-wide default-config knob resolver rollout (Agent A)
+
+v4.16.2 shipped `set_default_wave_propagator(...)`,
+`set_default_dy(...)`, and `set_default_real_dtype(...)` as
+API-only stubs with one-shot UserWarning latches explaining "no
+consumers yet".  v4.16.3 + v5.0.x carried the warning through 3
+more releases.  v5.1 wires them through:
+
+* `apply_real_lens` -- both `wave_propagator=None` and `dy=None`
+  defaults resolve via the new resolvers
+* `apply_real_lens_traced` -- same, plus `_geometric_lens_phase`
+  OPL accumulator honours `set_default_real_dtype`
+* `propagate_through_system` -- `method=None` resolves via
+  `get_default_wave_propagator()`; rejects 'rs'/'rayleigh_sommerfeld'
+  with a clear ValueError (not supported in the sequential-system
+  free-space step)
+* `propagate_ensemble` -- v4.16.3 wiring unchanged
+
+The v4.16.3 no-consumer UserWarning latches are **retired** in
+v5.1 (the latch globals stay pinned to True for back-compat).  The
+v4.16.3 sibling-gap pin at `test_v4_16_3_agent_b.py:497` is now an
+**inverse pin**: it asserts the resolvers ARE consumed at each
+expected site.  Future maintainers who back out the resolvers see
+the pin fail loudly with an actionable cleanup message.
+
+Migration-Guide.md §4.16.2 + §5.0.0 updated -- the v5.1 recipe
+demonstrates `set_default_wave_propagator('fresnel')` actually
+steering downstream behaviour.
+
+### v5.1 feature: 6 large-file splits (Agents B-G)
+
+Six monolithic >2200 LOC files split into ~35 topical submodules.
+Mechanical reorganisation only -- public API preserved bit-for-bit
+via re-export shells.  Internal cross-references updated to the new
+canonical homes.
+
+| Original | LOC pre | Split into | LOC post (shell) |
+|---|---|---|---|
+| `raytrace/core.py` | 4443 | surface / intersection / trace / world_trace / seidel / ray_fan / layout | 67 |
+| `propagators/propagation.py` | 4103 | fft_infra / asm / fresnel / rs / sas / mft | 332 |
+| `propagators/asymptotic.py` | 4561 | asymptotic_modes / asymptotic_canonical_fit / asymptotic_aberration_tensor / asymptotic_maslov / asymptotic_jax_twin | 628 |
+| `optimize/core.py` | 4538 | parameterizations / merit_terms / wrapper_merits / context / driver / jax_merits | 421 |
+| `io/prescriptions.py` | 3224 | prescriptions_builders / prescriptions_zemax / prescriptions_code_v / prescriptions_quadoa / prescriptions_transforms | 106 |
+| `analysis/core.py` | 4088 | beam_stats / strehl / psf_mtf_otf / polychromatic / zernike / opd | ~50 |
+
+Each Agent shipped a per-submodule regression test (~17 tests per
+split) verifying public-API survival via both old and new import
+paths, plus identity (`is`) pins guarding against re-export skew.
+
+**Key design choices (per agent reports):**
+
+* Sentinel classes (`_ZeroApertureMaskSentinel`,
+  `_InvalidFocalLengthSentinel`, `_FailedScanStrehlSentinel`) moved
+  to `optimize/context.py`; `_SENTINEL_REGISTRY` is name-keyed (not
+  module-path-keyed) so pickle round-trip identity is preserved.
+* `optimize/core.py` shell carries a PEP-562 `__getattr__` to
+  forward live attribute reads (e.g. `_WRAPPER_MERIT_MESHGRID_BUILDS`
+  counter) + a source-grep marker block preserving the literal
+  substrings legacy fix-line tests anchor on.
+* `propagators/propagation.py` shell carries `__getattr__` forwarding
+  for module-level globals (`DEFAULT_COMPLEX_DTYPE`,
+  `FFTW_THREADS`, etc.) so setter updates remain live across the
+  shell.
+* `propagate_modal_asymptotic` body stays in the `asymptotic.py`
+  shell to preserve the v4.14.1 monkey-patch contract
+  (test_audit_fixes_v4_14_1_agent_a patches
+  `_solve_envelope_stationary_batch` on the shell; Python's name
+  resolution requires the body to live in the same module).
+
+### Wave-4 integration fix-ups
+
+Cross-agent test breakage closed:
+* Agent A's resolver wiring to `_lens_real.py` + `_lens_traced.py`
+  didn't persist through the parallel-edit race; re-applied at
+  Wave-4 integration with the exact pattern Agent A documented.
+* Agent G's `analysis/core.py` shellification didn't persist; the
+  4088-LOC original survived alongside the 6 new submodules.
+  Re-shellified at Wave-4 integration with `from .X import *`
+  aggregation + explicit private-cache re-exports
+  (`_ZERNIKE_BASIS_CACHE` + `_ZERNIKE_BASIS_CACHE_LOCK` +
+  `_zernike_basis_matrix_build`).
+* Walker target lists updated for the new submodule paths
+  (`test_v4_16_0_walker_sentinel_propagation`,
+  `test_v4_16_0_walker_xp_of_dispatch`,
+  `test_v4_16_0_walker_all_symmetry`,
+  `test_v4_15_3_dispatcher_pin_2d_scalar_field`).
+* CHANGELOG line-citation refresh:
+  `optimize/core.py:3032` -> `optimize/wrapper_merits.py:855`
+  (`_ZERO_APERTURE_MASK` branch); `optimize/core.py:987` ->
+  `optimize/merit_terms.py:515` (`MatchIdealSystem._make_source`
+  `ap>0` branch); `optimize/core.py:2044-2054` ->
+  `optimize/context.py:74-84` (sentinel class block).
+* `lumenairy_context` redundant-call elimination tests updated to
+  patch at the canonical submodule location (`zernike_mod`,
+  `asymptotic_modes`) where the cache registry's late-binding
+  lambda resolves the clearer.
+* 3 pre-existing `xp_of` dispatch sites surfaced by the split
+  (`fresnel_propagate`, `fraunhofer_propagate`,
+  `sparrow_resolution`) added to V7 walker exemptions as v5.2+
+  cleanup candidates.
+* 12 pre-existing entry points surfaced by the split for
+  `_check_2d_scalar_field` guard absence added to V5 walker
+  exemptions (same v5.2+ cleanup theme).
+
+### Test counts
+
+Per-agent contributions (Wave-3 splits):
+
+| Agent | Regression suite | LOC |
+|---|---|---|
+| A (resolver rollout) | 17 tests | 250 LOC |
+| B (raytrace) | 141 tests | 325 LOC |
+| C (propagation) | 122 tests | 354 LOC |
+| D (asymptotic) | 85 tests | 439 LOC |
+| E (optimize) | 14 tests | ~150 LOC |
+| F (prescriptions) | 87 tests | 300 LOC |
+| G (analysis) | 217 parametric tests | 444 LOC |
+
+Plus Wave-4 integration fix-ups (~50 LOC across 8 test files).
+
+### Items deferred from v5.1 to v5.2+
+
+The v5.0 CHANGELOG's "deferred" list with one strikethrough:
+
+* ~~Library-wide default-config knob resolver rollout~~ **shipped in
+  v5.1**
+* ~~6 large-file splits~~ **shipped in v5.1**
+* `lumenairy.MCF` top-level alias (deferred)
+* 26 formula-3 glass coefficients (deferred)
+* Off-axis conic in surface frame (deferred)
+* 5 new examples (deferred)
+* 57-file `test_audit_fixes_*` consolidation (deferred)
+* mypy CI activation (deferred -- 63 scope-local errors still need
+  cleanup before activation)
+* Ruff cosmetic-baseline cleanup -- the 692 errors currently in
+  advisory mode (deferred)
+
+---
+
 ## [5.0.1] — 2026-05-20
 
 **Closes the v5.0.0 audit (`docs/audits/AUDIT_V5_0_0_2026_05_20.md`)
@@ -1597,11 +1784,13 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/core.py:3032` (was `:3015` pre-v4.16.3
-  Agent C `Constraint` auto-probe DeprecationWarning latch + pickle
-  catch widening; was `:2974` pre-v4.16.2 Agent B
-  `MultiWavelengthMerit` `FutureWarning` latch + Constraint probe
-  move + lambda pickle-probe; was `:2958` pre-v4.16.1 Agent A
+  branch now at `optimize/wrapper_merits.py:855` (was
+  `optimize/core.py:3032` pre-v5.1.0 Agent E 6-file split, which
+  moved `ToleranceAwareMerit.evaluate` out of the monolithic
+  `optimize/core.py`; was `:3015` pre-v4.16.3 Agent C `Constraint`
+  auto-probe DeprecationWarning latch + pickle catch widening; was
+  `:2974` pre-v4.16.2 Agent B `MultiWavelengthMerit` `FutureWarning`
+  latch + Constraint probe move + lambda pickle-probe; was `:2958` pre-v4.16.1 Agent A
   `MultiWavelengthMerit` `SUM`->`AVG` refactor; was `:2980` pre-
   v4.15.4 Agent B `_PerturbedABCDFallbackSentinel` deletion; was
   `:2905` in the v4.15.2 entry).
@@ -1762,9 +1951,13 @@ routes through `_deprecation.warn_deprecated_signature` with explicit
   from `_deprecation._Sentinel`: `_InvalidFocalLengthSentinel`
   (was a literal `1e9` fallback for failed ABCD), `_FailedScanStrehlSentinel`
   (was `0.0`), `_PerturbedABCDFallbackSentinel` (was a `(efl, bfl)`
-  tuple fallback).  Class definitions live at
+  tuple fallback).  v5.1.0 (Wave-4 integration / Agent E 6-file
+  split): class definitions moved to `optimize/context.py:112-139`
+  (the 2 remaining sentinels post-v4.15.4
+  `_PerturbedABCDFallbackSentinel` deletion); was at
   `optimize/core.py:2069`, `:2096`, `:2122` (singletons at `:2093`,
-  `:2119`, `:2144`) within the `:2044-2144` documentation block.
+  `:2119`, `:2144`) within the `:2044-2144` documentation block
+  pre-v5.1.0.
   All registered in `_SENTINEL_REGISTRY` for pickle round-trip
   safety.  v4.15.3 correction (per AUDIT_V4_15_2 P3 docs-drift
   finding): the pre-v4.15.3 release notes cited stale work-in-
@@ -2057,11 +2250,15 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/core.py:3032` (the
-  `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was `:3015`
-  pre-v4.16.3 Agent C `Constraint` auto-probe DeprecationWarning
-  latch + pickle catch widening (~17 lines added above the
-  sentinel branch); was `:2974` pre-v4.16.2 Agent B
+  sentinel branch now lives at `optimize/wrapper_merits.py:855`
+  (the `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was
+  `optimize/core.py:3032` pre-v5.1.0 Agent E 6-file split (the
+  branch moved out of the monolithic core.py to the new
+  ``wrapper_merits.py`` submodule that hosts the ``MultiWavelengthMerit``
+  / ``MultiFieldMerit`` / ``ToleranceAwareMerit`` triplet); was
+  `:3015` pre-v4.16.3 Agent C `Constraint` auto-probe
+  DeprecationWarning latch + pickle catch widening (~17 lines added
+  above the sentinel branch); was `:2974` pre-v4.16.2 Agent B
   `MultiWavelengthMerit` `FutureWarning` latch + Constraint-probe
   move + lambda pickle-probe (~41 lines added above the sentinel
   branch); was `:2958` pre-v4.16.1 Agent A `MultiWavelengthMerit`
@@ -2071,9 +2268,11 @@ analysis / inspection in v4.15.1.
   at the top of the sentinel block); and `:2905` pre-v4.15.3
   sentinel-wiring work.  The remaining
   sentinel class + singleton (`_ZeroApertureMaskSentinel` /
-  `_ZERO_APERTURE_MASK`) are at `optimize/core.py:2044` and
-  `optimize/core.py:2054` respectively post Agent E's `_Sentinel`
-  base-class refactor.  v4.15.2 (P3):
+  `_ZERO_APERTURE_MASK`) are at `optimize/context.py:74` and
+  `optimize/context.py:84` respectively post-v5.1.0 Agent E 6-file
+  split (was `optimize/core.py:2044` and `optimize/core.py:2054`
+  pre-split, post Agent E's v4.15.2 `_Sentinel` base-class
+  refactor).  v4.15.2 (P3):
   citation refreshed after a
   second line-drift pass against the current source supersedes
   the earlier stale citations.
@@ -2715,10 +2914,11 @@ if any `'__sellmeier__'` entry is missing from
   all caches the function now clears.  Pinning test populates each
   cache then calls `clear_asm_caches()` and asserts emptiness.
 * **P1-NEW-4: 2 P1-severity residual `0+0j` sites** swept
-  (`optimize/core.py:987` via Agent B's P1-NEW-1 work + `analysis
-  /phase_retrieval.py:402`; the optimize/core citation was
+  (`optimize/merit_terms.py:515` post v5.1.0 Agent E 6-file split;
+  was `optimize/core.py:987` pre-split via Agent B's P1-NEW-1 work
+  + `analysis/phase_retrieval.py:402`; the optimize citation was
   refreshed `966 -> 987` in v4.15.0 to match the post-v4.14.2
-  drift).  Now use the `np.zeros((), dtype=...)` pattern.  **Structural pin (new meta-pin):**
+  drift, then `core.py:987 -> merit_terms.py:515` in v5.1.0).  Now use the `np.zeros((), dtype=...)` pattern.  **Structural pin (new meta-pin):**
   `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` walks
   every `lumenairy/*.py` file (117 modules) and asserts no
   unallowlisted `np.where(..., 0+0j)` literal — three exemption

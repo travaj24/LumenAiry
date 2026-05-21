@@ -64,12 +64,18 @@ def reset_dy_latch():
 
 
 class TestSetDefaultWavePropagatorNoConsumerWarning:
-    # audit closure: P2-NEW-F1-4
-    def test_first_call_emits_userwarning(
+    """v5.1.0 (Wave-4 integration): inverse pin -- the v4.16.3 +
+    v5.0.1 no-consumer UserWarning was RETIRED in v5.1.0 because
+    the consumers landed (Agent A resolver rollout).  The setter
+    now stores silently; the test asserts NO UserWarning fires."""
+
+    # audit closure: v5.1.0 default-knob resolver rollout
+    def test_first_call_emits_no_userwarning(
             self, reset_wave_propagator_latch):
-        """The first call to ``set_default_wave_propagator`` after a
-        fresh-process state must emit exactly one ``UserWarning``
-        explaining the knob is API-only at v4.16.2/v4.16.3."""
+        """Post-v5.1.0: the setter no longer emits the v4.16.3
+        'API-only; no consumers' UserWarning -- consumers are wired
+        at ``apply_real_lens`` / ``apply_real_lens_traced`` /
+        ``propagate_through_system`` and the warning would be a lie."""
         from lumenairy.propagators.propagation import (
             set_default_wave_propagator,
             get_default_wave_propagator,
@@ -79,19 +85,14 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
             with warnings.catch_warnings(record=True) as ws:
                 warnings.simplefilter("always")
                 set_default_wave_propagator('fresnel')
-            uw = [w for w in ws if issubclass(w.category, UserWarning)]
-            assert len(uw) == 1, (
-                f"Expected exactly one UserWarning on first call; got "
-                f"{len(uw)}: {[str(w.message) for w in uw]}")
-            msg = str(uw[0].message)
-            assert 'set_default_wave_propagator' in msg
-            assert 'API-only' in msg or 'no library consumer' in msg
-            assert 'v5.1' in msg, (
-                f"Warning must cite v5.1 (the actual deferral target "
-                f"post-v5.0).  v5.0.1 audit P1-NEW-F1-2 closure: the "
-                f"v4.16.3 warning text said 'v5.0' but the v5.0 release "
-                f"explicitly deferred the rollout to v5.1+.  Got msg: "
-                f"{msg!r}")
+            uw = [w for w in ws if issubclass(w.category, UserWarning)
+                  and 'no library consumer' in str(w.message)]
+            assert uw == [], (
+                f"v5.1.0: set_default_wave_propagator must NOT emit "
+                f"the v4.16.3 'no consumers' UserWarning -- consumers "
+                f"are now wired at apply_real_lens / "
+                f"apply_real_lens_traced / propagate_through_system.  "
+                f"Got: {[str(w.message) for w in uw]}")
         finally:
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", UserWarning)
@@ -164,8 +165,11 @@ class TestSetDefaultWavePropagatorNoConsumerWarning:
 
 
 class TestSetDefaultDyNoConsumerWarning:
-    # audit closure: P2-NEW-F1-4
-    def test_first_call_emits_userwarning(self, reset_dy_latch):
+    """v5.1.0 (Wave-4 integration): inverse pin -- same retirement
+    as TestSetDefaultWavePropagatorNoConsumerWarning above."""
+
+    # audit closure: v5.1.0 default-knob resolver rollout
+    def test_first_call_emits_no_userwarning(self, reset_dy_latch):
         from lumenairy.propagators.propagation import (
             set_default_dy,
             get_default_dy,
@@ -175,7 +179,14 @@ class TestSetDefaultDyNoConsumerWarning:
             with warnings.catch_warnings(record=True) as ws:
                 warnings.simplefilter("always")
                 set_default_dy(5e-6)
-            uw = [w for w in ws if issubclass(w.category, UserWarning)]
+            uw = [w for w in ws if issubclass(w.category, UserWarning)
+                  and 'no library consumer' in str(w.message)]
+            assert uw == [], (
+                f"v5.1.0: set_default_dy must NOT emit the v4.16.3 "
+                f"'no consumers' UserWarning.  Consumers wired at "
+                f"apply_real_lens / apply_real_lens_traced.  Got: "
+                f"{[str(w.message) for w in uw]}")
+            return  # short-circuit -- old expectations below are dead
             assert len(uw) == 1
             msg = str(uw[0].message)
             assert 'set_default_dy' in msg
@@ -191,19 +202,20 @@ class TestSetDefaultDyNoConsumerWarning:
                 warnings.simplefilter("ignore", UserWarning)
                 set_default_dy(original)
 
-    # audit closure: P2-NEW-F1-4
-    def test_first_call_with_none_also_emits(self, reset_dy_latch):
-        """The ``None`` (early-return) branch must also emit -- both
-        ``set_default_dy(None)`` and ``set_default_dy(<float>)`` set
-        the default and so both should surface the no-consumer notice."""
+    # audit closure: v5.1.0 default-knob resolver rollout (was P2-NEW-F1-4 in v4.16.3)
+    def test_first_call_with_none_also_emits_no_userwarning(self, reset_dy_latch):
+        """v5.1.0: inverse pin -- ``set_default_dy(None)`` no longer
+        emits the no-consumer notice because consumers are now wired."""
         from lumenairy.propagators.propagation import set_default_dy
         with warnings.catch_warnings(record=True) as ws:
             warnings.simplefilter("always")
             set_default_dy(None)
-        uw = [w for w in ws if issubclass(w.category, UserWarning)]
-        assert len(uw) == 1, (
-            f"set_default_dy(None) must emit the no-consumer notice "
-            f"too; got {len(uw)} warnings")
+        uw = [w for w in ws if issubclass(w.category, UserWarning)
+              and 'no library consumer' in str(w.message)]
+        assert uw == [], (
+            f"v5.1.0: set_default_dy(None) must NOT emit the v4.16.3 "
+            f"'no consumers' UserWarning.  Got: "
+            f"{[str(w.message) for w in uw]}")
 
     # audit closure: P2-NEW-F1-4
     def test_second_call_emits_no_warning(self, reset_dy_latch):
@@ -505,67 +517,71 @@ class TestSiblingGapDefaultConfigKnobs:
         src = inspect.getsource(_ens)
         assert 'get_default_real_dtype' in src
 
-    # audit closure: P2-NEW-F1-4 (sibling-gap sweep)
-    def test_wave_propagator_and_dy_have_zero_consumers_lib_wide(self):
-        """Pin the v4.16.3 honest state: across the lumenairy package,
-        no source file (other than the propagation.py module that
-        DEFINES the knob) reads ``DEFAULT_WAVE_PROPAGATOR`` /
-        ``get_default_wave_propagator`` / ``DEFAULT_DY`` /
-        ``get_default_dy``.  When a v5.0 PR adds the first consumer
-        this assertion FAILS, prompting the maintainer to also remove
-        the no-consumer UserWarning + Migration-Guide limitation
-        note.
+    # audit closure: v5.1.0 default-knob resolver rollout (was P2-NEW-F1-4)
+    def test_wave_propagator_and_dy_have_consumers_at_expected_sites(self):
+        """v5.1.0 (Wave-4 integration): INVERSE pin -- the v4.16.3
+        sibling-gap pin previously asserted ZERO consumers; v5.1.0
+        rolled out the resolvers, so the inverse must now hold:
+        ``apply_real_lens``, ``apply_real_lens_traced``, and
+        ``propagate_through_system`` each call
+        ``get_default_wave_propagator()`` (and the dy variants).
 
-        The pin is intentionally tight: if a future PR adds a
-        consumer, this test fails LOUDLY rather than leaving a stale
-        warning in place.
+        Future maintainers who back out the resolvers see this pin
+        fail loudly with an actionable message: re-wire the consumers
+        or re-add the v4.16.3 no-consumer UserWarning + Migration-
+        Guide limitation note.
         """
         import os
         import lumenairy as la
         pkg_root = os.path.dirname(la.__file__)
-        SYMBOLS = (
-            'DEFAULT_WAVE_PROPAGATOR',
-            'get_default_wave_propagator',
-            'DEFAULT_DY',
-            'get_default_dy',
-        )
-        # propagation.py is the definition site; lumenairy/__init__.py
-        # is the re-export site (top-level API surface).  Neither
-        # counts as a "consumer" -- a real consumer is library code
+        EXPECTED_CONSUMERS = {
+            'get_default_wave_propagator': {
+                'elements/_lens_real.py',
+                'elements/_lens_traced.py',
+                'propagators/system.py',
+            },
+            'get_default_dy': {
+                'elements/_lens_real.py',
+                'elements/_lens_traced.py',
+                'propagators/system.py',
+            },
+        }
+        # propagation.py / fft_infra.py are the definition sites;
+        # lumenairy/__init__.py is the re-export site.  None of those
+        # count as a "consumer" -- a real consumer is library code
         # that READS the value to drive a behavioural decision.
-        EXEMPT = {
+        DEFINITION_SITES = {
             os.path.normpath(os.path.join(
                 pkg_root, 'propagators', 'propagation.py')),
+            os.path.normpath(os.path.join(
+                pkg_root, 'propagators', 'fft_infra.py')),
             os.path.normpath(os.path.join(pkg_root, '__init__.py')),
         }
-        consumers = {}
+        found = {sym: set() for sym in EXPECTED_CONSUMERS}
         for dirpath, _dirs, files in os.walk(pkg_root):
             for fn in files:
                 if not fn.endswith('.py'):
                     continue
                 p = os.path.normpath(os.path.join(dirpath, fn))
-                if p in EXEMPT:
+                if p in DEFINITION_SITES:
                     continue
                 try:
                     with open(p, 'r', encoding='utf-8') as fh:
                         body = fh.read()
                 except (OSError, UnicodeDecodeError):
                     continue
-                for sym in SYMBOLS:
+                rel = os.path.relpath(p, pkg_root).replace(os.sep, '/')
+                for sym in EXPECTED_CONSUMERS:
                     if sym in body:
-                        consumers.setdefault(sym, []).append(p)
-        # The current honest state: zero consumers outside the
-        # definition site.  When this fires, also remove the
-        # corresponding UserWarning in propagation.py.
-        assert not consumers, (
-            "v4.16.3 (audit P2-NEW-F1-4 sibling-gap sweep): expected "
-            "zero consumers of DEFAULT_WAVE_PROPAGATOR / DEFAULT_DY "
-            "outside propagation.py at v4.16.3 ship.  Found "
-            f"consumers: {consumers}.  When you add the first real "
-            "consumer, also (a) remove the no-consumer UserWarning "
-            "in set_default_wave_propagator / set_default_dy, and "
-            "(b) update the Migration-Guide.md §4.16.2 limitation "
-            "note + the §v5.0 recipe.")
+                        found[sym].add(rel)
+        for sym, expected in EXPECTED_CONSUMERS.items():
+            missing = expected - found[sym]
+            assert not missing, (
+                f"v5.1.0 resolver rollout: ``{sym}`` must be consumed "
+                f"at every expected site {sorted(expected)} but "
+                f"missing from: {sorted(missing)}.  Re-wire the "
+                f"resolver at those sites or update this pin's "
+                f"expected-consumers set.")
 
 
 if __name__ == '__main__':

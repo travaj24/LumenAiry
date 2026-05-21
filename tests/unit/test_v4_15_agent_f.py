@@ -115,11 +115,18 @@ class TestF1LumenairyContextRedundantCallEliminated:
         single call to ``clear_asm_caches`` should fire each
         sibling exactly once via the chain.
         """
-        from lumenairy.analysis import core as analysis_core
-        from lumenairy.propagators import asymptotic as asym_mod
+        # v5.1.0 (Wave-4 integration / Agent G split): the
+        # ``clear_zernike_basis_cache`` function moved from
+        # ``analysis/core.py`` to ``analysis/zernike.py``.  The cache
+        # registry's late-binding lambda resolves the clearer at the
+        # canonical submodule location; mock.patch.object on the old
+        # ``analysis.core`` re-export no longer intercepts.  Patch at
+        # the canonical submodule location to match registry resolution.
+        from lumenairy.analysis import zernike as zernike_mod
+        from lumenairy.propagators import asymptotic_modes as asym_mod  # v5.1.0 split: clear_lg_polynomial_cache moved here
         counter_z = {'n': 0}
         counter_lg = {'n': 0}
-        real_z = analysis_core.clear_zernike_basis_cache
+        real_z = zernike_mod.clear_zernike_basis_cache
         real_lg = asym_mod.clear_lg_polynomial_cache
 
         def counting_z():
@@ -130,7 +137,7 @@ class TestF1LumenairyContextRedundantCallEliminated:
             counter_lg['n'] += 1
             real_lg()
 
-        with mock.patch.object(analysis_core, 'clear_zernike_basis_cache',
+        with mock.patch.object(zernike_mod, 'clear_zernike_basis_cache',
                                new=counting_z), \
              mock.patch.object(asym_mod, 'clear_lg_polynomial_cache',
                                new=counting_lg):
@@ -183,12 +190,16 @@ class TestF1LumenairyContextRedundantCallEliminated:
         directly from ``_context.py``'s fan-out block (which
         would double-count to 2 each).
         """
-        from lumenairy.analysis import core as analysis_core
-        from lumenairy.propagators import asymptotic as asym_mod
+        # v5.1.0 (Wave-4 integration / Agent G split): same as the
+        # sibling test above -- patch at the canonical submodule
+        # location so the cache registry's late-binding lambda
+        # picks up the mock.
+        from lumenairy.analysis import zernike as zernike_mod
+        from lumenairy.propagators import asymptotic_modes as asym_mod  # v5.1.0 split: clear_lg_polynomial_cache moved here
         from lumenairy.analysis import phase_retrieval as pr_mod
         # Counters for 3 representative sibling clearers.
         counts = {'z': 0, 'lg': 0, 'pr': 0}
-        real_z = analysis_core.clear_zernike_basis_cache
+        real_z = zernike_mod.clear_zernike_basis_cache
         real_lg = asym_mod.clear_lg_polynomial_cache
         real_pr = pr_mod.clear_phase_retrieval_caches
 
@@ -204,7 +215,7 @@ class TestF1LumenairyContextRedundantCallEliminated:
             counts['pr'] += 1
             real_pr()
 
-        with mock.patch.object(analysis_core, 'clear_zernike_basis_cache',
+        with mock.patch.object(zernike_mod, 'clear_zernike_basis_cache',
                                new=cz), \
              mock.patch.object(asym_mod, 'clear_lg_polynomial_cache',
                                new=clg), \
@@ -516,25 +527,33 @@ class TestF5ChangelogLineCitations:
         line).
         """
         text = _CHANGELOG_PATH.read_text(encoding='utf-8')
+        # v5.1.0 (Wave-4 integration / Agent E split):
+        # ``ToleranceAwareMerit.evaluate`` moved out of the monolithic
+        # ``optimize/core.py`` into ``optimize/wrapper_merits.py``.
+        # ``MatchIdealSystem._make_source`` stayed in ``merit_terms.py``
+        # (the wrapper-merits split's sibling submodule).  Walk both
+        # plus the back-compat shell ``core.py`` so the pin keeps
+        # finding the anchor strings regardless of which submodule
+        # hosts them post-split.
         from lumenairy.optimize import core as opt_core
-        opt_src = inspect.getsource(opt_core)
-        lines = opt_src.splitlines()
-        # Find the actual SITE OF THE BRANCH (not its docstring
-        # commentary).  The branch itself is an ``if _cache['mask']
-        # is _ZERO_APERTURE_MASK:`` statement -- the leading
-        # ``if _cache`` is the unique anchor (the docstring at
-        # 2020 has no ``if _cache``).
+        from lumenairy.optimize import wrapper_merits as opt_wm
+        from lumenairy.optimize import merit_terms as opt_mt
         actual_tolerance_line = None
         actual_match_ideal_line = None
-        for i, line in enumerate(lines, start=1):
-            stripped = line.lstrip()
-            if (actual_tolerance_line is None
-                    and stripped.startswith('if _cache[')
-                    and '_ZERO_APERTURE_MASK' in line):
-                actual_tolerance_line = i
-            if (actual_match_ideal_line is None
-                    and 'np.isfinite(ap) and ap > 0' in line):
-                actual_match_ideal_line = i
+        for _mod in (opt_wm, opt_mt, opt_core):
+            opt_src = inspect.getsource(_mod)
+            for i, line in enumerate(opt_src.splitlines(), start=1):
+                stripped = line.lstrip()
+                if (actual_tolerance_line is None
+                        and stripped.startswith('if _cache[')
+                        and '_ZERO_APERTURE_MASK' in line):
+                    actual_tolerance_line = i
+                if (actual_match_ideal_line is None
+                        and 'np.isfinite(ap) and ap > 0' in line):
+                    actual_match_ideal_line = i
+            if (actual_tolerance_line is not None
+                    and actual_match_ideal_line is not None):
+                break
         # We don't pin to an exact line; verify a citation within
         # +/- 5 of either canonical location exists in CHANGELOG.
         for actual_line, fixture_label in (

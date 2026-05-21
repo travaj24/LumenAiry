@@ -531,17 +531,19 @@ def test_counter_pin_fake_registered_cache_does_not_trip(monkeypatch):
     """Sibling positive-signal counter-pin: a synthetic cache record
     in a file that DOES call ``register_cache_clearer`` must NOT trip.
 
-    Uses ``lumenairy/propagators/propagation.py`` (which contains the
-    canonical late-binding ``register_cache_clearer('asm_local', ...)``
-    call) as the registered-host file.
+    v5.1.0 (Agent C split): the canonical late-binding
+    ``register_cache_clearer('asm_local', ...)`` call moved from
+    ``propagators/propagation.py`` (now a thin re-export shell) to
+    ``propagators/fft_infra.py``.  Use ``fft_infra.py`` as the
+    registered-host file.
     """
-    fake_rel = 'lumenairy/propagators/propagation.py'
+    fake_rel = 'lumenairy/propagators/fft_infra.py'
     fake_name = '_FAKE_REGISTERED_CACHE_FOR_POSITIVE_COUNTERPIN'
     # Sanity: target has a registration call.
     tree = _file_to_ast(_REPO_ROOT / fake_rel)
     assert _module_has_register_cache_clearer_call(tree), (
         "Counter-pin setup error: positive-signal target file "
-        "(lumenairy/propagators/propagation.py) lacks the expected "
+        "(lumenairy/propagators/fft_infra.py) lacks the expected "
         "``register_cache_clearer`` call."
     )
     fake_record = (fake_rel, fake_name, 1, 'cache_dict')
@@ -615,7 +617,7 @@ def test_discovered_cache_inventory_for_diagnostics():
 # ============================================================================
 
 def test_propagation_asm_local_uses_late_binding_lambda():
-    """``propagators/propagation.py`` MUST register ``_clear_local_asm_caches``
+    """``propagators/fft_infra.py`` MUST register ``_clear_local_asm_caches``
     via a late-binding lambda (the canonical v4.16.0 pattern used by
     the other 8 cache-owning modules).
 
@@ -624,42 +626,59 @@ def test_propagation_asm_local_uses_late_binding_lambda():
     a tester-visible inconsistency vs the other 8 caches.  v4.16.1 /
     Agent C closes the gap per AUDIT_V4_16_0_DEEP P1-NEW-F1-2.
 
-    The test parses the propagation.py AST and locates the
+    v5.1.0 split (Agent C): the ``_clear_local_asm_caches`` function and
+    its registration moved from ``propagators/propagation.py`` (now a
+    thin re-export shell) to ``propagators/fft_infra.py``.  The test
+    walks both candidate files so the contract continues to be pinned
+    after the split.
+
+    The test parses the AST and locates the
     ``_register_cache_clearer('asm_local', ...)`` Call node; the
     second argument must be a ``Lambda`` node (not a bare
     ``Name``-reference).
     """
-    py = _PKG_ROOT / 'propagators' / 'propagation.py'
-    tree = _file_to_ast(py)
+    candidate_files = [
+        _PKG_ROOT / 'propagators' / 'fft_infra.py',
+        _PKG_ROOT / 'propagators' / 'propagation.py',
+    ]
     found_call = None
-    for sub in ast.walk(tree):
-        if not isinstance(sub, ast.Call):
+    found_in = None
+    for py in candidate_files:
+        if not py.exists():
             continue
-        terminal = _attr_terminal(sub.func)
-        if terminal not in ('register_cache_clearer',
-                            '_register_cache_clearer'):
-            continue
-        # Expect the first arg to be the string literal 'asm_local'.
-        if not sub.args:
-            continue
-        first = sub.args[0]
-        if isinstance(first, ast.Constant) and first.value == 'asm_local':
-            found_call = sub
+        tree = _file_to_ast(py)
+        for sub in ast.walk(tree):
+            if not isinstance(sub, ast.Call):
+                continue
+            terminal = _attr_terminal(sub.func)
+            if terminal not in ('register_cache_clearer',
+                                '_register_cache_clearer'):
+                continue
+            # Expect the first arg to be the string literal 'asm_local'.
+            if not sub.args:
+                continue
+            first = sub.args[0]
+            if (isinstance(first, ast.Constant)
+                    and first.value == 'asm_local'):
+                found_call = sub
+                found_in = py
+                break
+        if found_call is not None:
             break
     assert found_call is not None, (
         "Could not locate the ``register_cache_clearer('asm_local', ...)`` "
-        "call in propagators/propagation.py."
+        "call in propagators/fft_infra.py or propagators/propagation.py."
     )
     assert len(found_call.args) >= 2, (
-        "register_cache_clearer('asm_local', ...) call must pass a "
-        "second positional argument (the clear-function)."
+        f"register_cache_clearer('asm_local', ...) call in {found_in} "
+        f"must pass a second positional argument (the clear-function)."
     )
     second = found_call.args[1]
     assert isinstance(second, ast.Lambda), (
         f"v4.16.1 / Agent C (audit P1-NEW-F1-2) regression: "
-        f"register_cache_clearer('asm_local', ...) second argument "
-        f"is {type(second).__name__}, expected ast.Lambda (late-binding "
-        f"closure mirroring the other 8 cache enrollments)."
+        f"register_cache_clearer('asm_local', ...) in {found_in} second "
+        f"argument is {type(second).__name__}, expected ast.Lambda "
+        f"(late-binding closure mirroring the other 8 cache enrollments)."
     )
 
 

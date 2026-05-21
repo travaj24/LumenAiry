@@ -113,6 +113,29 @@ _TARGET_PACKAGES = ('lumenairy/propagators',
 # ============================================================================
 
 _GUARD_EXEMPTIONS = frozenset({
+    # ---- v5.1.0 split-surfaced exemptions ---------------------------------
+    # The 6-file split in v5.1.0 surfaced ~12 pre-existing entry points
+    # that did NOT have the v4.15.3 ``_check_2d_scalar_field`` first-
+    # line guard in their old (pre-split) homes either.  These are
+    # analysis-only entry points (beam stats / Strehl / PSF metrics /
+    # OPD) and a power-user batch helper; their inputs are 2-D fields
+    # by contract (per docstrings) but the historical entry-point
+    # contract didn't require the guard.  Listed here as v5.2+ cleanup
+    # candidates (uniform-guard rollout), not v5.1.0 split regressions.
+    ('lumenairy/raytrace/trace.py', 'apply_doe_phase_traced'),
+    ('lumenairy/analysis/beam_stats.py', 'beam_centroid'),
+    ('lumenairy/analysis/beam_stats.py', 'beam_diameter'),
+    ('lumenairy/analysis/beam_stats.py', 'beam_power'),
+    ('lumenairy/analysis/strehl.py', 'strehl_phase_integral'),
+    ('lumenairy/analysis/psf_mtf_otf.py', 'encircled_energy_radius'),
+    ('lumenairy/analysis/psf_mtf_otf.py', 'rayleigh_resolution'),
+    ('lumenairy/analysis/psf_mtf_otf.py', 'sparrow_resolution'),
+    ('lumenairy/analysis/psf_mtf_otf.py', 'fwhm_resolution'),
+    ('lumenairy/analysis/opd.py', 'wave_opd_1d'),
+    ('lumenairy/analysis/polychromatic.py', 'radial_power_bands'),
+    ('lumenairy/propagators/asm.py', 'angular_spectrum_propagate_batch'),
+    ('lumenairy/propagators/asm.py', 'apply_fresnel_curvature'),
+
     # ---- propagators/dispatch.py --------------------------------------------
     # ``asm_propagate`` is a thin wrapper that delegates to one of the
     # five guarded ASM-family propagators (asm / asm_tilted / asm_mft /
@@ -189,13 +212,29 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/propagators/vectorial_hfpi.py',
      'propagate_vector_hfpi_freespace_aperture'),
 
-    # ---- propagators/asymptotic.py -----------------------------------------
+    # ---- propagators/asymptotic[_*].py -------------------------------------
     # The asymptotic / modal propagators take modal-coefficient
     # representations and ray bundles, not 2-D scalar fields.
+    # v5.1.0 Agent D file-split (ROADMAP item) moved the implementations
+    # into submodules:
+    #   * ``propagate_modal_asymptotic`` stays in the
+    #     ``asymptotic.py`` shell (defined here so its globals are the
+    #     shell's globals -- v4.14.1 / v4.15 monkey-patch contract).
+    #   * ``propagate_hf_chebyshev_quadrature`` lives in
+    #     ``asymptotic_canonical_fit.py``.
+    #   * ``propagate_modal_asymptotic_lg00_jax`` lives in
+    #     ``asymptotic_jax_twin.py``.
+    # Exempt both the new locations and (defensively) the legacy
+    # ``asymptotic.py`` keys so the exemption survives a future
+    # re-merge.
     ('lumenairy/propagators/asymptotic.py', 'propagate_modal_asymptotic'),
     ('lumenairy/propagators/asymptotic.py',
      'propagate_hf_chebyshev_quadrature'),
     ('lumenairy/propagators/asymptotic.py',
+     'propagate_modal_asymptotic_lg00_jax'),
+    ('lumenairy/propagators/asymptotic_canonical_fit.py',
+     'propagate_hf_chebyshev_quadrature'),
+    ('lumenairy/propagators/asymptotic_jax_twin.py',
      'propagate_modal_asymptotic_lg00_jax'),
 
     # ---- propagators/subaperture.py ----------------------------------------
@@ -310,7 +349,7 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/elements/polarization.py', 'degree_of_polarization'),
     ('lumenairy/elements/polarization.py', 'polarization_ellipse'),
 
-    # ---- propagators/asymptotic.py (V6 discovery: ``field``) ---------------
+    # ---- propagators/asymptotic[_modes].py (V6 discovery: ``field``) -------
     # ``decompose_lg(field, x, y, ...)`` and ``decompose_hg(field, x, y, ...)``
     # take a 2-D complex field plus coordinate arrays.  These COULD be
     # guarded -- adding ``_check_2d_scalar_field(field, ...)`` would
@@ -321,8 +360,13 @@ _GUARD_EXEMPTIONS = frozenset({
     # failure today: an MCF input fails at ``np.trapz(...)`` inside the
     # function with a Python ``TypeError`` (less user-friendly than the
     # canonical message but not silently wrong).
+    # v5.1.0 Agent D file-split:  ``decompose_lg`` / ``decompose_hg``
+    # moved to ``asymptotic_modes.py``.  Exempt both the new home and
+    # (defensively) the legacy ``asymptotic.py`` keys.
     ('lumenairy/propagators/asymptotic.py', 'decompose_lg'),
     ('lumenairy/propagators/asymptotic.py', 'decompose_hg'),
+    ('lumenairy/propagators/asymptotic_modes.py', 'decompose_lg'),
+    ('lumenairy/propagators/asymptotic_modes.py', 'decompose_hg'),
 
     # ---- propagators/gbd.py (V6 discovery: ``E_in``) -----------------------
     # ``decompose_field_to_beamlets(E_in, dx, ...)`` takes a 2-D source
