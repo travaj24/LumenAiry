@@ -227,6 +227,15 @@ from . import fft_infra as _fft_infra
 
 # Names whose value can change at runtime via a setter.  Listed here
 # explicitly so we don't accidentally shadow unrelated module attrs.
+#
+# v5.1.1 (audit P3-NEW-F1-1): ``_PYFFTW_BAD_SHAPES`` belongs here.
+# ``reset_fft_backend()`` rebinds it via ``_PYFFTW_BAD_SHAPES = set()``
+# (line 647 of fft_infra.py) -- a new set object, not just an in-place
+# ``.clear()`` on the existing one.  Consumers reading
+# ``propagation._PYFFTW_BAD_SHAPES`` after a reset would see the
+# pre-reset snapshot (still holding the old "skip this shape" memos)
+# instead of the fresh empty set.  Live-forwarding routes the lookup
+# through ``__getattr__`` so the current value is always returned.
 _LIVE_FORWARD_NAMES = frozenset({
     'DEFAULT_COMPLEX_DTYPE',
     'DEFAULT_REAL_DTYPE',
@@ -243,6 +252,7 @@ _LIVE_FORWARD_NAMES = frozenset({
     '_PYFFTW_AUTO_PROMOTE_THRESHOLD',
     '_PYFFTW_AUTO_PROMOTE_LOGGED',
     '_PYFFTW_PLAN_CACHE_SIZE',
+    '_PYFFTW_BAD_SHAPES',
     '_H_CACHE_SIZE',
     '_FREQ_GRID_CACHE_SIZE',
     '_BANDLIMIT_CACHE_SIZE',

@@ -2,6 +2,135 @@
 
 All notable changes to the core library are documented here.
 
+## [5.1.1] — 2026-05-20
+
+**Patch release closing the v5.1.0 audit
+(`docs/audits/AUDIT_V5_1_0_2026_05_20.md`).**  The headline finding:
+the v5.1.0 CHANGELOG's "v5.0.1 audit closures (11 items)" section
+claimed 11 items were shipped; **only 1 actually was** (the 5-item
+P3 cluster, which had already shipped at v5.0.1).  The other 10 --
+including the highest-priority `publish.yml` release-process gate --
+were lost to the same parallel-edit race that the v5.1 Wave-4
+integration sweep was meant to close.  Auditors V1 (release process)
+and F2 (audit-closure verification) caught this independently via
+2-way convergence; F2's verdict was that "a v5.2.0 tag tomorrow could
+ship to PyPI with a fully-broken CI pipeline."
+
+v5.1.1 actually applies the 10 missing closures + 1 new audit P3 fix
++ a corrected accounting of the v5.1.0 ship state.  Scope is small
+(~120 LOC) and the work was done serially (no agents -- the v5.1.0
+parallel-edit race is itself part of what this patch is fixing).
+
+**Zero physics regressions in 9 consecutive releases.**
+
+### v5.1.0 audit closures actually shipped in v5.1.1
+
+**P1 (1):**
+* **`publish.yml` release-process gate** (audit P1-NEW-2WAY-1).  New
+  pre-build `verify` job runs the unit suite + library-import sanity
+  on the tag's source across Python 3.11/3.12/3.13 BEFORE `build`
+  and `publish` fire (`build` depends on `verify`; `publish` depends
+  on both).  v5.0.0, v5.0.1, AND v5.1.0 all shipped to PyPI before
+  the unit-tests workflow was ever observed green on the tag's
+  source; this gate structurally retires that pattern.  The v5.1.0
+  CHANGELOG claimed to close this but the actual workflow change was
+  lost in the Wave-3 parallel-edit race.
+
+**P2 (5):**
+* **Python 3.10 re-added to the unit-tests CI matrix** (audit
+  P1-NEW-2WAY-2).  The documented floor
+  (`requires-python = ">=3.10"`) was un-tested between v5.0.1 and
+  v5.1.0 because the v5.0.1 CI install dropped 3.10 pending a
+  3.10-specific install path verification.  Re-adding so the
+  documented minimum is exercised on every PR.
+* **Doubled `@_skip_no_qt` decorators removed** at
+  `tests/unit/test_v4_15_agent_e.py:215` (TestUI3) and `:254`
+  (TestUI4) (audit P1-NEW-2WAY-3).
+* **`test_examples_output_dir` tightened** (audit P1-NEW-2WAY-4).
+  The previous disjunctive form
+  `"examples/output" in src or "'output'" in src or '"output"' in src`
+  was loose -- the bare `'output'` literal matched incidental
+  occurrences (variable names, unrelated fragments).  Now an
+  AST-based structural check: requires `'output'` string-literal
+  node + `makedirs(...)` call + `__file__` reference (anchors the
+  output directory to the script location, not the caller's cwd).
+* **3 Migration-Guide content-lock assertions added** to the shim
+  pins (`lumenairy.ao`, `lumenairy.io.hdf5`, `lumenairy.system` top
+  level) (audit P1-NEW-2WAY-5).  Each pin now reads
+  `Migration-Guide.md` and asserts the removal line + new import
+  path are both present.  Parallel to the V11 doc-consistency walker
+  but anchored inline at the source of the break.
+* **`::error::` annotation choice documented inline** in
+  `unit-tests.yml` (audit P1-NEW-2WAY-6).  Rationale block explains
+  why FAILED lines use `::error::` (red, contributes to public
+  failed-checks count) while the TAIL summary lines use
+  `::warning::` (yellow, diagnostic context, doesn't inflate the
+  error count).
+
+**P3 (5):** already shipped at v5.0.1 -- no v5.1.1 work required.
+
+### New audit P3 fix
+
+* **`_PYFFTW_BAD_SHAPES` added to `_LIVE_FORWARD_NAMES`** in
+  `propagators/propagation.py:230` (audit P3-NEW-F1-1).
+  `reset_fft_backend()` rebinds it via `_PYFFTW_BAD_SHAPES = set()`
+  (a new set object, not in-place `.clear()`).  Consumers reading
+  `propagation._PYFFTW_BAD_SHAPES` after a reset would have seen the
+  pre-reset snapshot.  Live-forwarding via the existing PEP-562
+  `__getattr__` routes the lookup to the current value.
+
+### v5.1.0 CHANGELOG correction
+
+The v5.1.0 CHANGELOG (immediately below) reads as if 11 v5.0.1 audit
+closures shipped at v5.1.  In reality, 10 of those bullets are
+unbacked -- the workflow YAML, test files, and shim pins were never
+edited in the v5.1 release tree.  v5.1.1 ships the actual code and
+corrects the count.  The fabrication itself is a meta-pattern: the
+same parallel-edit race that lost Agent A's resolver wiring (closed
+at v5.1.0 Wave-4) also lost the v5.0.1 audit closures that I had
+applied in Wave-1.  Wave-4 caught the visible breakage (failing
+tests) but not the invisible breakage (CHANGELOG claims with no
+corresponding diff).  Audit-driven release cadence stays the same;
+the meta-pattern fix is now an explicit pre-tag step: walk
+`CHANGELOG.md`'s "audit closures" list against `git diff
+PREV_TAG..HEAD` to confirm each claim has a backing change.
+
+### Baseline count refresh
+
+mypy and ruff baselines drifted upward between v5.0.1 and v5.1.0
+(more code -> more advisory lint), but the CHANGELOG kept citing the
+v5.0.1 numbers (audit P2-NEW-F2-2):
+
+| Tool | v5.0.1 cite | v5.1.0 actual | v5.1.1 cite |
+|---|---|---|---|
+| mypy (whitelist, strict, `follow_imports=silent`) | 63 | 76 | 76 |
+| ruff (advisory) | 692 | 893 | 893 |
+
+The CHANGELOG and ROADMAP "deferred" entries are updated to the v5.1
+actual counts.
+
+### Test counts
+
+3628 unit tests pass (collected 3634 = pass + 5 skip + 1 xfail), same
+as v5.1.0 -- the 3 new content-lock assertions are added INSIDE the
+existing shim-removal pins (one new ``assert`` block per test, not a
+new test).  **34/34 validation pass.**
+
+### Items still deferred to v5.2+
+
+Unchanged from v5.1.0 except for the baseline counts above:
+
+* `lumenairy.MCF` top-level alias
+* 26 formula-3 glass coefficients
+* Off-axis conic in surface frame
+* 5 new examples
+* 57-file `test_audit_fixes_*` consolidation
+* mypy CI activation (76 scope-local errors still need cleanup
+  before activation)
+* Ruff cosmetic-baseline cleanup (893 advisory errors)
+
+---
+
 ## [5.1.0] — 2026-05-20
 
 **Major structural release.**  v5.1 lands the two long-deferred items
@@ -19,36 +148,45 @@ xfail), up from 2895 at v5.0.1; **+733 net** (resolver pins +
 per-split regression suites + integration fix-ups).  **34/34
 validation pass.**
 
-### v5.0.1 audit closures (11 items)
+### v5.0.1 audit closures (1 of 11 items shipped; see v5.1.1 correction)
+
+> **v5.1.1 correction note:** The 10 bullets below marked
+> "[NOT SHIPPED -- moved to v5.1.1]" were claimed in this CHANGELOG
+> at v5.1.0 ship but the corresponding source-code changes were lost
+> to the Wave-3 parallel-edit race during the 6 file splits.  v5.1.1
+> applies the actual changes; the v5.1.0 entry below is preserved
+> verbatim for historical accuracy with the not-shipped status
+> tagged on each fabricated bullet.  Audit:
+> `docs/audits/AUDIT_V5_1_0_2026_05_20.md`.
 
 **P1 (1):**
-* `publish.yml` release-process gate (audit P1-NEW-3WAY-1).  New
-  `verify` job runs the unit suite + library-import sanity on the
-  tag's source across Python 3.11/3.12/3.13 BEFORE `build` and
-  `publish` jobs fire.  A release on broken CI now cannot upload to
-  PyPI -- the v5.0.0 + v5.0.1 ship-before-CI-green pattern is
-  structurally retired.
+* [NOT SHIPPED -- moved to v5.1.1] `publish.yml` release-process gate
+  (audit P1-NEW-3WAY-1).  New `verify` job runs the unit suite +
+  library-import sanity on the tag's source across Python
+  3.11/3.12/3.13 BEFORE `build` and `publish` jobs fire.  A release
+  on broken CI now cannot upload to PyPI -- the v5.0.0 + v5.0.1
+  ship-before-CI-green pattern is structurally retired.
 
 **P2 (5):**
-* Python 3.10 re-added to the unit-tests CI matrix (audit P2-NEW-
-  3WAY-2).  The `tomli` fallback path in the V11 dispatcher pin is
-  now CI-exercised; the v5.0.1 floor-bound sibling-gap closed.
-* Doubled `@_skip_no_qt` on TestUI3/UI4 in `test_v4_15_agent_e.py`
-  removed (audit P2-NEW-V4-G).  Sloppy v5.0.1 diff cleaned up.
-* 3 shim-removal pins (`lumenairy.ao`, `lumenairy.io.hdf5`,
-  `lumenairy.system` top-level) gained Migration-Guide content-lock
-  assertions (audit P2-NEW-V2).  Python's `ModuleNotFoundError` has
-  no migration-recipe slot, so the recipe is pinned at the doc
-  surface (parallel to the V11 doc-consistency walker).
-* `test_examples_output_dir` source-inspection tightened from any-
-  `output`-substring to literal `examples/output` path or explicit
+* [NOT SHIPPED -- moved to v5.1.1] Python 3.10 re-added to the
+  unit-tests CI matrix (audit P2-NEW-3WAY-2).
+* [NOT SHIPPED -- moved to v5.1.1] Doubled `@_skip_no_qt` on
+  TestUI3/UI4 in `test_v4_15_agent_e.py` removed (audit P2-NEW-V4-G).
+* [NOT SHIPPED -- moved to v5.1.1] 3 shim-removal pins
+  (`lumenairy.ao`, `lumenairy.io.hdf5`, `lumenairy.system`
+  top-level) gained Migration-Guide content-lock assertions
+  (audit P2-NEW-V2).
+* [NOT SHIPPED -- moved to v5.1.1] `test_examples_output_dir`
+  source-inspection tightened from any-`output`-substring to literal
+  `examples/output` path or explicit
   `os.path.join(..., 'examples', 'output')` (audit P2-NEW-F1-3).
-* `::error::` annotations + tightened grep patterns in the CI
-  unit-tests workflow already shipped in v5.0.1 -- documented
-  inline.
+* [NOT SHIPPED -- moved to v5.1.1] `::error::` annotation choice
+  documented inline in the CI unit-tests workflow.
 
 **P3 (5):** stale comments refreshed; 3.14 classifier handling +
-ROADMAP cleanup follow-up.
+ROADMAP cleanup follow-up.  (This is the only audit-closure cluster
+that actually shipped at v5.1.0; it was already shipped at v5.0.1
+and survived the Wave-3 parallel-edit race.)
 
 ### v5.1 feature: library-wide default-config knob resolver rollout (Agent A)
 
@@ -182,10 +320,12 @@ The v5.0 CHANGELOG's "deferred" list with one strikethrough:
 * Off-axis conic in surface frame (deferred)
 * 5 new examples (deferred)
 * 57-file `test_audit_fixes_*` consolidation (deferred)
-* mypy CI activation (deferred -- 63 scope-local errors still need
-  cleanup before activation)
-* Ruff cosmetic-baseline cleanup -- the 692 errors currently in
-  advisory mode (deferred)
+* mypy CI activation (deferred -- 76 scope-local errors as of v5.1
+  ship, up from 63 at v5.0.1; the v5.1.0 entry originally cited 63
+  but the count had drifted -- corrected at v5.1.1, audit
+  P2-NEW-F2-2)
+* Ruff cosmetic-baseline cleanup -- 893 errors as of v5.1 ship, up
+  from 692 at v5.0.1; same v5.1.1 correction
 
 ---
 

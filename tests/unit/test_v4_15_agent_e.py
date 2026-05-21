@@ -213,7 +213,6 @@ class TestUI2NudgeDistanceCoordinateModeAware:
 # ============================================================================
 
 @_skip_no_qt
-@_skip_no_qt
 class TestUI3UndoCapturesNewFields:
     """Round-trip undo/redo for the three previously-missed fields."""
 
@@ -251,7 +250,6 @@ class TestUI3UndoCapturesNewFields:
 # E.1.4 -- P1-UI-4: back-vertex helper unifies two call sites
 # ============================================================================
 
-@_skip_no_qt
 @_skip_no_qt
 class TestUI4BackVertexHelper:
     """``_prev_element_back_vertex_world`` is the single source of truth."""

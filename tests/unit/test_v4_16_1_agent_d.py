@@ -341,15 +341,56 @@ def test_examples_output_dir_exists_and_contains_pngs():
         'algebra_anamorphic.py',
         'plot_opd_summary_singlet.py',
     )
+    # v5.1.1 (audit P1-NEW-2WAY-4): the prior disjunctive form
+    # ``"examples/output" in src or "'output'" in src or '"output"' in src``
+    # was loose -- the bare ``'output'`` literal matches incidental
+    # occurrences (a variable named ``output``, an unrelated path
+    # fragment, etc).  Tighten by requiring three structural elements
+    # to all co-occur: a ``'output'`` string-literal AST node, a
+    # ``makedirs(...)`` call, AND a reference to ``__file__`` (so the
+    # output directory is anchored to the script location, not the
+    # caller's cwd).  All three are present in the v4.16.1 wiring;
+    # any one missing means the script is no longer routing through
+    # ``examples/output/`` as designed.
     for script_name in expected_scripts:
         script = _EXAMPLES_DIR / script_name
         assert script.is_file(), (
             f'{script_name} is missing from examples/')
         src = script.read_text(encoding='utf-8')
-        assert "examples/output" in src or "'output'" in src or '"output"' in src, (
-            f'{script_name} does not route its PNG output through '
-            f'examples/output/; the v4.16.1 Agent-D move was meant to '
-            f'centralise example outputs there.')
+        tree = ast.parse(src, filename=str(script))
+
+        has_output_literal = any(
+            isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and node.value == 'output'
+            for node in ast.walk(tree))
+        has_makedirs_call = any(
+            isinstance(node, ast.Call)
+            and (
+                (isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'makedirs')
+                or (isinstance(node.func, ast.Name)
+                    and node.func.id == 'makedirs'))
+            for node in ast.walk(tree))
+        has_file_ref = any(
+            isinstance(node, ast.Name) and node.id == '__file__'
+            for node in ast.walk(tree))
+
+        assert has_output_literal, (
+            f'{script_name} has no `\'output\'` string literal; '
+            f'v4.16.1 Agent-D routed example PNGs through '
+            f'``examples/output/`` -- the literal directory name '
+            f'must appear in the source.')
+        assert has_makedirs_call, (
+            f'{script_name} does not call ``makedirs(...)``; '
+            f'v4.16.1 wiring creates ``examples/output/`` on first '
+            f'run via ``os.makedirs(out_dir, exist_ok=True)``.')
+        assert has_file_ref, (
+            f'{script_name} does not reference ``__file__``; '
+            f'v4.16.1 wiring anchors the output directory to the '
+            f'script location (``dirname(abspath(__file__))``) so '
+            f'PNGs land in ``examples/output/`` regardless of the '
+            f'caller\'s cwd.')
 
 
 # ============================================================================

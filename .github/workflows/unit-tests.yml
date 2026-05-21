@@ -20,11 +20,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.10 is the documented floor (``requires-python = ">=3.10"``)
-        # but validate.yml only exercises 3.11-3.13 successfully.  We
-        # mirror that matrix here and add 3.10 back in a v5.0.2+ patch
-        # once the 3.10-specific install path is verified.
-        python-version: ['3.11', '3.12', '3.13']
+        # v5.1.1 (audit P1-NEW-2WAY-2): 3.10 is the documented floor
+        # (``requires-python = ">=3.10"``).  v5.0.1 dropped it from CI
+        # because validate.yml at the time only exercised 3.11-3.13;
+        # but that left the documented floor un-tested -- a v5.0.2-class
+        # closure that v5.1.0 CHANGELOG claimed to deliver but never
+        # did (parallel-edit race during 6 file splits).  Re-adding
+        # here so the documented minimum is actually exercised on PR.
+        python-version: ['3.10', '3.11', '3.12', '3.13']
     timeout-minutes: 20
 
     steps:
@@ -93,6 +96,19 @@ jobs:
         if: failure()
         shell: bash
         run: |
+          # v5.1.1 (audit P1-NEW-2WAY-6): rationale for ``::error::``
+          # over ``::warning::`` for the failure lines.  The
+          # ``::warning::`` annotation type would surface in the
+          # Annotations API but is rendered yellow in the GitHub UI
+          # and does NOT add to the job-level failed-checks counter.
+          # ``::error::`` is rendered red, contributes to the
+          # public failed-checks count, and is the conventional
+          # type for ``-grep "^FAILED"`` matches in pytest output.
+          # The trailing ``tail -n 5`` summary line(s) (e.g.
+          # ``5 failed, 1242 passed in 38.21s``) ARE
+          # ``::warning::`` because they are diagnostic context,
+          # not the failure itself -- duplicating each into
+          # ``::error::`` would inflate the error count.
           # Annotations are visible via the public annotations API, so
           # external observers can see test failure names without
           # admin-level log access.  Print first 10 FAILED lines + any
@@ -103,7 +119,8 @@ jobs:
               | while IFS= read -r line; do
                   echo "::error::${line}"
                 done
-            # Final summary line(s)
+            # Final summary line(s) -- diagnostic context, not a
+            # failure, so kept at ``::warning::`` (see comment above).
             tail -n 5 unit_test_output.txt | while IFS= read -r line; do
               echo "::warning::TAIL: ${line}"
             done

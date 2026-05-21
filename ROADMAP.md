@@ -188,19 +188,27 @@ feature work that didn't fit the v5.0 review window.
 * **mypy `--strict` CI activation.**  v5.0 shipped the
   `[tool.mypy]` config but did NOT wire mypy into the workflow.
   v5.0.1 (audit P2-NEW-V4-2) added `follow_imports = "silent"`
-  so a future activation sees only the ~63 scope-local errors,
-  not the ~1889-error cascade into untyped downstream files.
-  v5.1 cleans the 63 scope-local errors and adds the mypy step
-  to `unit-tests.yml`.
+  so a future activation sees only the scope-local errors, not
+  the ~1889-error cascade into untyped downstream files.
+  v5.1.1 baseline refresh (audit P2-NEW-F2-2): **76 scope-local
+  errors** in 8 files as of the v5.1 file splits (drifted up
+  from 63 at v5.0.1 -- the resolver rollout + shellification
+  added type-stub gaps in `lumenairy/backend/fft.py`).  v5.2
+  cleans the 76 scope-local errors and adds the mypy step to
+  `unit-tests.yml`.
 
 * **Ruff baseline cleanup**.  v5.0 shipped the `[tool.ruff]`
   config; at v5.0 ship the baseline produced ~696 errors (4
   real F821 forward-ref bugs in `algebra/base.py` +
   `propagators/system.py` -- closed in v5.0.1 -- and ~692
   cosmetic I001 / F401 / F841 / F541 / E702 / F811 errors that
-  a one-shot `ruff --fix` PR will sweep).  Schedule the
-  `ruff --fix` PR alongside the file splits so the diff lands
-  in one reviewable chunk.
+  a one-shot `ruff --fix` PR will sweep).  v5.1.1 baseline
+  refresh (audit P2-NEW-F2-2): **893 errors** as of the v5.1
+  file splits (drifted up from 692 at v5.0.1 -- the shellified
+  re-export modules + the `__getattr__` forwarding shells added
+  ~200 cosmetic I001 / F401 hits).  Schedule the `ruff --fix`
+  PR alongside the v5.2 work so the diff lands in one
+  reviewable chunk.
 
 ### Config knobs (library-wide consumer wiring)
 

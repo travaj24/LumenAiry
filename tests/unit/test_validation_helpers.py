@@ -360,25 +360,74 @@ class TestV5_0_ShimRemovalAntiRegression:
     the corresponding test fails immediately.
     """
 
+    # v5.1.1 (audit P1-NEW-2WAY-5): content-lock helper.
+    # The bare ``ImportError`` pin only verifies the OLD path fails;
+    # it does NOT verify the Migration Guide still documents the new
+    # path.  A future maintainer could silently delete the
+    # corresponding section from Migration-Guide.md and these pins
+    # would still pass -- callers would be left with a raise and no
+    # migration recipe.  Each test below now additionally reads
+    # Migration-Guide.md and asserts the removal line + the new
+    # import path are both present.  Parallel to the V11 doc-
+    # consistency walker but anchored inline at the source of the
+    # break, so a maintainer editing the shim pin sees the doc
+    # dependency directly.
+    @staticmethod
+    def _migration_guide_text():
+        from pathlib import Path
+        repo_root = Path(__file__).resolve().parents[2]
+        guide = repo_root / 'Migration-Guide.md'
+        assert guide.is_file(), (
+            f'Migration-Guide.md not found at {guide}; the v5.0 '
+            f'shim-removal recipes have nowhere to live.')
+        return guide.read_text(encoding='utf-8')
+
     def test_lumenairy_ao_shim_removed_in_v5_0(self):
         """v5.0 (honest break): the v4.x back-compat shim
         ``lumenairy.ao`` was removed.  Importing
         ``DeformableMirror`` from the old top-level path must raise
         ``ImportError`` / ``ModuleNotFoundError``; callers must use
-        ``lumenairy.analysis.ao`` (or the top-level re-export)."""
+        ``lumenairy.analysis.ao`` (or the top-level re-export).
+
+        v5.1.1 (audit P1-NEW-2WAY-5): also content-lock the
+        Migration-Guide entry so the recipe cannot silently regress.
+        """
         # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from lumenairy.ao import DeformableMirror  # noqa: F401
+        guide = self._migration_guide_text()
+        assert '`lumenairy.ao`' in guide and '**Removed.**' in guide, (
+            'Migration-Guide.md is missing the ``lumenairy.ao`` '
+            'removal entry; the shim raise is wired but callers '
+            'have no documented migration recipe.')
+        assert 'lumenairy.analysis.ao' in guide, (
+            'Migration-Guide.md no longer documents the new '
+            '``lumenairy.analysis.ao`` import path for the '
+            '``DeformableMirror`` migration.')
 
     def test_lumenairy_io_hdf5_shim_removed_in_v5_0(self):
         """v5.0 (honest break): the v4.x back-compat shim
         ``lumenairy.io.hdf5`` was removed.  Importing
         ``save_field_h5`` from the old path must raise
         ``ImportError`` / ``ModuleNotFoundError``; callers must use
-        ``lumenairy.io.storage`` (or the top-level re-export)."""
+        ``lumenairy.io.storage`` (or the top-level re-export).
+
+        v5.1.1 (audit P1-NEW-2WAY-5): also content-lock the
+        Migration-Guide entry so the recipe cannot silently regress.
+        """
         # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from lumenairy.io.hdf5 import save_field_h5  # noqa: F401
+        guide = self._migration_guide_text()
+        assert '`lumenairy.io.hdf5`' in guide and '**Removed.**' in guide, (
+            'Migration-Guide.md is missing the '
+            '``lumenairy.io.hdf5`` removal entry; the shim raise '
+            'is wired but callers have no documented migration '
+            'recipe.')
+        assert 'lumenairy.io.storage' in guide, (
+            'Migration-Guide.md no longer documents the new '
+            '``lumenairy.io.storage`` import path for the '
+            '``save_field_h5`` migration.')
 
     def test_lumenairy_system_top_level_removed_in_v5_0(self):
         """v5.0 (honest break): the top-level ``lumenairy.system``
@@ -387,10 +436,25 @@ class TestV5_0_ShimRemovalAntiRegression:
         ``ModuleNotFoundError``; the canonical
         ``lumenairy.propagate_through_system`` top-level facade
         still works (verified separately via the public-API smoke
-        test)."""
+        test).
+
+        v5.1.1 (audit P1-NEW-2WAY-5): also content-lock the
+        Migration-Guide section so the move recipe cannot silently
+        regress.
+        """
         # audit closure: P2-NEW-F2-1 (shim-removal anti-regression pin asymmetry)
         with pytest.raises((ImportError, ModuleNotFoundError)):
             from lumenairy.system import propagate_through_system  # noqa: F401
+        guide = self._migration_guide_text()
+        assert 'lumenairy/system.py' in guide and 'lumenairy/propagators/system.py' in guide, (
+            'Migration-Guide.md is missing the '
+            '``lumenairy/system.py -> lumenairy/propagators/system.py`` '
+            'move heading; the raise is wired but callers have no '
+            'documented migration recipe.')
+        assert 'from lumenairy.propagators.system import propagate_through_system' in guide, (
+            'Migration-Guide.md no longer documents the new '
+            '``from lumenairy.propagators.system import '
+            'propagate_through_system`` import path.')
 
     def test_jax_aperture_legacy_schema_removed_in_v5_0(self):
         """v5.0 (honest break): the legacy pre-v4.12 JAX-only

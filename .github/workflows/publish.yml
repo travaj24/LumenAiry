@@ -24,8 +24,52 @@ on:
   workflow_dispatch:
 
 jobs:
+  # v5.1.1 (audit P1-NEW-2WAY-1): release-process gate.  v5.0.0,
+  # v5.0.1, and v5.1.0 all shipped to PyPI before the unit-tests
+  # workflow was ever observed green on the tag's source -- v5.0.0
+  # audit V4 read the workflow YAML but didn't trigger it;
+  # ``publish.yml`` had no dependency on CI passing.  v5.1.0's
+  # CHANGELOG claimed to close this but the actual code change was
+  # lost in the parallel-edit race during the 6 file splits.
+  # v5.1.1 actually wires it: this pre-build ``verify`` job runs the
+  # unit suite + library-import sanity on the tag's source so a
+  # release on broken CI cannot upload to PyPI.  ``build`` depends
+  # on ``verify``; ``publish`` depends on both.
+  verify:
+    name: Verify CI on release tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install Lumenairy with test extras
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
+          pip install tomli
+
+      - name: Library import sanity
+        run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
+
+      - name: Run unit tests (release tag verification)
+        run: |
+          python -m pytest tests/unit -m "not integration" --tb=short \
+            -p no:cacheprovider --maxfail=5
+        timeout-minutes: 15
+
   build:
     name: Build sdist + wheel
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +98,7 @@ jobs:
 
   publish:
     name: Publish to PyPI
-    needs: build
+    needs: [verify, build]
     runs-on: ubuntu-latest
     # The "pypi" environment is what PyPI's Trusted Publishing config
     # checks for -- requests from any other environment will be rejected.
