@@ -43,7 +43,13 @@ __all__ = [
     'lumenairy_context',
     'snapshot_globals',
     'apply_globals',
-    'install_atexit_restore',
+    # v5.2.5 (AUDIT_V5_2_3 P3-F4): the public name ``install_atexit_restore``
+    # was renamed to ``_install_atexit_restore`` to signal its private-
+    # bootstrap intent (caller is ``lumenairy/__init__.py`` at the end
+    # of library import; no user-facing call site).  The legacy name
+    # remains importable as a back-compat alias defined at the bottom
+    # of this module, but is intentionally NOT in ``__all__``.
+    '_install_atexit_restore',
 ]
 
 
@@ -342,8 +348,16 @@ _ATEXIT_INSTALLED = False
 _ATEXIT_SNAPSHOT: Optional[dict[str, Any]] = None
 
 
-def install_atexit_restore() -> None:
+def _install_atexit_restore() -> None:
     """Register an atexit handler that restores import-time defaults.
+
+    Private bootstrap helper.  v5.2.5 (AUDIT_V5_2_3 P3-F4): renamed
+    from ``install_atexit_restore`` to the underscore-prefixed
+    form; the helper is called exactly once at the end of
+    :mod:`lumenairy.__init__` during library import and has no
+    user-facing call site.  ``install_atexit_restore`` (the legacy
+    public name) is preserved as a back-compat alias below in this
+    module for any external caller that imported it directly.
 
     Idempotent: subsequent calls are no-ops.  Called once at the end
     of :mod:`lumenairy.__init__` so that any user code that calls
@@ -360,3 +374,13 @@ def install_atexit_restore() -> None:
     _ATEXIT_SNAPSHOT = snapshot_globals()
     atexit.register(_atexit_restore, _ATEXIT_SNAPSHOT)
     _ATEXIT_INSTALLED = True
+
+
+# v5.2.5 (AUDIT_V5_2_3 P3-F4): legacy public name preserved as a
+# back-compat alias.  Pre-v5.2.5 the function was named
+# ``install_atexit_restore`` (no leading underscore) which made it
+# look like a user-facing API surface despite being a private
+# bootstrap helper.  External callers that imported it by the old
+# name continue to work; new code should use the underscore-
+# prefixed canonical name.
+install_atexit_restore = _install_atexit_restore

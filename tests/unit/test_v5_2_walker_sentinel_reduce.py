@@ -186,26 +186,32 @@ def _parametrize_id(cls: type) -> str:
 # ===========================================================================
 
 def test_v15_walker_discovers_known_sentinel_floor():
-    """Sanity floor: the walker MUST discover at least the 5 known
-    v5.1.0 ``_Sentinel`` subclasses.
+    """Sanity floor: the walker MUST discover at least the 6 known
+    v5.2.0 ``_Sentinel`` subclasses.
 
     Pre-v5.2 the hardcoded ``EXPECTED_SUBCLASSES`` tuple in
     ``test_v4_15_2_agent_e.py`` enumerated 3 of them
     (``_ZeroApertureMaskSentinel``, ``_InvalidFocalLengthSentinel``,
     ``_FailedScanStrehlSentinel``); ``_NoDefaultSentinel`` and
     ``_AngleUnsetSentinel`` exist alongside but are not in that
-    tuple.  This walker auto-discovers all 5 plus any future ones.
+    tuple.  v5.2.0's walker auto-discovery turned up a SIXTH
+    (``_SchellReturnKindUnsetSentinel``) that the hardcoded tuple
+    was silently missing -- which is the regression class V15 was
+    built to catch.
 
-    A floor of 5 catches a walker collapse (e.g. the import-time
-    self-registration broke, or ``pkgutil.walk_packages`` failed to
-    enumerate ``lumenairy``) while leaving headroom for legitimate
-    refactoring.
+    v5.2.5 (AUDIT_V5_2_3 P3-F1-6): tightened from >= 5 to >= 6 to
+    reflect the v5.2.0-discovered baseline.  A floor of 6 catches
+    a walker collapse (e.g. the import-time self-registration
+    broke, or ``pkgutil.walk_packages`` failed to enumerate
+    ``lumenairy``) while leaving headroom for legitimate
+    refactoring.  When new sentinels are added the floor should
+    bump alongside.
     """
     names = sorted(c.__qualname__ for c in _DISCOVERED_SUBCLASSES)
-    assert len(_DISCOVERED_SUBCLASSES) >= 5, (
+    assert len(_DISCOVERED_SUBCLASSES) >= 6, (
         f'V15 walker discovered only {len(_DISCOVERED_SUBCLASSES)} '
         f'``_Sentinel`` subclasses in the live ``lumenairy.*`` '
-        f'namespace; expected >= 5 (the v5.1.0 baseline).  '
+        f'namespace; expected >= 6 (the v5.2.0 baseline).  '
         f'Discovered: {names!r}.  The discovery walker may have '
         f'regressed (e.g. ``pkgutil.walk_packages`` no longer '
         f'imports the sentinel-defining submodules, or the '

@@ -100,34 +100,73 @@ def chebyshev_vandermonde(u: np.ndarray, max_k: int,
     return xp.stack(T)
 
 
-def chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int
+def chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int,
+                                     xp: Optional[Any] = None
                                      ) -> np.ndarray:
     """
     Build T_n'(u) for n = 0..max_k.  Uses T_n'(x) = n * U_{n-1}(x),
     where U is the Chebyshev polynomial of the second kind.
 
+    Parameters
+    ----------
+    u : ndarray, any shape, values in [-1, 1]
+    max_k : int
+    xp : array-API module, optional
+        Backend to evaluate on.  ``None`` (default) uses NumPy with the
+        original in-place stacked-array construction.  Pass
+        ``jax.numpy`` (or any other array-API module) to evaluate on a
+        non-NumPy backend; a functional-style construction is used so
+        the result is traceable / differentiable.
+
     Returns
     -------
     Tp : ndarray of shape (max_k+1,) + u.shape
     """
-    u = np.asarray(u)
-    Tp = np.zeros((max_k + 1,) + u.shape, dtype=np.float64)
-    if max_k < 1:
+    if xp is None or xp is np:
+        # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+        # original NumPy path, moved verbatim from elements/lenses.py.
+        u = np.asarray(u)
+        Tp = np.zeros((max_k + 1,) + u.shape, dtype=np.float64)
+        if max_k < 1:
+            return Tp
+        # U_0(x) = 1, U_1(x) = 2x, U_{n+1} = 2x U_n - U_{n-1}
+        U = np.empty((max_k + 1,) + u.shape, dtype=np.float64)
+        U[0] = 1.0
+        if max_k >= 1:
+            U[1] = 2.0 * u
+        for n in range(2, max_k + 1):
+            U[n] = 2.0 * u * U[n - 1] - U[n - 2]
+        # T_n'(x) = n * U_{n-1}(x)  for n >= 1
+        for n in range(1, max_k + 1):
+            Tp[n] = float(n) * U[n - 1]
         return Tp
+
+    # v5.2.5 (AUDIT_V5_2_3 P3-F1-3 chebyshev derivative xp dispatch):
+    # xp-dispatched path mirrors chebyshev_vandermonde's JAX-friendly
+    # functional construction.  Build U_0..U_{max_k} via list-append on
+    # the 3-term recurrence, then form T'_n = n * U_{n-1} for n >= 1.
+    # Returns a stacked array via xp.stack so the caller sees the same
+    # shape contract as the NumPy path.  No in-place writes keeps this
+    # jax.jit / jax.grad traceable.
+    u_arr = xp.asarray(u)
+    if max_k < 1:
+        # Single zero row at order 0.
+        return xp.stack([xp.zeros_like(u_arr)])
     # U_0(x) = 1, U_1(x) = 2x, U_{n+1} = 2x U_n - U_{n-1}
-    U = np.empty((max_k + 1,) + u.shape, dtype=np.float64)
-    U[0] = 1.0
+    U = [xp.ones_like(u_arr)]
     if max_k >= 1:
-        U[1] = 2.0 * u
+        U.append(2.0 * u_arr)
     for n in range(2, max_k + 1):
-        U[n] = 2.0 * u * U[n - 1] - U[n - 2]
-    # T_n'(x) = n * U_{n-1}(x)  for n >= 1
+        U.append(2.0 * u_arr * U[n - 1] - U[n - 2])
+    # T'_0 = 0, T'_n = n * U_{n-1} for n >= 1.
+    Tp_rows = [xp.zeros_like(u_arr)]
     for n in range(1, max_k + 1):
-        Tp[n] = float(n) * U[n - 1]
-    return Tp
+        Tp_rows.append(float(n) * U[n - 1])
+    return xp.stack(Tp_rows)
 
 
-def chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int
+def chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int,
+                                            xp: Optional[Any] = None
                                             ) -> np.ndarray:
     """
     Build T_n''(u) for n = 0..max_k.
@@ -143,19 +182,54 @@ def chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int
     Uses the same 3-term recurrence style as the first-derivative
     helper, so the cost is O(max_k) per evaluation point.
 
+    Parameters
+    ----------
+    u : ndarray, any shape, values in [-1, 1]
+    max_k : int
+    xp : array-API module, optional
+        Backend to evaluate on.  ``None`` (default) uses NumPy with the
+        original in-place stacked-array construction.  Pass
+        ``jax.numpy`` (or any other array-API module) to evaluate on a
+        non-NumPy backend; a functional-style construction is used so
+        the result is traceable / differentiable.
+
     Returns
     -------
     Tpp : ndarray of shape (max_k+1,) + u.shape
     """
-    u = np.asarray(u)
-    shape = u.shape
-    Tpp = np.zeros((max_k + 1,) + shape, dtype=np.float64)
-    if max_k < 2:
+    if xp is None or xp is np:
+        # v5.2 (ROADMAP v5.1 shared Chebyshev helpers extraction):
+        # original NumPy path, moved verbatim from elements/lenses.py.
+        u = np.asarray(u)
+        shape = u.shape
+        Tpp = np.zeros((max_k + 1,) + shape, dtype=np.float64)
+        if max_k < 2:
+            return Tpp
+        # We'll need T'_n to drive the recurrence
+        Tp = chebyshev_derivative_vandermonde(u, max_k)
+        # T''_0 = 0, T''_1 = 0, T''_2 = 4 (constant)
+        Tpp[2] = 4.0 * np.ones(shape, dtype=np.float64)
+        for n in range(2, max_k):
+            Tpp[n + 1] = 2.0 * u * Tpp[n] + 4.0 * Tp[n] - Tpp[n - 1]
         return Tpp
-    # We'll need T'_n to drive the recurrence
-    Tp = chebyshev_derivative_vandermonde(u, max_k)
-    # T''_0 = 0, T''_1 = 0, T''_2 = 4 (constant)
-    Tpp[2] = 4.0 * np.ones(shape, dtype=np.float64)
+
+    # v5.2.5 (AUDIT_V5_2_3 P3-F1-3 chebyshev derivative xp dispatch):
+    # xp-dispatched path -- functional list-of-rows construction so
+    # jax.jit / jax.grad can trace through it.  Recurrence is identical
+    # to the NumPy branch: T''_0 = 0, T''_1 = 0, T''_2 = 4,
+    # T''_{n+1} = 2 x T''_n + 4 T'_n - T''_{n-1}.
+    u_arr = xp.asarray(u)
+    if max_k < 2:
+        # All-zero rows at orders 0..max_k.
+        zero = xp.zeros_like(u_arr)
+        rows = [zero for _ in range(max_k + 1)]
+        return xp.stack(rows)
+    # Need T'_n on the same backend to drive the recurrence.
+    Tp = chebyshev_derivative_vandermonde(u_arr, max_k, xp=xp)
+    zero = xp.zeros_like(u_arr)
+    Tpp_rows = [zero, zero, 4.0 * xp.ones_like(u_arr)]
     for n in range(2, max_k):
-        Tpp[n + 1] = 2.0 * u * Tpp[n] + 4.0 * Tp[n] - Tpp[n - 1]
-    return Tpp
+        Tpp_rows.append(
+            2.0 * u_arr * Tpp_rows[n] + 4.0 * Tp[n] - Tpp_rows[n - 1]
+        )
+    return xp.stack(Tpp_rows)

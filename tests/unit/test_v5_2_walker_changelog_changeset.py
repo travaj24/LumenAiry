@@ -101,8 +101,28 @@ _FILE_PATH_PATTERN = re.compile(
     r'`')
 
 
+# v5.2.5 (AUDIT_V5_2_3 P2-F1-2): the original v5.2.0 form required
+# ``[A-Z0-9_-]{2,}`` after the first uppercase letter, so short-form
+# audit IDs like ``P1-A`` / ``P1-C`` / ``P1-F`` / ``P1-G`` / ``P1-1``
+# (the IDs cited in v5.2.3's CHANGELOG) were rejected.  V12.2 was a
+# silent no-op on the v5.2.3 release because no audit IDs matched.
+# The relaxed form below accepts both short-form (``P1-A``,
+# ``P1-1``) and the long-form (``P1-NEW-2WAY-1``) audit ID styles.
+# To clamp false positives (e.g. a stray ``P1-X`` in prose that is
+# NOT an audit ID), each match is filtered by a known-prefix
+# allowlist BEFORE assertion.
 _AUDIT_ID_PATTERN = re.compile(
-    r'(?<![A-Z0-9])(P[0-3](?:-NEW)?-[A-Z][A-Z0-9_-]{2,})')
+    r'(?<![A-Z0-9])(P[0-3](?:-NEW)?-[A-Z0-9][A-Z0-9_-]*)')
+
+# Known-prefix allowlist for audit-ID validation.  An ID matched by
+# the regex is only treated as an audit-ID citation if it starts
+# with one of these prefixes.  Catches the short-form
+# ``P1-A``/``P1-C``/.../``P1-1`` family that the v5.2.3 audit
+# (AUDIT_V4_13_1 carry-overs) uses, plus the long-form
+# ``P1-NEW-<scope>-<n>`` family from the v5.0.x/v5.1.x audits.
+_AUDIT_ID_KNOWN_PREFIXES = (
+    'P0-', 'P1-', 'P2-', 'P3-',
+)
 
 
 def _extract_cited_paths(body):

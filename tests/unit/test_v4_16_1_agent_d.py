@@ -372,24 +372,96 @@ def test_examples_output_dir_exists_and_contains_pngs():
         return ((isinstance(f, ast.Attribute) and f.attr == 'makedirs')
                 or (isinstance(f, ast.Name) and f.id == 'makedirs'))
 
-    def _resolve_arg_closure(call_node, tree):
+    # v5.2.5 (AUDIT_V5_2_3 V1 P3 AST tightening: function-scope filter +
+    # last-write-wins): v5.2.0's ``_resolve_arg_closure`` looked at EVERY
+    # ``ast.Assign`` to the closure variable name anywhere in the source.
+    # F1's V1-P3 residual demonstrated two narrower gaming bypasses against
+    # that:
+    #
+    # 1. Multi-assign: ``out_dir = good_form; out_dir = '/tmp/elsewhere';
+    #    makedirs(out_dir)`` -- accepted because the EARLIER ``out_dir =
+    #    good_form`` assignment is still found by ``ast.walk(tree)``.
+    # 2. Dead-code:    signals inside ``def never_called(): out_dir =
+    #    good_form`` get picked up because no function-scope filter was
+    #    applied -- ``ast.walk(tree)`` walks SIBLING function bodies too.
+    #
+    # The tightening closes both:
+    #   * Function-scope filter -- only consider assignments inside the
+    #     SAME function as the makedirs call (or at module top-level);
+    #     skip sibling-function bodies entirely.
+    #   * Last-write-wins      -- when multiple assignments to the same
+    #     Name appear in the relevant scope, only the LAST one before the
+    #     makedirs call's lineno is considered.
+    def _build_enclosing_function_map(tree):
+        """Walk ``tree`` and return ``{id(node): enclosing_FunctionDef_or_None}``.
+        Module-level nodes map to ``None``.  Nested functions: the inner
+        function is the enclosing scope.
+        """
+        mapping = {}
+
+        def _visit(node, enclosing):
+            mapping[id(node)] = enclosing
+            # When we enter a FunctionDef / AsyncFunctionDef, it becomes
+            # the new enclosing scope for its descendants.
+            new_enclosing = enclosing
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                new_enclosing = node
+            for child in ast.iter_child_nodes(node):
+                _visit(child, new_enclosing)
+
+        _visit(tree, None)
+        return mapping
+
+    def _resolve_arg_closure(call_node, tree, enc_map=None):
         """Return the AST nodes whose subtree defines the ``makedirs``
         first argument's value.  If the arg is a literal expression
         (e.g. ``os.path.join(..., 'output')``), return ``[arg]``.  If
-        the arg is a Name (e.g. ``out_dir``), return the RHS values
-        of every ``ast.Assign`` in the file that binds that Name.
+        the arg is a Name (e.g. ``out_dir``), return the RHS values of
+        every ``ast.Assign`` to that Name that are:
+
+          (a) in scope (same enclosing function as the call, OR at
+              module top-level), AND
+          (b) the LAST such assignment before the call's lineno
+              (last-write-wins).
+
+        ``enc_map`` is the ``{id(node): enclosing_FunctionDef_or_None}``
+        mapping from ``_build_enclosing_function_map``.  When omitted it
+        is rebuilt (test-helper convenience).
         """
         if not call_node.args:
             return []
         arg = call_node.args[0]
         if isinstance(arg, ast.Name):
             name = arg.id
-            return [
-                a.value for a in ast.walk(tree)
-                if isinstance(a, ast.Assign)
-                and any(isinstance(t, ast.Name) and t.id == name
-                        for t in a.targets)
-            ]
+            if enc_map is None:
+                enc_map = _build_enclosing_function_map(tree)
+            call_scope = enc_map.get(id(call_node))
+            candidates = []
+            for a in ast.walk(tree):
+                if not isinstance(a, ast.Assign):
+                    continue
+                if not any(isinstance(t, ast.Name) and t.id == name
+                           for t in a.targets):
+                    continue
+                a_scope = enc_map.get(id(a))
+                # In-scope iff the assignment is at module-level (None)
+                # or inside the same function as the call.  Sibling-
+                # function bodies (a_scope is a different FunctionDef)
+                # are excluded -- that closes the dead-code bypass.
+                if a_scope is not None and a_scope is not call_scope:
+                    continue
+                # Must be a strictly earlier line than the call -- the
+                # last-write-wins semantics need a temporal ordering.
+                if a.lineno >= call_node.lineno:
+                    continue
+                candidates.append(a)
+            if not candidates:
+                return []
+            # Sort by line number and keep only the LAST assignment;
+            # that closes the multi-assign bypass.
+            candidates.sort(key=lambda x: x.lineno)
+            last = candidates[-1]
+            return [last.value]
         return [arg]
 
     for script_name in expected_scripts:
@@ -405,9 +477,16 @@ def test_examples_output_dir_exists_and_contains_pngs():
             f'v4.16.1 wiring creates ``examples/output/`` on first '
             f'run via ``os.makedirs(out_dir, exist_ok=True)``.')
 
+        # v5.2.5 (AUDIT_V5_2_3 V1 P3 AST tightening: function-scope filter +
+        # last-write-wins): build the enclosing-function map once per
+        # script so each ``_resolve_arg_closure`` call can map both the
+        # makedirs call and every candidate assignment to its enclosing
+        # FunctionDef without re-walking the tree.
+        enc_map = _build_enclosing_function_map(tree)
+
         co_located = False
         for call in makedirs_calls:
-            closures = _resolve_arg_closure(call, tree)
+            closures = _resolve_arg_closure(call, tree, enc_map=enc_map)
             for value in closures:
                 has_output = _walk_value(value, _is_output_literal)
                 has_file = _walk_value(value, _is_file_ref)
@@ -427,6 +506,206 @@ def test_examples_output_dir_exists_and_contains_pngs():
             f'tokens must appear in the same assignment RHS (or be '
             f"inline in the call's first arg).  Three scattered "
             f'tokens elsewhere in the file no longer suffice.')
+
+
+# ============================================================================
+# v5.2.5 (AUDIT_V5_2_3 V1 P3 AST tightening: function-scope filter +
+# last-write-wins) -- regression tests for the two gaming bypasses that
+# survived v5.2.0's co-location tightening.
+# ============================================================================
+
+class TestAuditV5_2_3_AstResolveArgClosureTightening:
+    """Pin the v5.2.5 tightening of the AST ``_resolve_arg_closure``
+    helper used by ``test_examples_output_dir_exists_and_contains_pngs``.
+
+    v5.2.0 required the ``'output'`` literal + ``__file__`` reference to
+    be co-located with the ``makedirs(...)`` call's first argument
+    (either inline in the call or in the RHS of the assignment binding
+    the arg variable).  F1's V1-P3 residual demonstrated TWO narrower
+    gaming bypasses that the v5.2.0 check still accepted:
+
+      1. Multi-assign  -- ``out_dir = good_form; out_dir =
+         '/tmp/elsewhere'; makedirs(out_dir)`` got accepted because the
+         EARLIER assignment's RHS still carried the signals; the LATER
+         re-bind was ignored.
+      2. Dead-code     -- signals inside ``def never_called():
+         out_dir = good_form`` were picked up because ``ast.walk(tree)``
+         walked sibling-function bodies indiscriminately.
+
+    The v5.2.5 tightening closes both: function-scope filtering rejects
+    sibling-function assignments, and last-write-wins picks the LAST
+    in-scope assignment before the makedirs call's lineno.
+
+    These tests reach into the inner helpers by re-implementing them
+    in the test (mirroring the test-under-test's private nested
+    helpers) -- we cannot import them directly because they are local
+    to ``test_examples_output_dir_exists_and_contains_pngs``.  The
+    re-implementation here MUST stay byte-equivalent to the helpers
+    under test; any divergence is a test-bug, not a regression of the
+    code under test.
+    """
+
+    @staticmethod
+    def _build_enclosing_function_map(tree):
+        mapping = {}
+
+        def _visit(node, enclosing):
+            mapping[id(node)] = enclosing
+            new_enclosing = enclosing
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                new_enclosing = node
+            for child in ast.iter_child_nodes(node):
+                _visit(child, new_enclosing)
+
+        _visit(tree, None)
+        return mapping
+
+    @staticmethod
+    def _walk_value(value, target):
+        return any(target(n) for n in ast.walk(value))
+
+    @staticmethod
+    def _is_output_literal(node):
+        return (isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and node.value == 'output')
+
+    @staticmethod
+    def _is_file_ref(node):
+        return isinstance(node, ast.Name) and node.id == '__file__'
+
+    @staticmethod
+    def _is_makedirs_call(node):
+        if not isinstance(node, ast.Call):
+            return False
+        f = node.func
+        return ((isinstance(f, ast.Attribute) and f.attr == 'makedirs')
+                or (isinstance(f, ast.Name) and f.id == 'makedirs'))
+
+    @classmethod
+    def _resolve_arg_closure(cls, call_node, tree, enc_map):
+        if not call_node.args:
+            return []
+        arg = call_node.args[0]
+        if isinstance(arg, ast.Name):
+            name = arg.id
+            call_scope = enc_map.get(id(call_node))
+            candidates = []
+            for a in ast.walk(tree):
+                if not isinstance(a, ast.Assign):
+                    continue
+                if not any(isinstance(t, ast.Name) and t.id == name
+                           for t in a.targets):
+                    continue
+                a_scope = enc_map.get(id(a))
+                if a_scope is not None and a_scope is not call_scope:
+                    continue
+                if a.lineno >= call_node.lineno:
+                    continue
+                candidates.append(a)
+            if not candidates:
+                return []
+            candidates.sort(key=lambda x: x.lineno)
+            return [candidates[-1].value]
+        return [arg]
+
+    @classmethod
+    def _predicate(cls, src):
+        """Run the full co-location predicate over ``src`` (a Python
+        source string).  Returns ``True`` if the tightened check would
+        accept the source, ``False`` otherwise.  Mirrors the body of
+        ``test_examples_output_dir_exists_and_contains_pngs``.
+        """
+        tree = ast.parse(src)
+        makedirs_calls = [n for n in ast.walk(tree) if cls._is_makedirs_call(n)]
+        if not makedirs_calls:
+            return False
+        enc_map = cls._build_enclosing_function_map(tree)
+        for call in makedirs_calls:
+            closures = cls._resolve_arg_closure(call, tree, enc_map)
+            for value in closures:
+                has_output = cls._walk_value(value, cls._is_output_literal)
+                has_file = cls._walk_value(value, cls._is_file_ref)
+                if has_output and has_file:
+                    return True
+        return False
+
+    def test_multi_assign_bypass_caught(self):
+        """The multi-assign gaming form should now be REJECTED.
+
+        Form: ``out_dir = good_form; out_dir = '/tmp/elsewhere';
+        makedirs(out_dir)`` -- v5.2.0 accepted this because the EARLIER
+        assignment carried the signals.  v5.2.5's last-write-wins picks
+        the LATER ``out_dir = '/tmp/elsewhere'`` assignment, whose RHS
+        lacks BOTH the ``'output'`` literal AND the ``__file__``
+        reference -- so the predicate rejects.
+        """
+        src = (
+            "import os\n"
+            "def main():\n"
+            "    out_dir = os.path.join(os.path.dirname("
+            "os.path.abspath(__file__)), 'output')\n"
+            "    out_dir = '/tmp/somewhere_else'\n"
+            "    os.makedirs(out_dir, exist_ok=True)\n"
+        )
+        assert self._predicate(src) is False, (
+            'multi-assign bypass should be REJECTED by the v5.2.5 '
+            'last-write-wins tightening: the LATER ``out_dir = '
+            "'/tmp/somewhere_else'`` rebind lacks the ``'output'`` "
+            'literal + ``__file__`` reference signals.')
+
+    def test_dead_code_bypass_caught(self):
+        """The dead-code gaming form should now be REJECTED.
+
+        Form: ``def never_called(): out_dir = good_form`` placed beside
+        a ``main()`` whose ``out_dir`` is bound to ``'/tmp'``.  v5.2.0
+        accepted this because ``ast.walk(tree)`` picked up the
+        good-form assignment in the sibling function body.  v5.2.5's
+        function-scope filter excludes assignments from sibling
+        function bodies entirely.
+        """
+        src = (
+            "import os\n"
+            "def never_called():\n"
+            "    out_dir = os.path.join(os.path.dirname("
+            "os.path.abspath(__file__)), 'output')\n"
+            "def main():\n"
+            "    out_dir = '/tmp'\n"
+            "    os.makedirs(out_dir, exist_ok=True)\n"
+        )
+        assert self._predicate(src) is False, (
+            'dead-code bypass should be REJECTED by the v5.2.5 '
+            'function-scope filter: the ``never_called()`` body is a '
+            'sibling-function scope of ``main()`` and its assignments '
+            'must NOT be considered when resolving ``out_dir`` for the '
+            '``makedirs`` call inside ``main()``.')
+
+    def test_real_example_scripts_still_pass(self):
+        """The 3 real v4.16.1 example scripts must STILL pass.
+
+        ``algebra_4f_system.py``, ``algebra_anamorphic.py``, and
+        ``plot_opd_summary_singlet.py`` all bind ``out_dir =
+        os.path.join(os.path.dirname(os.path.abspath(__file__)),
+        'output')`` once at the top of ``main()`` and then call
+        ``os.makedirs(out_dir, exist_ok=True)``.  Both the function-
+        scope filter and the last-write-wins semantics admit them
+        unchanged: the single assignment IS the last write, and it
+        IS in the same function scope as the makedirs call.
+        """
+        expected_scripts = (
+            'algebra_4f_system.py',
+            'algebra_anamorphic.py',
+            'plot_opd_summary_singlet.py',
+        )
+        for script_name in expected_scripts:
+            script = _EXAMPLES_DIR / script_name
+            assert script.is_file(), (
+                f'{script_name} is missing from examples/')
+            src = script.read_text(encoding='utf-8')
+            assert self._predicate(src) is True, (
+                f'{script_name} should STILL pass the v5.2.5 tightened '
+                f'predicate; the v5.2.0 contract for the 3 real example '
+                f'scripts must not regress.')
 
 
 # ============================================================================

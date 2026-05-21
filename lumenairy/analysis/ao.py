@@ -616,9 +616,11 @@ def ao_closed_loop(
     dm: 'DeformableMirror',
     n_iterations: int = 10,
     gain: float = 0.5,
+    leak: float = 0.0,
     wavelength: float = 633e-9,
     dx: float,
     wfs: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+    tol: Optional[float] = None,
     return_history: bool = False,
 ) -> Union[np.ndarray, Tuple[np.ndarray, Dict[str, np.ndarray]]]:
     """Run a closed-loop AO control sequence on a disturbance phase.
@@ -633,12 +635,23 @@ def ao_closed_loop(
         closed-loop command.  Call ``dm.reset()`` first if you want a
         fresh loop.
     n_iterations : int, default 10
-        Number of closed-loop iterations.
+        Number of closed-loop iterations.  Treated as an upper bound
+        if ``tol`` is set and the early-stop criterion fires first.
     gain : float, default 0.5
-        Loop gain (0 < gain <= 1).  Standard leaky-integrator gain.
+        Loop gain in ``[0, 2]``.  Standard leaky-integrator gain.
         Typical AO values are 0.3 -- 0.5; lower values reject
         wavefront-sensor noise better at the cost of convergence
-        speed.
+        speed.  ``gain = 0`` is an open-loop fallback: the DM command
+        is never updated and the residual stays equal to
+        ``phase_disturbance - dm.phase()`` at the input state for all
+        iterations (useful for noise-only WFS characterisation).
+    leak : float, default 0.0
+        Leak factor in ``[0, 1]`` applied to the previous command at
+        every step (v5.2.5: AUDIT_V5_2_3 V9 + P3-F1-2).  The control
+        law is ``cmd_{k+1} = (1 - leak) * cmd_k + gain * fit(...)``;
+        ``leak = 0`` (default) is a pure integrator and reproduces the
+        v5.2.3 behaviour bit-for-bit.  Small positive leak prevents
+        long-term command drift on un-locked loops.
     wavelength : float, default 633e-9
         Operating wavelength in meters.  Only used to convert
         ``history['rms_per_iter']`` to ``history['wfe_per_iter']``
@@ -654,7 +667,15 @@ def ao_closed_loop(
         ideal phase sensing is assumed (``measured = residual``).
         Pass a ``functools.partial(...)`` wrapper around a realistic
         sensor (e.g. :func:`lumenairy.shack_hartmann`) for noisy or
-        rate-limited measurements.
+        rate-limited measurements.  v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2):
+        if ``wfs(residual)`` returns ``None`` the helper treats that
+        iteration as a missed measurement and skips the command update
+        (the DM command is unchanged on that step).
+    tol : float, optional
+        Residual-RMS early-stop threshold in radians (v5.2.5:
+        AUDIT_V5_2_3 V9 + P3-F1-2).  If set and the residual RMS drops
+        below ``tol`` after some iteration, the loop returns early.
+        Default ``None`` runs the full ``n_iterations``.
     return_history : bool, default False
         If True, return a per-iteration diagnostic dict alongside the
         final residual.
@@ -662,25 +683,28 @@ def ao_closed_loop(
     Returns
     -------
     residual_phase : ndarray, shape (Ny, Nx)
-        The residual phase after ``n_iterations`` closed-loop steps,
-        in radians.  Equal to
+        The residual phase after the loop terminates (either
+        ``n_iterations`` reached or ``tol`` met), in radians.  Equal to
         ``phase_disturbance - dm.phase()`` at the end of the loop.
     history : dict (only if ``return_history=True``)
         Diagnostic dict with keys:
 
-        * ``'rms_per_iter'`` : ndarray of shape ``(n_iterations + 1,)``,
-          float, RMS of the residual phase in radians at iteration 0
-          (initial) through ``n_iterations`` (final).
-        * ``'wfe_per_iter'`` : ndarray of shape ``(n_iterations + 1,)``,
-          float, the same RMS converted to meters of OPD via
+        * ``'rms_per_iter'`` : ndarray of shape
+          ``(iterations_run + 1,)``, float, RMS of the residual phase
+          in radians at iteration 0 (initial) through the final
+          iteration actually executed.  When ``tol`` is not set this
+          length is ``n_iterations + 1``.
+        * ``'wfe_per_iter'`` : ndarray of the same shape, the same RMS
+          converted to meters of OPD via
           ``rms / (2 pi) * wavelength``.
 
     Notes
     -----
-    The control law is the canonical leaky-integrator with zero leak:
+    The control law is the leaky integrator:
 
     .. math::
-        \\mathrm{cmd}_{k+1} = \\mathrm{cmd}_k + g \\cdot \\mathrm{fit}(\\mathrm{wfs}(\\mathrm{residual}_k))
+        \\mathrm{cmd}_{k+1} = (1 - \\mathrm{leak}) \\cdot \\mathrm{cmd}_k
+        + g \\cdot \\mathrm{fit}(\\mathrm{wfs}(\\mathrm{residual}_k))
 
     where ``fit`` is the DM's least-squares projection
     (:meth:`DeformableMirror.fit_phase`) onto the influence-function
@@ -688,16 +712,24 @@ def ao_closed_loop(
 
     1. Compute ``residual = phase_disturbance - dm.phase()``.
     2. Pass the residual through the user WFS (or pass through for
-       ideal sensing).
+       ideal sensing).  If the WFS returns ``None`` this iteration is
+       a no-op (no command update).
     3. Fit the measured phase to the DM's influence-function basis
        (on a scratch DM, so the user's ``dm.command`` accumulates).
-    4. Update ``dm.command += gain * delta_cmd``.
+    4. Update
+       ``dm.command = (1 - leak) * dm.command + gain * delta_cmd``.
 
     The user-supplied ``wfs`` should return a phase map on the same
     grid as ``phase_disturbance`` (an ideal projection back to the
     pupil from whatever the sensor measures).  For real Shack-Hartmann
     integration, build a wrapper that runs the sensor and then
     reconstructs the wavefront via a modal basis.
+
+    Sign conventions: phases follow the library-wide convention table
+    in ``CONVENTIONS.md`` Section 7 (OPD sign -- positive OPD means a
+    phase advance / wavefront leads the reference sphere; time
+    convention ``exp(-i omega t)`` with forward propagation
+    ``exp(+i k z)``).
 
     Examples
     --------
@@ -715,13 +747,31 @@ def ao_closed_loop(
     if n_iterations < 0:
         raise ValueError(
             f"n_iterations must be >= 0; got {n_iterations}")
-    if not (0.0 < gain <= 1.0):
+    # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): loosen gain to [0, 2] (matches
+    # sibling LeakyIntegrator).  gain=0 is an open-loop fallback.
+    if not (0.0 <= gain <= 2.0):
         raise ValueError(
-            f"gain must be in (0, 1]; got {gain}")
+            f"gain must be in [0, 2]; got {gain}")
+    # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): leak factor validation.
+    if not (0.0 <= leak <= 1.0):
+        raise ValueError(
+            f"leak must be in [0, 1]; got {leak}")
     if dx <= 0:
         raise ValueError(f"dx must be > 0; got {dx}")
     if wavelength <= 0:
         raise ValueError(f"wavelength must be > 0; got {wavelength}")
+    # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): tol validation (None or
+    # non-negative float).
+    if tol is not None:
+        tol = float(tol)
+        if tol < 0.0:
+            raise ValueError(f"tol must be >= 0 or None; got {tol}")
+    # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): explicit wfs-callable check.
+    # ``None`` -> ideal pass-through.  Anything else must be callable.
+    if wfs is not None and not callable(wfs):
+        raise TypeError(
+            "ao_closed_loop: wfs must be None or callable; got "
+            f"{type(wfs).__name__}")
     if not isinstance(dm, DeformableMirror):
         raise TypeError(
             "ao_closed_loop: dm must be a DeformableMirror instance, "
@@ -742,8 +792,22 @@ def ao_closed_loop(
 
     # Initial residual (k = 0) before any control action this call.
     residual = phase - dm.phase()
+    rms0 = float(np.sqrt(np.mean(residual * residual)))
     if record_history:
-        rms_per_iter[0] = float(np.sqrt(np.mean(residual * residual)))
+        rms_per_iter[0] = rms0
+
+    # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): early-stop check on the
+    # initial sample so callers who pass an already-converged state
+    # don't waste iterations.
+    if tol is not None and rms0 < tol:
+        if record_history:
+            rms_per_iter = rms_per_iter[:1]
+            wfe_per_iter = rms_per_iter / (2.0 * np.pi) * wavelength
+            return residual, {
+                'rms_per_iter': rms_per_iter,
+                'wfe_per_iter': wfe_per_iter,
+            }
+        return residual
 
     # Scratch DM mirrors the user DM's geometry so ``fit_phase`` can
     # solve for the incremental command without overwriting the
@@ -757,20 +821,36 @@ def ao_closed_loop(
         cache_basis=dm.cache_basis,
     )
 
+    iterations_run = 0
     for k in range(n_iterations):
         # 1. Wavefront-sensor measurement (ideal pass-through by default).
         measured = wfs(residual) if wfs is not None else residual
-        # 2. Project measured phase onto DM basis (incremental command).
-        scratch.fit_phase(measured)
-        delta_cmd = scratch.command
-        # 3. Leaky-integrator update (zero leak: pure integrator).
-        dm.command = dm.command + gain * delta_cmd
+        # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): a WFS that returns None
+        # signals "no measurement this frame".  Apply the leak (so the
+        # command still relaxes if leak > 0) but skip the integrator
+        # update.  When leak == 0 this is a true no-op on the command.
+        if measured is None:
+            dm.command = (1.0 - leak) * dm.command
+        else:
+            # 2. Project measured phase onto DM basis (incremental command).
+            scratch.fit_phase(measured)
+            delta_cmd = scratch.command
+            # 3. Leaky-integrator update.  v5.2.5: leak=0 reproduces the
+            # v5.2.3 pure-integrator update bit-for-bit.
+            dm.command = (1.0 - leak) * dm.command + gain * delta_cmd
         # 4. Recompute residual after the update.
         residual = phase - dm.phase()
+        rms_k = float(np.sqrt(np.mean(residual * residual)))
         if record_history:
-            rms_per_iter[k + 1] = float(np.sqrt(np.mean(residual * residual)))
+            rms_per_iter[k + 1] = rms_k
+        iterations_run += 1
+        # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): early-stop on tol.
+        if tol is not None and rms_k < tol:
+            break
 
     if record_history:
+        # Slice history to the iterations actually run (v5.2.5).
+        rms_per_iter = rms_per_iter[:iterations_run + 1]
         # WFE in meters of OPD = (rad rms) / (2 pi) * wavelength.
         wfe_per_iter = rms_per_iter / (2.0 * np.pi) * wavelength
         history = {

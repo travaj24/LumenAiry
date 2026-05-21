@@ -163,6 +163,34 @@ def main():
     print(f'    Helper history (global RMS) final: '
           f'{history["rms_per_iter"][-1]:.4f} rad')
 
+    # --- 6. v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2) -- new kwargs demo -----
+    # Demonstrate ``leak`` and ``tol`` on the same disturbance.  ``leak``
+    # bleeds the cumulative command toward zero each step (useful for
+    # un-locked loops); ``tol`` early-stops the loop once the residual
+    # RMS drops below the threshold.
+    print()
+    print('  v5.2.5 new kwargs (leak + tol + gain=0 open-loop fallback):')
+    # leak=0.05 over 30 iter, generous tol so the loop trips early.
+    dm.reset()
+    residual_v525, history_v525 = la.ao_closed_loop(
+        phase_atm, dm=dm, n_iterations=30, gain=0.5, leak=0.05,
+        wavelength=wavelength, dx=dx, tol=0.20,
+        return_history=True)
+    iters_v525 = len(history_v525['rms_per_iter']) - 1
+    print(f'    leak=0.05, tol=0.20 rad -> stopped at iter {iters_v525} '
+          f'/ 30 (RMS={_phase_rms(residual_v525, pupil_mask):.3f} rad)')
+    print(f'      rms_per_iter[0]={history_v525["rms_per_iter"][0]:.3f} '
+          f'rad, rms_per_iter[-1]='
+          f'{history_v525["rms_per_iter"][-1]:.3f} rad')
+    # gain=0 open-loop fallback for noise-only WFS characterisation.
+    dm.reset()
+    residual_g0 = la.ao_closed_loop(
+        phase_atm, dm=dm, n_iterations=3, gain=0.0,
+        wavelength=wavelength, dx=dx)
+    print(f'    gain=0.0 (open-loop fallback) -> residual RMS '
+          f'unchanged: {_phase_rms(residual_g0, pupil_mask):.3f} rad '
+          f'(matches initial {rms_initial:.3f} rad)')
+
 
 if __name__ == '__main__':
     main()

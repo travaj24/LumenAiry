@@ -168,6 +168,19 @@ def _is_audit_closure_section(heading_line):
         ### audit closures
         ### audit P3 fix
         ### New audit P3 fix
+        ### Tier 1 closures (5 substantive residuals)        [v5.2.5]
+        ### Tier 2 closures (2 documentation refactors)       [v5.2.5]
+        ### Tier 3 closures (3 tools / infra)                 [v5.2.5]
+        ### Tier 1 -- substantive residuals                   [v5.2.5]
+        ### v5.2.0 audit closures actually shipped in v5.2.5  [v5.2.5]
+
+    v5.2.5 (AUDIT_V5_2_3 P2-F1-3): extended to recognize "Tier N
+    closures" (v5.2.3 used that form for its 3 closure sections;
+    the v5.2.3 release's verify_changelog_closures run reported
+    rc=2 "no audit-closure bullets detected" because the
+    classifier missed the Tier-N heading family).  Future
+    audit-closure heading variants should be added here, NOT
+    silently allowed past the gate.
     """
     s = heading_line.lower()
     return (
@@ -176,6 +189,8 @@ def _is_audit_closure_section(heading_line):
         or 'audit carryover' in s
         or 'audit fix' in s
         or re.search(r'\bp[0-3]\s+closure', s) is not None
+        # v5.2.5 (AUDIT_V5_2_3 P2-F1-3): Tier N closures form
+        or re.search(r'\btier\s+[0-9]\b', s) is not None
     )
 
 

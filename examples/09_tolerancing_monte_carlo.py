@@ -31,16 +31,28 @@ import lumenairy as la
 
 def main():
     # --- 1. Build a singlet prescription ------------------------------
-    # 50 mm-EFL N-BK7 plano-convex singlet at 12 mm clear aperture.
+    # ~100 mm-EFL N-BK7 plano-convex singlet at 12 mm clear aperture.
     # The two refracting surfaces are indices 0 and 1; we'll tolerance
     # both.
     wavelength = 587.56e-9  # d-line
-    f_target = 100e-3       # ~ paraxial focal length
     aperture = 12e-3
     prescription = la.make_singlet(
         R1=51.5e-3, R2=float('inf'), d=4e-3,
         glass='N-BK7', aperture=aperture,
     )
+
+    # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 Strehl normalization fix):
+    # Use the singlet's paraxial back focal length (computed from the
+    # prescription) as ``focal_length`` rather than a hand-picked
+    # round number.  The reference Strehl denominator inside
+    # ``monte_carlo_tolerancing`` is evaluated at this z; if it
+    # disagrees with the actual focal plane the through-focus scan
+    # peak can exceed the reference and yield non-physical Strehl > 1.
+    surfs = la.surfaces_from_prescription(prescription)
+    _, efl, bfl, _ = la.system_abcd(surfs, wavelength=wavelength)
+    f_target = bfl
+    print(f'  Singlet paraxial: EFL = {efl*1e3:.3f} mm,  '
+          f'BFL = {bfl*1e3:.3f} mm  (used as focal_length)')
 
     # --- 2. Build the source pupil ------------------------------------
     # A circular clear pupil on a 128x128 grid.  Pupil semi-diameter

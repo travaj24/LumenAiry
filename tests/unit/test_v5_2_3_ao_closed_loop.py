@@ -290,12 +290,17 @@ def test_ao_closed_loop_ideal_wfs_matches_default():
 
 
 def test_ao_closed_loop_rejects_bad_gain():
+    # v5.2.5 (AUDIT_V5_2_3 V9 + P3-F1-2): gain validation loosened
+    # from ``0.0 < gain <= 1.0`` to ``0.0 <= gain <= 2.0``.  The
+    # boundary ``gain=0.0`` is now an open-loop fallback (useful
+    # for noise-only characterization); ``gain=1.5`` is a valid
+    # high-bandwidth tuning.  Out-of-range values still raise.
     dm, dx, _, _ = _build_dm_and_grid()
     phase = np.zeros((dm.N, dm.N))
     with pytest.raises(ValueError, match='gain'):
-        la.ao_closed_loop(phase, dm=dm, n_iterations=1, gain=0.0, dx=dx)
+        la.ao_closed_loop(phase, dm=dm, n_iterations=1, gain=-0.1, dx=dx)
     with pytest.raises(ValueError, match='gain'):
-        la.ao_closed_loop(phase, dm=dm, n_iterations=1, gain=1.5, dx=dx)
+        la.ao_closed_loop(phase, dm=dm, n_iterations=1, gain=2.5, dx=dx)
 
 
 def test_ao_closed_loop_rejects_bad_dx():

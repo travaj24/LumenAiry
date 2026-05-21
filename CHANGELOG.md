@@ -2,6 +2,181 @@
 
 All notable changes to the core library are documented here.
 
+## [5.2.5] — 2026-05-21
+
+**Patch release closing AUDIT_V5_2_3_2026_05_21** (the 4-release-chain
+v5.1.1 -> v5.2.3 audit by the 12-agent fleet).  Closes all 7 P2 +
+all 10 P3 findings.  Version number jumps from 5.2.3 to 5.2.5 (no
+5.2.4) to signal that this is a substantive patch rather than a
+trivial cleanup.
+
+**Zero physics regressions in 14 consecutive releases.**
+
+3780 unit tests pass (collected = 3797 = pass + 16 skip + 1 xfail);
++15 net pass vs v5.2.3.  34/34 validation pass.
+
+### P2 closures (7)
+
+* **V12 walker regex relaxed to accept short-form audit IDs**
+  (P2-F1-2).  The v5.2.0 regex
+  `r'(?<![A-Z0-9])(P[0-3](?:-NEW)?-[A-Z][A-Z0-9_-]{2,})'` required
+  `[A-Z0-9_-]{2,}` after the first uppercase letter, so short-form
+  IDs like `P1-A` / `P1-C` / `P1-F` / `P1-G` / `P1-1` (the IDs cited
+  in v5.2.3's own CHANGELOG) were silently rejected.  V12.2 was a
+  no-op on the v5.2.3 release.  Relaxed to
+  `r'(?<![A-Z0-9])(P[0-3](?:-NEW)?-[A-Z0-9][A-Z0-9_-]*)'` + known-
+  prefix allowlist (`P0-` / `P1-` / `P2-` / `P3-`).  Both
+  short-form and long-form audit IDs now resolve through V12.2.
+* **V16 heading classifier extended to "Tier N closures"** (P2-F1-3).
+  `_is_audit_closure_section` in
+  `scripts/verify_changelog_closures.py` only matched
+  `'audit closure'` / `'audit carry-over'` / `'audit fix'` / `\bp[0-3]\s+closure`.
+  v5.2.3 used `### Tier 1 closures` / `### Tier 2 closures` /
+  `### Tier 3 closures` -- none matched.  Empirically
+  `python scripts/verify_changelog_closures.py --version 5.2.3`
+  exited rc=2 (treated as pass by CI gate); a v5.2.4 with
+  fabricated `### Tier N closures` bullets would NOT have been
+  caught.  Extended classifier with `re.search(r'\btier\s+[0-9]\b', s)`.
+* **Python 3.10 added to publish.yml verify matrix** (P2-F1-4).
+  v5.1.1 + v5.2.x publish.yml matrix was `[3.11, 3.12, 3.13]` -- no
+  3.10 even though the documented floor is 3.10 and v5.2.2's whole
+  reason for existing was 3.10 install-path drift.  Bumped to
+  `[3.10, 3.11, 3.12, 3.13]` matching unit-tests.yml.
+* **HFPI/HF freespace dispatcher threads `output_grid`/`output_dx`**
+  (P2-F1-1).  v5.2.3 fixed the through-prescription paths but the
+  freespace branches (when `prescription is None`) silently dropped
+  the resolved values.  `propagate(method='hfpi', output_grid=...)`
+  without a prescription returned a default-shape result.  Now
+  threads `(output_shape, output_dx)` through the freespace
+  branches too.
+* **Consolidated test refreshed to v5.2+ kwarg idiom** (P2-F1-5).
+  3 sites in `tests/unit/test_audit_propagation.py` carried the
+  v4.11.2-era `output_grid=(Ny, Nx)` form, which now fires the
+  v5.2.0 DeprecationWarning shim.  Tests passed only because
+  DeprecationWarning is non-fatal by default.  Refreshed to
+  `output_shape=(Ny, Nx)` so the bit-for-bit preservation claim is
+  honest under `-W error::DeprecationWarning`.
+* **AST `_resolve_arg_closure` tightening** (P3 V1 residual).  v5.2.0
+  required the `'output'` literal + `__file__` reference inside the
+  `makedirs(...)` first-arg subtree OR the RHS of the binding
+  assignment.  F1 demonstrated two narrower gaming bypasses:
+  multi-assign-shadow (`out_dir = good; out_dir = bad; makedirs(out_dir)`)
+  + dead-code-in-unreached-function.  v5.2.5 adds function-scope
+  filtering + last-write-wins semantics.  Both bypasses now
+  rejected; 3 new gaming-form tests added.
+* **dep-metadata drift check re-run** (P2 V6, no code change).
+  Audit claimed the zarr env-marker was stale (zarr 3.2.1 requires
+  >=3.12 vs pyproject >=3.11) and scipy/numpy/astropy/jax had
+  silent floor drift.  v5.2.5 ran the v5.2.3-shipped dep-metadata
+  drift script and confirmed **zero drift** -- the resolver picks
+  compatible earlier zarr 3.0/3.1.x releases on Python 3.11 under
+  the current bare-version constraints; same for scipy / numpy /
+  astropy / jax.  Audit claim was speculative; current pyproject
+  is correct.  The v5.2.3-shipped Monday cron continues to watch
+  for real future drift.  **No files modified for this finding.**
+
+### P3 closures (10)
+
+* **Example 09 Strehl > 1 normalization fix** (P3-F1-1).  Both
+  library-side AND example-side bugs identified + fixed:
+  - `monte_carlo_tolerancing` (numpy + JAX backends) was
+    recomputing `ideal_peak` inside the trial loop from each
+    PERTURBED `E_exit`.  Pinned to the UNPERTURBED nominal pupil
+    computed ONCE before the loop.
+  - Example 09 hard-coded `f_target = 100e-3` but the singlet's
+    actual paraxial BFL is 97.015 mm; passing a focal length that
+    disagrees with the lens's true focus also produces Strehl > 1.
+    Replaced with a `system_abcd` ray-trace to get the true BFL.
+  Final printed Strehl: 0.967 +/- 0.029 (mean +/- std), 5th pct
+  0.910, 95th pct 0.997.  All percentiles physically bounded;
+  max of 1.003 is rounding-noise from per-iteration perturbations
+  slightly shifting focus past the reference plane.
+* **`ao_closed_loop` `leak` + `tol` kwargs + edge cases** (P3-F1-2 +
+  V9).  Added two new kwargs: `leak: float = 0.0` (default 0.0 =
+  pure integrator, bit-for-bit identical to v5.2.3) and
+  `tol: Optional[float] = None` (residual-RMS early-stop
+  threshold).  Loosened `gain` validation from `0.0 < gain <= 1.0`
+  to `0.0 <= gain <= 2.0` -- `gain=0.0` is now an open-loop
+  fallback.  Added `wfs(...)`-returning-None skip-update path
+  (no longer crashes).  Cited CONVENTIONS.md Section 7 in
+  docstring.  Bit-for-bit preservation at `leak=0.0` verified
+  via `np.array_equal` pin.  8 new tests.
+* **Chebyshev derivative + second-derivative `xp=` dispatch**
+  (P3-F1-3).  v5.2.0 module docstring claimed "all three helpers"
+  support `xp=` backend dispatch but only `chebyshev_vandermonde`
+  did.  v5.2.5 makes the existing claim true: added `xp=None` kwarg
+  to `chebyshev_derivative_vandermonde` and
+  `chebyshev_second_derivative_vandermonde` + dispatched internal
+  `np.*` to `xp.*`.  JAX traceability verified under `jax.jit`.
+  Consumer call sites preserve numerics exactly (positional calls
+  don't pass `xp=`, default `None` -> NumPy bit-for-bit).
+* **CHANGELOG `apply_doe_phase_traced` re-worded** (P3-F1-4).
+  v5.2.0 description said "phase advance/retard"; actual fix is
+  direction-cosine deflection.  Grating equation L -> L + m*lambda/Lambda
+  is transverse-only; OPL accumulator is unchanged.  Reworded in
+  the v5.2.0 entry.
+* **CHANGELOG test-count self-citation accuracy** (audit Part 8
+  P3 row 5, F1).
+  CHANGELOG v5.2.3 entry stated 3765/18/1; F1's empirical run
+  showed 3766/17/1 (1-test delta from V12.4 conditional path).
+  V12.3 self-consistency holds either way since 3784 = 3766 + 17 + 1
+  = 3765 + 18 + 1.  Stamped the v5.2.3 entry counts at the
+  build-time empirical numbers (verified at v5.2.5 ship as 3780
+  pass / 16 skip / 1 xfail = 3797 -- the new tests + AST tightening
+  account for the +15 pass delta).
+* **V15 walker floor bumped 5 -> 6** (P3-F1-6).  v5.2.0 discovered
+  6 sentinels including `_SchellReturnKindUnsetSentinel` (the
+  v4.15.2 hardcoded tuple was missing it).  Floor tightened to >= 6
+  to reflect that baseline.  Catches a walker collapse without
+  leaving silently-pass headroom.
+* **`install_atexit_restore` -> `_install_atexit_restore`** (audit F4).
+  Renamed to underscore-prefixed form to signal private-bootstrap
+  intent (caller is `lumenairy/__init__.py` at the end of library
+  import; no user-facing call site).  Legacy name preserved as
+  back-compat alias at the bottom of `_context.py` so any external
+  caller importing it by the old name continues to work.
+* **`docs/cookbook.md` cross-links** (audit F4).  Added 5
+  cross-links: 2 in the header "See also" block (CONVENTIONS.md
+  + Migration-Guide.md), 2 in OPD/Zernike + through-focus recipes
+  (pointing at CONVENTIONS.md Section 7), 1 in polarization recipe
+  (Migration-Guide.md for v4 -> v5 shim removals).
+* **`ao_closed_loop` docstring cites CONVENTIONS Section 7**
+  (audit F4).  One-line pointer in the Notes section: "phases follow
+  the library-wide convention table in `CONVENTIONS.md` Section 7
+  (OPD sign + time convention + forward propagation)".
+* **CHANGELOG.md:81 line-count self-citation refreshed** (audit V8).
+  v5.2.3 entry said `11553 -> 10618 lines` at the time of the
+  archive split.  v5.2.3's entry itself added ~150 lines after
+  the split was measured; current state is ~10769 lines.  v5.2.3
+  bullet now states the AT-THE-TIME-OF-SPLIT count + the post-add
+  current state.
+
+### Side-effects
+
+* `_context.py` legacy `install_atexit_restore` alias is NOT in
+  `__all__` (matches the rename's "private intent" signal).  Any
+  user-facing call site relying on `from lumenairy._context import install_atexit_restore`
+  continues to work.
+* Existing v5.2.3 test `test_ao_closed_loop_rejects_bad_gain` was
+  updated to reflect the new `[0.0, 2.0]` range -- previously
+  expected `gain=0.0` and `gain=1.5` to raise; now both are valid.
+
+### Items still deferred to v5.3 forward horizon
+
+Unchanged from v5.2.3:
+
+* `MultiFieldMerit` JIT compile.
+* `logging` adoption sweep.
+* CHANGELOG pre-v4.11 archive completion.
+* Designer GUI v3.8+ (separate version stream).
+* Next audit cycle (AUDIT_V5_2_5_X).
+
+### Files touched
+
+29 files: 1 dispatch + 1 ao + 1 chebyshev + 3 walkers + 1 publish.yml + 1 test_audit_propagation + 1 test_v4_16_1_agent_d (AST) + 1 _context (rename + alias) + 1 cookbook + 1 through_focus + 1 example 09 + new test_v5_2_5_ao_closed_loop_residuals.py + various walker test pins + this CHANGELOG entry.
+
+---
+
 ## [5.2.3] — 2026-05-21
 
 **Full v5.x ROADMAP closure** (Tier-1 + Tier-2 + Tier-3 residuals
@@ -78,11 +253,14 @@ all explicitly moved to the v5.3 forward horizon.
   out verbatim into `docs/cookbook.md` (376 lines).  Anchor
   links preserved.
 * **CHANGELOG.md archive split** (ROADMAP v5.1 docs residual,
-  partial).  11553 -> 10618 lines (-935, -8%).  v4.11.x and
-  v4.12.x entries moved verbatim into `docs/changelogs/v4.md`
-  (962 lines).  Pre-v4.11 entries (v4.10 down to v2.5) remain
-  in the top-level CHANGELOG.md and are deferred to v5.3 for
-  completion.
+  partial).  11553 -> 10618 lines AT-THE-TIME-OF-SPLIT (-935,
+  -8%).  v4.11.x and v4.12.x entries moved verbatim into
+  `docs/changelogs/v4.md` (962 lines).  Pre-v4.11 entries
+  (v4.10 down to v2.5) remain in the top-level CHANGELOG.md
+  and are deferred to v5.3 for completion.  v5.2.5 self-citation
+  refresh: post-v5.2.3 the top-level CHANGELOG.md is back up
+  to ~10769 lines because the v5.2.3 entry itself added ~150
+  lines after the split was measured.
 
 ### Tier 3 closures (3 tools / infra)
 
@@ -529,8 +707,10 @@ All five are AUDIT_V4_13_1 deferred Tier-2 items.
   LOC in `raytrace/trace.py`).  The inline `trace()` DOE kick
   preserved the diffraction-order sign; the traced sibling
   did not.  Fix mirrors the inline pattern.  Negative-order
-  diffraction now produces the correct phase advance/retard.
-  3 new tests.
+  diffraction now produces the correct direction-cosine
+  deflection (the grating equation L -> L + m*lambda/Lambda is
+  transverse-only; the OPL accumulator is unchanged).  3 new
+  tests.
 * **`MultiPrescriptionParameterization.scale_floor`** (P1-1;
   `optimize/parameterizations.py`).  Added `scale_floor`
   kwarg + per-parameter-type default table: radii /

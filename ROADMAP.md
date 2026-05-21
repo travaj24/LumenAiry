@@ -27,6 +27,17 @@
   V16 walker + verify_changelog_closures script + dep-drift
   weekly cron, 9 source-text-proxy tests behavioral conversion,
   README cookbook split, partial CHANGELOG archive.
+* **v5.2.5** -- AUDIT_V5_2_3 closure (7 P2 + 10 P3): V12 regex
+  + V16 heading-classifier widening (the walker bugs the v5.2.3
+  release itself surfaced), publish.yml verify matrix gets
+  Python 3.10, HFPI/HF freespace dispatcher threads
+  `output_grid`/`output_dx`, AST `_resolve_arg_closure`
+  function-scope + last-write-wins tightening, ao_closed_loop
+  `leak` + `tol` kwargs + edge-case handling, Chebyshev
+  derivative + second-derivative `xp=` dispatch, Example 09
+  Strehl normalization (library + example side), `_install_atexit_restore`
+  rename + alias, cookbook cross-links, V15 floor bumped 5 -> 6.
+  3780 unit tests pass.
 
 Remaining v5.3 horizon: `MultiFieldMerit` JIT, `logging`
 adoption sweep, CHANGELOG pre-v4.11 archive completion,
@@ -45,8 +56,8 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v5.2.3 baseline (3765 unit tests passing + 18
-  documented skips + 1 documented xfail = 3784 collected).
+- **Library:** v5.2.5 baseline (3780 unit tests passing + 16
+  documented skips + 1 documented xfail = 3797 collected).
   Python 3.10+ required.
   v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.

@@ -7,6 +7,15 @@ installation + quick-start + API surface.
 See the top-level [README.md](../README.md) for installation and the
 library's organising principles.
 
+See also (canonical sibling docs):
+
+- [CONVENTIONS.md](../CONVENTIONS.md) -- sign conventions, units,
+  factory-verb naming (``create_*`` vs ``make_*``), kwarg vocabulary,
+  and other library-wide invariants every recipe below relies on.
+- [Migration-Guide.md](../Migration-Guide.md) -- v4 -> v5 API moves,
+  deprecated kwargs, and shim-removal schedule.  Consult before
+  porting older code into a snippet here.
+
 ---
 
 ## Cookbook
@@ -125,6 +134,11 @@ E_anam = la.apply_real_lens(E_in, prescription=pres,
 
 ### Zernike decomposition of an OPD map
 
+OPD sign and the converging-phase convention used here are pinned in
+[CONVENTIONS.md section 7](../CONVENTIONS.md#7-sign-conventions);
+follow that document if you need to compare these numbers against an
+external optical design package.
+
 ```python
 # Extract the OPD map from a wave field
 E_exit = la.apply_real_lens(E_in, prescription=prescription,
@@ -239,6 +253,11 @@ protocol.
 
 ### Through-focus and tolerancing
 
+The Strehl denominator ``ideal_peak`` is pinned to the unperturbed
+nominal pupil so tolerancing trials report Strehl bounded to [0, 1];
+units and phase-sign conventions used here follow
+[CONVENTIONS.md section 7](../CONVENTIONS.md#7-sign-conventions).
+
 ```python
 # Run a 21-plane through-focus scan
 E_exit = la.apply_real_lens(E_in, prescription=prescription,
@@ -265,6 +284,13 @@ results = la.tolerancing_sweep(prescription, wavelength, N, dx,
 ```
 
 ### Polarization
+
+The Jones-field method API (``field.apply_thin_lens``,
+``field.propagate``, ...) and the ``create_*`` vs ``apply_*`` split
+shown below are v5 conventions; pre-v5 free-function shims were
+removed in the v5.0 cleanup -- see
+[Migration-Guide.md](../Migration-Guide.md) if you are porting v4
+polarization code.
 
 ```python
 # Create a right-hand circularly polarized Gaussian beam

@@ -42,7 +42,15 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        python-version: ['3.11', '3.12', '3.13']
+        # v5.2.5 (AUDIT_V5_2_3 P2-F1-4): added '3.10' to the verify
+        # matrix.  Until v5.2.5 the verify gate exercised 3.11-3.13
+        # only -- which left a hole at the documented floor (3.10).
+        # v5.2.2's whole reason for existing was 3.10 install-path
+        # drift (pyfftw 0.15.1 + zarr 3.x dropped 3.10 support); the
+        # ship gate could not see that failure mode because 3.10 was
+        # not in this matrix.  unit-tests.yml already exercises 3.10
+        # so this brings publish.yml's matrix into parity.
+        python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
       - uses: actions/checkout@v4
 

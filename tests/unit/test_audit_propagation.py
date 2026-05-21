@@ -154,7 +154,15 @@ class TestAuditFixesV4_11_2_hfpi_hf_HfpiThroughPrescriptionFiniteConjugate:
             n_paths=4096,
             rng=42,
             cone_half_angle=0.05,  # narrow cone -> rays hit the lens
-            output_grid=(N_out, N_out),
+            # v5.2.5 (AUDIT_V5_2_3 P2-F1-5): v5.2.0 renamed this
+            # kwarg from ``output_grid`` (then meaning ``(Ny, Nx)``
+            # shape) to ``output_shape`` and made the old kwarg a
+            # DeprecationWarning shim.  The consolidated test
+            # carried the legacy form unchanged from v4.11.2; tests
+            # passed only because DeprecationWarning is non-fatal
+            # by default.  Refresh to the v5.2+ idiom so the test
+            # is bit-for-bit clean under -W error::DeprecationWarning.
+            output_shape=(N_out, N_out),
             output_dx=dx_out,
         )
 
@@ -358,7 +366,8 @@ class TestAuditFixesV4_11_2_hfpi_hf_HfThroughPrescriptionAsymptoticHonoursEin:
             E_gaussian, dx, rx,
             wavelength=wavelength,
             method='asymptotic',
-            output_grid=(N, N),
+            # v5.2.5 (AUDIT_V5_2_3 P2-F1-5): output_grid -> output_shape
+            output_shape=(N, N),
             output_dx=dx,
             source_box_half=40e-6,
             pupil_box_half=0.01,
@@ -367,7 +376,8 @@ class TestAuditFixesV4_11_2_hfpi_hf_HfThroughPrescriptionAsymptoticHonoursEin:
             E_offset, dx, rx,
             wavelength=wavelength,
             method='asymptotic',
-            output_grid=(N, N),
+            # v5.2.5 (AUDIT_V5_2_3 P2-F1-5): output_grid -> output_shape
+            output_shape=(N, N),
             output_dx=dx,
             source_box_half=40e-6,
             pupil_box_half=0.01,

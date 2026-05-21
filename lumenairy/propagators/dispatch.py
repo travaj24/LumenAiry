@@ -587,6 +587,15 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
                     "propagate(method='hfpi') without prescription "
                     "needs at least an aperture geometry "
                     "(aperture_radius=...).")
+            # v5.2.5 (AUDIT_V5_2_3 P2-F1-1): thread the resolved
+            # ``output_grid``/``output_dx`` through the freespace
+            # branch too.  v5.2.3 fixed the through-prescription path
+            # but the freespace branch silently dropped them.
+            _shape, _dx_out = _resolve_dispatcher_output_grid(
+                method, output_grid, output_dx, E_in.shape)
+            if _shape is not None or _dx_out is not None:
+                kwargs.setdefault('output_shape', _shape)
+                kwargs.setdefault('output_dx', _dx_out)
             return propagate_hfpi_freespace_aperture(
                 E_in, dx,
                 wavelength=wavelength,
@@ -612,6 +621,15 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             if z is None:
                 raise ValueError(
                     "propagate(method='hf') without prescription requires z.")
+            # v5.2.5 (AUDIT_V5_2_3 P2-F1-1): thread the resolved
+            # ``output_grid``/``output_dx`` through the freespace
+            # branch too.  v5.2.3 fixed the through-prescription path
+            # but the freespace branch silently dropped them.
+            _shape, _dx_out = _resolve_dispatcher_output_grid(
+                method, output_grid, output_dx, E_in.shape)
+            if _shape is not None or _dx_out is not None:
+                kwargs.setdefault('output_shape', _shape)
+                kwargs.setdefault('output_dx', _dx_out)
             return propagate_huygens_fresnel_freespace(
                 E_in, z, wavelength, dx, **kwargs,
             )

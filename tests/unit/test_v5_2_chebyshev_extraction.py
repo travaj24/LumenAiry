@@ -272,3 +272,87 @@ def test_xp_jax_traceable():
     # Match the NumPy reference to floating tolerance.
     T_ref = chebyshev_vandermonde(np.asarray(u_jax), max_k=4)
     np.testing.assert_allclose(np.asarray(T_jit), T_ref, rtol=1e-6, atol=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# Pin 8 -- v5.2.5 (AUDIT_V5_2_3 P3-F1-3): derivative + second-derivative
+# helpers honor the ``xp=`` kwarg the same way ``chebyshev_vandermonde``
+# does.  Pre-v5.2.5 they ignored / didn't accept ``xp=``; this pin
+# enforces the symmetric API.
+# ---------------------------------------------------------------------------
+
+def test_chebyshev_derivative_vandermonde_xp_dispatch():
+    """First-derivative helper: xp=np matches default; xp=jnp matches
+    under jax.jit when JAX is importable."""
+    from lumenairy._math.chebyshev import chebyshev_derivative_vandermonde
+    u = np.linspace(-0.9, 0.9, 13)
+    Tp_default = chebyshev_derivative_vandermonde(u, max_k=5)
+    Tp_xp_np = chebyshev_derivative_vandermonde(u, max_k=5, xp=np)
+    # xp=np must be bit-identical to the default branch.
+    assert Tp_default.shape == Tp_xp_np.shape == (6, 13)
+    np.testing.assert_array_equal(Tp_default, Tp_xp_np)
+
+    # max_k = 0 edge case: single all-zero row.
+    Tp0 = chebyshev_derivative_vandermonde(u, max_k=0, xp=np)
+    assert Tp0.shape == (1, 13)
+    np.testing.assert_array_equal(Tp0, np.zeros((1, 13)))
+
+    # Optional JAX leg.
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    u_jax = jnp.linspace(-0.9, 0.9, 13)
+    Tp_jax = chebyshev_derivative_vandermonde(u_jax, max_k=5, xp=jnp)
+    assert jnp.issubdtype(Tp_jax.dtype, jnp.floating)
+    assert Tp_jax.shape == (6, 13)
+    # jit-compile round-trip.
+    jitted = jax.jit(
+        lambda u: chebyshev_derivative_vandermonde(u, max_k=5, xp=jnp)
+    )
+    Tp_jit = jitted(u_jax)
+    # JAX defaults to float32 unless x64 is enabled; loosen tolerance
+    # accordingly.  Derivative magnitudes scale as n * U_{n-1}, so the
+    # absolute error grows with max_k.
+    np.testing.assert_allclose(
+        np.asarray(Tp_jit), Tp_default, rtol=1e-4, atol=1e-4,
+    )
+
+
+def test_chebyshev_second_derivative_vandermonde_xp_dispatch():
+    """Second-derivative helper: xp=np matches default; xp=jnp matches
+    under jax.jit when JAX is importable."""
+    from lumenairy._math.chebyshev import (
+        chebyshev_second_derivative_vandermonde,
+    )
+    u = np.linspace(-0.85, 0.85, 11)
+    Tpp_default = chebyshev_second_derivative_vandermonde(u, max_k=5)
+    Tpp_xp_np = chebyshev_second_derivative_vandermonde(u, max_k=5, xp=np)
+    # xp=np must be bit-identical to the default branch.
+    assert Tpp_default.shape == Tpp_xp_np.shape == (6, 11)
+    np.testing.assert_array_equal(Tpp_default, Tpp_xp_np)
+
+    # max_k < 2 edge cases: all-zero rows.
+    Tpp0 = chebyshev_second_derivative_vandermonde(u, max_k=0, xp=np)
+    assert Tpp0.shape == (1, 11)
+    np.testing.assert_array_equal(Tpp0, np.zeros((1, 11)))
+    Tpp1 = chebyshev_second_derivative_vandermonde(u, max_k=1, xp=np)
+    assert Tpp1.shape == (2, 11)
+    np.testing.assert_array_equal(Tpp1, np.zeros((2, 11)))
+
+    # Optional JAX leg.
+    jax = pytest.importorskip('jax')
+    jnp = jax.numpy
+    u_jax = jnp.linspace(-0.85, 0.85, 11)
+    Tpp_jax = chebyshev_second_derivative_vandermonde(u_jax, max_k=5, xp=jnp)
+    assert jnp.issubdtype(Tpp_jax.dtype, jnp.floating)
+    assert Tpp_jax.shape == (6, 11)
+    # jit-compile round-trip.
+    jitted = jax.jit(
+        lambda u: chebyshev_second_derivative_vandermonde(u, max_k=5, xp=jnp)
+    )
+    Tpp_jit = jitted(u_jax)
+    # JAX defaults to float32 unless x64 is enabled; loosen tolerance
+    # accordingly.  Second-derivative magnitudes scale faster than the
+    # first derivative (O(n^3) at endpoints), so allow more slack.
+    np.testing.assert_allclose(
+        np.asarray(Tpp_jit), Tpp_default, rtol=1e-3, atol=1e-3,
+    )

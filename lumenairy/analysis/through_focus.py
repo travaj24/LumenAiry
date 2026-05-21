@@ -898,6 +898,20 @@ def monte_carlo_tolerancing(
     z_values = np.linspace(z_scan_range[0], z_scan_range[1], z_scan_n) \
                   + focal_length
 
+    # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 monte_carlo_tolerancing nominal-pupil pin):
+    # Strehl denominator (``ideal_peak``) must be derived from the
+    # UNPERTURBED nominal exit pupil and held fixed across all trials --
+    # otherwise a perturbed pupil whose amplitude happens to better
+    # match the diffraction-limited reference can yield Strehl > 1.
+    # Previously ``ideal_peak`` was recomputed inside the loop from the
+    # per-trial perturbed ``E_exit``, which is what produced the
+    # non-physical mean Strehl ~1.09 in example 09.
+    E_exit_nominal = apply_real_lens(
+        E_source, prescription=prescription, wavelength=wavelength, dx=dx,
+        bandlimit=True, slant_correction=True)
+    ideal_peak = diffraction_limited_peak(
+        E_exit_nominal, wavelength, focal_length, dx)
+
     trial_results = []
     strehls = np.empty(n_trials)
 
@@ -928,8 +942,9 @@ def monte_carlo_tolerancing(
         E_exit = apply_real_lens(
             E_source, prescription=pres_p, wavelength=wavelength, dx=dx,
             bandlimit=True, slant_correction=True)
-        ideal_peak = diffraction_limited_peak(
-            E_exit, wavelength, focal_length, dx)
+        # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 monte_carlo_tolerancing nominal-pupil pin):
+        # ``ideal_peak`` is the unperturbed nominal reference computed
+        # once above; do NOT recompute from the perturbed ``E_exit``.
         scan = through_focus_scan(
             E_exit, dx, wavelength, z_values,
             bucket_radius=bucket_radius,
@@ -1233,6 +1248,24 @@ def monte_carlo_tolerancing_jax(
             f"wave_propagator must be 'real_lens_traced_jax' or "
             f"'real_lens'; got {wave_propagator!r}")
 
+    # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 monte_carlo_tolerancing nominal-pupil pin):
+    # Strehl denominator (``ideal_peak``) must be derived from the
+    # UNPERTURBED nominal exit pupil and held fixed across all trials --
+    # otherwise a perturbed pupil whose amplitude happens to better
+    # match the diffraction-limited reference can yield Strehl > 1.
+    # Mirror the NumPy twin's fix here so backend='jax' has the same
+    # physically bounded Strehl in [0, 1] contract.
+    if wave_propagator == 'real_lens_traced_jax':
+        E_exit_nominal = apply_real_lens_traced_jax(
+            E_source, prescription=prescription, wavelength=wavelength,
+            dx=dx, ray_subsample=4)
+    else:  # 'real_lens'
+        E_exit_nominal = apply_real_lens(
+            E_source, prescription=prescription, wavelength=wavelength,
+            dx=dx, bandlimit=True, slant_correction=True)
+    ideal_peak = diffraction_limited_peak(
+        np.asarray(E_exit_nominal), wavelength, focal_length, dx)
+
     trial_results = []
     strehls = np.empty(n_trials)
     for t in range(n_trials):
@@ -1266,8 +1299,9 @@ def monte_carlo_tolerancing_jax(
                 bandlimit=True, slant_correction=True)
             E_exit = E_exit_np
 
-        ideal_peak = diffraction_limited_peak(
-            np.asarray(E_exit), wavelength, focal_length, dx)
+        # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 monte_carlo_tolerancing nominal-pupil pin):
+        # ``ideal_peak`` is the unperturbed nominal reference computed
+        # once above; do NOT recompute from the perturbed ``E_exit``.
         scan = through_focus_scan_jax(
             E_exit, dx, wavelength, z_values,
             bucket_radius=bucket_radius, ideal_peak=ideal_peak,
