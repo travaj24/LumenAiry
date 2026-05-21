@@ -787,7 +787,7 @@ def propagate_hfpi_through_prescription(
         surfaces_from_prescription,
     )
 
-    xp = array_namespace(E_in)
+    array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
     # v5.2 (AUDIT_V4_13_1 Part 2 P1-A closure): see module helper;
     # ``output_grid`` is now the deprecated spelling of ``output_shape``.
@@ -843,7 +843,7 @@ def propagate_hfpi_through_prescription(
     # trace() machinery, then re-sample at the diffractor.
     # Hand off to trace for the whole stack at once if there are no
     # interior diffractors; otherwise per-segment.
-    surf_indices = list(range(len(surfaces)))
+    list(range(len(surfaces)))
     if not diffracting_surfaces:
         # Single trace through the full stack.
         paths = _hfpi_segment_trace(
@@ -929,7 +929,7 @@ def _hfpi_segment_trace(paths: PathBundle,
     xp = array_namespace(paths.positions)
 
     # Build a RayBundle from the PathBundle's geometric state.
-    n = int(paths.positions.shape[0])
+    int(paths.positions.shape[0])
     pos_h = np.asarray(paths.positions if not is_jax_array(paths.positions)
                        else to_numpy(paths.positions))
     dir_h = np.asarray(paths.directions if not is_jax_array(paths.directions)

@@ -281,7 +281,8 @@ def M2(
     # Spatial centroid + variance about centroid
     cx = float((X * I).sum() / P)
     cy = float((Y * I).sum() / P)
-    Xs = X - cx; Ys = Y - cy
+    Xs = X - cx
+    Ys = Y - cy
     sx2 = float((Xs ** 2 * I).sum() / P)
     sy2 = float((Ys ** 2 * I).sum() / P)
 

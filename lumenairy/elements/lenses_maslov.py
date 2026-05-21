@@ -282,8 +282,10 @@ def apply_real_lens_maslov(
     py = cheb_nodes(ray_pupil_samples)
 
     HX, HY, PX, PY = np.meshgrid(hx, hy, px, py, indexing='ij')
-    HX = HX.ravel(); HY = HY.ravel()
-    PX = PX.ravel(); PY = PY.ravel()
+    HX = HX.ravel()
+    HY = HY.ravel()
+    PX = PX.ravel()
+    PY = PY.ravel()
 
     keep = (PX**2 + PY**2) <= 1.0
     HX, HY, PX, PY = HX[keep], HY[keep], PX[keep], PY[keep]
@@ -441,8 +443,10 @@ def apply_real_lens_maslov(
     tuk_y = tukey(n_v2)
     tuk_2d = tuk_x[None, :] * tuk_y[:, None]
 
-    v2x_samples = v2x_c + u_v2x_samples * v2x_h
-    v2y_samples = v2y_c + u_v2y_samples * v2y_h
+    # v5.2.1: ``v2x_samples`` / ``v2y_samples`` were computed but never
+    # used -- downstream code reads ``u_v2x_samples`` / ``u_v2y_samples``
+    # (the unitless Chebyshev-node coords) instead.  Removed dead assigns.
+
 
     def sample_E_bilinear(s1x_q: np.ndarray, s1y_q: np.ndarray) -> np.ndarray:
         in_axis = (np.arange(N) - N / 2) * dx
@@ -715,15 +719,32 @@ def _integrate_quadrature(
         weights_c = weight_per_sample[c_start:c_end]
 
         if use_numexpr:
+            # v5.2.1: numexpr's ``evaluate(expr)`` reads variable names
+            # from the caller's stack frame via introspection, which
+            # makes ``twopi`` / ``cos_term`` / etc. invisible to static
+            # analysis (ruff F841).  Pass an explicit ``local_dict=``
+            # so the locals appear in the surrounding code's AST.
+            # Matches the canonical pattern at ``_lens_real.py:882``.
             _ne = _lenses_module._ne
             twopi = 2.0 * np.pi
-            cos_term = _ne.evaluate("cos(twopi * opd_c)")
-            sin_term = _ne.evaluate("sin(twopi * opd_c)")
-            Er = Eobj_c.real; Ei = Eobj_c.imag
+            cos_term = _ne.evaluate(
+                "cos(twopi * opd_c)",
+                local_dict={'twopi': twopi, 'opd_c': opd_c})
+            sin_term = _ne.evaluate(
+                "sin(twopi * opd_c)",
+                local_dict={'twopi': twopi, 'opd_c': opd_c})
+            Er = Eobj_c.real
+            Ei = Eobj_c.imag
             contrib_r = _ne.evaluate(
-                "(Er*cos_term - Ei*sin_term) * abs_J_c * weights_c")
+                "(Er*cos_term - Ei*sin_term) * abs_J_c * weights_c",
+                local_dict={'Er': Er, 'Ei': Ei,
+                            'cos_term': cos_term, 'sin_term': sin_term,
+                            'abs_J_c': abs_J_c, 'weights_c': weights_c})
             contrib_i = _ne.evaluate(
-                "(Ei*cos_term + Er*sin_term) * abs_J_c * weights_c")
+                "(Ei*cos_term + Er*sin_term) * abs_J_c * weights_c",
+                local_dict={'Er': Er, 'Ei': Ei,
+                            'cos_term': cos_term, 'sin_term': sin_term,
+                            'abs_J_c': abs_J_c, 'weights_c': weights_c})
             contrib_sum = contrib_r.sum(axis=1) + 1j * contrib_i.sum(axis=1)
         else:
             contrib_c = (Eobj_c
@@ -759,7 +780,6 @@ def _integrate_stationary_phase(
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
     """
-    M = len(mi)
     t_int_start = time.perf_counter()
     _progress('integrate', 0.65,
               f'stationary-phase Newton ({newton_iter} max iters)')
@@ -781,10 +801,14 @@ def _integrate_stationary_phase(
         dT4 = _chebyshev_derivative_vandermonde(u4, poly_order)
         d2T3 = _chebyshev_second_derivative_vandermonde(u3, poly_order)
         d2T4 = _chebyshev_second_derivative_vandermonde(u4, poly_order)
-        T1b = T1[K1_arr]; T2b = T2[K2_arr]
-        T3b = T3[K3_arr]; T4b = T4[K4_arr]
-        dT3b = dT3[K3_arr]; dT4b = dT4[K4_arr]
-        d2T3b = d2T3[K3_arr]; d2T4b = d2T4[K4_arr]
+        T1b = T1[K1_arr]
+        T2b = T2[K2_arr]
+        T3b = T3[K3_arr]
+        T4b = T4[K4_arr]
+        dT3b = dT3[K3_arr]
+        dT4b = dT4[K4_arr]
+        d2T3b = d2T3[K3_arr]
+        d2T4b = d2T4[K4_arr]
         T12 = T1b * T2b
         c = coef[:, None]
         f        = np.sum(c * T12 * T3b  * T4b , axis=0)
@@ -906,7 +930,6 @@ def _integrate_local_quadrature(
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
     """
-    M = len(mi)
     t_int_start = time.perf_counter()
     _progress('integrate', 0.60,
               f'local_quadrature: Newton phase ({newton_iter} max iters)')
@@ -927,10 +950,14 @@ def _integrate_local_quadrature(
         dT4 = _chebyshev_derivative_vandermonde(u4, poly_order)
         d2T3 = _chebyshev_second_derivative_vandermonde(u3, poly_order)
         d2T4 = _chebyshev_second_derivative_vandermonde(u4, poly_order)
-        T1b = T1[K1_arr]; T2b = T2[K2_arr]
-        T3b = T3[K3_arr]; T4b = T4[K4_arr]
-        dT3b = dT3[K3_arr]; dT4b = dT4[K4_arr]
-        d2T3b = d2T3[K3_arr]; d2T4b = d2T4[K4_arr]
+        T1b = T1[K1_arr]
+        T2b = T2[K2_arr]
+        T3b = T3[K3_arr]
+        T4b = T4[K4_arr]
+        dT3b = dT3[K3_arr]
+        dT4b = dT4[K4_arr]
+        d2T3b = d2T3[K3_arr]
+        d2T4b = d2T4[K4_arr]
         T12 = T1b * T2b
         c = coef[:, None]
         f        = np.sum(c * T12 * T3b  * T4b , axis=0)
@@ -960,7 +987,8 @@ def _integrate_local_quadrature(
         step_size = np.sqrt(dv3 ** 2 + dv4 ** 2)
         damp = np.where(step_size > 0.5,
                          0.5 / np.maximum(step_size, 1e-30), 1.0)
-        dv3 *= damp; dv4 *= damp
+        dv3 *= damp
+        dv4 *= damp
         u_v2x[active] = np.clip(u_v2x[active] + dv3, -1.0, 1.0)
         u_v2y[active] = np.clip(u_v2y[active] + dv4, -1.0, 1.0)
         grad_mag = np.sqrt(g3 ** 2 + g4 ** 2)

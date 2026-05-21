@@ -180,8 +180,8 @@ def test_glass_without_validity_entry_emits_no_warning():
     try:
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            n = la.get_glass_index(synth_name, 100e-9)  # absurd UV
-            n2 = la.get_glass_index(synth_name, 10e-3)  # absurd IR
+            la.get_glass_index(synth_name, 100e-9)  # absurd UV
+            la.get_glass_index(synth_name, 10e-3)  # absurd IR
 
         validity_warnings = [
             w for w in caught

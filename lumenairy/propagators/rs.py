@@ -226,7 +226,6 @@ def rayleigh_sommerfeld_propagate(
                  np.dtype(target_cdtype).str, 'RS')
         H = _h_cache_lookup(h_key)
 
-    cache_hit = H is not None
 
     if H is None:
         # -- build the RS impulse response h(x, y, z) on the padded grid -------

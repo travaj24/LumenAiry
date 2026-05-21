@@ -217,7 +217,7 @@ def afocal_angular_magnification(prescription: Dict[str, Any],
     """
     surfs = surfaces_from_prescription(prescription)
     M_abcd, _, _, _ = system_abcd(surfs, wavelength)
-    A, B = M_abcd[0, 0], M_abcd[0, 1]
+    _A, _B = M_abcd[0, 0], M_abcd[0, 1]
     C, D = M_abcd[1, 0], M_abcd[1, 1]
     # C has units of 1/length; scale by aperture radius so the test
     # is dimensionally a residual output angle (radians).

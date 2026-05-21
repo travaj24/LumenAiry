@@ -267,7 +267,7 @@ class TestAuditFixesV4_11_2_hfpi_hf_HfWithOplCallableMaslovPrefactor:
 
         # Plane-wave input, single output point at origin.
         E_in = np.ones((N, N), dtype=np.complex128)
-        x = (np.arange(N) - N / 2 + 0.5) * dx
+        (np.arange(N) - N / 2 + 0.5) * dx
         out_x = np.array([0.0])
         out_y = np.array([0.0])
 
@@ -1754,7 +1754,6 @@ class TestAuditFixesV4_12_1_grid_unify_HfGridConventionMatchesLibrary:
 
         N = 16
         dx = 5e-6
-        wl = WAVELENGTH
         # Identity Phi: phi(s1, s2) = 0 for all (s1, s2).  Then the
         # HF output at a given s2 is simply the input field
         # integrated over the s1 grid, times a constant.  But we

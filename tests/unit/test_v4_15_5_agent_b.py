@@ -327,7 +327,7 @@ def test_plot_opd_summary_even_n_central_index_aligned_with_radial():
     # Pre-v4.15.5 the centre col was Nx // 2 = 16; v4.15.5 makes it
     # (Nx - 1) // 2 = 15.  Place a sentinel at col 15 only.
     col_new_centre = (N - 1) // 2  # = 15
-    col_old_centre = N // 2  # = 16
+    N // 2  # = 16
     sentinel = 0.123e-6
     # Fill BOTH columns with NaN except for col_new_centre.  The
     # extraction must read the sentinel, which is only at the new

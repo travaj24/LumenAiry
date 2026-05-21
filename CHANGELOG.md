@@ -2,6 +2,95 @@
 
 All notable changes to the core library are documented here.
 
+## [5.2.1] — 2026-05-21
+
+**Patch release: complete v5.2 ruff baseline closure (134 -> 0
+errors).**  v5.2.0 left 134 advisory ruff errors deferred with
+`continue-on-error: true` on the `lint` job; this patch closes them
+honestly.
+
+### Ruff cleanup (134 -> 0 advisory errors)
+
+- **70 F841 (unused-variable)** auto-fixed via `ruff --fix
+  --unsafe-fixes`.  Two genuinely-dead assignments deleted manually
+  in `lenses_maslov.py` (`v2x_samples` + `v2y_samples` were computed
+  but never used; downstream code reads the unitless
+  `u_v2x_samples` / `u_v2y_samples` Chebyshev-node coords instead),
+  and two stale `M = len(mi)` sites deleted.
+- **63 E702 (multiple-statements-on-one-line-semicolon)** split via a
+  scripted AST-aware splitter (`scripts/`-style one-off; not
+  committed).  Pure cosmetic, zero behavior change.
+- **1 I001 (unsorted-imports)** auto-fixed.
+
+### numexpr static-analysis cleanup (`lenses_maslov.py`)
+
+The Maslov propagator's hot inner loop uses
+`numexpr.evaluate("expr_string")` for the 5 array operations that
+would otherwise allocate ~17 GB complex128 temporaries at N=32768.
+numexpr reads variable names from the caller's stack frame via
+introspection at runtime, which makes `twopi` / `cos_term` /
+`sin_term` / `Er` / `Ei` invisible to ruff and mypy -- they
+appeared as F841 unused-variable false positives.
+
+v5.2.1 refactors all 4 affected calls in `lenses_maslov.py` to pass
+the variables explicitly via `local_dict={'name': value, ...}`,
+matching the canonical pattern already used at `_lens_real.py:882`.
+Variable names now appear in the surrounding code's AST; ruff /
+mypy / IDEs see the usage; no `# noqa: F841` needed; no
+performance loss (`local_dict=` is the recommended numexpr API
+and avoids the runtime frame-introspection overhead).
+
+### CI: lint job now GREEN
+
+`.github/workflows/unit-tests.yml` `lint` job still carries
+`continue-on-error: true` (preserved for forward-safety against
+future ruff rule additions) but **now finishes green** on every
+push.  The red badge that has been flagging on every push since v5.0
+is retired.
+
+### Per-file ruff ignores (no change in v5.2.1; documented for
+clarity)
+
+The v5.2.0 per-file ignores in `pyproject.toml`
+`[tool.ruff.lint.per-file-ignores]` remain in place:
+- 6 v5.1.0 file-split shells (`F401`, `F403` -- the shells exist to
+  re-export pre-v5.1 public names; "unused-import" is the correct
+  behavior, not a bug).
+- 8 sub-package `__init__.py` files (same rationale).
+- `tests/**/*.py` (`F401`, `F811` -- test files re-import + redefine
+  fixtures freely).
+
+No new per-file ignores were added at v5.2.1.  The lenses_maslov
+F841 false positives are closed by the `local_dict=` refactor, NOT
+by a per-file ignore.
+
+### Tests
+
+3742 unit tests pass (collected = 3749 = pass + 6 skip + 1 xfail);
+same as v5.2.0.  34/34 validation pass.  Zero behavior change.
+**Zero physics regressions in 11 consecutive releases.**
+
+### Why the deferral happened at v5.2.0
+
+Honest retrospective: v5.2.0's CHANGELOG noted "deferred to v5.2.1
+for the unsafe-fix sweep" but did not explain WHY.  The reason was
+caution -- F841's `--unsafe-fix` rewrites `x = func()` to bare
+`func()`, which can silently break callers that look up `x` via
+`globals()['x']` (rare but possible).  In retrospect this was
+over-cautious for a library with no `globals()['<name>']`
+introspection pattern: the unsafe-fixes are safe in practice.
+
+The user feedback ("I wanted complete closure on all v5.x
+updates") is correct.  v5.2.1 ships the closure.  The two failure
+modes I was right to be cautious about both DID surface during the
+patch -- numexpr false positives (refactored to `local_dict=`) and
+the `lenses.py` Chebyshev re-export back-compat alias (restored
+with `# noqa: F401` on the import block) -- and were caught by the
+existing test suite, so the caution paid off as a regression net
+even though the deferral itself was unwarranted.
+
+---
+
 ## [5.2.0] — 2026-05-20
 
 **Largest non-breaking release in the v5.x series.**  Closes the

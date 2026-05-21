@@ -669,8 +669,10 @@ def apply_real_lens(
             # foot solve.)
             tx_f = float(tilt_sf[0])
             ty_f = float(tilt_sf[1])
-            cx_f = np.cos(tx_f); sx_f = np.sin(tx_f)
-            cy_f = np.cos(ty_f); sy_f = np.sin(ty_f)
+            cx_f = np.cos(tx_f)
+            sx_f = np.sin(tx_f)
+            cy_f = np.cos(ty_f)
+            sy_f = np.sin(ty_f)
             _dx_local = X - decenter[0]
             _dy_local = Y - decenter[1]
             Xs = cy_f * _dx_local + sx_f * sy_f * _dy_local

@@ -326,7 +326,8 @@ class GaussianBSDF(BSDFModel):
             up = np.array([0.0, 0.0, 1.0])
         else:
             up = np.array([1.0, 0.0, 0.0])
-        tangent = np.cross(up, spec); tangent /= np.linalg.norm(tangent)
+        tangent = np.cross(up, spec)
+        tangent /= np.linalg.norm(tangent)
         bitangent = np.cross(spec, tangent)
         dirs = (L_loc[:, None] * tangent
                 + M_loc[:, None] * bitangent
@@ -444,7 +445,8 @@ class HarveyShackBSDF(BSDFModel):
             up = np.array([0.0, 0.0, 1.0])
         else:
             up = np.array([1.0, 0.0, 0.0])
-        tangent = np.cross(up, spec); tangent /= np.linalg.norm(tangent)
+        tangent = np.cross(up, spec)
+        tangent /= np.linalg.norm(tangent)
         bitangent = np.cross(spec, tangent)
         dirs = (L_loc[:, None] * tangent
                 + M_loc[:, None] * bitangent

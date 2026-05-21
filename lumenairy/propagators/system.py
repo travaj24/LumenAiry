@@ -1013,7 +1013,7 @@ def _make_system_jax_kernel(elem_sigs, wavelength, dx, dy):
     import jax
     import jax.numpy as jnp
 
-    mask_indices = [i for i, sig in enumerate(elem_sigs) if sig[0] == 'mask']
+    [i for i, sig in enumerate(elem_sigs) if sig[0] == 'mask']
 
     def _kernel(E, *mask_arrays):
         Ny, Nx = E.shape[-2:]

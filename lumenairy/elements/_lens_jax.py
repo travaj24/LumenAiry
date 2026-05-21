@@ -132,8 +132,10 @@ def _cheb_eval_value_grad_jax(coeffs, K1, K2, xmin, xmax, ymin, ymax,
     v = (2.0 * y - (ymin + ymax)) / (ymax - ymin)
     Tu, Tup = _cheb_Tprime_recurrence_jax(u, order)
     Tv, Tvp = _cheb_Tprime_recurrence_jax(v, order)
-    Tu = jnp.stack(Tu); Tup = jnp.stack(Tup)   # (order+1, *u.shape)
-    Tv = jnp.stack(Tv); Tvp = jnp.stack(Tvp)
+    Tu = jnp.stack(Tu)
+    Tup = jnp.stack(Tup)   # (order+1, *u.shape)
+    Tv = jnp.stack(Tv)
+    Tvp = jnp.stack(Tvp)
     # Reshape coeffs so it broadcasts over the trailing dims of u/v.
     extra_dims = u.ndim
     coeffs_b = coeffs.reshape((-1,) + (1,) * extra_dims)

@@ -677,8 +677,8 @@ def fraunhofer_propagate_mft(
     k = 2.0 * np.pi / wavelength
     xc, yc = float(centre_out[0]), float(centre_out[1])
 
-    n_x = np.arange(Nx_in, dtype=np.float64)
-    n_y = np.arange(Ny_in, dtype=np.float64)
+    np.arange(Nx_in, dtype=np.float64)
+    np.arange(Ny_in, dtype=np.float64)
     k_x = np.arange(Nx_out, dtype=np.float64)
     k_y = np.arange(Ny_out, dtype=np.float64)
     x_out = (k_x - Nx_out / 2.0) * dx_out + xc

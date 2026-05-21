@@ -157,7 +157,7 @@ def apply_detector(
     # non-integer ratios first uniform-filter to anti-alias, then
     # sample at the new pixel centers, scaled by pixel_pitch^2 so the
     # integral over each detector pixel is correctly represented.
-    px_per_pixel_y = float(pixel_pitch / (Ny / n_pixels * dx_field)) if Ny > 0 else 0
+    float(pixel_pitch / (Ny / n_pixels * dx_field)) if Ny > 0 else 0
     # Simpler: per-detector-pixel area in field samples.
     samples_per_pix_y = (Ny / n_pixels) if n_pixels > 0 else 1.0
     samples_per_pix_x = (Nx / n_pixels) if n_pixels > 0 else 1.0
@@ -446,13 +446,12 @@ def shack_hartmann(
         else:
             cx_ref = 0.0
             cy_ref = 0.0
-        ref_centroids_x = np.where(valid_mask, cx_ref, 0.0)
-        ref_centroids_y = np.where(valid_mask, cy_ref, 0.0)
+        np.where(valid_mask, cx_ref, 0.0)
+        np.where(valid_mask, cy_ref, 0.0)
 
         # ---- measurement pass: gather valid sub-apertures into one
         # (K, sa, sa) batch and propagate in a single shot.
         iy_idx, ix_idx = np.where(valid_mask)  # both shape (K,)
-        K = iy_idx.size
         # v4.14.0 perf (Agent 3 / 3B): vectorise the per-lenslet gather.
         # Pre-v4.14 the ``for k in range(K)`` loop took K array slices,
         # each copying sa_pixels * sa_pixels = 64 elements -- at

@@ -101,8 +101,12 @@ def make_jax_ray_state(x, y, z, L, M, N, opd=None, alive=None):
         raise ImportError(
             "JAX is not installed; install with `pip install jax`")
     import jax.numpy as jnp
-    x = jnp.asarray(x); y = jnp.asarray(y); z = jnp.asarray(z)
-    L = jnp.asarray(L); M = jnp.asarray(M); N = jnp.asarray(N)
+    x = jnp.asarray(x)
+    y = jnp.asarray(y)
+    z = jnp.asarray(z)
+    L = jnp.asarray(L)
+    M = jnp.asarray(M)
+    N = jnp.asarray(N)
     if opd is None:
         opd = jnp.zeros_like(x)
     else:
@@ -1368,7 +1372,9 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     is_flat = jnp.isinf(R) | (jnp.abs(R) > 1e15)
 
     # Spherical initial guess for the curved branch.
-    dx = state.x; dy = state.y; dz = state.z - R_finite
+    dx = state.x
+    dy = state.y
+    dz = state.z - R_finite
     b_q = 2.0 * (state.L * dx + state.M * dy + state.N * dz)
     c_q = dx ** 2 + dy ** 2 + dz ** 2 - R_finite ** 2
     disc = b_q ** 2 - 4.0 * c_q
@@ -1441,7 +1447,9 @@ def _refract_jax_param(state, R, conic, asph_powers, asph_coeffs, n1, n2):
     nz = jnp.ones_like(state.x)
     nrm = jnp.sqrt(nx * nx + ny * ny + nz * nz)
     nrm = jnp.maximum(nrm, 1e-30)
-    nx = nx / nrm; ny = ny / nrm; nz = nz / nrm
+    nx = nx / nrm
+    ny = ny / nrm
+    nz = nz / nrm
 
     # Make normal point opposite to ray direction.
     dot = state.L * nx + state.M * ny + state.N * nz

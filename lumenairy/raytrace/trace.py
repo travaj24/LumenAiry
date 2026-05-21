@@ -1161,7 +1161,6 @@ def surfaces_from_elements(
             # 1/f = (n-1)*(1/R1 - 1/R2), a symmetric biconvex with
             # R1 = -R2 = R gives 1/f = (n-1)*2/R → R = 2*f*(n-1).
             # With n=1.5, R = f.  This is exact in the paraxial limit.
-            n_thin = 1.5
             R_val = f  # R = 2*f*(n-1) = 2*f*0.5 = f for n=1.5
             sd = np.inf
             if 'aperture_diameter' in elem:

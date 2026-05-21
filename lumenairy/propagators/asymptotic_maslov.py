@@ -490,8 +490,8 @@ def _solve_envelope_stationary_batch(
     inv_ws2 = 1.0 / (w_s * w_s)
     inv_wp2 = 1.0 / (w_p * w_p)
     last_norm = np.full(N, np.inf, dtype=np.float64)
-    src = np.array([src_x, src_y], dtype=np.float64)
-    vc = np.array([v_cx, v_cy], dtype=np.float64)
+    np.array([src_x, src_y], dtype=np.float64)
+    np.array([v_cx, v_cy], dtype=np.float64)
     eye2 = np.eye(2, dtype=np.float64)
     for it in range(max_iter):
         active = ~finished

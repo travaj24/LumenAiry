@@ -959,7 +959,7 @@ class TestAuditFixesV4_14_3_agent_b_B5MulticonfigGlassIndex:
             # and fell back, not that the entire pipeline succeeds.
             err = None
             try:
-                pres = la.keplerian_telescope(
+                la.keplerian_telescope(
                     f_objective=200e-3, f_eyepiece=50e-3,
                     glass='__bogus_glass_name__',
                     wavelength=587.6e-9, aperture=25.4e-3,
@@ -968,7 +968,6 @@ class TestAuditFixesV4_14_3_agent_b_B5MulticonfigGlassIndex:
                 # Downstream surfaces_from_prescription rejection is
                 # fine; we just need the helper to have warned.
                 err = e
-                pres = None
         # The UserWarning from _resolve_lens_glass_index must have
         # fired regardless of whether the downstream pipeline crashed.
         user_warns = [w for w in caught

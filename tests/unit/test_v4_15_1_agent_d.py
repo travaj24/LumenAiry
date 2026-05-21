@@ -422,7 +422,7 @@ class TestOrthonormalizerDocstringMatchesCode:
         # corrected docstring's reference to the historical wrong
         # form is the substring tolerated; we anchor on whether the
         # corrected line is also present).
-        wrong_pattern = re.compile(
+        re.compile(
             r"c_n\s*=\s*sqrt\(\s*\(2n\+3\)\s*\(n\+2\)\s*/\s*\(n\+1\)\s*\^?\s*2",
         )
         # Allow the wrong form to appear in the v4.15.1 historical-

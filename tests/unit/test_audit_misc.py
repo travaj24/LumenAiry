@@ -511,7 +511,7 @@ class TestAuditFixesV4_11_1_TraceJaxRaisesOnMirror:
     """
 
     def test_trace_jax_raises_on_mirror(self):
-        jax = pytest.importorskip('jax')
+        pytest.importorskip('jax')
         from lumenairy.raytrace.jax_trace import make_jax_ray_state, trace_jax
         prescription = {
             'aperture_diameter': 20e-3,
@@ -2017,7 +2017,7 @@ class TestAuditFixesV4_12_1_coverage_SourceFactoryKwargsForwarded:
                    # the y-axis vs x-axis if dy were honored.
         wavelength = 1e-6
         w0 = 20e-6
-        sigma = w0 / np.sqrt(2)
+        w0 / np.sqrt(2)
         src_dy = la.Source.gaussian(w0=w0, N=N, dx=dx,
                                      wavelength=wavelength, dy=dy)
         E_dy = np.asarray(src_dy.E)
@@ -2495,7 +2495,7 @@ class TestAuditFixesV4_12_1_coverage_ZemaxCoordBreakStopMarker:
         # SURF 0 = object, SURF 1 = COORDBRK, SURF 2..5 = refractive,
         # SURF 6 = image.
         cb_surfs = [s for s in surfs if s['type'] == 'COORDBRK']
-        std_surfs = [s for s in surfs if s['type'] == 'STANDARD']
+        [s for s in surfs if s['type'] == 'STANDARD']
         assert len(cb_surfs) == 1, (
             f"Expected exactly one COORDBRK; got {len(cb_surfs)} "
             f"({[s['idx'] for s in cb_surfs]}).")
@@ -5921,7 +5921,7 @@ def test_d1_load_plane_slice_returns_tuple_h5(tmp_path):
     """load_plane_slice must return ``(arr, attrs)`` per the v4.13.2
     docstring -- a bare ``np.ndarray`` would silently break every
     caller that destructures."""
-    h5py = pytest.importorskip('h5py')
+    pytest.importorskip('h5py')
 
     # Build a small HDF5 store with one plane.
     fpath = str(tmp_path / 'one_plane.h5')

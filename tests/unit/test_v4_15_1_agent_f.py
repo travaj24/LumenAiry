@@ -555,7 +555,7 @@ def test_complex_gradient_vortex_direction_recovery_per_pixel():
     ``1 / (r k0)``.
     """
     N, dx, lam = 128, 1e-6, 633e-9
-    k0 = 2.0 * np.pi / lam
+    2.0 * np.pi / lam
     x = (np.arange(N) - N // 2) * dx
     X, Y = np.meshgrid(x, x)
     R = np.sqrt(X * X + Y * Y)

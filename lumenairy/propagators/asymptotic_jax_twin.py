@@ -224,7 +224,8 @@ def _compute_M_b_xp(fit, s2x, s2y, v2x, v2y, src_x, src_y, w_s, w_p,
     import jax
     import jax.numpy as jnp
 
-    s2x = jnp.asarray(s2x); s2y = jnp.asarray(s2y)
+    s2x = jnp.asarray(s2x)
+    s2y = jnp.asarray(s2y)
 
     def s1_of_v(v):
         s1x, s1y = fit.eval_s1_xp(s2x, s2y, v[0], v[1])
@@ -899,7 +900,7 @@ def fit_canonical_polynomials_jax(
 
     # ---- Total-degree multi-indices (Python-time) -------------------
     multi_indices = _multi_indices_total_degree(4, poly_order)
-    n_basis = len(multi_indices)
+    len(multi_indices)
 
     # ---- Build Chebyshev Vandermonde for each axis ------------------
     def cheb_vand_jax(u, max_k):

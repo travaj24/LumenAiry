@@ -618,7 +618,7 @@ class TestAstigmatismMagAngle:
         x = (np.arange(N) - N / 2) * dx
         X, Y = np.meshgrid(x, x)
         r_pupil = 0.5 * aperture
-        pupil_mask = (X ** 2 + Y ** 2) <= r_pupil ** 2
+        (X ** 2 + Y ** 2) <= r_pupil ** 2
         c3_true = 5e-7
         c5_true = -3e-7
         # Synthesize the OPD via zernike_reconstruct so it lives on the

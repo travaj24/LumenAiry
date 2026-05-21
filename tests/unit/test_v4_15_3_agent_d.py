@@ -518,7 +518,7 @@ def test_rays_from_field_threshold_inclusive_consistent_across_modes():
     # asserting at least one peak hit + boundary admission via the
     # threshold check itself (which can be probed only indirectly).
     # In practice with random_state=42 the boundary pixels are hit.
-    boundary_set = set(boundary_pixels)
+    set(boundary_pixels)
     # Note: at threshold=0.01 the Bernoulli draw at the boundary is
     # very low probability; rejection mode may not hit a boundary
     # pixel even after 10000 tries.  But it MUST at least admit one

@@ -648,7 +648,7 @@ class TestAuditFixesV4_13_0_ghost_apply_mirror_ApplyMirrorBackendDispatch:
         equivalent results for a small mirror up to JAX's default
         single-precision rounding (``jax_enable_x64`` is off by default,
         so JAX silently demotes complex128 -> complex64)."""
-        jax = pytest.importorskip('jax')
+        pytest.importorskip('jax')
         jnp = pytest.importorskip('jax.numpy')
 
         N = 64
@@ -967,12 +967,15 @@ def _scalar_reference_coatings(layers, wavelengths, angle=0.0,
             C = M[1, 0] + M[1, 1] * eta_sub
             r = (eta_amb * B - C) / (eta_amb * B + C)
             t_amp = 2.0 * eta_amb / (eta_amb * B + C)
-            rs.append(r); ts.append(t_amp)
+            rs.append(r)
+            ts.append(t_amp)
         if polarization == 'avg':
             R_val = 0.5 * (abs(rs[0]) ** 2 + abs(rs[1]) ** 2)
             phase_val = 0.5 * (np.angle(rs[0]) + np.angle(rs[1]))
-            _ess = eta_sub_by_pol['s']; _eas = eta_amb_by_pol['s']
-            _esp = eta_sub_by_pol['p']; _eap = eta_amb_by_pol['p']
+            _ess = eta_sub_by_pol['s']
+            _eas = eta_amb_by_pol['s']
+            _esp = eta_sub_by_pol['p']
+            _eap = eta_amb_by_pol['p']
             T_s = float((_ess.real / max(_eas.real, 1e-30))
                         * abs(ts[0]) ** 2)
             T_p = float((_esp.real / max(_eap.real, 1e-30))

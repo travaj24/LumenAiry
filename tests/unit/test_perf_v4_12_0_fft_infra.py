@@ -169,7 +169,7 @@ class TestCrossCallIndependence:
 
         a_ifft = _ifft2(a)
         a_ifft_snapshot = a_ifft.copy()
-        b_ifft = _ifft2(b)
+        _ifft2(b)
 
         assert np.array_equal(a_ifft, a_ifft_snapshot), (
             "Second _ifft2 call mutated the buffer returned by the "

@@ -690,8 +690,10 @@ def propagate_gbd_through_prescription(
         M = abcd_result[0]
     else:
         M = abcd_result
-    A = float(M[0, 0]); B = float(M[0, 1])
-    C = float(M[1, 0]); D = float(M[1, 1])
+    A = float(M[0, 0])
+    B = float(M[0, 1])
+    C = float(M[1, 0])
+    D = float(M[1, 1])
 
     # 4.11.1 (H-AS-1): compute the axial OPL = sum_k n_k * t_k across
     # every glass/air segment plus the BFL gap to the image plane.

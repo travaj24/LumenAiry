@@ -455,7 +455,7 @@ def fit_canonical_polynomials(
         opd_residual = phi_live.copy()
 
     multi_indices = _multi_indices_total_degree(4, poly_order)
-    n_basis = len(multi_indices)
+    len(multi_indices)
     T1 = _chebyshev_vandermonde(u_s2x, poly_order)
     T2 = _chebyshev_vandermonde(u_s2y, poly_order)
     T3 = _chebyshev_vandermonde(u_v2x, poly_order)

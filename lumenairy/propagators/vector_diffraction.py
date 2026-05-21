@@ -124,8 +124,8 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
     x_f = (np.arange(N_focal) - N_focal / 2) * dx_focal
     y_f = (np.arange(N_focal) - N_focal / 2) * dx_focal
     Xf, Yf = np.meshgrid(x_f, y_f)
-    rho_f = np.sqrt(Xf ** 2 + Yf ** 2)
-    phi_f = np.arctan2(Yf, Xf)
+    np.sqrt(Xf ** 2 + Yf ** 2)
+    np.arctan2(Yf, Xf)
 
     # Pupil coordinates -> angular mapping
     x_p = (np.arange(Np) - Np / 2) * dx_pupil

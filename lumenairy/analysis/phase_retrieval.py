@@ -169,7 +169,7 @@ def gerchberg_saxton(
     if source_amplitude.shape != target_amplitude.shape:
         raise ValueError("Source and target must have the same shape")
 
-    N = source_amplitude.shape[0]
+    source_amplitude.shape[0]
 
     # Initial guess (4.10: seeded for reproducibility; pass seed=None
     # for the prior randomised-per-call behaviour).
@@ -355,7 +355,7 @@ def error_reduction(
         raise ValueError(
             f"error_reduction: backend must be 'numpy' or 'jax'; "
             f"got {backend!r}.")
-    N = measured_amplitude.shape[0]
+    measured_amplitude.shape[0]
 
     # 4.11.2: honour `seed` for reproducibility (pre-4.11.2 the kwarg
     # didn't exist on this path; users wanting deterministic runs had

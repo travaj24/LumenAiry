@@ -278,7 +278,7 @@ class TestAuditFixesV4_13_2_agent_c_C1MakeLgAberrationMeritJax:
     piston sum regardless of weights."""
 
     def _build_merit(self, targets, weight_kwarg=1.0):
-        jax = pytest.importorskip('jax')
+        pytest.importorskip('jax')
         # Lazy import so the test module loads on JAX-less envs.
         import lumenairy
         from lumenairy.optimize.core import make_lg_aberration_merit_jax
@@ -1687,7 +1687,6 @@ class TestAuditFixesV4_14_2_agent_b_B1ToleranceAwareApertureZero:
 
         from lumenairy.elements import lenses as lens_mod
 
-        original = lens_mod.apply_real_lens
 
         def capturing_apply_real_lens(E_in, **kw):
             captured['E_in'] = np.asarray(E_in).copy()

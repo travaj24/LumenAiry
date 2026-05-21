@@ -407,7 +407,7 @@ class TestRoadmapMetaPinEnumeration:
     def test_roadmap_meta_pin_count_matches_dispatcher_pin_files(self):
         # Discover all dispatcher pin files in tests/unit/.
         pin_dir = _REPO_ROOT / 'tests' / 'unit'
-        pin_files = sorted(
+        sorted(
             f.name for f in pin_dir.glob('test_v4_*_dispatcher_pin_*.py')
         )
         # Plus the v4.16.2 doc-consistency pin (this file).

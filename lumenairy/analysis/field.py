@@ -1216,8 +1216,10 @@ def sensitivity_ranking(
         step = abs(v) * eps_rel if v != 0 else eps_abs_floor
         if step < eps_abs_floor:
             step = eps_abs_floor
-        xp = x0.copy(); xp[i] = v + step
-        xm = x0.copy(); xm[i] = v - step
+        xp = x0.copy()
+        xp[i] = v + step
+        xm = x0.copy()
+        xm[i] = v - step
         try:
             fp = float(merit_fn(xp))
             fm = float(merit_fn(xm))

@@ -142,8 +142,10 @@ def _newton_invert_chunk(args):
     for _it in range(_NEWTON_MAX_ITERS):
         if not active.any():
             break
-        xa = xe[active]; ya = ye[active]
-        xw = x_chunk[active]; yw = y_chunk[active]
+        xa = xe[active]
+        ya = ye[active]
+        xw = x_chunk[active]
+        yw = y_chunk[active]
         rx = Sx.ev(xa, ya) - xw
         ry = Sy.ev(xa, ya) - yw
         jxx = Sx.ev(xa, ya, dx=1)
@@ -323,9 +325,11 @@ if _NUMBA_AVAILABLE:
             # T_0 = 1, T_1 = u, T_{n+1} = 2u T_n - T_{n-1}
             Tu = np.empty(max_order + 1)
             Tv = np.empty(max_order + 1)
-            Tu[0] = 1.0; Tv[0] = 1.0
+            Tu[0] = 1.0
+            Tv[0] = 1.0
             if max_order >= 1:
-                Tu[1] = u; Tv[1] = v
+                Tu[1] = u
+                Tv[1] = v
             for n in range(2, max_order + 1):
                 Tu[n] = 2.0 * u * Tu[n - 1] - Tu[n - 2]
                 Tv[n] = 2.0 * v * Tv[n - 1] - Tv[n - 2]
@@ -347,8 +351,10 @@ if _NUMBA_AVAILABLE:
                     for n in range(3, max_order + 1):
                         U_next_u = 2.0 * u * U_u - U_prev_u
                         U_next_v = 2.0 * v * U_v - U_prev_v
-                        U_prev_u = U_u; U_u = U_next_u
-                        U_prev_v = U_v; U_v = U_next_v
+                        U_prev_u = U_u
+                        U_u = U_next_u
+                        U_prev_v = U_v
+                        U_v = U_next_v
                         dTu[n] = n * U_u
                         dTv[n] = n * U_v
 
@@ -466,8 +472,10 @@ class _Cheb2DEvaluator:
         self.order = int(order)
         # Scalars extracted as Python floats so chain-rule multiplies
         # stay backend-agnostic and don't pull host-device copies later.
-        self.xmin = float(xs_np.min()); self.xmax = float(xs_np.max())
-        self.ymin = float(ys_np.min()); self.ymax = float(ys_np.max())
+        self.xmin = float(xs_np.min())
+        self.xmax = float(xs_np.max())
+        self.ymin = float(ys_np.min())
+        self.ymax = float(ys_np.max())
         # Build total-degree multi-indices (kx, ky) with kx + ky <= order
         self._mi = [(kx, ky)
                      for kx in range(order + 1)
@@ -1389,7 +1397,7 @@ def apply_real_lens_traced(
 
     aperture = lens_prescription.get('aperture_diameter')
     thicknesses = lens_prescription['thicknesses']
-    total_thickness = float(sum(thicknesses))
+    float(sum(thicknesses))
 
     # 4.11.2: warn if the prescription specifies a stop_index other than
     # the entrance (or carries a decentered stop).  ``apply_real_lens``
@@ -2011,8 +2019,10 @@ def apply_real_lens_traced(
                                  f'newton converged after {_it} iters')
                 break
             # Only evaluate splines at active (unconverged) pixels
-            xa = xe[active]; ya = ye[active]
-            xw = x_w_flat[active]; yw = y_w_flat[active]
+            xa = xe[active]
+            ya = ye[active]
+            xw = x_w_flat[active]
+            yw = y_w_flat[active]
             if _has_combined:
                 fx_val, jxx, jxy = Sx.ev_value_and_grad(xa, ya)
                 fy_val, jyx, jyy = Sy.ev_value_and_grad(xa, ya)

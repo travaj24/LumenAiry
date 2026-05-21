@@ -177,7 +177,7 @@ def _scalar_pixel_reference_propagate_modal(fit, *,
 
     s2x_arr = np.asarray(s2_grid_x, dtype=np.float64)
     s2y_arr = np.asarray(s2_grid_y, dtype=np.float64)
-    out = np.zeros(s2x_arr.shape, dtype=np.complex128)
+    np.zeros(s2x_arr.shape, dtype=np.complex128)
 
     max_order_src = max(
         (2 * p + abs(l) for (p, l) in source_amplitudes), default=0)
@@ -474,8 +474,8 @@ def _scalar_pixel_reference_hf_chebyshev(fit, E_in, ix, iy, ox, oy,
     semantics that the pre-fix code was trying (and failing) to
     express.
     """
-    Nx_in = ix.shape[0]
-    Ny_in = iy.shape[0]
+    ix.shape[0]
+    iy.shape[0]
     Nx_out = ox.shape[0]
     Ny_out = oy.shape[0]
     dx = float(np.mean(np.diff(ix)))

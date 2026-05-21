@@ -724,10 +724,14 @@ def _warn_if_aperture_exceeds_grid(prescription, N, dx, *,
 # without forcing those callers to update their import paths.
 # ---------------------------------------------------------------------------
 
-from .._math.chebyshev import (  # noqa: F401 -- back-compat alias re-export
-    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,
-    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,
-    chebyshev_vandermonde as _chebyshev_vandermonde,
+from .._math.chebyshev import (  # noqa: F401 -- back-compat alias re-export (v5.2)
+    chebyshev_derivative_vandermonde as _chebyshev_derivative_vandermonde,  # noqa: F401
+)
+from .._math.chebyshev import (
+    chebyshev_second_derivative_vandermonde as _chebyshev_second_derivative_vandermonde,  # noqa: F401
+)
+from .._math.chebyshev import (
+    chebyshev_vandermonde as _chebyshev_vandermonde,  # noqa: F401
 )
 
 

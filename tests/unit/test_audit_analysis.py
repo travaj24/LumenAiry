@@ -613,7 +613,8 @@ class TestAuditFixesV4_12_0_round4_analysis_ImagePlaneWfeSphereRadiusOffAxis:
         if not np.isfinite(ep_r) or ep_r <= 0:
             ep_r = 6e-3
         src_x, src_y = 20e-3, 0.0
-        aim_x = -src_x; aim_y = -src_y
+        aim_x = -src_x
+        aim_y = -src_y
         aim_z = obj_d + ep_z
         norm = float(np.sqrt(aim_x**2 + aim_y**2 + aim_z**2))
         L = aim_x / norm
@@ -627,8 +628,12 @@ class TestAuditFixesV4_12_0_round4_analysis_ImagePlaneWfeSphereRadiusOffAxis:
         res = trace(bundle, surfs, 587.56e-9, output_filter='last')
         f = res.image_rays
         assert bool(f.alive[0])
-        s2x = float(f.x[0]); s2y = float(f.y[0]); s2z = float(f.z[0])
-        Ld = float(f.L[0]); Md = float(f.M[0]); Nd = float(f.N[0])
+        s2x = float(f.x[0])
+        s2y = float(f.y[0])
+        s2z = float(f.z[0])
+        Ld = float(f.L[0])
+        Md = float(f.M[0])
+        Nd = float(f.N[0])
         # Chief image landing.
         t_adv = wfe.img_d_m / Nd
         cx = s2x + Ld * t_adv
@@ -1814,7 +1819,7 @@ def test_3b_shack_hartmann_bit_exact_zernike_tilt_defocus():
     N = 256
     dx = 5e-6
     wavelength = 633e-9
-    k0 = 2 * np.pi / wavelength
+    2 * np.pi / wavelength
     # Tilt + defocus phase (Z2 + Z4 + Z6 in OSA indexing).
     x = (np.arange(N) - N / 2) * dx
     X, Y = np.meshgrid(x, x, indexing='xy')
@@ -2148,7 +2153,7 @@ class TestAuditFixesV4_14_0_agent_5_MtfCutoff:
         # Curve never falls below 0.6 on [0, 50] (limit at the end is
         # ~0.6065 from exp(-1/2) but with normalisation higher)
         mtf = np.maximum(np.exp(-freq / 100.0), 0.6)
-        result = mtf_cutoff(mtf, freq, threshold=0.99)
+        mtf_cutoff(mtf, freq, threshold=0.99)
         # 0.99 is above the DC value (1.0 -> 0.99 means we cross
         # immediately).  Use 0.99 above max for the "stays above"
         # sense:

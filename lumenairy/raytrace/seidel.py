@@ -96,7 +96,6 @@ def _paraxial_trace(surfaces, wavelength, y_in=0.0, u_in=0.0):
         # Transfer to next surface
         if i < len(surfaces) - 1:
             t = surf.thickness
-            n_medium = n2
             y = y + u * t
 
     return y_hist, u_hist
@@ -213,7 +212,7 @@ def system_abcd(
                               [0.0, 1.0]])
             M = T_mat @ M
 
-    A, B = M[0, 0], M[0, 1]
+    A, _B = M[0, 0], M[0, 1]
     C, D = M[1, 0], M[1, 1]
 
     efl = -1.0 / C if abs(C) > 1e-30 else np.inf
@@ -412,7 +411,7 @@ def lens_abcd(
 
     # ---- ABCD + paraxial focal quantities ------------------------
     M, efl, bfl, ffl = system_abcd(sub, wavelength)
-    A, B, C, D = float(M[0, 0]), float(M[0, 1]), \
+    A, _B, C, D = float(M[0, 0]), float(M[0, 1]), \
                   float(M[1, 0]), float(M[1, 1])
     if abs(C) > 1e-30:
         # Welford convention: H = (D-1)/C (from front vertex),
@@ -530,7 +529,8 @@ class FirstOrderData:
         s = {'m': 1.0, 'mm': 1e3, 'um': 1e6, 'µm': 1e6}.get(units, 1e3)
         u = 'mm' if units == 'm' else units  # display label
         if units == 'm':
-            s = 1.0; u = 'm'
+            s = 1.0
+            u = 'm'
         lines = [
             'First-order data:',
             f'  EFL = {self.efl*s:+.4f} {u}',
@@ -713,21 +713,21 @@ def compute_pupils(
         # already lands the ray at the stop vertex.
         M_pre, _, _, _ = system_abcd(pre, wavelength)
         A_pre, B_pre = float(M_pre[0, 0]), float(M_pre[0, 1])
-        C_pre, D_pre = float(M_pre[1, 0]), float(M_pre[1, 1])
+        _C_pre, _D_pre = float(M_pre[1, 0]), float(M_pre[1, 1])
         # Imaging condition: prepend T(z_obj) so B_total = 0.
         # B + z * A = 0 ?  No: T(z) applied on the RIGHT gives
         # M . T(z) = [[A, A*z+B], [C, C*z+D]].  So B_total = A*z + B.
         # z_ep = -B / A (distance from surface 0 back to EP).
         # Magnification through pre: m_pre = A_pre when B=0.
         if abs(A_pre) > 1e-30:
-            z_ep = -B_pre / A_pre
+            -B_pre / A_pre
             # Radius: EP is the reverse image of the stop with
             # magnification 1/A_pre (because the forward sub-system
             # maps object height to stop height with factor A when
             # B=0 -> object height = stop / A).
             ep_radius = abs(stop_radius / A_pre) if np.isfinite(stop_radius) else float('nan')
         else:
-            z_ep = float('inf')
+            float('inf')
             ep_radius = float('inf')
 
     # ---- Exit pupil -----------------------------------------------
@@ -1075,7 +1075,7 @@ def seidel_coefficients(
             nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
 
             u_m_after = nu_m_after / n2
-            u_c_after = nu_c_after / n2
+            nu_c_after / n2
 
             # Abbe invariant
             A_m = n1 * i_m  # = n2 * i_m_after (Snell)
@@ -1133,7 +1133,7 @@ def seidel_coefficients(
             nu_c_after = nu_val_c - y_val_c * (n2 - n1) * c
 
             u_m_after = nu_m_after / n2
-            u_c_after = nu_c_after / n2
+            nu_c_after / n2
 
             A_m = n1 * i_m   # = n2 * i_after (Snell)
             A_c = n1 * i_c
@@ -1175,7 +1175,7 @@ def seidel_coefficients(
             nu_m_after = nu_val_m
             nu_c_after = nu_val_c
             u_m_after = nu_m_after / n2
-            u_c_after = nu_c_after / n2
+            nu_c_after / n2
 
             A_m = n1 * i_m
             A_c = n1 * i_c

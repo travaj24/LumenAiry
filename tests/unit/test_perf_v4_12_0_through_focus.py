@@ -433,7 +433,7 @@ class TestThroughFocusScanProgressCallback:
         calls = []
         def cb(stage, fraction, message):
             calls.append((stage, float(fraction), message))
-        scan = through_focus_scan(
+        through_focus_scan(
             E_exit, dx, wl, z_arr, bandlimit=True, progress=cb)
         # Expect one progress event per z plus a final 'done' event.
         assert len(calls) == len(z_arr) + 1, (
@@ -520,7 +520,7 @@ class TestThroughFocusScanNumPyHoistActuallyHoists:
         with patch.object(
                 _prop, '_get_or_make_freq_grids',
                 side_effect=real_grids) as mock_grids:
-            scan = through_focus_scan(
+            through_focus_scan(
                 E_exit, dx, wl, z_arr, bandlimit=True, verbose=False)
 
         # Frequency grid is hoisted once.  Pre-v4.12.2 the per-z

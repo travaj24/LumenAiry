@@ -609,10 +609,14 @@ class TestTransferJaxHighNAWarning:
 
         _reset_transfer_jax_warning()
         try:
-            x = np.zeros(1); y = np.zeros(1); z = np.zeros(1)
-            L = np.array([0.5]); M = np.zeros(1)
+            x = np.zeros(1)
+            y = np.zeros(1)
+            z = np.zeros(1)
+            L = np.array([0.5])
+            M = np.zeros(1)
             n_axis = np.array([np.sqrt(1.0 - 0.25)])
-            opd = np.zeros(1); alive = np.ones(1, dtype=bool)
+            opd = np.zeros(1)
+            alive = np.ones(1, dtype=bool)
             state = JaxRayState(x, y, z, L, M, n_axis, opd, alive)
 
             with warnings.catch_warnings(record=True) as caught:
@@ -650,8 +654,11 @@ class TestTransferJaxHighNAWarning:
             def step(state, t):
                 return _transfer_jax(state, t, n_medium=1.0)
 
-            x = _jnp.zeros(1); y = _jnp.zeros(1); z = _jnp.zeros(1)
-            L = _jnp.array([0.5]); M = _jnp.zeros(1)
+            x = _jnp.zeros(1)
+            y = _jnp.zeros(1)
+            z = _jnp.zeros(1)
+            L = _jnp.array([0.5])
+            M = _jnp.zeros(1)
             n_axis = _jnp.array([_jnp.sqrt(1.0 - 0.25)])
             opd = _jnp.zeros(1)
             alive = _jnp.ones(1, dtype=bool)

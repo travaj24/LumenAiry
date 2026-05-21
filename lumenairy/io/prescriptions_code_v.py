@@ -196,7 +196,6 @@ def load_codev_seq(filepath: str,
     # surface header or END.
     surfaces_raw = []
     current = None
-    stop_index_raw = None
     # v4.13.2 (C-P0-4): also capture the optional SI image-plane block
     # so callers can recover the BFL from a `.seq` file that uses the
     # standard CODE V convention of encoding the back-focal length on
@@ -291,7 +290,7 @@ def load_codev_seq(filepath: str,
         if cmd == 'STO':
             if current.get('kind') == 'refracting':
                 current['is_stop'] = True
-                stop_index_raw = current['index']
+                current['index']
             i += 1
             continue
 

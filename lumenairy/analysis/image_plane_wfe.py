@@ -332,7 +332,8 @@ def eval_image_plane_wfe(
         raise ValueError(
             f"eval_image_plane_wfe: sphere_tangent must be one of "
             f"('vertex','exit_pupil'); got {sphere_tangent!r}.")
-    Hx = float(field[0]); Hy = float(field[1])
+    Hx = float(field[0])
+    Hy = float(field[1])
     if (Hx != 0.0 or Hy != 0.0):
         if field_max_m is None:
             field_max_m = prescription.get('field_max_m')
@@ -410,7 +411,8 @@ def eval_image_plane_wfe(
             raise ValueError("pupil_grid: no sample points provided.")
         inside = (px ** 2 + py ** 2) <= 1.0 + 1e-12
         if not np.all(inside):
-            px = px[inside]; py = py[inside]
+            px = px[inside]
+            py = py[inside]
         if px.size == 0:
             raise ValueError(
                 "pupil_grid: all sample points fell outside the "
@@ -419,9 +421,11 @@ def eval_image_plane_wfe(
         # Default: square grid clipped to the unit disk.
         p1 = np.linspace(-1.0, 1.0, n_pupil)
         PX, PY = np.meshgrid(p1, p1)
-        px = PX.ravel(); py = PY.ravel()
+        px = PX.ravel()
+        py = PY.ravel()
         inside = (px ** 2 + py ** 2) <= 1.0
-        px = px[inside]; py = py[inside]
+        px = px[inside]
+        py = py[inside]
 
     # Compute object-space source position.  On-axis (Hx=Hy=0)
     # this is (0, 0, -obj_d).  Off-axis the source is laterally

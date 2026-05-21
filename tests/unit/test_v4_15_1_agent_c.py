@@ -293,7 +293,8 @@ class TestAstigmatismMagAngleRangeFix:
             f"observed theta maximum {thetas.max()!r} above "
             f"(-pi/2, pi/2] range.")
         # Edge case: pure c5=-1, c3=0 -> atan2(0, -1) = pi -> 0.5*pi = pi/2
-        c = np.zeros(6); c[5] = -1.0
+        c = np.zeros(6)
+        c[5] = -1.0
         _mag, theta_edge = astigmatism_mag_angle(c)
         assert abs(theta_edge - np.pi / 2) < 1e-12, (
             f"(c3=0, c5=-1) edge case: theta = {theta_edge!r}, "
