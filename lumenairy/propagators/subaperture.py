@@ -140,6 +140,17 @@ def combine_patch_fields(
         ``UserWarning`` advising the user to supply mapped centres for
         non-unit-magnification systems.
 
+    .. versionchanged:: 5.2.3
+        v5.2.3 (AUDIT_V4_13_1 P1-F substantive closure):
+        :func:`propagate_subaperture_asymptotic` now computes the
+        image-plane centres / half-widths internally from the system
+        ABCD and passes them through these kwargs automatically, so
+        the v5.2.0 ``UserWarning`` is silenced for the typical-call
+        case.  The opt-in kwargs still work and take precedence over
+        the auto-computed values for callers who want to override the
+        paraxial mapping (e.g. when the prescription's nominal image
+        plane is not the desired output plane).
+
     Parameters
     ----------
     image_centres : ndarray (N_patch, 2), optional
@@ -286,45 +297,82 @@ def propagate_subaperture_asymptotic(
     if output_dx is None:
         output_dx = dx
 
-    # v5.2 (AUDIT_V4_13_1 Part 2 P1-F closure): the partition-of-unity
-    # windows that :func:`combine_patch_fields` builds below are centred
-    # on ``patch_grid.centres``, which are SOURCE-plane positions.  That
-    # is only correct for unit-magnification, no-tilt geometries -- a
-    # system with magnification ``m != 1`` maps each source patch to
-    # an image-plane footprint at ``m * (cx, cy)`` with half-width
-    # ``|m| * source_box_half``, and the current code window would
-    # tile the wrong location.  v5.2 surfaces this limitation as a
-    # ``UserWarning`` rather than silently producing a wrong field;
-    # the full fix (compute ``m`` from the prescription's system
-    # ABCD, pass mapped centres through :func:`combine_patch_fields`'s
-    # new ``image_centres`` / ``image_half_widths`` kwargs) is the
-    # v5.2.1 candidate per ROADMAP.  Heuristic for triggering: probe
-    # the system ABCD's ``A`` element (the linear magnification term);
-    # ``|A - 1| > 0.05`` means "not unit mag" and we warn.
+    # v5.2.3 (AUDIT_V4_13_1 P1-F substantive closure): compute the
+    # paraxial object-to-image magnification from the system ABCD and
+    # use it to map each per-patch source-plane window centre /
+    # half-width onto its image-plane footprint.  v5.2.0 surfaced the
+    # source-plane-centred-window bug as a ``UserWarning`` -- v5.2.3
+    # now FIXES it by routing the mapped centres through
+    # :func:`combine_patch_fields`'s ``image_centres`` /
+    # ``image_half_widths`` kwargs.  For a unit-magnification system
+    # (``A == 1, B == 0``) the mapped centres equal the source-plane
+    # centres bit-for-bit, so v5.1 / pre-v5.2 numerics are preserved
+    # exactly.  The warning is retained only as a fallback for the
+    # corner case where the ABCD computation itself fails (degenerate
+    # / coord-break-heavy prescriptions without a clean paraxial
+    # imaging chain).
+    image_mag = None
+    _abcd_failure = None
     try:
         from ..raytrace import system_abcd_prescription
         _abcd = system_abcd_prescription(prescription, wavelength)
-        _M = _abcd[0] if isinstance(_abcd, tuple) else _abcd
-        _A = float(_M[0, 0])
-        if abs(_A - 1.0) > 0.05:
-            _warnings.warn(
-                "propagate_subaperture_asymptotic: partition-of-unity "
-                "patch windows are centred on SOURCE-plane positions; "
-                f"this system has magnification |A|={abs(_A):.3g} "
-                "(non-unity), so the image-plane recombination weights "
-                "will tile the wrong locations and the result is "
-                "unreliable at off-axis patches.  Reliable for unit-"
-                "magnification, no-tilt geometries only.  See "
-                "AUDIT_V4_13_1 Part 2 P1-F; the full fix (image-plane "
-                "centre remapping) is tracked as a v5.2.1 candidate.",
-                UserWarning, stacklevel=2,
-            )
+        _M_lens = _abcd[0] if isinstance(_abcd, tuple) else _abcd
+        _A_l = float(_M_lens[0, 0])
+        _B_l = float(_M_lens[0, 1])
+        _C_l = float(_M_lens[1, 0])
+        _D_l = float(_M_lens[1, 1])
+        # Compose with object- and image-space transfers to get the
+        # full conjugate ABCD.  ``object_distance`` is the source-plane
+        # to first-surface distance; defaults to 0 (source AT the first
+        # surface).  Reduced coordinates equal physical coordinates in
+        # air on both sides for the typical lens prescription, so no
+        # extra n_0 / n_image scaling is needed.
+        d_obj = float(prescription.get('object_distance', 0.0) or 0.0)
+        # After T(d_obj) * M_lens the matrix elements are
+        #   A' = A_l,                B' = A_l * d_obj + B_l
+        #   C' = C_l,                D' = C_l * d_obj + D_l
+        # The paraxial image plane sits at the ``d_image`` value that
+        # zeros the composed B element of T(d_image) * (T(d_obj) * M):
+        #   B_full = (A_l * d_obj + B_l) + d_image * (C_l * d_obj + D_l) = 0
+        _B_pre = _A_l * d_obj + _B_l
+        _D_pre = _C_l * d_obj + _D_l
+        if abs(_D_pre) < 1e-30:
+            # No clean conjugate plane (e.g. afocal system with object
+            # at infinity).  Fall back to the lens A as the linear
+            # magnification, which is the right answer for an afocal
+            # system (transverse magnification = 1 / angular mag).
+            _M_mag = _A_l
+        else:
+            _d_image = -_B_pre / _D_pre
+            # Magnification at the conjugate image plane: A_full =
+            # A_pre + d_image * C_pre = A_l + d_image * C_l.
+            _M_mag = _A_l + _d_image * _C_l
+        if not _np.isfinite(_M_mag):
+            raise RuntimeError(
+                f"non-finite paraxial magnification {_M_mag!r}")
+        image_mag = float(_M_mag)
     except (ImportError, RuntimeError, ValueError, KeyError, TypeError,
-            IndexError):
+            IndexError, AttributeError) as _exc:
         # ABCD probing can fail for prescriptions without a clean
         # paraxial system_abcd path (e.g. coord-break-heavy designs).
-        # Don't block the propagator on an inability to assess magnification.
-        pass
+        # Fall back to the v5.2 ``UserWarning`` path; we still produce
+        # a result using source-plane centres, with the documented
+        # accuracy caveat.
+        _abcd_failure = _exc
+
+    if image_mag is None:
+        _warnings.warn(
+            "propagate_subaperture_asymptotic: paraxial ABCD probe "
+            "failed ({}: {}); falling back to SOURCE-plane partition-"
+            "of-unity centres.  Result is reliable only for unit-"
+            "magnification, no-tilt geometries.  See AUDIT_V4_13_1 "
+            "Part 2 P1-F.".format(
+                type(_abcd_failure).__name__
+                if _abcd_failure is not None else 'UnknownError',
+                _abcd_failure,
+            ),
+            UserWarning, stacklevel=2,
+        )
 
     # 4.13.2 (P1-NEW-B): build the source-plane coordinate grid for
     # E_in so we can project the actual input field onto the LG basis
@@ -454,14 +502,28 @@ def propagate_subaperture_asymptotic(
         )
         patch_fields.append(F_i)
 
-    # Recombine via partition-of-unity windows centred on patch
-    # centres in the *output* plane.  This treats the patch
-    # decomposition as defining "which patch the output point sees
-    # most clearly" -- adjacent patches' contributions blend smoothly.
+    # v5.2.3 (AUDIT_V4_13_1 P1-F substantive closure): recombine via
+    # partition-of-unity windows centred on the IMAGE-plane footprint
+    # of each source patch, derived from the paraxial magnification
+    # ``image_mag`` computed above.  Falls back to source-plane
+    # centres (the v5.1 / legacy behaviour) when the ABCD probe failed
+    # -- the ``UserWarning`` above documents that fallback.  For a
+    # unit-mag system (image_mag == 1) the mapped centres equal the
+    # source-plane centres bit-for-bit, so v5.1 numerics are preserved
+    # exactly.
+    if image_mag is not None:
+        _abs_mag = abs(image_mag)
+        _img_centres = _np.asarray(pg.centres) * image_mag
+        _img_half_widths = _np.asarray(pg.half_widths) * _abs_mag
+    else:
+        _img_centres = None
+        _img_half_widths = None
     return combine_patch_fields(
         patch_fields, pg,
         output_grid_x=out_x, output_grid_y=out_y,
         edge_smoothness=edge_smoothness,
+        image_centres=_img_centres,
+        image_half_widths=_img_half_widths,
     )
 
 

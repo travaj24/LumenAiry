@@ -1,0 +1,95 @@
+name: Dep-metadata drift check
+
+# v5.2.3 (ROADMAP v5.2.x dep-metadata drift check; v5.2.2 incident retrospective):
+# weekly scheduled scan that catches the v5.2.2-class regression
+# automatically.
+#
+# Background
+# ----------
+#
+# Between v5.1.1 (which re-added Python 3.10 to CI per audit
+# P2-NEW-3WAY-2) and v5.2.1, two optional deps published 2025 releases
+# that bumped their ``requires-python`` to ``>=3.11``, silently breaking
+# ``pip install lumenairy[fft,zarr,...]`` on 3.10:
+#
+# - pyfftw 0.15.1 (2025): ``requires-python = ">=3.11"``
+# - zarr 3.1.6 (2025):    ``requires-python = ">=3.11"``
+#
+# v5.2.2 fixed via PEP 508 environment markers, but this class of
+# failure WILL recur: any dep we list with no upper cap may, in any
+# future release, bump its floor and silently drop a supported Python.
+#
+# What this workflow does
+# -----------------------
+#
+# Runs ``scripts/check_dep_metadata.py`` on a weekly cron (Mondays at
+# 06:00 UTC, low-traffic) and on manual ``workflow_dispatch``.  The
+# script walks pyproject.toml, fetches each dep's PyPI metadata, and
+# exits non-zero if the latest version of any dep does NOT support all
+# of LumenAiry's documented Python versions (3.10/3.11/3.12/3.13) AND
+# is not already guarded by a PEP 508 env marker in pyproject.toml.
+#
+# When the script flags drift the workflow turns red, the weekly badge
+# changes colour, and the maintainer investigates.  The output table is
+# grep-able and the report includes a suggested ``pyproject.toml`` PEP
+# 508 env-marker fix matching the v5.2.2 pattern.
+#
+# Triggers
+# --------
+#
+# - schedule (cron, Mondays 06:00 UTC) -- the scan target
+# - workflow_dispatch                  -- manual re-run from the
+#                                          Actions tab
+#
+# NOT triggered on ``push`` or ``pull_request`` -- this is an
+# infrastructure-drift watcher, not a per-PR gate.  Library code changes
+# don't cause dep-metadata drift; only external PyPI publications do.
+# A red badge here means "an upstream dep changed its
+# ``requires-python``", not "this PR is broken".
+#
+# How to fix flagged drift
+# ------------------------
+#
+# 1. Open the failed workflow log; the per-package table identifies the
+#    offending dep + the Python(s) it dropped.
+# 2. The "Suggested PEP 508 env-marker fix" block shows the
+#    ``pyproject.toml`` edit, modelled on the v5.2.2 ``fft`` / ``zarr``
+#    pair.
+# 3. Apply the edit (cap the latest version on dropped Pythons, leave
+#    the unconstrained version for supported Pythons).
+# 4. Cut a patch release (v5.2.x).  Document in CHANGELOG citing this
+#    workflow's detection.
+
+on:
+  schedule:
+    # Weekly, Mondays 06:00 UTC -- low US/EU overlap, fresh data after
+    # the weekend's PyPI publications.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  drift:
+    name: PyPI dep-metadata drift
+    runs-on: ubuntu-latest
+    # v5.2.3: not in the merge-blocking pipeline; informative only.  A
+    # red badge here surfaces external infrastructure drift, NOT a
+    # library regression.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tomllib backport (for 3.10 fallback path)
+        # tomllib is in the stdlib on 3.11+, so on the 3.12 runner this
+        # is a no-op-ish install -- but the script also supports the 3.10
+        # fallback to ``tomli``.  Installing it here keeps the install
+        # line identical regardless of which Python the runner provides.
+        run: pip install tomli
+
+      - name: Check dep metadata
+        run: python scripts/check_dep_metadata.py

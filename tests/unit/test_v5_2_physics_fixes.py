@@ -17,10 +17,13 @@ One test class per fix.  Pins:
   ``DeprecationWarning`` on the legacy ``output_grid`` spelling.
 
 * ``TestV5_2_P1_C_MaslovSubdomainGridLoss`` --
-  :func:`prescription_subdomain` raises ``ValueError`` when
-  ``method='maslov'`` is used with an output grid that differs from
-  the input grid (the maslov dispatcher branch silently drops the
-  request pre-v5.2).
+  :func:`prescription_subdomain` accepts an output grid that differs
+  from the input grid when ``method='maslov'`` (v5.2.3 substantive
+  closure -- the maslov branch resamples the kernel-native (input-grid)
+  output onto ``out_surface``).  v5.2.0 raised ``ValueError`` here
+  (option a); v5.2.3 ships option b (substantive resampling).  The
+  narrow retained-raise covers non-square out_surface, which the
+  maslov kernel's downstream resampler cannot handle.
 
 * ``TestV5_2_P1_F_PartitionOfUnitySourcePlaneWarning`` --
   :func:`propagate_subaperture_asymptotic` emits a ``UserWarning`` on
@@ -397,15 +400,25 @@ class TestV5_2_P1_A_OutputShapeRename:
 # ===========================================================================
 
 class TestV5_2_P1_C_MaslovSubdomainGridLoss:
-    """``prescription_subdomain(method='maslov')`` raises when the
-    output Huygens surface declares a grid different from the input
-    Huygens surface, instead of silently dropping the request."""
+    """``prescription_subdomain(method='maslov')`` accepts a different
+    output Huygens surface and resamples kernel-native (input-grid)
+    output onto it (v5.2.3 substantive closure).  v5.2.0 raised here
+    (option a -- block); v5.2.3 ships option b (substantive resample).
+
+    The narrow retained-raise covers non-square out_surface; the maslov
+    kernel itself requires square pixels.  See the standalone
+    ``test_v5_2_3_mhs_maslov_resampling.py`` for the full physics-pin
+    coverage of the new resampling behaviour."""
 
     def _make_surface(self, Ny, Nx, dx):
         from lumenairy.propagators.mhs import HuygensSurface
         return HuygensSurface(z=0.0, dx=dx, Ny=Ny, Nx=Nx)
 
-    def test_maslov_with_different_output_grid_raises(self):
+    def test_maslov_with_different_output_grid_does_not_raise(self):
+        """v5.2.3 (AUDIT_V4_13_1 P1-C substantive closure): pre-v5.2.3
+        this raised ``ValueError`` (option a -- block).  v5.2.3 now
+        resamples the kernel-native input-grid output onto the declared
+        ``out_surface`` instead."""
         from lumenairy.propagators.mhs import prescription_subdomain
         in_s = self._make_surface(64, 64, 10e-6)
         out_s = self._make_surface(128, 128, 5e-6)
@@ -418,15 +431,18 @@ class TestV5_2_P1_C_MaslovSubdomainGridLoss:
             ],
             'thicknesses': [5e-3, 100e-3],
         }
-        with pytest.raises(ValueError, match='maslov'):
-            prescription_subdomain(
-                in_s, out_s, pres,
-                wavelength=633e-9, method='maslov',
-            )
+        # Construction must succeed; the resample fires at run-time.
+        sub = prescription_subdomain(
+            in_s, out_s, pres,
+            wavelength=633e-9, method='maslov',
+        )
+        assert sub is not None
+        assert sub.in_surface.Nx == 64
+        assert sub.out_surface.Nx == 128
 
     def test_maslov_same_grid_does_not_raise(self):
-        """Same-grid maslov call is the supported case -- construction
-        must succeed silently."""
+        """Same-grid maslov call -- the resampler is skipped and the
+        kernel-native output is returned directly."""
         from lumenairy.propagators.mhs import prescription_subdomain
         in_s = self._make_surface(64, 64, 10e-6)
         out_s = self._make_surface(64, 64, 10e-6)
@@ -448,8 +464,8 @@ class TestV5_2_P1_C_MaslovSubdomainGridLoss:
 
     def test_non_maslov_with_different_grid_does_not_raise(self):
         """Non-maslov methods that natively support output-grid
-        resampling (gbd / hfpi / hf) must not be blocked by the v5.2
-        guard."""
+        resampling (gbd / hfpi / hf) keep their native code path
+        (unchanged by v5.2.3)."""
         from lumenairy.propagators.mhs import prescription_subdomain
         in_s = self._make_surface(64, 64, 10e-6)
         out_s = self._make_surface(128, 128, 5e-6)
@@ -469,17 +485,53 @@ class TestV5_2_P1_C_MaslovSubdomainGridLoss:
         )
         assert sub is not None
 
+    def test_maslov_non_square_out_surface_raises(self):
+        """Narrow retained-raise corner case (v5.2.3): the maslov kernel
+        requires square pixels and its downstream resampler is built
+        on a square ``N_out`` -- a non-square output grid is rejected
+        at construction time."""
+        from lumenairy.propagators.mhs import prescription_subdomain
+        in_s = self._make_surface(64, 64, 10e-6)
+        out_s = self._make_surface(128, 64, 5e-6)  # Ny != Nx
+        pres = {
+            'surfaces': [
+                {'radius': 50e-3, 'glass_before': 'air',
+                 'glass_after': 'N-BK7'},
+                {'radius': -50e-3, 'glass_before': 'N-BK7',
+                 'glass_after': 'air'},
+            ],
+            'thicknesses': [5e-3, 100e-3],
+        }
+        with pytest.raises(ValueError, match='square'):
+            prescription_subdomain(
+                in_s, out_s, pres,
+                wavelength=633e-9, method='maslov',
+            )
+
 
 # ===========================================================================
 # Fix 5: partition-of-unity convention (AUDIT_V4_13_1 Part 2 P1-F)
 # ===========================================================================
 
 class TestV5_2_P1_F_PartitionOfUnitySourcePlaneWarning:
-    """``propagate_subaperture_asymptotic`` emits a ``UserWarning`` for
-    non-unit-magnification systems (where the partition-of-unity
-    windows centred on SOURCE-plane positions are physically wrong).
-    The new ``image_centres`` / ``image_half_widths`` kwargs on
-    :func:`combine_patch_fields` give callers an escape hatch."""
+    """v5.2.0 P1-F pinning: the new ``image_centres`` /
+    ``image_half_widths`` kwargs on :func:`combine_patch_fields` give
+    callers an escape hatch from the legacy source-plane partition-of-
+    unity behaviour.
+
+    .. versionchanged:: 5.2.3
+        v5.2.3 closed P1-F substantively by computing the image-plane
+        centres from the system ABCD internally inside
+        :func:`propagate_subaperture_asymptotic`, so the original
+        v5.2.0 ``UserWarning`` is silenced for the typical-call case
+        (2x telephoto, 0.5x condenser, etc.).  The warning is now
+        retained only as a fallback for the corner case where the
+        paraxial ABCD probe itself fails.  See
+        ``test_v5_2_3_subaperture_image_plane.py`` for the substantive
+        closure pins; this class continues to pin the
+        :func:`combine_patch_fields` kwarg shape contract (opt-in
+        kwargs take precedence over the auto-computed values, and
+        the default ``None`` path remains bit-for-bit legacy)."""
 
     def test_combine_patch_fields_accepts_image_centres(self):
         """The new ``image_centres`` kwarg overrides the legacy

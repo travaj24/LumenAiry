@@ -16,8 +16,11 @@ from 10 source files (per the v5.2 ROADMAP / 57-file consolidation):
 
 Each source file's contents are concatenated below verbatim (modulo
 minimal renames to avoid identifier collisions and to give each top-level
-test class an audit-version attribution prefix).  inspect.getsource proxy
-tests are tagged with a TODO comment per AUDIT_V4_13_1 Part 6.1.
+test class an audit-version attribution prefix).  v5.2.3 closed the
+v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+file: replaced where a behavioral pin was achievable; otherwise kept
+inspect.getsource by design and updated the comment to explain why
+(see AUDIT_V4_13_1 Part 6.1).
 """
 from __future__ import annotations
 
@@ -2151,57 +2154,95 @@ class TestAuditFixesV4_13_1_context_guards_ContextGuardSourceShape:
     """Pin the source-level shape of the guard so a future refactor
     can't quietly move the import back outside the try."""
 
-    def test_import_inside_try_block(self):
-        """The ``from .propagators.propagation import
-        clear_asm_caches`` line must be inside the try/except
-        block, NOT immediately before it.
+    def test_import_inside_try_block(self, monkeypatch):
+        """An ``ImportError`` on the ``from .propagators.propagation
+        import clear_asm_caches`` line during context-exit must NOT
+        propagate out of ``lumenairy_context`` -- proving the import
+        is guarded by a ``try:`` block (not sitting outside it).
+
+        v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource
+        proxy with behavioral pin): pre-v5.2.3 this test grepped the
+        source for the relative position of the ``try:`` and the
+        ``from .propagators.propagation import clear_asm_caches``
+        keyword.  The same shape is now exercised behaviorally by
+        forcing the import to raise and asserting that exiting the
+        context manager does not re-raise.  A regression that moved
+        the import back outside the try (the v4.13.0 P1-E bug shape)
+        would cause the ``with`` block below to raise ImportError on
+        exit.
         """
-        import inspect
+        import lumenairy as la  # noqa: F401 -- ensure submodule init
 
-        from lumenairy import _context as ctx_mod
+        # Reuse the synthetic-ImportError fixture from the sibling
+        # ClearCachesOnExitImportGuard test class.  It deletes the
+        # bound name on lumenairy.propagators.propagation and
+        # installs a module-level ``__getattr__`` that raises
+        # ImportError on ``clear_asm_caches`` access -- exactly the
+        # condition the v4.13.0 audit P1-E was guarding against.
+        _install_failing_clear_asm_caches(monkeypatch)
+        # Replace the 6 downstream clearers with no-op counters so
+        # the fallback path runs cleanly without touching real caches.
+        _install_counting_replacements(monkeypatch)
 
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
-        src = inspect.getsource(ctx_mod.lumenairy_context)
-        # Find the position of the import and the position of the
-        # surrounding try.  The import must come AFTER the most
-        # recent ``try:`` keyword that precedes it.
-        import_pos = src.find('from .propagators.propagation import '
-                              'clear_asm_caches')
-        assert import_pos != -1, (
-            'Import of clear_asm_caches missing entirely.')
-        # The substring between the start of the function and the
-        # import line should end with a ``try:`` (not a non-try
-        # statement at the same indent level).
-        before = src[:import_pos]
-        # Walk back to find the last ``try:`` keyword.
-        last_try = before.rfind('try:')
-        # Confirm no intervening ``except`` / ``finally`` block
-        # close between that try and the import.
-        between = before[last_try:]
-        assert 'except' not in between or last_try > between.find('except'), (
-            'Import of clear_asm_caches appears to be outside the '
-            'last try: block -- regression of v4.13.0 audit P1-E.')
+        # The pre-v4.13.0 (un-guarded) shape would propagate
+        # ImportError out of the context exit; v4.13.0+ swallows
+        # it and falls through to the per-sibling fallback.
+        with la.lumenairy_context(clear_caches_on_exit=True):
+            pass
+        # Reaching this line without an unhandled exception is the
+        # behavioural pin.  (pytest will fail the test automatically
+        # if any exception escaped the ``with`` block.)
 
-    def test_importerror_in_typed_tuple(self):
-        """The except clause that guards clear_asm_caches must
-        include ``ImportError`` in its typed tuple."""
-        import inspect
+    def test_importerror_in_typed_tuple(self, monkeypatch):
+        """The except clause that guards ``clear_asm_caches`` must
+        include ``ImportError`` in its typed tuple -- proven by
+        observing that ImportError-from-import is followed by the
+        fallback-clearer path firing (not by an uncaught exception).
 
-        from lumenairy import _context as ctx_mod
+        v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource
+        proxy with behavioral pin): pre-v5.2.3 this test grepped the
+        source for ``"ImportError"`` inside the ``except`` line.  We
+        now exercise the same surface behaviorally: inject the
+        ImportError and assert that the fallback path (other 6
+        cache clearers) actually fires.  If ImportError were removed
+        from the typed tuple, exiting the context would either
+        raise ImportError out (caught by pytest as a test failure)
+        or, if some other broader except absorbed it but did NOT
+        run the fallback chain, the counter assertion below would
+        fail.  Either failure mode points at the right regression.
+        """
+        import lumenairy as la  # noqa: F401
 
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
-        src = inspect.getsource(ctx_mod.lumenairy_context)
-        # Find the asm-cache import.
-        idx = src.find('clear_asm_caches()')
-        assert idx != -1, 'clear_asm_caches() call missing.'
-        # Look forward to the next except clause.
-        tail = src[idx:]
-        except_idx = tail.find('except')
-        assert except_idx != -1, 'except clause missing.'
-        except_line = tail[except_idx:tail.find('\n', except_idx)]
-        assert 'ImportError' in except_line, (
-            f'except clause guarding clear_asm_caches must include '
-            f'ImportError; got: {except_line!r}')
+        _install_failing_clear_asm_caches(monkeypatch)
+        counters = _install_counting_replacements(monkeypatch)
+
+        # Exit the context with ImportError on clear_asm_caches.
+        # The narrowed except tuple MUST contain ImportError or this
+        # would raise out (caught here only by the test runner).
+        with la.lumenairy_context(clear_caches_on_exit=True):
+            pass
+
+        # Defence-in-depth: the fallback chain must have run at least
+        # one downstream clearer.  The Zernike clearer is always
+        # available (no optional dep), so it must show count==1.
+        # ``-1`` is reserved for modules not importable in this env.
+        zernike_count = counters['zernike']['count']
+        assert zernike_count == 1, (
+            f'After ImportError on clear_asm_caches, the fallback '
+            f'Zernike clearer should have been called exactly once; '
+            f'got count={zernike_count}.  This means either '
+            f'ImportError is missing from the typed except-tuple '
+            f'(in which case the test would have raised above) OR '
+            f'the fallback chain was bypassed -- a regression of '
+            f'v4.13.0 audit P1-E.')
+        # At least one further block should also have fired to make
+        # the test non-vacuous (matches the sibling
+        # test_import_failure_does_not_bypass_later_blocks threshold).
+        fired = sum(1 for c in counters.values() if c['count'] == 1)
+        assert fired >= 1, (
+            f'Expected at least one fallback cache clearer to fire '
+            f'after the ImportError on clear_asm_caches; counters='
+            f'{counters}')
 
 
 # ============================================================================

@@ -18,8 +18,11 @@ from 12 source files (per the v5.2 ROADMAP / 57-file consolidation):
 
 Each source file's contents are concatenated below verbatim (modulo
 minimal renames to avoid identifier collisions and to give each top-level
-test class an audit-version attribution prefix).  inspect.getsource proxy
-tests are tagged with a TODO comment per AUDIT_V4_13_1 Part 6.1.
+test class an audit-version attribution prefix).  v5.2.3 closed the
+v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+file: replaced where a behavioral pin was achievable; otherwise kept
+inspect.getsource by design and updated the comment to explain why
+(see AUDIT_V4_13_1 Part 6.1).
 """
 from __future__ import annotations
 
@@ -3523,38 +3526,98 @@ class TestAuditFixesV4_13_0_except_sweep_DesignOptimizePlaneLoggerWarnsOnFailure
     """
 
     def test_warns_when_plane_logger_raises(self):
-        """Run a 1-eval optimization with a logger that raises;
-        assert a RuntimeWarning is emitted referencing plane_logger.
+        """Run a 1-iter design_optimize with a logger that raises a
+        ValueError; assert at least one ``RuntimeWarning`` is emitted
+        with the user-visible ``"plane_logger callback failed"`` text
+        AND the optimisation completes (the logger error must NOT
+        propagate out of merit_fn).
 
-        We exercise the merit-fn-side ``plane_logger`` invocation
-        directly by reading the source -- pinning the line that
-        emits the warning -- rather than driving a full
-        ``design_optimize`` call, because the trivial 1-param
-        Powell config returns before any merit eval on some scipy
-        versions, leaving the warning un-emitted.
+        v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource
+        proxy with behavioral pin): the previous version grepped
+        ``design_optimize`` source for the warning-message substring,
+        ``"RuntimeWarning"``, and the narrowed except tuple.  All three
+        are visible from the merit_fn invocation path; we now exercise
+        the path directly.  Empirically confirmed (against the live
+        v5.2.x driver) that the merit_fn fires at least once during a
+        max_iter=1 L-BFGS-B run on a single-free-variable singlet, so
+        the previous comment about scipy not calling merit_fn was
+        addressed by the v4.16 unconditional final-evaluate guarantee
+        and is no longer a concern.
         """
-        import inspect
+        from lumenairy.optimize.core import (
+            DesignParameterization, design_optimize)
 
-        from lumenairy.optimize import core as oc
+        pres = lm.make_singlet(
+            R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',
+            aperture=12e-3,
+        )
+        param = DesignParameterization(
+            template=pres,
+            free_vars=[('surfaces', 0, 'radius')],
+            bounds=[(30e-3, 100e-3)],
+        )
+        inner = lm.StrehlMerit(weight=1.0)
 
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
-        src = inspect.getsource(oc.design_optimize)
-        # The narrowed plane_logger except clause must emit a
-        # RuntimeWarning that names ``plane_logger`` in the message
-        # so users can locate the failure.
-        assert "plane_logger callback failed" in src, (
-            "design_optimize plane_logger callback failure now "
-            "warns instead of silently passing; the warning string "
-            "is the user-visible contract.")
-        assert "RuntimeWarning" in src, (
-            "plane_logger failure-handler must emit a RuntimeWarning.")
-        # The narrow itself replaced an ``except Exception:`` with
-        # a typed tuple.  Confirm the narrowed form is in place.
-        assert "except (TypeError, ValueError, RuntimeError" in src, (
-            "plane_logger except clause should be narrowed to the "
-            "expected exception spectrum (TypeError, ValueError, "
-            "RuntimeError, KeyError, AttributeError, IndexError, "
-            "OSError).")
+        logger_calls = []
+
+        def bad_logger(iteration, ctx):
+            logger_calls.append(iteration)
+            # ValueError is in the narrowed except tuple
+            # (TypeError, ValueError, RuntimeError, KeyError,
+            # AttributeError, IndexError, OSError).  A future
+            # narrowing that drops ValueError would re-raise out
+            # of merit_fn and break the optimisation -- which is
+            # exactly what this behavioural pin would catch
+            # (the design_optimize call would raise).
+            raise ValueError('synthetic plane_logger fail')
+
+        with warnings.catch_warnings(record=True) as ws:
+            warnings.simplefilter('always')
+            # The call MUST NOT raise -- the warning-handler's job
+            # is to swallow the logger exception and continue.
+            design_optimize(
+                parameterization=param,
+                merit_terms=[inner],
+                wavelength=1.55e-6,
+                N=32, dx=10e-6,
+                max_iter=1,
+                plane_logger=bad_logger,
+                verbose=False,
+            )
+
+        # Behavioral pin 1: the logger DID get called (otherwise the
+        # warning-emit path is untested).
+        assert len(logger_calls) >= 1, (
+            'plane_logger was never invoked during a max_iter=1 '
+            'design_optimize call; the merit_fn fires at least once '
+            'at finalisation.  If this fails, scipy / the driver no '
+            'longer evaluates merit_fn during finalize -- the rest of '
+            'this test would be vacuous.')
+
+        # Behavioral pin 2: at least one RuntimeWarning fired with the
+        # user-visible ``"plane_logger callback failed"`` text.  This
+        # is the contract that subsumes the three pre-v5.2.3
+        # source-grep assertions:
+        #   - ``"plane_logger callback failed"`` substring in source
+        #     -> appears in the actual warning message;
+        #   - ``"RuntimeWarning"`` in source
+        #     -> the warning category is RuntimeWarning;
+        #   - ``"except (TypeError, ValueError, RuntimeError, ..."``
+        #     narrowed-tuple -> ValueError raised by bad_logger is
+        #     caught (otherwise this test would fail with an
+        #     unhandled ValueError, not the assertion below).
+        runtime_ws = [w for w in ws
+                      if issubclass(w.category, RuntimeWarning)
+                      and 'plane_logger callback failed' in str(w.message)]
+        assert len(runtime_ws) >= 1, (
+            f"design_optimize plane_logger callback failure must emit "
+            f"a RuntimeWarning containing 'plane_logger callback "
+            f"failed'.  Got {[str(w.message) for w in ws]}.")
+        # The warning must also name the exception type, so the
+        # user can triage their broken logger.
+        assert 'ValueError' in str(runtime_ws[0].message), (
+            f"warning should name the exception type "
+            f"(ValueError); got: {runtime_ws[0].message!r}")
 
 
 # ============================================================================
@@ -6377,17 +6440,90 @@ class TestAuditFixesV4_9_ZemaxInchAlias:
         """Audit #4.4: the .zmx loader (``load_zemax_zmx``) used to
         handle MM / CM / IN / M but not INCH / INCHES.  Some Zemax
         exports use the long form.  4.9 adds INCH and INCHES.
+
+        v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource
+        proxy with behavioral pin): the previous version grepped
+        ``load_zemax_zmx`` source for the literal strings ``"'INCH'"``
+        and ``"'INCHES'"`` in the local ``unit_map`` dict.  The new
+        pin writes three minimal .zmx files (UNIT IN as a v4.9-
+        pre-existing reference, UNIT INCH and UNIT INCHES as the new
+        aliases) and verifies all three produce identical, correctly
+        inch-scaled thicknesses (1.0 inch -> 0.0254 m).
         """
-        import inspect
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
-        src = inspect.getsource(lm.load_zemax_zmx)
-        # 'INCH' (and ideally 'INCHES') should now appear in the
-        # unit_map literal.
-        assert "'INCH'" in src, (
-            "load_zemax_zmx unit_map does not contain 'INCH' alias.  "
-            "Audit #4.4: add 'INCH' / 'INCHES' alongside 'IN'.")
-        assert "'INCHES'" in src, (
-            "load_zemax_zmx unit_map does not contain 'INCHES' alias.")
+        import os
+        import tempfile
+
+        # 3 identical files differing only in the UNIT token.  Thickness
+        # 1.0 (in whatever the unit is) on the air gap -- so the parsed
+        # all_thicknesses[0] should be 0.0254 m for every inch spelling.
+        zmx_template = (
+            'UNIT {unit}\n'
+            'SURF 0\n'
+            '  CURV 0.0\n'
+            '  DISZ INFINITY\n'
+            'SURF 1\n'
+            '  CURV 0.0\n'
+            '  DISZ 1.0\n'
+            '  GLAS N-BK7\n'
+            '  DIAM 0.5\n'
+            'SURF 2\n'
+            '  CURV 0.0\n'
+            '  DISZ 0.5\n'
+            '  DIAM 0.5\n'
+        )
+
+        def _parse_with_unit(unit_str):
+            with tempfile.NamedTemporaryFile(
+                    'w', suffix='.zmx', encoding='utf-8',
+                    delete=False) as fh:
+                fh.write(zmx_template.format(unit=unit_str))
+                path = fh.name
+            try:
+                return lm.load_zemax_zmx(path)
+            finally:
+                os.unlink(path)
+
+        # Reference: pre-v4.9 ``IN`` form (already worked).
+        rx_in = _parse_with_unit('IN')
+        # New v4.9 aliases.
+        rx_inch = _parse_with_unit('INCH')
+        rx_inches = _parse_with_unit('INCHES')
+
+        # The 1-inch air gap between surfaces 1 and 2 should appear
+        # in all_thicknesses at index 1 (index 0 is the OBJ->surf 1
+        # INFINITY gap, which is dropped to 0.0).  All three forms
+        # must agree to within float-precision.
+        ref_t = rx_in['all_thicknesses']
+        inch_t = rx_inch['all_thicknesses']
+        inches_t = rx_inches['all_thicknesses']
+
+        assert len(ref_t) == len(inch_t) == len(inches_t), (
+            f'thickness-list lengths disagree: IN={len(ref_t)}, '
+            f'INCH={len(inch_t)}, INCHES={len(inches_t)} -- the unit '
+            f'parser must produce identical structure regardless of '
+            f'spelling.')
+        for i, (a, b, c) in enumerate(zip(ref_t, inch_t, inches_t)):
+            assert abs(a - b) < 1e-12, (
+                f'UNIT INCH alias produced thickness[{i}]={b!r} but '
+                f'reference UNIT IN gave {a!r}.  Audit #4.4: INCH '
+                f'must scale to inches (25.4e-3 m), not the default '
+                f'MM (1e-3 m).')
+            assert abs(a - c) < 1e-12, (
+                f'UNIT INCHES alias produced thickness[{i}]={c!r} '
+                f'but reference UNIT IN gave {a!r}.')
+        # Quantitative: a 1.0-inch DISZ must parse to ~0.0254 m.
+        # The DISZ 1.0 lives on surf 1 (the air gap before surf 2)
+        # which maps to all_thicknesses[1] under the load_zemax_zmx
+        # contract.  (Index 0 is OBJ -> first lens surface, which we
+        # set to INFINITY -> 0.0.)
+        non_zero_inch = [t for t in inch_t if abs(t) > 1e-12]
+        assert non_zero_inch, (
+            'Expected at least one non-zero thickness; '
+            f'all_thicknesses={inch_t!r}')
+        assert any(abs(t - 25.4e-3) < 1e-9 for t in non_zero_inch), (
+            f'No thickness matched 1.0 inch = 25.4e-3 m in the parsed '
+            f'all_thicknesses {inch_t!r}; UNIT INCH is being silently '
+            f'treated as the default UNIT MM (factor 1000x smaller).')
 
 
 # ============================================================================

@@ -335,6 +335,59 @@ def _auto_select_method(E_in, *, z, wavelength, dx, prescription,
 _FORWARD_ONLY_METHODS = ('sas', 'fresnel', 'fraunhofer', 'rs')
 
 
+def _resolve_dispatcher_output_grid(method, output_grid, output_dx, in_shape):
+    """Resolve the dispatcher's ``output_grid = (N_out, dx_out)`` contract
+    into the gbd / hfpi / hf sub-propagators' v5.2.0 ``output_shape`` +
+    ``output_dx`` form.
+
+    v5.2.3 (AUDIT_V4_13_1 P1-A residual closure).  v5.2.0 renamed the
+    sub-propagators' ``output_grid`` -> ``output_shape`` (where the
+    sub-propagators' ``output_grid`` had meant the ``(Ny, Nx)`` shape
+    only, NOT the dispatcher's documented ``(N_out, dx_out)`` form).
+    The dispatcher kept forwarding the legacy ``output_grid`` kwarg
+    name AND tuple form, which triggered the v5.2.0
+    ``DeprecationWarning`` shim AND mis-interpreted the dispatcher's
+    canonical tuple as ``(Ny=N_out, Nx=dx_out)``.  v5.2.3 resolves
+    the dispatcher's tuple here once, then forwards via the new
+    kwargs.
+
+    Returns ``(output_shape, dx_out)`` where ``output_shape`` is
+    ``(N_out, N_out)`` (square) and ``dx_out`` is the resolved output
+    pitch in meters.  Either may be ``None`` (caller didn't ask for
+    a custom output grid).
+    """
+    if output_grid is None and output_dx is None:
+        return None, None
+    # Same parsing path as ``_dispatch_bare_grid_with_output`` but
+    # returns shape + dx instead of calling the MFT variant.
+    Ny, Nx = in_shape[-2], in_shape[-1]
+    N_in = max(Ny, Nx)
+    dx_out = None
+    N_out = None
+    if output_grid is not None:
+        if isinstance(output_grid, dict):
+            N_out = output_grid.get('N')
+            dx_out = output_grid.get('dx')
+        elif (isinstance(output_grid, (tuple, list))
+              and len(output_grid) >= 2):
+            N_out, dx_out = output_grid[0], output_grid[1]
+        else:
+            raise ValueError(
+                f"propagate(method={method!r}, output_grid=...): "
+                f"output_grid must be a (N_out, dx_out) tuple or "
+                f"{{'N': ..., 'dx': ...}} dict, got "
+                f"{type(output_grid).__name__}.")
+    if output_dx is not None:
+        dx_out = output_dx
+    if N_out is None:
+        N_out = N_in
+    N_out = int(N_out)
+    if dx_out is not None:
+        dx_out = float(dx_out)
+    output_shape = (N_out, N_out)
+    return output_shape, dx_out
+
+
 def _dispatch_bare_grid_with_output(method, E_in, *, z, wavelength, dx,
                                      output_grid, output_dx, **kwargs):
     """Route a bare-grid method (asm/fresnel/fraunhofer/sas/rs) to the
@@ -497,19 +550,29 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
 
     if method == 'gbd':
         from .gbd import propagate_gbd_freespace, propagate_gbd_through_prescription
+        # v5.2.3 (AUDIT_V4_13_1 P1-A residual closure): resolve the
+        # dispatcher's ``output_grid = (N_out, dx_out)`` contract
+        # into the sub-propagator's new ``output_shape`` + ``output_dx``
+        # kwargs before forwarding, so the sub-propagator's
+        # v5.2.0 ``output_grid``-as-(Ny, Nx) DeprecationWarning shim
+        # doesn't fire on a dispatcher-canonical call.  v5.2.0 closed
+        # the rename at the sub-propagator surface; v5.2.3 closes the
+        # forwarding so the dispatcher contract is end-to-end clean.
+        _shape, _dx_out = _resolve_dispatcher_output_grid(
+            method, output_grid, output_dx, E_in.shape)
         if prescription is None:
             if z is None:
                 raise ValueError(
                     "propagate(method='gbd') without prescription requires z.")
             return propagate_gbd_freespace(
                 E_in, dx, z=z, wavelength=wavelength,
-                output_grid=output_grid, output_dx=output_dx,
+                output_shape=_shape, output_dx=_dx_out,
                 **kwargs,
             )
         return propagate_gbd_through_prescription(
             E_in, dx, prescription,
             wavelength=wavelength,
-            output_grid=output_grid, output_dx=output_dx,
+            output_shape=_shape, output_dx=_dx_out,
             **kwargs,
         )
 
@@ -529,10 +592,14 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
                 wavelength=wavelength,
                 **kwargs,
             )
+        # v5.2.3 (AUDIT_V4_13_1 P1-A residual closure): same dispatcher
+        # forwarding fix as the ``gbd`` branch above.
+        _shape, _dx_out = _resolve_dispatcher_output_grid(
+            method, output_grid, output_dx, E_in.shape)
         return propagate_hfpi_through_prescription(
             E_in, dx, prescription,
             wavelength=wavelength,
-            output_grid=output_grid, output_dx=output_dx,
+            output_shape=_shape, output_dx=_dx_out,
             **kwargs,
         )
 
@@ -548,10 +615,14 @@ def _dispatch_to_method(method, E_in, *, z, wavelength, dx,
             return propagate_huygens_fresnel_freespace(
                 E_in, z, wavelength, dx, **kwargs,
             )
+        # v5.2.3 (AUDIT_V4_13_1 P1-A residual closure): same dispatcher
+        # forwarding fix as the ``gbd`` / ``hfpi`` branches above.
+        _shape, _dx_out = _resolve_dispatcher_output_grid(
+            method, output_grid, output_dx, E_in.shape)
         return propagate_huygens_fresnel_through_prescription(
             E_in, dx, prescription,
             wavelength=wavelength,
-            output_grid=output_grid, output_dx=output_dx,
+            output_shape=_shape, output_dx=_dx_out,
             **kwargs,
         )
 

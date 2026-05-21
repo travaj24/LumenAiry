@@ -1,23 +1,26 @@
 """
 Lumenairy example 11 -- adaptive-optics closed loop.
 
-Demonstrates an AO closed loop built from the v5.2 primitives:
+Demonstrates a single-conjugate AO closed loop using v5.2.3's
+canonical ``lumenairy.ao_closed_loop`` helper:
 
   * ``lumenairy.generate_turbulence_screen`` -- Kolmogorov atmosphere
   * ``lumenairy.DeformableMirror``           -- Gaussian-IF DM
-  * The DM ``fit_phase`` projector closes the loop with a single
-    least-squares step per iteration (no separate Shack-Hartmann
-    measurement -- this is a clairvoyant / ideal-WFS controller for
-    pedagogy).
+  * ``lumenairy.ao_closed_loop``             -- closed-loop driver
+    (leaky integrator + DM ``fit_phase`` projector).  Returns the
+    final residual phase and a per-iteration RMS history.
 
 The example draws a Kolmogorov phase screen on the pupil, then runs
-10 closed-loop iterations where each iteration:
+10 closed-loop iterations with ideal phase sensing.  Each iteration:
 
   1. Measures the current residual phase (perfect-WFS approximation).
   2. Projects it onto the DM influence-function basis.
-  3. Adds the negated correction to the cumulative DM command (leaky
-     integrator with gain g).
+  3. Adds the gain-scaled increment to the cumulative DM command.
   4. Recomputes the residual phase.
+
+v5.2.3 demonstrates the canonical ``ao_closed_loop`` helper: the
+v5.2.0 build-it-yourself pattern (manual scratch-DM + cumulative
+command bookkeeping) is replaced by a single library call.
 
 Run::
 
@@ -25,11 +28,6 @@ Run::
 
 A residual-RMS vs iteration plot is written to
 ``examples/output/11_ao_closed_loop.png``.
-
-Note: this uses the v5.2 DM primitive plus a simple closed-loop
-control law assembled by hand.  A higher-level "ao_closed_loop"
-helper is not yet in the library -- the build-your-own pattern
-here is the canonical v5.2 idiom.
 
 Author: Andrew Traverso -- v5.2 / examples roadmap.
 """
@@ -89,36 +87,36 @@ def main():
     )
 
     # --- 3. Closed-loop iterations ------------------------------------
-    # Leaky-integrator control law:
-    #   cmd_{k+1} = (1 - leak) * cmd_k + gain * fit(residual)
-    # with gain = 0.5 and leak = 0.0 (pure integrator) for a quick
-    # demonstration.  In practice gain ~ 0.3 - 0.5 keeps the loop
-    # stable across temporal bandwidths.
+    # v5.2.3: one-call closed-loop helper.  Leaky-integrator gain 0.5
+    # and ideal phase sensing (``wfs=None``) replicate the v5.2.0
+    # pattern.  ``return_history=True`` records per-iteration residual
+    # RMS for the convergence plot below.
     gain = 0.5
-    leak = 0.0
     n_iter = 10
-    rms_history = [rms_initial]
+    residual_final, history = la.ao_closed_loop(
+        phase_atm,
+        dm=dm,
+        n_iterations=n_iter,
+        gain=gain,
+        wavelength=wavelength,
+        dx=dx,
+        wfs=None,
+        return_history=True,
+    )
 
+    # The helper records the global (full-grid) RMS each iteration.
+    # For the convergence plot we want the pupil-masked RMS so the
+    # numbers match the labelled "initial pupil RMS" line above.
+    # Reconstruct per-iteration pupil-masked RMS by re-running a
+    # second pass starting from a flat DM and recording the masked
+    # statistic after each step.
+    dm.reset()
+    rms_history = [rms_initial]
     for k in range(n_iter):
-        # Residual = atmospheric phase + current DM phase (DM imparts
-        # a phase via dm.phase()).  Note we ADD the DM phase because
-        # the DM is conjugate to the pupil; the controller learns the
-        # negative of the residual through fit_phase + cumulative
-        # commands.
-        residual = phase_atm + dm.phase()
-        # Project the *negative* residual onto the DM basis -- the
-        # incremental command needed to push the residual to zero.
-        # fit_phase overwrites dm.command with the fit; instead use
-        # a scratch DM to compute the increment, then accumulate.
-        scratch = la.DeformableMirror(
-            n_actuators=n_act, pitch=pitch, dx=dx, N=N,
-            inter_actuator_coupling=0.2,
-        )
-        scratch.fit_phase(-residual)
-        delta_cmd = scratch.command
-        # Apply leaky-integrator update.
-        dm.command = (1.0 - leak) * dm.command + gain * delta_cmd
-        rms_k = _phase_rms(phase_atm + dm.phase(), pupil_mask)
+        la.ao_closed_loop(
+            phase_atm, dm=dm, n_iterations=1, gain=gain,
+            wavelength=wavelength, dx=dx, wfs=None)
+        rms_k = _phase_rms(phase_atm - dm.phase(), pupil_mask)
         rms_history.append(rms_k)
         print(f'  iter {k+1:2d}:  residual RMS = {rms_k:.3f} rad  '
               f'({rms_k * wavelength / (2*np.pi) * 1e9:5.1f} nm WFE)')
@@ -161,6 +159,9 @@ def main():
     print(f'    Convergence ratio: '
           f'{rms_final/rms_initial:.3f} '
           f'(lower = better)')
+    # Reference the helper's global-RMS history too.
+    print(f'    Helper history (global RMS) final: '
+          f'{history["rms_per_iter"][-1]:.4f} rad')
 
 
 if __name__ == '__main__':

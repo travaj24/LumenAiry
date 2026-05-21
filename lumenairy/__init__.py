@@ -269,6 +269,10 @@ from ._context import (
 from .analysis.ao import (
     DeformableMirror,
     LeakyIntegrator,
+    # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper): canonical
+    # high-level closed-loop AO driver, supersedes the v5.2.0
+    # build-it-yourself pattern in examples/11_ao_closed_loop.py.
+    ao_closed_loop,
     apply_dm,
     slope_to_modal,
     zernike_modal_basis,
@@ -835,7 +839,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.2.2"
+__version__ = "5.2.3"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1258,6 +1262,8 @@ __all__ = [
     'DeformableMirror', 'apply_dm',
     'zernike_modal_basis', 'slope_to_modal',
     'LeakyIntegrator',
+    # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper):
+    'ao_closed_loop',
 
     # Field-resolved analyses (4.4.0)
     'DistortionVsField', 'distortion_vs_field',

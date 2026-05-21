@@ -15,8 +15,11 @@ from 9 source files (per the v5.2 ROADMAP / 57-file consolidation):
 
 Each source file's contents are concatenated below verbatim (modulo
 minimal renames to avoid identifier collisions and to give each top-level
-test class an audit-version attribution prefix).  inspect.getsource proxy
-tests are tagged with a TODO comment per AUDIT_V4_13_1 Part 6.1.
+test class an audit-version attribution prefix).  v5.2.3 closed the
+v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+file: replaced where a behavioral pin was achievable; otherwise kept
+inspect.getsource by design and updated the comment to explain why
+(see AUDIT_V4_13_1 Part 6.1).
 """
 from __future__ import annotations
 
@@ -511,7 +514,18 @@ class TestAuditFixesV4_13_0_ghost_apply_mirror_GhostRConventionDisambiguated:
         """The function body's local variables for curvature radii are
         named ``r_i`` / ``r_j`` (lowercase), not ``R_i_val`` /
         ``R_j_val`` (pre-fix) or ``R_i`` / ``R_j`` (the Fresnel form)."""
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
+        # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+        # the v4.13.0 fix was a pure source-level rename of LOCAL variables
+        # (Python locals don't escape to any observable signature, public
+        # dict key, or runtime attribute) introduced specifically to
+        # disambiguate Fresnel reflectance ``R`` from curvature radius
+        # ``r`` for human readers of ghost.py.  The public dict-key
+        # contract (``'R_i'``/``'R_j'`` preserved) is pinned behaviorally
+        # by ``test_ghost_analysis_still_returns_R_i_and_R_j_keys`` below.
+        # No dispatcher / V3 walker covers the rename of locals, so
+        # inspect.getsource on the function body is the correct tool for
+        # this absence-of-pre-fix-pattern check.  Not a v5.2.x replacement
+        # candidate.
         src = inspect.getsource(ghost_mod.ghost_analysis)
         # Renamed locals present.
         assert "r_i = surfs[i].radius" in src, (
@@ -2085,7 +2099,17 @@ class TestAuditFixesV4_14_1_agent_c_C2ZeroLiteralSweep:
         ``0.0 + 0.0j`` complex128 literal in code (only in comments)."""
         from lumenairy.elements import lenses_maslov
 
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
+        # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+        # this is an absence-of-anti-pattern check (no bare ``0.0 + 0.0j``
+        # literal in executable code).  The sibling structural walker
+        # ``test_v4_14_2_dispatcher_pin_zero_plus_zeroj`` covers only the
+        # ``np.where(..., 0.0 + 0.0j)`` form (scoped to avoid scalar
+        # accumulators by design); it does NOT cover the broader bare-
+        # literal-anywhere check this test performs across lenses_maslov.
+        # Structural-source-check is the appropriate tool for "no anti-
+        # pattern in source" -- no runtime behavior can prove the absence
+        # of a literal that would silently upcast dtype.  Not a v5.2.x
+        # replacement candidate.
         src = inspect.getsource(lenses_maslov)
         # Strip comments to focus on executable code.
         code_lines = []
@@ -2108,7 +2132,14 @@ class TestAuditFixesV4_14_1_agent_c_C2ZeroLiteralSweep:
         be the bare ``1.0 + 0.0j`` complex128 literal."""
         from lumenairy.elements import _lens_thin
 
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
+        # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+        # absence-of-anti-pattern check (no bare ``1.0 + 0.0j`` literal
+        # in executable code).  The sibling structural walker
+        # ``test_v4_14_2_dispatcher_pin_zero_plus_zeroj`` covers only the
+        # ``np.where(..., 0.0 + 0.0j)`` form (zero, not one) and does not
+        # walk for the unit-phase ``1.0 + 0.0j`` sentinel at all.
+        # Structural-source-check remains the appropriate tool here.
+        # Not a v5.2.x replacement candidate.
         src = inspect.getsource(_lens_thin)
         # Strip comments.
         code_lines = []
@@ -2122,7 +2153,10 @@ class TestAuditFixesV4_14_1_agent_c_C2ZeroLiteralSweep:
             "aware ``xp.ones((), dtype=...)``."
         )
         # Spot-check the aplanatic branch source.
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
+        # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: kept inspect.getsource by design):
+        # spot-check on the same absence-of-anti-pattern surface, narrowed
+        # to the apply_thin_lens function's aplanatic branch.  Same
+        # rationale as above; not a v5.2.x replacement candidate.
         apl = inspect.getsource(_lens_thin.apply_thin_lens)
         assert '1.0 + 0.0j' not in apl.split('#', 1)[0]
 

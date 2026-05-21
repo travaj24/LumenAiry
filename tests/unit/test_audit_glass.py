@@ -8,8 +8,11 @@ from 2 source files (per the v5.2 ROADMAP / 57-file consolidation):
 
 Each source file's contents are concatenated below verbatim (modulo
 minimal renames to avoid identifier collisions and to give each top-level
-test class an audit-version attribution prefix).  inspect.getsource proxy
-tests are tagged with a TODO comment per AUDIT_V4_13_1 Part 6.1.
+test class an audit-version attribution prefix).  v5.2.3 closed the
+v5.2.1 TODO markers on the inspect.getsource proxy-test sites in this
+file: replaced where a behavioral pin was achievable; otherwise kept
+inspect.getsource by design and updated the comment to explain why
+(see AUDIT_V4_13_1 Part 6.1).
 """
 from __future__ import annotations
 
@@ -445,30 +448,42 @@ class TestAuditFixesV4_14_2_agent_a_SLahDispatch:
             f'catalogue value is 2.003.')
 
     def test_glass_registry_consistency_check_present(self):
-        """The new module-load consistency check function exists
-        and contains the drift-detection logic.  Its source must
-        reference both ``GLASS_REGISTRY`` and
-        ``SELLMEIER_COEFFICIENTS`` and contain a ``RuntimeError``
-        path -- this is the structural counter-measure that prevents
-        the same class-of-bug from re-surfacing silently.
+        """The v4.14.2 module-load consistency check function exists,
+        is callable with no arguments, and runs to completion on a
+        healthy registry without raising.
+
+        The drift-detection contract is exercised by its siblings
+        (``test_glass_registry_consistency_check_rejects_drift`` and
+        the polynomial-/reverse-direction tests later in this class)
+        which inject synthetic drift entries and assert ``RuntimeError``.
+        This test pins the no-arg callable contract: a future refactor
+        that adds a required parameter or that turns the function into
+        a non-callable (module-level attribute, classmethod-only, etc.)
+        would silently disable the check; this assertion fails loudly
+        if that happens.
         """
+        # v5.2.3 (AUDIT_V4_13_1 Part 6.1 closure: replace inspect.getsource proxy with behavioral pin):
+        # the original assertion grepped the source for 'GLASS_REGISTRY',
+        # 'SELLMEIER_COEFFICIENTS', 'RuntimeError', and '__sellmeier__'
+        # substrings.  The drift-detection contract those substrings
+        # proxied is covered behaviorally by the sibling drift-injection
+        # tests in this class.  Here we pin only the missing piece those
+        # siblings cannot reach: that the no-arg callable contract holds.
         assert hasattr(_glass, '_check_glass_registry_consistency'), (
             'v4.14.2 module-load consistency check '
             '`_check_glass_registry_consistency` is missing from '
             'lumenairy.glass.')
-        # TODO(v5.2.1): replace with behavioral pin -- inspect.getsource proxy-test pattern (per AUDIT_V4_13_1 Part 6.1)
-        src = inspect.getsource(_glass._check_glass_registry_consistency)
-        assert 'GLASS_REGISTRY' in src, (
-            'consistency check must iterate GLASS_REGISTRY')
-        assert 'SELLMEIER_COEFFICIENTS' in src, (
-            'consistency check must verify membership in '
-            'SELLMEIER_COEFFICIENTS')
-        assert 'RuntimeError' in src, (
-            'consistency check must fail-fast with RuntimeError on '
-            'detected drift')
-        assert "'__sellmeier__'" in src or '"__sellmeier__"' in src, (
-            'consistency check must filter on the __sellmeier__ '
-            'sentinel')
+        fn = _glass._check_glass_registry_consistency
+        assert callable(fn), (
+            '`_check_glass_registry_consistency` must be a callable; '
+            f'got {type(fn).__name__}.')
+        # No-arg contract: calling it on the healthy (un-tampered)
+        # registry returns cleanly.  A future signature break that
+        # adds a required arg would fail TypeError here, and a future
+        # regression that re-introduces real drift in GLASS_REGISTRY
+        # would fail RuntimeError here -- both are the right failures
+        # to surface at the right time.
+        fn()
 
     def test_glass_registry_consistency_check_rejects_drift(self):
         """Inject a synthetic ``'__test_sentinel_v4_14_2__'`` entry

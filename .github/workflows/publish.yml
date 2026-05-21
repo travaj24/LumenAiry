@@ -58,6 +58,29 @@ jobs:
           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
           pip install tomli
 
+      # v5.2.3 (AUDIT_V5_1_0 P1-NEW-2WAY-1; CONTENT-LEVEL CHANGELOG-
+      # fabrication walker V16 + companion script).  V12 catches
+      # FILE-LEVEL fabrications (cited file does not exist); V16 +
+      # this script catch CONTENT-LEVEL fabrications (cited file
+      # exists but is not in the ``git diff PREV_TAG..HEAD``
+      # changeset -- the v5.1.0 ``publish.yml verify gate`` claim
+      # was that exact class).  Runs BEFORE the library-import
+      # sanity step so a release with fabricated audit-closure
+      # claims fails BEFORE upload.  Exit codes: 0 = OK, 1 =
+      # fabrication candidates found (fail the job), 2 = clean
+      # skip (no audit closures or no git history), 3 = input
+      # error.  We accept 0 and 2 as pass; 1 and 3 fail the job.
+      - name: Verify CHANGELOG closures have backing diffs
+        run: |
+          python scripts/verify_changelog_closures.py
+          rc=$?
+          if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
+            echo "verify_changelog_closures: OK (rc=$rc)"
+          else
+            echo "::error::verify_changelog_closures failed (rc=$rc) -- fabrication candidates in CHANGELOG.  See script output above."
+            exit "$rc"
+          fi
+
       - name: Library import sanity
         run: python -c "import lumenairy; print('lumenairy', lumenairy.__version__)"
 

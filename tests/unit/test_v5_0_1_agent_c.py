@@ -110,6 +110,25 @@ def _extract_v5_1_section(text: str) -> str:
     return match.group(0)
 
 
+# v5.2.3 (ROADMAP refresh): the v5.1.0 ROADMAP section itself has
+# been retired -- v5.1.0 shipped at the v5.1.0 release tag, v5.2.0
+# shipped the remaining v5.1.0 deferrals, and v5.2.3 collapsed the
+# section to a single "shipped at v5.x" pointer that links to the
+# "Shipped highlights" section.  The 7-test class below was the
+# v5.0.1 audit P2-NEW-F2-3 closure pin guarding against the v5.1.0
+# section listing shipped items as future work.  That contract is
+# preserved structurally by the v5.2.0 V11 doc-consistency walker
+# + the v5.2.3 V16 CHANGELOG content-vs-changeset walker (which
+# catches the analogous CHANGELOG-side fabrication class), so the
+# narrow ``## v5.1.0`` section pin is superseded.  Skipped at v5.2.3
+# rather than deleted so the audit-ID citation trail survives in
+# the repo; the v5.3 work item is to either resurrect the
+# generalized version (asserting against the current forward-horizon
+# section) or delete the dead class entirely.
+@pytest.mark.skip(reason="v5.0.1 audit P2-NEW-F2-3 pin superseded "
+                         "by v5.2.3 ROADMAP retirement of the "
+                         "v5.1.0 section; structural guard moved "
+                         "to V11/V16 walkers.")
 class TestRoadmapV5_1SectionStaleItemStrip:
     """ROADMAP.md ``## v5.1.0`` section must NOT list v5.0-shipped
     items as still-pending.  Closes audit P2-NEW-F2-3.

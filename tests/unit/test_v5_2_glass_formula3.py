@@ -162,12 +162,33 @@ class TestPolynomialStubManifest:
     automatically).
     """
 
-    def test_manifest_is_non_empty_at_v5_2_ship(self):
-        """v5.2 ships with 24 known formula-3 catalogue entries that
-        have NOT been ingested.  Asserting non-empty pins the "tests
-        catch the regression where someone deletes the manifest
-        without ingesting the data" scenario."""
-        assert len(_POLYNOMIAL_STUB_NAMES) > 0
+    def test_manifest_state_at_v5_2_3_ship(self):
+        """v5.2.0 shipped with 24 known formula-3 catalogue entries
+        STUBBED.  v5.2.3 completed the ingestion: ``POLYNOMIAL_COEFFICIENTS``
+        now has 24 entries and ``_POLYNOMIAL_STUB_NAMES`` is empty.
+        The frozenset is kept (rather than deleted) as a forward
+        parking spot for future formula-3 catalogue additions.
+
+        Pin: either the manifest is empty (full ingestion completed)
+        OR every entry in it has NO matching POLYNOMIAL_COEFFICIENTS
+        entry (regression guard against accidental dual-state).
+        """
+        if len(_POLYNOMIAL_STUB_NAMES) == 0:
+            # v5.2.3 ship state: all 24 ingested.
+            assert len(POLYNOMIAL_COEFFICIENTS) >= 24, (
+                f"v5.2.3 expected at least 24 ingested formula-3 "
+                f"glasses; found {len(POLYNOMIAL_COEFFICIENTS)}.")
+        else:
+            # Future state: stubs may re-appear if new formula-3
+            # catalogue entries are added before their coefficients
+            # are ingested.  In that case, the stub-to-coefficient
+            # disjointness must still hold.
+            overlap = (set(_POLYNOMIAL_STUB_NAMES)
+                       & set(POLYNOMIAL_COEFFICIENTS))
+            assert not overlap, (
+                f"_POLYNOMIAL_STUB_NAMES and POLYNOMIAL_COEFFICIENTS "
+                f"overlap on {overlap!r} -- a glass cannot be both "
+                f"stubbed and ingested.")
 
     def test_every_stub_resolves_in_glass_registry(self):
         """Every name in the stub manifest must point at a real
@@ -271,24 +292,46 @@ class TestStubbedGlassDispatch:
 
     def test_minimal_install_stubbed_glass_raises_not_implemented(
             self, monkeypatch):
-        """Force the refractiveindex-unavailable branch and verify
-        the documented NotImplementedError text fires for every
-        stubbed glass."""
+        """v5.2.0 ship-state pin: when ``_POLYNOMIAL_STUB_NAMES`` is
+        non-empty (i.e. some catalogue entries haven't been ingested
+        yet), looking up such a name on a minimal install raises
+        ``NotImplementedError`` with the documented migration text.
+
+        v5.2.3 ship-state: ``_POLYNOMIAL_STUB_NAMES`` is empty (all 24
+        ingested), so this test SKIPS rather than asserting a contract
+        that no longer has a triggering input.  The dispatch arm is
+        still present in ``get_glass_index`` and would re-activate if
+        a future catalogue addition re-populates the manifest.
+        """
+        if not _POLYNOMIAL_STUB_NAMES:
+            pytest.skip(
+                "_POLYNOMIAL_STUB_NAMES is empty (v5.2.3 finished the "
+                "ingestion); the NotImplementedError dispatch arm has "
+                "no triggering input until a future catalogue addition.")
         monkeypatch.setattr(_glass, '_REFRACTIVEINDEX_AVAILABLE', False)
-        # Pick a representative -- the contract applies to all 24.
-        # Hand-picked: one from each catalogue.
-        for name in ('H-ZK7', 'E-LASF016', 'K-VC78'):
-            assert name in _POLYNOMIAL_STUB_NAMES
+        # Pick a representative -- the contract applies to every
+        # currently-stubbed name.
+        for name in sorted(_POLYNOMIAL_STUB_NAMES)[:3]:
             with pytest.raises(NotImplementedError, match="formula-3"):
                 get_glass_index(name, 587.6e-9)
 
     def test_minimal_install_error_text_directs_to_extras_or_issue(
             self, monkeypatch):
         """The NotImplementedError text must mention BOTH remediation
-        paths: install [glass] extras OR open a v5.2.1 issue."""
+        paths: install [glass] extras OR open a v5.2.1 issue.
+
+        v5.2.3 ship-state: ``_POLYNOMIAL_STUB_NAMES`` is empty (all 24
+        ingested), so this test SKIPS until a future catalogue
+        addition re-introduces a stubbed name.
+        """
+        if not _POLYNOMIAL_STUB_NAMES:
+            pytest.skip(
+                "_POLYNOMIAL_STUB_NAMES is empty (v5.2.3 finished the "
+                "ingestion); no stubbed glass to trigger the error.")
         monkeypatch.setattr(_glass, '_REFRACTIVEINDEX_AVAILABLE', False)
+        sample = next(iter(_POLYNOMIAL_STUB_NAMES))
         with pytest.raises(NotImplementedError) as excinfo:
-            get_glass_index('H-ZK7', 587.6e-9)
+            get_glass_index(sample, 587.6e-9)
         msg = str(excinfo.value)
         assert 'lumenairy[glass]' in msg or 'refractiveindex' in msg
         assert 'v5.2.1' in msg

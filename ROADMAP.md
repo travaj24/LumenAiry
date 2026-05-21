@@ -1,14 +1,36 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-20 (post-v5.1.0).  v4.16.x + v5.0.x have
-shipped; v5.1.0 lands the two long-deferred structural items from
-v5.0's ROADMAP: the **library-wide default-config knob resolver
-rollout** + the **6 large-file splits** (~26K LOC reorganised into
-~35 topical submodules, public API bit-for-bit preserved).  v5.1
-explicitly defers MCF top-level alias, formula-3 coefficient
-ingestion, off-axis conic, 5 missing examples, 57 audit-fix test
-consolidation, mypy CI activation, and ruff cosmetic-baseline
-cleanup -- those items move to the v5.2+ horizon.
+**Last updated:** 2026-05-21 (post-v5.2.3).  The entire v5.0 / v5.1
+/ v5.2.x ROADMAP has shipped:
+
+* **v5.0** -- coordinated breaking-change release (Python 3.10
+  floor, 5 shim removals, `system.py` move, CI gates,
+  Migration-Guide.md).
+* **v5.1.0** -- 6 large-file splits (~26K LOC reorganised into
+  ~35 submodules; public API bit-for-bit preserved) +
+  library-wide default-knob consumer wiring.
+* **v5.2.0** -- 4 new meta-walkers (V12 / V13 / V14 / V15), all
+  v5.x deferred features (MCF / formula-3 evaluator / off-axis
+  conic / 5 examples / 57-file consolidation / Chebyshev
+  extraction), structural cleanups (_xp_of dedup / backend-fft
+  inversion fix), CONVENTIONS table + validation/README, 5
+  v4.13.1-deferred physics fixes (DOE sign / scale_floor /
+  output_grid rename / MHS guard / partition-of-unity warning),
+  mypy CI activation, 85% ruff cleanup.
+* **v5.2.1** -- complete ruff baseline closure (134 -> 0) +
+  numexpr `local_dict=` refactor.
+* **v5.2.2** -- Python 3.10 install-path fix (pyfftw 0.15.1 +
+  zarr 3.x dropped 3.10).
+* **v5.2.3** -- Tier-1 / Tier-2 / Tier-3 ROADMAP closure: 24
+  formula-3 coefficients ingested, MHS substantive resampling,
+  subaperture image-plane mapping, `ao_closed_loop` helper,
+  V16 walker + verify_changelog_closures script + dep-drift
+  weekly cron, 9 source-text-proxy tests behavioral conversion,
+  README cookbook split, partial CHANGELOG archive.
+
+Remaining v5.3 horizon: `MultiFieldMerit` JIT, `logging`
+adoption sweep, CHANGELOG pre-v4.11 archive completion,
+Designer GUI v3.8+, next audit cycle.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -23,8 +45,8 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v5.1.0 baseline (3628 unit tests passing + 5
-  documented skips + 1 documented xfail = 3634 collected).
+- **Library:** v5.2.3 baseline (3765 unit tests passing + 18
+  documented skips + 1 documented xfail = 3784 collected).
   Python 3.10+ required.
   v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.
@@ -182,145 +204,134 @@ The next horizon is v5.0 — major structural release.
 
 ---
 
-## v5.1.0 — Structural reorganisation + deferred-feature land
+## v5.1, v5.2 -- shipped (see "Shipped highlights")
 
-This is the post-v5.0 horizon.  v5.0 shipped the coordinated
-breaking-change work (Python 3.10 floor; 5 shim removals;
-`lumenairy/system.py` -> `lumenairy/propagators/system.py`; CI
-gates; `Migration-Guide.md`; `test_public_api.py` smoke).  v5.1
-is **non-breaking** -- mechanical cleanup + the non-breaking
-feature work that didn't fit the v5.0 review window.
+Everything that was in this section as of v5.0 has now shipped
+across v5.1.0, v5.2.0, v5.2.1, v5.2.2, and v5.2.3.  Brief recap
+of the v5.1+v5.2 shipped items (the "Shipped highlights" section
+near the end of this file carries the per-release detail):
 
-> **Note (v5.0.1 audit P2-NEW-F2-3 closure):**  The v4.16.x
-> ROADMAP's v5.0 plan and v5.1's post-v5.0 horizon were drifting
-> together.  Items listed below are ONLY those that v5.0 did
-> not ship; the v5.0-shipped items (CI gates, public-API smoke,
-> Python 3.10 bump, 5/8 shim removals, `system.py` move,
-> Migration-Guide existence) have been moved to "Shipped
-> highlights" below.
+* **6 file splits** -- v5.1.0.  26K LOC reorganised into ~35
+  submodules; public API bit-for-bit preserved via re-export shells.
+* **Library-wide default-knob consumer wiring** -- v5.1.0.
+  `set_default_wave_propagator` / `set_default_dy` /
+  `set_default_real_dtype` now consulted by every applicable
+  entry point.
+* **57-file `test_audit_fixes_*` consolidation** -- v5.2.0.
+  791 tests preserved into 10 topical homes.
+* **Shared Chebyshev helpers extraction** -- v5.2.0.
+  `lumenairy/_math/chebyshev.py` is the canonical home; 6
+  consumer sites updated, back-compat aliases preserved.
+* **MCF top-level alias** -- v5.2.0.  `lumenairy.MCF` is now
+  `PartialCoherenceMCF`.
+* **26 / 24 formula-3 glass coefficients** -- evaluator
+  shipped at v5.2.0; **24 coefficient sets ingested at v5.2.3**
+  from the refractiveindex.info database with worst-case n_d
+  delta 7.9e-6 (under the 5e-5 budget; no tolerance relaxation
+  required).  ("26" was the original ROADMAP count; the
+  catalogue actually has 24 formula-3 polynomial entries -- 4
+  CDGM + 10 Hikari + 10 Sumita -- so v5.2.0 auto-corrected the
+  manifest count.)
+* **Off-axis conic in surface frame** -- v5.2.0.
+  `apply_real_lens(..., surface_frame=True)` opt-in with full
+  rigid-body transform.  Default `False` preserves v5.1
+  behavior bit-for-bit.
+* **5 new examples** (multiconfig zoom / Monte-Carlo tolerancing
+  / coronagraph / AO closed loop / ghost stray-light) -- v5.2.0.
+  Example 11 (AO closed loop) re-built on the v5.2.3
+  `ao_closed_loop` high-level helper.
+* **CONVENTIONS.md sign-convention table** -- v5.2.0.
+* **validation/README.md** -- v5.2.0.
+* **README.md split** (deep cookbook -> `docs/cookbook.md`) --
+  v5.2.3.
+* **CHANGELOG.md archive split** (v4.11-v4.12 entries ->
+  `docs/changelogs/v4.md`) -- v5.2.3 (partial; pre-v4.11
+  entries still in top-level CHANGELOG.md, deferred to v5.3
+  for completion).
+* **mypy strict CI activation** -- v5.2.0.  All 76 scope-local
+  errors cleaned; `mypy` is now a real CI gate
+  (`continue-on-error: false`).
+* **Ruff baseline cleanup** -- v5.2.0 (917 -> 134, 85%) +
+  v5.2.1 (134 -> 0).  `lint` job now finishes green.
 
-### Architecture / housekeeping
+### Active back-compat shims at v5.0 (intentionally kept)
 
-* **6 file splits** (no public API change; mechanical
-  reorganisation visible only to git-blame).  Live LOC counts at
-  v5.0 ship:
-  - `raytrace/core.py` (4443 LOC) -> split surface / intersection /
-    trace / world-trace / Seidel / ray-fan / layout.
-  - `propagators/propagation.py` (4095 LOC) -> split FFT-infra /
-    ASM / Fresnel / RS / SAS / MFT.
-  - `propagators/asymptotic.py` (4561 LOC) -> split modes /
-    canonical-fit / aberration-tensor / Maslov / JAX-twin.
-  - `optimize/core.py` (4538 LOC) -> split parameterisations /
-    merit-terms / wrapper-merits / context / driver / JAX-merits.
-  - `io/prescriptions.py` (3224 LOC) -> split builders / Zemax /
-    CODE V / Quadoa / transforms.
-  - `analysis/core.py` (4088 LOC) -> split beam-stats / Strehl /
-    PSF / MTF-OTF / polychromatic / Zernike / OPD.
+v5.0 removed 5 of the 8 shims catalogued in AUDIT_V4_13_1
+Part 5.  The 3 remaining shims are **intentionally retained**
+as legitimate public API surface, NOT scheduled for removal:
 
-* **Shared Chebyshev helpers extraction**.
-  `propagators/asymptotic.py` and `elements/lenses_maslov.py`
-  both import private Chebyshev helpers from
-  `elements/lenses.py` -- an inverted dependency.  Move to
-  `lumenairy/_math/chebyshev.py`.
+* `lumenairy.elements.lenses.apply_thin_lens` re-export.
+* `lumenairy.elements.lenses.apply_real_lens` re-export.
+* `lumenairy.elements.lenses.apply_real_lens_traced` re-export.
 
-* **57-file `test_audit_fixes_*` consolidation**.  Merge the
-  long-tail audit-fix files into topical homes (`test_lens.py`,
-  `test_propagation.py`, etc.); delete obsolete proxy tests
-  (the `inspect.getsource` substring-match pattern caught in
-  AUDIT_V4_13_1 Part 6.1).
+These give a coherent one-stop ``from
+lumenairy.elements.lenses import apply_real_lens`` import
+surface; the underlying `_lens_thin.py` / `_lens_real.py` /
+`_lens_traced.py` file-split is an internal organisational
+choice rather than a deprecation cycle.
 
-* **mypy `--strict` CI activation.**  v5.0 shipped the
-  `[tool.mypy]` config but did NOT wire mypy into the workflow.
-  v5.0.1 (audit P2-NEW-V4-2) added `follow_imports = "silent"`
-  so a future activation sees only the scope-local errors, not
-  the ~1889-error cascade into untyped downstream files.
-  v5.1.1 baseline refresh (audit P2-NEW-F2-2): **76 scope-local
-  errors** in 8 files as of the v5.1 file splits (drifted up
-  from 63 at v5.0.1 -- the resolver rollout + shellification
-  added type-stub gaps in `lumenairy/backend/fft.py`).  v5.2
-  cleans the 76 scope-local errors and adds the mypy step to
-  `unit-tests.yml`.
+---
 
-* **Ruff baseline cleanup**.  v5.0 shipped the `[tool.ruff]`
-  config; at v5.0 ship the baseline produced ~696 errors (4
-  real F821 forward-ref bugs in `algebra/base.py` +
-  `propagators/system.py` -- closed in v5.0.1 -- and ~692
-  cosmetic I001 / F401 / F841 / F541 / E702 / F811 errors that
-  a one-shot `ruff --fix` PR will sweep).  v5.1.1 baseline
-  refresh (audit P2-NEW-F2-2): **893 errors** as of the v5.1
-  file splits (drifted up from 692 at v5.0.1 -- the shellified
-  re-export modules + the `__getattr__` forwarding shells added
-  ~200 cosmetic I001 / F401 hits).  Schedule the `ruff --fix`
-  PR alongside the v5.2 work so the diff lands in one
-  reviewable chunk.
+## v5.3 forward horizon
 
-### Config knobs (library-wide consumer wiring)
+v5.2.3 closed every Tier-1 / Tier-2 / Tier-3 item that the
+v5.2.0 + v5.2.1 + v5.2.2 patches had deferred to v5.3.  The
+items that remain open at v5.2.3 ship are:
 
-The default-config knobs `set_default_wave_propagator`,
-`set_default_dy`, and `set_default_real_dtype` shipped in v4.16
-but remain API-only at v5.0 -- no library code consults them
-yet.  v5.1 rolls out consumer wiring across every applicable
-entry point so a user `set_default_wave_propagator('fresnel')`
-call actually changes the default at `apply_real_lens`,
-`apply_real_lens_traced`, `propagate`, and the
-`propagate_through_system` family.  When the first consumer
-lands, the sibling-gap pin at
-`test_v4_16_3_agent_b.py:497` fails loudly with an actionable
-message naming exactly what to clean up next (the no-consumer
-UserWarning at `propagators/propagation.py:378-440` and the
-Migration-Guide v4.16.2 limitation note).
+### Performance (no concrete cost / value triggers yet)
 
-### Partial-coherence / MCF public-API polish
+* **`MultiFieldMerit` JIT compile**.  Per-field `np.exp` +
+  `np.where` calls dominate at large N; meshgrid cache hits
+  1.19x at N=128.  Numba or JAX JIT compile of the per-field
+  tilt path would lift the ceiling but adds an optional-dep
+  hot path.  Not blocking any current user.
 
-`PartialCoherenceMCF` -- including its `coherence_at(...)`
-two-point query -- already shipped in v4.15.1
-(`lumenairy/sources/core.py:1410`) and is re-exported at the
-top level as `lumenairy.PartialCoherenceMCF`.  What remains is
-the *naming* polish: a shorter top-level alias
-`lumenairy.MCF` for symmetry with `lumenairy.propagate_ensemble`
-/ `lumenairy.coherence_at` so the partial-coherence import
-story is uniform.  (See v5.0.1 CHANGELOG clarification of the
-v4.16.x "MCF object" ROADMAP entry that predated v4.15.1 and
-was carried forward without rewording.)
+* **`logging` adoption sweep**.  42 `warnings.warn` calls
+  across 22 files; long-running paths (`apply_real_lens_traced`,
+  `design_optimize`, `monte_carlo_tolerancing`) have no
+  per-iteration telemetry.  Convention change spanning the
+  whole library; cost is high vs the immediate need.
 
-### Glass / materials
+### CHANGELOG archive completion
 
-* **26 formula-3 (polynomial) glass coefficients** ingestion.
-  The Hikari, Sumita, and 4 CDGM glasses that use
-  refractiveindex.info formula 3 still rely on the optional
-  `[glass]` install (the v4.16.1 `M-1` closure scoped them off
-  the bundle).  v5.1 bundles a native formula-3 evaluator and
-  the 26 coefficient sets.  The 5e-5 n_d cross-check budget
-  may need relaxation for BK7-like polynomial fits per the
-  V3 v4.16.2 note.
+* The v5.2.3 archive split moved v4.11 - v4.12 entries into
+  `docs/changelogs/v4.md`.  v4.10 and earlier (down to v2.5)
+  are still in the top-level `CHANGELOG.md`.  v5.3 finishes
+  the archive pass.
 
-* **Off-axis conic in surface frame** (not just decenter+tilt).
-  `apply_real_lens` honours `decenter` and `tilt` keys but
-  adds them to the field's coordinates, not the surface's
-  frame.  Tilted / displaced asphere with proper sag in
-  surface frame requires a coordinate transformation Optiland
-  and Zemax do natively.
+### Designer GUI (separate v3.8+ stream, never formally planned)
 
-### Documentation + examples
+Catalogued from prior survey, not allocated to a specific
+release.  Tracked separately because the Designer ships
+co-versioned inside the library wheel.
 
-* **5 missing examples**: multi-config / zoom, tolerancing,
-  coronagraph workflow, AO closed loop, ghost / stray-light.
+* **Polarization plotting docks** -- none currently surface
+  Jones-pupil and Stokes maps from `polarization.py` /
+  Richards-Wolf paths.
+* **Coronagraph workflow dock** -- `analysis/coronagraph.py`
+  has `coronagraph_contrast_curve` but no dedicated dock to
+  set up the 4-stop chain (Lyot focal mask -> Lyot stop ->
+  apodised pupil) interactively.
+* **Tolerancing dock** -- `monte_carlo_tolerancing` exists but
+  the UI surface is limited; a dedicated "perturbation knobs
+  + run MC" dock is the canonical Zemax pattern.
+* **Multi-config / zoom dock** -- `optimize/multiconfig.py`
+  exists but no UI; users build configs in code.
+* **Wavefront-map plot integration** -- v4.14.0 added
+  `plot_wavefront`; no dock surfaces it yet.
+* **`CancellableProgress` UI button** -- v4.13.1 added the
+  cancellation protocol, wired into all 4 scipy callbacks;
+  needs a Stop-button surface in the optimisation dock.
 
-* Convention table -- one-stop summary of sign conventions
-  (`exp(-i*omega*t)`, mirror radius wave-side `R>0=concave`,
-  Welford signed-R for raytrace, OPD sign, etc.).  Currently
-  each is documented in the place it matters but no single
-  doc page.
+### Audit-cadence follow-ups
 
-* Split README.md (3475 lines) -- move deep cookbook to
-  `docs/cookbook.md`.
-
-* CHANGELOG.md (7000+ lines) -- consider yearly /
-  per-major-version archive splits.
-
-* `validation/README.md` -- still absent; new contributors
-  don't know whether to add tests to `tests/unit/` or
-  `validation/`.
+* **Audit cycle continuation**.  v5.2.x closed every
+  v5.x-vintage audit P1-P3 finding.  v5.3 begins on the
+  AUDIT_V5_2_X audit cycle (when written).  The 16
+  meta-walkers V1-V16 + the dep-drift cron + the V12 /
+  verify_changelog_closures content-vs-changeset gate cover
+  the currently-known sibling-gap surfaces; new classes will
+  continue to be added to the V-walker family as identified.
 
 ### Active back-compat shims at v5.0 (intentionally kept)
 
@@ -371,51 +382,38 @@ Possible v3.8+ scope (not yet planned):
 
 ---
 
-## Opportunistic / lower-priority items
+## Opportunistic / lower-priority items -- all shipped at v5.2.x
 
-Catalogued from prior audits + cross-library survey, not allocated
-to a specific release:
+(Section kept as a historical pointer; every item shipped between
+v5.2.0 and v5.2.3.  See "Shipped highlights" for per-release
+detail and the "v5.3 forward horizon" section above for the two
+remaining performance items.)
 
-* **`_deprecation.py` orphan helpers** — `warn_deprecated_kwarg`,
-  `warn_renamed_function`, `warn_deprecated_default` are exported
-  but never called.  Either delete or wire into kwarg renames
-  introduced in v4.7-v4.13.
-* **Duplicate `_xp_of`** in `elements/elements.py:27` and `analysis
-  /core.py:52`.  Consolidate to direct `from ..backend import
-  array_namespace`.
-* **`backend/fft.py` → `propagators/propagation.py` inversion** —
-  FFT plan caches + toggle flags live in `propagation.py`, but
-  `backend/fft.py` imports from there.  Lift to `propagators/
-  fft_infra.py`.
-* **Source-text-proxy tests** in v4.13.1's Agent 3 file — 4 tests
-  use `inspect.getsource` substring matching instead of behavioural
-  assertions.  Replace with real behaviour pins.
-* **`MultiFieldMerit` performance ceiling** — meshgrid cache hit
-  1.19× at N=128; the per-field `np.exp` + `np.where` calls
-  dominate and cannot be cached.  Future: JIT-compile the per-
-  field tilt path via Numba or JAX.
-* **`output_grid` parameter semantics inconsistency** (AUDIT_V4_13_1
-  Part 2 P1-A) — dispatcher documents `(N, dx_out)` but 3 sub-
-  propagators (gbd/hfpi/hf) interpret as `(Ny, Nx)`.  Pick one;
-  rename the sub-propagator kwarg to `output_shape` for the
-  `(Ny, Nx)` case.
-* **MHS subdomain grid loss** (AUDIT_V4_13_1 P1-C) —
-  `prescription_subdomain` with default `method='maslov'` silently
-  outputs on input grid (compounds dispatcher P1).
-* **Partition-of-unity convention bug** in `subaperture.py:140-148`
-  (AUDIT_V4_13_1 P1-F).  Window centred on source-plane positions;
-  only correct for unit-mag no-tilt.
-* **`apply_doe_phase_traced`** discards sign of `N` but `trace()`
-  inline DOE kick preserves it (AUDIT_V4_13_1 P1-G).  ~2 LOC fix.
-* **`MultiPrescriptionParameterization.scale_floor`** not supported
-  (AUDIT_V4_13_1 P1-1).  ~20 LOC + path-aware defaults per opt
-  variable type (radii / thicknesses 1e-6, conics 1e-3, aspheric
-  α_n 1e-3/factor).
-* **`logging` adoption** — currently 1 use across the whole library
-  (`propagators/propagation.py:592`); 42 `warnings.warn` calls
-  across 22 files.  Long-running paths (`apply_real_lens_traced`,
-  `design_optimize`, `monte_carlo_tolerancing`) have no per-
-  iteration telemetry.
+* `_deprecation.py` orphan helpers -- documented as kept-for-
+  forward-use at v5.2.0.
+* Duplicate `_xp_of` -- consolidated at v5.2.0 (5 sites -> 1
+  `from ..backend import array_namespace as _xp_of` alias).
+* `backend/fft.py -> propagators/propagation.py` inversion --
+  fixed at v5.2.0 (now routes through `fft_infra` directly).
+* Source-text-proxy tests (4+ sites) -- 5 replaced behaviorally
+  at v5.2.3; 4 kept by design as anti-pattern absence checks.
+* `output_grid` parameter semantics (AUDIT_V4_13_1 P1-A) --
+  sub-propagator rename + `DeprecationWarning` shim at v5.2.0;
+  dispatcher forwarding fix at v5.2.3.
+* MHS subdomain grid loss (AUDIT_V4_13_1 P1-C) -- safe
+  `ValueError` guard at v5.2.0; substantive maslov-branch
+  resampling at v5.2.3 (Parseval-preserving, rel_err < 1e-9).
+* Partition-of-unity convention (AUDIT_V4_13_1 P1-F) --
+  `UserWarning` + opt-in kwargs at v5.2.0; full ABCD-driven
+  image-plane mapping at v5.2.3 (unit-mag bit-for-bit
+  preserved).
+* `apply_doe_phase_traced` sign (AUDIT_V4_13_1 P1-G) -- fixed
+  at v5.2.0.
+* `MultiPrescriptionParameterization.scale_floor`
+  (AUDIT_V4_13_1 P1-1) -- shipped at v5.2.0 with per-type
+  default table.
+* `MultiFieldMerit` JIT + `logging` adoption -- still open;
+  moved to "v5.3 forward horizon" above.
 
 ---
 

@@ -499,52 +499,119 @@ def prescription_subdomain(
     :func:`lumenairy.propagators.dispatch.propagate`.
 
     .. versionchanged:: 5.2
-        v5.2 (AUDIT_V4_13_1 Part 2 P1-C closure): when ``method='maslov'``
-        (the default) and the requested output grid (``out_surface``)
-        differs from the input grid (``in_surface``), this function now
-        raises ``ValueError`` with an actionable message.  Pre-v5.2 the
-        request was silently ignored -- the maslov dispatcher branch
-        does not honour ``output_grid`` / ``output_dx``, so the
-        propagation produced output on the INPUT grid (regardless of
-        what ``out_surface`` declared) and downstream MHS pipeline
-        stitching saw a silently-mis-shaped intermediate field.
+        v5.2 (AUDIT_V4_13_1 Part 2 P1-C, option a -- raise) raised
+        ``ValueError`` at subdomain construction time when
+        ``method='maslov'`` was paired with an ``out_surface`` declaring
+        a grid that differed from ``in_surface``.  Pre-v5.2 the request
+        was silently dropped (the maslov dispatcher branch does not
+        forward ``output_grid`` / ``output_dx`` to
+        :func:`apply_real_lens_maslov`) and downstream MHS pipeline
+        stitching saw a mis-shaped intermediate field.
 
-        To resample the maslov output onto a different output grid,
-        either chain a separate resampling step (e.g. an ``asm``
-        subdomain at zero distance with the desired output grid) or
-        choose a method that natively supports output-grid resampling
-        (``gbd`` / ``hfpi`` / ``hf``).
+    .. versionchanged:: 5.2.3
+        v5.2.3 (AUDIT_V4_13_1 P1-C substantive closure): the maslov
+        branch now **actually resamples** onto ``out_surface`` instead
+        of raising.  The propagation runs natively on the input grid
+        (which is all the maslov kernel supports), then a one-step
+        :func:`resample_field` lands the output on ``out_surface``.
+        Total power is re-normalised across the resample so the
+        resampling step preserves L2 energy to within the bicubic
+        interpolator's numerical precision.
+
+        For a non-resampling alternative -- when the resample step's
+        bicubic interpolation error at the new grid's edges is not
+        acceptable -- pass ``method='gbd'`` / ``'hfpi'`` / ``'hf'``
+        (their underlying propagators sample the output grid natively
+        via Bluestein chirp-Z or HFPI integration).
+
+        The narrow retained-raise corner case: the maslov kernel itself
+        requires a SQUARE input field (``E_in.shape[0] == E_in.shape[1]``)
+        and SQUARE pixels (``dx == dy``).  If the caller hands the
+        subdomain a non-square input grid or a non-square output grid,
+        we raise at construction time (rather than letting the kernel
+        raise mid-pipeline).
     """
     from .dispatch import propagate
+    from .mft import resample_field
 
-    # v5.2 (AUDIT_V4_13_1 Part 2 P1-C closure): the maslov dispatcher
-    # branch does not forward ``output_grid`` / ``output_dx`` to
-    # :func:`apply_real_lens_maslov`, so when the input and output
-    # Huygens surfaces declare different grids the maslov method
-    # silently drops the request.  Fail loudly at subdomain
-    # construction time so the pipeline author can pick a different
-    # method or insert an explicit resampling step.
+    # v5.2.3 (AUDIT_V4_13_1 P1-C substantive closure): the maslov kernel
+    # requires square inputs (``apply_real_lens_maslov`` enforces
+    # ``E_in.shape[0] == E_in.shape[1]``) and isotropic pitch.  We only
+    # need the post-resample path for maslov, so guard those upstream
+    # invariants here so a non-square out_surface fails at construction
+    # time with a clear message rather than mid-run inside the kernel.
     if method == 'maslov':
-        same_shape = (int(in_surface.Ny) == int(out_surface.Ny)
-                      and int(in_surface.Nx) == int(out_surface.Nx))
-        same_dx = abs(float(in_surface.dx) - float(out_surface.dx)) < 1e-15
-        if not (same_shape and same_dx):
+        if int(in_surface.Ny) != int(in_surface.Nx):
             raise ValueError(
                 "prescription_subdomain(method='maslov'): the maslov "
-                "branch of the dispatcher does not honour an output "
-                "grid that differs from the input grid (input shape "
-                f"({in_surface.Ny}, {in_surface.Nx}) dx={in_surface.dx}, "
-                f"output shape ({out_surface.Ny}, {out_surface.Nx}) "
-                f"dx={out_surface.dx}).  Pre-v5.2 this request was "
-                "silently dropped and the propagation returned on the "
-                "INPUT grid.  Choose a method that natively supports "
-                "output-grid resampling (``method='gbd'`` / ``'hfpi'`` "
-                "/ ``'hf'``), or insert a separate resampling subdomain "
-                "(e.g. ``asm_subdomain(in_surface, out_surface, "
-                "z=0.0)``) downstream of the maslov stage."
+                "kernel requires a square input grid (Ny == Nx); got "
+                f"in_surface shape ({in_surface.Ny}, {in_surface.Nx}).  "
+                "Pre-resample the input to a square grid, or pick a "
+                "method that supports anamorphic inputs "
+                "(``method='gbd'`` / ``'hfpi'`` / ``'hf'``)."
+            )
+        if int(out_surface.Ny) != int(out_surface.Nx):
+            raise ValueError(
+                "prescription_subdomain(method='maslov'): the maslov "
+                "kernel's downstream resampler requires a square output "
+                "grid (Ny == Nx); got out_surface shape "
+                f"({out_surface.Ny}, {out_surface.Nx}).  Pick a method "
+                "that supports anamorphic outputs (``method='gbd'`` / "
+                "``'hfpi'`` / ``'hf'``)."
             )
 
     def _prop(E, in_s, out_s, **kw):
+        # v5.2.3 (AUDIT_V4_13_1 P1-C substantive closure): for
+        # ``method='maslov'`` the dispatcher's maslov branch produces
+        # output on the INPUT grid (regardless of ``output_grid`` /
+        # ``output_dx``).  When the caller declares a different
+        # ``out_surface``, run the maslov kernel on the input grid and
+        # then resample to the requested output grid via
+        # :func:`resample_field`.  Power is re-normalised so the
+        # resample is L2-energy preserving (matching the maslov kernel's
+        # built-in ``normalize_output='power'`` contract).
+        if kw['method'] == 'maslov':
+            E_native = propagate(
+                E,
+                wavelength=kw['wavelength'],
+                dx=in_s.dx,
+                prescription=kw['prescription'],
+                method=kw['method'],
+                **{k: v for k, v in kw.items()
+                   if k not in ('wavelength', 'prescription', 'method')},
+            )
+            same_shape = (int(in_s.Ny) == int(out_s.Ny)
+                          and int(in_s.Nx) == int(out_s.Nx))
+            same_dx = abs(float(in_s.dx) - float(out_s.dx)) < 1e-15
+            if same_shape and same_dx:
+                return E_native
+            # Resample onto the declared output grid.  ``resample_field``
+            # returns ``(E_out, dx_out)``; we only need the field.
+            E_resampled, _ = resample_field(
+                E_native,
+                dx_in=float(in_s.dx),
+                dx_out=float(out_s.dx),
+                N_out=int(out_s.Nx),
+                order=3,
+            )
+            # Re-normalise power across the resample so total energy is
+            # preserved (bicubic interpolation introduces a small power
+            # drift, mainly at the new grid's edges where it crops or
+            # extends the support).  This matches the maslov kernel's
+            # default ``normalize_output='power'`` contract.
+            p_in = float(np.sum(np.abs(E_native) ** 2)) * (float(in_s.dx) ** 2)
+            p_out = float(np.sum(np.abs(E_resampled) ** 2)) * (float(out_s.dx) ** 2)
+            if p_out > 0.0 and p_in > 0.0:
+                scale = float(np.sqrt(p_in / p_out))
+                E_resampled = E_resampled * scale
+            # Preserve dtype (resample_field promotes complex64 -> complex128
+            # via map_coordinates' float64 output).
+            if E_resampled.dtype != E_native.dtype:
+                E_resampled = E_resampled.astype(E_native.dtype)
+            return E_resampled
+
+        # Non-maslov methods (gbd / hfpi / hf) honour ``output_grid`` /
+        # ``output_dx`` natively in their underlying propagators.
         return propagate(
             E,
             wavelength=kw['wavelength'],

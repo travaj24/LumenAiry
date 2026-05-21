@@ -338,29 +338,147 @@ SELLMEIER_COEFFICIENTS = {
 # to 5e-5 (matches the v4.14.2 / v4.16.0 cross-check methodology).
 
 POLYNOMIAL_COEFFICIENTS = {
-    # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-    # the structure-ready interface for the 24 formula-3 catalogue
-    # entries (4 CDGM + 10 Hikari + 10 Sumita) ships with the EVALUATOR
-    # + dispatch wiring + per-name stub manifest below
-    # (_POLYNOMIAL_STUB_NAMES).  Per-glass coefficient ingestion against
-    # the authoritative refractiveindex.info YAML dataset is deferred
-    # to v5.2.1 -- shipping fabricated coefficients would silently bias
-    # any downstream calculation (e.g. n_d catalog cross-checks) by an
-    # unbounded amount and is strictly worse than a fail-fast
-    # NotImplementedError that directs users to either install the
-    # optional ``refractiveindex`` extra or open a v5.2.1 issue
-    # requesting the specific coefficient ingestion.
+    # v5.2.3 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+    # 24 formula-3 catalogue entries (4 CDGM + 10 Hikari + 10 Sumita)
+    # ingested verbatim from the refractiveindex.info YAML dataset.
+    # Each tuple is ``(c0, [(c_i, exponent_i), ...])`` matching the
+    # ``_polynomial_index`` evaluator contract above.
+    #
+    # Coefficient values are bit-for-bit copies of the
+    # ``coefficients: <c0> <c1> <p1> <c2> <p2> ...`` field of the
+    # corresponding YAML's ``type: formula 3`` entry; wavelength
+    # validity ranges are tracked separately in GLASS_VALIDITY.
+    # Sources:
+    #   CDGM    -> CDGM Zemax 2022-06 catalogue YAMLs
+    #   Hikari  -> NIKON Zemax 2017-11 catalogue YAMLs (HIKARI shelf)
+    #   Sumita  -> SUMITA Zemax 2017-02-02 catalogue YAMLs
     #
     # When ingesting a row, add it here with the documented
-    # ``{name: (c0, [(c_i, exp_i), ...])}`` layout (NOT to
-    # _POLYNOMIAL_STUB_NAMES, which is the "not yet ingested" manifest).
-    # Removing the name from _POLYNOMIAL_STUB_NAMES at the same commit
-    # is enforced by the v5.2 consistency check below.
+    # ``{name: (c0, [(c_i, exp_i), ...])}`` layout AND remove the
+    # name from _POLYNOMIAL_STUB_NAMES in the same commit; the v5.2
+    # consistency check below enforces the disjoint-state invariant.
+    #
+    # ----- CDGM (China Daheng Group / Tianjin Lingxin) -----
+    # 4 polynomial entries from CDGM 2022-06.  The 8 CDGM Sellmeier-2
+    # entries are bundled separately above in SELLMEIER_COEFFICIENTS.
+    'F1-CDGM':     (2.5059651,
+                    [(-0.0078686119, 2), (0.021574214, -2),
+                     (0.00059867966, -4), (-9.5194606e-07, -6),
+                     (2.9024858e-06, -8)]),
+    'F2-CDGM':     (2.53265982,
+                    [(-0.00773825354, 2), (0.0231731432, -2),
+                     (0.000409362855, -4), (3.78046829e-05, -6),
+                     (1.03464346e-06, -8)]),
+    'H-ZF52A':     (3.2506862,
+                    [(-0.0133942217, 2), (0.0483625913, -2),
+                     (0.00314442751, -4), (-0.000197073674, -6),
+                     (3.47645679e-05, -8)]),
+    'H-ZK7':       (2.56229558,
+                    [(-0.0108844706, 2), (0.0140997791, -2),
+                     (0.000379257039, -4), (-2.41612681e-05, -6),
+                     (1.41616214e-06, -8)]),
+    # ----- Hikari Glass Co. Ltd (NIKON Zemax 2017-11) -----
+    # 10 polynomial entries.  E-* glasses use 5 coefficient pairs over
+    # 0.4-0.7 um; some J-* entries (J-FK01A, J-LASF09A, J-LAK7,
+    # J-BASF7) carry 7 pairs over a wider 0.365-2.058 um span.  The
+    # GLASS_VALIDITY entries below pin the documented dispersion fit
+    # band; the polynomial evaluator extrapolates outside that band
+    # at the caller's own risk.
+    'E-BAK1':      (2.44353274,
+                    [(-0.0161455184, 2), (0.00881927898, -2),
+                     (0.00144687542, -4), (-0.000136331798, -6),
+                     (6.03309808e-06, -8)]),
+    'E-F2':        (2.55739282,
+                    [(-0.0107951229, 2), (0.0216807328, -2),
+                     (0.00105165979, -4), (-5.36309816e-05, -6),
+                     (7.7466326e-06, -8)]),
+    'E-LAK04':     (2.6768086,
+                    [(-0.0102173269, 2), (0.0177389501, -2),
+                     (2.82247162e-05, -4), (4.32740016e-05, -6),
+                     (-2.15847266e-06, -8)]),
+    'E-LAK7':      (2.68241693,
+                    [(-0.0118445415, 2), (0.016242269, -2),
+                     (0.000303298585, -4), (-8.32486246e-06, -6),
+                     (7.74390846e-07, -8)]),
+    'E-LASF016':   (3.07241378,
+                    [(-0.0146849804, 2), (0.0244285857, -2),
+                     (0.000398183255, -4), (1.22802438e-05, -6),
+                     (1.23709929e-07, -8)]),
+    'E-SK16':      (2.58572188,
+                    [(-0.0114561541, 2), (0.0140913669, -2),
+                     (0.000439966701, -4), (-2.67679001e-05, -6),
+                     (1.51331053e-06, -8)]),
+    'J-BASF7':     (2.82115391,
+                    [(-0.0100514408, 2), (-9.24350756e-05, 4),
+                     (0.0249821665, -2), (0.000523468025, -4),
+                     (3.70259835e-05, -6), (-2.14786963e-06, -8),
+                     (2.97698375e-07, -10)]),
+    'J-FK01A':     (2.21785004,
+                    [(-0.00552619544, 2), (-4.04219098e-05, 4),
+                     (0.00839820345, -2), (8.8019088e-05, -4),
+                     (1.15723877e-07, -6), (5.3817861e-08, -8)]),
+    'J-LAK7':      (2.6823272,
+                    [(-0.0119713031, 2), (-0.00014372436, 4),
+                     (0.0164555463, -2), (0.000217295781, -4),
+                     (4.69383509e-06, -6), (3.49394854e-08, -8)]),
+    'J-LASF09A':   (3.21676146,
+                    [(-0.013942445, 2), (-0.000118797124, 4),
+                     (0.0279205286, -2), (0.000601395043, -4),
+                     (-4.6499054e-06, -6), (1.72221463e-06, -8),
+                     (-3.69002554e-08, -10)]),
+    # ----- Sumita Optical Glass, Inc. (Zemax 2017-02-02) -----
+    # 10 polynomial entries.  All Sumita entries share the catalogue's
+    # documented 0.36-1.55 um polynomial fit band and use 5
+    # coefficient pairs.  Names are stored uppercase-canonicalised
+    # (e.g. K-LaK10 -> K-LAK10) per the GLASS_REGISTRY note above;
+    # the catalogue's mixed-case page label is preserved in the
+    # GLASS_REGISTRY tuple's third element so the refractiveindex.info
+    # live lookup still resolves.
+    'K-BK7':       (2.2705778,
+                    [(-0.010059376, 2), (0.010414999, -2),
+                     (0.00028872517, -4), (-2.2214495e-05, -6),
+                     (1.4258559e-06, -8)]),
+    'K-FK5':       (2.189197,
+                    [(-0.0097642231, 2), (0.0086917382, -2),
+                     (0.00023646623, -4), (-1.7699987e-05, -6),
+                     (9.6989631e-07, -8)]),
+    'K-LAFN3':     (2.827081,
+                    [(-0.010220727, 2), (0.021224097, -2),
+                     (0.0006653956, -4), (-3.3316539e-05, -6),
+                     (3.16429e-06, -8)]),
+    'K-LAK10':     (2.8960747,
+                    [(-0.011713123, 2), (0.021599254, -2),
+                     (0.00043811038, -4), (5.752903e-06, -6),
+                     (-1.7364157e-07, -8)]),
+    'K-LASFN10':   (3.2128137,
+                    [(-0.015587464, 2), (0.028249299, -2),
+                     (0.00086439607, -4), (-2.9175496e-05, -6),
+                     (2.9912535e-06, -8)]),
+    'K-PBK40':     (2.2744024,
+                    [(-0.01070289, 2), (0.010577306, -2),
+                     (0.00022857431, -4), (-7.2914225e-06, -6),
+                     (2.4124054e-07, -8)]),
+    'K-PFK90':     (2.1094643,
+                    [(-0.0048026812, 2), (0.0067645351, -2),
+                     (8.3329962e-05, -4), (3.4196126e-07, -6),
+                     (-8.4933854e-08, -8)]),
+    'K-PSKN2':     (2.578886,
+                    [(-0.010381408, 2), (0.014233563, -2),
+                     (0.00012483021, -4), (1.7477672e-05, -6),
+                     (-9.6204805e-07, -8)]),
+    'K-SK4':       (2.5587726,
+                    [(-0.0098095616, 2), (0.014840563, -2),
+                     (0.0003193166, -4), (-1.016436e-05, -6),
+                     (6.6518794e-07, -8)]),
+    'K-VC78':      (2.7376882,
+                    [(-0.012269245, 2), (0.017439403, -2),
+                     (0.00047088707, -4), (-2.7150134e-05, -6),
+                     (1.8172045e-06, -8)]),
 }
 
 
 # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
-# the 24 formula-3 polynomial glass names that are present in
+# manifest of formula-3 polynomial glass names that are present in
 # GLASS_REGISTRY (as ``(shelf, book, page)`` tuples for the optional
 # refractiveindex live lookup) but NOT yet ingested into
 # POLYNOMIAL_COEFFICIENTS for the bundled-evaluator fallback.
@@ -374,54 +492,18 @@ POLYNOMIAL_COEFFICIENTS = {
 # this glass not yet covered", which made the v5.2.1 ingestion gap
 # invisible to users.
 #
-# Catalogue and validity ranges for each entry are recorded in
-# GLASS_REGISTRY / GLASS_VALIDITY (search by name).  Source of truth
-# for the eventual coefficient values: the corresponding
-# refractiveindex.info YAML at
-# https://refractiveindex.info/?shelf=specs&book=<CATALOG>&page=<NAME>.
+# v5.2.3 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
+# all 24 formula-3 catalogue entries (4 CDGM + 10 Hikari + 10 Sumita)
+# have now been ingested into POLYNOMIAL_COEFFICIENTS verbatim from
+# the refractiveindex.info YAML dataset, so the stub manifest is
+# empty.  The frozenset is intentionally retained (rather than
+# deleted) so that any future formula-3 catalogue additions land
+# here as a stub before their coefficient row, and the migration-
+# message dispatch arm in get_glass_index remains reachable.
 #
-# Layout below: catalogue grouping for human readability; the set is
-# iteration-order-independent at runtime.
-_POLYNOMIAL_STUB_NAMES = frozenset({
-    # ----- CDGM (China Daheng Group / Tianjin Lingxin) formula-3 -----
-    # 4 entries that use refractiveindex.info "formula 3" (polynomial)
-    # in the CDGM 2022-06 catalogue YAML.  The 8 CDGM Sellmeier-2
-    # entries (H-K9L, H-LAK52, H-LAK53A, H-ZK9B, H-ZF12, D-ZK3,
-    # D-LAK52, H-ZLAF52A) are bundled directly in
-    # SELLMEIER_COEFFICIENTS and are NOT in this set.
-    'H-ZK7',
-    'H-ZF52A',
-    'F1-CDGM',
-    'F2-CDGM',
-    # ----- Hikari Glass Co. Ltd. formula-3 -----
-    # 10 entries from the Hikari 2017-11 catalogue YAML.  All Hikari
-    # entries in GLASS_REGISTRY use formula-3.
-    'E-LASF016',
-    'E-SK16',
-    'E-LAK7',
-    'E-LAK04',
-    'E-BAK1',
-    'J-FK01A',
-    'J-LASF09A',
-    'J-LAK7',
-    'J-BASF7',
-    'E-F2',
-    # ----- Sumita Optical Glass, Inc. formula-3 -----
-    # 10 entries from the Sumita 2017-02 catalogue YAML.  Names are
-    # canonicalised to all-uppercase per the GLASS_REGISTRY note
-    # (Sumita uses mixed-case in their catalogue but we normalise for
-    # cross-vendor search consistency).
-    'K-VC78',
-    'K-LAK10',
-    'K-LASFN10',
-    'K-SK4',
-    'K-PFK90',
-    'K-PBK40',
-    'K-BK7',
-    'K-PSKN2',
-    'K-FK5',
-    'K-LAFN3',
-})
+# Catalogue and validity ranges for each entry are recorded in
+# GLASS_REGISTRY / GLASS_VALIDITY (search by name).
+_POLYNOMIAL_STUB_NAMES = frozenset()
 
 
 def _polynomial_index(wavelength_m, coeffs, glass_name=None):

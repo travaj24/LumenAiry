@@ -70,7 +70,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from dataclasses import field as _dc_field
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 
@@ -600,10 +600,193 @@ class LeakyIntegrator:
         self.command = np.zeros_like(self.command)
 
 
+# =============================================================================
+# High-level closed-loop AO helper
+# =============================================================================
+
+# v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper): canonical closed-loop AO
+# helper.  At v5.2.0, ``examples/11_ao_closed_loop.py`` had to assemble the
+# loop from ``DeformableMirror.fit_phase`` + cumulative-command
+# accumulation by hand because no top-level helper existed.  This function
+# ships that pattern as a one-line API and is the canonical idiom from
+# v5.2.3 onwards.
+def ao_closed_loop(
+    phase_disturbance: np.ndarray,
+    *,
+    dm: 'DeformableMirror',
+    n_iterations: int = 10,
+    gain: float = 0.5,
+    wavelength: float = 633e-9,
+    dx: float,
+    wfs: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+    return_history: bool = False,
+) -> Union[np.ndarray, Tuple[np.ndarray, Dict[str, np.ndarray]]]:
+    """Run a closed-loop AO control sequence on a disturbance phase.
+
+    Parameters
+    ----------
+    phase_disturbance : ndarray (Ny, Nx)
+        Atmospheric (or other) phase disturbance to correct, in radians.
+    dm : DeformableMirror
+        The deformable mirror used for correction.  The DM is mutated
+        in place -- on return, ``dm.command`` holds the accumulated
+        closed-loop command.  Call ``dm.reset()`` first if you want a
+        fresh loop.
+    n_iterations : int, default 10
+        Number of closed-loop iterations.
+    gain : float, default 0.5
+        Loop gain (0 < gain <= 1).  Standard leaky-integrator gain.
+        Typical AO values are 0.3 -- 0.5; lower values reject
+        wavefront-sensor noise better at the cost of convergence
+        speed.
+    wavelength : float, default 633e-9
+        Operating wavelength in meters.  Only used to convert
+        ``history['rms_per_iter']`` to ``history['wfe_per_iter']``
+        (waves of OPD).
+    dx : float
+        Grid spacing in meters.  Must match the grid the DM was built
+        on (``dm.dx``).  Accepted as a separate keyword for explicit
+        documentation of the spatial scale used by the disturbance
+        phase.
+    wfs : callable, optional
+        Wavefront-sensor function with signature
+        ``residual_phase -> measured_phase``.  If ``None`` (default),
+        ideal phase sensing is assumed (``measured = residual``).
+        Pass a ``functools.partial(...)`` wrapper around a realistic
+        sensor (e.g. :func:`lumenairy.shack_hartmann`) for noisy or
+        rate-limited measurements.
+    return_history : bool, default False
+        If True, return a per-iteration diagnostic dict alongside the
+        final residual.
+
+    Returns
+    -------
+    residual_phase : ndarray, shape (Ny, Nx)
+        The residual phase after ``n_iterations`` closed-loop steps,
+        in radians.  Equal to
+        ``phase_disturbance - dm.phase()`` at the end of the loop.
+    history : dict (only if ``return_history=True``)
+        Diagnostic dict with keys:
+
+        * ``'rms_per_iter'`` : ndarray of shape ``(n_iterations + 1,)``,
+          float, RMS of the residual phase in radians at iteration 0
+          (initial) through ``n_iterations`` (final).
+        * ``'wfe_per_iter'`` : ndarray of shape ``(n_iterations + 1,)``,
+          float, the same RMS converted to meters of OPD via
+          ``rms / (2 pi) * wavelength``.
+
+    Notes
+    -----
+    The control law is the canonical leaky-integrator with zero leak:
+
+    .. math::
+        \\mathrm{cmd}_{k+1} = \\mathrm{cmd}_k + g \\cdot \\mathrm{fit}(\\mathrm{wfs}(\\mathrm{residual}_k))
+
+    where ``fit`` is the DM's least-squares projection
+    (:meth:`DeformableMirror.fit_phase`) onto the influence-function
+    basis.  Each iteration:
+
+    1. Compute ``residual = phase_disturbance - dm.phase()``.
+    2. Pass the residual through the user WFS (or pass through for
+       ideal sensing).
+    3. Fit the measured phase to the DM's influence-function basis
+       (on a scratch DM, so the user's ``dm.command`` accumulates).
+    4. Update ``dm.command += gain * delta_cmd``.
+
+    The user-supplied ``wfs`` should return a phase map on the same
+    grid as ``phase_disturbance`` (an ideal projection back to the
+    pupil from whatever the sensor measures).  For real Shack-Hartmann
+    integration, build a wrapper that runs the sensor and then
+    reconstructs the wavefront via a modal basis.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import lumenairy as la
+    >>> N, dx = 128, 30e-3 / 128
+    >>> dm = la.DeformableMirror(n_actuators=9, pitch=1e-3, dx=dx, N=N)
+    >>> screen = la.generate_turbulence_screen(N, dx, r0=2e-3, seed=0)
+    >>> residual, hist = la.ao_closed_loop(
+    ...     screen, dm=dm, n_iterations=10, gain=0.5,
+    ...     dx=dx, return_history=True)
+    >>> hist['rms_per_iter'][-1] < hist['rms_per_iter'][0]
+    True
+    """
+    if n_iterations < 0:
+        raise ValueError(
+            f"n_iterations must be >= 0; got {n_iterations}")
+    if not (0.0 < gain <= 1.0):
+        raise ValueError(
+            f"gain must be in (0, 1]; got {gain}")
+    if dx <= 0:
+        raise ValueError(f"dx must be > 0; got {dx}")
+    if wavelength <= 0:
+        raise ValueError(f"wavelength must be > 0; got {wavelength}")
+    if not isinstance(dm, DeformableMirror):
+        raise TypeError(
+            "ao_closed_loop: dm must be a DeformableMirror instance, "
+            f"got {type(dm).__name__}")
+
+    phase = np.asarray(phase_disturbance, dtype=np.float64)
+    if phase.ndim != 2:
+        raise ValueError(
+            f"phase_disturbance must be 2-D (Ny, Nx); got shape "
+            f"{phase.shape}")
+
+    # Track per-iteration residual RMS if requested.  Iteration 0 is
+    # the initial disturbance minus the DM's current phase (so callers
+    # who pass an already-flat DM see the pure-disturbance RMS at k=0).
+    record_history = bool(return_history)
+    if record_history:
+        rms_per_iter = np.empty(n_iterations + 1, dtype=np.float64)
+
+    # Initial residual (k = 0) before any control action this call.
+    residual = phase - dm.phase()
+    if record_history:
+        rms_per_iter[0] = float(np.sqrt(np.mean(residual * residual)))
+
+    # Scratch DM mirrors the user DM's geometry so ``fit_phase`` can
+    # solve for the incremental command without overwriting the
+    # accumulator on ``dm``.  Mirrors the v5.2.0 example idiom.
+    scratch = DeformableMirror(
+        n_actuators=dm.n_actuators,
+        pitch=dm.pitch,
+        dx=dm.dx,
+        N=dm.N,
+        inter_actuator_coupling=dm.inter_actuator_coupling,
+        cache_basis=dm.cache_basis,
+    )
+
+    for k in range(n_iterations):
+        # 1. Wavefront-sensor measurement (ideal pass-through by default).
+        measured = wfs(residual) if wfs is not None else residual
+        # 2. Project measured phase onto DM basis (incremental command).
+        scratch.fit_phase(measured)
+        delta_cmd = scratch.command
+        # 3. Leaky-integrator update (zero leak: pure integrator).
+        dm.command = dm.command + gain * delta_cmd
+        # 4. Recompute residual after the update.
+        residual = phase - dm.phase()
+        if record_history:
+            rms_per_iter[k + 1] = float(np.sqrt(np.mean(residual * residual)))
+
+    if record_history:
+        # WFE in meters of OPD = (rad rms) / (2 pi) * wavelength.
+        wfe_per_iter = rms_per_iter / (2.0 * np.pi) * wavelength
+        history = {
+            'rms_per_iter': rms_per_iter,
+            'wfe_per_iter': wfe_per_iter,
+        }
+        return residual, history
+    return residual
+
+
 __all__ = [
     'DeformableMirror',
     'apply_dm',
     'zernike_modal_basis',
     'slope_to_modal',
     'LeakyIntegrator',
+    # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper):
+    'ao_closed_loop',
 ]
