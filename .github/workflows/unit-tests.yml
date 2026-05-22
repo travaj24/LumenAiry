@@ -31,7 +31,17 @@ jobs:
     timeout-minutes: 20
 
     steps:
+      # v5.2.5 (AUDIT_V5_2_3 post-tag fix): fetch full history + tags
+      # so the V16 walker (test_v5_2_3_walker_changelog_content.py)
+      # can run ``git diff v5.1.0..v5.1.1`` against real tag refs.
+      # Default checkout is shallow + tag-less; the v5.2.3-shipped
+      # V16 synthetic-fabrication self-test (requires past tags
+      # to be reachable for the diff command) was the only failing
+      # test in the v5.2.3/v5.2.5 CI runs.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

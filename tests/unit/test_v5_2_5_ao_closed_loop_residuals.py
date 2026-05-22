@@ -19,7 +19,6 @@ import pytest
 
 import lumenairy as la
 
-
 # --------------------------------------------------------------------------- #
 # Shared helpers (kept independent of the v5.2.3 test file -- copying the
 # small builder is cheaper than cross-file imports).

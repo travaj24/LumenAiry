@@ -52,7 +52,15 @@ jobs:
         # so this brings publish.yml's matrix into parity.
         python-version: ['3.10', '3.11', '3.12', '3.13']
     steps:
+      # v5.2.5: fetch full history + tags so the V16
+      # verify_changelog_closures step below can resolve PREV_TAG
+      # via ``git diff PREV_TAG..HEAD``.  Default checkout is
+      # shallow + tag-less, which would cause V16 to silently exit
+      # rc=2 ("no diff range resolvable") on every release.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5

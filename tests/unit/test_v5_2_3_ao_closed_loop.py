@@ -17,7 +17,6 @@ import pytest
 import lumenairy as la
 from lumenairy.analysis import ao as _ao_module
 
-
 # --------------------------------------------------------------------------- #
 # API smoke pin
 # --------------------------------------------------------------------------- #

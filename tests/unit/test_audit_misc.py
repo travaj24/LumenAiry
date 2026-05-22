@@ -3544,8 +3544,7 @@ class TestAuditFixesV4_13_0_except_sweep_DesignOptimizePlaneLoggerWarnsOnFailure
         addressed by the v4.16 unconditional final-evaluate guarantee
         and is no longer a concern.
         """
-        from lumenairy.optimize.core import (
-            DesignParameterization, design_optimize)
+        from lumenairy.optimize.core import DesignParameterization, design_optimize
 
         pres = lm.make_singlet(
             R1=60e-3, R2=float('inf'), d=4e-3, glass='N-BK7',

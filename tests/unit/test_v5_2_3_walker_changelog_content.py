@@ -50,7 +50,6 @@ from pathlib import Path
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Repo wiring
 # ---------------------------------------------------------------------------
@@ -157,12 +156,12 @@ def test_v16_companion_script_exists():
 
     # Sanity: docstring + CLI entry point
     assert 'verify_block' in source, (
-        f'companion script missing the ``verify_block`` entry point '
-        f'that V16 walker shares for in-process reuse.')
+        'companion script missing the ``verify_block`` entry point '
+        'that V16 walker shares for in-process reuse.')
     assert '--version' in source, (
-        f'companion script missing the documented ``--version`` flag.')
+        'companion script missing the documented ``--version`` flag.')
     assert '--strict' in source, (
-        f'companion script missing the documented ``--strict`` flag.')
+        'companion script missing the documented ``--strict`` flag.')
 
 
 # ---------------------------------------------------------------------------
@@ -211,8 +210,8 @@ def test_v16_synthetic_fabrication_is_caught(tmp_path, monkeypatch):
     module = _load_script_module()
     if module is None:
         pytest.skip(
-            f'companion script not present; V16.4 requires the script '
-            f'module for in-process parsing helpers.')
+            'companion script not present; V16.4 requires the script '
+            'module for in-process parsing helpers.')
 
     if not _git_available():
         pytest.skip(

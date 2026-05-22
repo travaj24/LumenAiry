@@ -47,7 +47,6 @@ import warnings
 import numpy as np
 import pytest
 
-
 # ============================================================================
 # Helpers
 # ============================================================================
@@ -266,8 +265,8 @@ class TestV5_2_3_MagnificationSpatialExtent:
         # so the image would have ~zero finite-amplitude extent
         # outside the central patch).
         assert img_w > 0.0, (
-            f'propagated field has zero spatial extent; '
-            f'image-plane window mapping likely failed.')
+            'propagated field has zero spatial extent; '
+            'image-plane window mapping likely failed.')
         # The propagated extent should be at least 30% of the source
         # extent (we don't enforce strict |M| scaling because the
         # asymptotic propagator's modal expansion includes the lens
@@ -335,11 +334,11 @@ class TestV5_2_3_WarningRetainedOnAbcdFailure:
         """Force ``system_abcd_prescription`` to raise; check that
         the propagator still produces a finite output AND emits the
         v5.2.0 fallback ``UserWarning``."""
-        from lumenairy.propagators import subaperture as _sub
         # Patch the live import inside the propagator with a stub
         # that raises -- the function imports from
         # ``lumenairy.raytrace`` inside the try-block.
         import lumenairy.raytrace as _rt
+        from lumenairy.propagators import subaperture as _sub
 
         def _raises(*args, **kwargs):
             raise RuntimeError(
