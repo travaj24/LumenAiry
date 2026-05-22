@@ -46,6 +46,12 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 import numpy as np
 
+# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): fused Numba
+# kernel that builds the masked tilted plane wave in one parallel
+# pass; falls back to a pure-NumPy implementation that matches the
+# pre-v5.3 path bit-for-bit when Numba is unavailable.  See
+# ``lumenairy/optimize/_merit_jit.py`` for the contract.
+from ._merit_jit import _multi_field_tilt_phasor_masked
 from .context import (
     _FAILED_SCAN_STREHL_SENTINEL_OBJ,
     _INVALID_FL_SENTINEL_OBJ,
@@ -53,13 +59,6 @@ from .context import (
     EvaluationContext,
     MeritTerm,
 )
-
-# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): fused Numba
-# kernel that builds the masked tilted plane wave in one parallel
-# pass; falls back to a pure-NumPy implementation that matches the
-# pre-v5.3 path bit-for-bit when Numba is unavailable.  See
-# ``lumenairy/optimize/_merit_jit.py`` for the contract.
-from ._merit_jit import _multi_field_tilt_phasor_masked
 
 # =========================================================================
 # Wrapper-merit meshgrid cache (v4.14.0 perf)

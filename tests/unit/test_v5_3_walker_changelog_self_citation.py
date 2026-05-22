@@ -60,7 +60,6 @@ from pathlib import Path
 
 import pytest
 
-
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _CHANGELOG = _REPO_ROOT / 'CHANGELOG.md'
 
@@ -203,8 +202,8 @@ def test_v17_file_count_claim_within_drift_band():
         text, re.MULTILINE))
     if len(all_blocks) < 2:
         pytest.skip(
-            f'CHANGELOG has fewer than 2 ``## [X.Y.Z]`` blocks; '
-            f'V17.2 needs a PREV_TAG to diff against.')
+            'CHANGELOG has fewer than 2 ``## [X.Y.Z]`` blocks; '
+            'V17.2 needs a PREV_TAG to diff against.')
     prev_ver = all_blocks[1].group('ver')
     prev_tag = f'v{prev_ver}'
 

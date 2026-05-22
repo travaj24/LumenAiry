@@ -465,7 +465,6 @@ def test_examples_output_dir_exists_and_contains_pngs():
         events = []
         for a in ast.walk(tree):
             kind = None
-            node_target = None
             if isinstance(a, ast.Assign):
                 # Direct Name target ('safe' form) vs. Tuple/List
                 # unpacking (unsafe -- we cannot pick out which RHS
