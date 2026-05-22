@@ -37,11 +37,22 @@
   derivative + second-derivative `xp=` dispatch, Example 09
   Strehl normalization (library + example side), `_install_atexit_restore`
   rename + alias, cookbook cross-links, V15 floor bumped 5 -> 6.
-  3780 unit tests pass.
+  3781 unit tests pass (force-retagged post-tag for CI checkout
+  fix).
+* **v5.3.0** -- AUDIT_V5_2_5 closure (1 P1 + 2 P2 + 12 P3) PLUS
+  all 3 remaining v5.x ROADMAP horizon items.  HF freespace
+  TypeError regression fixed (the v5.2.5 P2-F1-1 closure shipped
+  half-broken); V17 walker added for recursive self-citation
+  drift; ao_closed_loop docstring honesty; AST tightening
+  against 4 new bypasses; MultiFieldMerit JIT (8.1x speedup at
+  N=256/8 fields); CHANGELOG.md pre-v4.11 archive complete;
+  pyproject conftest comment corrected; ROADMAP code-work is
+  now empty.  3848 unit tests pass.
 
-Remaining v5.3 horizon: `MultiFieldMerit` JIT, `logging`
-adoption sweep, CHANGELOG pre-v4.11 archive completion,
-Designer GUI v3.8+, next audit cycle.
+After v5.3.0: the v5.x ROADMAP is **EMPTY of code work**.
+Remaining horizon is process-only: logging adoption sweep,
+Designer GUI v3.8+, next audit cycle, CHANGELOG ship-time-stamp
+injection (V17 surfaces drift; the fix requires a pre-tag hook).
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -56,8 +67,8 @@ are preserved in git history; this file is forward-only.
 
 ## Current state
 
-- **Library:** v5.2.5 baseline (3780 unit tests passing + 16
-  documented skips + 1 documented xfail = 3797 collected).
+- **Library:** v5.3.0 baseline (3848 unit tests passing + 17
+  documented skips + 1 documented xfail = 3866 collected).
   Python 3.10+ required.
   v4.16.0 mega-rollup
   shipped the entire v4.16 + v4.17 + v4.18 ROADMAP in one release.

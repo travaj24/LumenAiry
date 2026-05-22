@@ -54,6 +54,13 @@ from .context import (
     MeritTerm,
 )
 
+# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): fused Numba
+# kernel that builds the masked tilted plane wave in one parallel
+# pass; falls back to a pure-NumPy implementation that matches the
+# pre-v5.3 path bit-for-bit when Numba is unavailable.  See
+# ``lumenairy/optimize/_merit_jit.py`` for the contract.
+from ._merit_jit import _multi_field_tilt_phasor_masked
+
 # =========================================================================
 # Wrapper-merit meshgrid cache (v4.14.0 perf)
 # =========================================================================
@@ -633,7 +640,6 @@ class MultiFieldMerit(MeritTerm):
             # optimizer toward apertures larger than designed.
             # v4.13.2 (C-P0-2): generic off-axis tilt with both X and
             # Y components.  Pre-fix the X term was silently dropped.
-            tilt_phase = np.sin(theta_x) * k_X + np.sin(theta_y) * k_Y
             # 4.11.1: honour precision knob (was hard-coded complex128
             # which silently demoted precision='single' configs).
             # v4.14.1 (P1-NEW-1): three branches -- None means "no
@@ -643,13 +649,29 @@ class MultiFieldMerit(MeritTerm):
             # zero-diameter case was an all-False ndarray (correctly
             # zeroing the field); v4.14.0 collapsed it into the None
             # branch (full-grid plane wave), flipping the semantics.
+            # v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT):
+            # the boolean-mask branch (the dominant hot path -- a
+            # finite ``aperture_diameter`` is set on essentially
+            # every real prescription) is now routed through the
+            # fused Numba kernel in ``_merit_jit.py``.  The kernel
+            # collapses ``sin(tx)*k_X + sin(ty)*k_Y -> exp(1j*phase)
+            # -> where(mask, ..., 0)`` -- three N x N temporaries
+            # per field in the legacy NumPy path -- into a single
+            # parallel pass with zero temporaries.  The other two
+            # branches (None / _ZERO_APERTURE_MASK) are already
+            # NumPy-cheap and stay on the legacy path.  When Numba
+            # is unavailable OR the grid is below the kernel-
+            # overhead threshold, the helper falls back to the
+            # legacy NumPy expression -- callers see no API change.
             if aperture_mask is _ZERO_APERTURE_MASK:
                 E_tilted = np.zeros((Ny, Nx), dtype=_cdtype)
             elif aperture_mask is None:
+                tilt_phase = np.sin(theta_x) * k_X + np.sin(theta_y) * k_Y
                 E_tilted = np.exp(1j * tilt_phase).astype(_cdtype)
             else:
-                E_tilted = np.where(aperture_mask, np.exp(1j * tilt_phase),
-                                     0.0).astype(_cdtype)
+                E_tilted = _multi_field_tilt_phasor_masked(
+                    np.sin(theta_x), np.sin(theta_y),
+                    k_X, k_Y, aperture_mask, _cdtype)
             E_exit = _core.apply_real_lens(
                 E_tilted, prescription=ctx.prescription, wavelength=ctx.wavelength, dx=ctx.dx)
             # Build sub-context.  v4.13.2 (C-P1-2): thread ctx.x so

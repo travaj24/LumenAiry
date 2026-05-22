@@ -641,10 +641,14 @@ def ao_closed_loop(
         Loop gain in ``[0, 2]``.  Standard leaky-integrator gain.
         Typical AO values are 0.3 -- 0.5; lower values reject
         wavefront-sensor noise better at the cost of convergence
-        speed.  ``gain = 0`` is an open-loop fallback: the DM command
-        is never updated and the residual stays equal to
-        ``phase_disturbance - dm.phase()`` at the input state for all
-        iterations (useful for noise-only WFS characterisation).
+        speed.  ``gain = 0`` is an open-loop fallback for noise-only
+        WFS characterisation: NO new correction is computed from the
+        WFS measurement at each step.  However, ``gain = 0`` alone
+        does NOT freeze the DM command in general -- if ``leak > 0``
+        the leak term ``(1 - leak) * cmd_k`` still decays the existing
+        command toward zero each iteration.  Pure "command never
+        updated" semantics require BOTH ``gain = 0`` AND ``leak = 0``;
+        see the Notes section below.
     leak : float, default 0.0
         Leak factor in ``[0, 1]`` applied to the previous command at
         every step (v5.2.5: AUDIT_V5_2_3 V9 + P3-F1-2).  The control
@@ -724,6 +728,26 @@ def ao_closed_loop(
     pupil from whatever the sensor measures).  For real Shack-Hartmann
     integration, build a wrapper that runs the sensor and then
     reconstructs the wavefront via a modal basis.
+
+    Joint ``gain`` / ``leak`` semantics (v5.3, AUDIT_V5_2_5 P3-1
+    ao_closed_loop docstring fix): the two parameters control
+    orthogonal pieces of the control law and the "command never
+    updated" intuition is only correct in their joint zero limit.
+
+    * ``gain = 0`` and ``leak = 0``: pure open-loop / frozen DM.  The
+      command is left untouched; the residual at every iteration
+      equals the input-state ``phase_disturbance - dm.phase()``.
+    * ``gain = 0`` and ``leak > 0``: WFS measurements are ignored but
+      the leak term still decays the existing DM command toward zero
+      as ``cmd_{k+1} = (1 - leak) * cmd_k``.  After ``K`` iterations
+      ``cmd_K = (1 - leak)**K * cmd_0``.  This behaviour is pinned by
+      ``test_leak_nonzero_decays_command`` in
+      ``tests/unit/test_v5_2_5_ao_closed_loop_residuals.py`` -- e.g.
+      ``leak = 0.5`` with three iterations decays the command norm
+      by ``(0.5)**3 = 0.125``.
+    * ``gain > 0`` and ``leak = 0``: pure integrator (v5.2.3
+      behaviour, reproduced bit-for-bit).
+    * ``gain > 0`` and ``leak > 0``: full leaky integrator.
 
     Sign conventions: phases follow the library-wide convention table
     in ``CONVENTIONS.md`` Section 7 (OPD sign -- positive OPD means a

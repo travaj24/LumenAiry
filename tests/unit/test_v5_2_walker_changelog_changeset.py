@@ -130,7 +130,19 @@ def _extract_cited_paths(body):
 
 
 def _extract_cited_audit_ids(body):
-    return {m.group(1) for m in _AUDIT_ID_PATTERN.finditer(body)}
+    # v5.3 (AUDIT_V5_2_5 P3-4): the ``_AUDIT_ID_KNOWN_PREFIXES``
+    # allowlist was defined at v5.2.5 but never used.  v5.3 wires it
+    # as a defense-in-depth filter: only candidates whose prefix is in
+    # the allowlist are returned.  The regex already enforces the
+    # same gate (it requires ``P[0-3]-``), so this is structurally
+    # a no-op for now -- but if a future regex relaxation
+    # accidentally widens the prefix surface, the allowlist provides
+    # a second-tier guard against false positives in prose.
+    return {
+        m.group(1)
+        for m in _AUDIT_ID_PATTERN.finditer(body)
+        if any(m.group(1).startswith(p) for p in _AUDIT_ID_KNOWN_PREFIXES)
+    }
 
 
 # ===========================================================================

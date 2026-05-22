@@ -18,6 +18,20 @@ Run::
 A histogram of the trial Strehl values is written to
 ``examples/output/09_tolerancing_monte_carlo.png``.
 
+v5.3 (AUDIT_V5_2_5 P3-7 Strehl methodology disclosure):
+Note: a small fraction of trials may report Strehl slightly > 1.0
+(typical max ~ 1.003).  This is NOT a normalization bug -- it's a
+methodology consequence of computing ``ideal_peak`` at the NOMINAL
+focal length while each trial searches for its own ``z_best`` via
+``find_best_focus``.  A perturbed trial whose ``z_best`` shifts away
+from nominal BFL can land on a peak whose absolute value exceeds the
+unperturbed on-axis peak at BFL.  Acceptable for Monte Carlo
+tolerancing where the metric of interest is the DISTRIBUTION, not
+individual trials.  v5.2.5 CHANGELOG initially attributed this to
+"rounding noise"; the AUDIT_V5_2_5 P3-7 finding corrected the
+diagnosis to the focus-shift methodology consequence documented
+here.
+
 Author: Andrew Traverso -- v5.2 / examples roadmap.
 """
 from __future__ import annotations
@@ -134,6 +148,15 @@ def main():
     print(f'    Strehl 95th percentile: {p95:.3f}')
     print(f'    Strehl range:          '
           f'[{strehls.min():.3f}, {strehls.max():.3f}]')
+
+    # v5.3 (AUDIT_V5_2_5 P3-7 Strehl methodology disclosure):
+    # If any trials report Strehl > 1.0, surface a 1-line pointer to
+    # the module docstring's focus-shift methodology note so users
+    # don't mistake it for a normalization bug.
+    n_over_one = int(np.sum(strehls > 1.0))
+    if n_over_one > 0:
+        print(f'  (Strehl > 1 in ~{n_over_one} trials; see docstring '
+              f'for the focus-shift methodology note.)')
 
 
 if __name__ == '__main__':

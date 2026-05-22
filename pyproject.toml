@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "lumenairy"
-version = "5.2.5"
+version = "5.3.0"
 description = "Coherent optical beam propagation, geometric ray tracing, and manipulation using the Angular Spectrum Method."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -91,7 +91,11 @@ hdf5 = ["h5py>=3.0", "filelock>=3.0"]
 # re-added 3.10 CI matrix entry.  PEP 508 environment marker pins
 # the zarr line to Python >= 3.11 so the 3.10 install path
 # resolves; tests requiring zarr v3 already skip cleanly when
-# zarr is missing (per the v4.16.0 conftest pattern).  ``filelock``
+# zarr is missing (per the v4.16.0 per-test pattern at
+# ``test_v4_16_0_agent_b_multiprocess_storage.py:142-159``; the
+# v5.2.2 inline comment originally cited a non-existent "conftest"
+# pattern -- ``tests/conftest.py`` has no zarr handling.  v5.3
+# (AUDIT_V5_2_5 V6 closure) corrects the citation).  ``filelock``
 # stays unconditional so the storage-lock contract is exercisable
 # on 3.10 (against h5py only) too.
 zarr = ['zarr>=3.0; python_version >= "3.11"', "filelock>=3.0"]

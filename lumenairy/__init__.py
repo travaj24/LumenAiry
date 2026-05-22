@@ -257,8 +257,8 @@ from ._cache_registry import (
 
 # â”€â”€ Scoped runtime-environment context (4.8.1) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from ._context import (
+    _install_atexit_restore,
     apply_globals,
-    install_atexit_restore,
     lumenairy_context,
     snapshot_globals,
 )
@@ -679,7 +679,14 @@ from .raytrace import (
 # expect a "clean" library state on the next unrelated run -- the
 # handler restores whatever the defaults were at the very first
 # ``import lumenairy``.
-install_atexit_restore()
+# v5.3 (AUDIT_V5_2_5 P3-6 closure): the v5.2.5 rename to the
+# underscore-prefixed form was documentation-only -- both the
+# library bootstrap and the test_context_manager test still used
+# the legacy public name.  v5.3 migrates the library bootstrap to
+# the underscore form.  The back-compat alias at ``_context.py``
+# remains for any external caller still importing the legacy
+# name.
+_install_atexit_restore()
 
 # â”€â”€ Plotting utilities â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # â”€â”€ Deprecated-alias shims â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -839,7 +846,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.2.5"
+__version__ = "5.3.0"
 
 #
 # __all__ is grouped by user-journey tier:

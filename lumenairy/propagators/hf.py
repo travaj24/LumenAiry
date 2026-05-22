@@ -92,6 +92,8 @@ def propagate_huygens_fresnel_freespace(
     dx: float,
     *,
     dy: Optional[float] = None,
+    output_shape: Optional[Tuple[int, int]] = None,
+    output_dx: Optional[float] = None,
     **kwargs: Any,
 ) -> np.ndarray:
     """Free-space Huygens-Fresnel propagation with the standard
@@ -100,11 +102,60 @@ def propagate_huygens_fresnel_freespace(
     Equivalent to :func:`lumenairy.propagation.rayleigh_sommerfeld_propagate`;
     re-exported here for API consistency with the other ``hf.*``
     entry points.
+
+    v5.3 (AUDIT_V5_2_5 P1-1 closure): ``output_shape`` and
+    ``output_dx`` kwargs are accepted and honored via a post-kernel
+    ``resample_field`` step (matches the v5.2.3 MHS substantive-
+    resampling pattern at ``mhs.py:573-611``).  The underlying
+    ``rayleigh_sommerfeld_propagate`` kernel returns on the input
+    grid; the resample step bridges to the caller-requested output
+    grid.  v5.2.5 routed these kwargs from the dispatcher into this
+    function but the v5.2.5 pass-through to
+    ``rayleigh_sommerfeld_propagate`` raised ``TypeError`` because
+    the RS kernel does not accept either kwarg.  v5.3 fixes the
+    pass-through by handling the resample here instead of
+    forwarding to the kernel.
+
+    Return type
+    -----------
+    When neither ``output_shape`` nor ``output_dx`` is given (the
+    common pass-through case), returns the bare ``ndarray`` -- same
+    contract as the underlying RS kernel.
+
+    When ``output_shape`` or ``output_dx`` IS given (the v5.3
+    resample path), returns a ``(E_out, dx_out)`` 2-tuple matching
+    the ``resample_field`` contract -- the call has changed the
+    grid spacing and the caller needs to know the new pitch.
     """
-    from .propagation import rayleigh_sommerfeld_propagate
-    return rayleigh_sommerfeld_propagate(
+    from .propagation import rayleigh_sommerfeld_propagate, resample_field
+    E_native = rayleigh_sommerfeld_propagate(
         E_in, z, wavelength, dx, dy=dy, **kwargs,
     )
+    if output_shape is None and output_dx is None:
+        return E_native
+
+    # Resample to the requested output grid (matches MHS pattern).
+    target_dx = float(output_dx) if output_dx is not None else float(dx)
+    if output_shape is None:
+        # Same shape as input; only the pitch changed.
+        N_out = E_native.shape[-1]
+    else:
+        if len(output_shape) != 2:
+            raise ValueError(
+                f"propagate_huygens_fresnel_freespace: output_shape "
+                f"must be a (Ny, Nx) tuple of two ints; got "
+                f"{output_shape!r}.")
+        Ny, Nx = int(output_shape[0]), int(output_shape[1])
+        if Ny != Nx:
+            raise ValueError(
+                f"propagate_huygens_fresnel_freespace: non-square "
+                f"output_shape ({Ny}, {Nx}) not supported -- the "
+                f"underlying resample_field assumes a square "
+                f"target grid.  Either request a square shape or "
+                f"call ``rayleigh_sommerfeld_propagate`` + your own "
+                f"resampler directly.")
+        N_out = Ny
+    return resample_field(E_native, dx, target_dx, N_out)
 
 
 def propagate_huygens_fresnel_with_opl_callable(

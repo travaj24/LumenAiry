@@ -76,8 +76,14 @@ _FILE_PATH_PATTERN = re.compile(
     r'`')
 
 
+# v5.3 (AUDIT_V5_2_5 P2-1): parallel to the v5.2.5 V12 walker regex
+# relax (test_v5_2_walker_changelog_changeset.py:104-105) -- the
+# v5.2.5 closure was supposed to land at both sites; this script
+# was missed.  Pre-v5.3 the script-side regex was the same
+# restrictive ``[A-Z][A-Z0-9_-]{2,}`` form that rejects short-form
+# audit IDs like P1-A / P1-C / P1-1.  Relaxed to match the walker.
 _AUDIT_ID_PATTERN = re.compile(
-    r'(?<![A-Z0-9])(P[0-3](?:-NEW)?-[A-Z][A-Z0-9_-]{2,})')
+    r'(?<![A-Z0-9])(P[0-3](?:-NEW)?-[A-Z0-9][A-Z0-9_-]*)')
 
 
 # Bullet markers at the start of a stripped line.
@@ -189,8 +195,10 @@ def _is_audit_closure_section(heading_line):
         or 'audit carryover' in s
         or 'audit fix' in s
         or re.search(r'\bp[0-3]\s+closure', s) is not None
-        # v5.2.5 (AUDIT_V5_2_3 P2-F1-3): Tier N closures form
-        or re.search(r'\btier\s+[0-9]\b', s) is not None
+        # v5.2.5 (AUDIT_V5_2_3 P2-F1-3): Tier N closures form.
+        # v5.3 (AUDIT_V5_2_5 stretch goal): widened ``\d`` -> ``\d+``
+        # so hypothetical Tier-10+ headings parse correctly.
+        or re.search(r'\btier\s+\d+\b', s) is not None
     )
 
 

@@ -412,6 +412,102 @@ def test_examples_output_dir_exists_and_contains_pngs():
         _visit(tree, None)
         return mapping
 
+    # v5.3 (AUDIT_V5_2_5 P3-2 AST tightening: 4 new bypass forms):
+    # v5.2.5's ``_resolve_arg_closure`` only inspected ``ast.Assign``
+    # nodes with a direct ``ast.Name`` target.  Four more gameability
+    # bypasses survived:
+    #
+    #   1. AugAssign       -- ``out_dir += '/elsewhere'``
+    #   2. AnnAssign       -- ``out_dir: str = '/tmp/elsewhere'``
+    #   3. Tuple-unpack    -- ``out_dir, other = ('/tmp', 'x')``
+    #   4. With-as / For   -- ``with open(f) as out_dir:`` or
+    #                         ``for out_dir in [...]:``
+    #
+    # The v5.3 fix: collect ALL rebinds to the same name (not just plain
+    # Assigns) between the binding and the makedirs call.  If the LAST
+    # rebind event is anything other than a plain ``ast.Assign`` with a
+    # direct ``ast.Name`` target whose RHS can be statically inspected,
+    # the closure check fails (because we cannot statically know the new
+    # binding carries the ``'output'`` + ``__file__`` signals).
+    def _name_in_target(node, name):
+        """Return True iff ``name`` appears as an ``ast.Name`` (with id
+        == ``name``) somewhere in the target subtree of an assignment-
+        like AST node (handles plain Name, nested Tuple/List unpacking,
+        and Starred forms).
+        """
+        if isinstance(node, ast.Name):
+            return node.id == name
+        if isinstance(node, (ast.Tuple, ast.List)):
+            return any(_name_in_target(e, name) for e in node.elts)
+        if isinstance(node, ast.Starred):
+            return _name_in_target(node.value, name)
+        return False
+
+    def _collect_rebinds(tree, name, call_scope, call_lineno, enc_map):
+        """Collect every rebinding event for ``name`` in scope, before
+        ``call_lineno``.  Each event is a ``(lineno, kind, node)``
+        triple where ``kind`` is one of:
+
+          'assign_direct'    -- ``ast.Assign`` with a direct ``Name``
+                                target (the only "safe" form whose RHS
+                                we can statically inspect).
+          'assign_unpack'    -- ``ast.Assign`` whose target is a Tuple
+                                or List containing ``name``.
+          'aug_assign'       -- ``ast.AugAssign`` to ``name``.
+          'ann_assign'       -- ``ast.AnnAssign`` to ``name``.
+          'with_as'          -- ``ast.With`` / ``ast.AsyncWith`` whose
+                                ``items[*].optional_vars`` matches.
+          'for_target'       -- ``ast.For`` / ``ast.AsyncFor`` whose
+                                ``target`` matches.
+
+        Scope filter + temporal ordering match the v5.2.5 semantics.
+        """
+        events = []
+        for a in ast.walk(tree):
+            kind = None
+            node_target = None
+            if isinstance(a, ast.Assign):
+                # Direct Name target ('safe' form) vs. Tuple/List
+                # unpacking (unsafe -- we cannot pick out which RHS
+                # element bound ``name``).
+                direct = any(isinstance(t, ast.Name) and t.id == name
+                             for t in a.targets)
+                unpack = any(isinstance(t, (ast.Tuple, ast.List))
+                             and _name_in_target(t, name)
+                             for t in a.targets)
+                if direct:
+                    kind = 'assign_direct'
+                elif unpack:
+                    kind = 'assign_unpack'
+            elif isinstance(a, ast.AugAssign):
+                if isinstance(a.target, ast.Name) and a.target.id == name:
+                    kind = 'aug_assign'
+            elif isinstance(a, ast.AnnAssign):
+                if isinstance(a.target, ast.Name) and a.target.id == name:
+                    kind = 'ann_assign'
+            elif isinstance(a, (ast.With, ast.AsyncWith)):
+                for item in a.items:
+                    ov = item.optional_vars
+                    if ov is not None and _name_in_target(ov, name):
+                        kind = 'with_as'
+                        break
+            elif isinstance(a, (ast.For, ast.AsyncFor)):
+                if _name_in_target(a.target, name):
+                    kind = 'for_target'
+
+            if kind is None:
+                continue
+            a_scope = enc_map.get(id(a))
+            # Scope filter (same as v5.2.5): module-level OR same
+            # enclosing function as the call.
+            if a_scope is not None and a_scope is not call_scope:
+                continue
+            # Strictly earlier than the call's lineno.
+            if a.lineno >= call_lineno:
+                continue
+            events.append((a.lineno, kind, a))
+        return events
+
     def _resolve_arg_closure(call_node, tree, enc_map=None):
         """Return the AST nodes whose subtree defines the ``makedirs``
         first argument's value.  If the arg is a literal expression
@@ -423,6 +519,14 @@ def test_examples_output_dir_exists_and_contains_pngs():
               module top-level), AND
           (b) the LAST such assignment before the call's lineno
               (last-write-wins).
+
+        v5.3 (AUDIT_V5_2_5 P3-2 AST tightening: 4 new bypass forms):
+        when the LAST rebind event in scope is anything other than a
+        plain ``ast.Assign`` with a direct ``Name`` target (i.e. it's
+        an AugAssign, AnnAssign, tuple-unpack Assign, with-as, or
+        for-target), the closure cannot be statically inspected for
+        the ``'output'`` + ``__file__`` signals -- return ``[]`` so the
+        co-location predicate rejects.
 
         ``enc_map`` is the ``{id(node): enclosing_FunctionDef_or_None}``
         mapping from ``_build_enclosing_function_map``.  When omitted it
@@ -436,32 +540,24 @@ def test_examples_output_dir_exists_and_contains_pngs():
             if enc_map is None:
                 enc_map = _build_enclosing_function_map(tree)
             call_scope = enc_map.get(id(call_node))
-            candidates = []
-            for a in ast.walk(tree):
-                if not isinstance(a, ast.Assign):
-                    continue
-                if not any(isinstance(t, ast.Name) and t.id == name
-                           for t in a.targets):
-                    continue
-                a_scope = enc_map.get(id(a))
-                # In-scope iff the assignment is at module-level (None)
-                # or inside the same function as the call.  Sibling-
-                # function bodies (a_scope is a different FunctionDef)
-                # are excluded -- that closes the dead-code bypass.
-                if a_scope is not None and a_scope is not call_scope:
-                    continue
-                # Must be a strictly earlier line than the call -- the
-                # last-write-wins semantics need a temporal ordering.
-                if a.lineno >= call_node.lineno:
-                    continue
-                candidates.append(a)
-            if not candidates:
+            # v5.3 (AUDIT_V5_2_5 P3-2 AST tightening: 4 new bypass forms):
+            # collect ALL rebind events (Assign + AugAssign + AnnAssign +
+            # tuple-unpack + With-as + For-target), not just plain
+            # Assigns.  Last-write-wins still applies, but now the
+            # "winning" event must be a safe ``assign_direct`` -- any of
+            # the 4 new unsafe forms invalidates the closure check.
+            events = _collect_rebinds(
+                tree, name, call_scope, call_node.lineno, enc_map)
+            if not events:
                 return []
-            # Sort by line number and keep only the LAST assignment;
-            # that closes the multi-assign bypass.
-            candidates.sort(key=lambda x: x.lineno)
-            last = candidates[-1]
-            return [last.value]
+            events.sort(key=lambda e: e[0])
+            last_lineno, last_kind, last_node = events[-1]
+            if last_kind != 'assign_direct':
+                # The most recent rebind is one of the 4 new bypass forms;
+                # we cannot statically extract a clean RHS containing the
+                # signals.  Reject by returning an empty closure.
+                return []
+            return [last_node.value]
         return [arg]
 
     for script_name in expected_scripts:
@@ -582,6 +678,64 @@ class TestAuditV5_2_3_AstResolveArgClosureTightening:
         return ((isinstance(f, ast.Attribute) and f.attr == 'makedirs')
                 or (isinstance(f, ast.Name) and f.id == 'makedirs'))
 
+    # v5.3 (AUDIT_V5_2_5 P3-2 AST tightening: 4 new bypass forms):
+    # mirror the inner helpers of the test-under-test.  The class-level
+    # helper must stay byte-equivalent to the production helper above
+    # so the class's gaming-form tests exercise the same predicate.
+    @staticmethod
+    def _name_in_target(node, name):
+        if isinstance(node, ast.Name):
+            return node.id == name
+        if isinstance(node, (ast.Tuple, ast.List)):
+            return any(
+                TestAuditV5_2_3_AstResolveArgClosureTightening
+                ._name_in_target(e, name) for e in node.elts)
+        if isinstance(node, ast.Starred):
+            return (TestAuditV5_2_3_AstResolveArgClosureTightening
+                    ._name_in_target(node.value, name))
+        return False
+
+    @classmethod
+    def _collect_rebinds(cls, tree, name, call_scope, call_lineno, enc_map):
+        events = []
+        for a in ast.walk(tree):
+            kind = None
+            if isinstance(a, ast.Assign):
+                direct = any(isinstance(t, ast.Name) and t.id == name
+                             for t in a.targets)
+                unpack = any(isinstance(t, (ast.Tuple, ast.List))
+                             and cls._name_in_target(t, name)
+                             for t in a.targets)
+                if direct:
+                    kind = 'assign_direct'
+                elif unpack:
+                    kind = 'assign_unpack'
+            elif isinstance(a, ast.AugAssign):
+                if isinstance(a.target, ast.Name) and a.target.id == name:
+                    kind = 'aug_assign'
+            elif isinstance(a, ast.AnnAssign):
+                if isinstance(a.target, ast.Name) and a.target.id == name:
+                    kind = 'ann_assign'
+            elif isinstance(a, (ast.With, ast.AsyncWith)):
+                for item in a.items:
+                    ov = item.optional_vars
+                    if ov is not None and cls._name_in_target(ov, name):
+                        kind = 'with_as'
+                        break
+            elif isinstance(a, (ast.For, ast.AsyncFor)):
+                if cls._name_in_target(a.target, name):
+                    kind = 'for_target'
+
+            if kind is None:
+                continue
+            a_scope = enc_map.get(id(a))
+            if a_scope is not None and a_scope is not call_scope:
+                continue
+            if a.lineno >= call_lineno:
+                continue
+            events.append((a.lineno, kind, a))
+        return events
+
     @classmethod
     def _resolve_arg_closure(cls, call_node, tree, enc_map):
         if not call_node.args:
@@ -590,23 +744,17 @@ class TestAuditV5_2_3_AstResolveArgClosureTightening:
         if isinstance(arg, ast.Name):
             name = arg.id
             call_scope = enc_map.get(id(call_node))
-            candidates = []
-            for a in ast.walk(tree):
-                if not isinstance(a, ast.Assign):
-                    continue
-                if not any(isinstance(t, ast.Name) and t.id == name
-                           for t in a.targets):
-                    continue
-                a_scope = enc_map.get(id(a))
-                if a_scope is not None and a_scope is not call_scope:
-                    continue
-                if a.lineno >= call_node.lineno:
-                    continue
-                candidates.append(a)
-            if not candidates:
+            events = cls._collect_rebinds(
+                tree, name, call_scope, call_node.lineno, enc_map)
+            if not events:
                 return []
-            candidates.sort(key=lambda x: x.lineno)
-            return [candidates[-1].value]
+            events.sort(key=lambda e: e[0])
+            last_lineno, last_kind, last_node = events[-1]
+            if last_kind != 'assign_direct':
+                # v5.3: last rebind is one of the 4 new bypass forms;
+                # reject by returning an empty closure.
+                return []
+            return [last_node.value]
         return [arg]
 
     @classmethod
@@ -706,6 +854,110 @@ class TestAuditV5_2_3_AstResolveArgClosureTightening:
                 f'{script_name} should STILL pass the v5.2.5 tightened '
                 f'predicate; the v5.2.0 contract for the 3 real example '
                 f'scripts must not regress.')
+
+    # ----------------------------------------------------------------- #
+    # v5.3 (AUDIT_V5_2_5 P3-2 AST tightening: 4 new bypass forms)
+    # ----------------------------------------------------------------- #
+
+    def test_aug_assign_bypass_caught(self):
+        """The AugAssign gaming form should now be REJECTED.
+
+        Form: ``out_dir = good_form; out_dir += '/elsewhere';
+        makedirs(out_dir)`` -- v5.2.5 accepted this because the
+        AugAssign was invisible to the plain-Assign-only candidate
+        scan, so the (good-form) plain Assign was still the
+        last-write-wins winner.  v5.3 collects AugAssigns into the
+        rebind-event stream; the AugAssign now wins last-write-wins
+        and, being a non-``assign_direct`` event, invalidates the
+        closure check.
+        """
+        src = (
+            "import os\n"
+            "def main():\n"
+            "    out_dir = os.path.join(os.path.dirname("
+            "os.path.abspath(__file__)), 'output')\n"
+            "    out_dir += '/elsewhere'\n"
+            "    os.makedirs(out_dir, exist_ok=True)\n"
+        )
+        assert self._predicate(src) is False, (
+            'AugAssign bypass should be REJECTED by the v5.3 P3-2 '
+            'tightening: the LATER ``out_dir += "/elsewhere"`` AugAssign '
+            'rebinds ``out_dir`` to a value whose RHS cannot statically '
+            'be shown to carry the ``"output"`` + ``__file__`` signals.')
+
+    def test_ann_assign_bypass_caught(self):
+        """The AnnAssign gaming form should now be REJECTED.
+
+        Form: ``out_dir = good_form; out_dir: str = '/tmp/elsewhere';
+        makedirs(out_dir)`` -- v5.2.5 accepted this because the
+        AnnAssign was invisible to the plain-Assign-only candidate
+        scan.  v5.3 collects AnnAssigns into the rebind-event stream
+        and rejects the closure check when an AnnAssign is the last
+        rebind before the call.
+        """
+        src = (
+            "import os\n"
+            "def main():\n"
+            "    out_dir = os.path.join(os.path.dirname("
+            "os.path.abspath(__file__)), 'output')\n"
+            "    out_dir: str = '/tmp/elsewhere'\n"
+            "    os.makedirs(out_dir, exist_ok=True)\n"
+        )
+        assert self._predicate(src) is False, (
+            'AnnAssign bypass should be REJECTED by the v5.3 P3-2 '
+            'tightening: the LATER ``out_dir: str = "/tmp/elsewhere"`` '
+            'AnnAssign rebinds ``out_dir`` to a value whose RHS lacks '
+            'the ``"output"`` + ``__file__`` signals.')
+
+    def test_tuple_unpack_bypass_caught(self):
+        """The tuple-unpack gaming form should now be REJECTED.
+
+        Form: ``out_dir = good_form; out_dir, other = ('/tmp', 'x');
+        makedirs(out_dir)`` -- v5.2.5 accepted this because the
+        Tuple-target Assign was filtered out by the ``isinstance(t,
+        ast.Name)`` candidate check.  v5.3 picks up Tuple/List unpacking
+        targets in the rebind-event stream and rejects -- the RHS is an
+        unknown tuple element rather than a single inspectable expr.
+        """
+        src = (
+            "import os\n"
+            "def main():\n"
+            "    out_dir = os.path.join(os.path.dirname("
+            "os.path.abspath(__file__)), 'output')\n"
+            "    out_dir, other = ('/tmp', 'x')\n"
+            "    os.makedirs(out_dir, exist_ok=True)\n"
+        )
+        assert self._predicate(src) is False, (
+            'Tuple-unpack bypass should be REJECTED by the v5.3 P3-2 '
+            'tightening: the LATER ``out_dir, other = ("/tmp", "x")`` '
+            'unpacks an unknown tuple element into ``out_dir``; the '
+            'closure check cannot statically extract the bound value.')
+
+    def test_with_as_bypass_caught(self):
+        """The ``with ... as out_dir:`` gaming form should now be REJECTED.
+
+        Form: ``out_dir = good_form; with open(f) as out_dir:
+        makedirs(out_dir)`` -- v5.2.5 accepted this because the
+        With-as rebind was invisible to the plain-Assign-only candidate
+        scan, so the (good-form) plain Assign was still the
+        last-write-wins winner.  v5.3 collects With-as / AsyncWith-as
+        binders into the rebind-event stream and rejects -- the
+        ``optional_vars`` is bound to the context manager's value, not
+        a statically-inspectable RHS.
+        """
+        src = (
+            "import os\n"
+            "def main():\n"
+            "    out_dir = os.path.join(os.path.dirname("
+            "os.path.abspath(__file__)), 'output')\n"
+            "    with open('/tmp/something') as out_dir:\n"
+            "        os.makedirs(out_dir, exist_ok=True)\n"
+        )
+        assert self._predicate(src) is False, (
+            'With-as bypass should be REJECTED by the v5.3 P3-2 '
+            'tightening: the LATER ``with open(...) as out_dir:`` rebinds '
+            '``out_dir`` to the file object, NOT a value whose RHS '
+            'carries the ``"output"`` + ``__file__`` signals.')
 
 
 # ============================================================================

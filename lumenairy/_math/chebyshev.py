@@ -152,10 +152,12 @@ def chebyshev_derivative_vandermonde(u: np.ndarray, max_k: int,
     if max_k < 1:
         # Single zero row at order 0.
         return xp.stack([xp.zeros_like(u_arr)])
+    # v5.3 (AUDIT_V5_2_5 P3-5): the ``if max_k >= 1`` guard above
+    # was dead code -- we already early-returned at ``max_k < 1``
+    # so by this point ``max_k >= 1`` is guaranteed.  Removed the
+    # redundant check.
     # U_0(x) = 1, U_1(x) = 2x, U_{n+1} = 2x U_n - U_{n-1}
-    U = [xp.ones_like(u_arr)]
-    if max_k >= 1:
-        U.append(2.0 * u_arr)
+    U = [xp.ones_like(u_arr), 2.0 * u_arr]
     for n in range(2, max_k + 1):
         U.append(2.0 * u_arr * U[n - 1] - U[n - 2])
     # T'_0 = 0, T'_n = n * U_{n-1} for n >= 1.
