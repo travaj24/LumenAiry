@@ -2,6 +2,65 @@
 
 All notable changes to the core library are documented here.
 
+## [5.3.1] — 2026-05-23
+
+**Docs-only patch: PyPI project-page sync fix.**  No library code
+change; no test change.  Sole purpose is to surface the
+v5.1.1 / v5.2.x / v5.3.0 release notes on PyPI's project page,
+which were missing because the README's embedded
+``## What's new in X.Y.Z`` block had stopped accruing new sections
+after v5.1.0.
+
+### What changed
+
+* **README.md ``What's new in X.Y.Z`` block stripped**.  The
+  embedded historical release-notes block (v3.0 through v5.1.0)
+  is removed -- 4076 to 5168 README lines collapsed into a
+  single ``## Release notes`` pointer paragraph that links to
+  `CHANGELOG.md` (the canonical source), the wiki Release-Notes
+  page, and the GitHub Releases feed.  PyPI shows the README as
+  the project description; pre-v5.3.1 the embedded block
+  advertised v5.1.0 as the "latest" release because the per-
+  release sync step had stopped after v5.1.0 was tagged.  The
+  pointer-only form has no stale-content failure mode.
+
+* **README.md line count**: 4762 -> 3671 (-1091 lines).  Block
+  bounds: lines 13-1104 (the first ``## What's new in 5.1.0``
+  through the last entry of ``## What's new in 3.0``).
+
+### Why not back-fill the missing What's-new sections instead
+
+User-chosen option (from a 3-way trade-off): the back-fill path
+would require 7 new "What's new" sections in the README (5.1.1,
+5.2.0, 5.2.1, 5.2.2, 5.2.3, 5.2.5, 5.3.0) AND a release-process
+step to remember to add another section before each future tag.
+The pointer-only form has zero ongoing maintenance and zero
+stale-content failure mode.  The trade-off is that the PyPI
+project page no longer shows release highlights inline -- users
+who want them click through to CHANGELOG.md (a single click in
+the PyPI sidebar's ``Changelog`` link).
+
+### What did NOT change
+
+* `CHANGELOG.md` -- structure unchanged (this is the canonical
+  source going forward; nothing was overhauled).
+* All library code, examples, tests, walkers, and ROADMAP --
+  bit-for-bit unchanged from v5.3.0.
+
+### Tests
+
+Same as v5.3.0: 3847 unit tests pass (collected = 3866 = pass + 18
+skip + 1 xfail).  V11 doc-consistency walker still green against
+the trimmed README.
+
+### v5.x ROADMAP status (unchanged)
+
+**The v5.x ROADMAP remains empty of code work.**  Remaining
+horizon is process-only (logging adoption sweep, Designer GUI
+v3.8+, next audit cycle, CHANGELOG ship-time-stamp injection).
+
+---
+
 ## [5.3.0] — 2026-05-22
 
 **Closes AUDIT_V5_2_5_2026_05_22** (1 P1 blocker + 2 P2 + 12 P3
