@@ -1274,7 +1274,7 @@ Cross-agent test breakage closed:
   `test_v4_16_0_walker_all_symmetry`,
   `test_v4_15_3_dispatcher_pin_2d_scalar_field`).
 * CHANGELOG line-citation refresh:
-  `optimize/core.py:3032` -> `optimize/wrapper_merits.py:855`
+  `optimize/core.py:3032` -> `optimize/wrapper_merits.py:876`
   (`_ZERO_APERTURE_MASK` branch); `optimize/core.py:987` ->
   `optimize/merit_terms.py:515` (`MatchIdealSystem._make_source`
   `ap>0` branch); `optimize/core.py:2044-2054` ->
@@ -2923,7 +2923,7 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/wrapper_merits.py:855` (was
+  branch now at `optimize/wrapper_merits.py:876` (was
   `optimize/core.py:3032` pre-v5.1.0 Agent E 6-file split, which
   moved `ToleranceAwareMerit.evaluate` out of the monolithic
   `optimize/core.py`; was `:3015` pre-v4.16.3 Agent C `Constraint`
@@ -3389,7 +3389,7 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/wrapper_merits.py:855`
+  sentinel branch now lives at `optimize/wrapper_merits.py:876`
   (the `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was
   `optimize/core.py:3032` pre-v5.1.0 Agent E 6-file split (the
   branch moved out of the monolithic core.py to the new
