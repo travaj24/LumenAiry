@@ -390,6 +390,35 @@ class MainWindow(QMainWindow):
             'Coronagraph workflow', self.coronagraph_widget,
             Qt.BottomDockWidgetArea, 'coronagraph')
 
+        # v5.4 audit P2-A: Algebra operator-chain inspector dock --
+        # surfaces lumenairy.algebra (8 operator kinds) with tree view,
+        # ABCD display, save/load chain, and "from prescription"
+        # ergonomic populator.
+        from .algebra_dock import AlgebraDock
+        self.algebra_widget = AlgebraDock(self.model)
+        self.algebra_dock_widget = dock(
+            'Operator algebra', self.algebra_widget,
+            Qt.BottomDockWidgetArea, 'algebra')
+
+        # v5.4 audit P2-D: Coatings stack design dock -- surfaces
+        # elements/coatings.py with stack editor, substrate dropdown,
+        # R(lambda) sweep, and AR / Bragg-HR quick templates.
+        from .coatings_dock import CoatingsDock
+        self.coatings_widget = CoatingsDock(self.model)
+        self.coatings_dock = dock(
+            'Thin-film coatings', self.coatings_widget,
+            Qt.BottomDockWidgetArea, 'coatings')
+
+        # v5.4 audit P2-B: Log viewer dock -- displays library
+        # telemetry from the v5.3.2 _logging hooks (per-Newton, per-
+        # scipy-iter, per-MC-trial) with level + module filter, pause,
+        # find, and CSV save.
+        from .log_viewer_dock import LogViewerDock
+        self.log_viewer_widget = LogViewerDock(self.model)
+        self.log_viewer_dock = dock(
+            'Log viewer', self.log_viewer_widget,
+            Qt.BottomDockWidgetArea, 'log_viewer')
+
         from .field_browser_dock import FieldBrowserDock
         self.field_browser_widget = FieldBrowserDock(self.model)
         self.field_browser_dock = dock(
