@@ -579,3 +579,94 @@ inside `propagate_subaperture_asymptotic` so the warning never
 fires for legitimate magnifying systems -- is tracked as a v5.2.1
 candidate per ROADMAP.
 
+---
+
+## 5.3.2 -- maintainers: CHANGELOG ship-time stamping is now a
+pre-tag step
+
+This is NOT a user-facing migration -- it's a maintainer-side
+release-process note.  Library callers see no behaviour change.
+
+Pre-v5.3.2, each CHANGELOG entry self-cited build-time empirical
+numbers (test counts, file counts, line counts) that were always
+at-write-time, never at-ship-time.  v5.3 surfaced this drift class
+via the V17 walker
+(`tests/unit/test_v5_3_walker_changelog_self_citation.py`).  v5.3.2
+ships the FIX side: `scripts/stamp_changelog.py` stamps the topmost
+CHANGELOG block with current empirical values just before tag commit.
+
+**Maintainer recipe at tag time:**
+
+```
+1. Write the CHANGELOG entry with at-write-time placeholders.
+2. ``git add CHANGELOG.md`` along with the other release files.
+3. ``python scripts/stamp_changelog.py --quick --apply``
+4. ``git add CHANGELOG.md`` again.
+5. ``git commit ... && git tag ... && git push ...``
+```
+
+The script is dry-run by default; `--apply` is required to actually
+rewrite `CHANGELOG.md`.  Full release-process documentation lives in
+[`docs/release-process.md`](docs/release-process.md).
+
+## 5.3.2 -- opt-in telemetry logging
+
+v5.3.2 adds **opt-in** per-iteration telemetry logging to three
+long-running paths the audit cited as lacking progress visibility:
+
+* `apply_real_lens_traced` -- per-Newton-iteration markers
+  (`apply_real_lens_traced: newton iter k/N residual_max=... m
+  remaining=.../...`)
+* `design_optimize` -- per-scipy-iteration markers
+  (`design_optimize: iter k/N merit=... efl=...mm`)
+* `monte_carlo_tolerancing` (+ its `_jax` twin) -- per-trial markers
+  (`monte_carlo_tolerancing: trial k/N strehl_peak=...`)
+
+This is **purely additive**.  No `warnings.warn` call was converted
+to `logger.warning`; the deprecation / sampling-violation warning
+surface is part of the public API contract and is unchanged.  No
+default behaviour shifts.  No numerical answer changes.
+
+**Default behaviour: SILENT.**  The library's `'lumenairy'` root
+logger gets a `NullHandler` at import time, so a fresh program that
+calls `apply_real_lens_traced` / `design_optimize` /
+`monte_carlo_tolerancing` will see NO new log output -- the same as
+in v5.3.1 and earlier.
+
+**Opt-in recipe:** attach a handler to the `'lumenairy'` logger (or
+a sub-logger) and set the level to `INFO`:
+
+```python
+import logging
+import lumenairy as la
+
+# Easiest: route lumenairy INFO records to stderr via the root
+# logger's basicConfig.
+logging.basicConfig(level=logging.INFO)
+
+# Now any apply_real_lens_traced / design_optimize / MC call emits
+# per-iteration progress as INFO records:
+result = la.design_optimize(...)
+# INFO:lumenairy.optimize.driver:design_optimize: entry method=L-BFGS-B ...
+# INFO:lumenairy.optimize.driver:design_optimize: iter 1/100 merit=... efl=...mm
+# INFO:lumenairy.optimize.driver:design_optimize: iter 2/100 merit=... efl=...mm
+# ...
+```
+
+For larger Monte Carlo runs where per-trial output is noisy,
+silence the per-trial logs by raising just the lumenairy logger to
+`WARNING`:
+
+```python
+logging.getLogger('lumenairy').setLevel(logging.WARNING)
+```
+
+The entry-summary log on each of the three paths uses `INFO`, so
+raising to `WARNING` silences both entry and per-iteration logs --
+which is the right behaviour for n_trials > 100 cases the audit
+specifically called out.
+
+**No code changes required** to keep pre-v5.3.2 behaviour -- without
+a user-attached handler, the `NullHandler` absorbs the records and
+nothing prints.
+

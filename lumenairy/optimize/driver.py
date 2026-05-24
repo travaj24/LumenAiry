@@ -16,6 +16,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+# v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+# Module-level logger for design_optimize entry + per-scipy-iteration
+# progress.  Default-quiet via the lumenairy root logger's NullHandler.
+from .._logging import get_logger
+
+logger = get_logger(__name__)
+
 # Note: ``json`` (aliased to ``_json``) and ``os`` (aliased to ``_os``)
 # are accessed by ``design_optimize``'s state-file helpers via
 # ``lumenairy.optimize.core`` (lazy lookup at call time) so historical
@@ -554,6 +561,16 @@ def design_optimize(parameterization: Any,
     call_progress(progress, 'design_optimize', 0.0,
                   f'method={method}, {len(merit_terms)} merit term(s)')
 
+    # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+    # Entry log -- method + free-param count + merit-term count + iter
+    # cap so an attached handler shows the design_optimize call shape
+    # before the first scipy iteration fires.
+    logger.info(
+        "design_optimize: entry method=%s n_params=%d n_merits=%d "
+        "max_iter=%d wave_propagator=%s",
+        str(method), int(n_params), int(len(merit_terms)),
+        int(max_iter), str(wave_propagator))
+
     multi_mode = isinstance(parameterization, MultiPrescriptionParameterization)
 
     def _emit_progress(frac: float, msg: str) -> None:
@@ -575,6 +592,14 @@ def design_optimize(parameterization: Any,
             frac,
             f'iter {iter_count[0]}: merit={last_value[0]:.4g}  '
             f'efl={last_efl[0]*1e3:.3f}mm')
+        # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+        # telemetry): one INFO record per scipy iteration -- mirrors
+        # the progress-callback message so an attached handler sees
+        # the same merit/efl trace the GUI/CLI progress bar shows.
+        logger.info(
+            "design_optimize: iter %d/%d merit=%.4g efl=%.3fmm",
+            int(iter_count[0]), int(max_iter),
+            float(last_value[0]), float(last_efl[0] * 1e3))
 
     def evaluate(x):
         # Resolve names through ``lumenairy.optimize.core`` so the

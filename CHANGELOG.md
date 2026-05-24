@@ -2,6 +2,170 @@
 
 All notable changes to the core library are documented here.
 
+## [5.3.2] — 2026-05-23
+
+**Three v5.x horizon-item closures shipped together.**  After this
+release the v5.x ROADMAP horizon has 1 item left (next-audit-cycle
+process item) + Designer GUI (separate stream).  No library
+behavior change for existing callers; all three items add
+*observational* infrastructure (telemetry + drift-detection +
+ship-time validation).
+
+**Zero physics regressions in 16 consecutive releases.**
+
+3863 unit tests pass (collected = 3884 = pass + 20 skip + 1
+xfail).  +15 net pass vs v5.3.0 (3848); +3 new skips for
+documented data-driven cases (V12.2/V12.4 audit-bullet absence in
+docs-only v5.3.2 block + V18 source-line absence + V17.3
+line-count-claim absence -- all "no input to verify" rather than
+test logic failures).
+
+### Item 1: per-iteration `logging` telemetry on long-running paths
+
+The audit-cited ROADMAP item ("42 `warnings.warn` calls across
+22 files; long-running paths have no per-iteration telemetry")
+is scoped precisely to TELEMETRY -- not to a conversion of the
+`warnings.warn` surface.  The 42 cited `warnings.warn` sites
+stay as-is (they are public API contract).  Three long-running
+functions gain INFO-level per-iteration logging hooks:
+
+* **`apply_real_lens_traced`** (`lumenairy/elements/_lens_traced.py`):
+  entry log + per-Newton-iteration log (`iter k/N residual_max=X
+  m`) + early-convergence log.
+* **`design_optimize`** (`lumenairy/optimize/driver.py`): entry
+  log + per-scipy-iteration log via the existing
+  `CancellableProgress` callback path (one extra line per
+  method-specific callback site; covers L-BFGS-B / SLSQP /
+  trust-constr / DE / basin-hopping / dual_annealing).
+* **`monte_carlo_tolerancing`** + **`monte_carlo_tolerancing_jax`**
+  (`lumenairy/analysis/through_focus.py`): per-trial log + entry
+  log on each twin.
+
+New `lumenairy/_logging.py` private module exposes the
+convention.  Default-quiet contract: with no user-attached
+handler, the library produces zero log output (a `NullHandler`
+sits on the `'lumenairy'` root logger at import time).  Users
+opt in:
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO)
+# or per-logger:
+logging.getLogger('lumenairy').setLevel(logging.INFO)
+```
+
+8 new tests in `tests/unit/test_v5_3_2_logging_telemetry.py`
+pin the default-quiet contract, the telemetry-active contract,
+and bit-for-bit behavioural preservation (a 1-iter
+`design_optimize` returns the same `result.x` and `result.merit`
+with and without the INFO handler attached).
+
+### Item 2: V18 walker -- source-file:line citation drift
+
+The v5.3.0 ship hit a real failure of this class -- CHANGELOG
+cited `optimize/wrapper_merits.py:855` but the v5.3.0 MultiFieldMerit
+JIT change had shifted the sentinel branch to line 876.  V18 is
+the GENERAL version of `test_v4_15_agent_f.py::TestF5ChangelogLineCitations`
+which only catches a hardcoded shortlist of symbols.
+
+**Walker** (`tests/unit/test_v5_3_2_walker_source_line_citation.py`):
+parses the topmost CHANGELOG block, extracts ALL backticked
+`lumenairy/foo/bar.py:LINE` (or `:START-END`) citations, opens
+each at the cited line, and verifies the line is **non-trivial**
+(not whitespace, not a closing bracket, not a bare
+`pass`/`continue`/`break`/`else:`/`try:`).  This is necessary-
+but-not-sufficient (V18 doesn't try to identify the cited
+SYMBOL -- that requires a hand-curated anchor database).  5
+tests; 4 pass + 1 clean skip on the docs-only v5.3.1 block.
+
+**Companion script** (`scripts/check_source_line_citations.py`,
+429 LOC): runnable as `python scripts/check_source_line_citations.py
+[--version VER] [--quiet]`.  Exit codes: 0 OK, 1 drift detected,
+2 clean skip.  Handles both full-path and bare-basename
+citations (resolves bare basenames via a basename->path index;
+basenames matching multiple files report SKIP-AMBIGUOUS).
+
+**Wired into `publish.yml`** at the verify job, line 93, BEFORE
+the V16 `verify_changelog_closures.py` step.  Same exit-code-2
+= pass treatment.  Line-level drift surfaces before content-
+level drift.
+
+### Item 3: CHANGELOG ship-time-stamp injection
+
+The v5.2.5-documented "recursive self-citation drift" class:
+each CHANGELOG entry self-cites build-time empirical numbers,
+but the entry itself is part of the diff that establishes those
+numbers, so cited counts are always at-write-time, not
+at-ship-time.  V17 walker (`tests/unit/test_v5_3_walker_changelog_self_citation.py`,
+v5.3.0) DETECTS drift; the FIX requires a pre-tag hook that
+refreshes the cited values just before tag commit.
+
+v5.3.2 ships that pre-tag hook as a CLI script:
+
+**`scripts/stamp_changelog.py`** (623 LOC): parses the topmost
+`## [X.Y.Z]` CHANGELOG block, computes empirical test count
+(`pytest --collect-only` in `--quick` mode, full suite in
+`--full` mode), file count (`git diff PREV_TAG..HEAD`), and
+line count (`wc -l CHANGELOG.md`).  Rewrites the matching
+self-citation patterns in the topmost block.  **Dry-run by
+default**; explicit `--apply` flag required to write.
+
+Four invocation patterns documented in
+`docs/release-process.md` (new):
+
+```
+python scripts/stamp_changelog.py                      # dry-run preview (default)
+python scripts/stamp_changelog.py --quick --apply      # canonical pre-tag (~5s)
+python scripts/stamp_changelog.py --full --apply       # empirical pass/skip/xfail (~5min)
+python scripts/stamp_changelog.py --version 5.2.3 --apply  # back-stamp past block
+```
+
+6 tests in `tests/unit/test_v5_3_2_stamp_changelog.py` cover
+parsing, --help, dry-run-against-current-CHANGELOG, and
+synthetic-stamps-correctly.  Exit codes mirror V12/V16 idioms
+(0 ok / 1 drift-detected-but-not-applied / 2 clean-skip / 3
+input-error).
+
+**Self-dogfood**: this v5.3.2 entry's test counts were stamped
+by the new script (see commit message for the dry-run preview
+output).
+
+### Documentation
+
+* `Migration-Guide.md` -- new "opt-in telemetry logging" section
+  (v5.3.2 + how to attach a handler) + maintainer-only pointer
+  to `docs/release-process.md`.
+* `docs/release-process.md` (NEW) -- pre-tag stamp workflow +
+  the four `stamp_changelog.py` invocation patterns.
+* `ROADMAP.md` -- v5.3.2 added; remaining v5.x horizon is now
+  process-only (next audit cycle + Designer GUI v3.8+).
+* Wiki `Release-Notes.md` -- v5.3.2 section added.
+
+### v5.x ROADMAP status
+
+After v5.3.2, **the v5.x ROADMAP code-work is fully closed
+except for one named horizon item**:
+
+* `logging` adoption sweep -- SHIPPED (this release, item 1).
+* CHANGELOG ship-time-stamp injection -- SHIPPED (this release,
+  item 3).
+* V18 walker -- SHIPPED (this release, item 2).
+* Next audit cycle (AUDIT_V5_3_2_*) -- process item, yours to call.
+* Designer GUI v3.8+ -- separate version stream.
+
+### Files touched
+
+16 files modified or created.  Net LOC: +2766 / -11.
+
+(File-count and LOC stamped post-commit so ``git diff v5.3.1..HEAD
+--name-only`` returns the committed-snapshot value.  The
+``stamp_changelog.py`` script that ships in this release uses the
+same git diff invocation as the V17 walker, so a pre-commit stamp
+run produces 0 files until ``git commit`` lands -- ``docs/release-
+process.md`` documents the post-stamp re-amend workflow.)
+
+---
+
 ## [5.3.1] — 2026-05-23
 
 **Docs-only patch: PyPI project-page sync fix.**  No library code

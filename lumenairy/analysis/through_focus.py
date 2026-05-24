@@ -44,6 +44,10 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
+# v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+# Module-level logger for monte_carlo_tolerancing entry + per-trial
+# progress.  Default-quiet via the lumenairy root logger's NullHandler.
+from .._logging import get_logger
 from ..elements.lenses import apply_real_lens
 from ..propagators.propagation import angular_spectrum_propagate
 from .core import (
@@ -51,6 +55,8 @@ from .core import (
     beam_d4sigma,
     radial_power_bands,
 )
+
+logger = get_logger(__name__)
 
 # ============================================================================
 # Module-scope cache for the jit-compiled ASM vmap kernel inside
@@ -898,6 +904,16 @@ def monte_carlo_tolerancing(
     z_values = np.linspace(z_scan_range[0], z_scan_range[1], z_scan_n) \
                   + focal_length
 
+    # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+    # Entry log -- n_trials + perturbation-spec count + z-scan size so
+    # an attached handler shows the call shape before the trial loop
+    # begins.  Users can raise to WARNING to silence per-trial logs on
+    # large runs (n_trials > 100).
+    logger.info(
+        "monte_carlo_tolerancing: entry n_trials=%d n_perturbations=%d "
+        "z_scan_n=%d backend=numpy",
+        int(n_trials), int(len(perturbation_spec)), int(z_scan_n))
+
     # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 monte_carlo_tolerancing nominal-pupil pin):
     # Strehl denominator (``ideal_peak``) must be derived from the
     # UNPERTURBED nominal exit pupil and held fixed across all trials --
@@ -958,6 +974,15 @@ def monte_carlo_tolerancing(
         })
         if verbose and (t + 1) % max(1, n_trials // 10) == 0:
             print(f'    trial {t+1}/{n_trials}: Strehl={strehl_peak:.3f}')
+        # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+        # telemetry): one INFO record per Monte Carlo trial.  Pre-trial
+        # call_progress already fires; the log records the post-trial
+        # Strehl so a handler attached at INFO sees the full per-trial
+        # convergence trace.  Users with n_trials > 100 can raise to
+        # WARNING to silence.
+        logger.info(
+            "monte_carlo_tolerancing: trial %d/%d strehl_peak=%.4f",
+            int(t + 1), int(n_trials), float(strehl_peak))
 
     call_progress(progress, 'monte_carlo_tolerancing', 1.0, 'done')
     return {
@@ -1248,6 +1273,16 @@ def monte_carlo_tolerancing_jax(
             f"wave_propagator must be 'real_lens_traced_jax' or "
             f"'real_lens'; got {wave_propagator!r}")
 
+    # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+    # Entry log -- n_trials + perturbation-spec count + z-scan size +
+    # wave_propagator choice so an attached handler shows the JAX-twin
+    # call shape before the trial loop begins.
+    logger.info(
+        "monte_carlo_tolerancing_jax: entry n_trials=%d n_perturbations=%d "
+        "z_scan_n=%d wave_propagator=%s",
+        int(n_trials), int(len(perturbation_spec)),
+        int(z_scan_n), str(wave_propagator))
+
     # v5.2.5 (AUDIT_V5_2_3 P3-F1-1 monte_carlo_tolerancing nominal-pupil pin):
     # Strehl denominator (``ideal_peak``) must be derived from the
     # UNPERTURBED nominal exit pupil and held fixed across all trials --
@@ -1315,6 +1350,13 @@ def monte_carlo_tolerancing_jax(
         })
         if verbose and (t + 1) % max(1, n_trials // 10) == 0:
             print(f'    trial {t+1}/{n_trials}: Strehl={strehl_peak:.3f}')
+        # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+        # telemetry): one INFO record per JAX-twin Monte Carlo trial.
+        # Mirrors the NumPy twin's per-trial log site so an attached
+        # handler sees the same convergence trace on either backend.
+        logger.info(
+            "monte_carlo_tolerancing_jax: trial %d/%d strehl_peak=%.4f",
+            int(t + 1), int(n_trials), float(strehl_peak))
 
     call_progress(progress, 'monte_carlo_tolerancing_jax', 1.0, 'done')
     return {

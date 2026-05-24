@@ -48,11 +48,37 @@
   N=256/8 fields); CHANGELOG.md pre-v4.11 archive complete;
   pyproject conftest comment corrected; ROADMAP code-work is
   now empty.  3848 unit tests pass.
+* **v5.3.1** -- docs-only: strip stale ``What's new`` block from
+  README; PyPI project-page now points to CHANGELOG.md
+  canonical source.
+* **v5.3.2** -- ships the 3 remaining v5.x horizon items as a
+  package:
+  - **Per-iteration logging telemetry** on the 3 named long-
+    running paths (``apply_real_lens_traced``, ``design_optimize``,
+    ``monte_carlo_tolerancing``).  ``lumenairy/_logging.py``
+    NullHandler-default convention.  Existing 42 ``warnings.warn``
+    sites stay -- TELEMETRY scope, not warning-conversion.
+  - **V18 walker** for source-file:line citation drift
+    (``tests/unit/test_v5_3_2_walker_source_line_citation.py``)
+    + companion ``scripts/check_source_line_citations.py``
+    wired into publish.yml's verify job at line 93.  Catches
+    the v5.3.0-class ``wrapper_merits.py:855 -> :876``
+    drift pattern in general.
+  - **CHANGELOG ship-time-stamp script**
+    (``scripts/stamp_changelog.py``) + ``docs/release-process.md``
+    documenting the four invocation patterns.  Closes the
+    V17-detected recursive self-citation drift class.
 
-After v5.3.0: the v5.x ROADMAP is **EMPTY of code work**.
-Remaining horizon is process-only: logging adoption sweep,
-Designer GUI v3.8+, next audit cycle, CHANGELOG ship-time-stamp
-injection (V17 surfaces drift; the fix requires a pre-tag hook).
+After v5.3.2: the v5.x ROADMAP code-work is **fully closed**.
+Remaining horizon is process-only:
+* Next audit cycle (AUDIT_V5_3_2_*) -- your call on cadence.
+* Designer GUI v3.8+ (separate version stream).
+* Force-retag discipline retrospective -- v5.2.5, v5.3.0, v5.3.1,
+  and v5.3.2 each needed at least one post-tag commit for
+  CI-environment-only issues.  Either accept the class and
+  document it, or add a structural pre-tag check that runs
+  ``ruff`` + ``check_source_line_citations`` + a synthetic
+  fresh-clone smoke before pushing the tag.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised
@@ -103,9 +129,9 @@ are preserved in git history; this file is forward-only.
   per the v5.0 CHANGELOG "Shims preserved" decision -- a v5.2+
   audit that flags these for removal should be rejected with a
   pointer to the v5.0 CHANGELOG entry).
-- **Meta-pin coverage:** ALL 15 dispatcher meta-pins active and
-  clean (V12-V15 added in v5.2; see the
-  "v5.2-class sibling-gap surfaces" note below):
+- **Meta-pin coverage:** ALL 18 dispatcher meta-pins active and
+  clean (V12-V15 added in v5.2; V16 in v5.2.3; V17 in v5.3.0; V18
+  in v5.3.2; see the "v5.2-class sibling-gap surfaces" note below):
   - V1: cache-clear chain re-export (v4.14.1).
   - V2: cache <-> lock pairing (v4.14.2).
   - V3: 0+0j literal sweep (v4.14.2).
@@ -169,6 +195,34 @@ are preserved in git history; this file is forward-only.
     identity.  Replaces the v4.15.2 hardcoded
     ``EXPECTED_SUBCLASSES`` tuple so new sentinels are auto-
     pinned (closes the v5.1.0 P3-NEW-F1-3 counter-pin gap).
+  - **V16 (NEW v5.2.3)**: content-level CHANGELOG fabrication
+    walker -- extends V12's file-existence + audit-ID coverage
+    by parsing each audit-closure bullet and verifying via
+    ``git diff PREV_TAG..HEAD`` that the claimed behavior change
+    actually appears in the changeset.  Companion CLI script
+    ``scripts/verify_changelog_closures.py`` (547 LOC) wired
+    into ``publish.yml``'s verify gate.  Closes the v5.2.0-
+    surfaced "cited file exists but cited behavior is missing"
+    fabrication class.
+  - **V17 (NEW v5.3.0)**: recursive self-citation drift walker
+    -- pins CHANGELOG numeric self-citations (test count, file
+    count, line count) against ``pytest --collect-only`` + ``git
+    diff PREV_TAG..HEAD`` + ``wc -l CHANGELOG.md`` with a +/- 5
+    drift tolerance.  Catches the v5.2.5-surfaced class where
+    each entry's at-write-time empirical numbers diverged from
+    at-ship-time reality.  v5.3.2 ships the ``stamp_changelog.py``
+    pre-tag hook that closes the drift class structurally.
+  - **V18 (NEW v5.3.2)**: source-file:line citation drift
+    walker -- parses the topmost CHANGELOG block, extracts ALL
+    backticked ``lumenairy/foo/bar.py:LINE`` (or ``:START-END``)
+    citations, opens each at the cited line, and verifies the
+    line is non-trivial.  The GENERAL version of
+    ``test_v4_15_agent_f.py::TestF5ChangelogLineCitations``
+    (which only catches a hardcoded shortlist of symbols).
+    Companion CLI script ``scripts/check_source_line_citations.py``
+    (429 LOC) wired into ``publish.yml`` BEFORE the V16 step.
+    Catches the v5.3.0-surfaced ``wrapper_merits.py:855 -> :876``
+    drift pattern in general.
 
   **v5.2 meta-pattern note**: At v4.16.2 the "fix N, miss N+1"
   sibling-gap meta-pattern was claimed retired across all
@@ -178,7 +232,7 @@ are preserved in git history; this file is forward-only.
   level via V12, plus 3 additional structural surfaces (V13
   shell-vs-canonical, V14 PEP-562 forwarding, V15 sentinel
   __reduce__) that v5.1.0's audit identified as remaining gaps.
-  Honest current status: structurally retired across 15 currently-known sibling-gap surfaces; new classes will
+  Honest current status: structurally retired across 18 currently-known sibling-gap surfaces; new classes will
   continue to surface and be added to the V-walker family as
   identified, including CONTENT-LEVEL CHANGELOG fabrications
   (where the cited file exists but the cited behavior is

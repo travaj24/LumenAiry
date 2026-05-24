@@ -90,8 +90,16 @@ from .lenses import (
 _surface_sag_general = surface_sag_general
 
 # Sibling-module imports.
+# v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+# Module-level logger for apply_real_lens_traced entry / per-Newton-
+# iteration progress.  Default-quiet via the lumenairy root logger's
+# NullHandler -- users opt in by attaching a handler to the
+# ``lumenairy`` logger.
+from .._logging import get_logger
 from ..glass import get_glass_index
 from ..progress import ProgressScaler, call_progress
+
+logger = get_logger(__name__)
 
 # apply_real_lens (analytic split-step) is the workhorse for the
 # amplitude leg of apply_real_lens_traced.  Lives in _lens_real.py
@@ -1368,6 +1376,23 @@ def apply_real_lens_traced(
 
     call_progress(progress, 'real_lens_traced', 0.0, 'initialising')
 
+    # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration telemetry):
+    # Entry log -- grid size + surface count + Newton iter cap so users
+    # who attach a handler can see the call shape at a glance.  The
+    # actual Newton-cap value is resolved further down (caller override
+    # > module default); we reproduce that resolution here so the entry
+    # log reports what the run will actually use.
+    _ny_entry, _nx_entry = np.shape(E_in)
+    _n_surfaces_entry = len(prescription.get('surfaces') or [])
+    _newton_cap_entry = (int(newton_max_iters)
+                         if newton_max_iters is not None
+                         else _NEWTON_MAX_ITERS)
+    logger.info(
+        "apply_real_lens_traced: entry N=%dx%d n_surfaces=%d "
+        "newton_max_iters=%d ray_subsample=%d",
+        int(_ny_entry), int(_nx_entry), int(_n_surfaces_entry),
+        int(_newton_cap_entry), int(ray_subsample))
+
     # Pre-flight grid vs prescription-aperture check.
     try:
         _warn_if_aperture_exceeds_grid(
@@ -2017,6 +2042,13 @@ def apply_real_lens_traced(
                 if sub_progress is not None:
                     sub_progress(1.0,
                                  f'newton converged after {_it} iters')
+                # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+                # telemetry): emit a "converged" marker so an attached
+                # handler sees the early-exit path.
+                logger.info(
+                    "apply_real_lens_traced: newton iter %d/%d converged "
+                    "(all %d pixels)",
+                    int(_it), int(MAX_NEWTON_ITERS), int(n_total))
                 break
             # Only evaluate splines at active (unconverged) pixels
             xa = xe[active]
@@ -2060,6 +2092,24 @@ def apply_real_lens_traced(
                     frac,
                     f'newton {_it + 1}/{MAX_NEWTON_ITERS}: '
                     f'{remaining}/{n_total} pixels unconverged')
+            # v5.3.2 (ROADMAP logging adoption sweep -- per-iteration
+            # telemetry): per-Newton-iteration log, independent of the
+            # sub_progress callback (sub_progress is None on the
+            # serial / single-call code paths).  Reports current OPD
+            # residual norm + remaining-active-pixel count so an
+            # attached handler can track convergence.
+            _remaining_log = int(active.sum())
+            try:
+                _res_norm = float(xp.sqrt(
+                    (rx * rx + ry * ry).max()
+                    if rx.size > 0 else 0.0))
+            except (ValueError, TypeError):
+                _res_norm = float('nan')
+            logger.info(
+                "apply_real_lens_traced: newton iter %d/%d "
+                "residual_max=%.3e m remaining=%d/%d",
+                int(_it + 1), int(MAX_NEWTON_ITERS),
+                _res_norm, _remaining_log, int(n_total))
         # Surface unconverged pixels.  Healthy prescriptions can have a
         # handful of out-of-domain edge pixels left active at the
         # iteration cap -- those are benign and don't warrant a warning.

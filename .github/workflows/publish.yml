@@ -74,6 +74,33 @@ jobs:
           pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
           pip install tomli
 
+      # v5.3.2 (ROADMAP V18 walker -- source-file:line citation
+      # drift).  V12 catches FILE-LEVEL fabrications (cited file
+      # does not exist).  V16 (below) catches CONTENT-LEVEL
+      # fabrications (cited file exists but is not in
+      # ``git diff PREV_TAG..HEAD``).  V18 closes a third sibling:
+      # LINE-LEVEL drift in source-file:line citations.  The v5.3.0
+      # ship hit this exact class -- CHANGELOG cited
+      # ``optimize/wrapper_merits.py:855`` but the v5.3.0 JIT change
+      # had shifted the sentinel branch to line 876.  V18 reads the
+      # cited line, asserts it is non-trivial (not whitespace, not a
+      # closing bracket, not a bare ``pass``/``continue``/``break``).
+      # Runs BEFORE the V16 step so line-level drift is surfaced
+      # before content-level drift.  Exit codes: 0 = OK, 1 = drift
+      # detected (fail the job), 2 = clean skip (no source-file:line
+      # citations in the topmost block, e.g. a docs-only patch).  We
+      # accept 0 and 2 as pass; 1 fails the job.
+      - name: Verify CHANGELOG source-line citations
+        run: |
+          python scripts/check_source_line_citations.py
+          rc=$?
+          if [ "$rc" -eq 0 ] || [ "$rc" -eq 2 ]; then
+            echo "check_source_line_citations: OK (rc=$rc)"
+          else
+            echo "::error::check_source_line_citations failed (rc=$rc) -- source-file:line citation drift in CHANGELOG.  See script output above."
+            exit "$rc"
+          fi
+
       # v5.2.3 (AUDIT_V5_1_0 P1-NEW-2WAY-1; CONTENT-LEVEL CHANGELOG-
       # fabrication walker V16 + companion script).  V12 catches
       # FILE-LEVEL fabrications (cited file does not exist); V16 +
