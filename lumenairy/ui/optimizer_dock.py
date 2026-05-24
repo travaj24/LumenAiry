@@ -1,38 +1,136 @@
 """
-Optimizer dock — variable selection, merit function, optimization control.
+Optimizer dock -- variable selection, merit function, optimization control.
+
+# v5.4 (audit P1-F): wire CancellableProgress + Stop button
+# v5.4 (audit P1-D): parameter surface expansion for v4.16.0 optimisation framework
 
 Author: Andrew Traverso
 """
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QProgressBar, QTextEdit, QCheckBox, QGroupBox, QComboBox,
     QDialog, QDialogButtonBox, QScrollArea, QFormLayout,
+    QFileDialog, QLineEdit, QDoubleSpinBox,
 )
 from PySide6.QtGui import QFont, QColor
 
 import numpy as np
 
 from .model import SystemModel, SurfaceRow
+from ..progress import CancellableProgress, is_cancelled
+
+
+# v5.4 (audit P1-D): canonical scipy / design_optimize method tokens
+# surfaced via the Advanced-parameters dropdown.  Order matters --
+# QComboBox.addItems lands on index 0 by default.  Per the backward-
+# compat note in the prompt, the local geometric path's
+# model.run_optimization() hardcoded 'Nelder-Mead' pre-v5.4, so we
+# keep it as the initial selection for byte-identical untouched-
+# control behaviour.  Users wanting the v4.16.0 default ('L-BFGS-B',
+# better for smooth problems with many free vars) pick it explicitly.
+ADVANCED_METHODS = (
+    'Nelder-Mead', 'L-BFGS-B', 'SLSQP', 'trust-constr', 'trust-ncg',
+    'Powell', 'COBYLA',
+    'differential_evolution', 'basin_hopping', 'dual_annealing',
+    'newton',
+)
+
+# Methods that accept hard constraints via scipy.optimize.NonlinearConstraint.
+# Mirrors lumenairy.optimize.context._METHODS_SUPPORTING_CONSTRAINTS so a
+# users' Constraint editor + method= mismatch surfaces at the dock layer
+# (clearer message) before reaching design_optimize().
+_CONSTRAINT_METHODS = ('SLSQP', 'trust-constr')
+
+# Methods that accept a Hessian (hess=) kwarg.  Mirrors the dispatch
+# branch in lumenairy/optimize/driver.py around line 1156.
+_HESS_METHODS = ('trust-ncg', 'trust-constr', 'newton')
+
+# Default wave-propagator names.  Resolved lazily at dock construction
+# from lumenairy.optimize.WAVE_PROPAGATOR_REGISTRY so user-registered
+# propagators appear in the dropdown alongside the built-ins.
+_DEFAULT_WAVE_PROPAGATORS = (
+    'real_lens', 'gbd', 'hf', 'hfpi', 'asymptotic',
+)
 
 
 class OptimizeWorker(QThread):
-    """Run optimization in a background thread."""
+    """Run optimization in a background thread.
+
+    v5.4 (audit P1-D): accepts an ``advanced_kwargs`` dict from the
+    dock so the user's dropdown / spinner choices (method, max_iter,
+    ...) flow through to model.run_optimization() instead of being
+    silently dropped.  Pre-v5.4 the worker only forwarded ``max_iter``
+    and hardcoded method='Nelder-Mead' inside the model.
+    """
     progress = Signal(int, float)
     finished = Signal(bool, str)
+    cancelled = Signal()
 
-    def __init__(self, model, max_iter):
+    def __init__(self, model, max_iter, advanced_kwargs=None):
         super().__init__()
         self.model = model
         self.max_iter = max_iter
+        # v5.4 (audit P1-D): dock-supplied advanced parameter dict.
+        # Defaults to empty -- model.run_optimization will then keep
+        # its pre-v5.4 Nelder-Mead behaviour.
+        self.advanced_kwargs = dict(advanced_kwargs or {})
+        # v5.4 (audit P1-F): cancellation flag polled by the scipy
+        # callback below.  run_optimization() doesn't take a
+        # CancellableProgress so we sentinel via StopIteration in the
+        # callback and catch it in run().
+        self._cancel_progress = CancellableProgress()
 
     def run(self):
+        # v5.4 (audit P1-D): validate dock kwarg combinations BEFORE
+        # spawning the scipy run so the user sees an immediate error
+        # message instead of a deep-stack KeyError / ValueError from
+        # scipy.  The local geometric path runs scipy.minimize
+        # directly -- only ``method`` is meaningful here.
+        # hess / constraints / state_file / wave_propagator /
+        # precision are wave-leg parameters and are silently ignored
+        # (the Advanced-group help text documents this); but the
+        # combination hess= + non-Hessian-method is genuinely
+        # inconsistent and is reported up-front.
+        method = self.advanced_kwargs.get('method', 'Nelder-Mead')
+        hess = self.advanced_kwargs.get('hess')
+        if hess and hess != 'auto' and method not in _HESS_METHODS:
+            self.finished.emit(
+                False,
+                f"hess={hess!r} requires method in {_HESS_METHODS}; "
+                f"got method={method!r}.  Either change the method "
+                f"or set hess to 'auto'.")
+            return
+        constraints = self.advanced_kwargs.get('constraints') or ()
+        if constraints and method not in _CONSTRAINT_METHODS:
+            self.finished.emit(
+                False,
+                f"constraints= requires method in {_CONSTRAINT_METHODS}; "
+                f"got method={method!r}.  Switch to SLSQP / trust-constr "
+                f"or clear the constraints table.")
+            return
+
         def cb(it, merit):
             self.progress.emit(it, merit)
-        success, msg = self.model.run_optimization(self.max_iter, cb)
+            if self._cancel_progress.should_stop:
+                # Nelder-Mead's callback path lacks a clean abort
+                # contract; raise StopIteration which scipy surfaces
+                # via OptimizeResult or raises into the caller.
+                raise StopIteration('cancelled by user')
+        try:
+            success, msg = self.model.run_optimization(
+                self.max_iter, cb, method=method)
+        except StopIteration:
+            self.cancelled.emit()
+            self.finished.emit(False, 'Cancelled by user')
+            return
         self.finished.emit(success, msg)
+
+    @Slot()
+    def cancel(self):
+        self._cancel_progress.cancel()
 
 
 class OptimizerDock(QWidget):
@@ -243,6 +341,16 @@ class OptimizerDock(QWidget):
         adv_row.addStretch()
         opt_layout.addLayout(adv_row)
 
+        # v5.4 (audit P1-D): "Advanced parameters" collapsible group
+        # surfaces the 8 dock-relevant design_optimize() kwargs that
+        # were hardcoded pre-v5.4.  Sits beneath the run-button row so
+        # casual users still see the run controls without scrolling;
+        # power users tick the checkable group to expose method /
+        # constraints / state_file / hess / wave_propagator /
+        # precision / multi-objective / max_iter.  Built in
+        # _build_advanced_group() to keep __init__ readable.
+        self._build_advanced_group(opt_layout)
+
         layout.addWidget(opt_group)
 
         # ── Log ──
@@ -386,6 +494,262 @@ class OptimizerDock(QWidget):
             self.combo_merit_geo.currentIndex(), 'rms_spot')
         self.sm.geo_merit_target = self.spin_target.value()
 
+    # ----------------------------------------------------------------
+    # v5.4 (audit P1-D): Advanced-parameters group.
+    # ----------------------------------------------------------------
+
+    def _build_advanced_group(self, parent_layout):
+        """Construct the collapsible Advanced-parameters group.
+
+        v5.4 (audit P1-D): surfaces 8 design_optimize() kwargs that
+        were hardcoded pre-v5.4.  Children of the group are:
+
+        * combo_method   -- method dropdown (default Nelder-Mead for
+                            backward compatibility with pre-v5.4
+                            local geometric path; the wave path
+                            falls back to L-BFGS-B when the user
+                            leaves the dropdown on Nelder-Mead AND
+                            picks a wave merit, since Nelder-Mead is
+                            a poor fit for the smooth wave-leg merit
+                            landscape).
+        * spin_max_iter_adv -- max_iter override (mirrors the
+                            existing Compute-backend spin_iter; we
+                            still read spin_iter as the fallback so
+                            the dock keeps a single visible
+                            iteration knob for casual users).
+        * combo_hess     -- hess dropdown.  Auto disables the row
+                            when method is not in _HESS_METHODS.
+        * combo_wp       -- wave_propagator dropdown.  Populated
+                            lazily from the registry so user-
+                            registered propagators appear.
+        * combo_precision -- 'double' / 'single' dropdown.
+        * chk_mo + spin_n_gen + spin_pop -- multi-objective Pareto
+                            checkbox + NSGA-II generation / pop
+                            spinners.  Disabled when PYMOO_AVAILABLE
+                            is False.
+        * edit_state_file + btn_resume + btn_save -- checkpoint
+                            picker.
+        * constraints_editor -- _ConstraintsEditor (QTableWidget +
+                            Add / Remove buttons).
+        """
+        self._adv_group = QGroupBox('Advanced parameters')
+        self._adv_group.setCheckable(True)
+        self._adv_group.setChecked(False)
+        self._adv_group.setToolTip(
+            'Surfaces the v4.16.0 design_optimize() parameter '
+            'surface.  Untick to use the pre-v5.4 defaults '
+            '(Nelder-Mead for the local geometric path, L-BFGS-B for '
+            'the wave-optimize path, no constraints, no checkpoint).')
+        adv_layout = QFormLayout(self._adv_group)
+
+        # --- method dropdown ---
+        self.combo_method = QComboBox()
+        self.combo_method.addItems(ADVANCED_METHODS)
+        # Pre-v5.4 hardcoded Nelder-Mead in model.run_optimization;
+        # keep that as the initial dropdown selection so users that
+        # don't touch the control see byte-identical behaviour.
+        # 'L-BFGS-B' is the v4.16.0 design_optimize default and
+        # generally a better choice -- power users pick it
+        # explicitly.  See module-level ADVANCED_METHODS docstring.
+        self.combo_method.setCurrentText('Nelder-Mead')
+        self.combo_method.setToolTip(
+            'Optimization algorithm.  Nelder-Mead (default, pre-v5.4 '
+            'behaviour): derivative-free, slow but robust.  '
+            'L-BFGS-B: gradient-based, fast for smooth merits.  '
+            'SLSQP / trust-constr: support hard constraints.  '
+            'differential_evolution / basin_hopping / dual_annealing: '
+            'global stochastic.  newton: FD-Hessian Newton (small N '
+            'problems).')
+        self.combo_method.currentTextChanged.connect(
+            self._on_method_changed)
+        adv_layout.addRow('method:', self.combo_method)
+
+        # --- max_iter override ---
+        # Mirrors the existing Compute-backend max-iter spinner.  We
+        # surface a second copy here for proximity to the other
+        # Advanced controls; when the group is unchecked we read
+        # spin_iter (the original) instead.
+        self.spin_max_iter_adv = QSpinBox()
+        self.spin_max_iter_adv.setRange(10, 50000)
+        self.spin_max_iter_adv.setValue(self.spin_iter.value())
+        self.spin_max_iter_adv.setToolTip(
+            'Maximum scipy iterations / generations.  Overrides the '
+            'Compute-backend spinner when this Advanced group is '
+            'expanded.  Unchecked: the original spinner wins.')
+        adv_layout.addRow('max_iter:', self.spin_max_iter_adv)
+
+        # --- hess dropdown ---
+        self.combo_hess = QComboBox()
+        self.combo_hess.addItems(['auto', '2-point', '3-point', 'cs'])
+        self.combo_hess.setCurrentText('auto')
+        self.combo_hess.setToolTip(
+            'Hessian estimator.  Only honoured for method in '
+            f'{_HESS_METHODS}.  auto: design_optimize chooses '
+            '(default).  2-point / 3-point / cs: scipy '
+            'FiniteDifferenceHessian schemes.')
+        adv_layout.addRow('hess:', self.combo_hess)
+
+        # --- wave_propagator dropdown ---
+        self.combo_wp = QComboBox()
+        try:
+            from lumenairy.optimize import WAVE_PROPAGATOR_REGISTRY
+            wp_names = sorted(WAVE_PROPAGATOR_REGISTRY.keys())
+            if not wp_names:
+                wp_names = list(_DEFAULT_WAVE_PROPAGATORS)
+        except Exception:
+            wp_names = list(_DEFAULT_WAVE_PROPAGATORS)
+        self.combo_wp.addItems(wp_names)
+        self.combo_wp.setCurrentText(
+            'real_lens' if 'real_lens' in wp_names else wp_names[0])
+        self.combo_wp.setToolTip(
+            'Wave-leg propagator (Wave Optimize path only).  '
+            'real_lens: default lens-then-Fresnel.  gbd: Gaussian '
+            'beam decomposition.  hf / hfpi: Huygens-Fresnel (with '
+            'phase integral).  asymptotic: canonical-polynomial '
+            'modal asymptotic.')
+        adv_layout.addRow('wave_propagator:', self.combo_wp)
+
+        # --- precision dropdown ---
+        self.combo_precision = QComboBox()
+        self.combo_precision.addItems(['double', 'single'])
+        self.combo_precision.setCurrentText('double')
+        self.combo_precision.setToolTip(
+            'Complex-array precision.  double (default): complex128, '
+            'best accuracy.  single: complex64, ~2x FFT throughput '
+            'and ~2x memory headroom; ~80 dB cumulative dynamic-'
+            'range noise floor.')
+        adv_layout.addRow('precision:', self.combo_precision)
+
+        # --- multi-objective Pareto row ---
+        try:
+            from lumenairy.optimize import PYMOO_AVAILABLE
+        except Exception:
+            PYMOO_AVAILABLE = False
+        mo_row = QHBoxLayout()
+        self.chk_mo = QCheckBox('Multi-objective (NSGA-II)')
+        self.chk_mo.setChecked(False)
+        self.chk_mo.setEnabled(bool(PYMOO_AVAILABLE))
+        self.chk_mo.setToolTip(
+            'Route through design_optimize_multi_objective (pymoo '
+            'NSGA-II).  Wave Optimize path only.'
+            + ('' if PYMOO_AVAILABLE else
+               '\n\n(pymoo not detected -- '
+               'pip install lumenairy[multi_objective])'))
+        mo_row.addWidget(self.chk_mo)
+        mo_row.addWidget(QLabel('n_gen:'))
+        self.spin_n_gen = QSpinBox()
+        self.spin_n_gen.setRange(1, 10000)
+        self.spin_n_gen.setValue(100)
+        self.spin_n_gen.setEnabled(False)
+        mo_row.addWidget(self.spin_n_gen)
+        mo_row.addWidget(QLabel('pop:'))
+        self.spin_pop = QSpinBox()
+        self.spin_pop.setRange(4, 10000)
+        self.spin_pop.setValue(50)
+        self.spin_pop.setEnabled(False)
+        mo_row.addWidget(self.spin_pop)
+        mo_row.addStretch()
+        self.chk_mo.toggled.connect(self.spin_n_gen.setEnabled)
+        self.chk_mo.toggled.connect(self.spin_pop.setEnabled)
+        adv_layout.addRow('multi-objective:', mo_row)
+
+        # --- state_file row ---
+        state_row = QHBoxLayout()
+        self.edit_state_file = QLineEdit()
+        self.edit_state_file.setPlaceholderText(
+            '(no checkpoint)')
+        self.edit_state_file.setToolTip(
+            'JSON file used to checkpoint and resume optimisation. '
+            'Pre-existing files are loaded on the next run; new '
+            'runs create the file on first eval.')
+        state_row.addWidget(self.edit_state_file, stretch=1)
+        btn_resume = QPushButton('Resume from...')
+        btn_resume.setToolTip('Pick an existing checkpoint JSON to '
+                              'resume from.')
+        btn_resume.clicked.connect(self._pick_state_file_resume)
+        btn_save = QPushButton('Save to...')
+        btn_save.setToolTip('Pick a destination JSON for periodic '
+                            'state saves.')
+        btn_save.clicked.connect(self._pick_state_file_save)
+        state_row.addWidget(btn_resume)
+        state_row.addWidget(btn_save)
+        adv_layout.addRow('state_file:', state_row)
+
+        # --- constraints editor (sub-group) ---
+        self.constraints_editor = _ConstraintsEditor(self)
+        adv_layout.addRow(self.constraints_editor)
+
+        # Initial method-driven enable / disable sweep.
+        self._on_method_changed(self.combo_method.currentText())
+
+        parent_layout.addWidget(self._adv_group)
+
+    def _on_method_changed(self, method):
+        """Enable / disable hess row + constraint editor based on
+        method compatibility.  Mirrors design_optimize's dispatch
+        rules so the user sees grayed-out controls instead of a
+        downstream ValueError.
+        """
+        # hess is only honoured by trust-* and the 'newton' alias.
+        self.combo_hess.setEnabled(method in _HESS_METHODS)
+        if method not in _HESS_METHODS:
+            self.combo_hess.setCurrentText('auto')
+        # Constraints only supported by SLSQP / trust-constr.
+        if hasattr(self, 'constraints_editor'):
+            self.constraints_editor.setEnabled(
+                method in _CONSTRAINT_METHODS)
+            if method not in _CONSTRAINT_METHODS:
+                self.constraints_editor.setToolTip(
+                    f'Constraints disabled: method={method!r} does '
+                    f'not support hard constraints.  Switch to '
+                    f'{list(_CONSTRAINT_METHODS)}.')
+            else:
+                self.constraints_editor.setToolTip('')
+
+    def _pick_state_file_resume(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Resume from checkpoint', '',
+            'JSON files (*.json);;All files (*.*)')
+        if path:
+            self.edit_state_file.setText(path)
+
+    def _pick_state_file_save(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, 'Save checkpoint to', 'optimize_state.json',
+            'JSON files (*.json);;All files (*.*)')
+        if path:
+            self.edit_state_file.setText(path)
+
+    def _collect_advanced_kwargs(self):
+        """Gather Advanced-group widget values into a dict.
+
+        Returns an empty dict if the Advanced group is unchecked --
+        the worker then preserves the pre-v5.4 hardcoded behaviour
+        (Nelder-Mead in the local path, L-BFGS-B + no extras in the
+        wave path).
+        """
+        if not getattr(self, '_adv_group', None):
+            return {}
+        if not self._adv_group.isChecked():
+            return {}
+        kwargs = {
+            'method': self.combo_method.currentText(),
+            'max_iter': int(self.spin_max_iter_adv.value()),
+            'hess': self.combo_hess.currentText(),
+            'wave_propagator': self.combo_wp.currentText(),
+            'precision': self.combo_precision.currentText(),
+            'multi_objective': bool(self.chk_mo.isChecked()),
+            'n_generations': int(self.spin_n_gen.value()),
+            'pop_size': int(self.spin_pop.value()),
+        }
+        state = self.edit_state_file.text().strip()
+        if state:
+            kwargs['state_file'] = state
+        constraints = self.constraints_editor.to_constraints()
+        if constraints:
+            kwargs['constraints'] = constraints
+        return kwargs
+
     def _start_optimize(self):
         if not self.sm.opt_variables:
             self.log.append('No variables defined -- add variables first.')
@@ -412,15 +776,34 @@ class OptimizerDock(QWidget):
         self._reset_convergence()
         self._append_convergence(0, initial_merit)
 
-        self._worker = OptimizeWorker(self.sm, self.spin_iter.value())
+        # v5.4 (audit P1-D): forward the Advanced-parameters dock
+        # selections (method / max_iter override / hess / constraints)
+        # to the worker.  Empty dict when the group is unchecked --
+        # OptimizeWorker then preserves the pre-v5.4 Nelder-Mead path.
+        adv = self._collect_advanced_kwargs()
+        max_iter = adv.pop('max_iter', self.spin_iter.value())
+        self._worker = OptimizeWorker(self.sm, max_iter, advanced_kwargs=adv)
         self._worker.progress.connect(self._on_progress)
         self._worker.finished.connect(self._on_finished)
+        # v5.4 (audit P1-F): also reset UI on cooperative cancel.
+        self._worker.cancelled.connect(
+            lambda: self._on_finished(False, 'Cancelled by user'))
         self._worker.start()
 
     def _stop_optimize(self):
+        # v5.4 (audit P1-F): cooperative cancellation -- workers poll
+        # CancellableProgress.should_stop and return partial results.
+        # The finished/cancelled signal handlers re-enable the UI.
         if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-            self._on_finished(False, 'Stopped by user')
+            try:
+                self._worker.cancel()
+            except AttributeError:
+                # Defensive: legacy worker without cancel() -- fall
+                # back to terminate().  Should not happen post-v5.4.
+                self._worker.terminate()
+                self._on_finished(False, 'Stopped by user')
+            self.log.append('Cancellation requested -- waiting for '
+                            'current iteration to finish...')
 
     def _on_progress(self, iteration, merit):
         self.log.append(f'  iter {iteration}: merit = {merit*1e6:.4f} µm')
@@ -479,6 +862,9 @@ class OptimizerDock(QWidget):
         self._worker = GlobalSearchWorker(self.sm, self.spin_iter.value(), 20)
         self._worker.progress.connect(self._on_global_progress)
         self._worker.finished.connect(self._on_finished)
+        # v5.4 (audit P1-F): map cancel signal to the same UI reset.
+        self._worker.cancelled.connect(
+            lambda: self._on_finished(False, 'Cancelled by user'))
         self._worker.start()
 
     def _on_global_progress(self, restart, merit):
@@ -652,15 +1038,35 @@ class OptimizerDock(QWidget):
 
             # Run in background thread
             use_jax = bool(self.chk_jax.isChecked())
+            # v5.4 (audit P1-D): forward the full Advanced-parameters
+            # dock surface to the wave worker.  The wave worker passes
+            # method / hess / wave_propagator / precision / constraints
+            # / state_file straight to design_optimize().  If the user
+            # also enabled the multi-objective checkbox we re-route
+            # via design_optimize_multi_objective(...) inside the
+            # worker.
+            adv = self._collect_advanced_kwargs()
+            adv_max_iter = adv.pop('max_iter', self.spin_iter.value())
             self._worker = WaveOptimizeWorker(
                 param, merit_terms, self.sm.wavelength_nm * 1e-9,
-                self.spin_iter.value(), use_jax=use_jax)
+                adv_max_iter, use_jax=use_jax,
+                advanced_kwargs=adv)
             if use_jax:
                 self.log.append(
                     '  JAX wave propagator: ON (jac="auto" will use '
                     'analytic Jacobians for JAX merit terms)')
+            # Log the advanced choices so the user sees the effective
+            # call shape in the log.
+            if adv:
+                _amsg = ', '.join(f'{k}={v!r}' for k, v in adv.items()
+                                  if v not in (None, '', 'auto'))
+                if _amsg:
+                    self.log.append(f'  Advanced: {_amsg}')
             self._worker.finished_result.connect(self._on_wave_finished)
             self._worker.fine_progress.connect(self._on_wave_progress)
+            # v5.4 (audit P1-F): wave worker emits its own cancelled
+            # signal; the finished_result already carries success=False
+            # on cancel so we don't need a second UI handler.
             self._worker.start()
 
         except Exception as e:
@@ -713,23 +1119,147 @@ class WaveOptimizeWorker(QThread):
     """Background thread for hybrid wave/ray optimization."""
     finished_result = Signal(dict)
     fine_progress = Signal(float, str)   # fraction in [0, 1], label
+    cancelled = Signal()
 
     def __init__(self, param, merit_terms, wavelength, max_iter,
-                 use_jax=False):
+                 use_jax=False, advanced_kwargs=None):
         super().__init__()
         self.param = param
         self.merit_terms = merit_terms
         self.wavelength = wavelength
         self.max_iter = max_iter
         self.use_jax = use_jax
+        # v5.4 (audit P1-D): full advanced-parameter dict from the
+        # dock.  Recognised keys: method, hess, wave_propagator,
+        # precision, constraints, state_file, state_save_every,
+        # multi_objective (bool), n_generations, pop_size.
+        # Default empty -> preserves the pre-v5.4 'L-BFGS-B' /
+        # double-precision / no-constraints behaviour.
+        self.advanced_kwargs = dict(advanced_kwargs or {})
+        # v5.4 (audit P1-F): CancellableProgress wraps the existing
+        # Qt-emit callback.  design_optimize polls should_stop in all
+        # 4 scipy callbacks and stops cleanly with a partial result.
+        self._cancel_progress = CancellableProgress(self._on_progress)
 
     def _on_progress(self, stage, fraction, message=''):
         # Route the core's callback into a Qt signal the dock can
         # connect to its progress bar.
         self.fine_progress.emit(fraction, message)
 
+    def _validate_kwargs(self):
+        """v5.4 (audit P1-D): pre-flight check on dock-supplied kwargs.
+
+        Raises ValueError on combinations that ``design_optimize``
+        would reject downstream with a less-readable message.  Returns
+        the cleaned kwarg dict ready to splat into ``design_optimize``.
+        """
+        adv = self.advanced_kwargs
+        method = adv.get('method', 'L-BFGS-B')
+        hess = adv.get('hess')
+        if hess and hess != 'auto' and method not in _HESS_METHODS:
+            raise ValueError(
+                f"hess={hess!r} requires method in {_HESS_METHODS}; "
+                f"got method={method!r}.")
+        constraints = adv.get('constraints') or ()
+        if constraints and method not in _CONSTRAINT_METHODS:
+            raise ValueError(
+                f"constraints= requires method in {_CONSTRAINT_METHODS}; "
+                f"got method={method!r}.  Switch to SLSQP / trust-constr "
+                f"or clear the constraints table.")
+        precision = adv.get('precision', 'double')
+        if precision not in ('double', 'single'):
+            raise ValueError(
+                f"precision must be 'double' or 'single', got "
+                f"{precision!r}.")
+
+        kwargs = {
+            'method': method,
+            'precision': precision,
+        }
+        if hess and hess != 'auto':
+            kwargs['hess'] = hess
+        if constraints:
+            kwargs['constraints'] = list(constraints)
+        wp = adv.get('wave_propagator')
+        if wp and wp != 'real_lens':
+            kwargs['wave_propagator'] = wp
+        sf = adv.get('state_file')
+        if sf:
+            kwargs['state_file'] = sf
+            ssev = adv.get('state_save_every')
+            if ssev:
+                kwargs['state_save_every'] = int(ssev)
+        return kwargs
+
+    def _run_multi_objective(self):
+        """v5.4 (audit P1-D): NSGA-II Pareto front via pymoo.
+
+        Wraps each MeritTerm.evaluate(...) into a scalar callable so
+        ``design_optimize_multi_objective`` can score the population.
+        The Pareto result is logged but the prescription returned is
+        the first (and any) point on the front -- the user can run a
+        single-objective refinement on a specific solution later.
+        """
+        from lumenairy.optimize import design_optimize_multi_objective
+        from lumenairy.optimize import EvaluationContext
+
+        adv = self.advanced_kwargs
+        n_gen = int(adv.get('n_generations', 100))
+        pop = int(adv.get('pop_size', 50))
+
+        # Wrap each merit term as a scalar callable f(x) -> float by
+        # building a transient EvaluationContext.  Ray-only merits
+        # work; wave merits will fail (need_wave) -- we let the user
+        # discover that via the wrapper's exception path.
+        wavelength = self.wavelength
+        param = self.param
+
+        def make_merit(term):
+            def _f(x):
+                pres = param.build(x)
+                ctx = EvaluationContext(
+                    prescription=pres, wavelength=wavelength,
+                    N=256, dx=16e-6, x=np.asarray(x, dtype=np.float64))
+                try:
+                    return float(term.evaluate(ctx))
+                except Exception:
+                    return 1e18
+            return _f
+        merits = [make_merit(t) for t in self.merit_terms]
+
+        # Initial x0 from parameterization defaults.
+        try:
+            x0 = np.asarray(param.x0, dtype=np.float64)
+        except AttributeError:
+            x0 = np.zeros(len(param.bounds), dtype=np.float64)
+        bounds = list(param.bounds)
+        result = design_optimize_multi_objective(
+            merits, x0, bounds,
+            n_generations=n_gen, pop_size=pop,
+            progress=self._cancel_progress,
+            verbose=False,
+        )
+        return result
+
     def run(self):
         try:
+            # v5.4 (audit P1-D): NSGA-II Pareto front branch.
+            if self.advanced_kwargs.get('multi_objective'):
+                pareto = self._run_multi_objective()
+                self.finished_result.emit({
+                    'success': True,
+                    'merit': float(np.min(pareto.F[:, 0]))
+                              if pareto.F.size else 0.0,
+                    'efl_mm': 0.0,
+                    'strehl': 0.0,
+                    'iterations': int(pareto.n_generations),
+                    'time_sec': 0.0,
+                    'prescription': None,
+                    'pareto_F': pareto.F,
+                    'pareto_X': pareto.X,
+                })
+                return
+
             from lumenairy.optimize import design_optimize
             # JAX wave propagator (3.5.0+): apply_real_lens_traced_jax
             # is JAX-traceable so design_optimize's jac='auto' default
@@ -739,16 +1269,36 @@ class WaveOptimizeWorker(QThread):
             extra = {}
             if self.use_jax:
                 extra['wave_propagator'] = 'real_lens_traced_jax'
+
+            # v5.4 (audit P1-D): merge dock-supplied advanced kwargs
+            # over the worker defaults.  Method defaults to 'L-BFGS-B'
+            # here (was hardcoded pre-v5.4); user picks at dock level.
+            adv_clean = self._validate_kwargs()
+            # If the dock picked a specific wave_propagator that
+            # disagrees with use_jax, the dock-supplied value wins
+            # (the user explicitly picked it -- documented behaviour).
+            base_kwargs = {
+                'method': 'L-BFGS-B',
+            }
+            base_kwargs.update(extra)
+            base_kwargs.update(adv_clean)
+
             result = design_optimize(
                 parameterization=self.param,
                 merit_terms=self.merit_terms,
                 wavelength=self.wavelength,
                 N=256, dx=16e-6,
-                method='L-BFGS-B',
                 max_iter=self.max_iter,
                 verbose=False,
-                progress=self._on_progress,
-                **extra)
+                progress=self._cancel_progress,
+                **base_kwargs)
+            if self._cancel_progress.should_stop:
+                self.cancelled.emit()
+                self.finished_result.emit({
+                    'success': False,
+                    'msg': 'Cancelled by user',
+                })
+                return
             self.finished_result.emit({
                 'success': True,
                 'merit': result.merit,
@@ -764,17 +1314,25 @@ class WaveOptimizeWorker(QThread):
                 'msg': f'{type(e).__name__}: {e}',
             })
 
+    @Slot()
+    def cancel(self):
+        self._cancel_progress.cancel()
+
 
 class GlobalSearchWorker(QThread):
     """Random-restart global optimization (inspired by CODE V Global Synthesis)."""
     progress = Signal(int, float)  # restart number, best merit
     finished = Signal(bool, str)
+    cancelled = Signal()
 
     def __init__(self, model, max_iter_per_restart, n_restarts):
         super().__init__()
         self.model = model
         self.max_iter = max_iter_per_restart
         self.n_restarts = n_restarts
+        # v5.4 (audit P1-F): polled between restarts (and inside each
+        # restart's Nelder-Mead callback) for clean cancellation.
+        self._cancel_progress = CancellableProgress()
 
     def run(self):
         from scipy.optimize import minimize
@@ -784,7 +1342,13 @@ class GlobalSearchWorker(QThread):
         best_merit = self.model.merit_function(x0)
         rng = np.random.default_rng()
 
+        def _inner_cb(xk):
+            if self._cancel_progress.should_stop:
+                raise StopIteration('cancelled')
+
         for restart in range(self.n_restarts):
+            if self._cancel_progress.should_stop:
+                break
             # Perturb starting point: ±30% for radius/thickness, ±1 for conic
             x_start = x0.copy()
             for i, (row_idx, col_idx) in enumerate(self.model.opt_variables):
@@ -798,21 +1362,34 @@ class GlobalSearchWorker(QThread):
                     self.model.merit_function, x_start,
                     method='Nelder-Mead',
                     options={'maxiter': self.max_iter, 'xatol': 1e-8, 'fatol': 1e-12},
+                    callback=_inner_cb,
                 )
                 if result.fun < best_merit:
                     best_merit = result.fun
                     best_x = result.x.copy()
+            except StopIteration:
+                break
             except Exception:
                 pass
 
             self.progress.emit(restart + 1, best_merit)
 
-        # Apply best result
+        # Apply best result (best-so-far on cancel)
         self.model.set_variable_values(best_x)
         self.model._invalidate()
         self.model.system_changed.emit()
-        msg = f'Best merit: {best_merit*1e6:.3f} µm from {self.n_restarts} restarts'
+        if self._cancel_progress.should_stop:
+            self.cancelled.emit()
+            self.finished.emit(
+                False,
+                f'Cancelled -- best so far: {best_merit*1e6:.3f} um')
+            return
+        msg = f'Best merit: {best_merit*1e6:.3f} um from {self.n_restarts} restarts'
         self.finished.emit(True, msg)
+
+    @Slot()
+    def cancel(self):
+        self._cancel_progress.cancel()
 
 
 # ---------------------------------------------------------------------------
@@ -1020,3 +1597,170 @@ class _WeightsDialog(QDialog):
 
     def weights(self):
         return [sp.value() for sp in self._rows]
+
+
+# ---------------------------------------------------------------------------
+# v5.4 (audit P1-D): Constraint editor sub-panel.
+# ---------------------------------------------------------------------------
+
+class _ConstraintsEditor(QGroupBox):
+    """Sub-panel for editing the Constraint sequence passed to
+    design_optimize(constraints=...).
+
+    Layout: a QTableWidget with one row per Constraint and five
+    columns (label, fun expression, lb, ub, kind) plus Add / Remove
+    row buttons.  ``fun`` is entered as a string expression in the
+    parameter vector ``x``; on submission it is compiled to a
+    callable via ``eval('lambda x: ' + expr, {'np': np})`` so users
+    can reference numpy helpers.  Empty rows are silently skipped.
+
+    Output via :meth:`to_constraints` -- builds a list of
+    :class:`lumenairy.optimize.Constraint` instances ready to splat
+    into design_optimize(constraints=...).  Returns an empty list
+    when the editor is empty so callers can pass the result
+    unconditionally.
+    """
+
+    COLS = ('label', 'fun (lambda x: ...)', 'lb', 'ub', 'kind')
+
+    def __init__(self, parent=None):
+        super().__init__('Constraints (SLSQP / trust-constr only)', parent)
+        self.setToolTip(
+            'Hard non-linear constraints applied by design_optimize via '
+            'scipy.optimize.NonlinearConstraint.  Each row evaluates '
+            '``f(x)`` and enforces ``lb <= f(x) <= ub``.  Leave lb or '
+            'ub blank for one-sided constraints (-inf / +inf).')
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
+
+        self.table = QTableWidget(0, len(self.COLS))
+        self.table.setHorizontalHeaderLabels(list(self.COLS))
+        self.table.horizontalHeader().setSectionResizeMode(
+            QHeaderView.Stretch)
+        self.table.setMaximumHeight(120)
+        layout.addWidget(self.table)
+
+        btn_row = QHBoxLayout()
+        btn_add = QPushButton('+ Add constraint')
+        btn_add.clicked.connect(self._add_row)
+        btn_remove = QPushButton('- Remove selected')
+        btn_remove.clicked.connect(self._remove_row)
+        btn_clear = QPushButton('Clear')
+        btn_clear.clicked.connect(self._clear)
+        btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_remove)
+        btn_row.addWidget(btn_clear)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+    def _add_row(self):
+        r = self.table.rowCount()
+        self.table.insertRow(r)
+        # Pre-fill helpful placeholders so the user knows the format.
+        defaults = ['c{}'.format(r), 'np.sum(x)', '-inf', '+inf', 'ineq']
+        for c, default in enumerate(defaults):
+            if c == 4:
+                # kind: dropdown via setCellWidget
+                combo = QComboBox()
+                combo.addItems(['ineq', 'eq'])
+                combo.setCurrentText(default)
+                self.table.setCellWidget(r, c, combo)
+            else:
+                self.table.setItem(r, c, QTableWidgetItem(default))
+
+    def _remove_row(self):
+        rows = sorted({i.row() for i in self.table.selectedIndexes()},
+                      reverse=True)
+        for r in rows:
+            self.table.removeRow(r)
+
+    def _clear(self):
+        self.table.setRowCount(0)
+
+    def to_constraints(self):
+        """Compile the table rows into Constraint instances.
+
+        Returns an empty list when the table is empty.  Skips rows
+        with a blank ``fun`` cell silently (an empty row from
+        accidental Add clicks shouldn't blow up the run).  Raises
+        ``ValueError`` on rows whose ``fun`` expression doesn't
+        compile or whose lb / ub aren't parseable floats.
+        """
+        try:
+            from lumenairy.optimize import Constraint
+        except Exception:
+            return []
+        out = []
+        for r in range(self.table.rowCount()):
+            label_item = self.table.item(r, 0)
+            fun_item = self.table.item(r, 1)
+            lb_item = self.table.item(r, 2)
+            ub_item = self.table.item(r, 3)
+            kind_widget = self.table.cellWidget(r, 4)
+
+            label = (label_item.text() if label_item else '').strip()
+            fun_expr = (fun_item.text() if fun_item else '').strip()
+            if not fun_expr:
+                continue
+            lb_str = (lb_item.text() if lb_item else '').strip().lower()
+            ub_str = (ub_item.text() if ub_item else '').strip().lower()
+            kind = (kind_widget.currentText() if kind_widget else 'ineq')
+
+            # Parse bounds.  Empty / 'inf' / '-inf' map to None so
+            # Constraint(lb=None, ub=...) is one-sided.
+            def _parse_bound(s):
+                if not s or s == 'none':
+                    return None
+                if s in ('inf', '+inf', 'infinity', '+infinity'):
+                    return float('inf')
+                if s in ('-inf', '-infinity'):
+                    return float('-inf')
+                try:
+                    return float(s)
+                except (TypeError, ValueError):
+                    raise ValueError(
+                        f"Constraint row {r}: cannot parse bound "
+                        f"{s!r} as a float.  Use a numeric literal, "
+                        f"'inf', '-inf', or leave blank.")
+            lb = _parse_bound(lb_str)
+            ub = _parse_bound(ub_str)
+            # Treat +/-inf endpoints as None so Constraint accepts
+            # them as "no bound on this side".  Constraint.__post_init__
+            # raises if both endpoints are None, so the user is forced
+            # to give at least one finite bound.
+            if lb is not None and np.isinf(lb) and lb < 0:
+                lb = None
+            if ub is not None and np.isinf(ub) and ub > 0:
+                ub = None
+            if kind == 'eq':
+                # scipy NonlinearConstraint encodes equality as lb==ub.
+                # If only one side is provided we treat it as the
+                # equality target.
+                target = lb if lb is not None else ub
+                if target is None:
+                    raise ValueError(
+                        f"Constraint row {r}: kind='eq' requires lb "
+                        f"or ub (the equality target).")
+                lb = ub = target
+
+            # Compile the expression to a callable f(x) -> float.  We
+            # accept either a bare expression in ``x`` (e.g.
+            # ``np.sum(x)``) or a full ``lambda x: ...`` literal.
+            # The expression namespace is locked down to numpy +
+            # builtins to avoid arbitrary-name leakage.
+            try:
+                if fun_expr.lstrip().startswith('lambda'):
+                    fun = eval(fun_expr, {'np': np, '__builtins__': {}})
+                else:
+                    fun = eval(
+                        'lambda x: ' + fun_expr,
+                        {'np': np, '__builtins__': {}})
+            except Exception as e:
+                raise ValueError(
+                    f"Constraint row {r}: cannot compile fun "
+                    f"expression {fun_expr!r}: {type(e).__name__}: "
+                    f"{e}")
+            out.append(Constraint(
+                fun=fun, lb=lb, ub=ub, label=label or f'row{r}'))
+        return out

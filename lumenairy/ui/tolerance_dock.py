@@ -5,10 +5,12 @@ Perturbs surface parameters within user-defined tolerances and traces
 each perturbed system to build a statistical distribution of performance
 metrics (RMS spot, EFL, BFL).
 
+# v5.4 (audit P1-F): wire CancellableProgress + Stop button
+
 Author: Andrew Traverso
 """
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox,
@@ -23,6 +25,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 
 from .model import SystemModel
+from ..progress import CancellableProgress
 from ..raytrace import (
     Surface, trace, make_rings, spot_rms, system_abcd,
     find_paraxial_focus,
@@ -36,6 +39,7 @@ class ToleranceWorker(QThread):
     fine_progress = Signal(float, str)  # fraction, stage msg
     trial_result = Signal(float, float)  # per-trial (rms_um, efl_mm)
     finished = Signal(object)         # results dict
+    cancelled = Signal()
 
     def __init__(self, model, n_trials, tol_radius_pct, tol_thickness_mm,
                  tol_decenter_mm):
@@ -45,6 +49,10 @@ class ToleranceWorker(QThread):
         self.tol_radius_pct = tol_radius_pct
         self.tol_thickness_mm = tol_thickness_mm
         self.tol_decenter_mm = tol_decenter_mm
+        # v5.4 (audit P1-F): polled between trials in the run() loop.
+        # Per-trial trace_world is fast (~ms), so per-trial granularity
+        # gives a responsive Stop without library-side support.
+        self._cancel_progress = CancellableProgress()
 
     def run(self):
         rms_list = []
@@ -68,6 +76,10 @@ class ToleranceWorker(QThread):
         semi_ap = self.model.epd_m / 2.0
 
         for trial in range(self.n_trials):
+            # v5.4 (audit P1-F): poll for cooperative cancel between
+            # trials so the user's Stop click is honoured promptly.
+            if self._cancel_progress.should_stop:
+                break
             self.progress.emit(trial + 1, self.n_trials)
             self.fine_progress.emit(
                 trial / max(self.n_trials, 1),
@@ -159,10 +171,19 @@ class ToleranceWorker(QThread):
                 rms_list.append(np.nan)
                 efl_list.append(np.nan)
 
+        # v5.4 (audit P1-F): emit cancelled before finished so the
+        # dock can distinguish a partial run.  finished still fires
+        # so the histogram is drawn from the partial sample.
+        if self._cancel_progress.should_stop:
+            self.cancelled.emit()
         self.finished.emit({
             'rms': np.array(rms_list),
             'efl': np.array(efl_list),
         })
+
+    @Slot()
+    def cancel(self):
+        self._cancel_progress.cancel()
 
 
 class ToleranceDock(QWidget):
@@ -227,6 +248,16 @@ class ToleranceDock(QWidget):
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
 
+        # v5.4 (audit P1-F): Stop button -- cooperative cancel via
+        # CancellableProgress polled between MC trials.
+        self.btn_stop = QPushButton('Stop')
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.setToolTip(
+            'Cancel the running MC sweep.  The histogram will be '
+            'drawn from the trials completed so far.')
+        self.btn_stop.clicked.connect(self._stop)
+        run_row.addWidget(self.btn_stop)
+
         # 3.5.9: structured-report export (uses tolerancing_report
         # when Strehl data is available; falls back to a JSON/text
         # summary built from the locally-collected RMS + EFL arrays
@@ -279,6 +310,7 @@ class ToleranceDock(QWidget):
 
     def _run(self):
         self.btn_run.setEnabled(False)
+        self.btn_stop.setEnabled(True)
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, self.spin_trials.value())
         self.progress_bar.setValue(0)
@@ -300,7 +332,23 @@ class ToleranceDock(QWidget):
         self._worker.fine_progress.connect(self._on_fine_progress)
         self._worker.trial_result.connect(self._on_trial_result)
         self._worker.finished.connect(self._on_finished)
+        # v5.4 (audit P1-F): partial-result still flushed via
+        # finished; the cancelled signal is informational so the
+        # summary line below can mark the run as user-aborted.
+        self._worker.cancelled.connect(self._on_cancelled)
         self._worker.start()
+
+    def _stop(self):
+        # v5.4 (audit P1-F): cooperative cancel via CancellableProgress.
+        if self._worker and self._worker.isRunning():
+            self._worker.cancel()
+            self.btn_stop.setEnabled(False)
+            self.progress_bar.setToolTip('Cancelling...')
+
+    def _on_cancelled(self):
+        # The finished handler still fires after cancelled, so just
+        # tag the histogram title for the next redraw.
+        self._cancelled_by_user = True
 
     def _on_trial_result(self, rms_um, efl_mm):
         """Append to the live histogram; redraw every N trials."""
@@ -351,6 +399,7 @@ class ToleranceDock(QWidget):
 
     def _on_finished(self, results):
         self.btn_run.setEnabled(True)
+        self.btn_stop.setEnabled(False)
         self.progress_bar.setVisible(False)
         self._worker = None
 

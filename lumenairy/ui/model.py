@@ -2543,7 +2543,15 @@ class SystemModel(QObject):
                     return 1e10
         return np.sqrt(total / max(n, 1))
 
-    def run_optimization(self, max_iter=200, callback=None):
+    def run_optimization(self, max_iter=200, callback=None,
+                         method='Nelder-Mead'):
+        # v5.4 (audit P1-D): ``method`` kwarg surfaces the optimizer-
+        # dock dropdown choice through to scipy.minimize.  Pre-v5.4
+        # the call was hardcoded to Nelder-Mead; we keep that as the
+        # default so callers that don't pass ``method=`` see byte-
+        # identical behaviour.  Methods accepting bounds use the
+        # variable-bound list when available; gradient-method
+        # 'Nelder-Mead' / 'Powell' ignore the kwarg entirely.
         from scipy.optimize import minimize
         if not self.opt_variables:
             return False, 'No variables defined.'
@@ -2555,14 +2563,20 @@ class SystemModel(QObject):
             self.optimization_progress.emit(iteration[0], merit)
             if callback:
                 callback(iteration[0], merit)
+        # Method-specific option dict.  Nelder-Mead supports xatol /
+        # fatol; other methods don't recognise them and emit warnings.
+        if method == 'Nelder-Mead':
+            opts = {'maxiter': max_iter, 'xatol': 1e-8, 'fatol': 1e-12}
+        else:
+            opts = {'maxiter': max_iter}
         try:
-            result = minimize(self.merit_function, x0, method='Nelder-Mead',
-                              options={'maxiter': max_iter, 'xatol': 1e-8, 'fatol': 1e-12},
-                              callback=_cb)
+            result = minimize(self.merit_function, x0, method=method,
+                              options=opts, callback=_cb)
             self.set_variable_values(result.x)
             self._invalidate()
             self.system_changed.emit()
-            msg = f'Merit: {result.fun*1e6:.3f} um after {result.nit} iterations'
+            msg = (f'Merit: {result.fun*1e6:.3f} um after {result.nit} '
+                   f'iterations [{method}]')
             self.optimization_finished.emit(result.success, msg)
             return result.success, msg
         except Exception as e:

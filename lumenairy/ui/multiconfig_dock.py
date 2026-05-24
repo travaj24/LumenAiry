@@ -8,6 +8,8 @@ Each configuration gets its own thickness / radius overrides, but
 the free-variable set is shared so the final design is a single
 set of parts that works across every configuration.
 
+# v5.4 (audit P1-F): wire CancellableProgress + Stop button
+
 Author: Andrew Traverso
 """
 
@@ -15,7 +17,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QSpinBox,
@@ -23,10 +25,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 
+from ..progress import CancellableProgress
+
 
 class _MultiConfigWorker(QThread):
     fine_progress = Signal(float, str)
     finished_result = Signal(dict)
+    cancelled = Signal()
 
     def __init__(self, templates, free_vars, bounds, merit_terms,
                  wavelength, max_iter):
@@ -37,6 +42,10 @@ class _MultiConfigWorker(QThread):
         self.merit_terms = merit_terms
         self.wavelength = wavelength
         self.max_iter = max_iter
+        # v5.4 (audit P1-F): wraps the existing Qt-emit callback.
+        # design_optimize polls should_stop in its 4 scipy callbacks
+        # so the L-BFGS-B run terminates cleanly with a partial result.
+        self._cancel_progress = CancellableProgress(self._progress)
 
     def _progress(self, stage, frac, msg=''):
         self.fine_progress.emit(float(frac), str(msg))
@@ -52,7 +61,14 @@ class _MultiConfigWorker(QThread):
             res = design_optimize(
                 par, self.merit_terms, wavelength=self.wavelength,
                 method='L-BFGS-B', max_iter=self.max_iter,
-                verbose=False, progress=self._progress)
+                verbose=False, progress=self._cancel_progress)
+            if self._cancel_progress.should_stop:
+                self.cancelled.emit()
+                self.finished_result.emit({
+                    'success': False,
+                    'error': 'Cancelled by user',
+                })
+                return
             self.finished_result.emit({
                 'success': True,
                 'merit': res.merit,
@@ -64,6 +80,10 @@ class _MultiConfigWorker(QThread):
             self.finished_result.emit({
                 'success': False,
                 'error': f'{type(e).__name__}: {e}'})
+
+    @Slot()
+    def cancel(self):
+        self._cancel_progress.cancel()
 
 
 class MultiConfigDock(QWidget):
@@ -125,6 +145,17 @@ class MultiConfigDock(QWidget):
             'Optimizer dock.')
         self.btn_run.clicked.connect(self._run)
         run_row.addWidget(self.btn_run)
+
+        # v5.4 (audit P1-F): Stop button -- cooperative cancel via
+        # CancellableProgress polled in design_optimize's scipy callbacks.
+        self.btn_stop = QPushButton('Stop')
+        self.btn_stop.setEnabled(False)
+        self.btn_stop.setToolTip(
+            'Cancel the running joint optimisation.  The optimizer '
+            'stops at its next iteration checkpoint and returns the '
+            'best-so-far design.')
+        self.btn_stop.clicked.connect(self._stop)
+        run_row.addWidget(self.btn_stop)
         run_row.addStretch()
         layout.addLayout(run_row)
 
@@ -210,6 +241,7 @@ class MultiConfigDock(QWidget):
                 FocalLengthMerit, BackFocalLengthMerit)
             merits = [FocalLengthMerit(target=0.05, weight=1.0)]
             self.btn_run.setEnabled(False)
+            self.btn_stop.setEnabled(True)
             self.progress_bar.setVisible(True)
             self.progress_bar.setValue(0)
             self._worker = _MultiConfigWorker(
@@ -218,11 +250,25 @@ class MultiConfigDock(QWidget):
                 self.spin_iter.value())
             self._worker.fine_progress.connect(self._on_progress)
             self._worker.finished_result.connect(self._on_finished)
+            # v5.4 (audit P1-F): inform the summary on user cancel;
+            # finished_result still fires so the partial design is
+            # still applied.
+            self._worker.cancelled.connect(
+                lambda: self.summary.append('Cancelled by user.'))
             self._worker.start()
         except Exception as e:
             self.summary.append(f'Start failed: {type(e).__name__}: {e}')
             self.btn_run.setEnabled(True)
+            self.btn_stop.setEnabled(False)
             self.progress_bar.setVisible(False)
+
+    def _stop(self):
+        # v5.4 (audit P1-F): cooperative cancel via CancellableProgress.
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.cancel()
+            self.btn_stop.setEnabled(False)
+            self.summary.append('Cancellation requested -- waiting for '
+                                'current iteration to finish...')
 
     def _on_progress(self, frac, msg):
         self.progress_bar.setValue(int(1000 * max(0.0, min(1.0, frac))))
@@ -231,6 +277,7 @@ class MultiConfigDock(QWidget):
 
     def _on_finished(self, res):
         self.btn_run.setEnabled(True)
+        self.btn_stop.setEnabled(False)
         self.progress_bar.setVisible(False)
         self._worker = None
         if not res.get('success'):

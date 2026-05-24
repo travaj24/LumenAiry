@@ -364,6 +364,32 @@ class MainWindow(QMainWindow):
             'Phase Retrieval', self.phase_retrieval_widget,
             Qt.BottomDockWidgetArea, 'phase_retrieval')
 
+        # v5.4 audit P1-B: Wavefront map dock surfaces plot_wavefront()
+        # with OPD-source / units / aperture-overlay controls and a
+        # live optimiser-iteration hook.
+        from .wavefront_map_dock import WavefrontMapDock
+        self.wavefront_map_widget = WavefrontMapDock(self.model)
+        self.wavefront_map_dock = dock(
+            'Wavefront map', self.wavefront_map_widget,
+            Qt.BottomDockWidgetArea, 'wavefront_map')
+
+        # v5.4 audit P1-A: AO closed-loop dock surfaces ao_closed_loop()
+        # with DM / WFS / leaky-integrator controls + residual plot.
+        from .ao_dock import AOClosedLoopDock
+        self.ao_widget = AOClosedLoopDock(self.model)
+        self.ao_dock = dock(
+            'AO closed loop', self.ao_widget,
+            Qt.BottomDockWidgetArea, 'ao_closed_loop')
+
+        # v5.4 audit P1-C: Coronagraph workflow dock surfaces the
+        # 4-stop chain (apodised pupil -> Lyot focal mask -> Lyot stop
+        # -> image plane) with live contrast-curve plot.
+        from .coronagraph_dock import CoronagraphDock
+        self.coronagraph_widget = CoronagraphDock(self.model)
+        self.coronagraph_dock = dock(
+            'Coronagraph workflow', self.coronagraph_widget,
+            Qt.BottomDockWidgetArea, 'coronagraph')
+
         from .field_browser_dock import FieldBrowserDock
         self.field_browser_widget = FieldBrowserDock(self.model)
         self.field_browser_dock = dock(
