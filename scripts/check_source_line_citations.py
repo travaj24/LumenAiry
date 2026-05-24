@@ -23,15 +23,26 @@ topmost CHANGELOG block and verifies that line N still exists AND is
 near).
 
 Heuristic: a NON-TRIVIAL line is a line that is NOT just whitespace,
-NOT a closing bracket, and NOT a bare ``pass`` / ``continue`` /
-``break``.  A non-trivial line at the cited position is the structural
-anchor; if the cited line is trivial, the citation is probably stale.
+NOT a closing bracket, NOT a bare ``pass`` / ``continue`` / ``break`` /
+``return``, and NOT a pure docstring-content line.  A non-trivial line
+at the cited position is the structural anchor; if the cited line is
+trivial, the citation is probably stale.
+
+For ``path:START-END`` range citations BOTH endpoints (START AND END)
+are verified.  Drift inside the range is invisible to V18, but a stale
+END often signals the range itself has shifted.
+
+For bare-basename citations that resolve to MULTIPLE candidate files
+(e.g. ``core.py`` exists in 4 places in the repo), V18 emits a WARN
+and contributes to drift (rc=1) -- ambiguous citations are a
+fabrication blind spot, not a clean-skip case.  Authors must use a
+full path (``lumenairy/optimize/core.py:855``) to disambiguate.
 
 This is a NECESSARY-BUT-NOT-SUFFICIENT check.  V18 does not try to
 verify the cited SYMBOL is at the cited line (that requires an
 anchor-string database, which ``test_v4_15_agent_f.py`` builds by hand
-for specific symbols).  V18 just verifies "the cited line still exists
-AND is non-trivial."
+for specific symbols).  V18 just verifies "the cited line(s) still
+exist AND are non-trivial."
 
 Usage:
     python scripts/check_source_line_citations.py
@@ -45,8 +56,8 @@ Usage:
 
 Exit codes:
     0  -- all source-file:line citations land on non-trivial lines (OK)
-    1  -- one or more citations land on trivial lines OR out-of-range
-          (CITATION DRIFT)
+    1  -- one or more citations land on trivial lines, out-of-range,
+          OR resolve to ambiguous bare basenames (CITATION DRIFT)
     2  -- no source-file:line citations to audit (skip cleanly)
 """
 from __future__ import annotations
@@ -75,8 +86,11 @@ _CHANGELOG = _REPO_ROOT / 'CHANGELOG.md'
 # bullet about ``propagate_huygens_fresnel_freespace``).  V18 resolves
 # bare basenames against the repo: a basename with EXACTLY ONE match
 # under ``lumenairy/`` / ``tests/`` / ``scripts/`` / ``examples/`` is
-# treated as a real citation; ambiguous basenames are skipped (a
-# basename that resolves to multiple files cannot be line-checked).
+# treated as a real citation.  v5.4 (audit V17/V18 hardening): basenames
+# that resolve to MULTIPLE candidate files (e.g. ``core.py`` matches 4
+# files) now contribute to drift (rc=1) with a WARN message rather than
+# being silently skipped -- ambiguous citations are a fabrication blind
+# spot (AUDIT_V5_3_2 Part 7 P2-1).
 #
 # The .md / .toml / .yml file types are deliberately excluded -- those
 # class of citations (e.g. ``CHANGELOG.md:81``) are V17's domain.
@@ -101,6 +115,11 @@ def _is_trivial_line(line):
 
     A non-trivial line is the structural anchor; a trivial line at the
     cited position usually means the citation has drifted.
+
+    v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-2 + P2-3:
+    also flags pure docstring-content lines (triple-quoted boundaries
+    and single-line docstrings) and fixes the unreachable ``return\\n``
+    check (``stripped`` has already had ``\\n`` removed by .strip()).
     """
     stripped = line.strip()
     if not stripped:
@@ -121,8 +140,38 @@ def _is_trivial_line(line):
     # Bare keyword statements with no payload.
     if stripped in _TRIVIAL_TOKENS:
         return True
-    if stripped.startswith('pass ') or stripped.startswith('return\n'):
+    # v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-3:
+    # ``stripped.startswith('return\\n')`` was unreachable (stripped has
+    # already removed \\n).  Correct check is for the bare ``return``
+    # keyword on its own line.
+    if stripped == 'return':
         return True
+    if stripped.startswith('pass '):
+        return True
+    # v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-2:
+    # docstring-only lines are also trivial.  A CHANGELOG citing a
+    # docstring as the "implementation site" should be flagged.
+    # Detect:
+    #   * one-line docstrings: ``"""foo"""`` or ``'''foo'''``
+    #   * bare boundary: ``"""`` or ``'''``
+    #   * opening-only with no other Python content: ``"""prose...``
+    # The detection is heuristic -- it cannot tell a docstring from a
+    # legitimate raw triple-quoted string literal assigned to a name --
+    # but a backticked CHANGELOG citation of a literal-string-assignment
+    # line is itself a code smell.
+    for q in ('"""', "'''"):
+        # One-line docstring: starts AND ends with q (length >= 2*len(q))
+        if (stripped.startswith(q) and stripped.endswith(q)
+                and len(stripped) >= 2 * len(q)):
+            return True
+        # Bare boundary token alone on the line.
+        if stripped == q:
+            return True
+        # Opening-only docstring line: starts with q, does NOT contain
+        # the closing q anywhere after the opening token (so it is a
+        # multi-line docstring's first line).
+        if stripped.startswith(q) and q not in stripped[len(q):]:
+            return True
     return False
 
 
@@ -248,9 +297,15 @@ def _verify_citation(path, start_line, end_line):
       * ``detail`` is a short human-readable explanation.
       * ``sample`` is the cited line text (or empty when not applicable).
 
-    Note: ``'ambiguous-basename'`` is treated as a clean skip (not a
-    failure) by the audit -- if a bare basename matches multiple files,
-    V18 cannot decide which one the bullet meant.
+    v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-1:
+    ``'ambiguous-basename'`` now contributes to drift (rc=1) rather
+    than being a clean skip.  An ambiguous bare-basename citation is a
+    fabrication blind spot; authors must use a full path to
+    disambiguate.
+
+    v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-4: for
+    ``:START-END`` range citations BOTH endpoints are verified (was
+    START only).
     """
     resolved = _resolve_path(path)
     if resolved is None:
@@ -263,9 +318,13 @@ def _verify_citation(path, start_line, end_line):
             return ('missing-file',
                     f'bare basename ``{path}`` matches no file in repo',
                     '')
+        # v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-1:
+        # ambiguous basenames are now drift, not clean-skip.  The caller
+        # promotes this status to a rc=1 contribution.
         return ('ambiguous-basename',
-                f'bare basename ``{path}`` matches {len(matches)} '
-                f'files: {matches!r}; V18 cannot disambiguate', '')
+                f'ambiguous basename ``{path}`` matches '
+                f'{len(matches)} files; use full path in CHANGELOG '
+                f'citation: {", ".join(matches)}', '')
 
     p = _REPO_ROOT / resolved
     if not p.is_file():
@@ -281,6 +340,24 @@ def _verify_citation(path, start_line, end_line):
         return ('out-of-range',
                 f'{path}: cited line {start_line} but file has {n} '
                 f'lines', '')
+
+    # v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-4: for
+    # ``:START-END`` citations, ALSO verify END line is in range and
+    # non-trivial.  Drift in the middle of the range is still invisible
+    # but a stale END is a strong signal the range has shifted.
+    if end_line is not None:
+        if end_line < 1 or end_line > n:
+            return ('out-of-range',
+                    f'{path}: cited END line {end_line} but file has '
+                    f'{n} lines', '')
+        cited_end = lines[end_line - 1]
+        if _is_trivial_line(cited_end):
+            return ('trivial-line',
+                    f'{path}:{start_line}-{end_line} cited END line '
+                    f'{end_line} is trivial (``{cited_end.strip()!r}``); '
+                    f'the cited range has likely drifted past its '
+                    f'original closing anchor',
+                    cited_end.strip())
 
     # Check a 5-line window centered on the cited line.  If EITHER the
     # cited line itself OR every line in the +/- 2 window is trivial,
@@ -352,7 +429,6 @@ def audit_block(version=None, quiet=False):
         return 2
 
     failures = []
-    skipped_ambig = 0
     ok_count = 0
 
     if not quiet:
@@ -372,21 +448,24 @@ def audit_block(version=None, quiet=False):
             if not quiet:
                 preview = sample[:50] if sample else ''
                 print(f'  OK                  {cite_str}  ``{preview}``')
-        elif status == 'ambiguous-basename':
-            skipped_ambig += 1
-            if not quiet:
-                print(f'  SKIP-AMBIGUOUS      {cite_str}')
-                print(f'                      -- {detail}')
         else:
+            # v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7
+            # P2-1: ambiguous-basename now contributes to drift (rc=1)
+            # rather than being a clean-skip.  Render with a distinct
+            # WARN label so the operator can tell it apart from
+            # trivial-line drift.
             failures.append((cite_str, status, detail))
             if not quiet:
-                print(f'  {status.upper():<19} {cite_str}')
+                label = ('WARN-AMBIGUOUS'
+                         if status == 'ambiguous-basename'
+                         else status.upper())
+                print(f'  {label:<19} {cite_str}')
                 print(f'                      -- {detail}')
 
     if not quiet:
         print()
         print(f'  summary: ok={ok_count}  drift={len(failures)}  '
-              f'skip_ambig={skipped_ambig}  total={len(citations)}')
+              f'total={len(citations)}')
 
     if failures:
         if quiet:

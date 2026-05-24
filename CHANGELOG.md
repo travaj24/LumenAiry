@@ -143,8 +143,8 @@ output).
 
 ### v5.x ROADMAP status
 
-After v5.3.2, **the v5.x ROADMAP code-work is fully closed
-except for one named horizon item**:
+After v5.3.2, **the v5.x ROADMAP code-work is fully closed**.
+Remaining horizon is process-only:
 
 * `logging` adoption sweep -- SHIPPED (this release, item 1).
 * CHANGELOG ship-time-stamp injection -- SHIPPED (this release,
@@ -152,6 +152,10 @@ except for one named horizon item**:
 * V18 walker -- SHIPPED (this release, item 2).
 * Next audit cycle (AUDIT_V5_3_2_*) -- process item, yours to call.
 * Designer GUI v3.8+ -- separate version stream.
+* Force-retag discipline retrospective -- v5.2.5, v5.3.0, and
+  v5.3.2 each needed at least one post-tag commit (v5.3.1 was
+  the only clean single-commit release in the cycle); decide
+  whether to accept the class or add a structural pre-tag check.
 
 ### Files touched
 
@@ -282,7 +286,12 @@ this release, every v5.x ROADMAP item has shipped.
   time; the actual ship-time-stamp injection is a v5.3.1+ goal
   (would require a pre-tag hook).
 
-### P3 closures (12)
+### P3 closures (10)
+
+(audit's "(12)" header was a CHANGELOG self-citation drift; the
+delivered list is 9 P3 items P3-1 through P3-9 plus 1 stretch goal
+(V16 Tier-N regex widening) = 10 total.  Caught at v5.4 by the
+audit-of-audits at `docs/audits/AUDIT_V5_3_2_2026_05_23.md` Part 2.)
 
 * **`ao_closed_loop` docstring + leak/gain=0 joint semantics fix**
   (P3-1).  Docstring claimed `gain=0` meant "command never
@@ -377,12 +386,18 @@ this release, every v5.x ROADMAP item has shipped.
   `@njit(parallel=True, fastmath=True)` kernel with zero
   temporaries.  Two dtype-specialised kernels (complex64 +
   complex128) dispatched at the call site.  **Measured speedup:
-  8.1x at N=256 with 8 fields** (jit=3.1 ms vs numpy=25.4 ms).
-  Lifts the meshgrid-cache-hit performance ceiling cited in the
-  v4.14.0 perf audit (1.19x at N=128).  NumPy fallback preserved
-  bit-for-bit when Numba is unavailable OR when the grid is
-  below the JIT-call-overhead threshold (N < 128).  52 new
-  tests in `test_v5_3_multi_field_merit_jit.py` covering
+  1.5-8x speedup (hardware dependent; v5.3 audit measured 8.53x
+  at N=256/8 fields on a 16-core machine, dipping to 1.5-3x
+  under heavy parallel contention)** (jit=3.1 ms vs numpy=25.4
+  ms at the headline operating point).  Lifts the meshgrid-
+  cache-hit performance ceiling cited in the v4.14.0 perf audit
+  (1.19x at N=128).  NumPy fallback bit-for-bit preserved; JIT
+  path matches the NumPy reference to `rtol=1e-12` (FMA
+  reassociation under `fastmath=True` produces ULP-level
+  differences, documented in `lumenairy/optimize/_merit_jit.py`).
+  The NumPy path is also used when Numba is unavailable OR when
+  the grid is below the JIT-call-overhead threshold (N < 128).
+  52 new tests in `test_v5_3_multi_field_merit_jit.py` covering
   numerical equivalence + cache-hit preservation + speedup
   pin + fallback.
 

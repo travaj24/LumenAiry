@@ -167,7 +167,6 @@ def _get_wrapper_merit_cache(
     # Cache miss: build the grid + mask + Y-factor once and store.
     # The build itself is pure-CPU numpy and re-entrant; only the
     # OrderedDict get/move_to_end/set/popitem operations need the lock.
-    _WRAPPER_MERIT_MESHGRID_BUILDS += 1
     Y_idx, X_idx = np.indices((Ny, Nx))
     X = (X_idx - Nx / 2) * dx_f
     Y = (Y_idx - Ny / 2) * dx_f
@@ -226,6 +225,8 @@ def _get_wrapper_merit_cache(
         'E_ones': E_ones,
     }
     with _WRAPPER_MERIT_CACHE_LOCK:
+        # v5.4 (audit P3): increment inside lock to preserve cache-build-counter invariant
+        _WRAPPER_MERIT_MESHGRID_BUILDS += 1
         _WRAPPER_MERIT_CACHE[key] = entry
         while len(_WRAPPER_MERIT_CACHE) > _WRAPPER_MERIT_CACHE_SIZE:
             _WRAPPER_MERIT_CACHE.popitem(last=False)

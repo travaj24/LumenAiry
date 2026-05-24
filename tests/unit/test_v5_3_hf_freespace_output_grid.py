@@ -107,13 +107,17 @@ def test_hf_freespace_no_output_kwargs_returns_bare_ndarray():
 
 
 def test_hf_freespace_resampled_power_is_preserved():
-    """End-to-end: total field power through the propagator + resample
-    is bounded -- the resample step does not artificially amplify
-    or attenuate beyond the documented bicubic-interpolation
-    behavior.  Pin to within 20% because RS at z=10mm + bicubic
-    resample has non-trivial sample-pad behavior at this grid
-    scale; the test is a sanity guard against catastrophic
-    amplification, not a Parseval pin.
+    """End-to-end Parseval pin: total field power through the
+    propagator + resample is preserved to within bicubic-interp
+    noise on a well-confined Gaussian.
+
+    v5.4 (audit P2): tightened from ``0.5 < ratio < 2.0`` (catastrophic-
+    amplification sanity guard) to ``rel_err < 1e-3`` after the HF
+    freespace wrapper gained the sqrt(p_in/p_out) Parseval
+    renormalization step that mirrors mhs.py:602-606.  Pre-fix
+    the edge-grazing case drifted ~1.6%; well-confined Gaussian
+    drifts an order of magnitude less but the same renorm path
+    bounds it to interp noise (<< 1e-3).
     """
     N, dx = 64, 10e-6
     E = _build_test_field(N=N, dx=dx)
@@ -125,12 +129,90 @@ def test_hf_freespace_resampled_power_is_preserved():
         method='hf', output_grid=(N, dx))
     p_out = float(np.sum(np.abs(E_out) ** 2) * dx_out * dx_out)
 
-    # Bounded ratio -- guards against catastrophic amplification.
-    ratio = p_out / max(p_in, 1e-30)
-    assert 0.5 < ratio < 2.0, (
-        f'HF freespace + resample power ratio out/in = {ratio:.4f}; '
-        f'expected within (0.5, 2.0) -- catastrophic amplification '
-        f'or attenuation would indicate a kernel-or-resample bug.')
+    # Tight Parseval pin -- the renorm step in
+    # propagate_huygens_fresnel_freespace must restore total power.
+    rel_err = abs(p_out - p_in) / max(p_in, 1e-30)
+    assert rel_err < 1e-3, (
+        f'HF freespace + resample Parseval drift rel_err = {rel_err:.6e}; '
+        f'expected < 1e-3 -- the sqrt(p_in/p_out) renorm step in '
+        f'propagate_huygens_fresnel_freespace (mirrors mhs.py:602-606) '
+        f'must restore total power to within bicubic-interp noise.')
+
+
+def test_hf_freespace_same_shape_short_circuit_is_bit_for_bit():
+    """v5.4 (audit P2) pin (a): when the requested output grid exactly
+    matches the input grid (same N, same dx), the resample branch
+    must short-circuit and return the native RS-kernel output
+    bit-for-bit -- no ``map_coordinates`` pass, no rescale, no
+    dtype churn.  Mirrors mhs.py:583-587.
+    """
+    from lumenairy.propagators.hf import propagate_huygens_fresnel_freespace
+    from lumenairy.propagators.propagation import rayleigh_sommerfeld_propagate
+
+    N, dx = 64, 10e-6
+    E = _build_test_field(N=N, dx=dx)
+    z, wavelength = 0.01, 633e-9
+
+    E_native = rayleigh_sommerfeld_propagate(E, z, wavelength, dx)
+    E_short, dx_short = propagate_huygens_fresnel_freespace(
+        E, z, wavelength, dx,
+        output_shape=(N, N), output_dx=dx)
+
+    assert dx_short == dx, (
+        f'short-circuit must echo input dx exactly; got '
+        f'{dx_short!r} vs {dx!r}.')
+    assert np.array_equal(E_short, E_native), (
+        'same-shape / same-dx short-circuit must return the native '
+        'RS-kernel output bit-for-bit (no map_coordinates pass).')
+
+
+def test_hf_freespace_edge_grazing_gaussian_parseval_renorm():
+    """v5.4 (audit P2) pin (b): edge-grazing Gaussian upsample must
+    preserve Parseval power to within 1e-3.  Pre-fix this drifted
+    ~1.6e-2 because ``resample_field`` (bicubic) attenuates
+    edge-pixel power when the support grazes the grid boundary.
+    The sqrt(p_in/p_out) renorm step (mirrors mhs.py:602-606)
+    restores total power.
+    """
+    from lumenairy.propagators.hf import propagate_huygens_fresnel_freespace
+
+    N_in, dx = 256, 10e-6
+    # Edge-grazing waist: w0 = 25 * dx places significant Gaussian
+    # tail near the (N_in/2) * dx grid edge.
+    w0 = 25.0 * dx
+    x = (np.arange(N_in) - N_in / 2) * dx
+    X, Y = np.meshgrid(x, x)
+    E = np.exp(-(X ** 2 + Y ** 2) / (w0 ** 2)).astype(np.complex128)
+    z, wavelength = 0.01, 633e-9
+
+    # Upsample to N=512 at the same dx (covers double the extent).
+    N_out, dx_out = 512, dx
+
+    p_in = float(np.sum(np.abs(E) ** 2) * dx * dx)
+    E_native = E  # we measure p_in on the input field for clarity.
+    # Drive the resample path: native RS output is at the input grid,
+    # but we request a larger N at the same dx.
+    E_out, dx_returned = propagate_huygens_fresnel_freespace(
+        E, z, wavelength, dx,
+        output_shape=(N_out, N_out), output_dx=dx_out)
+
+    # The Parseval invariant we actually pin is on the
+    # RS-kernel-native vs resampled power -- it's the resample
+    # step that the renorm targets.  Re-run the native kernel to
+    # get the reference total.
+    from lumenairy.propagators.propagation import rayleigh_sommerfeld_propagate
+    E_ref = rayleigh_sommerfeld_propagate(E, z, wavelength, dx)
+    p_ref = float(np.sum(np.abs(E_ref) ** 2) * dx * dx)
+    p_out = float(np.sum(np.abs(E_out) ** 2) * dx_returned * dx_returned)
+
+    rel_err = abs(p_out - p_ref) / max(p_ref, 1e-30)
+    assert rel_err < 1e-3, (
+        f'Edge-grazing Gaussian Parseval drift rel_err = {rel_err:.6e}; '
+        f'expected < 1e-3.  Pre-fix this was ~1.6e-2 (1.6% drift) '
+        f'because resample_field attenuates edge-pixel power; '
+        f'the sqrt(p_in/p_out) renorm step in '
+        f'propagate_huygens_fresnel_freespace (mirrors mhs.py:602-606) '
+        f'must restore total power.')
 
 
 def test_hf_freespace_non_square_output_shape_raises():

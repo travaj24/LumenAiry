@@ -202,6 +202,31 @@ class TestNumericalEquivalence:
             err_msg=('NumPy fallback path must match legacy '
                      'expression bit-for-bit (no JIT involved)'))
 
+    def test_jit_helper_rejects_non_standard_complex_dtype(self):
+        """v5.4 (audit P3): defensive dtype check.  Pre-v5.4 a caller
+        passing ``np.complex256`` (long-double complex, present on some
+        platforms) would silently downgrade to complex128 via the
+        kernel's native output, masking precision loss.  The helper
+        now raises ``TypeError`` at the entry guard."""
+        from lumenairy.optimize._merit_jit import (
+            _multi_field_tilt_phasor_masked,
+        )
+
+        # complex256 is platform-dependent (absent on Windows / many
+        # ARM builds).  Skip when it isn't constructible.
+        try:
+            arr = np.zeros((4, 4), dtype=np.complex256)
+        except (AttributeError, TypeError):
+            pytest.skip('complex256 not available on this platform')
+
+        N = 4
+        k_X = np.zeros((N, N), dtype=np.float64)
+        k_Y = np.zeros((N, N), dtype=np.float64)
+        mask = np.ones((N, N), dtype=bool)
+        with pytest.raises(TypeError, match='complex64 or complex128'):
+            _multi_field_tilt_phasor_masked(
+                0.0, 0.0, k_X, k_Y, mask, arr.dtype)
+
 
 # ---------------------------------------------------------------------------
 # 2. Numba speedup at large grid

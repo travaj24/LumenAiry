@@ -179,6 +179,13 @@ def _multi_field_tilt_phasor_masked(
     are unconditionally NumPy-cheap (single allocation) and don't
     benefit from JIT.
     """
+    # v5.4 (audit P3): defensive dtype check -- complex256 would silently downgrade
+    np_dtype = np.dtype(dtype)
+    if np_dtype not in (np.dtype(np.complex64), np.dtype(np.complex128)):
+        raise TypeError(
+            "_multi_field_jit only supports complex64 or complex128; "
+            "got {0}".format(np_dtype.name))
+
     # Threshold + dtype dispatch.  Below the threshold the
     # JIT-call overhead dominates the savings, so fall through to
     # NumPy.  When Numba is unavailable, the threshold check is

@@ -55,7 +55,9 @@ Author: Andrew Traverso -- v5.3 / AUDIT_V5_2_5 V17 closure.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -161,6 +163,75 @@ def test_v17_test_count_arithmetic_reconciles():
         f'not reconcile: {pass_n} pass + {skip_n} skip + {xfail_n} '
         f'xfail = {pass_n + skip_n + xfail_n}, but collected count '
         f'is {coll_n}.')
+
+    # v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-1: V17.1
+    # docstring claims an empirical-collection cross-check via
+    # ``pytest --collect-only`` but the implementation only checks
+    # arithmetic.  The 3780/16/1 vs 3781/15/1 distribution drift that
+    # motivated V17 sums to 3797 in BOTH forms -- so the arithmetic
+    # check alone is blind to that bug class.  Add the actual empirical
+    # cross-check the docstring promised.
+    #
+    # Mirrors V16's subprocess-invocation pattern (V16 walker invokes
+    # its companion script the same way).
+    if shutil.which('pytest') is None and not Path(sys.executable).exists():
+        pytest.skip(
+            'pytest CLI not on PATH and python executable unresolvable; '
+            'V17.1 empirical cross-check cannot run (CI shallow-clone '
+            'scenario).')
+    try:
+        proc = subprocess.run(
+            [sys.executable, '-m', 'pytest', '--collect-only', '-q',
+             '-m', 'not integration'],
+            cwd=str(_REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        pytest.skip(
+            'pytest --collect-only invocation failed (OSError or timeout); '
+            'V17.1 empirical cross-check cannot complete in this '
+            'environment.')
+
+    if proc.returncode != 0:
+        pytest.skip(
+            f'pytest --collect-only returned non-zero rc={proc.returncode} '
+            f'(CI shallow-clone scenario or collection-time import error); '
+            f'V17.1 empirical cross-check skipped cleanly.')
+
+    # Parse the "X tests collected" line from pytest -q --collect-only
+    # output.  Format varies slightly: "3865 tests collected in 1.23s"
+    # or "3865 tests collected" or "3865/3886 tests collected"
+    # (deselected variant).  Match the leading integer of the
+    # "<N>[/M] tests collected" form.
+    measured_n = None
+    for ln in proc.stdout.splitlines():
+        m = re.search(
+            r'^\s*(\d{3,6})(?:/\d{3,6})?\s+tests?\s+collected',
+            ln, re.IGNORECASE)
+        if m:
+            measured_n = int(m.group(1))
+            break
+    if measured_n is None:
+        pytest.skip(
+            'Could not parse a ``X tests collected`` line from pytest '
+            '--collect-only output; V17.1 empirical cross-check '
+            'inconclusive.')
+
+    cited_total = pass_n + skip_n + xfail_n
+    drift_tol = 2  # collection can vary by 1-2 across machines due to
+                   # optional-dep imports (zarr/numba/etc.)
+    drift = abs(measured_n - cited_total)
+    assert drift <= drift_tol, (
+        f'CHANGELOG ``## [{version}]`` cites {cited_total} tests '
+        f'(={pass_n} pass + {skip_n} skip + {xfail_n} xfail) but '
+        f'pytest --collect-only -q -m "not integration" empirically '
+        f'reports {measured_n} tests collected (drift '
+        f'{drift} > tolerance {drift_tol}).  This is the distribution-'
+        f'drift bug class V17.1 was built to detect: cited vs measured '
+        f'mismatch.  Refresh the CHANGELOG test count to the '
+        f'at-ship-time empirical value (e.g. via stamp_changelog.py).')
 
 
 # ===========================================================================

@@ -202,6 +202,99 @@ def test_design_optimize_telemetry_observational_only(caplog):
         f"handler-on ({result_b.merit}) runs.")
 
 
+def _build_small_wave_leg_problem():
+    """Minimal singlet + MultiFieldMerit problem so design_optimize
+    exercises the WAVE-LEG code path (apply_real_lens_traced or
+    apply_real_lens) at every iteration -- not just sum(x*x) like
+    the quadratic above.  Matches the singlet/StrehlMerit pattern
+    used by ``test_v5_3_multi_field_merit_jit.py`` and
+    ``test_audit_optimize.py`` MultiWavelengthMerit smoke runs.
+    """
+    from lumenairy.optimize import DesignParameterization
+    from lumenairy.optimize.core import MultiFieldMerit, StrehlMerit
+
+    template = {
+        'surfaces': [
+            {'radius': 50e-3, 'glass_before': 'air',
+             'glass_after': 'N-BK7'},
+            {'radius': -50e-3, 'glass_before': 'N-BK7',
+             'glass_after': 'air'},
+        ],
+        'thicknesses': [3e-3],
+        'aperture_diameter': 10e-3,
+    }
+    param = DesignParameterization(
+        template=template,
+        free_vars=[('surfaces', 0, 'radius')],
+        bounds=[(30e-3, 80e-3)])
+    # min_strehl=0.999 + an off-axis field tilt guarantees a non-zero
+    # deficit on the initial point, so L-BFGS-B actually steps and
+    # the per-iter callback fires at least once.
+    merit = MultiFieldMerit(
+        field_angles=[(0.0, 0.0), (0.005, 0.0)],
+        sub_merit=StrehlMerit(min_strehl=0.999, weight=1.0),
+        weight=1.0)
+    return param, [merit]
+
+
+def test_design_optimize_wave_leg_telemetry_observational_only(caplog):
+    """Behavioural preservation pin (wave-leg path): with a real
+    ``MultiFieldMerit`` + ``StrehlMerit`` chain, design_optimize must
+    still return the same optimised x-vector and merit with and
+    without an INFO handler attached.  Companion to
+    ``test_design_optimize_telemetry_observational_only`` which only
+    exercises ``sum(x*x)``.
+
+    Also pins that the wave-leg path emits >= 2 INFO records
+    (entry + per-iter) under handler-on, so we verify the new
+    telemetry is actually firing on the wave-leg code path.
+    """
+    import warnings
+    from lumenairy.optimize import design_optimize
+
+    # Run 1: default (no handler).
+    param_a, merits_a = _build_small_wave_leg_problem()
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)
+        warnings.simplefilter('ignore', UserWarning)
+        warnings.simplefilter('ignore', DeprecationWarning)
+        result_a = design_optimize(
+            param_a, merits_a, wavelength=1.30e-6,
+            N=64, dx=12e-6,
+            method='L-BFGS-B', max_iter=2, verbose=False)
+
+    # Run 2: with INFO-level logging on the lumenairy logger.
+    param_b, merits_b = _build_small_wave_leg_problem()
+    with caplog.at_level(logging.INFO, logger='lumenairy'):
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore', RuntimeWarning)
+            warnings.simplefilter('ignore', UserWarning)
+            warnings.simplefilter('ignore', DeprecationWarning)
+            result_b = design_optimize(
+                param_b, merits_b, wavelength=1.30e-6,
+                N=64, dx=12e-6,
+                method='L-BFGS-B', max_iter=2, verbose=False)
+
+    np.testing.assert_array_equal(
+        result_a.x, result_b.x,
+        err_msg=("wave-leg telemetry must be observational only: "
+                 "x-vector differs between handler-off and "
+                 "handler-on runs."))
+    assert float(result_a.merit) == float(result_b.merit), (
+        f"wave-leg telemetry must be observational only: final "
+        f"merit differs between handler-off ({result_a.merit}) "
+        f"and handler-on ({result_b.merit}) runs.")
+    # Confirm the wave-leg path actually emitted telemetry.
+    lumenairy_records = [r for r in caplog.records
+                         if r.name.startswith('lumenairy')
+                         and 'design_optimize' in r.getMessage()]
+    assert len(lumenairy_records) >= 2, (
+        f"wave-leg telemetry-active contract violated: expected "
+        f">= 2 INFO records (entry + per-iter); got "
+        f"{len(lumenairy_records)}.  Captured: "
+        f"{[r.getMessage() for r in lumenairy_records]}")
+
+
 # ----------------------------------------------------------------------
 # Section 3 -- apply_real_lens_traced telemetry pins
 # ----------------------------------------------------------------------

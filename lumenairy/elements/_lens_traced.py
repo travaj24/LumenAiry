@@ -2099,10 +2099,9 @@ def apply_real_lens_traced(
             # residual norm + remaining-active-pixel count so an
             # attached handler can track convergence.
             _remaining_log = int(active.sum())
+            # v5.4 (audit P3): deduplicate -- reuse res from convergence check above
             try:
-                _res_norm = float(xp.sqrt(
-                    (rx * rx + ry * ry).max()
-                    if rx.size > 0 else 0.0))
+                _res_norm = float(res.max()) if res.size > 0 else 0.0
             except (ValueError, TypeError):
                 _res_norm = float('nan')
             logger.info(

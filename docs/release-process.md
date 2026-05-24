@@ -134,6 +134,31 @@ the older block's PREV_TAG, NOT against the target's own tag.
   above are pure-`git` steps; the script's role ends at writing
   the stamped CHANGELOG.
 
+## Known limitation: self-circular file count
+
+`scripts/stamp_changelog.py --apply` writes the cited file count by
+running `git diff PREV_TAG..HEAD --name-only | wc -l`.  BEFORE the
+release commit lands (step 5 in the canonical sequence), this diff
+does NOT include the stamp's own edit to `CHANGELOG.md` -- the diff
+sees the staged file but counts only files whose changes are
+already in the working tree's index against `PREV_TAG`.  AFTER the
+commit lands, the count is correct, but the V17 walker (which
+compares the CHANGELOG-cited count against the same `git diff`
+output) will then observe a +/- 1 drift relative to the pre-commit
+stamp value.  Fully reconciling the count therefore requires a
+SECOND `stamp_changelog.py --apply` run post-commit.
+
+**Mitigation.**  Either (a) invoke `stamp_changelog.py --apply`
+TWICE in the release workflow -- once pre-commit (to refresh test
+counts and most file counts) and once post-commit (to refresh the
+file count against the now-landed CHANGELOG edit) -- or (b) accept
+a Phase-1 +/- 1 drift on the file-count cite and let the V17
+walker's documented tolerance band (+/- 5 files) absorb it.  Most
+maintainers choose option (b) for normal releases and only invoke
+the second stamp pass when V17 starts flagging drift.  See
+`docs/audits/AUDIT_V5_3_2_2026_05_23.md` Part 7 P3-7 for the
+original audit finding.
+
 ## Integration with the V17 walker
 
 The V17 walker

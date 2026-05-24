@@ -155,7 +155,37 @@ def propagate_huygens_fresnel_freespace(
                 f"call ``rayleigh_sommerfeld_propagate`` + your own "
                 f"resampler directly.")
         N_out = Ny
-    return resample_field(E_native, dx, target_dx, N_out)
+
+    # v5.4 (audit P2): same-shape short-circuit -- mirrors mhs.py:583-587.
+    # If input grid already matches the requested target grid (same N
+    # and same dx within tight tolerance), skip ``resample_field``
+    # entirely.  ``map_coordinates`` introduces a small power drift
+    # at the edges even when the grids nominally match; the
+    # short-circuit guarantees bit-for-bit native-kernel return.
+    xp = array_namespace(E_native)
+    N_in = int(E_native.shape[-1])
+    if N_in == int(N_out) and np.isclose(
+            float(dx), float(target_dx), rtol=1e-12):
+        return E_native, target_dx
+
+    E_resampled, dx_resampled = resample_field(
+        E_native, dx, target_dx, N_out)
+
+    # v5.4 (audit P2): Parseval renorm to restore total power -- mirrors
+    # mhs.py:602-606.  Bicubic ``map_coordinates`` interpolation
+    # introduces a small power drift (mainly at edges where the
+    # resample crops or extends the support); rescale by
+    # sqrt(p_in / p_out) so the resample is L2-energy preserving.
+    p_in = float(xp.sum(xp.abs(E_native) ** 2)) * (float(dx) ** 2)
+    p_out = float(xp.sum(xp.abs(E_resampled) ** 2)) * (float(dx_resampled) ** 2)
+    if p_out > 0.0 and p_in > 0.0:
+        scale = float(xp.sqrt(p_in / p_out))
+        E_resampled = E_resampled * scale
+    # Preserve dtype (resample_field promotes complex64 -> complex128
+    # via map_coordinates' float64 output).
+    if E_resampled.dtype != E_native.dtype:
+        E_resampled = E_resampled.astype(E_native.dtype)
+    return E_resampled, dx_resampled
 
 
 def propagate_huygens_fresnel_with_opl_callable(

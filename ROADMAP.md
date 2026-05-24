@@ -73,12 +73,15 @@ After v5.3.2: the v5.x ROADMAP code-work is **fully closed**.
 Remaining horizon is process-only:
 * Next audit cycle (AUDIT_V5_3_2_*) -- your call on cadence.
 * Designer GUI v3.8+ (separate version stream).
-* Force-retag discipline retrospective -- v5.2.5, v5.3.0, v5.3.1,
-  and v5.3.2 each needed at least one post-tag commit for
-  CI-environment-only issues.  Either accept the class and
-  document it, or add a structural pre-tag check that runs
-  ``ruff`` + ``check_source_line_citations`` + a synthetic
-  fresh-clone smoke before pushing the tag.
+* Force-retag discipline retrospective -- v5.2.5, v5.3.0, and
+  v5.3.2 each needed at least one post-tag commit for CI-
+  environment-only issues; v5.3.1 was the only clean single-commit
+  release in the cycle (zero post-tag commits).  Either accept
+  the class and document it, or add a structural pre-tag check
+  that runs ``ruff`` + ``check_source_line_citations`` + a
+  synthetic fresh-clone smoke before pushing the tag.  See
+  ``docs/audits/AUDIT_V5_3_2_2026_05_23.md`` Part 5 for the
+  trajectory analysis.
 
 This file captures the next-release scope for LumenAiry and its
 Designer GUI.  Items are grouped by release target and prioritised

@@ -328,3 +328,206 @@ def test_v18_walker_synthetic_valid_citation_is_passed(tmp_path, monkeypatch):
         f'returned 0; got rc={rc} instead.  This means the walker is '
         f'rejecting valid citations -- a regression in the V18 '
         f'trivial-line heuristic.')
+
+
+# ===========================================================================
+# v5.4 hardening tests -- AUDIT_V5_3_2 Part 7 P2 closures
+# ===========================================================================
+
+def test_v18_ambiguous_basename_contributes_to_drift(tmp_path, monkeypatch):
+    """v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-1:
+    bare-basename citations resolving to MULTIPLE candidate files now
+    contribute to drift (rc=1) rather than being silently skipped.
+
+    Constructs two files with the same basename in different
+    subtrees, then a synthetic CHANGELOG citing the bare basename.
+    The walker must return rc=1 with a WARN message naming the
+    competing candidates.
+    """
+    module = _load_script_module()
+    if module is None:
+        pytest.skip(
+            'companion script not present; v5.4 ambiguous-basename '
+            'test requires the script module.')
+
+    # Two files with the same basename in different subtrees.  The
+    # walker's basename index searches lumenairy/, tests/, scripts/,
+    # examples/, benchmarks/, validation/.  Build two real candidates.
+    lumenairy_pkg = tmp_path / 'lumenairy'
+    lumenairy_pkg.mkdir()
+    (lumenairy_pkg / 'duplicate_basename.py').write_text(
+        'x = 1\n', encoding='utf-8')
+    tests_pkg = tmp_path / 'tests'
+    tests_pkg.mkdir()
+    (tests_pkg / 'duplicate_basename.py').write_text(
+        'y = 2\n', encoding='utf-8')
+
+    synthetic = (
+        '# Changelog -- synthetic\n\n'
+        '## [9.9.9] -- 2099-12-31\n\n'
+        '### What changed\n\n'
+        '* **Ambiguous basename citation** at '
+        '`duplicate_basename.py:1` -- this bullet cites a bare '
+        'basename that matches multiple files.  V18 walker must '
+        'flag it as drift.\n\n'
+        '## [9.9.8] -- 2099-12-30\n\n'
+        '### Stub previous block\n\n'
+        '(nothing to verify here)\n'
+    )
+    fake_changelog = tmp_path / 'CHANGELOG.md'
+    fake_changelog.write_text(synthetic, encoding='utf-8')
+
+    monkeypatch.setattr(module, '_CHANGELOG', fake_changelog)
+    monkeypatch.setattr(module, '_REPO_ROOT', tmp_path)
+    monkeypatch.setattr(module, '_BASENAME_INDEX_CACHE', None)
+
+    rc = module.audit_block(version='9.9.9', quiet=True)
+    assert rc == 1, (
+        f'V18 walker failed to flag an ambiguous-basename citation.  '
+        f'``duplicate_basename.py:1`` matches two files in the '
+        f'synthetic repo and must contribute to drift (rc=1), not be '
+        f'silently skipped; got rc={rc} instead.  This regresses '
+        f'AUDIT_V5_3_2 Part 7 P2-1 closure.')
+
+
+def test_v18_docstring_line_is_trivial(tmp_path, monkeypatch):
+    """v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-2:
+    ``_is_trivial_line`` now flags pure docstring lines (boundary
+    ``\\\"\\\"\\\"``, one-line ``\\\"\\\"\\\"foo\\\"\\\"\\\"``, and
+    opening-only multiline docstring starts).  A CHANGELOG citing a
+    docstring as the "implementation site" must be flagged as drift.
+    """
+    module = _load_script_module()
+    if module is None:
+        pytest.skip(
+            'companion script not present; v5.4 docstring-line test '
+            'requires the script module.')
+
+    # Confirm the heuristic directly first.
+    assert module._is_trivial_line('"""') is True
+    assert module._is_trivial_line("'''") is True
+    assert module._is_trivial_line('    """one-liner"""') is True
+    assert module._is_trivial_line('"""Module docstring opens here.') is True
+    assert module._is_trivial_line("'''multi-line docstring start") is True
+    # Sanity: real code lines that happen to contain a triple-quoted
+    # substring are NOT misclassified.
+    assert module._is_trivial_line('x = """not a docstring"""') is False
+    assert module._is_trivial_line('return "foo"') is False
+
+    # End-to-end: synthetic CHANGELOG citing a docstring line.
+    fake_pkg = tmp_path / 'lumenairy'
+    fake_pkg.mkdir()
+    fake_src = fake_pkg / 'docstring_module_for_v18_test.py'
+    fake_src.write_text(
+        '"""Module docstring start.\n'  # line 1 -- docstring opener
+        '\n'                              # line 2 -- blank
+        'Some prose.\n'                   # line 3 -- prose body
+        '"""\n'                           # line 4 -- docstring closer
+        'x = 1\n',                        # line 5 -- real code
+        encoding='utf-8',
+    )
+
+    synthetic = (
+        '# Changelog -- synthetic\n\n'
+        '## [9.9.9] -- 2099-12-31\n\n'
+        '### What changed\n\n'
+        '* **Docstring-line citation** at '
+        '`lumenairy/docstring_module_for_v18_test.py:4` -- this '
+        'bullet cites the docstring closer; V18 must flag it as '
+        'drift.\n\n'
+        '## [9.9.8] -- 2099-12-30\n\n'
+        '### Stub previous block\n\n'
+        '(nothing to verify here)\n'
+    )
+    fake_changelog = tmp_path / 'CHANGELOG.md'
+    fake_changelog.write_text(synthetic, encoding='utf-8')
+
+    monkeypatch.setattr(module, '_CHANGELOG', fake_changelog)
+    monkeypatch.setattr(module, '_REPO_ROOT', tmp_path)
+    monkeypatch.setattr(module, '_BASENAME_INDEX_CACHE', None)
+
+    rc = module.audit_block(version='9.9.9', quiet=True)
+    assert rc == 1, (
+        f'V18 walker failed to flag a docstring-line citation.  Line 4 '
+        f'is the docstring-closing ``\\\"\\\"\\\"`` and must register '
+        f'as trivial; got rc={rc} instead.  This regresses '
+        f'AUDIT_V5_3_2 Part 7 P2-2 closure.')
+
+
+def test_v18_end_line_verified_for_range_citation(tmp_path, monkeypatch):
+    """v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-4:
+    for ``:START-END`` range citations the walker now verifies BOTH
+    endpoints.  Constructs a synthetic citation where START is
+    non-trivial but END is trivial (a blank line) and asserts the
+    walker returns rc=1.
+    """
+    module = _load_script_module()
+    if module is None:
+        pytest.skip(
+            'companion script not present; v5.4 end-line test '
+            'requires the script module.')
+
+    fake_pkg = tmp_path / 'lumenairy'
+    fake_pkg.mkdir()
+    fake_src = fake_pkg / 'range_module_for_v18_test.py'
+    fake_src.write_text(
+        'def hello():\n'        # line 1 -- non-trivial
+        '    return "world"\n'  # line 2 -- non-trivial
+        '\n'                    # line 3 -- BLANK (trivial)
+        '\n'                    # line 4 -- BLANK (trivial)
+        '\n',                   # line 5 -- BLANK (trivial)
+        encoding='utf-8',
+    )
+
+    # Citation START=1 (non-trivial) but END=4 (blank).  Pre-hardening
+    # walker would have returned 0 (only START checked).  Post-
+    # hardening must return 1 because END is trivial.
+    synthetic = (
+        '# Changelog -- synthetic\n\n'
+        '## [9.9.9] -- 2099-12-31\n\n'
+        '### What changed\n\n'
+        '* **Range-citation with stale END** at '
+        '`lumenairy/range_module_for_v18_test.py:1-4` -- START is '
+        '``def hello`` (non-trivial) but END=4 is BLANK.  V18 must '
+        'flag the END drift.\n\n'
+        '## [9.9.8] -- 2099-12-30\n\n'
+        '### Stub previous block\n\n'
+        '(nothing to verify here)\n'
+    )
+    fake_changelog = tmp_path / 'CHANGELOG.md'
+    fake_changelog.write_text(synthetic, encoding='utf-8')
+
+    monkeypatch.setattr(module, '_CHANGELOG', fake_changelog)
+    monkeypatch.setattr(module, '_REPO_ROOT', tmp_path)
+    monkeypatch.setattr(module, '_BASENAME_INDEX_CACHE', None)
+
+    rc = module.audit_block(version='9.9.9', quiet=True)
+    assert rc == 1, (
+        f'V18 walker failed to flag a range citation with a trivial '
+        f'END line.  START=1 is ``def hello()`` (non-trivial), END=4 '
+        f'is BLANK -- pre-v5.4 walker only verified START and would '
+        f'pass; got rc={rc} instead.  This regresses AUDIT_V5_3_2 '
+        f'Part 7 P2-4 closure.')
+
+
+def test_v18_bare_return_flagged_as_trivial():
+    """v5.4 (audit V17/V18 hardening) -- AUDIT_V5_3_2 Part 7 P2-3:
+    fix the dead code at ``_is_trivial_line:124``.  Before v5.4 the
+    check was ``stripped.startswith('return\\n')`` which is
+    unreachable because ``stripped`` has already had ``\\n`` removed
+    by .strip().  Post-fix: a bare ``return`` statement must be
+    flagged as trivial.
+    """
+    module = _load_script_module()
+    if module is None:
+        pytest.skip(
+            'companion script not present; v5.4 bare-return test '
+            'requires the script module.')
+
+    # Bare ``return`` on its own line is now trivial.
+    assert module._is_trivial_line('    return') is True
+    assert module._is_trivial_line('return') is True
+    # Returns WITH a value are still non-trivial structural anchors.
+    assert module._is_trivial_line('return None') is False
+    assert module._is_trivial_line('return foo(bar)') is False
+    assert module._is_trivial_line('    return x + 1') is False
