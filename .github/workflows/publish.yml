@@ -91,6 +91,15 @@ jobs:
       # citations in the topmost block, e.g. a docs-only patch).  We
       # accept 0 and 2 as pass; 1 fails the job.
       - name: Verify CHANGELOG source-line citations
+        # ``shell: bash {0}`` overrides the default ``bash --noprofile
+        # --norc -eo pipefail {0}``, removing ``-e`` so a non-zero exit
+        # from ``check_source_line_citations.py`` (rc=2 on a docs-only
+        # or horizon-items release with no source-file:line citations)
+        # does NOT terminate the step before the rc capture below.
+        # v5.3.2's v5.3.2-tag publish run failed because the default
+        # errexit semantics killed the step on the script's clean-skip
+        # exit (rc=2) before the if-branch could translate it to 0.
+        shell: bash {0}
         run: |
           python scripts/check_source_line_citations.py
           rc=$?
@@ -114,6 +123,12 @@ jobs:
       # skip (no audit closures or no git history), 3 = input
       # error.  We accept 0 and 2 as pass; 1 and 3 fail the job.
       - name: Verify CHANGELOG closures have backing diffs
+        # ``shell: bash {0}`` removes the default ``-e`` so rc=2 (clean
+        # skip on a release with no audit-closure bullets) does not
+        # terminate the step.  Same latent bug class as the V18 step
+        # above; surfaced first by v5.3.2 where both walkers returned
+        # rc=2 simultaneously.
+        shell: bash {0}
         run: |
           python scripts/verify_changelog_closures.py
           rc=$?
