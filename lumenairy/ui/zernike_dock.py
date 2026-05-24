@@ -1,16 +1,25 @@
+# v5.4 (audit P3-B): add normalization + weighting controls
 """
-Zernike decomposition dock — interactive Zernike coefficient viewer.
+Zernike decomposition dock -- interactive Zernike coefficient viewer.
 
-Shows bar chart of Zernike coefficients from the latest wave-optics
-OPD map, with mode names and RMS contributions.
+v5.4 (audit P3-B) adds two polish controls:
+  * Normalization selector (library hard-codes OSA/ANSI -- non-OSA
+    selections emit a summary warning until the library exposes a
+    ``normalization=`` kwarg).
+  * Weighting mask -- applied post-hoc (we multiply the OPD by the
+    mask before ``zernike_decompose``); default ``'none'`` preserves
+    v5.3.2 numerical behavior bit-for-bit.
 
 Author: Andrew Traverso
 """
 
+import os
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QGroupBox, QTextEdit,
+    QSpinBox, QDoubleSpinBox, QGroupBox, QTextEdit, QComboBox,
+    QFileDialog,
 )
 from PySide6.QtGui import QFont
 
@@ -67,6 +76,48 @@ class ZernikeDock(QWidget):
         ctrl.addWidget(self.btn_decompose_trace)
         ctrl.addStretch()
         layout.addLayout(ctrl)
+
+        # v5.4 (P3-B): normalization selector (library locked to OSA).
+        norm_row = QHBoxLayout()
+        norm_row.addWidget(QLabel('Normalization:'))
+        self.combo_normalization = QComboBox()
+        self.combo_normalization.addItems(
+            ['OSA', 'Noll', 'Fringe', 'Standard'])
+        self.combo_normalization.setToolTip(
+            'Library hard-codes OSA/ANSI; non-OSA choices warn until '
+            'a normalization= kwarg lands.')
+        norm_row.addWidget(self.combo_normalization)
+        norm_row.addStretch()
+        layout.addLayout(norm_row)
+
+        # v5.4 (P3-B): weighting mask group (post-hoc OPD multiply;
+        # default 'none' reproduces v5.3.2 output bit-for-bit).
+        self.group_weighting = QGroupBox('Weighting')
+        w_layout = QHBoxLayout(self.group_weighting)
+        w_layout.addWidget(QLabel('Source:'))
+        self.combo_weighting_source = QComboBox()
+        self.combo_weighting_source.addItems(
+            ['none', 'circular_aperture', 'from_file'])
+        self.combo_weighting_source.currentTextChanged.connect(
+            self._on_weighting_source_changed)
+        w_layout.addWidget(self.combo_weighting_source)
+        self.lbl_weighting_radius = QLabel('Radius (pupil frac):')
+        self.spin_weighting_radius = QDoubleSpinBox()
+        self.spin_weighting_radius.setRange(0.0, 1.0)
+        self.spin_weighting_radius.setSingleStep(0.05)
+        self.spin_weighting_radius.setDecimals(3)
+        self.spin_weighting_radius.setValue(1.0)
+        w_layout.addWidget(self.lbl_weighting_radius)
+        w_layout.addWidget(self.spin_weighting_radius)
+        self.btn_weighting_file = QPushButton('Browse...')
+        self.btn_weighting_file.clicked.connect(self._pick_weighting_file)
+        w_layout.addWidget(self.btn_weighting_file)
+        self.lbl_weighting_file = QLabel('(no file)')
+        self.lbl_weighting_file.setStyleSheet('color:#7a94b8')
+        w_layout.addWidget(self.lbl_weighting_file, stretch=1)
+        self._weighting_file_path = None
+        self._on_weighting_source_changed('none')
+        layout.addWidget(self.group_weighting)
 
         # Plot
         if HAS_MPL:
@@ -158,8 +209,10 @@ class ZernikeDock(QWidget):
             grid[iy, ix] = opl
             from lumenairy.analysis import zernike_decompose
             n_modes = self.spin_modes.value()
+            self._warn_if_nonstandard_normalization()
+            opd_in = self._apply_weighting(grid, dx, ap)
             coeffs, names = zernike_decompose(
-                grid, dx, ap, n_modes=n_modes)
+                opd_in, dx, ap, n_modes=n_modes)
             self._coeffs = coeffs
             self._names = names
             self._opd_map = grid
@@ -203,8 +256,11 @@ class ZernikeDock(QWidget):
         try:
             from lumenairy.analysis import zernike_decompose
             n_modes = self.spin_modes.value()
+            self._warn_if_nonstandard_normalization()
+            opd_in = self._apply_weighting(
+                self._opd_map, self._dx, self._aperture)
             coeffs, names = zernike_decompose(
-                self._opd_map, self._dx, self._aperture, n_modes=n_modes)
+                opd_in, self._dx, self._aperture, n_modes=n_modes)
             self._coeffs = coeffs
             self._names = names
             self._plot_coefficients()
@@ -244,3 +300,80 @@ class ZernikeDock(QWidget):
         self.summary.append(
             f'\nRMS wavefront error (modes 3+): {rms*1e9:.3f} nm '
             f'= {rms/(self.sm.wavelength_nm*1e-9):.4f} waves')
+
+    # v5.4 (P3-B) helpers: normalization warning + weighting mask
+
+    def _warn_if_nonstandard_normalization(self):
+        """Warn when the user selects a non-OSA convention (no-op for OSA)."""
+        norm = self.combo_normalization.currentText()
+        if norm != 'OSA':
+            self.summary.append(
+                f"NOTE: normalization='{norm}' not yet wired through; "
+                f"library hard-codes OSA/ANSI.  Fit used OSA.")
+
+    def _on_weighting_source_changed(self, src):
+        """Show/hide weighting sub-widgets based on the chosen source."""
+        is_circ = (src == 'circular_aperture')
+        is_file = (src == 'from_file')
+        self.lbl_weighting_radius.setVisible(is_circ)
+        self.spin_weighting_radius.setVisible(is_circ)
+        self.btn_weighting_file.setVisible(is_file)
+        self.lbl_weighting_file.setVisible(is_file)
+
+    def _pick_weighting_file(self):
+        """Open a file dialog to pick a .npy / .h5 mask."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, 'Select weighting mask',
+            '', 'Mask files (*.npy *.h5 *.hdf5);;All files (*)')
+        if path:
+            self._weighting_file_path = path
+            self.lbl_weighting_file.setText(os.path.basename(path))
+
+    def _apply_weighting(self, opd_map, dx, aperture):
+        """Multiply ``opd_map`` by the chosen mask (no-op for 'none')."""
+        src = self.combo_weighting_source.currentText()
+        if src == 'none' or opd_map is None:
+            return opd_map
+        try:
+            Ny, Nx = opd_map.shape
+            if src == 'circular_aperture':
+                frac = float(self.spin_weighting_radius.value())
+                r_cut = max(0.0, min(1.0, frac)) * 0.5 * aperture
+                x = (np.arange(Nx) - Nx / 2) * dx
+                y = (np.arange(Ny) - Ny / 2) * dx
+                X, Y = np.meshgrid(x, y)
+                mask = (X ** 2 + Y ** 2) <= (r_cut ** 2)
+                self.summary.append(
+                    f"Weighting: circular_aperture, frac={frac:.3f} "
+                    f"({int(mask.sum())} active pixels)")
+                return np.where(mask, opd_map, np.nan)
+            if src == 'from_file':
+                if not self._weighting_file_path:
+                    self.summary.append(
+                        "Weighting 'from_file' but no file chosen; "
+                        "running unweighted.")
+                    return opd_map
+                path = self._weighting_file_path
+                ext = os.path.splitext(path)[1].lower()
+                if ext == '.npy':
+                    mask = np.load(path)
+                elif ext in ('.h5', '.hdf5'):
+                    import h5py
+                    with h5py.File(path, 'r') as f:
+                        mask = np.asarray(f[next(iter(f.keys()))][...])
+                else:
+                    self.summary.append(
+                        f"Weighting: unsupported ext '{ext}'; unweighted.")
+                    return opd_map
+                if mask.shape != opd_map.shape:
+                    self.summary.append(
+                        f"Weighting: shape mismatch {mask.shape} vs "
+                        f"{opd_map.shape}; unweighted.")
+                    return opd_map
+                self.summary.append(
+                    f"Weighting: from_file '{os.path.basename(path)}'")
+                return opd_map * mask
+        except Exception as e:
+            self.summary.append(
+                f'Weighting failed ({type(e).__name__}: {e}); unweighted.')
+        return opd_map

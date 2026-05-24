@@ -419,6 +419,17 @@ class MainWindow(QMainWindow):
             'Log viewer', self.log_viewer_widget,
             Qt.BottomDockWidgetArea, 'log_viewer')
 
+        # v5.4 audit P3-C: Chebyshev freeform fit tool -- lets users
+        # fit measured z(x, y) profilometer / interferometer data to
+        # 2-D Chebyshev polynomials and emit the coefficient dict in
+        # the lumenairy.elements.freeform.surface_sag_chebyshev
+        # canonical format.
+        from .chebyshev_fit_dock import ChebyshevFitDock
+        self.chebyshev_fit_widget = ChebyshevFitDock(self.model)
+        self.chebyshev_fit_dock = dock(
+            'Chebyshev fit', self.chebyshev_fit_widget,
+            Qt.BottomDockWidgetArea, 'chebyshev_fit')
+
         from .field_browser_dock import FieldBrowserDock
         self.field_browser_widget = FieldBrowserDock(self.model)
         self.field_browser_dock = dock(
