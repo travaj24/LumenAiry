@@ -13,7 +13,7 @@ ship-time validation).
 
 **Zero physics regressions in 16 consecutive releases.**
 
-3863 unit tests pass (collected = 3884 = pass + 20 skip + 1
+3865 unit tests pass (collected = 3886 = pass + 20 skip + 1
 xfail).  +15 net pass vs v5.3.0 (3848); +3 new skips for
 documented data-driven cases (V12.2/V12.4 audit-bullet absence in
 docs-only v5.3.2 block + V18 source-line absence + V17.3
