@@ -69,10 +69,27 @@
     documenting the four invocation patterns.  Closes the
     V17-detected recursive self-citation drift class.
 
-After v5.3.2: the v5.x ROADMAP code-work is **fully closed**.
-Remaining horizon is process-only:
-* Next audit cycle (AUDIT_V5_3_2_*) -- your call on cadence.
-* Designer GUI v3.8+ (separate version stream).
+After v5.3.2: the v5.x ROADMAP **library code-work** is fully
+closed.  The v5.3.2 cycle generated 2 follow-up audits which
+v5.4.0 then closed:
+
+* **v5.4.0** -- closes both AUDIT_V5_3_2_2026_05_23 (1 P2 physics
+  + 5 P2 walker + 10 P3 = 16 items) and
+  AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 (6 Tier-1 P1 + 5 Tier-2
+  P2 + 3 Tier-3 P3 = 14 GUI items) in a single coordinated ship.
+  Library: HF freespace Parseval renorm, V17/V18 walker
+  hardening (5 narrowing surfaces closed), P3 code/doc batch.
+  Designer GUI: 6 new docks (wavefront map, AO closed-loop,
+  coronagraph workflow, operator algebra, thin-film coatings,
+  log viewer, Chebyshev fit) + 5 dock expansions (optimizer
+  parameter surface, phase retrieval, ghost path enumeration,
+  Stokes tab, coherence 4-tab).  Cross-cutting CancellableProgress
+  + Stop buttons.  Designer GUI version bumped 3.7.10 -> 5.4.0
+  (co-versioned with library).
+
+After v5.4.0: the v5.x ROADMAP is **fully closed**, both library
+AND Designer GUI.  Remaining horizon is process-only:
+* Next audit cycle (AUDIT_V5_4_0_*) -- your call on cadence.
 * Force-retag discipline retrospective -- v5.2.5, v5.3.0, and
   v5.3.2 each needed at least one post-tag commit for CI-
   environment-only issues; v5.3.1 was the only clean single-commit
@@ -115,9 +132,14 @@ are preserved in git history; this file is forward-only.
   `examples/07_zemax_load_trace.py`, new `CONVENTIONS.md`).  34/34
   validation files passing.  Public API at ~400+ symbols in
   `lumenairy.__all__`.
-- **Designer GUI:** v3.7.10 (per in-code comments at
-  `ui/main_window.py:2196` etc.).  No standalone release stream; the
-  Designer ships co-versioned inside the library wheel.
+- **Designer GUI:** v5.4.0 (co-versioned with the library; reads
+  `lumenairy.__version__` at runtime).  37 docks: 22 pre-v5.4 +
+  6 NEW in v5.4.0 (wavefront map, AO closed-loop, coronagraph
+  workflow, operator algebra, thin-film coatings, log viewer,
+  Chebyshev fit) + 5 substantive expansions (optimizer parameter
+  surface, phase retrieval, ghost path enumeration, Stokes tab,
+  coherence 4-tab).  See `docs/designer_guide.md` for the full
+  dock-by-dock library-backing inventory.
 - **Audit closure status:** AUDIT_V4_12_1 through
   AUDIT_V4_16_3 all closed; AUDIT_V5_0_0 in active v5.0.1 closure.
   AUDIT_V4_13_1 Tier-2/3/4 architectural items now scoped to
@@ -378,29 +400,30 @@ items that remain open at v5.2.3 ship are:
   are still in the top-level `CHANGELOG.md`.  v5.3 finishes
   the archive pass.
 
-### Designer GUI (separate v3.8+ stream, never formally planned)
+### Designer GUI horizon -- ALL SHIPPED in v5.4.0
 
-Catalogued from prior survey, not allocated to a specific
-release.  Tracked separately because the Designer ships
-co-versioned inside the library wheel.
+The 6 unscoped Designer items previously listed here all shipped
+in v5.4.0 (driven by AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24).  See
+`docs/designer_guide.md` for the v5.4.0 dock inventory.
 
-* **Polarization plotting docks** -- none currently surface
-  Jones-pupil and Stokes maps from `polarization.py` /
-  Richards-Wolf paths.
-* **Coronagraph workflow dock** -- `analysis/coronagraph.py`
-  has `coronagraph_contrast_curve` but no dedicated dock to
-  set up the 4-stop chain (Lyot focal mask -> Lyot stop ->
-  apodised pupil) interactively.
-* **Tolerancing dock** -- `monte_carlo_tolerancing` exists but
-  the UI surface is limited; a dedicated "perturbation knobs
-  + run MC" dock is the canonical Zemax pattern.
-* **Multi-config / zoom dock** -- `optimize/multiconfig.py`
-  exists but no UI; users build configs in code.
-* **Wavefront-map plot integration** -- v4.14.0 added
-  `plot_wavefront`; no dock surfaces it yet.
-* **`CancellableProgress` UI button** -- v4.13.1 added the
-  cancellation protocol, wired into all 4 scipy callbacks;
-  needs a Stop-button surface in the optimisation dock.
+* **Polarization plotting docks** -- SHIPPED.  Jones pupil was
+  already shipped at v3.6+; v5.4 added Stokes + DOP/DOLP/DOCP tabs
+  to `jones_pupil_dock.py` (193 -> 404 LOC).
+* **Coronagraph workflow dock** -- SHIPPED at v5.4.  New
+  `coronagraph_dock.py` (783 LOC) with the 4-stop chain builder.
+* **Tolerancing dock** -- already shipped pre-v5.4 (`tolerance_dock.py`
+  at 524 LOC; ROADMAP's prior "missing" claim was a self-citation
+  drift caught by audit).  v5.4 adds Stop-button cancellation.
+* **Multi-config / zoom dock** -- already shipped pre-v5.4
+  (`multiconfig_dock.py` at 245 LOC; ROADMAP's prior "missing"
+  claim was a self-citation drift caught by audit).  v5.4 adds
+  Stop-button cancellation.
+* **Wavefront-map plot integration** -- SHIPPED at v5.4.  New
+  `wavefront_map_dock.py` (661 LOC) wrapping `plot_wavefront()`
+  with embedded canvas + 6 controls + live optimiser hook.
+* **`CancellableProgress` Stop button** -- SHIPPED at v5.4.  Wired
+  in optimizer + tolerance + phase retrieval + multiconfig docks
+  (6 worker classes total).
 
 ### Audit-cadence follow-ups
 
@@ -432,14 +455,18 @@ the v5.0 CHANGELOG "Shims preserved" decision.
 
 ---
 
-## Designer GUI (separate version stream)
+## Designer GUI (co-versioned with library at v5.4.0+)
 
-The Designer ships co-versioned inside the library wheel.  Current
-in-code references: 3.7.6, 3.7.7, 3.7.9, 3.7.10 — latest is
-**3.7.10**.  No active Designer plan since the prior `valiant-
-hopping-dream` plan (3.6.1 + 3.7 + 3.8) was completed.
+The Designer ships co-versioned inside the library wheel.  As of
+v5.4.0 it reads `lumenairy.__version__` at runtime, so the v3.7.10
+internal version markers are no longer authoritative.  See
+`docs/designer_guide.md` for the v5.4.0 dock surface inventory.
 
-Possible v3.8+ scope (not yet planned):
+v5.4.0 ships 6 new docks + 5 expansions per
+AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24.  No open v5.x ROADMAP
+items remaining for the Designer.
+
+Possible v5.5+ scope (not yet planned):
 
 * **Polarization plotting docks** — none currently surface Jones-
   pupil and Stokes maps from the library's `polarization.py` /

@@ -2,6 +2,347 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.0] — 2026-05-24
+
+**Largest release in the v5.x line: closes BOTH outstanding audits
+in a single coordinated v5.4 ship.**  Closes AUDIT_V5_3_2_2026_05_23
+(1 P2 physics + 5 P2 walker + 10 P3 batch = 16 findings) plus
+AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 (6 Tier-1 P1 + 5 Tier-2 P2 +
+3 Tier-3 P3 = 14 GUI work items).  Designer GUI is now co-versioned
+at v5.4.0 (was v3.7.10), bumping with the core library to reflect
+the substantial Designer surface added in this release.
+
+**Zero physics regressions in 17 consecutive releases.**
+
+**Substantive ship:**
+
+* +1 substantive physics fix (HF freespace Parseval renormalisation,
+  convergent across 3 audit agents)
+* +5 walker hardenings closing the V17/V18 narrowing surfaces the
+  v5.3.2 audit cycle surfaced
+* +10 P3 code/doc cleanups
+* +6 new Designer docks (wavefront map, AO closed-loop, coronagraph
+  workflow, operator algebra, thin-film coatings, log viewer)
+* +2 substantial Designer dock expansions (optimizer parameter
+  surface, phase retrieval expansion)
+* +3 Designer dock expansions / polish (ghost path enumeration,
+  Stokes visualization tab, coherence 4-tab expansion)
+* +1 new Designer dock (Chebyshev freeform fit metrology tool)
+* Cross-cutting: CancellableProgress + Stop buttons wired in 4
+  long-running docks (optimizer / tolerance / phase retrieval /
+  multiconfig)
+
+### Phase 1 -- Library + walker hardening (AUDIT_V5_3_2_2026_05_23)
+
+**P2 -- HF freespace Parseval renormalisation gap (convergent across
+3 audit agents)**.  The v5.3.0 P1 closure (HF freespace TypeError
+fix) shipped without the `sqrt(p_in/p_out)` Parseval renormalisation
+step that the CHANGELOG explicitly claimed it inherited from the
+MHS pattern.  Empirical: edge-grazing Gaussian upsample showed 1.6%
+power drift.  v5.4.0:
+
+* `lumenairy/propagators/hf.py` -- adds same-shape / same-dx
+  short-circuit mirroring `mhs.py:583-587` (skips
+  `resample_field` when input grid already matches target).
+* `lumenairy/propagators/hf.py` -- adds `sqrt(p_in/p_out)` Parseval
+  renormalisation after `resample_field` mirroring
+  `mhs.py:602-606`.  Restores total power to within rel_err <
+  1e-9 on Parseval check.
+* `tests/unit/test_v5_3_hf_freespace_output_grid.py` -- tightens
+  the existing power-preserved test pin from `0.5 < ratio < 2.0`
+  (100% tolerance) to `rel_err < 1e-3`.  Adds 2 new tests:
+  same-shape short-circuit bit-for-bit pin + edge-grazing
+  Gaussian Parseval pin (the regression the audit surfaced).
+
+**P2 -- V17/V18 walker narrowing surfaces (5 fixes)**.  V17.1 was
+structurally weaker than the bug class it was built to detect (only
+arithmetic, not empirical cross-check); V18 had 4 narrowing surfaces
+that let CHANGELOG fabrications slip through.
+
+* `tests/unit/test_v5_3_walker_changelog_self_citation.py` -- V17.1
+  now invokes `pytest --collect-only -q -m "not integration"` via
+  subprocess and cross-checks the CHANGELOG-cited
+  `pass + skip + xfail` total against empirical collection count,
+  drift tolerance +/- 2.  Closes the doc-vs-impl gap.  Clean-skip
+  path on missing pytest / shallow-clone / unparseable output,
+  mirroring V17.2 / V17.3.
+* `scripts/check_source_line_citations.py` -- V18 ambiguous-basename
+  citations (e.g. `core.py:855` matching 4 files in the repo) were
+  silently SKIPPED; now WARN with rc=1 and a candidate-list
+  message.  Closes the fabrication-class blind spot.
+* `scripts/check_source_line_citations.py` -- V18 `_is_trivial_line`
+  now flags one-line and multi-line docstring boundaries
+  (`"""foo"""`, bare `"""`) as trivial.  CHANGELOG citing a
+  docstring as the implementation site no longer slips through.
+* `scripts/check_source_line_citations.py` -- V18 now verifies the
+  END line of `:START-END` citations is in-range AND non-trivial
+  (not just START).  Drift inside the range no longer hides.
+* `scripts/check_source_line_citations.py` -- V18
+  `_is_trivial_line:124` dead code (`stripped.startswith('return\\n')`
+  is unreachable after `line.strip()`) replaced with
+  `stripped == 'return'` so the bare-return detection actually
+  fires.
+* `tests/unit/test_v5_3_2_walker_source_line_citation.py` -- 4 new
+  tests pin the V18 narrowing surfaces (ambiguous basename,
+  docstring trivial, END-line drift, bare-return trivial).
+
+**P3 -- 10 code/doc cleanups**:
+
+* `lumenairy/elements/_lens_traced.py` -- Newton-iter telemetry now
+  reuses `res = sqrt(rx*rx + ry*ry)` from the convergence check
+  rather than recomputing in the logging block.  No more
+  pay-the-compute-when-silent.
+* `lumenairy/optimize/_merit_jit.py` -- defensive dtype check at
+  helper entry; raises `TypeError` on non-c64/c128 instead of
+  silent downgrade via `out.astype(...)`.  Test added (Windows-
+  skipped where complex256 is unavailable).
+* `lumenairy/optimize/wrapper_merits.py` --
+  `_WRAPPER_MERIT_MESHGRID_BUILDS` counter increment moved INSIDE
+  the cache-store lock to preserve the "exactly one build per
+  signature" cache invariant under thread race.
+* `CHANGELOG.md` -- v5.3.0 entry's "8.1x speedup" headline softened
+  to "1.5-8x (hardware dependent; audit measured 8.53x on 16-core,
+  dipping to 1.5-3x under heavy parallel contention)" to match
+  the test pin (1.5x) and the JIT module's own variance comment.
+* `CHANGELOG.md` -- v5.3.0 entry's "bit-for-bit" boundary
+  clarified.  NumPy fallback is bit-for-bit; JIT path matches
+  NumPy to `rtol=1e-12` (FMA reassociation under
+  `fastmath=True`).
+* `tests/unit/test_v5_3_2_logging_telemetry.py` -- new test
+  `test_design_optimize_wave_leg_telemetry_observational_only`
+  pins numerical neutrality of telemetry on a REAL MultiFieldMerit
+  wave-leg `design_optimize` problem (the existing
+  observational-only test used a trivial quadratic merit, which
+  had 0 wave-leg telemetry cost).
+* `docs/release-process.md` -- new section "Known limitation:
+  self-circular file count" documenting the stamp_changelog
+  `--apply` pre-vs-post-commit gap with both mitigations
+  (double-apply or accept +/- 1 drift).
+* `CHANGELOG.md` -- v5.3.0 "P3 closures (12)" header corrected to
+  "(10)" (9 P3 + 1 stretch goal).  Recursive self-citation drift
+  caught by audit Part 2.
+* `CHANGELOG.md` -- v5.3.2 "v5.x ROADMAP status" missed the 3rd
+  ROADMAP open horizon item (Force-retag discipline retrospective).
+  Added.
+* `ROADMAP.md` -- line 76 wrongly claimed v5.3.1 needed a post-tag
+  commit; v5.3.1 had ZERO post-tag commits (the only clean release
+  in the v5.3.x cycle).  Corrected + audit Part 5 cited.
+
+### Phase 2 -- Tier 1 Designer GUI (P1, user-blocking)
+
+**CancellableProgress + Stop buttons (cross-cutting, audit P1-F)**:
+4 docks gain Stop buttons (optimizer / tolerance / phase retrieval /
+multiconfig).  The library hook has been ready since v4.13.1 via
+`lumenairy.progress.CancellableProgress` (polling-based protocol --
+`should_stop` property, `is_cancelled(progress)` helper -- no
+exception class); the GUI side was unwired.  6 worker classes
+gain a `cancel()` slot + `cancelled` signal.  Cancellation
+granularity: between scipy iterations (`design_optimize`); between
+Monte Carlo trials (`monte_carlo_tolerancing`); between chunked
+phase-retrieval iterations (CHUNK_SIZE=10).
+
+**Optimizer dock parameter surface expansion (audit P1-D)**:
+`lumenairy/ui/optimizer_dock.py` grows 1022 -> 1766 LOC.  Adds a
+checkable "Advanced parameters" group exposing 8 new controls:
+method dropdown (11 methods including the v4.16.0 Newton /
+trust-ncg), constraints editor (5-col QTableWidget driving
+`Constraint` dataclass list), `state_file=` checkpoint/resume,
+hess dropdown (auto/2-point/3-point/cs, gated by method),
+wave_propagator dropdown (live-read from
+`WAVE_PROPAGATOR_REGISTRY`), precision dropdown, multi-objective
+Pareto NSGA-II toggle (gated by `PYMOO_AVAILABLE`), max_iter
+override.  Closes the audit's "library has 15 parameters; dock
+surfaces 2" under-exposure.  Backward compatible: Advanced group
+unchecked -> pre-v5.4 behavior (Nelder-Mead local path).
+
+**New `lumenairy/ui/wavefront_map_dock.py` (661 LOC, audit P1-B)**:
+wraps the v4.14.0 `plot_wavefront()` function with embedded
+`FigureCanvasQTAgg`.  OPD source selector (current system / loaded
+HDF5 / live optimiser run), aperture overlay, units selector
+(waves / um / mm / nm), 5 matplotlib colormaps, RMS / PV
+annotation toggle.  Live optimiser hook subscribes to the
+`OptimizeWorker.progress` signal so OPD updates as the optimiser
+steps.
+
+**Phase retrieval dock expansion (audit P1-E)**:
+`lumenairy/ui/phase_retrieval_dock.py` grows 266 -> 884 LOC.  The
+former 41-LOC-of-meaningful-UI stub becomes a full algorithm-
+dispatched dock.  6 algorithms wired (3 NumPy + 3 JAX twins):
+`gerchberg_saxton`, `error_reduction`, `hybrid_input_output`.  8
+controls: algorithm dropdown, max-iter, tolerance, HIO beta
+(method-gated), amplitude min/max bounds, phase-wrap dropdown
+(`principal_value` / `unwrap` / `none`), two file pickers (source
++ target intensity), initial-phase strategy (zeros / random /
+from_file).  Live convergence plot + reconstruction preview.
+Worker renamed `_GSWorker` -> `_PhaseRetrievalWorker` (back-compat
+alias kept).
+
+**New `lumenairy/ui/ao_dock.py` (864 LOC, audit P1-A)**: surfaces
+the v5.2.3 `ao_closed_loop()` workflow.  DM actuator-count + modal
+basis (zernike / karhunen_loeve / free) + max radial order + stroke
++ coupling controls.  WFS type (shack_hartmann / pyramid /
+curvature; documented as captured but currently wired only to
+ideal phase sensing per the library's `wfs=None` default).  Leaky-
+integrator controller (gain / leak / tol / max iterations).  Input
+selector (random Kolmogorov turbulence / loaded `.npy` phase /
+manual Zernike spectrum).  3 embedded matplotlib canvases: live
+convergence vs iteration, DM-command heatmap, residual-phase
+heatmap.  Worker single-steps the helper (library has no per-iter
+callback; matches the `examples/11_ao_closed_loop.py` pattern) and
+emits residual_norm per iteration.
+
+**New `lumenairy/ui/coronagraph_dock.py` (783 LOC, audit P1-C)**:
+interactive 4-stop chain builder.  Per-stop profile dropdowns:
+Stop 1 (apodised pupil) -- gaussian / cosine / super-gaussian /
+uniform; Stop 2 (Lyot focal mask) -- hard_circular /
+gaussian_taper / eight-octant_phase_mask / four-quadrant_phase_mask;
+Stop 3 (Lyot stop) -- hard_circular / lyot_with_secondary_obscuration;
+Stop 4 (image plane sampler) -- contrast_curve sampler with
+n_radii + max_lam_over_D controls.  Reference PSF source toggle
+(compute from system / loaded file).  Embedded `coronagraph_contrast_curve()`
+plot (log10 contrast vs lambda/D) + per-stop 4-subplot intensity
+previews + total throughput QLabel.
+
+### Phase 3 -- Tier 2 Designer GUI (P2, significant)
+
+**New `lumenairy/ui/algebra_dock.py` (935 LOC, audit P2-A)**: surfaces
+the v4.15.1 `lumenairy.algebra` symbolic operator system.  Tree-view
+operator chain.  Per-operator parameter dialogs for 8 operator
+kinds: `FreeSpace` / `ThinLens` / `CylindricalLens` / `Magnify` /
+`FourierTransform` / `Aperture` / `GaussianAperture` (composite
+operator built directly).  Each row exposes its ABCD matrix
+(button -> dialog).  Move up / down for reordering (composition
+is non-commutative).  "From prescription" populator (uses
+`Operator.from_prescription()` classmethod).  "Apply chain to
+current field" runner with intensity preview.  Full-system ABCD
+display + EFL extraction.  JSON save/load.
+
+**New `lumenairy/ui/coatings_dock.py` (752 LOC, audit P2-D)**:
+surfaces `elements/coatings.py`.  Stack editor (material +
+thickness QTableWidget).  Substrate dropdown (BK7 / Fused Silica /
+CaF2 / ZnSe / Si / Sapphire + custom-n).  Incident-medium
+dropdown (air / vacuum + custom-n).  Lambda-sweep range + AOI +
+polarisation (s / p / avg).  Embedded R(lambda) matplotlib
+canvas.  3 quick-template buttons: single-layer MgF2 quarter-wave
+at 550 nm, broadband AR V-coat optimiser, N-bilayer Bragg HR.
+7-material hardcoded refractive-index database (MgF2 / SiO2 /
+TiO2 / Ta2O5 / MgO / ZnS / Al2O3 at 550 nm, dispersion-flat
+across sweep) documented in dock docstring -- the library does
+not yet ship a material -> n registry for thin films.  R_mean /
+R_min + lambda_min / R_max metrics display.
+
+**New `lumenairy/ui/log_viewer_dock.py` (392 LOC, audit P2-B)**:
+displays the v5.3.2 library logging telemetry stream from
+`_logging.get_logger(...)` hooks on `apply_real_lens_traced` /
+`design_optimize` / `monte_carlo_tolerancing`.  Capped 5000-line
+QPlainTextEdit + level filter (DEBUG-CRITICAL) + module filter
+(lumenairy.* prefix-based) + pause/resume + clear + save-to-file
++ find-next + status bar showing record counts.  Implements
+`_QSignalLogHandler` (QObject + logging.Handler dual inheritance)
+that re-emits records as Qt signals.  Lowers `lumenairy` logger
+level on attach (default WARNING blocks INFO) and restores on
+`closeEvent`.
+
+**`lumenairy/ui/ghost_dock.py` expansion (audit P2-C)**: 141 ->
+624 LOC.  Now wires all 3 library ghost-analysis functions
+(`ghost_analysis`, `enumerate_ghost_paths`,
+`non_sequential_stray_light`).  Path enumeration QTableWidget
+(sortable by column).  4 filter knobs (max bounces, min
+transmittance log10, min energy fraction ppm, sort-by combo).
+Embedded matplotlib top-10 bar chart of ghost paths by energy
+fraction.  Per-path spot-diagram preview.  Total stray-light
+budget QLabel.  CSV export button.  Class signature preserved.
+
+**`lumenairy/ui/jones_pupil_dock.py` Stokes tab (audit P2-E)**:
+193 -> 404 LOC.  Central plot area converted to `QTabWidget` with
+3 tabs.  "Jones pupil" -- existing 2x4 amplitude+phase grid
+preserved.  "Stokes" -- 2x2 S0 / S1 / S2 / S3 heatmaps (S0
+viridis, S1-S3 RdBu_r centred on 0).  "Polarisation derived" --
+DOP / DOLP / DOCP heatmaps (viridis, range [0, 1]).  Implements
+`_jones_to_stokes_unpolarized(J)` via canonical Mueller row-0
+formulas (library exposes `stokes_parameters()` for a JonesField
+but no direct `jones_to_stokes(J)` helper).  Status bar adds
+<DOP> readout.
+
+### Phase 4 -- Tier 3 Designer GUI (P3, polish)
+
+**`lumenairy/ui/coherence_dock.py` expansion (audit P3-A)**: 162 ->
+656 LOC.  Central layout becomes a QTabWidget with 4 tabs.  Tab 1
+"Schell source" preserves the existing 162-LOC UI verbatim.  Tabs
+2-4 wire 3 previously-unsurfaced library functions:
+`koehler_image()`, `extended_source_image()`, `mutual_coherence()`.
+New `_CoherenceAnalysisWorker(QThread)` dispatches on the active
+tab.  Loaders accept `.npy` / `.npz` / `.h5` / `.hdf5` with
+deterministic demo-data fallback on missing file.
+
+**`lumenairy/ui/zernike_dock.py` polish (audit P3-B)**: 246 -> 379
+LOC.  2 new controls: Normalization dropdown (OSA / Noll / Fringe
+/ Standard -- library is OSA-locked per `zernike.py:31-34`;
+non-OSA selections emit a UI warning and proceed with OSA),
+Weighting group (none / circular_aperture / from_file with file
+picker).  Weighting applied post-hoc -- the OPD is masked BEFORE
+`zernike_decompose()` since the library function doesn't accept a
+weighting= kwarg yet.  Default "none" preserves v5.3.2 numerical
+output bit-for-bit.
+
+**New `lumenairy/ui/chebyshev_fit_dock.py` (533 LOC, audit P3-C)**:
+specialised metrology tool for fitting measured profilometer /
+interferometer height-map data to 2-D Chebyshev polynomials.
+Loads z(x, y) from `.npy` / `.h5` / `.csv`, optionally normalises
+aperture and masks outliers, fits via
+`numpy.polynomial.chebyshev.chebvander2d` +
+`numpy.linalg.lstsq` (the library's `_math/chebyshev.py` only
+exposes Vandermonde tables, not a 2-D fitter; inline fit is
+documented in the dock docstring).  Coefficient table
+(`{(i, j): c_ij}` dict), RMS + PV residuals, 3-panel canvas
+(raw / fit / residual), and "Apply to prescription" that emits
+the library's canonical `freeform_type='chebyshev'` surface
+format.
+
+### Designer GUI version bump
+
+Internal version markers in `lumenairy/ui/` were at v3.7.10 (per
+`main_window.py:2196` etc).  The Designer ships co-versioned
+inside the library wheel and pulls its display version from
+`lumenairy.__version__` at runtime, so the v5.3.2 -> v5.4.0
+library bump automatically renders as "LumenAiry Designer 5.4.0"
+in the title bar + About dialog.  The historical "3.7.10"
+embedded changelog comments are preserved (audit
+AUDIT_V5_3_2_GUI_VS_LIBRARY Part 4 classified them as
+cosmetic; no remediation required).  Going forward Designer
+versioning is the library versioning.
+
+### Documentation
+
+* `docs/designer_guide.md` (NEW) -- dedicated GUI documentation
+  covering the v5.4.0 dock surface (37 docks total: 22 pre-existing
+  + 9 new in v5.4.0 + 6 expansions).  Tab-by-tab dock inventory,
+  registration order, library backings, library functions wired.
+* `Migration-Guide.md` -- v5.4 section noting the optional
+  CancellableProgress Stop-button surface (default unchecked, no
+  user-visible change unless wired).
+* `ROADMAP.md` -- Designer GUI section regenerated to reflect the
+  v5.3.2 -> v5.4.0 closures.  v5.x ROADMAP is now fully closed --
+  ALL library + GUI work-items shipped.
+* Wiki `Release-Notes.md` -- v5.4.0 section added.
+
+### v5.x ROADMAP status
+
+After v5.4.0, **the v5.x ROADMAP is fully closed** -- both library
+code-work AND Designer GUI:
+
+* Library: all P1 / P2 / P3 from AUDIT_V5_3_2_2026_05_23 shipped.
+* GUI: all P1 / P2 / P3 from AUDIT_V5_3_2_GUI_VS_LIBRARY shipped.
+* Designer GUI version bumped 3.7.10 -> 5.4.0 (co-versioned).
+* Next audit cycle (AUDIT_V5_4_0_*) -- yours to call.
+
+### Files touched
+
+42 files modified or created.  Net LOC: stamped post-commit by
+`scripts/stamp_changelog.py --apply`.
+
+---
+
 ## [5.3.2] — 2026-05-23
 
 **Three v5.x horizon-item closures shipped together.**  After this
