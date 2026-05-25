@@ -559,131 +559,45 @@ def _fresnel_R_normal(n1: float, n2: float) -> float:
 
 def _ghost_intersect(rays, surface, *, n_medium: float,
                       direction: int) -> None:
-    """Direction-aware spherical surface intersection used by
-    :func:`retrace_ghost_path`.
+    """Backward-compatible alias for :func:`_intersect_surface`.
 
-    The standard :func:`_intersect_surface` fast path always selects
-    the near root assuming forward propagation (N > 0).  In a ghost
-    retrace some legs run backward (N < 0) after a reflection, and
-    the near root then sits on the opposite parametric side.  This
-    helper inlines the ray-sphere quadratic and picks the root closest
-    to ``rays.z = 0`` along the ray's actual propagation direction,
-    so both legs land on the correct intersection.
+    v5.4.1 (audit P1): ``_ghost_intersect`` is now redundant; the
+    library's ``_intersect_surface`` uses direction-aware root pick
+    canonically.  Kept as an alias for backward compatibility so any
+    external caller that imported this helper continues to resolve.
+
+    Historically (v5.4.0) this helper inlined a direction-aware
+    ray-sphere quadratic to work around a direction-blind root pick
+    in ``_intersect_surface`` that landed backward-propagating rays
+    on the wrong side of the sphere.  The v5.4.1 patch promoted that
+    fix into the canonical library function (``intersection.py``
+    fast path at the spherical branch + Newton initial guess), so
+    ``_intersect_surface`` is now correct for both forward and
+    backward legs.
+
+    The ``direction`` keyword is retained for signature compatibility
+    but ignored -- the library inspects each ray's ``N`` cosine to
+    select the near root, so a bundle-wide direction hint is no
+    longer required.
 
     Parameters
     ----------
     rays : RayBundle
-        Rays in the surface's local frame; ``rays.z`` is the offset
-        from the vertex plane (typically 0).  Modified in place: x, y,
-        z advance to the intersection point; OPL accumulates ``n_medium
-        * t`` for the leg.  Rays missing the sphere or outside the
-        clear aperture are marked dead.
+        Rays in the surface's local frame; modified in place.
     surface : Surface
-        Spherical / flat refracting surface.  Conic / aspheric /
-        biconic / freeform surfaces fall through to the library's
-        Newton iteration (which is still root-ambiguous on backward
-        rays, but ghost dock previews target spherical lenses).
+        Refracting / reflecting surface.
     n_medium : float
         Refractive index of the medium the rays are travelling through
-        on the way to this surface (same convention as
-        ``_intersect_surface``).
+        on the way to this surface.
     direction : int
-        +1 = rays propagate along +z (N > 0), -1 = along -z (N < 0).
-        Only used to disambiguate the spherical root pick.
+        Ignored.  Retained for v5.4.0 signature compatibility.
     """
     from ..raytrace.intersection import _intersect_surface
-    from ..raytrace.surface import RAY_APERTURE, RAY_MISSED_SURFACE, RAY_OK
 
-    R = float(surface.radius)
-    kc = float(surface.conic)
-    asph = surface.aspheric_coeffs
-    radius_y = getattr(surface, 'radius_y', None)
-    freeform = getattr(surface, 'freeform', None)
-
-    is_pure_spherical = (
-        np.isfinite(R)
-        and kc == 0.0
-        and not asph
-        and radius_y is None
-        and freeform is None
-    )
-
-    if not is_pure_spherical:
-        # Fall through to the library implementation -- aspheric /
-        # freeform ghost paths are not on the v5.4 dock's hot path.
-        # (The Newton's initial-guess for those surfaces is
-        # similarly direction-blind; users hitting that case can
-        # bisect the path into single-surface retraces.)
-        _intersect_surface(rays, surface, n_medium=n_medium)
-        return
-
-    # Ray-sphere quadratic.  Sphere centred at (0, 0, R) with radius
-    # |R|.  Ray line: (x0 + L*t, y0 + M*t, z0 + N*t).  Quadratic in t:
-    #   t^2 + b*t + c = 0
-    # with b = 2*(L*x0 + M*y0 + N*(z0-R)), c = x0^2 + y0^2 + (z0-R)^2 - R^2.
-    # Two roots t1 <= t2.  We want the root closest to z = 0 in the
-    # *propagation* direction -- equivalently, the smallest non-
-    # negative root in the ray's parametric direction.  For N > 0 the
-    # ray is moving forward; for N < 0 it is moving backward and the
-    # "near" root is the one with the smaller magnitude of t (since
-    # both roots will have the same sign as N for a sensible setup).
-    x0, y0, z0 = rays.x, rays.y, rays.z
-    Ld, Md, Nd = rays.L, rays.M, rays.N
-    dx, dy, dz = x0, y0, z0 - R
-    b = 2.0 * (Ld * dx + Md * dy + Nd * dz)
-    c = dx ** 2 + dy ** 2 + dz ** 2 - R ** 2
-    disc = b ** 2 - 4.0 * c
-    disc_safe = np.maximum(disc, 0.0)
-    sqrt_disc = np.sqrt(disc_safe)
-    t1 = (-b - sqrt_disc) / 2.0
-    t2 = (-b + sqrt_disc) / 2.0
-
-    # Direction-aware root pick: choose the root with the smallest
-    # absolute value (the geometric "near" hit).  This collapses to
-    # the legacy ``t1 if R > 0 else t2`` for forward rays starting on
-    # the vertex plane, and gives the correct opposite pick for
-    # backward rays.
-    if direction >= 0:
-        # Forward: prefer t closest to 0 from above (positive t for
-        # the ordinary advancing trace).  Fall back to the smaller-
-        # magnitude root if both are negative (degenerate, but the
-        # library's fast path uses the same convention).
-        t = np.where(np.abs(t1) <= np.abs(t2), t1, t2)
-    else:
-        # Backward: same min-magnitude rule; t1 and t2 will both be
-        # negative (parametric step opposite to N which is negative)
-        # and we want the one with smaller |t|.
-        t = np.where(np.abs(t1) <= np.abs(t2), t1, t2)
-
-    disc_pos = disc > 0
-    t = np.where(disc_pos, t, 0.0)
-    missed_init = (~disc_pos) & rays.alive
-
-    if missed_init.any():
-        rays.alive = rays.alive & ~missed_init
-        if rays.error_code is not None:
-            first_failure = missed_init & (rays.error_code == RAY_OK)
-            rays.error_code = np.where(
-                first_failure, RAY_MISSED_SURFACE, rays.error_code)
-
-    # Advance to the intersection.
-    t = np.where(rays.alive, t, 0.0)
-    rays.x = rays.x + rays.L * t
-    rays.y = rays.y + rays.M * t
-    rays.z = rays.z + rays.N * t
-
-    # OPL: geometric path length |t| times refractive index.
-    rays.opd = rays.opd + n_medium * np.abs(t)
-
-    # Vignette by clear aperture.
-    if np.isfinite(surface.semi_diameter):
-        h_sq = rays.x ** 2 + rays.y ** 2
-        clipped = (h_sq > surface.semi_diameter ** 2) & rays.alive
-        if clipped.any():
-            rays.alive = rays.alive & ~clipped
-            if rays.error_code is not None:
-                rays.error_code = np.where(
-                    clipped, RAY_APERTURE, rays.error_code)
+    # ``direction`` is unused; the library now resolves the near root
+    # per-ray from the sign of N rather than a bundle-wide hint.
+    del direction
+    _intersect_surface(rays, surface, n_medium=n_medium)
 
 
 def retrace_ghost_path(

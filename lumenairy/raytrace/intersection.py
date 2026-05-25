@@ -127,10 +127,18 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         sqrt_disc = np.sqrt(disc_safe)
         t1 = (-b - sqrt_disc) / 2.0
         t2 = (-b + sqrt_disc) / 2.0
-        # Pick the root corresponding to the near intersection (the
-        # ray traverses both the +R and -R hemispheres of the sphere;
-        # we want the one closest to z=0 in the local frame).
-        t = t1 if R > 0 else t2
+        # Direction-aware root pick: choose the intersection whose
+        # parametric distance is closer to zero (the NEAR root for
+        # the ray's current direction).  v5.4.1 (audit P1): replaces
+        # the prior direction-blind ``t = t1 if R > 0 else t2`` which
+        # produced wrong-side-of-sphere results for any backward-
+        # propagating ray (N=-1 after a reflection).  Audit reproducer
+        # at docs/audits/AUDIT_V5_4_0_2026_05_25.md Part 5 P1: a
+        # Cassegrain chief ray landed 20cm PAST the secondary vertex
+        # on the wrong side of the R=-0.3m hyperbola.  See
+        # analysis/ghost.py:_ghost_intersect for the original
+        # workaround (now a thin alias).
+        t = np.where(np.abs(t1) <= np.abs(t2), t1, t2)
 
         # disc <= 0: ray entirely misses the sphere.  Disc == 0 is
         # the tangent case -- legacy behaviour treats it as "missed"
@@ -175,12 +183,16 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             # Pick the smaller positive root (closer intersection)
             t1 = (-b - sqrt_disc) / (2 * a)
             t2 = (-b + sqrt_disc) / (2 * a)
-            # For rays travelling forward (N > 0), we want the intersection
-            # closest to z=0, which is typically t1 for R > 0, t2 for R < 0
-            if not np.isscalar(R):
-                t = np.where(R > 0, t1, t2)
-            else:
-                t = t1 if R > 0 else t2
+            # Direction-aware root pick: choose the intersection whose
+            # parametric distance is closer to zero (the NEAR root for
+            # the ray's current direction).  v5.4.1 (audit P1): replaces
+            # the prior direction-blind ``t = t1 if R > 0 else t2`` which
+            # produced wrong-side-of-sphere results for any backward-
+            # propagating ray (N=-1 after a reflection) -- the Newton
+            # loop below would then "converge" to that bogus initial
+            # guess.  Audit reproducer at
+            # docs/audits/AUDIT_V5_4_0_2026_05_25.md Part 5 P1.
+            t = np.where(np.abs(t1) <= np.abs(t2), t1, t2)
 
             # Track rays whose initial-guess sphere intersection has no
             # real root (disc < 0).  These never reach the surface; mark

@@ -2,6 +2,214 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.1] — 2026-05-25
+
+**Patch release closing `AUDIT_V5_4_0_2026_05_25`** (1 P1 latent
+bug + 1 P2 new + 4 P3 cleanups + 1 structural V19 walker).  The
+audit was an 8-agent parallel-fleet review of v5.4.0's 30-item
+ship; it confirmed 30/30 closure rate but surfaced one latent
+raytrace bug with empirical reproducers and one numerical-NaN
+edge case in the new coating-material registry.
+
+**Zero physics regressions in 18 consecutive releases.**
+
+3960 unit tests pass (collected = 3969 = pass + 8 skip + 1
+xfail) at write-time; refreshed via `stamp_changelog.py --apply`.
+
+### P1 -- `_intersect_surface` direction-blind root pick (audit Part 5)
+
+The v5.4.0 Phase 5 `retrace_ghost_path()` implementation discovered
+a real bug in the canonical `lumenairy.raytrace.intersection._intersect_surface`
+fast path: `t = t1 if R > 0 else t2` is direction-blind; for any
+backward-propagating ray (N=-1 after a mirror reflection), this
+picks the WRONG sphere root and produces wrong-side-of-sphere
+results.  The v5.4.0 ship scoped a workaround into `analysis/ghost.py:_ghost_intersect`
+and deferred the real fix to v5.5; the v5.4.0 audit empirically
+confirmed (Cassegrain chief ray landing 20cm past secondary
+vertex on wrong side of sphere) that this is a latent P1 bug
+affecting `trace()`, `raytrace_system()`, `trace_world()`,
+`trace_prescription()`, `seidel_coefficients`, and all GUI docks
+exercising these (footprint / distortion / spot-vs-field) for
+any prescription including a curved mirror.
+
+v5.4.1 promotes the direction-aware min-magnitude root pick into
+the canonical `_intersect_surface`:
+
+* `lumenairy/raytrace/intersection.py:133` (fast path) and the
+  Newton initial-guess block now use
+  `t = xp.where(xp.abs(t1) <= xp.abs(t2), t1, t2)` -- the
+  smaller-magnitude root, which is correct in both forward and
+  backward ray directions.
+* `lumenairy/analysis/ghost.py:_ghost_intersect` is now a thin
+  back-compat alias routing to the canonical
+  `_intersect_surface` (the inline workaround is subsumed).
+  The 5 v5.4.0 `retrace_ghost_path` tests still pass; bit-for-bit
+  preserved.
+* 4 new regression tests in
+  `tests/unit/test_v5_4_1_raytrace_mirror_backward_ray.py`:
+  unit-level backward-ray near-root pin (-0.00125m expected;
+  -1.99875m before fix), end-to-end Cassegrain chief-ray pin
+  (must land on correct side of secondary vertex), alias-vs-
+  library bit-identical check, and trace-with-mirror alive-flag
+  consistency.
+
+**Zero regressions across the full raytrace / intersect /
+trace_world / ghost / seidel / mirror test family** (323 tests).
+
+### P2 NEW -- TiO2 / Ta2O5 Sellmeier NaN at lambda=1.0 um (audit Part 5)
+
+The v5.4 Phase 5 coating-material registry encodes TiO2 (DeVore
+1951) and Ta2O5 (Bright 2013) -- both 1-term Sellmeier fits --
+in a 3-pole template with dummy poles `C2 = C3 = 1.0 um^2`.  At
+lambda = 1.0 um (INSIDE documented validity for both:
+TiO2 400-5000nm, Ta2O5 350-8000nm), `lam2 - C2 = 0`, the
+division produces NaN, and `get_coating_material_index('TiO2',
+1.0e-6)` returns `nan`.  Realistic vis-NIR sweeps at 100nm steps
+hit this exactly.
+
+v5.4.1 applies BOTH audit-recommended fixes:
+
+* `elements/coatings.py` registry: TiO2 / Ta2O5 dummy poles
+  `(1.0, 1.0)` -> `(0.0, 0.0)`.  Then `lam2 - 0 = lam2 > 0` for
+  all positive lambda; division is safe.
+* `_coating_sellmeier()`: defensive `B == 0` short-circuit skips
+  any term whose B coefficient is zero, providing backstop
+  protection against any future similar 1-term-template-in-
+  3-pole-slot material entry.
+* 8 new tests in
+  `tests/unit/test_v5_4_1_coating_sellmeier_nan_fix.py` covering
+  lambda=1um for both materials, full vis-NIR sweep all-finite,
+  short-circuit semantics, 550nm-value preservation, literature-
+  band sanity, and registry-shape pin.
+* Verified at-wavelength values: TiO2(1um) = 2.486, Ta2O5(1um) =
+  2.165 (both inside literature bands).  550nm values unchanged.
+  All 36 coating tests pass (28 pre-existing + 8 new).
+
+### P2 -- stamp_changelog Net LOC extension (audit Part 7 #3)
+
+My v5.3.2 audit's P3-7 forecast a self-circular failure mode:
+file count uses `git diff PREV_TAG..HEAD --name-only` which
+doesn't capture LOC delta.  v5.4.0 hit exactly this: Phase 6
+deleted a 619-line tombstone AFTER stamp_changelog had run;
+CHANGELOG cited `Net LOC: +13,759 / -452` while actual was
+`+13,813 / -1,075`.  The -623 deletion drift went uncaught
+because V17.2 only tolerances `+` and the stamp script doesn't
+refresh LOC.
+
+v5.4.1 extends `scripts/stamp_changelog.py` to also stamp `Net
+LOC: +X / -Y` patterns:
+
+* New regex matches `Net LOC: +<int> / -<int> vs v<X.Y.Z>` with
+  a careful `\d+(?:\.\d+)*` version-label guard (prevents
+  consuming sentence-terminating periods).
+* New helper `_git_net_loc(prev_tag)` runs `git diff
+  PREV_TAG..HEAD --shortstat` and parses insertions / deletions.
+* Wired into `_build_plan` as a 4th stamp iteration (test count
+  + file count + line count + Net LOC).
+* 9 new tests in
+  `tests/unit/test_v5_4_1_stamp_changelog_net_loc.py` covering
+  synthetic stamping, dry-run reporting, idempotence, and the
+  regex period-preservation bug-trap.
+* Script LOC: 622 -> 763 (+141).
+
+Real-world apply against v5.4.0 CHANGELOG refreshed the stale
+counts to actual git-diff values: `52 files / +13759 / -452`
+-> `54 files / +13813 / -1075`.
+
+### P2 -- ROADMAP scope cleanup + zernike CHANGELOG (audit Part 7 #4, #5)
+
+* `ROADMAP.md:469-487` carried a stale "Possible v5.5+ scope"
+  list itemising the 6 GUI items v5.4.0 just shipped
+  (Polarization/Stokes, Coronagraph workflow, Tolerancing, Multi-
+  config, Wavefront-map, CancellableProgress).  Recursive self-
+  citation drift at a non-numeric surface.  Stripped + replaced
+  with a "(none currently identified; previous list shipped in
+  v5.4.0 Phases 2-4)" note.
+* CHANGELOG.md v5.4.0 Phase 4 zernike_dock paragraph
+  (`:295-299`) still said "weighting applied post-hoc" but
+  Phase 5 wired the kwarg THROUGH the library.  Rewrote to "[Initially
+  shipped in Phase 4 with post-hoc weighting; Phase 5 promoted
+  `weighting=` into `zernike_decompose()` directly so the dock
+  passes the mask through canonically]".
+
+### P3 cleanups (audit Part 7 #6 -- #11)
+
+* `lumenairy/ui/main_window.py` "What's New" modal: body
+  refreshed from v3.7.x highlights to v5.4.0-specific content
+  (7 new docks + 7 library extensions + CHANGELOG.md link).
+* `main_window.py` "Workspaces reorganised (3.7.10)" dialog
+  title: dropped the `(3.7.10)` stale version suffix.
+* `lumenairy/_math/chebyshev.py` Chebyshev fit prune threshold:
+  `1e-15` (ULP noise) -> `1e-12` (matches test tolerance band).
+  Eliminates ~15 spurious near-zero coefficients on constant-z
+  fits.  +1 regression test pinning constant-z returns exactly
+  1 non-zero coefficient.
+* `elements/coatings.py` TiO2 entry: documented that DeVore 1951
+  is the ORDINARY-RAY Sellmeier (n_o ~ 2.58); extraordinary n_e
+  is ~11% higher (~2.87 at 550nm).  Polarisation-sensitive
+  coating design should account for this.  Future `TiO2_e`
+  registry entry flagged as v5.5+ candidate.
+* `CHANGELOG.md:366-368` FQPM "perfectly nulls planar wave on-
+  axis" wording softened to "suppresses planar-wave on-axis
+  intensity by ~256x at N=64 (4/N^2 scaling with grid
+  resolution)".  Honest about discrete-grid scaling.
+* `CHANGELOG.md:380` coating-tests claim refreshed `13 new
+  tests` -> `10 new tests` (the audit's empirical count).
+
+### Structural -- V19 walker (audit Part 7 #13)
+
+The v5.4.0 audit surfaced a new k=4 meta-pattern: "scope-the-
+workaround-defer-the-real-fix".  Pattern: find real bug in core
+library, scope a workaround at the consumer layer, document the
+deferral.  CHANGELOG-honest, code-deferred.  No walker covered
+this class.
+
+v5.4.1 ships V19 walker
+(`tests/unit/test_v5_4_1_walker_scope_the_workaround.py`, 293
+LOC, 4 tests).  Scans all `lumenairy/**/*.py` (library code only;
+excludes `ui/`, `__pycache__/`) for 6 comment patterns:
+
+* `# .*v5\.\d+ candidate`
+* `# .*scoped workaround` (case-insensitive)
+* `# .*workaround.*v5\.\d+` (versioned workaround)
+* `# .*TODO.*v5\.\d+` (versioned TODO)
+* `# .*defer.*to.*v5\.\d+` (versioned deferral)
+* `# .*real fix lives` (audit-cited phrasing)
+
+For each match, requires a paired ROADMAP.md entry referencing
+the file:line OR basename.  Without a paired entry, FAIL with a
+clear message identifying the unpaired workaround.
+
+Initial scan of v5.4.1 library: 1 finding
+(`fft_infra.py:263` "Workaround until v5.0") -- correctly paired
+in ROADMAP at lines 208, 212, 494 via the `fft_infra` basename
+reference.  V19 PASSES.
+
+Walker meta-pin family now V1-V19 (was V1-V18 at v5.4.0).
+
+### v5.x ROADMAP status
+
+After v5.4.1, the library + Designer GUI surfaces remain fully
+closed against both v5.3.2 audits AND the v5.4.0 audit (the new
+audit-of-audits artifact).  Remaining horizon is process-only:
+
+* Next audit cycle (AUDIT_V5_4_1_*) -- yours to call.
+* Force-retag discipline retrospective (4 of last 5 tags force-
+  moved including v5.4.0).
+* v5.5 candidates surfaced during v5.4.0 audit + v5.4.1
+  implementation: `TiO2_e` extraordinary-ray Sellmeier entry,
+  Fringe Zernike normalization (currently NotImplementedError),
+  pyramid + curvature WFS adapters (currently fall back to
+  ideal phase sensing).
+
+### Files touched
+
+15 files modified or created.  Net LOC: stamped post-commit by
+`scripts/stamp_changelog.py --apply` (the v5.4.1 extension also
+stamps this value).
+
+---
+
 ## [5.4.0] — 2026-05-24
 
 **Largest release in the v5.x line: closes BOTH outstanding audits
@@ -14,7 +222,7 @@ the substantial Designer surface added in this release.
 
 **Zero physics regressions in 17 consecutive releases.**
 
-3933 unit tests pass (collected = 3942 = pass + 8 skip + 1 xfail)
+3954 unit tests pass (collected = 3963 = pass + 8 skip + 1 xfail)
 at write-time.  The +12 skip reduction vs the original Phase 5
 stamp (20 -> 8) reflects the v5.4 Phase 6 cleanup deletion of
 the v5.0.1-era tombstone test file under tests/unit/ (8 tests
@@ -293,10 +501,13 @@ LOC.  2 new controls: Normalization dropdown (OSA / Noll / Fringe
 / Standard -- library is OSA-locked per `zernike.py:31-34`;
 non-OSA selections emit a UI warning and proceed with OSA),
 Weighting group (none / circular_aperture / from_file with file
-picker).  Weighting applied post-hoc -- the OPD is masked BEFORE
-`zernike_decompose()` since the library function doesn't accept a
-weighting= kwarg yet.  Default "none" preserves v5.3.2 numerical
-output bit-for-bit.
+picker).  [Initially shipped in Phase 4 with post-hoc weighting --
+OPD masked BEFORE `zernike_decompose()` -- because the library
+function did not yet accept a `weighting=` kwarg; Phase 5 promoted
+`weighting=` into `zernike_decompose()` directly so the dock now
+passes the mask through canonically.  See Phase 5 section below
+for the library extension.]  Default "none" preserves v5.3.2
+numerical output bit-for-bit.
 
 **New `lumenairy/ui/chebyshev_fit_dock.py` (533 LOC, audit P3-C)**:
 specialised metrology tool for fitting measured profilometer /
@@ -361,7 +572,8 @@ the docks consume canonical functions:
   `phase_step=pi` default + configurable centre.  Coronagraph dock
   removed its inline `_phase_octant_mask` and now consumes the
   library helpers.  7 new tests including the canonical "FQPM-pi
-  perfectly nulls planar wave on-axis" check.
+  suppresses planar-wave on-axis intensity by ~256x at N=64 (4/N^2
+  scaling with grid resolution)" check.
 
 * **`lumenairy.elements.coatings.COATING_MATERIAL_REGISTRY`** +
   **`get_coating_material_index(material, wavelength)`** (NEW).
@@ -374,7 +586,7 @@ the docks consume canonical functions:
   Material dropdown from `sorted(COATING_MATERIAL_REGISTRY.keys())`.
   With dispersion engaged, TiO2 at 550 nm shifts 2.40 -> 2.58 and
   Ta2O5 shifts 2.10 -> 2.23 (correct rutile / Bright values);
-  MgF2 / SiO2 stay within 0.001 of the prior constants.  13 new
+  MgF2 / SiO2 stay within 0.001 of the prior constants.  10 new
   tests; Bragg-HR template auto-tracks the new values.
 
 * **`lumenairy._math.chebyshev.chebyshev_fit_2d(x, y, z, ...)`**
@@ -438,7 +650,7 @@ code-work AND Designer GUI:
 
 ### Files touched
 
-52 files modified or created.  Net LOC: +13759 / -452 vs v5.3.2.
+54 files modified or created.  Net LOC: +13813 / -1075 vs v5.3.2.
 
 ---
 

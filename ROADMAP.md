@@ -466,25 +466,16 @@ v5.4.0 ships 6 new docks + 5 expansions per
 AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24.  No open v5.x ROADMAP
 items remaining for the Designer.
 
-Possible v5.5+ scope (not yet planned):
+Possible v5.5+ Designer scope (not yet planned; will be itemised
+by the next GUI audit cycle if any surface emerges):
 
-* **Polarization plotting docks** — none currently surface Jones-
-  pupil and Stokes maps from the library's `polarization.py` /
-  Richards-Wolf paths.
-* **Coronagraph workflow dock** — `analysis/coronagraph.py` has
-  `coronagraph_contrast_curve` but no dedicated dock to set up
-  the 4-stop chain (Lyot focal mask → Lyot stop → apodised pupil)
-  interactively.
-* **Tolerancing dock** — `monte_carlo_tolerancing` exists but the
-  UI surface is limited; a dedicated "perturbation knobs + run MC"
-  dock is the canonical Zemax pattern.
-* **Multi-config / zoom dock** — `optimize/multiconfig.py` exists
-  but no UI; users build configs in code.
-* **Wavefront-map plot integration** — v4.14.0 added
-  `plot_wavefront`; no dock surfaces it yet.
-* **`CancellableProgress` UI button** — v4.13.1 added the
-  cancellation protocol, wired into all 4 scipy callbacks; needs
-  a Stop-button surface in the optimisation dock.
+* (none currently identified -- the v5.4.0 audit cycle
+  (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24) confirmed full coverage
+  of the post-v5.0 library expansion.  The previous 6-item list
+  here -- polarization docks, coronagraph workflow, tolerancing,
+  multi-config/zoom, wavefront-map plot, `CancellableProgress` UI
+  button -- all shipped in v5.4.0 Phases 2-4 and was stripped at
+  v5.4.0+ per AUDIT_V5_4_0_2026_05_25 Part 7 #4.)
 
 ---
 

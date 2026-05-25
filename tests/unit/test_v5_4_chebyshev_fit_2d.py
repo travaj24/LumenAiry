@@ -80,6 +80,18 @@ def test_constant_z_fits_to_T0_T0_only():
             f"unexpected non-zero coefficient at {key}: {val}")
 
 
+def test_constant_z_fits_to_T0_T0_only_post_v5_4_1_threshold():
+    """v5.4.1 P3 #8: constant z fit returns exactly ONE non-zero coefficient."""
+    from lumenairy._math.chebyshev import chebyshev_fit_2d
+
+    x = np.linspace(0, 1, 20)
+    y = np.linspace(0, 1, 20)
+    z = np.full((20, 20), 5.0)
+    coeffs = chebyshev_fit_2d(x, y, z, n_max_x=4, n_max_y=4)
+    assert len(coeffs) == 1, f'Expected 1 coefficient (T0*T0); got {len(coeffs)}: {coeffs}'
+    assert (0, 0) in coeffs and abs(coeffs[(0, 0)] - 5.0) < 1e-10
+
+
 # ---------------------------------------------------------------------------
 # Pin 2 -- pure T_2(x) * T_0(y) recovers the injected coefficient
 # ---------------------------------------------------------------------------

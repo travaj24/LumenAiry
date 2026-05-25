@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # v5.3.2 (ROADMAP V17 fix companion -- pre-tag ship-time-stamp injection):
+# v5.4.1 (AUDIT_V5_4_0 P2 #3): extended with Net LOC: +X / -Y stamp to close
+# the 619-line tombstone-deletion drift class flagged in the v5.4.0 audit.
 """stamp_changelog.py -- CHANGELOG ship-time-stamp injection script.
 
 Companion to the V17 walker
@@ -24,6 +26,10 @@ Patterns rewritten in the topmost ``## [X.Y.Z]`` block:
 * ``N files touched`` / ``N files changed`` / ``N files modified``
   -- update N to ``git diff PREV_TAG..HEAD --name-only | wc -l``.
 * ``CHANGELOG.md: OLD -> NEW lines`` -- update NEW to current line count.
+* ``Net LOC: +X / -Y`` (optionally followed by ``vs vA.B.C``)
+  -- update X (insertions) and Y (deletions) to
+  ``git diff PREV_TAG..HEAD --shortstat``.  Added v5.4.1 to close the
+  619-line tombstone-deletion drift class observed in v5.4.0.
 
 If a pattern is NOT found in the block, the script logs "skipped: no
 pattern to update" and proceeds.  It does NOT fabricate new pattern
@@ -115,6 +121,44 @@ _LINE_COUNT_ARROW_PATTERN = re.compile(
     re.IGNORECASE)
 _LINE_COUNT_FROM_TO_PATTERN = re.compile(
     r'(CHANGELOG\.md[^\n]*?\bfrom\s+\d+\s+to\s+)(?P<n>\d{4,6})(\s*lines)',
+    re.IGNORECASE)
+
+
+# Net-LOC self-citation pattern (v5.4.1 addition).  Matches the
+# canonical v5.x phrasing:
+#     "Net LOC: +13759 / -452 vs v5.3.2."
+#     "Net LOC: +2766 / -11."
+#     "Net LOC: +1500/-200 vs v1.2.3"   (no spaces around slash, allowed)
+# Captures:
+#   ins   -- insertions count (the "+" number)
+#   del_  -- deletions count (the "-" number; trailing underscore avoids
+#            shadowing the python builtin ``del``)
+# The trailing ``vs vX.Y.Z`` is optional; both forms are stamped.
+# Group structure (5 groups total):
+#   1 = "Net LOC: +" prefix (case-insensitive matching, but case
+#       preserved by Python regex's capture, so the original prefix
+#       stays intact on rewrite).
+#   2 = ins (named ``ins``)
+#   3 = " / -" middle glue (with optional spaces)
+#   4 = del_ (named ``del_``)
+#   5 = " vs vX.Y.Z" suffix OR a sentence-terminator (period / end-of-line)
+#
+# The suffix capture is the tricky part:
+#   - It must consume "vs vX.Y.Z" or "vs X.Y.Z" so the trailing
+#     version label round-trips intact on rewrite.
+#   - It must NOT consume the sentence-terminating period that
+#     follows "vs v5.3.2." in the canonical v5.4.0 phrasing --
+#     hence the dotted-version atom ``\d+(?:\.\d+)*`` rather than
+#     a loose ``[0-9.]+`` character class.
+#   - When no ``vs`` clause is present, the suffix is a zero-width
+#     lookahead at a whitespace / punctuation boundary so the
+#     numbers can be replaced without disturbing surrounding text.
+_NET_LOC_PATTERN = re.compile(
+    r'(?P<pre>Net\s+LOC\s*:\s*\+)'
+    r'(?P<ins>\d+)'
+    r'(?P<mid>\s*/\s*-)'
+    r'(?P<del_>\d+)'
+    r'(?P<suf>\s+vs\s+v?\d+(?:\.\d+)*|(?=[\s.,)]|$))',
     re.IGNORECASE)
 
 
@@ -276,6 +320,44 @@ def _git_changed_file_count(prev_tag, head_ref='HEAD'):
     return len(files)
 
 
+def _git_net_loc(prev_tag, head_ref='HEAD'):
+    """Return ``(insertions, deletions)`` from
+    ``git diff PREV_TAG..HEAD --shortstat``.
+
+    The git-shortstat output looks like:
+        " 54 files changed, 13813 insertions(+), 1075 deletions(-)"
+
+    Either side can be missing (a release that only adds OR only
+    deletes lines).  Missing sides default to 0 -- this matches
+    git's own convention.
+
+    Returns ``(None, None)`` when git is unavailable, the diff
+    fails, or the shortstat line cannot be parsed.
+    """
+    rc, out = _run(['git', 'diff', '--shortstat',
+                    f'{prev_tag}..{head_ref}'],
+                   timeout=30)
+    if rc != 0:
+        return None, None
+    # The shortstat output is a single line (possibly with a
+    # trailing newline).  Be defensive and walk all non-empty
+    # lines -- some git versions emit a blank leading line.
+    for line in out.splitlines():
+        line = line.strip()
+        if 'changed' not in line:
+            continue
+        ins_match = re.search(r'(\d+)\s+insertion', line)
+        del_match = re.search(r'(\d+)\s+deletion', line)
+        ins = int(ins_match.group(1)) if ins_match else 0
+        del_ = int(del_match.group(1)) if del_match else 0
+        # If both sides are zero AND the regex didn't fire, the
+        # parse failed; signal None to skip the stamp.
+        if ins_match is None and del_match is None:
+            return None, None
+        return ins, del_
+    return None, None
+
+
 def _resolve_prev_tag(target_version):
     """Find the previous git tag to use as the diff base.
 
@@ -422,8 +504,41 @@ def _stamp_line_count(body, n_lines):
     return body, None
 
 
+def _stamp_net_loc(body, loc_ins, loc_del):
+    """Rewrite ``Net LOC: +X / -Y [vs vA.B.C]`` claims.
+
+    Added in v5.4.1 (AUDIT_V5_4_0 P2 #3) to catch the deletions-side
+    drift class: V17.2's tolerance band only covers the ``+`` axis,
+    and the v5.4.0 Phase 6 tombstone deletion (-619 lines) slipped
+    past unnoticed.  Stamping both numbers from ``--shortstat``
+    closes the loop.
+
+    Returns ``(new_body, change_or_None)``.  When the empirical
+    pair matches the cited pair, the body is returned unchanged.
+    """
+    if loc_ins is None or loc_del is None:
+        return body, None
+    match = _NET_LOC_PATTERN.search(body)
+    if match is None:
+        return body, None
+    old_ins = int(match.group('ins'))
+    old_del = int(match.group('del_'))
+    if (old_ins, old_del) == (loc_ins, loc_del):
+        return body, None
+    new_span = (
+        f'{match.group("pre")}{loc_ins}{match.group("mid")}'
+        f'{loc_del}{match.group("suf")}'
+    )
+    new_body = body[:match.start()] + new_span + body[match.end():]
+    label = (
+        f'Net LOC: +{old_ins} / -{old_del}  ->  '
+        f'+{loc_ins} / -{loc_del} (git diff PREV_TAG..HEAD --shortstat)'
+    )
+    return new_body, (label, match.group(0), new_span)
+
+
 def _build_plan(body, mode, pass_n, coll_n, skip_n, xfail_n,
-                file_count, line_count):
+                file_count, line_count, loc_ins=None, loc_del=None):
     """Apply all rewrites to ``body`` and return a ``_StampPlan``."""
     plan = _StampPlan()
     new_body = body
@@ -457,6 +572,19 @@ def _build_plan(body, mode, pass_n, coll_n, skip_n, xfail_n,
         )
         if not has_pattern:
             plan.skipped.append('line count: no pattern to update')
+    else:
+        plan.changes.append(change)
+
+    # v5.4.1 addition: Net LOC: +X / -Y stamp.  Order it last so the
+    # diff-preview reads top-to-bottom as the patterns appear in the
+    # canonical "### Files touched" subsection of a CHANGELOG entry.
+    new_body, change = _stamp_net_loc(new_body, loc_ins, loc_del)
+    if change is None:
+        if loc_ins is None or loc_del is None:
+            plan.skipped.append(
+                'Net LOC: PREV_TAG not resolvable or shortstat failed')
+        elif _NET_LOC_PATTERN.search(body) is None:
+            plan.skipped.append('Net LOC: no pattern to update')
     else:
         plan.changes.append(change)
 
@@ -520,6 +648,8 @@ def stamp(version=None, apply_changes=False, mode='quick', stream=sys.stdout):
         print('    git tag PREV: unresolvable (no prior v* tag found)',
               file=stream)
         file_count = None
+        loc_ins = None
+        loc_del = None
     else:
         file_count = _git_changed_file_count(prev_tag)
         if file_count is None:
@@ -527,6 +657,17 @@ def stamp(version=None, apply_changes=False, mode='quick', stream=sys.stdout):
         else:
             print(f'    git diff {prev_tag}..HEAD: {file_count} files',
                   file=stream)
+        # v5.4.1 addition: --shortstat for the Net LOC stamp.
+        loc_ins, loc_del = _git_net_loc(prev_tag)
+        if loc_ins is None or loc_del is None:
+            print(
+                f'    git diff {prev_tag}..HEAD --shortstat: failed',
+                file=stream)
+        else:
+            print(
+                f'    git diff {prev_tag}..HEAD --shortstat: '
+                f'+{loc_ins} / -{loc_del}',
+                file=stream)
 
     line_count = _file_line_count(_CHANGELOG)
     if line_count is not None:
@@ -534,7 +675,7 @@ def stamp(version=None, apply_changes=False, mode='quick', stream=sys.stdout):
 
     plan = _build_plan(
         body, mode, pass_n, coll_n, skip_n, xfail_n,
-        file_count, line_count,
+        file_count, line_count, loc_ins, loc_del,
     )
 
     # Report.

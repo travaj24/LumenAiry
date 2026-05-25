@@ -378,11 +378,14 @@ def chebyshev_fit_2d(x: np.ndarray,
     # natural reshape is (n_x+1, n_y+1) with axis 0 = x-order.
     coeffs_2d = coeffs_flat.reshape(n_max_x + 1, n_max_y + 1)
 
+    # v5.4.1 (audit P3 #8): tighten prune threshold from 1e-15 (ULP
+    # noise) to 1e-12 (matches the test-tolerance band; eliminates
+    # ~15 spurious near-zero coefficients on constant-z fits).
     coeffs_dict = {
         (i, j): float(coeffs_2d[i, j])
         for i in range(n_max_x + 1)
         for j in range(n_max_y + 1)
-        if abs(coeffs_2d[i, j]) > 1e-15
+        if abs(coeffs_2d[i, j]) > 1e-12
     }
 
     if return_residual:

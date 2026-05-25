@@ -400,8 +400,20 @@ COATING_MATERIAL_REGISTRY: dict = {
         'range':          (400e-9, 5000e-9),
         # DeVore 1951 ordinary-ray Sellmeier (refractiveindex.info
         # main/TiO2/Devore-o); valid 0.43-1.53 um.
+        # v5.4.1 (audit P2 NEW): dummy poles set to 0.0 instead of 1.0
+        # to avoid lam2-C=0 division at lam=1um, which was inside
+        # documented validity range.
+        #
+        # v5.4.1 (audit P3 #9): DeVore 1951 used here is the
+        # ORDINARY-RAY Sellmeier of uniaxial-anisotropic rutile TiO2
+        # (n_o).  The extraordinary-ray index n_e is ~11% higher
+        # (n_e ~ 2.87 at 550nm vs n_o ~ 2.58); polarisation-sensitive
+        # coating design should account for this.  Future v5.5+
+        # candidate: add 'TiO2_e' (or similar) entry with the n_e
+        # Sellmeier (Cardona 1965 / DeVore 1951 also has the
+        # extraordinary fit).
         'sellmeier':      ((4.99048, 0.0, 0.0),
-                           (0.19086**2, 1.0, 1.0)),
+                           (0.19086**2, 0.0, 0.0)),
     },
     'Ta2O5': {
         'n_constant':     2.10,
@@ -410,8 +422,11 @@ COATING_MATERIAL_REGISTRY: dict = {
         # Bright 2013 Ta2O5 1-term Sellmeier
         # (refractiveindex.info main/Ta2O5/Bright); valid 0.5-1.0 um.
         # Single-pole approximation: n^2 - 1 = B*lam^2 / (lam^2 - C).
+        # v5.4.1 (audit P2 NEW): dummy poles set to 0.0 instead of 1.0
+        # to avoid lam2-C=0 division at lam=1um, which was inside
+        # documented validity range.
         'sellmeier':      ((3.5820, 0.0, 0.0),
-                           (0.16986**2, 1.0, 1.0)),
+                           (0.16986**2, 0.0, 0.0)),
     },
     'MgO':   {
         'n_constant':     1.74,
@@ -470,11 +485,14 @@ def _coating_sellmeier(
     """
     lam2 = (np.asarray(wavelength_m, dtype=float) * 1e6) ** 2
     (B1, B2, B3), (C1, C2, C3) = coeffs
-    n_sq_minus_1 = (
-        B1 * lam2 / (lam2 - C1)
-        + B2 * lam2 / (lam2 - C2)
-        + B3 * lam2 / (lam2 - C3)
-    )
+    # v5.4.1 (audit P2 NEW): defensive guard -- skip dummy poles where
+    # B is zero (the term contributes nothing to n^2 and would NaN if C
+    # also happens to equal lam2).
+    n_sq_minus_1 = np.zeros_like(lam2, dtype=float)
+    for B, C in ((B1, C1), (B2, C2), (B3, C3)):
+        if B == 0:
+            continue
+        n_sq_minus_1 = n_sq_minus_1 + B * lam2 / (lam2 - C)
     return np.sqrt(1.0 + n_sq_minus_1)
 
 
