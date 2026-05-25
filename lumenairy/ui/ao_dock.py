@@ -860,4 +860,6 @@ class AOClosedLoopDock(QWidget):
             f'({wfe_initial:.3f} -> {wfe_final:.3f} waves){suffix}')
 
 
-__all__ = ['AOClosedLoopDock']
+# v5.4 audit P1-A: no __all__ -- UI docks are imported by name in
+# main_window.py and not exposed at lumenairy.__all__ (V9 walker
+# convention; matches the 22 pre-v5.4 docks that ship without it).

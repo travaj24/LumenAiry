@@ -339,12 +339,14 @@ def test_roadmap_test_count_refresh():
     section = section_match.group(1)
     # Collect every integer in the section that is plausibly a test
     # count (4-digit number greater than 1500 -- the v4.14.3
-    # baseline was 1265 and v4.15.0+ is in the 1500-2000 range).
+    # baseline was 1265, v4.15.0+ was in the 1500-2000 range, and
+    # the v5.4 ship is at ~3880; v5.4 widened the upper bound to
+    # 6000 to give headroom for future growth).
     numbers = [int(n) for n in re.findall(r'(\d{4})', section)]
-    test_count_candidates = [n for n in numbers if 1500 <= n <= 3000]
+    test_count_candidates = [n for n in numbers if 1500 <= n <= 6000]
     assert test_count_candidates, (
         'ROADMAP ``## Current state`` section contains no 4-digit '
-        'number in the [1500, 3000] range; the test-count claim '
+        'number in the [1500, 6000] range; the test-count claim '
         'appears missing or malformed.\n\nSection text:\n'
         + section)
     # Pre-v4.15.3 claim was ``~1700``.  After v4.15.3 the claim

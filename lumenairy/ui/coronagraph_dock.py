@@ -780,4 +780,6 @@ class CoronagraphDock(QWidget):
         return params
 
 
-__all__ = ['CoronagraphDock']
+# v5.4 audit P1-C: no __all__ -- UI docks are imported by name in
+# main_window.py and not exposed at lumenairy.__all__ (V9 walker
+# convention; matches the 22 pre-v5.4 docks that ship without it).

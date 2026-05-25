@@ -932,4 +932,6 @@ def _desanitize_params(params: Dict[str, Any]) -> Dict[str, Any]:
             for k, v in params.items()}
 
 
-__all__ = ['AlgebraDock']
+# v5.4 audit P2-A: no __all__ -- UI docks are imported by name in
+# main_window.py and not exposed at lumenairy.__all__ (V9 walker
+# convention; matches the 22 pre-v5.4 docks that ship without it).

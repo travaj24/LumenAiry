@@ -188,10 +188,9 @@ def test_hf_freespace_edge_grazing_gaussian_parseval_renorm():
     # Upsample to N=512 at the same dx (covers double the extent).
     N_out, dx_out = 512, dx
 
-    p_in = float(np.sum(np.abs(E) ** 2) * dx * dx)
-    E_native = E  # we measure p_in on the input field for clarity.
     # Drive the resample path: native RS output is at the input grid,
-    # but we request a larger N at the same dx.
+    # but we request a larger N at the same dx.  Parseval is measured
+    # below against the native RS reference (re-run inside the test).
     E_out, dx_returned = propagate_huygens_fresnel_freespace(
         E, z, wavelength, dx,
         output_shape=(N_out, N_out), output_dx=dx_out)

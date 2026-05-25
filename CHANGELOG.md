@@ -14,6 +14,10 @@ the substantial Designer surface added in this release.
 
 **Zero physics regressions in 17 consecutive releases.**
 
+3880 unit tests pass (collected = 3901 = pass + 20 skip + 1 xfail)
+at write-time; stamp_changelog refreshes ship-time empirical values
+into this block at tag time.
+
 **Substantive ship:**
 
 * +1 substantive physics fix (HF freespace Parseval renormalisation,
@@ -67,9 +71,10 @@ that let CHANGELOG fabrications slip through.
   path on missing pytest / shallow-clone / unparseable output,
   mirroring V17.2 / V17.3.
 * `scripts/check_source_line_citations.py` -- V18 ambiguous-basename
-  citations (e.g. `core.py:855` matching 4 files in the repo) were
-  silently SKIPPED; now WARN with rc=1 and a candidate-list
-  message.  Closes the fabrication-class blind spot.
+  citations (e.g. a bare `foo.py` basename matching 4 candidate
+  files in the repo) were silently SKIPPED; now WARN with rc=1
+  and a candidate-list message instructing the author to use the
+  full path.  Closes the fabrication-class blind spot.
 * `scripts/check_source_line_citations.py` -- V18 `_is_trivial_line`
   now flags one-line and multi-line docstring boundaries
   (`"""foo"""`, bare `"""`) as trivial.  CHANGELOG citing a
@@ -338,8 +343,7 @@ code-work AND Designer GUI:
 
 ### Files touched
 
-42 files modified or created.  Net LOC: stamped post-commit by
-`scripts/stamp_changelog.py --apply`.
+33 files modified or created.  Net LOC: +9486 / -440 vs v5.3.2.
 
 ---
 

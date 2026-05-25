@@ -250,6 +250,7 @@ def test_design_optimize_wave_leg_telemetry_observational_only(caplog):
     telemetry is actually firing on the wave-leg code path.
     """
     import warnings
+
     from lumenairy.optimize import design_optimize
 
     # Run 1: default (no handler).
