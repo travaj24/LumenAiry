@@ -332,3 +332,219 @@ def broadband_ar_v_coat(
     d_H = wavelength_center / (4 * n_H)
     d_L = wavelength_center / (4 * n_L)
     return [(n_L, d_L), (n_H, d_H)]
+
+
+# =============================================================================
+# v5.4 Phase 5 -- Thin-film coating material database
+# =============================================================================
+#
+# Canonical lookup of refractive index for common thin-film AR / HR
+# coating materials.  Modeled on the ``GLASS_REGISTRY`` / ``get_glass_
+# index`` pattern in ``lumenairy/glass.py`` but scoped to dielectric
+# coating materials (which the bulk-glass catalogue does not cover in
+# a thin-film-relevant way).
+#
+# Each entry in :data:`COATING_MATERIAL_REGISTRY` is a dict carrying:
+#
+# * ``'n_constant'`` (float) -- flat refractive index at
+#   ``'ref_wavelength'``.  Used as the fallback when no Sellmeier
+#   coefficients are provided.
+# * ``'ref_wavelength'`` (float, m) -- the wavelength at which
+#   ``n_constant`` is quoted.  Always 550 nm for the dock's default
+#   visible-band designs.
+# * ``'range'`` ((float, float), m) -- documented validity range
+#   (``lambda_min, lambda_max``).  ``get_coating_material_index`` warns
+#   (``UserWarning``) when called outside this band.
+# * ``'sellmeier'`` (optional, ((B1, B2, B3), (C1, C2, C3))) -- 3-term
+#   Sellmeier coefficients with ``C_i`` in um^2 (same convention as
+#   :data:`lumenairy.glass.SELLMEIER_COEFFICIENTS`).  When present the
+#   dispersion is computed via the standard
+#   ``n^2 - 1 = sum_i B_i lam^2 / (lam^2 - C_i)`` formula; otherwise
+#   the constant ``n_constant`` value is returned for every wavelength.
+#
+# Sources for Sellmeier coefficients (top 4 AR/HR materials):
+#
+# * MgF2 (Dodge 1984): ordinary ray, refractiveindex.info
+#   main/MgF2/Dodge-o; valid 0.2-7.0 um.
+# * SiO2 (Malitson 1965): fused silica, JOSA 55, 1205; valid 0.21-6.7 um.
+# * TiO2 (DeVore 1951): ordinary ray, JOSA 41, 416; valid 0.43-1.53 um.
+# * Ta2O5 (Bright 2013): refractiveindex.info main/Ta2O5/Bright;
+#   valid 0.5-1.0 um for the polynomial fit baked here.  Outside
+#   that band the constant value is the safer choice; users with
+#   broader bands should override the registry entry or pass an
+#   explicit n at the layer level.
+# =============================================================================
+
+COATING_MATERIAL_REGISTRY: dict = {
+    'MgF2':  {
+        'n_constant':     1.38,
+        'ref_wavelength': 550e-9,
+        'range':          (200e-9, 7000e-9),
+        # Dodge 1984 ordinary-ray Sellmeier (refractiveindex.info
+        # main/MgF2/Dodge-o); valid 0.2-7.0 um.
+        'sellmeier':      ((0.48755108, 0.39875031, 2.3120353),
+                           (0.04338408**2, 0.09461442**2, 23.793604**2)),
+    },
+    'SiO2':  {
+        'n_constant':     1.46,
+        'ref_wavelength': 550e-9,
+        'range':          (200e-9, 8000e-9),
+        # Malitson 1965 fused silica (refractiveindex.info
+        # main/SiO2/Malitson); valid 0.21-6.7 um.
+        'sellmeier':      ((0.6961663, 0.4079426, 0.8974794),
+                           (0.0684043**2, 0.1162414**2, 9.896161**2)),
+    },
+    'TiO2':  {
+        'n_constant':     2.40,
+        'ref_wavelength': 550e-9,
+        'range':          (400e-9, 5000e-9),
+        # DeVore 1951 ordinary-ray Sellmeier (refractiveindex.info
+        # main/TiO2/Devore-o); valid 0.43-1.53 um.
+        'sellmeier':      ((4.99048, 0.0, 0.0),
+                           (0.19086**2, 1.0, 1.0)),
+    },
+    'Ta2O5': {
+        'n_constant':     2.10,
+        'ref_wavelength': 550e-9,
+        'range':          (350e-9, 8000e-9),
+        # Bright 2013 Ta2O5 1-term Sellmeier
+        # (refractiveindex.info main/Ta2O5/Bright); valid 0.5-1.0 um.
+        # Single-pole approximation: n^2 - 1 = B*lam^2 / (lam^2 - C).
+        'sellmeier':      ((3.5820, 0.0, 0.0),
+                           (0.16986**2, 1.0, 1.0)),
+    },
+    'MgO':   {
+        'n_constant':     1.74,
+        'ref_wavelength': 550e-9,
+        'range':          (250e-9, 6000e-9),
+    },
+    'ZnS':   {
+        'n_constant':     2.35,
+        'ref_wavelength': 550e-9,
+        'range':          (400e-9, 12000e-9),
+    },
+    'Al2O3': {
+        'n_constant':     1.77,
+        'ref_wavelength': 550e-9,
+        'range':          (200e-9, 8000e-9),
+    },
+    'HfO2':  {
+        'n_constant':     2.05,
+        'ref_wavelength': 550e-9,
+        'range':          (250e-9, 10000e-9),
+    },
+    'Y2O3':  {
+        'n_constant':     1.93,
+        'ref_wavelength': 550e-9,
+        'range':          (300e-9, 12000e-9),
+    },
+    'ZrO2':  {
+        'n_constant':     2.15,
+        'ref_wavelength': 550e-9,
+        'range':          (350e-9, 10000e-9),
+    },
+    'CeO2':  {
+        'n_constant':     2.20,
+        'ref_wavelength': 550e-9,
+        'range':          (400e-9, 8000e-9),
+    },
+    'CaF2':  {
+        'n_constant':     1.43,
+        'ref_wavelength': 550e-9,
+        'range':          (150e-9, 12000e-9),
+    },
+}
+
+
+def _coating_sellmeier(
+    wavelength_m,
+    coeffs,
+):
+    """Evaluate a 3-term Sellmeier on scalar or array wavelength.
+
+    ``coeffs`` is ``((B1, B2, B3), (C1, C2, C3))`` with ``C_i`` in
+    um^2 (same convention as :data:`lumenairy.glass.SELLMEIER_COEFFI-
+    CIENTS`).  Mirrors the array-aware behaviour of the polynomial
+    evaluator so the coatings-dock visible-band sweeps can call this
+    once with the full wavelength array.
+    """
+    lam2 = (np.asarray(wavelength_m, dtype=float) * 1e6) ** 2
+    (B1, B2, B3), (C1, C2, C3) = coeffs
+    n_sq_minus_1 = (
+        B1 * lam2 / (lam2 - C1)
+        + B2 * lam2 / (lam2 - C2)
+        + B3 * lam2 / (lam2 - C3)
+    )
+    return np.sqrt(1.0 + n_sq_minus_1)
+
+
+def get_coating_material_index(
+    material: str,
+    wavelength,
+):
+    """Return the refractive index of a thin-film coating material at
+    the given wavelength.
+
+    Parameters
+    ----------
+    material : str
+        Material name; must be a key in
+        :data:`COATING_MATERIAL_REGISTRY`.
+    wavelength : float or ndarray
+        Vacuum wavelength(s) in metres.  Scalar input returns float;
+        array input returns an ndarray of the same shape.
+
+    Returns
+    -------
+    n : float or ndarray
+        Real refractive index.  If the material has a ``'sellmeier'``
+        entry, the dispersion is computed; otherwise the constant
+        ``'n_constant'`` value is returned (broadcast for array
+        input).
+
+    Raises
+    ------
+    KeyError
+        If ``material`` is not in :data:`COATING_MATERIAL_REGISTRY`.
+
+    Warns
+    -----
+    UserWarning
+        If ``wavelength`` falls outside the documented ``'range'``
+        for ``material``.  The value is still returned (extrapolation
+        is sometimes useful for design-space exploration); the warning
+        only fires once per call.
+    """
+    if material not in COATING_MATERIAL_REGISTRY:
+        raise KeyError(
+            f"get_coating_material_index: unknown thin-film material "
+            f"{material!r}.  Known materials: "
+            f"{sorted(COATING_MATERIAL_REGISTRY.keys())}")
+    entry = COATING_MATERIAL_REGISTRY[material]
+    lmin, lmax = entry['range']
+
+    # Range check -- scalar or array; fire UserWarning if ANY sample
+    # falls outside the documented band.
+    wl_arr = np.asarray(wavelength, dtype=float)
+    if np.any(wl_arr < lmin) or np.any(wl_arr > lmax):
+        import warnings
+        warnings.warn(
+            f"get_coating_material_index: {material} validity is "
+            f"[{lmin:.3e}, {lmax:.3e}] m; got wavelength "
+            f"{float(wl_arr.min()):.3e} to {float(wl_arr.max()):.3e} m. "
+            f"Extrapolated value may not be physical.",
+            UserWarning, stacklevel=2,
+        )
+
+    if 'sellmeier' in entry:
+        result = _coating_sellmeier(wavelength, entry['sellmeier'])
+        # Scalar in -> scalar out, mirroring _sellmeier_index in glass.py
+        if wl_arr.ndim == 0:
+            return float(result)
+        return result
+
+    # Constant-n path.
+    n_const = float(entry['n_constant'])
+    if wl_arr.ndim == 0:
+        return n_const
+    return np.full_like(wl_arr, n_const, dtype=float)

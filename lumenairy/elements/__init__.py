@@ -60,6 +60,8 @@ from .elements import (
     apply_zernike_aberration,
     coronagraph_contrast_curve,
     generate_turbulence_screen,
+    make_eight_octant_phase_mask,
+    make_four_quadrant_phase_mask,
     zernike,
 )
 from .freeform import (
@@ -132,6 +134,9 @@ __all__ = [
     'apply_mask', 'zernike', 'apply_zernike_aberration',
     'apply_lyot_focal_plane_mask', 'apply_vortex_phase_mask',
     'apply_lyot_stop', 'apply_apodized_pupil',
+    # v5.4 Phase 5: canonical phase-mask builders for the four-quadrant
+    # (Rouan 2000) and eight-octant (Murakami 2008) focal-plane masks.
+    'make_four_quadrant_phase_mask', 'make_eight_octant_phase_mask',
     'coronagraph_contrast_curve',
     'generate_turbulence_screen',
     # thin-grating diffraction efficiency (analytical scalar model)

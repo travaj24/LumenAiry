@@ -110,6 +110,7 @@ from .ghost import (
     enumerate_ghost_paths,
     ghost_analysis,
     non_sequential_stray_light,
+    retrace_ghost_path,
 )
 from .image_plane_wfe import (
     ImagePlaneWFE,
@@ -197,6 +198,7 @@ __all__ = [
     'apply_detector', 'shack_hartmann',
     # ghost
     'enumerate_ghost_paths', 'ghost_analysis', 'non_sequential_stray_light',
+    'retrace_ghost_path',
     # interferometry
     'simulate_interferogram', 'phase_shift_extract', 'fringe_spacing',
     # phase retrieval

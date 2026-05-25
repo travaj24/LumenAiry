@@ -64,25 +64,29 @@ except ImportError:  # pragma: no cover - matplotlib is a hard dep
 # =============================================================================
 # Material database -- common thin-film coating indices.
 #
-# The library's ``elements.coatings`` module does not expose a
-# material-name -> refractive-index lookup.  Rather than depend on
-# the ``glass`` package (which is curated for bulk substrates, not
-# thin-film coating materials), we hardcode the canonical seven
-# materials used in 95% of AR / HR designs.  All indices are quoted
-# at ~550 nm (visible reference); the dispersion of these materials
-# over the 400-800 nm band is small enough for the design-helper
-# templates the dock exposes.  Documented limitation: the dock
-# treats n as dispersionless within a sweep.
+# v5.4 Phase 5: library now ships COATING_MATERIAL_REGISTRY in
+# ``lumenairy.elements.coatings``, so the dock consumes the canonical
+# registry instead of carrying its own hardcoded short list.  Each
+# material's reference index (at its ``ref_wavelength``, typically
+# 550 nm) is materialised into ``MATERIAL_INDEX`` at module-load
+# time for back-compat with the dock's existing ``MATERIAL_INDEX[
+# name]`` call sites.  ``get_coating_material_index(material,
+# wavelength)`` is the canonical accessor for wavelength-aware
+# lookups -- the four most common AR/HR materials (MgF2, SiO2, TiO2,
+# Ta2O5) carry Sellmeier coefficients, the rest fall back to a flat
+# index.  Documented limitation: the dock's table view still treats
+# n as dispersionless within a single layer entry (the user can
+# override by editing the ``n`` cell directly).
 # =============================================================================
 
+from lumenairy.elements.coatings import (
+    COATING_MATERIAL_REGISTRY,
+    get_coating_material_index,
+)
+
 MATERIAL_INDEX: Dict[str, float] = {
-    'MgF2':  1.38,
-    'SiO2':  1.46,
-    'Al2O3': 1.77,
-    'MgO':   1.74,
-    'Ta2O5': 2.10,
-    'ZnS':   2.35,
-    'TiO2':  2.40,
+    name: float(get_coating_material_index(name, entry['ref_wavelength']))
+    for name, entry in sorted(COATING_MATERIAL_REGISTRY.items())
 }
 
 SUBSTRATE_INDEX: Dict[str, float] = {

@@ -115,6 +115,8 @@ from .elements import (
     apply_vortex_phase_mask,
     apply_zernike_aberration,
     generate_turbulence_screen,
+    make_eight_octant_phase_mask,
+    make_four_quadrant_phase_mask,
     zernike,
 )
 
@@ -263,6 +265,13 @@ from ._context import (
     snapshot_globals,
 )
 
+# v5.4 Phase 5: 2-D Chebyshev fit primitive promoted out of the UI
+# dock so notebook scripts and external callers can reuse the same
+# tested LS solve.  Lives under the private ``_math`` package; we
+# only re-export the fit helper (the Vandermonde-table primitives
+# stay internal).
+from ._math.chebyshev import chebyshev_fit_2d
+
 # â”€â”€ Adaptive optics primitives â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # AO moved to analysis/ao.py in 4.3.0; lumenairy.ao still works via
 # a back-compat shim.
@@ -274,6 +283,9 @@ from .analysis.ao import (
     # build-it-yourself pattern in examples/11_ao_closed_loop.py.
     ao_closed_loop,
     apply_dm,
+    # v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A): canonical
+    # Shack-Hartmann WFS-callable factory for ao_closed_loop(wfs=...).
+    make_shack_hartmann_wfs,
     slope_to_modal,
     zernike_modal_basis,
 )
@@ -319,6 +331,7 @@ from .analysis.ghost import (
     enumerate_ghost_paths,
     ghost_analysis,
     non_sequential_stray_light,
+    retrace_ghost_path,
 )
 
 # â”€â”€ Interferometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -365,8 +378,11 @@ from .elements.bsdf import (
 
 # â”€â”€ Thin-film coatings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.coatings import (
+    # v5.4 Phase 5: thin-film coating material database and accessor.
+    COATING_MATERIAL_REGISTRY,
     broadband_ar_v_coat,
     coating_reflectance,
+    get_coating_material_index,
     quarter_wave_ar,
 )
 
@@ -948,6 +964,9 @@ __all__ = [
     'surface_sag_q_bfs',
     'surface_sag_q_con',
     'surface_sag_freeform',
+    # v5.4 Phase 5: 2-D Chebyshev fit helper (LS solve for the
+    # ``{(i, j): c_ij}`` dict that ``surface_sag_chebyshev`` consumes).
+    'chebyshev_fit_2d',
 
     # Polarization / Jones calculus
     'JonesField',
@@ -991,6 +1010,11 @@ __all__ = [
     'apply_vortex_phase_mask',
     'apply_lyot_stop',
     'apply_apodized_pupil',
+    # v5.4 Phase 5: phase-mask coronagraph builders (FQPM + 8OPM)
+    # promoted from inline ``coronagraph_dock`` helper to canonical
+    # library functions.
+    'make_four_quadrant_phase_mask',
+    'make_eight_octant_phase_mask',
     'coronagraph_contrast_curve',
 
     # Grid / sampling helpers
@@ -1271,6 +1295,8 @@ __all__ = [
     'LeakyIntegrator',
     # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper):
     'ao_closed_loop',
+    # v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A):
+    'make_shack_hartmann_wfs',
 
     # Field-resolved analyses (4.4.0)
     'DistortionVsField', 'distortion_vs_field',
@@ -1299,6 +1325,7 @@ __all__ = [
     'enumerate_ghost_paths',
     'ghost_analysis',
     'non_sequential_stray_light',
+    'retrace_ghost_path',
 
     # ============================================================
     # Tier 5 -- Optimize
@@ -1413,6 +1440,9 @@ __all__ = [
     'coating_reflectance',
     'quarter_wave_ar',
     'broadband_ar_v_coat',
+    # v5.4 Phase 5: thin-film coating material database.
+    'COATING_MATERIAL_REGISTRY',
+    'get_coating_material_index',
 
     # ============================================================
     # Tier 8 -- I/O (HDF5 / Zarr / phase / FITS / code-gen)

@@ -1,27 +1,26 @@
-# v5.4 (audit P3-C): new Chebyshev surface fitter dock.
+# v5.4 Phase 5: library now ships chebyshev_fit_2d.
 #
-# AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24.md Part 6.3 P3-C noted that
-# six library sites consume the shared Chebyshev helpers extracted
-# into ``lumenairy/_math/chebyshev.py`` in v5.2.0, but no UI offered
-# a "fit measured freeform data to Chebyshev polynomials" workflow.
-# This dock fills that gap: it loads a measured z(x, y) height map,
-# fits it to a 2-D first-kind Chebyshev product basis, and either
-# exports the coefficients or stamps them into the current system's
-# prescription as a ``freeform_type='chebyshev'`` surface (matching
-# the convention of ``lumenairy.elements.freeform.surface_sag_chebyshev``).
+# AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24.md Part 6.3 P3-C originally
+# noted that six library sites consume the shared Chebyshev helpers
+# extracted into ``lumenairy/_math/chebyshev.py`` in v5.2.0, but no UI
+# offered a "fit measured freeform data to Chebyshev polynomials"
+# workflow.  This dock fills that gap: it loads a measured z(x, y)
+# height map, fits it to a 2-D first-kind Chebyshev product basis,
+# and either exports the coefficients or stamps them into the current
+# system's prescription as a ``freeform_type='chebyshev'`` surface
+# (matching the convention of
+# ``lumenairy.elements.freeform.surface_sag_chebyshev``).
 #
-# Library inspection notes
-# ------------------------
-# ``lumenairy._math.chebyshev`` exposes the three Vandermonde-table
-# helpers (value, first-derivative, second-derivative) only.  It
-# does NOT expose a ready-made ``chebyshev_fit_2d`` routine.  Per
-# the task spec we therefore implement the fit inline via
-# ``numpy.polynomial.chebyshev.chebvander2d`` + ``numpy.linalg.lstsq``.
-# The basis used by ``chebvander2d`` is exactly T_i(x) * T_j(y) with
-# T the first-kind Chebyshev polynomial -- identical to the basis
-# the library's ``surface_sag_chebyshev`` evaluates -- so the
-# coefficients we emit drop straight into the existing
-# ``cheb_coeffs`` dict format ``{(i, j): c_ij}``.
+# v5.4 Phase 5 follow-up: the inline ``chebvander2d`` + ``lstsq``
+# block has been promoted into the library as
+# ``lumenairy._math.chebyshev.chebyshev_fit_2d`` (re-exported at the
+# top level as ``lumenairy.chebyshev_fit_2d``).  The dock now defers
+# the LS solve to that helper so every UI / notebook / batch tool
+# shares a single tested fit primitive instead of each rolling its
+# own Vandermonde + lstsq block.  The basis is identical to the one
+# ``surface_sag_chebyshev`` evaluates, so the emitted
+# ``{(i, j): c_ij}`` coefficients drop straight into the existing
+# prescription dict format.
 """
 Chebyshev freeform-surface fitter dock.
 
@@ -107,49 +106,70 @@ def _fit_chebyshev_2d(z: np.ndarray, max_order: int,
                       ) -> tuple:
     """Fit a tensor-product Chebyshev surface to a 2-D height map.
 
-    Uses ``numpy.polynomial.chebyshev.chebvander2d`` to build the
-    design matrix and ``numpy.linalg.lstsq`` for the solve.  Returns
-    ``(coeff_matrix, residual_map, x_axis, y_axis)`` where
-    ``coeff_matrix[i, j]`` is c_ij in ``z = sum c_ij T_i(x) T_j(y)``.
+    v5.4 Phase 5: this wrapper now defers the LS solve to
+    ``lumenairy._math.chebyshev.chebyshev_fit_2d`` (re-exported at
+    the top level as ``lumenairy.chebyshev_fit_2d``).  It still
+    returns the dock's historical 4-tuple
+    ``(coeff_matrix, fit_map, residual, x_axis, y_axis)`` so the
+    rest of the dock (table, plot, export, apply) keeps working
+    unchanged; the coefficient matrix is reconstructed from the
+    sparse ``{(i, j): c_ij}`` dict that the library helper returns.
     """
-    from numpy.polynomial.chebyshev import chebvander2d, chebval2d
+    from lumenairy._math.chebyshev import chebyshev_fit_2d
+    from numpy.polynomial.chebyshev import chebval2d
+
     ny, nx = z.shape
-    # Build pixel-centre coordinate grids.
+    # Build pixel-centre coordinate axes.  When normalize_aperture is
+    # True we pre-scale to [-1, 1] and pass normalize_xy=False so the
+    # library doesn't redundantly rescale; otherwise we hand it raw
+    # pixel-indexed axes and let it normalise.
     if normalize_aperture:
         x = np.linspace(-1.0, 1.0, nx)
         y = np.linspace(-1.0, 1.0, ny)
+        normalize_xy = False
     else:
         x = np.linspace(-(nx - 1) / 2.0, (nx - 1) / 2.0, nx)
         y = np.linspace(-(ny - 1) / 2.0, (ny - 1) / 2.0, ny)
-    X, Y = np.meshgrid(x, y)
-    # Flatten and apply mask + finite filter.
+        normalize_xy = True
+
+    # The library helper accepts a per-pixel weight array.  We build
+    # one from the dock's binary mask (1 on keep, 0 on drop) and also
+    # zero out non-finite z entries so the LS solve never sees a NaN.
     finite = np.isfinite(z)
     if mask is not None:
         if mask.shape != z.shape:
             raise ValueError(
                 f'mask shape {mask.shape} does not match data '
                 f'shape {z.shape}')
-        keep = finite & (mask.astype(bool))
+        weight = (finite & mask.astype(bool)).astype(np.float64)
     else:
-        keep = finite
-    if keep.sum() < (max_order + 1) ** 2:
-        raise ValueError(
-            f'not enough valid pixels ({int(keep.sum())}) to fit '
-            f'order {max_order} (need at least '
-            f'{(max_order + 1) ** 2}).')
-    Xf = X[keep].ravel()
-    Yf = Y[keep].ravel()
-    Zf = z[keep].ravel()
-    # ``chebvander2d`` returns a flat (Npts, (n+1)*(m+1)) matrix
-    # in row-major (i then j) ordering.
-    V = chebvander2d(Xf, Yf, [max_order, max_order])
-    coeffs_flat, *_ = np.linalg.lstsq(V, Zf, rcond=None)
-    coeff_matrix = coeffs_flat.reshape(
-        (max_order + 1, max_order + 1))
-    # Compute residual on the full grid (out-of-mask cells filled
-    # with NaN so the residual plot makes geometric sense).
+        weight = finite.astype(np.float64)
+
+    coeffs_dict, residual = chebyshev_fit_2d(
+        x, y, z,
+        n_max_x=max_order, n_max_y=max_order,
+        weight=weight,
+        normalize_xy=normalize_xy,
+        return_residual=True,
+    )
+
+    # Reconstruct the (max_order+1, max_order+1) dense coefficient
+    # matrix the dock's table / export code expects.  The library
+    # helper drops near-zero terms from the dict; missing entries are
+    # therefore exactly zero, so the reconstruction below is loss-
+    # less and matches the historical ``coeffs_flat.reshape(...)``
+    # output of the inline implementation.
+    coeff_matrix = np.zeros(
+        (max_order + 1, max_order + 1), dtype=np.float64)
+    for (i, j), c in coeffs_dict.items():
+        coeff_matrix[i, j] = c
+
+    # Evaluate fit_map on the full grid for the residual plot.  We
+    # don't reuse ``z - residual`` here because residual is NaN-
+    # masked outside the weight support, but the user wants to see
+    # the smooth extrapolated fit there.
+    X, Y = np.meshgrid(x, y)
     fit_map = chebval2d(X, Y, coeff_matrix)
-    residual = np.where(keep, z - fit_map, np.nan)
     return coeff_matrix, fit_map, residual, x, y
 
 

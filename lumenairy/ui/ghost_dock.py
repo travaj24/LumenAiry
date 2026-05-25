@@ -517,45 +517,121 @@ class GhostDock(QWidget):
         return None
 
     def _draw_spot_preview(self, ghost):
-        """Render a stylised spot diagram for the selected ghost.
+        """Render the per-path ghost spot diagram for the selected row.
 
-        The library aggregates per-path retraces inside
-        ``non_sequential_stray_light``; we render a Gaussian whose
-        width tracks ``focus_z_estimate`` and whose peak reflects
-        the energy fraction so the user gets a relative-magnitude
-        cue without a second per-path trace.
+        v5.4 Phase 5 (audit P2-C closure): replaced the synthesised
+        Gaussian relative-magnitude visual with a REAL per-path
+        retrace via ``analysis.ghost.retrace_ghost_path``.  The dock
+        now displays the actual ray-cloud histogram at the image
+        plane along with the centroid + RMS legend.
+
+        Falls back to the legacy Gaussian if the retrace raises (e.g.
+        an unsupported prescription schema or a numerically-degenerate
+        path).  The fallback path keeps the dock usable while still
+        clearly labelling the fallback in the title.
         """
         self.fig_spot.clear()
         ax = self.fig_spot.add_subplot(111)
         ax.set_facecolor('#0a0c10')
 
-        n = 64
-        x = np.linspace(-1.0, 1.0, n)
-        xx, yy = np.meshgrid(x, x)
-        rr = np.sqrt(xx * xx + yy * yy)
-        f_est = float(ghost.get('focus_z_estimate', 0.05))
-        sigma = max(min(0.04 / max(abs(f_est) * 10, 1e-6), 0.6), 0.05)
-        eppm = float(ghost.get('energy_ppm', 0.0))
-        spot = np.exp(-(rr ** 2) / (2.0 * sigma * sigma)) * (eppm + 1e-12)
-
-        im = ax.imshow(np.log10(spot + spot.max() * 1e-6 + 1e-30),
-                       cmap='inferno', origin='lower',
-                       extent=(-1.0, 1.0, -1.0, 1.0))
         path = ghost.get('path')
-        title = (f'Ghost spot S{path[0]}->S{path[1]} '
-                 if isinstance(path, tuple) else 'Ghost spot ')
-        ax.set_title(title + f'({eppm:.3f} ppm)',
-                     color='#dde8f8', fontsize=8,
+        eppm = float(ghost.get('energy_ppm', 0.0))
+
+        # Attempt a real retrace.  All inputs come from the dock's
+        # current model so we don't need to re-validate the
+        # prescription here.
+        retrace_ok = False
+        rays_xy = None
+        rms_mm = float('nan')
+        peak_xy_mm = (0.0, 0.0)
+        try:
+            if isinstance(path, tuple) and len(path) == 2:
+                from ..analysis.ghost import (
+                    _path_from_pair, retrace_ghost_path)
+                pres = self.sm.to_prescription()
+                ap = pres.get('aperture_diameter', 25.4e-3)
+                semi_ap = (ap / 2.0) if ap else 12.7e-3
+                # Use the system's image-plane z if the prescription
+                # carries one, else default to None (library falls
+                # back to the last surface's thickness).
+                image_z = pres.get('image_distance')
+                expl_path = _path_from_pair(
+                    self._n_surfaces, int(path[0]), int(path[1]))
+                rr = retrace_ghost_path(
+                    pres, expl_path,
+                    wavelength=self.sm.wavelength_m,
+                    semi_aperture=float(semi_ap),
+                    n_rays=64,
+                    image_plane_z=image_z,
+                )
+                rays_xy = np.asarray(rr['rays_image_plane'])
+                rms_mm = float(rr['rms_radius_mm'])
+                peak_xy_mm = tuple(rr['peak_xy_mm'])
+                retrace_ok = rays_xy is not None and rays_xy.shape[0] >= 2
+        except Exception:
+            retrace_ok = False
+
+        if retrace_ok and rays_xy.shape[0] >= 2:
+            # v5.4 Phase 5: real per-path retrace -- ray-cloud scatter
+            # plus a 2-D histogram underlay for density.  Coordinates
+            # in millimetres relative to the image-plane vertex.
+            x_mm = rays_xy[:, 0] * 1e3
+            y_mm = rays_xy[:, 1] * 1e3
+            # Choose extent: 3-sigma RMS, with a minimum window so we
+            # never zoom into a single-pixel artefact.
+            half = max(3.0 * rms_mm, 1e-3)
+            extent = (-half, half, -half, half)
+            try:
+                ax.hist2d(x_mm, y_mm,
+                          bins=min(48, max(8, int(np.sqrt(len(x_mm))))),
+                          range=[[-half, half], [-half, half]],
+                          cmap='inferno')
+            except (ValueError, RuntimeError):
+                # hist2d can choke on edge cases (all rays at one
+                # point); fall through to a scatter.
+                pass
+            ax.scatter(x_mm, y_mm, s=4, alpha=0.4, c='#5cb8ff',
+                       edgecolors='none')
+            ax.set_xlim(extent[0], extent[1])
+            ax.set_ylim(extent[2], extent[3])
+            title = (f'Ghost S{path[0]}->S{path[1]} '
+                     f'({eppm:.3f} ppm, RMS {rms_mm:.3f} mm)')
+            ax.set_xlabel('x [mm]', color='#dde8f8', fontsize=8,
+                          fontfamily='monospace')
+            ax.set_ylabel('y [mm]', color='#dde8f8', fontsize=8,
+                          fontfamily='monospace')
+        else:
+            # Fallback: synthesised Gaussian (legacy behaviour) so the
+            # dock stays usable on prescriptions where the retrace
+            # raises.
+            n = 64
+            x = np.linspace(-1.0, 1.0, n)
+            xx, yy = np.meshgrid(x, x)
+            rr = np.sqrt(xx * xx + yy * yy)
+            f_est = float(ghost.get('focus_z_estimate', 0.05))
+            sigma = max(min(0.04 / max(abs(f_est) * 10, 1e-6), 0.6),
+                         0.05)
+            spot = (np.exp(-(rr ** 2) / (2.0 * sigma * sigma))
+                    * (eppm + 1e-12))
+            im = ax.imshow(np.log10(spot + spot.max() * 1e-6 + 1e-30),
+                           cmap='inferno', origin='lower',
+                           extent=(-1.0, 1.0, -1.0, 1.0))
+            title = (f'Ghost S{path[0]}->S{path[1]} (fallback) '
+                     if isinstance(path, tuple) else 'Ghost spot ')
+            title += f'({eppm:.3f} ppm)'
+            try:
+                self.fig_spot.colorbar(im, ax=ax, fraction=0.046,
+                                       shrink=0.8, pad=0.04)
+            except Exception:
+                pass
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        ax.set_title(title, color='#dde8f8', fontsize=8,
                      fontfamily='monospace')
-        ax.set_xticks([])
-        ax.set_yticks([])
+        ax.tick_params(colors='#7a94b8', labelsize=7)
         for spine in ax.spines.values():
             spine.set_color('#334054')
-        try:
-            self.fig_spot.colorbar(im, ax=ax, fraction=0.046,
-                                   shrink=0.8, pad=0.04)
-        except Exception:
-            pass
         self.fig_spot.tight_layout()
         self.canvas_spot.draw_idle()
 

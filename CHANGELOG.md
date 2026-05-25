@@ -14,7 +14,7 @@ the substantial Designer surface added in this release.
 
 **Zero physics regressions in 17 consecutive releases.**
 
-3880 unit tests pass (collected = 3901 = pass + 20 skip + 1 xfail)
+3942 unit tests pass (collected = 3963 = pass + 20 skip + 1 xfail)
 at write-time; stamp_changelog refreshes ship-time empirical values
 into this block at tag time.
 
@@ -304,6 +304,93 @@ documented in the dock docstring).  Coefficient table
 the library's canonical `freeform_type='chebyshev'` surface
 format.
 
+### Phase 5 -- Library extensions to retire dock-inline workarounds
+
+The 4 phase-driven dock waves (Phase 2-4) shipped working surfaces
+but left 8 inline workarounds where the library lacked a clean
+primitive.  Phase 5 promotes those workarounds into library API so
+the docks consume canonical functions:
+
+* **`lumenairy.analysis.ao.make_shack_hartmann_wfs(...)`** (NEW;
+  ~290 LOC).  Factory returning a `callable(residual) -> measured`
+  suitable for `ao_closed_loop(wfs=...)`.  Captures
+  subaperture_grid, noise_sigma_pixels, modal_basis, n_modes,
+  dx_pupil, wavelength, lenslet_focal.  Implements first-call
+  per-geometry calibration (zero-phase reference + unit-tilt
+  linearity scale) cached in a closure-local dict so repeated
+  calls are fast.  AO dock now wires the real SH WFS when the
+  combo is `'shack_hartmann'`; pyramid / curvature fall back to
+  `wfs=None` with a documented status message.  13 new tests.
+
+* **`zernike_decompose(normalization=, weighting=)`** -- 2 new
+  kwargs accepted by `lumenairy.analysis.zernike.zernike_decompose`.
+  `normalization`: `'OSA'` (default, bit-for-bit v5.3.2),
+  `'Standard'` (= OSA per ANSI/Z80.28-2010), `'Noll'` (sign-flip
+  on m<0 modes per Noll 1976), `'Fringe'` (raises
+  NotImplementedError with v5.5 pointer; the Fringe convention is
+  a different mode set + peak-value-1 polynomials, not expressible
+  as a per-mode rescale of OSA).  `weighting=` accepts a 2-D float
+  array applied via canonical weighted-least-squares.  Zernike
+  dock removed its post-hoc fallback and now passes the kwargs
+  through.  11 new tests + 93 zernike tests overall.
+
+* **`lumenairy.analysis.ghost.retrace_ghost_path(...)`** (NEW).
+  Per-path explicit raytrace returning image-plane geometry
+  (`rays_image_plane`, `peak_xy_mm`, `rms_radius_mm`, `fwhm_mm`,
+  `total_transmittance`, `energy_fraction_ppm`).  Ghost dock spot
+  preview is now a real retrace (hist2d + scatter) instead of the
+  synthesised relative-magnitude Gaussian.  Discovered a backward-
+  ray intersection issue in the library's `_intersect_surface`
+  fast path (it picks the wrong sphere root for rays travelling
+  toward `-z` after a reflection); the scoped workaround is a new
+  `_ghost_intersect` helper in `analysis/ghost.py` that uses the
+  smaller-magnitude root.  Promoting this fix to
+  `raytrace/intersection.py` is a v5.5 candidate.  5 new tests.
+
+* **`make_four_quadrant_phase_mask()`** + **`make_eight_octant_phase_mask()`**
+  (NEW; in `lumenairy.elements.elements`, re-exported via
+  `lumenairy.elements.coronagraph`).  FQPM and 8OPM builders with
+  `phase_step=pi` default + configurable centre.  Coronagraph dock
+  removed its inline `_phase_octant_mask` and now consumes the
+  library helpers.  7 new tests including the canonical "FQPM-pi
+  perfectly nulls planar wave on-axis" check.
+
+* **`lumenairy.elements.coatings.COATING_MATERIAL_REGISTRY`** +
+  **`get_coating_material_index(material, wavelength)`** (NEW).
+  12 thin-film materials (MgF2, SiO2, TiO2, Ta2O5, MgO, ZnS,
+  Al2O3, HfO2, Y2O3, ZrO2, CeO2, CaF2).  Top 4 (MgF2 / SiO2 /
+  TiO2 / Ta2O5) carry real 3-term Sellmeier coefficients sourced
+  from refractiveindex.info (Dodge / Malitson / DeVore / Bright);
+  the other 8 use a flat `n_constant` at 550 nm.  Coatings dock
+  removed its hardcoded 7-material dict and now drives the
+  Material dropdown from `sorted(COATING_MATERIAL_REGISTRY.keys())`.
+  With dispersion engaged, TiO2 at 550 nm shifts 2.40 -> 2.58 and
+  Ta2O5 shifts 2.10 -> 2.23 (correct rutile / Bright values);
+  MgF2 / SiO2 stay within 0.001 of the prior constants.  13 new
+  tests; Bragg-HR template auto-tracks the new values.
+
+* **`lumenairy._math.chebyshev.chebyshev_fit_2d(x, y, z, ...)`**
+  (NEW).  2-D Chebyshev least-squares fit returning the same
+  `{(i, j): c_ij}` coefficient dict format that
+  `lumenairy.elements.freeform.surface_sag_chebyshev` consumes.
+  Accepts `weight=` (variance weights), `normalize_xy=` (rescale
+  to [-1, 1] before fit), `return_residual=`.  Chebyshev-fit dock
+  removed its inline `chebvander2d + lstsq` block and now calls
+  the library helper.  6 new tests including bit-for-bit
+  Chebyshev coefficient recovery and weighted-fit outlier
+  rejection.
+
+* **CHANGELOG archive completion** (audit P3-7).  Inspection
+  confirmed the v5.2.3 + v5.3.0 archive splits had already moved
+  v4.11.x through v2.5.x into `docs/changelogs/v4.md`.  Top-level
+  CHANGELOG.md's oldest entry is v4.13.0 (2026-05-17).  Refreshed
+  the trailing archive-note paragraph to cite v5.4.0 Phase 5 as
+  the explicit completion checkpoint.
+
+After Phase 5, the v5.4.0 audit-closure list is empty: every
+deferral noted during Phases 1-4 has been retired with a library
+extension + dock simplification + regression tests.
+
 ### Designer GUI version bump
 
 Internal version markers in `lumenairy/ui/` were at v3.7.10 (per
@@ -343,7 +430,7 @@ code-work AND Designer GUI:
 
 ### Files touched
 
-33 files modified or created.  Net LOC: +9486 / -440 vs v5.3.2.
+38 files modified or created.  Net LOC: +10912 / -446 vs v5.3.2.
 
 ---
 
@@ -6004,9 +6091,4 @@ behavioural change vs v4.12.2 in this path.
 
 ---
 
-## Pre-v5.0 history
-
-All pre-v5.0 changelog entries (v4.11.0 through v2.5.0) are
-archived at [docs/changelogs/v4.md](docs/changelogs/v4.md).
-See that file for full historical release notes.  The v5.3
-release completed the archive split that v5.2.3 began.
+**Archive note:** v4.10.x and earlier (down to v2.5.x) are preserved in [`docs/changelogs/v4.md`](docs/changelogs/v4.md).  The v5.2.3 release split moved v4.11.x - v4.12.x; v5.4.0 Phase 5 completes the pass.

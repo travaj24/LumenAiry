@@ -18,6 +18,10 @@ Element factories
   apodized).
 * :func:`apply_apodized_pupil` -- pupil apodization (cos2 / cos_power
   / gaussian / sonine) for shaped-pupil designs.
+* :func:`make_four_quadrant_phase_mask` -- canonical four-quadrant
+  phase-mask coronagraph (Rouan 2000) as a complex (N, N) ndarray.
+* :func:`make_eight_octant_phase_mask` -- canonical eight-octant
+  phase-mask coronagraph (Murakami 2008) as a complex (N, N) ndarray.
 
 For the analysis side -- post-coronagraph contrast curves --
 see :mod:`lumenairy.analysis.coronagraph`.
@@ -28,6 +32,8 @@ from .elements import (
     apply_lyot_focal_plane_mask,
     apply_lyot_stop,
     apply_vortex_phase_mask,
+    make_eight_octant_phase_mask,
+    make_four_quadrant_phase_mask,
 )
 
 __all__ = [
@@ -35,4 +41,7 @@ __all__ = [
     'apply_vortex_phase_mask',
     'apply_lyot_stop',
     'apply_apodized_pupil',
+    # v5.4 Phase 5: phase-mask builders (FQPM + 8OPM).
+    'make_four_quadrant_phase_mask',
+    'make_eight_octant_phase_mask',
 ]

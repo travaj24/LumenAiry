@@ -49,6 +49,7 @@ __all__ = [
     'chebyshev_vandermonde',
     'chebyshev_derivative_vandermonde',
     'chebyshev_second_derivative_vandermonde',
+    'chebyshev_fit_2d',
 ]
 
 
@@ -235,3 +236,163 @@ def chebyshev_second_derivative_vandermonde(u: np.ndarray, max_k: int,
             2.0 * u_arr * Tpp_rows[n] + 4.0 * Tp[n] - Tpp_rows[n - 1]
         )
     return xp.stack(Tpp_rows)
+
+
+def chebyshev_fit_2d(x: np.ndarray,
+                     y: np.ndarray,
+                     z: np.ndarray,
+                     n_max_x: int = 8,
+                     n_max_y: int = 8,
+                     *,
+                     weight: Optional[np.ndarray] = None,
+                     normalize_xy: bool = True,
+                     return_residual: bool = False):
+    """Fit a 2-D height-map z(x, y) to first-kind Chebyshev polynomials.
+
+    Solves the least-squares problem
+
+        z(x_p, y_p) ~ sum_{i=0..n_max_x, j=0..n_max_y} c_{ij}
+                          T_i(x_p / a) T_j(y_p / b)
+
+    for the coefficients ``c_{ij}`` and returns them in the
+    ``{(i, j): c_ij}`` dict format consumed by
+    ``lumenairy.elements.freeform.surface_sag_chebyshev``.
+
+    v5.4 Phase 5: this helper was hoisted out of
+    ``lumenairy/ui/chebyshev_fit_dock.py``'s inline P3-C
+    implementation so the library now ships a single, tested fit
+    primitive instead of leaving each UI to roll its own
+    ``chebvander2d`` + ``lstsq`` block.
+
+    Parameters
+    ----------
+    x, y : ndarray
+        1-D coordinate arrays.  Must form a regular grid (the
+        2-D meshgrid is built internally with ``indexing='xy'``).
+    z : ndarray
+        2-D height map of shape ``(len(y), len(x))``.
+    n_max_x, n_max_y : int, optional
+        Maximum polynomial degree in each dimension (default 8).
+        The fit basis is the tensor product ``T_i(x) T_j(y)`` for
+        ``0 <= i <= n_max_x`` and ``0 <= j <= n_max_y``.
+    weight : ndarray, optional
+        Optional 2-D weight / mask array of the same shape as ``z``.
+        Pixels with ``weight <= 0`` are excluded from the LS solve;
+        positive entries are interpreted as variance weights
+        (``sqrt(w)`` rows are scaled into the normal equations).
+        Non-finite ``z`` entries are also excluded automatically.
+    normalize_xy : bool, optional
+        If True (default), rescale ``x`` and ``y`` to the canonical
+        Chebyshev domain ``[-1, 1]`` before evaluating the basis.
+        Required for Chebyshev orthogonality on a finite aperture;
+        set False only if the caller has already normalised ``x``,
+        ``y`` themselves.
+    return_residual : bool, optional
+        If True, also return the residual ``z - z_fit`` evaluated on
+        the original grid (NaN where ``weight <= 0`` so the masked
+        regions are clearly excluded from PV / RMS statistics).
+
+    Returns
+    -------
+    coeffs : dict of {(int, int): float}
+        Sparse coefficient dictionary; entries with magnitude below
+        ``1e-15`` are dropped.  Keys are ``(i, j)`` with ``i`` the
+        x-order and ``j`` the y-order, matching the convention of
+        ``surface_sag_chebyshev``.
+    residual : ndarray, only if ``return_residual=True``
+        ``z - z_fit`` on the original ``(len(y), len(x))`` grid.
+    """
+    # v5.4 Phase 5: lstsq-based 2-D Chebyshev fit promoted out of the
+    # UI dock so external callers (notebook scripts, batch metrology
+    # tools, regression tests) can share a single tested entry point.
+    # Implementation uses numpy.polynomial.chebyshev.chebvander2d to
+    # build the design matrix -- exactly the basis that
+    # ``surface_sag_chebyshev`` evaluates -- so the emitted
+    # ``{(i, j): c_ij}`` dict round-trips through the library's own
+    # evaluator without an extra scaling step.
+    from numpy.polynomial.chebyshev import chebval2d, chebvander2d
+
+    z = np.asarray(z, dtype=np.float64)
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+
+    if z.ndim != 2:
+        raise ValueError(
+            f"chebyshev_fit_2d: z must be 2-D; got shape {z.shape}.")
+    if z.shape != (y.size, x.size):
+        raise ValueError(
+            f"chebyshev_fit_2d: z shape {z.shape} must equal "
+            f"(len(y), len(x)) = ({y.size}, {x.size}).")
+
+    # Normalise coordinates to [-1, 1] so the Chebyshev basis is
+    # orthogonal on the sampled aperture.  Guard against degenerate
+    # zero-extent axes (would divide by zero below).
+    if normalize_xy:
+        x_span = float(x.max() - x.min())
+        y_span = float(y.max() - y.min())
+        if x_span == 0.0 or y_span == 0.0:
+            raise ValueError(
+                "chebyshev_fit_2d: cannot normalise -- x or y has "
+                "zero extent.  Pass normalize_xy=False if you have "
+                "already scaled the coordinates.")
+        x_norm = 2.0 * (x - x.min()) / x_span - 1.0
+        y_norm = 2.0 * (y - y.min()) / y_span - 1.0
+    else:
+        x_norm, y_norm = x, y
+
+    X, Y = np.meshgrid(x_norm, y_norm, indexing='xy')
+    # chebvander2d builds the design matrix of shape
+    # (M, (n_x+1)*(n_y+1)) in row-major (i then j) order.
+    V = chebvander2d(X.ravel(), Y.ravel(), [n_max_x, n_max_y])
+    z_flat = z.ravel()
+
+    # Drop non-finite samples up front so the LS solve never sees a
+    # NaN; the caller's residual is filled with NaN at those pixels.
+    finite = np.isfinite(z_flat)
+    if weight is not None:
+        w = np.asarray(weight, dtype=np.float64)
+        if w.shape != z.shape:
+            raise ValueError(
+                f"chebyshev_fit_2d: weight shape {w.shape} does not "
+                f"match z shape {z.shape}.")
+        w_flat = w.ravel()
+        keep = finite & (w_flat > 0)
+        sqrt_w = np.sqrt(w_flat[keep])
+        V_solve = V[keep] * sqrt_w[:, None]
+        z_solve = z_flat[keep] * sqrt_w
+    else:
+        keep = finite
+        V_solve = V[keep]
+        z_solve = z_flat[keep]
+
+    n_terms = (n_max_x + 1) * (n_max_y + 1)
+    if int(keep.sum()) < n_terms:
+        raise ValueError(
+            f"chebyshev_fit_2d: not enough valid samples "
+            f"({int(keep.sum())}) to fit ({n_max_x}+1) x "
+            f"({n_max_y}+1) = {n_terms} coefficients.")
+
+    coeffs_flat, _, _, _ = np.linalg.lstsq(
+        V_solve, z_solve, rcond=None)
+    # chebvander2d packs columns in (i, j) row-major order, so the
+    # natural reshape is (n_x+1, n_y+1) with axis 0 = x-order.
+    coeffs_2d = coeffs_flat.reshape(n_max_x + 1, n_max_y + 1)
+
+    coeffs_dict = {
+        (i, j): float(coeffs_2d[i, j])
+        for i in range(n_max_x + 1)
+        for j in range(n_max_y + 1)
+        if abs(coeffs_2d[i, j]) > 1e-15
+    }
+
+    if return_residual:
+        z_fit = chebval2d(X, Y, coeffs_2d).reshape(z.shape)
+        residual = z - z_fit
+        if weight is not None:
+            # Match the dock convention: blank out excluded pixels
+            # with NaN so PV / RMS statistics see only the fit
+            # support.
+            mask_2d = (np.asarray(weight, dtype=np.float64) > 0)
+            residual = np.where(mask_2d, residual, np.nan)
+        return coeffs_dict, residual
+    return coeffs_dict

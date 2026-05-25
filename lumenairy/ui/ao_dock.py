@@ -126,6 +126,42 @@ class _AOClosedLoopWorker(QThread):
                 inter_actuator_coupling=coupling,
             )
 
+            # v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A wfs adapter):
+            # build a real Shack-Hartmann WFS callable when the dock's WFS
+            # combo is set to 'shack_hartmann'; fall back to ``wfs=None``
+            # (ideal phase sensing) for the not-yet-implemented pyramid /
+            # curvature options.  The make_shack_hartmann_wfs factory
+            # captures all SH parameters in a closure so ao_closed_loop
+            # can use it through its standard ``wfs=`` kwarg.
+            wfs_type = str(params.get('wfs_type', 'shack_hartmann'))
+            wfs_noise = float(params.get('wfs_noise', 0.0))
+            subap = int(params.get('subaperture_grid', 8))
+            modal_basis = str(params.get('modal_basis', 'zernike'))
+            n_modes_used = int(params.get('max_radial_order', 6))
+            # Zernike OSA index count for radial orders [1..n] is
+            # n*(n+3)/2 (one less than the cumulative-piston count).
+            n_modes_used = max(n_modes_used * (n_modes_used + 3) // 2, 3)
+            wfs = None
+            wfs_note = ''
+            if wfs_type == 'shack_hartmann' and modal_basis == 'zernike':
+                wfs = la.make_shack_hartmann_wfs(
+                    subaperture_grid=subap,
+                    noise_sigma_pixels=wfs_noise,
+                    modal_basis='zernike',
+                    n_modes=n_modes_used,
+                    dx_pupil=dx,
+                    wavelength=wavelength,
+                )
+            elif wfs_type in ('pyramid', 'curvature'):
+                wfs_note = (
+                    f'{wfs_type} WFS not yet implemented; using ideal '
+                    'phase sensing (wfs=None).')
+            elif wfs_type == 'shack_hartmann' and modal_basis != 'zernike':
+                wfs_note = (
+                    f'Shack-Hartmann adapter only supports modal_basis='
+                    f'"zernike" at v5.4; got "{modal_basis}".  Falling '
+                    'back to ideal phase sensing.')
+
             # Initial residual + history slot.
             residual = phase - dm.phase()
             rms0 = float(np.sqrt(np.mean(residual * residual)))
@@ -138,7 +174,7 @@ class _AOClosedLoopWorker(QThread):
                     break
                 residual = la.ao_closed_loop(
                     phase, dm=dm, n_iterations=1, gain=gain, leak=leak,
-                    wavelength=wavelength, dx=dx, wfs=None,
+                    wavelength=wavelength, dx=dx, wfs=wfs,
                 )
                 # Clamp DM command to the requested stroke (in waves of OPD).
                 if stroke > 0.0:
@@ -162,6 +198,9 @@ class _AOClosedLoopWorker(QThread):
                 'wfe_per_iter': wfe_per_iter,
                 'iterations_run': iterations_run,
                 'stopped': self._stop_requested,
+                # v5.4: surface any WFS-fallback note (pyramid/curvature
+                # not implemented yet, etc.) so the dock can tooltip it.
+                'wfs_note': wfs_note,
             })
         except Exception as e:
             self.finished_result.emit({
@@ -338,9 +377,10 @@ class AOClosedLoopDock(QWidget):
         self.combo_wfs.addItems(list(self.WFS_TYPES))
         self.combo_wfs.setCurrentText('shack_hartmann')
         self.combo_wfs.setToolTip(
-            'Wavefront-sensor type.  v5.4 dock uses ideal phase sensing '
-            'internally and reports the chosen type to the summary; a '
-            'future revision will wire pyramid / curvature sensors.')
+            'Wavefront-sensor type.  shack_hartmann wires the real '
+            'lumenairy.make_shack_hartmann_wfs adapter (slope-based '
+            'reconstruction via the SH simulator).  pyramid / curvature '
+            'fall back to ideal phase sensing (not yet implemented).')
         form.addRow('WFS type:', self.combo_wfs)
 
         self.spin_subap = QSpinBox()
@@ -858,6 +898,12 @@ class AOClosedLoopDock(QWidget):
             f'AO loop done: iter={iters_run}, '
             f'RMS {history[0]:.4f} -> {history[-1]:.4f} rad '
             f'({wfe_initial:.3f} -> {wfe_final:.3f} waves){suffix}')
+        # v5.4: surface any WFS-fallback note from the worker (e.g. the
+        # pyramid / curvature path used ``wfs=None`` because the real
+        # sensors are not implemented yet).
+        wfs_note = result.get('wfs_note', '')
+        if wfs_note:
+            self.summary.append(wfs_note)
 
 
 # v5.4 audit P1-A: no __all__ -- UI docks are imported by name in

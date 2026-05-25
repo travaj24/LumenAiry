@@ -885,6 +885,323 @@ def ao_closed_loop(
     return residual
 
 
+# =============================================================================
+# Shack-Hartmann WFS factory (v5.4 -- AO closed-loop dock real-WFS wiring)
+# =============================================================================
+
+# v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A wfs adapter): the
+# ``ao_closed_loop`` helper accepts an arbitrary callable
+# ``wfs(residual_phase) -> measured_phase``, but until v5.4 the only
+# canonical option was ``None`` (ideal phase sensing) or a hand-rolled
+# closure -- the v5.3.2 GUI ``ao_dock`` ships a "WFS type" combo
+# (``shack_hartmann`` / ``pyramid`` / ``curvature``) that had nothing
+# to wire because no library-side adapter wrapped ``shack_hartmann``
+# (the spot-displacement simulator) and ``slope_to_modal`` (the
+# slope-to-Zernike reconstructor) into a single closure.  This
+# factory closes that gap so the dock can call a real WFS path.
+def make_shack_hartmann_wfs(
+    *,
+    subaperture_grid: int = 8,
+    noise_sigma_pixels: float = 0.0,
+    modal_basis: str = 'zernike',
+    n_modes: int = 36,
+    rng_seed: Optional[int] = None,
+    dx_pupil: Optional[float] = None,
+    wavelength: Optional[float] = None,
+    lenslet_focal: float = 5e-3,
+) -> Callable[[np.ndarray], np.ndarray]:
+    """Build a closure that simulates a Shack-Hartmann reconstruction
+    of an input residual-phase map.
+
+    The returned callable has the signature expected by the ``wfs=``
+    kwarg of :func:`ao_closed_loop`:
+    ``closure(residual: np.ndarray) -> measured: np.ndarray``.
+
+    Internally the closure:
+
+    1. Forms a unit-amplitude complex field
+       ``E = exp(1j * residual)`` on the pupil grid.
+    2. Runs :func:`lumenairy.shack_hartmann` with ``n_lenslets =
+       subaperture_grid`` to obtain per-subaperture spot displacements
+       (centroids) and slopes ``= centroid / lenslet_focal``.
+    3. Adds optional Gaussian centroid noise scaled by
+       ``noise_sigma_pixels * dx_pupil`` (i.e. interpreted as detector
+       pixels equivalent to ``dx_pupil`` -- the library does not
+       resolve sub-pixel SH detector geometry on this code path).
+    4. Reconstructs modal coefficients via :func:`slope_to_modal`
+       against a Zernike basis built for the same subaperture grid.
+    5. Reprojects those coefficients onto the original pupil grid via
+       :func:`lumenairy.zernike_basis_matrix` so the measured phase
+       lives on the same ``(Ny, Nx)`` grid as the input residual.
+
+    Parameters
+    ----------
+    subaperture_grid : int, default 8
+        Number of subapertures per axis on the SH lenslet array
+        (square grid).  Maps to ``shack_hartmann(n_lenslets=...)``
+        and ``zernike_modal_basis(n_lenslets=...)``.
+    noise_sigma_pixels : float, default 0.0
+        Gaussian sigma of additive centroid noise in pixel units of
+        the input phase grid.  Non-zero values inject fresh noise on
+        every call (deterministic when ``rng_seed`` is set, otherwise
+        seeded from a per-call :func:`numpy.random.default_rng`).
+    modal_basis : {'zernike'}, default 'zernike'
+        Modal-basis identifier.  ``'zernike'`` is the only supported
+        option at v5.4 -- a placeholder for the v5.4-roadmap
+        Karhunen-Loeve basis.
+    n_modes : int, default 36
+        Number of OSA-indexed Zernike modes to reconstruct (starting
+        at OSA index 1 -- tip).  36 covers through 7th-order
+        spherical aberration.
+    rng_seed : int, optional
+        Seed for the noise RNG.  If set, the closure is fully
+        deterministic; if ``None`` (default), each call samples a
+        fresh ``default_rng()`` so repeated calls on the same input
+        produce different outputs (the canonical noisy-WFS semantics).
+    dx_pupil : float, optional
+        Pupil-grid spacing [m].  If ``None``, derived from the input
+        ``residual`` shape on the assumption that the residual fills a
+        ``[-1, 1]`` normalised pupil (``dx = 2 / N``).  Pass an
+        explicit value when the residual lives on a known physical
+        grid.
+    wavelength : float, optional
+        Wavelength [m].  If ``None``, defaults to 633 nm (the library
+        default).  Only affects ``shack_hartmann()``'s lenslet-focus
+        FFT; the reconstructed phase is wavelength-agnostic.
+    lenslet_focal : float, default 5e-3
+        Lenslet focal length [m].  Sets the centroid-to-slope
+        conversion (``slope = centroid / lenslet_focal``).
+
+    Returns
+    -------
+    wfs : callable
+        ``wfs(residual: np.ndarray) -> measured: np.ndarray`` closure
+        suitable for passing as the ``wfs=`` kwarg of
+        :func:`ao_closed_loop`.
+
+    Notes
+    -----
+    Side-effect freedom: the closure does not mutate any captured
+    state.  When ``rng_seed`` is set the same residual always
+    produces the same measured phase; with ``rng_seed=None`` and
+    ``noise_sigma_pixels > 0`` repeated calls on the same residual
+    return different reconstructions.
+
+    The reconstructor truncates the input residual to the projection
+    of the chosen Zernike basis on the in-disk subapertures, so very
+    high-order disturbances will see the typical SH-modal aliasing.
+    Increase ``n_modes`` and ``subaperture_grid`` together if you
+    need finer reconstruction.
+    """
+    if subaperture_grid <= 0:
+        raise ValueError(
+            f"subaperture_grid must be > 0; got {subaperture_grid}")
+    if n_modes <= 0:
+        raise ValueError(f"n_modes must be > 0; got {n_modes}")
+    if noise_sigma_pixels < 0:
+        raise ValueError(
+            f"noise_sigma_pixels must be >= 0; got {noise_sigma_pixels}")
+    if modal_basis != 'zernike':
+        # v5.4: zernike is the only canonical basis in the library;
+        # 'karhunen_loeve' is a UI placeholder for the v5.4-roadmap
+        # KL basis.  Reject anything else explicitly so callers know
+        # the option is reserved rather than silently ignored.
+        raise ValueError(
+            f"modal_basis must be 'zernike'; got {modal_basis!r}.  "
+            "Karhunen-Loeve / free-actuator bases are reserved for a "
+            "future v5.4+ revision.")
+    if lenslet_focal <= 0:
+        raise ValueError(
+            f"lenslet_focal must be > 0; got {lenslet_focal}")
+
+    wl_default = 633e-9 if wavelength is None else float(wavelength)
+    if wl_default <= 0:
+        raise ValueError(f"wavelength must be > 0; got {wl_default}")
+
+    # Capture parameters in locals for the closure.
+    _subap = int(subaperture_grid)
+    _n_modes = int(n_modes)
+    _noise = float(noise_sigma_pixels)
+    _rng_seed = rng_seed
+    _dx_user = dx_pupil
+    _wl = wl_default
+    _focal = float(lenslet_focal)
+
+    # Deferred import: avoid a circular import on package init since
+    # ``analysis.detector`` re-imports from this module's siblings.
+    from .detector import shack_hartmann as _sh_call
+    from .zernike import zernike_basis_matrix as _zbasis
+
+    # v5.4 (calibration cache): the library SH simulator does NOT
+    # produce slopes whose magnitude matches the linear theory
+    # ``dW/dx = (dphi/dx) * lambda / (2*pi)`` for arbitrary phases --
+    # it has its own centroid response curve set by the lenslet
+    # diffraction PSF, finite sub-aperture size, FFT discretisation,
+    # and a small reference/measurement-path bias from differing
+    # FFT vs ASM propagation conventions.  Two calibration steps
+    # capture this on first call and apply it on every subsequent
+    # measurement:
+    #
+    #   (a) zero-phase reference centroids ``sx_ref / sy_ref`` --
+    #       subtracted so a flat input phase maps to zero slope.
+    #   (b) unit-tilt scale factor ``slope_scale`` -- ratio of the
+    #       SH-measured slope to the linear-theory slope on a unit
+    #       phase ramp.  Slopes are divided by this factor before
+    #       being passed into ``slope_to_modal`` so the reconstructed
+    #       Zernike coefficients have the correct OPD magnitude
+    #       (within the linear regime of the SH PSF).
+    #
+    # Both are cached per ``(N, dx, lenslet_pitch)`` since each only
+    # depends on the lenslet grid geometry.  Mirrors the calibration
+    # any real SH-WFS hardware would need on a known reference beam.
+    _calib_cache: Dict[str, Any] = {}
+
+    def _wfs(residual: np.ndarray) -> np.ndarray:
+        r = np.asarray(residual, dtype=np.float64)
+        if r.ndim != 2:
+            raise ValueError(
+                f"residual must be 2-D (Ny, Nx); got shape {r.shape}")
+        Ny, Nx = r.shape
+        if Ny != Nx:
+            raise ValueError(
+                f"residual must be square (Ny == Nx); got shape {r.shape}")
+        N = Ny
+        # Pupil grid spacing: explicit dx_pupil if given, else assume
+        # the residual fills a [-1, 1] normalised pupil so dx = 2 / N.
+        dx = float(_dx_user) if _dx_user is not None else 2.0 / N
+        semi_aperture = N * dx / 2.0
+        # Choose a lenslet pitch that tiles the full grid: the SH call
+        # uses int(round(pitch / dx)) so pitch must be >= 2 * dx.
+        lenslet_pitch = (N * dx) / _subap
+        if lenslet_pitch < 2.0 * dx:
+            raise ValueError(
+                f"subaperture_grid={_subap} too fine for N={N} grid; "
+                f"need lenslet_pitch >= 2*dx ({2*dx:.3e}), got "
+                f"{lenslet_pitch:.3e}.")
+
+        # 1. Phase -> unit-amplitude complex field.
+        E = np.exp(1j * r)
+
+        # 2. SH-WFS: returns (slopes_x, slopes_y, wavefront,
+        # centroids_x, centroids_y), each (n_lenslets, n_lenslets)
+        # with NaN at out-of-bounds lenslets.
+        slopes_x, slopes_y, _wf, cx, cy = _sh_call(
+            E, dx, wavelength=_wl,
+            lenslet_pitch=lenslet_pitch,
+            lenslet_focal=_focal,
+            n_lenslets=_subap,
+        )
+
+        # v5.4: subtract the zero-phase calibration and apply the
+        # unit-phase-ramp linearity rescale.  Cached per grid geometry.
+        # ``slope_scale`` is the SH-measured slope divided by the
+        # linear-theory PHASE-gradient (rad/m of phi), so dividing
+        # the SH slopes by it gives slopes directly in rad/m of phase
+        # -- skipping the lambda conversion that would otherwise
+        # amplify noise by ~1e7 at visible wavelengths.
+        calib_key = f'{N}_{dx:.12e}_{lenslet_pitch:.12e}'
+        if calib_key not in _calib_cache:
+            # (a) Zero-phase reference centroids.
+            E_ref = np.ones((N, N), dtype=complex)
+            sx_ref, sy_ref, *_ = _sh_call(
+                E_ref, dx, wavelength=_wl,
+                lenslet_pitch=lenslet_pitch,
+                lenslet_focal=_focal,
+                n_lenslets=_subap,
+            )
+            # (b) Unit-phase-tilt calibration: inject a small phase
+            # ramp ``phi = a_cal * x`` (well inside the SH linear
+            # regime) and measure the SH-response factor relative to
+            # the expected linear PHASE-gradient ``a_cal`` (rad/m).
+            a_cal_rad_per_m = 0.05 / (N * dx)
+            x_coord = (np.arange(N) - N / 2) * dx
+            X_cal, _Y_cal = np.meshgrid(x_coord, x_coord)
+            phase_cal = a_cal_rad_per_m * X_cal
+            E_cal = np.exp(1j * phase_cal)
+            sx_cal, sy_cal, *_ = _sh_call(
+                E_cal, dx, wavelength=_wl,
+                lenslet_pitch=lenslet_pitch,
+                lenslet_focal=_focal,
+                n_lenslets=_subap,
+            )
+            # Mean over finite lenslets gives the SH-measured tilt.
+            finite = np.isfinite(sx_cal) & np.isfinite(sx_ref)
+            if np.any(finite):
+                measured_tilt = float(np.mean(sx_cal[finite] - sx_ref[finite]))
+            else:
+                measured_tilt = 0.0
+            # slope_scale maps SH slope -> phase-gradient (rad/m).
+            if abs(a_cal_rad_per_m) < 1e-30 or abs(measured_tilt) < 1e-30:
+                slope_scale = 1.0
+            else:
+                slope_scale = measured_tilt / a_cal_rad_per_m
+            _calib_cache[calib_key] = (sx_ref, sy_ref, slope_scale)
+        sx_ref, sy_ref, slope_scale = _calib_cache[calib_key]
+        # Zero-bias the slopes and rescale so the reconstructor sees
+        # slopes in rad/m of phase (not m/m of OPD).  Only subtract on
+        # lenslets where both measurement and reference are finite, so
+        # NaN sentinels stay NaN (preserved through the in-disk mask).
+        good = np.isfinite(slopes_x) & np.isfinite(sx_ref)
+        slopes_x = np.where(good, (slopes_x - sx_ref) / slope_scale, slopes_x)
+        slopes_y = np.where(good, (slopes_y - sy_ref) / slope_scale, slopes_y)
+
+        # 3. Optional centroid noise: per-call RNG so the closure is
+        # non-deterministic by default (canonical noisy-WFS semantics).
+        # ``noise_sigma_pixels`` is interpreted as SH-detector-pixel
+        # sigma, with a detector pixel pitch equal to the input grid
+        # spacing ``dx`` (the SH simulator samples the focal plane on
+        # the same Cartesian grid as the input field).  The
+        # corresponding slope-noise sigma is
+        # ``sigma_pixels * dx / lenslet_focal`` (m of OPD per m of
+        # pupil = radians of tilt).
+        if _noise > 0.0:
+            rng = np.random.default_rng(_rng_seed)
+            sigma_slope = _noise * dx / _focal
+            slopes_x = slopes_x + rng.standard_normal(slopes_x.shape) * sigma_slope
+            slopes_y = slopes_y + rng.standard_normal(slopes_y.shape) * sigma_slope
+
+        # 4. Build the matching slope-to-modal reconstructor and pick
+        # out the in-disk lenslets in the same row-major order
+        # zernike_modal_basis uses internally.
+        basis = zernike_modal_basis(
+            n_modes=_n_modes,
+            n_lenslets=_subap,
+            semi_aperture=semi_aperture,
+        )
+        p = (np.arange(_subap) - (_subap - 1) / 2) / max((_subap - 1) / 2, 1e-12)
+        XL, YL = np.meshgrid(p, p)
+        inside = (XL ** 2 + YL ** 2) <= 1.0
+        # Replace any NaN sentinels (OOB lenslets) with zero before
+        # masking to the disk: NaN-poisoning the basis solve produces
+        # all-NaN coefficients and a NaN reconstructed phase.
+        sx_in = np.where(np.isfinite(slopes_x[inside]), slopes_x[inside], 0.0)
+        sy_in = np.where(np.isfinite(slopes_y[inside]), slopes_y[inside], 0.0)
+        slopes_flat = np.concatenate([sx_in, sy_in])
+        coeffs = slope_to_modal(slopes_flat, basis)
+
+        # 5. Reproject onto the full (N, N) pupil grid.
+        # After the unit-phase-tilt rescale, ``coeffs`` are in RADIANS
+        # of phase (not meters of OPD): the basis influence matrix is
+        # in 1/m and the rescaled slopes are in rad/m, so the dot
+        # product gives rad directly.
+        #
+        # ``zernike_modal_basis(first_mode=1)`` uses OSA indices
+        # [1..n_modes] (skip piston).  ``zernike_basis_matrix(n_modes)``
+        # uses OSA indices [0..n_modes-1] (include piston).  Build with
+        # n_modes+1 and slice off the piston column so the two stay
+        # aligned mode-for-mode.
+        x = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, x)
+        Zmat_full, pupil_mask = _zbasis(_n_modes + 1, X, Y, semi_aperture)
+        Zmat = Zmat_full[:, 1:]  # drop piston to match first_mode=1
+        measured = np.zeros((N, N), dtype=np.float64)
+        # zernike_basis_matrix returns rows for in-pupil pixels only.
+        measured[pupil_mask] = Zmat @ coeffs
+        return measured
+
+    return _wfs
+
+
 __all__ = [
     'DeformableMirror',
     'apply_dm',
@@ -893,4 +1210,6 @@ __all__ = [
     'LeakyIntegrator',
     # v5.2.3 (ROADMAP v5.2.x ao_closed_loop helper):
     'ao_closed_loop',
+    # v5.4 (AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24 P1-A wfs adapter):
+    'make_shack_hartmann_wfs',
 ]

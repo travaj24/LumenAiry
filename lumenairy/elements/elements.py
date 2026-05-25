@@ -751,6 +751,121 @@ def apply_vortex_phase_mask(E_in, dx, *, charge=2, xc=0.0, yc=0.0,
     return E_in * xp.exp(1j * phase)
 
 
+def make_four_quadrant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
+    """Construct a four-quadrant phase mask (FQPM).
+
+    The four-quadrant phase mask is a focal-plane coronagraph element
+    that imparts a ``phase_step`` retardation on quadrants 1 + 3 and
+    zero retardation on quadrants 2 + 4 (or equivalently the opposite
+    pairing, depending on the sign convention).  For ``phase_step = pi``
+    it is a perfect on-axis nuller for circularly symmetric pupils
+    (Rouan et al. 2000).
+
+    Parameters
+    ----------
+    N : int
+        Side length of the (N, N) output grid in pixels.
+    dx : float
+        Focal-plane grid spacing [m].  Retained for API symmetry with
+        the other ``make_*_mask`` builders and for downstream centering
+        in physical units; the mask itself is dimensionless.
+    phase_step : float, default ``numpy.pi``
+        Phase shift [rad] applied on the +/- diagonal quadrants.
+        ``pi`` is the canonical FQPM; other values give partial nullers.
+    center : tuple[int, int] or None, optional
+        ``(row, col)`` pixel index of the mask centre.  ``None``
+        defaults to the grid centre ``(N // 2, N // 2)``.
+
+    Returns
+    -------
+    mask : ndarray (complex, N x N)
+        Complex transmission ``exp(1j * phase_step)`` on quadrants
+        where ``(x * y) > 0`` and ``1 + 0j`` elsewhere.  Magnitude is
+        unity everywhere.
+
+    References
+    ----------
+    Rouan, D. et al. (2000).  "The Four-Quadrant Phase-Mask
+    Coronagraph. I. Principle."  PASP 112, 1479.
+    """
+    # v5.4 Phase 5: builder for the canonical FQPM coronagraph mask.
+    # Returns a complex (N, N) ndarray that callers multiply into the
+    # focal-plane field.  Implementation stays on NumPy (no E_in
+    # backend to dispatch from); the multiplication site dispatches.
+    #
+    # Coordinate convention: column axis maps to ``x`` and row axis
+    # maps to ``y`` via ``y = (arange - cy) * dx`` -- the same
+    # convention used by ``apply_lyot_focal_plane_mask`` etc.  In
+    # screen coordinates (row 0 at the top) this means "row index
+    # below center" is geometrically the upper half.  FQPM
+    # quadrants 1+3 (upper-right + lower-left in screen orientation,
+    # i.e. ``mask[row < cy, col > cx]`` and ``mask[row > cy, col <
+    # cx]``) carry the ``phase_step`` shift.  These quadrants
+    # correspond to opposite signs of ``x`` and ``y``, hence the
+    # ``X * Y < 0`` selector below.
+    cy, cx = (N // 2, N // 2) if center is None else center
+    x = (np.arange(N) - cx) * dx
+    y = (np.arange(N) - cy) * dx
+    X, Y = np.meshgrid(x, y)
+    # ``X * Y < 0`` selects quadrants 1 (upper-right) and 3
+    # (lower-left) in screen orientation; the complement (including
+    # the axes themselves) gets exp(0) = 1.
+    mask = np.where(X * Y < 0,
+                    np.exp(1j * phase_step),
+                    1.0 + 0.0j).astype(np.complex128)
+    return mask
+
+
+def make_eight_octant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
+    """Construct an eight-octant phase mask (8OPM).
+
+    The eight-octant phase mask refines the four-quadrant design by
+    splitting each 90-degree quadrant into two 45-degree octants and
+    alternating the phase between adjacent octants.  Compared to the
+    FQPM it tightens the inner working angle and breaks the residual
+    on-axis leakage from non-circular pupils (Murakami et al. 2008).
+
+    Parameters
+    ----------
+    N : int
+        Side length of the (N, N) output grid in pixels.
+    dx : float
+        Focal-plane grid spacing [m].  Retained for API symmetry with
+        the other ``make_*_mask`` builders.
+    phase_step : float, default ``numpy.pi``
+        Phase shift [rad] applied on alternating octants.  ``pi`` is
+        the canonical 8OPM.
+    center : tuple[int, int] or None, optional
+        ``(row, col)`` pixel index of the mask centre.  ``None``
+        defaults to the grid centre ``(N // 2, N // 2)``.
+
+    Returns
+    -------
+    mask : ndarray (complex, N x N)
+        Complex transmission alternating between ``exp(1j * phase_step)``
+        and ``1 + 0j`` on the eight angular octants.  Magnitude is
+        unity everywhere.
+
+    References
+    ----------
+    Murakami, N. et al. (2008).  "Eight-Octant Phase-Mask
+    Coronagraph."  PASP 120, 1112.
+    """
+    # v5.4 Phase 5: builder for the canonical 8OPM coronagraph mask.
+    # ``theta + pi`` wraps arctan2's [-pi, pi] return into [0, 2*pi];
+    # dividing by pi/4 buckets it into eight contiguous octants.
+    cy, cx = (N // 2, N // 2) if center is None else center
+    x = (np.arange(N) - cx) * dx
+    y = (np.arange(N) - cy) * dx
+    X, Y = np.meshgrid(x, y)
+    theta = np.arctan2(Y, X)
+    octant = np.floor((theta + np.pi) / (np.pi / 4.0)).astype(int)
+    # ``octant & 1`` alternates 0/1 across the 8 sectors.
+    phase = np.where((octant & 1) == 0, 0.0, phase_step)
+    mask = np.exp(1j * phase).astype(np.complex128)
+    return mask
+
+
 def apply_lyot_stop(E_in, dx, *, outer_diameter, inner_diameter=0.0,
                      xc=0.0, yc=0.0, dy=None):
     """Apply a downstream Lyot-stop pupil aperture.

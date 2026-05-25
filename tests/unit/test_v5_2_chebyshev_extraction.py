@@ -67,8 +67,13 @@ def test_math_chebyshev_module_exists():
         assert hasattr(mod, name), (
             f"lumenairy._math.chebyshev missing public name {name!r}"
         )
+    # v5.4 Phase 5 added ``chebyshev_fit_2d`` to the module (the
+    # tested fit primitive promoted out of the UI dock).  This pin
+    # accepts that addition; the original three Vandermonde helpers
+    # remain mandatory above.
     assert sorted(mod.__all__) == [
         'chebyshev_derivative_vandermonde',
+        'chebyshev_fit_2d',
         'chebyshev_second_derivative_vandermonde',
         'chebyshev_vandermonde',
     ]
