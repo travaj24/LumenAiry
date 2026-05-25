@@ -2731,19 +2731,38 @@ class MainWindow(QMainWindow):
         think the GUI is frozen on heavy systems.  Paired with
         :meth:`_on_trace_ready` which restores the cursor and
         updates the status to the trace result.
+
+        v5.4.2 (audit C2 belt-and-suspenders): track that we've
+        set a cursor so _on_trace_ready can defensively restore
+        even if signals fire out of pair-order (e.g., a future
+        worker that emits trace_ready before trace_started).
         """
         try:
             QApplication.setOverrideCursor(Qt.WaitCursor)
+            self._trace_cursor_set = True
         except Exception:
-            pass
+            self._trace_cursor_set = False
         self.status_label.setText('Tracing…')
 
     def _on_trace_ready(self, r):
-        """3.7.9: restore cursor + status after a trace completes."""
+        """3.7.9: restore cursor + status after a trace completes.
+
+        v5.4.2 (audit C2 belt-and-suspenders): wrap restore in
+        try/finally so the cursor is ALWAYS restored even if the
+        downstream status update raises.  Also defensive: only
+        restore if _trace_cursor_set is True (avoids stacking a
+        restoreOverrideCursor() against nothing if trace_ready
+        fires without a paired trace_started).
+        """
         try:
-            QApplication.restoreOverrideCursor()
-        except Exception:
-            pass
+            if getattr(self, '_trace_cursor_set', False):
+                try:
+                    QApplication.restoreOverrideCursor()
+                except Exception:
+                    pass
+                self._trace_cursor_set = False
+        finally:
+            pass  # final-block placeholder for future cleanup hooks
         if r is None:
             self.status_label.setText('No trace')
             return

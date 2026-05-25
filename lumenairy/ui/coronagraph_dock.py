@@ -674,6 +674,19 @@ class CoronagraphDock(QWidget):
             self._worker.requestInterruption()
             self.summary.append('Stop requested (waits for current step).')
 
+    def closeEvent(self, event):
+        """v5.4.2 (audit C1): wait briefly for an in-flight worker
+        thread before the dock destructs.  Without this, closing the
+        dock during a run leaves the worker alive with dangling
+        callbacks to a deleted parent (potential segfault on emit).
+        2-second timeout is more than enough for the worker to finish
+        the current 4-stop chain step and clean up.
+        """
+        if self._worker is not None and self._worker.isRunning():
+            self._worker.requestInterruption()
+            self._worker.wait(2000)
+        super().closeEvent(event)
+
     def _on_progress(self, stop_idx, label):
         self.progress.setValue(int(stop_idx) + 1)
         self.summary.append(f'  [{stop_idx + 1}/4] {label}')

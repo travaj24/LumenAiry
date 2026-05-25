@@ -2291,7 +2291,15 @@ class SystemModel(QObject):
         and are transformed into each surface's local frame only for
         the intersection / refraction step.  No coord-break surfaces.
         """
-        self.trace_started.emit()
+        # v5.4.2 (post-v5.4.1 user-reported GUI hang): build the
+        # surface list FIRST so the empty-prescription early-exit
+        # can emit trace_ready(None) instead of leaving the GUI in
+        # a wait-cursor + "Tracing..." status forever.  The prior
+        # ordering emitted trace_started BEFORE the empty check,
+        # which set the wait cursor; the early-exit then returned
+        # without emitting trace_ready, so _on_trace_ready never
+        # fired to restore the cursor.  Symptom: clicking Retrace
+        # with no prescription loaded looked like a GUI hang.
         world_list = self._build_trace_surfaces_world()
         surfaces = [Surface(
             radius=s.radius, conic=s.conic, semi_diameter=s.semi_diameter,
@@ -2305,7 +2313,15 @@ class SystemModel(QObject):
                      if s.world_R is not None else None),
         ) for s in world_list]
         if not surfaces:
+            # Emit trace_ready(None) so _on_trace_ready clears the
+            # status bar to "No trace" (the existing None-branch).
+            # No trace_started.emit() either -- avoids the cursor
+            # flash entirely on the empty-prescription path.
+            self.trace_ready.emit(None)
             return None
+
+        # Now that we know there's actual work to do, signal start.
+        self.trace_started.emit()
 
         semi_ap = self.epd_m / 2.0
         wv = self.wavelength_m

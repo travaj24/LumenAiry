@@ -2,6 +2,82 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.2] — 2026-05-25
+
+**GUI patch: fix user-reported retrace-on-empty-prescription hang +
+3 belt-and-suspenders GUI hardenings from a focused post-v5.4.1
+class-A/class-B audit.**
+
+**Zero physics regressions in 19 consecutive releases.**
+
+### P1 -- Retrace on empty prescription hang (user-reported)
+
+Clicking Retrace with no prescription loaded left the wait cursor +
+"Tracing..." status set forever.  Symptom: GUI appeared to hang;
+actually stuck with a stale wait cursor.
+
+Root cause: `SystemModel.run_trace()` emitted the `trace_started`
+signal at the top of the function, BEFORE the `if not surfaces:
+return None` empty-prescription early-exit.  `trace_started` is
+connected to `_on_trace_started` which sets `Qt.WaitCursor` + status
+bar "Tracing...".  The early-exit returned without ever emitting
+`trace_ready`, so the paired `_on_trace_ready` handler (which
+restores the cursor + clears the status bar) never fired.
+
+**Fix** (`lumenairy/ui/model.py:run_trace`): reorder so the world-
+frame surface list is built FIRST, then the empty-prescription
+branch (a) emits `trace_ready.emit(None)` so the existing
+`_on_trace_ready` None-branch fires and (b) skips the
+`trace_started.emit()` entirely on the no-op path (avoids the
+cursor flash).  `trace_started.emit()` now fires only after the
+surface list is non-empty.  The non-empty path is unchanged.
+
+**Tests** (NEW; 2 pins of the signal-ordering contract):
+* `test_run_trace_empty_prescription_emits_trace_ready_none` --
+  empty `elements=[]` invocation must emit `trace_ready.emit(None)`
+  exactly once and `trace_started.emit()` zero times.
+* `test_run_trace_empty_prescription_does_not_set_wait_cursor` --
+  triple invocation must produce zero `trace_started` emits.
+
+### Belt-and-suspenders GUI hardenings (post-v5.4.1 GUI audit)
+
+A focused audit scanned the GUI for two bug classes raised by the
+user-reported hang: (A) signal-pairing / empty-state hangs and (B)
+auto-calc on parameter entry that could take a long time.  Class A
+scan came back CLEAN (the retrace-hang was the only instance).
+Class B scan was mostly safe (most controls properly debounce).  3
+belt-and-suspenders hardenings are folded into v5.4.2:
+
+**C1 -- Coronagraph worker lifetime** (`ui/coronagraph_dock.py`):
+the `_CoronagraphWorker` thread is now drained via `closeEvent`
+when the dock is destroyed.  Without this, closing the dock during
+a 4-stop chain run left the worker alive with dangling callbacks to
+a deleted parent (potential segfault on emit).  2-second timeout
+absorbs the worker's longest in-flight step.
+
+**B-P2 -- Inner slider-emit debounce** (`ui/slider_dock.py`): added
+a 40 ms `_emit_timer` that defers `system_changed.emit()` from the
+slider drag.  The `main_window` auto-retrace timer (200 ms) already
+coalesces the downstream retrace, but the inner debounce defends
+against the case where the auto-retrace path is ever bypassed or
+rewired.  Net effect: 60+ Hz slider drag produces ~25 emits/sec
+instead of one per pixel.
+
+**C2 -- Cursor restore symmetry** (`ui/main_window.py`):
+`_on_trace_started` now tracks `self._trace_cursor_set = True` on
+successful `setOverrideCursor`; `_on_trace_ready` checks the flag
+before restoring (avoids stacking a `restoreOverrideCursor()` if a
+future caller emits `trace_ready` without a paired `trace_started`).
+Defense-in-depth against signal-pair-order violations.
+
+3961 unit tests pass (collected = 3970 = pass + 8 skip + 1 xfail).
+
+### Files touched
+
+8 files modified or created.  Net LOC: +136 / -28 vs v5.4.1.
+
+---
+
 ## [5.4.1] — 2026-05-25
 
 **Patch release closing `AUDIT_V5_4_0_2026_05_25`** (1 P1 latent

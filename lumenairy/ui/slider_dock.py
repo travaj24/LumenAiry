@@ -142,6 +142,18 @@ class SliderDock(QWidget):
         self._merit_timer.setInterval(80)
         self._merit_timer.timeout.connect(self._update_merit)
 
+        # v5.4.2 (audit B-P2 belt-and-suspenders): inner 40 ms
+        # debounce on the system_changed emit itself.  The
+        # main_window auto-retrace timer (200 ms) already coalesces
+        # the downstream retrace, but the inner debounce defends
+        # against the case where the auto-retrace path is ever
+        # disabled or rewired.  Net effect: slider drag at 60+ Hz
+        # produces ~25 system_changed emits/sec instead of 60+.
+        self._emit_timer = QTimer(self)
+        self._emit_timer.setSingleShot(True)
+        self._emit_timer.setInterval(40)
+        self._emit_timer.timeout.connect(self._emit_system_changed)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 4, 4, 4)
 
@@ -306,15 +318,33 @@ class SliderDock(QWidget):
             pass
 
     def _on_slider_change(self, var_index, new_value):
-        """Called when any slider is moved."""
+        """Called when any slider is moved.
+
+        v5.4.2 (audit B-P2 belt-and-suspenders): defer the
+        ``system_changed`` emission via a 40 ms debounce timer so a
+        drag at 60+ Hz coalesces into ~25 emits/sec instead of one
+        emit per pixel.  The main_window's auto-retrace timer
+        (200 ms) ALSO debounces this path, so retraces fire only
+        on idle in both cases -- but the inner debounce defends
+        against the case where the main_window debounce is ever
+        bypassed (e.g., a future caller wiring ``system_changed``
+        to an undebounced consumer).
+        """
         values = self.sm.get_variable_values()
         values[var_index] = new_value
         self.sm.set_variable_values(values)
         self.sm._invalidate()
-        self.sm.system_changed.emit()
+        # v5.4.2: emit system_changed via 40 ms inner debounce
+        # instead of synchronously.  Coalesces 60 Hz slider drag
+        # into ~25 Hz emit cadence.
+        self._emit_timer.start()
         # Debounce the merit + EFL/BFL update so a drag at 60 Hz doesn't
         # trigger 60 ray-traces per second on a large system.
         self._merit_timer.start()
+
+    def _emit_system_changed(self):
+        """v5.4.2: deferred system_changed emit slot."""
+        self.sm.system_changed.emit()
 
     def _update_merit(self):
         if not self.sm.opt_variables:
