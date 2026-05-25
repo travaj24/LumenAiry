@@ -6,8 +6,8 @@ The Lumenairy coronagraph dock used to ship an inline
 did not have a phase-mask family.  v5.4 Phase 5 promoted the helper to
 two canonical builders in ``lumenairy.elements``:
 
-    * ``make_four_quadrant_phase_mask`` -- Rouan (2000) FQPM
-    * ``make_eight_octant_phase_mask`` -- Murakami (2008) 8OPM
+    * ``create_four_quadrant_phase_mask`` -- Rouan (2000) FQPM
+    * ``create_eight_octant_phase_mask`` -- Murakami (2008) 8OPM
 
 This module pins:
 
@@ -35,8 +35,8 @@ import pytest
 
 import lumenairy as la
 from lumenairy.elements import (
-    make_eight_octant_phase_mask,
-    make_four_quadrant_phase_mask,
+    create_eight_octant_phase_mask,
+    create_four_quadrant_phase_mask,
 )
 
 
@@ -54,7 +54,7 @@ def test_fqpm_is_pi_on_quadrants_13():
     """
     N = 32
     dx = 1.0e-6
-    mask = make_four_quadrant_phase_mask(N, dx)
+    mask = create_four_quadrant_phase_mask(N, dx)
 
     # Quadrant 1 (upper-right): exp(i*pi) = -1+0j.
     np.testing.assert_allclose(mask[N // 4, (N // 4) * 3],
@@ -78,7 +78,7 @@ def test_fqpm_unitary_magnitude():
     """|FQPM mask| == 1 everywhere (pure phase plate)."""
     N = 64
     dx = 0.5e-6
-    mask = make_four_quadrant_phase_mask(N, dx)
+    mask = create_four_quadrant_phase_mask(N, dx)
     np.testing.assert_allclose(np.abs(mask),
                                np.ones((N, N)),
                                atol=1e-12)
@@ -108,7 +108,7 @@ def test_fqpm_pi_step_nulls_planar_wave():
     I_ref_on_axis = float(np.abs(E_ref_far[N // 2, N // 2]) ** 2)
 
     # Through FQPM.
-    mask = make_four_quadrant_phase_mask(N, dx)
+    mask = create_four_quadrant_phase_mask(N, dx)
     E_masked = E_plane * mask
     E_far, _, _ = la.fraunhofer_propagate(E_masked, z, wavelength, dx)
     I_on_axis = float(np.abs(E_far[N // 2, N // 2]) ** 2)
@@ -127,7 +127,7 @@ def test_8oct_unitary_magnitude():
     """|8OPM mask| == 1 everywhere (pure phase plate)."""
     N = 64
     dx = 0.5e-6
-    mask = make_eight_octant_phase_mask(N, dx)
+    mask = create_eight_octant_phase_mask(N, dx)
     np.testing.assert_allclose(np.abs(mask),
                                np.ones((N, N)),
                                atol=1e-12)
@@ -140,7 +140,7 @@ def test_8oct_8_distinct_octants():
     N = 128
     dx = 1.0e-6
     phase_step = np.pi
-    mask = make_eight_octant_phase_mask(N, dx, phase_step=phase_step)
+    mask = create_eight_octant_phase_mask(N, dx, phase_step=phase_step)
 
     # Exactly 2 distinct values (excluding the central pixel, which
     # is degenerate at the arctan2 singularity but still maps to one
@@ -224,10 +224,10 @@ def test_make_lyot_focal_plane_mask_dispatches_to_phase_helpers():
 # Top-level re-export pin
 # ---------------------------------------------------------------------------
 def test_phase_mask_helpers_reexported_top_level():
-    """``la.make_four_quadrant_phase_mask`` / ``la.make_eight_octant_phase_mask``
+    """``la.create_four_quadrant_phase_mask`` / ``la.create_eight_octant_phase_mask``
     are exposed at the top level (v5.4 Phase 5 export contract).
     """
-    assert hasattr(la, 'make_four_quadrant_phase_mask')
-    assert hasattr(la, 'make_eight_octant_phase_mask')
-    assert 'make_four_quadrant_phase_mask' in la.__all__
-    assert 'make_eight_octant_phase_mask' in la.__all__
+    assert hasattr(la, 'create_four_quadrant_phase_mask')
+    assert hasattr(la, 'create_eight_octant_phase_mask')
+    assert 'create_four_quadrant_phase_mask' in la.__all__
+    assert 'create_eight_octant_phase_mask' in la.__all__

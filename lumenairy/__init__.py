@@ -115,8 +115,8 @@ from .elements import (
     apply_vortex_phase_mask,
     apply_zernike_aberration,
     generate_turbulence_screen,
-    make_eight_octant_phase_mask,
-    make_four_quadrant_phase_mask,
+    create_eight_octant_phase_mask,
+    create_four_quadrant_phase_mask,
     zernike,
 )
 
@@ -1013,8 +1013,8 @@ __all__ = [
     # v5.4 Phase 5: phase-mask coronagraph builders (FQPM + 8OPM)
     # promoted from inline ``coronagraph_dock`` helper to canonical
     # library functions.
-    'make_four_quadrant_phase_mask',
-    'make_eight_octant_phase_mask',
+    'create_four_quadrant_phase_mask',
+    'create_eight_octant_phase_mask',
     'coronagraph_contrast_curve',
 
     # Grid / sampling helpers

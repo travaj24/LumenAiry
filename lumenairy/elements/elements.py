@@ -751,7 +751,7 @@ def apply_vortex_phase_mask(E_in, dx, *, charge=2, xc=0.0, yc=0.0,
     return E_in * xp.exp(1j * phase)
 
 
-def make_four_quadrant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
+def create_four_quadrant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
     """Construct a four-quadrant phase mask (FQPM).
 
     The four-quadrant phase mask is a focal-plane coronagraph element
@@ -816,7 +816,7 @@ def make_four_quadrant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
     return mask
 
 
-def make_eight_octant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
+def create_eight_octant_phase_mask(N, dx, *, phase_step=np.pi, center=None):
     """Construct an eight-octant phase mask (8OPM).
 
     The eight-octant phase mask refines the four-quadrant design by

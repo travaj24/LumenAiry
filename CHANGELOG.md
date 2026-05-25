@@ -347,7 +347,7 @@ the docks consume canonical functions:
   smaller-magnitude root.  Promoting this fix to
   `raytrace/intersection.py` is a v5.5 candidate.  5 new tests.
 
-* **`make_four_quadrant_phase_mask()`** + **`make_eight_octant_phase_mask()`**
+* **`create_four_quadrant_phase_mask()`** + **`create_eight_octant_phase_mask()`**
   (NEW; in `lumenairy.elements.elements`, re-exported via
   `lumenairy.elements.coronagraph`).  FQPM and 8OPM builders with
   `phase_step=pi` default + configurable centre.  Coronagraph dock
@@ -430,7 +430,7 @@ code-work AND Designer GUI:
 
 ### Files touched
 
-38 files modified or created.  Net LOC: +10912 / -446 vs v5.3.2.
+52 files modified or created.  Net LOC: +13759 / -452 vs v5.3.2.
 
 ---
 

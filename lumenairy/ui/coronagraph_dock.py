@@ -128,8 +128,8 @@ IMAGE_PLANE_PROFILES = {
 # ---------------------------------------------------------------------------
 # Phase-mask helpers
 #
-# v5.4 Phase 5: library now ships make_four_quadrant_phase_mask +
-# make_eight_octant_phase_mask in ``lumenairy.elements`` (and the
+# v5.4 Phase 5: library now ships create_four_quadrant_phase_mask +
+# create_eight_octant_phase_mask in ``lumenairy.elements`` (and the
 # ``lumenairy.elements.coronagraph`` namespace re-export).  The dock
 # now consumes those canonical builders -- no inline implementation.
 # ---------------------------------------------------------------------------
@@ -296,8 +296,8 @@ class _CoronagraphWorker(QThread):
     def _apply_focal_mask(self, E_in, dx_focal, stop, wavelength, f_eff, D):
         from lumenairy.elements import (
             apply_lyot_focal_plane_mask,
-            make_eight_octant_phase_mask,
-            make_four_quadrant_phase_mask,
+            create_eight_octant_phase_mask,
+            create_four_quadrant_phase_mask,
         )
         prof = stop['profile']
         cfg = LYOT_FPM_PROFILES[prof]
@@ -305,12 +305,12 @@ class _CoronagraphWorker(QThread):
         lod = wavelength * f_eff / D
         if lib_name == '__phase4__':
             # v5.4 Phase 5: library now ships
-            # ``make_four_quadrant_phase_mask`` -- consume it instead of
+            # ``create_four_quadrant_phase_mask`` -- consume it instead of
             # the legacy inline ``_phase_octant_mask`` helper.  Apply a
             # soft outer cutoff at mask_radius_lod so the result behaves
             # like a finite-extent FPM.
             Ny, Nx = E_in.shape
-            mask = make_four_quadrant_phase_mask(Nx, dx_focal)
+            mask = create_four_quadrant_phase_mask(Nx, dx_focal)
             E_phase = E_in * mask
             r_cut = stop['mask_radius_lod'] * lod
             x = (np.arange(Nx) - Nx / 2) * dx_focal
@@ -320,10 +320,10 @@ class _CoronagraphWorker(QThread):
             return np.where(inside, E_phase, E_in)
         if lib_name == '__phase8__':
             # v5.4 Phase 5: library now ships
-            # ``make_eight_octant_phase_mask`` -- consume it instead of
+            # ``create_eight_octant_phase_mask`` -- consume it instead of
             # the legacy inline ``_phase_octant_mask`` helper.
             Ny, Nx = E_in.shape
-            mask = make_eight_octant_phase_mask(Nx, dx_focal)
+            mask = create_eight_octant_phase_mask(Nx, dx_focal)
             E_phase = E_in * mask
             r_cut = stop['mask_radius_lod'] * lod
             x = (np.arange(Nx) - Nx / 2) * dx_focal
