@@ -329,6 +329,96 @@ def zernike_basis_matrix(
     return basis, pupil_mask
 
 
+# ----------------------------------------------------------------------
+# v5.4 Phase 5 -- normalization & weighting per-mode rescaling helpers
+# ----------------------------------------------------------------------
+#
+# The library's internal basis is OSA/ANSI orthonormal on the unit disk
+# (see :func:`zernike_polynomial`).  ``zernike_decompose`` now accepts a
+# ``normalization=`` kwarg by rescaling the OSA basis on a per-mode
+# basis BEFORE the least-squares solve, then unscaling the recovered
+# coefficients so callers receive coefficients expressed in the
+# requested convention.  No new basis-matrix builds are needed.
+#
+# Conventions implemented
+# -----------------------
+# * ``'OSA'``       -- ANSI/OSA orthonormal (current behavior).
+#                      Per-mode factor = 1.  Reference: ANSI Z80.28-2010.
+# * ``'Noll'``      -- Noll 1976 (J. Opt. Soc. Am. 66, 207-211).  Same
+#                      magnitudes as OSA, but the sign convention on
+#                      the sine-like (m < 0) modes is opposite to OSA.
+#                      Implemented as factor = -1 for m < 0, +1
+#                      otherwise.  This matches the most-documented
+#                      practical difference; if the caller really wants
+#                      Noll's j-ordering as well they can permute
+#                      after the fact.
+# * ``'Standard'``  -- ANSI/Z80.28-2010 Born-Wolf form.  Algebraically
+#                      identical to OSA (factor = 1).  Provided
+#                      explicitly so dock dropdowns don't have to
+#                      special-case the name.
+# * ``'Fringe'``    -- Wyant / U-Arizona "Fringe" ordering uses
+#                      single-index 1..37 with a DIFFERENT mode set
+#                      and unnormalised peak-value-1 polynomials.
+#                      Not implementable as a pure per-mode rescale of
+#                      the OSA basis; ``NotImplementedError`` until a
+#                      dedicated Fringe basis lands (planned: v5.5).
+#
+# The rescaling identity, for any per-mode factor ``s_j``:
+#   if OSA basis is B and the requested basis is B' with
+#   B'[:, j] = s_j * B[:, j], then a least-squares fit of OPD against
+#   B' returns coefficients c'_j = c_j / s_j (where c_j are OSA
+#   coefficients).  Equivalently we can solve against B (cached) and
+#   divide: c'_j = c_j / s_j.  We do exactly that -- it avoids a
+#   second basis-matrix build and a second cache key.
+# ----------------------------------------------------------------------
+
+_VALID_NORMALIZATIONS = ('OSA', 'Noll', 'Standard', 'Fringe')
+
+
+def _normalization_factors(n_modes: int, normalization: str) -> np.ndarray:
+    """Per-mode multiplicative rescale to go from OSA -> requested
+    convention.
+
+    Returns an array ``s`` of shape ``(n_modes,)`` such that, in the
+    requested convention, the j-th Zernike polynomial equals
+    ``s[j] * Z_j^{OSA}``.  Coefficients returned to the caller are
+    divided by ``s`` so they represent expansion in the requested
+    basis.
+
+    Raises ``ValueError`` for unknown names and ``NotImplementedError``
+    for conventions whose basis differs structurally from OSA (Fringe).
+    """
+    if normalization not in _VALID_NORMALIZATIONS:
+        raise ValueError(
+            f"Unknown normalization {normalization!r}; expected one of "
+            f"{_VALID_NORMALIZATIONS}.")
+    if normalization == 'Fringe':
+        # Fringe uses a different mode set (37 polynomials with non-OSA
+        # ordering and peak-value-1 instead of RMS-1).  Cannot express
+        # as a per-mode scale of the OSA basis; needs a dedicated
+        # Fringe basis builder, planned for v5.5.
+        raise NotImplementedError(
+            "normalization='Fringe' not yet supported; the Fringe "
+            "convention uses a different mode ordering AND peak-value-1 "
+            "(not RMS-1) polynomials, so it cannot be implemented as a "
+            "per-mode rescale of the OSA basis.  Planned for v5.5; "
+            "use 'OSA' or 'Noll' for now.")
+    if normalization in ('OSA', 'Standard'):
+        # ANSI/Z80.28-2010 ('Standard') is algebraically identical to
+        # OSA/ANSI orthonormal -- both give N_n^m = sqrt(2(n+1)/
+        # (1+delta_{m,0})).  No rescale required.
+        return np.ones(n_modes, dtype=np.float64)
+    # 'Noll': flip sign on sine-like (m < 0) modes vs OSA.  Magnitudes
+    # are identical, so |c_j^{Noll}| = |c_j^{OSA}| and RMS aggregates
+    # are unchanged; only signs on m<0 entries differ.
+    s = np.ones(n_modes, dtype=np.float64)
+    for j in range(n_modes):
+        _n, m = zernike_index_to_nm(j)
+        if m < 0:
+            s[j] = -1.0
+    return s
+
+
 def zernike_decompose(
     opd_map: np.ndarray,
     dx: float,
@@ -336,6 +426,8 @@ def zernike_decompose(
     n_modes: int = 21,
     dy: Optional[float] = None,
     return_residual: bool = False,
+    normalization: str = 'OSA',
+    weighting: Optional[np.ndarray] = None,
 ) -> Union[Tuple[np.ndarray, List[str]], Tuple[np.ndarray, List[str], np.ndarray, float]]:
     """Decompose a 2-D OPD map into Zernike coefficients using a
     numerically-stable Householder QR least-squares solve.
@@ -359,6 +451,29 @@ def zernike_decompose(
     return_residual : bool, default False
         Also return the 2-D residual ``opd_map - reconstruction`` and
         its RMS.
+    normalization : {'OSA', 'Noll', 'Standard', 'Fringe'}, default 'OSA'
+        Zernike normalization convention.  ``'OSA'`` (default) and
+        ``'Standard'`` (ANSI/Z80.28-2010 Born-Wolf form) are
+        orthonormal on the unit disk and produce algebraically
+        identical coefficients.  ``'Noll'`` (Noll 1976, J. Opt. Soc.
+        Am. 66, 207-211) has the same magnitudes as OSA but the
+        opposite sign convention on the sine-like (m < 0) modes --
+        i.e. ``c_j^{Noll} = -c_j^{OSA}`` for any j whose OSA azimuthal
+        order is negative; magnitudes and RMS-sums are unchanged.
+        ``'Fringe'`` (Wyant / U-Arizona) raises
+        ``NotImplementedError`` -- the Fringe convention uses a
+        different mode set AND peak-value-1 polynomials, so it cannot
+        be expressed as a per-mode rescale of the OSA basis (planned
+        v5.5).
+    weighting : ndarray of shape ``(Ny, Nx)``, optional
+        Per-pixel weight applied during the least-squares solve.
+        Each pupil row of the design matrix and the corresponding OPD
+        sample is multiplied by ``sqrt(weighting)``, which is the
+        canonical weighted-least-squares transformation (minimises
+        ``sum_i w_i * (opd_i - sum_j c_j Z_j(x_i, y_i))**2``).  Useful
+        when the pupil has obstructions or edge irregularities you
+        want to suppress.  Defaults to ``None`` (uniform weight = 1
+        on every pupil pixel; identical to v5.3.2).
 
     Returns
     -------
@@ -383,6 +498,19 @@ def zernike_decompose(
     revelation.  This is more stable than the default SVD driver for
     ill-conditioned Zernike bases (common when the pupil is partially
     illuminated or when many modes are requested).
+
+    Backward compatibility: calling ``zernike_decompose(opd, dx,
+    aperture)`` with no ``normalization=`` / ``weighting=`` kwargs is
+    bit-for-bit identical to v5.3.2 output.
+
+    References
+    ----------
+    * Noll, R.J. (1976), "Zernike polynomials and atmospheric
+      turbulence", J. Opt. Soc. Am. 66 (3), 207-211.
+    * ANSI Z80.28-2010 "Ophthalmics -- Methods of reporting optical
+      aberrations of eyes".
+    * Mahajan, V.N. (2013), "Optical Imaging and Aberrations, Part
+      III: Wavefront Analysis", SPIE Press.
     """
     if dy is None:
         dy = dx
@@ -394,6 +522,28 @@ def zernike_decompose(
 
     basis, pupil_mask = zernike_basis_matrix(n_modes, X, Y, r_pupil)
 
+    # Validate / compute per-mode rescale.  Resolved BEFORE the
+    # weighting branch so a 'Fringe' or 'Bogus' choice fails fast.
+    norm_scale = _normalization_factors(n_modes, normalization)
+
+    # Validate weighting shape (if any).  We accept either None (no
+    # weighting, the historical default) or a 2-D array matching
+    # ``opd_map``.  Negative or NaN weights are tolerated and treated
+    # as "exclude this pixel" (sqrt(w<=0) -> 0 row contribution).
+    weight_flat = None
+    if weighting is not None:
+        weighting = np.asarray(weighting)
+        if weighting.shape != opd_map.shape:
+            raise ValueError(
+                f'weighting shape {weighting.shape} does not match '
+                f'opd_map shape {opd_map.shape}.')
+        weight_flat = weighting[pupil_mask].astype(np.float64, copy=False)
+        # Mask non-positive / non-finite weights -- treat them like
+        # outside-pupil so they drop out of the fit cleanly.
+        weight_flat = np.where(
+            np.isfinite(weight_flat) & (weight_flat > 0.0),
+            weight_flat, 0.0)
+
     # Flatten the OPD to match basis rows
     opd_flat = opd_map[pupil_mask]
     # Drop NaN/inf rows from both sides
@@ -401,11 +551,29 @@ def zernike_decompose(
     if not finite.all():
         basis = basis[finite]
         opd_flat = opd_flat[finite]
+        if weight_flat is not None:
+            weight_flat = weight_flat[finite]
+    # Drop zero-weight rows (uniform-fit path is unchanged because
+    # ``weight_flat is None`` skips this branch).
+    if weight_flat is not None:
+        nonzero = weight_flat > 0.0
+        if not nonzero.all():
+            basis = basis[nonzero]
+            opd_flat = opd_flat[nonzero]
+            weight_flat = weight_flat[nonzero]
     if opd_flat.size < n_modes:
         raise ValueError(
             f'Not enough valid pupil samples ({opd_flat.size}) to fit '
             f'{n_modes} modes.  Check aperture/grid alignment or '
             f'reduce n_modes.')
+
+    # Apply weighted-least-squares transformation: multiply each row
+    # of (basis | opd) by sqrt(w_i).  Skipping this entirely when
+    # ``weighting is None`` preserves bit-for-bit v5.3.2 output.
+    if weight_flat is not None:
+        sw = np.sqrt(weight_flat)
+        basis = basis * sw[:, None]
+        opd_flat = opd_flat * sw
 
     # Householder QR with column pivoting (gelsy driver)
     try:
@@ -418,14 +586,21 @@ def zernike_decompose(
         # (ValueError, LinAlgError).
         coeffs, *_ = np.linalg.lstsq(basis, opd_flat, rcond=None)
 
+    # Rescale OSA coefficients into the requested convention.  For
+    # 'OSA' and 'Standard' this is a no-op (factors are all 1.0).
+    coeffs = coeffs / norm_scale
+
     names = [_zernike_classical_name(*zernike_index_to_nm(j))
              for j in range(n_modes)]
 
     if return_residual:
-        # Reconstruct over the full pupil, not just the finite subset
+        # Reconstruct over the full pupil, not just the finite subset.
+        # Reconstruction uses the OSA basis with OSA-equivalent
+        # coefficients (coeffs * norm_scale) so the residual measures
+        # the same wavefront regardless of the requested normalization.
         basis_full, _ = zernike_basis_matrix(
             n_modes, X, Y, r_pupil)
-        recon_flat = basis_full @ coeffs
+        recon_flat = basis_full @ (coeffs * norm_scale)
         reconstruction = np.zeros_like(opd_map)
         reconstruction[pupil_mask] = recon_flat
         residual = opd_map - reconstruction

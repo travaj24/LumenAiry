@@ -1,14 +1,19 @@
-# v5.4 (audit P3-B): add normalization + weighting controls
+# v5.4 Phase 5: library now accepts normalization= + weighting= kwargs
 """
 Zernike decomposition dock -- interactive Zernike coefficient viewer.
 
-v5.4 (audit P3-B) adds two polish controls:
-  * Normalization selector (library hard-codes OSA/ANSI -- non-OSA
-    selections emit a summary warning until the library exposes a
-    ``normalization=`` kwarg).
-  * Weighting mask -- applied post-hoc (we multiply the OPD by the
-    mask before ``zernike_decompose``); default ``'none'`` preserves
-    v5.3.2 numerical behavior bit-for-bit.
+v5.4 Phase 5 wires the dock dropdowns directly into the library:
+  * Normalization selector ('OSA' / 'Noll' / 'Standard' / 'Fringe')
+    flows to ``zernike_decompose(..., normalization=...)``.  Fringe
+    raises ``NotImplementedError`` at the library layer; the dock
+    catches and reports it in the summary box.
+  * Weighting mask ('none' / 'circular_aperture' / 'from_file') is
+    built as a 2-D float array and passed to
+    ``zernike_decompose(..., weighting=...)``.  The library applies
+    the canonical weighted-least-squares transform internally; the
+    dock no longer multiplies the OPD post-hoc.
+  * Default selections ('OSA' + 'none') reproduce v5.3.2 numerical
+    output bit-for-bit.
 
 Author: Andrew Traverso
 """
@@ -77,21 +82,25 @@ class ZernikeDock(QWidget):
         ctrl.addStretch()
         layout.addLayout(ctrl)
 
-        # v5.4 (P3-B): normalization selector (library locked to OSA).
+        # v5.4 Phase 5: normalization selector (library accepts the
+        # kwarg directly; no post-hoc warning required).
         norm_row = QHBoxLayout()
         norm_row.addWidget(QLabel('Normalization:'))
         self.combo_normalization = QComboBox()
         self.combo_normalization.addItems(
             ['OSA', 'Noll', 'Fringe', 'Standard'])
         self.combo_normalization.setToolTip(
-            'Library hard-codes OSA/ANSI; non-OSA choices warn until '
-            'a normalization= kwarg lands.')
+            "Zernike normalization convention.  'OSA' (default) and "
+            "'Standard' are orthonormal; 'Noll' flips sign on sine "
+            "modes; 'Fringe' is not yet supported (raises in lib).")
         norm_row.addWidget(self.combo_normalization)
         norm_row.addStretch()
         layout.addLayout(norm_row)
 
-        # v5.4 (P3-B): weighting mask group (post-hoc OPD multiply;
-        # default 'none' reproduces v5.3.2 output bit-for-bit).
+        # v5.4 Phase 5: weighting mask group.  The library applies the
+        # weight via weighted-least-squares internally; the dock just
+        # builds the 2-D mask array.  Default 'none' = uniform weights
+        # (numerically identical to v5.3.2).
         self.group_weighting = QGroupBox('Weighting')
         w_layout = QHBoxLayout(self.group_weighting)
         w_layout.addWidget(QLabel('Source:'))
@@ -209,10 +218,12 @@ class ZernikeDock(QWidget):
             grid[iy, ix] = opl
             from lumenairy.analysis import zernike_decompose
             n_modes = self.spin_modes.value()
-            self._warn_if_nonstandard_normalization()
-            opd_in = self._apply_weighting(grid, dx, ap)
+            normalization = self.combo_normalization.currentText()
+            weighting = self._build_weighting(grid, dx, ap)
             coeffs, names = zernike_decompose(
-                opd_in, dx, ap, n_modes=n_modes)
+                grid, dx, ap, n_modes=n_modes,
+                normalization=normalization,
+                weighting=weighting)
             self._coeffs = coeffs
             self._names = names
             self._opd_map = grid
@@ -221,9 +232,14 @@ class ZernikeDock(QWidget):
             self.summary.clear()
             self.summary.append(
                 f'Ray-trace decomposition: {int(np.sum(alive))} rays, '
-                f'ap={ap*1e3:.2f} mm')
+                f'ap={ap*1e3:.2f} mm '
+                f'(norm={normalization}, weighting='
+                f'{self.combo_weighting_source.currentText()})')
             self._plot_coefficients()
             self._print_summary()
+        except NotImplementedError as e:
+            self.summary.append(
+                f'Normalization not supported: {e}')
         except Exception as e:
             self.summary.append(
                 f'Ray-trace decomposition failed: {type(e).__name__}: {e}')
@@ -256,15 +272,21 @@ class ZernikeDock(QWidget):
         try:
             from lumenairy.analysis import zernike_decompose
             n_modes = self.spin_modes.value()
-            self._warn_if_nonstandard_normalization()
-            opd_in = self._apply_weighting(
+            normalization = self.combo_normalization.currentText()
+            weighting = self._build_weighting(
                 self._opd_map, self._dx, self._aperture)
             coeffs, names = zernike_decompose(
-                opd_in, self._dx, self._aperture, n_modes=n_modes)
+                self._opd_map, self._dx, self._aperture,
+                n_modes=n_modes,
+                normalization=normalization,
+                weighting=weighting)
             self._coeffs = coeffs
             self._names = names
             self._plot_coefficients()
             self._print_summary()
+        except NotImplementedError as e:
+            self.summary.append(
+                f'Normalization not supported: {e}')
         except Exception as e:
             self.summary.append(f'Decomposition failed: {type(e).__name__}: {e}')
 
@@ -301,15 +323,10 @@ class ZernikeDock(QWidget):
             f'\nRMS wavefront error (modes 3+): {rms*1e9:.3f} nm '
             f'= {rms/(self.sm.wavelength_nm*1e-9):.4f} waves')
 
-    # v5.4 (P3-B) helpers: normalization warning + weighting mask
-
-    def _warn_if_nonstandard_normalization(self):
-        """Warn when the user selects a non-OSA convention (no-op for OSA)."""
-        norm = self.combo_normalization.currentText()
-        if norm != 'OSA':
-            self.summary.append(
-                f"NOTE: normalization='{norm}' not yet wired through; "
-                f"library hard-codes OSA/ANSI.  Fit used OSA.")
+    # v5.4 Phase 5 helpers: build a weighting array for the library
+    # to consume.  The library now applies the weight internally via
+    # canonical weighted-least-squares -- the dock no longer pre-
+    # multiplies the OPD.
 
     def _on_weighting_source_changed(self, src):
         """Show/hide weighting sub-widgets based on the chosen source."""
@@ -329,11 +346,18 @@ class ZernikeDock(QWidget):
             self._weighting_file_path = path
             self.lbl_weighting_file.setText(os.path.basename(path))
 
-    def _apply_weighting(self, opd_map, dx, aperture):
-        """Multiply ``opd_map`` by the chosen mask (no-op for 'none')."""
+    def _build_weighting(self, opd_map, dx, aperture):
+        """Return a 2-D weight array matching ``opd_map.shape`` or
+        ``None`` for the unweighted default.
+
+        ``None`` (rather than an all-ones array) is the canonical
+        signal to ``zernike_decompose`` that no weighting is required,
+        which preserves v5.3.2 bit-for-bit output for default
+        selections.
+        """
         src = self.combo_weighting_source.currentText()
         if src == 'none' or opd_map is None:
-            return opd_map
+            return None
         try:
             Ny, Nx = opd_map.shape
             if src == 'circular_aperture':
@@ -346,13 +370,13 @@ class ZernikeDock(QWidget):
                 self.summary.append(
                     f"Weighting: circular_aperture, frac={frac:.3f} "
                     f"({int(mask.sum())} active pixels)")
-                return np.where(mask, opd_map, np.nan)
+                return mask.astype(np.float64)
             if src == 'from_file':
                 if not self._weighting_file_path:
                     self.summary.append(
                         "Weighting 'from_file' but no file chosen; "
                         "running unweighted.")
-                    return opd_map
+                    return None
                 path = self._weighting_file_path
                 ext = os.path.splitext(path)[1].lower()
                 if ext == '.npy':
@@ -364,16 +388,17 @@ class ZernikeDock(QWidget):
                 else:
                     self.summary.append(
                         f"Weighting: unsupported ext '{ext}'; unweighted.")
-                    return opd_map
+                    return None
                 if mask.shape != opd_map.shape:
                     self.summary.append(
                         f"Weighting: shape mismatch {mask.shape} vs "
                         f"{opd_map.shape}; unweighted.")
-                    return opd_map
+                    return None
                 self.summary.append(
                     f"Weighting: from_file '{os.path.basename(path)}'")
-                return opd_map * mask
+                return np.asarray(mask, dtype=np.float64)
         except Exception as e:
             self.summary.append(
-                f'Weighting failed ({type(e).__name__}: {e}); unweighted.')
-        return opd_map
+                f'Weighting build failed ({type(e).__name__}: {e}); '
+                f'unweighted.')
+        return None
