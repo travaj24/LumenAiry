@@ -14,9 +14,14 @@ the substantial Designer surface added in this release.
 
 **Zero physics regressions in 17 consecutive releases.**
 
-3942 unit tests pass (collected = 3963 = pass + 20 skip + 1 xfail)
-at write-time; stamp_changelog refreshes ship-time empirical values
-into this block at tag time.
+3933 unit tests pass (collected = 3942 = pass + 8 skip + 1 xfail)
+at write-time.  The +12 skip reduction vs the original Phase 5
+stamp (20 -> 8) reflects the v5.4 Phase 6 cleanup deletion of
+`tests/unit/test_v5_0_1_agent_c.py` (8 tests permanently
+dormant; pin superseded by V11/V16 walkers per the file's own
+skip reason) plus normalisation of how pytest's short summary
+collapses identical data-driven skip messages.  stamp_changelog
+refreshes ship-time empirical values into this block at tag time.
 
 **Substantive ship:**
 
