@@ -254,6 +254,13 @@ class TestB2SwmrConcurrentReadDuringWrite:
 
         # Launch a slow writer in the background.  Sleeps 0.2s
         # between each append; total runtime ~1s.
+        #
+        # v5.4 Phase 8: timeouts bumped 8.0 -> 20.0 (poll) and 10.0 ->
+        # 30.0 (writer.join) after observing intermittent Python 3.10
+        # + Linux-CI flakes where the writer subprocess took longer
+        # than 10s to spawn + import lumenairy + acquire the filelock
+        # under CI load.  The test's actual work is ~1 second; the
+        # generous timeouts only kick in under adverse CI conditions.
         ctx = mp.get_context('spawn')
         writer = ctx.Process(
             target=_worker_slow_append_h5,
@@ -266,7 +273,7 @@ class TestB2SwmrConcurrentReadDuringWrite:
             # until we see >= 2 planes (the seed + at least one new)
             # OR until the writer exits.
             seen_extra = False
-            deadline = time.time() + 8.0
+            deadline = time.time() + 20.0
             while time.time() < deadline and writer.is_alive():
                 try:
                     with h5py.File(path, 'r',
@@ -281,18 +288,25 @@ class TestB2SwmrConcurrentReadDuringWrite:
                     pass
                 time.sleep(0.05)
             # Don't deadlock the test if the writer is stuck.
-            writer.join(timeout=10.0)
+            writer.join(timeout=30.0)
             if writer.is_alive():
                 writer.terminate()
                 writer.join(timeout=2.0)
                 pytest.fail(
-                    'Writer process did not exit in 10 seconds; '
+                    'Writer process did not exit in 30 seconds; '
                     'multi-process lock may be deadlocked.'
                 )
         finally:
             if writer.is_alive():
                 writer.terminate()
                 writer.join(timeout=2.0)
+
+        # v5.4 Phase 8: surface writer exit code so flake-debug has a
+        # trace.  Non-zero exitcode means the worker subprocess crashed
+        # before completing its 4 appends -- typically an import-time
+        # or filelock-acquisition issue that the spawn-mp context
+        # silently swallows.
+        writer_exit = writer.exitcode
 
         # Either we saw a partial state during the run (preferred --
         # proves SWMR works), or the writer finished too quickly to
@@ -303,7 +317,10 @@ class TestB2SwmrConcurrentReadDuringWrite:
             n_final = int(f['planes'].attrs.get('n_planes', 0))
         assert n_final == 5, (
             f'Expected 5 planes after seed + 4 worker appends, got '
-            f'{n_final}.  Multi-process state is inconsistent.'
+            f'{n_final}.  Multi-process state is inconsistent.  '
+            f'Writer subprocess exitcode={writer_exit} '
+            f'(non-zero = subprocess crashed; 0 = exited cleanly but '
+            f'did not produce expected writes; None = still alive).'
         )
         # ``seen_extra`` is informative but not load-bearing -- it's
         # documented above as best-effort.  Surface it so a failing
