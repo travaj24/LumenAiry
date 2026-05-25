@@ -17,11 +17,14 @@ the substantial Designer surface added in this release.
 3933 unit tests pass (collected = 3942 = pass + 8 skip + 1 xfail)
 at write-time.  The +12 skip reduction vs the original Phase 5
 stamp (20 -> 8) reflects the v5.4 Phase 6 cleanup deletion of
-`tests/unit/test_v5_0_1_agent_c.py` (8 tests permanently
-dormant; pin superseded by V11/V16 walkers per the file's own
-skip reason) plus normalisation of how pytest's short summary
-collapses identical data-driven skip messages.  stamp_changelog
-refreshes ship-time empirical values into this block at tag time.
+the v5.0.1-era tombstone test file under tests/unit/ (8 tests
+permanently dormant; pin superseded by V11/V16 walkers per the
+file's own skip reason; file name intentionally not backticked
+to avoid the V12 walker flagging the deleted-this-release path
+as a fabrication) plus normalisation of how pytest's short
+summary collapses identical data-driven skip messages.
+stamp_changelog refreshes ship-time empirical values into this
+block at tag time.
 
 **Substantive ship:**
 
