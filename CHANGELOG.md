@@ -13,7 +13,7 @@ edge case in the new coating-material registry.
 
 **Zero physics regressions in 18 consecutive releases.**
 
-3960 unit tests pass (collected = 3969 = pass + 8 skip + 1
+3959 unit tests pass (collected = 3968 = pass + 8 skip + 1
 xfail) at write-time; refreshed via `stamp_changelog.py --apply`.
 
 ### P1 -- `_intersect_surface` direction-blind root pick (audit Part 5)
@@ -204,9 +204,7 @@ audit-of-audits artifact).  Remaining horizon is process-only:
 
 ### Files touched
 
-15 files modified or created.  Net LOC: stamped post-commit by
-`scripts/stamp_changelog.py --apply` (the v5.4.1 extension also
-stamps this value).
+16 files modified or created.  Net LOC: +2188 / -202 vs v5.4.0.
 
 ---
 
