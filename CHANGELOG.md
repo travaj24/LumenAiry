@@ -74,7 +74,7 @@ Defense-in-depth against signal-pair-order violations.
 
 ### Files touched
 
-8 files modified or created.  Net LOC: +136 / -28 vs v5.4.1.
+8 files modified or created.  Net LOC: +265 / -10 vs v5.4.1.
 
 ---
 
