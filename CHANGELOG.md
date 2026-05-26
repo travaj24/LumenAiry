@@ -75,7 +75,7 @@ imports block (it was already imported in 11 of the touched files).
 
 ### Files touched
 
-32 files modified or created.  Net LOC: +95 / 0 vs v5.4.2.
+31 files modified or created.  Net LOC: +195 / -21 vs v5.4.2.
 
 ---
 
