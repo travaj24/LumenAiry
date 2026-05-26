@@ -13,7 +13,7 @@ Author: Andrew Traverso
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox,
+    QSizePolicy, QSpinBox, QDoubleSpinBox, QProgressBar, QGroupBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QTextEdit,
     QFileDialog, QMessageBox,
 )
@@ -300,6 +300,9 @@ class ToleranceDock(QWidget):
         # ── Results plot ──
         self.fig = Figure(figsize=(6, 3), dpi=100, facecolor='#0a0c10')
         self.canvas = FigureCanvasQTAgg(self.fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas.setMinimumSize(0, 0)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self.canvas, stretch=1)
 
         # ── Summary ──

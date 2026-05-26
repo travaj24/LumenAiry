@@ -18,7 +18,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QDoubleSpinBox, QGroupBox, QTextEdit, QComboBox,
+    QSizePolicy, QSpinBox, QDoubleSpinBox, QGroupBox, QTextEdit, QComboBox,
     QProgressBar,
 )
 from PySide6.QtGui import QFont
@@ -145,6 +145,9 @@ class PSFMTFDock(QWidget):
         if HAS_MPL:
             self.fig = Figure(figsize=(7, 4), tight_layout=True)
             self.canvas = FigureCanvas(self.fig)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas.setMinimumSize(0, 0)
+            self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar = NavigationToolbar(self.canvas, self)
             layout.addWidget(self.toolbar)
             layout.addWidget(self.canvas, stretch=1)

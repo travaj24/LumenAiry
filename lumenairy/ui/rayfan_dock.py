@@ -4,7 +4,7 @@ Ray fan and OPD dock — matplotlib-based transverse aberration plots.
 Author: Andrew Traverso
 """
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, QLabel
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QComboBox, QLabel, QSizePolicy
 from PySide6.QtCore import Qt
 
 import numpy as np
@@ -61,6 +61,9 @@ class RayFanDock(QWidget):
         from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
         self.fig = Figure(figsize=(8, 4), dpi=100, facecolor='#0a0c10')
         self.canvas = FigureCanvasQTAgg(self.fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas.setMinimumSize(0, 0)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar = NavigationToolbar2QT(self.canvas, self)
         layout.addWidget(self.mpl_toolbar)
         layout.addWidget(self.canvas, stretch=1)

@@ -40,7 +40,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QButtonGroup, QComboBox, QDoubleSpinBox,
     QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QHeaderView,
-    QLabel, QProgressBar, QPushButton, QRadioButton, QSpinBox,
+    QLabel, QProgressBar, QPushButton, QRadioButton, QSizePolicy, QSpinBox,
     QSplitter, QStackedWidget, QTableWidget, QTableWidgetItem,
     QTextEdit, QVBoxLayout, QWidget,
 )
@@ -281,6 +281,9 @@ class AOClosedLoopDock(QWidget):
             self.fig_residual = Figure(figsize=(5.0, 2.6), tight_layout=True,
                                        facecolor='#0a0c10')
             self.canvas_residual = FigureCanvas(self.fig_residual)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_residual.setMinimumSize(0, 0)
+            self.canvas_residual.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_residual = NavigationToolbar(
                 self.canvas_residual, right)
             top_w = QWidget()
@@ -293,11 +296,17 @@ class AOClosedLoopDock(QWidget):
             self.fig_dm = Figure(figsize=(5.0, 2.6), tight_layout=True,
                                  facecolor='#0a0c10')
             self.canvas_dm = FigureCanvas(self.fig_dm)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_dm.setMinimumSize(0, 0)
+            self.canvas_dm.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             right.addWidget(self.canvas_dm)
 
             self.fig_residual_map = Figure(
                 figsize=(5.0, 2.6), tight_layout=True, facecolor='#0a0c10')
             self.canvas_residual_map = FigureCanvas(self.fig_residual_map)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_residual_map.setMinimumSize(0, 0)
+            self.canvas_residual_map.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             right.addWidget(self.canvas_residual_map)
         else:
             warn = QLabel(

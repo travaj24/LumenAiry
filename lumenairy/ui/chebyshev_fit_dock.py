@@ -46,7 +46,7 @@ import numpy as np
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QCheckBox, QFileDialog, QGroupBox, QTableWidget,
+    QSizePolicy, QSpinBox, QCheckBox, QFileDialog, QGroupBox, QTableWidget,
     QTableWidgetItem, QMessageBox, QHeaderView,
 )
 from PySide6.QtGui import QFont
@@ -303,6 +303,9 @@ class ChebyshevFitDock(QWidget):
         if HAS_MPL:
             self.fig = Figure(figsize=(7, 3), tight_layout=True)
             self.canvas = FigureCanvasQTAgg(self.fig)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas.setMinimumSize(0, 0)
+            self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             layout.addWidget(self.canvas, stretch=1)
         else:
             self.canvas = None

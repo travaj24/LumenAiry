@@ -268,6 +268,8 @@ class CoherenceDock(QWidget):
         outer.addWidget(self.btn_run)
         self.fig = Figure(figsize=(6, 3.4), dpi=100, facecolor='#0a0c10')
         self.canvas = FigureCanvasQTAgg(self.fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas.setMinimumSize(0, 0)
         self.canvas.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
         outer.addWidget(self.canvas, stretch=1)
@@ -338,6 +340,8 @@ class CoherenceDock(QWidget):
     def _make_canvas(self):
         fig = Figure(figsize=(6, 3.4), dpi=100, facecolor=self._BG)
         canvas = FigureCanvasQTAgg(fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        canvas.setMinimumSize(0, 0)
         canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         return fig, canvas
 

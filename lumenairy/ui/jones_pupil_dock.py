@@ -26,7 +26,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QComboBox, QDoubleSpinBox, QTabWidget,
+    QComboBox, QDoubleSpinBox, QSizePolicy, QTabWidget,
 )
 
 import numpy as np
@@ -161,6 +161,9 @@ class JonesPupilDock(QWidget):
         # Tab 1: Jones pupil (original 2x4 grid)
         self.fig = Figure(figsize=(12, 6), dpi=100, facecolor='#0a0c10')
         self.canvas = FigureCanvasQTAgg(self.fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas.setMinimumSize(0, 0)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar = NavigationToolbar2QT(self.canvas, self)
         tab_jones = QWidget()
         lay_jones = QVBoxLayout(tab_jones)
@@ -172,6 +175,9 @@ class JonesPupilDock(QWidget):
         # Tab 2: Stokes 2x2 grid
         self.fig_stokes = Figure(figsize=(10, 8), dpi=100, facecolor='#0a0c10')
         self.canvas_stokes = FigureCanvasQTAgg(self.fig_stokes)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas_stokes.setMinimumSize(0, 0)
+        self.canvas_stokes.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar_stokes = NavigationToolbar2QT(self.canvas_stokes, self)
         tab_stokes = QWidget()
         lay_stokes = QVBoxLayout(tab_stokes)
@@ -183,6 +189,9 @@ class JonesPupilDock(QWidget):
         # Tab 3: Polarisation-derived (DOP / DOLP / DOCP)
         self.fig_dop = Figure(figsize=(12, 4), dpi=100, facecolor='#0a0c10')
         self.canvas_dop = FigureCanvasQTAgg(self.fig_dop)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas_dop.setMinimumSize(0, 0)
+        self.canvas_dop.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar_dop = NavigationToolbar2QT(self.canvas_dop, self)
         tab_dop = QWidget()
         lay_dop = QVBoxLayout(tab_dop)

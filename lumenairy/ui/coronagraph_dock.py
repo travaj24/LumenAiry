@@ -35,7 +35,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSpinBox, QDoubleSpinBox, QGroupBox, QTextEdit, QComboBox,
+    QSizePolicy, QSpinBox, QDoubleSpinBox, QGroupBox, QTextEdit, QComboBox,
     QProgressBar, QRadioButton, QButtonGroup, QSplitter, QScrollArea,
     QFormLayout, QFrame, QFileDialog,
 )
@@ -602,6 +602,9 @@ class CoronagraphDock(QWidget):
             # Contrast curve canvas (top, 60% height).
             self.fig_curve = Figure(figsize=(6, 4), tight_layout=True)
             self.canvas_curve = FigureCanvas(self.fig_curve)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_curve.setMinimumSize(0, 0)
+            self.canvas_curve.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_curve = NavigationToolbar(self.canvas_curve, right_host)
             right_lay.addWidget(self.toolbar_curve)
             right_lay.addWidget(self.canvas_curve, stretch=6)
@@ -610,6 +613,9 @@ class CoronagraphDock(QWidget):
             # with 4 horizontal subplots.
             self.fig_stops = Figure(figsize=(8, 3), tight_layout=True)
             self.canvas_stops = FigureCanvas(self.fig_stops)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_stops.setMinimumSize(0, 0)
+            self.canvas_stops.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             right_lay.addWidget(self.canvas_stops, stretch=4)
         else:                                              # pragma: no cover
             right_lay.addWidget(QLabel('(matplotlib not available)'))

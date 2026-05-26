@@ -2,6 +2,83 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.3] — 2026-05-25
+
+**GUI patch: comprehensive matplotlib-canvas resize fix.**  Several
+bottom-area docks (PSF/MTF, interferometry, partial-coherence
+user-reported) could not be resized vertically; the dock-splitter
+refused to drag.  Audit scoped this to a single mechanism: every
+`FigureCanvasQTAgg` constructor adopts a `sizeHint()` derived from
+`figsize x DPI` (e.g., `Figure(figsize=(7, 4))` at DPI=100 -> 700x400
+px minimum), and Qt refuses to shrink the parent dock below this
+hint even when the canvas's `QSizePolicy` is `Expanding`.
+
+The canonical fix has been in `layout_2d.py` / `layout_3d.py` /
+`main_window.py` since v3.7.6 but never propagated to the analysis-
+dock fleet:
+
+```python
+self.canvas.setMinimumSize(0, 0)
+self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+```
+
+**Zero physics regressions in 19 consecutive releases.**
+
+### Scope
+
+30 dock files containing `FigureCanvasQTAgg` instances inspected; 35
+individual canvas construction sites patched.  Each patched site now
+calls `setMinimumSize(0, 0)` (overrides the matplotlib-derived
+size-hint floor) and `setSizePolicy(Expanding, Expanding)` (allows
+the parent layout to claim freed vertical space when the user shrinks
+the dock).
+
+**Per-dock canvas-count breakdown:**
+
+* 1-canvas docks (22): `algebra_dock`, `caustic_dock`,
+  `chebyshev_fit_dock`, `coatings_dock`, `distortion_dock`,
+  `field_browser_dock`, `footprint_dock`, `glass_map_dock`,
+  `interferometry_dock`, `lg_aberration_dock`, `psf_mtf_dock`,
+  `rayfan_dock`, `richards_wolf_dock`, `sensitivity_dock`,
+  `shack_hartmann_dock`, `spot_field_dock`, `thin_grating_dock`,
+  `through_focus_dock`, `tolerance_dock`, `wavefront_map_dock`,
+  `waveoptics_dock`, `zernike_dock`
+* 2-canvas docks (4): `coronagraph_dock` (contrast + per-stop preview),
+  `ghost_dock` (bar chart + spot preview -- only bar chart patched;
+  spot retained intentional `setMinimumHeight(200)`),
+  `phase_retrieval_dock` (convergence + reconstruction),
+  `coherence_dock` (main + multi-tab helper feeding 3 tabs)
+* 3-canvas docks (2): `ao_dock` (convergence + DM-command + residual),
+  `jones_pupil_dock` (Jones + Stokes + DOP-DOLP-DOCP)
+
+**Intentionally skipped (small fixed-height previews):**
+
+* `optimizer_dock._conv_canvas` -- `setFixedHeight(130)` is a deliberate
+  small convergence strip above the variable table.
+* `surface_editors.canvas` -- `setFixedHeight(150)` is a deliberate
+  sag-preview thumbnail next to the freeform-coefficient table.
+* `ghost_dock.canvas_spot` -- `setMinimumHeight(200)` + `Preferred`
+  size policy so the small spot preview stays visible next to its
+  label.
+
+19 dock files received a `QSizePolicy` import added to their PySide6
+imports block (it was already imported in 11 of the touched files).
+
+### Verification
+
+* Smoke import: all 30 dock classes instantiate cleanly under
+  offscreen Qt.
+* Targeted suite: `pytest tests/unit/ -k "ui or dock or sizing or
+  layout" -q` reports 226 passed, 1 unrelated skip, 0 failures.
+* Full suite: 3961 unit tests pass (collected = 3970 = pass + 8 skip
+  + 1 xfail).
+
+### Files touched
+
+32 files modified or created.  Net LOC: +95 / 0 vs v5.4.2.
+
+---
+
 ## [5.4.2] — 2026-05-25
 
 **GUI patch: fix user-reported retrace-on-empty-prescription hang +

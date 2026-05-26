@@ -14,7 +14,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSpinBox, QComboBox,
+    QSizePolicy, QSpinBox, QComboBox,
 )
 
 import numpy as np
@@ -75,6 +75,9 @@ class FootprintDock(QWidget):
         # Matplotlib canvas
         self.fig = Figure(figsize=(10, 4), dpi=100, facecolor='#0a0c10')
         self.canvas = FigureCanvasQTAgg(self.fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas.setMinimumSize(0, 0)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.mpl_toolbar = NavigationToolbar2QT(self.canvas, self)
         layout.addWidget(self.mpl_toolbar)
         layout.addWidget(self.canvas, stretch=1)

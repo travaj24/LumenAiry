@@ -12,7 +12,7 @@ Author: Andrew Traverso
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QLineEdit, QComboBox,
+    QLineEdit, QComboBox, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal
 
@@ -81,6 +81,9 @@ class GlassMapDock(QWidget):
         # Matplotlib canvas
         self.fig = Figure(figsize=(6, 4), dpi=100, facecolor='#0a0c10')
         self.canvas = FigureCanvasQTAgg(self.fig)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas.setMinimumSize(0, 0)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.canvas.mpl_connect('button_press_event', self._on_click)
         layout.addWidget(self.canvas, stretch=1)
 

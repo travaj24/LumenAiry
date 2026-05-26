@@ -31,7 +31,7 @@ import numpy as np
 from PySide6.QtCore import Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QSpinBox, QComboBox, QFileDialog, QTextEdit,
+    QGroupBox, QSizePolicy, QSpinBox, QComboBox, QFileDialog, QTextEdit,
     QDoubleSpinBox, QProgressBar, QSplitter, QFormLayout,
     QLineEdit, QCheckBox,
 )
@@ -619,6 +619,9 @@ class PhaseRetrievalDock(QWidget):
             self.ax_conv.set_yscale('log')
             self.ax_conv.grid(alpha=0.2)
             self.canvas_conv = FigureCanvas(self.fig_conv)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_conv.setMinimumSize(0, 0)
+            self.canvas_conv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_conv = NavigationToolbar(self.canvas_conv, self)
             conv_layout.addWidget(self.toolbar_conv)
             conv_layout.addWidget(self.canvas_conv, stretch=1)
@@ -642,6 +645,9 @@ class PhaseRetrievalDock(QWidget):
             self.ax_phase.set_title('arg(reconstruction)')
             self.ax_phase.set_xticks([]); self.ax_phase.set_yticks([])
             self.canvas_recon = FigureCanvas(self.fig_recon)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas_recon.setMinimumSize(0, 0)
+            self.canvas_recon.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar_recon = NavigationToolbar(self.canvas_recon, self)
             recon_layout.addWidget(self.toolbar_recon)
             recon_layout.addWidget(self.canvas_recon, stretch=1)

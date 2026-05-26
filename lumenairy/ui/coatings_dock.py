@@ -321,6 +321,8 @@ class CoatingsDock(QWidget):
             self.fig = Figure(figsize=(6.0, 3.6), tight_layout=True,
                               facecolor='#0a0c10')
             self.canvas = FigureCanvas(self.fig)
+            # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+            self.canvas.setMinimumSize(0, 0)
             self.canvas.setSizePolicy(
                 QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.toolbar = NavigationToolbar(self.canvas, self)

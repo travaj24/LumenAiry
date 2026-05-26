@@ -155,6 +155,8 @@ class GhostDock(QWidget):
         self.fig_bar = Figure(figsize=(4.0, 3.0), dpi=100,
                               facecolor='#0a0c10')
         self.canvas_bar = FigureCanvasQTAgg(self.fig_bar)
+        # v5.4.3 (audit GUI-resize): override matplotlib canvas sizeHint so the dock can shrink
+        self.canvas_bar.setMinimumSize(0, 0)
         self.canvas_bar.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Expanding)
         splitter.addWidget(self.canvas_bar)
