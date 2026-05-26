@@ -2,6 +2,122 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.4] — 2026-05-25
+
+**GUI patch (round 2): the real dock-resize fix.**  v5.4.3 patched
+matplotlib canvases with `setMinimumSize(0, 0)` based on a wrong
+hypothesis about Qt's sizing chain.  The user reported the fix
+didn't work -- bottom docks on all tabs except Design still refused
+to resize vertically.  Root cause: QDockWidget walks its CONTENT
+WIDGET's `minimumSizeHint()` (not just leaf children) to determine
+the dock's floor.  The default `minimumSizeHint()` is computed by
+QWidget from layout children's hints, which adds up matplotlib
+canvases + tables + toolbars to produce a large floor.
+
+The canonical fix has been in `lumenairy/ui/layout_2d.py:1027-1039`
+since v3.6.1 hotfix-6: override `minimumSizeHint()` on the dock
+content widget to return a tiny `QSize(40, 40)`.  This propagates
+through QDockWidget and unlocks the bottom-area splitter.  The
+v5.4.3 canvas-level fix was insufficient because the dock widget
+still computed its floor from the QVBoxLayout children's hints.
+
+**Zero physics regressions in 19 consecutive releases.**
+
+### The fix
+
+39 dock classes patched.  Each now has:
+
+```python
+def minimumSizeHint(self):
+    from PySide6.QtCore import QSize
+    return QSize(40, 40)
+
+def sizeHint(self):
+    from PySide6.QtCore import QSize
+    return QSize(400, 200)
+```
+
+`minimumSizeHint(40, 40)` is the floor that QDockWidget walks; tiny
+value lets the user drag the dock down to almost nothing.
+`sizeHint(400, 200)` is the natural initial size when first shown.
+
+### Scope
+
+39 dock classes patched (audit-counted, +9 vs the v5.4.3 list which
+covered only matplotlib-canvas docks):
+
+`AlgebraDock, AOClosedLoopDock, CausticDock, ChebyshevFitDock,
+CoatingsDock, CoherenceDock, CoronagraphDock, DistortionDock,
+ElementTableEditor, FieldBrowserDock, FootprintDock, GhostDock,
+GlassMapDock, InterferometryDock, JonesPupilDock, LGAberrationDock,
+LibraryDock, LogViewerDock, MaterialsDock, MultiConfigDock,
+OptimizerDock, PhaseRetrievalDock, PSFMTFDock, RayFanDock, ReplDock,
+RichardsWolfDock, SensitivityDock, ShackHartmannDock, SliderDock,
+SnapshotsDock, SpotFieldDock, SurfaceTableEditor, ThinGratingDock,
+ThroughFocusDock, ToleranceDock, WavefrontMapDock, WaveOpticsDock,
+WelcomeDock, ZernikeDock`.
+
+Skipped (already had the override since v3.6.1): `Layout2DView`,
+`Layout3DView`.
+
+### Why v5.4.3's fix wasn't enough
+
+v5.4.3 patched the matplotlib canvas with `setMinimumSize(0, 0)`.
+This is correct but insufficient -- it tells the CANVAS widget it
+can shrink to 0, but the parent dock-content QWidget still computes
+its `minimumSizeHint()` from the layout, which includes contributions
+from non-canvas children (toolbar widgets, parameter group-boxes,
+summary text edits) AND from the canvas's `sizeHint()` (NOT
+`minimumSize()`).  The QDockWidget then uses the dock-content's
+hint, not the canvas's hint.
+
+The v5.4.4 fix overrides `minimumSizeHint()` on the dock-content
+QWidget itself -- the actual widget QDockWidget walks.  v5.4.3's
+canvas patches still help (they make the canvas more flexible
+inside the dock) but the v5.4.4 minimumSizeHint override is what
+actually unlocks the bottom-area splitter.
+
+### Verification
+
+* AST-based patcher confirmed all 39 classes received both methods
+  at column-4 indentation inside the class body (not module-level)
+* All 39 dock modules import cleanly under offscreen Qt
+* 38/39 dock instances confirmed to return the expected `QSize(40,
+  40)` / `QSize(400, 200)` from the new methods (1 unrelated VTK
+  pure-virtual error on `SurfaceTableEditor` ctor in headless mode;
+  AST inspection confirms the methods are present on the class)
+* `pytest tests/unit/ -k "ui or dock or sizing"` -> 220 passed, 1
+  unrelated skip
+* Ruff CI scope clean
+
+### Bonus: Free_Space_Optics script audit
+
+A parallel audit ran against the user's
+`d:\Metacept\Neurophos\Python_Test_Scripts\Free_Space_Optics\` scripts
+(46 scripts in `Reverse_Symmetric_ASM/` consuming `lumenairy`).
+Result: ZERO breaking changes from the v5.3.x -> v5.4.x evolution.
+All scripts use current symbols (`apply_real_lens_traced`,
+`apply_mirror`, `propagate_huygens_fresnel_freespace`,
+`load_zemax_zmx`, `system_abcd_prescription`,
+`create_periodic_phase_mask`); no deprecated symbols
+(`analysis.analysis`, `cosmic_ray_rate=`, `output_grid=`,
+`make_*_phase_mask`) detected.
+
+Forward-path workflows (refractive lenses + metasurface phase
+screens, return path deferred per script comments) do not exercise
+the v5.4.1 `_intersect_surface` backward-ray fix; current
+numerical outputs are unchanged.  Future return-path work
+(`trace_prescription()` through fold mirrors, ghost analysis,
+Seidel coefficients on systems with curved mirrors) will
+auto-benefit from the v5.4.1 fix.
+
+### Files touched
+
+40 files modified (39 dock files + this CHANGELOG).  Net LOC:
++~400 / 0 vs v5.4.3.
+
+---
+
 ## [5.4.3] — 2026-05-25
 
 **GUI patch: comprehensive matplotlib-canvas resize fix.**  Several

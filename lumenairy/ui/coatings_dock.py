@@ -751,6 +751,24 @@ class CoatingsDock(QWidget):
         self.fig.tight_layout()
         self.canvas.draw_idle()
 
+    def minimumSizeHint(self):
+        """v5.4.4 (audit GUI-resize round 2): report a tiny minimum so
+        the QDockWidget will let the user drag this dock pane down to
+        almost nothing.  Inherited Qt implementation walks layout
+        children (matplotlib canvas, tables, toolbars) and adds up
+        their hints, producing a floor that locks the bottom dock
+        area on non-Design tabs.  Matches the v3.6.1 fix in
+        layout_2d.py / layout_3d.py.
+        """
+        from PySide6.QtCore import QSize
+        return QSize(40, 40)
+
+    def sizeHint(self):
+        """v5.4.4: companion to minimumSizeHint() above.  Provides a
+        reasonable initial size when the dock is first shown."""
+        from PySide6.QtCore import QSize
+        return QSize(400, 200)
+
 
 # =============================================================================
 # Module smoke-test (matches the dock spec's smoke-test command):
