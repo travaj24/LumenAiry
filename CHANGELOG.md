@@ -113,8 +113,7 @@ auto-benefit from the v5.4.1 fix.
 
 ### Files touched
 
-40 files modified (39 dock files + this CHANGELOG).  Net LOC:
-+~400 / 0 vs v5.4.3.
+42 files modified or created.  Net LOC: +820 / -2 vs v5.4.3.
 
 ---
 
