@@ -513,28 +513,52 @@ def _stamp_net_loc(body, loc_ins, loc_del):
     past unnoticed.  Stamping both numbers from ``--shortstat``
     closes the loop.
 
-    Returns ``(new_body, change_or_None)``.  When the empirical
-    pair matches the cited pair, the body is returned unchanged.
+    v5.4.5 (AUDIT_V5_4_4_2026_05_26 P3): refresh ALL ``Net LOC:
+    +X / -Y`` patterns in the topmost block, not just the first.
+    Earlier behavior used ``_NET_LOC_PATTERN.search()`` which returns
+    only the first match -- if a CHANGELOG block had a second Net LOC
+    line (e.g. a sub-section roll-up beneath a release-total line)
+    it would silently stay stale.  ``re.finditer`` collects every
+    occurrence; substitutions are applied in reverse span order so
+    each replacement does not shift the indexes of later matches.
+
+    Returns ``(new_body, changes)`` where ``changes`` is a list of
+    per-match ``(label, original_span, new_span)`` tuples.  When the
+    empirical pair matches every cited pair (or no pattern is
+    present), the list is empty and the body is returned unchanged.
     """
     if loc_ins is None or loc_del is None:
-        return body, None
-    match = _NET_LOC_PATTERN.search(body)
-    if match is None:
-        return body, None
-    old_ins = int(match.group('ins'))
-    old_del = int(match.group('del_'))
-    if (old_ins, old_del) == (loc_ins, loc_del):
-        return body, None
-    new_span = (
-        f'{match.group("pre")}{loc_ins}{match.group("mid")}'
-        f'{loc_del}{match.group("suf")}'
-    )
-    new_body = body[:match.start()] + new_span + body[match.end():]
-    label = (
-        f'Net LOC: +{old_ins} / -{old_del}  ->  '
-        f'+{loc_ins} / -{loc_del} (git diff PREV_TAG..HEAD --shortstat)'
-    )
-    return new_body, (label, match.group(0), new_span)
+        return body, []
+    # Collect every match up front so we can rewrite right-to-left;
+    # rewriting in reverse order keeps each remaining match's span
+    # valid (left-of-cursor text is untouched).
+    matches = list(_NET_LOC_PATTERN.finditer(body))
+    if not matches:
+        return body, []
+    changes = []
+    new_body = body
+    for match in reversed(matches):
+        old_ins = int(match.group('ins'))
+        old_del = int(match.group('del_'))
+        if (old_ins, old_del) == (loc_ins, loc_del):
+            continue
+        new_span = (
+            f'{match.group("pre")}{loc_ins}{match.group("mid")}'
+            f'{loc_del}{match.group("suf")}'
+        )
+        new_body = (
+            new_body[:match.start()] + new_span + new_body[match.end():]
+        )
+        label = (
+            f'Net LOC: +{old_ins} / -{old_del}  ->  '
+            f'+{loc_ins} / -{loc_del} (git diff PREV_TAG..HEAD --shortstat)'
+        )
+        # Append in iteration order (reverse).  We reverse the list
+        # again before returning so report output reads top-to-bottom
+        # in file order.
+        changes.append((label, match.group(0), new_span))
+    changes.reverse()
+    return new_body, changes
 
 
 def _build_plan(body, mode, pass_n, coll_n, skip_n, xfail_n,
@@ -578,15 +602,19 @@ def _build_plan(body, mode, pass_n, coll_n, skip_n, xfail_n,
     # v5.4.1 addition: Net LOC: +X / -Y stamp.  Order it last so the
     # diff-preview reads top-to-bottom as the patterns appear in the
     # canonical "### Files touched" subsection of a CHANGELOG entry.
-    new_body, change = _stamp_net_loc(new_body, loc_ins, loc_del)
-    if change is None:
+    # v5.4.5: _stamp_net_loc now returns a LIST of per-match changes
+    # (a block may contain a release-total Net LOC PLUS a sub-section
+    # roll-up).  Extend the plan with every change so each appears
+    # in the diff preview and pushes the "wrote N stamps" counter.
+    new_body, net_loc_changes = _stamp_net_loc(new_body, loc_ins, loc_del)
+    if not net_loc_changes:
         if loc_ins is None or loc_del is None:
             plan.skipped.append(
                 'Net LOC: PREV_TAG not resolvable or shortstat failed')
         elif _NET_LOC_PATTERN.search(body) is None:
             plan.skipped.append('Net LOC: no pattern to update')
     else:
-        plan.changes.append(change)
+        plan.changes.extend(net_loc_changes)
 
     plan.new_body = new_body
     return plan

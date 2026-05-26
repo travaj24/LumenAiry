@@ -2,6 +2,108 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.5] — 2026-05-26
+
+**Audit-driven patch release closing AUDIT_V5_4_4_2026_05_26.md.**  Three
+P2 coating-material edge cases hardened, V19 scope-the-workaround walker
+hardened against the audit-confirmed basename-collision exploit + pattern
+gaps + docstring-housed workarounds, and two small P3 cleanups
+(`_math/chebyshev.py` docstring drift, `stamp_changelog._stamp_net_loc`
+first-match-only on multi-section CHANGELOG entries).
+
+**Zero physics regressions in 20 consecutive releases.**
+
+### Library — Coatings P2 edge cases (`lumenairy/elements/coatings.py`)
+
+Three input-handling gaps caught by the audit:
+
+1. **Negative wavelength**: previously passed through unchanged into the
+   Sellmeier `lam_um**2 / (lam_um**2 - C)` form, which is mathematically
+   symmetric but silently accepted nonsensical user input.  Now warns
+   (`"sellmeier: rectifying negative wavelength via np.abs(...)"`) and
+   rectifies via `np.abs(wl_arr)`.
+
+2. **NaN wavelength**: previously failed the range check with a confusing
+   `n > lmax` error (NaN propagates).  Now warns first
+   (`"sellmeier: NaN wavelength encountered, result will be NaN"`) and
+   uses `np.nanmin`/`np.nanmax` for the range-message values.
+
+3. **SiO2 range overstated**: the previous upper bound was
+   `8000e-9` but Malitson 1965 (the citation source) only fits
+   `200e-9 -- 6700e-9`.  Tightened to `(200e-9, 6700e-9)` per source.
+   Range check tightened from `> lmax` to `>= lmax` so the boundary
+   case is excluded (it would otherwise extrapolate into garbage at
+   the SiO2 lattice-resonance roll-off).
+
+**Tests**: 7 new tests in
+`tests/unit/test_v5_4_5_coating_edge_cases.py` (172 LOC), 43/43 coating
+tests overall pass.
+
+### Walker — V19 scope-the-workaround hardening
+(`tests/unit/test_v5_4_1_walker_scope_the_workaround.py`)
+
+The audit confirmed three gameability vectors in the v5.4.1 V19 walker:
+
+1. **Basename-collision exploit (confirmed by audit)**: `_is_paired`
+   matched on `os.path.basename`, so a ROADMAP entry citing
+   `coronagraph_dock.py` would falsely pair an unrelated finding in
+   `analysis/coronagraph.py`.  Tightened to require a full
+   `file:line`, a full rel-path, or the path with `lumenairy/` prefix
+   stripped.  Uses `str.startswith` + slice (NOT `lstrip`, which
+   strips characters not a prefix).
+
+2. **Pattern gaps**: extended `_WORKAROUND_PATTERNS` with 5 new
+   entries: `FIXME`, unversioned-deferral (`deferred to/until/past`),
+   hyphen-separator (`v5.5 - candidate`), qualified-hack (`hack until
+   vN.M` or `hack workaround` -- bare `# hack` does NOT match), and
+   versioned-patch.  Existing 6 patterns generalised from `v5\.\d+`
+   to `v\d+\.\d+` for post-v5 readiness.
+
+3. **Docstring-housed workarounds**: second-pass scan emits
+   `docstring:`-prefixed kind labels for lines containing a
+   triple-quote and a workaround phrase.  Multi-line docstrings
+   without a triple-quote on the offending line are an acknowledged
+   limitation -- a `TODO(v5.5+)` marker requests an upgrade to
+   `ast.parse`.
+
+`ROADMAP.md` "Audit-cadence follow-ups" section gains a full-path
+citation of `lumenairy/propagators/fft_infra.py` so the existing
+`fft_infra.py:263` finding still pairs under the new strict logic.
+
+**Tests**: 8 new tests in
+`tests/unit/test_v5_4_1_walker_scope_the_workaround.py` (12 total).
+Walker live-self-run finds 1 paired workaround (the
+`fft_infra.py:263` "Workaround until v5.0" -- correctly paired).
+
+### Library — Chebyshev docstring drift (`lumenairy/_math/chebyshev.py`)
+
+`fit_2d_separable` docstring claimed `default 1e-15` for the
+regularisation parameter, but v5.4.1 raised the default to `1e-12`.
+Updated docstring to match the code and added a one-sentence
+explanation paragraph linking to v5.4.1 audit follow-up.
+
+### Tooling — `_stamp_net_loc` multi-match
+(`scripts/stamp_changelog.py`)
+
+`_stamp_net_loc` used `_NET_LOC_PATTERN.search()` which finds only
+the FIRST match.  CHANGELOG entries with multiple `### Net LOC`
+sub-headings (one per agent-wave) would only get the first one
+updated.  Swapped to `list(_NET_LOC_PATTERN.finditer(...))` with
+reversed-order substitution to preserve string offsets.  Signature
+changed to return `(new_body, changes_list)` instead of
+`(new_body, change_or_None)`; `_build_plan` updated accordingly.
+
+**Tests**: 4 new tests in
+`tests/unit/test_v5_4_1_stamp_changelog_net_loc.py` (13 total).
+
+### Process / shipping discipline
+
+- Force-retag discipline maintained: v5.4.5 will be the 5th
+  consecutive v5.4.x tag created via the `ship -> tag ->
+  stamp_changelog --apply -> force-retag` workflow.
+- Auto-push permitted on tests-pass per the saved feedback memory;
+  tag creation will still ask for confirmation.
+
 ## [5.4.4] — 2026-05-25
 
 **GUI patch (round 2): the real dock-resize fix.**  v5.4.3 patched

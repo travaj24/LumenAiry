@@ -1,21 +1,40 @@
 """V19 walker -- scope-the-workaround comment pattern.
 
 Detects comment patterns indicating scoped workarounds in shipped
-library code:
+library code.  Original v5.4.1 surface (kept):
 
-  - ``# v5.\\d+ candidate``
+  - ``# vN.M candidate``
   - ``# scoped workaround``
   - ``# scope.*workaround`` (case-insensitive)
-  - ``# workaround.*v5\\.\\d+`` (e.g. "workaround until v5.5")
-  - ``# TODO.*v5\\.\\d+``
-  - ``# defer.*to.*v5\\.\\d+``
-  - ``# .*real.*fix.*lives`` (audit-cited "real fix lives elsewhere"
-    phrasing)
+  - ``# workaround.*vN\\.M``
+  - ``# TODO.*vN\\.M``
+  - ``# defer.*to.*vN\\.M``
+  - ``# .*real.*fix.*lives``
+
+v5.4.5 extensions (AUDIT_V5_4_4 Part 9 #4 / #5 / #6) close the
+gameable surfaces the audit empirically demonstrated against the
+v5.4.1 walker:
+
+  - ``# FIXME`` keyword (versioned or unversioned)
+  - unversioned defer (``# deferred to next release``,
+    ``# deferred until ...``, ``# deferred past ...``)
+  - post-v5 versions (``v6.0 candidate``, ``v7.X``, ...) -- the
+    ``v\\d+\\.\\d+`` family generalises the prior ``v5\\.\\d+``
+  - hyphen separators (``# v5.5-candidate``)
+  - qualified synonyms (``# hack until v5.5``,
+    ``# kludge workaround``, ``# bandaid v5.5``)
+  - versioned patch (``# patch v5.5``)
+  - docstring-housed workarounds (triple-quoted ``v5.5 candidate: ...``)
+    -- a second-pass scanner flags lines containing a triple-quote
+    AND any of the workaround phrases.  Multi-line docstrings
+    without a triple-quote on the offending line are an
+    acknowledged limitation (see ``_DOCSTRING_PHRASES`` TODO).
 
 For each match, this walker requires a paired ``ROADMAP.md`` entry
-that references the file:line OR topic.  Without a paired entry the
-workaround is invisible to the audit cadence and risks being lost
-between releases.
+that references the file:line OR full path (audit fix #4 closed
+the basename-collision exploit -- bare basenames no longer pair).
+Without a paired entry the workaround is invisible to the audit
+cadence and risks being lost between releases.
 
 Background.  v5.4.0 shipped the ``_ghost_intersect`` workaround in
 ``analysis/ghost.py`` with a CHANGELOG-honest comment naming the
@@ -73,23 +92,82 @@ _ROADMAP = _REPO_ROOT / 'ROADMAP.md'
 
 # Comment patterns that indicate a scoped workaround.  Tuned to the
 # audit-named phrasings (AUDIT_V5_4_0_2026_05_25.md Part 6 + Part 7
-# #13); generic ``# TODO`` comments are intentionally NOT included --
-# they require the ``v5.\d+`` version suffix to trigger so the
-# walker does not become a TODO-policing nuisance.
+# #13, extended by AUDIT_V5_4_4 Part 9 #5); generic ``# TODO`` /
+# ``# hack`` comments are NOT matched in isolation -- they require a
+# version, deferral, or "workaround" qualifier so the walker does
+# not become a generic TODO-policing nuisance.
+#
+# Version family generalised from ``v5\.\d+`` to ``v\d+\.\d+`` in
+# v5.4.5 so post-v5 versions (v6.x / v7.x / ...) all match (audit
+# fix #5, "post-v5 versions").  Hyphen-separated form
+# ``v5.5-candidate`` matches via the ``[-\s]+`` separator in the
+# extended pattern (audit fix #5, "hyphen separator").
 _WORKAROUND_PATTERNS = [
-    (re.compile(r'#.*v5\.\d+\s+candidate', re.IGNORECASE),
-     'v5.N candidate'),
-    (re.compile(r'#.*scoped\s+workaround', re.IGNORECASE),
+    # ---- Original v5.4.1 surface (kept, version family widened) ----
+    (re.compile(r'#.*\bv\d+\.\d+\s+candidate\b', re.IGNORECASE),
+     'vN.M candidate'),
+    (re.compile(r'#.*\bscoped\s+workaround\b', re.IGNORECASE),
      'scoped workaround'),
-    (re.compile(r'#.*workaround.*v5\.\d+', re.IGNORECASE),
+    (re.compile(r'#.*\bworkaround\b.*\bv\d+\.\d+\b', re.IGNORECASE),
      'versioned workaround'),
-    (re.compile(r'#.*TODO.*v5\.\d+', re.IGNORECASE),
+    (re.compile(r'#.*\bTODO\b.*\bv\d+\.\d+\b', re.IGNORECASE),
      'versioned TODO'),
-    (re.compile(r'#.*defer.*to.*v5\.\d+', re.IGNORECASE),
+    (re.compile(r'#.*\bdefer\b.*\bto\b.*\bv\d+\.\d+\b', re.IGNORECASE),
      'versioned deferral'),
-    (re.compile(r'#.*real\s+fix\s+lives', re.IGNORECASE),
+    (re.compile(r'#.*\breal\s+fix\s+lives\b', re.IGNORECASE),
      'real-fix-lives-elsewhere'),
+    # ---- v5.4.5 audit fix #5: extended pattern set ----
+    (re.compile(r'#.*\bFIXME\b', re.IGNORECASE),
+     'FIXME'),
+    (re.compile(r'#.*\bdeferred\s+(?:to|until|past)\b', re.IGNORECASE),
+     'unversioned deferral'),
+    (re.compile(r'#.*\bv\d+\.\d+[-\s]+candidate\b', re.IGNORECASE),
+     'vN.M-candidate (hyphen+space)'),
+    (re.compile(r'#.*\b(?:hack|kludge|bandaid)\b'
+                r'.*\b(?:until|workaround|v\d+\.\d+)\b', re.IGNORECASE),
+     'qualified hack/kludge'),
+    (re.compile(r'#.*\bpatch\s+v\d+\.\d+\b', re.IGNORECASE),
+     'versioned patch'),
 ]
+
+
+# v5.4.5 audit fix #6: docstring-housed workarounds slip through the
+# comment-prefix patterns above (which require a ``#`` lead).  This
+# phrase list is matched against any line containing a triple-quote
+# (``"""`` or ``'''``).  Multi-line docstrings without a triple-quote
+# on the offending line are an acknowledged limitation -- the full
+# defence would require a Python AST parse, which is overkill for a
+# walker test; the single-line / opening-line triple-quote case
+# covers the audit-confirmed exploit ("""v5.5 candidate: ...""").
+# TODO(v5.5+): if docstring-housed workarounds escape this heuristic
+# in practice, upgrade to an ``ast.parse`` walk that visits every
+# ``Expr(value=Constant(str))`` node.
+_DOCSTRING_PHRASES = [
+    (re.compile(r'\bv\d+\.\d+\s+candidate\b', re.IGNORECASE),
+     'docstring: vN.M candidate'),
+    (re.compile(r'\bscoped\s+workaround\b', re.IGNORECASE),
+     'docstring: scoped workaround'),
+    (re.compile(r'\bworkaround\b.*\bv\d+\.\d+\b', re.IGNORECASE),
+     'docstring: versioned workaround'),
+    (re.compile(r'\bFIXME\b', re.IGNORECASE),
+     'docstring: FIXME'),
+    (re.compile(r'\breal\s+fix\s+lives\b', re.IGNORECASE),
+     'docstring: real-fix-lives-elsewhere'),
+    (re.compile(r'\bdeferred\s+(?:to|until|past)\b', re.IGNORECASE),
+     'docstring: unversioned deferral'),
+]
+
+
+def _line_in_docstring(line):
+    """Heuristic: line contains a triple-quote.
+
+    Simplest workable test for the v5.4.5 docstring fix.  See the
+    ``_DOCSTRING_PHRASES`` TODO above for the acknowledged limitation
+    (multi-line docstrings without a triple-quote on the workaround
+    line itself escape this check).
+    """
+    stripped = line.strip()
+    return '"""' in stripped or "'''" in stripped
 
 
 # Files / directories to skip.  Library code only -- UI, tests,
@@ -104,7 +182,8 @@ def _scan_library_for_workaround_comments():
 
     Library code = ``lumenairy/**/*.py`` minus the directories named
     in ``_SKIP_DIRS``.  At most one finding is emitted per source
-    line (first pattern wins).
+    line (first pattern wins; comment patterns take priority over
+    docstring patterns).
     """
     findings = []
     for py_file in _LUMENAIRY_DIR.rglob('*.py'):
@@ -116,12 +195,26 @@ def _scan_library_for_workaround_comments():
         except OSError:
             continue
         for lineno, line in enumerate(text.splitlines(), start=1):
+            rel_path = py_file.relative_to(_REPO_ROOT).as_posix()
+            matched = False
+            # Pass 1: comment patterns (``#`` prefix family).
             for pattern, kind in _WORKAROUND_PATTERNS:
                 if pattern.search(line):
-                    rel_path = py_file.relative_to(_REPO_ROOT).as_posix()
                     findings.append(
                         (f'{rel_path}:{lineno}', line.strip(), kind))
+                    matched = True
                     break  # one match per line
+            if matched:
+                continue
+            # Pass 2: docstring-housed workarounds (v5.4.5 fix #6).
+            # Only consider lines that contain a triple-quote; this
+            # is the documented single-line heuristic.
+            if _line_in_docstring(line):
+                for pattern, kind in _DOCSTRING_PHRASES:
+                    if pattern.search(line):
+                        findings.append(
+                            (f'{rel_path}:{lineno}', line.strip(), kind))
+                        break  # one match per line
     return findings
 
 
@@ -130,22 +223,43 @@ def _roadmap_text():
 
 
 def _is_paired(file_line, roadmap_lower):
-    """Return True if ``roadmap_lower`` references ``file_line``, its
-    file path, or its basename stem.
+    """v5.4.5 (AUDIT_V5_4_4 Part 9 fix #4): require a full-path
+    match in ROADMAP, not just a bare basename mention.
 
-    Pairing is lenient on purpose: V19 is necessary-but-not-sufficient.
-    Any of the three references (full ``file:line``, the rel-path
-    alone, or the basename stem) signals an intent to track the
-    deferral.  An audit-cycle reviewer then verifies the ROADMAP
-    item actually tracks THIS workaround.
+    Closes the basename-collision exploit the audit empirically
+    confirmed: a workaround planted in ``analysis/coronagraph.py``
+    is falsely-paired by a ROADMAP entry that mentions
+    ``coronagraph_dock.py`` (different file, same stem).
+
+    Pairing now accepts:
+      * the full ``file:line`` citation
+        (``lumenairy/foo/bar.py:42``)
+      * the full relative path
+        (``lumenairy/foo/bar.py``)
+      * the path with the ``lumenairy/`` package prefix stripped
+        (``foo/bar.py``)
+
+    Bare basenames (``bar.py``) NO LONGER pair.  V19 remains
+    necessary-but-not-sufficient: an audit-cycle reviewer still
+    verifies the ROADMAP item actually tracks THIS workaround.
     """
-    file_part = file_line.split(':', 1)[0]
-    basename = Path(file_part).stem
-    return (
-        file_line.lower() in roadmap_lower
-        or file_part.lower() in roadmap_lower
-        or basename.lower() in roadmap_lower
-    )
+    file_line_l = file_line.lower()
+    file_part = file_line_l.split(':', 1)[0]      # 'lumenairy/foo/bar.py'
+    # Strip an optional leading ``lumenairy/`` package prefix without
+    # consuming arbitrary leading chars (str.lstrip strips characters,
+    # not a prefix substring).
+    _PKG = 'lumenairy/'
+    if file_part.startswith(_PKG):
+        file_part_short = file_part[len(_PKG):]   # 'foo/bar.py'
+    else:
+        file_part_short = file_part
+    candidates = {
+        file_line_l,                               # 'lumenairy/foo/bar.py:42'
+        file_part,                                 # 'lumenairy/foo/bar.py'
+        file_part_short,                           # 'foo/bar.py'
+        file_part_short.lstrip('/'),               # defensive double-slash
+    }
+    return any(c and c in roadmap_lower for c in candidates)
 
 
 # ===========================================================================
@@ -236,7 +350,7 @@ def test_v19_each_pattern_kind_matches_its_canonical_example():
     """
     canonical_examples = [
         ('# v5.5 candidate: promote this fix to intersection.py',
-         'v5.N candidate'),
+         'vN.M candidate'),
         ('# scoped workaround in the consumer layer',
          'scoped workaround'),
         ('# workaround until v5.5 rolls out the shared-state fix',
@@ -291,3 +405,165 @@ def test_v19_finds_at_least_the_documented_v5_4_examples(capsys):
         snippet = comment_text if len(comment_text) <= 80 \
             else comment_text[:77] + '...'
         print(f'  {file_line}  [{kind}]:  {snippet}')
+
+
+# ===========================================================================
+# V19.5 -- v5.4.5 audit fix #4: basename-collision pairing closed
+# ===========================================================================
+
+def test_v19_full_path_pairing_rejects_basename_collision():
+    """v5.4.5 (AUDIT_V5_4_4 Part 9 fix #4): a ROADMAP entry that
+    only mentions a sibling file with the same basename stem must
+    NOT pair a workaround in the original file.
+
+    Audit-confirmed exploit: a workaround planted in
+    ``analysis/coronagraph.py`` was falsely-paired by a ROADMAP
+    line mentioning ``coronagraph_dock.py``.  Tightened
+    ``_is_paired`` now requires a full-path match.
+    """
+    finding = ('lumenairy/analysis/coronagraph.py:42',
+               '# v5.5 candidate: real fix lives in propagation.py',
+               'vN.M candidate')
+    # Mock ROADMAP mentions ONLY the sibling docking file with the
+    # colliding basename stem -- not the real workaround site.
+    fake_roadmap = (
+        '* designer GUI: `coronagraph_dock.py` (783 LOC) ships the '
+        '4-stop chain builder at v5.4.\n'
+    ).lower()
+    # New (tightened) logic: must reject the bare-basename collision.
+    assert not _is_paired(finding[0], fake_roadmap), (
+        'V19 fix #4 regression: ``_is_paired`` accepted a ROADMAP '
+        'mention of a different file with the same basename stem '
+        '(coronagraph_dock.py vs analysis/coronagraph.py).  The '
+        'audit-confirmed basename-collision exploit is open again; '
+        'pairing must require a full-path match.')
+    # And: a ROADMAP entry mentioning the FULL relative path DOES
+    # still pair (full-path positive case -- defends against an
+    # overcorrection that would break legitimate pairings).
+    real_roadmap = (
+        '* `lumenairy/analysis/coronagraph.py` carries a v5.5 '
+        'deferred fix tracked here.\n'
+    ).lower()
+    assert _is_paired(finding[0], real_roadmap), (
+        'V19 fix #4 overcorrection: full-path ROADMAP mention '
+        'should still pair.')
+
+
+# ===========================================================================
+# V19.6-12 -- v5.4.5 audit fix #5 + #6: extended pattern coverage
+# ===========================================================================
+
+def _scan_lines(lines):
+    """Helper: run the comment + docstring scanner over an in-memory
+    list of source lines.  Mirrors ``_scan_library_for_workaround_comments``
+    minus the file-walking layer, so individual lines can be tested
+    without planting a real workaround on disk.
+    """
+    hits = []
+    for lineno, line in enumerate(lines, start=1):
+        matched = False
+        for pattern, kind in _WORKAROUND_PATTERNS:
+            if pattern.search(line):
+                hits.append((lineno, line, kind))
+                matched = True
+                break
+        if matched:
+            continue
+        if _line_in_docstring(line):
+            for pattern, kind in _DOCSTRING_PHRASES:
+                if pattern.search(line):
+                    hits.append((lineno, line, kind))
+                    break
+    return hits
+
+
+def test_v19_pattern_FIXME_caught():
+    """v5.4.5 fix #5: ``# FIXME ...`` (versioned or unversioned) is
+    a scoped workaround.  Audit Part 9 #5 empirical entry:
+    ``# FIXME until v5.5`` was MISSED by v5.4.1.
+    """
+    hits = _scan_lines(['# FIXME until v5.5: clean this up'])
+    assert hits, 'V19 fix #5 (FIXME) failed: line was not matched.'
+    assert hits[0][2] == 'FIXME', (
+        f'V19 fix #5 (FIXME) wrong kind label: {hits[0][2]!r}.')
+
+
+def test_v19_pattern_unversioned_defer_caught():
+    """v5.4.5 fix #5: unversioned ``# deferred to next release`` is
+    a scoped workaround (audit Part 9 #5: "unversioned defer").
+    """
+    hits = _scan_lines(['# deferred to next release'])
+    assert hits, 'V19 fix #5 (unversioned defer) failed: not matched.'
+    assert hits[0][2] == 'unversioned deferral', (
+        f'V19 fix #5 wrong kind label: {hits[0][2]!r}.')
+
+
+def test_v19_pattern_post_v5_version_caught():
+    """v5.4.5 fix #5: post-v5 versions (``v6.0 candidate``) must
+    match.  Audit Part 9 #5: hard-coded ``v5\\.\\d+`` was a v6
+    transition footgun; widened to ``v\\d+\\.\\d+``.
+    """
+    hits = _scan_lines(['# v6.0 candidate: redo the dispatcher'])
+    assert hits, 'V19 fix #5 (post-v5) failed: v6.0 not matched.'
+    assert hits[0][2] == 'vN.M candidate', (
+        f'V19 fix #5 (post-v5) wrong kind label: {hits[0][2]!r}.')
+
+
+def test_v19_pattern_hyphen_separator_caught():
+    """v5.4.5 fix #5: ``# v5.5-candidate`` (hyphen separator) must
+    match.  Audit Part 9 #5: prior regex only allowed whitespace.
+    """
+    hits = _scan_lines(['# v5.5-candidate: real fix in next release'])
+    assert hits, 'V19 fix #5 (hyphen) failed: v5.5-candidate not matched.'
+    assert hits[0][2] == 'vN.M-candidate (hyphen+space)', (
+        f'V19 fix #5 (hyphen) wrong kind label: {hits[0][2]!r}.')
+
+
+def test_v19_pattern_qualified_hack_caught():
+    """v5.4.5 fix #5: ``# hack until v5.5`` (qualified synonym) must
+    match.  Bare ``# hack`` is intentionally NOT matched -- the
+    qualifier (``until`` / ``workaround`` / ``vN.M``) is required to
+    avoid policing every "hack" comment in the library.
+    """
+    hits = _scan_lines(['# hack until v5.5: revisit when consumer wires'])
+    assert hits, 'V19 fix #5 (qualified hack) failed: not matched.'
+    assert hits[0][2] == 'qualified hack/kludge', (
+        f'V19 fix #5 (qualified hack) wrong kind: {hits[0][2]!r}.')
+    # Counter-pin: bare ``# hack`` ALONE must NOT match.  This guards
+    # against the "regex too broad" failure mode the audit flagged.
+    bare = _scan_lines(['# hack to make the test pass'])
+    assert not bare, (
+        f'V19 fix #5: bare ``# hack`` should NOT match; got {bare!r}.')
+
+
+def test_v19_pattern_versioned_patch_caught():
+    """v5.4.5 fix #5: ``# patch v5.5`` (versioned synonym for
+    workaround / deferred fix) must match.
+    """
+    hits = _scan_lines(['# patch v5.5: temporary until shared-state lands'])
+    assert hits, 'V19 fix #5 (versioned patch) failed: not matched.'
+    assert hits[0][2] == 'versioned patch', (
+        f'V19 fix #5 (versioned patch) wrong kind: {hits[0][2]!r}.')
+
+
+def test_v19_docstring_housed_workaround_caught():
+    """v5.4.5 fix #6: workaround phrasings housed in a docstring
+    (triple-quoted ``v5.5 candidate: ...``) must match via the
+    second-pass docstring scanner.  Audit Part 9 #6 confirmed the
+    comment-only regex missed docstring-housed workarounds.
+    """
+    line = '    """v5.5 candidate: promote this into intersection.py"""'
+    hits = _scan_lines([line])
+    assert hits, (
+        'V19 fix #6 (docstring) failed: triple-quoted workaround '
+        'phrase was not flagged.')
+    assert hits[0][2].startswith('docstring:'), (
+        f'V19 fix #6 wrong kind label (expected docstring: prefix): '
+        f'{hits[0][2]!r}.')
+    # Counter-pin: non-docstring line with the same phrase but no
+    # triple-quote should NOT be flagged by the docstring scanner
+    # (the comment-prefix regex handles ``#`` lines on its own).
+    no_quote = _scan_lines(['v5.5 candidate: not in a docstring'])
+    assert not no_quote, (
+        f'V19 fix #6: line without ``#`` or triple-quote should not '
+        f'match; got {no_quote!r}.')

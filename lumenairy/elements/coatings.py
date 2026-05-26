@@ -388,7 +388,11 @@ COATING_MATERIAL_REGISTRY: dict = {
     'SiO2':  {
         'n_constant':     1.46,
         'ref_wavelength': 550e-9,
-        'range':          (200e-9, 8000e-9),
+        # v5.4.5 (audit P2-3): tightened from 8000e-9 to match Malitson
+        # 1965 source citation (0.21-6.7 um).  At lambda > 6.7 um the
+        # Sellmeier extrapolation returns non-physical n < 1 for a
+        # dielectric in air (e.g. n=0.945 at 7.5 um, n=0.642 at 8.0 um).
+        'range':          (200e-9, 6700e-9),
         # Malitson 1965 fused silica (refractiveindex.info
         # main/SiO2/Malitson); valid 0.21-6.7 um.
         'sellmeier':      ((0.6961663, 0.4079426, 0.8974794),
@@ -483,7 +487,12 @@ def _coating_sellmeier(
     evaluator so the coatings-dock visible-band sweeps can call this
     once with the full wavelength array.
     """
-    lam2 = (np.asarray(wavelength_m, dtype=float) * 1e6) ** 2
+    # v5.4.5 (audit P2-1): explicit np.abs makes the Sellmeier's
+    # sign-symmetry visible in the source; lam2 = (wl*1e6)**2 already
+    # squares away the sign, but using |wl| documents that
+    # n(-lam) == n(+lam) is intentional, not an accidental side effect.
+    wl_abs = np.abs(np.asarray(wavelength_m, dtype=float))
+    lam2 = (wl_abs * 1e6) ** 2
     (B1, B2, B3), (C1, C2, C3) = coeffs
     # v5.4.1 (audit P2 NEW): defensive guard -- skip dummy poles where
     # B is zero (the term contributes nothing to n^2 and would NaN if C
@@ -541,15 +550,52 @@ def get_coating_material_index(
     entry = COATING_MATERIAL_REGISTRY[material]
     lmin, lmax = entry['range']
 
-    # Range check -- scalar or array; fire UserWarning if ANY sample
-    # falls outside the documented band.
+    import warnings
+
     wl_arr = np.asarray(wavelength, dtype=float)
-    if np.any(wl_arr < lmin) or np.any(wl_arr > lmax):
-        import warnings
+
+    # v5.4.5 (audit P2-1): negative-wavelength guard.  The Sellmeier
+    # formula uses lam2 = (wl*1e6)**2, so it is sign-symmetric:
+    # n(-lam) == n(+lam) exactly.  A negative wavelength buried in an
+    # array would silently land in a real band without this warning.
+    # Use warnings.warn (not raise) because the formula IS
+    # mathematically symmetric and vector callers (e.g. wavelength
+    # sweeps that include 0 / near-0 values) may want to suppress.
+    if np.any(wl_arr < 0):
+        warnings.warn(
+            f"get_coating_material_index({material!r}): negative "
+            f"wavelength(s) detected; the Sellmeier formula is "
+            f"sign-symmetric (n(-lam) == n(+lam)) so the returned "
+            f"values are computed at |lam|.  This is almost certainly "
+            f"a unit-conversion error in the caller; verify your "
+            f"wavelength array.",
+            UserWarning, stacklevel=2,
+        )
+
+    # v5.4.5 (audit P2-2): NaN-detection guard.  np.any(wl_arr < lmin)
+    # returns False for NaN by IEEE 754 semantics, so a single NaN in
+    # an array silently propagates to NaN output with no warning.
+    # Place BEFORE the range check so the NaN warning surfaces first.
+    if np.any(np.isnan(wl_arr)):
+        warnings.warn(
+            f"get_coating_material_index({material!r}): NaN "
+            f"wavelength(s) detected in input; output will contain "
+            f"NaN at those positions.  This usually indicates upstream "
+            f"data corruption (NaN propagation from earlier "
+            f"computation).",
+            UserWarning, stacklevel=2,
+        )
+
+    # Range check -- scalar or array; fire UserWarning if ANY sample
+    # falls outside the documented band.  v5.4.5 (audit P2-3): `>=` so
+    # a wavelength exactly at lmax also triggers (covers the "n<1 at
+    # the exact registry boundary" case).
+    if np.any(wl_arr < lmin) or np.any(wl_arr >= lmax):
         warnings.warn(
             f"get_coating_material_index: {material} validity is "
             f"[{lmin:.3e}, {lmax:.3e}] m; got wavelength "
-            f"{float(wl_arr.min()):.3e} to {float(wl_arr.max()):.3e} m. "
+            f"{float(np.nanmin(wl_arr)):.3e} to "
+            f"{float(np.nanmax(wl_arr)):.3e} m. "
             f"Extrapolated value may not be physical.",
             UserWarning, stacklevel=2,
         )

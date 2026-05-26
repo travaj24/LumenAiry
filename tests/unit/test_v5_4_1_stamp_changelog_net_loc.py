@@ -447,3 +447,228 @@ def test_script_help_still_exits_cleanly():
     assert result.returncode == 0, (
         f'--help returned rc={result.returncode}; stamp_changelog '
         f'is broken.\nstdout:\n{result.stdout}\nstderr:\n{result.stderr}')
+
+
+# ---------------------------------------------------------------------------
+# v5.4.5 (AUDIT_V5_4_4_2026_05_26 P3 #7) -- multi-match Net LOC stamp
+# ---------------------------------------------------------------------------
+#
+# F1-C of the v5.4.4 audit found that ``_stamp_net_loc`` used
+# ``_NET_LOC_PATTERN.search()`` which returns ONLY the first match.
+# A CHANGELOG block that legitimately contained two ``Net LOC:`` lines
+# (e.g. one for the release total plus one for a sub-section roll-up)
+# would have its second line silently stay stale.  v5.4.5 swapped the
+# call to ``finditer`` and applies each substitution in reverse span
+# order so the indexes do not shift.  These tests pin the new
+# behavior.
+
+def _make_changelog_with_multiple_net_loc(tmp_path, pairs, suffixes=None):
+    """Build a synthetic CHANGELOG.md with N Net-LOC lines in the
+    topmost block.
+
+    ``pairs`` is a list of ``(ins, del_)`` tuples; one Net-LOC line is
+    emitted per tuple.  ``suffixes`` is an optional list of trailing
+    ``' vs vX.Y.Z'`` strings (same length as ``pairs``); when omitted
+    every line gets an empty suffix.  Returns the path.
+    """
+    if suffixes is None:
+        suffixes = [''] * len(pairs)
+    assert len(suffixes) == len(pairs), (
+        'pairs and suffixes must be the same length.')
+
+    lines = []
+    for idx, ((ins, del_), suf) in enumerate(zip(pairs, suffixes)):
+        # Distinct sub-section labels keep the lines independently
+        # searchable in assertions.
+        section = (
+            'release total' if idx == 0
+            else f'sub-section #{idx} roll-up'
+        )
+        lines.append(
+            f'- {section}: Net LOC: +{ins} / -{del_}{suf}.'
+        )
+
+    body_lines = '\n        '.join(lines)
+    body = textwrap.dedent(f"""\
+        # Changelog -- lumenairy (synthetic test fixture)
+
+        ## [9.9.9] -- 2026-01-01
+
+        Multi-Net-LOC test fixture (v5.4.5 P3 #7 pin).
+
+        ### Files touched
+
+        {body_lines}
+
+        ## [9.9.8] -- 2025-12-31
+
+        Previous fake release; provides the second-block anchor.
+        """)
+    cl = tmp_path / 'CHANGELOG.md'
+    cl.write_text(body, encoding='utf-8')
+    return cl
+
+
+def test_stamp_two_net_loc_lines_both_refreshed(tmp_path, monkeypatch):
+    """v5.4.5: two ``Net LOC: ...`` lines in one block -> BOTH stamped.
+
+    Before v5.4.5, ``_stamp_net_loc`` used ``.search()`` and silently
+    left the second line stale.  This test fails on the pre-fix
+    implementation because the second Net-LOC pair is never refreshed.
+    """
+    module = _load_script_module('two_net_loc')
+
+    cl = _make_changelog_with_multiple_net_loc(
+        tmp_path,
+        pairs=[(1000, 50), (200, 10)],
+        suffixes=[' vs v1.2.3', ''],
+    )
+    monkeypatch.setattr(module, '_CHANGELOG', cl)
+    monkeypatch.setattr(module, '_pytest_collect_count',
+                        lambda: (None, None, None, None))
+    monkeypatch.setattr(module, '_resolve_prev_tag', lambda v: 'v9.9.8')
+    monkeypatch.setattr(module, '_git_changed_file_count',
+                        lambda *a, **k: None)
+    monkeypatch.setattr(module, '_git_net_loc',
+                        lambda *a, **k: (1500, 200))
+
+    rc = module.stamp(version=None, apply_changes=True, mode='quick',
+                      stream=sys.stdout)
+    assert rc == 0, f'stamp --apply returned rc={rc}; expected 0.'
+
+    rewritten = cl.read_text(encoding='utf-8')
+    # Both lines must be refreshed to the empirical pair.
+    refreshed_count = rewritten.count('Net LOC: +1500 / -200')
+    assert refreshed_count == 2, (
+        f'Expected BOTH Net LOC lines refreshed (2 occurrences of '
+        f'"Net LOC: +1500 / -200"); got {refreshed_count}.\n'
+        f'rewritten:\n{rewritten}')
+    # The old numbers must be gone.
+    assert '+1000 / -50' not in rewritten, (
+        f'Old first-line Net LOC numbers still present after stamp; '
+        f'rewritten:\n{rewritten}')
+    assert '+200 / -10' not in rewritten, (
+        f'Old second-line Net LOC numbers still present after stamp; '
+        f'rewritten:\n{rewritten}')
+    # The "vs v1.2.3" suffix on the first line must survive the rewrite.
+    assert 'vs v1.2.3' in rewritten, (
+        f'Version suffix was lost from first Net LOC line; '
+        f'rewritten:\n{rewritten}')
+
+
+def test_stamp_three_net_loc_lines_all_refreshed(tmp_path, monkeypatch):
+    """v5.4.5: three ``Net LOC: ...`` lines -> ALL three stamped."""
+    module = _load_script_module('three_net_loc')
+
+    cl = _make_changelog_with_multiple_net_loc(
+        tmp_path,
+        pairs=[(1000, 50), (400, 20), (100, 5)],
+        suffixes=[' vs v1.2.3', '', ''],
+    )
+    monkeypatch.setattr(module, '_CHANGELOG', cl)
+    monkeypatch.setattr(module, '_pytest_collect_count',
+                        lambda: (None, None, None, None))
+    monkeypatch.setattr(module, '_resolve_prev_tag', lambda v: 'v9.9.8')
+    monkeypatch.setattr(module, '_git_changed_file_count',
+                        lambda *a, **k: None)
+    monkeypatch.setattr(module, '_git_net_loc',
+                        lambda *a, **k: (1500, 200))
+
+    rc = module.stamp(version=None, apply_changes=True, mode='quick',
+                      stream=sys.stdout)
+    assert rc == 0, f'stamp --apply returned rc={rc}; expected 0.'
+
+    rewritten = cl.read_text(encoding='utf-8')
+    refreshed_count = rewritten.count('Net LOC: +1500 / -200')
+    assert refreshed_count == 3, (
+        f'Expected ALL THREE Net LOC lines refreshed; '
+        f'got {refreshed_count} occurrences of '
+        f'"Net LOC: +1500 / -200".\nrewritten:\n{rewritten}')
+    # None of the old triples should survive.
+    for old in ('+1000 / -50', '+400 / -20', '+100 / -5'):
+        assert old not in rewritten, (
+            f'Old Net LOC numbers {old!r} still present after stamp; '
+            f'rewritten:\n{rewritten}')
+
+
+def test_stamp_zero_net_loc_lines_no_op(tmp_path, monkeypatch):
+    """v5.4.5 regression: a block with no Net LOC line still no-ops.
+
+    The multi-match refactor must not break the pre-existing zero-
+    pattern case (covered already by
+    ``test_stamp_no_net_loc_pattern_no_change`` but we re-pin it
+    explicitly under the v5.4.5 contract so a future refactor that
+    drops the empty-list fast path cannot regress silently).
+    """
+    module = _load_script_module('zero_net_loc')
+
+    cl = _make_changelog_no_net_loc(tmp_path)
+    monkeypatch.setattr(module, '_CHANGELOG', cl)
+    monkeypatch.setattr(module, '_pytest_collect_count',
+                        lambda: (None, None, None, None))
+    monkeypatch.setattr(module, '_resolve_prev_tag', lambda v: 'v9.9.8')
+    monkeypatch.setattr(module, '_git_changed_file_count',
+                        lambda *a, **k: None)
+    monkeypatch.setattr(module, '_git_net_loc',
+                        lambda *a, **k: (1500, 200))
+
+    # Direct unit test of the helper: empty list, body unchanged.
+    body = cl.read_text(encoding='utf-8')
+    new_body, changes = module._stamp_net_loc(body, 1500, 200)
+    assert changes == [], (
+        f'Zero-Net-LOC block should return [] changes; got {changes!r}.')
+    assert new_body == body, (
+        'Zero-Net-LOC block should return body unchanged.')
+
+    # End-to-end: stamp() must also no-op cleanly.
+    original = cl.read_text(encoding='utf-8')
+    rc = module.stamp(version=None, apply_changes=True, mode='quick',
+                      stream=sys.stdout)
+    assert rc in (0, 2), (
+        f'Zero-Net-LOC block stamp rc={rc}; expected 0 or 2.')
+    after = cl.read_text(encoding='utf-8')
+    assert after == original, (
+        'Zero-Net-LOC block stamp mutated the CHANGELOG.')
+
+
+def test_stamp_idempotent_with_multiple_lines(tmp_path, monkeypatch):
+    """v5.4.5: stamp twice across a multi-line block -> second pass no-ops.
+
+    Pins idempotence for the multi-match path: after the first pass
+    refreshes every line, the second pass must see zero drift and
+    leave the file byte-identical.
+    """
+    module = _load_script_module('multi_idempotent')
+
+    cl = _make_changelog_with_multiple_net_loc(
+        tmp_path,
+        pairs=[(1000, 50), (400, 20)],
+        suffixes=[' vs v1.2.3', ''],
+    )
+    monkeypatch.setattr(module, '_CHANGELOG', cl)
+    monkeypatch.setattr(module, '_pytest_collect_count',
+                        lambda: (None, None, None, None))
+    monkeypatch.setattr(module, '_resolve_prev_tag', lambda v: 'v9.9.8')
+    monkeypatch.setattr(module, '_git_changed_file_count',
+                        lambda *a, **k: None)
+    monkeypatch.setattr(module, '_git_net_loc',
+                        lambda *a, **k: (1500, 200))
+
+    rc1 = module.stamp(version=None, apply_changes=True, mode='quick',
+                       stream=sys.stdout)
+    assert rc1 == 0, f'First pass rc={rc1}; expected 0.'
+    after_first = cl.read_text(encoding='utf-8')
+    assert after_first.count('Net LOC: +1500 / -200') == 2, (
+        f'First pass should have refreshed BOTH lines; '
+        f'after:\n{after_first}')
+
+    # Second pass: same empirical numbers, no drift expected.
+    rc2 = module.stamp(version=None, apply_changes=True, mode='quick',
+                       stream=sys.stdout)
+    assert rc2 in (0, 2), (
+        f'Idempotent second pass rc={rc2}; expected 0 or 2.')
+    after_second = cl.read_text(encoding='utf-8')
+    assert after_second == after_first, (
+        'Second --apply pass mutated the CHANGELOG; multi-line '
+        f'stamp is not idempotent.\nfirst:\n{after_first}\n'
+        f'second:\n{after_second}')

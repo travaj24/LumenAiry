@@ -50,7 +50,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Constants / regexes -- borrowed from V12 walker, then specialised
 # ---------------------------------------------------------------------------

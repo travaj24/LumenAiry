@@ -435,6 +435,19 @@ in v5.4.0 (driven by AUDIT_V5_3_2_GUI_VS_LIBRARY_2026_05_24).  See
   the currently-known sibling-gap surfaces; new classes will
   continue to be added to the V-walker family as identified.
 
+* **`lumenairy/propagators/fft_infra.py` shared-state workaround**
+  (V19 paired tracker).  `fft_infra.py:263` carries a
+  ``# Workaround until v5.0 rolls out a shared-state mechanism``
+  comment documenting the fork-safety footgun in
+  ``ProcessPoolExecutor``-style child workers: the parent's
+  ``set_default_*`` overrides are not propagated to spawned
+  workers and the per-call workaround is to re-call the setter
+  inside each worker or pass the value explicitly.  The proper
+  shared-state mechanism is a v5.x deferred design item;
+  documented here so the V19 scope-the-workaround walker can
+  pair the comment via full-path match (audit fix #4 closed
+  the basename-collision exploit).
+
 ### Active back-compat shims at v5.0 (intentionally kept)
 
 v5.0 removed 5 of the 8 shims catalogued in AUDIT_V4_13_1

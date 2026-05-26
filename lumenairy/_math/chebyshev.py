@@ -296,8 +296,11 @@ def chebyshev_fit_2d(x: np.ndarray,
     -------
     coeffs : dict of {(int, int): float}
         Sparse coefficient dictionary; entries with magnitude below
-        ``1e-15`` are dropped.  Keys are ``(i, j)`` with ``i`` the
-        x-order and ``j`` the y-order, matching the convention of
+        ``1e-12`` are dropped.  v5.4.1 tightened this from ``1e-15``
+        (ULP noise) to ``1e-12`` (matches the test-tolerance band;
+        eliminates ~15 spurious near-zero coefficients on constant-z
+        fits).  Keys are ``(i, j)`` with ``i`` the x-order and ``j``
+        the y-order, matching the convention of
         ``surface_sag_chebyshev``.
     residual : ndarray, only if ``return_residual=True``
         ``z - z_fit`` on the original ``(len(y), len(x))`` grid.

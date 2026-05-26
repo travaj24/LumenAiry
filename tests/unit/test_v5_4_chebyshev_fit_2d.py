@@ -270,3 +270,41 @@ def test_chebvander2d_basis_matches_library_evaluation():
         X_m, Y_m, R=np.inf, conic=0.0,
         cheb_coeffs=coeffs, norm_x=norm_x, norm_y=norm_y)
     np.testing.assert_allclose(z_lib, z, rtol=1e-12, atol=1e-16)
+
+
+# ---------------------------------------------------------------------------
+# v5.4.5 (AUDIT_V5_4_4_2026_05_26 P3 #8 follow-up): docstring drift pin
+# ---------------------------------------------------------------------------
+
+def test_chebyshev_fit_docstring_threshold_matches_code():
+    """The ``chebyshev_fit_2d`` docstring must cite the active prune
+    threshold value used by the code.
+
+    v5.4.1 (audit P3 #8) tightened the prune threshold from ``1e-15``
+    (ULP noise) to ``1e-12`` (matches the test tolerance band), but
+    the Returns-section docstring kept the stale ``1e-15`` text until
+    v5.4.5 caught the drift.  This test pins the doc/code alignment
+    so a future threshold bump cannot regress the prose.
+    """
+    from lumenairy._math.chebyshev import chebyshev_fit_2d
+
+    doc = chebyshev_fit_2d.__doc__ or ''
+    # The docstring's "Returns" claim about which entries are dropped
+    # must cite 1e-12 (the active code threshold).
+    assert '1e-12' in doc, (
+        "chebyshev_fit_2d docstring is missing the active '1e-12' "
+        "prune-threshold value; the v5.4.1 tightening was not "
+        "propagated to the Returns section.")
+    # An informational reference to the historical 1e-15 value is
+    # OK ("tightened from 1e-15") -- it tells maintainers what the
+    # threshold WAS -- but the docstring must NOT claim that 1e-15
+    # is the live threshold.  Make sure 1e-15 only appears in a
+    # "tightened from" / "(was 1e-15)" historical context, never as
+    # a standalone "below 1e-15 are dropped" assertion.
+    if '1e-15' in doc:
+        # Allow historical mentions but forbid the stale claim.
+        forbidden = 'below ``1e-15`` are dropped'
+        assert forbidden not in doc, (
+            f"chebyshev_fit_2d docstring still asserts the stale "
+            f"'{forbidden}' claim; v5.4.1 raised the threshold to "
+            f"1e-12 but the Returns text was not refreshed.")
