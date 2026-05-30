@@ -2,6 +2,90 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.7] — 2026-05-30
+
+**Audit-driven patch release closing AUDIT_V5_4_6_2026_05_29.md** — the
+meta-audit that verified the v5.4.6 sweep (71 closures, 4 latent P1 physics
+fixes confirmed correct from first principles) and handed back a small
+remediation backlog plus a set of v5.5 candidates.  This release closes
+**all** of them (backlog + candidates + governance items); nothing is
+deferred.
+
+**Zero physics regressions in 22 consecutive releases.**
+
+### Correctness (P2)
+
+- **`io/codegen.py` `_generate_system_style`** — the v5.4.6 F-14 mirror-
+  radius negation only patched the `unrolled` codegen style; the `system`
+  style emitted the raytrace-convention radius un-negated, so a curved
+  fold mirror got the OPPOSITE focusing sign (a concave `R=-0.5`
+  prescription emitted `radius=-0.5` -> diverging; a >5000x focus-vs-
+  defocus inversion).  Both styles now negate identically; refractive
+  radii (feeding `apply_real_lens`) stay un-negated.  (gap #1)
+
+### Correctness (P3)
+
+- **`raytrace/surface.py` `_axis_deriv`** — the biconic per-axis sag
+  derivative returned `0.0` (a bogus flat surface normal) outside the conic
+  domain where the sag is already NaN; now returns NaN, matching the
+  rot-sym derivative and `surface_sag_general`.  (gap #2)
+- **`tests/unit/test_v5_4_6_wave6_analysis.py`** — the F-11 piston-removal
+  pin constructed `ImagePlaneWFE` with 2 of 8 required fields, hit a
+  `TypeError`, and `skip`'d every run; rebuilt with all required fields so
+  the correct v5.4.6 fix is now actually pinned.  (gap #3)
+- **`sources/core.py` `create_led_source` grid validation** — the factory
+  always validated `N/dx/wavelength` (after its legacy-positional shim),
+  but the call sat past the meta-pin's body-head scan window, so it was
+  exemption+`xfail`'d.  Added an early in-window validation and made the
+  meta-pin scanner count EXECUTABLE (not docstring) lines, so the
+  `_KNOWN_VALIDATION_EXEMPTIONS` entry retires -> the suite drops to
+  **0 xfailed**.  (gap #4)
+- **`io/prescriptions_zemax.py` `_export_zemax_zmx_full`** — the cb/mirror-
+  aware `.zmx` writer self-resolves the aperture stop from the prescription
+  (`stop_index` / `is_stop`) instead of the historical hardcoded surface 0;
+  the public `export_zemax_zmx` already passed a resolved value (F-29), so
+  this hardens direct calls.  (#6)
+
+### Hardening / structure
+
+- **V20 cross-backend parity walker**
+  (`tests/unit/test_v5_4_7_walker_v20_cross_backend_parity.py`) — the
+  structural defense the audit said was missing for the dominant k=6
+  "canonical-path fix, peripheral-path drift" class.  A registry of
+  NumPy<->JAX physics-path twin pairs enforces (1) every discovered JAX
+  twin is registered with its NumPy sibling, (2) both backends resolve,
+  and (3) the specific parity fixes (JAX intersect root pick; x64-aware
+  JAX RNG dtype) stay in place.  Runs without a JAX install.  (#3)
+- **`elements/polarization.py`** — relocated the pure-NumPy
+  `jones_pupil_to_stokes_unpolarized` / `stokes_to_dop` helpers out of the
+  Qt-importing `ui/jones_pupil_dock.py` (which re-imports them) so CI can
+  exercise them without PySide6 (the P3-23 test no longer needs a skip
+  guard).  (#10)
+- **Test isolation** — the `ClearAsmCachesChainsAll` class gets an autouse
+  cache-clearing fixture so its exact pre-population counts are
+  deterministic regardless of prior JAX tests in the session (the
+  cross-audit flake).  (#7)
+- **`propagators/gbd.py`** — clarified the `BeamletBundle.Q` comment: `Q`
+  is the engineering `1/q`; the physics field is rendered via
+  `exp(+0.5j k conj(Q) rho^2)`.  (#9)
+- **`analysis/through_focus.py`** — added a regression pin for the F-12
+  fixed-nominal-Strehl-denominator (completing the physics-sign pin
+  coverage).  (#11)
+
+### Assessed (no change)
+
+- **Downstream `Reverse_Symmetric_ASM` scripts (governance flag #2)** —
+  audited all 46 scripts: none call the GBD propagator or
+  `rayleigh_sommerfeld_propagate` (they use `angular_spectrum_propagate`
+  27x and the asymptotic propagators 7x), so the v5.4.6 GBD-phase and
+  RS-copy output-behaviour changes have **no downstream impact**.  The
+  "beamlet" references are TX field-sampling points in the optimiser
+  merit, unrelated to GBD beamlets.
+
+### Closes
+
+- `docs/audits/AUDIT_V5_4_6_2026_05_29.md`
+
 ## [5.4.6] — 2026-05-29
 
 **Audit-driven patch release closing AUDIT_V5_4_5_2026_05_26_DEEP.md
@@ -104,7 +188,16 @@ regression test and verified against the full unit suite.
 - Docstring / convention corrections: mtf_radial / rayleigh_resolution
   dead params (P3-8/P3-9), waveplate sign decoupling now in CONVENTIONS
   section 7 (P3-22), and many JonesField / asymptotic / paraxial / opd /
-  aberration / context / progress / user_library notes.
+  aberration / progress / user_library notes.
+- **`raytrace/ray_fan.py`** (behavioural; promoted from the batch above
+  for per-finding auditability per AUDIT_V5_4_6 #8) — `ray_fan_data` /
+  `opd_fan_data` build a finite chief ray (`L=0.0`) on internal-stop
+  systems instead of feeding `ep_z` into the x-direction cosine.
+  (follow-up F-8)
+- **`_context.py` `lumenairy_context`** (behavioural; promoted per
+  AUDIT_V5_4_6 #8) — applies the new globals inside the `try`/`finally` so
+  a setter raising during context ENTRY restores the prior state instead
+  of leaking a partially-applied knob.  (follow-up F-17)
 
 ### Reviewed (no change)
 

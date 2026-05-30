@@ -57,17 +57,18 @@ def test_jonesfield_apply_real_lens_fresnel_warns():
 
 # ---- P3-23: unpolarized Stokes 1/2 + signs ----------------------------
 
-@pytest.mark.skipif(
-    importlib.util.find_spec('PySide6') is None, reason="PySide6 not installed")
 def test_jones_pupil_unpolarized_stokes_normalisation():
-    # jones_pupil_dock imports PySide6 at module scope, so this is skipped
-    # in headless/CI environments without Qt (the helper itself is pure NumPy).
-    from lumenairy.ui.jones_pupil_dock import _jones_to_stokes_unpolarized
+    # v5.4.7 (audit AUDIT_V5_4_6 #10): the helper now lives in the non-Qt
+    # ``elements.polarization`` module, so this runs in CI without PySide6
+    # (no skipif needed) -- closing the coverage gap the v5.4.6 skip masked.
+    from lumenairy.elements.polarization import (
+        jones_pupil_to_stokes_unpolarized as _j2s,
+    )
     # Identity Jones pupil -> unpolarized output: S0=1, S1=S2=S3=0.
     J = np.zeros((4, 4, 2, 2), dtype=complex)
     J[..., 0, 0] = 1.0
     J[..., 1, 1] = 1.0
-    s = _jones_to_stokes_unpolarized(J)
+    s = _j2s(J)
     assert np.allclose(s['S0'], 1.0), "S0 must carry the 1/2 (identity -> 1)"
     assert np.allclose(s['S1'], 0.0)
     assert np.allclose(s['S2'], 0.0)
@@ -75,7 +76,7 @@ def test_jones_pupil_unpolarized_stokes_normalisation():
     # Horizontal polarizer diag(1, 0): S0=0.5, S1=+0.5 (DOLP=1, +x linear).
     Jp = np.zeros((4, 4, 2, 2), dtype=complex)
     Jp[..., 0, 0] = 1.0
-    sp = _jones_to_stokes_unpolarized(Jp)
+    sp = _j2s(Jp)
     assert np.allclose(sp['S0'], 0.5)
     assert np.allclose(sp['S1'], 0.5), "S1 sign/pattern: +x polarizer -> +S1"
 

@@ -1,7 +1,18 @@
 # LumenAiry Forward Roadmap
 
-**Last updated:** 2026-05-21 (post-v5.2.3).  The entire v5.0 / v5.1
-/ v5.2.x ROADMAP has shipped:
+**Last updated:** 2026-05-30 (post-v5.4.7).  The deep self-audit cadence
+(AUDIT_V5_4_5_*_DEEP -> v5.4.6 -> AUDIT_V5_4_6 -> v5.4.7) is fully closed:
+v5.4.6 closed 73 findings from the two deep audits, and **v5.4.7 closed the
+entire AUDIT_V5_4_6 remediation backlog AND every v5.5 candidate it
+listed** (codegen system-style mirror sign, biconic derivative NaN, the
+F-11 dead test, the `create_led_source` validation-visibility gap, the
+binary `.zmx` stop resolution, the V20 cross-backend parity walker, the
+Stokes-helper relocation out of Qt, the `ClearAsmCachesChainsAll` test-
+isolation flake, the GBD `Q` comment, the F-12 pin, and the downstream
+46-script GBD/RS impact assessment -- nothing deferred).  There is no open
+ROADMAP code-work as of v5.4.7.
+
+The earlier v5.0 / v5.1 / v5.2.x ROADMAP had already shipped:
 
 * **v5.0** -- coordinated breaking-change release (Python 3.10
   floor, 5 shim removals, `system.py` move, CI gates,

@@ -152,21 +152,16 @@ _DISCOVERED_FACTORIES = _discover_create_factories()
 # ============================================================================
 
 _KNOWN_VALIDATION_EXEMPTIONS = frozenset({
-    # ``create_led_source`` calls ``_validate_grid_params`` AFTER its
-    # legacy-positional shim (the shim runs first so a legacy 5-
-    # positional call gets re-mapped to canonical kwargs before
-    # validation).  This positions the validate call past the 15-
-    # body-line head window the meta-pin scans, but the call IS
-    # present (``sources/core.py:create_led_source`` -- look for
-    # ``_validate_grid_params(N, dx, wavelength,
-    # fn_name='create_led_source')``).  Re-ordering the validate
-    # call to come BEFORE the shim would break legacy callers (the
-    # shim re-maps positions 2-4, so the wavelength validation
-    # would compare against the legacy ``diameter`` value).
-    # Recorded here as a documented exemption rather than widening
-    # ``_BODY_HEAD_LINES`` for every factory.  When the legacy shim
-    # is removed at v5.0 this exemption ratchets out via XPASS.
-    'create_led_source',
+    # v5.4.7 (audit AUDIT_V5_4_6 gap #4): the sole entry,
+    # ``create_led_source``, has been RETIRED.  It always validated
+    # N/dx/wavelength via ``_validate_grid_params`` after its legacy-
+    # positional shim, but that call sat past this meta-pin's 15-line
+    # body-head scan window, so the factory was exempted+xfail'd despite
+    # actually validating.  v5.4.7 surfaces an early N/dx validation within
+    # the window (the shim never remaps N/dx), so the factory now passes
+    # the pin directly and the exemption set is EMPTY -> the suite drops to
+    # ``0 xfailed``.  Future factories that land without a visible
+    # validation call should be FIXED, not re-added here.
 })
 
 
@@ -198,6 +193,13 @@ def _body_calls_validator(fn) -> bool:
     body_lines: List[str] = []
     seen_def = False
     paren_depth = 0
+    # v5.4.7 (audit AUDIT_V5_4_6 gap #4): count only EXECUTABLE body lines
+    # toward the safety cap, not docstring lines.  A long (>~60-line)
+    # docstring previously exhausted the cap before any real body line was
+    # collected, so a factory like create_led_source (77-line docstring)
+    # was invisible to this pin and had to be exemption+xfail'd despite
+    # actually validating its grid params.
+    n_body_exec = 0
     for line in lines:
         stripped = line.strip()
         if not seen_def:
@@ -234,9 +236,10 @@ def _body_calls_validator(fn) -> bool:
             docstring_quote = quote
             continue
         body_lines.append(line)
-        if len(body_lines) >= _BODY_HEAD_LINES * 4:
-            # Safety cap so a malformed function doesn't make us scan
-            # the entire file.  4x the threshold to be generous.
+        n_body_exec += 1
+        if n_body_exec >= _BODY_HEAD_LINES * 4:
+            # Safety cap (EXECUTABLE lines only) so a malformed function
+            # doesn't make us scan the entire file.  4x the threshold.
             break
     # Re-scan: drop docstring content from body_lines so the search
     # window is the first 15 EXECUTABLE lines.

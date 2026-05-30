@@ -112,7 +112,13 @@ class BeamletBundle:
 
     positions: object       # (N, 3) -- base ray position per beamlet
     directions: object      # (N, 3) -- base ray direction per beamlet
-    Q: object               # (N,) complex (= 1/q)
+    # v5.4.7 (audit AUDIT_V5_4_6 #9): Q is the ENGINEERING 1/q parameter
+    # (q_code = conj(q_physics)); at the waist Q = -i/z_R.  The physics
+    # (exp(-i omega t) / exp(+ikz)) field is rendered in
+    # reconstruct_field_from_beamlets via exp(+0.5j k conj(Q) rho^2) =
+    # exp(+i k rho^2 / (2 q_physics)) (the v5.4.6 F-1 fix).  The Q-evolution
+    # (Q/(1+tQ), Q-1/f) is left in this engineering convention.
+    Q: object               # (N,) complex (engineering 1/q; see note above)
     amplitude: object       # (N,) complex on-axis amplitude
     waist0: object          # (N,) initial waist (for profile)
 

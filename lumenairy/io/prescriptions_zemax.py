@@ -1170,7 +1170,7 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
 
 
 def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
-                            stop_surface=0, aperture_diameter=None,
+                            stop_surface=None, aperture_diameter=None,
                             back_focal_length=None, name=None):
     """3.7.0: cb/mirror-aware .zmx writer.
 
@@ -1193,6 +1193,22 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
     carries the new keys; the pre-3.7 lens-only path remains the
     fallback.
     """
+    # v5.4.7 (audit AUDIT_V5_4_6 #6): resolve the aperture-stop index from
+    # the prescription when not given, instead of the historical hardcoded
+    # 0 (first refractive surface).  The public ``export_zemax_zmx`` already
+    # passes a resolved value (F-29), so this only changes a hypothetical
+    # direct call -- but it makes the internal writer self-consistent.
+    # ``stop_surface`` is the index AMONG REFRACTIVE surfaces, and
+    # ``prescription['surfaces']`` is exactly the refractive subset (no
+    # mirrors), so the is_stop / stop_index search over it yields the right
+    # refractive index even for folded (mirror-bearing) designs.
+    if stop_surface is None:
+        stop_surface = prescription.get('stop_index')
+        if stop_surface is None:
+            stop_surface = next(
+                (i for i, s in enumerate(prescription.get('surfaces', []))
+                 if s.get('is_stop')), 0)
+    stop_surface = int(stop_surface)
     full = prescription['elements']
     cbs = prescription.get('coord_breaks') or []
     all_thicknesses = (prescription.get('all_thicknesses')

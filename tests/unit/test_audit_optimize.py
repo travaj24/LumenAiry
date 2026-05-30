@@ -2327,6 +2327,21 @@ class TestAuditFixesV4_14_2_agent_c_C2ClearAsmCachesChainsAll:
     cache the audit identified, by populating each cache and
     asserting it is empty after the call."""
 
+    @pytest.fixture(autouse=True)
+    def _isolate_caches(self):
+        # v5.4.7 (audit AUDIT_V5_4_6 #7): drain the asm-chained caches
+        # before AND after each test so the exact pre-population counts
+        # (the ``== 1`` asserts below) are deterministic regardless of
+        # prior JAX tests in the session.  Without this, a real
+        # through-focus / system / trace JAX test earlier in the run leaves
+        # entries in these shared module-level caches and the ``== 1``
+        # asserts fail under load (while passing in isolation -- the
+        # test-isolation flake the audit flagged across V3 + V4).
+        from lumenairy.propagators.propagation import clear_asm_caches
+        clear_asm_caches()
+        yield
+        clear_asm_caches()
+
     def test_clears_zernike_basis_cache(self):
         from lumenairy.analysis.core import (
             _ZERNIKE_BASIS_CACHE,

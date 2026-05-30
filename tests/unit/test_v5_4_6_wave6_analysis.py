@@ -60,22 +60,31 @@ def test_detector_flux_conservation_non_integer_ratio():
 
 def test_image_plane_wfe_rms_removes_piston():
     """Adding a constant piston to the OPD must not change rms_waves /
-    strehl (a piston does not aberrate the wavefront)."""
-    import dataclasses
+    strehl (a piston does not aberrate the wavefront).
 
+    v5.4.7 (audit AUDIT_V5_4_6 gap #3): build ImagePlaneWFE with ALL
+    required dataclass fields so this pin actually runs.  The v5.4.6
+    version constructed it with 2 of 8 required fields, hit a TypeError,
+    and pytest.skip'd every run -- so the F-11 piston-removal fix shipped
+    unverified by its own test.
+    """
     from lumenairy.analysis.image_plane_wfe import ImagePlaneWFE
 
     n = 64
-    opd_w = np.linspace(-0.1, 0.1, n)  # waves, zero-mean-ish aberration
+    opd_w = np.linspace(-0.1, 0.1, n)  # waves, zero-mean aberration
     alive = np.ones(n, dtype=bool)
-    try:
-        w0 = ImagePlaneWFE(opd_w=opd_w.copy(), alive=alive.copy())
-        w1 = ImagePlaneWFE(opd_w=opd_w + 5.0, alive=alive.copy())
-    except TypeError:
-        # Constructor takes more fields; build via dataclasses.replace on
-        # a minimal instance is not portable -- skip gracefully.
-        import pytest
-        pytest.skip("ImagePlaneWFE constructor signature not minimal")
+    px = np.linspace(-1.0, 1.0, n)
+    py = np.zeros(n)
+
+    def _wfe(opd):
+        return ImagePlaneWFE(
+            px=px.copy(), py=py.copy(), opd_w=opd, alive=alive.copy(),
+            chief_idx=0, img_d_m=0.1, wavelength_m=633e-9, aperture_m=1e-3)
+
+    w0 = _wfe(opd_w.copy())
+    w1 = _wfe(opd_w + 5.0)  # +5 waves of pure piston
     assert np.isclose(w0.rms_waves, w1.rms_waves), (
         "rms_waves must be invariant to a constant piston (F-11)")
     assert np.isclose(w0.strehl, w1.strehl)
+    # Sanity: a pure-piston wavefront (constant OPD) has zero RMS.
+    assert np.isclose(_wfe(np.full(n, 3.0)).rms_waves, 0.0, atol=1e-12)

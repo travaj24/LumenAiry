@@ -965,7 +965,17 @@ def _generate_system_style(steps, wavelength, N, dx, source_sigma,
             lines.append(f"    {{'type': 'real_lens', 'prescription': {var_name}}},")
         elif step['type'] == 'mirror':
             r = step['radius']
-            r_str = 'None' if np.isinf(r) else f'{step["radius"]:.17e}'
+            # v5.4.7 (audit AUDIT_V5_4_6 gap #1): negate the mirror radius
+            # here too.  The v5.4.6 F-14 fix only patched the unrolled style
+            # (above); this system style emitted the raytrace-convention
+            # radius un-negated into the step dict, which
+            # propagate_through_system forwards straight to apply_mirror
+            # (wave-side convention) -> a curved fold mirror got the
+            # OPPOSITE focusing sign (a concave R=-0.5 prescription emitted
+            # radius=-0.5, diverging instead of focusing -- a >5000x
+            # focus-vs-defocus inversion).  Refractive surf['radius'] sites
+            # (feeding apply_real_lens) must NOT be negated; only mirrors.
+            r_str = 'None' if np.isinf(r) else f'{-r:.17e}'
             ap = step.get('aperture_diameter')
             ap_str = (f'{ap:.17e}'
                       if (ap is not None and float(ap) > 0)

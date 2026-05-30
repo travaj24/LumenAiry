@@ -1010,3 +1010,70 @@ def polarization_ellipse(field: 'JonesField') -> Tuple[np.ndarray, np.ndarray]:
     sin_2chi = np.clip(sin_2chi, -1.0, 1.0)
     ellipticity = 0.5 * np.arcsin(sin_2chi)
     return orientation, ellipticity
+
+
+# =============================================================================
+# JONES-PUPIL -> STOKES / DOP HELPERS
+# =============================================================================
+# v5.4.7 (audit AUDIT_V5_4_6 #10): relocated here from
+# ``lumenairy/ui/jones_pupil_dock.py`` (which imports PySide6 at module
+# scope).  These are pure-NumPy helpers and belong in the polarization
+# domain; living here lets CI exercise them without a Qt install.  The
+# dock re-imports them so its behaviour is unchanged.
+
+def jones_pupil_to_stokes_unpolarized(J: np.ndarray) -> Dict[str, np.ndarray]:
+    """Per-pixel Stokes maps from a Jones *pupil* under unpolarized input.
+
+    A Jones pupil is the full 2x2 transfer matrix at each spatial point,
+    so collapsing it to a Stokes image requires choosing the input
+    polarization.  This uses the canonical UNPOLARIZED-input output Stokes
+    (Mueller column 0 -- the intensity-average of the x-input and y-input
+    output Stokes), with the 1/2 normalisation and the library's
+    ``S3 = -2 Im(Ex conj Ey)`` sign (see CONVENTIONS.md section 7)::
+
+        S0 =  0.5 (|J00|^2 + |J01|^2 + |J10|^2 + |J11|^2)
+        S1 =  0.5 (|J00|^2 + |J01|^2 - |J10|^2 - |J11|^2)
+        S2 =  Re(J00 conj(J10) + J01 conj(J11))
+        S3 = -Im(J00 conj(J10) + J01 conj(J11))
+
+    Parameters
+    ----------
+    J : ndarray (complex, Ny, Nx, 2, 2)
+        Jones pupil (e.g. from ``compute_jones_pupil``).
+
+    Returns
+    -------
+    dict with keys ``'S0'``, ``'S1'``, ``'S2'``, ``'S3'`` -- real (Ny, Nx).
+    """
+    J00 = J[..., 0, 0]
+    J01 = J[..., 0, 1]
+    J10 = J[..., 1, 0]
+    J11 = J[..., 1, 1]
+    a00 = np.abs(J00) ** 2
+    a01 = np.abs(J01) ** 2
+    a10 = np.abs(J10) ** 2
+    a11 = np.abs(J11) ** 2
+    S0 = 0.5 * (a00 + a01 + a10 + a11)
+    S1 = 0.5 * (a00 + a01 - a10 - a11)
+    S2 = np.real(J00 * np.conj(J10) + J01 * np.conj(J11))
+    S3 = -np.imag(J00 * np.conj(J10) + J01 * np.conj(J11))
+    return {'S0': S0, 'S1': S1, 'S2': S2, 'S3': S3}
+
+
+def stokes_to_dop(stokes: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+    """Per-pixel DOP / DOLP / DOCP from a Stokes dict.
+
+    ``DOP = sqrt(S1^2 + S2^2 + S3^2) / S0``,
+    ``DOLP = sqrt(S1^2 + S2^2) / S0``, ``DOCP = |S3| / S0``.
+    Pixels with ``S0 <= 1e-30`` (background) are set to 0.
+    """
+    S0 = stokes['S0']
+    S1 = stokes['S1']
+    S2 = stokes['S2']
+    S3 = stokes['S3']
+    safe = np.maximum(S0, 1e-30)
+    mask = S0 > 1e-30
+    dop = np.where(mask, np.sqrt(S1 ** 2 + S2 ** 2 + S3 ** 2) / safe, 0.0)
+    dolp = np.where(mask, np.sqrt(S1 ** 2 + S2 ** 2) / safe, 0.0)
+    docp = np.where(mask, np.abs(S3) / safe, 0.0)
+    return {'DOP': dop, 'DOLP': dolp, 'DOCP': docp}

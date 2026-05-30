@@ -365,7 +365,14 @@ def _surface_sag_derivatives_xy(x, y, surface):
             norm = (1 + K) * h_sq / R ** 2
             valid = norm < 0.9999
             denom = np.where(valid, np.sqrt(np.maximum(1 - norm, 1e-30)), 1.0)
-            d = np.where(valid, u / (R * denom), 0.0)
+            # v5.4.7 (audit AUDIT_V5_4_6 gap #2): NaN (not 0.0) out of the
+            # conic domain, matching the rot-sym _surface_sag_derivative
+            # and the surface_sag_general / v5.4.6 F-19 sag fix.  A silent
+            # 0.0 here gives a bogus axial (flat) surface normal where the
+            # sag is already NaN -- the exact silent-wrong-geometry
+            # inconsistency the F-19 fix targeted (biconic + out-of-domain
+            # ray).
+            d = np.where(valid, u / (R * denom), np.nan)
         if asph:
             for power, coeff in asph.items():
                 # d/du of coeff * u^power = power * coeff * u^(power-1)

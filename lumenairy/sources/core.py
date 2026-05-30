@@ -1140,6 +1140,12 @@ def create_led_source(
             64, 16e-6, 1.31e-6,
             diameter=100e-6, divergence_angle=0.3)
     """
+    # v5.4.7 (audit AUDIT_V5_4_6 gap #4): early grid validation, within the
+    # meta-pin's body-head window (the full validation also runs after the
+    # legacy shim resolves the wavelength; the shim never remaps N/dx).
+    if not args and wavelength is not None:
+        _validate_grid_params(N, dx, wavelength, dy=dy,
+                              fn_name='create_led_source')
     # v4.14.2 (P1-NEW-9): backward-compat shim for the pre-v4.14.2
     # positional ``(N, dx, diameter, divergence_angle, wavelength,
     # x0, y0, dtype)`` form.  We detect it via ``*args``: under the
