@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import importlib.util
 import inspect
 
 import numpy as np
@@ -56,7 +57,11 @@ def test_jonesfield_apply_real_lens_fresnel_warns():
 
 # ---- P3-23: unpolarized Stokes 1/2 + signs ----------------------------
 
+@pytest.mark.skipif(
+    importlib.util.find_spec('PySide6') is None, reason="PySide6 not installed")
 def test_jones_pupil_unpolarized_stokes_normalisation():
+    # jones_pupil_dock imports PySide6 at module scope, so this is skipped
+    # in headless/CI environments without Qt (the helper itself is pure NumPy).
     from lumenairy.ui.jones_pupil_dock import _jones_to_stokes_unpolarized
     # Identity Jones pupil -> unpolarized output: S0=1, S1=S2=S3=0.
     J = np.zeros((4, 4, 2, 2), dtype=complex)
