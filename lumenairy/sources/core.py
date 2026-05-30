@@ -296,13 +296,27 @@ def create_gaussian_beam(
     y = (xp.arange(Ny) - Ny / 2) * dy
     X, Y = xp.meshgrid(x, y)
 
+    # v5.4.6 (audit F-39): reject non-physical scale parameters -- sigma=0
+    # gives a divide-by-zero / NaN-laced field and sigma<0 silently
+    # produces the same beam as |sigma|, both of which were accepted
+    # without warning before.
+    if not np.isfinite(sigma) or sigma <= 0:
+        raise ValueError(
+            f"create_gaussian_beam: sigma must be positive and finite, "
+            f"got {sigma}.")
     # Gaussian amplitude: exp(-r^2 / (2 sigma^2))
     target_dtype = _resolve_complex_dtype(dtype)
     E = xp.exp(-((X - x0)**2 + (Y - y0)**2) / (2 * sigma**2))
     E = E.astype(target_dtype)
 
     if normalize == 'peak':
-        pass  # already peak == 1 from exp(0) at the centre
+        # v5.4.6 (audit F-38): divide by the ACTUAL peak so the field is
+        # unit-peak even when the beam centre (x0, y0) falls off the
+        # sampled grid (where exp(0) is never sampled).  Strict no-op for
+        # an on-grid peak (max is already 1).
+        mx = float(xp.abs(E).max())
+        if mx > 0:
+            E = E / mx
     elif normalize == 'power':
         norm = xp.sqrt(xp.sum(xp.abs(E) ** 2) * dx * dy)
         if float(norm) > 0:
@@ -685,6 +699,16 @@ def create_tilted_plane_wave(
         angle_y = float(np.radians(angle_y_deg))
     if dy is None:
         dy = dx
+    # v5.4.6 (audit F-40): kx = k0 sin(angle_x) and ky = k0 sin(angle_y) are
+    # applied independently; if sin^2(ax) + sin^2(ay) > 1 the transverse
+    # wavevector exceeds k0 and the wave is evanescent (non-propagating),
+    # which a propagating-plane-wave construction cannot represent.
+    _kt2 = float(np.sin(angle_x) ** 2 + np.sin(angle_y) ** 2)
+    if _kt2 > 1.0:
+        raise ValueError(
+            f"create_tilted_plane_wave: sin^2(angle_x) + sin^2(angle_y) = "
+            f"{_kt2:.4f} > 1 -- the transverse wavevector exceeds k0 and the "
+            f"wave would be evanescent.  Reduce the tilt angle(s).")
     x = (np.arange(N) - N / 2) * dx
     y = (np.arange(N) - N / 2) * dy
     X, Y = np.meshgrid(x, y)
@@ -1039,9 +1063,17 @@ def create_led_source(
     y0: float = 0,
     dtype: Optional[Any] = None,
 ) -> Tuple[np.ndarray, List[Tuple[float, float]], np.ndarray, np.ndarray]:
-    """Lambertian LED source (incoherent; returns the intensity
+    """Extended LED-style source (incoherent; returns the intensity
     envelope as a complex field for use with partial-coherence
     imaging).
+
+    v5.4.6 (audit P3-11): the returned ``source_angles`` are sampled
+    UNIFORMLY over the divergence cone (concentric rings), NOT Lambertian
+    (cos-theta) weighted, and ``extended_source_image`` defaults every
+    angle to unit weight -- so this models a uniform-RADIANCE disk in
+    angle, not a true Lambertian (I ~ cos theta) emitter.  For a
+    Lambertian profile, weight each returned angle by
+    ``cos(sqrt(ax^2 + ay^2))`` in the downstream integration.
 
     The spatial extent is a uniform disk of given diameter; the
     angular extent (divergence) determines how many source angles
@@ -1824,10 +1856,13 @@ def _schell_phase_realizations(
        ``H(k) = exp(-|k|^2 * sigma_g^2 / 4)`` and inverse-FFT.  The
        resulting complex field ``phi(r)`` has spatial correlation
        ``<phi(r1) conj(phi(r2))> ~ exp(-|r1-r2|^2 / (2 sigma_g^2))``.
-    3. Normalise so the mean intensity is unity:
-       ``phi <- phi / sqrt(<|phi|^2>)``.  ``|phi|^2`` then averages to
-       1; the resulting field acts as the random "phase + speckle"
-       factor of the Schell-model decomposition.
+    3. Normalise by the DETERMINISTIC expected mean intensity
+       ``phi <- phi / sqrt(E[<|phi|^2>])`` with
+       ``E[<|phi|^2>] = sum_k |H(k)|^2 / (Ny*Nx)`` (Parseval), a single
+       constant for the whole ensemble.  v5.4.6 (audit P3-10): this
+       preserves unit mean intensity in EXPECTATION while keeping the
+       two-point correlation exactly Gaussian-Schell; per-realisation
+       normalisation (the pre-fix recipe) biases the empirical MCF.
 
     Returns
     -------
@@ -1847,17 +1882,23 @@ def _schell_phase_realizations(
     out = np.empty((int(n_realizations), int(Ny), int(Nx)),
                    dtype=np.complex128)
     inv_sqrt2 = 1.0 / np.sqrt(2.0)
+    # v5.4.6 (audit P3-10): normalise EVERY realisation by the single
+    # DETERMINISTIC expected mean intensity, not by each realisation's own
+    # random mean.  Dividing each realisation by its random mean is
+    # non-linear in the ensemble and systematically biases the empirical
+    # Gaussian-Schell two-point correlation (the bias does NOT average out
+    # with more realisations).  By Parseval, E[mean(|Phi|^2)] =
+    # sum_k |H(k)|^2 / (Ny*Nx).  Unit mean intensity is thus preserved IN
+    # EXPECTATION while keeping <phi(r1) conj(phi(r2))> exactly Gaussian.
+    _mean_I = float(np.sum(np.abs(spec_filter) ** 2) / (Ny * Nx))
+    _norm = np.sqrt(_mean_I) if _mean_I > 0.0 else 1.0
     for k in range(int(n_realizations)):
         # Circular-Gaussian complex white noise.
         w_re = rng.standard_normal((Ny, Nx))
         w_im = rng.standard_normal((Ny, Nx))
         W = (w_re + 1j * w_im) * inv_sqrt2
         Phi = np.fft.ifft2(np.fft.fft2(W) * spec_filter)
-        # Normalise to unit mean intensity per realisation.
-        mean_I = float(np.mean(np.abs(Phi) ** 2))
-        if mean_I > 0.0:
-            Phi = Phi / np.sqrt(mean_I)
-        out[k] = Phi
+        out[k] = Phi / _norm
     return out
 
 

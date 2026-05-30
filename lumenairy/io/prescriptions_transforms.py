@@ -408,8 +408,16 @@ def split_prescription_at_mirrors(
         kind = el.get('element_type', 'surface')
         if kind == 'mirror':
             _flush_refractive()
+            # v5.4.6 (audit F-15): preserve the propagation distances INTO
+            # and OUT OF the mirror (previously dropped), so the folded-
+            # design walking workflow can reconstruct the inter-leg
+            # geometry.  all_th[i] is the gap from element i to element i+1.
+            d_in = float(all_th[idx - 1]) if idx > 0 else 0.0
+            d_out = float(all_th[idx]) if idx < len(all_th) else 0.0
             legs.append({'kind': 'mirror',
-                         'element': copy.deepcopy(el)})
+                         'element': copy.deepcopy(el),
+                         'distance_in': d_in,
+                         'distance_out': d_out})
             last_was_surface = False
             continue
         # Refractive surface.

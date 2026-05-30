@@ -107,8 +107,13 @@ def thin_grating_efficiency_1d(
         Reflected diffraction efficiency per order.  **Always zero**
         under the thin-grating approximation.
     T_eff : ndarray
-        Transmitted diffraction efficiency per order.  Sums to 1 by
-        energy conservation (for lossless materials).
+        Transmitted diffraction efficiency per order.  v5.4.6 (audit
+        F-24): the kept orders sum to ~1 by energy conservation ONLY
+        when all retained orders propagate AND enough orders are kept;
+        once orders go evanescent (``|kx_m| >= k0*n_substrate``) or are
+        truncated by ``n_orders``, their efficiency is set to 0 and the
+        sum of ``T_eff`` is < 1 (the missing power is in evanescent /
+        dropped orders).
     """
     k0 = 2 * np.pi / wavelength
     K = 2 * np.pi / period
@@ -189,6 +194,14 @@ def grating_efficiency_vs_wavelength(
         Efficiency of the requested order at each wavelength.
     """
     wavelengths = np.atleast_1d(np.asarray(wavelengths))
+    # v5.4.6 (audit F-23): reject an out-of-range order rather than
+    # silently returning the nearest available order's efficiency (the
+    # retained orders are arange(-n_orders, n_orders+1)).
+    if abs(int(order)) > n_orders:
+        raise ValueError(
+            f"grating_efficiency_vs_wavelength: requested order {order} is "
+            f"outside the retained range [-{n_orders}, {n_orders}]; "
+            f"increase n_orders to include it.")
     eff = np.empty(wavelengths.size)
     for i, wl in enumerate(wavelengths):
         orders, _, T = thin_grating_efficiency_1d(

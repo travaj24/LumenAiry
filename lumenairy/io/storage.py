@@ -715,6 +715,17 @@ def append_plane_h5(filepath: str, field: np.ndarray, dx: float,
                 # create-dataset path can raise anything from the
                 # HDF5 native layer; preserve the original Exception
                 # class for the user via ``raise``.
+                # v5.4.6 (audit P3-15): if create_dataset SUCCEEDED but a
+                # later attrs/swmr/flush step raised, the orphan plane_NN
+                # dataset would block the next append at the same name
+                # (overwrite was removed in v4.14.3).  Delete it so the
+                # file sits at exactly n planes -- the documented
+                # atomicity contract -- before decrementing n_planes.
+                try:
+                    if name in grp:
+                        del grp[name]
+                except Exception:
+                    pass
                 grp.attrs['n_planes'] = n
                 raise
     finally:

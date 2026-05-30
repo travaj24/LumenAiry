@@ -1026,7 +1026,7 @@ def load_zemax_prescription_data_txt(filepath: str,
 
 def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
                            wavelength: float,
-                           stop_surface: int = 0,
+                           stop_surface: Optional[int] = None,
                            aperture_diameter: Optional[float] = None,
                            back_focal_length: Optional[float] = None,
                            description: Optional[str] = None,
@@ -1091,6 +1091,14 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
     lines.append('#   Source: collimated on-axis plane wave')
     lines.append(f'#   Aperture: clear semi-diameter = '
                  f'{semi_dia_mm:.4f} mm (diameter {aperture_diameter*1e3:.4f} mm)')
+    # v5.4.6 (audit F-29): default stop_surface to the prescription's own
+    # stop (stop_index, else per-surface is_stop), not surface 0.
+    if stop_surface is None:
+        stop_surface = prescription.get('stop_index')
+        if stop_surface is None:
+            stop_surface = next(
+                (i for i, s in enumerate(surfaces) if s.get('is_stop')), 0)
+    stop_surface = int(stop_surface)
     lines.append(f'#   Stop surface index: {stop_surface + 1}')
     if extra_notes:
         for note in extra_notes:
@@ -1392,7 +1400,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
 
 def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
                      wavelength: float,
-                     stop_surface: int = 0,
+                     stop_surface: Optional[int] = None,
                      aperture_diameter: Optional[float] = None,
                      back_focal_length: Optional[float] = None,
                      name: Optional[str] = None) -> None:
@@ -1438,6 +1446,17 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
     session in Zemax and manually enter the rows from
     :func:`export_zemax_lens_data` instead.
     """
+    # v5.4.6 (audit F-29): default stop_surface to the prescription's own
+    # stop (stop_index, else per-surface is_stop), not surface 0, so a
+    # load->export->load round trip preserves the aperture stop -- both the
+    # full (mirror/coord-break) writer and the simple lens-only writer.
+    if stop_surface is None:
+        stop_surface = prescription.get('stop_index')
+        if stop_surface is None:
+            stop_surface = next(
+                (i for i, s in enumerate(prescription.get('surfaces', []))
+                 if s.get('is_stop')), 0)
+    stop_surface = int(stop_surface)
     # 3.7.0: prefer the full chronological list when present (it
     # carries mirrors and is aligned with all_thicknesses + the
     # coord_breaks list).  Fall back to the lens-only path otherwise.

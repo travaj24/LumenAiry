@@ -50,12 +50,22 @@ def _jones_to_stokes_unpolarized(J: np.ndarray) -> dict:
     JonesField (one input polarization).  A Jones *pupil* is the full
     2x2 transfer matrix at each spatial point, so to collapse it to a
     Stokes image we must specify the input polarization.  We use the
-    canonical unpolarized-input formulas (Mueller-matrix row-0):
+    canonical UNPOLARIZED-input output Stokes (Mueller column 0, i.e. the
+    intensity-average of the x-input and y-input output Stokes), with the
+    1/2 normalisation and the library's S3 = -2 Im(Ex conj Ey) sign.
 
-        S0 = |J00|^2 + |J01|^2 + |J10|^2 + |J11|^2
-        S1 = |J00|^2 - |J01|^2 + |J10|^2 - |J11|^2
-        S2 = 2 Re(J00 J01* + J10 J11*)
-        S3 = 2 Im(J01 J00* + J11 J10*)
+    v5.4.6 (audit P3-23): the pre-fix formulas omitted the 1/2 (absolute
+    magnitude 2x too large) and used an S1 sign pattern
+    ``|J00|^2 - |J01|^2 + |J10|^2 - |J11|^2`` that is neither Mueller row-0
+    nor column-0.  Corrected to::
+
+        S0 =  0.5 (|J00|^2 + |J01|^2 + |J10|^2 + |J11|^2)
+        S1 =  0.5 (|J00|^2 + |J01|^2 - |J10|^2 - |J11|^2)
+        S2 =  Re(J00 conj(J10) + J01 conj(J11))
+        S3 = -Im(J00 conj(J10) + J01 conj(J11))
+
+    (DOP / DOLP / DOCP ratios are unchanged by the 1/2; the absolute
+    Stokes magnitudes and the S1 sign pattern are now correct.)
 
     Parameters
     ----------
@@ -74,10 +84,12 @@ def _jones_to_stokes_unpolarized(J: np.ndarray) -> dict:
     a01 = np.abs(J01) ** 2
     a10 = np.abs(J10) ** 2
     a11 = np.abs(J11) ** 2
-    S0 = a00 + a01 + a10 + a11
-    S1 = a00 - a01 + a10 - a11
-    S2 = 2.0 * np.real(J00 * np.conj(J01) + J10 * np.conj(J11))
-    S3 = 2.0 * np.imag(J01 * np.conj(J00) + J11 * np.conj(J10))
+    # v5.4.6 (audit P3-23): unpolarized-input output Stokes (Mueller
+    # column 0) with the 1/2 normalisation and the library S3 sign.
+    S0 = 0.5 * (a00 + a01 + a10 + a11)
+    S1 = 0.5 * (a00 + a01 - a10 - a11)
+    S2 = np.real(J00 * np.conj(J10) + J01 * np.conj(J11))
+    S3 = -np.imag(J00 * np.conj(J10) + J01 * np.conj(J11))
     return {'S0': S0, 'S1': S1, 'S2': S2, 'S3': S3}
 
 

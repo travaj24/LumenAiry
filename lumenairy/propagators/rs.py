@@ -332,6 +332,14 @@ def rayleigh_sommerfeld_propagate(
         E_conv = xp.fft.ifft2(E_fft * H)
 
     # -- extract the valid region (same location as input was placed) ----------
-    E_out = E_conv[y0:y0 + Ny, x0:x0 + Nx]
+    # v5.4.6 (audit F-3): ``.copy()`` is REQUIRED.  For the NumPy/CuPy path
+    # ``_ifft2`` returns a view into the cache-owned pyFFTW inverse
+    # ping-pong buffer, which the double-buffer contract guarantees only
+    # until the NEXT same-key ``_ifft2`` call.  Returning a bare slice
+    # (a view) of that buffer means a subsequent RS propagation at the
+    # same grid silently overwrites a previously-returned field -- a
+    # data-corruption hazard on multi-distance RS sweeps.  Copy detaches
+    # the output from the reused buffer.
+    E_out = E_conv[y0:y0 + Ny, x0:x0 + Nx].copy()
 
     return E_out

@@ -367,14 +367,22 @@ def reconstruct_field_from_beamlets(
         if has_dirs:
             L_b = beamlets.directions[start:end, 0]
             M_b = beamlets.directions[start:end, 1]
-            # Fused phase argument: imag part of the complex factor in
-            # the original exp().  ``-Q_b * rho2 / 2 + (L_b * dX + M_b * dY)``
-            # is then multiplied by ``1j * k`` inside the single exp.
-            arg = (-0.5 * Q_b[None, None, :] * rho2
+            # Fused phase argument.  v5.4.6 (audit F-1): the stored Q uses
+            # the engineering 1/q parameterisation (q_code = conj(q_physics));
+            # the reconstructed FIELD must be expressed in the library's
+            # exp(-i omega t) / forward exp(+ikz) convention, i.e. the
+            # transverse curvature is exp(+i k rho^2 / (2 q_physics)) =
+            # exp(+0.5j k conj(Q) rho^2).  The pre-fix ``-0.5*Q`` rendered the
+            # complex CONJUGATE of the propagated wavefront curvature (the
+            # |E| envelope and waist are sign-blind, so intensity/focus tests
+            # never caught it).  conj(Q) has the same Im part, so the Gaussian
+            # decay and the on-axis-waist (Re(Q)=0) reconstruction are
+            # unchanged; only the off-waist phase sign is corrected.
+            arg = (0.5 * xp.conj(Q_b[None, None, :]) * rho2
                    + L_b[None, None, :] * dX + M_b[None, None, :] * dY)
             phase = xp.exp(1j * k * arg)
         else:
-            phase = xp.exp(-0.5j * k * Q_b[None, None, :] * rho2)
+            phase = xp.exp(0.5j * k * xp.conj(Q_b[None, None, :]) * rho2)
         # ``out += einsum('mnk,k->mn', phase, a_b)`` if numpy; the
         # operator is equivalent to ``sum(a_b * phase, axis=-1)``
         # but avoids the (Ny, Nx, chunk) ``a_b * phase`` intermediate.

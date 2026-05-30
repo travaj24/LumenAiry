@@ -24,6 +24,44 @@ from matplotlib.figure import Figure
 from .model import SystemModel
 
 
+class _RWResult:
+    """Lightweight container so the dock can read ``res.Ex/.Ey/.Ez`` --
+    v5.4.6 (audit F-18): ``richards_wolf_focus`` returns a TUPLE
+    ``(Ex, Ey, Ez, x_f, y_f)``, not an object with attributes."""
+
+    def __init__(self, Ex, Ey, Ez, x_f, y_f):
+        self.Ex, self.Ey, self.Ez = Ex, Ey, Ez
+        self.x_f, self.y_f = x_f, y_f
+
+
+def _rw_compute(NA, wavelength, polarization, N, dx_m, z_offset_m):
+    """v5.4.6 (audit F-18): build a uniform circular pupil and call the
+    real ``richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil, ...)``
+    signature.  The pre-fix dock called a fabricated signature
+    (``NA=, n_im=, N=, dx=, z=``) that ALWAYS raised TypeError, so the
+    feature never produced output.  Factored out of the QThread so it can
+    be exercised without a Qt event loop."""
+    import lumenairy as la
+    # Map the dock's polarization labels to the library's supported set.
+    pol_map = {'linear_x': 'x', 'x': 'x', 'linear_y': 'y', 'y': 'y',
+               'rcp': 'circular', 'lcp': 'circular', 'circular': 'circular'}
+    pol = pol_map.get(str(polarization).lower(), 'x')
+    N = int(N)
+    # f is arbitrary (a valid focal length); the focal-plane pitch is set
+    # via dx_pupil so it honours the dock's requested dx, and the pupil is
+    # filled out to the requested NA.
+    f = 1.0e-3
+    dx_pupil = float(wavelength) * f / (N * float(dx_m))
+    xp = (np.arange(N) - N / 2) * dx_pupil
+    Xp, Yp = np.meshgrid(xp, xp)
+    rho = np.sqrt(Xp ** 2 + Yp ** 2)
+    pupil = (rho <= f * float(NA)).astype(np.complex128)
+    Ex, Ey, Ez, x_f, y_f = la.richards_wolf_focus(
+        pupil, float(wavelength), float(NA), f, dx_pupil,
+        N_focal=N, z_planes=[float(z_offset_m)], polarization=pol)
+    return _RWResult(Ex, Ey, Ez, x_f, y_f)
+
+
 class RichardsWolfWorker(QThread):
     """Background worker for the (potentially expensive) RW integral."""
     finished_result = Signal(object)
@@ -33,7 +71,7 @@ class RichardsWolfWorker(QThread):
         super().__init__()
         self.NA = NA
         self.wavelength = wavelength
-        self.n_im = n_im
+        self.n_im = n_im  # immersion index (NA already folds it in)
         self.polarization = polarization
         self.N = N
         self.dx_m = dx_m
@@ -41,11 +79,8 @@ class RichardsWolfWorker(QThread):
 
     def run(self):
         try:
-            import lumenairy as la
-            res = la.richards_wolf_focus(
-                NA=self.NA, wavelength=self.wavelength,
-                n_im=self.n_im, polarization=self.polarization,
-                N=self.N, dx=self.dx_m, z=self.z_offset_m)
+            res = _rw_compute(self.NA, self.wavelength, self.polarization,
+                              self.N, self.dx_m, self.z_offset_m)
             self.finished_result.emit(res)
         except Exception as exc:
             self.finished_result.emit(

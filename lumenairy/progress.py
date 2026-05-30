@@ -75,8 +75,13 @@ def call_progress(cb: Optional[ProgressCallback],
                   message: str = '') -> None:
     """Invoke a progress callback if one is set, swallowing failures.
 
-    Progress reporting must never break the underlying computation, so
-    any exception in the callback is suppressed.  Callers pass their
+    Progress reporting must never break the underlying computation, so a
+    TARGETED set of callback exceptions is suppressed (v5.4.6 audit F-37:
+    the prior "any exception is suppressed" wording overstated this):
+    TypeError (wrong-arity callback), ValueError (bad f-string format),
+    RuntimeError and OSError (GUI-thread / pipe failures), and
+    KeyError / IndexError / AttributeError.  Other exception types
+    (e.g. KeyboardInterrupt, MemoryError) PROPAGATE.  Callers pass their
     own callback through as an opt-in; ``None`` (the default) skips
     the whole mechanism with no overhead.
     """

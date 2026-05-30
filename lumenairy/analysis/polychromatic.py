@@ -428,7 +428,11 @@ def polychromatic_psf(
     total = float(psf_out.sum())
     if total > 0:
         x = (np.arange(N) - N / 2) * dx
-        y = (np.arange(N) - N / 2) * dx
+        # v5.4.6 (audit P2-2): use dy for the y-axis on anamorphic grids;
+        # the pixel_area block 20 lines above already threads dy, but this
+        # centroid / D4-sigma diagnostic used dx for y, giving wrong
+        # metres-in-y when dy != dx.
+        y = (np.arange(N) - N / 2) * (dy if dy is not None else dx)
         X, Y = np.meshgrid(x, y)
         xc = float((psf_out * X).sum() / total)
         yc = float((psf_out * Y).sum() / total)

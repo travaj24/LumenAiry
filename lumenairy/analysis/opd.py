@@ -479,6 +479,16 @@ def wave_opd_1d(
         unwrapping.
     dy : float, optional
         Grid spacing in y [m].  Defaults to ``dx``.
+    focal_length : float, optional
+        v5.4.6 (audit F-26): if given, used to emit the Nyquist
+        sampling warning (``dx < lambda * focal_length / aperture``) so
+        an under-sampled pupil cut is flagged before unwrapping.
+    f_ref : float, optional
+        v5.4.6 (audit F-26): reference-sphere focal length [m].  When
+        provided, the quadratic (defocus) reference phase of a sphere
+        converging to ``f_ref`` is subtracted before unwrapping, so the
+        returned OPD is the residual wavefront error relative to that
+        reference sphere rather than the full focusing wavefront.
 
     Returns
     -------

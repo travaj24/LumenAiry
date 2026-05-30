@@ -113,12 +113,16 @@ def optical_invariant(efl: float, f_number_val: float,
           = h \\cdot u_{marginal}
 
     where ``y_pupil`` is the marginal-ray height at the entrance pupil
-    and ``u_chief`` the chief-ray angle there.  For a system at f-number
-    ``f/#`` and field-height ``h``, the invariant is
+    and ``u_chief`` the chief-ray angle there.  For an entrance pupil of
+    diameter ``D``, EFL ``f``, and image-side field-height ``h``, the
+    invariant is the half-aperture times the chief-ray field-angle
 
     .. math::
-        H = \\frac{D / 2}{2 \\cdot (f/\\#)} \\cdot \\frac{h}{f}
-          = \\frac{h \\cdot D}{4 \\cdot (f/\\#) \\cdot f}.
+        H = \\frac{D}{2} \\cdot \\frac{h}{f}.
+
+    .. v5.4.6 (audit F-25): docstring formula corrected to match the
+        code ``H = (D/2) * (h/efl)``; the prior ``h*D/(4*(f/#)*f)`` form
+        carried a spurious extra division by ``2*(f/#)``.
 
     Parameters
     ----------

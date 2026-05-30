@@ -90,6 +90,22 @@ class JonesField:
 
     Polarization-dependent elements (polarizers, waveplates, Jones
     matrices) mix Ex and Ey according to their 2×2 Jones matrix.
+
+    Warnings
+    --------
+    v5.4.6 (audit P3-18): the "non-polarizing" per-component dispatch is
+    exact only inside the paraxial, low-AOI envelope.  It does NOT model:
+
+    * s/p Fresnel splitting -- ``apply_real_lens(fresnel=True)`` /
+      ``slant_correction=True`` at large AOI (it applies an s/p-averaged
+      unpolarized power coefficient; a UserWarning is raised).
+    * the longitudinal Ez component / Debye-Wolf depolarization at high NA
+      (NA > ~0.3) -- use
+      :func:`lumenairy.propagators.vector_diffraction.richards_wolf_focus`.
+    * the polarization-basis rotation at large carrier tilt in
+      :meth:`propagate_tilted` (paraxial / small-tilt only).
+    * circular-polarization handedness inversion on reflection in
+      :meth:`apply_mirror`.
     """
 
     def __init__(self, Ex: np.ndarray, Ey: np.ndarray, dx: float, dy: Optional[float] = None) -> None:
@@ -227,7 +243,14 @@ class JonesField:
         tilt_y: float = 0,
         bandlimit: bool = True,
     ) -> 'JonesField':
-        """Propagate via off-axis ASM."""
+        """Propagate via off-axis ASM.
+
+        v5.4.6 (audit P3-20): valid in the paraxial / small-tilt regime
+        (|tilt| < ~5 deg).  Ex and Ey are dispatched with the same carrier
+        tilt and NO rotation of the (Ex, Ey) basis into the tilted
+        propagation frame, so at larger tilts the implied transverse
+        polarization basis and the (small) Ez component are not modeled.
+        """
         self.Ex = angular_spectrum_propagate_tilted(
             self.Ex, z, wavelength, self.dx, self.dy,
             tilt_x=tilt_x, tilt_y=tilt_y, bandlimit=bandlimit)
@@ -311,7 +334,14 @@ class JonesField:
     # ------------------------------------------------------------------
 
     def apply_thin_lens(self, f: float, wavelength: float, **kwargs: Any) -> 'JonesField':
-        """Apply a thin lens to both components."""
+        """Apply a thin lens to both components.
+
+        v5.4.6 (audit P3-21): scalar per-component dispatch is exact in the
+        paraxial regime.  Under high-NA focusing (NA > ~0.3, f/# < ~1.7)
+        the vectorial Ez component and Debye-Wolf depolarization are NOT
+        modeled; use ``vector_diffraction.richards_wolf_focus`` instead.
+        Same caveat applies to :meth:`apply_spherical_lens`.
+        """
         self.Ex = apply_thin_lens(self.Ex, f=f, wavelength=wavelength, dx=self.dx, dy=self.dy, **kwargs)
         self.Ey = apply_thin_lens(self.Ey, f=f, wavelength=wavelength, dx=self.dx, dy=self.dy, **kwargs)
         return self
@@ -336,20 +366,57 @@ class JonesField:
 
         See :func:`lumenairy.lenses.apply_real_lens` for parameter
         documentation.
+
+        Warning
+        -------
+        v5.4.6 (audit P2-3 / P3-25): per-component dispatch is only
+        non-polarizing for the default (phase-screen) path.  With
+        ``fresnel=True`` (or ``slant_correction=True`` at large AOI) the
+        scalar kernel applies an s/p-AVERAGED unpolarized power
+        coefficient ``T_eff = 0.5(|t_s|^2 + |t_p|^2)`` to each component
+        independently, so the s-vs-p Fresnel split is collapsed BEFORE the
+        JonesField sees the result (a 100%-x-polarized beam through a
+        Brewster surface is then physically wrong).  A ``UserWarning`` is
+        emitted in that case; a rigorous per-pixel Jones-matrix Fresnel
+        path is queued for v5.5.
         """
+        if fresnel or slant_correction:
+            import warnings
+            warnings.warn(
+                "JonesField.apply_real_lens: fresnel/slant_correction apply "
+                "an s/p-averaged unpolarized power coefficient per component, "
+                "collapsing the polarization-dependent Fresnel split.  The "
+                "result is only correct for unpolarized / low-AOI input; for "
+                "a polarized high-AOI pipeline this is physically wrong.",
+                UserWarning, stacklevel=2)
+        # v5.4.6 (audit P2-4): forward dy=self.dy so anamorphic JonesFields
+        # (dx != dy) keep the correct y-axis pitch (apply_thin_lens already did).
         self.Ex = apply_real_lens(
-            self.Ex, prescription=prescription, wavelength=wavelength, dx=self.dx,
+            self.Ex, prescription=prescription, wavelength=wavelength,
+            dx=self.dx, dy=self.dy,
             bandlimit=bandlimit, slant_correction=slant_correction,
             fresnel=fresnel, absorption=absorption)
         self.Ey = apply_real_lens(
-            self.Ey, prescription=prescription, wavelength=wavelength, dx=self.dx,
+            self.Ey, prescription=prescription, wavelength=wavelength,
+            dx=self.dx, dy=self.dy,
             bandlimit=bandlimit, slant_correction=slant_correction,
             fresnel=fresnel, absorption=absorption)
         return self
 
     def apply_mirror(self, wavelength: float, **kwargs: Any) -> 'JonesField':
-        self.Ex = apply_mirror(self.Ex, wavelength, self.dx, **kwargs)
-        self.Ey = apply_mirror(self.Ey, wavelength, self.dx, **kwargs)
+        """Apply an ideal (phase-only) mirror to both components.
+
+        v5.4.6 (audit P3-19): the scalar mirror applies only the sag phase
+        (no metallic R_s/R_p split), so per-component dispatch is correct
+        for the phase part -- use ``apply_jones_matrix`` for a metallic
+        coating.  Note that physical reflection inverts circular-
+        polarization handedness (S3 -> -S3) because the propagation
+        direction reverses; this method leaves the (Ex, Ey) basis
+        unchanged, so the caller owns any handedness/frame convention.
+        """
+        # v5.4.6 (audit P2-4): forward dy=self.dy for anamorphic grids.
+        self.Ex = apply_mirror(self.Ex, wavelength, self.dx, dy=self.dy, **kwargs)
+        self.Ey = apply_mirror(self.Ey, wavelength, self.dx, dy=self.dy, **kwargs)
         return self
 
     def apply_aperture(
@@ -359,8 +426,11 @@ class JonesField:
         xc: float = 0,
         yc: float = 0,
     ) -> 'JonesField':
-        self.Ex = apply_aperture(self.Ex, self.dx, shape=shape, params=params, xc=xc, yc=yc)
-        self.Ey = apply_aperture(self.Ey, self.dx, shape=shape, params=params, xc=xc, yc=yc)
+        # v5.4.6 (audit P2-4): forward dy=self.dy for anamorphic grids.
+        self.Ex = apply_aperture(self.Ex, self.dx, shape=shape, params=params,
+                                 xc=xc, yc=yc, dy=self.dy)
+        self.Ey = apply_aperture(self.Ey, self.dx, shape=shape, params=params,
+                                 xc=xc, yc=yc, dy=self.dy)
         return self
 
     def apply_mask(self, mask: np.ndarray) -> 'JonesField':
@@ -456,7 +526,11 @@ def apply_jones_matrix(field: 'JonesField', matrix: Union[np.ndarray, Callable[[
         Input polarized field.
     matrix : ndarray (complex, 2×2) or callable
         The Jones matrix. If callable, must accept (x, y) meshgrids and
-        return a (2, 2, N, N) array for spatially-varying elements.
+        return a spatially-varying Jones array.  v5.4.6 (audit P3-26):
+        BOTH layouts are accepted -- the canonical ``(2, 2, Ny, Nx)`` and
+        the ``(Ny, Nx, 2, 2)`` layout that ``meshgrid``-based callables
+        produce naturally (the latter is transposed internally via
+        ``np.moveaxis``).
 
     Returns
     -------
@@ -595,6 +669,14 @@ def apply_waveplate(
     pre-4.11.2 docstring still showed the EE-convention form
     ``R(-theta) * diag(1, exp(+i phi)) * R(theta)``, which was
     inconsistent with the actual implementation.)
+
+    v5.4.6 (audit P3-22): this slow-axis ``exp(-i*retardance)`` is
+    DECOUPLED from the propagators' field-phase convention
+    ``exp(+i*k*OPL)`` (asymptotic.py / vectorial_hfpi.py).  It is an
+    intentional, regression-pinned choice -- closed Jones pipelines give
+    correct intensities because this retarder sign and the Stokes
+    S3 = -2 Im(Ex conj Ey) sign are mutually consistent.  See
+    CONVENTIONS.md section 7 (Waveplate row).
     """
     angle = _resolve_angle('apply_waveplate', angle, angle_deg)
     c = np.cos(angle)

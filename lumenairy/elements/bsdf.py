@@ -290,9 +290,10 @@ class GaussianBSDF(BSDFModel):
         sd = np.asarray(scattered_dir, dtype=float)
         # Specular direction = (L_i, M_i, -N_i) if we flip z;
         # here we assume incident has N<0 and scattered has N>0.
-        specular = np.array([inc[..., 0] if inc.ndim else inc[0],
-                             inc[..., 1] if inc.ndim else inc[1],
-                             -inc[..., 2] if inc.ndim else -inc[2]])
+        # v5.4.6 (audit F-22): stack along the LAST axis so the batched-
+        # incidence path produces (..., 3) matching scattered_dir, not
+        # the transposed (3, ...) that crashed broadcasting in (M,3)*(3,M).
+        specular = np.stack([inc[..., 0], inc[..., 1], -inc[..., 2]], axis=-1)
         # cos(theta_s) between scattered and specular
         cos_theta = np.clip(np.sum(sd * specular, axis=-1), -1.0, 1.0)
         theta = np.arccos(cos_theta)

@@ -85,16 +85,20 @@ class Aperture(Operator):
                 f"Aperture: inner_diameter must be a real number, got "
                 f"{inner_diameter!r}."
             ) from e
-        if inner < 0.0 or inner >= D:
-            if shape == 'annular' and inner == 0.0:
-                # Default inner = D / 2 for annular if caller did not
-                # supply one.
-                inner = D / 2.0
-            elif inner != 0.0:
-                raise ValueError(
-                    f"Aperture: inner_diameter must be in [0, "
-                    f"diameter), got inner={inner}, diameter={D}."
-                )
+        # v5.4.6 (audit F-16): validate 0 <= inner < D FIRST, then apply
+        # the annular default. The old guard nested the default inside
+        # 'if inner < 0 or inner >= D', which is False for the default
+        # inner==0.0, so a default Aperture(shape='annular') silently had
+        # NO central obstruction (contradicting the docstring).
+        if not np.isfinite(inner) or inner < 0.0 or inner >= D:
+            raise ValueError(
+                f"Aperture: inner_diameter must be in [0, "
+                f"diameter), got inner={inner}, diameter={D}."
+            )
+        if shape == 'annular' and inner == 0.0:
+            # Default inner = D / 2 for annular if caller did not supply
+            # one.
+            inner = D / 2.0
         self.diameter = D
         self.shape = shape
         self.inner_diameter = inner

@@ -215,7 +215,15 @@ def _fd_grad_pure(
     scale_floor : ndarray, shape (N,), optional
         Per-variable absolute step floor.  Defaults to 1 micron per
         variable (matches the legacy ``_fd_grad_for`` default for radii
-        / thicknesses).
+        / thicknesses).  v5.4.6 (audit F-20): note that ``scale_floor``
+        is consumed by THIS finite-difference helper, which
+        ``design_optimize`` invokes only on the JAX-gradient-combined
+        path (``jac='auto'`` WITH a JaxMeritTerm) and ``method='newton'``.
+        On the default ``jac='auto'``-without-JAX path ``final_jac`` is
+        ``None`` and scipy estimates the gradient with its own internal
+        2-point step, which never sees ``scale_floor`` -- so the floor is
+        inert there.  Pass an explicit ``jac`` / use the Newton path (or a
+        JAX merit) to make the per-variable floor effective.
     f0 : float, optional
         Pre-computed ``f(x)``.  Only consulted when ``scheme='forward'``;
         ignored otherwise.  When supplied for the forward path, the
@@ -704,8 +712,12 @@ def design_optimize(parameterization: Any,
             z_best_v, strehl_best_v = _core.find_best_focus(scan, 'strehl')
             ctx.z_best = float(z_best_v)
             ctx.strehl_best = float(strehl_best_v)
-            i_best = int(np.argmax(scan.strehl))
-            ctx.rms_radius_best = float(scan.rms_radius[i_best])
+            # v5.4.6 (audit F-5): NaN-safe argmax -- a single NaN
+            # through-focus slice must not steal the argmax (np.argmax
+            # treats NaN as the maximum).  Mirrors the wrapper-merit guard.
+            if np.any(np.isfinite(scan.strehl)):
+                i_best = int(np.nanargmax(scan.strehl))
+                ctx.rms_radius_best = float(scan.rms_radius[i_best])
             # Build OPD map for Zernike fit
             ap = pres.get('aperture_diameter') or (0.4 * N * dx)
             try:

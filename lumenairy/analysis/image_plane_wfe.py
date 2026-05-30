@@ -129,7 +129,13 @@ class ImagePlaneWFE:
         """
         v = self.opd_w[self.alive]
         v = v[np.isfinite(v)]
-        return float(np.sqrt(np.mean(v ** 2))) if v.size else float('nan')
+        if v.size == 0:
+            return float('nan')
+        # v5.4.6 (audit F-11): remove piston (the mean) before the RMS.
+        # A constant piston does not aberrate the wavefront and must not
+        # enter the Marechal-Strehl RMS; including it biases the RMS high
+        # and the Strehl low.  (This is the RMS about the mean = std.)
+        return float(np.sqrt(np.mean((v - v.mean()) ** 2)))
 
     @property
     def strehl(self) -> float:

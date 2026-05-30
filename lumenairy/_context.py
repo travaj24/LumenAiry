@@ -235,7 +235,19 @@ def lumenairy_context(
             cache['h_max_bytes_per_entry'] = int(asm_cache_max_bytes_per_entry)
         new_state['asm_cache_size'] = cache
 
-    apply_globals(new_state)
+    # v5.4.6 (audit F-17): apply the new state INSIDE a try so that a
+    # setter raising partway through context ENTRY does not leak an
+    # already-applied earlier knob.  ``prior`` is snapshotted above
+    # (before any mutation), so on an entry-time failure we restore it
+    # and re-raise -- leaving process-global state exactly as it was
+    # before the ``with`` was attempted.  Pre-v5.4.6 this call sat
+    # outside the try/finally, so a mid-apply exception stranded the
+    # knobs that had already been set.
+    try:
+        apply_globals(new_state)
+    except BaseException:
+        apply_globals(prior)
+        raise
     try:
         yield
     finally:

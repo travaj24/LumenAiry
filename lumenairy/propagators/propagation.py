@@ -193,6 +193,7 @@ from .fft_infra import (
     get_pyfftw_planner,
     pyfftw,
     reset_fft_backend,
+    restore_fft_state,
     set_asm_cache_size,
     set_default_complex_dtype,
     set_default_dy,
@@ -203,6 +204,7 @@ from .fft_infra import (
     set_fft_plan_cache_size,
     set_fft_threads,
     set_pyfftw_planner,
+    snapshot_fft_state,
     warmup_fft_plans,
 )
 from .fresnel import (
@@ -323,6 +325,8 @@ __all__ = [
     'set_pyfftw_planner',
     'get_pyfftw_planner',
     'set_fft_plan_cache_size',
+    'snapshot_fft_state',
+    'restore_fft_state',
     'warmup_fft_plans',
     'set_fft_auto_promote',
     'get_fft_auto_promote',

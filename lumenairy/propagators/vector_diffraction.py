@@ -121,11 +121,13 @@ def richards_wolf_focus(pupil, wavelength, NA, f, dx_pupil,
         z_planes = np.atleast_1d(np.asarray(z_planes, dtype=np.float64))
 
     # Focal coordinates (at the actual FFT-natural pitch).
+    # v5.4.6 (audit F-34): removed the dead focal polar coordinates
+    # (rho_f = sqrt(Xf**2+Yf**2) and phi_f = arctan2(Yf, Xf)).  They were
+    # computed from an Xf/Yf meshgrid and immediately discarded; the FFT-
+    # based Richards-Wolf evaluation here never references focal-plane
+    # polar coords.  Only x_f/y_f are needed (they are returned).
     x_f = (np.arange(N_focal) - N_focal / 2) * dx_focal
     y_f = (np.arange(N_focal) - N_focal / 2) * dx_focal
-    Xf, Yf = np.meshgrid(x_f, y_f)
-    np.sqrt(Xf ** 2 + Yf ** 2)
-    np.arctan2(Yf, Xf)
 
     # Pupil coordinates -> angular mapping
     x_p = (np.arange(Np) - Np / 2) * dx_pupil

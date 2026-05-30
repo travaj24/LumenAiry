@@ -28,7 +28,7 @@ import numpy as np
 
 def export_codev_seq(prescription: Dict[str, Any], path: str, *,
                      wavelength: float,
-                     stop_surface: int = 0,
+                     stop_surface: Optional[int] = None,
                      aperture_diameter: Optional[float] = None,
                      back_focal_length: Optional[float] = None,
                      name: Optional[str] = None,
@@ -76,6 +76,15 @@ def export_codev_seq(prescription: Dict[str, Any], path: str, *,
     """
     surfaces = prescription['surfaces']
     thicknesses = prescription['thicknesses']
+    # v5.4.6 (audit F-29): default stop_surface to the prescription's own
+    # stop (stop_index, else per-surface is_stop), not surface 0, so a
+    # load->export->load round trip preserves the aperture stop.
+    if stop_surface is None:
+        stop_surface = prescription.get('stop_index')
+        if stop_surface is None:
+            stop_surface = next(
+                (i for i, s in enumerate(surfaces) if s.get('is_stop')), 0)
+    stop_surface = int(stop_surface)
     if aperture_diameter is None:
         aperture_diameter = prescription.get('aperture_diameter', 25.4e-3)
     bfl = back_focal_length or 0.0

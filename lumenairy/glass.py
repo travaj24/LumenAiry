@@ -206,8 +206,13 @@ SELLMEIER_COEFFICIENTS = {
                    (2.526430e-3, 1.007833e-2, 1.200556e3)),
     'MgF2':       ((0.48755108, 0.39875031, 2.3120353),
                    (1.882178e-3, 8.951888e-3, 5.661406e2)),
-    'BaF2':       ((0.6435, 0.5067, 3.8261),
-                   (1.5e-3, 9.5e-3, 2.5e3)),
+    # v5.4.6 (audit F-33): replace the low-precision / mis-poled BaF2 row
+    # (B=(0.6435,0.5067,3.8261), C=(1.5e-3,9.5e-3,2.5e3)) -- ~0.4-0.5%
+    # index error in the visible -- with the authoritative Li 1980 fit
+    # (refractiveindex.info main/BaF2/Li).  C_i are the resonance
+    # wavelengths squared in um^2.
+    'BaF2':       ((0.643356, 0.506762, 3.8261),
+                   (0.057789**2, 0.10968**2, 46.3864**2)),
     # v4.15 (P1-GL-1): bundled Sellmeier fallback for tuple-registered
     # fused-silica entries.  Pre-4.15 these were registered as
     # (main, SiO2, Malitson) tuples in GLASS_REGISTRY but absent from
@@ -506,6 +511,48 @@ POLYNOMIAL_COEFFICIENTS = {
 _POLYNOMIAL_STUB_NAMES = frozenset()
 
 
+def _guard_wavelength(wavelength_m, fn_label, *, sign_symmetric):
+    """v5.4.6 (audit P3-4 / P3-7): shared negative / NaN wavelength guard
+    for the dispersion evaluators, so ``glass._sellmeier_index``,
+    ``glass._polynomial_index`` and ``coatings._coating_sellmeier`` all
+    handle bad wavelengths identically (a fix landing in one no longer
+    silently skips the others).
+
+    NaN -> UserWarning (the result will be NaN; usually upstream
+    propagation).  Negative wavelength: for a ``sign_symmetric`` form
+    (Sellmeier, which depends on lam^2) warn and use ``abs`` -- a negative
+    wavelength almost always signals a metres/microns unit error; for a
+    NON sign-symmetric form (the polynomial, whose odd/negative exponents
+    give ``n(-lam) != n(|lam|)``) raise ``ValueError`` rather than return
+    a silently-wrong index.  Returns the (possibly abs'd) wavelength,
+    preserving scalar-vs-array shape.
+    """
+    import warnings
+    arr = np.asarray(wavelength_m, dtype=float)
+    if np.any(np.isnan(arr)):
+        warnings.warn(
+            f"{fn_label}: wavelength contains NaN; the returned index will "
+            f"be NaN.  Check for upstream NaN propagation.",
+            UserWarning, stacklevel=3)
+    if np.any(arr < 0.0):
+        if sign_symmetric:
+            warnings.warn(
+                f"{fn_label}: negative wavelength(s) received; using |lambda| "
+                f"(the Sellmeier form is sign-symmetric).  A negative "
+                f"wavelength usually signals a metres/microns unit error.",
+                UserWarning, stacklevel=3)
+            if np.ndim(wavelength_m) == 0:
+                return abs(float(wavelength_m))
+            return np.abs(wavelength_m)
+        bad = float(arr.flat[int(np.argmin(arr))])
+        raise ValueError(
+            f"{fn_label}: negative wavelength {bad*1e9:.3f} nm is not "
+            f"permitted -- the polynomial dispersion form is NOT "
+            f"sign-symmetric (n(-lambda) != n(|lambda|)).  Pass a positive "
+            f"vacuum wavelength in metres.")
+    return wavelength_m
+
+
 def _polynomial_index(wavelength_m, coeffs, glass_name=None):
     """refractiveindex.info formula-3 (polynomial) evaluator.
 
@@ -532,6 +579,8 @@ def _polynomial_index(wavelength_m, coeffs, glass_name=None):
     so the contract stays narrow.
     """
     label = f" for glass {glass_name!r}" if glass_name else ""
+    wavelength_m = _guard_wavelength(
+        wavelength_m, f"_polynomial_index{label}", sign_symmetric=False)
     c0, pairs = coeffs
     # Scalar fast-path: mirror _sellmeier_index's float math so the
     # common get_glass_index('NAME', 587.6e-9) call stays a pure float
@@ -580,9 +629,11 @@ def _sellmeier_index(wavelength_m, coeffs, glass_name=None):
     ``math domain error``; this version raises ``ValueError`` with the
     glass name and the offending wavelength.
     """
+    label = f" for glass {glass_name!r}" if glass_name else ""
+    wavelength_m = _guard_wavelength(
+        wavelength_m, f"_sellmeier_index{label}", sign_symmetric=True)
     lam2 = (wavelength_m * 1e6) ** 2  # wavelength^2 in um^2
     (B1, B2, B3), (C1, C2, C3) = coeffs
-    label = f" for glass {glass_name!r}" if glass_name else ""
     for ci in (C1, C2, C3):
         if abs(lam2 - ci) < 1e-12:
             raise ValueError(

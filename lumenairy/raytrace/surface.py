@@ -396,8 +396,14 @@ def _surface_sag_derivative(h, R, conic=0.0, aspheric_coeffs=None):
         norm = (1 + conic) * h_sq / R ** 2
         valid = norm < 0.9999
         denom = np.where(valid, np.sqrt(np.maximum(1 - norm, 1e-30)), 1.0)
-        # d(sag)/dh for conic: h / (R * sqrt(1 - (1+k)*h^2/R^2))
-        dz_dh = np.where(valid, h / (R * denom), 0.0)
+        # d(sag)/dh for conic: h / (R * sqrt(1 - (1+k)*h^2/R^2)).
+        # v5.4.6 (audit P3-2): outside the conic domain ((1+k)h^2/R^2 >= 1)
+        # there is no real surface, so the derivative is NaN (matching
+        # surface_sag_general / the F-19 biconic fix) rather than a silent
+        # 0.0 that yields a bogus axial (flat) normal and masks the bad
+        # geometry.  Rays in that region now carry NaN normals and are
+        # flagged downstream instead of refracting through nonsense.
+        dz_dh = np.where(valid, h / (R * denom), np.nan)
 
     if aspheric_coeffs:
         for power, coeff in aspheric_coeffs.items():

@@ -299,19 +299,31 @@ def mtf_radial(
     mtf : ndarray (real, N×N)
         2D MTF array from :func:`compute_mtf`.
     dx_psf : float
-        PSF-plane grid spacing [m] (from :func:`compute_psf`).
+        PSF-plane grid spacing [m] (from :func:`compute_psf`).  This is
+        the ONLY input that sets the returned frequency axis: the focal-
+        plane frequency step is ``df = 1 / (N * dx_psf)`` in cycles/m.
     wavelength : float
-        Wavelength [m].
+        Accepted for signature stability only; CURRENTLY UNUSED.  The
+        frequency axis is derived entirely from ``dx_psf`` (the
+        wavelength/focal-length dependence is already baked into
+        ``dx_psf`` by :func:`compute_psf`).  Retained as a positional
+        argument for back-compatibility.
     f : float
-        Focal length [m].
+        Accepted for signature stability only; CURRENTLY UNUSED (see
+        ``wavelength`` above).  Retained for back-compatibility.
 
     Returns
     -------
     freq : ndarray (real, N/2,)
-        Spatial frequencies in cycles per mm at the focal plane.
+        Spatial frequencies at the focal plane.  Derived from
+        ``dx_psf`` as ``arange(N//2) / (N * dx_psf)`` (cycles/m) and
+        then scaled to cycles per mm for the returned array.
     mtf_profile : ndarray (real, N/2,)
         Azimuthally-averaged MTF at each frequency.
     """
+    # v5.4.6 (audit P3-8): wavelength and f are accepted for signature
+    # stability but are NOT used -- the frequency axis comes solely
+    # from dx_psf.  Docstring corrected to stop implying otherwise.
     N = mtf.shape[0]
     # Frequency grid for the PSF plane (in cycles/m)
     df = 1.0 / (N * dx_psf)
@@ -880,9 +892,9 @@ def rayleigh_resolution(
     dx : float
         PSF-plane grid spacing in x [m].
     wavelength : float
-        Wavelength [m].  Currently used only as a numerical anchor
-        for the small-separation tolerance; the first-zero search
-        does not require it explicitly.
+        Wavelength [m].  Validated only (must be positive and finite);
+        it is NOT used in the first-zero search, which works purely
+        off the PSF profile and ``dx`` / ``dy``.
     axis : ``'radial'`` (default) | ``'x'`` | ``'y'``
         Profile axis to scan for the first zero.
     dy : float, optional

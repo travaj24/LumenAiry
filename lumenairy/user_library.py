@@ -153,6 +153,17 @@ def load_material(name: str) -> Dict[str, Any]:
 
     if data['type'] == 'catalog':
         from .glass import GLASS_REGISTRY
+        # v5.4.6 (audit F-35): warn before overriding a built-in registry
+        # entry of the same name (the prior code clobbered it silently,
+        # and load_material can auto-run at import).  The override still
+        # proceeds -- the user explicitly saved this material -- but is
+        # now surfaced, matching register_fixed_glass's collision guard.
+        if mat_name in GLASS_REGISTRY:
+            import warnings
+            warnings.warn(
+                f"load_material: user material '{mat_name}' overrides the "
+                f"built-in GLASS_REGISTRY entry of the same name.",
+                UserWarning, stacklevel=2)
         GLASS_REGISTRY[mat_name] = (data['shelf'], data['book'], data['page'])
 
     elif data['type'] == 'fixed':

@@ -757,7 +757,14 @@ def _generate_unrolled(steps, wavelength, N, dx, source_sigma,
 
         elif step['type'] == 'mirror':
             r = step['radius']
-            r_str = 'None' if np.isinf(r) else f'{r:.17e}'
+            # v5.4.6 (audit F-14): the prescription stores the mirror radius
+            # in the raytrace (Zemax/Welford) convention, where a CONCAVE
+            # focusing mirror has R < 0, but la.apply_mirror uses the
+            # wave-side convention where R > 0 is concave/focusing (verified
+            # empirically).  Negate so the generated script reproduces the
+            # prescription's focusing sign.  Flat mirrors (R = inf) are
+            # sign-agnostic and stay None.
+            r_str = 'None' if np.isinf(r) else f'{-r:.17e}'
             conic = step.get('conic', 0.0)
             ap = step.get('aperture_diameter')
             ap_str = f'{ap:.17e}' if ap and ap > 0 else 'None'

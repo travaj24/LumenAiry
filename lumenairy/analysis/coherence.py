@@ -92,12 +92,21 @@ def koehler_image(
     theta_max = np.arcsin(min(condenser_NA, 0.999))
     angles = np.linspace(-theta_max, theta_max, n_source_points)
     I_total = np.zeros((N, N), dtype=np.float64)
-    count = 0
+    w_total = 0.0
 
     for ax in angles:
         for ay in angles:
-            if np.sqrt(ax ** 2 + ay ** 2) > theta_max:
+            theta = np.sqrt(ax ** 2 + ay ** 2)
+            if theta > theta_max:
                 continue
+            # v5.4.6 (audit P3-12): obliquity / solid-angle weighting.  A
+            # bare count-average over the Cartesian (ax, ay) grid treats
+            # every direction as equally bright and over-weights high-angle
+            # directions.  Weight each contribution by cos(theta) (a
+            # uniform-radiance / Lambertian condenser model) and normalise
+            # by sum(w).  At small condenser_NA cos(theta) -> 1 (the old
+            # behaviour); the correction matters near the 0.999 NA clamp.
+            w = float(np.cos(theta))
             # Tilted illumination
             E_illum = object_field * np.exp(
                 1j * k0 * (np.sin(ax) * X + np.sin(ay) * Y))
@@ -105,10 +114,10 @@ def koehler_image(
             if focal_length is not None:
                 E_exit = angular_spectrum_propagate(
                     E_exit, focal_length, wavelength, dx)
-            I_total = I_total + np.abs(E_exit) ** 2
-            count += 1
+            I_total = I_total + w * np.abs(E_exit) ** 2
+            w_total += w
 
-    return I_total / max(count, 1)
+    return I_total / max(w_total, 1e-30)
 
 
 def extended_source_image(

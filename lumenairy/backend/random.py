@@ -97,7 +97,12 @@ class RandomState:
         import jax
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
-            dtype = jax.numpy.float32
+            # v5.4.6 (audit F-31): match the NumPy/CuPy default precision.
+            # ``result_type(float)`` is x64-aware: float64 when jax_enable_x64
+            # is set (so it agrees with NumPy), float32 otherwise (the only
+            # option JAX supports without x64).  The old hard-coded float32
+            # silently downcast even on x64-enabled builds.
+            dtype = jax.numpy.result_type(float)
         return jax.random.uniform(sub, shape, dtype=dtype,
                                   minval=low, maxval=high)
 
@@ -115,7 +120,8 @@ class RandomState:
         import jax
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
-            dtype = jax.numpy.float32
+            # v5.4.6 (audit F-31): x64-aware default; see ``uniform``.
+            dtype = jax.numpy.result_type(float)
         return mean + std * jax.random.normal(sub, shape, dtype=dtype)
 
     def integers(self, shape: Tuple[int, ...],
@@ -134,7 +140,11 @@ class RandomState:
         import jax
         self._key, sub = jax.random.split(self._key)
         if dtype is None:
-            dtype = jax.numpy.int32
+            # v5.4.6 (audit F-30): match the NumPy/CuPy int64 default on
+            # x64-enabled JAX (``result_type(int)`` -> int64 when
+            # jax_enable_x64 is set, int32 otherwise).  Mirrors the v4.13.2
+            # int64 parity fix already applied to ``choice``.
+            dtype = jax.numpy.result_type(int)
         # v5.2 (AUDIT_V5_1_0 P2-NEW-F2-2 mypy strict closure): the public
         # contract is "high required for the JAX branch"; numpy/cupy
         # accept high=None as "use dtype max" but jax.random.randint does

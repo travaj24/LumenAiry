@@ -207,6 +207,7 @@ def apply_vector_aperture_diffraction(
     wavelength: float = 0.0,
     rng: Optional[Union[int, object]] = None,
     cone_half_angle: float = np.pi / 2 - 1e-6,
+    vector_projection: bool = False,
 ) -> VectorPathBundle:
     """Vectorial counterpart of :func:`apply_aperture_diffraction`.
 
@@ -216,11 +217,18 @@ def apply_vector_aperture_diffraction(
     by ``cos(theta_new)`` to account for the m-theory dipole
     obliquity, and the OPL accumulator is reset.
 
-    A more rigorous m-theory treatment would project ``E_in``
-    onto the new direction's transverse plane (``E_transverse =
-    E_in - (E_in . rho_hat) rho_hat``).  This implementation does
-    the scalar-magnitude obliquity weighting; a full vectorial
-    projection variant is straightforward to add when needed.
+    Parameters
+    ----------
+    vector_projection : bool, default False
+        v5.4.6 (audit P3-24): if ``True``, additionally project the input
+        Jones vector onto the new direction's transverse plane,
+        ``E_t = E_in - (E_in . rho_hat) rho_hat`` (with the unrepresentable
+        longitudinal Ez' component dropped, since ``VectorPathBundle`` is
+        2-component).  The default (``False``) keeps the historical scalar-
+        magnitude obliquity weighting only.  For a fully rigorous high-NA
+        vector focus, use
+        :func:`lumenairy.propagators.vector_diffraction.richards_wolf_focus`,
+        which carries the Ez component explicitly.
     """
     xp = array_namespace(paths.positions)
     rs = RandomState(rng=rng if rng is not None else 0)
@@ -262,8 +270,20 @@ def apply_vector_aperture_diffraction(
     inv_i_lambda = (1.0 / (1j * wavelength)) if wavelength > 0 else 1.0
     kirchhoff = complex(inv_i_lambda) * solid_angle
     obl = obliquity.astype(paths.Ex.dtype)
-    new_Ex = paths.Ex * obl * kirchhoff
-    new_Ey = paths.Ey * obl * kirchhoff
+    # v5.4.6 (audit P3-24): optional transverse projection of the Jones
+    # vector onto the new propagation direction's transverse plane.
+    # E_in = (Ex, Ey, 0); rho_hat = (L, M, Nz); E.rho_hat = Ex*L + Ey*M.
+    # The transverse parts of E - (E.rho_hat) rho_hat are kept; the
+    # longitudinal Ez' = -(E.rho_hat) Nz is dropped (2-component bundle).
+    if vector_projection:
+        proj = (paths.Ex * xp.asarray(L).astype(paths.Ex.dtype)
+                + paths.Ey * xp.asarray(M).astype(paths.Ey.dtype))
+        Ex_t = paths.Ex - proj * xp.asarray(L).astype(paths.Ex.dtype)
+        Ey_t = paths.Ey - proj * xp.asarray(M).astype(paths.Ey.dtype)
+    else:
+        Ex_t, Ey_t = paths.Ex, paths.Ey
+    new_Ex = Ex_t * obl * kirchhoff
+    new_Ey = Ey_t * obl * kirchhoff
     new_opl = xp.zeros_like(paths.opl)
     return VectorPathBundle(
         positions=paths.positions,

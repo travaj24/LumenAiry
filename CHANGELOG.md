@@ -2,6 +2,122 @@
 
 All notable changes to the core library are documented here.
 
+## [5.4.6] — 2026-05-29
+
+**Audit-driven patch release closing AUDIT_V5_4_5_2026_05_26_DEEP.md
+(33 findings) and AUDIT_V5_4_5_2026_05_29_DEEP_FOLLOWUP.md (40 findings).**
+A coordinated sweep over the under-audited subsystems the follow-up deep
+audit surfaced (GBD, asymptotic propagators, Seidel/paraxial, the JAX
+backend, detector radiometry, io round-trips, FFT/storage concurrency) plus
+the prior deep audit's deferred backlog.
+
+**Zero physics regressions in 21 consecutive releases** — the corrections
+below are forward fixes to pre-existing defects, each pinned by a new
+regression test and verified against the full unit suite.
+
+### Correctness (P1 / P2)
+
+- **GBD reconstructed field phase (`propagators/gbd.py`)** — the stored
+  `Q` uses the engineering `1/q` parameterisation, so the reconstructed
+  transverse curvature was the complex CONJUGATE of the physics
+  `exp(+ikz)` convention (intensity/focus correct, so it evaded every
+  intensity-only test).  Now renders `exp(+0.5j k conj(Q) rho^2)`;
+  only `Re(Q)` (the phase) flips.  (follow-up F-1)
+- **`raytrace/seidel.py` `compute_pupils`** — `ep_z` was never assigned on
+  the internal-stop branch (a bare orphaned expression) -> `UnboundLocalError`
+  on every non-front-stop system.  (follow-up F-2)
+- **`propagators/rs.py`** — `rayleigh_sommerfeld_propagate` returned a view
+  into the reused pyFFTW inverse buffer, corrupting earlier results on a
+  same-grid z-sweep; now returns a copy.  (follow-up F-3)
+- **JAX intersect kernels (`raytrace/jax_trace.py`)** — direction-aware
+  near-root pick `where(|t1|<=|t2|, t1, t2)` ported from the v5.4.1 NumPy
+  fix (`_intersect_jax` + `_intersect_jax_param`).  (prior P1-1 / P3-1)
+- **`analysis/detector.py`** — non-integer pixel-ratio resampling replaced
+  the box-mean (+/-25% flux error) with a flux-conserving per-sample
+  assignment.  (follow-up F-10)
+- **`analysis/image_plane_wfe.py`** — Marechal RMS now removes piston (was
+  biased low).  (follow-up F-11)
+- **`analysis/through_focus.py` `tolerancing_sweep`** — fixed Strehl
+  denominator from the nominal pupil (the v5.2.5 fix, missed here).
+  (follow-up F-12)
+- **`analysis/interferometry.py` `phase_shift_extract`** — general
+  least-squares for arbitrary (non-equispaced) shifts; bit-preserves the
+  equispaced path.  (follow-up F-13)
+- **`elements/coatings.py`** — TiO2 / Ta2O5 advertised `range` tightened to
+  the cited DeVore-1951 / Bright-2013 validity.  (prior P2-1)
+- **`glass.py` / `elements/coatings.py`** — shared `_guard_wavelength`
+  (negative -> warn+abs for Sellmeier, ValueError for the non-symmetric
+  polynomial; NaN -> warn) reconciles the two evaluators.  (prior P3-4/P3-7)
+- **`glass.py` BaF2** — replaced the low-precision Sellmeier row with the
+  authoritative Li-1980 fit.  (follow-up F-33)
+- **`elements/polarization.py` JonesField** — `apply_real_lens` /
+  `apply_mirror` / `apply_aperture` now forward `dy` (anamorphic grids);
+  `apply_real_lens(fresnel=True)` warns that the s/p split is collapsed.
+  (prior P2-3/P2-4)
+- **`analysis/polychromatic.py`** — centroid / D4-sigma use `dy` for the
+  y-axis on anamorphic grids.  (prior P2-2)
+- **`io/codegen.py`** — mirror radius negated on emit (prescription
+  raytrace convention R<0=concave -> `apply_mirror` wave-side R>0=concave,
+  verified empirically).  (follow-up F-14)
+- **`io/prescriptions_*`** — exporters default the aperture stop to the
+  prescription's own stop, not surface 0 (lossless round trip).
+  (follow-up F-29)
+- **`io/prescriptions_transforms.py`** — `split_prescription_at_mirrors`
+  records the surface<->mirror propagation distances.  (follow-up F-15)
+- **`ui/richards_wolf_dock.py`** — the dock worker called a fabricated
+  signature (always TypeError); now builds a pupil and calls the real
+  `richards_wolf_focus(...)`.  (follow-up F-18)
+- **`algebra/apertures.py`** — default annular aperture now has the
+  documented D/2 central obstruction (was unreachable dead code).
+  (follow-up F-16)
+- **`elements/lenses.py` / `raytrace/surface.py`** — biconic sag and the
+  conic sag-derivative return NaN (not a silent flat 0) outside the conic
+  domain.  (follow-up F-19 / prior P3-2)
+- **`backend/random.py`** — JAX RNG default dtype is now x64-aware
+  (`result_type`), matching NumPy/CuPy.  (follow-up F-30/F-31)
+- **`elements/_lens_jax.py`** — wave-grid `meshgrid` indexing `'ij'->'xy'`
+  to match the `(y, x)` field layout (latent, pre-emptive).  (follow-up F-7)
+
+### Hardening, concurrency, conventions, docs (P3)
+
+- FFT infra: `_PYFFTW_BAD_SHAPES` race guarded under the plan lock
+  (P3-14); `append_plane_h5` deletes the orphan dataset on rollback
+  (P3-15); new public `snapshot_fft_state()` / `restore_fft_state()` for
+  spawn-worker config inheritance (P3-16); `warmup_fft_plans` defaults to
+  the `FFTW_THREADS` global (F-32); MEASURE-under-lock documented
+  (P3-13, deferred).
+- Sources/coherence: deterministic Gaussian-Schell mean-intensity norm
+  (P3-10); LED uniform-vs-Lambertian documented (P3-11); Koehler obliquity
+  weighting (P3-12); `create_gaussian_beam` sigma guard + robust peak norm
+  (F-39/F-38); `create_tilted_plane_wave` evanescent guard (F-40).
+- Optimize: `RMSWavefrontMerit` OSA exclude-low-order semantics corrected
+  (F-4); driver NaN-safe `nanargmax` (F-5); `scale_floor`-inert-path note
+  (F-20).
+- BSDF batched-incidence shape crash (F-22); thin-grating out-of-range
+  order raises (F-23) + energy-conservation caveat (F-24).
+- Coating energy-conservation `R+T==1` sweep test + V-coat layer-order pin
+  (prior P3-5/P3-6).  Stronger raytrace pins replacing `is not None` smoke
+  tests (prior P3-17).
+- Vector aperture diffraction gains an opt-in `vector_projection` kwarg
+  (prior P3-24).  jones_pupil_dock unpolarized Stokes gets the 1/2 norm +
+  correct S1/S3 (prior P3-23).
+- Docstring / convention corrections: mtf_radial / rayleigh_resolution
+  dead params (P3-8/P3-9), waveplate sign decoupling now in CONVENTIONS
+  section 7 (P3-22), and many JonesField / asymptotic / paraxial / opd /
+  aberration / context / progress / user_library notes.
+
+### Reviewed (no change)
+
+- **F-6** (`asymptotic_aberration_tensor` saddle-image evaluation): the
+  v4.10.3 behaviour is intentional and grid-path-consistent.
+- **F-9** (local coord-break tilt sign): a deliberate v3.7.1 choice; a
+  trace-vs-trace_world parity change is deferred pending a reproducer.
+
+### Closes
+
+- `docs/audits/AUDIT_V5_4_5_2026_05_26_DEEP.md`
+- `docs/audits/AUDIT_V5_4_5_2026_05_29_DEEP_FOLLOWUP.md`
+
 ## [5.4.5] — 2026-05-26
 
 **Audit-driven patch release closing AUDIT_V5_4_4_2026_05_26.md.**  Three
@@ -2534,7 +2650,7 @@ Cross-agent test breakage closed:
 * CHANGELOG line-citation refresh:
   `optimize/core.py:3032` -> `optimize/wrapper_merits.py:876`
   (`_ZERO_APERTURE_MASK` branch); `optimize/core.py:987` ->
-  `optimize/merit_terms.py:515` (`MatchIdealSystem._make_source`
+  `optimize/merit_terms.py:524` (`MatchIdealSystem._make_source`
   `ap>0` branch); `optimize/core.py:2044-2054` ->
   `optimize/context.py:74-84` (sentinel class block).
 * `lumenairy_context` redundant-call elimination tests updated to
@@ -5311,11 +5427,11 @@ if any `'__sellmeier__'` entry is missing from
   all caches the function now clears.  Pinning test populates each
   cache then calls `clear_asm_caches()` and asserts emptiness.
 * **P1-NEW-4: 2 P1-severity residual `0+0j` sites** swept
-  (`optimize/merit_terms.py:515` post v5.1.0 Agent E 6-file split;
+  (`optimize/merit_terms.py:524` post v5.1.0 Agent E 6-file split;
   was `optimize/core.py:987` pre-split via Agent B's P1-NEW-1 work
   + `analysis/phase_retrieval.py:402`; the optimize citation was
   refreshed `966 -> 987` in v4.15.0 to match the post-v4.14.2
-  drift, then `core.py:987 -> merit_terms.py:515` in v5.1.0).  Now use the `np.zeros((), dtype=...)` pattern.  **Structural pin (new meta-pin):**
+  drift, then `core.py:987 -> merit_terms.py:524` in v5.1.0).  Now use the `np.zeros((), dtype=...)` pattern.  **Structural pin (new meta-pin):**
   `tests/unit/test_v4_14_2_dispatcher_pin_zero_plus_zeroj.py` walks
   every `lumenairy/*.py` file (117 modules) and asserts no
   unallowlisted `np.where(..., 0+0j)` literal — three exemption

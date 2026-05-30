@@ -19,11 +19,22 @@ class TestMakeRay:
     def test_make_ray_default(self, wavelength_m):
         ray = la.make_ray(x=0.0, y=0.0, L=0.0, M=0.0, wavelength=wavelength_m)
         assert isinstance(ray, la.RayBundle)
+        # v5.4.6 (audit P3-17): assert the actual ray state, not just type.
+        assert float(ray.x[0]) == 0.0 and float(ray.y[0]) == 0.0
+        assert float(ray.L[0]) == 0.0 and float(ray.M[0]) == 0.0
+        assert float(ray.N[0]) > 0.0  # forward-propagating (N = sqrt(1-L^2-M^2))
+        assert ray.wavelength == wavelength_m
+        assert bool(ray.alive[0])
 
     def test_make_fan_n_rays(self, wavelength_m):
         bundle = la.make_fan(axis='y', semi_aperture=1e-3, n_rays=11,
                               wavelength=wavelength_m)
         assert isinstance(bundle, la.RayBundle)
+        # v5.4.6 (audit P3-17): assert the fan geometry, not just type.
+        assert len(bundle.y) == 11
+        assert np.all(np.isfinite(bundle.y))
+        assert np.isclose(bundle.y.max(), 1e-3, atol=1e-9)
+        assert np.isclose(bundle.y.min(), -1e-3, atol=1e-9)
 
 
 # ----------------------------------------------------------------------
@@ -81,9 +92,19 @@ class TestSeidelCoefficients:
         iterable / dict-like with per-aberration values."""
         surfaces = la.surfaces_from_prescription(singlet_prescription)
         result = la.seidel_coefficients(surfaces, wavelength_m)
-        # Result API may be tuple, dict, or dataclass.  Just check
-        # it returned something non-None and finite.
         assert result is not None
+        # v5.4.6 (audit P3-17): assert the named Seidel coefficients are
+        # finite real numbers, not just that the call returned non-None.
+        # seidel_coefficients returns (data_dict, abcd); data['total'] is a
+        # dict of the five primary sums S1..S5 (Spherical..Distortion).
+        data = result[0] if isinstance(result, tuple) else result
+        assert isinstance(data, dict)
+        totals = data.get('total', data)
+        for key in ('S1', 'S2', 'S3', 'S4', 'S5'):
+            assert key in totals, f"missing Seidel sum {key} in {totals!r}"
+            assert np.isfinite(float(totals[key]))
+        # A powered singlet must have non-trivial spherical aberration.
+        assert abs(float(totals['S1'])) > 0.0
 
 
 # ----------------------------------------------------------------------

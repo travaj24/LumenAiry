@@ -642,9 +642,13 @@ def reset_fft_backend() -> None:
     scipy fallback.  Also drops every cached plan, freeing all
     aligned workspaces.
     """
-    global _PYFFTW_BAD_SHAPES, _PYFFTW_AUTO_PROMOTE_LOGGED
-    _PYFFTW_BAD_SHAPES = set()
+    global _PYFFTW_AUTO_PROMOTE_LOGGED
+    # v5.4.6 (audit P3-14): clear the bad-shapes set IN PLACE under the
+    # plan lock instead of rebinding the global, so a concurrent
+    # _handle_pyfftw_failure cannot add to an orphaned set that is then
+    # GC'd (silently dropping the blacklist entry).
     with _PYFFTW_PLAN_LOCK:
+        _PYFFTW_BAD_SHAPES.clear()
         _PYFFTW_PLAN_CACHE.clear()
     # Reset the auto-promote one-shot log gate so that the next
     # ESTIMATE->MEASURE promotion (if any) is announced again --
@@ -728,7 +732,12 @@ def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional
     if dtype is None:
         dtype = np.complex128
     if threads is None:
-        threads = max(1, _available_cpus())
+        # v5.4.6 (audit F-32): default to the FFTW_THREADS global that
+        # _fft2/_ifft2 actually dispatch on, NOT _available_cpus().  The
+        # plan cache key includes the thread count, so after
+        # set_fft_threads(k) a warmup built at _available_cpus() threads
+        # lands under a key the runtime never queries -- a silent no-op.
+        threads = max(1, int(FFTW_THREADS))
     n = 0
     for shape in shapes:
         for direction in ('fwd', 'inv'):
@@ -736,6 +745,52 @@ def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional
                                 int(threads))
             n += 1
     return n
+
+
+# v5.4.6 (audit P3-16): the FFT/precision dispatch globals below are plain
+# module globals, so a spawn-based worker re-imports this module at library
+# defaults and silently loses any parent ``set_default_*`` / ``set_fft_*``
+# overrides.  ``snapshot_fft_state`` / ``restore_fft_state`` let a caller
+# carry the parent's configuration across the spawn boundary.
+_FFT_STATE_KEYS = (
+    'DEFAULT_COMPLEX_DTYPE', 'DEFAULT_REAL_DTYPE', 'DEFAULT_WAVE_PROPAGATOR',
+    'DEFAULT_DY', 'FFTW_THREADS', 'SCIPY_FFT_WORKERS', 'USE_PYFFTW',
+    '_PYFFTW_PLAN_FLAGS', '_PYFFTW_AUTO_PROMOTE',
+)
+
+
+def snapshot_fft_state() -> dict:
+    """Capture the FFT / precision dispatch globals this process has set
+    (via the ``set_default_*`` / ``set_fft_*`` / ``set_pyfftw_*`` setters).
+
+    Returns a plain, pickleable ``dict`` suitable for handing to a spawned
+    worker.  See :func:`restore_fft_state`.  v5.4.6 (audit P3-16).
+    """
+    g = globals()
+    return {k: g[k] for k in _FFT_STATE_KEYS}
+
+
+def restore_fft_state(state: dict) -> None:
+    """Restore the globals captured by :func:`snapshot_fft_state` in THIS
+    process.  Use as the per-worker initializer for a spawn-based pool::
+
+        from lumenairy.propagators.fft_infra import (
+            snapshot_fft_state, restore_fft_state)
+        state = snapshot_fft_state()
+        with ProcessPoolExecutor(
+                initializer=restore_fft_state, initargs=(state,)) as ex:
+            ...
+
+    so each worker runs at the parent's precision / thread / planner
+    settings instead of the library defaults.  Unknown / missing keys are
+    ignored (forward-compatible).  v5.4.6 (audit P3-16).
+    """
+    if not state:
+        return
+    g = globals()
+    for k in _FFT_STATE_KEYS:
+        if k in state:
+            g[k] = state[k]
 
 
 # Whether we have emitted the first-promote info log this process.
@@ -897,6 +952,18 @@ def _get_or_make_plan(direction, shape, dtype, threads):
                     # cache, and use the new entry for this call.
                     # Promotion is one-shot; subsequent hits at this
                     # key use the MEASURE plan without re-planning.
+                    #
+                    # v5.4.6 (audit P3-13): KNOWN LIMITATION (perf, not
+                    # correctness).  The FFTW_MEASURE planner here can take
+                    # 100-1000 ms on 4k+ grids and runs while holding
+                    # _PYFFTW_PLAN_LOCK, so every concurrent _fft2/_ifft2
+                    # blocks for that window.  The proper fix is a
+                    # double-checked lock: stash a "promote requested"
+                    # marker, drop the lock, build the new entry, then
+                    # reacquire and swap only if the slot is unchanged.
+                    # That concurrency-sensitive refactor is deferred to
+                    # v5.5; single-thread / single-process callers (the
+                    # common case) are unaffected.
                     _ensure_pyfftw_loaded()
                     new_entry = _promote_entry_to_measure(
                         entry, direction, shape_t, dt, threads)
@@ -1438,8 +1505,15 @@ def _handle_pyfftw_failure(x, op_name, exc):
     aligned contiguous plan buffer on large grids with tight RAM).
     """
     shape = tuple(x.shape)
-    was_new = shape not in _PYFFTW_BAD_SHAPES
-    _PYFFTW_BAD_SHAPES.add(shape)
+    # v5.4.6 (audit P3-14): the read-test-then-add must be atomic under the
+    # plan lock, else two threads failing on the same shape both observe
+    # was_new=True (duplicate warnings) and a concurrent reset can swap the
+    # binding underfoot.  This handler runs OUTSIDE the plan-lookup lock
+    # (it is called from the _fft2/_ifft2 execution except-blocks), so
+    # acquiring the (non-reentrant) lock here does not deadlock.
+    with _PYFFTW_PLAN_LOCK:
+        was_new = shape not in _PYFFTW_BAD_SHAPES
+        _PYFFTW_BAD_SHAPES.add(shape)
     if was_new:
         import warnings
         # Flush pyFFTW's plan cache so the failed buffers are freed
@@ -1807,6 +1881,7 @@ __all__ = [
     'set_fft_fallback', 'set_fft_threads', 'get_fft_threads',
     'set_pyfftw_planner', 'get_pyfftw_planner',
     'set_fft_plan_cache_size', 'warmup_fft_plans',
+    'snapshot_fft_state', 'restore_fft_state',
     'set_fft_auto_promote', 'get_fft_auto_promote',
     'reset_fft_backend',
     # Default-config knobs

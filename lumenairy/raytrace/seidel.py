@@ -720,14 +720,18 @@ def compute_pupils(
         # z_ep = -B / A (distance from surface 0 back to EP).
         # Magnification through pre: m_pre = A_pre when B=0.
         if abs(A_pre) > 1e-30:
-            -B_pre / A_pre
+            # v5.4.6 (audit F-2): ``ep_z`` MUST be assigned here.  Pre-fix
+            # this line was a bare expression ``-B_pre / A_pre`` whose value
+            # was discarded, leaving ``ep_z`` unbound on every non-front-stop
+            # system -> UnboundLocalError at the ``return PupilInfo(...)`` line.
+            ep_z = -B_pre / A_pre
             # Radius: EP is the reverse image of the stop with
             # magnification 1/A_pre (because the forward sub-system
             # maps object height to stop height with factor A when
             # B=0 -> object height = stop / A).
             ep_radius = abs(stop_radius / A_pre) if np.isfinite(stop_radius) else float('nan')
         else:
-            float('inf')
+            ep_z = float('inf')
             ep_radius = float('inf')
 
     # ---- Exit pupil -----------------------------------------------

@@ -239,7 +239,12 @@ def ray_fan_data(
     try:
         fod = first_order_data(surfaces, wavelength)
         ep_y = -fod.ep_z * np.tan(field_angle)
-        chief = make_ray(0, ep_y, fod.ep_z,
+        # v5.4.6 (audit F-8): make_ray(x, y, L, M, *, wavelength) has NO z
+        # argument; the old call passed fod.ep_z as L (the x-direction
+        # cosine).  The chief launches at z=0 with the ep_y offset
+        # (-ep_z*tan(field)) already chosen so it crosses the EP centre at
+        # z=ep_z; the direction is L=0, M=sin(field_angle).
+        chief = make_ray(0, ep_y, 0.0,
                          np.sin(field_angle),
                          wavelength=wavelength)
     except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,
@@ -426,7 +431,12 @@ def opd_fan_data(
     try:
         fod = first_order_data(surfaces, wavelength)
         ep_y = -fod.ep_z * np.tan(field_angle)
-        chief = make_ray(0, ep_y, fod.ep_z,
+        # v5.4.6 (audit F-8): make_ray(x, y, L, M, *, wavelength) has NO z
+        # argument; the old call passed fod.ep_z as L (the x-direction
+        # cosine).  The chief launches at z=0 with the ep_y offset
+        # (-ep_z*tan(field)) already chosen so it crosses the EP centre at
+        # z=ep_z; the direction is L=0, M=sin(field_angle).
+        chief = make_ray(0, ep_y, 0.0,
                          np.sin(field_angle),
                          wavelength=wavelength)
     except (ValueError, RuntimeError, ZeroDivisionError, AttributeError,

@@ -535,7 +535,14 @@ def apply_real_lens_traced_jax(
 
     # ---- Newton inversion of (Sx, Sy) on the wave grid --------------
     x_wave = (jnp.arange(N) - N / 2) * float(dx)
-    Xw, Yw = jnp.meshgrid(x_wave, x_wave, indexing='ij')
+    # v5.4.6 (audit F-7): 'xy' indexing so the wave-grid axis order matches
+    # the library's image-like (y, x) field layout (E_in axis 0 = y) and the
+    # NumPy traced reference.  With 'ij' the phase screen is transposed vs
+    # E_in for non-symmetric prescriptions -- latent today (the asymmetric
+    # JAX trace builder raises NotImplementedError) but a live autodiff bug
+    # once biconic/decenter JAX trace lands.  Strict no-op for the
+    # rotationally symmetric square grids the current suite exercises.
+    Xw, Yw = jnp.meshgrid(x_wave, x_wave, indexing='xy')
 
     # Initial-guess paraxial magnification: use the central finite-
     # difference slope of the forward map as in the NumPy version.
@@ -762,7 +769,14 @@ def apply_real_lens_maslov_jax(
         xs_in, xs_in, opl_grid, cheb_order)
 
     x_wave = (jnp.arange(N) - N / 2) * float(dx)
-    Xw, Yw = jnp.meshgrid(x_wave, x_wave, indexing='ij')
+    # v5.4.6 (audit F-7): 'xy' indexing so the wave-grid axis order matches
+    # the library's image-like (y, x) field layout (E_in axis 0 = y) and the
+    # NumPy traced reference.  With 'ij' the phase screen is transposed vs
+    # E_in for non-symmetric prescriptions -- latent today (the asymmetric
+    # JAX trace builder raises NotImplementedError) but a live autodiff bug
+    # once biconic/decenter JAX trace lands.  Strict no-op for the
+    # rotationally symmetric square grids the current suite exercises.
+    Xw, Yw = jnp.meshgrid(x_wave, x_wave, indexing='xy')
 
     di = max(1, n_launch // 8)
     dx_in = 2.0 * float(launch_radius) / (n_launch - 1)

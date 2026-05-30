@@ -151,11 +151,22 @@ class RMSWavefrontMerit(MeritTerm):
     """Penalise RMS wavefront error above a target (waves).
 
     Uses Zernike decomposition to exclude the first
-    ``exclude_low_order`` modes (default 4: piston + 2 tilts +
-    defocus), matching the optics-design convention of reporting
-    'image-quality' RMS after best-focus.  Set ``exclude_low_order=3``
-    to keep defocus in the RMS (penalises focus shift as well as
-    high-order aberrations).
+    ``exclude_low_order`` OSA/ANSI-ordered modes.
+
+    v5.4.6 (audit F-4): the default ``exclude_low_order=4`` drops OSA
+    indices [0:4] = piston + 2 tilts + OBLIQUE ASTIGMATISM, and KEEPS
+    defocus (OSA index 4).  In OSA/ANSI order the low modes are
+    0=piston, 1=tilt-Y, 2=tilt-X, 3=oblique-astig, 4=defocus,
+    5=vertical-astig, so contiguous slicing of ``coeffs[N:]`` cannot
+    remove defocus while keeping the two astigmatism orientations:
+    defocus (index 4) sits between them.  Removing defocus by raising
+    the cut to 5 would also remove oblique astigmatism, and removing
+    BOTH astigmatism orientations needs index 6.  A genuinely
+    defocus-insensitive, astigmatism-sensitive RMS therefore requires a
+    future (n, m)-explicit mode exclusion rather than a leading-count
+    slice; that is the real defocus-insensitive fix.  ``exclude_low_order``
+    is documented here as a leading-OSA-index count, not a
+    'piston/tilt/defocus' selector.
     """
 
     needs_wave = True

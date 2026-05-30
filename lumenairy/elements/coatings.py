@@ -312,7 +312,13 @@ def quarter_wave_ar(
 ) -> List[Tuple[float, float]]:
     """Design a single-layer quarter-wave AR coating.
 
-    Returns ``(n_layer, thickness)`` for a MgF2-like AR coating.
+    Returns ``[(n_layer, thickness)]`` for a MgF2-like AR coating.
+
+    v5.4.6 (audit P3-6): the returned layer list is in ``coating_reflectance``
+    order -- ambient-side first (outermost layer first).  For this
+    single-layer design the order is unobservable, but the convention is
+    stated here so multi-layer designs (see ``broadband_ar_v_coat``) and
+    callers agree.
     """
     n_layer = np.sqrt(n_substrate)  # ideal
     d = wavelength_center / (4 * n_layer)
@@ -325,7 +331,13 @@ def broadband_ar_v_coat(
 ) -> List[Tuple[float, float]]:
     """Design a simple 2-layer V-coat AR for broadband use.
 
-    Returns a list of (n, d) layers.
+    Returns a list of ``(n, d)`` layers in ``coating_reflectance`` order:
+    AMBIENT-SIDE FIRST (outermost first).  The low-index (MgF2-like,
+    n=1.38) layer is returned first because it sits on the air/ambient
+    side; the high-index (TiO2-like, n=2.3) layer is next to the
+    substrate.  v5.4.6 (audit P3-6): this order is load-bearing -- feeding
+    the list to ``coating_reflectance`` substrate-first would model an HR
+    stack, not an AR V-coat.  Pinned by a 550 nm round-trip test.
     """
     n_H = 2.3  # TiO2-like
     n_L = 1.38  # MgF2-like
@@ -401,7 +413,13 @@ COATING_MATERIAL_REGISTRY: dict = {
     'TiO2':  {
         'n_constant':     2.40,
         'ref_wavelength': 550e-9,
-        'range':          (400e-9, 5000e-9),
+        # v5.4.6 (audit P2-1): range tightened to the cited DeVore-1951
+        # fit validity (0.43-1.53 um).  The prior (400e-9, 5000e-9) was
+        # ~3.3x wider than the 1-term ordinary-ray Sellmeier supports, so
+        # the out-of-range UserWarning never fired for 1.53-5 um sweeps
+        # that silently extrapolate.  For a wider design band swap to a
+        # multi-pole fit (e.g. Sarkar 2019), do not widen 'range'.
+        'range':          (430e-9, 1530e-9),
         # DeVore 1951 ordinary-ray Sellmeier (refractiveindex.info
         # main/TiO2/Devore-o); valid 0.43-1.53 um.
         # v5.4.1 (audit P2 NEW): dummy poles set to 0.0 instead of 1.0
@@ -422,7 +440,10 @@ COATING_MATERIAL_REGISTRY: dict = {
     'Ta2O5': {
         'n_constant':     2.10,
         'ref_wavelength': 550e-9,
-        'range':          (350e-9, 8000e-9),
+        # v5.4.6 (audit P2-1): range tightened to the cited Bright-2013
+        # fit validity (0.5-1.0 um); the prior (350e-9, 8000e-9) was ~8x
+        # wider than the single-pole Sellmeier supports.
+        'range':          (500e-9, 1000e-9),
         # Bright 2013 Ta2O5 1-term Sellmeier
         # (refractiveindex.info main/Ta2O5/Bright); valid 0.5-1.0 um.
         # Single-pole approximation: n^2 - 1 = B*lam^2 / (lam^2 - C).
@@ -487,12 +508,19 @@ def _coating_sellmeier(
     evaluator so the coatings-dock visible-band sweeps can call this
     once with the full wavelength array.
     """
-    # v5.4.5 (audit P2-1): explicit np.abs makes the Sellmeier's
-    # sign-symmetry visible in the source; lam2 = (wl*1e6)**2 already
-    # squares away the sign, but using |wl| documents that
-    # n(-lam) == n(+lam) is intentional, not an accidental side effect.
-    wl_abs = np.abs(np.asarray(wavelength_m, dtype=float))
-    lam2 = (wl_abs * 1e6) ** 2
+    # v5.4.6 (audit P3-7): share ``glass._guard_wavelength`` so this
+    # evaluator and ``glass._sellmeier_index`` handle NaN / negative
+    # wavelength identically (a guard fix in one no longer silently skips
+    # the other).  Sellmeier is sign-symmetric, so the guard warns on a
+    # negative wavelength and returns |lambda|; it also warns on NaN.  The
+    # B==0 dummy-pole skip below remains a coatings-only optimisation, and
+    # all four bundled coating poles lie out of band so no in-range
+    # lam2==C blowup occurs (unlike glass._sellmeier_index, this array
+    # evaluator tolerates an exact pole as NaN rather than raising).
+    from ..glass import _guard_wavelength
+    wl_g = _guard_wavelength(wavelength_m, "_coating_sellmeier",
+                             sign_symmetric=True)
+    lam2 = (np.abs(np.asarray(wl_g, dtype=float)) * 1e6) ** 2
     (B1, B2, B3), (C1, C2, C3) = coeffs
     # v5.4.1 (audit P2 NEW): defensive guard -- skip dummy poles where
     # B is zero (the term contributes nothing to n^2 and would NaN if C

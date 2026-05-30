@@ -125,28 +125,32 @@ def phase_shift_extract(
         shifts = [2 * np.pi * i / n for i in range(n)]
     frames = [np.asarray(f, dtype=np.float64) for f in frames]
     shifts = np.asarray(shifts, dtype=np.float64)
-    # Least-squares extraction: phase = atan2(sum(I*sin), sum(I*cos))
-    sin_sum = np.zeros_like(frames[0])
-    cos_sum = np.zeros_like(frames[0])
-    for f, s in zip(frames, shifts):
-        sin_sum += f * np.sin(s)
-        cos_sum += f * np.cos(s)
-    if convention == 'hardware':
-        # I = a + b * cos(phi - s)
-        #   = a + b*(cos(phi)cos(s) + sin(phi)sin(s))
-        # => sum(I*sin(s)) = +b*(n/2)*sin(phi);
-        #    sum(I*cos(s)) = +b*(n/2)*cos(phi)
-        # => phi = atan2(sin_sum, cos_sum)
-        phase = np.arctan2(sin_sum, cos_sum)
-    elif convention == 'library':
-        # I = a + b * cos(phi + s)
-        # => sum(I*sin(s)) = -b*(n/2)*sin(phi);
-        # => phi = atan2(-sin_sum, cos_sum)
-        phase = np.arctan2(-sin_sum, cos_sum)
-    else:
+    # v5.4.6 (audit F-13): GENERAL least-squares extraction valid for
+    # ARBITRARY (non-equispaced) shifts.  Model each frame as
+    #   I_k = a + A*cos(s_k) + B*sin(s_k),  A = b*cos(phi), B = b*sin(phi)
+    # and solve the linear LSQ for (a, A, B) per pixel via the design
+    # matrix S = [1, cos(s), sin(s)].  The previous correlation estimator
+    # atan2(sum(I*sin), sum(I*cos)) is the LSQ solution ONLY when the S
+    # columns are orthogonal (equispaced full-period shifts); for that
+    # case S^T S = diag(n, n/2, n/2) and this reduces to exactly the old
+    # result (so equispaced callers are bit-preserved), but for arbitrary
+    # shifts the old form was biased.
+    if convention not in ('hardware', 'library'):
         raise ValueError(
             f"convention must be 'hardware' or 'library', got {convention!r}")
-    modulation = 2 * np.sqrt(sin_sum**2 + cos_sum**2) / n
+    S = np.stack([np.ones_like(shifts), np.cos(shifts), np.sin(shifts)], axis=1)
+    pinv = np.linalg.pinv(S)  # (3, n)
+    I_stack = np.stack(frames, axis=0)  # (n, Ny, Nx)
+    coeffs = np.tensordot(pinv, I_stack, axes=([1], [0]))  # (3, ...) = (a, A, B)
+    A = coeffs[1]
+    B = coeffs[2]
+    if convention == 'hardware':
+        # I = a + b cos(phi - s) -> A = b cos(phi), B = b sin(phi)
+        phase = np.arctan2(B, A)
+    else:
+        # I = a + b cos(phi + s) -> A = b cos(phi), B = -b sin(phi)
+        phase = np.arctan2(-B, A)
+    modulation = np.sqrt(A ** 2 + B ** 2)
     return phase, modulation
 
 

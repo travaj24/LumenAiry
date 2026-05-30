@@ -331,9 +331,11 @@ class CausticDiagnostic:
         Absolute z coordinates at which the Jacobian was evaluated,
         measured from the first refractive surface.
     det_J : (n_z,) array
-        Sign of det(d(s_out)/d(s_in)) at each z, evaluated at the
-        chief ray via finite differences across a small marginal-ray
-        fan.
+        v5.4.6 (audit F-27): the RAW determinant det(d(s_out)/d(s_in))
+        at each z (not its sign), evaluated at the chief ray via finite
+        differences across a small marginal-ray fan.  ``sign(det_J)``
+        gives the fold orientation, and a sign change between samples
+        marks a caustic (see ``caustic_z``).
     caustic_z : list of float
         z coordinates where ``det_J`` flips sign (linearly
         interpolated between samples).  These are the on-axis

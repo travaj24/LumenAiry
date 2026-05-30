@@ -253,7 +253,13 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
             N_safe = jnp.where(jnp.abs(state.N) > eps, state.N, eps)
             t0 = -state.z / N_safe
         else:
-            t_pick = t1 if R_safe > 0 else t2
+            # v5.4.6 (audit P1-1): direction-AWARE root pick, mirroring the
+            # v5.4.1 NumPy fix in intersection.py.  The old direction-blind
+            # ``t1 if R_safe > 0 else t2`` picks the near root only on the
+            # forward leg; a backward-propagating ray (N < 0 after a mirror
+            # reflection) lands on the diametrically-opposite FAR root.  The
+            # near root is min(|t1|, |t2|) regardless of curvature sign.
+            t_pick = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
             t0 = jnp.where(disc_pos, t_pick, 0.0)
             # disc<=0 means the ray missed the sphere entirely.
             miss = miss | (~disc_pos)
@@ -1385,7 +1391,13 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
     t1 = (-b_q - sqrt_disc) / 2.0
     t2 = (-b_q + sqrt_disc) / 2.0
-    t_sphere = jnp.where(R_finite > 0, t1, t2)
+    # v5.4.6 (audit P3-1): direction-aware near-root pick (min |t|), matching
+    # the v5.4.1 NumPy fix and the static-branch JAX kernel (P1-1).  The old
+    # ``R_finite > 0`` selector is direction-blind and lands a backward leg
+    # (post-mirror N<0) on the far root, corrupting jax.grad of mirror/folded
+    # prescriptions.  As a bonus this removes the dependence on the sign of a
+    # (possibly traced) curvature, improving JAX traceability.
+    t_sphere = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
     t_sphere = jnp.where(disc_pos, t_sphere, 0.0)
 
     # Flat initial guess.

@@ -548,6 +548,11 @@ def aberration_tensor(
                     # needs_sigma_integration check above (modes
                     # genuinely degenerate at the origin in the
                     # saddle-point limit).
+                    # v5.4.6 (audit F-6): REVIEWED -- evaluating out_poly at
+                    # the absolute image coord (s2x_img, s2y_img) is the
+                    # intentional v4.10.3 fix (see the comment above) and is
+                    # consistent with the sigma-grid branch, which builds its
+                    # grid centered on s2x_img/s2y_img.  Not a defect.
                     out_const = 0.0 + 0.0j
                     for (ii, jj), c in out_poly.items():
                         out_const += c * (s2x_img ** ii) * (s2y_img ** jj)

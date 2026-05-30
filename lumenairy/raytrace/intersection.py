@@ -140,10 +140,13 @@ def _intersect_surface(rays, surface, n_medium=1.0):
         # workaround (now a thin alias).
         t = np.where(np.abs(t1) <= np.abs(t2), t1, t2)
 
-        # disc <= 0: ray entirely misses the sphere.  Disc == 0 is
-        # the tangent case -- legacy behaviour treats it as "missed"
-        # to keep the same vignetting cutoff.
-        disc_pos = disc > 0
+        # disc < 0: ray entirely misses the sphere.  v5.4.6 (audit P3-3):
+        # disc == 0 is the tangent case -- a real single-point intersection
+        # (e.g. a chief ray sitting exactly on the stop edge), so it is now
+        # accepted (>= 0) rather than dropped as "missed".  Exact tangency
+        # is measure-zero numerically, so this does not change vignetting
+        # for ordinary rays.
+        disc_pos = disc >= 0
         t = np.where(disc_pos, t, 0.0)
         missed_init = (~disc_pos) & rays.alive
 
@@ -200,7 +203,9 @@ def _intersect_surface(rays, surface, n_medium=1.0):
             # such rays to land at z=0 with a residual sag, then masquerade
             # as converged once Newton found |dt|<1e-15 at a stuck point.
             missed_init = (disc < 0) & rays.alive
-            t = np.where(disc > 0, t, 0.0)
+            # v5.4.6 (audit P3-3): keep the tangent case (disc == 0); only
+            # disc < 0 (no real root) is a true miss.  Matches missed_init.
+            t = np.where(disc >= 0, t, 0.0)
         else:
             missed_init = np.zeros(rays.n_rays, dtype=bool)
             # Flat surface with aspheric terms only: start at z=0

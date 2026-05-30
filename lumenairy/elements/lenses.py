@@ -320,10 +320,14 @@ def surface_sag_biconic(
             norm = (1 + K) * h_sq / R ** 2
             valid = norm < 0.9999
             denom_arg = xp.where(valid, 1 - norm, 0.01)
+            # v5.4.6 (audit F-19): outside the conic domain
+            # (norm >= 0.9999) the surface is not defined.  Return NaN
+            # (not a silent 0.0 flat ring) so callers detect 'no real
+            # surface', matching surface_sag_general.
             s = xp.where(
                 valid,
                 h_sq / (R * (1 + xp.sqrt(denom_arg))),
-                0.0,
+                xp.nan,
             )
         if asph:
             for power, coeff in asph.items():

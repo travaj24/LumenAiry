@@ -452,6 +452,13 @@ def through_focus_scan(
                   f'D4sig_x={m["d4sigma_x"]*1e6:.2f} um')
 
     call_progress(progress, 'through_focus_scan', 1.0, 'done')
+    # v5.4.6 (audit F-28): populate the best-focus summary fields on the
+    # NumPy path too -- the JAX twin (through_focus_scan_jax) already does,
+    # so a backend switch silently changed ThroughFocusResult.best_focus_*
+    # from a real value to the dataclass NaN default.
+    best_strehl = float(np.nanmax(strehl)) if ideal_peak else float('nan')
+    best_spot = (float(np.nanmin(rms_r))
+                 if np.any(np.isfinite(rms_r)) else float('nan'))
     return ThroughFocusResult(
         z=z_arr, peak_I=peak_I, strehl=strehl,
         d4sigma_x=d4x, d4sigma_y=d4y, rms_radius=rms_r,
@@ -459,6 +466,7 @@ def through_focus_scan(
         wavelength=float(wavelength), dx=float(dx),
         bucket_radius=float(bucket_radius) if bucket_radius else 0.0,
         ideal_peak=float(ideal_peak) if ideal_peak else 0.0,
+        best_focus_strehl=best_strehl, best_focus_spot=best_spot,
     )
 
 
@@ -773,12 +781,19 @@ def tolerancing_sweep(
     z_values = np.linspace(z_scan_range[0], z_scan_range[1], z_scan_n) \
                   + focal_length
 
-    def _run_one(pres_used, label, inner_scaler=None):
+    def _run_one(pres_used, label, inner_scaler=None, ideal_peak_fixed=None):
         E_exit = apply_real_lens(
             E_source, prescription=pres_used, wavelength=wavelength, dx=dx,
             bandlimit=True, slant_correction=True)
-        ideal_peak = diffraction_limited_peak(
-            E_exit, wavelength, focal_length, dx)
+        # v5.4.6 (audit F-12): when a fixed denominator is supplied, use
+        # it -- every perturbation's Strehl is then normalised against the
+        # SAME reference (the diffraction-limited peak of the NOMINAL
+        # pupil), not a perturbation-dependent denominator that lets
+        # per-perturbation Strehls exceed 1.  This is the v5.2.5
+        # nominal-pupil fix already in monte_carlo_tolerancing.
+        ideal_peak = (ideal_peak_fixed if ideal_peak_fixed is not None
+                      else diffraction_limited_peak(
+                          E_exit, wavelength, focal_length, dx))
         scan = through_focus_scan(
             E_exit, dx, wavelength, z_values,
             bucket_radius=bucket_radius,
@@ -803,10 +818,18 @@ def tolerancing_sweep(
     results = []
     if verbose:
         print('  -- Nominal ...')
+    # v5.4.6 (audit F-12): diffraction-limited peak of the NOMINAL pupil
+    # = fixed Strehl denominator reused by every run below.
+    _E_nom = apply_real_lens(
+        E_source, prescription=prescription, wavelength=wavelength, dx=dx,
+        bandlimit=True, slant_correction=True)
+    nominal_ideal_peak = diffraction_limited_peak(
+        _E_nom, wavelength, focal_length, dx)
     nominal_scaler = ProgressScaler(progress, 'tolerancing_sweep',
                                      0.0, 1.0 / n_total)
     call_progress(progress, 'tolerancing_sweep', 0.0, 'nominal run')
-    nominal = _run_one(prescription, 'nominal', nominal_scaler)
+    nominal = _run_one(prescription, 'nominal', nominal_scaler,
+                       ideal_peak_fixed=nominal_ideal_peak)
     results.append(nominal)
 
     for i, pert in enumerate(perturbations):
@@ -819,7 +842,8 @@ def tolerancing_sweep(
                       f'perturbation {i + 1}/{n_total - 1}: {label}')
         pres_pert = apply_perturbations(prescription, [pert], N=N, dx=dx)
         inner = ProgressScaler(progress, 'tolerancing_sweep', lo, hi)
-        r = _run_one(pres_pert, label, inner)
+        r = _run_one(pres_pert, label, inner,
+                     ideal_peak_fixed=nominal_ideal_peak)
         r['delta_strehl'] = r['strehl_peak'] - nominal['strehl_peak']
         r['delta_spot'] = r['d4sigma_min'] - nominal['d4sigma_min']
         results.append(r)

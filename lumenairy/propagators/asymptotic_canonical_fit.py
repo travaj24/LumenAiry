@@ -1208,11 +1208,15 @@ def propagate_hf_chebyshev_quadrature(
         flat_out[start:end] = chunk_field
 
     out = flat_out.reshape(Ny_out, Nx_out)
-    # 4.10: apply the Van Vleck-Morette asymptotic prefactor (2π)^(-d/2)·i^(-d/2)
-    # for d = 2: this is -i/(2π).  Pre-4.10 omitted the i^(-d/2) (the
-    # Maslov phase) so the result was off by a global 90° phase relative
-    # to the Fresnel kernel (which is 1/(iλz) = -i/(λz) in the paraxial
-    # limit).  Without this factor, coherent superposition of HF-quadrature
-    # output with ASM/Fresnel output is 90° out of phase.
+    # 4.10: apply the Van Vleck-Morette asymptotic Maslov phase i^(-d/2)
+    # for d = 2, i.e. i^(-1) = -i.  v5.4.6 (audit F-21): the APPLIED
+    # factor is exactly -1j -- the (2π)^(-d/2) and λ normalisations of the
+    # full VVM prefactor cancel against the k and density-of-states units
+    # already carried by integrand_kernel * pixel_area, leaving only the
+    # -i Maslov phase.  (The earlier "-i/(2π)" wording described the
+    # un-cancelled prefactor; taking it literally as the applied factor
+    # would be a 0.159x-amplitude regression.)  Pre-4.10 omitted this
+    # phase, so HF-quadrature output was 90° out of phase with the
+    # Fresnel kernel (1/(iλz) = -i/(λz) in the paraxial limit).
     out = out * (-1j)
     return out

@@ -195,6 +195,7 @@ from .propagators.propagation import (
     rayleigh_sommerfeld_propagate,
     resample_field,
     reset_fft_backend,
+    restore_fft_state,
     scalable_angular_spectrum_propagate,
     set_asm_cache_size,
     set_default_complex_dtype,
@@ -206,6 +207,7 @@ from .propagators.propagation import (
     set_fft_plan_cache_size,
     set_fft_threads,
     set_pyfftw_planner,
+    snapshot_fft_state,
     warmup_fft_plans,
 )
 
@@ -862,7 +864,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.4.5"
+__version__ = "5.4.6"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1567,6 +1569,8 @@ __all__ = [
     'get_pyfftw_planner',
     'set_fft_auto_promote',
     'get_fft_auto_promote',
+    'snapshot_fft_state',
+    'restore_fft_state',
     'warmup_fft_plans',
     'clear_asm_caches',
     'clear_zernike_basis_cache',

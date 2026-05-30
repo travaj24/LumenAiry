@@ -184,49 +184,34 @@ def apply_detector(
         image[:block_h, :block_w] = block[:block_h, :block_w]
         image = image * (dx_field ** 2)
     else:
-        # Non-integer ratio: uniform-filter then point-sample at the
-        # detector pixel centers.  uniform_filter computes the mean
-        # over a (2*radius+1) window; multiply by window area to get
-        # the integral over the detector-pixel-sized neighbourhood,
-        # which approximates the area integral up to the
-        # uniform-filter's box-filter response.
-        from scipy.ndimage import uniform_filter as _ufilt
-        win_y = max(1, int(round(samples_per_pix_y)))
-        win_x = max(1, int(round(samples_per_pix_x)))
-        avg = _ufilt(I_field, size=(win_y, win_x), mode='constant', cval=0.0)
-        # Sample at detector-pixel centres in field-grid coords.
-        # Field-grid pixel j corresponds to physical x = (j - Nx/2) * dx_field.
-        # Detector pixel k centre is at  (k - n_pixels/2 + 0.5) * pixel_pitch.
-        # Convert detector centre to a field-grid float index:
-        k = np.arange(n_pixels)
-        det_centres_x = (k - n_pixels / 2 + 0.5) * pixel_pitch
-        det_centres_y = (k - n_pixels / 2 + 0.5) * pixel_pitch
-        idx_fx = det_centres_x / dx_field + Nx / 2 - 0.5
-        idx_fy = det_centres_y / dx_field + Ny / 2 - 0.5
-        ix0 = np.clip(np.floor(idx_fx).astype(int), 0, Nx - 1)
-        iy0 = np.clip(np.floor(idx_fy).astype(int), 0, Ny - 1)
-        IX, IY = np.meshgrid(ix0, iy0)
-        # 4.11.2: scale by the actual fractional samples-per-pixel
-        # rather than the integer-rounded window size.  ``uniform_filter``
-        # with ``size=(win_y, win_x)`` returns the box-mean over a
-        # (win_y * dx_field) x (win_x * dx_field) field-grid area.
-        # Multiplying that by ``pixel_pitch**2`` gives the right
-        # answer when win_{y,x} == samples_per_pix_{y,x} exactly --
-        # but for a ratio like 2.5 the rounded window (3) over-samples
-        # the area by 20% and the result over-/undercounts photons
-        # proportionally.  The correct integration scale for "intensity
-        # per m² integrated over one detector pixel" is the actual
-        # detector-pixel area (``pixel_pitch**2``), not the window area,
-        # so the dominant correction is to keep the pixel_pitch**2
-        # factor but re-normalise the box mean back to the true
-        # samples-per-pixel.  Algebraically: avg * (samples/win) =
-        # mean over the true detector-pixel-sized region.  Note this is
-        # still a box-filter approximation -- for sub-pixel-accurate
-        # cases the caller should resample on a grid with an integer
-        # samples-per-pixel ratio.
-        scale_y = float(samples_per_pix_y) / float(win_y)
-        scale_x = float(samples_per_pix_x) / float(win_x)
-        image = avg[IY, IX] * (pixel_pitch ** 2) * (scale_y * scale_x)
+        # v5.4.6 (audit F-10): flux-CONSERVING area integration for
+        # non-integer samples-per-pixel ratios.  Each field sample carries
+        # energy ``I_field * dx_field**2`` and is assigned to the detector
+        # pixel that contains its physical centre; the per-pixel sum is the
+        # integral of I_field over the covered area, exact to the field-grid
+        # quantisation, and the total collected signal is conserved.
+        #
+        # The prior approach (box-mean * pixel_pitch**2 * samples/win) used
+        # win = round(samples_per_pix), which differs from the true
+        # samples_per_pix for non-integer ratios and so over-/under-counted
+        # the flux by up to ~25% (e.g. ratio 2.5 -> win 2 -> +25%; ratio
+        # 2.6 -> win 3 -> -13%).  For exact integer ratios the branch above
+        # (block-sum) already conserves; this branch now does too.
+        jx = np.arange(Nx)
+        jy = np.arange(Ny)
+        x_phys = (jx - Nx / 2 + 0.5) * dx_field   # field-sample centres [m]
+        y_phys = (jy - Ny / 2 + 0.5) * dx_field
+        col = np.floor(x_phys / pixel_pitch + n_pixels / 2.0).astype(np.int64)
+        row = np.floor(y_phys / pixel_pitch + n_pixels / 2.0).astype(np.int64)
+        col_ok = (col >= 0) & (col < n_pixels)
+        row_ok = (row >= 0) & (row < n_pixels)
+        weight = I_field * (dx_field ** 2)
+        valid = row_ok[:, None] & col_ok[None, :]
+        flat = (np.clip(row, 0, n_pixels - 1)[:, None] * n_pixels
+                + np.clip(col, 0, n_pixels - 1)[None, :])
+        image = np.zeros(n_pixels * n_pixels, dtype=np.float64)
+        np.add.at(image, flat[valid], weight[valid])
+        image = image.reshape(n_pixels, n_pixels)
 
     # Per-pixel QE map.  For a Bayer detector, the QE varies per-cell
     # on a 2x2 mosaic; otherwise QE is uniform.
