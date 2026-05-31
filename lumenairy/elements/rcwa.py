@@ -9,9 +9,12 @@ gap between LumenAiry's scalar :mod:`~lumenairy.elements.thin_grating`
 (thin-phase, no metal, no polarization coupling) and the laterally-uniform
 isotropic TMM in :mod:`~lumenairy.elements.coatings`: it solves the full
 vector Maxwell equations inside a structured periodic layer and returns
-rigorous diffraction efficiencies AND the complex zeroth-order Jones
-reflection matrix that drops straight into the
-:class:`~lumenairy.elements.polarization.JonesField` pipeline.
+rigorous diffraction efficiencies AND the complex zeroth-order
+(specular) Jones reflection matrix that bridges into the
+:class:`~lumenairy.elements.polarization.JonesField` pipeline via
+:meth:`RCWAResult.to_jones_field` / :meth:`RCWAResult.apply_reflection`
+(the specular order only -- non-zero diffraction orders are not
+reconstructed into a field).
 
 This is a clean-room implementation derived from the published Fourier
 Modal Method literature -- principally
@@ -68,6 +71,14 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
+from ..backend import (
+    CUPY_AVAILABLE,
+    JAX_AVAILABLE,
+    array_namespace,
+    backend_name,
+    is_jax_array,
+)
+
 __all__ = [
     "rcwa_efficiency_1d",
     "rcwa_efficiency_vs_wavelength",
@@ -86,6 +97,98 @@ __all__ = [
 _C = np.complex128
 
 
+def _eig_for(xp):
+    """Backend-appropriate general (non-Hermitian) eigendecomposition for the
+    layer / Omega^2 solve.  NumPy and CuPy use their native ``linalg.eig``;
+    JAX uses the gauge-stable custom-VJP eig (:func:`_jax_eig_stable`) so the
+    whole RCWA solve stays differentiable.  Returns a callable with the
+    ``eig(A) -> (eigvals, eigvecs)`` signature."""
+    if JAX_AVAILABLE and backend_name(xp) == "jax":
+        return _jax_eig_stable()
+    return xp.linalg.eig
+
+
+def _block(xp, rows):
+    """Assemble a 2-level block matrix (like ``numpy.block`` on a nested list
+    of 2-D blocks) using only ``concatenate`` -- portable across NumPy / CuPy
+    / JAX (some CuPy builds lack ``cupy.block``)."""
+    return xp.concatenate([xp.concatenate(row, axis=1) for row in rows],
+                          axis=0)
+
+
+def _rcwa_xp(fn_name, use_gpu, *arrays):
+    """Resolve the array namespace for an RCWA entry point.
+
+    JAX if any input is a JAX array (the differentiable path); else CuPy if
+    ``use_gpu`` is set or any input is already a CuPy array (the GPU path);
+    else NumPy.  Raises if ``use_gpu`` is requested without CuPy installed.
+    The numerically delicate eig/solve still run in double precision (``_C``).
+    """
+    if any(is_jax_array(a) for a in arrays):
+        import jax.numpy as jnp
+        return jnp
+    if use_gpu:
+        if not CUPY_AVAILABLE:
+            raise RuntimeError(
+                f"{fn_name}: use_gpu=True but CuPy is not installed.  Install "
+                f"the GPU stack (`pip install lumenairy[cuda]`) or call with "
+                f"use_gpu=False for the NumPy path.")
+        import cupy as cp
+        return cp
+    return array_namespace(*arrays)
+
+
+def _is_traced(v):
+    """True if ``v`` is an abstract JAX tracer (no concrete numeric value), so
+    geometry validation / Wood-anomaly nudges that need a concrete number are
+    skipped on the differentiable path.  Uses ``complex`` (not ``float``) so a
+    concrete complex index doesn't emit a discard-imaginary ComplexWarning."""
+    try:
+        complex(v)
+        return False
+    except Exception:
+        return True
+
+
+def _concrete(**kw):
+    """Subset of geometry kwargs whose values are concrete (float-able);
+    used to validate only the non-traced arguments on the JAX path."""
+    return {k: v for k, v in kw.items() if not _is_traced(v)}
+
+
+def _warn_if_jax_f32(fn_name):
+    """Warn if JAX x64 is disabled.  RCWA's eigenproblem is ill-conditioned in
+    single precision, and JAX silently truncates the requested complex128 to
+    complex64 unless ``jax_enable_x64`` is set -- giving quietly inaccurate
+    results.  Emitted once per call site (Python's default warning filter)."""
+    import jax
+    try:
+        enabled = bool(jax.config.read("jax_enable_x64"))
+    except Exception:
+        enabled = bool(getattr(jax.config, "jax_enable_x64", False))
+    if not enabled:
+        import warnings
+        warnings.warn(
+            f"{fn_name}: JAX x64 is disabled, so the RCWA solve runs in "
+            f"complex64 -- its eigenproblem is ill-conditioned in single "
+            f"precision.  Enable double precision before the call with "
+            f"jax.config.update('jax_enable_x64', True).",
+            stacklevel=3)
+
+
+def _normalize_pol(fn_name, polarization):
+    """Normalise a polarization string, accepting ``'s'`` / ``'p'`` as
+    aliases for ``'te'`` / ``'tm'`` (the ``coatings`` module speaks s/p while
+    RCWA / ``thin_grating`` speak te/tm -- CONVENTIONS Section 7 bridge)."""
+    pol = {"s": "te", "p": "tm"}.get(str(polarization).lower(),
+                                     str(polarization).lower())
+    if pol not in ("te", "tm"):
+        raise ValueError(
+            f"{fn_name}: polarization must be 'te'/'tm' (or the 's'/'p' "
+            f"aliases), got {polarization!r}.")
+    return pol
+
+
 # ===========================================================================
 # Convention-aware square root (branch selection)
 # ===========================================================================
@@ -101,12 +204,13 @@ def _sqrt_forward(x: np.ndarray) -> np.ndarray:
     negative argument it is ``+i|.|^{1/2}`` (an order that decays as
     ``z -> +inf``).
     """
-    x = np.asarray(x, dtype=_C)
-    r = np.sqrt(x)
+    xp = array_namespace(x)
+    x = xp.asarray(x).astype(_C)
+    r = xp.sqrt(x)
     # numpy's principal branch already yields Im >= 0 except on the cut;
     # force the decaying root for any residual negative-imaginary roundoff.
-    bad = (r.imag < 0) | ((np.abs(r.imag) <= 1e-300) & (r.real < 0))
-    return np.where(bad, -r, r)
+    bad = (r.imag < 0) | ((xp.abs(r.imag) <= 1e-300) & (r.real < 0))
+    return xp.where(bad, -r, r)
 
 
 def _inv_lam(lam: np.ndarray) -> np.ndarray:
@@ -116,7 +220,8 @@ def _inv_lam(lam: np.ndarray) -> np.ndarray:
     so this regularisation never affects a physical diffraction efficiency;
     it only keeps the eigenvector matrix finite at an exact Wood anomaly.
     """
-    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+    xp = array_namespace(lam)
+    safe = xp.where(xp.abs(lam) < 1e-12, 1e-12, lam)
     return 1.0 / safe
 
 
@@ -136,44 +241,198 @@ def _sqrt_decay(x: np.ndarray) -> np.ndarray:
     root).  For propagating modes (``lam^2`` negative real) both branches
     agree on ``+i|kz|``, so physics is unchanged.
     """
-    x = np.asarray(x, dtype=_C)
-    r = np.sqrt(x)  # principal branch: Re(r) >= 0 by construction
+    xp = array_namespace(x)
+    x = xp.asarray(x).astype(_C)
+    r = xp.sqrt(x)  # principal branch: Re(r) >= 0 by construction
     # On the cut (pure-imaginary r, i.e. lam^2 real negative) pin Im >= 0
     # so propagating modes use the outgoing root deterministically.
     on_cut = r.real == 0
-    return np.where(on_cut & (r.imag < 0), -r, r)
+    return xp.where(on_cut & (r.imag < 0), -r, r)
+
+
+# ===========================================================================
+# Robustness guards: non-propagating incidence + generalized Wood-anomaly
+# ===========================================================================
+
+def _require_propagating_incidence(fn_name, eps_sup, kt0_sq):
+    """Raise if the incidence half-space is non-propagating, i.e. the
+    incident plane wave is evanescent in the superstrate
+    (``Re(eps_superstrate) <= kx0^2 + ky0^2``).  Without this guard the
+    efficiency normalisation divides by ``kz_inc ~ 0`` and silently returns
+    negative / NaN 'efficiencies'.  For a real lossless superstrate this can
+    only trip at exactly grazing incidence (theta -> 90 deg); it fires for
+    evanescent / metallic / gain incidence media."""
+    if float(np.real(eps_sup)) - float(np.real(kt0_sq)) <= 1e-12:
+        raise ValueError(
+            f"{fn_name}: the incidence half-space is non-propagating "
+            f"(Re(eps_superstrate) = {float(np.real(eps_sup)):.4g} <= "
+            f"kx0^2+ky0^2 = {float(np.real(kt0_sq)):.4g}); the incident plane "
+            f"wave is evanescent in the superstrate.  Use a propagating "
+            f"incidence medium (real n_superstrate > n_inc*sin(theta)).")
+
+
+def _grazing_safe_wavelength(wavelength, kx0, ky0, m_orders, n_orders,
+                             period_x, period_y, eps_reals, max_iter=8):
+    """Wavelength nudged off any EXACT Wood anomaly -- a diffracted order
+    grazing (``kz = 0``) in ANY medium whose real permittivity is in
+    ``eps_reals`` (the super/substrate AND the layer's constituent indices;
+    omitting the layer is what let a grazing LAYER mode crash the interface
+    S-matrix).  A tiny relative REAL nudge is applied only when an exact
+    grazing is detected, so lossless energy stays exact, ``+/-m`` symmetry is
+    preserved, and the grazing order (which carries no z-power) limits
+    continuously."""
+    eps_reals = [float(np.real(e)) for e in eps_reals]
+
+    def closest(wl):
+        kxg = kx0 + m_orders * (wl / period_x)
+        kyg = ky0 + n_orders * (wl / period_y)
+        kt2 = kxg ** 2 + kyg ** 2
+        return min(float(np.min(np.abs(e - kt2))) for e in eps_reals)
+
+    wl = wavelength
+    for _ in range(max_iter):
+        if closest(wl) > 1e-9:
+            return wl
+        wl = wl * (1.0 + 1e-7)
+    return wl
+
+
+def _validate_geometry(fn_name, *, period=None, period_y=None, depth=None,
+                       wavelength=None, n_orders=None, n_orders_y=None):
+    """Shared geometric input validation for every RCWA entry point.
+
+    Raises :class:`ValueError` with a ``fn_name:`` prefix (CONVENTIONS Section
+    2) on any non-physical geometry.  Replaces the silent-wrong-answer /
+    cryptic-LinAlgError failure modes the v5.5.0 audit found: ``depth < 0``
+    silently returned a wrong answer, ``period = 0`` raised ``ZeroDivision``,
+    and ``n_orders < 1`` raised a bare ``zero-size array`` error."""
+    def _pos(name, val):
+        if val is None:
+            return
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{fn_name}: {name} must be a positive real number, got "
+                f"{val!r}.") from None
+        if not np.isfinite(v) or v <= 0.0:
+            raise ValueError(f"{fn_name}: {name} must be > 0, got {v}.")
+
+    _pos("period", period)
+    _pos("period_y", period_y)
+    _pos("depth", depth)
+    _pos("wavelength", wavelength)
+    for name, val in (("n_orders", n_orders), ("n_orders_y", n_orders_y)):
+        if val is None:
+            continue
+        try:
+            iv = int(val)
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"{fn_name}: {name} must be an integer >= 1, got "
+                f"{val!r}.") from None
+        if iv != val or iv < 1:
+            raise ValueError(
+                f"{fn_name}: {name} must be an integer >= 1, got {val!r}.")
+
+
+def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y):
+    """Enforce the 2-D Fourier-aliasing bound.  The Laurent convolution table
+    spans difference orders ``[-2N..2N]`` per axis, so a PATTERNED cell must
+    satisfy ``S >= 4*n_orders + 1`` along each axis or the ``% S`` wrap aliases
+    high-frequency permittivity coefficients into the low orders -- a silent
+    wrong answer.  Raises with a ``fn_name:`` prefix when undersampled.
+
+    A spatially UNIFORM cell (every pixel identical -- a homogeneous layer
+    passed as an array) has only a DC coefficient, but that DC term still
+    aliases onto off-diagonal entries (corrupting the otherwise ``const*I``
+    convolution into a singular matrix) once ``S <= 2*n_orders``; it is exact
+    only for ``S >= 2*n_orders + 1``, the relaxed floor used here."""
+    Sx, Sy = int(cell.shape[0]), int(cell.shape[1])
+    Mx, My = int(n_orders_x), int(n_orders_y)
+    # Uniformity is a VALUE check -- only attempt it on a concrete (non-traced)
+    # array; a traced JAX cell can't be inspected, so fall back to the strict
+    # patterned bound (shape is always available).  uniform <=> every component
+    # is constant across the two SPATIAL axes (per-component spread over (0, 1)
+    # is zero -- NOT the spread over the whole array, which a varying tensor's
+    # distinct components would trip).
+    uniform = False
+    if not is_jax_array(cell):
+        xpc = array_namespace(cell)
+        arr = xpc.asarray(cell)
+        spatial = arr.reshape(Sx, Sy, -1)
+        spread = xpc.ptp(spatial.real, axis=(0, 1))
+        if xpc.iscomplexobj(spatial):
+            spread = spread + xpc.ptp(spatial.imag, axis=(0, 1))
+        uniform = bool(float(xpc.max(spread)) == 0.0)
+    fac = 2 if uniform else 4
+    need_x, need_y = fac * Mx + 1, fac * My + 1
+    if Sx < need_x or Sy < need_y:
+        bound = ("2*n_orders + 1 (uniform cell)" if uniform
+                 else "4*n_orders + 1")
+        raise ValueError(
+            f"{fn_name}: the unit-cell sampling {(Sx, Sy)} is too coarse for "
+            f"n_orders_x={Mx}, n_orders_y={My}; the Fourier convolution would "
+            f"alias.  Need at least ({need_x}, {need_y}) samples "
+            f"(>= {bound} per axis).")
+
+
+def _validate_shapes(fn_name, shapes):
+    """Validate the analytic-shape list: known kind and strictly positive
+    dimensions.  A zero/negative size silently vanishes or sign-flips the
+    shape's contribution to the permittivity spectrum (a wrong answer with no
+    error), so reject it up front with a ``fn_name:`` prefix."""
+    for i, sh in enumerate(shapes):
+        kind = sh.get("shape")
+        if kind == "rectangle":
+            dims = tuple(sh["size"])
+        elif kind == "disk":
+            dims = (sh["radius"],)
+        elif kind == "ellipse":
+            dims = tuple(sh["semi_axes"])
+        else:
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] has unknown shape {kind!r} (expected "
+                f"'rectangle', 'disk' or 'ellipse').")
+        for d in dims:
+            if not (np.isfinite(float(d)) and float(d) > 0.0):
+                raise ValueError(
+                    f"{fn_name}: shapes[{i}] ({kind}) has a non-positive "
+                    f"dimension {d!r}; all sizes / radii / semi-axes must "
+                    f"be > 0 metres.")
 
 
 # ===========================================================================
 # Fourier factorization -- convolution matrices
 # ===========================================================================
 
-def _fourier_coeffs_1d(profile: np.ndarray, n_coeffs: int) -> np.ndarray:
+def _fourier_coeffs_1d(profile, n_coeffs: int):
     """Centred Fourier coefficients ``c_k`` (``k = -(n_coeffs-1) ..
     (n_coeffs-1)``, length ``2*n_coeffs-1``) of a uniformly-sampled,
     one-period profile, with ``c_k = <f(x) exp(-i k G x)>``.
+
+    Backend-agnostic and JAX-differentiable: vectorised fancy-indexing (no
+    item assignment) so it runs unchanged on NumPy / CuPy / JAX arrays.
     """
-    profile = np.asarray(profile, dtype=_C)
+    xp = array_namespace(profile)
+    profile = xp.asarray(profile).astype(_C)
     Nx = profile.shape[0]
-    full = np.fft.fft(profile) / Nx  # full[k] holds c_k (periodic in k)
-    K = 2 * n_coeffs - 1
-    out = np.empty(K, dtype=_C)
-    for j, k in enumerate(range(-(n_coeffs - 1), n_coeffs)):
-        out[j] = full[k % Nx]
-    return out
+    full = xp.fft.fft(profile) / Nx  # full[k] holds c_k (periodic in k)
+    ks = xp.arange(-(n_coeffs - 1), n_coeffs)
+    return full[ks % Nx]
 
 
-def _toeplitz_1d(coeffs: np.ndarray, n_orders: int) -> np.ndarray:
+def _toeplitz_1d(coeffs, n_orders: int):
     """``(N, N)`` Toeplitz convolution matrix from centred Fourier
     coefficients, ``N = 2*n_orders + 1``; entry ``[m, n] = c_{m-n}``.
-    """
+
+    Backend-agnostic / JAX-differentiable (vectorised gather)."""
+    xp = array_namespace(coeffs)
     N = 2 * n_orders + 1
     centre = (coeffs.shape[0] - 1) // 2  # index of c_0
-    out = np.empty((N, N), dtype=_C)
-    for m in range(N):
-        for n in range(N):
-            out[m, n] = coeffs[centre + (m - n)]
-    return out
+    idx = xp.arange(N)
+    tidx = centre + (idx[:, None] - idx[None, :])  # (N, N) of (m - n)
+    return coeffs[tidx]
 
 
 def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
@@ -185,18 +444,24 @@ def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
     A closed-form Fourier series exists for a binary profile, but sampling
     + FFT keeps the path identical to the (future) arbitrary-profile and
     2-D cases and is exact to machine precision at this sampling.
+
+    Backend-agnostic / JAX-differentiable: the hard-edge ``where`` selects
+    between the (possibly traced) ridge / groove permittivities, so the
+    gradient flows to the INDEX VALUES (the documented JAX design targets);
+    ``duty_cycle`` is a discrete threshold and is not differentiated.
     """
-    x = (np.arange(n_samples) + 0.5) / n_samples
-    eps_r = _C(n_ridge) ** 2
-    eps_g = _C(n_groove) ** 2
-    eps = np.where(x < duty_cycle, eps_r, eps_g).astype(_C)
+    xp = array_namespace(n_ridge, n_groove)
+    x = (xp.arange(n_samples) + 0.5) / n_samples
+    eps_r = xp.asarray(n_ridge).astype(_C) ** 2
+    eps_g = xp.asarray(n_groove).astype(_C) ** 2
+    eps = xp.where(x < duty_cycle, eps_r, eps_g).astype(_C)
     # The Toeplitz matrix needs coefficients c_k for k = -(N-1)..(N-1) with
     # N = 2*n_orders+1, i.e. n_coeffs = N.
     n_coeffs = 2 * n_orders + 1
     eps_coeffs = _fourier_coeffs_1d(eps, n_coeffs)
     inv_eps_coeffs = _fourier_coeffs_1d(1.0 / eps, n_coeffs)
     EPS = _toeplitz_1d(eps_coeffs, n_orders)               # Laurent rule
-    EPS_II = np.linalg.inv(_toeplitz_1d(inv_eps_coeffs, n_orders))  # inverse rule
+    EPS_II = xp.linalg.inv(_toeplitz_1d(inv_eps_coeffs, n_orders))  # inverse rule
     return EPS, EPS_II
 
 
@@ -216,7 +481,8 @@ def _layer_Q_matrix(Kx, Ky, EPS, EPS_xx):
     use one convention everywhere (essential for evanescent-order interface
     consistency).
     """
-    return np.block([
+    xp = array_namespace(Kx, Ky, EPS, EPS_xx)
+    return _block(xp, [
         [Kx @ Ky,           EPS - Kx @ Kx],
         [Ky @ Ky - EPS_xx,  -Ky @ Kx],
     ])
@@ -253,38 +519,60 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=None):
     (``Re >= 0`` branch; ``= i kz`` propagating, ``= |gamma|`` evanescent),
     which feeds the forward-decaying propagator ``X = exp(-lam k0 L)``.
     """
-    Kx = np.asarray(Kx, dtype=_C)
-    Ky = np.asarray(Ky, dtype=_C)
+    xp = array_namespace(Kx, Ky, EPS, EPS_xx)
+    Kx = xp.asarray(Kx).astype(_C)
+    Ky = xp.asarray(Ky).astype(_C)
     N = Kx.shape[0]
-    I = np.eye(N, dtype=_C)
+    I = xp.eye(N, dtype=_C)
     Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_xx)
+    is_jax = backend_name(xp) == "jax"
 
-    offdiag = EPS - np.diag(np.diag(EPS))
-    scale = max(1.0, float(np.max(np.abs(np.diag(EPS)))))
-    if np.max(np.abs(offdiag)) < 1e-12 * scale:
-        # Uniform layer: analytic modes (W = I), kz per order from eps.
+    # A laterally UNIFORM (diagonal [[eps]]) layer has DOUBLY-DEGENERATE 2N
+    # modes (TE/TM share kz); a general eig then returns an arbitrary, often
+    # ill-conditioned eigenvector basis whose interface ``solve`` corrupts the
+    # reflected orders.  The analytic modes (W = I, kz from eps) are the
+    # well-posed answer.
+    def _uniform_modes():
         eps0 = EPS[0, 0]
-        kx = np.diag(Kx)
-        ky = np.diag(Ky)
-        kz = _sqrt_forward(eps0 - kx ** 2 - ky ** 2)
-        lam = _sqrt_decay(-np.concatenate([kz, kz]) ** 2)
-        W = np.eye(2 * N, dtype=_C)
-        V = Q @ np.diag(_inv_lam(lam))
-        return W, V, lam
+        kz = _sqrt_forward(eps0 - xp.diag(Kx) ** 2 - xp.diag(Ky) ** 2)
+        lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
+        return xp.eye(2 * N, dtype=_C), Q @ xp.diag(_inv_lam(lam)), lam
 
-    # E_z elimination (P block): inv([[eps]]) by default, or the supplied
-    # Laurent [[1/eps]] for the dual-Laurent (analytic-FT) formulation.
-    EPS_inv = ez_laurent_inv if ez_laurent_inv is not None else np.linalg.inv(EPS)
-    # P: dH/dz' = P E   (mu = 1 so URC = I).
-    P = np.block([
-        [Kx @ EPS_inv @ Ky,        I - Kx @ EPS_inv @ Kx],
-        [Ky @ EPS_inv @ Ky - I,    -Ky @ EPS_inv @ Kx],
-    ])
-    OM2 = P @ Q  # Omega^2
-    lam2, W = np.linalg.eig(OM2)
-    lam = _sqrt_decay(lam2)              # Re >= 0: = i kz (prop.) / |gamma| (evan.)
-    V = Q @ W @ np.diag(_inv_lam(lam))   # magnetic-field eigenvectors
-    return W, V, lam
+    def _structured_modes():
+        # E_z elimination (P block): inv([[eps]]) by default, or the supplied
+        # Laurent [[1/eps]] for the dual-Laurent (analytic-FT) formulation.
+        EPS_inv = (ez_laurent_inv if ez_laurent_inv is not None
+                   else xp.linalg.inv(EPS))
+        P = _block(xp, [
+            [Kx @ EPS_inv @ Ky,        I - Kx @ EPS_inv @ Kx],
+            [Ky @ EPS_inv @ Ky - I,    -Ky @ EPS_inv @ Kx],
+        ])
+        lam2, W = _eig_for(xp)(P @ Q)            # Omega^2 = P @ Q
+        lam = _sqrt_decay(lam2)                  # = i kz (prop.) / |gamma| (evan.)
+        return W, Q @ W @ xp.diag(_inv_lam(lam)), lam
+
+    offdiag = EPS - xp.diag(xp.diag(EPS))
+    if not is_jax:
+        # NumPy / CuPy: a concrete value test selects the well-posed branch
+        # (kept identical to v5.5.0 -- bit-for-bit on both branches).
+        scale = max(1.0, float(xp.max(xp.abs(xp.diag(EPS)))))
+        if xp.max(xp.abs(offdiag)) < 1e-12 * scale:
+            return _uniform_modes()
+        return _structured_modes()
+
+    # JAX: a data-dependent ``if`` is illegal under tracing, so compute BOTH
+    # and select with ``where`` (the unselected branch stays finite -- the
+    # eig is Lorentzian-broadened -- so no NaN leaks into the gradient).  This
+    # makes a uniform-isotropic array layer well-posed on the differentiable
+    # path too (else its degenerate eig silently broke energy at oblique).
+    Wu, Vu, lamu = _uniform_modes()
+    Ws, Vs, lams = _structured_modes()
+    diagmax = xp.max(xp.abs(xp.diag(EPS)))
+    scale = xp.where(diagmax > 1.0, diagmax, 1.0)
+    uniform = xp.max(xp.abs(offdiag)) < 1e-12 * scale
+    return (xp.where(uniform, Wu, Ws),
+            xp.where(uniform, Vu, Vs),
+            xp.where(uniform, lamu, lams))
 
 
 def _homogeneous_eigenmodes(Kx, Ky, eps):
@@ -294,16 +582,18 @@ def _homogeneous_eigenmodes(Kx, Ky, eps):
     :func:`_layer_eigenmodes` so propagating AND evanescent orders match at
     every interface.  Dimension-agnostic (``N`` inferred from ``Kx``).
     """
-    N = np.asarray(Kx).shape[0]
-    kx = np.diag(Kx).astype(_C)
-    ky = np.diag(Ky).astype(_C)
+    xp = array_namespace(Kx, Ky)
+    Kx = xp.asarray(Kx).astype(_C)
+    Ky = xp.asarray(Ky).astype(_C)
+    N = Kx.shape[0]
+    kx = xp.diag(Kx)
+    ky = xp.diag(Ky)
     kz = _sqrt_forward(eps - kx ** 2 - ky ** 2)   # per-order kz/k0
-    lam = _sqrt_decay(-np.concatenate([kz, kz]) ** 2)
-    W = np.eye(2 * N, dtype=_C)
-    eps_I = eps * np.eye(N, dtype=_C)             # uniform: Laurent == inverse rule
-    Q = _layer_Q_matrix(np.asarray(Kx, dtype=_C), np.asarray(Ky, dtype=_C),
-                        eps_I, eps_I)
-    V = Q @ np.diag(_inv_lam(lam))
+    lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
+    W = xp.eye(2 * N, dtype=_C)
+    eps_I = eps * xp.eye(N, dtype=_C)             # uniform: Laurent == inverse rule
+    Q = _layer_Q_matrix(Kx, Ky, eps_I, eps_I)
+    V = Q @ xp.diag(_inv_lam(lam))
     return W, V, kz
 
 
@@ -326,10 +616,11 @@ def _redheffer_star(SA, SB):
     ``(S11, S12, S21, S22)`` of ``2N x 2N`` blocks."""
     A11, A12, A21, A22 = SA
     B11, B12, B21, B22 = SB
+    xp = array_namespace(A11, B11)
     n = A11.shape[0]
-    I = np.eye(n, dtype=_C)
-    D = np.linalg.inv(I - B11 @ A22)
-    F = np.linalg.inv(I - A22 @ B11)
+    I = xp.eye(n, dtype=_C)
+    D = xp.linalg.inv(I - B11 @ A22)
+    F = xp.linalg.inv(I - A22 @ B11)
     C11 = A11 + A12 @ D @ B11 @ A21
     C12 = A12 @ D @ B12
     C21 = B21 @ F @ A21
@@ -351,11 +642,12 @@ def _interface_smatrix(Wa, Va, Wb, Vb):
     deliberately tiny-columned evanescent eigenvectors do not blow up an
     explicit inverse.
     """
-    a = np.linalg.solve(Wb, Wa)
-    b = np.linalg.solve(Vb, Va)
+    xp = array_namespace(Wa, Va, Wb, Vb)
+    a = xp.linalg.solve(Wb, Wa)
+    b = xp.linalg.solve(Vb, Va)
     apb = a + b
     amb = a - b
-    iapb = np.linalg.inv(apb)
+    iapb = xp.linalg.inv(apb)
     S11 = -iapb @ amb
     S12 = 2.0 * iapb
     S21 = 0.5 * (apb - amb @ iapb @ amb)
@@ -367,9 +659,10 @@ def _propagation_smatrix(lam, k0_L):
     """Pure-propagation S-matrix of a layer: forward and backward modes
     each acquire ``X = exp(-lam k0 L)`` (a phase for propagating orders, a
     decay for evanescent ones), with zero self-reflection."""
+    xp = array_namespace(lam)
     n = lam.shape[0]
-    X = np.diag(np.exp(-lam * k0_L))
-    Z = np.zeros((n, n), dtype=_C)
+    X = xp.diag(xp.exp(-lam * k0_L))
+    Z = xp.zeros((n, n), dtype=_C)
     return (Z, X, X, Z)
 
 
@@ -391,8 +684,15 @@ def rcwa_efficiency_1d(
     polarization: str = "te",
     n_orders: int = 11,
     formulation: str = "auto",
+    use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 1-D binary grating.
+
+    Backend-dispatched: returns NumPy arrays by default, CuPy arrays when
+    ``use_gpu=True`` (or a CuPy input is passed), and differentiable JAX
+    arrays when any index / geometry argument is a JAX array -- this single
+    routine is what the (now-deprecated) :func:`rcwa_efficiency_1d_jax`
+    forwards to, so the NumPy and JAX results agree to eig precision.
 
     Parameters
     ----------
@@ -433,20 +733,38 @@ def rcwa_efficiency_1d(
     T_eff : (2*n_orders+1,) float ndarray
         Transmitted diffraction efficiency per order.
     """
-    if polarization not in ("te", "tm"):
-        raise ValueError(
-            f"rcwa_efficiency_1d: polarization must be 'te' or 'tm', got "
-            f"{polarization!r}.")
-    if not (0.0 <= duty_cycle <= 1.0):
+    polarization = _normalize_pol("rcwa_efficiency_1d", polarization)
+    if not (0.0 <= float(duty_cycle) <= 1.0):
         raise ValueError(
             f"rcwa_efficiency_1d: duty_cycle must be in [0, 1], got "
             f"{duty_cycle}.")
+    if formulation not in ("auto", "laurent", "li"):
+        raise ValueError(
+            f"rcwa_efficiency_1d: formulation must be 'auto', 'laurent' or "
+            f"'li', got {formulation!r}.")
+
+    xp = _rcwa_xp("rcwa_efficiency_1d", use_gpu, n_ridge, n_groove,
+                  n_substrate, n_superstrate, depth, angle, wavelength)
+    is_jax = backend_name(xp) == "jax"
+    if is_jax:
+        _warn_if_jax_f32("rcwa_efficiency_1d")
+    _validate_geometry(
+        "rcwa_efficiency_1d",
+        **_concrete(period=period, depth=depth, wavelength=wavelength),
+        n_orders=n_orders)
 
     # --- factorization choice (uses the PUBLIC n = n + i kappa) ----------
     def _metallic(n):
-        nv = _C(n)
+        try:
+            nv = complex(n)
+        except Exception:
+            return False  # traced (JAX): assume dielectric; use formulation='li'
         return (nv.imag > 1e-6) or (nv.real ** 2 - nv.imag ** 2 < 0)
     is_metal = _metallic(n_ridge) or _metallic(n_groove)
+    if formulation == "auto":
+        use_li = (polarization == "tm") or is_metal
+    else:
+        use_li = (formulation == "li")
 
     # Convention bridge: the eigenmode/S-matrix core is derived in the
     # engineering exp(+i omega t) convention (forward wave exp(-i kz z),
@@ -454,51 +772,38 @@ def rcwa_efficiency_1d(
     # absorber has Im(eps) < 0.  LumenAiry's public convention is
     # exp(-i omega t) with n = n + i kappa (kappa > 0), i.e. Im(eps) > 0.
     # Conjugating the indices maps a public absorber to the internal loss
-    # sign, giving POSITIVE absorptance; lossless (real n) is unaffected and
-    # all the lossless validations are bit-identical.  (Complex reflection
-    # amplitudes returned to the Jones bridge are conjugated back there.)
-    n_ridge = np.conj(_C(n_ridge))
-    n_groove = np.conj(_C(n_groove))
-    n_substrate = np.conj(_C(n_substrate))
-    n_superstrate = np.conj(_C(n_superstrate))
-    if formulation == "auto":
-        use_li = (polarization == "tm") or is_metal
-    elif formulation == "li":
-        use_li = True
-    elif formulation == "laurent":
-        use_li = False
-    else:
-        raise ValueError(
-            f"rcwa_efficiency_1d: formulation must be 'auto', 'laurent' or "
-            f"'li', got {formulation!r}.")
+    # sign.  Done in the ACTIVE namespace so the JAX path stays differentiable
+    # w.r.t. the index values; lossless (real n) is bit-identical to v5.5.0.
+    n_ridge = xp.conj(xp.asarray(n_ridge).astype(_C))
+    n_groove = xp.conj(xp.asarray(n_groove).astype(_C))
+    n_inc = xp.conj(xp.asarray(n_superstrate).astype(_C))
+    eps_sup = xp.conj(xp.asarray(n_superstrate).astype(_C)) ** 2
+    eps_sub = xp.conj(xp.asarray(n_substrate).astype(_C)) ** 2
 
     M = int(n_orders)
     N = 2 * M + 1
-    orders = np.arange(-M, M + 1)
+    orders = xp.arange(-M, M + 1)
+    kx0 = xp.real(n_inc) * xp.sin(angle)
 
-    n_inc = _C(n_superstrate)
-    eps_sup = _C(n_superstrate) ** 2
-    eps_sub = _C(n_substrate) ** 2
-    kx0 = np.real(n_inc) * np.sin(angle)
-
-    # Wood-anomaly regularisation.  When a diffracted order sits EXACTLY at
-    # grazing in a region (kx_m^2 == Re(eps), so kz = 0) the interface
-    # S-matrix is singular.  Nudge the WAVELENGTH by a tiny RELATIVE amount
-    # (only when an exact grazing is detected) to move that measure-zero
-    # singularity away: everything stays real (so lossless energy is still
-    # exact and normal-incidence +/-m symmetry is preserved, since kx0 is
-    # unchanged), the grazing order -- which carries no z-power -- limits
-    # continuously, and every matrix becomes invertible.
-    def _grazing(wl):
-        kxg = kx0 + orders * (wl / period)
-        kzs = np.abs(np.real(eps_sup) - kxg ** 2)
-        kzt = np.abs(np.real(eps_sub) - kxg ** 2)
-        return np.min(np.concatenate([kzs, kzt]))
-    wl_eff = wavelength
-    for _ in range(4):
-        if _grazing(wl_eff) > 1e-9:
-            break
-        wl_eff = wl_eff * (1.0 + 1e-7)
+    # The grazing/non-propagating guards need concrete numbers.  On the JAX
+    # path the GEOMETRY (angle, wavelength, region indices) is normally
+    # concrete -- only the layer indices / depth are traced -- so the guards
+    # still run against the concrete super/substrate, catching the dominant
+    # region Rayleigh anomaly (and non-propagating incidence) instead of
+    # silently returning NaN that poisons the gradient.  The layer-index
+    # grazing term is included only when those indices are concrete.
+    geom_concrete = not (_is_traced(kx0) or _is_traced(wavelength))
+    if not is_jax or geom_concrete:
+        _require_propagating_incidence("rcwa_efficiency_1d", complex(eps_sup),
+                                       complex(kx0) ** 2)
+        eps_reals = [complex(eps_sup), complex(eps_sub)]
+        if not _is_traced(n_ridge):
+            eps_reals += [complex(n_ridge) ** 2, complex(n_groove) ** 2]
+        wl_eff = _grazing_safe_wavelength(
+            float(wavelength), float(xp.real(kx0)), 0.0, np.arange(-M, M + 1),
+            np.zeros(N), period, 1.0, eps_reals)
+    else:
+        wl_eff = wavelength
 
     k0 = 2.0 * np.pi / wl_eff
     # Tangential wavevector normalised by k0; planar mounting -> ky = 0.
@@ -506,8 +811,8 @@ def rcwa_efficiency_1d(
     # order +m carries the +m'th grating vector G = 2*pi/period), matching
     # the diffraction-order labelling used across the RCWA literature.
     kx = kx0 + orders * (wl_eff / period)
-    Kx = np.diag(kx.astype(_C))
-    Ky = np.zeros((N, N), dtype=_C)
+    Kx = xp.diag(kx.astype(_C))
+    Ky = xp.zeros((N, N), dtype=_C)
 
     # --- convolution matrices -------------------------------------------
     EPS, EPS_II = _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, M)
@@ -527,21 +832,21 @@ def rcwa_efficiency_1d(
     S11, S12, S21, S22 = S
 
     # --- incident field (delta on 0th order, chosen polarization) -------
-    delta = np.zeros(N, dtype=_C)
-    delta[M] = 1.0
+    delta = (orders == 0).astype(_C)             # unit on the 0th order
+    zeros_N = xp.zeros(N, dtype=_C)
     if polarization == "te":
-        cinc = np.concatenate([np.zeros(N, dtype=_C), delta])   # E along y
+        cinc = xp.concatenate([zeros_N, delta])   # E along y
     else:
-        cinc = np.concatenate([delta, np.zeros(N, dtype=_C)])   # E along x
+        cinc = xp.concatenate([delta, zeros_N])   # E along x
     # Source is given in the reflection-region eigenbasis (W_ref = I).
     r = S11 @ cinc            # reflected tangential-E mode amplitudes
     t = S21 @ cinc            # transmitted
 
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
-    kyv = np.diag(Ky)
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    kyv = xp.diag(Ky)
+    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
     # Longitudinal field from div(D) = 0 in each homogeneous region: a
     # diffracted order's full E carries Ez = -(kx Ex + ky Ey)/kz, so the
     # transverse-only |E_t|^2 understates the power by |Ez|^2.
@@ -554,17 +859,17 @@ def rcwa_efficiency_1d(
     # for TM (and exactly 1 for TE).  Normalising the diffraction
     # efficiencies by this incident |E|^2 is what keeps sum(R)+sum(T)=1 at
     # oblique TM (without it the sums scale as sec^2 theta).
-    kz_inc = np.real(_sqrt_forward(eps_sup - kx0 ** 2))
+    kz_inc = xp.real(_sqrt_forward(eps_sup - kx0 ** 2))
     if polarization == "te":
         einc_sq = 1.0
     else:
         einc_sq = 1.0 + (kx0 / kz_inc) ** 2
-    R_eff = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                        + np.abs(rz) ** 2) / einc_sq
-    T_eff = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                        + np.abs(tz) ** 2) / einc_sq
-    R_eff = np.where(np.real(kz_ref) > 0, np.real(R_eff), 0.0)
-    T_eff = np.where(np.real(kz_trn) > 0, np.real(T_eff), 0.0)
+    R_eff = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                        + xp.abs(rz) ** 2) / einc_sq
+    T_eff = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                        + xp.abs(tz) ** 2) / einc_sq
+    R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
+    T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
     return orders, R_eff, T_eff
 
 
@@ -662,14 +967,17 @@ def _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y):
     Fourier coefficients of ``eps``; built by vectorised fancy-indexing into
     the coefficient table (the block-Toeplitz-Toeplitz structure).
     """
+    xp = array_namespace(eps_cell)
     Mx, My = int(n_orders_x), int(n_orders_y)
-    eps_cell = np.asarray(eps_cell, dtype=_C)
-    Sx, Sy = eps_cell.shape
-    full = np.fft.fft2(eps_cell) / (Sx * Sy)  # full[k, l] = c_{k,l} (periodic)
-    # Coefficient table over the difference range k in [-2Mx..2Mx], l in [-2My..2My].
-    krange = np.arange(-2 * Mx, 2 * Mx + 1)
-    lrange = np.arange(-2 * My, 2 * My + 1)
-    table = full[np.ix_(krange % Sx, lrange % Sy)]  # (4Mx+1, 4My+1)
+    eps_cell = xp.asarray(eps_cell).astype(_C)
+    Sx, Sy = int(eps_cell.shape[0]), int(eps_cell.shape[1])
+    full = xp.fft.fft2(eps_cell) / (Sx * Sy)  # full[k, l] = c_{k,l} (periodic)
+    # Coefficient table over the difference range k in [-2Mx..2Mx], l in
+    # [-2My..2My].  The index arrays are plain NumPy ints (lattice indices),
+    # which index a NumPy / CuPy / JAX `full` identically via broadcasting.
+    krange = np.arange(-2 * Mx, 2 * Mx + 1) % Sx
+    lrange = np.arange(-2 * My, 2 * My + 1) % Sy
+    table = full[krange[:, None], lrange[None, :]]  # (4Mx+1, 4My+1)
     dm = orders[:, 0][:, None] - orders[:, 0][None, :]   # (N, N)
     dn = orders[:, 1][:, None] - orders[:, 1][None, :]
     return table[dm + 2 * Mx, dn + 2 * My]
@@ -690,10 +998,14 @@ def rcwa_efficiency_2d(
     n_orders_x: int = 5,
     n_orders_y: int = 5,
     formulation: str = "laurent",
+    use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 2-D (doubly periodic) crossed
     grating: a single patterned layer of permittivity ``eps_cell`` between a
     ``n_superstrate`` half-space and a ``n_substrate`` half-space.
+
+    Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
+    ``eps_cell`` is a JAX array); see :func:`rcwa_efficiency_1d`.
 
     Parameters
     ----------
@@ -729,29 +1041,62 @@ def rcwa_efficiency_2d(
     R_eff, T_eff : (N,) float ndarray
         Reflected / transmitted diffraction efficiency per order.
     """
-    if polarization not in ("te", "tm"):
-        raise ValueError(
-            f"rcwa_efficiency_2d: polarization must be 'te' or 'tm', got "
-            f"{polarization!r}.")
+    _validate_geometry("rcwa_efficiency_2d",
+                       **_concrete(period=period_x, period_y=period_y,
+                                   depth=depth, wavelength=wavelength),
+                       n_orders=n_orders_x, n_orders_y=n_orders_y)
+    _validate_cell_sampling("rcwa_efficiency_2d", eps_cell,
+                            n_orders_x, n_orders_y)
+    polarization = _normalize_pol("rcwa_efficiency_2d", polarization)
     if formulation != "laurent":
         raise ValueError(
             f"rcwa_efficiency_2d: only formulation='laurent' is available in "
             f"this build, got {formulation!r}.")
 
-    # Loss-convention bridge (see rcwa_efficiency_1d): conjugate PUBLIC eps.
-    eps_cell = np.conj(np.asarray(eps_cell, dtype=_C))
-    eps_sup = np.conj(_C(n_superstrate) ** 2)
-    eps_sub = np.conj(_C(n_substrate) ** 2)
+    xp = _rcwa_xp("rcwa_efficiency_2d", use_gpu, eps_cell)
+    is_jax = backend_name(xp) == "jax"
+    if is_jax:
+        _warn_if_jax_f32("rcwa_efficiency_2d")
+
+    # Loss-convention bridge (see rcwa_efficiency_1d): conjugate the PUBLIC
+    # permittivity in the active namespace (so a JAX eps_cell stays
+    # differentiable); the region scalars stay host complex.
+    eps_cell = xp.conj(xp.asarray(eps_cell).astype(_C))
+    eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
+    eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
     orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
-    k0 = 2.0 * np.pi / wavelength
-    nre = np.real(np.sqrt(eps_sup))
-    kx0 = nre * np.sin(theta) * np.cos(phi)
+    nre = float(np.real(np.sqrt(eps_sup)))
+    kx0 = nre * np.sin(theta) * np.cos(phi)        # concrete host floats
     ky0 = nre * np.sin(theta) * np.sin(phi)
-    kx = kx0 + orders[:, 0] * (wavelength / period_x)
-    ky = ky0 + orders[:, 1] * (wavelength / period_y)
-    Kx = np.diag(kx.astype(_C))
-    Ky = np.diag(ky.astype(_C))
+    # Run the grazing / non-propagating guards whenever the GEOMETRY is
+    # concrete (always on NumPy/CuPy; on JAX when angle/wavelength aren't
+    # differentiated), so a region Rayleigh anomaly / non-propagating incidence
+    # is caught instead of poisoning the gradient with NaN.  The (traced) cell
+    # permittivities are added to the nudge only on the non-JAX path.
+    geom_concrete = not (_is_traced(wavelength) or _is_traced(theta)
+                         or _is_traced(phi))
+    if not is_jax or geom_concrete:
+        _require_propagating_incidence("rcwa_efficiency_2d", eps_sup,
+                                       kx0 ** 2 + ky0 ** 2)
+        eps_reals = [eps_sup, eps_sub]
+        if not is_jax:
+            eps_reals += [float(xp.real(eps_cell).min()),
+                          float(xp.real(eps_cell).max())]
+        wl_eff = _grazing_safe_wavelength(
+            float(wavelength), kx0, ky0, orders[:, 0], orders[:, 1], period_x,
+            period_y, eps_reals)
+    else:
+        wl_eff = wavelength
+    k0 = 2.0 * np.pi / wl_eff
+    kx = kx0 + orders[:, 0] * (wl_eff / period_x)   # host float arrays
+    ky = ky0 + orders[:, 1] * (wl_eff / period_y)
+    # Build the (constant) K matrices on the host then move to the backend so
+    # they share eps_cell's namespace (mixing backends in one op would raise).
+    Kx = xp.asarray(np.diag(kx.astype(_C)))
+    Ky = xp.asarray(np.diag(ky.astype(_C)))
+    kxv = xp.asarray(kx.astype(_C))
+    kyv = xp.asarray(ky.astype(_C))
 
     EPS = _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y)
     EPS_xx = EPS  # Laurent rule: wall-normal convolution == [[eps]]
@@ -766,11 +1111,9 @@ def rcwa_efficiency_2d(
 
     # Incident unit plane wave on the (0, 0) order, TE/TM relative to the
     # plane of incidence (built from the in-plane azimuth direction).
-    p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
-    delta = np.zeros(N, dtype=_C)
-    delta[p0] = 1.0
-    kz_inc = np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))
-    kt = np.hypot(kx0, ky0)
+    delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
+    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    kt = float(np.hypot(kx0, ky0))
     if kt < 1e-12:                       # normal incidence
         ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
         einc_sq = 1.0
@@ -782,22 +1125,22 @@ def rcwa_efficiency_2d(
         else:
             ex0, ey0 = ax, ay            # p-pol transverse part along rho
             einc_sq = 1.0 + (kt / kz_inc) ** 2
-    cinc = np.concatenate([ex0 * delta, ey0 * delta])
+    cinc = xp.concatenate([ex0 * delta, ey0 * delta])
 
     r = S11 @ cinc
     t = S21 @ cinc
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-    rz = -(kx * rx + ky * ry) / safe_r
-    tz = -(kx * tx + ky * ty) / safe_t
-    R_eff = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                        + np.abs(rz) ** 2) / einc_sq
-    T_eff = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                        + np.abs(tz) ** 2) / einc_sq
-    R_eff = np.where(np.real(kz_ref) > 0, np.real(R_eff), 0.0)
-    T_eff = np.where(np.real(kz_trn) > 0, np.real(T_eff), 0.0)
+    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    rz = -(kxv * rx + kyv * ry) / safe_r
+    tz = -(kxv * tx + kyv * ty) / safe_t
+    R_eff = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                        + xp.abs(rz) ** 2) / einc_sq
+    T_eff = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                        + xp.abs(tz) ** 2) / einc_sq
+    R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
+    T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
     return orders, R_eff, T_eff
 
 
@@ -858,7 +1201,8 @@ def _toeplitz_of_profile(profile, n_orders):
 def _inv_toeplitz_of_profile(profile, n_orders):
     """Inverse-rule operator ``[[1/f]]^{-1}`` of a sampled one-period
     profile."""
-    return np.linalg.inv(
+    xp = array_namespace(profile)
+    return xp.linalg.inv(
         _toeplitz_1d(_fourier_coeffs_1d(1.0 / profile, 2 * n_orders + 1),
                      n_orders))
 
@@ -873,11 +1217,12 @@ def _tensor_convolutions(profiles, n_orders):
     ``P`` block).  Reduces to ``Cxx = Cyy = [[eps]]``, ``Cxy = Cyx = 0`` for
     a scalar (isotropic) tensor.
     """
-    a = np.asarray(profiles["xx"], dtype=_C)
-    b = np.asarray(profiles["xy"], dtype=_C)
-    c = np.asarray(profiles["yx"], dtype=_C)
-    d = np.asarray(profiles["yy"], dtype=_C)
-    ezz = np.asarray(profiles["zz"], dtype=_C)
+    xp = array_namespace(profiles["xx"])
+    a = xp.asarray(profiles["xx"]).astype(_C)
+    b = xp.asarray(profiles["xy"]).astype(_C)
+    c = xp.asarray(profiles["yx"]).astype(_C)
+    d = xp.asarray(profiles["yy"]).astype(_C)
+    ezz = xp.asarray(profiles["zz"]).astype(_C)
     inv_a = _inv_toeplitz_of_profile(a, n_orders)             # [[1/exx]]^{-1}
     T_b_a = _toeplitz_of_profile(b / a, n_orders)             # [[exy/exx]]
     T_c_a = _toeplitz_of_profile(c / a, n_orders)             # [[eyx/exx]]
@@ -903,24 +1248,43 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
 
     The ``P`` block is the core's, with the ``E_z`` elimination ``inv(EZZ)``.
     """
-    Kx = np.asarray(Kx, dtype=_C)
-    Ky = np.asarray(Ky, dtype=_C)
+    xp = array_namespace(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
+    Kx = xp.asarray(Kx).astype(_C)
+    Ky = xp.asarray(Ky).astype(_C)
     N = Kx.shape[0]
-    I = np.eye(N, dtype=_C)
-    Ez_inv = np.linalg.inv(EZZ)
-    P = np.block([
+    I = xp.eye(N, dtype=_C)
+    Ez_inv = xp.linalg.inv(EZZ)
+    P = _block(xp, [
         [Kx @ Ez_inv @ Ky,        I - Kx @ Ez_inv @ Kx],
         [Ky @ Ez_inv @ Ky - I,    -Ky @ Ez_inv @ Kx],
     ])
-    Q = np.block([
+    Q = _block(xp, [
         [Cyx + Kx @ Ky,        Cyy - Kx @ Kx],
         [Ky @ Ky - Cxx,        -(Cxy + Ky @ Kx)],
     ])
-    OM2 = P @ Q
-    lam2, W = np.linalg.eig(OM2)
+    lam2, W = _eig_for(xp)(P @ Q)
     lam = _sqrt_decay(lam2)
-    V = Q @ W @ np.diag(_inv_lam(lam))
-    return W, V, lam
+    V = Q @ W @ xp.diag(_inv_lam(lam))
+    if backend_name(xp) != "jax":
+        return W, V, lam
+
+    # JAX: an ISOTROPIC-uniform tensor layer (Cxx = Cyy = eps0 I, Cxy = Cyx = 0)
+    # is doubly degenerate, so jnp's eig returns an ill-conditioned basis that
+    # corrupts the reflected orders (NumPy's eig happens to stay well-posed).
+    # Blend in the analytic uniform modes (W = I) when that degeneracy is
+    # detected -- tracer-safe ``where``, no NaN (the eig is broadened).
+    eps0 = Cxx[0, 0]
+    kz = _sqrt_forward(eps0 - xp.diag(Kx) ** 2 - xp.diag(Ky) ** 2)
+    lam_u = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
+    Wu = xp.eye(2 * N, dtype=_C)
+    Vu = Q @ xp.diag(_inv_lam(lam_u))
+    aniso = (xp.max(xp.abs(Cxx - eps0 * I)) + xp.max(xp.abs(Cyy - eps0 * I))
+             + xp.max(xp.abs(Cxy)) + xp.max(xp.abs(Cyx)))
+    scale = xp.where(xp.abs(eps0) > 1.0, xp.abs(eps0), 1.0)
+    iso_uniform = aniso < 1e-10 * scale
+    return (xp.where(iso_uniform, Wu, W),
+            xp.where(iso_uniform, Vu, V),
+            xp.where(iso_uniform, lam_u, lam))
 
 
 def rcwa_jones_1d(
@@ -935,11 +1299,15 @@ def rcwa_jones_1d(
     *,
     angle: float = 0.0,
     n_orders: int = 11,
+    use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 1-D anisotropic grating: a binary grating whose ridge and
     groove are full ``(3, 3)`` permittivity tensors (the liquid-crystal /
     birefringent case).  Because the in-plane tensor couples TE and TM, the
     response is a full Jones matrix.
+
+    Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
+    a tensor argument is a JAX array); see :func:`rcwa_efficiency_1d`.
 
     Parameters
     ----------
@@ -968,34 +1336,58 @@ def rcwa_jones_1d(
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
     """
-    if not (0.0 <= duty_cycle <= 1.0):
+    _validate_geometry("rcwa_jones_1d",
+                       **_concrete(period=period, depth=depth,
+                                   wavelength=wavelength), n_orders=n_orders)
+    if not (0.0 <= float(duty_cycle) <= 1.0):
         raise ValueError(
             f"rcwa_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+
+    xp = _rcwa_xp("rcwa_jones_1d", use_gpu, eps_ridge, eps_groove)
+    is_jax = backend_name(xp) == "jax"
+    if is_jax:
+        _warn_if_jax_f32("rcwa_jones_1d")
     M = int(n_orders)
     N = 2 * M + 1
     orders = np.arange(-M, M + 1)
 
-    # Loss-convention bridge: conjugate ALL public eps (tensor + regions).
-    eps_ridge = np.conj(np.asarray(eps_ridge, dtype=_C))
-    eps_groove = np.conj(np.asarray(eps_groove, dtype=_C))
-    eps_sup = np.conj(_C(n_superstrate) ** 2)
-    eps_sub = np.conj(_C(n_substrate) ** 2)
-    n_inc = np.conj(_C(n_superstrate))
+    # Loss-convention bridge: conjugate the PUBLIC tensors in the active
+    # namespace (differentiable for JAX); region scalars stay host complex.
+    eps_ridge = xp.conj(xp.asarray(eps_ridge).astype(_C))
+    eps_groove = xp.conj(xp.asarray(eps_groove).astype(_C))
+    eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
+    eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
-    k0 = 2.0 * np.pi / wavelength
-    kx0 = np.real(n_inc) * np.sin(angle)
-    kx = kx0 + orders * (wavelength / period)
-    Kx = np.diag(kx.astype(_C))
-    Ky = np.zeros((N, N), dtype=_C)
+    kx0 = float(np.real(np.conj(_C(n_superstrate))) * np.sin(angle))
+    # Guards run on the concrete geometry (angle/wavelength are not tensor
+    # arguments here, so always concrete); the region Rayleigh anomaly and
+    # non-propagating incidence are caught on JAX too.  The tensor-layer
+    # diagonal permittivities are added to the nudge only when concrete.
+    if not is_jax or not _is_traced(wavelength):
+        _require_propagating_incidence("rcwa_jones_1d", eps_sup, kx0 ** 2)
+        eps_reals = [eps_sup, eps_sub]
+        if not is_jax:
+            eps_reals += [complex(eps_ridge[0, 0]), complex(eps_ridge[1, 1]),
+                          complex(eps_groove[0, 0]), complex(eps_groove[1, 1])]
+        wl_eff = _grazing_safe_wavelength(
+            float(wavelength), kx0, 0.0, orders, np.zeros_like(orders), period,
+            1.0, eps_reals)
+    else:
+        wl_eff = wavelength
+    k0 = 2.0 * np.pi / wl_eff
+    kx = kx0 + orders * (wl_eff / period)
+    Kx = xp.asarray(np.diag(kx.astype(_C)))
+    Ky = xp.zeros((N, N), dtype=_C)
+    kxv = xp.asarray(kx.astype(_C))
 
     # Sample the per-component profiles across one period (ridge over duty).
     n_samples = 4096
-    xq = (np.arange(n_samples) + 0.5) / n_samples
+    xq = (xp.arange(n_samples) + 0.5) / n_samples
     inside = xq < duty_cycle
     profiles = {}
     for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
                           "yy": (1, 1), "zz": (2, 2)}.items():
-        profiles[key] = np.where(inside, eps_ridge[ii, jj],
+        profiles[key] = xp.where(inside, eps_ridge[ii, jj],
                                  eps_groove[ii, jj]).astype(_C)
     Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M)
 
@@ -1007,36 +1399,38 @@ def rcwa_jones_1d(
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
     S11, S12, S21, S22 = S
 
-    delta = np.zeros(N, dtype=_C)
-    delta[M] = 1.0
-    kz_inc = np.real(_sqrt_forward(eps_sup - kx0 ** 2))
-    R_eff = np.zeros((2, N))
-    T_eff = np.zeros((2, N))
-    jones_reflection = np.zeros((2, 2), dtype=_C)
-    for col, pol in enumerate(("x", "y")):
+    delta = xp.asarray((orders == 0).astype(_C))
+    zeros_N = xp.zeros(N, dtype=_C)
+    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2)))
+    # Build the two incident-polarization responses then STACK (no item
+    # assignment, so the path is JAX-differentiable as well as GPU-ready).
+    R_rows, T_rows, j_cols = [], [], []
+    for pol in ("x", "y"):
         if pol == "x":
-            cinc = np.concatenate([delta, np.zeros(N, dtype=_C)])
+            cinc = xp.concatenate([delta, zeros_N])
             einc_sq = 1.0 + (kx0 / kz_inc) ** 2 if kz_inc != 0 else 1.0
         else:
-            cinc = np.concatenate([np.zeros(N, dtype=_C), delta])
+            cinc = xp.concatenate([zeros_N, delta])
             einc_sq = 1.0
         r = S11 @ cinc
         t = S21 @ cinc
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
-        safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-        rz = -(kx * rx) / safe_r
-        tz = -(kx * tx) / safe_t
-        Re = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                         + np.abs(rz) ** 2) / einc_sq
-        Te = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                         + np.abs(tz) ** 2) / einc_sq
-        R_eff[col] = np.where(np.real(kz_ref) > 0, np.real(Re), 0.0)
-        T_eff[col] = np.where(np.real(kz_trn) > 0, np.real(Te), 0.0)
-        # Zeroth-order Jones (conjugate back to the public exp(-i w t)).
-        jones_reflection[0, col] = np.conj(rx[M])
-        jones_reflection[1, col] = np.conj(ry[M])
+        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        rz = -(kxv * rx) / safe_r
+        tz = -(kxv * tx) / safe_t
+        Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                         + xp.abs(rz) ** 2) / einc_sq
+        Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                         + xp.abs(tz) ** 2) / einc_sq
+        R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
+        T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+        # Zeroth-order Jones column (conjugate back to public exp(-i w t)).
+        j_cols.append(xp.stack([xp.conj(rx[M]), xp.conj(ry[M])]))
+    R_eff = xp.stack(R_rows)                       # (2, N)
+    T_eff = xp.stack(T_rows)
+    jones_reflection = xp.stack(j_cols, axis=1)    # (2, 2): columns = pol
     return orders, R_eff, T_eff, jones_reflection
 
 
@@ -1053,12 +1447,16 @@ def rcwa_jones_2d(
     phi: float = 0.0,
     n_orders_x: int = 5,
     n_orders_y: int = 5,
+    use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
     subset; Li 2003, direct-rule factorization).  Returns diffraction
     efficiencies for both incident linear polarizations plus the 2x2
     zeroth-order Jones reflection matrix.
+
+    Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
+    ``eps_tensor_cell`` is a JAX array); see :func:`rcwa_efficiency_1d`.
 
     Parameters
     ----------
@@ -1091,19 +1489,46 @@ def rcwa_jones_2d(
     :func:`rcwa_efficiency_2d` for a scalar cell; it converges fastest for
     smooth / dielectric anisotropic media (e.g. liquid-crystal cells).
     """
-    eps_t = np.conj(np.asarray(eps_tensor_cell, dtype=_C))
-    eps_sup = np.conj(_C(n_superstrate) ** 2)
-    eps_sub = np.conj(_C(n_substrate) ** 2)
+    _validate_geometry("rcwa_jones_2d",
+                       **_concrete(period=period_x, period_y=period_y,
+                                   depth=depth, wavelength=wavelength),
+                       n_orders=n_orders_x, n_orders_y=n_orders_y)
+    _validate_cell_sampling("rcwa_jones_2d", eps_tensor_cell,
+                            n_orders_x, n_orders_y)
+
+    xp = _rcwa_xp("rcwa_jones_2d", use_gpu, eps_tensor_cell)
+    is_jax = backend_name(xp) == "jax"
+    if is_jax:
+        _warn_if_jax_f32("rcwa_jones_2d")
+    eps_t = xp.conj(xp.asarray(eps_tensor_cell).astype(_C))
+    eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
+    eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
     orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
-    k0 = 2.0 * np.pi / wavelength
-    nre = np.real(np.sqrt(eps_sup))
+    nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
-    kx = kx0 + orders[:, 0] * (wavelength / period_x)
-    ky = ky0 + orders[:, 1] * (wavelength / period_y)
-    Kx = np.diag(kx.astype(_C))
-    Ky = np.diag(ky.astype(_C))
+    geom_concrete = not (_is_traced(wavelength) or _is_traced(theta)
+                         or _is_traced(phi))
+    if not is_jax or geom_concrete:
+        _require_propagating_incidence("rcwa_jones_2d", eps_sup,
+                                       kx0 ** 2 + ky0 ** 2)
+        eps_reals = [eps_sup, eps_sub]
+        if not is_jax:
+            dr = xp.real(eps_t[:, :, [0, 1, 2], [0, 1, 2]])
+            eps_reals += [float(dr.min()), float(dr.max())]
+        wl_eff = _grazing_safe_wavelength(
+            float(wavelength), kx0, ky0, orders[:, 0], orders[:, 1], period_x,
+            period_y, eps_reals)
+    else:
+        wl_eff = wavelength
+    k0 = 2.0 * np.pi / wl_eff
+    kx = kx0 + orders[:, 0] * (wl_eff / period_x)
+    ky = ky0 + orders[:, 1] * (wl_eff / period_y)
+    Kx = xp.asarray(np.diag(kx.astype(_C)))
+    Ky = xp.asarray(np.diag(ky.astype(_C)))
+    kxv = xp.asarray(kx.astype(_C))
+    kyv = xp.asarray(ky.astype(_C))
 
     # Direct-rule (Laurent) convolution of each tensor component.
     def _conv(comp):
@@ -1123,34 +1548,33 @@ def rcwa_jones_2d(
     S11, S12, S21, S22 = S
 
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
-    delta = np.zeros(N, dtype=_C)
-    delta[p0] = 1.0
-    kz_inc = np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-    R_eff = np.zeros((2, N))
-    T_eff = np.zeros((2, N))
-    jones_reflection = np.zeros((2, 2), dtype=_C)
-    for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
+    delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
+    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    R_rows, T_rows, j_cols = [], [], []
+    for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
         # Unit tangential E along (ex0, ey0); the incident wave's longitudinal
         # Ez = -(kx0 ex + ky0 ey)/kz_inc inflates |E_inc|^2 (cf. the 1-D sec^2).
         long_inc = (kx0 * ex0 + ky0 * ey0)
         einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-        cinc = np.concatenate([ex0 * delta, ey0 * delta])
+        cinc = xp.concatenate([ex0 * delta, ey0 * delta])
         r = S11 @ cinc
         t = S21 @ cinc
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
-        rz = -(kx * rx + ky * ry) / safe_r
-        tz = -(kx * tx + ky * ty) / safe_t
-        Re = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                         + np.abs(rz) ** 2) / einc_sq
-        Te = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                         + np.abs(tz) ** 2) / einc_sq
-        R_eff[col] = np.where(np.real(kz_ref) > 0, np.real(Re), 0.0)
-        T_eff[col] = np.where(np.real(kz_trn) > 0, np.real(Te), 0.0)
-        jones_reflection[0, col] = np.conj(rx[p0])
-        jones_reflection[1, col] = np.conj(ry[p0])
+        rz = -(kxv * rx + kyv * ry) / safe_r
+        tz = -(kxv * tx + kyv * ty) / safe_t
+        Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                         + xp.abs(rz) ** 2) / einc_sq
+        Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                         + xp.abs(tz) ** 2) / einc_sq
+        R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
+        T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+        j_cols.append(xp.stack([xp.conj(rx[p0]), xp.conj(ry[p0])]))
+    R_eff = xp.stack(R_rows)
+    T_eff = xp.stack(T_rows)
+    jones_reflection = xp.stack(j_cols, axis=1)
     return orders, R_eff, T_eff, jones_reflection
 
 
@@ -1242,9 +1666,16 @@ def rcwa_efficiency_2d_shapes(
     polarization: str = "te",
     n_orders_x: int = 5,
     n_orders_y: int = 5,
+    use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D crossed-grating efficiencies using **analytic** shape
     Fourier transforms and the dual-Laurent factorization.
+
+    Backend-dispatched for NumPy / CuPy (``use_gpu``).  The analytic shape
+    form factors are evaluated on the host (closed form) and the resulting
+    convolution matrices are moved to the backend for the eigensolve; the
+    JAX (differentiable) path is not offered for the analytic-shape solver
+    (its Bessel form factors are host ``scipy.special``).
 
     The patterned layer is a background permittivity ``eps_background``
     overlaid with analytically-described ``shapes`` (no pixelation), so the
@@ -1272,28 +1703,48 @@ def rcwa_efficiency_2d_shapes(
     orders : (N, 2) int ndarray
     R_eff, T_eff : (N,) float ndarray
     """
-    if polarization not in ("te", "tm"):
-        raise ValueError(
-            f"rcwa_efficiency_2d_shapes: polarization must be 'te' or 'tm', "
-            f"got {polarization!r}.")
-    # Loss-sign bridge: conjugate every public permittivity.
-    eps_bg = np.conj(_C(eps_background))
-    shapes_c = [dict(s, eps=np.conj(_C(s["eps"]))) for s in shapes]
-    eps_sup = np.conj(_C(n_superstrate) ** 2)
-    eps_sub = np.conj(_C(n_substrate) ** 2)
+    _validate_geometry("rcwa_efficiency_2d_shapes", period=period_x,
+                       period_y=period_y, depth=depth, wavelength=wavelength,
+                       n_orders=n_orders_x, n_orders_y=n_orders_y)
+    _validate_shapes("rcwa_efficiency_2d_shapes", shapes)
+    polarization = _normalize_pol("rcwa_efficiency_2d_shapes", polarization)
+
+    xp = _rcwa_xp("rcwa_efficiency_2d_shapes", use_gpu)
+    if backend_name(xp) == "jax":
+        raise NotImplementedError(
+            "rcwa_efficiency_2d_shapes: the analytic-shape solver has no JAX "
+            "(differentiable) path; use a JAX eps_cell with rcwa_efficiency_2d "
+            "for gradient-based design, or call with use_gpu for CuPy.")
+    # Loss-sign bridge: conjugate every public permittivity (host scalars).
+    eps_bg = complex(np.conj(_C(eps_background)))
+    shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
+    eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
+    eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
     orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
-    k0 = 2.0 * np.pi / wavelength
-    nre = np.real(np.sqrt(eps_sup))
+    nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
-    kx = kx0 + orders[:, 0] * (wavelength / period_x)
-    ky = ky0 + orders[:, 1] * (wavelength / period_y)
-    Kx = np.diag(kx.astype(_C))
-    Ky = np.diag(ky.astype(_C))
+    _require_propagating_incidence("rcwa_efficiency_2d_shapes", eps_sup,
+                                   kx0 ** 2 + ky0 ** 2)
+    layer_eps = [eps_bg] + [s["eps"] for s in shapes_c]
+    wl_eff = _grazing_safe_wavelength(
+        wavelength, kx0, ky0, orders[:, 0], orders[:, 1], period_x, period_y,
+        [eps_sup, eps_sub] + layer_eps)
+    k0 = 2.0 * np.pi / wl_eff
+    kx = kx0 + orders[:, 0] * (wl_eff / period_x)
+    ky = ky0 + orders[:, 1] * (wl_eff / period_y)
+    Kx = xp.asarray(np.diag(kx.astype(_C)))
+    Ky = xp.asarray(np.diag(ky.astype(_C)))
+    kxv = xp.asarray(kx.astype(_C))
+    kyv = xp.asarray(ky.astype(_C))
 
-    EPS, EPS_inv = _analytic_convolutions_2d(
+    # Analytic (host) form factors -> move the convolution matrices to the
+    # backend for the eigensolve.
+    EPS_np, EPS_inv_np = _analytic_convolutions_2d(
         eps_bg, shapes_c, orders, n_orders_x, n_orders_y, period_x, period_y)
+    EPS = xp.asarray(EPS_np)
+    EPS_inv = xp.asarray(EPS_inv_np)
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
@@ -1304,11 +1755,9 @@ def rcwa_efficiency_2d_shapes(
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
     S11, S12, S21, S22 = S
 
-    p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
-    delta = np.zeros(N, dtype=_C)
-    delta[p0] = 1.0
-    kz_inc = np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))
-    kt = np.hypot(kx0, ky0)
+    delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
+    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    kt = float(np.hypot(kx0, ky0))
     if kt < 1e-12:
         ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
         einc_sq = 1.0
@@ -1320,21 +1769,21 @@ def rcwa_efficiency_2d_shapes(
         else:
             ex0, ey0 = ax, ay
             einc_sq = 1.0 + (kt / kz_inc) ** 2
-    cinc = np.concatenate([ex0 * delta, ey0 * delta])
+    cinc = xp.concatenate([ex0 * delta, ey0 * delta])
     r = S11 @ cinc
     t = S21 @ cinc
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-    rz = -(kx * rx + ky * ry) / safe_r
-    tz = -(kx * tx + ky * ty) / safe_t
-    R_eff = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                        + np.abs(rz) ** 2) / einc_sq
-    T_eff = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                        + np.abs(tz) ** 2) / einc_sq
-    R_eff = np.where(np.real(kz_ref) > 0, np.real(R_eff), 0.0)
-    T_eff = np.where(np.real(kz_trn) > 0, np.real(T_eff), 0.0)
+    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    rz = -(kxv * rx + kyv * ry) / safe_r
+    tz = -(kxv * tx + kyv * ty) / safe_t
+    R_eff = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                        + xp.abs(rz) ** 2) / einc_sq
+    T_eff = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                        + xp.abs(tz) ** 2) / einc_sq
+    R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
+    T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
     return orders, R_eff, T_eff
 
 
@@ -1427,136 +1876,60 @@ def rcwa_efficiency_1d_jax(
 ):
     """JAX (differentiable) twin of :func:`rcwa_efficiency_1d`.
 
+    .. deprecated:: 5.5.1
+        Retained for backward compatibility.  This is now a thin wrapper that
+        promotes its inputs to ``jax.numpy`` arrays and forwards to the
+        unified :func:`rcwa_efficiency_1d`, which auto-dispatches to the
+        differentiable JAX backend when given JAX inputs.  Prefer calling
+        ``rcwa_efficiency_1d(...)`` with ``jax.numpy`` arguments directly.
+
     Returns ``(orders, R_eff, T_eff)`` as JAX arrays; the efficiencies are
     differentiable w.r.t. ``n_ridge``, ``n_groove``, ``depth`` and ``angle``
     (pass them as JAX tracers / floats), enabling ``jax.grad`` /
     ``jax.value_and_grad`` gradient-based metasurface inverse design.
 
-    Matches :func:`rcwa_efficiency_1d` numerically (same physics,
-    conventions and loss-sign bridge); the binary profile is sampled on
-    ``n_samples`` points with a soft edge (differentiable w.r.t. the index
-    VALUES rather than the discrete duty-cycle threshold).  Requires the
-    optional ``jax`` extra.  Assumes no order sits exactly at grazing (no
-    Wood-anomaly nudge on the differentiable path).
+    .. note::
+        The non-Hermitian-eig custom VJP provides validated **first-order**
+        gradients (matched to complex finite differences).  Second derivatives
+        (``jax.hessian`` / forward-over-reverse) flow through the
+        Lorentzian-broadened eigenvector term and are **not** validated; treat
+        Hessian-based optimizers as unsupported on the eig path.
+
+    Folding the former stand-alone JAX solver into the backend-dispatched
+    core removed ~150 lines of duplicated physics (the source of the v5.5.0
+    Wood-anomaly / validation drift) and switched the differentiable path
+    from a soft-edge sampled profile to the SAME exact binary-grating Fourier
+    coefficients the NumPy path uses -- so JAX now matches NumPy to eig
+    precision rather than the old ~5e-3.  ``n_samples`` is accepted but
+    ignored (the exact analytic coefficients need no sampling); ``duty_cycle``
+    is a discrete threshold and is not differentiated.  Assumes no order sits
+    exactly at grazing (no Wood-anomaly nudge on the differentiable path);
+    choose ``wavelength`` / ``angle`` away from an exact Rayleigh anomaly.
     """
+    from ..backend import JAX_AVAILABLE as _JAX_AVAILABLE
+    if not _JAX_AVAILABLE:
+        raise ImportError(
+            "rcwa_efficiency_1d_jax requires the optional 'jax' extra; install "
+            "with `pip install lumenairy[jax]` (or `pip install jax`).  Use the "
+            "NumPy rcwa_efficiency_1d for non-differentiable evaluation.")
     import jax.numpy as jnp
-    eig_stable = _jax_eig_stable()
-    C = jnp.complex128
-
-    if polarization not in ("te", "tm"):
-        raise ValueError("polarization must be 'te' or 'tm'.")
-
-    nr0 = complex(n_ridge) if not hasattr(n_ridge, "shape") else n_ridge
-    ng0 = complex(n_groove) if not hasattr(n_groove, "shape") else n_groove
-    is_metal = (np.imag(complex(nr0)) > 1e-6 if not hasattr(nr0, "shape") else False) \
-        or (np.imag(complex(ng0)) > 1e-6 if not hasattr(ng0, "shape") else False)
-    use_li = (formulation == "li") or (
-        formulation == "auto" and (polarization == "tm" or is_metal))
-
-    M = int(n_orders)
-    N = 2 * M + 1
-    orders = jnp.arange(-M, M + 1)
-    # Loss-sign bridge: conjugate the public indices (engineering exp(+iwt)).
-    nr = jnp.conj(jnp.asarray(n_ridge, dtype=C))
-    ng = jnp.conj(jnp.asarray(n_groove, dtype=C))
-    eps_sup = jnp.conj(jnp.asarray(n_superstrate, dtype=C) ** 2)
-    eps_sub = jnp.conj(jnp.asarray(n_substrate, dtype=C) ** 2)
-
-    k0 = 2.0 * jnp.pi / wavelength
-    kx0 = jnp.real(jnp.sqrt(eps_sup)) * jnp.sin(angle)
-    kx = kx0 + orders * (wavelength / period)
-    Kx = jnp.diag(kx.astype(C))
-
-    xq = (jnp.arange(n_samples) + 0.5) / n_samples
-    soft = 0.5 * (1.0 + jnp.tanh((duty_cycle - xq) * n_samples))
-    eps_prof = ng ** 2 + (nr ** 2 - ng ** 2) * soft
-    ncoef = 2 * N - 1
-    centre = ncoef // 2
-    ks = jnp.arange(-centre, centre + 1)
-    mi = jnp.arange(N)
-    tidx = centre + (mi[:, None] - mi[None, :])
-
-    def _toeplitz(prof):
-        full = jnp.fft.fft(prof) / n_samples
-        coef = full[ks % n_samples]
-        return coef[tidx]
-
-    EPS = _toeplitz(eps_prof)
-    EPS_xx = jnp.linalg.inv(_toeplitz(1.0 / eps_prof)) if use_li else EPS
-
-    def _sqrt_fwd(x):
-        r = jnp.sqrt(x.astype(C))
-        bad = (jnp.imag(r) < 0) | ((jnp.abs(jnp.imag(r)) <= 1e-300) & (jnp.real(r) < 0))
-        return jnp.where(bad, -r, r)
-
-    def _sqrt_dec(x):
-        r = jnp.sqrt(x.astype(C))
-        return jnp.where((jnp.real(r) == 0) & (jnp.imag(r) < 0), -r, r)
-
-    Zb = jnp.zeros((N, N), dtype=C)
-    Ib = jnp.eye(N, dtype=C)
-
-    def _homog(eps):
-        kz = _sqrt_fwd(eps - kx ** 2)
-        lam_h = _sqrt_dec(-jnp.concatenate([kz, kz]) ** 2)
-        Qh = jnp.block([[Zb, eps * Ib - Kx @ Kx], [-eps * Ib, Zb]])
-        return jnp.eye(2 * N, dtype=C), Qh @ jnp.diag(1.0 / lam_h), kz
-
-    Q = jnp.block([[Zb, EPS - Kx @ Kx], [-EPS_xx, Zb]])
-    P = jnp.block([[Zb, Ib - Kx @ jnp.linalg.inv(EPS) @ Kx], [-Ib, Zb]])
-    lam2, W = eig_stable(P @ Q)
-    lam = _sqrt_dec(lam2)
-    Vl = Q @ W @ jnp.diag(1.0 / lam)
-
-    Wref, Vref, kz_ref = _homog(eps_sup)
-    Wtrn, Vtrn, kz_trn = _homog(eps_sub)
-    X = jnp.diag(jnp.exp(-lam * k0 * depth))
-
-    def _iface(Wa, Va, Wb, Vb):
-        a = jnp.linalg.solve(Wb, Wa)
-        b = jnp.linalg.solve(Vb, Va)
-        apb, amb = a + b, a - b
-        iapb = jnp.linalg.inv(apb)
-        return (-iapb @ amb, 2.0 * iapb,
-                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
-
-    def _star(SA, SB):
-        A11, A12, A21, A22 = SA
-        B11, B12, B21, B22 = SB
-        Im = jnp.eye(A11.shape[0], dtype=C)
-        Dm = jnp.linalg.inv(Im - B11 @ A22)
-        Fm = jnp.linalg.inv(Im - A22 @ B11)
-        return (A11 + A12 @ Dm @ B11 @ A21, A12 @ Dm @ B12,
-                B21 @ Fm @ A21, B22 + B21 @ Fm @ A22 @ B12)
-
-    Z2 = jnp.zeros((2 * N, 2 * N), dtype=C)
-    Sp = (Z2, X, X, Z2)
-    S = _star(_star(_iface(Wref, Vref, W, Vl), Sp), _iface(W, Vl, Wtrn, Vtrn))
-    S11, S12, S21, S22 = S
-
-    delta = jnp.zeros(N, dtype=C).at[M].set(1.0)
-    kz_inc = jnp.real(_sqrt_fwd(eps_sup - kx0 ** 2))
-    if polarization == "te":
-        cinc = jnp.concatenate([jnp.zeros(N, dtype=C), delta])
-        einc_sq = 1.0
-    else:
-        cinc = jnp.concatenate([delta, jnp.zeros(N, dtype=C)])
-        einc_sq = 1.0 + (kx0 / kz_inc) ** 2
-    r = S11 @ cinc
-    t = S21 @ cinc
-    rx, ry = r[:N], r[N:]
-    tx, ty = t[:N], t[N:]
-    safe_r = jnp.where(jnp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = jnp.where(jnp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-    rz = -(kx * rx) / safe_r
-    tz = -(kx * tx) / safe_t
-    R = jnp.real(kz_ref / kz_inc) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
-                                     + jnp.abs(rz) ** 2) / einc_sq
-    T = jnp.real(kz_trn / kz_inc) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
-                                     + jnp.abs(tz) ** 2) / einc_sq
-    R = jnp.where(jnp.real(kz_ref) > 0, jnp.real(R), 0.0)
-    T = jnp.where(jnp.real(kz_trn) > 0, jnp.real(T), 0.0)
-    return orders, R, T
+    del n_samples  # accepted for back-compat; unused by the exact-coeff path
+    # Promote the differentiable arguments to JAX arrays so the unified solver
+    # dispatches to the JAX backend (gradients flow through these).
+    return rcwa_efficiency_1d(
+        period,
+        jnp.asarray(n_ridge),
+        jnp.asarray(n_groove),
+        jnp.asarray(n_substrate),
+        jnp.asarray(n_superstrate),
+        jnp.asarray(depth),
+        duty_cycle,
+        jnp.asarray(wavelength),
+        angle=jnp.asarray(angle),
+        polarization=polarization,
+        n_orders=n_orders,
+        formulation=formulation,
+    )
 
 
 # ===========================================================================
@@ -1609,6 +1982,10 @@ class RCWAResult:
         :class:`~lumenairy.elements.polarization.JonesField` -- the bridge
         from a rigorous metasurface reflection into the polarization
         pipeline.
+    to_jones_field(nx, ny, dx, ...) -> JonesField
+        Build a uniform specular (zeroth-order) JonesField for the
+        polarization / propagation pipeline (single plane wave; see the
+        method's warning about non-zero orders).
     """
 
     def __init__(self, orders, R, T, jones_reflection, jones_transmission):
@@ -1631,8 +2008,50 @@ class RCWAResult:
         return self._Jt
 
     def apply_reflection(self, jones_field):
+        # apply_jones_matrix transforms its field IN PLACE; operate on a copy
+        # so the caller's incident field is preserved.  Note: this carries
+        # only the zeroth-order (specular) 2x2 Jones -- for a strongly
+        # diffracting cell most power is in non-zero orders, so the returned
+        # field is the specular component only (a single plane wave).
         from .polarization import apply_jones_matrix
-        return apply_jones_matrix(jones_field, self._Jr)
+        return apply_jones_matrix(jones_field.copy(), self._Jr)
+
+    def to_jones_field(self, nx, ny, dx, *, incident=(1.0, 0.0),
+                       port="reflection", dy=None):
+        """Build a :class:`~lumenairy.elements.polarization.JonesField` of the
+        specular (zeroth-order) response to a unit incident plane wave, for use
+        in the polarization / propagation pipeline.
+
+        Parameters
+        ----------
+        nx, ny : int
+            Output grid shape ``(ny, nx)``.
+        dx : float
+            Grid pitch [m] (``dy`` defaults to ``dx``).
+        incident : (2,) complex, optional
+            Incident Jones vector ``(E_x, E_y)``.  Default ``(1, 0)``.
+        port : {'reflection', 'transmission'}, optional
+            Which zeroth-order Jones matrix to apply.  Default reflection.
+
+        .. warning::
+            This carries ONLY the zeroth (specular) diffraction order -- a
+            single uniform plane wave.  For a strongly diffracting cell most
+            power sits in non-zero orders, which this bridge does NOT
+            reconstruct (per-order field reconstruction is a future addition);
+            the returned field is the specular component only.
+        """
+        if port not in ("reflection", "transmission"):
+            raise ValueError(
+                f"RCWAResult.to_jones_field: port must be 'reflection' or "
+                f"'transmission', got {port!r}.")
+        from ..backend import to_numpy
+        from .polarization import JonesField
+        J = to_numpy(self._Jr if port == "reflection" else self._Jt)
+        inc = np.asarray(incident, dtype=_C).reshape(2)
+        out = J @ inc                       # specular [E_x, E_y] response
+        ex = np.full((int(ny), int(nx)), out[0], dtype=_C)
+        ey = np.full((int(ny), int(nx)), out[1], dtype=_C)
+        return JonesField(ex, ey, dx=dx, dy=dy)
 
 
 class _RCWALayer:
@@ -1677,7 +2096,9 @@ class RCWAStack:
     """
 
     def __init__(self, period, *, period_y=None, n_superstrate=1.0,
-                 n_substrate=1.0, n_orders=11, n_orders_y=None):
+                 n_substrate=1.0, n_orders=11, n_orders_y=None, use_gpu=False):
+        _validate_geometry("RCWAStack", period=period, period_y=period_y,
+                           n_orders=n_orders, n_orders_y=n_orders_y)
         self.period_x = float(period)
         self.is_1d = period_y is None and n_orders_y is None
         self.period_y = float(period if period_y is None else period_y)
@@ -1686,6 +2107,7 @@ class RCWAStack:
         self.nox = int(n_orders)
         self.noy = 0 if self.is_1d else int(
             n_orders if n_orders_y is None else n_orders_y)
+        self.use_gpu = bool(use_gpu)
         self._layers: List[_RCWALayer] = []
         self._source: Optional[dict] = None
 
@@ -1707,49 +2129,80 @@ class RCWAStack:
             raise ValueError(
                 "add_layer: provide exactly one of eps, eps_cell, "
                 "eps_tensor_cell, shapes.")
+        _validate_geometry("add_layer", depth=thickness)
         if eps is not None:
             self._layers.append(_RCWALayer(thickness, "uniform", _C(eps)))
         elif eps_cell is not None:
             cell = np.asarray(eps_cell, dtype=_C)
             if cell.ndim == 1:
                 cell = cell[:, None]
+            _validate_cell_sampling("add_layer", cell, self.nox, self.noy)
             self._layers.append(_RCWALayer(thickness, "iso", cell))
         elif shapes is not None:
             if eps_background is None:
                 raise ValueError(
                     "add_layer: shapes requires eps_background.")
+            _validate_shapes("add_layer", shapes)
             self._layers.append(
                 _RCWALayer(thickness, "shapes", (_C(eps_background), shapes)))
         else:
-            self._layers.append(
-                _RCWALayer(thickness, "tensor",
-                           np.asarray(eps_tensor_cell, dtype=_C)))
+            tcell = np.asarray(eps_tensor_cell, dtype=_C)
+            _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
+            self._layers.append(_RCWALayer(thickness, "tensor", tcell))
         return self
 
-    def set_source(self, wavelength, *, theta=0.0, phi=0.0, polarization="te"):
+    def set_source(self, wavelength, *, theta=0.0, phi=0.0):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
-        ``theta`` and azimuth ``phi`` [rad])."""
+        ``theta`` and azimuth ``phi`` [rad]).
+
+        The stack solver always returns the full zeroth-order Jones response
+        (the reaction to both incident ``E_x`` and ``E_y``), so no incident
+        polarization is selected here."""
+        _validate_geometry("RCWAStack.set_source", wavelength=wavelength)
         self._source = dict(wavelength=float(wavelength), theta=float(theta),
-                            phi=float(phi), polarization=polarization)
+                            phi=float(phi))
         return self
+
+    def _layer_eps_reals(self):
+        """Real permittivities present in the layers (for the Wood-anomaly
+        grazing nudge)."""
+        vals = []
+        for L in self._layers:
+            if L.kind == "uniform":
+                vals.append(float(np.real(_C(L.data))))
+            elif L.kind == "iso":
+                r = np.real(L.data)
+                vals += [float(r.min()), float(r.max())]
+            elif L.kind == "shapes":
+                bg, shapes = L.data
+                vals.append(float(np.real(_C(bg))))
+                vals += [float(np.real(_C(s["eps"]))) for s in shapes]
+            else:  # tensor
+                d = np.real(L.data[:, :, [0, 1, 2], [0, 1, 2]])
+                vals += [float(d.min()), float(d.max())]
+        return vals
 
     def _layer_modes(self, layer, Kx, Ky, orders):
+        xp = array_namespace(Kx)
         if layer.kind == "uniform":
-            W, V, kz = _homogeneous_eigenmodes(Kx, Ky, np.conj(layer.data))
-            lam = _sqrt_decay(-np.concatenate([kz, kz]) ** 2)
+            W, V, kz = _homogeneous_eigenmodes(Kx, Ky, complex(np.conj(layer.data)))
+            lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
             return W, V, lam
         if layer.kind == "iso":
-            EPS = _eps_convolution_2d(np.conj(layer.data), orders,
+            EPS = _eps_convolution_2d(xp.conj(xp.asarray(layer.data)), orders,
                                       self.nox, self.noy)
             return _layer_eigenmodes(Kx, Ky, EPS, EPS)
         if layer.kind == "shapes":
+            # Analytic (host) form factors -> move the convolution to backend.
             eps_bg, shapes = layer.data
-            shapes_c = [dict(s, eps=np.conj(_C(s["eps"]))) for s in shapes]
-            EPS, EPS_inv = _analytic_convolutions_2d(
-                np.conj(eps_bg), shapes_c, orders, self.nox, self.noy,
-                self.period_x, self.period_y)
-            return _layer_eigenmodes(Kx, Ky, EPS, EPS, ez_laurent_inv=EPS_inv)
-        et = np.conj(layer.data)
+            shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
+            EPS_np, EPS_inv_np = _analytic_convolutions_2d(
+                complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
+                self.noy, self.period_x, self.period_y)
+            EPS = xp.asarray(EPS_np)
+            return _layer_eigenmodes(Kx, Ky, EPS, EPS,
+                                     ez_laurent_inv=xp.asarray(EPS_inv_np))
+        et = xp.conj(xp.asarray(layer.data))
 
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
@@ -1765,19 +2218,35 @@ class RCWAStack:
             raise ValueError("RCWAStack.solve: add at least one layer.")
         src = self._source
         wl, theta, phi = src["wavelength"], src["theta"], src["phi"]
-        k0 = 2.0 * np.pi / wl
+        xp = _rcwa_xp("RCWAStack.solve", self.use_gpu)
+        bname = backend_name(xp)
         orders, N = _harmonic_orders_2d(self.nox, self.noy)
-        eps_sup = np.conj(_C(self.n_superstrate) ** 2)
-        eps_sub = np.conj(_C(self.n_substrate) ** 2)
-        nre = np.real(np.sqrt(eps_sup))
+        eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
+        eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
+        nre = float(np.real(np.sqrt(eps_sup)))
         kx0 = nre * np.sin(theta) * np.cos(phi)
         ky0 = nre * np.sin(theta) * np.sin(phi)
+        _require_propagating_incidence("RCWAStack.solve", eps_sup,
+                                       kx0 ** 2 + ky0 ** 2)
+        wl = _grazing_safe_wavelength(
+            wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
+            self.period_y, [eps_sup, eps_sub] + self._layer_eps_reals())
+        k0 = 2.0 * np.pi / wl
         kx = kx0 + orders[:, 0] * (wl / self.period_x)
         ky = ky0 + orders[:, 1] * (wl / self.period_y)
-        Kx = np.diag(kx.astype(_C))
-        Ky = np.diag(ky.astype(_C))
+        Kx = xp.asarray(np.diag(kx.astype(_C)))
+        Ky = xp.asarray(np.diag(ky.astype(_C)))
+        kxv = xp.asarray(kx.astype(_C))
+        kyv = xp.asarray(ky.astype(_C))
+        # n_superstrate MUST be part of the key for BOTH region caches: the
+        # substrate modes depend on Kx/Ky whose kx0 = Re(sqrt(eps_sup))*... ,
+        # so two stacks with the same n_substrate but different n_superstrate
+        # have DIFFERENT substrate modes.  Omitting it caused a cache
+        # collision (33-40% spurious energy gain on oblique sweeps).  The
+        # backend name is in the key too so a NumPy and a CuPy solve of the
+        # same geometry never alias to each other's (wrong-device) modes.
         geom = (self.nox, self.noy, wl, theta, phi, self.period_x,
-                self.period_y)
+                self.period_y, self.n_superstrate, bname)
         Wref, Vref, kz_ref = _cached_homogeneous_eigenmodes(
             eps_sup, Kx, Ky, ("sup", self.n_superstrate) + geom)
         Wtrn, Vtrn, kz_trn = _cached_homogeneous_eigenmodes(
@@ -1797,33 +2266,33 @@ class RCWAStack:
         S11, S12, S21, S22 = S
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
-        delta = np.zeros(N, dtype=_C)
-        delta[p0] = 1.0
-        kz_inc = np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2))
-        safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-        R = np.zeros((2, N))
-        T = np.zeros((2, N))
-        Jr = np.zeros((2, 2), dtype=_C)
-        Jt = np.zeros((2, 2), dtype=_C)
-        for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
+        delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
+        kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        R_rows, T_rows, jr_cols, jt_cols = [], [], [], []
+        for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-            cinc = np.concatenate([ex0 * delta, ey0 * delta])
+            cinc = xp.concatenate([ex0 * delta, ey0 * delta])
             r = S11 @ cinc
             t = S21 @ cinc
             rx, ry = r[:N], r[N:]
             tx, ty = t[:N], t[N:]
-            rz = -(kx * rx + ky * ry) / safe_r
-            tz = -(kx * tx + ky * ty) / safe_t
-            Re = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                             + np.abs(rz) ** 2) / einc_sq
-            Te = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                             + np.abs(tz) ** 2) / einc_sq
-            R[col] = np.where(np.real(kz_ref) > 0, np.real(Re), 0.0)
-            T[col] = np.where(np.real(kz_trn) > 0, np.real(Te), 0.0)
-            Jr[0, col], Jr[1, col] = np.conj(rx[p0]), np.conj(ry[p0])
-            Jt[0, col], Jt[1, col] = np.conj(tx[p0]), np.conj(ty[p0])
+            rz = -(kxv * rx + kyv * ry) / safe_r
+            tz = -(kxv * tx + kyv * ty) / safe_t
+            Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                             + xp.abs(rz) ** 2) / einc_sq
+            Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                             + xp.abs(tz) ** 2) / einc_sq
+            R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
+            T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+            jr_cols.append(xp.stack([xp.conj(rx[p0]), xp.conj(ry[p0])]))
+            jt_cols.append(xp.stack([xp.conj(tx[p0]), xp.conj(ty[p0])]))
+        R = xp.stack(R_rows)
+        T = xp.stack(T_rows)
+        Jr = xp.stack(jr_cols, axis=1)
+        Jt = xp.stack(jt_cols, axis=1)
         out_orders = orders[:, 0].copy() if self.is_1d else orders
         return RCWAResult(out_orders, R, T, Jr, Jt)
 

@@ -2,6 +2,110 @@
 
 All notable changes to the core library are documented here.
 
+## [5.5.1] — 2026-05-31
+
+**RCWA hardening + backend unification.**  A correctness, robustness, and
+architecture pass over the v5.5.0 RCWA module, driven by two independent
+audits.  No public-API removals except one inert parameter; all NumPy results
+are **bit-identical** to v5.5.0 (verified to `max|Δ| = 0` across a six-config
+baseline spanning every entry point).
+
+### Fixed (correctness)
+
+- **Substrate homogeneous-mode cache collision (`RCWAStack`).**  The cached
+  half-space eigenmode key omitted `n_superstrate`; at oblique incidence two
+  stacks with equal `n_substrate` but different `n_superstrate` collided, so
+  the second reused the first's substrate modes (`R + T > 1`, ~33–40 % spurious
+  energy on oblique sweeps).  `n_superstrate` (and the backend name) are now
+  part of the key.
+- **Grazing layer-mode crash.**  A diffracted order grazing (`k_z → 0`) inside
+  a *layer* made the interface S-matrix singular (`LinAlgError`).  The
+  Wood-anomaly nudge now also covers the layer's constituent indices, not just
+  the half-spaces.
+- **Non-propagating incidence.**  An evanescent / metallic / grazing incidence
+  half-space silently produced negative / NaN "efficiencies"; it now raises a
+  clear `ValueError`.
+- **`RCWAResult.apply_reflection` mutated its input.**  It delegated to the
+  in-place `apply_jones_matrix`, destroying the caller's incident
+  `JonesField`; it now operates on a copy and returns a new field.
+- **JAX degenerate / anomaly robustness** (found by an adversarial review of
+  the new backend dispatch).  A laterally-uniform *isotropic* layer is doubly
+  degenerate, so JAX's eig returned an ill-conditioned basis that silently
+  broke energy at oblique incidence (`R + T = 2.2`); the analytic uniform-mode
+  branch is now reachable on JAX (and the tensor path) via a tracer-safe
+  select.  At an exact Rayleigh/Wood anomaly the JAX path returned `NaN`
+  (poisoning gradients); the grazing / non-propagating guards now run against
+  the concrete geometry on JAX too, so the value and gradient stay finite (or
+  raise a clear error for non-propagating incidence).
+
+### Added (robustness)
+
+- **Input validation** on every entry point and `RCWAStack` (positive
+  `period` / `depth` / `thickness` / `wavelength`, integer `n_orders ≥ 1`),
+  with `fn_name:` error prefixes — replacing the prior silent-wrong-answer /
+  cryptic-`LinAlgError` / `ZeroDivision` failure modes.
+- **2-D Fourier aliasing bound** is enforced: a patterned cell needs
+  `S ≥ 4·n_orders + 1` samples per axis (a uniform cell, `S ≥ 2·n_orders + 1`),
+  else it raises rather than silently aliasing.
+- **Analytic-shape validation** (known kind, strictly positive dimensions).
+- The JAX entry point gained a lazy-import sentinel with an actionable
+  `ImportError`, the `fn_name:` error prefix, and the duty-cycle / formulation
+  validation it previously dropped.
+
+### Added (architecture — backend unification)
+
+- **All RCWA solvers are now backend-dispatched** (NumPy / CuPy / JAX) via the
+  library's `array_namespace` pattern, with a `use_gpu` keyword on every entry
+  point and `RCWAStack`.  *(CuPy GPU execution requires a working
+  cuSOLVER/cuFFT stack; the dispatch is exercised on CPU in CI and routes
+  correctly to CuPy where available.)*
+- **The standalone JAX 1-D solver was folded** into `rcwa_efficiency_1d`,
+  removing a ~150-line duplicate that had drifted from the NumPy path
+  (missing Wood handling + validation).  `rcwa_efficiency_1d_jax` is retained
+  as a thin, deprecated wrapper.  The differentiable path now uses the **same
+  exact binary-grating Fourier coefficients** as the NumPy path, so JAX
+  matches NumPy to **eig precision (~1e-13)** instead of the former soft-edge
+  ~5e-3, while staying differentiable w.r.t. indices / depth / angle (gradients
+  verified against finite differences).  `n_samples` is accepted but ignored.
+- A double-precision (`jax_enable_x64`) guard warns when JAX would silently
+  truncate the ill-conditioned eigenproblem to single precision.
+- Polarization arguments accept the `s` / `p` aliases (the `coatings`
+  convention) everywhere alongside `te` / `tm`.
+
+### Added (integration)
+
+- **`RCWAResult.to_jones_field(nx, ny, dx, …)`** — a specular (zeroth-order)
+  bridge from a rigorous solve into the `JonesField` polarization / propagation
+  pipeline (documented as carrying the specular order only).
+
+### Changed / removed
+
+- Removed the inert `polarization=` parameter from `RCWAStack.set_source`
+  (the stack always returns the full Jones response; the parameter never had
+  any effect).
+
+### Documentation honesty
+
+- The v5.5.0 tolerance phrasing was over-stated for some configurations.  The
+  accurate picture: lossless **energy conservation** holds to ~1e-13 and the
+  **analytic-limit / TMM / isotropic-reduction** cross-checks to ~1e-13; but
+  agreement with an external oracle is **configuration-dependent** — for
+  high-contrast oblique **TM** the fast Li inverse rule converges quickly while
+  a Laurent-rule oracle (grcwa) converges slowly, so a low-truncation
+  comparison looks worse even though lumen is the converged answer
+  (triangulated against grcwa converging *down* and inkstone converging *up* to
+  the same value).  "Bit-exact 1-D reduction" should be read as agreement to
+  the eigensolver floor (~5e-3 at matched modest truncation), not literally
+  bit-for-bit.
+
+### Tests
+
+- Regression pins for every fixed bug; a committed oblique-TM converged-value
+  oracle; a conical 2-D anisotropic Jones energy + cross-pol guard; a
+  NumPy↔JAX execution-parity contract across all differentiable entry points;
+  `use_gpu` routing, s/p-alias, `_block`-portability, and `to_jones_field`
+  pins.
+
 ## [5.5.0] — 2026-05-30
 
 **Major feature release: a native Rigorous Coupled-Wave Analysis (RCWA /

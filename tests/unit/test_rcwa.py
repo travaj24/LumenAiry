@@ -492,14 +492,405 @@ def test_stack_jones_bridge_to_jonesfield():
     assert np.allclose(out.Ex, J[0, 0]) and np.allclose(out.Ey, J[1, 0])
 
 
+def test_stack_homog_cache_substrate_key_collision_oblique():
+    """ADVERSARIAL: the module-global homogeneous-mode cache must not return
+    the wrong substrate modes when two stacks share n_substrate + geom but
+    differ in n_superstrate at oblique incidence."""
+    from lumenairy.elements import rcwa as _r
+
+    S = 16  # >= 4*n_orders + 1 = 9 (patterned cell must clear the alias bound)
+    xx, yy = np.meshgrid((np.arange(S) + .5) / S, (np.arange(S) + .5) / S,
+                         indexing="ij")
+    mask = (np.abs(xx - .5) < .25) & (np.abs(yy - .5) < .25)
+    cell = np.where(mask, 2.3 ** 2, 1.5 ** 2).astype(complex)
+    theta = np.deg2rad(30)
+
+    def build(nsup, nsub):
+        st = RCWAStack(0.8e-6, period_y=0.8e-6, n_superstrate=nsup,
+                       n_substrate=nsub, n_orders=2, n_orders_y=2)
+        st.add_layer(0.3e-6, eps_cell=cell)
+        return st.set_source(WL, theta=theta).solve()
+
+    # clean reference for B (n_sup=2.2), cache empty
+    la.clear_asm_caches()
+    o, Rc, Tc = build(2.2, 1.5).efficiencies()
+    # dirty: A (n_sup=1.0) populates ('sub',1.5,geom); B (n_sup=2.2) shares it
+    la.clear_asm_caches()
+    _ = build(1.0, 1.5)
+    o2, Rd, Td = build(2.2, 1.5).efficiencies()
+    la.clear_asm_caches()
+    # correct behavior: cache must NOT change B's result, energy stays <= 1
+    # (regression pin for P1-B: substrate homog-mode cache key now folds in
+    # n_superstrate via `geom`, so the A->B oblique collision can't occur).
+    assert np.max(np.abs(Td - Tc)) < 1e-12
+    assert np.max(np.abs(Rd - Rc)) < 1e-12  # Rd == Rc
+    assert np.all(Rd.sum(axis=1) + Td.sum(axis=1) <= 1.0 + 1e-9)
+
+
+def test_stack_apply_reflection_does_not_mutate_input():
+    """ADVERSARIAL: apply_reflection must not mutate the incident JonesField."""
+    from lumenairy.elements.polarization import JonesField
+
+    elc = uniaxial_tensor(1.5, 1.7, np.pi / 2, phi=np.deg2rad(30))
+    cell = np.broadcast_to(elc, (8, 8, 3, 3)).copy()
+    st = RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=2, n_orders_y=2)
+    res = st.add_layer(0.3e-6, eps_tensor_cell=cell).set_source(WL).solve()
+    jf = JonesField(np.ones((6, 6), complex), np.zeros((6, 6), complex), dx=1e-6)
+    ex0, ey0 = jf.Ex.copy(), jf.Ey.copy()
+    out = res.apply_reflection(jf)
+    assert np.allclose(jf.Ex, ex0) and np.allclose(jf.Ey, ey0)  # input intact
+    assert out is not jf                                         # new object
+
+
+# =========================== input validation =============================
+# v5.5.1: every entry point rejects non-physical geometry with a fn_name:
+# prefix instead of the v5.5.0 silent-wrong-answer / cryptic-LinAlgError modes.
+
+
+def test_validate_1d_geometry_rejects_bad_inputs():
+    bad = [
+        dict(period=0.0), dict(period=-1e-6), dict(depth=-0.3e-6),
+        dict(depth=0.0), dict(n_orders=0), dict(n_orders=-3),
+        dict(n_orders=5.5), dict(wavelength=0.0),
+    ]
+    base = dict(period=1e-6, n_ridge=2.2, n_groove=1.0, n_substrate=1.5,
+                n_superstrate=1.0, depth=0.3e-6, duty_cycle=0.5, wavelength=WL)
+    for override in bad:
+        kw = dict(base, **override)
+        with pytest.raises(ValueError, match="rcwa_efficiency_1d:"):
+            rcwa_efficiency_1d(kw.pop("period"), kw.pop("n_ridge"),
+                               kw.pop("n_groove"), kw.pop("n_substrate"),
+                               kw.pop("n_superstrate"), kw.pop("depth"),
+                               kw.pop("duty_cycle"), kw.pop("wavelength"), **kw)
+
+
+def _patterned_cell(S):
+    """A genuinely patterned SxS cell (centred square) -- has high-order
+    Fourier content, so the aliasing bound applies (unlike a uniform cell)."""
+    xx, yy = np.meshgrid((np.arange(S) + .5) / S, (np.arange(S) + .5) / S,
+                         indexing="ij")
+    mask = (np.abs(xx - .5) < .25) & (np.abs(yy - .5) < .25)
+    return np.where(mask, 6.0, 2.0).astype(complex)
+
+
+def test_validate_2d_aliasing_bound_rejects_undersampled_cell():
+    # S = 8 < 4*n_orders + 1 = 13 -> would alias -> must raise, not silently
+    # return a wrong spectrum (patterned cell, so the bound truly applies).
+    with pytest.raises(ValueError, match="too coarse"):
+        rcwa_efficiency_2d(0.8e-6, 0.8e-6, _patterned_cell(8), 1.5, 1.0,
+                           0.3e-6, WL, n_orders_x=3, n_orders_y=3)
+    # exactly 4*n_orders + 1 = 13 is accepted and conserves energy
+    o, R, T = rcwa_efficiency_2d(0.8e-6, 0.8e-6, _patterned_cell(13), 1.5, 1.0,
+                                 0.3e-6, WL, n_orders_x=3, n_orders_y=3)
+    assert abs(R.sum() + T.sum() - 1.0) < 1e-9
+    # a UNIFORM cell uses the relaxed 2*n_orders+1 floor: 8 >= 2*3+1 = 7 passes
+    # (8 < 4*3+1 = 13 would reject a *patterned* cell of the same size).
+    o, R, T = rcwa_efficiency_2d(0.8e-6, 0.8e-6, np.full((8, 8), 2.25, complex),
+                                 1.5, 1.0, 0.3e-6, WL, n_orders_x=3,
+                                 n_orders_y=3)
+    assert abs(R.sum() + T.sum() - 1.0) < 1e-9
+    # but a uniform cell below the 2*n_orders+1 DC-alias floor still raises
+    with pytest.raises(ValueError, match="uniform cell"):
+        rcwa_efficiency_2d(0.8e-6, 0.8e-6, np.full((4, 4), 2.25, complex),
+                           1.5, 1.0, 0.3e-6, WL, n_orders_x=3, n_orders_y=3)
+
+
+def test_validate_shapes_rejects_nonpositive_dims():
+    sh = [{"shape": "disk", "eps": 6.0, "radius": 0.0,
+           "center": (0.4e-6, 0.4e-6)}]
+    with pytest.raises(ValueError, match="non-positive"):
+        rcwa_efficiency_2d_shapes(0.8e-6, 0.8e-6, 1.0, sh, 1.5, 1.0, 0.3e-6, WL,
+                                  n_orders_x=3, n_orders_y=3)
+
+
+def test_validate_stack_geometry_and_dead_param():
+    with pytest.raises(ValueError, match="RCWAStack: period"):
+        RCWAStack(0.0)
+    with pytest.raises(ValueError, match="add_layer: depth"):
+        RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=2,
+                  n_orders_y=2).add_layer(-1e-6, eps=2.0)
+    with pytest.raises(ValueError, match="set_source: wavelength"):
+        RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=2,
+                  n_orders_y=2).set_source(-WL)
+    with pytest.raises(ValueError, match="too coarse"):
+        RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=3,
+                  n_orders_y=3).add_layer(0.3e-6, eps_cell=_patterned_cell(8))
+    # the inert v5.5.0 set_source(polarization=...) param is gone
+    with pytest.raises(TypeError):
+        RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=2,
+                  n_orders_y=2).set_source(WL, polarization="tm")
+
+
+# ===================== convergence / physics oracles ======================
+# Committed value pins that auto-catch a future regression in the delicate
+# paths (the v5.5.0 audit's P1-A oblique-TM claim was a convergence artifact,
+# triangulated to lumen's converged Rtot ~= 0.5317; this pins that value).
+
+
+def test_oblique_tm_converged_reflectance_pin():
+    """Oblique high-contrast TM total reflectance, pinned to the value
+    triangulated against grcwa (Laurent, converging down) and inkstone
+    (converging up) -- both bracket ~0.5317.  Locks the Li inverse-rule TM
+    path against silent regression (and documents that the v5.5.0 'P1-A'
+    split was an under-converged-oracle artifact, not a solver bug)."""
+    o, R, T = rcwa_efficiency_1d(1.2e-6, 2.5, 1.0, 1.0, 1.0, 0.4e-6, 0.4,
+                                 0.55e-6, angle=np.deg2rad(15),
+                                 polarization="tm", n_orders=60)
+    assert abs(float(R.sum()) - 0.5317) < 5e-3          # converged value
+    assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-9   # lossless: energy = 1
+
+
+def test_conical_2d_jones_energy_and_crosspol():
+    """Conical-incidence 2-D anisotropic Jones solve conserves energy for both
+    incident polarizations AND produces real cross-polarization coupling
+    (a guard on the anisotropic Q-block Cyx sign: getting it wrong silently
+    breaks energy at off-axis director angles)."""
+    elc = uniaxial_tensor(1.5, 1.9, np.pi / 2, phi=np.deg2rad(35))
+    cell = np.broadcast_to(elc, (16, 16, 3, 3)).copy()
+    o, R, T, J = rcwa_jones_2d(0.7e-6, 0.7e-6, cell, 1.0, 1.0, 0.5e-6, WL,
+                               theta=np.deg2rad(12), phi=np.deg2rad(25),
+                               n_orders_x=4, n_orders_y=4)
+    assert abs(float(R[0].sum() + T[0].sum()) - 1.0) < 1e-6
+    assert abs(float(R[1].sum() + T[1].sum()) - 1.0) < 1e-6
+    # off-diagonal Jones (cross-pol) must be non-trivial for a rotated director
+    assert float(np.abs(J[0, 1])) > 1e-3 and float(np.abs(J[1, 0])) > 1e-3
+
+
+def test_numpy_value_regression_pins():
+    """Committed value pins for the NumPy path -- any future backend / helper
+    refactor that perturbs the physics is caught here (these are the exact
+    pre-keystone v5.5.0 values)."""
+    o, R, T = rcwa_efficiency_1d(1.2e-6, 2.5, 1.0, 1.5, 1.0, 0.4e-6, 0.4,
+                                 0.55e-6, angle=np.deg2rad(15),
+                                 polarization="tm", n_orders=40)
+    assert abs(float(R.sum()) - 0.1905690334313482) < 1e-12
+    assert abs(float(T.sum()) - 0.809430966568596) < 1e-12
+    o, R, T = rcwa_efficiency_1d(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
+                                 polarization="te", n_orders=11)
+    assert abs(float(T[len(T) // 2]) - 0.6835550591286147) < 1e-12
+
+
+# ====================== backend dispatch (v5.5.1) =========================
+# The solvers became backend-dispatched (NumPy / CuPy via use_gpu / JAX).
+# CuPy GPU execution can't run in CI without CUDA libs; these pins lock the
+# NumPy results, the s/p aliases, and the use_gpu routing contract.
+
+
+@pytest.mark.parametrize("alias,canon", [("s", "te"), ("p", "tm"),
+                                         ("S", "te"), ("P", "tm")])
+def test_polarization_s_p_aliases(alias, canon):
+    """'s'/'p' (coatings convention) map exactly to 'te'/'tm' (RCWA)."""
+    args = (1.2e-6, 2.5, 1.0, 1.5, 1.0, 0.4e-6, 0.4, 0.55e-6)
+    o, Ra, Ta = rcwa_efficiency_1d(*args, angle=np.deg2rad(12),
+                                   polarization=alias, n_orders=20)
+    o, Rc, Tc = rcwa_efficiency_1d(*args, angle=np.deg2rad(12),
+                                   polarization=canon, n_orders=20)
+    assert np.array_equal(Ra, Rc) and np.array_equal(Ta, Tc)
+
+
+def test_use_gpu_without_cupy_raises_clear_error(monkeypatch):
+    """use_gpu=True must raise a clear, actionable error when CuPy is absent
+    (rather than a cryptic NumPy/AttributeError)."""
+    import lumenairy.elements.rcwa as _r
+    monkeypatch.setattr(_r, "CUPY_AVAILABLE", False)
+    with pytest.raises(RuntimeError, match="use_gpu=True but CuPy is not"):
+        rcwa_efficiency_1d(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
+                           n_orders=11, use_gpu=True)
+
+
+def test_block_helper_matches_numpy_block():
+    """The portable concatenate-based _block reproduces numpy.block exactly
+    (some CuPy builds lack cupy.block)."""
+    from lumenairy.elements.rcwa import _block
+    rng = np.random.default_rng(0)
+    A, B, C, D = (rng.standard_normal((3, 3)) for _ in range(4))
+    assert np.array_equal(_block(np, [[A, B], [C, D]]),
+                          np.block([[A, B], [C, D]]))
+
+
+def test_to_jones_field_specular_bridge():
+    """RCWAResult.to_jones_field builds a uniform specular JonesField whose
+    value is the zeroth-order Jones applied to the incident vector."""
+    from lumenairy.elements.polarization import JonesField
+    elc = uniaxial_tensor(1.5, 1.7, np.pi / 2, phi=np.deg2rad(30))
+    cell = np.broadcast_to(elc, (16, 16, 3, 3)).copy()
+    res = (RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=3, n_orders_y=3)
+           .add_layer(0.3e-6, eps_tensor_cell=cell)
+           .set_source(WL).solve())
+    jf = res.to_jones_field(8, 6, dx=1e-6, incident=(1.0, 0.0))
+    assert isinstance(jf, JonesField) and jf.Ex.shape == (6, 8)
+    Jr = res.jones_reflection()
+    assert np.allclose(jf.Ex, Jr[0, 0]) and np.allclose(jf.Ey, Jr[1, 0])
+    jt = res.to_jones_field(4, 4, dx=1e-6, incident=(0.0, 1.0),
+                            port="transmission")
+    assert np.allclose(jt.Ex, res.jones_transmission()[0, 1])
+    with pytest.raises(ValueError, match="port must be"):
+        res.to_jones_field(4, 4, dx=1e-6, port="bogus")
+
+
 # ============================== JAX autodiff ===============================
 
 jax = pytest.importorskip("jax")
 
 
+def _square_cell(S):
+    xx, yy = np.meshgrid((np.arange(S) + .5) / S - .5,
+                         (np.arange(S) + .5) / S - .5, indexing="ij")
+    return np.where(xx ** 2 + yy ** 2 < 0.0625, 6.0, 2.0).astype(complex)
+
+
+def test_jax_execution_parity_all_entry_points():
+    """v5.5.1 execution-parity contract: every backend-dispatched solver
+    returns bit-for-eig-precision identical results on NumPy and JAX (the
+    folded core runs the SAME algorithm on both backends)."""
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    cell = _square_cell(16)
+    elc = uniaxial_tensor(1.5, 1.7, np.pi / 2, phi=np.deg2rad(30))
+    tcell = np.broadcast_to(elc, (16, 16, 3, 3)).copy()
+
+    # 1-D efficiency
+    a = (1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL)
+    on, Rn, Tn = rcwa_efficiency_1d(*a, angle=np.deg2rad(15),
+                                    polarization="tm", n_orders=11)
+    oj, Rj, Tj = rcwa_efficiency_1d(
+        1.2e-6, jnp.asarray(2.2 + 0j), jnp.asarray(1.0 + 0j),
+        jnp.asarray(1.5 + 0j), jnp.asarray(1.0 + 0j), jnp.asarray(0.5e-6),
+        0.5, jnp.asarray(WL), angle=np.deg2rad(15), polarization="tm",
+        n_orders=11)
+    assert float(np.max(np.abs(np.asarray(Rj) - Rn))) < 1e-10
+    assert float(np.max(np.abs(np.asarray(Tj) - Tn))) < 1e-10
+
+    # 2-D efficiency
+    on, Rn, Tn = rcwa_efficiency_2d(0.8e-6, 0.8e-6, cell, 1.5, 1.0, 0.3e-6, WL,
+                                    theta=np.deg2rad(10), n_orders_x=3,
+                                    n_orders_y=3)
+    oj, Rj, Tj = rcwa_efficiency_2d(0.8e-6, 0.8e-6, jnp.asarray(cell), 1.5, 1.0,
+                                    0.3e-6, WL, theta=np.deg2rad(10),
+                                    n_orders_x=3, n_orders_y=3)
+    assert float(np.max(np.abs(np.asarray(Rj) - Rn))) < 1e-10
+
+    # 1-D Jones (anisotropic)
+    er = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=np.deg2rad(20))
+    eg = (1.5 ** 2) * np.eye(3)
+    on, Rn, Tn, Jn = rcwa_jones_1d(1.0e-6, er, eg, 1.5, 1.0, 0.4e-6, 0.5, WL,
+                                   angle=np.deg2rad(10), n_orders=15)
+    oj, Rj, Tj, Jj = rcwa_jones_1d(1.0e-6, jnp.asarray(er), jnp.asarray(eg),
+                                   1.5, 1.0, 0.4e-6, 0.5, WL,
+                                   angle=np.deg2rad(10), n_orders=15)
+    assert float(np.max(np.abs(np.asarray(Jj) - Jn))) < 1e-10
+
+    # 2-D Jones (tensor field)
+    on, Rn, Tn, Jn = rcwa_jones_2d(0.8e-6, 0.8e-6, tcell, 1.5, 1.0, 0.3e-6, WL,
+                                   theta=np.deg2rad(8), n_orders_x=3,
+                                   n_orders_y=3)
+    oj, Rj, Tj, Jj = rcwa_jones_2d(0.8e-6, 0.8e-6, jnp.asarray(tcell), 1.5, 1.0,
+                                   0.3e-6, WL, theta=np.deg2rad(8),
+                                   n_orders_x=3, n_orders_y=3)
+    assert float(np.max(np.abs(np.asarray(Jj) - Jn))) < 1e-10
+
+
+def test_jax_uniform_layer_energy_conserved():
+    """ADVERSARIAL (v5.5.1): a laterally-UNIFORM isotropic layer is doubly
+    degenerate; its eig basis is gauge-arbitrary and ill-conditioned, which
+    silently broke energy on the JAX path at oblique incidence (R+T=2.2).  The
+    analytic uniform-mode branch is now reachable on JAX (tracer-safe where),
+    so a uniform iso cell AND a uniform isotropic tensor conserve energy."""
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    kw = dict(period_x=1e-6, period_y=1e-6, n_substrate=1.5, n_superstrate=1.0,
+              depth=0.3e-6, wavelength=WL, n_orders_x=5, n_orders_y=5)
+    for theta in (0.0, 0.2):  # the failure was oblique-specific
+        o, R, T = rcwa_efficiency_2d(eps_cell=jnp.full((21, 21), 2.25 + 0j),
+                                     theta=theta, phi=0.0, polarization="te",
+                                     **kw)
+        assert abs(float(np.asarray(R).sum() + np.asarray(T).sum()) - 1.0) < 1e-6
+    iso_t = (2.25 + 0j) * np.eye(3)
+    tcell = jnp.asarray(np.broadcast_to(iso_t, (21, 21, 3, 3)).copy())
+    o, R, T, J = rcwa_jones_2d(1e-6, 1e-6, tcell, 1.5, 1.0, 0.3e-6, WL,
+                               theta=0.2, phi=0.0, n_orders_x=5, n_orders_y=5)
+    assert abs(float(R[0].sum() + T[0].sum()) - 1.0) < 1e-6
+    assert abs(float(R[1].sum() + T[1].sum()) - 1.0) < 1e-6
+
+
+def test_jax_wood_anomaly_no_nan():
+    """ADVERSARIAL (v5.5.1): at an EXACT Rayleigh/Wood anomaly a diffracted
+    order has k_z = 0 in a region, making the interface S-matrix singular ->
+    NaN.  The NumPy path nudges the wavelength off the anomaly; the JAX path
+    used to skip that nudge and return NaN (poisoning jax.grad).  The guards
+    now run against the concrete geometry on JAX too, so forward value AND
+    gradient stay finite at the anomaly."""
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    # period = wavelength, normal incidence -> m = +/-1 graze in the n=1 regions
+    a = dict(angle=jnp.asarray(0.0), polarization="te", n_orders=5)
+    o, R, T = rcwa_efficiency_1d(1e-6, jnp.asarray(1.5 + 0j), jnp.asarray(1.0 + 0j),
+                                 jnp.asarray(1.0 + 0j), jnp.asarray(1.0 + 0j),
+                                 jnp.asarray(0.5e-6), 0.5, jnp.asarray(1e-6), **a)
+    assert not bool(np.isnan(np.asarray(R)).any())
+    assert abs(float(np.asarray(R).sum() + np.asarray(T).sum()) - 1.0) < 1e-6
+
+    def loss(nr):
+        _, R, T = rcwa_efficiency_1d(1e-6, nr, jnp.asarray(1.0 + 0j),
+                                     jnp.asarray(1.0 + 0j), jnp.asarray(1.0 + 0j),
+                                     jnp.asarray(0.5e-6), 0.5, jnp.asarray(1e-6),
+                                     **a)
+        return T.sum()
+    g = jax.grad(loss)(jnp.asarray(1.5 + 0j))
+    assert not bool(np.isnan(np.asarray(g)))
+
+
+def test_jax_2d_gradient_matches_finite_difference():
+    """The 2-D solver is differentiable through the eig path (cell scaling)."""
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    cell = _square_cell(16)
+
+    def loss(scale):
+        o, R, T = rcwa_efficiency_2d(0.8e-6, 0.8e-6, jnp.asarray(cell) * scale,
+                                     1.5, 1.0, 0.3e-6, WL, theta=np.deg2rad(10),
+                                     n_orders_x=3, n_orders_y=3)
+        return T[len(T) // 2]
+    g = float(jax.grad(loss)(1.0))
+    h = 1e-6
+    fd = (float(loss(1.0 + h)) - float(loss(1.0 - h))) / (2 * h)
+    assert abs(g - fd) / max(abs(fd), 1e-30) < 1e-5
+
+
+def test_jax_validation_and_error_prefixes():
+    """v5.5.1: the folded JAX twin delegates to the unified solver, so input
+    validation (no longer silently dropped) is enforced there.  ``n_samples``
+    is now accepted-but-ignored (exact analytic coefficients need no
+    sampling)."""
+    jax.config.update("jax_enable_x64", True)
+    from lumenairy.elements.rcwa import rcwa_efficiency_1d_jax
+    base = dict(period=1.2e-6, n_ridge=2.2, n_groove=1.0, n_substrate=1.5,
+                n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=WL)
+
+    def call(**over):
+        kw = dict(base, **over)
+        return rcwa_efficiency_1d_jax(
+            kw["period"], kw["n_ridge"], kw["n_groove"], kw["n_substrate"],
+            kw["n_superstrate"], kw["depth"], kw["duty_cycle"], kw["wavelength"],
+            **{k: v for k, v in over.items() if k not in base})
+
+    with pytest.raises(ValueError, match="rcwa_efficiency_1d: polarization"):
+        call(polarization="circular")
+    with pytest.raises(ValueError, match="rcwa_efficiency_1d: formulation"):
+        call(formulation="bogus")
+    with pytest.raises(ValueError, match="rcwa_efficiency_1d: duty_cycle"):
+        call(duty_cycle=1.7)
+    with pytest.raises(ValueError, match="rcwa_efficiency_1d: depth"):
+        call(depth=-1e-6)
+    # n_samples is accepted (back-compat) but no longer triggers validation
+    o, R, T = call(n_orders=8, n_samples=5)
+    assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
+
+
 def test_jax_value_matches_numpy():
-    """The differentiable JAX twin matches the NumPy core (soft-edge approx)
-    and conserves energy."""
+    """v5.5.1: the folded JAX path uses the SAME exact binary-grating Fourier
+    coefficients as the NumPy core (not the old soft-edge sample), so the two
+    agree to eig precision (was ~5e-3) and energy is conserved."""
     jax.config.update("jax_enable_x64", True)
     from lumenairy.elements.rcwa import rcwa_efficiency_1d_jax
     o, R, T = rcwa_efficiency_1d(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
@@ -507,11 +898,10 @@ def test_jax_value_matches_numpy():
                                  n_orders=11)
     oj, Rj, Tj = rcwa_efficiency_1d_jax(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5,
                                         WL, angle=np.deg2rad(15),
-                                        polarization="tm", n_orders=11,
-                                        n_samples=2048)
-    m = len(o) // 2
-    assert abs(T[m] - float(Tj[m])) < 5e-3
-    assert abs(float(Rj.sum() + Tj.sum()) - 1.0) < 1e-6
+                                        polarization="tm", n_orders=11)
+    assert float(np.max(np.abs(np.asarray(Rj) - R))) < 1e-10
+    assert float(np.max(np.abs(np.asarray(Tj) - T))) < 1e-10
+    assert abs(float(Rj.sum() + Tj.sum()) - 1.0) < 1e-9
 
 
 def test_jax_gradients_match_finite_difference():

@@ -311,6 +311,43 @@ S = la.stokes_parameters(field)
 print(f"S3/S0 = {S['S3'].mean() / S['S0'].mean():+.3f}")
 ```
 
+### Rigorous gratings / metasurfaces (RCWA)
+
+`rcwa_*` solves the full vector Maxwell equations in a laterally periodic
+layer — the rigorous counterpart to the scalar `thin_grating` and the
+laterally-uniform `coatings` TMM. Every solver is backend-dispatched
+(NumPy / CuPy via `use_gpu` / differentiable JAX), accepts `te`/`tm` (or the
+`s`/`p` aliases), and conserves energy for lossless media.
+
+```python
+import numpy as np
+import lumenairy as la
+
+# 1-D binary grating: rigorous diffraction efficiencies (oblique TM)
+orders, R, T = la.rcwa_efficiency_1d(
+    period=1.2e-6, n_ridge=2.5, n_groove=1.0, n_substrate=1.5,
+    n_superstrate=1.0, depth=0.4e-6, duty_cycle=0.4, wavelength=0.55e-6,
+    angle=np.deg2rad(15), polarization='tm', n_orders=40)
+print(f"R+T = {R.sum() + T.sum():.6f}  (lossless -> 1)")
+
+# A multilayer stack with a 2-D patterned layer; bridge the specular
+# (zeroth-order) Jones reflection into the polarization pipeline.
+cell = np.where(((np.add.outer(np.arange(32) - 16, np.zeros(32))) ** 2
+                 + (np.add.outer(np.zeros(32), np.arange(32) - 16)) ** 2)
+                < 8 ** 2, 6.0, 2.0).astype(complex)
+res = (la.RCWAStack(0.8e-6, period_y=0.8e-6, n_substrate=1.5, n_orders=4,
+                    n_orders_y=4)
+       .add_layer(0.30e-6, eps_cell=cell)
+       .set_source(0.633e-6, theta=np.deg2rad(10))
+       .solve())
+jones = res.to_jones_field(256, 256, dx=0.8e-6, incident=(1.0, 0.0))  # specular
+```
+
+For gradient-based metasurface inverse design, pass `jax.numpy` arrays (and
+set `jax.config.update('jax_enable_x64', True)` — RCWA needs double
+precision); `rcwa_efficiency_1d` / `_2d` then differentiate w.r.t. the
+permittivities, depth, and angle via `jax.grad`.
+
 ### Phase retrieval (Gerchberg-Saxton CGH design)
 
 ```python
