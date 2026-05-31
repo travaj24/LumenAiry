@@ -2,6 +2,91 @@
 
 All notable changes to the core library are documented here.
 
+## [5.5.0] — 2026-05-30
+
+**Major feature release: a native Rigorous Coupled-Wave Analysis (RCWA /
+Fourier Modal Method) module** — `lumenairy.elements.rcwa`.  A clean-room,
+full-vector frequency-domain Maxwell solver for laterally periodic, layered
+structures (dielectric / metallic gratings, sub-wavelength metasurfaces,
+liquid-crystal cells).  It is the rigorous counterpart to the scalar
+`thin_grating` model and the laterally-uniform `coatings` TMM, and it
+returns both rigorous diffraction efficiencies and the complex Jones
+reflection of anisotropic layers.
+
+Implemented clean-room from the published literature (Moharam–Gaylord 1995,
+Li 1996/1997/2003, Götz–Schuster, Rumpf 2011); validated numerically
+against independent (GPL, black-box) solvers grcwa / inkstone and against
+analytic / in-library references.
+
+New public API (all exposed at the top level and under
+`lumenairy.elements`):
+
+- `rcwa_efficiency_1d` — 1-D binary gratings, **dielectric and metal**,
+  TE/TM, planar incidence; automatic Laurent / Li-inverse-rule
+  factorization.  Validated to **1e-16** vs the analytic Airy thin-film
+  limit and the library's own TMM, energy-conserving to **1e-13**, and
+  agreeing with grcwa to **<2e-3** per order (TE metal to **1e-5**).
+- `rcwa_efficiency_vs_wavelength` — spectral sweep of one order.
+- `rcwa_efficiency_2d` — 2-D crossed gratings (doubly periodic), conical
+  mounting; bit-exact 1-D reduction, energy to **1e-13**.
+- `rcwa_jones_1d`, `rcwa_jones_2d` — 1-D and 2-D **anisotropic / liquid
+  crystal** layers (full in-plane permittivity tensor), returning per-pol
+  diffraction efficiencies and the 2×2 zeroth-order Jones reflection
+  matrix; isotropic-reduction is bit-exact and energy conserves to
+  **1e-14**.
+- `uniaxial_tensor` — rotated uniaxial (LC director) permittivity tensor.
+- `rcwa_efficiency_2d_shapes` — 2-D solver using **analytic** shape Fourier
+  transforms (rectangle / disk / ellipse, no pixelation) with the
+  dual-Laurent ⟦ε⟧/⟦1/ε⟧ factorization: the permittivity spectrum is exact
+  (matches the uniform-slab Airy limit to **1e-16**) and convergence is
+  clean/monotone, energy-conserving to machine precision.
+- `RCWAStack` / `RCWAResult` — a builder + result API for **multi-layer**
+  stacks (uniform spacers, isotropic / anisotropic / analytic-shape
+  patterned layers, 1-D or 2-D).  `RCWAResult` exposes `efficiencies()`,
+  `absorptance()`, `jones_reflection()`, and `apply_reflection(jones_field)`
+  — the bridge that drops a rigorous metasurface Jones reflection into the
+  `JonesField` polarization pipeline.  Homogeneous-mode caching (thread-safe,
+  registered with the library cache registry) accelerates sweeps.
+- `rcwa_efficiency_1d_jax` — a JAX **differentiable** twin for
+  gradient-based / adjoint metasurface inverse design.  Reverse-mode AD
+  flows straight through the rigorous solve, including the non-Hermitian
+  per-layer eigendecomposition via a custom Lorentzian-broadened
+  eigenvector VJP; gradients match finite differences to **~1e-8**
+  (permittivity and depth paths).  Requires the optional `jax` extra.
+
+Conventions match the library throughout: `exp(-i w t)` / `exp(+i k z)`,
+SI metres, `n = n + i kappa` for loss (a convention bridge gives positive
+absorptance for metals), and the standard `kx_m = kx0 + m λ/Λ` order
+labelling.  Numerical robustness: a `Re(λ) ≥ 0` layer-eigenvalue branch
+guarantees unconditional S-matrix stability (no high-order blow-up), a
+gap-free interface/propagation Redheffer assembly avoids evanescent
+leakage, and an exact-grazing (Wood-anomaly) wavelength nudge keeps every
+matrix invertible.
+
+Tests: `tests/unit/test_rcwa.py` (51 regression pins; the JAX pins skip
+without `jax`) and the thorough physics harness
+`validation/elements/test_rcwa.py`.  Example
+`examples/13_rcwa_inverse_design.py` demonstrates autodiff inverse design of
+a +1-order beam-deflector grating.
+
+Known limitation: 2-D **metal** gratings with sharp corners converge slowly
+(an inherent property of every Fourier-modal method — the field is singular
+at metallic corners; the analytic-FT dual-Laurent path mitigates the
+pixelation error but not the fundamental rate).  A Götz–Schuster
+normal-vector "fast Fourier factorization" was evaluated and **deliberately
+not shipped**: it could not be validated to the library's correctness bar
+(no oracle converges for 2-D sharp-metal gratings at achievable truncation,
+and a candidate implementation violated energy conservation), and mature
+analytic-FT FMM codes do not use it by default either.
+
+**Also new:** `apply_polarizing_beam_splitter` — a polarizing beam splitter
+that separates a `JonesField` into a transmitted port (the polarization
+along the transmission axis) and a reflected port (the orthogonal
+polarization), with an optional finite `extinction_ratio` for a realistic
+device.  Power is conserved between the ports and the input field is left
+unmodified.  (Linear polarizers, half/quarter-wave plates, arbitrary
+retarders and rotators were already provided.)
+
 ## [5.4.7] — 2026-05-30
 
 **Audit-driven patch release closing AUDIT_V5_4_6_2026_05_29.md** — the

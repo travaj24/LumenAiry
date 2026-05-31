@@ -93,6 +93,7 @@ from .polarization import (
     apply_half_wave_plate,
     apply_jones_matrix,
     apply_polarizer,
+    apply_polarizing_beam_splitter,
     apply_quarter_wave_plate,
     apply_rotator,
     apply_waveplate,
@@ -102,6 +103,18 @@ from .polarization import (
     degree_of_polarization,
     polarization_ellipse,
     stokes_parameters,
+)
+from .rcwa import (
+    RCWAResult,
+    RCWAStack,
+    rcwa_efficiency_1d,
+    rcwa_efficiency_1d_jax,
+    rcwa_efficiency_2d,
+    rcwa_efficiency_2d_shapes,
+    rcwa_efficiency_vs_wavelength,
+    rcwa_jones_1d,
+    rcwa_jones_2d,
+    uniaxial_tensor,
 )
 from .thin_grating import (
     grating_efficiency_vs_wavelength,
@@ -142,10 +155,22 @@ __all__ = [
     # thin-grating diffraction efficiency (analytical scalar model)
     'thin_grating_efficiency_1d',
     'grating_efficiency_vs_wavelength',
+    # RCWA / Fourier Modal Method (rigorous vector grating solver)
+    'rcwa_efficiency_1d',
+    'rcwa_efficiency_1d_jax',
+    'rcwa_efficiency_2d',
+    'rcwa_efficiency_2d_shapes',
+    'rcwa_efficiency_vs_wavelength',
+    'rcwa_jones_1d',
+    'rcwa_jones_2d',
+    'uniaxial_tensor',
+    'RCWAStack',
+    'RCWAResult',
     # polarization
     'JonesField',
     'apply_jones_matrix', 'apply_polarizer', 'apply_waveplate',
     'apply_half_wave_plate', 'apply_quarter_wave_plate', 'apply_rotator',
+    'apply_polarizing_beam_splitter',
     'create_linear_polarized', 'create_circular_polarized',
     'create_elliptical_polarized', 'stokes_parameters',
     'degree_of_polarization', 'polarization_ellipse',

@@ -139,6 +139,7 @@ _KNOWN_DY_THREADING_EXEMPTIONS = frozenset({
     'apply_half_wave_plate',
     'apply_quarter_wave_plate',
     'apply_rotator',
+    'apply_polarizing_beam_splitter',
 
     # ---- BeamletBundle / PathBundle / RayBundle consumers -----------------
     # Bundles carry per-element position arrays; there is no underlying

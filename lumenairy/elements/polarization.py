@@ -13,6 +13,7 @@ Polarization elements provided:
     - apply_waveplate (HWP, QWP, arbitrary retardance)
     - apply_jones_matrix (arbitrary 2×2 transformation)
     - apply_rotator
+    - apply_polarizing_beam_splitter (two orthogonal output ports)
 
 Sources:
     - create_linear_polarized
@@ -791,6 +792,85 @@ def apply_rotator(
     J = np.array([[c, -s],
                   [s,  c]], dtype=complex)
     return apply_jones_matrix(field, J)
+
+
+def apply_polarizing_beam_splitter(
+    field: 'JonesField',
+    angle: Any = _ANGLE_UNSET,
+    *,
+    angle_deg: Optional[float] = None,
+    extinction_ratio: Optional[float] = None,
+) -> 'Tuple[JonesField, JonesField]':
+    """
+    Split a field into two orthogonally-polarized output ports of a
+    polarizing beam splitter (PBS).
+
+    The TRANSMITTED port passes the linear polarization along the
+    transmission axis (``angle``, the "p" component); the REFLECTED port
+    carries the orthogonal polarization (``angle + 90 deg``, the "s"
+    component).  For an ideal PBS the two ports are complementary
+    projections, so power is conserved exactly
+    (``|E_t|^2 + |E_r|^2 == |E_in|^2`` per pixel).
+
+    Parameters
+    ----------
+    field : JonesField
+        Input field.
+    angle : float, default 0
+        Transmission-axis angle [radians] from +x (the p-axis).
+    angle_deg : float, optional
+        Transmission-axis angle in degrees; when supplied, takes
+        precedence over the radian ``angle`` (the canonical ``_deg``
+        convention used by the other polarization helpers).
+    extinction_ratio : float, optional
+        Finite polarization extinction ratio (the wanted:unwanted POWER
+        ratio in each port), modelling a real PBS's leakage.  ``None``
+        (default) is the ideal PBS (infinite extinction).  A value of,
+        e.g., ``1000`` lets ``1/1001`` of the wrong polarization's power
+        leak into each port; power is still conserved between the two
+        ports.
+
+    Returns
+    -------
+    (transmitted, reflected) : tuple of JonesField
+        The two output ports.
+
+    Raises
+    ------
+    ValueError
+        If both ``angle`` and ``angle_deg`` disagree, or if
+        ``extinction_ratio`` is non-positive.
+
+    Notes
+    -----
+    This models the PBS as a polarization *separator*: the reflected
+    port's Jones vector is expressed in the same lab (x, y) basis as the
+    input (no handedness flip).  If a specific reflection geometry needs
+    the mirror coordinate flip, apply it to the returned reflected port.
+    """
+    angle = _resolve_angle('apply_polarizing_beam_splitter', angle, angle_deg)
+    if extinction_ratio is not None and extinction_ratio <= 0:
+        raise ValueError(
+            "apply_polarizing_beam_splitter: extinction_ratio must be "
+            "positive (the wanted:unwanted power ratio), got "
+            f"{extinction_ratio}.")
+    # Power leakage fraction of the wrong polarization into each port.
+    leak = 0.0 if extinction_ratio is None else 1.0 / (1.0 + extinction_ratio)
+    a = np.sqrt(1.0 - leak)   # amplitude of the wanted polarization
+    b = np.sqrt(leak)         # amplitude of the leaked (wrong) polarization
+    c = np.cos(angle)
+    s = np.sin(angle)
+    # J = R(angle) diag(major, minor) R(-angle); transmitted is strong along
+    # the p (transmission) axis, reflected strong along the orthogonal s axis.
+    Jt = np.array([[a * c * c + b * s * s, (a - b) * c * s],
+                   [(a - b) * c * s,       a * s * s + b * c * c]], dtype=complex)
+    Jr = np.array([[b * c * c + a * s * s, (b - a) * c * s],
+                   [(b - a) * c * s,       b * s * s + a * c * c]], dtype=complex)
+    # apply_jones_matrix mutates its field in place, so each output port must
+    # operate on an independent copy of the input (otherwise the second call
+    # would see the first port's already-transformed field).
+    return (apply_jones_matrix(field.copy(), Jt),
+            apply_jones_matrix(field.copy(), Jr))
 
 
 # =============================================================================

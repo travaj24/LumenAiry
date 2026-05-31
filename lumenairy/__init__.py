@@ -418,6 +418,7 @@ from .elements.polarization import (
     apply_half_wave_plate,
     apply_jones_matrix,
     apply_polarizer,
+    apply_polarizing_beam_splitter,
     apply_quarter_wave_plate,
     apply_rotator,
     apply_waveplate,
@@ -429,10 +430,25 @@ from .elements.polarization import (
     stokes_parameters,
 )
 
+# Rigorous Coupled-Wave Analysis (full vector Fourier Modal Method): 1-D and
+# 2-D crossed gratings, metals (Li inverse rule), and anisotropic / LC layers
+# (Jones reflection).  The rigorous counterpart to the scalar thin_grating.
+from .elements.rcwa import (
+    RCWAResult,
+    RCWAStack,
+    rcwa_efficiency_1d,
+    rcwa_efficiency_1d_jax,
+    rcwa_efficiency_2d,
+    rcwa_efficiency_2d_shapes,
+    rcwa_efficiency_vs_wavelength,
+    rcwa_jones_1d,
+    rcwa_jones_2d,
+    uniaxial_tensor,
+)
+
 # â”€â”€ Grating diffraction efficiency (thin-grating scalar approx) â”€â”€â”€â”€â”€â”€â”€
 # The function is named for what it actually computes: an analytical
-# scalar thin-phase-grating diffraction-efficiency formula.  A future
-# release may add a separate full RCWA path.
+# scalar thin-phase-grating diffraction-efficiency formula.
 from .elements.thin_grating import (
     grating_efficiency_vs_wavelength,
     thin_grating_efficiency_1d,
@@ -864,7 +880,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.4.7"
+__version__ = "5.5.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -974,6 +990,7 @@ __all__ = [
     'JonesField',
     'apply_jones_matrix',
     'apply_polarizer',
+    'apply_polarizing_beam_splitter',
     'apply_waveplate',
     'apply_half_wave_plate',
     'apply_quarter_wave_plate',
@@ -1429,6 +1446,18 @@ __all__ = [
     # Thin-grating scalar diffraction efficiency
     'thin_grating_efficiency_1d',
     'grating_efficiency_vs_wavelength',
+
+    # RCWA / Fourier Modal Method (rigorous vector grating solver)
+    'rcwa_efficiency_1d',
+    'rcwa_efficiency_1d_jax',
+    'rcwa_efficiency_2d',
+    'rcwa_efficiency_2d_shapes',
+    'rcwa_efficiency_vs_wavelength',
+    'rcwa_jones_1d',
+    'rcwa_jones_2d',
+    'uniaxial_tensor',
+    'RCWAStack',
+    'RCWAResult',
 
     # BSDF / surface scatter
     'BSDFModel',

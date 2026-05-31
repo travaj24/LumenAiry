@@ -279,6 +279,7 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/elements/polarization.py', 'apply_half_wave_plate'),
     ('lumenairy/elements/polarization.py', 'apply_quarter_wave_plate'),
     ('lumenairy/elements/polarization.py', 'apply_rotator'),
+    ('lumenairy/elements/polarization.py', 'apply_polarizing_beam_splitter'),
 
     # ---- analysis/through_focus.py (v4.15.4 NEW) ---------------------------
     # ``apply_perturbations(prescription, perturbations, N, dx)`` takes
