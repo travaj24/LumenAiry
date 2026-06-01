@@ -1321,18 +1321,30 @@ def rcwa_efficiency_1d(
         ``0.0`` (default) is the standard uniform method, **bit-identical** to
         a call without the argument.  ``asr_eta > 0`` applies a matched
         coordinate stretch ``f(u) = 1 - asr_eta*cos(...)`` that clusters the
-        Fourier harmonics at the grating walls, converging much faster for
-        metals / high-contrast TM at LOW order counts (e.g. ~10x lower TM error
-        and ~100x lower TE error at ``n_orders=12`` on a gold grating).
-        Validated sweet spot ``0.5-0.8`` (geometry-dependent).  ASR is a
-        LOW-to-MODERATE-order accelerator: the internal ``u<->x`` basis bridge
-        is increasingly ill-conditioned as ``n_orders`` grows, so at high order
-        counts ASR can be *less* accurate than the uniform method and a
-        conditioning warning is emitted -- use a low ``n_orders`` (its purpose)
-        or disable ASR for high-order runs.  Combined with the inverse rule
-        (``formulation='li'`` / metals) this is the matched-coordinate FFF.
-        **Normal incidence only** (raises for ``angle != 0``); NumPy / CuPy
-        only (raises on the JAX path).
+        Fourier harmonics at the grating walls.
+
+        **When it helps:** cases where the uniform method is SLOWLY convergent
+        -- lossy-metal / high-contrast TM, deep gratings -- reaching a given
+        accuracy at far fewer orders (e.g. ~10x lower TM error and ~100x lower
+        TE error at ``n_orders=12`` on a gold grating; ASR at 12 orders beats
+        the uniform method at 24).  Validated sweet spot ``0.5-0.8``
+        (geometry-dependent).
+
+        **When it does NOT help:** ASR has an accuracy FLOOR (the matched
+        coordinate + ``u<->x`` bridge plateau, ~1e-4 for TM), and its error is
+        non-monotonic in ``n_orders`` (a low-order sweet spot, not
+        machine-precision convergence).  For EASY / already-well-converged
+        geometries (shallow, low-contrast, or simply enough orders) the uniform
+        method is already below that floor, so ASR offers no benefit and can be
+        marginally LESS accurate.  Enable it for hard metal/TM problems, not
+        universally.  It is also a low-to-moderate-ORDER method: the bridge is
+        increasingly ill-conditioned as ``n_orders`` grows (a conditioning
+        warning is emitted at high order) -- use a low ``n_orders`` (its
+        purpose) or disable ASR for high-order runs.
+
+        Combined with the inverse rule (``formulation='li'`` / metals) this is
+        the matched-coordinate FFF.  **Normal incidence only** (raises for
+        ``angle != 0``); NumPy / CuPy only (raises on the JAX path).
     asr_samples : int, optional
         Uniform ``u``-grid sample count for the ASR metric / permittivity /
         bridge FFTs (default 16384).  Only used when ``asr_eta > 0``.

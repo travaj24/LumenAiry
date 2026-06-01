@@ -2,6 +2,22 @@
 
 All notable changes to the core library are documented here.
 
+## [5.7.1] — 2026-06-01
+
+**ASR documentation honesty (no code/behaviour change).**  An adversarial
+geometry sweep (5 materials × duty × depth × TE/TM) found that ASR has an
+accuracy **floor** (~1e-4 for TM, the matched-coordinate + bridge plateau) and
+its error is **non-monotonic** in `n_orders`.  So for EASY / already-
+well-converged geometries (shallow, low-contrast, or simply enough orders) the
+uniform method is already below that floor and ASR offers no benefit and can be
+marginally *less* accurate — with no warning (this is the formulation floor,
+not the bridge ill-conditioning the existing warning catches).  This is not a
+correctness bug (results stay valid and converge to the right value), but the
+v5.7.0 claims over-generalized.  The `asr_eta` docstring now states plainly
+**when ASR helps** (uniform-slow cases: lossy-metal / high-contrast TM, deep
+gratings) and **when it does not** (easy/well-converged → accuracy floor, may
+be marginally worse) — enable it for hard metal/TM problems, not universally.
+
 ## [5.7.0] — 2026-06-01
 
 **Adaptive Spatial Resolution + matched coordinates for the 1-D RCWA solver
