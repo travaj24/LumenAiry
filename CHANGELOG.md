@@ -2,6 +2,43 @@
 
 All notable changes to the core library are documented here.
 
+## [5.6.1] — 2026-06-01
+
+**RCWA symmetry fast path + cross-platform `stabilize` robustness.**  Two
+follow-ups to v5.6.0; default NumPy paths stay **bit-identical** (the new
+`symmetry` option is opt-in, and `stabilize` only changes behaviour on the
+retry path it already owns).
+
+### Added
+
+- **`symmetry=True` on `rcwa_efficiency_2d`** — even-parity-sector solve.  For
+  a centro-symmetric cell at normal incidence the `(0,0)` source is purely
+  even and no operator couples the two order-flip parities, so the **whole**
+  single-layer recursion (layer eig, interface `inv`/`solve`, Redheffer star)
+  runs in the `~N`-dimensional even subspace instead of the full `2N`.
+  Measured **2.4× → 4.5× end-to-end** speed-up, growing with `n_orders`
+  (validated against the full solve to ~1e-12 on TE/TM × Laurent/Li).  An
+  off-origin symmetry centre (a feature centred anywhere, not just at sample 0)
+  is handled by a diagonal recentering gauge — efficiencies are gauge-invariant
+  so no back-transform is needed.  Gated on the exact precondition; oblique
+  incidence, a non-centro-symmetric cell, or a uniform layer transparently
+  **fall back bit-identically** to the full `2N` solve.  NumPy / CuPy only.
+  - *Note:* folding only the layer eig (the obvious move) is Amdahl-capped at
+    ~1.0× because the interface and Redheffer algebra, also `O(N³)`, would stay
+    full-size — hence the whole-recursion even-sector approach.
+
+### Fixed
+
+- **`stabilize` now self-heals on every LAPACK build.**  The v5.6.0 retry
+  schedule searched only *upward* (`n_orders + {0,1,2,3,4,6,8}`), which failed
+  on Linux/Python 3.10–3.13 for the large-period blow-up geometry: the
+  measure-zero instability lands at LAPACK-dependent truncations, and the
+  nearest clean ones can sit *below* the request (low orders are generically
+  well-conditioned).  The search is now **nearest-first in both directions**
+  (`±1, ±2, …`, higher order preferred at equal distance, floored at 2), making
+  the heal platform-robust.  Bit-exact no-op on already-clean geometry
+  preserved.
+
 ## [5.6.0] — 2026-06-01
 
 **RCWA convergence acceleration + cross-subsystem physics.**  Implements the

@@ -80,6 +80,7 @@ from ..backend import (
     backend_name,
     is_cupy_array,
     is_jax_array,
+    to_numpy,
 )
 
 __all__ = [
@@ -173,6 +174,28 @@ def _with_blas_limit(fn):
         with _blas_limit():
             return fn(*args, **kwargs)
     return _wrapped
+
+
+def _stabilize_bumps(n_orders, reach=12, floor=2):
+    """``n_orders`` offsets to try when ``stabilize=True`` self-heals a
+    measure-zero energy blow-up, ordered nearest-first in BOTH directions.
+
+    The clean truncations bracket the bad ones, and on some LAPACK builds the
+    nearest clean truncation sits BELOW the request -- low orders are
+    generically well-conditioned (the near-singular layer<->region mode-match
+    needs enough orders to appear), so the downward search is what makes the
+    heal platform-robust (an upward-only schedule fails when the LAPACK-
+    dependent blow-up pattern leaves no clean truncation above the request).
+    Higher order is tried first at equal distance (more accurate); the floor
+    keeps the retained count at ``>= floor`` per side.
+    """
+    n = int(n_orders)
+    bumps = [0]
+    for d in range(1, int(reach) + 1):
+        bumps.append(d)                   # up first (more accurate when clean)
+        if n - d >= floor:
+            bumps.append(-d)
+    return bumps
 
 
 def _eig_for(xp):
@@ -697,6 +720,250 @@ def _layer_Q_matrix(Kx, Ky, EPS, EPS_xx):
     ])
 
 
+# ===========================================================================
+# Even-parity-sector RCWA solve (opt-in symmetry speed-up)
+# ===========================================================================
+#
+# When the cell is centro-symmetric AND incidence is normal, EVERY operator in
+# the solve (layer system matrix ``M = P @ Q``, region modes, interface and
+# Redheffer S-matrices) commutes with the order-flip ``G = blockdiag(J, J)``
+# (``J`` maps order ``(m, n) -> (-m, -n)``).  The (0, 0) incident order is the
+# fixed point of ``J``, so the source is PURELY EVEN; because no operator
+# couples the two parities, the odd half of the field is never excited and can
+# be discarded entirely.  The whole recursion therefore runs in the
+# ``(N + 1)``-dimensional EVEN subspace instead of the full ``2N`` -- every
+# ``O(N^3)`` step (the eig, the interface ``inv``/``solve``, the Redheffer
+# star) shrinks ~8x.  This realizes the symmetry speed-up end-to-end; folding
+# only the layer eig (the obvious move) is Amdahl-capped because the interface
+# and Redheffer algebra, also ``O(N^3)``, would stay full-size.
+#
+# The even block of a ``G``-commuting operator is ``B^H A B`` for the ``(N+1)``
+# orthonormal even basis (a fixed-point column ``e_f`` plus pair columns
+# ``(e_i + e_j)/sqrt(2)``).  It is assembled by an ``O(N^2)`` index FOLD --
+# never a dense ``B^H A B`` matmul (itself ``O(N^3)``, which would erase the
+# saving): each column has <= 2 nonzeros, so every entry is a 4-term index
+# combination.  The path is GATED on the exact precondition (normal incidence +
+# ``J EPS J = EPS``); if it fails (oblique -> the order set is not flip-closed;
+# a non-centro-symmetric cell; or a uniform layer, whose degenerate eig wants
+# the analytic path) it returns ``None`` and the caller runs the full solve, so
+# the result is always correct.  Opt-in (``symmetry=True``) because the
+# even-basis recursion changes the result at the ~1e-12 level -- physically
+# identical, but not bit-for-bit with the default path.
+
+
+def _order_flip_perm(Kx, Ky):
+    """Permutation ``p`` with ``p[i]`` = index of the order whose transverse
+    wavevector is ``(-kx_i, -ky_i)``, or ``None`` if the order set is not
+    closed under that flip.
+
+    Derived purely from the ``K`` diagonals, so it is self-contained (no order
+    table needed) and serves any truncation and both the 1-D and 2-D cores.
+    The set is closed only at NORMAL incidence: an oblique ``kx0`` offset makes
+    ``-kx_i`` land off-lattice, so ``None`` is returned and symmetry is skipped.
+    """
+    kx = np.real(np.diagonal(to_numpy(Kx))).astype(float)
+    ky = np.real(np.diagonal(to_numpy(Ky))).astype(float)
+    n = kx.shape[0]
+    scale = float(max(np.max(np.abs(kx)), np.max(np.abs(ky)), 1.0))
+    tol = 1e-9 * scale
+    # Bucket each order by a rounded (kx, ky) key, then look up its flip.
+    q = 1.0 / tol
+    key = lambda a, b: (int(round(a * q)), int(round(b * q)))  # noqa: E731
+    lut = {}
+    for i in range(n):
+        lut[key(kx[i], ky[i])] = i
+    perm = np.empty(n, dtype=np.intp)
+    for i in range(n):
+        j = lut.get(key(-kx[i], -ky[i]))
+        if j is None:
+            return None
+        perm[i] = j
+    return perm
+
+
+def _flip_invariant(A, flip):
+    """True if ``J A J == A`` (``J`` the order flip), i.e. ``A`` is the
+    convolution of a real, origin-even permittivity -- the precondition for the
+    even-sector solve.  ``O(N^2)`` host-cheap check."""
+    Ah = to_numpy(A)
+    resid = np.max(np.abs(Ah[np.ix_(flip, flip)] - Ah))
+    scale = float(max(np.max(np.abs(np.diagonal(Ah))), 1.0))
+    return resid <= 1e-10 * scale
+
+
+def _recentering_phase(EPS, orders, xp):
+    """Diagonal gauge ``d`` that moves a cell's symmetry centre to the FFT
+    origin, or ``None`` if it cannot be inferred.
+
+    A cell even about real position ``(x0, y0)`` -- the usual ``centred''
+    feature, NOT aligned to sample 0 -- has Fourier coefficients
+    ``c_{-k} = e^{i phi . k} c_k`` (a linear phase ramp).  Conjugating ``EPS``
+    by ``D = diag(e^{-i phi . order / 2})`` cancels the ramp so ``D^{-1} EPS D``
+    is flip-invariant (``c_{-k} = c_k``) and the even-sector machinery applies.
+    ``D`` is a per-order phase, hence a gauge: it leaves every per-order
+    efficiency ``|r_i|^2`` unchanged, so no back-transform is needed.  ``phi``
+    is read off the first harmonics ``c_{(+/-1,0)}`` / ``c_{(0,+/-1)}``; a wrong
+    guess is caught by the caller's flip-invariance check (-> full-solve
+    fallback), so this is safe even when the read-off is degenerate.
+    """
+    om = {(int(a), int(b)): i for i, (a, b) in enumerate(np.asarray(orders))}
+    i00 = om.get((0, 0))
+    if i00 is None:
+        return None
+    Eh = to_numpy(EPS)
+    ref = abs(Eh[i00, i00]) + 1e-300
+
+    def _phi(plus, minus):
+        ip, im = om.get(plus), om.get(minus)
+        if ip is None or im is None:
+            return 0.0
+        cp = Eh[ip, i00]                       # c_{+e}
+        if abs(cp) < 1e-10 * ref:              # no first-harmonic content
+            return 0.0
+        return float(np.angle(Eh[im, i00] * np.conj(cp)))   # angle(c_{-e}/c_{+e})
+
+    phix = _phi((1, 0), (-1, 0))
+    phiy = _phi((0, 1), (0, -1))
+    m = np.asarray(orders)[:, 0].astype(float)
+    n = np.asarray(orders)[:, 1].astype(float)
+    return xp.asarray(np.exp(-0.5j * (phix * m + phiy * n)).astype(_C))
+
+
+def _even_basis_desc(flip):
+    """Descriptor of the orthonormal EVEN basis of ``G = blockdiag(J, J)`` over
+    the ``2N`` field space: a fixed-point column ``e_f`` for each self-paired
+    order (the two ``(0,0)`` components) and a column ``(e_i + e_j)/sqrt(2)``
+    for each flip-pair.  Returns ``(i0, i1, c0, c1, n2)`` -- two support indices
+    and two coefficients per even column (the fixed-point column repeats its
+    index with ``c1 = 0``), plus the field-space size ``n2 = 2N``."""
+    n = flip.shape[0]
+    n2 = 2 * n
+    flip2 = np.concatenate([flip, flip + n])          # G = blockdiag(J, J)
+    ar = np.arange(n2)
+    fixed = np.flatnonzero(flip2 == ar)               # self-paired (e.g. (0,0))
+    pair_i = np.flatnonzero(flip2 > ar)               # canonical reps (i < j)
+    pair_j = flip2[pair_i]
+    inv2 = 1.0 / np.sqrt(2.0)
+    i0 = np.concatenate([fixed, pair_i])
+    i1 = np.concatenate([fixed, pair_j])
+    c0 = np.concatenate([np.ones(fixed.size), np.full(pair_i.size, inv2)])
+    c1 = np.concatenate([np.zeros(fixed.size), np.full(pair_i.size, inv2)])
+    return i0, i1, c0, c1, n2
+
+
+def _even_fold(A, desc, xp):
+    """Even block ``B^H A B`` (``(N+1) x (N+1)``) of a ``G``-commuting ``2N``
+    operator, as a 4-term index combination (no dense matmul)."""
+    i0, i1, c0, c1, _ = desc
+    c0x = xp.asarray(c0.astype(_C))
+    c1x = xp.asarray(c1.astype(_C))
+    i0n, i1n = np.asarray(i0), np.asarray(i1)
+    A00 = A[i0n[:, None], i0n[None, :]]
+    A01 = A[i0n[:, None], i1n[None, :]]
+    A10 = A[i1n[:, None], i0n[None, :]]
+    A11 = A[i1n[:, None], i1n[None, :]]
+    return (c0x[:, None] * c0x[None, :] * A00
+            + c0x[:, None] * c1x[None, :] * A01
+            + c1x[:, None] * c0x[None, :] * A10
+            + c1x[:, None] * c1x[None, :] * A11)
+
+
+def _even_project(v, desc, xp):
+    """``B^H v`` -- project a ``2N`` field vector onto the even basis
+    (``(N+1)`` coords).  Lossless for a purely even ``v`` (e.g. the source)."""
+    i0, i1, c0, c1, _ = desc
+    c0x = xp.asarray(c0.astype(_C))
+    c1x = xp.asarray(c1.astype(_C))
+    return c0x * v[xp.asarray(i0)] + c1x * v[xp.asarray(i1)]
+
+
+def _even_unfold(ve, desc, xp):
+    """``B ve`` -- expand an even-basis ``(N+1)`` vector back to the full
+    ``2N`` field space."""
+    i0, i1, c0, c1, n2 = desc
+    i0x, i1x = xp.asarray(i0), xp.asarray(i1)
+    c0x = xp.asarray(c0.astype(_C))
+    c1x = xp.asarray(c1.astype(_C))
+    v = xp.zeros(n2, dtype=_C)
+    # i0 entries are all-distinct and i1 entries are all-distinct, so the two
+    # fancy-indexed adds need no scatter-accumulate (the only shared index is a
+    # fixed point, where c1 == 0).
+    v[i0x] = v[i0x] + c0x * ve
+    v[i1x] = v[i1x] + c1x * ve
+    return v
+
+
+def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
+                        orders, k0, depth, cinc, xp):
+    """Even-parity-sector reflection/transmission (see section header).
+
+    Runs the full single-layer S-matrix recursion in the ``(N+1)``-d even
+    subspace and returns the full ``2N`` ``(r, t)`` so the caller's per-order
+    efficiency tail is unchanged -- or ``None`` if the symmetry precondition
+    fails (the caller then runs the full ``2N`` solve).  The region electric
+    eigenvector block is the identity (gauge-invariant), so only the region
+    magnetic blocks ``Vref`` / ``Vtrn`` are needed.
+    """
+    flip = _order_flip_perm(Kx, Ky)
+    if flip is None:                                  # oblique / not flip-closed
+        return None
+    # Move an off-origin symmetry centre to the FFT origin with a diagonal gauge
+    # (a centred feature is even about its geometric centre, not sample 0).
+    d = _recentering_phase(EPS, orders, xp)
+    if d is None:
+        return None
+    dinv = 1.0 / d
+
+    def _recentre(A):
+        return (dinv[:, None] * A) * d[None, :]       # D^{-1} A D (cheap O(N^2))
+
+    EPS = _recentre(EPS)
+    if not _flip_invariant(EPS, flip):                # non-centro-symmetric cell
+        return None
+    EPS_xx = _recentre(EPS_xx)
+    ez_inv = _recentre(ez_inv) if ez_inv is not None else None
+    if ez_inv is not None and not _flip_invariant(ez_inv, flip):
+        return None
+    offdiag = EPS - xp.diag(xp.diag(EPS))
+    scale = max(1.0, float(xp.max(xp.abs(xp.diag(EPS)))))
+    if float(xp.max(xp.abs(offdiag))) < 1e-12 * scale:  # uniform -> analytic path
+        return None
+
+    n = flip.shape[0]
+    desc = _even_basis_desc(flip)
+    # Layer system matrix M = P @ Q (built as in _structured_modes), folded to
+    # its even block; the half-size eig replaces the full 2N eig.  The gauge D
+    # is a per-order phase, so r/t below are returned in the recentred gauge --
+    # |r_i| (hence every efficiency) is gauge-invariant, so no undo is needed.
+    Imat = xp.eye(n, dtype=_C)
+    EPS_inv = ez_inv if ez_inv is not None else xp.linalg.inv(EPS)
+    P = _block(xp, [
+        [Kx @ EPS_inv @ Ky,        Imat - Kx @ EPS_inv @ Kx],
+        [Ky @ EPS_inv @ Ky - Imat, -Ky @ EPS_inv @ Kx],
+    ])
+    Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_xx)
+    Mp = _even_fold(P @ Q, desc, xp)
+    lam2_e, Wl_e = _eig_for(xp)(Mp)
+    lam_e = _sqrt_decay(lam2_e)
+    Q_e = _even_fold(Q, desc, xp)
+    Vl_e = Q_e @ Wl_e @ xp.diag(_inv_lam(lam_e))
+    # Region modes folded to even.  W_region = I (2N) -> I in the even basis;
+    # only the V blocks carry the half-space index.
+    ne = Mp.shape[0]
+    Ireg_e = xp.eye(ne, dtype=_C)
+    Vref_e = _even_fold(Vref, desc, xp)
+    Vtrn_e = _even_fold(Vtrn, desc, xp)
+    # S-matrix recursion in the even sector (dimension-agnostic helpers).
+    S = _interface_smatrix(Ireg_e, Vref_e, Wl_e, Vl_e)
+    S = _redheffer_star(S, _propagation_smatrix(lam_e, k0 * depth))
+    S = _redheffer_star(S, _interface_smatrix(Wl_e, Vl_e, Ireg_e, Vtrn_e))
+    S11, _S12, S21, _S22 = S
+    cinc_e = _even_project(cinc, desc, xp)
+    r = _even_unfold(S11 @ cinc_e, desc, xp)
+    t = _even_unfold(S21 @ cinc_e, desc, xp)
+    return r, t
+
+
 def _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=None):
     """Eigenmodes of a single layer (structured or uniform).
 
@@ -960,7 +1227,7 @@ def rcwa_efficiency_1d(
     """
     if stabilize and not _is_traced(wavelength):
         last = None
-        for bump in (0, 1, 2, 3, 4, 6, 8):
+        for bump in _stabilize_bumps(n_orders):
             try:
                 return rcwa_efficiency_1d(
                     period, n_ridge, n_groove, n_substrate, n_superstrate,
@@ -1386,6 +1653,7 @@ def rcwa_efficiency_2d(
     formulation: str = "laurent",
     truncation: str = "rectangular",
     stabilize: bool = False,
+    symmetry: bool = False,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 2-D (doubly periodic) crossed
@@ -1449,12 +1717,26 @@ def rcwa_efficiency_2d(
     stabilize : bool, optional
         When ``True`` and the energy guard detects the measure-zero
         large-period / high-contrast instability, search the nearby
-        truncations ``n_orders + {0, 1, 2, 3, 4, 6, 8}`` (the clean
-        truncations sit right next to the bad ones; higher is not
-        monotonically safer) and return the first energy-conserving solve
-        (its order count may then differ from the request).  Default
-        ``False`` raises (bit-for-bit backward compatible).  NumPy / CuPy
-        only.
+        truncations (``n_orders +/- {1, 2, ...}``, nearest first, BOTH
+        directions -- the clean truncations bracket the bad ones and on some
+        LAPACK builds sit below the request) and return the first
+        energy-conserving solve (its order count may then differ from the
+        request).  Default ``False`` raises (bit-for-bit backward compatible).
+        NumPy / CuPy only.
+    symmetry : bool, optional
+        When ``True`` AND the cell is centro-symmetric AND incidence is normal
+        (``theta == 0``), run the WHOLE single-layer solve in the even-parity
+        subspace: the ``(0, 0)`` source is even and no operator couples the
+        parities, so the odd half is never excited and the eig, interface, and
+        Redheffer steps all shrink from ``2N`` to ``~N`` -- a ~2-4x end-to-end
+        speed-up that grows with ``n_orders``.  An off-origin symmetry centre
+        is handled by a diagonal recentering gauge.  Gated on the exact
+        precondition; if it does not hold (oblique, non-centro-symmetric, or a
+        uniform layer) the solver transparently falls back to the full ``2N``
+        solve, so the result is always correct.  The even-adapted basis differs
+        from the default by a mode-wise rescale/reorder, so efficiencies match
+        the ``symmetry=False`` path to ~1e-12 but NOT bit-for-bit.  Default
+        ``False``.  NumPy / CuPy only (no effect under JAX tracing).
 
     Returns
     -------
@@ -1465,7 +1747,7 @@ def rcwa_efficiency_2d(
     """
     if stabilize and not (_is_traced(wavelength) or _is_traced(theta)):
         last = None
-        for bump in (0, 1, 2, 3, 4, 6, 8):
+        for bump in _stabilize_bumps(min(int(n_orders_x), int(n_orders_y))):
             try:
                 return rcwa_efficiency_2d(
                     period_x, period_y, eps_cell, n_substrate, n_superstrate,
@@ -1473,7 +1755,8 @@ def rcwa_efficiency_2d(
                     polarization=polarization,
                     n_orders_x=int(n_orders_x) + bump,
                     n_orders_y=int(n_orders_y) + bump, formulation=formulation,
-                    truncation=truncation, stabilize=False, use_gpu=use_gpu)
+                    truncation=truncation, stabilize=False, symmetry=symmetry,
+                    use_gpu=use_gpu)
             except _EnergyError as e:
                 last = e
         raise last
@@ -1545,11 +1828,6 @@ def rcwa_efficiency_2d(
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=ez_inv)
-    S = _interface_smatrix(Wref, Vref, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
-    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-    S11, S12, S21, S22 = S
 
     # Incident unit plane wave on the (0, 0) order, TE/TM relative to the
     # plane of incidence (built from the in-plane azimuth direction).
@@ -1569,8 +1847,25 @@ def rcwa_efficiency_2d(
             einc_sq = 1.0 + (kt / kz_inc) ** 2
     cinc = xp.concatenate([ex0 * delta, ey0 * delta])
 
-    r = S11 @ cinc
-    t = S21 @ cinc
+    # Opt-in even-parity-sector fast path: a centro-symmetric cell at normal
+    # incidence excites only even modes, so the whole recursion runs in the
+    # (N+1)-d even subspace (see the section header above _symmetric_solve_rt).
+    # Returns None -> not applicable -> fall through to the full 2N solve.
+    rt = None
+    if symmetry and not is_jax and kt < 1e-12:
+        rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
+                                 orders, k0, depth, cinc, xp)
+    if rt is not None:
+        r, t = rt
+    else:
+        Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_xx,
+                                        ez_laurent_inv=ez_inv)
+        S = _interface_smatrix(Wref, Vref, Wl, Vl)
+        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        S11, S12, S21, S22 = S
+        r = S11 @ cinc
+        t = S21 @ cinc
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
