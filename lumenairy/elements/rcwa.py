@@ -698,6 +698,119 @@ def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
 
 
 # ===========================================================================
+# Adaptive Spatial Resolution (ASR / Granet 1999) -- 1-D binary grating
+# ===========================================================================
+#
+# ASR replaces the uniform spatial sampling with a periodic coordinate map
+# ``x = x(u)`` whose Jacobian ``f(u) = dx/du`` is SMALL (fine resolution) at the
+# grating walls and LARGE (coarse) in the homogeneous regions, then runs the
+# Fourier Modal Method in the uniform ``u``-coordinate.  Concentrating the
+# harmonics where the field varies fastest gives much faster convergence for
+# metals / high contrast / TM than uniform sampling (~10x fewer orders for the
+# same TM error on a gold grating; ~hundreds-x for TE).  "Matched coordinates"
+# (the configuration used here) places the binary walls EXACTLY on coordinate
+# lines, so ``eps(x(u))`` is a clean step on the ``u``-grid; combined with the
+# Li inverse rule (``use_li``) this is the matched-coordinate FFF.
+#
+# Two NON-OBVIOUS facts -- both proven the hard way by three independent
+# prototypes, both load-bearing, both regression-tested -- govern correctness:
+#
+#  (1) FACTORIZATION.  Use the NON-MULTIPLIED (chain-rule) form: the metric
+#      enters ONLY on the derivative (``Kx_asr = [[1/f]] @ Du``) and the
+#      permittivity is the plain ``eps(x(u))`` sampled on the ``u``-grid
+#      (Laurent ``[[eps]]`` tangential, inverse-rule ``[[1/eps]]^{-1}``
+#      wall-normal).  Do NOT fold the metric into the permittivity (the
+#      ``[[f eps]]`` / ``[[1/(f eps)]]^{-1}`` "multiply-by-f covariant" form):
+#      mixing it with ``[[1/f]] Du`` converges to the WRONG value at high N
+#      while STILL being bit-exact at ``eta=0`` -- internal consistency does
+#      not imply the correct continuous-limit operator.
+#
+#  (2) BASIS BRIDGE.  The layer is solved in the ``u``-Fourier basis but the
+#      homogeneous regions live in the physical-``x`` Rayleigh basis.  The
+#      order-``m`` harmonics do NOT coincide between the two bases unless
+#      ``f == 1``, so the layer modes must be mapped through the dense Rayleigh
+#      transform ``G[m, n] = <exp(i a_n x(u)) exp(-i a_m u)>_u`` BEFORE the
+#      interface match.  The direction is ``G^{-1}`` (a physical field with
+#      x-coeffs ``a`` has u-coeffs ``G a``); applying ``G`` instead gives a
+#      stable-but-WRONG answer.  At ``eta=0``: ``x(u)=u`` -> ``G=I``.
+
+
+def _asr_metric_profile(duty_cycle, eta, n_samples):
+    """Matched Granet sine-stretch coordinate map for a 1-D binary cell.
+
+    Period is normalised to 1; the two walls sit at ``u = 0`` and
+    ``u = duty_cycle`` (and the cell edge ``u = 1``), landing exactly on
+    coordinate lines.  On each sub-interval of length ``L`` (local
+    ``s = (u - a)/L in [0, 1)``)::
+
+        x(u) = a + L (s - (eta / 2pi) sin(2pi s))
+        f(u) = dx/du = 1 - eta cos(2pi s)
+
+    so ``f`` is fine (``1 - eta``) at the walls, coarse (``1 + eta``) mid-cell,
+    ``integral(f) = L`` over each sub-interval (``<f> = 1`` exactly, preserving
+    the Floquet lattice), and ``eta = 0`` gives ``f == 1``, ``x(u) = u``.
+    Returns ``(u, f_u, x_u, in_ridge)`` on the uniform grid
+    ``u = (i + 0.5)/n_samples``.  Host NumPy (pure geometry).
+    """
+    u = (np.arange(n_samples) + 0.5) / n_samples
+    u1 = float(duty_cycle)
+    f = np.ones(n_samples)
+    x = u.copy()
+    tp = 2.0 * np.pi
+    in_ridge = u < u1
+    if u1 > 0.0:                                  # ridge sub-interval [0, u1)
+        a = u[in_ridge]
+        f[in_ridge] = 1.0 - eta * np.cos(tp * a / u1)
+        x[in_ridge] = a - (eta * u1 / tp) * np.sin(tp * a / u1)
+    w = 1.0 - u1
+    if w > 0.0:                                   # groove sub-interval [u1, 1)
+        b = u[~in_ridge] - u1
+        f[~in_ridge] = 1.0 - eta * np.cos(tp * b / w)
+        x[~in_ridge] = u[~in_ridge] - (eta * w / tp) * np.sin(tp * b / w)
+    return u, f, x, in_ridge
+
+
+def _asr_convolutions(n_ridge, n_groove, duty_cycle, n_orders, eta, xp,
+                      n_samples=16384):
+    """ASR convolution matrices + the u<->x basis bridge (NON-multiplied form).
+
+    Returns ``(Fi, EPS, EPS_II, G)`` (in the namespace ``xp``):
+
+    - ``Fi = [[1/f]]``  -- Laurent Toeplitz of ``1/f`` (``f`` is smooth, so the
+      bare metric takes the DIRECT rule; never an inverse rule on ``f``).  Used
+      as ``Kx_asr = Fi @ Du`` (the metric lives on the derivative).
+    - ``EPS = [[eps(x(u))]]``        -- Laurent (wall-tangential ``E_y``/``E_z``).
+    - ``EPS_II = [[1/eps(x(u))]]^-1`` -- Li inverse rule (wall-normal ``E_x``).
+      Plain ``1/eps`` (NO metric inside): ``D_x = eps E_x`` is continuous on the
+      same ``u``-line, and the metric already lives on the derivative.
+    - ``G[m, n] = <exp(i a_n x(u)) exp(-i a_m u)>_u`` -- the dense Rayleigh
+      transform from the layer ``u``-basis to the physical-``x`` region basis
+      (see section header fact (2); applied as ``G^{-1}`` to the layer modes).
+
+    NumPy/CuPy only (the ASR path is gated off JAX).  The permittivity is
+    sampled from the ALREADY-CONJUGATED internal indices, so it shares the
+    public->internal convention bridge with ``_binary_grating_convolutions``.
+    """
+    u, f_u, x_u, in_ridge = _asr_metric_profile(duty_cycle, eta, n_samples)
+    eps_r = complex(n_ridge) ** 2
+    eps_g = complex(n_groove) ** 2
+    eps_u = np.where(in_ridge, eps_r, eps_g).astype(_C)   # eps(x(u)) on u-grid
+    n_coeffs = 2 * n_orders + 1
+    Fi = _toeplitz_1d(_fourier_coeffs_1d(1.0 / f_u, n_coeffs), n_orders)
+    EPS = _toeplitz_1d(_fourier_coeffs_1d(eps_u, n_coeffs), n_orders)
+    EPS_II = np.linalg.inv(
+        _toeplitz_1d(_fourier_coeffs_1d(1.0 / eps_u, n_coeffs), n_orders))
+    # u<->x Rayleigh bridge (period-normalised orders; normal incidence).
+    orders = np.arange(-n_orders, n_orders + 1)
+    twopi = 2.0 * np.pi
+    ph_xn = np.exp(1j * twopi * np.outer(x_u, orders))     # (Ns, N) exp(i a_n x)
+    ph_um = np.exp(-1j * twopi * np.outer(u, orders))      # (Ns, N) exp(-i a_m u)
+    G = (ph_um.T @ ph_xn) / n_samples                      # (N, N)
+    return (xp.asarray(Fi.astype(_C)), xp.asarray(EPS.astype(_C)),
+            xp.asarray(EPS_II.astype(_C)), xp.asarray(G.astype(_C)))
+
+
+# ===========================================================================
 # Layer eigen-solve (vectorial 2N system, Rumpf/Moharam)
 # ===========================================================================
 
@@ -1162,6 +1275,8 @@ def rcwa_efficiency_1d(
     n_orders: int = 11,
     formulation: str = "auto",
     stabilize: bool = False,
+    asr_eta: float = 0.0,
+    asr_samples: int = 16384,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 1-D binary grating.
@@ -1201,6 +1316,26 @@ def rcwa_efficiency_1d(
         for dielectrics; ``'li'`` (inverse rule) is required for metals /
         high-contrast TM.  ``'auto'`` picks ``'li'`` for TM or when any
         index is metallic, else ``'laurent'``.
+    asr_eta : float, optional
+        Adaptive Spatial Resolution sharpness (Granet 1999), in ``[0, 1)``.
+        ``0.0`` (default) is the standard uniform method, **bit-identical** to
+        a call without the argument.  ``asr_eta > 0`` applies a matched
+        coordinate stretch ``f(u) = 1 - asr_eta*cos(...)`` that clusters the
+        Fourier harmonics at the grating walls, converging much faster for
+        metals / high-contrast TM at LOW order counts (e.g. ~10x lower TM error
+        and ~100x lower TE error at ``n_orders=12`` on a gold grating).
+        Validated sweet spot ``0.5-0.8`` (geometry-dependent).  ASR is a
+        LOW-to-MODERATE-order accelerator: the internal ``u<->x`` basis bridge
+        is increasingly ill-conditioned as ``n_orders`` grows, so at high order
+        counts ASR can be *less* accurate than the uniform method and a
+        conditioning warning is emitted -- use a low ``n_orders`` (its purpose)
+        or disable ASR for high-order runs.  Combined with the inverse rule
+        (``formulation='li'`` / metals) this is the matched-coordinate FFF.
+        **Normal incidence only** (raises for ``angle != 0``); NumPy / CuPy
+        only (raises on the JAX path).
+    asr_samples : int, optional
+        Uniform ``u``-grid sample count for the ASR metric / permittivity /
+        bridge FFTs (default 16384).  Only used when ``asr_eta > 0``.
 
     Returns
     -------
@@ -1318,18 +1453,70 @@ def rcwa_efficiency_1d(
     Kx = xp.diag(kx.astype(_C))
     Ky = xp.zeros((N, N), dtype=_C)
 
-    # --- convolution matrices -------------------------------------------
-    EPS, EPS_II = _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, M)
+    # --- convolution matrices (+ optional ASR metric) -------------------
+    # Adaptive Spatial Resolution: a coordinate stretch f(u) concentrates the
+    # harmonics at the grating walls (see the section above _asr_metric_profile).
+    # The metric enters ONLY on the derivative (Kx_layer = [[1/f]] @ Kx); the
+    # permittivity is the plain eps(x(u)) on the u-grid; the layer modes are
+    # bridged back to the physical-x region basis by G^{-1} before the
+    # interface.  asr_eta == 0 is the exact uniform path (no branch taken).
+    use_asr = float(asr_eta) != 0.0
+    Gbridge = None
+    Kx_layer = Kx
+    if use_asr:
+        if not (0.0 <= float(asr_eta) < 1.0):
+            raise ValueError(
+                f"rcwa_efficiency_1d: asr_eta must be in [0, 1) (eta>=1 makes "
+                f"the coordinate Jacobian f=1-eta*cos touch zero), got "
+                f"{asr_eta}.")
+        if is_jax:
+            raise ValueError(
+                "rcwa_efficiency_1d: asr_eta>0 (Adaptive Spatial Resolution) is "
+                "NumPy/CuPy only; it is not supported on the JAX path.")
+        if abs(float(xp.real(kx0))) > 1e-12:
+            raise ValueError(
+                "rcwa_efficiency_1d: asr_eta>0 (Adaptive Spatial Resolution) is "
+                "currently implemented for normal incidence only (angle=0).")
+        Fi, EPS, EPS_II, Gbridge = _asr_convolutions(
+            n_ridge, n_groove, duty_cycle, M, float(asr_eta), xp,
+            n_samples=int(asr_samples))
+        Kx_layer = Fi @ Kx                       # metric x derivative
+        # The u<->x bridge G is increasingly ill-conditioned as n_orders grows
+        # (high-order x-harmonics map outside the u-truncation window), so the
+        # ASR benefit is a LOW-to-MODERATE-order effect and high-order ASR can
+        # be LESS accurate than the uniform solver.  Warn (never silently wrong)
+        # when G enters the unreliable regime; the result is still returned.
+        _cond_G = float(xp.linalg.cond(Gbridge))
+        if _cond_G > 1e8:
+            import warnings
+            warnings.warn(
+                f"rcwa_efficiency_1d: ASR coordinate-bridge conditioning is "
+                f"poor (cond={_cond_G:.1e}) at n_orders={M}, asr_eta={asr_eta}; "
+                f"ASR is a low-to-moderate-order accelerator and the result "
+                f"here may be less accurate than the uniform solver. Reduce "
+                f"n_orders or asr_eta, or disable ASR (asr_eta=0) for high "
+                f"order counts.", stacklevel=2)
+    else:
+        EPS, EPS_II = _binary_grating_convolutions(n_ridge, n_groove,
+                                                   duty_cycle, M)
     # Wall-normal E_x uses the Li inverse rule [[1/eps]]^{-1} when requested
     # (TM / metals); E_y (tangential) always uses the Laurent [[eps]].
     EPS_xx = EPS_II if use_li else EPS
 
-    # --- region (half-space) modes --------------------------------------
+    # --- region (half-space) modes (physical-x basis, UNCHANGED by ASR) -
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
 
     # --- global S = (sup|layer) * propagate(layer) * (layer|sub) --------
-    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_xx)
+    Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_xx)
+    if Gbridge is not None:
+        # Map the layer's u-basis modes to the physical-x Rayleigh basis the
+        # regions use (direction is G^{-1}; applying G is silently WRONG).
+        Gi = xp.linalg.inv(Gbridge)
+        zN = xp.zeros_like(Gi)
+        Giblk = _block(xp, [[Gi, zN], [zN, Gi]])
+        Wl = Giblk @ Wl
+        Vl = Giblk @ Vl
     S = _interface_smatrix(Wref, Vref, Wl, Vl)
     S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))

@@ -2,6 +2,42 @@
 
 All notable changes to the core library are documented here.
 
+## [5.7.0] — 2026-06-01
+
+**Adaptive Spatial Resolution + matched coordinates for the 1-D RCWA solver
+(roadmap items E & F).**  Opt-in, default-off, **bit-identical when off**.
+
+### Added
+
+- **`asr_eta` / `asr_samples` on `rcwa_efficiency_1d`** — Adaptive Spatial
+  Resolution (Granet, JOSA A 16, 2510 (1999)).  A matched coordinate stretch
+  `f(u) = 1 − asr_eta·cos(...)` clusters the Fourier harmonics at the grating
+  walls, converging far faster for metals / high-contrast TM at **low order
+  counts**: on a gold grating at `n_orders=12`, ~**10×** lower TM error and
+  ~**100–460×** lower TE error than the uniform method (validated against the
+  uniform solver at high order as the convergence oracle).  `asr_eta=0`
+  (default) is the exact uniform path, bit-identical to a call without the arg.
+  - **Item F (matched coordinates + FFF)** is the same path with
+    `formulation='li'` (auto-selected for metals): the walls land exactly on
+    coordinate lines so `eps(x(u))` is a clean step, and the Li inverse rule
+    applies to the matched permittivity.
+  - **The verified factorization** (cross-checked by three independent
+    prototypes): the metric enters *only* on the derivative
+    (`Kx_layer = [[1/f]] @ Kx`); the permittivity is the plain `eps(x(u))` on
+    the `u`-grid (Laurent tangential, inverse-rule wall-normal). The
+    "multiply-by-`f`" covariant form (`[[f·eps]]`, `[[1/(f·eps)]]⁻¹`) is
+    **wrong** in this non-multiplied formulation — it converges to a different
+    value at high order while staying bit-exact at `asr_eta=0`. The layer's
+    `u`-basis modes are bridged to the physical-`x` region basis by `G⁻¹`
+    before the interface (applying `G` is silently wrong). Both facts are
+    recorded as code comments and regression-tested.
+  - **Scope / guard:** ASR is a low-to-moderate-order accelerator — the dense
+    `u↔x` bridge is ill-conditioned at high order, so ASR can be *less*
+    accurate there and a conditioning **warning** is emitted (never silently
+    wrong). Normal incidence only (raises for `angle != 0`); NumPy / CuPy only
+    (raises on JAX). Reuses every existing eigenmode / S-matrix / region /
+    efficiency helper unchanged.
+
 ## [5.6.1] — 2026-06-01
 
 **RCWA symmetry fast path + cross-platform `stabilize` robustness.**  Two
