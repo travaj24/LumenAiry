@@ -1209,6 +1209,32 @@ def search_glasses(pattern: str) -> List[str]:
 # ---------------------------------------------------------------------------
 _glass_cache = {}
 
+# v5.6: value cache for the IMMUTABLE-catalogue dispatch branches only
+# (__sellmeier__, __polynomial__ and the refractiveindex-unavailable
+# Sellmeier / polynomial fallback).  Keyed on (glass_name, wavelength in
+# femtometres) -> float index.  It is consulted ONLY inside those branches
+# (after the entry sentinel is confirmed), so re-registering a name under a
+# different dispatch (a callable, a tuple, register_fixed_glass) can never
+# serve a stale value; ``register_fixed_glass`` clears it as well.  Array
+# wavelengths bypass it (not hashable / not the hot scalar path).
+_glass_value_cache = {}
+
+
+def _cached_glass_value(glass_name, wavelength, compute):
+    """Memoise an immutable-catalogue index value keyed on
+    ``(glass_name, round(wavelength * 1e12))`` (femtometre resolution, far
+    below any optical relevance).  Scalar wavelengths only; arrays recompute.
+    ``compute`` is a zero-arg callable returning the float index."""
+    if np.ndim(wavelength) != 0:
+        return compute()
+    key = (glass_name, round(float(wavelength) * 1e12))
+    cached = _glass_value_cache.get(key)
+    if cached is not None:
+        return cached
+    value = compute()
+    _glass_value_cache[key] = value
+    return value
+
 
 def get_glass_index(glass_name: str, wavelength: float) -> float:
     """
@@ -1314,8 +1340,10 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
                 f"Glass {glass_name!r} is flagged '__sellmeier__' in "
                 f"GLASS_REGISTRY but has no entry in "
                 f"SELLMEIER_COEFFICIENTS.")
-        return _sellmeier_index(wavelength,
-                                SELLMEIER_COEFFICIENTS[glass_name])
+        return _cached_glass_value(
+            glass_name, wavelength,
+            lambda: _sellmeier_index(wavelength,
+                                     SELLMEIER_COEFFICIENTS[glass_name]))
 
     # v4.16.3 (audit P3-NEW-F1-1): __polynomial__ sentinel parallel to
     # __sellmeier__.  Pre-v4.16.3 the bundled formula-3 polynomial
@@ -1334,9 +1362,11 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
                 f"Glass {glass_name!r} is flagged '__polynomial__' in "
                 f"GLASS_REGISTRY but has no entry in "
                 f"POLYNOMIAL_COEFFICIENTS.")
-        return _polynomial_index(wavelength,
-                                 POLYNOMIAL_COEFFICIENTS[glass_name],
-                                 glass_name=glass_name)
+        return _cached_glass_value(
+            glass_name, wavelength,
+            lambda: _polynomial_index(wavelength,
+                                      POLYNOMIAL_COEFFICIENTS[glass_name],
+                                      glass_name=glass_name))
 
     # Internal thin-lens placeholder marker (used by the thin-lens
     # helpers); should never reach a propagation path, but if a user
@@ -1367,8 +1397,10 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
         # If we have Sellmeier coefficients bundled for the same name,
         # use them rather than raising.
         if glass_name in SELLMEIER_COEFFICIENTS:
-            return _sellmeier_index(wavelength,
-                                    SELLMEIER_COEFFICIENTS[glass_name])
+            return _cached_glass_value(
+                glass_name, wavelength,
+                lambda: _sellmeier_index(
+                    wavelength, SELLMEIER_COEFFICIENTS[glass_name]))
         # v4.16.2 (pre-v5.0 prep): formula-3 polynomial fallback for
         # glasses whose coefficients have been ingested into
         # POLYNOMIAL_COEFFICIENTS.  Empty at v4.16.2 ship; populating
@@ -1376,9 +1408,11 @@ def get_glass_index(glass_name: str, wavelength: float) -> float:
         # vendor-source review against refractiveindex.info YAML +
         # 5e-5 n_d cross-check).
         if glass_name in POLYNOMIAL_COEFFICIENTS:
-            return _polynomial_index(wavelength,
-                                     POLYNOMIAL_COEFFICIENTS[glass_name],
-                                     glass_name=glass_name)
+            return _cached_glass_value(
+                glass_name, wavelength,
+                lambda: _polynomial_index(
+                    wavelength, POLYNOMIAL_COEFFICIENTS[glass_name],
+                    glass_name=glass_name))
         # v5.2 (ROADMAP v5.1 formula-3 polynomial coefficients ingestion):
         # known-but-stubbed formula-3 glass.  Raise NotImplementedError
         # (not ImportError) so callers can distinguish "package missing"

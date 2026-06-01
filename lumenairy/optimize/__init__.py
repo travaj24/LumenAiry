@@ -42,6 +42,7 @@ from .core import (
     MultiFieldMerit,
     MultiPrescriptionParameterization,
     MultiWavelengthMerit,
+    RawParameterization,
     RMSWavefrontMerit,
     SphericalSeidelMerit,
     SpotSizeMerit,
@@ -81,6 +82,7 @@ __all__ = [
     # core
     'DesignParameterization',
     'MultiPrescriptionParameterization',
+    'RawParameterization',
     'MeritTerm',
     'FocalLengthMerit',
     'BackFocalLengthMerit',

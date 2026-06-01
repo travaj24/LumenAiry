@@ -63,26 +63,25 @@ def coating_reflectance(
 
     Notes
     -----
-    **Limitations (audit #2.4).**  Two assumptions in the internal
-    Snell-step deserve calling out:
+    **Snell factorization (v5.6 complex-angle TMM).**  The wall-normal
+    ``cos(theta)`` is set by the conserved Snell invariant
+    ``n0 sin(theta0)`` and carried as a COMPLEX number on the
+    decaying-evanescent branch ``Im(n_j cos_t_j) >= 0``:
 
-    1. **Complex index ``.imag`` is dropped at the Snell step.**
-       The propagated refraction angle uses ``n.real`` only --
-       fine for transparent dielectric AR / HR stacks where ``.imag``
-       is essentially zero, but underestimates the absorbing-layer
-       phase thickness for metallic mirrors or metal-dielectric
-       hybrids.  For accurate metal-bearing stacks use a TMM solver
-       that propagates the complex angle (e.g.
-       ``tmm.coh_tmm`` in the ``tmm`` package).
-    2. **TIR inside the stack is silently capped** via
-       ``sin_t = min(sin_t, 0.9999)``, masking total internal
-       reflection at intra-stack interfaces and reporting finite
-       transmittance through what should be a totally reflecting
-       interface.  Typical AR coatings don't reach TIR; high-AOI
-       polarizing-beam-splitter coatings can, and this function
-       will under-report their reflectance.
+    - **Lossy / metallic layers** propagate the correct complex angle
+      (``n.imag`` is no longer dropped), so absorbing-layer phase
+      thickness and the resulting R / T are physically accurate for
+      metal mirrors and metal-dielectric hybrids.
+    - **TIR / frustrated TIR** is handled directly (no
+      ``min(sin_t, 0.9999)`` cap): past the critical angle ``cos_t``
+      becomes imaginary, the characteristic-matrix ``cos/sin`` become
+      ``cosh/sinh``, and a totally-reflecting interface correctly gives
+      ``R -> 1``, ``T -> 0`` -- the high-AOI polarizing-beam-splitter
+      case the pre-v5.6 real-Snell approximation under-reported.
 
-    Both items are on the roadmap for a proper TMM rewrite.
+    For a fully REAL-index, sub-critical stack (the common transparent
+    AR / HR case) ``cos(theta)`` is real and the result is **bit-identical**
+    to the pre-v5.6 real-Snell path.
     """
     # 4.14.0 (Tier-2 perf, audit group): track scalar-input back-compat
     # before the np.atleast_1d promotion.  When a scalar wavelength is
@@ -107,80 +106,76 @@ def coating_reflectance(
     # ``math.asin`` for ~10x speedup over the numpy ufuncs on
     # 50-layer-scale stacks; the result is bit-identical because both
     # routes go through libm.
-    theta_prev = angle
-    n_prev = complex(n_ambient)
-    layer_cos_t: List[float] = []
-    layer_n: List[complex] = []
-    layer_d: List[float] = []
-    for n_layer, d in layers:
-        n_layer = complex(n_layer)
-        sin_t = n_prev.real * math.sin(theta_prev) / n_layer.real
-        # v4.15.1 (P3-4 / Agent E): always-emit TIR cap warning.
-        # Physics: when ``sin_t > 1.0`` Snell's law has no real
-        # solution -- the wave is totally internally reflected and
-        # the transmitted amplitude is evanescent (purely imaginary
-        # cos_t).  Capping ``sin_t`` at 0.9999 produces a finite
-        # real cos_t and so a finite transmittance, which is
-        # physically WRONG at TIR -- R should be 1.0, T should be
-        # 0.0 in the steady state.  The warning category is
-        # ``UserWarning`` (always-visible by Python's default
-        # filters) rather than ``RuntimeWarning`` (which some test
-        # frameworks / IDE notebooks silently filter) so the user
-        # always sees the cap firing.
-        if sin_t > 1.0:
-            import warnings
-            warnings.warn(
-                f"thin_film_stack: intra-stack TIR at layer with "
-                f"n_layer={n_layer.real:.3f}, sin_t={sin_t:.3f}; "
-                f"capped at 0.9999 (real-Snell approximation).  "
-                f"The reported R/T at this layer is NOT physically "
-                f"correct at TIR -- the steady-state R is 1.0 and "
-                f"T is 0.0, but the real-Snell approximation forces "
-                f"a finite transmittance.  For accurate TIR / "
-                f"immersion behaviour use a full complex-Snell "
-                f"solver (e.g. ``tmm.coh_tmm`` in the ``tmm`` "
-                f"package).",
-                UserWarning, stacklevel=2,
-            )
-        sin_t = min(sin_t, 0.9999)
-        cos_t = math.sqrt(1 - sin_t * sin_t)
-        layer_cos_t.append(cos_t)
-        layer_n.append(n_layer)
-        layer_d.append(d)
-        theta_prev = math.asin(sin_t)
-        n_prev = n_layer
+    # The wall-normal angle is set by the Snell invariant ``n0 sin(theta0)``,
+    # which is conserved EXACTLY across the stack -- no per-layer asin chain.
+    # The wall-normal cos(theta) is COMPLEX in general:
+    # ``cos_t_j = sqrt(1 - (n0 sin0 / n_j)^2)`` on the decaying-evanescent
+    # branch ``Im(n_j cos_t_j) >= 0``.
+    #
+    # v5.6: for a fully REAL-index, sub-critical stack (the common AR / HR
+    # dielectric case) cos_t is real and we keep the libm real-sqrt path, so
+    # the result stays BIT-IDENTICAL to <= v5.5.3.  The complex path is taken
+    # only when an index is lossy / active (Im != 0) OR the incidence is past
+    # a critical angle (TIR) -- exactly the cases where the old real-Snell
+    # ``min(sin_t, 0.9999)`` cap was physically WRONG (it warned and forced a
+    # finite transmittance; the complex path gives the correct evanescent
+    # decay, ``R -> 1``, ``T -> 0``, with no cap and no warning).
+    n0sin0 = complex(n_ambient) * math.sin(angle)
+    _all_n = [complex(nl) for nl, _ in layers] + [complex(n_substrate)]
+    _amb = complex(n_ambient)
+    _real_subcritical = (
+        abs(_amb.imag) < 1e-12
+        and all(abs(z.imag) < 1e-12 for z in _all_n)
+        and all(abs(n0sin0.real) < abs(z.real) for z in _all_n))
+
+    if _real_subcritical:
+        # Real-Snell path -- bit-identical to <= v5.5.3 (the gate guarantees
+        # no TIR cap fires, so the sequential asin chain == the invariant).
+        theta_prev = angle
+        n_prev = complex(n_ambient)
+        layer_cos_t: List[complex] = []
+        layer_n: List[complex] = []
+        layer_d: List[float] = []
+        for n_layer, d in layers:
+            n_layer = complex(n_layer)
+            sin_t = n_prev.real * math.sin(theta_prev) / n_layer.real
+            sin_t = min(sin_t, 0.9999)
+            cos_t = math.sqrt(1 - sin_t * sin_t)
+            layer_cos_t.append(cos_t)
+            layer_n.append(n_layer)
+            layer_d.append(d)
+            theta_prev = math.asin(sin_t)
+            n_prev = n_layer
+        sin_sub = (n_prev.real * math.sin(theta_prev)
+                   / complex(n_substrate).real)
+        sin_sub = min(sin_sub, 0.9999)
+        cos_sub = math.sqrt(1 - sin_sub * sin_sub)
+        cos_angle = math.cos(angle)
+        _cos_dtype = np.float64
+    else:
+        # Complex-Snell path -- correct evanescent physics for lossy / metal
+        # layers and TIR (no cap, no warning; the wave decays).
+        def _cos_theta(n_layer):
+            ct = np.sqrt(1.0 - (n0sin0 / n_layer) ** 2 + 0j)
+            if (n_layer * ct).imag < 0.0:        # decaying branch Im(n cos)>=0
+                ct = -ct
+            if abs(ct) < 1e-12:                  # exact critical: avoid n/cos=inf
+                ct = 1e-12 + 0j
+            return complex(ct)
+        layer_cos_t = [_cos_theta(complex(nl)) for nl, _ in layers]
+        layer_n = [complex(nl) for nl, _ in layers]
+        layer_d = [d for _, d in layers]
+        cos_sub = _cos_theta(complex(n_substrate))
+        cos_angle = _cos_theta(_amb)             # == cos(angle) for real ambient
+        _cos_dtype = np.complex128
 
     n_layers = len(layer_cos_t)
-    # Substrate / ambient angles (also wavelength-independent in the
-    # real-Snell approximation).
-    sin_sub = (n_prev.real * math.sin(theta_prev)
-               / complex(n_substrate).real)
-    # v4.15.1 (P3-4 / Agent E): substrate TIR cap warning.  Pre-
-    # v4.15.1 this site silently capped ``sin_sub`` with no
-    # diagnostic, so a high-AOI polarizing-beam-splitter coating
-    # where the substrate medium had a lower n than the final
-    # layer could exhibit TIR at the substrate interface and the
-    # caller would never know.  Mirrors the intra-stack cap above.
-    if sin_sub > 1.0:
-        import warnings
-        warnings.warn(
-            f"thin_film_stack: substrate TIR at the final interface "
-            f"(n_substrate={complex(n_substrate).real:.3f}, "
-            f"sin_sub={sin_sub:.3f}); capped at 0.9999 (real-Snell "
-            f"approximation).  Same physics caveat as the intra-stack "
-            f"TIR warning above -- use a complex-Snell solver for "
-            f"accurate TIR R/T.",
-            UserWarning, stacklevel=2,
-        )
-    sin_sub = min(sin_sub, 0.9999)
-    cos_sub = math.sqrt(1 - sin_sub * sin_sub)
-    cos_angle = math.cos(angle)
 
     # Layer arrays (n_layers,)
     if n_layers:
         n_arr = np.asarray(layer_n, dtype=np.complex128)
         d_arr = np.asarray(layer_d, dtype=np.float64)
-        cos_t_arr = np.asarray(layer_cos_t, dtype=np.float64)
+        cos_t_arr = np.asarray(layer_cos_t, dtype=_cos_dtype)
         # delta = 2*pi * n * d * cos_t / lambda
         # Broadcast wavelength: (n_wv, 1) * (n_layers,) -> (n_wv, n_layers)
         delta_all = (2.0 * math.pi
@@ -324,10 +319,11 @@ def coating_reflectance_jax(
     in :class:`lumenairy.optimize.JaxMeritTerm` (with ``needs_ray=False``) to
     optimize an AR / HR / band-pass stack against a target reflectance.
 
-    Matches :func:`coating_reflectance` to its real-Snell approximation (the
-    Snell angle chain uses the concrete real indices + angle, which do not
-    depend on the differentiated thicknesses; ``n.imag`` is dropped at the
-    Snell step and intra-stack TIR is capped, exactly as documented there).
+    Matches :func:`coating_reflectance` (v5.6 complex-Snell): the Snell angle
+    chain uses the conserved invariant ``n0 sin(theta0)`` over the concrete
+    indices + angle (which do not depend on the differentiated thicknesses),
+    carrying a COMPLEX ``cos(theta)`` on the decaying-evanescent branch so
+    lossy / metal layers and TIR are handled correctly (no real-Snell cap).
     Requires the optional ``jax`` extra.
 
     Parameters mirror :func:`coating_reflectance` (``layers`` is a list of
@@ -340,25 +336,30 @@ def coating_reflectance_jax(
             "coating_reflectance_jax requires the optional 'jax' extra; "
             "install with `pip install lumenairy[jax]`.  Use "
             "coating_reflectance for non-differentiable evaluation.")
+    import cmath
+
     import jax.numpy as jnp
 
     # --- Snell angle chain: CONCRETE (depends on indices + angle, not the
-    # differentiated thicknesses).  Real-Snell + TIR cap, matching
-    # coating_reflectance exactly.
-    theta_prev = float(angle)
-    n_prev = complex(n_ambient)
+    # differentiated thicknesses).  Complex invariant cos(theta), matching
+    # coating_reflectance's v5.6 path exactly.
+    n0sin0 = complex(n_ambient) * math.sin(float(angle))
+
+    def _cos_theta(n_layer):
+        ct = cmath.sqrt(1.0 - (n0sin0 / n_layer) ** 2)
+        if (n_layer * ct).imag < 0.0:            # decaying branch Im(n cos)>=0
+            ct = -ct
+        if abs(ct) < 1e-12:                       # exact critical: avoid n/cos
+            ct = 1e-12 + 0j
+        return ct
+
     cos_t, n_re = [], []
     for n_layer, _d in layers:
         n_layer = complex(n_layer)
-        sin_t = min(n_prev.real * math.sin(theta_prev) / n_layer.real, 0.9999)
-        cos_t.append(math.sqrt(1.0 - sin_t * sin_t))
+        cos_t.append(_cos_theta(n_layer))
         n_re.append(n_layer)
-        theta_prev = math.asin(sin_t)
-        n_prev = n_layer
-    sin_sub = min(n_prev.real * math.sin(theta_prev)
-                  / complex(n_substrate).real, 0.9999)
-    cos_sub = math.sqrt(1.0 - sin_sub * sin_sub)
-    cos_angle = math.cos(float(angle))
+    cos_sub = _cos_theta(complex(n_substrate))
+    cos_angle = _cos_theta(complex(n_ambient))    # == cos(angle) for real amb
 
     pols = ['s', 'p'] if polarization == 'avg' else [polarization]
     R_terms = []

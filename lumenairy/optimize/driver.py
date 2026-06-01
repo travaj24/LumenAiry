@@ -586,6 +586,21 @@ def design_optimize(parameterization: Any,
 
     multi_mode = isinstance(parameterization, MultiPrescriptionParameterization)
 
+    # v5.6: a template-free parameterization (RawParameterization) builds a
+    # prescription with no 'surfaces', so a ray-leg merit has nothing to
+    # trace.  Catch that up front with a clear, actionable error instead of
+    # silently degenerating to efl/bfl = 1e9 inside the per-iteration ray leg.
+    if need_ray and not multi_mode:
+        _built0 = parameterization.build(x0)
+        if isinstance(_built0, dict) and 'surfaces' not in _built0:
+            raise ValueError(
+                "design_optimize: a ray-leg merit (needs_ray=True) needs a "
+                "prescription with 'surfaces', but the parameterization built "
+                "one without it (e.g. RawParameterization).  Set "
+                "needs_ray=False on the merit terms for wave-only / "
+                "rigorous-element (RCWA / coating) design, or use "
+                "DesignParameterization with a real lens template.")
+
     def _emit_progress(frac: float, msg: str) -> None:
         # Clamp to [last_frac, 0.99] so the bar is monotonic.  The
         # eval-based and iter-based progress series can leapfrog each

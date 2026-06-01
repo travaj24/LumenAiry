@@ -595,41 +595,51 @@ class TestE5P3LambertianBSDFFrameWarning:
         assert val == pytest.approx(0.8 / np.pi, abs=1e-12)
 
 
-class TestE5P3CoatingsTIRWarning:
-    """P3-4: ``thin_film_stack`` always-emits the TIR cap warning at
-    BOTH the intra-stack and substrate-interface sites.  Pre-v4.15.1
-    the substrate cap (``sin_sub = min(sin_sub, 0.9999)``) was
-    silent; only the intra-stack cap emitted a warning.
+class TestE5P3CoatingsTIR:
+    """v5.6 supersedes P3-4: ``coating_reflectance`` no longer CAPS the Snell
+    angle at TIR (the old real-Snell ``min(sin_t, 0.9999)`` approximation,
+    which warned that its result was physically wrong).  It now carries a
+    COMPLEX ``cos(theta)`` on the decaying-evanescent branch, so TIR /
+    frustrated-TIR is handled correctly and SILENTLY -- the wave decays, energy
+    is conserved, and no warning is needed because the answer is right.
     """
 
-    def test_intra_stack_tir_warns(self):
-        """Intra-stack TIR at a high-AOI low-n interface fires the
-        cap-warning."""
+    def test_tir_is_correct_and_silent(self):
+        """Intra-stack TIR (high-index ambient, thin low-index layer) is now
+        solved with the correct evanescent physics and emits NO TIR cap
+        warning."""
         from lumenairy.elements.coatings import coating_reflectance
-        # Constructed scenario: light enters a high-index ambient
-        # (n=2.0) at 70 deg, then strikes a low-index layer (n=1.0)
-        # where Snell's law gives sin_t = 2.0 * sin(70) / 1.0 ~ 1.88
-        # -- well above the cap.
+        # n=2.0 ambient at 70 deg into a thin n=1.0 layer: sin_t ~ 1.88 -> the
+        # wave is evanescent in the layer (frustrated TIR through 100 nm).
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter('always')
-            try:
-                coating_reflectance(
-                    layers=[(1.0, 100e-9)],
-                    wavelengths=633e-9,
-                    angle=np.deg2rad(70.0),
-                    n_ambient=2.0,
-                    n_substrate=1.5,
-                    polarization='s',
-                )
-            except Exception:
-                # Some implementations may raise on extreme TIR;
-                # as long as the warning fired we accept either
-                # outcome.
-                pass
+            R, T, phase = coating_reflectance(
+                layers=[(1.0, 100e-9)],
+                wavelengths=633e-9,
+                angle=np.deg2rad(70.0),
+                n_ambient=2.0,
+                n_substrate=1.5,
+                polarization='s',
+            )
         tir_warnings = [w for w in caught
                         if ('TIR' in str(w.message)
-                            or 'tir' in str(w.message).lower())]
-        assert tir_warnings, (
-            f"P3-4: coating_reflectance must emit a TIR cap warning "
-            f"at the intra-stack site when sin_t > 1; got warnings: "
-            f"{[str(w.message) for w in caught]}")
+                            or 'cap' in str(w.message).lower())]
+        assert not tir_warnings, (
+            f"v5.6: TIR is handled with correct evanescent physics and must "
+            f"NOT emit a cap warning; got: {[str(w.message) for w in caught]}")
+        # finite, physical, energy-conserving (lossless frustrated TIR)
+        assert np.isfinite(R) and np.isfinite(T)
+        assert 0.0 <= R <= 1.0 + 1e-9 and 0.0 <= T <= 1.0 + 1e-9
+        assert abs(R + T - 1.0) < 1e-6
+
+    def test_total_internal_reflection_thick_gap_reflects_all(self):
+        """Past the critical angle with NO tunneling path (bare glass->air
+        interface, no layers) reflects all the power: R -> 1, T -> 0."""
+        from lumenairy.elements.coatings import coating_reflectance
+        # glass (n=1.52) -> air (n=1.0): critical angle ~41.1 deg; at 55 deg
+        # the air half-space carries a purely evanescent field -> total
+        # internal reflection.
+        R, T, phase = coating_reflectance(
+            layers=[], wavelengths=633e-9, angle=np.deg2rad(55.0),
+            n_ambient=1.52, n_substrate=1.0, polarization='s')
+        assert abs(R - 1.0) < 1e-9 and abs(T) < 1e-9

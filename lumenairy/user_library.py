@@ -255,7 +255,7 @@ def register_fixed_glass(name: str, n: float) -> None:
             f"path; the upper bound covers Si ~3.4, Ge ~4.0, and any "
             f"common semiconductor used in mid-IR / THz design.)")
 
-    from .glass import GLASS_REGISTRY, _glass_cache
+    from .glass import GLASS_REGISTRY, _glass_cache, _glass_value_cache
 
     if name in GLASS_REGISTRY:
         import warnings as _w
@@ -275,6 +275,11 @@ def register_fixed_glass(name: str, n: float) -> None:
 
     GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
     _glass_cache[name] = _FixedIndex(n_f)
+    # v5.6: a re-registered name must not serve a stale value from the
+    # immutable-branch value cache (e.g. a catalogue glass overwritten by a
+    # fixed index).  Clearing the whole value cache is cheap (registration is
+    # rare) and fully safe.
+    _glass_value_cache.clear()
 
 
 # ════════════════════════════════════════════════════════════════════════

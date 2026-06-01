@@ -201,6 +201,7 @@ from .merit_terms import (
 from .parameterizations import (
     DesignParameterization,
     MultiPrescriptionParameterization,
+    RawParameterization,
     _read_path,
     _write_path,
 )

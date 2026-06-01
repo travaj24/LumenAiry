@@ -443,6 +443,7 @@ from .elements.rcwa import (
     rcwa_efficiency_2d,
     rcwa_efficiency_2d_shapes,
     rcwa_efficiency_vs_wavelength,
+    rcwa_extrapolate,
     rcwa_jones_1d,
     rcwa_jones_2d,
     set_blas_threads,
@@ -571,6 +572,7 @@ from .optimize import (
     MultiWavelengthMerit,
     # v4.16 (ROADMAP #11): multi-objective Pareto wrapper (pymoo-optional)
     ParetoResult,
+    RawParameterization,
     RMSWavefrontMerit,
     SphericalSeidelMerit,
     SpotSizeMerit,
@@ -883,7 +885,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.5.3"
+__version__ = "5.6.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1355,6 +1357,7 @@ __all__ = [
 
     'DesignParameterization',
     'MultiPrescriptionParameterization',
+    'RawParameterization',
     'EvaluationContext',
     'DesignResult',
     'Constraint',
@@ -1456,6 +1459,7 @@ __all__ = [
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',
     'rcwa_efficiency_vs_wavelength',
+    'rcwa_extrapolate',
     'rcwa_jones_1d',
     'rcwa_jones_2d',
     'uniaxial_tensor',

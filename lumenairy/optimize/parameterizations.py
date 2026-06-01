@@ -184,6 +184,75 @@ class DesignParameterization:
         return pres
 
 
+@dataclass
+class RawParameterization:
+    """A flat parameter vector with **no lens-prescription template** -- the
+    parameterization for wave-only / rigorous-element design (RCWA, thin-film
+    coatings, metasurfaces) where the merit reads the raw parameters
+    (``ctx.x``) or drives a custom wave propagator, rather than a ray-traced
+    lens.
+
+    Unlike :class:`DesignParameterization` (which resolves ``free_vars`` paths
+    against a real surfaces/thicknesses dict), this requires only the starting
+    vector ``x0`` and optional ``bounds`` / ``scale_floor``.  ``build(x)``
+    returns a minimal prescription ``{'_raw_params': x, 'aperture_diameter':
+    None}`` -- no ``'surfaces'`` -- so the wave leg's
+    ``pres.get('aperture_diameter')`` falls back to its grid default and the
+    merit can read ``ctx.x``.
+
+    Use with merits that set ``needs_ray=False`` (the geometric ray leg has no
+    sensible meaning without a prescription, and ``design_optimize`` raises a
+    clear error if a ``needs_ray=True`` merit is paired with a template-free
+    build).
+
+    Attributes
+    ----------
+    x0 : array-like of float
+        Starting parameter vector (also defines ``n_params``).
+    bounds : list of (lower, upper) or None
+        Per-parameter bounds for bounded scipy solvers.
+    scale_floor : None | scalar | array
+        Per-parameter absolute FD step floor (default ``1e-6`` everywhere).
+    """
+
+    x0: Any
+    bounds: Optional[List[Optional[Tuple[float, float]]]] = None
+    scale_floor: Optional[Any] = None
+
+    def __post_init__(self) -> None:
+        self.x0 = np.asarray(self.x0, dtype=np.float64).ravel()
+        if self.bounds is not None and len(self.bounds) != self.x0.size:
+            raise ValueError(
+                f"RawParameterization: bounds length {len(self.bounds)} != "
+                f"x0 length {self.x0.size}")
+        self.scale_floor = self._resolve_scale_floor(self.scale_floor)
+
+    def _resolve_scale_floor(self, value: Any) -> np.ndarray:
+        n = self.x0.size
+        if value is None:
+            return np.full(n, _DEFAULT_SCALE_FLOORS['_default'],
+                           dtype=np.float64)
+        arr = np.asarray(value, dtype=np.float64)
+        if arr.ndim == 0:
+            return np.full(n, float(arr), dtype=np.float64)
+        if arr.shape != (n,):
+            raise ValueError(
+                f"RawParameterization.scale_floor length {arr.shape} does "
+                f"not match x0 length {n}.")
+        return arr
+
+    @property
+    def n_params(self) -> int:
+        return int(self.x0.size)
+
+    def initial_values(self) -> np.ndarray:
+        return self.x0.copy()
+
+    def build(self, x: np.ndarray) -> Dict[str, Any]:
+        return {'_raw_params': np.asarray(x, dtype=np.float64),
+                'aperture_diameter': None}
+
+
 def _read_path(pres, path):
     """Read a value from a prescription dict along a tuple path."""
     cur = pres

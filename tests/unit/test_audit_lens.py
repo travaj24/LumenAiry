@@ -1674,26 +1674,31 @@ class TestAuditFixesV4_14_0_agent_2_2A_CoatingWavelengthBatch:
         np.testing.assert_allclose(ph_new, ph_ref, atol=1e-12)
 
     def test_complex_index_lossy_stack(self):
-        """Documented approximation: n.imag dropped at the Snell step
-        but kept in the phase-thickness delta; this test pins that the
-        new batched code reproduces the scalar-loop output for an
-        absorbing layer (so any future complex-Snell rewrite has a
-        regression checkpoint)."""
+        """v5.6 complex-Snell: an absorbing layer now propagates the correct
+        COMPLEX refraction angle (``n.imag`` is no longer dropped at the Snell
+        step).  The result is physical -- finite, ``0 <= R, T <= 1``, and the
+        absorptance ``A = 1 - R - T`` is non-negative and tracks the layer
+        loss -- which the pre-v5.6 real-Snell approximation could not
+        guarantee.  (The old approximation's pinned values are intentionally
+        superseded; see CHANGELOG v5.6.)"""
         layers = [
             (1.46, 100e-9),                    # SiO2 spacer
             (2.30 + 0.01j, 80e-9),             # mildly absorbing high-index
             (1.46, 100e-9),
         ]
         wavelengths = np.linspace(0.9e-6, 1.1e-6, 50)
-        R_ref, T_ref, ph_ref = _scalar_loop_coating_reference(
+        R, T, ph = coating_reflectance(
             layers, wavelengths, angle=0.1,
             n_substrate=1.52, n_ambient=1.0, polarization='avg')
-        R_new, T_new, ph_new = coating_reflectance(
-            layers, wavelengths, angle=0.1,
-            n_substrate=1.52, n_ambient=1.0, polarization='avg')
-        np.testing.assert_allclose(R_new, R_ref, atol=1e-12)
-        np.testing.assert_allclose(T_new, T_ref, atol=1e-12)
-        np.testing.assert_allclose(ph_new, ph_ref, atol=1e-12)
+        assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
+        assert np.all(np.isfinite(ph))
+        assert np.all((R >= 0.0) & (R <= 1.0))
+        assert np.all((T >= 0.0) & (T <= 1.0))
+        A = 1.0 - R - T
+        # the absorbing layer removes a small, non-negative amount of power
+        assert np.all(A >= -1e-9)
+        assert A.max() > 1e-4                   # genuinely lossy
+        assert A.max() < 0.05                   # but only mildly
 
     def test_empty_stack_uncoated_fresnel(self):
         """Zero layers: characteristic matrix is identity, result is

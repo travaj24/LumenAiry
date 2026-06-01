@@ -2,6 +2,114 @@
 
 All notable changes to the core library are documented here.
 
+## [5.6.0] — 2026-06-01
+
+**RCWA convergence acceleration + cross-subsystem physics.**  Implements the
+high-value, oracle-validated half of the RCWA convergence-acceleration roadmap
+(`docs/audits/AUDIT_RCWA_CONVERGENCE_ACCELERATION_2026_06_01.md`) plus the
+deferred coatings / glass / optimize items.  Every change is validated against
+an external oracle (grcwa / inkstone), a reduction limit, or energy
+conservation; default NumPy paths stay **bit-identical** to v5.5.3 except the
+intended coatings complex-Snell upgrade (dielectric stays bit-identical).
+
+The audit's headline finding was corrected during verification: lumenairy's
+**analytic-shape solver already implemented the fast dual-Laurent (FFF) rule**
+(`rcwa_efficiency_2d_shapes`) -- the audit read only the grid solver and missed
+it.  The real gaps were narrower (the grid path lacked the rule; the docstring
+was stale), and are closed here.
+
+### Added (RCWA convergence)
+
+- **`formulation='li'` (alias `'fff'`) on `rcwa_efficiency_2d`** -- the
+  dual-Laurent z-rule (the `E_z` elimination uses `[[1/eps]]` instead of
+  `[[eps]]^{-1}`), the convergence-accelerating factorization for TM / metals
+  / high contrast.  Verified to converge toward the inkstone gold value faster
+  than the default `'laurent'` on a 2-D metal pillar; `'laurent'` stays the
+  default and bit-identical.  The stale "provided separately" docstring is
+  corrected (the rule was already used unconditionally by the analytic-shape
+  solver).
+- **`truncation='circular'` (Lalanne 1997)** on both 2-D solvers -- keeps the
+  orders inside the inscribed reciprocal circle (isotropic resolution, no
+  wasted corner orders).  Reaches the same converged value as the rectangular
+  box with ~30 % fewer harmonics (and less `O(N^3)` eig work).  Default
+  `'rectangular'` is unchanged.
+- **Eig reuse for repeated layers** -- `RCWAStack.solve` memoises the
+  thickness-independent layer eigenproblem by permittivity content, so a DBR /
+  Bragg / metamaterial stack with `K` identical period layers solves the eig
+  **once per unique layer** instead of once per layer (a 12-layer / 2-unique
+  DBR runs 2 eigs, not 12).  Bit-exact (a pure memoization).
+- **`rcwa_extrapolate(values, n_orders=, method=)`** -- Richardson (algebraic
+  `L + C N^{-p}`, default) and Shanks (geometric) extrapolation of a
+  slowly-converging quantity to its `n_orders -> infinity` limit; recovers the
+  limit to machine precision on clean synthetic sequences (documented to be a
+  smooth-convergence estimator, not reliable on irregular tails).
+- **Lanczos-sigma field filtering** -- `RCWAResult.to_multiorder_field(...,
+  filter='lanczos')` damps the high orders to suppress Gibbs ringing in the
+  reconstructed real-space field (a visualisation aid, not energy-exact).
+
+### Fixed (RCWA robustness)
+
+- **Large-period instability self-heal** -- `rcwa_efficiency_1d` /
+  `rcwa_efficiency_2d` gain `stabilize=True`: when the v5.5.3 energy guard
+  detects the measure-zero near-singular layer<->region mode-match, retry the
+  nearby truncations `n_orders + {0,1,2,3,4,6,8}` (the clean truncations sit
+  right next to the bad ones -- higher is NOT monotonically safer, verified by
+  reproduction) and return the first energy-conserving solve.  Default
+  `False` raises as before (bit-identical).  The energy guard now raises a
+  typed `_EnergyError` (a `ValueError` subclass).
+
+### Fixed (coatings physics)
+
+- **Complex-Snell / correct TIR** -- `coating_reflectance` and
+  `coating_reflectance_jax` now carry a COMPLEX `cos(theta)` (conserved Snell
+  invariant, decaying-evanescent branch) instead of the real-Snell
+  approximation with the `min(sin_t, 0.9999)` TIR cap.  Lossy / metallic layers
+  propagate the correct complex angle (`n.imag` no longer dropped), and TIR /
+  frustrated-TIR is handled directly (`R -> 1`, `T -> 0`, no cap, no warning).
+  **Bit-identical** for the real-index, sub-critical dielectric case (an
+  explicit fast-path); only the absorbing / TIR cases -- which the old code
+  warned were wrong -- change, to the physically-correct values.  The jax twin
+  matches numpy to ~1e-16 and stays thickness-differentiable.
+
+### Added (glass / optimize)
+
+- **Glass index value memoization** -- `get_glass_index` caches the IMMUTABLE
+  dispatch branches (`__sellmeier__` / `__polynomial__` sentinels + the
+  refractiveindex-unavailable fallback) keyed on `(glass_name, wavelength)`.
+  Consulted only inside those branches (after the entry sentinel is confirmed)
+  so a re-registered name can never serve a stale value; `register_fixed_glass`
+  clears it.  Bit-identical values; callable / user-fixed entries are never
+  cached.
+- **`RawParameterization`** -- a template-free parameterization for wave-only /
+  rigorous-element (RCWA / coating / metasurface) design: `design_optimize`
+  runs from a bare parameter vector (merits read `ctx.x`), no lens prescription
+  required.  A `needs_ray=True` merit paired with a template-free build raises a
+  clear, actionable error.
+
+### Deferred to v5.7 (documented, with reasons)
+
+The remaining convergence-acceleration roadmap items are deferred because they
+cannot be shipped at the "bug-free and physically accurate" bar without a
+dedicated, source-faithful implementation + oracle-validation pass:
+
+- **Normal-incidence symmetry block-diagonalization** -- the mirror-parity
+  block reduction is *correct* (auto-detected, validated bit-exact vs the full
+  eig), but the dense symmetry-adapted compression `B^T M B` is itself
+  `O(N^3)` with a constant comparable to the eig it saves, so it does not
+  accelerate; realizing the ~2-4x speedup needs efficient *folded* block
+  assembly (never forming the dense compression).
+- **Adaptive Spatial Resolution (Granet 1999) + matched coordinates** -- the
+  coordinate-metric factorization (Vallius-Honkanen 2002) is the bug-prone part
+  (mis-factorized, it makes metals *worse*); needs a literature-faithful
+  implementation validated across TE/TM and geometries.  Matched coordinates
+  builds on ASR.
+- **PMM / B-spline modal method (Edee 2011)** -- a separate modal solver (not
+  an acceleration of the Fourier one), requiring its own oracle-validation
+  harness.
+- **RCWA eig warm-start across `lambda`/`theta` sweeps** -- the in-solve
+  repeated-layer reuse above is shipped; the cross-sweep warm-start needs
+  non-Hermitian eigenvector gauge-continuity tracking.
+
 ## [5.5.3] — 2026-06-01
 
 **Energy-correct multi-order fields + concurrency-safe tuning + differentiable

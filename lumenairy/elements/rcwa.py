@@ -87,6 +87,7 @@ __all__ = [
     "rcwa_efficiency_vs_wavelength",
     "rcwa_efficiency_2d",
     "rcwa_efficiency_2d_shapes",
+    "rcwa_extrapolate",
     "rcwa_jones_1d",
     "rcwa_jones_2d",
     "rcwa_efficiency_1d_jax",
@@ -241,14 +242,25 @@ def _concrete(**kw):
     return {k: v for k, v in kw.items() if not _is_traced(v)}
 
 
+class _EnergyError(ValueError):
+    """Raised by :func:`_check_energy` when a passive solve returns
+    non-physical ``sum(R)+sum(T) >> 1``.  A subclass of ``ValueError`` (so
+    existing ``except ValueError`` handlers are unaffected) that the
+    ``stabilize=`` retry path can catch specifically."""
+
+
 def _check_energy(fn_name, R, T):
     """Raise if the total efficiency exceeds the incident power by a large
     margin.  A PASSIVE structure cannot reflect + transmit more than what
     comes in, so ``sum(R) + sum(T) >> 1`` per incident polarization signals a
-    numerical instability -- typically a near-degenerate / ill-conditioned
-    layer eigenproblem at a specific large-period / low-contrast geometry
-    (the blow-up is erratic: it can hit one period and not the next) -- that
-    was otherwise SILENTLY returning a non-physical answer (R+T up to 1e30+).
+    numerical instability -- the layer<->region mode-match matrix in
+    :func:`_interface_smatrix` goes near-singular (cond up to ~1e13) at an
+    erratic, measure-zero (period, n_orders) coincidence for high contrast,
+    and its explicit inverse amplifies the noise floor into the Redheffer
+    star denominators (the v5.6 root-cause analysis).  The true answer there
+    is ~1.0; bumping ``n_orders`` by a few shifts the quasi-resonance away
+    (see the ``stabilize=`` retry).  This was otherwise SILENTLY returning a
+    non-physical answer (R+T up to 1e30+).
 
     Skipped on the JAX path (the sums are traced).  Lossy media give R+T < 1
     (never triggered); the tolerance leaves normal Wood-nudge residue alone.
@@ -256,11 +268,13 @@ def _check_energy(fn_name, R, T):
     tot = float(np.real(np.sum(np.asarray(R))) + np.real(np.sum(np.asarray(T))))
     n_states = int(R.shape[0]) if getattr(R, "ndim", 1) == 2 else 1
     if tot > n_states * 1.05:
-        raise ValueError(
+        raise _EnergyError(
             f"{fn_name}: energy non-conservation detected (sum R+T = "
             f"{tot:.3e} exceeds {n_states}); the solve is numerically unstable "
-            f"at this geometry (a near-degenerate layer eigenproblem, common "
-            f"at very large period / low index contrast).  Reduce n_orders, "
+            f"at this geometry (a near-degenerate layer<->region mode-match at "
+            f"a measure-zero period / n_orders coincidence, common at very "
+            f"large period / low index contrast).  Pass stabilize=True to "
+            f"auto-retry at a slightly higher n_orders, or reduce n_orders, "
             f"adjust the period, or increase the index contrast.")
 
 
@@ -295,6 +309,21 @@ def _normalize_pol(fn_name, polarization):
             f"{fn_name}: polarization must be 'te'/'tm' (or the 's'/'p' "
             f"aliases), got {polarization!r}.")
     return pol
+
+
+def _normalize_2d_formulation(fn_name, formulation):
+    """Normalise the 2-D Fourier-factorization selector.  ``'laurent'`` is the
+    direct rule everywhere (default, bit-for-bit backward compatible);
+    ``'li'`` (alias ``'fff'``) is the dual-Laurent z-rule: the ``E_z``
+    elimination uses ``[[1/eps]]`` for fast TM / metal convergence."""
+    f = str(formulation).lower()
+    if f == "fff":
+        f = "li"
+    if f not in ("laurent", "li"):
+        raise ValueError(
+            f"{fn_name}: formulation must be 'laurent', 'li' or 'fff' "
+            f"(alias of 'li'), got {formulation!r}.")
+    return f
 
 
 # ===========================================================================
@@ -865,6 +894,7 @@ def rcwa_efficiency_1d(
     polarization: str = "te",
     n_orders: int = 11,
     formulation: str = "auto",
+    stabilize: bool = False,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 1-D binary grating.
@@ -913,7 +943,33 @@ def rcwa_efficiency_1d(
         Reflected diffraction efficiency per order (evanescent orders 0).
     T_eff : (2*n_orders+1,) float ndarray
         Transmitted diffraction efficiency per order.
+
+    Notes
+    -----
+    ``stabilize`` (default ``False``): the large-period / high-contrast
+    instability is a near-singular layer<->region mode-match at a
+    *measure-zero, erratic* set of ``n_orders`` -- the clean truncations sit
+    immediately next to the bad ones (e.g. ``n_orders`` itself blows up while
+    ``n_orders + 1`` conserves energy to 1e-6), and going to *higher*
+    ``n_orders`` is not monotonically safer.  ``stabilize=True`` therefore
+    searches the nearby truncations ``n_orders + {0, 1, 2, 3, 4, 6, 8}`` and
+    returns the first energy-conserving solve (so the returned order count
+    may differ from ``2*n_orders+1``); it raises only if none conserve.  With
+    the default ``False`` the guard raises immediately (bit-for-bit backward
+    compatible).  NumPy / CuPy only; the JAX path is unchanged.
     """
+    if stabilize and not _is_traced(wavelength):
+        last = None
+        for bump in (0, 1, 2, 3, 4, 6, 8):
+            try:
+                return rcwa_efficiency_1d(
+                    period, n_ridge, n_groove, n_substrate, n_superstrate,
+                    depth, duty_cycle, wavelength, angle=angle,
+                    polarization=polarization, n_orders=int(n_orders) + bump,
+                    formulation=formulation, stabilize=False, use_gpu=use_gpu)
+            except _EnergyError as e:
+                last = e
+        raise last
     polarization = _normalize_pol("rcwa_efficiency_1d", polarization)
     if not (0.0 <= float(duty_cycle) <= 1.0):
         raise ValueError(
@@ -1132,6 +1188,107 @@ def rcwa_efficiency_vs_wavelength(
     return out if np.ndim(wavelengths) else out[0]
 
 
+def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
+    """Extrapolate a slowly-converging RCWA quantity toward its
+    ``n_orders -> infinity`` limit from a few finite-``n_orders`` samples.
+
+    Two estimators, picked by ``method``:
+
+    - ``'richardson'`` (default) assumes the **algebraic** tail
+      ``s(N) = L + C N^{-p}`` typical of Fourier-truncated RCWA (sharp
+      permittivity steps give ``p ~ 1``).  Using the last three samples it
+      solves the order ``p`` from the finite-difference ratio and returns the
+      intercept ``L``.  Needs ``n_orders`` (the harmonic counts the samples
+      were taken at).
+    - ``'shanks'`` applies the iterated Shanks (epsilon) transform
+      ``S(s)_k = (s_{k+1} s_{k-1} - s_k^2)/(s_{k+1} + s_{k-1} - 2 s_k)``,
+      which is exact for a **geometric** tail ``s_k = L + A r^k`` (e.g. the
+      exponential convergence of a spectral / PMM solver).  Index-based, so
+      ``n_orders`` is optional.
+
+    .. important::
+       Extrapolation assumes a **smoothly / monotonically** converging
+       sequence.  An irregular sequence -- e.g. a metallic cell with sharp
+       corners under rectangular truncation, whose tail wiggles -- can make
+       either estimator overshoot; treat the result as an *estimate* and
+       cross-check against a direct higher-``N`` solve.  It is most reliable
+       for clean dielectric convergence and as a per-order error gauge.
+
+    Parameters
+    ----------
+    values : array-like of float
+        The quantity at increasing ``n_orders`` (at least 3 samples).
+    n_orders : array-like of int, optional
+        The harmonic counts the samples were taken at (required for
+        ``method='richardson'``; ignored by ``'shanks'``).
+    method : {'richardson', 'shanks'}, optional
+
+    Returns
+    -------
+    estimate : float
+        The extrapolated ``N -> infinity`` value.
+    """
+    v = np.asarray(values, dtype=float).ravel()
+    if v.size < 3:
+        raise ValueError(
+            "rcwa_extrapolate: need at least 3 samples (the quantity at "
+            "increasing n_orders) to extrapolate.")
+    if method == "shanks":
+        # One Aitken / Shanks pass: S_k = (s_{k+1} s_{k-1} - s_k^2) /
+        # (s_{k+1} + s_{k-1} - 2 s_k), exact for a geometric tail.  Return the
+        # most-converged (highest-k) accelerated estimate.  We do NOT iterate
+        # to a single point: once the sequence flattens the denominator -> 0
+        # and a second pass divides rounding noise, overshooting wildly.
+        num = v[2:] * v[:-2] - v[1:-1] ** 2
+        den = v[2:] + v[:-2] - 2.0 * v[1:-1]
+        acc = np.where(np.abs(den) < 1e-15 * (np.abs(v[1:-1]) + 1e-30),
+                       v[1:-1], num / den)
+        return float(acc[-1])
+    if method == "richardson":
+        if n_orders is None:
+            raise ValueError(
+                "rcwa_extrapolate: method='richardson' needs n_orders (the "
+                "harmonic counts the samples were taken at).")
+        N = np.asarray(n_orders, dtype=float).ravel()
+        if N.size != v.size:
+            raise ValueError(
+                "rcwa_extrapolate: n_orders and values must have the same "
+                f"length, got {N.size} and {v.size}.")
+        n1, n2, n3 = N[-3:]
+        s1, s2, s3 = v[-3:]
+        denom = s3 - s2
+        if abs(denom) < 1e-300 or abs(s2 - s1) < 1e-300:
+            return float(s3)                 # already converged at the tail
+        target = (s2 - s1) / denom
+
+        def _ratio(p):
+            a, b, c = n1 ** -p, n2 ** -p, n3 ** -p
+            d = b - c
+            return (a - b) / d if abs(d) > 1e-300 else np.inf
+
+        # bisect p in [0.2, 8] for the monotone ratio == target; fall back to
+        # the dominant p = 1 rate if the bracket does not contain a root.
+        lo, hi = 0.2, 8.0
+        flo, fhi = _ratio(lo) - target, _ratio(hi) - target
+        if not np.isfinite(flo) or not np.isfinite(fhi) or flo * fhi > 0:
+            p = 1.0
+        else:
+            for _ in range(60):
+                mid = 0.5 * (lo + hi)
+                fmid = _ratio(mid) - target
+                if flo * fmid <= 0:
+                    hi, fhi = mid, fmid
+                else:
+                    lo, flo = mid, fmid
+            p = 0.5 * (lo + hi)
+        # model s = L + C N^-p  ->  s2 - s1 = C (N2^-p - N1^-p)
+        C = (s2 - s1) / (n2 ** -p - n1 ** -p)
+        return float(s1 - C * n1 ** -p)
+    raise ValueError(
+        f"rcwa_extrapolate: method must be 'richardson' or 'shanks', got "
+        f"{method!r}.")
+
+
 # ===========================================================================
 # 2-D crossed gratings (doubly periodic)
 # ===========================================================================
@@ -1144,16 +1301,47 @@ def rcwa_efficiency_vs_wavelength(
 # and the permittivity convolution (block-Toeplitz-of-block-Toeplitz)
 # become two-dimensional.
 
-def _harmonic_orders_2d(n_orders_x, n_orders_y):
+def _harmonic_orders_2d(n_orders_x, n_orders_y, *, truncation="rectangular",
+                        period_x=None, period_y=None):
     """Flat list of integer ``(m, n)`` diffraction-order pairs on the 2-D
     reciprocal lattice (``m`` slow in ``[-Mx..Mx]``, ``n`` fast in
     ``[-My..My]``).  Returns ``(orders, N)`` with ``orders`` an ``(N, 2)``
-    int array and ``N = (2 Mx + 1)(2 My + 1)``."""
+    int array.
+
+    ``truncation='rectangular'`` (default) keeps the full Cartesian box,
+    ``N = (2 Mx + 1)(2 My + 1)`` -- bit-for-bit the historical order set.
+
+    ``truncation='circular'`` (Lalanne 1997) keeps only the orders inside the
+    largest reciprocal-space circle inscribed in that box,
+    ``(m / period_x)^2 + (n / period_y)^2 <= R^2`` with
+    ``R = min(Mx / period_x, My / period_y)``.  This gives isotropic
+    resolution and drops the wasted high-|G| corner orders, so a target
+    accuracy is reached with fewer harmonics (and, since the eig is
+    ``O(N^3)``, less work).  The kept set is period-dependent, so
+    ``period_x`` / ``period_y`` are required.  The (0, 0) order is always
+    retained.
+    """
     Mx, My = int(n_orders_x), int(n_orders_y)
     m = np.repeat(np.arange(-Mx, Mx + 1), 2 * My + 1)
     n = np.tile(np.arange(-My, My + 1), 2 * Mx + 1)
     orders = np.stack([m, n], axis=1)
-    return orders, orders.shape[0]
+    if truncation == "rectangular":
+        return orders, orders.shape[0]
+    if truncation == "circular":
+        if period_x is None or period_y is None:
+            raise ValueError(
+                "_harmonic_orders_2d: truncation='circular' needs period_x "
+                "and period_y (the reciprocal-circle radius is "
+                "period-dependent).")
+        gx = m / float(period_x)
+        gy = n / float(period_y)
+        r2 = min(Mx / float(period_x), My / float(period_y)) ** 2
+        keep = (gx ** 2 + gy ** 2) <= r2 * (1.0 + 1e-9)
+        orders = orders[keep]
+        return orders, orders.shape[0]
+    raise ValueError(
+        f"_harmonic_orders_2d: truncation must be 'rectangular' or 'circular', "
+        f"got {truncation!r}.")
 
 
 def _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y):
@@ -1196,6 +1384,8 @@ def rcwa_efficiency_2d(
     n_orders_x: int = 5,
     n_orders_y: int = 5,
     formulation: str = "laurent",
+    truncation: str = "rectangular",
+    stabilize: bool = False,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 2-D (doubly periodic) crossed
@@ -1227,10 +1417,44 @@ def rcwa_efficiency_2d(
     n_orders_x, n_orders_y : int, optional
         Retained orders per side along each axis (default 5 -> 11x11 = 121
         harmonics).
-    formulation : {'laurent'}, optional
-        Fourier factorization.  ``'laurent'`` (direct rule) is correct and
-        fast-converging for dielectrics; the fast-Fourier-factorization
-        (normal-vector) rule for 2-D metals is provided separately.
+    formulation : {'laurent', 'li', 'fff'}, optional
+        Fourier factorization of the patterned layer.
+
+        - ``'laurent'`` (default) -- the direct rule everywhere
+          (``E_z`` elimination uses ``[[eps]]^{-1}``).  Correct and
+          fast-converging for low-contrast dielectrics; kept as the default
+          for bit-for-bit backward compatibility.
+        - ``'li'`` / ``'fff'`` -- the dual-Laurent (Li 1996 inverse-rule)
+          factorization: the ``E_z`` elimination uses ``[[1/eps]]`` (the
+          Toeplitz of the Fourier coefficients of ``1/eps``) instead of
+          ``[[eps]]^{-1}``.  This is the convergence-accelerating rule for
+          **TM / metals / high contrast** -- the same formulation the
+          analytic-shape solver :func:`rcwa_efficiency_2d_shapes` uses
+          unconditionally, and the rule used by mature FMM codes
+          (verified to converge toward grcwa / inkstone).  Recommended for
+          metallic 2-D gratings; for a *pixelated* ``eps_cell`` the in-plane
+          staircase still limits the rate, so prefer the analytic-shape
+          solver when the geometry is describable by disks / rectangles.
+
+        (``'fff'`` is accepted as an alias of ``'li'``; the full
+        off-diagonal normal-vector in-plane tensor is not required to reach
+        the oracle value for isotropic media and is not built here.)
+    truncation : {'rectangular', 'circular'}, optional
+        Order-set shape.  ``'rectangular'`` (default) keeps the full
+        ``(2 Mx + 1)(2 My + 1)`` box; ``'circular'`` (Lalanne 1997) keeps
+        only the orders inside the inscribed reciprocal circle, giving
+        isotropic resolution and dropping the wasted corner orders -- the
+        same target accuracy at fewer harmonics (and less ``O(N^3)`` eig
+        work).  The returned ``orders`` length ``N`` shrinks accordingly.
+    stabilize : bool, optional
+        When ``True`` and the energy guard detects the measure-zero
+        large-period / high-contrast instability, search the nearby
+        truncations ``n_orders + {0, 1, 2, 3, 4, 6, 8}`` (the clean
+        truncations sit right next to the bad ones; higher is not
+        monotonically safer) and return the first energy-conserving solve
+        (its order count may then differ from the request).  Default
+        ``False`` raises (bit-for-bit backward compatible).  NumPy / CuPy
+        only.
 
     Returns
     -------
@@ -1239,6 +1463,20 @@ def rcwa_efficiency_2d(
     R_eff, T_eff : (N,) float ndarray
         Reflected / transmitted diffraction efficiency per order.
     """
+    if stabilize and not (_is_traced(wavelength) or _is_traced(theta)):
+        last = None
+        for bump in (0, 1, 2, 3, 4, 6, 8):
+            try:
+                return rcwa_efficiency_2d(
+                    period_x, period_y, eps_cell, n_substrate, n_superstrate,
+                    depth, wavelength, theta=theta, phi=phi,
+                    polarization=polarization,
+                    n_orders_x=int(n_orders_x) + bump,
+                    n_orders_y=int(n_orders_y) + bump, formulation=formulation,
+                    truncation=truncation, stabilize=False, use_gpu=use_gpu)
+            except _EnergyError as e:
+                last = e
+        raise last
     _validate_geometry("rcwa_efficiency_2d",
                        **_concrete(period=period_x, period_y=period_y,
                                    depth=depth, wavelength=wavelength),
@@ -1246,10 +1484,7 @@ def rcwa_efficiency_2d(
     _validate_cell_sampling("rcwa_efficiency_2d", eps_cell,
                             n_orders_x, n_orders_y)
     polarization = _normalize_pol("rcwa_efficiency_2d", polarization)
-    if formulation != "laurent":
-        raise ValueError(
-            f"rcwa_efficiency_2d: only formulation='laurent' is available in "
-            f"this build, got {formulation!r}.")
+    formulation = _normalize_2d_formulation("rcwa_efficiency_2d", formulation)
 
     xp = _rcwa_xp("rcwa_efficiency_2d", use_gpu, eps_cell)
     is_jax = backend_name(xp) == "jax"
@@ -1263,7 +1498,9 @@ def rcwa_efficiency_2d(
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
     eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
-    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
+    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y,
+                                    truncation=truncation,
+                                    period_x=period_x, period_y=period_y)
     nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)        # concrete host floats
     ky0 = nre * np.sin(theta) * np.sin(phi)
@@ -1298,10 +1535,17 @@ def rcwa_efficiency_2d(
 
     EPS = _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y)
     EPS_xx = EPS  # Laurent rule: wall-normal convolution == [[eps]]
+    # Dual-Laurent (Li) z-rule: E_z elimination uses [[1/eps]] (Toeplitz of
+    # the Fourier coefficients of 1/eps) rather than [[eps]]^{-1}.  This is
+    # the convergence-accelerating factorization for TM / metals; gated so
+    # the default 'laurent' path stays bit-for-bit unchanged.
+    ez_inv = (_eps_convolution_2d(1.0 / eps_cell, orders, n_orders_x,
+                                  n_orders_y)
+              if formulation == "li" else None)
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_xx)
+    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=ez_inv)
     S = _interface_smatrix(Wref, Vref, Wl, Vl)
     S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
@@ -1873,6 +2117,7 @@ def rcwa_efficiency_2d_shapes(
     polarization: str = "te",
     n_orders_x: int = 5,
     n_orders_y: int = 5,
+    truncation: str = "rectangular",
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D crossed-grating efficiencies using **analytic** shape
@@ -1915,6 +2160,7 @@ def rcwa_efficiency_2d_shapes(
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_shapes("rcwa_efficiency_2d_shapes", shapes, period_x, period_y)
     polarization = _normalize_pol("rcwa_efficiency_2d_shapes", polarization)
+    truncation = str(truncation)
 
     xp = _rcwa_xp("rcwa_efficiency_2d_shapes", use_gpu)
     if backend_name(xp) == "jax":
@@ -1928,7 +2174,9 @@ def rcwa_efficiency_2d_shapes(
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
     eps_sub = complex(np.conj(_C(n_substrate) ** 2))
 
-    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
+    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y,
+                                    truncation=truncation,
+                                    period_x=period_x, period_y=period_y)
     nre = float(np.real(np.sqrt(eps_sup)))
     kx0 = nre * np.sin(theta) * np.cos(phi)
     ky0 = nre * np.sin(theta) * np.sin(phi)
@@ -2423,7 +2671,7 @@ class RCWAResult:
 
     def to_multiorder_field(self, nx, ny, dx, *, incident=(1.0, 0.0),
                             port="reflection", orders=None, normalize="power",
-                            dy=None):
+                            filter="none", dy=None):
         """Reconstruct the full diffracted field as a superposition of the
         PROPAGATING diffraction orders -- the bridge a strongly diffracting
         metasurface (deflector / grating coupler / metalens cell) needs, where
@@ -2441,6 +2689,14 @@ class RCWAResult:
         tangential boundary amplitudes (NOT power-conserving -- see
         :meth:`to_jones_field`).
 
+        ``filter='lanczos'`` multiplies each order by the Lanczos sigma factor
+        ``sinc(m/(Mx+1)) sinc(n/(My+1))`` before deposition, suppressing the
+        Gibbs ringing a truncated-order reconstruction shows at sharp
+        permittivity steps (the high orders are damped smoothly rather than
+        cut off).  ``'none'`` (default) leaves the orders unweighted.  Note
+        the filter trades a little total power for a much smoother field, so
+        it is a visualisation / post-processing aid, not energy-exact.
+
         Note: the reconstruction is exact only over one unit cell (the field is
         quasi-periodic); evanescent orders are excluded.
         """
@@ -2452,6 +2708,11 @@ class RCWAResult:
             raise ValueError(
                 f"RCWAResult.to_multiorder_field: normalize must be 'power' "
                 f"or 'field', got {normalize!r}.")
+        if filter not in ("none", "lanczos"):
+            raise ValueError(
+                f"RCWAResult.to_multiorder_field: filter must be 'none' or "
+                f"'lanczos', got {filter!r}.")
+        sigma = self._lanczos_sigma() if filter == "lanczos" else None
         from ..backend import to_numpy
         from .polarization import JonesField
         m = self._require_modal()
@@ -2482,10 +2743,27 @@ class RCWAResult:
             if normalize == "power":
                 s = self._order_power_scale(idx, ax, ay, incident, port)
                 ax, ay = s * ax, s * ay
+            if sigma is not None:
+                w = sigma[idx]
+                ax, ay = w * ax, w * ay
             carrier = self._order_carrier(idx, nx_i, ny_i, float(dx), dy_f)
             ex += ax * carrier
             ey += ay * carrier
         return JonesField(ex, ey, dx=dx, dy=dy)
+
+    def _lanczos_sigma(self):
+        """Per-order Lanczos sigma factors ``sinc(m/(Mx+1)) sinc(n/(My+1))``
+        (1-D: the y-factor is 1), indexed by flat order index.  Damps the
+        high orders smoothly to suppress Gibbs ringing in the reconstructed
+        real-space field."""
+        o = np.asarray(self.orders)
+        if o.ndim == 2:
+            mx = max(1, int(np.abs(o[:, 0]).max()))
+            my = max(1, int(np.abs(o[:, 1]).max()))
+            return (np.sinc(o[:, 0] / (mx + 1.0))
+                    * np.sinc(o[:, 1] / (my + 1.0)))
+        mx = max(1, int(np.abs(o).max()))
+        return np.sinc(o / (mx + 1.0))
 
 
 class _RCWALayer:
@@ -2644,6 +2922,29 @@ class RCWAStack:
             Kx, Ky, cv(et[:, :, 0, 0]), cv(et[:, :, 0, 1]),
             cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]), cv(et[:, :, 2, 2]))
 
+    @staticmethod
+    def _layer_eig_key(layer):
+        """Content key identifying a layer's eigenproblem (the layer's
+        permittivity + kind; the layer eig is THICKNESS-INDEPENDENT and, within
+        one solve, ``Kx`` / ``Ky`` are shared).  Two layers with the same key
+        have identical modes, so a repeated layer (a DBR / Bragg period) is
+        solved once.  ``None`` -> not dedupable (e.g. a traced JAX array)."""
+        kind = layer.kind
+        data = layer.data
+        if kind == "uniform":
+            return ("uniform", complex(data))
+        if kind == "shapes":
+            eps_bg, shapes = data
+            return ("shapes", complex(eps_bg),
+                    tuple(sorted((k, repr(v)) for s in shapes
+                                 for k, v in s.items())))
+        from ..backend import to_numpy
+        try:                                   # iso / tensor: hash the cell
+            arr = np.ascontiguousarray(to_numpy(data))
+        except Exception:                      # traced array -> no dedup
+            return None
+        return (kind, arr.shape, str(arr.dtype), arr.tobytes())
+
     @_with_blas_limit
     def solve(self) -> RCWAResult:
         """Solve the stack -> :class:`RCWAResult`."""
@@ -2687,7 +2988,21 @@ class RCWAStack:
         Wtrn, Vtrn, kz_trn = _cached_homogeneous_eigenmodes(
             eps_sub, Kx, Ky, ("sub", self.n_substrate) + geom)
 
-        modes = [self._layer_modes(L, Kx, Ky, orders) for L in self._layers]
+        # Eig reuse (v5.6): the per-layer modal eig is the dominant cost and is
+        # THICKNESS-INDEPENDENT, so two layers with identical permittivity (a
+        # repeated DBR / Bragg period, a metamaterial supercell) share one eig
+        # instead of recomputing it.  Bit-exact -- it memoises a pure function;
+        # a None key (traced JAX array) falls back to per-layer solves.
+        _mode_cache = {}
+        modes = []
+        for L in self._layers:
+            key = self._layer_eig_key(L)
+            cached = _mode_cache.get(key) if key is not None else None
+            if cached is None:
+                cached = self._layer_modes(L, Kx, Ky, orders)
+                if key is not None:
+                    _mode_cache[key] = cached
+            modes.append(cached)
         W0, V0, lam0 = modes[0]
         S = _interface_smatrix(Wref, Vref, W0, V0)
         S = _redheffer_star(S, _propagation_smatrix(lam0, k0 * self._layers[0].thickness))

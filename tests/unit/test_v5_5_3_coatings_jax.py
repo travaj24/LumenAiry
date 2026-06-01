@@ -140,3 +140,49 @@ def test_jax_grad_drives_ar_thickness_toward_quarter_wave():
         d = d - 2e-19 * jax.grad(R_of)(d)
     R1 = float(R_of(d))
     assert R1 < R0
+
+
+# ----------------------------------------------------------------------------
+# v5.6 complex-Snell / TIR physics (jax mirrors numpy)
+# ----------------------------------------------------------------------------
+
+@pytest.mark.parametrize("layers,ang,nsub,namb,pol", [
+    ([(0.5 + 3.0j, 0.05e-6)], 30.0, 1.52, 1.0, "avg"),          # lossy metal
+    ([(0.2 + 3.4j, 0.04e-6), (1.38, 0.1e-6)], 25.0, 1.52, 1.0, "p"),
+    ([], 55.0, 1.0, 1.52, "s"),                                  # TIR glass->air
+])
+def test_jax_matches_numpy_complex_snell(layers, ang, nsub, namb, pol):
+    """The v5.6 complex-Snell path (lossy metal + TIR) matches numpy to
+    machine precision in the JAX companion too."""
+    a = np.deg2rad(ang)
+    Rn = _R(coating_reflectance(
+        layers, WL, angle=a, n_substrate=nsub, n_ambient=namb,
+        polarization=pol)[0])
+    Rj = float(coating_reflectance_jax(
+        [(n, jnp.asarray(d)) for n, d in layers], WL, angle=a,
+        n_substrate=nsub, n_ambient=namb, polarization=pol))
+    assert abs(Rn - Rj) < 1e-12
+
+
+def test_jax_grad_flows_through_lossy_stack():
+    """Autodiff still flows through a complex-angle (metal) stack."""
+    def loss(d0):
+        return coating_reflectance_jax(
+            [(0.5 + 3.0j, d0), (1.38, jnp.asarray(0.11e-6))], WL,
+            angle=np.deg2rad(20), polarization="avg")
+
+    g = float(jax.grad(loss)(jnp.asarray(0.05e-6)))
+    h = 1e-12
+    fd = (float(loss(jnp.asarray(0.05e-6 + h)))
+          - float(loss(jnp.asarray(0.05e-6 - h)))) / (2 * h)
+    assert abs(g - fd) / max(abs(fd), 1e-30) < 1e-6
+
+
+def test_lossy_metal_conserves_energy_numpy():
+    """A lossy metal coating gives 0 <= R, T and R + T + A = 1 with A >= 0."""
+    R, T, _ = coating_reflectance([(0.5 + 3.0j, 0.05e-6)], WL,
+                                  angle=np.deg2rad(30), n_substrate=1.52,
+                                  polarization="avg")
+    R, T = _R(R), _R(T)
+    assert 0.0 <= R <= 1.0 and 0.0 <= T <= 1.0
+    assert -1e-9 <= 1.0 - R - T <= 1.0 + 1e-9          # absorptance in [0, 1]
