@@ -434,6 +434,11 @@ def design_optimize(parameterization: Any,
                 UserWarning, stacklevel=2)
 
     need_wave = any(m.needs_wave for m in merit_terms)
+    # The ray-leg (system ABCD / EFL / BFL / Seidel) runs unless EVERY merit
+    # opts out via needs_ray=False (default True preserves the historical
+    # behavior).  Skipping it speeds up wave-only / rigorous-element merits and
+    # lets a prescription with no sensible ABCD (a metasurface) optimize.
+    need_ray = any(getattr(m, 'needs_ray', True) for m in merit_terms)
     n_params = parameterization.n_params
     x0 = parameterization.initial_values()
     bounds = parameterization.bounds
@@ -628,37 +633,45 @@ def design_optimize(parameterization: Any,
             prescription=pres, wavelength=wavelength, N=N, dx=dx,
             prescriptions=prescriptions,
             x=np.asarray(x, dtype=np.float64).copy())
-        # Ray-leg (always)
-        surfs = _core.surfaces_from_prescription(pres)
-        try:
-            _, efl, bfl, _ = _core.system_abcd(surfs, wavelength)
-        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
-                np.linalg.LinAlgError, IndexError, TypeError):
-            # Degenerate / mirror-only / short prescription -- the
-            # downstream sentinel filter (np.isfinite check) caps
-            # these at 1e9.
-            efl = bfl = float('inf')
-        try:
-            seidel_raw = _core.seidel_coefficients(surfs, wavelength)
-            # seidel_coefficients returns (per-surface-dict, totals-dict)
-            if (isinstance(seidel_raw, tuple) and len(seidel_raw) == 2
-                    and isinstance(seidel_raw[0], dict)):
-                per_surf = seidel_raw[0]
-                # Sum each aberration coefficient over surfaces
-                seidel = np.array([
-                    np.sum(per_surf.get(f'S{k}', np.zeros(1)))
-                    for k in range(1, 6)], dtype=np.float64)
-            else:
-                seidel = np.asarray(seidel_raw, dtype=np.float64)
-        except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
-                np.linalg.LinAlgError, IndexError, AttributeError,
-                TypeError):
-            # Seidel sum unavailable -- zero-fill so the optimizer
-            # sees no aberration contribution from this iteration.
-            seidel = np.zeros(5)
-        ctx.efl = float(efl) if np.isfinite(efl) else 1e9
-        ctx.bfl = float(bfl) if np.isfinite(bfl) else 1e9
-        ctx.seidel = np.asarray(seidel, dtype=np.float64).ravel()
+        # Ray-leg (skipped if no merit needs it -- see need_ray above).
+        if need_ray:
+            surfs = _core.surfaces_from_prescription(pres)
+            try:
+                _, efl, bfl, _ = _core.system_abcd(surfs, wavelength)
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, TypeError):
+                # Degenerate / mirror-only / short prescription -- the
+                # downstream sentinel filter (np.isfinite check) caps
+                # these at 1e9.
+                efl = bfl = float('inf')
+            try:
+                seidel_raw = _core.seidel_coefficients(surfs, wavelength)
+                # seidel_coefficients returns (per-surface-dict, totals-dict)
+                if (isinstance(seidel_raw, tuple) and len(seidel_raw) == 2
+                        and isinstance(seidel_raw[0], dict)):
+                    per_surf = seidel_raw[0]
+                    # Sum each aberration coefficient over surfaces
+                    seidel = np.array([
+                        np.sum(per_surf.get(f'S{k}', np.zeros(1)))
+                        for k in range(1, 6)], dtype=np.float64)
+                else:
+                    seidel = np.asarray(seidel_raw, dtype=np.float64)
+            except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
+                    np.linalg.LinAlgError, IndexError, AttributeError,
+                    TypeError):
+                # Seidel sum unavailable -- zero-fill so the optimizer
+                # sees no aberration contribution from this iteration.
+                seidel = np.zeros(5)
+            ctx.efl = float(efl) if np.isfinite(efl) else 1e9
+            ctx.bfl = float(bfl) if np.isfinite(bfl) else 1e9
+            ctx.seidel = np.asarray(seidel, dtype=np.float64).ravel()
+        else:
+            # No merit reads the ray-leg -- supply the same sentinels the
+            # degenerate-prescription branch uses, so any incidental access is
+            # well-defined.
+            ctx.efl = 1e9
+            ctx.bfl = 1e9
+            ctx.seidel = np.zeros(5)
         # Wave leg (only if any merit term needs it)
         if need_wave:
             if E_in is None:

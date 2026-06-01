@@ -216,10 +216,19 @@ class MeritTerm:
         evaluation.  Set False for pure-geometric terms -- the
         optimizer will skip the expensive wave leg if NO merit
         terms need it.
+    needs_ray : bool, default True
+        If True, the optimizer runs the ray-leg (system ABCD / EFL / BFL /
+        Seidel) each evaluation.  Set False for a merit that reads neither
+        ``ctx.efl/bfl`` nor ``ctx.seidel`` -- e.g. a rigorous-element
+        (RCWA / metasurface / coatings) merit with no imaging prescription --
+        so the optimizer skips the ray-leg (a speed win, and the unblocker for
+        optimizing a prescription that has no sensible ABCD).  The ray-leg is
+        skipped only if NO merit term needs it.
     """
 
     weight: float = 1.0
     needs_wave: bool = False
+    needs_ray: bool = True
     name: str = 'MeritTerm'
 
     def evaluate(self, ctx: Any) -> float:

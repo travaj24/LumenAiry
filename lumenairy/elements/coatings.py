@@ -306,6 +306,88 @@ def coating_reflectance(
     return R, T, phase_r
 
 
+def coating_reflectance_jax(
+    layers,
+    wavelength,
+    angle: float = 0.0,
+    n_substrate=1.52,
+    n_ambient=1.0,
+    polarization: str = 'avg',
+):
+    """JAX-differentiable thin-film reflectance (Abeles TMM) for gradient-based
+    coating inverse design -- the s/p sibling of the RCWA differentiable path
+    (v5.5.3).
+
+    Differentiable w.r.t. the layer THICKNESSES: pass them as ``jax.numpy``
+    scalars/arrays and ``jax.grad`` flows through the matrix product.  Returns
+    a scalar ``R`` (power reflectance at the single ``wavelength``).  Wrap this
+    in :class:`lumenairy.optimize.JaxMeritTerm` (with ``needs_ray=False``) to
+    optimize an AR / HR / band-pass stack against a target reflectance.
+
+    Matches :func:`coating_reflectance` to its real-Snell approximation (the
+    Snell angle chain uses the concrete real indices + angle, which do not
+    depend on the differentiated thicknesses; ``n.imag`` is dropped at the
+    Snell step and intra-stack TIR is capped, exactly as documented there).
+    Requires the optional ``jax`` extra.
+
+    Parameters mirror :func:`coating_reflectance` (``layers`` is a list of
+    ``(index, thickness)`` ambient-side first; ``polarization`` is
+    ``'s'`` / ``'p'`` / ``'avg'``).
+    """
+    from ..backend import JAX_AVAILABLE
+    if not JAX_AVAILABLE:
+        raise ImportError(
+            "coating_reflectance_jax requires the optional 'jax' extra; "
+            "install with `pip install lumenairy[jax]`.  Use "
+            "coating_reflectance for non-differentiable evaluation.")
+    import jax.numpy as jnp
+
+    # --- Snell angle chain: CONCRETE (depends on indices + angle, not the
+    # differentiated thicknesses).  Real-Snell + TIR cap, matching
+    # coating_reflectance exactly.
+    theta_prev = float(angle)
+    n_prev = complex(n_ambient)
+    cos_t, n_re = [], []
+    for n_layer, _d in layers:
+        n_layer = complex(n_layer)
+        sin_t = min(n_prev.real * math.sin(theta_prev) / n_layer.real, 0.9999)
+        cos_t.append(math.sqrt(1.0 - sin_t * sin_t))
+        n_re.append(n_layer)
+        theta_prev = math.asin(sin_t)
+        n_prev = n_layer
+    sin_sub = min(n_prev.real * math.sin(theta_prev)
+                  / complex(n_substrate).real, 0.9999)
+    cos_sub = math.sqrt(1.0 - sin_sub * sin_sub)
+    cos_angle = math.cos(float(angle))
+
+    pols = ['s', 'p'] if polarization == 'avg' else [polarization]
+    R_terms = []
+    for pol in pols:
+        if pol == 's':
+            eta = [n_re[j] * cos_t[j] for j in range(len(layers))]
+            eta_sub = complex(n_substrate) * cos_sub
+            eta_amb = complex(n_ambient) * cos_angle
+        else:
+            eta = [n_re[j] / cos_t[j] for j in range(len(layers))]
+            eta_sub = complex(n_substrate) / cos_sub
+            eta_amb = complex(n_ambient) / cos_angle
+        # --- characteristic-matrix product (JAX; delta carries the thickness)
+        M = jnp.eye(2, dtype=jnp.complex128)
+        for j, (n_layer, d) in enumerate(layers):
+            delta = (2.0 * jnp.pi * complex(n_re[j]) * cos_t[j]
+                     * jnp.asarray(d) / wavelength)
+            cd, sd = jnp.cos(delta), jnp.sin(delta)
+            ej = complex(eta[j])
+            Mj = jnp.array([[cd, -1j * sd / ej],
+                            [-1j * ej * sd, cd]], dtype=jnp.complex128)
+            M = M @ Mj
+        B = M[0, 0] + M[0, 1] * eta_sub
+        C = M[1, 0] + M[1, 1] * eta_sub
+        r = (eta_amb * B - C) / (eta_amb * B + C)
+        R_terms.append(jnp.abs(r) ** 2)
+    return sum(R_terms) / len(R_terms)
+
+
 def quarter_wave_ar(
     n_substrate: float,
     wavelength_center: float,

@@ -313,6 +313,9 @@ def angular_spectrum_propagate(
             bl_y = xp.abs(fy) < fy_max
             mask = bl_x[None, :] & bl_y[:, None]
             H = H * mask.astype(target_cdtype)
+        # v5.5.3: store H in NATURAL (un-shifted) FFT layout so the per-call
+        # propagation folds away the two spectrum-domain shifts (4 -> 2 shifts).
+        H = xp.fft.ifftshift(H)
 
     if H is None:
         # Spatial-frequency squared vectors (cached on numpy path).
@@ -369,6 +372,8 @@ def angular_spectrum_propagate(
                   f"(H cache miss, built in {chunk}-row chunks)")
             print(f"  Grid: {Ny}x{Nx}, dx={dx*1e6:.3f} um, dy={dy*1e6:.3f} um")
             print(f"  Wavelength: {wavelength*1e9:.1f} nm")
+        # v5.5.3: cache H in NATURAL (un-shifted) FFT layout (see below).
+        H = xp.fft.ifftshift(H)
         # Store under the numpy key only.  The cached H is read-only
         # in normal use; we don't deep-copy on lookup, so callers must
         # not mutate it in place.
@@ -378,22 +383,25 @@ def angular_spectrum_propagate(
         print(f"  ASM propagation: z = {z*1e3:.3f} mm  (H cache HIT)")
 
     # -- propagate: E_out = IFFT{ FFT{E_in} * H } ---------------------------
-    if is_jax:
-        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_in)))
-        E_out = xp.fft.fftshift(xp.fft.ifft2(xp.fft.ifftshift(E_fft * H)))
-    elif xp is np:
-        E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_in)))
-        E_out = np.fft.fftshift(_ifft2(np.fft.ifftshift(E_fft * H)))
+    # H is stored NATURAL-layout, so the two spectrum-domain shifts fold away:
+    #   fftshift(ifft2(ifftshift( fftshift(fft2(ifftshift(E)))*H_centred )))
+    #   == fftshift(ifft2(           fft2(ifftshift(E))      *H_natural   ))
+    # (ifftshift distributes over the elementwise product; ifftshift.fftshift =
+    # id).  Algebraically EXACT for any N, even or odd -- 4 shifts -> 2.
+    if xp is np:
+        E_out = np.fft.fftshift(_ifft2(_fft2(np.fft.ifftshift(E_in)) * H))
     else:
-        E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_in)))
-        E_out = xp.fft.fftshift(xp.fft.ifft2(xp.fft.ifftshift(E_fft * H)))
+        E_out = xp.fft.fftshift(
+            xp.fft.ifft2(xp.fft.fft2(xp.fft.ifftshift(E_in)) * H))
 
     if return_transfer_function:
-        # 4.10: return a copy of the cached H so a caller that does
-        # ``E_out, H = angular_spectrum_propagate(..., return_transfer_function=True)``
-        # then ``H *= mask`` cannot mutate the cached entry and corrupt
-        # every subsequent ASM call at the same key.
-        H_returned = H.copy() if hasattr(H, 'copy') else xp.asarray(H)
+        # 4.10: return a copy so a caller that does ``E_out, H = ...(
+        # return_transfer_function=True)`` then ``H *= mask`` cannot mutate the
+        # cached entry.  Re-centre H (fftshift) so the returned transfer
+        # function keeps the historical CENTERED-spectrum contract callers use.
+        H_returned = xp.fft.fftshift(H)
+        H_returned = (H_returned.copy() if hasattr(H_returned, 'copy')
+                      else xp.asarray(H_returned))
         return E_out, H_returned
     else:
         return E_out

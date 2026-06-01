@@ -97,6 +97,62 @@ def _apply_rcwa_element(E, elem):
     return E * complex(amp)
 
 
+def _apply_coating_element(E, elem, system_wavelength=None):
+    """Apply a multilayer thin-film coating as a uniform complex amplitude on a
+    scalar field ``E``.
+
+    The element dict is::
+
+        {'type': 'coating', 'layers': [(n, thickness_m), ...],
+         'wavelength': float,                  # defaults to the system wavelength
+         'angle': float (rad, default 0),
+         'n_substrate': float (default 1.52),
+         'n_ambient': float (default 1.0),
+         'polarization': 's'|'p'|'avg' (default 'avg'),
+         'port': 'reflection'|'transmission' (default 'transmission')}
+
+    The coating's specular response at the single (wavelength, angle) point is
+    used as the uniform multiplier ``E -> amp*E``.  For the ``'reflection'``
+    port the complex coefficient ``sqrt(R)*exp(i*phase_r)`` carries the
+    interference phase; for ``'transmission'`` only the amplitude
+    ``sqrt(T)`` is applied (a lossless coating's transmitted phase is not
+    returned by :func:`~lumenairy.elements.coatings.coating_reflectance`).
+
+    This mirrors the scalar ``'rcwa'`` bridge: it carries one polarization at
+    one angle.  Spectral or angular sweeps call
+    :func:`~lumenairy.elements.coatings.coating_reflectance` directly.
+    """
+    from ..elements.coatings import coating_reflectance
+    layers = elem.get('layers')
+    if layers is None:
+        raise ValueError(
+            "propagate_through_system: a 'coating' element needs 'layers' "
+            "(a list of (n, thickness_m) tuples).")
+    wl = elem.get('wavelength', system_wavelength)
+    if wl is None:
+        raise ValueError(
+            "propagate_through_system: a 'coating' element needs 'wavelength'.")
+    port = elem.get('port', 'transmission')
+    if port not in ('transmission', 'reflection'):
+        raise ValueError(
+            f"propagate_through_system: 'coating' element port must be "
+            f"'transmission' or 'reflection', got {port!r}.")
+    R, T, phase_r = coating_reflectance(
+        layers, wl,
+        angle=elem.get('angle', 0.0),
+        n_substrate=elem.get('n_substrate', 1.52),
+        n_ambient=elem.get('n_ambient', 1.0),
+        polarization=elem.get('polarization', 'avg'))
+    R = float(np.atleast_1d(R)[0])
+    T = float(np.atleast_1d(T)[0])
+    phase_r = float(np.atleast_1d(phase_r)[0])
+    if port == 'reflection':
+        amp = np.sqrt(R) * np.exp(1j * phase_r)
+    else:
+        amp = np.sqrt(T)
+    return E * complex(amp)
+
+
 def propagate_through_system(E_in: np.ndarray,
                              elements: Sequence[Dict[str, Any]],
                              wavelength: float,
@@ -533,6 +589,9 @@ def propagate_through_system(E_in: np.ndarray,
 
         elif elem['type'] == 'rcwa':
             E = _apply_rcwa_element(E, elem)
+
+        elif elem['type'] == 'coating':
+            E = _apply_coating_element(E, elem, system_wavelength=wavelength)
 
         elif elem['type'] == 'propagate_tilted':
             # Legacy alias — redirect to the unified 'propagate' handler

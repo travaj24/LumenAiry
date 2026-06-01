@@ -367,8 +367,9 @@ deflected = res.to_jones_field(512, 512, dx=2.0e-6 / 64, order=+1,
 field = res.to_multiorder_field(512, 512, dx=2.0e-6 / 64, port='transmission')
 field.propagate(z=50e-6, wavelength=0.633e-6)            # into the JonesField pipeline
 
-# A periodic element can also drop into a scalar system as its specular order:
-E_out = la.propagate_through_system(
+# A periodic element can also drop into a scalar system as its specular order
+# (propagate_through_system returns (field, intermediates)):
+E_out, _ = la.propagate_through_system(
     np.ones((256, 256), complex),
     [{'type': 'rcwa', 'result': res, 'port': 'transmission'},
      {'type': 'propagate', 'z': 10e-3}],

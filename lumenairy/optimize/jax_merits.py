@@ -77,10 +77,15 @@ class JaxMeritTerm(MeritTerm):
                  needs_wave: bool = False,
                  name: Optional[str] = None,
                  real_part: bool = False,
-                 build_args: Optional[Callable] = None) -> None:
+                 build_args: Optional[Callable] = None,
+                 needs_ray: bool = True) -> None:
         self.fn = fn
         self.weight = float(weight)
         self.needs_wave = bool(needs_wave)
+        # needs_ray=False lets a rigorous-element merit (RCWA / metasurface /
+        # coatings, with no imaging prescription) skip the ray-leg in
+        # design_optimize -- no dummy lens prescription needed.
+        self.needs_ray = bool(needs_ray)
         self.real_part = bool(real_part)
         self.build_args = build_args
         if name is not None:

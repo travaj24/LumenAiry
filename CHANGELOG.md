@@ -2,6 +2,99 @@
 
 All notable changes to the core library are documented here.
 
+## [5.5.3] — 2026-06-01
+
+**Energy-correct multi-order fields + concurrency-safe tuning + differentiable
+coatings.**  Closes the v5.5.2 audit (confirmed P1 multi-order energy
+non-conservation; confirmed an audit-unconfirmed large-period blow-up), makes
+the v5.5.2 BLAS-thread tuning thread-safe, lands a bit-exact whole-library ASM
+speedup, and extends the RCWA-style differentiable on-ramp to thin-film
+coatings.  NumPy results remain **bit-identical** to v5.5.2 **except** the
+multi-order field reconstruction, whose new default corrects an energy error
+(see below; `normalize='field'` restores the old amplitudes).
+
+### Fixed (correctness)
+
+- **Multi-order field energy non-conservation (audit P1).**  `to_jones_field(…,
+  order=(m,n))` and **`to_multiorder_field`** previously placed each order's
+  *raw* tangential Jones amplitude on its carrier, so the reconstructed field
+  power disagreed with the solver's own diffraction efficiencies by **−13 % to
+  +148 %** (verified at runtime).  Both now default to `normalize='power'`: each
+  order's transverse carrier is calibrated so `|Eₓ|²+|E_y|²` equals that order's
+  efficiency, folding in the obliquity (flux) weight and the longitudinal `|E_z|²`
+  component.  A one-cell Parseval check now matches the efficiency sum to 1e-6
+  across normal/oblique and reflection/transmission.  Pass `normalize='field'`
+  for the pre-v5.5.3 raw-amplitude behaviour.
+- **Cumulative over-cell shapes (audit P2).**  The v5.5.2 per-shape area-fraction
+  guard missed *multiple* shapes that each fit but together exceed the unit
+  cell; `_validate_shapes` now accumulates the total fraction and rejects
+  `Σ fraction > 1`.
+- **Large-period energy blow-up guard (audit lead, confirmed).**  High-contrast
+  large-period configs could return non-physical `Σ(R)+Σ(T)` up to ~1e34 from an
+  ill-conditioned eigenproblem.  A module-level `_check_energy` now raises a
+  clear error when the reflected+transmitted sum exceeds the mode count by >5 %,
+  wired into all six solve entry points — converting a silent wrong answer into
+  a diagnosable failure.  (The underlying conditioning fix is deferred to v5.6;
+  the guard is the honest interim.)
+- **Evanescent explicit-order guard.**  `to_jones_field(order=(m,n))` now warns
+  when the requested order is non-propagating instead of emitting a silent
+  decaying carrier.
+
+### Fixed (concurrency)
+
+- **`set_blas_threads` / `rcwa_blas_threads` are now thread-local.**  The
+  v5.5.2 BLAS-thread cap was process-global, so a cap set for one solve leaked
+  into concurrent solves on other threads.  The state and the
+  `rcwa_blas_threads` context manager now isolate per thread.
+
+### Added (speed)
+
+- **ASM transfer-function shift-fold (bit-exact).**
+  `angular_spectrum_propagate` now caches the transfer function `H` in natural
+  (un-shifted) layout and folds the four `fftshift`/`ifftshift` calls per
+  propagation down to two — the `ifftshift` permutation distributes over the
+  elementwise `H` multiply.  Results are bit-identical (≤1 ULP at N=256, the FFT
+  noise floor); 589 propagator tests pass unchanged.  `return_transfer_function`
+  re-centres `H` so its public contract is preserved.
+
+### Added (differentiable coatings)
+
+- **`coating_reflectance_jax`** — a JAX companion to `coating_reflectance` that
+  reproduces the NumPy real-Snell Abeles TMM to machine precision (≤1e-12 across
+  s/p/avg and 0–45°) and is **differentiable w.r.t. layer thickness**
+  (autodiff == central-difference to ~5e-10).  This is the thin-film
+  inverse-design on-ramp, mirroring the RCWA fold.
+- **`'coating'` element type** in `propagate_through_system` — applies a
+  multilayer coating's specular SCALAR response (`√T` transmission port,
+  `√R·e^{iφ_r}` reflection port) as a uniform field multiplier, with the
+  wavelength falling back to the system wavelength.
+
+### Added (optimize)
+
+- **`MeritTerm.needs_ray` / `JaxMeritTerm(needs_ray=…)`.**  A merit set with no
+  ray-leg terms now skips the geometric ray solve (surfaces → ABCD → Seidel) in
+  `design_optimize`, removing a wasted leg for wave-only designs.  (A fully
+  prescription-free parameterization remains a v5.6 item.)
+
+### Hardened (completeness)
+
+- The **V20 cross-backend walker** now covers the folded RCWA jax twin
+  (`rcwa_efficiency_1d_jax → rcwa_efficiency_1d`) and the new coatings TMM twin
+  (`coating_reflectance_jax → coating_reflectance`), so a physics fix can't drift
+  between a NumPy path and its differentiable sibling.
+- `per_order_amplitudes` documents the flux-recovery relation; the cookbook's
+  `propagate_through_system` call unpacks its `(field, results)` tuple.
+
+### Deferred to v5.6 (documented, with reasons)
+
+- **Glass-index memoization** — marginal perf vs a staleness footgun and a
+  multi-return refactor risk.
+- **RCWA large-period conditioning fix** — the `_check_energy` guard makes the
+  failure loud meanwhile.
+- **Coatings backend (CuPy) dispatch, correct complex-Snell TIR/evanescent
+  physics, and index gradients** — the existing TIR `UserWarning` prevents a
+  silent wrong answer meanwhile.
+
 ## [5.5.2] — 2026-05-31
 
 **RCWA backlog + speed + library integration.**  Closes the v5.5.1 audit

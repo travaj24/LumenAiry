@@ -39,6 +39,8 @@ _JAX_TWIN_MODULES = (
     'lumenairy.propagators.asymptotic_jax_twin',
     'lumenairy.analysis.through_focus',
     'lumenairy.propagators.system',
+    'lumenairy.elements.rcwa',          # v5.5.3: cover the folded RCWA jax twin
+    'lumenairy.elements.coatings',      # v5.5.3: cover the differentiable TMM twin
 )
 
 # Non-physics JAX helpers (ray-state builders, cache clearers) -- excluded
@@ -71,6 +73,16 @@ _PARITY_REGISTRY = {
         'lumenairy.propagators.asymptotic_canonical_fit:solve_envelope_stationary',
     'lumenairy.propagators.asymptotic_jax_twin:fit_canonical_polynomials_jax':
         'lumenairy.propagators.asymptotic_canonical_fit:fit_canonical_polynomials',
+    # v5.5.3: the RCWA jax twin is now a deprecated thin wrapper over the
+    # unified, backend-dispatched rcwa_efficiency_1d (its NumPy sibling), so a
+    # cross-backend fix can't land on one path only.
+    'lumenairy.elements.rcwa:rcwa_efficiency_1d_jax':
+        'lumenairy.elements.rcwa:rcwa_efficiency_1d',
+    # v5.5.3: the differentiable thin-film TMM companion mirrors the NumPy
+    # real-Snell coating_reflectance to machine precision, so a physics fix
+    # (Snell chain, Abeles factors, TIR cap) can't drift between the two.
+    'lumenairy.elements.coatings:coating_reflectance_jax':
+        'lumenairy.elements.coatings:coating_reflectance',
 }
 
 # Discovered ``*jax*`` functions intentionally WITHOUT a physics NumPy

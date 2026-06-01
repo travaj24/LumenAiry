@@ -150,6 +150,20 @@ def test_p2a_layer_mode_grazing_pin(pol):
     assert np.all(np.isfinite(R)) and np.all(np.isfinite(J))
 
 
+@pytest.mark.parametrize("P,M", [(20e-6, 15), (15e-6, 15), (20e-6, 8)])
+def test_large_period_energy_blowup_guarded(P, M):
+    """v5.5.3 (audit/workflow cross-confirmed): a near-degenerate layer
+    eigenproblem at certain large-period / low-contrast geometries silently
+    returned R+T up to 1e30+ (erratic in n_orders).  The post-solve energy
+    guard now turns that silent wrong answer into a clear error."""
+    with pytest.raises(ValueError, match="energy non-conservation"):
+        rcwa_efficiency_1d(P, 1.52, 1.5, 1.5, 1.5, 0.8e-6, 0.5, WL, n_orders=M)
+    # a valid lossy (metal) solve with R+T < 1 must NOT be tripped
+    o, R, T = rcwa_efficiency_1d(0.6e-6, 0.056 + 4.28j, 1.0, 1.5, 1.0, 0.12e-6,
+                                 0.5, WL, n_orders=15)
+    assert R.sum() + T.sum() < 1.0
+
+
 @pytest.mark.parametrize("fn,kw", [
     ("rcwa_efficiency_1d", None),
     ("rcwa_efficiency_2d", None),
@@ -678,6 +692,31 @@ def test_validate_shapes_rejects_over_cell():
     assert abs(R.sum() + T.sum() - 1.0) < 1e-9
 
 
+def test_validate_shapes_rejects_cumulative_over_cell():
+    """v5.5.3 (audit P2): the over-cell check must be CUMULATIVE -- two
+    disjoint disks at area fraction 0.6 each (total 1.2) drive the DC
+    permittivity past the shapes' eps just as a single oversized shape would,
+    but each passes the per-shape check.  The v5.5.2 per-shape-only check let
+    them slip through."""
+    r = float(np.sqrt(0.6 * (0.8e-6) ** 2 / np.pi))   # fraction 0.6 each
+    two = [{"shape": "disk", "eps": 6.0, "radius": r, "center": (0.2e-6, 0.4e-6)},
+           {"shape": "disk", "eps": 6.0, "radius": r, "center": (0.6e-6, 0.4e-6)}]
+    with pytest.raises(ValueError, match="CUMULATIVE area fraction"):
+        rcwa_efficiency_2d_shapes(0.8e-6, 0.8e-6, 1.0, two, 1.5, 1.0, 0.3e-6,
+                                  WL, n_orders_x=4, n_orders_y=4)
+    with pytest.raises(ValueError, match="add_layer:.*CUMULATIVE"):
+        RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=4, n_orders_y=4).add_layer(
+            0.3e-6, shapes=two, eps_background=1.0)
+    # two small disjoint disks (total fraction << 1) still solve fine
+    small = [{"shape": "disk", "eps": 6.0, "radius": 0.15e-6,
+              "center": (0.2e-6, 0.4e-6)},
+             {"shape": "disk", "eps": 6.0, "radius": 0.15e-6,
+              "center": (0.6e-6, 0.4e-6)}]
+    o, R, T = rcwa_efficiency_2d_shapes(0.8e-6, 0.8e-6, 1.0, small, 1.5, 1.0,
+                                        0.3e-6, WL, n_orders_x=4, n_orders_y=4)
+    assert abs(R.sum() + T.sum() - 1.0) < 1e-9
+
+
 def test_validate_stack_geometry_and_dead_param():
     with pytest.raises(ValueError, match="RCWAStack: period"):
         RCWAStack(0.0)
@@ -819,12 +858,40 @@ def test_set_blas_threads_numerically_equivalent():
     o, Rd, Td = rcwa_efficiency_1d(*args, angle=np.deg2rad(15),
                                    polarization="tm", n_orders=40)
     with rcwa_blas_threads(2):
-        assert _r._BLAS_THREADS == 2
+        assert _r._get_blas_threads() == 2
         o, Rc, Tc = rcwa_efficiency_1d(*args, angle=np.deg2rad(15),
                                        polarization="tm", n_orders=40)
-    assert _r._BLAS_THREADS is None          # restored on context exit
+    assert _r._get_blas_threads() is None    # restored on context exit
     assert float(np.max(np.abs(Rc - Rd))) < 1e-10
     assert abs(float(Rc.sum() + Tc.sum()) - 1.0) < 1e-9
+
+
+def test_blas_threads_thread_local_isolation():
+    """v5.5.3 (audit P3): the BLAS cap is thread-local, so a cap set in one
+    thread does not leak into another running concurrently."""
+    import threading
+
+    import lumenairy.elements.rcwa as _r
+    from lumenairy.elements.rcwa import rcwa_blas_threads, set_blas_threads
+    seen = {}
+    barrier = threading.Barrier(2)
+
+    def worker(name, n):
+        with rcwa_blas_threads(n):
+            barrier.wait()                    # both inside their cap at once
+            seen[name] = _r._get_blas_threads()
+        seen[name + "_after"] = _r._get_blas_threads()
+
+    set_blas_threads(None)
+    t1 = threading.Thread(target=worker, args=("a", 2))
+    t2 = threading.Thread(target=worker, args=("b", 4))
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+    assert seen["a"] == 2 and seen["b"] == 4          # no cross-thread leak
+    assert seen["a_after"] is None and seen["b_after"] is None
+    assert _r._get_blas_threads() is None             # main thread untouched
 
 
 def test_to_jones_field_specular_bridge():
@@ -951,6 +1018,38 @@ def test_multiorder_bridge():
         res.to_jones_field(8, 8, dx=dx, order=99)
     with pytest.raises(ValueError, match="port must be"):
         res.to_multiorder_field(8, 8, dx=dx, port="bogus")
+
+
+@pytest.mark.parametrize("port", ["reflection", "transmission"])
+@pytest.mark.parametrize("theta", [0.0, 10.0])
+def test_multiorder_field_conserves_energy(port, theta):
+    """v5.5.3 (audit P1): the power-normalized multi-order field must carry the
+    correct per-order power -- on a one-cell grid Parseval gives
+    mean|field|^2 == sum of the propagating-order EFFICIENCIES.  The v5.5.2
+    field dropped the Poynting flux weight + the longitudinal component and
+    was off by -39% to +148%; this pins the fix."""
+    S = 64
+    x = (np.arange(S) + 0.5) / S
+    cell = np.where(x < 0.5, 2.5 ** 2, 1.0).astype(complex)
+    res = (RCWAStack(2.0e-6, n_superstrate=1.0, n_substrate=1.5, n_orders=12)
+           .add_layer(0.4e-6, eps_cell=cell)
+           .set_source(WL, theta=np.deg2rad(theta)).solve())
+    o, R, T = res.efficiencies()
+    pa = res.per_order_amplitudes(port)
+    prop = np.real(pa["kz"]) > 1e-12
+    eff_total = float((R if port == "reflection" else T)[0][prop].sum())
+    # one-cell grid -> the order carriers are orthonormal (Parseval exact)
+    period = res._modal["period_x"]
+    nx = 60
+    jf = res.to_multiorder_field(nx, nx, dx=period / nx, incident=(1.0, 0.0),
+                                 port=port, normalize="power")
+    field_power = float(np.mean(np.abs(jf.Ex) ** 2 + np.abs(jf.Ey) ** 2))
+    assert abs(field_power - eff_total) < 1e-6
+    # the raw 'field' mode is NOT power-calibrated (documents the distinction)
+    jf_raw = res.to_multiorder_field(nx, nx, dx=period / nx, port=port,
+                                     normalize="field")
+    raw_power = float(np.mean(np.abs(jf_raw.Ex) ** 2 + np.abs(jf_raw.Ey) ** 2))
+    assert abs(raw_power - eff_total) > 1e-4 or theta == 0.0  # generally differs
 
 
 # ============================== JAX autodiff ===============================

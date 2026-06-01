@@ -915,6 +915,49 @@ def _simple_singlet():
     }
 
 
+def test_need_ray_gating_skips_ray_leg(monkeypatch):
+    """v5.5.3: a merit with ``needs_ray=False`` makes design_optimize SKIP the
+    ray-leg (``surfaces_from_prescription`` / ``system_abcd`` / Seidel) -- a
+    speed win and the unblocker for a rigorous-element (RCWA / metasurface /
+    coatings) merit with no imaging prescription.  A default merit
+    (``needs_ray=True``) still runs it."""
+    pytest.importorskip("jax")
+    import warnings
+
+    import lumenairy.optimize.core as _core
+    from lumenairy.optimize import JaxMeritTerm
+
+    calls = {"n": 0}
+    orig = _core.surfaces_from_prescription
+
+    def spy(*a, **k):
+        calls["n"] += 1
+        return orig(*a, **k)
+    monkeypatch.setattr(_core, "surfaces_from_prescription", spy)
+
+    param = DesignParameterization(
+        template=_simple_singlet(),
+        free_vars=[('surfaces', 0, 'radius')], bounds=[(20e-3, 80e-3)])
+
+    def run(merit):
+        calls["n"] = 0
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            design_optimize(param, [merit], wavelength=1.30e-6, N=16, dx=10e-6,
+                            method='L-BFGS-B', max_iter=1, verbose=False)
+        return calls["n"]
+
+    # needs_ray=False merit (pure function of x) -> the ray-leg is never built
+    no_ray = JaxMeritTerm(fn=lambda v: (v - 0.05) ** 2,
+                          build_args=lambda x: (x[0],),
+                          needs_ray=False, real_part=True)
+    assert run(no_ray) == 0
+    # a default (needs_ray=True) merit still builds the ray-leg
+    with_ray = JaxMeritTerm(fn=lambda v: (v - 0.05) ** 2,
+                            build_args=lambda x: (x[0],), real_part=True)
+    assert run(with_ray) > 0
+
+
 # ============================================================================
 # Cache primitives
 # ============================================================================

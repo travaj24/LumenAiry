@@ -384,6 +384,7 @@ from .elements.coatings import (
     COATING_MATERIAL_REGISTRY,
     broadband_ar_v_coat,
     coating_reflectance,
+    coating_reflectance_jax,
     get_coating_material_index,
     quarter_wave_ar,
 )
@@ -882,7 +883,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.5.2"
+__version__ = "5.5.3"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1473,6 +1474,7 @@ __all__ = [
 
     # Thin-film coatings
     'coating_reflectance',
+    'coating_reflectance_jax',
     'quarter_wave_ar',
     'broadband_ar_v_coat',
     # v5.4 Phase 5: thin-film coating material database.
