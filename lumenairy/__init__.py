@@ -436,6 +436,7 @@ from .elements.polarization import (
 from .elements.rcwa import (
     RCWAResult,
     RCWAStack,
+    rcwa_blas_threads,
     rcwa_efficiency_1d,
     rcwa_efficiency_1d_jax,
     rcwa_efficiency_2d,
@@ -443,6 +444,7 @@ from .elements.rcwa import (
     rcwa_efficiency_vs_wavelength,
     rcwa_jones_1d,
     rcwa_jones_2d,
+    set_blas_threads,
     uniaxial_tensor,
 )
 
@@ -880,7 +882,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.5.1"
+__version__ = "5.5.2"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1458,6 +1460,8 @@ __all__ = [
     'uniaxial_tensor',
     'RCWAStack',
     'RCWAResult',
+    'set_blas_threads',
+    'rcwa_blas_threads',
 
     # BSDF / surface scatter
     'BSDFModel',

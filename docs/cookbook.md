@@ -343,10 +343,44 @@ res = (la.RCWAStack(0.8e-6, period_y=0.8e-6, n_substrate=1.5, n_orders=4,
 jones = res.to_jones_field(256, 256, dx=0.8e-6, incident=(1.0, 0.0))  # specular
 ```
 
+**Full pipeline: deflector cell → diffracted field → propagate → focal spot.**
+A strongly diffracting cell puts most power in non-zero orders, which
+`to_multiorder_field` reconstructs as a propagatable `JonesField` (the v5.5.2
+multi-order bridge):
+
+```python
+# A 1-D beam-deflector grating (period 2*wl -> propagating +/-1 orders)
+S = 64
+xprof = (np.arange(S) + 0.5) / S
+cell1d = np.where(xprof < 0.5, 2.5 ** 2, 1.0).astype(complex)
+res = (la.RCWAStack(2.0e-6, n_superstrate=1.0, n_substrate=1.0, n_orders=12)
+       .add_layer(0.4e-6, eps_cell=cell1d)
+       .set_source(0.633e-6, theta=np.deg2rad(8)).solve())
+
+# Inspect where the power went, then reconstruct the diffracted field
+o, R, T = res.efficiencies()
+amps = res.per_order_amplitudes('transmission')          # (2, N) per order
+
+# One order as a tilted carrier, or the full multi-order superposition:
+deflected = res.to_jones_field(512, 512, dx=2.0e-6 / 64, order=+1,
+                               port='transmission')
+field = res.to_multiorder_field(512, 512, dx=2.0e-6 / 64, port='transmission')
+field.propagate(z=50e-6, wavelength=0.633e-6)            # into the JonesField pipeline
+
+# A periodic element can also drop into a scalar system as its specular order:
+E_out = la.propagate_through_system(
+    np.ones((256, 256), complex),
+    [{'type': 'rcwa', 'result': res, 'port': 'transmission'},
+     {'type': 'propagate', 'z': 10e-3}],
+    wavelength=0.633e-6, dx=2e-6)
+```
+
 For gradient-based metasurface inverse design, pass `jax.numpy` arrays (and
 set `jax.config.update('jax_enable_x64', True)` — RCWA needs double
 precision); `rcwa_efficiency_1d` / `_2d` then differentiate w.r.t. the
-permittivities, depth, and angle via `jax.grad`.
+permittivities, depth, and angle via `jax.grad` (see
+`examples/13_rcwa_inverse_design.py`). On thread-oversubscribed machines,
+`la.set_blas_threads(2)` gives a modest (~2–3×) solve speedup.
 
 ### Phase retrieval (Gerchberg-Saxton CGH design)
 

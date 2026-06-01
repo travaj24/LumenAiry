@@ -156,6 +156,7 @@ at every dispatcher.
 | Polarization convention               | Jones / Stokes follow the Born-Wolf right-handed circular convention | ``polarization.py``                                   |
 | Waveplate slow-axis phase             | ``exp(-i * retardance)`` (slow axis delayed under ``exp(-i omega t)``); DECOUPLED from the propagator ``exp(+i k OPL)``. Intentional, regression-pinned: this sign and ``S3 = -2 Im(Ex conj Ey)`` are mutually consistent so closed Jones pipelines give correct intensities | ``polarization.py::apply_waveplate`` (v5.4.6 audit P3-22) |
 | Refractive index                      | ``n_complex = n + 1j * kappa`` with ``kappa > 0`` for ABSORPTION (passive media) | ``glass.py`` registry                                 |
+| Grating/coating polarization aliases  | ``s`` == ``te`` (E perpendicular to the plane of incidence); ``p`` == ``tm`` (E in the plane). The grating solvers (``rcwa_*``, ``thin_grating``) speak ``te``/``tm`` and the ``coatings`` TMM speaks ``s``/``p``; both aliases are accepted everywhere (case-insensitive) | ``rcwa.py::_normalize_pol``, ``coatings.py`` |
 
 * Time: ``exp(-i omega t)`` -- standard physics convention.
 * Forward propagation: ``exp(+i k z)``.

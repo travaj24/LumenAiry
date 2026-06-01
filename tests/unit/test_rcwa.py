@@ -130,6 +130,48 @@ def test_wood_anomaly_does_not_crash():
     assert abs(R.sum() + T.sum() - 1.0) < 1e-6
 
 
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_p2a_layer_mode_grazing_pin(pol):
+    """Regression pin for P2-A: a diffracted order grazing inside the *LAYER*
+    (not just a half-space) made the interface S-matrix singular -> LinAlgError
+    before the layer-index Wood nudge.  period = 2*wl, normal incidence, ridge
+    n=2.0 -> order +/-4 has kx_4 = 4*wl/period = 2.0 = n_ridge, i.e. kz = 0
+    INSIDE the ridge.  Must stay finite + energy-conserving."""
+    o, R, T = rcwa_efficiency_1d(1.1e-6, 2.0, 1.0, 1.5, 1.0, 0.3e-6, 0.5,
+                                 0.55e-6, angle=0.0, polarization=pol,
+                                 n_orders=8)
+    assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
+    assert abs(R.sum() + T.sum() - 1.0) < 1e-6
+    # anisotropic (Jones) layer path shares the nudge -- pin it too.
+    er = uniaxial_tensor(2.0, 2.0, np.pi / 2)   # n=2.0 -> order +/-4 grazes
+    eg = 1.0 * np.eye(3)
+    o, R, T, J = rcwa_jones_1d(1.1e-6, er, eg, 1.5, 1.0, 0.3e-6, 0.5, 0.55e-6,
+                               angle=0.0, n_orders=8)
+    assert np.all(np.isfinite(R)) and np.all(np.isfinite(J))
+
+
+@pytest.mark.parametrize("fn,kw", [
+    ("rcwa_efficiency_1d", None),
+    ("rcwa_efficiency_2d", None),
+])
+def test_p2b_non_propagating_incidence_raises(fn, kw):
+    """Regression pin for P2-B: a non-propagating incidence half-space
+    (Re(eps_superstrate) <= kx0^2+ky0^2 -- here a metallic n=0.5+2j with
+    Re(eps) = -3.75) must raise a clear ValueError, not silently return
+    negative / NaN efficiencies."""
+    n_metal = 0.5 + 2j
+    if fn == "rcwa_efficiency_1d":
+        with pytest.raises(ValueError, match="non-propagating"):
+            rcwa_efficiency_1d(1.0e-6, 2.2, 1.0, 1.5, n_metal, 0.3e-6, 0.5, WL,
+                               angle=np.deg2rad(20), polarization="te",
+                               n_orders=5)
+    else:
+        with pytest.raises(ValueError, match="non-propagating"):
+            rcwa_efficiency_2d(0.5e-6, 0.5e-6, np.full((16, 16), 2.0, complex),
+                               1.5, n_metal, 0.3e-6, WL, theta=np.deg2rad(20),
+                               n_orders_x=3, n_orders_y=3)
+
+
 @pytest.mark.parametrize("bad", [
     dict(polarization="circular"),
     dict(duty_cycle=1.5),
@@ -603,6 +645,39 @@ def test_validate_shapes_rejects_nonpositive_dims():
                                   n_orders_x=3, n_orders_y=3)
 
 
+def test_validate_shapes_rejects_over_cell():
+    # An over-cell disk (radius > period / sqrt(pi), i.e. area fraction > 1)
+    # drives the DC permittivity past the shape's own eps -- physically
+    # impossible.  P / sqrt(pi) ~= 0.451e-6 for P = 0.8e-6, so r = 0.6e-6 gives
+    # area fraction pi*r^2/P^2 ~= 1.77 > 1.  Must raise, not silently model a
+    # non-physical structure (and the disk would conserve energy if it ran).
+    big_disk = [{"shape": "disk", "eps": 6.0, "radius": 0.6e-6,
+                 "center": (0.4e-6, 0.4e-6)}]
+    with pytest.raises(ValueError, match="area fraction"):
+        rcwa_efficiency_2d_shapes(0.8e-6, 0.8e-6, 1.0, big_disk, 1.5, 1.0,
+                                  0.3e-6, WL, n_orders_x=3, n_orders_y=3)
+    # A shape with area fraction <= 1 can still wrap and self-overlap: a
+    # 1.2e-6 x 0.4e-6 rectangle in a 0.8e-6 cell is fraction 0.75 but its
+    # x-extent 1.2e-6 > 0.8e-6.  The bounding-extent guard catches it.
+    wrap_rect = [{"shape": "rectangle", "eps": 6.0, "size": (1.2e-6, 0.4e-6),
+                  "center": (0.4e-6, 0.4e-6)}]
+    with pytest.raises(ValueError, match="extent"):
+        rcwa_efficiency_2d_shapes(0.8e-6, 0.8e-6, 1.0, wrap_rect, 1.5, 1.0,
+                                  0.3e-6, WL, n_orders_x=3, n_orders_y=3)
+    # The same guard fires on the RCWAStack.add_layer path (uses the stack's
+    # own period), with the fn_name prefix.
+    with pytest.raises(ValueError, match="add_layer:.*area fraction"):
+        RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=3, n_orders_y=3).add_layer(
+            0.3e-6, shapes=big_disk, eps_background=1.0)
+    # A shape that exactly tiles / is inscribed must still be accepted: a disk
+    # of radius P/2 (inscribed, extent == period, fraction pi/4) does not raise.
+    fit_disk = [{"shape": "disk", "eps": 6.0, "radius": 0.4e-6,
+                 "center": (0.4e-6, 0.4e-6)}]
+    o, R, T = rcwa_efficiency_2d_shapes(0.8e-6, 0.8e-6, 1.0, fit_disk, 1.5, 1.0,
+                                        0.3e-6, WL, n_orders_x=3, n_orders_y=3)
+    assert abs(R.sum() + T.sum() - 1.0) < 1e-9
+
+
 def test_validate_stack_geometry_and_dead_param():
     with pytest.raises(ValueError, match="RCWAStack: period"):
         RCWAStack(0.0)
@@ -619,6 +694,31 @@ def test_validate_stack_geometry_and_dead_param():
     with pytest.raises(TypeError):
         RCWAStack(0.8e-6, period_y=0.8e-6, n_orders=2,
                   n_orders_y=2).set_source(WL, polarization="tm")
+
+
+def test_n_orders_ceiling_guards_oom():
+    """v5.5.2: a fat-finger n_orders that would build an unsolvable 2N x 2N
+    eig must raise (not OOM-hang).  1-D harmonic count and the 2-D product
+    are both bounded."""
+    with pytest.raises(ValueError, match="harmonic count"):
+        rcwa_efficiency_1d(1e-6, 2.0, 1.0, 1.5, 1.0, 0.4e-6, 0.5, WL,
+                           n_orders=10 ** 9)
+    with pytest.raises(ValueError, match="harmonic count"):
+        rcwa_efficiency_2d(0.8e-6, 0.8e-6, np.full((16, 16), 2.0, complex),
+                           1.5, 1.0, 0.3e-6, WL, n_orders_x=100, n_orders_y=100)
+
+
+def test_vs_wavelength_validation():
+    """v5.5.2: rcwa_efficiency_vs_wavelength reports geometry errors with ITS
+    OWN prefix (not the inner per-call prefix) and rejects an empty / non-
+    positive wavelength list instead of silently returning empty."""
+    base = (1.4e-6, 2.0, 1.0, 1.5, 1.0, 0.5e-6, 0.5)
+    with pytest.raises(ValueError, match="rcwa_efficiency_vs_wavelength: peri"):
+        rcwa_efficiency_vs_wavelength(-1.0, *base[1:], [0.6e-6], order=1)
+    with pytest.raises(ValueError, match="wavelengths is empty"):
+        rcwa_efficiency_vs_wavelength(*base, np.array([]), order=1)
+    with pytest.raises(ValueError, match="every wavelength must be"):
+        rcwa_efficiency_vs_wavelength(*base, [0.6e-6, -1.0], order=1)
 
 
 # ===================== convergence / physics oracles ======================
@@ -708,6 +808,25 @@ def test_block_helper_matches_numpy_block():
                           np.block([[A, B], [C, D]]))
 
 
+def test_set_blas_threads_numerically_equivalent():
+    """v5.5.2: the opt-in BLAS thread cap is numerically equivalent to the
+    default (it changes results only at the ~1e-14 floating-point-
+    reassociation level from the thread-count change, not physically); the
+    context manager restores the prior setting."""
+    import lumenairy.elements.rcwa as _r
+    from lumenairy.elements.rcwa import rcwa_blas_threads
+    args = (1.2e-6, 2.5, 1.0, 1.5, 1.0, 0.4e-6, 0.4, 0.55e-6)
+    o, Rd, Td = rcwa_efficiency_1d(*args, angle=np.deg2rad(15),
+                                   polarization="tm", n_orders=40)
+    with rcwa_blas_threads(2):
+        assert _r._BLAS_THREADS == 2
+        o, Rc, Tc = rcwa_efficiency_1d(*args, angle=np.deg2rad(15),
+                                       polarization="tm", n_orders=40)
+    assert _r._BLAS_THREADS is None          # restored on context exit
+    assert float(np.max(np.abs(Rc - Rd))) < 1e-10
+    assert abs(float(Rc.sum() + Tc.sum()) - 1.0) < 1e-9
+
+
 def test_to_jones_field_specular_bridge():
     """RCWAResult.to_jones_field builds a uniform specular JonesField whose
     value is the zeroth-order Jones applied to the incident vector."""
@@ -726,6 +845,112 @@ def test_to_jones_field_specular_bridge():
     assert np.allclose(jt.Ex, res.jones_transmission()[0, 1])
     with pytest.raises(ValueError, match="port must be"):
         res.to_jones_field(4, 4, dx=1e-6, port="bogus")
+
+
+def _diffracting_grating_result():
+    """A high-contrast 1-D grating (most reflected power in non-zero orders)."""
+    S = 64
+    x = (np.arange(S) + 0.5) / S
+    cell = np.where(x < 0.5, 2.5 ** 2, 1.0).astype(complex)
+    return (RCWAStack(2.0e-6, n_superstrate=1.0, n_substrate=1.0, n_orders=12)
+            .add_layer(0.4e-6, eps_cell=cell)
+            .set_source(WL, theta=np.deg2rad(8)).solve())
+
+
+def test_rcwa_reduces_to_thin_grating_limit():
+    """v5.5.2 cross-solver pin: in the thin-grating regime (period >> lambda,
+    low index contrast, shallow, normal incidence, index-matched half-spaces
+    so reflection -> 0) the rigorous RCWA transmitted-order efficiencies must
+    agree with the analytic scalar thin_grating model -- the documented
+    upgrade path from thin_grating to RCWA."""
+    from lumenairy.elements.thin_grating import thin_grating_efficiency_1d
+    cfg = dict(period=10e-6, n_ridge=1.55, n_groove=1.5, n_substrate=1.5,
+               n_superstrate=1.5, depth=0.5e-6, duty_cycle=0.5, wavelength=WL,
+               angle=0.0, n_orders=15)
+    o, R, T = rcwa_efficiency_1d(cfg["period"], cfg["n_ridge"], cfg["n_groove"],
+                                 cfg["n_substrate"], cfg["n_superstrate"],
+                                 cfg["depth"], cfg["duty_cycle"],
+                                 cfg["wavelength"], angle=cfg["angle"],
+                                 polarization="te", n_orders=cfg["n_orders"])
+    ot, Rt, Tt = thin_grating_efficiency_1d(**cfg, polarization="te")
+    assert R.sum() < 2e-3                          # thin regime: R ~ 0
+    mid = len(o) // 2
+    for m in (-2, -1, 0, 1, 2):
+        assert abs(T[mid + m] - Tt[mid + m]) < 2e-3
+    # thin_grating now also validates polarization (s/p aliases; rejects typos)
+    with pytest.raises(ValueError, match="polarization must be"):
+        thin_grating_efficiency_1d(**cfg, polarization="circular")
+
+
+def test_rcwa_system_element():
+    """v5.5.2: an 'rcwa' element in propagate_through_system applies the
+    rigorous specular scalar amplitude to a scalar field (explicit amplitude
+    or from an RCWAResult's co-pol Jones), and composes with other stages."""
+    from lumenairy.propagators.system import propagate_through_system
+    E0 = np.ones((32, 32), complex)
+
+    def _field(out):
+        return out[0] if isinstance(out, tuple) else out
+
+    # explicit complex amplitude -> uniform multiplier
+    E = _field(propagate_through_system(
+        E0, [{"type": "rcwa", "amplitude": 0.5 + 0.2j}], WL, dx=2e-6,
+        verbose=False))
+    assert np.allclose(E, 0.5 + 0.2j)
+
+    # from an RCWAResult (uniform slab -> co-pol == Jt[0,0])
+    res = (RCWAStack(0.5e-6, period_y=0.5e-6, n_substrate=1.5, n_orders=3,
+                     n_orders_y=3)
+           .add_layer(0.3e-6, eps=2.1 ** 2).set_source(WL).solve())
+    E = _field(propagate_through_system(
+        E0, [{"type": "rcwa", "result": res, "port": "transmission",
+              "incident": (1, 0)}], WL, dx=2e-6, verbose=False))
+    assert np.allclose(E[0, 0], res.jones_transmission()[0, 0])
+
+    # composes with a propagation stage; missing spec raises clearly
+    E = _field(propagate_through_system(
+        E0, [{"type": "rcwa", "amplitude": 0.8}, {"type": "propagate",
+              "z": 5e-3}], WL, dx=2e-6, verbose=False))
+    assert np.all(np.isfinite(E))
+    with pytest.raises(ValueError, match="rcwa.*needs either|needs either"):
+        propagate_through_system(E0, [{"type": "rcwa"}], WL, dx=2e-6,
+                                 verbose=False)
+
+
+def test_multiorder_bridge():
+    """v5.5.2: RCWAResult exposes per-order amplitudes + a multi-order field
+    bridge -- the data the solver used to discard.  A strongly diffracting
+    grating puts most power in non-zero orders, which to_multiorder_field
+    reconstructs as a superposition of tilted plane-wave carriers."""
+    res = _diffracting_grating_result()
+    o, R, T = res.efficiencies()
+    p0 = int(np.where(o == 0)[0][0])
+    # most reflected power is NOT in the specular order (the whole point)
+    assert R[0, p0] / R[0].sum() < 0.5
+
+    pa = res.per_order_amplitudes("reflection")
+    assert pa["Ex"].shape == (2, o.shape[0]) and pa["kx"].shape == o.shape
+    assert pa["wavelength"] == WL
+
+    dx = 2.0e-6 / 64
+    # specular order=None is a uniform field (backward-compatible)
+    jf0 = res.to_jones_field(48, 48, dx=dx, order=None)
+    assert np.allclose(jf0.Ex, jf0.Ex.flat[0])
+    # a non-zero order is a tilted carrier (uniform magnitude, varying phase)
+    jf1 = res.to_jones_field(48, 48, dx=dx, order=1)
+    assert np.allclose(np.abs(jf1.Ex), np.abs(jf1.Ex).flat[0])
+    assert not np.allclose(jf1.Ex, jf1.Ex.flat[0])      # phase actually tilts
+    # a single-order multi-order field equals to_jones_field of that order
+    mf1 = res.to_multiorder_field(48, 48, dx=dx, orders=[1])
+    assert np.allclose(mf1.Ex, jf1.Ex) and np.allclose(mf1.Ey, jf1.Ey)
+    # the full reconstruction is finite and superposes the propagating orders
+    mf = res.to_multiorder_field(48, 48, dx=dx)
+    assert np.all(np.isfinite(mf.Ex)) and np.max(np.abs(mf.Ex)) > 0
+    # out-of-range order / bad port raise clearly
+    with pytest.raises(ValueError, match="outside the retained range"):
+        res.to_jones_field(8, 8, dx=dx, order=99)
+    with pytest.raises(ValueError, match="port must be"):
+        res.to_multiorder_field(8, 8, dx=dx, port="bogus")
 
 
 # ============================== JAX autodiff ===============================
@@ -857,6 +1082,7 @@ def test_jax_2d_gradient_matches_finite_difference():
     assert abs(g - fd) / max(abs(fd), 1e-30) < 1e-5
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_jax_validation_and_error_prefixes():
     """v5.5.1: the folded JAX twin delegates to the unified solver, so input
     validation (no longer silently dropped) is enforced there.  ``n_samples``
@@ -887,6 +1113,26 @@ def test_jax_validation_and_error_prefixes():
     assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
 
 
+def test_rcwa_efficiency_1d_jax_deprecation_warning():
+    """v5.5.2: the folded alias emits a DeprecationWarning steering callers to
+    the unified rcwa_efficiency_1d (with jax.numpy inputs)."""
+    jax.config.update("jax_enable_x64", True)
+    from lumenairy.elements.rcwa import rcwa_efficiency_1d_jax
+    with pytest.warns(DeprecationWarning, match="rcwa_efficiency_1d_jax"):
+        rcwa_efficiency_1d_jax(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
+                               n_orders=8)
+
+
+def test_jax_plus_use_gpu_rejected():
+    """v5.5.2: a JAX input combined with use_gpu (or a CuPy input) is an
+    ambiguous mixed-backend call and must raise, not silently pick JAX."""
+    import jax.numpy as jnp
+    with pytest.raises(ValueError, match="cannot be combined with use_gpu"):
+        rcwa_efficiency_1d(1.2e-6, jnp.asarray(2.2 + 0j), 1.0, 1.5, 1.0,
+                           0.5e-6, 0.5, WL, n_orders=5, use_gpu=True)
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_jax_value_matches_numpy():
     """v5.5.1: the folded JAX path uses the SAME exact binary-grating Fourier
     coefficients as the NumPy core (not the old soft-edge sample), so the two
@@ -904,6 +1150,7 @@ def test_jax_value_matches_numpy():
     assert abs(float(Rj.sum() + Tj.sum()) - 1.0) < 1e-9
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_jax_gradients_match_finite_difference():
     """Autodiff gradients (incl. the non-Hermitian eig path) match central
     finite differences -- the inverse-design enabler.  The eig custom VJP's

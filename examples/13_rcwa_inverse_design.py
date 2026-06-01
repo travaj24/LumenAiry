@@ -1,15 +1,25 @@
 """
 Lumenairy example 13 -- RCWA adjoint / gradient-based inverse design.
 
-Use the differentiable RCWA solver (:func:`lumenairy.rcwa_efficiency_1d_jax`)
-to inverse-design a 1-D transmission grating that steers light into its
-``+1`` diffraction order -- a textbook beam-deflector / metasurface design
-task.  The gradient of the diffraction efficiency w.r.t. the continuous
-design parameters (grating depth, ridge index) is obtained by reverse-mode
-automatic differentiation straight through the rigorous vector Maxwell
-solve -- including the non-Hermitian eigendecomposition of each layer (a
-custom, Lorentzian-broadened eigenvector VJP) -- so no finite differences
-and no adjoint bookkeeping are needed: ``jax.grad`` does it all.
+Use the differentiable RCWA solver to inverse-design a 1-D transmission
+grating that steers light into its ``+1`` diffraction order -- a textbook
+beam-deflector / metasurface design task.  The gradient of the diffraction
+efficiency w.r.t. the continuous design parameters (grating depth, ridge
+index) is obtained by reverse-mode automatic differentiation straight through
+the rigorous vector Maxwell solve -- including the non-Hermitian
+eigendecomposition of each layer (a custom, Lorentzian-broadened eigenvector
+VJP) -- so no finite differences and no adjoint bookkeeping are needed:
+``jax.grad`` does it all.
+
+The differentiable path is the unified :func:`lumenairy.rcwa_efficiency_1d`
+itself: pass ``jax.numpy`` arrays for the design parameters and it
+auto-dispatches to the JAX backend (the v5.5.1 fold; the old
+``rcwa_efficiency_1d_jax`` is a deprecated alias).
+
+To drive this with the library's optimizer instead of the hand-rolled loop
+below, wrap the loss in :class:`lumenairy.optimize.JaxMeritTerm` --
+``JaxMeritTerm(fn=loss, build_args=lambda x: (...), real_part=True)`` -- whose
+analytic ``jax.grad`` is auto-detected by ``design_optimize``.
 
 Falls back gracefully when JAX isn't installed.
 """
@@ -42,10 +52,13 @@ def main():
     def neg_efficiency(x):
         depth = x[0] * 1e-6
         n_ridge = x[1]
-        _, R, T = la.rcwa_efficiency_1d_jax(
+        # Unified solver, JAX-dispatched because depth / n_ridge are jnp
+        # arrays; the geometry (period, wavelength, angle, region indices) is
+        # static, so the solve is jax.grad- and jax.jit-able.
+        _, R, T = la.rcwa_efficiency_1d(
             period, n_ridge, n_superstrate, n_substrate, n_superstrate,
             depth, duty_cycle, wavelength, angle=angle, polarization='te',
-            n_orders=11, n_samples=512)
+            n_orders=11)
         return -T[m1]
 
     value_and_grad = jax.jit(jax.value_and_grad(neg_efficiency))

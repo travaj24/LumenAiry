@@ -107,6 +107,7 @@ from .polarization import (
 from .rcwa import (
     RCWAResult,
     RCWAStack,
+    rcwa_blas_threads,
     rcwa_efficiency_1d,
     rcwa_efficiency_1d_jax,
     rcwa_efficiency_2d,
@@ -114,6 +115,7 @@ from .rcwa import (
     rcwa_efficiency_vs_wavelength,
     rcwa_jones_1d,
     rcwa_jones_2d,
+    set_blas_threads,
     uniaxial_tensor,
 )
 from .thin_grating import (
@@ -166,6 +168,8 @@ __all__ = [
     'uniaxial_tensor',
     'RCWAStack',
     'RCWAResult',
+    'set_blas_threads',
+    'rcwa_blas_threads',
     # polarization
     'JonesField',
     'apply_jones_matrix', 'apply_polarizer', 'apply_waveplate',

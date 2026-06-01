@@ -53,6 +53,50 @@ from .propagation import (
 )
 
 
+def _apply_rcwa_element(E, elem):
+    """Apply the rigorous zeroth-order (specular) SCALAR amplitude of a
+    periodic RCWA element to a scalar field ``E``.
+
+    The element dict is one of::
+
+        {'type': 'rcwa', 'amplitude': complex}                  # explicit
+        {'type': 'rcwa', 'result': RCWAResult,                  # from a solve
+         'port': 'transmission'|'reflection', 'incident': (Ex, Ey)}
+
+    For the ``result`` form the co-polarised zeroth-order Jones amplitude
+    (the incident vector propagated through the 2x2 Jones and projected back
+    onto itself) is used as a uniform complex multiplier ``E -> amplitude*E``.
+
+    This is the SCALAR-pipeline bridge: it carries only the specular order for
+    one polarization.  Polarization-resolved and non-zero-order composition
+    uses the JonesField chain instead --
+    :meth:`~lumenairy.elements.rcwa.RCWAResult.to_jones_field` /
+    :meth:`~lumenairy.elements.rcwa.RCWAResult.to_multiorder_field` ->
+    ``JonesField.propagate``.
+    """
+    amp = elem.get('amplitude')
+    if amp is None:
+        result = elem.get('result')
+        if result is None:
+            raise ValueError(
+                "propagate_through_system: an 'rcwa' element needs either "
+                "'amplitude' (complex) or 'result' (an RCWAResult).")
+        port = elem.get('port', 'transmission')
+        if port not in ('transmission', 'reflection'):
+            raise ValueError(
+                f"propagate_through_system: 'rcwa' element port must be "
+                f"'transmission' or 'reflection', got {port!r}.")
+        incident = elem.get('incident', (1.0, 0.0))
+        from ..backend import to_numpy
+        J = to_numpy(result.jones_transmission() if port == 'transmission'
+                     else result.jones_reflection())
+        inc = np.asarray(incident, dtype=complex).reshape(2)
+        out = J @ inc                       # specular [Ex, Ey] response
+        norm = np.vdot(inc, inc)
+        amp = complex(np.vdot(inc, out) / (norm if norm != 0 else 1.0))
+    return E * complex(amp)
+
+
 def propagate_through_system(E_in: np.ndarray,
                              elements: Sequence[Dict[str, Any]],
                              wavelength: float,
@@ -486,6 +530,9 @@ def propagate_through_system(E_in: np.ndarray,
 
         elif elem['type'] == 'mask':
             E = apply_mask(E, elem['mask'])
+
+        elif elem['type'] == 'rcwa':
+            E = _apply_rcwa_element(E, elem)
 
         elif elem['type'] == 'propagate_tilted':
             # Legacy alias — redirect to the unified 'propagate' handler

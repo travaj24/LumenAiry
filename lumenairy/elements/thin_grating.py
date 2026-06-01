@@ -115,6 +115,16 @@ def thin_grating_efficiency_1d(
         sum of ``T_eff`` is < 1 (the missing power is in evanescent /
         dropped orders).
     """
+    # v5.5.2: validate the polarization (accepting the s/p aliases) so a typo
+    # is caught instead of silently ignored.  The value is still unused by the
+    # scalar thin-grating model -- it is checked for forward consistency with
+    # the RCWA solver (CONVENTIONS Section 7 polarization bridge).
+    pol = {'s': 'te', 'p': 'tm'}.get(str(polarization).lower(),
+                                     str(polarization).lower())
+    if pol not in ('te', 'tm'):
+        raise ValueError(
+            f"thin_grating_efficiency_1d: polarization must be 'te'/'tm' "
+            f"(or the 's'/'p' aliases), got {polarization!r}.")
     k0 = 2 * np.pi / wavelength
     K = 2 * np.pi / period
     N = 2 * n_orders + 1  # total orders

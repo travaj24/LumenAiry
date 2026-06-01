@@ -2,6 +2,83 @@
 
 All notable changes to the core library are documented here.
 
+## [5.5.2] — 2026-05-31
+
+**RCWA backlog + speed + library integration.**  Closes the v5.5.1 audit
+backlog, adds the highest-value RCWA↔library bridges (multi-order field
+reconstruction, a system element, an inverse-design on-ramp), and an opt-in
+solve speedup.  All NumPy results remain **bit-identical** to v5.5.1.
+
+### Fixed / hardened (audit backlog)
+
+- **Over-cell analytic shapes** are now rejected: a shape whose area fraction
+  exceeds the cell (or whose bounding extent wraps the period) drove the DC
+  permittivity past the shape's own `eps` -- a non-physical structure that
+  previously solved silently.  `_validate_shapes` checks area fraction ≤ 1 and
+  extent ≤ period.
+- **`n_orders` upper bound** -- a fat-finger `n_orders` (e.g. `1e9`) that would
+  build an unsolvable dense `2N × 2N` eigenproblem now raises instead of
+  OOM-hanging.
+- **`rcwa_efficiency_vs_wavelength`** reports geometry errors with its OWN
+  `fn:` prefix (not the inner per-call one) and rejects an empty / non-positive
+  wavelength list instead of silently returning empty.
+- **Dedicated regression pins** for the v5.5.1 P2-A (layer-mode grazing) and
+  P2-B (non-propagating incidence) fixes, which previously shipped unpinned.
+- `rcwa_efficiency_1d_jax` (deprecated) now emits a `DeprecationWarning`; a JAX
+  input combined with `use_gpu`/CuPy now raises instead of silently picking JAX.
+
+### Added (speed)
+
+- **`set_blas_threads(n)` / `rcwa_blas_threads(n)`** -- an opt-in BLAS-thread
+  cap for the NumPy/CuPy solve.  On a thread-oversubscribed many-core box the
+  dense `zgeev` + S-matrix BLAS3 contend; capping (the measured optimum is ~2)
+  gives a **modest, machine-dependent ~2–3×** speedup with no physical change
+  (results differ only at the ~1e-14 floating-point-reassociation level).
+  Default is untouched threading.
+
+### Added (library integration)
+
+- **Multi-order field reconstruction.**  The solver computes every order's
+  complex amplitude then used to discard all but the specular one.
+  `RCWAResult` now retains them: `per_order_amplitudes(port)` exposes the
+  per-order `(2, N)` Jones amplitudes + transverse k-vectors;
+  `to_jones_field(..., order=(m, n))` builds one order as a tilted plane-wave
+  carrier; **`to_multiorder_field(...)`** superposes all propagating orders
+  into a propagatable `JonesField` -- the bridge a strongly diffracting
+  deflector / metalens cell (most power in non-zero orders) needs.
+- **`'rcwa'` element type** in `propagate_through_system` -- applies a periodic
+  element's rigorous specular SCALAR amplitude (from an `RCWAResult` or an
+  explicit value) in a scalar system (polarization-resolved composition uses
+  the JonesField chain).
+- **Inverse-design on-ramp.**  `examples/13_rcwa_inverse_design.py` now uses
+  the unified `jax.jit`-able `rcwa_efficiency_1d` (the v5.5.1 fold) and
+  documents wrapping the loss in `optimize.JaxMeritTerm`.
+- **Cross-solver pin** that RCWA reduces to the analytic `thin_grating` model
+  in the thin / low-contrast / large-period limit; `thin_grating_efficiency_1d`
+  now validates its polarization (s/p aliases, rejects typos); the s/p↔te/tm
+  bridge is documented in `CONVENTIONS.md` §7.
+
+### Deferred (to v5.6, with reason)
+
+- Lazy JAX import (the audit's "50–84 s" cold-start figure was not reproduced;
+  the real cost is ~0.5 s and the fix needs a top-level package PEP-562
+  refactor -- a poor risk/value trade).
+- A prescription-free `design_optimize` path for pure metasurfaces (the driver
+  is coupled to a ray-traced prescription; a clean decoupling is a larger
+  change).
+- Per-order field reconstruction is exact over one cell only; full aperiodic
+  field synthesis and an RCWA Designer dock remain open.
+
+### Note on the v5.5.1 audit
+
+The `AUDIT_V5_5_1` headline "~100–300× BLAS speedup (159 s → 1 s)" did not
+reproduce: an `n_orders=41` solve runs in ~150 ms (not 159 s) at default
+threads, and the thread cap gives ~2–3×.  Its other findings (the over-cell
+shape gap, the unpinned fixes, the `n_orders` ceiling) were all confirmed and
+are fixed here.  The audit also correctly **retracted** the v5.5.0 P1-A
+oblique-TM claim (an under-converged-oracle artifact), matching v5.5.1's
+committed convergence pin.
+
 ## [5.5.1] — 2026-05-31
 
 **RCWA hardening + backend unification.**  A correctness, robustness, and

@@ -66,6 +66,8 @@ Author: Andrew Traverso (LumenAiry RCWA module).
 """
 from __future__ import annotations
 
+import contextlib
+import functools
 import threading
 from typing import List, Optional, Tuple
 
@@ -76,6 +78,7 @@ from ..backend import (
     JAX_AVAILABLE,
     array_namespace,
     backend_name,
+    is_cupy_array,
     is_jax_array,
 )
 
@@ -90,11 +93,78 @@ __all__ = [
     "uniaxial_tensor",
     "RCWAStack",
     "RCWAResult",
+    "set_blas_threads",
+    "rcwa_blas_threads",
 ]
 
 # Internal eigenproblem dtype -- always double complex regardless of the
 # field-side default (RCWA conditioning is sensitive to single precision).
 _C = np.complex128
+
+# Safe ceiling on the retained-harmonic count N (the dense 2N x 2N eig is
+# O((2N)^2) memory): N = 5000 -> a 10000 x 10000 complex128 matrix ~ 1.6 GB.
+# Guards against an accidental huge n_orders OOM-hanging the solve; advanced
+# users with more memory can raise it.
+_MAX_HARMONICS = 5000
+
+# Optional BLAS-thread cap for the NumPy/CuPy solve.  The dense non-Hermitian
+# eigensolver (LAPACK zgeev, largely serial) plus the S-matrix BLAS3 thrash
+# under thread oversubscription on many-core boxes, so capping the BLAS pool
+# to a few threads is a MODEST, machine-dependent ~2-3x speedup at moderate N
+# with ZERO numerics change.  Opt-in (None = leave the environment's threading
+# untouched) because the optimum is configuration-dependent and a global
+# thread change shouldn't be forced on the caller.
+_BLAS_THREADS: Optional[int] = None
+
+
+def set_blas_threads(n: Optional[int]) -> None:
+    """Cap the BLAS thread pool used by subsequent NumPy/CuPy RCWA solves.
+
+    On a thread-oversubscribed many-core box the dense ``zgeev`` eigensolver
+    (largely serial) and the S-matrix BLAS3 contend, so a small cap (the
+    measured optimum is ~2) gives a modest ~2-3x speedup at moderate truncation
+    -- machine-dependent, with no change to the numbers.  Pass ``None`` to
+    restore the default (untouched) threading.  Has no effect on the JAX path
+    (XLA manages its own threads).  For a scoped cap use
+    :func:`rcwa_blas_threads`.
+    """
+    global _BLAS_THREADS
+    _BLAS_THREADS = None if n is None else max(1, int(n))
+
+
+@contextlib.contextmanager
+def rcwa_blas_threads(n: Optional[int]):
+    """Context manager that caps the BLAS pool for RCWA solves within the
+    ``with`` block (see :func:`set_blas_threads`); restores the prior setting
+    on exit."""
+    global _BLAS_THREADS
+    prev = _BLAS_THREADS
+    set_blas_threads(n)
+    try:
+        yield
+    finally:
+        _BLAS_THREADS = prev
+
+
+def _blas_limit():
+    """Apply the module-level BLAS cap if one is set, else a zero-overhead
+    no-op context (so the default path is untouched)."""
+    if _BLAS_THREADS is None:
+        return contextlib.nullcontext()
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:  # pragma: no cover - threadpoolctl ships with numpy
+        return contextlib.nullcontext()
+    return threadpool_limits(limits=_BLAS_THREADS, user_api="blas")
+
+
+def _with_blas_limit(fn):
+    """Decorator: run an RCWA entry point under the optional BLAS-thread cap."""
+    @functools.wraps(fn)
+    def _wrapped(*args, **kwargs):
+        with _blas_limit():
+            return fn(*args, **kwargs)
+    return _wrapped
 
 
 def _eig_for(xp):
@@ -125,6 +195,14 @@ def _rcwa_xp(fn_name, use_gpu, *arrays):
     The numerically delicate eig/solve still run in double precision (``_C``).
     """
     if any(is_jax_array(a) for a in arrays):
+        # The JAX short-circuit must not silently swallow a conflicting GPU
+        # request: a JAX input combined with use_gpu / a CuPy input is an
+        # ambiguous mixed-backend call, so reject it explicitly.
+        if use_gpu or any(is_cupy_array(a) for a in arrays):
+            raise ValueError(
+                f"{fn_name}: a JAX input cannot be combined with use_gpu or a "
+                f"CuPy input -- pass a single backend (all-JAX for the "
+                f"differentiable path, or use_gpu/CuPy for the GPU path).")
         import jax.numpy as jnp
         return jnp
     if use_gpu:
@@ -334,6 +412,24 @@ def _validate_geometry(fn_name, *, period=None, period_y=None, depth=None,
         if iv != val or iv < 1:
             raise ValueError(
                 f"{fn_name}: {name} must be an integer >= 1, got {val!r}.")
+    # Upper bound: the dense 2N x 2N non-Hermitian eigenproblem is O((2N)^3)
+    # time and O((2N)^2) memory, where N is the retained-harmonic count (1-D:
+    # 2*n_orders+1; 2-D: (2*nox+1)(2*noy+1)).  Without a ceiling a fat-finger
+    # n_orders (e.g. 1e9) passes validation and OOM-hangs the solve, so cap N.
+    if n_orders is not None:
+        nh = (2 * int(n_orders) + 1)
+        if n_orders_y is not None:
+            nh *= (2 * int(n_orders_y) + 1)
+        if nh > _MAX_HARMONICS:
+            raise ValueError(
+                f"{fn_name}: the retained-harmonic count {nh} (from "
+                f"n_orders={int(n_orders)}"
+                + (f", n_orders_y={int(n_orders_y)}"
+                   if n_orders_y is not None else "")
+                + f") exceeds the safe ceiling {_MAX_HARMONICS}; the dense "
+                f"2N x 2N eigenproblem would risk OOM.  Reduce n_orders "
+                f"(raise lumenairy.elements.rcwa._MAX_HARMONICS only if you "
+                f"have the memory).")
 
 
 def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y):
@@ -377,29 +473,66 @@ def _validate_cell_sampling(fn_name, cell, n_orders_x, n_orders_y):
             f"(>= {bound} per axis).")
 
 
-def _validate_shapes(fn_name, shapes):
-    """Validate the analytic-shape list: known kind and strictly positive
-    dimensions.  A zero/negative size silently vanishes or sign-flips the
-    shape's contribution to the permittivity spectrum (a wrong answer with no
-    error), so reject it up front with a ``fn_name:`` prefix."""
+def _validate_shapes(fn_name, shapes, period_x, period_y):
+    """Validate the analytic-shape list against three silent-wrong-answer
+    traps, each rejected up front with a ``fn_name:`` prefix:
+
+    * unknown kind / zero or negative size -- a non-positive dimension
+      vanishes or sign-flips the shape's contribution to the permittivity
+      spectrum;
+    * area fraction > 1 -- a shape whose area exceeds the cell drives the
+      ``G = 0`` (DC) Fourier coefficient (the cell-average permittivity)
+      past the shape's own ``eps``; an average must lie between
+      ``eps_background`` and ``eps_shape``, so this is physically impossible;
+    * bounding extent > a period -- the shape wraps across the cell and
+      self-overlaps, so even an area fraction <= 1 is mis-modelled.
+
+    The solver runs without complaint on any of these (it even conserves
+    energy R + T = 1) while modelling a non-physical structure, hence the
+    up-front guard.  ``period_x`` / ``period_y`` are the unit-cell lattice
+    periods [m]."""
+    area_cell = float(period_x) * float(period_y)
     for i, sh in enumerate(shapes):
         kind = sh.get("shape")
         if kind == "rectangle":
-            dims = tuple(sh["size"])
+            wx, wy = (float(v) for v in sh["size"])
+            dims, ext_x, ext_y, area_shape = (wx, wy), wx, wy, wx * wy
         elif kind == "disk":
-            dims = (sh["radius"],)
+            r = float(sh["radius"])
+            dims, ext_x, ext_y, area_shape = (r,), 2.0 * r, 2.0 * r, np.pi * r * r
         elif kind == "ellipse":
-            dims = tuple(sh["semi_axes"])
+            ax, ay = (float(v) for v in sh["semi_axes"])
+            dims = (ax, ay)
+            ext_x, ext_y, area_shape = 2.0 * ax, 2.0 * ay, np.pi * ax * ay
         else:
             raise ValueError(
                 f"{fn_name}: shapes[{i}] has unknown shape {kind!r} (expected "
                 f"'rectangle', 'disk' or 'ellipse').")
         for d in dims:
-            if not (np.isfinite(float(d)) and float(d) > 0.0):
+            if not (np.isfinite(d) and d > 0.0):
                 raise ValueError(
                     f"{fn_name}: shapes[{i}] ({kind}) has a non-positive "
                     f"dimension {d!r}; all sizes / radii / semi-axes must "
                     f"be > 0 metres.")
+        # An exactly-tiling rectangle (fraction == 1) and an inscribed
+        # disk/ellipse (extent == period) are legitimate, so compare with a
+        # tiny relative slack -- far below any real overshoot.
+        fraction = area_shape / area_cell
+        if fraction > 1.0 + 1e-9:
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) has area fraction "
+                f"{fraction:.4g} > 1 of the {period_x:.4g} x {period_y:.4g} m "
+                f"unit cell; its area exceeds the cell, so the average (G=0) "
+                f"permittivity would overshoot the shape's own eps -- a "
+                f"non-physical structure.  Shrink the shape or enlarge the "
+                f"period.")
+        if ext_x > period_x * (1.0 + 1e-9) or ext_y > period_y * (1.0 + 1e-9):
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) bounding extent "
+                f"{ext_x:.4g} x {ext_y:.4g} m exceeds the {period_x:.4g} x "
+                f"{period_y:.4g} m unit cell; the shape wraps across the "
+                f"period and self-overlaps.  Shrink the shape or enlarge the "
+                f"period.")
 
 
 # ===========================================================================
@@ -670,6 +803,7 @@ def _propagation_smatrix(lam, k0_L):
 # Public 1-D entry point
 # ===========================================================================
 
+@_with_blas_limit
 def rcwa_efficiency_1d(
     period: float,
     n_ridge: complex,
@@ -873,6 +1007,7 @@ def rcwa_efficiency_1d(
     return orders, R_eff, T_eff
 
 
+@_with_blas_limit
 def rcwa_efficiency_vs_wavelength(
     period: float,
     n_ridge: complex,
@@ -919,7 +1054,20 @@ def rcwa_efficiency_vs_wavelength(
         raise ValueError(
             f"rcwa_efficiency_vs_wavelength: quantity must be 'transmitted' "
             f"or 'reflected', got {quantity!r}.")
+    # Validate geometry HERE so the error carries this function's prefix
+    # (otherwise the failure surfaces with the inner rcwa_efficiency_1d
+    # prefix from the per-wavelength call, confusing the caller).
+    _validate_geometry("rcwa_efficiency_vs_wavelength", period=period,
+                       depth=depth, n_orders=n_orders)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0:
+        raise ValueError(
+            "rcwa_efficiency_vs_wavelength: wavelengths is empty; pass at "
+            "least one wavelength [m].")
+    if not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError(
+            "rcwa_efficiency_vs_wavelength: every wavelength must be a finite "
+            "value > 0 [m].")
     out = np.empty(wl.shape[0], dtype=float)
     for i, w in enumerate(wl):
         orders, R, T = rcwa_efficiency_1d(
@@ -983,6 +1131,7 @@ def _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y):
     return table[dm + 2 * Mx, dn + 2 * My]
 
 
+@_with_blas_limit
 def rcwa_efficiency_2d(
     period_x: float,
     period_y: float,
@@ -1287,6 +1436,7 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
             xp.where(iso_uniform, lam_u, lam))
 
 
+@_with_blas_limit
 def rcwa_jones_1d(
     period: float,
     eps_ridge,
@@ -1434,6 +1584,7 @@ def rcwa_jones_1d(
     return orders, R_eff, T_eff, jones_reflection
 
 
+@_with_blas_limit
 def rcwa_jones_2d(
     period_x: float,
     period_y: float,
@@ -1651,6 +1802,7 @@ def _analytic_convolutions_2d(eps_background, shapes, orders, n_orders_x,
     return EPS, EPS_inv
 
 
+@_with_blas_limit
 def rcwa_efficiency_2d_shapes(
     period_x: float,
     period_y: float,
@@ -1706,7 +1858,7 @@ def rcwa_efficiency_2d_shapes(
     _validate_geometry("rcwa_efficiency_2d_shapes", period=period_x,
                        period_y=period_y, depth=depth, wavelength=wavelength,
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
-    _validate_shapes("rcwa_efficiency_2d_shapes", shapes)
+    _validate_shapes("rcwa_efficiency_2d_shapes", shapes, period_x, period_y)
     polarization = _normalize_pol("rcwa_efficiency_2d_shapes", polarization)
 
     xp = _rcwa_xp("rcwa_efficiency_2d_shapes", use_gpu)
@@ -1906,6 +2058,12 @@ def rcwa_efficiency_1d_jax(
     exactly at grazing (no Wood-anomaly nudge on the differentiable path);
     choose ``wavelength`` / ``angle`` away from an exact Rayleigh anomaly.
     """
+    import warnings
+    warnings.warn(
+        "rcwa_efficiency_1d_jax is deprecated since v5.5.1 and will be removed "
+        "in v5.7.0; call rcwa_efficiency_1d(...) with jax.numpy arguments "
+        "instead (it auto-dispatches to the differentiable JAX backend).",
+        DeprecationWarning, stacklevel=2)
     from ..backend import JAX_AVAILABLE as _JAX_AVAILABLE
     if not _JAX_AVAILABLE:
         raise ImportError(
@@ -1982,21 +2140,77 @@ class RCWAResult:
         :class:`~lumenairy.elements.polarization.JonesField` -- the bridge
         from a rigorous metasurface reflection into the polarization
         pipeline.
-    to_jones_field(nx, ny, dx, ...) -> JonesField
-        Build a uniform specular (zeroth-order) JonesField for the
-        polarization / propagation pipeline (single plane wave; see the
-        method's warning about non-zero orders).
+    to_jones_field(nx, ny, dx, ..., order=None) -> JonesField
+        Build a JonesField from one diffraction order (``order=None`` is the
+        uniform specular field; a non-zero order is a tilted carrier).
+    per_order_amplitudes(port) -> dict
+        Per-order complex tangential amplitudes ``(2, N)`` + transverse
+        k-vectors -- the modal data the solver computes.
+    to_multiorder_field(nx, ny, dx, ...) -> JonesField
+        Reconstruct the full diffracted field as a superposition of the
+        propagating orders (the metasurface-deflector / metalens bridge).
     """
 
-    def __init__(self, orders, R, T, jones_reflection, jones_transmission):
+    def __init__(self, orders, R, T, jones_reflection, jones_transmission,
+                 modal=None):
         self.orders = orders
         self._R = R
         self._T = T
         self._Jr = jones_reflection
         self._Jt = jones_transmission
+        self._modal = modal   # per-order amplitudes + k-vectors (or None)
 
     def efficiencies(self):
         return self.orders, self._R, self._T
+
+    # -- per-order modal access + multi-order field reconstruction ---------
+
+    def _require_modal(self):
+        if self._modal is None:
+            raise ValueError(
+                "RCWAResult: per-order modal data is unavailable on this "
+                "result (it is retained only by RCWAStack.solve()).")
+        return self._modal
+
+    def _order_index(self, order):
+        """Flat index of a diffraction order: ``m`` (1-D) or ``(m, n)``
+        (2-D)."""
+        o2 = self._require_modal()["orders2d"]
+        from ..backend import to_numpy
+        o2 = to_numpy(o2)
+        if np.ndim(order) == 0:                      # 1-D: integer order m
+            hit = np.where((o2[:, 0] == int(order)) & (o2[:, 1] == 0))[0]
+        else:
+            m, n = order
+            hit = np.where((o2[:, 0] == int(m)) & (o2[:, 1] == int(n)))[0]
+        if hit.size == 0:
+            raise ValueError(
+                f"RCWAResult: order {order!r} is outside the retained range; "
+                f"increase n_orders.")
+        return int(hit[0])
+
+    def per_order_amplitudes(self, port="reflection"):
+        """Per-order complex tangential field amplitudes (PUBLIC ``exp(-iwt)``
+        convention) and transverse k-vectors -- the data the multi-order field
+        bridge is built on.
+
+        Returns a dict with ``Ex`` / ``Ey`` each ``(2, N)`` (row 0 = response
+        to incident ``E_x``, row 1 to incident ``E_y``), the per-order
+        ``kx`` / ``ky`` / ``kz`` normalised by ``k0 = 2*pi/wavelength``, the
+        ``orders``, and the ``wavelength``.  ``port`` selects the reflection or
+        transmission side.
+        """
+        if port not in ("reflection", "transmission"):
+            raise ValueError(
+                f"RCWAResult.per_order_amplitudes: port must be 'reflection' "
+                f"or 'transmission', got {port!r}.")
+        from ..backend import to_numpy
+        m = self._require_modal()
+        ex, ey = ("rx", "ry") if port == "reflection" else ("tx", "ty")
+        kz = m["kz_ref"] if port == "reflection" else m["kz_trn"]
+        return dict(orders=self.orders, Ex=to_numpy(m[ex]), Ey=to_numpy(m[ey]),
+                    kx=to_numpy(m["kx"]), ky=to_numpy(m["ky"]),
+                    kz=to_numpy(kz), wavelength=m["wavelength"])
 
     def absorptance(self):
         return 1.0 - self._R.sum(axis=1) - self._T.sum(axis=1)
@@ -2016,11 +2230,22 @@ class RCWAResult:
         from .polarization import apply_jones_matrix
         return apply_jones_matrix(jones_field.copy(), self._Jr)
 
+    def _order_amplitude(self, idx, incident, port):
+        """Incident-weighted PUBLIC [Ex, Ey] tangential amplitude of one order
+        (flat index ``idx``)."""
+        from ..backend import to_numpy
+        m = self._require_modal()
+        ex_a, ey_a = ("rx", "ry") if port == "reflection" else ("tx", "ty")
+        Ex = to_numpy(m[ex_a])[:, idx]      # (2,) responses to incident Ex/Ey
+        Ey = to_numpy(m[ey_a])[:, idx]
+        inc = np.asarray(incident, dtype=_C).reshape(2)
+        return inc @ Ex, inc @ Ey           # ex*resp_Ex + ey*resp_Ey
+
     def to_jones_field(self, nx, ny, dx, *, incident=(1.0, 0.0),
-                       port="reflection", dy=None):
-        """Build a :class:`~lumenairy.elements.polarization.JonesField` of the
-        specular (zeroth-order) response to a unit incident plane wave, for use
-        in the polarization / propagation pipeline.
+                       port="reflection", order=None, dy=None):
+        """Build a :class:`~lumenairy.elements.polarization.JonesField` from a
+        single diffraction order's plane-wave response, for the polarization /
+        propagation pipeline.
 
         Parameters
         ----------
@@ -2031,26 +2256,89 @@ class RCWAResult:
         incident : (2,) complex, optional
             Incident Jones vector ``(E_x, E_y)``.  Default ``(1, 0)``.
         port : {'reflection', 'transmission'}, optional
-            Which zeroth-order Jones matrix to apply.  Default reflection.
+            Reflection or transmission side.  Default reflection.
+        order : int | (int, int) | None, optional
+            Which diffraction order to reconstruct: ``None`` (default) is the
+            specular ``(0, 0)`` order, returned as a UNIFORM field (a normal
+            plane wave); a non-zero order is returned as a TILTED carrier
+            ``exp(i (kx_m x + ky_m y))`` ready for :func:`propagate_tilted`.
 
-        .. warning::
-            This carries ONLY the zeroth (specular) diffraction order -- a
-            single uniform plane wave.  For a strongly diffracting cell most
-            power sits in non-zero orders, which this bridge does NOT
-            reconstruct (per-order field reconstruction is a future addition);
-            the returned field is the specular component only.
+        Notes
+        -----
+        Carries one order only; use :meth:`to_multiorder_field` to superpose
+        several (a strongly diffracting cell spreads power across orders).
         """
         if port not in ("reflection", "transmission"):
             raise ValueError(
                 f"RCWAResult.to_jones_field: port must be 'reflection' or "
                 f"'transmission', got {port!r}.")
+        from .polarization import JonesField
+        ny_i, nx_i = int(ny), int(nx)
+        if order is None:
+            # Specular order as a UNIFORM field (backward-compatible; at normal
+            # incidence this equals the order=(0,0) carrier, which is 1).
+            from ..backend import to_numpy
+            J = to_numpy(self._Jr if port == "reflection" else self._Jt)
+            inc = np.asarray(incident, dtype=_C).reshape(2)
+            out = J @ inc
+            ex = np.full((ny_i, nx_i), out[0], dtype=_C)
+            ey = np.full((ny_i, nx_i), out[1], dtype=_C)
+            return JonesField(ex, ey, dx=dx, dy=dy)
+        idx = self._order_index(order)
+        ax, ay = self._order_amplitude(idx, incident, port)
+        carrier = self._order_carrier(idx, nx_i, ny_i, float(dx),
+                                      float(dx if dy is None else dy))
+        return JonesField(ax * carrier, ay * carrier, dx=dx, dy=dy)
+
+    def _order_carrier(self, idx, nx, ny, dx, dy):
+        """Unit plane-wave carrier ``exp(i (kx_m x + ky_m y))`` of one order on
+        a centred ``(ny, nx)`` grid (k-vectors are stored normalised by k0)."""
+        from ..backend import to_numpy
+        m = self._require_modal()
+        k0 = 2.0 * np.pi / m["wavelength"]
+        kx = k0 * float(np.real(to_numpy(m["kx"])[idx]))   # physical [1/m]
+        ky = k0 * float(np.real(to_numpy(m["ky"])[idx]))
+        xg = (np.arange(nx) - nx // 2) * dx
+        yg = (np.arange(ny) - ny // 2) * dy
+        X, Y = np.meshgrid(xg, yg)                         # (ny, nx)
+        return np.exp(1j * (kx * X + ky * Y)).astype(_C)
+
+    def to_multiorder_field(self, nx, ny, dx, *, incident=(1.0, 0.0),
+                            port="reflection", orders=None, dy=None):
+        """Reconstruct the full diffracted field as a superposition of the
+        PROPAGATING diffraction orders -- the bridge a strongly diffracting
+        metasurface (deflector / grating coupler / metalens cell) needs, where
+        most power is in non-zero orders that :meth:`to_jones_field` drops.
+
+        ``E(x, y) = sum_m A_m exp(i (kx_m x + ky_m y))`` over the requested
+        ``orders`` (default: every propagating order, ``Re(kz) > 0``).  Returns
+        a :class:`~lumenairy.elements.polarization.JonesField` on a centred
+        ``(ny, nx)`` grid of pitch ``dx`` (``dy``).
+
+        Note: the reconstruction is exact only over one unit cell (the field is
+        quasi-periodic); evanescent orders are excluded.
+        """
+        if port not in ("reflection", "transmission"):
+            raise ValueError(
+                f"RCWAResult.to_multiorder_field: port must be 'reflection' "
+                f"or 'transmission', got {port!r}.")
         from ..backend import to_numpy
         from .polarization import JonesField
-        J = to_numpy(self._Jr if port == "reflection" else self._Jt)
-        inc = np.asarray(incident, dtype=_C).reshape(2)
-        out = J @ inc                       # specular [E_x, E_y] response
-        ex = np.full((int(ny), int(nx)), out[0], dtype=_C)
-        ey = np.full((int(ny), int(nx)), out[1], dtype=_C)
+        m = self._require_modal()
+        kz = to_numpy(m["kz_ref"] if port == "reflection" else m["kz_trn"])
+        if orders is None:
+            idxs = [i for i in range(kz.shape[0]) if np.real(kz[i]) > 1e-12]
+        else:
+            idxs = [self._order_index(o) for o in orders]
+        ny_i, nx_i = int(ny), int(nx)
+        dy_f = float(dx if dy is None else dy)
+        ex = np.zeros((ny_i, nx_i), dtype=_C)
+        ey = np.zeros((ny_i, nx_i), dtype=_C)
+        for idx in idxs:
+            ax, ay = self._order_amplitude(idx, incident, port)
+            carrier = self._order_carrier(idx, nx_i, ny_i, float(dx), dy_f)
+            ex += ax * carrier
+            ey += ay * carrier
         return JonesField(ex, ey, dx=dx, dy=dy)
 
 
@@ -2142,7 +2430,7 @@ class RCWAStack:
             if eps_background is None:
                 raise ValueError(
                     "add_layer: shapes requires eps_background.")
-            _validate_shapes("add_layer", shapes)
+            _validate_shapes("add_layer", shapes, self.period_x, self.period_y)
             self._layers.append(
                 _RCWALayer(thickness, "shapes", (_C(eps_background), shapes)))
         else:
@@ -2210,6 +2498,7 @@ class RCWAStack:
             Kx, Ky, cv(et[:, :, 0, 0]), cv(et[:, :, 0, 1]),
             cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]), cv(et[:, :, 2, 2]))
 
+    @_with_blas_limit
     def solve(self) -> RCWAResult:
         """Solve the stack -> :class:`RCWAResult`."""
         if self._source is None:
@@ -2271,6 +2560,9 @@ class RCWAStack:
         safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
         safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
         R_rows, T_rows, jr_cols, jt_cols = [], [], [], []
+        # Per-order tangential field amplitudes (PUBLIC exp(-iwt) convention =
+        # conjugate of the internal), kept for the multi-order field bridge.
+        rx_rows, ry_rows, tx_rows, ty_rows = [], [], [], []
         for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
@@ -2287,6 +2579,10 @@ class RCWAStack:
                                              + xp.abs(tz) ** 2) / einc_sq
             R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
             T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+            rx_rows.append(xp.conj(rx))
+            ry_rows.append(xp.conj(ry))
+            tx_rows.append(xp.conj(tx))
+            ty_rows.append(xp.conj(ty))
             jr_cols.append(xp.stack([xp.conj(rx[p0]), xp.conj(ry[p0])]))
             jt_cols.append(xp.stack([xp.conj(tx[p0]), xp.conj(ty[p0])]))
         R = xp.stack(R_rows)
@@ -2294,7 +2590,16 @@ class RCWAStack:
         Jr = xp.stack(jr_cols, axis=1)
         Jt = xp.stack(jt_cols, axis=1)
         out_orders = orders[:, 0].copy() if self.is_1d else orders
-        return RCWAResult(out_orders, R, T, Jr, Jt)
+        # Modal data for RCWAResult's multi-order field bridge: per-order
+        # amplitudes (2, N) for the two incident pols, the transverse
+        # wavevectors normalised by k0 (kxv = kx/k0), and the per-order kz/k0
+        # in each region (for propagation + the propagating-order mask).
+        modal = dict(
+            orders2d=orders, p0=p0, wavelength=float(wl),
+            rx=xp.stack(rx_rows), ry=xp.stack(ry_rows),
+            tx=xp.stack(tx_rows), ty=xp.stack(ty_rows),
+            kx=kxv, ky=kyv, kz_ref=kz_ref, kz_trn=kz_trn)
+        return RCWAResult(out_orders, R, T, Jr, Jt, modal=modal)
 
 
 # Register the RCWA caches with the library cache registry (so the global
