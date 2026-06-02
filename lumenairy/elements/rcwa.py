@@ -4478,6 +4478,48 @@ class _RCWALayer:
         self.data = data
 
 
+# ---------------------------------------------------------------------------
+# RCWAStack.solve(stabilize=True) consensus selector
+# (audit AUDIT_RCWA_STACK_RESONANT_CONVERGENCE_2026_06_02).  A sharp-resonant
+# metal STACK biases a SINGLE diffraction order (a reflection null)
+# non-monotonically at isolated n_orders while total power stays bounded -- the
+# isolated-resonance pathology fixed for pmm_efficiency_1d in v5.10.6, here in
+# the multilayer S-matrix (near-singular layer<->layer / layer<->region
+# mode-match at isolated truncation counts).  Scan a short upward n_orders
+# window and keep the solve whose ZERO-ORDER R/T is in the consensus cluster --
+# PER-ORDER, not total power, which does not move.
+# ---------------------------------------------------------------------------
+_STACK_STABILIZE_WINDOW = 5
+_STACK_STABILIZE_TOL = 0.02          # 0-order efficiency agreement (spikes >~0.1)
+
+
+def _zero_order_efficiency(result):
+    """The zeroth-order ``(R, T)`` efficiencies for both incident polarizations
+    of an ``RCWAResult``, as a length-4 vector -- the per-order quantity the
+    stack resonance biases (the reflection null)."""
+    o, R, T = result.efficiencies()
+    o = np.asarray(to_numpy(o))
+    R = np.asarray(to_numpy(R))
+    T = np.asarray(to_numpy(T))
+    if o.ndim == 1:
+        p0 = int(np.where(o == 0)[0][0])
+    else:
+        p0 = int(np.where((o[:, 0] == 0) & (o[:, 1] == 0))[0][0])
+    return np.concatenate([R[:, p0], T[:, p0]])
+
+
+def _largest_feature_cluster(feats, tol):
+    """Indices of the largest group of feature vectors mutually within ``tol``
+    (L-inf) -- the resonance-free consensus; greedy around each anchor."""
+    best = []
+    for i, fi in enumerate(feats):
+        grp = [j for j, fj in enumerate(feats)
+               if float(np.max(np.abs(fi - fj))) <= tol]
+        if len(grp) > len(best):
+            best = grp
+    return best
+
+
 class RCWAStack:
     """Builder + solver for a MULTI-LAYER RCWA stack (1-D or 2-D periodic).
 
@@ -4767,8 +4809,79 @@ class RCWAStack:
         return (kind, arr.shape, str(arr.dtype), arr.tobytes())
 
     @_with_blas_limit
-    def solve(self, *, retain_internal=False) -> RCWAResult:
+    def solve(self, *, retain_internal=False, stabilize=False) -> RCWAResult:
         """Solve the stack -> :class:`RCWAResult`.
+
+        ``stabilize=True`` (opt-in; default ``False``) guards against the
+        ISOLATED-RESONANCE spikes a sharp-resonant metal MULTILAYER can show: a
+        near-singular layer<->layer / layer<->region mode-match at isolated
+        ``n_orders`` biases a SINGLE diffraction order (e.g. a reflection null)
+        non-monotonically while total power stays bounded -- the same pathology
+        fixed for :func:`pmm_efficiency_1d` (v5.10.6).  It re-solves over a short
+        ``n_orders`` window at or below the requested count (so the cell sampling,
+        sized for ``n_orders``, never aliases) and returns the solve whose
+        ZERO-ORDER R/T is in the consensus cluster (the spikes are the outliers;
+        the consensus is PER-ORDER because total power does not move).  If no
+        plateau forms (genuinely under-resolved, not an isolated spike) it warns
+        and returns the requested ``n_orders``.  It costs
+        ``_STACK_STABILIZE_WINDOW`` full stack solves, so it is opt-in; clean
+        (non-resonant) stacks are unaffected and ``stabilize=False`` is the exact
+        single solve.
+
+        ``retain_internal=True`` additionally retains the per-layer modes and the
+        cumulative partial S-matrices needed to reconstruct the in-structure E/H
+        field via :meth:`RCWAResult.internal_field` (and the per-layer
+        absorption via :meth:`RCWAResult.layer_absorption`).  It costs an extra
+        ``O(n_layers)`` star-product sweep and keeps the per-layer ``2N x 2N``
+        matrices, so it is off by default for hot efficiency sweeps.  NumPy /
+        CuPy only."""
+        if not stabilize:
+            return self._solve_once(retain_internal=retain_internal)
+        import warnings
+        base_nox, base_noy = self.nox, self.noy
+
+        def _set(nox):
+            self.nox = nox
+            self.noy = (base_noy if self.is_1d
+                        else max(1, base_noy - (base_nox - nox)))
+
+        # DOWNWARD window: distinct n_orders from the requested count down, so the
+        # cell sampling (sized for the requested n_orders) NEVER aliases.  The
+        # spikes are isolated, so the remaining counts form the consensus cluster.
+        window = sorted({max(1, base_nox - b)
+                         for b in range(_STACK_STABILIZE_WINDOW)}, reverse=True)
+        results, feats = [], []
+        try:
+            for nox in window:
+                _set(nox)
+                res = self._solve_once(retain_internal=False)
+                results.append(res)
+                feats.append(_zero_order_efficiency(res))
+        finally:
+            self.nox, self.noy = base_nox, base_noy
+        cluster = _largest_feature_cluster(feats, _STACK_STABILIZE_TOL)
+        if len(cluster) < 2:
+            warnings.warn(
+                "RCWAStack.solve(stabilize=True): no consensus across the "
+                f"n_orders window {window}; the stack is likely UNDER-RESOLVED "
+                "(no convergence plateau, not just an isolated spike) -- raise "
+                "n_orders / n_orders_y (and the cell sampling).  Returning the "
+                "requested n_orders.", stacklevel=2)
+            chosen = 0                        # results[0] = requested (highest) n
+        else:
+            chosen = min(cluster)             # highest-n_orders consensus solve
+        if not retain_internal:
+            return results[chosen]
+        # re-solve the consensus n_orders WITH the internal-field data retained
+        try:
+            _set(window[chosen])
+            return self._solve_once(retain_internal=True)
+        finally:
+            self.nox, self.noy = base_nox, base_noy
+
+    def _solve_once(self, *, retain_internal=False) -> RCWAResult:
+        """Inner single-``n_orders`` stack solve (the public :meth:`solve` body;
+        ``stabilize`` scans a window of these).
 
         ``retain_internal=True`` additionally retains the per-layer modes and the
         cumulative partial S-matrices needed to reconstruct the in-structure E/H
