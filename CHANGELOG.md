@@ -2,6 +2,23 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.5] — 2026-06-02
+
+**Autodiff completeness: batched (vmap) solves + validated Hessians (audit W1 /
+W6).**  Both fall out of the now-traceable 2-D solve; this pins them with
+tests (no code change).
+
+### Added
+
+- **W1 — `jax.vmap` batched geometry solve.**  A parameter grid / inverse-design
+  population solves in **one device call**: `jax.vmap(solver)(batch_of_cells)`
+  matches the sequential loop, and `jax.vmap(jax.grad(solver))` gives batched
+  gradients — the throughput lever for sweeps and population optimizers.
+- **W6 — validated 2nd-order autodiff.**  `jax.hessian` through the full vector
+  solve (including the Lorentzian-broadened-eig term) matches a finite-
+  difference-of-gradient to ~1e-2 — relevant for Newton-type inverse design.
+  Requires `jax_enable_x64`.
+
 ## [5.10.4] — 2026-06-02
 
 **Differentiable multi-layer `RCWAStack` (audit P1 — DynaMeta port blocker).**

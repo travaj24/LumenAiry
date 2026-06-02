@@ -99,3 +99,29 @@ def test_stack_gradient_wrt_layer_depth_matches_fd():
     fd = (_stack_sumT(6.0 + 0.5j, d0 + h)
           - _stack_sumT(6.0 + 0.5j, d0 - h)) / (2 * h)
     assert np.allclose(float(g), float(fd), rtol=1e-2)
+
+
+# ---------------------------------------------------------------------------
+# W1 -- batched (vmap) geometry solve; W6 -- 2nd-order (Hessian) autodiff
+# ---------------------------------------------------------------------------
+
+def test_vmap_batched_solve_matches_sequential_loop():
+    batch = jnp.array([5.0 + 0.3j, 6.0 + 0.5j, 7.0 + 0.2j, 8.0 + 0.4j])
+    vals = jax.vmap(lambda e: _sumT_eps(e))(batch)        # one device call
+    loop = np.array([float(_sumT_eps(b)) for b in batch])
+    assert np.allclose(np.asarray(vals), loop, atol=1e-9)
+
+
+def test_vmap_of_grad_gives_batched_gradients():
+    batch = jnp.array([5.0 + 0.3j, 6.0 + 0.5j, 7.0 + 0.2j])
+    g = jax.vmap(jax.grad(_sumT_eps, holomorphic=False))(batch)
+    assert np.asarray(g).shape == (3,) and np.all(np.isfinite(np.real(g)))
+
+
+def test_hessian_wrt_depth_matches_fd_of_grad():
+    d0 = jnp.asarray(0.2e-6)
+    H = jax.hessian(_sumT_depth)(d0)                      # d2(sumT)/d(depth)^2
+    h = 2e-9
+    grad = jax.grad(_sumT_depth)
+    fd_of_grad = (grad(d0 + h) - grad(d0 - h)) / (2 * h)
+    assert np.allclose(float(H), float(fd_of_grad), rtol=3e-2)
