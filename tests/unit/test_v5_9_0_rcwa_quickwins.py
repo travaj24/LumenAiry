@@ -45,11 +45,19 @@ def test_inplane_tensor_accepted():
     assert abs((R.sum() + T.sum()) / 2 - 1.0) < 1e-6      # lossless -> energy ok
 
 
-def test_out_of_plane_tensor_rejected_jones_1d():
+def test_out_of_plane_tensor_solved_jones_1d():
+    """v5.11.0 (GAP7-full): the 1-D path now SOLVES a full-3x3 out-of-plane
+    tensor (tilted-director LC) via the general anisotropic FMM (Li 2003)
+    instead of rejecting it.  Was a hard ValueError pre-v5.11.0; now it returns
+    an energy-conserving Jones response.  (2-D / RCWAStack still reject -- see
+    test_out_of_plane_tensor_rejected_jones_2d_and_stack.)"""
     tilted = uniaxial_tensor(1.5, 1.7, np.pi / 4)         # 45deg tilt -> eps_xz!=0
-    with pytest.raises(ValueError, match="out-of-plane"):
-        rcwa_jones_1d(1e-6, tilted, ISO3, 1.0, 1.0, 0.3e-6, 0.5, 0.8e-6,
-                      n_orders=6)
+    assert abs(tilted[0, 2]) > 0.1                         # genuinely out-of-plane
+    o, R, T, J = rcwa_jones_1d(1e-6, tilted, ISO3, 1.0, 1.0, 0.3e-6, 0.5, 0.8e-6,
+                               n_orders=6)
+    # lossless tilted dielectric grating -> energy conserved per polarization
+    assert abs(float(R[0].sum() + T[0].sum()) - 1.0) < 1e-6
+    assert abs(float(R[1].sum() + T[1].sum()) - 1.0) < 1e-6
 
 
 def test_out_of_plane_tensor_rejected_jones_2d_and_stack():

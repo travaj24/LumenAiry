@@ -1258,6 +1258,59 @@ def _propagation_smatrix(lam, k0_L):
 
 
 # ===========================================================================
+# GENERALIZED S-matrix (explicit forward / backward modes) for full-3x3 tensors
+# ===========================================================================
+#
+# :func:`_interface_smatrix` hardwires the backward modes as ``[W; -V]`` (the
+# in-plane / isotropic symmetry ``lam -> -lam``).  A full anisotropic generator
+# G breaks that symmetry, so each medium must carry its forward AND backward
+# mode matrices independently.  These helpers operate on the 4N x 4N field-mode
+# matrix ``M = [[Wf, Wb], [Vf, Vb]]`` and produce S-matrices in the SAME
+# Redheffer block convention as :func:`_redheffer_star`, so the recursion is
+# unchanged.
+
+def _modes_to_M(Wf, Vf, Wb, Vb):
+    """Assemble the 4N x 4N field-mode matrix ``[[Wf, Wb], [Vf, Vb]]``."""
+    return _block(array_namespace(Wf, Vf, Wb, Vb), [[Wf, Wb], [Vf, Vb]])
+
+
+def _interface_smatrix_general(Ma, Mb):
+    """Interface S-matrix (medium ``a`` -> medium ``b``) from the full field-mode
+    matrices ``Ma, Mb`` (each ``[[Wf, Wb], [Vf, Vb]]``).
+
+    State partition: top 2N = forward ('+') amplitudes, bottom 2N = backward
+    ('-').  Returns ``(S11, S12, S21, S22)`` in the same block convention as
+    :func:`_interface_smatrix` / :func:`_redheffer_star`.  Built by solving the
+    tangential-field continuity ``Ma ca = Mb cb`` for the scattering form
+    (``T = inv(Mb) Ma``, re-blocked)."""
+    xp = array_namespace(Ma, Mb)
+    n2 = Ma.shape[0] // 2
+    T = xp.linalg.solve(Mb, Ma)
+    T11 = T[:n2, :n2]
+    T12 = T[:n2, n2:]
+    T21 = T[n2:, :n2]
+    T22 = T[n2:, n2:]
+    iT22 = xp.linalg.inv(T22)
+    S11 = -iT22 @ T21             # a+ -> a-
+    S12 = iT22                    # b- -> a-
+    S21 = T11 - T12 @ iT22 @ T21  # a+ -> b+
+    S22 = T12 @ iT22              # b- -> b+
+    return (S11, S12, S21, S22)
+
+
+def _propagation_smatrix_general(lam_f, lam_b, k0_L):
+    """Pure-propagation S-matrix for a layer with explicit forward eigenvalues
+    ``lam_f`` (decay ``exp(-lam_f k0 L)``) and backward eigenvalues ``lam_b``
+    (the backward branch, ``Re(lam_b) <= 0``, so ``exp(+lam_b k0 L)`` decays).
+    No self-reflection."""
+    xp = array_namespace(lam_f, lam_b)
+    Xf = xp.diag(xp.exp(-lam_f * k0_L))
+    Xb = xp.diag(xp.exp(lam_b * k0_L))
+    Z = xp.zeros_like(Xf)
+    return (Z, Xb, Xf, Z)
+
+
+# ===========================================================================
 # Public 1-D entry point
 # ===========================================================================
 
@@ -2344,7 +2397,149 @@ def _tensor_convolutions(profiles, n_orders):
     return Cxx, Cxy, Cyx, Cyy, EZZ
 
 
-def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
+def _tensor_has_offplane(profiles):
+    """True if any of the off-plane profile keys (``xz, zx, yz, zy``) is present
+    and above a tiny RELATIVE tolerance.  Used to branch onto the full-3x3 path
+    WITHOUT perturbing the in-plane result, so the legacy 5-tuple path is
+    bit-identical when the tensor is in-plane (the same ``1e-9 * scale`` cutoff
+    as :func:`_tensor_offplane_present`, so the convolution helper and the
+    ``rcwa_jones_1d`` routing decision agree -- roundoff-level off-plane from a
+    pi/2 director rotation does NOT trip the full path)."""
+    off = 0.0
+    for key in ("xz", "zx", "yz", "zy"):
+        p = profiles.get(key)
+        if p is None:
+            continue
+        if is_jax_array(p):
+            # JAX: cannot test concretely here -- assume present (caller decides).
+            return True
+        off = max(off, float(np.max(np.abs(np.asarray(to_numpy(p))))))
+    if off == 0.0:
+        return False
+    scale = 1.0
+    for key in ("xx", "yy", "zz"):
+        p = profiles.get(key)
+        if p is not None and not is_jax_array(p):
+            scale = max(scale, float(np.max(np.abs(np.asarray(to_numpy(p))))))
+    return off > 1e-9 * scale
+
+
+def _tensor_convolutions_full(profiles, n_orders):
+    """Full anisotropic 1-D Fourier operators with OUT-OF-PLANE coupling
+    (Li 2003; wall normal along x).
+
+    ``profiles`` holds the one-period samplings of ALL nine tensor components
+    ``xx, xy, yx, yy, zz`` and (optionally) ``xz, zx, yz, zy``.  Returns the
+    9-tuple ``(Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ)``.
+
+    The in-plane 2x2 block ``[[Cxx, Cxy], [Cyx, Cyy]]`` is built from the
+    ``ezz``-Schur-REDUCED effective in-plane profile -- done POINTWISE in x
+    (a_eff = exx - exz ezx/ezz, etc.) BEFORE the existing wall-normal-x Li
+    factorization (inverse-rule-on-x + Schur), which is then run on the
+    ``*_eff`` profiles.  ``EZX, EZY, EXZ, EYZ`` are the direct-rule (Laurent)
+    Toeplitz operators of the off-plane components, feeding the A, B generator
+    cross-blocks in :func:`_layer_eigenmodes_tensor`.
+
+    When the off-plane keys are ABSENT or all zero, ``(Cxx, Cxy, Cyx, Cyy, EZZ)``
+    is bit-identical to :func:`_tensor_convolutions` (the effective profile then
+    equals the raw in-plane profile, branched on absence -- no ``-0`` subtraction
+    perturbs it) and ``EZX = EZY = EXZ = EYZ = 0``.
+    """
+    xp = array_namespace(profiles["xx"])
+    has_off = _tensor_has_offplane(profiles)
+    if not has_off:
+        # Bit-identical in-plane path + zero off-plane operators.
+        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, n_orders)
+        N = 2 * n_orders + 1
+        Z = xp.zeros((N, N), dtype=_C)
+        return Cxx, Cxy, Cyx, Cyy, EZZ, Z, Z, Z, Z
+
+    a = xp.asarray(profiles["xx"]).astype(_C)
+    b = xp.asarray(profiles["xy"]).astype(_C)
+    c = xp.asarray(profiles["yx"]).astype(_C)
+    d = xp.asarray(profiles["yy"]).astype(_C)
+    ezz = xp.asarray(profiles["zz"]).astype(_C)
+    exz = xp.asarray(profiles["xz"]).astype(_C)
+    ezx = xp.asarray(profiles["zx"]).astype(_C)
+    eyz = xp.asarray(profiles["yz"]).astype(_C)
+    ezy = xp.asarray(profiles["zy"]).astype(_C)
+
+    # ----- ezz Schur reduction, POINTWISE in x (do NOT commute as FT ops) -----
+    # Eliminate Ez = (1/ezz)(Dz - ezx Ex - ezy Ey); substituting into the Dx,Dy
+    # rows gives the effective in-plane 2x2 tensor profile.
+    inv_ezz = 1.0 / ezz
+    a_eff = a - exz * ezx * inv_ezz
+    b_eff = b - exz * ezy * inv_ezz
+    c_eff = c - eyz * ezx * inv_ezz
+    d_eff = d - eyz * ezy * inv_ezz
+
+    # ----- existing wall-normal-x Li factorization on the EFFECTIVE profile ---
+    inv_a = _inv_toeplitz_of_profile(a_eff, n_orders)        # [[1/a_eff]]^{-1}
+    T_b_a = _toeplitz_of_profile(b_eff / a_eff, n_orders)
+    T_c_a = _toeplitz_of_profile(c_eff / a_eff, n_orders)
+    T_schur = _toeplitz_of_profile(d_eff - c_eff * b_eff / a_eff, n_orders)
+    Cxx = inv_a
+    Cxy = inv_a @ T_b_a
+    Cyx = T_c_a @ inv_a
+    Cyy = T_schur + T_c_a @ inv_a @ T_b_a
+    EZZ = _toeplitz_of_profile(ezz, n_orders)
+
+    # ----- direct-rule operators for the generator cross-blocks A, B ----------
+    EZX = _toeplitz_of_profile(ezx, n_orders)
+    EZY = _toeplitz_of_profile(ezy, n_orders)
+    EXZ = _toeplitz_of_profile(exz, n_orders)
+    EYZ = _toeplitz_of_profile(eyz, n_orders)
+    return Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ
+
+
+def _select_forward_flux(gam, Vfull, N):
+    """Generalized all-harmonic flux-based forward-mode selector for the full
+    anisotropic generator G (Li 2003).
+
+    Returns EXACTLY ``2N`` indices of the FORWARD (outgoing toward ``+z``) modes.
+    A mode is classified by the net Poynting z-flux SUMMED OVER ALL harmonics
+    (the m=0-only rule is correct ONLY at M=0)::
+
+        Ex = v[:N], Ey = v[N:2N], Hx = v[2N:3N]/1j, Hy = v[3N:4N]/1j
+        Sz = real( sum( Ex conj(Hy) - Ey conj(Hx) ) )
+
+    Forward = (propagating, ``|Re(gam)| < tol``): ``Sz > 0``; (evanescent):
+    ``Re(gam) > 0`` (decaying as ``exp(-lam k0 z)``).  This is gauge-robust and,
+    unlike a +-pair search, does NOT throw on NON-RECIPROCAL media (whose
+    spectrum is not +-symmetric).
+
+    A defensive rebalance keeps the count at exactly ``2N`` if a near-zero-flux
+    propagating mode (``|Sz| < flux_tol``) would otherwise tip the split: the
+    excess/deficit is resolved by the signed flux (most-forward kept)."""
+    xp = array_namespace(Vfull)
+    n = gam.shape[0]
+    gre = xp.real(gam)
+    tol = 1e-7 * float(xp.maximum(xp.asarray(1.0), xp.max(xp.abs(gam))))
+    Ex = Vfull[:N, :]
+    Ey = Vfull[N:2 * N, :]
+    Hx = Vfull[2 * N:3 * N, :] / 1j
+    Hy = Vfull[3 * N:4 * N, :] / 1j
+    Sz = xp.real(xp.sum(Ex * xp.conj(Hy) - Ey * xp.conj(Hx), axis=0))   # (n,)
+    prop = xp.abs(gre) < tol
+    fwd = xp.where(prop, Sz > 0, gre > 0)
+    idx = xp.asarray(np.where(to_numpy(fwd))[0])
+    if int(idx.shape[0]) == 2 * N:
+        return idx
+    # ---- defensive rebalance to EXACTLY 2N (near-zero-flux / cut tie) --------
+    Sz_np = np.asarray(to_numpy(Sz))
+    gre_np = np.asarray(to_numpy(gre))
+    prop_np = np.asarray(to_numpy(prop))
+    # Rank all modes by a signed "forwardness" score: propagating by Sz,
+    # evanescent by Re(gam).  The 2N largest scores are forward.
+    score = np.where(prop_np, Sz_np, gre_np)
+    order = np.argsort(-score)
+    fwd_fixed = np.zeros(n, dtype=bool)
+    fwd_fixed[order[:2 * N]] = True
+    return np.where(fwd_fixed)[0]
+
+
+def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
+                             EZX=None, EZY=None, EXZ=None, EYZ=None):
     """Eigenmodes of a full-in-plane-tensor layer (dimension-agnostic).
 
     The anisotropic ``Q`` block (rigorously derived and locked to the
@@ -2356,6 +2551,17 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
              [ Ky Ky - Cxx,   -(Cxy + Ky Kx) ]]
 
     The ``P`` block is the core's, with the ``E_z`` elimination ``inv(EZZ)``.
+
+    OUT-OF-PLANE (full-3x3, Li 2003): when ``EZX, EZY, EXZ, EYZ`` are supplied
+    (not None), the layer ODE picks up the off-plane cross-blocks ``A`` (from
+    ``ezx, ezy``) and ``B`` (from ``exz, eyz``), so the first-order generator
+    ``G = [[A, P], [Q, B]]`` is eigendecomposed directly (the in-plane symmetry
+    ``[W; -V] <-> -lam`` is BROKEN, so forward AND backward modes are genuinely
+    distinct).  This path returns the 6-tuple ``(W, V, lam, Wb, Vb, lam_b)`` --
+    forward E/H-block + eigenvalues and backward E/H-block + eigenvalues -- for
+    the GENERALIZED S-matrix (:func:`_interface_smatrix_general`).  When all four
+    are None the EXACT current ``eig(P@Q)`` path runs byte-for-byte (the
+    isotropic / JAX branches are untouched).
     """
     xp = array_namespace(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
     Kx = xp.asarray(Kx).astype(_C)
@@ -2371,6 +2577,38 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
         [Cyx + Kx @ Ky,        Cyy - Kx @ Kx],
         [Ky @ Ky - Cxx,        -(Cxy + Ky @ Kx)],
     ])
+    if any(t is not None for t in (EZX, EZY, EXZ, EYZ)):
+        # ---- full-3x3 (out-of-plane) generator path (Li 2003) ---------------
+        Z = xp.zeros((N, N), dtype=_C)
+        EZX = Z if EZX is None else xp.asarray(EZX).astype(_C)
+        EZY = Z if EZY is None else xp.asarray(EZY).astype(_C)
+        EXZ = Z if EXZ is None else xp.asarray(EXZ).astype(_C)
+        EYZ = Z if EYZ is None else xp.asarray(EYZ).astype(_C)
+        # A block: Ez = inv(EZZ)(Dz - EZX Ex - EZY Ey) feeds -Kx inv(EZZ) EZX etc.
+        A = _block(xp, [
+            [-Kx @ Ez_inv @ EZX,   -Kx @ Ez_inv @ EZY],
+            [-Ky @ Ez_inv @ EZX,   -Ky @ Ez_inv @ EZY],
+        ])
+        # B block: the exz/eyz feedback into the modal-H rows (CORRECTED block,
+        # validated against the Berreman 4x4 Delta).
+        B = _block(xp, [
+            [EYZ @ Ez_inv @ Ky,    -EYZ @ Ez_inv @ Kx],
+            [-EXZ @ Ez_inv @ Ky,   EXZ @ Ez_inv @ Kx],
+        ])
+        G = _block(xp, [[A, P], [Q, B]])
+        gam, Vfull = _eig_for(xp)(G)
+        fidx = _select_forward_flux(gam, Vfull, N)
+        fset = set(np.asarray(to_numpy(fidx)).tolist())
+        bidx = xp.asarray(np.array(sorted(set(range(4 * N)) - fset)))
+        lam = gam[fidx]
+        lam_b = gam[bidx]
+        Vf = Vfull[:, fidx]
+        Vb = Vfull[:, bidx]
+        W = Vf[:2 * N, :]
+        V = Vf[2 * N:, :]
+        Wb = Vb[:2 * N, :]
+        Vbk = Vb[2 * N:, :]
+        return W, V, lam, Wb, Vbk, lam_b
     lam2, W = _eig_for(xp)(P @ Q)
     lam = _sqrt_decay(lam2)
     V = Q @ W @ xp.diag(_inv_lam(lam))
@@ -2396,17 +2634,11 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
             xp.where(iso_uniform, lam_u, lam))
 
 
-def _require_inplane_tensor(fn_name, *tensors):
-    """Reject a ``(3, 3)`` permittivity tensor (or ``(..., 3, 3)`` tensor cell)
-    with OUT-OF-PLANE coupling -- ``eps_xz, eps_yz, eps_zx, eps_zy``.
-
-    The anisotropic FMM here is the z-DECOUPLED in-plane subset
-    (``[[exx, exy], [eyx, eyy]]`` + ``ezz``; Li 1996 / 2003).  A tilted-director
-    LC, a magneto-optic / gyrotropic medium, or any tensor with x/y<->z coupling
-    would have those components SILENTLY DROPPED -- so raise instead of returning
-    a quietly wrong answer.  Concrete (NumPy / CuPy) tensors only -- a JAX
-    tensor is skipped (not materialisable here) and assumed in-plane on the
-    differentiable path."""
+def _tensor_offplane_present(*tensors):
+    """True if any concrete ``(3, 3)`` (or ``(..., 3, 3)``) tensor has
+    OUT-OF-PLANE coupling (``eps_xz, eps_yz, eps_zx, eps_zy`` above a tiny
+    relative tolerance).  JAX / non-3x3 inputs are skipped (treated as
+    in-plane)."""
     for t in tensors:
         if t is None or is_jax_array(t):
             continue
@@ -2419,13 +2651,38 @@ def _require_inplane_tensor(fn_name, *tensors):
                                   np.abs(a[..., 2, 2])])
         scale = max(float(np.max(diag)), 1.0)
         if float(np.max(offz)) > 1e-9 * scale:
-            raise ValueError(
-                f"{fn_name}: the anisotropic path is the z-decoupled in-plane "
-                f"tensor subset (exx, exy, eyx, eyy, ezz); the supplied tensor "
-                f"has out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy "
-                f"!= 0 -- e.g. a tilted-director LC or a magneto-optic / "
-                f"gyrotropic tensor), which this solver would silently drop. "
-                f"Full 3x3 (out-of-plane) tensors are not yet supported.")
+            return True
+    return False
+
+
+def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
+    """Reject a ``(3, 3)`` permittivity tensor (or ``(..., 3, 3)`` tensor cell)
+    with OUT-OF-PLANE coupling -- ``eps_xz, eps_yz, eps_zx, eps_zy``.
+
+    The legacy anisotropic FMM is the z-DECOUPLED in-plane subset
+    (``[[exx, exy], [eyx, eyy]]`` + ``ezz``; Li 1996 / 2003).  A tilted-director
+    LC, a magneto-optic / gyrotropic medium, or any tensor with x/y<->z coupling
+    would have those components SILENTLY DROPPED on the legacy path -- so raise
+    instead of returning a quietly wrong answer.  Concrete (NumPy / CuPy) tensors
+    only -- a JAX tensor is skipped (not materialisable here) and assumed
+    in-plane on the differentiable path.
+
+    The 1-D NumPy/CuPy path now has a FULL-3x3 (out-of-plane) solver (Li 2003,
+    v5.11.0), so it passes ``allow_offplane=True`` and this returns whether
+    out-of-plane coupling is present (the caller routes to the full path) instead
+    of raising.  The 2-D (:func:`rcwa_jones_2d`) and :class:`RCWAStack` paths keep
+    ``allow_offplane=False`` (1-D only; 2-D / stack out-of-plane pending)."""
+    has_off = _tensor_offplane_present(*tensors)
+    if has_off and not allow_offplane:
+        raise ValueError(
+            f"{fn_name}: the anisotropic path is the z-decoupled in-plane "
+            f"tensor subset (exx, exy, eyx, eyy, ezz); the supplied tensor "
+            f"has out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy "
+            f"!= 0 -- e.g. a tilted-director LC or a magneto-optic / "
+            f"gyrotropic tensor), which this solver would silently drop. "
+            f"Full 3x3 (out-of-plane) tensors are supported on the 1-D path "
+            f"(rcwa_jones_1d); 2-D / RCWAStack out-of-plane is pending.")
+    return has_off
 
 
 @_with_blas_limit
@@ -2484,7 +2741,11 @@ def rcwa_jones_1d(
     if not (0.0 <= float(duty_cycle) <= 1.0):
         raise ValueError(
             f"rcwa_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
-    _require_inplane_tensor("rcwa_jones_1d", eps_ridge, eps_groove)
+    # Out-of-plane (full-3x3) tensors are allowed on the 1-D path (v5.11.0);
+    # the flag routes to the general full-tensor solver below.  In-plane tensors
+    # keep the existing path bit-identical.
+    offplane = _require_inplane_tensor("rcwa_jones_1d", eps_ridge, eps_groove,
+                                       allow_offplane=True)
 
     xp = _rcwa_xp("rcwa_jones_1d", use_gpu, eps_ridge, eps_groove)
     is_jax = backend_name(xp) == "jax"
@@ -2527,20 +2788,47 @@ def rcwa_jones_1d(
     n_samples = 4096
     xq = (xp.arange(n_samples) + 0.5) / n_samples
     inside = xq < duty_cycle
-    profiles = {}
-    for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
-                          "yy": (1, 1), "zz": (2, 2)}.items():
-        profiles[key] = xp.where(inside, eps_ridge[ii, jj],
-                                 eps_groove[ii, jj]).astype(_C)
-    Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M)
+    if offplane:
+        # ---- FULL-3x3 (out-of-plane) path (Li 2003) ------------------------
+        # Sample all nine component profiles, build the full convolutions +
+        # generator eigenmodes (explicit forward/backward), and assemble the
+        # half-space regions as [W; -V] (the in-plane symmetry holds for an
+        # isotropic half-space) and the layer via the GENERAL S-matrix.
+        profiles = {}
+        for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
+                              "yy": (1, 1), "zz": (2, 2), "xz": (0, 2),
+                              "zx": (2, 0), "yz": (1, 2), "zy": (2, 1)}.items():
+            profiles[key] = xp.where(inside, eps_ridge[ii, jj],
+                                     eps_groove[ii, jj]).astype(_C)
+        Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ = \
+            _tensor_convolutions_full(profiles, M)
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+        Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
+            Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ)
+        Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
+        Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
+        Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
+        S = _interface_smatrix_general(Mref, Ml)
+        S = _redheffer_star(
+            S, _propagation_smatrix_general(lam, lam_b, k0 * depth))
+        S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
+        S11, S12, S21, S22 = S
+    else:
+        profiles = {}
+        for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
+                              "yy": (1, 1), "zz": (2, 2)}.items():
+            profiles[key] = xp.where(inside, eps_ridge[ii, jj],
+                                     eps_groove[ii, jj]).astype(_C)
+        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M)
 
-    Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
-    Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-    Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
-    S = _interface_smatrix(Wref, Vref, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
-    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-    S11, S12, S21, S22 = S
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+        Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
+        S = _interface_smatrix(Wref, Vref, Wl, Vl)
+        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        S11, S12, S21, S22 = S
 
     delta = xp.asarray((orders == 0).astype(_C))
     zeros_N = xp.zeros(N, dtype=_C)
