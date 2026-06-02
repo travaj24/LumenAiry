@@ -134,3 +134,42 @@ def test_internal_field_te_has_no_Ex():
                            incident=(0.0, 1.0))
     assert np.max(np.abs(f["Ex"])) < 1e-12
     assert np.max(np.abs(f["Ey"])) > 0.1
+
+
+# ---------------------------------------------------------------------------
+# GAP 6: per-layer absorption (built on the internal field)
+# ---------------------------------------------------------------------------
+
+def test_layer_absorption_localizes_to_the_lossy_layer():
+    # only the middle layer is lossy -> it should absorb ~everything
+    st = la.RCWAStack(0.5e-6, n_substrate=1.5, n_superstrate=1.0, n_orders=8)
+    st.add_layer(THICK[0], eps=2.1).add_layer(THICK[1], eps=6.0 + 0.5j)
+    st.add_layer(THICK[2], eps=4.0)
+    res = st.set_source(0.633e-6, theta=np.deg2rad(20)).solve(
+        retain_internal=True)
+    A = res.layer_absorption(nx=16, nz_per_layer=12)
+    assert A.shape == (2, 3)
+    # rows sum to the total absorptance (energy-conserving attribution)
+    assert np.allclose(A.sum(axis=1), res.absorptance(), atol=1e-9)
+    # all the loss is in the lossy layer; the lossless ones carry ~none
+    assert np.all(A[:, [0, 2]] < 1e-9)
+    assert np.all(A[:, 1] / A.sum(axis=1) > 0.999)
+
+
+def test_layer_absorption_iso_metal_cell():
+    S = 64
+    x = (np.arange(S) + 0.5) / S
+    cell = np.where(np.abs(x - 0.5) < 0.25, -3 + 4j, 1.0).astype(complex)
+    st = la.RCWAStack(0.5e-6, n_substrate=1.5, n_orders=8)
+    st.add_layer(0.1e-6, eps=2.1)
+    st.add_layer(0.15e-6, eps_cell=np.broadcast_to(cell[:, None], (S, 1)).copy())
+    res = st.set_source(0.6e-6).solve(retain_internal=True)
+    A = res.layer_absorption(nx=64)
+    assert np.allclose(A.sum(axis=1), res.absorptance(), atol=1e-9)
+    assert np.all(A[:, 1] / A.sum(axis=1) > 0.999)        # metal layer absorbs
+
+
+def test_layer_absorption_requires_retain_flag():
+    res = _stack().solve()
+    with pytest.raises(ValueError, match="retain_internal"):
+        res.layer_absorption()

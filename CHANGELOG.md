@@ -2,6 +2,24 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.2] — 2026-06-01
+
+**RCWA per-layer absorption (audit GAP6).**  Built on the v5.10.1 internal
+field; additive.
+
+### Added
+
+- **`RCWAResult.layer_absorption(*, nx, ny, nz_per_layer)`** — attribute the
+  total absorptance to each LAYER (where is the power lost — metal teeth vs
+  back-reflector vs lossy spacer?).  Integrates the local loss density
+  `Im(eps)|E|^2` from the reconstructed internal field over each layer,
+  normalised so the layers sum to the total `absorptance()` (energy-conserving
+  by construction).  Returns `(2, n_layers)` (row 0 = incident `E_x`, row 1 =
+  `E_y`).  Validated: a single lossy layer captures ~100% of the loss
+  (lossless layers ~0), for both a dielectric and a metal-cell stack.  Requires
+  `solve(retain_internal=True)`; uniform / isotropic-cell layers (tensor /
+  analytic-shape layers raise).
+
 ## [5.10.1] — 2026-06-01
 
 **RCWA internal-layer E/H field reconstruction (audit GAP1).**  Additive; the

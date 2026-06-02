@@ -3602,6 +3602,76 @@ class RCWAResult:
         result["y"] = yg
         return result
 
+    @staticmethod
+    def _layer_im_eps(layer, xg, yg, period_x, period_y):
+        """``Im(eps_public(x, y)) >= 0`` of a layer on the real-space field grid
+        (the local loss density weight for :meth:`layer_absorption`)."""
+        ny, nx = len(yg), len(xg)
+        if layer.kind == "uniform":
+            return np.full((ny, nx), float(np.imag(complex(layer.data))))
+        if layer.kind == "iso":
+            cell = np.asarray(layer.data)                 # (Sx, Sy), public
+            Sx, Sy = cell.shape
+            ix = (np.floor((xg % period_x) / period_x * Sx).astype(int)) % Sx
+            iy = (np.floor((yg % period_y) / period_y * Sy).astype(int)) % Sy
+            return np.imag(cell[np.ix_(ix, iy)]).T          # (ny, nx)
+        raise NotImplementedError(
+            "RCWAResult.layer_absorption: only uniform and isotropic-cell "
+            "layers are supported; tensor / analytic-shape layers are not yet "
+            "handled (their local Im(eps) map is not reconstructed here).")
+
+    def layer_absorption(self, *, nx=64, ny=None, nz_per_layer=8):
+        """Absorbed power fraction broken down PER LAYER (audit GAP6).
+
+        The total absorptance ``A = 1 - sum(R) - sum(T)`` tells you how much
+        power is lost but not WHERE; this attributes it to each layer by
+        integrating the local loss density ``Im(eps) |E|^2`` (from the
+        reconstructed internal field) over each layer, normalised so the layers
+        sum to the total absorptance (energy-conserving by construction).
+
+        Requires ``RCWAStack.solve(retain_internal=True)``.  Uniform and
+        isotropic-cell layers only (raises for tensor / analytic-shape layers).
+
+        Returns
+        -------
+        (2, n_layers) ndarray
+            Absorbed fraction in each layer; row 0 for incident ``E_x``, row 1
+            for incident ``E_y``.  ``row.sum() == absorptance()[row]``.
+        """
+        info = self._require_modal().get("internal")
+        if info is None:
+            raise ValueError(
+                "RCWAResult.layer_absorption: the stack was solved without the "
+                "internal-field data; call RCWAStack.solve(retain_internal="
+                "True).")
+        layers = info["layers"]
+        thick = info["thick"]
+        nlay = len(layers)
+        A_tot = self.absorptance()                          # (2,)
+        px, py = info["period_x"], info["period_y"]
+        ny_i = (1 if info["is_1d"] else int(nx)) if ny is None else int(ny)
+        nx_i = int(nx)
+        dx, dy = px / nx_i, py / ny_i
+        xg = (np.arange(nx_i) - nx_i // 2) * dx
+        yg = (np.arange(ny_i) - ny_i // 2) * dy
+        im_eps = [self._layer_im_eps(L, xg, yg, px, py) for L in layers]
+        out = np.zeros((2, nlay))
+        for p, inc in enumerate(((1.0, 0.0), (0.0, 1.0))):
+            raw = np.zeros(nlay)
+            for i in range(nlay):
+                zl = (np.arange(nz_per_layer) + 0.5) / nz_per_layer * thick[i]
+                f = self.internal_field(zl, component="E", nx=nx_i, ny=ny_i,
+                                        dx=dx, dy=dy, layer=i, incident=inc)
+                e2 = (np.abs(f["Ex"]) ** 2 + np.abs(f["Ey"]) ** 2
+                      + np.abs(f["Ez"]) ** 2)
+                if e2.ndim == 2:                            # 1-D: (nz, nx)
+                    e2 = e2[:, None, :]
+                # thickness-weighted cell+depth average of Im(eps)|E|^2
+                raw[i] = thick[i] * float(np.mean(im_eps[i][None] * e2))
+            total = raw.sum()
+            out[p] = A_tot[p] * raw / total if total > 0 else np.zeros(nlay)
+        return out
+
 
 class _RCWALayer:
     __slots__ = ("thickness", "kind", "data")
