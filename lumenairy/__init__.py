@@ -439,6 +439,7 @@ from .elements.rcwa import (
     RCWAResult,
     RCWAStack,
     rcwa_blas_threads,
+    rcwa_convergence,
     rcwa_efficiency_1d,
     rcwa_efficiency_1d_jax,
     rcwa_efficiency_2d,
@@ -447,6 +448,7 @@ from .elements.rcwa import (
     rcwa_extrapolate,
     rcwa_jones_1d,
     rcwa_jones_2d,
+    rcwa_jones_vs_wavelength,
     set_blas_threads,
     uniaxial_tensor,
 )
@@ -886,7 +888,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.8.0"
+__version__ = "5.9.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1461,8 +1463,10 @@ __all__ = [
     'rcwa_efficiency_2d_shapes',
     'rcwa_efficiency_vs_wavelength',
     'rcwa_extrapolate',
+    'rcwa_convergence',
     'rcwa_jones_1d',
     'rcwa_jones_2d',
+    'rcwa_jones_vs_wavelength',
     'uniaxial_tensor',
     'RCWAStack',
     'RCWAResult',

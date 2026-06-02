@@ -89,8 +89,10 @@ __all__ = [
     "rcwa_efficiency_2d",
     "rcwa_efficiency_2d_shapes",
     "rcwa_extrapolate",
+    "rcwa_convergence",
     "rcwa_jones_1d",
     "rcwa_jones_2d",
+    "rcwa_jones_vs_wavelength",
     "rcwa_efficiency_1d_jax",
     "uniaxial_tensor",
     "RCWAStack",
@@ -1654,6 +1656,175 @@ def rcwa_efficiency_vs_wavelength(
     return out if np.ndim(wavelengths) else out[0]
 
 
+def _order_key(o):
+    """Hashable order key: an int for the 1-D order index, a ``(m, n)`` tuple
+    for a 2-D order pair."""
+    o = np.atleast_1d(np.asarray(o))
+    return int(o[0]) if o.size == 1 else tuple(int(x) for x in o)
+
+
+def _max_aligned_delta(o_lo, A_lo, o_hi, A_hi):
+    """Max ``|A_lo - A_hi|`` over the diffraction orders present in BOTH solves
+    (aligned by order index/pair).  ``A`` may be ``(N,)`` or ``(2, N)`` (Jones),
+    the order axis being the last."""
+    A_lo = np.asarray(to_numpy(A_lo))
+    A_hi = np.asarray(to_numpy(A_hi))
+    hi_map = {_order_key(o): j for j, o in enumerate(np.asarray(to_numpy(o_hi)))}
+    dmax = 0.0
+    for i, o in enumerate(np.asarray(to_numpy(o_lo))):
+        j = hi_map.get(_order_key(o))
+        if j is not None:
+            dmax = max(dmax, float(np.max(np.abs(A_lo[..., i] - A_hi[..., j]))))
+    return dmax
+
+
+def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
+                     warn=True, **kwargs):
+    """Run an RCWA ``solver`` at the requested harmonic count AND a higher one,
+    and report whether the answer has converged in the retained order count.
+
+    A too-low truncation can manufacture a *plausible but wrong* result -- most
+    dangerously a spurious deep reflection null at a sharp / high-Q resonance --
+    so this solves twice (each name in ``order_params`` bumped by ``bump``) and
+    compares the per-order efficiencies, warning if the largest change exceeds
+    ``atol``.  Cheap insurance (one extra solve) against silently
+    under-resolved physics; for a converged *value* (not just a check) see
+    :func:`rcwa_extrapolate`.
+
+    Parameters
+    ----------
+    solver : callable
+        An RCWA efficiency entry point returning ``(orders, R, T, ...)`` --
+        e.g. :func:`rcwa_efficiency_1d`, :func:`rcwa_efficiency_2d`,
+        :func:`rcwa_jones_1d`.
+    order_params : tuple of str, optional
+        The harmonic-count keyword(s) to bump.  ``("n_orders",)`` (default) for
+        the 1-D / Jones-1-D solvers; ``("n_orders_x", "n_orders_y")`` for 2-D.
+    bump : int, optional
+        Increment added to each order parameter for the high-resolution solve
+        (default 4).
+    atol : float, optional
+        Convergence tolerance on the largest per-order efficiency change
+        (default ``1e-3``).
+    warn : bool, optional
+        Emit a ``UserWarning`` when not converged (default ``True``).
+    **kwargs
+        Passed verbatim to ``solver`` (must include the ``order_params`` and the
+        geometry).
+
+    Returns
+    -------
+    result : tuple
+        The HIGHER-resolution ``solver(**kwargs_bumped)`` return value (the more
+        trustworthy of the two).
+    report : dict
+        ``converged`` (bool), ``delta`` (max per-order efficiency change),
+        ``delta_sum_R`` / ``delta_sum_T`` (change in total R / T),
+        ``n_orders_low`` / ``n_orders_high`` (the two truncations).
+    """
+    for p in order_params:
+        if p not in kwargs:
+            raise ValueError(
+                f"rcwa_convergence: order parameter {p!r} not found in kwargs; "
+                f"pass it (and set order_params to the solver's harmonic-count "
+                f"argument names).")
+    low = solver(**kwargs)
+    hi_kwargs = dict(kwargs)
+    for p in order_params:
+        hi_kwargs[p] = int(kwargs[p]) + int(bump)
+    high = solver(**hi_kwargs)
+
+    o_lo, R_lo, T_lo = low[0], low[1], low[2]
+    o_hi, R_hi, T_hi = high[0], high[1], high[2]
+    delta = max(_max_aligned_delta(o_lo, R_lo, o_hi, R_hi),
+                _max_aligned_delta(o_lo, T_lo, o_hi, T_hi))
+    dsR = abs(float(np.sum(to_numpy(R_lo))) - float(np.sum(to_numpy(R_hi))))
+    dsT = abs(float(np.sum(to_numpy(T_lo))) - float(np.sum(to_numpy(T_hi))))
+    converged = delta <= atol
+    report = dict(converged=converged, delta=delta, delta_sum_R=dsR,
+                  delta_sum_T=dsT,
+                  n_orders_low={p: int(kwargs[p]) for p in order_params},
+                  n_orders_high={p: int(hi_kwargs[p]) for p in order_params})
+    if warn and not converged:
+        import warnings
+        warnings.warn(
+            f"rcwa_convergence: NOT converged at {report['n_orders_low']} -- the "
+            f"per-order efficiency changed by {delta:.2e} (> atol={atol:.1e}) "
+            f"going to {report['n_orders_high']}; the lower-order result may be "
+            f"unreliable (a too-low truncation can fabricate a spurious "
+            f"resonance/null). Increase the order count.", stacklevel=2)
+    return high, report
+
+
+def rcwa_jones_vs_wavelength(
+    period: float,
+    eps_ridge,
+    eps_groove,
+    n_substrate,
+    n_superstrate,
+    depth: float,
+    duty_cycle: float,
+    wavelengths,
+    *,
+    angle: float = 0.0,
+    n_orders: int = 11,
+):
+    """DISPERSIVE Jones spectral sweep of the 1-D anisotropic grating -- the
+    Jones companion to :func:`rcwa_efficiency_vs_wavelength` (which is scalar +
+    dispersionless).
+
+    Each of ``eps_ridge``, ``eps_groove``, ``n_substrate``, ``n_superstrate``
+    may be a FIXED value or a CALLABLE ``wl -> value`` (so material dispersion is
+    handled by passing ``n(lambda)`` / ``eps(lambda)`` closures -- e.g. from the
+    bundled ``refractiveindex`` database).
+
+    Parameters
+    ----------
+    eps_ridge, eps_groove : (3, 3) array_like or callable
+        Ridge / groove permittivity tensors (PUBLIC ``Im(eps) > 0``), or a
+        ``wl -> (3, 3)`` callable for a dispersive medium.
+    n_substrate, n_superstrate : complex or callable
+        Half-space indices, or ``wl -> complex`` callables.
+    wavelengths : float or array-like
+        Vacuum wavelength(s) [m].
+    angle, n_orders
+        As in :func:`rcwa_jones_1d`.
+
+    Returns
+    -------
+    wavelengths : ndarray
+        The sweep grid (scalar in -> scalar out).
+    jones : (Nwl, 2, 2) complex ndarray
+        Zeroth-order Jones reflection at each wavelength.
+    R_total, T_total : (Nwl, 2) float ndarray
+        Total reflected / transmitted efficiency (summed over orders) for each
+        incident polarization (column 0 = incident ``E_x``, 1 = ``E_y``).
+    """
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError(
+            "rcwa_jones_vs_wavelength: every wavelength must be finite and > 0 "
+            "[m] (got an empty or invalid sweep).")
+
+    def _at(v, w):
+        return v(w) if callable(v) else v
+
+    J = np.empty((wl.size, 2, 2), dtype=_C)
+    Rt = np.empty((wl.size, 2), dtype=float)
+    Tt = np.empty((wl.size, 2), dtype=float)
+    for i, w in enumerate(wl):
+        _o, R, T, jr = rcwa_jones_1d(
+            period, _at(eps_ridge, w), _at(eps_groove, w),
+            _at(n_substrate, w), _at(n_superstrate, w), depth, duty_cycle,
+            float(w), angle=angle, n_orders=n_orders)
+        J[i] = np.asarray(to_numpy(jr))
+        Rt[i] = np.asarray(to_numpy(R)).sum(axis=1)
+        Tt[i] = np.asarray(to_numpy(T)).sum(axis=1)
+    if np.ndim(wavelengths):
+        return wl, J, Rt, Tt
+    return wl[0], J[0], Rt[0], Tt[0]
+
+
 def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
     """Extrapolate a slowly-converging RCWA quantity toward its
     ``n_orders -> infinity`` limit from a few finite-``n_orders`` samples.
@@ -2225,6 +2396,38 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ):
             xp.where(iso_uniform, lam_u, lam))
 
 
+def _require_inplane_tensor(fn_name, *tensors):
+    """Reject a ``(3, 3)`` permittivity tensor (or ``(..., 3, 3)`` tensor cell)
+    with OUT-OF-PLANE coupling -- ``eps_xz, eps_yz, eps_zx, eps_zy``.
+
+    The anisotropic FMM here is the z-DECOUPLED in-plane subset
+    (``[[exx, exy], [eyx, eyy]]`` + ``ezz``; Li 1996 / 2003).  A tilted-director
+    LC, a magneto-optic / gyrotropic medium, or any tensor with x/y<->z coupling
+    would have those components SILENTLY DROPPED -- so raise instead of returning
+    a quietly wrong answer.  Concrete (NumPy / CuPy) tensors only -- a JAX
+    tensor is skipped (not materialisable here) and assumed in-plane on the
+    differentiable path."""
+    for t in tensors:
+        if t is None or is_jax_array(t):
+            continue
+        a = np.asarray(to_numpy(t)).astype(_C)
+        if a.shape[-2:] != (3, 3):
+            continue
+        offz = np.maximum.reduce([np.abs(a[..., 0, 2]), np.abs(a[..., 1, 2]),
+                                  np.abs(a[..., 2, 0]), np.abs(a[..., 2, 1])])
+        diag = np.maximum.reduce([np.abs(a[..., 0, 0]), np.abs(a[..., 1, 1]),
+                                  np.abs(a[..., 2, 2])])
+        scale = max(float(np.max(diag)), 1.0)
+        if float(np.max(offz)) > 1e-9 * scale:
+            raise ValueError(
+                f"{fn_name}: the anisotropic path is the z-decoupled in-plane "
+                f"tensor subset (exx, exy, eyx, eyy, ezz); the supplied tensor "
+                f"has out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy "
+                f"!= 0 -- e.g. a tilted-director LC or a magneto-optic / "
+                f"gyrotropic tensor), which this solver would silently drop. "
+                f"Full 3x3 (out-of-plane) tensors are not yet supported.")
+
+
 @_with_blas_limit
 def rcwa_jones_1d(
     period: float,
@@ -2281,6 +2484,7 @@ def rcwa_jones_1d(
     if not (0.0 <= float(duty_cycle) <= 1.0):
         raise ValueError(
             f"rcwa_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+    _require_inplane_tensor("rcwa_jones_1d", eps_ridge, eps_groove)
 
     xp = _rcwa_xp("rcwa_jones_1d", use_gpu, eps_ridge, eps_groove)
     is_jax = backend_name(xp) == "jax"
@@ -2437,6 +2641,7 @@ def rcwa_jones_2d(
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_cell_sampling("rcwa_jones_2d", eps_tensor_cell,
                             n_orders_x, n_orders_y)
+    _require_inplane_tensor("rcwa_jones_2d", eps_tensor_cell)
 
     xp = _rcwa_xp("rcwa_jones_2d", use_gpu, eps_tensor_cell)
     is_jax = backend_name(xp) == "jax"
@@ -3354,6 +3559,7 @@ class RCWAStack:
         else:
             tcell = np.asarray(eps_tensor_cell, dtype=_C)
             _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
+            _require_inplane_tensor("add_layer", tcell)
             self._layers.append(_RCWALayer(thickness, "tensor", tcell))
         return self
 

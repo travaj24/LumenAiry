@@ -2,6 +2,44 @@
 
 All notable changes to the core library are documented here.
 
+## [5.9.0] — 2026-06-01
+
+**RCWA audit quick-wins.**  The low-effort / high-value items from the two RCWA
+feature audits (`docs/audits/AUDIT_RCWA_GAPS_AND_WISHLIST_2026_06_01.md`,
+`docs/audits/lumenairy_rcwa_port_wishlist.md`).  Additive; existing behaviour
+unchanged except the new out-of-plane-tensor guard (which only rejects
+previously-silently-truncated input).
+
+### Added
+
+- **`rcwa_convergence(solver, *, order_params, bump, atol, warn)`** (audit
+  GAP 3) — a convergence / resonance self-check.  Solves at the requested
+  harmonic count and a higher one and compares per-order efficiencies, warning
+  when the largest change exceeds `atol` and returning the higher-resolution
+  result.  Cheap insurance against a silently under-resolved truncation — the
+  audit documented a real error where a coarse count fabricated a spurious deep
+  reflection null.  Works for the 1-D, 2-D, and Jones solvers (pass the
+  appropriate `order_params`, e.g. `("n_orders_x", "n_orders_y")` for 2-D).
+- **`rcwa_jones_vs_wavelength(...)`** (audit GAP 5) — a **dispersive** Jones
+  spectral sweep (the Jones companion to the scalar, dispersionless
+  `rcwa_efficiency_vs_wavelength`).  Each of `eps_ridge` / `eps_groove` /
+  `n_substrate` / `n_superstrate` may be a fixed value **or a callable
+  `wl -> value`**, so material dispersion is handled by passing `n(λ)` closures.
+  Returns the per-wavelength 2×2 Jones reflection plus total R / T per incident
+  polarization.
+
+### Fixed / hardened
+
+- **Out-of-plane (full 3×3) tensors are now rejected, not silently truncated**
+  (audit P5 / GAP 7).  The anisotropic path is the z-decoupled in-plane subset
+  (`exx, exy, eyx, eyy, ezz`); a tilted-director LC or a magneto-optic /
+  gyrotropic tensor (non-zero `eps_xz` / `eps_yz` / `eps_zx` / `eps_zy`) used to
+  have its z-coupling quietly dropped.  `rcwa_jones_1d`, `rcwa_jones_2d`, and
+  `RCWAStack.add_layer(eps_tensor_cell=...)` now raise a clear `ValueError`.
+- **Verified the stacked 1-D-anisotropic + isotropic `RCWAStack` path** (audit
+  GAP 2, previously "⚠ verify") solves and conserves energy (`R + T + A == 1`
+  per incident polarization) — now covered by a regression test.
+
 ## [5.8.0] — 2026-06-01
 
 **Polynomial Modal Method (PMM) — a non-Fourier 1-D grating solver (roadmap
