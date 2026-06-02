@@ -2,6 +2,29 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.0] — 2026-06-01
+
+**RCWA layer-builder conveniences (audit GAP4 / P4).**  Two additive
+`RCWAStack` methods that centralise the z-staircase slicing callers used to
+hand-roll.
+
+### Added
+
+- **`RCWAStack.add_graded_layer(thickness, profile, *, n_slices, rule)`** — auto-
+  slice a continuous `eps(z)` depth profile (a carrier-accumulation / ENZ layer,
+  a thermo-optic or field gradient) into a staircase of `n_slices` thin layers.
+  `profile(zeta)` returns the permittivity at fractional depth `zeta∈[0,1]`; the
+  return shape selects the layer kind (scalar → spacer, `(Sx,Sy)` → isotropic
+  cell, `(Sx,Sy,3,3)` → anisotropic tensor cell).  `rule='midpoint'` (default)
+  or `'trapezoid'`.  A constant profile reproduces a single `add_layer` to
+  ~1e-12.
+- **`RCWAStack.add_tapered_grating(thickness, *, eps_ridge, eps_groove,
+  duty_bottom, duty_top, n_slices, n_x)`** — a 1-D grating with **slanted
+  (trapezoidal) sidewalls** as an auto-sliced z-staircase (fab realism — a few
+  degrees of sidewall taper can materially change a device).  The centred
+  ridge's duty cycle varies linearly from `duty_top` to `duty_bottom`;
+  `duty_top == duty_bottom` reproduces the vertical binary grating to ~1e-15.
+
 ## [5.9.0] — 2026-06-01
 
 **RCWA audit quick-wins.**  The low-effort / high-value items from the two RCWA

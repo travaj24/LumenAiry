@@ -3563,6 +3563,108 @@ class RCWAStack:
             self._layers.append(_RCWALayer(thickness, "tensor", tcell))
         return self
 
+    def add_graded_layer(self, thickness, profile, *, n_slices=8,
+                         rule="midpoint"):
+        """Append a continuously-graded ``eps(z)`` layer as an auto-sliced
+        z-staircase of ``n_slices`` thin layers (audit GAP4 / P4).
+
+        A continuous depth profile (a carrier-accumulation / ENZ layer, a
+        thermo-optic or field gradient, a tapered etch) is approximated by a
+        staircase; this centralises that slicing so the caller does not
+        hand-roll many :meth:`add_layer` calls.
+
+        Parameters
+        ----------
+        thickness : float
+            Total layer thickness (metres).
+        profile : callable
+            ``profile(zeta) -> permittivity`` at fractional depth
+            ``zeta in [0, 1]`` (``0`` = top, ``1`` = bottom).  The return shape
+            selects the layer kind: a SCALAR -> uniform spacer; an ``(Sx, Sy)``
+            array -> isotropic ``eps_cell``; an ``(Sx, Sy, 3, 3)`` array ->
+            anisotropic ``eps_tensor_cell``.
+        n_slices : int, optional
+            Number of staircase slices (the convergence knob; default 8).
+        rule : {'midpoint', 'trapezoid'}, optional
+            Sample each slice at its centre (``'midpoint'``, default) or average
+            its two edges (``'trapezoid'``).
+        """
+        n = int(n_slices)
+        if n < 1:
+            raise ValueError(
+                f"add_graded_layer: n_slices must be >= 1, got {n_slices}.")
+        if rule not in ("midpoint", "trapezoid"):
+            raise ValueError(
+                f"add_graded_layer: rule must be 'midpoint' or 'trapezoid', "
+                f"got {rule!r}.")
+        dz = float(thickness) / n
+        for k in range(n):
+            if rule == "midpoint":
+                eps_k = np.asarray(profile((k + 0.5) / n), dtype=_C)
+            else:
+                eps_k = 0.5 * (np.asarray(profile(k / n), dtype=_C)
+                               + np.asarray(profile((k + 1) / n), dtype=_C))
+            if eps_k.ndim == 0:
+                self.add_layer(dz, eps=complex(eps_k))
+            elif eps_k.ndim == 2:
+                self.add_layer(dz, eps_cell=eps_k)
+            elif eps_k.ndim == 4:
+                self.add_layer(dz, eps_tensor_cell=eps_k)
+            else:
+                raise ValueError(
+                    f"add_graded_layer: profile must return a scalar, an "
+                    f"(Sx, Sy) cell, or an (Sx, Sy, 3, 3) tensor cell; got "
+                    f"shape {eps_k.shape}.")
+        return self
+
+    def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
+                            duty_bottom, duty_top=None, n_slices=12, n_x=256):
+        """Append a 1-D grating with SLANTED (trapezoidal) sidewalls as an
+        auto-sliced z-staircase (audit GAP4 -- fab realism).
+
+        The centred ridge's duty cycle varies linearly with depth from
+        ``duty_top`` (at the top, ``zeta = 0``) to ``duty_bottom`` (at the
+        bottom, ``zeta = 1``); ``duty_top == duty_bottom`` is the usual vertical
+        binary grating.  A small sidewall taper can materially change a device,
+        so this makes the staircase a one-liner with a documented ``n_slices``
+        convergence knob.
+
+        Parameters
+        ----------
+        thickness : float
+            Grating thickness (metres).
+        eps_ridge, eps_groove : complex
+            Ridge / groove permittivities (PUBLIC ``Im(eps) > 0``).
+        duty_bottom : float
+            Ridge fraction at the bottom of the grating, in ``[0, 1]``.
+        duty_top : float, optional
+            Ridge fraction at the top; defaults to ``duty_bottom`` (vertical).
+        n_slices : int, optional
+            Staircase slice count (default 12).
+        n_x : int, optional
+            Cell samples along x for each slice's ``eps_cell`` (default 256).
+        """
+        dt = float(duty_bottom if duty_top is None else duty_top)
+        db = float(duty_bottom)
+        for d in (db, dt):
+            if not (0.0 <= d <= 1.0):
+                raise ValueError(
+                    f"add_tapered_grating: duty cycles must be in [0, 1], got "
+                    f"duty_top={dt}, duty_bottom={db}.")
+        er, eg = _C(eps_ridge), _C(eps_groove)
+        x = (np.arange(int(n_x)) + 0.5) / int(n_x)
+        n_y = max(1, 4 * self.noy + 1)              # grating is uniform in y
+
+        def _profile(zeta):
+            duty = dt + (db - dt) * zeta            # top (0) -> bottom (1)
+            half = 0.5 * duty
+            ridge = np.abs(x - 0.5) < half          # centred ridge
+            col = np.where(ridge, er, eg).astype(_C)
+            return np.broadcast_to(col[:, None], (int(n_x), n_y)).copy()
+
+        return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
+                                     rule="midpoint")
+
     def set_source(self, wavelength, *, theta=0.0, phi=0.0):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
         ``theta`` and azimuth ``phi`` [rad]).
