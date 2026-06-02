@@ -59,3 +59,43 @@ def test_2d_gradient_wrt_depth_matches_fd():
     h = 1e-9
     fd = (_sumT_depth(d0 + h) - _sumT_depth(d0 - h)) / (2 * h)
     assert np.allclose(float(g), float(fd), rtol=1e-3)
+
+
+# ---------------------------------------------------------------------------
+# multi-layer RCWAStack autodiff (audit P1 completion)
+# ---------------------------------------------------------------------------
+
+import lumenairy as la  # noqa: E402
+
+SS = 48
+
+
+def _stack_sumT(eps_hi, depth1):
+    x = (jnp.arange(SS) + 0.5) / SS - 0.5
+    X, Y = jnp.meshgrid(x, x, indexing="ij")
+    cell = jnp.where((jnp.abs(X) < 0.25) & (jnp.abs(Y) < 0.25), eps_hi,
+                     2.1 + 0j)
+    st = la.RCWAStack(0.5e-6, period_y=0.5e-6, n_substrate=1.5, n_orders=6,
+                      n_orders_y=6)
+    st.add_layer(depth1, eps_cell=cell).add_layer(0.1e-6, eps=2.1)
+    st.set_source(0.6e-6, theta=0.001)
+    o, R, T = st.solve().efficiencies()
+    return jnp.real(jnp.sum(T))
+
+
+def test_stack_gradient_wrt_cell_permittivity_matches_fd():
+    e0 = jnp.asarray(6.0 + 0.5j)
+    g = jax.grad(lambda e: _stack_sumT(e, 0.2e-6), holomorphic=False)(e0)
+    h = 1e-5
+    fd = (_stack_sumT(e0 + h, 0.2e-6) - _stack_sumT(e0 - h, 0.2e-6)) / (2 * h)
+    assert np.isfinite(float(np.real(g)))
+    assert np.allclose(np.real(g), np.real(fd), rtol=1e-3, atol=1e-6)
+
+
+def test_stack_gradient_wrt_layer_depth_matches_fd():
+    d0 = jnp.asarray(0.2e-6)
+    g = jax.grad(lambda d: _stack_sumT(6.0 + 0.5j, d))(d0)
+    h = 1e-9
+    fd = (_stack_sumT(6.0 + 0.5j, d0 + h)
+          - _stack_sumT(6.0 + 0.5j, d0 - h)) / (2 * h)
+    assert np.allclose(float(g), float(fd), rtol=1e-2)

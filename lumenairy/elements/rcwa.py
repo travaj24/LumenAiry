@@ -3677,7 +3677,8 @@ class _RCWALayer:
     __slots__ = ("thickness", "kind", "data")
 
     def __init__(self, thickness, kind, data):
-        self.thickness = float(thickness)
+        # keep a traced (JAX) thickness native so layer DEPTH is differentiable
+        self.thickness = thickness if is_jax_array(thickness) else float(thickness)
         self.kind = kind          # 'uniform' | 'iso' | 'tensor'
         self.data = data
 
@@ -3748,11 +3749,16 @@ class RCWAStack:
             raise ValueError(
                 "add_layer: provide exactly one of eps, eps_cell, "
                 "eps_tensor_cell, shapes.")
-        _validate_geometry("add_layer", depth=thickness)
+        if not is_jax_array(thickness):       # traced depth -> skip the guard
+            _validate_geometry("add_layer", depth=thickness)
         if eps is not None:
             self._layers.append(_RCWALayer(thickness, "uniform", _C(eps)))
         elif eps_cell is not None:
-            cell = np.asarray(eps_cell, dtype=_C)
+            # Keep a JAX cell native (a np.asarray would materialise the tracer
+            # and break the differentiable RCWAStack path); NumPy/list inputs
+            # are still normalised to a contiguous complex array.
+            cell = (eps_cell.astype(_C) if is_jax_array(eps_cell)
+                    else np.asarray(eps_cell, dtype=_C))
             if cell.ndim == 1:
                 cell = cell[:, None]
             _validate_cell_sampling("add_layer", cell, self.nox, self.noy)
@@ -3765,7 +3771,8 @@ class RCWAStack:
             self._layers.append(
                 _RCWALayer(thickness, "shapes", (_C(eps_background), shapes)))
         else:
-            tcell = np.asarray(eps_tensor_cell, dtype=_C)
+            tcell = (eps_tensor_cell.astype(_C) if is_jax_array(eps_tensor_cell)
+                     else np.asarray(eps_tensor_cell, dtype=_C))
             _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
             _require_inplane_tensor("add_layer", tcell)
             self._layers.append(_RCWALayer(thickness, "tensor", tcell))
@@ -3981,8 +3988,17 @@ class RCWAStack:
             raise ValueError("RCWAStack.solve: add at least one layer.")
         src = self._source
         wl, theta, phi = src["wavelength"], src["theta"], src["phi"]
-        xp = _rcwa_xp("RCWAStack.solve", self.use_gpu)
+        # Dispatch the backend off the patterned-layer arrays so a JAX cell
+        # makes the whole stack solve differentiable (the source geometry --
+        # wavelength/angle -- is always concrete here, so only the layer
+        # permittivities are traced).
+        layer_arrays = [L.data for L in self._layers if L.kind in ("iso",
+                                                                    "tensor")]
+        xp = _rcwa_xp("RCWAStack.solve", self.use_gpu, *layer_arrays)
         bname = backend_name(xp)
+        is_jax = bname == "jax"
+        if is_jax:
+            _warn_if_jax_f32("RCWAStack.solve")
         orders, N = _harmonic_orders_2d(self.nox, self.noy)
         eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
         eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
@@ -3991,9 +4007,14 @@ class RCWAStack:
         ky0 = nre * np.sin(theta) * np.sin(phi)
         _require_propagating_incidence("RCWAStack.solve", eps_sup,
                                        kx0 ** 2 + ky0 ** 2)
+        # The traced (JAX) layer permittivities cannot feed the concrete grazing
+        # nudge, so on the differentiable path the nudge sees only the region
+        # indices (the dominant region Rayleigh anomaly is still caught).
+        eps_reals = ([eps_sup, eps_sub] if is_jax
+                     else [eps_sup, eps_sub] + self._layer_eps_reals())
         wl = _grazing_safe_wavelength(
             wl, kx0, ky0, orders[:, 0], orders[:, 1], self.period_x,
-            self.period_y, [eps_sup, eps_sub] + self._layer_eps_reals())
+            self.period_y, eps_reals)
         k0 = 2.0 * np.pi / wl
         kx = kx0 + orders[:, 0] * (wl / self.period_x)
         ky = ky0 + orders[:, 1] * (wl / self.period_y)
@@ -4108,7 +4129,8 @@ class RCWAStack:
                 N=N, delta=delta, layers=list(self._layers),
                 period_x=self.period_x, period_y=self.period_y,
                 is_1d=self.is_1d, nox=self.nox, noy=self.noy)
-        _check_energy("RCWAStack.solve", R, T)
+        if not is_jax:                       # the guard needs concrete R/T
+            _check_energy("RCWAStack.solve", R, T)
         return RCWAResult(out_orders, R, T, Jr, Jt, modal=modal)
 
     def _internal_partials(self, modes, Wref, Vref, Wtrn, Vtrn, k0):

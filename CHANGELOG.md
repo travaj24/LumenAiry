@@ -2,6 +2,28 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.4] — 2026-06-02
+
+**Differentiable multi-layer `RCWAStack` (audit P1 — DynaMeta port blocker).**
+Completes the 2-D autodiff story: v5.10.3 validated the single-layer
+`rcwa_efficiency_2d` gradient; this makes the full **multi-layer stack** solve
+JAX-traceable, so a 2-D metasurface figure-of-merit differentiates through a
+stack of patterned + spacer layers (the basis for stacked-layer inverse
+design).
+
+### Changed
+
+- **`RCWAStack.add_layer` / `solve` are now JAX-differentiable.**  `add_layer`
+  keeps a JAX `eps_cell` / `eps_tensor_cell` / `thickness` native (a `np.asarray`
+  / `float()` used to materialise the tracer and break the trace); `solve`
+  dispatches the backend off the patterned-layer arrays and gates the
+  concrete-only guards (the grazing nudge, the energy check) on the traced path
+  — exactly as the single-entry 2-D solver already does.  Gradients of
+  `sum(T)` w.r.t. a **cell permittivity** and a **layer thickness** match finite
+  difference to ~1e-3 on a two-layer stack.  The NumPy / CuPy path is unchanged
+  (the stable-eig custom-VJP and the per-layer eig solve were already
+  dimension-agnostic).  Requires `jax_enable_x64`.
+
 ## [5.10.3] — 2026-06-01
 
 **Validated 2-D RCWA differentiability (audit P1, single-layer).**
