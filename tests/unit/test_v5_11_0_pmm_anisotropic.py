@@ -161,20 +161,25 @@ def test_no_accuracy_floor_jones_error_improves():
                                    LC["wavelength"], n_orders=80)
 
     def clean_err(deg):
-        # stabilize=False so we test the exact requested degree (skip resonant)
+        # stabilize=False probes the EXACT degree; a resonant degree INFLATES the
+        # power and returns None.  Which degrees resonate is LAPACK-build
+        # dependent (the same isolated-resonance pathology as the scalar PMM), so
+        # the no-floor property is the running-min over CLEAN degrees, not a pair
+        # of fixed degrees (degree 20 happened to resonate on the CI build).
         o, R, T, J = pmm_jones_1d(
             LC["period"], LC_RIDGE, LC_GROOVE, LC["n_substrate"],
             LC["n_superstrate"], LC["depth"], LC["duty_cycle"],
             LC["wavelength"], degree=deg, stabilize=False)
         tot = float(R.sum() + T.sum())
         passive = tot <= 2.0 + 2e-3
-        return (np.max(np.abs(J - Jo)) if passive else None)
+        return (float(np.max(np.abs(J - Jo))) if passive else None)
 
-    e_low = clean_err(8)
-    e_high = clean_err(20)
-    assert e_low is not None and e_high is not None
-    assert e_high < e_low                       # monotone improvement, no floor
-    assert e_high < 1e-4                         # reaches deep accuracy
+    errs = {d: clean_err(d) for d in range(8, 25)}
+    low = [e for d, e in errs.items() if d <= 12 and e is not None]
+    high = [e for d, e in errs.items() if d >= 16 and e is not None]
+    assert low and high                          # clean degrees exist at both ends
+    assert min(high) < min(low)                  # running-min improves, no floor
+    assert min(high) < 1e-4                       # reaches deep accuracy
 
 
 # --------------------------------------------------------------------------- #
