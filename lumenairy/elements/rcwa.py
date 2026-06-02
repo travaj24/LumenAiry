@@ -92,6 +92,11 @@ __all__ = [
     "rcwa_convergence",
     "rcwa_jones_1d",
     "rcwa_jones_1d_segments",
+    "grating_segments",
+    "binary_grating_segments",
+    "interdigitated_grating_segments",
+    "reflective_outcoupling",
+    "jones_retardance_diattenuation",
     "rcwa_jones_2d",
     "rcwa_jones_vs_wavelength",
     "rcwa_efficiency_1d_jax",
@@ -3073,6 +3078,131 @@ def rcwa_jones_1d_segments(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
         xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d_segments")
+
+
+# ===========================================================================
+# W3 -- 1-D device grating builders (emit the ``segments`` list for
+# rcwa_jones_1d_segments, so users don't hand-roll region masks).
+# ===========================================================================
+def grating_segments(widths, materials):
+    """Build a ``segments`` list for :func:`rcwa_jones_1d_segments` from per-region
+    widths and materials.
+
+    ``widths`` are RELATIVE region widths (any positive units; normalized so the
+    period sums to 1); ``materials`` are the matching per-region permittivities
+    (a scalar for an isotropic region, or a ``(3, 3)`` tensor).  Returns
+    ``[(width_fraction, eps), ...]`` -- the ``segments`` argument.  Arbitrary
+    region count (2, 4, N).
+    """
+    widths = [float(w) for w in widths]
+    materials = list(materials)
+    if len(widths) != len(materials):
+        raise ValueError("grating_segments: widths and materials must have the "
+                         f"same length ({len(widths)} != {len(materials)}).")
+    if not widths:
+        raise ValueError("grating_segments: need at least one region.")
+    if any(w <= 0 for w in widths):
+        raise ValueError("grating_segments: all widths must be positive.")
+    total = sum(widths)
+    return [(w / total, eps) for w, eps in zip(widths, materials)]
+
+
+def binary_grating_segments(duty_cycle, eps_ridge, eps_groove):
+    """Two-region (binary) ``segments`` list: a ridge of fractional width
+    ``duty_cycle`` followed by a groove -- the geometry of :func:`rcwa_jones_1d`
+    expressed for :func:`rcwa_jones_1d_segments`."""
+    duty = float(duty_cycle)
+    if not (0.0 < duty < 1.0):
+        raise ValueError(
+            f"binary_grating_segments: duty_cycle must be in (0, 1), got {duty}.")
+    return [(duty, eps_ridge), (1.0 - duty, eps_groove)]
+
+
+def interdigitated_grating_segments(tooth_widths, gap_width, tooth_materials,
+                                    gap_material):
+    """``segments`` list for an interdigitated-teeth profile: each tooth (its own
+    width + material) separated by a gap of width ``gap_width`` filled with
+    ``gap_material`` -- the 'grounded tooth | gap | floating tooth | gap | ...'
+    device pattern.  Widths are relative (normalized over the period)."""
+    tooth_widths = [float(w) for w in tooth_widths]
+    tooth_materials = list(tooth_materials)
+    if len(tooth_widths) != len(tooth_materials):
+        raise ValueError("interdigitated_grating_segments: tooth_widths and "
+                         "tooth_materials must have the same length "
+                         f"({len(tooth_widths)} != {len(tooth_materials)}).")
+    if not tooth_widths:
+        raise ValueError("interdigitated_grating_segments: need at least one tooth.")
+    g = float(gap_width)
+    if g <= 0 or any(w <= 0 for w in tooth_widths):
+        raise ValueError("interdigitated_grating_segments: all widths must be "
+                         "positive.")
+    raw = []
+    for w, m in zip(tooth_widths, tooth_materials):
+        raw.append((w, m))
+        raw.append((g, gap_material))
+    total = sum(w for w, _ in raw)
+    return [(w / total, eps) for w, eps in raw]
+
+
+# ===========================================================================
+# W2 -- reflective-Jones device helpers (metasurface-as-Jones-element).
+# ===========================================================================
+def _qwp_matrix(theta):
+    """Quarter-wave-plate 2x2 Jones matrix, fast axis at ``theta`` (radians), in
+    the library's ``exp(-i w t)`` convention (matches ``apply_waveplate`` with
+    retardance pi/2): ``R(theta) diag(1, -i) R(-theta)``."""
+    c, s = np.cos(theta), np.sin(theta)
+    e = -1j                                        # exp(-i * pi/2)
+    return np.array([[c * c + e * s * s, c * s * (1 - e)],
+                     [c * s * (1 - e), s * s + e * c * c]], dtype=_C)
+
+
+def reflective_outcoupling(jones_reflection, *, qwp_angle=None):
+    """Cross-port (out-coupled) power fraction of the reflective-Jones device
+    ``PBS -> QWP@45 -> grating -> QWP@45 -> PBS`` for a grating's zeroth-order
+    ``jones_reflection`` (the 2x2 returned by :func:`rcwa_jones_1d` /
+    :func:`rcwa_jones_1d_segments`).
+
+    The in-coupling PBS launches an x-polarized wave; a quarter-wave plate (fast
+    axis at ``qwp_angle``, default 45 deg) converts it, the grating reflects it
+    (Jones ``J``), the wave passes back through the QWP, and the out-coupling PBS
+    routes the orthogonal (y) component to the side port.  Returns
+    ``|[Q J Q]_{yx}|**2``.  For a LOSSLESS grating whose retardance ``Gamma`` is
+    aligned to TE/TM this equals ``cos**2(Gamma/2)`` (so tuning the grating's
+    retardance -- e.g. via an LC fill -- modulates the side-port power).
+    """
+    J = np.asarray(jones_reflection, dtype=_C)
+    if J.shape != (2, 2):
+        raise ValueError("reflective_outcoupling: expected a (2, 2) Jones "
+                         f"matrix, got shape {J.shape}.")
+    Q = _qwp_matrix(np.pi / 4 if qwp_angle is None else float(qwp_angle))
+    M = Q @ J @ Q
+    return float(np.abs(M[1, 0]) ** 2)
+
+
+def jones_retardance_diattenuation(jones_reflection):
+    """Retardance, diattenuation, and fast-axis orientation of a 2x2 Jones matrix
+    via the polar decomposition ``J = U H`` (``U`` unitary retarder, ``H``
+    Hermitian diattenuator), from its SVD.
+
+    Returns ``(retardance, diattenuation, fast_axis_rad)``: ``retardance`` is the
+    phase difference between the retarder eigenpolarizations [radians, in
+    ``(-pi, pi]``] (for a TE/TM-aligned grating, ``arg(r_TM) - arg(r_TE)``);
+    ``diattenuation`` = ``(Tmax - Tmin)/(Tmax + Tmin)`` of the intensity
+    eigentransmittances (0 = none, 1 = ideal polarizer); ``fast_axis_rad`` is the
+    orientation of the maximum-transmittance input eigenpolarization."""
+    J = np.asarray(jones_reflection, dtype=_C)
+    if J.shape != (2, 2):
+        raise ValueError("jones_retardance_diattenuation: expected a (2, 2) "
+                         f"Jones matrix, got shape {J.shape}.")
+    U, s, Vh = np.linalg.svd(J)
+    tmax, tmin = float(s[0]) ** 2, float(s[1]) ** 2
+    diatt = (tmax - tmin) / (tmax + tmin) if (tmax + tmin) > 0 else 0.0
+    ev = np.linalg.eigvals(U @ Vh)                 # unitary retarder eigenphases
+    retard = float(np.angle(ev[0] / ev[1]))
+    v0 = np.conj(Vh[0])                            # max-T input eigenpolarization
+    fast_axis = float(np.arctan2(np.real(v0[1]), np.real(v0[0])))
+    return retard, diatt, fast_axis
 
 
 @_with_blas_limit
