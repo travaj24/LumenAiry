@@ -2,6 +2,24 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.3] — 2026-06-01
+
+**Validated 2-D RCWA differentiability (audit P1, single-layer).**
+
+### Added
+
+- A regression test pinning `rcwa_efficiency_2d` 2-D JAX **autodiff** against
+  finite difference (gradients of `sum(T)` w.r.t. a cell permittivity and the
+  layer depth, matched to ~1e-3).  The stable-eig custom-VJP is
+  dimension-agnostic, so the full vector 2-D (crossed-grating / metasurface)
+  solve was already differentiable -- this confirms and protects it as the
+  basis for **single-layer 2-D inverse design**.  Requires
+  `jax.config.update('jax_enable_x64', True)` (the solver already warns when
+  x64 is off, since its eigenproblem is ill-conditioned in single precision).
+  - *Remaining (P1):* multi-layer `RCWAStack.solve` is not yet JAX-traceable
+    (it forces NumPy + uses a host-side eig cache); that is the larger
+    follow-up for differentiating stacked-layer designs.
+
 ## [5.10.2] — 2026-06-01
 
 **RCWA per-layer absorption (audit GAP6).**  Built on the v5.10.1 internal
