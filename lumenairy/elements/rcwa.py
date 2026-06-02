@@ -99,6 +99,7 @@ __all__ = [
     "jones_retardance_diattenuation",
     "rcwa_jones_2d",
     "rcwa_jones_vs_wavelength",
+    "rcwa_jones_vs_wavelength_segments",
     "rcwa_efficiency_1d_jax",
     "uniaxial_tensor",
     "RCWAStack",
@@ -1740,6 +1741,49 @@ def _max_aligned_delta(o_lo, A_lo, o_hi, A_hi):
     return dmax
 
 
+def _rcwa_convergence_stack(stack, *, bump, atol, warn):
+    """``rcwa_convergence`` for a configured :class:`RCWAStack`: solve at its
+    current ``n_orders`` AND a ``bump``-higher count, compare the per-order
+    efficiencies, and return ``(high_result, report)`` (the bumped
+    :class:`RCWAResult`).
+
+    The stack's truncation lives on the object (``nox`` / ``noy``), not in a
+    kwarg, so it is bumped in place and RESTORED in a ``finally`` (a 2-D stack
+    bumps both axes).  The two solves are compared on their ``(2, N)`` per-order
+    R / T, aligned by order index (the high solve retains strictly more orders).
+    """
+    base_nox, base_noy = stack.nox, stack.noy
+    low = stack.solve()
+    o_lo, R_lo, T_lo = low.efficiencies()
+    try:
+        stack.nox = base_nox + int(bump)
+        if not stack.is_1d:
+            stack.noy = base_noy + int(bump)
+        high = stack.solve()
+    finally:
+        stack.nox, stack.noy = base_nox, base_noy
+    o_hi, R_hi, T_hi = high.efficiencies()
+    delta = max(_max_aligned_delta(o_lo, R_lo, o_hi, R_hi),
+                _max_aligned_delta(o_lo, T_lo, o_hi, T_hi))
+    dsR = abs(float(np.sum(to_numpy(R_lo))) - float(np.sum(to_numpy(R_hi))))
+    dsT = abs(float(np.sum(to_numpy(T_lo))) - float(np.sum(to_numpy(T_hi))))
+    converged = delta <= atol
+    no_lo = {"n_orders": base_nox} if stack.is_1d else {
+        "n_orders": base_nox, "n_orders_y": base_noy}
+    no_hi = {"n_orders": base_nox + int(bump)} if stack.is_1d else {
+        "n_orders": base_nox + int(bump), "n_orders_y": base_noy + int(bump)}
+    report = dict(converged=converged, delta=delta, delta_sum_R=dsR,
+                  delta_sum_T=dsT, n_orders_low=no_lo, n_orders_high=no_hi)
+    if warn and not converged:
+        import warnings
+        warnings.warn(
+            f"rcwa_convergence: RCWAStack NOT converged at {no_lo} -- the "
+            f"per-order efficiency changed by {delta:.2e} (> atol={atol:.1e}) "
+            f"going to {no_hi}; the lower-order result may be unreliable. "
+            f"Increase n_orders.", stacklevel=3)
+    return high, report
+
+
 def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
                      warn=True, **kwargs):
     """Run an RCWA ``solver`` at the requested harmonic count AND a higher one,
@@ -1755,13 +1799,19 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
 
     Parameters
     ----------
-    solver : callable
+    solver : callable or RCWAStack
         An RCWA efficiency entry point returning ``(orders, R, T, ...)`` --
         e.g. :func:`rcwa_efficiency_1d`, :func:`rcwa_efficiency_2d`,
-        :func:`rcwa_jones_1d`.
+        :func:`rcwa_jones_1d` -- OR a configured :class:`RCWAStack` (with its
+        source + layers already set).  For a stack the truncation it is bumped
+        is its ``n_orders`` (and ``n_orders_y`` for a 2-D stack); ``kwargs`` /
+        ``order_params`` are ignored and the two ``RCWAResult`` solves are
+        compared on their per-order efficiencies (the HIGHER-resolution
+        ``RCWAResult`` is returned).
     order_params : tuple of str, optional
-        The harmonic-count keyword(s) to bump.  ``("n_orders",)`` (default) for
-        the 1-D / Jones-1-D solvers; ``("n_orders_x", "n_orders_y")`` for 2-D.
+        The harmonic-count keyword(s) to bump (callable ``solver`` only).
+        ``("n_orders",)`` (default) for the 1-D / Jones-1-D solvers;
+        ``("n_orders_x", "n_orders_y")`` for 2-D.
     bump : int, optional
         Increment added to each order parameter for the high-resolution solve
         (default 4).
@@ -1771,19 +1821,22 @@ def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
     warn : bool, optional
         Emit a ``UserWarning`` when not converged (default ``True``).
     **kwargs
-        Passed verbatim to ``solver`` (must include the ``order_params`` and the
-        geometry).
+        Passed verbatim to a callable ``solver`` (must include the
+        ``order_params`` and the geometry); ignored for an :class:`RCWAStack`.
 
     Returns
     -------
-    result : tuple
-        The HIGHER-resolution ``solver(**kwargs_bumped)`` return value (the more
-        trustworthy of the two).
+    result : tuple or RCWAResult
+        The HIGHER-resolution solve (the more trustworthy of the two) -- the
+        ``solver(**kwargs_bumped)`` tuple for a callable, or the bumped
+        :class:`RCWAResult` for a stack.
     report : dict
         ``converged`` (bool), ``delta`` (max per-order efficiency change),
         ``delta_sum_R`` / ``delta_sum_T`` (change in total R / T),
         ``n_orders_low`` / ``n_orders_high`` (the two truncations).
     """
+    if isinstance(solver, RCWAStack):
+        return _rcwa_convergence_stack(solver, bump=bump, atol=atol, warn=warn)
     for p in order_params:
         if p not in kwargs:
             raise ValueError(
@@ -1879,6 +1932,85 @@ def rcwa_jones_vs_wavelength(
             period, _at(eps_ridge, w), _at(eps_groove, w),
             _at(n_substrate, w), _at(n_superstrate, w), depth, duty_cycle,
             float(w), angle=angle, n_orders=n_orders)
+        J[i] = np.asarray(to_numpy(jr))
+        Rt[i] = np.asarray(to_numpy(R)).sum(axis=1)
+        Tt[i] = np.asarray(to_numpy(T)).sum(axis=1)
+    if np.ndim(wavelengths):
+        return wl, J, Rt, Tt
+    return wl[0], J[0], Rt[0], Tt[0]
+
+
+def rcwa_jones_vs_wavelength_segments(
+    period: float,
+    segments,
+    n_substrate,
+    n_superstrate,
+    depth: float,
+    wavelengths,
+    *,
+    angle: float = 0.0,
+    n_orders: int = 11,
+):
+    """DISPERSIVE Jones spectral sweep of a MULTI-SEGMENT 1-D anisotropic grating
+    -- the arbitrary-profile generalisation of :func:`rcwa_jones_vs_wavelength`
+    (a binary ridge / groove cell), looping :func:`rcwa_jones_1d_segments` over
+    ``wavelengths``.
+
+    Each segment's ``eps`` (and ``n_substrate`` / ``n_superstrate``) may be a
+    FIXED value or a CALLABLE ``wl -> value`` (so material dispersion is handled
+    by passing ``n(lambda)`` / ``eps(lambda)`` closures -- e.g. from the bundled
+    ``refractiveindex`` database); the per-segment ``width_fraction`` is fixed.
+
+    Parameters
+    ----------
+    period : float
+        Grating period (metres).
+    segments : list of (width_fraction, eps_or_callable)
+        Consecutive regions covering one period (the
+        :func:`rcwa_jones_1d_segments` profile); each ``eps`` is a scalar /
+        ``(3, 3)`` tensor, or a ``wl -> (scalar | (3, 3))`` callable for a
+        dispersive region.  The ``width_fraction`` values must sum to ``1``.
+    n_substrate, n_superstrate : complex or callable
+        Half-space indices, or ``wl -> complex`` callables.
+    depth : float
+        Grating thickness (metres).
+    wavelengths : float or array-like
+        Vacuum wavelength(s) [m].
+    angle, n_orders
+        As in :func:`rcwa_jones_1d_segments`.
+
+    Returns
+    -------
+    wavelengths : ndarray
+        The sweep grid (scalar in -> scalar out).
+    jones : (Nwl, 2, 2) complex ndarray
+        Zeroth-order Jones reflection at each wavelength.
+    R_total, T_total : (Nwl, 2) float ndarray
+        Total reflected / transmitted efficiency (summed over orders) for each
+        incident polarization (column 0 = incident ``E_x``, 1 = ``E_y``).
+    """
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError(
+            "rcwa_jones_vs_wavelength_segments: every wavelength must be finite "
+            "and > 0 [m] (got an empty or invalid sweep).")
+    seg_list = list(segments)
+    if len(seg_list) == 0:
+        raise ValueError(
+            "rcwa_jones_vs_wavelength_segments: segments must be a non-empty "
+            "list of (width_fraction, eps) pairs.")
+
+    def _at(v, w):
+        return v(w) if callable(v) else v
+
+    J = np.empty((wl.size, 2, 2), dtype=_C)
+    Rt = np.empty((wl.size, 2), dtype=float)
+    Tt = np.empty((wl.size, 2), dtype=float)
+    for i, w in enumerate(wl):
+        segs_w = [(width, _at(eps, w)) for (width, eps) in seg_list]
+        _o, R, T, jr = rcwa_jones_1d_segments(
+            period, segs_w, _at(n_substrate, w), _at(n_superstrate, w),
+            depth, float(w), angle=angle, n_orders=n_orders)
         J[i] = np.asarray(to_numpy(jr))
         Rt[i] = np.asarray(to_numpy(R)).sum(axis=1)
         Tt[i] = np.asarray(to_numpy(T)).sum(axis=1)
@@ -2830,6 +2962,50 @@ def _tensor_offplane_present(*tensors):
     return False
 
 
+def _reject_jax_offplane(fn_name, *tensors):
+    """Raise ``NotImplementedError`` if any JAX tensor argument carries
+    OUT-OF-PLANE coupling (``eps_xz / eps_yz / eps_zx / eps_zy != 0``).
+
+    The 1-D full-3x3 (out-of-plane) solver routes through
+    :func:`_select_forward_flux`, whose forward/backward mode split is a
+    ``np.where`` / ``argsort`` on host-materialised flux -- a HARD, non-
+    differentiable selection that breaks the autodiff graph (mirroring the
+    ``rcwa_efficiency_2d`` ``formulation='fff_nv'`` JAX rejection).  Worse, the
+    plain in-plane router (:func:`_tensor_offplane_present`) SKIPS JAX arrays, so
+    a JAX off-plane tensor would otherwise be SILENTLY treated as in-plane and
+    its z-coupling dropped -- a quietly wrong gradient.  So reject it explicitly.
+
+    A CONCRETE JAX array is inspected for the off-plane block; a TRACER (under
+    ``jax.grad`` / ``jax.jit``) cannot be materialised, so its off-plane content
+    is undetectable here -- the docstring documents that the JAX path supports
+    the in-plane tensor subset only."""
+    for t in tensors:
+        if t is None or not is_jax_array(t):
+            continue
+        try:                                 # concrete JAX array -> inspectable
+            a = np.asarray(to_numpy(t)).astype(_C)
+        except Exception:                    # tracer -> not materialisable
+            continue
+        if a.shape[-2:] != (3, 3):
+            continue
+        offz = np.maximum.reduce([np.abs(a[..., 0, 2]), np.abs(a[..., 1, 2]),
+                                  np.abs(a[..., 2, 0]), np.abs(a[..., 2, 1])])
+        diag = np.maximum.reduce([np.abs(a[..., 0, 0]), np.abs(a[..., 1, 1]),
+                                  np.abs(a[..., 2, 2])])
+        scale = max(float(np.max(diag)), 1.0)
+        if float(np.max(offz)) > 1e-9 * scale:
+            raise NotImplementedError(
+                f"{fn_name}: a JAX (differentiable) tensor with OUT-OF-PLANE "
+                f"coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0 -- e.g. a "
+                f"tilted-director LC) has NO differentiable path: the full-3x3 "
+                f"solver's forward-mode selection (_select_forward_flux) uses a "
+                f"host np.where / argsort that breaks the autodiff graph. Use an "
+                f"IN-PLANE tensor (exx, exy, eyx, eyy, ezz; e.g. a theta=pi/2 "
+                f"uniaxial_tensor) for gradient-based design, or call on "
+                f"NumPy/CuPy for the rigorous (non-differentiable) off-plane "
+                f"solve.")
+
+
 def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
     """Reject a ``(3, 3)`` permittivity tensor (or ``(..., 3, 3)`` tensor cell)
     with OUT-OF-PLANE coupling -- ``eps_xz, eps_yz, eps_zx, eps_zy``.
@@ -3011,6 +3187,9 @@ def rcwa_jones_1d(
     is_jax = backend_name(xp) == "jax"
     if is_jax:
         _warn_if_jax_f32("rcwa_jones_1d")
+        # See _reject_jax_offplane: the full-3x3 path is non-differentiable and
+        # a JAX off-plane tensor would otherwise be silently treated as in-plane.
+        _reject_jax_offplane("rcwa_jones_1d", eps_ridge, eps_groove)
     M = int(n_orders)
     N = 2 * M + 1
     orders = np.arange(-M, M + 1)
@@ -3098,7 +3277,13 @@ def rcwa_jones_1d_segments(
     (:func:`_jones_1d_from_profiles`); only the profile sampling differs.
 
     Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
-    a segment tensor is a JAX array); see :func:`rcwa_efficiency_1d`.
+    a segment tensor is a JAX array); see :func:`rcwa_efficiency_1d`.  The JAX
+    path differentiates the IN-PLANE tensor subset (``exx, exy, eyx, eyy,
+    ezz``); a JAX tensor with OUT-OF-PLANE coupling (``eps_xz / eps_yz /
+    eps_zx / eps_zy != 0`` -- a tilted-director LC) raises
+    :class:`NotImplementedError`, because the full-3x3 solver's forward-mode
+    flux selection is a host ``np.where`` / ``argsort`` that breaks the autodiff
+    graph (call on NumPy / CuPy for the rigorous off-plane solve).
 
     Parameters
     ----------
@@ -3181,6 +3366,10 @@ def rcwa_jones_1d_segments(
     is_jax = backend_name(xp) == "jax"
     if is_jax:
         _warn_if_jax_f32("rcwa_jones_1d_segments")
+        # The full-3x3 (out-of-plane) solver is non-differentiable (its
+        # forward-mode flux split is a host np.where/argsort); the in-plane
+        # router silently skips JAX, so reject a JAX off-plane tensor here.
+        _reject_jax_offplane("rcwa_jones_1d_segments", *eps_tensors)
     M = int(n_orders)
     N = 2 * M + 1
     orders = np.arange(-M, M + 1)
@@ -3316,14 +3505,17 @@ def interdigitated_grating_segments(tooth_widths, gap_width, tooth_materials,
 # ===========================================================================
 # W2 -- reflective-Jones device helpers (metasurface-as-Jones-element).
 # ===========================================================================
-def _qwp_matrix(theta):
+def _qwp_matrix(theta, xp=np):
     """Quarter-wave-plate 2x2 Jones matrix, fast axis at ``theta`` (radians), in
     the library's ``exp(-i w t)`` convention (matches ``apply_waveplate`` with
-    retardance pi/2): ``R(theta) diag(1, -i) R(-theta)``."""
-    c, s = np.cos(theta), np.sin(theta)
+    retardance pi/2): ``R(theta) diag(1, -i) R(-theta)``.  Built in namespace
+    ``xp`` (NumPy by default) so it can multiply a JAX Jones matrix and keep the
+    autodiff graph; ``theta`` is a concrete host scalar (a device geometry knob,
+    not a traced quantity)."""
+    c, s = float(np.cos(theta)), float(np.sin(theta))
     e = -1j                                        # exp(-i * pi/2)
-    return np.array([[c * c + e * s * s, c * s * (1 - e)],
-                     [c * s * (1 - e), s * s + e * c * c]], dtype=_C)
+    return xp.asarray([[c * c + e * s * s, c * s * (1 - e)],
+                       [c * s * (1 - e), s * s + e * c * c]], dtype=_C)
 
 
 def reflective_outcoupling(jones_reflection, *, qwp_angle=None):
@@ -3339,14 +3531,21 @@ def reflective_outcoupling(jones_reflection, *, qwp_angle=None):
     ``|[Q J Q]_{yx}|**2``.  For a LOSSLESS grating whose retardance ``Gamma`` is
     aligned to TE/TM this equals ``cos**2(Gamma/2)`` (so tuning the grating's
     retardance -- e.g. via an LC fill -- modulates the side-port power).
+
+    Backend-agnostic: a NumPy / CuPy Jones returns a Python float (bit-identical
+    to the historical NumPy path), and a JAX Jones returns a traced scalar so
+    ``jax.grad`` flows through (the device is just three 2x2 matrix products).
     """
-    J = np.asarray(jones_reflection, dtype=_C)
+    xp = array_namespace(jones_reflection)
+    is_jax = backend_name(xp) == "jax"
+    J = jones_reflection if is_jax else np.asarray(jones_reflection, dtype=_C)
     if J.shape != (2, 2):
         raise ValueError("reflective_outcoupling: expected a (2, 2) Jones "
                          f"matrix, got shape {J.shape}.")
-    Q = _qwp_matrix(np.pi / 4 if qwp_angle is None else float(qwp_angle))
+    Q = _qwp_matrix(np.pi / 4 if qwp_angle is None else float(qwp_angle), xp=xp)
     M = Q @ J @ Q
-    return float(np.abs(M[1, 0]) ** 2)
+    out = xp.abs(M[1, 0]) ** 2
+    return out if is_jax else float(out)
 
 
 def jones_retardance_diattenuation(jones_reflection):
@@ -4398,34 +4597,61 @@ class RCWAResult:
         return result
 
     @staticmethod
+    def _cell_grid_index(xg, yg, period_x, period_y, Sx, Sy):
+        """Nearest-cell-pixel ``(ix, iy)`` index grids mapping the real-space
+        field samples ``(xg, yg)`` onto a ``(Sx, Sy)`` unit-cell sampling."""
+        ix = (np.floor((xg % period_x) / period_x * Sx).astype(int)) % Sx
+        iy = (np.floor((yg % period_y) / period_y * Sy).astype(int)) % Sy
+        return ix, iy
+
+    @staticmethod
     def _layer_im_eps(layer, xg, yg, period_x, period_y):
-        """``Im(eps_public(x, y)) >= 0`` of a layer on the real-space field grid
-        (the local loss density weight for :meth:`layer_absorption`)."""
+        """``Im(eps_public(x, y)) >= 0`` of a SCALAR (uniform / isotropic) layer
+        on the real-space field grid (the local loss density weight for
+        :meth:`layer_absorption`)."""
         ny, nx = len(yg), len(xg)
         if layer.kind == "uniform":
             return np.full((ny, nx), float(np.imag(complex(layer.data))))
         if layer.kind == "iso":
             cell = np.asarray(layer.data)                 # (Sx, Sy), public
             Sx, Sy = cell.shape
-            ix = (np.floor((xg % period_x) / period_x * Sx).astype(int)) % Sx
-            iy = (np.floor((yg % period_y) / period_y * Sy).astype(int)) % Sy
+            ix, iy = RCWAResult._cell_grid_index(xg, yg, period_x, period_y,
+                                                 Sx, Sy)
             return np.imag(cell[np.ix_(ix, iy)]).T          # (ny, nx)
         raise NotImplementedError(
-            "RCWAResult.layer_absorption: only uniform and isotropic-cell "
-            "layers are supported; tensor / analytic-shape layers are not yet "
-            "handled (their local Im(eps) map is not reconstructed here).")
+            "RCWAResult.layer_absorption: _layer_im_eps handles only uniform / "
+            "isotropic-cell layers; a tensor layer uses _layer_eps_tensor_grid.")
+
+    @staticmethod
+    def _layer_eps_tensor_grid(layer, xg, yg, period_x, period_y):
+        """Full ``(ny, nx, 3, 3)`` PUBLIC permittivity tensor of a TENSOR layer
+        on the real-space field grid (nearest-pixel sampling of the
+        ``(Sx, Sy, 3, 3)`` cell) -- the loss operator for the tensor branch of
+        :meth:`layer_absorption`."""
+        cell = np.asarray(layer.data)                     # (Sx, Sy, 3, 3) public
+        Sx, Sy = cell.shape[0], cell.shape[1]
+        ix, iy = RCWAResult._cell_grid_index(xg, yg, period_x, period_y, Sx, Sy)
+        # gather (nx, ny, 3, 3) then move to (ny, nx, 3, 3)
+        g = cell[np.ix_(ix, iy)]                           # (nx, ny, 3, 3)
+        return np.transpose(g, (1, 0, 2, 3))               # (ny, nx, 3, 3)
 
     def layer_absorption(self, *, nx=64, ny=None, nz_per_layer=8):
         """Absorbed power fraction broken down PER LAYER (audit GAP6).
 
         The total absorptance ``A = 1 - sum(R) - sum(T)`` tells you how much
         power is lost but not WHERE; this attributes it to each layer by
-        integrating the local loss density ``Im(eps) |E|^2`` (from the
-        reconstructed internal field) over each layer, normalised so the layers
-        sum to the total absorptance (energy-conserving by construction).
+        integrating the local loss density over each layer, normalised so the
+        layers sum to the total absorptance (energy-conserving by construction).
+        For a scalar (uniform / isotropic) layer the density is
+        ``Im(eps) |E|^2``; for an ANISOTROPIC (tensor) layer it is the full
+        quadratic form ``Im(E* . eps . E)`` (the rigorous power-loss operator,
+        which reduces to ``Im(eps) |E|^2`` for a diagonal medium) -- the
+        reconstructed ``(Ex, Ey, Ez)`` is contracted against the local
+        ``Im(eps_tensor)``.
 
-        Requires ``RCWAStack.solve(retain_internal=True)``.  Uniform and
-        isotropic-cell layers only (raises for tensor / analytic-shape layers).
+        Requires ``RCWAStack.solve(retain_internal=True)``.  Uniform,
+        isotropic-cell, and TENSOR (in-plane) layers are supported (raises for
+        analytic-shape layers, whose local map is not reconstructed here).
 
         Returns
         -------
@@ -4449,7 +4675,18 @@ class RCWAResult:
         dx, dy = px / nx_i, py / ny_i
         xg = (np.arange(nx_i) - nx_i // 2) * dx
         yg = (np.arange(ny_i) - ny_i // 2) * dy
-        im_eps = [self._layer_im_eps(L, xg, yg, px, py) for L in layers]
+        # Per-layer local loss operator: a scalar Im(eps) map for uniform /
+        # isotropic layers, the full (ny, nx, 3, 3) tensor for anisotropic
+        # layers (the loss density is then the quadratic form Im(E* . eps . E)).
+        if any(L.kind == "shapes" for L in layers):
+            raise NotImplementedError(
+                "RCWAResult.layer_absorption: analytic-shape layers are not "
+                "supported (their local Im(eps) map is not reconstructed here); "
+                "uniform, isotropic-cell, and tensor layers are.")
+        im_eps = [None if L.kind == "tensor"
+                  else self._layer_im_eps(L, xg, yg, px, py) for L in layers]
+        eps_t = [self._layer_eps_tensor_grid(L, xg, yg, px, py)
+                 if L.kind == "tensor" else None for L in layers]
         out = np.zeros((2, nlay))
         for p, inc in enumerate(((1.0, 0.0), (0.0, 1.0))):
             raw = np.zeros(nlay)
@@ -4457,12 +4694,22 @@ class RCWAResult:
                 zl = (np.arange(nz_per_layer) + 0.5) / nz_per_layer * thick[i]
                 f = self.internal_field(zl, component="E", nx=nx_i, ny=ny_i,
                                         dx=dx, dy=dy, layer=i, incident=inc)
-                e2 = (np.abs(f["Ex"]) ** 2 + np.abs(f["Ey"]) ** 2
-                      + np.abs(f["Ez"]) ** 2)
-                if e2.ndim == 2:                            # 1-D: (nz, nx)
-                    e2 = e2[:, None, :]
-                # thickness-weighted cell+depth average of Im(eps)|E|^2
-                raw[i] = thick[i] * float(np.mean(im_eps[i][None] * e2))
+                ex, ey, ez = f["Ex"], f["Ey"], f["Ez"]
+                if ex.ndim == 2:                            # 1-D: (nz, nx)
+                    ex, ey, ez = ex[:, None, :], ey[:, None, :], ez[:, None, :]
+                if layers[i].kind == "tensor":
+                    # density = Im(E* . eps . E) with E = (Ex, Ey, Ez), the
+                    # local public tensor T = eps_t[i] broadcast over (nz):
+                    # sum_ab conj(E_a) T_ab E_b, then take Im (>= 0 passive).
+                    E = np.stack([ex, ey, ez], axis=-1)     # (nz, ny, nx, 3)
+                    T = eps_t[i][None]                      # (1, ny, nx, 3, 3)
+                    TE = np.einsum("...ab,...b->...a", T, E)  # eps . E
+                    dens = np.imag(np.sum(np.conj(E) * TE, axis=-1))
+                else:
+                    e2 = np.abs(ex) ** 2 + np.abs(ey) ** 2 + np.abs(ez) ** 2
+                    dens = im_eps[i][None] * e2
+                # thickness-weighted cell+depth average of the loss density
+                raw[i] = thick[i] * float(np.mean(dens))
             total = raw.sum()
             out[p] = A_tot[p] * raw / total if total > 0 else np.zeros(nlay)
         return out

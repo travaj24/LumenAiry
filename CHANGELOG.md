@@ -70,6 +70,47 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
 - **New tests** `tests/unit/test_v5_11_0_pmm_anisotropic.py` — the four
   validation gates (vs `rcwa_jones_1d`, decouple-to-scalar, energy, no-floor).
 
+#### Lower-priority ergonomics / hardening (from the same audits)
+
+- **JAX off-plane differentiability guard.** The in-plane (`z`-decoupled tensor)
+  1-D Jones path is `jax.grad`-differentiable (verified vs central finite
+  difference across multiple objectives / `n_orders`); the full-3×3 *out-of-plane*
+  path is **not** (its forward-mode flux selector `_select_forward_flux` uses
+  `np.where`/`argsort`, which breaks the trace). Because `_tensor_offplane_present`
+  skips JAX arrays, a concrete off-plane JAX tensor would otherwise be silently
+  routed through the in-plane solver — a wrong answer *and* a wrong gradient.
+  `rcwa_jones_1d` / `rcwa_jones_1d_segments` now raise a clear `NotImplementedError`
+  for a concrete off-plane JAX tensor (mirroring the `formulation='fff_nv'` JAX
+  rejection); the in-plane subset is pinned differentiable. NumPy paths are an
+  exact no-op (the guard fires only under `if is_jax:`). *Known narrow gap:* an
+  off-plane tensor built purely **inside** a trace (a `Tracer`) cannot be
+  inspected and routes in-plane — documented in the docstring.
+- **`RCWAResult.layer_absorption` for tensor-cell layers.** Per-layer loss
+  attribution for the metal-tooth / LC `(3,3)`-tensor layers via the anti-Hermitian
+  loss density `Im(Eᴴ·ε·E)` (the public `exp(-i w t)` convention; `Im(ε_public) ≥ 0`).
+  A uniform tensor cell matches the equivalent scalar layer **bit-identically**;
+  per-layer values close to the total absorptance and localize loss to the lossy
+  layer. Uniform / isotropic-cell layers are unchanged; analytic-shape layers still
+  raise.
+- **`reflective_outcoupling` is now backend-agnostic.** `jax.grad` traces through
+  the side-port out-coupling FOM (so it can be an inverse-design objective directly);
+  a NumPy Jones still returns a Python `float` **bit-identical** to before.
+- **`rcwa_convergence` accepts an `RCWAStack`.** Solves the stack at its configured
+  `n_orders` and a bumped count, reports/warns on the **per-order** efficiency delta
+  (a sharp-resonant metal multilayer biases an isolated order while total power
+  stays bounded), and restores the stack's `n_orders`. The single-entry-solver path
+  is unchanged.
+- **`rcwa_jones_vs_wavelength_segments`** — the segmented (multi-region / multi-level)
+  dispersive Jones sweep companion to `rcwa_jones_1d_segments`; `segments` and the
+  half-space indices may be `wl → …` callables (material dispersion). A 2-segment
+  sweep is **bit-identical** to the binary `rcwa_jones_vs_wavelength`. Exported.
+- **New tests** `tests/unit/test_v5_11_1_rcwa_lowerpri.py` (19) — differentiability
+  (in-plane grad vs FD; off-plane raises), tensor `layer_absorption` (sum-to-total +
+  uniform-tensor-vs-scalar bit-identity), `reflective_outcoupling` NumPy bit-identity
+  + JAX grad, stack `rcwa_convergence`, segmented dispersive sweep. An adversarial
+  three-skeptic review (tensor-loss physics, the JAX guard, bit-identity of the
+  touched public surface) found no defects.
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**
