@@ -91,6 +91,7 @@ __all__ = [
     "rcwa_extrapolate",
     "rcwa_convergence",
     "rcwa_jones_1d",
+    "rcwa_jones_1d_segments",
     "rcwa_jones_2d",
     "rcwa_jones_vs_wavelength",
     "rcwa_efficiency_1d_jax",
@@ -2685,6 +2686,91 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
     return has_off
 
 
+def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
+                            eps_sup, eps_sub, kz_inc, depth, kx0, xp, is_jax,
+                            fn_name):
+    """Shared 1-D anisotropic Jones solve core (binary or multi-segment).
+
+    Given the per-component one-period ``profiles`` (5 keys for the in-plane
+    path; 9 keys when ``offplane`` is True) and the already-set-up modal grid
+    (``Kx, Ky, kxv, k0`` and the half-space ``eps_sup / eps_sub / kz_inc``),
+    build the convolutions, layer eigenmodes, region/layer S-matrix (the
+    general full-tensor branch or the in-plane branch), then the R/T/Jones
+    efficiency tail.  Returns ``(orders, R_eff, T_eff, jones_reflection)``.
+
+    Factored out of :func:`rcwa_jones_1d` so that
+    :func:`rcwa_jones_1d_segments` reuses the EXACT same core; the binary and
+    multi-segment callers differ only in how they sample ``profiles``.  Keeps
+    the JAX-differentiable stack-based structure (no in-place assignment).
+    """
+    N = 2 * M + 1
+    if offplane:
+        # ---- FULL-3x3 (out-of-plane) path (Li 2003) ------------------------
+        # Sample all nine component profiles, build the full convolutions +
+        # generator eigenmodes (explicit forward/backward), and assemble the
+        # half-space regions as [W; -V] (the in-plane symmetry holds for an
+        # isotropic half-space) and the layer via the GENERAL S-matrix.
+        Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ = \
+            _tensor_convolutions_full(profiles, M)
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+        Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
+            Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ)
+        Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
+        Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
+        Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
+        S = _interface_smatrix_general(Mref, Ml)
+        S = _redheffer_star(
+            S, _propagation_smatrix_general(lam, lam_b, k0 * depth))
+        S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
+        S11, S12, S21, S22 = S
+    else:
+        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M)
+
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+        Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
+        S = _interface_smatrix(Wref, Vref, Wl, Vl)
+        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        S11, S12, S21, S22 = S
+
+    delta = xp.asarray((orders == 0).astype(_C))
+    zeros_N = xp.zeros(N, dtype=_C)
+    # Build the two incident-polarization responses then STACK (no item
+    # assignment, so the path is JAX-differentiable as well as GPU-ready).
+    R_rows, T_rows, j_cols = [], [], []
+    for pol in ("x", "y"):
+        if pol == "x":
+            cinc = xp.concatenate([delta, zeros_N])
+            einc_sq = 1.0 + (kx0 / kz_inc) ** 2 if kz_inc != 0 else 1.0
+        else:
+            cinc = xp.concatenate([zeros_N, delta])
+            einc_sq = 1.0
+        r = S11 @ cinc
+        t = S21 @ cinc
+        rx, ry = r[:N], r[N:]
+        tx, ty = t[:N], t[N:]
+        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        rz = -(kxv * rx) / safe_r
+        tz = -(kxv * tx) / safe_t
+        Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                         + xp.abs(rz) ** 2) / einc_sq
+        Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                         + xp.abs(tz) ** 2) / einc_sq
+        R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
+        T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+        # Zeroth-order Jones column (conjugate back to public exp(-i w t)).
+        j_cols.append(xp.stack([xp.conj(rx[M]), xp.conj(ry[M])]))
+    R_eff = xp.stack(R_rows)                       # (2, N)
+    T_eff = xp.stack(T_rows)
+    jones_reflection = xp.stack(j_cols, axis=1)    # (2, 2): columns = pol
+    if not is_jax:
+        _check_energy(fn_name, R_eff, T_eff)
+    return orders, R_eff, T_eff, jones_reflection
+
+
 @_with_blas_limit
 def rcwa_jones_1d(
     period: float,
@@ -2789,82 +2875,204 @@ def rcwa_jones_1d(
     xq = (xp.arange(n_samples) + 0.5) / n_samples
     inside = xq < duty_cycle
     if offplane:
-        # ---- FULL-3x3 (out-of-plane) path (Li 2003) ------------------------
-        # Sample all nine component profiles, build the full convolutions +
-        # generator eigenmodes (explicit forward/backward), and assemble the
-        # half-space regions as [W; -V] (the in-plane symmetry holds for an
-        # isotropic half-space) and the layer via the GENERAL S-matrix.
+        # ---- FULL-3x3 (out-of-plane) path (Li 2003): sample all nine
+        # component profiles (ridge over duty), the rest is the shared core.
         profiles = {}
         for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
                               "yy": (1, 1), "zz": (2, 2), "xz": (0, 2),
                               "zx": (2, 0), "yz": (1, 2), "zy": (2, 1)}.items():
             profiles[key] = xp.where(inside, eps_ridge[ii, jj],
                                      eps_groove[ii, jj]).astype(_C)
-        Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ = \
-            _tensor_convolutions_full(profiles, M)
-        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
-        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-        Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
-            Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, EZX, EZY, EXZ, EYZ)
-        Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
-        Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
-        Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
-        S = _interface_smatrix_general(Mref, Ml)
-        S = _redheffer_star(
-            S, _propagation_smatrix_general(lam, lam_b, k0 * depth))
-        S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
-        S11, S12, S21, S22 = S
     else:
         profiles = {}
         for key, (ii, jj) in {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0),
                               "yy": (1, 1), "zz": (2, 2)}.items():
             profiles[key] = xp.where(inside, eps_ridge[ii, jj],
                                      eps_groove[ii, jj]).astype(_C)
-        Cxx, Cxy, Cyx, Cyy, EZZ = _tensor_convolutions(profiles, M)
 
-        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
-        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-        Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
-        S = _interface_smatrix(Wref, Vref, Wl, Vl)
-        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-        S11, S12, S21, S22 = S
-
-    delta = xp.asarray((orders == 0).astype(_C))
-    zeros_N = xp.zeros(N, dtype=_C)
     kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2)))
-    # Build the two incident-polarization responses then STACK (no item
-    # assignment, so the path is JAX-differentiable as well as GPU-ready).
-    R_rows, T_rows, j_cols = [], [], []
-    for pol in ("x", "y"):
-        if pol == "x":
-            cinc = xp.concatenate([delta, zeros_N])
-            einc_sq = 1.0 + (kx0 / kz_inc) ** 2 if kz_inc != 0 else 1.0
-        else:
-            cinc = xp.concatenate([zeros_N, delta])
-            einc_sq = 1.0
-        r = S11 @ cinc
-        t = S21 @ cinc
-        rx, ry = r[:N], r[N:]
-        tx, ty = t[:N], t[N:]
-        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
-        rz = -(kxv * rx) / safe_r
-        tz = -(kxv * tx) / safe_t
-        Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                         + xp.abs(rz) ** 2) / einc_sq
-        Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                         + xp.abs(tz) ** 2) / einc_sq
-        R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
-        T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
-        # Zeroth-order Jones column (conjugate back to public exp(-i w t)).
-        j_cols.append(xp.stack([xp.conj(rx[M]), xp.conj(ry[M])]))
-    R_eff = xp.stack(R_rows)                       # (2, N)
-    T_eff = xp.stack(T_rows)
-    jones_reflection = xp.stack(j_cols, axis=1)    # (2, 2): columns = pol
-    if not is_jax:
-        _check_energy("rcwa_jones_1d", R_eff, T_eff)
-    return orders, R_eff, T_eff, jones_reflection
+    return _jones_1d_from_profiles(
+        profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
+        eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
+        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d")
+
+
+@_with_blas_limit
+def rcwa_jones_1d_segments(
+    period: float,
+    segments,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelength: float,
+    *,
+    angle: float = 0.0,
+    n_orders: int = 11,
+    use_gpu: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Rigorous 1-D anisotropic grating with an ARBITRARY piecewise-constant
+    profile -- the multi-region / multi-level generalisation of
+    :func:`rcwa_jones_1d` (which is the 2-segment ridge/groove special case).
+
+    A single grating layer is partitioned into consecutive regions along ``x``;
+    each region carries its own (possibly anisotropic) permittivity.  This
+    covers multi-level staircases (blazed-grating approximations), arbitrary
+    multi-region cells, and mixed isotropic / liquid-crystal regions.  Because
+    an in-plane tensor couples TE and TM the response is a full Jones matrix;
+    out-of-plane (full ``3x3``) tensors route through the v5.11.0 general
+    solver.  The solve shares the EXACT same core as :func:`rcwa_jones_1d`
+    (:func:`_jones_1d_from_profiles`); only the profile sampling differs.
+
+    Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
+    a segment tensor is a JAX array); see :func:`rcwa_efficiency_1d`.
+
+    Parameters
+    ----------
+    period : float
+        Grating period (metres).
+    segments : list of (width_fraction, eps)
+        Consecutive regions covering one period in order; the
+        ``width_fraction`` values (each in ``(0, 1]``) must sum to ``1`` (within
+        ``1e-6``).  Each ``eps`` is either a complex scalar (taken as
+        ``scalar * I(3)``, isotropic), an in-plane ``(3, 3)`` tensor, or a full
+        out-of-plane ``(3, 3)`` tensor (e.g. a tilted-director LC built with
+        :func:`uniaxial_tensor`).  PUBLIC convention ``Im(eps) > 0`` for loss.
+    n_substrate, n_superstrate : complex
+        Transmission / incidence half-space (isotropic) indices.
+    depth, wavelength, angle, n_orders
+        As in :func:`rcwa_jones_1d` (planar incidence at ``angle``).
+
+    Returns
+    -------
+    orders : (2*n_orders+1,) int ndarray
+        Diffraction-order indices.
+    R_eff, T_eff : (2, 2*n_orders+1) float ndarray
+        Reflected / transmitted diffraction efficiency per order; row 0 is the
+        response to an incident ``E_x`` wave, row 1 to incident ``E_y``.
+    jones_reflection : (2, 2) complex ndarray
+        Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis
+        (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
+        incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
+    """
+    _validate_geometry("rcwa_jones_1d_segments",
+                       **_concrete(period=period, depth=depth,
+                                   wavelength=wavelength), n_orders=n_orders)
+    seg_list = list(segments)
+    if len(seg_list) == 0:
+        raise ValueError(
+            "rcwa_jones_1d_segments: segments must be a non-empty list of "
+            "(width_fraction, eps) pairs.")
+    widths = []
+    eps_raw = []
+    for k, item in enumerate(seg_list):
+        try:
+            w, e = item
+        except (TypeError, ValueError):
+            raise ValueError(
+                f"rcwa_jones_1d_segments: segment {k} must be a "
+                f"(width_fraction, eps) pair, got {item!r}.") from None
+        wf = float(w)
+        if not np.isfinite(wf) or wf <= 0.0:
+            raise ValueError(
+                f"rcwa_jones_1d_segments: width_fraction of segment {k} must "
+                f"be > 0, got {wf}.")
+        widths.append(wf)
+        eps_raw.append(e)
+    total = float(np.sum(widths))
+    if abs(total - 1.0) > 1e-6:
+        raise ValueError(
+            f"rcwa_jones_1d_segments: the segment width_fractions must sum to "
+            f"1 (within 1e-6), got {total}.")
+
+    # Promote scalars to scalar * I(3); leave (3, 3) tensors as-is.  Each cell
+    # may independently be a host array, CuPy, or JAX array.
+    eps_tensors = []
+    for k, e in enumerate(eps_raw):
+        arr = e
+        if np.ndim(e) == 0:
+            arr = _C(e) * np.eye(3, dtype=_C)
+        if np.shape(arr)[-2:] != (3, 3):
+            raise ValueError(
+                f"rcwa_jones_1d_segments: eps of segment {k} must be a scalar "
+                f"or a (3, 3) tensor, got shape {np.shape(arr)}.")
+        eps_tensors.append(arr)
+
+    # Out-of-plane present in ANY segment -> route every segment through the
+    # 9-key full-tensor solver (v5.11.0).  In-plane-only stays on the legacy
+    # 5-key path (bit-identical to rcwa_jones_1d for a 2-segment cell).
+    offplane = _require_inplane_tensor("rcwa_jones_1d_segments", *eps_tensors,
+                                       allow_offplane=True)
+
+    xp = _rcwa_xp("rcwa_jones_1d_segments", use_gpu, *eps_tensors)
+    is_jax = backend_name(xp) == "jax"
+    if is_jax:
+        _warn_if_jax_f32("rcwa_jones_1d_segments")
+    M = int(n_orders)
+    N = 2 * M + 1
+    orders = np.arange(-M, M + 1)
+
+    # Loss-convention bridge: conjugate the PUBLIC tensors in the active
+    # namespace (differentiable for JAX); region scalars stay host complex.
+    eps_tensors = [xp.conj(xp.asarray(t).astype(_C)) for t in eps_tensors]
+    eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
+    eps_sub = complex(np.conj(_C(n_substrate) ** 2))
+
+    kx0 = float(np.real(np.conj(_C(n_superstrate))) * np.sin(angle))
+    # Guards run on the concrete geometry (angle/wavelength are not tensor
+    # arguments here, so always concrete); the region Rayleigh anomaly and
+    # non-propagating incidence are caught on JAX too.  The tensor-layer
+    # diagonal permittivities are added to the nudge only when concrete.
+    if not is_jax or not _is_traced(wavelength):
+        _require_propagating_incidence("rcwa_jones_1d_segments", eps_sup,
+                                       kx0 ** 2)
+        eps_reals = [eps_sup, eps_sub]
+        if not is_jax:
+            for t in eps_tensors:
+                eps_reals += [complex(t[0, 0]), complex(t[1, 1])]
+        wl_eff = _grazing_safe_wavelength(
+            float(wavelength), kx0, 0.0, orders, np.zeros_like(orders), period,
+            1.0, eps_reals)
+    else:
+        wl_eff = wavelength
+    k0 = 2.0 * np.pi / wl_eff
+    kx = kx0 + orders * (wl_eff / period)
+    Kx = xp.asarray(np.diag(kx.astype(_C)))
+    Ky = xp.zeros((N, N), dtype=_C)
+    kxv = xp.asarray(kx.astype(_C))
+
+    # Sample the per-component profiles across one period.  For sample x in
+    # [0, 1) find which segment's cumulative [c_{k-1}, c_k) interval it lands
+    # in and take that segment's component.  Built stack-based via nested
+    # xp.where over the segments (no in-place assignment -> JAX-differentiable).
+    n_samples = 4096
+    xq = (xp.arange(n_samples) + 0.5) / n_samples
+    cum = np.cumsum([0.0] + widths)
+    cum[-1] = 1.0  # close the last interval exactly despite float roundoff
+
+    if offplane:
+        comp_map = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1),
+                    "zz": (2, 2), "xz": (0, 2), "zx": (2, 0), "yz": (1, 2),
+                    "zy": (2, 1)}
+    else:
+        comp_map = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1),
+                    "zz": (2, 2)}
+    profiles = {}
+    for key, (ii, jj) in comp_map.items():
+        # Start from the LAST segment, then fold earlier segments in REVERSE
+        # order so each segment's left boundary ``xq < c_{k+1}`` is applied
+        # over the wider ones -- segment k wins on [c_k, c_{k+1}) because every
+        # later-applied (smaller-k) mask is the disjoint left part.
+        prof = xp.full(n_samples, eps_tensors[-1][ii, jj], dtype=_C)
+        for k in range(len(eps_tensors) - 2, -1, -1):
+            in_seg = xq < cum[k + 1]
+            prof = xp.where(in_seg, eps_tensors[k][ii, jj], prof)
+        profiles[key] = prof.astype(_C)
+
+    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2)))
+    return _jones_1d_from_profiles(
+        profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
+        eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
+        xp=xp, is_jax=is_jax, fn_name="rcwa_jones_1d_segments")
 
 
 @_with_blas_limit
