@@ -201,11 +201,24 @@ def test_scalar_pmm_unchanged_by_jones_addition():
 # --------------------------------------------------------------------------- #
 # guards
 # --------------------------------------------------------------------------- #
-def test_rejects_oblique():
-    with pytest.raises(NotImplementedError, match="normal incidence"):
-        pmm_jones_1d(LC["period"], LC_RIDGE, LC_GROOVE, LC["n_substrate"],
-                     LC["n_superstrate"], LC["depth"], LC["duty_cycle"],
-                     LC["wavelength"], angle=0.2)
+def test_oblique_jones_matches_fmm():
+    # Oblique anisotropic Jones (the +i*kx0 Bloch shift, the Poynting-flux mode
+    # selector, the per-column p-pol incident normalization) -- once a
+    # NotImplementedError, now solved: the 2x2 Jones matches rcwa_jones_1d and
+    # energy is conserved (lossless LC) at off-normal incidence.
+    for ang_deg in (15.0, 30.0, 45.0):
+        ang = np.radians(ang_deg)
+        o, R, T, J = pmm_jones_1d(
+            LC["period"], LC_RIDGE, LC_GROOVE, LC["n_substrate"],
+            LC["n_superstrate"], LC["depth"], LC["duty_cycle"],
+            LC["wavelength"], angle=ang, degree=20)
+        oo, Ro, To, Jo = rcwa_jones_1d(
+            LC["period"], LC_RIDGE, LC_GROOVE, LC["n_substrate"],
+            LC["n_superstrate"], LC["depth"], LC["duty_cycle"],
+            LC["wavelength"], angle=ang, n_orders=25)
+        assert np.max(np.abs(J - Jo)) < 5e-4, f"ang={ang_deg}"
+        # lossless -> both incident polarizations conserve energy
+        assert np.allclose(R.sum(axis=1) + T.sum(axis=1), 1.0, atol=1e-6)
 
 
 def test_rejects_out_of_plane_tensor():

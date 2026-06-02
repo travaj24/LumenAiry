@@ -168,9 +168,29 @@ def test_pmm_grading_helps_metal_tm():
 # gates
 # ---------------------------------------------------------------------------
 
-def test_pmm_rejects_oblique():
-    with pytest.raises(NotImplementedError, match="normal incidence"):
-        pmm_efficiency_1d(**GOLD, polarization="tm", degree=10, angle=0.2)
+def test_pmm_oblique_matches_fmm():
+    # Oblique incidence (the +i*kx0 Bloch shift) -- once a NotImplementedError,
+    # now solved: matches the FMM oracle for BOTH polarizations and conserves
+    # energy.  Dielectric grating (the robust case; lossy-metal-TM at steep
+    # oblique stays resonance-limited and is not asserted here).
+    diel = dict(period=0.8e-6, n_ridge=2.0, n_groove=1.0, n_substrate=1.5,
+                n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5,
+                wavelength=0.55e-6)
+    ang = np.radians(25.0)
+    for pol in ("te", "tm"):
+        o, R, T = pmm_efficiency_1d(**diel, polarization=pol, degree=20,
+                                    angle=ang)
+        orf, Rr, Tr = rcwa_efficiency_1d(**diel, polarization=pol, n_orders=31,
+                                         angle=ang)
+        assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-4   # lossless
+        dr = {int(a): float(b) for a, b in zip(orf, Rr)}
+        dt = {int(a): float(b) for a, b in zip(orf, Tr)}
+        pr = {int(a): float(b) for a, b in zip(o, R)}
+        pt = {int(a): float(b) for a, b in zip(o, T)}
+        keys = set(dr) | set(pr)
+        err = max(max(abs(dr.get(k, 0) - pr.get(k, 0)) for k in keys),
+                  max(abs(dt.get(k, 0) - pt.get(k, 0)) for k in keys))
+        assert err < 1e-3, f"{pol}: PMM oblique vs FMM max|d|={err:.2e}"
 
 
 def test_pmm_rejects_bad_polarization():

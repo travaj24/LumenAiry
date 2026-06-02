@@ -111,6 +111,57 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   three-skeptic review (tensor-loss physics, the JAX guard, bit-identity of the
   touched public surface) found no defects.
 
+#### OBLIQUE PMM — off-angle parity for `pmm_efficiency_1d` + `pmm_jones_1d`
+
+- **`pmm_efficiency_1d` and `pmm_jones_1d` now support oblique incidence**
+  (`angle != 0`) — previously a `NotImplementedError`. This is the PMM analogue
+  of off-angle RCWA: the pseudo-periodic envelope `E(x) = exp(i kx0 x) u(x)`
+  (`kx0 = Re(n_sup) sin(angle) k0`) is solved by Bloch-shifting every
+  `x`-derivative `d/dx -> d/dx + i kx0` in the spectral-element operators, and
+  the Rayleigh far-field / incident flux pick up the `kx0` offset. **`angle == 0`
+  is bit-identical** to the prior normal-incidence solve (the shift terms vanish
+  and the legacy branch is used). Validated against `rcwa_efficiency_1d` /
+  `rcwa_jones_1d` at matched angle: dielectric / tunable-LC tensor match to
+  ~1e-5–1e-4 with energy conserved to ~1e-13 (lossless), spectral convergence in
+  `degree`, across 0–60°. Three physics points were required and are worth
+  recording:
+  - **Antisymmetrized convection.** The Bloch cross-term is `-i kx0 (C - Cᵀ)`
+    with `C = ∫φ φ'` (TM uses the `1/eps`-weighted `Cinv`). For TM the weight
+    *varies across the wall*, so `Cinv` is **not** antisymmetric and the naïve
+    `-2i kx0 Cinv` is wrong (it silently gives an energy-conserving-but-wrong
+    TM answer); the `(Cinv - Cinvᵀ)` form is required. TE (unit weight) is
+    unaffected.
+  - **Forward-mode selection.** At oblique the operator is complex-Hermitian
+    (lossless), so the QZ `eig` leaks imaginary noise; the scalar path uses a
+    noise-robust `Im(q)` branch, and the **coupled anisotropic** path — whose
+    modes do not split cleanly by `Im(q)` — selects the forward set by the sign
+    of each mode's **z-Poynting flux** (`Im(Eₓ·S0·conj(H_y) − E_y·S0·conj(Hₓ))`).
+  - **Per-column incident normalization.** The incident `Eₓ` (p-pol) wave also
+    carries `E_z = -kx0 Eₓ/k_z`, so its incident z-flux is `eps_sup/k_z`, not
+    `k_z`; normalizing both polarizations by `k_z` over-counted the p channel by
+    `1/cos²(angle)`. Fixed per-column (s-pol unaffected; bit-identical at `kx0=0`).
+  - *Known limit:* very lossy **metal-corner TM at steep oblique** stays
+    resonance-limited (`stabilize` may raise) — use `rcwa_efficiency_1d` there.
+    The realistic dielectric / tunable-LC regime is robust across angle.
+- **`stabilize` now gates on PER-ORDER convergence, not just total power**
+  (`pmm_efficiency_1d` + `pmm_jones_1d`, normal AND oblique). An adversarial
+  review found that the old gate keyed only on `sum(R)+sum(T)`, which the
+  S-matrix conserves even when the modal basis is *under-resolved* — so a
+  high-index / many-order grating at the default degree could return per-order
+  efficiencies / a Jones matrix wrong by tens of percent **with no warning**
+  (e.g. n≈3.8 TM at 40° gave a 33%-wrong zeroth order while `sum(R)+sum(T)=1` to
+  1e-7). The consensus now requires two passive degrees to agree on the
+  **per-order efficiencies and the 2×2 Jones** (a resonance-contaminated passive
+  degree is isolated — it has no per-order partner), returning a converged
+  degree or, failing that, warning that the result is likely under-resolved
+  (raise `degree` / `elements_per_region`). Well-converged configs are
+  unaffected; `stabilize=False` is unchanged.
+- **New tests** `tests/unit/test_v5_11_0_pmm_oblique.py` (17) — scalar TE/TM and
+  anisotropic-Jones oblique vs the FMM oracle (multiple angles), `angle==0`
+  bit-identity, the all-vacuum `1/cos²` regression, diagonal-tensor decoupling,
+  lossy-LC, and degree convergence. The two prior `*_rejects_oblique` guards were
+  retargeted to assert oblique now matches the FMM.
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**

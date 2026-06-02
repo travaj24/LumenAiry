@@ -65,9 +65,9 @@ forward propagator ``exp(-lam k0 L) = exp(+i q k0 L)`` decays.
 
 Scope (first release)
 ---------------------
-1-D binary grating, **normal incidence only** (``angle == 0``; oblique needs the
-``+i kx0`` Bloch shift in the stiffness and is not yet implemented -- raises
-``NotImplementedError``).  NumPy / SciPy (dense generalized eig); not
+1-D binary grating, normal OR oblique incidence (``angle`` adds the ``+i kx0``
+Bloch shift of the pseudo-periodic envelope; the forward modes are then chosen
+by the z-Poynting flux).  NumPy / SciPy (dense generalized eig); not
 JAX-differentiable.  TM converges monotone-no-floor but only spectral-*ish* (the
 matched TM partner ``Ex = q (1/eps) Hy`` is discontinuous at the wall and a C0
 nodal value averages that jump) -- mesh grading toward the walls (multiple
@@ -87,8 +87,9 @@ nodal multiply-by-``1/exx`` operator, inverted), and the ``Kx``-derivative terms
 (``Ez``-elimination and ``Kx^2``) become spectral-element STIFFNESS operators
 weighted by ``1/ezz`` / ``1`` -- so the inverse rule is AUTOMATIC and exact (the
 ``eps`` jump is on an element boundary).  The coupled second-order modal operator
-mirrors the FMM tensor block ``M = -P@Q`` at normal incidence.  Normal incidence,
-binary, NumPy only (multi-region / oblique / autodiff are follow-ons).
+mirrors the FMM tensor block ``M = -P@Q``.  Normal OR oblique incidence (the
+``kx0`` Bloch shift + a z-Poynting-flux forward selector), binary, NumPy only
+(multi-region / autodiff are follow-ons).
 """
 from __future__ import annotations
 
@@ -118,7 +119,13 @@ _C = np.complex128
 # lone low outlier (under-convergence) and a lone high outlier (resonance) are
 # rejected as non-consensus.
 _STABILIZE_MAX_SCAN = 16    # hard cap on degrees scanned (covers >=7-wide bands)
-_MIN_CLUSTER = 3            # passive solves that must agree to fix the consensus
+# PER-ORDER corroboration width: TWO passive degrees that agree per-order are
+# strong evidence of convergence (the per-order signature is a far stronger
+# signal than the total power, and a resonance-contaminated passive degree is
+# isolated -- it has no per-order partner).  A heavily-resonant config can leave
+# only two clean degrees in the window before the next resonance, so requiring 3
+# would miss them and fall back to a contaminated degree.
+_MIN_PLATEAU = 2
 _PASSIVE_TOL = 1.0e-3       # reject super-unity resonances; accept lossless R+T=1
 # converged degrees agree to ~1e-6 and differ across the window only by the
 # convergence drift (~1e-4); resonances inflate, and under-convergence deflates,
@@ -126,17 +133,60 @@ _PASSIVE_TOL = 1.0e-3       # reject super-unity resonances; accept lossless R+T
 # both off-curve modes and bounds the worst-case efficiency error of a returned
 # degree.
 _CLUSTER_TOL = 5.0e-4
+# PER-ORDER convergence tolerance for the consensus.  The total-power gate alone
+# is blind to under-convergence (the S-matrix conserves sum(R)+sum(T) even when
+# the modal basis is under-resolved and the per-order split is wrong by tens of
+# percent -- a silent error for high-index / many-order gratings at the default
+# degree).  Two solves join the converged plateau only if their PER-ORDER
+# efficiencies (and the Jones matrix) also agree to this width; an under-resolved
+# degree fails to match the higher-degree plateau and is excluded (the consensus
+# then returns a converged degree, or warns/raises if none is found).
+_PER_ORDER_TOL = 3.0e-3
 
 
-def _largest_cluster(totals, tol):
-    """Members of the largest mutually-(within ``tol``)-consistent group of
-    ``totals`` (the convergence plateau); greedy around each anchor (n<=16)."""
+def _aligned_max_diff(rec_a, rec_b):
+    """Max absolute PER-ORDER efficiency difference between two scanned solves,
+    aligned by integer Rayleigh order (an order present in only one solve counts
+    at its full magnitude), plus the ``|Jones|`` difference when both carry one.
+
+    ``rec = (orders, effs, jones_or_None)`` where ``effs`` is a tuple of arrays
+    whose LAST axis is the order (so ``A[..., i]`` is order ``i`` -- works for the
+    scalar ``(N,)`` R/T and the Jones ``(2, N)`` R/T alike).  This is the
+    convergence signal the total power alone misses: the S-matrix conserves
+    sum(R)+sum(T) even when the polynomial basis is under-resolved and the
+    per-order split is still moving."""
+    oa, effs_a, Ja = rec_a
+    ob, effs_b, Jb = rec_b
+    ia = {int(o): i for i, o in enumerate(oa)}
+    ib = {int(o): i for i, o in enumerate(ob)}
+    d = 0.0
+    for k in set(ia) | set(ib):
+        for A, B in zip(effs_a, effs_b):
+            va = A[..., ia[k]] if k in ia else 0.0
+            vb = B[..., ib[k]] if k in ib else 0.0
+            d = max(d, float(np.max(np.abs(np.asarray(va) - np.asarray(vb)))))
+    if Ja is not None and Jb is not None:
+        d = max(d, float(np.max(np.abs(np.asarray(Ja) - np.asarray(Jb)))))
+    return d
+
+
+def _converged_cluster(records, passive, tol, min_cluster):
+    """Indices of the largest group of PASSIVE solves that mutually agree
+    PER-ORDER (and on the Jones matrix) within ``tol`` -- the converged plateau.
+
+    ``records[i]`` is the ``rec`` tuple for :func:`_aligned_max_diff`; ``passive``
+    is the aligned bool list.  Returns the index list (sorted) when it reaches
+    ``min_cluster`` members, else ``[]``.  Clustering on the per-order signature
+    (not the total) is what rejects an under-converged-but-energy-passive solve:
+    such a degree fails to agree with the higher-degree plateau and is excluded.
+    """
+    pidx = [i for i, p in enumerate(passive) if p]
     best = []
-    for anchor in totals:
-        grp = [t for t in totals if abs(t - anchor) <= tol]
+    for a in pidx:
+        grp = [b for b in pidx if _aligned_max_diff(records[a], records[b]) <= tol]
         if len(grp) > len(best):
             best = grp
-    return best
+    return sorted(best) if len(best) >= min_cluster else []
 
 
 # ===========================================================================
@@ -226,6 +276,7 @@ def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
     def _z():
         return np.zeros((n_glob, n_glob), dtype=_C)
     S0, Peps, Pinv, L, Linv = _z(), _z(), _z(), _z(), _z()
+    C, Cinv = _z(), _z()                            # convection (oblique only)
     for e in range(n_el):
         xl, xr, eps = elem_bnds[e]
         J = 0.5 * (xr - xl)                         # dx/dxi
@@ -234,6 +285,7 @@ def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
         Dphys = Dref / J
         Mloc = np.diag(wel)                         # GLL mass (diagonal)
         Kloc = (Dphys.T * wel) @ Dphys              # stiffness
+        Cloc = Mloc @ Dphys                         # INT phi_i phi_j' (convection)
         idx = l2g[e]
         ix = np.ix_(idx, idx)
         S0[ix] += Mloc
@@ -241,28 +293,57 @@ def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
         Pinv[ix] += inv * Mloc
         L[ix] += Kloc
         Linv[ix] += inv * Kloc
-    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, n_glob=n_glob,
-                l2g=l2g, elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes)
+        C[ix] += Cloc
+        Cinv[ix] += inv * Cloc
+    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv,
+                n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
+                ref_nodes=ref_nodes)
 
 
-def _sem_modes(mats, k0, polarization):
+def _sem_modes(mats, k0, polarization, kx0=0.0):
     """Periodic generalized eigenproblem on the nodal basis.
 
     Returns ``(Acoef, lam, q, invop)``: ``Acoef[:, n]`` = nodal values of mode
-    ``n``'s field profile (``E_y`` TE / ``H_y`` TM); ``q = gamma/k0`` with
-    ``Im(q) >= 0``; ``lam = -i q`` (forward-decaying propagator); ``invop`` =
-    nodal multiply-by-``1/eps`` operator (TM only).
+    ``n``'s field profile (``E_y`` TE / ``H_y`` TM); ``q = gamma/k0``;
+    ``lam = -i q`` (forward-decaying propagator); ``invop`` = nodal multiply-by-
+    ``1/eps`` operator (TM only).
+
+    ``kx0`` (= incident transverse wavenumber, ``Re(n_sup) sin(angle) k0``) adds
+    the Bloch shift of the pseudo-periodic envelope: the x-derivative becomes
+    ``d/dx + i kx0``, so the stiffness picks up the ANTISYMMETRIZED convection
+    ``-i kx0 (C - C^T)`` (``C = INT phi phi'``; for TM the 1/eps-weighted
+    ``Cinv``, which is NOT antisymmetric across the wall -> the (Cinv - Cinv^T)
+    form is required, not ``2 Cinv``) and the ``kx0^2`` mass.  At ``kx0 == 0``
+    this is bit-identical to the normal-incidence solve (the shift terms vanish
+    and the legacy ``Im(q) >= 0`` branch is used).
     """
     k02 = k0 * k0
     if polarization == "te":
-        A, B = mats["Peps"] - mats["L"] / k02, mats["S0"]
+        Lop = mats["L"]
+        if kx0:
+            Cas = mats["C"] - mats["C"].T
+            Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * mats["S0"]
+        A, B = mats["Peps"] - Lop / k02, mats["S0"]
         invop = None
     else:
-        A, B = mats["S0"] - mats["Linv"] / k02, mats["Pinv"]
+        Lop = mats["Linv"]
+        if kx0:
+            Cas = mats["Cinv"] - mats["Cinv"].T
+            Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * mats["Pinv"]
+        A, B = mats["S0"] - Lop / k02, mats["Pinv"]
         invop = np.linalg.solve(mats["S0"], mats["Pinv"])
     q2, Acoef = sla.eig(A, B)
     q = np.sqrt(q2)
-    q = np.where(q.imag < 0.0, -q, q)               # Im(q) >= 0 forward decay
+    if kx0:
+        # NOISE-ROBUST forward branch: the oblique operator is complex-Hermitian
+        # for lossless media, so the QZ eig leaks ~1e-15 imag noise; the naive
+        # sign test would flip near-real (propagating) modes on noise -> dense
+        # spurious resonances.  Flip only when CLEARLY backward.
+        tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+        flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
+        q = np.where(flip, -q, q)
+    else:
+        q = np.where(q.imag < 0.0, -q, q)           # Im(q) >= 0 forward decay
     lam = -1j * q
     return Acoef, lam, q, invop
 
@@ -358,11 +439,12 @@ def _n_propagating_orders(period, wl, n_max):
 
 def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
                degree, polarization, n_ridge_el, n_groove_el, grade,
-               far_field_orders):
+               far_field_orders, angle=0.0):
     eps_ridge, eps_groove = n_ridge ** 2, n_groove ** 2
     eps_sup, eps_sub = n_sup ** 2, n_sub ** 2
     k0 = 2.0 * np.pi / wl
     d_wall = duty * period
+    kx0 = float(np.real(n_sup)) * np.sin(float(angle)) * k0
 
     mats = _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
                       n_ridge_el, n_groove_el, grade)
@@ -391,15 +473,15 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
             f"degree or elements_per_region.")
     orders = np.arange(-half, half + 1)
     G = 2.0 * np.pi / period
-    kx = (orders * G) / k0
+    kx = (kx0 + orders * G) / k0                     # oblique: kx_m = (kx0+mG)/k0
     Tp = _sem_fourier_projection(orders, period, mats)
 
-    Acoef, lam_l, q_l, invop = _sem_modes(mats, k0, polarization)
+    Acoef, lam_l, q_l, invop = _sem_modes(mats, k0, polarization, kx0)
     Wl = Acoef
     Vl = (Acoef if polarization == "te" else invop @ Acoef) @ np.diag(q_l)
 
-    Wsup, _ls, q_sup, invsup = _sem_modes(mats_sup, k0, polarization)
-    Wsub, _lb, q_sub, invsub = _sem_modes(mats_sub, k0, polarization)
+    Wsup, _ls, q_sup, invsup = _sem_modes(mats_sup, k0, polarization, kx0)
+    Wsub, _lb, q_sub, invsub = _sem_modes(mats_sub, k0, polarization, kx0)
     if polarization == "te":
         Vsup, Vsub = Wsup @ np.diag(q_sup), Wsub @ np.diag(q_sub)
     else:
@@ -422,7 +504,7 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     t_ord = Hsub @ (S21 @ cinc)
 
     kz_sup, kz_sub = _kz_forward(eps_sup, kx), _kz_forward(eps_sub, kx)
-    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([0.0]))[0]))
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
     if polarization == "te":
         R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
         T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
@@ -513,8 +595,9 @@ def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
 
     # mass operators keyed by coefficient; stiffness operators keyed by weight
     mass = {k: _z() for k in ("one", "eyy", "exy_xx", "eyx_xx", "schur", "ezz",
-                              "inv_xx")}
+                              "inv_xx", "inv_ezz")}
     stiff = {k: _z() for k in ("one", "inv_ezz")}
+    conv = {k: _z() for k in ("one", "inv_ezz")}    # convection (oblique only)
     for e in range(n_el):
         xl, xr, t = elem_bnds[e]
         J = 0.5 * (xr - xl)
@@ -522,10 +605,12 @@ def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
         Dphys = Dref / J
         Mloc = np.diag(wel)
         Kloc = (Dphys.T * wel) @ Dphys
+        Cloc = Mloc @ Dphys
         idx = l2g[e]
         ix = np.ix_(idx, idx)
         exx, exy, eyx = t["exx"], t["exy"], t["eyx"]
         eyy, ezz = t["eyy"], t["ezz"]
+        iez = 1.0 / ezz
         mass["one"][ix] += Mloc
         mass["eyy"][ix] += eyy * Mloc
         mass["exy_xx"][ix] += (exy / exx) * Mloc
@@ -533,24 +618,38 @@ def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
         mass["schur"][ix] += (eyy - eyx * exy / exx) * Mloc
         mass["ezz"][ix] += ezz * Mloc
         mass["inv_xx"][ix] += (1.0 / exx) * Mloc
+        mass["inv_ezz"][ix] += iez * Mloc
         stiff["one"][ix] += Kloc
-        stiff["inv_ezz"][ix] += (1.0 / ezz) * Kloc
-    return dict(mass=mass, stiff=stiff, S0=mass["one"], n_glob=n_glob, l2g=l2g,
-                elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes)
+        stiff["inv_ezz"][ix] += iez * Kloc
+        conv["one"][ix] += Cloc
+        conv["inv_ezz"][ix] += iez * Cloc
+    return dict(mass=mass, stiff=stiff, conv=conv, S0=mass["one"],
+                n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
+                ref_nodes=ref_nodes)
 
 
-def _sem_modes_tensor(mats, k0):
+def _sem_modes_tensor(mats, k0, kx0=0.0):
     """Coupled ``(E_x, E_y)`` anisotropic SE modal eigenproblem.
 
     Returns ``(W2, V2, lam, q)``: ``W2[:, n]`` = the 2-vector field of mode
     ``n`` (top ``n_glob`` rows ``E_x``, bottom ``E_y``); ``V2`` the matched
-    magnetic partner ``Q W diag(1/lam)``; ``q = gamma/k0`` (``Im q >= 0``);
+    magnetic partner ``Q W diag(1/lam)``; ``q = gamma/k0``;
     ``lam = -i q`` (forward-decaying propagator).
+
+    ``kx0`` (the incident transverse wavenumber) Bloch-shifts every ``Kx``
+    operator: ``Kx^2`` (unit weight) and ``Kx (1/ezz) Kx`` (Ez elimination) each
+    become ``(Kx + kx0) w (Kx + kx0)``, i.e. the weak-form stiffness gains
+    ``-i kx0 (conv_w - conv_w^T) + kx0^2 mass_w``.  At ``kx0 == 0`` this is
+    bit-identical to the normal-incidence solve (shift vanishes, legacy
+    ``Im(q) >= 0`` branch).  At ``kx0 != 0`` the coupled modes are genuinely
+    non-Hermitian so the forward set is chosen by the z-POYNTING FLUX sign (the
+    Im(q) split forms an inconsistent, non-passive basis there).
     """
     n = mats["n_glob"]
     k02 = k0 * k0
-    iS0 = np.linalg.inv(mats["S0"])
-    mass, stiff = mats["mass"], mats["stiff"]
+    S0 = mats["S0"]
+    iS0 = np.linalg.inv(S0)
+    mass, stiff, conv = mats["mass"], mats["stiff"], mats["conv"]
 
     # nodal pointwise operators (S0^-1 . Galerkin operator)
     Cinv_xx = iS0 @ mass["inv_xx"]          # multiply by 1/exx == [[1/exx]]
@@ -564,20 +663,43 @@ def _sem_modes_tensor(mats, k0):
 
     # Kx-derivative operators (1/k0^2 . SE stiffness).  Ez-elimination uses the
     # 1/ezz-weighted stiffness (the Ez wall-tangential inverse rule); plain Kx^2
-    # the unit-weighted one.
-    KxEzziKx = (1.0 / k02) * (iS0 @ stiff["inv_ezz"])
-    Kx2 = (1.0 / k02) * (iS0 @ stiff["one"])
+    # the unit-weighted one.  Bloch shift (kx0 != 0): (Kx+kx0) w (Kx+kx0).
+    def _kxop(skey, ckey, mkey):
+        op = stiff[skey]
+        if kx0:
+            Cw = conv[ckey]
+            op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mass[mkey]
+        return (1.0 / k02) * (iS0 @ op)
+    KxEzziKx = _kxop("inv_ezz", "inv_ezz", "inv_ezz")
+    Kx2 = _kxop("one", "one", "one")
     G = np.eye(n, dtype=_C) - KxEzziKx
 
     Mbig = np.block([[G @ Cxx, G @ Cxy],
                      [Cyx,     Cyy - Kx2]])
     q2, W2 = np.linalg.eig(Mbig)
     q = np.sqrt(q2)
-    q = np.where(q.imag < 0.0, -q, q)       # Im(q) >= 0 forward decay
-    lam = -1j * q
-
     # modal magnetic partner: V = Q @ W @ diag(1/lam) with the (Ky=0) Q block
     Q = np.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
+
+    if not kx0:
+        q = np.where(q.imag < 0.0, -q, q)   # Im(q) >= 0 forward decay (legacy)
+    else:
+        # POYNTING-FLUX forward selector: V2 partner is [Hx; Hy] and the modal H
+        # carries an extra -i, so Sz_n = Im( Ex.S0.conj(Hy) - Ey.S0.conj(Hx) )
+        # (cross pairing, imag part: + forward, ~0 evanescent).  Flux ~ 1/q
+        # flips sign with the branch; pick +z power (propagating) / +z decay.
+        lam0 = -1j * q
+        safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+        V0 = Q @ W2 @ np.diag(1.0 / safe0)
+        SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
+        SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
+        flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
+                       - np.einsum("in,in->n", W2[n:], SVt))
+        fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
+        prop = np.abs(flux) > fscale
+        flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+        q = np.where(flip, -q, q)
+    lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
     V2 = Q @ W2 @ np.diag(1.0 / safe)
     return W2, V2, lam, q
@@ -585,13 +707,14 @@ def _sem_modes_tensor(mats, k0):
 
 def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                      duty, wl, degree, n_ridge_el, n_groove_el, grade,
-                     far_field_orders):
+                     far_field_orders, angle=0.0):
     """Single-degree coupled anisotropic PMM solve.
 
     Returns ``(orders, R(2,N), T(2,N), jones(2,2), n_glob)`` in the PUBLIC
     ``exp(-i w t)`` convention.  Row/column 0 is the incident ``E_x`` response,
     1 the incident ``E_y``; ``jones`` columns are the zeroth-order reflected
-    ``[E_x; E_y]`` for incident ``E_x`` / ``E_y``.
+    ``[E_x; E_y]`` for incident ``E_x`` / ``E_y``.  ``angle != 0`` adds the
+    ``kx0`` Bloch shift (modes) and the oblique far-field normalization.
     """
     er = np.asarray(eps_ridge3, dtype=_C)
     eg = np.asarray(eps_groove3, dtype=_C)
@@ -603,6 +726,7 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
     k0 = 2.0 * np.pi / wl
     d_wall = duty * period
+    kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
 
     mats = _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
                              n_ridge_el, n_groove_el, grade)
@@ -614,9 +738,9 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                                  n_ridge_el, n_groove_el, grade)
     n_glob = mats["n_glob"]
 
-    Wl, Vl, lam_l, _ql = _sem_modes_tensor(mats, k0)
-    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0)
-    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0)
+    Wl, Vl, lam_l, _ql = _sem_modes_tensor(mats, k0, kx0)
+    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0)
+    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0)
 
     # Rayleigh order set for the forward far-field projection (cover the
     # propagating orders, kept well below the nodal DOF -- see the scalar path).
@@ -637,7 +761,7 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
             f"degree or elements_per_region.")
     orders = np.arange(-half, half + 1)
     G = 2.0 * np.pi / period
-    kx = (orders * G) / k0
+    kx = (kx0 + orders * G) / k0
     N = len(orders)
     Tp = _sem_fourier_projection(orders, period, mats)
 
@@ -658,7 +782,8 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
 
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
-    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([0.0]))[0]))
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+    kx0n = kx0 / k0
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
 
@@ -679,10 +804,15 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
         # component -- the term that makes the TM channel conserve energy.
         rz = -(kx * rx) / safe_r
         tz = -(kx * tx) / safe_t
-        Re = np.real(kz_sup / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                         + np.abs(rz) ** 2)
-        Te = np.real(kz_sub / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                         + np.abs(tz) ** 2)
+        # per-COLUMN incident flux: the col-0 wave (incident Ex=1, p-pol) ALSO
+        # carries Ez_inc = -kx0 Ex/kz_inc, so its z-flux is kz_inc(1+(kx0/kz_inc)
+        # ^2), NOT kz_inc; col-1 (Ey, s-pol) has Ez_inc=0.  At kx0=0 both reduce
+        # to kz_inc -> bit-identical to the normal-incidence solve.
+        flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0 else kz_inc
+        Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                + np.abs(rz) ** 2) / flux_inc
+        Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                + np.abs(tz) ** 2) / flux_inc
         R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
         T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
         jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
@@ -738,9 +868,11 @@ def pmm_jones_1d(
         As in :func:`pmm_efficiency_1d` (the ridge occupies ``duty_cycle`` of
         the period).
     angle : float, optional
-        Incidence angle (radians).  **Only ``0`` (normal) is implemented**; a
-        non-zero angle raises ``NotImplementedError`` (oblique needs the ``+i
-        kx0`` Bloch shift in the stiffness).
+        Incidence angle (radians) in the x-z plane (classical mount, ``ky=0``).
+        Oblique is supported via the ``+i kx0`` Bloch shift; the coupled tensor
+        modes' forward set is chosen by the z-Poynting flux.  Lossless / mild-
+        loss anisotropic (the tunable-LC case) is robust across angle; very
+        lossy metal-corner TM at steep angle can be resonance-limited.
     degree : int, optional
         Polynomial degree per spectral element -- the spectral convergence knob.
         Default 16.
@@ -778,14 +910,10 @@ def pmm_jones_1d(
 
     Notes
     -----
-    NumPy / SciPy (dense generalized eig); not JAX-differentiable.  Normal
-    incidence, binary grating, in-plane tensor only (multi-region / oblique /
+    NumPy / SciPy (dense generalized eig); not JAX-differentiable.  Normal or
+    oblique incidence, binary grating, in-plane tensor only (multi-region /
     autodiff are follow-ons).
     """
-    if abs(float(angle)) > 1e-12:
-        raise NotImplementedError(
-            "pmm_jones_1d: only normal incidence (angle=0) is implemented "
-            "(oblique needs the +i*kx0 Bloch shift in the element stiffness).")
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
     if not (0.0 <= float(duty_cycle) <= 1.0):
@@ -812,31 +940,52 @@ def pmm_jones_1d(
             duty_cycle, wavelength)
     kw = dict(n_ridge_el=int(elements_per_region),
               n_groove_el=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders))
+              far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
         o, R, T, J, _ = _pmm_jones_solve(*args, degree=int(degree), **kw)
         return o, R, T, J
 
-    # Stabilize: scan UPWARD, return the lowest degree at/above the request whose
-    # BOTH incident-polarization totals are energy-passive (reject the isolated-
-    # degree resonances that inflate sum(R)+sum(T)).  Mirrors the scalar PMM
-    # selector; two states so each must be passive.
+    # Stabilize: scan UPWARD and lock onto the CONVERGENCE CONSENSUS -- the
+    # degrees whose totals are energy-passive (both incident states <= 1+tol, so
+    # the super-unity resonances are rejected) AND whose PER-ORDER efficiencies +
+    # the 2x2 Jones agree (the total alone is conserved by the S-matrix even when
+    # the modal basis is under-resolved -> a silent per-order/Jones error).  Mirrors
+    # the scalar selector with the Jones matrix added to the convergence signature.
     d0 = int(degree)
-    last = None
+    scanned = []                # (degree, orders, R, T, J, passive)
     for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
         o, R, T, J, _ = _pmm_jones_solve(*args, degree=d, **kw)
         tot = float(np.real(R.sum() + T.sum()))     # both incident states
-        last = (o, R, T, J)
-        if tot <= 2.0 + 2.0 * _JONES_PASSIVE_TOL:
-            return o, R, T, J
+        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * _JONES_PASSIVE_TOL))
+        records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
+        passive = [s[5] for s in scanned]
+        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
+                                     _MIN_PLATEAU)
+        if not cluster:
+            continue
+        pick = 0 if 0 in cluster else cluster[0]
+        _d, o_i, R_i, T_i, J_i, _p = scanned[pick]
+        return o_i, R_i, T_i, J_i
+    passives = [s for s in scanned if s[5]]
+    if not passives:
+        warnings.warn(
+            f"pmm_jones_1d: no energy-passive solve in degrees "
+            f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the last attempt "
+            f"(degree {d0 + _STABILIZE_MAX_SCAN - 1}).  It may sit in a resonance "
+            f"band -- try a different degree or elements_per_region>1 with "
+            f"grade=True.", stacklevel=2)
+        s = scanned[-1]
+        return s[1], s[2], s[3], s[4]
     warnings.warn(
-        f"pmm_jones_1d: no energy-passive solve in degrees "
-        f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the last attempt "
-        f"(degree {d0 + _STABILIZE_MAX_SCAN - 1}).  It may sit in a resonance "
-        f"band -- try a different degree or elements_per_region>1 with "
-        f"grade=True.", stacklevel=2)
-    return last
+        f"pmm_jones_1d: the per-order / Jones solution did not converge within "
+        f"degrees [{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest "
+        f"degree tried (degree {max(p[0] for p in passives)}).  It is likely "
+        f"UNDER-RESOLVED (the total power can be passive while the per-order "
+        f"split / Jones is still wrong) -- raise degree or use "
+        f"elements_per_region>1 with grade=True.", stacklevel=2)
+    best = max(passives, key=lambda s: s[0])
+    return best[1], best[2], best[3], best[4]
 
 
 def pmm_efficiency_1d(
@@ -873,9 +1022,12 @@ def pmm_efficiency_1d(
         (metres / PUBLIC ``n = n + i kappa``).  The ridge occupies the fraction
         ``duty_cycle`` of the period.
     angle : float, optional
-        Incidence angle (radians).  **Only ``0`` (normal) is implemented**;
-        a non-zero angle raises ``NotImplementedError`` (oblique needs the
-        ``+i kx0`` Bloch shift in the stiffness).
+        Incidence angle (radians).  Oblique is supported via the ``+i kx0``
+        Bloch shift of the pseudo-periodic envelope (the convection term is
+        antisymmetrized so the wall-varying ``1/eps`` weight is handled
+        correctly for TM); the forward modes use a noise-robust branch.
+        Dielectric is robust across angle; very lossy metal-corner TM at steep
+        angle can be resonance-limited (``stabilize`` may raise -- use rcwa).
     polarization : {'te', 'tm'}, optional
         ``'te'`` (E along the grooves) or ``'tm'``.  Default ``'te'``.
     degree : int, optional
@@ -924,10 +1076,6 @@ def pmm_efficiency_1d(
         raise ValueError(
             f"pmm_efficiency_1d: polarization must be 'te' or 'tm', got "
             f"{polarization!r}.")
-    if abs(float(angle)) > 1e-12:
-        raise NotImplementedError(
-            "pmm_efficiency_1d: only normal incidence (angle=0) is implemented "
-            "(oblique needs the +i*kx0 Bloch shift in the element stiffness).")
     if int(degree) < 2:
         raise ValueError("pmm_efficiency_1d: degree must be >= 2.")
     if not (0.0 <= float(duty_cycle) <= 1.0):
@@ -939,7 +1087,7 @@ def pmm_efficiency_1d(
             _C(n_superstrate), depth, duty_cycle, wavelength)
     kw = dict(polarization=pol, n_ridge_el=int(elements_per_region),
               n_groove_el=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders))
+              far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
         orders, R, T, _ = _pmm_solve(*args, degree=int(degree), **kw)
@@ -960,28 +1108,25 @@ def pmm_efficiency_1d(
     # the nearest clean degree.  Early-exit at the first established consensus
     # bounds the cost (a clean degree resolves in _MIN_CLUSTER solves).
     d0 = int(degree)
-    scanned = []
+    scanned = []                # (degree, orders, R, T, passive)
     for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
         orders, R, T, _ = _pmm_solve(*args, degree=d, **kw)
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, tot, tot <= 1.0 + _PASSIVE_TOL, orders, R, T))
-        passives = [s for s in scanned if s[2]]
-        if len(passives) < _MIN_CLUSTER:
-            continue
-        cluster = _largest_cluster([s[1] for s in passives], _CLUSTER_TOL)
-        if len(cluster) < _MIN_CLUSTER:
+        scanned.append((d, orders, R, T, tot <= 1.0 + _PASSIVE_TOL))
+        records = [(s[1], (s[2], s[3]), None) for s in scanned]
+        passive = [s[4] for s in scanned]
+        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
+                                     _MIN_PLATEAU)
+        if not cluster:
             continue                                  # no plateau yet -- keep scanning
-        baseline = float(np.median(cluster))
-        lo, hi = baseline - _CLUSTER_TOL, baseline + _CLUSTER_TOL
-        # requested degree itself converged + resonance-free -> return unchanged
-        if scanned[0][2] and lo <= scanned[0][1] <= hi:
-            return scanned[0][3], scanned[0][4], scanned[0][5]
-        # else nearest clean: lowest-degree solve whose total is in the consensus
-        for d_i, tot_i, passive_i, o_i, R_i, T_i in scanned:
-            if passive_i and lo <= tot_i <= hi:
-                return o_i, R_i, T_i
-    # window exhausted without an established consensus
-    passives = [s for s in scanned if s[2]]
+        # requested degree itself converged (its per-order signature is in the
+        # plateau) -> return it unchanged (degree/DOF preserved); else the lowest
+        # converged degree (skipping the under-resolved / resonant low degrees).
+        pick = 0 if 0 in cluster else cluster[0]
+        _d, o_i, R_i, T_i, _p = scanned[pick]
+        return o_i, R_i, T_i
+    # window exhausted without an established (per-order) consensus
+    passives = [s for s in scanned if s[4]]
     if not passives:
         raise RuntimeError(
             f"pmm_efficiency_1d: no resonance-free solve in degrees "
@@ -990,10 +1135,11 @@ def pmm_efficiency_1d(
             f"spectrally -- degree<=32 typically suffices) or "
             f"elements_per_region>1 with grade=True.")
     warnings.warn(
-        f"pmm_efficiency_1d: the solution did not stabilize within degrees "
-        f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the most-converged "
-        f"available (degree {max(p[0] for p in passives)}).  It may be "
-        f"under-converged -- raise degree or use elements_per_region>1 with "
-        f"grade=True.", stacklevel=2)
+        f"pmm_efficiency_1d: the per-order solution did not converge within "
+        f"degrees [{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest "
+        f"degree tried (degree {max(p[0] for p in passives)}).  It is likely "
+        f"UNDER-RESOLVED (the total power can be passive while the per-order "
+        f"efficiencies are still wrong) -- raise degree or use "
+        f"elements_per_region>1 with grade=True.", stacklevel=2)
     best = max(passives, key=lambda s: s[0])          # highest degree = most converged
-    return best[3], best[4], best[5]
+    return best[1], best[2], best[3]
