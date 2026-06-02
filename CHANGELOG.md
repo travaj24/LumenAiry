@@ -2,6 +2,28 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.1] — 2026-06-01
+
+**RCWA internal-layer E/H field reconstruction (audit GAP1).**  Additive; the
+default far-field path is unchanged.
+
+### Added
+
+- **`RCWAStack.solve(retain_internal=True)` + `RCWAResult.internal_field(z, *,
+  component, nx, ny, dx, dy, layer, incident, filter)`** — reconstruct the real-
+  space **E and H field INSIDE the structure** (all six components), not just
+  the far-field plane-wave superposition `to_multiorder_field` gives.  This is
+  the basis for plasmonic / gap-mode physics and field-based inverse-design
+  merits.  Derived + validated by a derive/prototype/synthesize workflow.
+  - Recovers the per-layer forward/backward modal amplitudes from the gap-free
+    S-matrix partials; the **longitudinal `Ez` is from curl-H** (the div-D form
+    is wrong for oblique TM — caught by the workflow).  Validated to machine
+    precision: tangential E,H continuity (2.9e-15), boundary fields == the
+    library's own grcwa/inkstone/Airy-validated r/t (1.2e-16), constant
+    Poynting flux in a lossless stack (8e-16), and continuous normal D = eps·Ez
+    for oblique TM (8e-16).  NumPy / CuPy only; `retain_internal` is off by
+    default (it costs an extra `O(n_layers)` star-product sweep).
+
 ## [5.10.0] — 2026-06-01
 
 **RCWA layer-builder conveniences (audit GAP4 / P4).**  Two additive

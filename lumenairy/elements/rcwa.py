@@ -3464,6 +3464,144 @@ class RCWAResult:
         mx = max(1, int(np.abs(o).max()))
         return np.sinc(o / (mx + 1.0))
 
+    # -- in-structure (internal) E/H field reconstruction -----------------
+
+    def _internal_cpm(self, info, i, cinc):
+        """Forward/backward modal amplitudes ``(c+, c-)`` at the TOP of layer
+        ``i`` for the internal-convention source ``cinc`` (the validated gap-free
+        S-matrix recovery)."""
+        N = info["N"]
+        Sa = info["S_above"][i]
+        Sb = info["S_below"][i]
+        Sa22 = np.asarray(to_numpy(Sa[3]))
+        Sa21 = np.asarray(to_numpy(Sa[2]))
+        Sb11 = np.asarray(to_numpy(Sb[0]))
+        denom = np.linalg.inv(np.eye(2 * N, dtype=_C) - Sa22 @ Sb11)
+        cplus = denom @ (Sa21 @ cinc)
+        cminus = Sb11 @ cplus
+        return cplus, cminus
+
+    def internal_field(self, z, *, component="all", nx=64, ny=None, dx=None,
+                       dy=None, layer=None, incident=(1.0, 0.0), filter="none"):
+        """Reconstruct the real-space E and/or H field INSIDE the structure
+        (audit GAP1) -- the in-layer near field that :meth:`to_multiorder_field`
+        (a far-field superposition) cannot show.
+
+        Requires the stack to have been solved with
+        ``RCWAStack.solve(retain_internal=True)``.
+
+        Parameters
+        ----------
+        z : float or array-like
+            Depth(s) [m] measured from the TOP of the stack (the superstrate
+            interface).  With ``layer=i`` given, ``z`` is instead the LOCAL depth
+            inside layer ``i`` (``0`` = its top).
+        component : {'E', 'H', 'all'}, optional
+            Which field(s) to return (default ``'all'`` -> all six components).
+        nx, ny : int, optional
+            Real-space grid (``ny`` defaults to 1 for a 1-D stack, else ``nx``).
+        dx, dy : float, optional
+            Grid pitch [m] (default tiles one unit cell: ``period / n``);
+            co-registers with :meth:`to_multiorder_field` when matched.
+        layer : int, optional
+            Force a specific layer index (then ``z`` is local to that layer);
+            default maps each ``z`` to its layer via the cumulative thicknesses.
+        incident : (complex, complex), optional
+            Incident Jones vector ``(E_x, E_y)`` (default x-polarized).
+        filter : {'none', 'lanczos'}, optional
+            ``'lanczos'`` damps the high orders (Gibbs suppression at sharp
+            permittivity steps) -- a smoothing aid, not energy-exact.
+
+        Returns
+        -------
+        dict
+            ``{'Ex','Ey','Ez','Hx','Hy','Hz'}`` (per ``component``) each a
+            ``(nz, ny, nx)`` complex array (``ny`` axis dropped when 1), plus
+            ``'z'`` (the depth samples), ``'x'``, ``'y'`` (the grid axes).
+            Fields are in the PUBLIC ``exp(-i w t)`` convention.
+        """
+        info = self._require_modal().get("internal")
+        if info is None:
+            raise ValueError(
+                "RCWAResult.internal_field: the stack was solved without the "
+                "internal-field data; call RCWAStack.solve(retain_internal="
+                "True).")
+        names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
+                 "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
+        if component not in names:
+            raise ValueError(
+                f"RCWAResult.internal_field: component must be 'E', 'H' or "
+                f"'all', got {component!r}.")
+        if filter not in ("none", "lanczos"):
+            raise ValueError(
+                f"RCWAResult.internal_field: filter must be 'none' or "
+                f"'lanczos', got {filter!r}.")
+        want = names[component]
+        N = info["N"]
+        Kx = np.asarray(to_numpy(info["Kx"]))
+        Ky = np.asarray(to_numpy(info["Ky"]))
+        k0 = info["k0"]
+        delta = np.asarray(to_numpy(info["delta"]))
+        thick = info["thick"]
+        z_top = np.concatenate([[0.0], np.cumsum(thick)])
+        ex0, ey0 = incident
+        cinc = np.concatenate([ex0 * delta, ey0 * delta]).astype(_C)
+        sigma = self._lanczos_sigma() if filter == "lanczos" else None
+
+        ny_i = (1 if info["is_1d"] else int(nx)) if ny is None else int(ny)
+        nx_i = int(nx)
+        dx_f = float(info["period_x"] / nx_i if dx is None else dx)
+        dy_f = float(info["period_y"] / ny_i if dy is None else dy)
+        xg = (np.arange(nx_i) - nx_i // 2) * dx_f
+        yg = (np.arange(ny_i) - ny_i // 2) * dy_f
+        # all-order carriers (internal field INCLUDES evanescent orders, unlike
+        # the propagating-only far field) -- precompute once and reuse.
+        carriers = np.stack([np.asarray(self._order_carrier(idx, nx_i, ny_i,
+                                                            dx_f, dy_f))
+                             for idx in range(N)])           # (N, ny, nx)
+
+        # cache c+/c- per layer for this incident vector
+        cpm = {}
+
+        def _harm(i, zloc):
+            if i not in cpm:
+                cpm[i] = self._internal_cpm(info, i, cinc)
+            cplus, cminus = cpm[i]
+            W = np.asarray(to_numpy(info["W"][i]))
+            V = np.asarray(to_numpy(info["V"][i]))
+            lam = np.asarray(to_numpy(info["lam"][i]))
+            EPS = np.asarray(to_numpy(info["EPS"][i]))
+            fwd = cplus * np.exp(-lam * k0 * zloc)
+            bwd = cminus * np.exp(+lam * k0 * zloc)
+            s = W @ (fwd + bwd)                              # E tangential
+            u = V @ (fwd - bwd)                              # H partner
+            Sx, Sy = s[:N], s[N:]
+            Hx, Hy = -1j * u[:N], -1j * u[N:]                # -i*eta0 scale
+            Sz = np.linalg.solve(EPS, -(Kx @ Hy - Ky @ Hx))  # curl-H z-comp
+            Hz = Kx @ Sy - Ky @ Sx                           # curl-E z-comp
+            return dict(Ex=Sx, Ey=Sy, Ez=Sz, Hx=Hx, Hy=Hy, Hz=Hz)
+
+        zs = np.atleast_1d(np.asarray(z, dtype=float))
+        out = {c: np.empty((zs.shape[0], ny_i, nx_i), dtype=_C) for c in want}
+        for zi, zz in enumerate(zs):
+            if layer is None:
+                i = int(np.clip(np.searchsorted(z_top, zz, side="right") - 1,
+                                0, len(thick) - 1))
+                zloc = zz - z_top[i]
+            else:
+                i, zloc = int(layer), zz
+            h = _harm(i, zloc)
+            for c in want:
+                amp = np.conj(h[c])                          # internal -> public
+                if sigma is not None:
+                    amp = amp * sigma
+                out[c][zi] = np.tensordot(amp, carriers, axes=([0], [0]))
+        result = {c: (out[c][:, 0, :] if ny_i == 1 else out[c]) for c in want}
+        result["z"] = zs
+        result["x"] = xg
+        result["y"] = yg
+        return result
+
 
 class _RCWALayer:
     __slots__ = ("thickness", "kind", "data")
@@ -3697,15 +3835,21 @@ class RCWAStack:
         return vals
 
     def _layer_modes(self, layer, Kx, Ky, orders):
+        """Layer eigenmodes ``(W, V, lam, EPS)``.  ``EPS`` is the wall-tangential
+        ``[[eps]]`` convolution (``EZZ`` for a tensor layer) in the INTERNAL
+        convention -- retained for the curl-H ``E_z`` solve in the internal-field
+        reconstruction; ignored on the (default) far-field path."""
         xp = array_namespace(Kx)
         if layer.kind == "uniform":
             W, V, kz = _homogeneous_eigenmodes(Kx, Ky, complex(np.conj(layer.data)))
             lam = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
-            return W, V, lam
+            EPS = complex(np.conj(layer.data)) * xp.eye(Kx.shape[0], dtype=_C)
+            return W, V, lam, EPS
         if layer.kind == "iso":
             EPS = _eps_convolution_2d(xp.conj(xp.asarray(layer.data)), orders,
                                       self.nox, self.noy)
-            return _layer_eigenmodes(Kx, Ky, EPS, EPS)
+            W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
+            return W, V, lam, EPS
         if layer.kind == "shapes":
             # Analytic (host) form factors -> move the convolution to backend.
             eps_bg, shapes = layer.data
@@ -3714,15 +3858,18 @@ class RCWAStack:
                 complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
                 self.noy, self.period_x, self.period_y)
             EPS = xp.asarray(EPS_np)
-            return _layer_eigenmodes(Kx, Ky, EPS, EPS,
-                                     ez_laurent_inv=xp.asarray(EPS_inv_np))
+            W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS,
+                                          ez_laurent_inv=xp.asarray(EPS_inv_np))
+            return W, V, lam, EPS
         et = xp.conj(xp.asarray(layer.data))
 
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
-        return _layer_eigenmodes_tensor(
+        EZZ = cv(et[:, :, 2, 2])
+        W, V, lam = _layer_eigenmodes_tensor(
             Kx, Ky, cv(et[:, :, 0, 0]), cv(et[:, :, 0, 1]),
-            cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]), cv(et[:, :, 2, 2]))
+            cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]), EZZ)
+        return W, V, lam, EZZ
 
     @staticmethod
     def _layer_eig_key(layer):
@@ -3748,8 +3895,16 @@ class RCWAStack:
         return (kind, arr.shape, str(arr.dtype), arr.tobytes())
 
     @_with_blas_limit
-    def solve(self) -> RCWAResult:
-        """Solve the stack -> :class:`RCWAResult`."""
+    def solve(self, *, retain_internal=False) -> RCWAResult:
+        """Solve the stack -> :class:`RCWAResult`.
+
+        ``retain_internal=True`` additionally retains the per-layer modes and the
+        cumulative partial S-matrices needed to reconstruct the in-structure E/H
+        field via :meth:`RCWAResult.internal_field` (and the per-layer
+        absorption via :meth:`RCWAResult.layer_absorption`).  It costs an extra
+        ``O(n_layers)`` star-product sweep and keeps the per-layer ``2N x 2N``
+        matrices, so it is off by default for hot efficiency sweeps.  NumPy /
+        CuPy only."""
         if self._source is None:
             raise ValueError("RCWAStack.solve: call set_source first.")
         if not self._layers:
@@ -3805,15 +3960,15 @@ class RCWAStack:
                 if key is not None:
                     _mode_cache[key] = cached
             modes.append(cached)
-        W0, V0, lam0 = modes[0]
+        W0, V0, lam0, _e0 = modes[0]
         S = _interface_smatrix(Wref, Vref, W0, V0)
         S = _redheffer_star(S, _propagation_smatrix(lam0, k0 * self._layers[0].thickness))
         for i in range(1, len(modes)):
-            Wp, Vp, _lp = modes[i - 1]
-            Wc, Vc, lamc = modes[i]
+            Wp, Vp, _lp, _ = modes[i - 1]
+            Wc, Vc, lamc, _ = modes[i]
             S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
             S = _redheffer_star(S, _propagation_smatrix(lamc, k0 * self._layers[i].thickness))
-        Wl, Vl, _ll = modes[-1]
+        Wl, Vl, _ll, _el = modes[-1]
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
         S11, S12, S21, S22 = S
 
@@ -3867,8 +4022,55 @@ class RCWAStack:
             # weight Re(kz_m/kz_inc) and the incident |E|^2 (einc_sq) that the
             # power-calibrated field reconstruction needs.
             kx0=float(kx0), ky0=float(ky0), kz_inc=float(kz_inc))
+        if retain_internal and bname != "jax":
+            # Per-layer cumulative partial S-matrices that bracket the TOP plane
+            # of each layer -> the c+/c- modal amplitudes for the in-structure
+            # field (see RCWAResult.internal_field).  Same gap-free
+            # _interface/_propagation/_redheffer sequence as the global solve;
+            # star(S_above[0], S_below[0]) reproduces the global S used for r/t.
+            S_above, S_below = self._internal_partials(
+                modes, Wref, Vref, Wtrn, Vtrn, k0)
+            modal["internal"] = dict(
+                W=[m[0] for m in modes], V=[m[1] for m in modes],
+                lam=[m[2] for m in modes], EPS=[m[3] for m in modes],
+                thick=[float(L.thickness) for L in self._layers],
+                S_above=S_above, S_below=S_below, Kx=Kx, Ky=Ky, k0=float(k0),
+                N=N, delta=delta, layers=list(self._layers),
+                period_x=self.period_x, period_y=self.period_y,
+                is_1d=self.is_1d, nox=self.nox, noy=self.noy)
         _check_energy("RCWAStack.solve", R, T)
         return RCWAResult(out_orders, R, T, Jr, Jt, modal=modal)
+
+    def _internal_partials(self, modes, Wref, Vref, Wtrn, Vtrn, k0):
+        """Cumulative ``(S_above, S_below)`` partial S-matrices bracketing the
+        TOP of each layer (the recovery basis for the internal field).
+
+        ``S_above[i]`` = star product superstrate -> TOP of layer ``i`` (through
+        the interface INTO layer ``i``, before its own propagation);
+        ``S_below[i]`` = star product TOP of layer ``i`` -> substrate (its own
+        propagation first).  ``star(S_above[0], S_below[0])`` reproduces the
+        global S-matrix."""
+        nlay = len(modes)
+        ifc = [_interface_smatrix(Wref, Vref, modes[0][0], modes[0][1])]
+        for i in range(1, nlay):
+            ifc.append(_interface_smatrix(modes[i - 1][0], modes[i - 1][1],
+                                          modes[i][0], modes[i][1]))
+        ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wtrn, Vtrn))
+        prop = [_propagation_smatrix(modes[i][2], k0 * self._layers[i].thickness)
+                for i in range(nlay)]
+        S_above = [None] * nlay
+        S_above[0] = ifc[0]
+        for i in range(1, nlay):
+            S_above[i] = _redheffer_star(
+                _redheffer_star(S_above[i - 1], prop[i - 1]), ifc[i])
+        S_below = [None] * nlay
+        for i in range(nlay - 1, -1, -1):
+            if i == nlay - 1:
+                S_below[i] = _redheffer_star(prop[i], ifc[nlay])
+            else:
+                S_below[i] = _redheffer_star(
+                    prop[i], _redheffer_star(ifc[i + 1], S_below[i + 1]))
+        return S_above, S_below
 
 
 # Register the RCWA caches with the library cache registry (so the global
