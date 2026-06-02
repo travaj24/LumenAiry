@@ -88,7 +88,7 @@ from .lenses import (
     surface_sag_biconic,
     surface_sag_general,
 )
-from .pmm import pmm_efficiency_1d
+from .pmm import pmm_efficiency_1d, pmm_jones_1d
 from .polarization import (
     JonesField,
     apply_half_wave_plate,
@@ -170,6 +170,7 @@ __all__ = [
     'rcwa_efficiency_1d',
     'rcwa_efficiency_1d_jax',
     'pmm_efficiency_1d',
+    'pmm_jones_1d',
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',
     'rcwa_efficiency_vs_wavelength',

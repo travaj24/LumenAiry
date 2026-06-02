@@ -2,6 +2,74 @@
 
 All notable changes to the core library are documented here.
 
+## [5.11.0] — 2026-06-02
+
+**1-D anisotropic device modeling + 2-D normal-vector FFF + stack/PMM
+robustness.** A batch closing the functional + convergence gaps from the RCWA
+gaps/wishlist, DynaMeta-port, and resonant-stack audits: full out-of-plane
+anisotropy, arbitrary multi-region gratings, reflective-Jones device helpers,
+the true normal-vector 2-D factorization, a resonance guard for multilayer
+stacks, and an anisotropic-Jones spectral-element solver. Every pre-existing
+path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
+`RCWAStack.solve`) is **bit-identical** — all new behavior is gated/opt-in.
+
+### Added
+
+- **GAP7 — full 3×3 out-of-plane anisotropy in `rcwa_jones_1d`.** Tilted-director
+  LC, magneto-optic / gyrotropic media (`eps_xz/yz/zx/zy ≠ 0`). The full 4N
+  generator `G=[[A,P],[Q,B]]` is eigendecomposed with a generalized all-harmonic
+  Poynting-flux forward selector (robust on non-reciprocal spectra, where a
+  ±-pairing selector throws), and a generalized explicit forward/backward
+  S-matrix carries the tilted layer's asymmetric modes. Berreman-4×4 validated to
+  ~1e-15; the in-plane path is byte-identical. 1-D Jones path (2-D / `RCWAStack`
+  out-of-plane pending).
+- **GAP2 — `rcwa_jones_1d_segments`**: arbitrary piecewise-constant 1-D profiles
+  (multi-level / interdigitated / N-region, each scalar or `(3,3)` tensor). Shares
+  the exact `rcwa_jones_1d` solve core (refactored to `_jones_1d_from_profiles`,
+  byte-identical).
+- **W3 grating builders** — `grating_segments`, `binary_grating_segments`,
+  `interdigitated_grating_segments` (emit the `segments` list for GAP2). **W2
+  reflective-Jones helpers** — `reflective_outcoupling` (the
+  PBS→QWP@45→grating→QWP@45→PBS cross-port FOM = `cos²(Γ/2)` for a lossless
+  TE/TM-aligned grating) and `jones_retardance_diattenuation` (polar/SVD
+  decomposition of a 2×2 Jones).
+- **`rcwa_efficiency_2d(formulation='fff_nv')`** — the Schuster-2007 normal-vector
+  Fast Fourier Factorization for 2-D: a continuous unit-normal field with the
+  inverse rule on the boundary-normal projection, completing the factorization the
+  existing `'li'` rule lacked (it inverse-ruled only `E_z`, never the in-plane
+  normal field). Robust wins on dielectrics and separable stripes (→ rigorous 1-D
+  Li); a correct, non-collapsing factorization on 2-D metal corners.
+  `'laurent'`/`'li'` bit-identical.
+- **`RCWAStack.solve(stabilize=True)`** — opt-in per-order consensus guard for the
+  sharp-resonant metal-multilayer pathology (a near-singular mode-match biases a
+  single diffraction order, e.g. a reflection null, non-monotonically at isolated
+  `n_orders` while total power stays bounded). Re-solves a short downward
+  `n_orders` window and returns the consensus solve; `stabilize=False` is the
+  exact prior single solve.
+- **`pmm_jones_1d`** — a binary 1-D grating whose ridge / groove are full
+  `(3, 3)` IN-PLANE permittivity tensors (the tunable-LC reflective grating),
+  returning the full complex `2x2` Jones reflection. The off-diagonal `exy`
+  couples `E_x` ↔ `E_y` in the spectral-element modal eigenproblem (the modal
+  field is a 2-vector `[E_x; E_y]` per node), so the phase relationship a
+  tunable-LC grating needs is carried — the scalar TE/TM solver could not. The
+  Li-1996 factorization is realized in the nodal basis: the wall-normal inverse
+  rule `[[1/exx]]^-1` becomes `inv(hat(1/exx))`, and the `Kx`-derivative terms
+  (`Ez`-elimination, `Kx^2`) become spectral-element STIFFNESS operators
+  (weighted by `1/ezz` / `1`) so the inverse rule is **automatic and exact** (the
+  `eps` jump lands on an element boundary). The coupled second-order modal
+  operator mirrors the FMM tensor block `M = -P@Q` at normal incidence. PUBLIC
+  `exp(-i w t)` convention end-to-end (no eps conjugation — the scalar PMM is
+  self-contained in the public convention). Validated against `rcwa_jones_1d`:
+  the `2x2` Jones matches to ~5e-6 (lossless tilted-LC) / ~2e-6 (lossy
+  anisotropic metal) and converges spectrally with no floor; a diagonal tensor
+  decouples back to the scalar TE/TM efficiencies (cross-pol `~1e-18`); lossless
+  energy `sum(R)+sum(T)=1` (cross-pol included) to ~1e-14. Inherits the scalar
+  PMM `stabilize` resonance guard (both incident polarizations must be passive).
+  Normal incidence, binary, NumPy only (multi-region / oblique / autodiff are
+  follow-ons). Exported top-level.
+- **New tests** `tests/unit/test_v5_11_0_pmm_anisotropic.py` — the four
+  validation gates (vs `rcwa_jones_1d`, decouple-to-scalar, energy, no-floor).
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**

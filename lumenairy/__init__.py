@@ -412,7 +412,7 @@ from .elements.freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
 )
-from .elements.pmm import pmm_efficiency_1d
+from .elements.pmm import pmm_efficiency_1d, pmm_jones_1d
 
 # â”€â”€ Polarization / Jones calculus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.polarization import (
@@ -894,7 +894,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.10.6"
+__version__ = "5.11.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1487,6 +1487,7 @@ __all__ = [
 
     # PMM (Polynomial Modal Method -- non-Fourier 1-D modal solver)
     'pmm_efficiency_1d',
+    'pmm_jones_1d',
 
     # BSDF / surface scatter
     'BSDFModel',

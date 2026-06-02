@@ -73,6 +73,22 @@ matched TM partner ``Ex = q (1/eps) Hy`` is discontinuous at the wall and a C0
 nodal value averages that jump) -- mesh grading toward the walls (multiple
 graded elements per region) recovers the corner resolution and is the speed
 lever for metal TM.
+
+Anisotropic (Jones) path
+------------------------
+:func:`pmm_jones_1d` extends the solver to a binary grating whose ridge / groove
+are full ``(3, 3)`` IN-PLANE permittivity tensors (the tunable-LC reflective
+grating), returning the full complex ``2x2`` Jones reflection -- the
+spectral-element counterpart of :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`.
+The modal field becomes a 2-vector ``[E_x; E_y]`` per node; the off-diagonal
+``exy`` couples them.  The Li-1996 factorization is realized in the nodal basis:
+the wall-normal inverse rule ``[[1/exx]]^{-1}`` becomes ``inv(hat(1/exx))`` (the
+nodal multiply-by-``1/exx`` operator, inverted), and the ``Kx``-derivative terms
+(``Ez``-elimination and ``Kx^2``) become spectral-element STIFFNESS operators
+weighted by ``1/ezz`` / ``1`` -- so the inverse rule is AUTOMATIC and exact (the
+``eps`` jump is on an element boundary).  The coupled second-order modal operator
+mirrors the FMM tensor block ``M = -P@Q`` at normal incidence.  Normal incidence,
+binary, NumPy only (multi-region / oblique / autodiff are follow-ons).
 """
 from __future__ import annotations
 
@@ -83,7 +99,7 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import Legendre
 
-__all__ = ["pmm_efficiency_1d"]
+__all__ = ["pmm_efficiency_1d", "pmm_jones_1d"]
 
 _C = np.complex128
 
@@ -417,6 +433,410 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
     T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
     return orders, R, T, n_glob
+
+
+# ===========================================================================
+# Anisotropic (in-plane tensor) PMM -- the full 2x2 Jones reflection
+# ===========================================================================
+#
+# The spectral-element counterpart of the FMM tensor path (rcwa_jones_1d).  The
+# modal field is a 2-vector [E_x; E_y] per node; the in-plane tensor
+#   eps = [[exx, exy, 0], [eyx, eyy, 0], [0, 0, ezz]]
+# couples E_x <-> E_y through exy / eyx.  Mirroring the FMM eigenmode block at
+# normal incidence (Ky = 0), the coupled SECOND-ORDER modal eigenproblem is
+#
+#     M @ [Ex; Ey] = q^2 [Ex; Ey],   q = gamma / k0 = n_eff,   M = -P@Q,
+#     M = [[ G Cxx ,  G Cxy ],
+#          [ Cyx   ,  Cyy - Kx^2 ]],   G = I - Kx Ezzi Kx,
+#
+# with the Li-1996 in-plane factorization (the wall normal is x):
+#     Cxx = [[1/exx]]^-1,   Cxy = Cxx [[exy/exx]],   Cyx = [[eyx/exx]] Cxx,
+#     Cyy = [[eyy - eyx exy/exx]] + [[eyx/exx]] Cxx [[exy/exx]].
+#
+# SPECTRAL-ELEMENT realization (the inverse rule is AUTOMATIC and EXACT because
+# every eps jump lands on an element boundary):
+#   * a Fourier convolution [[f]] becomes the nodal multiply operator
+#     hat(f) = S0^-1 (INT phi f phi)  (piecewise-constant f -> essentially
+#     diagonal, the shared wall node carrying the exact C0 average);
+#   * the wall-normal inverse rule [[1/exx]]^-1 becomes inv(hat(1/exx));
+#   * the Kx-derivative terms become spectral-element STIFFNESS operators -- the
+#     weak form moves one derivative onto the test function, integrating the wall
+#     jump exactly:  Kx (w) Kx -> (1/k0^2) S0^-1 (INT phi' w phi').  The
+#     Ez-elimination G uses the 1/ezz-weighted stiffness (the Ez wall-tangential
+#     inverse-rule = inv([[ezz]])); the plain Kx^2 uses the unit-weighted one.
+#
+# The modal magnetic partner V = Q @ W @ diag(1/lam) (the Ky=0 Q block) feeds the
+# SAME interface S-matrix as the scalar path.  PUBLIC exp(-i w t) convention
+# end-to-end (no eps conjugation, no Jones conjugation) -- the scalar PMM is
+# self-contained in the public convention, and conjugating in+out (as the FMM
+# oracle does internally) would double-flip to conj(J).  Energy validated.
+
+# anisotropic-Jones stabilize parameters: both incident-polarization totals must
+# be passive (each <= 1 + tol) to reject the isolated-degree resonances.
+_JONES_PASSIVE_TOL = 2.0e-3
+
+
+def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
+                      n_ridge_el, n_groove_el, grade):
+    """Assemble the periodic C0 spectral-element operators for an ANISOTROPIC
+    layer (per-coefficient masses + weighted stiffnesses).
+
+    ``t_ridge`` / ``t_groove`` are dicts ``dict(exx, exy, eyx, eyy, ezz)`` of the
+    (already convention-correct) tensor components, constant within each region.
+    Returns a dict with the nodal mass operators (``INT phi c phi`` for each
+    coefficient ``c``) and stiffness operators (``INT phi' c phi'``), plus the
+    local->global map / element table (shared with the scalar projection).
+    """
+    ref_nodes, ref_w = _gll_nodes_weights(degree)
+    Dref = _lagrange_derivative_matrix(ref_nodes)
+    rb = _graded_boundaries(0.0, d_wall, n_ridge_el, grade)
+    gb = _graded_boundaries(d_wall, period, n_groove_el, grade)
+    elem_bnds = (list(zip(rb[:-1], rb[1:], [t_ridge] * n_ridge_el))
+                 + list(zip(gb[:-1], gb[1:], [t_groove] * n_groove_el)))
+    n_el = len(elem_bnds)
+
+    l2g = np.zeros((n_el, degree + 1), dtype=int)
+    gid = 0
+    for e in range(n_el):
+        for a in range(degree + 1):
+            if a == 0 and e > 0:
+                l2g[e, a] = l2g[e - 1, degree]
+            else:
+                l2g[e, a] = gid
+                gid += 1
+    last = l2g[n_el - 1, degree]
+    l2g[l2g == last] = 0
+    n_glob = last
+
+    def _z():
+        return np.zeros((n_glob, n_glob), dtype=_C)
+
+    # mass operators keyed by coefficient; stiffness operators keyed by weight
+    mass = {k: _z() for k in ("one", "eyy", "exy_xx", "eyx_xx", "schur", "ezz",
+                              "inv_xx")}
+    stiff = {k: _z() for k in ("one", "inv_ezz")}
+    for e in range(n_el):
+        xl, xr, t = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        wel = ref_w * J
+        Dphys = Dref / J
+        Mloc = np.diag(wel)
+        Kloc = (Dphys.T * wel) @ Dphys
+        idx = l2g[e]
+        ix = np.ix_(idx, idx)
+        exx, exy, eyx = t["exx"], t["exy"], t["eyx"]
+        eyy, ezz = t["eyy"], t["ezz"]
+        mass["one"][ix] += Mloc
+        mass["eyy"][ix] += eyy * Mloc
+        mass["exy_xx"][ix] += (exy / exx) * Mloc
+        mass["eyx_xx"][ix] += (eyx / exx) * Mloc
+        mass["schur"][ix] += (eyy - eyx * exy / exx) * Mloc
+        mass["ezz"][ix] += ezz * Mloc
+        mass["inv_xx"][ix] += (1.0 / exx) * Mloc
+        stiff["one"][ix] += Kloc
+        stiff["inv_ezz"][ix] += (1.0 / ezz) * Kloc
+    return dict(mass=mass, stiff=stiff, S0=mass["one"], n_glob=n_glob, l2g=l2g,
+                elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes)
+
+
+def _sem_modes_tensor(mats, k0):
+    """Coupled ``(E_x, E_y)`` anisotropic SE modal eigenproblem.
+
+    Returns ``(W2, V2, lam, q)``: ``W2[:, n]`` = the 2-vector field of mode
+    ``n`` (top ``n_glob`` rows ``E_x``, bottom ``E_y``); ``V2`` the matched
+    magnetic partner ``Q W diag(1/lam)``; ``q = gamma/k0`` (``Im q >= 0``);
+    ``lam = -i q`` (forward-decaying propagator).
+    """
+    n = mats["n_glob"]
+    k02 = k0 * k0
+    iS0 = np.linalg.inv(mats["S0"])
+    mass, stiff = mats["mass"], mats["stiff"]
+
+    # nodal pointwise operators (S0^-1 . Galerkin operator)
+    Cinv_xx = iS0 @ mass["inv_xx"]          # multiply by 1/exx == [[1/exx]]
+    Cxx = np.linalg.inv(Cinv_xx)            # [[1/exx]]^-1 (wall-normal inverse rule)
+    EXY_XX = iS0 @ mass["exy_xx"]           # [[exy/exx]]
+    EYX_XX = iS0 @ mass["eyx_xx"]           # [[eyx/exx]]
+    SCHUR = iS0 @ mass["schur"]             # [[eyy - eyx exy/exx]]
+    Cxy = Cxx @ EXY_XX
+    Cyx = EYX_XX @ Cxx
+    Cyy = SCHUR + EYX_XX @ Cxx @ EXY_XX
+
+    # Kx-derivative operators (1/k0^2 . SE stiffness).  Ez-elimination uses the
+    # 1/ezz-weighted stiffness (the Ez wall-tangential inverse rule); plain Kx^2
+    # the unit-weighted one.
+    KxEzziKx = (1.0 / k02) * (iS0 @ stiff["inv_ezz"])
+    Kx2 = (1.0 / k02) * (iS0 @ stiff["one"])
+    G = np.eye(n, dtype=_C) - KxEzziKx
+
+    Mbig = np.block([[G @ Cxx, G @ Cxy],
+                     [Cyx,     Cyy - Kx2]])
+    q2, W2 = np.linalg.eig(Mbig)
+    q = np.sqrt(q2)
+    q = np.where(q.imag < 0.0, -q, q)       # Im(q) >= 0 forward decay
+    lam = -1j * q
+
+    # modal magnetic partner: V = Q @ W @ diag(1/lam) with the (Ky=0) Q block
+    Q = np.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
+    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+    V2 = Q @ W2 @ np.diag(1.0 / safe)
+    return W2, V2, lam, q
+
+
+def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
+                     duty, wl, degree, n_ridge_el, n_groove_el, grade,
+                     far_field_orders):
+    """Single-degree coupled anisotropic PMM solve.
+
+    Returns ``(orders, R(2,N), T(2,N), jones(2,2), n_glob)`` in the PUBLIC
+    ``exp(-i w t)`` convention.  Row/column 0 is the incident ``E_x`` response,
+    1 the incident ``E_y``; ``jones`` columns are the zeroth-order reflected
+    ``[E_x; E_y]`` for incident ``E_x`` / ``E_y``.
+    """
+    er = np.asarray(eps_ridge3, dtype=_C)
+    eg = np.asarray(eps_groove3, dtype=_C)
+
+    def _t3(M):
+        return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
+                    ezz=M[2, 2])
+    t_ridge, t_groove = _t3(er), _t3(eg)
+    eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    k0 = 2.0 * np.pi / wl
+    d_wall = duty * period
+
+    mats = _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
+                             n_ridge_el, n_groove_el, grade)
+    t_sup = dict(exx=eps_sup, exy=0.0, eyx=0.0, eyy=eps_sup, ezz=eps_sup)
+    t_sub = dict(exx=eps_sub, exy=0.0, eyx=0.0, eyy=eps_sub, ezz=eps_sub)
+    mats_sup = _build_sem_tensor(period, d_wall, t_sup, t_sup, degree,
+                                 n_ridge_el, n_groove_el, grade)
+    mats_sub = _build_sem_tensor(period, d_wall, t_sub, t_sub, degree,
+                                 n_ridge_el, n_groove_el, grade)
+    n_glob = mats["n_glob"]
+
+    Wl, Vl, lam_l, _ql = _sem_modes_tensor(mats, k0)
+    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0)
+    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0)
+
+    # Rayleigh order set for the forward far-field projection (cover the
+    # propagating orders, kept well below the nodal DOF -- see the scalar path).
+    n_max = max(np.real(np.sqrt(eps_sup)), np.real(np.sqrt(eps_sub)),
+                np.real(np.sqrt(er[0, 0])), np.real(np.sqrt(eg[0, 0])),
+                np.real(np.sqrt(er[1, 1])), np.real(np.sqrt(eg[1, 1])))
+    m_prop = _n_propagating_orders(period, wl, n_max)
+    n_proj = max(int(far_field_orders), 2 * m_prop + 5)
+    cap = n_glob if n_glob % 2 else n_glob - 1
+    n_proj = min(n_proj, cap)
+    if n_proj % 2 == 0:
+        n_proj -= 1
+    half = (n_proj - 1) // 2
+    if 2 * m_prop + 1 > n_proj:
+        raise ValueError(
+            f"pmm_jones_1d: degree={degree} too low to resolve the "
+            f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
+            f"degree or elements_per_region.")
+    orders = np.arange(-half, half + 1)
+    G = 2.0 * np.pi / period
+    kx = (orders * G) / k0
+    N = len(orders)
+    Tp = _sem_fourier_projection(orders, period, mats)
+
+    # interface + propagation S-matrix (block size 2*n_glob; the field stacks
+    # [Ex_nodal; Ey_nodal], so each mode matrix is already 2*n_glob tall).
+    S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
+    S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
+    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
+    S11, _S12, S21, _S22 = S
+
+    def _project(Wmodes):
+        """Project each (Ex / Ey) half of the nodal modes onto the Rayleigh
+        orders -> a (2N, modes) operator: x-orders stacked over y-orders."""
+        return np.vstack([Tp @ Wmodes[:n_glob, :], Tp @ Wmodes[n_glob:, :]])
+
+    Hsup = _project(Wsup)
+    Hsub = _project(Wsub)
+
+    kz_sup = _kz_forward(eps_sup, kx)
+    kz_sub = _kz_forward(eps_sub, kx)
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([0.0]))[0]))
+    safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+    safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+
+    m0 = np.where(orders == 0)[0][0]
+    jones = np.zeros((2, 2), dtype=_C)
+    R_eff = np.zeros((2, N))
+    T_eff = np.zeros((2, N))
+    for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
+        rhs = np.zeros(2 * N, dtype=_C)
+        rhs[(col * N) + m0] = 1.0               # order-0 unit Ex (col 0) / Ey (col 1)
+        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        r_ord = Hsup @ (S11 @ cinc)
+        t_ord = Hsub @ (S21 @ cinc)
+        rx, ry = r_ord[:N], r_ord[N:]
+        tx, ty = t_ord[:N], t_ord[N:]
+        # longitudinal Ez from div D = 0 in the isotropic half-space (rz =
+        # -kx rx / kz); it carries z-flux for the wall-normal (Ex / TM-like)
+        # component -- the term that makes the TM channel conserve energy.
+        rz = -(kx * rx) / safe_r
+        tz = -(kx * tx) / safe_t
+        Re = np.real(kz_sup / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                         + np.abs(rz) ** 2)
+        Te = np.real(kz_sub / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                         + np.abs(tz) ** 2)
+        R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
+        T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
+        jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
+        jones[1, col] = ry[m0]
+    return orders, R_eff, T_eff, jones, n_glob
+
+
+def pmm_jones_1d(
+    period: float,
+    eps_ridge,
+    eps_groove,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    duty_cycle: float,
+    wavelength: float,
+    *,
+    angle: float = 0.0,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    stabilize: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Anisotropic 1-D binary grating by the Polynomial Modal Method -- the full
+    complex ``2x2`` Jones reflection (the spectral-element counterpart of
+    :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`).
+
+    The ridge and groove are full ``(3, 3)`` IN-PLANE permittivity tensors (the
+    tunable-LC reflective grating); the off-diagonal ``exy`` couples ``E_x`` and
+    ``E_y`` in the spectral-element modal eigenproblem, so the response is a full
+    Jones matrix (the phase relationship the scalar :func:`pmm_efficiency_1d`
+    cannot carry).  Converges SPECTRALLY in the polynomial ``degree`` with no
+    accuracy floor -- the PMM win on metals where the FMM needs many orders and
+    the ASR stretch plateaus.
+
+    Parameters
+    ----------
+    period : float
+        Grating period (metres).
+    eps_ridge, eps_groove : (3, 3) array_like of complex
+        Permittivity tensors of the ridge / groove (PUBLIC convention
+        ``Im(eps) > 0`` for loss).  Pass ``scalar * np.eye(3)`` for an isotropic
+        region; build LC tensors with
+        :func:`~lumenairy.elements.rcwa.uniaxial_tensor` (``theta = pi/2`` keeps
+        the director in-plane).  Must be IN-PLANE (no ``eps_xz / eps_yz /
+        eps_zx / eps_zy``); an out-of-plane tensor raises ``ValueError`` (use
+        :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` for the full-3x3 case).
+    n_substrate, n_superstrate : complex
+        Transmission / incidence half-space (isotropic) indices (PUBLIC ``n =
+        n + i kappa``).
+    depth, duty_cycle, wavelength : float
+        As in :func:`pmm_efficiency_1d` (the ridge occupies ``duty_cycle`` of
+        the period).
+    angle : float, optional
+        Incidence angle (radians).  **Only ``0`` (normal) is implemented**; a
+        non-zero angle raises ``NotImplementedError`` (oblique needs the ``+i
+        kx0`` Bloch shift in the stiffness).
+    degree : int, optional
+        Polynomial degree per spectral element -- the spectral convergence knob.
+        Default 16.
+    elements_per_region : int, optional
+        Spectral elements per homogeneous subsection (ridge / groove).  Default
+        1.  Raise with ``grade=True`` to resolve the wall-corner field.
+    grade : bool, optional
+        Cluster the elements toward the walls when
+        ``elements_per_region > 1``.  Default ``True``.
+    far_field_orders : int, optional
+        Rayleigh order count for the once-only forward far-field projection
+        (auto-grown to cover the propagating orders).  Default 21.
+    stabilize : bool, optional
+        Guard against the isolated-degree PMM resonances (a near-singular
+        layer<->region mode-match injects spurious flux and inflates
+        ``sum(R)+sum(T)``).  When ``True`` (default) the solver scans a short
+        upward degree window and returns the lowest degree at/above the request
+        whose BOTH incident-polarization totals are energy-passive.  Set
+        ``False`` to solve at exactly ``degree``.
+
+    Returns
+    -------
+    orders : (M,) int ndarray
+        Retained Rayleigh-order indices (the far-field projection set).
+    R_eff, T_eff : (2, M) float ndarray
+        Reflected / transmitted diffraction efficiency per order; row 0 is the
+        response to an incident ``E_x`` wave, row 1 to incident ``E_y`` (cross-
+        polarization included).
+    jones_reflection : (2, 2) complex ndarray
+        Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis (PUBLIC
+        ``exp(-i w t)`` convention); columns are the responses to incident
+        ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.  Matches
+        :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` to the convergence
+        tolerance.
+
+    Notes
+    -----
+    NumPy / SciPy (dense generalized eig); not JAX-differentiable.  Normal
+    incidence, binary grating, in-plane tensor only (multi-region / oblique /
+    autodiff are follow-ons).
+    """
+    if abs(float(angle)) > 1e-12:
+        raise NotImplementedError(
+            "pmm_jones_1d: only normal incidence (angle=0) is implemented "
+            "(oblique needs the +i*kx0 Bloch shift in the element stiffness).")
+    if int(degree) < 2:
+        raise ValueError("pmm_jones_1d: degree must be >= 2.")
+    if not (0.0 <= float(duty_cycle) <= 1.0):
+        raise ValueError(
+            f"pmm_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+    er = np.asarray(eps_ridge, dtype=_C)
+    eg = np.asarray(eps_groove, dtype=_C)
+    if er.shape[-2:] != (3, 3) or eg.shape[-2:] != (3, 3):
+        raise ValueError(
+            "pmm_jones_1d: eps_ridge / eps_groove must be (3, 3) permittivity "
+            "tensors (use scalar * np.eye(3) for an isotropic region).")
+    # in-plane only: reject out-of-plane coupling (would be silently dropped)
+    scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
+    off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
+              float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
+    if off > 1e-9 * scale:
+        raise ValueError(
+            "pmm_jones_1d: the anisotropic PMM is the z-decoupled IN-PLANE "
+            "tensor subset (exx, exy, eyx, eyy, ezz); the supplied tensor has "
+            "out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0). "
+            "Use rcwa_jones_1d for the full-3x3 (out-of-plane) case.")
+
+    args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
+            duty_cycle, wavelength)
+    kw = dict(n_ridge_el=int(elements_per_region),
+              n_groove_el=int(elements_per_region), grade=bool(grade),
+              far_field_orders=int(far_field_orders))
+
+    if not stabilize:
+        o, R, T, J, _ = _pmm_jones_solve(*args, degree=int(degree), **kw)
+        return o, R, T, J
+
+    # Stabilize: scan UPWARD, return the lowest degree at/above the request whose
+    # BOTH incident-polarization totals are energy-passive (reject the isolated-
+    # degree resonances that inflate sum(R)+sum(T)).  Mirrors the scalar PMM
+    # selector; two states so each must be passive.
+    d0 = int(degree)
+    last = None
+    for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
+        o, R, T, J, _ = _pmm_jones_solve(*args, degree=d, **kw)
+        tot = float(np.real(R.sum() + T.sum()))     # both incident states
+        last = (o, R, T, J)
+        if tot <= 2.0 + 2.0 * _JONES_PASSIVE_TOL:
+            return o, R, T, J
+    warnings.warn(
+        f"pmm_jones_1d: no energy-passive solve in degrees "
+        f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the last attempt "
+        f"(degree {d0 + _STABILIZE_MAX_SCAN - 1}).  It may sit in a resonance "
+        f"band -- try a different degree or elements_per_region>1 with "
+        f"grade=True.", stacklevel=2)
+    return last
 
 
 def pmm_efficiency_1d(
