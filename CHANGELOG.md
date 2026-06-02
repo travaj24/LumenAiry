@@ -2,6 +2,43 @@
 
 All notable changes to the core library are documented here.
 
+## [5.10.6] — 2026-06-02
+
+**PMM build-portability fix: resonance-robust degree selection (`stabilize`).**
+A CI flake surfaced a real robustness bug in `pmm_efficiency_1d`: the Polynomial
+Modal Method has discrete *resonances* at isolated polynomial degrees where a
+near-singular layer↔region interface mode-match injects spurious flux, inflating
+`sum(R)+sum(T)` above the clean value (catastrophically — R+T ≫ 1 — or only
+mildly, leaving R+T ≤ 1 yet biasing the efficiencies). The resonant degrees are
+**LAPACK-build dependent**, so `degree=24` returned an off-curve `T` (0.3997 vs
+the true 0.3982) on the CI build while passing locally, tripping
+`test_pmm_self_converges_no_floor`. The old `stabilize` gate (accept the *first*
+degree with R+T ≤ 1) let the mild, sub-unity resonances through.
+
+### Fixed
+
+- **Convergence-consensus `stabilize` selector.** `stabilize=True` (default) now
+  scans a short upward degree window, collects the *passive* solves (total power
+  within tolerance of unity — discarding the super-unity resonances), and locks
+  onto the **consensus** the converged degrees agree on (the largest cluster of
+  mutually-consistent totals), returning the requested degree unchanged when its
+  own total is in that cluster (DOF preserved, bit-identical at clean degrees)
+  and the nearest clean degree otherwise. This rejects **both** off-curve modes:
+  the *upward* resonance spikes **and** the *downward* under-convergence deficit
+  at low degree on high-index gratings (an adversarial audit showed a naïve
+  "minimum-power = clean" rule would latch onto the worst-converged low-degree
+  solve — e.g. silicon n≈4 at degree 8 was biased by up to 6.5e-2; the consensus
+  rule returns the converged value to ~4e-5). Resonances proliferate into
+  multi-degree bands at high degree, so the scan raises a clear error if no
+  passive solve exists, and warns if the solution never stabilizes within the
+  window (genuinely under-resolved — raise `degree` or `elements_per_region`).
+  `stabilize=False` is unchanged (exact degree). Verified across metal / lossless
+  / dielectric / silicon, both polarizations; all PMM tests pass.
+- **New regression tests** `test_pmm_degree_robustness_no_resonance_leak` (no
+  inflated total power / off-curve outlier at any requested degree) and
+  `test_pmm_low_degree_high_index_converges` (low-degree high-index solves track
+  the FMM oracle, not the under-converged value).
+
 ## [5.10.5] — 2026-06-02
 
 **Autodiff completeness: batched (vmap) solves + validated Hessians (audit W1 /

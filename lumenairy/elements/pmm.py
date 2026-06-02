@@ -76,6 +76,7 @@ lever for metal TM.
 """
 from __future__ import annotations
 
+import warnings
 from typing import Tuple
 
 import numpy as np
@@ -85,6 +86,41 @@ from numpy.polynomial.legendre import Legendre
 __all__ = ["pmm_efficiency_1d"]
 
 _C = np.complex128
+
+# ``stabilize`` robust-selection parameters.  PMM has two distinct off-curve
+# failure modes vs polynomial degree: (1) discrete RESONANCES at isolated degrees
+# that INFLATE sum(R)+sum(T) above the converged value (sparse at low degree,
+# proliferating into multi-degree bands at high degree), and (2) UNDER-
+# CONVERGENCE at low degree on high-index gratings, where the total sits BELOW
+# the converged value (a power deficit).  The clean answer is therefore neither
+# the maximum nor the minimum power but the CONSENSUS that the converged degrees
+# agree on.  The selector scans upward, collects the PASSIVE solves (total within
+# ``_PASSIVE_TOL`` of unity -- discards the super-unity resonances), and once
+# ``_MIN_CLUSTER`` of them agree within ``_CLUSTER_TOL`` (the converged plateau)
+# returns the requested degree if its own total is in that cluster (degree / DOF
+# preserved in the common clean case), else the nearest clean degree.  Both a
+# lone low outlier (under-convergence) and a lone high outlier (resonance) are
+# rejected as non-consensus.
+_STABILIZE_MAX_SCAN = 16    # hard cap on degrees scanned (covers >=7-wide bands)
+_MIN_CLUSTER = 3            # passive solves that must agree to fix the consensus
+_PASSIVE_TOL = 1.0e-3       # reject super-unity resonances; accept lossless R+T=1
+# converged degrees agree to ~1e-6 and differ across the window only by the
+# convergence drift (~1e-4); resonances inflate, and under-convergence deflates,
+# the power by >~2e-3.  This width cleanly separates the converged cluster from
+# both off-curve modes and bounds the worst-case efficiency error of a returned
+# degree.
+_CLUSTER_TOL = 5.0e-4
+
+
+def _largest_cluster(totals, tol):
+    """Members of the largest mutually-(within ``tol``)-consistent group of
+    ``totals`` (the convergence plateau); greedy around each anchor (n<=16)."""
+    best = []
+    for anchor in totals:
+        grp = [t for t in totals if abs(t - anchor) <= tol]
+        if len(grp) > len(best):
+            best = grp
+    return best
 
 
 # ===========================================================================
@@ -438,9 +474,14 @@ def pmm_efficiency_1d(
         (auto-grown to cover the propagating orders; kept well below the nodal
         DOF).  Default 21.
     stabilize : bool, optional
-        Retry nearby ``degree`` when an isolated near-singular layer<->region
-        resonance pushes ``sum(R)+sum(T) > 1`` (a measure-zero erratic event,
-        the analogue of the FMM ``stabilize`` flag).  Default ``True``.
+        Guard against the measure-zero discrete resonances at isolated
+        polynomial degrees (a near-singular layer<->region mode-match injects
+        spurious flux and inflates ``sum(R)+sum(T)``; the analogue of the FMM
+        ``stabilize`` flag).  When ``True`` (default) the solver scans a short
+        UPWARD degree window and returns the minimum-power, resonance-free
+        result -- build-reproducible and never below the requested degree's
+        accuracy.  Set ``False`` to solve at exactly ``degree`` (e.g. for
+        convergence studies that tolerate the occasional resonant degree).
 
     Returns
     -------
@@ -480,14 +521,59 @@ def pmm_efficiency_1d(
               n_groove_el=int(elements_per_region), grade=bool(grade),
               far_field_orders=int(far_field_orders))
 
-    bumps = (0, 1, -1, 2, 3, -2, 5, 7) if stabilize else (0,)
-    last = None
-    for bump in bumps:
-        d = int(degree) + bump
-        if d < 2:
-            continue
+    if not stabilize:
+        orders, R, T, _ = _pmm_solve(*args, degree=int(degree), **kw)
+        return orders, R, T
+
+    # Robust degree selection by CONVERGENCE CONSENSUS.  PMM has TWO off-curve
+    # failure modes vs degree: RESONANCES at isolated degrees inflate sum(R)+
+    # sum(T) above the converged value (catastrophically R+T >> 1, or mildly
+    # R+T <= 1 yet biasing the efficiencies; the resonant set moves with the
+    # LAPACK build); and UNDER-CONVERGENCE at low degree on high-index gratings
+    # deflates it below the converged value.  The clean answer is the CONSENSUS
+    # the converged degrees agree on -- neither the maximum nor the minimum
+    # power (a min-power rule would latch onto the worst-converged low-degree
+    # solve).  Scan UPWARD, collect the PASSIVE solves (total within _PASSIVE_TOL
+    # of unity -- discards super-unity resonances); once _MIN_CLUSTER of them
+    # agree within _CLUSTER_TOL (the converged plateau) return the requested
+    # degree if its own total is in that cluster (degree/DOF preserved), else
+    # the nearest clean degree.  Early-exit at the first established consensus
+    # bounds the cost (a clean degree resolves in _MIN_CLUSTER solves).
+    d0 = int(degree)
+    scanned = []
+    for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
         orders, R, T, _ = _pmm_solve(*args, degree=d, **kw)
-        last = (orders, R, T)
-        if float(R.sum() + T.sum()) <= 1.0 + 1e-6:    # passive: <= 1 (+eps)
-            return orders, R, T
-    return last                                        # best effort if none pass
+        tot = float(np.real(R.sum() + T.sum()))
+        scanned.append((d, tot, tot <= 1.0 + _PASSIVE_TOL, orders, R, T))
+        passives = [s for s in scanned if s[2]]
+        if len(passives) < _MIN_CLUSTER:
+            continue
+        cluster = _largest_cluster([s[1] for s in passives], _CLUSTER_TOL)
+        if len(cluster) < _MIN_CLUSTER:
+            continue                                  # no plateau yet -- keep scanning
+        baseline = float(np.median(cluster))
+        lo, hi = baseline - _CLUSTER_TOL, baseline + _CLUSTER_TOL
+        # requested degree itself converged + resonance-free -> return unchanged
+        if scanned[0][2] and lo <= scanned[0][1] <= hi:
+            return scanned[0][3], scanned[0][4], scanned[0][5]
+        # else nearest clean: lowest-degree solve whose total is in the consensus
+        for d_i, tot_i, passive_i, o_i, R_i, T_i in scanned:
+            if passive_i and lo <= tot_i <= hi:
+                return o_i, R_i, T_i
+    # window exhausted without an established consensus
+    passives = [s for s in scanned if s[2]]
+    if not passives:
+        raise RuntimeError(
+            f"pmm_efficiency_1d: no resonance-free solve in degrees "
+            f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); the requested degree sits in a "
+            f"high-degree resonance band.  Use a lower degree (PMM converges "
+            f"spectrally -- degree<=32 typically suffices) or "
+            f"elements_per_region>1 with grade=True.")
+    warnings.warn(
+        f"pmm_efficiency_1d: the solution did not stabilize within degrees "
+        f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the most-converged "
+        f"available (degree {max(p[0] for p in passives)}).  It may be "
+        f"under-converged -- raise degree or use elements_per_region>1 with "
+        f"grade=True.", stacklevel=2)
+    best = max(passives, key=lambda s: s[0])          # highest degree = most converged
+    return best[3], best[4], best[5]

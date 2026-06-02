@@ -59,9 +59,62 @@ def test_pmm_tm_error_improves_with_degree():
 
 def test_pmm_self_converges_no_floor():
     # independent of the oracle's own residual: two high degrees must agree,
-    # proving PMM keeps converging rather than plateauing with noise
+    # proving PMM keeps converging rather than plateauing with noise.  (Robust
+    # across LAPACK builds because the stabilize selector returns a clean,
+    # resonance-free solve at each degree -- see the regression test below.)
     assert abs(_pmm_T("tm", 24) - _pmm_T("tm", 36)) < 1e-4
     assert abs(_pmm_T("te", 16) - _pmm_T("te", 28)) < 1e-5
+
+
+def test_pmm_degree_robustness_no_resonance_leak():
+    """Regression (CI flake): PMM has discrete resonances at isolated polynomial
+    degrees where a near-singular interface mode-match injects spurious flux,
+    inflating ``sum(R)+sum(T)`` and biasing the efficiencies.  Their location
+    shifts with the LAPACK build, so a fixed degree was not CI-portable --
+    ``degree=24`` returned an off-curve ``T`` (0.3997 vs the true 0.3982) on the
+    CI build while passing locally.  The ``stabilize`` selector must therefore
+    return a clean, resonance-free solve at EVERY requested degree: no inflated
+    total power and no off-curve efficiency outlier.
+    """
+    for pol in ("tm", "te"):
+        ref = _oracle_T(pol)                         # FMM truth anchor (no self-ref)
+        for d in range(12, 41):
+            o, R, T = pmm_efficiency_1d(**GOLD, polarization=pol, degree=d)
+            rt = float(R.sum() + T.sum())
+            assert rt <= 1.0 + 1e-3, (
+                f"{pol} degree {d}: R+T={rt:.5f} inflated -- a resonance leaked "
+                f"through the stabilize selector")
+            # anchor to the FMM oracle (bites for BOTH pols, unlike a self-median:
+            # a leaked resonant/under-converged degree lands >~1e-3 off truth,
+            # while the genuine convergence drift over 12..40 stays ~1e-4).
+            assert abs(float(T.sum()) - ref) < 1e-3, (
+                f"{pol} degree {d}: T={float(T.sum()):.6f} is {abs(float(T.sum())-ref):.2e} "
+                f"off the FMM oracle {ref:.6f} -- a resonant/under-converged "
+                f"degree leaked through stabilize")
+
+
+def test_pmm_low_degree_high_index_converges():
+    """Regression (adversarial audit): a min-power 'clean = lowest total' rule
+    silently returned the WORST-converged low-degree solve on high-index gratings
+    (where the field is under-resolved and R+T sits *below* its converged value).
+    The consensus selector must instead track the converged value even when a low
+    degree is requested.  Silicon ridge n~=4 was biased by up to 6.5e-2 under the
+    naive rule; it must now match the FMM oracle.
+    """
+    si = dict(period=1.2e-6, n_ridge=4.0 + 0.1j, n_groove=1.0, n_substrate=3.5,
+              n_superstrate=1.0, depth=0.4e-6, duty_cycle=0.6, wavelength=1.0e-6)
+    for pol in ("te", "tm"):
+        o, R, T = rcwa_efficiency_1d(**si, polarization=pol, n_orders=160)
+        ref = float(T.sum())
+        for d in (8, 10, 12):
+            op, Rp, Tp = pmm_efficiency_1d(**si, polarization=pol, degree=d)
+            # the under-converged-deficit bug gave dT >~ 4e-3 (te up to 6.5e-2);
+            # the consensus value tracks the oracle (te ~4e-5, tm ~1.4e-3 -- the
+            # honest low-degree TM rate, still far from the broken deficit).
+            assert abs(float(Tp.sum()) - ref) < 3e-3, (
+                f"silicon {pol} degree {d}: T={float(Tp.sum()):.6f} is "
+                f"{abs(float(Tp.sum())-ref):.2e} off the FMM oracle {ref:.6f} -- "
+                f"the consensus selector returned an under-converged solve")
 
 
 def test_pmm_beats_fmm_at_matched_dof_te():
