@@ -202,23 +202,45 @@ def test_shapes_fff_converges_to_inkstone_gold():
 # large-period self-heal (stabilize=)
 # ---------------------------------------------------------------------------
 
-# A reproduced measure-zero blow-up: period 15 um, n=2.5/1.0, only n_orders
-# 12 and 14 conserve energy; 11, 13, 15.. all blow up (sum R+T up to 1e30).
+# The large-period / high-contrast instability: period 15 um, n=2.5/1.0, an
+# erratic, MEASURE-ZERO set of n_orders blows up energy (sum R+T up to 1e30).
+# WHICH n_orders blow up is LAPACK-build dependent (a near-singular layer<->
+# region mode-match), so the tests SEARCH for a blow-up at run time rather than
+# pinning one truncation -- and skip when the platform's LAPACK happens not to
+# exhibit it (otherwise the test is a coin-flip across NumPy/LAPACK builds).
 _BLOWUP = dict(period=15e-6, n_ridge=2.5, n_groove=1.0, n_substrate=1.0,
                n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5,
                wavelength=0.633e-6, angle=0.0, polarization="te")
 
 
+def _find_blowup_order(max_m=28):
+    """First n_orders in ``[3, max_m]`` whose solve trips the energy guard at
+    the ``_BLOWUP`` geometry, or ``None`` if this LAPACK build conserves energy
+    at every truncation."""
+    for m in range(3, max_m + 1):
+        try:
+            rcwa_efficiency_1d(**_BLOWUP, n_orders=m)
+        except _EnergyError:
+            return m
+    return None
+
+
 def test_energy_guard_raises_typed_error_on_blowup():
+    m = _find_blowup_order()
+    if m is None:
+        pytest.skip("no measure-zero large-period blow-up on this LAPACK build")
     with pytest.raises(_EnergyError, match="energy non-conservation"):
-        rcwa_efficiency_1d(**_BLOWUP, n_orders=11)
+        rcwa_efficiency_1d(**_BLOWUP, n_orders=m)
 
 
 def test_stabilize_heals_blowup_to_conserving_solve():
-    o, Re, Te = rcwa_efficiency_1d(**_BLOWUP, n_orders=11, stabilize=True)
+    m = _find_blowup_order()
+    if m is None:
+        pytest.skip("no measure-zero large-period blow-up on this LAPACK build")
+    o, Re, Te = rcwa_efficiency_1d(**_BLOWUP, n_orders=m, stabilize=True)
     tot = float(Re.sum() + Te.sum())
     assert abs(tot - 1.0) < 1e-3                  # lossless -> energy conserved
-    assert len(o) != 23                           # bumped off the bad M=11
+    assert len(o) != 2 * m + 1                    # bumped off the bad truncation
 
 
 def test_stabilize_is_bit_exact_noop_on_clean_geometry():
