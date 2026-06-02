@@ -2,6 +2,49 @@
 
 All notable changes to the core library are documented here.
 
+## [5.8.0] — 2026-06-01
+
+**Polynomial Modal Method (PMM) — a non-Fourier 1-D grating solver (roadmap
+item G).**  New module `lumenairy/elements/pmm.py`, public
+`pmm_efficiency_1d(...)`.  Purely additive; nothing else changes.
+
+### Added
+
+- **`pmm_efficiency_1d`** — rigorous diffraction efficiencies of a 1-D binary
+  grating by the subsectional spectral-element / high-degree-Legendre modal
+  method (Edee, JOSA A 28, 2006 (2011)).  Instead of a global Fourier harmonic
+  basis it uses one C0 spectral element per homogeneous subsection (ridge /
+  groove), with the element boundary on each wall, so `eps` is exact per element
+  (no Gibbs) and the method converges **spectrally in the polynomial degree**.
+  Derived + validated by a 3-prototype derive/prototype/synthesize workflow
+  (all three independently converged on the bridge-free, high-degree
+  formulation).
+  - **The key win over the Fourier method and the v5.7 ASR stretch: NO accuracy
+    floor.**  Where ASR plateaus at ~1e-4 for TM (its `u<->x` Rayleigh bridge
+    inherits the Fourier-truncation error), PMM's TM error drops monotonically
+    with no plateau and TE self-converges to ~1e-11.  Validated against the FMM
+    oracle: TE reaches the oracle's own residual (~1e-6) by degree 12; TM is
+    monotone-no-floor (5.7e-3 → 1.8e-5), beating uniform FMM at matched DOF and
+    reaching a robust TM<1e-4 in ~2.9× fewer DOF.
+  - **Well-conditioned (no ASR conditioning ceiling):** the homogeneous regions
+    are expanded in the *same* nodal basis, so every layer↔region interface is a
+    square, well-conditioned mode match (cond~1); the Rayleigh projection is
+    applied **once, forward only** at the far field (never inverted as a tall
+    bridge — the structural reason it has no floor).
+  - **Verified factorization** (the bug-prone part): the TM operator is built
+    from `1/eps` (`A = S0 − Linv/k0²`, `B = Pinv` — the polynomial Li-inverse-
+    rule analog); using `eps` gives the slow algebraic TM rate.  Runs the
+    **public `exp(−iωt)` convention end-to-end** (no conjugation) — verified by
+    an absorbing-slab cross-check matching FMM to ~1e-15.
+  - **Mesh grading** (`elements_per_region`, `grade`) clusters elements at the
+    walls (hp-refinement) to resolve the metal-corner singularity — the TM
+    speed lever.
+  - **Scope:** 1-D binary grating, **normal incidence only** (oblique →
+    `NotImplementedError`); NumPy/SciPy (dense generalized eig), not
+    JAX-differentiable.  TM is monotone-no-floor but only spectral-*ish* (the
+    discontinuous TM partner is C0-averaged at the wall).  2-D crossed gratings
+    remain on `rcwa_efficiency_2d`.
+
 ## [5.7.1] — 2026-06-01
 
 **ASR documentation honesty (no code/behaviour change).**  An adversarial
