@@ -419,6 +419,9 @@ from .elements.pmm import (
     pmm_jones_1d,
     pmm_jones_1d_segments,
 )
+from .elements.pmm2d import (
+    pmm_efficiency_2d,
+)
 
 # â”€â”€ Polarization / Jones calculus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.polarization import (
@@ -1498,6 +1501,7 @@ __all__ = [
     'pmm_efficiency_1d_segments',
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
+    'pmm_efficiency_2d',
     'PMMStack',
 
     # BSDF / surface scatter

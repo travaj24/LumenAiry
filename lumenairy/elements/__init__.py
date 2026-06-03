@@ -95,6 +95,9 @@ from .pmm import (
     pmm_jones_1d,
     pmm_jones_1d_segments,
 )
+from .pmm2d import (
+    pmm_efficiency_2d,
+)
 from .polarization import (
     JonesField,
     apply_half_wave_plate,
@@ -180,6 +183,7 @@ __all__ = [
     'pmm_efficiency_1d_segments',
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
+    'pmm_efficiency_2d',
     'PMMStack',
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',

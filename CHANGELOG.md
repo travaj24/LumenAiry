@@ -240,6 +240,42 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   bit-identity, 2-layer vs `RCWAStack` (normal + oblique), uniform-spacer +
   energy, all-vacuum transparency, isotropic-decoupling, and the guards.
 
+#### 2-D PMM — `pmm_efficiency_2d` (hybrid crossed-grating modal solver)
+
+- **`pmm_efficiency_2d`** is the 2-D (doubly periodic) analogue of
+  `rcwa_efficiency_2d` for a **separable rectangular pillar** (`eps_pillar`
+  rectangle in an `eps_host` background) — the modal-method counterpart that
+  resolves the pillar edge on a tensor-product GLL nodal grid instead of a
+  staircased Fourier series. It is a **hybrid**: the structured layer is a nodal
+  spectral-element operator **Fourier-Galerkin-projected** into the Rayleigh
+  basis, paired with **analytic plane-wave half-space regions** (`W = I`, exact
+  flux). Validated vs `rcwa_efficiency_2d` (Li rule, matched truncation) to
+  ~2e-4 on the 0-order at `degree=11`, energy conserved to ~1e-3; vacuum is exact
+  and degree-independent; a square pillar reproduces C4v symmetry (TE x-orders ≡
+  TM y-orders) and ±-order symmetry at normal incidence.
+  - **The null-mode fix that makes it viable.** A naive nodal `[Sx;Sy] P@Q` solve
+    produced a fatal cloud of spurious modes — *not* a fundamental vector-Maxwell
+    spurious-gradient problem, but the classic **periodic-grid Nyquist null mode**
+    of the nodal first-derivative, present exactly when the per-axis node count is
+    *even*. Forcing it **odd** (`3·degree·elements_per_strip` odd) restores the
+    correct 1-D derivative kernel and the divergence-reduced second-order form then
+    injects no spurious modes — no grad-div penalty / projection / Lagrange
+    multiplier needed.
+  - **Honest scope.** Single separable rectangular pillar, isotropic scalar
+    TE/TM, single layer, normal / near-normal incidence (oblique is wired via the
+    Bloch shift but unvalidated at large angles). Because the layer lives in a
+    truncated Rayleigh basis of half-width `n_orders`, this solver **has a
+    Fourier-truncation floor like the FMM** — it is *not* no-floor like the 1-D
+    `pmm_efficiency_1d`. For arbitrary 2-D profiles, anisotropy/full-Jones, or
+    multilayer stacks use `rcwa_efficiency_2d` / `RCWAStack`. (A genuinely
+    no-floor 2-D nodal method is blocked by the flux-inconsistent degenerate
+    uniform-region nodal eigenproblem — the same wall RCWA sidesteps with its
+    analytic region path — and is being pursued separately via an FEEC E–D
+    formulation.) New module `lumenairy/elements/pmm2d.py`, exported top-level.
+- **New tests** `tests/unit/test_v5_11_0_pmm2d.py` (17) — vacuum exactness +
+  degree-independence, pillar vs the rcwa li oracle, energy conservation, C4v +
+  ±-order symmetry, and the odd-node / n_orders / polarization guards.
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**
