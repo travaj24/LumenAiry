@@ -162,6 +162,43 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   lossy-LC, and degree convergence. The two prior `*_rejects_oblique` guards were
   retargeted to assert oblique now matches the FMM.
 
+#### MULTI-REGION PMM — `pmm_efficiency_1d_segments` + `pmm_jones_1d_segments`
+
+- **Arbitrary piecewise-constant 1-D profiles** (multi-level staircases,
+  interdigitated / N-region cells, mixed isotropic / liquid-crystal regions) by
+  the PMM — `pmm_jones_1d_segments` is the spectral-element counterpart of
+  `rcwa_jones_1d_segments`, and `pmm_efficiency_1d_segments` is the scalar fast
+  path (no rcwa equivalent). `segments` is a list of `(width_fraction, eps)`
+  (each `eps` scalar or `(3,3)` in-plane tensor; fractions sum to 1) — the same
+  format the `grating_segments` / `binary_grating_segments` /
+  `interdigitated_grating_segments` builders emit. A region wall lands on every
+  spectral element (eps exact per element, no Gibbs), so it converges spectrally
+  in `degree` with no accuracy floor; the binary ridge/groove path is the
+  2-segment special case. Validated against `rcwa_jones_1d_segments` to ~1e-5
+  (Jones) / ~1e-4 (per-order) across normal + oblique, lossless + lossy,
+  multi-region tensor (the tunable-LC `metal | LC | metal | LC` device). The
+  binary `pmm_efficiency_1d` / `pmm_jones_1d` are **bit-identical** (the solve
+  core was refactored to `_pmm_solve_core` / `_pmm_jones_solve_core`, shared by
+  the binary + segmented wrappers; the per-order stabilize was extracted to
+  shared helpers). Exported top-level. Two subtleties were found and fixed:
+  - **Robust forward selector at normal incidence.** A many-element multi-region
+    cell has *dense* isolated-degree resonances that the legacy `Im(q)` branch
+    cannot dodge (the segmented solve blew up at almost every degree at exactly
+    `angle=0`, while the slightest oblique angle was clean). The segmented solver
+    therefore uses the noise-robust / z-Poynting-flux forward selector even at
+    normal incidence (calibrated there); the binary path keeps the legacy branch
+    (bit-identical).
+  - **Mirror-handedness.** The PMM's nodal `x` is mirrored relative to the FMM
+    (`rcwa_jones_1d_segments` places `segments[0]` on `x ∈ [0, w0)`), which at
+    oblique incidence gives the x-reversed spectrum for an *asymmetric* profile.
+    Invisible for the binary (every 2-region cell is mirror-symmetric about its
+    own centre, so `R[+m]=R[-m]`), it surfaced only for 3+ asymmetric regions at
+    oblique; the segment layout is reversed to match the FMM order-by-order.
+- **New tests** `tests/unit/test_v5_11_0_pmm_segments.py` (16) — Jones + scalar
+  multi-region vs the FMM (normal + oblique, lossless + lossy, tensor + scalar),
+  the asymmetric-oblique per-order mirror regression, uniform-N-region
+  transparency, scalar-eps promotion, and the validation guards.
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**

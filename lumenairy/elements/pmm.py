@@ -100,7 +100,8 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import Legendre
 
-__all__ = ["pmm_efficiency_1d", "pmm_jones_1d"]
+__all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
+           "pmm_jones_1d", "pmm_jones_1d_segments"]
 
 _C = np.complex128
 
@@ -300,7 +301,7 @@ def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
                 ref_nodes=ref_nodes)
 
 
-def _sem_modes(mats, k0, polarization, kx0=0.0):
+def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     """Periodic generalized eigenproblem on the nodal basis.
 
     Returns ``(Acoef, lam, q, invop)``: ``Acoef[:, n]`` = nodal values of mode
@@ -314,8 +315,11 @@ def _sem_modes(mats, k0, polarization, kx0=0.0):
     ``-i kx0 (C - C^T)`` (``C = INT phi phi'``; for TM the 1/eps-weighted
     ``Cinv``, which is NOT antisymmetric across the wall -> the (Cinv - Cinv^T)
     form is required, not ``2 Cinv``) and the ``kx0^2`` mass.  At ``kx0 == 0``
-    this is bit-identical to the normal-incidence solve (the shift terms vanish
-    and the legacy ``Im(q) >= 0`` branch is used).
+    the shift vanishes.  ``robust`` forces the NOISE-ROBUST forward branch even at
+    ``kx0 == 0`` (the legacy ``Im(q) >= 0`` branch is bit-identical to the prior
+    binary solve but has dense isolated-degree resonances for many-element /
+    multi-region cells; the robust branch suppresses them).  Binary passes
+    ``robust=False`` (bit-identical); the segmented solver passes ``robust=True``.
     """
     k02 = k0 * k0
     if polarization == "te":
@@ -334,10 +338,10 @@ def _sem_modes(mats, k0, polarization, kx0=0.0):
         invop = np.linalg.solve(mats["S0"], mats["Pinv"])
     q2, Acoef = sla.eig(A, B)
     q = np.sqrt(q2)
-    if kx0:
-        # NOISE-ROBUST forward branch: the oblique operator is complex-Hermitian
-        # for lossless media, so the QZ eig leaks ~1e-15 imag noise; the naive
-        # sign test would flip near-real (propagating) modes on noise -> dense
+    if kx0 or robust:
+        # NOISE-ROBUST forward branch: the operator is (near-)Hermitian for
+        # lossless media, so the QZ eig leaks ~1e-15 imag noise; the naive sign
+        # test would flip near-real (propagating) modes on noise -> dense
         # spurious resonances.  Flip only when CLEARLY backward.
         tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
         flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
@@ -440,6 +444,9 @@ def _n_propagating_orders(period, wl, n_max):
 def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
                degree, polarization, n_ridge_el, n_groove_el, grade,
                far_field_orders, angle=0.0):
+    """Binary (ridge/groove) single-degree scalar PMM solve -- a thin wrapper
+    that builds the two-region operators and defers to :func:`_pmm_solve_core`
+    (shared with the multi-region :func:`_pmm_solve_segments`)."""
     eps_ridge, eps_groove = n_ridge ** 2, n_groove ** 2
     eps_sup, eps_sub = n_sup ** 2, n_sub ** 2
     k0 = 2.0 * np.pi / wl
@@ -452,13 +459,26 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
                           n_ridge_el, n_groove_el, grade)
     mats_sub = _build_sem(period, d_wall, eps_sub, eps_sub, degree,
                           n_ridge_el, n_groove_el, grade)
-    n_glob = mats["n_glob"]
+    n_max = max(np.real(n_sup), np.real(n_sub), np.real(n_ridge),
+                np.real(n_groove))
+    return _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
+                           period, depth, wl, degree, polarization,
+                           far_field_orders, kx0)
 
+
+def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
+                    depth, wl, degree, polarization, far_field_orders, kx0,
+                    label="pmm_efficiency_1d", robust=False):
+    """Single-degree scalar PMM solve from PRE-BUILT spectral-element operators
+    (the layer ``mats`` and the matching homogeneous half-space ``mats_sup`` /
+    ``mats_sub``, all sharing the same node layout).  Shared by the binary
+    :func:`_pmm_solve` and the multi-region :func:`_pmm_solve_segments`
+    (``robust`` forces the noise-robust forward branch -- see :func:`_sem_modes`)."""
+    k0 = 2.0 * np.pi / wl
+    n_glob = mats["n_glob"]
     # Rayleigh order set for the (forward-only) far-field projection: cover the
     # propagating orders with an evanescent buffer, kept WELL BELOW n_glob (a
     # projection order count approaching n_glob aliases the nodal->Fourier map).
-    n_max = max(np.real(n_sup), np.real(n_sub), np.real(n_ridge),
-                np.real(n_groove))
     m_prop = _n_propagating_orders(period, wl, n_max)
     n_proj = max(int(far_field_orders), 2 * m_prop + 5)
     cap = n_glob if n_glob % 2 else n_glob - 1
@@ -468,7 +488,7 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     half = (n_proj - 1) // 2
     if 2 * m_prop + 1 > n_proj:
         raise ValueError(
-            f"pmm_efficiency_1d: degree={degree} too low to resolve the "
+            f"{label}: degree={degree} too low to resolve the "
             f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
             f"degree or elements_per_region.")
     orders = np.arange(-half, half + 1)
@@ -476,12 +496,12 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     kx = (kx0 + orders * G) / k0                     # oblique: kx_m = (kx0+mG)/k0
     Tp = _sem_fourier_projection(orders, period, mats)
 
-    Acoef, lam_l, q_l, invop = _sem_modes(mats, k0, polarization, kx0)
+    Acoef, lam_l, q_l, invop = _sem_modes(mats, k0, polarization, kx0, robust)
     Wl = Acoef
     Vl = (Acoef if polarization == "te" else invop @ Acoef) @ np.diag(q_l)
 
-    Wsup, _ls, q_sup, invsup = _sem_modes(mats_sup, k0, polarization, kx0)
-    Wsub, _lb, q_sub, invsub = _sem_modes(mats_sub, k0, polarization, kx0)
+    Wsup, _ls, q_sup, invsup = _sem_modes(mats_sup, k0, polarization, kx0, robust)
+    Wsub, _lb, q_sub, invsub = _sem_modes(mats_sub, k0, polarization, kx0, robust)
     if polarization == "te":
         Vsup, Vsub = Wsup @ np.diag(q_sup), Wsub @ np.diag(q_sub)
     else:
@@ -628,7 +648,7 @@ def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
                 ref_nodes=ref_nodes)
 
 
-def _sem_modes_tensor(mats, k0, kx0=0.0):
+def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     """Coupled ``(E_x, E_y)`` anisotropic SE modal eigenproblem.
 
     Returns ``(W2, V2, lam, q)``: ``W2[:, n]`` = the 2-vector field of mode
@@ -681,7 +701,7 @@ def _sem_modes_tensor(mats, k0, kx0=0.0):
     # modal magnetic partner: V = Q @ W @ diag(1/lam) with the (Ky=0) Q block
     Q = np.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
 
-    if not kx0:
+    if not kx0 and not robust:
         q = np.where(q.imag < 0.0, -q, q)   # Im(q) >= 0 forward decay (legacy)
     else:
         # POYNTING-FLUX forward selector: V2 partner is [Hx; Hy] and the modal H
@@ -736,17 +756,30 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                                  n_ridge_el, n_groove_el, grade)
     mats_sub = _build_sem_tensor(period, d_wall, t_sub, t_sub, degree,
                                  n_ridge_el, n_groove_el, grade)
-    n_glob = mats["n_glob"]
-
-    Wl, Vl, lam_l, _ql = _sem_modes_tensor(mats, k0, kx0)
-    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0)
-    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0)
-
-    # Rayleigh order set for the forward far-field projection (cover the
-    # propagating orders, kept well below the nodal DOF -- see the scalar path).
     n_max = max(np.real(np.sqrt(eps_sup)), np.real(np.sqrt(eps_sub)),
                 np.real(np.sqrt(er[0, 0])), np.real(np.sqrt(eg[0, 0])),
                 np.real(np.sqrt(er[1, 1])), np.real(np.sqrt(eg[1, 1])))
+    return _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub,
+                                 n_max, period, depth, wl, degree,
+                                 far_field_orders, kx0)
+
+
+def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
+                          period, depth, wl, degree, far_field_orders, kx0,
+                          label="pmm_jones_1d", robust=False):
+    """Single-degree coupled anisotropic solve from PRE-BUILT operators (layer +
+    matching homogeneous half-spaces); shared by the binary
+    :func:`_pmm_jones_solve` and the multi-region
+    :func:`_pmm_jones_solve_segments` (``robust`` forces the z-Poynting-flux
+    forward selector even at normal incidence -- see :func:`_sem_modes_tensor`)."""
+    k0 = 2.0 * np.pi / wl
+    n_glob = mats["n_glob"]
+    Wl, Vl, lam_l, _ql = _sem_modes_tensor(mats, k0, kx0, robust)
+    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0, robust)
+    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0, robust)
+
+    # Rayleigh order set for the forward far-field projection (cover the
+    # propagating orders, kept well below the nodal DOF -- see the scalar path).
     m_prop = _n_propagating_orders(period, wl, n_max)
     n_proj = max(int(far_field_orders), 2 * m_prop + 5)
     cap = n_glob if n_glob % 2 else n_glob - 1
@@ -756,7 +789,7 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     half = (n_proj - 1) // 2
     if 2 * m_prop + 1 > n_proj:
         raise ValueError(
-            f"pmm_jones_1d: degree={degree} too low to resolve the "
+            f"{label}: degree={degree} too low to resolve the "
             f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
             f"degree or elements_per_region.")
     orders = np.arange(-half, half + 1)
@@ -818,6 +851,279 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
         jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
         jones[1, col] = ry[m0]
     return orders, R_eff, T_eff, jones, n_glob
+
+
+# ===========================================================================
+# Multi-region (segmented) PMM -- arbitrary piecewise-constant 1-D profiles
+# (the spectral-element analogue of rcwa_jones_1d_segments).  A region wall
+# lands on every element boundary, so eps is exact per element (no Gibbs); the
+# binary ridge/groove path is the 2-segment special case.
+# ===========================================================================
+
+def _segment_walls(period, widths):
+    """Cumulative region walls ``[0, w0, w0+w1, ..., period]`` (metres) for the
+    fractional ``widths`` (must sum to 1 within 1e-6); normalized to land
+    EXACTLY on 0 and ``period``."""
+    w = np.asarray(widths, dtype=float)
+    if w.ndim != 1 or w.size < 1:
+        raise ValueError("segments: need at least one region.")
+    if np.any(w <= 0.0):
+        raise ValueError("segments: every width fraction must be > 0.")
+    if abs(float(w.sum()) - 1.0) > 1e-6:
+        raise ValueError(
+            f"segments: width fractions must sum to 1 (got {float(w.sum()):.6f}).")
+    edges = np.concatenate([[0.0], np.cumsum(w)])
+    return edges / edges[-1] * period
+
+
+def _segment_elem_bnds(period, widths, materials, n_el_per_region, grade):
+    """``elem_bnds`` list ``[(x_left, x_right, material), ...]`` for N graded
+    regions (``n_el_per_region`` elements each; a wall on every region boundary).
+
+    The regions are laid out in REVERSED order: the PMM's nodal ``x`` orientation
+    is mirrored relative to the FMM (:func:`rcwa_jones_1d_segments`, which places
+    ``segments[0]`` on ``x in [0, w0)``), and at oblique incidence the handedness
+    matters -- reversing here makes the segmented PMM match the FMM order-by-order
+    (verified; for a symmetric profile or normal incidence the order is
+    immaterial, and the binary 2-region cell is always mirror-symmetric so the
+    mirror was invisible there)."""
+    widths = list(widths)[::-1]
+    materials = list(materials)[::-1]
+    walls = _segment_walls(period, widths)
+    elem_bnds = []
+    for i in range(len(widths)):
+        b = _graded_boundaries(walls[i], walls[i + 1], n_el_per_region, grade)
+        elem_bnds += list(zip(b[:-1], b[1:], [materials[i]] * n_el_per_region))
+    return elem_bnds
+
+
+def _l2g_periodic(n_el, degree):
+    """C0 local->global node map with the last node wrapped onto node 0
+    (periodic); shared by the segmented assemblers."""
+    l2g = np.zeros((n_el, degree + 1), dtype=int)
+    gid = 0
+    for e in range(n_el):
+        for a in range(degree + 1):
+            if a == 0 and e > 0:
+                l2g[e, a] = l2g[e - 1, degree]
+            else:
+                l2g[e, a] = gid
+                gid += 1
+    last = l2g[n_el - 1, degree]
+    l2g[l2g == last] = 0
+    return l2g, last
+
+
+def _build_sem_segments(period, widths, seg_eps, degree, n_el_per_region, grade):
+    """Scalar N-region SEM operators (multi-region :func:`_build_sem`);
+    ``seg_eps[i]`` = scalar permittivity of region ``i``."""
+    ref_nodes, ref_w = _gll_nodes_weights(degree)
+    Dref = _lagrange_derivative_matrix(ref_nodes)
+    elem_bnds = _segment_elem_bnds(period, widths, seg_eps, n_el_per_region,
+                                   grade)
+    n_el = len(elem_bnds)
+    l2g, n_glob = _l2g_periodic(n_el, degree)
+
+    def _z():
+        return np.zeros((n_glob, n_glob), dtype=_C)
+    S0, Peps, Pinv, L, Linv = _z(), _z(), _z(), _z(), _z()
+    C, Cinv = _z(), _z()
+    for e in range(n_el):
+        xl, xr, eps = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        inv = 1.0 / eps
+        wel = ref_w * J
+        Dphys = Dref / J
+        Mloc = np.diag(wel)
+        Kloc = (Dphys.T * wel) @ Dphys
+        Cloc = Mloc @ Dphys
+        idx = l2g[e]
+        ix = np.ix_(idx, idx)
+        S0[ix] += Mloc
+        Peps[ix] += eps * Mloc
+        Pinv[ix] += inv * Mloc
+        L[ix] += Kloc
+        Linv[ix] += inv * Kloc
+        C[ix] += Cloc
+        Cinv[ix] += inv * Cloc
+    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv,
+                n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
+                ref_nodes=ref_nodes)
+
+
+def _build_sem_tensor_segments(period, widths, seg_tensors, degree,
+                               n_el_per_region, grade):
+    """Tensor N-region SEM operators (multi-region :func:`_build_sem_tensor`);
+    ``seg_tensors[i]`` = ``dict(exx, exy, eyx, eyy, ezz)`` of region ``i``."""
+    ref_nodes, ref_w = _gll_nodes_weights(degree)
+    Dref = _lagrange_derivative_matrix(ref_nodes)
+    elem_bnds = _segment_elem_bnds(period, widths, seg_tensors, n_el_per_region,
+                                   grade)
+    n_el = len(elem_bnds)
+    l2g, n_glob = _l2g_periodic(n_el, degree)
+
+    def _z():
+        return np.zeros((n_glob, n_glob), dtype=_C)
+    mass = {k: _z() for k in ("one", "eyy", "exy_xx", "eyx_xx", "schur", "ezz",
+                              "inv_xx", "inv_ezz")}
+    stiff = {k: _z() for k in ("one", "inv_ezz")}
+    conv = {k: _z() for k in ("one", "inv_ezz")}
+    for e in range(n_el):
+        xl, xr, t = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        wel = ref_w * J
+        Dphys = Dref / J
+        Mloc = np.diag(wel)
+        Kloc = (Dphys.T * wel) @ Dphys
+        Cloc = Mloc @ Dphys
+        idx = l2g[e]
+        ix = np.ix_(idx, idx)
+        exx, exy, eyx = t["exx"], t["exy"], t["eyx"]
+        eyy, ezz = t["eyy"], t["ezz"]
+        iez = 1.0 / ezz
+        mass["one"][ix] += Mloc
+        mass["eyy"][ix] += eyy * Mloc
+        mass["exy_xx"][ix] += (exy / exx) * Mloc
+        mass["eyx_xx"][ix] += (eyx / exx) * Mloc
+        mass["schur"][ix] += (eyy - eyx * exy / exx) * Mloc
+        mass["ezz"][ix] += ezz * Mloc
+        mass["inv_xx"][ix] += (1.0 / exx) * Mloc
+        mass["inv_ezz"][ix] += iez * Mloc
+        stiff["one"][ix] += Kloc
+        stiff["inv_ezz"][ix] += iez * Kloc
+        conv["one"][ix] += Cloc
+        conv["inv_ezz"][ix] += iez * Cloc
+    return dict(mass=mass, stiff=stiff, conv=conv, S0=mass["one"],
+                n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
+                ref_nodes=ref_nodes)
+
+
+def _pmm_solve_segments(period, widths, seg_n, n_sub, n_sup, depth, wl, degree,
+                        polarization, n_el_per_region, grade, far_field_orders,
+                        angle=0.0):
+    """Single-degree scalar PMM solve for an N-region profile (``seg_n[i]`` =
+    refractive index of region ``i``)."""
+    seg_eps = [_C(n) ** 2 for n in seg_n]
+    eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    k0 = 2.0 * np.pi / wl
+    kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
+    mats = _build_sem_segments(period, widths, seg_eps, degree,
+                               n_el_per_region, grade)
+    mats_sup = _build_sem_segments(period, widths, [eps_sup] * len(widths),
+                                   degree, n_el_per_region, grade)
+    mats_sub = _build_sem_segments(period, widths, [eps_sub] * len(widths),
+                                   degree, n_el_per_region, grade)
+    n_max = max([np.real(np.sqrt(e)) for e in seg_eps]
+                + [np.real(_C(n_sup)), np.real(_C(n_sub))])
+    return _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
+                           period, depth, wl, degree, polarization,
+                           far_field_orders, kx0,
+                           label="pmm_efficiency_1d_segments", robust=True)
+
+
+def _pmm_jones_solve_segments(period, widths, seg_tensors3, n_sub, n_sup, depth,
+                              wl, degree, n_el_per_region, grade,
+                              far_field_orders, angle=0.0):
+    """Single-degree coupled anisotropic PMM solve for an N-region profile
+    (``seg_tensors3[i]`` = the region's ``(3, 3)`` permittivity tensor)."""
+    arrs = [np.asarray(M, dtype=_C) for M in seg_tensors3]
+
+    def _t3(M):
+        return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
+                    ezz=M[2, 2])
+    tensors = [_t3(M) for M in arrs]
+    eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    k0 = 2.0 * np.pi / wl
+    kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
+    mats = _build_sem_tensor_segments(period, widths, tensors, degree,
+                                      n_el_per_region, grade)
+    t_sup = dict(exx=eps_sup, exy=0.0, eyx=0.0, eyy=eps_sup, ezz=eps_sup)
+    t_sub = dict(exx=eps_sub, exy=0.0, eyx=0.0, eyy=eps_sub, ezz=eps_sub)
+    mats_sup = _build_sem_tensor_segments(period, widths, [t_sup] * len(widths),
+                                          degree, n_el_per_region, grade)
+    mats_sub = _build_sem_tensor_segments(period, widths, [t_sub] * len(widths),
+                                          degree, n_el_per_region, grade)
+    n_max = max([np.real(np.sqrt(M[0, 0])) for M in arrs]
+                + [np.real(np.sqrt(M[1, 1])) for M in arrs]
+                + [np.real(np.sqrt(eps_sup)), np.real(np.sqrt(eps_sub))])
+    return _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub,
+                                 n_max, period, depth, wl, degree,
+                                 far_field_orders, kx0,
+                                 label="pmm_jones_1d_segments", robust=True)
+
+
+# --- shared stabilize (per-order convergence consensus) --------------------
+def _stabilize_scalar(solve_at_degree, d0, label):
+    """Per-order convergence consensus over a degree window; ``solve_at_degree(d)
+    -> (orders, R, T)``.  Shared by the binary + segmented scalar solvers."""
+    scanned = []
+    for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
+        orders, R, T = solve_at_degree(d)
+        tot = float(np.real(R.sum() + T.sum()))
+        scanned.append((d, orders, R, T, tot <= 1.0 + _PASSIVE_TOL))
+        records = [(s[1], (s[2], s[3]), None) for s in scanned]
+        passive = [s[4] for s in scanned]
+        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
+                                     _MIN_PLATEAU)
+        if not cluster:
+            continue
+        pick = 0 if 0 in cluster else cluster[0]
+        return scanned[pick][1], scanned[pick][2], scanned[pick][3]
+    passives = [s for s in scanned if s[4]]
+    if not passives:
+        raise RuntimeError(
+            f"{label}: no resonance-free solve in degrees "
+            f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); the requested degree sits in a "
+            f"high-degree resonance band.  Use a lower degree (PMM converges "
+            f"spectrally -- degree<=32 typically suffices) or "
+            f"elements_per_region>1 with grade=True.")
+    warnings.warn(
+        f"{label}: the per-order solution did not converge within degrees "
+        f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest degree tried "
+        f"(degree {max(p[0] for p in passives)}).  It is likely UNDER-RESOLVED "
+        f"(the total power can be passive while the per-order efficiencies are "
+        f"still wrong) -- raise degree or use elements_per_region>1 with "
+        f"grade=True.", stacklevel=3)
+    best = max(passives, key=lambda s: s[0])
+    return best[1], best[2], best[3]
+
+
+def _stabilize_jones(solve_at_degree, d0, label):
+    """Per-order + Jones convergence consensus; ``solve_at_degree(d) ->
+    (orders, R, T, J)``.  Shared by the binary + segmented anisotropic solvers."""
+    scanned = []
+    for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
+        o, R, T, J = solve_at_degree(d)
+        tot = float(np.real(R.sum() + T.sum()))
+        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * _JONES_PASSIVE_TOL))
+        records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
+        passive = [s[5] for s in scanned]
+        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
+                                     _MIN_PLATEAU)
+        if not cluster:
+            continue
+        pick = 0 if 0 in cluster else cluster[0]
+        s = scanned[pick]
+        return s[1], s[2], s[3], s[4]
+    passives = [s for s in scanned if s[5]]
+    if not passives:
+        warnings.warn(
+            f"{label}: no energy-passive solve in degrees "
+            f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the last attempt "
+            f"(degree {d0 + _STABILIZE_MAX_SCAN - 1}).  It may sit in a resonance "
+            f"band -- try a different degree or elements_per_region>1 with "
+            f"grade=True.", stacklevel=3)
+        s = scanned[-1]
+        return s[1], s[2], s[3], s[4]
+    warnings.warn(
+        f"{label}: the per-order / Jones solution did not converge within "
+        f"degrees [{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest "
+        f"degree tried (degree {max(p[0] for p in passives)}).  It is likely "
+        f"UNDER-RESOLVED (the total power can be passive while the per-order "
+        f"split / Jones is still wrong) -- raise degree or use "
+        f"elements_per_region>1 with grade=True.", stacklevel=3)
+    best = max(passives, key=lambda s: s[0])
+    return best[1], best[2], best[3], best[4]
 
 
 def pmm_jones_1d(
@@ -945,47 +1251,11 @@ def pmm_jones_1d(
     if not stabilize:
         o, R, T, J, _ = _pmm_jones_solve(*args, degree=int(degree), **kw)
         return o, R, T, J
-
-    # Stabilize: scan UPWARD and lock onto the CONVERGENCE CONSENSUS -- the
-    # degrees whose totals are energy-passive (both incident states <= 1+tol, so
-    # the super-unity resonances are rejected) AND whose PER-ORDER efficiencies +
-    # the 2x2 Jones agree (the total alone is conserved by the S-matrix even when
-    # the modal basis is under-resolved -> a silent per-order/Jones error).  Mirrors
-    # the scalar selector with the Jones matrix added to the convergence signature.
-    d0 = int(degree)
-    scanned = []                # (degree, orders, R, T, J, passive)
-    for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
-        o, R, T, J, _ = _pmm_jones_solve(*args, degree=d, **kw)
-        tot = float(np.real(R.sum() + T.sum()))     # both incident states
-        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * _JONES_PASSIVE_TOL))
-        records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
-        passive = [s[5] for s in scanned]
-        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
-                                     _MIN_PLATEAU)
-        if not cluster:
-            continue
-        pick = 0 if 0 in cluster else cluster[0]
-        _d, o_i, R_i, T_i, J_i, _p = scanned[pick]
-        return o_i, R_i, T_i, J_i
-    passives = [s for s in scanned if s[5]]
-    if not passives:
-        warnings.warn(
-            f"pmm_jones_1d: no energy-passive solve in degrees "
-            f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the last attempt "
-            f"(degree {d0 + _STABILIZE_MAX_SCAN - 1}).  It may sit in a resonance "
-            f"band -- try a different degree or elements_per_region>1 with "
-            f"grade=True.", stacklevel=2)
-        s = scanned[-1]
-        return s[1], s[2], s[3], s[4]
-    warnings.warn(
-        f"pmm_jones_1d: the per-order / Jones solution did not converge within "
-        f"degrees [{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest "
-        f"degree tried (degree {max(p[0] for p in passives)}).  It is likely "
-        f"UNDER-RESOLVED (the total power can be passive while the per-order "
-        f"split / Jones is still wrong) -- raise degree or use "
-        f"elements_per_region>1 with grade=True.", stacklevel=2)
-    best = max(passives, key=lambda s: s[0])
-    return best[1], best[2], best[3], best[4]
+    # Per-order + Jones convergence consensus (rejects the super-unity resonances
+    # AND the under-resolved-but-energy-passive degrees; see _stabilize_jones).
+    return _stabilize_jones(
+        lambda d: _pmm_jones_solve(*args, degree=d, **kw)[:4], int(degree),
+        "pmm_jones_1d")
 
 
 def pmm_efficiency_1d(
@@ -1092,54 +1362,162 @@ def pmm_efficiency_1d(
     if not stabilize:
         orders, R, T, _ = _pmm_solve(*args, degree=int(degree), **kw)
         return orders, R, T
+    # Robust degree selection by per-order CONVERGENCE CONSENSUS: collect the
+    # PASSIVE solves (total within _PASSIVE_TOL of unity -- discards the
+    # super-unity resonances) and lock onto the plateau the converged degrees
+    # AGREE ON per-order (the total alone is conserved even when under-resolved);
+    # return the requested degree if it is in the plateau, else the lowest
+    # converged degree, else warn/raise.  See _stabilize_scalar.
+    return _stabilize_scalar(
+        lambda d: _pmm_solve(*args, degree=d, **kw)[:3], int(degree),
+        "pmm_efficiency_1d")
 
-    # Robust degree selection by CONVERGENCE CONSENSUS.  PMM has TWO off-curve
-    # failure modes vs degree: RESONANCES at isolated degrees inflate sum(R)+
-    # sum(T) above the converged value (catastrophically R+T >> 1, or mildly
-    # R+T <= 1 yet biasing the efficiencies; the resonant set moves with the
-    # LAPACK build); and UNDER-CONVERGENCE at low degree on high-index gratings
-    # deflates it below the converged value.  The clean answer is the CONSENSUS
-    # the converged degrees agree on -- neither the maximum nor the minimum
-    # power (a min-power rule would latch onto the worst-converged low-degree
-    # solve).  Scan UPWARD, collect the PASSIVE solves (total within _PASSIVE_TOL
-    # of unity -- discards super-unity resonances); once _MIN_CLUSTER of them
-    # agree within _CLUSTER_TOL (the converged plateau) return the requested
-    # degree if its own total is in that cluster (degree/DOF preserved), else
-    # the nearest clean degree.  Early-exit at the first established consensus
-    # bounds the cost (a clean degree resolves in _MIN_CLUSTER solves).
-    d0 = int(degree)
-    scanned = []                # (degree, orders, R, T, passive)
-    for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
-        orders, R, T, _ = _pmm_solve(*args, degree=d, **kw)
-        tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, orders, R, T, tot <= 1.0 + _PASSIVE_TOL))
-        records = [(s[1], (s[2], s[3]), None) for s in scanned]
-        passive = [s[4] for s in scanned]
-        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
-                                     _MIN_PLATEAU)
-        if not cluster:
-            continue                                  # no plateau yet -- keep scanning
-        # requested degree itself converged (its per-order signature is in the
-        # plateau) -> return it unchanged (degree/DOF preserved); else the lowest
-        # converged degree (skipping the under-resolved / resonant low degrees).
-        pick = 0 if 0 in cluster else cluster[0]
-        _d, o_i, R_i, T_i, _p = scanned[pick]
-        return o_i, R_i, T_i
-    # window exhausted without an established (per-order) consensus
-    passives = [s for s in scanned if s[4]]
-    if not passives:
-        raise RuntimeError(
-            f"pmm_efficiency_1d: no resonance-free solve in degrees "
-            f"[{d0}, {d0 + _STABILIZE_MAX_SCAN}); the requested degree sits in a "
-            f"high-degree resonance band.  Use a lower degree (PMM converges "
-            f"spectrally -- degree<=32 typically suffices) or "
-            f"elements_per_region>1 with grade=True.")
-    warnings.warn(
-        f"pmm_efficiency_1d: the per-order solution did not converge within "
-        f"degrees [{d0}, {d0 + _STABILIZE_MAX_SCAN}); returning the highest "
-        f"degree tried (degree {max(p[0] for p in passives)}).  It is likely "
-        f"UNDER-RESOLVED (the total power can be passive while the per-order "
-        f"efficiencies are still wrong) -- raise degree or use "
-        f"elements_per_region>1 with grade=True.", stacklevel=2)
-    best = max(passives, key=lambda s: s[0])          # highest degree = most converged
-    return best[1], best[2], best[3]
+
+def pmm_efficiency_1d_segments(
+    period: float,
+    segments,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelength: float,
+    *,
+    angle: float = 0.0,
+    polarization: str = "te",
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    stabilize: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Scalar diffraction efficiencies of an ARBITRARY piecewise-constant 1-D
+    grating by the PMM -- the multi-region / multi-level generalization of
+    :func:`pmm_efficiency_1d` (the 2-region ridge/groove special case).
+
+    The PMM's fast isotropic path: each region carries a scalar (possibly
+    complex) refractive index, a region wall lands on every spectral-element
+    boundary (so ``eps`` is exact per element -- no Gibbs), and the solve
+    converges spectrally in ``degree`` with no accuracy floor.  For anisotropic
+    (tensor) regions use :func:`pmm_jones_1d_segments`.
+
+    Parameters
+    ----------
+    period, n_substrate, n_superstrate, depth, wavelength : as in
+        :func:`pmm_efficiency_1d`.
+    segments : list of (width_fraction, n)
+        Consecutive regions along ``x`` (the ridge side first), each a
+        ``(width_fraction, refractive_index)`` pair; the fractions must sum to 1
+        (within ``1e-6``).  Covers multi-level staircases (blazed-grating
+        approximations) and arbitrary multi-region cells.
+    angle, polarization, degree, elements_per_region, grade, far_field_orders,
+    stabilize : as in :func:`pmm_efficiency_1d`.
+
+    Returns
+    -------
+    orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
+    """
+    pol = polarization.lower()
+    if pol not in ("te", "tm"):
+        raise ValueError(
+            f"pmm_efficiency_1d_segments: polarization must be 'te' or 'tm', "
+            f"got {polarization!r}.")
+    if int(degree) < 2:
+        raise ValueError("pmm_efficiency_1d_segments: degree must be >= 2.")
+    if len(segments) < 1:
+        raise ValueError(
+            "pmm_efficiency_1d_segments: need at least one segment.")
+    widths = [float(w) for w, _ in segments]
+    seg_n = [_C(n) for _, n in segments]
+    sa = (period, widths, seg_n, _C(n_substrate), _C(n_superstrate), depth,
+          wavelength)
+    kw = dict(polarization=pol, n_el_per_region=int(elements_per_region),
+              grade=bool(grade), far_field_orders=int(far_field_orders),
+              angle=float(angle))
+
+    if not stabilize:
+        o, R, T, _ = _pmm_solve_segments(*sa, degree=int(degree), **kw)
+        return o, R, T
+    return _stabilize_scalar(
+        lambda d: _pmm_solve_segments(*sa, degree=d, **kw)[:3], int(degree),
+        "pmm_efficiency_1d_segments")
+
+
+def pmm_jones_1d_segments(
+    period: float,
+    segments,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelength: float,
+    *,
+    angle: float = 0.0,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    stabilize: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Anisotropic 1-D grating with an ARBITRARY piecewise-constant profile by
+    the PMM -- the multi-region / multi-level generalization of
+    :func:`pmm_jones_1d` (the 2-segment ridge/groove special case) and the
+    spectral-element counterpart of
+    :func:`~lumenairy.elements.rcwa.rcwa_jones_1d_segments`.
+
+    Each region carries its own (possibly anisotropic) IN-PLANE permittivity, so
+    the response is a full complex ``2x2`` Jones reflection.  Covers multi-level
+    staircases, interdigitated / N-region cells, and mixed isotropic / liquid-
+    crystal regions (e.g. the grounded-tooth | LC | floating-tooth | LC device
+    class).  Converges spectrally in ``degree`` with no accuracy floor.
+
+    Parameters
+    ----------
+    period, n_substrate, n_superstrate, depth, wavelength : as in
+        :func:`pmm_jones_1d`.
+    segments : list of (width_fraction, eps)
+        Consecutive regions along ``x``; each ``eps`` is a scalar (isotropic
+        region) or a ``(3, 3)`` IN-PLANE permittivity tensor.  Width fractions
+        must sum to 1 (within ``1e-6``).  Accepts the output of the
+        ``grating_segments`` / ``binary_grating_segments`` /
+        ``interdigitated_grating_segments`` builders.
+    angle, degree, elements_per_region, grade, far_field_orders, stabilize : as
+        in :func:`pmm_jones_1d`.
+
+    Returns
+    -------
+    orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
+    """
+    if int(degree) < 2:
+        raise ValueError("pmm_jones_1d_segments: degree must be >= 2.")
+    if len(segments) < 1:
+        raise ValueError("pmm_jones_1d_segments: need at least one segment.")
+    widths = [float(w) for w, _ in segments]
+    tensors = []
+    for _w, eps in segments:
+        M = np.asarray(eps, dtype=_C)
+        if M.ndim == 0:                         # scalar -> isotropic tensor
+            M = M * np.eye(3, dtype=_C)
+        if M.shape[-2:] != (3, 3):
+            raise ValueError(
+                "pmm_jones_1d_segments: each segment eps must be a scalar or a "
+                "(3, 3) permittivity tensor.")
+        tensors.append(M)
+    # in-plane only: reject out-of-plane coupling (would be silently dropped)
+    scale = max([float(np.max(np.abs(M))) for M in tensors] + [1.0])
+    off = max(float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
+              for M in tensors)
+    if off > 1e-9 * scale:
+        raise ValueError(
+            "pmm_jones_1d_segments: the anisotropic PMM is the z-decoupled "
+            "IN-PLANE tensor subset (exx, exy, eyx, eyy, ezz); a segment has "
+            "out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0). "
+            "Use rcwa_jones_1d_segments for the full-3x3 case.")
+    sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
+          wavelength)
+    kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+              far_field_orders=int(far_field_orders), angle=float(angle))
+
+    if not stabilize:
+        o, R, T, J, _ = _pmm_jones_solve_segments(*sa, degree=int(degree), **kw)
+        return o, R, T, J
+    return _stabilize_jones(
+        lambda d: _pmm_jones_solve_segments(*sa, degree=d, **kw)[:4],
+        int(degree), "pmm_jones_1d_segments")

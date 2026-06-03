@@ -412,7 +412,12 @@ from .elements.freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
 )
-from .elements.pmm import pmm_efficiency_1d, pmm_jones_1d
+from .elements.pmm import (
+    pmm_efficiency_1d,
+    pmm_efficiency_1d_segments,
+    pmm_jones_1d,
+    pmm_jones_1d_segments,
+)
 
 # â”€â”€ Polarization / Jones calculus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.polarization import (
@@ -1489,7 +1494,9 @@ __all__ = [
 
     # PMM (Polynomial Modal Method -- non-Fourier 1-D modal solver)
     'pmm_efficiency_1d',
+    'pmm_efficiency_1d_segments',
     'pmm_jones_1d',
+    'pmm_jones_1d_segments',
 
     # BSDF / surface scatter
     'BSDFModel',
