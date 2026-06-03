@@ -78,6 +78,11 @@ A high-Q resonant null is a near-cancellation of `r_TM` against `r_TE`; its accu
 
 Two design questions follow directly from the convergence finding above. Both answers are **yes**, with a dependency order.
 
+> **RESOLVED 2026-06-03 — all three steps of the recommended sequence shipped and validated externally** (`pbs_qwp_mirror_sim/validation/check_pmmstack.py`, `check_pmm_degree.py`; v5.11.0):
+> 1. **`RCWAStack.solve(stabilize=True)`** (commit `348c6fb`) — removes the resonance spikes (n=300 null 8.0% → 0.7% = nannos golden).
+> 2. **(A) Anisotropic + Jones + multi-region PMM** (`pmm_jones_1d` / `pmm_jones_1d_segments`, commits `2237147`/`16c0e4c`) — single patterned layer, spectral and floor-free; out-coupling agrees with FMM to ~0.01%, ~100× faster.
+> 3. **(B) PMM-native multilayer** — shipped as **`PMMStack`** (commit `1fa9c2d`), the "PMM-native multilayer S-matrix" alternative noted in step 3 below (a standalone stack solved on the **union of all layers' walls**, rather than `add_pmm_layer` inside `RCWAStack` — cleaner, since it avoids the cross-basis PMM↔Fourier interface projection). Validated on the **real 2-layer anisotropic Cu/SiCN device**: out-coupling-vs-LC-angle matches `RCWAStack(stabilize)` to **~0.3–1%**, spectrally converged by **degree 16** (flat to degree 40), and **~103× faster** (0.68 s vs 70 s). So the structural cure (B) for the stacked sharp-resonant device now exists end-to-end — exactly as predicted in the "Why it matters here" note below. The lone item *not* taken: mixed PMM+FMM stacks (PMMStack is all-PMM), which this device doesn't need.
+
 ### (A) Extend `pmm_efficiency_1d` → anisotropic + full 2×2 Jones + multi-region (+ oblique, + autodiff). ★ do first
 
 - **Why it's the right lever.** PMM's spectral, **no-accuracy-floor** convergence is exactly what a sharp gap-plasmon **null** needs — the null is a near-cancellation of `r_TM` against `r_TE`, so Fourier-truncation error (and the ASR ~1e-4 TM floor) corrupt it, whereas PMM's TM error drops monotonically with no plateau. For the anisotropic-LC reflective grating this would be the strongest convergence accelerator in the library.
@@ -113,7 +118,9 @@ Cross-validating `internal_field` / `layer_absorption` on the 2-layer Cu/SiCN de
 
 So `internal_field` and `layer_absorption` are **implemented for tensor cells (they don't raise) but silently wrong for deep/metallic layers** — exactly the gap-plasmon device class they're meant for. Field maps + per-layer loss for this device are **not yet usable** in lumenairy (nannos `get_Efield_grid` still needed).
 
-**Fix:** stabilize the field recovery — never form the raw growing `exp(+lam·k0·z)`; balance it by the layer's `exp(-Im(lam)·k0·thickness)` (or recover the field from the already-balanced S-matrix layer amplitudes, as the enhanced-transmittance field recovery does). Clipping is not enough — the modal terms must be combined in the numerically-stable order. Repro: `validation/check_absorption_diag.py` (the device study).
+**RESOLVED 2026-06-02 — fixed and validated externally** (`validation/check_absorption_diag.py`): `internal_field` now returns **finite** `Ex` (max|E|≈14, no overflow) and `layer_absorption` returns **`[LayerB 0.277, LayerA 0.028]` summing to `absorptance()` = 0.306** (energy invariant holds; the gap-plasmon LC/Cu layer dominates, as expected). Field maps + per-layer loss now work on the deep metal tensor device.
+
+**Fix (for the record):** stabilize the field recovery — never form the raw growing `exp(+lam·k0·z)`; balance it by the layer's `exp(-Im(lam)·k0·thickness)` (or recover the field from the already-balanced S-matrix layer amplitudes, as the enhanced-transmittance field recovery does). Clipping is not enough — the modal terms must be combined in the numerically-stable order.
 
 ---
 
