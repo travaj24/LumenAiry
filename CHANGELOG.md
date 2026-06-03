@@ -106,7 +106,13 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   (the field values are unchanged).
 - **`reflective_outcoupling` is now backend-agnostic.** `jax.grad` traces through
   the side-port out-coupling FOM (so it can be an inverse-design objective directly);
-  a NumPy Jones still returns a Python `float` **bit-identical** to before.
+  a NumPy Jones still returns a Python `float` **bit-identical** to before. The full
+  loop (`PBS → QWP@45 → grating → QWP@45 → PBS`) is differentiable **end-to-end**
+  w.r.t. the anisotropic-LC grating design (`jax.grad` flows from
+  `rcwa_jones_1d_segments` through `reflective_outcoupling`, matching central FD),
+  so side-port power can be gradient-optimized directly — pinned by
+  `test_side_port_outcoupling_end_to_end_differentiable` (needs JAX float64, as
+  always for a meaningful FD).
 - **`rcwa_convergence` accepts an `RCWAStack`.** Solves the stack at its configured
   `n_orders` and a bumped count, reports/warns on the **per-order** efficiency delta
   (a sharp-resonant metal multilayer biases an isolated order while total power

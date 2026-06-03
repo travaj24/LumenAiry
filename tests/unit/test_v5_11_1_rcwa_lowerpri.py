@@ -226,6 +226,39 @@ def test_reflective_outcoupling_jax_gradient_matches_fd():
     assert np.isclose(g, fd, rtol=1e-5, atol=1e-9)
 
 
+def test_side_port_outcoupling_end_to_end_differentiable():
+    """The inverse-design loop: the side-port out-coupling power FOM
+    (PBS -> QWP@45 -> grating -> QWP@45 -> PBS) is differentiable w.r.t. the
+    (anisotropic LC) grating DESIGN end-to-end -- jax.grad flows from
+    rcwa_jones_1d_segments through reflective_outcoupling and matches central FD.
+    So side-port power can be optimized directly via gradient descent.
+
+    NOTE: a meaningful finite-difference cross-check (and well-conditioned
+    optimization) requires JAX float64 -- `_jax()` enables it; in the default
+    float32 a 1e-6 FD step is numerical noise (this caught a self-inflicted
+    false alarm during development, not a library bug)."""
+    jax = _jax()
+    import jax.numpy as jnp
+
+    def side_port(scale):
+        ridge = scale * jnp.asarray(RIDGE_INPLANE)        # tune the LC tensor
+        groove = jnp.asarray(GROOVE_ISO)
+        _o, _R, _T, J = rcwa_jones_1d_segments(
+            PERIOD, [(0.4, ridge), (0.6, groove)], N_SUB, N_SUP, DEPTH, WL,
+            n_orders=9)
+        return reflective_outcoupling(J)                  # the side-port FOM
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        g = float(jax.grad(side_port)(jnp.asarray(1.0)))
+        h = 1e-7
+        fd = float((side_port(jnp.asarray(1.0 + h))
+                    - side_port(jnp.asarray(1.0 - h))) / (2 * h))
+    assert np.isfinite(g)
+    assert abs(g) > 1e-9                                   # a real, non-zero grad
+    assert np.isclose(g, fd, rtol=1e-4, atol=1e-9)
+
+
 # ===========================================================================
 # Item 4 -- rcwa_convergence for an RCWAStack.
 # ===========================================================================
