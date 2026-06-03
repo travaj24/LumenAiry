@@ -89,6 +89,7 @@ from .lenses import (
     surface_sag_general,
 )
 from .pmm import (
+    PMMStack,
     pmm_efficiency_1d,
     pmm_efficiency_1d_segments,
     pmm_jones_1d,
@@ -179,6 +180,7 @@ __all__ = [
     'pmm_efficiency_1d_segments',
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
+    'PMMStack',
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',
     'rcwa_efficiency_vs_wavelength',

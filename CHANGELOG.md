@@ -211,6 +211,29 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   the asymmetric-oblique per-order mirror regression, uniform-N-region
   transparency, scalar-eps promotion, and the validation guards.
 
+#### MULTILAYER PMM — `PMMStack` (the `RCWAStack` analogue)
+
+- **`PMMStack`** composes multiple anisotropic 1-D patterned layers + uniform
+  spacers between a superstrate and substrate and Redheffer-stacks them — the
+  spectral-element counterpart of `RCWAStack`. The one structural requirement
+  (different layers have different walls, so their mode matrices must share a
+  grid) is met by solving the whole stack on the **union of every layer's walls**
+  (one shared nodal grid; a wall lands on every element boundary, so eps is exact
+  per element and each layer converges spectrally in `degree`). Anisotropic /
+  Jones throughout (scalar layers promoted to isotropic; in-plane tensors only,
+  use `RCWAStack` for out-of-plane), normal or oblique incidence, using the same
+  z-Poynting-flux forward selector as the multi-region single-layer solver (so
+  the many-element shared grid stays resonance-free). Builder API mirrors
+  `RCWAStack`: `add_layer(thickness, eps=… | segments=…)` → `set_source(wl,
+  angle=…)` → `solve()` → `(orders, R, T, jones)`. Validated: a **1-layer stack
+  is bit-identical** to `pmm_jones_1d_segments`, and a **2-layer tensor stack
+  matches `RCWAStack` to ~5e-4** (0-order, both polarizations, normal + oblique)
+  with energy conserved to ~1e-6. Exported top-level. (Result-object features —
+  `layer_absorption` / `internal_field` for a `PMMStack` — are follow-ons.)
+- **New tests** `tests/unit/test_v5_11_0_pmm_stack.py` (10) — 1-layer
+  bit-identity, 2-layer vs `RCWAStack` (normal + oblique), uniform-spacer +
+  energy, all-vacuum transparency, isotropic-decoupling, and the guards.
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**

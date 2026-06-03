@@ -101,7 +101,7 @@ import scipy.linalg as sla
 from numpy.polynomial.legendre import Legendre
 
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
-           "pmm_jones_1d", "pmm_jones_1d_segments"]
+           "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack"]
 
 _C = np.complex128
 
@@ -1521,3 +1521,243 @@ def pmm_jones_1d_segments(
     return _stabilize_jones(
         lambda d: _pmm_jones_solve_segments(*sa, degree=d, **kw)[:4],
         int(degree), "pmm_jones_1d_segments")
+
+
+# ===========================================================================
+# PMMStack -- multilayer 1-D PMM (the spectral-element analogue of RCWAStack)
+# ===========================================================================
+#
+# Each layer is a 1-D piecewise-constant (anisotropic) profile; the layers are
+# composed vertically by the same Redheffer scattering-matrix recursion the
+# single-layer solver uses.  The one structural requirement is that every layer
+# share ONE nodal grid so the interface mode-match is dimensionally compatible
+# -- so the stack is solved on the UNION of every layer's walls (a wall lands on
+# every element boundary, eps exact per element).  Anisotropic / Jones throughout
+# (scalar layers are promoted to isotropic tensors); normal or oblique incidence.
+
+def _tensor3_dict(M):
+    """``(3,3)`` (or scalar) permittivity -> the ``dict(exx, exy, eyx, eyy, ezz)``
+    the tensor spectral-element assembler consumes."""
+    M = np.asarray(M, dtype=_C)
+    if M.ndim == 0:
+        M = M * np.eye(3, dtype=_C)
+    return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1], ezz=M[2, 2])
+
+
+def _pmm_union_grid(layer_segments):
+    """Build the shared nodal grid for a stack: the union of every layer's walls.
+
+    ``layer_segments[i]`` = layer ``i``'s ``[(width_fraction, eps), ...]``.
+    Returns ``(union_widths, layer_eps_union)`` where ``union_widths`` are the
+    fractional widths of the union cells (sum to 1) and ``layer_eps_union[i][c]``
+    is layer ``i``'s permittivity on union cell ``c`` (each union cell lies wholly
+    within one of layer ``i``'s segments, so eps is exact per cell)."""
+    walls = {0.0, 1.0}
+    cums = []
+    for segs in layer_segments:
+        w = np.asarray([float(s[0]) for s in segs], dtype=float)
+        cw = np.concatenate([[0.0], np.cumsum(w)])
+        cw[-1] = 1.0
+        cums.append(cw)
+        walls.update(float(x) for x in cw)
+    uwalls = np.array(sorted(walls))
+    uwidths = np.diff(uwalls)
+    mids = 0.5 * (uwalls[:-1] + uwalls[1:])
+    layer_eps_union = []
+    for segs, cw in zip(layer_segments, cums):
+        row = []
+        for m in mids:
+            j = min(max(int(np.searchsorted(cw, m, side="right") - 1), 0),
+                    len(segs) - 1)
+            row.append(segs[j][1])
+        layer_eps_union.append(row)
+    return uwidths, layer_eps_union
+
+
+class PMMStack:
+    """Multilayer 1-D grating stack solved by the Polynomial Modal Method -- the
+    spectral-element counterpart of :class:`~lumenairy.elements.rcwa.RCWAStack`.
+
+    Compose anisotropic (or isotropic) 1-D patterned layers and uniform spacers
+    between a superstrate and substrate, set the incident plane wave, and solve
+    once for the diffraction efficiencies of both incident polarizations plus the
+    zeroth-order ``2x2`` Jones reflection.  The whole stack is solved on the
+    UNION of every layer's walls (one shared nodal grid), so each layer converges
+    spectrally in ``degree`` with no Fourier truncation in-plane.
+
+    Example
+    -------
+    >>> st = PMMStack(0.8e-6, n_substrate=1.5, n_superstrate=1.0, degree=20)
+    >>> st.add_layer(0.2e-6, eps=2.1)                       # uniform spacer
+    >>> st.add_layer(0.3e-6, segments=[(0.5, lc), (0.5, 1.0)])  # patterned
+    >>> orders, R, T, jones = st.set_source(0.55e-6, angle=0.2).solve()
+
+    Parameters
+    ----------
+    period : float
+        Grating period (metres).
+    n_substrate, n_superstrate : complex, optional
+        Transmission / incidence half-space indices.
+    degree : int, optional
+        Polynomial degree per spectral element (the spectral knob).  Default 16.
+    elements_per_region, grade, far_field_orders : as in
+        :func:`pmm_jones_1d_segments`.
+
+    Notes
+    -----
+    Anisotropic / Jones throughout (scalar layers are promoted to isotropic
+    tensors), IN-PLANE tensors only (use :class:`RCWAStack` for out-of-plane),
+    normal or oblique incidence, NumPy (not JAX).  The modal forward set uses the
+    z-Poynting-flux selector (as the multi-region single-layer solver), so the
+    many-element shared grid stays resonance-free.
+    """
+
+    def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
+                 degree=16, elements_per_region=1, grade=True,
+                 far_field_orders=21):
+        if int(degree) < 2:
+            raise ValueError("PMMStack: degree must be >= 2.")
+        self.period = float(period)
+        self.n_sub = _C(n_substrate)
+        self.n_sup = _C(n_superstrate)
+        self.degree = int(degree)
+        self.n_el = int(elements_per_region)
+        self.grade = bool(grade)
+        self.ffo = int(far_field_orders)
+        self._layers = []                          # (thickness, segments)
+        self._src = None
+
+    def _as_tensor(self, eps):
+        M = np.asarray(eps, dtype=_C)
+        if M.ndim == 0:
+            M = M * np.eye(3, dtype=_C)
+        if M.shape[-2:] != (3, 3):
+            raise ValueError(
+                "PMMStack.add_layer: each eps must be a scalar or a (3, 3) "
+                "permittivity tensor.")
+        scale = max(float(np.max(np.abs(M))), 1.0)
+        off = float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
+        if off > 1e-9 * scale:
+            raise ValueError(
+                "PMMStack: the anisotropic PMM is the z-decoupled IN-PLANE tensor "
+                "subset (exx, exy, eyx, eyy, ezz); a layer has out-of-plane "
+                "coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0).  Use RCWAStack "
+                "for the full-3x3 case.")
+        return M
+
+    def add_layer(self, thickness, *, segments=None, eps=None):
+        """Append a layer.  Give exactly one of ``eps`` (uniform: scalar or
+        ``(3,3)`` tensor) or ``segments`` (a list of ``(width_fraction, eps)`` --
+        each ``eps`` scalar or ``(3,3)``; widths sum to 1).  Returns ``self``."""
+        if (segments is None) == (eps is None):
+            raise ValueError(
+                "PMMStack.add_layer: give exactly one of `segments` or `eps`.")
+        if eps is not None:
+            segs = [(1.0, self._as_tensor(eps))]
+        else:
+            if len(segments) < 1:
+                raise ValueError("PMMStack.add_layer: empty segments.")
+            segs = [(float(w), self._as_tensor(e)) for w, e in segments]
+        self._layers.append((float(thickness), segs))
+        return self
+
+    def set_source(self, wavelength, *, angle=0.0):
+        """Set the incident plane wave (vacuum wavelength [m], incidence
+        ``angle`` [rad] in the x-z plane).  Returns ``self``."""
+        self._src = dict(wl=float(wavelength), angle=float(angle))
+        return self
+
+    def solve(self):
+        """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``
+        as :func:`pmm_jones_1d_segments` (``R_eff`` / ``T_eff`` are ``(2, M)``:
+        row 0 = incident ``E_x``, row 1 = incident ``E_y``; ``jones`` is the
+        zeroth-order ``2x2`` reflection)."""
+        if self._src is None:
+            raise ValueError("PMMStack.solve: call set_source(...) first.")
+        if not self._layers:
+            raise ValueError("PMMStack.solve: add at least one layer.")
+        wl, angle = self._src["wl"], self._src["angle"]
+        k0 = 2.0 * np.pi / wl
+        kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
+        eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
+
+        uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers])
+        nU = len(uwidths)
+        layer_mats = [
+            _build_sem_tensor_segments(
+                self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
+                self.degree, self.n_el, self.grade)
+            for eps_u in layer_eps_u]
+        t_sup = _tensor3_dict(eps_sup * np.eye(3))
+        t_sub = _tensor3_dict(eps_sub * np.eye(3))
+        mats_sup = _build_sem_tensor_segments(
+            self.period, uwidths, [t_sup] * nU, self.degree, self.n_el, self.grade)
+        mats_sub = _build_sem_tensor_segments(
+            self.period, uwidths, [t_sub] * nU, self.degree, self.n_el, self.grade)
+        n_glob = mats_sup["n_glob"]
+
+        Wsup, Vsup, _l, _g = _sem_modes_tensor(mats_sup, k0, kx0, True)
+        Wsub, Vsub, _l, _g = _sem_modes_tensor(mats_sub, k0, kx0, True)
+        lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in layer_mats]
+
+        # Redheffer recursion: sup -> [interface, propagation]*layers -> sub
+        S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
+        for i, (Wl, Vl, lam_l, _q) in enumerate(lmodes):
+            S = _redheffer_star(S, _propagation_smatrix(
+                lam_l, k0 * self._layers[i][0]))
+            nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
+                      else (lmodes[i + 1][0], lmodes[i + 1][1]))
+            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, nW, nV))
+        S11, _S12, S21, _S22 = S
+
+        # far-field projection (mirrors _pmm_jones_solve_core)
+        n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
+                     for eps_u in layer_eps_u for e in eps_u]
+                    + [np.real(self.n_sup), np.real(self.n_sub)])
+        m_prop = _n_propagating_orders(self.period, wl, n_max)
+        n_proj = max(self.ffo, 2 * m_prop + 5)
+        cap = n_glob if n_glob % 2 else n_glob - 1
+        n_proj = min(n_proj, cap)
+        if n_proj % 2 == 0:
+            n_proj -= 1
+        half = (n_proj - 1) // 2
+        orders = np.arange(-half, half + 1)
+        G = 2.0 * np.pi / self.period
+        kx = (kx0 + orders * G) / k0
+        N = len(orders)
+        Tp = _sem_fourier_projection(orders, self.period, mats_sup)
+
+        def _proj(Wm):
+            return np.vstack([Tp @ Wm[:n_glob, :], Tp @ Wm[n_glob:, :]])
+        Hsup, Hsub = _proj(Wsup), _proj(Wsub)
+        kz_sup = _kz_forward(eps_sup, kx)
+        kz_sub = _kz_forward(eps_sub, kx)
+        kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+        kx0n = kx0 / k0
+        safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+        safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+        m0 = np.where(orders == 0)[0][0]
+        jones = np.zeros((2, 2), dtype=_C)
+        R_eff = np.zeros((2, N))
+        T_eff = np.zeros((2, N))
+        for col in range(2):
+            rhs = np.zeros(2 * N, dtype=_C)
+            rhs[(col * N) + m0] = 1.0
+            cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+            r_ord = Hsup @ (S11 @ cinc)
+            t_ord = Hsub @ (S21 @ cinc)
+            rx, ry = r_ord[:N], r_ord[N:]
+            tx, ty = t_ord[:N], t_ord[N:]
+            rz = -(kx * rx) / safe_r
+            tz = -(kx * tx) / safe_t
+            flux_inc = (kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0
+                        else kz_inc)
+            Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                    + np.abs(rz) ** 2) / flux_inc
+            Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                    + np.abs(tz) ** 2) / flux_inc
+            R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
+            T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
+            jones[0, col] = rx[m0]
+            jones[1, col] = ry[m0]
+        return orders, R_eff, T_eff, jones

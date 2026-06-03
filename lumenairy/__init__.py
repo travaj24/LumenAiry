@@ -413,6 +413,7 @@ from .elements.freeform import (
     surface_sag_zernike_freeform,
 )
 from .elements.pmm import (
+    PMMStack,
     pmm_efficiency_1d,
     pmm_efficiency_1d_segments,
     pmm_jones_1d,
@@ -1497,6 +1498,7 @@ __all__ = [
     'pmm_efficiency_1d_segments',
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
+    'PMMStack',
 
     # BSDF / surface scatter
     'BSDFModel',
