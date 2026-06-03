@@ -276,6 +276,33 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   degree-independence, pillar vs the rcwa li oracle, energy conservation, C4v +
   ±-order symmetry, and the odd-node / n_orders / polarization guards.
 
+### Fixed
+
+- **Element-size-aware conditioning for the PMM solver — fixes the thin-feature /
+  tapered-stack `Singular matrix`.** The spectral-element operators carry the
+  element Jacobian `J = (x_r − x_l)/2` (`S0 ∝ J`, `K ∝ 1/J`), so a grid spanning a
+  huge width ratio — a thin liner/coating next to a wide region, and especially
+  the `PMMStack` **union grid of a tapered stack** whose per-slice walls land
+  sub-nm / coincident — drove `S0` singular (`J → 0`) and `pmm_jones_1d*` /
+  `pmm_efficiency_1d*` / `PMMStack` raised `numpy.linalg.LinAlgError: Singular
+  matrix` (or returned non-physical `|J| ~ 10¹⁰` modes). Two-part fix:
+  - **(A) gated symmetric Jacobi equilibration** of the SE inversions
+    (`_safe_inv` / `_safe_solve` / `_safe_geig` at the `S0` inverse, the wall-
+    normal `[[1/εxx]]⁻¹`, the scalar `1/ε` solve, and the generalized eig). It is
+    the exact identity `inv(A) = D inv(DAD) D` for the real-positive mass `S0`
+    (and a conditioning-reducing similarity rescale for the complex operators),
+    and is **gated on an ill-scaling test so every well-scaled geometry takes the
+    plain, bit-identical path** — existing results are unchanged.
+  - **(B) near-coincident-wall merge in the `PMMStack` union grid** so a genuinely
+    zero-width union cell (which equilibration cannot rescue) never forms; the
+    snapped walls differ by < 1 pm, so there is no physical effect — the spurious
+    wall is removed and the result matches the exactly-aligned grid.
+  Unlocks PMM (with its ~10–100× speed over the FMM for resonant devices) on the
+  conformal-coating / barrier-liner / tapered-staircase class that was RCWA-only.
+  New tests `tests/unit/test_v5_11_0_pmm_element_size_scaling.py` (8); all 104 PMM
+  tests pass (well-scaled paths bit-identical). Audit:
+  `docs/audits/AUDIT_PMM_ELEMENT_SIZE_SCALING_2026_06_03.md`.
+
 ## [5.10.6] — 2026-06-02
 
 **PMM build-portability fix: resonance-robust degree selection (`stabilize`).**

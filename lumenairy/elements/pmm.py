@@ -301,6 +301,65 @@ def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
                 ref_nodes=ref_nodes)
 
 
+def _ill_scaled(A, ratio=1e-12):
+    """``True`` when ``A`` is element-size (sliver-element) ill-scaled: the
+    spectral-element mass/stiffness carry the element Jacobian ``J`` on their
+    diagonal, so a grid spanning a huge width ratio (e.g. a 1 nm liner next to a
+    500 nm region, or near-coincident walls in a tapered stack's union grid) gives
+    ``min|diag| << max|diag|`` and ``cond ~ w_max/w_min``.  The threshold is
+    deliberately generous (``cond >~ 1e12``) so that EVERY well-scaled geometry in
+    normal use returns ``False`` and takes the plain, bit-identical path; only the
+    genuinely pathological thin-feature grids are equilibrated."""
+    d = np.abs(np.diag(A))
+    dmax = float(d.max()) if d.size else 0.0
+    return dmax > 0.0 and float(d.min()) < ratio * dmax
+
+
+def _equil_scale(A):
+    """Symmetric (Jacobi) equilibration scaling ``d_i = 1/sqrt(|A_ii|)`` with a
+    floor on near-zero diagonals (a genuinely zero-width / ``J=0`` element, which
+    only the geometry-side wall-merge can truly remove)."""
+    d = np.sqrt(np.abs(np.diag(A)))
+    d = np.maximum(d, d.max() * 1e-13)
+    return 1.0 / d
+
+
+def _safe_inv(A):
+    """``inv(A)`` with symmetric Jacobi equilibration when ``A`` is element-size
+    ill-scaled.  Equilibration is the EXACT identity ``inv(A) = D inv(D A D) D``
+    (``D = diag(1/sqrt(diag A))``) for a real-positive diagonal (the SE mass
+    ``S0``), and a conditioning-reducing similarity rescale otherwise: the matrix
+    actually inverted has unit diagonal (``cond ~ degree^2`` instead of
+    ``w_max/w_min``).  Well-scaled ``A`` -> plain ``inv`` (BIT-IDENTICAL)."""
+    if not _ill_scaled(A):
+        return np.linalg.inv(A)
+    di = _equil_scale(A)
+    return di[:, None] * np.linalg.inv((di[:, None] * A) * di[None, :]) * di[None, :]
+
+
+def _safe_solve(A, B):
+    """``solve(A, B)`` with the same equilibration gate as :func:`_safe_inv`
+    (``A^-1 B = D (D A D)^-1 D B``).  Well-scaled ``A`` -> plain ``solve``."""
+    if not _ill_scaled(A):
+        return np.linalg.solve(A, B)
+    di = _equil_scale(A)
+    return di[:, None] * np.linalg.solve((di[:, None] * A) * di[None, :],
+                                         di[:, None] * B)
+
+
+def _safe_geig(A, B):
+    """Generalized eig ``sla.eig(A, B)`` with symmetric equilibration of the pencil
+    when the mass ``B`` is element-size ill-scaled.  The congruence ``D(.)D``
+    leaves the eigenvalues invariant (``A x = q^2 B x`` <=> ``DAD z = q^2 DBD z``
+    with ``x = D z``), so this only rescales the conditioning.  Well-scaled ``B``
+    -> plain ``sla.eig`` (BIT-IDENTICAL)."""
+    if not _ill_scaled(B):
+        return sla.eig(A, B)
+    di = _equil_scale(B)
+    q2, z = sla.eig((di[:, None] * A) * di[None, :], (di[:, None] * B) * di[None, :])
+    return q2, di[:, None] * z
+
+
 def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     """Periodic generalized eigenproblem on the nodal basis.
 
@@ -335,8 +394,8 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
             Cas = mats["Cinv"] - mats["Cinv"].T
             Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * mats["Pinv"]
         A, B = mats["S0"] - Lop / k02, mats["Pinv"]
-        invop = np.linalg.solve(mats["S0"], mats["Pinv"])
-    q2, Acoef = sla.eig(A, B)
+        invop = _safe_solve(mats["S0"], mats["Pinv"])
+    q2, Acoef = _safe_geig(A, B)
     q = np.sqrt(q2)
     if kx0 or robust:
         # NOISE-ROBUST forward branch: the operator is (near-)Hermitian for
@@ -668,12 +727,12 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     n = mats["n_glob"]
     k02 = k0 * k0
     S0 = mats["S0"]
-    iS0 = np.linalg.inv(S0)
+    iS0 = _safe_inv(S0)
     mass, stiff, conv = mats["mass"], mats["stiff"], mats["conv"]
 
     # nodal pointwise operators (S0^-1 . Galerkin operator)
     Cinv_xx = iS0 @ mass["inv_xx"]          # multiply by 1/exx == [[1/exx]]
-    Cxx = np.linalg.inv(Cinv_xx)            # [[1/exx]]^-1 (wall-normal inverse rule)
+    Cxx = _safe_inv(Cinv_xx)                # [[1/exx]]^-1 (wall-normal inverse rule)
     EXY_XX = iS0 @ mass["exy_xx"]           # [[exy/exx]]
     EYX_XX = iS0 @ mass["eyx_xx"]           # [[eyx/exx]]
     SCHUR = iS0 @ mass["schur"]             # [[eyy - eyx exy/exx]]
@@ -1561,6 +1620,24 @@ def _pmm_union_grid(layer_segments):
         cums.append(cw)
         walls.update(float(x) for x in cw)
     uwalls = np.array(sorted(walls))
+    # MERGE near-coincident walls (geometry-side conditioning fix): a tapered
+    # stack offsets each slice's walls by ~dz*tan(theta), so the union of
+    # different layers' walls contains pairs differing by floating noise / sub-pm
+    # amounts -> sub-nm or zero-width union cells -> a J~0 spectral element -> a
+    # singular S0 (equilibration alone cannot rescue a genuinely zero-width
+    # element).  Snap walls closer than ``tol`` (fractional; ~sub-pm for any
+    # realistic period) together; intentional thin features (a 1 nm liner is a
+    # ~1e-3 fraction) are far above tol and untouched.  Per-cell eps is still
+    # assigned by midpoint below, so the merge never mislabels a region.
+    if uwalls.size > 2:
+        tol = 1e-9
+        keep = [uwalls[0]]
+        for w in uwalls[1:]:
+            if w - keep[-1] > tol:
+                keep.append(w)
+        if keep[-1] < uwalls[-1]:           # never drop the period boundary
+            keep[-1] = uwalls[-1]
+        uwalls = np.array(keep)
     uwidths = np.diff(uwalls)
     mids = 0.5 * (uwalls[:-1] + uwalls[1:])
     layer_eps_union = []
