@@ -7,6 +7,8 @@
 
 ---
 
+> **Update 2026-06-02 — recommendations implemented and validated.** The maintainer shipped (v5.11.0): **`RCWAStack.solve(stabilize=True)`** (Part 3), the **anisotropic PMM** `pmm_jones_1d` / `pmm_jones_1d_segments` (Part 4.1-A), and 2-D normal-vector FFF (`formulation='fff_nv'`). Validated externally (`validation/check_pmm_and_stabilize.py` in the device study): `stabilize=True` turns the n_orders=300 null spike (8.0%) into **0.7%** (= the converged value); `pmm_jones_1d` agrees with `rcwa_jones_1d` to **~0.01%** and is **~100–300× faster**. **Remaining from this note:** Part 4.1-**B** (compose PMM layers in a stack — `add_pmm_layer` — for the *2-layer* device at PMM speed), `layer_absorption` on tensor cells, and a differentiable `reflective_outcoupling`.
+
 ## Part 0 — TL;DR
 
 The gaps-and-wishlist audit (GAP1–7, W1–3, W6) is **fully implemented and verified** — including the device topology this study needs (2 stacked 1-D anisotropic patterned layers via `RCWAStack` + `eps_tensor_cell`). Cross-validation against a converged nannos oracle confirms:
@@ -96,6 +98,22 @@ Two design questions follow directly from the convergence finding above. Both an
 3. **PMM layers in `RCWAStack`** (or a PMM-native multilayer S-matrix) — covers the full 2-stacked-layer device, eliminating the Fourier-resonance spikes at the root.
 
 **Scope honesty:** (A) is real work (a coupled/vector spectral-element eigenproblem), and (B) adds cross-basis interface matching — neither is a quick patch. But together they are the *step-change* for sharp anisotropic resonant gratings, and they degrade gracefully: `stabilize` (1) gives reliability now, (A) gives the spectral win for single-layer devices, and (B) extends it to stacks.
+
+---
+
+## Part 4.2 — NEW BUG: internal-field reconstruction goes non-finite for deep metal tensor layers
+
+> **Update 2026-06-02 — FIXED.** The backward modal field is now referenced to the layer **bottom** (`c⁻_bot·exp(-lam·k0·(L-z))`, a decaying exponent) via a new reflection-below-bottom S-matrix partial, instead of the layer top (`c⁻·exp(+lam·k0·z)`, which grew/overflowed). A deep Cu/LC layer (600 nm, McPeak Cu, n_orders=120) now reconstructs a finite field and `layer_absorption` returns the true per-layer loss summing to the total absorptance (was `[0, 0]`). Math-identical for shallow layers. Regression tests: `test_internal_field_finite_through_deep_lossy_layer`, `test_layer_absorption_nonzero_for_deep_metal` (single + non-last-layer).
+
+Cross-validating `internal_field` / `layer_absorption` on the 2-layer Cu/SiCN device (Layer B = 285 nm LC/Cu, McPeak Cu, n_orders=200) found:
+
+- **`RCWAResult.internal_field(...)` returns non-finite `Ex`** (`np.all(isfinite) == False`), with `RuntimeWarning: overflow in exp` at `bwd = cminus * np.exp(+lam * k0 * zloc)` — the **backward/evanescent modal field grows as `exp(+lam·k0·z)`** through a deep, high-loss layer → overflow → NaN.
+- consequently **`layer_absorption()` returns `[0.000, 0.000]`** for both layers while `absorptance()` = 0.306 (the loss integral over a NaN field collapses to 0).
+- **Not** substrate-dominance: with a **lossless** substrate (loss forced into the metal-teeth layers) `layer_absorption` is **still `[0, 0]`** — so the *reconstruction*, not the attribution, is the failure.
+
+So `internal_field` and `layer_absorption` are **implemented for tensor cells (they don't raise) but silently wrong for deep/metallic layers** — exactly the gap-plasmon device class they're meant for. Field maps + per-layer loss for this device are **not yet usable** in lumenairy (nannos `get_Efield_grid` still needed).
+
+**Fix:** stabilize the field recovery — never form the raw growing `exp(+lam·k0·z)`; balance it by the layer's `exp(-Im(lam)·k0·thickness)` (or recover the field from the already-balanced S-matrix layer amplitudes, as the enhanced-transmittance field recovery does). Clipping is not enough — the modal terms must be combined in the numerically-stable order. Repro: `validation/check_absorption_diag.py` (the device study).
 
 ---
 

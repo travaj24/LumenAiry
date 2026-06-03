@@ -4461,9 +4461,17 @@ class RCWAResult:
     # -- in-structure (internal) E/H field reconstruction -----------------
 
     def _internal_cpm(self, info, i, cinc):
-        """Forward/backward modal amplitudes ``(c+, c-)`` at the TOP of layer
-        ``i`` for the internal-convention source ``cinc`` (the validated gap-free
-        S-matrix recovery)."""
+        """Forward amplitude ``c+`` at the TOP of layer ``i`` and the backward
+        amplitude ``c-_bot`` at its BOTTOM (the numerically-stable reference) for
+        the internal-convention source ``cinc`` (the validated gap-free S-matrix
+        recovery).
+
+        The backward field is then ``c-_bot exp(-lam k0 (L - z))`` -- a DECAYING
+        exponential -- so a deep, lossy layer never forms the overflowing
+        ``exp(+lam k0 z)`` (the old top-referenced ``c- exp(+lam k0 z)`` blew up
+        to NaN through high-loss metal layers, silently zeroing
+        :meth:`layer_absorption`).  Math-identical: ``c- = X c-_bot`` with
+        ``X = exp(-lam k0 L)``."""
         N = info["N"]
         Sa = info["S_above"][i]
         Sb = info["S_below"][i]
@@ -4471,9 +4479,15 @@ class RCWAResult:
         Sa21 = np.asarray(to_numpy(Sa[2]))
         Sb11 = np.asarray(to_numpy(Sb[0]))
         denom = np.linalg.inv(np.eye(2 * N, dtype=_C) - Sa22 @ Sb11)
-        cplus = denom @ (Sa21 @ cinc)
-        cminus = Sb11 @ cplus
-        return cplus, cminus
+        cplus = denom @ (Sa21 @ cinc)              # forward amp at TOP of layer i
+        # backward amp at the BOTTOM = (reflection below the bottom) @ (forward
+        # propagated to the bottom).  X = exp(-lam k0 L) decays (Re(lam) >= 0
+        # forward branch), so every exponential here is bounded.
+        lam = np.asarray(to_numpy(info["lam"][i]))
+        X = np.exp(-lam * info["k0"] * float(info["thick"][i]))
+        Sbb11 = np.asarray(to_numpy(info["S_below_bot"][i][0]))
+        cminus_bot = Sbb11 @ (X * cplus)
+        return cplus, cminus_bot
 
     def internal_field(self, z, *, component="all", nx=64, ny=None, dx=None,
                        dy=None, layer=None, incident=(1.0, 0.0), filter="none"):
@@ -4560,13 +4574,18 @@ class RCWAResult:
         def _harm(i, zloc):
             if i not in cpm:
                 cpm[i] = self._internal_cpm(info, i, cinc)
-            cplus, cminus = cpm[i]
+            cplus, cminus_bot = cpm[i]
             W = np.asarray(to_numpy(info["W"][i]))
             V = np.asarray(to_numpy(info["V"][i]))
             lam = np.asarray(to_numpy(info["lam"][i]))
             EPS = np.asarray(to_numpy(info["EPS"][i]))
+            # forward referenced to the layer TOP (depth z), backward to the
+            # BOTTOM (L - z): BOTH exponents are <= 0 (Re(lam) >= 0 on the forward
+            # branch), so a deep/lossy layer never overflows.  Same field as the
+            # old c- exp(+lam k0 z), evaluated in the numerically-stable order.
+            Lz = float(thick[i]) - zloc
             fwd = cplus * np.exp(-lam * k0 * zloc)
-            bwd = cminus * np.exp(+lam * k0 * zloc)
+            bwd = cminus_bot * np.exp(-lam * k0 * Lz)
             s = W @ (fwd + bwd)                              # E tangential
             u = V @ (fwd - bwd)                              # H partner
             Sx, Sy = s[:N], s[N:]
@@ -5274,13 +5293,14 @@ class RCWAStack:
             # field (see RCWAResult.internal_field).  Same gap-free
             # _interface/_propagation/_redheffer sequence as the global solve;
             # star(S_above[0], S_below[0]) reproduces the global S used for r/t.
-            S_above, S_below = self._internal_partials(
+            S_above, S_below, S_below_bot = self._internal_partials(
                 modes, Wref, Vref, Wtrn, Vtrn, k0)
             modal["internal"] = dict(
                 W=[m[0] for m in modes], V=[m[1] for m in modes],
                 lam=[m[2] for m in modes], EPS=[m[3] for m in modes],
                 thick=[float(L.thickness) for L in self._layers],
-                S_above=S_above, S_below=S_below, Kx=Kx, Ky=Ky, k0=float(k0),
+                S_above=S_above, S_below=S_below, S_below_bot=S_below_bot,
+                Kx=Kx, Ky=Ky, k0=float(k0),
                 N=N, delta=delta, layers=list(self._layers),
                 period_x=self.period_x, period_y=self.period_y,
                 is_1d=self.is_1d, nox=self.nox, noy=self.noy)
@@ -5311,13 +5331,19 @@ class RCWAStack:
             S_above[i] = _redheffer_star(
                 _redheffer_star(S_above[i - 1], prop[i - 1]), ifc[i])
         S_below = [None] * nlay
+        # S_below_bot[i] = star product from the BOTTOM of layer i to the
+        # substrate (i.e. S_below[i] with layer i's own propagation removed from
+        # the top).  Its S11 is the reflection seen looking DOWN from the bottom
+        # of layer i; it lets the internal-field recovery reference the backward
+        # mode to the layer BOTTOM with a DECAYING exponential (no exp(+lam k0 z)
+        # overflow through a deep/lossy layer -- see RCWAResult._internal_cpm).
+        S_below_bot = [None] * nlay
         for i in range(nlay - 1, -1, -1):
-            if i == nlay - 1:
-                S_below[i] = _redheffer_star(prop[i], ifc[nlay])
-            else:
-                S_below[i] = _redheffer_star(
-                    prop[i], _redheffer_star(ifc[i + 1], S_below[i + 1]))
-        return S_above, S_below
+            below_bot = (ifc[nlay] if i == nlay - 1
+                         else _redheffer_star(ifc[i + 1], S_below[i + 1]))
+            S_below_bot[i] = below_bot
+            S_below[i] = _redheffer_star(prop[i], below_bot)
+        return S_above, S_below, S_below_bot
 
 
 # Register the RCWA caches with the library cache registry (so the global

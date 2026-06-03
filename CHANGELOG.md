@@ -92,6 +92,18 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   per-layer values close to the total absorptance and localize loss to the lossy
   layer. Uniform / isotropic-cell layers are unchanged; analytic-shape layers still
   raise.
+- **Fixed — `internal_field` / `layer_absorption` no longer overflow through deep,
+  lossy layers** (audit `AUDIT_RCWA_STACK_RESONANT_CONVERGENCE` Part 4.2). The
+  internal-field recovery referenced the backward mode to the layer *top*
+  (`c⁻·exp(+lam·k0·z)`), which **grows** through the layer and overflowed to `NaN`
+  for a deep, high-loss metal layer at high `n_orders` (the highest evanescent
+  orders have `Re(lam·k0·thickness) > 709`) — silently collapsing
+  `layer_absorption` to `[0, 0]` while `absorptance()` was nonzero. The backward
+  mode is now referenced to the layer *bottom* (`c⁻_bot·exp(-lam·k0·(L-z))`,
+  a **decaying** exponent) via the reflection-below-bottom S-matrix partial — every
+  exponential is bounded, so a deep Cu/LC gap-plasmon layer reconstructs cleanly and
+  per-layer loss sums to the total absorptance. Math-identical for shallow layers
+  (the field values are unchanged).
 - **`reflective_outcoupling` is now backend-agnostic.** `jax.grad` traces through
   the side-port out-coupling FOM (so it can be an inverse-design objective directly);
   a NumPy Jones still returns a Python `float` **bit-identical** to before.

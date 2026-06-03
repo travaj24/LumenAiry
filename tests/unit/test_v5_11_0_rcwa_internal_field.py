@@ -173,3 +173,49 @@ def test_layer_absorption_requires_retain_flag():
     res = _stack().solve()
     with pytest.raises(ValueError, match="retain_internal"):
         res.layer_absorption()
+
+
+def _deep_metal_stack(n_orders=120, thick=0.6e-6, two_layer=False):
+    # A DEEP, high-loss tensor layer: the highest evanescent orders have
+    # Re(lam k0 thick) > 709, so the old backward reference exp(+lam k0 z)
+    # overflowed -> NaN field -> layer_absorption silently returned [0, 0].
+    from lumenairy.elements.rcwa import uniaxial_tensor
+    S = 4 * n_orders + 8
+    x = (np.arange(S) + 0.5) / S
+    metal = (-83.13 + 2.70j) * np.eye(3)               # McPeak-Cu-like
+    lc = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=0.3) + 0.02j * np.eye(3)
+    cell = np.empty((S, 1, 3, 3), dtype=complex)
+    for k in range(S):
+        cell[k, 0] = metal if abs(x[k] - 0.5) < 0.25 else lc
+    st = la.RCWAStack(0.38e-6, n_substrate=(-83.13 + 2.70j) ** 0.5,
+                      n_superstrate=1.0, n_orders=n_orders)
+    if two_layer:
+        st.add_layer(0.05e-6, eps=2.1)                 # a layer ABOVE the deep one
+    st.add_layer(thick, eps_tensor_cell=cell)
+    return st.set_source(0.633e-6, theta=np.deg2rad(5)).solve(
+        retain_internal=True)
+
+
+def test_internal_field_finite_through_deep_lossy_layer():
+    # the backward modal field must stay finite (no exp(+lam k0 z) overflow)
+    # everywhere inside a deep high-loss metal layer (audit Part 4.2 bug).
+    res = _deep_metal_stack()
+    f = res.internal_field(np.array([0.02e-6, 0.3e-6, 0.58e-6]),
+                           component="E", nx=16, layer=-1)
+    assert np.all(np.isfinite(f["Ex"]))
+    assert np.all(np.isfinite(f["Ey"])) and np.all(np.isfinite(f["Ez"]))
+
+
+def test_layer_absorption_nonzero_for_deep_metal():
+    # the silent-[0,0] regression: per-layer loss must be the real absorptance,
+    # not collapse to zero from a NaN field.  Tested for a single deep layer AND
+    # a deep layer that is NOT the last (the bottom-reference path differs).
+    for two in (False, True):
+        res = _deep_metal_stack(two_layer=two)
+        A = res.layer_absorption(nx=16, nz_per_layer=10)
+        tot = res.absorptance()
+        assert np.all(np.isfinite(A))
+        assert np.max(np.abs(A)) > 1e-3                # NOT silently zero
+        assert np.allclose(A.sum(axis=1), tot, atol=1e-6)   # sums to the total
+        # essentially all the loss is in the metal layer (last)
+        assert np.all(A[:, -1] / np.maximum(A.sum(axis=1), 1e-30) > 0.9)
