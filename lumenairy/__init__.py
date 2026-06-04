@@ -425,6 +425,9 @@ from .elements.pmm import (
 from .elements.pmm2d import (
     pmm_efficiency_2d,
 )
+from .elements.pmm2d_staggered import (
+    pmm_efficiency_2d_staggered,
+)
 
 # â”€â”€ Polarization / Jones calculus â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.polarization import (
@@ -1506,6 +1509,7 @@ __all__ = [
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
     'pmm_efficiency_2d',
+    'pmm_efficiency_2d_staggered',
     'grating_convergence_class',
     'classify_from_grating',
     'PMMStack',

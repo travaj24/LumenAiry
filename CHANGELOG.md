@@ -305,6 +305,34 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   guard, slant vs RCWA-staircase cross-check; predictor Type I/II/III, the Type-II
   closed-form sign, Type-III-impossible-for-all-dielectric (200 random corners),
   lossy regularization, and the degenerate-edge guard.
+- **`pmm_efficiency_2d_staggered` — canonical NO-FLOOR 2-D crossed-grating PMM
+  (Granet, JOSA A 40:652, 2023; the faithful staggered modified-Legendre basis).**
+  The 2-D analogue of `pmm_efficiency_1d`, and the no-floor counterpart of the
+  FMM-floored hybrid `pmm_efficiency_2d`. Solves every region (cover/film/substrate)
+  in the SAME staggered modal basis at equal dimension, so every interface is a
+  SQUARE modal match (the 1-D `_pmm_solve_core` architecture lifted to 2-D, reusing
+  `_interface_smatrix`/`_redheffer_star` unchanged) and the Rayleigh projection is
+  applied ONCE, forward-only, at the far field. The longitudinal field is slaved by
+  `div(D)=0` (the `-K_tz (eps33)^-1 K_zt` Schur term) and continuity is embedded in
+  the basis via shared hats + the Bloch periodic hat — so the eigensolver is
+  **spurious-free by construction** (the mimetic `span(d·B̃)=span(B)` de Rham
+  property, verified to ~1e-14; no stabilization parameter). Result: the energy
+  balance is **`n_orders`-INDEPENDENT** (no Fourier floor — byte-identical across
+  n_orders, tracking only the modal degree to ~1e-13) with **exact sidewalls and
+  position invariance**, validated against the analytic uniform-slab Fabry–Pérot to
+  ~1e-9 and bracketing the RCWA-li value from the opposite side (PMM pins the value
+  RCWA converges toward on a hard high-contrast case). SCOPE: axis-aligned
+  rectangular pillars (walls on the `(Nx,Ny)` `eps_cell` grid), single layer,
+  isotropic TE/TM, NumPy dense eig; **corner-capped** (algebraic, no-floor — at-best
+  RCWA parity per DOF on vertical pillars, the win being accuracy quality). Curved/
+  slanted boundaries (Granet's transfinite curved-quad mapping) are a follow-on. New
+  module `lumenairy/elements/pmm2d_staggered.py`, exported top-level; kept DISTINCT
+  from `pmm_efficiency_2d` (different convergence class + geometry input).
+- **New tests** `tests/unit/test_v5_12_0_pmm2d_staggered.py` (12) — vacuum
+  exactness, the no-Fourier-floor gate (energy byte-identical across n_orders),
+  no-floor-in-degree, uniform-slab Fabry–Pérot vs analytic, position invariance,
+  lossy-pillar absorption, TE/TM energy conservation, RCWA cross-check, and input
+  validation.
 
 ### Fixed
 
