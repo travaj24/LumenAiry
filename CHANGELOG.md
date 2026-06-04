@@ -275,6 +275,36 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
 - **New tests** `tests/unit/test_v5_11_0_pmm2d.py` (17) — vacuum exactness +
   degree-independence, pillar vs the rcwa li oracle, energy conservation, C4v +
   ±-order symmetry, and the odd-node / n_orders / polarization guards.
+- **`pmm_efficiency_1d_slanted` — slanted 1-D lamellar gratings by the
+  inclined-coordinate PMM (Granet, Randriamihaja & Raniriharinosy, JOSA A 34:975,
+  2017).** A slanted side-wall that RCWA must STAIRCASE into many laterally-shifted
+  thin layers is solved as a SINGLE layer in the inclined coordinate
+  `u = x − tan(φ)·z` (the walls become coordinate surfaces, so `eps` depends on
+  `u` only) — no z-staircase. The slant injects a linear-in-`q` convection term
+  (the modal eigenproblem becomes quadratic, companion-linearized) and breaks the
+  `±q` field symmetry, so the explicit forward/backward generalized S-matrix is
+  reused. Validated vs an RCWA staircase: NORMAL incidence, slant 0–75°, TE+TM;
+  TE matches a fine staircase to ~1e-5 and reaches the converged efficiencies at a
+  single-layer DOF the staircase needs ~30–70× more work for. `slant_angle=0`
+  reduces **bit-identically** to `pmm_efficiency_1d`. SCOPE: normal incidence only
+  for a slanted grating — combined oblique + slant raises `NotImplementedError`
+  (the inclined-frame Bloch↔slant convection cross-term is unresolved; energy
+  conserves but the per-order split is wrong) rather than returning a wrong answer.
+- **`grating_convergence_class` / `classify_from_grating` — a convergence-class
+  predictor for right-angle grating edges (Li & Granet, JOSA A 28:738, 2011).** A
+  pure O(1) diagnostic that classifies the in-plane-E (TM) field singularity at a
+  four-region corner: Type I (all-dielectric, algebraic convergence at rate
+  `Re[τ]`), Type II (lossless metal–dielectric, irregular — **no** modal method
+  converges), Type III (requires a metal quadrant; impossible for an all-dielectric
+  corner). Returns `τ`, `Δ`, `Δ'`, the predicted algebraic rate, a `converges`
+  flag, and a diagnostic warning. Applies to both PMM and RCWA. (Loss lifts the
+  Type-II irregularity only *asymptotically* — a weakly lossy metal corner can
+  still stall at practical truncation; the warning says so.)
+- **New tests** `tests/unit/test_v5_12_0_pmm_slant_and_convergence.py` (24) —
+  slant=0 bit-identical reduction, energy conservation 10–75° (TE+TM), oblique+slant
+  guard, slant vs RCWA-staircase cross-check; predictor Type I/II/III, the Type-II
+  closed-form sign, Type-III-impossible-for-all-dielectric (200 random corners),
+  lossy regularization, and the degenerate-edge guard.
 
 ### Fixed
 

@@ -93,6 +93,7 @@ mirrors the FMM tensor block ``M = -P@Q``.  Normal OR oblique incidence (the
 """
 from __future__ import annotations
 
+import cmath
 import warnings
 from typing import Tuple
 
@@ -100,8 +101,16 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import Legendre
 
+# Reused for the slanted-grating solver: the slant breaks the +/-q field
+# symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
+# (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
+# top-level import introduces no cycle.
+from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
+
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
-           "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack"]
+           "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
+           "pmm_efficiency_1d_slanted", "grating_convergence_class",
+           "classify_from_grating"]
 
 _C = np.complex128
 
@@ -1838,3 +1847,526 @@ class PMMStack:
             jones[0, col] = rx[m0]
             jones[1, col] = ry[m0]
         return orders, R_eff, T_eff, jones
+
+
+# ===========================================================================
+# Slanted 1-D lamellar grating -- inclined-coordinate PMM (Granet 2017)
+# ===========================================================================
+# A slanted grating has straight side-walls tilted by ``slant_angle`` from the
+# vertical (z) axis.  A Fourier method (RCWA/FMM) cannot represent the slant
+# directly -- it must STAIRCASE the layer into many thin laterally-shifted
+# binary sub-layers and converge in the slice count.  In the inclined
+# coordinate ``u = x - tan(phi) z`` the slant walls become coordinate surfaces
+# ``u = const``, so ``eps`` depends on ``u`` only and a SINGLE slanted layer is
+# solved exactly -- no z-staircase.  The slant injects a LINEAR-in-q convection
+# term, making the modal eigenproblem QUADRATIC (companion-linearized); it also
+# breaks the +/-q field symmetry (like a full-3x3 tensor layer), so the
+# explicit forward/backward GENERALIZED S-matrix is used.  Validated vs an RCWA
+# staircase: NORMAL incidence, slant 0-75deg, TE+TM, reaching the converged
+# efficiencies at a single-layer DOF the staircase needs ~30-70x more work for.
+def _build_sem_slant(period, d_wall, eps_ridge, eps_groove, degree,
+                     n_ridge_el, n_groove_el, grade):
+    """Assemble the periodic C0 spectral-element operators on the inclined
+    coordinate ``u = x - tan(phi) z``.  Element boundaries land on the walls
+    ``u = 0`` and ``u = d_wall``, so ``eps`` is constant per element and every
+    Galerkin integral is exact.  Adds the convection operators ``C = INT B B'``
+    and ``Cinv = INT (1/eps) B B'`` (the slant's linear-in-q term) to the usual
+    mass/stiffness set."""
+    ref_nodes, ref_w = _gll_nodes_weights(degree)
+    Dref = _lagrange_derivative_matrix(ref_nodes)
+    rb = _graded_boundaries(0.0, d_wall, n_ridge_el, grade)
+    gb = _graded_boundaries(d_wall, period, n_groove_el, grade)
+    elem_bnds = (list(zip(rb[:-1], rb[1:], [eps_ridge] * n_ridge_el))
+                 + list(zip(gb[:-1], gb[1:], [eps_groove] * n_groove_el)))
+    n_el = len(elem_bnds)
+
+    l2g = np.zeros((n_el, degree + 1), dtype=int)
+    gid = 0
+    for e in range(n_el):
+        for a in range(degree + 1):
+            if a == 0 and e > 0:
+                l2g[e, a] = l2g[e - 1, degree]
+            else:
+                l2g[e, a] = gid
+                gid += 1
+    last = l2g[n_el - 1, degree]
+    l2g[l2g == last] = 0
+    n_glob = last
+
+    def _z():
+        return np.zeros((n_glob, n_glob), dtype=_C)
+    S0, Peps, Pinv, L, Linv, C, Cinv = (_z() for _ in range(7))
+    for e in range(n_el):
+        xl, xr, eps = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        inv = 1.0 / eps
+        wel = ref_w * J
+        Dphys = Dref / J
+        Mloc = np.diag(wel)
+        Kloc = (Dphys.T * wel) @ Dphys          # INT phi' phi'  (stiffness)
+        Cloc = Mloc @ Dphys                     # INT phi phi'   (convection)
+        idx = l2g[e]
+        ix = np.ix_(idx, idx)
+        S0[ix] += Mloc
+        Peps[ix] += eps * Mloc
+        Pinv[ix] += inv * Mloc
+        L[ix] += Kloc
+        Linv[ix] += inv * Kloc
+        C[ix] += Cloc
+        Cinv[ix] += inv * Cloc
+    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv,
+                n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
+                ref_nodes=ref_nodes)
+
+
+def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
+    """Periodic modal eigenproblem in the inclined coordinate.
+
+    The slant injects a LINEAR-in-q convection term, so the modal problem is
+    QUADRATIC ``(A1 + q Ac + q^2 A2) phi = 0``, solved by companion
+    linearization.  At ``slant_angle == 0`` (and ``kx0 == 0``) the convection
+    term vanishes and this reduces EXACTLY to the vertical PMM generalized
+    eigenproblem with the symmetric +/-q field convention.
+
+    Returns a mode dict (``symmetric`` flag + the forward/backward field blocks
+    + eigenvalues + the ``1/eps`` multiply operator ``invop`` for TM)."""
+    # Sign: u = x + tan(phi) z so the PMM shear matches the RCWA staircase's
+    # +tan(phi)*z ridge shift (else the diffraction orders come out mirrored
+    # m -> -m; identical physics, only the order labels flip).
+    t = -np.tan(slant_angle)
+    sec2 = 1.0 / np.cos(slant_angle) ** 2
+    k02 = k0 * k0
+    n = mats["S0"].shape[0]
+    Imat = np.eye(n, dtype=_C)
+    Z = np.zeros((n, n), dtype=_C)
+    skip_slant = abs(t) < 1e-10                  # tiny-phi cancellation guard
+
+    # nodal first-derivative operator Dop = S0^-1 C (L2-projected derivative);
+    # used in the slant convection term and the slant-aware modal H-partner.
+    Dop = _safe_solve(mats["S0"], mats["C"])
+
+    if polarization == "te":
+        S0, Peps = mats["S0"], mats["Peps"]
+        Lop = mats["L"]
+        Cv = mats["C"]
+        if kx0:
+            Cas = Cv - Cv.T
+            Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * S0
+        # quadratic pencil (A1 - q Ac - q^2 A2) phi = 0:
+        #   A1 = Peps - sec^2 Lop/k0^2,  Ac = (2 i t/k0) C,  A2 = S0.
+        A1 = Peps - sec2 * Lop / k02
+        A2 = S0
+        Ac = (2j * t / k0) * Cv
+        invop = None
+    else:  # tm: built from 1/eps (Li inverse rule)
+        S0, Pinv = mats["S0"], mats["Pinv"]
+        Lop = mats["Linv"]
+        Cv = mats["Cinv"]
+        if kx0:
+            Cas = Cv - Cv.T
+            Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * Pinv
+        A1 = S0 - sec2 * Lop / k02
+        A2 = Pinv
+        # TM convection is the ANTISYMMETRIZED (1/eps)-weighted form
+        #   Ac = (i t / k0)(Cinv - Cinv^T)
+        # (the 1/eps sits BETWEEN the two z-derivatives in TM, so the slant
+        # cross term integrates by parts to Cinv - Cinv^T, NOT 2 Cinv).
+        Ac = (1j * t / k0) * (Cv - Cv.T)
+        invop = _safe_solve(mats["S0"], mats["Pinv"])
+
+    if skip_slant:
+        # VERTICAL layer (any incidence): the +/-q field symmetry holds, so this
+        # is the standard PMM generalized eig A1 phi = q^2 A2 phi (the kx0 Bloch
+        # shift already lives in A1's Lop).
+        q2, Acoef = sla.eig(A1, A2)
+        q = np.sqrt(q2)
+        if kx0:
+            tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+            flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
+            q = np.where(flip, -q, q)
+        else:
+            q = np.where(q.imag < 0.0, -q, q)
+        lam = -1j * q
+        return dict(symmetric=True, W=Acoef, q=q, lam=lam, invop=invop,
+                    Dop=Dop, t=t, k0=k0, polarization=polarization)
+
+    # ---- general case: linearize the quadratic pencil to a 2n first-order
+    # generalized eigenproblem and pick the FORWARD half by z-Poynting flux ----
+    Abig = np.block([[Z, Imat], [A1, -Ac]])
+    Bbig = np.block([[Imat, Z], [Z, A2]])
+    qall, Vbig = sla.eig(Abig, Bbig)
+    finite = np.isfinite(qall)
+    qall = qall[finite]
+    phis = Vbig[:n, finite]                       # upper block = phi
+    nrm = np.linalg.norm(phis, axis=0)
+    nrm = np.where(nrm < 1e-300, 1.0, nrm)
+    phis = phis / nrm
+    q = qall
+
+    # slant-aware modal tangential partner (continuous across the PLANAR
+    # z-interfaces), from the lab-frame d/dz = (i gamma - t d/du):
+    #   TE: V = q W + (i t/k0) Dop W
+    #   TM: V = q (1/eps) W + (i t/k0)(1/eps) Dop W  (derivative BEFORE 1/eps)
+    if polarization == "te":
+        V = phis * q[None, :] + (1j * t / k0) * (Dop @ phis)
+    else:
+        V = (invop @ phis) * q[None, :] \
+            + (1j * t / k0) * (invop @ (Dop @ phis))
+
+    # forward selector by z-Poynting flux Sz ~ Re(F conj(Hx)); propagating modes
+    # keep Sz > 0, evanescent keep Im(q) > 0 (decay exp(+i q k0 z)).
+    SF = S0 @ np.conj(V)
+    Sz = np.real(np.einsum("in,in->n", phis, SF))
+    qmax = max(float(np.max(np.abs(q))), 1.0)
+    tol = 1e-7 * qmax
+    prop = np.abs(q.imag) < tol
+    fwd = np.where(prop, Sz > 0.0, q.imag > 0.0)
+    fidx = np.where(fwd)[0]
+    if fidx.size != n:                            # rebalance to exactly n forward
+        score = np.where(prop, Sz, q.imag)
+        fidx = np.argsort(-score)[:n]
+    bidx = np.array(sorted(set(range(len(q))) - set(fidx.tolist())))
+
+    Wf, Vf, qf = phis[:, fidx], V[:, fidx], q[fidx]
+    Wb, Vb, qb = phis[:, bidx], V[:, bidx], q[bidx]
+    lam_f = -1j * qf                              # exp(-lam_f k0 z) decays fwd
+    lam_b = -1j * qb
+    return dict(symmetric=False, Wf=Wf, Vf=Vf, lam_f=lam_f, qf=qf,
+                Wb=Wb, Vb=Vb, lam_b=lam_b, qb=qb, invop=invop,
+                Dop=Dop, t=t, k0=k0, polarization=polarization)
+
+
+def _modes_M_slant(md):
+    """Build the generalized field-mode matrix ``M = [[Wf, Wb], [Vf, Vb]]`` plus
+    ``(lam_f, lam_b)`` and the forward field block ``Wf`` from a
+    :func:`_sem_modes_slant` dict.  For the symmetric (vertical) case the
+    backward modes are the mirror ``[W; -V]`` with eigenvalue ``-lam`` -- the
+    implicit convention of the symmetric interface -- so the same generalized
+    recursion serves both cases."""
+    pol = md["polarization"]
+    if md["symmetric"]:
+        W, q, lam = md["W"], md["q"], md["lam"]
+        invop = md["invop"]
+        Wbase = W if pol == "te" else (invop @ W)
+        Vf = Wbase * q[None, :]                  # forward partner (+q)
+        Wf, lam_f = W, lam
+        Wb, Vb, lam_b = W, -Vf, -lam             # mirror backward
+        M = np.block([[Wf, Wb], [Vf, Vb]])
+        return M, lam_f, lam_b, Wf
+    Wf, Vf, lam_f = md["Wf"], md["Vf"], md["lam_f"]
+    Wb, Vb, lam_b = md["Wb"], md["Vb"], md["lam_b"]
+    M = np.block([[Wf, Wb], [Vf, Vb]])
+    return M, lam_f, lam_b, Wf
+
+
+def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
+                     depth, duty_cycle, wavelength, slant_angle, *, angle,
+                     polarization, degree, elements_per_region, grade,
+                     far_field_orders):
+    """Single-layer slanted-grating PMM solve (the inclined-coordinate layer +
+    homogeneous half-spaces + generalized S-matrix + lab-frame far field).
+    Returns ``(orders, R, T, n_glob)``."""
+    eps_ridge, eps_groove = _C(n_ridge) ** 2, _C(n_groove) ** 2
+    eps_sup, eps_sub = _C(n_superstrate) ** 2, _C(n_substrate) ** 2
+    k0 = 2.0 * np.pi / wavelength
+    d_wall = duty_cycle * period
+    kx0 = float(np.real(n_superstrate)) * np.sin(float(angle)) * k0
+    nel = int(elements_per_region)
+
+    mats = _build_sem_slant(period, d_wall, eps_ridge, eps_groove, degree,
+                            nel, nel, grade)
+    # The half-spaces are HOMOGENEOUS -> no slant (a uniform medium has no
+    # walls); build them with slant_angle = 0 (their modes are plane waves).
+    mats_sup = _build_sem_slant(period, d_wall, eps_sup, eps_sup, degree,
+                                nel, nel, grade)
+    mats_sub = _build_sem_slant(period, d_wall, eps_sub, eps_sub, degree,
+                                nel, nel, grade)
+    n_max = max(np.real(n_superstrate), np.real(n_substrate), np.real(n_ridge),
+                np.real(n_groove))
+    n_glob = mats["n_glob"]
+
+    m_prop = _n_propagating_orders(period, wavelength, n_max)
+    n_proj = max(int(far_field_orders), 2 * m_prop + 5)
+    cap = n_glob if n_glob % 2 else n_glob - 1
+    n_proj = min(n_proj, cap)
+    if n_proj % 2 == 0:
+        n_proj -= 1
+    half = (n_proj - 1) // 2
+    if 2 * m_prop + 1 > n_proj:
+        raise ValueError(
+            f"pmm_efficiency_1d_slanted: degree={degree} too low to resolve "
+            f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}).")
+    orders = np.arange(-half, half + 1)
+    G = 2.0 * np.pi / period
+    kx = (kx0 + orders * G) / k0
+    Tp = _sem_fourier_projection(orders, period, mats)
+
+    # layer modes (inclined) + homogeneous half-space modes (lab/vertical), each
+    # assembled into the explicit forward/backward field-mode matrix for the
+    # GENERALIZED S-matrix (the slant breaks the +/-q symmetry).
+    md_l = _sem_modes_slant(mats, k0, polarization, slant_angle, kx0)
+    md_s = _sem_modes_slant(mats_sup, k0, polarization, 0.0, kx0)
+    md_b = _sem_modes_slant(mats_sub, k0, polarization, 0.0, kx0)
+    Ml, lamf_l, lamb_l, _Wf_l = _modes_M_slant(md_l)
+    Ms, _lamf_s, _lamb_s, Wf_s = _modes_M_slant(md_s)
+    Mb, _lamf_b, _lamb_b, Wf_b = _modes_M_slant(md_b)
+
+    S = _interface_smatrix_general(Ms, Ml)
+    S = _redheffer_star(S, _propagation_smatrix_general(lamf_l, lamb_l,
+                                                        k0 * depth))
+    S = _redheffer_star(S, _interface_smatrix_general(Ml, Mb))
+    S11, _S12, S21, _S22 = S
+
+    # forward far-field projection: the forward field block of each (homogeneous)
+    # half-space is a set of plane waves; project order-0 incidence, recover r/t.
+    Hsup = Tp @ Wf_s
+    Hsub = Tp @ Wf_b
+    delta0 = (orders == 0).astype(_C)
+    cinc, *_ = np.linalg.lstsq(Hsup, delta0, rcond=None)
+    r_ord = Hsup @ (S11 @ cinc)
+    t_ord = Hsub @ (S21 @ cinc)
+
+    kz_sup, kz_sub = _kz_forward(eps_sup, kx), _kz_forward(eps_sub, kx)
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+    if polarization == "te":
+        R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
+        T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
+    else:
+        flux_inc = np.real(kz_inc / eps_sup)
+        R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
+        T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
+    R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
+    T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
+    return orders, R, T, n_glob
+
+
+def pmm_efficiency_1d_slanted(
+    period: float,
+    n_ridge: complex,
+    n_groove: complex,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    duty_cycle: float,
+    wavelength: float,
+    slant_angle: float,
+    *,
+    angle: float = 0.0,
+    polarization: str = "te",
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    stabilize: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Rigorous diffraction efficiencies of a 1-D SLANTED binary grating by the
+    inclined-coordinate Polynomial Modal Method (Granet, Randriamihaja &
+    Raniriharinosy, JOSA A 34:975, 2017).
+
+    Extends :func:`pmm_efficiency_1d` to a grating whose straight side-walls are
+    tilted by ``slant_angle`` from the vertical.  Where a Fourier method
+    (:func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`) must STAIRCASE the
+    slant into many laterally-shifted thin layers and converge in the slice
+    count, PMM solves a SINGLE slanted layer exactly in the inclined coordinate
+    ``u = x - tan(slant_angle) z`` -- no z-staircase -- reaching the converged
+    efficiencies at a fraction of the cost (~30-70x fewer DOF*slices in the
+    validated dielectric cases).
+
+    Parameters
+    ----------
+    period ... wavelength : as in :func:`pmm_efficiency_1d` (metres / PUBLIC
+        ``n = n + i kappa``).  The (projected) ridge occupies ``duty_cycle`` of
+        the period; the planar layer interfaces are at ``z = 0`` and
+        ``z = depth``.
+    slant_angle : float
+        Side-wall tilt from the vertical (radians); ``0`` = vertical (then this
+        reduces bit-identically to :func:`pmm_efficiency_1d`).  Validated for
+        ``0 <= slant_angle <= ~75 deg``; conditioning grows as
+        ``sec^2(slant_angle)`` at steep tilt.
+    angle : float, optional
+        Incidence angle (radians).  MUST be ``0`` (normal incidence) when
+        ``slant_angle != 0`` -- combined oblique + slant is not yet supported
+        (see Notes) and raises ``NotImplementedError``.
+    polarization, degree, elements_per_region, grade, far_field_orders,
+    stabilize : as in :func:`pmm_efficiency_1d`.
+
+    Returns
+    -------
+    orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
+
+    Notes
+    -----
+    The slant injects a linear-in-``q`` convection term (the modal eigenproblem
+    becomes quadratic, companion-linearized) and breaks the ``+/-q`` field
+    symmetry, so the explicit forward/backward generalized S-matrix is used.
+    The inclined coordinate is INTERNAL to the patterned layer; the homogeneous
+    half-spaces and the Rayleigh far-field projection are in the lab ``(x, z)``
+    frame.  TE matches a fine RCWA staircase to ~1e-5; TM self-converges and is
+    the BETTER reference (RCWA-TM is Gibbs/slice-limited).
+
+    SCOPE: NORMAL incidence only for a slanted grating.  The inclined-frame
+    ``kx0 <-> slant`` convection cross-coupling for combined oblique incidence +
+    nonzero slant is unresolved (energy conserves but the per-order split is
+    wrong), so that combination raises rather than returning a wrong answer.
+    Use ``rcwa`` (staircase) for oblique + slant.
+    """
+    pol = polarization.lower()
+    if pol not in ("te", "tm"):
+        raise ValueError(
+            f"pmm_efficiency_1d_slanted: polarization must be 'te' or 'tm', "
+            f"got {polarization!r}.")
+    if int(degree) < 2:
+        raise ValueError("pmm_efficiency_1d_slanted: degree must be >= 2.")
+    if not (0.0 <= float(duty_cycle) <= 1.0):
+        raise ValueError(
+            f"pmm_efficiency_1d_slanted: duty_cycle must be in [0, 1], got "
+            f"{duty_cycle}.")
+    if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
+        raise NotImplementedError(
+            "pmm_efficiency_1d_slanted: combined OBLIQUE incidence + nonzero "
+            "slant is not supported (the inclined-frame Bloch<->slant "
+            "convection cross-term is unresolved -- energy conserves but the "
+            "per-order split is wrong). Use normal incidence (angle=0) with any "
+            "slant, a vertical grating (slant_angle=0) at any angle via "
+            "pmm_efficiency_1d, or rcwa (staircase) for oblique + slant.")
+
+    args = (period, _C(n_ridge), _C(n_groove), _C(n_substrate),
+            _C(n_superstrate), depth, duty_cycle, wavelength,
+            float(slant_angle))
+    kw = dict(angle=float(angle), polarization=pol,
+              elements_per_region=int(elements_per_region), grade=bool(grade),
+              far_field_orders=int(far_field_orders))
+
+    if not stabilize:
+        orders, R, T, _ = _pmm_slant_solve(*args, degree=int(degree), **kw)
+        return orders, R, T
+    return _stabilize_scalar(
+        lambda d: _pmm_slant_solve(*args, degree=d, **kw)[:3], int(degree),
+        "pmm_efficiency_1d_slanted")
+
+
+# ===========================================================================
+# Convergence-class predictor for right-angle grating edges (Li-Granet 2011)
+# ===========================================================================
+def grating_convergence_class(eps_quadrants):
+    """Classify modal-method convergence at a right-angle grating edge (Li &
+    Granet, JOSA A 28:738, 2011).
+
+    Predicts whether -- and how fast -- a modal method (FMM/RCWA, AMM, or PMM)
+    converges at the right-angle corner where four regions of permittivity
+    meet.  The governing field singularity is in the IN-PLANE electric field
+    (the TM problem); TE (E parallel to the edge) is typically far better
+    behaved.  This is a PURE O(1) diagnostic -- it does not solve the grating.
+
+    Parameters
+    ----------
+    eps_quadrants : sequence of 4 complex
+        The four permittivities meeting at the corner, IN ORDER AROUND THE
+        VERTEX ``(eps1, eps2, eps3, eps4)``; ``eps1``/``eps3`` and
+        ``eps2``/``eps4`` are the diagonal pairs.  PUBLIC convention
+        ``Im(eps) > 0`` for loss.
+
+    Returns
+    -------
+    dict
+        ``type`` ('I' | 'II' | 'III' | 'degenerate'), ``tau`` (complex
+        singularity exponent, Eq. 2), ``delta`` (Eq. 4), ``delta_prime``
+        (Eq. 3), ``predicted_rate`` (``Re[tau]``, the algebraic decay exponent
+        for Type I; else NaN), ``converges`` (bool), ``warning`` (str).
+
+    Classification (lossless edges)
+    -------------------------------
+    * **Type I**  ``0 < Delta < 1`` (all-dielectric): REGULAR singularity;
+      modal methods converge ALGEBRAICALLY at rate ``Re[tau]`` (slow as
+      ``Re[tau] -> 0``; ``elements_per_region>1, grade=True`` recovers it).
+    * **Type II** ``Delta < 0`` (LOSSLESS metal-dielectric): IRREGULAR
+      singularity; NO method (FMM/AMM/PMM) converges.  Mitigate with metal
+      loss, a rounded corner, or accept non-convergence.
+    * **Type III** ``Delta > 1`` (requires a metal quadrant): no singularity,
+      fast.  IMPOSSIBLE for an all-dielectric corner -- the squared numerator
+      over a positive denominator forces ``Delta <= 1``.
+
+    Loss caveat
+    -----------
+    A lossless metal corner is Type II; absorption (``Im(eps) > 0``) lifts the
+    irregularity ASYMPTOTICALLY and is reported as (slowly) convergent.  This is
+    NOT a hard switch -- a weakly lossy metal corner can still stall like
+    Type II at practical truncation, so read ``converges=True`` for a
+    near-lossless metal as "convergent in the limit," not "fast".
+
+    References
+    ----------
+    L. Li & G. Granet, "Field singularities at lossless metal-dielectric
+    right-angle edges and their ramifications to the numerical modeling of
+    gratings," J. Opt. Soc. Am. A 28, 738-746 (2011).
+    """
+    e1, e2, e3, e4 = (_C(v) for v in eps_quadrants)
+    loss_tol = 1e-9
+    degen_tol = 1e-12
+
+    has_loss = max(abs(e.imag) for e in (e1, e2, e3, e4)) > loss_tol
+
+    f12, f23, f34, f41 = e1 + e2, e2 + e3, e3 + e4, e4 + e1
+    num = (e1 * e3 - e2 * e4) ** 2
+    den = f12 * f23 * f34 * f41
+    scale = (abs(e1) + abs(e2) + abs(e3) + abs(e4)) ** 4 + 1e-30
+    if abs(den) < degen_tol * scale or not np.isfinite(num / den):
+        return dict(
+            type="degenerate", tau=complex("nan"), delta=complex("nan"),
+            delta_prime=complex("nan"), predicted_rate=float("nan"),
+            converges=False,
+            warning=("DEGENERATE EDGE: a (eps_i+eps_j) denominator factor "
+                     "vanished (impedance-matched / resonant corner); "
+                     "Delta_prime is ill-defined."))
+
+    delta_prime = num / den
+    delta = 1.0 - delta_prime
+    tau = (2.0 / np.pi) * cmath.asin(cmath.sqrt(complex(delta_prime)))
+    dr = delta.real
+
+    if has_loss:
+        # Loss lifts the lossless-metal irregularity (asymptotically).
+        ctype = "I" if dr < 1.0 else "III"
+        warning = ""
+        if dr < 0.0:
+            ctype = "I"
+            warning = (
+                "Lossy metal corner: the lossless Type-II irregularity is "
+                "lifted by absorption, but a WEAKLY lossy metal can still "
+                "stall at practical truncation; convergence may be SLOW (use "
+                "mesh grading toward the wall).")
+        return dict(type=ctype, tau=tau, delta=delta, delta_prime=delta_prime,
+                    predicted_rate=float(abs(tau.real)), converges=True,
+                    warning=warning)
+
+    if dr < 0.0:
+        return dict(
+            type="II", tau=tau, delta=delta, delta_prime=delta_prime,
+            predicted_rate=float("nan"), converges=False,
+            warning=("TYPE II IRREGULAR SINGULARITY (lossless metal-dielectric "
+                     "edge): NO modal method (FMM/AMM/PMM) converges. Add metal "
+                     "loss, round the corner, or accept non-convergence -- do "
+                     "NOT trust efficiencies from this edge."))
+    if dr > 1.0:
+        return dict(type="III", tau=tau, delta=delta, delta_prime=delta_prime,
+                    predicted_rate=float("nan"), converges=True, warning="")
+
+    rate = tau.real
+    warning = ""
+    if rate < 0.3:
+        warning = (
+            f"WEAK Type-I singularity (Re[tau]={rate:.4f} < 0.3): algebraic "
+            "convergence is SLOW (~N^-tau); use elements_per_region>1, "
+            "grade=True to recover the rate.")
+    return dict(type="I", tau=tau, delta=delta, delta_prime=delta_prime,
+                predicted_rate=float(rate), converges=True, warning=warning)
+
+
+def classify_from_grating(eps_superstrate, eps_ridge, eps_groove,
+                          eps_substrate):
+    """Convenience wrapper of :func:`grating_convergence_class` for a 1-D binary
+    grating: maps the four regions around the ridge/groove corner to the vertex
+    ordering ``(sup, ridge, sub, groove)`` so the diagonal pairs are
+    ``(sup, sub)`` and ``(ridge, groove)`` (Li & Granet Fig. 1)."""
+    return grating_convergence_class(
+        (eps_superstrate, eps_ridge, eps_substrate, eps_groove))

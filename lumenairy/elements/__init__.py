@@ -90,8 +90,11 @@ from .lenses import (
 )
 from .pmm import (
     PMMStack,
+    classify_from_grating,
+    grating_convergence_class,
     pmm_efficiency_1d,
     pmm_efficiency_1d_segments,
+    pmm_efficiency_1d_slanted,
     pmm_jones_1d,
     pmm_jones_1d_segments,
 )
@@ -181,9 +184,12 @@ __all__ = [
     'rcwa_efficiency_1d_jax',
     'pmm_efficiency_1d',
     'pmm_efficiency_1d_segments',
+    'pmm_efficiency_1d_slanted',
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
     'pmm_efficiency_2d',
+    'grating_convergence_class',
+    'classify_from_grating',
     'PMMStack',
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',
