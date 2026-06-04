@@ -69,6 +69,29 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   follow-ons). Exported top-level.
 - **New tests** `tests/unit/test_v5_11_0_pmm_anisotropic.py` — the four
   validation gates (vs `rcwa_jones_1d`, decouple-to-scalar, energy, no-floor).
+- **`pmm_jones_1d_slanted`** — the anisotropic-Jones counterpart of
+  `pmm_efficiency_1d_slanted`: a binary 1-D grating with tilted side-walls AND
+  full `(3, 3)` IN-PLANE permittivity tensors (a slanted tunable-LC /
+  gyrotropic grating), returning the coupled `(E_x, E_y)` efficiencies and the
+  zeroth-order `2x2` Jones reflection. Built from the genuine Edee-Granet 2024
+  covariant-metric first-order Maxwell generator `-i k γ ψ = L ψ`,
+  `L = A + B C⁻¹ D`, `ψ = [E_x; E_y; iZ H_x; iZ H_y]` (LINEAR in `γ`): the slant
+  enters ONLY through the metric-folded effective tensors `εˡᵐ = √g (J⁻¹ ε Jᵀ)ˡᵐ`
+  / `μˡᵐ = √g gˡᵐ`, and the magnetic field is a genuine state component read
+  directly from the eigenvector, so the layer modes are flux-orthogonal by
+  construction (the symplectic property a reshaped convection pencil lacks). The
+  Li inverse rule lands on the wall-normal `εˡˡ`; the homogeneous half-spaces and
+  the lab-frame Rayleigh far field reuse the proven `pmm_jones_1d` /
+  `pmm_efficiency_1d_slanted` plumbing. Validated through the public API: lossless
+  energy `sum(R)+sum(T)=1` (cross-pol included) to ~1e-13 across `0–60°` for BOTH
+  real-symmetric AND gyrotropic tensors; high-contrast (`ε~12`) conserves; at
+  `slant=0` it reduces to `pmm_jones_1d` (~2e-4) and a diagonal tensor decouples
+  to the scalar `pmm_efficiency_1d_slanted` (TE machine-exact ~1e-7, TM
+  inverse-rule ~6e-4); reciprocal for a real-symmetric tensor, non-reciprocal for
+  a gyrotropic one. SCOPE: NORMAL incidence, BINARY grating, in-plane tensor only;
+  NumPy/SciPy (not JAX). Combined oblique + slant and the multi-region (segments)
+  path raise `NotImplementedError`. Exported top-level; tests in
+  `tests/unit/test_v5_12_0_pmm_slant_and_convergence.py`.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

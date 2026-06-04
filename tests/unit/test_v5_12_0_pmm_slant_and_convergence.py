@@ -17,6 +17,9 @@ from lumenairy.elements.pmm import (
     grating_convergence_class,
     pmm_efficiency_1d,
     pmm_efficiency_1d_slanted,
+    pmm_jones_1d,
+    pmm_jones_1d_slanted,
+    pmm_jones_1d_slanted_segments,
 )
 from lumenairy.elements.rcwa import RCWAStack
 
@@ -171,3 +174,218 @@ def test_degenerate_edge():
     assert r["type"] == "degenerate"
     assert not r["converges"]
     assert np.isnan(r["delta_prime"].real)
+
+
+# ===================================================================
+# Slanted + IN-PLANE-ANISOTROPIC (Jones) PMM -- the genuine Edee-Granet
+# 2024 covariant-metric [E_t; H_t] generator (validated proto round 11).
+# ===================================================================
+# Geometry for the coupled-tensor slant solver (the proto's validated case:
+# symmetric lossless non-resonant half-spaces).
+_JGEOM = dict(period=1.0e-6, n_substrate=1.5, n_superstrate=1.5,
+              depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6)
+# Asymmetric half-spaces (for the diagonal / phi=0 decouple checks vs the
+# scalar solvers, which use n_sup=1.0 / n_sub=1.5).
+_JGEOM_ASYM = dict(period=1.0e-6, n_substrate=1.5, n_superstrate=1.0,
+                   depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6)
+
+
+def _eps_diag(val):
+    return (val * np.eye(3)).astype(np.complex128)
+
+
+def _eps_real_sym(diag=2.25, off=0.4):
+    e = _eps_diag(diag)
+    e[0, 1] = e[1, 0] = off
+    return e
+
+
+def _eps_gyro(diag=2.25, g=0.5):
+    e = _eps_diag(diag)
+    e[0, 1] = -1j * g
+    e[1, 0] = 1j * g
+    return e
+
+
+def test_jones_slant_vacuum():
+    """Empty cell -> full transmission, no cross-polarization."""
+    I = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        period=1.0e-6, eps_ridge=I, eps_groove=I, n_substrate=1.0,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        slant_angle=0.0, degree=12, stabilize=False)
+    m0 = int(np.where(o == 0)[0][0])
+    assert abs(T[0][m0] - 1.0) < 1e-10
+    assert abs(T[1][m0] - 1.0) < 1e-10
+    assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12
+
+
+@pytest.mark.parametrize("pol_diag", [(0, "tm"), (1, "te")])
+def test_jones_slant_phi0_diagonal_decouples_to_scalar(pol_diag):
+    """phi=0 with a DIAGONAL tensor decouples to the scalar TE/TM solver
+    (cross-pol ~0; Ey channel == TE, Ex channel == TM)."""
+    row, pol = pol_diag
+    er = _eps_diag(2.25)
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=0.0, degree=18,
+        stabilize=False, **_JGEOM_ASYM)
+    oS, RS, TS = pmm_efficiency_1d(
+        period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        polarization=pol, degree=18)
+    assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12
+    # TE is the direct rule (machine-exact); TM is the 1/eps inverse-rule
+    # discretization gap that shrinks with degree (~3e-4 at deg 18).
+    tol = 1e-6 if pol == "te" else 1e-3
+    assert np.max(np.abs(R[row] - RS)) < tol
+    assert np.max(np.abs(T[row] - TS)) < tol
+
+
+@pytest.mark.parametrize("tensor", ["real-sym", "gyro"])
+def test_jones_slant_phi0_coupled_matches_jones(tensor):
+    """phi=0 COUPLED reduces to the vertical pmm_jones_1d (efficiency + |Jones|
+    to ~2e-4; the residual is the inverse-rule convergence, which the genuine
+    generator -- resonance-free, sumRT=1 at every degree -- shares)."""
+    er = _eps_real_sym() if tensor == "real-sym" else _eps_gyro()
+    eg = _eps_diag(1.0)
+    deg = 20
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=0.0, degree=deg,
+        stabilize=False, **_JGEOM_ASYM)
+    oJ, RJ, TJ, JJ = pmm_jones_1d(
+        period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        degree=deg, stabilize=True)
+    dR = float(max(np.max(np.abs(R - RJ)), np.max(np.abs(T - TJ))))
+    dJ = float(np.max(np.abs(np.abs(J) - np.abs(JJ))))
+    assert dR < 1e-3
+    assert dJ < 1e-3
+
+
+@pytest.mark.parametrize("phi_deg", [0.0, 15.0, 30.0, 45.0, 60.0])
+def test_jones_slant_finite_diagonal_matches_scalar_slanted(phi_deg):
+    """A DIAGONAL tensor at finite slant reduces to pmm_efficiency_1d_slanted
+    (TE machine-exact ~1e-7 -- the decisive proof the metric fold is right;
+    TM the 1/eps inverse-rule convergence ~6e-4).  Uses the proto's L3 geometry
+    (asymmetric n_sup=1.0 / n_sub=1.5)."""
+    phi = np.deg2rad(phi_deg)
+    er = _eps_diag(2.25)
+    eg = _eps_diag(1.0)
+    deg = 20
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
+        stabilize=False, **_JGEOM_ASYM)
+    oT, RTte, TTte = pmm_efficiency_1d_slanted(
+        period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        slant_angle=phi, polarization="te", degree=deg, stabilize=True)
+    oM, RTtm, TTtm = pmm_efficiency_1d_slanted(
+        period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        slant_angle=phi, polarization="tm", degree=deg, stabilize=True)
+    dte = max(np.max(np.abs(R[1] - RTte)), np.max(np.abs(T[1] - TTte)))
+    dtm = max(np.max(np.abs(R[0] - RTtm)), np.max(np.abs(T[0] - TTtm)))
+    assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-10
+    assert dte < 1e-6
+    assert dtm < 1e-3
+
+
+@pytest.mark.parametrize("tensor", ["real-sym", "gyro"])
+@pytest.mark.parametrize("phi_deg", [0.0, 15.0, 30.0, 45.0, 60.0])
+def test_jones_slant_energy_conservation(tensor, phi_deg):
+    """A lossless coupled slanted layer conserves energy (sumRT=1, cross-pol
+    included) for BOTH a real-symmetric AND a gyrotropic tensor across 0-60
+    deg (the validated ~1e-12 of the genuine flux-orthogonal generator)."""
+    er = _eps_real_sym() if tensor == "real-sym" else _eps_gyro()
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=np.deg2rad(phi_deg),
+        degree=22, stabilize=False, **_JGEOM)
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-10
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-10
+
+
+def test_jones_slant_reciprocity_real_symmetric():
+    """A real-symmetric tensor is reciprocal (Jxy == Jyx); a gyrotropic tensor
+    breaks reciprocity (the validated physical signature)."""
+    eg = _eps_diag(1.0)
+    _, _, _, Jsym = pmm_jones_1d_slanted(
+        eps_ridge=_eps_real_sym(), eps_groove=eg, slant_angle=np.deg2rad(30.0),
+        degree=22, stabilize=False, **_JGEOM)
+    _, _, _, Jgyro = pmm_jones_1d_slanted(
+        eps_ridge=_eps_gyro(), eps_groove=eg, slant_angle=np.deg2rad(30.0),
+        degree=22, stabilize=False, **_JGEOM)
+    assert abs(Jsym[0, 1] - Jsym[1, 0]) < 1e-9
+    assert abs(Jgyro[0, 1] - Jgyro[1, 0]) > 1e-3
+
+
+def test_jones_slant_high_contrast_conserves():
+    """A high-contrast coupled tensor (eps~12) still conserves energy (the
+    round-10 refute case: must NOT inflate to ~3.9)."""
+    erH = _eps_diag(12.0)
+    erH[0, 1] = erH[1, 0] = 2.0
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=erH, eps_groove=_eps_diag(1.0), slant_angle=np.deg2rad(30.0),
+        degree=26, stabilize=False, **_JGEOM)
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-2
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-2
+
+
+@pytest.mark.parametrize("phi_deg", [0.0, 20.0, 40.0])
+def test_jones_slant_lossy_passive(phi_deg):
+    """A lossy coupled slanted layer absorbs (sumRT < 1, no super-unity)."""
+    er = _eps_diag(2.25 + 0.3j)
+    er[0, 1] = er[1, 0] = 0.3
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=_eps_diag(1.0),
+        slant_angle=np.deg2rad(phi_deg), degree=22, stabilize=False, **_JGEOM)
+    assert _sum_RT(R[0], T[0]) < 1.0 + 1e-4
+    assert _sum_RT(R[1], T[1]) < 1.0 + 1e-4
+
+
+def test_jones_slant_reduces_to_pmm_jones_at_phi0_stabilized():
+    """The stabilized public path at slant=0 agrees with pmm_jones_1d to the
+    convergence tolerance (a smoke check that stabilize wires through)."""
+    er = _eps_real_sym()
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=0.0, degree=18,
+        **_JGEOM_ASYM)
+    oJ, RJ, TJ, JJ = pmm_jones_1d(
+        period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        degree=18)
+    assert np.max(np.abs(np.abs(J) - np.abs(JJ))) < 2e-3
+
+
+def test_jones_slant_oblique_plus_slant_raises():
+    """Combined oblique incidence + nonzero slant is unsupported and raises;
+    each alone is fine."""
+    er = _eps_real_sym()
+    eg = _eps_diag(1.0)
+    with pytest.raises(NotImplementedError):
+        pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg,
+                             slant_angle=np.deg2rad(25.0),
+                             angle=np.deg2rad(15.0), **_JGEOM)
+    # slant alone, and oblique alone (vertical), both solve
+    pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg,
+                         slant_angle=np.deg2rad(25.0), angle=0.0, degree=16,
+                         **_JGEOM)
+    pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg, slant_angle=0.0,
+                         angle=np.deg2rad(15.0), degree=16, **_JGEOM)
+
+
+def test_jones_slant_segments_raises():
+    """The multi-region (segments) slanted-tensor path is RED and raises."""
+    with pytest.raises(NotImplementedError):
+        pmm_jones_1d_slanted_segments()
+
+
+def test_jones_slant_out_of_plane_tensor_rejected():
+    """An out-of-plane tensor (eps_xz/zx != 0) is rejected (in-plane only)."""
+    er = _eps_diag(2.25)
+    er[0, 2] = er[2, 0] = 0.3
+    with pytest.raises(ValueError):
+        pmm_jones_1d_slanted(eps_ridge=er, eps_groove=_eps_diag(1.0),
+                             slant_angle=np.deg2rad(20.0), **_JGEOM)

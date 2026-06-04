@@ -109,8 +109,8 @@ from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
 
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
            "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
-           "pmm_efficiency_1d_slanted", "grating_convergence_class",
-           "classify_from_grating"]
+           "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
+           "grating_convergence_class", "classify_from_grating"]
 
 _C = np.complex128
 
@@ -2243,6 +2243,516 @@ def pmm_efficiency_1d_slanted(
     return _stabilize_scalar(
         lambda d: _pmm_slant_solve(*args, degree=d, **kw)[:3], int(degree),
         "pmm_efficiency_1d_slanted")
+
+
+# ===========================================================================
+# SLANTED + IN-PLANE-ANISOTROPIC (Jones) PMM -- the genuine Edee-Granet 2024
+# covariant-metric [E_t; H_t] first-order generator.
+# ---------------------------------------------------------------------------
+# Slant enters ONLY through the metric-folded effective tensors eps^lm / mu^lm;
+# the eigenproblem is the TRUE first-order physical Maxwell operator
+#     -i k gamma psi = L psi,   L = A + B C^-1 D,   psi = [Ex; Ey; iZ Hx; iZ Hy]
+# (Edee & Granet 2024, JOSA A 41(9) 1803, Eqs. 3, 7-15), LINEAR in gamma.  H is a
+# genuine STATE component read directly from the eigenvector (the lower G-block =
+# iZ H), so the modes are flux-orthogonal BY CONSTRUCTION -- the symplectic
+# property a reshaped convection pencil lacks.  Validated (proto round 11):
+# energy ~1e-13 all slants 0-60 BOTH real-symmetric AND gyrotropic, reduces to
+# pmm_jones_1d at phi=0 and to pmm_efficiency_1d_slanted on the diagonal, linear-
+# in-gamma residual ~6e-16.  SCOPE: binary (1 ridge + 1 groove), NORMAL incidence.
+# ===========================================================================
+
+def _t3_slant(M):
+    """In-plane (3, 3) tensor -> the dict ``dict(exx, exy, eyx, eyy, ezz)`` the
+    metric generator's nodal builder consumes."""
+    return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1], ezz=M[2, 2])
+
+
+def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
+                        n_ridge_el, n_groove_el, grade):
+    """Nodal Galerkin operator builder for the metric generator (mirrors the
+    :func:`_build_sem_tensor` element loop).
+
+    Returns the unit mass ``S0``, the per-coefficient masses (DIRECT and
+    ``1/exx`` / ``1/ezz`` INVERSE already separated), and the convection
+    ``C = INT phi phi'``.  All metric folding / inverse-rule logic lives in
+    :func:`_build_generator_metric`."""
+    ref_nodes, ref_w = _gll_nodes_weights(degree)
+    Dref = _lagrange_derivative_matrix(ref_nodes)
+    rb = _graded_boundaries(0.0, d_wall, n_ridge_el, grade)
+    gb = _graded_boundaries(d_wall, period, n_groove_el, grade)
+    elem_bnds = (list(zip(rb[:-1], rb[1:], [t_ridge] * n_ridge_el))
+                 + list(zip(gb[:-1], gb[1:], [t_groove] * n_groove_el)))
+    n_el = len(elem_bnds)
+    l2g = np.zeros((n_el, degree + 1), dtype=int)
+    gid = 0
+    for e in range(n_el):
+        for a in range(degree + 1):
+            if a == 0 and e > 0:
+                l2g[e, a] = l2g[e - 1, degree]
+            else:
+                l2g[e, a] = gid
+                gid += 1
+    last = l2g[n_el - 1, degree]
+    l2g[l2g == last] = 0
+    n_glob = last
+
+    def _z():
+        return np.zeros((n_glob, n_glob), dtype=_C)
+    # masses keyed by the coefficient they integrate
+    keys = ("one", "exx", "eyy", "exy", "eyx", "ezz", "inv_exx", "inv_ezz")
+    mass = {k: _z() for k in keys}
+    C = _z()
+    for e in range(n_el):
+        xl, xr, t = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        wel = ref_w * J
+        Dphys = Dref / J
+        Mloc = np.diag(wel)
+        Cloc = Mloc @ Dphys
+        idx = l2g[e]
+        ix = np.ix_(idx, idx)
+        exx, exy, eyx = t["exx"], t["exy"], t["eyx"]
+        eyy, ezz = t["eyy"], t["ezz"]
+        mass["one"][ix] += Mloc
+        mass["exx"][ix] += exx * Mloc
+        mass["eyy"][ix] += eyy * Mloc
+        mass["exy"][ix] += exy * Mloc
+        mass["eyx"][ix] += eyx * Mloc
+        mass["ezz"][ix] += ezz * Mloc
+        mass["inv_exx"][ix] += (1.0 / exx) * Mloc
+        mass["inv_ezz"][ix] += (1.0 / ezz) * Mloc
+        C[ix] += Cloc
+    return dict(mass=mass, C=C, S0=mass["one"], n_glob=n_glob, l2g=l2g,
+                elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes)
+
+
+def _coeff_mass_metric(mats, fn):
+    """Assemble the Galerkin mass ``INT phi fn(material) phi`` for an arbitrary
+    scalar coefficient ``fn(t_dict)`` (element-piecewise constant), reusing the
+    element table.  Returns the ``n x n`` mass (NOT yet ``iS0``-applied)."""
+    ref_nodes, ref_w = _gll_nodes_weights(mats["degree"])
+    elem_bnds = mats["elem_bnds"]
+    l2g = mats["l2g"]
+    n = mats["n_glob"]
+    M = np.zeros((n, n), dtype=_C)
+    for e in range(len(elem_bnds)):
+        xl, xr, t = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        wel = ref_w * J
+        Mloc = np.diag(wel)
+        idx = l2g[e]
+        M[np.ix_(idx, idx)] += fn(t) * Mloc
+    return M
+
+
+def _build_inv_rule_metric(mats, inv_fn, iS0):
+    """Li inverse-rule operator ``[[coeff]]^-1`` where ``inv_fn(t_dict) =
+    1/coeff`` (the reciprocal, element-piecewise constant): assemble the direct
+    mass of ``1/coeff``, apply ``iS0``, invert."""
+    M = _coeff_mass_metric(mats, inv_fn)
+    return _safe_inv(iS0 @ M)
+
+
+def _build_generator_metric(mats, k0, slant_angle):
+    r"""Assemble the ``4n x 4n`` physical first-order Maxwell generator ``L`` for
+    the state ``psi = [Ex; Ey; iZ Hx; iZ Hy]``.  Slant enters ONLY through the
+    metric-folded ``eps^lm`` / ``mu^lm``.  Returns ``(L, n)``.
+
+    LOAD-BEARING metric fold (validated; do NOT "fix"): the contravariant
+    ``eps^lm = sqrt(g) [J^-1 eps_mat J^-T]^lm`` (the in-plane-anisotropic
+    realization, with ``J = [[1,0,tan],[0,1,0],[0,0,1]]``, ``sqrt(g)=1``):
+        eps^11 = exx + ezz tan^2   (wall-normal: inverse rule on 1/(exx+ezz t^2))
+        eps^13 = eps^31 = -ezz tan ;  eps^33 = ezz ;  eps^22 = eyy
+        eps^12 = exy ; eps^21 = eyx ; eps^23 = eps^32 = 0
+        mu^lm = sqrt(g) g^lm:  mu^11 = sec2 ; mu^13 = mu^31 = -tan ; mu^33 = 1.
+    ``eps^13 = -ezz tan`` and ``mu^13 = -tan`` share the sign of ``tan`` -> TE
+    and TM convect identically (the metric is self-consistent).  Each block
+    coefficient is a nodal operator (``d1 -> Dop = S0^-1 C``; ``eps^lm/mu^lm ->
+    iS0 @ Galerkin mass``), with the Li INVERSE rule on the WALL-NORMAL component
+    (``eps^11``) and DIRECT rule on wall-tangential (``eyy``, ``1/ezz``, ``mu``).
+    """
+    n = mats["n_glob"]
+    k = k0                                   # k = omega sqrt(eps0 mu0) = k0
+    S0 = mats["S0"]
+    iS0 = _safe_inv(S0)
+    mass = mats["mass"]
+    I = np.eye(n, dtype=_C)
+    Z = np.zeros((n, n), dtype=_C)
+
+    # Slant sign matched to pmm_efficiency_1d_slanted's order labels (the metric
+    # is self-consistent: eps^13 and mu^13 share the sign of `tan`, so TE/TM
+    # mirror TOGETHER under a flip).
+    tan = np.tan(slant_angle)
+    sec2 = 1.0 / np.cos(slant_angle) ** 2
+
+    # ---- nodal derivative d1 (= D1) ----------------------------------------
+    Dop = _safe_solve(S0, mats["C"])         # S0^-1 INT phi phi'
+
+    # ---- pointwise material operators (direct rule) -------------------------
+    Oeyy = iS0 @ mass["eyy"]                 # [[eyy]]
+    Oexy = iS0 @ mass["exy"]                 # [[exy]]
+    Oeyx = iS0 @ mass["eyx"]                 # [[eyx]]
+    Oezz = iS0 @ mass["ezz"]                 # [[ezz]]
+    # WALL-NORMAL inverse rule: [[1/exx]]^-1 (the discontinuous normal-D multiply)
+    Oinv_exx = iS0 @ mass["inv_exx"]         # [[1/exx]]
+    Exx_norm = _safe_inv(Oinv_exx)           # [[1/exx]]^-1  (Li inverse rule)
+    # (eps^33)^-1 = DIRECT average of 1/ezz (the wall-tangential longitudinal
+    # inverse used inside the C^-1 elimination).
+    O_inv_ezz = iS0 @ mass["inv_ezz"]        # [[1/ezz]]  (= (eps^33)^-1)
+
+    # ---- metric-folded effective tensor operators ---------------------------
+    if abs(tan) < 1e-14:
+        Oeps11 = Exx_norm                                 # = [[1/exx]]^-1
+        Oeps13 = Z.copy()
+        Oeps31 = Z.copy()
+    else:
+        Oeps11 = _build_inv_rule_metric(
+            mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)
+        Oeps13 = (iS0 @ _coeff_mass_metric(
+            mats, lambda t_: -t_["ezz"] * tan))           # -ezz*tan
+        Oeps31 = Oeps13.copy()
+    Oeps33 = Oezz                                          # eps^33 = ezz
+    Oeps22 = Oeyy
+    Oeps12 = Oexy
+    Oeps21 = Oeyx
+    # mu (smooth, scalar metric -> all direct, = metric constants * I):
+    Mu11 = sec2 * I
+    Mu13 = -tan * I
+    Mu31 = -tan * I
+    Mu33 = I
+    Mu22 = I
+    Mu23 = Z
+    Mu32 = Z
+    Mu12 = Z
+
+    # ===== A (Eq.8) ; mu^21 = mu^12 = 0 here (slant couples 1-3, not 1-2) =====
+    A = np.block([
+        [Z,                Z,                (-k) * Mu12,    (-k) * Mu22],
+        [Z,                Z,                (-k) * (-Mu11), (-k) * (-Mu12)],
+        [(-k) * Oeps21,    (-k) * Oeps22,    Z,             Z],
+        [(-k) * (-Oeps11), (-k) * (-Oeps12), Z,             Z],
+    ])
+
+    # ===== B (Eq.9, d2=0) (4x2) ; eps^23 = 0 =================================
+    B = np.block([
+        [Dop,            (-k) * Mu23],
+        [Z,              k * Mu13],
+        [(-k) * Z,       Dop],
+        [k * Oeps13,     Z],
+    ])
+
+    # ===== C (Eq.11) ; C^-1 = -(1/k)[[0,(eps^33)^-1],[(mu^33)^-1,0]] =========
+    #   (eps^33)^-1 = O_inv_ezz (DIRECT 1/ezz) ;  (mu^33)^-1 = I  (mu^33 = 1)
+    Cinv = np.block([
+        [Z,                 (-1.0 / k) * O_inv_ezz],
+        [(-1.0 / k) * Mu33, Z],
+    ])
+
+    # ===== D (Eq.12, d2=0) (2x4) ; eps^32 = 0 ===============================
+    D = np.block([
+        [Z,           Dop,      k * Mu31,  k * Mu32],
+        [k * Oeps31,  (k) * Z,  Z,         Dop],
+    ])
+
+    L = A + B @ Cinv @ D
+    return L, n
+
+
+def _split_modes_flux_metric(W, V, q, lam, n):
+    """Forward/backward split by the all-harmonic z-Poynting flux of the genuine
+    state.  ``V = -(iZ H)`` (lib-aligned partner), so
+    ``Sz = -Im( Ex conj(V[n:]) - Ey conj(V[:n]) )``; the propagating branch keeps
+    ``Sz > 0`` (= +z power), evanescent keeps ``Im(q) > 0``."""
+    Ex, Ey = W[:n], W[n:]
+    Vx, Vy = V[:n], V[n:]                     # -(iZ Hx), -(iZ Hy)
+    flux = np.imag(np.sum(Ex * np.conj(Vy) - Ey * np.conj(Vx), axis=0))
+    N = 2 * n
+    qmax = max(float(np.max(np.abs(q))), 1.0)
+    tol = 1e-7 * qmax
+    prop = np.abs(q.imag) < tol               # propagating: real q
+    fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
+    fwd = np.where(prop, flux > fscale, q.imag > 0.0)
+    fidx = np.where(fwd)[0]
+    if fidx.size != N:
+        score = np.where(prop, flux, q.imag)
+        fidx = np.argsort(-score)[:N]
+    bidx = np.array(sorted(set(range(len(q))) - set(fidx.tolist())), dtype=int)
+    return (W[:, fidx], V[:, fidx], lam[fidx], q[fidx],
+            W[:, bidx], V[:, bidx], lam[bidx], q[bidx])
+
+
+def _layer_modes_metric(mats, k0, slant_angle):
+    r"""Eigenmodes of the metric generator ``L``: ``L psi = mu psi`` with
+    ``mu = -i k0 gamma``, so ``q = gamma = i mu / k0`` and ``lam = -i q =
+    mu / k0`` (propagator ``exp(-lam k0 z) = exp(+i q k0 z)``).
+
+    Returns ``(Wf, Vf, lamf, qf, Wb, Vb, lamb, qb)``: ``W = [Ex; Ey]`` (2n) is
+    the eigenvector's upper block, and the partner ``V = -G`` where
+    ``G = psi[2n:]`` is the genuine magnetic state ``iZ H`` -- the uniform gauge
+    sign that aligns this LAYER to the lib half-spaces' ``_sem_modes_tensor``
+    partner convention so they share ONE ``[W; V]`` continuity in
+    ``_interface_smatrix_general``."""
+    L, n = _build_generator_metric(mats, k0, slant_angle)
+    mu, psi = np.linalg.eig(L)               # L psi = mu psi
+    q = 1j * mu / k0                          # mu = -i k0 q  -> q = i mu / k0
+    lam = -1j * q                             # = mu / k0
+    W = psi[:2 * n, :]                        # [Ex; Ey]
+    Gpart = psi[2 * n:, :]                    # [iZ Hx; iZ Hy] (PHYSICAL state H)
+    V = -Gpart                                # lib-aligned partner sign
+    return _split_modes_flux_metric(W, V, q, lam, n)
+
+
+def _half_M_sym_metric(W, V):
+    """Symmetric (vertical homogeneous) half-space field-mode matrix
+    ``[[W, W], [V, -V]]`` -- the +/-q convention :func:`_sem_modes_tensor`
+    returns for a uniform medium."""
+    return np.block([[W, W], [V, -V]])
+
+
+def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
+                           duty, wl, slant_angle, degree, n_ridge_el,
+                           n_groove_el, grade, far_field_orders):
+    """Single-degree slanted-tensor coupled PMM solve from the genuine metric
+    generator (the slanted layer) + homogeneous half-spaces (the lib's PROVEN
+    :func:`_sem_modes_tensor` modes) + generalized S-matrix + lab-frame Rayleigh
+    far field.
+
+    Returns ``(orders, R(2,N), T(2,N), jones(2,2), n_glob)`` in the PUBLIC
+    ``exp(-i w t)`` convention (row/column 0 = incident ``E_x``, 1 = incident
+    ``E_y``; ``jones`` columns are the zeroth-order reflected ``[E_x; E_y]``)."""
+    er = np.asarray(eps_ridge3, dtype=_C)
+    eg = np.asarray(eps_groove3, dtype=_C)
+    eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    k0 = 2.0 * np.pi / wl
+    d_wall = duty * period
+
+    mats = _build_nodal_metric(period, d_wall, _t3_slant(er), _t3_slant(eg),
+                               degree, n_ridge_el, n_groove_el, grade)
+    # HALF-SPACES: homogeneous (no walls -> no slant); use the lib's PROVEN
+    # _sem_modes_tensor modes + far-field plumbing.  The genuine generator is
+    # used ONLY for the slanted LAYER; its V is aligned to the lib partner sign
+    # (V := -G in _layer_modes_metric) so LAYER + HALF-SPACES share ONE [W; V]
+    # continuity convention.
+    t_sup = dict(exx=eps_sup, exy=0.0, eyx=0.0, eyy=eps_sup, ezz=eps_sup)
+    t_sub = dict(exx=eps_sub, exy=0.0, eyx=0.0, eyy=eps_sub, ezz=eps_sub)
+    mats_sup = _build_sem_tensor(period, d_wall, t_sup, t_sup, degree,
+                                 n_ridge_el, n_groove_el, grade)
+    mats_sub = _build_sem_tensor(period, d_wall, t_sub, t_sub, degree,
+                                 n_ridge_el, n_groove_el, grade)
+    n_glob = mats["n_glob"]
+
+    Wf_l, Vf_l, lamf_l, _qf, Wb_l, Vb_l, lamb_l, _qb = _layer_modes_metric(
+        mats, k0, slant_angle)
+    Ws, Vs, _ls, _qs = _sem_modes_tensor(mats_sup, k0, 0.0, True)
+    Wsub, Vsub, _lb, _qb2 = _sem_modes_tensor(mats_sub, k0, 0.0, True)
+    Ms = _half_M_sym_metric(Ws, Vs)
+    Mb = _half_M_sym_metric(Wsub, Vsub)
+    Ml = np.block([[Wf_l, Wb_l], [Vf_l, Vb_l]])
+
+    n_max = max(np.real(n_sup), np.real(n_sub), np.real(np.sqrt(er[0, 0])),
+                np.real(np.sqrt(er[1, 1])), np.real(np.sqrt(eg[0, 0])),
+                np.real(np.sqrt(eg[1, 1])))
+    m_prop = _n_propagating_orders(period, wl, n_max)
+    n_proj = max(int(far_field_orders), 2 * m_prop + 5)
+    cap = n_glob if n_glob % 2 else n_glob - 1
+    n_proj = min(n_proj, cap)
+    if n_proj % 2 == 0:
+        n_proj -= 1
+    if 2 * m_prop + 1 > n_proj:
+        raise ValueError(
+            f"pmm_jones_1d_slanted: degree={degree} too low to resolve the "
+            f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
+            f"degree or elements_per_region.")
+    half = (n_proj - 1) // 2
+    orders = np.arange(-half, half + 1)
+    G = 2.0 * np.pi / period
+    kx = (orders * G) / k0
+    N = len(orders)
+    Tp = _sem_fourier_projection(orders, period, mats)
+
+    S = _interface_smatrix_general(Ms, Ml)
+    S = _redheffer_star(
+        S, _propagation_smatrix_general(lamf_l, lamb_l, k0 * depth))
+    S = _redheffer_star(S, _interface_smatrix_general(Ml, Mb))
+    S11, _S12, S21, _S22 = S
+
+    def _proj_fwd(M):
+        Wf = M[:2 * n_glob, :2 * n_glob]
+        return np.vstack([Tp @ Wf[:n_glob, :], Tp @ Wf[n_glob:, :]])
+    Hsup = _proj_fwd(Ms)
+    Hsub = _proj_fwd(Mb)
+
+    kz_sup = _kz_forward(eps_sup, kx)
+    kz_sub = _kz_forward(eps_sub, kx)
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([0.0]))[0]))
+    safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+    safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+    m0 = np.where(orders == 0)[0][0]
+    R_eff = np.zeros((2, N))
+    T_eff = np.zeros((2, N))
+    jones = np.zeros((2, 2), _C)
+    for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
+        rhs = np.zeros(2 * N, _C)
+        rhs[(col * N) + m0] = 1.0
+        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        r_ord = Hsup @ (S11 @ cinc)
+        t_ord = Hsub @ (S21 @ cinc)
+        rx, ry = r_ord[:N], r_ord[N:]
+        tx, ty = t_ord[:N], t_ord[N:]
+        rz = -(kx * rx) / safe_r
+        tz = -(kx * tx) / safe_t
+        flux_inc = kz_inc
+        Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                + np.abs(rz) ** 2) / flux_inc
+        Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                + np.abs(tz) ** 2) / flux_inc
+        R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
+        T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
+        jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
+        jones[1, col] = ry[m0]
+    return orders, R_eff, T_eff, jones, n_glob
+
+
+def pmm_jones_1d_slanted(
+    period: float,
+    eps_ridge,
+    eps_groove,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    duty_cycle: float,
+    wavelength: float,
+    slant_angle: float,
+    *,
+    angle: float = 0.0,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    stabilize: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """SLANTED binary grating with full ``(3, 3)`` IN-PLANE permittivity tensors
+    -- the anisotropic-Jones counterpart of :func:`pmm_efficiency_1d_slanted`,
+    by the genuine Edee-Granet 2024 covariant-metric spectral-element solver.
+
+    Combines the tilted side-walls of :func:`pmm_efficiency_1d_slanted` with the
+    coupled ``(E_x, E_y)`` Jones response of :func:`pmm_jones_1d`.  The tilt is
+    folded into the effective ``eps^lm`` / ``mu^lm`` of a curvilinear (inclined)
+    metric, and the modal eigenproblem is the TRUE first-order physical Maxwell
+    generator ``-i k gamma psi = L psi`` (``psi = [E_x; E_y; iZ H_x; iZ H_y]``,
+    LINEAR in ``gamma``): the magnetic field is read directly from the
+    eigenvector, so the layer modes are flux-orthogonal by construction (the
+    symplectic property a reshaped convection pencil lacks) and energy conserves
+    to ~1e-13 across ``0-60`` deg for both real-symmetric and gyrotropic tensors.
+
+    Parameters
+    ----------
+    period : float
+        Grating period (metres).
+    eps_ridge, eps_groove : (3, 3) array_like of complex
+        IN-PLANE permittivity tensors of the ridge / groove (PUBLIC convention
+        ``Im(eps) > 0`` for loss).  As in :func:`pmm_jones_1d`: pass
+        ``scalar * np.eye(3)`` for an isotropic region; ``exy`` / ``eyx`` couple
+        ``E_x`` and ``E_y`` (real-symmetric for a tilted LC director, anti-
+        Hermitian ``+/- i g`` for a gyrotropic / magneto-optic medium).  Must be
+        IN-PLANE (no ``eps_xz / eps_yz / eps_zx / eps_zy``); an out-of-plane
+        tensor raises ``ValueError``.
+    n_substrate, n_superstrate : complex
+        Transmission / incidence half-space (isotropic) indices (PUBLIC ``n =
+        n + i kappa``).
+    depth, duty_cycle, wavelength : float
+        As in :func:`pmm_efficiency_1d_slanted` (the projected ridge occupies
+        ``duty_cycle`` of the period; the planar interfaces are at ``z = 0`` and
+        ``z = depth``).
+    slant_angle : float
+        Side-wall tilt from the vertical (radians); ``0`` = vertical (then this
+        reduces to :func:`pmm_jones_1d`).  Validated for ``0 <= slant_angle <=
+        ~60 deg`` (conditioning grows as ``sec^2`` at steep tilt).
+    angle : float, optional
+        Incidence angle (radians).  MUST be ``0`` (normal incidence) when
+        ``slant_angle != 0`` -- combined oblique + slant is not supported and
+        raises ``NotImplementedError`` (use ``rcwa`` staircase for that case).
+    degree, elements_per_region, grade, far_field_orders, stabilize : as in
+        :func:`pmm_jones_1d`.
+
+    Returns
+    -------
+    orders : (M,) int ndarray
+        Retained Rayleigh-order indices.
+    R_eff, T_eff : (2, M) float ndarray
+        Reflected / transmitted diffraction efficiency per order; row 0 is the
+        response to an incident ``E_x`` wave, row 1 to incident ``E_y`` (cross-
+        polarization included).
+    jones_reflection : (2, 2) complex ndarray
+        Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis (PUBLIC
+        ``exp(-i w t)`` convention); columns are the responses to incident
+        ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
+
+    Notes
+    -----
+    NumPy / SciPy (dense eig); not JAX-differentiable.  SCOPE: NORMAL incidence,
+    BINARY grating (1 ridge + 1 groove), in-plane tensor only.  Combined oblique
+    + slant and the multi-region (segments) path are not supported (they raise
+    ``NotImplementedError`` / there is no ``..._slanted_segments`` companion).
+    """
+    if int(degree) < 2:
+        raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
+    if not (0.0 <= float(duty_cycle) <= 1.0):
+        raise ValueError(
+            f"pmm_jones_1d_slanted: duty_cycle must be in [0, 1], got "
+            f"{duty_cycle}.")
+    er = np.asarray(eps_ridge, dtype=_C)
+    eg = np.asarray(eps_groove, dtype=_C)
+    if er.shape[-2:] != (3, 3) or eg.shape[-2:] != (3, 3):
+        raise ValueError(
+            "pmm_jones_1d_slanted: eps_ridge / eps_groove must be (3, 3) "
+            "permittivity tensors (use scalar * np.eye(3) for an isotropic "
+            "region).")
+    # in-plane only: reject out-of-plane coupling (would be silently dropped)
+    scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
+    off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
+              float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
+    if off > 1e-9 * scale:
+        raise ValueError(
+            "pmm_jones_1d_slanted: the anisotropic PMM is the z-decoupled "
+            "IN-PLANE tensor subset (exx, exy, eyx, eyy, ezz); the supplied "
+            "tensor has out-of-plane coupling (eps_xz / eps_yz / eps_zx / "
+            "eps_zy != 0).")
+    if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
+        raise NotImplementedError(
+            "pmm_jones_1d_slanted: combined OBLIQUE incidence + nonzero slant "
+            "is not supported (the inclined-frame Bloch<->slant convection "
+            "cross-term is unresolved). Use normal incidence (angle=0) with any "
+            "slant, a vertical grating (slant_angle=0) at any angle via "
+            "pmm_jones_1d, or rcwa (staircase) for oblique + slant.")
+
+    args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
+            duty_cycle, wavelength, float(slant_angle))
+    kw = dict(n_ridge_el=int(elements_per_region),
+              n_groove_el=int(elements_per_region), grade=bool(grade),
+              far_field_orders=int(far_field_orders))
+
+    if not stabilize:
+        o, R, T, J, _ = _pmm_jones_slant_solve(*args, degree=int(degree), **kw)
+        return o, R, T, J
+    return _stabilize_jones(
+        lambda d: _pmm_jones_slant_solve(*args, degree=d, **kw)[:4],
+        int(degree), "pmm_jones_1d_slanted")
+
+
+def pmm_jones_1d_slanted_segments(*args, **kwargs):
+    """Multi-region (segmented) slanted-tensor PMM -- NOT supported.
+
+    The validated metric generator covers the BINARY (1 ridge + 1 groove) cell
+    only; the multi-region slanted-tensor path is not part of the validated
+    solver and always raises ``NotImplementedError`` (use the binary
+    :func:`pmm_jones_1d_slanted`, or ``rcwa`` staircase for arbitrary slanted
+    profiles)."""
+    raise NotImplementedError(
+        "pmm_jones_1d_slanted_segments: the slanted anisotropic-Jones PMM is "
+        "BINARY (1 ridge + 1 groove) only; the multi-region (segments) path is "
+        "not supported. Use pmm_jones_1d_slanted for a binary slanted grating, "
+        "or rcwa (staircase) for an arbitrary slanted multi-region profile.")
 
 
 # ===========================================================================
