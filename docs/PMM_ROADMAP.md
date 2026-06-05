@@ -332,6 +332,42 @@ slowly at high contrast (εr≥6). **The two formulations are mutually exclusive
 this nodal basis: 2nd-order = good operator / bad V; 1st-order = good V / spurious
 mode.** Energy ~1e-4 holds only at low contrast (εr ≤ 2.4, slant ≤ 60°).
 
+**Round 18 outcome (2026-06-05) — the round-17 "wall" is NOT a far-field
+projection bug; it is the V-partner/layer-basis, exactly as round 17 found.** A
+proto-author flag on `slant_tensor_vshear.py` (lines ~116–131) re-attributed the
+residual TM/Ex leak (2.3e-2 at slant 0 → 38 % at slant 45°) to the *wall-normal
+TM far-field Rayleigh projection* (plain `Tp` on physical `Ex` instead of a
+`1/ε`-weighted TM-potential projection mirroring `_pmm_slant_solve`). **This
+reframing is REFUTED, three ways, BLAS-pinned:**
+
+- **PROBE B** (`round18_projfix_test.py`): keep the proto's *identical*
+  ε-unweighted projection but swap ONLY the layer modes to the in-library
+  flux-orthogonal metric oracle `_layer_modes_metric` → energy conserves to
+  **1.76e-12** on the exact DIAGONAL+COUPLED gate-3 cells where the proto leaks up
+  to 38 %. Same projection + flux-orthogonal modes ⇒ conserves ⇒ the projection
+  cannot be the defect.
+- **PROBE C** (`round18_probeC.py`): apply the reframing's prescribed
+  `1/ε`-weighted TM projection to the proto's *own* convection-pencil modes →
+  leak gets **worse** (Ex sumRT → 0.475, 52 % error). The ε-multiplied direction
+  (`slant_vshear_proj.py`) is worse still (GATE2 0→1.19, GATE3 0.38→2.02). Both
+  weighting directions span the homogeneous-half-space inner product; neither
+  helps.
+- **Basis check** (`round18_basis_ortho.py`): the proto `[W;V]` layer basis
+  carries worst off-diagonal cross-flux **7.77** (8× the diagonal scale) in its
+  own flux form, vs **0.999** for the metric oracle — the proto basis is **not
+  flux-orthogonal**, the precise property the interface S-matrix needs to
+  conserve. Per-mode admittance matching scalar to 1e-9 (GATE0) is necessary but
+  NOT sufficient for basis flux-orthogonality.
+
+The shipped `pmm_jones_1d_slanted` (metric generator) was re-verified to conserve
+to **≤6.3e-12** across slant 0–85°, coupled εxy=εyx, high-contrast εr≈12, and
+gyrotropic ±0.6 i — i.e. the *modes* change, not a projection change, is the
+genuine and already-shipped fix. **No shipped-operator change was made; pmm.py
+working tree is clean.** The round-17 verdict stands, recast precisely: the open
+piece is the proto's V-partner / layer basis (the reshaped 2nd-order convection
+pencil is not symplectic), not the operator, not the V per-mode admittance, and
+not the far-field projection.
+
 **Status: documented frontier limit.** The exact triple (slant × coupled-tensor ×
 div-conforming SEM with a consistent V) is genuinely unpublished (confirmed by
 both the in-folder audit and an external web reconnaissance). It is an *assembly*
