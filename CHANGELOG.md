@@ -153,6 +153,23 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   forward/backward S-matrix (slanted layers solved by the div-conforming metric
   generator). A single slanted layer in a stack reproduces `pmm_jones_1d_slanted`
   to ~1e-12; mixed and slanted-multi-region stacks conserve energy to ~1e-13.
+- **`pmm_jones_1d` — full `(3, 3)` OUT-OF-PLANE anisotropy** (εxz/εyz/εzx/εzy ≠ 0:
+  tilted-director LC, magneto-optic / gyrotropic media). Previously rejected (the
+  PMM was the in-plane `(exx,exy,eyx,eyy,ezz)` subset); an out-of-plane tensor now
+  routes to the **native full-3×3 metric generator** — derived in the *same*
+  Edee-Granet `A+B·C⁻¹·D` PMM layout (no RCWA/Berreman block structure, `V=−G`
+  unchanged). The out-of-plane physics enters via the **pointwise εzz-Schur
+  composites** `a_eff = εxx − εxz·εzx/εzz` … (Li 1999 Eq. 12, formed element-wise
+  *before* the wall-normal inverse rule — the correct factorization order; a naïve
+  spectral `B·C⁻¹·D` Schur of the raw εxz/εzx gives spurious modes) plus surgical
+  single-derivative cross-blocks, **both vanishing identically at off-plane=0** so
+  the generator is **byte-for-byte** the in-plane operator there (`np.array_equal`
+  at normal AND slant AND oblique). Per-order matches `rcwa_jones_1d` to **<1e-3**
+  (normal AND oblique), **lossless-trap-defeating** (absorbed fraction matches on
+  lossy cells to ~5e-6), gyrotropic non-reciprocity physical. SCOPE: binary,
+  VERTICAL grating, normal or oblique (out-of-plane + slanted wall is energy-
+  conserving but not yet per-order-validated, so it stays guarded; multi-region /
+  stack out-of-plane are follow-ons). The shipped in-plane path is byte-identical.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

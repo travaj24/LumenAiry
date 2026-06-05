@@ -221,13 +221,51 @@ def test_oblique_jones_matches_fmm():
         assert np.allclose(R.sum(axis=1) + T.sum(axis=1), 1.0, atol=1e-6)
 
 
-def test_rejects_out_of_plane_tensor():
-    # a tilted (theta != pi/2) director has out-of-plane coupling
+def _ovl_perorder(o1, R1, T1, o2, R2, T2):
+    c = np.intersect1d(o1, o2)
+    i1 = {int(x): k for k, x in enumerate(o1)}
+    i2 = {int(x): k for k, x in enumerate(o2)}
+    return max(max(np.max(np.abs(R1[:, i1[int(m)]] - R2[:, i2[int(m)]])),
+                   np.max(np.abs(T1[:, i1[int(m)]] - T2[:, i2[int(m)]]))) for m in c)
+
+
+@pytest.mark.parametrize("ang_deg", [0.0, 20.0])
+def test_out_of_plane_matches_rcwa(ang_deg):
+    """A tilted-director (theta=pi/4) tensor has OUT-OF-PLANE coupling
+    (eps_xz/eps_yz != 0) -- now SUPPORTED via the native full-3x3 metric generator
+    (was a ValueError).  pmm_jones_1d matches the rigorous rcwa_jones_1d oracle
+    per-order to <1.5e-3 and conserves energy, at normal AND oblique incidence, on
+    a multi-order grating (period > wl)."""
     op = uniaxial_tensor(1.5, 1.7, np.pi / 4, phi=0.3)
-    with pytest.raises(ValueError, match="out-of-plane"):
-        pmm_jones_1d(LC["period"], op, LC_GROOVE, LC["n_substrate"],
-                     LC["n_superstrate"], LC["depth"], LC["duty_cycle"],
-                     LC["wavelength"])
+    gr = np.eye(3, dtype=_C)
+    geom = dict(period=1.0e-6, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+                n_substrate=1.0, n_superstrate=1.0)
+    a = np.deg2rad(ang_deg)
+    oP, RP, TP, JP = pmm_jones_1d(
+        geom["period"], op, gr, geom["n_substrate"], geom["n_superstrate"],
+        geom["depth"], geom["duty_cycle"], geom["wavelength"], angle=a,
+        degree=16, elements_per_region=4)
+    oR, RR, TR, JR = rcwa_jones_1d(
+        geom["period"], op, gr, geom["n_substrate"], geom["n_superstrate"],
+        geom["depth"], geom["duty_cycle"], geom["wavelength"], angle=a,
+        n_orders=61)
+    assert _ovl_perorder(oP, RP, TP, oR, RR, TR) < 1.5e-3
+    assert abs(RP[0].sum() + TP[0].sum() - 1.0) < 1e-3
+    assert abs(RP[1].sum() + TP[1].sum() - 1.0) < 1e-3
+
+
+def test_out_of_plane_in_plane_path_unchanged():
+    """The out-of-plane route does NOT perturb the in-plane path: an IN-PLANE
+    tensor (theta=pi/2 director, no out-of-plane coupling) still takes the
+    second-order _pmm_jones_solve and matches rcwa_jones_1d as before."""
+    ip = uniaxial_tensor(1.5, 1.7, np.pi / 2, phi=0.4)        # in-plane (eps_xz=0)
+    gr = np.eye(3, dtype=_C)
+    oP, RP, TP, JP = pmm_jones_1d(1.0e-6, ip, gr, 1.0, 1.0, 0.5e-6, 0.5, 0.633e-6,
+                                  degree=16)
+    oR, RR, TR, JR = rcwa_jones_1d(1.0e-6, ip, gr, 1.0, 1.0, 0.5e-6, 0.5, 0.633e-6,
+                                   n_orders=61)
+    assert _ovl_perorder(oP, RP, TP, oR, RR, TR) < 1.5e-3
+    assert np.max(np.abs(JP - JR)) < 1e-3
 
 
 def test_exported_top_level():

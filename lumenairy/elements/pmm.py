@@ -1229,13 +1229,15 @@ def pmm_jones_1d(
     period : float
         Grating period (metres).
     eps_ridge, eps_groove : (3, 3) array_like of complex
-        Permittivity tensors of the ridge / groove (PUBLIC convention
-        ``Im(eps) > 0`` for loss).  Pass ``scalar * np.eye(3)`` for an isotropic
-        region; build LC tensors with
-        :func:`~lumenairy.elements.rcwa.uniaxial_tensor` (``theta = pi/2`` keeps
-        the director in-plane).  Must be IN-PLANE (no ``eps_xz / eps_yz /
-        eps_zx / eps_zy``); an out-of-plane tensor raises ``ValueError`` (use
-        :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` for the full-3x3 case).
+        FULL ``(3, 3)`` permittivity tensors of the ridge / groove (PUBLIC
+        convention ``Im(eps) > 0`` for loss).  Pass ``scalar * np.eye(3)`` for an
+        isotropic region; build LC tensors with
+        :func:`~lumenairy.elements.rcwa.uniaxial_tensor`.  OUT-OF-PLANE coupling
+        (``eps_xz / eps_yz / eps_zx / eps_zy != 0``, e.g. a tilted-director LC or
+        a magneto-optic medium) is supported via the native full-3x3 metric
+        generator (the ``eps_zz``-Schur of ``E_z`` is folded pointwise, Li 1999
+        Eq.12); per-order matches :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`
+        to ``<1e-3``.  In-plane tensors take the (byte-identical) in-plane path.
     n_substrate, n_superstrate : complex
         Transmission / incidence half-space (isotropic) indices (PUBLIC ``n =
         n + i kappa``).
@@ -1286,8 +1288,11 @@ def pmm_jones_1d(
     Notes
     -----
     NumPy / SciPy (dense generalized eig); not JAX-differentiable.  Normal or
-    oblique incidence, binary grating, in-plane tensor only (multi-region /
-    autodiff are follow-ons).
+    oblique incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR
+    out-of-plane).  An out-of-plane tensor routes through the native full-3x3
+    metric generator (vertical only -- out-of-plane combined with a slanted wall
+    is not yet validated per-order; multi-region out-of-plane / autodiff are
+    follow-ons).
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
@@ -1300,16 +1305,27 @@ def pmm_jones_1d(
         raise ValueError(
             "pmm_jones_1d: eps_ridge / eps_groove must be (3, 3) permittivity "
             "tensors (use scalar * np.eye(3) for an isotropic region).")
-    # in-plane only: reject out-of-plane coupling (would be silently dropped)
+    # FULL-3x3 OUT-OF-PLANE (exz/eyz/ezx/ezy != 0): route to the native full-3x3
+    # metric generator (_pmm_jones_slant_solve at slant=0 -- the same operator the
+    # slant/oblique paths use, now carrying the out-of-plane pointwise ezz-Schur).
+    # The in-plane tensor keeps the (byte-identical) second-order _pmm_jones_solve.
+    # Normal AND oblique are supported; per-order matches rcwa_jones_1d to <1e-3.
     scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
     off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
               float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
     if off > 1e-9 * scale:
-        raise ValueError(
-            "pmm_jones_1d: the anisotropic PMM is the z-decoupled IN-PLANE "
-            "tensor subset (exx, exy, eyx, eyy, ezz); the supplied tensor has "
-            "out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0). "
-            "Use rcwa_jones_1d for the full-3x3 (out-of-plane) case.")
+        sargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
+                 duty_cycle, wavelength, 0.0)
+        skw = dict(n_ridge_el=int(elements_per_region),
+                   n_groove_el=int(elements_per_region), grade=bool(grade),
+                   far_field_orders=int(far_field_orders), angle=float(angle))
+        if not stabilize:
+            o, R, T, J, _ = _pmm_jones_slant_solve(*sargs, degree=int(degree),
+                                                   **skw)
+            return o, R, T, J
+        return _stabilize_jones(
+            lambda d: _pmm_jones_slant_solve(*sargs, degree=d, **skw)[:4],
+            int(degree), "pmm_jones_1d")
 
     args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
             duty_cycle, wavelength)
@@ -1605,12 +1621,17 @@ def pmm_jones_1d_segments(
 # (scalar layers are promoted to isotropic tensors); normal or oblique incidence.
 
 def _tensor3_dict(M):
-    """``(3,3)`` (or scalar) permittivity -> the ``dict(exx, exy, eyx, eyy, ezz)``
-    the tensor spectral-element assembler consumes."""
+    """``(3,3)`` (or scalar) permittivity -> the dict of all 9 components the
+    tensor spectral-element assembler consumes (the in-plane subset drives the
+    vertical/slant path; the out-of-plane components are zero for an in-plane
+    tensor and carry the full-3x3 anisotropy when present -- mirrors
+    :func:`_t3_slant`)."""
     M = np.asarray(M, dtype=_C)
     if M.ndim == 0:
         M = M * np.eye(3, dtype=_C)
-    return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1], ezz=M[2, 2])
+    return dict(exx=M[0, 0], exy=M[0, 1], exz=M[0, 2],
+                eyx=M[1, 0], eyy=M[1, 1], eyz=M[1, 2],
+                ezx=M[2, 0], ezy=M[2, 1], ezz=M[2, 2])
 
 
 def _pmm_union_grid(layer_segments):
@@ -2320,9 +2341,16 @@ def pmm_efficiency_1d_slanted(
 # ===========================================================================
 
 def _t3_slant(M):
-    """In-plane (3, 3) tensor -> the dict ``dict(exx, exy, eyx, eyy, ezz)`` the
-    metric generator's nodal builder consumes."""
-    return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1], ezz=M[2, 2])
+    """Full (3, 3) tensor -> the dict of all 9 components the metric generator's
+    nodal builder + the full-3x3 out-of-plane generator consume.  The in-plane
+    subset (``exx, exy, eyx, eyy, ezz``) drives the in-plane / slant path; the
+    out-of-plane components (``exz, eyz, ezx, ezy``) are zero for an in-plane
+    tensor (so the generator's ``off_present`` flag stays False and the operator
+    is byte-identical to the in-plane path) and carry the full-3x3 anisotropy when
+    present."""
+    return dict(exx=M[0, 0], exy=M[0, 1], exz=M[0, 2],
+                eyx=M[1, 0], eyy=M[1, 1], eyz=M[1, 2],
+                ezx=M[2, 0], ezy=M[2, 1], ezz=M[2, 2])
 
 
 def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
@@ -2525,33 +2553,75 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     # incidence) Dopx == Dop, so the generator is byte-identical to the prior path.
     Dopx = Dop + 1j * kx0 * I
 
-    # ---- pointwise material operators (direct rule) -------------------------
-    Oeyy = iS0 @ mass["eyy"]                 # [[eyy]]
-    Oexy = iS0 @ mass["exy"]                 # [[exy]]
-    Oeyx = iS0 @ mass["eyx"]                 # [[eyx]]
-    Oezz = iS0 @ mass["ezz"]                 # [[ezz]]
-    # WALL-NORMAL inverse rule: [[1/exx]]^-1 (the discontinuous normal-D multiply)
-    Oinv_exx = iS0 @ mass["inv_exx"]         # [[1/exx]]
-    Exx_norm = _safe_inv(Oinv_exx)           # [[1/exx]]^-1  (Li inverse rule)
+    # ---- FULL-3x3 OUT-OF-PLANE detection (the native off-plane extension) ----
+    # The full-3x3 anisotropic case (exz/eyz/ezx/ezy != 0) is solved in THIS metric
+    # A+B C^-1 D layout: the out-of-plane coupling enters via (a) the POINTWISE
+    # ezz-Schur composites of the wall-normal / in-plane operators (Li 1999 Eq.12,
+    # below) and (b) the surgical single-derivative cross blocks (after L is
+    # assembled).  Both VANISH identically when exz=eyz=ezx=ezy=0, so off_present
+    # False reproduces the in-plane / slant operator BYTE-FOR-BYTE.  (A naive
+    # spectral B C^-1 D Schur of the RAW eps^13/31 -- forming the composites as
+    # products of separately-discretized Toeplitz factors -- is the WRONG Li
+    # factorization order and gives spurious modes; the pointwise composite is
+    # correct.  V = -G is unchanged.)
+    def _maxoff(key):
+        return max(abs(complex(t[key])) for (_xl, _xr, t) in mats["elem_bnds"])
+    off_present = any(_maxoff(kk) > 0.0 for kk in ("exz", "eyz", "ezx", "ezy"))
+
+    Oezz = iS0 @ mass["ezz"]                  # [[ezz]]
     # (eps^33)^-1 = DIRECT average of 1/ezz (the wall-tangential longitudinal
     # inverse used inside the C^-1 elimination).
-    O_inv_ezz = iS0 @ mass["inv_ezz"]        # [[1/ezz]]  (= (eps^33)^-1)
-
-    # ---- metric-folded effective tensor operators ---------------------------
-    if abs(tan) < 1e-14:
-        Oeps11 = Exx_norm                                 # = [[1/exx]]^-1
-        Oeps13 = Z.copy()
-        Oeps31 = Z.copy()
+    O_inv_ezz = iS0 @ mass["inv_ezz"]         # [[1/ezz]]  (= (eps^33)^-1)
+    if not off_present:
+        # ---- IN-PLANE / SLANT material operators (byte-identical) ------------
+        Oeyy = iS0 @ mass["eyy"]                 # [[eyy]]
+        Oexy = iS0 @ mass["exy"]                 # [[exy]]
+        Oeyx = iS0 @ mass["eyx"]                 # [[eyx]]
+        # WALL-NORMAL inverse rule: [[1/exx]]^-1 (the discontinuous normal-D mult)
+        Oinv_exx = iS0 @ mass["inv_exx"]         # [[1/exx]]
+        Exx_norm = _safe_inv(Oinv_exx)           # [[1/exx]]^-1  (Li inverse rule)
+        if abs(tan) < 1e-14:
+            Oeps11 = Exx_norm                                 # = [[1/exx]]^-1
+            Oeps13 = Z.copy()
+            Oeps31 = Z.copy()
+        else:
+            Oeps11 = _build_inv_rule_metric(
+                mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)
+            Oeps13 = (iS0 @ _coeff_mass_metric(
+                mats, lambda t_: -t_["ezz"] * tan))           # -ezz*tan
+            Oeps31 = Oeps13.copy()
+        Oeps22 = Oeyy
+        Oeps12 = Oexy
+        Oeps21 = Oeyx
     else:
-        Oeps11 = _build_inv_rule_metric(
-            mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)
-        Oeps13 = (iS0 @ _coeff_mass_metric(
-            mats, lambda t_: -t_["ezz"] * tan))           # -ezz*tan
-        Oeps31 = Oeps13.copy()
+        # ---- FULL-3x3 pointwise ezz-Schur composites (Li 1999 Eq.12) ---------
+        # a_eff = exx - exz ezx/ezz, b_eff = exy - exz ezy/ezz,
+        # c_eff = eyx - eyz ezx/ezz, d_eff = eyy - eyz ezy/ezz, formed element-
+        # pointwise in x BEFORE the wall-normal inverse rule.  At off-plane=0 these
+        # reduce EXACTLY to exx/exy/eyx/eyy.
+        def _aeff(t_): return t_["exx"] - t_["exz"] * t_["ezx"] / t_["ezz"]
+        def _beff(t_): return t_["exy"] - t_["exz"] * t_["ezy"] / t_["ezz"]
+        def _ceff(t_): return t_["eyx"] - t_["eyz"] * t_["ezx"] / t_["ezz"]
+        def _deff(t_): return t_["eyy"] - t_["eyz"] * t_["ezy"] / t_["ezz"]
+        Oeps11 = _safe_inv(iS0 @ _coeff_mass_metric(
+            mats, lambda t_: 1.0 / (_aeff(t_) + t_["ezz"] * tan * tan)))
+        T_b_a = iS0 @ _coeff_mass_metric(mats, lambda t_: _beff(t_) / _aeff(t_))
+        T_c_a = iS0 @ _coeff_mass_metric(mats, lambda t_: _ceff(t_) / _aeff(t_))
+        T_sch = iS0 @ _coeff_mass_metric(
+            mats, lambda t_: _deff(t_) - _ceff(t_) * _beff(t_) / _aeff(t_))
+        Oeps12 = Oeps11 @ T_b_a
+        Oeps21 = T_c_a @ Oeps11
+        Oeps22 = T_sch + T_c_a @ Oeps11 @ T_b_a
+        if abs(tan) < 1e-14:
+            Oeps13 = Z.copy()
+            Oeps31 = Z.copy()
+        else:
+            # slant cross terms ride the SAME (1,3)/(3,1) block; raw ezz (the
+            # slant is a metric fold, not a material coupling).
+            Oeps13 = (iS0 @ _coeff_mass_metric(
+                mats, lambda t_: -t_["ezz"] * tan))
+            Oeps31 = Oeps13.copy()
     Oeps33 = Oezz                                          # eps^33 = ezz
-    Oeps22 = Oeyy
-    Oeps12 = Oexy
-    Oeps21 = Oeyx
     # mu (smooth, scalar metric -> all direct, = metric constants * I):
     Mu11 = sec2 * I
     Mu13 = -tan * I
@@ -2616,6 +2686,26 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     pointwise_long = (-1.0 / k) * (Dopx @ (O_inv_ezz @ Dopx))
     divconf_long = (1.0 / k) * (iS0 @ Lez)
     L[0:n, 3 * n:4 * n] += (divconf_long - pointwise_long)
+
+    # ===== FULL-3x3 OUT-OF-PLANE single-derivative cross blocks ===============
+    # The off-plane material coupling (exz/eyz/ezx/ezy) drives Ez and Hz through
+    # (eps^33)^-1; eliminating them adds single-derivative terms into the two
+    # quadrants the in-plane metric generator leaves ZERO: the A-quadrant (Ex/Ey
+    # equations, rows 0..n) and the B-quadrant (iZHx/iZHy equations, rows 2n..4n).
+    # Each carries the Li inverse rule inv([[ezz]]) (NOT the Laurent [[1/ezz]]) and
+    # vanishes identically at off-plane=0.  Kx = Dopx/(i k0); scaled by k0 to the
+    # metric L = k0 * G convention.
+    if off_present:
+        EZZi = _safe_inv(Oezz)                               # inv([[ezz]])
+        EZX_L = iS0 @ _coeff_mass_metric(mats, lambda t_: t_["ezx"])
+        EZY_L = iS0 @ _coeff_mass_metric(mats, lambda t_: t_["ezy"])
+        EXZ_L = iS0 @ _coeff_mass_metric(mats, lambda t_: t_["exz"])
+        EYZ_L = iS0 @ _coeff_mass_metric(mats, lambda t_: t_["eyz"])
+        Kx = Dopx / (1j * k0)
+        L[0:n, 0:n] += k0 * (-Kx @ EZZi @ EZX_L)
+        L[0:n, n:2 * n] += k0 * (-Kx @ EZZi @ EZY_L)
+        L[2 * n:3 * n, 3 * n:4 * n] += k0 * (-EYZ_L @ EZZi @ Kx)
+        L[3 * n:4 * n, 3 * n:4 * n] += k0 * (EXZ_L @ EZZi @ Kx)
     return L, n
 
 
