@@ -131,3 +131,61 @@ def test_solve_requires_source_and_layers():
 
 def test_pmmstack_exported():
     assert hasattr(la, "PMMStack") and "PMMStack" in la.__all__
+
+
+# ---------------------------------------------------------------------------
+# SLANTED layers (add_layer slant_angle) -- a stack may MIX vertical + slanted
+# ---------------------------------------------------------------------------
+def _eps_coupled():
+    er = np.diag([2.25, 2.10, 2.25]).astype(_C)
+    er[0, 1] = er[1, 0] = 0.15
+    return er
+
+
+@pytest.mark.parametrize("phi_deg", [30.0, 60.0])
+@pytest.mark.parametrize("ang_deg", [0.0, 15.0])
+def test_single_slanted_layer_stack_equals_binary(phi_deg, ang_deg):
+    """A single slanted layer in a stack (vacuum/sub half-spaces) reproduces the
+    binary pmm_jones_1d_slanted -- energy + zeroth-order Jones magnitude to
+    ~1e-12.  (Segments reverse internally, so compare energy + |jones|, which are
+    invariant to the order-label mirror.)"""
+    er, eg = _eps_coupled(), GR
+    phi, ang = np.radians(phi_deg), np.radians(ang_deg)
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=24)
+    st.add_layer(0.5e-6, segments=[(0.5, er), (0.5, eg)], slant_angle=phi)
+    o, R, T, J = st.set_source(0.633e-6, angle=ang).solve()
+    ob, Rb, Tb, Jb = la.pmm_jones_1d_slanted(
+        period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        slant_angle=phi, angle=ang, degree=24, stabilize=False)
+    assert abs((R[0].sum() + T[0].sum()) - (Rb[0].sum() + Tb[0].sum())) < 1e-11
+    assert abs((R[1].sum() + T[1].sum()) - (Rb[1].sum() + Tb[1].sum())) < 1e-11
+    assert abs(abs(J[0, 0]) - abs(Jb[0, 0])) < 1e-11
+
+
+def test_mixed_vertical_slanted_stack_conserves():
+    """A stack mixing a VERTICAL spacer and a SLANTED grating (oblique incidence)
+    conserves energy -- the general fwd/back cascade handles both families."""
+    er, eg = _eps_coupled(), GR
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=20)
+    st.add_layer(0.2e-6, eps=2.1)                                  # vertical spacer
+    st.add_layer(0.4e-6, segments=[(0.5, er), (0.5, eg)],
+                 slant_angle=np.radians(40.0))                     # slanted grating
+    o, R, T, J = st.set_source(0.633e-6, angle=np.radians(10.0)).solve()
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
+    assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3
+
+
+def test_slanted_multiregion_layer_in_stack_conserves():
+    """A SLANTED 3-region layer (coupled middle) inside a stack conserves -- the
+    multi-region metric generator composes in the stack cascade."""
+    e1 = np.diag([2.25, 2.25, 2.25]).astype(_C)
+    e2 = np.diag([4.0, 3.6, 4.0]).astype(_C)
+    e2[0, 1] = e2[1, 0] = 0.3
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=22)
+    st.add_layer(0.15e-6, eps=2.0)
+    st.add_layer(0.4e-6, segments=[(0.2, e1), (0.5, e2), (0.3, GR)],
+                 slant_angle=np.radians(35.0))
+    o, R, T, J = st.set_source(0.633e-6, angle=np.radians(12.0)).solve()
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
+    assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3

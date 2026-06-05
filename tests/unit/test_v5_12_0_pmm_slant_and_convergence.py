@@ -20,6 +20,7 @@ from lumenairy.elements.pmm import (
     pmm_efficiency_1d,
     pmm_efficiency_1d_slanted,
     pmm_jones_1d,
+    pmm_jones_1d_segments,
     pmm_jones_1d_slanted,
     pmm_jones_1d_slanted_segments,
 )
@@ -529,10 +530,80 @@ def test_jones_slant_oblique_metric_reduces_to_efficiency_1d(ang_deg):
     assert np.max(np.abs(T[0] - TL)) < 1e-3
 
 
-def test_jones_slant_segments_raises():
-    """The multi-region (segments) slanted-tensor path is RED and raises."""
-    with pytest.raises(NotImplementedError):
-        pmm_jones_1d_slanted_segments()
+_SEGGEOM = dict(period=1.0e-6, n_substrate=1.5, n_superstrate=1.0,
+                depth=0.5e-6, wavelength=0.633e-6)
+
+
+def _seg_asym3():
+    """Asymmetric 3-region cell with a COUPLED middle region -- the round-12
+    adversarial profile that leaked to sumRT~210 on the pre-round-19 operator."""
+    e1 = _eps_diag(2.25)
+    e2 = np.diag([4.0, 3.6, 4.0]).astype(np.complex128)
+    e2[0, 1] = e2[1, 0] = 0.3
+    e3 = _eps_diag(1.0)
+    return [(0.2, e1), (0.5, e2), (0.3, e3)]
+
+
+@pytest.mark.parametrize("phi_deg", [0.0, 30.0, 60.0])
+def test_jones_slant_segments_binary_reduces_to_slanted(phi_deg):
+    """A 2-segment cell reproduces the binary pmm_jones_1d_slanted BIT-IDENTICALLY
+    at all slants (the segment assembler is byte-exact on the binary case; the
+    metric generator + far field are region-count-agnostic).  Segments reverse
+    internally, so pass (groove, ridge) to land the binary ridge|groove x-order."""
+    phi = np.deg2rad(phi_deg)
+    er = np.diag([2.25, 2.10, 2.25]).astype(np.complex128)
+    er[0, 1] = er[1, 0] = 0.15
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted_segments(
+        segments=[(0.5, eg), (0.5, er)], slant_angle=phi, degree=24,
+        stabilize=False, **_SEGGEOM)
+    ob, Rb, Tb, Jb = pmm_jones_1d_slanted(
+        period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        slant_angle=phi, degree=24, stabilize=False)
+    assert np.array_equal(o, ob)
+    assert np.max(np.abs(R - Rb)) < 1e-12
+    assert np.max(np.abs(T - Tb)) < 1e-12
+    assert np.max(np.abs(J - Jb)) < 1e-12
+
+
+def test_jones_slant_segments_vertical_reduces_to_segments():
+    """At slant=0 the N-region metric generator reduces to the validated vertical
+    pmm_jones_1d_segments to the div-conforming discretization difference (~e-5 --
+    the same level as the binary slant=0 reduction to pmm_jones_1d, NOT a bug)."""
+    segs = _seg_asym3()
+    o, R, T, J = pmm_jones_1d_slanted_segments(
+        segments=segs, slant_angle=0.0, degree=24, stabilize=False, **_SEGGEOM)
+    ob, Rb, Tb, Jb = pmm_jones_1d_segments(
+        1.0e-6, segs, 1.5, 1.0, 0.5e-6, 0.633e-6, degree=24, stabilize=False)
+    assert np.array_equal(o, ob)
+    assert np.max(np.abs(R - Rb)) < 5e-4
+    assert np.max(np.abs(T - Tb)) < 5e-4
+    assert np.max(np.abs(J - Jb)) < 5e-4
+
+
+@pytest.mark.parametrize("ang_deg,slant_deg", [(0.0, 30.0), (0.0, 60.0),
+                                               (20.0, 30.0)])
+def test_jones_slant_segments_conserves(ang_deg, slant_deg):
+    """Asymmetric multi-region (coupled middle) conserves energy at slant alone
+    AND combined oblique+slant -- the rounds-12-15 frontier (sumRT~210), closed by
+    the round-19 div-conforming operator."""
+    segs = _seg_asym3()
+    o, R, T, J = pmm_jones_1d_slanted_segments(
+        segments=segs, slant_angle=np.deg2rad(slant_deg),
+        angle=np.deg2rad(ang_deg), degree=24, stabilize=False, **_SEGGEOM)
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-3
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3
+
+
+def test_jones_slant_segments_out_of_plane_rejected():
+    """A segment with an out-of-plane tensor (eps_xz/zx != 0) is rejected."""
+    er = _eps_diag(2.25)
+    er[0, 2] = er[2, 0] = 0.3
+    with pytest.raises(ValueError):
+        pmm_jones_1d_slanted_segments(
+            segments=[(0.5, er), (0.5, _eps_diag(1.0))],
+            slant_angle=np.deg2rad(20.0), **_SEGGEOM)
 
 
 def test_jones_slant_out_of_plane_tensor_rejected():

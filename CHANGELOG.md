@@ -132,6 +132,27 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   `pmm_efficiency_1d_slanted` still forbids that combo). The
   `NotImplementedError` guard on `angle≠0 & slant≠0` is removed. Internal to the
   existing `pmm_jones_1d_slanted` (no new public API).
+- **`pmm_jones_1d_slanted_segments`** — SLANTED multi-region grating with full
+  `(3, 3)` IN-PLANE tensors (the multi-region generalization of
+  `pmm_jones_1d_slanted` and the slanted counterpart of `pmm_jones_1d_segments`).
+  Solved by the **same** div-conforming covariant-metric `[E;H]` generator — the
+  operator and the lab-frame far field are **region-count-agnostic**, so an
+  N-region cell reuses the identical (validated) machinery on an N-segment nodal
+  grid (binary and far-field code now share a single `_pmm_jones_slant_core`,
+  bit-identical to `pmm_jones_1d_slanted`). This **closes the rounds-12–15
+  frontier**: asymmetric ≥3-region slanted cells (which leaked to `sum(R)+sum(T)`
+  ≈ 210 on the pre-round-19 operator) now conserve energy to **~1e-13** at all
+  slants — the round-19 div-conforming Ez closure removed the spurious TM mode the
+  asymmetric wall used to excite. Combined oblique + slant supported; `slant=0`
+  reduces to `pmm_jones_1d_segments` and the binary cell to `pmm_jones_1d_slanted`.
+  In-plane tensor only; exported top-level.
+- **`PMMStack` slanted layers** — `add_layer(..., slant_angle=...)` tilts a
+  layer's side-walls; a stack may freely **mix vertical and slanted layers**. An
+  all-vertical stack keeps the symmetric `±q` cascade (**bit-identical** to the
+  prior release); any slanted layer promotes the whole stack to the general
+  forward/backward S-matrix (slanted layers solved by the div-conforming metric
+  generator). A single slanted layer in a stack reproduces `pmm_jones_1d_slanted`
+  to ~1e-12; mixed and slanted-multi-region stacks conserve energy to ~1e-13.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

@@ -422,6 +422,7 @@ from .elements.pmm import (
     pmm_jones_1d,
     pmm_jones_1d_segments,
     pmm_jones_1d_slanted,
+    pmm_jones_1d_slanted_segments,
 )
 from .elements.pmm2d import (
     pmm_efficiency_2d,
@@ -1510,6 +1511,7 @@ __all__ = [
     'pmm_jones_1d',
     'pmm_jones_1d_segments',
     'pmm_jones_1d_slanted',
+    'pmm_jones_1d_slanted_segments',
     'pmm_efficiency_2d',
     'pmm_efficiency_2d_staggered',
     'grating_convergence_class',
