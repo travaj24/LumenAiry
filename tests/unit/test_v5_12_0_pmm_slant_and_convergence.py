@@ -13,6 +13,8 @@ import numpy as np
 import pytest
 
 from lumenairy.elements.pmm import (
+    _pmm_jones_slant_solve,
+    _stabilize_jones,
     classify_from_grating,
     grating_convergence_class,
     pmm_efficiency_1d,
@@ -223,23 +225,28 @@ def test_jones_slant_vacuum():
 @pytest.mark.parametrize("pol_diag", [(0, "tm"), (1, "te")])
 def test_jones_slant_phi0_diagonal_decouples_to_scalar(pol_diag):
     """phi=0 with a DIAGONAL tensor decouples to the scalar TE/TM solver
-    (cross-pol ~0; Ey channel == TE, Ex channel == TM)."""
+    (cross-pol ~0; Ey channel == TE, Ex channel == TM).
+
+    Post-cure (round 16): a diagonal tensor now routes through the DIV-CONFORMING
+    scalar slant operator, which at phi=0 is the SAME operator pmm_efficiency_1d
+    uses -- so BOTH channels now match to MACHINE PRECISION (the old metric
+    generator's ~3e-4 TM 1/eps gap is gone).  Stabilized on both sides (degree 18
+    is a scalar-slant resonance band; the guard finds the passive solve)."""
     row, pol = pol_diag
     er = _eps_diag(2.25)
     eg = _eps_diag(1.0)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=0.0, degree=18,
-        stabilize=False, **_JGEOM_ASYM)
+        stabilize=True, **_JGEOM_ASYM)
     oS, RS, TS = pmm_efficiency_1d(
         period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
         polarization=pol, degree=18)
     assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12
-    # TE is the direct rule (machine-exact); TM is the 1/eps inverse-rule
-    # discretization gap that shrinks with degree (~3e-4 at deg 18).
-    tol = 1e-6 if pol == "te" else 1e-3
-    assert np.max(np.abs(R[row] - RS)) < tol
-    assert np.max(np.abs(T[row] - TS)) < tol
+    # post-cure: BOTH TE (direct rule) and TM (div-conforming inverse rule)
+    # reduce to the vertical scalar solver to ~1e-6 (was ~3e-4 TM pre-cure).
+    assert np.max(np.abs(R[row] - RS)) < 1e-6
+    assert np.max(np.abs(T[row] - TS)) < 1e-6
 
 
 @pytest.mark.parametrize("tensor", ["real-sym", "gyro"])
@@ -389,3 +396,156 @@ def test_jones_slant_out_of_plane_tensor_rejected():
     with pytest.raises(ValueError):
         pmm_jones_1d_slanted(eps_ridge=er, eps_groove=_eps_diag(1.0),
                              slant_angle=np.deg2rad(20.0), **_JGEOM)
+
+
+# ===================================================================
+# THE DIAGONAL CURE (round 16; Granet 2017/2023, Liu 2015) -- a diagonal
+# tensor (exy=eyx=0) with exx==ezz routes TE/TM through the div-conforming
+# scalar slant operator (_sem_modes_slant, spurious-mode-free), shedding the
+# pointwise metric generator's latent ~2e-4 per-order accuracy gap. Coupled
+# tensors AND diagonal exx!=ezz tensors keep the metric generator unchanged.
+# ===================================================================
+def _eps_uniaxial(exx_ezz=2.25, eyy=4.0):
+    """Diagonal uniaxial tensor exx == ezz != eyy (the TM/TE-distinct cure
+    case): TM sees exx, TE sees eyy, ezz == exx so the scalar slant is EXACT."""
+    return np.diag([exx_ezz, eyy, exx_ezz]).astype(np.complex128)
+
+
+@pytest.mark.parametrize("kind", ["isotropic", "uniaxial"])
+@pytest.mark.parametrize("phi_deg", [0.0, 20.0, 45.0, 60.0])
+def test_jones_slant_diag_cure_matches_scalar_by_construction(kind, phi_deg):
+    """THE CURE IS THE SCALAR SLANT: a diagonal tensor (isotropic exx=eyy=ezz,
+    OR uniaxial exx=ezz!=eyy) routed through the cure reproduces the per-channel
+    pmm_efficiency_1d_slanted to ~1e-10 (BY CONSTRUCTION -- same div-conforming
+    _sem_modes_slant operator).  stabilize=False pins both to the same degree."""
+    phi = np.deg2rad(phi_deg)
+    deg = 14                               # resonance-free here (stabilize=False)
+    if kind == "isotropic":
+        er = _eps_diag(2.25)
+        n_r_tm = n_r_te = 1.5
+    else:
+        er = _eps_uniaxial(exx_ezz=2.25, eyy=4.0)
+        n_r_tm, n_r_te = 1.5, 2.0          # sqrt(exx)=1.5 (TM), sqrt(eyy)=2.0 (TE)
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
+        stabilize=False, **_JGEOM_ASYM)
+    # per-channel scalar slant references (TM = row 0 = incident Ex ; TE = row 1)
+    sc = dict(period=1.0e-6, n_groove=1.0, n_substrate=1.5, n_superstrate=1.0,
+              depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+              slant_angle=phi, degree=deg, stabilize=False)
+    # sanity: the chosen degree is physical (the by-construction equality holds
+    # at ANY degree, but a resonance-free one keeps the numbers meaningful)
+    assert abs(_sum_RT(*pmm_efficiency_1d_slanted(n_ridge=n_r_tm,
+                                                  polarization="tm", **sc)[1:])
+               - 1.0) < 1e-2
+    oTM, RTM, TTM = pmm_efficiency_1d_slanted(n_ridge=n_r_tm, polarization="tm",
+                                              **sc)
+    oTE, RTE, TTE = pmm_efficiency_1d_slanted(n_ridge=n_r_te, polarization="te",
+                                              **sc)
+    assert np.array_equal(o, oTM) and np.array_equal(o, oTE)
+    # off-diagonal Jones is identically zero (no Ex<->Ey coupling)
+    assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-14
+    assert np.max(np.abs(R[0] - RTM)) < 1e-10      # row 0 = TM
+    assert np.max(np.abs(T[0] - TTM)) < 1e-10
+    assert np.max(np.abs(R[1] - RTE)) < 1e-10      # row 1 = TE
+    assert np.max(np.abs(T[1] - TTE)) < 1e-10
+
+
+@pytest.mark.parametrize("phi_deg", [15.0, 30.0, 45.0])
+def test_jones_slant_diag_cure_vs_old_metric_generator(phi_deg):
+    """The cured diagonal output is the SAME PHYSICS as the OLD metric-generator
+    path -- the per-order R agrees to ~2e-4 (the Liu-2015 spurious-mode gap the
+    cure sheds) and T to ~1e-3 (the TM 1/eps inverse-rule convergence) -- AND
+    the cured path conserves energy.  Both paths are stabilized (degree 20 is a
+    metric-generator resonance band; the scalar slant resonance band differs, so
+    a fair physics compare needs the resonance guard on both)."""
+    phi = np.deg2rad(phi_deg)
+    deg = 20
+    er = _eps_diag(2.25)
+    eg = _eps_diag(1.0)
+    # cured public path (diagonal -> div-conforming scalar slant), stabilized
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
+        stabilize=True, **_JGEOM_ASYM)
+    # OLD metric generator path, stabilized the SAME way the public function did
+    # before the cure (call the internal solver directly -> bypass the dispatch).
+    margs = (1.0e-6, er, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6,
+             phi)
+    oM, RM, TM, JM = _stabilize_jones(
+        lambda d: _pmm_jones_slant_solve(
+            *margs, degree=d, n_ridge_el=1, n_groove_el=1, grade=True,
+            far_field_orders=21)[:4], deg, "metric-ref")
+    assert np.array_equal(o, oM)
+    assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12      # cured is diagonal
+    # same physics: R to the ~2e-4 spurious-mode gap, T to the ~1e-3 TM gap
+    assert np.max(np.abs(R - RM)) < 2e-4
+    assert np.max(np.abs(T - TM)) < 1e-3
+    # the cured path conserves energy (cross-pol included)
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-3
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3
+
+
+@pytest.mark.parametrize("pol_diag", [(0, "tm"), (1, "te")])
+def test_jones_slant_diag_cure_phi0_reduces_to_pmm_jones(pol_diag):
+    """At slant=0 the cured DIAGONAL path reduces to the vertical pmm_jones_1d
+    to ~1e-6 (TE machine-exact direct rule ~1e-9; TM now the DIV-CONFORMING
+    inverse rule ~3e-6 -- the ~2e-4 metric-generator gap is GONE).  Stabilized
+    (deg 18 is the requested floor; the guard finds the nearest passive solve)."""
+    row, pol = pol_diag
+    er = _eps_diag(2.25)
+    eg = _eps_diag(1.0)
+    deg = 18
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=0.0, degree=deg,
+        stabilize=True, **_JGEOM_ASYM)
+    oJ, RJ, TJ, JJ = pmm_jones_1d(
+        period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        degree=deg, stabilize=True)
+    assert np.array_equal(o, oJ)
+    assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12
+    assert np.max(np.abs(R[row] - RJ[row])) < 1e-6
+    assert np.max(np.abs(T[row] - TJ[row])) < 1e-6
+
+
+@pytest.mark.parametrize("phi_deg", [0.0, 30.0, 60.0])
+def test_jones_slant_coupled_byte_identical_after_cure(phi_deg):
+    """A COUPLED tensor (exy=eyx=0.4) is NOT diagonal -> stays on the metric
+    generator: the public output is BYTE-IDENTICAL to the internal metric-
+    generator solve (the cure did not touch the coupled path)."""
+    phi = np.deg2rad(phi_deg)
+    deg = 20
+    er = _eps_real_sym(diag=2.25, off=0.4)
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
+        stabilize=False, **_JGEOM)
+    oM, RM, TM, JM, _n = _pmm_jones_slant_solve(
+        1.0e-6, er, eg, complex(1.5), complex(1.5), 0.5e-6, 0.5, 0.633e-6, phi,
+        degree=deg, n_ridge_el=1, n_groove_el=1, grade=True, far_field_orders=21)
+    assert np.array_equal(o, oM)
+    assert np.array_equal(R, RM)
+    assert np.array_equal(T, TM)
+    assert np.array_equal(J, JM)
+
+
+@pytest.mark.parametrize("phi_deg", [0.0, 30.0, 60.0])
+def test_jones_slant_diag_exx_ne_ezz_stays_on_metric_generator(phi_deg):
+    """A DIAGONAL tensor with exx != ezz (scalar slant would be WRONG -- it uses
+    a SINGLE eps per region) is NOT cured: it stays on the metric generator,
+    BYTE-IDENTICAL to the internal solve."""
+    phi = np.deg2rad(phi_deg)
+    deg = 20
+    er = np.diag([2.25, 2.25, 3.0]).astype(np.complex128)   # exx=2.25 != ezz=3.0
+    eg = _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
+        stabilize=False, **_JGEOM)
+    oM, RM, TM, JM, _n = _pmm_jones_slant_solve(
+        1.0e-6, er, eg, complex(1.5), complex(1.5), 0.5e-6, 0.5, 0.633e-6, phi,
+        degree=deg, n_ridge_el=1, n_groove_el=1, grade=True, far_field_orders=21)
+    assert np.array_equal(o, oM)
+    assert np.array_equal(R, RM)    # stayed on the metric generator (not scalar)
+    assert np.array_equal(T, TM)
+    assert np.array_equal(J, JM)

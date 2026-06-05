@@ -2062,10 +2062,18 @@ def _modes_M_slant(md):
 def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
                      depth, duty_cycle, wavelength, slant_angle, *, angle,
                      polarization, degree, elements_per_region, grade,
-                     far_field_orders):
+                     far_field_orders, return_coeffs=False):
     """Single-layer slanted-grating PMM solve (the inclined-coordinate layer +
     homogeneous half-spaces + generalized S-matrix + lab-frame far field).
-    Returns ``(orders, R, T, n_glob)``."""
+    Returns ``(orders, R, T, n_glob)``.
+
+    With ``return_coeffs=True`` ALSO returns the COMPLEX zeroth-order reflected /
+    transmitted field coefficients ``(r0, t0)`` -> ``(orders, R, T, n_glob, r0,
+    t0)``.  The default ``return_coeffs=False`` is byte-identical to the legacy
+    return (the efficiency caller :func:`pmm_efficiency_1d_slanted` is
+    untouched); the coefficient tail feeds the DIAGONAL-tensor cure in
+    :func:`pmm_jones_1d_slanted` (assembling the diagonal Jones from the two
+    div-conforming scalar channels)."""
     eps_ridge, eps_groove = _C(n_ridge) ** 2, _C(n_groove) ** 2
     eps_sup, eps_sub = _C(n_superstrate) ** 2, _C(n_substrate) ** 2
     k0 = 2.0 * np.pi / wavelength
@@ -2137,6 +2145,9 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
         T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
     R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
     T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
+    if return_coeffs:
+        m0 = int(np.where(orders == 0)[0][0])
+        return orders, R, T, n_glob, _C(r_ord[m0]), _C(t_ord[m0])
     return orders, R, T, n_glob
 
 
@@ -2613,6 +2624,59 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     return orders, R_eff, T_eff, jones, n_glob
 
 
+def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
+                                slant_angle, degree, elements_per_region, grade,
+                                far_field_orders):
+    r"""DIAGONAL-tensor slanted-Jones solve via the DIV-CONFORMING scalar slant
+    operator (THE DIAGONAL CURE, round 16).
+
+    For a diagonal in-plane tensor (``exy = eyx = 0``) WITH ``exx == ezz`` the
+    TE / TM channels DECOUPLE and the scalar :func:`_pmm_slant_solve`
+    (``_sem_modes_slant``, which puts ``1/eps`` INSIDE the z-stiffness -- a
+    div-conforming, Liu-2015-spurious-mode-free TM operator) is EXACT per
+    channel:
+
+      * TE sees ``eyy``          -> ``n = sqrt(eyy)``  (row 1, incident ``E_y``)
+      * TM sees ``exx`` (= ezz)  -> ``n = sqrt(exx)``  (row 0, incident ``E_x``)
+
+    The off-diagonal Jones is identically zero (no ``E_x`` <-> ``E_y`` coupling).
+    Returns ``(orders, R_eff(2, M), T_eff(2, M), jones(2, 2))`` in the EXACT
+    :func:`_pmm_jones_slant_solve` convention (row/col 0 = incident ``E_x`` = TM,
+    1 = incident ``E_y`` = TE; ``jones`` columns are the zeroth-order reflected
+    ``[E_x; E_y]``, PUBLIC ``exp(-i w t)``, no conjugation).
+
+    See Granet 2017 (JOSA A 34:975) / Granet 2023 for the scalar slant operator
+    and Liu 2015 (CiCP 18:467) for the divergence (Gauss-law) condition the
+    pointwise metric-generator Ez-elimination violates."""
+    kw = dict(angle=0.0, elements_per_region=int(elements_per_region),
+              grade=bool(grade), far_field_orders=int(far_field_orders),
+              degree=int(degree), return_coeffs=True)
+    # TM channel: wall-normal exx (== ezz, asserted by the caller's dispatch).
+    o_tm, R_tm, T_tm, _ngt, r0_tm, _t0_tm = _pmm_slant_solve(
+        period, np.sqrt(er[0, 0]), np.sqrt(eg[0, 0]), n_sub, n_sup, depth, duty,
+        wl, slant_angle, polarization="tm", **kw)
+    # TE channel: wall-tangential eyy.
+    o_te, R_te, T_te, _nge, r0_te, _t0_te = _pmm_slant_solve(
+        period, np.sqrt(er[1, 1]), np.sqrt(eg[1, 1]), n_sub, n_sup, depth, duty,
+        wl, slant_angle, polarization="te", **kw)
+    # The two channels share period/depth/duty/slant/degree/etc, so the retained
+    # Rayleigh-order set is identical; guard the invariant explicitly.
+    if not np.array_equal(o_tm, o_te):
+        raise RuntimeError(
+            "pmm_jones_1d_slanted (diagonal cure): the TE/TM scalar-slant order "
+            "sets disagree -- internal invariant violated.")
+    orders = o_tm
+    M = orders.size
+    R_eff = np.zeros((2, M))
+    T_eff = np.zeros((2, M))
+    R_eff[0], T_eff[0] = R_tm, T_tm          # row 0 = incident E_x = TM
+    R_eff[1], T_eff[1] = R_te, T_te          # row 1 = incident E_y = TE
+    jones = np.zeros((2, 2), _C)
+    jones[0, 0] = r0_tm                       # diag(r0_TM, r0_TE); off-diag = 0
+    jones[1, 1] = r0_te
+    return orders, R_eff, T_eff, jones
+
+
 def pmm_jones_1d_slanted(
     period: float,
     eps_ridge,
@@ -2694,6 +2758,20 @@ def pmm_jones_1d_slanted(
     BINARY grating (1 ridge + 1 groove), in-plane tensor only.  Combined oblique
     + slant and the multi-region (segments) path are not supported (they raise
     ``NotImplementedError`` / there is no ``..._slanted_segments`` companion).
+
+    DIAGONAL CURE (round 16; Granet 2017 JOSA A 34:975 / Granet 2023; Liu 2015
+    CiCP 18:467).  A DIAGONAL tensor (``exy = eyx = 0``) WITH ``exx == ezz`` in
+    BOTH regions is solved through the DIV-CONFORMING scalar slant operator
+    (``_sem_modes_slant``: the Li ``1/eps`` inverse rule sits INSIDE the
+    z-stiffness, so it is free of the Liu-2015 spurious harmonic-mean static
+    mode) -- TE via ``n = sqrt(eyy)``, TM via ``n = sqrt(exx)``, assembled into
+    the diagonal Jones.  This is the MORE-ACCURATE path.  COUPLED tensors
+    (``exy / eyx != 0``) AND diagonal tensors with ``exx != ezz`` keep the
+    pointwise covariant-metric generator (``_build_metric_generator``), which
+    eliminates ``E_z`` with a pointwise ``[[1/ezz]]`` average that does NOT
+    enforce the discrete Gauss law -> a LATENT ~2e-4 per-order accuracy gap
+    (energy still conserves to ~1e-12).  The full coupled / diagonal-anisotropic
+    div-conforming cure is a documented frontier (``docs/PMM_ROADMAP.md`` sec 8).
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
@@ -2725,6 +2803,37 @@ def pmm_jones_1d_slanted(
             "cross-term is unresolved). Use normal incidence (angle=0) with any "
             "slant, a vertical grating (slant_angle=0) at any angle via "
             "pmm_jones_1d, or rcwa (staircase) for oblique + slant.")
+
+    # ---- THE DIAGONAL CURE (round 16, Granet 2017/2023; Liu 2015) -----------
+    # For a DIAGONAL in-plane tensor (exy = eyx = 0) WITH exx == ezz BOTH
+    # regions, the TE / TM channels decouple and each maps onto the scalar slant
+    # operator _sem_modes_slant -- which is DIV-CONFORMING (the Li 1/eps inverse
+    # rule sits INSIDE the z-stiffness) and so SPURIOUS-MODE-FREE.  Route TE
+    # through the scalar slant with n=sqrt(eyy) and TM with n=sqrt(exx), then
+    # assemble the diagonal Jones.  This is the MORE-ACCURATE path: it sheds the
+    # latent ~2e-4 per-order Liu-2015 spurious-harmonic-mean accuracy gap that
+    # the pointwise metric-generator Ez-elimination (_build_metric_generator,
+    # O_inv_ezz = iS0 @ [[1/ezz]]) carries (energy still conserves to ~1e-12).
+    # Coupled tensors (exy/eyx != 0) AND diagonal tensors with exx != ezz fall
+    # through to the metric generator UNCHANGED and retain that latent gap; the
+    # full coupled / diagonal-anisotropic div-conforming cure is a documented
+    # frontier (docs/PMM_ROADMAP.md sec 8).
+    inplane_off = max(abs(er[0, 1]), abs(er[1, 0]),
+                      abs(eg[0, 1]), abs(eg[1, 0]))
+    exx_eq_ezz = max(abs(er[0, 0] - er[2, 2]), abs(eg[0, 0] - eg[2, 2]))
+    diagonal_cure = (inplane_off <= 1e-9 * scale
+                     and exx_eq_ezz <= 1e-9 * scale)
+    if diagonal_cure:
+        dargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
+                 duty_cycle, wavelength, float(slant_angle))
+        dkw = dict(elements_per_region=int(elements_per_region),
+                   grade=bool(grade), far_field_orders=int(far_field_orders))
+        if not stabilize:
+            return _pmm_jones_slant_diag_solve(*dargs, degree=int(degree),
+                                               **dkw)
+        return _stabilize_jones(
+            lambda d: _pmm_jones_slant_diag_solve(*dargs, degree=d, **dkw),
+            int(degree), "pmm_jones_1d_slanted")
 
     args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
             duty_cycle, wavelength, float(slant_angle))

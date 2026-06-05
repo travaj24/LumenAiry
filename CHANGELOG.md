@@ -92,6 +92,20 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   NumPy/SciPy (not JAX). Combined oblique + slant and the multi-region (segments)
   path raise `NotImplementedError`. Exported top-level; tests in
   `tests/unit/test_v5_12_0_pmm_slant_and_convergence.py`.
+- **`pmm_jones_1d_slanted` diagonal cure** (round 16; Granet 2017/2023, Liu
+  2015). A **diagonal** tensor (`exy = eyx = 0`) with `exx == ezz` in BOTH
+  regions now routes its TE / TM channels through the **div-conforming** scalar
+  slant operator (`_sem_modes_slant`: the Li `1/eps` inverse rule lives INSIDE
+  the z-stiffness, so it is free of the Liu-2015 spurious harmonic-mean static
+  mode) — TE via `n = √eyy`, TM via `n = √exx` — and assembles the diagonal
+  Jones. This sheds the latent **~2e-4** per-order accuracy gap the pointwise
+  covariant-metric `E_z`-elimination (`_build_metric_generator`,
+  `(ε33)⁻¹ = iS0·[[1/ezz]]`) carries (energy was already conserved to ~1e-12).
+  **Coupled** tensors (`exy/eyx ≠ 0`) AND diagonal tensors with `exx ≠ ezz`
+  fall through to the metric generator **unchanged** (byte-identical) and retain
+  that latent gap; the full coupled / diagonal-anisotropic div-conforming cure
+  is a documented frontier (`docs/PMM_ROADMAP.md` §8). Internal to the existing
+  `pmm_jones_1d_slanted` (no new public API).
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 
