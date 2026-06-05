@@ -316,11 +316,44 @@ convection attaches cleanly; the div-conforming Ez-elim is proven for the
 REDUCTION-2 ≈ 9.2e-10 for the operator. The open problem is their **simultaneous**
 assembly — making the *coupled* TM slant convection div-conforming. Rounds 2–8 and
 the 6 round-16 attempts produced a garbage high-q spectrum when folding the TM
-convection into the inverse-rule frame. **Round 17** is the assembly attempt;
-exit gates: REDUCTION-2 (~9e-10) **and** spurious-free **and** energy ~1e-4 at all
-slants, simultaneously. If round 17 yields garbage-high-q again, #4 is a frontier
-wall (the div-conforming × coupled-slant combination may be intrinsically hard in
-this nodal basis) → document as a known limit; use the RCWA staircase meanwhile.
+convection into the inverse-rule frame.
+
+**Round 17 outcome (2026-06-04) — NOT closed; the bind is now precisely isolated
+(a frontier wall in the PMM/SEM basis).** The 2nd-order pure-E operator
+(`slant_tensor_fix`) passes REDUCTION-2 (9.2e-10) **and** is spurious-free (it was
+already div-conforming — `1/εzz` inside the z-stiffness; no harmonic-mean null;
+the round-16 garbage-q was a frame-mixing bug, missing the `Px` bridge). **The
+*operator* is solved.** But its reconstructed magnetic partner `V = Q W/λ` is
+**structurally wrong at finite slant** (partner ratio drifts 1.0 → 0.54 → −0.18
+over 0→60°) → energy blows up. This is the rounds-2–8 V-partner wall, re-confirmed.
+The 1st-order [E;H] Berreman generator gives V for free (eigenvector lower block)
+but carries the round-16 spurious mode (pointwise Ez) and converges pathologically
+slowly at high contrast (εr≥6). **The two formulations are mutually exclusive in
+this nodal basis: 2nd-order = good operator / bad V; 1st-order = good V / spurious
+mode.** Energy ~1e-4 holds only at low contrast (εr ≤ 2.4, slant ≤ 60°).
+
+**Status: documented frontier limit.** The exact triple (slant × coupled-tensor ×
+div-conforming SEM with a consistent V) is genuinely unpublished (confirmed by
+both the in-folder audit and an external web reconnaissance). It is an *assembly*
+of separately-solved halves, not an impossibility — but it is out of scope for
+further blind PMM rounds. **Path forward when revisited (NOT more PMM grinding):**
+(1) the external papers now in `PMM_Papers/` target it directly —
+`popov_neviere_josaa18-11-2886_2001` (coupled-tensor local-frame factorization for
+the V/normal projector), `jiang_liu_PIER148_151_2014` (Gauss-law-constrained
+coupled mixed-FEM — spurious-free *and* coupled), `faghihifar_arxiv_2606.03537`
+(oracle-free spurious-mode selector); (2) **build a Li-1999 oblique-coordinate
+C-method oracle** — it absorbs slant into the metric (sidestepping the
+V-partner/convection fold) and is the closest published formulation to the full
+case, giving a much-needed second source of truth. Meanwhile the binary
+slanted-tensor (`pmm_jones_1d_slanted`) + vertical multi-region
+(`pmm_jones_1d_segments`) cover the common cases; use the RCWA staircase for the
+niche coupled-slant-multi-region geometry.
+
+**Banked win (independent of #4):** the diagonal TM spurious-mode cure
+(div-conforming Ez-elimination; round 16, proto `slant_tm_opfix.py`) — replace the
+shipped binary's pointwise `(ε33)⁻¹` (`pmm.py:_build_metric_generator`) with the
+`1/ε`-in-stiffness form to close its latent ~2e-4 per-order accuracy gap
+(energy-neutral; behavior change → review before shipping).
 
 ### 8.6 Reduction / consistency gates (must hold at every assembly step)
 
