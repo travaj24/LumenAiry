@@ -110,7 +110,7 @@ from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
            "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
            "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
-           "pmm_jones_1d_slanted_segments",
+           "pmm_jones_1d_slanted_segments", "pmm_1d",
            "grating_convergence_class", "classify_from_grating"]
 
 _C = np.complex128
@@ -1290,9 +1290,13 @@ def pmm_jones_1d(
     NumPy / SciPy (dense generalized eig); not JAX-differentiable.  Normal or
     oblique incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR
     out-of-plane).  An out-of-plane tensor routes through the native full-3x3
-    metric generator (vertical only -- out-of-plane combined with a slanted wall
-    is not yet validated per-order; multi-region out-of-plane / autodiff are
-    follow-ons).
+    metric generator (VERTICAL only).  Out-of-plane combined with a slanted wall
+    is guarded in :func:`pmm_jones_1d_slanted`: it conserves energy but is
+    per-order WRONG (measured 2-30e-3 vs an RCWA tensor z-staircase, the gap
+    saturating with degree -- a factorization defect), because the slant metric
+    fold of the FULL tensor must SUPERPOSE the out-of-plane components
+    (``eps^13 = -ezz*tan + exz``, ``eps^23 = eyz``, ... Li 1999), which the
+    vertical off-plane closure does not yet carry.  JAX autodiff is a follow-on.
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
@@ -1585,16 +1589,25 @@ def pmm_jones_1d_segments(
                 "pmm_jones_1d_segments: each segment eps must be a scalar or a "
                 "(3, 3) permittivity tensor.")
         tensors.append(M)
-    # in-plane only: reject out-of-plane coupling (would be silently dropped)
+    # FULL-3x3 OUT-OF-PLANE (exz/eyz/ezx/ezy != 0): route to the native full-3x3
+    # metric generator (_pmm_jones_slant_segments_solve at slant=0 -- region-count-
+    # agnostic, carrying the out-of-plane pointwise ezz-Schur).  The in-plane
+    # tensor keeps the (byte-identical) second-order _pmm_jones_solve_segments.
     scale = max([float(np.max(np.abs(M))) for M in tensors] + [1.0])
     off = max(float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
               for M in tensors)
     if off > 1e-9 * scale:
-        raise ValueError(
-            "pmm_jones_1d_segments: the anisotropic PMM is the z-decoupled "
-            "IN-PLANE tensor subset (exx, exy, eyx, eyy, ezz); a segment has "
-            "out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0). "
-            "Use rcwa_jones_1d_segments for the full-3x3 case.")
+        oargs = (period, widths, tensors, _C(n_substrate), _C(n_superstrate),
+                 depth, wavelength, 0.0)
+        okw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+                   far_field_orders=int(far_field_orders), angle=float(angle))
+        if not stabilize:
+            o, R, T, J, _ = _pmm_jones_slant_segments_solve(
+                *oargs, degree=int(degree), **okw)
+            return o, R, T, J
+        return _stabilize_jones(
+            lambda d: _pmm_jones_slant_segments_solve(*oargs, degree=d, **okw)[:4],
+            int(degree), "pmm_jones_1d_segments")
     sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
           wavelength)
     kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
@@ -1748,15 +1761,13 @@ class PMMStack:
             raise ValueError(
                 "PMMStack.add_layer: each eps must be a scalar or a (3, 3) "
                 "permittivity tensor.")
-        scale = max(float(np.max(np.abs(M))), 1.0)
-        off = float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
-        if off > 1e-9 * scale:
-            raise ValueError(
-                "PMMStack: the anisotropic PMM is the z-decoupled IN-PLANE tensor "
-                "subset (exx, exy, eyx, eyy, ezz); a layer has out-of-plane "
-                "coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0).  Use RCWAStack "
-                "for the full-3x3 case.")
         return M
+
+    @staticmethod
+    def _is_oop(M):
+        """True if the (3,3) tensor has out-of-plane coupling (eps_xz/yz/zx/zy)."""
+        scale = max(float(np.max(np.abs(M))), 1.0)
+        return float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]]))) > 1e-9 * scale
 
     def add_layer(self, thickness, *, segments=None, eps=None, slant_angle=0.0):
         """Append a layer.  Give exactly one of ``eps`` (uniform: scalar or
@@ -1775,6 +1786,12 @@ class PMMStack:
             if len(segments) < 1:
                 raise ValueError("PMMStack.add_layer: empty segments.")
             segs = [(float(w), self._as_tensor(e)) for w, e in segments]
+        if abs(float(slant_angle)) > 1e-12 and any(self._is_oop(M)
+                                                   for _w, M in segs):
+            raise NotImplementedError(
+                "PMMStack.add_layer: a SLANTED out-of-plane layer (slant_angle != 0 "
+                "with eps_xz/eyz/ezx/ezy != 0) is not yet per-order-validated; use a "
+                "VERTICAL out-of-plane layer or an in-plane slanted layer.")
         self._layers.append((float(thickness), segs, float(slant_angle)))
         return self
 
@@ -1817,9 +1834,15 @@ class PMMStack:
         Wsub, Vsub, _l, _g = _sem_modes_tensor(mats_sub, k0, kx0, True)
 
         # Redheffer recursion: sup -> [interface, propagation]*layers -> sub.
-        if not any(abs(L[2]) > 1e-12 for L in self._layers):
-            # ALL-VERTICAL: the symmetric (+/-q) S-matrix path -- bit-identical to
-            # the prior release.
+        # A layer needs the GENERAL fwd/back cascade if it is SLANTED or carries
+        # full-3x3 OUT-OF-PLANE coupling (both break the +/-q symmetry and are
+        # solved by the metric generator); an all-vertical-in-plane stack keeps the
+        # symmetric path (bit-identical to the prior release).
+        oop_layer = [any(self._is_oop(M) for _w, M in L[1]) for L in self._layers]
+        if not any(abs(L[2]) > 1e-12 or oo
+                   for L, oo in zip(self._layers, oop_layer)):
+            # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path --
+            # bit-identical to the prior release.
             lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in layer_mats]
             S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
             for i, (Wl, Vl, lam_l, _q) in enumerate(lmodes):
@@ -1829,16 +1852,17 @@ class PMMStack:
                           else (lmodes[i + 1][0], lmodes[i + 1][1]))
                 S = _redheffer_star(S, _interface_smatrix(Wl, Vl, nW, nV))
         else:
-            # MIXED vertical + SLANTED: every layer carries EXPLICIT forward/
-            # backward modes (a slanted layer breaks the +/-q symmetry), cascaded
-            # with the GENERAL fwd/back S-matrix.  Slanted layers use the
-            # div-conforming metric generator; a vertical layer reuses its
+            # MIXED vertical / SLANTED / OUT-OF-PLANE: every layer carries EXPLICIT
+            # forward/backward modes cascaded with the GENERAL fwd/back S-matrix.  A
+            # SLANTED or OUT-OF-PLANE layer uses the div-conforming metric generator
+            # (_layer_modes_metric carries both the slant fold AND the out-of-plane
+            # pointwise ezz-Schur); a plain vertical-in-plane layer reuses its
             # symmetric modes as the degenerate [[W,W],[V,-V]] forward/backward set.
             Ms = _half_M_sym_metric(Wsup, Vsup)
             Mb = _half_M_sym_metric(Wsub, Vsub)
             Mls, lamfs, lambs = [], [], []
             for i, (_thk, _segs, slant) in enumerate(self._layers):
-                if abs(slant) > 1e-12:
+                if abs(slant) > 1e-12 or oop_layer[i]:
                     mm = _build_nodal_metric_segments(
                         self.period, uwidths,
                         [_tensor3_dict(e) for e in layer_eps_u[i]],
@@ -3302,6 +3326,93 @@ def pmm_jones_1d_slanted_segments(
     return _stabilize_jones(
         lambda d: _pmm_jones_slant_segments_solve(*sa, degree=d, **kw)[:4],
         int(degree), "pmm_jones_1d_slanted_segments")
+
+
+def pmm_1d(
+    period: float,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelength: float,
+    *,
+    eps_ridge=None,
+    eps_groove=None,
+    duty_cycle: float = 0.5,
+    segments=None,
+    slant_angle: float = 0.0,
+    angle: float = 0.0,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    stabilize: bool = True,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Unified 1-D anisotropic-Jones PMM dispatcher -- one entry point that
+    auto-routes to the right solver by geometry.
+
+    Covers the whole 1-D Jones family in a single call:
+
+    ====================  =====================  =====================================
+    geometry              ``slant_angle == 0``   ``slant_angle != 0``
+    ====================  =====================  =====================================
+    BINARY                :func:`pmm_jones_1d`    :func:`pmm_jones_1d_slanted`
+    (``eps_ridge`` +      (vertical)              (slanted)
+    ``eps_groove`` +
+    ``duty_cycle``)
+    MULTI-REGION          :func:`pmm_jones_1d_    :func:`pmm_jones_1d_slanted_segments`
+    (``segments``)        segments`
+    ====================  =====================  =====================================
+
+    Each ``eps`` may be a scalar (promoted to an isotropic tensor) or a full
+    ``(3, 3)`` permittivity tensor (IN-PLANE or, for the VERTICAL cases,
+    OUT-OF-PLANE ``eps_xz/eyz/ezx/ezy != 0``).  Normal or oblique incidence.
+    (Combined out-of-plane + slant is not yet per-order-validated and raises in
+    the underlying slanted solvers.)
+
+    Parameters
+    ----------
+    period, n_substrate, n_superstrate, depth, wavelength : as in
+        :func:`pmm_jones_1d`.
+    eps_ridge, eps_groove, duty_cycle : the BINARY grating spec (give these OR
+        ``segments``, not both).
+    segments : list of ``(width_fraction, eps)`` -- the MULTI-REGION spec.
+    slant_angle : float
+        Side-wall tilt from the vertical (radians); ``0`` = vertical.
+    angle, degree, elements_per_region, grade, far_field_orders, stabilize : as in
+        :func:`pmm_jones_1d`.
+
+    Returns
+    -------
+    orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
+    """
+    has_binary = eps_ridge is not None or eps_groove is not None
+    if (segments is None) == (not has_binary):
+        raise ValueError(
+            "pmm_1d: give EITHER `segments` OR `eps_ridge` + `eps_groove` "
+            "(+ `duty_cycle`), not both / neither.")
+    common = dict(angle=float(angle), degree=int(degree),
+                  elements_per_region=int(elements_per_region),
+                  grade=bool(grade), far_field_orders=int(far_field_orders),
+                  stabilize=bool(stabilize))
+    slanted = abs(float(slant_angle)) > 1e-12
+    if segments is not None:
+        if slanted:
+            return pmm_jones_1d_slanted_segments(
+                period, segments, n_substrate, n_superstrate, depth, wavelength,
+                float(slant_angle), **common)
+        return pmm_jones_1d_segments(
+            period, segments, n_substrate, n_superstrate, depth, wavelength,
+            **common)
+    if eps_ridge is None or eps_groove is None:
+        raise ValueError(
+            "pmm_1d: the binary spec needs BOTH `eps_ridge` and `eps_groove`.")
+    if slanted:
+        return pmm_jones_1d_slanted(
+            period, eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
+            float(duty_cycle), wavelength, float(slant_angle), **common)
+    return pmm_jones_1d(
+        period, eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
+        float(duty_cycle), wavelength, **common)
 
 
 # ===========================================================================

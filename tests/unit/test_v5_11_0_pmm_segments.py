@@ -18,6 +18,7 @@ from lumenairy.elements.pmm import (
     pmm_efficiency_1d_segments,
     pmm_jones_1d,
     pmm_jones_1d_segments,
+    pmm_jones_1d_slanted_segments,
 )
 from lumenairy.elements.rcwa import (
     binary_grating_segments,
@@ -176,11 +177,14 @@ def test_widths_must_sum_to_one():
                               DEPTH, WL)
 
 
-def test_rejects_out_of_plane_segment():
+def test_rejects_slanted_out_of_plane_segment():
+    # VERTICAL out-of-plane multi-region is now supported (see
+    # test_segments_out_of_plane_matches_rcwa); only a SLANTED out-of-plane
+    # grating is not yet per-order-validated and raises.
     op = uniaxial_tensor(1.5, 1.7, np.pi / 4, phi=0.3)     # tilted -> off-plane
     with pytest.raises(ValueError, match="out-of-plane"):
-        pmm_jones_1d_segments(PERIOD, [(0.5, op), (0.5, GR)], NSUB, NSUP, DEPTH,
-                              WL)
+        pmm_jones_1d_slanted_segments(PERIOD, [(0.5, op), (0.5, GR)], NSUB, NSUP,
+                                      DEPTH, WL, np.deg2rad(30.0))
 
 
 def test_rejects_bad_tensor_shape():
@@ -193,3 +197,27 @@ def test_segments_exported_top_level():
     import lumenairy as la
     for name in ("pmm_efficiency_1d_segments", "pmm_jones_1d_segments"):
         assert hasattr(la, name) and name in la.__all__
+
+
+def test_segments_out_of_plane_matches_rcwa():
+    """A MULTI-REGION grating with OUT-OF-PLANE coupling (eps_xz/eyz != 0) now
+    routes through the native full-3x3 metric generator (region-count-agnostic)
+    and matches rcwa_jones_1d_segments per-order to <1.5e-3; conserves energy."""
+    e1 = np.diag([2.25, 2.25, 2.25]).astype(_C)
+    e1[0, 2] = e1[2, 0] = 0.3
+    e2 = np.diag([4.0, 3.6, 4.0]).astype(_C)
+    e2[0, 2] = e2[2, 0] = 0.4
+    e2[1, 2] = e2[2, 1] = 0.2
+    segs = [(0.2, e1), (0.5, e2), (0.3, GR)]
+    o, R, T, J = pmm_jones_1d_segments(PERIOD, segs, 1.5, 1.0, DEPTH, WL,
+                                       degree=16, elements_per_region=6)
+    oR, RR, TR, JR = rcwa_jones_1d_segments(PERIOD, segs, 1.5, 1.0, DEPTH, WL,
+                                            n_orders=61)
+    c = np.intersect1d(o, oR)
+    i1 = {int(x): k for k, x in enumerate(o)}
+    i2 = {int(x): k for k, x in enumerate(oR)}
+    d = max(max(np.max(np.abs(R[:, i1[int(m)]] - RR[:, i2[int(m)]])),
+                np.max(np.abs(T[:, i1[int(m)]] - TR[:, i2[int(m)]]))) for m in c)
+    assert d < 1.5e-3
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
+    assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3

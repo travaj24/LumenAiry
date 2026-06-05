@@ -167,9 +167,29 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   at normal AND slant AND oblique). Per-order matches `rcwa_jones_1d` to **<1e-3**
   (normal AND oblique), **lossless-trap-defeating** (absorbed fraction matches on
   lossy cells to ~5e-6), gyrotropic non-reciprocity physical. SCOPE: binary,
-  VERTICAL grating, normal or oblique (out-of-plane + slanted wall is energy-
-  conserving but not yet per-order-validated, so it stays guarded; multi-region /
-  stack out-of-plane are follow-ons). The shipped in-plane path is byte-identical.
+  VERTICAL grating, normal or oblique. Out-of-plane + a SLANTED wall stays
+  guarded: it conserves energy but is per-order WRONG (measured 2–30e-3 vs an
+  independent RCWA tensor z-staircase, the gap saturating with degree — a
+  factorization defect, not resolution), because the slant metric fold must
+  SUPERPOSE the out-of-plane components (`ε¹³ = −εzz·tanφ + εxz`, `ε²³ = εyz`, …
+  Li 1999) — a focused operator follow-on. The shipped in-plane path is
+  byte-identical.
+- **`pmm_jones_1d_segments` + `PMMStack` — out-of-plane too.** The full-3×3
+  out-of-plane support extends region- and stack-agnostically: a multi-region
+  grating (`pmm_jones_1d_segments`) routes out-of-plane through the metric-
+  generator segments path (per-order matches `rcwa_jones_1d_segments` to ~3.6e-4),
+  and a **vertical** out-of-plane `PMMStack` layer is solved by the metric
+  generator and cascaded with the general fwd/back S-matrix (a single out-of-plane
+  layer reproduces `pmm_jones_1d` to ~1e-11; mixed in-plane/out-of-plane stacks
+  conserve). A slanted out-of-plane layer raises (not yet per-order-validated).
+  In-plane paths byte-identical.
+- **`pmm_1d` — unified 1-D Jones dispatcher.** One entry point that auto-routes by
+  geometry: binary (`eps_ridge`/`eps_groove`/`duty_cycle`) vs multi-region
+  (`segments`), and vertical (`slant_angle=0`) vs slanted — to `pmm_jones_1d` /
+  `pmm_jones_1d_slanted` / `pmm_jones_1d_segments` / `pmm_jones_1d_slanted_segments`
+  respectively. Scalar (→isotropic) or full `(3,3)` (in-plane / out-of-plane) eps;
+  normal or oblique. Each route is bit-identical to calling the specific solver.
+  Exported top-level.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

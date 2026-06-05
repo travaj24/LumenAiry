@@ -21,7 +21,9 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from lumenairy.elements.pmm import pmm_efficiency_1d, pmm_jones_1d
+from lumenairy.elements.pmm import (
+    pmm_1d, pmm_efficiency_1d, pmm_jones_1d, pmm_jones_1d_segments,
+    pmm_jones_1d_slanted, pmm_jones_1d_slanted_segments)
 from lumenairy.elements.rcwa import rcwa_efficiency_1d, rcwa_jones_1d, uniaxial_tensor
 
 _C = np.complex128
@@ -271,3 +273,61 @@ def test_out_of_plane_in_plane_path_unchanged():
 def test_exported_top_level():
     import lumenairy as la
     assert hasattr(la, "pmm_jones_1d")
+
+
+# ---------------------------------------------------------------------------
+# Unified pmm_1d dispatcher
+# ---------------------------------------------------------------------------
+def _jeq(a, b):
+    return (np.array_equal(a[0], b[0]) and np.max(np.abs(a[1] - b[1])) < 1e-14
+            and np.max(np.abs(a[2] - b[2])) < 1e-14
+            and np.max(np.abs(a[3] - b[3])) < 1e-14)
+
+
+def test_pmm_1d_dispatch_bit_identical():
+    """pmm_1d auto-routes to the right solver by geometry, BIT-IDENTICALLY."""
+    er = np.diag([2.25, 2.10, 2.25]).astype(_C)
+    er[0, 1] = er[1, 0] = 0.15
+    eg = np.eye(3, dtype=_C)
+    g = dict(period=1.0e-6, n_substrate=1.5, n_superstrate=1.0, depth=0.5e-6,
+             wavelength=0.633e-6)
+    phi = np.deg2rad(30.0)
+    segs = [(0.5, er), (0.5, eg)]
+    # binary vertical
+    assert _jeq(
+        pmm_1d(**g, eps_ridge=er, eps_groove=eg, duty_cycle=0.5, degree=16,
+               stabilize=False),
+        pmm_jones_1d(1.0e-6, er, eg, 1.5, 1.0, 0.5e-6, 0.5, 0.633e-6, degree=16,
+                     stabilize=False))
+    # binary slanted
+    assert _jeq(
+        pmm_1d(**g, eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=16,
+               stabilize=False),
+        pmm_jones_1d_slanted(1.0e-6, er, eg, 1.5, 1.0, 0.5e-6, 0.5, 0.633e-6, phi,
+                             degree=16, stabilize=False))
+    # multi-region vertical
+    assert _jeq(
+        pmm_1d(**g, segments=segs, degree=16, stabilize=False),
+        pmm_jones_1d_segments(1.0e-6, segs, 1.5, 1.0, 0.5e-6, 0.633e-6, degree=16,
+                              stabilize=False))
+    # multi-region slanted
+    assert _jeq(
+        pmm_1d(**g, segments=segs, slant_angle=phi, degree=16, stabilize=False),
+        pmm_jones_1d_slanted_segments(1.0e-6, segs, 1.5, 1.0, 0.5e-6, 0.633e-6,
+                                      phi, degree=16, stabilize=False))
+
+
+def test_pmm_1d_out_of_plane_and_errors():
+    """pmm_1d carries out-of-plane (vertical) through, and validates the spec."""
+    op = np.diag([2.25, 2.10, 2.40]).astype(_C)
+    op[0, 2] = op[2, 0] = 0.3
+    g = dict(period=1.0e-6, n_substrate=1.5, n_superstrate=1.0, depth=0.5e-6,
+             wavelength=0.633e-6)
+    o, R, T, J = pmm_1d(**g, eps_ridge=op, eps_groove=np.eye(3, dtype=_C),
+                        degree=14, elements_per_region=6)
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
+    with pytest.raises(ValueError):                  # neither spec
+        pmm_1d(**g)
+    with pytest.raises(ValueError):                  # both specs
+        pmm_1d(**g, eps_ridge=op, eps_groove=np.eye(3, dtype=_C),
+               segments=[(1.0, op)])

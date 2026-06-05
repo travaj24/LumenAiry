@@ -108,10 +108,12 @@ def test_isotropic_stack_decouples():
 # --------------------------------------------------------------------------- #
 # guards
 # --------------------------------------------------------------------------- #
-def test_rejects_out_of_plane_layer():
+def test_accepts_vertical_out_of_plane_layer():
+    # A VERTICAL out-of-plane layer is now accepted (see
+    # test_single_out_of_plane_layer_stack_equals_binary); only a SLANTED
+    # out-of-plane layer raises (test_slanted_out_of_plane_layer_raises).
     op = uniaxial_tensor(1.5, 1.7, np.pi / 4, phi=0.3)     # tilted -> off-plane
-    with pytest.raises(ValueError, match="out-of-plane"):
-        la.PMMStack(0.8e-6).add_layer(0.1e-6, eps=op)
+    la.PMMStack(0.8e-6).add_layer(0.1e-6, eps=op)          # no raise
 
 
 def test_rejects_bad_add_layer_args():
@@ -189,3 +191,49 @@ def test_slanted_multiregion_layer_in_stack_conserves():
     o, R, T, J = st.set_source(0.633e-6, angle=np.radians(12.0)).solve()
     assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
     assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3
+
+
+# ---------------------------------------------------------------------------
+# OUT-OF-PLANE layers (full 3x3, vertical) -- routed through the metric generator
+# ---------------------------------------------------------------------------
+def _eps_oop():
+    er = np.diag([2.25, 2.10, 2.40]).astype(_C)
+    er[0, 2] = er[2, 0] = 0.3
+    er[1, 2] = er[2, 1] = 0.2
+    return er
+
+
+def test_single_out_of_plane_layer_stack_equals_binary():
+    """A single VERTICAL out-of-plane layer in a stack reproduces the binary
+    pmm_jones_1d (full-3x3) to ~1e-11 (energy + zeroth-order Jones magnitude)."""
+    er, eg = _eps_oop(), GR
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=16,
+                     elements_per_region=6)
+    st.add_layer(0.5e-6, segments=[(0.5, er), (0.5, eg)])
+    o, R, T, J = st.set_source(0.633e-6).solve()
+    ob, Rb, Tb, Jb = la.pmm_jones_1d(1.0e-6, er, eg, 1.5, 1.0, 0.5e-6, 0.5,
+                                     0.633e-6, degree=16, elements_per_region=6)
+    assert abs((R[0].sum() + T[0].sum()) - (Rb[0].sum() + Tb[0].sum())) < 1e-10
+    assert abs(abs(J[0, 0]) - abs(Jb[0, 0])) < 1e-10
+
+
+def test_mixed_inplane_out_of_plane_stack_conserves():
+    """A stack mixing an in-plane spacer and a VERTICAL out-of-plane grating
+    conserves energy (the general cascade routes the out-of-plane layer through
+    the metric generator)."""
+    er, eg = _eps_oop(), GR
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=14,
+                     elements_per_region=4)
+    st.add_layer(0.2e-6, eps=2.1)
+    st.add_layer(0.4e-6, segments=[(0.5, er), (0.5, eg)])
+    o, R, T, J = st.set_source(0.633e-6).solve()
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
+    assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3
+
+
+def test_slanted_out_of_plane_layer_raises():
+    """A SLANTED out-of-plane layer is not yet per-order-validated and raises."""
+    with pytest.raises(NotImplementedError):
+        la.PMMStack(1.0e-6).add_layer(0.4e-6, segments=[(0.5, _eps_oop()),
+                                                        (0.5, GR)],
+                                      slant_angle=np.radians(30.0))
