@@ -88,10 +88,10 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   `slant=0` it reduces to `pmm_jones_1d` (~2e-4) and a diagonal tensor decouples
   to the scalar `pmm_efficiency_1d_slanted` (TE machine-exact ~1e-7, TM
   inverse-rule ~6e-4); reciprocal for a real-symmetric tensor, non-reciprocal for
-  a gyrotropic one. SCOPE: NORMAL incidence, BINARY grating, in-plane tensor only;
-  NumPy/SciPy (not JAX). Combined oblique + slant and the multi-region (segments)
-  path raise `NotImplementedError`. Exported top-level; tests in
-  `tests/unit/test_v5_12_0_pmm_slant_and_convergence.py`.
+  a gyrotropic one. SCOPE: BINARY grating, in-plane tensor only (normal OR oblique
+  incidence at any slant — see the round-19 entry below); NumPy/SciPy (not JAX).
+  The multi-region (segments) path raises `NotImplementedError`. Exported
+  top-level; tests in `tests/unit/test_v5_12_0_pmm_slant_and_convergence.py`.
 - **`pmm_jones_1d_slanted` diagonal cure** (round 16; Granet 2017/2023, Liu
   2015). A **diagonal** tensor (`exy = eyx = 0`) with `exx == ezz` in BOTH
   regions now routes its TE / TM channels through the **div-conforming** scalar
@@ -106,6 +106,32 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   that latent gap; the full coupled / diagonal-anisotropic div-conforming cure
   is a documented frontier (`docs/PMM_ROADMAP.md` §8). Internal to the existing
   `pmm_jones_1d_slanted` (no new public API).
+- **`pmm_jones_1d_slanted` — div-conforming `E_z` closure (all slants) + combined
+  oblique + slant** (round 19; Granet 2023 Eq.16-18, Popov-Nevière App.B, Liu
+  2015). The covariant-metric generator's `E_z` elimination is now
+  **div-conforming at every slant**: the `(E_x,iZH_y)` longitudinal slot uses the
+  Li-inverse-rule `−`stiffness `+(1/k) iS0·∫(1/εzz)B′B′` (`1/εzz` BETWEEN the
+  discrete z-derivatives) in place of the spurious-prone pointwise `[[1/εzz]]`
+  average, so the TM-block spectrum bit-matches the scalar slant solver, the
+  Liu-2015 harmonic-mean static null is gone, and per-order TM converges to the
+  scalar oracle (**~6.5e-4** @ deg32 / **~4.3e-4** @ deg40 at 45°; energy still
+  ~1e-13). **Combined OBLIQUE incidence + nonzero slant is now SUPPORTED**:
+  `kx0 = k0·Re(n_sup)·sin(angle)` is wired through the generator (Bloch-shifted
+  `d1 → d1 + i kx0` in B/D + the kx0 antisym-convection / mass in the `1/εzz`
+  bracket), the lab half-spaces, and the Rayleigh projection (with the oblique
+  TM incident-flux normalization). The slanted layer's genuine `[E;H]` state is
+  already lab-Cartesian, so its magnetic partner `V = −G` matches the proven
+  `_sem_modes_tensor` lab half-spaces directly — **no inclined→lab shear** (a
+  shear was measured to *break* conservation). Energy conserves ~1e-13 and the
+  per-order split matches an RCWA z-staircase to **~2–3e-3 degree-cleanly** (no
+  stabilize crutch) across angle×slant; survives adversarial refutation (negative
+  angle, opposite-slant mirror symmetry ~1e-14, Wood anomalies, steep slant
+  70–80°, high-contrast/gyrotropic). The combined oblique+slant case (even a
+  diagonal cell) routes through the metric generator, since the scalar diagonal
+  cure's oblique+slant per-order split is wrong (the reason the *scalar*
+  `pmm_efficiency_1d_slanted` still forbids that combo). The
+  `NotImplementedError` guard on `angle≠0 & slant≠0` is removed. Internal to the
+  existing `pmm_jones_1d_slanted` (no new public API).
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

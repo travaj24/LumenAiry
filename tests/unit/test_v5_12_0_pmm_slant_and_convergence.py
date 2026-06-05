@@ -366,21 +366,167 @@ def test_jones_slant_reduces_to_pmm_jones_at_phi0_stabilized():
     assert np.max(np.abs(np.abs(J) - np.abs(JJ))) < 2e-3
 
 
-def test_jones_slant_oblique_plus_slant_raises():
-    """Combined oblique incidence + nonzero slant is unsupported and raises;
-    each alone is fine."""
+@pytest.mark.parametrize("ang_deg,slant_deg", [(15.0, 25.0), (20.0, 30.0),
+                                               (30.0, 15.0)])
+def test_jones_slant_oblique_plus_slant_conserves(ang_deg, slant_deg):
+    """Combined OBLIQUE incidence + nonzero slant is now SUPPORTED (round-19
+    div-conforming Ez closure removes the Bloch-amplified Liu-2015 spurious null;
+    kx0 is wired through the generator, the half-spaces, and the lab Rayleigh far
+    field).  A lossless cell conserves energy to ~1e-3 across the angle x slant
+    grid.  At combined oblique+slant BOTH the coupled tensor AND the diagonal cell
+    route through the METRIC GENERATOR -- the scalar diagonal cure is excluded for
+    that combo (its oblique+slant per-order split is wrong); the route itself is
+    locked by test_jones_slant_oblique_dispatch_invariant."""
+    ang, phi = np.deg2rad(ang_deg), np.deg2rad(slant_deg)
+    eg = _eps_diag(1.0)
+    # coupled tensor -> metric generator (lossless real-symmetric)
+    erC = _eps_real_sym()
+    _o, R, T, _J = pmm_jones_1d_slanted(
+        eps_ridge=erC, eps_groove=eg, slant_angle=phi, angle=ang, degree=24,
+        **_JGEOM)
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-3
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3
+    # diagonal cell + combined oblique+slant -> ALSO the metric generator (the
+    # cure is excluded here; scalar pmm_efficiency_1d_slanted forbids the combo).
+    erD = _eps_diag(2.25)
+    _o2, R2, T2, _J2 = pmm_jones_1d_slanted(
+        eps_ridge=erD, eps_groove=eg, slant_angle=phi, angle=ang, degree=24,
+        **_JGEOM)
+    assert abs(_sum_RT(R2[0], T2[0]) - 1.0) < 1e-3
+    assert abs(_sum_RT(R2[1], T2[1]) - 1.0) < 1e-3
+
+
+def test_jones_slant_each_alone_solves():
+    """Slant alone (normal incidence) and oblique alone (vertical grating) both
+    solve -- the two limits the combined oblique+slant path must reduce to."""
     er = _eps_real_sym()
     eg = _eps_diag(1.0)
-    with pytest.raises(NotImplementedError):
-        pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg,
-                             slant_angle=np.deg2rad(25.0),
-                             angle=np.deg2rad(15.0), **_JGEOM)
-    # slant alone, and oblique alone (vertical), both solve
     pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg,
                          slant_angle=np.deg2rad(25.0), angle=0.0, degree=16,
                          **_JGEOM)
     pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg, slant_angle=0.0,
                          angle=np.deg2rad(15.0), degree=16, **_JGEOM)
+
+
+def test_jones_slant_oblique_dispatch_invariant(monkeypatch):
+    """NEGATIVE routing invariant (energy CANNOT guard it): for a cure-eligible
+    diagonal cell the scalar diagonal cure is NEVER taken at combined oblique +
+    slant (its per-order split is ~10% wrong there yet still conserves energy --
+    the lossless trap), and IS taken where it is correct (diagonal + normal +
+    slant, and diagonal + oblique on a vertical grating).  Instrument the route
+    directly with call spies, because a refactor re-enabling the cure for
+    oblique+slant would silently return a wrong split with no failing assertion."""
+    import lumenairy.elements.pmm as _pmm
+    calls = {"cure": 0, "metric": 0}
+    orig_cure = _pmm._pmm_jones_slant_diag_solve
+    orig_metric = _pmm._pmm_jones_slant_solve
+
+    def spy_cure(*a, **k):
+        calls["cure"] += 1
+        return orig_cure(*a, **k)
+
+    def spy_metric(*a, **k):
+        calls["metric"] += 1
+        return orig_metric(*a, **k)
+
+    monkeypatch.setattr(_pmm, "_pmm_jones_slant_diag_solve", spy_cure)
+    monkeypatch.setattr(_pmm, "_pmm_jones_slant_solve", spy_metric)
+    erD = _eps_diag(2.25)           # cure-ELIGIBLE diagonal cell (exy=eyx=0, exx==ezz)
+    eg = _eps_diag(1.0)
+
+    # (a) combined oblique + slant -> MUST be the metric generator, NOT the cure
+    calls.update(cure=0, metric=0)
+    _pmm.pmm_jones_1d_slanted(eps_ridge=erD, eps_groove=eg,
+                              slant_angle=np.deg2rad(30.0),
+                              angle=np.deg2rad(20.0), degree=16, **_JGEOM)
+    assert calls["cure"] == 0 and calls["metric"] >= 1
+
+    # (b) diagonal + NORMAL + slant -> the cure (correct + faster here)
+    calls.update(cure=0, metric=0)
+    _pmm.pmm_jones_1d_slanted(eps_ridge=erD, eps_groove=eg,
+                              slant_angle=np.deg2rad(30.0), angle=0.0,
+                              degree=16, **_JGEOM)
+    assert calls["cure"] >= 1 and calls["metric"] == 0
+
+    # (c) diagonal + oblique + VERTICAL (slant=0) -> the cure (valid scalar oblique)
+    calls.update(cure=0, metric=0)
+    _pmm.pmm_jones_1d_slanted(eps_ridge=erD, eps_groove=eg, slant_angle=0.0,
+                              angle=np.deg2rad(20.0), degree=16, **_JGEOM)
+    assert calls["cure"] >= 1 and calls["metric"] == 0
+
+
+def test_jones_slant_diag_cure_internal_guard_raises():
+    """Defense-in-depth: the diagonal-cure SOLVER ITSELF re-asserts its ENTIRE
+    validity domain (diagonal exy=eyx=0, exx==ezz, and NOT combined oblique+slant)
+    and fails loud -- never a silent wrong answer (a dropped off-diagonal Jones, a
+    wrong TM index, or the ~10%-wrong-but-energy-conserving oblique+slant split).
+    So even a direct call or a future dispatch mis-route raises.  The valid cases
+    (diagonal exx==ezz at slant-alone or oblique-alone) must NOT raise."""
+    import lumenairy.elements.pmm as _pmm
+    erD = _eps_diag(2.25)
+    eg = _eps_diag(1.0)
+    base = (1.0e-6, erD, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6)
+    # (1) combined oblique + slant -> RuntimeError (the lossless-trap case)
+    with pytest.raises(RuntimeError):
+        _pmm._pmm_jones_slant_diag_solve(
+            *base, np.deg2rad(30.0), 16, 1, True, 21, angle=np.deg2rad(20.0))
+    # (2) COUPLED tensor (exy!=0) -> RuntimeError (cure would drop the coupling)
+    erC = _eps_diag(2.25); erC[0, 1] = erC[1, 0] = 0.3
+    with pytest.raises(RuntimeError):
+        _pmm._pmm_jones_slant_diag_solve(
+            1.0e-6, erC, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6,
+            np.deg2rad(30.0), 16, 1, True, 21, angle=0.0)
+    # (3) exx != ezz tensor -> RuntimeError (cure's scalar TM index would be wrong)
+    erU = np.diag([2.25, 2.10, 2.40]).astype(np.complex128)
+    with pytest.raises(RuntimeError):
+        _pmm._pmm_jones_slant_diag_solve(
+            1.0e-6, erU, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6,
+            np.deg2rad(30.0), 16, 1, True, 21, angle=0.0)
+    # valid: diagonal exx==ezz at slant-alone (normal) and oblique-alone (vertical)
+    _pmm._pmm_jones_slant_diag_solve(
+        *base, np.deg2rad(30.0), 16, 1, True, 21, angle=0.0)
+    _pmm._pmm_jones_slant_diag_solve(
+        *base, 0.0, 16, 1, True, 21, angle=np.deg2rad(20.0))
+
+
+def test_jones_slant_oblique_degree_clean():
+    """Combined oblique+slant is DEGREE-CLEAN: with stabilize=False the metric
+    generator conserves energy at EVERY raw degree (the validated round-19
+    signature -- a frame-consistent far field has no isolated-degree resonances,
+    so the old 0.79-1.58 chaos / stabilize-crutch is gone).  Coupled cell ->
+    metric generator, lossless, angle 25 + slant 30."""
+    er = _eps_real_sym()
+    eg = _eps_diag(1.0)
+    ang, phi = np.deg2rad(25.0), np.deg2rad(30.0)
+    for deg in (16, 20, 24, 28):
+        _o, R, T, _J = pmm_jones_1d_slanted(
+            eps_ridge=er, eps_groove=eg, slant_angle=phi, angle=ang,
+            degree=deg, stabilize=False, **_JGEOM)
+        assert abs(_sum_RT(R[0], T[0]) - 1.0) < 5e-3, f"deg={deg} Ex"
+        assert abs(_sum_RT(R[1], T[1]) - 1.0) < 5e-3, f"deg={deg} Ey"
+
+
+@pytest.mark.parametrize("ang_deg", [10.0, 20.0, 30.0])
+def test_jones_slant_oblique_metric_reduces_to_efficiency_1d(ang_deg):
+    """The kx0 wiring is correct end-to-end through the METRIC GENERATOR: a
+    VERTICAL (slant=0) grating at oblique incidence solved by the tensor metric
+    generator reproduces the rigorous scalar oracle pmm_efficiency_1d (TM) to
+    ~1e-3 per order.  Call the internal solver directly (a slant=0 diagonal cell
+    would otherwise route to the scalar cure) so this exercises the metric
+    generator's own Bloch path."""
+    ai = np.deg2rad(ang_deg)
+    erD = _eps_diag(2.25)
+    egD = _eps_diag(1.0)
+    o, R, T, _J, _ng = _pmm_jones_slant_solve(
+        1.0e-6, erD, egD, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6, 0.0,
+        24, 1, 1, True, 21, angle=ai)
+    oL, RL, TL = pmm_efficiency_1d(
+        period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        polarization="tm", degree=24, angle=ai, stabilize=True)
+    assert np.array_equal(o, oL)
+    assert np.max(np.abs(R[0] - RL)) < 1e-3      # row 0 = incident Ex = TM
+    assert np.max(np.abs(T[0] - TL)) < 1e-3
 
 
 def test_jones_slant_segments_raises():
@@ -453,13 +599,20 @@ def test_jones_slant_diag_cure_matches_scalar_by_construction(kind, phi_deg):
 
 
 @pytest.mark.parametrize("phi_deg", [15.0, 30.0, 45.0])
-def test_jones_slant_diag_cure_vs_old_metric_generator(phi_deg):
-    """The cured diagonal output is the SAME PHYSICS as the OLD metric-generator
-    path -- the per-order R agrees to ~2e-4 (the Liu-2015 spurious-mode gap the
-    cure sheds) and T to ~1e-3 (the TM 1/eps inverse-rule convergence) -- AND
-    the cured path conserves energy.  Both paths are stabilized (degree 20 is a
-    metric-generator resonance band; the scalar slant resonance band differs, so
-    a fair physics compare needs the resonance guard on both)."""
+def test_jones_slant_diag_cure_vs_metric_generator(phi_deg):
+    """The cured diagonal output is the SAME PHYSICS as the metric-generator path.
+    As of the round-19 integration the metric generator's Ez closure is ALSO
+    div-conforming (un-gated, all slants), so the Liu-2015 spurious-mode gap is
+    GONE from BOTH paths: the per-order R/T now agree to the tensor-vs-scalar
+    DISCRETIZATION gap (the [E;H] tensor generator self-converges ~2x slower than
+    the scalar slant at steep tilt -- both correct, energy ~1e-13 each).  The gap
+    is degree-limited (deg20-stabilized): R ~2e-4, T ~2e-3 at 45deg, shrinking
+    with degree (see test_jones_slant_diag_cure_matches_scalar_by_construction for
+    the by-construction equality, and the metric generator's own per-order
+    convergence to the scalar oracle 6.5e-4@deg32 / 4.3e-4@deg40 at 45deg).  Both
+    paths are stabilized (degree 20 is a metric-generator resonance band; the
+    scalar slant resonance band differs, so a fair compare needs the guard on
+    both)."""
     phi = np.deg2rad(phi_deg)
     deg = 20
     er = _eps_diag(2.25)
@@ -468,8 +621,8 @@ def test_jones_slant_diag_cure_vs_old_metric_generator(phi_deg):
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
         stabilize=True, **_JGEOM_ASYM)
-    # OLD metric generator path, stabilized the SAME way the public function did
-    # before the cure (call the internal solver directly -> bypass the dispatch).
+    # metric generator path (now div-conforming), stabilized the SAME way -- call
+    # the internal solver directly to bypass the diagonal-cure dispatch.
     margs = (1.0e-6, er, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6,
              phi)
     oM, RM, TM, JM = _stabilize_jones(
@@ -478,9 +631,10 @@ def test_jones_slant_diag_cure_vs_old_metric_generator(phi_deg):
             far_field_orders=21)[:4], deg, "metric-ref")
     assert np.array_equal(o, oM)
     assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12      # cured is diagonal
-    # same physics: R to the ~2e-4 spurious-mode gap, T to the ~1e-3 TM gap
+    # same physics to the tensor-vs-scalar div-conforming convergence gap
+    # (deg20-stabilized; both conserve energy and converge to one answer).
     assert np.max(np.abs(R - RM)) < 2e-4
-    assert np.max(np.abs(T - TM)) < 1e-3
+    assert np.max(np.abs(T - TM)) < 3e-3
     # the cured path conserves energy (cross-pol included)
     assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-3
     assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3

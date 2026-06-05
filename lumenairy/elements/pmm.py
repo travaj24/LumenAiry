@@ -2265,11 +2265,14 @@ def pmm_efficiency_1d_slanted(
 #     -i k gamma psi = L psi,   L = A + B C^-1 D,   psi = [Ex; Ey; iZ Hx; iZ Hy]
 # (Edee & Granet 2024, JOSA A 41(9) 1803, Eqs. 3, 7-15), LINEAR in gamma.  H is a
 # genuine STATE component read directly from the eigenvector (the lower G-block =
-# iZ H), so the modes are flux-orthogonal BY CONSTRUCTION -- the symplectic
-# property a reshaped convection pencil lacks.  Validated (proto round 11):
-# energy ~1e-13 all slants 0-60 BOTH real-symmetric AND gyrotropic, reduces to
-# pmm_jones_1d at phi=0 and to pmm_efficiency_1d_slanted on the diagonal, linear-
-# in-gamma residual ~6e-16.  SCOPE: binary (1 ridge + 1 groove), NORMAL incidence.
+# iZ H), so the modes are energy-conserving BY CONSTRUCTION -- the property a
+# reshaped convection pencil lacks.  Validated (proto round 11): energy ~1e-13 all
+# slants 0-60 BOTH real-symmetric AND gyrotropic, reduces to pmm_jones_1d at phi=0
+# and to pmm_efficiency_1d_slanted on the diagonal, linear-in-gamma residual
+# ~6e-16.  The round-19 div-conforming E_z closure (1/ezz BETWEEN the discrete
+# z-derivatives) + kx0 Bloch wiring extend it to COMBINED OBLIQUE + SLANT (the
+# generator + lab half-spaces conserve + are per-order accurate degree-cleanly).
+# SCOPE: binary (1 ridge + 1 groove), normal OR oblique incidence at any slant.
 # ===========================================================================
 
 def _t3_slant(M):
@@ -2313,6 +2316,16 @@ def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
     keys = ("one", "exx", "eyy", "exy", "eyx", "ezz", "inv_exx", "inv_ezz")
     mass = {k: _z() for k in keys}
     C = _z()
+    # DIV-CONFORMING longitudinal operators for the Gauss-law-clean Ez closure
+    # (round 19): 1/ezz placed BETWEEN the two z-derivatives -- the placement the
+    # div-conforming Ez-elimination in :func:`_build_generator_metric` needs
+    # (Granet 2023 Eq.16-18 / Popov-Neviere App.B), vs the spurious-prone pointwise
+    # [[1/ezz]] average (= ``mass['inv_ezz']``).  ``L_inv_ezz = INT(1/ezz) B' B'``
+    # is the 1/ezz-weighted z-STIFFNESS; ``C_inv_ezz = INT(1/ezz) B B'`` the
+    # 1/ezz-weighted convection (for the kx0 Bloch antisymmetrization at oblique
+    # incidence).  Cheap to accumulate here; inert unless the generator uses them.
+    L_inv_ezz = _z()
+    C_inv_ezz = _z()
     for e in range(n_el):
         xl, xr, t = elem_bnds[e]
         J = 0.5 * (xr - xl)
@@ -2320,6 +2333,7 @@ def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
         Dphys = Dref / J
         Mloc = np.diag(wel)
         Cloc = Mloc @ Dphys
+        Kloc = (Dphys.T * wel) @ Dphys           # INT B' B' (element stiffness)
         idx = l2g[e]
         ix = np.ix_(idx, idx)
         exx, exy, eyx = t["exx"], t["exy"], t["eyx"]
@@ -2332,9 +2346,12 @@ def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
         mass["ezz"][ix] += ezz * Mloc
         mass["inv_exx"][ix] += (1.0 / exx) * Mloc
         mass["inv_ezz"][ix] += (1.0 / ezz) * Mloc
+        L_inv_ezz[ix] += (1.0 / ezz) * Kloc
+        C_inv_ezz[ix] += (1.0 / ezz) * Cloc
         C[ix] += Cloc
     return dict(mass=mass, C=C, S0=mass["one"], n_glob=n_glob, l2g=l2g,
-                elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes)
+                elem_bnds=elem_bnds, degree=degree, ref_nodes=ref_nodes,
+                L_inv_ezz=L_inv_ezz, C_inv_ezz=C_inv_ezz)
 
 
 def _coeff_mass_metric(mats, fn):
@@ -2364,7 +2381,7 @@ def _build_inv_rule_metric(mats, inv_fn, iS0):
     return _safe_inv(iS0 @ M)
 
 
-def _build_generator_metric(mats, k0, slant_angle):
+def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     r"""Assemble the ``4n x 4n`` physical first-order Maxwell generator ``L`` for
     the state ``psi = [Ex; Ey; iZ Hx; iZ Hy]``.  Slant enters ONLY through the
     metric-folded ``eps^lm`` / ``mu^lm``.  Returns ``(L, n)``.
@@ -2380,7 +2397,15 @@ def _build_generator_metric(mats, k0, slant_angle):
     and TM convect identically (the metric is self-consistent).  Each block
     coefficient is a nodal operator (``d1 -> Dop = S0^-1 C``; ``eps^lm/mu^lm ->
     iS0 @ Galerkin mass``), with the Li INVERSE rule on the WALL-NORMAL component
-    (``eps^11``) and DIRECT rule on wall-tangential (``eyy``, ``1/ezz``, ``mu``).
+    (``eps^11``) and DIRECT rule on wall-tangential (``eyy``, ``mu``).
+
+    The longitudinal ``E_z`` closure (the ``(0,3)`` slot) is DIV-CONFORMING (round
+    19): after ``L = A + B Cinv D`` the pointwise ``-(1/k) Dopx [[1/ezz]] Dopx`` is
+    surgically replaced by the Li-inverse-rule ``+(1/k) iS0 INT(1/ezz) B' B'``
+    (``1/ezz`` BETWEEN the z-derivatives) -- see the inline note.  ``kx0`` is the
+    oblique Bloch shift (``Dop -> Dopx = Dop + i kx0`` in B/D, plus the kx0
+    antisym-convection + mass in the ``1/ezz`` bracket); ``kx0 = 0`` is
+    byte-identical to the normal-incidence generator for the in-plane blocks.
     """
     n = mats["n_glob"]
     k = k0                                   # k = omega sqrt(eps0 mu0) = k0
@@ -2398,6 +2423,11 @@ def _build_generator_metric(mats, k0, slant_angle):
 
     # ---- nodal derivative d1 (= D1) ----------------------------------------
     Dop = _safe_solve(S0, mats["C"])         # S0^-1 INT phi phi'
+    # OBLIQUE incidence: the transverse derivative acting on the periodic envelope
+    # is d/dx + i*kx0 (field ~ e^{i kx0 x} u(x), Granet Eq.17 d1 -> i alpha0 + d1).
+    # Inject it into every transverse-derivative slot of B/D.  At kx0 = 0 (normal
+    # incidence) Dopx == Dop, so the generator is byte-identical to the prior path.
+    Dopx = Dop + 1j * kx0 * I
 
     # ---- pointwise material operators (direct rule) -------------------------
     Oeyy = iS0 @ mass["eyy"]                 # [[eyy]]
@@ -2446,9 +2476,9 @@ def _build_generator_metric(mats, k0, slant_angle):
 
     # ===== B (Eq.9, d2=0) (4x2) ; eps^23 = 0 =================================
     B = np.block([
-        [Dop,            (-k) * Mu23],
+        [Dopx,           (-k) * Mu23],
         [Z,              k * Mu13],
-        [(-k) * Z,       Dop],
+        [(-k) * Z,       Dopx],
         [k * Oeps13,     Z],
     ])
 
@@ -2461,11 +2491,35 @@ def _build_generator_metric(mats, k0, slant_angle):
 
     # ===== D (Eq.12, d2=0) (2x4) ; eps^32 = 0 ===============================
     D = np.block([
-        [Z,           Dop,      k * Mu31,  k * Mu32],
-        [k * Oeps31,  (k) * Z,  Z,         Dop],
+        [Z,           Dopx,     k * Mu31,  k * Mu32],
+        [k * Oeps31,  (k) * Z,  Z,         Dopx],
     ])
 
     L = A + B @ Cinv @ D
+
+    # ===== DIV-CONFORMING Ez closure (round 19; un-gated, all slants) ========
+    # The pointwise [[1/ezz]] longitudinal closure that ``B @ Cinv @ D`` injects
+    # into the (Ex-eqn, reads iZHy) slot (0,3) is
+    #     L03_pointwise = -(1/k) Dopx [[1/ezz]] Dopx          (+stiffness, 1/ezz
+    # OUTSIDE the z-derivatives) -- the discrete Gauss-law violation that admits
+    # the Liu-2015 harmonic-mean spurious static null (amplified to 13-33% error
+    # by the kx0 Bloch shift at oblique+slant).  Replace that single slot by the
+    # Li-inverse-rule -stiffness  +(1/k) iS0 INT(1/ezz) B' B'  (1/ezz BETWEEN the
+    # derivatives -- Granet 2023 Eq.16-18 / Popov-Neviere App.B), the SAME
+    # placement the working scalar TM solver (:func:`_sem_modes_slant`) uses.  The
+    # TM-block spectrum then bit-matches the scalar div-conforming TM solver and
+    # the spurious null is gone (per-order TM improves ~9x coupled / ~300x
+    # diagonal-exx!=ezz; energy still ~1e-13).  kx0 enters the longitudinal bracket
+    # via Granet Eq.17: INT(1/ezz)(kx0 + d1)'(kx0 + d1) = L + kx0 antisym-conv +
+    # kx0^2 mass.  The [E;H] block layout is untouched, so the magnetic partner
+    # V = -G stays the genuine (energy-conserving) lower block.
+    Lez = mats["L_inv_ezz"].copy()
+    if kx0:
+        Cas = mats["C_inv_ezz"] - mats["C_inv_ezz"].T
+        Lez = Lez - 1j * kx0 * Cas + (kx0 * kx0) * mass["inv_ezz"]
+    pointwise_long = (-1.0 / k) * (Dopx @ (O_inv_ezz @ Dopx))
+    divconf_long = (1.0 / k) * (iS0 @ Lez)
+    L[0:n, 3 * n:4 * n] += (divconf_long - pointwise_long)
     return L, n
 
 
@@ -2492,18 +2546,27 @@ def _split_modes_flux_metric(W, V, q, lam, n):
             W[:, bidx], V[:, bidx], lam[bidx], q[bidx])
 
 
-def _layer_modes_metric(mats, k0, slant_angle):
+def _layer_modes_metric(mats, k0, slant_angle, kx0=0.0):
     r"""Eigenmodes of the metric generator ``L``: ``L psi = mu psi`` with
     ``mu = -i k0 gamma``, so ``q = gamma = i mu / k0`` and ``lam = -i q =
     mu / k0`` (propagator ``exp(-lam k0 z) = exp(+i q k0 z)``).
 
+    ``kx0`` is the lab transverse incident wavenumber (``k0 Re(n_sup) sin angle``)
+    for OBLIQUE incidence; it enters the generator's transverse derivatives and
+    the div-conforming Ez bracket (Granet Eq.17).  ``kx0 = 0`` = normal incidence.
+
     Returns ``(Wf, Vf, lamf, qf, Wb, Vb, lamb, qb)``: ``W = [Ex; Ey]`` (2n) is
     the eigenvector's upper block, and the partner ``V = -G`` where
-    ``G = psi[2n:]`` is the genuine magnetic state ``iZ H`` -- the uniform gauge
-    sign that aligns this LAYER to the lib half-spaces' ``_sem_modes_tensor``
-    partner convention so they share ONE ``[W; V]`` continuity in
-    ``_interface_smatrix_general``."""
-    L, n = _build_generator_metric(mats, k0, slant_angle)
+    ``G = psi[2n:]`` is the genuine magnetic state ``iZ H``.  This state is
+    ALREADY lab-Cartesian (the slant is folded entirely into the contravariant
+    ``eps^lm/mu^lm``, NOT into the field components), so ``V = -G`` IS the
+    genuinely-continuous lab tangential ``[iZ Hx; iZ Hy]`` across the planar
+    ``y=const`` interface -- it needs NO inclined->lab shear (a Granet Eq.6 shear
+    here would double-count and break continuity; measured directly).  This is the
+    uniform gauge sign that aligns the LAYER to the lib half-spaces'
+    ``_sem_modes_tensor`` partner convention so they share ONE ``[W; V]``
+    continuity in ``_interface_smatrix_general``."""
+    L, n = _build_generator_metric(mats, k0, slant_angle, kx0)
     mu, psi = np.linalg.eig(L)               # L psi = mu psi
     q = 1j * mu / k0                          # mu = -i k0 q  -> q = i mu / k0
     lam = -1j * q                             # = mu / k0
@@ -2522,11 +2585,19 @@ def _half_M_sym_metric(W, V):
 
 def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                            duty, wl, slant_angle, degree, n_ridge_el,
-                           n_groove_el, grade, far_field_orders):
+                           n_groove_el, grade, far_field_orders, angle=0.0):
     """Single-degree slanted-tensor coupled PMM solve from the genuine metric
     generator (the slanted layer) + homogeneous half-spaces (the lib's PROVEN
     :func:`_sem_modes_tensor` modes) + generalized S-matrix + lab-frame Rayleigh
     far field.
+
+    ``angle`` is the incidence angle (radians); it sets the lab transverse Bloch
+    wavenumber ``kx0 = k0 Re(n_sup) sin(angle)`` that enters the div-conforming
+    generator, the half-space modes, and the lab Rayleigh projection.  ``angle =
+    0`` (normal incidence) is byte-identical to the prior signature.  Combined
+    oblique + slant is validated (the div-conforming Ez closure removes the
+    Bloch-amplified Liu-2015 spurious null); the layer + lab half-spaces conserve
+    energy ~1e-13 and the far field is degree-clean at all slants.
 
     Returns ``(orders, R(2,N), T(2,N), jones(2,2), n_glob)`` in the PUBLIC
     ``exp(-i w t)`` convention (row/column 0 = incident ``E_x``, 1 = incident
@@ -2535,6 +2606,7 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     eg = np.asarray(eps_groove3, dtype=_C)
     eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
     k0 = 2.0 * np.pi / wl
+    kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
     d_wall = duty * period
 
     mats = _build_nodal_metric(period, d_wall, _t3_slant(er), _t3_slant(eg),
@@ -2553,9 +2625,9 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     n_glob = mats["n_glob"]
 
     Wf_l, Vf_l, lamf_l, _qf, Wb_l, Vb_l, lamb_l, _qb = _layer_modes_metric(
-        mats, k0, slant_angle)
-    Ws, Vs, _ls, _qs = _sem_modes_tensor(mats_sup, k0, 0.0, True)
-    Wsub, Vsub, _lb, _qb2 = _sem_modes_tensor(mats_sub, k0, 0.0, True)
+        mats, k0, slant_angle, kx0)
+    Ws, Vs, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0, True)
+    Wsub, Vsub, _lb, _qb2 = _sem_modes_tensor(mats_sub, k0, kx0, True)
     Ms = _half_M_sym_metric(Ws, Vs)
     Mb = _half_M_sym_metric(Wsub, Vsub)
     Ml = np.block([[Wf_l, Wb_l], [Vf_l, Vb_l]])
@@ -2577,7 +2649,7 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     half = (n_proj - 1) // 2
     orders = np.arange(-half, half + 1)
     G = 2.0 * np.pi / period
-    kx = (orders * G) / k0
+    kx = (kx0 + orders * G) / k0              # Bloch-shifted order wavenumbers
     N = len(orders)
     Tp = _sem_fourier_projection(orders, period, mats)
 
@@ -2595,7 +2667,8 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
 
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
-    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([0.0]))[0]))
+    kx0n = kx0 / k0
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0n]))[0]))
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
     m0 = np.where(orders == 0)[0][0]
@@ -2612,7 +2685,12 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
         tx, ty = t_ord[:N], t_ord[N:]
         rz = -(kx * rx) / safe_r
         tz = -(kx * tx) / safe_t
-        flux_inc = kz_inc
+        # OBLIQUE incident-flux normalization: the col-0 (Ex, p-pol/TM) incident
+        # wave carries Ez_inc = -kx0 Ex/kz_inc, so its z-flux is
+        # kz_inc(1 + (kx0/kz_inc)^2); col-1 (Ey, s-pol/TE) has Ez_inc = 0.  At
+        # kx0 = 0 both reduce to kz_inc (byte-identical to normal incidence).
+        flux_inc = (kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0
+                    else kz_inc)
         Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
                                 + np.abs(rz) ** 2) / flux_inc
         Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
@@ -2626,7 +2704,7 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
 
 def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
                                 slant_angle, degree, elements_per_region, grade,
-                                far_field_orders):
+                                far_field_orders, angle=0.0):
     r"""DIAGONAL-tensor slanted-Jones solve via the DIV-CONFORMING scalar slant
     operator (THE DIAGONAL CURE, round 16).
 
@@ -2648,7 +2726,33 @@ def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
     See Granet 2017 (JOSA A 34:975) / Granet 2023 for the scalar slant operator
     and Liu 2015 (CiCP 18:467) for the divergence (Gauss-law) condition the
     pointwise metric-generator Ez-elimination violates."""
-    kw = dict(angle=0.0, elements_per_region=int(elements_per_region),
+    # DEFENSE-IN-DEPTH (fail loud, never silently wrong): the scalar-channel cure is
+    # EXACT only inside its validity domain -- a diagonal tensor (exy=eyx=0) with
+    # exx==ezz, at normal incidence OR on a vertical grating (NOT combined oblique +
+    # slant, whose scalar per-order split is wrong while energy still conserves --
+    # the lossless trap that defeats an energy assertion).  The dispatch in
+    # pmm_jones_1d_slanted already enforces exactly this domain before routing here;
+    # the cure RE-ASSERTS it so any future mis-route or direct call raises instead
+    # of returning a wrong answer (a missing off-diagonal Jones, a wrong TM index,
+    # or a ~10%-wrong oblique+slant split).
+    er = np.asarray(er, dtype=_C)
+    eg = np.asarray(eg, dtype=_C)
+    _scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
+    _inplane_off = max(abs(er[0, 1]), abs(er[1, 0]), abs(eg[0, 1]), abs(eg[1, 0]))
+    _exx_eq_ezz = max(abs(er[0, 0] - er[2, 2]), abs(eg[0, 0] - eg[2, 2]))
+    if _inplane_off > 1e-9 * _scale or _exx_eq_ezz > 1e-9 * _scale:
+        raise RuntimeError(
+            "pmm_jones_1d_slanted (diagonal cure): the scalar-channel cure requires "
+            "a DIAGONAL in-plane tensor (exy=eyx=0) with exx==ezz in both regions; "
+            "a coupled or exx!=ezz tensor must route through the metric generator "
+            "-- internal dispatch invariant violated.")
+    if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
+        raise RuntimeError(
+            "pmm_jones_1d_slanted (diagonal cure): combined oblique incidence + "
+            "nonzero slant must route through the metric generator, not the scalar "
+            "diagonal cure (its per-order split is wrong for that combination) -- "
+            "internal dispatch invariant violated.")
+    kw = dict(angle=float(angle), elements_per_region=int(elements_per_region),
               grade=bool(grade), far_field_orders=int(far_field_orders),
               degree=int(degree), return_coeffs=True)
     # TM channel: wall-normal exx (== ezz, asserted by the caller's dispatch).
@@ -2733,9 +2837,14 @@ def pmm_jones_1d_slanted(
         reduces to :func:`pmm_jones_1d`).  Validated for ``0 <= slant_angle <=
         ~60 deg`` (conditioning grows as ``sec^2`` at steep tilt).
     angle : float, optional
-        Incidence angle (radians).  MUST be ``0`` (normal incidence) when
-        ``slant_angle != 0`` -- combined oblique + slant is not supported and
-        raises ``NotImplementedError`` (use ``rcwa`` staircase for that case).
+        Incidence angle (radians).  COMBINED oblique incidence + nonzero slant is
+        SUPPORTED (the round-19 div-conforming ``E_z`` closure removes the
+        Bloch-amplified Liu-2015 spurious null; ``kx0 = k0 Re(n_sup) sin(angle)``
+        is wired through the generator, the half-spaces, and the lab Rayleigh far
+        field): the metric generator conserves energy ~1e-13 and the per-order
+        split matches an RCWA staircase to ~2-3e-3, degree-cleanly (no stabilize
+        crutch).  Combined oblique + slant always routes through the metric
+        generator (the scalar diagonal cure's oblique+slant per-order is wrong).
     degree, elements_per_region, grade, far_field_orders, stabilize : as in
         :func:`pmm_jones_1d`.
 
@@ -2754,24 +2863,33 @@ def pmm_jones_1d_slanted(
 
     Notes
     -----
-    NumPy / SciPy (dense eig); not JAX-differentiable.  SCOPE: NORMAL incidence,
-    BINARY grating (1 ridge + 1 groove), in-plane tensor only.  Combined oblique
-    + slant and the multi-region (segments) path are not supported (they raise
-    ``NotImplementedError`` / there is no ``..._slanted_segments`` companion).
+    NumPy / SciPy (dense eig); not JAX-differentiable.  SCOPE: BINARY grating
+    (1 ridge + 1 groove), in-plane tensor only, normal OR oblique incidence at any
+    slant.  The multi-region (segments) path is not supported (there is no
+    ``..._slanted_segments`` companion -- it raises ``NotImplementedError``).
 
     DIAGONAL CURE (round 16; Granet 2017 JOSA A 34:975 / Granet 2023; Liu 2015
     CiCP 18:467).  A DIAGONAL tensor (``exy = eyx = 0``) WITH ``exx == ezz`` in
-    BOTH regions is solved through the DIV-CONFORMING scalar slant operator
-    (``_sem_modes_slant``: the Li ``1/eps`` inverse rule sits INSIDE the
-    z-stiffness, so it is free of the Liu-2015 spurious harmonic-mean static
-    mode) -- TE via ``n = sqrt(eyy)``, TM via ``n = sqrt(exx)``, assembled into
-    the diagonal Jones.  This is the MORE-ACCURATE path.  COUPLED tensors
-    (``exy / eyx != 0``) AND diagonal tensors with ``exx != ezz`` keep the
-    pointwise covariant-metric generator (``_build_metric_generator``), which
-    eliminates ``E_z`` with a pointwise ``[[1/ezz]]`` average that does NOT
-    enforce the discrete Gauss law -> a LATENT ~2e-4 per-order accuracy gap
-    (energy still conserves to ~1e-12).  The full coupled / diagonal-anisotropic
-    div-conforming cure is a documented frontier (``docs/PMM_ROADMAP.md`` sec 8).
+    BOTH regions at NORMAL incidence (or any incidence on a VERTICAL grating) is
+    solved through the DIV-CONFORMING scalar slant operator (``_sem_modes_slant``:
+    the Li ``1/eps`` inverse rule sits INSIDE the z-stiffness, so it is free of the
+    Liu-2015 spurious harmonic-mean static mode) -- TE via ``n = sqrt(eyy)``, TM
+    via ``n = sqrt(exx)``, assembled into the diagonal Jones.  This is the FASTER
+    (scalar ``n x n`` vs tensor ``4n x 4n``) and MORE-ACCURATE-per-degree path for
+    that case.
+
+    METRIC GENERATOR (round 11 + round-19 div-conforming closure).  COUPLED
+    tensors (``exy / eyx != 0``), diagonal tensors with ``exx != ezz``, AND ALL
+    combined oblique+slant cases use the covariant-metric ``[E;H]`` first-order
+    generator (``_build_generator_metric``).  As of round 19 its ``E_z``
+    elimination is DIV-CONFORMING at ALL slants (``1/ezz`` placed BETWEEN the
+    discrete z-derivatives, ``+ iS0 INT(1/ezz) B' B'``, Granet 2023 Eq.16-18 /
+    Popov-Neviere App.B), so its TM-block spectrum bit-matches the scalar slant
+    solver, is free of the Liu-2015 spurious harmonic-mean null, and per-order TM
+    converges to the scalar oracle (~6.5e-4 deg32 / ~4.3e-4 deg40 at 45 deg).
+    Energy conserves to ~1e-13 in all paths.  The combined oblique+slant far field
+    (inclined-frame consistent, lab half-spaces) is degree-clean -- no stabilize
+    crutch.
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
@@ -2796,13 +2914,6 @@ def pmm_jones_1d_slanted(
             "IN-PLANE tensor subset (exx, exy, eyx, eyy, ezz); the supplied "
             "tensor has out-of-plane coupling (eps_xz / eps_yz / eps_zx / "
             "eps_zy != 0).")
-    if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
-        raise NotImplementedError(
-            "pmm_jones_1d_slanted: combined OBLIQUE incidence + nonzero slant "
-            "is not supported (the inclined-frame Bloch<->slant convection "
-            "cross-term is unresolved). Use normal incidence (angle=0) with any "
-            "slant, a vertical grating (slant_angle=0) at any angle via "
-            "pmm_jones_1d, or rcwa (staircase) for oblique + slant.")
 
     # ---- THE DIAGONAL CURE (round 16, Granet 2017/2023; Liu 2015) -----------
     # For a DIAGONAL in-plane tensor (exy = eyx = 0) WITH exx == ezz BOTH
@@ -2815,19 +2926,32 @@ def pmm_jones_1d_slanted(
     # the pointwise metric-generator Ez-elimination (_build_metric_generator,
     # O_inv_ezz = iS0 @ [[1/ezz]]) carries (energy still conserves to ~1e-12).
     # Coupled tensors (exy/eyx != 0) AND diagonal tensors with exx != ezz fall
-    # through to the metric generator UNCHANGED and retain that latent gap; the
-    # full coupled / diagonal-anisotropic div-conforming cure is a documented
-    # frontier (docs/PMM_ROADMAP.md sec 8).
+    # through to the metric generator (now div-conforming at all slants, so the
+    # latent gap is gone there too).
+    #
+    # COMBINED OBLIQUE + SLANT is the ONE case the diagonal cure must NOT take:
+    # the scalar slant operator's per-order split is wrong for oblique + nonzero
+    # slant (energy still conserves -- a lossless cell auto-balances total power --
+    # which is exactly why :func:`pmm_efficiency_1d_slanted` forbids that combo).
+    # The round-19 div-conforming METRIC GENERATOR is the validated oblique+slant
+    # path (per-order matches an RCWA staircase to ~2e-3, degree-clean), so route
+    # combined oblique+slant through it even for a diagonal cell.  Oblique on a
+    # VERTICAL grating (slant=0) and slant at NORMAL incidence are both still
+    # handled correctly by the (more-accurate) scalar cure.
     inplane_off = max(abs(er[0, 1]), abs(er[1, 0]),
                       abs(eg[0, 1]), abs(eg[1, 0]))
     exx_eq_ezz = max(abs(er[0, 0] - er[2, 2]), abs(eg[0, 0] - eg[2, 2]))
+    combined_oblique_slant = (abs(float(angle)) > 1e-12
+                              and abs(float(slant_angle)) > 1e-12)
     diagonal_cure = (inplane_off <= 1e-9 * scale
-                     and exx_eq_ezz <= 1e-9 * scale)
+                     and exx_eq_ezz <= 1e-9 * scale
+                     and not combined_oblique_slant)
     if diagonal_cure:
         dargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
         dkw = dict(elements_per_region=int(elements_per_region),
-                   grade=bool(grade), far_field_orders=int(far_field_orders))
+                   grade=bool(grade), far_field_orders=int(far_field_orders),
+                   angle=float(angle))
         if not stabilize:
             return _pmm_jones_slant_diag_solve(*dargs, degree=int(degree),
                                                **dkw)
@@ -2839,7 +2963,7 @@ def pmm_jones_1d_slanted(
             duty_cycle, wavelength, float(slant_angle))
     kw = dict(n_ridge_el=int(elements_per_region),
               n_groove_el=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders))
+              far_field_orders=int(far_field_orders), angle=float(angle))
 
     if not stabilize:
         o, R, T, J, _ = _pmm_jones_slant_solve(*args, degree=int(degree), **kw)
