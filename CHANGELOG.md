@@ -221,9 +221,21 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   warns on complex64. SCOPE (the de-risking spike): binary, NORMAL incidence,
   `elements_per_region=1`, fixed `degree` with `stabilize=False`, real lossless eps;
   `angle≠0` / `stabilize=True` / `elements_per_region>1` raise precise errors on the
-  JAX path (NumPy-only). Moving-boundary (`duty_cycle`) gradients, oblique, complex/
-  lossy eps, and the Jones path are follow-on increments. Requires `lumenairy[jax]`
-  + `jax_enable_x64`. Tests in `tests/unit/test_v5_12_0_pmm_autodiff.py`.
+  JAX path (NumPy-only). Oblique, complex/lossy eps, and the Jones path are follow-on
+  increments. Requires `lumenairy[jax]` + `jax_enable_x64`. Tests in
+  `tests/unit/test_v5_12_0_pmm_autodiff.py`.
+- **`pmm_efficiency_1d` — moving-boundary `duty_cycle` gradient (JAX Phase 2).**
+  Extends the differentiable surface to the grating wall position: `d/d(duty_cycle)`
+  now flows through a smooth **fixed-topology moving mesh** — the wall sits exactly
+  on an element boundary, so the element Jacobians `J=½(x_r−x_l)` (and the masses
+  `∝J` / stiffness `∝1/J`) and the Rayleigh-projection phases `exp(−iG_m x(u))` carry
+  the gradient analytically, with the element **count held fixed** (no remeshing, no
+  Gibbs/Li-rule-of-a-blurred-step non-smoothness — the structural advantage PMM has
+  over RCWA, which cannot differentiate `duty_cycle` at all). Validated: `jax.grad`
+  vs a central finite difference that **physically moves the wall** to rtol ~1e-6
+  (TE+TM, multiple cells); forward jnp≡numpy to ~1e-14; the numpy path and the
+  Phase-1 `eps`/`depth`/`wavelength` gradients are unchanged; jit-compiles; a
+  degenerate `duty=0/1` (zero-width region, singular Jacobian) raises in eager mode.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

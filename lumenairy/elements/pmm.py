@@ -1387,21 +1387,34 @@ def pmm_jones_1d(
 # branch is forward-identical to the NumPy binary solve on the validated cells.
 
 
-def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
-    """Precompute the eps-INDEPENDENT spectral-element topology + per-element
-    local mass / stiffness (all NumPy; frozen as jnp constants downstream).
+def _graded_fractions(n_el, grade):
+    """The dimensionless element-boundary fractions s in [0, 1] (n_el+1 values)
+    mirroring :func:`_graded_boundaries` -- the d_wall-INDEPENDENT part of the
+    boundary map.  Physical boundaries are then a + (b - a) * s, which is a
+    SMOOTH (linear) function of the endpoints, hence differentiable in d_wall.
+    """
+    if n_el <= 1:
+        return np.array([0.0, 1.0])
+    if not grade:
+        return np.linspace(0.0, 1.0, n_el + 1)
+    i = np.arange(n_el + 1)
+    return 0.5 * (1.0 - np.cos(np.pi * i / n_el))
 
-    Mirrors :func:`_build_sem` but factors out the eps-weighted assembly so the
-    differentiable path can rebuild S0 / Peps / Pinv / L / Linv functionally
-    from traced ``eps_ridge`` / ``eps_groove``.  Region id 0 = ridge, 1 =
-    groove."""
+
+def _jpmm_build_topology(degree, n_ridge_el, n_groove_el, grade):
+    """The truly-STATIC spectral-element topology -- depends ONLY on
+    degree / element counts / grading, NOT on d_wall.  Returns the GLL
+    reference nodes/weights, the reference derivative matrix, the local->global
+    map, the per-region element fractions, and the region ids.  This is frozen
+    as NumPy constants; the d_wall-dependent geometry (boundaries, Jacobians,
+    masses, stiffnesses, projection phases) is rebuilt by
+    :func:`_jpmm_build_dynamic` so the duty-cycle gradient flows."""
     ref_nodes, ref_w = _gll_nodes_weights(degree)
     Dref = _lagrange_derivative_matrix(ref_nodes)
-    rb = _graded_boundaries(0.0, d_wall, n_ridge_el, grade)
-    gb = _graded_boundaries(d_wall, period, n_groove_el, grade)
-    elem = ([(rb[i], rb[i + 1], 0) for i in range(n_ridge_el)]
-            + [(gb[i], gb[i + 1], 1) for i in range(n_groove_el)])
-    n_el = len(elem)
+    rfrac = _graded_fractions(n_ridge_el, grade)   # ridge boundary fractions
+    gfrac = _graded_fractions(n_groove_el, grade)  # groove boundary fractions
+    n_el = n_ridge_el + n_groove_el
+    region = np.array([0] * n_ridge_el + [1] * n_groove_el, dtype=int)
     l2g = np.zeros((n_el, degree + 1), dtype=int)
     gid = 0
     for e in range(n_el):
@@ -1414,20 +1427,75 @@ def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
     last = l2g[n_el - 1, degree]
     l2g[l2g == last] = 0
     n_glob = last
+    return dict(l2g=l2g, n_glob=n_glob, n_el=n_el, degree=degree,
+                n_ridge_el=n_ridge_el, n_groove_el=n_groove_el,
+                ref_nodes=ref_nodes, ref_w=ref_w, Dref=Dref,
+                rfrac=rfrac, gfrac=gfrac, region=region)
+
+
+def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
+    """Precompute the eps-INDEPENDENT spectral-element topology + per-element
+    local mass / stiffness (all NumPy; frozen as jnp constants downstream).
+
+    Mirrors :func:`_build_sem` but factors out the eps-weighted assembly so the
+    differentiable path can rebuild S0 / Peps / Pinv / L / Linv functionally
+    from traced ``eps_ridge`` / ``eps_groove``.  Region id 0 = ridge, 1 =
+    groove.
+
+    Kept as the NumPy (concrete, non-duty-traced) path: it composes the static
+    topology with the concrete d_wall geometry.  The duty-traced path uses
+    :func:`_jpmm_build_topology` + :func:`_jpmm_build_dynamic` instead so the
+    Jacobians / masses / stiffnesses / projection phases carry the d_wall
+    gradient."""
+    topo = _jpmm_build_topology(degree, n_ridge_el, n_groove_el, grade)
+    ref_w, Dref = topo["ref_w"], topo["Dref"]
+    rb = 0.0 + (d_wall - 0.0) * topo["rfrac"]
+    gb = d_wall + (period - d_wall) * topo["gfrac"]
+    elem = ([(rb[i], rb[i + 1]) for i in range(n_ridge_el)]
+            + [(gb[i], gb[i + 1]) for i in range(n_groove_el)])
+    n_el = topo["n_el"]
     Mloc = np.zeros((n_el, degree + 1))
     Kloc = np.zeros((n_el, degree + 1, degree + 1))
-    region = np.zeros(n_el, dtype=int)
-    for e, (xl, xr, rid) in enumerate(elem):
+    for e, (xl, xr) in enumerate(elem):
         J = 0.5 * (xr - xl)
         wel = ref_w * J
         Dphys = Dref / J
         Mloc[e] = wel
         Kloc[e] = (Dphys.T * wel) @ Dphys
-        region[e] = rid
-    return dict(l2g=l2g, n_glob=n_glob, n_el=n_el, degree=degree,
-                Mloc=Mloc, Kloc=Kloc, region=region,
-                elem_bnds=[(xl, xr) for (xl, xr, _) in elem],
-                ref_nodes=ref_nodes)
+    d = dict(topo)
+    d.update(Mloc=Mloc, Kloc=Kloc,
+             elem_bnds=[(xl, xr) for (xl, xr) in elem])
+    return d
+
+
+def _jpmm_build_dynamic(topo, jnp, period, d_wall):
+    """Rebuild the d_wall-DEPENDENT spectral-element geometry in jnp so the
+    duty-cycle gradient flows through the moving Jacobians.
+
+    With the element COUNT held FIXED (the static topology), every global
+    matrix entry is an ANALYTIC function of ``d_wall``: the element boundaries
+    rb / gb are linear in d_wall, the Jacobian ``J = 0.5*(xr - xl)`` is linear,
+    the local mass ``Mloc = ref_w * J`` scales as J, and the stiffness
+    ``Kloc = (Dref/J)^T (ref_w*J) (Dref/J)`` scales as 1/J.  Returns jnp arrays
+    ``Mloc`` (n_el, p+1), ``Kloc`` (n_el, p+1, p+1) and per-element endpoints
+    ``xl`` / ``xr`` (n_el,) for the differentiable Fourier projection."""
+    ref_w = jnp.asarray(topo["ref_w"])
+    Dref = jnp.asarray(topo["Dref"])
+    rfrac = jnp.asarray(topo["rfrac"])
+    gfrac = jnp.asarray(topo["gfrac"])
+    n_ridge_el = topo["n_ridge_el"]
+    # Physical boundaries: linear (hence smooth) in d_wall.
+    rb = d_wall * rfrac                              # [0, d_wall] graded
+    gb = d_wall + (period - d_wall) * gfrac          # [d_wall, period] graded
+    xl = jnp.concatenate([rb[:-1], gb[:-1]])
+    xr = jnp.concatenate([rb[1:], gb[1:]])
+    J = 0.5 * (xr - xl)                              # (n_el,)
+    Mloc = ref_w[None, :] * J[:, None]               # (n_el, p+1)
+    # Kloc[e] = (Dref/J).T @ diag(ref_w*J) @ (Dref/J) = (Dref.T @ diag(ref_w)
+    # @ Dref) / J  -- assemble via einsum to keep it a clean traced tensor.
+    Kref = jnp.einsum("ai,a,aj->ij", Dref, ref_w, Dref)   # (p+1, p+1), static-ish
+    Kloc = Kref[None, :, :] / J[:, None, None]       # (n_el, p+1, p+1)
+    return dict(Mloc=Mloc, Kloc=Kloc, xl=xl, xr=xr)
 
 
 def _jpmm_order_set(static, period, wl, n_max, far_field_orders, degree, label):
@@ -1495,17 +1563,86 @@ def _jpmm_fourier_projection(orders, period, static):
     return T
 
 
-def _jpmm_assemble(static, jnp, eps_ridge, eps_groove):
+def _jpmm_projection_quad(static):
+    """The d_wall-INDEPENDENT quadrature pieces of the Fourier projection: the
+    Gauss-Legendre reference nodes ``xg`` / weights ``wg`` and the Lagrange
+    nodal-basis values ``Lv`` (nq, p+1) sampled at those nodes.  All static
+    (depend only on degree).  Returned for reuse by the duty-traced jnp
+    projection :func:`_jpmm_fourier_projection_jax`."""
+    from numpy.polynomial.legendre import leggauss
+    degree = static["degree"]
+    ref_nodes = static["ref_nodes"]
+    nq = max(2 * degree + 8, 24)
+    xg, wg = leggauss(nq)
+    wbary = np.ones(degree + 1)
+    for j in range(degree + 1):
+        for k in range(degree + 1):
+            if k != j:
+                wbary[j] /= (ref_nodes[j] - ref_nodes[k])
+    Lv = np.zeros((nq, degree + 1))
+    for r, x in enumerate(xg):
+        diff = x - ref_nodes
+        if np.any(np.abs(diff) < 1e-14):
+            Lv[r, np.argmin(np.abs(diff))] = 1.0
+        else:
+            num = wbary / diff
+            Lv[r, :] = num / num.sum()
+    return xg, wg, Lv
+
+
+def _jpmm_fourier_projection_jax(orders, period, static, jnp, dyn, quad):
+    """``T[m, i]`` Rayleigh projection rebuilt in jnp from the traced per-element
+    endpoints (``dyn['xl']`` / ``dyn['xr']``), so the duty-cycle gradient flows
+    through the projection PHASES (x = 0.5*(xr+xl) + J*xi depends on d_wall).
+
+    Algebra-identical to :func:`_jpmm_fourier_projection`; only the duty-moving
+    physical node positions are traced, while the quadrature (xg, wg, Lv) and
+    the global index map stay static."""
+    cj = jnp.complex128
+    l2g = static["l2g"]
+    degree = static["degree"]
+    n_glob = static["n_glob"]
+    n_el = static["n_el"]
+    xg, wg, Lv = quad
+    xg = jnp.asarray(xg)
+    wg = jnp.asarray(wg)
+    Lv = jnp.asarray(Lv, cj)
+    G = 2.0 * np.pi / period
+    orders_j = jnp.asarray(orders)
+    xl = dyn["xl"]
+    xr = dyn["xr"]
+    T = jnp.zeros((len(orders), n_glob), cj)
+    for e in range(n_el):
+        Je = 0.5 * (xr[e] - xl[e])
+        xphys = 0.5 * (xr[e] + xl[e]) + Je * xg            # (nq,)
+        phase = jnp.exp(-1j * jnp.outer(orders_j * G, xphys))   # (M, nq)
+        contrib = (phase * (wg * Je / period)) @ Lv        # (M, p+1)
+        idx = l2g[e]
+        for a in range(degree + 1):
+            T = T.at[:, idx[a]].add(contrib[:, a])
+    return T
+
+
+def _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=None):
     """Functionally assemble S0 / Peps / Pinv / L / Linv in jnp from the static
     per-element operators and the (traced) ridge / groove permittivities (eps
-    enters the masses linearly).  Normal incidence -> no convection / kx0^2."""
+    enters the masses linearly).  Normal incidence -> no convection / kx0^2.
+
+    When ``dyn`` (a :func:`_jpmm_build_dynamic` result) is supplied, the
+    duty-traced per-element ``Mloc`` / ``Kloc`` are used instead of the frozen
+    numpy ones, so the duty-cycle gradient flows through the moving Jacobians.
+    """
     cj = jnp.complex128
     n_glob = static["n_glob"]
     n_el = static["n_el"]
     l2g = static["l2g"]
     region = static["region"]
-    Mloc = jnp.asarray(static["Mloc"], cj)
-    Kloc = jnp.asarray(static["Kloc"], cj)
+    if dyn is None:
+        Mloc = jnp.asarray(static["Mloc"], cj)
+        Kloc = jnp.asarray(static["Kloc"], cj)
+    else:
+        Mloc = jnp.asarray(dyn["Mloc"], cj)
+        Kloc = jnp.asarray(dyn["Kloc"], cj)
     eps_of = [eps_ridge, eps_groove]
     S0 = jnp.zeros((n_glob, n_glob), cj)
     Peps = jnp.zeros_like(S0)
@@ -1551,19 +1688,24 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization):
 
 
 def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
-                eps_sup, eps_sub, depth, wl, polarization):
+                eps_sup, eps_sub, depth, wl, polarization, dyn=None):
     """Self-contained jnp binary / normal-incidence scalar PMM solve.  Returns
     ``(orders, R, T)`` as jnp arrays, differentiable w.r.t. the permittivities,
     ``depth`` and ``wl``.  Algebra-identical to :func:`_pmm_solve_core` at
-    kx0 = 0."""
+    kx0 = 0.
+
+    When ``dyn`` is supplied (a :func:`_jpmm_build_dynamic` result), the
+    duty-moving Jacobians drive ALL three mass assemblies (layer + both
+    half-spaces share ONE mesh, so the [W;V] interface continuity is consistent)
+    and the duty-cycle gradient flows through the geometry."""
     cj = jnp.complex128
     k0 = 2.0 * jnp.pi / wl
     G = 2.0 * np.pi / period
     kx = (jnp.asarray(orders) * G) / k0          # kx0 = 0 (normal incidence)
 
-    M = _jpmm_assemble(static, jnp, eps_ridge, eps_groove)
-    Msup = _jpmm_assemble(static, jnp, eps_sup, eps_sup)
-    Msub = _jpmm_assemble(static, jnp, eps_sub, eps_sub)
+    M = _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=dyn)
+    Msup = _jpmm_assemble(static, jnp, eps_sup, eps_sup, dyn=dyn)
+    Msub = _jpmm_assemble(static, jnp, eps_sub, eps_sub, dyn=dyn)
 
     Acoef, lam_l, q_l, invop = _jpmm_sem_modes(M, jnp, eig, k0, polarization)
     Wl = Acoef
@@ -1683,12 +1825,28 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
                   if v is not None]
     n_max = max(n_max_vals) if n_max_vals else 1.0
 
-    d_wall = float(duty_cycle) * period_c
-    static = _jpmm_build_static(period_c, d_wall, int(degree), 1, 1, bool(grade))
+    # A CONCRETE duty value sizes the static topology + order set (shape-fixing).
+    # When duty_cycle is the traced grad variable it arrives as an abstract
+    # tracer; the topology (element COUNT, l2g, region) is duty-INDEPENDENT, so
+    # any concrete proxy keeps shapes static while the d_wall-dependent geometry
+    # (Jacobians, masses, projection phases) is rebuilt below in jnp from the
+    # TRACED d_wall (Route B: smooth fixed-topology moving mesh).
+    duty_traced = is_jax_array(duty_cycle)
+    duty_c = _re_or_none(duty_cycle)
+    if duty_c is None:
+        duty_c = 0.5                                   # shape-only proxy
+    if not (0.0 < duty_c < 1.0):
+        raise ValueError(
+            "pmm_efficiency_1d: the JAX (differentiable) path needs a strictly "
+            f"interior duty_cycle (0 < duty < 1), got {duty_c}; a zero-width "
+            "ridge or groove collapses an element (singular Jacobian).")
+    d_wall_c = duty_c * period_c
+    # The static topology depends ONLY on degree / element count / grading.
+    static = _jpmm_build_static(period_c, d_wall_c, int(degree), 1, 1,
+                                bool(grade))
     orders = _jpmm_order_set(static, period_c, wl_c, n_max,
                              int(far_field_orders), int(degree),
                              "pmm_efficiency_1d")
-    Tp = jnp.asarray(_jpmm_fourier_projection(orders, period_c, static), cj)
 
     n_ridge = jnp.asarray(n_ridge, cj)
     n_groove = jnp.asarray(n_groove, cj)
@@ -1701,10 +1859,23 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     eps_sup = n_superstrate ** 2
     eps_sub = n_substrate ** 2
 
+    if duty_traced:
+        # Route B: rebuild the moving geometry in jnp so the duty gradient flows
+        # through the Jacobians (masses / stiffnesses) AND the projection phases.
+        d_wall = jnp.asarray(duty_cycle) * period_c
+        topo = _jpmm_build_topology(int(degree), 1, 1, bool(grade))
+        dyn = _jpmm_build_dynamic(topo, jnp, period_c, d_wall)
+        quad = _jpmm_projection_quad(static)
+        Tp = _jpmm_fourier_projection_jax(orders, period_c, static, jnp, dyn,
+                                          quad)
+    else:
+        dyn = None
+        Tp = jnp.asarray(_jpmm_fourier_projection(orders, period_c, static), cj)
+
     eig = _jax_eig_stable()
     o, R, T = _jpmm_solve(static, orders, Tp, jnp, eig, period_c,
                           eps_ridge, eps_groove, eps_sup, eps_sub,
-                          depth, wavelength, polarization)
+                          depth, wavelength, polarization, dyn=dyn)
     return jnp.asarray(orders), R, T
 
 
@@ -1789,8 +1960,11 @@ def pmm_efficiency_1d(
     NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** when
     any index / geometry argument is a JAX array (mirrors ``rcwa``): the call then
     routes to a self-contained ``jax.numpy`` twin and returns ``jax.grad``-able
-    efficiencies w.r.t. ``eps`` (via ``n``), ``depth`` and ``wavelength``, reusing
-    the validated Lorentzian-broadened custom-VJP eig from ``rcwa``.  The numpy
+    efficiencies w.r.t. ``eps`` (via ``n``), ``depth``, ``wavelength`` AND
+    ``duty_cycle`` (the moving grating wall -- a smooth fixed-topology shape
+    gradient: the wall sits on an element boundary so the element Jacobians and the
+    Rayleigh-projection phases carry it analytically, no remeshing), reusing the
+    validated Lorentzian-broadened custom-VJP eig from ``rcwa``.  The numpy
     path is **byte-identical** (the JAX branch fires only on JAX inputs).  The
     differentiable surface is the minimal validated one -- binary, NORMAL incidence,
     ``elements_per_region=1``, a single fixed ``degree`` with ``stabilize=False``
@@ -1812,10 +1986,13 @@ def pmm_efficiency_1d(
             f"{polarization!r}.")
     if int(degree) < 2:
         raise ValueError("pmm_efficiency_1d: degree must be >= 2.")
-    if not (0.0 <= float(duty_cycle) <= 1.0):
-        raise ValueError(
-            f"pmm_efficiency_1d: duty_cycle must be in [0, 1], got "
-            f"{duty_cycle}.")
+    # A TRACED (jit) duty_cycle has no concrete value to range-check; the JAX
+    # path enforces 0 < duty < 1 on the concrete proxy / leading value instead.
+    if not is_jax_array(duty_cycle):
+        if not (0.0 <= float(duty_cycle) <= 1.0):
+            raise ValueError(
+                f"pmm_efficiency_1d: duty_cycle must be in [0, 1], got "
+                f"{duty_cycle}.")
 
     # JAX (differentiable) dispatch -- mirror rcwa's backend detection.  Routed
     # to the self-contained jnp twin ONLY when an index / geometry input is a
@@ -1825,7 +2002,8 @@ def pmm_efficiency_1d(
     # branch MUST precede the _C(...) coercion below, which would sever the JAX
     # trace.
     if any(is_jax_array(a) for a in (n_ridge, n_groove, n_substrate,
-                                     n_superstrate, depth, wavelength)):
+                                     n_superstrate, depth, wavelength,
+                                     duty_cycle)):
         if float(angle) != 0.0:
             raise NotImplementedError(
                 "pmm_efficiency_1d: the JAX (differentiable) path supports "
