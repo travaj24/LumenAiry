@@ -202,6 +202,28 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   incidence (and any vertical grating) keeps the dedicated scalar solver
   unchanged. No new public API; out-of-plane + slant remains guarded (per-order
   unresolved — see the `pmm_jones_1d` out-of-plane entry).
+- **`pmm_efficiency_1d` — JAX-differentiable** (inverse-design enablement, first
+  increment). Passing a JAX array for any index/geometry argument routes the call
+  to a self-contained `jax.numpy` twin (mirroring how `rcwa` dispatches), returning
+  `jax.grad`/`jit`/`vmap`-able efficiencies differentiable w.r.t. `eps_ridge` /
+  `eps_groove` (via `n`), `depth`, `wavelength`, and the half-space indices. The
+  hardest component — the non-Hermitian eigendecomposition VJP with degeneracy
+  regularization — is **reused** from `rcwa._jax_eig_stable` (the torcwa/fmmax-style
+  Lorentzian-broadened custom-VJP eig); `rcwa.py` is **untouched**. The generalized
+  modal pencil `A x = q² B x` (no JAX primitive) is folded to a standard
+  `eig(B⁻¹A)` (validated forward-identical to the SciPy generalized solve to ~1e-12),
+  and the element-loop assembly is rebuilt functionally (`jnp.at[].add`, `eps`
+  enters linearly) with the eps-independent SEM topology frozen as constants. The
+  **numpy path is byte-identical** — the JAX branch fires only on JAX inputs (a
+  purely additive +387-line change, zero deletions). Validated: forward jnp≡numpy to
+  ~5e-14; `jax.grad` vs central finite difference to rtol ~1e-8 (TE+TM, all four
+  variables, on cells the build never used); jit/vmap-over-wavelength; the x64 guard
+  warns on complex64. SCOPE (the de-risking spike): binary, NORMAL incidence,
+  `elements_per_region=1`, fixed `degree` with `stabilize=False`, real lossless eps;
+  `angle≠0` / `stabilize=True` / `elements_per_region>1` raise precise errors on the
+  JAX path (NumPy-only). Moving-boundary (`duty_cycle`) gradients, oblique, complex/
+  lossy eps, and the Jones path are follow-on increments. Requires `lumenairy[jax]`
+  + `jax_enable_x64`. Tests in `tests/unit/test_v5_12_0_pmm_autodiff.py`.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

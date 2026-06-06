@@ -107,6 +107,11 @@ from numpy.polynomial.legendre import Legendre
 # top-level import introduces no cycle.
 from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
 
+# Backend detection for the JAX (differentiable) dispatch in pmm_efficiency_1d.
+# Mirrors rcwa's pattern: a JAX input routes to the self-contained jnp twin,
+# while a NumPy input falls through to the original (byte-identical) code.
+from ..backend import is_jax_array
+
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
            "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
            "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
@@ -1347,6 +1352,362 @@ def pmm_jones_1d(
         "pmm_jones_1d")
 
 
+# ===========================================================================
+# JAX (differentiable) binary / normal-incidence path for pmm_efficiency_1d
+# ===========================================================================
+#
+# A SELF-CONTAINED jax.numpy twin of the binary, NORMAL-incidence scalar PMM
+# solve (_pmm_solve / _pmm_solve_core).  It is invoked ONLY when the index /
+# geometry inputs are JAX arrays (see the dispatch in pmm_efficiency_1d); for
+# NumPy inputs the original code runs verbatim, so the NumPy path is
+# byte-identical by construction.  Scope is deliberately minimal (the
+# de-risking spike): binary ridge/groove, angle == 0, fixed geometry, single
+# fixed degree (stabilize=False semantics), elements_per_region == 1.
+#
+# The eps-INDEPENDENT topology (GLL nodes, the Lagrange derivative matrix, the
+# local->global integer map, the per-element local mass / stiffness, AND the
+# Rayleigh far-field projection T[m, i]) is precomputed ONCE in NumPy from the
+# static (degree, duty, period, ...) integers and frozen as jnp constants -- so
+# the trace carries only the eps / depth / wavelength dependence.  eps enters
+# the Galerkin masses LINEARLY (Peps += eps*Mloc, Pinv += (1/eps)*Mloc), so the
+# eps gradient flows once the in-place assembly is functionalised (.at[].add).
+#
+# The generalized modal pencil A x = q^2 B x (B = nodal mass S0 for TE, Pinv for
+# TM) has NO JAX generalized-eig, so it is FOLDED to the standard problem
+# eig(B^-1 A) -- B is well-conditioned here (the module's _safe_geig
+# equilibration is not even triggered for well-scaled binary cells) -- and the
+# differentiable custom-VJP eig (rcwa._jax_eig_stable, the torcwa/fmmax-style
+# Lorentzian-broadened eigenvector VJP) is applied.  The fold reproduces the
+# generalized spectrum to ~1e-12 (validated).  The forward-mode selector uses
+# the NOISE-ROBUST branch (flip only when CLEARLY backward): a degenerate
+# half-space q^2 carries ~1e-15 imaginary noise whose SIGN differs between the
+# scipy-QZ generalized eig and the jnp folded eig, so the naive Im(q) < 0 test
+# would flip propagating modes inconsistently and break the layer<->region
+# pairing in the interface S-matrix (observed: R+T blew up to ~18).  The robust
+# branch is forward-identical to the NumPy binary solve on the validated cells.
+
+
+def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
+    """Precompute the eps-INDEPENDENT spectral-element topology + per-element
+    local mass / stiffness (all NumPy; frozen as jnp constants downstream).
+
+    Mirrors :func:`_build_sem` but factors out the eps-weighted assembly so the
+    differentiable path can rebuild S0 / Peps / Pinv / L / Linv functionally
+    from traced ``eps_ridge`` / ``eps_groove``.  Region id 0 = ridge, 1 =
+    groove."""
+    ref_nodes, ref_w = _gll_nodes_weights(degree)
+    Dref = _lagrange_derivative_matrix(ref_nodes)
+    rb = _graded_boundaries(0.0, d_wall, n_ridge_el, grade)
+    gb = _graded_boundaries(d_wall, period, n_groove_el, grade)
+    elem = ([(rb[i], rb[i + 1], 0) for i in range(n_ridge_el)]
+            + [(gb[i], gb[i + 1], 1) for i in range(n_groove_el)])
+    n_el = len(elem)
+    l2g = np.zeros((n_el, degree + 1), dtype=int)
+    gid = 0
+    for e in range(n_el):
+        for a in range(degree + 1):
+            if a == 0 and e > 0:
+                l2g[e, a] = l2g[e - 1, degree]
+            else:
+                l2g[e, a] = gid
+                gid += 1
+    last = l2g[n_el - 1, degree]
+    l2g[l2g == last] = 0
+    n_glob = last
+    Mloc = np.zeros((n_el, degree + 1))
+    Kloc = np.zeros((n_el, degree + 1, degree + 1))
+    region = np.zeros(n_el, dtype=int)
+    for e, (xl, xr, rid) in enumerate(elem):
+        J = 0.5 * (xr - xl)
+        wel = ref_w * J
+        Dphys = Dref / J
+        Mloc[e] = wel
+        Kloc[e] = (Dphys.T * wel) @ Dphys
+        region[e] = rid
+    return dict(l2g=l2g, n_glob=n_glob, n_el=n_el, degree=degree,
+                Mloc=Mloc, Kloc=Kloc, region=region,
+                elem_bnds=[(xl, xr) for (xl, xr, _) in elem],
+                ref_nodes=ref_nodes)
+
+
+def _jpmm_order_set(static, period, wl, n_max, far_field_orders, degree, label):
+    """The Rayleigh order set for the forward far-field projection -- the SAME
+    sizing as :func:`_pmm_solve_core`, computed from CONCRETE (real, static)
+    numbers so the order COUNT (which sets the solve's array shapes) is fixed
+    for a given jit trace."""
+    n_glob = static["n_glob"]
+    m_prop = _n_propagating_orders(period, wl, n_max)
+    n_proj = max(int(far_field_orders), 2 * m_prop + 5)
+    cap = n_glob if n_glob % 2 else n_glob - 1
+    n_proj = min(n_proj, cap)
+    if n_proj % 2 == 0:
+        n_proj -= 1
+    half = (n_proj - 1) // 2
+    if 2 * m_prop + 1 > n_proj:
+        raise ValueError(
+            f"{label}: degree={degree} too low to resolve the "
+            f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
+            f"degree or elements_per_region.")
+    return np.arange(-half, half + 1)
+
+
+def _jpmm_fourier_projection(orders, period, static):
+    """``T[m, i]`` Rayleigh projection of the nodal Lagrange basis (NumPy; the
+    static constant of the differentiable solve).  Identical quadrature to
+    :func:`_sem_fourier_projection`."""
+    from numpy.polynomial.legendre import leggauss
+    l2g = static["l2g"]
+    elem_bnds = static["elem_bnds"]
+    degree = static["degree"]
+    ref_nodes = static["ref_nodes"]
+    n_glob = static["n_glob"]
+    G = 2.0 * np.pi / period
+    nq = max(2 * degree + 8, 24)
+    xg, wg = leggauss(nq)
+    wbary = np.ones(degree + 1)
+    for j in range(degree + 1):
+        for k in range(degree + 1):
+            if k != j:
+                wbary[j] /= (ref_nodes[j] - ref_nodes[k])
+
+    def _lagrange_vals(xi):
+        V = np.zeros((len(xi), degree + 1))
+        for r, x in enumerate(xi):
+            diff = x - ref_nodes
+            if np.any(np.abs(diff) < 1e-14):
+                V[r, np.argmin(np.abs(diff))] = 1.0
+            else:
+                num = wbary / diff
+                V[r, :] = num / num.sum()
+        return V
+
+    Lv = _lagrange_vals(xg)
+    T = np.zeros((len(orders), n_glob), dtype=_C)
+    for e in range(len(elem_bnds)):
+        xl, xr = elem_bnds[e]
+        J = 0.5 * (xr - xl)
+        xphys = 0.5 * (xr + xl) + J * xg
+        phase = np.exp(-1j * np.outer(orders * G, xphys))
+        contrib = (phase * (wg * J / period)) @ Lv
+        idx = l2g[e]
+        for a in range(degree + 1):
+            T[:, idx[a]] += contrib[:, a]
+    return T
+
+
+def _jpmm_assemble(static, jnp, eps_ridge, eps_groove):
+    """Functionally assemble S0 / Peps / Pinv / L / Linv in jnp from the static
+    per-element operators and the (traced) ridge / groove permittivities (eps
+    enters the masses linearly).  Normal incidence -> no convection / kx0^2."""
+    cj = jnp.complex128
+    n_glob = static["n_glob"]
+    n_el = static["n_el"]
+    l2g = static["l2g"]
+    region = static["region"]
+    Mloc = jnp.asarray(static["Mloc"], cj)
+    Kloc = jnp.asarray(static["Kloc"], cj)
+    eps_of = [eps_ridge, eps_groove]
+    S0 = jnp.zeros((n_glob, n_glob), cj)
+    Peps = jnp.zeros_like(S0)
+    Pinv = jnp.zeros_like(S0)
+    L = jnp.zeros_like(S0)
+    Linv = jnp.zeros_like(S0)
+    for e in range(n_el):
+        eps = eps_of[region[e]]
+        inv = 1.0 / eps
+        idx = l2g[e]
+        Ml = jnp.diag(Mloc[e])
+        Kl = Kloc[e]
+        ii, jj = np.meshgrid(idx, idx, indexing="ij")
+        S0 = S0.at[ii, jj].add(Ml)
+        Peps = Peps.at[ii, jj].add(eps * Ml)
+        Pinv = Pinv.at[ii, jj].add(inv * Ml)
+        L = L.at[ii, jj].add(Kl)
+        Linv = Linv.at[ii, jj].add(inv * Kl)
+    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv)
+
+
+def _jpmm_sem_modes(M, jnp, eig, k0, polarization):
+    """Folded standard-eig modal solve eig(B^-1 A) with the differentiable
+    custom-VJP eig and the noise-robust forward-mode branch.  Returns
+    ``(Acoef, lam, q, invop)`` (mirror of :func:`_sem_modes`, kx0 = 0)."""
+    k02 = k0 * k0
+    if polarization == "te":
+        A, B = M["Peps"] - M["L"] / k02, M["S0"]
+        invop = None
+    else:
+        A, B = M["S0"] - M["Linv"] / k02, M["Pinv"]
+        invop = jnp.linalg.solve(M["S0"], M["Pinv"])
+    q2, Acoef = eig(jnp.linalg.solve(B, A))
+    q = jnp.sqrt(q2)
+    # Noise-robust forward branch (the _sem_modes robust=True rule): flip only
+    # when CLEARLY backward -- a degenerate half-space q^2 carries ~1e-15 imag
+    # noise whose sign differs between scipy-QZ and the jnp folded eig.
+    tol = 1e-8 * jnp.maximum(jnp.max(jnp.abs(q)), 1.0)
+    flip = (q.imag < -tol) | ((jnp.abs(q.imag) <= tol) & (q.real < 0.0))
+    q = jnp.where(flip, -q, q)
+    lam = -1j * q
+    return Acoef, lam, q, invop
+
+
+def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
+                eps_sup, eps_sub, depth, wl, polarization):
+    """Self-contained jnp binary / normal-incidence scalar PMM solve.  Returns
+    ``(orders, R, T)`` as jnp arrays, differentiable w.r.t. the permittivities,
+    ``depth`` and ``wl``.  Algebra-identical to :func:`_pmm_solve_core` at
+    kx0 = 0."""
+    cj = jnp.complex128
+    k0 = 2.0 * jnp.pi / wl
+    G = 2.0 * np.pi / period
+    kx = (jnp.asarray(orders) * G) / k0          # kx0 = 0 (normal incidence)
+
+    M = _jpmm_assemble(static, jnp, eps_ridge, eps_groove)
+    Msup = _jpmm_assemble(static, jnp, eps_sup, eps_sup)
+    Msub = _jpmm_assemble(static, jnp, eps_sub, eps_sub)
+
+    Acoef, lam_l, q_l, invop = _jpmm_sem_modes(M, jnp, eig, k0, polarization)
+    Wl = Acoef
+    Vl = (Acoef if polarization == "te" else invop @ Acoef) @ jnp.diag(q_l)
+    Wsup, _ls, q_sup, invsup = _jpmm_sem_modes(Msup, jnp, eig, k0, polarization)
+    Wsub, _lb, q_sub, invsub = _jpmm_sem_modes(Msub, jnp, eig, k0, polarization)
+    if polarization == "te":
+        Vsup, Vsub = Wsup @ jnp.diag(q_sup), Wsub @ jnp.diag(q_sub)
+    else:
+        Vsup = (invsup @ Wsup) @ jnp.diag(q_sup)
+        Vsub = (invsub @ Wsub) @ jnp.diag(q_sub)
+
+    def _ismat(Wa, Va, Wb, Vb):
+        a = jnp.linalg.solve(Wb, Wa)
+        b = jnp.linalg.solve(Vb, Va)
+        apb, amb = a + b, a - b
+        iapb = jnp.linalg.inv(apb)
+        return (-iapb @ amb, 2.0 * iapb,
+                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+
+    def _psmat(lam, k0_L):
+        n = lam.shape[0]
+        X = jnp.diag(jnp.exp(-lam * k0_L))
+        Z = jnp.zeros((n, n), cj)
+        return (Z, X, X, Z)
+
+    def _star(SA, SB):
+        A11, A12, A21, A22 = SA
+        B11, B12, B21, B22 = SB
+        n = A11.shape[0]
+        I = jnp.eye(n, dtype=cj)
+        D = jnp.linalg.inv(I - B11 @ A22)
+        F = jnp.linalg.inv(I - A22 @ B11)
+        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
+                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+
+    S = _ismat(Wsup, Vsup, Wl, Vl)
+    S = _star(S, _psmat(lam_l, k0 * depth))
+    S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
+    S11, _S12, S21, _S22 = S
+
+    Hsup = Tp @ Wsup
+    Hsub = Tp @ Wsub
+    delta0 = jnp.asarray((orders == 0).astype(_C))
+    cinc = jnp.linalg.lstsq(Hsup, delta0, rcond=None)[0]
+    r_ord = Hsup @ (S11 @ cinc)
+    t_ord = Hsub @ (S21 @ cinc)
+
+    def _kzf(eps, kxv):
+        val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
+        return jnp.where(val.imag < 0.0, -val, val)
+
+    kz_sup = _kzf(eps_sup, kx)
+    kz_sub = _kzf(eps_sub, kx)
+    # kz_inc stays a TRACED jnp scalar (kx0 = 0) so d/d(wavelength) flows
+    # through the efficiency normaliser.
+    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(0.0)))
+    if polarization == "te":
+        R = jnp.real(kz_sup / kz_inc) * jnp.abs(r_ord) ** 2
+        T = jnp.real(kz_sub / kz_inc) * jnp.abs(t_ord) ** 2
+    else:
+        flux_inc = jnp.real(kz_inc / eps_sup)
+        R = jnp.real(kz_sup / eps_sup) * jnp.abs(r_ord) ** 2 / flux_inc
+        T = jnp.real(kz_sub / eps_sub) * jnp.abs(t_ord) ** 2 / flux_inc
+    R = jnp.where(jnp.real(kz_sup) > 1e-12, jnp.real(R), 0.0)
+    T = jnp.where(jnp.real(kz_sub) > 1e-12, jnp.real(T), 0.0)
+    return orders, R, T
+
+
+def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
+                           n_superstrate, depth, duty_cycle, wavelength,
+                           *, polarization, degree, elements_per_region,
+                           grade, far_field_orders):
+    """Differentiable (JAX) binary / normal-incidence ``pmm_efficiency_1d``.
+
+    Invoked by :func:`pmm_efficiency_1d` when any index / geometry input is a
+    JAX array.  Supports ONLY the minimal validated surface (binary, angle = 0,
+    fixed single degree); anything outside it (oblique, stabilize, multi-region)
+    raises a precise error so the user is never silently given a wrong path."""
+    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
+    import jax.numpy as jnp
+    _warn_if_jax_f32("pmm_efficiency_1d")
+
+    if int(elements_per_region) != 1:
+        raise NotImplementedError(
+            "pmm_efficiency_1d: the JAX (differentiable) path currently "
+            "supports elements_per_region == 1 only (the binary de-risking "
+            "spike); use the NumPy path for hp-refinement.")
+
+    cj = jnp.complex128
+
+    # CONCRETE (real, static) numbers for the shape-determining order COUNT,
+    # resolved from the ORIGINAL arguments BEFORE the jnp.asarray promotion --
+    # the COUNT must be fixed for a given trace (it sets every array shape).
+    # When a sizing input is the differentiated variable it arrives as an
+    # abstract tracer (no concrete value); _re_or_none then drops it and the
+    # order count falls back to the remaining concrete inputs + the
+    # far_field_orders floor.  This holds the count fixed across the trace --
+    # eps / depth / wl flow through the solve body (shape-invariant) -- which is
+    # the documented Wood-anomaly caveat (gradients are valid only BETWEEN order
+    # cutoffs; do not differentiate across a Rayleigh anomaly that changes the
+    # propagating-order count).
+    def _re_or_none(v):
+        try:
+            return float(np.real(np.asarray(v)))
+        except Exception:
+            return None
+
+    period_c = float(period)
+    wl_c = _re_or_none(wavelength)
+    if wl_c is None:
+        # wavelength is the traced grad variable: size from the far_field_orders
+        # floor only (m_prop unknown without a concrete wl), capped at n_glob.
+        wl_c = float("inf")
+    n_max_vals = [v for v in (_re_or_none(n_superstrate), _re_or_none(n_substrate),
+                              _re_or_none(n_ridge), _re_or_none(n_groove))
+                  if v is not None]
+    n_max = max(n_max_vals) if n_max_vals else 1.0
+
+    d_wall = float(duty_cycle) * period_c
+    static = _jpmm_build_static(period_c, d_wall, int(degree), 1, 1, bool(grade))
+    orders = _jpmm_order_set(static, period_c, wl_c, n_max,
+                             int(far_field_orders), int(degree),
+                             "pmm_efficiency_1d")
+    Tp = jnp.asarray(_jpmm_fourier_projection(orders, period_c, static), cj)
+
+    n_ridge = jnp.asarray(n_ridge, cj)
+    n_groove = jnp.asarray(n_groove, cj)
+    n_substrate = jnp.asarray(n_substrate, cj)
+    n_superstrate = jnp.asarray(n_superstrate, cj)
+    depth = jnp.asarray(depth)
+    wavelength = jnp.asarray(wavelength)
+    eps_ridge = n_ridge ** 2
+    eps_groove = n_groove ** 2
+    eps_sup = n_superstrate ** 2
+    eps_sub = n_substrate ** 2
+
+    eig = _jax_eig_stable()
+    o, R, T = _jpmm_solve(static, orders, Tp, jnp, eig, period_c,
+                          eps_ridge, eps_groove, eps_sup, eps_sub,
+                          depth, wavelength, polarization)
+    return jnp.asarray(orders), R, T
+
+
 def pmm_efficiency_1d(
     period: float,
     n_ridge: complex,
@@ -1425,10 +1786,24 @@ def pmm_efficiency_1d(
 
     Notes
     -----
-    NumPy / SciPy (dense generalized eig); not JAX-differentiable.  TM converges
-    monotone-with-no-floor but only spectral-*ish* (the discontinuous TM partner
-    is C0-averaged at the wall); ``elements_per_region>1, grade=True`` recovers
-    the rate for metals.
+    NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** when
+    any index / geometry argument is a JAX array (mirrors ``rcwa``): the call then
+    routes to a self-contained ``jax.numpy`` twin and returns ``jax.grad``-able
+    efficiencies w.r.t. ``eps`` (via ``n``), ``depth`` and ``wavelength``, reusing
+    the validated Lorentzian-broadened custom-VJP eig from ``rcwa``.  The numpy
+    path is **byte-identical** (the JAX branch fires only on JAX inputs).  The
+    differentiable surface is the minimal validated one -- binary, NORMAL incidence,
+    ``elements_per_region=1``, a single fixed ``degree`` with ``stabilize=False``
+    (a resonant degree gives the converged jnp answer but a non-physical numpy one,
+    so pick a degree where the numpy solve already conserves energy); ``angle!=0``,
+    ``stabilize=True`` and ``elements_per_region>1`` raise on the JAX path (NumPy-
+    only for now).  Gradients are valid BETWEEN Rayleigh-order cutoffs (the
+    propagating-order count is fixed per trace; set ``far_field_orders`` high enough
+    to cover the working wavelength when differentiating ``wavelength``).  Requires
+    ``jax_enable_x64`` (a warning fires otherwise -- complex64 is too ill-conditioned
+    for the modal eig).  TM converges monotone-with-no-floor but only
+    spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
+    ``elements_per_region>1, grade=True`` recovers the rate for metals.
     """
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -1441,6 +1816,32 @@ def pmm_efficiency_1d(
         raise ValueError(
             f"pmm_efficiency_1d: duty_cycle must be in [0, 1], got "
             f"{duty_cycle}.")
+
+    # JAX (differentiable) dispatch -- mirror rcwa's backend detection.  Routed
+    # to the self-contained jnp twin ONLY when an index / geometry input is a
+    # JAX array; NumPy inputs fall through to the original code verbatim (so the
+    # NumPy path stays BYTE-IDENTICAL).  The JAX path covers the minimal
+    # validated surface: binary, NORMAL incidence, fixed single degree.  This
+    # branch MUST precede the _C(...) coercion below, which would sever the JAX
+    # trace.
+    if any(is_jax_array(a) for a in (n_ridge, n_groove, n_substrate,
+                                     n_superstrate, depth, wavelength)):
+        if float(angle) != 0.0:
+            raise NotImplementedError(
+                "pmm_efficiency_1d: the JAX (differentiable) path supports "
+                "normal incidence (angle == 0) only in this release; use the "
+                "NumPy path for oblique.")
+        if stabilize:
+            raise ValueError(
+                "pmm_efficiency_1d: the JAX (differentiable) path requires "
+                "stabilize=False (the degree-scan returns a discrete degree via "
+                "host control flow, which is non-differentiable); pass a single "
+                "fixed degree.")
+        return _pmm_efficiency_1d_jax(
+            period, n_ridge, n_groove, n_substrate, n_superstrate, depth,
+            duty_cycle, wavelength, polarization=pol,
+            degree=int(degree), elements_per_region=int(elements_per_region),
+            grade=bool(grade), far_field_orders=int(far_field_orders))
 
     args = (period, _C(n_ridge), _C(n_groove), _C(n_substrate),
             _C(n_superstrate), depth, duty_cycle, wavelength)
