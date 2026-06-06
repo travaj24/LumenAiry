@@ -2284,9 +2284,12 @@ def pmm_efficiency_1d_slanted(
         ``0 <= slant_angle <= ~75 deg``; conditioning grows as
         ``sec^2(slant_angle)`` at steep tilt.
     angle : float, optional
-        Incidence angle (radians).  MUST be ``0`` (normal incidence) when
-        ``slant_angle != 0`` -- combined oblique + slant is not yet supported
-        (see Notes) and raises ``NotImplementedError``.
+        Incidence angle (radians).  COMBINED oblique incidence + nonzero slant IS
+        supported: it is routed through the metric-generator Jones solver
+        (:func:`pmm_jones_1d_slanted`) with an isotropic tensor and the requested
+        scalar channel extracted (see Notes), per-order to ~2-3e-3 vs an RCWA
+        staircase.  At normal incidence (or a vertical grating) the dedicated
+        inclined-coordinate scalar solver is used.
     polarization, degree, elements_per_region, grade, far_field_orders,
     stabilize : as in :func:`pmm_efficiency_1d`.
 
@@ -2304,11 +2307,17 @@ def pmm_efficiency_1d_slanted(
     frame.  TE matches a fine RCWA staircase to ~1e-5; TM self-converges and is
     the BETTER reference (RCWA-TM is Gibbs/slice-limited).
 
-    SCOPE: NORMAL incidence only for a slanted grating.  The inclined-frame
-    ``kx0 <-> slant`` convection cross-coupling for combined oblique incidence +
-    nonzero slant is unresolved (energy conserves but the per-order split is
-    wrong), so that combination raises rather than returning a wrong answer.
-    Use ``rcwa`` (staircase) for oblique + slant.
+    SCOPE: binary (1 ridge + 1 groove), any slant, NORMAL or OBLIQUE incidence.
+    The dedicated inclined-coordinate scalar eigenproblem is used at normal
+    incidence (and for a vertical grating at any angle); for combined oblique
+    incidence + nonzero slant -- where that scalar solver's ``kx0 <-> slant``
+    convection cross-coupling is unresolved -- the call is delegated to the
+    genuine Edee-Granet 2024 metric generator via :func:`pmm_jones_1d_slanted`
+    (isotropic tensor ``n^2 I``, scalar channel extracted: TE = E along the
+    grooves = Jones row 1, TM = row 0), which resolves the cross-coupling with the
+    round-19 div-conforming ``E_z`` closure (per-order to ~2-3e-3 vs an RCWA
+    staircase, degree-cleanly -- the residual is the shared wall-normal TM/p-pol
+    inverse-rule floor, not a coupling error).
     """
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -2322,13 +2331,24 @@ def pmm_efficiency_1d_slanted(
             f"pmm_efficiency_1d_slanted: duty_cycle must be in [0, 1], got "
             f"{duty_cycle}.")
     if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
-        raise NotImplementedError(
-            "pmm_efficiency_1d_slanted: combined OBLIQUE incidence + nonzero "
-            "slant is not supported (the inclined-frame Bloch<->slant "
-            "convection cross-term is unresolved -- energy conserves but the "
-            "per-order split is wrong). Use normal incidence (angle=0) with any "
-            "slant, a vertical grating (slant_angle=0) at any angle via "
-            "pmm_efficiency_1d, or rcwa (staircase) for oblique + slant.")
+        # COMBINED OBLIQUE + SLANT.  The scalar inclined-frame solver's own
+        # Bloch<->slant convection cross-term is unresolved (energy conserves but
+        # the per-order split is wrong), so route through the genuine Edee-Granet
+        # 2024 metric generator (pmm_jones_1d_slanted), whose round-19 div-
+        # conforming E_z closure DOES handle combined oblique + slant (per-order
+        # to ~2-3e-3 vs an RCWA staircase, degree-cleanly).  An isotropic region
+        # is the diagonal tensor n^2 * I; the Jones response is then uncoupled, so
+        # the scalar channel is a single row: TE (E along the grooves, E_y) is
+        # Jones row 1, TM (E_x) is row 0.
+        eye3 = np.eye(3)
+        o, R_j, T_j, _ = pmm_jones_1d_slanted(
+            period, (_C(n_ridge) ** 2) * eye3, (_C(n_groove) ** 2) * eye3,
+            _C(n_substrate), _C(n_superstrate), depth, duty_cycle, wavelength,
+            float(slant_angle), angle=float(angle), degree=int(degree),
+            elements_per_region=int(elements_per_region), grade=bool(grade),
+            far_field_orders=int(far_field_orders), stabilize=bool(stabilize))
+        row = 1 if pol == "te" else 0
+        return o, R_j[row], T_j[row]
 
     args = (period, _C(n_ridge), _C(n_groove), _C(n_substrate),
             _C(n_superstrate), depth, duty_cycle, wavelength,

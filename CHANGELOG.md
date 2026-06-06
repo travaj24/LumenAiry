@@ -128,10 +128,10 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   angle, opposite-slant mirror symmetry ~1e-14, Wood anomalies, steep slant
   70–80°, high-contrast/gyrotropic). The combined oblique+slant case (even a
   diagonal cell) routes through the metric generator, since the scalar diagonal
-  cure's oblique+slant per-order split is wrong (the reason the *scalar*
-  `pmm_efficiency_1d_slanted` still forbids that combo). The
-  `NotImplementedError` guard on `angle≠0 & slant≠0` is removed. Internal to the
-  existing `pmm_jones_1d_slanted` (no new public API).
+  cure's oblique+slant per-order split is wrong (the *scalar*
+  `pmm_efficiency_1d_slanted` now **delegates** combined oblique+slant here too —
+  see below). The `NotImplementedError` guard on `angle≠0 & slant≠0` is removed.
+  Internal to the existing `pmm_jones_1d_slanted` (no new public API).
 - **`pmm_jones_1d_slanted_segments`** — SLANTED multi-region grating with full
   `(3, 3)` IN-PLANE tensors (the multi-region generalization of
   `pmm_jones_1d_slanted` and the slanted counterpart of `pmm_jones_1d_segments`).
@@ -190,6 +190,18 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   respectively. Scalar (→isotropic) or full `(3,3)` (in-plane / out-of-plane) eps;
   normal or oblique. Each route is bit-identical to calling the specific solver.
   Exported top-level.
+- **`pmm_efficiency_1d_slanted` — combined oblique + slant** (the scalar TE/TM
+  ergonomics closure). The dedicated inclined-coordinate scalar solver's
+  `kx0 ↔ slant` convection cross-term is unresolved, so the previous
+  `NotImplementedError` on `angle≠0 & slant≠0` is **replaced by delegation** to the
+  round-19 metric generator (`pmm_jones_1d_slanted`) with an isotropic `n² I`
+  tensor, extracting the requested scalar channel (TE = E along the grooves =
+  Jones row 1, TM = row 0). Output is **byte-identical** to that Jones row, so it
+  matches a fine oblique RCWA staircase on the dominant order — TE to ~5e-5, TM to
+  the shared wall-normal inverse-rule floor ~2e-3 — and conserves energy. Normal
+  incidence (and any vertical grating) keeps the dedicated scalar solver
+  unchanged. No new public API; out-of-plane + slant remains guarded (per-order
+  unresolved — see the `pmm_jones_1d` out-of-plane entry).
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

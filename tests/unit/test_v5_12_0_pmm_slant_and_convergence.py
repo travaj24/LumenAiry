@@ -63,20 +63,41 @@ def test_slant_energy_conservation(phi_deg, pol):
     assert abs(_sum_RT(R, T) - 1.0) < 3e-3
 
 
-def test_slant_oblique_raises():
-    """Combined oblique incidence + nonzero slant is unsupported and must raise
-    (rather than return a wrong per-order split)."""
-    with pytest.raises(NotImplementedError):
-        pmm_efficiency_1d_slanted(**_GEOM, slant_angle=np.deg2rad(25.0),
-                                  angle=np.deg2rad(15.0))
-    # but each alone is fine
-    pmm_efficiency_1d_slanted(**_GEOM, slant_angle=np.deg2rad(25.0), angle=0.0)
-    pmm_efficiency_1d_slanted(**_GEOM, slant_angle=0.0, angle=np.deg2rad(15.0))
+def test_slant_oblique_now_supported():
+    """Combined oblique incidence + nonzero slant is now SUPPORTED: the scalar
+    solver delegates to the metric-generator Jones path (pmm_jones_1d_slanted)
+    with an isotropic tensor and extracts the requested channel.  It must (a) not
+    raise, (b) conserve energy, and (c) be BYTE-IDENTICAL to that Jones row (TE =
+    row 1, TM = row 0) -- the plumbing contract."""
+    phi, ang = np.deg2rad(25.0), np.deg2rad(15.0)
+    for pol in ("te", "tm"):
+        o, R, T = pmm_efficiency_1d_slanted(**_GEOM, slant_angle=phi, angle=ang,
+                                            polarization=pol, degree=14)
+        assert abs(_sum_RT(R, T) - 1.0) < 3e-3
+    # each alone is still fine (the dedicated scalar inclined-frame solver)
+    pmm_efficiency_1d_slanted(**_GEOM, slant_angle=phi, angle=0.0)
+    pmm_efficiency_1d_slanted(**_GEOM, slant_angle=0.0, angle=ang)
+    # byte-identical to the Jones metric generator with an isotropic n^2 I tensor
+    er = (complex(_GEOM["n_ridge"]) ** 2) * np.eye(3)
+    eg = (complex(_GEOM["n_groove"]) ** 2) * np.eye(3)
+    oj, Rj, Tj, _ = pmm_jones_1d_slanted(
+        _GEOM["period"], er, eg, _GEOM["n_substrate"], _GEOM["n_superstrate"],
+        _GEOM["depth"], _GEOM["duty_cycle"], _GEOM["wavelength"], phi,
+        angle=ang, degree=14, stabilize=False)
+    for pol, row in (("te", 1), ("tm", 0)):
+        o, R, T = pmm_efficiency_1d_slanted(**_GEOM, slant_angle=phi, angle=ang,
+                                            polarization=pol, degree=14,
+                                            stabilize=False)
+        assert np.array_equal(o, oj)
+        assert np.max(np.abs(R - Rj[row])) < 1e-13
+        assert np.max(np.abs(T - Tj[row])) < 1e-13
 
 
-def _rcwa_staircase_slant(phi, pol, n_orders=21, n_slices=96, n_x=512):
+def _rcwa_staircase_slant(phi, pol, angle=0.0, n_orders=21, n_slices=96,
+                          n_x=512):
     """Independent oracle: the same slanted grating as an RCWA z-staircase of
-    laterally-shifted binary slices."""
+    laterally-shifted binary slices.  ``angle`` (the lab incidence angle, same
+    sign convention as the PMM ``angle``) drives an oblique source."""
     g = _GEOM
     er, eg = complex(g["n_ridge"]) ** 2, complex(g["n_groove"]) ** 2
     t = np.tan(phi)
@@ -89,10 +110,25 @@ def _rcwa_staircase_slant(phi, pol, n_orders=21, n_slices=96, n_x=512):
         ridge = ((x - shift) % 1.0) < g["duty_cycle"]
         col = np.where(ridge, er, eg).astype(np.complex128)
         stack.add_layer(dz, eps_cell=col[:, None])
-    res = stack.set_source(g["wavelength"], theta=0.0).solve()
+    res = stack.set_source(g["wavelength"], theta=float(angle)).solve()
     orders, R2, T2 = res.efficiencies()
     row = 1 if pol == "te" else 0           # E_y = TE = row 1 ; E_x = TM = row 0
     return np.asarray(orders), np.asarray(R2[row]), np.asarray(T2[row])
+
+
+def test_slant_oblique_matches_rcwa_staircase():
+    """The combined oblique + slant scalar output (via the wrapper) matches a fine
+    OBLIQUE RCWA staircase on the 0th order: TE cleanly (~1e-3), TM to the shared
+    wall-normal inverse-rule floor (~3e-3).  This pins both the physics AND that
+    the PMM ``angle`` and RCWA ``theta`` share a sign (a flipped sign mismatches
+    the asymmetric slanted 0th order by ~1e-1)."""
+    phi, ang = np.deg2rad(20.0), np.deg2rad(12.0)
+    for pol, tol in (("te", 2e-3), ("tm", 4e-3)):
+        o, R, T = pmm_efficiency_1d_slanted(**_GEOM, slant_angle=phi, angle=ang,
+                                            polarization=pol, degree=16)
+        orc, Rr, Tr = _rcwa_staircase_slant(phi, pol, angle=ang, n_slices=128)
+        assert abs(float(T[o == 0][0]) - float(Tr[orc == 0][0])) < tol
+        assert abs(float(R[o == 0][0]) - float(Rr[orc == 0][0])) < tol
 
 
 def test_slant_matches_rcwa_staircase_te():
