@@ -28,7 +28,12 @@ jobs:
         # did (parallel-edit race during 6 file splits).  Re-adding
         # here so the documented minimum is actually exercised on PR.
         python-version: ['3.10', '3.11', '3.12', '3.13']
-    timeout-minutes: 20
+    # The full unit suite (4077 tests, -v) runs ~15 min on the runner; install
+    # + import sanity adds ~3.  Job cap was 20 (step 15) which the suite brushed
+    # against (a 14:50 run, then a 15-min step TIMEOUT once the suite grew).
+    # Give real headroom so CI-load variance / the slow multiprocess SWMR tests
+    # don't intermittently trip the cap.
+    timeout-minutes: 30
 
     steps:
       # v5.2.5 (AUDIT_V5_2_3 post-tag fix): fetch full history + tags
@@ -79,7 +84,7 @@ jobs:
             -p no:cacheprovider --maxfail=5 -v 2>&1 \
             | tee unit_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 15
+        timeout-minutes: 25
 
       - name: Upload unit-test log on failure
         if: failure()
