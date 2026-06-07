@@ -1456,14 +1456,21 @@ def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
     n_el = topo["n_el"]
     Mloc = np.zeros((n_el, degree + 1))
     Kloc = np.zeros((n_el, degree + 1, degree + 1))
+    # Cloc = local convection mass INT phi phi' = diag(w*J) @ (Dref/J); the
+    # weighted assembly (C = INT phi phi', Cinv = INT phi (1/eps) phi') drives
+    # the oblique kx0 Bloch antisymmetrized convection -1j kx0 (C - C^T).  Its
+    # J-scaling cancels (w*J)(Dref/J) = w*Dref, so it is d_wall-INDEPENDENT, but
+    # kept per element for the assembly loop / the dynamic (duty-traced) twin.
+    Cloc = np.zeros((n_el, degree + 1, degree + 1))
     for e, (xl, xr) in enumerate(elem):
         J = 0.5 * (xr - xl)
         wel = ref_w * J
         Dphys = Dref / J
         Mloc[e] = wel
         Kloc[e] = (Dphys.T * wel) @ Dphys
+        Cloc[e] = (wel[:, None] * Dphys)
     d = dict(topo)
-    d.update(Mloc=Mloc, Kloc=Kloc,
+    d.update(Mloc=Mloc, Kloc=Kloc, Cloc=Cloc,
              elem_bnds=[(xl, xr) for (xl, xr) in elem])
     return d
 
@@ -1495,7 +1502,12 @@ def _jpmm_build_dynamic(topo, jnp, period, d_wall):
     # @ Dref) / J  -- assemble via einsum to keep it a clean traced tensor.
     Kref = jnp.einsum("ai,a,aj->ij", Dref, ref_w, Dref)   # (p+1, p+1), static-ish
     Kloc = Kref[None, :, :] / J[:, None, None]       # (n_el, p+1, p+1)
-    return dict(Mloc=Mloc, Kloc=Kloc, xl=xl, xr=xr)
+    # Cloc[e] = diag(ref_w*J) @ (Dref/J) = diag(ref_w) @ Dref -- the J-scaling
+    # cancels, so the oblique convection mass is duty-INDEPENDENT; broadcast it
+    # across elements to keep one tensor shape with the static path.
+    Cref = ref_w[:, None] * Dref                     # (p+1, p+1)
+    Cloc = jnp.broadcast_to(Cref[None, :, :], (J.shape[0],) + Cref.shape)
+    return dict(Mloc=Mloc, Kloc=Kloc, Cloc=Cloc, xl=xl, xr=xr)
 
 
 def _jpmm_order_set(static, period, wl, n_max, far_field_orders, degree, label):
@@ -1640,40 +1652,70 @@ def _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=None):
     if dyn is None:
         Mloc = jnp.asarray(static["Mloc"], cj)
         Kloc = jnp.asarray(static["Kloc"], cj)
+        Cloc = jnp.asarray(static["Cloc"], cj)
     else:
         Mloc = jnp.asarray(dyn["Mloc"], cj)
         Kloc = jnp.asarray(dyn["Kloc"], cj)
+        Cloc = jnp.asarray(dyn["Cloc"], cj)
     eps_of = [eps_ridge, eps_groove]
     S0 = jnp.zeros((n_glob, n_glob), cj)
     Peps = jnp.zeros_like(S0)
     Pinv = jnp.zeros_like(S0)
     L = jnp.zeros_like(S0)
     Linv = jnp.zeros_like(S0)
+    # Convection masses for the oblique kx0 Bloch shift (cheap; harmless at
+    # normal incidence where the -1j kx0 (C - C^T) + kx0^2 mass terms vanish).
+    C = jnp.zeros_like(S0)
+    Cinv = jnp.zeros_like(S0)
     for e in range(n_el):
         eps = eps_of[region[e]]
         inv = 1.0 / eps
         idx = l2g[e]
         Ml = jnp.diag(Mloc[e])
         Kl = Kloc[e]
+        Cl = Cloc[e]
         ii, jj = np.meshgrid(idx, idx, indexing="ij")
         S0 = S0.at[ii, jj].add(Ml)
         Peps = Peps.at[ii, jj].add(eps * Ml)
         Pinv = Pinv.at[ii, jj].add(inv * Ml)
         L = L.at[ii, jj].add(Kl)
         Linv = Linv.at[ii, jj].add(inv * Kl)
-    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv)
+        C = C.at[ii, jj].add(Cl)
+        Cinv = Cinv.at[ii, jj].add(inv * Cl)
+    return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv)
 
 
-def _jpmm_sem_modes(M, jnp, eig, k0, polarization):
+def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     """Folded standard-eig modal solve eig(B^-1 A) with the differentiable
     custom-VJP eig and the noise-robust forward-mode branch.  Returns
-    ``(Acoef, lam, q, invop)`` (mirror of :func:`_sem_modes`, kx0 = 0)."""
+    ``(Acoef, lam, q, invop)`` (mirror of :func:`_sem_modes`).
+
+    ``kx0`` (a TRACED jnp scalar = ``Re(n_sup) sin(angle) k0``) adds the Bloch
+    shift of the pseudo-periodic envelope: the stiffness picks up the
+    ANTISYMMETRIZED convection ``-1j kx0 (C - C^T)`` (the 1/eps-weighted
+    ``Cinv`` for TM) and the ``kx0^2`` mass -- the exact transcription of the
+    NumPy :func:`_sem_modes` oblique branch.  A ``kx0`` that is identically the
+    python ``0.0`` (normal incidence) skips the convection so the path stays
+    byte-equal to the prior normal-incidence twin; a traced kx0 (even one whose
+    concrete value is 0) flows the ``d/d(angle)`` derivative through."""
     k02 = k0 * k0
+    # Skip the convection ONLY for the python literal 0.0 (normal incidence,
+    # byte-equal to the prior twin); a TRACED jnp scalar -- even one valued 0 --
+    # is NOT a python float, so its d/d(angle) derivative flows.
+    oblique = not (isinstance(kx0, float) and kx0 == 0.0)
     if polarization == "te":
-        A, B = M["Peps"] - M["L"] / k02, M["S0"]
+        Lop = M["L"]
+        if oblique:
+            Cas = M["C"] - M["C"].T
+            Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * M["S0"]
+        A, B = M["Peps"] - Lop / k02, M["S0"]
         invop = None
     else:
-        A, B = M["S0"] - M["Linv"] / k02, M["Pinv"]
+        Lop = M["Linv"]
+        if oblique:
+            Cas = M["Cinv"] - M["Cinv"].T
+            Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * M["Pinv"]
+        A, B = M["S0"] - Lop / k02, M["Pinv"]
         invop = jnp.linalg.solve(M["S0"], M["Pinv"])
     q2, Acoef = eig(jnp.linalg.solve(B, A))
     q = jnp.sqrt(q2)
@@ -1688,11 +1730,19 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization):
 
 
 def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
-                eps_sup, eps_sub, depth, wl, polarization, dyn=None):
-    """Self-contained jnp binary / normal-incidence scalar PMM solve.  Returns
-    ``(orders, R, T)`` as jnp arrays, differentiable w.r.t. the permittivities,
-    ``depth`` and ``wl``.  Algebra-identical to :func:`_pmm_solve_core` at
-    kx0 = 0.
+                eps_sup, eps_sub, depth, wl, polarization, dyn=None, kx0=0.0):
+    """Self-contained jnp binary scalar PMM solve.  Returns ``(orders, R, T)``
+    as jnp arrays, differentiable w.r.t. the permittivities, ``depth``, ``wl``
+    AND -- at oblique incidence -- the incident ``angle`` / ``n_superstrate``
+    (both threaded through the TRACED ``kx0``).  Algebra-identical to
+    :func:`_pmm_solve_core`.
+
+    ``kx0`` is the (traced) incident transverse wavenumber
+    ``Re(n_sup) sin(angle) k0``; the python literal ``0.0`` selects the
+    normal-incidence byte-equal branch.  At oblique it Bloch-shifts the modal
+    operator (:func:`_jpmm_sem_modes`), the per-order ``kx = (kx0 + mG)/k0``,
+    and the incident-flux normaliser carries the ``Ez`` component (the term
+    that makes TM conserve at oblique).
 
     When ``dyn`` is supplied (a :func:`_jpmm_build_dynamic` result), the
     duty-moving Jacobians drive ALL three mass assemblies (layer + both
@@ -1701,17 +1751,20 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
     cj = jnp.complex128
     k0 = 2.0 * jnp.pi / wl
     G = 2.0 * np.pi / period
-    kx = (jnp.asarray(orders) * G) / k0          # kx0 = 0 (normal incidence)
+    kx = (kx0 + jnp.asarray(orders) * G) / k0    # oblique: kx_m = (kx0+mG)/k0
 
     M = _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=dyn)
     Msup = _jpmm_assemble(static, jnp, eps_sup, eps_sup, dyn=dyn)
     Msub = _jpmm_assemble(static, jnp, eps_sub, eps_sub, dyn=dyn)
 
-    Acoef, lam_l, q_l, invop = _jpmm_sem_modes(M, jnp, eig, k0, polarization)
+    Acoef, lam_l, q_l, invop = _jpmm_sem_modes(M, jnp, eig, k0, polarization,
+                                               kx0)
     Wl = Acoef
     Vl = (Acoef if polarization == "te" else invop @ Acoef) @ jnp.diag(q_l)
-    Wsup, _ls, q_sup, invsup = _jpmm_sem_modes(Msup, jnp, eig, k0, polarization)
-    Wsub, _lb, q_sub, invsub = _jpmm_sem_modes(Msub, jnp, eig, k0, polarization)
+    Wsup, _ls, q_sup, invsup = _jpmm_sem_modes(Msup, jnp, eig, k0, polarization,
+                                               kx0)
+    Wsub, _lb, q_sub, invsub = _jpmm_sem_modes(Msub, jnp, eig, k0, polarization,
+                                               kx0)
     if polarization == "te":
         Vsup, Vsub = Wsup @ jnp.diag(q_sup), Wsub @ jnp.diag(q_sub)
     else:
@@ -1760,9 +1813,14 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
 
     kz_sup = _kzf(eps_sup, kx)
     kz_sub = _kzf(eps_sub, kx)
-    # kz_inc stays a TRACED jnp scalar (kx0 = 0) so d/d(wavelength) flows
-    # through the efficiency normaliser.
-    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(0.0)))
+    # kz_inc stays a TRACED jnp scalar so d/d(wavelength) AND d/d(angle) /
+    # d/d(n_sup) flow through the efficiency normaliser.  At oblique the
+    # incident transverse wavenumber is kx0/k0 (the order-0 Rayleigh channel);
+    # the scalar TM normaliser is flux_inc = kz_inc/eps_sup (mirror of
+    # _pmm_solve_core -- the Ez longitudinal flux is already folded into the
+    # scalar 1/eps weighting, unlike the Jones path's explicit (1+(kx0/kz)^2)).
+    kx0n = kx0 / k0
+    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
     if polarization == "te":
         R = jnp.real(kz_sup / kz_inc) * jnp.abs(r_ord) ** 2
         T = jnp.real(kz_sub / kz_inc) * jnp.abs(t_ord) ** 2
@@ -1777,14 +1835,20 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
 
 def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
                            n_superstrate, depth, duty_cycle, wavelength,
-                           *, polarization, degree, elements_per_region,
+                           *, angle, polarization, degree, elements_per_region,
                            grade, far_field_orders):
-    """Differentiable (JAX) binary / normal-incidence ``pmm_efficiency_1d``.
+    """Differentiable (JAX) binary ``pmm_efficiency_1d`` (normal OR oblique).
 
-    Invoked by :func:`pmm_efficiency_1d` when any index / geometry input is a
-    JAX array.  Supports ONLY the minimal validated surface (binary, angle = 0,
-    fixed single degree); anything outside it (oblique, stabilize, multi-region)
-    raises a precise error so the user is never silently given a wrong path."""
+    Invoked by :func:`pmm_efficiency_1d` when any index / geometry / angle
+    input is a JAX array.  Supports the binary, fixed-single-degree surface at
+    normal AND oblique incidence (real or complex/lossy eps); ``d/d(angle)`` and
+    ``d/d(n_superstrate)`` flow through the TRACED Bloch wavenumber ``kx0``.
+    Anything outside the surface (stabilize, multi-region) raises a precise
+    error so the user is never silently given a wrong path.
+
+    Oblique Wood-anomaly caveat: the propagating-order COUNT (array shapes) is
+    sized from CONCRETE inputs and held static per trace, so ``d/d(angle)`` /
+    ``d/d(wl)`` are valid only BETWEEN Rayleigh-order cutoffs."""
     from .rcwa import _jax_eig_stable, _warn_if_jax_f32
     import jax.numpy as jnp
     _warn_if_jax_f32("pmm_efficiency_1d")
@@ -1859,6 +1923,20 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     eps_sup = n_superstrate ** 2
     eps_sub = n_substrate ** 2
 
+    # Oblique Bloch wavenumber kx0 = Re(n_sup) sin(angle) k0 -- a TRACED jnp
+    # scalar (function of angle AND Re(n_superstrate)) so d/d(angle) and
+    # d/d(n_superstrate) flow.  At a concrete angle == 0 (and NOT traced) we
+    # pass the python literal 0.0 so the solve takes the byte-equal
+    # normal-incidence branch (no convection / kx0^2 / Ez normaliser shift) --
+    # the Phase 0-2 path is untouched.  A TRACED angle (even one whose value is
+    # 0) flows the convection so jax.grad(... , angle) is valid.
+    angle_traced = is_jax_array(angle)
+    if angle_traced or float(angle) != 0.0:
+        k0_kx = 2.0 * jnp.pi / wavelength
+        kx0 = jnp.real(n_superstrate) * jnp.sin(jnp.asarray(angle)) * k0_kx
+    else:
+        kx0 = 0.0
+
     if duty_traced:
         # Route B: rebuild the moving geometry in jnp so the duty gradient flows
         # through the Jacobians (masses / stiffnesses) AND the projection phases.
@@ -1875,7 +1953,7 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     eig = _jax_eig_stable()
     o, R, T = _jpmm_solve(static, orders, Tp, jnp, eig, period_c,
                           eps_ridge, eps_groove, eps_sup, eps_sub,
-                          depth, wavelength, polarization, dyn=dyn)
+                          depth, wavelength, polarization, dyn=dyn, kx0=kx0)
     return jnp.asarray(orders), R, T
 
 
@@ -1960,18 +2038,22 @@ def pmm_efficiency_1d(
     NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** when
     any index / geometry argument is a JAX array (mirrors ``rcwa``): the call then
     routes to a self-contained ``jax.numpy`` twin and returns ``jax.grad``-able
-    efficiencies w.r.t. ``eps`` (via ``n``), ``depth``, ``wavelength`` AND
+    efficiencies w.r.t. ``eps`` (via ``n``, including COMPLEX/lossy eps -- both the
+    real and imaginary parts, ``holomorphic=False``), ``depth``, ``wavelength``,
+    ``angle`` and ``n_superstrate`` (the Bloch ``kx0`` convection is traced), AND
     ``duty_cycle`` (the moving grating wall -- a smooth fixed-topology shape
     gradient: the wall sits on an element boundary so the element Jacobians and the
     Rayleigh-projection phases carry it analytically, no remeshing), reusing the
     validated Lorentzian-broadened custom-VJP eig from ``rcwa``.  The numpy
     path is **byte-identical** (the JAX branch fires only on JAX inputs).  The
-    differentiable surface is the minimal validated one -- binary, NORMAL incidence,
-    ``elements_per_region=1``, a single fixed ``degree`` with ``stabilize=False``
-    (a resonant degree gives the converged jnp answer but a non-physical numpy one,
-    so pick a degree where the numpy solve already conserves energy); ``angle!=0``,
-    ``stabilize=True`` and ``elements_per_region>1`` raise on the JAX path (NumPy-
-    only for now).  Gradients are valid BETWEEN Rayleigh-order cutoffs (the
+    differentiable surface is binary, NORMAL or OBLIQUE incidence, lossless or
+    lossy eps, ``elements_per_region=1``, a single fixed ``degree`` with
+    ``stabilize=False`` (a resonant degree gives the converged jnp answer but a
+    non-physical numpy one -- pick a degree where the numpy solve already conserves
+    energy); ``stabilize=True`` and ``elements_per_region>1`` raise on the JAX path
+    (NumPy-only for now).  For a LOSSY cell, validate per-order / absorbed-fraction
+    against an oracle, NOT energy (a lossless cell auto-balances power even with a
+    wrong split).  Gradients are valid BETWEEN Rayleigh-order cutoffs (the
     propagating-order count is fixed per trace; set ``far_field_orders`` high enough
     to cover the working wavelength when differentiating ``wavelength``).  Requires
     ``jax_enable_x64`` (a warning fires otherwise -- complex64 is too ill-conditioned
@@ -2003,12 +2085,7 @@ def pmm_efficiency_1d(
     # trace.
     if any(is_jax_array(a) for a in (n_ridge, n_groove, n_substrate,
                                      n_superstrate, depth, wavelength,
-                                     duty_cycle)):
-        if float(angle) != 0.0:
-            raise NotImplementedError(
-                "pmm_efficiency_1d: the JAX (differentiable) path supports "
-                "normal incidence (angle == 0) only in this release; use the "
-                "NumPy path for oblique.")
+                                     duty_cycle, angle)):
         if stabilize:
             raise ValueError(
                 "pmm_efficiency_1d: the JAX (differentiable) path requires "
@@ -2017,7 +2094,7 @@ def pmm_efficiency_1d(
                 "fixed degree.")
         return _pmm_efficiency_1d_jax(
             period, n_ridge, n_groove, n_substrate, n_superstrate, depth,
-            duty_cycle, wavelength, polarization=pol,
+            duty_cycle, wavelength, angle=angle, polarization=pol,
             degree=int(degree), elements_per_region=int(elements_per_region),
             grade=bool(grade), far_field_orders=int(far_field_orders))
 

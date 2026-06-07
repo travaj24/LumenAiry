@@ -74,6 +74,27 @@ def _solve_jax(c, pol, *, n_ridge=None, n_groove=None, depth=None,
 
 
 # ---------------------------------------------------------------------------
+# GATE-NUMPY-BITID: a plain NumPy call still hits the original code path; the
+# oblique JAX plumbing must not perturb the NumPy result by a single bit.
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("angle", [0.0, 0.1, 0.4363, 0.6981])
+@pytest.mark.parametrize("pol", ["te", "tm"])
+@pytest.mark.parametrize("cname", ["cell1", "cell2"])
+def test_numpy_path_unchanged_normal_and_oblique(cname, pol, angle):
+    """The NumPy path (no JAX inputs) is independent of the JAX twin; this pins
+    that it runs + conserves at normal AND oblique (the byte-identical anchor is
+    enforced out-of-band against a pre-edit snapshot in the workflow gate)."""
+    c = CELLS[cname]
+    o, R, T = pmm_efficiency_1d(
+        c["period"], c["n_ridge"], c["n_groove"], c["n_substrate"],
+        c["n_superstrate"], c["depth"], c["duty_cycle"], c["wavelength"],
+        angle=angle, polarization=pol, degree=c["degree"], stabilize=False)
+    assert isinstance(R, np.ndarray) and not isinstance(R, jnp.ndarray)
+    assert abs(float(np.sum(R) + np.sum(T)) - 1.0) < 1e-6
+
+
+# ---------------------------------------------------------------------------
 # GATE-FWD: the JAX twin reproduces the NumPy solve to eig precision
 # ---------------------------------------------------------------------------
 
@@ -331,16 +352,6 @@ def test_jit_grad_wrt_duty():
 # Guard rails: the JAX path raises a precise error outside its validated scope
 # ---------------------------------------------------------------------------
 
-def test_jax_oblique_raises():
-    c = CELLS["cell1"]
-    with pytest.raises(NotImplementedError):
-        pmm_efficiency_1d(
-            c["period"], jnp.asarray(c["n_ridge"], _CJ), c["n_groove"],
-            c["n_substrate"], c["n_superstrate"], c["depth"], c["duty_cycle"],
-            c["wavelength"], angle=0.1, polarization="te", degree=c["degree"],
-            stabilize=False)
-
-
 def test_jax_stabilize_true_raises():
     c = CELLS["cell1"]
     with pytest.raises(ValueError):
@@ -379,3 +390,227 @@ def test_jax_grad_is_jittable():
         jnp.asarray(c["n_ridge"], _CJ), jnp.asarray(c["depth"]))
     assert np.isfinite(complex(g[0]))
     assert np.isfinite(float(jnp.real(g[1])))
+
+
+# ===========================================================================
+# Phase 3: OBLIQUE incidence + COMPLEX/LOSSY eps gradients
+# ===========================================================================
+# The JAX twin lifts the angle==0 guard: kx0 = Re(n_sup) sin(angle) k0 is a
+# TRACED jnp scalar, so d/d(angle) and d/d(n_superstrate) flow through the modal
+# operator's Bloch convection (-1j kx0 (C - C^T) + kx0^2 mass), the per-order
+# wavenumbers (kx0 + mG)/k0, and the oblique incident-flux normaliser.  This is
+# a faithful transcription of the already-correct NumPy oblique solve
+# (_pmm_solve_core / _sem_modes), NOT a re-derivation.  Lossy (Im(eps) > 0) eps
+# breaks energy conservation, so the lossy gate validates the per-order R/T AND
+# the absorbed fraction A = 1 - sumR - sumT against the NumPy oracle (the
+# lossless-trap killer), NOT an energy check.
+
+_ANGLES = [0.1, 0.4363, 0.6981]                # ~5.7 / 25 / 40 degrees
+
+
+def _solve_jax_oblique(c, pol, angle, *, n_ridge=None, n_superstrate=None,
+                       trace_angle=True):
+    """Library JAX solve at oblique.  ``angle`` is fed as a jnp array (so the
+    JAX path triggers even when no index input is traced) unless
+    trace_angle=False."""
+    nr = c["n_ridge"] if n_ridge is None else n_ridge
+    nsup = c["n_superstrate"] if n_superstrate is None else n_superstrate
+    ang = jnp.asarray(angle) if trace_angle else angle
+    return pmm_efficiency_1d(
+        c["period"], jnp.asarray(nr, _CJ), jnp.asarray(c["n_groove"], _CJ),
+        jnp.asarray(c["n_substrate"], _CJ), jnp.asarray(nsup, _CJ),
+        jnp.asarray(c["depth"]), c["duty_cycle"], jnp.asarray(c["wavelength"]),
+        angle=ang, polarization=pol, degree=c["degree"], stabilize=False)
+
+
+@pytest.mark.parametrize("angle", _ANGLES)
+@pytest.mark.parametrize("pol", ["te", "tm"])
+@pytest.mark.parametrize("cname", list(CELLS))
+def test_jax_forward_oblique_matches_numpy(cname, pol, angle):
+    """GATE-FWD-OBLIQUE: the jnp twin reproduces the NumPy oblique solve
+    per-order (TE + TM) to eig precision, across angles."""
+    c = CELLS[cname]
+    o_np, R_np, T_np = pmm_efficiency_1d(
+        c["period"], c["n_ridge"], c["n_groove"], c["n_substrate"],
+        c["n_superstrate"], c["depth"], c["duty_cycle"], c["wavelength"],
+        angle=angle, polarization=pol, degree=c["degree"], stabilize=False)
+    o_j, R_j, T_j = _solve_jax_oblique(c, pol, angle)
+    assert np.array_equal(np.asarray(o_j), o_np)
+    assert np.max(np.abs(np.asarray(R_j) - R_np)) < 1e-10
+    assert np.max(np.abs(np.asarray(T_j) - T_np)) < 1e-10
+    # these cells are lossless -> power still conserved at oblique
+    assert abs(float(np.sum(R_j) + np.sum(T_j)) - 1.0) < 1e-6
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+@pytest.mark.parametrize("cname", list(CELLS))
+def test_grad_wrt_angle_matches_fd(cname, pol):
+    """GATE-GRAD-ANGLE: jax.grad of sum(T) / sum(R) w.r.t. the incident angle
+    vs central FD, TE + TM."""
+    c = CELLS[cname]
+    a0 = 0.4363
+
+    def sumT(a):
+        _, _, T = _solve_jax_oblique(c, pol, a)
+        return jnp.sum(T)
+
+    def sumR(a):
+        _, R, _ = _solve_jax_oblique(c, pol, a)
+        return jnp.sum(R)
+
+    h = 1e-6
+    gT = float(jax.grad(sumT)(jnp.asarray(a0)))
+    gR = float(jax.grad(sumR)(jnp.asarray(a0)))
+    fdT = float(_central_fd(lambda x: float(sumT(jnp.asarray(x))), a0, h))
+    fdR = float(_central_fd(lambda x: float(sumR(jnp.asarray(x))), a0, h))
+    assert np.isfinite(gT) and np.isfinite(gR)
+    assert abs(gT - fdT) <= 1e-4 * abs(fdT) + 1e-9
+    assert abs(gR - fdR) <= 1e-4 * abs(fdR) + 1e-9
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_grad_wrt_n_superstrate_oblique_matches_fd(pol):
+    """GATE-GRAD-ANGLE (n_sup half): at oblique, n_superstrate enters BOTH the
+    Bloch kx0 (via Re(n_sup)) and the incident flux; jax.grad vs FD."""
+    # superstrate index > 1 so it actually drives kx0 / reflection.
+    c = dict(CELLS["cell1"], n_superstrate=1.3)
+    a0 = 0.4363
+
+    def sumT(ns):
+        nsc = jnp.asarray(ns, _CJ)
+        _, _, T = _solve_jax_oblique(c, pol, a0, n_superstrate=nsc,
+                                     trace_angle=False)
+        return jnp.sum(T)
+
+    x0 = float(c["n_superstrate"])
+    h = 1e-6
+    gT = float(jax.grad(sumT)(jnp.asarray(x0)))
+    fdT = float(_central_fd(lambda x: float(sumT(jnp.asarray(x))), x0, h))
+    assert np.isfinite(gT)
+    assert abs(gT - fdT) <= 1e-4 * abs(fdT) + 1e-9
+
+
+# ---- COMPLEX / LOSSY eps gradients (holomorphic=False) --------------------
+
+# A lossy ridge (Im(n) > 0): n = 2.0 + 0.3j -> eps = 3.91 + 1.2j.  The cell
+# absorbs, so R + T < 1; the absorbed fraction A = 1 - sumR - sumT is the
+# physically-meaningful loss objective.
+_LOSSY_N_RIDGE = 2.0 + 0.3j
+
+
+def _solve_jax_lossy(c, pol, angle, eps_re, eps_im):
+    """Library JAX oblique solve with a lossy ridge eps = eps_re + i eps_im,
+    re / im fed as SEPARATE real tracers (holomorphic=False differentiation)."""
+    n_ridge = jnp.sqrt(eps_re + 1j * eps_im)
+    return pmm_efficiency_1d(
+        c["period"], n_ridge, jnp.asarray(c["n_groove"], _CJ),
+        jnp.asarray(c["n_substrate"], _CJ),
+        jnp.asarray(c["n_superstrate"], _CJ),
+        jnp.asarray(c["depth"]), c["duty_cycle"], jnp.asarray(c["wavelength"]),
+        angle=jnp.asarray(angle), polarization=pol, degree=c["degree"],
+        stabilize=False)
+
+
+@pytest.mark.parametrize("angle", [0.1, 0.4363])
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_grad_wrt_complex_eps_matches_fd(pol, angle):
+    """GATE-GRAD-COMPLEX: d(absorbed)/d(Re eps) and d(absorbed)/d(Im eps) of a
+    LOSSY ridge (holomorphic=False, real + imag parts fed as separate real
+    tracers) vs central FD."""
+    c = CELLS["cell0"]
+    eps0 = _LOSSY_N_RIDGE ** 2
+    re0, im0 = float(np.real(eps0)), float(np.imag(eps0))
+
+    def absorbed(re, im):
+        _, R, T = _solve_jax_lossy(c, pol, angle, re, im)
+        return 1.0 - jnp.sum(R) - jnp.sum(T)
+
+    h = 1e-5
+    gre = float(jax.grad(absorbed, argnums=0)(jnp.asarray(re0),
+                                              jnp.asarray(im0)))
+    gim = float(jax.grad(absorbed, argnums=1)(jnp.asarray(re0),
+                                              jnp.asarray(im0)))
+    fdre = float(_central_fd(
+        lambda x: float(absorbed(jnp.asarray(x), jnp.asarray(im0))), re0, h))
+    fdim = float(_central_fd(
+        lambda x: float(absorbed(jnp.asarray(re0), jnp.asarray(x))), im0, h))
+    assert np.isfinite(gre) and np.isfinite(gim)
+    assert abs(gre - fdre) <= 1e-3 * abs(fdre) + 1e-9
+    assert abs(gim - fdim) <= 1e-3 * abs(fdim) + 1e-9
+
+
+@pytest.mark.parametrize("angle", [0.1, 0.4363])
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_lossy_oracle_per_order_and_absorbed(pol, angle):
+    """GATE-LOSSY-ORACLE (the lossless-trap killer): a LOSSY cell at oblique --
+    per-order R / T AND the absorbed fraction A = 1 - sumR - sumT match the
+    NumPy oracle (NOT an energy check; a lossy cell does not conserve power)."""
+    c = CELLS["cell0"]
+    o_np, R_np, T_np = pmm_efficiency_1d(
+        c["period"], _LOSSY_N_RIDGE, c["n_groove"], c["n_substrate"],
+        c["n_superstrate"], c["depth"], c["duty_cycle"], c["wavelength"],
+        angle=angle, polarization=pol, degree=c["degree"], stabilize=False)
+    A_np = 1.0 - float(np.sum(R_np)) - float(np.sum(T_np))
+    eps0 = _LOSSY_N_RIDGE ** 2
+    o_j, R_j, T_j = _solve_jax_lossy(c, pol, angle, float(np.real(eps0)),
+                                     float(np.imag(eps0)))
+    A_j = 1.0 - float(np.sum(R_j)) - float(np.sum(T_j))
+    assert np.array_equal(np.asarray(o_j), o_np)
+    # the cell genuinely absorbs (defeats the lossless trap -- a real absorbed
+    # fraction the oracle must reproduce, not an auto-balanced unit total).
+    assert A_np > 0.1
+    assert np.max(np.abs(np.asarray(R_j) - R_np)) < 1e-6
+    assert np.max(np.abs(np.asarray(T_j) - T_np)) < 1e-6
+    assert abs(A_j - A_np) < 1e-6
+
+
+# ---- jit + regression guards ----------------------------------------------
+
+def test_jit_grad_wrt_angle_and_eps():
+    """GATE-JIT: jax.jit(jax.grad) w.r.t. angle AND w.r.t. (complex) eps
+    compiles + is finite at oblique."""
+    c = CELLS["cell1"]
+
+    def loss_angle(a):
+        _, _, T = _solve_jax_oblique(c, "tm", a)
+        return jnp.sum(T)
+
+    ga = jax.jit(jax.grad(loss_angle))(jnp.asarray(0.4363))
+    assert np.isfinite(float(ga))
+
+    def loss_eps(re, im):
+        _, R, T = _solve_jax_lossy(c, "te", 0.4363, re, im)
+        return 1.0 - jnp.sum(R) - jnp.sum(T)
+
+    eps0 = _LOSSY_N_RIDGE ** 2
+    g = jax.jit(jax.grad(loss_eps, argnums=(0, 1)))(
+        jnp.asarray(float(np.real(eps0))), jnp.asarray(float(np.imag(eps0))))
+    assert np.isfinite(float(g[0])) and np.isfinite(float(g[1]))
+
+
+def test_oblique_does_not_disturb_normal_incidence():
+    """GATE-PH012-PRESERVED: the Phase 0-2 normal-incidence gradients
+    (eps_ridge, depth, wavelength, duty) still match FD after the oblique
+    plumbing -- the angle==0 path is byte-equal (python-literal kx0 = 0.0
+    skips the convection)."""
+    c = CELLS["cell1"]
+
+    # eps_ridge (TM), normal incidence
+    def sumT_eps(eps):
+        _, _, T = _solve_jax(c, "tm", n_ridge=jnp.sqrt(eps))
+        return jnp.sum(T)
+
+    x = c["n_ridge"] ** 2
+    g = float(jax.grad(sumT_eps)(x))
+    fd = float(_central_fd(lambda v: float(sumT_eps(v)), x, 1e-5))
+    assert abs(g - fd) <= 1e-4 * abs(fd) + 1e-9
+
+    # depth (TE), normal incidence
+    def sumT_dep(dep):
+        _, _, T = _solve_jax(c, "te", depth=dep)
+        return jnp.sum(T)
+
+    x = c["depth"]
+    g = float(jax.grad(sumT_dep)(x))
+    fd = float(_central_fd(lambda v: float(sumT_dep(v)), x, 1e-10))
+    assert abs(g - fd) <= 1e-4 * abs(fd) + 1e-3

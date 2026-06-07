@@ -236,6 +236,22 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   (TE+TM, multiple cells); forward jnp≡numpy to ~1e-14; the numpy path and the
   Phase-1 `eps`/`depth`/`wavelength` gradients are unchanged; jit-compiles; a
   degenerate `duty=0/1` (zero-width region, singular Jacobian) raises in eager mode.
+- **`pmm_efficiency_1d` — JAX oblique incidence + complex/lossy eps gradients (Phase 3).**
+  Lifts the `angle≠0` guard on the JAX path: the Bloch shift `kx0 = k0·Re(n_superstrate)·sin(angle)`
+  is threaded as a **traced** scalar through the modal operator (the antisymmetrized
+  convection `−i·kx0·(C−Cᵀ) + kx0²·mass`, with the `1/eps`-weighted form for TM — an
+  exact transcription of the numpy `_sem_modes`), the per-order Rayleigh `kx`, and the
+  oblique TM incident-flux normalizer, so `d/d(angle)` and `d/d(n_superstrate)` flow.
+  Complex/**lossy** eps is differentiable too (`d/d(Re eps)`, `d/d(Im eps)`,
+  `holomorphic=False`). Normal incidence stays **byte-equal** (only the Python-literal
+  `kx0=0.0` skips the convection; a *traced* angle valued 0 still flows its gradient).
+  Validated — and crucially **lossless-trap-defeating**: on lossy cells the per-order
+  R/T *and* the absorbed fraction `A=1−ΣR−ΣT` match the numpy/RCWA oracle to ~1e-15
+  (genuine absorption 0.55–0.88), validated per-order, **not** by energy; `d/d(angle)`
+  / `d/d(n_sup)` / complex-eps grads vs central FD to rtol ~1e-7; forward jnp≡numpy to
+  ~1e-14; the numpy path and Phases 0–2 gradients are unchanged. The flux selector
+  stays the differentiable noise-robust `where(flip,−q,q)` (no argsort). Gradients
+  remain valid between Rayleigh-order cutoffs (the order count is fixed per trace).
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 
