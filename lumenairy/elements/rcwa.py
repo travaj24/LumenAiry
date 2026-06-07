@@ -2072,8 +2072,13 @@ def rcwa_extrapolate(values, *, n_orders=None, method="richardson"):
         # and a second pass divides rounding noise, overshooting wildly.
         num = v[2:] * v[:-2] - v[1:-1] ** 2
         den = v[2:] + v[:-2] - 2.0 * v[1:-1]
-        acc = np.where(np.abs(den) < 1e-15 * (np.abs(v[1:-1]) + 1e-30),
-                       v[1:-1], num / den)
+        # Divide ONLY where the denominator is safe (a flattened sequence drives
+        # den -> 0; the mask falls back to s_k there).  Computing num/den for every
+        # element first leaked a spurious "invalid value encountered in divide"
+        # RuntimeWarning (audit P3) -- the returned value was already correct.
+        den_safe = np.abs(den) >= 1e-15 * (np.abs(v[1:-1]) + 1e-30)
+        ratio = np.divide(num, den, out=np.full_like(num, np.nan), where=den_safe)
+        acc = np.where(den_safe, ratio, v[1:-1])
         return float(acc[-1])
     if method == "richardson":
         if n_orders is None:
@@ -2829,10 +2834,13 @@ def _select_forward_flux(gam, Vfull, N):
         Ex = v[:N], Ey = v[N:2N], Hx = v[2N:3N]/1j, Hy = v[3N:4N]/1j
         Sz = real( sum( Ex conj(Hy) - Ey conj(Hx) ) )
 
-    Forward = (propagating, ``|Re(gam)| < tol``): ``Sz > 0``; (evanescent):
-    ``Re(gam) > 0`` (decaying as ``exp(-lam k0 z)``).  This is gauge-robust and,
-    unlike a +-pair search, does NOT throw on NON-RECIPROCAL media (whose
-    spectrum is not +-symmetric).
+    Forward = (carries net z-flux, ``|Sz| > flux_tol``): ``Sz > 0``; (flux-null /
+    evanescent): ``Re(gam) > 0`` (decaying as ``exp(-lam k0 z)``).  The split is by
+    FLUX MAGNITUDE rather than ``Re(gam)`` sign, so it is gauge-robust AND correct
+    for NON-RECIPROCAL / gyrotropic media (whose ``lam`` are neither purely real nor
+    purely imaginary -- a ``Re(gam)`` split misclassifies them and yields a
+    rank-deficient forward set / Singular matrix).  For reciprocal media the two
+    criteria coincide.
 
     A defensive rebalance keeps the count at exactly ``2N`` if a near-zero-flux
     propagating mode (``|Sz| < flux_tol``) would otherwise tip the split: the
@@ -2840,24 +2848,33 @@ def _select_forward_flux(gam, Vfull, N):
     xp = array_namespace(Vfull)
     n = gam.shape[0]
     gre = xp.real(gam)
-    tol = 1e-7 * float(xp.maximum(xp.asarray(1.0), xp.max(xp.abs(gam))))
     Ex = Vfull[:N, :]
     Ey = Vfull[N:2 * N, :]
     Hx = Vfull[2 * N:3 * N, :] / 1j
     Hy = Vfull[3 * N:4 * N, :] / 1j
     Sz = xp.real(xp.sum(Ex * xp.conj(Hy) - Ey * xp.conj(Hx), axis=0))   # (n,)
-    prop = xp.abs(gre) < tol
-    fwd = xp.where(prop, Sz > 0, gre > 0)
+    # Classify by FLUX MAGNITUDE, not Re(gam) sign (audit P2-A): a mode carrying
+    # significant net z-flux is forward iff Sz > 0 -- robust for NON-RECIPROCAL /
+    # gyrotropic media whose lam are neither purely real (propagating) nor purely
+    # imaginary (evanescent).  The old |Re(gam)|<tol split shunted such modes into
+    # the Re-sign branch and produced a rank-deficient forward set (Singular matrix
+    # on a uniform non-reciprocal layer).  A flux-NULL (truly evanescent) mode
+    # falls back to the decay sign Re(gam) > 0.  For RECIPROCAL media the two
+    # criteria coincide (propagating modes carry flux, evanescent ones are
+    # flux-null), so the Berreman-validated path is unchanged.
+    flux_tol = 1e-9 * float(xp.maximum(xp.asarray(1.0), xp.max(xp.abs(Sz))))
+    carries = xp.abs(Sz) > flux_tol
+    fwd = xp.where(carries, Sz > 0, gre > 0)
     idx = xp.asarray(np.where(to_numpy(fwd))[0])
     if int(idx.shape[0]) == 2 * N:
         return idx
     # ---- defensive rebalance to EXACTLY 2N (near-zero-flux / cut tie) --------
     Sz_np = np.asarray(to_numpy(Sz))
     gre_np = np.asarray(to_numpy(gre))
-    prop_np = np.asarray(to_numpy(prop))
-    # Rank all modes by a signed "forwardness" score: propagating by Sz,
-    # evanescent by Re(gam).  The 2N largest scores are forward.
-    score = np.where(prop_np, Sz_np, gre_np)
+    carries_np = np.asarray(to_numpy(carries))
+    # Rank all modes by a signed "forwardness" score: flux-carrying by Sz,
+    # flux-null (evanescent) by Re(gam).  The 2N largest scores are forward.
+    score = np.where(carries_np, Sz_np, gre_np)
     order = np.argsort(-score)
     fwd_fixed = np.zeros(n, dtype=bool)
     fwd_fixed[order[:2 * N]] = True

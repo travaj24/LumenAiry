@@ -315,3 +315,25 @@ def _fresnel_film(n0, n1, n2, d, wavelength, angle):
     ts = (t01s * t12s * ph) / (1 + r01s * r12s * ph2)
     tp = None
     return rs, rp, ts, tp
+
+
+# ---------------------------------------------------------------------------
+# Audit P2-A: a UNIFORM real-asymmetric (non-reciprocal, eps_xz != eps_zx) layer
+# at oblique used to crash the forward-mode selector with 'Singular matrix' -- the
+# |Re(gam)|<tol propagating/evanescent split misclassified its (mixed Re/Im)
+# eigenvalues into the Re-sign branch and produced a rank-deficient forward set.
+# The flux-magnitude selector handles it.  (The gyrotropic Hermitian C2 above --
+# imaginary off-diagonal -- never crashed; this is the non-Hermitian case.)
+# ---------------------------------------------------------------------------
+def test_p2a_nonreciprocal_real_asymmetric_uniform_no_singular():
+    eps = np.array([[2.25, 0.0, 0.5],
+                    [0.0, 2.25, 0.0],
+                    [0.1, 0.0, 2.40]], dtype=np.complex128)   # eps_xz=0.5 != eps_zx=0.1
+    for angdeg in (5, 20, 35, 50):
+        for no in (1, 3):
+            # uniform layer (ridge == groove) is the crashing configuration
+            o, R, T, J = la.rcwa_jones_1d(
+                PERIOD, eps, eps, 1.5, 1.0, DEPTH, 0.5, WL,
+                angle=np.deg2rad(angdeg), n_orders=no)        # must not raise
+            assert np.all(np.isfinite(R)) and np.all(np.isfinite(T))
+            assert np.all(np.isfinite(J))
