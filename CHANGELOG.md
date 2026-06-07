@@ -252,6 +252,29 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   ~1e-14; the numpy path and Phases 0–2 gradients are unchanged. The flux selector
   stays the differentiable noise-robust `where(flip,−q,q)` (no argsort). Gradients
   remain valid between Rayleigh-order cutoffs (the order count is fixed per trace).
+- **`pmm_jones_1d` — JAX-differentiable (anisotropic 2×2 Jones, Phase 4).** The
+  in-plane-tensor binary grating (tunable-LC reflective grating) is now
+  `jax.grad`-able on a JAX input: it routes to a `jax.numpy` twin whose 2n×2n coupled
+  `[E_x; E_y]` modal solver is a **standard** eig (`Mbig`), so the reused
+  `rcwa._jax_eig_stable` custom-VJP eig applies *directly* (no generalized fold). The
+  2×2 complex `jones` and `R_eff`/`T_eff` are differentiable w.r.t. the tensor entries
+  — **including the off-diagonal `exy`/`eyx` cross-pol coupling**, real and imaginary
+  (lossy) — plus `depth`, `wavelength`, `angle`, and the half-space indices. Forward
+  jnp≡numpy to ~5e-15 (`R`,`T`, and the Jones matrix); `jax.grad` of a cross-pol FOM
+  `|jones[0,1]|²` and of `sum(T)` vs central FD to rtol ~1e-9…3e-7; a diagonal tensor
+  reduces to the scalar-TE gradient (~5e-10); **lossless-trap-defeating** (lossy-tensor
+  per-order R/T + absorbed fraction match the numpy oracle to ~5e-15, absorption
+  5–78%). The degenerate TE/TM modes at normal incidence are handled by the Lorentzian
+  broadening + gauge-invariance of `|J|` (no gauge fix — it would corrupt the gradient;
+  `d/d(angle)` at *exactly* normal is the symmetry-protected zero, differentiate at
+  oblique). The underdetermined incident-amplitude projection uses a closed-form
+  min-norm pseudo-inverse (forward-identical to numpy's SVD `lstsq` to ~1e-14) because
+  `jnp.linalg.lstsq`'s VJP is undefined there. The numpy path is **byte-identical**
+  (24-array snapshot vs a detached HEAD worktree, max|d|=0); rcwa.py untouched; the
+  scalar Phase 0–3 gradients unchanged. SCOPE: in-plane tensor, VERTICAL wall, normal
+  or oblique, `elements_per_region=1`, fixed degree (`stabilize=False`). Slanted-Jones
+  and out-of-plane JAX paths (the heavier metric-generator eig) remain follow-ons;
+  out-of-plane+slant stays per-order-guarded in numpy too.
 
 #### Lower-priority ergonomics / hardening (from the same audits)
 

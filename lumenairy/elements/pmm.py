@@ -1292,22 +1292,94 @@ def pmm_jones_1d(
 
     Notes
     -----
-    NumPy / SciPy (dense generalized eig); not JAX-differentiable.  Normal or
-    oblique incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR
-    out-of-plane).  An out-of-plane tensor routes through the native full-3x3
-    metric generator (VERTICAL only).  Out-of-plane combined with a slanted wall
-    is guarded in :func:`pmm_jones_1d_slanted`: it conserves energy but is
-    per-order WRONG (measured 2-30e-3 vs an RCWA tensor z-staircase, the gap
-    saturating with degree -- a factorization defect), because the slant metric
-    fold of the FULL tensor must SUPERPOSE the out-of-plane components
-    (``eps^13 = -ezz*tan + exz``, ``eps^23 = eyz``, ... Li 1999), which the
-    vertical off-plane closure does not yet carry.  JAX autodiff is a follow-on.
+    NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** for an
+    IN-PLANE tensor (``exz = eyz = ezx = ezy = 0``) on a VERTICAL grating when any
+    index / geometry / tensor argument is a JAX array: it routes to a self-contained
+    ``jax.numpy`` twin (the 2n x 2n coupled ``[E_x; E_y]`` standard eig solved
+    directly by the reused ``rcwa`` custom-VJP eig), returning ``jax.grad``-able
+    ``R_eff`` / ``T_eff`` and the 2x2 ``jones`` w.r.t. the tensor entries (incl. the
+    off-diagonal ``exy`` / ``eyx`` cross-pol coupling, real and imaginary), ``depth``,
+    ``wavelength``, ``angle`` and the half-space indices.  The numpy path is
+    **byte-identical** (the JAX branch fires only on JAX inputs).  ``d/d(angle)`` at
+    EXACTLY normal incidence is a symmetry-protected zero where the degenerate TE/TM
+    eigen-subspace leaves a tiny (~5e-5) artifact against the true zero -- harmless
+    (the gradient there IS zero; no gauge fix is applied since it would corrupt the
+    gauge-invariant ``|J|`` observables); differentiate at any oblique angle for a
+    clean value.  ``stabilize=True``, ``elements_per_region>1``, a SLANTED wall, and
+    an OUT-OF-PLANE tensor raise on the JAX path (NumPy-only).  Normal or oblique
+    incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR out-of-plane).  An
+    out-of-plane tensor routes through the native full-3x3 metric generator (VERTICAL
+    only).  Out-of-plane combined with a slanted wall is guarded in
+    :func:`pmm_jones_1d_slanted`: it conserves energy but is per-order WRONG (measured
+    2-30e-3 vs an RCWA tensor z-staircase, the gap saturating with degree -- a
+    factorization defect), because the slant metric fold of the FULL tensor must
+    SUPERPOSE the out-of-plane components (``eps^13 = -ezz*tan + exz``,
+    ``eps^23 = eyz``, ... Li 1999), which the vertical off-plane closure does not yet
+    carry.
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
-    if not (0.0 <= float(duty_cycle) <= 1.0):
-        raise ValueError(
-            f"pmm_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+    # A TRACED (jit) duty_cycle has no concrete value to range-check.
+    if not is_jax_array(duty_cycle):
+        if not (0.0 <= float(duty_cycle) <= 1.0):
+            raise ValueError(
+                f"pmm_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+
+    # JAX (differentiable) dispatch -- mirror pmm_efficiency_1d / rcwa.  Routed
+    # to the self-contained jnp Jones twin ONLY when a tensor / geometry / angle
+    # input is a JAX array; NumPy inputs fall through to the original
+    # (byte-identical) code.  The JAX surface is binary, IN-PLANE tensor
+    # (exz/eyz/ezx/ezy == 0), VERTICAL wall, NORMAL or OBLIQUE incidence, a
+    # single fixed degree.  This branch MUST precede the np.asarray(_C) coercion
+    # below, which would sever the JAX trace.  is_jax_array on a (3,3) tensor
+    # array detects a JAX tensor input.
+    _jax_inputs = (eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
+                   wavelength, duty_cycle, angle)
+    if any(is_jax_array(a) for a in _jax_inputs):
+        if stabilize:
+            raise ValueError(
+                "pmm_jones_1d: the JAX (differentiable) path requires "
+                "stabilize=False (the degree-scan returns a discrete degree via "
+                "host control flow, which is non-differentiable); pass a single "
+                "fixed degree where the numpy solve already conserves energy.")
+        import jax.numpy as _jnp
+        er_j = _jnp.asarray(eps_ridge, _jnp.complex128)
+        eg_j = _jnp.asarray(eps_groove, _jnp.complex128)
+        if er_j.shape[-2:] != (3, 3) or eg_j.shape[-2:] != (3, 3):
+            raise ValueError(
+                "pmm_jones_1d: eps_ridge / eps_groove must be (3, 3) "
+                "permittivity tensors (use scalar * np.eye(3) for isotropic).")
+        # OUT-OF-PLANE (exz/eyz/ezx/ezy != 0) and SLANT stay NumPy-only (the
+        # native metric generator is not differentiable yet) -- a precise raise
+        # so the user is never silently given a wrong path.  Use the CONCRETE
+        # off-plane magnitude when available (a traced off-plane entry cannot be
+        # checked, so an all-traced tensor is assumed in-plane and validated by
+        # the numpy oracle in tests).
+        def _off_mag(M):
+            try:
+                arr = np.asarray(M, dtype=_C)
+                return float(np.max(np.abs(arr[[0, 1, 2, 2], [2, 2, 0, 1]])))
+            except Exception:
+                return 0.0
+        scale = 1.0
+        try:
+            scale = max(float(np.max(np.abs(np.asarray(eps_ridge, dtype=_C)))),
+                        float(np.max(np.abs(np.asarray(eps_groove, dtype=_C)))),
+                        1.0)
+        except Exception:
+            scale = 1.0
+        off = max(_off_mag(eps_ridge), _off_mag(eps_groove))
+        if off > 1e-9 * scale:
+            raise NotImplementedError(
+                "pmm_jones_1d: the JAX (differentiable) path supports IN-PLANE "
+                "tensors only (exz/eyz/ezx/ezy == 0); the out-of-plane native "
+                "metric generator is NumPy-only.")
+        return _pmm_jones_1d_jax(
+            period, er_j, eg_j, n_substrate, n_superstrate, depth, duty_cycle,
+            wavelength, angle=angle, degree=int(degree),
+            elements_per_region=int(elements_per_region), grade=bool(grade),
+            far_field_orders=int(far_field_orders))
+
     er = np.asarray(eps_ridge, dtype=_C)
     eg = np.asarray(eps_groove, dtype=_C)
     if er.shape[-2:] != (3, 3) or eg.shape[-2:] != (3, 3):
@@ -1955,6 +2027,392 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
                           eps_ridge, eps_groove, eps_sup, eps_sub,
                           depth, wavelength, polarization, dyn=dyn, kx0=kx0)
     return jnp.asarray(orders), R, T
+
+
+# ===========================================================================
+# JAX (differentiable) Jones path for pmm_jones_1d -- Phase 4
+# ===========================================================================
+#
+# A SELF-CONTAINED jax.numpy twin of the coupled ANISOTROPIC (in-plane 2x2-
+# tensor) binary Jones solve (_pmm_jones_solve / _pmm_jones_solve_core /
+# _sem_modes_tensor), differentiable w.r.t. the IN-PLANE tensor entries
+# (exx, exy, eyx, eyy, ezz), depth, wavelength, angle and the half-space
+# indices.  Invoked ONLY when an input is a JAX array (the dispatch in
+# pmm_jones_1d); NumPy inputs run the original code verbatim, so the NumPy path
+# is byte-identical by construction.  Scope (the validated Jones surface):
+# binary ridge/groove, IN-PLANE tensor (exz/eyz/ezx/ezy == 0), VERTICAL wall
+# (slant == 0), NORMAL or OBLIQUE incidence, real OR complex/lossy eps, a single
+# fixed degree (stabilize=False semantics), elements_per_region == 1.
+#
+# Unlike the scalar generalized pencil A x = q^2 B x (folded to eig(B^-1 A)),
+# the Jones modal solver is a STANDARD eig of the 2n x 2n coupled [Ex; Ey] block
+# Mbig (np.linalg.eig(Mbig) directly), so the rcwa custom-VJP eig applies
+# DIRECTLY -- no generalized fold.  The tensor enters the Galerkin masses
+# LINEARLY in eps (the wall-normal inverse-rule block Cxx = [[1/exx]]^-1 is the
+# only nonlinearity, an inv of an eps-linear mass), so the tensor-entry gradient
+# (incl off-diagonal exy/eyx -- the cross-pol coupling) flows.  The forward set
+# is chosen by the z-Poynting flux with the DIFFERENTIABLE noise-robust
+# jnp.where (NO argsort / compaction).  At NORMAL incidence the degenerate
+# Ex/Ey-dominant modes are mixed by np.linalg.eig in the degenerate subspace,
+# but the Jones OBSERVABLES (|J|^2, efficiencies) are GAUGE-INVARIANT, so the
+# in-subspace rotation does not affect them -- no argmax / sort / phase gauge
+# fix is applied (it would corrupt the gauge-invariant grads).
+
+
+def _jpmm_assemble_tensor(static, jnp, t_ridge, t_groove, dyn=None):
+    """Functionally assemble the per-coefficient tensor Galerkin masses
+    (``one``/``eyy``/``exy_xx``/``eyx_xx``/``schur``/``inv_xx``/``inv_ezz``) and
+    the ``one``/``inv_ezz`` weighted stiffnesses + convection masses in jnp from
+    the static per-element local operators and the (traced) ridge / groove
+    tensor dicts ``dict(exx, exy, eyx, eyy, ezz)`` -- the differentiable twin of
+    :func:`_build_sem_tensor`.  Every coefficient enters its mass LINEARLY, so
+    the tensor-entry gradient flows (the only nonlinearity, ``Cxx =
+    [[1/exx]]^-1``, is an inv applied later in :func:`_jpmm_sem_modes_tensor`).
+
+    ``dyn`` (a :func:`_jpmm_build_dynamic` result) swaps in the duty-traced
+    per-element ``Mloc`` / ``Kloc`` / ``Cloc`` (not used by the Jones surface
+    yet -- duty is held fixed -- but kept symmetric with the scalar path)."""
+    cj = jnp.complex128
+    n_glob = static["n_glob"]
+    n_el = static["n_el"]
+    l2g = static["l2g"]
+    region = static["region"]
+    if dyn is None:
+        Mloc = jnp.asarray(static["Mloc"], cj)
+        Kloc = jnp.asarray(static["Kloc"], cj)
+        Cloc = jnp.asarray(static["Cloc"], cj)
+    else:
+        Mloc = jnp.asarray(dyn["Mloc"], cj)
+        Kloc = jnp.asarray(dyn["Kloc"], cj)
+        Cloc = jnp.asarray(dyn["Cloc"], cj)
+    t_of = [t_ridge, t_groove]
+    Z = jnp.zeros((n_glob, n_glob), cj)
+    mass = {k: Z for k in ("one", "eyy", "exy_xx", "eyx_xx", "schur",
+                           "inv_xx", "inv_ezz")}
+    stiff = {k: Z for k in ("one", "inv_ezz")}
+    conv = {k: Z for k in ("one", "inv_ezz")}
+    for e in range(n_el):
+        t = t_of[region[e]]
+        exx, exy, eyx = t["exx"], t["exy"], t["eyx"]
+        eyy, ezz = t["eyy"], t["ezz"]
+        iez = 1.0 / ezz
+        idx = l2g[e]
+        ii, jj = np.meshgrid(idx, idx, indexing="ij")
+        Ml = jnp.diag(Mloc[e])
+        Kl = Kloc[e]
+        Cl = Cloc[e]
+        mass["one"] = mass["one"].at[ii, jj].add(Ml)
+        mass["eyy"] = mass["eyy"].at[ii, jj].add(eyy * Ml)
+        mass["exy_xx"] = mass["exy_xx"].at[ii, jj].add((exy / exx) * Ml)
+        mass["eyx_xx"] = mass["eyx_xx"].at[ii, jj].add((eyx / exx) * Ml)
+        mass["schur"] = mass["schur"].at[ii, jj].add(
+            (eyy - eyx * exy / exx) * Ml)
+        mass["inv_xx"] = mass["inv_xx"].at[ii, jj].add((1.0 / exx) * Ml)
+        mass["inv_ezz"] = mass["inv_ezz"].at[ii, jj].add(iez * Ml)
+        stiff["one"] = stiff["one"].at[ii, jj].add(Kl)
+        stiff["inv_ezz"] = stiff["inv_ezz"].at[ii, jj].add(iez * Kl)
+        conv["one"] = conv["one"].at[ii, jj].add(Cl)
+        conv["inv_ezz"] = conv["inv_ezz"].at[ii, jj].add(iez * Cl)
+    return dict(mass=mass, stiff=stiff, conv=conv, S0=mass["one"],
+                n_glob=n_glob)
+
+
+def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
+    """Coupled ``(E_x, E_y)`` anisotropic modal solve -- the differentiable twin
+    of :func:`_sem_modes_tensor`.  Returns ``(W2, V2, lam, q)`` (``W2[:, n]`` =
+    the 2-vector field of mode ``n`` stacked ``[Ex; Ey]``; ``V2`` the matched
+    magnetic partner ``Q W diag(1/lam)``; ``q = gamma/k0``; ``lam = -i q``).
+
+    The 2n x 2n coupled block ``Mbig = [[G Cxx, G Cxy], [Cyx, Cyy - Kx2]]`` is a
+    STANDARD eig (no generalized fold), so the rcwa custom-VJP ``eig`` applies
+    directly.  The forward set is chosen by the z-POYNTING FLUX with a
+    DIFFERENTIABLE noise-robust :func:`jnp.where` (flip a mode only when CLEARLY
+    backward); at ``kx0 == 0`` the propagating modes are real so the flux split
+    reduces to the legacy ``Im(q) >= 0`` rule (matched via the same robust
+    fallback the scalar twin uses)."""
+    cj = jnp.complex128
+    n = mats["n_glob"]
+    k02 = k0 * k0
+    S0 = mats["S0"]
+    mass, stiff, conv = mats["mass"], mats["stiff"], mats["conv"]
+
+    iS0 = jnp.linalg.inv(S0)
+    Cinv_xx = iS0 @ mass["inv_xx"]          # [[1/exx]]
+    Cxx = jnp.linalg.inv(Cinv_xx)           # [[1/exx]]^-1 (wall-normal inv rule)
+    EXY_XX = iS0 @ mass["exy_xx"]           # [[exy/exx]]
+    EYX_XX = iS0 @ mass["eyx_xx"]           # [[eyx/exx]]
+    SCHUR = iS0 @ mass["schur"]             # [[eyy - eyx exy/exx]]
+    Cxy = Cxx @ EXY_XX
+    Cyx = EYX_XX @ Cxx
+    Cyy = SCHUR + EYX_XX @ Cxx @ EXY_XX
+
+    # Skip the convection ONLY for the python literal 0.0 (normal incidence,
+    # byte-equal to the prior twin); a TRACED jnp scalar -- even one valued 0 --
+    # is NOT a python float, so its d/d(angle) derivative flows.
+    oblique = not (isinstance(kx0, float) and kx0 == 0.0)
+
+    def _kxop(skey, ckey, mkey):
+        op = stiff[skey]
+        if oblique:
+            Cw = conv[ckey]
+            op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mass[mkey]
+        return (1.0 / k02) * (iS0 @ op)
+    KxEzziKx = _kxop("inv_ezz", "inv_ezz", "inv_ezz")
+    Kx2 = _kxop("one", "one", "one")
+    G = jnp.eye(n, dtype=cj) - KxEzziKx
+
+    Mbig = jnp.block([[G @ Cxx, G @ Cxy],
+                      [Cyx,     Cyy - Kx2]])
+    q2, W2 = eig(Mbig)
+    q = jnp.sqrt(q2)
+    Q = jnp.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
+
+    # POYNTING-FLUX forward selector (the _sem_modes_tensor non-legacy branch,
+    # also valid at kx0 == 0 since the propagating modes are real there): the V2
+    # partner is [Hx; Hy] and the modal H carries an extra -i, so
+    # Sz_n = Im( Ex.S0.conj(Hy) - Ey.S0.conj(Hx) ).  Flip only when CLEARLY
+    # backward (a degenerate q^2 carries ~1e-15 imag noise whose sign differs
+    # between scipy-QZ and jnp eig -> the naive Im(q)<0 test would flip
+    # propagating modes inconsistently).
+    lam0 = -1j * q
+    safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
+    V0 = Q @ W2 @ jnp.diag(1.0 / safe0)
+    SVt = S0 @ jnp.conj(V0[:n])             # S0 conj(Hx)
+    SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
+    flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
+                    - jnp.einsum("in,in->n", W2[n:], SVt))
+    fscale = 1e-9 * jnp.maximum(jnp.max(jnp.abs(flux)), 1.0)
+    prop = jnp.abs(flux) > fscale
+    flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
+    q = jnp.where(flip, -q, q)
+    lam = -1j * q
+    safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+    V2 = Q @ W2 @ jnp.diag(1.0 / safe)
+    return W2, V2, lam, q
+
+
+def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
+                      eps_sup, eps_sub, depth, wl, kx0=0.0, dyn=None):
+    """Self-contained jnp coupled anisotropic (Jones) PMM solve -- the
+    differentiable twin of :func:`_pmm_jones_solve_core`.  Returns
+    ``(orders, R(2,N), T(2,N), jones(2,2))`` as jnp arrays, differentiable
+    w.r.t. the in-plane tensor entries, ``depth``, ``wl`` and (at oblique) the
+    incident ``angle`` / ``n_superstrate`` (threaded through the TRACED ``kx0``).
+
+    The half-spaces are ISOTROPIC tensors (``exx = eyy = ezz = eps``,
+    ``exy = eyx = 0``); they share the layer's mesh so the ``[W; V]`` interface
+    continuity is consistent.  Everything is built FUNCTIONALLY (jnp stacking,
+    no in-place ``np.zeros`` mutation)."""
+    cj = jnp.complex128
+    k0 = 2.0 * jnp.pi / wl
+    n_glob = static["n_glob"]
+    G = 2.0 * np.pi / period
+    N = len(orders)
+
+    t_iso_sup = dict(exx=eps_sup, exy=0.0 * eps_sup, eyx=0.0 * eps_sup,
+                     eyy=eps_sup, ezz=eps_sup)
+    t_iso_sub = dict(exx=eps_sub, exy=0.0 * eps_sub, eyx=0.0 * eps_sub,
+                     eyy=eps_sub, ezz=eps_sub)
+    mats = _jpmm_assemble_tensor(static, jnp, t_ridge, t_groove, dyn=dyn)
+    mats_sup = _jpmm_assemble_tensor(static, jnp, t_iso_sup, t_iso_sup, dyn=dyn)
+    mats_sub = _jpmm_assemble_tensor(static, jnp, t_iso_sub, t_iso_sub, dyn=dyn)
+
+    Wl, Vl, lam_l, _ql = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
+    Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_tensor(mats_sup, jnp, eig, k0, kx0)
+    Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_tensor(mats_sub, jnp, eig, k0, kx0)
+
+    def _ismat(Wa, Va, Wb, Vb):
+        a = jnp.linalg.solve(Wb, Wa)
+        b = jnp.linalg.solve(Vb, Va)
+        apb, amb = a + b, a - b
+        iapb = jnp.linalg.inv(apb)
+        return (-iapb @ amb, 2.0 * iapb,
+                0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
+
+    def _psmat(lam, k0_L):
+        m = lam.shape[0]
+        X = jnp.diag(jnp.exp(-lam * k0_L))
+        Z = jnp.zeros((m, m), cj)
+        return (Z, X, X, Z)
+
+    def _star(SA, SB):
+        A11, A12, A21, A22 = SA
+        B11, B12, B21, B22 = SB
+        m = A11.shape[0]
+        I = jnp.eye(m, dtype=cj)
+        D = jnp.linalg.inv(I - B11 @ A22)
+        F = jnp.linalg.inv(I - A22 @ B11)
+        return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
+                B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
+
+    S = _ismat(Wsup, Vsup, Wl, Vl)
+    S = _star(S, _psmat(lam_l, k0 * depth))
+    S = _star(S, _ismat(Wl, Vl, Wsub, Vsub))
+    S11, _S12, S21, _S22 = S
+
+    def _project(Wmodes):
+        return jnp.vstack([Tp @ Wmodes[:n_glob, :], Tp @ Wmodes[n_glob:, :]])
+
+    Hsup = _project(Wsup)
+    Hsub = _project(Wsub)
+
+    orders_j = jnp.asarray(orders)
+    kx = (kx0 + orders_j * G) / k0
+
+    def _kzf(eps, kxv):
+        val = jnp.sqrt(jnp.asarray(eps - kxv ** 2, dtype=cj))
+        return jnp.where(val.imag < 0.0, -val, val)
+
+    kz_sup = _kzf(eps_sup, kx)
+    kz_sub = _kzf(eps_sub, kx)
+    kx0n = kx0 / k0
+    kz_inc = jnp.real(_kzf(eps_sup, jnp.asarray(kx0n, cj)))
+    safe_r = jnp.where(jnp.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+    safe_t = jnp.where(jnp.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+
+    # DIFFERENTIABLE minimum-norm least squares for the incident-amplitude
+    # projection.  ``jnp.linalg.lstsq``'s VJP NaNs on a rank-deficient / under-
+    # determined system (the stacked Hsup is (2N, 2*n_glob) with 2N <= 2*n_glob,
+    # i.e. underdetermined), so use the closed-form min-norm pseudo-inverse
+    # x = A^H (A A^H)^-1 b (forward-identical to numpy's SVD min-norm lstsq to
+    # ~1e-14, validated; A A^H is well-conditioned -- cond ~ Hsup's^2).  The
+    # over-determined case (2N > 2*n_glob, not hit on this surface) would use
+    # (A^H A)^-1 A^H; branch on the CONCRETE shape (static per trace).
+    mrows, ncols = Hsup.shape
+    if mrows <= ncols:
+        AAH_inv = jnp.linalg.inv(Hsup @ Hsup.conj().T)
+        pinv = Hsup.conj().T @ AAH_inv          # (ncols, mrows) min-norm pinv
+    else:
+        AHA_inv = jnp.linalg.inv(Hsup.conj().T @ Hsup)
+        pinv = AHA_inv @ Hsup.conj().T          # least-squares pinv
+
+    m0 = int(np.where(orders == 0)[0][0])
+    rows_R, rows_T, jcols = [], [], []
+    for col in range(2):                    # 0 = incident Ex, 1 = incident Ey
+        rhs = jnp.zeros(2 * N, cj).at[(col * N) + m0].set(1.0)
+        cinc = pinv @ rhs
+        r_ord = Hsup @ (S11 @ cinc)
+        t_ord = Hsub @ (S21 @ cinc)
+        rx, ry = r_ord[:N], r_ord[N:]
+        tx, ty = t_ord[:N], t_ord[N:]
+        # longitudinal Ez (div D = 0 in the isotropic half-space): rz = -kx rx/kz
+        rz = -(kx * rx) / safe_r
+        tz = -(kx * tx) / safe_t
+        # per-column incident flux: col-0 (Ex, p-pol) carries Ez_inc -> z-flux
+        # kz_inc(1+(kx0/kz_inc)^2); col-1 (Ey, s-pol) -> kz_inc.  At kx0=0 both
+        # reduce to kz_inc (byte-equal to normal incidence).
+        if col == 0:
+            flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2)
+        else:
+            flux_inc = kz_inc
+        Re = jnp.real(kz_sup) * (jnp.abs(rx) ** 2 + jnp.abs(ry) ** 2
+                                 + jnp.abs(rz) ** 2) / flux_inc
+        Te = jnp.real(kz_sub) * (jnp.abs(tx) ** 2 + jnp.abs(ty) ** 2
+                                 + jnp.abs(tz) ** 2) / flux_inc
+        rows_R.append(jnp.where(jnp.real(kz_sup) > 1e-12, jnp.real(Re), 0.0))
+        rows_T.append(jnp.where(jnp.real(kz_sub) > 1e-12, jnp.real(Te), 0.0))
+        jcols.append(jnp.stack([rx[m0], ry[m0]]))   # [Ex; Ey] reflected, order 0
+    R_eff = jnp.stack(rows_R)
+    T_eff = jnp.stack(rows_T)
+    jones = jnp.stack(jcols, axis=1)        # (2,2): columns = incident Ex / Ey
+    return orders, R_eff, T_eff, jones
+
+
+def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
+                      depth, duty_cycle, wavelength, *, angle, degree,
+                      elements_per_region, grade, far_field_orders):
+    """Differentiable (JAX) binary ``pmm_jones_1d`` -- the full ``2x2`` Jones
+    response of an IN-PLANE anisotropic binary grating (normal OR oblique,
+    vertical wall).  Invoked by :func:`pmm_jones_1d` when any tensor / geometry /
+    angle input is a JAX array.  Differentiable w.r.t. the in-plane tensor
+    entries (incl off-diagonal ``exy`` / ``eyx``), ``depth``, ``wavelength``,
+    ``angle`` and the half-space indices.  Anything outside the surface
+    (stabilize, multi-region, out-of-plane, slant) raises (handled upstream)."""
+    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
+    import jax.numpy as jnp
+    _warn_if_jax_f32("pmm_jones_1d")
+
+    if int(elements_per_region) != 1:
+        raise NotImplementedError(
+            "pmm_jones_1d: the JAX (differentiable) path currently supports "
+            "elements_per_region == 1 only; use the NumPy path for "
+            "hp-refinement.")
+
+    cj = jnp.complex128
+    er = jnp.asarray(eps_ridge, cj)
+    eg = jnp.asarray(eps_groove, cj)
+
+    def _t3(M):
+        return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
+                    ezz=M[2, 2])
+    t_ridge, t_groove = _t3(er), _t3(eg)
+
+    # CONCRETE numbers for the shape-determining order COUNT (held static per
+    # trace -- it sets every array shape).  A traced sizing input arrives as a
+    # tracer with no concrete value; _re_or_none drops it and the count falls
+    # back to the remaining concrete inputs + the far_field_orders floor (the
+    # documented Wood-anomaly caveat: grads valid only BETWEEN order cutoffs).
+    def _re_or_none(v):
+        try:
+            return float(np.real(np.asarray(v)))
+        except Exception:
+            return None
+
+    period_c = float(period)
+    wl_c = _re_or_none(wavelength)
+    if wl_c is None:
+        wl_c = float("inf")
+    nsup_c = _re_or_none(n_superstrate)
+    nsub_c = _re_or_none(n_substrate)
+    exx_r = _re_or_none(er[0, 0])
+    eyy_r = _re_or_none(er[1, 1])
+    exx_g = _re_or_none(eg[0, 0])
+    eyy_g = _re_or_none(eg[1, 1])
+    n_max_vals = [np.real(np.sqrt(v)) for v in (exx_r, eyy_r, exx_g, eyy_g)
+                  if v is not None]
+    n_max_vals += [v for v in (nsup_c, nsub_c) if v is not None]
+    n_max = max(n_max_vals) if n_max_vals else 1.0
+
+    duty_c = _re_or_none(duty_cycle)
+    if duty_c is None:
+        duty_c = 0.5
+    if not (0.0 < duty_c < 1.0):
+        raise ValueError(
+            "pmm_jones_1d: the JAX (differentiable) path needs a strictly "
+            f"interior duty_cycle (0 < duty < 1), got {duty_c}.")
+    d_wall_c = duty_c * period_c
+    static = _jpmm_build_static(period_c, d_wall_c, int(degree), 1, 1,
+                                bool(grade))
+    orders = _jpmm_order_set(static, period_c, wl_c, n_max,
+                             int(far_field_orders), int(degree), "pmm_jones_1d")
+
+    n_substrate = jnp.asarray(n_substrate, cj)
+    n_superstrate = jnp.asarray(n_superstrate, cj)
+    depth = jnp.asarray(depth)
+    wavelength = jnp.asarray(wavelength)
+    eps_sup = n_superstrate ** 2
+    eps_sub = n_substrate ** 2
+
+    # Oblique Bloch wavenumber kx0 = Re(n_sup) sin(angle) k0 -- TRACED so
+    # d/d(angle) and d/d(n_superstrate) flow.  A concrete angle == 0 (and NOT
+    # traced) passes the python literal 0.0 for the byte-equal normal-incidence
+    # branch (no convection / kx0^2 / Ez normaliser shift).
+    angle_traced = is_jax_array(angle)
+    if angle_traced or float(angle) != 0.0:
+        k0_kx = 2.0 * jnp.pi / wavelength
+        kx0 = jnp.real(n_superstrate) * jnp.sin(jnp.asarray(angle)) * k0_kx
+    else:
+        kx0 = 0.0
+
+    # duty held fixed on the Jones surface (no moving-mesh phase yet); the
+    # projection is the static numpy one.
+    Tp = jnp.asarray(_jpmm_fourier_projection(orders, period_c, static), cj)
+
+    eig = _jax_eig_stable()
+    o, R, T, J = _jpmm_jones_solve(static, orders, Tp, jnp, eig, period_c,
+                                   t_ridge, t_groove, eps_sup, eps_sub, depth,
+                                   wavelength, kx0=kx0)
+    return jnp.asarray(orders), R, T, J
 
 
 def pmm_efficiency_1d(
