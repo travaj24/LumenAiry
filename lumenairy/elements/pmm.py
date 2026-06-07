@@ -112,7 +112,8 @@ from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
 # while a NumPy input falls through to the original (byte-identical) code.
 from ..backend import is_jax_array
 
-__all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_segments",
+__all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
+           "pmm_efficiency_1d_segments",
            "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
            "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
            "pmm_jones_1d_slanted_segments", "pmm_1d",
@@ -2574,6 +2575,61 @@ def pmm_efficiency_1d(
     return _stabilize_scalar(
         lambda d: _pmm_solve(*args, degree=d, **kw)[:3], int(degree),
         "pmm_efficiency_1d")
+
+
+def pmm_efficiency_1d_jax(
+    period,
+    n_ridge,
+    n_groove,
+    n_substrate,
+    n_superstrate,
+    depth,
+    duty_cycle,
+    wavelength,
+    *,
+    angle=0.0,
+    polarization="te",
+    degree=16,
+    elements_per_region=1,
+    grade=True,
+    far_field_orders=21,
+):
+    """JAX (differentiable) twin of :func:`pmm_efficiency_1d`.
+
+    Thin wrapper that promotes its inputs to ``jax.numpy`` arrays and forwards to
+    the unified :func:`pmm_efficiency_1d`, which auto-dispatches to the
+    differentiable JAX backend on JAX inputs.  Prefer calling
+    ``pmm_efficiency_1d(...)`` with ``jax.numpy`` arguments directly; this explicit
+    twin exists for discoverability and the cross-backend parity contract.  The JAX
+    path uses ``stabilize=False`` (passed automatically) -- choose a single fixed
+    ``degree`` where the NumPy solve already conserves energy.  Differentiable
+    w.r.t. ``n_ridge`` / ``n_groove`` (via eps), ``depth``, ``wavelength``,
+    ``angle`` and the half-space indices; first-order only (no eig Hessian).
+    """
+    from ..backend import JAX_AVAILABLE as _JAX_AVAILABLE
+    if not _JAX_AVAILABLE:
+        raise ImportError(
+            "pmm_efficiency_1d_jax requires the optional 'jax' extra; install with "
+            "`pip install lumenairy[jax]` (or `pip install jax`).  Use the NumPy "
+            "pmm_efficiency_1d for non-differentiable evaluation.")
+    import jax.numpy as jnp
+    return pmm_efficiency_1d(
+        period,
+        jnp.asarray(n_ridge),
+        jnp.asarray(n_groove),
+        jnp.asarray(n_substrate),
+        jnp.asarray(n_superstrate),
+        jnp.asarray(depth),
+        duty_cycle,
+        jnp.asarray(wavelength),
+        angle=jnp.asarray(angle),
+        polarization=polarization,
+        degree=degree,
+        elements_per_region=elements_per_region,
+        grade=grade,
+        far_field_orders=far_field_orders,
+        stabilize=False,
+    )
 
 
 def pmm_efficiency_1d_segments(

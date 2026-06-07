@@ -417,6 +417,7 @@ from .elements.pmm import (
     classify_from_grating,
     grating_convergence_class,
     pmm_efficiency_1d,
+    pmm_efficiency_1d_jax,
     pmm_efficiency_1d_segments,
     pmm_efficiency_1d_slanted,
     pmm_1d,
@@ -1507,6 +1508,7 @@ __all__ = [
 
     # PMM (Polynomial Modal Method -- non-Fourier 1-D modal solver)
     'pmm_efficiency_1d',
+    'pmm_efficiency_1d_jax',
     'pmm_efficiency_1d_segments',
     'pmm_efficiency_1d_slanted',
     'pmm_1d',

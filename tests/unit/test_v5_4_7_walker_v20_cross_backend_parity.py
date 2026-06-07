@@ -41,6 +41,7 @@ _JAX_TWIN_MODULES = (
     'lumenairy.propagators.system',
     'lumenairy.elements.rcwa',          # v5.5.3: cover the folded RCWA jax twin
     'lumenairy.elements.coatings',      # v5.5.3: cover the differentiable TMM twin
+    'lumenairy.elements.pmm',           # 2026-06-07 audit P2-C: cover the PMM jax twin
 )
 
 # Non-physics JAX helpers (ray-state builders, cache clearers) -- excluded
@@ -83,6 +84,11 @@ _PARITY_REGISTRY = {
     # (Snell chain, Abeles factors, TIR cap) can't drift between the two.
     'lumenairy.elements.coatings:coating_reflectance_jax':
         'lumenairy.elements.coatings:coating_reflectance',
+    # 2026-06-07 audit P2-C: the PMM jax twin is a thin wrapper over the unified,
+    # backend-dispatched pmm_efficiency_1d (its NumPy sibling), so the differentiable
+    # PMM path is no longer structurally invisible to the parity walker.
+    'lumenairy.elements.pmm:pmm_efficiency_1d_jax':
+        'lumenairy.elements.pmm:pmm_efficiency_1d',
 }
 
 # Discovered ``*jax*`` functions intentionally WITHOUT a physics NumPy
