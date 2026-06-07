@@ -1310,13 +1310,14 @@ def pmm_jones_1d(
     an OUT-OF-PLANE tensor raise on the JAX path (NumPy-only).  Normal or oblique
     incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR out-of-plane).  An
     out-of-plane tensor routes through the native full-3x3 metric generator (VERTICAL
-    only).  Out-of-plane combined with a slanted wall is GUARDED:
-    :func:`pmm_jones_1d_slanted` RAISES ``ValueError`` for an out-of-plane tensor (it
-    does not return a value).  If computed it would conserve energy but be per-order
-    WRONG (~2-30e-3 vs an RCWA tensor z-staircase) because the slant metric fold of the
-    FULL tensor must SUPERPOSE the out-of-plane components (``eps^13 = -ezz*tan + exz``,
-    ``eps^23 = eyz``, ... Li 1999) -- an off-plane Schur closure the vertical branch
-    does not yet carry.
+    only).  Out-of-plane combined with a slanted wall is SUPPORTED (binary) as of
+    2026-06-07: :func:`pmm_jones_1d_slanted` carries the slant as EXACT convection
+    (``tan * d/dx``) instead of the static metric fold (whose ``ezz*tan^2`` re-
+    injection capped the per-order accuracy at ~1e-2 for the full tensor), so
+    out-of-plane + slant reaches the same ~1e-4 wall-normal per-order floor as the
+    in-plane slant TM channel (validated vs an RCWA tensor z-staircase across slant
+    15-60 deg, normal + oblique).  The multi-region (segments) out-of-plane + slant
+    path remains guarded.
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
@@ -4273,14 +4274,17 @@ def pmm_jones_1d_slanted(
     far_field_orders: int = 21,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """SLANTED binary grating with full ``(3, 3)`` IN-PLANE permittivity tensors
-    -- the anisotropic-Jones counterpart of :func:`pmm_efficiency_1d_slanted`,
-    by the genuine Edee-Granet 2024 covariant-metric spectral-element solver.
+    """SLANTED binary grating with full ``(3, 3)`` permittivity tensors (in-plane
+    OR out-of-plane) -- the anisotropic-Jones counterpart of
+    :func:`pmm_efficiency_1d_slanted`, by the Edee-Granet covariant-metric
+    spectral-element solver.
 
     Combines the tilted side-walls of :func:`pmm_efficiency_1d_slanted` with the
-    coupled ``(E_x, E_y)`` Jones response of :func:`pmm_jones_1d`.  The tilt is
-    folded into the effective ``eps^lm`` / ``mu^lm`` of a curvilinear (inclined)
-    metric, and the modal eigenproblem is the TRUE first-order physical Maxwell
+    coupled ``(E_x, E_y)`` Jones response of :func:`pmm_jones_1d`.  The tilt
+    enters as an EXACT first-order convection (``tan * d/dx`` on the clean
+    vertical metric generator -- this is what lets out-of-plane + slant reach the
+    wall-normal floor; see :func:`_build_generator_metric`), and the modal
+    eigenproblem is the TRUE first-order physical Maxwell
     generator ``-i k gamma psi = L psi`` (``psi = [E_x; E_y; iZ H_x; iZ H_y]``,
     LINEAR in ``gamma``): the magnetic field is read directly from the
     eigenvector, so the layer modes are flux-orthogonal by construction (the
@@ -4296,9 +4300,12 @@ def pmm_jones_1d_slanted(
         ``Im(eps) > 0`` for loss).  As in :func:`pmm_jones_1d`: pass
         ``scalar * np.eye(3)`` for an isotropic region; ``exy`` / ``eyx`` couple
         ``E_x`` and ``E_y`` (real-symmetric for a tilted LC director, anti-
-        Hermitian ``+/- i g`` for a gyrotropic / magneto-optic medium).  Must be
-        IN-PLANE (no ``eps_xz / eps_yz / eps_zx / eps_zy``); an out-of-plane
-        tensor raises ``ValueError``.
+        Hermitian ``+/- i g`` for a gyrotropic / magneto-optic medium).  FULL
+        out-of-plane coupling (``eps_xz / eps_yz / eps_zx / eps_zy != 0``, e.g. a
+        tilted-director LC) is SUPPORTED (binary grating): it routes through the
+        coupled metric generator and reaches the same ~1e-4 wall-normal per-order
+        floor as the in-plane slant TM channel (validated vs an RCWA tensor
+        z-staircase, slant 15-60 deg, normal + oblique).
     n_substrate, n_superstrate : complex
         Transmission / incidence half-space (isotropic) indices (PUBLIC ``n =
         n + i kappa``).
@@ -4342,9 +4349,10 @@ def pmm_jones_1d_slanted(
     Notes
     -----
     NumPy / SciPy (dense eig); not JAX-differentiable.  SCOPE: BINARY grating
-    (1 ridge + 1 groove), in-plane tensor only, normal OR oblique incidence at any
-    slant.  The multi-region (segments) path is not supported (there is no
-    ``..._slanted_segments`` companion -- it raises ``NotImplementedError``).
+    (1 ridge + 1 groove), full ``(3, 3)`` tensor IN-PLANE OR OUT-OF-PLANE, normal
+    OR oblique incidence at any slant.  The multi-region
+    :func:`pmm_jones_1d_slanted_segments` companion supports in-plane tensors only
+    (it still guards out-of-plane + slant pending its own per-order validation).
 
     DIAGONAL CURE (round 16; Granet 2017 JOSA A 34:975 / Granet 2023; Liu 2015
     CiCP 18:467).  A DIAGONAL tensor (``exy = eyx = 0``) WITH ``exx == ezz`` in
@@ -4382,16 +4390,21 @@ def pmm_jones_1d_slanted(
             "pmm_jones_1d_slanted: eps_ridge / eps_groove must be (3, 3) "
             "permittivity tensors (use scalar * np.eye(3) for an isotropic "
             "region).")
-    # in-plane only: reject out-of-plane coupling (would be silently dropped)
+    # OUT-OF-PLANE (eps_xz/yz/zx/zy != 0): SUPPORTED (2026-06-07).  Since the
+    # slant is carried as EXACT convection in the metric generator (see
+    # _build_generator_metric), out-of-plane + slant now reaches the SAME
+    # wall-normal ~1e-4 per-order floor as the in-plane slant TM channel
+    # (validated vs an independent RCWA tensor z-staircase across slant 15-60 deg,
+    # normal + oblique, symmetric / lossy / asymmetric tensors; energy conserves
+    # to ~1e-13).  An out-of-plane tensor MUST route through the coupled metric
+    # generator and NOT the scalar diagonal cure (which is the z-decoupled in-plane
+    # subset and would silently drop the off-plane coupling), so `off` excludes it
+    # from the diagonal cure below.  BINARY grating only -- the multi-region
+    # (segments) out-of-plane + slant path stays guarded pending its own
+    # per-order validation.
     scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
     off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
               float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
-    if off > 1e-9 * scale:
-        raise ValueError(
-            "pmm_jones_1d_slanted: the anisotropic PMM is the z-decoupled "
-            "IN-PLANE tensor subset (exx, exy, eyx, eyy, ezz); the supplied "
-            "tensor has out-of-plane coupling (eps_xz / eps_yz / eps_zx / "
-            "eps_zy != 0).")
 
     # ---- THE DIAGONAL CURE (round 16, Granet 2017/2023; Liu 2015) -----------
     # For a DIAGONAL in-plane tensor (exy = eyx = 0) WITH exx == ezz BOTH
@@ -4423,6 +4436,7 @@ def pmm_jones_1d_slanted(
                               and abs(float(slant_angle)) > 1e-12)
     diagonal_cure = (inplane_off <= 1e-9 * scale
                      and exx_eq_ezz <= 1e-9 * scale
+                     and off <= 1e-9 * scale          # out-of-plane -> metric gen
                      and not combined_oblique_slant)
     if diagonal_cure:
         dargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,

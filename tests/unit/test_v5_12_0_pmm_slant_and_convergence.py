@@ -667,13 +667,182 @@ def test_jones_slant_segments_out_of_plane_rejected():
             slant_angle=np.deg2rad(20.0), **_SEGGEOM)
 
 
-def test_jones_slant_out_of_plane_tensor_rejected():
-    """An out-of-plane tensor (eps_xz/zx != 0) is rejected (in-plane only)."""
-    er = _eps_diag(2.25)
-    er[0, 2] = er[2, 0] = 0.3
-    with pytest.raises(ValueError):
-        pmm_jones_1d_slanted(eps_ridge=er, eps_groove=_eps_diag(1.0),
-                             slant_angle=np.deg2rad(20.0), **_JGEOM)
+# ===================================================================
+# OUT-OF-PLANE (full 3x3, eps_xz/yz/zx/zy) + SLANT -- UNGATED 2026-06-07.
+# The slant is carried as EXACT convection in the metric generator, so
+# out-of-plane + slant now reaches the wall-normal ~1e-4 per-order floor (the
+# same floor as the in-plane slant TM channel).  Validated below vs an
+# INDEPENDENT RCWA full-3x3 z-staircase oracle (rcwa internals only, no PMM).
+# ===================================================================
+from lumenairy.elements import rcwa as _RC
+
+
+def _oop_staircase(er, eg, slant, n_slabs=200, n_orders=15, angle=0.0):
+    """Independent oracle: the same slanted out-of-plane binary grating as an
+    RCWA z-staircase (many vertical full-3x3 tensor slabs, each laterally shifted
+    by tan(phi)*z).  Geometry = ``_JGEOM_ASYM``.  Returns (orders, R(2,N), T(2,N))
+    in the PUBLIC convention.  Uses ONLY rcwa primitives -- fully PMM-independent.
+    """
+    period, depth, duty, wl, n_sub, n_sup = 1e-6, 0.5e-6, 0.5, 0.633e-6, 1.5, 1.0
+    C = np.complex128
+    M = int(n_orders)
+    N = 2 * M + 1
+    orders = np.arange(-M, M + 1)
+    erc = np.conj(np.asarray(er, C))
+    egc = np.conj(np.asarray(eg, C))
+    eps_sup = complex(np.conj(C(n_sup) ** 2))
+    eps_sub = complex(np.conj(C(n_sub) ** 2))
+    kx0 = float(np.real(np.conj(C(n_sup))) * np.sin(angle))
+    k0 = 2 * np.pi / wl
+    kx = kx0 + orders * (wl / period)
+    Kx = np.diag(kx.astype(C))
+    Ky = np.zeros((N, N), C)
+    kxv = kx.astype(C)
+    kz_inc = float(np.real(_RC._sqrt_forward(eps_sup - kx0 ** 2)))
+    tanp = np.tan(slant)
+    dz = depth / n_slabs
+    Wr, Vr, kzr = _RC._homogeneous_eigenmodes(Kx, Ky, eps_sup)
+    Wt, Vt, kzt = _RC._homogeneous_eigenmodes(Kx, Ky, eps_sub)
+    Mref = _RC._modes_to_M(Wr, Vr, Wr, -Vr)
+    Mtrn = _RC._modes_to_M(Wt, Vt, Wt, -Vt)
+    keys = {"xx": (0, 0), "xy": (0, 1), "yx": (1, 0), "yy": (1, 1), "zz": (2, 2),
+            "xz": (0, 2), "zx": (2, 0), "yz": (1, 2), "zy": (2, 1)}
+    xq = (np.arange(4096) + 0.5) / 4096
+    S = None
+    Mp = Mref
+    for s in range(n_slabs):
+        inside = np.mod(xq - tanp * ((s + 0.5) * dz) / period, 1.0) < duty
+        prof = {kk: np.where(inside, erc[ij], egc[ij]).astype(C)
+                for kk, ij in keys.items()}
+        cc = _RC._tensor_convolutions_full(prof, M)
+        Wl, Vl, lam, Wlb, Vlb, lamb = _RC._layer_eigenmodes_tensor(Kx, Ky, *cc)
+        Ml = _RC._modes_to_M(Wl, Vl, Wlb, Vlb)
+        Sl = _RC._redheffer_star(_RC._interface_smatrix_general(Mp, Ml),
+                                 _RC._propagation_smatrix_general(lam, lamb, k0 * dz))
+        S = Sl if S is None else _RC._redheffer_star(S, Sl)
+        Mp = Ml
+    S11, _S12, S21, _S22 = _RC._redheffer_star(
+        S, _RC._interface_smatrix_general(Mp, Mtrn))
+    delta = (orders == 0).astype(C)
+    zN = np.zeros(N, C)
+    Rr, Tr = [], []
+    for pol in ("x", "y"):
+        cinc = (np.concatenate([delta, zN]) if pol == "x"
+                else np.concatenate([zN, delta]))
+        einc = 1.0 + (kx0 / kz_inc) ** 2 if (pol == "x" and kz_inc != 0) else 1.0
+        r = S11 @ cinc
+        t = S21 @ cinc
+        rx, ry = r[:N], r[N:]
+        tx, ty = t[:N], t[N:]
+        sr = np.where(np.abs(kzr) < 1e-12, 1.0, kzr)
+        st = np.where(np.abs(kzt) < 1e-12, 1.0, kzt)
+        rz = -(kxv * rx) / sr
+        tz = -(kxv * tx) / st
+        Re = np.real(kzr / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                      + np.abs(rz) ** 2) / einc
+        Te = np.real(kzt / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                      + np.abs(tz) ** 2) / einc
+        Rr.append(np.where(np.real(kzr) > 0, np.real(Re), 0.0))
+        Tr.append(np.where(np.real(kzt) > 0, np.real(Te), 0.0))
+    return orders, np.stack(Rr), np.stack(Tr)
+
+
+def _eps_oop_sym():
+    """Symmetric out-of-plane cell: exz=ezx=0.3, eyz=ezy=0.2 (the milestone)."""
+    return np.array([[2.25, 0, 0.3], [0, 2.10, 0.2], [0.3, 0.2, 2.40]],
+                    dtype=np.complex128)
+
+
+def test_oop_staircase_oracle_self_test():
+    """The independent staircase oracle reduces to rcwa_jones_1d at slant=0 -- a
+    sanity check that the oracle the OOP+slant tests rely on is itself correct."""
+    from lumenairy.elements.rcwa import rcwa_jones_1d
+    er, eg = _eps_oop_sym(), _eps_diag(1.0)
+    oR, _ReR, TeR, _JR = rcwa_jones_1d(1e-6, er, eg, 1.5, 1.0, 0.5e-6, 0.5,
+                                       0.633e-6, n_orders=11)
+    o, _Re, Te = _oop_staircase(er, eg, 0.0, n_slabs=4, n_orders=11)
+    iR = {int(m): i for i, m in enumerate(oR.tolist())}
+    io = {int(m): i for i, m in enumerate(o.tolist())}
+    d = max(abs(Te[r, io[m]] - TeR[r, iR[m]])
+            for r in (0, 1) for m in o.tolist() if m in iR)
+    assert d < 1e-6
+
+
+@pytest.mark.parametrize("phi_deg", [30.0, 45.0])
+def test_jones_slant_out_of_plane_matches_staircase(phi_deg):
+    """OUT-OF-PLANE + slant now SOLVES (no longer raises) and matches the
+    independent RCWA tensor staircase on the propagating orders to the
+    wall-normal floor (TM ~1e-3, TE ~1e-4); energy conserves."""
+    er, eg = _eps_oop_sym(), _eps_diag(1.0)
+    phi = np.deg2rad(phi_deg)
+    o, R, T, J = pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg, slant_angle=phi,
+                                      degree=16, stabilize=True, **_JGEOM_ASYM)
+    oo, Ro, To = _oop_staircase(er, eg, phi, n_slabs=200, n_orders=15)
+    ip = {int(m): i for i, m in enumerate(o.tolist())}
+    io = {int(m): i for i, m in enumerate(oo.tolist())}
+    common = [m for m in oo.tolist() if m in ip and (To[0, io[m]] + Ro[0, io[m]]) > 1e-6]
+    dtm = max(abs(T[0, ip[m]] - To[0, io[m]]) for m in common)
+    dte = max(abs(T[1, ip[m]] - To[1, io[m]]) for m in common)
+    assert dtm < 3e-3
+    assert dte < 1e-3
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-3
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3
+
+
+def test_jones_slant_out_of_plane_slant0_reduces_to_vertical():
+    """At slant=0 the out-of-plane slanted path is BYTE-IDENTICAL to the vertical
+    pmm_jones_1d (the convection term vanishes -> same metric generator)."""
+    er, eg = _eps_oop_sym(), _eps_diag(1.0)
+    o, R, T, J = pmm_jones_1d_slanted(eps_ridge=er, eps_groove=eg, slant_angle=0.0,
+                                      degree=16, stabilize=False, **_JGEOM_ASYM)
+    oV, RV, TV, JV = pmm_jones_1d(
+        period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        degree=16, stabilize=False)
+    assert np.array_equal(o, oV)
+    assert np.max(np.abs(J - JV)) == 0.0
+    assert np.max(np.abs(T - TV)) == 0.0
+
+
+def test_jones_slant_out_of_plane_reduces_to_inplane_as_off_vanishes():
+    """As the off-plane coupling -> 0 the out-of-plane slanted solve converges to
+    the in-plane slanted solve (the off-plane terms are continuous in their
+    magnitude)."""
+    eg = _eps_diag(1.0)
+    base = _eps_diag(2.25)
+    base[1, 1] = 2.10
+    base[2, 2] = 2.40                              # diagonal in-plane (exx!=ezz)
+    o_in, R_in, T_in, J_in = pmm_jones_1d_slanted(
+        eps_ridge=base, eps_groove=eg, slant_angle=np.deg2rad(30.0),
+        degree=18, stabilize=True, **_JGEOM_ASYM)
+    er = base.copy()
+    er[0, 2] = er[2, 0] = 1e-7                     # vanishing off-plane
+    er[1, 2] = er[2, 1] = 1e-7
+    o_oo, R_oo, T_oo, J_oo = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=np.deg2rad(30.0),
+        degree=18, stabilize=True, **_JGEOM_ASYM)
+    assert np.array_equal(o_in, o_oo)
+    assert np.max(np.abs(T_in - T_oo)) < 1e-6
+
+
+def test_jones_slant_out_of_plane_diagonal_routes_to_metric_not_cure():
+    """A DIAGONAL-in-plane (exx==ezz, exy=0) tensor that ALSO has off-plane
+    coupling must NOT take the scalar diagonal cure (the z-decoupled in-plane
+    subset, which would silently DROP the off-plane).  Verify the off-plane
+    PHYSICALLY changes the answer vs the same cell with the off-plane removed
+    (and the solve is still energy-passive)."""
+    eg = _eps_diag(1.0)
+    er0 = _eps_diag(2.25)                           # diagonal, exx==ezz, NO off-plane
+    er1 = er0.copy()
+    er1[0, 2] = er1[2, 0] = 0.5                     # + x-z off-plane coupling
+    kw = dict(slant_angle=np.deg2rad(25.0), degree=16, stabilize=True,
+              **_JGEOM_ASYM)
+    _o0, _R0, T0, _J0 = pmm_jones_1d_slanted(eps_ridge=er0, eps_groove=eg, **kw)
+    _o1, R1, T1, _J1 = pmm_jones_1d_slanted(eps_ridge=er1, eps_groove=eg, **kw)
+    assert abs(_sum_RT(R1[0], T1[0]) - 1.0) < 1e-3      # solved, energy-passive
+    # off-plane is PHYSICALLY present (a wrong route to the cure would drop it,
+    # giving T1 == T0).
+    assert np.max(np.abs(T1 - T0)) > 1e-3
 
 
 # ===================================================================
