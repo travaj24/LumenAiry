@@ -2395,26 +2395,27 @@ def rcwa_efficiency_2d(
           arbitrarily oriented walls.  The ``E_z`` elimination uses the
           dual-Laurent ``[[1/eps]]`` rule (``inv(EZZ) = [[1/eps]]``, the same
           unbiased ``E_z`` rule the analytic-shape solver uses).  This is the
-          convergence-accelerating factorization for **2-D metallic gratings**:
-          it reaches a target accuracy in fewer orders than ``'li'`` and tracks
-          the rigorous (analytic-shape) reference on both dielectrics and
-          metals.  ``N`` is built automatically from a Gaussian-smoothed
-          gradient of the material indicator, so it works for numeric cells,
-          disks, ellipses and multi-shape cells.
+          convergence-accelerating factorization for **SEPARABLE / axis-aligned
+          2-D metallic gratings**: there it reaches a target accuracy in fewer
+          orders than ``'li'`` and matches the rigorous 1-D-Li oracle (absorptance
+          to ~6e-5 on a metal stripe).  ``N`` is built automatically from a
+          Gaussian-smoothed gradient of the material indicator.
 
-          VALIDATION SCOPE: the diagonal normal/tangential projection (the
-          dominant win) is validated for axis-aligned/rectangular features and
-          matches the analytic-shape reference on a clean dielectric to ~1e-3.
-          The off-diagonal cross term ``Cxy = -Delta @ [[Nx Ny]]`` is genuinely
-          nonzero only on curved boundaries (disks/ellipses); on the convergent
-          metal-disk benchmark it shifts the answer at the ~1-2e-3 level and the
-          with-cross solve converges to the analytic-disk reference, but that
-          reference is itself only self-consistent to ~3-4e-3 at the tested
-          orders, so the cross term is validated as ACTIVE and convergent but
-          its accuracy edge over the diagonal-only form is within reference
-          noise -- treat curved-boundary use as supported-but-modestly-verified.
-          ``'fff_nv'`` is NumPy / CuPy only and is incompatible with the
-          ``symmetry`` even-parity fast path (transparently skipped).
+          VALIDATION SCOPE (corrected, 2026-06-07 audit): the diagonal
+          normal/tangential projection (the dominant win) is validated for
+          AXIS-ALIGNED / SEPARABLE features -- it matches the analytic-shape
+          reference on a clean dielectric to ~1e-3 and genuinely beats 2-D
+          ``'li'`` / ``'laurent'`` on a metal stripe.  The off-diagonal cross term
+          ``Cxy = -Delta @ [[Nx Ny]]`` (nonzero only on CURVED boundaries --
+          disks/ellipses) is **NOT validated**: on a lossy metal disk it
+          **mis-splits the absorptance by ~50%** -- a lossless-trap failure
+          (``R+T+A`` still closes, but the per-channel split is wrong; converged
+          oracles give ``A ~ 0.094-0.096``, ``fff_nv`` gives ``A ~ 0.046-0.077``).
+          A ``UserWarning`` fires when the geometry is non-separable; **use**
+          ``'li'`` **or** ``'laurent'`` **for curved / non-separable walls** until
+          the cross-term factorization is corrected.  ``'fff_nv'`` is NumPy / CuPy
+          only and is incompatible with the ``symmetry`` even-parity fast path
+          (transparently skipped).
 
         (``'fff'`` is accepted as an alias of ``'li'``.)
     truncation : {'rectangular', 'circular'}, optional
@@ -2547,6 +2548,24 @@ def rcwa_efficiency_2d(
     # direct rule on the tangent).  Routed through the tensor eigensolver below.
     if formulation == "fff_nv":
         Nx_nv, Ny_nv = _nv_field_2d(eps_cell, period_x, period_y)
+        # Non-separability gate (2026-06-07 audit P1-A).  The NV cross term
+        # [[Nx*Ny]] is ~0 for axis-aligned / separable patterns (where fff_nv is
+        # validated and beats 2-D li/laurent on metal stripes) but is exercised on
+        # CURVED walls -- where the cross-term factorization mis-splits absorption
+        # by ~50% (a lossless-trap failure: R+T+A closes but the channel split is
+        # wrong).  Warn rather than silently return a wrong absorptance.
+        _nv_cross = float(np.max(np.abs(np.asarray(Nx_nv) * np.asarray(Ny_nv))))
+        if _nv_cross > 1e-2:
+            import warnings
+            warnings.warn(
+                "rcwa_efficiency_2d(formulation='fff_nv'): the geometry is "
+                "NON-SEPARABLE (curved / non-axis-aligned walls; NV cross term "
+                f"max|Nx*Ny| = {_nv_cross:.3g}).  fff_nv's cross-term "
+                "factorization is NOT validated there -- it can mis-split "
+                "absorptance by ~50% (total R+T+A still closes).  Use "
+                "formulation='li' or 'laurent' for curved / non-separable "
+                "patterns; fff_nv is validated for separable axis-aligned "
+                "features.", stacklevel=2)
         Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv = _nv_convolutions_2d(
             eps_cell, Nx_nv, Ny_nv, orders, n_orders_x, n_orders_y, xp)
 
