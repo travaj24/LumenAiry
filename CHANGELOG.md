@@ -617,9 +617,12 @@ tests (no code change).
   matches the sequential loop, and `jax.vmap(jax.grad(solver))` gives batched
   gradients — the throughput lever for sweeps and population optimizers.
 - **W6 — validated 2nd-order autodiff.**  `jax.hessian` through the full vector
-  solve (including the Lorentzian-broadened-eig term) matches a finite-
-  difference-of-gradient to ~1e-2 — relevant for Newton-type inverse design.
-  Requires `jax_enable_x64`.
+  solve matches a finite-difference-of-gradient to ~1e-2 for **depth / geometry**
+  parameters — relevant for Newton-type inverse design.  Requires `jax_enable_x64`.
+  *Scope (corrected 2026-06-07 audit):* Hessians w.r.t. cell **permittivity** are
+  **not** supported — the non-symmetric eigenvector 2nd-derivative is undefined in
+  the Lorentzian-broadened custom-VJP eig (`jax.hessian` wrt eps raises
+  `NotImplementedError`); first-order eps gradients are fine.
 
 ## [5.10.4] — 2026-06-02
 
@@ -832,7 +835,9 @@ be marginally worse) — enable it for hard metal/TM problems, not universally.
   Resolution (Granet, JOSA A 16, 2510 (1999)).  A matched coordinate stretch
   `f(u) = 1 − asr_eta·cos(...)` clusters the Fourier harmonics at the grating
   walls, converging far faster for metals / high-contrast TM at **low order
-  counts**: on a gold grating at `n_orders=12`, ~**10×** lower TM error and
+  counts**: on a gold grating at `n_orders=12`, the TM-error reduction is
+  **geometry-dependent ~3–10×** (a gold-TM cell measured ~2.8× in the 2026-06-07
+  audit; the 5.7.1 docstring already states the conservative figure) and
   ~**100–460×** lower TE error than the uniform method (validated against the
   uniform solver at high order as the convergence oracle).  `asr_eta=0`
   (default) is the exact uniform path, bit-identical to a call without the arg.
@@ -922,9 +927,11 @@ was stale), and are closed here.
   solver).
 - **`truncation='circular'` (Lalanne 1997)** on both 2-D solvers -- keeps the
   orders inside the inscribed reciprocal circle (isotropic resolution, no
-  wasted corner orders).  Reaches the same converged value as the rectangular
-  box with ~30 % fewer harmonics (and less `O(N^3)` eig work).  Default
-  `'rectangular'` is unchanged.
+  wasted corner orders).  On smooth/isotropic geometries it reaches the same
+  converged value as the rectangular box with up to ~30 % fewer harmonics (and
+  less `O(N^3)` eig work); the saving is **geometry-dependent and non-monotone**
+  — on sharp metal corners it can need *more* orders than rectangular (2026-06-07
+  audit), so benchmark per geometry.  Default `'rectangular'` is unchanged.
 - **Eig reuse for repeated layers** -- `RCWAStack.solve` memoises the
   thickness-independent layer eigenproblem by permittivity content, so a DBR /
   Bragg / metamaterial stack with `K` identical period layers solves the eig

@@ -1309,13 +1309,13 @@ def pmm_jones_1d(
     an OUT-OF-PLANE tensor raise on the JAX path (NumPy-only).  Normal or oblique
     incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR out-of-plane).  An
     out-of-plane tensor routes through the native full-3x3 metric generator (VERTICAL
-    only).  Out-of-plane combined with a slanted wall is guarded in
-    :func:`pmm_jones_1d_slanted`: it conserves energy but is per-order WRONG (measured
-    2-30e-3 vs an RCWA tensor z-staircase, the gap saturating with degree -- a
-    factorization defect), because the slant metric fold of the FULL tensor must
-    SUPERPOSE the out-of-plane components (``eps^13 = -ezz*tan + exz``,
-    ``eps^23 = eyz``, ... Li 1999), which the vertical off-plane closure does not yet
-    carry.
+    only).  Out-of-plane combined with a slanted wall is GUARDED:
+    :func:`pmm_jones_1d_slanted` RAISES ``ValueError`` for an out-of-plane tensor (it
+    does not return a value).  If computed it would conserve energy but be per-order
+    WRONG (~2-30e-3 vs an RCWA tensor z-staircase) because the slant metric fold of the
+    FULL tensor must SUPERPOSE the out-of-plane components (``eps^13 = -ezz*tan + exz``,
+    ``eps^23 = eyz``, ... Li 1999) -- an off-plane Schur closure the vertical branch
+    does not yet carry.
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
@@ -3430,8 +3430,9 @@ def pmm_efficiency_1d_slanted(
     (isotropic tensor ``n^2 I``, scalar channel extracted: TE = E along the
     grooves = Jones row 1, TM = row 0), which resolves the cross-coupling with the
     round-19 div-conforming ``E_z`` closure (per-order to ~2-3e-3 vs an RCWA
-    staircase, degree-cleanly -- the residual is the shared wall-normal TM/p-pol
-    inverse-rule floor, not a coupling error).
+    staircase -- the wall-normal TM/p-pol inverse-rule limit plus the oblique-slant
+    convection, not a coupling error; the in-plane wall-normal TM floor alone is much
+    tighter, ~3e-5..1e-4 near degree 18-20, U-shaped).
     """
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -4236,9 +4237,13 @@ def pmm_jones_1d_slanted(
         Bloch-amplified Liu-2015 spurious null; ``kx0 = k0 Re(n_sup) sin(angle)``
         is wired through the generator, the half-spaces, and the lab Rayleigh far
         field): the metric generator conserves energy ~1e-13 and the per-order
-        split matches an RCWA staircase to ~2-3e-3, degree-cleanly (no stabilize
-        crutch).  Combined oblique + slant always routes through the metric
-        generator (the scalar diagonal cure's oblique+slant per-order is wrong).
+        split matches an RCWA staircase to ~2-3e-3 at oblique+slant.  (The in-plane
+        wall-normal TM/p-pol inverse-rule floor itself is far tighter: it converges
+        to ~3e-5..1e-4 near degree 18-20, U-shaped, then mildly degrades past ~degree
+        22 as the benign flux-null evanescent spurious sea grows with slant -- energy
+        stays ~1e-13 throughout; TE is machine-clean ~1e-6.)  Combined oblique + slant
+        always routes through the metric generator (the scalar diagonal cure's
+        oblique+slant per-order is wrong).
     degree, elements_per_region, grade, far_field_orders, stabilize : as in
         :func:`pmm_jones_1d`.
 
