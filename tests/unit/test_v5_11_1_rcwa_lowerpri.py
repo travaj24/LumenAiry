@@ -334,6 +334,47 @@ def test_jones_vs_wavelength_segments_matches_single_call():
     assert np.allclose(T[1], Td.sum(axis=1))
 
 
+# ===========================================================================
+# Audit P1-B -- RCWAStack.solve(stabilize=True) must flag a MONOTONE-TREND
+# cluster as under-resolved (it used to silently return min(cluster)).
+# ===========================================================================
+def test_stabilize_trend_detector_flags_biased_cluster():
+    """A true convergence plateau is FLAT; an under-resolved cell biases the
+    low-order solves the same way so they CLUSTER within tol yet TREND
+    monotonically -- the silent-corruption case.  The detector flags a trend and
+    leaves a flat cluster alone (and needs >=3 points to decide)."""
+    from lumenairy.elements.rcwa import (_cluster_is_trending,
+                                         _STACK_STABILIZE_TOL as TOL)
+    flat = [np.array([0.210, 0.10, 0.690, 0.0]),
+            np.array([0.211, 0.10, 0.689, 0.0]),
+            np.array([0.209, 0.10, 0.691, 0.0]),
+            np.array([0.2105, 0.10, 0.6895, 0.0])]
+    trend = [np.array([0.390, 0.10, 0.510, 0.0]),
+             np.array([0.400, 0.10, 0.500, 0.0]),
+             np.array([0.410, 0.10, 0.490, 0.0]),
+             np.array([0.418, 0.10, 0.482, 0.0])]
+    assert _cluster_is_trending(trend, list(range(4)), TOL) is True
+    assert _cluster_is_trending(flat, list(range(4)), TOL) is False
+    assert _cluster_is_trending(trend, [0, 1], TOL) is False   # <3 pts: undecidable
+
+
+def test_stabilize_no_false_warning_on_converged_stack():
+    """A well-resolved dielectric stack must NOT emit the under-resolved warning
+    (the trend detector is a no-op on a flat plateau)."""
+    S = 48
+    xx = (np.arange(S) + 0.5) / S - 0.5
+    X, Y = np.meshgrid(xx, xx, indexing="ij")
+    diel = np.where((np.abs(X) < 0.25) & (np.abs(Y) < 0.25), 2.5 + 0j, 1.0 + 0j)
+    st = la.RCWAStack(period=0.6e-6, period_y=0.6e-6, n_superstrate=1.0,
+                      n_substrate=1.5, n_orders=9)
+    st.add_layer(0.2e-6, eps_cell=diel)
+    st.set_source(0.633e-6, theta=0.05)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        st.solve(stabilize=True)
+    assert not any("UNDER-RESOLVED" in str(x.message) for x in w)
+
+
 def test_jones_vs_wavelength_segments_scalar_in_scalar_out():
     segs = [(0.4, RIDGE_INPLANE), (0.6, GROOVE_ISO)]
     wl0, J0, R0, T0 = rcwa_jones_vs_wavelength_segments(

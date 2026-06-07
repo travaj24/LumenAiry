@@ -4805,6 +4805,27 @@ def _largest_feature_cluster(feats, tol):
     return best
 
 
+def _cluster_is_trending(feats, cluster, tol):
+    """True if the consensus ``cluster`` is a MONOTONE trend rather than a flat
+    convergence plateau (audit P1-B).  A genuine plateau is flat; an UNDER-RESOLVED
+    cell biases all the low-order solves the SAME direction, so they cluster within
+    ``tol`` yet drift monotonically in ``n_orders``.  ``feats`` are ordered by the
+    DESCENDING-n window, so a cluster index list sorted ascending is descending-n.
+    Returns True iff some feature component drifts monotonically across the cluster
+    with a spread that is a real trend (> 0.4*tol), not flat-band noise."""
+    idx = sorted(cluster)                   # ascending index == descending n_orders
+    if len(idx) < 3:                        # 2 points can't distinguish trend / flat
+        return False
+    series = np.asarray([np.asarray(feats[i], dtype=float) for i in idx])  # (k, F)
+    for c in range(series.shape[1]):
+        col = series[:, c]
+        diffs = np.diff(col)
+        spread = float(col.max() - col.min())
+        if spread > 0.4 * tol and (np.all(diffs > 0.0) or np.all(diffs < 0.0)):
+            return True
+    return False
+
+
 class RCWAStack:
     """Builder + solver for a MULTI-LAYER RCWA stack (1-D or 2-D periodic).
 
@@ -5145,13 +5166,22 @@ class RCWAStack:
         finally:
             self.nox, self.noy = base_nox, base_noy
         cluster = _largest_feature_cluster(feats, _STACK_STABILIZE_TOL)
-        if len(cluster) < 2:
+        # A genuine convergence plateau is FLAT.  An under-resolved cell biases the
+        # low-order solves the SAME direction, so they still cluster within TOL but
+        # TREND monotonically -- that is NOT a consensus (audit P1-B: this silently
+        # returned min(cluster), a confidently-wrong value).  Flag it too.
+        trending = _cluster_is_trending(feats, cluster, _STACK_STABILIZE_TOL)
+        if len(cluster) < 2 or trending:
+            reason = ("shows a MONOTONE trend (no flat convergence plateau -- the "
+                      "low-order solves are all biased the same way and merely "
+                      "cluster)" if trending else
+                      "shows no consensus (no convergence plateau, not just an "
+                      "isolated spike)")
             warnings.warn(
-                "RCWAStack.solve(stabilize=True): no consensus across the "
-                f"n_orders window {window}; the stack is likely UNDER-RESOLVED "
-                "(no convergence plateau, not just an isolated spike) -- raise "
-                "n_orders / n_orders_y (and the cell sampling).  Returning the "
-                "requested n_orders.", stacklevel=2)
+                f"RCWAStack.solve(stabilize=True): the n_orders window {window} "
+                f"{reason}; the stack is likely UNDER-RESOLVED -- raise n_orders / "
+                "n_orders_y (and the cell sampling).  Returning the requested "
+                "n_orders.", stacklevel=2)
             chosen = 0                        # results[0] = requested (highest) n
         else:
             chosen = min(cluster)             # highest-n_orders consensus solve
