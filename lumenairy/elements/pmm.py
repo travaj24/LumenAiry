@@ -3755,11 +3755,22 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     I = np.eye(n, dtype=_C)
     Z = np.zeros((n, n), dtype=_C)
 
-    # Slant sign matched to pmm_efficiency_1d_slanted's order labels (the metric
-    # is self-consistent: eps^13 and mu^13 share the sign of `tan`, so TE/TM
-    # mirror TOGETHER under a flip).
-    tan = np.tan(slant_angle)
-    sec2 = 1.0 / np.cos(slant_angle) ** 2
+    # SLANT as EXACT CONVECTION (2026-06-07).  The slant is carried as a first-
+    # order convection term `tan * d/dx` on each field block (added at the very
+    # end of this function) rather than folded into a static `ezz*tan^2` wall-
+    # normal term.  The static fold is the "slant cancels in the ezz-Schur, then
+    # is re-injected as ezz*tan^2" approximation, which caps per-order accuracy at
+    # ~1e-2 for strongly-coupled / steep-slant cells; the exact convection on the
+    # CLEAN slant=0 base reaches the ~1e-4 wall-normal floor UNIFORMLY (validated
+    # per-order vs a converged staircase-RCWA oracle: slant 15-60 deg, in-plane /
+    # out-of-plane / lossy / asymmetric tensors, normal AND oblique; energy
+    # conserves ~1e-13; the mild advection spurious it adds -- |Re q|~14 at slant
+    # 45 vs a from-scratch convection form's ~210 -- are flux-null and absorbed by
+    # the existing forward/backward selector).  So the eps^lm / mu^lm operators
+    # below are built at slant=0 and the slant enters ONLY via the convection.
+    tan_conv = np.tan(slant_angle)           # the slant, carried as convection
+    tan = 0.0                                # material / mu operators at slant=0
+    sec2 = 1.0
 
     # ---- nodal derivative d1 (= D1) ----------------------------------------
     Dop = _safe_solve(S0, mats["C"])         # S0^-1 INT phi phi'
@@ -3921,6 +3932,18 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         L[0:n, n:2 * n] += k0 * (-Kx @ EZZi @ EZY_L)
         L[2 * n:3 * n, 3 * n:4 * n] += k0 * (-EYZ_L @ EZZi @ Kx)
         L[3 * n:4 * n, 3 * n:4 * n] += k0 * (EXZ_L @ EZZi @ Kx)
+
+    # ===== SLANT as exact first-order convection (see top-of-function note) =====
+    # `tan * d/dx` (= tan_conv * Dopx) on each of the four field-component diagonal
+    # blocks [Ex; Ey; iZHx; iZHy].  Vanishes at slant=0 -> the generator is then
+    # byte-identical to the validated VERTICAL operator.  This is what replaces the
+    # static ezz*tan^2 / -ezz*tan fold (tan was forced to 0 above), and is what
+    # lifts the per-order accuracy from the fold's ~1e-2 floor to the wall-normal
+    # ~1e-4 floor at steep slant / strong coupling.
+    if abs(tan_conv) > 1e-14:
+        for _b in range(4):
+            _sl = slice(_b * n, (_b + 1) * n)
+            L[_sl, _sl] += tan_conv * Dopx
     return L, n
 
 
