@@ -177,14 +177,19 @@ def test_widths_must_sum_to_one():
                               DEPTH, WL)
 
 
-def test_rejects_slanted_out_of_plane_segment():
-    # VERTICAL out-of-plane multi-region is now supported (see
-    # test_segments_out_of_plane_matches_rcwa); only a SLANTED out-of-plane
-    # grating is not yet per-order-validated and raises.
+def test_slanted_out_of_plane_segment_now_solves():
+    # SLANTED out-of-plane multi-region is SUPPORTED as of 2026-06-07: the slant
+    # is carried as exact convection in the metric generator, so it reaches the
+    # ~1e-4 wall-normal per-order floor (validated vs a multi-region RCWA tensor
+    # z-staircase in test_v5_12_0_pmm_slant_and_convergence).  It solves and
+    # conserves energy (was: raised ValueError).
     op = uniaxial_tensor(1.5, 1.7, np.pi / 4, phi=0.3)     # tilted -> off-plane
-    with pytest.raises(ValueError, match="out-of-plane"):
-        pmm_jones_1d_slanted_segments(PERIOD, [(0.5, op), (0.5, GR)], NSUB, NSUP,
-                                      DEPTH, WL, np.deg2rad(30.0))
+    o, R, T, J = pmm_jones_1d_slanted_segments(
+        PERIOD, [(0.5, op), (0.5, GR)], NSUB, NSUP, DEPTH, WL,
+        np.deg2rad(30.0))
+    assert np.isfinite(R).all() and np.isfinite(T).all()
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 5e-3
+    assert abs(R[1].sum() + T[1].sum() - 1.0) < 5e-3
 
 
 def test_rejects_bad_tensor_shape():

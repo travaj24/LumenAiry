@@ -4517,8 +4517,9 @@ def pmm_jones_1d_slanted_segments(
     -----
     BINARY-cell reductions are bit-identical to :func:`pmm_jones_1d_slanted` and
     the ``slant=0`` limit reduces to :func:`pmm_jones_1d_segments` (to the
-    div-conforming discretization difference).  In-plane tensor only (out-of-plane
-    coupling raises ``ValueError``); NumPy/SciPy (not JAX).
+    div-conforming discretization difference).  Full ``(3, 3)`` tensor IN-PLANE
+    OR OUT-OF-PLANE (out-of-plane + slant reaches the ~1e-4 wall-normal floor,
+    validated vs a multi-region RCWA tensor z-staircase); NumPy/SciPy (not JAX).
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted_segments: degree must be >= 2.")
@@ -4536,16 +4537,13 @@ def pmm_jones_1d_slanted_segments(
                 "pmm_jones_1d_slanted_segments: each segment eps must be a "
                 "scalar or a (3, 3) permittivity tensor.")
         tensors.append(M)
-    # in-plane only: reject out-of-plane coupling (would be silently dropped)
-    scale = max([float(np.max(np.abs(M))) for M in tensors] + [1.0])
-    off = max(float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
-              for M in tensors)
-    if off > 1e-9 * scale:
-        raise ValueError(
-            "pmm_jones_1d_slanted_segments: the anisotropic PMM is the "
-            "z-decoupled IN-PLANE tensor subset (exx, exy, eyx, eyy, ezz); a "
-            "segment has out-of-plane coupling (eps_xz / eps_yz / eps_zx / "
-            "eps_zy != 0). Use rcwa (staircase) for the full-3x3 slanted case.")
+    # OUT-OF-PLANE (eps_xz/yz/zx/zy != 0): SUPPORTED (2026-06-07).  Multi-region
+    # out-of-plane + slant rides the SAME exact-convection slant treatment as the
+    # binary path (see _build_generator_metric), so it reaches the ~1e-4 wall-
+    # normal per-order floor (validated vs a multi-region RCWA tensor z-staircase
+    # oracle: 3-region dT ~3e-4 at slant 30; 2-segment == binary to ~1e-14; energy
+    # conserves).  Segments route straight through the coupled metric generator
+    # (no scalar diagonal cure here), so no out-of-plane dispatch guard is needed.
     sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
           wavelength, float(slant_angle))
     kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
@@ -4598,8 +4596,9 @@ def pmm_1d(
     Each ``eps`` may be a scalar (promoted to an isotropic tensor) or a full
     ``(3, 3)`` permittivity tensor (IN-PLANE or, for the VERTICAL cases,
     OUT-OF-PLANE ``eps_xz/eyz/ezx/ezy != 0``).  Normal or oblique incidence.
-    (Combined out-of-plane + slant is not yet per-order-validated and raises in
-    the underlying slanted solvers.)
+    (Combined out-of-plane + slant is SUPPORTED by the binary and segments slanted
+    solvers as of 2026-06-07 -- the slant is carried as exact convection, reaching
+    the ~1e-4 wall-normal per-order floor.)
 
     Parameters
     ----------

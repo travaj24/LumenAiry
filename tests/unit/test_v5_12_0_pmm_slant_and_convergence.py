@@ -657,14 +657,38 @@ def test_jones_slant_segments_conserves(ang_deg, slant_deg):
     assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3
 
 
-def test_jones_slant_segments_out_of_plane_rejected():
-    """A segment with an out-of-plane tensor (eps_xz/zx != 0) is rejected."""
-    er = _eps_diag(2.25)
-    er[0, 2] = er[2, 0] = 0.3
-    with pytest.raises(ValueError):
-        pmm_jones_1d_slanted_segments(
-            segments=[(0.5, er), (0.5, _eps_diag(1.0))],
-            slant_angle=np.deg2rad(20.0), **_SEGGEOM)
+@pytest.mark.parametrize("phi_deg", [30.0, 45.0])
+def test_jones_slant_segments_out_of_plane_2seg_matches_binary(phi_deg):
+    """OUT-OF-PLANE (ungated 2026-06-07): a 2-segment cell (ridge + groove) via the
+    SEGMENTS solver is byte-identical to the BINARY pmm_jones_1d_slanted -- the
+    multi-region nodal assembly reduces EXACTLY to the validated binary path with
+    the off-plane coupling present."""
+    er, eg = _eps_oop_sym(), _eps_diag(1.0)
+    phi = np.deg2rad(phi_deg)
+    ob, _Rb, Tb, Jb = pmm_jones_1d_slanted(
+        eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=18,
+        stabilize=False, **_JGEOM_ASYM)
+    os_, _Rs, Ts, Js = pmm_jones_1d_slanted_segments(
+        segments=[(0.5, er), (0.5, eg)], slant_angle=phi, degree=18,
+        stabilize=False, **_SEGGEOM)
+    assert np.array_equal(ob, os_)
+    assert np.max(np.abs(Tb - Ts)) < 1e-12
+    assert np.max(np.abs(Jb - Js)) < 1e-12
+
+
+@pytest.mark.parametrize("phi_deg", [30.0, 45.0])
+def test_jones_slant_segments_out_of_plane_3region_conserves(phi_deg):
+    """A genuine 3-REGION out-of-plane + slant cell SOLVES (no longer raises) and
+    conserves energy; the off-plane (eyz != 0) gives physical TE<->TM cross-pol."""
+    sym = _eps_oop_sym()
+    mid = np.array([[2.0, 0, 0.25], [0, 1.9, 0.15], [0.25, 0.15, 2.1]],
+                   dtype=np.complex128)
+    o, R, T, J = pmm_jones_1d_slanted_segments(
+        segments=[(0.3, sym), (0.3, mid), (0.4, _eps_diag(1.0))],
+        slant_angle=np.deg2rad(phi_deg), degree=18, stabilize=True, **_SEGGEOM)
+    assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-3
+    assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-3
+    assert max(abs(J[0, 1]), abs(J[1, 0])) > 1e-6
 
 
 # ===================================================================
