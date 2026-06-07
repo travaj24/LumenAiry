@@ -328,22 +328,26 @@ def test_jones_slant_finite_diagonal_matches_scalar_slanted(phi_deg):
     er = _eps_diag(2.25)
     eg = _eps_diag(1.0)
     deg = 20
-    # stabilize=True on BOTH sides (the efficiency reference below is also
-    # stabilized): a raw single-degree solve can land on a degree the stabilizer
-    # rejects as ill-conditioned on some BLAS (Linux OpenBLAS at steep slant),
-    # making a raw-vs-stabilized comparison environment-asymmetric.  Both
-    # stabilized -> both route to the same well-conditioned degree.
+    # stabilize=False on BOTH sides so this is a BIT-IDENTICAL comparison: the
+    # diagonal cure routes each channel through the same _pmm_slant_solve that
+    # pmm_efficiency_1d_slanted calls (TM -> sqrt(exx)=1.5, TE -> sqrt(eyy)=1.5),
+    # so at one fixed degree the two are the SAME computation -> dte == dtm == 0
+    # on every platform.  (Two STABILIZED solves are NOT bit-identical: the
+    # jones-diagonal and efficiency stabilizers can pick different degrees, and
+    # at the ~3e-3 TM inverse-rule floor that gap exceeds 1e-3 on some
+    # interpreters -- a Python-3.10 flake.  A raw-vs-stabilized mismatch is
+    # likewise environment-asymmetric.  Matching raw-vs-raw removes both.)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=True, **_JGEOM_ASYM)
+        stabilize=False, **_JGEOM_ASYM)
     oT, RTte, TTte = pmm_efficiency_1d_slanted(
         period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
-        slant_angle=phi, polarization="te", degree=deg, stabilize=True)
+        slant_angle=phi, polarization="te", degree=deg, stabilize=False)
     oM, RTtm, TTtm = pmm_efficiency_1d_slanted(
         period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
-        slant_angle=phi, polarization="tm", degree=deg, stabilize=True)
+        slant_angle=phi, polarization="tm", degree=deg, stabilize=False)
     dte = max(np.max(np.abs(R[1] - RTte)), np.max(np.abs(T[1] - TTte)))
     dtm = max(np.max(np.abs(R[0] - RTtm)), np.max(np.abs(T[0] - TTtm)))
     assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-10
@@ -787,13 +791,17 @@ def test_jones_slant_diag_cure_phi0_reduces_to_pmm_jones(pol_diag):
     # The cure routes TM -> n = sqrt(exx), TE -> n = sqrt(eyy) (= sqrt(ezz)).
     n_ridge = float(np.sqrt((er[0, 0] if pol == "tm" else er[1, 1]).real))
     n_groove = float(np.sqrt((eg[0, 0] if pol == "tm" else eg[1, 1]).real))
+    # stabilize=False on BOTH -> bit-identical comparison (same _pmm_slant_solve
+    # call each side at one degree), so R/T diffs are exactly 0 on every
+    # platform.  Two stabilized solves can pick different degrees and drift by
+    # the ~3e-3 TM floor on some interpreters (a Python-3.10 flake).
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=0.0, degree=deg,
-        stabilize=True, **_JGEOM_ASYM)
+        stabilize=False, **_JGEOM_ASYM)
     oS, RS, TS = pmm_efficiency_1d_slanted(
         period=1.0e-6, n_ridge=n_ridge, n_groove=n_groove, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
-        slant_angle=0.0, polarization=pol, degree=deg, stabilize=True)
+        slant_angle=0.0, polarization=pol, degree=deg, stabilize=False)
     assert np.array_equal(o, oS)
     assert max(abs(J[0, 1]), abs(J[1, 0])) < 1e-12
     assert np.max(np.abs(R[row] - RS)) < 1e-6
