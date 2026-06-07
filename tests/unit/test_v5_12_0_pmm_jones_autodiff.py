@@ -51,8 +51,7 @@ jax = pytest.importorskip("jax")
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp  # noqa: E402
 
-from lumenairy.elements.pmm import (  # noqa: E402
-    pmm_jones_1d, pmm_efficiency_1d)
+from lumenairy.elements.pmm import pmm_efficiency_1d, pmm_jones_1d  # noqa: E402
 
 _CJ = jnp.complex128
 

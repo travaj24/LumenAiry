@@ -343,8 +343,8 @@ def test_stabilize_trend_detector_flags_biased_cluster():
     low-order solves the same way so they CLUSTER within tol yet TREND
     monotonically -- the silent-corruption case.  The detector flags a trend and
     leaves a flat cluster alone (and needs >=3 points to decide)."""
-    from lumenairy.elements.rcwa import (_cluster_is_trending,
-                                         _STACK_STABILIZE_TOL as TOL)
+    from lumenairy.elements.rcwa import _STACK_STABILIZE_TOL as TOL
+    from lumenairy.elements.rcwa import _cluster_is_trending
     flat = [np.array([0.210, 0.10, 0.690, 0.0]),
             np.array([0.211, 0.10, 0.689, 0.0]),
             np.array([0.209, 0.10, 0.691, 0.0]),

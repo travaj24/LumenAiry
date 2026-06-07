@@ -22,8 +22,13 @@ import numpy as np
 import pytest
 
 from lumenairy.elements.pmm import (
-    pmm_1d, pmm_efficiency_1d, pmm_jones_1d, pmm_jones_1d_segments,
-    pmm_jones_1d_slanted, pmm_jones_1d_slanted_segments)
+    pmm_1d,
+    pmm_efficiency_1d,
+    pmm_jones_1d,
+    pmm_jones_1d_segments,
+    pmm_jones_1d_slanted,
+    pmm_jones_1d_slanted_segments,
+)
 from lumenairy.elements.rcwa import rcwa_efficiency_1d, rcwa_jones_1d, uniaxial_tensor
 
 _C = np.complex128

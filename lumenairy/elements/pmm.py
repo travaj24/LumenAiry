@@ -101,16 +101,16 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import Legendre
 
+# Backend detection for the JAX (differentiable) dispatch in pmm_efficiency_1d.
+# Mirrors rcwa's pattern: a JAX input routes to the self-contained jnp twin,
+# while a NumPy input falls through to the original (byte-identical) code.
+from ..backend import is_jax_array
+
 # Reused for the slanted-grating solver: the slant breaks the +/-q field
 # symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
 # top-level import introduces no cycle.
 from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
-
-# Backend detection for the JAX (differentiable) dispatch in pmm_efficiency_1d.
-# Mirrors rcwa's pattern: a JAX input routes to the self-contained jnp twin,
-# while a NumPy input falls through to the original (byte-identical) code.
-from ..backend import is_jax_array
 
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "pmm_efficiency_1d_segments",
@@ -1563,7 +1563,6 @@ def _jpmm_build_dynamic(topo, jnp, period, d_wall):
     Dref = jnp.asarray(topo["Dref"])
     rfrac = jnp.asarray(topo["rfrac"])
     gfrac = jnp.asarray(topo["gfrac"])
-    n_ridge_el = topo["n_ridge_el"]
     # Physical boundaries: linear (hence smooth) in d_wall.
     rb = d_wall * rfrac                              # [0, d_wall] graded
     gb = d_wall + (period - d_wall) * gfrac          # [d_wall, period] graded
@@ -1922,8 +1921,9 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     Oblique Wood-anomaly caveat: the propagating-order COUNT (array shapes) is
     sized from CONCRETE inputs and held static per trace, so ``d/d(angle)`` /
     ``d/d(wl)`` are valid only BETWEEN Rayleigh-order cutoffs."""
-    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
     import jax.numpy as jnp
+
+    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
     _warn_if_jax_f32("pmm_efficiency_1d")
 
     if int(elements_per_region) != 1:
@@ -2329,8 +2329,9 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     entries (incl off-diagonal ``exy`` / ``eyx``), ``depth``, ``wavelength``,
     ``angle`` and the half-space indices.  Anything outside the surface
     (stabilize, multi-region, out-of-plane, slant) raises (handled upstream)."""
-    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
     import jax.numpy as jnp
+
+    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
     _warn_if_jax_f32("pmm_jones_1d")
 
     if int(elements_per_region) != 1:
@@ -3836,7 +3837,6 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
             Oeps13 = (iS0 @ _coeff_mass_metric(
                 mats, lambda t_: -t_["ezz"] * tan))
             Oeps31 = Oeps13.copy()
-    Oeps33 = Oezz                                          # eps^33 = ezz
     # mu (smooth, scalar metric -> all direct, = metric constants * I):
     Mu11 = sec2 * I
     Mu13 = -tan * I

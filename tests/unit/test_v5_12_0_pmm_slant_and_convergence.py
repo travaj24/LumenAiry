@@ -317,9 +317,14 @@ def test_jones_slant_finite_diagonal_matches_scalar_slanted(phi_deg):
     er = _eps_diag(2.25)
     eg = _eps_diag(1.0)
     deg = 20
+    # stabilize=True on BOTH sides (the efficiency reference below is also
+    # stabilized): a raw single-degree solve can land on a degree the stabilizer
+    # rejects as ill-conditioned on some BLAS (Linux OpenBLAS at steep slant),
+    # making a raw-vs-stabilized comparison environment-asymmetric.  Both
+    # stabilized -> both route to the same well-conditioned degree.
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=False, **_JGEOM_ASYM)
+        stabilize=True, **_JGEOM_ASYM)
     oT, RTte, TTte = pmm_efficiency_1d_slanted(
         period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
@@ -508,7 +513,8 @@ def test_jones_slant_diag_cure_internal_guard_raises():
         _pmm._pmm_jones_slant_diag_solve(
             *base, np.deg2rad(30.0), 16, 1, True, 21, angle=np.deg2rad(20.0))
     # (2) COUPLED tensor (exy!=0) -> RuntimeError (cure would drop the coupling)
-    erC = _eps_diag(2.25); erC[0, 1] = erC[1, 0] = 0.3
+    erC = _eps_diag(2.25)
+    erC[0, 1] = erC[1, 0] = 0.3
     with pytest.raises(RuntimeError):
         _pmm._pmm_jones_slant_diag_solve(
             1.0e-6, erC, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6,
