@@ -2895,6 +2895,15 @@ class PMMStack:
         Polynomial degree per spectral element (the spectral knob).  Default 16.
     elements_per_region, grade, far_field_orders : as in
         :func:`pmm_jones_1d_segments`.
+    factorization : {'auto', 'convection', 'covariant'}, optional
+        Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
+        (default) uses the SPECTRAL covariant oblique-coordinate generator for an
+        IN-PLANE stack whose layers share a single non-zero slant, and the
+        (algebraic-but-fully-general) convection generator otherwise -- vertical,
+        out-of-plane, or MIXED-slant stacks (the covariant oblique frame is
+        per-slant, so a mixed-slant cascade falls back to convection).
+        ``'covariant'`` forces the spectral path (raises on out-of-plane or
+        mixed/zero slant); ``'convection'`` forces the general path.
 
     Notes
     -----
@@ -2916,15 +2925,20 @@ class PMMStack:
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
                  degree=16, elements_per_region=1, grade=True,
-                 far_field_orders=21):
+                 far_field_orders=21, factorization="auto"):
         if int(degree) < 2:
             raise ValueError("PMMStack: degree must be >= 2.")
+        if factorization not in ("auto", "convection", "covariant"):
+            raise ValueError(
+                "PMMStack: factorization must be 'auto', 'convection' or "
+                f"'covariant', got {factorization!r}.")
         self.period = float(period)
         self.n_sub = _C(n_substrate)
         self.n_sup = _C(n_superstrate)
         self.degree = int(degree)
         self.n_el = int(elements_per_region)
         self.grade = bool(grade)
+        self.factorization = factorization
         self.ffo = int(far_field_orders)
         self._layers = []                          # (thickness, segments)
         self._src = None
@@ -2984,6 +2998,39 @@ class PMMStack:
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
         eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
+
+        # ---- factorization dispatch: covariant (SPECTRAL slant) vs convection --
+        # 'auto' uses the covariant oblique-coordinate generator (spectral TM) for
+        # an IN-PLANE stack that has any slanted layer, and the convection metric
+        # generator otherwise (all-vertical, or any out-of-plane layer which the
+        # covariant path does not yet handle).  'covariant' forces it (raises on
+        # out-of-plane); 'convection' forces the algebraic-but-fully-general path.
+        _oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
+        _slants = [abs(L[2]) for L in self._layers]
+        # The covariant oblique frame is per-slant (the shear u = x - tanφ z), so
+        # the spectral covariant cascade requires a UNIFORM slant across all layers
+        # (and the homogeneous half-spaces are solved in that same frame).  A
+        # MIXED-slant stack (e.g. a vertical spacer + a slanted grating) would need
+        # inter-layer lateral-shift corrections and falls back to convection.
+        _uniform_slant = (max(_slants) > 1e-12
+                          and (max(_slants) - min(_slants)) <= 1e-12)
+        _fac = self.factorization
+        if _fac == "auto":
+            _fac = ("covariant" if (_uniform_slant and not _oop)
+                    else "convection")
+        if _fac == "covariant":
+            if _oop:
+                raise NotImplementedError(
+                    "PMMStack: factorization='covariant' does not support "
+                    "OUT-OF-PLANE layers (eps_xz/yz/zx/zy); use 'convection' or "
+                    "'auto'.")
+            if not _uniform_slant:
+                raise NotImplementedError(
+                    "PMMStack: factorization='covariant' requires a UNIFORM "
+                    "non-zero slant across all layers (the covariant oblique "
+                    "frame is per-slant); use 'convection' or 'auto' for "
+                    "vertical / mixed-slant stacks.")
+            return self._solve_covariant(wl, angle, k0)
 
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers])
         nU = len(uwidths)
@@ -3106,6 +3153,109 @@ class PMMStack:
             jones[0, col] = rx[m0]
             jones[1, col] = ry[m0]
         return orders, R_eff, T_eff, jones
+
+    def _solve_covariant(self, wl, angle, k0):
+        """SPECTRAL multi-layer solve via the Li covariant oblique-coordinate
+        generator (in-plane only).  Parallels the general fwd/back cascade of
+        :meth:`solve` but uses :func:`_cov_layer_4n` modes + COVARIANT
+        homogeneous half-spaces on the shared union grid, so slanted layers
+        converge SPECTRALLY (vertical-grade) instead of the convection
+        generator's algebraic ~1e-4 floor.  Internally exp(+iwt): eps are
+        conjugated in and the Jones conjugated out; the union widths/tensors are
+        PRE-REVERSED to cancel the _segment_elem_bnds [::-1] (so orders land in
+        the user's input frame, matching the convection path)."""
+        period, degree, n_el, grade = self.period, self.degree, self.n_el, \
+            self.grade
+        kx0 = float(np.real(np.conj(self.n_sup))) * np.sin(angle) * k0
+        eps_sup = np.conj(self.n_sup ** 2)
+        eps_sub = np.conj(self.n_sub ** 2)
+        uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers])
+        uw = list(uwidths)[::-1]
+        nU = len(uwidths)
+
+        def grid(eps_list):
+            seg = [_t3_slant(np.conj(np.asarray(e, _C))) for e in eps_list][::-1]
+            return _build_nodal_metric_segments(period, uw, seg, degree, n_el,
+                                                grade)
+        # the homogeneous half-spaces are solved in the SAME oblique frame as the
+        # layers (uniform slant), so their modes share the layer convention; pass
+        # PUBLIC eps (grid conjugates to the internal exp(+iwt) convention).
+        slant = self._layers[0][2]
+        layer_mats = [grid(layer_eps_u[i]) for i in range(len(self._layers))]
+        mats_s = grid([self.n_sup ** 2 * np.eye(3) for _ in range(nU)])
+        mats_b = grid([self.n_sub ** 2 * np.eye(3) for _ in range(nU)])
+        n_glob = mats_s["n_glob"]
+
+        Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant, kx0)
+        Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant, kx0)
+        fs, _bs = _cov_split(Ws, Vs, kzs, fws)
+        fb, _bb = _cov_split(Wb, Vb, kzb, fwb)
+
+        def _msym(W, V, f):
+            return np.block([[W[:, f], W[:, f]], [V[:, f], -V[:, f]]])
+        Mls, lamf_l, lamb_l = [], [], []
+        for i, (_thk, _segs, slant) in enumerate(self._layers):
+            Wl, Vl, kzl, fwl = _cov_layer_4n(layer_mats[i], k0, slant, kx0)
+            fl, bl = _cov_split(Wl, Vl, kzl, fwl)
+            Mls.append(np.block([[Wl[:, fl], Wl[:, bl]],
+                                 [Vl[:, fl], Vl[:, bl]]]))
+            lamf_l.append(-1j * kzl[fl])
+            lamb_l.append(-1j * kzl[bl])
+        S = _interface_smatrix_general(_msym(Ws, Vs, fs), Mls[0])
+        for i in range(len(self._layers)):
+            S = _redheffer_star(S, _propagation_smatrix_general(
+                lamf_l[i], lamb_l[i], k0 * self._layers[i][0]))
+            nextM = (_msym(Wb, Vb, fb) if i == len(self._layers) - 1
+                     else Mls[i + 1])
+            S = _redheffer_star(S, _interface_smatrix_general(Mls[i], nextM))
+        S11, _S12, S21, _S22 = S
+
+        n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
+                     for eps_u in layer_eps_u for e in eps_u]
+                    + [np.real(self.n_sup), np.real(self.n_sub)])
+        m_prop = _n_propagating_orders(period, wl, n_max)
+        n_proj = max(self.ffo, 2 * m_prop + 5)
+        cap = n_glob if n_glob % 2 else n_glob - 1
+        n_proj = min(n_proj, cap)
+        if n_proj % 2 == 0:
+            n_proj -= 1
+        half = (n_proj - 1) // 2
+        orders = np.arange(-half, half + 1)
+        N = len(orders)
+        kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0
+        Tp = _sem_fourier_projection(orders, period, mats_s)
+        m0 = int(np.where(orders == 0)[0][0])
+        kz_sup = _kz_forward(eps_sup, kx)
+        kz_sub = _kz_forward(eps_sub, kx)
+        kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+        Hsup = np.vstack([Tp @ Ws[:n_glob, fs], Tp @ Ws[n_glob:, fs]])
+        Hsub = np.vstack([Tp @ Wb[:n_glob, fb], Tp @ Wb[n_glob:, fb]])
+        safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+        safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+        R = np.zeros((2, N))
+        T = np.zeros((2, N))
+        jones = np.zeros((2, 2), _C)
+        for col in range(2):
+            rhs = np.zeros(2 * N, _C)
+            rhs[(col * N) + m0] = 1.0
+            cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+            r = Hsup @ (S11 @ cinc)
+            t = Hsub @ (S21 @ cinc)
+            rx, ry = r[:N], r[N:]
+            tx, ty = t[:N], t[N:]
+            rz = -(kx * rx) / safe_r
+            tz = -(kx * tx) / safe_t
+            flux_inc = (kz_inc * (1.0 + ((kx0 / k0) / kz_inc) ** 2) if col == 0
+                        else kz_inc)
+            Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                    + np.abs(rz) ** 2) / flux_inc
+            Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                    + np.abs(tz) ** 2) / flux_inc
+            R[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
+            T[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
+            jones[0, col] = rx[m0]
+            jones[1, col] = ry[m0]
+        return orders, R, T, np.conj(jones)
 
 
 # ===========================================================================

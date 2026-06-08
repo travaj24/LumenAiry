@@ -153,16 +153,65 @@ def test_single_slanted_layer_stack_equals_binary(phi_deg, ang_deg):
     invariant to the order-label mirror.)"""
     er, eg = _eps_coupled(), GR
     phi, ang = np.radians(phi_deg), np.radians(ang_deg)
+    # 'auto' routes this IN-PLANE slanted stack to the covariant generator;
+    # compare LIKE-TO-LIKE against the covariant single-layer solver (both
+    # spectral) -- 2-segment == binary covariant is exact, so they match tightly.
     st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=24)
     st.add_layer(0.5e-6, segments=[(0.5, er), (0.5, eg)], slant_angle=phi)
     o, R, T, J = st.set_source(0.633e-6, angle=ang).solve()
     ob, Rb, Tb, Jb = la.pmm_jones_1d_slanted(
         period=1.0e-6, eps_ridge=er, eps_groove=eg, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
-        slant_angle=phi, angle=ang, degree=24, stabilize=False)
-    assert abs((R[0].sum() + T[0].sum()) - (Rb[0].sum() + Tb[0].sum())) < 1e-11
-    assert abs((R[1].sum() + T[1].sum()) - (Rb[1].sum() + Tb[1].sum())) < 1e-11
-    assert abs(abs(J[0, 0]) - abs(Jb[0, 0])) < 1e-11
+        slant_angle=phi, angle=ang, degree=24, stabilize=False,
+        factorization="covariant")
+    # The covariant 1-layer stack reproduces the covariant single-layer solver to
+    # ~machine precision (same union-grid modes + half-spaces in the same oblique
+    # frame; 2-segment == binary covariant is exact).
+    assert np.max(np.abs(R - Rb)) < 1e-11
+    assert np.max(np.abs(T - Tb)) < 1e-11
+    assert np.max(np.abs(J - Jb)) < 1e-11
+
+
+def test_covariant_stack_is_spectral_vs_convection():
+    """A 2-layer UNIFORM-slant stack: 'auto' uses the covariant generator, which
+    converges to the (high-degree convection) truth far faster than convection at
+    matched low degree -- the spectral win in a multilayer stack."""
+    er = _eps_coupled()
+    e2 = np.diag([3.0, 2.2, 2.5]).astype(_C)
+    phi = np.radians(35.0)
+
+    def mk(degree, fac):
+        st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0,
+                         degree=degree, factorization=fac)
+        st.add_layer(0.3e-6, segments=[(0.5, er), (0.5, GR)], slant_angle=phi)
+        st.add_layer(0.25e-6, segments=[(0.4, e2), (0.6, GR)], slant_angle=phi)
+        return st.set_source(0.633e-6, angle=0.0).solve()
+
+    o_ref, R_ref, _T, _J = mk(40, "convection")          # converged truth
+    o_v, R_v, _Tv, _Jv = mk(20, "auto")                  # -> covariant
+    o_c, R_c, _Tc, _Jc = mk(20, "convection")
+    cov_err = np.max(np.abs(R_v - R_ref))
+    con_err = np.max(np.abs(R_c - R_ref))
+    assert abs(R_v[0].sum() + _Tv[0].sum() - 1.0) < 1e-3   # energy
+    assert cov_err < con_err                               # covariant closer
+    assert con_err > 2 * cov_err                           # ... by a clear margin
+
+
+def test_covariant_stack_rejects_mixed_and_oop():
+    """'covariant' requires a uniform non-zero slant and in-plane tensors; 'auto'
+    falls back to convection for mixed-slant / vertical / out-of-plane stacks."""
+    er = _eps_coupled()
+    st = la.PMMStack(1.0e-6, factorization="covariant")
+    st.add_layer(0.2e-6, eps=2.1)                          # vertical
+    st.add_layer(0.3e-6, segments=[(0.5, er), (0.5, GR)], slant_angle=np.radians(30))
+    with pytest.raises(NotImplementedError, match="UNIFORM"):
+        st.set_source(0.633e-6).solve()
+    # 'auto' on the same mixed-slant stack falls back to convection (energy ok)
+    sta = la.PMMStack(1.0e-6, n_substrate=1.5, factorization="auto")
+    sta.add_layer(0.2e-6, eps=2.1)
+    sta.add_layer(0.3e-6, segments=[(0.5, er), (0.5, GR)], slant_angle=np.radians(30))
+    o, R, T, J = sta.set_source(0.633e-6).solve()
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
 
 
 def test_mixed_vertical_slanted_stack_conserves():
