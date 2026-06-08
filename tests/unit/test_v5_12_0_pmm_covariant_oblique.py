@@ -143,12 +143,55 @@ def test_default_is_auto_routes_covariant_in_plane():
         assert np.array_equal(x, y)             # auto routes this in-plane cell -> covariant
 
 
-def test_covariant_rejects_out_of_plane():
+def test_covariant_handles_out_of_plane():
+    """factorization='covariant' SOLVES out-of-plane tensors (v5.12.0+): the
+    exz/ezx wall-normal x longitudinal coupling enters via the pointwise ezz-Schur
+    composites (Li-1999 Eq.12) + the cos*Dop single-x-derivative cross blocks
+    (Li Eq.18/19).  It converges to the convection answer and is SPECTRAL -- at a
+    modest degree it BEATS convection (which converges only algebraically)."""
     er = _diag(4.0, 2.25, 2.0)
-    er[0, 2] = er[2, 0] = 0.3                    # out-of-plane
+    er[0, 2] = er[2, 0] = 0.3                    # out-of-plane exz/ezx
     eg = _diag(2.0, 2.0, 2.0)
-    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
-        _slant(er, eg, np.deg2rad(30.0), 16, "covariant")
+    oc, _Rc, Tc, _Jc = _slant(er, eg, np.deg2rad(30.0), 24, "covariant")
+    ot, _Rt, Tt, _Jt = _slant(er, eg, np.deg2rad(30.0), 60, "convection")  # truth
+    on, _Rn, Tn, _Jn = _slant(er, eg, np.deg2rad(30.0), 24, "convection")
+    ic = {int(m): k for k, m in enumerate(oc.tolist())}
+    it = {int(m): k for k, m in enumerate(ot.tolist())}
+    inn = {int(m): k for k, m in enumerate(on.tolist())}
+    dcov = max(abs(float(Tc[ch][ic[m]]) - float(Tt[ch][it[m]]))
+               for ch in (0, 1) for m in ic if m in it)
+    dcon = max(abs(float(Tn[ch][inn[m]]) - float(Tt[ch][it[m]]))
+               for ch in (0, 1) for m in inn if m in it)
+    assert dcov < 1e-3                           # covariant converges to the truth
+    assert dcov < dcon                           # and is FASTER (spectral) at deg24
+
+
+@pytest.mark.parametrize("name", ["exz", "full", "lossy", "asym"])
+def test_covariant_out_of_plane_battery(name):
+    """The covariant OOP path converges to the convection answer AND is spectral
+    (beats convection at matched degree) across the hard cells: wall-normal-only
+    (exz), simultaneous exz+eyz (full), LOSSY (energy != 1 -> a wrong split cannot
+    auto-balance, the lossless-trap guard), and ASYMMETRIC non-reciprocal
+    (exz != ezx)."""
+    er = _diag(2.25 + (0.2j if name == "lossy" else 0.0), 2.10,
+               2.40 + (0.1j if name == "lossy" else 0.0))
+    er[0, 2] = 0.3
+    er[2, 0] = 0.5 if name == "asym" else 0.3
+    if name == "full":
+        er[1, 2] = er[2, 1] = 0.2
+    eg = _diag(1.0, 1.0, 1.0)
+    oc, _Rc, Tc, _ = _slant(er, eg, np.deg2rad(30.0), 24, "covariant")
+    ot, _Rt, Tt, _ = _slant(er, eg, np.deg2rad(30.0), 60, "convection")   # truth
+    on, _Rn, Tn, _ = _slant(er, eg, np.deg2rad(30.0), 24, "convection")
+    ic = {int(m): k for k, m in enumerate(oc.tolist())}
+    it = {int(m): k for k, m in enumerate(ot.tolist())}
+    inn = {int(m): k for k, m in enumerate(on.tolist())}
+    dcov = max(abs(float(Tc[ch][ic[m]]) - float(Tt[ch][it[m]]))
+               for ch in (0, 1) for m in ic if m in it)
+    dcon = max(abs(float(Tn[ch][inn[m]]) - float(Tt[ch][it[m]]))
+               for ch in (0, 1) for m in inn if m in it)
+    assert dcov < 2e-3                           # covariant converges to the truth
+    assert dcov < dcon                           # and is FASTER (spectral) at deg24
 
 
 def test_invalid_factorization_raises():
@@ -166,14 +209,15 @@ def test_auto_picks_covariant_for_inplane_slant():
         assert np.array_equal(x, y)
 
 
-def test_auto_picks_convection_for_out_of_plane():
-    """'auto' falls back to convection for an out-of-plane cell (no raise)."""
+def test_auto_picks_covariant_for_out_of_plane_slant():
+    """'auto' now routes an out-of-plane SLANTED cell to the SPECTRAL covariant
+    path (v5.12.0+; was convection) -- byte-identical to explicit 'covariant'."""
     er = _diag(4.0, 2.25, 2.0)
     er[0, 2] = er[2, 0] = 0.3
     eg = _diag(2.0, 2.0, 2.0)
     a = _slant(er, eg, np.deg2rad(30.0), 20, "auto")
-    con = _slant(er, eg, np.deg2rad(30.0), 20, "convection")
-    for x, y in zip(a, con):
+    cov = _slant(er, eg, np.deg2rad(30.0), 20, "covariant")
+    for x, y in zip(a, cov):
         assert np.array_equal(x, y)
 
 
@@ -236,13 +280,22 @@ def test_covariant_segments_matches_convection(slant_deg, ang_deg):
         assert abs(np.sum(R_v[ch]) + np.sum(T_v[ch]) - 1.0) < 1e-4
 
 
-def test_covariant_segments_rejects_out_of_plane():
+def test_covariant_segments_handles_out_of_plane():
+    """factorization='covariant' SOLVES out-of-plane segments (v5.12.0+): the
+    multi-region covariant path carries the exz/ezx coupling spectrally, like the
+    binary cell.  It converges to the convection answer and conserves energy."""
     seg = list(_SEG3)
     oop = _diag(3.0, 2.5, 2.2)
     oop[0, 2] = oop[2, 0] = 0.3
     seg[1] = (0.3, oop)
-    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
-        _seg(seg, np.deg2rad(30.0), 16, "covariant")
+    oc, Rc, Tc, _Jc = _seg(seg, np.deg2rad(30.0), 24, "covariant")
+    ot, _Rt, Tt, _Jt = _seg(seg, np.deg2rad(30.0), 60, "convection")   # truth
+    ic = {int(m): k for k, m in enumerate(oc.tolist())}
+    it = {int(m): k for k, m in enumerate(ot.tolist())}
+    d = max(abs(float(Tc[ch][ic[m]]) - float(Tt[ch][it[m]]))
+            for ch in (0, 1) for m in ic if m in it)
+    assert d < 2e-3                              # converges to the convection truth
+    assert abs(float(np.sum(Rc[0]) + np.sum(Tc[0])) - 1.0) < 1e-3
 
 
 def test_covariant_segments_invalid_factorization_raises():

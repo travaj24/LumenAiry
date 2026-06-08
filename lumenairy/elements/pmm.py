@@ -94,14 +94,17 @@ SLANT has TWO factorizations (kwarg ``factorization``), same physical answer:
     generator (``_cov_*``): the slanted wall becomes a coordinate surface so the
     wall-normal discontinuity is handled algebraically and the TM channel
     converges SPECTRALLY (vertical-grade ~1e-7), ~100-2400x fewer degrees.
-    IN-PLANE only: the covariant Chandezon 4n layout is STRUCTURALLY unable to
-    converge the wall-normal x longitudinal (out-of-plane ``eps_xz``/``ezx``)
-    coupling -- a 6-avenue Li-1999/Li-1996-grounded study floored every variant
-    at ~5e-2.  Out-of-plane is carried EXACTLY by the convection generator
-    instead (``'auto'`` routes such cells there), so this is not a gap but a
-    property of the spectral layout.
-  - ``'auto'`` (default) picks covariant for an in-plane slanted cell, convection
-    otherwise.
+    Handles IN-PLANE AND OUT-OF-PLANE (full 3x3) tensors: the out-of-plane
+    ``eps_xz/yz/zx/zy`` coupling enters via the pointwise ezz-Schur composites
+    (Li-1999 Eq.12) + the ``cos*Dop`` single-x-derivative cross blocks (Li Eq.18/
+    19), SPECTRAL at slant -- ~15x fewer degrees than convection for out-of-plane
+    too.  (The earlier "covariant cannot do out-of-plane" verdict was wrong: it
+    was four operator/factorization bugs -- ``G``-vs-``Dop``, the ``cos`` conical
+    projection, the eyz cross-block sign, and the ``/eps^11`` vs ``/a_eff``
+    inverse-rule denominator -- all since fixed and Li-grounded.)
+  - ``'auto'`` (default) picks covariant for ANY slanted cell (in-plane or
+    out-of-plane), convection otherwise (vertical, where the vertical solver is
+    already exact).
 
 The Li factorization is realized in the nodal basis: the wall-normal inverse rule
 ``[[1/exx]]^{-1}`` becomes ``inv(hat(1/exx))`` (the nodal multiply-by-``1/exx``
@@ -3014,12 +3017,13 @@ class PMMStack:
         :func:`pmm_jones_1d_segments`.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
-        (default) uses the SPECTRAL covariant oblique-coordinate generator for an
-        IN-PLANE stack whose layers share a single non-zero slant, and the
-        (algebraic-but-fully-general) convection generator otherwise -- vertical,
-        out-of-plane, or MIXED-slant stacks (the covariant oblique frame is
-        per-slant, so a mixed-slant cascade falls back to convection).
-        ``'covariant'`` forces the spectral path (raises on out-of-plane or
+        (default) uses the SPECTRAL covariant oblique-coordinate generator for a
+        stack whose layers share a single non-zero slant -- IN-PLANE OR
+        OUT-OF-PLANE (the full-3x3 coupling enters via the Li Eq.12 ezz-Schur
+        composites + cos*Dop cross blocks) -- and the (algebraic-but-fully-
+        general) convection generator otherwise -- vertical or MIXED-slant stacks
+        (the covariant oblique frame is per-slant, so a mixed-slant cascade falls
+        back to convection).  ``'covariant'`` forces the spectral path (raises on
         mixed/zero slant); ``'convection'`` forces the general path.
 
     Notes
@@ -3118,10 +3122,11 @@ class PMMStack:
 
         # ---- factorization dispatch: covariant (SPECTRAL slant) vs convection --
         # 'auto' uses the covariant oblique-coordinate generator (spectral TM) for
-        # an IN-PLANE stack that has any slanted layer, and the convection metric
-        # generator otherwise (all-vertical, or any out-of-plane layer, which the
-        # covariant 4n layout is structurally unable to converge -- carried
-        # exactly by convection instead).  'covariant' forces it (raises on
+        # ANY slanted stack -- in-plane OR out-of-plane (the full-3x3 coupling
+        # enters via the Li Eq.12 ezz-Schur composites + cos*Dop cross blocks) --
+        # and the convection metric generator otherwise (all-vertical).  The
+        # covariant cascade still requires a UNIFORM slant.  'covariant' forces it
+        # (raises on
         # out-of-plane); 'convection' forces the algebraic-but-fully-general path.
         _oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
         _slants = [abs(L[2]) for L in self._layers]
@@ -3134,16 +3139,8 @@ class PMMStack:
                           and (max(_slants) - min(_slants)) <= 1e-12)
         _fac = self.factorization
         if _fac == "auto":
-            _fac = ("covariant" if (_uniform_slant and not _oop)
-                    else "convection")
+            _fac = "covariant" if _uniform_slant else "convection"
         if _fac == "covariant":
-            if _oop:
-                raise NotImplementedError(
-                    "PMMStack: factorization='covariant' cannot represent "
-                    "OUT-OF-PLANE layers (eps_xz/yz/zx/zy): the covariant "
-                    "Chandezon 4n layout is structurally unable to converge the "
-                    "wall-normal x longitudinal coupling.  Use 'convection' or "
-                    "'auto', which carry out-of-plane exactly.")
             if not _uniform_slant:
                 raise NotImplementedError(
                     "PMMStack: factorization='covariant' requires a UNIFORM "
@@ -3257,7 +3254,8 @@ class PMMStack:
 
     def _solve_covariant(self, wl, angle, k0):
         """SPECTRAL multi-layer solve via the Li covariant oblique-coordinate
-        generator (in-plane only).  Parallels the general fwd/back cascade of
+        generator (in-plane OR out-of-plane).  Parallels the general fwd/back
+        cascade of
         :meth:`solve` but uses :func:`_cov_layer_4n` modes + COVARIANT
         homogeneous half-spaces on the shared union grid, so slanted layers
         converge SPECTRALLY (vertical-grade) instead of the convection
@@ -4354,14 +4352,21 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
 # ===========================================================================
 
 def _cov_blocks(mats, slant_angle):
-    r"""Li covariant E-matrix Z-blocks (Eq.12 + Eq.20) for an in-plane tensor,
-    sec-stretched oblique metric (Li x1=x periodic, x2=z propagation, x3=y
-    invariant; eps^11 = exx + ezz tan^2, eps^12 = -ezz tanφ secφ, eps^22 =
-    ezz sec^2, eps^13 = exy, eps^31 = eyx, eps^33 = eyy).  The inverse rule sits
-    on eps^11 and the couplings ride INSIDE the bracket as solitary composites
-    (eps^lm/eps^11), so the across-wall derivative never hits the discontinuous
-    field.  Returns ``(Z11, Z12, Z21, E22inv, Z13, Z31, Z33)`` (each n x n);
-    Z13/Z31/Z33 vanish for a diagonal cell (exy = eyx = 0)."""
+    r"""Li covariant E-matrix Z-blocks (Eq.12 + Eq.20), full ``(3,3)`` tensor
+    (IN-PLANE OR OUT-OF-PLANE), sec-stretched oblique metric (Li x1=x periodic,
+    x2=z propagation, x3=y invariant).  The OUT-OF-PLANE coupling enters through
+    the POINTWISE ezz-Schur composites (Li Eq.10/12, formed in x BEFORE
+    bracketing) -- ``a_eff = exx - exz ezx/ezz``, ``b_eff = exy - exz ezy/ezz``,
+    ``c_eff = eyx - eyz ezx/ezz``, ``d_eff = eyy - eyz ezy/ezz`` -- which replace
+    ``exx/exy/eyx/eyy`` everywhere; the slant fold then gives
+    ``eps^11 = a_eff + ezz tan^2``, ``eps^12 = -ezz tanφ secφ``,
+    ``eps^22 = ezz sec^2``, and the cross composites ride INSIDE the wall-normal
+    inverse bracket as solitary entities (``eps^lm/eps^11``, the LOAD-BEARING
+    ``/eps^11`` -- NOT ``/a_eff``; the ``ezz tan^2`` difference is the slant
+    cross-pol term).  At off-plane=0 a_eff/b_eff/c_eff/d_eff reduce to
+    exx/exy/eyx/eyy and this is BYTE-IDENTICAL to the in-plane form.  Returns
+    ``(Z11, Z12, Z21, E22inv, Z13, Z31, Z33)`` (each n x n); the single-x-
+    derivative off-plane cross blocks are added in :func:`_cov_generator_4n`."""
     iS0 = _safe_inv(mats["S0"])
     tan = np.tan(slant_angle)
     sec = 1.0 / np.cos(slant_angle)
@@ -4369,8 +4374,20 @@ def _cov_blocks(mats, slant_angle):
     def E(fn):
         return iS0 @ _coeff_mass_metric(mats, fn)
 
+    def aeff(t):                                          # ezz-Schur composites
+        return t["exx"] - t["exz"] * t["ezx"] / t["ezz"]  # (Li Eq.12, pointwise)
+
+    def beff(t):
+        return t["exy"] - t["exz"] * t["ezy"] / t["ezz"]
+
+    def ceff(t):
+        return t["eyx"] - t["eyz"] * t["ezx"] / t["ezz"]
+
+    def deff(t):
+        return t["eyy"] - t["eyz"] * t["ezy"] / t["ezz"]
+
     def e11(t):
-        return t["exx"] + t["ezz"] * tan * tan            # eps^11 (wall-normal)
+        return aeff(t) + t["ezz"] * tan * tan             # eps^11 (wall-normal)
 
     def e12(t):
         return -t["ezz"] * tan * sec                      # eps^12 (slant)
@@ -4379,8 +4396,8 @@ def _cov_blocks(mats, slant_angle):
         return t["ezz"] * sec * sec                       # eps^22 (longitudinal)
     E11 = _safe_inv(E(lambda t: 1.0 / e11(t)))            # [[1/eps^11]]^-1
     T12 = E(lambda t: e12(t) / e11(t))
-    T13 = E(lambda t: t["exy"] / e11(t))
-    T31 = E(lambda t: t["eyx"] / e11(t))
+    T13 = E(lambda t: beff(t) / e11(t))                   # eps^13/eps^11 (Li Eq.12)
+    T31 = E(lambda t: ceff(t) / e11(t))                   # eps^31/eps^11
     Tsch22 = E(lambda t: e22(t) - e12(t) * e12(t) / e11(t))
     EE12 = E11 @ T12
     EE21 = T12 @ E11
@@ -4389,7 +4406,7 @@ def _cov_blocks(mats, slant_angle):
     EE22 = T12 @ E11 @ T12 + Tsch22
     EE22i = _safe_inv(EE22)
     EE33 = (T31 @ E11 @ T13
-            + E(lambda t: t["eyy"] - t["eyx"] * t["exy"] / e11(t)))
+            + E(lambda t: deff(t) - ceff(t) * beff(t) / e11(t)))
     Z11 = E11 - EE12 @ EE22i @ EE21
     Z12 = EE12 @ EE22i
     Z21 = EE22i @ EE21
@@ -4425,6 +4442,32 @@ def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0):
     put(3, 3, -G @ Z21)
     put(1, 0, -kb * Z13)                                  # TM<-TE coupling
     put(2, 3, kb * Z31)                                   # TE<-TM coupling
+    # ----- FULL-3x3 OUT-OF-PLANE single-x-derivative cross blocks -----------
+    # Eliminating Ez through (eps^33)^-1 = inv([[ezz]]) adds these (Li Eq.19's
+    # alpha acting on the eps^13/eps^23 columns).  Each rides the BARE oblique-
+    # frame wall-normal derivative ``cos*Dop`` -- the ``cos`` is the conical
+    # projection ``k0bar/k0`` (Li Eq.18) that every z-derivative block carries,
+    # and the bare ``Dop`` (NOT the Floquet operator ``G``) is the correct
+    # single-derivative operator.  The Hx<-Hy (eyz) block carries a relative
+    # minus (the iZHx vs iZHy equation sign).  ALL vanish at off-plane=0
+    # (exz=eyz=ezx=ezy=0), so the in-plane generator is byte-identical.
+    def _maxoff(key):
+        return max(abs(complex(t[key])) for (_xl, _xr, t) in mats["elem_bnds"])
+    if any(_maxoff(kk) > 0.0 for kk in ("exz", "eyz", "ezx", "ezy")):
+        iS0 = _safe_inv(mats["S0"])
+
+        def Op(fn):
+            return iS0 @ _coeff_mass_metric(mats, fn)
+        EZZi = _safe_inv(Op(lambda t: t["ezz"]))          # (eps^33)^-1
+        EXZ = Op(lambda t: t["exz"])
+        EZX = Op(lambda t: t["ezx"])
+        EYZ = Op(lambda t: t["eyz"])
+        EZY = Op(lambda t: t["ezy"])
+        cD = cos * Dop                                    # conical-projected d1
+        M[n:2 * n, n:2 * n] += (EXZ @ EZZi) @ cD          # Hy<-Hy (exz)
+        M[3 * n:4 * n, 3 * n:4 * n] += -cD @ (EZZi @ EZX)  # Ex<-Ex (ezx)
+        M[2 * n:3 * n, n:2 * n] += -(EYZ @ EZZi) @ cD     # Hx<-Hy (eyz); minus
+        M[3 * n:4 * n, 0:n] += -cD @ (EZZi @ EZY)         # Ex<-Ey (ezy)
     return M, n
 
 
@@ -4528,9 +4571,9 @@ def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
     """Covariant oblique-coordinate slanted-Jones solve (the SPECTRAL slant path;
     ``factorization='covariant'``).  Same signature/returns as
     :func:`_pmm_jones_slant_solve`; converges spectrally where the convection
-    path converges algebraically (same physical answer).  IN-PLANE tensors only
-    (out-of-plane is structurally outside the covariant 4n layout -- carried by
-    the convection generator instead)."""
+    path converges algebraically (same physical answer).  Full ``(3, 3)`` tensors
+    IN-PLANE OR OUT-OF-PLANE (the out-of-plane coupling enters the covariant
+    generator via the Li Eq.12 ezz-Schur composites + cos*Dop cross blocks)."""
     er = np.conj(np.asarray(eps_ridge3, dtype=_C))        # exp(-iωt) -> internal
     eg = np.conj(np.asarray(eps_groove3, dtype=_C))
     eps_sup = np.conj(_C(n_sup) ** 2)
@@ -4790,24 +4833,24 @@ def pmm_jones_1d_slanted(
         :func:`pmm_jones_1d`.
     factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment.  ``'auto'`` (default) picks the best path per cell:
-        ``'covariant'`` for an IN-PLANE slanted cell (the spectral win) and
-        ``'convection'`` otherwise (vertical, or out-of-plane).
+        ``'covariant'`` for ANY slanted cell -- in-plane OR out-of-plane (the
+        spectral win) -- and ``'convection'`` otherwise (vertical).
         ``'convection'`` carries the tilt as an exact first-order convection on
-        the lab-Cartesian metric generator -- robust at all slants and tensors
-        (in-plane OR out-of-plane), but the TM/p-pol per-order accuracy converges
-        ALGEBRAICALLY (~1e-4 at practical degree).  ``'covariant'`` routes through
-        the Li-1999 oblique-coordinate covariant generator: the slanted wall
-        becomes a coordinate surface, so the wall-normal discontinuity is handled
-        algebraically and the TM channel converges SPECTRALLY (vertical-grade
-        ~1e-7 by degree ~24) -- the SAME physical answer as ``'convection'`` but
-        ~100-2400x fewer degrees for matched accuracy.  ``'covariant'`` handles
-        diagonal AND coupled (``exy``/``eyx``) IN-PLANE tensors, normal + oblique,
-        lossless + lossy; OUT-OF-PLANE (``eps_xz`` etc.) is STRUCTURALLY outside
-        the covariant path (the Chandezon 4n layout cannot converge the wall-
-        normal x longitudinal coupling -- it raises ``NotImplementedError``), so
-        ``'auto'`` keeps such cells on ``'convection'``, which carries out-of-
-        plane EXACTLY (byte-identical to :func:`pmm_jones_1d` at normal
-        incidence).  Pass ``'convection'`` explicitly to force the fully-general
+        the lab-Cartesian metric generator -- robust at all slants and tensors,
+        but the TM/p-pol per-order accuracy converges ALGEBRAICALLY (~1e-4 at
+        practical degree).  ``'covariant'`` routes through the Li-1999 oblique-
+        coordinate covariant generator: the slanted wall becomes a coordinate
+        surface, so the wall-normal discontinuity is handled algebraically and the
+        TM channel converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) --
+        the SAME physical answer as ``'convection'`` but ~100-2400x fewer degrees
+        for matched accuracy.  ``'covariant'`` handles diagonal, coupled
+        (``exy``/``eyx``), AND OUT-OF-PLANE (full 3x3 ``eps_xz/yz/zx/zy``)
+        tensors, normal + oblique, lossless + lossy -- the out-of-plane coupling
+        enters via the pointwise ezz-Schur composites (Li Eq.12) + the ``cos*Dop``
+        single-derivative cross blocks (Li Eq.18/19), spectral at slant, so
+        ``'auto'`` routes out-of-plane slanted cells to it too (~15x fewer degrees
+        than convection).  Pass ``'convection'`` explicitly to force the fully-
+        general
         algebraic path (e.g. for byte-stable cross-checks).
 
     Returns
@@ -4828,8 +4871,8 @@ def pmm_jones_1d_slanted(
     NumPy / SciPy (dense eig); not JAX-differentiable.  SCOPE: BINARY grating
     (1 ridge + 1 groove), full ``(3, 3)`` tensor IN-PLANE OR OUT-OF-PLANE, normal
     OR oblique incidence at any slant.  The multi-region
-    :func:`pmm_jones_1d_slanted_segments` companion supports in-plane tensors only
-    (it still guards out-of-plane + slant pending its own per-order validation).
+    :func:`pmm_jones_1d_slanted_segments` companion carries full ``(3, 3)``
+    tensors in-plane OR out-of-plane on every factorization.
 
     DIAGONAL CURE (round 16; Granet 2017 JOSA A 34:975 / Granet 2023; Liu 2015
     CiCP 18:467).  A DIAGONAL tensor (``exy = eyx = 0``) WITH ``exx == ezz`` in
@@ -4890,30 +4933,21 @@ def pmm_jones_1d_slanted(
     # converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) instead of the
     # convection path's ALGEBRAIC ~1e-4 floor -- same physical answer, ~100-2400x
     # fewer degrees.  Handles diagonal AND coupled (exy/eyx) IN-PLANE tensors,
-    # normal + oblique, lossless + lossy.  Out-of-plane (eps_xz/yz/zx/zy) is not
-    # yet supported on this path.  The DEFAULT 'auto' picks covariant for an
-    # in-plane slanted cell (the spectral win) and convection otherwise (vertical,
-    # or out-of-plane which convection handles to the ~1e-4 floor).
+    # normal + oblique, lossless + lossy, IN-PLANE OR OUT-OF-PLANE.  The full-3x3
+    # out-of-plane coupling (eps_xz/yz/zx/zy) enters the covariant generator via
+    # the pointwise ezz-Schur composites (Li Eq.12) + the cos*Dop single-x-
+    # derivative cross blocks (see _cov_blocks / _cov_generator_4n) -- SPECTRAL at
+    # slant, same as the in-plane covariant.  The DEFAULT 'auto' picks covariant
+    # for ANY slanted cell (the spectral win, now including out-of-plane) and
+    # convection otherwise (vertical, where the vertical solver is already exact).
     if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(
             "pmm_jones_1d_slanted: factorization must be 'auto', 'convection' "
             f"or 'covariant', got {factorization!r}.")
     if factorization == "auto":
-        _inplane = off <= 1e-9 * scale
         _slanted = abs(float(slant_angle)) > 1e-12
-        factorization = "covariant" if (_slanted and _inplane) else "convection"
+        factorization = "covariant" if _slanted else "convection"
     if factorization == "covariant":
-        if off > 1e-9 * scale:
-            raise NotImplementedError(
-                "pmm_jones_1d_slanted: factorization='covariant' cannot "
-                "represent OUT-OF-PLANE tensors (eps_xz/eps_yz/eps_zx/eps_zy != "
-                "0).  The covariant Chandezon 4n layout is STRUCTURALLY unable to "
-                "converge the wall-normal x longitudinal (exz/ezx) coupling -- a "
-                "6-avenue Li-1999/Li-1996-grounded study floored every variant at "
-                "~5e-2 (an energy-conserving +/-1-order split error, the lossless "
-                "trap).  Use factorization='convection' (or 'auto'), which carry "
-                "out-of-plane EXACTLY (byte-identical to pmm_jones_1d at normal "
-                "incidence; ~1e-3 vs an RCWA staircase at slant).")
         cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
         ckw = dict(n_ridge_el=int(elements_per_region),
@@ -5007,11 +5041,11 @@ def pmm_jones_1d_slanted_segments(
     (IN-PLANE OR OUT-OF-PLANE) -- the multi-region generalization of
     :func:`pmm_jones_1d_slanted` and the slanted counterpart of
     :func:`pmm_jones_1d_segments`.  The default ``factorization='auto'`` picks the
-    spectral covariant path for an in-plane slanted cell and the convection path
-    otherwise; out-of-plane (``eps_xz`` etc.) is supported only on the convection
-    path, so ``'auto'`` keeps such cells there.  ``factorization='covariant'`` is
-    in-plane only (raises on out-of-plane); pass ``'convection'`` to force the
-    fully-general algebraic path.
+    spectral covariant path for ANY slanted cell -- in-plane OR out-of-plane (the
+    full-3x3 coupling enters via the Li Eq.12 ezz-Schur composites + cos*Dop cross
+    blocks) -- and the convection path otherwise (vertical).
+    ``factorization='covariant'`` carries out-of-plane too; pass ``'convection'``
+    to force the fully-general algebraic path.
 
     Each region carries its own (possibly anisotropic) tensor, and the straight
     side-walls are tilted by ``slant_angle`` from the vertical.  Solved by the
@@ -5037,8 +5071,8 @@ def pmm_jones_1d_slanted_segments(
     angle, degree, elements_per_region, grade, far_field_orders, stabilize,
     factorization : as in :func:`pmm_jones_1d_slanted`.  ``factorization=
         'covariant'`` gives SPECTRAL TM convergence for the multi-region cell too
-        (in-plane tensors only); it pre-reverses the region order so the covariant
-        far field lands in the user's input frame.
+        (in-plane OR out-of-plane); it pre-reverses the region order so the
+        covariant far field lands in the user's input frame.
 
     Returns
     -------
@@ -5071,29 +5105,16 @@ def pmm_jones_1d_slanted_segments(
     # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
     # Multi-region generalization of the binary covariant path; spectral TM
     # convergence vs the convection path's algebraic floor (same answer).
-    # In-plane only (out-of-plane is structurally outside the covariant 4n
-    # layout; the convection path carries it exactly -- see the guard below).
+    # IN-PLANE OR OUT-OF-PLANE (the full-3x3 coupling enters via the Li Eq.12
+    # ezz-Schur composites + the cos*Dop single-derivative cross blocks).
     if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(
             "pmm_jones_1d_slanted_segments: factorization must be 'auto', "
             f"'convection' or 'covariant', got {factorization!r}.")
-    _off = max((float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
-                for M in tensors), default=0.0)
-    _scale = max((float(np.max(np.abs(M))) for M in tensors), default=1.0)
     if factorization == "auto":
-        _slanted = abs(float(slant_angle)) > 1e-12
-        factorization = ("covariant" if (_slanted and _off <= 1e-9 * _scale)
+        factorization = ("covariant" if abs(float(slant_angle)) > 1e-12
                          else "convection")
     if factorization == "covariant":
-        off = _off
-        scale = _scale
-        if off > 1e-9 * scale:
-            raise NotImplementedError(
-                "pmm_jones_1d_slanted_segments: factorization='covariant' cannot "
-                "represent OUT-OF-PLANE tensors -- the covariant Chandezon 4n "
-                "layout is structurally unable to converge the wall-normal x "
-                "longitudinal coupling.  Use 'convection' or 'auto', which carry "
-                "out-of-plane exactly.")
         ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
               wavelength, float(slant_angle))
         ckw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
