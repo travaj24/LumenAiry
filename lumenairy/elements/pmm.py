@@ -4731,7 +4731,7 @@ def pmm_jones_1d_slanted(
     grade: bool = True,
     far_field_orders: int = 21,
     stabilize: bool = True,
-    factorization: str = "convection",
+    factorization: str = "auto",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """SLANTED binary grating with full ``(3, 3)`` permittivity tensors (in-plane
     OR out-of-plane) -- the anisotropic-Jones counterpart of
@@ -4792,21 +4792,23 @@ def pmm_jones_1d_slanted(
     degree, elements_per_region, grade, far_field_orders, stabilize : as in
         :func:`pmm_jones_1d`.
     factorization : {'auto', 'convection', 'covariant'}, optional
-        Slant treatment.  ``'convection'`` (default) carries the tilt as an exact
-        first-order convection on the lab-Cartesian metric generator -- robust at
-        all slants and tensors (in-plane OR out-of-plane), but the TM/p-pol
-        per-order accuracy converges ALGEBRAICALLY (~1e-4 at practical degree).
-        ``'covariant'`` routes through the Li-1999 oblique-coordinate covariant
-        generator: the slanted wall becomes a coordinate surface, so the
-        wall-normal discontinuity is handled algebraically and the TM channel
-        converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) -- the SAME
-        physical answer as ``'convection'`` but ~100-2400x fewer degrees for
-        matched accuracy.  ``'covariant'`` handles diagonal AND coupled
-        (``exy``/``eyx``) IN-PLANE tensors, normal + oblique, lossless + lossy;
-        OUT-OF-PLANE (``eps_xz`` etc.) is not yet supported on the covariant path
-        (raises ``NotImplementedError``).  ``'auto'`` picks the best per cell:
+        Slant treatment.  ``'auto'`` (default) picks the best path per cell:
         ``'covariant'`` for an IN-PLANE slanted cell (the spectral win) and
         ``'convection'`` otherwise (vertical, or out-of-plane).
+        ``'convection'`` carries the tilt as an exact first-order convection on
+        the lab-Cartesian metric generator -- robust at all slants and tensors
+        (in-plane OR out-of-plane), but the TM/p-pol per-order accuracy converges
+        ALGEBRAICALLY (~1e-4 at practical degree).  ``'covariant'`` routes through
+        the Li-1999 oblique-coordinate covariant generator: the slanted wall
+        becomes a coordinate surface, so the wall-normal discontinuity is handled
+        algebraically and the TM channel converges SPECTRALLY (vertical-grade
+        ~1e-7 by degree ~24) -- the SAME physical answer as ``'convection'`` but
+        ~100-2400x fewer degrees for matched accuracy.  ``'covariant'`` handles
+        diagonal AND coupled (``exy``/``eyx``) IN-PLANE tensors, normal + oblique,
+        lossless + lossy; OUT-OF-PLANE (``eps_xz`` etc.) is not yet supported on
+        the covariant path (raises ``NotImplementedError``), so ``'auto'`` keeps
+        such cells on ``'convection'``.  Pass ``'convection'`` explicitly to force
+        the fully-general algebraic path (e.g. for byte-stable cross-checks).
 
     Returns
     -------
@@ -4993,14 +4995,17 @@ def pmm_jones_1d_slanted_segments(
     grade: bool = True,
     far_field_orders: int = 21,
     stabilize: bool = True,
-    factorization: str = "convection",
+    factorization: str = "auto",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """SLANTED multi-region grating with full ``(3, 3)`` permittivity tensors
     (IN-PLANE OR OUT-OF-PLANE) -- the multi-region generalization of
     :func:`pmm_jones_1d_slanted` and the slanted counterpart of
-    :func:`pmm_jones_1d_segments`.  Out-of-plane (``eps_xz`` etc.) is supported on
-    the default ``factorization='convection'`` path; ``factorization='covariant'``
-    is in-plane only (raises on out-of-plane).
+    :func:`pmm_jones_1d_segments`.  The default ``factorization='auto'`` picks the
+    spectral covariant path for an in-plane slanted cell and the convection path
+    otherwise; out-of-plane (``eps_xz`` etc.) is supported only on the convection
+    path, so ``'auto'`` keeps such cells there.  ``factorization='covariant'`` is
+    in-plane only (raises on out-of-plane); pass ``'convection'`` to force the
+    fully-general algebraic path.
 
     Each region carries its own (possibly anisotropic) tensor, and the straight
     side-walls are tilted by ``slant_angle`` from the vertical.  Solved by the
@@ -5059,7 +5064,7 @@ def pmm_jones_1d_slanted_segments(
         tensors.append(M)
     # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
     # Multi-region generalization of the binary covariant path; spectral TM
-    # convergence vs the convection default's algebraic floor (same answer).
+    # convergence vs the convection path's algebraic floor (same answer).
     # In-plane only (out-of-plane covariant is a further extension).
     if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(

@@ -123,15 +123,24 @@ def test_covariant_lossy_and_oblique():
         assert np.all(R[ch] >= -1e-12) and np.all(T[ch] >= -1e-12)
 
 
-def test_default_is_convection_byte_identical():
+def test_default_is_auto_routes_covariant_in_plane():
+    """The default factorization is 'auto' (v5.12.0+): an IN-PLANE slanted cell
+    routes to the SPECTRAL covariant path.  Pin the contract both ways -- the
+    no-kwarg default is byte-identical to explicit factorization='auto', and for
+    this in-plane diagonal cell 'auto' selects 'covariant' (so it is also byte-
+    identical to explicit 'covariant').  Convection stays available explicitly
+    and remains the route for OOP / combined-oblique+slant."""
     er, eg = _diag(4.0, 2.25, 2.0), _diag(2.0, 2.0, 2.0)
-    a = _slant(er, eg, np.deg2rad(30.0), 20, "convection")
-    b = pmm_jones_1d_slanted(
+    default = pmm_jones_1d_slanted(
         _GEOM["period"], er, eg, _GEOM["n_substrate"], _GEOM["n_superstrate"],
         _GEOM["depth"], _GEOM["duty_cycle"], _GEOM["wavelength"],
         np.deg2rad(30.0), degree=20, stabilize=False)   # no factorization kwarg
-    for x, y in zip(a, b):
-        assert np.array_equal(x, y)
+    auto = _slant(er, eg, np.deg2rad(30.0), 20, "auto")
+    cov = _slant(er, eg, np.deg2rad(30.0), 20, "covariant")
+    for x, y in zip(default, auto):
+        assert np.array_equal(x, y)             # default IS auto
+    for x, y in zip(default, cov):
+        assert np.array_equal(x, y)             # auto routes this in-plane cell -> covariant
 
 
 def test_covariant_rejects_out_of_plane():

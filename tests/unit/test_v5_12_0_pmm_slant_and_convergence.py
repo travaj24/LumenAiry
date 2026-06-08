@@ -339,7 +339,7 @@ def test_jones_slant_finite_diagonal_matches_scalar_slanted(phi_deg):
     # likewise environment-asymmetric.  Matching raw-vs-raw removes both.)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=False, **_JGEOM_ASYM)
+        stabilize=False, factorization="convection", **_JGEOM_ASYM)
     oT, RTte, TTte = pmm_efficiency_1d_slanted(
         period=1.0e-6, n_ridge=1.5, n_groove=1.0, n_substrate=1.5,
         n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
@@ -365,7 +365,7 @@ def test_jones_slant_energy_conservation(tensor, phi_deg):
     eg = _eps_diag(1.0)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=np.deg2rad(phi_deg),
-        degree=22, stabilize=False, **_JGEOM)
+        degree=22, stabilize=False, factorization="convection", **_JGEOM)
     assert abs(_sum_RT(R[0], T[0]) - 1.0) < 1e-10
     assert abs(_sum_RT(R[1], T[1]) - 1.0) < 1e-10
 
@@ -376,10 +376,10 @@ def test_jones_slant_reciprocity_real_symmetric():
     eg = _eps_diag(1.0)
     _, _, _, Jsym = pmm_jones_1d_slanted(
         eps_ridge=_eps_real_sym(), eps_groove=eg, slant_angle=np.deg2rad(30.0),
-        degree=22, stabilize=False, **_JGEOM)
+        degree=22, stabilize=False, factorization="convection", **_JGEOM)
     _, _, _, Jgyro = pmm_jones_1d_slanted(
         eps_ridge=_eps_gyro(), eps_groove=eg, slant_angle=np.deg2rad(30.0),
-        degree=22, stabilize=False, **_JGEOM)
+        degree=22, stabilize=False, factorization="convection", **_JGEOM)
     assert abs(Jsym[0, 1] - Jsym[1, 0]) < 1e-9
     assert abs(Jgyro[0, 1] - Jgyro[1, 0]) > 1e-3
 
@@ -499,20 +499,22 @@ def test_jones_slant_oblique_dispatch_invariant(monkeypatch):
     calls.update(cure=0, metric=0)
     _pmm.pmm_jones_1d_slanted(eps_ridge=erD, eps_groove=eg,
                               slant_angle=np.deg2rad(30.0),
-                              angle=np.deg2rad(20.0), degree=16, **_JGEOM)
+                              angle=np.deg2rad(20.0), degree=16,
+                              factorization="convection", **_JGEOM)
     assert calls["cure"] == 0 and calls["metric"] >= 1
 
     # (b) diagonal + NORMAL + slant -> the cure (correct + faster here)
     calls.update(cure=0, metric=0)
     _pmm.pmm_jones_1d_slanted(eps_ridge=erD, eps_groove=eg,
                               slant_angle=np.deg2rad(30.0), angle=0.0,
-                              degree=16, **_JGEOM)
+                              degree=16, factorization="convection", **_JGEOM)
     assert calls["cure"] >= 1 and calls["metric"] == 0
 
     # (c) diagonal + oblique + VERTICAL (slant=0) -> the cure (valid scalar oblique)
     calls.update(cure=0, metric=0)
     _pmm.pmm_jones_1d_slanted(eps_ridge=erD, eps_groove=eg, slant_angle=0.0,
-                              angle=np.deg2rad(20.0), degree=16, **_JGEOM)
+                              angle=np.deg2rad(20.0), degree=16,
+                              factorization="convection", **_JGEOM)
     assert calls["cure"] >= 1 and calls["metric"] == 0
 
 
@@ -838,13 +840,13 @@ def test_jones_slant_out_of_plane_reduces_to_inplane_as_off_vanishes():
     base[2, 2] = 2.40                              # diagonal in-plane (exx!=ezz)
     o_in, R_in, T_in, J_in = pmm_jones_1d_slanted(
         eps_ridge=base, eps_groove=eg, slant_angle=np.deg2rad(30.0),
-        degree=18, stabilize=True, **_JGEOM_ASYM)
+        degree=18, stabilize=True, factorization="convection", **_JGEOM_ASYM)
     er = base.copy()
     er[0, 2] = er[2, 0] = 1e-7                     # vanishing off-plane
     er[1, 2] = er[2, 1] = 1e-7
     o_oo, R_oo, T_oo, J_oo = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=np.deg2rad(30.0),
-        degree=18, stabilize=True, **_JGEOM_ASYM)
+        degree=18, stabilize=True, factorization="convection", **_JGEOM_ASYM)
     assert np.array_equal(o_in, o_oo)
     assert np.max(np.abs(T_in - T_oo)) < 1e-6
 
@@ -900,7 +902,7 @@ def test_jones_slant_diag_cure_matches_scalar_by_construction(kind, phi_deg):
     eg = _eps_diag(1.0)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=False, **_JGEOM_ASYM)
+        stabilize=False, factorization="convection", **_JGEOM_ASYM)
     # per-channel scalar slant references (TM = row 0 = incident Ex ; TE = row 1)
     sc = dict(period=1.0e-6, n_groove=1.0, n_substrate=1.5, n_superstrate=1.0,
               depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
@@ -945,7 +947,7 @@ def test_jones_slant_diag_cure_vs_metric_generator(phi_deg):
     # cured public path (diagonal -> div-conforming scalar slant), stabilized
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=True, **_JGEOM_ASYM)
+        stabilize=True, factorization="convection", **_JGEOM_ASYM)
     # metric generator path (now div-conforming), stabilized the SAME way -- call
     # the internal solver directly to bypass the diagonal-cure dispatch.
     margs = (1.0e-6, er, eg, complex(1.5), complex(1.0), 0.5e-6, 0.5, 0.633e-6,
@@ -1012,7 +1014,7 @@ def test_jones_slant_coupled_byte_identical_after_cure(phi_deg):
     eg = _eps_diag(1.0)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=False, **_JGEOM)
+        stabilize=False, factorization="convection", **_JGEOM)
     oM, RM, TM, JM, _n = _pmm_jones_slant_solve(
         1.0e-6, er, eg, complex(1.5), complex(1.5), 0.5e-6, 0.5, 0.633e-6, phi,
         degree=deg, n_ridge_el=1, n_groove_el=1, grade=True, far_field_orders=21)
@@ -1033,7 +1035,7 @@ def test_jones_slant_diag_exx_ne_ezz_stays_on_metric_generator(phi_deg):
     eg = _eps_diag(1.0)
     o, R, T, J = pmm_jones_1d_slanted(
         eps_ridge=er, eps_groove=eg, slant_angle=phi, degree=deg,
-        stabilize=False, **_JGEOM)
+        stabilize=False, factorization="convection", **_JGEOM)
     oM, RM, TM, JM, _n = _pmm_jones_slant_solve(
         1.0e-6, er, eg, complex(1.5), complex(1.5), 0.5e-6, 0.5, 0.633e-6, phi,
         degree=deg, n_ridge_el=1, n_groove_el=1, grade=True, far_field_orders=21)
