@@ -3285,8 +3285,12 @@ class PMMStack:
         mats_b = grid([self.n_sub ** 2 * np.eye(3) for _ in range(nU)])
         n_glob = mats_s["n_glob"]
 
-        Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant, kx0)
-        Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant, kx0)
+        # DIV-CONFORMING Ez closure if ANY layer is out-of-plane (machine-precision
+        # OOP), applied uniformly to all layers + both half-spaces so the closure
+        # matches across every interface; in-plane stacks keep the modal closure.
+        divconf = any(self._is_oop(M) for _L in self._layers for _w, M in _L[1])
+        Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant, kx0, divconf)
+        Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant, kx0, divconf)
         fs, _bs = _cov_split(Ws, Vs, kzs, fws)
         fb, _bb = _cov_split(Wb, Vb, kzb, fwb)
 
@@ -3294,7 +3298,8 @@ class PMMStack:
             return np.block([[W[:, f], W[:, f]], [V[:, f], -V[:, f]]])
         Mls, lamf_l, lamb_l = [], [], []
         for i, (_thk, _segs, slant) in enumerate(self._layers):
-            Wl, Vl, kzl, fwl = _cov_layer_4n(layer_mats[i], k0, slant, kx0)
+            Wl, Vl, kzl, fwl = _cov_layer_4n(layer_mats[i], k0, slant, kx0,
+                                             divconf)
             fl, bl = _cov_split(Wl, Vl, kzl, fwl)
             Mls.append(np.block([[Wl[:, fl], Wl[:, bl]],
                                  [Vl[:, fl], Vl[:, bl]]]))
@@ -4413,13 +4418,20 @@ def _cov_blocks(mats, slant_angle):
     return Z11, Z12, Z21, EE22i, EE13, EE31, EE33
 
 
-def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0):
+def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
     r"""Covariant 4n first-order generator ``M`` (state ``X = [Ey; Hy; Hx; Ex]``
     = Li ``[E3; H3; H1; E1]``) for ``dz X = i M X``.  TM block over ``(H3, E1)``,
     TE block over ``(E3, H1)`` (its metric is smooth -> machine-clean), and the
     in-plane ``exy/eyx`` coupling enters as ``M[H3,E3] = -k0 cosφ E13`` and
     ``M[H1,E1] = +k0 cosφ E31`` with ``E33`` replacing ``eyy`` in ``M[H1,E3]``.
-    ``kx0`` is the PHYSICAL oblique Bloch wavenumber (``k0 Re(n_sup) sinθ``)."""
+    ``kx0`` is the PHYSICAL oblique Bloch wavenumber (``k0 Re(n_sup) sinθ``).
+    ``divconf`` selects the longitudinal Ez closure ``M[E1, H3]``: ``False`` ->
+    the MODAL ``G (eps^22)^-1 G`` form (byte-identical to the prior in-plane
+    covariant); ``True`` -> the DIV-CONFORMING ``INT(1/ezz) B'B'`` form (Granet
+    2023 Eq.16-18) which cures the Liu-2015 harmonic-mean spurious null and takes
+    the OUT-OF-PLANE channel to machine precision.  The closure must MATCH across
+    each z=const interface, so the caller applies the SAME ``divconf`` to the
+    layer AND both homogeneous half-spaces."""
     n = mats["n_glob"]
     I = np.eye(n, dtype=_C)
     cos = np.cos(slant_angle)
@@ -4438,7 +4450,20 @@ def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0):
     put(2, 2, sin * G)
     put(1, 1, -Z12 @ G)
     put(1, 3, -kb * Z11)
-    put(3, 1, G @ (Z22i / (k0 * cos)) @ G - kb * I)
+    if divconf:
+        # DIV-CONFORMING longitudinal Ez closure: INT(1/ezz) B'B' (Granet 2023
+        # Eq.16-18) -- machine-precision out-of-plane.  The kx0 terms inject the
+        # oblique Bloch shift into the longitudinal derivative.  The cos/k0 factor
+        # (vs the convection path's 1/k0) is the oblique-frame z-metric (kz =
+        # beta / cos / k0 read-out).
+        iS0 = _safe_inv(mats["S0"])
+        Lez = mats["L_inv_ezz"].copy()
+        if kx0:
+            Cas = mats["C_inv_ezz"] - mats["C_inv_ezz"].T
+            Lez = Lez - 1j * kx0 * Cas + (kx0 * kx0) * mats["mass"]["inv_ezz"]
+        put(3, 1, (cos / k0) * (iS0 @ Lez) - kb * I)
+    else:
+        put(3, 1, G @ (Z22i / (k0 * cos)) @ G - kb * I)   # MODAL (in-plane)
     put(3, 3, -G @ Z21)
     put(1, 0, -kb * Z13)                                  # TM<-TE coupling
     put(2, 3, kb * Z31)                                   # TE<-TM coupling
@@ -4471,12 +4496,14 @@ def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0):
     return M, n
 
 
-def _cov_layer_4n(mats, k0, slant_angle, kx0=0.0):
+def _cov_layer_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
     r"""Covariant layer eigenmodes.  Returns ``(W, V, kz, fwd)`` where
     ``W = [Ex; Ey]`` (2n), ``V = [Hx; Hy]`` (2n), ``kz`` the LAB z-wavenumber /
     ``k0`` (propagator ``exp(i kz k0 z)``; ``kz = beta secφ / k0``), and ``fwd``
-    the +z-Poynting / decaying forward mask."""
-    M, n = _cov_generator_4n(mats, k0, slant_angle, kx0)
+    the +z-Poynting / decaying forward mask.  ``divconf`` selects the longitudinal
+    closure (see :func:`_cov_generator_4n`); it must be the SAME for the layer and
+    both half-spaces of a solve."""
+    M, n = _cov_generator_4n(mats, k0, slant_angle, kx0, divconf)
     beta, X = np.linalg.eig(M)
     kz = beta / np.cos(slant_angle) / k0
     Ey, Hy, Hx, Ex = X[:n], X[n:2 * n], X[2 * n:3 * n], X[3 * n:]
@@ -4513,9 +4540,15 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
     Returns ``(orders, R(2,N), T(2,N), jones(2,2), n_glob)``."""
     k0 = 2.0 * np.pi / wl
     n = mats["n_glob"]
-    Wl, Vl, kzl, fwl = _cov_layer_4n(mats, k0, slant_angle, kx0)
-    Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant_angle, kx0)
-    Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant_angle, kx0)
+    # DIV-CONFORMING Ez closure when the LAYER is out-of-plane (machine-precision
+    # OOP); applied to the layer AND both half-spaces so the closure form MATCHES
+    # across every z=const interface (the S-matrix continuity demands it).  An
+    # in-plane layer keeps the MODAL closure (byte-identical to the prior path).
+    divconf = any(max(abs(complex(t[kk])) for (_xl, _xr, t) in mats["elem_bnds"])
+                  > 0.0 for kk in ("exz", "eyz", "ezx", "ezy"))
+    Wl, Vl, kzl, fwl = _cov_layer_4n(mats, k0, slant_angle, kx0, divconf)
+    Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant_angle, kx0, divconf)
+    Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant_angle, kx0, divconf)
     fl, bl = _cov_split(Wl, Vl, kzl, fwl)
     fs, _bs = _cov_split(Ws, Vs, kzs, fws)
     fb, _bb = _cov_split(Wb, Vb, kzb, fwb)

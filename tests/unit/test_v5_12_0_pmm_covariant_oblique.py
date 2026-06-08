@@ -194,6 +194,31 @@ def test_covariant_out_of_plane_battery(name):
     assert dcov < dcon                           # and is FASTER (spectral) at deg24
 
 
+@pytest.mark.parametrize("name", ["exz", "lossy"])
+def test_covariant_divconf_slant0_machine_precision(name):
+    """The DIV-CONFORMING longitudinal Ez closure (Granet 2023 Eq.16-18,
+    ``INT(1/ezz) B'B'``) takes the RECIPROCAL wall-normal out-of-plane channel to
+    MACHINE precision at slant=0: the covariant path reproduces the independent
+    ``pmm_jones_1d`` 3x3 oracle to ~1e-9, vs the prior MODAL closure's ~8e-5
+    Liu-2015 harmonic-mean spurious-null floor.  This guards the closure against a
+    silent regression to modal -- the other OOP tests pin only the CONVECTION
+    slant=0 route and the covariant STAIRCASE at slant!=0, neither of which would
+    catch the longitudinal closure reverting.  (Only exz/lossy reach machine here;
+    asymmetric exz!=ezx and the eyz/full channels sit at the ~1e-5 physics floor,
+    so they are covered by the convergence battery, not this guard.)"""
+    er = _diag(2.25 + (0.2j if name == "lossy" else 0.0), 2.10,
+               2.40 + (0.1j if name == "lossy" else 0.0))
+    er[0, 2] = er[2, 0] = 0.3                     # reciprocal wall-normal exz/ezx
+    eg = _diag(1.0, 1.0, 1.0)
+    o, _R, T, J = _slant(er, eg, 0.0, 28, "covariant")
+    oR, _ReR, TeR, JR = pmm_jones_1d(
+        _GEOM["period"], er, eg, _GEOM["n_substrate"], _GEOM["n_superstrate"],
+        _GEOM["depth"], _GEOM["duty_cycle"], _GEOM["wavelength"], degree=28)
+    dT = max(_perorder(o, T, ch, oR, TeR) for ch in (0, 1))
+    assert dT < 1e-6                             # ~8e-10 actual; modal floored ~8e-5
+    assert np.max(np.abs(J - JR)) < 1e-6
+
+
 def test_invalid_factorization_raises():
     er, eg = _diag(4.0, 2.25, 2.0), _diag(2.0, 2.0, 2.0)
     with pytest.raises(ValueError, match="factorization"):
