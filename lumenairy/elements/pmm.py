@@ -63,33 +63,50 @@ the per-mode weight ``q`` (TE) or ``q/eps`` i.e. the ``(1/eps)``-weighted field
 (TM).  The S-matrix eigenvalue is ``lam = -i q`` with ``Im(q) >= 0`` so the
 forward propagator ``exp(-lam k0 L) = exp(+i q k0 L)`` decays.
 
-Scope (first release)
----------------------
-1-D binary grating, normal OR oblique incidence (``angle`` adds the ``+i kx0``
-Bloch shift of the pseudo-periodic envelope; the forward modes are then chosen
-by the z-Poynting flux).  NumPy / SciPy (dense generalized eig); not
-JAX-differentiable.  TM converges monotone-no-floor but only spectral-*ish* (the
-matched TM partner ``Ex = q (1/eps) Hy`` is discontinuous at the wall and a C0
-nodal value averages that jump) -- mesh grading toward the walls (multiple
-graded elements per region) recovers the corner resolution and is the speed
-lever for metal TM.
+Capability matrix (current)
+---------------------------
+The solver now spans the full 1-D family.  Two response kinds x two geometries x
+two wall orientations x two anisotropy classes x two backends:
 
-Anisotropic (Jones) path
-------------------------
-:func:`pmm_jones_1d` extends the solver to a binary grating whose ridge / groove
-are full ``(3, 3)`` IN-PLANE permittivity tensors (the tunable-LC reflective
-grating), returning the full complex ``2x2`` Jones reflection -- the
-spectral-element counterpart of :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`.
-The modal field becomes a 2-vector ``[E_x; E_y]`` per node; the off-diagonal
-``exy`` couples them.  The Li-1996 factorization is realized in the nodal basis:
-the wall-normal inverse rule ``[[1/exx]]^{-1}`` becomes ``inv(hat(1/exx))`` (the
-nodal multiply-by-``1/exx`` operator, inverted), and the ``Kx``-derivative terms
-(``Ez``-elimination and ``Kx^2``) become spectral-element STIFFNESS operators
-weighted by ``1/ezz`` / ``1`` -- so the inverse rule is AUTOMATIC and exact (the
-``eps`` jump is on an element boundary).  The coupled second-order modal operator
-mirrors the FMM tensor block ``M = -P@Q``.  Normal OR oblique incidence (the
-``kx0`` Bloch shift + a z-Poynting-flux forward selector), binary, NumPy only
-(multi-region / autodiff are follow-ons).
+* RESPONSE: scalar efficiencies (:func:`pmm_efficiency_1d`) OR full ``2x2`` Jones
+  (:func:`pmm_jones_1d`); :func:`pmm_1d` is the unified facade that auto-routes
+  by geometry, and :class:`PMMStack` is the MULTILAYER z-stack entry.
+* GEOMETRY: binary (ridge|groove) OR multi-region ``*_segments`` (N graded
+  regions on one shared nodal grid).
+* WALLS: VERTICAL OR SLANTED (``slant_angle``, ``*_slanted*``); normal OR oblique
+  incidence (``angle`` adds the ``+i kx0`` Bloch shift; forward modes chosen by
+  the z-Poynting flux).
+* ANISOTROPY: scalar/diagonal, full ``(3, 3)`` IN-PLANE tensors (``exy``/``eyx``
+  couple ``[E_x; E_y]``), AND OUT-OF-PLANE (``eps_xz/yz/zx/zy``).
+* BACKEND: NumPy/SciPy throughout; JAX-differentiable twins for the scalar and
+  in-plane vertical Jones paths (slant/OOP JAX is a follow-on).
+
+SLANT has TWO factorizations (kwarg ``factorization``), same physical answer:
+  - ``'convection'`` -- the CONVECTION METRIC GENERATOR (lab-Cartesian ``[E;H]``,
+    slant carried as ``tan * d/dx`` convection).  Fully general (handles
+    OUT-OF-PLANE and mixed-slant stacks) but the TM/p-pol channel converges only
+    ALGEBRAICALLY (~1e-4 per-order floor): the convection differentiates the
+    discontinuous wall-normal field.  NB energy conserves EXACTLY at every degree
+    even while the per-order split is still ~1e-4 off (a lossless cell
+    auto-balances total power) -- so do NOT read energy conservation as a
+    per-order accuracy proxy.
+  - ``'covariant'`` -- the genuinely-covariant Li-1999 OBLIQUE-COORDINATE
+    generator (``_cov_*``): the slanted wall becomes a coordinate surface so the
+    wall-normal discontinuity is handled algebraically and the TM channel
+    converges SPECTRALLY (vertical-grade ~1e-7), ~100-2400x fewer degrees.
+    IN-PLANE only (out-of-plane covariant is a roadmapped extension).
+  - ``'auto'`` (default) picks covariant for an in-plane slanted cell, convection
+    otherwise.
+
+The Li factorization is realized in the nodal basis: the wall-normal inverse rule
+``[[1/exx]]^{-1}`` becomes ``inv(hat(1/exx))`` (the nodal multiply-by-``1/exx``
+operator, inverted); the ``Kx``-derivative terms (``Ez``-elimination, ``Kx^2``)
+become spectral-element STIFFNESS operators weighted by ``1/ezz`` / ``1`` -- so
+the inverse rule is AUTOMATIC and exact (the ``eps`` jump is on an element
+boundary).  TM is monotone-no-floor for VERTICAL gratings (the matched partner
+``Ex = q (1/eps) Hy`` is discontinuous at the wall and a C0 nodal value averages
+that jump; mesh grading toward the walls recovers the corner resolution -- the
+speed lever for metal TM).
 """
 from __future__ import annotations
 
@@ -3687,9 +3704,15 @@ def pmm_efficiency_1d_slanted(
 
 
 # ===========================================================================
-# SLANTED + IN-PLANE-ANISOTROPIC (Jones) PMM -- the genuine Edee-Granet 2024
-# covariant-metric [E_t; H_t] first-order generator.
+# SLANTED + ANISOTROPIC (Jones) PMM -- the CONVECTION METRIC GENERATOR
+# (Edee-Granet 2024 [E_t; H_t] first-order metric generator; slant carried as
+# tan*d/dx convection).
 # ---------------------------------------------------------------------------
+# NAMING: this is the "convection" slant path (factorization='convection') -- the
+# lab-Cartesian metric generator.  It was historically called the "covariant-
+# metric" generator; that name is RETIRED here to avoid colliding with the
+# genuinely-covariant Li-1999 oblique-coordinate path (factorization='covariant',
+# the _cov_* family below), which is a DIFFERENT operator (spectral vs algebraic).
 # Slant enters ONLY through the metric-folded effective tensors eps^lm / mu^lm;
 # the eigenproblem is the TRUE first-order physical Maxwell operator
 #     -i k gamma psi = L psi,   L = A + B C^-1 D,   psi = [Ex; Ey; iZ Hx; iZ Hy]
@@ -4720,7 +4743,7 @@ def pmm_jones_1d_slanted(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """SLANTED binary grating with full ``(3, 3)`` permittivity tensors (in-plane
     OR out-of-plane) -- the anisotropic-Jones counterpart of
-    :func:`pmm_efficiency_1d_slanted`, by the Edee-Granet covariant-metric
+    :func:`pmm_efficiency_1d_slanted`, by the Edee-Granet convection-metric
     spectral-element solver.
 
     Combines the tilted side-walls of :func:`pmm_efficiency_1d_slanted` with the
@@ -4776,7 +4799,7 @@ def pmm_jones_1d_slanted(
         oblique+slant per-order is wrong).
     degree, elements_per_region, grade, far_field_orders, stabilize : as in
         :func:`pmm_jones_1d`.
-    factorization : {'convection', 'covariant', 'auto'}, optional
+    factorization : {'auto', 'convection', 'covariant'}, optional
         Slant treatment.  ``'convection'`` (default) carries the tilt as an exact
         first-order convection on the lab-Cartesian metric generator -- robust at
         all slants and tensors (in-plane OR out-of-plane), but the TM/p-pol
@@ -4826,7 +4849,7 @@ def pmm_jones_1d_slanted(
 
     METRIC GENERATOR (round 11 + round-19 div-conforming closure).  COUPLED
     tensors (``exy / eyx != 0``), diagonal tensors with ``exx != ezz``, AND ALL
-    combined oblique+slant cases use the covariant-metric ``[E;H]`` first-order
+    combined oblique+slant cases use the convection-metric ``[E;H]`` first-order
     generator (``_build_generator_metric``).  As of round 19 its ``E_z``
     elimination is DIV-CONFORMING at ALL slants (``1/ezz`` placed BETWEEN the
     discrete z-derivatives, ``+ iS0 INT(1/ezz) B' B'``, Granet 2023 Eq.16-18 /
@@ -4980,13 +5003,16 @@ def pmm_jones_1d_slanted_segments(
     stabilize: bool = True,
     factorization: str = "convection",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """SLANTED multi-region grating with full ``(3, 3)`` IN-PLANE permittivity
-    tensors -- the multi-region generalization of :func:`pmm_jones_1d_slanted`
-    and the slanted counterpart of :func:`pmm_jones_1d_segments`.
+    """SLANTED multi-region grating with full ``(3, 3)`` permittivity tensors
+    (IN-PLANE OR OUT-OF-PLANE) -- the multi-region generalization of
+    :func:`pmm_jones_1d_slanted` and the slanted counterpart of
+    :func:`pmm_jones_1d_segments`.  Out-of-plane (``eps_xz`` etc.) is supported on
+    the default ``factorization='convection'`` path; ``factorization='covariant'``
+    is in-plane only (raises on out-of-plane).
 
-    Each region carries its own (possibly anisotropic) in-plane tensor, and the
-    straight side-walls are tilted by ``slant_angle`` from the vertical.  Solved
-    by the same div-conforming covariant-metric ``[E;H]`` generator as the binary
+    Each region carries its own (possibly anisotropic) tensor, and the straight
+    side-walls are tilted by ``slant_angle`` from the vertical.  Solved by the
+    same div-conforming convection-metric ``[E;H]`` generator as the binary
     :func:`pmm_jones_1d_slanted` -- the metric generator and the lab-frame far
     field are region-count-agnostic, so the N-region cell uses the identical
     (validated) operator + half-space machinery on an N-segment nodal grid.
