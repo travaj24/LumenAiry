@@ -3129,6 +3129,11 @@ class PMMStack:
         n_proj = min(n_proj, cap)
         if n_proj % 2 == 0:
             n_proj -= 1
+        if 2 * m_prop + 1 > n_proj:               # parity with the single-layer cores
+            raise ValueError(
+                f"PMMStack.solve: degree={self.degree} too low to resolve the "
+                f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
+                f"degree or elements_per_region.")
         half = (n_proj - 1) // 2
         orders = np.arange(-half, half + 1)
         G = 2.0 * np.pi / self.period
@@ -3236,6 +3241,11 @@ class PMMStack:
         n_proj = min(n_proj, cap)
         if n_proj % 2 == 0:
             n_proj -= 1
+        if 2 * m_prop + 1 > n_proj:               # parity with the single-layer cores
+            raise ValueError(
+                f"PMMStack.solve (covariant): degree={self.degree} too low to "
+                f"resolve the {2 * m_prop + 1} propagating orders "
+                f"(n_glob={n_glob}); raise degree or elements_per_region.")
         half = (n_proj - 1) // 2
         orders = np.arange(-half, half + 1)
         N = len(orders)
@@ -3885,14 +3895,6 @@ def _coeff_mass_metric(mats, fn):
     return M
 
 
-def _build_inv_rule_metric(mats, inv_fn, iS0):
-    """Li inverse-rule operator ``[[coeff]]^-1`` where ``inv_fn(t_dict) =
-    1/coeff`` (the reciprocal, element-piecewise constant): assemble the direct
-    mass of ``1/coeff``, apply ``iS0``, invert."""
-    M = _coeff_mass_metric(mats, inv_fn)
-    return _safe_inv(iS0 @ M)
-
-
 def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     r"""Assemble the ``4n x 4n`` physical first-order Maxwell generator ``L`` for
     the state ``psi = [Ex; Ey; iZ Hx; iZ Hy]``.  Slant enters ONLY through the
@@ -3941,8 +3943,8 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     # the existing forward/backward selector).  So the eps^lm / mu^lm operators
     # below are built at slant=0 and the slant enters ONLY via the convection.
     tan_conv = np.tan(slant_angle)           # the slant, carried as convection
-    tan = 0.0                                # material / mu operators at slant=0
-    sec2 = 1.0
+    # (material / mu operators are built at slant=0; the slant enters ONLY via the
+    # tan_conv*Dopx convection added at the end -- NOT the archived ezz*tan^2 fold.)
 
     # ---- nodal derivative d1 (= D1) ----------------------------------------
     Dop = _safe_solve(S0, mats["C"])         # S0^-1 INT phi phi'
@@ -3976,19 +3978,15 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         Oeyy = iS0 @ mass["eyy"]                 # [[eyy]]
         Oexy = iS0 @ mass["exy"]                 # [[exy]]
         Oeyx = iS0 @ mass["eyx"]                 # [[eyx]]
-        # WALL-NORMAL inverse rule: [[1/exx]]^-1 (the discontinuous normal-D mult)
+        # WALL-NORMAL inverse rule: [[1/exx]]^-1 (the discontinuous normal-D mult).
+        # Slant enters as CONVECTION (tan_conv*Dopx, end of function), NOT a metric
+        # fold, so the wall-normal / cross blocks are built at slant=0.  (The old
+        # ezz*tan^2 fold that lived here is archived -- see _ARCHIVE_SLANT_FOLD.)
         Oinv_exx = iS0 @ mass["inv_exx"]         # [[1/exx]]
         Exx_norm = _safe_inv(Oinv_exx)           # [[1/exx]]^-1  (Li inverse rule)
-        if abs(tan) < 1e-14:
-            Oeps11 = Exx_norm                                 # = [[1/exx]]^-1
-            Oeps13 = Z.copy()
-            Oeps31 = Z.copy()
-        else:
-            Oeps11 = _build_inv_rule_metric(
-                mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)
-            Oeps13 = (iS0 @ _coeff_mass_metric(
-                mats, lambda t_: -t_["ezz"] * tan))           # -ezz*tan
-            Oeps31 = Oeps13.copy()
+        Oeps11 = Exx_norm                                     # = [[1/exx]]^-1
+        Oeps13 = Z.copy()
+        Oeps31 = Z.copy()
         Oeps22 = Oeyy
         Oeps12 = Oexy
         Oeps21 = Oeyx
@@ -4003,7 +4001,7 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         def _ceff(t_): return t_["eyx"] - t_["eyz"] * t_["ezx"] / t_["ezz"]
         def _deff(t_): return t_["eyy"] - t_["eyz"] * t_["ezy"] / t_["ezz"]
         Oeps11 = _safe_inv(iS0 @ _coeff_mass_metric(
-            mats, lambda t_: 1.0 / (_aeff(t_) + t_["ezz"] * tan * tan)))
+            mats, lambda t_: 1.0 / _aeff(t_)))   # slant via convection, not fold
         T_b_a = iS0 @ _coeff_mass_metric(mats, lambda t_: _beff(t_) / _aeff(t_))
         T_c_a = iS0 @ _coeff_mass_metric(mats, lambda t_: _ceff(t_) / _aeff(t_))
         T_sch = iS0 @ _coeff_mass_metric(
@@ -4011,19 +4009,13 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
         Oeps12 = Oeps11 @ T_b_a
         Oeps21 = T_c_a @ Oeps11
         Oeps22 = T_sch + T_c_a @ Oeps11 @ T_b_a
-        if abs(tan) < 1e-14:
-            Oeps13 = Z.copy()
-            Oeps31 = Z.copy()
-        else:
-            # slant cross terms ride the SAME (1,3)/(3,1) block; raw ezz (the
-            # slant is a metric fold, not a material coupling).
-            Oeps13 = (iS0 @ _coeff_mass_metric(
-                mats, lambda t_: -t_["ezz"] * tan))
-            Oeps31 = Oeps13.copy()
-    # mu (smooth, scalar metric -> all direct, = metric constants * I):
-    Mu11 = sec2 * I
-    Mu13 = -tan * I
-    Mu31 = -tan * I
+        Oeps13 = Z.copy()                        # slant via convection, not fold
+        Oeps31 = Z.copy()
+    # mu (smooth metric, slant via convection -> identity; the ezz*tan^2 / -tan
+    # metric fold that scaled these is archived as _ARCHIVE_SLANT_FOLD):
+    Mu11 = I
+    Mu13 = Z
+    Mu31 = Z
     Mu33 = I
     Mu22 = I
     Mu23 = Z
@@ -5332,3 +5324,61 @@ def classify_from_grating(eps_superstrate, eps_ridge, eps_groove,
     ``(sup, sub)`` and ``(ridge, groove)`` (Li & Granet Fig. 1)."""
     return grating_convergence_class(
         (eps_superstrate, eps_ridge, eps_substrate, eps_groove))
+
+
+# ===========================================================================
+# ARCHIVE -- superseded methods, preserved with the WHY (NOT executed)
+# ===========================================================================
+# The PMM 1-D solver grew through many incremental rounds.  Retired approaches
+# are kept here as raw strings (parsed, never run or linted) so the institutional
+# record -- what was tried and WHY it was superseded -- survives in the code, not
+# only in volatile notes.
+
+_ARCHIVE_SLANT_FOLD = r'''
+SUPERSEDED: the ezz*tan^2 STATIC METRIC FOLD for the slant (round 11; replaced by
+the exact tan_conv*Dopx CONVECTION in _build_generator_metric, 2026-06-07).
+
+WHAT IT COMPUTED -- the Edee-Granet 2024 contravariant metric fold for a slant
+phi, formerly in _build_generator_metric behind `if abs(tan) < 1e-14: ... else:`
+arms (tan was later hard-set to 0, making the else-arms dead; this is them):
+
+    # in-plane wall-normal + cross blocks (the dead else-arm):
+    Oeps11 = _build_inv_rule_metric(
+        mats, lambda t_: 1.0 / (t_["exx"] + t_["ezz"] * tan * tan), iS0)  # eps^11 = exx + ezz tan^2
+    Oeps13 = iS0 @ _coeff_mass_metric(mats, lambda t_: -t_["ezz"] * tan)  # eps^13 = eps^31 = -ezz tan
+    Oeps31 = Oeps13.copy()
+    # OOP cross-terms (the dead else-arm); raw ezz (slant is a metric fold here):
+    Oeps13 = iS0 @ _coeff_mass_metric(mats, lambda t_: -t_["ezz"] * tan)
+    Oeps31 = Oeps13.copy()
+    # mu fold:
+    Mu11 = sec2 * I          # mu^11 = sec^2 (sec2 = 1/cos(phi)^2)
+    Mu13 = -tan * I          # mu^13 = mu^31 = -tan
+    Mu31 = -tan * I
+
+    # the now-retired helper the fold used:
+    def _build_inv_rule_metric(mats, inv_fn, iS0):
+        """Li inverse-rule operator [[coeff]]^-1: direct mass of 1/coeff, iS0, invert."""
+        M = _coeff_mass_metric(mats, inv_fn)
+        return _safe_inv(iS0 @ M)
+
+WHY IT WAS TRIED: the original (round-11) slant realization.  The contravariant
+fold sqrt(g) J^-1 eps J^-T with J = [[1,0,tan],[0,1,0],[0,0,1]] gives
+eps^11 = exx + ezz tan^2, eps^13 = eps^31 = -ezz tan, mu^11 = sec^2,
+mu^13 = mu^31 = -tan.
+
+LOAD-BEARING SIGN DETAIL (do not lose if revisiting): eps^13 and mu^13 must SHARE
+the sign of tan -- this is the J^-1 eps J^-T CONTRAVARIANT fold, NOT J eps J^T --
+so TE and TM diffract to the SAME side.  The wrong (J eps J^T) fold flips eps^13's
+sign so TE and TM convect opposite ways (TE matches the reference at one slant
+sign, TM at the other) = unphysical opposite-side diffraction.
+
+WHY SUPERSEDED: the fold caps per-order TM accuracy at ~1e-2 for strongly-coupled
+/ steep-slant cells.  The ezz-Schur cancels the slant in the longitudinal then
+re-injects it as the STATIC wall-normal ezz*tan^2, whose factorization order is
+wrong for the DISCONTINUOUS wall-normal -> per-order TM floors at ~1e-2 (vs the
+convection treatment's ~1e-4).  The fix (2026-06-07) carries the slant as the
+EXACT first-order convection tan*d/dx (tan_conv*Dopx) added to the CLEAN slant=0
+generator, reaching the ~1e-4 wall-normal floor uniformly.  (The genuinely-
+covariant Li-1999 oblique-coordinate path, factorization='covariant', reaches the
+spectral ~1e-7 floor by making the wall a coordinate surface.)
+'''
