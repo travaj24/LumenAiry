@@ -16,7 +16,12 @@ Validated in these tests:
 import numpy as np
 import pytest
 
-from lumenairy.elements.pmm import pmm_jones_1d_slanted, pmm_jones_1d
+from lumenairy.elements.pmm import (
+    pmm_jones_1d,
+    pmm_jones_1d_segments,
+    pmm_jones_1d_slanted,
+    pmm_jones_1d_slanted_segments,
+)
 
 _GEOM = dict(period=1e-6, n_substrate=1.5, n_superstrate=1.0, depth=0.5e-6,
              duty_cycle=0.5, wavelength=0.633e-6)
@@ -141,3 +146,67 @@ def test_invalid_factorization_raises():
     er, eg = _diag(4.0, 2.25, 2.0), _diag(2.0, 2.0, 2.0)
     with pytest.raises(ValueError, match="factorization"):
         _slant(er, eg, np.deg2rad(30.0), 16, "bogus")
+
+
+# ---------------------------------------------------------------------------
+# SEGMENTS (multi-region) covariant path
+# ---------------------------------------------------------------------------
+_SEG3 = [(0.3, _diag(4.0, 2.25, 2.0)), (0.3, _coupled(3.0, 2.5, 2.2, 0.3)),
+         (0.4, _diag(2.0, 2.0, 2.0))]
+
+
+def _seg(segments, slant, deg, fac, ang=0.0):
+    return pmm_jones_1d_slanted_segments(
+        _GEOM["period"], segments, _GEOM["n_substrate"], _GEOM["n_superstrate"],
+        _GEOM["depth"], _GEOM["wavelength"], slant, angle=ang, degree=deg,
+        stabilize=False, factorization=fac)
+
+
+def test_covariant_segments_slant0_reduces_to_jones_1d_segments():
+    """3-region covariant at slant=0 == pmm_jones_1d_segments (the pre-reverse
+    fix cancels the internal _segment_elem_bnds [::-1] mirror)."""
+    o, R, T, J = _seg(_SEG3, 0.0, 26, "covariant")
+    oR, ReR, TeR, JR = pmm_jones_1d_segments(
+        _GEOM["period"], _SEG3, _GEOM["n_substrate"], _GEOM["n_superstrate"],
+        _GEOM["depth"], _GEOM["wavelength"], degree=26)
+    for ch in (0, 1):
+        assert _perorder(o, R, ch, oR, ReR) < 1e-5
+    assert np.max(np.abs(J - JR)) < 1e-5
+
+
+def test_covariant_segments_2seg_equals_binary():
+    """2 equal segments via the covariant segments path == the binary covariant
+    path, bit-for-bit (the multi-region assembly is exact)."""
+    er, eg = _diag(4.0, 2.25, 2.0), _diag(2.0, 2.0, 2.0)
+    o_s, R_s, T_s, J_s = _seg([(0.5, er), (0.5, eg)], np.deg2rad(30.0), 22,
+                              "covariant")
+    o_b, R_b, T_b, J_b = _slant(er, eg, np.deg2rad(30.0), 22, "covariant")
+    assert np.array_equal(R_s, R_b)
+    assert np.array_equal(T_s, T_b)
+    assert np.array_equal(J_s, J_b)
+
+
+@pytest.mark.parametrize("slant_deg,ang_deg", [(30.0, 0.0), (45.0, 12.0)])
+def test_covariant_segments_matches_convection(slant_deg, ang_deg):
+    o_v, R_v, T_v, _ = _seg(_SEG3, np.deg2rad(slant_deg), 30, "covariant",
+                            ang=np.deg2rad(ang_deg))
+    o_c, R_c, T_c, _ = _seg(_SEG3, np.deg2rad(slant_deg), 42, "convection",
+                            ang=np.deg2rad(ang_deg))
+    for ch in (0, 1):
+        assert _perorder(o_v, R_v, ch, o_c, R_c) < 5e-4
+    for ch in (0, 1):
+        assert abs(np.sum(R_v[ch]) + np.sum(T_v[ch]) - 1.0) < 1e-4
+
+
+def test_covariant_segments_rejects_out_of_plane():
+    seg = list(_SEG3)
+    oop = _diag(3.0, 2.5, 2.2)
+    oop[0, 2] = oop[2, 0] = 0.3
+    seg[1] = (0.3, oop)
+    with pytest.raises(NotImplementedError, match="OUT-OF-PLANE"):
+        _seg(seg, np.deg2rad(30.0), 16, "covariant")
+
+
+def test_covariant_segments_invalid_factorization_raises():
+    with pytest.raises(ValueError, match="factorization"):
+        _seg(_SEG3, np.deg2rad(30.0), 16, "bogus")

@@ -4397,6 +4397,47 @@ def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
     return orders, R, T, np.conj(jones), ng        # internal -> public exp(-iωt)
 
 
+def _pmm_jones_oblique_segments_solve(period, widths, seg_tensors3, n_sub, n_sup,
+                                      depth, wl, slant_angle, degree,
+                                      n_el_per_region, grade, far_field_orders,
+                                      angle=0.0):
+    """N-region covariant oblique-coordinate slanted-Jones solve -- the multi-
+    region generalization of :func:`_pmm_jones_oblique_solve`.  The covariant
+    generator + far field are region-count-agnostic; only the nodal grid differs
+    (the segment element table, and the homogeneous half-spaces on the SAME
+    segment grid).  IN-PLANE tensors only."""
+    # `_segment_elem_bnds` lays the regions out REVERSED in x ([::-1]); the
+    # convection core un-mirrors via the lib half-space/far-field handedness, but
+    # the covariant far-field does not -- so PRE-REVERSE widths + tensors here so
+    # the internal [::-1] cancels and the covariant solves the FORWARD layout
+    # (region 0 at x=0), reporting orders in the user's input frame.  (At slant=0
+    # the mirror is an order swap m<->-m; at slant!=0 it also flips φ -> -φ.)
+    widths = list(widths)[::-1]
+    seg_tensors3 = list(seg_tensors3)[::-1]
+    er_seg = [np.conj(np.asarray(t, dtype=_C)) for t in seg_tensors3]  # -> internal
+    eps_sup = np.conj(_C(n_sup) ** 2)
+    eps_sub = np.conj(_C(n_sub) ** 2)
+    k0 = 2.0 * np.pi / wl
+    kx0 = float(np.real(np.conj(_C(n_sup)))) * np.sin(float(angle)) * k0
+    nseg = len(widths)
+    seg_t = [_t3_slant(t) for t in er_seg]
+    mats = _build_nodal_metric_segments(period, widths, seg_t, degree,
+                                        n_el_per_region, grade)
+    ts = _t3_slant(np.diag([eps_sup, eps_sup, eps_sup]).astype(_C))
+    tb = _t3_slant(np.diag([eps_sub, eps_sub, eps_sub]).astype(_C))
+    mats_s = _build_nodal_metric_segments(period, widths, [ts] * nseg, degree,
+                                          n_el_per_region, grade)
+    mats_b = _build_nodal_metric_segments(period, widths, [tb] * nseg, degree,
+                                          n_el_per_region, grade)
+    n_max = max([np.real(n_sup), np.real(n_sub)]
+                + [np.real(np.sqrt(t[0, 0])) for t in er_seg]
+                + [np.real(np.sqrt(t[1, 1])) for t in er_seg])
+    orders, R, T, jones, ng = _pmm_jones_oblique_core(
+        mats, mats_s, mats_b, eps_sup, eps_sub, n_max, period, depth, wl,
+        slant_angle, kx0, far_field_orders, "pmm_jones_1d_slanted_segments")
+    return orders, R, T, np.conj(jones), ng        # internal -> public exp(-iωt)
+
+
 def _pmm_jones_slant_segments_solve(period, widths, seg_tensors3, n_sub, n_sup,
                                     depth, wl, slant_angle, degree,
                                     n_el_per_region, grade, far_field_orders,
@@ -4781,6 +4822,7 @@ def pmm_jones_1d_slanted_segments(
     grade: bool = True,
     far_field_orders: int = 21,
     stabilize: bool = True,
+    factorization: str = "convection",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """SLANTED multi-region grating with full ``(3, 3)`` IN-PLANE permittivity
     tensors -- the multi-region generalization of :func:`pmm_jones_1d_slanted`
@@ -4807,8 +4849,11 @@ def pmm_jones_1d_slanted_segments(
     slant_angle : float
         Side-wall tilt from the vertical (radians); ``0`` reduces to
         :func:`pmm_jones_1d_segments`.  Validated ``0 <= slant_angle <= ~60 deg``.
-    angle, degree, elements_per_region, grade, far_field_orders, stabilize : as
-        in :func:`pmm_jones_1d_slanted`.
+    angle, degree, elements_per_region, grade, far_field_orders, stabilize,
+    factorization : as in :func:`pmm_jones_1d_slanted`.  ``factorization=
+        'covariant'`` gives SPECTRAL TM convergence for the multi-region cell too
+        (in-plane tensors only); it pre-reverses the region order so the covariant
+        far field lands in the user's input frame.
 
     Returns
     -------
@@ -4838,6 +4883,33 @@ def pmm_jones_1d_slanted_segments(
                 "pmm_jones_1d_slanted_segments: each segment eps must be a "
                 "scalar or a (3, 3) permittivity tensor.")
         tensors.append(M)
+    # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
+    # Multi-region generalization of the binary covariant path; spectral TM
+    # convergence vs the convection default's algebraic floor (same answer).
+    # In-plane only (out-of-plane covariant is a further extension).
+    if factorization not in ("convection", "covariant"):
+        raise ValueError(
+            "pmm_jones_1d_slanted_segments: factorization must be 'convection' "
+            f"or 'covariant', got {factorization!r}.")
+    if factorization == "covariant":
+        off = max((float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
+                   for M in tensors), default=0.0)
+        scale = max((float(np.max(np.abs(M))) for M in tensors), default=1.0)
+        if off > 1e-9 * scale:
+            raise NotImplementedError(
+                "pmm_jones_1d_slanted_segments: factorization='covariant' does "
+                "not yet support OUT-OF-PLANE tensors; use 'convection'.")
+        ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
+              wavelength, float(slant_angle))
+        ckw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
+                   far_field_orders=int(far_field_orders), angle=float(angle))
+        if not stabilize:
+            o, R, T, J, _ = _pmm_jones_oblique_segments_solve(
+                *ca, degree=int(degree), **ckw)
+            return o, R, T, J
+        return _stabilize_jones(
+            lambda d: _pmm_jones_oblique_segments_solve(*ca, degree=d, **ckw)[:4],
+            int(degree), "pmm_jones_1d_slanted_segments")
     # OUT-OF-PLANE (eps_xz/yz/zx/zy != 0): SUPPORTED (2026-06-07).  Multi-region
     # out-of-plane + slant rides the SAME exact-convection slant treatment as the
     # binary path (see _build_generator_metric), so it reaches the ~1e-4 wall-
