@@ -830,6 +830,60 @@ def test_jones_slant_out_of_plane_slant0_reduces_to_vertical():
     assert np.max(np.abs(T - TV)) == 0.0
 
 
+# ===================================================================
+# OUT-OF-PLANE wall-normal x longitudinal (eps_xz / eps_zx) coupling is carried
+# EXACTLY by the CONVECTION generator.  The genuinely-covariant Chandezon 4n
+# layout (factorization='covariant') is STRUCTURALLY unable to converge this
+# channel -- a 6-avenue Li-1999/Li-1996-grounded study (2026-06-08) floored every
+# variant at ~5e-2 (an energy-conserving +/-1-order split error: the lossless
+# trap).  eyz/ezy (longitudinal x invariant) converges fine; only exz/ezx (the
+# DISCONTINUOUS wall-normal) is the wall.  These gates pin the convection path's
+# byte-exact slant=0 match vs the full-3x3 pmm_jones_1d oracle for the exact cells
+# that study used, INCLUDING a lossy and an asymmetric (non-reciprocal) cell whose
+# E0 != 1 -- so a wrong per-order split could not auto-balance (the trap guard).
+# ===================================================================
+def _oop_exz_cell(exz=0.3, ezx=None, loss=False):
+    """A wall-normal-only out-of-plane cell (eyz = ezy = 0, so the FAILING
+    exz/ezx channel is isolated).  ``loss`` adds Im on exx, ezz; ``ezx != exz``
+    makes it non-reciprocal."""
+    ezx = exz if ezx is None else ezx
+    exx = 2.25 + (0.2j if loss else 0.0)
+    ezz = 2.40 + (0.1j if loss else 0.0)
+    return np.array([[exx, 0.0, exz], [0.0, 2.10, 0.0], [ezx, 0.0, ezz]],
+                    dtype=np.complex128)
+
+
+@pytest.mark.parametrize("name,cell,tol", [
+    ("exz", _oop_exz_cell(0.3), 1e-10),                 # lossless symmetric
+    ("lossy_exz", _oop_exz_cell(0.3, loss=True), 1e-10),  # absorbing (E0 != 1)
+    ("asym_exz", _oop_exz_cell(0.3, ezx=0.5), 2e-3),   # non-reciprocal (E0 != 1)
+])
+def test_oop_convection_exz_slant0_matches_pmm_jones(name, cell, tol):
+    """The convection generator carries the wall-normal x longitudinal (exz/ezx)
+    out-of-plane coupling at slant=0 reproducing the full-3x3 pmm_jones_1d oracle
+    per-order: byte-exact for the symmetric (lossless + lossy) cells, ~2e-5 for
+    the asymmetric non-reciprocal cell.  This is the channel the covariant 4n
+    layout CANNOT converge (it floors at ~5e-2); convection is the validated
+    route.  For the lossy / asym cells E0 != 1, so a wrong per-order split could
+    NOT auto-balance -- yet dT is still ~0 (the lossless-trap guard)."""
+    eg = _eps_diag(1.0)
+    oR, RR, TR, _ = pmm_jones_1d(
+        period=1.0e-6, eps_ridge=cell, eps_groove=eg, n_substrate=1.5,
+        n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6,
+        degree=28, stabilize=False)
+    o, R, T, _ = pmm_jones_1d_slanted(
+        eps_ridge=cell, eps_groove=eg, slant_angle=0.0, degree=28,
+        stabilize=False, factorization="convection", **_JGEOM_ASYM)
+    assert np.array_equal(o, oR)
+    dT = max(np.max(np.abs(T[ch] - TR[ch])) for ch in (0, 1))
+    dR = max(np.max(np.abs(R[ch] - RR[ch])) for ch in (0, 1))
+    assert dT < tol and dR < tol
+    e0_conv, e0_oracle = _sum_RT(R[0], T[0]), _sum_RT(RR[0], TR[0])
+    assert abs(e0_conv - e0_oracle) < max(tol, 1e-6)
+    if name != "exz":
+        assert abs(e0_oracle - 1.0) > 1e-3      # energy != 1 -> no auto-balance
+
+
 def test_jones_slant_out_of_plane_reduces_to_inplane_as_off_vanishes():
     """As the off-plane coupling -> 0 the out-of-plane slanted solve converges to
     the in-plane slanted solve (the off-plane terms are continuous in their

@@ -94,7 +94,12 @@ SLANT has TWO factorizations (kwarg ``factorization``), same physical answer:
     generator (``_cov_*``): the slanted wall becomes a coordinate surface so the
     wall-normal discontinuity is handled algebraically and the TM channel
     converges SPECTRALLY (vertical-grade ~1e-7), ~100-2400x fewer degrees.
-    IN-PLANE only (out-of-plane covariant is a roadmapped extension).
+    IN-PLANE only: the covariant Chandezon 4n layout is STRUCTURALLY unable to
+    converge the wall-normal x longitudinal (out-of-plane ``eps_xz``/``ezx``)
+    coupling -- a 6-avenue Li-1999/Li-1996-grounded study floored every variant
+    at ~5e-2.  Out-of-plane is carried EXACTLY by the convection generator
+    instead (``'auto'`` routes such cells there), so this is not a gap but a
+    property of the spectral layout.
   - ``'auto'`` (default) picks covariant for an in-plane slanted cell, convection
     otherwise.
 
@@ -3114,8 +3119,9 @@ class PMMStack:
         # ---- factorization dispatch: covariant (SPECTRAL slant) vs convection --
         # 'auto' uses the covariant oblique-coordinate generator (spectral TM) for
         # an IN-PLANE stack that has any slanted layer, and the convection metric
-        # generator otherwise (all-vertical, or any out-of-plane layer which the
-        # covariant path does not yet handle).  'covariant' forces it (raises on
+        # generator otherwise (all-vertical, or any out-of-plane layer, which the
+        # covariant 4n layout is structurally unable to converge -- carried
+        # exactly by convection instead).  'covariant' forces it (raises on
         # out-of-plane); 'convection' forces the algebraic-but-fully-general path.
         _oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
         _slants = [abs(L[2]) for L in self._layers]
@@ -3133,9 +3139,11 @@ class PMMStack:
         if _fac == "covariant":
             if _oop:
                 raise NotImplementedError(
-                    "PMMStack: factorization='covariant' does not support "
-                    "OUT-OF-PLANE layers (eps_xz/yz/zx/zy); use 'convection' or "
-                    "'auto'.")
+                    "PMMStack: factorization='covariant' cannot represent "
+                    "OUT-OF-PLANE layers (eps_xz/yz/zx/zy): the covariant "
+                    "Chandezon 4n layout is structurally unable to converge the "
+                    "wall-normal x longitudinal coupling.  Use 'convection' or "
+                    "'auto', which carry out-of-plane exactly.")
             if not _uniform_slant:
                 raise NotImplementedError(
                     "PMMStack: factorization='covariant' requires a UNIFORM "
@@ -4521,7 +4529,8 @@ def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
     ``factorization='covariant'``).  Same signature/returns as
     :func:`_pmm_jones_slant_solve`; converges spectrally where the convection
     path converges algebraically (same physical answer).  IN-PLANE tensors only
-    (out-of-plane is a further extension)."""
+    (out-of-plane is structurally outside the covariant 4n layout -- carried by
+    the convection generator instead)."""
     er = np.conj(np.asarray(eps_ridge3, dtype=_C))        # exp(-iωt) -> internal
     eg = np.conj(np.asarray(eps_groove3, dtype=_C))
     eps_sup = np.conj(_C(n_sup) ** 2)
@@ -4793,10 +4802,13 @@ def pmm_jones_1d_slanted(
         ~1e-7 by degree ~24) -- the SAME physical answer as ``'convection'`` but
         ~100-2400x fewer degrees for matched accuracy.  ``'covariant'`` handles
         diagonal AND coupled (``exy``/``eyx``) IN-PLANE tensors, normal + oblique,
-        lossless + lossy; OUT-OF-PLANE (``eps_xz`` etc.) is not yet supported on
-        the covariant path (raises ``NotImplementedError``), so ``'auto'`` keeps
-        such cells on ``'convection'``.  Pass ``'convection'`` explicitly to force
-        the fully-general algebraic path (e.g. for byte-stable cross-checks).
+        lossless + lossy; OUT-OF-PLANE (``eps_xz`` etc.) is STRUCTURALLY outside
+        the covariant path (the Chandezon 4n layout cannot converge the wall-
+        normal x longitudinal coupling -- it raises ``NotImplementedError``), so
+        ``'auto'`` keeps such cells on ``'convection'``, which carries out-of-
+        plane EXACTLY (byte-identical to :func:`pmm_jones_1d` at normal
+        incidence).  Pass ``'convection'`` explicitly to force the fully-general
+        algebraic path (e.g. for byte-stable cross-checks).
 
     Returns
     -------
@@ -4893,9 +4905,15 @@ def pmm_jones_1d_slanted(
     if factorization == "covariant":
         if off > 1e-9 * scale:
             raise NotImplementedError(
-                "pmm_jones_1d_slanted: factorization='covariant' does not yet "
-                "support OUT-OF-PLANE tensors (eps_xz/eps_yz/eps_zx/eps_zy != 0);"
-                " use factorization='convection'.")
+                "pmm_jones_1d_slanted: factorization='covariant' cannot "
+                "represent OUT-OF-PLANE tensors (eps_xz/eps_yz/eps_zx/eps_zy != "
+                "0).  The covariant Chandezon 4n layout is STRUCTURALLY unable to "
+                "converge the wall-normal x longitudinal (exz/ezx) coupling -- a "
+                "6-avenue Li-1999/Li-1996-grounded study floored every variant at "
+                "~5e-2 (an energy-conserving +/-1-order split error, the lossless "
+                "trap).  Use factorization='convection' (or 'auto'), which carry "
+                "out-of-plane EXACTLY (byte-identical to pmm_jones_1d at normal "
+                "incidence; ~1e-3 vs an RCWA staircase at slant).")
         cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
         ckw = dict(n_ridge_el=int(elements_per_region),
@@ -5053,7 +5071,8 @@ def pmm_jones_1d_slanted_segments(
     # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
     # Multi-region generalization of the binary covariant path; spectral TM
     # convergence vs the convection path's algebraic floor (same answer).
-    # In-plane only (out-of-plane covariant is a further extension).
+    # In-plane only (out-of-plane is structurally outside the covariant 4n
+    # layout; the convection path carries it exactly -- see the guard below).
     if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(
             "pmm_jones_1d_slanted_segments: factorization must be 'auto', "
@@ -5070,8 +5089,11 @@ def pmm_jones_1d_slanted_segments(
         scale = _scale
         if off > 1e-9 * scale:
             raise NotImplementedError(
-                "pmm_jones_1d_slanted_segments: factorization='covariant' does "
-                "not yet support OUT-OF-PLANE tensors; use 'convection'.")
+                "pmm_jones_1d_slanted_segments: factorization='covariant' cannot "
+                "represent OUT-OF-PLANE tensors -- the covariant Chandezon 4n "
+                "layout is structurally unable to converge the wall-normal x "
+                "longitudinal coupling.  Use 'convection' or 'auto', which carry "
+                "out-of-plane exactly.")
         ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
               wavelength, float(slant_angle))
         ckw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
