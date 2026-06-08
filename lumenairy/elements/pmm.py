@@ -524,6 +524,87 @@ def _kz_forward(eps, kx):
     return np.where(val.imag < 0.0, -val, val)
 
 
+def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
+                             kz_sup, kz_sub, kz_inc, kx0n, N):
+    """Rayleigh far-field bookkeeping for a 2x2 Jones grating solve.
+
+    Given the Rayleigh-projection operators ``Hsup``/``Hsub`` (each a
+    ``(2N, modes)`` operator stacking the x-orders over the y-orders), the solved
+    interface S-matrix blocks ``S11``/``S21``, and the per-order ``kx``/``kz`` in
+    the two homogeneous half-spaces, drive the cell with a unit order-0 ``Ex``
+    (col 0) then ``Ey`` (col 1) and return ``(R_eff, T_eff, jones)``:
+
+    * ``R_eff``/``T_eff`` -- ``(2, N)`` real diffraction efficiencies, one row per
+      incident polarization, flux-normalized.  The longitudinal ``Ez`` from
+      ``div D = 0`` in the isotropic half-space (``rz = -kx rx / kz``) carries the
+      wall-normal (Ex / TM-like) z-flux -- the term that makes the TM channel
+      conserve energy.  The col-0 (Ex, p-pol) incident wave itself carries
+      ``Ez_inc = -kx0 Ex / kz_inc``, so its incident z-flux is
+      ``kz_inc (1 + (kx0/kz_inc)^2)``; col-1 (Ey, s-pol) has ``Ez_inc = 0``.  At
+      ``kx0 = 0`` both reduce to ``kz_inc`` (byte-identical to a normal solve).
+    * ``jones`` -- the ``(2, 2)`` order-0 reflection Jones in the PUBLIC
+      ``exp(-i w t)`` convention (no conjugation here; covariant callers conj the
+      returned matrix to bridge their internal ``exp(+i w t)`` gauge).
+
+    Extracted verbatim from the five identical NumPy Jones far-field loops
+    (vertical core, convection slant, PMMStack general + covariant cascades, and
+    the covariant single-layer core) so the flux bookkeeping lives in one place.
+    ``kx0n = kx0 / k0`` is the (dimensionless) Bloch shift; callers compute
+    ``kz_sup``/``kz_sub``/``kz_inc`` however their gauge requires and pass them in.
+    """
+    safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
+    safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+    m0 = np.where(orders == 0)[0][0]
+    jones = np.zeros((2, 2), dtype=_C)
+    R_eff = np.zeros((2, N))
+    T_eff = np.zeros((2, N))
+    for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
+        rhs = np.zeros(2 * N, dtype=_C)
+        rhs[(col * N) + m0] = 1.0               # order-0 unit Ex (col 0) / Ey (col 1)
+        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        r_ord = Hsup @ (S11 @ cinc)
+        t_ord = Hsub @ (S21 @ cinc)
+        rx, ry = r_ord[:N], r_ord[N:]
+        tx, ty = t_ord[:N], t_ord[N:]
+        rz = -(kx * rx) / safe_r
+        tz = -(kx * tx) / safe_t
+        flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0 else kz_inc
+        Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                + np.abs(rz) ** 2) / flux_inc
+        Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                + np.abs(tz) ** 2) / flux_inc
+        R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
+        T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
+        jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
+        jones[1, col] = ry[m0]
+    return R_eff, T_eff, jones
+
+
+def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
+                        polarization):
+    """TE/TM diffraction efficiencies from the order-resolved reflection /
+    transmission amplitudes of a scalar PMM solve.
+
+    The TE channel normalizes by ``kz`` (the standard plane-wave z-flux); the TM
+    channel normalizes by the wall-normal flux ``kz/eps`` (the inverse-rule
+    channel), with the incident flux ``kz_inc/eps_sup``.  Orders below cut-off
+    (``Re(kz) <= 0``) carry zero efficiency.  Shared verbatim by the vertical
+    scalar core and the scalar slant solver."""
+    kz_sup = _kz_forward(eps_sup, kx)
+    kz_sub = _kz_forward(eps_sub, kx)
+    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+    if polarization == "te":
+        R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
+        T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
+    else:
+        flux_inc = np.real(kz_inc / eps_sup)
+        R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
+        T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
+    R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
+    T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
+    return R, T
+
+
 # ===========================================================================
 # Core single-polarization PMM solve
 # ===========================================================================
@@ -615,17 +696,8 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     r_ord = Hsup @ (S11 @ cinc)
     t_ord = Hsub @ (S21 @ cinc)
 
-    kz_sup, kz_sub = _kz_forward(eps_sup, kx), _kz_forward(eps_sub, kx)
-    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
-    if polarization == "te":
-        R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
-        T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
-    else:
-        flux_inc = np.real(kz_inc / eps_sup)
-        R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
-        T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
-    R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
-    T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
+    R, T = _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
+                               polarization)
     return orders, R, T, n_glob
 
 
@@ -909,39 +981,8 @@ def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     kz_sub = _kz_forward(eps_sub, kx)
     kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
     kx0n = kx0 / k0
-    safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
-    safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-
-    m0 = np.where(orders == 0)[0][0]
-    jones = np.zeros((2, 2), dtype=_C)
-    R_eff = np.zeros((2, N))
-    T_eff = np.zeros((2, N))
-    for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
-        rhs = np.zeros(2 * N, dtype=_C)
-        rhs[(col * N) + m0] = 1.0               # order-0 unit Ex (col 0) / Ey (col 1)
-        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
-        r_ord = Hsup @ (S11 @ cinc)
-        t_ord = Hsub @ (S21 @ cinc)
-        rx, ry = r_ord[:N], r_ord[N:]
-        tx, ty = t_ord[:N], t_ord[N:]
-        # longitudinal Ez from div D = 0 in the isotropic half-space (rz =
-        # -kx rx / kz); it carries z-flux for the wall-normal (Ex / TM-like)
-        # component -- the term that makes the TM channel conserve energy.
-        rz = -(kx * rx) / safe_r
-        tz = -(kx * tx) / safe_t
-        # per-COLUMN incident flux: the col-0 wave (incident Ex=1, p-pol) ALSO
-        # carries Ez_inc = -kx0 Ex/kz_inc, so its z-flux is kz_inc(1+(kx0/kz_inc)
-        # ^2), NOT kz_inc; col-1 (Ey, s-pol) has Ez_inc=0.  At kx0=0 both reduce
-        # to kz_inc -> bit-identical to the normal-incidence solve.
-        flux_inc = kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0 else kz_inc
-        Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                + np.abs(rz) ** 2) / flux_inc
-        Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                + np.abs(tz) ** 2) / flux_inc
-        R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
-        T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
-        jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
-        jones[1, col] = ry[m0]
+    R_eff, T_eff, jones = _assemble_jones_farfield(
+        Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N)
     return orders, R_eff, T_eff, jones, n_glob
 
 
@@ -3148,32 +3189,8 @@ class PMMStack:
         kz_sub = _kz_forward(eps_sub, kx)
         kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
         kx0n = kx0 / k0
-        safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
-        safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-        m0 = np.where(orders == 0)[0][0]
-        jones = np.zeros((2, 2), dtype=_C)
-        R_eff = np.zeros((2, N))
-        T_eff = np.zeros((2, N))
-        for col in range(2):
-            rhs = np.zeros(2 * N, dtype=_C)
-            rhs[(col * N) + m0] = 1.0
-            cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
-            r_ord = Hsup @ (S11 @ cinc)
-            t_ord = Hsub @ (S21 @ cinc)
-            rx, ry = r_ord[:N], r_ord[N:]
-            tx, ty = t_ord[:N], t_ord[N:]
-            rz = -(kx * rx) / safe_r
-            tz = -(kx * tx) / safe_t
-            flux_inc = (kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0
-                        else kz_inc)
-            Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                    + np.abs(rz) ** 2) / flux_inc
-            Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                    + np.abs(tz) ** 2) / flux_inc
-            R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
-            T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
-            jones[0, col] = rx[m0]
-            jones[1, col] = ry[m0]
+        R_eff, T_eff, jones = _assemble_jones_farfield(
+            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N)
         return orders, R_eff, T_eff, jones
 
     def _solve_covariant(self, wl, angle, k0):
@@ -3251,38 +3268,15 @@ class PMMStack:
         N = len(orders)
         kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0
         Tp = _sem_fourier_projection(orders, period, mats_s)
-        m0 = int(np.where(orders == 0)[0][0])
         kz_sup = _kz_forward(eps_sup, kx)
         kz_sub = _kz_forward(eps_sub, kx)
         kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
         Hsup = np.vstack([Tp @ Ws[:n_glob, fs], Tp @ Ws[n_glob:, fs]])
         Hsub = np.vstack([Tp @ Wb[:n_glob, fb], Tp @ Wb[n_glob:, fb]])
-        safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
-        safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-        R = np.zeros((2, N))
-        T = np.zeros((2, N))
-        jones = np.zeros((2, 2), _C)
-        for col in range(2):
-            rhs = np.zeros(2 * N, _C)
-            rhs[(col * N) + m0] = 1.0
-            cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
-            r = Hsup @ (S11 @ cinc)
-            t = Hsub @ (S21 @ cinc)
-            rx, ry = r[:N], r[N:]
-            tx, ty = t[:N], t[N:]
-            rz = -(kx * rx) / safe_r
-            tz = -(kx * tx) / safe_t
-            flux_inc = (kz_inc * (1.0 + ((kx0 / k0) / kz_inc) ** 2) if col == 0
-                        else kz_inc)
-            Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                    + np.abs(rz) ** 2) / flux_inc
-            Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                    + np.abs(tz) ** 2) / flux_inc
-            R[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
-            T[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
-            jones[0, col] = rx[m0]
-            jones[1, col] = ry[m0]
-        return orders, R, T, np.conj(jones)
+        R, T, jones = _assemble_jones_farfield(
+            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
+            kx0 / k0, N)
+        return orders, R, T, np.conj(jones)        # conj: bridge +iwt -> public
 
 
 # ===========================================================================
@@ -3570,17 +3564,8 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
     r_ord = Hsup @ (S11 @ cinc)
     t_ord = Hsub @ (S21 @ cinc)
 
-    kz_sup, kz_sub = _kz_forward(eps_sup, kx), _kz_forward(eps_sub, kx)
-    kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
-    if polarization == "te":
-        R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
-        T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2
-    else:
-        flux_inc = np.real(kz_inc / eps_sup)
-        R = np.real(kz_sup / eps_sup) * np.abs(r_ord) ** 2 / flux_inc
-        T = np.real(kz_sub / eps_sub) * np.abs(t_ord) ** 2 / flux_inc
-    R = np.where(np.real(kz_sup) > 1e-12, np.real(R), 0.0)
-    T = np.where(np.real(kz_sub) > 1e-12, np.real(T), 0.0)
+    R, T = _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
+                               polarization)
     if return_coeffs:
         m0 = int(np.where(orders == 0)[0][0])
         return orders, R, T, n_glob, _C(r_ord[m0]), _C(t_ord[m0])
@@ -4226,36 +4211,8 @@ def _pmm_jones_slant_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     kz_sub = _kz_forward(eps_sub, kx)
     kx0n = kx0 / k0
     kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0n]))[0]))
-    safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
-    safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
-    m0 = np.where(orders == 0)[0][0]
-    R_eff = np.zeros((2, N))
-    T_eff = np.zeros((2, N))
-    jones = np.zeros((2, 2), _C)
-    for col in range(2):                        # 0 = incident Ex, 1 = incident Ey
-        rhs = np.zeros(2 * N, _C)
-        rhs[(col * N) + m0] = 1.0
-        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
-        r_ord = Hsup @ (S11 @ cinc)
-        t_ord = Hsub @ (S21 @ cinc)
-        rx, ry = r_ord[:N], r_ord[N:]
-        tx, ty = t_ord[:N], t_ord[N:]
-        rz = -(kx * rx) / safe_r
-        tz = -(kx * tx) / safe_t
-        # OBLIQUE incident-flux normalization: the col-0 (Ex, p-pol/TM) incident
-        # wave carries Ez_inc = -kx0 Ex/kz_inc, so its z-flux is
-        # kz_inc(1 + (kx0/kz_inc)^2); col-1 (Ey, s-pol/TE) has Ez_inc = 0.  At
-        # kx0 = 0 both reduce to kz_inc (byte-identical to normal incidence).
-        flux_inc = (kz_inc * (1.0 + (kx0n / kz_inc) ** 2) if col == 0
-                    else kz_inc)
-        Re = np.real(kz_sup) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                + np.abs(rz) ** 2) / flux_inc
-        Te = np.real(kz_sub) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                + np.abs(tz) ** 2) / flux_inc
-        R_eff[col] = np.where(np.real(kz_sup) > 1e-12, np.real(Re), 0.0)
-        T_eff[col] = np.where(np.real(kz_sub) > 1e-12, np.real(Te), 0.0)
-        jones[0, col] = rx[m0]                  # PUBLIC convention -> no conjugation
-        jones[1, col] = ry[m0]
+    R_eff, T_eff, jones = _assemble_jones_farfield(
+        Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N)
     return orders, R_eff, T_eff, jones, n_glob
 
 
@@ -4498,31 +4455,8 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
     kz_inc = float(np.real(kzo_s[m0]))
     Hsup = np.vstack([Tp @ Ws[:n, fs], Tp @ Ws[n:, fs]])
     Hsub = np.vstack([Tp @ Wb[:n, fb], Tp @ Wb[n:, fb]])
-    R = np.zeros((2, N))
-    T = np.zeros((2, N))
-    jones = np.zeros((2, 2), _C)
-    for col in range(2):                       # 0 = incident Ex, 1 = incident Ey
-        rhs = np.zeros(2 * N, _C)
-        rhs[(col * N) + m0] = 1.0
-        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
-        r = Hsup @ (S11 @ cinc)
-        t = Hsub @ (S21 @ cinc)
-        rx, ry = r[:N], r[N:]
-        tx, ty = t[:N], t[N:]
-        safe_r = np.where(np.abs(kzo_s) < 1e-12, 1.0, kzo_s)
-        safe_t = np.where(np.abs(kzo_b) < 1e-12, 1.0, kzo_b)
-        rz = -(kx * rx) / safe_r
-        tz = -(kx * tx) / safe_t
-        flux_inc = (kz_inc * (1.0 + ((kx0 / k0) / kz_inc) ** 2) if col == 0
-                    else kz_inc)
-        Re = np.real(kzo_s) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                               + np.abs(rz) ** 2) / flux_inc
-        Te = np.real(kzo_b) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                               + np.abs(tz) ** 2) / flux_inc
-        R[col] = np.where(np.real(kzo_s) > 1e-12, np.real(Re), 0.0)
-        T[col] = np.where(np.real(kzo_b) > 1e-12, np.real(Te), 0.0)
-        jones[0, col] = rx[m0]
-        jones[1, col] = ry[m0]
+    R, T, jones = _assemble_jones_farfield(
+        Hsup, Hsub, S11, S21, orders, kx, kzo_s, kzo_b, kz_inc, kx0 / k0, N)
     return orders, R, T, jones, n
 
 
