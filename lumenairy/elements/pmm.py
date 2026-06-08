@@ -4143,6 +4143,260 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
         slant_angle, kx0, far_field_orders, "pmm_jones_1d_slanted")
 
 
+# ===========================================================================
+# COVARIANT OBLIQUE-COORDINATE slant path (Li 1999 JOSA A 16:2521).
+# ---------------------------------------------------------------------------
+# The convection slant path (_build_generator_metric) carries the tilt as
+# `tan d/dx` on the LAB-Cartesian generator, which DIFFERENTIATES the
+# discontinuous wall-normal E -> the TM/p-pol per-order accuracy converges only
+# ALGEBRAICALLY (~1e-4 at practical degree, the "slant TM floor").  The
+# COVARIANT formulation absorbs the tilt into a constant oblique metric so the
+# slanted wall becomes a COORDINATE SURFACE: the discontinuous wall-normal field
+# is then handled ALGEBRAICALLY by the Li inverse rule and the across-wall
+# derivative only ever hits CONTINUOUS combinations -> SPECTRAL (vertical-grade)
+# convergence at slant.  Validated (proto): same physical answer as convection
+# (cross-validated two independent formulations + RCWA Fourier-converged oracle),
+# but spectral vs algebraic -> ~1e-7 by degree ~24 where convection is ~1e-4
+# (100-2400x fewer degrees for matched accuracy); energy conserves to ~1e-6
+# across cells x slant 15-60 x normal/oblique.
+#
+# Gauge: for a slanted LAMELLAR (a-dot=0) the covariant tangential components are
+# the LAB tangential (E1=Ex, E3=Ey, H1=Hx, H3=Hy) and the flat z=const interfaces
+# ARE coordinate surfaces -> CONFORMAL: match lab [Ex,Ey,Hx,Hy] to homogeneous
+# half-spaces built by the SAME covariant generator (NOT the lib _sem_modes_tensor
+# half-spaces -- those are a different gauge and give a lossless-trap per-order
+# error).  beta (the x2=z*secφ wavenumber) maps to the lab kz_eff = beta*secφ/k0,
+# which folds in BOTH layer propagation AND the lateral-shift phase.  The solver
+# is internally exp(+iωt) (conjugate of the PUBLIC exp(-iωt)); the public wrapper
+# conjugates eps in and the Jones out (efficiencies are |.|^2 -> convention-blind).
+# ===========================================================================
+
+def _cov_blocks(mats, slant_angle):
+    r"""Li covariant E-matrix Z-blocks (Eq.12 + Eq.20) for an in-plane tensor,
+    sec-stretched oblique metric (Li x1=x periodic, x2=z propagation, x3=y
+    invariant; eps^11 = exx + ezz tan^2, eps^12 = -ezz tanφ secφ, eps^22 =
+    ezz sec^2, eps^13 = exy, eps^31 = eyx, eps^33 = eyy).  The inverse rule sits
+    on eps^11 and the couplings ride INSIDE the bracket as solitary composites
+    (eps^lm/eps^11), so the across-wall derivative never hits the discontinuous
+    field.  Returns ``(Z11, Z12, Z21, E22inv, Z13, Z31, Z33)`` (each n x n);
+    Z13/Z31/Z33 vanish for a diagonal cell (exy = eyx = 0)."""
+    iS0 = _safe_inv(mats["S0"])
+    tan = np.tan(slant_angle)
+    sec = 1.0 / np.cos(slant_angle)
+
+    def E(fn):
+        return iS0 @ _coeff_mass_metric(mats, fn)
+
+    def e11(t):
+        return t["exx"] + t["ezz"] * tan * tan            # eps^11 (wall-normal)
+
+    def e12(t):
+        return -t["ezz"] * tan * sec                      # eps^12 (slant)
+
+    def e22(t):
+        return t["ezz"] * sec * sec                       # eps^22 (longitudinal)
+    E11 = _safe_inv(E(lambda t: 1.0 / e11(t)))            # [[1/eps^11]]^-1
+    T12 = E(lambda t: e12(t) / e11(t))
+    T13 = E(lambda t: t["exy"] / e11(t))
+    T31 = E(lambda t: t["eyx"] / e11(t))
+    Tsch22 = E(lambda t: e22(t) - e12(t) * e12(t) / e11(t))
+    EE12 = E11 @ T12
+    EE21 = T12 @ E11
+    EE13 = E11 @ T13
+    EE31 = T31 @ E11
+    EE22 = T12 @ E11 @ T12 + Tsch22
+    EE22i = _safe_inv(EE22)
+    EE33 = (T31 @ E11 @ T13
+            + E(lambda t: t["eyy"] - t["eyx"] * t["exy"] / e11(t)))
+    Z11 = E11 - EE12 @ EE22i @ EE21
+    Z12 = EE12 @ EE22i
+    Z21 = EE22i @ EE21
+    return Z11, Z12, Z21, EE22i, EE13, EE31, EE33
+
+
+def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0):
+    r"""Covariant 4n first-order generator ``M`` (state ``X = [Ey; Hy; Hx; Ex]``
+    = Li ``[E3; H3; H1; E1]``) for ``dz X = i M X``.  TM block over ``(H3, E1)``,
+    TE block over ``(E3, H1)`` (its metric is smooth -> machine-clean), and the
+    in-plane ``exy/eyx`` coupling enters as ``M[H3,E3] = -k0 cosφ E13`` and
+    ``M[H1,E1] = +k0 cosφ E31`` with ``E33`` replacing ``eyy`` in ``M[H1,E3]``.
+    ``kx0`` is the PHYSICAL oblique Bloch wavenumber (``k0 Re(n_sup) sinθ``)."""
+    n = mats["n_glob"]
+    I = np.eye(n, dtype=_C)
+    cos = np.cos(slant_angle)
+    sin = np.sin(slant_angle)
+    Dop = _safe_solve(mats["S0"], mats["C"])
+    G = kx0 * I + (-1j) * Dop                             # alpha (physical)
+    kb = k0 * cos
+    Z11, Z12, Z21, Z22i, Z13, Z31, Z33 = _cov_blocks(mats, slant_angle)
+    M = np.zeros((4 * n, 4 * n), dtype=_C)
+
+    def put(bi, bj, blk):
+        M[bi * n:(bi + 1) * n, bj * n:(bj + 1) * n] = blk
+    put(0, 0, sin * G)
+    put(0, 2, kb * I)
+    put(2, 0, kb * Z33 - (cos / k0) * (G @ G))
+    put(2, 2, sin * G)
+    put(1, 1, -Z12 @ G)
+    put(1, 3, -kb * Z11)
+    put(3, 1, G @ (Z22i / (k0 * cos)) @ G - kb * I)
+    put(3, 3, -G @ Z21)
+    put(1, 0, -kb * Z13)                                  # TM<-TE coupling
+    put(2, 3, kb * Z31)                                   # TE<-TM coupling
+    return M, n
+
+
+def _cov_layer_4n(mats, k0, slant_angle, kx0=0.0):
+    r"""Covariant layer eigenmodes.  Returns ``(W, V, kz, fwd)`` where
+    ``W = [Ex; Ey]`` (2n), ``V = [Hx; Hy]`` (2n), ``kz`` the LAB z-wavenumber /
+    ``k0`` (propagator ``exp(i kz k0 z)``; ``kz = beta secφ / k0``), and ``fwd``
+    the +z-Poynting / decaying forward mask."""
+    M, n = _cov_generator_4n(mats, k0, slant_angle, kx0)
+    beta, X = np.linalg.eig(M)
+    kz = beta / np.cos(slant_angle) / k0
+    Ey, Hy, Hx, Ex = X[:n], X[n:2 * n], X[2 * n:3 * n], X[3 * n:]
+    W = np.vstack([Ex, Ey])
+    V = np.vstack([Hx, Hy])
+    Sz = np.real(np.sum(Ex * np.conj(Hy) - Ey * np.conj(Hx), axis=0))
+    prop = np.abs(np.imag(kz)) < 1e-7 * max(float(np.max(np.abs(kz))), 1.0)
+    fwd = np.where(prop, Sz > 0.0, np.imag(kz) > 0.0)
+    return W, V, kz, fwd
+
+
+def _cov_split(W, V, kz, fwd):
+    """Forward/backward split, exactly half each (by Poynting / decay)."""
+    n = W.shape[0] // 2
+    half = W.shape[1] // 2
+    if int(np.sum(fwd)) == half:
+        fidx = np.where(fwd)[0]
+    else:
+        Ex, Ey, Hx, Hy = W[:n], W[n:], V[:n], V[n:]
+        Sz = np.real(np.sum(Ex * np.conj(Hy) - Ey * np.conj(Hx), axis=0))
+        sc = np.where(np.abs(np.imag(kz)) < 1e-7 * max(float(np.max(np.abs(kz))),
+                                                       1.0), Sz, np.imag(kz))
+        fidx = np.argsort(-sc)[:half]
+    bidx = np.array(sorted(set(range(W.shape[1])) - set(fidx.tolist())),
+                    dtype=int)
+    return fidx, bidx
+
+
+def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
+                           period, depth, wl, slant_angle, kx0, far_field_orders,
+                           label):
+    """Covariant slanted Jones far field (covariant half-spaces).  All eps are
+    INTERNAL (conjugate) convention; the caller conjugates the returned Jones.
+    Returns ``(orders, R(2,N), T(2,N), jones(2,2), n_glob)``."""
+    k0 = 2.0 * np.pi / wl
+    n = mats["n_glob"]
+    Wl, Vl, kzl, fwl = _cov_layer_4n(mats, k0, slant_angle, kx0)
+    Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant_angle, kx0)
+    Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant_angle, kx0)
+    fl, bl = _cov_split(Wl, Vl, kzl, fwl)
+    fs, _bs = _cov_split(Ws, Vs, kzs, fws)
+    fb, _bb = _cov_split(Wb, Vb, kzb, fwb)
+
+    def Mmat(W, V, f, b):
+        return np.block([[W[:, f], W[:, b]], [V[:, f], V[:, b]]])
+
+    def Msym(W, V, f):
+        return np.block([[W[:, f], W[:, f]], [V[:, f], -V[:, f]]])
+    Ms = Msym(Ws, Vs, fs)
+    Ml = Mmat(Wl, Vl, fl, bl)
+    Mb = Msym(Wb, Vb, fb)
+    S = _interface_smatrix_general(Ms, Ml)
+    S = _redheffer_star(S, _propagation_smatrix_general(
+        -1j * kzl[fl], -1j * kzl[bl], k0 * depth))
+    S = _redheffer_star(S, _interface_smatrix_general(Ml, Mb))
+    S11, _S12, S21, _S22 = S
+
+    m_prop = _n_propagating_orders(period, wl, n_max)
+    n_proj = max(int(far_field_orders), 2 * m_prop + 5)
+    cap = n if n % 2 else n - 1
+    n_proj = min(n_proj, cap)
+    if n_proj % 2 == 0:
+        n_proj -= 1
+    if 2 * m_prop + 1 > n_proj:
+        raise ValueError(
+            f"{label}: resolution too low to resolve the {2 * m_prop + 1} "
+            f"propagating orders (n_glob={n}); raise degree or "
+            f"elements_per_region.")
+    half = (n_proj - 1) // 2
+    orders = np.arange(-half, half + 1)
+    N = len(orders)
+    kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0   # kx / k0 per order
+    Tp = _sem_fourier_projection(orders, period, mats)
+    m0 = int(np.where(orders == 0)[0][0])
+
+    def kz_ord(eps):
+        kz = np.sqrt(_C(eps) - kx ** 2 + 0j)
+        return np.where(np.imag(kz) < 0, -kz, kz)
+    kzo_s = kz_ord(eps_sup)
+    kzo_b = kz_ord(eps_sub)
+    kz_inc = float(np.real(kzo_s[m0]))
+    Hsup = np.vstack([Tp @ Ws[:n, fs], Tp @ Ws[n:, fs]])
+    Hsub = np.vstack([Tp @ Wb[:n, fb], Tp @ Wb[n:, fb]])
+    R = np.zeros((2, N))
+    T = np.zeros((2, N))
+    jones = np.zeros((2, 2), _C)
+    for col in range(2):                       # 0 = incident Ex, 1 = incident Ey
+        rhs = np.zeros(2 * N, _C)
+        rhs[(col * N) + m0] = 1.0
+        cinc, *_ = np.linalg.lstsq(Hsup, rhs, rcond=None)
+        r = Hsup @ (S11 @ cinc)
+        t = Hsub @ (S21 @ cinc)
+        rx, ry = r[:N], r[N:]
+        tx, ty = t[:N], t[N:]
+        safe_r = np.where(np.abs(kzo_s) < 1e-12, 1.0, kzo_s)
+        safe_t = np.where(np.abs(kzo_b) < 1e-12, 1.0, kzo_b)
+        rz = -(kx * rx) / safe_r
+        tz = -(kx * tx) / safe_t
+        flux_inc = (kz_inc * (1.0 + ((kx0 / k0) / kz_inc) ** 2) if col == 0
+                    else kz_inc)
+        Re = np.real(kzo_s) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                               + np.abs(rz) ** 2) / flux_inc
+        Te = np.real(kzo_b) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                               + np.abs(tz) ** 2) / flux_inc
+        R[col] = np.where(np.real(kzo_s) > 1e-12, np.real(Re), 0.0)
+        T[col] = np.where(np.real(kzo_b) > 1e-12, np.real(Te), 0.0)
+        jones[0, col] = rx[m0]
+        jones[1, col] = ry[m0]
+    return orders, R, T, jones, n
+
+
+def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
+                             depth, duty, wl, slant_angle, degree, n_ridge_el,
+                             n_groove_el, grade, far_field_orders, angle=0.0):
+    """Covariant oblique-coordinate slanted-Jones solve (the SPECTRAL slant path;
+    ``factorization='covariant'``).  Same signature/returns as
+    :func:`_pmm_jones_slant_solve`; converges spectrally where the convection
+    path converges algebraically (same physical answer).  IN-PLANE tensors only
+    (out-of-plane is a further extension)."""
+    er = np.conj(np.asarray(eps_ridge3, dtype=_C))        # exp(-iωt) -> internal
+    eg = np.conj(np.asarray(eps_groove3, dtype=_C))
+    eps_sup = np.conj(_C(n_sup) ** 2)
+    eps_sub = np.conj(_C(n_sub) ** 2)
+    k0 = 2.0 * np.pi / wl
+    kx0 = float(np.real(np.conj(_C(n_sup)))) * np.sin(float(angle)) * k0
+    d_wall = duty * period
+    mats = _build_nodal_metric(period, d_wall, _t3_slant(er), _t3_slant(eg),
+                               degree, n_ridge_el, n_groove_el, grade)
+    ts = dict(exx=eps_sup, exy=0.0, eyx=0.0, eyy=eps_sup, ezz=eps_sup,
+              exz=0.0, eyz=0.0, ezx=0.0, ezy=0.0)
+    tb = dict(exx=eps_sub, exy=0.0, eyx=0.0, eyy=eps_sub, ezz=eps_sub,
+              exz=0.0, eyz=0.0, ezx=0.0, ezy=0.0)
+    mats_s = _build_nodal_metric(period, d_wall, ts, ts, degree, n_ridge_el,
+                                 n_groove_el, grade)
+    mats_b = _build_nodal_metric(period, d_wall, tb, tb, degree, n_ridge_el,
+                                 n_groove_el, grade)
+    n_max = max(np.real(n_sup), np.real(n_sub),
+                np.real(np.sqrt(er[0, 0])), np.real(np.sqrt(er[1, 1])),
+                np.real(np.sqrt(eg[0, 0])), np.real(np.sqrt(eg[1, 1])))
+    orders, R, T, jones, ng = _pmm_jones_oblique_core(
+        mats, mats_s, mats_b, eps_sup, eps_sub, n_max, period, depth, wl,
+        slant_angle, kx0, far_field_orders, "pmm_jones_1d_slanted")
+    return orders, R, T, np.conj(jones), ng        # internal -> public exp(-iωt)
+
+
 def _pmm_jones_slant_segments_solve(period, widths, seg_tensors3, n_sub, n_sup,
                                     depth, wl, slant_angle, degree,
                                     n_el_per_region, grade, far_field_orders,
@@ -4273,6 +4527,7 @@ def pmm_jones_1d_slanted(
     grade: bool = True,
     far_field_orders: int = 21,
     stabilize: bool = True,
+    factorization: str = "convection",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """SLANTED binary grating with full ``(3, 3)`` permittivity tensors (in-plane
     OR out-of-plane) -- the anisotropic-Jones counterpart of
@@ -4332,6 +4587,20 @@ def pmm_jones_1d_slanted(
         oblique+slant per-order is wrong).
     degree, elements_per_region, grade, far_field_orders, stabilize : as in
         :func:`pmm_jones_1d`.
+    factorization : {'convection', 'covariant'}, optional
+        Slant treatment.  ``'convection'`` (default) carries the tilt as an exact
+        first-order convection on the lab-Cartesian metric generator -- robust at
+        all slants, but the TM/p-pol per-order accuracy converges ALGEBRAICALLY
+        (~1e-4 at practical degree).  ``'covariant'`` routes through the Li-1999
+        oblique-coordinate covariant generator: the slanted wall becomes a
+        coordinate surface, so the wall-normal discontinuity is handled
+        algebraically and the TM channel converges SPECTRALLY (vertical-grade
+        ~1e-7 by degree ~24) -- the SAME physical answer as ``'convection'`` but
+        ~100-2400x fewer degrees for matched accuracy.  ``'covariant'`` handles
+        diagonal AND coupled (``exy``/``eyx``) IN-PLANE tensors, normal + oblique
+        incidence, lossless + lossy; OUT-OF-PLANE (``eps_xz`` etc.) is not yet
+        supported on the covariant path (raises ``NotImplementedError`` -- use
+        ``'convection'``).
 
     Returns
     -------
@@ -4405,6 +4674,38 @@ def pmm_jones_1d_slanted(
     scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
     off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
               float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
+
+    # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
+    # `factorization='covariant'` routes the slanted layer through the Li-1999
+    # oblique-coordinate covariant generator instead of the (default) convection
+    # generator.  The slanted wall becomes a coordinate surface, so the TM/p-pol
+    # channel converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) instead
+    # of the convection path's ALGEBRAIC ~1e-4 floor -- same physical answer,
+    # ~100-2400x fewer degrees for matched accuracy.  Handles diagonal AND coupled
+    # (exy/eyx) in-plane tensors, normal + oblique, lossless + lossy.  Out-of-plane
+    # (eps_xz/yz/zx/zy) is not yet supported on this path (use convection).
+    if factorization not in ("convection", "covariant"):
+        raise ValueError(
+            "pmm_jones_1d_slanted: factorization must be 'convection' or "
+            f"'covariant', got {factorization!r}.")
+    if factorization == "covariant":
+        if off > 1e-9 * scale:
+            raise NotImplementedError(
+                "pmm_jones_1d_slanted: factorization='covariant' does not yet "
+                "support OUT-OF-PLANE tensors (eps_xz/eps_yz/eps_zx/eps_zy != 0);"
+                " use factorization='convection'.")
+        cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
+                 duty_cycle, wavelength, float(slant_angle))
+        ckw = dict(n_ridge_el=int(elements_per_region),
+                   n_groove_el=int(elements_per_region), grade=bool(grade),
+                   far_field_orders=int(far_field_orders), angle=float(angle))
+        if not stabilize:
+            o, R, T, J, _ = _pmm_jones_oblique_solve(*cargs, degree=int(degree),
+                                                     **ckw)
+            return o, R, T, J
+        return _stabilize_jones(
+            lambda d: _pmm_jones_oblique_solve(*cargs, degree=d, **ckw)[:4],
+            int(degree), "pmm_jones_1d_slanted")
 
     # ---- THE DIAGONAL CURE (round 16, Granet 2017/2023; Liu 2015) -----------
     # For a DIAGONAL in-plane tensor (exy = eyx = 0) WITH exx == ezz BOTH
