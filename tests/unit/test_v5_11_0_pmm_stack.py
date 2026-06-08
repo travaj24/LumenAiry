@@ -231,9 +231,32 @@ def test_mixed_inplane_out_of_plane_stack_conserves():
     assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3
 
 
-def test_slanted_out_of_plane_layer_raises():
-    """A SLANTED out-of-plane layer is not yet per-order-validated and raises."""
-    with pytest.raises(NotImplementedError):
-        la.PMMStack(1.0e-6).add_layer(0.4e-6, segments=[(0.5, _eps_oop()),
-                                                        (0.5, GR)],
-                                      slant_angle=np.radians(30.0))
+def test_slanted_out_of_plane_layer_equals_single_layer_solver():
+    """A SLANTED out-of-plane layer now solves: a 1-layer stack reproduces the
+    (per-order-validated) single-layer pmm_jones_1d_slanted to ~1e-12."""
+    er, eg = _eps_oop(), GR
+    sl = np.radians(30.0)
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=16)
+    st.add_layer(0.5e-6, segments=[(0.5, er), (0.5, eg)], slant_angle=sl)
+    o, R, T, J = st.set_source(0.633e-6).solve()
+    oR, ReR, TeR, JR = la.pmm_jones_1d_slanted(
+        1.0e-6, er, eg, 1.5, 1.0, 0.5e-6, 0.5, 0.633e-6, sl, degree=16,
+        stabilize=False)
+    assert np.max(np.abs(R - ReR)) < 1e-10
+    assert np.max(np.abs(T - TeR)) < 1e-10
+    assert np.max(np.abs(J - JR)) < 1e-10
+
+
+def test_mixed_slanted_out_of_plane_stack_conserves_energy():
+    """A MIXED stack (vertical isotropic + slanted out-of-plane + vertical
+    out-of-plane) at oblique incidence cascades and conserves energy."""
+    er, eg = _eps_oop(), GR
+    st = la.PMMStack(1.0e-6, n_substrate=1.5, n_superstrate=1.0, degree=14)
+    st.add_layer(0.15e-6, eps=2.1)
+    st.add_layer(0.3e-6, segments=[(0.5, er), (0.5, eg)],
+                 slant_angle=np.radians(30.0))
+    st.add_layer(0.2e-6, segments=[(0.4, er), (0.6, eg)])
+    o, R, T, J = st.set_source(0.633e-6, angle=np.radians(12.0)).solve()
+    assert abs(R[0].sum() + T[0].sum() - 1.0) < 1e-3
+    assert abs(R[1].sum() + T[1].sum() - 1.0) < 1e-3
+    assert np.all(np.isfinite(J))

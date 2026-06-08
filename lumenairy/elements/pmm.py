@@ -2899,13 +2899,17 @@ class PMMStack:
     Notes
     -----
     Anisotropic / Jones throughout (scalar layers are promoted to isotropic
-    tensors), IN-PLANE tensors only (use :class:`RCWAStack` for out-of-plane),
-    normal or oblique incidence, NumPy (not JAX).  Layers may be VERTICAL or
-    SLANTED (``add_layer(..., slant_angle=...)``) and freely mixed: an all-vertical
-    stack uses the symmetric ``+/-q`` cascade (bit-identical to the prior
-    release), and any slanted layer promotes the whole stack to the general
-    forward/backward S-matrix (a slanted layer is solved by the div-conforming
-    covariant-metric generator).  The modal forward set uses the z-Poynting-flux
+    tensors), FULL ``(3,3)`` tensors IN-PLANE OR OUT-OF-PLANE
+    (``eps_xz/yz/zx/zy``), normal or oblique incidence, NumPy (not JAX).  Layers
+    may be VERTICAL or SLANTED (``add_layer(..., slant_angle=...)``), in-plane or
+    out-of-plane, and freely mixed: an all-vertical-in-plane stack uses the
+    symmetric ``+/-q`` cascade (bit-identical to the prior release), and any
+    slanted OR out-of-plane layer promotes the whole stack to the general
+    forward/backward S-matrix (solved by the div-conforming metric generator,
+    which carries the slant fold AND the out-of-plane ezz-Schur).  A slanted
+    out-of-plane layer reaches the same ~1e-4 wall-normal per-order floor as the
+    single-layer solver (validated vs an RCWA tensor z-staircase; energy
+    conserves).  The modal forward set uses the z-Poynting-flux
     selector (as the multi-region single-layer solver), so the many-element shared
     grid stays resonance-free.
     """
@@ -2958,12 +2962,6 @@ class PMMStack:
             if len(segments) < 1:
                 raise ValueError("PMMStack.add_layer: empty segments.")
             segs = [(float(w), self._as_tensor(e)) for w, e in segments]
-        if abs(float(slant_angle)) > 1e-12 and any(self._is_oop(M)
-                                                   for _w, M in segs):
-            raise NotImplementedError(
-                "PMMStack.add_layer: a SLANTED out-of-plane layer (slant_angle != 0 "
-                "with eps_xz/eyz/ezx/ezy != 0) is not yet per-order-validated; use a "
-                "VERTICAL out-of-plane layer or an in-plane slanted layer.")
         self._layers.append((float(thickness), segs, float(slant_angle)))
         return self
 
