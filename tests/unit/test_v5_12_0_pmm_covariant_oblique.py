@@ -148,6 +148,35 @@ def test_invalid_factorization_raises():
         _slant(er, eg, np.deg2rad(30.0), 16, "bogus")
 
 
+def test_auto_picks_covariant_for_inplane_slant():
+    """'auto' routes an in-plane slanted cell to the SPECTRAL covariant path."""
+    er, eg = _diag(4.0, 2.25, 2.0), _diag(2.0, 2.0, 2.0)
+    a = _slant(er, eg, np.deg2rad(30.0), 24, "auto")
+    cov = _slant(er, eg, np.deg2rad(30.0), 24, "covariant")
+    for x, y in zip(a, cov):
+        assert np.array_equal(x, y)
+
+
+def test_auto_picks_convection_for_out_of_plane():
+    """'auto' falls back to convection for an out-of-plane cell (no raise)."""
+    er = _diag(4.0, 2.25, 2.0)
+    er[0, 2] = er[2, 0] = 0.3
+    eg = _diag(2.0, 2.0, 2.0)
+    a = _slant(er, eg, np.deg2rad(30.0), 20, "auto")
+    con = _slant(er, eg, np.deg2rad(30.0), 20, "convection")
+    for x, y in zip(a, con):
+        assert np.array_equal(x, y)
+
+
+def test_auto_picks_convection_for_vertical():
+    """'auto' uses convection (the existing routing) at slant=0."""
+    er, eg = _diag(4.0, 2.25, 2.0), _diag(2.0, 2.0, 2.0)
+    a = _slant(er, eg, 0.0, 20, "auto")
+    con = _slant(er, eg, 0.0, 20, "convection")
+    for x, y in zip(a, con):
+        assert np.array_equal(x, y)
+
+
 # ---------------------------------------------------------------------------
 # SEGMENTS (multi-region) covariant path
 # ---------------------------------------------------------------------------

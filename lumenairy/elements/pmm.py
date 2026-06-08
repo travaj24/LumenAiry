@@ -4628,20 +4628,22 @@ def pmm_jones_1d_slanted(
         oblique+slant per-order is wrong).
     degree, elements_per_region, grade, far_field_orders, stabilize : as in
         :func:`pmm_jones_1d`.
-    factorization : {'convection', 'covariant'}, optional
+    factorization : {'convection', 'covariant', 'auto'}, optional
         Slant treatment.  ``'convection'`` (default) carries the tilt as an exact
         first-order convection on the lab-Cartesian metric generator -- robust at
-        all slants, but the TM/p-pol per-order accuracy converges ALGEBRAICALLY
-        (~1e-4 at practical degree).  ``'covariant'`` routes through the Li-1999
-        oblique-coordinate covariant generator: the slanted wall becomes a
-        coordinate surface, so the wall-normal discontinuity is handled
-        algebraically and the TM channel converges SPECTRALLY (vertical-grade
-        ~1e-7 by degree ~24) -- the SAME physical answer as ``'convection'`` but
-        ~100-2400x fewer degrees for matched accuracy.  ``'covariant'`` handles
-        diagonal AND coupled (``exy``/``eyx``) IN-PLANE tensors, normal + oblique
-        incidence, lossless + lossy; OUT-OF-PLANE (``eps_xz`` etc.) is not yet
-        supported on the covariant path (raises ``NotImplementedError`` -- use
-        ``'convection'``).
+        all slants and tensors (in-plane OR out-of-plane), but the TM/p-pol
+        per-order accuracy converges ALGEBRAICALLY (~1e-4 at practical degree).
+        ``'covariant'`` routes through the Li-1999 oblique-coordinate covariant
+        generator: the slanted wall becomes a coordinate surface, so the
+        wall-normal discontinuity is handled algebraically and the TM channel
+        converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) -- the SAME
+        physical answer as ``'convection'`` but ~100-2400x fewer degrees for
+        matched accuracy.  ``'covariant'`` handles diagonal AND coupled
+        (``exy``/``eyx``) IN-PLANE tensors, normal + oblique, lossless + lossy;
+        OUT-OF-PLANE (``eps_xz`` etc.) is not yet supported on the covariant path
+        (raises ``NotImplementedError``).  ``'auto'`` picks the best per cell:
+        ``'covariant'`` for an IN-PLANE slanted cell (the spectral win) and
+        ``'convection'`` otherwise (vertical, or out-of-plane).
 
     Returns
     -------
@@ -4716,19 +4718,25 @@ def pmm_jones_1d_slanted(
     off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
               float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
 
-    # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
+    # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant) ----------------
     # `factorization='covariant'` routes the slanted layer through the Li-1999
-    # oblique-coordinate covariant generator instead of the (default) convection
-    # generator.  The slanted wall becomes a coordinate surface, so the TM/p-pol
-    # channel converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) instead
-    # of the convection path's ALGEBRAIC ~1e-4 floor -- same physical answer,
-    # ~100-2400x fewer degrees for matched accuracy.  Handles diagonal AND coupled
-    # (exy/eyx) in-plane tensors, normal + oblique, lossless + lossy.  Out-of-plane
-    # (eps_xz/yz/zx/zy) is not yet supported on this path (use convection).
-    if factorization not in ("convection", "covariant"):
+    # oblique-coordinate covariant generator instead of the convection generator.
+    # The slanted wall becomes a coordinate surface, so the TM/p-pol channel
+    # converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) instead of the
+    # convection path's ALGEBRAIC ~1e-4 floor -- same physical answer, ~100-2400x
+    # fewer degrees.  Handles diagonal AND coupled (exy/eyx) IN-PLANE tensors,
+    # normal + oblique, lossless + lossy.  Out-of-plane (eps_xz/yz/zx/zy) is not
+    # yet supported on this path.  The DEFAULT 'auto' picks covariant for an
+    # in-plane slanted cell (the spectral win) and convection otherwise (vertical,
+    # or out-of-plane which convection handles to the ~1e-4 floor).
+    if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(
-            "pmm_jones_1d_slanted: factorization must be 'convection' or "
-            f"'covariant', got {factorization!r}.")
+            "pmm_jones_1d_slanted: factorization must be 'auto', 'convection' "
+            f"or 'covariant', got {factorization!r}.")
+    if factorization == "auto":
+        _inplane = off <= 1e-9 * scale
+        _slanted = abs(float(slant_angle)) > 1e-12
+        factorization = "covariant" if (_slanted and _inplane) else "convection"
     if factorization == "covariant":
         if off > 1e-9 * scale:
             raise NotImplementedError(
@@ -4887,14 +4895,20 @@ def pmm_jones_1d_slanted_segments(
     # Multi-region generalization of the binary covariant path; spectral TM
     # convergence vs the convection default's algebraic floor (same answer).
     # In-plane only (out-of-plane covariant is a further extension).
-    if factorization not in ("convection", "covariant"):
+    if factorization not in ("auto", "convection", "covariant"):
         raise ValueError(
-            "pmm_jones_1d_slanted_segments: factorization must be 'convection' "
-            f"or 'covariant', got {factorization!r}.")
+            "pmm_jones_1d_slanted_segments: factorization must be 'auto', "
+            f"'convection' or 'covariant', got {factorization!r}.")
+    _off = max((float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
+                for M in tensors), default=0.0)
+    _scale = max((float(np.max(np.abs(M))) for M in tensors), default=1.0)
+    if factorization == "auto":
+        _slanted = abs(float(slant_angle)) > 1e-12
+        factorization = ("covariant" if (_slanted and _off <= 1e-9 * _scale)
+                         else "convection")
     if factorization == "covariant":
-        off = max((float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
-                   for M in tensors), default=0.0)
-        scale = max((float(np.max(np.abs(M))) for M in tensors), default=1.0)
+        off = _off
+        scale = _scale
         if off > 1e-9 * scale:
             raise NotImplementedError(
                 "pmm_jones_1d_slanted_segments: factorization='covariant' does "
