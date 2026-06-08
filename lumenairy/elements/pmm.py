@@ -111,6 +111,7 @@ speed lever for metal TM).
 from __future__ import annotations
 
 import cmath
+import functools
 import warnings
 from typing import Tuple
 
@@ -227,22 +228,74 @@ def _converged_cluster(records, passive, tol, min_cluster):
 # Subsectional Gauss-Lobatto-Legendre (GLL) spectral-element primitives
 # ===========================================================================
 
+# ===========================================================================
+# PERFORMANCE NOTES
+# ---------------------------------------------------------------------------
+# The dominant cost of a PMM solve is the dense ``np.linalg.eig`` on the layer
+# generator (~85% of runtime), which depends on (eps, k0, slant) and so changes
+# every solve AND every stabilize-scan degree -- it is fundamentally per-solve
+# and is NOT cached.  The single biggest speed lever is therefore ACCURACY-PER-
+# DEGREE, not caching: an in-plane slanted cell now defaults to the SPECTRAL
+# covariant factorization (``'auto'``), reaching matched accuracy in ~100-2400x
+# fewer degrees (hence a far smaller eig) than the algebraic convection path.
+#
+# What IS memoized here is only the GEOMETRY-ONLY reference machinery -- the GLL
+# nodes/weights (Legendre root-find) and the barycentric differentiation matrix
+# (O(n^2) Python loop).  These are pure functions of ``degree`` alone, rebuilt on
+# every grid build, so caching them is free, exact (integer / node-coordinate
+# keys, no float-physics staleness), and helps fixed-geometry sweeps and the
+# stabilize scan.  Deliberately DEFERRED as risky-for-marginal-gain (see the
+# fdtd/pmm roadmap): an analytic (eig-free) homogeneous half-space basis, a
+# k0-independent generator-block precompute + float-keyed layer-mode cache, and a
+# sparse-degree stabilize probe (which could declare a false plateau on the
+# load-bearing convergence selector).  For production fixed-geometry sweeps,
+# ``stabilize=False`` at a once-validated degree is the supported fast path.
+# ===========================================================================
+def _readonly(*arrays):
+    """Mark arrays read-only (cache-poisoning guard) and return them."""
+    for a in arrays:
+        a.setflags(write=False)
+    return arrays if len(arrays) > 1 else arrays[0]
+
+
+@functools.lru_cache(maxsize=64)
 def _gll_nodes_weights(degree: int):
     """GLL nodes (``degree + 1`` of them) and quadrature weights on ``[-1, 1]``:
     endpoints +/-1 plus the roots of ``P_degree'``; ``w_i = 2 / (degree
-    (degree+1) P_degree(x_i)^2)``."""
+    (degree+1) P_degree(x_i)^2)``.
+
+    Memoized on ``degree`` (PERF): a pure geometry function whose Legendre
+    root-find recurs on EVERY grid build -- every solve, every stabilize-scan
+    degree, every step of a fixed-geometry wavelength/angle sweep.  The cached
+    arrays are returned READ-ONLY so an accidental in-place write raises instead
+    of silently poisoning the cache (callers only ever map/scale them into new
+    arrays: ``ref_w * J``, physical-coordinate maps)."""
     if degree == 1:
-        return np.array([-1.0, 1.0]), np.array([1.0, 1.0])
+        return _readonly(np.array([-1.0, 1.0]), np.array([1.0, 1.0]))
     interior = np.sort(Legendre.basis(degree).deriv().roots().real)
     nodes = np.concatenate([[-1.0], interior, [1.0]])
     PD = Legendre.basis(degree)
     w = 2.0 / (degree * (degree + 1) * (PD(nodes) ** 2))
-    return nodes, w
+    return _readonly(nodes, w)
+
+
+# Memo for the barycentric differentiation matrix, keyed on the node coordinates
+# (one entry per distinct GLL degree -- a small bounded set in practice).
+_LAGRANGE_DREF_CACHE: dict = {}
 
 
 def _lagrange_derivative_matrix(nodes):
     """Differentiation matrix ``D[i, j] = l_j'(x_i)`` for the nodal Lagrange
-    basis (barycentric form)."""
+    basis (barycentric form).
+
+    Memoized on the node coordinates (PERF): the ``O(n^2)`` Python barycentric
+    build recurs on every grid build for the same degree.  Same read-only
+    poisoning-guard as :func:`_gll_nodes_weights`; ``nodes`` here is always the
+    cached GLL array, so the ``tobytes`` key is one entry per degree."""
+    key = nodes.tobytes()
+    cached = _LAGRANGE_DREF_CACHE.get(key)
+    if cached is not None:
+        return cached
     n = len(nodes)
     Dmat = np.zeros((n, n))
     wb = np.ones(n)
@@ -255,6 +308,7 @@ def _lagrange_derivative_matrix(nodes):
             if i != j:
                 Dmat[i, j] = (wb[j] / wb[i]) / (nodes[i] - nodes[j])
         Dmat[i, i] = -np.sum([Dmat[i, k] for k in range(n) if k != i])
+    _LAGRANGE_DREF_CACHE[key] = _readonly(Dmat)
     return Dmat
 
 
