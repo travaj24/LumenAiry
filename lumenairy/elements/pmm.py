@@ -160,6 +160,30 @@ _C = np.complex128
 # 1e-3 rad ~ 0.057deg -- far below any slant where the spectral covariant win matters.
 _COV_MIN_SLANT_RAD = 1.0e-3
 
+
+def _resolve_order_count(far_field_orders, n_orders):
+    """Cross-suite alias: accept ``n_orders`` (the RCWA / 2-D PMM spelling) as a
+    synonym for ``far_field_orders`` (the historical 1-D PMM spelling) on every
+    public 1-D entry point.  ``n_orders`` overrides when supplied; ``None`` (the
+    default) keeps ``far_field_orders``.  Downstream code still coerces with
+    ``int(...)`` so no coercion happens here."""
+    return far_field_orders if n_orders is None else n_orders
+
+
+def _promote_eps_tensor(eps):
+    """Promote a scalar (isotropic) permittivity to a ``(3, 3)`` tensor; pass a
+    ``(3, 3)`` tensor through unchanged.  Mirrors ``PMMStack._as_tensor`` so the
+    functional :func:`pmm_1d` dispatcher honours the documented "scalar promoted
+    to an isotropic tensor" contract.  A JAX array is returned unchanged (the
+    differentiable surface requires an explicit ``(3, 3)`` tensor)."""
+    if is_jax_array(eps):
+        return eps
+    M = np.asarray(eps, dtype=_C)
+    if M.ndim == 0:
+        M = M * np.eye(3, dtype=_C)
+    return M
+
+
 # ``stabilize`` robust-selection parameters.  PMM has two distinct off-curve
 # failure modes vs polynomial degree: (1) discrete RESONANCES at isolated degrees
 # that INFLATE sum(R)+sum(T) above the converged value (sparse at low degree,
@@ -1372,6 +1396,7 @@ def pmm_jones_1d(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Anisotropic 1-D binary grating by the Polynomial Modal Method -- the full
@@ -1423,7 +1448,9 @@ def pmm_jones_1d(
         ``elements_per_region > 1``.  Default ``True``.
     far_field_orders : int, optional
         Rayleigh order count for the once-only forward far-field projection
-        (auto-grown to cover the propagating orders).  Default 21.
+        (auto-grown to cover the propagating orders).  Default 21.  Accepts
+        ``n_orders`` as a cross-suite alias (the RCWA / 2-D PMM spelling); when
+        given it overrides ``far_field_orders``.
     stabilize : bool, optional
         Guard against the isolated-degree PMM resonances (a near-singular
         layer<->region mode-match injects spurious flux and inflates
@@ -1475,6 +1502,7 @@ def pmm_jones_1d(
     15-60 deg, normal + oblique).  The multi-region (segments) out-of-plane + slant
     path remains guarded.
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
     # A TRACED (jit) duty_cycle has no concrete value to range-check.
@@ -2606,6 +2634,7 @@ def pmm_efficiency_1d(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 1-D binary grating by the
@@ -2646,7 +2675,8 @@ def pmm_efficiency_1d(
     far_field_orders : int, optional
         Rayleigh order count for the once-only forward far-field projection
         (auto-grown to cover the propagating orders; kept well below the nodal
-        DOF).  Default 21.
+        DOF).  Default 21.  Accepts ``n_orders`` as a cross-suite alias (the
+        RCWA / 2-D PMM spelling); when given it overrides ``far_field_orders``.
     stabilize : bool, optional
         Guard against the measure-zero discrete resonances at isolated
         polynomial degrees (a near-singular layer<->region mode-match injects
@@ -2696,6 +2726,7 @@ def pmm_efficiency_1d(
     spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
     ``elements_per_region>1, grade=True`` recovers the rate for metals.
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -2769,6 +2800,7 @@ def pmm_efficiency_1d_jax(
     elements_per_region=1,
     grade=True,
     far_field_orders=21,
+    n_orders=None,
 ):
     """JAX (differentiable) twin of :func:`pmm_efficiency_1d`.
 
@@ -2804,6 +2836,7 @@ def pmm_efficiency_1d_jax(
         elements_per_region=elements_per_region,
         grade=grade,
         far_field_orders=far_field_orders,
+        n_orders=n_orders,
         stabilize=False,
     )
 
@@ -2822,6 +2855,7 @@ def pmm_efficiency_1d_segments(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Scalar diffraction efficiencies of an ARBITRARY piecewise-constant 1-D
@@ -2850,6 +2884,7 @@ def pmm_efficiency_1d_segments(
     -------
     orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -2889,6 +2924,7 @@ def pmm_jones_1d_segments(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Anisotropic 1-D grating with an ARBITRARY piecewise-constant profile by
@@ -2920,6 +2956,7 @@ def pmm_jones_1d_segments(
     -------
     orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_segments: degree must be >= 2.")
     if len(segments) < 1:
@@ -3100,7 +3137,8 @@ class PMMStack:
 
     def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
                  degree=16, elements_per_region=1, grade=True,
-                 far_field_orders=21, factorization="auto"):
+                 far_field_orders=21, n_orders=None, factorization="auto"):
+        far_field_orders = _resolve_order_count(far_field_orders, n_orders)
         if int(degree) < 2:
             raise ValueError("PMMStack: degree must be >= 2.")
         if factorization not in ("auto", "convection", "covariant"):
@@ -3724,6 +3762,7 @@ def pmm_efficiency_1d_slanted(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous diffraction efficiencies of a 1-D SLANTED binary grating by the
@@ -3787,6 +3826,7 @@ def pmm_efficiency_1d_slanted(
     convection, not a coupling error; the in-plane wall-normal TM floor alone is much
     tighter, ~3e-5..1e-4 near degree 18-20, U-shaped).
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
         raise ValueError(
@@ -4880,6 +4920,7 @@ def pmm_jones_1d_slanted(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
     factorization: str = "auto",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -5007,6 +5048,7 @@ def pmm_jones_1d_slanted(
     (inclined-frame consistent, lab half-spaces) is degree-clean -- no stabilize
     crutch.
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
     if not (0.0 < float(duty_cycle) < 1.0):
@@ -5165,6 +5207,7 @@ def pmm_jones_1d_slanted_segments(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
     factorization: str = "auto",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -5217,6 +5260,7 @@ def pmm_jones_1d_slanted_segments(
     OR OUT-OF-PLANE (out-of-plane + slant reaches the ~1e-4 wall-normal floor,
     validated vs a multi-region RCWA tensor z-staircase); NumPy/SciPy (not JAX).
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted_segments: degree must be >= 2.")
     if len(segments) < 1:
@@ -5309,6 +5353,7 @@ def pmm_1d(
     elements_per_region: int = 1,
     grade: bool = True,
     far_field_orders: int = 21,
+    n_orders: int | None = None,
     stabilize: bool = True,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Unified 1-D anisotropic-Jones PMM dispatcher -- one entry point that
@@ -5350,6 +5395,7 @@ def pmm_1d(
     -------
     orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
     """
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     has_binary = eps_ridge is not None or eps_groove is not None
     if (segments is None) == (not has_binary):
         raise ValueError(
@@ -5371,6 +5417,10 @@ def pmm_1d(
     if eps_ridge is None or eps_groove is None:
         raise ValueError(
             "pmm_1d: the binary spec needs BOTH `eps_ridge` and `eps_groove`.")
+    # Honour the documented "scalar promoted to an isotropic tensor" contract
+    # (the underlying Jones solvers require an explicit (3, 3) tensor).
+    eps_ridge = _promote_eps_tensor(eps_ridge)
+    eps_groove = _promote_eps_tensor(eps_groove)
     if slanted:
         return pmm_jones_1d_slanted(
             period, eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
