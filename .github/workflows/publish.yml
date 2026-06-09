@@ -38,7 +38,13 @@ jobs:
   verify:
     name: Verify CI on release tag
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # v5.12.0: bumped 20 -> 30 to match unit-tests.yml (which already learned
+    # this lesson: the full unit suite grew past the old 15-min step cap once the
+    # RCWA/PMM solver tests landed, so a release on 3.10 hit a 15:00 step TIMEOUT
+    # while unit-tests.yml -- with the same suite -- passed at job=30/step=25).
+    # This verify gate's caps had not been kept in sync; keep them equal so a
+    # green unit-tests.yml run cannot be contradicted by a timed-out publish gate.
+    timeout-minutes: 30
     strategy:
       fail-fast: true
       matrix:
@@ -146,7 +152,10 @@ jobs:
         run: |
           python -m pytest tests/unit -m "not integration" --tb=short \
             -p no:cacheprovider --maxfail=5
-        timeout-minutes: 15
+        # v5.12.0: 15 -> 25 to match unit-tests.yml's proven step cap (the suite
+        # now runs ~15 min on 3.10 + ~3 min install; the old 15-min step cap
+        # TIMED OUT the v5.12.0 release on 3.10 at 97% through the suite).
+        timeout-minutes: 25
 
   build:
     name: Build sdist + wheel
