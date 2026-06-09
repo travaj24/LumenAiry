@@ -159,6 +159,58 @@ def test_matches_rcwa():
 
 
 # ===================================================================
+# PP2 perf invariant: the shared eps-free geometric eig reconstructs a
+# homogeneous half-space identically to a fresh per-region eig
+# ===================================================================
+def test_pp2_shared_homogeneous_eig_matches_fresh_eig():
+    """The half-space speed-up (one eps-free geometric eig serves BOTH half-spaces
+    via ``g2 = g2_geo + eps``, same eigenvectors -- 3 region eigs -> 2) must yield
+    GENUINE modes of each half-space operator.  Basis-invariant pin: the shifted
+    modes (i) carry the SAME spectrum as a fresh per-region eig (as a set) and
+    (ii) satisfy the region-b generalized eigen-relation ``L_b W = g2 G W`` to
+    round-off.  (The interface S-matrix itself is NOT a valid check here -- it is
+    expressed in region-b's mode-amplitude basis, whose ordering differs between
+    the two eig routes; that ordering cancels only through the full solve, which
+    ``test_uniform_slab_fabry_perot`` pins against an analytic oracle.)"""
+    from lumenairy.elements.pmm.twod_staggered import (
+        Granet2DTransverseE,
+        _homog_geom_cache,
+        _homog_region_modes,
+        _region_modes,
+    )
+
+    px = py = 0.6e-6
+    k0 = 2.0 * np.pi / 0.633e-6
+    Nx = Ny = 2
+    M = 4
+    eps_ref, eps_b = 1.0 + 0j, 2.25 + 0j          # b != ref -> exercises the shift
+
+    def _homog(eps):
+        return Granet2DTransverseE(px, py, Nx, Ny, M, np.full((Nx, Ny), eps),
+                                   alpha0x=0.0, alpha0y=0.0, k0=k0)
+
+    sol_b = _homog(eps_b)
+    L_b, G_b = sol_b.Lmat, -sol_b.Rmat
+
+    # Fresh per-region eig at eps_b (the OLD 3-eig path) ...
+    _Wbr, _Vbr, _l, g2_ref = _region_modes(sol_b)
+    # ... vs the shared geometric eig built from a DIFFERENT eps_ref, shifted to eps_b
+    geom = _homog_geom_cache(_homog(eps_ref))
+    W0, g2_geo = geom[0], geom[1]
+    g2_opt = g2_geo + eps_b
+
+    # (i) same spectrum as a set
+    s_ref = np.sort_complex(np.round(np.asarray(g2_ref), 8))
+    s_opt = np.sort_complex(np.round(np.asarray(g2_opt), 8))
+    assert np.max(np.abs(s_ref - s_opt)) < 1e-7
+
+    # (ii) the shifted modes are genuine generalized eigenvectors of (L_b, G_b)
+    resid = L_b @ W0 - (G_b @ W0) * g2_opt[None, :]
+    scale = np.linalg.norm(L_b @ W0, axis=0) + 1.0
+    assert np.max(np.linalg.norm(resid, axis=0) / scale) < 1e-9
+
+
+# ===================================================================
 # Input validation
 # ===================================================================
 def test_validation():
