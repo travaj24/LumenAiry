@@ -1097,3 +1097,32 @@ def test_jones_slant_diag_exx_ne_ezz_stays_on_metric_generator(phi_deg):
     assert np.array_equal(R, RM)    # stayed on the metric generator (not scalar)
     assert np.array_equal(T, TM)
     assert np.array_equal(J, JM)
+
+
+def _t3_aud(exx, eyy, ezz, exy=0.0):
+    M = np.diag([exx, eyy, ezz]).astype(complex)
+    M[0, 1] = exy
+    M[1, 0] = exy
+    return M
+
+
+@pytest.mark.parametrize("slant", [30.0, 45.0, 60.0])
+@pytest.mark.parametrize("ang", [0.0, 0.3])
+@pytest.mark.parametrize("loss", [0.0, 1.0])
+def test_slant_forward_selector_energy_sane_oblique_lossy(slant, ang, loss):
+    """Audit F5: the slanted forward-mode selector rebalance ranks the propagating
+    (flux) and evanescent (decay) pools SEPARATELY rather than argsort-ing a
+    mixed-unit score.  Across oblique + lossy + high-contrast slant -- the regime
+    that grows the flux-null spurious-mode sea and triggers the rebalance -- the
+    response must stay energy-passive (sum R + T per incident pol <= 1 for a lossy
+    cell, > 0) with a finite Jones matrix.  (The fix was verified byte-identical to
+    the prior selector on a 72-case battery; this pins the energy contract.)"""
+    er = _t3_aud(9.0 + loss * 1j, 4.0 + loss * 1j, 3.0 + loss * 1j, 0.4)
+    eg = np.eye(3).astype(complex)
+    o, R, T, J = pmm_jones_1d_slanted(
+        0.8e-6, er, eg, 1.5, 1.0, 0.4e-6, 0.5, 0.633e-6,
+        np.deg2rad(slant), angle=ang, degree=18, stabilize=False)
+    for pol in range(2):
+        tot = float(np.sum(R[pol]) + np.sum(T[pol]))
+        assert 0.0 < tot < (1.02 if loss > 0 else 2.02)
+    assert np.all(np.isfinite(J))

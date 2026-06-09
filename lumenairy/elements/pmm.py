@@ -174,9 +174,14 @@ def _promote_eps_tensor(eps):
     """Promote a scalar (isotropic) permittivity to a ``(3, 3)`` tensor; pass a
     ``(3, 3)`` tensor through unchanged.  Mirrors ``PMMStack._as_tensor`` so the
     functional :func:`pmm_1d` dispatcher honours the documented "scalar promoted
-    to an isotropic tensor" contract.  A JAX array is returned unchanged (the
-    differentiable surface requires an explicit ``(3, 3)`` tensor)."""
+    to an isotropic tensor" contract -- for BOTH NumPy and JAX scalars.  A 0-d
+    JAX scalar is promoted to ``eps * jnp.eye(3)``, which stays differentiable
+    (the gradient flows to the index value); a JAX array that is already a tensor
+    is passed through unchanged."""
     if is_jax_array(eps):
+        if getattr(eps, "ndim", 2) == 0:
+            import jax.numpy as _jnp
+            return eps * _jnp.eye(3, dtype=_jnp.complex128)
         return eps
     M = np.asarray(eps, dtype=_C)
     if M.ndim == 0:
@@ -187,9 +192,10 @@ def _promote_eps_tensor(eps):
 def _resolve_incidence(angle, theta):
     """Cross-dimension alias: accept ``theta`` (the 2-D / conical polar-angle
     spelling, also used by ``RCWAStack``) as a synonym for ``angle`` (the 1-D
-    classical-mount incidence angle).  The 1-D mount is planar (azimuth ``phi =
-    0``), so ``theta`` IS the in-plane ``angle``.  ``theta`` overrides when
-    supplied; ``None`` (the default) keeps ``angle``."""
+    classical-mount incidence angle).  ``theta`` IS ``angle`` -- the SAME number,
+    NO scaling or conversion, both measured from the ``+z`` surface normal; the
+    1-D mount is planar (azimuth ``phi = 0``).  ``theta`` overrides when supplied;
+    ``None`` (the default) keeps ``angle``."""
     return angle if theta is None else theta
 
 
@@ -3223,7 +3229,10 @@ class PMMStack:
         """Set the incident plane wave (vacuum wavelength [m], incidence
         ``angle`` [rad] in the x-z plane).  ``theta`` is accepted as a cross-suite
         alias for ``angle`` (matching ``RCWAStack.set_source``'s polar angle, with
-        the 1-D classical mount's azimuth ``phi = 0``).  Returns ``self``."""
+        the 1-D classical mount's azimuth ``phi = 0``).  ``theta`` WINS when both
+        are supplied -- the SAME rule as ``RCWAStack.set_source`` and the 1-D entry
+        points, so ``set_source(angle=A, theta=T)`` resolves to ``T`` in every
+        suite.  Returns ``self``."""
         angle = _resolve_incidence(angle, theta)
         self._src = dict(wl=float(wavelength), angle=float(angle))
         return self
@@ -3656,8 +3665,19 @@ def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
     fwd = np.where(prop, Sz > 0.0, q.imag > 0.0)
     fidx = np.where(fwd)[0]
     if fidx.size != n:                            # rebalance to exactly n forward
-        score = np.where(prop, Sz, q.imag)
-        fidx = np.argsort(-score)[:n]
+        # Sz (z-flux, ~length^2) and q.imag (decay, dimensionless) are NOT on a
+        # common scale, so a single argsort over a mixed score can rank a strongly
+        # decaying evanescent mode above a weakly-propagating one (audit F5).
+        # Rank each pool on its OWN measure and PREFER propagating-forward modes
+        # (net forward power) over evanescent (forward-decaying) ones.  In
+        # practice the re-ranked modes near the boundary are the flux-null
+        # spurious sea (zero power), so observables are unchanged -- this only
+        # removes the unit-mixing fragility.
+        prop_i = np.where(prop)[0]
+        ev_i = np.where(~prop)[0]
+        prop_i = prop_i[np.argsort(-Sz[prop_i])]
+        ev_i = ev_i[np.argsort(-q.imag[ev_i])]
+        fidx = np.sort(np.concatenate([prop_i, ev_i])[:n])
     bidx = np.array(sorted(set(range(len(q))) - set(fidx.tolist())))
 
     Wf, Vf, qf = phis[:, fidx], V[:, fidx], q[fidx]

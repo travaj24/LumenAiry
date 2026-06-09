@@ -18,6 +18,7 @@ from lumenairy.elements.rcwa import (
     _binary_grating_convolutions,
     _propagation_smatrix,
     _redheffer_star,
+    rcwa_efficiency_1d,
 )
 
 
@@ -82,3 +83,21 @@ def test_p4_default_use_li_true_unchanged():
     like the B2 test that unpack a 2-tuple of matrices."""
     EPS, II = _binary_grating_convolutions(1.5, 1.0, 0.5, 30)
     assert EPS.shape == (61, 61) and II.shape == (61, 61)
+
+
+def test_p4_use_li_false_te_end_to_end_noop():
+    """Audit F4: end-to-end validation of the use_li=False (Laurent) path where
+    P4 skips EPS_II.  The wall-normal inverse-rule operator does NOT enter the TE
+    problem, so formulation='laurent' (use_li=False, EPS_II skipped) is
+    BYTE-IDENTICAL to formulation='li' for TE -- proving the skip changed nothing
+    on the common path -- and conserves energy.  (For TM the two rules differ only
+    in CONVERGENCE RATE; both reach the same answer, so laurent+tm is a valid, if
+    slower, choice, NOT a guarded error -- hence no precondition raise.)"""
+    args = dict(period=0.9e-6, n_ridge=2.0, n_groove=1.0, n_substrate=1.5,
+                n_superstrate=1.0, depth=0.45e-6, duty_cycle=0.5,
+                wavelength=0.633e-6, polarization="te", n_orders=31)
+    o_l, R_l, T_l = rcwa_efficiency_1d(**args, formulation="laurent")
+    o_i, R_i, T_i = rcwa_efficiency_1d(**args, formulation="li")
+    assert np.array_equal(np.asarray(R_l), np.asarray(R_i))
+    assert np.array_equal(np.asarray(T_l), np.asarray(T_i))
+    assert abs(float(np.sum(R_l) + np.sum(T_l)) - 1.0) < 1e-6

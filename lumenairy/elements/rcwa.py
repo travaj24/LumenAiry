@@ -1289,10 +1289,13 @@ def _redheffer_star(SA, SB):
     # (I - A22 @ B11) are both exactly I, whose inverse is byte-identically I
     # (verified: max|inv(I)-I| == 0).  Substituting the literal I is therefore
     # bit-for-bit identical to inverting it, so skip the two dense 2N inverses.
-    # A JAX array can't be host-tested under jit (bool(.any()) would raise on a
-    # tracer) -> fall through to the inverse (unchanged path), keeping the JAX
-    # result identical.  (NB _is_traced is scalar-only -- complex() of a matrix
-    # always raises -- so detect the backend with is_jax_array on the blocks.)
+    # The JAX backend SKIPS this optimization entirely (it is a NumPy/CuPy-only
+    # fast path): bool(.any()) cannot be evaluated on a jit tracer, so a JAX
+    # array always takes the inverse branch below -- the SAME (unchanged) result,
+    # just without the zero-block shortcut.  The is_jax_array guards are a backend
+    # test, NOT the zero test; only the concrete .any() calls test for a zero
+    # block.  (is_jax_array, not the scalar-only _is_traced whose complex()
+    # coercion always raises on a matrix.)
     if (not is_jax_array(A22) and not is_jax_array(B11)
             and (not bool(A22.any()) or not bool(B11.any()))):
         D = I
@@ -1405,8 +1408,9 @@ def _propagation_smatrix_general(lam_f, lam_b, k0_L):
 def _resolve_incidence(angle, theta):
     """Cross-dimension alias: accept ``theta`` (the polar-angle spelling used by
     ``RCWAStack`` and the ``rcwa_*_2d`` conical solvers) as a synonym for the 1-D
-    classical-mount ``angle``.  The 1-D mount is planar (azimuth ``phi = 0``), so
-    ``theta`` IS the in-plane ``angle``.  ``theta`` overrides when supplied;
+    classical-mount ``angle``.  ``theta`` IS ``angle`` -- the SAME number, NO
+    scaling or conversion, both measured from the ``+z`` surface normal; the 1-D
+    mount is planar (azimuth ``phi = 0``).  ``theta`` overrides when supplied;
     ``None`` (the default) keeps ``angle``."""
     return angle if theta is None else theta
 
@@ -1472,9 +1476,15 @@ def rcwa_efficiency_1d(
         Default 11.
     formulation : {'auto', 'laurent', 'li'}, optional
         Fourier factorization.  ``'laurent'`` (direct rule) converges fast
-        for dielectrics; ``'li'`` (inverse rule) is required for metals /
-        high-contrast TM.  ``'auto'`` picks ``'li'`` for TM or when any
-        index is metallic, else ``'laurent'``.
+        for dielectrics; ``'li'`` (inverse rule) is strongly preferred for
+        metals / high-contrast TM (the wall-normal ``E_x`` is discontinuous).
+        ``'auto'`` (default) picks ``'li'`` for TM or when any index is
+        metallic, else ``'laurent'`` -- and ``'laurent'`` for TE never touches
+        the inverse rule (the wall-normal operator does not enter the TE
+        problem, so the result is identical to ``'li'``).  An explicit
+        ``'laurent'`` with TM is PERMITTED but converges slowly -- it reaches
+        the same answer at higher order, not a wrong one; prefer ``'auto'`` /
+        ``'li'`` unless deliberately studying the factorization rule.
     asr_eta : float, optional
         Adaptive Spatial Resolution sharpness (Granet 1999), in ``[0, 1)``.
         ``0.0`` (default) is the standard uniform method, **bit-identical** to
@@ -5196,19 +5206,23 @@ class RCWAStack:
         return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
                                      rule="midpoint")
 
-    def set_source(self, wavelength, *, theta=0.0, phi=0.0, angle=None):
+    def set_source(self, wavelength, *, theta=None, phi=0.0, angle=None):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
         ``theta`` and azimuth ``phi`` [rad]).  ``angle`` is accepted as a
-        cross-suite alias for ``theta`` (matching ``PMMStack.set_source`` /
-        the 1-D ``angle``); when given it overrides ``theta`` (with ``phi``
-        unchanged -- the classical planar mount is ``phi = 0``).
+        cross-suite alias for the polar ``theta`` (the 1-D ``angle`` /
+        ``PMMStack.set_source`` spelling), with ``phi`` unaffected (the classical
+        planar mount is ``phi = 0``).  To keep cross-suite substitution
+        unambiguous, ``theta`` WINS when both are supplied -- the SAME rule as the
+        1-D entry points and ``PMMStack.set_source`` (so ``set_source(angle=A,
+        theta=T)`` resolves to ``T`` in every suite); pass just one in practice.
 
         The stack solver always returns the full zeroth-order Jones response
         (the reaction to both incident ``E_x`` and ``E_y``), so no incident
         polarization is selected here."""
         _validate_geometry("RCWAStack.set_source", wavelength=wavelength)
-        if angle is not None:
-            theta = angle
+        theta = _resolve_incidence(angle, theta)      # theta wins; falls back to angle
+        if theta is None:
+            theta = 0.0
         self._source = dict(wavelength=float(wavelength), theta=float(theta),
                             phi=float(phi))
         return self

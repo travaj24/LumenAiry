@@ -16,6 +16,7 @@ See docs/audits/PMM_RCWA_AUDIT_2026_06_08.md (naming divergence) and
 docs/audits/AUDIT_EXECUTION_PLAN.md (Stage 2a/2b).
 """
 import numpy as np
+import pytest
 
 import lumenairy as la
 from lumenairy.elements.pmm import (
@@ -106,6 +107,31 @@ def test_pmm_1d_scalar_eps_promoted_to_isotropic_tensor():
         assert np.array_equal(np.asarray(x), np.asarray(y))
 
 
+def test_pmm_1d_jax_scalar_eps_promoted():
+    """Audit F1: the documented scalar-promotion contract must also hold on the
+    JAX (differentiable) surface -- a 0-d JAX eps must promote to scalar*eye(3),
+    not raise the (3,3) ValueError, and must stay grad-able to the index value."""
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+    base = dict(period=0.8e-6, n_substrate=1.5 + 0j, n_superstrate=1.0 + 0j,
+                depth=0.5e-6, duty_cycle=0.5, wavelength=0.633e-6, degree=10,
+                stabilize=False)
+    a = pmm_1d(eps_ridge=jnp.asarray(2.0 + 0j), eps_groove=jnp.asarray(1.0 + 0j),
+               **base)
+    b = pmm_1d(eps_ridge=jnp.asarray(2.0 + 0j) * jnp.eye(3),
+               eps_groove=jnp.asarray(1.0 + 0j) * jnp.eye(3), **base)
+    assert np.allclose(np.asarray(a[3]), np.asarray(b[3]))   # scalar == eye3
+
+    def loss(nr):
+        _, _, _, j = pmm_1d(eps_ridge=nr * nr, eps_groove=jnp.asarray(1.0 + 0j),
+                            **base)
+        return jnp.sum(jnp.abs(j) ** 2)
+
+    g = jax.grad(loss)(jnp.asarray(1.4 + 0j))
+    assert np.isfinite(np.asarray(g).real)                  # promotion stays diff'able
+
+
 def test_pmmstack_n_orders_constructor_alias():
     rd, gr = _eye3(4.0), _eye3(2.0)
 
@@ -183,8 +209,10 @@ def test_rcwa_stack_set_source_angle_aliases_theta():
     a = build(theta=_TH)
     b = build(angle=_TH)
     assert np.array_equal(a, b)
-    # override: angle wins over a different theta
-    c = build(theta=0.9, angle=_TH)
+    # CROSS-SUITE CONSISTENCY (audit F2): theta WINS when both are given, the
+    # SAME rule as PMMStack.set_source and the 1-D entry points -- so the same
+    # set_source(angle=A, theta=T) call resolves to T in every suite.
+    c = build(theta=_TH, angle=0.9)
     assert np.array_equal(a, c)
 
 
@@ -200,6 +228,27 @@ def test_pmm_stack_set_source_theta_aliases_angle():
     o2, R2, T2, J2 = build(theta=_TH)
     assert np.array_equal(np.asarray(R1), np.asarray(R2))
     assert np.array_equal(J1, J2)
+    # both-given override (audit F3): theta wins -- matches RCWAStack
+    o3, R3, T3, J3 = build(theta=_TH, angle=0.9)
+    assert np.array_equal(J2, J3)
+
+
+def test_set_source_theta_wins_consistent_across_suites():
+    """Audit F2: set_source(angle=A, theta=T) must resolve to the SAME incidence
+    (T) in both stack suites -- the cross-suite drop-in substitution the aliasing
+    was meant to enable."""
+    A, T = 0.7, 0.25
+    grid = np.where(np.arange(64) < 32, 4.0, 1.0).astype(complex)
+    rc = la.RCWAStack(1e-6, n_substrate=1.5, n_superstrate=1.0, n_orders=11)
+    rc.add_layer(0.3e-6, eps_cell=grid)
+    j_both = rc.set_source(0.633e-6, angle=A, theta=T).solve().jones_reflection()
+    j_theta = rc.set_source(0.633e-6, theta=T).solve().jones_reflection()
+    assert np.array_equal(j_both, j_theta)        # theta won, NOT angle
+    pm = la.PMMStack(1e-6, n_substrate=1.5, n_superstrate=1.0, degree=14)
+    pm.add_layer(0.3e-6, segments=[(0.5, _eye3(4.0)), (0.5, _eye3(2.0))])
+    p_both = pm.set_source(0.633e-6, angle=A, theta=T).solve()[3]
+    p_theta = pm.set_source(0.633e-6, theta=T).solve()[3]
+    assert np.array_equal(p_both, p_theta)        # theta won here too
 
 
 # ===================================================================== Stage 2c
