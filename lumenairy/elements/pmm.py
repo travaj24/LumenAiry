@@ -5042,13 +5042,18 @@ def pmm_jones_1d_slanted(
         # dependent (it blew up on CI's OpenBLAS while passing on MKL).  The grating
         # is vertical there, so defer to the EXACT vertical Jones solver (handles
         # in-plane AND out-of-plane), which is well-conditioned and deterministic.
+        # stabilize=True (NOT the slanted call's flag): the vertical Jones solver
+        # has LAPACK-build-dependent resonances at a FIXED degree, so its robust
+        # degree-scan is needed here -- and it matches the reduction tests'
+        # pmm_jones_1d reference (which uses the default stabilize=True), making the
+        # slant=0 result byte-deterministic across BLAS builds.
         return pmm_jones_1d(period, eps_ridge, eps_groove, n_substrate,
                             n_superstrate, depth, duty_cycle, wavelength,
                             angle=float(angle), degree=int(degree),
                             elements_per_region=int(elements_per_region),
                             grade=bool(grade),
                             far_field_orders=int(far_field_orders),
-                            stabilize=bool(stabilize))
+                            stabilize=True)
     if factorization == "covariant":
         cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
@@ -5223,11 +5228,13 @@ def pmm_jones_1d_slanted_segments(
         # half-spaces' TE/TM modes go exactly degenerate -> near-singular interface,
         # BLAS-build-dependent).  Defer to the EXACT vertical Jones segments solver,
         # which is well-conditioned and deterministic.
+        # stabilize=True: the vertical solver's robust degree-scan handles its
+        # fixed-degree LAPACK resonances and matches the reduction reference.
         return pmm_jones_1d_segments(
             period, segments, n_substrate, n_superstrate, depth, wavelength,
             angle=float(angle), degree=int(degree),
             elements_per_region=int(elements_per_region), grade=bool(grade),
-            far_field_orders=int(far_field_orders), stabilize=bool(stabilize))
+            far_field_orders=int(far_field_orders), stabilize=True)
     if factorization == "covariant":
         ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
               wavelength, float(slant_angle))
