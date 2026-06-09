@@ -132,8 +132,31 @@ factorization (`Minv=kron(inv My,inv Mx)`); PP8/PP9 projection/lstsq vectorizati
 byte-closeness vs the eig path before enabling on detection. (See report §3 for
 file:line + est. gains. NOTE PP4/PP11 are largely subsumed/by-design.)
 
-## STAGE 4 — 1D/2D package reorg (LAST; highest blast radius; FULL suites gate).
-Package layouts in report §4.1 (`rcwa/`), §4.2 (`pmm/`), §4.3 (`pmm2d/`). Order:
+## STAGE 4 — 1D/2D package reorg (DEFERRED to a dedicated session — assessment 2026-06-09).
+**Assessment after investigation (NOT rushed at the end of the Stage-2/3 session):**
+- The PMM 1D/2D separation **already exists at the file level** (`pmm.py` = all 1-D;
+  `pmm2d.py` / `pmm2d_staggered.py` = 2-D) — the user's primary "separate 1-D from 2-D"
+  ask is largely met for PMM. The genuine remaining reorg is (a) the RCWA monolith
+  (`rcwa.py` = 1-D + 2-D + jax) and (b) reducing duplication.
+- **`pmm2d` shared-helper extraction is real but tiny:** `_sqrt_decay` + `_inv_lam` are
+  BYTE-IDENTICAL across the two 2-D files; `_kz_forward2` differs only by a docstring
+  (code identical). Total ~15 lines — safe but marginal; not worth a new module + gate
+  cycle on its own. The "farfield epilogue" is NOT shared (hybrid `_axis_projection` vs
+  staggered `_stag_fourier_projection` are basis-specific).
+- **The RCWA R/T tail is NOT verbatim-duplicated** (the original "~7× verbatim" claim is
+  optimistic): the tails share STRUCTURE but differ materially — scalar single-pol
+  (`rcwa_efficiency_1d` ~1700-1740) vs Jones dual-pol vs 2-D each handle `einc_sq`, the
+  longitudinal `rz/tz`, and the incident vector differently. A single
+  `_rt_from_amplitudes` requires a careful PARAMETERIZED extraction (pol count, dim), not
+  a copy-paste merge — real silent-numeric-bug risk if a per-site nuance is flattened.
+- **The full monolith→package split** (`rcwa/`, `pmm/`) is the single highest-blast-radius
+  operation: every test imports privates + monkeypatches module globals + the dispatcher
+  calls cure callees as BARE module globals (report §4.4). It needs a Stage-0 reachability
+  smoke test FIRST and one incremental, full-suite-gated move at a time — a dedicated
+  session, not an end-of-session pass.
+**Recommendation:** do this as its own focused effort using the recipe below; the final
+audit re-surfaces it. Package layouts in report §4.1 (`rcwa/`), §4.2 (`pmm/`), §4.3
+(`pmm2d/`). Order:
 1. `pmm2d/` consolidation (`_common` extraction; collapses the duplicated `_sqrt_decay`/
    `_inv_lam`/`_kz_forward2`/farfield epilogue between pmm2d.py and pmm2d_staggered.py).
 2. `rcwa/` split (extract the R/T tail `_rt_from_amplitudes`/`_incident_vector`/
