@@ -37,6 +37,29 @@ from ._core import (
 )
 
 
+def _warn_stack_energy(R_eff, T_eff):
+    """Warn if a solve returns non-physical gain (``R+T > 1`` per incident
+    polarization) -- the signature of a near-singular interface mode-match in the
+    Redheffer cascade (the measure-zero quasi-resonance RCWA guards with
+    ``_check_energy``; the many-interface tapered z-staircase can hit it at large
+    ``n_slices``).  A passive structure cannot reflect+transmit more than the
+    incident power regardless of loss, so this is a pure instability tripwire
+    (lossy media give ``R+T < 1`` and never trip).  A WARNING (not a raise) so it
+    never breaks an existing working solve; reduce ``n_slices`` / raise ``degree``
+    to clear it."""
+    R = np.asarray(R_eff)
+    T = np.asarray(T_eff)
+    tot = np.real(R).sum(axis=-1) + np.real(T).sum(axis=-1)
+    worst = float(np.max(tot)) if tot.size else 0.0
+    if worst > 1.0 + 1e-2:
+        import warnings
+        warnings.warn(
+            f"PMMStack.solve: energy not conserved (max R+T = {worst:.3g} > 1) "
+            "-- a near-singular interface mode-match in the cascade (e.g. too "
+            "many tapered slices). The result is unreliable; reduce n_slices or "
+            "raise degree.", stacklevel=3)
+
+
 class PMMStack:
     """Multilayer 1-D grating stack solved by the Polynomial Modal Method -- the
     spectral-element counterpart of :class:`~lumenairy.elements.rcwa.RCWAStack`.
@@ -149,6 +172,80 @@ class PMMStack:
                 raise ValueError("PMMStack.add_layer: empty segments.")
             segs = [(float(w), self._as_tensor(e)) for w, e in segments]
         self._layers.append((float(thickness), segs, float(slant_angle)))
+        return self
+
+    def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
+                            duty_bottom, duty_top=None, n_slices=8,
+                            rule="midpoint"):
+        """Append a 1-D grating with SLANTED / TRAPEZOIDAL sidewalls as an
+        auto-sliced z-staircase of thin VERTICAL PMM layers -- the spectral-
+        element counterpart of :meth:`RCWAStack.add_tapered_grating`.
+
+        The centred ridge's duty cycle varies linearly with depth from
+        ``duty_top`` (top, ``zeta = 0``) to ``duty_bottom`` (bottom, ``zeta = 1``);
+        each slice is a vertical binary grating whose walls are resolved EXACTLY
+        by the nodal grid (no Fourier/Gibbs floor in x -- the PMM advantage), so
+        the only approximation is the z-staircase of the taper (a true trapezoid
+        is the ``n_slices -> infinity`` limit).  ``duty_top == duty_bottom`` gives
+        the usual vertical binary grating.
+
+        COST NOTE: every slice's two walls enter the stack's SHARED union grid, so
+        the global node count -- and thus each layer's eig -- grows with
+        ``n_slices``.  This is laterally exact and beats an RCWA z-staircase per
+        slice (no Fourier floor), but is practical for MODEST ``n_slices``; for a
+        scalable no-floor taper prefer a single covariant taper-metric layer (a
+        roadmap item).  The ``z``-staircase converges as ``O(1/n_slices^2)`` with
+        the default centre (``'midpoint'``) rule.  A wavelength sweep should use
+        :meth:`solve_vs_wavelength`, which assembles the (large) shared grid ONCE.
+
+        Parameters
+        ----------
+        thickness : float
+            Grating thickness (metres).
+        eps_ridge, eps_groove : complex or (3, 3)
+            Ridge / groove permittivity (scalar or full tensor; PUBLIC
+            ``Im(eps) > 0``).
+        duty_bottom : float
+            Ridge fraction at the bottom of the grating, in ``[0, 1]``.
+        duty_top : float, optional
+            Ridge fraction at the top; defaults to ``duty_bottom`` (vertical).
+        n_slices : int, optional
+            Staircase slice count (the convergence knob; default 8).
+        rule : {'midpoint', 'trapezoid'}, optional
+            Sample each slice's duty at its centre (``'midpoint'``, default,
+            ``O(1/n^2)``) or average its two edges (``'trapezoid'``).
+        """
+        n = int(n_slices)
+        if n < 1:
+            raise ValueError(
+                f"add_tapered_grating: n_slices must be >= 1, got {n_slices}.")
+        if rule not in ("midpoint", "trapezoid"):
+            raise ValueError(
+                f"add_tapered_grating: rule must be 'midpoint' or 'trapezoid', "
+                f"got {rule!r}.")
+        dt = float(duty_bottom if duty_top is None else duty_top)
+        db = float(duty_bottom)
+        for d in (db, dt):
+            if not (0.0 <= d <= 1.0):
+                raise ValueError(
+                    f"add_tapered_grating: duty cycles must be in [0, 1], got "
+                    f"duty_top={dt}, duty_bottom={db}.")
+        dz = float(thickness) / n
+        for k in range(n):
+            if rule == "midpoint":
+                duty = dt + (db - dt) * ((k + 0.5) / n)
+            else:
+                duty = dt + (db - dt) * 0.5 * (k / n + (k + 1) / n)
+            tol = 1e-9
+            if duty <= tol:                       # ridge vanished -> all groove
+                self.add_layer(dz, eps=eps_groove)
+            elif duty >= 1.0 - tol:               # groove vanished -> all ridge
+                self.add_layer(dz, eps=eps_ridge)
+            else:                                 # centred ridge between grooves
+                edge = 0.5 * (1.0 - duty)
+                self.add_layer(dz, segments=[(edge, eps_groove),
+                                             (duty, eps_ridge),
+                                             (edge, eps_groove)])
         return self
 
     def set_source(self, wavelength, *, angle=0.0, theta=None):
@@ -318,6 +415,7 @@ class PMMStack:
         kx0n = kx0 / k0
         R_eff, T_eff, jones = _assemble_jones_farfield(
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N)
+        _warn_stack_energy(R_eff, T_eff)
         return orders, R_eff, T_eff, jones
 
     def _solve_covariant(self, wl, angle, k0):
@@ -414,6 +512,7 @@ class PMMStack:
         R, T, jones = _assemble_jones_farfield(
             Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
             kx0 / k0, N)
+        _warn_stack_energy(R, T)
         return orders, R, T, np.conj(jones)        # conj: bridge +iwt -> public
 
 
