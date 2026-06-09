@@ -55,9 +55,11 @@ def test_b5_opposite_sign_slant_is_not_uniform():
 
 # ------------------------------------------------------------------- JAX (B3/B4/B7)
 jax = pytest.importorskip("jax")
-import jax.numpy as jnp                                                 # noqa: E402
+import jax.numpy as jnp  # noqa: E402
+
+from lumenairy.elements.pmm import pmm_jones_1d  # noqa: E402
+
 jax.config.update("jax_enable_x64", True)
-from lumenairy.elements.pmm import pmm_jones_1d                          # noqa: E402
 
 
 def test_b4_jax_jones_metal_tensor_no_nan_crash():
