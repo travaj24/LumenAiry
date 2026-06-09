@@ -830,8 +830,10 @@ def test_polarization_s_p_aliases(alias, canon):
 def test_use_gpu_without_cupy_raises_clear_error(monkeypatch):
     """use_gpu=True must raise a clear, actionable error when CuPy is absent
     (rather than a cryptic NumPy/AttributeError)."""
-    import lumenairy.elements.rcwa as _r
-    monkeypatch.setattr(_r, "CUPY_AVAILABLE", False)
+    # CUPY_AVAILABLE is read in the rcwa._core submodule (the package was split
+    # 1-D/2-D/core); patch it where it is LOOKED UP, not the re-exported alias.
+    import lumenairy.elements.rcwa._core as _rc
+    monkeypatch.setattr(_rc, "CUPY_AVAILABLE", False)
     with pytest.raises(RuntimeError, match="use_gpu=True but CuPy is not"):
         rcwa_efficiency_1d(1.2e-6, 2.2, 1.0, 1.5, 1.0, 0.5e-6, 0.5, WL,
                            n_orders=11, use_gpu=True)
