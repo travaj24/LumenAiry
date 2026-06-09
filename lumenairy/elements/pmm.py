@@ -642,6 +642,11 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     """
     safe_r = np.where(np.abs(kz_sup) < 1e-12, 1.0, kz_sup)
     safe_t = np.where(np.abs(kz_sub) < 1e-12, 1.0, kz_sub)
+    if abs(kz_inc) < 1e-9:
+        raise ValueError(
+            "pmm: grazing/evanescent incidence (kz_inc ~ 0) -- the incident wave "
+            "carries ~no z-flux, so the R/T flux normalization is ill-defined.  "
+            "Reduce the incidence angle below grazing.")
     m0 = np.where(orders == 0)[0][0]
     jones = np.zeros((2, 2), dtype=_C)
     R_eff = np.zeros((2, N))
@@ -681,6 +686,11 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
     kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+    if abs(kz_inc) < 1e-9:
+        raise ValueError(
+            "pmm: grazing/evanescent incidence (kz_inc ~ 0) -- the incident wave "
+            "carries ~no z-flux, so R/T normalization is ill-defined.  Reduce the "
+            "incidence angle below grazing.")
     if polarization == "te":
         R = np.real(kz_sup / kz_inc) * np.abs(r_ord) ** 2
         T = np.real(kz_sub / kz_inc) * np.abs(t_ord) ** 2

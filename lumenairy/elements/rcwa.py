@@ -624,6 +624,12 @@ def _validate_shapes(fn_name, shapes, period_x, period_y):
                     f"{fn_name}: shapes[{i}] ({kind}) has a non-positive "
                     f"dimension {d!r}; all sizes / radii / semi-axes must "
                     f"be > 0 metres.")
+        eps_sh = sh.get("eps")
+        if eps_sh is not None and abs(_C(eps_sh)) < 1e-12:
+            raise ValueError(
+                f"{fn_name}: shapes[{i}] ({kind}) has eps ~ 0 ({eps_sh!r}); a "
+                f"zero permittivity blows up the averaged-eps / inverse-rule "
+                f"convolution (inf/NaN) -- use a small non-zero eps.")
         # An exactly-tiling rectangle (fraction == 1) and an inscribed
         # disk/ellipse (extent == period) are legitimate, so compare with a
         # tiny relative slack -- far below any real overshoot.
@@ -1463,7 +1469,8 @@ def rcwa_efficiency_1d(
                     period, n_ridge, n_groove, n_substrate, n_superstrate,
                     depth, duty_cycle, wavelength, angle=angle,
                     polarization=polarization, n_orders=int(n_orders) + bump,
-                    formulation=formulation, stabilize=False, use_gpu=use_gpu)
+                    formulation=formulation, stabilize=False, use_gpu=use_gpu,
+                    asr_eta=asr_eta, asr_samples=asr_samples)  # forward ASR (P2)
             except _EnergyError as e:
                 last = e
         raise last
@@ -1678,6 +1685,7 @@ def rcwa_efficiency_vs_wavelength(
     n_orders: int = 11,
     formulation: str = "auto",
     quantity: str = "transmitted",
+    stabilize: bool = False,
 ) -> np.ndarray:
     """Rigorous diffraction efficiency of a single order across a wavelength
     sweep -- the spectral companion to :func:`rcwa_efficiency_1d`, mirroring
@@ -1723,17 +1731,29 @@ def rcwa_efficiency_vs_wavelength(
             "rcwa_efficiency_vs_wavelength: every wavelength must be a finite "
             "value > 0 [m].")
     out = np.empty(wl.shape[0], dtype=float)
+    n_unstable = 0
     for i, w in enumerate(wl):
-        orders, R, T = rcwa_efficiency_1d(
-            period, n_ridge, n_groove, n_substrate, n_superstrate, depth,
-            duty_cycle, float(w), angle=angle, polarization=polarization,
-            n_orders=n_orders, formulation=formulation)
+        try:
+            orders, R, T = rcwa_efficiency_1d(
+                period, n_ridge, n_groove, n_substrate, n_superstrate, depth,
+                duty_cycle, float(w), angle=angle, polarization=polarization,
+                n_orders=n_orders, formulation=formulation, stabilize=stabilize)
+        except _EnergyError:
+            out[i] = np.nan          # one unstable wavelength must NOT abort the
+            n_unstable += 1          # whole sweep (audit P2); flag it and continue
+            continue
         idx = np.searchsorted(orders, order)
         if idx >= orders.shape[0] or orders[idx] != order:
             raise ValueError(
                 f"rcwa_efficiency_vs_wavelength: order {order} is outside the "
                 f"retained range +/-{n_orders}; increase n_orders.")
         out[i] = (T[idx] if quantity == "transmitted" else R[idx])
+    if n_unstable:
+        import warnings
+        warnings.warn(
+            f"rcwa_efficiency_vs_wavelength: {n_unstable}/{wl.size} wavelengths hit "
+            f"a numerical instability (energy non-conservation) and were set to "
+            f"NaN; pass stabilize=True or adjust n_orders / period.", stacklevel=2)
     return out if np.ndim(wavelengths) else out[0]
 
 
@@ -3265,7 +3285,8 @@ def rcwa_jones_1d(
         eps_reals = [eps_sup, eps_sub]
         if not is_jax:
             eps_reals += [complex(eps_ridge[0, 0]), complex(eps_ridge[1, 1]),
-                          complex(eps_groove[0, 0]), complex(eps_groove[1, 1])]
+                          complex(eps_ridge[2, 2]), complex(eps_groove[0, 0]),
+                          complex(eps_groove[1, 1]), complex(eps_groove[2, 2])]
         wl_eff = _grazing_safe_wavelength(
             float(wavelength), kx0, 0.0, orders, np.zeros_like(orders), period,
             1.0, eps_reals)
@@ -3445,7 +3466,9 @@ def rcwa_jones_1d_segments(
         eps_reals = [eps_sup, eps_sub]
         if not is_jax:
             for t in eps_tensors:
-                eps_reals += [complex(t[0, 0]), complex(t[1, 1])]
+                eps_reals += [complex(t[0, 0]), complex(t[1, 1]),
+                              complex(t[2, 2])]        # ezz too (audit P2 -- a layer
+                #                          mode grazing on ezz was never nudged)
         wl_eff = _grazing_safe_wavelength(
             float(wavelength), kx0, 0.0, orders, np.zeros_like(orders), period,
             1.0, eps_reals)
@@ -3906,6 +3929,11 @@ def rcwa_efficiency_2d_shapes(
                        period_y=period_y, depth=depth, wavelength=wavelength,
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_shapes("rcwa_efficiency_2d_shapes", shapes, period_x, period_y)
+    if abs(_C(eps_background)) < 1e-12:
+        raise ValueError(
+            f"rcwa_efficiency_2d_shapes: eps_background ~ 0 ({eps_background!r}); "
+            f"a zero background permittivity blows up the averaged-eps / "
+            f"inverse-rule convolution -- use a small non-zero eps.")
     polarization = _normalize_pol("rcwa_efficiency_2d_shapes", polarization)
     truncation = str(truncation)
 
