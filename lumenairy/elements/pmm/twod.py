@@ -81,7 +81,8 @@ from ._core import (
     _redheffer_star,
 )
 
-__all__ = ["pmm_efficiency_2d"]
+__all__ = ["pmm_efficiency_2d", "PreparedPMM2D", "prepare_pmm_2d",
+           "pmm_efficiency_2d_vs_wavelength"]
 
 _C = np.complex128
 
@@ -478,3 +479,254 @@ def pmm_efficiency_2d(
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*Nf (the modal
     # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
     return Efficiency2D(orders2d, R, T, 2 * Nf)
+
+
+# =========================================================================== #
+# Wavelength-sweep reuse: assemble the GEOMETRY-ONLY work once, sweep many.
+#
+# This is the HIGHEST-LEVERAGE sweep in the library: the expensive parts of the
+# hybrid PMM-2D -- the nodal mass inverse + the [[1/eps]]^-1 nodal inversion
+# (``Eps``/``Einv``/``Epn``) and the ``O(N^3)`` Fourier-projection pseudo-inverse
+# (``Tp``/``Tpinv``) -- are all ``k0``-FREE and depend only on the basis +
+# geometry + order set.  Their Fourier-projected forms ``EpsF``/``EinvF``/``EpnF``
+# and ``Gx0F``/``Gy0F`` (the projected derivative operators at ``k0 = 1``) are
+# likewise wavelength-independent.  Per wavelength only the cheap rescale
+# ``GxF = Gx0F/k0 + kx0*IprojF`` and the SMALL projected eig (size ``2*Nf``,
+# ``Nf = (2 n_orders + 1)^2``) + S-matrix cascade run.  When ``degree >>
+# n_orders`` the reusable nodal/pinv work dominates -> a multi-x sweep speed-up.
+# ``prepare_pmm_2d(...).solve(wl)`` reproduces ``pmm_efficiency_2d(...)`` to
+# ~1e-13 (the only delta: ``Gx0F/k0`` reorders one division vs the single call;
+# the uniform-layer path is byte-identical).  Non-dispersive + fixed (theta,phi).
+# =========================================================================== #
+class PreparedPMM2D:
+    """A wavelength-invariant hybrid 2-D PMM assembly, reusable across a sweep.
+
+    Build with :func:`prepare_pmm_2d`; call :meth:`solve` per wavelength.  Holds
+    the basis, the order set, the incident vector, and -- for a structured layer
+    -- the ``k0``-free Fourier-projected operators (the reused nodal inversions +
+    pseudo-inverse).  :meth:`solve` runs only the per-wavelength operator rescale,
+    the small projected eig, and the S-matrix cascade.  NON-DISPERSIVE indices and
+    a FIXED ``(theta, phi)`` are assumed.
+    """
+
+    __slots__ = ("period_x", "period_y", "depth", "polarization", "formulation",
+                 "eps_h", "eps_sup", "eps_sub", "uniform_layer",
+                 "order_x", "order_y", "Nf", "kx0", "ky0",
+                 "Gx0F", "Gy0F", "EpsF", "EinvF", "EpnF", "IprojF",
+                 "cinc", "einc_sq", "kz_inc")
+
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+    def solve(self, wavelength) -> Efficiency2D:
+        """Diffraction efficiencies at ``wavelength`` reusing the prepared
+        geometry (equivalent to ``pmm_efficiency_2d(...)`` to ~1e-13)."""
+        k0 = 2.0 * np.pi / wavelength
+        wl = wavelength
+        order_x, order_y, Nf = self.order_x, self.order_y, self.Nf
+        kxv = self.kx0 + order_x * (wl / self.period_x)
+        kyv = self.ky0 + order_y * (wl / self.period_y)
+
+        Wsup, Vsup, _ls, kz_ref = _homogeneous_modes(kxv, kyv, self.eps_sup)
+        Wsub, Vsub, _lb, kz_trn = _homogeneous_modes(kxv, kyv, self.eps_sub)
+
+        if self.uniform_layer:
+            Wl, Vl, lam_l, _ = _homogeneous_modes(kxv, kyv, self.eps_h)
+        else:
+            GxF = self.Gx0F / k0 + self.kx0 * self.IprojF
+            GyF = self.Gy0F / k0 + self.ky0 * self.IprojF
+            Wl, Vl, lam_l = _layer_modes_projected(
+                GxF, GyF, self.EpsF, self.EinvF, self.EpnF,
+                formulation=self.formulation)
+
+        S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
+        S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * self.depth))
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
+        S11, _S12, S21, _S22 = S
+
+        cinc = self.cinc
+        r = S11 @ cinc
+        t = S21 @ cinc
+        rx, ry = r[:Nf], r[Nf:]
+        tx, ty = t[:Nf], t[Nf:]
+        safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+        safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        rz = -(kxv * rx + kyv * ry) / safe_r
+        tz = -(kxv * tx + kyv * ty) / safe_t
+        R = np.real(kz_ref / self.kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                             + np.abs(rz) ** 2) / self.einc_sq
+        T = np.real(kz_trn / self.kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                             + np.abs(tz) ** 2) / self.einc_sq
+        R = np.where(np.real(kz_ref) > 0, np.real(R), 0.0)
+        T = np.where(np.real(kz_trn) > 0, np.real(T), 0.0)
+        orders2d = np.stack([order_x, order_y], axis=1)
+        return Efficiency2D(orders2d, R, T, 2 * Nf)
+
+
+def prepare_pmm_2d(
+    period_x: float,
+    period_y: float,
+    eps_pillar: complex,
+    eps_host: complex,
+    x_bounds: Tuple[float, float],
+    y_bounds: Tuple[float, float],
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    *,
+    degree: int = 11,
+    elements_per_strip: int = 1,
+    grade: bool = False,
+    polarization: str = "te",
+    theta: float = 0.0,
+    phi: float = 0.0,
+    n_orders: int = 11,
+    formulation: str = "li",
+) -> PreparedPMM2D:
+    """Assemble the wavelength-INDEPENDENT part of a hybrid 2-D PMM solve once,
+    for a wavelength sweep that reuses it (see :class:`PreparedPMM2D`).
+
+    Parameters are the geometry/angle subset of :func:`pmm_efficiency_2d` (no
+    ``wavelength``).  NON-DISPERSIVE indices and a FIXED ``(theta, phi)`` assumed.
+    """
+    n_nodes_axis = 3 * degree * elements_per_strip
+    if n_nodes_axis % 2 == 0:
+        raise ValueError(
+            "per-axis node count 3*degree*elements_per_strip must be ODD to "
+            "avoid the periodic Nyquist null mode (use an odd polynomial "
+            f"degree); got degree={degree}, elements_per_strip="
+            f"{elements_per_strip} -> {n_nodes_axis} nodes")
+    if 2 * n_orders + 1 > n_nodes_axis:
+        raise ValueError(
+            f"n_orders={n_orders} too large for degree={degree}: need "
+            f"2*n_orders+1 ({2 * n_orders + 1}) <= per-axis nodes "
+            f"({n_nodes_axis}); raise degree or lower n_orders")
+    if polarization not in ("te", "tm"):
+        raise ValueError("polarization must be 'te' or 'tm'")
+
+    x0, x1 = float(x_bounds[0]), float(x_bounds[1])
+    y0, y1 = float(y_bounds[0]), float(y_bounds[1])
+    eps_p = np.conj(_C(eps_pillar))
+    eps_h = np.conj(_C(eps_host))
+    eps_sup = np.conj(_C(n_superstrate) ** 2)
+    eps_sub = np.conj(_C(n_substrate) ** 2)
+
+    ax = _build_axis(period_x, [x0, x1], degree, elements_per_strip, grade)
+    ay = _build_axis(period_y, [y0, y1], degree, elements_per_strip, grade)
+    eps_tile = np.full((3, 3), eps_h, dtype=_C)
+    eps_tile[1, 1] = eps_p
+
+    nre = float(np.real(np.sqrt(eps_sup)))
+    kx0 = nre * np.sin(theta) * np.cos(phi)
+    ky0 = nre * np.sin(theta) * np.sin(phi)
+
+    ox = np.arange(-n_orders, n_orders + 1)
+    oy = np.arange(-n_orders, n_orders + 1)
+    order_x = np.tile(ox, len(oy))
+    order_y = np.repeat(oy, len(ox))
+    Nf = len(order_x)
+
+    uniform_layer = abs(eps_p - eps_h) < 1e-12
+    Gx0F = Gy0F = EpsF = EinvF = EpnF = IprojF = None
+    if not uniform_layer:
+        Tp, Tpinv = _projectors(ax, ay, ox, oy)
+        # k0=1 -> Gx is the UNIT derivative op (-1j * Minv @ DX); the actual
+        # k0-scaling is applied per wavelength in solve() as Gx0F / k0.  Eps /
+        # Einv / Epn are k0-free regardless.
+        ops = _assemble_2d(ax, ay, eps_tile, 1.0)
+        Gx0F = Tp @ ops["Gx"] @ Tpinv
+        Gy0F = Tp @ ops["Gy"] @ Tpinv
+        EpsF = Tp @ ops["Eps"] @ Tpinv
+        EinvF = Tp @ ops["Einv"] @ Tpinv
+        EpnF = Tp @ ops["Epn"] @ Tpinv
+        IprojF = Tp @ Tpinv
+
+    # Incident plane wave (angle + eps_sup, NOT wavelength).
+    kt = float(np.hypot(kx0, ky0))
+    if kt < 1e-12:
+        ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
+        einc_sq = 1.0
+    else:
+        axu, ayu = kx0 / kt, ky0 / kt
+        if polarization == "te":
+            ex0, ey0 = -ayu, axu
+            einc_sq = 1.0
+        else:
+            ex0, ey0 = axu, ayu
+            kz_inc0 = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+            einc_sq = 1.0 + (kt / kz_inc0) ** 2
+    delta = ((order_x == 0) & (order_y == 0)).astype(_C)
+    cinc = np.concatenate([ex0 * delta, ey0 * delta])
+    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+
+    return PreparedPMM2D(
+        period_x=period_x, period_y=period_y, depth=depth,
+        polarization=polarization, formulation=formulation,
+        eps_h=eps_h, eps_sup=eps_sup, eps_sub=eps_sub,
+        uniform_layer=uniform_layer, order_x=order_x, order_y=order_y, Nf=Nf,
+        kx0=kx0, ky0=ky0, Gx0F=Gx0F, Gy0F=Gy0F, EpsF=EpsF, EinvF=EinvF,
+        EpnF=EpnF, IprojF=IprojF, cinc=cinc, einc_sq=einc_sq, kz_inc=kz_inc)
+
+
+def pmm_efficiency_2d_vs_wavelength(
+    period_x: float,
+    period_y: float,
+    eps_pillar: complex,
+    eps_host: complex,
+    x_bounds: Tuple[float, float],
+    y_bounds: Tuple[float, float],
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelengths,
+    *,
+    degree: int = 11,
+    elements_per_strip: int = 1,
+    grade: bool = False,
+    polarization: str = "te",
+    theta: float = 0.0,
+    phi: float = 0.0,
+    n_orders: int = 11,
+    formulation: str = "li",
+):
+    """Hybrid 2-D PMM diffraction efficiencies across a wavelength sweep, reusing
+    the geometry-only nodal/pseudo-inverse assembly (the spectral companion to
+    :func:`pmm_efficiency_2d`).
+
+    Assembles the wavelength-invariant projected operators ONCE (via
+    :func:`prepare_pmm_2d`) and loops only the per-wavelength operator rescale +
+    small projected eig + S-matrix.  Largest reuse win when ``degree >>
+    n_orders``.  Dispersive media (indices that change with wavelength) are NOT
+    reusable -- call :func:`pmm_efficiency_2d` per wavelength instead.
+
+    Returns
+    -------
+    orders : (Nf, 2) int ndarray
+        The (wavelength-independent) retained order pairs ``(m, n)``.
+    R, T : (n_wavelengths, Nf) float ndarray
+        Reflected / transmitted efficiency per order at each wavelength.
+    """
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0:
+        raise ValueError("pmm_efficiency_2d_vs_wavelength: wavelengths is "
+                         "empty; pass at least one wavelength [m].")
+    if not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError("pmm_efficiency_2d_vs_wavelength: every wavelength "
+                         "must be a finite value > 0 [m].")
+    prepared = prepare_pmm_2d(
+        period_x, period_y, eps_pillar, eps_host, x_bounds, y_bounds,
+        n_substrate, n_superstrate, depth, degree=degree,
+        elements_per_strip=elements_per_strip, grade=grade,
+        polarization=polarization, theta=theta, phi=phi, n_orders=n_orders,
+        formulation=formulation)
+    Nf = prepared.Nf
+    R = np.empty((wl.size, Nf), dtype=float)
+    T = np.empty((wl.size, Nf), dtype=float)
+    orders = None
+    for i, w in enumerate(wl):
+        res = prepared.solve(float(w))
+        orders = res[0]
+        R[i, :] = np.asarray(res[1])
+        T[i, :] = np.asarray(res[2])
+    return orders, R, T

@@ -20,4 +20,5 @@ __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
            "pmm_jones_1d_slanted_segments", "pmm_1d",
            "grating_convergence_class", "classify_from_grating",
-           "pmm_efficiency_2d", "pmm_efficiency_2d_staggered"]
+           "pmm_efficiency_2d", "pmm_efficiency_2d_staggered",
+           "PreparedPMM2D", "prepare_pmm_2d", "pmm_efficiency_2d_vs_wavelength"]
