@@ -478,9 +478,14 @@ def test_jones_slant_oblique_dispatch_invariant(monkeypatch):
     directly with call spies, because a refactor re-enabling the cure for
     oblique+slant would silently return a wrong split with no failing assertion."""
     import lumenairy.elements.pmm as _pmm
+
+    # The slant dispatcher (pmm_jones_1d_slanted) lives in pmm.oned and resolves
+    # these solver names in ITS module namespace (the package was split into
+    # _core/oned/stack), so the call spies must be installed on pmm.oned.
+    import lumenairy.elements.pmm.oned as _pmm_oned
     calls = {"cure": 0, "metric": 0}
-    orig_cure = _pmm._pmm_jones_slant_diag_solve
-    orig_metric = _pmm._pmm_jones_slant_solve
+    orig_cure = _pmm_oned._pmm_jones_slant_diag_solve
+    orig_metric = _pmm_oned._pmm_jones_slant_solve
 
     def spy_cure(*a, **k):
         calls["cure"] += 1
@@ -490,8 +495,8 @@ def test_jones_slant_oblique_dispatch_invariant(monkeypatch):
         calls["metric"] += 1
         return orig_metric(*a, **k)
 
-    monkeypatch.setattr(_pmm, "_pmm_jones_slant_diag_solve", spy_cure)
-    monkeypatch.setattr(_pmm, "_pmm_jones_slant_solve", spy_metric)
+    monkeypatch.setattr(_pmm_oned, "_pmm_jones_slant_diag_solve", spy_cure)
+    monkeypatch.setattr(_pmm_oned, "_pmm_jones_slant_solve", spy_metric)
     erD = _eps_diag(2.25)           # cure-ELIGIBLE diagonal cell (exy=eyx=0, exx==ezz)
     eg = _eps_diag(1.0)
 

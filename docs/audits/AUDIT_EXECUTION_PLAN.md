@@ -132,8 +132,23 @@ factorization (`Minv=kron(inv My,inv Mx)`); PP8/PP9 projection/lstsq vectorizati
 byte-closeness vs the eig path before enabling on detection. (See report §3 for
 file:line + est. gains. NOTE PP4/PP11 are largely subsumed/by-design.)
 
-## STAGE 4 — 1D/2D package reorg (DEFERRED to a dedicated session — assessment 2026-06-09).
-**Assessment after investigation (NOT rushed at the end of the Stage-2/3 session):**
+## STAGE 4 — 1D/2D package reorg — EXECUTED 2026-06-09 (user-requested).
+**DONE:** both monoliths split into mirrored packages, behavior-preserving (line-based
+AST split that PRESERVES every comment/byte; explicit cross-module imports; public API
+unchanged):
+- `rcwa.py` -> `rcwa/{_core,oned,twod,stack}` (commit cdc801e).
+- `pmm.py` -> `pmm/{_core,oned,stack}` + `pmm2d.py`->`pmm/twod.py`,
+  `pmm2d_staggered.py`->`pmm/twod_staggered.py` (folded the 2-D files into the package).
+**Two split-specific gotchas (both fixed):** (1) the cache-lock POLICY test needs the
+splitter to carry ANNOTATED `X: T = {}` module constants into `__all__` (so
+`_HOMOG_CACHE`/`_LAGRANGE_DREF_CACHE` re-export beside their `_LOCK`); (2) the V20
+cross-backend-parity walker keys JAX twins by `__module__`, which moved to `*.oned` --
+update `_PARITY_REGISTRY` + `_JAX_TWIN_MODULES` to `rcwa.oned`/`pmm.oned`.  **KEY LESSON:
+a `-k "pmm or rcwa"` gate MISSES cross-module meta-tests (parity walker, cache-lock
+policy, public_api) -- gate a structural refactor with the FULL suite.**  Monkeypatch:
+`CUPY_AVAILABLE` patched at `rcwa._core`; the slant-dispatch spy at `pmm.oned`.
+
+**Original deferral assessment (superseded by the above) follows for context:**
 - The PMM 1D/2D separation **already exists at the file level** (`pmm.py` = all 1-D;
   `pmm2d.py` / `pmm2d_staggered.py` = 2-D) — the user's primary "separate 1-D from 2-D"
   ask is largely met for PMM. The genuine remaining reorg is (a) the RCWA monolith

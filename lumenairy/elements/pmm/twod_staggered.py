@@ -5,7 +5,7 @@ modified-Legendre basis.
 A NON-Fourier rigorous modal solver for a 2-D (doubly periodic) crossed grating
 of axis-aligned rectangular pillars -- the 2-D analogue of
 :func:`~lumenairy.elements.pmm.pmm_efficiency_1d`, and the *no-floor* counterpart
-of the FMM-floored hybrid :func:`~lumenairy.elements.pmm2d.pmm_efficiency_2d`.
+of the FMM-floored hybrid :func:`~lumenairy.elements.pmm.twod.pmm_efficiency_2d`.
 
 This implements the FAITHFUL staggered modified-Legendre basis of Granet,
 "Modal spectral element method with modified Legendre polynomials to analyze
@@ -72,11 +72,12 @@ import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
 
+from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
+
 # UNCHANGED S-matrix algebra from the shipped 1-D PMM -- every region's modal
 # matrix W is square (same staggered dimension), so these are plain square
 # solves (no pseudo-inverse, no weighting).
-from .pmm import _interface_smatrix, _propagation_smatrix, _redheffer_star
-from .rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
+from ._core import _interface_smatrix, _propagation_smatrix, _redheffer_star
 
 __all__ = ["pmm_efficiency_2d_staggered"]
 
@@ -732,7 +733,7 @@ def pmm_efficiency_2d_staggered(
     2023 staggered modified-Legendre basis).
 
     The NO-FLOOR 2-D counterpart of :func:`pmm_efficiency_1d` and of the
-    FMM-floored hybrid :func:`~lumenairy.elements.pmm2d.pmm_efficiency_2d`: the
+    FMM-floored hybrid :func:`~lumenairy.elements.pmm.twod.pmm_efficiency_2d`: the
     energy balance is ``n_orders``-INDEPENDENT (no Fourier floor) and tracks only
     the modal ``degree``.  See the module docstring for the method and its scope.
 

@@ -39,9 +39,9 @@ _JAX_TWIN_MODULES = (
     'lumenairy.propagators.asymptotic_jax_twin',
     'lumenairy.analysis.through_focus',
     'lumenairy.propagators.system',
-    'lumenairy.elements.rcwa',          # v5.5.3: cover the folded RCWA jax twin
+    'lumenairy.elements.rcwa.oned',     # v5.5.3: RCWA jax twin (rcwa/ split 1D/2D)
     'lumenairy.elements.coatings',      # v5.5.3: cover the differentiable TMM twin
-    'lumenairy.elements.pmm',           # 2026-06-07 audit P2-C: cover the PMM jax twin
+    'lumenairy.elements.pmm.oned',      # 2026-06-07 audit P2-C: PMM jax twin (pmm/ split)
 )
 
 # Non-physics JAX helpers (ray-state builders, cache clearers) -- excluded
@@ -77,8 +77,8 @@ _PARITY_REGISTRY = {
     # v5.5.3: the RCWA jax twin is now a deprecated thin wrapper over the
     # unified, backend-dispatched rcwa_efficiency_1d (its NumPy sibling), so a
     # cross-backend fix can't land on one path only.
-    'lumenairy.elements.rcwa:rcwa_efficiency_1d_jax':
-        'lumenairy.elements.rcwa:rcwa_efficiency_1d',
+    'lumenairy.elements.rcwa.oned:rcwa_efficiency_1d_jax':
+        'lumenairy.elements.rcwa.oned:rcwa_efficiency_1d',
     # v5.5.3: the differentiable thin-film TMM companion mirrors the NumPy
     # real-Snell coating_reflectance to machine precision, so a physics fix
     # (Snell chain, Abeles factors, TIR cap) can't drift between the two.
@@ -87,8 +87,8 @@ _PARITY_REGISTRY = {
     # 2026-06-07 audit P2-C: the PMM jax twin is a thin wrapper over the unified,
     # backend-dispatched pmm_efficiency_1d (its NumPy sibling), so the differentiable
     # PMM path is no longer structurally invisible to the parity walker.
-    'lumenairy.elements.pmm:pmm_efficiency_1d_jax':
-        'lumenairy.elements.pmm:pmm_efficiency_1d',
+    'lumenairy.elements.pmm.oned:pmm_efficiency_1d_jax':
+        'lumenairy.elements.pmm.oned:pmm_efficiency_1d',
 }
 
 # Discovered ``*jax*`` functions intentionally WITHOUT a physics NumPy

@@ -1,5 +1,5 @@
 """
-lumenairy.elements.pmm2d -- 2-D crossed-grating Polynomial Modal Method (hybrid).
+lumenairy.elements.pmm.twod -- 2-D crossed-grating Polynomial Modal Method (hybrid).
 ================================================================================
 
 :func:`pmm_efficiency_2d` is the 2-D (doubly periodic) analogue of
@@ -71,7 +71,8 @@ from typing import Tuple
 
 import numpy as np
 
-from .pmm import (
+from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
+from ._core import (
     _gll_nodes_weights,
     _graded_boundaries,
     _interface_smatrix,
@@ -79,7 +80,6 @@ from .pmm import (
     _propagation_smatrix,
     _redheffer_star,
 )
-from .rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
 
 __all__ = ["pmm_efficiency_2d"]
 

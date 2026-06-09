@@ -102,10 +102,10 @@ from .pmm import (
     pmm_jones_1d_slanted,
     pmm_jones_1d_slanted_segments,
 )
-from .pmm2d import (
+from .pmm.twod import (
     pmm_efficiency_2d,
 )
-from .pmm2d_staggered import (
+from .pmm.twod_staggered import (
     pmm_efficiency_2d_staggered,
 )
 from .polarization import (

@@ -13,7 +13,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 import numpy as np
 import pytest
 
-from lumenairy.elements.pmm2d_staggered import pmm_efficiency_2d_staggered
+from lumenairy.elements.pmm.twod_staggered import pmm_efficiency_2d_staggered
 
 _G = dict(period_x=0.8e-6, period_y=0.8e-6, depth=0.3e-6, wavelength=0.633e-6)
 

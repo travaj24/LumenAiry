@@ -426,10 +426,10 @@ from .elements.pmm import (
     pmm_jones_1d_slanted,
     pmm_jones_1d_slanted_segments,
 )
-from .elements.pmm2d import (
+from .elements.pmm.twod import (
     pmm_efficiency_2d,
 )
-from .elements.pmm2d_staggered import (
+from .elements.pmm.twod_staggered import (
     pmm_efficiency_2d_staggered,
 )
 

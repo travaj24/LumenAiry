@@ -1,128 +1,12 @@
-"""
-Polynomial Modal Method (PMM) -- 1-D lamellar grating
-=====================================================
-
-A NON-Fourier rigorous modal solver for a 1-D binary (lamellar) grating,
-complementary to the Fourier Modal Method (RCWA) in
-:mod:`~lumenairy.elements.rcwa`.  Instead of expanding the periodic field in a
-global Fourier (trigonometric) harmonic basis, PMM expands it in LOCAL
-subsectional high-degree polynomials -- one C0 spectral element per homogeneous
-subsection (ridge / groove), with the element boundary placed EXACTLY on each
-grating wall.  Because each subsection has constant permittivity, every Galerkin
-integral is exact and there is NO Gibbs phenomenon at the discontinuities, so
-the method converges SPECTRALLY (exponentially) in the polynomial degree.
-
-This is the subsectional-polynomial modal method of Edee (JOSA A 28, 2006
-(2011)); the spectral-element (Gauss-Lobatto-Legendre nodal) realisation here
-is mathematically equivalent and well-conditioned.
-
-Why PMM over the Fourier method (and over the just-added ASR coordinate
-stretch)
---------------------------------------------------------------------------
-* **No accuracy floor.**  ASR (``rcwa_efficiency_1d(asr_eta=...)``) plateaus at
-  ~1e-4 for TM because its ``u<->x`` Rayleigh coordinate stretch is still a
-  global Fourier basis whose dense bridge inherits the Fourier-truncation
-  error.  PMM never truncates a Fourier series for the field: ``eps`` is
-  piecewise-constant with the discontinuity ON an element boundary, so the
-  representation is exact and the TM error drops monotonically with no plateau
-  (TE self-converges to ~1e-11).
-* **No conditioning ceiling.**  The homogeneous super/substrate regions are
-  expanded in the SAME nodal basis (their own uniform-``eps`` spectral
-  eigenproblem), so every layer<->region interface is a square, WELL-
-  CONDITIONED nodal-space mode match (cond ~ 1).  The Rayleigh plane-wave
-  projection is applied ONCE, post-recursion, FORWARD only (a small overlap
-  onto the propagating orders) -- it is NEVER inverted as a tall bridge, which
-  is exactly what gives ASR/FMM-hybrid schemes their floor.
-
-Conventions (match the rest of the library)
--------------------------------------------
-PUBLIC ``exp(-i w t)`` convention end-to-end: ``n = n + i kappa`` (``Im eps >
-0`` for loss), forward plane wave ``exp(+i kz z)``, decay ``Im(kz) >= 0``.  No
-index conjugation -- the solver is self-contained and validated by EFFICIENCIES
-(real power fractions), which are convention-independent.  (Mixing the public
-and engineering conventions was the single biggest pitfall during development;
-this module deliberately stays in one convention throughout.)
-
-Factorization (the bug-prone part, get it right or TM/metals converge slowly)
------------------------------------------------------------------------------
-The TM operator is built from ``1/eps``, NOT ``eps`` -- the polynomial analogue
-of Li's inverse rule.  With ``q = gamma/k0 = n_eff`` the generalized modal
-eigenproblems are::
-
-    TE:  ( Peps - L/k0^2  ) v = q^2 S0   v
-    TM:  ( S0   - Linv/k0^2) v = q^2 Pinv v
-
-    S0   = INT B_i B_j            Peps = INT eps   B_i B_j
-    Pinv = INT (1/eps) B_i B_j    L    = INT B_i' B_j'
-    Linv = INT (1/eps) B_i' B_j'
-
-Putting ``1/eps`` on the TM right-mass (``Pinv``) and weighted stiffness
-(``Linv``) is the inverse rule (using ``eps`` instead gives the slow Laurent /
-algebraic TM rate).  The modal partner (magnetic block for the S-matrix) carries
-the per-mode weight ``q`` (TE) or ``q/eps`` i.e. the ``(1/eps)``-weighted field
-(TM).  The S-matrix eigenvalue is ``lam = -i q`` with ``Im(q) >= 0`` so the
-forward propagator ``exp(-lam k0 L) = exp(+i q k0 L)`` decays.
-
-Capability matrix (current)
----------------------------
-The solver now spans the full 1-D family.  Two response kinds x two geometries x
-two wall orientations x two anisotropy classes x two backends:
-
-* RESPONSE: scalar efficiencies (:func:`pmm_efficiency_1d`) OR full ``2x2`` Jones
-  (:func:`pmm_jones_1d`); :func:`pmm_1d` is the unified facade that auto-routes
-  by geometry, and :class:`PMMStack` is the MULTILAYER z-stack entry.
-* GEOMETRY: binary (ridge|groove) OR multi-region ``*_segments`` (N graded
-  regions on one shared nodal grid).
-* WALLS: VERTICAL OR SLANTED (``slant_angle``, ``*_slanted*``); normal OR oblique
-  incidence (``angle`` adds the ``+i kx0`` Bloch shift; forward modes chosen by
-  the z-Poynting flux).
-* ANISOTROPY: scalar/diagonal, full ``(3, 3)`` IN-PLANE tensors (``exy``/``eyx``
-  couple ``[E_x; E_y]``), AND OUT-OF-PLANE (``eps_xz/yz/zx/zy``).
-* BACKEND: NumPy/SciPy throughout; JAX-differentiable twins for the scalar and
-  in-plane vertical Jones paths (slant/OOP JAX is a follow-on).
-
-SLANT has TWO factorizations (kwarg ``factorization``), same physical answer:
-  - ``'convection'`` -- the CONVECTION METRIC GENERATOR (lab-Cartesian ``[E;H]``,
-    slant carried as ``tan * d/dx`` convection).  Fully general (handles
-    OUT-OF-PLANE and mixed-slant stacks) but the TM/p-pol channel converges only
-    ALGEBRAICALLY (~1e-4 per-order floor): the convection differentiates the
-    discontinuous wall-normal field.  NB energy conserves EXACTLY at every degree
-    even while the per-order split is still ~1e-4 off (a lossless cell
-    auto-balances total power) -- so do NOT read energy conservation as a
-    per-order accuracy proxy.
-  - ``'covariant'`` -- the genuinely-covariant Li-1999 OBLIQUE-COORDINATE
-    generator (``_cov_*``): the slanted wall becomes a coordinate surface so the
-    wall-normal discontinuity is handled algebraically and the TM channel
-    converges SPECTRALLY (vertical-grade ~1e-7), ~100-2400x fewer degrees.
-    Handles IN-PLANE AND OUT-OF-PLANE (full 3x3) tensors: the out-of-plane
-    ``eps_xz/yz/zx/zy`` coupling enters via the pointwise ezz-Schur composites
-    (Li-1999 Eq.12) + the ``cos*Dop`` single-x-derivative cross blocks (Li Eq.18/
-    19), SPECTRAL at slant -- ~15x fewer degrees than convection for out-of-plane
-    too.  (The earlier "covariant cannot do out-of-plane" verdict was wrong: it
-    was four operator/factorization bugs -- ``G``-vs-``Dop``, the ``cos`` conical
-    projection, the eyz cross-block sign, and the ``/eps^11`` vs ``/a_eff``
-    inverse-rule denominator -- all since fixed and Li-grounded.)
-  - ``'auto'`` (default) picks covariant for ANY slanted cell (in-plane or
-    out-of-plane), convection otherwise (vertical, where the vertical solver is
-    already exact).
-
-The Li factorization is realized in the nodal basis: the wall-normal inverse rule
-``[[1/exx]]^{-1}`` becomes ``inv(hat(1/exx))`` (the nodal multiply-by-``1/exx``
-operator, inverted); the ``Kx``-derivative terms (``Ez``-elimination, ``Kx^2``)
-become spectral-element STIFFNESS operators weighted by ``1/ezz`` / ``1`` -- so
-the inverse rule is AUTOMATIC and exact (the ``eps`` jump is on an element
-boundary).  TM is monotone-no-floor for VERTICAL gratings (the matched partner
-``Ex = q (1/eps) Hy`` is discontinuous at the wall and a C0 nodal value averages
-that jump; mesh grading toward the walls recovers the corner resolution -- the
-speed lever for metal TM).
-"""
+"""PMM shared core: GLL/Lagrange spectral-element basis, the metric /
+convection / covariant slant generators, the slant solvers + stabilize selector,
+S-matrix cascade, and the far-field nodal->Rayleigh projection.
+NOT a public import surface -- use ``lumenairy.elements.pmm``."""
 from __future__ import annotations
 
-import cmath
 import functools
 import threading
 import warnings
-from typing import Tuple
 
 import numpy as np
 import scipy.linalg as sla
@@ -131,20 +15,13 @@ from numpy.polynomial.legendre import Legendre
 # Backend detection for the JAX (differentiable) dispatch in pmm_efficiency_1d.
 # Mirrors rcwa's pattern: a JAX input routes to the self-contained jnp twin,
 # while a NumPy input falls through to the original (byte-identical) code.
-from ..backend import is_jax_array
+from ...backend import is_jax_array
 
 # Reused for the slanted-grating solver: the slant breaks the +/-q field
 # symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
 # top-level import introduces no cycle.
-from .rcwa import _interface_smatrix_general, _propagation_smatrix_general
-
-__all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
-           "pmm_efficiency_1d_segments",
-           "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
-           "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
-           "pmm_jones_1d_slanted_segments", "pmm_1d",
-           "grating_convergence_class", "classify_from_grating"]
+from ..rcwa import _interface_smatrix_general, _propagation_smatrix_general
 
 _C = np.complex128
 
@@ -170,6 +47,7 @@ def _resolve_order_count(far_field_orders, n_orders):
     return far_field_orders if n_orders is None else n_orders
 
 
+
 def _promote_eps_tensor(eps):
     """Promote a scalar (isotropic) permittivity to a ``(3, 3)`` tensor; pass a
     ``(3, 3)`` tensor through unchanged.  Mirrors ``PMMStack._as_tensor`` so the
@@ -189,6 +67,7 @@ def _promote_eps_tensor(eps):
     return M
 
 
+
 def _resolve_incidence(angle, theta):
     """Cross-dimension alias: accept ``theta`` (the 2-D / conical polar-angle
     spelling, also used by ``RCWAStack``) as a synonym for ``angle`` (the 1-D
@@ -197,6 +76,7 @@ def _resolve_incidence(angle, theta):
     1-D mount is planar (azimuth ``phi = 0``).  ``theta`` overrides when supplied;
     ``None`` (the default) keeps ``angle``."""
     return angle if theta is None else theta
+
 
 
 # ``stabilize`` robust-selection parameters.  PMM has two distinct off-curve
@@ -265,6 +145,7 @@ def _aligned_max_diff(rec_a, rec_b):
     return d
 
 
+
 def _converged_cluster(records, passive, tol, min_cluster):
     """Indices of the largest group of PASSIVE solves that mutually agree
     PER-ORDER (and on the Jones matrix) within ``tol`` -- the converged plateau.
@@ -282,6 +163,7 @@ def _converged_cluster(records, passive, tol, min_cluster):
         if len(grp) > len(best):
             best = grp
     return sorted(best) if len(best) >= min_cluster else []
+
 
 
 # ===========================================================================
@@ -318,6 +200,7 @@ def _readonly(*arrays):
     return arrays if len(arrays) > 1 else arrays[0]
 
 
+
 @functools.lru_cache(maxsize=64)
 def _gll_nodes_weights(degree: int):
     """GLL nodes (``degree + 1`` of them) and quadrature weights on ``[-1, 1]``:
@@ -339,6 +222,7 @@ def _gll_nodes_weights(degree: int):
     return _readonly(nodes, w)
 
 
+
 # Memo for the barycentric differentiation matrix, keyed on the node coordinates
 # (one entry per distinct GLL degree -- a small bounded set in practice).  Guarded
 # by a companion lock for safe concurrent reader-writer access (library cache
@@ -352,6 +236,7 @@ def _clear_pmm_caches() -> None:
     registry, so the global 'clear all caches' path empties them too)."""
     with _LAGRANGE_DREF_LOCK:
         _LAGRANGE_DREF_CACHE.clear()
+
 
 
 def _lagrange_derivative_matrix(nodes):
@@ -385,6 +270,7 @@ def _lagrange_derivative_matrix(nodes):
     return Dmat
 
 
+
 def _graded_boundaries(a: float, b: float, n_el: int, grade: bool):
     """Element boundaries on ``[a, b]``.  ``grade=False`` -> uniform;
     ``grade=True`` -> Chebyshev-Lobatto clustering toward BOTH ends (the walls),
@@ -396,6 +282,7 @@ def _graded_boundaries(a: float, b: float, n_el: int, grade: bool):
     i = np.arange(n_el + 1)
     s = 0.5 * (1.0 - np.cos(np.pi * i / n_el))      # clustered at 0 and 1
     return a + (b - a) * s
+
 
 
 def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
@@ -461,6 +348,7 @@ def _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
                 ref_nodes=ref_nodes)
 
 
+
 def _ill_scaled(A, ratio=1e-12):
     """``True`` when ``A`` is element-size (sliver-element) ill-scaled: the
     spectral-element mass/stiffness carry the element Jacobian ``J`` on their
@@ -475,6 +363,7 @@ def _ill_scaled(A, ratio=1e-12):
     return dmax > 0.0 and float(d.min()) < ratio * dmax
 
 
+
 def _equil_scale(A):
     """Symmetric (Jacobi) equilibration scaling ``d_i = 1/sqrt(|A_ii|)`` with a
     floor on near-zero diagonals (a genuinely zero-width / ``J=0`` element, which
@@ -482,6 +371,7 @@ def _equil_scale(A):
     d = np.sqrt(np.abs(np.diag(A)))
     d = np.maximum(d, d.max() * 1e-13)
     return 1.0 / d
+
 
 
 def _safe_inv(A):
@@ -497,6 +387,7 @@ def _safe_inv(A):
     return di[:, None] * np.linalg.inv((di[:, None] * A) * di[None, :]) * di[None, :]
 
 
+
 def _safe_solve(A, B):
     """``solve(A, B)`` with the same equilibration gate as :func:`_safe_inv`
     (``A^-1 B = D (D A D)^-1 D B``).  Well-scaled ``A`` -> plain ``solve``."""
@@ -505,6 +396,7 @@ def _safe_solve(A, B):
     di = _equil_scale(A)
     return di[:, None] * np.linalg.solve((di[:, None] * A) * di[None, :],
                                          di[:, None] * B)
+
 
 
 def _safe_geig(A, B):
@@ -518,6 +410,7 @@ def _safe_geig(A, B):
     di = _equil_scale(B)
     q2, z = sla.eig((di[:, None] * A) * di[None, :], (di[:, None] * B) * di[None, :])
     return q2, di[:, None] * z
+
 
 
 def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
@@ -571,6 +464,7 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     return Acoef, lam, q, invop
 
 
+
 def _sem_fourier_projection(orders, period, mats):
     """``T[m, i] = (1/period) INT phi_i(x) exp(-i m G x) dx`` for the global
     nodal Lagrange basis ``phi_i``; exact per element by oversampled Gauss
@@ -612,6 +506,7 @@ def _sem_fourier_projection(orders, period, mats):
     return T
 
 
+
 # ===========================================================================
 # Self-contained scattering-matrix algebra (algebra-identical to rcwa's, kept
 # local so this module stays in ONE convention with no cross-coupling)
@@ -626,11 +521,13 @@ def _interface_smatrix(Wa, Va, Wb, Vb):
             0.5 * (apb - amb @ iapb @ amb), amb @ iapb)
 
 
+
 def _propagation_smatrix(lam, k0_L):
     n = lam.shape[0]
     X = np.diag(np.exp(-lam * k0_L))
     Z = np.zeros((n, n), dtype=_C)
     return (Z, X, X, Z)
+
 
 
 def _redheffer_star(SA, SB):
@@ -644,11 +541,13 @@ def _redheffer_star(SA, SB):
             B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
 
 
+
 def _kz_forward(eps, kx):
     """``kz/k0`` on the forward branch for ``exp(-i w t)``: ``Im(kz) >= 0`` so
     the forward wave ``exp(+i kz z)`` decays."""
     val = np.sqrt(np.asarray(eps - kx ** 2, dtype=_C))
     return np.where(val.imag < 0.0, -val, val)
+
 
 
 def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
@@ -712,6 +611,7 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
     return R_eff, T_eff, jones
 
 
+
 def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
                         polarization):
     """TE/TM diffraction efficiencies from the order-resolved reflection /
@@ -742,6 +642,7 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
     return R, T
 
 
+
 # ===========================================================================
 # Core single-polarization PMM solve
 # ===========================================================================
@@ -749,6 +650,7 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
 def _n_propagating_orders(period, wl, n_max):
     """Highest propagating Rayleigh order |m| with |kx_m| < n_max*k0."""
     return int(np.floor(float(np.real(n_max)) * period / wl + 1e-9))
+
 
 
 def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
@@ -778,6 +680,7 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     return _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
                            period, depth, wl, degree, polarization,
                            far_field_orders, kx0)
+
 
 
 def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
@@ -840,6 +743,7 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     R, T = _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
                                polarization)
     return orders, R, T, n_glob
+
 
 
 # ===========================================================================
@@ -953,6 +857,7 @@ def _build_sem_tensor(period, d_wall, t_ridge, t_groove, degree,
                 ref_nodes=ref_nodes)
 
 
+
 def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     """Coupled ``(E_x, E_y)`` anisotropic SE modal eigenproblem.
 
@@ -1030,6 +935,7 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     return W2, V2, lam, q
 
 
+
 def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                      duty, wl, degree, n_ridge_el, n_groove_el, grade,
                      far_field_orders, angle=0.0):
@@ -1067,6 +973,7 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     return _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub,
                                  n_max, period, depth, wl, degree,
                                  far_field_orders, kx0)
+
 
 
 def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
@@ -1127,6 +1034,7 @@ def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     return orders, R_eff, T_eff, jones, n_glob
 
 
+
 # ===========================================================================
 # Multi-region (segmented) PMM -- arbitrary piecewise-constant 1-D profiles
 # (the spectral-element analogue of rcwa_jones_1d_segments).  A region wall
@@ -1150,6 +1058,7 @@ def _segment_walls(period, widths):
     return edges / edges[-1] * period
 
 
+
 def _segment_elem_bnds(period, widths, materials, n_el_per_region, grade):
     """``elem_bnds`` list ``[(x_left, x_right, material), ...]`` for N graded
     regions (``n_el_per_region`` elements each; a wall on every region boundary).
@@ -1171,6 +1080,7 @@ def _segment_elem_bnds(period, widths, materials, n_el_per_region, grade):
     return elem_bnds
 
 
+
 def _l2g_periodic(n_el, degree):
     """C0 local->global node map with the last node wrapped onto node 0
     (periodic); shared by the segmented assemblers."""
@@ -1186,6 +1096,7 @@ def _l2g_periodic(n_el, degree):
     last = l2g[n_el - 1, degree]
     l2g[l2g == last] = 0
     return l2g, last
+
 
 
 def _build_sem_segments(period, widths, seg_eps, degree, n_el_per_region, grade):
@@ -1223,6 +1134,7 @@ def _build_sem_segments(period, widths, seg_eps, degree, n_el_per_region, grade)
     return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv,
                 n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
                 ref_nodes=ref_nodes)
+
 
 
 def _build_sem_tensor_segments(period, widths, seg_tensors, degree,
@@ -1272,6 +1184,7 @@ def _build_sem_tensor_segments(period, widths, seg_tensors, degree,
                 ref_nodes=ref_nodes)
 
 
+
 def _pmm_solve_segments(period, widths, seg_n, n_sub, n_sup, depth, wl, degree,
                         polarization, n_el_per_region, grade, far_field_orders,
                         angle=0.0):
@@ -1293,6 +1206,7 @@ def _pmm_solve_segments(period, widths, seg_n, n_sub, n_sup, depth, wl, degree,
                            period, depth, wl, degree, polarization,
                            far_field_orders, kx0,
                            label="pmm_efficiency_1d_segments", robust=True)
+
 
 
 def _pmm_jones_solve_segments(period, widths, seg_tensors3, n_sub, n_sup, depth,
@@ -1324,6 +1238,7 @@ def _pmm_jones_solve_segments(period, widths, seg_tensors3, n_sub, n_sup, depth,
                                  n_max, period, depth, wl, degree,
                                  far_field_orders, kx0,
                                  label="pmm_jones_1d_segments", robust=True)
+
 
 
 # --- shared stabilize (per-order convergence consensus) --------------------
@@ -1360,6 +1275,7 @@ def _stabilize_scalar(solve_at_degree, d0, label):
         f"grade=True.", stacklevel=3)
     best = max(passives, key=lambda s: s[0])
     return best[1], best[2], best[3]
+
 
 
 def _stabilize_jones(solve_at_degree, d0, label):
@@ -1399,238 +1315,6 @@ def _stabilize_jones(solve_at_degree, d0, label):
     best = max(passives, key=lambda s: s[0])
     return best[1], best[2], best[3], best[4]
 
-
-def pmm_jones_1d(
-    period: float,
-    eps_ridge,
-    eps_groove,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    duty_cycle: float,
-    wavelength: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Anisotropic 1-D binary grating by the Polynomial Modal Method -- the full
-    complex ``2x2`` Jones reflection (the spectral-element counterpart of
-    :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`).
-
-    The ridge and groove are full ``(3, 3)`` permittivity tensors -- IN-PLANE OR
-    OUT-OF-PLANE (an off-diagonal-z ``exz/eyz/ezx/ezy`` cell routes to the metric
-    generator); the off-diagonal ``exy`` couples ``E_x`` and ``E_y`` in the
-    spectral-element modal eigenproblem, so the response is a full Jones matrix (the
-    phase relationship the scalar :func:`pmm_efficiency_1d` cannot carry).  Converges SPECTRALLY in the polynomial ``degree`` with no
-    accuracy floor -- the PMM win on metals where the FMM needs many orders and
-    the ASR stretch plateaus.
-
-    Parameters
-    ----------
-    period : float
-        Grating period (metres).
-    eps_ridge, eps_groove : (3, 3) array_like of complex
-        FULL ``(3, 3)`` permittivity tensors of the ridge / groove (PUBLIC
-        convention ``Im(eps) > 0`` for loss).  Pass ``scalar * np.eye(3)`` for an
-        isotropic region; build LC tensors with
-        :func:`~lumenairy.elements.rcwa.uniaxial_tensor`.  OUT-OF-PLANE coupling
-        (``eps_xz / eps_yz / eps_zx / eps_zy != 0``, e.g. a tilted-director LC or
-        a magneto-optic medium) is supported via the native full-3x3 metric
-        generator (the ``eps_zz``-Schur of ``E_z`` is folded pointwise, Li 1999
-        Eq.12); per-order matches :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`
-        to ``<1e-3``.  In-plane tensors take the (byte-identical) in-plane path.
-    n_substrate, n_superstrate : complex
-        Transmission / incidence half-space (isotropic) indices (PUBLIC ``n =
-        n + i kappa``).
-    depth, duty_cycle, wavelength : float
-        As in :func:`pmm_efficiency_1d` (the ridge occupies ``duty_cycle`` of
-        the period).
-    angle : float, optional
-        Incidence angle (radians) in the x-z plane (classical mount, ``ky=0``).
-        Accepts ``theta`` as a cross-dimension alias (the 2-D / conical polar-
-        angle spelling, also used by ``RCWAStack``); overrides ``angle`` when
-        given.  Oblique is supported via the ``+i kx0`` Bloch shift; the coupled tensor
-        modes' forward set is chosen by the z-Poynting flux.  Lossless / mild-
-        loss anisotropic (the tunable-LC case) is robust across angle; very
-        lossy metal-corner TM at steep angle can be resonance-limited.
-    degree : int, optional
-        Polynomial degree per spectral element -- the spectral convergence knob.
-        Default 16.
-    elements_per_region : int, optional
-        Spectral elements per homogeneous subsection (ridge / groove).  Default
-        1.  Raise with ``grade=True`` to resolve the wall-corner field.
-    grade : bool, optional
-        Cluster the elements toward the walls when
-        ``elements_per_region > 1``.  Default ``True``.
-    far_field_orders : int, optional
-        Rayleigh order count for the once-only forward far-field projection
-        (auto-grown to cover the propagating orders).  Default 21.  Accepts
-        ``n_orders`` as a cross-suite alias (the RCWA / 2-D PMM spelling); when
-        given it overrides ``far_field_orders``.
-    stabilize : bool, optional
-        Guard against the isolated-degree PMM resonances (a near-singular
-        layer<->region mode-match injects spurious flux and inflates
-        ``sum(R)+sum(T)``).  When ``True`` (default) the solver scans a short
-        upward degree window and returns the lowest degree at/above the request
-        whose BOTH incident-polarization totals are energy-passive.  Set
-        ``False`` to solve at exactly ``degree``.
-
-    Returns
-    -------
-    orders : (M,) int ndarray
-        Retained Rayleigh-order indices (the far-field projection set).
-    R_eff, T_eff : (2, M) float ndarray
-        Reflected / transmitted diffraction efficiency per order; row 0 is the
-        response to an incident ``E_x`` wave, row 1 to incident ``E_y`` (cross-
-        polarization included).
-    jones_reflection : (2, 2) complex ndarray
-        Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis (PUBLIC
-        ``exp(-i w t)`` convention); columns are the responses to incident
-        ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.  Matches
-        :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` to the convergence
-        tolerance.
-
-    Notes
-    -----
-    NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** for an
-    IN-PLANE tensor (``exz = eyz = ezx = ezy = 0``) on a VERTICAL grating when any
-    index / geometry / tensor argument is a JAX array: it routes to a self-contained
-    ``jax.numpy`` twin (the 2n x 2n coupled ``[E_x; E_y]`` standard eig solved
-    directly by the reused ``rcwa`` custom-VJP eig), returning ``jax.grad``-able
-    ``R_eff`` / ``T_eff`` and the 2x2 ``jones`` w.r.t. the tensor entries (incl. the
-    off-diagonal ``exy`` / ``eyx`` cross-pol coupling, real and imaginary), ``depth``,
-    ``wavelength``, ``angle`` and the half-space indices.  The numpy path is
-    **byte-identical** (the JAX branch fires only on JAX inputs).  ``d/d(angle)`` at
-    EXACTLY normal incidence is a symmetry-protected zero where the degenerate TE/TM
-    eigen-subspace leaves a tiny (~5e-5) artifact against the true zero -- harmless
-    (the gradient there IS zero; no gauge fix is applied since it would corrupt the
-    gauge-invariant ``|J|`` observables); differentiate at any oblique angle for a
-    clean value.  ``stabilize=True``, ``elements_per_region>1``, a SLANTED wall, and
-    an OUT-OF-PLANE tensor raise on the JAX path (NumPy-only).  Normal or oblique
-    incidence, binary grating, full ``(3, 3)`` tensor (in-plane OR out-of-plane).  An
-    out-of-plane tensor routes through the native full-3x3 metric generator (VERTICAL
-    only).  Out-of-plane combined with a slanted wall is SUPPORTED (binary) as of
-    2026-06-07: :func:`pmm_jones_1d_slanted` carries the slant as EXACT convection
-    (``tan * d/dx``) instead of the static metric fold (whose ``ezz*tan^2`` re-
-    injection capped the per-order accuracy at ~1e-2 for the full tensor), so
-    out-of-plane + slant reaches the same ~1e-4 wall-normal per-order floor as the
-    in-plane slant TM channel (validated vs an RCWA tensor z-staircase across slant
-    15-60 deg, normal + oblique).  The multi-region (segments) out-of-plane + slant
-    path remains guarded.
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    if int(degree) < 2:
-        raise ValueError("pmm_jones_1d: degree must be >= 2.")
-    # A TRACED (jit) duty_cycle has no concrete value to range-check.
-    if not is_jax_array(duty_cycle):
-        if not (0.0 < float(duty_cycle) < 1.0):
-            raise ValueError(
-                f"pmm_jones_1d: duty_cycle must be strictly in (0, 1), got {duty_cycle}.")
-
-    # JAX (differentiable) dispatch -- mirror pmm_efficiency_1d / rcwa.  Routed
-    # to the self-contained jnp Jones twin ONLY when a tensor / geometry / angle
-    # input is a JAX array; NumPy inputs fall through to the original
-    # (byte-identical) code.  The JAX surface is binary, IN-PLANE tensor
-    # (exz/eyz/ezx/ezy == 0), VERTICAL wall, NORMAL or OBLIQUE incidence, a
-    # single fixed degree.  This branch MUST precede the np.asarray(_C) coercion
-    # below, which would sever the JAX trace.  is_jax_array on a (3,3) tensor
-    # array detects a JAX tensor input.
-    _jax_inputs = (eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
-                   wavelength, duty_cycle, angle)
-    if any(is_jax_array(a) for a in _jax_inputs):
-        if stabilize:
-            raise ValueError(
-                "pmm_jones_1d: the JAX (differentiable) path requires "
-                "stabilize=False (the degree-scan returns a discrete degree via "
-                "host control flow, which is non-differentiable); pass a single "
-                "fixed degree where the numpy solve already conserves energy.")
-        import jax.numpy as _jnp
-        er_j = _jnp.asarray(eps_ridge, _jnp.complex128)
-        eg_j = _jnp.asarray(eps_groove, _jnp.complex128)
-        if er_j.shape[-2:] != (3, 3) or eg_j.shape[-2:] != (3, 3):
-            raise ValueError(
-                "pmm_jones_1d: eps_ridge / eps_groove must be (3, 3) "
-                "permittivity tensors (use scalar * np.eye(3) for isotropic).")
-        # OUT-OF-PLANE (exz/eyz/ezx/ezy != 0) and SLANT stay NumPy-only (the
-        # native metric generator is not differentiable yet) -- a precise raise
-        # so the user is never silently given a wrong path.  Use the CONCRETE
-        # off-plane magnitude when available (a traced off-plane entry cannot be
-        # checked, so an all-traced tensor is assumed in-plane and validated by
-        # the numpy oracle in tests).
-        def _off_mag(M):
-            try:
-                arr = np.asarray(M, dtype=_C)
-                return float(np.max(np.abs(arr[[0, 1, 2, 2], [2, 2, 0, 1]])))
-            except Exception:
-                return 0.0
-        scale = 1.0
-        try:
-            scale = max(float(np.max(np.abs(np.asarray(eps_ridge, dtype=_C)))),
-                        float(np.max(np.abs(np.asarray(eps_groove, dtype=_C)))),
-                        1.0)
-        except Exception:
-            scale = 1.0
-        off = max(_off_mag(eps_ridge), _off_mag(eps_groove))
-        if off > 1e-9 * scale:
-            raise NotImplementedError(
-                "pmm_jones_1d: the JAX (differentiable) path supports IN-PLANE "
-                "tensors only (exz/eyz/ezx/ezy == 0); the out-of-plane native "
-                "metric generator is NumPy-only.")
-        return _pmm_jones_1d_jax(
-            period, er_j, eg_j, n_substrate, n_superstrate, depth, duty_cycle,
-            wavelength, angle=angle, degree=int(degree),
-            elements_per_region=int(elements_per_region), grade=bool(grade),
-            far_field_orders=int(far_field_orders))
-
-    er = np.asarray(eps_ridge, dtype=_C)
-    eg = np.asarray(eps_groove, dtype=_C)
-    if er.shape[-2:] != (3, 3) or eg.shape[-2:] != (3, 3):
-        raise ValueError(
-            "pmm_jones_1d: eps_ridge / eps_groove must be (3, 3) permittivity "
-            "tensors (use scalar * np.eye(3) for an isotropic region).")
-    # FULL-3x3 OUT-OF-PLANE (exz/eyz/ezx/ezy != 0): route to the native full-3x3
-    # metric generator (_pmm_jones_slant_solve at slant=0 -- the same operator the
-    # slant/oblique paths use, now carrying the out-of-plane pointwise ezz-Schur).
-    # The in-plane tensor keeps the (byte-identical) second-order _pmm_jones_solve.
-    # Normal AND oblique are supported; per-order matches rcwa_jones_1d to <1e-3.
-    scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
-    off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
-              float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
-    if off > 1e-9 * scale:
-        sargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
-                 duty_cycle, wavelength, 0.0)
-        skw = dict(n_ridge_el=int(elements_per_region),
-                   n_groove_el=int(elements_per_region), grade=bool(grade),
-                   far_field_orders=int(far_field_orders), angle=float(angle))
-        if not stabilize:
-            o, R, T, J, _ = _pmm_jones_slant_solve(*sargs, degree=int(degree),
-                                                   **skw)
-            return o, R, T, J
-        return _stabilize_jones(
-            lambda d: _pmm_jones_slant_solve(*sargs, degree=d, **skw)[:4],
-            int(degree), "pmm_jones_1d")
-
-    args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
-            duty_cycle, wavelength)
-    kw = dict(n_ridge_el=int(elements_per_region),
-              n_groove_el=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders), angle=float(angle))
-
-    if not stabilize:
-        o, R, T, J, _ = _pmm_jones_solve(*args, degree=int(degree), **kw)
-        return o, R, T, J
-    # Per-order + Jones convergence consensus (rejects the super-unity resonances
-    # AND the under-resolved-but-energy-passive degrees; see _stabilize_jones).
-    return _stabilize_jones(
-        lambda d: _pmm_jones_solve(*args, degree=d, **kw)[:4], int(degree),
-        "pmm_jones_1d")
 
 
 # ===========================================================================
@@ -1682,6 +1366,7 @@ def _graded_fractions(n_el, grade):
     return 0.5 * (1.0 - np.cos(np.pi * i / n_el))
 
 
+
 def _jpmm_build_topology(degree, n_ridge_el, n_groove_el, grade):
     """The truly-STATIC spectral-element topology -- depends ONLY on
     degree / element counts / grading, NOT on d_wall.  Returns the GLL
@@ -1712,6 +1397,7 @@ def _jpmm_build_topology(degree, n_ridge_el, n_groove_el, grade):
                 n_ridge_el=n_ridge_el, n_groove_el=n_groove_el,
                 ref_nodes=ref_nodes, ref_w=ref_w, Dref=Dref,
                 rfrac=rfrac, gfrac=gfrac, region=region)
+
 
 
 def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
@@ -1756,6 +1442,7 @@ def _jpmm_build_static(period, d_wall, degree, n_ridge_el, n_groove_el, grade):
     return d
 
 
+
 def _jpmm_build_dynamic(topo, jnp, period, d_wall):
     """Rebuild the d_wall-DEPENDENT spectral-element geometry in jnp so the
     duty-cycle gradient flows through the moving Jacobians.
@@ -1790,6 +1477,7 @@ def _jpmm_build_dynamic(topo, jnp, period, d_wall):
     return dict(Mloc=Mloc, Kloc=Kloc, Cloc=Cloc, xl=xl, xr=xr)
 
 
+
 def _jpmm_order_set(static, period, wl, n_max, far_field_orders, degree, label):
     """The Rayleigh order set for the forward far-field projection -- the SAME
     sizing as :func:`_pmm_solve_core`, computed from CONCRETE (real, static)
@@ -1809,6 +1497,7 @@ def _jpmm_order_set(static, period, wl, n_max, far_field_orders, degree, label):
             f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
             f"degree or elements_per_region.")
     return np.arange(-half, half + 1)
+
 
 
 def _jpmm_fourier_projection(orders, period, static):
@@ -1855,6 +1544,7 @@ def _jpmm_fourier_projection(orders, period, static):
     return T
 
 
+
 def _jpmm_projection_quad(static):
     """The d_wall-INDEPENDENT quadrature pieces of the Fourier projection: the
     Gauss-Legendre reference nodes ``xg`` / weights ``wg`` and the Lagrange
@@ -1880,6 +1570,7 @@ def _jpmm_projection_quad(static):
             num = wbary / diff
             Lv[r, :] = num / num.sum()
     return xg, wg, Lv
+
 
 
 def _jpmm_fourier_projection_jax(orders, period, static, jnp, dyn, quad):
@@ -1913,6 +1604,7 @@ def _jpmm_fourier_projection_jax(orders, period, static, jnp, dyn, quad):
         for a in range(degree + 1):
             T = T.at[:, idx[a]].add(contrib[:, a])
     return T
+
 
 
 def _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=None):
@@ -1965,6 +1657,7 @@ def _jpmm_assemble(static, jnp, eps_ridge, eps_groove, dyn=None):
     return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv)
 
 
+
 def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     """Folded standard-eig modal solve eig(B^-1 A) with the differentiable
     custom-VJP eig and the noise-robust forward-mode branch.  Returns
@@ -2007,6 +1700,7 @@ def _jpmm_sem_modes(M, jnp, eig, k0, polarization, kx0=0.0):
     q = jnp.where(flip, -q, q)
     lam = -1j * q
     return Acoef, lam, q, invop
+
 
 
 def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
@@ -2113,6 +1807,7 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
     return orders, R, T
 
 
+
 def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
                            n_superstrate, depth, duty_cycle, wavelength,
                            *, angle, polarization, degree, elements_per_region,
@@ -2131,7 +1826,7 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     ``d/d(wl)`` are valid only BETWEEN Rayleigh-order cutoffs."""
     import jax.numpy as jnp
 
-    from .rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _jax_eig_stable, _require_jax_x64
     _require_jax_x64("pmm_efficiency_1d")
 
     if int(elements_per_region) != 1:
@@ -2238,6 +1933,7 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     return jnp.asarray(orders), R, T
 
 
+
 # ===========================================================================
 # JAX (differentiable) Jones path for pmm_jones_1d -- Phase 4
 # ===========================================================================
@@ -2326,6 +2022,7 @@ def _jpmm_assemble_tensor(static, jnp, t_ridge, t_groove, dyn=None):
                 n_glob=n_glob)
 
 
+
 def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     """Coupled ``(E_x, E_y)`` anisotropic modal solve -- the differentiable twin
     of :func:`_sem_modes_tensor`.  Returns ``(W2, V2, lam, q)`` (``W2[:, n]`` =
@@ -2398,6 +2095,7 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
     V2 = Q @ W2 @ jnp.diag(1.0 / safe)
     return W2, V2, lam, q
+
 
 
 def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
@@ -2527,6 +2225,7 @@ def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
     return orders, R_eff, T_eff, jones
 
 
+
 def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
                       depth, duty_cycle, wavelength, *, angle, degree,
                       elements_per_region, grade, far_field_orders):
@@ -2539,7 +2238,7 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     (stabilize, multi-region, out-of-plane, slant) raises (handled upstream)."""
     import jax.numpy as jnp
 
-    from .rcwa import _jax_eig_stable, _require_jax_x64
+    from ..rcwa import _jax_eig_stable, _require_jax_x64
     _require_jax_x64("pmm_jones_1d")
 
     if int(elements_per_region) != 1:
@@ -2641,401 +2340,6 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     return jnp.asarray(orders), R, T, J
 
 
-def pmm_efficiency_1d(
-    period: float,
-    n_ridge: complex,
-    n_groove: complex,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    duty_cycle: float,
-    wavelength: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    polarization: str = "te",
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Rigorous diffraction efficiencies of a 1-D binary grating by the
-    Polynomial Modal Method (subsectional spectral element; Edee 2011).
-
-    A NON-Fourier alternative to :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`
-    that converges SPECTRALLY in the polynomial ``degree`` (no Gibbs at the
-    walls), with no accuracy floor and well-conditioned interfaces -- see the
-    module docstring for why this beats the Fourier method and the ASR
-    coordinate stretch for metals / high-contrast TM.
-
-    Parameters
-    ----------
-    period, n_ridge, n_groove, n_substrate, n_superstrate, depth, duty_cycle,
-    wavelength : as in :func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`
-        (metres / PUBLIC ``n = n + i kappa``).  The ridge occupies the fraction
-        ``duty_cycle`` of the period.
-    angle : float, optional
-        Incidence angle (radians).  Accepts ``theta`` as a cross-dimension alias
-        (the 2-D / conical polar-angle spelling); overrides ``angle`` when given.
-        Oblique is supported via the ``+i kx0``
-        Bloch shift of the pseudo-periodic envelope (the convection term is
-        antisymmetrized so the wall-varying ``1/eps`` weight is handled
-        correctly for TM); the forward modes use a noise-robust branch.
-        Dielectric is robust across angle; very lossy metal-corner TM at steep
-        angle can be resonance-limited (``stabilize`` may raise -- use rcwa).
-    polarization : {'te', 'tm'}, optional
-        ``'te'`` (E along the grooves) or ``'tm'``.  Default ``'te'``.
-    degree : int, optional
-        Polynomial degree per spectral element -- the SPECTRAL convergence knob
-        (raise it for accuracy, not the element count).  Default 16.
-    elements_per_region : int, optional
-        Spectral elements per homogeneous subsection (ridge / groove).  Default
-        1.  Raise (e.g. 2-4) with ``grade=True`` to resolve the metal-corner
-        field singularity -- the speed lever for TM (hp-refinement).
-    grade : bool, optional
-        When ``elements_per_region > 1``, cluster the elements toward the walls
-        (Chebyshev-Lobatto) to resolve the corner singularity.  Default
-        ``True`` (no effect for ``elements_per_region == 1``).
-    far_field_orders : int, optional
-        Rayleigh order count for the once-only forward far-field projection
-        (auto-grown to cover the propagating orders; kept well below the nodal
-        DOF).  Default 21.  Accepts ``n_orders`` as a cross-suite alias (the
-        RCWA / 2-D PMM spelling); when given it overrides ``far_field_orders``.
-    stabilize : bool, optional
-        Guard against the measure-zero discrete resonances at isolated
-        polynomial degrees (a near-singular layer<->region mode-match injects
-        spurious flux and inflates ``sum(R)+sum(T)``; the analogue of the FMM
-        ``stabilize`` flag).  When ``True`` (default) the solver scans a short
-        UPWARD degree window and returns the CONSENSUS result -- the value the
-        converged degrees agree on (discarding both super-unity resonances and
-        low-degree under-convergence), not merely the minimum or maximum power --
-        build-reproducible and never below the requested degree's accuracy.  Set
-        ``False`` to solve at exactly ``degree`` (e.g. for
-        convergence studies that tolerate the occasional resonant degree).
-
-    Returns
-    -------
-    orders : (M,) int ndarray
-        Retained Rayleigh-order indices (the far-field projection set).
-    R_eff, T_eff : (M,) float ndarray
-        Reflected / transmitted diffraction efficiency per order (real power
-        fractions; evanescent orders 0).  For a lossless grating
-        ``sum(R)+sum(T) == 1``; with loss the deficit is absorptance.
-
-    Notes
-    -----
-    NumPy / SciPy (dense generalized eig) by default.  **JAX-differentiable** when
-    any index / geometry argument is a JAX array (mirrors ``rcwa``): the call then
-    routes to a self-contained ``jax.numpy`` twin and returns ``jax.grad``-able
-    efficiencies w.r.t. ``eps`` (via ``n``, including COMPLEX/lossy eps -- both the
-    real and imaginary parts, ``holomorphic=False``), ``depth``, ``wavelength``,
-    ``angle`` and ``n_superstrate`` (the Bloch ``kx0`` convection is traced), AND
-    ``duty_cycle`` (the moving grating wall -- a smooth fixed-topology shape
-    gradient: the wall sits on an element boundary so the element Jacobians and the
-    Rayleigh-projection phases carry it analytically, no remeshing), reusing the
-    validated Lorentzian-broadened custom-VJP eig from ``rcwa``.  The numpy
-    path is **byte-identical** (the JAX branch fires only on JAX inputs).  The
-    differentiable surface is binary, NORMAL or OBLIQUE incidence, lossless or
-    lossy eps, ``elements_per_region=1``, a single fixed ``degree`` with
-    ``stabilize=False`` (a resonant degree gives the converged jnp answer but a
-    non-physical numpy one -- pick a degree where the numpy solve already conserves
-    energy); ``stabilize=True`` and ``elements_per_region>1`` raise on the JAX path
-    (NumPy-only for now).  For a LOSSY cell, validate per-order / absorbed-fraction
-    against an oracle, NOT energy (a lossless cell auto-balances power even with a
-    wrong split).  Gradients are valid BETWEEN Rayleigh-order cutoffs (the
-    propagating-order count is fixed per trace; set ``far_field_orders`` high enough
-    to cover the working wavelength when differentiating ``wavelength``).  Requires
-    ``jax_enable_x64`` (a warning fires otherwise -- complex64 is too ill-conditioned
-    for the modal eig).  TM converges monotone-with-no-floor but only
-    spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
-    ``elements_per_region>1, grade=True`` recovers the rate for metals.
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    pol = polarization.lower()
-    if pol not in ("te", "tm"):
-        raise ValueError(
-            f"pmm_efficiency_1d: polarization must be 'te' or 'tm', got "
-            f"{polarization!r}.")
-    if int(degree) < 2:
-        raise ValueError("pmm_efficiency_1d: degree must be >= 2.")
-    # A TRACED (jit) duty_cycle has no concrete value to range-check; the JAX
-    # path enforces 0 < duty < 1 on the concrete proxy / leading value instead.
-    if not is_jax_array(duty_cycle):
-        if not (0.0 < float(duty_cycle) < 1.0):
-            raise ValueError(
-                f"pmm_efficiency_1d: duty_cycle must be strictly in (0, 1), got "
-                f"{duty_cycle}.")
-
-    # JAX (differentiable) dispatch -- mirror rcwa's backend detection.  Routed
-    # to the self-contained jnp twin ONLY when an index / geometry input is a
-    # JAX array; NumPy inputs fall through to the original code verbatim (so the
-    # NumPy path stays BYTE-IDENTICAL).  The JAX path covers the minimal
-    # validated surface: binary, NORMAL incidence, fixed single degree.  This
-    # branch MUST precede the _C(...) coercion below, which would sever the JAX
-    # trace.
-    if any(is_jax_array(a) for a in (n_ridge, n_groove, n_substrate,
-                                     n_superstrate, depth, wavelength,
-                                     duty_cycle, angle)):
-        if stabilize:
-            raise ValueError(
-                "pmm_efficiency_1d: the JAX (differentiable) path requires "
-                "stabilize=False (the degree-scan returns a discrete degree via "
-                "host control flow, which is non-differentiable); pass a single "
-                "fixed degree.")
-        return _pmm_efficiency_1d_jax(
-            period, n_ridge, n_groove, n_substrate, n_superstrate, depth,
-            duty_cycle, wavelength, angle=angle, polarization=pol,
-            degree=int(degree), elements_per_region=int(elements_per_region),
-            grade=bool(grade), far_field_orders=int(far_field_orders))
-
-    args = (period, _C(n_ridge), _C(n_groove), _C(n_substrate),
-            _C(n_superstrate), depth, duty_cycle, wavelength)
-    kw = dict(polarization=pol, n_ridge_el=int(elements_per_region),
-              n_groove_el=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders), angle=float(angle))
-
-    if not stabilize:
-        orders, R, T, _ = _pmm_solve(*args, degree=int(degree), **kw)
-        return orders, R, T
-    # Robust degree selection by per-order CONVERGENCE CONSENSUS: collect the
-    # PASSIVE solves (total within _PASSIVE_TOL of unity -- discards the
-    # super-unity resonances) and lock onto the plateau the converged degrees
-    # AGREE ON per-order (the total alone is conserved even when under-resolved);
-    # return the requested degree if it is in the plateau, else the lowest
-    # converged degree, else warn/raise.  See _stabilize_scalar.
-    return _stabilize_scalar(
-        lambda d: _pmm_solve(*args, degree=d, **kw)[:3], int(degree),
-        "pmm_efficiency_1d")
-
-
-def pmm_efficiency_1d_jax(
-    period,
-    n_ridge,
-    n_groove,
-    n_substrate,
-    n_superstrate,
-    depth,
-    duty_cycle,
-    wavelength,
-    *,
-    angle=0.0,
-    theta=None,
-    polarization="te",
-    degree=16,
-    elements_per_region=1,
-    grade=True,
-    far_field_orders=21,
-    n_orders=None,
-):
-    """JAX (differentiable) twin of :func:`pmm_efficiency_1d`.
-
-    Thin wrapper that promotes its inputs to ``jax.numpy`` arrays and forwards to
-    the unified :func:`pmm_efficiency_1d`, which auto-dispatches to the
-    differentiable JAX backend on JAX inputs.  Prefer calling
-    ``pmm_efficiency_1d(...)`` with ``jax.numpy`` arguments directly; this explicit
-    twin exists for discoverability and the cross-backend parity contract.  The JAX
-    path uses ``stabilize=False`` (passed automatically) -- choose a single fixed
-    ``degree`` where the NumPy solve already conserves energy.  Differentiable
-    w.r.t. ``n_ridge`` / ``n_groove`` (via eps), ``depth``, ``wavelength``,
-    ``angle`` and the half-space indices; first-order only (no eig Hessian).
-    """
-    from ..backend import JAX_AVAILABLE as _JAX_AVAILABLE
-    if not _JAX_AVAILABLE:
-        raise ImportError(
-            "pmm_efficiency_1d_jax requires the optional 'jax' extra; install with "
-            "`pip install lumenairy[jax]` (or `pip install jax`).  Use the NumPy "
-            "pmm_efficiency_1d for non-differentiable evaluation.")
-    import jax.numpy as jnp
-    return pmm_efficiency_1d(
-        period,
-        jnp.asarray(n_ridge),
-        jnp.asarray(n_groove),
-        jnp.asarray(n_substrate),
-        jnp.asarray(n_superstrate),
-        jnp.asarray(depth),
-        duty_cycle,
-        jnp.asarray(wavelength),
-        angle=jnp.asarray(angle),
-        theta=theta,
-        polarization=polarization,
-        degree=degree,
-        elements_per_region=elements_per_region,
-        grade=grade,
-        far_field_orders=far_field_orders,
-        n_orders=n_orders,
-        stabilize=False,
-    )
-
-
-def pmm_efficiency_1d_segments(
-    period: float,
-    segments,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    wavelength: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    polarization: str = "te",
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Scalar diffraction efficiencies of an ARBITRARY piecewise-constant 1-D
-    grating by the PMM -- the multi-region / multi-level generalization of
-    :func:`pmm_efficiency_1d` (the 2-region ridge/groove special case).
-
-    The PMM's fast isotropic path: each region carries a scalar (possibly
-    complex) refractive index, a region wall lands on every spectral-element
-    boundary (so ``eps`` is exact per element -- no Gibbs), and the solve
-    converges spectrally in ``degree`` with no accuracy floor.  For anisotropic
-    (tensor) regions use :func:`pmm_jones_1d_segments`.
-
-    Parameters
-    ----------
-    period, n_substrate, n_superstrate, depth, wavelength : as in
-        :func:`pmm_efficiency_1d`.
-    segments : list of (width_fraction, n)
-        Consecutive regions along ``x`` (the ridge side first), each a
-        ``(width_fraction, refractive_index)`` pair; the fractions must sum to 1
-        (within ``1e-6``).  Covers multi-level staircases (blazed-grating
-        approximations) and arbitrary multi-region cells.
-    angle, polarization, degree, elements_per_region, grade, far_field_orders,
-    stabilize : as in :func:`pmm_efficiency_1d`.
-
-    Returns
-    -------
-    orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    pol = polarization.lower()
-    if pol not in ("te", "tm"):
-        raise ValueError(
-            f"pmm_efficiency_1d_segments: polarization must be 'te' or 'tm', "
-            f"got {polarization!r}.")
-    if int(degree) < 2:
-        raise ValueError("pmm_efficiency_1d_segments: degree must be >= 2.")
-    if len(segments) < 1:
-        raise ValueError(
-            "pmm_efficiency_1d_segments: need at least one segment.")
-    widths = [float(w) for w, _ in segments]
-    seg_n = [_C(n) for _, n in segments]
-    sa = (period, widths, seg_n, _C(n_substrate), _C(n_superstrate), depth,
-          wavelength)
-    kw = dict(polarization=pol, n_el_per_region=int(elements_per_region),
-              grade=bool(grade), far_field_orders=int(far_field_orders),
-              angle=float(angle))
-
-    if not stabilize:
-        o, R, T, _ = _pmm_solve_segments(*sa, degree=int(degree), **kw)
-        return o, R, T
-    return _stabilize_scalar(
-        lambda d: _pmm_solve_segments(*sa, degree=d, **kw)[:3], int(degree),
-        "pmm_efficiency_1d_segments")
-
-
-def pmm_jones_1d_segments(
-    period: float,
-    segments,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    wavelength: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Anisotropic 1-D grating with an ARBITRARY piecewise-constant profile by
-    the PMM -- the multi-region / multi-level generalization of
-    :func:`pmm_jones_1d` (the 2-segment ridge/groove special case) and the
-    spectral-element counterpart of
-    :func:`~lumenairy.elements.rcwa.rcwa_jones_1d_segments`.
-
-    Each region carries its own (possibly anisotropic) IN-PLANE permittivity, so
-    the response is a full complex ``2x2`` Jones reflection.  Covers multi-level
-    staircases, interdigitated / N-region cells, and mixed isotropic / liquid-
-    crystal regions (e.g. the grounded-tooth | LC | floating-tooth | LC device
-    class).  Converges spectrally in ``degree`` with no accuracy floor.
-
-    Parameters
-    ----------
-    period, n_substrate, n_superstrate, depth, wavelength : as in
-        :func:`pmm_jones_1d`.
-    segments : list of (width_fraction, eps)
-        Consecutive regions along ``x``; each ``eps`` is a scalar (isotropic
-        region) or a ``(3, 3)`` IN-PLANE permittivity tensor.  Width fractions
-        must sum to 1 (within ``1e-6``).  Accepts the output of the
-        ``grating_segments`` / ``binary_grating_segments`` /
-        ``interdigitated_grating_segments`` builders.
-    angle, degree, elements_per_region, grade, far_field_orders, stabilize : as
-        in :func:`pmm_jones_1d`.
-
-    Returns
-    -------
-    orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    if int(degree) < 2:
-        raise ValueError("pmm_jones_1d_segments: degree must be >= 2.")
-    if len(segments) < 1:
-        raise ValueError("pmm_jones_1d_segments: need at least one segment.")
-    widths = [float(w) for w, _ in segments]
-    tensors = []
-    for _w, eps in segments:
-        M = np.asarray(eps, dtype=_C)
-        if M.ndim == 0:                         # scalar -> isotropic tensor
-            M = M * np.eye(3, dtype=_C)
-        if M.shape[-2:] != (3, 3):
-            raise ValueError(
-                "pmm_jones_1d_segments: each segment eps must be a scalar or a "
-                "(3, 3) permittivity tensor.")
-        tensors.append(M)
-    # FULL-3x3 OUT-OF-PLANE (exz/eyz/ezx/ezy != 0): route to the native full-3x3
-    # metric generator (_pmm_jones_slant_segments_solve at slant=0 -- region-count-
-    # agnostic, carrying the out-of-plane pointwise ezz-Schur).  The in-plane
-    # tensor keeps the (byte-identical) second-order _pmm_jones_solve_segments.
-    scale = max([float(np.max(np.abs(M))) for M in tensors] + [1.0])
-    off = max(float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]])))
-              for M in tensors)
-    if off > 1e-9 * scale:
-        oargs = (period, widths, tensors, _C(n_substrate), _C(n_superstrate),
-                 depth, wavelength, 0.0)
-        okw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
-                   far_field_orders=int(far_field_orders), angle=float(angle))
-        if not stabilize:
-            o, R, T, J, _ = _pmm_jones_slant_segments_solve(
-                *oargs, degree=int(degree), **okw)
-            return o, R, T, J
-        return _stabilize_jones(
-            lambda d: _pmm_jones_slant_segments_solve(*oargs, degree=d, **okw)[:4],
-            int(degree), "pmm_jones_1d_segments")
-    sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
-          wavelength)
-    kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders), angle=float(angle))
-
-    if not stabilize:
-        o, R, T, J, _ = _pmm_jones_solve_segments(*sa, degree=int(degree), **kw)
-        return o, R, T, J
-    return _stabilize_jones(
-        lambda d: _pmm_jones_solve_segments(*sa, degree=d, **kw)[:4],
-        int(degree), "pmm_jones_1d_segments")
-
 
 # ===========================================================================
 # PMMStack -- multilayer 1-D PMM (the spectral-element analogue of RCWAStack)
@@ -3061,6 +2365,7 @@ def _tensor3_dict(M):
     return dict(exx=M[0, 0], exy=M[0, 1], exz=M[0, 2],
                 eyx=M[1, 0], eyy=M[1, 1], eyz=M[1, 2],
                 ezx=M[2, 0], ezy=M[2, 1], ezz=M[2, 2])
+
 
 
 def _pmm_union_grid(layer_segments):
@@ -3110,385 +2415,6 @@ def _pmm_union_grid(layer_segments):
         layer_eps_union.append(row)
     return uwidths, layer_eps_union
 
-
-class PMMStack:
-    """Multilayer 1-D grating stack solved by the Polynomial Modal Method -- the
-    spectral-element counterpart of :class:`~lumenairy.elements.rcwa.RCWAStack`.
-
-    Compose anisotropic (or isotropic) 1-D patterned layers and uniform spacers
-    between a superstrate and substrate, set the incident plane wave, and solve
-    once for the diffraction efficiencies of both incident polarizations plus the
-    zeroth-order ``2x2`` Jones reflection.  The whole stack is solved on the
-    UNION of every layer's walls (one shared nodal grid), so each layer converges
-    spectrally in ``degree`` with no Fourier truncation in-plane.
-
-    Example
-    -------
-    >>> st = PMMStack(0.8e-6, n_substrate=1.5, n_superstrate=1.0, degree=20)
-    >>> st.add_layer(0.2e-6, eps=2.1)                       # uniform spacer
-    >>> st.add_layer(0.3e-6, segments=[(0.5, lc), (0.5, 1.0)])  # patterned
-    >>> orders, R, T, jones = st.set_source(0.55e-6, angle=0.2).solve()
-
-    Parameters
-    ----------
-    period : float
-        Grating period (metres).
-    n_substrate, n_superstrate : complex, optional
-        Transmission / incidence half-space indices.
-    degree : int, optional
-        Polynomial degree per spectral element (the spectral knob).  Default 16.
-    elements_per_region, grade, far_field_orders : as in
-        :func:`pmm_jones_1d_segments`.
-    factorization : {'auto', 'convection', 'covariant'}, optional
-        Slant treatment (as in :func:`pmm_jones_1d_slanted`).  ``'auto'``
-        (default) uses the SPECTRAL covariant oblique-coordinate generator for a
-        stack whose layers share a single non-zero slant -- IN-PLANE OR
-        OUT-OF-PLANE (the full-3x3 coupling enters via the Li Eq.12 ezz-Schur
-        composites + cos*Dop cross blocks) -- and the (algebraic-but-fully-
-        general) convection generator otherwise -- vertical or MIXED-slant stacks
-        (the covariant oblique frame is per-slant, so a mixed-slant cascade falls
-        back to convection).  ``'covariant'`` forces the spectral path (raises on
-        mixed/zero slant); ``'convection'`` forces the general path.
-
-    Notes
-    -----
-    Anisotropic / Jones throughout (scalar layers are promoted to isotropic
-    tensors), FULL ``(3,3)`` tensors IN-PLANE OR OUT-OF-PLANE
-    (``eps_xz/yz/zx/zy``), normal or oblique incidence, NumPy (not JAX).  Layers
-    may be VERTICAL or SLANTED (``add_layer(..., slant_angle=...)``), in-plane or
-    out-of-plane, and freely mixed: an all-vertical-in-plane stack uses the
-    symmetric ``+/-q`` cascade (bit-identical to the prior release), and any
-    slanted OR out-of-plane layer promotes the whole stack to the general
-    forward/backward S-matrix (solved by the div-conforming metric generator,
-    which carries the slant fold AND the out-of-plane ezz-Schur).  A slanted
-    out-of-plane layer reaches the same ~1e-4 wall-normal per-order floor as the
-    single-layer solver (validated vs an RCWA tensor z-staircase; energy
-    conserves).  The modal forward set uses the z-Poynting-flux
-    selector (as the multi-region single-layer solver), so the many-element shared
-    grid stays resonance-free.
-    """
-
-    def __init__(self, period, *, n_substrate=1.0, n_superstrate=1.0,
-                 degree=16, elements_per_region=1, grade=True,
-                 far_field_orders=21, n_orders=None, factorization="auto"):
-        far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-        if int(degree) < 2:
-            raise ValueError("PMMStack: degree must be >= 2.")
-        if factorization not in ("auto", "convection", "covariant"):
-            raise ValueError(
-                "PMMStack: factorization must be 'auto', 'convection' or "
-                f"'covariant', got {factorization!r}.")
-        self.period = float(period)
-        self.n_sub = _C(n_substrate)
-        self.n_sup = _C(n_superstrate)
-        self.degree = int(degree)
-        self.n_el = int(elements_per_region)
-        self.grade = bool(grade)
-        self.factorization = factorization
-        self.ffo = int(far_field_orders)
-        self._layers = []                          # (thickness, segments)
-        self._src = None
-
-    def _as_tensor(self, eps):
-        M = np.asarray(eps, dtype=_C)
-        if M.ndim == 0:
-            M = M * np.eye(3, dtype=_C)
-        if M.shape[-2:] != (3, 3):
-            raise ValueError(
-                "PMMStack.add_layer: each eps must be a scalar or a (3, 3) "
-                "permittivity tensor.")
-        return M
-
-    @staticmethod
-    def _is_oop(M):
-        """True if the (3,3) tensor has out-of-plane coupling (eps_xz/yz/zx/zy)."""
-        scale = max(float(np.max(np.abs(M))), 1.0)
-        return float(np.max(np.abs(M[[0, 1, 2, 2], [2, 2, 0, 1]]))) > 1e-9 * scale
-
-    def add_layer(self, thickness, *, segments=None, eps=None, slant_angle=0.0):
-        """Append a layer.  Give exactly one of ``eps`` (uniform: scalar or
-        ``(3,3)`` tensor) or ``segments`` (a list of ``(width_fraction, eps)`` --
-        each ``eps`` scalar or ``(3,3)``; widths sum to 1).  ``slant_angle``
-        (radians) tilts the layer's straight side-walls from the vertical (``0``
-        = vertical); a slanted layer is solved by the div-conforming covariant-
-        metric generator and cascaded via the general fwd/back S-matrix, so a
-        stack may MIX vertical and slanted layers.  Returns ``self``."""
-        if (segments is None) == (eps is None):
-            raise ValueError(
-                "PMMStack.add_layer: give exactly one of `segments` or `eps`.")
-        if eps is not None:
-            segs = [(1.0, self._as_tensor(eps))]
-        else:
-            if len(segments) < 1:
-                raise ValueError("PMMStack.add_layer: empty segments.")
-            segs = [(float(w), self._as_tensor(e)) for w, e in segments]
-        self._layers.append((float(thickness), segs, float(slant_angle)))
-        return self
-
-    def set_source(self, wavelength, *, angle=0.0, theta=None):
-        """Set the incident plane wave (vacuum wavelength [m], incidence
-        ``angle`` [rad] in the x-z plane).  ``theta`` is accepted as a cross-suite
-        alias for ``angle`` (matching ``RCWAStack.set_source``'s polar angle, with
-        the 1-D classical mount's azimuth ``phi = 0``).  ``theta`` WINS when both
-        are supplied -- the SAME rule as ``RCWAStack.set_source`` and the 1-D entry
-        points, so ``set_source(angle=A, theta=T)`` resolves to ``T`` in every
-        suite.  Returns ``self``."""
-        angle = _resolve_incidence(angle, theta)
-        self._src = dict(wl=float(wavelength), angle=float(angle))
-        return self
-
-    def solve(self):
-        """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``
-        as :func:`pmm_jones_1d_segments` (``R_eff`` / ``T_eff`` are ``(2, M)``:
-        row 0 = incident ``E_x``, row 1 = incident ``E_y``; ``jones`` is the
-        zeroth-order ``2x2`` reflection)."""
-        if self._src is None:
-            raise ValueError("PMMStack.solve: call set_source(...) first.")
-        if not self._layers:
-            raise ValueError("PMMStack.solve: add at least one layer.")
-        wl, angle = self._src["wl"], self._src["angle"]
-        k0 = 2.0 * np.pi / wl
-        kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
-        eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
-
-        # ---- factorization dispatch: covariant (SPECTRAL slant) vs convection --
-        # 'auto' uses the covariant oblique-coordinate generator (spectral TM) for
-        # ANY slanted stack -- in-plane OR out-of-plane (the full-3x3 coupling
-        # enters via the Li Eq.12 ezz-Schur composites + cos*Dop cross blocks) --
-        # and the convection metric generator otherwise (all-vertical).  The
-        # covariant cascade still requires a UNIFORM slant.  'covariant' forces it
-        # (raises on
-        # out-of-plane); 'convection' forces the algebraic-but-fully-general path.
-        _oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
-        _slants = [abs(L[2]) for L in self._layers]
-        _signed = [L[2] for L in self._layers]
-        # The covariant oblique frame is per-slant (the shear u = x - tanφ z), so
-        # the spectral covariant cascade requires a UNIFORM slant across all layers
-        # (and the homogeneous half-spaces are solved in that same frame).  A
-        # MIXED-slant stack (e.g. a vertical spacer + a slanted grating) would need
-        # inter-layer lateral-shift corrections and falls back to convection.
-        # Gate uniformity on the SIGNED slant (not abs): the shear u = x - tanφ z is
-        # MIRROR-sheared for +φ vs -φ, so an equal-magnitude opposite-sign stack
-        # would cascade -φ layer modes against half-spaces fixed in the +φ frame --
-        # incompatible gauges, a silently-wrong S-matrix.  Opposite-sign / mixed
-        # slants fall back to convection ('auto') or raise ('covariant').
-        _uniform_slant = (max(_slants) >= _COV_MIN_SLANT_RAD
-                          and (max(_signed) - min(_signed)) <= 1e-12)
-        _fac = self.factorization
-        if _fac == "auto":
-            _fac = "covariant" if _uniform_slant else "convection"
-        if _fac == "covariant":
-            if not _uniform_slant:
-                raise NotImplementedError(
-                    "PMMStack: factorization='covariant' requires a UNIFORM "
-                    "non-zero slant across all layers (the covariant oblique "
-                    "frame is per-slant); use 'convection' or 'auto' for "
-                    "vertical / mixed-slant stacks.")
-            return self._solve_covariant(wl, angle, k0)
-
-        uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers])
-        nU = len(uwidths)
-        layer_mats = [
-            _build_sem_tensor_segments(
-                self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
-                self.degree, self.n_el, self.grade)
-            for eps_u in layer_eps_u]
-        t_sup = _tensor3_dict(eps_sup * np.eye(3))
-        t_sub = _tensor3_dict(eps_sub * np.eye(3))
-        mats_sup = _build_sem_tensor_segments(
-            self.period, uwidths, [t_sup] * nU, self.degree, self.n_el, self.grade)
-        mats_sub = _build_sem_tensor_segments(
-            self.period, uwidths, [t_sub] * nU, self.degree, self.n_el, self.grade)
-        n_glob = mats_sup["n_glob"]
-
-        Wsup, Vsup, _l, _g = _sem_modes_tensor(mats_sup, k0, kx0, True)
-        Wsub, Vsub, _l, _g = _sem_modes_tensor(mats_sub, k0, kx0, True)
-
-        # Redheffer recursion: sup -> [interface, propagation]*layers -> sub.
-        # A layer needs the GENERAL fwd/back cascade if it is SLANTED or carries
-        # full-3x3 OUT-OF-PLANE coupling (both break the +/-q symmetry and are
-        # solved by the metric generator); an all-vertical-in-plane stack keeps the
-        # symmetric path (bit-identical to the prior release).
-        oop_layer = [any(self._is_oop(M) for _w, M in L[1]) for L in self._layers]
-        if not any(abs(L[2]) > 1e-12 or oo
-                   for L, oo in zip(self._layers, oop_layer)):
-            # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path --
-            # bit-identical to the prior release.
-            lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in layer_mats]
-            S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
-            for i, (Wl, Vl, lam_l, _q) in enumerate(lmodes):
-                S = _redheffer_star(S, _propagation_smatrix(
-                    lam_l, k0 * self._layers[i][0]))
-                nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
-                          else (lmodes[i + 1][0], lmodes[i + 1][1]))
-                S = _redheffer_star(S, _interface_smatrix(Wl, Vl, nW, nV))
-        else:
-            # MIXED vertical / SLANTED / OUT-OF-PLANE: every layer carries EXPLICIT
-            # forward/backward modes cascaded with the GENERAL fwd/back S-matrix.  A
-            # SLANTED or OUT-OF-PLANE layer uses the div-conforming metric generator
-            # (_layer_modes_metric carries both the slant fold AND the out-of-plane
-            # pointwise ezz-Schur); a plain vertical-in-plane layer reuses its
-            # symmetric modes as the degenerate [[W,W],[V,-V]] forward/backward set.
-            Ms = _half_M_sym_metric(Wsup, Vsup)
-            Mb = _half_M_sym_metric(Wsub, Vsub)
-            Mls, lamfs, lambs = [], [], []
-            for i, (_thk, _segs, slant) in enumerate(self._layers):
-                if abs(slant) > 1e-12 or oop_layer[i]:
-                    mm = _build_nodal_metric_segments(
-                        self.period, uwidths,
-                        [_tensor3_dict(e) for e in layer_eps_u[i]],
-                        self.degree, self.n_el, self.grade)
-                    Wf, Vf, lamf, _qf, Wb, Vb, lamb, _qb = _layer_modes_metric(
-                        mm, k0, slant, kx0)
-                else:
-                    Wl, Vl, lam_l, _q = _sem_modes_tensor(
-                        layer_mats[i], k0, kx0, True)
-                    Wf, Wb, Vf, Vb = Wl, Wl, Vl, -Vl
-                    lamf, lamb = lam_l, -lam_l
-                Mls.append(np.block([[Wf, Wb], [Vf, Vb]]))
-                lamfs.append(lamf)
-                lambs.append(lamb)
-            S = _interface_smatrix_general(Ms, Mls[0])
-            for i in range(len(self._layers)):
-                S = _redheffer_star(S, _propagation_smatrix_general(
-                    lamfs[i], lambs[i], k0 * self._layers[i][0]))
-                nextM = (Mb if i == len(self._layers) - 1 else Mls[i + 1])
-                S = _redheffer_star(S, _interface_smatrix_general(Mls[i], nextM))
-        S11, _S12, S21, _S22 = S
-
-        # far-field projection (mirrors _pmm_jones_solve_core)
-        # max over BOTH in-plane diagonal components -- TM sees exx, TE sees eyy, so
-        # exx alone under-resolves a high-eyy stack and can miss a propagating order
-        # (audit P2; consistent with every single-layer solver).
-        n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
-                     for eps_u in layer_eps_u for e in eps_u]
-                    + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
-                       for eps_u in layer_eps_u for e in eps_u]
-                    + [np.real(self.n_sup), np.real(self.n_sub)])
-        m_prop = _n_propagating_orders(self.period, wl, n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
-        cap = n_glob if n_glob % 2 else n_glob - 1
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:               # parity with the single-layer cores
-            raise ValueError(
-                f"PMMStack.solve: degree={self.degree} too low to resolve the "
-                f"{2 * m_prop + 1} propagating orders (n_glob={n_glob}); raise "
-                f"degree or elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
-        G = 2.0 * np.pi / self.period
-        kx = (kx0 + orders * G) / k0
-        N = len(orders)
-        Tp = _sem_fourier_projection(orders, self.period, mats_sup)
-
-        def _proj(Wm):
-            return np.vstack([Tp @ Wm[:n_glob, :], Tp @ Wm[n_glob:, :]])
-        Hsup, Hsub = _proj(Wsup), _proj(Wsub)
-        kz_sup = _kz_forward(eps_sup, kx)
-        kz_sub = _kz_forward(eps_sub, kx)
-        kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
-        kx0n = kx0 / k0
-        R_eff, T_eff, jones = _assemble_jones_farfield(
-            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc, kx0n, N)
-        return orders, R_eff, T_eff, jones
-
-    def _solve_covariant(self, wl, angle, k0):
-        """SPECTRAL multi-layer solve via the Li covariant oblique-coordinate
-        generator (in-plane OR out-of-plane).  Parallels the general fwd/back
-        cascade of
-        :meth:`solve` but uses :func:`_cov_layer_4n` modes + COVARIANT
-        homogeneous half-spaces on the shared union grid, so slanted layers
-        converge SPECTRALLY (vertical-grade) instead of the convection
-        generator's algebraic ~1e-4 floor.  Internally exp(+iwt): eps are
-        conjugated in and the Jones conjugated out; the union widths/tensors are
-        PRE-REVERSED to cancel the _segment_elem_bnds [::-1] (so orders land in
-        the user's input frame, matching the convection path)."""
-        period, degree, n_el, grade = self.period, self.degree, self.n_el, \
-            self.grade
-        kx0 = float(np.real(np.conj(self.n_sup))) * np.sin(angle) * k0
-        eps_sup = np.conj(self.n_sup ** 2)
-        eps_sub = np.conj(self.n_sub ** 2)
-        uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers])
-        uw = list(uwidths)[::-1]
-        nU = len(uwidths)
-
-        def grid(eps_list):
-            seg = [_t3_slant(np.conj(np.asarray(e, _C))) for e in eps_list][::-1]
-            return _build_nodal_metric_segments(period, uw, seg, degree, n_el,
-                                                grade)
-        # the homogeneous half-spaces are solved in the SAME oblique frame as the
-        # layers (uniform slant), so their modes share the layer convention; pass
-        # PUBLIC eps (grid conjugates to the internal exp(+iwt) convention).
-        slant = self._layers[0][2]
-        layer_mats = [grid(layer_eps_u[i]) for i in range(len(self._layers))]
-        mats_s = grid([self.n_sup ** 2 * np.eye(3) for _ in range(nU)])
-        mats_b = grid([self.n_sub ** 2 * np.eye(3) for _ in range(nU)])
-        n_glob = mats_s["n_glob"]
-
-        # DIV-CONFORMING Ez closure if ANY layer is out-of-plane (machine-precision
-        # OOP), applied uniformly to all layers + both half-spaces so the closure
-        # matches across every interface; in-plane stacks keep the modal closure.
-        divconf = any(self._is_oop(M) for _L in self._layers for _w, M in _L[1])
-        Ws, Vs, kzs, fws = _cov_layer_4n(mats_s, k0, slant, kx0, divconf)
-        Wb, Vb, kzb, fwb = _cov_layer_4n(mats_b, k0, slant, kx0, divconf)
-        fs, _bs = _cov_split(Ws, Vs, kzs, fws)
-        fb, _bb = _cov_split(Wb, Vb, kzb, fwb)
-
-        def _msym(W, V, f):
-            return np.block([[W[:, f], W[:, f]], [V[:, f], -V[:, f]]])
-        Mls, lamf_l, lamb_l = [], [], []
-        for i, (_thk, _segs, slant) in enumerate(self._layers):
-            Wl, Vl, kzl, fwl = _cov_layer_4n(layer_mats[i], k0, slant, kx0,
-                                             divconf)
-            fl, bl = _cov_split(Wl, Vl, kzl, fwl)
-            Mls.append(np.block([[Wl[:, fl], Wl[:, bl]],
-                                 [Vl[:, fl], Vl[:, bl]]]))
-            lamf_l.append(-1j * kzl[fl])
-            lamb_l.append(-1j * kzl[bl])
-        S = _interface_smatrix_general(_msym(Ws, Vs, fs), Mls[0])
-        for i in range(len(self._layers)):
-            S = _redheffer_star(S, _propagation_smatrix_general(
-                lamf_l[i], lamb_l[i], k0 * self._layers[i][0]))
-            nextM = (_msym(Wb, Vb, fb) if i == len(self._layers) - 1
-                     else Mls[i + 1])
-            S = _redheffer_star(S, _interface_smatrix_general(Mls[i], nextM))
-        S11, _S12, S21, _S22 = S
-
-        # max over BOTH in-plane diagonal components -- TM sees exx, TE sees eyy, so
-        # exx alone under-resolves a high-eyy stack and can miss a propagating order
-        # (audit P2; consistent with every single-layer solver).
-        n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
-                     for eps_u in layer_eps_u for e in eps_u]
-                    + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
-                       for eps_u in layer_eps_u for e in eps_u]
-                    + [np.real(self.n_sup), np.real(self.n_sub)])
-        m_prop = _n_propagating_orders(period, wl, n_max)
-        n_proj = max(self.ffo, 2 * m_prop + 5)
-        cap = n_glob if n_glob % 2 else n_glob - 1
-        n_proj = min(n_proj, cap)
-        if n_proj % 2 == 0:
-            n_proj -= 1
-        if 2 * m_prop + 1 > n_proj:               # parity with the single-layer cores
-            raise ValueError(
-                f"PMMStack.solve (covariant): degree={self.degree} too low to "
-                f"resolve the {2 * m_prop + 1} propagating orders "
-                f"(n_glob={n_glob}); raise degree or elements_per_region.")
-        half = (n_proj - 1) // 2
-        orders = np.arange(-half, half + 1)
-        N = len(orders)
-        kx = kx0 / k0 + orders * (2.0 * np.pi / period) / k0
-        Tp = _sem_fourier_projection(orders, period, mats_s)
-        kz_sup = _kz_forward(eps_sup, kx)
-        kz_sub = _kz_forward(eps_sub, kx)
-        kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
-        Hsup = np.vstack([Tp @ Ws[:n_glob, fs], Tp @ Ws[n_glob:, fs]])
-        Hsub = np.vstack([Tp @ Wb[:n_glob, fb], Tp @ Wb[n_glob:, fb]])
-        R, T, jones = _assemble_jones_farfield(
-            Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
-            kx0 / k0, N)
-        return orders, R, T, np.conj(jones)        # conj: bridge +iwt -> public
 
 
 # ===========================================================================
@@ -3559,6 +2485,7 @@ def _build_sem_slant(period, d_wall, eps_ridge, eps_groove, degree,
     return dict(S0=S0, Peps=Peps, Pinv=Pinv, L=L, Linv=Linv, C=C, Cinv=Cinv,
                 n_glob=n_glob, l2g=l2g, elem_bnds=elem_bnds, degree=degree,
                 ref_nodes=ref_nodes)
+
 
 
 def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
@@ -3689,6 +2616,7 @@ def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
                 Dop=Dop, t=t, k0=k0, polarization=polarization)
 
 
+
 def _modes_M_slant(md):
     """Build the generalized field-mode matrix ``M = [[Wf, Wb], [Vf, Vb]]`` plus
     ``(lam_f, lam_b)`` and the forward field block ``Wf`` from a
@@ -3710,6 +2638,7 @@ def _modes_M_slant(md):
     Wb, Vb, lam_b = md["Wb"], md["Vb"], md["lam_b"]
     M = np.block([[Wf, Wb], [Vf, Vb]])
     return M, lam_f, lam_b, Wf
+
 
 
 def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
@@ -3795,135 +2724,6 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
     return orders, R, T, n_glob
 
 
-def pmm_efficiency_1d_slanted(
-    period: float,
-    n_ridge: complex,
-    n_groove: complex,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    duty_cycle: float,
-    wavelength: float,
-    slant_angle: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    polarization: str = "te",
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Rigorous diffraction efficiencies of a 1-D SLANTED binary grating by the
-    inclined-coordinate Polynomial Modal Method (Granet, Randriamihaja &
-    Raniriharinosy, JOSA A 34:975, 2017).
-
-    Extends :func:`pmm_efficiency_1d` to a grating whose straight side-walls are
-    tilted by ``slant_angle`` from the vertical.  Where a Fourier method
-    (:func:`~lumenairy.elements.rcwa.rcwa_efficiency_1d`) must STAIRCASE the
-    slant into many laterally-shifted thin layers and converge in the slice
-    count, PMM solves a SINGLE slanted layer exactly in the inclined coordinate
-    ``u = x - tan(slant_angle) z`` -- no z-staircase -- reaching the converged
-    efficiencies at a fraction of the cost (~30-70x fewer DOF*slices in the
-    validated dielectric cases).
-
-    Parameters
-    ----------
-    period ... wavelength : as in :func:`pmm_efficiency_1d` (metres / PUBLIC
-        ``n = n + i kappa``).  The (projected) ridge occupies ``duty_cycle`` of
-        the period; the planar layer interfaces are at ``z = 0`` and
-        ``z = depth``.
-    slant_angle : float
-        Side-wall tilt from the vertical (radians); ``0`` = vertical (then this
-        reduces bit-identically to :func:`pmm_efficiency_1d`).  Validated for
-        ``0 <= slant_angle <= ~75 deg``; conditioning grows as
-        ``sec^2(slant_angle)`` at steep tilt.
-    angle : float, optional
-        Incidence angle (radians).  COMBINED oblique incidence + nonzero slant IS
-        supported: it is routed through the metric-generator Jones solver
-        (:func:`pmm_jones_1d_slanted`) with an isotropic tensor and the requested
-        scalar channel extracted (see Notes), per-order to ~2-3e-3 vs an RCWA
-        staircase.  At normal incidence (or a vertical grating) the dedicated
-        inclined-coordinate scalar solver is used.
-    polarization, degree, elements_per_region, grade, far_field_orders,
-    stabilize : as in :func:`pmm_efficiency_1d`.
-
-    Returns
-    -------
-    orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
-
-    Notes
-    -----
-    The slant injects a linear-in-``q`` convection term (the modal eigenproblem
-    becomes quadratic, companion-linearized) and breaks the ``+/-q`` field
-    symmetry, so the explicit forward/backward generalized S-matrix is used.
-    The inclined coordinate is INTERNAL to the patterned layer; the homogeneous
-    half-spaces and the Rayleigh far-field projection are in the lab ``(x, z)``
-    frame.  TE matches a fine RCWA staircase to ~1e-5; TM self-converges and is
-    the BETTER reference (RCWA-TM is Gibbs/slice-limited).
-
-    SCOPE: binary (1 ridge + 1 groove), any slant, NORMAL or OBLIQUE incidence.
-    The dedicated inclined-coordinate scalar eigenproblem is used at normal
-    incidence (and for a vertical grating at any angle); for combined oblique
-    incidence + nonzero slant -- where that scalar solver's ``kx0 <-> slant``
-    convection cross-coupling is unresolved -- the call is delegated to the
-    genuine Edee-Granet 2024 metric generator via :func:`pmm_jones_1d_slanted`
-    (isotropic tensor ``n^2 I``, scalar channel extracted: TE = E along the
-    grooves = Jones row 1, TM = row 0), which resolves the cross-coupling with the
-    round-19 div-conforming ``E_z`` closure (per-order to ~2-3e-3 vs an RCWA
-    staircase -- the wall-normal TM/p-pol inverse-rule limit plus the oblique-slant
-    convection, not a coupling error; the in-plane wall-normal TM floor alone is much
-    tighter, ~3e-5..1e-4 near degree 18-20, U-shaped).
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    pol = polarization.lower()
-    if pol not in ("te", "tm"):
-        raise ValueError(
-            f"pmm_efficiency_1d_slanted: polarization must be 'te' or 'tm', "
-            f"got {polarization!r}.")
-    if int(degree) < 2:
-        raise ValueError("pmm_efficiency_1d_slanted: degree must be >= 2.")
-    if not (0.0 < float(duty_cycle) < 1.0):
-        raise ValueError(
-            f"pmm_efficiency_1d_slanted: duty_cycle must be strictly in (0, 1), got "
-            f"{duty_cycle}.")
-    if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
-        # COMBINED OBLIQUE + SLANT.  The scalar inclined-frame solver's own
-        # Bloch<->slant convection cross-term is unresolved (energy conserves but
-        # the per-order split is wrong), so route through the genuine Edee-Granet
-        # 2024 metric generator (pmm_jones_1d_slanted), whose round-19 div-
-        # conforming E_z closure DOES handle combined oblique + slant (per-order
-        # to ~2-3e-3 vs an RCWA staircase, degree-cleanly).  An isotropic region
-        # is the diagonal tensor n^2 * I; the Jones response is then uncoupled, so
-        # the scalar channel is a single row: TE (E along the grooves, E_y) is
-        # Jones row 1, TM (E_x) is row 0.
-        eye3 = np.eye(3)
-        o, R_j, T_j, _ = pmm_jones_1d_slanted(
-            period, (_C(n_ridge) ** 2) * eye3, (_C(n_groove) ** 2) * eye3,
-            _C(n_substrate), _C(n_superstrate), depth, duty_cycle, wavelength,
-            float(slant_angle), angle=float(angle), degree=int(degree),
-            elements_per_region=int(elements_per_region), grade=bool(grade),
-            far_field_orders=int(far_field_orders), stabilize=bool(stabilize))
-        row = 1 if pol == "te" else 0
-        return o, R_j[row], T_j[row]
-
-    args = (period, _C(n_ridge), _C(n_groove), _C(n_substrate),
-            _C(n_superstrate), depth, duty_cycle, wavelength,
-            float(slant_angle))
-    kw = dict(angle=float(angle), polarization=pol,
-              elements_per_region=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders))
-
-    if not stabilize:
-        orders, R, T, _ = _pmm_slant_solve(*args, degree=int(degree), **kw)
-        return orders, R, T
-    return _stabilize_scalar(
-        lambda d: _pmm_slant_solve(*args, degree=d, **kw)[:3], int(degree),
-        "pmm_efficiency_1d_slanted")
-
 
 # ===========================================================================
 # SLANTED + ANISOTROPIC (Jones) PMM -- the CONVECTION METRIC GENERATOR
@@ -3961,6 +2761,7 @@ def _t3_slant(M):
     return dict(exx=M[0, 0], exy=M[0, 1], exz=M[0, 2],
                 eyx=M[1, 0], eyy=M[1, 1], eyz=M[1, 2],
                 ezx=M[2, 0], ezy=M[2, 1], ezz=M[2, 2])
+
 
 
 def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
@@ -4036,6 +2837,7 @@ def _build_nodal_metric(period, d_wall, t_ridge, t_groove, degree,
                 L_inv_ezz=L_inv_ezz, C_inv_ezz=C_inv_ezz)
 
 
+
 def _build_nodal_metric_segments(period, widths, seg_tensors, degree,
                                  n_el_per_region, grade):
     """N-region generalization of :func:`_build_nodal_metric` for the metric
@@ -4088,6 +2890,7 @@ def _build_nodal_metric_segments(period, widths, seg_tensors, degree,
                 L_inv_ezz=L_inv_ezz, C_inv_ezz=C_inv_ezz)
 
 
+
 def _coeff_mass_metric(mats, fn):
     """Assemble the Galerkin mass ``INT phi fn(material) phi`` for an arbitrary
     scalar coefficient ``fn(t_dict)`` (element-piecewise constant), reusing the
@@ -4105,6 +2908,7 @@ def _coeff_mass_metric(mats, fn):
         idx = l2g[e]
         M[np.ix_(idx, idx)] += fn(t) * Mloc
     return M
+
 
 
 def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
@@ -4323,6 +3127,7 @@ def _build_generator_metric(mats, k0, slant_angle, kx0=0.0):
     return L, n
 
 
+
 def _split_modes_flux_metric(W, V, q, lam, n):
     """Forward/backward split by the all-harmonic z-Poynting flux of the genuine
     state.  ``V = -(iZ H)`` (lib-aligned partner), so
@@ -4344,6 +3149,7 @@ def _split_modes_flux_metric(W, V, q, lam, n):
     bidx = np.array(sorted(set(range(len(q))) - set(fidx.tolist())), dtype=int)
     return (W[:, fidx], V[:, fidx], lam[fidx], q[fidx],
             W[:, bidx], V[:, bidx], lam[bidx], q[bidx])
+
 
 
 def _layer_modes_metric(mats, k0, slant_angle, kx0=0.0):
@@ -4376,11 +3182,13 @@ def _layer_modes_metric(mats, k0, slant_angle, kx0=0.0):
     return _split_modes_flux_metric(W, V, q, lam, n)
 
 
+
 def _half_M_sym_metric(W, V):
     """Symmetric (vertical homogeneous) half-space field-mode matrix
     ``[[W, W], [V, -V]]`` -- the +/-q convention :func:`_sem_modes_tensor`
     returns for a uniform medium."""
     return np.block([[W, W], [V, -V]])
+
 
 
 def _pmm_jones_slant_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
@@ -4443,6 +3251,7 @@ def _pmm_jones_slant_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     return orders, R_eff, T_eff, jones, n_glob
 
 
+
 def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                            duty, wl, slant_angle, degree, n_ridge_el,
                            n_groove_el, grade, far_field_orders, angle=0.0):
@@ -4488,6 +3297,7 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
     return _pmm_jones_slant_core(
         mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period, depth, wl,
         slant_angle, kx0, far_field_orders, "pmm_jones_1d_slanted")
+
 
 
 # ===========================================================================
@@ -4580,6 +3390,7 @@ def _cov_blocks(mats, slant_angle):
     return Z11, Z12, Z21, EE22i, EE13, EE31, EE33
 
 
+
 def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
     r"""Covariant 4n first-order generator ``M`` (state ``X = [Ey; Hy; Hx; Ex]``
     = Li ``[E3; H3; H1; E1]``) for ``dz X = i M X``.  TM block over ``(H3, E1)``,
@@ -4663,6 +3474,7 @@ def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
     return M, n
 
 
+
 def _cov_layer_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
     r"""Covariant layer eigenmodes.  Returns ``(W, V, kz, fwd)`` where
     ``W = [Ex; Ey]`` (2n), ``V = [Hx; Hy]`` (2n), ``kz`` the LAB z-wavenumber /
@@ -4682,6 +3494,7 @@ def _cov_layer_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
     return W, V, kz, fwd
 
 
+
 def _cov_split(W, V, kz, fwd):
     """Forward/backward split, exactly half each (by Poynting / decay)."""
     n = W.shape[0] // 2
@@ -4697,6 +3510,7 @@ def _cov_split(W, V, kz, fwd):
     bidx = np.array(sorted(set(range(W.shape[1])) - set(fidx.tolist())),
                     dtype=int)
     return fidx, bidx
+
 
 
 def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
@@ -4765,6 +3579,7 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
     return orders, R, T, jones, n
 
 
+
 def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
                              depth, duty, wl, slant_angle, degree, n_ridge_el,
                              n_groove_el, grade, far_field_orders, angle=0.0):
@@ -4798,6 +3613,7 @@ def _pmm_jones_oblique_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup,
         mats, mats_s, mats_b, eps_sup, eps_sub, n_max, period, depth, wl,
         slant_angle, kx0, far_field_orders, "pmm_jones_1d_slanted")
     return orders, R, T, np.conj(jones), ng        # internal -> public exp(-iωt)
+
 
 
 def _pmm_jones_oblique_segments_solve(period, widths, seg_tensors3, n_sub, n_sup,
@@ -4843,6 +3659,7 @@ def _pmm_jones_oblique_segments_solve(period, widths, seg_tensors3, n_sub, n_sup
     return orders, R, T, np.conj(jones), ng        # internal -> public exp(-iωt)
 
 
+
 def _pmm_jones_slant_segments_solve(period, widths, seg_tensors3, n_sub, n_sup,
                                     depth, wl, slant_angle, degree,
                                     n_el_per_region, grade, far_field_orders,
@@ -4875,6 +3692,7 @@ def _pmm_jones_slant_segments_solve(period, widths, seg_tensors3, n_sub, n_sup,
     return _pmm_jones_slant_core(
         mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period, depth, wl,
         slant_angle, kx0, far_field_orders, "pmm_jones_1d_slanted_segments")
+
 
 
 def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
@@ -4958,665 +3776,6 @@ def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
     return orders, R_eff, T_eff, jones
 
 
-def pmm_jones_1d_slanted(
-    period: float,
-    eps_ridge,
-    eps_groove,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    duty_cycle: float,
-    wavelength: float,
-    slant_angle: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-    factorization: str = "auto",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """SLANTED binary grating with full ``(3, 3)`` permittivity tensors (in-plane
-    OR out-of-plane) -- the anisotropic-Jones counterpart of
-    :func:`pmm_efficiency_1d_slanted`, by the Edee-Granet convection-metric
-    spectral-element solver.
-
-    Combines the tilted side-walls of :func:`pmm_efficiency_1d_slanted` with the
-    coupled ``(E_x, E_y)`` Jones response of :func:`pmm_jones_1d`.  The tilt
-    enters as an EXACT first-order convection (``tan * d/dx`` on the clean
-    vertical metric generator -- this is what lets out-of-plane + slant reach the
-    wall-normal floor; see :func:`_build_generator_metric`), and the modal
-    eigenproblem is the TRUE first-order physical Maxwell
-    generator ``-i k gamma psi = L psi`` (``psi = [E_x; E_y; iZ H_x; iZ H_y]``,
-    LINEAR in ``gamma``): the magnetic field is read directly from the
-    eigenvector, so the layer modes are flux-orthogonal by construction (the
-    symplectic property a reshaped convection pencil lacks) and energy conserves
-    to ~1e-13 across ``0-60`` deg for both real-symmetric and gyrotropic tensors.
-
-    Parameters
-    ----------
-    period : float
-        Grating period (metres).
-    eps_ridge, eps_groove : (3, 3) array_like of complex
-        IN-PLANE permittivity tensors of the ridge / groove (PUBLIC convention
-        ``Im(eps) > 0`` for loss).  As in :func:`pmm_jones_1d`: pass
-        ``scalar * np.eye(3)`` for an isotropic region; ``exy`` / ``eyx`` couple
-        ``E_x`` and ``E_y`` (real-symmetric for a tilted LC director, anti-
-        Hermitian ``+/- i g`` for a gyrotropic / magneto-optic medium).  FULL
-        out-of-plane coupling (``eps_xz / eps_yz / eps_zx / eps_zy != 0``, e.g. a
-        tilted-director LC) is SUPPORTED (binary grating): it routes through the
-        coupled metric generator and reaches the same ~1e-4 wall-normal per-order
-        floor as the in-plane slant TM channel (validated vs an RCWA tensor
-        z-staircase, slant 15-60 deg, normal + oblique).
-    n_substrate, n_superstrate : complex
-        Transmission / incidence half-space (isotropic) indices (PUBLIC ``n =
-        n + i kappa``).
-    depth, duty_cycle, wavelength : float
-        As in :func:`pmm_efficiency_1d_slanted` (the projected ridge occupies
-        ``duty_cycle`` of the period; the planar interfaces are at ``z = 0`` and
-        ``z = depth``).
-    slant_angle : float
-        Side-wall tilt from the vertical (radians); ``0`` = vertical (then this
-        reduces to :func:`pmm_jones_1d`).  Validated for ``0 <= slant_angle <=
-        ~60 deg`` (conditioning grows as ``sec^2`` at steep tilt).
-    angle : float, optional
-        Incidence angle (radians).  COMBINED oblique incidence + nonzero slant is
-        SUPPORTED (the round-19 div-conforming ``E_z`` closure removes the
-        Bloch-amplified Liu-2015 spurious null; ``kx0 = k0 Re(n_sup) sin(angle)``
-        is wired through the generator, the half-spaces, and the lab Rayleigh far
-        field): the metric generator conserves energy ~1e-13 and the per-order
-        split matches an RCWA staircase to ~2-3e-3 at oblique+slant.  (The in-plane
-        wall-normal TM/p-pol inverse-rule floor itself is far tighter: it converges
-        to ~3e-5..1e-4 near degree 18-20, U-shaped, then mildly degrades past ~degree
-        22 as the benign flux-null evanescent spurious sea grows with slant -- energy
-        stays ~1e-13 throughout; TE is machine-clean ~1e-6.)  Combined oblique + slant
-        always routes through the metric generator (the scalar diagonal cure's
-        oblique+slant per-order is wrong).
-    degree, elements_per_region, grade, far_field_orders, stabilize : as in
-        :func:`pmm_jones_1d`.
-    factorization : {'auto', 'convection', 'covariant'}, optional
-        Slant treatment.  ``'auto'`` (default) picks the best path per cell:
-        ``'covariant'`` for ANY slanted cell -- in-plane OR out-of-plane (the
-        spectral win) -- and ``'convection'`` otherwise (vertical).
-        ``'convection'`` carries the tilt as an exact first-order convection on
-        the lab-Cartesian metric generator -- robust at all slants and tensors,
-        but the TM/p-pol per-order accuracy converges ALGEBRAICALLY (~1e-4 at
-        practical degree).  ``'covariant'`` routes through the Li-1999 oblique-
-        coordinate covariant generator: the slanted wall becomes a coordinate
-        surface, so the wall-normal discontinuity is handled algebraically and the
-        TM channel converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) --
-        the SAME physical answer as ``'convection'`` but ~100-2400x fewer degrees
-        for matched accuracy.  ``'covariant'`` handles diagonal, coupled
-        (``exy``/``eyx``), AND OUT-OF-PLANE (full 3x3 ``eps_xz/yz/zx/zy``)
-        tensors, normal + oblique, lossless + lossy -- the out-of-plane coupling
-        enters via the pointwise ezz-Schur composites (Li Eq.12) + the ``cos*Dop``
-        single-derivative cross blocks (Li Eq.18/19), spectral at slant, so
-        ``'auto'`` routes out-of-plane slanted cells to it too (~15x fewer degrees
-        than convection).  Pass ``'convection'`` explicitly to force the fully-
-        general
-        algebraic path (e.g. for byte-stable cross-checks).
-
-    Returns
-    -------
-    orders : (M,) int ndarray
-        Retained Rayleigh-order indices.
-    R_eff, T_eff : (2, M) float ndarray
-        Reflected / transmitted diffraction efficiency per order; row 0 is the
-        response to an incident ``E_x`` wave, row 1 to incident ``E_y`` (cross-
-        polarization included).
-    jones_reflection : (2, 2) complex ndarray
-        Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis (PUBLIC
-        ``exp(-i w t)`` convention); columns are the responses to incident
-        ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
-
-    Notes
-    -----
-    NumPy / SciPy (dense eig); not JAX-differentiable.  SCOPE: BINARY grating
-    (1 ridge + 1 groove), full ``(3, 3)`` tensor IN-PLANE OR OUT-OF-PLANE, normal
-    OR oblique incidence at any slant.  The multi-region
-    :func:`pmm_jones_1d_slanted_segments` companion carries full ``(3, 3)``
-    tensors in-plane OR out-of-plane on every factorization.
-
-    DIAGONAL CURE (round 16; Granet 2017 JOSA A 34:975 / Granet 2023; Liu 2015
-    CiCP 18:467).  A DIAGONAL tensor (``exy = eyx = 0``) WITH ``exx == ezz`` in
-    BOTH regions at NORMAL incidence (or any incidence on a VERTICAL grating) is
-    solved through the DIV-CONFORMING scalar slant operator (``_sem_modes_slant``:
-    the Li ``1/eps`` inverse rule sits INSIDE the z-stiffness, so it is free of the
-    Liu-2015 spurious harmonic-mean static mode) -- TE via ``n = sqrt(eyy)``, TM
-    via ``n = sqrt(exx)``, assembled into the diagonal Jones.  This is the FASTER
-    (scalar ``n x n`` vs tensor ``4n x 4n``) and MORE-ACCURATE-per-degree path for
-    that case.
-
-    METRIC GENERATOR (round 11 + round-19 div-conforming closure).  COUPLED
-    tensors (``exy / eyx != 0``), diagonal tensors with ``exx != ezz``, AND ALL
-    combined oblique+slant cases use the convection-metric ``[E;H]`` first-order
-    generator (``_build_generator_metric``).  As of round 19 its ``E_z``
-    elimination is DIV-CONFORMING at ALL slants (``1/ezz`` placed BETWEEN the
-    discrete z-derivatives, ``+ iS0 INT(1/ezz) B' B'``, Granet 2023 Eq.16-18 /
-    Popov-Neviere App.B), so its TM-block spectrum bit-matches the scalar slant
-    solver, is free of the Liu-2015 spurious harmonic-mean null, and per-order TM
-    converges to the scalar oracle (~6.5e-4 deg32 / ~4.3e-4 deg40 at 45 deg).
-    Energy conserves to ~1e-13 in all paths.  The combined oblique+slant far field
-    (inclined-frame consistent, lab half-spaces) is degree-clean -- no stabilize
-    crutch.
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    if int(degree) < 2:
-        raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
-    if not (0.0 < float(duty_cycle) < 1.0):
-        raise ValueError(
-            f"pmm_jones_1d_slanted: duty_cycle must be strictly in (0, 1), got "
-            f"{duty_cycle}.")
-    er = np.asarray(eps_ridge, dtype=_C)
-    eg = np.asarray(eps_groove, dtype=_C)
-    if er.shape[-2:] != (3, 3) or eg.shape[-2:] != (3, 3):
-        raise ValueError(
-            "pmm_jones_1d_slanted: eps_ridge / eps_groove must be (3, 3) "
-            "permittivity tensors (use scalar * np.eye(3) for an isotropic "
-            "region).")
-    # OUT-OF-PLANE (eps_xz/yz/zx/zy != 0): SUPPORTED (2026-06-07).  Since the
-    # slant is carried as EXACT convection in the metric generator (see
-    # _build_generator_metric), out-of-plane + slant now reaches the SAME
-    # wall-normal ~1e-4 per-order floor as the in-plane slant TM channel
-    # (validated vs an independent RCWA tensor z-staircase across slant 15-60 deg,
-    # normal + oblique, symmetric / lossy / asymmetric tensors; energy conserves
-    # to ~1e-13).  An out-of-plane tensor MUST route through the coupled metric
-    # generator and NOT the scalar diagonal cure (which is the z-decoupled in-plane
-    # subset and would silently drop the off-plane coupling), so `off` excludes it
-    # from the diagonal cure below.  BINARY grating only -- the multi-region
-    # (segments) out-of-plane + slant path stays guarded pending its own
-    # per-order validation.
-    scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
-    off = max(float(np.max(np.abs(er[[0, 1, 2, 2], [2, 2, 0, 1]]))),
-              float(np.max(np.abs(eg[[0, 1, 2, 2], [2, 2, 0, 1]]))))
-
-    # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant) ----------------
-    # `factorization='covariant'` routes the slanted layer through the Li-1999
-    # oblique-coordinate covariant generator instead of the convection generator.
-    # The slanted wall becomes a coordinate surface, so the TM/p-pol channel
-    # converges SPECTRALLY (vertical-grade ~1e-7 by degree ~24) instead of the
-    # convection path's ALGEBRAIC ~1e-4 floor -- same physical answer, ~100-2400x
-    # fewer degrees.  Handles diagonal AND coupled (exy/eyx) IN-PLANE tensors,
-    # normal + oblique, lossless + lossy, IN-PLANE OR OUT-OF-PLANE.  The full-3x3
-    # out-of-plane coupling (eps_xz/yz/zx/zy) enters the covariant generator via
-    # the pointwise ezz-Schur composites (Li Eq.12) + the cos*Dop single-x-
-    # derivative cross blocks (see _cov_blocks / _cov_generator_4n) -- SPECTRAL at
-    # slant, same as the in-plane covariant.  The DEFAULT 'auto' picks covariant
-    # for ANY slanted cell (the spectral win, now including out-of-plane) and
-    # convection otherwise (vertical, where the vertical solver is already exact).
-    if factorization not in ("auto", "convection", "covariant"):
-        raise ValueError(
-            "pmm_jones_1d_slanted: factorization must be 'auto', 'convection' "
-            f"or 'covariant', got {factorization!r}.")
-    if factorization == "auto":
-        factorization = ("covariant"
-                         if abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
-                         else "convection")
-    if (factorization == "covariant"
-            and abs(float(slant_angle)) < _COV_MIN_SLANT_RAD):
-        # The covariant oblique frame u = x - tan(phi) z DEGENERATES at ~zero slant:
-        # the isotropic half-spaces' TE/TM modes become EXACTLY degenerate, the
-        # interface mode-match goes near-singular, and the solve becomes BLAS-build-
-        # dependent (it blew up on CI's OpenBLAS while passing on MKL).  The grating
-        # is vertical there, so defer to the EXACT vertical Jones solver (handles
-        # in-plane AND out-of-plane), which is well-conditioned and deterministic.
-        # stabilize=True (NOT the slanted call's flag): the vertical Jones solver
-        # has LAPACK-build-dependent resonances at a FIXED degree, so its robust
-        # degree-scan is needed here -- and it matches the reduction tests'
-        # pmm_jones_1d reference (which uses the default stabilize=True), making the
-        # slant=0 result byte-deterministic across BLAS builds.
-        return pmm_jones_1d(period, eps_ridge, eps_groove, n_substrate,
-                            n_superstrate, depth, duty_cycle, wavelength,
-                            angle=float(angle), degree=int(degree),
-                            elements_per_region=int(elements_per_region),
-                            grade=bool(grade),
-                            far_field_orders=int(far_field_orders),
-                            stabilize=True)
-    if factorization == "covariant":
-        cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
-                 duty_cycle, wavelength, float(slant_angle))
-        ckw = dict(n_ridge_el=int(elements_per_region),
-                   n_groove_el=int(elements_per_region), grade=bool(grade),
-                   far_field_orders=int(far_field_orders), angle=float(angle))
-        if not stabilize:
-            o, R, T, J, _ = _pmm_jones_oblique_solve(*cargs, degree=int(degree),
-                                                     **ckw)
-            return o, R, T, J
-        return _stabilize_jones(
-            lambda d: _pmm_jones_oblique_solve(*cargs, degree=d, **ckw)[:4],
-            int(degree), "pmm_jones_1d_slanted")
-
-    # ---- THE DIAGONAL CURE (round 16, Granet 2017/2023; Liu 2015) -----------
-    # For a DIAGONAL in-plane tensor (exy = eyx = 0) WITH exx == ezz BOTH
-    # regions, the TE / TM channels decouple and each maps onto the scalar slant
-    # operator _sem_modes_slant -- which is DIV-CONFORMING (the Li 1/eps inverse
-    # rule sits INSIDE the z-stiffness) and so SPURIOUS-MODE-FREE.  Route TE
-    # through the scalar slant with n=sqrt(eyy) and TM with n=sqrt(exx), then
-    # assemble the diagonal Jones.  This is the MORE-ACCURATE path: it sheds the
-    # latent ~2e-4 per-order Liu-2015 spurious-harmonic-mean accuracy gap that
-    # the pointwise metric-generator Ez-elimination (_build_metric_generator,
-    # O_inv_ezz = iS0 @ [[1/ezz]]) carries (energy still conserves to ~1e-12).
-    # Coupled tensors (exy/eyx != 0) AND diagonal tensors with exx != ezz fall
-    # through to the metric generator (now div-conforming at all slants, so the
-    # latent gap is gone there too).
-    #
-    # COMBINED OBLIQUE + SLANT is the ONE case the diagonal cure must NOT take:
-    # the scalar slant operator's per-order split is wrong for oblique + nonzero
-    # slant (energy still conserves -- a lossless cell auto-balances total power --
-    # which is exactly why :func:`pmm_efficiency_1d_slanted` forbids that combo).
-    # The round-19 div-conforming METRIC GENERATOR is the validated oblique+slant
-    # path (per-order matches an RCWA staircase to ~2e-3, degree-clean), so route
-    # combined oblique+slant through it even for a diagonal cell.  Oblique on a
-    # VERTICAL grating (slant=0) and slant at NORMAL incidence are both still
-    # handled correctly by the (more-accurate) scalar cure.
-    inplane_off = max(abs(er[0, 1]), abs(er[1, 0]),
-                      abs(eg[0, 1]), abs(eg[1, 0]))
-    exx_eq_ezz = max(abs(er[0, 0] - er[2, 2]), abs(eg[0, 0] - eg[2, 2]))
-    combined_oblique_slant = (abs(float(angle)) > 1e-12
-                              and abs(float(slant_angle)) > 1e-12)
-    diagonal_cure = (inplane_off <= 1e-9 * scale
-                     and exx_eq_ezz <= 1e-9 * scale
-                     and off <= 1e-9 * scale          # out-of-plane -> metric gen
-                     and not combined_oblique_slant)
-    if diagonal_cure:
-        dargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
-                 duty_cycle, wavelength, float(slant_angle))
-        dkw = dict(elements_per_region=int(elements_per_region),
-                   grade=bool(grade), far_field_orders=int(far_field_orders),
-                   angle=float(angle))
-        if not stabilize:
-            return _pmm_jones_slant_diag_solve(*dargs, degree=int(degree),
-                                               **dkw)
-        return _stabilize_jones(
-            lambda d: _pmm_jones_slant_diag_solve(*dargs, degree=d, **dkw),
-            int(degree), "pmm_jones_1d_slanted")
-
-    args = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
-            duty_cycle, wavelength, float(slant_angle))
-    kw = dict(n_ridge_el=int(elements_per_region),
-              n_groove_el=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders), angle=float(angle))
-
-    if not stabilize:
-        o, R, T, J, _ = _pmm_jones_slant_solve(*args, degree=int(degree), **kw)
-        return o, R, T, J
-    return _stabilize_jones(
-        lambda d: _pmm_jones_slant_solve(*args, degree=d, **kw)[:4],
-        int(degree), "pmm_jones_1d_slanted")
-
-
-def pmm_jones_1d_slanted_segments(
-    period: float,
-    segments,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    wavelength: float,
-    slant_angle: float,
-    *,
-    angle: float = 0.0,
-    theta: float | None = None,
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-    factorization: str = "auto",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """SLANTED multi-region grating with full ``(3, 3)`` permittivity tensors
-    (IN-PLANE OR OUT-OF-PLANE) -- the multi-region generalization of
-    :func:`pmm_jones_1d_slanted` and the slanted counterpart of
-    :func:`pmm_jones_1d_segments`.  The default ``factorization='auto'`` picks the
-    spectral covariant path for ANY slanted cell -- in-plane OR out-of-plane (the
-    full-3x3 coupling enters via the Li Eq.12 ezz-Schur composites + cos*Dop cross
-    blocks) -- and the convection path otherwise (vertical).
-    ``factorization='covariant'`` carries out-of-plane too; pass ``'convection'``
-    to force the fully-general algebraic path.
-
-    Each region carries its own (possibly anisotropic) tensor, and the straight
-    side-walls are tilted by ``slant_angle`` from the vertical.  Solved by the
-    same div-conforming convection-metric ``[E;H]`` generator as the binary
-    :func:`pmm_jones_1d_slanted` -- the metric generator and the lab-frame far
-    field are region-count-agnostic, so the N-region cell uses the identical
-    (validated) operator + half-space machinery on an N-segment nodal grid.
-    Energy conserves to ~1e-13 across ``0-60`` deg for asymmetric multi-region
-    cells (including coupled / gyrotropic regions); combined oblique + slant is
-    supported (the metric generator handles it).
-
-    Parameters
-    ----------
-    period, n_substrate, n_superstrate, depth, wavelength : as in
-        :func:`pmm_jones_1d`.
-    segments : list of (width_fraction, eps)
-        Consecutive regions along ``x``; each ``eps`` is a scalar (isotropic
-        region) or a ``(3, 3)`` IN-PLANE permittivity tensor.  Width fractions
-        must sum to 1 (within ``1e-6``).
-    slant_angle : float
-        Side-wall tilt from the vertical (radians); ``0`` reduces to
-        :func:`pmm_jones_1d_segments`.  Validated ``0 <= slant_angle <= ~60 deg``.
-    angle, degree, elements_per_region, grade, far_field_orders, stabilize,
-    factorization : as in :func:`pmm_jones_1d_slanted`.  ``factorization=
-        'covariant'`` gives SPECTRAL TM convergence for the multi-region cell too
-        (in-plane OR out-of-plane); it pre-reverses the region order so the
-        covariant far field lands in the user's input frame.
-
-    Returns
-    -------
-    orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d_slanted`.
-
-    Notes
-    -----
-    BINARY-cell reductions are bit-identical to :func:`pmm_jones_1d_slanted` and
-    the ``slant=0`` limit reduces to :func:`pmm_jones_1d_segments` (to the
-    div-conforming discretization difference).  Full ``(3, 3)`` tensor IN-PLANE
-    OR OUT-OF-PLANE (out-of-plane + slant reaches the ~1e-4 wall-normal floor,
-    validated vs a multi-region RCWA tensor z-staircase); NumPy/SciPy (not JAX).
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    if int(degree) < 2:
-        raise ValueError("pmm_jones_1d_slanted_segments: degree must be >= 2.")
-    if len(segments) < 1:
-        raise ValueError(
-            "pmm_jones_1d_slanted_segments: need at least one segment.")
-    widths = [float(w) for w, _ in segments]
-    tensors = []
-    for _w, eps in segments:
-        M = np.asarray(eps, dtype=_C)
-        if M.ndim == 0:                         # scalar -> isotropic tensor
-            M = M * np.eye(3, dtype=_C)
-        if M.shape[-2:] != (3, 3):
-            raise ValueError(
-                "pmm_jones_1d_slanted_segments: each segment eps must be a "
-                "scalar or a (3, 3) permittivity tensor.")
-        tensors.append(M)
-    # ---- COVARIANT OBLIQUE-COORDINATE path (SPECTRAL slant, opt-in) ---------
-    # Multi-region generalization of the binary covariant path; spectral TM
-    # convergence vs the convection path's algebraic floor (same answer).
-    # IN-PLANE OR OUT-OF-PLANE (the full-3x3 coupling enters via the Li Eq.12
-    # ezz-Schur composites + the cos*Dop single-derivative cross blocks).
-    if factorization not in ("auto", "convection", "covariant"):
-        raise ValueError(
-            "pmm_jones_1d_slanted_segments: factorization must be 'auto', "
-            f"'convection' or 'covariant', got {factorization!r}.")
-    if factorization == "auto":
-        factorization = ("covariant"
-                         if abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
-                         else "convection")
-    if (factorization == "covariant"
-            and abs(float(slant_angle)) < _COV_MIN_SLANT_RAD):
-        # The covariant oblique frame degenerates at ~zero slant (the isotropic
-        # half-spaces' TE/TM modes go exactly degenerate -> near-singular interface,
-        # BLAS-build-dependent).  Defer to the EXACT vertical Jones segments solver,
-        # which is well-conditioned and deterministic.
-        # stabilize=True: the vertical solver's robust degree-scan handles its
-        # fixed-degree LAPACK resonances and matches the reduction reference.
-        return pmm_jones_1d_segments(
-            period, segments, n_substrate, n_superstrate, depth, wavelength,
-            angle=float(angle), degree=int(degree),
-            elements_per_region=int(elements_per_region), grade=bool(grade),
-            far_field_orders=int(far_field_orders), stabilize=True)
-    if factorization == "covariant":
-        ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
-              wavelength, float(slant_angle))
-        ckw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
-                   far_field_orders=int(far_field_orders), angle=float(angle))
-        if not stabilize:
-            o, R, T, J, _ = _pmm_jones_oblique_segments_solve(
-                *ca, degree=int(degree), **ckw)
-            return o, R, T, J
-        return _stabilize_jones(
-            lambda d: _pmm_jones_oblique_segments_solve(*ca, degree=d, **ckw)[:4],
-            int(degree), "pmm_jones_1d_slanted_segments")
-    # OUT-OF-PLANE (eps_xz/yz/zx/zy != 0): SUPPORTED (2026-06-07).  Multi-region
-    # out-of-plane + slant rides the SAME exact-convection slant treatment as the
-    # binary path (see _build_generator_metric), so it reaches the ~1e-4 wall-
-    # normal per-order floor (validated vs a multi-region RCWA tensor z-staircase
-    # oracle: 3-region dT ~3e-4 at slant 30; 2-segment == binary to ~1e-14; energy
-    # conserves).  Segments route straight through the coupled metric generator
-    # (no scalar diagonal cure here), so no out-of-plane dispatch guard is needed.
-    sa = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
-          wavelength, float(slant_angle))
-    kw = dict(n_el_per_region=int(elements_per_region), grade=bool(grade),
-              far_field_orders=int(far_field_orders), angle=float(angle))
-
-    if not stabilize:
-        o, R, T, J, _ = _pmm_jones_slant_segments_solve(
-            *sa, degree=int(degree), **kw)
-        return o, R, T, J
-    return _stabilize_jones(
-        lambda d: _pmm_jones_slant_segments_solve(*sa, degree=d, **kw)[:4],
-        int(degree), "pmm_jones_1d_slanted_segments")
-
-
-def pmm_1d(
-    period: float,
-    n_substrate: complex,
-    n_superstrate: complex,
-    depth: float,
-    wavelength: float,
-    *,
-    eps_ridge=None,
-    eps_groove=None,
-    duty_cycle: float = 0.5,
-    segments=None,
-    slant_angle: float = 0.0,
-    angle: float = 0.0,
-    theta: float | None = None,
-    degree: int = 16,
-    elements_per_region: int = 1,
-    grade: bool = True,
-    far_field_orders: int = 21,
-    n_orders: int | None = None,
-    stabilize: bool = True,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Unified 1-D anisotropic-Jones PMM dispatcher -- one entry point that
-    auto-routes to the right solver by geometry.
-
-    Covers the whole 1-D Jones family in a single call:
-
-    ====================  =====================  =====================================
-    geometry              ``slant_angle == 0``   ``slant_angle != 0``
-    ====================  =====================  =====================================
-    BINARY                :func:`pmm_jones_1d`    :func:`pmm_jones_1d_slanted`
-    (``eps_ridge`` +      (vertical)              (slanted)
-    ``eps_groove`` +
-    ``duty_cycle``)
-    MULTI-REGION          :func:`pmm_jones_1d_    :func:`pmm_jones_1d_slanted_segments`
-    (``segments``)        segments`
-    ====================  =====================  =====================================
-
-    Each ``eps`` may be a scalar (promoted to an isotropic tensor) or a full
-    ``(3, 3)`` permittivity tensor (IN-PLANE or, for the VERTICAL cases,
-    OUT-OF-PLANE ``eps_xz/eyz/ezx/ezy != 0``).  Normal or oblique incidence.
-    (Combined out-of-plane + slant is SUPPORTED by the binary and segments slanted
-    solvers as of 2026-06-07 -- the slant is carried as exact convection, reaching
-    the ~1e-4 wall-normal per-order floor.)
-
-    Parameters
-    ----------
-    period, n_substrate, n_superstrate, depth, wavelength : as in
-        :func:`pmm_jones_1d`.
-    eps_ridge, eps_groove, duty_cycle : the BINARY grating spec (give these OR
-        ``segments``, not both).
-    segments : list of ``(width_fraction, eps)`` -- the MULTI-REGION spec.
-    slant_angle : float
-        Side-wall tilt from the vertical (radians); ``0`` = vertical.
-    angle, degree, elements_per_region, grade, far_field_orders, stabilize : as in
-        :func:`pmm_jones_1d`.
-
-    Returns
-    -------
-    orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
-    """
-    angle = _resolve_incidence(angle, theta)
-    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
-    has_binary = eps_ridge is not None or eps_groove is not None
-    if (segments is None) == (not has_binary):
-        raise ValueError(
-            "pmm_1d: give EITHER `segments` OR `eps_ridge` + `eps_groove` "
-            "(+ `duty_cycle`), not both / neither.")
-    common = dict(angle=float(angle), degree=int(degree),
-                  elements_per_region=int(elements_per_region),
-                  grade=bool(grade), far_field_orders=int(far_field_orders),
-                  stabilize=bool(stabilize))
-    slanted = abs(float(slant_angle)) > 1e-12
-    if segments is not None:
-        if slanted:
-            return pmm_jones_1d_slanted_segments(
-                period, segments, n_substrate, n_superstrate, depth, wavelength,
-                float(slant_angle), **common)
-        return pmm_jones_1d_segments(
-            period, segments, n_substrate, n_superstrate, depth, wavelength,
-            **common)
-    if eps_ridge is None or eps_groove is None:
-        raise ValueError(
-            "pmm_1d: the binary spec needs BOTH `eps_ridge` and `eps_groove`.")
-    # Honour the documented "scalar promoted to an isotropic tensor" contract
-    # (the underlying Jones solvers require an explicit (3, 3) tensor).
-    eps_ridge = _promote_eps_tensor(eps_ridge)
-    eps_groove = _promote_eps_tensor(eps_groove)
-    if slanted:
-        return pmm_jones_1d_slanted(
-            period, eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
-            float(duty_cycle), wavelength, float(slant_angle), **common)
-    return pmm_jones_1d(
-        period, eps_ridge, eps_groove, n_substrate, n_superstrate, depth,
-        float(duty_cycle), wavelength, **common)
-
-
-# ===========================================================================
-# Convergence-class predictor for right-angle grating edges (Li-Granet 2011)
-# ===========================================================================
-def grating_convergence_class(eps_quadrants):
-    """Classify modal-method convergence at a right-angle grating edge (Li &
-    Granet, JOSA A 28:738, 2011).
-
-    Predicts whether -- and how fast -- a modal method (FMM/RCWA, AMM, or PMM)
-    converges at the right-angle corner where four regions of permittivity
-    meet.  The governing field singularity is in the IN-PLANE electric field
-    (the TM problem); TE (E parallel to the edge) is typically far better
-    behaved.  This is a PURE O(1) diagnostic -- it does not solve the grating.
-
-    Parameters
-    ----------
-    eps_quadrants : sequence of 4 complex
-        The four permittivities meeting at the corner, IN ORDER AROUND THE
-        VERTEX ``(eps1, eps2, eps3, eps4)``; ``eps1``/``eps3`` and
-        ``eps2``/``eps4`` are the diagonal pairs.  PUBLIC convention
-        ``Im(eps) > 0`` for loss.
-
-    Returns
-    -------
-    dict
-        ``type`` ('I' | 'II' | 'III' | 'degenerate'), ``tau`` (complex
-        singularity exponent, Eq. 2), ``delta`` (Eq. 4), ``delta_prime``
-        (Eq. 3), ``predicted_rate`` (``Re[tau]``, the algebraic decay exponent
-        for Type I; else NaN), ``converges`` (bool), ``warning`` (str).
-
-    Classification (lossless edges)
-    -------------------------------
-    * **Type I**  ``0 < Delta < 1`` (all-dielectric): REGULAR singularity;
-      modal methods converge ALGEBRAICALLY at rate ``Re[tau]`` (slow as
-      ``Re[tau] -> 0``; ``elements_per_region>1, grade=True`` recovers it).
-    * **Type II** ``Delta < 0`` (LOSSLESS metal-dielectric): IRREGULAR
-      singularity; NO method (FMM/AMM/PMM) converges.  Mitigate with metal
-      loss, a rounded corner, or accept non-convergence.
-    * **Type III** ``Delta > 1`` (requires a metal quadrant): no singularity,
-      fast.  IMPOSSIBLE for an all-dielectric corner -- the squared numerator
-      over a positive denominator forces ``Delta <= 1``.
-
-    Loss caveat
-    -----------
-    A lossless metal corner is Type II; absorption (``Im(eps) > 0``) lifts the
-    irregularity ASYMPTOTICALLY and is reported as (slowly) convergent.  This is
-    NOT a hard switch -- a weakly lossy metal corner can still stall like
-    Type II at practical truncation, so read ``converges=True`` for a
-    near-lossless metal as "convergent in the limit," not "fast".
-
-    References
-    ----------
-    L. Li & G. Granet, "Field singularities at lossless metal-dielectric
-    right-angle edges and their ramifications to the numerical modeling of
-    gratings," J. Opt. Soc. Am. A 28, 738-746 (2011).
-    """
-    e1, e2, e3, e4 = (_C(v) for v in eps_quadrants)
-    loss_tol = 1e-9
-    degen_tol = 1e-12
-
-    has_loss = max(abs(e.imag) for e in (e1, e2, e3, e4)) > loss_tol
-
-    f12, f23, f34, f41 = e1 + e2, e2 + e3, e3 + e4, e4 + e1
-    num = (e1 * e3 - e2 * e4) ** 2
-    den = f12 * f23 * f34 * f41
-    scale = (abs(e1) + abs(e2) + abs(e3) + abs(e4)) ** 4 + 1e-30
-    if abs(den) < degen_tol * scale or not np.isfinite(num / den):
-        return dict(
-            type="degenerate", tau=complex("nan"), delta=complex("nan"),
-            delta_prime=complex("nan"), predicted_rate=float("nan"),
-            converges=False,
-            warning=("DEGENERATE EDGE: a (eps_i+eps_j) denominator factor "
-                     "vanished (impedance-matched / resonant corner); "
-                     "Delta_prime is ill-defined."))
-
-    delta_prime = num / den
-    delta = 1.0 - delta_prime
-    tau = (2.0 / np.pi) * cmath.asin(cmath.sqrt(complex(delta_prime)))
-    dr = delta.real
-
-    if has_loss:
-        # Loss lifts the lossless-metal irregularity (asymptotically).
-        ctype = "I" if dr < 1.0 else "III"
-        warning = ""
-        if dr < 0.0:
-            ctype = "I"
-            warning = (
-                "Lossy metal corner: the lossless Type-II irregularity is "
-                "lifted by absorption, but a WEAKLY lossy metal can still "
-                "stall at practical truncation; convergence may be SLOW (use "
-                "mesh grading toward the wall).")
-        return dict(type=ctype, tau=tau, delta=delta, delta_prime=delta_prime,
-                    predicted_rate=float(abs(tau.real)), converges=True,
-                    warning=warning)
-
-    if dr < 0.0:
-        return dict(
-            type="II", tau=tau, delta=delta, delta_prime=delta_prime,
-            predicted_rate=float("nan"), converges=False,
-            warning=("TYPE II IRREGULAR SINGULARITY (lossless metal-dielectric "
-                     "edge): NO modal method (FMM/AMM/PMM) converges. Add metal "
-                     "loss, round the corner, or accept non-convergence -- do "
-                     "NOT trust efficiencies from this edge."))
-    if dr > 1.0:
-        return dict(type="III", tau=tau, delta=delta, delta_prime=delta_prime,
-                    predicted_rate=float("nan"), converges=True, warning="")
-
-    rate = tau.real
-    warning = ""
-    if rate < 0.3:
-        warning = (
-            f"WEAK Type-I singularity (Re[tau]={rate:.4f} < 0.3): algebraic "
-            "convergence is SLOW (~N^-tau); use elements_per_region>1, "
-            "grade=True to recover the rate.")
-    return dict(type="I", tau=tau, delta=delta, delta_prime=delta_prime,
-                predicted_rate=float(rate), converges=True, warning=warning)
-
-
-def classify_from_grating(eps_superstrate, eps_ridge, eps_groove,
-                          eps_substrate):
-    """Convenience wrapper of :func:`grating_convergence_class` for a 1-D binary
-    grating: maps the four regions around the ridge/groove corner to the vertex
-    ordering ``(sup, ridge, sub, groove)`` so the diagonal pairs are
-    ``(sup, sub)`` and ``(ridge, groove)`` (Li & Granet Fig. 1)."""
-    return grating_convergence_class(
-        (eps_superstrate, eps_ridge, eps_substrate, eps_groove))
-
-
 # ===========================================================================
 # ARCHIVE -- superseded methods, preserved with the WHY (NOT executed)
 # ===========================================================================
@@ -5681,10 +3840,104 @@ spectral ~1e-7 floor by making the wall a coordinate surface.)
 try:
     import sys as _sys
 
-    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    from ..._cache_registry import register_cache_clearer as _register_cache_clearer
     _register_cache_clearer(
         "pmm_lagrange_dref",
         lambda: getattr(_sys.modules[__name__], "_clear_pmm_caches")(),
     )
 except ImportError:  # pragma: no cover - registry always present in-tree
     pass
+
+__all__ = [
+    "_C",
+    "_COV_MIN_SLANT_RAD",
+    "_resolve_order_count",
+    "_promote_eps_tensor",
+    "_resolve_incidence",
+    "_STABILIZE_MAX_SCAN",
+    "_MIN_PLATEAU",
+    "_PASSIVE_TOL",
+    "_CLUSTER_TOL",
+    "_PER_ORDER_TOL",
+    "_aligned_max_diff",
+    "_converged_cluster",
+    "_readonly",
+    "_gll_nodes_weights",
+    "_LAGRANGE_DREF_CACHE",
+    "_LAGRANGE_DREF_LOCK",
+    "_clear_pmm_caches",
+    "_lagrange_derivative_matrix",
+    "_graded_boundaries",
+    "_build_sem",
+    "_ill_scaled",
+    "_equil_scale",
+    "_safe_inv",
+    "_safe_solve",
+    "_safe_geig",
+    "_sem_modes",
+    "_sem_fourier_projection",
+    "_interface_smatrix",
+    "_propagation_smatrix",
+    "_redheffer_star",
+    "_kz_forward",
+    "_assemble_jones_farfield",
+    "_scalar_farfield_RT",
+    "_n_propagating_orders",
+    "_pmm_solve",
+    "_pmm_solve_core",
+    "_JONES_PASSIVE_TOL",
+    "_build_sem_tensor",
+    "_sem_modes_tensor",
+    "_pmm_jones_solve",
+    "_pmm_jones_solve_core",
+    "_segment_walls",
+    "_segment_elem_bnds",
+    "_l2g_periodic",
+    "_build_sem_segments",
+    "_build_sem_tensor_segments",
+    "_pmm_solve_segments",
+    "_pmm_jones_solve_segments",
+    "_stabilize_scalar",
+    "_stabilize_jones",
+    "_graded_fractions",
+    "_jpmm_build_topology",
+    "_jpmm_build_static",
+    "_jpmm_build_dynamic",
+    "_jpmm_order_set",
+    "_jpmm_fourier_projection",
+    "_jpmm_projection_quad",
+    "_jpmm_fourier_projection_jax",
+    "_jpmm_assemble",
+    "_jpmm_sem_modes",
+    "_jpmm_solve",
+    "_pmm_efficiency_1d_jax",
+    "_jpmm_assemble_tensor",
+    "_jpmm_sem_modes_tensor",
+    "_jpmm_jones_solve",
+    "_pmm_jones_1d_jax",
+    "_tensor3_dict",
+    "_pmm_union_grid",
+    "_build_sem_slant",
+    "_sem_modes_slant",
+    "_modes_M_slant",
+    "_pmm_slant_solve",
+    "_t3_slant",
+    "_build_nodal_metric",
+    "_build_nodal_metric_segments",
+    "_coeff_mass_metric",
+    "_build_generator_metric",
+    "_split_modes_flux_metric",
+    "_layer_modes_metric",
+    "_half_M_sym_metric",
+    "_pmm_jones_slant_core",
+    "_pmm_jones_slant_solve",
+    "_cov_blocks",
+    "_cov_generator_4n",
+    "_cov_layer_4n",
+    "_cov_split",
+    "_pmm_jones_oblique_core",
+    "_pmm_jones_oblique_solve",
+    "_pmm_jones_oblique_segments_solve",
+    "_pmm_jones_slant_segments_solve",
+    "_pmm_jones_slant_diag_solve",
+]

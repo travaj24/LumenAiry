@@ -477,7 +477,8 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
     no-floor 2-D nodal method is blocked by the flux-inconsistent degenerate
     uniform-region nodal eigenproblem — the same wall RCWA sidesteps with its
     analytic region path — and is being pursued separately via an FEEC E–D
-    formulation.) New module `lumenairy/elements/pmm2d.py`, exported top-level.
+    formulation.) New module `lumenairy/elements/pmm/twod.py` (was `pmm2d.py`
+    before the 1-D/2-D package reorg), exported top-level.
 - **New tests** `tests/unit/test_v5_11_0_pmm2d.py` (17) — vacuum exactness +
   degree-independence, pillar vs the rcwa li oracle, energy conservation, C4v +
   ±-order symmetry, and the odd-node / n_orders / polarization guards.
@@ -532,7 +533,8 @@ path (isotropic, in-plane-tensor, `'laurent'`/`'li'`, scalar PMM, default
   isotropic TE/TM, NumPy dense eig; **corner-capped** (algebraic, no-floor — at-best
   RCWA parity per DOF on vertical pillars, the win being accuracy quality). Curved/
   slanted boundaries (Granet's transfinite curved-quad mapping) are a follow-on. New
-  module `lumenairy/elements/pmm2d_staggered.py`, exported top-level; kept DISTINCT
+  module `lumenairy/elements/pmm/twod_staggered.py` (was `pmm2d_staggered.py`
+  before the 1-D/2-D package reorg), exported top-level; kept DISTINCT
   from `pmm_efficiency_2d` (different convergence class + geometry input).
 - **New tests** `tests/unit/test_v5_12_0_pmm2d_staggered.py` (12) — vacuum
   exactness, the no-Fourier-floor gate (energy byte-identical across n_orders),
