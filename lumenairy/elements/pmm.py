@@ -184,6 +184,15 @@ def _promote_eps_tensor(eps):
     return M
 
 
+def _resolve_incidence(angle, theta):
+    """Cross-dimension alias: accept ``theta`` (the 2-D / conical polar-angle
+    spelling, also used by ``RCWAStack``) as a synonym for ``angle`` (the 1-D
+    classical-mount incidence angle).  The 1-D mount is planar (azimuth ``phi =
+    0``), so ``theta`` IS the in-plane ``angle``.  ``theta`` overrides when
+    supplied; ``None`` (the default) keeps ``angle``."""
+    return angle if theta is None else theta
+
+
 # ``stabilize`` robust-selection parameters.  PMM has two distinct off-curve
 # failure modes vs polynomial degree: (1) discrete RESONANCES at isolated degrees
 # that INFLATE sum(R)+sum(T) above the converged value (sparse at low degree,
@@ -1392,6 +1401,7 @@ def pmm_jones_1d(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     degree: int = 16,
     elements_per_region: int = 1,
     grade: bool = True,
@@ -1433,7 +1443,9 @@ def pmm_jones_1d(
         the period).
     angle : float, optional
         Incidence angle (radians) in the x-z plane (classical mount, ``ky=0``).
-        Oblique is supported via the ``+i kx0`` Bloch shift; the coupled tensor
+        Accepts ``theta`` as a cross-dimension alias (the 2-D / conical polar-
+        angle spelling, also used by ``RCWAStack``); overrides ``angle`` when
+        given.  Oblique is supported via the ``+i kx0`` Bloch shift; the coupled tensor
         modes' forward set is chosen by the z-Poynting flux.  Lossless / mild-
         loss anisotropic (the tunable-LC case) is robust across angle; very
         lossy metal-corner TM at steep angle can be resonance-limited.
@@ -1502,6 +1514,7 @@ def pmm_jones_1d(
     15-60 deg, normal + oblique).  The multi-region (segments) out-of-plane + slant
     path remains guarded.
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
@@ -2629,6 +2642,7 @@ def pmm_efficiency_1d(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     polarization: str = "te",
     degree: int = 16,
     elements_per_region: int = 1,
@@ -2653,7 +2667,9 @@ def pmm_efficiency_1d(
         (metres / PUBLIC ``n = n + i kappa``).  The ridge occupies the fraction
         ``duty_cycle`` of the period.
     angle : float, optional
-        Incidence angle (radians).  Oblique is supported via the ``+i kx0``
+        Incidence angle (radians).  Accepts ``theta`` as a cross-dimension alias
+        (the 2-D / conical polar-angle spelling); overrides ``angle`` when given.
+        Oblique is supported via the ``+i kx0``
         Bloch shift of the pseudo-periodic envelope (the convection term is
         antisymmetrized so the wall-varying ``1/eps`` weight is handled
         correctly for TM); the forward modes use a noise-robust branch.
@@ -2726,6 +2742,7 @@ def pmm_efficiency_1d(
     spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
     ``elements_per_region>1, grade=True`` recovers the rate for metals.
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -2795,6 +2812,7 @@ def pmm_efficiency_1d_jax(
     wavelength,
     *,
     angle=0.0,
+    theta=None,
     polarization="te",
     degree=16,
     elements_per_region=1,
@@ -2831,6 +2849,7 @@ def pmm_efficiency_1d_jax(
         duty_cycle,
         jnp.asarray(wavelength),
         angle=jnp.asarray(angle),
+        theta=theta,
         polarization=polarization,
         degree=degree,
         elements_per_region=elements_per_region,
@@ -2850,6 +2869,7 @@ def pmm_efficiency_1d_segments(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     polarization: str = "te",
     degree: int = 16,
     elements_per_region: int = 1,
@@ -2884,6 +2904,7 @@ def pmm_efficiency_1d_segments(
     -------
     orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -2920,6 +2941,7 @@ def pmm_jones_1d_segments(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     degree: int = 16,
     elements_per_region: int = 1,
     grade: bool = True,
@@ -2956,6 +2978,7 @@ def pmm_jones_1d_segments(
     -------
     orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_segments: degree must be >= 2.")
@@ -3192,9 +3215,12 @@ class PMMStack:
         self._layers.append((float(thickness), segs, float(slant_angle)))
         return self
 
-    def set_source(self, wavelength, *, angle=0.0):
+    def set_source(self, wavelength, *, angle=0.0, theta=None):
         """Set the incident plane wave (vacuum wavelength [m], incidence
-        ``angle`` [rad] in the x-z plane).  Returns ``self``."""
+        ``angle`` [rad] in the x-z plane).  ``theta`` is accepted as a cross-suite
+        alias for ``angle`` (matching ``RCWAStack.set_source``'s polar angle, with
+        the 1-D classical mount's azimuth ``phi = 0``).  Returns ``self``."""
+        angle = _resolve_incidence(angle, theta)
         self._src = dict(wl=float(wavelength), angle=float(angle))
         return self
 
@@ -3757,6 +3783,7 @@ def pmm_efficiency_1d_slanted(
     slant_angle: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     polarization: str = "te",
     degree: int = 16,
     elements_per_region: int = 1,
@@ -3826,6 +3853,7 @@ def pmm_efficiency_1d_slanted(
     convection, not a coupling error; the in-plane wall-normal TM floor alone is much
     tighter, ~3e-5..1e-4 near degree 18-20, U-shaped).
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -4916,6 +4944,7 @@ def pmm_jones_1d_slanted(
     slant_angle: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     degree: int = 16,
     elements_per_region: int = 1,
     grade: bool = True,
@@ -5048,6 +5077,7 @@ def pmm_jones_1d_slanted(
     (inclined-frame consistent, lab half-spaces) is degree-clean -- no stabilize
     crutch.
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
@@ -5203,6 +5233,7 @@ def pmm_jones_1d_slanted_segments(
     slant_angle: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     degree: int = 16,
     elements_per_region: int = 1,
     grade: bool = True,
@@ -5260,6 +5291,7 @@ def pmm_jones_1d_slanted_segments(
     OR OUT-OF-PLANE (out-of-plane + slant reaches the ~1e-4 wall-normal floor,
     validated vs a multi-region RCWA tensor z-staircase); NumPy/SciPy (not JAX).
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted_segments: degree must be >= 2.")
@@ -5349,6 +5381,7 @@ def pmm_1d(
     segments=None,
     slant_angle: float = 0.0,
     angle: float = 0.0,
+    theta: float | None = None,
     degree: int = 16,
     elements_per_region: int = 1,
     grade: bool = True,
@@ -5395,6 +5428,7 @@ def pmm_1d(
     -------
     orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
     """
+    angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     has_binary = eps_ridge is not None or eps_groove is not None
     if (segments is None) == (not has_binary):

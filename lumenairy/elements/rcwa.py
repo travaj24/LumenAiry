@@ -1374,6 +1374,15 @@ def _propagation_smatrix_general(lam_f, lam_b, k0_L):
 # Public 1-D entry point
 # ===========================================================================
 
+def _resolve_incidence(angle, theta):
+    """Cross-dimension alias: accept ``theta`` (the polar-angle spelling used by
+    ``RCWAStack`` and the ``rcwa_*_2d`` conical solvers) as a synonym for the 1-D
+    classical-mount ``angle``.  The 1-D mount is planar (azimuth ``phi = 0``), so
+    ``theta`` IS the in-plane ``angle``.  ``theta`` overrides when supplied;
+    ``None`` (the default) keeps ``angle``."""
+    return angle if theta is None else theta
+
+
 @_with_blas_limit
 def rcwa_efficiency_1d(
     period: float,
@@ -1386,6 +1395,7 @@ def rcwa_efficiency_1d(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     polarization: str = "te",
     n_orders: int = 11,
     formulation: str = "auto",
@@ -1424,7 +1434,9 @@ def rcwa_efficiency_1d(
         Vacuum wavelength (metres).
     angle : float, optional
         Incidence polar angle from the surface normal (radians), in the
-        plane of periodicity (planar mounting).  Default 0.
+        plane of periodicity (planar mounting).  Default 0.  Accepts ``theta``
+        as a cross-dimension alias (the polar-angle spelling used by the 2-D /
+        conical solvers and ``RCWAStack``); when given it overrides ``angle``.
     polarization : {'te', 'tm'}, optional
         ``'te'`` (s, E along grooves / y) or ``'tm'`` (p).  Default ``'te'``.
     n_orders : int, optional
@@ -1491,6 +1503,7 @@ def rcwa_efficiency_1d(
     the default ``False`` the guard raises immediately (bit-for-bit backward
     compatible).  NumPy / CuPy only; the JAX path is unchanged.
     """
+    angle = _resolve_incidence(angle, theta)
     if stabilize and not _is_traced(wavelength):
         last = None
         for bump in _stabilize_bumps(n_orders):
@@ -1711,6 +1724,7 @@ def rcwa_efficiency_vs_wavelength(
     *,
     order: int = 1,
     angle: float = 0.0,
+    theta: float | None = None,
     polarization: str = "te",
     n_orders: int = 11,
     formulation: str = "auto",
@@ -1742,6 +1756,7 @@ def rcwa_efficiency_vs_wavelength(
 
     Other parameters are as in :func:`rcwa_efficiency_1d`.
     """
+    angle = _resolve_incidence(angle, theta)
     if quantity not in ("transmitted", "reflected"):
         raise ValueError(
             f"rcwa_efficiency_vs_wavelength: quantity must be 'transmitted' "
@@ -1950,6 +1965,7 @@ def rcwa_jones_vs_wavelength(
     wavelengths,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     n_orders: int = 11,
 ):
     """DISPERSIVE Jones spectral sweep of the 1-D anisotropic grating -- the
@@ -1983,6 +1999,7 @@ def rcwa_jones_vs_wavelength(
         Total reflected / transmitted efficiency (summed over orders) for each
         incident polarization (column 0 = incident ``E_x``, 1 = ``E_y``).
     """
+    angle = _resolve_incidence(angle, theta)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(
@@ -2017,6 +2034,7 @@ def rcwa_jones_vs_wavelength_segments(
     wavelengths,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     n_orders: int = 11,
 ):
     """DISPERSIVE Jones spectral sweep of a MULTI-SEGMENT 1-D anisotropic grating
@@ -2057,6 +2075,7 @@ def rcwa_jones_vs_wavelength_segments(
         Total reflected / transmitted efficiency (summed over orders) for each
         incident polarization (column 0 = incident ``E_x``, 1 = ``E_y``).
     """
+    angle = _resolve_incidence(angle, theta)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(
@@ -3242,6 +3261,7 @@ def rcwa_jones_1d(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     n_orders: int = 11,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -3284,6 +3304,7 @@ def rcwa_jones_1d(
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
     """
+    angle = _resolve_incidence(angle, theta)
     _validate_geometry("rcwa_jones_1d",
                        **_concrete(period=period, depth=depth,
                                    wavelength=wavelength), n_orders=n_orders)
@@ -3374,6 +3395,7 @@ def rcwa_jones_1d_segments(
     wavelength: float,
     *,
     angle: float = 0.0,
+    theta: float | None = None,
     n_orders: int = 11,
     use_gpu: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -3427,6 +3449,7 @@ def rcwa_jones_1d_segments(
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
     """
+    angle = _resolve_incidence(angle, theta)
     _validate_geometry("rcwa_jones_1d_segments",
                        **_concrete(period=period, depth=depth,
                                    wavelength=wavelength), n_orders=n_orders)
@@ -4139,6 +4162,7 @@ def rcwa_efficiency_1d_jax(
     wavelength,
     *,
     angle=0.0,
+    theta=None,
     polarization="te",
     n_orders=11,
     formulation="auto",
@@ -4202,6 +4226,7 @@ def rcwa_efficiency_1d_jax(
         duty_cycle,
         jnp.asarray(wavelength),
         angle=jnp.asarray(angle),
+        theta=theta,
         polarization=polarization,
         n_orders=n_orders,
         formulation=formulation,
@@ -5125,14 +5150,19 @@ class RCWAStack:
         return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
                                      rule="midpoint")
 
-    def set_source(self, wavelength, *, theta=0.0, phi=0.0):
+    def set_source(self, wavelength, *, theta=0.0, phi=0.0, angle=None):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
-        ``theta`` and azimuth ``phi`` [rad]).
+        ``theta`` and azimuth ``phi`` [rad]).  ``angle`` is accepted as a
+        cross-suite alias for ``theta`` (matching ``PMMStack.set_source`` /
+        the 1-D ``angle``); when given it overrides ``theta`` (with ``phi``
+        unchanged -- the classical planar mount is ``phi = 0``).
 
         The stack solver always returns the full zeroth-order Jones response
         (the reaction to both incident ``E_x`` and ``E_y``), so no incident
         polarization is selected here."""
         _validate_geometry("RCWAStack.set_source", wavelength=wavelength)
+        if angle is not None:
+            theta = angle
         self._source = dict(wavelength=float(wavelength), theta=float(theta),
                             phi=float(phi))
         return self
