@@ -27,11 +27,19 @@ and use the WSL venv as the Linux/OpenBLAS CI-proxy (see memory
   `.dof`; rcwa_efficiency_2d/_shapes + pmm_efficiency_2d/_staggered all return it;
   exported at package + top level; contract test) (37334de); naming-divergence DOCS
   (n-vs-eps footgun cross-ref; staggered degree=M-not-GLL) (003efed). All CI-green.
-- **STAGE 2 REMAINING** (fresh context -- cross-cutting signature changes, higher risk):
-  the actual incidence-keyword ALIAS (`angle`<->`theta`/`phi`, planar-vs-conical) across
-  ALL 1-D entry points + `RCWAStack.set_source`; `far_field_orders`<->`n_orders` alias;
-  staggered `degree`->`n_modes` alias (kept the doc note for now); the remaining P3
-  renames (`_exx_eq_ezz`, `EPS_xx`->`EPS_normal`, `nox/noy`) and clarification comments.
+- Stage 2 staggered `n_modes` alias DONE (additive, `degree` stays default;
+  byte-identical) + accurate `-> Efficiency2D` return annotations. (Commit cb21076.)
+- **STAGE 2 REMAINING** (fresh context -- MULTI-FUNCTION signature changes, higher risk;
+  the careful move is a focused sweep, not piecemeal edits in a long context):
+  (a) `far_field_orders` <-> `n_orders` alias -- 8 public 1-D pmm.py entry points
+  (`far_field_orders: int = 21` at pmm.py:1374/2608/2824/2891/3726/4882/5167/5311);
+  do via a one-shot replace_all adding `n_orders: int | None = None` after each, plus a
+  per-function `if n_orders is not None: far_field_orders = n_orders` at the body top.
+  (b) incidence-keyword ALIAS `angle` <-> `theta`/`phi` (planar-vs-conical) across ALL
+  1-D entry points (both suites) + `RCWAStack.set_source` -- ~10+ functions; use a
+  `_incidence(angle, theta)` helper. (c) P3 renames (`_exx_eq_ezz`->`_exx_minus_ezz`,
+  `EPS_xx`->`EPS_normal`, `RCWAStack.nox/noy`) + the scattered clarification comments
+  (kx0 units, flux_inc/einc_sq, `_homogeneous_eigenmodes` kz slot, `_sqrt_forward`).
 
 ## STAGE 1 — P2 robustness cluster (part 2, rcwa.py) -- DONE (see above).
 Line numbers drift as edits land — locate by content.
