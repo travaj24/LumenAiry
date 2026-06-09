@@ -87,17 +87,22 @@ def test_p4_default_use_li_true_unchanged():
 
 def test_p4_use_li_false_te_end_to_end_noop():
     """Audit F4: end-to-end validation of the use_li=False (Laurent) path where
-    P4 skips EPS_II.  The wall-normal inverse-rule operator does NOT enter the TE
-    problem, so formulation='laurent' (use_li=False, EPS_II skipped) is
-    BYTE-IDENTICAL to formulation='li' for TE -- proving the skip changed nothing
-    on the common path -- and conserves energy.  (For TM the two rules differ only
-    in CONVERGENCE RATE; both reach the same answer, so laurent+tm is a valid, if
-    slower, choice, NOT a guarded error -- hence no precondition raise.)"""
+    P4 skips EPS_II.  The wall-normal inverse-rule operator is mathematically
+    inert for the TE problem (E_y is tangential / continuous), so
+    formulation='laurent' (use_li=False, EPS_II skipped) MATCHES formulation='li'
+    for TE and conserves energy.  (For TM the two rules differ only in CONVERGENCE
+    RATE; both reach the same answer, so laurent+tm is a valid, if slower, choice,
+    NOT a guarded error -- hence no precondition raise.)
+
+    NB: assert CLOSENESS, not byte-identity -- the two formulations build a
+    different (TE-equivalent) Q block, and its eig rounds differently across BLAS
+    builds: identical on Windows/MKL and the local WSL OpenBLAS, but ~ULP
+    different on GitHub's OpenBLAS (the WSL-CI-proxy 'good build' trap)."""
     args = dict(period=0.9e-6, n_ridge=2.0, n_groove=1.0, n_substrate=1.5,
                 n_superstrate=1.0, depth=0.45e-6, duty_cycle=0.5,
                 wavelength=0.633e-6, polarization="te", n_orders=31)
     o_l, R_l, T_l = rcwa_efficiency_1d(**args, formulation="laurent")
     o_i, R_i, T_i = rcwa_efficiency_1d(**args, formulation="li")
-    assert np.array_equal(np.asarray(R_l), np.asarray(R_i))
-    assert np.array_equal(np.asarray(T_l), np.asarray(T_i))
+    assert np.allclose(np.asarray(R_l), np.asarray(R_i), rtol=0, atol=1e-10)
+    assert np.allclose(np.asarray(T_l), np.asarray(T_i), rtol=0, atol=1e-10)
     assert abs(float(np.sum(R_l) + np.sum(T_l)) - 1.0) < 1e-6
