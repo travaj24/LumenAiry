@@ -876,11 +876,11 @@ def _asr_convolutions(n_ridge, n_groove, duty_cycle, n_orders, eta, xp,
 # Layer eigen-solve (vectorial 2N system, Rumpf/Moharam)
 # ===========================================================================
 
-def _layer_Q_matrix(Kx, Ky, EPS, EPS_xx):
+def _layer_Q_matrix(Kx, Ky, EPS, EPS_normal):
     """The ``Q`` block (``dE/dz' = Q H``) of the layer ODE system.
 
     ``EPS`` is the Laurent ``[[eps]]`` (used where E is tangential to the
-    grating walls -- the ``E_y`` response); ``EPS_xx`` is the convolution
+    grating walls -- the ``E_y`` response); ``EPS_normal`` is the convolution
     for the wall-NORMAL field ``E_x``, which is ``[[eps]]`` for the Laurent
     rule but the Li inverse-rule ``[[1/eps]]^{-1}`` for fast TM / metal
     convergence.  Shared by the structured-layer eig solve and the analytic
@@ -888,10 +888,10 @@ def _layer_Q_matrix(Kx, Ky, EPS, EPS_xx):
     use one convention everywhere (essential for evanescent-order interface
     consistency).
     """
-    xp = array_namespace(Kx, Ky, EPS, EPS_xx)
+    xp = array_namespace(Kx, Ky, EPS, EPS_normal)
     return _block(xp, [
         [Kx @ Ky,           EPS - Kx @ Kx],
-        [Ky @ Ky - EPS_xx,  -Ky @ Kx],
+        [Ky @ Ky - EPS_normal,  -Ky @ Kx],
     ])
 
 
@@ -1068,7 +1068,7 @@ def _even_unfold(ve, desc, xp):
     return v
 
 
-def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
+def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
                         orders, k0, depth, cinc, xp):
     """Even-parity-sector reflection/transmission (see section header).
 
@@ -1095,7 +1095,7 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
     EPS = _recentre(EPS)
     if not _flip_invariant(EPS, flip):                # non-centro-symmetric cell
         return None
-    EPS_xx = _recentre(EPS_xx)
+    EPS_normal = _recentre(EPS_normal)
     ez_inv = _recentre(ez_inv) if ez_inv is not None else None
     if ez_inv is not None and not _flip_invariant(ez_inv, flip):
         return None
@@ -1116,7 +1116,7 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
         [Kx @ EPS_inv @ Ky,        Imat - Kx @ EPS_inv @ Kx],
         [Ky @ EPS_inv @ Ky - Imat, -Ky @ EPS_inv @ Kx],
     ])
-    Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_xx)
+    Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_normal)
     Mp = _even_fold(P @ Q, desc, xp)
     lam2_e, Wl_e = _eig_for(xp)(Mp)
     lam_e = _sqrt_decay(lam2_e)
@@ -1139,7 +1139,7 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
     return r, t
 
 
-def _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=None):
+def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
     """Eigenmodes of a single layer (structured or uniform).
 
     Dimension-agnostic: the harmonic count ``N`` is inferred from ``Kx`` so
@@ -1154,7 +1154,7 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=None):
     while the wall-tangential ``E_y`` uses the Laurent rule.  Concretely the
     ``P`` block uses the Laurent inverse ``[[eps]]^{-1}`` (the ``E_z``
     elimination, which is wall-tangential -> direct rule on ``eps``, then
-    inverted), and the ``Q`` block uses ``EPS_xx`` for the wall-normal
+    inverted), and the ``Q`` block uses ``EPS_normal`` for the wall-normal
     ``E_x`` (the Li inverse-rule matrix ``[[1/eps]]^{-1}`` when requested)
     and the Laurent ``EPS`` for the tangential ``E_y``.  This placement is
     what gives the fast TM convergence; putting the inverse-rule matrix in
@@ -1170,12 +1170,12 @@ def _layer_eigenmodes(Kx, Ky, EPS, EPS_xx, ez_laurent_inv=None):
     (``Re >= 0`` branch; ``= i kz`` propagating, ``= |gamma|`` evanescent),
     which feeds the forward-decaying propagator ``X = exp(-lam k0 L)``.
     """
-    xp = array_namespace(Kx, Ky, EPS, EPS_xx)
+    xp = array_namespace(Kx, Ky, EPS, EPS_normal)
     Kx = xp.asarray(Kx).astype(_C)
     Ky = xp.asarray(Ky).astype(_C)
     N = Kx.shape[0]
     I = xp.eye(N, dtype=_C)
-    Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_xx)
+    Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_normal)
     is_jax = backend_name(xp) == "jax"
 
     # A laterally UNIFORM (diagonal [[eps]]) layer has DOUBLY-DEGENERATE 2N
@@ -1232,6 +1232,12 @@ def _homogeneous_eigenmodes(Kx, Ky, eps):
     regions.  Uses the SAME ``V = Q diag(1/lam)`` convention as
     :func:`_layer_eigenmodes` so propagating AND evanescent orders match at
     every interface.  Dimension-agnostic (``N`` inferred from ``Kx``).
+
+    Returns ``(W, V, kz)`` -- NOTE the 3rd slot is the per-order longitudinal
+    ``kz`` (vacuum-normalised), NOT the modal eigenvalue ``lam`` that
+    :func:`_layer_eigenmodes` returns in its 3rd slot.  A half-space order is its
+    own eigenmode, so the caller wants ``kz`` directly for the Rayleigh phase and
+    z-flux (``lam = sqrt_decay(-kz^2)`` is used only to build ``V``).
     """
     xp = array_namespace(Kx, Ky)
     Kx = xp.asarray(Kx).astype(_C)
@@ -1646,14 +1652,14 @@ def rcwa_efficiency_1d(
                                                    duty_cycle, M)
     # Wall-normal E_x uses the Li inverse rule [[1/eps]]^{-1} when requested
     # (TM / metals); E_y (tangential) always uses the Laurent [[eps]].
-    EPS_xx = EPS_II if use_li else EPS
+    EPS_normal = EPS_II if use_li else EPS
 
     # --- region (half-space) modes (physical-x basis, UNCHANGED by ASR) -
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
 
     # --- global S = (sup|layer) * propagate(layer) * (layer|sub) --------
-    Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_xx)
+    Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_normal)
     if Gbridge is not None:
         # Map the layer's u-basis modes to the physical-x Rayleigh basis the
         # regions use (direction is G^{-1}; applying G is silently WRONG).
@@ -2594,6 +2600,9 @@ def rcwa_efficiency_2d(
                                     truncation=truncation,
                                     period_x=period_x, period_y=period_y)
     nre = float(np.real(np.sqrt(eps_sup)))
+    # NB: the RCWA ``kx0`` / ``ky0`` are DIMENSIONLESS (k0-normalised, same units
+    # as the Kx/Ky order matrices) -- NOT the 1-D PMM convention where ``kx0`` is
+    # the dimensional rad/m wavenumber (``* k0``).  See pmm.py for that contrast.
     kx0 = nre * np.sin(theta) * np.cos(phi)        # concrete host floats
     ky0 = nre * np.sin(theta) * np.sin(phi)
     # Run the grazing / non-propagating guards whenever the GEOMETRY is
@@ -2630,7 +2639,7 @@ def rcwa_efficiency_2d(
     # wall-normal operator stays Laurent ([[eps]]) here, UNLIKE 1-D 'li'.  Full in-
     # plane normal-vector factorization needs the NV/fff path (formulation='fff_nv'),
     # not a single global inverse rule (there is no global wall normal in 2-D).
-    EPS_xx = EPS  # Laurent rule: wall-normal convolution == [[eps]]
+    EPS_normal = EPS  # Laurent rule: wall-normal convolution == [[eps]]
     # Dual-Laurent (Li) z-rule: E_z elimination uses [[1/eps]] (Toeplitz of
     # the Fourier coefficients of 1/eps) rather than [[eps]]^{-1}.  This is
     # the convergence-accelerating factorization for TM / metals; gated so
@@ -2691,10 +2700,10 @@ def rcwa_efficiency_2d(
     # (N+1)-d even subspace (see the section header above _symmetric_solve_rt).
     # Returns None -> not applicable -> fall through to the full 2N solve.
     # GATED OFF for 'fff_nv': _symmetric_solve_rt is hard-wired to the scalar
-    # (EPS, EPS_xx, ez_inv) core and cannot represent the full in-plane tensor.
+    # (EPS, EPS_normal, ez_inv) core and cannot represent the full in-plane tensor.
     rt = None
     if symmetry and not is_jax and kt < 1e-12 and formulation != "fff_nv":
-        rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_xx, ez_inv,
+        rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
                                  orders, k0, depth, cinc, xp)
     if rt is not None:
         r, t = rt
@@ -2703,7 +2712,7 @@ def rcwa_efficiency_2d(
             Wl, Vl, lam = _layer_eigenmodes_tensor(
                 Kx, Ky, Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv)
         else:
-            Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_xx,
+            Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
                                             ez_laurent_inv=ez_inv)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
@@ -5000,6 +5009,20 @@ class RCWAStack:
         self.use_gpu = bool(use_gpu)
         self._layers: List[_RCWALayer] = []
         self._source: Optional[dict] = None
+
+    @property
+    def n_orders_x(self) -> int:
+        """Retained Fourier orders per side along x -- the ``n_orders``
+        constructor argument.  Read-only public mirror of the internal ``nox``
+        field (which ``rcwa_convergence`` bumps in place during a sweep)."""
+        return self.nox
+
+    @property
+    def n_orders_y(self) -> int:
+        """Retained Fourier orders per side along y (0 for a 1-D stack; the
+        ``n_orders_y`` constructor argument otherwise).  Read-only public mirror
+        of the internal ``noy`` field."""
+        return self.noy
 
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
                   eps_tensor_cell=None, shapes=None, eps_background=None):

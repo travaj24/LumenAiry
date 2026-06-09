@@ -755,6 +755,10 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     eps_sup, eps_sub = n_sup ** 2, n_sub ** 2
     k0 = 2.0 * np.pi / wl
     d_wall = duty * period
+    # NB: the 1-D PMM ``kx0`` is DIMENSIONAL (rad/m, the ``* k0`` factor) -- it is
+    # the physical Bloch wavenumber added to d/dx.  This differs from the RCWA 2-D
+    # convention where ``kx0 = n sin(theta) cos(phi)`` is DIMENSIONLESS (k0-
+    # normalised, like Kx/Ky); do not cross-wire the two.
     kx0 = float(np.real(n_sup)) * np.sin(float(angle)) * k0
 
     mats = _build_sem(period, d_wall, eps_ridge, eps_groove, degree,
@@ -4890,8 +4894,10 @@ def _pmm_jones_slant_diag_solve(period, er, eg, n_sub, n_sup, depth, duty, wl,
     eg = np.asarray(eg, dtype=_C)
     _scale = max(float(np.max(np.abs(er))), float(np.max(np.abs(eg))), 1.0)
     _inplane_off = max(abs(er[0, 1]), abs(er[1, 0]), abs(eg[0, 1]), abs(eg[1, 0]))
-    _exx_eq_ezz = max(abs(er[0, 0] - er[2, 2]), abs(eg[0, 0] - eg[2, 2]))
-    if _inplane_off > 1e-9 * _scale or _exx_eq_ezz > 1e-9 * _scale:
+    # |exx - ezz| per region: nonzero means the diagonal-cure precondition
+    # (exx == ezz) is violated, so route to the metric generator instead.
+    _exx_minus_ezz = max(abs(er[0, 0] - er[2, 2]), abs(eg[0, 0] - eg[2, 2]))
+    if _inplane_off > 1e-9 * _scale or _exx_minus_ezz > 1e-9 * _scale:
         raise RuntimeError(
             "pmm_jones_1d_slanted (diagonal cure): the scalar-channel cure requires "
             "a DIAGONAL in-plane tensor (exy=eyx=0) with exx==ezz in both regions; "

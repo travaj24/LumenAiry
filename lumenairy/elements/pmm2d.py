@@ -264,9 +264,9 @@ def _fourier_ops(ax, ay, eps_tile, k0, Tp, Tpinv, kx0, ky0):
 def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li"):
     Nf = GxF.shape[0]
     I = np.eye(Nf, dtype=_C)
-    EPS_xx = EpnF if formulation == "li" else EpsF
+    EPS_normal = EpnF if formulation == "li" else EpsF
     Q = np.block([[GxF @ GyF, EpsF - GxF @ GxF],
-                  [GyF @ GyF - EPS_xx, -GyF @ GxF]])
+                  [GyF @ GyF - EPS_normal, -GyF @ GxF]])
     EPS_inv = EinvF if formulation == "li" else np.linalg.inv(EpsF)
     P = np.block([[GxF @ EPS_inv @ GyF, I - GxF @ EPS_inv @ GxF],
                   [GyF @ EPS_inv @ GyF - I, -GyF @ EPS_inv @ GxF]])

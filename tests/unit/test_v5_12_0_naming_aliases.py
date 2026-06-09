@@ -200,3 +200,15 @@ def test_pmm_stack_set_source_theta_aliases_angle():
     o2, R2, T2, J2 = build(theta=_TH)
     assert np.array_equal(np.asarray(R1), np.asarray(R2))
     assert np.array_equal(J1, J2)
+
+
+# ===================================================================== Stage 2c
+def test_rcwastack_n_orders_xy_properties_mirror_constructor():
+    """The cryptic internal ``nox``/``noy`` are now also exposed as the public
+    read-only ``n_orders_x``/``n_orders_y`` properties matching the constructor
+    keywords."""
+    st1 = la.RCWAStack(1e-6, n_substrate=1.5, n_orders=13)
+    assert st1.n_orders_x == 13 and st1.n_orders_y == 0 and st1.is_1d
+    assert (st1.n_orders_x, st1.n_orders_y) == (st1.nox, st1.noy)
+    st2 = la.RCWAStack(1e-6, period_y=1e-6, n_orders=7, n_orders_y=5)
+    assert st2.n_orders_x == 7 and st2.n_orders_y == 5
