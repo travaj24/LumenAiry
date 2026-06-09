@@ -756,7 +756,10 @@ def pmm_efficiency_2d_staggered(
     degree : int, optional
         Number ``M`` of modified-Legendre functions per segment per axis -- the
         modal convergence knob (raise for accuracy; the per-component DOF is
-        ``(Nx*(M-1)) * (Ny*(M-1))``).  Default 8.
+        ``(Nx*(M-1)) * (Ny*(M-1))``).  Default 8.  NOTE (naming divergence): unlike
+        the GLL POLYNOMIAL ``degree`` of :func:`pmm_efficiency_2d` and the 1-D
+        ``pmm_*`` solvers, this ``degree`` is a BASIS-FUNCTION COUNT ``M`` -- so a
+        cross-solver ``degree`` sweep compares unlike quantities.
     n_orders : int, optional
         Half-width of the retained Rayleigh diffraction-order set for the
         once-only forward far-field projection (the result is independent of

@@ -1407,8 +1407,12 @@ def rcwa_efficiency_1d(
     period : float
         Grating period (metres).
     n_ridge, n_groove : complex
-        Refractive indices of the ridge and groove regions of the patterned
-        layer (``n = n + i kappa``, ``kappa > 0`` for loss).
+        Refractive INDICES of the ridge and groove regions of the patterned
+        layer (``n = n + i kappa``, ``kappa > 0`` for loss).  CONVENTION WARNING:
+        this scalar entry point takes the refractive index ``n``, whereas the Jones
+        family (:func:`rcwa_jones_1d` etc.) takes the PERMITTIVITY ``eps = n**2`` --
+        a wrong-convention value is silently accepted (e.g. ``n=2.1`` read as
+        ``eps=2.1``), so pass ``n`` here and ``n**2`` to the Jones functions.
     n_substrate, n_superstrate : complex
         Indices of the transmission (below) and incidence (above)
         half-spaces.
@@ -3254,9 +3258,13 @@ def rcwa_jones_1d(
     period : float
         Grating period (metres).
     eps_ridge, eps_groove : (3, 3) array_like of complex
-        Permittivity tensors of the ridge and groove (PUBLIC convention
+        PERMITTIVITY tensors of the ridge and groove (PUBLIC convention
         ``Im(eps) > 0`` for loss).  Pass ``scalar * np.eye(3)`` for an
         isotropic region; build LC tensors with :func:`uniaxial_tensor`.
+        CONVENTION WARNING: the Jones family takes PERMITTIVITY ``eps = n**2`` here,
+        whereas the scalar :func:`rcwa_efficiency_1d` takes the refractive INDEX
+        ``n`` -- a wrong-convention value is silently accepted, so square your index
+        (``n**2``) for this function.
     n_substrate, n_superstrate : complex
         Transmission / incidence half-space (isotropic) indices.
     depth, duty_cycle, wavelength, angle, n_orders
