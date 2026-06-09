@@ -364,10 +364,16 @@ def _normalize_2d_formulation(fn_name, formulation):
     f = str(formulation).lower()
     if f == "fff":
         f = "li"
+    if f == "auto":
+        # 1-D parity (audit P2): 1-D accepts 'auto'; map it to the 'li' inverse
+        # rule here (the convergence-accelerating z-rule for TM / metals).  Note
+        # this is a fixed upgrade, NOT the 1-D adaptive auto-detection -- the 2-D
+        # default stays 'laurent' unless 'auto'/'li'/'fff_nv' is requested.
+        f = "li"
     if f not in ("laurent", "li", "fff_nv"):
         raise ValueError(
-            f"{fn_name}: formulation must be 'laurent', 'li', 'fff' "
-            f"(alias of 'li') or 'fff_nv', got {formulation!r}.")
+            f"{fn_name}: formulation must be 'laurent', 'li'/'auto' (the inverse "
+            f"rule), 'fff' (alias of 'li') or 'fff_nv', got {formulation!r}.")
     return f
 
 
@@ -4144,7 +4150,7 @@ def rcwa_efficiency_1d_jax(
     import warnings
     warnings.warn(
         "rcwa_efficiency_1d_jax is deprecated since v5.5.1 and will be removed "
-        "in v5.7.0; call rcwa_efficiency_1d(...) with jax.numpy arguments "
+        "in v6.0.0 (the next major); call rcwa_efficiency_1d(...) with jax.numpy "
         "instead (it auto-dispatches to the differentiable JAX backend).",
         DeprecationWarning, stacklevel=2)
     from ..backend import JAX_AVAILABLE as _JAX_AVAILABLE

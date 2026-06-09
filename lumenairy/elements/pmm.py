@@ -1378,11 +1378,11 @@ def pmm_jones_1d(
     complex ``2x2`` Jones reflection (the spectral-element counterpart of
     :func:`~lumenairy.elements.rcwa.rcwa_jones_1d`).
 
-    The ridge and groove are full ``(3, 3)`` IN-PLANE permittivity tensors (the
-    tunable-LC reflective grating); the off-diagonal ``exy`` couples ``E_x`` and
-    ``E_y`` in the spectral-element modal eigenproblem, so the response is a full
-    Jones matrix (the phase relationship the scalar :func:`pmm_efficiency_1d`
-    cannot carry).  Converges SPECTRALLY in the polynomial ``degree`` with no
+    The ridge and groove are full ``(3, 3)`` permittivity tensors -- IN-PLANE OR
+    OUT-OF-PLANE (an off-diagonal-z ``exz/eyz/ezx/ezy`` cell routes to the metric
+    generator); the off-diagonal ``exy`` couples ``E_x`` and ``E_y`` in the
+    spectral-element modal eigenproblem, so the response is a full Jones matrix (the
+    phase relationship the scalar :func:`pmm_efficiency_1d` cannot carry).  Converges SPECTRALLY in the polynomial ``degree`` with no
     accuracy floor -- the PMM win on metals where the FMM needs many orders and
     the ASR stretch plateaus.
 
@@ -2652,9 +2652,11 @@ def pmm_efficiency_1d(
         polynomial degrees (a near-singular layer<->region mode-match injects
         spurious flux and inflates ``sum(R)+sum(T)``; the analogue of the FMM
         ``stabilize`` flag).  When ``True`` (default) the solver scans a short
-        UPWARD degree window and returns the minimum-power, resonance-free
-        result -- build-reproducible and never below the requested degree's
-        accuracy.  Set ``False`` to solve at exactly ``degree`` (e.g. for
+        UPWARD degree window and returns the CONSENSUS result -- the value the
+        converged degrees agree on (discarding both super-unity resonances and
+        low-degree under-convergence), not merely the minimum or maximum power --
+        build-reproducible and never below the requested degree's accuracy.  Set
+        ``False`` to solve at exactly ``degree`` (e.g. for
         convergence studies that tolerate the occasional resonant degree).
 
     Returns
@@ -4714,7 +4716,9 @@ def _pmm_jones_oblique_segments_solve(period, widths, seg_tensors3, n_sub, n_sup
     region generalization of :func:`_pmm_jones_oblique_solve`.  The covariant
     generator + far field are region-count-agnostic; only the nodal grid differs
     (the segment element table, and the homogeneous half-spaces on the SAME
-    segment grid).  IN-PLANE tensors only."""
+    segment grid).  Full ``(3, 3)`` tensors IN-PLANE OR OUT-OF-PLANE (the
+    out-of-plane coupling enters the covariant generator via the Li Eq.12
+    ezz-Schur composites + cos*Dop cross blocks, same as the binary path)."""
     # `_segment_elem_bnds` lays the regions out REVERSED in x ([::-1]); the
     # convection core un-mirrors via the lib half-space/far-field handedness, but
     # the covariant far-field does not -- so PRE-REVERSE widths + tensors here so

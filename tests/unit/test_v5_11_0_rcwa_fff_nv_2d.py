@@ -386,8 +386,12 @@ def test_nv_field_unit_norm_and_taper():
 def test_fff_nv_rejects_jax():
     """fff_nv has no differentiable path; a JAX cell must raise a clear error
     rather than silently breaking the trace (the N-field is host-built)."""
-    pytest.importorskip("jax")
+    jax = pytest.importorskip("jax")
     import jax.numpy as jnp
+    # Enable x64 so the JAX cell reaches the fff_nv-specific rejection instead of the
+    # general x64 precondition (_require_jax_x64), which otherwise fires first when
+    # this test runs in isolation -- order-independence (post-B7 audit fix).
+    jax.config.update("jax_enable_x64", True)
     cell = jnp.asarray(_square_cell(80, 6.25 + 0j, 1.0 + 0j, 0.5))
     with pytest.raises(NotImplementedError, match="fff_nv"):
         rcwa_efficiency_2d(

@@ -119,6 +119,15 @@ half-space modes (gap-based) and symmetry-adapt / regularize the interface inver
 probe (patch `np.linalg.eig` +1e-8 noise → result must NOT jump) on WSL, AND keep the
 slant<1e-3 routing as a backstop. Prototypes: `C:/tmp/diag_cov_*.py`.
 
+## CLEANUP ITEMS (surfaced during execution)
+- **B7 JAX-test order-dependence**: `_require_jax_x64` now RAISES when `jax_enable_x64`
+  is off, so any JAX test that passes a jnp input without first enabling x64 fails in
+  ISOLATION (it passes in the full suite only because an earlier JAX test enabled x64).
+  `test_fff_nv_rejects_jax` was hardened (enables x64); audit the other JAX tests and
+  add a per-test `jax.config.update('jax_enable_x64', True)` where missing.  Do NOT use
+  a blanket session conftest enable -- `test_b7_jax_path_requires_x64` deliberately
+  DISABLES x64 to assert the raise.
+
 ## VERIFY CHECKLIST per stage
 ruff (WSL) → targeted tests → full PMM+RCWA on Windows (`766`) → WSL covariant suite
 for any covariant touch → commit → push → watch CI (`gh run watch`). The covariant
