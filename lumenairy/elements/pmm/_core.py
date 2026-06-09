@@ -3836,7 +3836,7 @@ spectral ~1e-7 floor by making the wall a coordinate surface.)
 
 # Register the PMM module caches with the library cache registry (so the global
 # "clear all caches" path empties them too).  Canonical v4.16.0 enrollment pattern
-# (mirrors rcwa.py and propagators/propagation.py).
+# (mirrors rcwa/_core.py and propagators/propagation.py).
 try:
     import sys as _sys
 

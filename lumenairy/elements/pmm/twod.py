@@ -391,10 +391,17 @@ def pmm_efficiency_2d(
 
     x0, x1 = float(x_bounds[0]), float(x_bounds[1])
     y0, y1 = float(y_bounds[0]), float(y_bounds[1])
-    eps_p = _C(eps_pillar)
-    eps_h = _C(eps_host)
-    eps_sup = _C(n_superstrate) ** 2
-    eps_sub = _C(n_substrate) ** 2
+    # Loss-convention bridge (matches pmm_efficiency_1d / rcwa_efficiency_2d):
+    # conjugate the PUBLIC eps (Im>0 for loss) into the internal exp(+iwt)
+    # convention the modal solve + decay branch use; real (lossless) eps is
+    # unaffected (conj is identity there), so the validated dielectric path is
+    # byte-unchanged.  Without this a passive lossy material is read as GAIN
+    # (R+T>1).  The efficiencies are real flux ratios, so no output un-conjugation
+    # is needed.
+    eps_p = np.conj(_C(eps_pillar))
+    eps_h = np.conj(_C(eps_host))
+    eps_sup = np.conj(_C(n_superstrate) ** 2)
+    eps_sub = np.conj(_C(n_substrate) ** 2)
 
     k0 = 2.0 * np.pi / wavelength
     wl = wavelength

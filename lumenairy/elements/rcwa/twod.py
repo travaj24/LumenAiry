@@ -453,7 +453,7 @@ def rcwa_efficiency_2d(
     nre = float(np.real(np.sqrt(eps_sup)))
     # NB: the RCWA ``kx0`` / ``ky0`` are DIMENSIONLESS (k0-normalised, same units
     # as the Kx/Ky order matrices) -- NOT the 1-D PMM convention where ``kx0`` is
-    # the dimensional rad/m wavenumber (``* k0``).  See pmm.py for that contrast.
+    # the dimensional rad/m wavenumber (``* k0``).  See pmm/_core.py for that contrast.
     kx0 = nre * np.sin(theta) * np.cos(phi)        # concrete host floats
     ky0 = nre * np.sin(theta) * np.sin(phi)
     # Run the grazing / non-propagating guards whenever the GEOMETRY is
