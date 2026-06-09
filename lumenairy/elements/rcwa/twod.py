@@ -589,6 +589,287 @@ def rcwa_efficiency_2d(
     return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
 
 
+# =========================================================================== #
+# Wavelength-sweep reuse: assemble the GEOMETRY-ONLY work once, sweep many.
+#
+# For a non-dispersive cell (indices fixed across the sweep) the permittivity
+# Fourier factorization -- the Laurent ``[[eps]]``, the Li ``[[1/eps]]`` z-rule,
+# and the fff_nv normal-vector tensor (including the O(N^3) ``inv([[1/eps]])``)
+# -- plus the harmonic order set and the incident vector are wavelength-
+# INDEPENDENT (verified: ``k0`` first appears only AFTER the convolutions are
+# built).  Only the modal eigendecomposition and the S-matrix cascade depend on
+# ``k0`` (via ``Kx``/``Ky``).  ``PreparedRCWA2D`` hoists the invariant part so a
+# wavelength sweep recomputes only the per-wavelength eig + cascade; this is the
+# big win on fff_nv / analytic-shape cells where the reusable factorization is a
+# genuine O(N^3) inversion comparable to the eig.  ``prepare_rcwa_2d(...).solve(
+# wavelength)`` reproduces ``rcwa_efficiency_2d(...)`` to ~1e-13 (gated by test).
+# NON-DISPERSIVE + fixed (theta, phi) + NumPy/CuPy only (a JAX sweep should use
+# ``jax.vmap`` over wavelength so XLA CSEs the invariant convolutions).
+# =========================================================================== #
+class PreparedRCWA2D:
+    """A wavelength-invariant 2-D RCWA assembly, reusable across a sweep.
+
+    Build with :func:`prepare_rcwa_2d`; call :meth:`solve` per wavelength.  Holds
+    the geometry-only permittivity factorization, the harmonic order set, and the
+    incident plane-wave vector (all independent of ``k0``); :meth:`solve` runs
+    only the ``k0``-dependent homogeneous/layer eig and the S-matrix cascade.
+
+    Assumes NON-DISPERSIVE indices (constant across the sweep) and a FIXED
+    ``(theta, phi)``.  NumPy / CuPy only -- for a differentiable sweep use
+    ``jax.vmap`` over wavelength on :func:`rcwa_efficiency_2d` directly.
+    """
+
+    __slots__ = ("xp", "polarization", "formulation", "symmetry", "orders", "N",
+                 "eps_sup", "eps_sub", "EPS", "EPS_normal", "ez_inv", "fff",
+                 "kx0", "ky0", "kt", "kz_inc", "einc_sq", "cinc",
+                 "period_x", "period_y", "depth", "eps_reals")
+
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+    def solve(self, wavelength) -> Efficiency2D:
+        """Diffraction efficiencies at ``wavelength`` reusing the prepared
+        geometry.  Equivalent to ``rcwa_efficiency_2d(...)`` at this wavelength
+        (to ~1e-13) but skips the eps factorization, order set, and incident
+        vector."""
+        xp = self.xp
+        orders, N = self.orders, self.N
+        # Per-wavelength grazing / non-propagating guards (nudge only kx/Kx,
+        # never the cached eps coefficients -- so the factorization stays valid).
+        _require_propagating_incidence("rcwa_efficiency_2d", self.eps_sup,
+                                       self.kx0 ** 2 + self.ky0 ** 2)
+        wl_eff = _grazing_safe_wavelength(
+            float(wavelength), self.kx0, self.ky0, orders[:, 0], orders[:, 1],
+            self.period_x, self.period_y, self.eps_reals)
+        k0 = 2.0 * np.pi / wl_eff
+        kx = self.kx0 + orders[:, 0] * (wl_eff / self.period_x)
+        ky = self.ky0 + orders[:, 1] * (wl_eff / self.period_y)
+        Kx = xp.asarray(np.diag(kx.astype(_C)))
+        Ky = xp.asarray(np.diag(ky.astype(_C)))
+        kxv = xp.asarray(kx.astype(_C))
+        kyv = xp.asarray(ky.astype(_C))
+
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, self.eps_sup)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, self.eps_sub)
+
+        rt = None
+        if self.symmetry and self.kt < 1e-12 and self.formulation != "fff_nv":
+            rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, self.EPS,
+                                     self.EPS_normal, self.ez_inv, orders, k0,
+                                     self.depth, self.cinc, xp)
+        if rt is not None:
+            r, t = rt
+        else:
+            if self.formulation == "fff_nv":
+                Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, *self.fff)
+            else:
+                Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, self.EPS,
+                                                self.EPS_normal,
+                                                ez_laurent_inv=self.ez_inv)
+            S = _interface_smatrix(Wref, Vref, Wl, Vl)
+            S = _redheffer_star(S, _propagation_smatrix(lam, k0 * self.depth))
+            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+            S11, S12, S21, S22 = S
+            r = S11 @ self.cinc
+            t = S21 @ self.cinc
+        rx, ry = r[:N], r[N:]
+        tx, ty = t[:N], t[N:]
+        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
+        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        rz = -(kxv * rx + kyv * ry) / safe_r
+        tz = -(kxv * tx + kyv * ty) / safe_t
+        R_eff = xp.real(kz_ref / self.kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                                 + xp.abs(rz) ** 2) / self.einc_sq
+        T_eff = xp.real(kz_trn / self.kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                                 + xp.abs(tz) ** 2) / self.einc_sq
+        R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
+        T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
+        _check_energy("rcwa_efficiency_2d", R_eff, T_eff)
+        return Efficiency2D(orders, R_eff, T_eff, 2 * N)
+
+
+@_with_blas_limit
+def prepare_rcwa_2d(
+    period_x: float,
+    period_y: float,
+    eps_cell,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    *,
+    theta: float = 0.0,
+    phi: float = 0.0,
+    polarization: str = "te",
+    n_orders_x: int = 5,
+    n_orders_y: int = 5,
+    formulation: str = "laurent",
+    truncation: str = "rectangular",
+    symmetry: bool = False,
+    use_gpu: bool = False,
+) -> PreparedRCWA2D:
+    """Assemble the wavelength-INDEPENDENT part of a 2-D RCWA solve once, for a
+    wavelength sweep that reuses it (see :class:`PreparedRCWA2D`).
+
+    Parameters are the geometry/angle/formulation subset of
+    :func:`rcwa_efficiency_2d` (no ``wavelength``; no ``stabilize`` -- pin a
+    validated ``n_orders`` for the sweep).  NON-DISPERSIVE indices and a FIXED
+    ``(theta, phi)`` are assumed; NumPy / CuPy only.
+    """
+    _validate_geometry("prepare_rcwa_2d",
+                       period=period_x, period_y=period_y, depth=depth,
+                       n_orders=n_orders_x, n_orders_y=n_orders_y)
+    _validate_cell_sampling("prepare_rcwa_2d", eps_cell, n_orders_x, n_orders_y)
+    polarization = _normalize_pol("prepare_rcwa_2d", polarization)
+    formulation = _normalize_2d_formulation("prepare_rcwa_2d", formulation)
+
+    xp = _rcwa_xp("prepare_rcwa_2d", use_gpu, eps_cell)
+    if backend_name(xp) == "jax":
+        raise NotImplementedError(
+            "prepare_rcwa_2d: the prepared wavelength-sweep path is NumPy/CuPy "
+            "only.  For a differentiable sweep, vectorise rcwa_efficiency_2d "
+            "with jax.vmap over wavelength (XLA reuses the invariant "
+            "convolutions); the imperative prepared cache breaks tracing.")
+
+    # Loss-convention bridge (matches rcwa_efficiency_2d).
+    eps_cell = xp.conj(xp.asarray(eps_cell).astype(_C))
+    eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
+    eps_sub = complex(np.conj(_C(n_substrate) ** 2))
+
+    orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y,
+                                    truncation=truncation,
+                                    period_x=period_x, period_y=period_y)
+    nre = float(np.real(np.sqrt(eps_sup)))
+    kx0 = nre * np.sin(theta) * np.cos(phi)
+    ky0 = nre * np.sin(theta) * np.sin(phi)
+    eps_reals = [eps_sup, eps_sub,
+                 float(xp.real(eps_cell).min()), float(xp.real(eps_cell).max())]
+
+    # GEOMETRY-ONLY permittivity factorization (no k0).
+    EPS = _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y)
+    EPS_normal = EPS
+    ez_inv = (_eps_convolution_2d(1.0 / eps_cell, orders, n_orders_x, n_orders_y)
+              if formulation == "li" else None)
+    fff = None
+    if formulation == "fff_nv":
+        Nx_nv, Ny_nv = _nv_field_2d(eps_cell, period_x, period_y)
+        _nv_cross = float(np.max(np.abs(np.asarray(Nx_nv) * np.asarray(Ny_nv))))
+        if _nv_cross > 1e-2:
+            import warnings
+            warnings.warn(
+                "prepare_rcwa_2d(formulation='fff_nv'): the geometry is "
+                "NON-SEPARABLE (curved / non-axis-aligned walls; NV cross term "
+                f"max|Nx*Ny| = {_nv_cross:.3g}).  fff_nv's cross-term "
+                "factorization is NOT validated there -- it can mis-split "
+                "absorptance by ~50%.  Use formulation='li' or 'laurent' for "
+                "curved / non-separable patterns.", stacklevel=2)
+        fff = _nv_convolutions_2d(eps_cell, Nx_nv, Ny_nv, orders, n_orders_x,
+                                  n_orders_y, xp)
+
+    # Incident plane wave (depends on angle + eps_sup, NOT wavelength).
+    delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
+    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    kt = float(np.hypot(kx0, ky0))
+    if kt < 1e-12:
+        ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
+        einc_sq = 1.0
+    else:
+        ax, ay = kx0 / kt, ky0 / kt
+        if polarization == "te":
+            ex0, ey0 = -ay, ax
+            einc_sq = 1.0
+        else:
+            ex0, ey0 = ax, ay
+            einc_sq = 1.0 + (kt / kz_inc) ** 2
+    cinc = xp.concatenate([ex0 * delta, ey0 * delta])
+
+    return PreparedRCWA2D(
+        xp=xp, polarization=polarization, formulation=formulation,
+        symmetry=symmetry, orders=orders, N=N, eps_sup=eps_sup, eps_sub=eps_sub,
+        EPS=EPS, EPS_normal=EPS_normal, ez_inv=ez_inv, fff=fff,
+        kx0=kx0, ky0=ky0, kt=kt, kz_inc=kz_inc, einc_sq=einc_sq, cinc=cinc,
+        period_x=period_x, period_y=period_y, depth=depth, eps_reals=eps_reals)
+
+
+def rcwa_efficiency_2d_vs_wavelength(
+    period_x: float,
+    period_y: float,
+    eps_cell,
+    n_substrate: complex,
+    n_superstrate: complex,
+    depth: float,
+    wavelengths,
+    *,
+    theta: float = 0.0,
+    phi: float = 0.0,
+    polarization: str = "te",
+    n_orders_x: int = 5,
+    n_orders_y: int = 5,
+    formulation: str = "laurent",
+    truncation: str = "rectangular",
+    symmetry: bool = False,
+    use_gpu: bool = False,
+):
+    """Rigorous 2-D diffraction efficiencies across a wavelength sweep, reusing
+    the geometry-only permittivity factorization (the spectral companion to
+    :func:`rcwa_efficiency_2d`).
+
+    Assembles the wavelength-invariant factorization ONCE (via
+    :func:`prepare_rcwa_2d`) and loops only the per-wavelength eig + S-matrix --
+    the assemble-once-sweep-many fast path.  For a dispersive material (indices
+    that change with wavelength) the factorization is NOT reusable; call
+    :func:`rcwa_efficiency_2d` per wavelength with the wavelength-specific
+    indices instead.
+
+    Parameters
+    ----------
+    wavelengths : array-like of float
+        Vacuum wavelengths [m]; non-dispersive indices assumed across the sweep.
+    Other parameters are as in :func:`rcwa_efficiency_2d` (``stabilize`` is
+    intentionally absent -- pin a validated ``n_orders`` for the sweep).
+
+    Returns
+    -------
+    orders : (N, 2) int ndarray
+        The (wavelength-independent) retained order pairs ``(m, n)``.
+    R, T : (n_wavelengths, N) float ndarray
+        Reflected / transmitted efficiency per order at each wavelength
+        (``NaN`` for any wavelength that hits a numerical instability).
+    """
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0:
+        raise ValueError("rcwa_efficiency_2d_vs_wavelength: wavelengths is "
+                         "empty; pass at least one wavelength [m].")
+    if not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError("rcwa_efficiency_2d_vs_wavelength: every wavelength "
+                         "must be a finite value > 0 [m].")
+    prepared = prepare_rcwa_2d(
+        period_x, period_y, eps_cell, n_substrate, n_superstrate, depth,
+        theta=theta, phi=phi, polarization=polarization, n_orders_x=n_orders_x,
+        n_orders_y=n_orders_y, formulation=formulation, truncation=truncation,
+        symmetry=symmetry, use_gpu=use_gpu)
+    Nfo = prepared.N
+    R = np.empty((wl.size, Nfo), dtype=float)
+    T = np.empty((wl.size, Nfo), dtype=float)
+    n_unstable = 0
+    for i, w in enumerate(wl):
+        try:
+            res = prepared.solve(float(w))
+        except _EnergyError:
+            R[i, :] = np.nan
+            T[i, :] = np.nan
+            n_unstable += 1
+            continue
+        R[i, :] = np.asarray(res[1])
+        T[i, :] = np.asarray(res[2])
+    if n_unstable:
+        import warnings
+        warnings.warn(
+            f"rcwa_efficiency_2d_vs_wavelength: {n_unstable}/{wl.size} "
+            "wavelengths hit a numerical instability (energy non-conservation) "
+            "and were set to NaN; adjust n_orders / period.", stacklevel=2)
+    return prepared.orders, R, T
+
 
 @_with_blas_limit
 def rcwa_jones_2d(
@@ -968,6 +1249,9 @@ __all__ = [
     "_nv_field_2d",
     "_nv_convolutions_2d",
     "rcwa_efficiency_2d",
+    "PreparedRCWA2D",
+    "prepare_rcwa_2d",
+    "rcwa_efficiency_2d_vs_wavelength",
     "rcwa_jones_2d",
     "_shape_form_factor",
     "_analytic_convolutions_2d",
