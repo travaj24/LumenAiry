@@ -1469,9 +1469,9 @@ def pmm_jones_1d(
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
     # A TRACED (jit) duty_cycle has no concrete value to range-check.
     if not is_jax_array(duty_cycle):
-        if not (0.0 <= float(duty_cycle) <= 1.0):
+        if not (0.0 < float(duty_cycle) < 1.0):
             raise ValueError(
-                f"pmm_jones_1d: duty_cycle must be in [0, 1], got {duty_cycle}.")
+                f"pmm_jones_1d: duty_cycle must be strictly in (0, 1), got {duty_cycle}.")
 
     # JAX (differentiable) dispatch -- mirror pmm_efficiency_1d / rcwa.  Routed
     # to the self-contained jnp Jones twin ONLY when a tensor / geometry / angle
@@ -2694,9 +2694,9 @@ def pmm_efficiency_1d(
     # A TRACED (jit) duty_cycle has no concrete value to range-check; the JAX
     # path enforces 0 < duty < 1 on the concrete proxy / leading value instead.
     if not is_jax_array(duty_cycle):
-        if not (0.0 <= float(duty_cycle) <= 1.0):
+        if not (0.0 < float(duty_cycle) < 1.0):
             raise ValueError(
-                f"pmm_efficiency_1d: duty_cycle must be in [0, 1], got "
+                f"pmm_efficiency_1d: duty_cycle must be strictly in (0, 1), got "
                 f"{duty_cycle}.")
 
     # JAX (differentiable) dispatch -- mirror rcwa's backend detection.  Routed
@@ -3268,8 +3268,13 @@ class PMMStack:
         S11, _S12, S21, _S22 = S
 
         # far-field projection (mirrors _pmm_jones_solve_core)
+        # max over BOTH in-plane diagonal components -- TM sees exx, TE sees eyy, so
+        # exx alone under-resolves a high-eyy stack and can miss a propagating order
+        # (audit P2; consistent with every single-layer solver).
         n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
                      for eps_u in layer_eps_u for e in eps_u]
+                    + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
+                       for eps_u in layer_eps_u for e in eps_u]
                     + [np.real(self.n_sup), np.real(self.n_sub)])
         m_prop = _n_propagating_orders(self.period, wl, n_max)
         n_proj = max(self.ffo, 2 * m_prop + 5)
@@ -3362,8 +3367,13 @@ class PMMStack:
             S = _redheffer_star(S, _interface_smatrix_general(Mls[i], nextM))
         S11, _S12, S21, _S22 = S
 
+        # max over BOTH in-plane diagonal components -- TM sees exx, TE sees eyy, so
+        # exx alone under-resolves a high-eyy stack and can miss a propagating order
+        # (audit P2; consistent with every single-layer solver).
         n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
                      for eps_u in layer_eps_u for e in eps_u]
+                    + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
+                       for eps_u in layer_eps_u for e in eps_u]
                     + [np.real(self.n_sup), np.real(self.n_sub)])
         m_prop = _n_propagating_orders(period, wl, n_max)
         n_proj = max(self.ffo, 2 * m_prop + 5)
@@ -3772,9 +3782,9 @@ def pmm_efficiency_1d_slanted(
             f"got {polarization!r}.")
     if int(degree) < 2:
         raise ValueError("pmm_efficiency_1d_slanted: degree must be >= 2.")
-    if not (0.0 <= float(duty_cycle) <= 1.0):
+    if not (0.0 < float(duty_cycle) < 1.0):
         raise ValueError(
-            f"pmm_efficiency_1d_slanted: duty_cycle must be in [0, 1], got "
+            f"pmm_efficiency_1d_slanted: duty_cycle must be strictly in (0, 1), got "
             f"{duty_cycle}.")
     if abs(float(angle)) > 1e-12 and abs(float(slant_angle)) > 1e-12:
         # COMBINED OBLIQUE + SLANT.  The scalar inclined-frame solver's own
@@ -4985,9 +4995,9 @@ def pmm_jones_1d_slanted(
     """
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
-    if not (0.0 <= float(duty_cycle) <= 1.0):
+    if not (0.0 < float(duty_cycle) < 1.0):
         raise ValueError(
-            f"pmm_jones_1d_slanted: duty_cycle must be in [0, 1], got "
+            f"pmm_jones_1d_slanted: duty_cycle must be strictly in (0, 1), got "
             f"{duty_cycle}.")
     er = np.asarray(eps_ridge, dtype=_C)
     eg = np.asarray(eps_groove, dtype=_C)

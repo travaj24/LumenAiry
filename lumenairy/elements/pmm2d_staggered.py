@@ -156,7 +156,7 @@ class Basis1D:
     """
 
     def __init__(self, d, N, M, tau=1.0 + 0.0j):
-        assert M >= 2
+        assert M >= 3, "Basis1D needs M>=3 (M=2 gives a degenerate cardinality)"
         self.d = float(d)
         self.N = int(N)
         self.M = int(M)
@@ -787,8 +787,11 @@ def pmm_efficiency_2d_staggered(
         raise ValueError(
             f"pmm_efficiency_2d_staggered: polarization must be 'te' or 'tm', "
             f"got {polarization!r}.")
-    if int(degree) < 2:
-        raise ValueError("pmm_efficiency_2d_staggered: degree must be >= 2.")
+    if int(degree) < 3:
+        # M=2 passes the old >=2 guard but yields |Btilde|=N, |B|=2N and trips the
+        # Basis1D cardinality assert deep in the build (audit P2); require M>=3.
+        raise ValueError("pmm_efficiency_2d_staggered: degree (modified-Legendre "
+                         "count M) must be >= 3.")
     eps_cell = np.asarray(eps_cell, dtype=_C)
     if eps_cell.ndim != 2:
         raise ValueError(
