@@ -95,11 +95,30 @@ Line numbers drift as edits land — locate by content.
 - `stabilize` default PMM True / RCWA False — document side-by-side as a choice.
 
 ## STAGE 3 — performance (RCWA-first; byte/near-byte identical where claimed).
-RCWA, ranked: P1 `_redheffer_star` skips the `inv` of a zero S11/S22 block (propagation
-matrices) — ~half the 2N×2N inverses are identity; P2 `_homogeneous_eigenmodes` builds
-a full 2N×2N `Q` via matmuls for an analytically DIAGONAL result (O(N³)→O(N), also
-`5081-5083`, `1140`); P4 `_binary_grating_convolutions` always builds `EPS_II` even on
-the Laurent/TE path (use_li-gate); P5 single-call entry points never use `_HOMOG_CACHE`;
+**SHIPPED (3a, commit 5d363c7) — BYTE-EXACT, verified by a 44-case stash-A/B digest
+(identical old vs new):** P1 `_redheffer_star` identity-skip (propagation S11=S22=0 ⇒
+`inv(I)==I` byte-exact; ~50% of stars skip a dense 2N inv; **measured ~26% faster on a
+20-layer n_orders=31 stack**; gated on `is_jax_array`, NOT the scalar-only `_is_traced`)
++ P4 `_binary_grating_convolutions` `use_li`-gated `EPS_II` skip (default True =
+back-compat; saves an O(M³) inv + FFT on the Laurent path). Tests in
+`test_v5_12_0_perf.py`.
+**EVALUATED + REJECTED — P2 `_homogeneous_eigenmodes` diagonal rebuild:** implemented
+(elementwise block `V` vs dense `Q@diag`), verified observables BYTE-IDENTICAL across a
+163-array battery (the ~1 ULP `V` shift washes out in the well-conditioned interface
+solve), BUT **measured ZERO speedup** (1D 58.3 vs 57.7 s; 2D-N361 8.7 vs 8.5 s — both
+within noise): the homogeneous-mode build is dwarfed by the per-layer non-Hermitian eig,
+so O(N³)→O(N) on it is negligible. Reverted — not worth the complexity. **KEY:** this
+re-frames **PP1** — it is NOT the same as P2. P2 removed *matmuls around an eig that
+stays*; PP1 removes **2 of 3 actual dense EIGS per solve** (the homogeneous half-spaces),
+compounding across every stabilize-scan degree → genuinely ~2-3×. PP1 is the top
+remaining lever (its own focused effort: the analytic Rayleigh half-space modes must
+match the eig path's mode convention + V-partner sign exactly — cf. the covariant saga).
+**REMAINING (deferred, ranked):** PP1 (PMM, top lever, eig-removal) > P9 batch per-layer
+eig / P6 vmap JAX sweeps (real but larger refactors, ULP-perturbing) > P3/P5/P7 (fractional —
+the per-wl/per-layer eig dominates) > P8 BLAS auto-cap (**do NOT** — thread-count changes
+reduction order, reintroduces the BLAS-build-dependence the covariant CI saga fixed) >
+P10-P13 GPU/2D-trunc (doc/warn or large). Lower-priority RCWA notes retained below:
+P5 single-call entry points never use `_HOMOG_CACHE`;
 P3 vs_wavelength rebuilds dispersionless convolutions per-λ; P7 batch the per-component
 FFTs; P6 `vmap` over wavelength/angle sweeps (jitted core); P9 batch per-layer
 eig/inv/solve into `(L,2N,2N)`; P8 `_with_blas_limit` no-op default (auto-cap); P12 2D
