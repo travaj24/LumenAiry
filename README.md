@@ -3551,7 +3551,8 @@ Optical_Propagation_Library/            # project root
                                          # surface lens
         multiconfig.py                   # Multi-configuration / afocal
                                          # (Keplerian, beam expander)
-        rcwa.py                          # 1-D rigorous coupled-wave analysis
+        rcwa/                            # rigorous coupled-wave analysis (1-D & 2-D)
+        pmm/                             # polynomial modal method (1-D & 2-D, no-floor)
         storage.py                       # Unified HDF5/Zarr auto-dispatch backend
         hdf5_io.py                       # Back-compat re-export shim for storage
         memory.py                        # RAM budget and batch-size helpers

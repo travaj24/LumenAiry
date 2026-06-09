@@ -2,6 +2,80 @@
 
 All notable changes to the core library are documented here.
 
+## [5.12.0] — 2026-06-09
+
+**First tag since v5.5.2 — package reorg + 2-D PMM correctness/perf.** This
+release consolidates the entire untagged `5.6.0 … 5.11.0` line (native RCWA
+convergence acceleration + ASR; the new `1-D` and `2-D` PMM solver families;
+full out-of-plane anisotropy; the RCWA + PMM JAX-autodiff surfaces) and adds the
+post-`5.11.0` structural reorganization of the two largest element modules into
+packages plus two `2-D` PMM fixes. The top-level `lumenairy.*` public API is
+**fully preserved and additive** (557/557 v5.5.2 symbols still resolve, +27 new,
+0 removed); all dotted `lumenairy.elements.rcwa.*` / `pmm.*` imports resolve
+unchanged. Backward-compatible — no migration is required for documented usage,
+and it ships as a minor version accordingly.
+
+### Changed
+
+- **`rcwa.py` (5,612-line monolith) → `rcwa/` package** (behavior-preserving
+  line-based AST split; every comment/byte preserved; public `__all__`
+  unchanged): `rcwa/__init__.py` re-exports all 23 public names plus the
+  test-imported / monkeypatched privates; `rcwa/_core.py` holds the BLAS
+  controls, validation, Redheffer/S-matrix algebra, eigenmodes, convolutions,
+  the homogeneous-mode cache, and the dimension-agnostic public utils
+  (`uniaxial_tensor`, `rcwa_extrapolate`, `Efficiency2D`); `rcwa/oned.py` the
+  `1-D` entry points (`rcwa_efficiency_1d` / `jones_1d` / `*_vs_wavelength` /
+  segments / `efficiency_1d_jax` / ASR / segment builders); `rcwa/twod.py` the
+  `2-D` solvers (`rcwa_efficiency_2d` / `jones_2d` / `_shapes` / normal-vector
+  FFF); `rcwa/stack.py` the `RCWAStack` / `RCWAResult` / `rcwa_convergence`.
+  Submodules use explicit cross-module imports; the package facade does the star
+  re-export. Monkeypatch targets preserved (`CUPY_AVAILABLE` is patched in
+  `rcwa._core`). Only observable delta: `rcwa.__file__` now ends in
+  `rcwa/__init__.py` and `rcwa.__path__` exists.
+- **`pmm.py` → `pmm/` package** (mirrors `rcwa/`): `pmm/_core.py` (shared
+  GLL/Lagrange basis, metric/convection/covariant slant generators, slant
+  solvers + `stabilize` selector, S-matrix cascade, far-field projection),
+  `pmm/oned.py` (the public `1-D` entry points incl. the `pmm_1d` dispatcher,
+  the JAX twin, and the right-angle convergence-class predictors),
+  `pmm/stack.py` (`PMMStack`), with the two standalone `2-D` modules folded in:
+  `pmm2d.py → pmm/twod.py` (hybrid `2-D` PMM) and
+  `pmm2d_staggered.py → pmm/twod_staggered.py` (staggered `2-D` PMM). The slant
+  dispatch call-spy now resolves through `pmm.oned`.
+
+### Fixed
+
+- **`2-D` hybrid PMM loss=gain bug.** `pmm_efficiency_2d` ran its modal solve in
+  the internal `exp(+iωt)` convention but did not conjugate the public `eps`
+  into it, so a passive lossy material (`Im(eps) > 0`) was read as **gain** —
+  `R+T > 1`, negative absorptance, `T00 > 1`. Added the conjugation bridge
+  (matching `pmm_efficiency_1d` / `rcwa_efficiency_2d`): lossy now matches the
+  RCWA-`2D` oracle absorptance to ~`2e-3` and `R+T ≤ 1`; lossless is
+  byte-unchanged (conjugating real `eps` is identity). New regression test
+  `tests/unit/test_v5_12_0_pmm2d_loss.py`.
+- **Reorg public-surface gap.** `pmm_efficiency_2d` / `pmm_efficiency_2d_staggered`
+  were unreachable via `lumenairy.elements.pmm.*` (the package facade re-exported
+  only `_core`/`oned`/`stack`, asymmetric with `rcwa/`). Added the `twod` /
+  `twod_staggered` re-exports + `__all__` entries to `lumenairy/elements/pmm/__init__.py`.
+- **Stale monolith doc references** after the reorg corrected (the `_core` / `twod`
+  cross-module pointers no longer cite the deleted `rcwa.py` / `pmm.py` files).
+- Post-reorg adversarial audit (full report in
+  `docs/audits/RCWA_PMM_POST_REORG_AUDIT_2026_06_09.md`) **refuted** two
+  speculative loss-sign claims by empirical verification (the covariant slant
+  path and the staggered solver are already internally consistent under loss);
+  those were left untouched, avoiding a regression.
+
+### Performance
+
+- **Staggered `2-D` PMM shared geometric eig (1.41×).**
+  `pmm_efficiency_2d_staggered` previously ran three dense generalized
+  eigensolves per call (one per region). Because the two homogeneous half-spaces
+  split exactly into an `eps`-scaled field-Gram plus an `eps`-free geometric part
+  (`L(eps) = eps·G + L0_geom`, with the `div(D)=0` Schur term `eps`-invariant),
+  **one** geometric eig now serves both half-spaces (3 region eigs → 2). `R`/`T`
+  identical to the old `3`-eig path to ~`1e-13` (lossless, lossy, asymmetric
+  `n_sub ≠ n_sup`); the sharing-the-assembly-only variant was profiled and
+  rejected (~1.02×).
+
 ## [5.11.0] — 2026-06-02
 
 **1-D anisotropic device modeling + 2-D normal-vector FFF + stack/PMM
