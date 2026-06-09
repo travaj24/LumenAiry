@@ -722,7 +722,7 @@ def _toeplitz_1d(coeffs, n_orders: int):
 
 
 def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
-                                 n_samples=4096):
+                                 n_samples=4096, use_li=True):
     """Convolution matrices for a 1-D binary grating: the Laurent ``[[eps]]``
     and the Li inverse-rule ``[[1/eps]]^{-1}``.  The ridge (index
     ``n_ridge``) occupies the fraction ``duty_cycle`` of the period.
@@ -735,6 +735,11 @@ def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
     between the (possibly traced) ridge / groove permittivities, so the
     gradient flows to the INDEX VALUES (the documented JAX design targets);
     ``duty_cycle`` is a discrete threshold and is not differentiated.
+
+    ``use_li`` (default ``True``) controls whether the inverse-rule matrix is
+    built: the Laurent / TE-dielectric path never reads it, so passing
+    ``use_li=False`` skips an O(n_orders^3) matrix inverse + one FFT and returns
+    ``EPS_II = None`` (byte-identical result -- the matrix was discarded anyway).
     """
     xp = array_namespace(n_ridge, n_groove)
     # The Toeplitz needs c_k for |k| up to 2*n_orders; an N-sample FFT represents
@@ -753,8 +758,10 @@ def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
     # N = 2*n_orders+1, i.e. n_coeffs = N.
     n_coeffs = 2 * n_orders + 1
     eps_coeffs = _fourier_coeffs_1d(eps, n_coeffs)
-    inv_eps_coeffs = _fourier_coeffs_1d(1.0 / eps, n_coeffs)
     EPS = _toeplitz_1d(eps_coeffs, n_orders)               # Laurent rule
+    if not use_li:
+        return EPS, None                                   # inverse rule unused
+    inv_eps_coeffs = _fourier_coeffs_1d(1.0 / eps, n_coeffs)
     EPS_II = xp.linalg.inv(_toeplitz_1d(inv_eps_coeffs, n_orders))  # inverse rule
     return EPS, EPS_II
 
@@ -1276,8 +1283,23 @@ def _redheffer_star(SA, SB):
     xp = array_namespace(A11, B11)
     n = A11.shape[0]
     I = xp.eye(n, dtype=_C)
-    D = xp.linalg.inv(I - B11 @ A22)
-    F = xp.linalg.inv(I - A22 @ B11)
+    # Layer-PROPAGATION S-matrices have S11 = S22 = 0 (see _propagation_smatrix),
+    # and the recursion stars one at every layer -- so ~half the stars feed a zero
+    # A22 or B11 here.  When either is the exact zero block, (I - B11 @ A22) and
+    # (I - A22 @ B11) are both exactly I, whose inverse is byte-identically I
+    # (verified: max|inv(I)-I| == 0).  Substituting the literal I is therefore
+    # bit-for-bit identical to inverting it, so skip the two dense 2N inverses.
+    # A JAX array can't be host-tested under jit (bool(.any()) would raise on a
+    # tracer) -> fall through to the inverse (unchanged path), keeping the JAX
+    # result identical.  (NB _is_traced is scalar-only -- complex() of a matrix
+    # always raises -- so detect the backend with is_jax_array on the blocks.)
+    if (not is_jax_array(A22) and not is_jax_array(B11)
+            and (not bool(A22.any()) or not bool(B11.any()))):
+        D = I
+        F = I
+    else:
+        D = xp.linalg.inv(I - B11 @ A22)
+        F = xp.linalg.inv(I - A22 @ B11)
     C11 = A11 + A12 @ D @ B11 @ A21
     C12 = A12 @ D @ B12
     C21 = B21 @ F @ A21
@@ -1649,9 +1671,10 @@ def rcwa_efficiency_1d(
                 f"order counts.", stacklevel=2)
     else:
         EPS, EPS_II = _binary_grating_convolutions(n_ridge, n_groove,
-                                                   duty_cycle, M)
+                                                   duty_cycle, M, use_li=use_li)
     # Wall-normal E_x uses the Li inverse rule [[1/eps]]^{-1} when requested
-    # (TM / metals); E_y (tangential) always uses the Laurent [[eps]].
+    # (TM / metals); E_y (tangential) always uses the Laurent [[eps]].  EPS_II is
+    # None when use_li is False (the inverse rule was skipped) -- never read here.
     EPS_normal = EPS_II if use_li else EPS
 
     # --- region (half-space) modes (physical-x basis, UNCHANGED by ASR) -
