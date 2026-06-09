@@ -16,8 +16,24 @@ and use the WSL venv as the Linux/OpenBLAS CI-proxy (see memory
   `is_spectral` absolute thresholds. (Commits d93c575, 453d015, e89b2c1, cd68acd.)
 - Stage 1 P2 part 1: PMMStack `eyy` n_max (both paths); staggered `degree>=3`; strict
   `duty` (0,1). (Commit 3f4b8e3.)
+- **STAGE 1 COMPLETE** -- P2 part 2 (Wood `ezz`; eps=0 shape+background guards; grazing
+  `kz_inc` guards; stabilize-retry ASR forwarding; `vs_wavelength` `stabilize` param +
+  per-lambda NaN recovery; `RCWAStack` `_EnergyError` per-window catch; 2-D `'li'`
+  note). (Commits 0bd767c, 3554f93.)
+- **STAGE 2 substantive items DONE**: `formulation='auto'` for 2-D; stale docstrings
+  (stabilize=consensus, IN-PLANE qualifiers dropped, deprecation v6.0.0);
+  `test_fff_nv_rejects_jax` x64-order hardening (ce8c0f2); **the SHIP-BLOCKER** -- 2-D
+  return-arity unified via `Efficiency2D` (a `tuple` subclass unpacking `(o,R,T)` with
+  `.dof`; rcwa_efficiency_2d/_shapes + pmm_efficiency_2d/_staggered all return it;
+  exported at package + top level; contract test) (37334de); naming-divergence DOCS
+  (n-vs-eps footgun cross-ref; staggered degree=M-not-GLL) (003efed). All CI-green.
+- **STAGE 2 REMAINING** (fresh context -- cross-cutting signature changes, higher risk):
+  the actual incidence-keyword ALIAS (`angle`<->`theta`/`phi`, planar-vs-conical) across
+  ALL 1-D entry points + `RCWAStack.set_source`; `far_field_orders`<->`n_orders` alias;
+  staggered `degree`->`n_modes` alias (kept the doc note for now); the remaining P3
+  renames (`_exx_eq_ezz`, `EPS_xx`->`EPS_normal`, `nox/noy`) and clarification comments.
 
-## STAGE 1 — P2 robustness cluster (part 2, rcwa.py). One PR, each with a test.
+## STAGE 1 — P2 robustness cluster (part 2, rcwa.py) -- DONE (see above).
 Line numbers drift as edits land — locate by content.
 1. **Grazing `kz_inc` /0** (pmm.py, `_assemble_jones_farfield` ~633-637 and
    `_scalar_farfield_RT` ~659-663): incident-flux normalizer divides by `kz_inc`
