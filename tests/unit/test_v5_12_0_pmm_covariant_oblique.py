@@ -194,6 +194,33 @@ def test_covariant_out_of_plane_battery(name):
     assert dcov < dcon                           # and is FASTER (spectral) at deg24
 
 
+def test_covariant_out_of_plane_oblique_carries_kx0():
+    """OBLIQUE incidence (angle!=0) on a slanted OUT-OF-PLANE cell: the covariant
+    OOP cross blocks must carry the Floquet Bloch shift d/dx -> d/dx + i*kx0
+    (Granet Eq.17), exactly as the convection generator injects via Dopx.  Without
+    it the per-order result is wrong by ~2-6e-3 at oblique while energy still
+    conserves (the lossless trap hides it); with it the covariant path converges to
+    the convection oracle (~1e-4) and beats it at matched degree.  Guards bug B1 --
+    the four covariant OOP tests above all run at normal incidence (kx0=0), where the
+    bare-Dop and Bloch-shifted operators coincide, so the defect was latent."""
+    er = _diag(2.25, 2.10, 2.40)
+    er[0, 2] = er[2, 0] = 0.3                    # out-of-plane exz/ezx
+    eg = _diag(1.0, 1.0, 1.0)
+    ang = np.deg2rad(20.0)
+    oc, _Rc, Tc, _ = _slant(er, eg, np.deg2rad(30.0), 24, "covariant", ang=ang)
+    ot, _Rt, Tt, _ = _slant(er, eg, np.deg2rad(30.0), 60, "convection", ang=ang)
+    on, _Rn, Tn, _ = _slant(er, eg, np.deg2rad(30.0), 24, "convection", ang=ang)
+    ic = {int(m): k for k, m in enumerate(oc.tolist())}
+    it = {int(m): k for k, m in enumerate(ot.tolist())}
+    inn = {int(m): k for k, m in enumerate(on.tolist())}
+    dcov = max(abs(float(Tc[ch][ic[m]]) - float(Tt[ch][it[m]]))
+               for ch in (0, 1) for m in ic if m in it)
+    dcon = max(abs(float(Tn[ch][inn[m]]) - float(Tt[ch][it[m]]))
+               for ch in (0, 1) for m in inn if m in it)
+    assert dcov < 5e-4                           # was ~2.7e-3 without the kx0 shift
+    assert dcov < dcon                           # spectral: beats convection at deg24
+
+
 @pytest.mark.parametrize("name", ["exz", "lossy"])
 def test_covariant_divconf_slant0_machine_precision(name):
     """The DIV-CONFORMING longitudinal Ez closure (Granet 2023 Eq.16-18,

@@ -4488,7 +4488,12 @@ def _cov_generator_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
         EZX = Op(lambda t: t["ezx"])
         EYZ = Op(lambda t: t["eyz"])
         EZY = Op(lambda t: t["ezy"])
-        cD = cos * Dop                                    # conical-projected d1
+        # conical-projected single x-derivative.  OBLIQUE incidence: the transverse
+        # derivative on the periodic envelope is d/dx + i*kx0 (field ~ e^{i kx0 x}
+        # u(x), Granet Eq.17), the SAME Bloch shift the convection generator injects
+        # via Dopx (_build_generator_metric).  At kx0=0 this is bare Dop, so normal
+        # incidence stays byte-identical.
+        cD = cos * (Dop + 1j * kx0 * I)
         M[n:2 * n, n:2 * n] += (EXZ @ EZZi) @ cD          # Hy<-Hy (exz)
         M[3 * n:4 * n, 3 * n:4 * n] += -cD @ (EZZi @ EZX)  # Ex<-Ex (ezx)
         M[2 * n:3 * n, n:2 * n] += -(EYZ @ EZZi) @ cD     # Hx<-Hy (eyz); minus
