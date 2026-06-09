@@ -125,6 +125,7 @@ from .polarization import (
     stokes_parameters,
 )
 from .rcwa import (
+    Efficiency2D,
     RCWAResult,
     RCWAStack,
     binary_grating_segments,
@@ -203,6 +204,7 @@ __all__ = [
     'pmm_efficiency_2d_staggered',
     'grating_convergence_class',
     'classify_from_grating',
+    'Efficiency2D',
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',
     'rcwa_efficiency_vs_wavelength',

@@ -455,6 +455,7 @@ from .elements.polarization import (
 # 2-D crossed gratings, metals (Li inverse rule), and anisotropic / LC layers
 # (Jones reflection).  The rigorous counterpart to the scalar thin_grating.
 from .elements.rcwa import (
+    Efficiency2D,
     RCWAResult,
     RCWAStack,
     binary_grating_segments,
@@ -1503,6 +1504,7 @@ __all__ = [
     'uniaxial_tensor',
     'RCWAStack',
     'RCWAResult',
+    'Efficiency2D',
     'set_blas_threads',
     'rcwa_blas_threads',
 

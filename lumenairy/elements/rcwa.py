@@ -274,6 +274,26 @@ def _concrete(**kw):
     return {k: v for k, v in kw.items() if not _is_traced(v)}
 
 
+class Efficiency2D(tuple):
+    """A 2-D diffraction-efficiency result that unpacks EXACTLY like the legacy
+    ``(orders, R, T)`` tuple but ALSO carries ``.dof`` -- the modal eigenproblem
+    dimension (``2 * n_retained_orders`` for RCWA, ``2 * Nf`` / ``2 * q^2`` for the
+    PMM hybrid / staggered solvers).  ``dof`` is the cross-suite degrees-of-freedom
+    cost metric for an accuracy-vs-cost comparison (the PMM win is matched accuracy
+    at smaller ``dof``).  Being a ``tuple`` subclass, ``o, R, T = result``,
+    ``result[i]`` and ``isinstance(result, tuple)`` all behave as before -- only the
+    extra ``.dof`` attribute is new (the cross-suite return-shape unification)."""
+
+    def __new__(cls, orders, R, T, dof):
+        self = super().__new__(cls, (orders, R, T))
+        self.dof = int(dof)
+        return self
+
+    def __repr__(self):
+        return (f"Efficiency2D(orders=<{len(self[0])}>, R=..., T=..., "
+                f"dof={self.dof})")
+
+
 class _EnergyError(ValueError):
     """Raised by :func:`_check_energy` when a passive solve returns
     non-physical ``sum(R)+sum(T) >> 1``.  A subclass of ``ValueError`` (so
@@ -2682,7 +2702,8 @@ def rcwa_efficiency_2d(
     T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
     if not is_jax:
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff)
-    return orders, R_eff, T_eff
+    # cross-suite return shape: unpacks as (orders, R, T); .dof = 2N eigenproblem dim
+    return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
 
 
 # ===========================================================================
@@ -4025,7 +4046,7 @@ def rcwa_efficiency_2d_shapes(
     R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
     T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
     _check_energy("rcwa_efficiency_2d_shapes", R_eff, T_eff)
-    return orders, R_eff, T_eff
+    return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
 
 
 # ===========================================================================

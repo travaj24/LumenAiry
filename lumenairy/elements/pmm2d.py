@@ -79,6 +79,7 @@ from .pmm import (
     _propagation_smatrix,
     _redheffer_star,
 )
+from .rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
 
 __all__ = ["pmm_efficiency_2d"]
 
@@ -467,4 +468,6 @@ def pmm_efficiency_2d(
     R = np.where(np.real(kz_ref) > 0, np.real(R), 0.0)
     T = np.where(np.real(kz_trn) > 0, np.real(T), 0.0)
     orders2d = np.stack([order_x, order_y], axis=1)
-    return orders2d, R, T, 2 * Nf
+    # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*Nf (the modal
+    # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
+    return Efficiency2D(orders2d, R, T, 2 * Nf)

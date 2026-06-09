@@ -41,7 +41,7 @@ def _odict(o, R, T):
 @pytest.mark.parametrize("pol", ["te", "tm"])
 @pytest.mark.parametrize("degree", [7, 9, 11])
 def test_vacuum_is_exact(pol, degree):
-    o, R, T, dof = la.pmm_efficiency_2d(
+    o, R, T = la.pmm_efficiency_2d(
         PX, PY, 1.0, 1.0, (0.2 * PX, 0.6 * PX), (0.2 * PY, 0.6 * PY),
         1.0, 1.0, DEPTH, WL, degree=degree, polarization=pol,
         theta=0.0, n_orders=6)
@@ -73,7 +73,7 @@ def test_pillar_matches_rcwa_oracle(pol):
     # both at n_orders = 9 (matched Fourier truncation); the geometry-conforming
     # nodal layer agrees with the staircased-Fourier FMM to a few 1e-3.
     od = _rcwa_oracle(pol, 9)
-    o, R, T, _ = la.pmm_efficiency_2d(
+    o, R, T = la.pmm_efficiency_2d(
         PX, PY, 2.25, 1.0, (X0, X1), (Y0, Y1), 1.0, 1.0, DEPTH, WL,
         degree=11, polarization=pol, theta=0.0, n_orders=9)
     d = _odict(o, R, T)
@@ -84,7 +84,7 @@ def test_pillar_matches_rcwa_oracle(pol):
 
 @pytest.mark.parametrize("degree", [9, 11, 13])
 def test_pillar_conserves_energy(degree):
-    o, R, T, _ = la.pmm_efficiency_2d(
+    o, R, T = la.pmm_efficiency_2d(
         PX, PY, 2.25, 1.0, (X0, X1), (Y0, Y1), 1.0, 1.0, DEPTH, WL,
         degree=degree, polarization="te", theta=0.0, n_orders=9)
     assert abs(float(R.sum() + T.sum()) - 1.0) < 5e-3
@@ -98,10 +98,10 @@ def test_square_pillar_c4v_symmetry():
     # polarization 90deg (te<->tm) swaps the x- and y-diffraction orders, and the
     # specular 0-order is polarization-independent.
     args = dict(degree=11, theta=0.0, n_orders=11)
-    oe, Re, Te, _ = la.pmm_efficiency_2d(
+    oe, Re, Te = la.pmm_efficiency_2d(
         PX, PY, 2.25, 1.0, (X0, X1), (Y0, Y1), 1.0, 1.0, DEPTH, WL,
         polarization="te", **args)
-    om, Rm, Tm, _ = la.pmm_efficiency_2d(
+    om, Rm, Tm = la.pmm_efficiency_2d(
         PX, PY, 2.25, 1.0, (X0, X1), (Y0, Y1), 1.0, 1.0, DEPTH, WL,
         polarization="tm", **args)
     de, dm = _odict(oe, Re, Te), _odict(om, Rm, Tm)
@@ -115,7 +115,7 @@ def test_square_pillar_c4v_symmetry():
 
 def test_normal_incidence_order_symmetry():
     # at normal incidence the +order and -order efficiencies are equal
-    o, R, T, _ = la.pmm_efficiency_2d(
+    o, R, T = la.pmm_efficiency_2d(
         PX, PY, 2.25, 1.0, (X0, X1), (Y0, Y1), 1.0, 1.0, DEPTH, WL,
         degree=11, polarization="te", theta=0.0, n_orders=11)
     d = _odict(o, R, T)
@@ -149,3 +149,30 @@ def test_rejects_bad_polarization():
 def test_pmm_efficiency_2d_exported():
     assert hasattr(la, "pmm_efficiency_2d")
     assert "pmm_efficiency_2d" in la.__all__
+
+
+def test_2d_return_shape_unified_efficiency2d():
+    """Cross-suite contract (audit Stage 2): RCWA + PMM-hybrid + PMM-staggered 2-D
+    efficiency entry points all return an ``Efficiency2D`` -- a tuple that unpacks as
+    EXACTLY ``(orders, R, T)`` AND carries ``.dof`` (= 2 x retained orders, the modal
+    eigenproblem dimension; the cross-suite degrees-of-freedom cost metric)."""
+    cell = np.full((48, 48), 2.25, complex)
+    cell[12:36, 12:36] = 6.0
+    rc = rcwa_efficiency_2d(PX, PY, cell, 1.0, 1.0, DEPTH, WL, theta=1e-4, phi=0.0,
+                            n_orders_x=3, n_orders_y=3, formulation="li")
+    ph = la.pmm_efficiency_2d(PX, PY, 6.0, 2.25, (X0, X1), (Y0, Y1), 1.0, 1.0,
+                              DEPTH, WL, degree=9, theta=0.0, n_orders=3)
+    ps = la.pmm_efficiency_2d_staggered(
+        period_x=PX, period_y=PY, depth=DEPTH, wavelength=WL,
+        eps_cell=np.full((2, 2), 2.25, complex), n_substrate=1.0,
+        n_superstrate=1.0, degree=6, n_orders=3)
+    for name, res in (("rcwa", rc), ("pmm_hybrid", ph), ("pmm_staggered", ps)):
+        assert isinstance(res, la.Efficiency2D), name
+        assert len(res) == 3, name              # unpacks as exactly (orders, R, T)
+        o, R, T = res
+        assert isinstance(res.dof, int) and res.dof > 0, name
+    # RCWA and the PMM hybrid build the eigenproblem over the retained ORDERS, so
+    # dof == 2*N; the staggered solver builds it over a MODAL basis (dof = 2*q^2),
+    # so it is not tied to the order count -- only the shape contract is universal.
+    assert rc.dof == 2 * len(rc[0])
+    assert ph.dof == 2 * len(ph[0])
