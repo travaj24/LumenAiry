@@ -368,12 +368,21 @@ def pmm_efficiency_2d(
 
     Returns
     -------
-    orders : ndarray, shape (M, 2)
-        ``(m, n)`` diffraction-order indices.
-    R, T : ndarray, shape (M,)
-        Reflected / transmitted efficiencies per order (energy fractions).
-    dof : int
-        Modal degrees of freedom retained (``2 * (2*n_orders+1)**2``).
+    result : :class:`~lumenairy.elements.rcwa.Efficiency2D`
+        A ``tuple`` subclass that unpacks as ``orders, R, T`` (NOT a 4-tuple) and
+        carries the modal degrees of freedom on the ``.dof`` attribute:
+
+        * ``orders`` -- ``(M, 2)`` ``(m, n)`` diffraction-order indices;
+        * ``R, T`` -- ``(M,)`` reflected / transmitted efficiencies per order;
+        * ``result.dof`` -- modal DOF retained (``2 * (2*n_orders+1)**2``).
+
+        .. note:: **API change (v5.11 -> v5.12).**  This used to return a bare
+           4-tuple ``(orders, R, T, dof)``; it now returns the cross-suite
+           :class:`Efficiency2D` (shared with :func:`rcwa_efficiency_2d`), which
+           unpacks to ``orders, R, T`` with ``dof`` as an attribute.  Migrate
+           ``o, R, T, dof = pmm_efficiency_2d(...)`` to either
+           ``res = pmm_efficiency_2d(...); o, R, T = res; dof = res.dof`` or
+           ``o, R, T = pmm_efficiency_2d(...)[:3]``.
     """
     n_nodes_axis = 3 * degree * elements_per_strip
     if n_nodes_axis % 2 == 0:
@@ -455,7 +464,7 @@ def pmm_efficiency_2d(
             einc_sq = 1.0
         else:
             ex0, ey0 = axu, ayu
-            kz_inc0 = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+            kz_inc0 = float(np.real(_kz_forward2(np.conj(eps_sup), kx0, ky0)))
             einc_sq = 1.0 + (kt / kz_inc0) ** 2
     delta = ((order_x == 0) & (order_y == 0)).astype(_C)
     cinc = np.concatenate([ex0 * delta, ey0 * delta])
@@ -464,17 +473,23 @@ def pmm_efficiency_2d(
     rx, ry = r[:Nf], r[Nf:]
     tx, ty = t[:Nf], t[Nf:]
 
-    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
-    safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    kz_inc = float(np.real(_kz_forward2(np.conj(eps_sup), kx0, ky0)))
+    # PUBLIC-convention forward kz for the z-flux + mask + Ez (the hybrid PMM
+    # conjugates the region eps for its internal solve; un-conjugate here so a
+    # lossy exit substrate is not read as evanescent -> T zeroed; lossless eps is
+    # real so this is byte-unchanged).  Mirrors rcwa._core._forward_flux_kz.
+    kz_ref_f = _kz_forward2(np.conj(eps_sup), kxv, kyv)
+    kz_trn_f = _kz_forward2(np.conj(eps_sub), kxv, kyv)
+    safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+    safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     rz = -(kxv * rx + kyv * ry) / safe_r
     tz = -(kxv * tx + kyv * ty) / safe_t
-    R = np.real(kz_ref / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                    + np.abs(rz) ** 2) / einc_sq
-    T = np.real(kz_trn / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                    + np.abs(tz) ** 2) / einc_sq
-    R = np.where(np.real(kz_ref) > 0, np.real(R), 0.0)
-    T = np.where(np.real(kz_trn) > 0, np.real(T), 0.0)
+    R = np.real(kz_ref_f / kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                      + np.abs(rz) ** 2) / einc_sq
+    T = np.real(kz_trn_f / kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                      + np.abs(tz) ** 2) / einc_sq
+    R = np.where(np.real(kz_ref_f) > 0, np.real(R), 0.0)
+    T = np.where(np.real(kz_trn_f) > 0, np.real(T), 0.0)
     orders2d = np.stack([order_x, order_y], axis=1)
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2*Nf (the modal
     # eigenproblem dimension).  Was a bare 4-tuple (orders, R, T, dof) pre-v5.12.
@@ -550,16 +565,18 @@ class PreparedPMM2D:
         t = S21 @ cinc
         rx, ry = r[:Nf], r[Nf:]
         tx, ty = t[:Nf], t[Nf:]
-        safe_r = np.where(np.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = np.where(np.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        kz_ref_f = _kz_forward2(np.conj(self.eps_sup), kxv, kyv)
+        kz_trn_f = _kz_forward2(np.conj(self.eps_sub), kxv, kyv)
+        safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+        safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         rz = -(kxv * rx + kyv * ry) / safe_r
         tz = -(kxv * tx + kyv * ty) / safe_t
-        R = np.real(kz_ref / self.kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
-                                             + np.abs(rz) ** 2) / self.einc_sq
-        T = np.real(kz_trn / self.kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
-                                             + np.abs(tz) ** 2) / self.einc_sq
-        R = np.where(np.real(kz_ref) > 0, np.real(R), 0.0)
-        T = np.where(np.real(kz_trn) > 0, np.real(T), 0.0)
+        R = np.real(kz_ref_f / self.kz_inc) * (np.abs(rx) ** 2 + np.abs(ry) ** 2
+                                               + np.abs(rz) ** 2) / self.einc_sq
+        T = np.real(kz_trn_f / self.kz_inc) * (np.abs(tx) ** 2 + np.abs(ty) ** 2
+                                               + np.abs(tz) ** 2) / self.einc_sq
+        R = np.where(np.real(kz_ref_f) > 0, np.real(R), 0.0)
+        T = np.where(np.real(kz_trn_f) > 0, np.real(T), 0.0)
         orders2d = np.stack([order_x, order_y], axis=1)
         return Efficiency2D(orders2d, R, T, 2 * Nf)
 
@@ -654,11 +671,11 @@ def prepare_pmm_2d(
             einc_sq = 1.0
         else:
             ex0, ey0 = axu, ayu
-            kz_inc0 = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+            kz_inc0 = float(np.real(_kz_forward2(np.conj(eps_sup), kx0, ky0)))
             einc_sq = 1.0 + (kt / kz_inc0) ** 2
     delta = ((order_x == 0) & (order_y == 0)).astype(_C)
     cinc = np.concatenate([ex0 * delta, ey0 * delta])
-    kz_inc = float(np.real(_kz_forward2(eps_sup, kx0, ky0)))
+    kz_inc = float(np.real(_kz_forward2(np.conj(eps_sup), kx0, ky0)))
 
     return PreparedPMM2D(
         period_x=period_x, period_y=period_y, depth=depth,

@@ -17,6 +17,7 @@ from ._core import (
     _cached_homogeneous_eigenmodes,
     _check_energy,
     _EnergyError,
+    _forward_flux_kz,
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
     _interface_smatrix,
@@ -1324,9 +1325,14 @@ class RCWAStack:
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
         delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-        kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
-        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
+        # PUBLIC-convention forward kz for the z-flux + mask + Ez (see
+        # rcwa._core._forward_flux_kz): a lossy exit substrate would otherwise
+        # have its transmittance silently zeroed by the Re(kz) > 0 mask.
+        kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)
+        kz_trn_f = _forward_flux_kz(eps_sub, kxv, kyv)
+        safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+        safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         R_rows, T_rows, jr_cols, jt_cols = [], [], [], []
         # Per-order tangential field amplitudes (PUBLIC exp(-iwt) convention =
         # conjugate of the internal), kept for the multi-order field bridge.
@@ -1341,12 +1347,12 @@ class RCWAStack:
             tx, ty = t[:N], t[N:]
             rz = -(kxv * rx + kyv * ry) / safe_r
             tz = -(kxv * tx + kyv * ty) / safe_t
-            Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                             + xp.abs(rz) ** 2) / einc_sq
-            Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                             + xp.abs(tz) ** 2) / einc_sq
-            R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
-            T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+            Re = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                               + xp.abs(rz) ** 2) / einc_sq
+            Te = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                               + xp.abs(tz) ** 2) / einc_sq
+            R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
+            T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
             rx_rows.append(xp.conj(rx))
             ry_rows.append(xp.conj(ry))
             tx_rows.append(xp.conj(tx))

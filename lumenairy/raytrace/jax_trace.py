@@ -784,7 +784,19 @@ def _register_jaxprescription_pytree():
         pass
 
 
-_register_jaxprescription_pytree()
+_JAXPRESCRIPTION_REGISTERED = False
+
+
+def _ensure_jaxprescription_registered():
+    """Register the JaxPrescription pytree on FIRST jax use rather than at module
+    import, so ``import lumenairy`` does not pull in jax (~4 s of the cold start;
+    audit P2-D).  Called at every JAX trace entry point; idempotent (the flag
+    short-circuits, and the underlying registration also guards re-registration).
+    """
+    global _JAXPRESCRIPTION_REGISTERED
+    if not _JAXPRESCRIPTION_REGISTERED:
+        _register_jaxprescription_pytree()
+        _JAXPRESCRIPTION_REGISTERED = True
 
 
 def _build_jax_prescription(prescription, wavelength,
@@ -796,6 +808,7 @@ def _build_jax_prescription(prescription, wavelength,
     inline on every call.  The output is suitable both for direct kernel
     use AND for cache-key lookup (the ``aux`` field is hashable).
     """
+    _ensure_jaxprescription_registered()    # lazy pytree reg (audit P2-D)
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
     import jax.numpy as jnp
@@ -1158,6 +1171,7 @@ def trace_jax(
     """
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
+    _ensure_jaxprescription_registered()    # lazy pytree reg (audit P2-D)
 
     # Allow callers to pre-build a JaxPrescription.  This lets advanced
     # users substitute tracer leaves for radii / conics / asph coeffs /
@@ -1540,6 +1554,7 @@ def trace_jax_with_params(initial_state, prescription, wavelength,
     """
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
+    _ensure_jaxprescription_registered()    # lazy pytree reg (audit P2-D)
     import jax.numpy as jnp
 
     surfaces_raw = prescription.get('surfaces', [])

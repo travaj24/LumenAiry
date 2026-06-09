@@ -459,12 +459,14 @@ from .elements.polarization import (
 # (Jones reflection).  The rigorous counterpart to the scalar thin_grating.
 from .elements.rcwa import (
     Efficiency2D,
+    PreparedRCWA2D,
     RCWAResult,
     RCWAStack,
     binary_grating_segments,
     grating_segments,
     interdigitated_grating_segments,
     jones_retardance_diattenuation,
+    prepare_rcwa_2d,
     rcwa_blas_threads,
     rcwa_convergence,
     rcwa_efficiency_1d,
@@ -474,8 +476,6 @@ from .elements.rcwa import (
     rcwa_efficiency_2d_vs_wavelength,
     rcwa_efficiency_vs_wavelength,
     rcwa_extrapolate,
-    prepare_rcwa_2d,
-    PreparedRCWA2D,
     rcwa_jones_1d,
     rcwa_jones_1d_segments,
     rcwa_jones_2d,
@@ -921,7 +921,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.12.0"
+__version__ = "5.13.0"
 
 #
 # __all__ is grouped by user-journey tier:

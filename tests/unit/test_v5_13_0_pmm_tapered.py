@@ -68,6 +68,47 @@ def test_energy_tripwire_warns_on_gain():
         _warn_stack_energy(np.array([[0.9, 0.5]]), np.array([[0.8, 0.2]]))
 
 
+def test_sweep_matches_perwavelength():
+    """PMMStack.solve_vs_wavelength (reusing the geometry-only SEM assembly)
+    reproduces per-wavelength solve() on the propagating orders, for a tapered
+    staircase and a plain vertical stack."""
+    wls = np.linspace(0.5e-6, 0.7e-6, 5)
+
+    def _build(tapered):
+        st = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=12)
+        if tapered:
+            st.add_tapered_grating(_TH, eps_ridge=_ER, eps_groove=_EG,
+                                   duty_bottom=0.6, duty_top=0.35, n_slices=5)
+        else:
+            st.add_layer(0.15e-6, segments=[(0.25, _EG), (0.5, _ER), (0.25, _EG)])
+            st.add_layer(0.15e-6, eps=2.25)
+        return st
+
+    for tapered in (True, False):
+        o_sw, R_sw, T_sw = _build(tapered).solve_vs_wavelength(wls, angle=0.0)
+        assert R_sw.shape == (len(wls), 2, len(o_sw))
+        for iw, w in enumerate(wls):
+            o1, R1, T1, _ = _build(tapered).set_source(float(w), angle=0.0).solve()
+            for m in o1:                          # compare on the common orders
+                if m in o_sw:
+                    js, j1 = int(np.where(o_sw == m)[0][0]), int(np.where(o1 == m)[0][0])
+                    assert np.allclose(R_sw[iw, :, js], R1[:, j1], rtol=0, atol=1e-10)
+                    assert np.allclose(T_sw[iw, :, js], T1[:, j1], rtol=0, atol=1e-10)
+
+
+def test_sweep_rejects_slanted_and_validates():
+    st = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=8)
+    st.add_layer(_TH, segments=[(0.5, _ER), (0.5, _EG)], slant_angle=0.1)
+    with pytest.raises(NotImplementedError):
+        st.solve_vs_wavelength([_WL], angle=0.0)
+    st2 = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=8)
+    st2.add_layer(_TH, eps=2.25)
+    with pytest.raises(ValueError):
+        st2.solve_vs_wavelength([], angle=0.0)
+    with pytest.raises(ValueError):
+        st2.solve_vs_wavelength([-1e-6], angle=0.0)
+
+
 def test_validation():
     st = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=8)
     with pytest.raises(ValueError):

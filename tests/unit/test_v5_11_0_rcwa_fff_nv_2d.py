@@ -233,7 +233,9 @@ def test_fff_nv_disk_tracks_analytic_reference():
         o, Rn, Tn = rcwa_efficiency_2d(
             PX, PY, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
             polarization="tm", n_orders_x=M, n_orders_y=M,
-            formulation="fff_nv", truncation="circular")
+            formulation="fff_nv", truncation="circular",
+            allow_nonseparable_nv=True)   # P1-B: curved wall -> opt out of raise
+                                          # (reflection still tracks; only A mis-splits)
         o, Rl, Tl = rcwa_efficiency_2d(
             PX, PY, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
             polarization="tm", n_orders_x=M, n_orders_y=M,
@@ -251,36 +253,41 @@ def test_fff_nv_disk_tracks_analytic_reference():
 
 
 @pytest.mark.slow
-def test_fff_nv_disk_warns_nonseparable_and_misplits_absorptance():
-    """AUDIT P1-A regression: on a CURVED (disk) lossy-metal wall, fff_nv's
-    cross-term factorization MIS-SPLITS the absorptance (a lossless-trap failure --
-    R+T+A still closes, but A is grossly low).  The non-separability gate must
-    WARN, the recommended 'li'/'laurent' must agree on the (correct) nonzero
-    absorptance, and fff_nv's absorptance must be materially low (the known bug).
+def test_fff_nv_disk_raises_nonseparable_by_default_and_misplits_when_opted_in():
+    """AUDIT P1-B: on a CURVED (disk) lossy-metal wall, fff_nv's cross-term
+    factorization MIS-SPLITS the absorptance (a lossless-trap failure -- R+T+A
+    still closes, but A is grossly low).  The non-separability gate now **raises**
+    by default so the wrong number can't propagate silently; the opt-out
+    (``allow_nonseparable_nv=True``) downgrades to a warning, and there the
+    mis-split is still observable.  The 'li'/'laurent' oracle gives the correct
+    nonzero absorptance.
 
-    If/when the cross-term factorization is corrected, the last assertion will
-    flip -- update it to assert agreement with the 'li'/'laurent' oracle then."""
+    If/when the cross-term factorization is corrected, the mis-split assertion
+    will flip -- update it to assert agreement with the 'li'/'laurent' oracle."""
     PX = PY = 1.2e-6
     WL, DEPTH, THETA = 0.633e-6, 0.08e-6, np.deg2rad(1e-3)
     EPS_METAL = -15.0 + 1.6j
     cell = _disk_cell(256, EPS_METAL, 1.0 + 0j, 0.30)
 
-    def _absorb(form, M):
+    def _absorb(form, M, **kw):
         o, R, T = rcwa_efficiency_2d(
             PX, PY, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
             polarization="tm", n_orders_x=M, n_orders_y=M,
-            formulation=form, truncation="circular")
+            formulation=form, truncation="circular", **kw)
         return 1.0 - float(np.sum(R)) - float(np.sum(T))
 
-    # (1) the gate WARNS on the curved disk (non-separable cross-term)
+    # (1) the gate RAISES on the curved disk by default (no silent wrong answer)
+    with pytest.raises(ValueError, match="NON-SEPARABLE"):
+        _absorb("fff_nv", 13)
+    # (2) the opt-out downgrades to a warning (expert reflection-only use)
     with pytest.warns(UserWarning, match="NON-SEPARABLE"):
-        A_nv = _absorb("fff_nv", 13)
-    # (2) 'li' and 'laurent' agree on a nonzero absorptance = the correct value
+        A_nv = _absorb("fff_nv", 13, allow_nonseparable_nv=True)
+    # (3) 'li' and 'laurent' agree on a nonzero absorptance = the correct value
     A_li, A_lau = _absorb("li", 13), _absorb("laurent", 13)
     assert A_li > 0.04 and abs(A_li - A_lau) < 3e-2, (
         f"li/laurent should agree on a nonzero disk absorptance: "
         f"li={A_li:.4f} laurent={A_lau:.4f}")
-    # (3) fff_nv mis-splits -> its absorptance is materially LOW vs the oracle.
+    # (4) opted-in fff_nv still mis-splits -> its absorptance is materially LOW.
     assert A_nv < 0.6 * A_li, (
         f"fff_nv disk absorptance {A_nv:.4f} is unexpectedly close to the "
         f"'li' oracle {A_li:.4f} -- did the cross-term factorization get fixed? "

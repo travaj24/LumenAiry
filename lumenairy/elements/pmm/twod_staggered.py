@@ -834,13 +834,21 @@ def pmm_efficiency_2d_staggered(
 
     Returns
     -------
-    orders : (Nfo, 2) int ndarray
-        The retained ``(m, n)`` diffraction-order pairs.
-    R_eff, T_eff : (Nfo,) float ndarray
-        Reflected / transmitted efficiency per order (real power fractions;
-        evanescent orders 0).  For a lossless grating ``sum(R)+sum(T) == 1``.
-    dof : int
-        The per-region modal problem size (``2 * Nx*(M-1) * Ny*(M-1)``).
+    result : :class:`~lumenairy.elements.rcwa.Efficiency2D`
+        A ``tuple`` subclass that unpacks as ``orders, R, T`` (NOT a 4-tuple) and
+        carries the modal problem size on ``.dof``:
+
+        * ``orders`` -- ``(Nfo, 2)`` retained ``(m, n)`` diffraction-order pairs;
+        * ``R, T`` -- ``(Nfo,)`` reflected / transmitted efficiency per order
+          (real power fractions; evanescent orders 0; lossless ``sum(R)+sum(T)
+          == 1``);
+        * ``result.dof`` -- per-region modal problem size
+          (``2 * Nx*(M-1) * Ny*(M-1)``).
+
+        .. note:: **API change (v5.11 -> v5.12).**  Formerly a bare 4-tuple
+           ``(orders, R, T, dof)``; now the cross-suite :class:`Efficiency2D`
+           that unpacks to ``orders, R, T`` with ``dof`` as an attribute.  See
+           :func:`pmm_efficiency_2d`.
 
     Notes
     -----

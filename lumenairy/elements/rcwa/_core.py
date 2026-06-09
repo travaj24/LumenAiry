@@ -325,6 +325,39 @@ def _sqrt_forward(x: np.ndarray) -> np.ndarray:
     return xp.where(bad, -r, r)
 
 
+def _forward_flux_kz(eps_region, kx, ky):
+    """PUBLIC-convention forward ``kz`` (``Re(kz) >= 0``) for a homogeneous
+    half-space, used by the z-FLUX weight, the propagating-order mask, and the
+    longitudinal field ``Ez = -(kx Ex + ky Ey)/kz``.
+
+    The internal ``exp(+i w t)`` loss bridge conjugates the region permittivity,
+    and :func:`_sqrt_forward` (the ``Im(kz) >= 0`` branch) then returns
+    ``Re(kz) < 0`` for a LOSSY half-space (a 4th-quadrant conjugated ``eps``).  The
+    ``Re(kz) > 0`` propagating mask read that as evanescent and SILENTLY ZEROED the
+    transmitted efficiency into ANY absorbing exit substrate (a long-standing
+    energy-corruption bug; the reflected side and the mode-match path are
+    unaffected).  Un-conjugating ``eps`` here restores ``Re(kz) >= 0`` for a forward
+    wave into a lossy medium so it carries its physical z-flux; for LOSSLESS (real)
+    ``eps`` the conjugate is the identity, so this is byte-for-bit unchanged.
+
+    Use this for the FLUX/mask/Ez only -- the modal eigenmode ``kz`` keeps the
+    internal convention (that path matches at every interface and is correct).
+
+    SCOPE (adversarial verification 2026-06-09, ~526 oracle-checked configs):
+    correct for a lossy EXIT substrate (``Im(eps) > 0``) -- T, R and the absorbed
+    fraction all match an independent TMM to ~1e-15.  Two regimes are out of
+    scope by construction: (1) a lossy INCIDENCE medium (lossy superstrate) makes
+    per-wave ``R + T != 1`` because each wave is normalized by its own
+    ``|amp|^2`` z-flux while the incident/reflected cross-term carries net flux --
+    the per-order value still matches analytic Fresnel exactly, so R/T are only
+    physically meaningful for a LOSSLESS incidence medium; (2) GAIN media
+    (``Im(n) < 0``) fall in the opposite eps quadrant and trip the passive
+    :func:`_check_energy` tripwire (a LOUD raise, never a silent wrong answer) --
+    active media are unsupported."""
+    xp = array_namespace(kx)
+    return _sqrt_forward(xp.conj(xp.asarray(eps_region).astype(_C))
+                         - kx ** 2 - ky ** 2)
+
 
 def _inv_lam(lam: np.ndarray) -> np.ndarray:
     """``1/lam`` with a floor on ``|lam|`` so a grazing mode (``kz -> 0`` so
@@ -1934,6 +1967,7 @@ __all__ = [
     "_require_jax_x64",
     "_normalize_pol",
     "_sqrt_forward",
+    "_forward_flux_kz",
     "_inv_lam",
     "_sqrt_decay",
     "_require_propagating_incidence",

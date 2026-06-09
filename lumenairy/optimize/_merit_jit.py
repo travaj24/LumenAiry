@@ -40,21 +40,36 @@ Author: Andrew Traverso -- v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT).
 
 from __future__ import annotations
 
+import importlib.util as _ilu
+
 import numpy as np
 
-# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): canonical Numba
-# probe.  Mirrors the guarded imports in elements/lenses.py and
-# elements/_lens_traced.py.  Two specialised @njit kernels are built
-# below (one per output dtype) because Numba does not erase the
-# complex-precision type of the output array.
-try:
-    import numba as _numba  # noqa: F401
-    from numba import njit as _njit
-    from numba import prange as _prange
-    _NUMBA_AVAILABLE = True
-except ImportError:
-    _numba = None
-    _NUMBA_AVAILABLE = False
+# v5.3 (ROADMAP v5.3 horizon -- MultiFieldMerit JIT): Numba probe, LAZY (audit
+# P2-D: the eager ``import numba`` cost ~1.8 s of ``import lumenairy`` cold
+# start).  Mirrors elements/lenses.py / elements/_lens_traced.py.  Two specialised
+# @njit kernels are built ON FIRST USE (one per output dtype, because Numba does
+# not erase the complex-precision type of the output array); both have a
+# pure-NumPy fallback, so numba loads only when a caller hits the fast path.
+_NUMBA_AVAILABLE = _ilu.find_spec("numba") is not None
+_numba = None                         # populated by _load_numba() on first use
+_njit = None
+_prange = None
+_NUMBA_KERNELS: dict = {}             # kernel-name -> compiled fn (or None)
+
+
+def _load_numba():
+    """Import numba + njit/prange on first use; cache the handles.  Returns True
+    iff numba is importable (False -> caller takes the pure-NumPy fallback)."""
+    global _numba, _njit, _prange
+    if _numba is not None:
+        return True
+    if not _NUMBA_AVAILABLE:
+        return False
+    import numba as _nb
+    from numba import njit as _nj
+    from numba import prange as _pr
+    _numba, _njit, _prange = _nb, _nj, _pr
+    return True
 
 
 # Minimum grid pixel count above which the JIT kernel is faster than
@@ -67,7 +82,16 @@ except ImportError:
 _MULTI_FIELD_JIT_MIN_PIXELS = 1 << 14  # 16384 pixels (N=128 square)
 
 
-if _NUMBA_AVAILABLE:
+def _get_multi_field_kernels():
+    """Compile (once, on first call) and return the ``(c128, c64)`` masked
+    tilt-phasor numba kernels, or ``(None, None)`` if numba is unavailable.  Lazy
+    so ``import lumenairy`` never pays the numba import / compile cost (P2-D)."""
+    if "multi_field" in _NUMBA_KERNELS:
+        return _NUMBA_KERNELS["multi_field"]
+    if not _load_numba():
+        _NUMBA_KERNELS["multi_field"] = (None, None)
+        return None, None
+
     @_njit(cache=True, parallel=True, fastmath=True)
     def _multi_field_tilt_phasor_masked_c128(
         sin_tx, sin_ty, k_X, k_Y, mask, out,
@@ -126,9 +150,10 @@ if _NUMBA_AVAILABLE:
                     out[i, j] = np.complex64(np.cos(ph) + 1j * np.sin(ph))
                 else:
                     out[i, j] = np.complex64(0.0 + 0.0j)
-else:
-    _multi_field_tilt_phasor_masked_c128 = None  # noqa
-    _multi_field_tilt_phasor_masked_c64 = None  # noqa
+
+    _NUMBA_KERNELS["multi_field"] = (_multi_field_tilt_phasor_masked_c128,
+                                     _multi_field_tilt_phasor_masked_c64)
+    return _NUMBA_KERNELS["multi_field"]
 
 
 def _multi_field_tilt_phasor_masked(
@@ -192,9 +217,13 @@ def _multi_field_tilt_phasor_masked(
     # vacuously satisfied (kernel is ``None``) and we go straight
     # to the NumPy path.
     n_pixels = mask.size
-    if (_NUMBA_AVAILABLE
-            and n_pixels >= _MULTI_FIELD_JIT_MIN_PIXELS
-            and _multi_field_tilt_phasor_masked_c128 is not None):
+    # Kernels compiled lazily on first use; (None, None) when numba is
+    # unavailable -> fall through to the pure-NumPy path (audit P2-D).
+    _kern_c128, _kern_c64 = (
+        _get_multi_field_kernels()
+        if _NUMBA_AVAILABLE and n_pixels >= _MULTI_FIELD_JIT_MIN_PIXELS
+        else (None, None))
+    if _kern_c128 is not None:
         # Specialise on dtype: complex64 vs complex128.  Numba's
         # @njit signatures fix the output dtype at compile time, so
         # we maintain two kernels rather than relying on a generic
@@ -202,7 +231,7 @@ def _multi_field_tilt_phasor_masked(
         np_dtype = np.dtype(dtype)
         if np_dtype == np.complex64:
             out = np.empty(mask.shape, dtype=np.complex64)
-            _multi_field_tilt_phasor_masked_c64(
+            _kern_c64(
                 float(sin_tx), float(sin_ty),
                 np.ascontiguousarray(k_X, dtype=np.float64),
                 np.ascontiguousarray(k_Y, dtype=np.float64),
@@ -213,7 +242,7 @@ def _multi_field_tilt_phasor_masked(
         # complex128 path (default; covers np.complex128 and any
         # promoted alias).
         out = np.empty(mask.shape, dtype=np.complex128)
-        _multi_field_tilt_phasor_masked_c128(
+        _kern_c128(
             float(sin_tx), float(sin_ty),
             np.ascontiguousarray(k_X, dtype=np.float64),
             np.ascontiguousarray(k_Y, dtype=np.float64),

@@ -17,6 +17,7 @@ from ._core import (
     _check_energy,
     _concrete,
     _EnergyError,
+    _forward_flux_kz,
     _fourier_coeffs_1d,
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
@@ -526,8 +527,20 @@ def rcwa_efficiency_1d(
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
     kyv = xp.diag(Ky)
-    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    # PUBLIC-convention forward kz (Re >= 0) for the z-FLUX, propagating mask, and
+    # longitudinal field.  The internal exp(+iwt) loss bridge conjugates the region
+    # eps, and _sqrt_forward (Im >= 0 branch) then returns Re(kz) < 0 for a LOSSY
+    # half-space (a 4th-quadrant conjugated eps), which the Re(kz) > 0 propagating
+    # mask wrongly read as evanescent -> T silently ZEROED into any absorbing exit
+    # substrate (a long-standing energy-corruption bug; R unaffected).  Un-conjugate
+    # the region eps here so a forward wave into a lossy medium keeps Re(kz) >= 0
+    # and carries its physical z-flux; LOSSLESS eps is real so conj is identity and
+    # this is byte-unchanged.  (The eigenmode kz_ref/kz_trn keep the internal
+    # convention for the mode match -- that path is already correct.)
+    kz_ref_f = _forward_flux_kz(eps_sup, kx, kyv)
+    kz_trn_f = _forward_flux_kz(eps_sub, kx, kyv)
+    safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+    safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     # Longitudinal field from div(D) = 0 in each homogeneous region: a
     # diffracted order's full E carries Ez = -(kx Ex + ky Ey)/kz, so the
     # transverse-only |E_t|^2 understates the power by |Ez|^2.
@@ -540,17 +553,17 @@ def rcwa_efficiency_1d(
     # for TM (and exactly 1 for TE).  Normalising the diffraction
     # efficiencies by this incident |E|^2 is what keeps sum(R)+sum(T)=1 at
     # oblique TM (without it the sums scale as sec^2 theta).
-    kz_inc = xp.real(_sqrt_forward(eps_sup - kx0 ** 2))
+    kz_inc = xp.real(_sqrt_forward(xp.conj(eps_sup) - kx0 ** 2))
     if polarization == "te":
         einc_sq = 1.0
     else:
         einc_sq = 1.0 + (kx0 / kz_inc) ** 2
-    R_eff = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                        + xp.abs(rz) ** 2) / einc_sq
-    T_eff = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                        + xp.abs(tz) ** 2) / einc_sq
-    R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
-    T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
+    R_eff = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                          + xp.abs(rz) ** 2) / einc_sq
+    T_eff = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                          + xp.abs(tz) ** 2) / einc_sq
+    R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
+    T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
     if not is_jax:
         _check_energy("rcwa_efficiency_1d", R_eff, T_eff)
     return orders, R_eff, T_eff
@@ -868,16 +881,21 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         t = S21 @ cinc
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
-        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        # PUBLIC-convention forward kz for the z-flux + mask + Ez (see
+        # _forward_flux_kz): the internal-conjugated lossy substrate would
+        # otherwise zero the transmittance.  1-D: ky = 0.
+        kz_ref_f = _forward_flux_kz(eps_sup, kxv, 0.0)
+        kz_trn_f = _forward_flux_kz(eps_sub, kxv, 0.0)
+        safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+        safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         rz = -(kxv * rx) / safe_r
         tz = -(kxv * tx) / safe_t
-        Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                         + xp.abs(rz) ** 2) / einc_sq
-        Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                         + xp.abs(tz) ** 2) / einc_sq
-        R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
-        T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+        Re = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                           + xp.abs(rz) ** 2) / einc_sq
+        Te = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                           + xp.abs(tz) ** 2) / einc_sq
+        R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
+        T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
         # Zeroth-order Jones column (conjugate back to public exp(-i w t)).
         j_cols.append(xp.stack([xp.conj(rx[M]), xp.conj(ry[M])]))
     R_eff = xp.stack(R_rows)                       # (2, N)
@@ -1018,7 +1036,7 @@ def rcwa_jones_1d(
             profiles[key] = xp.where(inside, eps_ridge[ii, jj],
                                      eps_groove[ii, jj]).astype(_C)
 
-    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2)))
+    kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2)))
     return _jones_1d_from_profiles(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,
@@ -1211,7 +1229,7 @@ def rcwa_jones_1d_segments(
             prof = xp.where(in_seg, eps_tensors[k][ii, jj], prof)
         profiles[key] = prof.astype(_C)
 
-    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2)))
+    kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2)))
     return _jones_1d_from_profiles(
         profiles, offplane, M=M, orders=orders, Kx=Kx, Ky=Ky, kxv=kxv, k0=k0,
         eps_sup=eps_sup, eps_sub=eps_sub, kz_inc=kz_inc, depth=depth, kx0=kx0,

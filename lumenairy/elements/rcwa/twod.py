@@ -17,6 +17,7 @@ from ._core import (
     _check_energy,
     _concrete,
     _EnergyError,
+    _forward_flux_kz,
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
     _interface_smatrix,
@@ -261,6 +262,69 @@ def _nv_convolutions_2d(eps_cell, Nx, Ny, orders, n_orders_x, n_orders_y, xp):
 
 
 
+def _nv_curved_wall_fraction(eps_cell):
+    """Fraction of the pattern's boundary that runs DIAGONAL to the axes -- the
+    cheap, smoothing-free discriminator for the fff_nv gate.
+
+    An axis-aligned rectangle has the two raw cell-gradient components
+    ``|d eps/dx|`` and ``|d eps/dy|`` BOTH significant only at its isolated
+    CORNER pixels (a vertical wall has ``d/dx`` only, a horizontal wall ``d/dy``
+    only).  A CURVED wall rendered on a grid is a staircase of many corners, so
+    the two gradients are co-significant over an extended fraction of the
+    boundary.  ``max|Nx*Ny|`` on the *smoothed* normal-vector field cannot tell
+    the two apart (both saturate at 0.5 -- a square's smoothed corners look as
+    diagonal as a disk's wall), so the gate uses this raw co-gradient fraction
+    instead: ~0.0-0.03 for squares / stripes / axis-aligned unions, ~0.17+ for
+    disks / ellipses."""
+    e = np.abs(np.asarray(eps_cell)).astype(float)
+    rng = float(e.max() - e.min())
+    if rng < 1e-12:                        # uniform cell -> no walls
+        return 0.0
+    e = (e - e.min()) / rng
+    gx = np.abs(np.roll(e, -1, 0) - e)     # periodic forward diff (matches the FFT cell)
+    gy = np.abs(np.roll(e, -1, 1) - e)
+    tol = 0.25                             # a "real" edge step (vs anti-alias ramp)
+    bx, by = gx > tol, gy > tol
+    nb = int((bx | by).sum())
+    return float((bx & by).sum()) / nb if nb else 0.0
+
+
+def _nv_nonseparable_guard(fn_name, eps_cell, allow_nonseparable_nv):
+    """fff_nv non-separability gate (AUDIT P1-A 2026-06-07 -> hardened to RAISE in
+    P1-B 2026-06-09).  ``fff_nv``'s cross-term factorization is validated for
+    axis-aligned features (squares, stripes, rectangular unions -- where it beats
+    2-D li/laurent on metal stripes) but MIS-SPLITS absorptance by ~50% on CURVED
+    / non-axis-aligned walls -- a lossless-trap failure (total ``R+T+A`` still
+    closes, but the channel split, hence the per-order R/T and the absorptance,
+    is wrong).
+
+    By DEFAULT this **raises** so a wrong number can never silently propagate
+    (``'li'``/``'laurent'`` are rigorous for that geometry -- use them).  The
+    reflection channel happens to still track on curved walls, so an expert who
+    needs only R can pass ``allow_nonseparable_nv=True`` to DOWNGRADE to a warning
+    and accept the (possibly wrong) absorptance split."""
+    frac = _nv_curved_wall_fraction(eps_cell)
+    if frac <= 0.06:                       # axis-aligned -> fff_nv is validated
+        return
+    msg = (f"{fn_name}(formulation='fff_nv'): NON-SEPARABLE geometry (curved / "
+           f"non-axis-aligned walls; {frac:.0%} of the boundary runs diagonal to "
+           f"the axes).  fff_nv's cross-term factorization is NOT validated there "
+           f"-- it mis-splits absorptance by ~50% (total R+T+A still closes, so "
+           f"the error is silent).  Use formulation='li' or 'laurent' for curved "
+           f"/ non-separable patterns (both are rigorous there)")
+    if allow_nonseparable_nv:
+        import warnings
+        warnings.warn(
+            msg + ".  [allow_nonseparable_nv=True -> proceeding with a WARNING; "
+            "the absorptance / per-order split may be wrong, though the "
+            "reflection channel still tracks].", stacklevel=3)
+    else:
+        raise ValueError(
+            msg + ", or pass allow_nonseparable_nv=True to proceed anyway "
+            "(downgrades this to a warning).")
+
+
+
 @_with_blas_limit
 def rcwa_efficiency_2d(
     period_x: float,
@@ -281,6 +345,7 @@ def rcwa_efficiency_2d(
     stabilize: bool = False,
     symmetry: bool = False,
     use_gpu: bool = False,
+    allow_nonseparable_nv: bool = False,
 ) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D (doubly periodic) crossed
     grating: a single patterned layer of permittivity ``eps_cell`` between a
@@ -360,11 +425,15 @@ def rcwa_efficiency_2d(
           **mis-splits the absorptance by ~50%** -- a lossless-trap failure
           (``R+T+A`` still closes, but the per-channel split is wrong; converged
           oracles give ``A ~ 0.094-0.096``, ``fff_nv`` gives ``A ~ 0.046-0.077``).
-          A ``UserWarning`` fires when the geometry is non-separable; **use**
-          ``'li'`` **or** ``'laurent'`` **for curved / non-separable walls** until
-          the cross-term factorization is corrected.  ``'fff_nv'`` is NumPy / CuPy
-          only and is incompatible with the ``symmetry`` even-parity fast path
-          (transparently skipped).
+          A non-separable geometry now **raises** ``ValueError`` (audit P1-B) so a
+          wrong absorptance can't propagate silently; **use** ``'li'`` **or**
+          ``'laurent'`` **for curved / non-separable walls** (both rigorous
+          there).  The reflection channel still tracks on curved walls, so an
+          expert who needs only R may pass ``allow_nonseparable_nv=True`` to
+          DOWNGRADE the raise to a warning and accept the (possibly wrong)
+          absorptance split.  ``'fff_nv'`` is NumPy / CuPy only and is
+          incompatible with the ``symmetry`` even-parity fast path (transparently
+          skipped).
 
         (``'fff'`` is accepted as an alias of ``'li'``.)
     truncation : {'rectangular', 'circular'}, optional
@@ -503,25 +572,13 @@ def rcwa_efficiency_2d(
     # in-plane tensor operator (the inverse rule projected on the normal, the
     # direct rule on the tangent).  Routed through the tensor eigensolver below.
     if formulation == "fff_nv":
+        # Non-separability gate (audit P1-A 2026-06-07; hardened to RAISE in
+        # P1-B 2026-06-09): a curved wall mis-splits absorptance by ~50%.  RAISE
+        # by default so a wrong number can't propagate silently; opt out with
+        # allow_nonseparable_nv=True (reflection-only expert use).
+        _nv_nonseparable_guard("rcwa_efficiency_2d", eps_cell,
+                               allow_nonseparable_nv)
         Nx_nv, Ny_nv = _nv_field_2d(eps_cell, period_x, period_y)
-        # Non-separability gate (2026-06-07 audit P1-A).  The NV cross term
-        # [[Nx*Ny]] is ~0 for axis-aligned / separable patterns (where fff_nv is
-        # validated and beats 2-D li/laurent on metal stripes) but is exercised on
-        # CURVED walls -- where the cross-term factorization mis-splits absorption
-        # by ~50% (a lossless-trap failure: R+T+A closes but the channel split is
-        # wrong).  Warn rather than silently return a wrong absorptance.
-        _nv_cross = float(np.max(np.abs(np.asarray(Nx_nv) * np.asarray(Ny_nv))))
-        if _nv_cross > 1e-2:
-            import warnings
-            warnings.warn(
-                "rcwa_efficiency_2d(formulation='fff_nv'): the geometry is "
-                "NON-SEPARABLE (curved / non-axis-aligned walls; NV cross term "
-                f"max|Nx*Ny| = {_nv_cross:.3g}).  fff_nv's cross-term "
-                "factorization is NOT validated there -- it can mis-split "
-                "absorptance by ~50% (total R+T+A still closes).  Use "
-                "formulation='li' or 'laurent' for curved / non-separable "
-                "patterns; fff_nv is validated for separable axis-aligned "
-                "features.", stacklevel=2)
         Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv = _nv_convolutions_2d(
             eps_cell, Nx_nv, Ny_nv, orders, n_orders_x, n_orders_y, xp)
 
@@ -531,7 +588,7 @@ def rcwa_efficiency_2d(
     # Incident unit plane wave on the (0, 0) order, TE/TM relative to the
     # plane of incidence (built from the in-plane azimuth direction).
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     kt = float(np.hypot(kx0, ky0))
     if kt < 1e-12:                       # normal incidence
         ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
@@ -573,16 +630,21 @@ def rcwa_efficiency_2d(
         t = S21 @ cinc
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
-    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    # PUBLIC-convention forward kz for the z-flux + mask + Ez (see
+    # _forward_flux_kz): the internal-conjugated lossy substrate would otherwise
+    # zero the transmittance into any absorbing exit medium.
+    kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)
+    kz_trn_f = _forward_flux_kz(eps_sub, kxv, kyv)
+    safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+    safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     rz = -(kxv * rx + kyv * ry) / safe_r
     tz = -(kxv * tx + kyv * ty) / safe_t
-    R_eff = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                        + xp.abs(rz) ** 2) / einc_sq
-    T_eff = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                        + xp.abs(tz) ** 2) / einc_sq
-    R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
-    T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
+    R_eff = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                          + xp.abs(rz) ** 2) / einc_sq
+    T_eff = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                          + xp.abs(tz) ** 2) / einc_sq
+    R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
+    T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
     if not is_jax:
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff)
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2N eigenproblem dim
@@ -675,16 +737,18 @@ class PreparedRCWA2D:
             t = S21 @ self.cinc
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
-        safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-        safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+        kz_ref_f = _forward_flux_kz(self.eps_sup, kxv, kyv)
+        kz_trn_f = _forward_flux_kz(self.eps_sub, kxv, kyv)
+        safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+        safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
         rz = -(kxv * rx + kyv * ry) / safe_r
         tz = -(kxv * tx + kyv * ty) / safe_t
-        R_eff = xp.real(kz_ref / self.kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                                 + xp.abs(rz) ** 2) / self.einc_sq
-        T_eff = xp.real(kz_trn / self.kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                                 + xp.abs(tz) ** 2) / self.einc_sq
-        R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
-        T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
+        R_eff = xp.real(kz_ref_f / self.kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                                   + xp.abs(rz) ** 2) / self.einc_sq
+        T_eff = xp.real(kz_trn_f / self.kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                                   + xp.abs(tz) ** 2) / self.einc_sq
+        R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
+        T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
         _check_energy("rcwa_efficiency_2d", R_eff, T_eff)
         return Efficiency2D(orders, R_eff, T_eff, 2 * N)
 
@@ -707,6 +771,7 @@ def prepare_rcwa_2d(
     truncation: str = "rectangular",
     symmetry: bool = False,
     use_gpu: bool = False,
+    allow_nonseparable_nv: bool = False,
 ) -> PreparedRCWA2D:
     """Assemble the wavelength-INDEPENDENT part of a 2-D RCWA solve once, for a
     wavelength sweep that reuses it (see :class:`PreparedRCWA2D`).
@@ -752,23 +817,15 @@ def prepare_rcwa_2d(
               if formulation == "li" else None)
     fff = None
     if formulation == "fff_nv":
+        _nv_nonseparable_guard("prepare_rcwa_2d", eps_cell,
+                               allow_nonseparable_nv)
         Nx_nv, Ny_nv = _nv_field_2d(eps_cell, period_x, period_y)
-        _nv_cross = float(np.max(np.abs(np.asarray(Nx_nv) * np.asarray(Ny_nv))))
-        if _nv_cross > 1e-2:
-            import warnings
-            warnings.warn(
-                "prepare_rcwa_2d(formulation='fff_nv'): the geometry is "
-                "NON-SEPARABLE (curved / non-axis-aligned walls; NV cross term "
-                f"max|Nx*Ny| = {_nv_cross:.3g}).  fff_nv's cross-term "
-                "factorization is NOT validated there -- it can mis-split "
-                "absorptance by ~50%.  Use formulation='li' or 'laurent' for "
-                "curved / non-separable patterns.", stacklevel=2)
         fff = _nv_convolutions_2d(eps_cell, Nx_nv, Ny_nv, orders, n_orders_x,
                                   n_orders_y, xp)
 
     # Incident plane wave (depends on angle + eps_sup, NOT wavelength).
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     kt = float(np.hypot(kx0, ky0))
     if kt < 1e-12:
         ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
@@ -809,6 +866,7 @@ def rcwa_efficiency_2d_vs_wavelength(
     truncation: str = "rectangular",
     symmetry: bool = False,
     use_gpu: bool = False,
+    allow_nonseparable_nv: bool = False,
 ):
     """Rigorous 2-D diffraction efficiencies across a wavelength sweep, reusing
     the geometry-only permittivity factorization (the spectral companion to
@@ -847,7 +905,8 @@ def rcwa_efficiency_2d_vs_wavelength(
         period_x, period_y, eps_cell, n_substrate, n_superstrate, depth,
         theta=theta, phi=phi, polarization=polarization, n_orders_x=n_orders_x,
         n_orders_y=n_orders_y, formulation=formulation, truncation=truncation,
-        symmetry=symmetry, use_gpu=use_gpu)
+        symmetry=symmetry, use_gpu=use_gpu,
+        allow_nonseparable_nv=allow_nonseparable_nv)
     Nfo = prepared.N
     R = np.empty((wl.size, Nfo), dtype=float)
     T = np.empty((wl.size, Nfo), dtype=float)
@@ -988,9 +1047,11 @@ def rcwa_jones_2d(
 
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
-    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
+    kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)
+    kz_trn_f = _forward_flux_kz(eps_sub, kxv, kyv)
+    safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+    safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     R_rows, T_rows, j_cols = [], [], []
     for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
         # Unit tangential E along (ex0, ey0); the incident wave's longitudinal
@@ -1004,12 +1065,12 @@ def rcwa_jones_2d(
         tx, ty = t[:N], t[N:]
         rz = -(kxv * rx + kyv * ry) / safe_r
         tz = -(kxv * tx + kyv * ty) / safe_t
-        Re = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                         + xp.abs(rz) ** 2) / einc_sq
-        Te = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                         + xp.abs(tz) ** 2) / einc_sq
-        R_rows.append(xp.where(xp.real(kz_ref) > 0, xp.real(Re), 0.0))
-        T_rows.append(xp.where(xp.real(kz_trn) > 0, xp.real(Te), 0.0))
+        Re = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                           + xp.abs(rz) ** 2) / einc_sq
+        Te = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                           + xp.abs(tz) ** 2) / einc_sq
+        R_rows.append(xp.where(xp.real(kz_ref_f) > 0, xp.real(Re), 0.0))
+        T_rows.append(xp.where(xp.real(kz_trn_f) > 0, xp.real(Te), 0.0))
         j_cols.append(xp.stack([xp.conj(rx[p0]), xp.conj(ry[p0])]))
     R_eff = xp.stack(R_rows)
     T_eff = xp.stack(T_rows)
@@ -1210,7 +1271,7 @@ def rcwa_efficiency_2d_shapes(
     S11, S12, S21, S22 = S
 
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
-    kz_inc = float(np.real(_sqrt_forward(eps_sup - kx0 ** 2 - ky0 ** 2)))
+    kz_inc = float(np.real(_sqrt_forward(np.conj(eps_sup) - kx0 ** 2 - ky0 ** 2)))
     kt = float(np.hypot(kx0, ky0))
     if kt < 1e-12:
         ex0, ey0 = (0.0, 1.0) if polarization == "te" else (1.0, 0.0)
@@ -1228,16 +1289,18 @@ def rcwa_efficiency_2d_shapes(
     t = S21 @ cinc
     rx, ry = r[:N], r[N:]
     tx, ty = t[:N], t[N:]
-    safe_r = xp.where(xp.abs(kz_ref) < 1e-12, 1.0, kz_ref)
-    safe_t = xp.where(xp.abs(kz_trn) < 1e-12, 1.0, kz_trn)
+    kz_ref_f = _forward_flux_kz(eps_sup, kxv, kyv)
+    kz_trn_f = _forward_flux_kz(eps_sub, kxv, kyv)
+    safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+    safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     rz = -(kxv * rx + kyv * ry) / safe_r
     tz = -(kxv * tx + kyv * ty) / safe_t
-    R_eff = xp.real(kz_ref / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
-                                        + xp.abs(rz) ** 2) / einc_sq
-    T_eff = xp.real(kz_trn / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
-                                        + xp.abs(tz) ** 2) / einc_sq
-    R_eff = xp.where(xp.real(kz_ref) > 0, xp.real(R_eff), 0.0)
-    T_eff = xp.where(xp.real(kz_trn) > 0, xp.real(T_eff), 0.0)
+    R_eff = xp.real(kz_ref_f / kz_inc) * (xp.abs(rx) ** 2 + xp.abs(ry) ** 2
+                                          + xp.abs(rz) ** 2) / einc_sq
+    T_eff = xp.real(kz_trn_f / kz_inc) * (xp.abs(tx) ** 2 + xp.abs(ty) ** 2
+                                          + xp.abs(tz) ** 2) / einc_sq
+    R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
+    T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
     _check_energy("rcwa_efficiency_2d_shapes", R_eff, T_eff)
     return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
 

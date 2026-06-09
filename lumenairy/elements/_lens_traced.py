@@ -59,15 +59,32 @@ def _ensure_numexpr_loaded():
 
 _NUMEXPR_MIN_SIZE = 1 << 20
 
-# Optional Numba JIT.
-try:
-    import numba as _numba
-    from numba import njit as _njit
-    from numba import prange as _prange
-    _NUMBA_AVAILABLE = True
-except ImportError:
-    _numba = None
-    _NUMBA_AVAILABLE = False
+# Optional Numba JIT, LAZILY imported on first kernel use (audit P2-D: the eager
+# ``import numba`` cost ~1.8 s of ``import lumenairy`` cold start).  The kernel
+# (``_cheb2d_val_grad_numba``) has a pure-NumPy fallback, so numba is pulled in
+# only when a caller actually hits the fast path AND numba is installed.
+import importlib.util as _ilu
+
+_NUMBA_AVAILABLE = _ilu.find_spec("numba") is not None
+_numba = None                         # populated by _load_numba() on first use
+_njit = None
+_prange = None
+_NUMBA_KERNELS: dict = {}             # kernel-name -> compiled fn (or None)
+
+
+def _load_numba():
+    """Import numba + njit/prange on first use; cache the handles.  Returns True
+    iff numba is importable (False -> caller takes the pure-NumPy fallback)."""
+    global _numba, _njit, _prange
+    if _numba is not None:
+        return True
+    if not _NUMBA_AVAILABLE:
+        return False
+    import numba as _nb
+    from numba import njit as _nj
+    from numba import prange as _pr
+    _numba, _njit, _prange = _nb, _nj, _pr
+    return True
 
 
 # Newton iter cap default.  Set to 12 (the historical value).
@@ -286,15 +303,21 @@ def close_worker_pool() -> None:
 # tight loop with zero temporaries and thread-parallel output rows.
 #
 # Guarded import -- fallback to pure-xp path (which is fine on NumPy and
-# REQUIRED on CuPy) when numba isn't installed.
-# Note: ``_NUMBA_AVAILABLE`` / ``_njit`` / ``_prange`` are imported once
-# at module top (see top of file).  This block historically had its own
-# import guard; the early import pulled the names earlier so the
-# ``_aspheric_sag_accum_numba`` helper at line ~150 can use them too.
+# REQUIRED on CuPy) when numba isn't installed.  The kernel is compiled LAZILY
+# on first call via _get_cheb2d_val_grad_numba() so ``import lumenairy`` never
+# pays the numba import / compile cost (audit P2-D).
 # ---------------------------------------------------------------------------
 
 
-if _NUMBA_AVAILABLE:
+def _get_cheb2d_val_grad_numba():
+    """Compile (once, on first call) and return the Chebyshev value+gradient
+    numba kernel, or ``None`` if numba is unavailable."""
+    if "cheb2d" in _NUMBA_KERNELS:
+        return _NUMBA_KERNELS["cheb2d"]
+    if not _load_numba():
+        _NUMBA_KERNELS["cheb2d"] = None
+        return None
+
     @_njit(cache=True, parallel=True, fastmath=True)
     def _cheb2d_val_grad_numba(coeffs, K1, K2, u_flat, v_flat, max_order):
         """Combined Chebyshev value + gradient via in-place recurrence.
@@ -383,6 +406,9 @@ if _NUMBA_AVAILABLE:
             fx[i] = acc_fx
             fy[i] = acc_fy
         return f, fx, fy
+
+    _NUMBA_KERNELS["cheb2d"] = _cheb2d_val_grad_numba
+    return _cheb2d_val_grad_numba
 
 
 def _get_array_module(arr):
@@ -568,14 +594,17 @@ class _Cheb2DEvaluator:
         sx = 2.0 / (self.xmax - self.xmin)
         sy = 2.0 / (self.ymax - self.ymin)
 
-        # Numba fastpath on the NumPy backend
-        if _NUMBA_AVAILABLE and xp is np:
+        # Numba fastpath on the NumPy backend (kernel compiled lazily on first
+        # use; None when numba is unavailable -> fall through to the pure-xp path)
+        _cheb_kernel = (_get_cheb2d_val_grad_numba()
+                        if xp is np and _NUMBA_AVAILABLE else None)
+        if _cheb_kernel is not None:
             u_flat = np.ascontiguousarray(u.ravel(), dtype=np.float64)
             v_flat = np.ascontiguousarray(v.ravel(), dtype=np.float64)
             coeffs = np.ascontiguousarray(self.coeffs, dtype=np.float64)
             K1 = np.ascontiguousarray(self._K1, dtype=np.int64)
             K2 = np.ascontiguousarray(self._K2, dtype=np.int64)
-            f_flat, fx_u_flat, fy_v_flat = _cheb2d_val_grad_numba(
+            f_flat, fx_u_flat, fy_v_flat = _cheb_kernel(
                 coeffs, K1, K2, u_flat, v_flat, self.order)
             shape = u.shape
             return (f_flat.reshape(shape),

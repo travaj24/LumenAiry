@@ -69,17 +69,34 @@ def _ensure_numexpr_loaded():
         _ne = _n
     return _ne is not None
 
-# Optional Numba JIT.  Used by ``_aspheric_sag_accum_numba`` (fused
-# polynomial-aspheric loop, 3.2.14) and the Maslov Chebyshev evaluator
-# (``_cheb2d_val_grad_numba``).  Both have pure-NumPy fallbacks below.
-try:
-    import numba as _numba
-    from numba import njit as _njit
-    from numba import prange as _prange
-    _NUMBA_AVAILABLE = True
-except ImportError:
-    _numba = None
-    _NUMBA_AVAILABLE = False
+# Optional Numba JIT, LAZILY imported on first kernel use (audit P2-D: the eager
+# ``import numba`` cost ~1.8 s of ``import lumenairy`` cold start).  Used by the
+# fused polynomial-aspheric loop ``_aspheric_sag_accum_numba`` (3.2.14), which has
+# a pure-NumPy fallback -- so numba is pulled in only when a caller actually hits
+# that fast path AND numba is installed.  ``find_spec`` checks availability
+# WITHOUT importing numba.
+import importlib.util as _ilu
+
+_NUMBA_AVAILABLE = _ilu.find_spec("numba") is not None
+_numba = None                         # populated by _load_numba() on first use
+_njit = None
+_prange = None
+_NUMBA_KERNELS: dict = {}             # kernel-name -> compiled fn (or None)
+
+
+def _load_numba():
+    """Import numba + njit/prange on first use; cache the handles.  Returns True
+    iff numba is importable (False -> callers take the pure-NumPy fallback)."""
+    global _numba, _njit, _prange
+    if _numba is not None:
+        return True
+    if not _NUMBA_AVAILABLE:
+        return False
+    import numba as _nb
+    from numba import njit as _nj
+    from numba import prange as _pr
+    _numba, _njit, _prange = _nb, _nj, _pr
+    return True
 
 
 # Default Newton iteration cap for the entrance->exit map inversion.
@@ -119,7 +136,16 @@ def _is_cupy_array(x):
 # Helper: general conic + aspheric surface sag
 # ---------------------------------------------------------------------------
 
-if _NUMBA_AVAILABLE:
+def _get_aspheric_sag_accum_numba():
+    """Compile (once, on first call) and return the fused aspheric-sag numba
+    kernel, or ``None`` if numba is unavailable.  Lazy so ``import lumenairy``
+    never pays the numba import / compile cost (audit P2-D)."""
+    if "aspheric_sag" in _NUMBA_KERNELS:
+        return _NUMBA_KERNELS["aspheric_sag"]
+    if not _load_numba():
+        _NUMBA_KERNELS["aspheric_sag"] = None
+        return None
+
     @_njit(cache=True, parallel=True, fastmath=True)
     def _aspheric_sag_accum_numba(h_sq, sag, powers, coeffs):
         """In-place accumulate sum_i coeff_i * h_sq**(power_i // 2) onto
@@ -145,8 +171,9 @@ if _NUMBA_AVAILABLE:
                     hp *= v
                 acc += coeffs[j] * hp
             flat_s[i] += acc
-else:
-    _aspheric_sag_accum_numba = None  # noqa
+
+    _NUMBA_KERNELS["aspheric_sag"] = _aspheric_sag_accum_numba
+    return _aspheric_sag_accum_numba
 
 
 def surface_sag_general(
@@ -213,8 +240,9 @@ def surface_sag_general(
         # legacy NumPy fallback required (5 aspheric coeffs at N=4096
         # is ~640 MB of transient memory in that path).  CuPy stays
         # on the legacy path because numba targets host arrays.
-        if (xp is np and _NUMBA_AVAILABLE
-                and _aspheric_sag_accum_numba is not None
+        _sag_kernel = (_get_aspheric_sag_accum_numba()
+                       if xp is np and _NUMBA_AVAILABLE else None)
+        if (_sag_kernel is not None
                 and h_sq.dtype == np.float64
                 and sag.dtype == np.float64):
             powers_arr = np.fromiter(
@@ -224,7 +252,7 @@ def surface_sag_general(
                 dtype=np.float64)
             # In-place accumulate; sag is contiguous from xp.zeros_like
             # above so .ravel() inside the kernel is a view.
-            _aspheric_sag_accum_numba(
+            _sag_kernel(
                 np.ascontiguousarray(h_sq), sag, powers_arr, coeffs_arr)
         else:
             for power, coeff in aspheric_coeffs.items():

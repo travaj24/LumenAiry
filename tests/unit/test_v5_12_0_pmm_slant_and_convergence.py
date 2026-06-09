@@ -837,15 +837,21 @@ def test_jones_slant_out_of_plane_slant0_reduces_to_vertical():
 
 # ===================================================================
 # OUT-OF-PLANE wall-normal x longitudinal (eps_xz / eps_zx) coupling is carried
-# EXACTLY by the CONVECTION generator.  The genuinely-covariant Chandezon 4n
-# layout (factorization='covariant') is STRUCTURALLY unable to converge this
-# channel -- a 6-avenue Li-1999/Li-1996-grounded study (2026-06-08) floored every
-# variant at ~5e-2 (an energy-conserving +/-1-order split error: the lossless
-# trap).  eyz/ezy (longitudinal x invariant) converges fine; only exz/ezx (the
-# DISCONTINUOUS wall-normal) is the wall.  These gates pin the convection path's
-# byte-exact slant=0 match vs the full-3x3 pmm_jones_1d oracle for the exact cells
-# that study used, INCLUDING a lossy and an asymmetric (non-reciprocal) cell whose
-# E0 != 1 -- so a wrong per-order split could not auto-balance (the trap guard).
+# EXACTLY by the CONVECTION generator, which remains the VALIDATED production
+# route for this channel.  On the genuinely-covariant Chandezon 4n layout
+# (factorization='covariant') the ISOLATED, DISCONTINUOUS exz/ezx sub-channel was
+# the weakest spot: a 6-avenue Li-1999/Li-1996-grounded study (2026-06-08) floored
+# every variant at ~5e-2 (an energy-conserving +/-1-order split error: the lossless
+# trap).  NB this is NOT a "structurally impossible" verdict -- the 2026-06-09
+# audit (P2-B) refuted that: the broader covariant wall-normal TM channel DOES
+# converge spectrally (~2.5e-3 vs an independent full-3x3 oracle at slant=45); the
+# bare exz/ezx sub-channel is simply where the covariant layout is weakest, so the
+# convection path is preferred here.  eyz/ezy (longitudinal x invariant) converges
+# fine; only exz/ezx (the DISCONTINUOUS wall-normal) is hard.  These gates pin the
+# convection path's byte-exact slant=0 match vs the full-3x3 pmm_jones_1d oracle
+# for the exact cells that study used, INCLUDING a lossy and an asymmetric
+# (non-reciprocal) cell whose E0 != 1 -- so a wrong per-order split could not
+# auto-balance (the trap guard).
 # ===================================================================
 def _oop_exz_cell(exz=0.3, ezx=None, loss=False):
     """A wall-normal-only out-of-plane cell (eyz = ezy = 0, so the FAILING

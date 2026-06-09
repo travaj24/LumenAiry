@@ -418,6 +418,133 @@ class PMMStack:
         _warn_stack_energy(R_eff, T_eff)
         return orders, R_eff, T_eff, jones
 
+    def solve_vs_wavelength(self, wavelengths, *, angle=0.0, theta=None):
+        """Diffraction efficiencies across a wavelength sweep on ONE call,
+        reusing the geometry-only spectral-element assembly.
+
+        The shared union grid and the per-layer SEM operators
+        (``_build_sem_tensor_segments``) + the Fourier far-field projector are
+        wavelength-INDEPENDENT and are assembled ONCE; only the per-wavelength
+        modal eigs + S-matrix cascade rerun.  HONEST PERF NOTE: the per-layer
+        generalized eig dominates the cost (the SEM assembly is a tiny fraction of
+        it), so this is essentially a CONVENIENCE + correctness wrapper returning a
+        dense ``(n_wl, 2, N)`` array, NOT a speedup -- it runs at roughly the same
+        wall-clock as a per-wavelength :meth:`solve` loop (the cost is eig-bound,
+        like the 1-D solvers).  Bit-identical to per-wavelength :meth:`solve` on
+        the propagating orders.
+
+        ALL-VERTICAL IN-PLANE stacks only (the symmetric ``+/-q`` cascade -- which
+        is what the tapered/vertical builders produce); for SLANTED or
+        OUT-OF-PLANE stacks call :meth:`solve` per wavelength.  NON-DISPERSIVE
+        indices assumed across the sweep.  A FIXED diffraction-order set (covering
+        the shortest wavelength's propagating orders) is used so the result is a
+        dense array.
+
+        Parameters
+        ----------
+        wavelengths : array-like of float
+            Vacuum wavelengths [m].
+        angle / theta : float, optional
+            Incidence angle [rad] (``theta`` is the cross-suite alias, and wins
+            when both are given) -- FIXED across the sweep.
+
+        Returns
+        -------
+        orders : (N,) int ndarray
+            The (wavelength-independent) retained diffraction orders.
+        R, T : (n_wavelengths, 2, N) float ndarray
+            Reflected / transmitted efficiency, ``[wavelength][incident pol][order]``
+            (pol 0 = incident ``E_x``, pol 1 = incident ``E_y``).
+        """
+        angle = _resolve_incidence(angle, theta)
+        if not self._layers:
+            raise ValueError("PMMStack.solve_vs_wavelength: add at least one "
+                             "layer.")
+        wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+        if wl.size == 0:
+            raise ValueError("PMMStack.solve_vs_wavelength: wavelengths is empty.")
+        if not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+            raise ValueError("PMMStack.solve_vs_wavelength: every wavelength "
+                             "must be a finite value > 0 [m].")
+        oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
+        if oop or any(abs(L[2]) > 1e-12 for L in self._layers):
+            raise NotImplementedError(
+                "PMMStack.solve_vs_wavelength: all-vertical in-plane stacks only "
+                "(the symmetric cascade); call solve() per wavelength for slanted "
+                "/ out-of-plane stacks.")
+
+        # ---- GEOMETRY-ONLY assembly (reused across the whole sweep) ----
+        uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers])
+        nU = len(uwidths)
+        layer_mats = [
+            _build_sem_tensor_segments(
+                self.period, uwidths, [_tensor3_dict(e) for e in eps_u],
+                self.degree, self.n_el, self.grade)
+            for eps_u in layer_eps_u]
+        t_sup = _tensor3_dict(self.n_sup ** 2 * np.eye(3))
+        t_sub = _tensor3_dict(self.n_sub ** 2 * np.eye(3))
+        mats_sup = _build_sem_tensor_segments(
+            self.period, uwidths, [t_sup] * nU, self.degree, self.n_el, self.grade)
+        mats_sub = _build_sem_tensor_segments(
+            self.period, uwidths, [t_sub] * nU, self.degree, self.n_el, self.grade)
+        n_glob = mats_sup["n_glob"]
+        eps_sup, eps_sub = self.n_sup ** 2, self.n_sub ** 2
+
+        # FIXED order set: cover the SHORTEST wavelength's propagating orders.
+        n_max = max([np.real(np.sqrt(np.asarray(e, _C)[0, 0]))
+                     for eps_u in layer_eps_u for e in eps_u]
+                    + [np.real(np.sqrt(np.asarray(e, _C)[1, 1]))
+                       for eps_u in layer_eps_u for e in eps_u]
+                    + [np.real(self.n_sup), np.real(self.n_sub)])
+        m_prop = _n_propagating_orders(self.period, float(np.min(wl)), n_max)
+        n_proj = max(self.ffo, 2 * m_prop + 5)
+        cap = n_glob if n_glob % 2 else n_glob - 1
+        n_proj = min(n_proj, cap)
+        if n_proj % 2 == 0:
+            n_proj -= 1
+        if 2 * m_prop + 1 > n_proj:
+            raise ValueError(
+                f"PMMStack.solve_vs_wavelength: degree={self.degree} too low to "
+                f"resolve the {2 * m_prop + 1} propagating orders at the shortest "
+                f"wavelength (n_glob={n_glob}); raise degree / elements_per_region.")
+        half = (n_proj - 1) // 2
+        orders = np.arange(-half, half + 1)
+        N = len(orders)
+        G = 2.0 * np.pi / self.period
+        Tp = _sem_fourier_projection(orders, self.period, mats_sup)
+
+        def _proj(Wm):
+            return np.vstack([Tp @ Wm[:n_glob, :], Tp @ Wm[n_glob:, :]])
+
+        R_all = np.empty((wl.size, 2, N), dtype=float)
+        T_all = np.empty((wl.size, 2, N), dtype=float)
+        for iw, w in enumerate(wl):
+            k0 = 2.0 * np.pi / float(w)
+            kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
+            Wsup, Vsup, _l, _g = _sem_modes_tensor(mats_sup, k0, kx0, True)
+            Wsub, Vsub, _l, _g = _sem_modes_tensor(mats_sub, k0, kx0, True)
+            lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in layer_mats]
+            S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
+            for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
+                S = _redheffer_star(S, _propagation_smatrix(
+                    lam_l, k0 * self._layers[i][0]))
+                nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
+                          else (lmodes[i + 1][0], lmodes[i + 1][1]))
+                S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
+            S11, _S12, S21, _S22 = S
+            kx = (kx0 + orders * G) / k0
+            Hsup, Hsub = _proj(Wsup), _proj(Wsub)
+            kz_sup = _kz_forward(eps_sup, kx)
+            kz_sub = _kz_forward(eps_sub, kx)
+            kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
+            R, T, _j = _assemble_jones_farfield(
+                Hsup, Hsub, S11, S21, orders, kx, kz_sup, kz_sub, kz_inc,
+                kx0 / k0, N)
+            _warn_stack_energy(R, T)
+            R_all[iw] = R
+            T_all[iw] = T
+        return orders, R_all, T_all
+
     def _solve_covariant(self, wl, angle, k0):
         """SPECTRAL multi-layer solve via the Li covariant oblique-coordinate
         generator (in-plane OR out-of-plane).  Parallels the general fwd/back

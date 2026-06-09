@@ -2,6 +2,111 @@
 
 All notable changes to the core library are documented here.
 
+## [5.13.0] — 2026-06-09
+
+**Wavelength-sweep reuse + trapezoidal PMM gratings + a swept audit
+(`AUDIT_V5_12_0`).** Adds assemble-once / solve-many wavelength sweeps to the 2-D
+RCWA and PMM solvers and a staircased trapezoidal-grating builder to `PMMStack`,
+then closes both confirmed P1s and all four P2s from the v5.12.0 adversarial
+audit. The headline fix — RCWA silently returned **T = 0 into any lossy exit
+substrate** — was long-standing (not a v5.12.0 regression) and is verified
+correct across ~526 oracle-checked configurations (transmittance, reflectance
+**and** the absorbed-fraction budget match an independent TMM to ~1e-15).
+
+### Added
+
+- **2-D RCWA wavelength sweep** — `prepare_rcwa_2d(...)` returns a
+  `PreparedRCWA2D` that hoists the wavelength-INDEPENDENT permittivity
+  factorization (Laurent `[[eps]]`, the Li `[[1/eps]]` z-rule, the `fff_nv`
+  normal-vector tensor incl. the `O(N^3) inv([[1/eps]])`), the order set and the
+  incident vector once; `.solve(wavelength)` then recomputes only the per-λ eig +
+  S-matrix. `rcwa_efficiency_2d_vs_wavelength(...)` is the thin sweep wrapper.
+  `prepared.solve(wl)` reproduces `rcwa_efficiency_2d(...)` to ~1e-13 (NumPy
+  byte-identical). Non-dispersive indices + fixed `(theta, phi)`; NumPy/CuPy only
+  (use `jax.vmap` over wavelength for a differentiable sweep).
+- **2-D hybrid PMM wavelength sweep** — `pmm_efficiency_2d_vs_wavelength(...)`,
+  same assemble-once / solve-many contract.
+- **`PMMStack.add_tapered_grating(...)`** — trapezoidal / slanted-sidewall 1-D
+  grating rendered as a z-staircase of thin VERTICAL PMM layers (lateral-exact,
+  no Fourier floor in x) — the spectral-element counterpart of
+  `RCWAStack.add_tapered_grating`. The vertical limit (equal duties) reproduces a
+  single vertical layer exactly; a many-interface cascade that loses energy
+  conservation now trips an explicit tripwire warning rather than returning
+  silent gain.
+- **`PMMStack.solve_vs_wavelength(...)`** — convenience all-vertical sweep reusing
+  the geometry-only SEM assembly (eig-bound; a convenience wrapper, not a speedup).
+- **`rcwa_efficiency_2d` / `prepare_rcwa_2d` / `*_vs_wavelength`:
+  `allow_nonseparable_nv=False`** — opt-out for the new `fff_nv` non-separable
+  raise (see below).
+
+### Fixed
+
+- **(P1-A) RCWA transmittance into a LOSSY EXIT SUBSTRATE was silently zeroed.**
+  The internal `exp(+iωt)` loss bridge conjugates the region permittivity;
+  `_sqrt_forward` (the `Im(kz) ≥ 0` branch) then returned `Re(kz) < 0` for a lossy
+  substrate, and the `Re(kz) > 0` propagating mask read that as evanescent and
+  zeroed `T` into **any** absorbing exit medium (a long-standing
+  energy-corruption bug; reflectance and the mode-match were unaffected). A new
+  `rcwa._core._forward_flux_kz` computes the z-flux weight, the propagating mask
+  and the longitudinal `Ez` from the PUBLIC-convention forward `kz` (un-conjugated
+  eps → `Re(kz) ≥ 0` for a forward wave into loss). Applied at all 9 affected
+  sites across `rcwa_efficiency_1d/2d`, `rcwa_jones_1d/2d`,
+  `rcwa_efficiency_2d_shapes`, `PreparedRCWA2D`, `RCWAStack`. **Lossless results
+  are byte-identical** (real eps → conjugate is the identity).
+- **(P1-C) The covariant slanted-Jones path shared the same bug** —
+  `_pmm_jones_oblique_solve` (`factorization='covariant'`) selected the far-field
+  flux `kz` with the same `Im(kz) < 0 → −kz` rule on conjugated eps, zeroing `T`
+  into a lossy substrate. Fixed to the public-convention forward `kz`; now
+  Fresnel-exact, lossless byte-identical.
+- **(P1-B) `rcwa_efficiency_2d(formulation='fff_nv')` now RAISES on a
+  non-separable (curved / non-axis-aligned) cell** instead of only warning. On a
+  curved wall the normal-vector cross-term factorization mis-splits absorptance by
+  ~50% (a lossless trap — `R+T+A` still closes); a non-blocking warning let the
+  wrong number propagate silently. Pass `allow_nonseparable_nv=True` to downgrade
+  to a warning for the reflection-only case (which still tracks). The gate now
+  measures the **raw cell co-gradient curved-wall fraction** (the fraction of the
+  boundary running diagonal to the axes) rather than `max|Nx·Ny|` on the smoothed
+  normal field — the latter saturates at 0.5 for BOTH an axis-aligned square (fine)
+  and a disk (broken) and so could not be a raise trigger.
+
+### Changed
+
+- **(P2-A, API) 2-D PMM return arity is documented as the unified `Efficiency2D`.**
+  `pmm_efficiency_2d` / `pmm_efficiency_2d_staggered` return the cross-suite
+  `Efficiency2D` (shared with `rcwa_efficiency_2d`), which unpacks to
+  `orders, R, T` with `dof` as an attribute — NOT the v5.11 bare 4-tuple
+  `(orders, R, T, dof)`. Migrate `o, R, T, dof = pmm_efficiency_2d(...)` to
+  `o, R, T = pmm_efficiency_2d(...)[:3]` (or read `.dof`). The shared type keeps
+  `rcwa_efficiency_2d` (historically a 3-tuple) backward-compatible.
+- **(P2-B, docs) Covariant out-of-plane accuracy headline corrected.** The
+  `~1e-4` floor was self-referential (covariant-vs-convection, which share the
+  wall-normal inverse-rule floor). Vs an independent RCWA full-3×3 oracle the
+  wall-normal TM channel floors at **~2.5e-3** (slant 45, a plateau); the TE
+  channel is clean (<8e-4). The spectral-convergence capability is real; only the
+  headline number was overstated.
+- **(P2-C) `_cov_split` forward/backward rebalance normalized** — the fallback
+  branch ranked propagating modes by Poynting flux `Sz` (~length²) and evanescent
+  modes by `Im(kz)` (dimensionless) in one `argsort` without normalization; each
+  population is now scaled to unit max magnitude first (the default
+  forward-count-equals-half path is byte-identical).
+- **(audit P3) Reconciled the covariant-OOP doc contradiction** (a test comment
+  still called the covariant path "structurally unable to converge" the
+  out-of-plane channel while the release ships it). Documented that the
+  alias-conflict "raise on mismatch" idea was **considered and rejected** — it
+  would break the deliberate, tested cross-suite `theta`/`angle` (and
+  `n_orders`/`far_field_orders`) substitution contract.
+
+### Performance
+
+- **(P2-D) `import lumenairy` no longer eagerly imports `jax` or `numba`** — the
+  pytree registration in `raytrace/jax_trace.py` is now lazy (first JAX-trace
+  call), and the Numba JIT kernels in `elements/lenses.py`,
+  `elements/_lens_traced.py` and `optimize/_merit_jit.py` compile on first use
+  behind a `find_spec` availability probe. Removes ~5.8 s (`jax` ~3.9 s + `numba`
+  ~1.85 s) of cold-start import; both modules report absent at import time, and
+  every fast path still resolves to the JIT kernel on first call (pure-NumPy
+  fallback when numba is absent).
+
 ## [5.12.0] — 2026-06-09
 
 **First tag since v5.5.2 — package reorg + 2-D PMM correctness/perf.** This

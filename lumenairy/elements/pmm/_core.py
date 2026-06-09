@@ -43,7 +43,14 @@ def _resolve_order_count(far_field_orders, n_orders):
     synonym for ``far_field_orders`` (the historical 1-D PMM spelling) on every
     public 1-D entry point.  ``n_orders`` overrides when supplied; ``None`` (the
     default) keeps ``far_field_orders``.  Downstream code still coerces with
-    ``int(...)`` so no coercion happens here."""
+    ``int(...)`` so no coercion happens here.
+
+    NB (audit P3, 2026-06-09): the "alias wins, no equality check" rule is
+    DELIBERATE -- it is the cross-suite drop-in-substitution contract established
+    by audit F2/F3 (a config carrying BOTH spellings resolves identically in
+    every suite), and is pinned by ``test_v5_12_0_naming_aliases``.  Adding a
+    raise-on-mismatch here was considered and REJECTED: it would break that
+    intentional, tested feature.  Pass only one spelling in practice."""
     return far_field_orders if n_orders is None else n_orders
 
 
@@ -74,7 +81,14 @@ def _resolve_incidence(angle, theta):
     classical-mount incidence angle).  ``theta`` IS ``angle`` -- the SAME number,
     NO scaling or conversion, both measured from the ``+z`` surface normal; the
     1-D mount is planar (azimuth ``phi = 0``).  ``theta`` overrides when supplied;
-    ``None`` (the default) keeps ``angle``."""
+    ``None`` (the default) keeps ``angle``.
+
+    NB (audit P3, 2026-06-09): the "theta wins, no equality check" rule is
+    DELIBERATE -- it is the cross-suite drop-in-substitution contract established
+    by audit F2/F3 (``set_source(angle=A, theta=T)`` resolves to ``T`` in EVERY
+    suite), pinned by ``test_v5_12_0_naming_aliases``.  Adding a raise-on-mismatch
+    here was considered and REJECTED: it would break that intentional, tested
+    feature.  Pass only one spelling in practice."""
     return angle if theta is None else theta
 
 
@@ -3311,11 +3325,18 @@ def _pmm_jones_slant_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
 # slanted wall becomes a COORDINATE SURFACE: the discontinuous wall-normal field
 # is then handled ALGEBRAICALLY by the Li inverse rule and the across-wall
 # derivative only ever hits CONTINUOUS combinations -> SPECTRAL (vertical-grade)
-# convergence at slant.  Validated (proto): same physical answer as convection
-# (cross-validated two independent formulations + RCWA Fourier-converged oracle),
-# but spectral vs algebraic -> ~1e-7 by degree ~24 where convection is ~1e-4
-# (100-2400x fewer degrees for matched accuracy); energy conserves to ~1e-6
-# across cells x slant 15-60 x normal/oblique.
+# convergence at slant (the channel converges spectrally where convection only
+# converges algebraically -- a real capability, the "structurally impossible"
+# verdict is refuted).
+# ACCURACY (calibrated 2026-06-09 audit P2-B): self-convergence (covariant vs its
+# own high-degree limit, and vs the convection path) reaches ~1e-7 by degree ~24,
+# BUT that figure is SELF-REFERENTIAL -- the convection path shares the identical
+# wall-normal inverse-rule floor, so agreeing with it does not bound the true
+# error.  Vs an INDEPENDENT RCWA full-3x3 z-staircase oracle the wall-normal TM
+# channel floors at ~2.5e-3 at slant=45 (a plateau, deg16->28: 2.57e-3->2.47e-3);
+# the TE channel is clean (<8e-4).  So the honest headline is ~2.5e-3 (TM) vs
+# independent ground truth, not 1e-7.  Energy conserves to ~1e-6 across
+# cells x slant 15-60 x normal/oblique.
 #
 # Gauge: for a slanted LAMELLAR (a-dot=0) the covariant tangential components are
 # the LAB tangential (E1=Ex, E3=Ey, H1=Hx, H3=Hy) and the flat z=const interfaces
@@ -3496,7 +3517,16 @@ def _cov_layer_4n(mats, k0, slant_angle, kx0=0.0, divconf=False):
 
 
 def _cov_split(W, V, kz, fwd):
-    """Forward/backward split, exactly half each (by Poynting / decay)."""
+    """Forward/backward split, exactly half each (by Poynting / decay).
+
+    When the raw forward mask already has exactly ``half`` members, use it
+    verbatim (the default slant path).  Otherwise fall back to a forward-ness
+    score that must be both SIGN- and SCALE-consistent (audit P2-C / followup F5):
+    propagating modes are ranked by their z-Poynting flux ``Sz`` (~length^2) and
+    evanescent modes by ``Im(kz)`` (dimensionless) -- two INCOMMENSURATE scales.
+    Each population is NORMALIZED to unit max magnitude before the merge (mirroring
+    the normalized RCWA analog), so an out-of-scale ``Sz`` cannot dominate the
+    rank purely by units in this rebalance branch."""
     n = W.shape[0] // 2
     half = W.shape[1] // 2
     if int(np.sum(fwd)) == half:
@@ -3504,8 +3534,15 @@ def _cov_split(W, V, kz, fwd):
     else:
         Ex, Ey, Hx, Hy = W[:n], W[n:], V[:n], V[n:]
         Sz = np.real(np.sum(Ex * np.conj(Hy) - Ey * np.conj(Hx), axis=0))
-        sc = np.where(np.abs(np.imag(kz)) < 1e-7 * max(float(np.max(np.abs(kz))),
-                                                       1.0), Sz, np.imag(kz))
+        imk = np.imag(kz)
+        prop = np.abs(imk) < 1e-7 * max(float(np.max(np.abs(kz))), 1.0)
+        # normalize each population to unit max magnitude so the propagating (Sz)
+        # and evanescent (Im kz) criteria are comparable across their unit gap
+        sz_sc = (max(float(np.max(np.abs(Sz[prop]))), 1e-300)
+                 if np.any(prop) else 1.0)
+        imk_sc = (max(float(np.max(np.abs(imk[~prop]))), 1e-300)
+                  if np.any(~prop) else 1.0)
+        sc = np.where(prop, Sz / sz_sc, imk / imk_sc)
         fidx = np.argsort(-sc)[:half]
     bidx = np.array(sorted(set(range(W.shape[1])) - set(fidx.tolist())),
                     dtype=int)
@@ -3567,8 +3604,13 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
     m0 = int(np.where(orders == 0)[0][0])
 
     def kz_ord(eps):
-        kz = np.sqrt(_C(eps) - kx ** 2 + 0j)
-        return np.where(np.imag(kz) < 0, -kz, kz)
+        # PUBLIC-convention forward kz (Re>=0) for the far-field FLUX weight + the
+        # propagating mask in _assemble_jones_farfield.  ``eps`` arrives in the
+        # INTERNAL exp(+iwt) (conjugated) gauge; un-conjugating it restores
+        # Re(kz)>=0 for a forward wave into a LOSSY exit half-space -- the raw
+        # internal kz has Re<0 there, which the ``Re(kz)>0`` mask silently zeroes
+        # (T=0).  Lossless eps is real -> conj is a no-op -> byte-unchanged.  P1-A.
+        return _kz_forward(np.conj(_C(eps)), kx)
     kzo_s = kz_ord(eps_sup)
     kzo_b = kz_ord(eps_sub)
     kz_inc = float(np.real(kzo_s[m0]))
@@ -3829,8 +3871,10 @@ wrong for the DISCONTINUOUS wall-normal -> per-order TM floors at ~1e-2 (vs the
 convection treatment's ~1e-4).  The fix (2026-06-07) carries the slant as the
 EXACT first-order convection tan*d/dx (tan_conv*Dopx) added to the CLEAN slant=0
 generator, reaching the ~1e-4 wall-normal floor uniformly.  (The genuinely-
-covariant Li-1999 oblique-coordinate path, factorization='covariant', reaches the
-spectral ~1e-7 floor by making the wall a coordinate surface.)
+covariant Li-1999 oblique-coordinate path, factorization='covariant', converges
+SPECTRALLY rather than algebraically by making the wall a coordinate surface --
+self-converging to ~1e-7, though vs an INDEPENDENT full-3x3 oracle the TM floor
+is ~2.5e-3 at slant=45 / TE <8e-4; see the COVARIANT block above, audit P2-B.)
 '''
 
 
