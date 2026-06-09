@@ -2577,6 +2577,10 @@ def rcwa_efficiency_2d(
     kyv = xp.asarray(ky.astype(_C))
 
     EPS = _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y)
+    # NOTE (audit P2): 2-D 'li' applies the inverse rule to E_z ONLY -- the in-plane
+    # wall-normal operator stays Laurent ([[eps]]) here, UNLIKE 1-D 'li'.  Full in-
+    # plane normal-vector factorization needs the NV/fff path (formulation='fff_nv'),
+    # not a single global inverse rule (there is no global wall normal in 2-D).
     EPS_xx = EPS  # Laurent rule: wall-normal convolution == [[eps]]
     # Dual-Laurent (Li) z-rule: E_z elimination uses [[1/eps]] (Toeplitz of
     # the Fourier coefficients of 1/eps) rather than [[eps]]^{-1}.  This is
@@ -5223,11 +5227,20 @@ class RCWAStack:
         try:
             for nox in window:
                 _set(nox)
-                res = self._solve_once(retain_internal=False)
+                try:
+                    res = self._solve_once(retain_internal=False)
+                except _EnergyError:
+                    continue          # a windowed low-order count that trips the
+                    #                   energy guard is SKIPPED, not fatal (audit P2)
                 results.append(res)
                 feats.append(_zero_order_efficiency(res))
         finally:
             self.nox, self.noy = base_nox, base_noy
+        if not results:
+            raise _EnergyError(
+                f"RCWAStack.solve(stabilize=True): every n_orders in the window "
+                f"{window} tripped the energy guard; the stack is numerically "
+                f"unstable here -- adjust n_orders / period / index contrast.")
         cluster = _largest_feature_cluster(feats, _STACK_STABILIZE_TOL)
         # A genuine convergence plateau is FLAT.  An under-resolved cell biases the
         # low-order solves the SAME direction, so they still cluster within TOL but
