@@ -120,6 +120,7 @@ from __future__ import annotations
 
 import cmath
 import functools
+import threading
 import warnings
 from typing import Tuple
 
@@ -146,6 +147,18 @@ __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "grating_convergence_class", "classify_from_grating"]
 
 _C = np.complex128
+
+# Minimum slant (radians) for the covariant oblique-coordinate path.  The covariant
+# frame ``u = x - tan(phi) z`` DEGENERATES as ``phi -> 0`` (it becomes the identity;
+# the TE/TM eigenvalues collapse to exactly degenerate and the interface mode-match
+# goes near-singular, a ~1e8-amplified inversion).  At the actual eigenvalues the
+# result is correct, but with a ~0-gap the eigenVECTORS are maximally sensitive to
+# the last-bit BLAS rounding, so different LAPACK builds land on opposite sides of
+# the instability (e.g. OpenBLAS on CI returned a blown-up R+T while MKL did not).
+# Below this angle the grating is ~vertical, where the convection treatment is BOTH
+# exact AND well-conditioned, so 'auto' and an explicit 'covariant' both route there.
+# 1e-3 rad ~ 0.057deg -- far below any slant where the spectral covariant win matters.
+_COV_MIN_SLANT_RAD = 1.0e-3
 
 # ``stabilize`` robust-selection parameters.  PMM has two distinct off-curve
 # failure modes vs polynomial degree: (1) discrete RESONANCES at isolated degrees
@@ -288,8 +301,18 @@ def _gll_nodes_weights(degree: int):
 
 
 # Memo for the barycentric differentiation matrix, keyed on the node coordinates
-# (one entry per distinct GLL degree -- a small bounded set in practice).
+# (one entry per distinct GLL degree -- a small bounded set in practice).  Guarded
+# by a companion lock for safe concurrent reader-writer access (library cache
+# policy), and enrolled with the central cache registry at the bottom of the module.
 _LAGRANGE_DREF_CACHE: dict = {}
+_LAGRANGE_DREF_LOCK = threading.Lock()
+
+
+def _clear_pmm_caches() -> None:
+    """Clear the PMM module-level caches (enrolled with the library cache
+    registry, so the global 'clear all caches' path empties them too)."""
+    with _LAGRANGE_DREF_LOCK:
+        _LAGRANGE_DREF_CACHE.clear()
 
 
 def _lagrange_derivative_matrix(nodes):
@@ -301,7 +324,8 @@ def _lagrange_derivative_matrix(nodes):
     poisoning-guard as :func:`_gll_nodes_weights`; ``nodes`` here is always the
     cached GLL array, so the ``tobytes`` key is one entry per degree."""
     key = nodes.tobytes()
-    cached = _LAGRANGE_DREF_CACHE.get(key)
+    with _LAGRANGE_DREF_LOCK:
+        cached = _LAGRANGE_DREF_CACHE.get(key)
     if cached is not None:
         return cached
     n = len(nodes)
@@ -316,7 +340,9 @@ def _lagrange_derivative_matrix(nodes):
             if i != j:
                 Dmat[i, j] = (wb[j] / wb[i]) / (nodes[i] - nodes[j])
         Dmat[i, i] = -np.sum([Dmat[i, k] for k in range(n) if k != i])
-    _LAGRANGE_DREF_CACHE[key] = _readonly(Dmat)
+    Dmat = _readonly(Dmat)
+    with _LAGRANGE_DREF_LOCK:
+        _LAGRANGE_DREF_CACHE[key] = Dmat
     return Dmat
 
 
@@ -2044,8 +2070,8 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
     ``d/d(wl)`` are valid only BETWEEN Rayleigh-order cutoffs."""
     import jax.numpy as jnp
 
-    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
-    _warn_if_jax_f32("pmm_efficiency_1d")
+    from .rcwa import _jax_eig_stable, _require_jax_x64
+    _require_jax_x64("pmm_efficiency_1d")
 
     if int(elements_per_region) != 1:
         raise NotImplementedError(
@@ -2452,8 +2478,8 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     (stabilize, multi-region, out-of-plane, slant) raises (handled upstream)."""
     import jax.numpy as jnp
 
-    from .rcwa import _jax_eig_stable, _warn_if_jax_f32
-    _warn_if_jax_f32("pmm_jones_1d")
+    from .rcwa import _jax_eig_stable, _require_jax_x64
+    _require_jax_x64("pmm_jones_1d")
 
     if int(elements_per_region) != 1:
         raise NotImplementedError(
@@ -2487,18 +2513,34 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
         wl_c = float("inf")
     nsup_c = _re_or_none(n_superstrate)
     nsub_c = _re_or_none(n_substrate)
-    exx_r = _re_or_none(er[0, 0])
-    eyy_r = _re_or_none(er[1, 1])
-    exx_g = _re_or_none(eg[0, 0])
-    eyy_g = _re_or_none(eg[1, 1])
-    n_max_vals = [np.real(np.sqrt(v)) for v in (exx_r, eyy_r, exx_g, eyy_g)
+    # n_max from the COMPLEX eps (Re(sqrt(eps))), matching the numpy reference
+    # _pmm_jones_solve.  Stripping Im first then sqrt gives NaN for a metal/ENZ
+    # eps (sqrt of a negative real -> int(NaN) crash in _n_propagating_orders) and
+    # under-counts propagating orders for a lossy eps (Re(sqrt(1+12j))=2.55, not 1).
+    def _n_or_none(v):
+        try:
+            return float(np.real(np.sqrt(np.asarray(v).astype(_C))))
+        except Exception:
+            return None
+    n_max_vals = [v for v in (_n_or_none(er[0, 0]), _n_or_none(er[1, 1]),
+                              _n_or_none(eg[0, 0]), _n_or_none(eg[1, 1]))
                   if v is not None]
     n_max_vals += [v for v in (nsup_c, nsub_c) if v is not None]
     n_max = max(n_max_vals) if n_max_vals else 1.0
 
     duty_c = _re_or_none(duty_cycle)
     if duty_c is None:
-        duty_c = 0.5
+        # A traced duty_cycle would be SILENTLY frozen at 0.5 here (the static
+        # topology + numpy projection bake d_wall = duty*period), returning the
+        # duty=0.5 answer for every duty and a 0.0 duty-gradient.  Raise instead:
+        # the moving-mesh duty rebuild exists only on the scalar
+        # pmm_efficiency_1d path (Route-B), not the Jones surface.
+        raise NotImplementedError(
+            "pmm_jones_1d: the JAX (differentiable) Jones path does not yet "
+            "differentiate duty_cycle -- gradients flow to the index / depth / "
+            "wavelength / angle parameters, but the duty moving-mesh rebuild is "
+            "implemented only on the scalar pmm_efficiency_1d path.  Pass a "
+            "CONCRETE duty_cycle, or use pmm_efficiency_1d for a duty gradient.")
     if not (0.0 < duty_c < 1.0):
         raise ValueError(
             "pmm_jones_1d: the JAX (differentiable) path needs a strictly "
@@ -3130,13 +3172,19 @@ class PMMStack:
         # out-of-plane); 'convection' forces the algebraic-but-fully-general path.
         _oop = any(self._is_oop(M) for L in self._layers for _w, M in L[1])
         _slants = [abs(L[2]) for L in self._layers]
+        _signed = [L[2] for L in self._layers]
         # The covariant oblique frame is per-slant (the shear u = x - tanφ z), so
         # the spectral covariant cascade requires a UNIFORM slant across all layers
         # (and the homogeneous half-spaces are solved in that same frame).  A
         # MIXED-slant stack (e.g. a vertical spacer + a slanted grating) would need
         # inter-layer lateral-shift corrections and falls back to convection.
-        _uniform_slant = (max(_slants) > 1e-12
-                          and (max(_slants) - min(_slants)) <= 1e-12)
+        # Gate uniformity on the SIGNED slant (not abs): the shear u = x - tanφ z is
+        # MIRROR-sheared for +φ vs -φ, so an equal-magnitude opposite-sign stack
+        # would cascade -φ layer modes against half-spaces fixed in the +φ frame --
+        # incompatible gauges, a silently-wrong S-matrix.  Opposite-sign / mixed
+        # slants fall back to convection ('auto') or raise ('covariant').
+        _uniform_slant = (max(_slants) >= _COV_MIN_SLANT_RAD
+                          and (max(_signed) - min(_signed)) <= 1e-12)
         _fac = self.factorization
         if _fac == "auto":
             _fac = "covariant" if _uniform_slant else "convection"
@@ -4983,8 +5031,24 @@ def pmm_jones_1d_slanted(
             "pmm_jones_1d_slanted: factorization must be 'auto', 'convection' "
             f"or 'covariant', got {factorization!r}.")
     if factorization == "auto":
-        _slanted = abs(float(slant_angle)) > 1e-12
-        factorization = "covariant" if _slanted else "convection"
+        factorization = ("covariant"
+                         if abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
+                         else "convection")
+    if (factorization == "covariant"
+            and abs(float(slant_angle)) < _COV_MIN_SLANT_RAD):
+        # The covariant oblique frame u = x - tan(phi) z DEGENERATES at ~zero slant:
+        # the isotropic half-spaces' TE/TM modes become EXACTLY degenerate, the
+        # interface mode-match goes near-singular, and the solve becomes BLAS-build-
+        # dependent (it blew up on CI's OpenBLAS while passing on MKL).  The grating
+        # is vertical there, so defer to the EXACT vertical Jones solver (handles
+        # in-plane AND out-of-plane), which is well-conditioned and deterministic.
+        return pmm_jones_1d(period, eps_ridge, eps_groove, n_substrate,
+                            n_superstrate, depth, duty_cycle, wavelength,
+                            angle=float(angle), degree=int(degree),
+                            elements_per_region=int(elements_per_region),
+                            grade=bool(grade),
+                            far_field_orders=int(far_field_orders),
+                            stabilize=bool(stabilize))
     if factorization == "covariant":
         cargs = (period, er, eg, _C(n_substrate), _C(n_superstrate), depth,
                  duty_cycle, wavelength, float(slant_angle))
@@ -5150,8 +5214,20 @@ def pmm_jones_1d_slanted_segments(
             "pmm_jones_1d_slanted_segments: factorization must be 'auto', "
             f"'convection' or 'covariant', got {factorization!r}.")
     if factorization == "auto":
-        factorization = ("covariant" if abs(float(slant_angle)) > 1e-12
+        factorization = ("covariant"
+                         if abs(float(slant_angle)) >= _COV_MIN_SLANT_RAD
                          else "convection")
+    if (factorization == "covariant"
+            and abs(float(slant_angle)) < _COV_MIN_SLANT_RAD):
+        # The covariant oblique frame degenerates at ~zero slant (the isotropic
+        # half-spaces' TE/TM modes go exactly degenerate -> near-singular interface,
+        # BLAS-build-dependent).  Defer to the EXACT vertical Jones segments solver,
+        # which is well-conditioned and deterministic.
+        return pmm_jones_1d_segments(
+            period, segments, n_substrate, n_superstrate, depth, wavelength,
+            angle=float(angle), degree=int(degree),
+            elements_per_region=int(elements_per_region), grade=bool(grade),
+            far_field_orders=int(far_field_orders), stabilize=bool(stabilize))
     if factorization == "covariant":
         ca = (period, widths, tensors, _C(n_substrate), _C(n_superstrate), depth,
               wavelength, float(slant_angle))
@@ -5456,3 +5532,18 @@ generator, reaching the ~1e-4 wall-normal floor uniformly.  (The genuinely-
 covariant Li-1999 oblique-coordinate path, factorization='covariant', reaches the
 spectral ~1e-7 floor by making the wall a coordinate surface.)
 '''
+
+
+# Register the PMM module caches with the library cache registry (so the global
+# "clear all caches" path empties them too).  Canonical v4.16.0 enrollment pattern
+# (mirrors rcwa.py and propagators/propagation.py).
+try:
+    import sys as _sys
+
+    from .._cache_registry import register_cache_clearer as _register_cache_clearer
+    _register_cache_clearer(
+        "pmm_lagrange_dref",
+        lambda: getattr(_sys.modules[__name__], "_clear_pmm_caches")(),
+    )
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass

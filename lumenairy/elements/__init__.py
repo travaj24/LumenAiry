@@ -203,7 +203,6 @@ __all__ = [
     'pmm_efficiency_2d_staggered',
     'grating_convergence_class',
     'classify_from_grating',
-    'PMMStack',
     'rcwa_efficiency_2d',
     'rcwa_efficiency_2d_shapes',
     'rcwa_efficiency_vs_wavelength',

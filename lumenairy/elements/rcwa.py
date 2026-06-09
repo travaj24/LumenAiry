@@ -297,7 +297,9 @@ def _check_energy(fn_name, R, T):
     Skipped on the JAX path (the sums are traced).  Lossy media give R+T < 1
     (never triggered); the tolerance leaves normal Wood-nudge residue alone.
     """
-    tot = float(np.real(np.sum(np.asarray(R))) + np.real(np.sum(np.asarray(T))))
+    # to_numpy (not np.asarray) so the CuPy/GPU path does not raise on the implicit
+    # device->host conversion -- _check_energy is the lone site that bypassed it.
+    tot = float(np.real(np.sum(to_numpy(R))) + np.real(np.sum(to_numpy(T))))
     n_states = int(R.shape[0]) if getattr(R, "ndim", 1) == 2 else 1
     if tot > n_states * 1.05:
         raise _EnergyError(
@@ -310,24 +312,32 @@ def _check_energy(fn_name, R, T):
             f"adjust the period, or increase the index contrast.")
 
 
-def _warn_if_jax_f32(fn_name):
-    """Warn if JAX x64 is disabled.  RCWA's eigenproblem is ill-conditioned in
-    single precision, and JAX silently truncates the requested complex128 to
-    complex64 unless ``jax_enable_x64`` is set -- giving quietly inaccurate
-    results.  Emitted once per call site (Python's default warning filter)."""
+def _require_jax_x64(fn_name):
+    """Require JAX double precision on the JAX (differentiable) path.  RCWA/PMM's
+    eigenproblem is ill-conditioned in single precision (cond ~1e13), and JAX
+    silently truncates the requested ``complex128`` to ``complex64`` unless
+    ``jax_enable_x64`` is set -- yielding quietly WRONG efficiencies and gradients
+    in the advertised differentiable regime, with the runtime energy tripwire
+    (:func:`_check_energy`) skipped on the JAX path.  A suppressible warning is not
+    enough for a correctness-critical precision requirement, so RAISE.
+
+    (The rest of the library auto-promotes via ``jax.config.update`` -- e.g.
+    :func:`fft_infra._resolve_jax_complex_dtype` -- but that global mutation is
+    unsafe mid-trace when the caller jits the whole solve, and enabling x64 is a
+    one-line caller setup.  Call before any ``complex128`` allocation.)"""
     import jax
     try:
         enabled = bool(jax.config.read("jax_enable_x64"))
     except Exception:
         enabled = bool(getattr(jax.config, "jax_enable_x64", False))
     if not enabled:
-        import warnings
-        warnings.warn(
-            f"{fn_name}: JAX x64 is disabled, so the RCWA solve runs in "
-            f"complex64 -- its eigenproblem is ill-conditioned in single "
-            f"precision.  Enable double precision before the call with "
-            f"jax.config.update('jax_enable_x64', True).",
-            stacklevel=3)
+        raise RuntimeError(
+            f"{fn_name}: the JAX (differentiable) path requires double precision, "
+            f"but jax_enable_x64 is disabled -- JAX would silently truncate "
+            f"complex128 to complex64 and the eigenproblem is ill-conditioned in "
+            f"single precision (cond ~1e13), giving quietly wrong efficiencies / "
+            f"gradients.  Enable it once at import: "
+            f"jax.config.update('jax_enable_x64', True).")
 
 
 def _normalize_pol(fn_name, polarization):
@@ -695,6 +705,14 @@ def _binary_grating_convolutions(n_ridge, n_groove, duty_cycle, n_orders,
     ``duty_cycle`` is a discrete threshold and is not differentiated.
     """
     xp = array_namespace(n_ridge, n_groove)
+    # The Toeplitz needs c_k for |k| up to 2*n_orders; an N-sample FFT represents
+    # c_k WITHOUT ALIASING only for |k| <= N/2, so N must exceed 4*n_orders.  When
+    # n_orders is large (> ~1024 at the 4096 default) the modular wrap full[k % N]
+    # folds high harmonics onto low orders and SILENTLY corrupts EPS/EPS_II -- bump
+    # the internal grid to the next power of two that clears the Nyquist limit.
+    need = 4 * n_orders + 2
+    if n_samples < need:
+        n_samples = 1 << (need - 1).bit_length()
     x = (xp.arange(n_samples) + 0.5) / n_samples
     eps_r = xp.asarray(n_ridge).astype(_C) ** 2
     eps_g = xp.asarray(n_groove).astype(_C) ** 2
@@ -1463,7 +1481,7 @@ def rcwa_efficiency_1d(
                   n_substrate, n_superstrate, depth, angle, wavelength)
     is_jax = backend_name(xp) == "jax"
     if is_jax:
-        _warn_if_jax_f32("rcwa_efficiency_1d")
+        _require_jax_x64("rcwa_efficiency_1d")
     _validate_geometry(
         "rcwa_efficiency_1d",
         **_concrete(period=period, depth=depth, wavelength=wavelength),
@@ -2488,7 +2506,7 @@ def rcwa_efficiency_2d(
     xp = _rcwa_xp("rcwa_efficiency_2d", use_gpu, eps_cell)
     is_jax = backend_name(xp) == "jax"
     if is_jax:
-        _warn_if_jax_f32("rcwa_efficiency_2d")
+        _require_jax_x64("rcwa_efficiency_2d")
         if formulation == "fff_nv":
             raise NotImplementedError(
                 "rcwa_efficiency_2d: formulation='fff_nv' (normal-vector FFF) "
@@ -3222,7 +3240,7 @@ def rcwa_jones_1d(
     xp = _rcwa_xp("rcwa_jones_1d", use_gpu, eps_ridge, eps_groove)
     is_jax = backend_name(xp) == "jax"
     if is_jax:
-        _warn_if_jax_f32("rcwa_jones_1d")
+        _require_jax_x64("rcwa_jones_1d")
         # See _reject_jax_offplane: the full-3x3 path is non-differentiable and
         # a JAX off-plane tensor would otherwise be silently treated as in-plane.
         _reject_jax_offplane("rcwa_jones_1d", eps_ridge, eps_groove)
@@ -3401,7 +3419,7 @@ def rcwa_jones_1d_segments(
     xp = _rcwa_xp("rcwa_jones_1d_segments", use_gpu, *eps_tensors)
     is_jax = backend_name(xp) == "jax"
     if is_jax:
-        _warn_if_jax_f32("rcwa_jones_1d_segments")
+        _require_jax_x64("rcwa_jones_1d_segments")
         # The full-3x3 (out-of-plane) solver is non-differentiable (its
         # forward-mode flux split is a host np.where/argsort); the in-plane
         # router silently skips JAX, so reject a JAX off-plane tensor here.
@@ -3676,7 +3694,7 @@ def rcwa_jones_2d(
     xp = _rcwa_xp("rcwa_jones_2d", use_gpu, eps_tensor_cell)
     is_jax = backend_name(xp) == "jax"
     if is_jax:
-        _warn_if_jax_f32("rcwa_jones_2d")
+        _require_jax_x64("rcwa_jones_2d")
     eps_t = xp.conj(xp.asarray(eps_tensor_cell).astype(_C))
     eps_sup = complex(np.conj(_C(n_superstrate) ** 2))
     eps_sub = complex(np.conj(_C(n_substrate) ** 2))
@@ -5238,7 +5256,7 @@ class RCWAStack:
         bname = backend_name(xp)
         is_jax = bname == "jax"
         if is_jax:
-            _warn_if_jax_f32("RCWAStack.solve")
+            _require_jax_x64("RCWAStack.solve")
         orders, N = _harmonic_orders_2d(self.nox, self.noy)
         eps_sup = complex(np.conj(_C(self.n_superstrate) ** 2))
         eps_sub = complex(np.conj(_C(self.n_substrate) ** 2))
