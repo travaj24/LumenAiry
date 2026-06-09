@@ -68,8 +68,6 @@ Equations implemented (Granet 2023, verified against the paper):
 """
 from __future__ import annotations
 
-from typing import Tuple
-
 import numpy as np
 import scipy.linalg as sla
 from numpy.polynomial.legendre import leggauss
@@ -723,11 +721,12 @@ def pmm_efficiency_2d_staggered(
     wavelength: float,
     *,
     degree: int = 8,
+    n_modes: int | None = None,
     n_orders: int = 7,
     polarization: str = "te",
     theta: float = 0.0,
     phi: float = 0.0,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D crossed grating of axis-aligned
     rectangular pillars by the canonical no-floor Polynomial Modal Method (Granet
     2023 staggered modified-Legendre basis).
@@ -759,7 +758,11 @@ def pmm_efficiency_2d_staggered(
         ``(Nx*(M-1)) * (Ny*(M-1))``).  Default 8.  NOTE (naming divergence): unlike
         the GLL POLYNOMIAL ``degree`` of :func:`pmm_efficiency_2d` and the 1-D
         ``pmm_*`` solvers, this ``degree`` is a BASIS-FUNCTION COUNT ``M`` -- so a
-        cross-solver ``degree`` sweep compares unlike quantities.
+        cross-solver ``degree`` sweep compares unlike quantities.  Prefer the clearer
+        alias ``n_modes`` (below); ``degree`` is kept for backward compatibility.
+    n_modes : int, optional
+        Clearer alias for ``degree`` (the modified-Legendre mode count ``M``).  If
+        given, it overrides ``degree``.  Use this in new code.
     n_orders : int, optional
         Half-width of the retained Rayleigh diffraction-order set for the
         once-only forward far-field projection (the result is independent of
@@ -791,6 +794,11 @@ def pmm_efficiency_2d_staggered(
         raise ValueError(
             f"pmm_efficiency_2d_staggered: polarization must be 'te' or 'tm', "
             f"got {polarization!r}.")
+    if n_modes is not None:
+        # 'n_modes' is the clearer alias for the modified-Legendre mode count M --
+        # 'degree' here is NOT a GLL polynomial degree (see the docstring); 'degree'
+        # stays the default for backward compatibility.
+        degree = int(n_modes)
     if int(degree) < 3:
         # M=2 passes the old >=2 guard but yields |Btilde|=N, |B|=2N and trips the
         # Basis1D cardinality assert deep in the build (audit P2); require M>=3.

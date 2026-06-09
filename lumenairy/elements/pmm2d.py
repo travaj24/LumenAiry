@@ -315,7 +315,7 @@ def pmm_efficiency_2d(
     phi: float = 0.0,
     n_orders: int = 11,
     formulation: str = "li",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+) -> Efficiency2D:
     r"""Diffraction efficiencies of a 2-D rectangular pillar via the hybrid PMM.
 
     The modal-method counterpart of :func:`rcwa_efficiency_2d` for a single

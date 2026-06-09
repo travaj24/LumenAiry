@@ -2405,7 +2405,7 @@ def rcwa_efficiency_2d(
     stabilize: bool = False,
     symmetry: bool = False,
     use_gpu: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Efficiency2D:
     """Rigorous diffraction efficiencies of a 2-D (doubly periodic) crossed
     grating: a single patterned layer of permittivity ``eps_cell`` between a
     ``n_superstrate`` half-space and a ``n_substrate`` half-space.
@@ -3928,7 +3928,7 @@ def rcwa_efficiency_2d_shapes(
     n_orders_y: int = 5,
     truncation: str = "rectangular",
     use_gpu: bool = False,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Efficiency2D:
     """Rigorous 2-D crossed-grating efficiencies using **analytic** shape
     Fourier transforms and the dual-Laurent factorization.
 
