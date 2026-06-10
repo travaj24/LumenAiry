@@ -80,6 +80,7 @@ from typing import Tuple
 
 import numpy as np
 
+from ...backend import is_jax_array
 from ..rcwa import Efficiency2D  # cross-suite 2-D result (unpacks (o,R,T), carries .dof)
 from ..rcwa._core import (
     _grazing_safe_wavelength,
@@ -721,6 +722,26 @@ def pmm_efficiency_2d(
             f"({n_nodes_axis}); raise degree or lower n_orders")
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
+
+    # JAX auto-dispatch (Phase 7): traced material values / depth / wavelength
+    # / angles on STATIC pillar bounds + degree + orders -- the 2-D analogue of
+    # the 1-D binary twin's scope.  See pmm/_jax_twod.py for the caveats.
+    _jx = (eps_pillar, eps_host, n_substrate, n_superstrate, depth,
+           wavelength, theta, phi)
+    if any(is_jax_array(a) for a in _jx):
+        if stabilize:
+            raise ValueError(
+                "pmm_efficiency_2d: stabilize=True is not differentiable "
+                "(host-side degree-scan consensus); pass stabilize=False on "
+                "the JAX path.")
+        from ._jax_twod import _pmm_efficiency_2d_jax
+        o, R, T = _pmm_efficiency_2d_jax(
+            period_x, period_y, eps_pillar, eps_host, x_bounds, y_bounds,
+            n_substrate, n_superstrate, depth, wavelength, degree=degree,
+            elements_per_strip=elements_per_strip, grade=grade,
+            polarization=polarization, theta=theta, phi=phi,
+            n_orders=n_orders, formulation=formulation)
+        return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
 
     x0, x1 = float(x_bounds[0]), float(x_bounds[1])
     y0, y1 = float(y_bounds[0]), float(y_bounds[1])
