@@ -2,6 +2,73 @@
 
 All notable changes to the core library are documented here.
 
+## [5.14.0] — 2026-06-09
+
+**2-D PMM capability parity.** The 2-D hybrid PMM grows from a single-pillar
+scalar TE/TM solver to full parity with `rcwa_efficiency_2d`/`rcwa_jones_2d`
+and the 1-D solver families — and beyond it on two axes (out-of-plane tensors
+and exact-wall geometry). Grounded in the PMM_Papers formulations (Li 1997
+crossed-grating factorization; Li 2003 z-decoupled tensors + full-3×3
+generator; pointwise ezz-Schur fold per Li 1999 Eq. 12).
+
+### Added
+
+- **`pmm_efficiency_2d_cell`** (+ `prepare_pmm_2d_cell`,
+  `pmm_efficiency_2d_cell_vs_wavelength`) — arbitrary axis-aligned
+  multi-region cells via the RCWA `eps_cell` pixel-grid convention, resolved
+  into EXACT spectral-element walls (no Fourier staircase). The single-pillar
+  cell reduces byte-identically to `pmm_efficiency_2d`. Includes the
+  Nyquist parity bump (widest strip +1 element on an even-node axis) and a
+  `max_nodal_dof` cost guard with clear guidance for sampled-smooth profiles.
+- **`pmm_jones_2d`** — full (3, 3) anisotropic tensor cells + the 2×2 Jones
+  reflection matrix, the PMM mirror of `rcwa_jones_2d` via the shared
+  dimension-agnostic tensor eigenmode solve. A scalar tensor cell reduces
+  byte-exactly to the scalar `'laurent'` path; an exact-diagonal uniform-cell
+  branch removes the projection floor entirely.
+- **OUT-OF-PLANE tensors** (`xz/yz/zx/zy`) in `pmm_jones_2d` — the library's
+  FIRST 2-D out-of-plane solver (`rcwa_jones_2d` is in-plane only), through
+  the shared full-3×3 first-order generator + generalized S-matrix, with the
+  pointwise ezz-Schur effective-profile fold (Li 1999 Eq. 12) applied before
+  factorization. Uniform cells match the Berreman 4×4 oracle to 2.4e-15;
+  y-uniform out-of-plane gratings match the validated 1-D full-3×3 solver to
+  ~3e-3; non-reciprocal `exz != ezx` total power tracks the 1-D value
+  (physically ≠ 1).
+- **`PMM2DStack`** (`pmm/stack2d.py`) — multilayer 2-D cascade mirroring
+  `RCWAStack`: uniform films + scalar cells + in-plane tensor cells (each
+  patterned layer keeps its OWN exact-wall SEM grid — no union-grid
+  constraint), `add_tapered_pillar` (z-staircase with exact interpolated walls
+  per slice), both-polarization solve returning
+  `(orders, R(2,N), T(2,N), jones)`, `solve_vs_wavelength`, energy tripwire.
+- **`stabilize=`** on the 2-D entry points — the 1-D per-order degree-scan
+  consensus stepping consecutive ODD degrees, with a graceful scan-exhaustion
+  sentinel at the cost cap and 2-D-calibrated tolerances.
+- **JAX differentiability** — `pmm_efficiency_2d` auto-dispatches to a jnp
+  twin on JAX inputs (traced `eps_pillar`/`eps_host`/indices/`depth`/
+  `wavelength`/`theta`/`phi`; static bounds/degree/orders). AD matches FD to
+  ~3e-9 (eps), ~5e-10 (depth/wavelength), ~1e-9 (theta at oblique); the
+  centered-square normal-incidence angle gradient is a clean symmetry zero
+  (~4e-15, no degenerate-gauge artifact). Arbitrary-cell autodiff stays with
+  RCWA (a traced `eps_cell` cannot define exact walls).
+
+### Fixed
+
+- **Oblique-incidence transverse-momentum leak**: wall-less axes are now
+  handled ANALYTICALLY (exact `diag(k)` Fourier operators — the operators
+  kron-factor). The all-nodal path leaked 4-8% into y-momentum-forbidden
+  orders on y-uniform cells at oblique incidence; now machine-exact (~1e-29).
+  The "validated near normal" caveat is replaced with measured large-angle
+  floors (validated to 60° vs RCWA-2D).
+- **`_select_forward_flux` hardening** (shared with RCWA; full-tensor suite
+  re-validated): (a) deep-evanescent modes in a PROJECTED modal basis carry
+  projection-noise flux above the old 1e-9 tolerance with random sign — one
+  growing mode classified forward blew the generalized cascade up by ~1e31;
+  noise-scale flux on a decaying mode now defers to the decay sign; (b) a
+  STABILITY band (|Re γ| > 0.5) is always classified by decay sign — cascade
+  boundedness demands it; the audit-P2-A gyrotropic flux-first modes are
+  near-propagating and unaffected.
+- Conical-incidence guards adopted from RCWA in all 2-D PMM entry points
+  (evanescent-incidence rejection + the exact-Wood-anomaly wavelength nudge).
+
 ## [5.13.0] — 2026-06-09
 
 **Wavelength-sweep reuse + trapezoidal PMM gratings + a swept audit
