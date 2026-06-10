@@ -875,11 +875,19 @@ def pmm_efficiency_2d_cell(
     formulation: str = "li",
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
+    region_layout=None,
 ) -> Efficiency2D:
     """Diffraction efficiencies of an ARBITRARY axis-aligned piecewise-constant
     2-D cell via the hybrid PMM -- the multi-region generalization of
     :func:`pmm_efficiency_2d` (any number of rectangular regions: multiple
     pillars, crosses, interdigitated pads, ...).
+
+    JAX: pass a TRACED ``eps_cell`` together with a CONCRETE ``region_layout``
+    (an int grid of the same shape labelling the regions -- a traced array
+    cannot define the exact walls) for a differentiable solve; gradients flow
+    through the region permittivity values (and depth / wavelength / angles).
+    Pixels within one region must share the traced value (unchecked under
+    trace).
 
     The ``(Sx, Sy)`` ``eps_cell`` grid IS the geometry: every pixel boundary
     where the adjacent column/row differs becomes an exact spectral-element
@@ -908,6 +916,26 @@ def pmm_efficiency_2d_cell(
     """
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
+    _jx = (eps_cell, n_substrate, n_superstrate, depth, wavelength, theta,
+           phi)
+    if any(is_jax_array(a) for a in _jx):
+        if stabilize:
+            raise ValueError(
+                "pmm_efficiency_2d_cell: stabilize=True is not "
+                "differentiable; pass stabilize=False on the JAX path.")
+        if region_layout is None:
+            raise ValueError(
+                "pmm_efficiency_2d_cell: a traced eps_cell cannot define the "
+                "exact walls -- pass region_layout (a CONCRETE int grid of "
+                "the same shape labelling the regions) on the JAX path.")
+        from ._jax_twod import _pmm_efficiency_2d_cell_jax
+        o, R, T = _pmm_efficiency_2d_cell_jax(
+            period_x, period_y, eps_cell, region_layout, n_substrate,
+            n_superstrate, depth, wavelength, degree=degree,
+            elements_per_strip=elements_per_strip, grade=grade,
+            polarization=polarization, theta=theta, phi=phi,
+            n_orders=n_orders, formulation=formulation)
+        return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
     x_walls, y_walls, tile = _cell_to_walls_tile(
         eps_cell, period_x, period_y, "pmm_efficiency_2d_cell")
     # Loss-convention bridge (see pmm_efficiency_2d).

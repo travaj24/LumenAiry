@@ -101,13 +101,130 @@ def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
     return out
 
 
+def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
+                      n_orders):
+    """Geometry constants for an arbitrary axis-aligned MULTI-REGION cell:
+    the wall layout comes from a CONCRETE region-id grid (a traced eps_cell
+    cannot define walls), and each region gets its partition-of-unity weight
+    vector ``Wreg[r]`` so a traced region-value vector enters linearly as
+    ``eps_nodal = eps_values @ Wreg``."""
+    lay = np.ascontiguousarray(np.asarray(layout, dtype=np.int64))
+    key = (period_x, period_y, lay.tobytes(), lay.shape, degree, n_el, grade,
+           n_orders)
+    with _STATIC_CACHE_LOCK:
+        hit = _STATIC_CACHE.get(key)
+    if hit is not None:
+        return hit
+    from .twod import (
+        _axis_elem_counts,
+        _build_axis,
+        _cell_to_walls_tile,
+        _projectors,
+        _validate_cell_orders,
+    )
+    x_walls, y_walls, tile = _cell_to_walls_tile(
+        lay.astype(complex), period_x, period_y, "pmm_efficiency_2d_cell")
+    el_x = _axis_elem_counts(period_x, x_walls, degree, n_el,
+                             "pmm_efficiency_2d_cell", "x")
+    el_y = _axis_elem_counts(period_y, y_walls, degree, n_el,
+                             "pmm_efficiency_2d_cell", "y")
+    _validate_cell_orders("pmm_efficiency_2d_cell", n_orders, degree, el_x,
+                          el_y)
+    ax = _build_axis(period_x, x_walls, degree, el_x, grade)
+    ay = _build_axis(period_y, y_walls, degree, el_y, grade)
+    ox = np.arange(-n_orders, n_orders + 1)
+    oy = np.arange(-n_orders, n_orders + 1)
+    Tp, Tpinv = _projectors(ax, ay, ox, oy)
+    mdx = np.diag(ax["M"])
+    mdy = np.diag(ay["M"])
+    Mdiag = np.kron(mdy, mdx)
+    # region ids per strip cell + per-region weight rows
+    region_ids = np.real(tile).astype(np.int64)
+    uniq = np.unique(lay)
+    Wreg = np.zeros((uniq.size, Mdiag.size))
+    nsx, nsy = region_ids.shape
+    for sx in range(nsx):
+        for sy in range(nsy):
+            r = int(np.where(uniq == region_ids[sx, sy])[0][0])
+            Wreg[r] += np.real(
+                np.kron(np.diag(ay["Mtile"][sy]),
+                        np.diag(ax["Mtile"][sx])) / Mdiag)
+    # first-pixel gather indices per region (to read traced values)
+    first_idx = []
+    for u in uniq:
+        i, j = np.argwhere(lay == u)[0]
+        first_idx.append((int(i), int(j)))
+    Minv = np.diag(1.0 / Mdiag)
+    Gx0 = -1j * (Minv @ np.kron(ay["M"], ax["D"]))
+    Gy0 = -1j * (Minv @ np.kron(ay["D"], ax["M"]))
+    out = dict(
+        Tp=Tp, Tpinv=Tpinv, Wreg=Wreg, first_idx=first_idx,
+        Gx0F=Tp @ Gx0 @ Tpinv, Gy0F=Tp @ Gy0 @ Tpinv,
+        IprojF=Tp @ Tpinv,
+        order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
+    with _STATIC_CACHE_LOCK:
+        _STATIC_CACHE[key] = out
+    return out
+
+
+def _pmm_efficiency_2d_cell_jax(period_x, period_y, eps_cell, region_layout,
+                                n_substrate, n_superstrate, depth,
+                                wavelength, *, degree, elements_per_strip,
+                                grade, polarization, theta, phi, n_orders,
+                                formulation):
+    """JAX twin for the MULTI-REGION cell (v5.14 roadmap item 1): a CONCRETE
+    ``region_layout`` (int grid, same shape as ``eps_cell``) defines the walls;
+    the traced ``eps_cell`` provides the region VALUES (read at each region's
+    first pixel -- pixels within a region must share the traced value, which
+    cannot be checked under trace)."""
+    import jax.numpy as jnp
+    st = _static_prep_cell(float(period_x), float(period_y), region_layout,
+                           int(degree), int(elements_per_strip), bool(grade),
+                           int(n_orders))
+    cj = jnp.complex128
+    eps_c = jnp.asarray(eps_cell).astype(cj)
+    eps_regions = jnp.stack([eps_c[i, j] for (i, j) in st["first_idx"]])
+    eps_regions = jnp.conj(eps_regions)          # loss bridge
+    Wreg = jnp.asarray(st["Wreg"])
+    eps_nodal = eps_regions @ Wreg
+    inv_nodal = (1.0 / eps_regions) @ Wreg
+    eps_sup = jnp.conj(jnp.asarray(n_superstrate).astype(cj) ** 2)
+    eps_sub = jnp.conj(jnp.asarray(n_substrate).astype(cj) ** 2)
+    return _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
+                            period_x, period_y, depth, wavelength,
+                            polarization, theta, phi, formulation)
+
+
 def _pmm_efficiency_2d_jax(period_x, period_y, eps_pillar, eps_host,
                            x_bounds, y_bounds, n_substrate, n_superstrate,
                            depth, wavelength, *, degree, elements_per_strip,
                            grade, polarization, theta, phi, n_orders,
                            formulation):
     import jax.numpy as jnp
+    st = _static_prep(float(period_x), float(period_y),
+                      float(x_bounds[0]), float(x_bounds[1]),
+                      float(y_bounds[0]), float(y_bounds[1]),
+                      int(degree), int(elements_per_strip), bool(grade),
+                      int(n_orders))
+    cj = jnp.complex128
+    w = jnp.asarray(st["w"])
+    # loss-convention bridge (PUBLIC Im>0 -> internal exp(+iwt))
+    eps_p = jnp.conj(jnp.asarray(eps_pillar).astype(cj))
+    eps_h = jnp.conj(jnp.asarray(eps_host).astype(cj))
+    eps_sup = jnp.conj(jnp.asarray(n_superstrate).astype(cj) ** 2)
+    eps_sub = jnp.conj(jnp.asarray(n_substrate).astype(cj) ** 2)
+    eps_nodal = eps_h + (eps_p - eps_h) * w
+    inv_nodal = 1.0 / eps_h + (1.0 / eps_p - 1.0 / eps_h) * w
+    return _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
+                            period_x, period_y, depth, wavelength,
+                            polarization, theta, phi, formulation)
 
+
+def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
+                     period_x, period_y, depth, wavelength, polarization,
+                     theta, phi, formulation):
+    """Shared traced solve: projected operators from the nodal eps vectors,
+    the 2Nf eig (custom-VJP), the cascade, and the flux tail."""
     from ..rcwa import _jax_eig_stable, _require_jax_x64
     from ..rcwa._core import (
         _interface_smatrix,
@@ -130,26 +247,14 @@ def _pmm_efficiency_2d_jax(period_x, period_y, eps_pillar, eps_host,
         val = jnp.sqrt((eps - kx ** 2 - ky ** 2).astype(cj))
         return jnp.where(val.imag < 0.0, -val, val)
 
-    st = _static_prep(float(period_x), float(period_y),
-                      float(x_bounds[0]), float(x_bounds[1]),
-                      float(y_bounds[0]), float(y_bounds[1]),
-                      int(degree), int(elements_per_strip), bool(grade),
-                      int(n_orders))
     Tp = jnp.asarray(st["Tp"], cj)
     Tpinv = jnp.asarray(st["Tpinv"], cj)
-    w = jnp.asarray(st["w"])
     Gx0F = jnp.asarray(st["Gx0F"], cj)
     Gy0F = jnp.asarray(st["Gy0F"], cj)
     IprojF = jnp.asarray(st["IprojF"], cj)
     order_x = jnp.asarray(st["order_x"])
     order_y = jnp.asarray(st["order_y"])
     Nf = st["order_x"].size
-
-    # loss-convention bridge (PUBLIC Im>0 -> internal exp(+iwt))
-    eps_p = jnp.conj(jnp.asarray(eps_pillar).astype(cj))
-    eps_h = jnp.conj(jnp.asarray(eps_host).astype(cj))
-    eps_sup = jnp.conj(jnp.asarray(n_superstrate).astype(cj) ** 2)
-    eps_sub = jnp.conj(jnp.asarray(n_substrate).astype(cj) ** 2)
 
     k0 = 2.0 * jnp.pi / wavelength
     nre = jnp.real(jnp.sqrt(eps_sup))
@@ -175,11 +280,9 @@ def _pmm_efficiency_2d_jax(period_x, period_y, eps_pillar, eps_host,
 
     # layer operators: nodal vectors LINEAR in the traced eps, sandwiched by
     # the constant projectors (Tp * v) @ Tpinv == Tp @ diag(v) @ Tpinv
-    eps_nodal = eps_h + (eps_p - eps_h) * w
-    inv_nodal = 1.0 / eps_h + (1.0 / eps_p - 1.0 / eps_h) * w
-    EpsF = (Tp * eps_nodal[None, :]) @ Tpinv
-    EinvF = (Tp * inv_nodal[None, :]) @ Tpinv
-    EpnF = (Tp * (1.0 / inv_nodal)[None, :]) @ Tpinv
+    EpsF = (Tp * eps_nodal[None, :].astype(cj)) @ Tpinv
+    EinvF = (Tp * inv_nodal[None, :].astype(cj)) @ Tpinv
+    EpnF = (Tp * (1.0 / inv_nodal)[None, :].astype(cj)) @ Tpinv
     GxF = Gx0F / k0 + kx0 * IprojF
     GyF = Gy0F / k0 + ky0 * IprojF
 

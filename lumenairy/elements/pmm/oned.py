@@ -1484,6 +1484,7 @@ __all__ = [
     "pmm_1d",
     "pmm_efficiency_1d_vs_wavelength",
     "pmm_jones_1d_vs_wavelength",
+    "pmm_graded_segments",
     "grating_convergence_class",
     "classify_from_grating",
 ]
@@ -1612,4 +1613,24 @@ def pmm_jones_1d_vs_wavelength(
     if np.ndim(wavelengths):
         return wl, J, Rt, Tt
     return wl[0], J[0], Rt[0], Tt[0]
+
+def pmm_graded_segments(profile, n_segments=16):
+    """Approximate a CONTINUOUS lateral permittivity profile by piecewise-
+    constant segments for the PMM segment solvers (v5.14 roadmap item 4).
+
+    ``profile`` is a callable ``u -> eps`` (or ``u -> (3, 3) tensor``) over the
+    normalized period coordinate ``u in [0, 1)``; each of the ``n_segments``
+    equal-width segments takes the MIDPOINT value (O(1/n^2) profile error).
+    The audit measured a 16-segment approximation of a sinusoidal profile
+    converging to the same-profile RCWA reference; double ``n_segments`` to
+    quarter the staircase error.
+
+    Returns the ``segments`` list for :func:`pmm_efficiency_1d_segments` /
+    :func:`pmm_jones_1d_segments` / ``PMMStack.add_layer``.
+    """
+    n_segments = int(n_segments)
+    if n_segments < 2:
+        raise ValueError("pmm_graded_segments: n_segments must be >= 2")
+    w = 1.0 / n_segments
+    return [(w, profile((i + 0.5) * w)) for i in range(n_segments)]
 

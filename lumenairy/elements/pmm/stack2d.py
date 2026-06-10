@@ -26,6 +26,9 @@ import numpy as np
 
 from ..rcwa._core import (
     _grazing_safe_wavelength,
+    _interface_smatrix_general,
+    _modes_to_M,
+    _propagation_smatrix_general,
     _require_propagating_incidence,
 )
 from ._core import (
@@ -48,7 +51,7 @@ from .twod import (
     _validate_cell_cost,
     _validate_cell_orders,
 )
-from .twod_jones import _require_inplane_tile, _tensor_layer_modes
+from .twod_jones import _require_nonzero_ezz, _tensor_layer_modes
 
 __all__ = ["PMM2DStack"]
 
@@ -128,7 +131,10 @@ class PMM2DStack:
                 f"(Sx, Sy, 3, 3), got shape {cell.shape}.")
         xw, yw, tile = _cell_to_walls_tile(
             cell, self.period_x, self.period_y, "PMM2DStack.add_layer")
-        _require_inplane_tile("PMM2DStack.add_layer", tile)
+        _require_nonzero_ezz("PMM2DStack.add_layer", tile)
+        # OUT-OF-PLANE tensor layers are allowed (v5.14 roadmap item 3): any
+        # such layer promotes the WHOLE cascade to the generalized S-matrix
+        # in solve() (the 1-D PMMStack precedent).
         self._append_patterned("tensor", float(thickness), xw, yw, tile)
         return self
 
@@ -270,27 +276,58 @@ class PMM2DStack:
                     Wl, Vl, lam = _layer_modes_projected(
                         GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
                         formulation=self.formulation)
-            else:                                   # in-plane tensor
+            else:                                   # tensor (full 3x3)
                 tile_i = np.conj(L["tile"])
                 ax = _build_axis(self.period_x, L["xw"], self.degree,
                                  L["el_x"], self.grade)
                 ay = _build_axis(self.period_y, L["yw"], self.degree,
                                  L["el_y"], self.grade)
                 ez_rule = ("li" if self.formulation == "li" else "laurent")
-                Wl, Vl, lam = _tensor_layer_modes(
+                out = _tensor_layer_modes(
                     ax, ay, L["xw"], L["yw"], tile_i, k0, kx0, ky0, ox, oy,
                     kxv, kyv, ez_rule)
-            modes.append((Wl, Vl, lam, L["t"]))
+                if len(out) == 6:                   # out-of-plane generator
+                    modes.append(("gen",) + out + (L["t"],))
+                    continue
+                Wl, Vl, lam = out
+            modes.append(("sym", Wl, Vl, lam, L["t"]))
 
-        # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub
-        W_prev, V_prev = Wsup, Vsup
-        S = None
-        for (Wl, Vl, lam, t) in modes:
-            Si = _interface_smatrix(W_prev, V_prev, Wl, Vl)
-            S = Si if S is None else _redheffer_star(S, Si)
-            S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
-            W_prev, V_prev = Wl, Vl
-        S = _redheffer_star(S, _interface_smatrix(W_prev, V_prev, Wsub, Vsub))
+        any_oop = any(m[0] == "gen" for m in modes)
+        if not any_oop:
+            # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub (symmetric)
+            W_prev, V_prev = Wsup, Vsup
+            S = None
+            for (_k, Wl, Vl, lam, t) in modes:
+                Si = _interface_smatrix(W_prev, V_prev, Wl, Vl)
+                S = Si if S is None else _redheffer_star(S, Si)
+                S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
+                W_prev, V_prev = Wl, Vl
+            S = _redheffer_star(S, _interface_smatrix(W_prev, V_prev, Wsub,
+                                                      Vsub))
+        else:
+            # GENERALIZED cascade (v5.14): any out-of-plane layer breaks the
+            # [W; -V] <-> -lam symmetry, so the whole stack is promoted --
+            # symmetric layers/half-spaces enter as [W, W; V, -V] blocks with
+            # (lam, -lam), the generator layers with their explicit
+            # forward/backward sets (the 1-D PMMStack precedent).
+            def _blocks(m):
+                if m[0] == "sym":
+                    _k, W, V, lam, t = m
+                    return _modes_to_M(W, V, W, -V), lam, -lam, t
+                _k, Wf, Vf, lf, Wb, Vb, lb, t = m
+                return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb, t
+
+            M_prev = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
+            S = None
+            for m in modes:
+                Ml, lf, lb, t = _blocks(m)
+                Si = _interface_smatrix_general(M_prev, Ml)
+                S = Si if S is None else _redheffer_star(S, Si)
+                S = _redheffer_star(
+                    S, _propagation_smatrix_general(lf, lb, k0 * t))
+                M_prev = Ml
+            Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
+            S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
         S11, _S12, S21, _S22 = S
 
         # Jones far field (both incident polarizations)

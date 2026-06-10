@@ -168,3 +168,86 @@ def test_dispersive_sweeps():
     w1, R1, T1 = pmm_efficiency_1d_vs_wavelength(
         1e-6, 2.0, 1.0, 1.45, 1.0, 0.3e-6, 0.5, 0.55e-6, degree=12)
     assert np.isscalar(R1) or np.ndim(R1) == 0
+
+
+def test_jax_cell_twin_forward_and_grad():
+    """v5.14 roadmap item 1: traced eps_cell + concrete region_layout."""
+    jax = pytest.importorskip("jax")
+    import jax.numpy as jnp
+    jax.config.update("jax_enable_x64", True)
+    P, WL, DEP = 0.6e-6, 0.55e-6, 0.25e-6
+    layout = np.zeros((6, 6), int)
+    layout[1:3, 1:3] = 1
+    layout[4:6, 4:5] = 2
+
+    def cellv(e1):
+        c = jnp.ones((6, 6), jnp.complex128)
+        c = c.at[1:3, 1:3].set(e1)
+        c = c.at[4:6, 4:5].set(4.0)
+        return c
+
+    cn = np.ones((6, 6), complex)
+    cn[1:3, 1:3] = 6.0
+    cn[4:6, 4:5] = 4.0
+    o1, R1, T1 = pmm_efficiency_2d_cell(P, P, cn, 1.5, 1.0, DEP, WL,
+                                        degree=7, n_orders=4)
+    o2, R2, T2 = pmm_efficiency_2d_cell(P, P, cellv(6.0), 1.5, 1.0, DEP, WL,
+                                        degree=7, n_orders=4,
+                                        region_layout=layout)
+    assert np.max(np.abs(R1 - np.asarray(R2))) < 1e-11
+    assert np.max(np.abs(T1 - np.asarray(T2))) < 1e-11
+
+    def sumT(e1):
+        o, R, T = pmm_efficiency_2d_cell(P, P, cellv(e1), 1.5, 1.0, DEP, WL,
+                                         degree=7, n_orders=4,
+                                         region_layout=layout)
+        return jnp.sum(T)
+
+    g = float(jnp.real(jax.grad(sumT)(jnp.asarray(6.0 + 0j))))
+    h = 1e-5
+    fd = (float(sumT(jnp.asarray(6.0 + h + 0j)))
+          - float(sumT(jnp.asarray(6.0 - h + 0j)))) / (2 * h)
+    assert abs(g - fd) < 1e-5 * max(abs(fd), 1e-6)
+    # traced cell without a layout raises with guidance
+    with pytest.raises(ValueError, match="region_layout"):
+        pmm_efficiency_2d_cell(P, P, cellv(6.0), 1.5, 1.0, DEP, WL,
+                               degree=7, n_orders=4)
+
+
+def test_stack2d_oop_layer_promotes_and_matches_direct():
+    """v5.14 roadmap item 3: an out-of-plane tensor layer in PMM2DStack
+    promotes the cascade and a single-layer stack is byte-identical to
+    pmm_jones_2d."""
+    from lumenairy.elements.pmm import PMM2DStack, pmm_jones_2d
+    P, WL, DEP = 0.6e-6, 0.55e-6, 0.25e-6
+    ridge = np.array([[2.25, 0, 0.3], [0, 2.10, 0], [0.3, 0, 2.40]], complex)
+    tc = np.zeros((6, 6, 3, 3), complex)
+    for i in range(3):
+        tc[:, :, i, i] = 1.0
+    tc[1:4, 2:5] = ridge
+    st = PMM2DStack(P, n_substrate=1.5, n_superstrate=1.0, degree=9,
+                    n_orders=4, formulation="laurent")
+    st.add_layer(DEP, eps_tensor_cell=tc)
+    o1, R1, T1, J1 = st.set_source(WL).solve()
+    o2, R2, T2, J2 = pmm_jones_2d(P, P, tc, 1.5, 1.0, DEP, WL, degree=9,
+                                  n_orders=4, formulation="laurent")
+    assert np.array_equal(np.asarray(R1), np.asarray(R2))
+    assert np.array_equal(np.asarray(T1), np.asarray(T2))
+    assert np.array_equal(J1, J2)
+
+
+def test_graded_segments_helper():
+    """v5.14 roadmap item 4: continuous-profile staircase builder."""
+    from lumenairy.elements.pmm import (
+        pmm_efficiency_1d_segments,
+        pmm_graded_segments,
+    )
+    segs = pmm_graded_segments(
+        lambda u: 1.5 + 0.5 * np.sin(2 * np.pi * u) ** 2, 16)
+    assert len(segs) == 16
+    assert abs(sum(w for w, _ in segs) - 1.0) < 1e-12
+    o, R, T = pmm_efficiency_1d_segments(1e-6, segs, 1.45, 1.0, 0.3e-6,
+                                         0.55e-6, degree=10)
+    assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-8
+    with pytest.raises(ValueError, match="n_segments"):
+        pmm_graded_segments(lambda u: 2.0, 1)

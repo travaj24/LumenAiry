@@ -197,9 +197,11 @@ def test_builder_validation():
         PMM2DStack(_P).set_source(_WL).solve()
     with pytest.raises(ValueError, match="formulation"):
         PMM2DStack(_P, formulation="bogus")
-    with pytest.raises(NotImplementedError, match="out-of-plane"):
+    # out-of-plane tensor layers are SUPPORTED since the v5.14 generalized-
+    # cascade promotion (test_v5_14_0_pmm_audit_fixes pins the physics); the
+    # remaining tensor guard is the nonzero-e_zz contract
+    with pytest.raises(ValueError, match="e_zz"):
         bad = np.zeros((4, 4, 3, 3), complex)
-        for i in range(3):
-            bad[:, :, i, i] = 2.0
-        bad[1:3, 1:3, 0, 2] = 0.3
+        bad[:, :, 0, 0] = 2.0
+        bad[:, :, 1, 1] = 2.0          # e_zz left at 0
         PMM2DStack(_P).add_layer(0.1e-6, eps_tensor_cell=bad)
