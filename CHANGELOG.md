@@ -4,7 +4,62 @@ All notable changes to the core library are documented here.
 
 ## [5.14.0] — 2026-06-09
 
-**2-D PMM capability parity.** The 2-D hybrid PMM grows from a single-pillar
+**Accuracy/speed audit (22-agent, 41 findings, 16/16 adversarially
+confirmed).** Post-parity hardening of the whole PMM family:
+
+### Fixed (audit)
+
+- **P1 dense normal-incidence resonances** — the 1-D binary paths' legacy
+  forward-mode branch (`Im(q) >= 0`) flipped degenerate propagating modes on
+  ~1e-15 QZ noise; 8 of 13 degrees in 12..24 silently returned
+  `sum(R)+sum(T)` up to 65.7 (scalar) / 344 (Jones) on plain gratings. The
+  noise-robust / Poynting-flux selectors (already used by the oblique and
+  segmented paths) are now unconditional — every probed degree conserves
+  energy to 1e-6 and matches the RCWA oracle per-order to ~6e-6. NB: this
+  retires the bit-identity between the one-layer `PMMStack` and the segments
+  path (gauge-dependent selections within degenerate pairs now differ by
+  ~1e-7; the test pins 5e-6).
+- **P2 Wood-anomaly cutoffs (1-D)** — the 1-D solvers now nudge off exact
+  Rayleigh-cutoff wavelengths (was a silent 2.5e-4 energy violation).
+- **P1 staggered Wood divergence** — `pmm_efficiency_2d_staggered` diverges
+  like ~1/sqrt(cutoff distance) near Rayleigh cutoffs (intrinsic to its
+  H-partner construction); it now nudges off exact coincidences and WARNS
+  inside the divergence band, pointing to the (clean) hybrid solver.
+- **P2 pillar bounds** — `pmm_efficiency_2d`/`prepare_pmm_2d` enforce
+  `0 < lo < hi < period` (inverted bounds previously returned a silently
+  wrong geometry; degenerate bounds crashed with a raw LinAlgError).
+- **P2 stabilize pseudo-plateau** — the degree-scan consensus now returns the
+  ENERGY-CLEANEST cluster member on lossless structures (two marginal degrees
+  could corroborate each other ~1e-3 off per-order); the pillar stabilize
+  scan also gained the cost cap (it previously laddered to multi-GB dense
+  problems on persistently non-passive configs).
+
+### Performance (audit)
+
+- **P1 factorized 2-D assembly** — the dense nodal path spent 88-97% of the
+  whole 2-D solve materializing kron products and LAPACK-inverting an EXACTLY
+  DIAGONAL mass matrix. The projected operators are now built factorized
+  (per-axis small matrices + `(Tp * vec) @ Tpinv` sandwiches): machine-
+  identical (rel ~2.6e-15), 220-1078x faster assembly, 64-138x less memory;
+  end-to-end 2-pillar solves drop from ~8 s to ~0.2 s. `max_nodal_dof` rises
+  4000 -> 150000, making STAIRCASED CURVED cells (e.g. a pixelated disk)
+  practical on the exact-wall hybrid.
+- **Numba assessed and rejected** (confirmed): the solvers are LAPACK-eig /
+  small-matmul bound; end-to-end gain would be <1.1x. JAX coverage is the
+  acceleration path (1-D twins + the 2-D pillar twin; the cell twin is
+  confirmed feasible — see docs/pmm_roadmap_v5_14.md).
+
+### Added (audit)
+
+- **Dispersive PMM wavelength sweeps** — `pmm_efficiency_1d_vs_wavelength` /
+  `pmm_jones_1d_vs_wavelength` accept callable `n(wl)` / `eps(wl)` materials,
+  mirroring the RCWA sweep API (the PMM family previously had none).
+- `docs/pmm_roadmap_v5_14.md` — the audit's remaining confirmed-feasible
+  items (JAX cell twin, 1-D homogeneous-eig share, stack OOP promotion,
+  graded-profile helper, native 2-D slant, Li-1997 mixed rules) with effort
+  assessments, and the explicitly-rejected paths.
+
+**Also in 5.14.0 — 2-D PMM capability parity.** The 2-D hybrid PMM grows from a single-pillar
 scalar TE/TM solver to full parity with `rcwa_efficiency_2d`/`rcwa_jones_2d`
 and the 1-D solver families — and beyond it on two axes (out-of-plane tensors
 and exact-wall geometry). Grounded in the PMM_Papers formulations (Li 1997

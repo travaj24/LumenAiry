@@ -20,7 +20,13 @@ WL = 0.55e-6
 
 
 def test_one_layer_stack_equals_segments():
-    # a 1-layer PMMStack must be bit-identical to pmm_jones_1d_segments
+    # a 1-layer PMMStack reproduces pmm_jones_1d_segments.  Bit-identity held
+    # while both paths used the gauge-INDEPENDENT legacy Im(q)>=0 mode branch;
+    # since v5.14 (the dense-resonance P1 fix) both use the Poynting-flux
+    # selector, whose sign choices within DEGENERATE mode pairs depend on the
+    # eig gauge -- the two paths assemble machine-different matrices, so their
+    # equally-valid selections can differ, propagating ~1e-7 into J.  Pin a
+    # tight tolerance instead.
     lc = uniaxial_tensor(1.5, 1.8, np.pi / 2, phi=0.4)
     for ang_deg in (0.0, 25.0):
         st = la.PMMStack(0.8e-6, n_substrate=1.5, n_superstrate=1.0, degree=20)
@@ -30,8 +36,8 @@ def test_one_layer_stack_equals_segments():
             0.8e-6, [(0.5, lc), (0.5, GR)], 1.5, 1.0, 0.5e-6, WL,
             angle=np.radians(ang_deg), degree=20)
         assert np.array_equal(o, o2)
-        assert np.max(np.abs(J - J2)) == 0.0
-        assert np.max(np.abs(R - R2)) == 0.0 and np.max(np.abs(T - T2)) == 0.0
+        assert np.max(np.abs(J - J2)) < 5e-6
+        assert np.max(np.abs(R - R2)) < 5e-6 and np.max(np.abs(T - T2)) < 5e-6
 
 
 def _rcwa_two_layer(theta):

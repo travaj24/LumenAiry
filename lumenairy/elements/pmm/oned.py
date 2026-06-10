@@ -337,16 +337,20 @@ def pmm_efficiency_1d(
         DOF).  Default 21.  Accepts ``n_orders`` as a cross-suite alias (the
         RCWA / 2-D PMM spelling); when given it overrides ``far_field_orders``.
     stabilize : bool, optional
-        Guard against the measure-zero discrete resonances at isolated
-        polynomial degrees (a near-singular layer<->region mode-match injects
-        spurious flux and inflates ``sum(R)+sum(T)``; the analogue of the FMM
-        ``stabilize`` flag).  When ``True`` (default) the solver scans a short
-        UPWARD degree window and returns the CONSENSUS result -- the value the
-        converged degrees agree on (discarding both super-unity resonances and
-        low-degree under-convergence), not merely the minimum or maximum power --
-        build-reproducible and never below the requested degree's accuracy.  Set
-        ``False`` to solve at exactly ``degree`` (e.g. for
-        convergence studies that tolerate the occasional resonant degree).
+        Guard against residual quasi-resonances (a near-singular
+        layer<->region mode-match injecting spurious flux; the analogue of the
+        FMM ``stabilize`` flag).  When ``True`` (default) the solver scans a
+        short UPWARD degree window and returns the CONSENSUS result -- the
+        value the converged degrees agree on, with the ENERGY-CLEANEST cluster
+        member preferred on lossless structures (v5.14: two marginal degrees
+        could previously corroborate each other ~1e-3 off).  The consensus is
+        accurate to the scan's per-order tolerance (~3e-3 worst case), so it is
+        NOT strictly monotone in the requested degree.  NB v5.14 also fixed
+        the root cause of the formerly-DENSE normal-incidence resonances (a
+        noise-sensitive legacy forward-mode branch); with that fix
+        ``stabilize=False`` conserves energy at every probed degree, and the
+        consensus is a safety net rather than a necessity.  Set ``False`` to
+        solve at exactly ``degree``.
 
     Returns
     -------
@@ -1478,6 +1482,134 @@ __all__ = [
     "pmm_jones_1d_slanted",
     "pmm_jones_1d_slanted_segments",
     "pmm_1d",
+    "pmm_efficiency_1d_vs_wavelength",
+    "pmm_jones_1d_vs_wavelength",
     "grating_convergence_class",
     "classify_from_grating",
 ]
+
+def pmm_efficiency_1d_vs_wavelength(
+    period: float,
+    n_ridge,
+    n_groove,
+    n_substrate,
+    n_superstrate,
+    depth: float,
+    duty_cycle: float,
+    wavelengths,
+    *,
+    polarization: str = "te",
+    angle: float = 0.0,
+    theta: float | None = None,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    n_orders: int | None = None,
+    stabilize: bool = True,
+):
+    """DISPERSIVE scalar spectral sweep of the binary PMM grating -- the PMM
+    counterpart of :func:`rcwa_efficiency_vs_wavelength` (v5.14 generality
+    audit: the PMM family previously had no dispersive-material sweep).
+
+    Each of ``n_ridge``, ``n_groove``, ``n_substrate``, ``n_superstrate`` may
+    be a FIXED value or a CALLABLE ``wl -> value`` (material dispersion via
+    ``n(lambda)`` closures, e.g. from the bundled refractiveindex database).
+
+    Returns
+    -------
+    wavelengths : ndarray
+        The sweep grid (scalar in -> scalar out).
+    R_total, T_total : (Nwl,) float ndarray
+        Total reflected / transmitted efficiency (summed over orders) at each
+        wavelength.
+    """
+    angle = _resolve_incidence(angle, theta)
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError(
+            "pmm_efficiency_1d_vs_wavelength: every wavelength must be "
+            "finite and > 0 [m] (got an empty or invalid sweep).")
+
+    def _at(v, w):
+        return v(w) if callable(v) else v
+
+    Rt = np.empty(wl.size, dtype=float)
+    Tt = np.empty(wl.size, dtype=float)
+    for i, w in enumerate(wl):
+        _o, R, T = pmm_efficiency_1d(
+            period, _at(n_ridge, w), _at(n_groove, w), _at(n_substrate, w),
+            _at(n_superstrate, w), depth, duty_cycle, float(w),
+            polarization=polarization, angle=angle, degree=degree,
+            elements_per_region=elements_per_region, grade=grade,
+            far_field_orders=far_field_orders, stabilize=stabilize)
+        Rt[i] = float(np.asarray(R).sum())
+        Tt[i] = float(np.asarray(T).sum())
+    if np.ndim(wavelengths):
+        return wl, Rt, Tt
+    return wl[0], Rt[0], Tt[0]
+
+
+def pmm_jones_1d_vs_wavelength(
+    period: float,
+    eps_ridge,
+    eps_groove,
+    n_substrate,
+    n_superstrate,
+    depth: float,
+    duty_cycle: float,
+    wavelengths,
+    *,
+    angle: float = 0.0,
+    theta: float | None = None,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    n_orders: int | None = None,
+    stabilize: bool = True,
+):
+    """DISPERSIVE Jones spectral sweep of the 1-D anisotropic PMM grating --
+    the PMM mirror of :func:`rcwa_jones_vs_wavelength` (same signature shape
+    and returns).  Each of ``eps_ridge``, ``eps_groove``, ``n_substrate``,
+    ``n_superstrate`` may be a fixed value or a ``wl -> value`` callable.
+
+    Returns
+    -------
+    wavelengths : ndarray
+        The sweep grid (scalar in -> scalar out).
+    jones : (Nwl, 2, 2) complex ndarray
+        Zeroth-order Jones reflection at each wavelength (PUBLIC convention).
+    R_total, T_total : (Nwl, 2) float ndarray
+        Total efficiencies per incident polarization (row order: incident
+        ``E_x``, ``E_y``).
+    """
+    angle = _resolve_incidence(angle, theta)
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError(
+            "pmm_jones_1d_vs_wavelength: every wavelength must be finite and "
+            "> 0 [m] (got an empty or invalid sweep).")
+
+    def _at(v, w):
+        return v(w) if callable(v) else v
+
+    J = np.empty((wl.size, 2, 2), dtype=complex)
+    Rt = np.empty((wl.size, 2), dtype=float)
+    Tt = np.empty((wl.size, 2), dtype=float)
+    for i, w in enumerate(wl):
+        _o, R, T, jr = pmm_jones_1d(
+            period, _at(eps_ridge, w), _at(eps_groove, w),
+            _at(n_substrate, w), _at(n_superstrate, w), depth, duty_cycle,
+            float(w), angle=angle, degree=degree,
+            elements_per_region=elements_per_region, grade=grade,
+            far_field_orders=far_field_orders, stabilize=stabilize)
+        J[i] = np.asarray(jr)
+        Rt[i] = np.asarray(R).sum(axis=1)
+        Tt[i] = np.asarray(T).sum(axis=1)
+    if np.ndim(wavelengths):
+        return wl, J, Rt, Tt
+    return wl[0], J[0], Rt[0], Tt[0]
+

@@ -77,7 +77,6 @@ from .twod import (
     _cell_to_walls_tile,
     _homogeneous_modes,
     _kz_forward2,
-    _projectors,
     _scan_solver,
     _validate_cell_cost,
     _validate_cell_orders,
@@ -255,26 +254,57 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
             if offp:
                 oop = {k: np.kron(v, Ix) for k, v in o1.items()}
     else:
-        Gx0, Gy0, ops = _assemble_2d_tensor(ax, ay, tile_i)
-        Tp, Tpinv = _projectors(ax, ay, ox, oy)
-        N = Gx0.shape[0]
-        I_nodal = np.eye(N, dtype=_C)
-        GxF = Tp @ (Gx0 / k0 + kx0 * I_nodal) @ Tpinv
-        GyF = Tp @ (Gy0 / k0 + ky0 * I_nodal) @ Tpinv
-        CxxF = Tp @ ops["xx"] @ Tpinv
-        CxyF = Tp @ ops["xy"] @ Tpinv
-        CyxF = Tp @ ops["yx"] @ Tpinv
-        CyyF = Tp @ ops["yy"] @ Tpinv
+        # FACTORIZED dense-branch assembly (v5.14 perf audit P1; mirrors
+        # twod._scalar_projected_ops): diagonal GLL masses make every tensor
+        # component a NODAL VECTOR and the derivative operators kron-factor --
+        # no N x N dense materialization.
+        Tx = _axis_projection(ax, ox)
+        Txp = np.linalg.pinv(Tx)
+        Ty = _axis_projection(ay, oy)
+        Typ = np.linalg.pinv(Ty)
+        mdx = np.diag(ax["M"])
+        mdy = np.diag(ay["M"])
+        gx1 = Tx @ ((1.0 / mdx)[:, None] * ax["D"]) @ Txp
+        gy1 = Ty @ ((1.0 / mdy)[:, None] * ay["D"]) @ Typ
+        NxO, NyO = len(ox), len(oy)
+        Gx0F = -1j * np.kron(np.eye(NyO, dtype=_C), gx1)
+        Gy0F = -1j * np.kron(gy1, np.eye(NxO, dtype=_C))
+        Ip = np.kron(Ty @ Typ, Tx @ Txp)
+        GxF = Gx0F / k0 + kx0 * Ip
+        GyF = Gy0F / k0 + ky0 * Ip
+        Mdiag = np.kron(mdy, mdx)
+        kers = [[np.kron(np.diag(ay["Mtile"][sy]), np.diag(ax["Mtile"][sx]))
+                 for sy in range(nsy)] for sx in range(nsx)]
+
+        def _nodal(getter):
+            v = np.zeros_like(Mdiag)
+            for sx in range(nsx):
+                for sy in range(nsy):
+                    v += getter(tile_i[sx, sy]) * kers[sx][sy]
+            return v / Mdiag
+
+        Tp = np.kron(Ty, Tx)
+        Tpinv = np.kron(Typ, Txp)
+
+        def _proj(getter):
+            return (Tp * _nodal(getter)[None, :]) @ Tpinv
+
+        CxxF = _proj(lambda t: t[0, 0])
+        CxyF = _proj(lambda t: t[0, 1])
+        CyxF = _proj(lambda t: t[1, 0])
+        CyyF = _proj(lambda t: t[1, 1])
         if formulation == "li":
             # the shared solver computes Ez_inv = inv(EZZ); feeding inv(EinvF)
             # makes Ez_inv == the projected multiply-by-1/ezz (the hybrid's
             # validated inverse-rule E_z elimination)
-            EZZ = np.linalg.inv(Tp @ ops["izz"] @ Tpinv)
+            EZZ = np.linalg.inv(_proj(lambda t: 1.0 / t[2, 2]))
         else:
-            EZZ = Tp @ ops["zz"] @ Tpinv
+            EZZ = _proj(lambda t: t[2, 2])
         if offp:
-            oop = dict(EZX=Tp @ ops["zx"] @ Tpinv, EZY=Tp @ ops["zy"] @ Tpinv,
-                       EXZ=Tp @ ops["xz"] @ Tpinv, EYZ=Tp @ ops["yz"] @ Tpinv)
+            oop = dict(EZX=_proj(lambda t: t[2, 0]),
+                       EZY=_proj(lambda t: t[2, 1]),
+                       EXZ=_proj(lambda t: t[0, 2]),
+                       EYZ=_proj(lambda t: t[1, 2]))
     return _layer_eigenmodes_tensor(GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
                                     **oop)
 

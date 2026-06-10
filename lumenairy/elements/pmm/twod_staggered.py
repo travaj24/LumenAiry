@@ -882,8 +882,37 @@ def pmm_efficiency_2d_staggered(
     M = int(degree)
     eps_sup = _C(n_superstrate) ** 2
     eps_sub = _C(n_substrate) ** 2
-    k0 = 2.0 * np.pi / wavelength
-    wl = wavelength
+    # Wood-anomaly guard (v5.14 robustness audit P1): the staggered solver's
+    # H-partner ``V ~ 1/gamma`` amplifies basis-truncation error for a
+    # JUST-PROPAGATING order, and the lossless total DIVERGES like
+    # ~1/sqrt(cutoff distance) as the wavelength approaches any Rayleigh
+    # cutoff FROM BELOW (measured tot = 1.2 at wl = P*(1 - 1e-6), 7.5 at
+    # -1e-9, 205 at -1e-12).  Nudge off an EXACT coincidence, and WARN loudly
+    # inside the divergence band (the hybrid pmm_efficiency_2d_cell is clean
+    # there -- use it near cutoffs).
+    from ..rcwa._core import _grazing_safe_wavelength
+    nre0 = float(np.real(np.sqrt(eps_sup)))
+    _mo = np.arange(-int(n_orders), int(n_orders) + 1)
+    _mx = np.tile(_mo, len(_mo))
+    _my = np.repeat(_mo, len(_mo))
+    _kx0n = nre0 * np.sin(theta) * np.cos(phi)
+    _ky0n = nre0 * np.sin(theta) * np.sin(phi)
+    wl = _grazing_safe_wavelength(float(wavelength), _kx0n, _ky0n, _mx, _my,
+                                  period_x, period_y, [eps_sup, eps_sub])
+    _kt2 = ((_kx0n + _mx * (wl / period_x)) ** 2
+            + (_ky0n + _my * (wl / period_y)) ** 2)
+    _gap = min(float(np.min(np.abs(float(np.real(e)) - _kt2)))
+               for e in (eps_sup, eps_sub))
+    if _gap < 1e-4:
+        import warnings
+        warnings.warn(
+            f"pmm_efficiency_2d_staggered: a diffraction order is within "
+            f"{_gap:.2g} (kt^2 units) of a Rayleigh cutoff; the staggered "
+            f"solver's accuracy DEGRADES like ~1/sqrt(distance) near cutoffs "
+            f"(energy errors of several % to >100% measured inside 1e-6).  "
+            f"Use pmm_efficiency_2d_cell (clean there) or detune the "
+            f"wavelength.", stacklevel=2)
+    k0 = 2.0 * np.pi / wl
     nre = float(np.real(np.sqrt(eps_sup)))
     alpha0x = nre * np.sin(theta) * np.cos(phi) * k0
     alpha0y = nre * np.sin(theta) * np.sin(phi) * k0

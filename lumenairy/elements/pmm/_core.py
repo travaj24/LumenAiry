@@ -470,16 +470,20 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
         invop = _safe_solve(mats["S0"], mats["Pinv"])
     q2, Acoef = _safe_geig(A, B)
     q = np.sqrt(q2)
-    if kx0 or robust:
-        # NOISE-ROBUST forward branch: the operator is (near-)Hermitian for
-        # lossless media, so the QZ eig leaks ~1e-15 imag noise; the naive sign
-        # test would flip near-real (propagating) modes on noise -> dense
-        # spurious resonances.  Flip only when CLEARLY backward.
-        tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-        flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-        q = np.where(flip, -q, q)
-    else:
-        q = np.where(q.imag < 0.0, -q, q)           # Im(q) >= 0 forward decay
+    # NOISE-ROBUST forward branch (unconditional since v5.14, robustness audit
+    # P1): the operator is (near-)Hermitian for lossless media, so the QZ eig
+    # leaks ~1e-15 imag noise; the legacy naive sign test
+    # ``q = where(q.imag < 0, -q, q)`` -- kept until v5.14 for the
+    # normal-incidence binary path's bit-identity -- flipped near-real
+    # (propagating) modes on that noise, producing DENSE spurious resonances at
+    # normal incidence (8 of 13 degrees in 12..24 returned sum(R)+sum(T) up to
+    # 65.7 on a plain n=2/1 grating).  The robust branch flips only when
+    # CLEARLY backward and restores tot = 1.0 at every probed degree, matching
+    # the RCWA oracle per-order to ~6e-6; oblique/segmented paths always used
+    # it.  (``robust`` is retained in the signature for call compatibility.)
+    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
+    q = np.where(flip, -q, q)
     lam = -1j * q
     return Acoef, lam, q, invop
 
@@ -673,6 +677,22 @@ def _n_propagating_orders(period, wl, n_max):
 
 
 
+def _wood_safe_wl_1d(wl, angle, n_sup, period, eps_values, far_field_orders):
+    """1-D Wood-anomaly wavelength nudge (v5.14 robustness audit): a
+    wavelength sitting EXACTLY on (or within ~1e-9 of) a Rayleigh-order cutoff
+    in any constituent medium puts a grazing order (``kz ~ 0``) in the flux
+    normalization and silently violates energy conservation (measured
+    ``tot = 1.00025`` at ``wl = P*(1 - 1e-9)`` with no warning).  The 2-D
+    paths already nudge; this is the 1-D counterpart (identity away from exact
+    grazing, so ordinary solves are byte-unchanged)."""
+    from ..rcwa._core import _grazing_safe_wavelength
+    kx0n = float(np.real(_C(n_sup))) * np.sin(float(angle))  # dimensionless
+    m = np.arange(-int(far_field_orders), int(far_field_orders) + 1)
+    return _grazing_safe_wavelength(float(wl), kx0n, 0.0, m,
+                                    np.zeros_like(m), period, period,
+                                    [complex(e) for e in eps_values])
+
+
 def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
                degree, polarization, n_ridge_el, n_groove_el, grade,
                far_field_orders, angle=0.0):
@@ -681,6 +701,9 @@ def _pmm_solve(period, n_ridge, n_groove, n_sub, n_sup, depth, duty, wl,
     (shared with the multi-region :func:`_pmm_solve_segments`)."""
     eps_ridge, eps_groove = n_ridge ** 2, n_groove ** 2
     eps_sup, eps_sub = n_sup ** 2, n_sub ** 2
+    wl = _wood_safe_wl_1d(wl, angle, n_sup, period,
+                          [eps_sup, eps_sub, eps_ridge, eps_groove],
+                          far_field_orders)
     k0 = 2.0 * np.pi / wl
     d_wall = duty * period
     # NB: the 1-D PMM ``kx0`` is DIMENSIONAL (rad/m, the ``* k0`` factor) -- it is
@@ -931,24 +954,25 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
     # modal magnetic partner: V = Q @ W @ diag(1/lam) with the (Ky=0) Q block
     Q = np.block([[Cyx, Cyy - Kx2], [-Cxx, -Cxy]])
 
-    if not kx0 and not robust:
-        q = np.where(q.imag < 0.0, -q, q)   # Im(q) >= 0 forward decay (legacy)
-    else:
-        # POYNTING-FLUX forward selector: V2 partner is [Hx; Hy] and the modal H
-        # carries an extra -i, so Sz_n = Im( Ex.S0.conj(Hy) - Ey.S0.conj(Hx) )
-        # (cross pairing, imag part: + forward, ~0 evanescent).  Flux ~ 1/q
-        # flips sign with the branch; pick +z power (propagating) / +z decay.
-        lam0 = -1j * q
-        safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
-        V0 = Q @ W2 @ np.diag(1.0 / safe0)
-        SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
-        SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
-        flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
-                       - np.einsum("in,in->n", W2[n:], SVt))
-        fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
-        prop = np.abs(flux) > fscale
-        flip = np.where(prop, flux < 0.0, q.imag < 0.0)
-        q = np.where(flip, -q, q)
+    # POYNTING-FLUX forward selector (unconditional since v5.14, robustness
+    # audit P1 -- the legacy normal-incidence ``Im(q) >= 0`` branch flipped
+    # degenerate propagating modes on ~1e-15 QZ noise, producing DENSE
+    # spurious resonances: totals up to 344 at isolated degrees on a plain
+    # diagonal-tensor grating).  V2 partner is [Hx; Hy] and the modal H
+    # carries an extra -i, so Sz_n = Im( Ex.S0.conj(Hy) - Ey.S0.conj(Hx) )
+    # (cross pairing, imag part: + forward, ~0 evanescent).  Flux ~ 1/q
+    # flips sign with the branch; pick +z power (propagating) / +z decay.
+    lam0 = -1j * q
+    safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+    V0 = Q @ W2 @ np.diag(1.0 / safe0)
+    SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
+    SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
+    flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
+                   - np.einsum("in,in->n", W2[n:], SVt))
+    fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
+    prop = np.abs(flux) > fscale
+    flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+    q = np.where(flip, -q, q)
     lam = -1j * q
     safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
     V2 = Q @ W2 @ np.diag(1.0 / safe)
@@ -975,6 +999,9 @@ def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                     ezz=M[2, 2])
     t_ridge, t_groove = _t3(er), _t3(eg)
     eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    wl = _wood_safe_wl_1d(wl, angle, n_sup, period,
+                          [eps_sup, eps_sub, er[0, 0], er[1, 1], er[2, 2],
+                           eg[0, 0], eg[1, 1], eg[2, 2]], far_field_orders)
     k0 = 2.0 * np.pi / wl
     d_wall = duty * period
     kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
@@ -1212,6 +1239,8 @@ def _pmm_solve_segments(period, widths, seg_n, n_sub, n_sup, depth, wl, degree,
     refractive index of region ``i``)."""
     seg_eps = [_C(n) ** 2 for n in seg_n]
     eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    wl = _wood_safe_wl_1d(wl, angle, n_sup, period,
+                          [eps_sup, eps_sub] + seg_eps, far_field_orders)
     k0 = 2.0 * np.pi / wl
     kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
     mats = _build_sem_segments(period, widths, seg_eps, degree,
@@ -1241,6 +1270,10 @@ def _pmm_jones_solve_segments(period, widths, seg_tensors3, n_sub, n_sup, depth,
                     ezz=M[2, 2])
     tensors = [_t3(M) for M in arrs]
     eps_sup, eps_sub = _C(n_sup) ** 2, _C(n_sub) ** 2
+    wl = _wood_safe_wl_1d(
+        wl, angle, n_sup, period,
+        [eps_sup, eps_sub] + [M[i, i] for M in arrs for i in range(3)],
+        far_field_orders)
     k0 = 2.0 * np.pi / wl
     kx0 = float(np.real(_C(n_sup))) * np.sin(float(angle)) * k0
     mats = _build_sem_tensor_segments(period, widths, tensors, degree,
@@ -1262,6 +1295,23 @@ def _pmm_jones_solve_segments(period, widths, seg_tensors3, n_sub, n_sup, depth,
 
 
 # --- shared stabilize (per-order convergence consensus) --------------------
+def _energy_clean_pick(cluster, tots, target):
+    """Pick the cluster member to return (v5.14 accuracy audit, the
+    pseudo-plateau guard): when the structure is evidently LOSSLESS (some
+    scanned solve conserves energy to ~1e-6), prefer the cluster member whose
+    total is CLOSEST to the lossless target -- two marginal degrees can
+    corroborate each other per-order within the cluster tolerance while both
+    sit ~1e-3 off in energy (the measured pseudo-plateau returned per-order
+    errors up to 1.5e-3 worse than lower degrees).  For lossy structures
+    (no scanned solve near the target) energy is not a fitness signal, so the
+    historical pick (the requested degree if clustered, else the first
+    cluster member) is kept."""
+    errs = [abs(t - target) for t in tots]
+    if min(errs) < 1e-6 * max(target, 1.0):
+        return min(cluster, key=lambda i: errs[i])
+    return 0 if 0 in cluster else cluster[0]
+
+
 class _StabilizeScanExhausted(Exception):
     """Raised by a ``solve_at_degree`` closure when the NEXT scan degree is
     unaffordable (e.g. the 2-D nodal-DOF cost cap): the scan ends gracefully
@@ -1286,14 +1336,14 @@ def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
         except _StabilizeScanExhausted:
             break
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, orders, R, T, tot <= 1.0 + passive_tol))
+        scanned.append((d, orders, R, T, tot <= 1.0 + passive_tol, tot))
         records = [(s[1], (s[2], s[3]), None) for s in scanned]
         passive = [s[4] for s in scanned]
         cluster = _converged_cluster(records, passive, per_order_tol,
                                      _MIN_PLATEAU)
         if not cluster:
             continue
-        pick = 0 if 0 in cluster else cluster[0]
+        pick = _energy_clean_pick(cluster, [s[5] for s in scanned], 1.0)
         return scanned[pick][1], scanned[pick][2], scanned[pick][3]
     passives = [s for s in scanned if s[4]]
     if not passives:
@@ -1330,14 +1380,14 @@ def _stabilize_jones(solve_at_degree, d0, label, *, passive_tol=None,
         except _StabilizeScanExhausted:
             break
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * passive_tol))
+        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * passive_tol, tot))
         records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
         passive = [s[5] for s in scanned]
         cluster = _converged_cluster(records, passive, per_order_tol,
                                      _MIN_PLATEAU)
         if not cluster:
             continue
-        pick = 0 if 0 in cluster else cluster[0]
+        pick = _energy_clean_pick(cluster, [s[6] for s in scanned], 2.0)
         s = scanned[pick]
         return s[1], s[2], s[3], s[4]
     passives = [s for s in scanned if s[5]]

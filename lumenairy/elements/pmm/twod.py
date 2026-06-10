@@ -242,11 +242,32 @@ def _cell_to_walls_tile(eps_cell, period_x, period_y, fn_name):
     return x_walls, y_walls, tile
 
 
-# Default cap on the dense nodal problem size nodes_x * nodes_y.  The hybrid
-# materializes ~10 dense (N, N) complex operators (kron masses / derivatives /
-# their inverses) before projecting; N = 4000 is ~256 MB each -- the practical
-# single-machine ceiling.  The pillar default (degree 11, 3 strips) is N = 1089.
-_MAX_NODAL_DOF = 4000
+# Default cap on the nodal problem size nodes_x * nodes_y.  With the v5.14
+# FACTORIZED assembly (see _scalar_projected_ops) nothing dense of size N x N
+# is ever materialized -- the binding costs are the (Nf, N) projector pair
+# (~16 * Nf * N bytes each) and the (Tp * vec) @ Tpinv sandwiches
+# (O(Nf^2 N) flops) -- so the ceiling is ~40x higher than the old dense-kron
+# path's 4000.  N = 150_000 at n_orders = 11 (Nf = 529) is ~2.5 GB of
+# projectors; staircased curved cells (a 32-strip-per-axis disk at degree 9 is
+# N ~ 83k) now fit.  The pillar default (degree 11, 3 strips) is N = 1089.
+_MAX_NODAL_DOF = 150_000
+
+
+def _validate_pillar_bounds(fn_name, x_bounds, y_bounds, period_x, period_y):
+    """Enforce the documented pillar contract ``0 < lo < hi < period`` (v5.14
+    robustness audit: INVERTED bounds silently built a negative-width strip and
+    returned an energy-conserving but geometrically WRONG answer; degenerate
+    bounds crashed with a raw LinAlgError)."""
+    for name, (lo, hi), per in (("x_bounds", x_bounds, period_x),
+                                ("y_bounds", y_bounds, period_y)):
+        lo, hi = float(lo), float(hi)
+        if not (0.0 < lo < hi < float(per)):
+            raise ValueError(
+                f"{fn_name}: {name} must satisfy 0 < lo < hi < period "
+                f"(strictly interior, non-degenerate walls); got "
+                f"({lo:.6g}, {hi:.6g}) with period {float(per):.6g}.  A pillar "
+                f"touching the cell edge can be expressed by shifting the "
+                f"unit-cell origin (the lattice is periodic).")
 
 
 def _validate_cell_cost(fn_name, el_x, el_y, degree, max_nodal_dof):
@@ -256,14 +277,14 @@ def _validate_cell_cost(fn_name, el_x, el_y, degree, max_nodal_dof):
         raise ValueError(
             f"{fn_name}: the derived strip layout needs a {nx} x {ny} nodal "
             f"grid ({nx * ny} nodal DOF > max_nodal_dof={max_nodal_dof}); the "
-            f"dense nodal operators would not fit in memory.  This usually "
-            f"means eps_cell is a SAMPLED SMOOTH profile (anti-aliased disk / "
-            f"graded index), where nearly every pixel boundary becomes a wall "
-            f"({len(el_x)} x-strips, {len(el_y)} y-strips).  The hybrid PMM is "
-            f"for cells made of a modest number of axis-aligned rectangles -- "
-            f"for curved / graded profiles use rcwa_efficiency_2d (Fourier "
-            f"sampling) or pmm_efficiency_2d_staggered; otherwise lower degree "
-            f"/ elements_per_strip or raise max_nodal_dof explicitly.")
+            f"(n_orders-sized x N) projector pair + sandwiches would be too "
+            f"large.  A very large strip count usually means eps_cell is a "
+            f"SAMPLED SMOOTH profile (anti-aliased graded index) with "
+            f"({len(el_x)} x-strips, {len(el_y)} y-strips).  STAIRCASED curved "
+            f"cells are supported up to the cap (v5.14 factorized assembly); "
+            f"beyond it use rcwa_efficiency_2d (Fourier sampling) or "
+            f"pmm_efficiency_2d_staggered, or lower degree / "
+            f"elements_per_strip, or raise max_nodal_dof explicitly.")
 
 
 def _axis_elem_counts(period, walls, degree, elements_per_strip, fn_name,
@@ -433,13 +454,44 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
     nsx = len(ax["strips"])
     nsy = len(ay["strips"])
     if nsx > 1 and nsy > 1:
-        ops = _assemble_2d(ax, ay, eps_tile, 1.0)
-        Tp, Tpinv = _projectors(ax, ay, ox, oy)
-        Ip = Tp @ Tpinv
-        return dict(Gx0F=Tp @ ops["Gx"] @ Tpinv, Gy0F=Tp @ ops["Gy"] @ Tpinv,
-                    EpsF=Tp @ ops["Eps"] @ Tpinv,
-                    EinvF=Tp @ ops["Einv"] @ Tpinv,
-                    EpnF=Tp @ ops["Epn"] @ Tpinv, IpxF=Ip, IpyF=Ip)
+        # FACTORIZED assembly (v5.14 perf audit P1): the GLL masses are exactly
+        # DIAGONAL, so Minv @ DX = kron(I, Mx^-1 Dx), every eps operator is a
+        # diagonal NODAL VECTOR, and pinv(kron(Ty, Tx)) = kron(pinv, pinv) --
+        # the dense N x N kron materialization + the O(N^3) LAPACK inversion
+        # OF A DIAGONAL MATRIX the old _assemble_2d path performed are never
+        # needed.  Measured machine-identical to the dense path (rel ~2.6e-15)
+        # and 220-1078x faster / 64-138x less memory at degree 9-11; the dense
+        # assembly was 88-97% of the whole solve.
+        Tx = _axis_projection(ax, ox)
+        Txp = np.linalg.pinv(Tx)
+        Ty = _axis_projection(ay, oy)
+        Typ = np.linalg.pinv(Ty)
+        mdx = np.diag(ax["M"])
+        mdy = np.diag(ay["M"])
+        gx1 = Tx @ ((1.0 / mdx)[:, None] * ax["D"]) @ Txp
+        gy1 = Ty @ ((1.0 / mdy)[:, None] * ay["D"]) @ Typ
+        Gx0F = -1j * np.kron(np.eye(NyO, dtype=_C), gx1)
+        Gy0F = -1j * np.kron(gy1, np.eye(NxO, dtype=_C))
+        Mdiag = np.kron(mdy, mdx)
+        P_eps = np.zeros_like(Mdiag)
+        P_inv = np.zeros_like(Mdiag)
+        for sx in range(nsx):
+            for sy in range(nsy):
+                ker = np.kron(np.diag(ay["Mtile"][sy]),
+                              np.diag(ax["Mtile"][sx]))
+                e = eps_tile[sx, sy]
+                P_eps += e * ker
+                P_inv += ker / e
+        eps_nodal = P_eps / Mdiag
+        inv_nodal = P_inv / Mdiag
+        Tp = np.kron(Ty, Tx)
+        Tpinv = np.kron(Typ, Txp)
+        EpsF = (Tp * eps_nodal[None, :]) @ Tpinv
+        EinvF = (Tp * inv_nodal[None, :]) @ Tpinv
+        EpnF = (Tp * (1.0 / inv_nodal)[None, :]) @ Tpinv
+        Ip = np.kron(Ty @ Typ, Tx @ Txp)
+        return dict(Gx0F=Gx0F, Gy0F=Gy0F, EpsF=EpsF, EinvF=EinvF, EpnF=EpnF,
+                    IpxF=Ip, IpyF=Ip)
     if nsy == 1 and nsx > 1:                    # uniform along y
         o1 = _axis_ops_1d(ax, eps_tile[:, 0])
         Tx = _axis_projection(ax, ox)
@@ -743,6 +795,8 @@ def pmm_efficiency_2d(
             n_orders=n_orders, formulation=formulation)
         return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
 
+    _validate_pillar_bounds("pmm_efficiency_2d", x_bounds, y_bounds,
+                            period_x, period_y)
     x0, x1 = float(x_bounds[0]), float(x_bounds[1])
     y0, y1 = float(y_bounds[0]), float(y_bounds[1])
     # Loss-convention bridge (matches pmm_efficiency_1d / rcwa_efficiency_2d):
@@ -760,6 +814,15 @@ def pmm_efficiency_2d(
     eps_tile[1, 1] = eps_p
 
     def _solve_at(deg):
+        # cost cap inside the scan closure too (v5.14 robustness audit: the
+        # stabilize degree ladder on a config that is non-passive at EVERY
+        # degree previously ran away to multi-GB dense problems)
+        nodes = 3 * elements_per_strip * deg
+        if nodes * nodes > _MAX_NODAL_DOF:
+            raise ValueError(
+                f"pmm_efficiency_2d: degree {deg} needs a {nodes} x {nodes} "
+                f"nodal grid ({nodes * nodes} > max_nodal_dof "
+                f"{_MAX_NODAL_DOF}).")
         return _pmm2d_solve_core(
             period_x, period_y, [x0, x1], [y0, y1], eps_tile, eps_sup,
             eps_sub, depth, wavelength, deg, elements_per_strip,
@@ -1006,6 +1069,8 @@ def prepare_pmm_2d(
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
 
+    _validate_pillar_bounds("prepare_pmm_2d", x_bounds, y_bounds,
+                            period_x, period_y)
     x0, x1 = float(x_bounds[0]), float(x_bounds[1])
     y0, y1 = float(y_bounds[0]), float(y_bounds[1])
     eps_p = np.conj(_C(eps_pillar))
