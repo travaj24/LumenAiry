@@ -60,13 +60,18 @@ def test_out_of_plane_tensor_solved_jones_1d():
     assert abs(float(R[1].sum() + T[1].sum()) - 1.0) < 1e-6
 
 
-def test_out_of_plane_tensor_rejected_jones_2d_and_stack():
+def test_out_of_plane_tensor_jones_2d_supported_stack_rejected():
+    """RE-PINNED 2026-06-10 (audit GAP2, v5.14.1): rcwa_jones_2d now SOLVES
+    out-of-plane tensors (generalized cascade; pinned against the conical
+    Berreman oracle in test_v5_14_1_rcwa_deferred); the STACK still rejects
+    them (its cascade is symmetric-mode based -- roadmap item)."""
     tilted = uniaxial_tensor(1.5, 1.7, np.pi / 4)
     Sx, Sy = 32, 32
     cell = np.broadcast_to(tilted, (Sx, Sy, 3, 3)).copy()
-    with pytest.raises(ValueError, match="out-of-plane"):
-        rcwa_jones_2d(1e-6, 1e-6, cell, 1.0, 1.0, 0.2e-6, 0.8e-6,
-                      n_orders_x=3, n_orders_y=3)
+    o, R, T, J = rcwa_jones_2d(1e-6, 1e-6, cell, 1.0, 1.0, 0.2e-6, 0.8e-6,
+                               n_orders_x=3, n_orders_y=3)
+    for row in (0, 1):
+        assert abs(float(R[row].sum() + T[row].sum()) - 1.0) < 1e-9
     with pytest.raises(ValueError, match="out-of-plane"):
         (la.RCWAStack(1e-6, period_y=1e-6, n_orders=3, n_orders_y=3)
          .add_layer(0.2e-6, eps_tensor_cell=cell))

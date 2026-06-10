@@ -762,8 +762,22 @@ import numpy as np
 import pytest
 
 # Skip the whole module if JAX is unavailable.
-jax = pytest.importorskip('jax')
-jnp = pytest.importorskip('jax.numpy')
+try:
+    import jax
+    import jax.numpy as jnp
+    _HAS_JAX = True
+except ImportError:                  # pragma: no cover - environment dependent
+    jax = jnp = None
+    _HAS_JAX = False
+
+# SCOPED skip (2026-06-10): the previous MODULE-LEVEL importorskip('jax')
+# silently skipped this entire file -- including every non-JAX pin in it --
+# on any environment without jax (CI and the WSL proxy among them).
+_requires_jax = pytest.mark.skipif(not _HAS_JAX,
+                                   reason="could not import 'jax'")
+
+if _HAS_JAX:
+    jax.config.update('jax_enable_x64', True)
 
 
 import lumenairy as lm  # noqa: E402  (after importorskip)
@@ -946,6 +960,7 @@ class TestAuditFixesV4_12_0_round4_jax_B1_1_ApertureSchemaUnification:
 # B1-2 -- propagate_through_system_jax fail-fast on non-traceable elements
 # ===========================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_0_round4_jax_B1_2_NonTraceableElementFailFast:
     """Element types without a JAX handler must raise
     :class:`NotImplementedError` at call time, listing the offending
@@ -1037,6 +1052,7 @@ class TestAuditFixesV4_12_0_round4_jax_B1_2_NonTraceableElementFailFast:
 # B1-9 -- _apply_doe_kick_jax gradient flow w.r.t. grating period
 # ===========================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_0_round4_jax_B1_9_DoeKickJaxGradient:
     """The DOE-kick path must keep the JAX trace alive when
     ``period_x`` / ``period_y`` are JAX-traced values, so users can
@@ -1404,6 +1420,7 @@ class TestAuditFixesV4_12_0_round4_tier0_ReadmeCookbookExamples:
 # B0-2 -- deprecation aliases are wired and emit DeprecationWarning
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_0_round4_tier0_DeprecatedAliasShims:
     """``_deprecation.deprecated_alias`` is now actually imported into
     the top-level namespace, and v4.7-renamed functions ship back-compat
@@ -1524,6 +1541,7 @@ class TestAuditFixesV4_12_0_round4_tier0_DeprecatedAliasShims:
 jax = pytest.importorskip('jax', reason='JAX not available')
 
 
+@_requires_jax
 class TestAuditFixesV4_12_0_round4_tier0_GerchbergSaxtonJaxDispatch:
     """``gerchberg_saxton(backend='jax')`` now forwards
     ``seed`` / ``dtype`` / ``initial_phase`` to the JAX implementation.
@@ -2541,6 +2559,7 @@ class TestAuditFixesV4_12_1_coverage_ZemaxCoordBreakStopMarker:
 # Item 12 -- JAX <-> NumPy phase-retrieval cross-parity
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_1_coverage_GerchbergSaxtonCrossBackendParity:
     """v4.12.0 (Track Tier-0) wired ``seed`` / ``dtype`` /
     ``initial_phase`` forwarding through the unified
@@ -3114,6 +3133,7 @@ class TestAuditFixesV4_12_2_cache_hygiene_PhaseRetrievalCachesLru:
 # A5.1 (continued) -- phase-retrieval cache clear
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_2_cache_hygiene_PhaseRetrievalCacheClear:
     """``clear_phase_retrieval_caches()`` (v4.12.2 new) clears GS / ER /
     HIO kernel caches in one call.  Populated by running a few iterations
@@ -3265,6 +3285,7 @@ class TestAuditFixesV4_12_2_cache_hygiene_LumenairyContextClearsAll:
 # A2 -- benchmark marker registration
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_2_cache_hygiene_BenchMarkerRegistered:
     """``bench`` marker is registered in ``[tool.pytest.ini_options]
     .markers`` so ``--strict-markers`` does not fail benchmark
@@ -3587,6 +3608,7 @@ class TestAuditFixesV4_13_0_except_sweep_AbbeDiagramSkipsMissingGlass:
         plt.close(fig)
 
 
+@_requires_jax
 class TestAuditFixesV4_13_0_except_sweep_DistortionGridNarrowCatchesTraceFailures:
     """``distortion_grid`` narrows the per-(ix, iy) trace except to
     ``(ValueError, RuntimeError, ZeroDivisionError, KeyError,
@@ -3709,6 +3731,7 @@ needs_jax = pytest.mark.skipif(
 # L2 -- JAX dtype unification via _resolve_jax_complex_dtype
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_0_jax_dtype_dy_siblings_L2JaxDtypeUnification:
     """``set_default_complex_dtype(np.complex128)`` propagates to every
     JAX entry point.  Pre-fix the JAX-side hard-casts (``jnp.asarray(
@@ -4186,6 +4209,7 @@ class TestAuditFixesV4_13_0_jax_dtype_dy_siblings_L4aMirrorGuardDispatcherPin:
 # L4b -- JAX-dispatch ``initial_guess`` forwarding / refusal
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_0_jax_dtype_dy_siblings_L4bInitialGuessForwarding:
     """v4.13.0 decision: refuse to silently demote a NumPy-API
     ``initial_guess`` (complex object-plane field) into a JAX-API
@@ -4237,6 +4261,7 @@ class TestAuditFixesV4_13_0_jax_dtype_dy_siblings_L4bInitialGuessForwarding:
 # L4c -- gerchberg_saxton(backend='jax', return_history=True) shape
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_0_jax_dtype_dy_siblings_L4cReturnHistoryShape:
     """v4.13.0 decision: emit ``RuntimeWarning`` and synthesise a
     3-tuple with an empty history list when ``backend='jax'`` is paired
@@ -4372,6 +4397,7 @@ _PHASE_RETRIEVAL_KERNELS = ['gerchberg_saxton_jax',
                             'hybrid_input_output_jax']
 
 
+@_requires_jax
 class TestAuditFixesV4_13_0_jax_dtype_dy_siblings_P1BPhaseRetrievalDtypeResolver:
     """v4.13.0 audit P1-B: ``error_reduction_jax`` and
     ``hybrid_input_output_jax`` route ``dtype`` through
@@ -5150,6 +5176,7 @@ def test_p2_12_apply_mirror_aperture_doc_says_circle():
 # P3 #21 -- dtype-aware zero replaces 0.0+0.0j literal
 # ====================================================================
 
+@_requires_jax
 def test_p3_21_apply_mirror_aperture_no_complex_literal():
     """The aperture mask in apply_mirror must not use the
     ``0.0 + 0.0j`` complex128 literal (which could silently upcast
@@ -5216,6 +5243,7 @@ jax = pytest.importorskip('jax')
 # replace=False is honoured on JAX
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_1_random_choice_JaxChoiceReplaceFalse:
     """``RandomState(jax_key).choice(n, shape, replace=False)``
     returns unique indices.
@@ -5279,6 +5307,7 @@ class TestAuditFixesV4_13_1_random_choice_JaxChoiceReplaceFalse:
 # _is_jax_prng_key recognises opaque keys (JAX 0.4.20+)
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_1_random_choice_IsJaxPrngKeyOpaque:
     """``_is_jax_prng_key`` returns True for both legacy uint32
     keys and the opaque keys from ``jax.random.key()``.
@@ -5429,6 +5458,7 @@ needs_jax = pytest.mark.skipif(
 # B.1 -- JAX lens twins accept dy=None and enforce dy == dx
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_2_agent_b_B1JaxLensTwinsAcceptDy:
     """``apply_real_lens_traced_jax`` / ``apply_real_lens_maslov_jax``
     accept ``dy=None`` and raise a clear ``ValueError`` on ``dy != dx``.

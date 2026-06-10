@@ -86,9 +86,22 @@ def test_coating_element_errors_are_clear():
 # coating_reflectance_jax -- differentiable companion (JAX-gated)
 # ----------------------------------------------------------------------------
 
-jax = pytest.importorskip("jax")
-jax.config.update("jax_enable_x64", True)
-import jax.numpy as jnp  # noqa: E402
+try:
+    import jax
+    import jax.numpy as jnp
+    _HAS_JAX = True
+except ImportError:                  # pragma: no cover - environment dependent
+    jax = jnp = None
+    _HAS_JAX = False
+
+# SCOPED skip (2026-06-10): the previous MODULE-LEVEL importorskip('jax')
+# silently skipped this entire file -- including every non-JAX pin in it --
+# on any environment without jax (CI and the WSL proxy among them).
+_requires_jax = pytest.mark.skipif(not _HAS_JAX,
+                                   reason="could not import 'jax'")
+
+if _HAS_JAX:
+    jax.config.update('jax_enable_x64', True)
 
 from lumenairy.elements.coatings import coating_reflectance_jax  # noqa: E402
 
@@ -99,6 +112,7 @@ from lumenairy.elements.coatings import coating_reflectance_jax  # noqa: E402
     [(1.38, 0.115e-6)],
     [(2.30, 0.07e-6), (1.38, 0.11e-6), (2.30, 0.07e-6)],
 ])
+@_requires_jax
 def test_jax_matches_numpy_tmm(pol, ang_deg, layers):
     ang = np.deg2rad(ang_deg)
     Rn = _R(coating_reflectance(
@@ -109,6 +123,7 @@ def test_jax_matches_numpy_tmm(pol, ang_deg, layers):
     assert abs(Rn - Rj) < 1e-12
 
 
+@_requires_jax
 def test_jax_grad_matches_finite_difference():
     """d R / d(thickness) from autodiff matches a central difference."""
     n0, d0 = 2.30, 0.07e-6
@@ -125,6 +140,7 @@ def test_jax_grad_matches_finite_difference():
     assert abs(g - fd) / max(abs(fd), 1e-30) < 1e-6
 
 
+@_requires_jax
 def test_jax_grad_drives_ar_thickness_toward_quarter_wave():
     """A gradient step on a single-layer AR reduces reflectance -- the
     differentiable path is usable for inverse design, not just evaluation."""
@@ -151,6 +167,7 @@ def test_jax_grad_drives_ar_thickness_toward_quarter_wave():
     ([(0.2 + 3.4j, 0.04e-6), (1.38, 0.1e-6)], 25.0, 1.52, 1.0, "p"),
     ([], 55.0, 1.0, 1.52, "s"),                                  # TIR glass->air
 ])
+@_requires_jax
 def test_jax_matches_numpy_complex_snell(layers, ang, nsub, namb, pol):
     """The v5.6 complex-Snell path (lossy metal + TIR) matches numpy to
     machine precision in the JAX companion too."""
@@ -164,6 +181,7 @@ def test_jax_matches_numpy_complex_snell(layers, ang, nsub, namb, pol):
     assert abs(Rn - Rj) < 1e-12
 
 
+@_requires_jax
 def test_jax_grad_flows_through_lossy_stack():
     """Autodiff still flows through a complex-angle (metal) stack."""
     def loss(d0):

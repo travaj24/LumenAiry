@@ -10,6 +10,7 @@ import numpy as np
 from ...backend import (
     array_namespace,
     backend_name,
+    is_jax_array,
     to_numpy,
 )
 from ._core import (
@@ -17,6 +18,7 @@ from ._core import (
     _block,
     _check_energy,
     _concrete,
+    _eig_for,
     _EnergyError,
     _EnergyWarning,
     _forward_flux_kz,
@@ -25,19 +27,21 @@ from ._core import (
     _homogeneous_eigenmodes,
     _interface_smatrix,
     _interface_smatrix_general,
+    _inv_lam,
     _is_traced,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
     _modes_to_M,
     _normalize_pol,
-    _propagation_smatrix,
-    _propagation_smatrix_general,
+    _propagation_star,
+    _propagation_star_general,
     _rcwa_xp,
     _redheffer_star,
     _reject_jax_offplane,
     _require_inplane_tensor,
     _require_jax_x64,
     _require_propagating_incidence,
+    _sqrt_decay,
     _sqrt_forward,
     _stabilize_bumps,
     _tensor_convolutions,
@@ -448,6 +452,19 @@ def rcwa_efficiency_1d(
     # grazing term is included only when those indices are concrete.
     geom_concrete = not (_is_traced(kx0) or _is_traced(wavelength))
     if not is_jax or geom_concrete:
+        # Non-finite indices must fail HERE with a named culprit, not as a
+        # downstream 'Singular matrix' / silent NaN row (audit P3).
+        if not is_jax:
+            for _nm, _v in (("n_ridge", n_ridge), ("n_groove", n_groove),
+                            ("n_substrate", n_substrate),
+                            ("n_superstrate", n_superstrate)):
+                try:
+                    if not np.isfinite(complex(_v)):
+                        raise ValueError(
+                            f"rcwa_efficiency_1d: {_nm} is not finite "
+                            f"({_v!r}).")
+                except TypeError:
+                    pass                      # array-valued: checked downstream
         _require_propagating_incidence("rcwa_efficiency_1d", complex(eps_sup),
                                        complex(kx0) ** 2)
         eps_reals = [complex(eps_sup), complex(eps_sub)]
@@ -518,38 +535,84 @@ def rcwa_efficiency_1d(
     # None when use_li is False (the inverse rule was skipped) -- never read here.
     EPS_normal = EPS_II if use_li else EPS
 
-    # --- region (half-space) modes (physical-x basis, UNCHANGED by ASR) -
-    Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
-    Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-
-    # --- global S = (sup|layer) * propagate(layer) * (layer|sub) --------
-    Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_normal)
-    if Gbridge is not None:
-        # Map the layer's u-basis modes to the physical-x Rayleigh basis the
-        # regions use (direction is G^{-1}; applying G is silently WRONG).
-        Gi = xp.linalg.inv(Gbridge)
-        zN = xp.zeros_like(Gi)
-        Giblk = _block(xp, [[Gi, zN], [zN, Gi]])
-        Wl = Giblk @ Wl
-        Vl = Giblk @ Vl
-    S = _interface_smatrix(Wref, Vref, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
-    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-    S11, S12, S21, S22 = S
-
-    # --- incident field (delta on 0th order, chosen polarization) -------
     delta = (orders == 0).astype(_C)             # unit on the 0th order
     zeros_N = xp.zeros(N, dtype=_C)
-    if polarization == "te":
-        cinc = xp.concatenate([zeros_N, delta])   # E along y
+    if not is_jax and not use_asr and backend_name(xp) == "numpy":
+        # --- planar TE/TM decoupled fast path (audit RCWA-LEV-1) ---------
+        # At planar mounting (Ky = 0) the layer system P@Q is EXACTLY
+        # block-diagonal (measured 0.0 off-diagonal), and a fixed incident
+        # polarization excites only ONE block, so the eig, both interfaces,
+        # and the Redheffer recursion all run at size N instead of 2N --
+        # ~x4-8 end-to-end at large N, per-order identical to the 2N path
+        # to ~1e-12 (the eig basis within each block is the same; only the
+        # block bookkeeping is removed).  JAX keeps the 2N path (jit traces
+        # it once); ASR needs the u<->x bridge structure of the 2N path.
+        kxc = kx.astype(_C)
+        kz_ref1 = _sqrt_forward(eps_sup - kxc ** 2)
+        kz_trn1 = _sqrt_forward(eps_sub - kxc ** 2)
+        lam_ref = _sqrt_decay(-kz_ref1 ** 2)
+        lam_trn = _sqrt_decay(-kz_trn1 ** 2)
+        Kx2 = xp.diag(kxc ** 2)
+        if polarization == "te":
+            # E = S_y block: M2 = Kx^2 - EPS, V = (EPS - Kx^2) W / lam
+            lam2, Wl1 = _eig_for(xp)(Kx2 - EPS)
+            lam1 = _sqrt_decay(lam2)
+            Vl1 = ((EPS - Kx2) @ Wl1) * _inv_lam(lam1)[None, :]
+            v_ref = (eps_sup - kxc ** 2) * _inv_lam(lam_ref)
+            v_trn = (eps_sub - kxc ** 2) * _inv_lam(lam_trn)
+        else:
+            # E = S_x block: M1 = -(I - Kx EPS^{-1} Kx) EPS_normal,
+            # V = -EPS_normal W / lam
+            EPS_inv1 = xp.linalg.inv(EPS)
+            M1 = -(xp.eye(N, dtype=_C)
+                   - (kxc[:, None] * EPS_inv1) * kxc[None, :]) @ EPS_normal
+            lam2, Wl1 = _eig_for(xp)(M1)
+            lam1 = _sqrt_decay(lam2)
+            Vl1 = (-(EPS_normal @ Wl1)) * _inv_lam(lam1)[None, :]
+            v_ref = -eps_sup * _inv_lam(lam_ref)
+            v_trn = -eps_sub * _inv_lam(lam_trn)
+        I_N = xp.eye(N, dtype=_C)
+        S = _interface_smatrix(I_N, xp.diag(v_ref), Wl1, Vl1)
+        S = _propagation_star(S, lam1, k0 * depth)
+        S = _redheffer_star(
+            S, _interface_smatrix(Wl1, Vl1, I_N, xp.diag(v_trn)))
+        r1 = S[0] @ delta
+        t1 = S[2] @ delta
+        if polarization == "te":
+            rx, ry, tx, ty = zeros_N, r1, zeros_N, t1
+        else:
+            rx, ry, tx, ty = r1, zeros_N, t1, zeros_N
     else:
-        cinc = xp.concatenate([delta, zeros_N])   # E along x
-    # Source is given in the reflection-region eigenbasis (W_ref = I).
-    r = S11 @ cinc            # reflected tangential-E mode amplitudes
-    t = S21 @ cinc            # transmitted
+        # --- region (half-space) modes (physical-x basis, UNCHANGED by ASR)
+        Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
+        Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
 
-    rx, ry = r[:N], r[N:]
-    tx, ty = t[:N], t[N:]
+        # --- global S = (sup|layer) * propagate(layer) * (layer|sub) -----
+        Wl, Vl, lam = _layer_eigenmodes(Kx_layer, Ky, EPS, EPS_normal)
+        if Gbridge is not None:
+            # Map the layer's u-basis modes to the physical-x Rayleigh basis
+            # the regions use (direction is G^{-1}; applying G is WRONG).
+            Gi = xp.linalg.inv(Gbridge)
+            zN = xp.zeros_like(Gi)
+            Giblk = _block(xp, [[Gi, zN], [zN, Gi]])
+            Wl = Giblk @ Wl
+            Vl = Giblk @ Vl
+        S = _interface_smatrix(Wref, Vref, Wl, Vl)
+        S = _propagation_star(S, lam, k0 * depth)
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        S11, S12, S21, S22 = S
+
+        # --- incident field (delta on 0th order, chosen polarization) ----
+        if polarization == "te":
+            cinc = xp.concatenate([zeros_N, delta])   # E along y
+        else:
+            cinc = xp.concatenate([delta, zeros_N])   # E along x
+        # Source is given in the reflection-region eigenbasis (W_ref = I).
+        r = S11 @ cinc            # reflected tangential-E mode amplitudes
+        t = S21 @ cinc            # transmitted
+
+        rx, ry = r[:N], r[N:]
+        tx, ty = t[:N], t[N:]
     kyv = xp.diag(Ky)
     # PUBLIC-convention forward kz (Re >= 0) for the z-FLUX, propagating mask, and
     # longitudinal field.  The internal exp(+iwt) loss bridge conjugates the region
@@ -649,6 +712,14 @@ def rcwa_efficiency_vs_wavelength(
 
     Other parameters are as in :func:`rcwa_efficiency_1d`.
     """
+    if any(is_jax_array(a) for a in (wavelengths, period, n_ridge, n_groove,
+                                     n_substrate, n_superstrate, depth)):
+        raise NotImplementedError(
+            "rcwa_efficiency_vs_wavelength: JAX inputs are not supported on "
+            "the sweep wrapper (it would silently materialise to numpy and "
+            "break the gradient); use jax.vmap over wavelength on "
+            "rcwa_efficiency_1d directly.")
+
     angle = _resolve_incidence(angle, theta)
     if quantity not in ("transmitted", "reflected"):
         raise ValueError(
@@ -883,8 +954,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
         Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
         S = _interface_smatrix_general(Mref, Ml)
-        S = _redheffer_star(
-            S, _propagation_smatrix_general(lam, lam_b, k0 * depth))
+        S = _propagation_star_general(S, lam, lam_b, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
         S11, S12, S21, S22 = S
     else:
@@ -894,7 +964,7 @@ def _jones_1d_from_profiles(profiles, offplane, *, M, orders, Kx, Ky, kxv, k0,
         Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
         Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
-        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
+        S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
         S11, S12, S21, S22 = S
 

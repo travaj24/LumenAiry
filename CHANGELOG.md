@@ -69,15 +69,62 @@ independent probes — the audit's verification phase was unavailable).**
 - Re-pinned tests that encoded the refuted error-cancellation agreements
   (fff_nv dielectric square, inkstone metal-pillar "gold", symmetry×li).
 
-### Added
+### Added (the roadmap's deferred items, same release)
 
-- `docs/rcwa_roadmap_v5_14.md` — the audit's remaining confirmed items:
-  perf levers (1-D TE/TM decouple, diagonal-aware propagation star, symmetry
-  scope incl. the new tensor-li fold, honest JAX positioning) and capability
-  gaps (per-layer stack formulation, stack dispersion sweeps, 2-D
-  out-of-plane tensors, shear walls, fff_nv rework-or-retire).
-- `tests/unit/test_v5_14_1_rcwa_audit_fixes.py` — 11 regression tests
-  pinning all of the above.
+- **2-D out-of-plane tensors in `rcwa_jones_2d`** (audit GAP2): full-3×3
+  cells (tilted uniaxials, magneto-optic media) via the pointwise ezz-Schur
+  fold + the generalized forward/backward S-matrix cascade (the 1-D OOP /
+  `pmm_jones_2d` pattern). Validated against an independent conical
+  Berreman 4×4 oracle at machine precision (≤2.2e-15, incl. lossy conical)
+  and against the 1-D OOP solver on patterned y-uniform cells.
+- **Per-layer `formulation=` in `RCWAStack.add_layer`** (GAP3): isotropic
+  patterned layers accept `'li'` (the corrected sequential rule); a 1-D
+  stack metal layer reproduces the direct 1-D `'li'` solver per-order and
+  halves the absorptance error vs Laurent at matched truncation.
+- **`RCWAStack.solve_vs_wavelength` + dispersive materials** (GAP5): every
+  material slot (`eps`, `eps_cell`, `eps_tensor_cell`, `eps_background`,
+  per-shape `eps`) accepts a `wl -> value` callable; unstable wavelengths
+  return NaN rows with one summary warning instead of aborting the sweep;
+  `solve()` on a dispersive stack raises with guidance.
+- **Sheared sidewalls** (GAP1): `add_tapered_grating(..., shear=)` —
+  parallelogram (slanted-wall) gratings as a one-liner, wrap-aware.
+
+### Performance
+
+- **1-D planar TE/TM decouple** (audit RCWA-LEV-1): at planar mounting the
+  layer system is exactly block-diagonal and a fixed polarization excites
+  one block, so `rcwa_efficiency_1d` (NumPy, non-ASR) runs the eig +
+  interfaces + Redheffer at size N instead of 2N — ×4-8 at large N
+  (n_orders=161: 2.16 s → 0.29 s), per-order equal to the 2N machinery.
+  BONUS: the separated blocks are better conditioned — two of the three
+  pinned large-period energy blow-ups no longer occur (they now solve
+  cleanly at the adjacent-truncation consensus).
+- **Diagonal-aware propagation star** (RCWA-LEV-2): starring against a
+  pure-propagation factor reduces to row/column scaling (identity ~9e-16);
+  applied at every propagation site (1-D, 2-D, jones, shapes, stack incl.
+  the `retain_internal` partial-S sweep, and the generalized OOP cascade).
+
+### Hygiene (audit P3s)
+
+- Non-finite material indices raise with a named culprit (was: silent NaN
+  totals past the one-sided tripwire); `_check_energy` raises on non-finite.
+- `rcwa_efficiency_2d_shapes` actually rejects JAX inputs (the guard was
+  unreachable dead code — no arrays fed the dispatcher).
+- `RCWAStack.solve(retain_internal=True)` on JAX warns that internal-field
+  data is host-side only (was: silent drop + misleading downstream error).
+- The 1-D sweep wrapper rejects JAX inputs with the vmap pointer (was:
+  silent numpy materialisation).
+- `gpu` extra pinned to `cupy>=14` (`cupy.linalg.eig` exists only since 14).
+
+### Docs / roadmap
+
+- `docs/rcwa_roadmap_v5_14.md` — remaining items after this batch: symmetry
+  scope (stack + tensor-li even-parity fold), JAX positioned as the
+  gradient path (jit forward is only ~1-2.4× wall via thread parallelism),
+  fff_nv rework-or-retire, µ/bianisotropic + hex lattices (research).
+- `tests/unit/test_v5_14_1_rcwa_audit_fixes.py` — 11 regression tests for
+  the audit fixes; `tests/unit/test_v5_14_1_rcwa_deferred.py` — 20 tests
+  for the deferred-item batch.
 
 ## [5.14.0] — 2026-06-09
 

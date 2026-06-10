@@ -54,14 +54,27 @@ def test_b5_opposite_sign_slant_is_not_uniform():
 
 
 # ------------------------------------------------------------------- JAX (B3/B4/B7)
-jax = pytest.importorskip("jax")
-import jax.numpy as jnp  # noqa: E402
+try:
+    import jax
+    import jax.numpy as jnp
+    _HAS_JAX = True
+except ImportError:                  # pragma: no cover - environment dependent
+    jax = jnp = None
+    _HAS_JAX = False
+
+# SCOPED skip (2026-06-10): the previous MODULE-LEVEL importorskip('jax')
+# silently skipped this entire file -- including every non-JAX pin in it --
+# on any environment without jax (CI and the WSL proxy among them).
+_requires_jax = pytest.mark.skipif(not _HAS_JAX,
+                                   reason="could not import 'jax'")
+
+if _HAS_JAX:
+    jax.config.update('jax_enable_x64', True)
 
 from lumenairy.elements.pmm import pmm_jones_1d  # noqa: E402
 
-jax.config.update("jax_enable_x64", True)
 
-
+@_requires_jax
 def test_b4_jax_jones_metal_tensor_no_nan_crash():
     """B4: the JAX-Jones order-set sizing must take Re(sqrt(complex eps)), not
     sqrt(Re(eps)).  For a metal/ENZ eps (Re < 0) the latter is sqrt(neg)=NaN and
@@ -74,6 +87,7 @@ def test_b4_jax_jones_metal_tensor_no_nan_crash():
     assert np.all(np.isfinite(np.asarray(J)))
 
 
+@_requires_jax
 def test_b3_jax_jones_traced_duty_raises():
     """B3: a TRACED duty_cycle was silently frozen at 0.5 (the duty=0.5 answer for
     every duty, a 0.0 duty-gradient).  It must raise NotImplementedError instead of
@@ -89,6 +103,7 @@ def test_b3_jax_jones_traced_duty_raises():
         jax.grad(f)(0.5)
 
 
+@_requires_jax
 def test_b7_jax_path_requires_x64():
     """B7: the JAX path must RAISE (not just warn) when x64 is disabled -- JAX
     silently truncates complex128 to complex64 and the eigenproblem is

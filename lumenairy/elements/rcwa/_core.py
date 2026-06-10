@@ -270,6 +270,13 @@ def _check_energy(fn_name, R, T, lossless=False):
     # device->host conversion -- _check_energy is the lone site that bypassed it.
     tot = float(np.real(np.sum(to_numpy(R))) + np.real(np.sum(to_numpy(T))))
     n_states = int(R.shape[0]) if getattr(R, "ndim", 1) == 2 else 1
+    # NaN/inf propagates PAST a one-sided '>' comparison (audit P3: a NaN
+    # substrate index silently returned sumR = nan) -- raise loudly.
+    if not np.isfinite(tot):
+        raise _EnergyError(
+            f"{fn_name}: non-finite total efficiency (sum R+T = {tot}); a "
+            f"NaN/inf material index or permittivity reached the solve "
+            f"(check the region indices and the cell values).")
     if tot > n_states * 1.05:
         raise _EnergyError(
             f"{fn_name}: energy non-conservation detected (sum R+T = "
@@ -1000,7 +1007,7 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
     Vtrn_e = _even_fold(Vtrn, desc, xp)
     # S-matrix recursion in the even sector (dimension-agnostic helpers).
     S = _interface_smatrix(Ireg_e, Vref_e, Wl_e, Vl_e)
-    S = _redheffer_star(S, _propagation_smatrix(lam_e, k0 * depth))
+    S = _propagation_star(S, lam_e, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix(Wl_e, Vl_e, Ireg_e, Vtrn_e))
     S11, _S12, S21, _S22 = S
     cinc_e = _even_project(cinc, desc, xp)
@@ -1214,6 +1221,37 @@ def _propagation_smatrix(lam, k0_L):
     X = xp.diag(xp.exp(-lam * k0_L))
     Z = xp.zeros((n, n), dtype=_C)
     return (Z, X, X, Z)
+
+
+
+def _propagation_star(S, lam, k0_L):
+    """``S`` Redheffer-starred with the pure-propagation S-matrix of
+    ``(lam, k0_L)``, exploiting its structure (diagonal off-blocks, ZERO
+    diagonal blocks): ``P11 = 0`` collapses both star inverses to the
+    identity, so the whole product reduces to row/column scaling by
+    ``X = exp(-lam k0 L)`` -- algebraically identical to
+    ``_redheffer_star(S, _propagation_smatrix(lam, k0_L))`` but without the
+    ~10-zgemm chain against literal identity/zero blocks (audit RCWA-LEV-2:
+    463.5 ms -> 7.3 ms at 2N = 722; one of the two stars in every
+    single-layer solve and half the stars in every stack solve)."""
+    A11, A12, A21, A22 = S
+    xp = array_namespace(A11, lam)
+    X = xp.exp(-lam * k0_L)
+    return (A11, A12 * X[None, :], X[:, None] * A21,
+            (X[:, None] * A22) * X[None, :])
+
+
+
+def _propagation_star_general(S, lam_f, lam_b, k0_L):
+    """Diagonal-aware star against the GENERALIZED propagation S-matrix
+    (explicit forward ``exp(-lam_f k0 L)`` / backward ``exp(+lam_b k0 L)``
+    factors) -- the :func:`_propagation_star` of the full-3x3 cascade."""
+    A11, A12, A21, A22 = S
+    xp = array_namespace(A11, lam_f)
+    Xf = xp.exp(-lam_f * k0_L)
+    Xb = xp.exp(lam_b * k0_L)
+    return (A11, A12 * Xb[None, :], Xf[:, None] * A21,
+            (Xf[:, None] * A22) * Xb[None, :])
 
 
 
@@ -2079,6 +2117,8 @@ __all__ = [
     "_redheffer_star",
     "_interface_smatrix",
     "_propagation_smatrix",
+    "_propagation_star",
+    "_propagation_star_general",
     "_modes_to_M",
     "_interface_smatrix_general",
     "_propagation_smatrix_general",

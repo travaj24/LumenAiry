@@ -23,19 +23,22 @@ from ._core import (
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
     _interface_smatrix,
+    _interface_smatrix_general,
     _is_traced,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
+    _modes_to_M,
     _normalize_pol,
-    _propagation_smatrix,
+    _propagation_star,
+    _propagation_star_general,
     _rcwa_xp,
     _redheffer_star,
-    _require_inplane_tensor,
     _require_jax_x64,
     _require_propagating_incidence,
     _sqrt_forward,
     _stabilize_bumps,
     _symmetric_solve_rt,
+    _tensor_offplane_present,
     _validate_cell_sampling,
     _validate_geometry,
     _validate_shapes,
@@ -745,7 +748,7 @@ def rcwa_efficiency_2d(
             Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
                                             ez_laurent_inv=ez_inv)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
-        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
+        S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
         S11, S12, S21, S22 = S
         r = S11 @ cinc
@@ -853,7 +856,7 @@ class PreparedRCWA2D:
                                                 self.EPS_normal,
                                                 ez_laurent_inv=self.ez_inv)
             S = _interface_smatrix(Wref, Vref, Wl, Vl)
-            S = _redheffer_star(S, _propagation_smatrix(lam, k0 * self.depth))
+            S = _propagation_star(S, lam, k0 * self.depth)
             S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
             S11, S12, S21, S22 = S
             r = S11 @ self.cinc
@@ -1119,6 +1122,16 @@ def rcwa_jones_2d(
     energy-conserving for a lossless tensor and reduces to
     :func:`rcwa_efficiency_2d` for a scalar cell; it converges fastest for
     smooth / dielectric anisotropic media (e.g. liquid-crystal cells).
+
+    OUT-OF-PLANE tensors (``e_xz, e_yz, e_zx, e_zy != 0`` -- tilted
+    uniaxials, magneto-optic media) are supported since v5.14.1 (audit
+    GAP2): the pointwise ezz-Schur fold + the generalized forward/backward
+    S-matrix cascade (the 1-D OOP / ``pmm_jones_2d`` pattern).  Requires
+    ``|e_zz| > 0`` everywhere; NumPy/CuPy only (a traced JAX tensor keeps
+    the in-plane contract -- the forward/backward mode split is a host-side
+    argsort).  A non-reciprocal (gyrotropic) cell legitimately has
+    polarization-dependent extinction; only PROVABLY-LOSSLESS (all-real)
+    cells are closure-checked.
     """
     _validate_geometry("rcwa_jones_2d",
                        **_concrete(period=period_x, period_y=period_y,
@@ -1126,7 +1139,19 @@ def rcwa_jones_2d(
                        n_orders=n_orders_x, n_orders_y=n_orders_y)
     _validate_cell_sampling("rcwa_jones_2d", eps_tensor_cell,
                             n_orders_x, n_orders_y)
-    _require_inplane_tensor("rcwa_jones_2d", eps_tensor_cell)
+    # OUT-OF-PLANE tensors are SUPPORTED since v5.14.1 (audit GAP2) via the
+    # generalized forward/backward cascade below; the remaining contract is a
+    # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  Traced JAX
+    # tensors cannot be inspected and keep the in-plane contract.
+    offplane = _tensor_offplane_present(eps_tensor_cell)
+    if offplane:
+        ezz_min = float(np.min(np.abs(np.asarray(
+            to_numpy(eps_tensor_cell))[..., 2, 2])))
+        if ezz_min < 1e-12:
+            raise ValueError(
+                "rcwa_jones_2d: an out-of-plane tensor cell requires "
+                "|e_zz| > 0 everywhere (the E_z elimination divides by it); "
+                f"min |e_zz| = {ezz_min:.3e}.")
 
     xp = _rcwa_xp("rcwa_jones_2d", use_gpu, eps_tensor_cell)
     is_jax = backend_name(xp) == "jax"
@@ -1165,18 +1190,49 @@ def rcwa_jones_2d(
     # Direct-rule (Laurent) convolution of each tensor component.
     def _conv(comp):
         return _eps_convolution_2d(comp, orders, n_orders_x, n_orders_y)
-    Cxx = _conv(eps_t[:, :, 0, 0])
-    Cxy = _conv(eps_t[:, :, 0, 1])
-    Cyx = _conv(eps_t[:, :, 1, 0])
-    Cyy = _conv(eps_t[:, :, 1, 1])
-    EZZ = _conv(eps_t[:, :, 2, 2])
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-    Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
-    S = _interface_smatrix(Wref, Vref, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
-    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+    if offplane:
+        # Full-3x3 path (audit GAP2, v5.14.1; the same Li-2003 order the 1-D
+        # OOP path and pmm_jones_2d use): the POINTWISE ezz-Schur fold
+        # a_eff = e_ab - e_az e_zb / e_zz is applied on the CELL before the
+        # direct-rule convolution (folding AFTER convolution is the audited
+        # "gen2" trap), the four off-plane blocks feed the first-order
+        # generator, and the asymmetric forward/backward mode sets cascade
+        # through the GENERALIZED S-matrix.  Validated against a conical
+        # Berreman 4x4 oracle on uniform tilted-uniaxial / lossy cells.
+        ezz_c = eps_t[:, :, 2, 2]
+        inv_ezz = 1.0 / ezz_c
+        exz_c = eps_t[:, :, 0, 2]
+        eyz_c = eps_t[:, :, 1, 2]
+        ezx_c = eps_t[:, :, 2, 0]
+        ezy_c = eps_t[:, :, 2, 1]
+        Cxx = _conv(eps_t[:, :, 0, 0] - exz_c * ezx_c * inv_ezz)
+        Cxy = _conv(eps_t[:, :, 0, 1] - exz_c * ezy_c * inv_ezz)
+        Cyx = _conv(eps_t[:, :, 1, 0] - eyz_c * ezx_c * inv_ezz)
+        Cyy = _conv(eps_t[:, :, 1, 1] - eyz_c * ezy_c * inv_ezz)
+        EZZ = _conv(ezz_c)
+        Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
+            Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
+            EZX=_conv(ezx_c), EZY=_conv(ezy_c),
+            EXZ=_conv(exz_c), EYZ=_conv(eyz_c))
+        Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
+        Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
+        Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)
+        S = _interface_smatrix_general(Mref, Ml)
+        S = _propagation_star_general(S, lam, lam_b, k0 * depth)
+        S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
+    else:
+        Cxx = _conv(eps_t[:, :, 0, 0])
+        Cxy = _conv(eps_t[:, :, 0, 1])
+        Cyx = _conv(eps_t[:, :, 1, 0])
+        Cyy = _conv(eps_t[:, :, 1, 1])
+        EZZ = _conv(eps_t[:, :, 2, 2])
+        Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
+        S = _interface_smatrix(Wref, Vref, Wl, Vl)
+        S = _propagation_star(S, lam, k0 * depth)
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
     S11, S12, S21, S22 = S
 
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
@@ -1357,7 +1413,14 @@ def rcwa_efficiency_2d_shapes(
     polarization = _normalize_pol("rcwa_efficiency_2d_shapes", polarization)
     truncation = str(truncation)
 
-    xp = _rcwa_xp("rcwa_efficiency_2d_shapes", use_gpu)
+    # Pass the shape/background eps values into the dispatcher so a JAX
+    # input actually reaches the NotImplementedError below (audit P3: with no
+    # arrays the dispatcher could never resolve to jax, silently coercing a
+    # concrete JAX eps to host numpy and dying raw under jax.grad).
+    _eps_args = [eps_background] + [sh.get("eps") for sh in shapes]
+    xp = _rcwa_xp("rcwa_efficiency_2d_shapes", use_gpu,
+                  *[e for e in _eps_args if e is not None
+                    and not isinstance(e, (int, float, complex))])
     if backend_name(xp) == "jax":
         raise NotImplementedError(
             "rcwa_efficiency_2d_shapes: the analytic-shape solver has no JAX "
@@ -1404,7 +1467,7 @@ def rcwa_efficiency_2d_shapes(
     # refuting the old attribution to the pixel route).
     Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
     S = _interface_smatrix(Wref, Vref, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
+    S = _propagation_star(S, lam, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
     S11, S12, S21, S22 = S
 

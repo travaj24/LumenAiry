@@ -150,14 +150,28 @@ def test_p2a_layer_mode_grazing_pin(pol):
     assert np.all(np.isfinite(R)) and np.all(np.isfinite(J))
 
 
-@pytest.mark.parametrize("P,M", [(20e-6, 15), (15e-6, 15), (20e-6, 8)])
-def test_large_period_energy_blowup_guarded(P, M):
+def test_large_period_energy_blowup_guarded():
     """v5.5.3 (audit/workflow cross-confirmed): a near-degenerate layer
     eigenproblem at certain large-period / low-contrast geometries silently
     returned R+T up to 1e30+ (erratic in n_orders).  The post-solve energy
-    guard now turns that silent wrong answer into a clear error."""
-    with pytest.raises(ValueError, match="energy non-conservation"):
-        rcwa_efficiency_1d(P, 1.52, 1.5, 1.5, 1.5, 0.8e-6, 0.5, WL, n_orders=M)
+    guard turns any surviving blow-up into a clear error.
+
+    RE-PINNED 2026-06-10 (audit RCWA-LEV-1): the planar TE/TM-decoupled
+    N-sized path cured two of the three originally-pinned blow-ups on MKL --
+    but WHICH (P, M) pairs blow up is BLAS-build dependent (OpenBLAS trips
+    different truncations of the same geometry class), so the build-portable
+    contract is: every case either RAISES the loud guard or solves with
+    CLEAN lossless closure -- never a silent wrong answer."""
+    n_raised = 0
+    for P, M in ((15e-6, 15), (20e-6, 15), (20e-6, 8)):
+        try:
+            o, R, T = rcwa_efficiency_1d(P, 1.52, 1.5, 1.5, 1.5, 0.8e-6, 0.5,
+                                         WL, n_orders=M)
+        except ValueError as e:
+            assert "energy non-conservation" in str(e)
+            n_raised += 1
+            continue
+        assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
     # a valid lossy (metal) solve with R+T < 1 must NOT be tripped
     o, R, T = rcwa_efficiency_1d(0.6e-6, 0.056 + 4.28j, 1.0, 1.5, 1.0, 0.12e-6,
                                  0.5, WL, n_orders=15)
@@ -936,16 +950,23 @@ def test_rcwa_reduces_to_thin_grating_limit():
     cfg = dict(period=10e-6, n_ridge=1.55, n_groove=1.5, n_substrate=1.5,
                n_superstrate=1.5, depth=0.5e-6, duty_cycle=0.5, wavelength=WL,
                angle=0.0, n_orders=15)
+    # stabilize=True (2026-06-10): this large-period/low-contrast geometry
+    # sits in the documented erratic-instability class -- WHICH truncations
+    # blow up is BLAS-build dependent (OpenBLAS trips at M=14/15 where MKL is
+    # clean; the module-level jax skip had hidden this from CI/WSL for the
+    # file's whole life).  The consensus retry pins the physics on any build.
     o, R, T = rcwa_efficiency_1d(cfg["period"], cfg["n_ridge"], cfg["n_groove"],
                                  cfg["n_substrate"], cfg["n_superstrate"],
                                  cfg["depth"], cfg["duty_cycle"],
                                  cfg["wavelength"], angle=cfg["angle"],
-                                 polarization="te", n_orders=cfg["n_orders"])
+                                 polarization="te", n_orders=cfg["n_orders"],
+                                 stabilize=True)
     ot, Rt, Tt = thin_grating_efficiency_1d(**cfg, polarization="te")
     assert R.sum() < 2e-3                          # thin regime: R ~ 0
-    mid = len(o) // 2
+    pos = {int(m): j for j, m in enumerate(np.asarray(o))}
+    mid_t = len(ot) // 2
     for m in (-2, -1, 0, 1, 2):
-        assert abs(T[mid + m] - Tt[mid + m]) < 2e-3
+        assert abs(T[pos[m]] - Tt[mid_t + m]) < 2e-3
     # thin_grating now also validates polarization (s/p aliases; rejects typos)
     with pytest.raises(ValueError, match="polarization must be"):
         thin_grating_efficiency_1d(**cfg, polarization="circular")
@@ -1055,8 +1076,21 @@ def test_multiorder_field_conserves_energy(port, theta):
 
 
 # ============================== JAX autodiff ===============================
+#
+# SCOPED skip (2026-06-10): the previous module-level importorskip('jax')
+# silently skipped this ENTIRE file -- including the 50+ non-JAX core RCWA
+# pins above -- on any environment without jax (CI and the WSL proxy among
+# them).  Only the tests below need jax.
 
-jax = pytest.importorskip("jax")
+try:
+    import jax
+    _HAS_JAX = True
+except ImportError:        # pragma: no cover - environment dependent
+    jax = None
+    _HAS_JAX = False
+
+_requires_jax = pytest.mark.skipif(not _HAS_JAX,
+                                   reason="could not import 'jax'")
 
 
 def _square_cell(S):
@@ -1065,6 +1099,7 @@ def _square_cell(S):
     return np.where(xx ** 2 + yy ** 2 < 0.0625, 6.0, 2.0).astype(complex)
 
 
+@_requires_jax
 def test_jax_execution_parity_all_entry_points():
     """v5.5.1 execution-parity contract: every backend-dispatched solver
     returns bit-for-eig-precision identical results on NumPy and JAX (the
@@ -1116,6 +1151,7 @@ def test_jax_execution_parity_all_entry_points():
     assert float(np.max(np.abs(np.asarray(Jj) - Jn))) < 1e-10
 
 
+@_requires_jax
 def test_jax_uniform_layer_energy_conserved():
     """ADVERSARIAL (v5.5.1): a laterally-UNIFORM isotropic layer is doubly
     degenerate; its eig basis is gauge-arbitrary and ill-conditioned, which
@@ -1139,6 +1175,7 @@ def test_jax_uniform_layer_energy_conserved():
     assert abs(float(R[1].sum() + T[1].sum()) - 1.0) < 1e-6
 
 
+@_requires_jax
 def test_jax_wood_anomaly_no_nan():
     """ADVERSARIAL (v5.5.1): at an EXACT Rayleigh/Wood anomaly a diffracted
     order has k_z = 0 in a region, making the interface S-matrix singular ->
@@ -1166,6 +1203,7 @@ def test_jax_wood_anomaly_no_nan():
     assert not bool(np.isnan(np.asarray(g)))
 
 
+@_requires_jax
 def test_jax_2d_gradient_matches_finite_difference():
     """The 2-D solver is differentiable through the eig path (cell scaling)."""
     jax.config.update("jax_enable_x64", True)
@@ -1184,6 +1222,7 @@ def test_jax_2d_gradient_matches_finite_difference():
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@_requires_jax
 def test_jax_validation_and_error_prefixes():
     """v5.5.1: the folded JAX twin delegates to the unified solver, so input
     validation (no longer silently dropped) is enforced there.  ``n_samples``
@@ -1214,6 +1253,7 @@ def test_jax_validation_and_error_prefixes():
     assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
 
 
+@_requires_jax
 def test_rcwa_efficiency_1d_jax_deprecation_warning():
     """v5.5.2: the folded alias emits a DeprecationWarning steering callers to
     the unified rcwa_efficiency_1d (with jax.numpy inputs)."""
@@ -1224,6 +1264,7 @@ def test_rcwa_efficiency_1d_jax_deprecation_warning():
                                n_orders=8)
 
 
+@_requires_jax
 def test_jax_plus_use_gpu_rejected():
     """v5.5.2: a JAX input combined with use_gpu (or a CuPy input) is an
     ambiguous mixed-backend call and must raise, not silently pick JAX."""
@@ -1234,6 +1275,7 @@ def test_jax_plus_use_gpu_rejected():
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@_requires_jax
 def test_jax_value_matches_numpy():
     """v5.5.1: the folded JAX path uses the SAME exact binary-grating Fourier
     coefficients as the NumPy core (not the old soft-edge sample), so the two
@@ -1252,6 +1294,7 @@ def test_jax_value_matches_numpy():
 
 
 @pytest.mark.filterwarnings("ignore::DeprecationWarning")
+@_requires_jax
 def test_jax_gradients_match_finite_difference():
     """Autodiff gradients (incl. the non-Hermitian eig path) match central
     finite differences -- the inverse-design enabler.  The eig custom VJP's

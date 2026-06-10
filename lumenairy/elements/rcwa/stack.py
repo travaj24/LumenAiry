@@ -2,6 +2,7 @@
 Jones bridge).  Handles both 1-D and 2-D layers."""
 from __future__ import annotations
 
+import warnings
 from typing import List, Optional
 
 import numpy as np
@@ -24,7 +25,8 @@ from ._core import (
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
     _max_aligned_delta,
-    _propagation_smatrix,
+    _order_key,
+    _propagation_star,
     _rcwa_convergence_stack,
     _rcwa_xp,
     _redheffer_star,
@@ -45,6 +47,7 @@ from .twod import (
     _analytic_convolutions_2d,
     _eps_convolution_2d,
     _harmonic_orders_2d,
+    _li_convolutions_2d,
 )
 
 
@@ -755,13 +758,16 @@ class RCWAResult:
 
 
 class _RCWALayer:
-    __slots__ = ("thickness", "kind", "data")
+    __slots__ = ("thickness", "kind", "data", "formulation", "dispersive")
 
-    def __init__(self, thickness, kind, data):
+    def __init__(self, thickness, kind, data, formulation="laurent",
+                 dispersive=False):
         # keep a traced (JAX) thickness native so layer DEPTH is differentiable
         self.thickness = thickness if is_jax_array(thickness) else float(thickness)
-        self.kind = kind          # 'uniform' | 'iso' | 'tensor'
+        self.kind = kind          # 'uniform' | 'iso' | 'shapes' | 'tensor'
         self.data = data
+        self.formulation = formulation   # 'laurent' | 'li' (iso layers)
+        self.dispersive = dispersive     # data holds wl -> value callable(s)
 
 
 
@@ -894,17 +900,32 @@ class RCWAStack:
         return self.noy
 
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
-                  eps_tensor_cell=None, shapes=None, eps_background=None):
+                  eps_tensor_cell=None, shapes=None, eps_background=None,
+                  formulation="laurent"):
         """Append a layer.  Provide exactly one layer specification:
 
         * ``eps`` (scalar) -- uniform spacer;
         * ``eps_cell`` (``(Sx, Sy)``) -- isotropic patterned, FFT-sampled;
         * ``eps_tensor_cell`` (``(Sx, Sy, 3, 3)``) -- anisotropic patterned;
         * ``shapes`` (with ``eps_background``) -- isotropic patterned using
-          ANALYTIC shape Fourier transforms + the dual-Laurent factorization
-          (exact, no pixelation; see :func:`rcwa_efficiency_2d_shapes`).
+          ANALYTIC shape Fourier transforms (exact form factors, direct-rule
+          ``E_z``; see :func:`rcwa_efficiency_2d_shapes`).
 
         Permittivities are in the PUBLIC convention (``Im(eps) > 0`` lossy).
+
+        DISPERSIVE materials (audit GAP5, v5.14.1): ``eps``, ``eps_cell``,
+        ``eps_tensor_cell``, ``eps_background``, and each shape's ``eps`` may
+        be a CALLABLE ``wl -> value`` instead of a concrete value; such a
+        stack is solved with :meth:`solve_vs_wavelength` (a plain
+        :meth:`solve` raises, since no single wavelength is defined).
+
+        ``formulation`` (audit GAP3, v5.14.1): ``'laurent'`` (default,
+        unchanged) or ``'li'``/``'fff'`` for an ISOTROPIC patterned layer --
+        the Li-1997 sequential rule (inverse along each E-component's own
+        axis, direct along the other, direct-rule ``E_z``), the
+        fast-converging factorization for metal / high-contrast layers.
+        For 1-D stacks it reduces to the rigorous 1-D ``'li'`` placement.
+        Uniform / shapes / tensor layers accept only the default.
         """
         n = sum(x is not None for x in (eps, eps_cell, eps_tensor_cell, shapes))
         if n != 1:
@@ -913,9 +934,29 @@ class RCWAStack:
                 "eps_tensor_cell, shapes.")
         if not is_jax_array(thickness):       # traced depth -> skip the guard
             _validate_geometry("add_layer", depth=thickness)
+        f = str(formulation).lower()
+        if f == "fff":
+            f = "li"
+        if f not in ("laurent", "li"):
+            raise ValueError(
+                f"add_layer: formulation must be 'laurent' or 'li'/'fff', "
+                f"got {formulation!r}.")
+        if f != "laurent" and eps_cell is None:
+            raise ValueError(
+                "add_layer: formulation='li' applies to isotropic patterned "
+                "layers (eps_cell) only; uniform / shapes / tensor layers "
+                "use their own factorizations.")
         if eps is not None:
-            self._layers.append(_RCWALayer(thickness, "uniform", _C(eps)))
+            if callable(eps):
+                self._layers.append(_RCWALayer(thickness, "uniform", eps,
+                                               dispersive=True))
+            else:
+                self._layers.append(_RCWALayer(thickness, "uniform", _C(eps)))
         elif eps_cell is not None:
+            if callable(eps_cell):
+                self._layers.append(_RCWALayer(thickness, "iso", eps_cell,
+                                               formulation=f, dispersive=True))
+                return self
             # Keep a JAX cell native (a np.asarray would materialise the tracer
             # and break the differentiable RCWAStack path); NumPy/list inputs
             # are still normalised to a contiguous complex array.
@@ -924,15 +965,30 @@ class RCWAStack:
             if cell.ndim == 1:
                 cell = cell[:, None]
             _validate_cell_sampling("add_layer", cell, self.nox, self.noy)
-            self._layers.append(_RCWALayer(thickness, "iso", cell))
+            self._layers.append(_RCWALayer(thickness, "iso", cell,
+                                           formulation=f))
         elif shapes is not None:
             if eps_background is None:
                 raise ValueError(
                     "add_layer: shapes requires eps_background.")
-            _validate_shapes("add_layer", shapes, self.period_x, self.period_y)
-            self._layers.append(
-                _RCWALayer(thickness, "shapes", (_C(eps_background), shapes)))
+            disp = callable(eps_background) or any(
+                callable(sh.get("eps")) for sh in shapes)
+            if not disp:
+                _validate_shapes("add_layer", shapes, self.period_x,
+                                 self.period_y)
+                self._layers.append(
+                    _RCWALayer(thickness, "shapes",
+                               (_C(eps_background), shapes)))
+            else:
+                self._layers.append(
+                    _RCWALayer(thickness, "shapes", (eps_background, shapes),
+                               dispersive=True))
         else:
+            if callable(eps_tensor_cell):
+                self._layers.append(_RCWALayer(thickness, "tensor",
+                                               eps_tensor_cell,
+                                               dispersive=True))
+                return self
             tcell = (eps_tensor_cell.astype(_C) if is_jax_array(eps_tensor_cell)
                      else np.asarray(eps_tensor_cell, dtype=_C))
             _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
@@ -995,7 +1051,8 @@ class RCWAStack:
         return self
 
     def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
-                            duty_bottom, duty_top=None, n_slices=12, n_x=256):
+                            duty_bottom, duty_top=None, n_slices=12, n_x=256,
+                            shear=0.0):
         """Append a 1-D grating with SLANTED (trapezoidal) sidewalls as an
         auto-sliced z-staircase (audit GAP4 -- fab realism).
 
@@ -1020,6 +1077,15 @@ class RCWAStack:
             Staircase slice count (default 12).
         n_x : int, optional
             Cell samples along x for each slice's ``eps_cell`` (default 256).
+        shear : float, optional
+            SHEARED (parallelogram) sidewalls (audit GAP1, v5.14.1): the
+            ridge CENTRE shifts laterally by ``shear`` periods from top to
+            bottom (e.g. ``shear = depth * tan(wall_angle) / period``), so a
+            30-deg slanted-wall binary grating is
+            ``add_tapered_grating(d, ..., duty_top=duty_bottom,
+            shear=d*tan(0.524)/period)``.  Wrap-aware (the ridge may cross
+            the cell edge).  Default 0 (centred, unchanged).  Staircase
+            accuracy class: ~1e-3 absolute at 16-32 slices.
         """
         dt = float(duty_bottom if duty_top is None else duty_top)
         db = float(duty_bottom)
@@ -1029,14 +1095,16 @@ class RCWAStack:
                     f"add_tapered_grating: duty cycles must be in [0, 1], got "
                     f"duty_top={dt}, duty_bottom={db}.")
         er, eg = _C(eps_ridge), _C(eps_groove)
+        sh = float(shear)
         x = (np.arange(int(n_x)) + 0.5) / int(n_x)
         n_y = max(1, 4 * self.noy + 1)              # grating is uniform in y
 
         def _profile(zeta):
             duty = dt + (db - dt) * zeta            # top (0) -> bottom (1)
             half = 0.5 * duty
-            ridge = np.abs(x - 0.5) < half          # centred ridge
-            col = np.where(ridge, er, eg).astype(_C)
+            centre = 0.5 + sh * (zeta - 0.5)        # sheared ridge centre
+            dist = np.abs((x - centre + 0.5) % 1.0 - 0.5)   # wrap-aware
+            col = np.where(dist < half, er, eg).astype(_C)
             return np.broadcast_to(col[:, None], (int(n_x), n_y)).copy()
 
         return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
@@ -1082,6 +1150,125 @@ class RCWAStack:
                 vals += [float(d.min()), float(d.max())]
         return vals
 
+    def _materialized_layers(self, wl, layers=None):
+        """Concrete layer list at one wavelength: every DISPERSIVE
+        (``wl -> value``) layer spec is resolved and validated; non-dispersive
+        layers pass through by reference (their eig-dedup keys are unchanged
+        across the sweep).  ``layers`` defaults to the stack's own list; the
+        sweep passes its saved BASE list explicitly (inside the sweep loop
+        ``self._layers`` already holds the previous wavelength's concrete
+        materialisation)."""
+        out = []
+        for L in (self._layers if layers is None else layers):
+            if not getattr(L, "dispersive", False):
+                out.append(L)
+                continue
+            if L.kind == "uniform":
+                out.append(_RCWALayer(L.thickness, "uniform", _C(L.data(wl))))
+            elif L.kind == "iso":
+                cell = np.asarray(L.data(wl), dtype=_C)
+                if cell.ndim == 1:
+                    cell = cell[:, None]
+                _validate_cell_sampling("solve_vs_wavelength", cell, self.nox,
+                                        self.noy)
+                out.append(_RCWALayer(L.thickness, "iso", cell,
+                                      formulation=L.formulation))
+            elif L.kind == "shapes":
+                bg, shapes = L.data
+                bgv = _C(bg(wl)) if callable(bg) else _C(bg)
+                sh = [dict(d, eps=(_C(d["eps"](wl)) if callable(d["eps"])
+                                   else _C(d["eps"]))) for d in shapes]
+                _validate_shapes("solve_vs_wavelength", sh, self.period_x,
+                                 self.period_y)
+                out.append(_RCWALayer(L.thickness, "shapes", (bgv, sh)))
+            else:
+                tcell = np.asarray(L.data(wl), dtype=_C)
+                _validate_cell_sampling("solve_vs_wavelength", tcell, self.nox,
+                                        self.noy)
+                _require_inplane_tensor("solve_vs_wavelength", tcell)
+                out.append(_RCWALayer(L.thickness, "tensor", tcell))
+        return out
+
+    def solve_vs_wavelength(self, wavelengths, *, stabilize=False):
+        """Solve the stack across a wavelength sweep (audit GAP5, v5.14.1).
+
+        Calls :meth:`set_source`'s stored ``(theta, phi)`` at each wavelength,
+        materialising any DISPERSIVE (``wl -> value``) layer or region-index
+        callables per wavelength.  An unstable wavelength (the loud
+        ``_EnergyError`` guard) is returned as a NaN row and counted in a
+        single summary warning -- one bad point must not abort the sweep.
+
+        Returns
+        -------
+        orders : (N,) or (N, 2) int ndarray
+            The requested order set (fixed across the sweep).
+        R, T : (n_wl, 2, N) float ndarray
+            Reflected / transmitted efficiencies per wavelength, per incident
+            polarization (TE row 0, TM row 1 -- the :meth:`solve` layout).
+        jones : (n_wl, 2, 2) complex ndarray
+            Zeroth-order Jones reflection per wavelength.
+
+        With ``stabilize=True`` a per-wavelength consensus solve may return a
+        DIFFERENT order count; its efficiencies are aligned onto the requested
+        order set (orders it did not compute stay NaN).
+        """
+        if self._source is None:
+            raise ValueError(
+                "RCWAStack.solve_vs_wavelength: call set_source first (the "
+                "wavelength passed there is ignored in favour of the sweep).")
+        if not self._layers:
+            raise ValueError(
+                "RCWAStack.solve_vs_wavelength: add at least one layer.")
+        wl_arr = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+        orders_ref, N = _harmonic_orders_2d(self.nox, self.noy)
+        # key in the SAME form the per-wavelength results report their orders
+        # (1-D stacks return a flat (N,) order vector)
+        ret_orders = (orders_ref[:, 0] if self.is_1d else orders_ref)
+        key_to_col = {_order_key(o): j
+                      for j, o in enumerate(np.asarray(ret_orders))}
+        R_out = np.full((wl_arr.size, 2, N), np.nan)
+        T_out = np.full((wl_arr.size, 2, N), np.nan)
+        J_out = np.full((wl_arr.size, 2, 2), np.nan, dtype=_C)
+        base_layers = self._layers
+        base_ns, base_nb = self.n_superstrate, self.n_substrate
+        base_src = self._source
+        n_unstable = 0
+        try:
+            for i, w in enumerate(wl_arr):
+                w = float(w)
+                self._layers = self._materialized_layers(w, base_layers)
+                self.n_superstrate = (base_ns(w) if callable(base_ns)
+                                      else base_ns)
+                self.n_substrate = (base_nb(w) if callable(base_nb)
+                                    else base_nb)
+                self._source = dict(base_src, wavelength=w)
+                try:
+                    res = self.solve(stabilize=stabilize)
+                except _EnergyError:
+                    n_unstable += 1
+                    continue
+                o_i, R_i, T_i = res.efficiencies()
+                o_i = np.asarray(to_numpy(o_i))
+                R_i = np.asarray(to_numpy(R_i))
+                T_i = np.asarray(to_numpy(T_i))
+                cols = [key_to_col.get(_order_key(o)) for o in o_i]
+                for j_src, j_dst in enumerate(cols):
+                    if j_dst is not None:
+                        R_out[i, :, j_dst] = R_i[:, j_src]
+                        T_out[i, :, j_dst] = T_i[:, j_src]
+                J_out[i] = np.asarray(to_numpy(res.jones_reflection()))
+        finally:
+            self._layers = base_layers
+            self.n_superstrate, self.n_substrate = base_ns, base_nb
+            self._source = base_src
+        if n_unstable:
+            warnings.warn(
+                f"RCWAStack.solve_vs_wavelength: {n_unstable} of "
+                f"{wl_arr.size} wavelengths were numerically unstable "
+                f"(energy guard) and returned NaN; pass stabilize=True or "
+                f"adjust n_orders.", stacklevel=2)
+        return ret_orders, R_out, T_out, J_out
+
     def _layer_modes(self, layer, Kx, Ky, orders):
         """Layer eigenmodes ``(W, V, lam, EPS)``.  ``EPS`` is the wall-tangential
         ``[[eps]]`` convolution (``EZZ`` for a tensor layer) in the INTERNAL
@@ -1094,8 +1281,23 @@ class RCWAStack:
             EPS = complex(np.conj(layer.data)) * xp.eye(Kx.shape[0], dtype=_C)
             return W, V, lam, EPS
         if layer.kind == "iso":
-            EPS = _eps_convolution_2d(xp.conj(xp.asarray(layer.data)), orders,
-                                      self.nox, self.noy)
+            cell_c = xp.conj(xp.asarray(layer.data))
+            EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
+            if getattr(layer, "formulation", "laurent") == "li":
+                # Li-1997 sequential rule (audit GAP3, v5.14.1): rigorous
+                # fast-TM/metal factorization per layer; a 1-D stack cell
+                # (Sy = 1) reduces exactly to the 1-D 'li' placement.  A
+                # uniform cell falls through to the scalar path (all rules
+                # coincide; its analytic uniform modes avoid degenerate eig).
+                e_np = to_numpy(cell_c)
+                scale = max(1.0, float(np.max(np.abs(e_np))))
+                if float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale:
+                    Cxx, Cyy = _li_convolutions_2d(cell_c, orders, self.nox,
+                                                   self.noy, xp)
+                    Zli = xp.zeros_like(Cxx)
+                    W, V, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Zli,
+                                                         Zli, Cyy, EPS)
+                    return W, V, lam, EPS
             W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
             return W, V, lam, EPS
         if layer.kind == "shapes":
@@ -1137,12 +1339,12 @@ class RCWAStack:
             return ("shapes", complex(eps_bg),
                     tuple(sorted((k, repr(v)) for s in shapes
                                  for k, v in s.items())))
-        from ...backend import to_numpy
         try:                                   # iso / tensor: hash the cell
             arr = np.ascontiguousarray(to_numpy(data))
         except Exception:                      # traced array -> no dedup
             return None
-        return (kind, arr.shape, str(arr.dtype), arr.tobytes())
+        return (kind, getattr(layer, "formulation", "laurent"), arr.shape,
+                str(arr.dtype), arr.tobytes())
 
     @_with_blas_limit
     def solve(self, *, retain_internal=False, stabilize=False) -> RCWAResult:
@@ -1248,6 +1450,13 @@ class RCWAStack:
             raise ValueError("RCWAStack.solve: call set_source first.")
         if not self._layers:
             raise ValueError("RCWAStack.solve: add at least one layer.")
+        if any(getattr(L, "dispersive", False) for L in self._layers) or \
+                callable(self.n_superstrate) or callable(self.n_substrate):
+            raise ValueError(
+                "RCWAStack.solve: the stack holds DISPERSIVE (wl -> value) "
+                "materials, which have no value at a single set_source "
+                "wavelength alone; use solve_vs_wavelength(wavelengths) "
+                "(it materialises every callable per wavelength).")
         src = self._source
         wl, theta, phi = src["wavelength"], src["theta"], src["phi"]
         # Dispatch the backend off the patterned-layer arrays so a JAX cell
@@ -1315,12 +1524,12 @@ class RCWAStack:
             modes.append(cached)
         W0, V0, lam0, _e0 = modes[0]
         S = _interface_smatrix(Wref, Vref, W0, V0)
-        S = _redheffer_star(S, _propagation_smatrix(lam0, k0 * self._layers[0].thickness))
+        S = _propagation_star(S, lam0, k0 * self._layers[0].thickness)
         for i in range(1, len(modes)):
             Wp, Vp, _lp, _ = modes[i - 1]
             Wc, Vc, lamc, _ = modes[i]
             S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
-            S = _redheffer_star(S, _propagation_smatrix(lamc, k0 * self._layers[i].thickness))
+            S = _propagation_star(S, lamc, k0 * self._layers[i].thickness)
         Wl, Vl, _ll, _el = modes[-1]
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
         S11, S12, S21, S22 = S
@@ -1380,6 +1589,12 @@ class RCWAStack:
             # weight Re(kz_m/kz_inc) and the incident |E|^2 (einc_sq) that the
             # power-calibrated field reconstruction needs.
             kx0=float(kx0), ky0=float(ky0), kz_inc=float(kz_inc))
+        if retain_internal and bname == "jax":
+            warnings.warn(
+                "RCWAStack.solve: retain_internal=True is unavailable on the "
+                "JAX path (the per-layer modal retention is host-side); the "
+                "efficiencies are returned WITHOUT internal-field data -- "
+                "re-solve with NumPy inputs for field maps.", stacklevel=2)
         if retain_internal and bname != "jax":
             # Per-layer cumulative partial S-matrices that bracket the TOP plane
             # of each layer -> the c+/c- modal amplitudes for the in-structure
@@ -1416,13 +1631,13 @@ class RCWAStack:
             ifc.append(_interface_smatrix(modes[i - 1][0], modes[i - 1][1],
                                           modes[i][0], modes[i][1]))
         ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wtrn, Vtrn))
-        prop = [_propagation_smatrix(modes[i][2], k0 * self._layers[i].thickness)
-                for i in range(nlay)]
+        lam_L = [(modes[i][2], k0 * self._layers[i].thickness)
+                 for i in range(nlay)]
         S_above = [None] * nlay
         S_above[0] = ifc[0]
         for i in range(1, nlay):
             S_above[i] = _redheffer_star(
-                _redheffer_star(S_above[i - 1], prop[i - 1]), ifc[i])
+                _propagation_star(S_above[i - 1], *lam_L[i - 1]), ifc[i])
         S_below = [None] * nlay
         # S_below_bot[i] = star product from the BOTTOM of layer i to the
         # substrate (i.e. S_below[i] with layer i's own propagation removed from
@@ -1435,7 +1650,13 @@ class RCWAStack:
             below_bot = (ifc[nlay] if i == nlay - 1
                          else _redheffer_star(ifc[i + 1], S_below[i + 1]))
             S_below_bot[i] = below_bot
-            S_below[i] = _redheffer_star(prop[i], below_bot)
+            # left-star against a pure-propagation factor collapses the same
+            # way as _propagation_star (P11 = P22 = 0), mirrored:
+            B11, B12, B21, B22 = below_bot
+            xpb = array_namespace(B11)
+            X = xpb.exp(-lam_L[i][0] * lam_L[i][1])
+            S_below[i] = ((X[:, None] * B11) * X[None, :], X[:, None] * B12,
+                          B21 * X[None, :], B22)
         return S_above, S_below, S_below_bot
 
 

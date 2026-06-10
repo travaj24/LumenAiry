@@ -1103,14 +1103,27 @@ import numpy as np
 import pytest
 
 # Skip the whole module if JAX is unavailable.
-jax = pytest.importorskip('jax')
-jnp = pytest.importorskip('jax.numpy')
+try:
+    import jax
+    import jax.numpy as jnp
+    _HAS_JAX = True
+except ImportError:                  # pragma: no cover - environment dependent
+    jax = jnp = None
+    _HAS_JAX = False
+
+# SCOPED skip (2026-06-10): the previous MODULE-LEVEL importorskip('jax')
+# silently skipped this entire file -- including every non-JAX pin in it --
+# on any environment without jax (CI and the WSL proxy among them).
+_requires_jax = pytest.mark.skipif(not _HAS_JAX,
+                                   reason="could not import 'jax'")
+
+if _HAS_JAX:
+    jax.config.update('jax_enable_x64', True)
 
 
 # x64 is required for canonical-poly fit (per fit_canonical_polynomials_jax
 # itself, which auto-enables x64 with a warning).  Enable here too so
 # tests run deterministically regardless of import order.
-jax.config.update('jax_enable_x64', True)
 
 
 import lumenairy as lm  # noqa: E402
@@ -1146,6 +1159,7 @@ def singlet():
 # THE CRITICAL TEST -- the failure that prompted v4.12.1
 # ===========================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_CacheGradFinite:
     """The v4.12.0 cache implementation broke ``jax.grad`` through
     :func:`fit_canonical_polynomials_jax`, returning NaN.  v4.12.1
@@ -1242,6 +1256,7 @@ def _make_state(sbh=20e-6, n_per_side=8):
     )
 
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_CacheReuse:
     """Eager / non-traced calls with the same prescription must reuse
     one cached jit kernel."""
@@ -1273,6 +1288,7 @@ class TestAuditFixesV4_12_1_trace_jax_cache_CacheReuse:
             f"share a cache slot; got size {len(_TRACE_JAX_CACHE)}.")
 
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_NumericEquality:
     """Cached output must be bit-exact equal to the uncached fallback."""
 
@@ -1333,6 +1349,7 @@ class TestAuditFixesV4_12_1_trace_jax_cache_NumericEquality:
             rtol=1e-13, atol=1e-14)
 
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_AuxKeying:
     """Changing only an aux entry (e.g., glass name) must miss the
     cache; numeric-only differences that go into aux (radii / conics)
@@ -1385,6 +1402,7 @@ class TestAuditFixesV4_12_1_trace_jax_cache_AuxKeying:
             f"{len(_TRACE_JAX_CACHE)} (expected 2).")
 
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_LeafDifferentiability:
     """When a user substitutes a tracer leaf into a JaxPrescription
     (e.g., differentiate w.r.t. a radius) the cache is bypassed and the
@@ -1416,6 +1434,7 @@ class TestAuditFixesV4_12_1_trace_jax_cache_LeafDifferentiability:
 # Cache hit speedup
 # ===========================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_CacheWarmSpeedup:
     """Pin the warm-call speedup expected from cache hits.
 
@@ -1464,6 +1483,7 @@ class TestAuditFixesV4_12_1_trace_jax_cache_CacheWarmSpeedup:
 # JaxPrescription pytree integrity
 # ===========================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_JaxPrescriptionPytree:
     """The pytree registration must round-trip and play with the JAX
     pytree machinery (``jax.tree_util.tree_map`` etc.)."""
@@ -1528,6 +1548,7 @@ class TestAuditFixesV4_12_1_trace_jax_cache_JaxPrescriptionPytree:
 # Surface-kind validation preserved
 # ===========================================================================
 
+@_requires_jax
 class TestAuditFixesV4_12_1_trace_jax_cache_SurfaceKindGate:
     """The v4.11.2 ``NotImplementedError`` gate on unsupported surface
     kinds (mirrors / coord-breaks / biconic / freeform) must still
@@ -2239,6 +2260,7 @@ class TestAuditFixesV4_13_2_agent_a_PetzvalRadiusMirror:
 # A.5 -- P1-NEW-D: _build_jax_prescription glass_after='MIRROR' check
 # ============================================================================
 
+@_requires_jax
 class TestAuditFixesV4_13_2_agent_a_JaxPrescriptionMirrorMarker:
     """Pre-4.13.2 :func:`_build_jax_prescription` rejected mirrors
     signalled by ``is_mirror=True`` but did NOT check the

@@ -63,7 +63,7 @@ fft = [
     'pyfftw>=0.13,<0.15.1; python_version < "3.11"',
     'pyfftw>=0.13; python_version >= "3.11"',
 ]
-gpu = ["cupy>=11.0"]
+gpu = ["cupy>=14.0"]  # cupy.linalg.eig (cuSOLVER geev) exists only since v14
 fits = ["astropy>=5.0"]
 # v4.16.1 (audit M-1): refractiveindex pulled from the hard
 # dependency block to align with the optional / lazy-import handling
