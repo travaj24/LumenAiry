@@ -101,7 +101,12 @@ class PMM2DStack:
         """Append one layer: a UNIFORM film (``eps``, scalar), a patterned
         scalar cell (``eps_cell``, the :func:`pmm_efficiency_2d_cell` pixel
         grid), or an in-plane anisotropic tensor cell (``eps_tensor_cell``,
-        ``(Sx, Sy, 3, 3)``).  Exactly one of the three must be given."""
+        ``(Sx, Sy, 3, 3)``).  Exactly one of the three must be given.
+
+        DISPERSIVE materials (device-geometry roadmap item 5, 2026-06-10):
+        any of the three slots may be a ``wl -> value`` callable; such a
+        stack is solved with :meth:`solve_vs_wavelength` (a plain
+        :meth:`solve` raises)."""
         if float(thickness) <= 0.0 or not np.isfinite(float(thickness)):
             raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
         given = [v is not None for v in (eps, eps_cell, eps_tensor_cell)]
@@ -110,6 +115,12 @@ class PMM2DStack:
                 "PMM2DStack.add_layer: pass exactly ONE of eps (uniform), "
                 "eps_cell (scalar pixel grid) or eps_tensor_cell "
                 "((Sx, Sy, 3, 3) in-plane tensor grid).")
+        for slot, v in (("eps", eps), ("eps_cell", eps_cell),
+                        ("eps_tensor_cell", eps_tensor_cell)):
+            if callable(v):
+                self._layers.append(dict(kind="disp", t=float(thickness),
+                                         slot=slot, fn=v))
+                return self
         if eps is not None:
             self._layers.append(dict(kind="uniform", t=float(thickness),
                                      eps=complex(eps)))
@@ -149,6 +160,70 @@ class PMM2DStack:
                             self.max_nodal_dof)
         self._layers.append(dict(kind=kind, t=t, xw=list(xw), yw=list(yw),
                                  tile=tile, el_x=el_x, el_y=el_y))
+
+    def add_tapered_pillars(self, thickness, *, pillars, eps_host,
+                            n_slices=8):
+        """Append MULTI-PILLAR tapered layers as an auto-sliced z-staircase
+        (device-geometry roadmap item 1, 2026-06-10) -- the N-feature,
+        center-anchored generalization of :meth:`add_tapered_pillar`.
+
+        ``pillars`` is a list of
+        ``((cx, cy), (wx_top, wy_top), (wx_bottom, wy_bottom), eps)`` in
+        ABSOLUTE metres; each pillar tapers linearly ABOUT ITS OWN FIXED
+        CENTER.  ``eps_host`` fills the remainder.  Each slice's walls are
+        EXACT spectral-element walls (no pixelation).  Pillars must lie
+        strictly inside the cell (no wrap) and may not overlap.
+        """
+        n = int(n_slices)
+        if n < 1:
+            raise ValueError(
+                f"add_tapered_pillars: n_slices must be >= 1, got {n_slices}.")
+        pil = [((float(c[0]), float(c[1])), (float(wt[0]), float(wt[1])),
+                (float(wb[0]), float(wb[1])), complex(e))
+               for c, wt, wb, e in pillars]
+        eh = complex(eps_host)
+        dz = float(thickness) / n
+        for k in range(n):
+            zeta = (k + 0.5) / n
+            rects = []
+            for (cx, cy), (wxt, wyt), (wxb, wyb), e in pil:
+                wxz = wxt + (wxb - wxt) * zeta
+                wyz = wyt + (wyb - wyt) * zeta
+                if wxz <= 0.0 or wyz <= 0.0:
+                    continue
+                x0, x1 = cx - 0.5 * wxz, cx + 0.5 * wxz
+                y0, y1 = cy - 0.5 * wyz, cy + 0.5 * wyz
+                if not (0.0 < x0 < x1 < self.period_x
+                        and 0.0 < y0 < y1 < self.period_y):
+                    raise ValueError(
+                        "add_tapered_pillars: every pillar must lie strictly "
+                        "inside the cell at every slice (no wrap); got "
+                        f"x [{x0:.3e}, {x1:.3e}], y [{y0:.3e}, {y1:.3e}].")
+                rects.append((x0, x1, y0, y1, e))
+            for i, (ax0, ax1, ay0, ay1, _e) in enumerate(rects):
+                for bx0, bx1, by0, by1, _e2 in rects[i + 1:]:
+                    if ax0 < bx1 and bx0 < ax1 and ay0 < by1 and by0 < ay1:
+                        raise ValueError(
+                            "add_tapered_pillars: pillars overlap; merge or "
+                            "separate them explicitly.")
+            # INTERIOR wall positions in metres (the _append_patterned
+            # convention used by add_tapered_pillar; tile has one strip more
+            # than walls per axis)
+            xw = sorted({v for r in rects for v in (r[0], r[1])})
+            yw = sorted({v for r in rects for v in (r[2], r[3])})
+            bx = [0.0] + xw + [self.period_x]
+            by = [0.0] + yw + [self.period_y]
+            tile = np.full((len(xw) + 1, len(yw) + 1), eh, dtype=complex)
+            for ix in range(len(xw) + 1):
+                mx = 0.5 * (bx[ix] + bx[ix + 1])
+                for iy in range(len(yw) + 1):
+                    my = 0.5 * (by[iy] + by[iy + 1])
+                    for x0, x1, y0, y1, e in rects:
+                        if x0 < mx < x1 and y0 < my < y1:
+                            tile[ix, iy] = e
+                            break
+            self._append_patterned("scalar", dz, xw, yw, tile)
+        return self
 
     def add_tapered_pillar(self, thickness, *, eps_pillar, eps_host,
                            x_bounds_bottom, y_bounds_bottom,
@@ -194,6 +269,55 @@ class PMM2DStack:
             self._append_patterned("scalar", dz, xw, yw, tile)
         return self
 
+    def plot_geometry(self, axes=None, material_names=None):
+        """Draw each layer's exact-wall (x, y) cell map (device-geometry
+        roadmap item 7): one panel per layer from the stored analytic walls
+        and strip tile -- no pixelation.  Returns the list of axes."""
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Rectangle
+        n = len(self._layers)
+        if n == 0:
+            raise ValueError("PMM2DStack.plot_geometry: add layers first.")
+        if axes is None:
+            _fig, axes = plt.subplots(1, n, figsize=(3.2 * n, 3.2),
+                                      squeeze=False)
+            axes = list(axes[0])
+        for ax, L in zip(axes, self._layers):
+            kind = L.get("kind")
+            if kind == "uniform":
+                ax.add_patch(Rectangle((0, 0), self.period_x, self.period_y,
+                                       facecolor="0.8"))
+                ax.text(0.5 * self.period_x, 0.5 * self.period_y,
+                        f"eps={L['eps']:.3g}\nt={L['t']:.3g} m",
+                        ha="center", va="center", fontsize=8)
+            elif kind == "disp":
+                ax.add_patch(Rectangle((0, 0), self.period_x, self.period_y,
+                                       facecolor="none", edgecolor="0.4",
+                                       hatch="//"))
+                ax.text(0.5 * self.period_x, 0.5 * self.period_y,
+                        "dispersive", ha="center", va="center", fontsize=8)
+            else:
+                bx = [0.0] + [float(v) for v in L["xw"]] + [self.period_x]
+                by = [0.0] + [float(v) for v in L["yw"]] + [self.period_y]
+                tile = np.asarray(L["tile"])
+                vals = (np.real(tile[..., 0, 0]) if tile.ndim == 4
+                        else np.real(tile))
+                vmin, vmax = float(vals.min()), float(vals.max())
+                rng = (vmax - vmin) or 1.0
+                cmap = plt.get_cmap("viridis")
+                for ix in range(len(bx) - 1):
+                    for iy in range(len(by) - 1):
+                        ax.add_patch(Rectangle(
+                            (bx[ix], by[iy]), bx[ix + 1] - bx[ix],
+                            by[iy + 1] - by[iy],
+                            facecolor=cmap((vals[ix, iy] - vmin) / rng),
+                            edgecolor="none"))
+                ax.set_title(f"t={L['t']:.3g} m", fontsize=8)
+            ax.set_xlim(0, self.period_x)
+            ax.set_ylim(0, self.period_y)
+            ax.set_aspect("equal")
+        return axes
+
     def set_source(self, wavelength, *, theta=None, phi=0.0, angle=None):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
         ``theta`` / azimuth ``phi`` [rad]).  ``angle`` is the cross-suite alias
@@ -211,6 +335,11 @@ class PMM2DStack:
         """Solve the cascade.  Returns ``(orders, R(2, N), T(2, N),
         jones_reflection(2, 2))`` -- row 0 = incident ``E_x``, row 1 =
         incident ``E_y``; Jones in the PUBLIC convention."""
+        if any(L.get("kind") == "disp" for L in self._layers):
+            raise ValueError(
+                "PMM2DStack.solve: the stack holds DISPERSIVE (wl -> value) "
+                "materials; use solve_vs_wavelength(wavelengths), which "
+                "materialises every callable per wavelength.")
         if self._src is None:
             raise ValueError("PMM2DStack.solve: call set_source(...) first")
         if not self._layers:
@@ -364,10 +493,30 @@ class PMM2DStack:
         _warn_stack_energy(R_eff, T_eff)
         return orders2d, R_eff, T_eff, jones
 
+    def _materialized_layers(self, w, layers):
+        """Concrete layer list at one wavelength: each DISPERSIVE layer's
+        callable is resolved and run through the normal add-time processing
+        (walls/tile extraction + validation); concrete layers pass through."""
+        out = []
+        for L in layers:
+            if L.get("kind") != "disp":
+                out.append(L)
+                continue
+            probe = PMM2DStack.__new__(PMM2DStack)
+            probe.__dict__.update(self.__dict__)
+            probe._layers = []
+            probe.add_layer(L["t"], **{L["slot"]: L["fn"](float(w))})
+            out.extend(probe._layers)
+        return out
+
     def solve_vs_wavelength(self, wavelengths, *, theta=None, phi=0.0,
-                            angle=None):
-        """Solve the stack across a wavelength sweep (NON-DISPERSIVE indices).
-        Returns ``(orders, R(n_wl, 2, N), T(n_wl, 2, N))``."""
+                            angle=None, jones=False):
+        """Solve the stack across a wavelength sweep, materialising any
+        DISPERSIVE (``wl -> value``) layer callables per wavelength (item 5,
+        device-geometry roadmap 2026-06-10).
+        Returns ``(orders, R(n_wl, 2, N), T(n_wl, 2, N))``, plus a FOURTH
+        ``jones (n_wl, 2, 2)`` element when ``jones=True`` (default ``False``
+        keeps the released 3-tuple)."""
         wlv = np.atleast_1d(np.asarray(wavelengths, dtype=float))
         if wlv.size == 0:
             raise ValueError("PMM2DStack.solve_vs_wavelength: wavelengths is "
@@ -375,14 +524,23 @@ class PMM2DStack:
         if not np.all(np.isfinite(wlv)) or np.any(wlv <= 0.0):
             raise ValueError("PMM2DStack.solve_vs_wavelength: every "
                              "wavelength must be a finite value > 0 [m].")
-        orders = R = T = None
-        for i, w in enumerate(wlv):
-            self.set_source(float(w), theta=theta, phi=phi, angle=angle)
-            o, R1, T1, _j = self.solve()
-            if orders is None:
-                orders = o
-                R = np.empty((wlv.size,) + R1.shape, dtype=float)
-                T = np.empty((wlv.size,) + T1.shape, dtype=float)
-            R[i] = R1
-            T[i] = T1
+        base = self._layers
+        orders = R = T = J = None
+        try:
+            for i, w in enumerate(wlv):
+                self._layers = self._materialized_layers(float(w), base)
+                self.set_source(float(w), theta=theta, phi=phi, angle=angle)
+                o, R1, T1, j1 = self.solve()
+                if orders is None:
+                    orders = o
+                    R = np.empty((wlv.size,) + R1.shape, dtype=float)
+                    T = np.empty((wlv.size,) + T1.shape, dtype=float)
+                    J = np.empty((wlv.size, 2, 2), dtype=complex)
+                R[i] = R1
+                T[i] = T1
+                J[i] = np.asarray(j1)
+        finally:
+            self._layers = base
+        if jones:
+            return orders, R, T, J
         return orders, R, T

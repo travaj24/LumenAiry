@@ -22,11 +22,14 @@ from ._core import (
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
     _interface_smatrix,
+    _interface_smatrix_general,
     _layer_eigenmodes,
     _layer_eigenmodes_tensor,
     _max_aligned_delta,
+    _modes_to_M,
     _order_key,
     _propagation_star,
+    _propagation_star_general,
     _rcwa_convergence_stack,
     _rcwa_xp,
     _redheffer_star,
@@ -35,6 +38,7 @@ from ._core import (
     _require_propagating_incidence,
     _sqrt_decay,
     _sqrt_forward,
+    _tensor_offplane_present,
     _validate_cell_sampling,
     _validate_geometry,
     _validate_shapes,
@@ -992,7 +996,19 @@ class RCWAStack:
             tcell = (eps_tensor_cell.astype(_C) if is_jax_array(eps_tensor_cell)
                      else np.asarray(eps_tensor_cell, dtype=_C))
             _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
-            _require_inplane_tensor("add_layer", tcell)
+            # OUT-OF-PLANE tensor layers are SUPPORTED since v5.14.1 (the
+            # rcwa_jones_2d GAP2 machinery promoted to the stack via the
+            # PMM2DStack any_oop pattern); the remaining contract is a
+            # nonzero e_zz (the pointwise ezz-Schur fold divides by it).
+            # Traced JAX tensors keep the in-plane contract.
+            if _tensor_offplane_present(tcell):
+                ezz_min = float(np.min(np.abs(
+                    to_numpy(tcell)[..., 2, 2])))
+                if ezz_min < 1e-12:
+                    raise ValueError(
+                        "add_layer: an out-of-plane tensor layer requires "
+                        "|e_zz| > 0 everywhere (the E_z elimination divides "
+                        f"by it); min |e_zz| = {ezz_min:.3e}.")
             self._layers.append(_RCWALayer(thickness, "tensor", tcell))
         return self
 
@@ -1109,6 +1125,166 @@ class RCWAStack:
 
         return self.add_graded_layer(thickness, _profile, n_slices=n_slices,
                                      rule="midpoint")
+
+    def add_tapered_ridges(self, thickness, *, ridges, eps_groove,
+                           n_slices=12, n_x=256, n_y=None):
+        """Append a MULTI-RIDGE tapered grating as an auto-sliced z-staircase
+        (device-geometry roadmap item 1, 2026-06-10) -- the N-feature,
+        center-anchored generalization of :meth:`add_tapered_grating`.
+
+        ``ridges`` is a list of ``(center, w_top, w_bottom, eps)`` in ABSOLUTE
+        metres; each ridge tapers linearly ABOUT ITS OWN FIXED CENTER (a
+        width-sequence construction that left-anchors a ridge drifts its
+        center -- the audited geometry bug).  Wrap-aware; later ridges may
+        NOT overlap earlier ones (raises).  ``eps_groove`` fills the rest.
+        """
+        n = int(n_slices)
+        if n < 1:
+            raise ValueError(
+                f"add_tapered_ridges: n_slices must be >= 1, got {n_slices}.")
+        rid = [(float(c), float(wt), float(wb), _C(e))
+               for c, wt, wb, e in ridges]
+        eg = _C(eps_groove)
+        nx = int(n_x)
+        ny = int(n_y) if n_y is not None else max(1, 4 * self.noy + 1)
+        x = (np.arange(nx) + 0.5) / nx          # period fractions
+
+        def _profile(zeta):
+            col = np.full(nx, eg, dtype=_C)
+            covered = np.zeros(nx, dtype=bool)
+            for c, wt, wb, e in rid:
+                w = wt + (wb - wt) * zeta
+                if w <= 0.0:
+                    continue
+                half = 0.5 * w / self.period_x
+                dist = np.abs((x - c / self.period_x + 0.5) % 1.0 - 0.5)
+                m = dist < half
+                if np.any(m & covered):
+                    raise ValueError(
+                        "add_tapered_ridges: ridges overlap; merge or "
+                        "separate them explicitly.")
+                covered |= m
+                col[m] = e
+            return np.broadcast_to(col[:, None], (nx, ny)).copy()
+
+        return self.add_graded_layer(thickness, _profile, n_slices=n,
+                                     rule="midpoint")
+
+    def add_tapered_pillars(self, thickness, *, pillars, eps_host,
+                            n_slices=8, n_x=None, n_y=None):
+        """Append MULTI-PILLAR tapered 2-D layers as an auto-sliced
+        z-staircase (device-geometry roadmap item 1; the 2-D RCWA stack had
+        NO tapered builder at all).
+
+        ``pillars`` is a list of
+        ``((cx, cy), (wx_top, wy_top), (wx_bottom, wy_bottom), eps)`` in
+        ABSOLUTE metres; each pillar tapers linearly about its own fixed
+        center.  ``eps_host`` fills the rest.  Wrap-aware in both axes;
+        overlapping pillars raise.
+        """
+        if self.is_1d:
+            raise ValueError(
+                "add_tapered_pillars: this is a 1-D stack; use "
+                "add_tapered_ridges (or construct the stack with period_y).")
+        n = int(n_slices)
+        if n < 1:
+            raise ValueError(
+                f"add_tapered_pillars: n_slices must be >= 1, got {n_slices}.")
+        nx = int(n_x) if n_x is not None else max(33, 4 * self.nox + 1)
+        ny = int(n_y) if n_y is not None else max(33, 4 * self.noy + 1)
+        eh = _C(eps_host)
+        xs = (np.arange(nx) + 0.5) / nx
+        ys = (np.arange(ny) + 0.5) / ny
+        pil = [((float(c[0]), float(c[1])), (float(wt[0]), float(wt[1])),
+                (float(wb[0]), float(wb[1])), _C(e))
+               for c, wt, wb, e in pillars]
+
+        def _profile(zeta):
+            cell = np.full((nx, ny), eh, dtype=_C)
+            covered = np.zeros((nx, ny), dtype=bool)
+            for (cx, cy), (wxt, wyt), (wxb, wyb), e in pil:
+                wxz = wxt + (wxb - wxt) * zeta
+                wyz = wyt + (wyb - wyt) * zeta
+                if wxz <= 0.0 or wyz <= 0.0:
+                    continue
+                dx = np.abs((xs - cx / self.period_x + 0.5) % 1.0 - 0.5)
+                dy = np.abs((ys - cy / self.period_y + 0.5) % 1.0 - 0.5)
+                m = (dx[:, None] < 0.5 * wxz / self.period_x) & \
+                    (dy[None, :] < 0.5 * wyz / self.period_y)
+                if np.any(m & covered):
+                    raise ValueError(
+                        "add_tapered_pillars: pillars overlap; merge or "
+                        "separate them explicitly.")
+                covered |= m
+                cell[m] = e
+            return cell
+
+        return self.add_graded_layer(thickness, _profile, n_slices=n,
+                                     rule="midpoint")
+
+    def plot_geometry(self, ax=None, material_names=None):
+        """Draw the stack cross-section as the solver sees it (device-geometry
+        roadmap item 7): per-layer Re(eps) maps -- a 1-D stack renders an
+        ``(x, z)`` cross-section; a 2-D stack renders the x-z cut at the
+        cell's y midline (each layer's own pixel grid, no resampling).
+        Dispersive layers render as hatched bands (no single-wavelength
+        value).  Returns the matplotlib axes."""
+        import matplotlib.pyplot as plt
+        from matplotlib.patches import Rectangle
+        if ax is None:
+            _fig, ax = plt.subplots(figsize=(6, 4))
+        total = sum(float(L.thickness) for L in self._layers)
+        z = 0.0
+        nx = 256
+        for L in self._layers:
+            t = float(L.thickness)
+            if getattr(L, "dispersive", False):
+                ax.add_patch(Rectangle((0.0, -z - t), self.period_x, t,
+                                       facecolor="none", edgecolor="0.4",
+                                       hatch="//"))
+                ax.text(0.02 * self.period_x, -z - 0.5 * t,
+                        "dispersive (wl -> eps)", fontsize=7, va="center")
+            else:
+                if L.kind == "uniform":
+                    row = np.full(nx, np.real(complex(L.data)))
+                elif L.kind == "iso":
+                    cell = np.asarray(L.data)
+                    col = cell[:, cell.shape[1] // 2]
+                    row = np.real(col[(np.arange(nx) * cell.shape[0])
+                                      // nx])
+                elif L.kind == "tensor":
+                    cell = np.asarray(L.data)
+                    col = cell[:, cell.shape[1] // 2, 0, 0]
+                    row = np.real(col[(np.arange(nx) * cell.shape[0])
+                                      // nx])
+                else:                       # shapes: rasterize via the cut
+                    eps_bg, shapes = L.data
+                    xs = (np.arange(nx) + 0.5) / nx * self.period_x
+                    ym = 0.5 * self.period_y
+                    row = np.full(nx, np.real(complex(eps_bg)))
+                    for sh in shapes:
+                        cx, cy = sh.get("center", (self.period_x / 2,
+                                                   self.period_y / 2))
+                        if sh["shape"] == "rectangle":
+                            wx, wy = sh["size"]
+                            m = (np.abs(xs - cx) < 0.5 * wx) & \
+                                (abs(ym - cy) < 0.5 * wy)
+                        else:               # disk / ellipse
+                            rx = sh.get("radius", sh.get("size", (0, 0))[0])
+                            ry = sh.get("radius", sh.get("size", (0, 0))[-1])
+                            m = ((xs - cx) / rx) ** 2 + \
+                                ((ym - cy) / max(ry, 1e-300)) ** 2 < 1.0
+                        row = np.where(m, np.real(complex(sh["eps"])), row)
+                ax.imshow(row[None, :], aspect="auto", origin="upper",
+                          extent=(0.0, self.period_x, -z - t, -z),
+                          cmap="viridis")
+            z += t
+        ax.set_xlim(0.0, self.period_x)
+        ax.set_ylim(-total, 0.0)
+        ax.set_xlabel("x [m]")
+        ax.set_ylabel("z [m] (0 = top)")
+        ax.set_title("RCWAStack geometry (Re eps, y-midline cut)")
+        return ax
 
     def set_source(self, wavelength, *, theta=None, phi=0.0, angle=None):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
@@ -1318,6 +1494,23 @@ class RCWAStack:
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
         EZZ = cv(et[:, :, 2, 2])
+        if _tensor_offplane_present(layer.data):
+            # full-3x3 layer (v5.14.1): pointwise ezz-Schur fold on the CELL
+            # before the direct-rule convolution + the 6-tuple generator --
+            # the rcwa_jones_2d GAP2 machinery, per stack layer.
+            inv_ezz = 1.0 / et[:, :, 2, 2]
+            exz = et[:, :, 0, 2]
+            eyz = et[:, :, 1, 2]
+            ezx = et[:, :, 2, 0]
+            ezy = et[:, :, 2, 1]
+            Wf, Vf, lf, Wb, Vb, lb = _layer_eigenmodes_tensor(
+                Kx, Ky,
+                cv(et[:, :, 0, 0] - exz * ezx * inv_ezz),
+                cv(et[:, :, 0, 1] - exz * ezy * inv_ezz),
+                cv(et[:, :, 1, 0] - eyz * ezx * inv_ezz),
+                cv(et[:, :, 1, 1] - eyz * ezy * inv_ezz), EZZ,
+                EZX=cv(ezx), EZY=cv(ezy), EXZ=cv(exz), EYZ=cv(eyz))
+            return ("gen", Wf, Vf, lf, Wb, Vb, lb, EZZ)
         W, V, lam = _layer_eigenmodes_tensor(
             Kx, Ky, cv(et[:, :, 0, 0]), cv(et[:, :, 0, 1]),
             cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]), EZZ)
@@ -1522,16 +1715,51 @@ class RCWAStack:
                 if key is not None:
                     _mode_cache[key] = cached
             modes.append(cached)
-        W0, V0, lam0, _e0 = modes[0]
-        S = _interface_smatrix(Wref, Vref, W0, V0)
-        S = _propagation_star(S, lam0, k0 * self._layers[0].thickness)
-        for i in range(1, len(modes)):
-            Wp, Vp, _lp, _ = modes[i - 1]
-            Wc, Vc, lamc, _ = modes[i]
-            S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
-            S = _propagation_star(S, lamc, k0 * self._layers[i].thickness)
-        Wl, Vl, _ll, _el = modes[-1]
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        any_oop = any(isinstance(m, tuple) and len(m) == 8 and m[0] == "gen"
+                      for m in modes)
+        if not any_oop:
+            W0, V0, lam0, _e0 = modes[0]
+            S = _interface_smatrix(Wref, Vref, W0, V0)
+            S = _propagation_star(S, lam0, k0 * self._layers[0].thickness)
+            for i in range(1, len(modes)):
+                Wp, Vp, _lp, _ = modes[i - 1]
+                Wc, Vc, lamc, _ = modes[i]
+                S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
+                S = _propagation_star(S, lamc, k0 * self._layers[i].thickness)
+            Wl, Vl, _ll, _el = modes[-1]
+            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
+        else:
+            # GENERALIZED cascade (v5.14.1): any out-of-plane tensor layer
+            # breaks the [W; -V] <-> -lam symmetry, so the whole stack is
+            # promoted -- symmetric layers/half-spaces enter as
+            # [W, W; V, -V] blocks with (lam, -lam), the generator layers
+            # with their explicit forward/backward sets (the PMM2DStack
+            # any_oop pattern; the single-layer machinery is rcwa_jones_2d's
+            # GAP2 path).
+            if retain_internal:
+                raise NotImplementedError(
+                    "RCWAStack.solve(retain_internal=True): internal-field "
+                    "retention is not available for stacks with "
+                    "out-of-plane tensor layers (the partial-S recovery is "
+                    "symmetric-mode based).")
+
+            def _gblocks(m):
+                if isinstance(m, tuple) and len(m) == 8 and m[0] == "gen":
+                    _k, Wf, Vf, lf, Wb, Vb, lb, _e = m
+                    return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb
+                W, V, lam, _e = m
+                return _modes_to_M(W, V, W, -V), lam, -lam
+            M_prev = _modes_to_M(Wref, Vref, Wref, -Vref)
+            S = None
+            for i, m in enumerate(modes):
+                Ml, lf, lb = _gblocks(m)
+                Si = _interface_smatrix_general(M_prev, Ml)
+                S = Si if S is None else _redheffer_star(S, Si)
+                S = _propagation_star_general(
+                    S, lf, lb, k0 * self._layers[i].thickness)
+                M_prev = Ml
+            Msub = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
+            S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
         S11, S12, S21, S22 = S
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])

@@ -4,6 +4,76 @@ All notable changes to the core library are documented here.
 
 ## [5.14.1] — unreleased
 
+**Device-geometry roadmap** (docs/audits/ROADMAP_DEVICE_GEOMETRY_SWEEPS_
+2026_06_10.md — geometry construction, not solvers, was the bottleneck):
+
+### Added (device-geometry)
+
+- **Multi-feature tapered builders, center-anchored** (item 1):
+  `PMMStack.add_tapered_ridges`, `RCWAStack.add_tapered_ridges` /
+  `.add_tapered_pillars` (the first 2-D RCWA tapered builder),
+  `PMM2DStack.add_tapered_pillars` — absolute-position `(center, w_top,
+  w_bottom, eps)` features that taper about their own FIXED centers (the
+  audited left-anchored-drift bug class), wrap-aware, overlap-raising;
+  single-feature cases reproduce the legacy builders bit-for-bit.
+- **`SegmentStackGeometry`** (item 2): solver-independent geometry algebra —
+  `add_ridges` / conformal `coat` (exact L∞ dilation: tooth tops, sidewalls,
+  gap floors in one operation) / `line_interface` (liner on specific
+  material-material interfaces, vertical AND horizontal, carved from a named
+  side) / `fill` / `to_pmm_stack` / `to_rcwa_stack` / `plot` — one object
+  feeds the PMM solve, the RCWA cross-check, and the viewer.
+- **Staircase robustness** (item 3): `_pmm_union_grid` gains a PHYSICAL
+  `min_feature` wall-snap (default period×1e-5) that merges near-coincident
+  CROSS-LAYER wall pairs with a warning naming them — a single layer's own
+  thin feature (a 1 nm liner) is never touched; `PMMStack.solve(
+  stabilize='slices')` re-solves recorded taper builders at n_slices ± 1 and
+  warns on zeroth-order Jones disagreement — the PASSIVE-BUT-WRONG staircase
+  detector that energy tripwires cannot see.
+- **Sweep parity + dispersion** (item 5):
+  `pmm_jones_1d_segments_vs_wavelength` (the missing segments mirror);
+  `PMMStack` and `PMM2DStack` accept `wl -> value` callables in every
+  material slot and their `solve_vs_wavelength` gains `jones=True` (opt-in
+  4-tuple; the released 3-tuple is unchanged); dispersive stacks refuse a
+  single-wavelength `solve()` with guidance.
+- **PMM internal absorption** (item 6): `PMMStack.solve(
+  retain_internal=True)` + `layer_absorption(by_material=False|True)` — the
+  internal z-Poynting flux difference per layer (closes against the far
+  field to ~1e-14: `sum A == 1 - R - T` is a cross-machinery invariant, not
+  a construction) with per-MATERIAL attribution via the lossy volume
+  density.  The PMM split is flat in degree where the RCWA cross-check is
+  provably under-resolved on metals — the loss-map gap that drove the
+  device's Ta-liner redesign by inference now has a direct instrument.
+- **Prepared material slots** (item 8): segments accept material KEY strings;
+  `PMMStack.prepare()` + `prepared.solve(materials={...})` re-eig only the
+  layers whose keys changed (an LC director sweep re-eigs 1 of N layers),
+  bit-equal to the rebuild path.
+- **Geometry viewers** (item 7): `plot_geometry` on `PMMStack` (exact
+  analytic rectangles), `RCWAStack` (per-layer eps maps), `PMM2DStack`
+  (per-layer exact-wall cell maps) — the picture IS the model.
+- **`Material.from_csv`** (item 9): the tabulated n/k loader every project
+  re-writes, as a `wl -> eps` callable accepted by every dispersive slot;
+  linear in n/k, loud out-of-range.
+- **`RCWAStack` out-of-plane tensor layers** (prior roadmap follow-through):
+  any full-3×3 layer promotes the whole cascade to the generalized
+  S-matrix (the `PMM2DStack` any_oop pattern over the `rcwa_jones_2d` GAP2
+  machinery); single-layer stacks match the direct solver bit-for-bit,
+  split-film identity to 4e-17, mixed stacks energy-exact.
+
+### Deferred with reasons (device-geometry)
+
+- Item 4 (native exact trapezoid-metric PMM layer): the roadmap's "linear
+  convection term like the slant" sketch does not hold — `u = (x − c)/w(z)`
+  leaves `1/w(z)²` z-dependence in the lateral operator for a LINEAR taper,
+  so the modal problem is not constant-coefficient (no single per-layer
+  eig); an exponential-taper gauge or a z-ODE (Magnus) integrator are the
+  honest starting points.  Research-grade; the staircase + items 1/3 remain
+  the path.
+- 1-D homogeneous-eig share (PMM roadmap #2): requires threading a
+  presolved spectrum through the modal flux selector; small win (1 eig of
+  N+2), deferred.
+- RCWA even-parity scope (LEV-3) and µ/bianisotropy + hex lattices: as
+  before.
+
 **RCWA accuracy audit (46 findings; every landed fix hand-verified with
 independent probes — the audit's verification phase was unavailable).**
 

@@ -412,6 +412,7 @@ from .elements.freeform import (
     surface_sag_xy_polynomial,
     surface_sag_zernike_freeform,
 )
+from .elements.materials import Material
 from .elements.pmm import (
     PMMStack,
     classify_from_grating,
@@ -425,6 +426,7 @@ from .elements.pmm import (
     pmm_graded_segments,
     pmm_jones_1d,
     pmm_jones_1d_segments,
+    pmm_jones_1d_segments_vs_wavelength,
     pmm_jones_1d_slanted,
     pmm_jones_1d_slanted_segments,
     pmm_jones_1d_vs_wavelength,
@@ -496,6 +498,10 @@ from .elements.rcwa import (
     reflective_outcoupling,
     set_blas_threads,
     uniaxial_tensor,
+)
+from .elements.segment_geometry import (
+    BACKGROUND,
+    SegmentStackGeometry,
 )
 
 # â”€â”€ Grating diffraction efficiency (thin-grating scalar approx) â”€â”€â”€â”€â”€â”€â”€
@@ -1540,7 +1546,11 @@ __all__ = [
     'pmm_jones_1d_slanted',
     'pmm_jones_1d_slanted_segments',
     'pmm_efficiency_1d_vs_wavelength',
+    'Material',
+    'SegmentStackGeometry',
+    'BACKGROUND',
     'pmm_jones_1d_vs_wavelength',
+    'pmm_jones_1d_segments_vs_wavelength',
     'pmm_graded_segments',
     'pmm_efficiency_2d',
     'pmm_efficiency_2d_cell',

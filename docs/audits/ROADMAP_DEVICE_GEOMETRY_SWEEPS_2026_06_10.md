@@ -124,10 +124,13 @@ staircase walls collide earlier: at `n_slices=8` the 2° taper's per-slice offse
 | ns=6, deg 10 | 78.0% | 0.892 | quiet |
 | ns=8, deg 10 | 29.9% | **1.121** | **fires** ✓ |
 | ns=8, deg 14 | **27.0%** | 0.892 | **silent** ✗ |
+| ns=8, deg 18 | 88.6% | **1.121** | **fires** ✓ |
 
-The ns8/deg14 row is the dangerous one: raising degree restores **passivity but not
-accuracy** — an energy-clean, plausible-looking, completely wrong answer the
-`R+T>1` tripwire cannot catch. Two library-side fixes:
+There is **no degree cure**: degrees 10/14/18 give three *different* wrong answers,
+non-monotonically (loud gain → silent passive-but-wrong → loud gain). The ns8/deg14 row
+is the dangerous one — an energy-clean, plausible-looking, completely wrong answer the
+`R+T>1` tripwire cannot catch (the tripwire's own "raise degree" advice does not hold
+in this regime). Two library-side fixes:
 
 - **(a) Physical wall-snap.** A `min_feature=` (absolute length or fraction) on the
   union builder / staircase builders: snap union walls closer than it (midpoint eps
@@ -333,3 +336,32 @@ adjudicated limit agrees with PMM). Application-side sources:
 `pbs_qwp_mirror_sim/src/pmm_taper.py` (`_coated_layers`, `coated_tapered_jones`,
 `view_coated_1d`), `validation/check_bare_paths.py` (the gold-standard match),
 `check_pmm_straddle.py`, `check_v5_14.py` (regression + tripwire + ns8/deg14 row).
+
+
+---
+
+## EXECUTION STATUS (2026-06-10, same day)
+
+Critically assessed and implemented in the v5.14.1 working tree (see
+CHANGELOG "Device-geometry roadmap" for the shipped surface):
+
+| Item | Verdict | Status |
+|---|---|---|
+| 1 multi-ridge/pillar builders | sound, small | **SHIPPED** all four families (center-anchor pinned by a drift-detector test) |
+| 2 geometry algebra | sound; `coat(where=...)` SUBSET filters deliberately not offered in v1 (a wrong subset classification is the failure class this layer removes) | **SHIPPED** (`SegmentStackGeometry`, conformal coat = exact L∞ dilation, liners both orientations, hand-exact tests) |
+| 3a physical wall-snap | sound, incl. the cross-layer-only asymmetry | **SHIPPED** (default period×1e-5; own-layer liners never merged) |
+| 3b slices consensus | sound | **SHIPPED** (`stabilize='slices'`, warns on Jones disagreement; cannot re-slice hand-added layers — warns) |
+| 4 trapezoid-metric layer | **sketch refuted**: `u=(x−c)/w(z)` leaves `1/w(z)²` z-dependence in the lateral operator for a linear taper — NOT a constant-coefficient modal problem; the "quadratic-in-q via linear convection" claim only holds for the slant (z-independent shear) | DEFERRED (research; exponential-taper gauge or Magnus z-ODE are the honest starts) |
+| 5 sweeps | sound; NB the matrix row 5b was stale — `RCWAStack.solve_vs_wavelength` (v5.14.1) already returns jones | **SHIPPED** (segments jones sweep; PMM stacks dispersive + `jones=True` opt-in to keep released 3-tuples) |
+| 6 PMM absorption | sound; per-material = renormalized volume-density split | **SHIPPED** (flux-based per-layer, closure ~1e-14 as an honest invariant; cross-solver totals agree on single-lossy stacks; the multi-lossy TM split exposes exactly the documented RCWA under-resolution) |
+| 7 viewers | sound | **SHIPPED** (all three stacks + the geometry object) |
+| 8 prepared material slots | sound | **SHIPPED** (`prepare()` + `solve(materials=...)`, bit-equal, eig-cache verified) |
+| 9 material loaders | `from_csv` sound; `from_refractiveindex` (network) rejected — a numerics library should not fetch URLs at solve time | **SHIPPED** (`Material.from_csv` + `.index()`) |
+
+Validation caveat: the roadmap's device-specific reference numbers (82.3% /
+77.9% etc.) live in the application repo (`pbs_qwp_mirror_sim`), which is not
+part of this library; the shipped tests pin the same INVARIANTS on synthetic
+geometry (single-feature == legacy builders bit-for-bit, center-drift
+detector, hand-exact coat/liner bands, closure invariants, prepared ==
+rebuild).  Re-running the application validation set against v5.14.1 is the
+recommended acceptance step.

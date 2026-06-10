@@ -2463,22 +2463,36 @@ def _tensor3_dict(M):
 
 
 
-def _pmm_union_grid(layer_segments):
+def _pmm_union_grid(layer_segments, min_feature=None):
     """Build the shared nodal grid for a stack: the union of every layer's walls.
 
     ``layer_segments[i]`` = layer ``i``'s ``[(width_fraction, eps), ...]``.
     Returns ``(union_widths, layer_eps_union)`` where ``union_widths`` are the
     fractional widths of the union cells (sum to 1) and ``layer_eps_union[i][c]``
     is layer ``i``'s permittivity on union cell ``c`` (each union cell lies wholly
-    within one of layer ``i``'s segments, so eps is exact per cell)."""
+    within one of layer ``i``'s segments, so eps is exact per cell).
+
+    ``min_feature`` (FRACTION of the period; device-geometry roadmap item 3a,
+    2026-06-10): PHYSICAL wall-snap.  Distinct layers' staircase walls collide
+    at offsets far above float noise (a 2-deg taper at n_slices=8 puts walls
+    ~1.2 nm apart -> near-zero-width union elements -> a passive-but-wrong or
+    blowing-up solve).  Adjacent union walls closer than ``min_feature`` are
+    snapped to their midpoint and a warning names the merged pairs -- but ONLY
+    when the pair comes from DIFFERENT layers: a close pair owned by a single
+    layer is that layer's own intentional thin feature (a 1 nm liner) and is
+    never thinned."""
     walls = {0.0, 1.0}
+    wall_owners = {0.0: set(), 1.0: set()}
     cums = []
-    for segs in layer_segments:
+    for li, segs in enumerate(layer_segments):
         w = np.asarray([float(s[0]) for s in segs], dtype=float)
         cw = np.concatenate([[0.0], np.cumsum(w)])
         cw[-1] = 1.0
         cums.append(cw)
-        walls.update(float(x) for x in cw)
+        for x in cw:
+            x = float(x)
+            walls.add(x)
+            wall_owners.setdefault(x, set()).add(li)
     uwalls = np.array(sorted(walls))
     # MERGE near-coincident walls (geometry-side conditioning fix): a tapered
     # stack offsets each slice's walls by ~dz*tan(theta), so the union of
@@ -2492,11 +2506,48 @@ def _pmm_union_grid(layer_segments):
     if uwalls.size > 2:
         tol = 1e-9
         keep = [uwalls[0]]
+        owners = [wall_owners.get(float(uwalls[0]), set())]
         for w in uwalls[1:]:
             if w - keep[-1] > tol:
                 keep.append(w)
+                owners.append(wall_owners.get(float(w), set()))
+            else:
+                owners[-1] = owners[-1] | wall_owners.get(float(w), set())
         if keep[-1] < uwalls[-1]:           # never drop the period boundary
             keep[-1] = uwalls[-1]
+        # ---- PHYSICAL wall-snap (item 3a): cross-layer pairs only ----------
+        if min_feature is not None and float(min_feature) > tol:
+            mf = float(min_feature)
+            merged_pairs = []
+            out_w = [keep[0]]
+            out_o = [owners[0]]
+            for w, ow in zip(keep[1:], owners[1:]):
+                d = w - out_w[-1]
+                interior = 0.0 < out_w[-1] and w < 1.0
+                if (d < mf and interior
+                        and not (out_o[-1] & ow)):      # no common owner layer
+                    merged_pairs.append((out_w[-1], w))
+                    out_w[-1] = 0.5 * (out_w[-1] + w)   # snap to midpoint
+                    out_o[-1] = out_o[-1] | ow
+                else:
+                    out_w.append(w)
+                    out_o.append(ow)
+            if merged_pairs:
+                import warnings as _warnings
+                pairs_txt = ", ".join(
+                    f"({a:.6g}, {b:.6g})" for a, b in merged_pairs[:6])
+                more = ("" if len(merged_pairs) <= 6
+                        else f" (+{len(merged_pairs) - 6} more)")
+                _warnings.warn(
+                    f"_pmm_union_grid: snapped {len(merged_pairs)} pair(s) of "
+                    f"NEAR-COINCIDENT cross-layer walls closer than "
+                    f"min_feature={mf:.3g} (period fractions): {pairs_txt}"
+                    f"{more}.  These near-zero-width union elements are the "
+                    f"staircase wall-collision pathology (passive-but-wrong / "
+                    f"blow-up); the snap moves each pair to its midpoint.  "
+                    f"Single-layer thin features are never merged.",
+                    stacklevel=3)
+            keep = out_w
         uwalls = np.array(keep)
     uwidths = np.diff(uwalls)
     mids = 0.5 * (uwalls[:-1] + uwalls[1:])

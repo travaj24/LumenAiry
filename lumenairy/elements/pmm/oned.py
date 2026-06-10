@@ -1484,6 +1484,7 @@ __all__ = [
     "pmm_1d",
     "pmm_efficiency_1d_vs_wavelength",
     "pmm_jones_1d_vs_wavelength",
+    "pmm_jones_1d_segments_vs_wavelength",
     "pmm_graded_segments",
     "grating_convergence_class",
     "classify_from_grating",
@@ -1613,6 +1614,65 @@ def pmm_jones_1d_vs_wavelength(
     if np.ndim(wavelengths):
         return wl, J, Rt, Tt
     return wl[0], J[0], Rt[0], Tt[0]
+
+def pmm_jones_1d_segments_vs_wavelength(
+    period: float,
+    segments,
+    n_substrate,
+    n_superstrate,
+    depth: float,
+    wavelengths,
+    *,
+    angle: float = 0.0,
+    theta: float | None = None,
+    degree: int = 16,
+    elements_per_region: int = 1,
+    grade: bool = True,
+    far_field_orders: int = 21,
+    n_orders: int | None = None,
+    stabilize: bool = True,
+):
+    """DISPERSIVE Jones spectral sweep of the SEGMENTED 1-D PMM grating -- the
+    segments mirror of :func:`pmm_jones_1d_vs_wavelength` and the PMM parity
+    item for :func:`~lumenairy.elements.rcwa.rcwa_jones_vs_wavelength_segments`
+    (device-geometry roadmap item 5, 2026-06-10).
+
+    Each segment's ``eps`` (scalar or ``(3, 3)``) and the region indices may be
+    fixed values or ``wl -> value`` callables.
+
+    Returns ``(wavelengths, jones (Nwl, 2, 2), R_total (Nwl, 2),
+    T_total (Nwl, 2))`` exactly as :func:`pmm_jones_1d_vs_wavelength`
+    (scalar wavelength in -> scalar out).
+    """
+    angle = _resolve_incidence(angle, theta)
+    far_field_orders = _resolve_order_count(far_field_orders, n_orders)
+    wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+    if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
+        raise ValueError(
+            "pmm_jones_1d_segments_vs_wavelength: every wavelength must be "
+            "finite and > 0 [m] (got an empty or invalid sweep).")
+
+    def _at(v, w):
+        return v(w) if callable(v) else v
+
+    J = np.empty((wl.size, 2, 2), dtype=complex)
+    Rt = np.empty((wl.size, 2), dtype=float)
+    Tt = np.empty((wl.size, 2), dtype=float)
+    for i, w in enumerate(wl):
+        segs_w = [(float(wd), _at(e, float(w))) for wd, e in segments]
+        _o, R, T, jr = pmm_jones_1d_segments(
+            period, segs_w, _at(n_substrate, float(w)),
+            _at(n_superstrate, float(w)), depth, float(w), angle=angle,
+            degree=degree, elements_per_region=elements_per_region,
+            grade=grade, far_field_orders=far_field_orders,
+            stabilize=stabilize)
+        J[i] = np.asarray(jr)
+        Rt[i] = np.asarray(R).sum(axis=1)
+        Tt[i] = np.asarray(T).sum(axis=1)
+    if np.ndim(wavelengths):
+        return wl, J, Rt, Tt
+    return wl[0], J[0], Rt[0], Tt[0]
+
 
 def pmm_graded_segments(profile, n_segments=16):
     """Approximate a CONTINUOUS lateral permittivity profile by piecewise-
