@@ -146,8 +146,14 @@ def _aligned_max_diff(rec_a, rec_b):
     per-order split is still moving."""
     oa, effs_a, Ja = rec_a
     ob, effs_b, Jb = rec_b
-    ia = {int(o): i for i, o in enumerate(oa)}
-    ib = {int(o): i for i, o in enumerate(ob)}
+
+    def _key(o):
+        # 1-D orders are scalars; 2-D orders are (m, n) pairs -- both hashable
+        a = np.atleast_1d(np.asarray(o))
+        return int(a[0]) if a.size == 1 else tuple(int(v) for v in a)
+
+    ia = {_key(o): i for i, o in enumerate(oa)}
+    ib = {_key(o): i for i, o in enumerate(ob)}
     d = 0.0
     for k in set(ia) | set(ib):
         for A, B in zip(effs_a, effs_b):
@@ -1256,17 +1262,34 @@ def _pmm_jones_solve_segments(period, widths, seg_tensors3, n_sub, n_sup, depth,
 
 
 # --- shared stabilize (per-order convergence consensus) --------------------
-def _stabilize_scalar(solve_at_degree, d0, label):
+class _StabilizeScanExhausted(Exception):
+    """Raised by a ``solve_at_degree`` closure when the NEXT scan degree is
+    unaffordable (e.g. the 2-D nodal-DOF cost cap): the scan ends gracefully
+    and the consensus is evaluated on the degrees already solved."""
+
+
+def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
+                      per_order_tol=None):
     """Per-order convergence consensus over a degree window; ``solve_at_degree(d)
-    -> (orders, R, T)``.  Shared by the binary + segmented scalar solvers."""
+    -> (orders, R, T)``.  Shared by the binary + segmented scalar solvers (and
+    the 2-D cell solver, whose closure maps the scan index onto odd degrees and
+    raises :class:`_StabilizeScanExhausted` at its cost cap).  ``passive_tol`` /
+    ``per_order_tol`` default to the 1-D-calibrated constants; the 2-D hybrid
+    passes looser values (its Fourier-truncation energy floor ~1e-2 exceeds the
+    1-D no-floor tolerance)."""
+    passive_tol = _PASSIVE_TOL if passive_tol is None else passive_tol
+    per_order_tol = _PER_ORDER_TOL if per_order_tol is None else per_order_tol
     scanned = []
     for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
-        orders, R, T = solve_at_degree(d)
+        try:
+            orders, R, T = solve_at_degree(d)
+        except _StabilizeScanExhausted:
+            break
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, orders, R, T, tot <= 1.0 + _PASSIVE_TOL))
+        scanned.append((d, orders, R, T, tot <= 1.0 + passive_tol))
         records = [(s[1], (s[2], s[3]), None) for s in scanned]
         passive = [s[4] for s in scanned]
-        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
+        cluster = _converged_cluster(records, passive, per_order_tol,
                                      _MIN_PLATEAU)
         if not cluster:
             continue
@@ -1292,17 +1315,25 @@ def _stabilize_scalar(solve_at_degree, d0, label):
 
 
 
-def _stabilize_jones(solve_at_degree, d0, label):
+def _stabilize_jones(solve_at_degree, d0, label, *, passive_tol=None,
+                     per_order_tol=None):
     """Per-order + Jones convergence consensus; ``solve_at_degree(d) ->
-    (orders, R, T, J)``.  Shared by the binary + segmented anisotropic solvers."""
+    (orders, R, T, J)``.  Shared by the binary + segmented anisotropic solvers
+    (and the 2-D tensor solver; see :class:`_StabilizeScanExhausted` and the
+    tolerance note on :func:`_stabilize_scalar`)."""
+    passive_tol = _JONES_PASSIVE_TOL if passive_tol is None else passive_tol
+    per_order_tol = _PER_ORDER_TOL if per_order_tol is None else per_order_tol
     scanned = []
     for d in range(d0, d0 + _STABILIZE_MAX_SCAN):
-        o, R, T, J = solve_at_degree(d)
+        try:
+            o, R, T, J = solve_at_degree(d)
+        except _StabilizeScanExhausted:
+            break
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * _JONES_PASSIVE_TOL))
+        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * passive_tol))
         records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
         passive = [s[5] for s in scanned]
-        cluster = _converged_cluster(records, passive, _PER_ORDER_TOL,
+        cluster = _converged_cluster(records, passive, per_order_tol,
                                      _MIN_PLATEAU)
         if not cluster:
             continue

@@ -1613,8 +1613,30 @@ def _select_forward_flux(gam, Vfull, N):
     # falls back to the decay sign Re(gam) > 0.  For RECIPROCAL media the two
     # criteria coincide (propagating modes carry flux, evanescent ones are
     # flux-null), so the Berreman-validated path is unchanged.
-    flux_tol = 1e-9 * float(xp.maximum(xp.asarray(1.0), xp.max(xp.abs(Sz))))
+    mx = float(xp.maximum(xp.asarray(1.0), xp.max(xp.abs(Sz))))
+    flux_tol = 1e-9 * mx
     carries = xp.abs(Sz) > flux_tol
+    # DEEP-DECAY override (v5.14, PMM-2D out-of-plane): in a PROJECTED
+    # (non-orthogonal, truncated) modal basis the deep-evanescent modes carry
+    # PROJECTION-NOISE flux far above the 1e-9 tolerance (measured up to
+    # ~7e-4 of max on the 2-D PMM generator), and the noise SIGN is random --
+    # one growing mode classified forward blows the cascade up by exp(+|Re
+    # gam}| k0 L) ~ 1e30.  A mode whose flux is below the noise ceiling while
+    # decaying decisively is physically flux-null: trust the decay sign.
+    # Genuine flux carriers (lossless propagating ~O(1) rel, lossy-metal
+    # forward ~0.2 rel, the gyrotropic audit-P2-A modes) sit far above the
+    # ceiling and are untouched, so the Berreman-validated rcwa full-3x3
+    # behavior is preserved.
+    deep_noise = (xp.abs(Sz) < 3e-3 * mx) & (xp.abs(gre) > 0.1)
+    # STABILITY band: a strongly-decaying mode (|Re gam| > 0.5, i.e. e^{-pi}
+    # per period-depth) must be classified by its decay sign REGARDLESS of
+    # flux -- keeping a growing mode in the forward set makes the cascade's
+    # exp(+|Re gam| k0 L) unbounded no matter what its (possibly genuine,
+    # non-reciprocal) flux says.  The gyrotropic modes the flux-first rule
+    # protects (audit P2-A) are near-propagating (|Re gam| small) and stay
+    # flux-classified.
+    deep = xp.abs(gre) > 0.5
+    carries = carries & ~deep_noise & ~deep
     fwd = xp.where(carries, Sz > 0, gre > 0)
     idx = xp.asarray(np.where(to_numpy(fwd))[0])
     if int(idx.shape[0]) == 2 * N:

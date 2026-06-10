@@ -426,11 +426,20 @@ from .elements.pmm import (
     pmm_jones_1d_slanted,
     pmm_jones_1d_slanted_segments,
 )
+from .elements.pmm.stack2d import (
+    PMM2DStack,
+)
 from .elements.pmm.twod import (
     PreparedPMM2D,
     pmm_efficiency_2d,
+    pmm_efficiency_2d_cell,
+    pmm_efficiency_2d_cell_vs_wavelength,
     pmm_efficiency_2d_vs_wavelength,
     prepare_pmm_2d,
+    prepare_pmm_2d_cell,
+)
+from .elements.pmm.twod_jones import (
+    pmm_jones_2d,
 )
 from .elements.pmm.twod_staggered import (
     pmm_efficiency_2d_staggered,
@@ -1528,8 +1537,13 @@ __all__ = [
     'pmm_jones_1d_slanted',
     'pmm_jones_1d_slanted_segments',
     'pmm_efficiency_2d',
+    'pmm_efficiency_2d_cell',
     'pmm_efficiency_2d_vs_wavelength',
+    'pmm_efficiency_2d_cell_vs_wavelength',
+    'pmm_jones_2d',
+    'PMM2DStack',
     'prepare_pmm_2d',
+    'prepare_pmm_2d_cell',
     'PreparedPMM2D',
     'pmm_efficiency_2d_staggered',
     'grating_convergence_class',

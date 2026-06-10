@@ -1,0 +1,351 @@
+"""
+lumenairy.elements.pmm.stack2d -- multilayer 2-D hybrid PMM (PMM2DStack).
+=========================================================================
+
+:class:`PMM2DStack` cascades MULTIPLE doubly-periodic layers -- uniform films,
+axis-aligned patterned cells (:func:`pmm_efficiency_2d_cell` geometry), and
+in-plane anisotropic tensor cells (:func:`pmm_jones_2d` geometry) -- through
+the Redheffer S-matrix in the shared Rayleigh (Fourier) order basis.  It is the
+2-D PMM counterpart of :class:`lumenairy.elements.rcwa.RCWAStack` (builder API:
+``add_layer`` / ``add_tapered_pillar`` / ``set_source`` / ``solve`` /
+``solve_vs_wavelength``).
+
+Because every patterned layer is Fourier-Galerkin PROJECTED into the same
+Rayleigh basis, each layer gets its OWN exact spectral-element grid (walls need
+not align across layers -- no union-grid constraint, unlike the 1-D
+:class:`PMMStack`); the interfaces couple layer modes through the common order
+set.  The solve always drives BOTH incident polarizations and returns
+``(orders, R(2, N), T(2, N), jones_reflection(2, 2))`` -- the
+:func:`rcwa_jones_2d` return shape.
+
+Loss convention: PUBLIC ``Im(eps) > 0`` for loss throughout.
+"""
+from __future__ import annotations
+
+import numpy as np
+
+from ..rcwa._core import (
+    _grazing_safe_wavelength,
+    _require_propagating_incidence,
+)
+from ._core import (
+    _interface_smatrix,
+    _propagation_smatrix,
+    _redheffer_star,
+    _resolve_incidence,
+)
+from .stack import _warn_stack_energy
+from .twod import (
+    _C,
+    _MAX_NODAL_DOF,
+    _axis_elem_counts,
+    _build_axis,
+    _cell_to_walls_tile,
+    _homogeneous_modes,
+    _kz_forward2,
+    _layer_modes_projected,
+    _scalar_projected_ops,
+    _validate_cell_cost,
+    _validate_cell_orders,
+)
+from .twod_jones import _require_inplane_tile, _tensor_layer_modes
+
+__all__ = ["PMM2DStack"]
+
+
+class PMM2DStack:
+    """Builder for a multilayer doubly-periodic stack solved by the hybrid
+    2-D PMM (see the module docstring).
+
+    Parameters
+    ----------
+    period_x, period_y : float
+        Lattice periods (metres); ``period_y`` defaults to ``period_x``.
+    n_superstrate, n_substrate : complex, optional
+        Half-space refractive indices (isotropic).
+    degree, elements_per_strip, grade, n_orders, formulation, max_nodal_dof
+        Shared solver knobs, as in :func:`pmm_efficiency_2d_cell` /
+        :func:`pmm_jones_2d` (``formulation`` controls the scalar wall-normal
+        rule AND the tensor ``E_z`` elimination).
+    """
+
+    def __init__(self, period_x, period_y=None, *, n_superstrate=1.0,
+                 n_substrate=1.0, degree=11, elements_per_strip=1,
+                 grade=False, n_orders=11, formulation="li",
+                 max_nodal_dof=_MAX_NODAL_DOF):
+        if formulation not in ("li", "laurent"):
+            raise ValueError(
+                f"PMM2DStack: formulation must be 'li' or 'laurent', got "
+                f"{formulation!r}")
+        self.period_x = float(period_x)
+        self.period_y = float(period_x if period_y is None else period_y)
+        self.n_sup = complex(n_superstrate)
+        self.n_sub = complex(n_substrate)
+        self.degree = int(degree)
+        self.n_el = int(elements_per_strip)
+        self.grade = bool(grade)
+        self.n_orders = int(n_orders)
+        self.formulation = formulation
+        self.max_nodal_dof = int(max_nodal_dof)
+        self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
+        self._src = None
+
+    # ------------------------------------------------------------------ #
+    # builder
+    # ------------------------------------------------------------------ #
+    def add_layer(self, thickness, *, eps=None, eps_cell=None,
+                  eps_tensor_cell=None):
+        """Append one layer: a UNIFORM film (``eps``, scalar), a patterned
+        scalar cell (``eps_cell``, the :func:`pmm_efficiency_2d_cell` pixel
+        grid), or an in-plane anisotropic tensor cell (``eps_tensor_cell``,
+        ``(Sx, Sy, 3, 3)``).  Exactly one of the three must be given."""
+        if float(thickness) <= 0.0 or not np.isfinite(float(thickness)):
+            raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
+        given = [v is not None for v in (eps, eps_cell, eps_tensor_cell)]
+        if sum(given) != 1:
+            raise ValueError(
+                "PMM2DStack.add_layer: pass exactly ONE of eps (uniform), "
+                "eps_cell (scalar pixel grid) or eps_tensor_cell "
+                "((Sx, Sy, 3, 3) in-plane tensor grid).")
+        if eps is not None:
+            self._layers.append(dict(kind="uniform", t=float(thickness),
+                                     eps=complex(eps)))
+            return self
+        if eps_cell is not None:
+            xw, yw, tile = _cell_to_walls_tile(
+                eps_cell, self.period_x, self.period_y,
+                "PMM2DStack.add_layer")
+            if tile.ndim != 2:
+                raise ValueError(
+                    "PMM2DStack.add_layer: eps_cell must be a scalar (Sx, Sy) "
+                    "grid; pass tensor cells via eps_tensor_cell.")
+            self._append_patterned("scalar", float(thickness), xw, yw, tile)
+            return self
+        cell = np.asarray(eps_tensor_cell, dtype=_C)
+        if cell.ndim != 4 or cell.shape[2:] != (3, 3):
+            raise ValueError(
+                f"PMM2DStack.add_layer: eps_tensor_cell must be "
+                f"(Sx, Sy, 3, 3), got shape {cell.shape}.")
+        xw, yw, tile = _cell_to_walls_tile(
+            cell, self.period_x, self.period_y, "PMM2DStack.add_layer")
+        _require_inplane_tile("PMM2DStack.add_layer", tile)
+        self._append_patterned("tensor", float(thickness), xw, yw, tile)
+        return self
+
+    def _append_patterned(self, kind, t, xw, yw, tile):
+        el_x = _axis_elem_counts(self.period_x, xw, self.degree, self.n_el,
+                                 "PMM2DStack.add_layer", "x")
+        el_y = _axis_elem_counts(self.period_y, yw, self.degree, self.n_el,
+                                 "PMM2DStack.add_layer", "y")
+        _validate_cell_orders("PMM2DStack.add_layer", self.n_orders,
+                              self.degree, el_x, el_y)
+        _validate_cell_cost("PMM2DStack.add_layer", el_x, el_y, self.degree,
+                            self.max_nodal_dof)
+        self._layers.append(dict(kind=kind, t=t, xw=list(xw), yw=list(yw),
+                                 tile=tile, el_x=el_x, el_y=el_y))
+
+    def add_tapered_pillar(self, thickness, *, eps_pillar, eps_host,
+                           x_bounds_bottom, y_bounds_bottom,
+                           x_bounds_top=None, y_bounds_top=None,
+                           n_slices=8, rule="midpoint"):
+        """Append a TAPERED rectangular pillar (sloped sidewalls) as a
+        z-staircase of ``n_slices`` exact-wall scalar layers -- the 2-D
+        counterpart of ``RCWAStack.add_tapered_grating``.  The pillar bounds
+        interpolate linearly from ``*_bounds_bottom`` to ``*_bounds_top``
+        (default: equal -> a straight pillar); each slice's walls are EXACT
+        (no pixel snapping).  ``rule='midpoint'`` samples the bounds at slice
+        midpoints (O(1/n_slices^2)); ``'bottom'`` at the slice bottoms."""
+        if rule not in ("midpoint", "bottom"):
+            raise ValueError(
+                f"PMM2DStack.add_tapered_pillar: rule must be 'midpoint' or "
+                f"'bottom', got {rule!r}")
+        n_slices = int(n_slices)
+        if n_slices < 1:
+            raise ValueError(
+                "PMM2DStack.add_tapered_pillar: n_slices must be >= 1")
+        xb0 = tuple(map(float, x_bounds_bottom))
+        yb0 = tuple(map(float, y_bounds_bottom))
+        xb1 = xb0 if x_bounds_top is None else tuple(map(float, x_bounds_top))
+        yb1 = yb0 if y_bounds_top is None else tuple(map(float, y_bounds_top))
+        dz = float(thickness) / n_slices
+        for s in range(n_slices):
+            # slice s spans [s*dz, (s+1)*dz] measured from the layer BOTTOM;
+            # the stack is built superstrate-first, so slice order is TOP-down
+            zfrac = (1.0 - (s + 0.5) / n_slices if rule == "midpoint"
+                     else 1.0 - (s + 1.0) / n_slices)
+            xw = [xb0[0] + (xb1[0] - xb0[0]) * zfrac,
+                  xb0[1] + (xb1[1] - xb0[1]) * zfrac]
+            yw = [yb0[0] + (yb1[0] - yb0[0]) * zfrac,
+                  yb0[1] + (yb1[1] - yb0[1]) * zfrac]
+            if not (0.0 < xw[0] < xw[1] < self.period_x
+                    and 0.0 < yw[0] < yw[1] < self.period_y):
+                raise ValueError(
+                    "PMM2DStack.add_tapered_pillar: interpolated pillar "
+                    f"bounds {xw} x {yw} must satisfy 0 < lo < hi < period "
+                    "at every slice.")
+            tile = np.full((3, 3), complex(eps_host), dtype=_C)
+            tile[1, 1] = complex(eps_pillar)
+            self._append_patterned("scalar", dz, xw, yw, tile)
+        return self
+
+    def set_source(self, wavelength, *, theta=None, phi=0.0, angle=None):
+        """Set the incident plane wave (vacuum ``wavelength`` [m], polar
+        ``theta`` / azimuth ``phi`` [rad]).  ``angle`` is the cross-suite alias
+        for ``theta`` (theta wins when both are given, as everywhere else)."""
+        theta = _resolve_incidence(angle, theta)
+        self._src = dict(wavelength=float(wavelength),
+                         theta=0.0 if theta is None else float(theta),
+                         phi=float(phi))
+        return self
+
+    # ------------------------------------------------------------------ #
+    # solve
+    # ------------------------------------------------------------------ #
+    def solve(self):
+        """Solve the cascade.  Returns ``(orders, R(2, N), T(2, N),
+        jones_reflection(2, 2))`` -- row 0 = incident ``E_x``, row 1 =
+        incident ``E_y``; Jones in the PUBLIC convention."""
+        if self._src is None:
+            raise ValueError("PMM2DStack.solve: call set_source(...) first")
+        if not self._layers:
+            raise ValueError("PMM2DStack.solve: add at least one layer")
+        wavelength = self._src["wavelength"]
+        theta, phi = self._src["theta"], self._src["phi"]
+
+        eps_sup = np.conj(_C(self.n_sup) ** 2)
+        eps_sub = np.conj(_C(self.n_sub) ** 2)
+        nre = float(np.real(np.sqrt(eps_sup)))
+        kx0 = nre * np.sin(theta) * np.cos(phi)
+        ky0 = nre * np.sin(theta) * np.sin(phi)
+        _require_propagating_incidence("PMM2DStack.solve", eps_sup,
+                                       kx0 ** 2 + ky0 ** 2)
+
+        n_orders = self.n_orders
+        ox = np.arange(-n_orders, n_orders + 1)
+        oy = np.arange(-n_orders, n_orders + 1)
+        order_x = np.tile(ox, len(oy))
+        order_y = np.repeat(oy, len(ox))
+        Nf = len(order_x)
+
+        eps_reals = [eps_sup, eps_sub]
+        for L in self._layers:
+            if L["kind"] == "uniform":
+                eps_reals.append(complex(L["eps"]))
+            elif L["kind"] == "scalar":
+                eps_reals += [complex(e) for e in
+                              np.asarray(L["tile"]).ravel()]
+            else:
+                eps_reals += [complex(e) for e in
+                              np.asarray(L["tile"][..., [0, 1, 2],
+                                                   [0, 1, 2]]).ravel()]
+        wl = _grazing_safe_wavelength(wavelength, kx0, ky0, order_x, order_y,
+                                      self.period_x, self.period_y, eps_reals)
+        k0 = 2.0 * np.pi / wl
+        kxv = kx0 + order_x * (wl / self.period_x)
+        kyv = ky0 + order_y * (wl / self.period_y)
+
+        Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
+        Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)
+
+        # per-layer modes in the shared Rayleigh basis
+        modes = []
+        for L in self._layers:
+            if L["kind"] == "uniform":
+                Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv,
+                                                    np.conj(_C(L["eps"])))
+            elif L["kind"] == "scalar":
+                tile_i = np.conj(L["tile"])
+                eps0 = tile_i.flat[0]
+                if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):
+                    Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv, eps0)
+                else:
+                    ax = _build_axis(self.period_x, L["xw"], self.degree,
+                                     L["el_x"], self.grade)
+                    ay = _build_axis(self.period_y, L["yw"], self.degree,
+                                     L["el_y"], self.grade)
+                    lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
+                                                 self.period_x, self.period_y)
+                    GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
+                    GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+                    Wl, Vl, lam = _layer_modes_projected(
+                        GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
+                        formulation=self.formulation)
+            else:                                   # in-plane tensor
+                tile_i = np.conj(L["tile"])
+                ax = _build_axis(self.period_x, L["xw"], self.degree,
+                                 L["el_x"], self.grade)
+                ay = _build_axis(self.period_y, L["yw"], self.degree,
+                                 L["el_y"], self.grade)
+                ez_rule = ("li" if self.formulation == "li" else "laurent")
+                Wl, Vl, lam = _tensor_layer_modes(
+                    ax, ay, L["xw"], L["yw"], tile_i, k0, kx0, ky0, ox, oy,
+                    kxv, kyv, ez_rule)
+            modes.append((Wl, Vl, lam, L["t"]))
+
+        # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub
+        W_prev, V_prev = Wsup, Vsup
+        S = None
+        for (Wl, Vl, lam, t) in modes:
+            Si = _interface_smatrix(W_prev, V_prev, Wl, Vl)
+            S = Si if S is None else _redheffer_star(S, Si)
+            S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
+            W_prev, V_prev = Wl, Vl
+        S = _redheffer_star(S, _interface_smatrix(W_prev, V_prev, Wsub, Vsub))
+        S11, _S12, S21, _S22 = S
+
+        # Jones far field (both incident polarizations)
+        p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
+        delta = ((order_x == 0) & (order_y == 0)).astype(_C)
+        kz_inc = float(np.real(_kz_forward2(np.conj(eps_sup), kx0, ky0)))
+        kz_ref_f = _kz_forward2(np.conj(eps_sup), kxv, kyv)
+        kz_trn_f = _kz_forward2(np.conj(eps_sub), kxv, kyv)
+        safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
+        safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
+        R_rows, T_rows, j_cols = [], [], []
+        for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+            long_inc = (kx0 * ex0 + ky0 * ey0)
+            einc_sq = (1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0
+                       else 1.0)
+            cinc = np.concatenate([ex0 * delta, ey0 * delta])
+            r = S11 @ cinc
+            t_ = S21 @ cinc
+            rx, ry = r[:Nf], r[Nf:]
+            tx, ty = t_[:Nf], t_[Nf:]
+            rz = -(kxv * rx + kyv * ry) / safe_r
+            tz = -(kxv * tx + kyv * ty) / safe_t
+            Re = np.real(kz_ref_f / kz_inc) * (
+                np.abs(rx) ** 2 + np.abs(ry) ** 2 + np.abs(rz) ** 2) / einc_sq
+            Te = np.real(kz_trn_f / kz_inc) * (
+                np.abs(tx) ** 2 + np.abs(ty) ** 2 + np.abs(tz) ** 2) / einc_sq
+            R_rows.append(np.where(np.real(kz_ref_f) > 0, np.real(Re), 0.0))
+            T_rows.append(np.where(np.real(kz_trn_f) > 0, np.real(Te), 0.0))
+            j_cols.append(np.stack([np.conj(rx[p0]), np.conj(ry[p0])]))
+        R_eff = np.stack(R_rows)
+        T_eff = np.stack(T_rows)
+        jones = np.stack(j_cols, axis=1)
+        orders2d = np.stack([order_x, order_y], axis=1)
+        _warn_stack_energy(R_eff, T_eff)
+        return orders2d, R_eff, T_eff, jones
+
+    def solve_vs_wavelength(self, wavelengths, *, theta=None, phi=0.0,
+                            angle=None):
+        """Solve the stack across a wavelength sweep (NON-DISPERSIVE indices).
+        Returns ``(orders, R(n_wl, 2, N), T(n_wl, 2, N))``."""
+        wlv = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+        if wlv.size == 0:
+            raise ValueError("PMM2DStack.solve_vs_wavelength: wavelengths is "
+                             "empty; pass at least one wavelength [m].")
+        if not np.all(np.isfinite(wlv)) or np.any(wlv <= 0.0):
+            raise ValueError("PMM2DStack.solve_vs_wavelength: every "
+                             "wavelength must be a finite value > 0 [m].")
+        orders = R = T = None
+        for i, w in enumerate(wlv):
+            self.set_source(float(w), theta=theta, phi=phi, angle=angle)
+            o, R1, T1, _j = self.solve()
+            if orders is None:
+                orders = o
+                R = np.empty((wlv.size,) + R1.shape, dtype=float)
+                T = np.empty((wlv.size,) + T1.shape, dtype=float)
+            R[i] = R1
+            T[i] = T1
+        return orders, R, T
