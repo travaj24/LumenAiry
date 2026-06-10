@@ -140,6 +140,11 @@ class PMMStack:
         # PHYSICAL wall-snap threshold for the shared union grid (item 3a):
         # ABSOLUTE metres; default period*1e-5 -- far above float noise, far
         # below intentional features, and cross-layer-pairs-only either way.
+        # ALSO THE COST KNOB for dense staircases (application feedback
+        # 2026-06-10): snapping colliding cross-layer walls shrinks the
+        # union grid -- measured 5.7x (321 s -> 56 s) on an ns8 coated taper
+        # at min_feature=1.5e-9, at a ~1.6% geometry-perturbation cost
+        # (+-0.75 nm wall moves).
         self.min_feature = (float(period) * 1e-5 if min_feature is None
                             else float(min_feature))
         self._layers = []                          # (thickness, segments)
@@ -369,13 +374,21 @@ class PMMStack:
         silently diverge.
 
         ``material_names`` optionally maps a complex eps (or a material key
-        string) to a display name.  Returns the matplotlib axes.
+        string) to a display name; a stack built via
+        ``SegmentStackGeometry.to_pmm_stack(materials=...)`` already carries
+        its key names, so legends read ``"LC"``/``"Ta"`` automatically
+        (application feedback 2026-06-10).
+
+        Returns
+        -------
+        matplotlib Axes -- use ``ax.figure.savefig(...)`` to save the figure.
         """
         import matplotlib.pyplot as plt
         from matplotlib.patches import Rectangle
         if ax is None:
             _fig, ax = plt.subplots(figsize=(6, 4))
-        names = dict(material_names or {})
+        names = dict(getattr(self, "_material_names", {}) or {})
+        names.update(material_names or {})
 
         def _key(e):
             if isinstance(e, str):
@@ -396,11 +409,18 @@ class PMMStack:
         seen = {}
         cmap = plt.get_cmap("tab10")
         total = sum(L[0] for L in self._layers)
+        seg_labels = getattr(self, "_segment_labels", None)
         z = 0.0
-        for t, segs, _slant in self._layers:
+        for li, (t, segs, _slant) in enumerate(self._layers):
             x = 0.0
-            for w, e in segs:
-                k = _key(e)
+            for j, (w, e) in enumerate(segs):
+                # prefer the material KEY label (a SegmentStackGeometry
+                # export) so twin keys with the same eps stay distinct
+                if (seg_labels and li < len(seg_labels)
+                        and j < len(seg_labels[li])):
+                    k = seg_labels[li][j]
+                else:
+                    k = _key(e)
                 if k not in seen:
                     seen[k] = cmap(len(seen) % 10)
                 ax.add_patch(Rectangle((x * self.period, -z - t),
@@ -606,11 +626,32 @@ class PMMStack:
                             lmodes[j][2], k0 * self._layers[j][0]))
                         below = _redheffer_star(below, ifc[j + 1])
                     S_below_bot[i] = below
+                # per-union-cell material LABELS (application feedback
+                # 2026-06-10): when the layers carry key names (a
+                # SegmentStackGeometry export), map them onto the union grid
+                # by the same midpoint rule the eps assignment uses, so
+                # layer_absorption can attribute by KEY (twin keys with the
+                # same eps split the loss map as they split the geometry).
+                labels_u = None
+                seg_labels = getattr(self, "_segment_labels", None)
+                if seg_labels and len(seg_labels) >= len(self._layers):
+                    uwalls = np.concatenate([[0.0], np.cumsum(uwidths)])
+                    mids = 0.5 * (uwalls[:-1] + uwalls[1:])
+                    labels_u = []
+                    for li, (_t, segs, _sl) in enumerate(self._layers):
+                        labs = seg_labels[li]
+                        cw = np.concatenate(
+                            [[0.0], np.cumsum([w for w, _ in segs])])
+                        cw[-1] = 1.0
+                        labels_u.append([
+                            labs[min(max(int(np.searchsorted(
+                                cw, m, side="right") - 1), 0),
+                                len(labs) - 1)] for m in mids])
                 self._internal = dict(
                     lmodes=lmodes, S_above=S_above, S_below_bot=S_below_bot,
                     layer_mats=layer_mats, layer_eps_u=layer_eps_u,
                     uwidths=uwidths, mats_sup=mats_sup, k0=k0, kx0=kx0,
-                    n_glob=n_glob)
+                    n_glob=n_glob, labels_u=labels_u)
         else:
             if retain_internal:
                 raise NotImplementedError(
@@ -815,7 +856,11 @@ class PMMStack:
         Rayleigh far field.
 
         ``by_material=True`` additionally returns a dict mapping each
-        distinct permittivity (complex key, e.g. the Ta vs the Cu value) to
+        distinct material -- by KEY NAME (``"Cu"``, ``"Ta"``) when the stack
+        was built via ``SegmentStackGeometry.to_pmm_stack`` (so twin keys
+        with the SAME eps, the under-tooth-liner trick, split the loss map
+        as they split the geometry; application feedback 2026-06-10), else
+        by distinct permittivity (complex key, e.g. the Ta vs the Cu value) to
         its ``(2,)`` absorbed fraction, attributed by the per-element lossy
         volume integral ``Im(E* . eps . E)`` within each layer (GLL
         quadrature in x, closed-form in z; the in-plane field components --
@@ -864,8 +909,20 @@ class PMMStack:
             from ._core import _gll_nodes_weights
             _rn, ref_w = _gll_nodes_weights(mats_i["degree"])
             keyed = {}
+            labels_u = d.get("labels_u")
+            ucum = np.concatenate([[0.0], np.cumsum(d["uwidths"])]) \
+                * self.period
             for e, (xl, xr, tns) in enumerate(elem_bnds):
-                key = complex(tns["exx"])
+                if labels_u is not None:
+                    # attribute by material KEY: locate the element's union
+                    # cell by midpoint (robust to element ordering/grading)
+                    mid = 0.5 * (xl + xr)
+                    cell = min(max(int(np.searchsorted(
+                        ucum, mid, side="right") - 1), 0),
+                        len(d["uwidths"]) - 1)
+                    key = labels_u[i][cell]
+                else:
+                    key = complex(tns["exx"])
                 if abs(np.imag(tns["exx"])) < 1e-15 and                         abs(np.imag(tns["eyy"])) < 1e-15:
                     continue                   # lossless segment
                 J = 0.5 * (xr - xl)

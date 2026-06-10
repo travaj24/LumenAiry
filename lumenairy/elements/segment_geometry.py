@@ -408,13 +408,33 @@ class SegmentStackGeometry:
     def to_pmm_stack(self, *, materials=None, **stack_kwargs):
         """Build a :class:`~lumenairy.elements.pmm.PMMStack` from this
         geometry.  ``materials`` maps key -> eps (scalar / (3,3) / wl-callable);
-        omitted keys stay as MATERIAL KEYS for ``stack.prepare()`` swapping."""
+        omitted keys stay as MATERIAL KEYS for ``stack.prepare()`` swapping.
+
+        The material KEY NAMES ride along (application feedback 2026-06-10):
+        ``stack.plot_geometry()`` legends read ``"LC"``/``"Ta"`` instead of
+        eps values, and ``layer_absorption(by_material=True)`` attributes by
+        KEY -- so twin keys mapped to the SAME eps (the ``"Cu"``/``"CuCol"``
+        under-tooth-liner trick) split the loss map as they split the
+        geometry."""
         from .pmm import PMMStack
         materials = dict(materials or {})
         st = PMMStack(self.period, **stack_kwargs)
+        names = {}
+        labels = []
         for t, segs in self.layers():
             st.add_layer(t, segments=[(w, materials.get(m, m))
                                       for w, m in segs])
+            labels.append([m for _w, m in segs])
+            for _w, m in segs:
+                v = materials.get(m, m)
+                if isinstance(v, str) or callable(v):
+                    names[v if isinstance(v, str) else m] = m
+                else:
+                    M = np.asarray(v)
+                    disp = complex(M[0, 0]) if M.ndim == 2 else complex(M)
+                    names.setdefault(disp, m)
+        st._material_names = names
+        st._segment_labels = labels
         return st
 
     def to_rcwa_stack(self, *, materials, n_x=1024, **stack_kwargs):

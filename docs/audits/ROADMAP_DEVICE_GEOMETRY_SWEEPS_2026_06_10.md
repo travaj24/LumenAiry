@@ -365,3 +365,35 @@ geometry (single-feature == legacy builders bit-for-bit, center-drift
 detector, hand-exact coat/liner bands, closure invariants, prepared ==
 rebuild).  Re-running the application validation set against v5.14.1 is the
 recommended acceptance step.
+
+---
+
+## DEVICE ACCEPTANCE (2026-06-10, v5.14.1 working tree @32c6e1d — application side)
+
+The recommended acceptance step was run: the full coated device
+(`pbs_qwp_mirror_sim`, Ta1/Al2O3-6, n_sup 1.50, 2°, deg 10) rebuilt through the
+NEW APIs only and exercised end-to-end
+(`validation/check_new_geometry_api*.py`, `check_min_feature_snap.py`).
+
+| Test | Result |
+|---|---|
+| Geometry-algebra build (8 calls, no boundary arithmetic) | φ0 **76.5% / Rx 0.887**, φ90 **8.7% / 0.770** vs hand-built 77.9/0.892, 10.4/0.774 — two ns4 staircase *realizations* of one trapezoid (different z-banding); see convergence row |
+| Staircase convergence | geom-obj ns4→6→8: 76.5 → 77.1 → **77.4%**; hand ns4→6: 77.9 → 78.0% — both → one limit ✓ |
+| Under-grounded-tooth Ta (Cu-Cu plane) | expressible via distinct keys, same eps (`"Cu"`/`"CuCol"` + `line_interface("Cu","CuCol",…)`) ✓ |
+| `plot_geometry` | correct (straddle, taper steps, liners) ✓ — polish: legend shows eps values; material KEY names would be better when built via `to_pmm_stack(materials=…)` |
+| `prepare()` + LC swap (4-pt φ-curve) | 76.5 / 63.5 / 26.1 / 8.7% in 158 s; endpoints ≡ rebuild ✓ |
+| Dispersive `solve_vs_wavelength(jones=True)` + `Material.from_csv` (real IMEC SiCN nm-CSV + Al2O3 µm-CSV + callable Cu/Ta) | 1295/1310/1325 nm → 68.8 / 76.5 / 82.3% (129 s), trend ≡ per-λ refs ✓ |
+| `layer_absorption(by_material=True)` | closure 8e-7 ✓; φ0: Cu(all) 6.4% + Ta **2.1%** + ~2.4% into the Cu substrate (= the 10.8% lump 1−Rx, now attributed); φ90: Cu 14.1% + Ta 3.8% — the Ta-under-teeth redesign confirmed DIRECTLY (was 33–58% in the sidewall design, by inference). NB same-eps keys merge ("Cu"+"CuCol" → one entry): attribute by KEY when keys exist, or give twin keys an eps·(1+1e-12) to split them |
+| `min_feature=1.5e-9` snap on the ns8 build (1.22 nm collisions) | snap **fires** (44 cross-layer pairs named), result physical (75.8%/0.885), and **5.7× faster** (56 s vs 321 s — smaller union); ~1.6% geometry perturbation vs unsnapped, as expected for ±0.75 nm wall moves |
+| Existing-path regression on this tree | hand-built `coated_tapered_jones` defaults: **77.9% / Rx 0.892 EXACT** — the batch changes nothing it shouldn't ✓ |
+
+Bonus observation: the geometry-object ns8 build happens to solve physically
+even UNSNAPPED (77.4%, 321 s) — the near-coincidence pathology is
+realization-sensitive (wall-pattern dependent), which is exactly why the
+defensive posture (snap or ns ≤ 6, plus `stabilize='slices'` for the silent
+case) is the right contract rather than trusting any particular realization.
+
+Verdict: **ACCEPTED.** The application's ~140 lines of geometry arithmetic
+reduce to an 8-call build; the φ-curve, λ-sweep, loss budget, and viewer are
+one-call library operations; the two residual polish items are cosmetic
+(viewer label names, by-key absorption attribution).

@@ -59,6 +59,18 @@ All notable changes to the core library are documented here.
   machinery); single-layer stacks match the direct solver bit-for-bit,
   split-film identity to 4e-17, mixed stacks energy-exact.
 
+### Application-feedback polish (same day; FEEDBACK_DEVICE_GEOMETRY doc)
+
+- `layer_absorption(by_material=True)` attributes by material KEY when the
+  stack came from `SegmentStackGeometry.to_pmm_stack` — twin keys with the
+  same eps (the `"Cu"`/`"CuCol"` under-tooth-liner trick) now split the
+  loss map as they split the geometry (raw-eps stacks keep complex-eps
+  keys; the `eps·(1+1e-12)` workaround is obsolete).
+- `PMMStack.plot_geometry` legends show material KEY names automatically on
+  geometry-built stacks; viewer docstrings note `ax.figure.savefig(...)`.
+- `min_feature` documented as the COST knob for dense staircases (measured
+  5.7× on the application's ns8 coated taper).
+
 ### Deferred with reasons (device-geometry)
 
 - Item 4 (native exact trapezoid-metric PMM layer): the roadmap's "linear

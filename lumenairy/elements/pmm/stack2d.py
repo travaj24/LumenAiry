@@ -272,7 +272,13 @@ class PMM2DStack:
     def plot_geometry(self, axes=None, material_names=None):
         """Draw each layer's exact-wall (x, y) cell map (device-geometry
         roadmap item 7): one panel per layer from the stored analytic walls
-        and strip tile -- no pixelation.  Returns the list of axes."""
+        and strip tile -- no pixelation.
+
+        Returns
+        -------
+        list of matplotlib Axes -- use ``axes[0].figure.savefig(...)`` to
+        save the figure.
+        """
         import matplotlib.pyplot as plt
         from matplotlib.patches import Rectangle
         n = len(self._layers)

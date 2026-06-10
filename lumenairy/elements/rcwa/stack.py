@@ -1228,7 +1228,12 @@ class RCWAStack:
         ``(x, z)`` cross-section; a 2-D stack renders the x-z cut at the
         cell's y midline (each layer's own pixel grid, no resampling).
         Dispersive layers render as hatched bands (no single-wavelength
-        value).  Returns the matplotlib axes."""
+        value).
+
+        Returns
+        -------
+        matplotlib Axes -- use ``ax.figure.savefig(...)`` to save the figure.
+        """
         import matplotlib.pyplot as plt
         from matplotlib.patches import Rectangle
         if ax is None:

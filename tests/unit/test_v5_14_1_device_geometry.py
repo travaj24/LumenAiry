@@ -470,3 +470,40 @@ def test_rcwa_stack_oop_retain_internal_raises():
     st.set_source(_WL)
     with pytest.raises(NotImplementedError, match="retain_internal"):
         st.solve(retain_internal=True)
+
+
+# =========================================================================== #
+# application feedback (FEEDBACK_DEVICE_GEOMETRY_V5_14_1_2026_06_10)
+# =========================================================================== #
+
+def test_feedback_by_key_attribution_and_legend_names():
+    """Twin material keys mapped to the SAME eps (the under-grounded-tooth
+    Ta trick: tooth-Cu vs column-Cu) must split BOTH the absorption map and
+    the viewer legend -- attribution/labels ride the key names a
+    SegmentStackGeometry export carries, with raw-eps stacks falling back to
+    complex-eps keys."""
+    g = SegmentStackGeometry(_P)
+    g.add_ridges(0.15e-6, ridges=[(0.4e-6, 0.3e-6, 0.3e-6, "Cu")],
+                 n_slices=1)
+    g.add_ridges(0.12e-6, ridges=[(0.4e-6, 0.2e-6, 0.2e-6, "CuCol")],
+                 n_slices=1)
+    g.fill("LC")
+    eps_cu = -20.0 + 3.0j
+    st = g.to_pmm_stack(materials={"Cu": eps_cu, "CuCol": eps_cu, "LC": 2.4},
+                        n_substrate=1.5, n_superstrate=1.0, degree=12)
+    o, R, T, _ = st.set_source(_WL).solve(retain_internal=True)
+    A, mat = st.layer_absorption(by_material=True)
+    assert "Cu" in mat and "CuCol" in mat          # twins split
+    tot = sum(v for v in mat.values())
+    assert np.max(np.abs(tot - A.sum(axis=0))) < 1e-12
+    budget = 1.0 - R.sum(axis=1) - T.sum(axis=1)
+    assert np.max(np.abs(A.sum(axis=0) - budget)) < 1e-10
+    labels = [t.get_text() for t in st.plot_geometry().get_legend()
+              .get_texts()]
+    assert {"Cu", "CuCol", "LC"} <= set(labels)
+    # raw-eps stacks keep the complex-eps fallback
+    st2 = PMMStack(_P, n_substrate=1.5, n_superstrate=1.0, degree=12)
+    st2.add_layer(0.15e-6, segments=[(0.5, 4.0 + 2.0j), (0.5, 1.0)])
+    st2.set_source(_WL).solve(retain_internal=True)
+    _A2, mat2 = st2.layer_absorption(by_material=True)
+    assert complex(4.0 + 2.0j) in mat2
