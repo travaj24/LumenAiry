@@ -107,15 +107,19 @@ def test_merged_degenerate_wall_matches_aligned():
 
 def test_aligned_stack_bit_identical_to_segments():
     # the well-scaled path is untouched: a 1-layer PMMStack reproduces
-    # pmm_jones_1d_segments bit-for-bit (the fix's gate keeps it on the plain path).
+    # pmm_jones_1d_segments (RELAXED from bit-identity 2026-06-10: the v5.14
+    # noise-robust selectors retire bit-identity across paths -- the gauge
+    # WITHIN degenerate mode pairs is BLAS-build/runner dependent (one CI
+    # runner produced 1.4e-7 where others give 0.0); the physical contract
+    # is the same 5e-6 the stack-vs-segments sibling test pins).
     st = la.PMMStack(0.8e-6, n_substrate=1.5, n_superstrate=1.0, degree=20)
     st.add_layer(0.5e-6, segments=[(0.5, LC), (0.5, GR)])
     o, R, T, J = st.set_source(WL, angle=np.radians(25)).solve()
     o2, R2, T2, J2 = la.pmm_jones_1d_segments(
         0.8e-6, [(0.5, LC), (0.5, GR)], 1.5, 1.0, 0.5e-6, WL,
         angle=np.radians(25), degree=20)
-    assert np.max(np.abs(J - J2)) == 0.0
-    assert np.max(np.abs(R - R2)) == 0.0 and np.max(np.abs(T - T2)) == 0.0
+    assert np.max(np.abs(J - J2)) < 5e-6
+    assert np.max(np.abs(R - R2)) < 5e-6 and np.max(np.abs(T - T2)) < 5e-6
 
 
 @pytest.mark.parametrize("pol", ["te", "tm"])

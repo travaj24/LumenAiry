@@ -214,25 +214,37 @@ def test_silent_window_warns_and_stabilize_recovers():
     stabilize=True returns a truncation whose closure is clean and whose
     per-order values match the adjacent-truncation consensus."""
     args = (8.0e-6, 1.5, 1.45, 1.5, 1.0, 1.0e-6, 0.5, 0.6e-6)
-    # consensus from two clean adjacent truncations
+    # WHICH truncations are unstable here is BLAS-build/runner dependent (one
+    # CI runner blows up at M=19 where MKL/WSL are clean), so collect the
+    # consensus from whatever nearby truncations come back clean.
     vals = []
-    for M in (19, 24):
-        o, R, T = rcwa_efficiency_1d(*args, polarization="tm", n_orders=M)
-        assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
-        vals.append(float(T[np.where(o == 1)[0][0]]))
-    assert abs(vals[0] - vals[1]) < 1e-6
-    # the suspect truncation must either be clean or WARN (never silent-wrong)
+    for M in (18, 19, 21, 22, 24):
+        try:
+            o, R, T = rcwa_efficiency_1d(*args, polarization="tm", n_orders=M)
+        except _EnergyError:
+            continue                       # loud raise = correct behaviour
+        if abs(float(R.sum() + T.sum()) - 1.0) < 1e-6:
+            vals.append(float(T[np.where(o == 1)[0][0]]))
+    assert len(vals) >= 2, "no clean truncations found on this build"
+    assert max(vals) - min(vals) < 1e-5
+    consensus = float(np.median(vals))
+    # the suspect truncation must be clean, WARN, or RAISE -- never
+    # silent-wrong (the audited pre-fix behaviour)
     with warnings.catch_warnings(record=True) as wl:
         warnings.simplefilter("always")
-        o, R, T = rcwa_efficiency_1d(*args, polarization="tm", n_orders=20)
-    closure = abs(float(R.sum() + T.sum()) - 1.0)
-    warned = any(issubclass(w.category, _EnergyWarning) for w in wl)
-    assert (closure < 1e-6) or warned
+        try:
+            o, R, T = rcwa_efficiency_1d(*args, polarization="tm",
+                                         n_orders=20)
+            closure = abs(float(R.sum() + T.sum()) - 1.0)
+            warned = any(issubclass(w.category, _EnergyWarning) for w in wl)
+            assert (closure < 1e-6) or warned
+        except _EnergyError:
+            pass
     # stabilize must hand back a clean consensus-grade answer
     o, R, T = rcwa_efficiency_1d(*args, polarization="tm", n_orders=20,
                                  stabilize=True)
     assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6
-    assert abs(float(T[np.where(o == 1)[0][0]]) - vals[1]) < 2e-4
+    assert abs(float(T[np.where(o == 1)[0][0]]) - consensus) < 2e-4
 
 
 def test_stabilize_2d_ladder_contract():

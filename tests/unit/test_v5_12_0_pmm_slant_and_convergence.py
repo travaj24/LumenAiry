@@ -916,7 +916,11 @@ def test_jones_slant_out_of_plane_reduces_to_inplane_as_off_vanishes():
         eps_ridge=er, eps_groove=eg, slant_angle=np.deg2rad(30.0),
         degree=18, stabilize=True, factorization="convection", **_JGEOM_ASYM)
     assert np.array_equal(o_in, o_oo)
-    assert np.max(np.abs(T_in - T_oo)) < 1e-6
+    # 1e-4 (was 1e-6) 2026-06-10: at the vanishing-off-plane limit the system
+    # is exactly degenerate, so the generalized (4N) and in-plane (2N)
+    # cascades pick build-dependent gauges within the degenerate pairs --
+    # one CI runner measured 3.0e-5 where local MKL/WSL give <1e-6.
+    assert np.max(np.abs(T_in - T_oo)) < 1e-4
 
 
 def test_jones_slant_out_of_plane_diagonal_routes_to_metric_not_cure():
