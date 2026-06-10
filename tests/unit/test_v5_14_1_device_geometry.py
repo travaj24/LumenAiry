@@ -507,3 +507,49 @@ def test_feedback_by_key_attribution_and_legend_names():
     st2.set_source(_WL).solve(retain_internal=True)
     _A2, mat2 = st2.layer_absorption(by_material=True)
     assert complex(4.0 + 2.0j) in mat2
+
+
+def test_feedback_to_rcwa_stack_tensor_materials():
+    """Application feedback ask 4: to_rcwa_stack must accept (3, 3) tensor
+    materials (the LC), pixelating mixed bands into eps_tensor_cell with
+    scalars promoted to eps*I3; scalar-only bands keep eps_cell.  The two
+    exports of one geometry must agree (same Fourier content)."""
+    no2, ne2 = 1.5 ** 2, 1.7 ** 2
+    c, sn = np.cos(0.6), np.sin(0.6)
+    lc = np.diag([no2, no2, no2]).astype(complex)
+    lc[0, 0] = ne2 * c * c + no2 * sn * sn
+    lc[1, 1] = ne2 * sn * sn + no2 * c * c
+    lc[0, 1] = lc[1, 0] = (ne2 - no2) * c * sn
+    g = SegmentStackGeometry(_P)
+    g.add_ridges(0.2e-6, ridges=[(0.4e-6, 0.3e-6, 0.3e-6, "Cu")], n_slices=1)
+    g.fill("LC")
+    g.add_band(0.1e-6, [(1.0, "SiCN")])
+    mats = {"Cu": -20.0 + 3.0j, "LC": lc, "SiCN": 4.84}
+    st = g.to_rcwa_stack(materials=mats, n_superstrate=1.0, n_substrate=1.5,
+                         n_orders=10)
+    kinds = [L.kind for L in st._layers]
+    assert kinds == ["tensor", "uniform"] or kinds == ["tensor", "iso"]
+    res = st.set_source(_WL).solve()
+    o, R, T = res.efficiencies()
+    tot = float(np.asarray(R)[0].sum() + np.asarray(T)[0].sum())
+    assert 0.0 < tot < 1.0                      # lossy Cu present
+    # PMM export of the SAME geometry agrees at the cross-family level
+    pst = g.to_pmm_stack(materials=mats, n_substrate=1.5, n_superstrate=1.0,
+                         degree=14)
+    o2, R2, T2, _ = pst.set_source(_WL).solve()
+    tot_p = float(R2[0].sum() + T2[0].sum())
+    # COARSE cross-family sanity only: RCWA tensor layers are Laurent-only
+    # and Cu at n_orders=10 is the documented under-resolved regime (the
+    # application's own cross-check reads low even at nh=80); the exact
+    # gates above pin the EXPORT mechanics, not FMM convergence.
+    assert abs(tot - tot_p) < 0.25
+    # scalar tensor (eps*I3) export == plain scalar export
+    g2 = SegmentStackGeometry(_P)
+    g2.add_band(0.2e-6, [(0.5, "A"), (0.5, "B")])
+    sa = g2.to_rcwa_stack(materials={"A": 4.0, "B": 1.0}, n_superstrate=1.0,
+                          n_substrate=1.5, n_orders=8)
+    sb = g2.to_rcwa_stack(materials={"A": 4.0 * np.eye(3), "B": np.eye(3)},
+                          n_superstrate=1.0, n_substrate=1.5, n_orders=8)
+    oa, Ra, Ta = sa.set_source(_WL).solve().efficiencies()
+    ob, Rb, Tb = sb.set_source(_WL).solve().efficiencies()
+    assert np.max(np.abs(np.asarray(Ra) - np.asarray(Rb))) < 1e-10

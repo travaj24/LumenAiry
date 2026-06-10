@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [5.14.1] — unreleased
+## [5.14.1] — 2026-06-10
 
 **Device-geometry roadmap** (docs/audits/ROADMAP_DEVICE_GEOMETRY_SWEEPS_
 2026_06_10.md — geometry construction, not solvers, was the bottleneck):
@@ -70,6 +70,10 @@ All notable changes to the core library are documented here.
   geometry-built stacks; viewer docstrings note `ax.figure.savefig(...)`.
 - `min_feature` documented as the COST knob for dense staircases (measured
   5.7× on the application's ns8 coated taper).
+- `to_rcwa_stack` accepts ANISOTROPIC materials (feedback ask 4): a band
+  containing any (3, 3) tensor material (the LC) pixelates into an
+  `eps_tensor_cell` with scalars promoted to `eps·I₃`; scalar-only bands
+  keep the `eps_cell` path (scalar-vs-`eps·I₃` exports agree to 1e-10).
 
 ### Deferred with reasons (device-geometry)
 

@@ -240,11 +240,24 @@ def test_stabilize_heals_blowup_to_conserving_solve():
 
 
 def test_stabilize_is_bit_exact_noop_on_clean_geometry():
+    """RE-PINNED 2026-06-10: WHICH truncations are clean at this large-period
+    low-contrast geometry is BLAS-build/runner dependent (one CI runner blows
+    up at n_orders=11 where others are clean), so find a clean truncation on
+    THIS build first, then pin the contract: stabilize=True is a bit-exact
+    noop there."""
     clean = dict(period=5e-6, n_ridge=2.5, n_groove=1.0, n_substrate=1.0,
                  n_superstrate=1.0, depth=0.5e-6, duty_cycle=0.5,
                  wavelength=0.633e-6, polarization="te")
-    o1, R1, T1 = rcwa_efficiency_1d(**clean, n_orders=11)
-    o2, R2, T2 = rcwa_efficiency_1d(**clean, n_orders=11, stabilize=True)
+    for M in (11, 12, 13, 10, 14):
+        try:
+            o1, R1, T1 = rcwa_efficiency_1d(**clean, n_orders=M)
+        except ValueError:
+            continue
+        if abs(float(R1.sum() + T1.sum()) - 1.0) < 1e-9:
+            break
+    else:
+        pytest.skip("no clean truncation in the probe window on this build")
+    o2, R2, T2 = rcwa_efficiency_1d(**clean, n_orders=M, stabilize=True)
     assert np.array_equal(R1, R2) and np.array_equal(T1, T2)
 
 

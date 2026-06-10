@@ -441,19 +441,43 @@ class SegmentStackGeometry:
         """Build a :class:`~lumenairy.elements.rcwa.RCWAStack` (1-D) from this
         geometry by exact-boundary pixelation at ``n_x`` samples per period
         (``materials`` must resolve every key; RCWA layers hold values, not
-        keys)."""
+        keys).
+
+        ANISOTROPIC materials are supported (application feedback ask 4,
+        2026-06-10): a band containing any ``(3, 3)`` tensor material is
+        pixelated into an ``eps_tensor_cell`` with scalar materials promoted
+        to ``eps * I3``; scalar-only bands keep the ``eps_cell`` path."""
         from .rcwa import RCWAStack
         st = RCWAStack(self.period, **stack_kwargs)
-        xs = (np.arange(int(n_x)) + 0.5) / int(n_x) * self.period
+        nx = int(n_x)
+        xs = (np.arange(nx) + 0.5) / nx * self.period
+        eye3 = np.eye(3, dtype=complex)
         for t, ivs in self._bands:
-            col = np.empty(int(n_x), dtype=complex)
-            col[:] = np.nan
+            vals = []
             for lo, hi, m in ivs:
                 if m == BACKGROUND:
                     raise ValueError(
                         "to_rcwa_stack: BACKGROUND remains; fill(...) first.")
-                col[(xs >= lo) & (xs < hi)] = complex(materials[m])
-            st.add_layer(t, eps_cell=col[:, None])
+                v = np.asarray(materials[m], dtype=complex)
+                if v.ndim not in (0, 2) or (v.ndim == 2
+                                            and v.shape != (3, 3)):
+                    raise ValueError(
+                        f"to_rcwa_stack: material {m!r} must be a scalar or "
+                        f"a (3, 3) tensor, got shape {v.shape}.")
+                vals.append((lo, hi, v))
+            if any(v.ndim == 2 for _lo, _hi, v in vals):
+                cell = np.empty((nx, 1, 3, 3), dtype=complex)
+                cell[:] = np.nan
+                for lo, hi, v in vals:
+                    M3 = v if v.ndim == 2 else complex(v) * eye3
+                    cell[(xs >= lo) & (xs < hi), 0] = M3
+                st.add_layer(t, eps_tensor_cell=cell)
+            else:
+                col = np.empty(nx, dtype=complex)
+                col[:] = np.nan
+                for lo, hi, v in vals:
+                    col[(xs >= lo) & (xs < hi)] = complex(v)
+                st.add_layer(t, eps_cell=col[:, None])
         return st
 
     def plot(self, ax=None, material_colors=None):

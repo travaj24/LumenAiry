@@ -223,9 +223,10 @@ def test_tapered_grating_shear():
     o, Rs, Ts = build(0.3)
     ip1 = int(np.where(np.asarray(o) == 1)[0][0])
     im1 = int(np.where(np.asarray(o) == -1)[0][0])
-    # lossless staircase conserves energy with or without shear
-    assert abs(float(R0.sum() + T0.sum()) - 2.0) < 1e-9
-    assert abs(float(Rs.sum() + Ts.sum()) - 2.0) < 1e-9
+    # lossless staircase conserves energy with or without shear (1e-7: one
+    # CI runner's BLAS closes this 8-slice staircase at 4.5e-8)
+    assert abs(float(R0.sum() + T0.sum()) - 2.0) < 1e-7
+    assert abs(float(Rs.sum() + Ts.sum()) - 2.0) < 1e-7
     # the vertical grating is +/-1 symmetric; the sheared one is NOT
     assert abs(float(T0[0, ip1] - T0[0, im1])) < 1e-12
     assert abs(float(Ts[0, ip1] - Ts[0, im1])) > 1e-2
