@@ -167,35 +167,31 @@ def test_circular_truncation_reaches_same_value_fewer_orders():
 # oracle cross-check (skipped when inkstone is unavailable)
 # ---------------------------------------------------------------------------
 
-def test_shapes_fff_converges_to_inkstone_gold():
-    """The analytic-shape dual-Laurent solver converges toward inkstone's
-    high-num_g transmittance on a 2-D metal pillar (independent FFF oracle)."""
-    Inkstone = pytest.importorskip("inkstone.simulator").Inkstone
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        s = Inkstone()
-        s.frequency = 1 / 0.5
-        s.lattice = ((0.5, 0.0), (0.0, 0.5))
-        s.num_g = 500
-        s.AddMaterial("metal", EPS_METAL)
-        s.AddLayer("in", 0.0, "vacuum")
-        s.AddLayer("slab", 0.2, "vacuum")
-        s.AddPatternRectangle("slab", "metal", (0.25, 0.25),
-                              center=(0.125, 0.125))
-        s.AddLayer("out", 0.0, "vacuum")
-        s.SetExcitation(theta=1e-3, phi=0.0, s_amplitude=0.0, p_amplitude=1.0)
-        inc, refl = s.GetPowerFlux("in")
-        fo, _ = s.GetPowerFlux("out")
-    T_gold = float(fo / inc)
-
-    pillar = _pillar_shape()
-    o, Re, Te = rcwa_efficiency_2d_shapes(
-        P, P, 1.0, [pillar], 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
-        polarization="tm", n_orders_x=14, n_orders_y=14)
-    T_lumen = float(Te.sum())
-    # lumenairy (rectangular, sharp-corner staircase-free analytic FT) lands
-    # within ~1% of the inkstone gold value -- the convergence is genuine.
-    assert abs(T_lumen - T_gold) < 0.01
+def test_li_sequential_converges_where_laurent_extrapolates():
+    """RE-PINNED 2026-06-10 (audit F1): the old gate compared the dual-Laurent
+    shapes solver at M=14 against inkstone at num_g=500 -- two UNCONVERGED
+    values that agreed by shared error (inkstone oscillates 0.548 -> 0.541 ->
+    0.544 -> 0.551 over num_g 200..1400 on this metal pillar; the same mutual-
+    unconvergence trap as the PMM metal-TM adjudication).  The honest gate:
+    the v5.14.1 sequential-rule 'li' is already stable at modest M, and the
+    Richardson 1/M extrapolation of the slow-but-correct 'laurent' tail lands
+    on it (measured: li M=8..14 in [0.5703, 0.5712]; laurent Richardson from
+    (M=12, 14) = 0.5717; inkstone trends toward it from below)."""
+    S = 64
+    cell = np.full((S, S), 1.0 + 0j)
+    cell[:S // 2, :S // 2] = EPS_METAL
+    def T_of(form, M):
+        o, R, T = rcwa_efficiency_2d(
+            P, P, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
+            polarization="tm", n_orders_x=M, n_orders_y=M, formulation=form)
+        return float(T.sum())
+    T_li_8, T_li_12 = T_of("li", 8), T_of("li", 12)
+    assert abs(T_li_12 - T_li_8) < 2e-3            # measured 6.9e-4: stable
+    T_la_12, T_la_14 = T_of("laurent", 12), T_of("laurent", 14)
+    T_extrap = (14.0 * T_la_14 - 12.0 * T_la_12) / 2.0   # Richardson, 1/M tail
+    assert abs(T_extrap - T_li_12) < 5e-3          # measured 1.2e-3
+    # laurent itself is still far at M=14 -- the acceleration is genuine
+    assert abs(T_la_14 - T_li_12) > 5e-3           # measured 1.3e-2
 
 
 # ---------------------------------------------------------------------------

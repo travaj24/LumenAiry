@@ -2,6 +2,83 @@
 
 All notable changes to the core library are documented here.
 
+## [5.14.1] — unreleased
+
+**RCWA accuracy audit (46 findings; every landed fix hand-verified with
+independent probes — the audit's verification phase was unavailable).**
+
+### Fixed (physics — results change)
+
+- **P1: the 2-D `E_z` inverse-rule factorization was wrong.**
+  `rcwa_efficiency_2d` `formulation='li'/'fff'/'auto'`, the analytic-shape
+  solver `rcwa_efficiency_2d_shapes`, `fff_nv`'s `EZZ`, and shapes layers in
+  `RCWAStack` eliminated `E_z` with Li's INVERSE rule `[[1/eps]]`. `E_z` is
+  tangential to every vertical wall of a z-invariant layer, so the direct
+  rule `[[eps]]` is mandatory (Li 1997 Eq. 27; what S4/grcwa do). The wrong
+  rule overestimated metal absorptance by up to **+0.35** (period-robust,
+  silent on lossy cells where the energy tripwire cannot fire) and was less
+  accurate than `'laurent'` even on dielectrics. 2-D `'li'` is now the
+  **Li-1997 sequential rule** (Eqs. 8/9: inverse along each E-component's own
+  axis, direct along the other; routed through the per-component tensor
+  eigensolver): a y-/x-uniform cell reduces to rigorous 1-D `'li'` per-order
+  (~5e-5 at S=256, 2nd-order in the cell sampling), metal-stripe absorptance
+  error at M=16 drops to +4.6e-3, and on a true 2-D metal pillar the
+  Richardson 1/M extrapolation of `'laurent'` lands on its converged value.
+  On staircased CURVES it wins too (a pixel cell is axis-aligned by
+  construction): on a metal disk `'li'` sits in the converged absorptance
+  band at M=13 while `'laurent'` is 2× high and only reaches it at M=21.
+  The old "matches grcwa/inkstone" and "direct-z biased low by 6e-2" claims
+  were error-cancellation artifacts (inkstone at num_g≤1400 is itself
+  unconverged on the audited pillar). **Re-run any 2-D
+  `'li'/'fff'/'auto'`/shapes/fff_nv results on lossy cells.** `'laurent'`
+  (the default) is byte-identical-unchanged everywhere.
+- **P1: gain superstrates silently negated every efficiency.**
+  `Im(n_superstrate) < 0` (even 1e-9) flipped the forward root, returning
+  R=0 and NEGATIVE T (TM sum −392.8 on a plain lossless grating) below the
+  one-sided tripwire. All entry points now reject gain incidence media
+  loudly; `_check_energy` additionally raises on negative totals.
+- **P1: the silent energy window (1e-6 < |R+T−1| < 0.05) is now policed.**
+  For provably-lossless inputs (every permittivity exactly real — closure is
+  exact in this code) a violation beyond 1e-6 emits `_EnergyWarning` with
+  the measured closure error (the audited 1-D case: a silent +3.3e-2 with an
+  8% per-order error and broken ±1 symmetry), and `stabilize=True` treats
+  the warning as a failed attempt — it previously returned the
+  byte-identical wrong answer (now it returns the adjacent-truncation
+  consensus value).
+- **P2: 2-D `stabilize=True` wrong-abort** — upward bumps past the
+  cell-sampling alias bound are pre-filtered, so the ladder terminates with
+  its documented `_EnergyError` instead of a misleading "cell too coarse for
+  n_orders you never requested" ValueError.
+- **P2: the Berreman 4×4 test oracle was wrong at true conical incidence**
+  (`tests/unit/_berreman4x4._berreman_delta`: three entries off by exactly
+  ±Kx·Ky, pinned by rotation covariance — exact at φ=0/90, which is why all
+  planar tests passed). Fixed; the conical wrapper now conserves energy to
+  1e-12 and `rcwa_jones_1d` matches it conically to 3.9e-15 including
+  out-of-plane lossy tensors.
+
+### Changed
+
+- `formulation='li'` (2-D) no longer uses the `symmetry=True` even-parity
+  fast path (the sequential rule lives in the tensor eigensolver; the fold
+  is scalar-only) — it transparently falls back to the full solve.
+  Extending the fold to the per-component tensor operators is a roadmap
+  perf item.
+- 1-D docstring: explicit `'laurent'`+TM on metals flagged as a
+  factorization-study mode (unconverged at n_orders=128 on Ag, ~2-3e-2 off
+  `'li'`).
+- Re-pinned tests that encoded the refuted error-cancellation agreements
+  (fff_nv dielectric square, inkstone metal-pillar "gold", symmetry×li).
+
+### Added
+
+- `docs/rcwa_roadmap_v5_14.md` — the audit's remaining confirmed items:
+  perf levers (1-D TE/TM decouple, diagonal-aware propagation star, symmetry
+  scope incl. the new tensor-li fold, honest JAX positioning) and capability
+  gaps (per-layer stack formulation, stack dispersion sweeps, 2-D
+  out-of-plane tensors, shear walls, fff_nv rework-or-retire).
+- `tests/unit/test_v5_14_1_rcwa_audit_fixes.py` — 11 regression tests
+  pinning all of the above.
+
 ## [5.14.0] — 2026-06-09
 
 **Accuracy/speed audit (22-agent, 41 findings, 16/16 adversarially

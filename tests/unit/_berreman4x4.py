@@ -112,13 +112,19 @@ def _berreman_delta(eps, Kx, Ky):
     D[1, 1] = -Ky * ezy * d
     D[1, 2] = Ky * Ky * d - 1.0
     D[1, 3] = -Ky * Kx * d
-    D[2, 0] = eyx - eyz * ezx * d
+    # Conical (Kx*Ky != 0) entries fixed 2026-06-10 (audit F1-berreman):
+    # rotation covariance blkdiag(R2,R2) Delta(eps_rot, kt, 0) blkdiag(R2,R2)^T
+    # == Delta(eps, Kx, Ky) pinned the defect to exactly +/-Kx*Ky at [2,0],
+    # [2,3], [3,2] (eps-independent); the uncorrected form gave R+T = 14.35 on
+    # a lossless isotropic slab at (theta=20, phi=35) while being exact at
+    # phi = 0 / 90 where Kx*Ky = 0 (so every planar test passed).
+    D[2, 0] = eyx - eyz * ezx * d + Kx * Ky
     D[2, 1] = eyy - eyz * ezy * d - Kx * Kx
     D[2, 2] = eyz * Ky * d
-    D[2, 3] = Kx * Ky - eyz * Kx * d
+    D[2, 3] = -eyz * Kx * d
     D[3, 0] = exz * ezx * d - exx + Ky * Ky
     D[3, 1] = exz * ezy * d - exy - Kx * Ky
-    D[3, 2] = Kx * Ky - exz * Ky * d
+    D[3, 2] = -exz * Ky * d
     D[3, 3] = exz * Kx * d
     return D
 

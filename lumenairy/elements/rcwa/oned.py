@@ -2,6 +2,7 @@
 sweeps, segment builders, ASR, and the differentiable JAX-1D entry point."""
 from __future__ import annotations
 
+import warnings
 from typing import Tuple
 
 import numpy as np
@@ -17,6 +18,7 @@ from ._core import (
     _check_energy,
     _concrete,
     _EnergyError,
+    _EnergyWarning,
     _forward_flux_kz,
     _fourier_coeffs_1d,
     _grazing_safe_wavelength,
@@ -289,9 +291,12 @@ def rcwa_efficiency_1d(
         metallic, else ``'laurent'`` -- and ``'laurent'`` for TE never touches
         the inverse rule (the wall-normal operator does not enter the TE
         problem, so the result is identical to ``'li'``).  An explicit
-        ``'laurent'`` with TM is PERMITTED but converges slowly -- it reaches
-        the same answer at higher order, not a wrong one; prefer ``'auto'`` /
-        ``'li'`` unless deliberately studying the factorization rule.
+        ``'laurent'`` with TM is PERMITTED but converges slowly -- and for
+        METALS it may not converge within reachable order counts at all
+        (audit 2026-06-10: on a Ag grating ``R0`` still oscillates and the
+        absorptance is ~2-3e-2 off ``'li'`` at ``n_orders=128``); treat an
+        explicit ``'laurent'``+TM as a factorization-study mode only and use
+        ``'auto'`` / ``'li'`` for real metal TM answers.
     asr_eta : float, optional
         Adaptive Spatial Resolution sharpness (Granet 1999), in ``[0, 1)``.
         ``0.0`` (default) is the standard uniform method, **bit-identical** to
@@ -353,14 +358,34 @@ def rcwa_efficiency_1d(
         last = None
         for bump in _stabilize_bumps(n_orders):
             try:
-                return rcwa_efficiency_1d(
-                    period, n_ridge, n_groove, n_substrate, n_superstrate,
-                    depth, duty_cycle, wavelength, angle=angle,
-                    polarization=polarization, n_orders=int(n_orders) + bump,
-                    formulation=formulation, stabilize=False, use_gpu=use_gpu,
-                    asr_eta=asr_eta, asr_samples=asr_samples)  # forward ASR (P2)
+                with warnings.catch_warnings(record=True) as wlist:
+                    warnings.simplefilter("always")
+                    res = rcwa_efficiency_1d(
+                        period, n_ridge, n_groove, n_substrate, n_superstrate,
+                        depth, duty_cycle, wavelength, angle=angle,
+                        polarization=polarization,
+                        n_orders=int(n_orders) + bump,
+                        formulation=formulation, stabilize=False,
+                        use_gpu=use_gpu,
+                        asr_eta=asr_eta, asr_samples=asr_samples)  # fwd ASR
             except _EnergyError as e:
                 last = e
+                continue
+            # Re-emit unrelated warnings; a lossless-closure _EnergyWarning
+            # means the per-order answers are wrong (audit P1: the silent
+            # 1e-6..0.05 window) -> treat as a failed attempt and keep
+            # laddering instead of returning the byte-identical wrong answer.
+            closure = None
+            for w in wlist:
+                if issubclass(w.category, _EnergyWarning):
+                    closure = closure or w
+                else:
+                    warnings.warn_explicit(w.message, w.category, w.filename,
+                                           w.lineno)
+            if closure is not None:
+                last = _EnergyError(str(closure.message))
+                continue
+            return res
         raise last
     polarization = _normalize_pol("rcwa_efficiency_1d", polarization)
     if not (0.0 <= float(duty_cycle) <= 1.0):
@@ -478,7 +503,6 @@ def rcwa_efficiency_1d(
         # when G enters the unreliable regime; the result is still returned.
         _cond_G = float(xp.linalg.cond(Gbridge))
         if _cond_G > 1e8:
-            import warnings
             warnings.warn(
                 f"rcwa_efficiency_1d: ASR coordinate-bridge conditioning is "
                 f"poor (cond={_cond_G:.1e}) at n_orders={M}, asr_eta={asr_eta}; "
@@ -565,7 +589,17 @@ def rcwa_efficiency_1d(
     R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
     T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
     if not is_jax:
-        _check_energy("rcwa_efficiency_1d", R_eff, T_eff)
+        # Provably lossless (every permittivity exactly real) => the closure
+        # R+T = 1 is exact; _check_energy then warns in the silent window
+        # 1e-6..0.05 where the per-order answers are wrong (audit P1).
+        try:
+            lossless = all(
+                float(np.imag(complex(v))) == 0.0
+                for v in (complex(eps_sup), complex(eps_sub),
+                          _C(n_ridge) ** 2, _C(n_groove) ** 2))
+        except TypeError:                  # traced / array-valued inputs
+            lossless = False
+        _check_energy("rcwa_efficiency_1d", R_eff, T_eff, lossless=lossless)
     return orders, R_eff, T_eff
 
 
@@ -653,7 +687,6 @@ def rcwa_efficiency_vs_wavelength(
                 f"retained range +/-{n_orders}; increase n_orders.")
         out[i] = (T[idx] if quantity == "transmitted" else R[idx])
     if n_unstable:
-        import warnings
         warnings.warn(
             f"rcwa_efficiency_vs_wavelength: {n_unstable}/{wl.size} wavelengths hit "
             f"a numerical instability (energy non-conservation) and were set to "
@@ -1427,7 +1460,6 @@ def rcwa_efficiency_1d_jax(
     exactly at grazing (no Wood-anomaly nudge on the differentiable path);
     choose ``wavelength`` / ``angle`` away from an exact Rayleigh anomaly.
     """
-    import warnings
     warnings.warn(
         "rcwa_efficiency_1d_jax is deprecated since v5.5.1 and will be removed "
         "in v6.0.0 (the next major); call rcwa_efficiency_1d(...) with jax.numpy "

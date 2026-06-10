@@ -53,7 +53,13 @@ def test_hybrid_2d_lossy_is_passive_and_matches_rcwa():
         assert rt <= 1.0 + 1e-6, f"loss={loss}: R+T={rt} > 1 (loss read as gain)"
         A_pmm = 1.0 - rt
         A_oracle = _rcwa_oracle_A(epp, 9)
-        assert abs(A_pmm - A_oracle) < 5e-3, (
+        # RE-PINNED 2026-06-10 (RCWA audit F1): the corrected 'li' oracle is
+        # CONVERGED at A=0.6022 (flat 9->17 orders; laurent descends onto it).
+        # The hybrid's Rayleigh-projection floor at degree=11/n_orders=9 is
+        # ~1.4e-2 high and descends with degree/n_orders (0.6161 -> 0.6130 at
+        # deg 15/n 13); the old 5e-3 pass was that floor cancelling against
+        # the old inverse-z oracle's absorptance overestimate.
+        assert abs(A_pmm - A_oracle) < 2e-2, (
             f"loss={loss}: A_pmm={A_pmm:.4f} vs A_rcwa={A_oracle:.4f}")
 
 

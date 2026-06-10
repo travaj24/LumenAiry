@@ -3364,89 +3364,14 @@ LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 
 
 # ============================================================================
-# Count regression guard
+# Count regression guard -- MOVED (2026-06-10, v5.14.1)
 # ============================================================================
-
-# Justified KEEP-AS-IS sites in non-``ui/`` after the v4.13.0 sweep:
-#   - lumenairy/_context.py atexit handler
-#   - lumenairy/optimize/core.py ``__del__`` dtype-restore guard
-#   - lumenairy/propagators/hfpi.py JAX fold_in optional-dep gate
-# (other comment-only references that ``grep`` picks up do not count)
+# The broad-``except`` budget guard now lives in
+# tests/unit/test_audit_except_budget.py: this module's MODULE-LEVEL
+# ``pytest.importorskip('jax')`` silently skipped it (and every other
+# non-JAX pin in this file) on CI, letting the count creep 13 -> 20
+# unobserved.  The extracted file has no jax dependency.
 #
-# Add a small slack so a future legitimate KEEP-AS-IS (e.g. a new
-# atexit hook) doesn't have to also bump this test; if you legitimately
-# add a non-KEEP site, the right move is to narrow it instead.
-_NON_UI_EXCEPT_BUDGET = 15  # well below the post-sweep target (~80)
-
-
-def _count_except_exception_in_non_ui() -> int:
-    """Walk ``lumenairy/*.py`` excluding ``ui/`` and count
-    ``except Exception:`` and ``except Exception as ...:`` lines.
-
-    Comment-only mentions (lines containing ``#``-style references to
-    the pattern as prose) are not counted.
-    """
-    pat = re.compile(r'^\s*except\s+Exception(\s+as\s+\w+)?\s*:')
-    n = 0
-    for root, dirs, files in os.walk(LUMENAIRY_DIR):
-        # Skip ui/ entirely.
-        if os.path.basename(root) == 'ui':
-            dirs[:] = []
-            continue
-        # Don't descend into subdirs of ui/.
-        dirs[:] = [d for d in dirs if d != 'ui' and not d.startswith('__')]
-        for fn in files:
-            if not fn.endswith('.py'):
-                continue
-            path = os.path.join(root, fn)
-            try:
-                with open(path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        if pat.match(line):
-                            n += 1
-            except OSError:
-                # Should not happen on a normal checkout, but
-                # tolerate so a stray locked file doesn't break the
-                # count.
-                pass
-    return n
-
-
-class TestAuditFixesV4_13_0_except_sweep_ExceptExceptionCount:
-    """The post-sweep non-``ui/`` count stays within budget."""
-
-    def test_non_ui_except_exception_within_budget(self):
-        """At least one count is below ``_NON_UI_EXCEPT_BUDGET``.
-
-        Caps non-``ui/`` ``except Exception:`` at the post-sweep
-        target.  Failing means a new broad-except crept in -- the fix
-        is to narrow it (see the test's docstring for the judgement
-        rule), not to bump this number.
-        """
-        n = _count_except_exception_in_non_ui()
-        assert n <= _NON_UI_EXCEPT_BUDGET, (
-            f"Non-``ui/`` ``except Exception:`` count is {n}, above "
-            f"the v4.13.0 post-sweep budget of "
-            f"{_NON_UI_EXCEPT_BUDGET}.  A new broad-except crept in. "
-            f"See AUDIT_V4_12_1_2026_05_16.md L5 for the judgement "
-            f"rule (NARROW > WARN-BEFORE-PASS > RE-RAISE > "
-            f"KEEP-AS-IS).")
-
-    def test_non_ui_count_substantially_below_pre_sweep(self):
-        """Pre-sweep was 99 non-ui clauses; post-sweep <= 15.
-
-        Pins the v4.13.0 outcome so a future regression that bulk-
-        reintroduces broad-except (e.g. a copy-paste from ``ui/``)
-        gets caught.
-        """
-        n = _count_except_exception_in_non_ui()
-        # Strong target: at least 80% reduction vs pre-sweep (99 -> <= 19).
-        assert n <= 20, (
-            f"v4.13.0 reduced non-``ui/`` ``except Exception:`` count "
-            f"from 99 to a target of <=15; current count {n} suggests "
-            f"a regression that re-introduces broad-except.")
-
-
 # ============================================================================
 # WARN-BEFORE-PASS pin: petzval_radius glass lookup
 # ============================================================================

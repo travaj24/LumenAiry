@@ -2,6 +2,7 @@
 normal-vector FFF, analytic-shape factorization."""
 from __future__ import annotations
 
+import warnings
 from typing import Tuple
 
 import numpy as np
@@ -17,6 +18,7 @@ from ._core import (
     _check_energy,
     _concrete,
     _EnergyError,
+    _EnergyWarning,
     _forward_flux_kz,
     _grazing_safe_wavelength,
     _homogeneous_eigenmodes,
@@ -44,11 +46,13 @@ from ._core import (
 def _normalize_2d_formulation(fn_name, formulation):
     """Normalise the 2-D Fourier-factorization selector.  ``'laurent'`` is the
     direct rule everywhere (default, bit-for-bit backward compatible);
-    ``'li'`` (alias ``'fff'``) is the dual-Laurent z-rule: the ``E_z``
-    elimination uses ``[[1/eps]]`` for fast TM / metal convergence;
-    ``'fff_nv'`` is the normal-vector fast Fourier factorization (Schuster 2007)
-    -- the in-plane inverse rule projected on the local wall-normal field, the
-    correct factorization for 2-D metallic gratings."""
+    ``'li'`` (alias ``'fff'``) is the Li-1997 sequential rule for axis-aligned
+    crossed gratings (inverse rule along each E-component's own axis, direct
+    along the other, direct-rule ``E_z`` elimination) -- the rigorous
+    fast-converging factorization for TM / metals on pixelated cells;
+    ``'fff_nv'`` is the normal-vector fast Fourier factorization (Schuster
+    2007) -- the in-plane inverse rule projected on the local wall-normal
+    field (axis-aligned separable cells only; see its caveats)."""
     f = str(formulation).lower()
     if f == "fff":
         f = "li"
@@ -146,6 +150,69 @@ def _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y):
     return table[dm + 2 * Mx, dn + 2 * My]
 
 
+def _cell_lossless(eps_sup, eps_sub, *eps_arrays):
+    """True when every region scalar and structure permittivity is exactly
+    real (provably lossless -> the closure ``R+T = 1`` is exact and
+    :func:`_check_energy` can police the silent 1e-6..0.05 window)."""
+    try:
+        if float(np.imag(complex(eps_sup))) != 0.0:
+            return False
+        if float(np.imag(complex(eps_sub))) != 0.0:
+            return False
+        for a in eps_arrays:
+            if float(np.max(np.abs(np.imag(to_numpy(a))))) != 0.0:
+                return False
+    except TypeError:                      # traced / non-concrete inputs
+        return False
+    return True
+
+
+def _li_convolutions_2d(eps_cell, orders, n_orders_x, n_orders_y, xp):
+    """Li-1997 sequential-rule operators for an axis-aligned (pixelated)
+    crossed grating: ``(Cxx, Cyy)`` (Li 1997 JOSAA 14:2758, Eqs. 8/9).
+
+    ``E_x`` is wall-normal at x-walls and wall-tangential at y-walls, so its
+    permittivity operator takes the INVERSE rule along x and the DIRECT rule
+    along y: per pixel-row ``y``, build the 1-D Toeplitz of ``1/eps`` along
+    x and invert it (the 1-D Li inverse rule), then Laurent-transform the
+    matrix family along y.  ``Cyy`` is the transpose construction.  The
+    ``E_z`` elimination is NOT built here -- it must use the plain 2-D
+    Laurent ``[[eps]]`` (Li 1997 Eq. 27: ``E_z`` is tangential to every
+    vertical wall of a z-invariant layer, so ``D_z = eps E_z`` has no
+    concurrent jumps and takes the direct rule; the dual-Laurent
+    ``[[1/eps]]`` z-rule shipped before v5.14.1 violates Li's rule 3 and
+    overestimated metal absorptance by up to +0.35 -- audit F1 2026-06-10).
+
+    For a y-uniform cell this reduces EXACTLY to the rigorous 1-D 'li'
+    factorization (per-order ~1e-14, the audit's mechanism proof); for a
+    uniform cell it reduces to the Laurent matrix.  Cost: ``Sy`` (resp.
+    ``Sx``) batched inversions of ``(2Mx+1)``- (resp. ``(2My+1)``-) sized
+    Toeplitz blocks -- negligible next to the ``2N`` eigensolve.
+    """
+    Mx, My = int(n_orders_x), int(n_orders_y)
+    eps_cell = xp.asarray(eps_cell).astype(_C)
+    Sx, Sy = int(eps_cell.shape[0]), int(eps_cell.shape[1])
+    # Cxx: inverse rule along x per pixel-row, direct (Laurent) along y.
+    ax = np.arange(-Mx, Mx + 1)
+    dmx = (ax[:, None] - ax[None, :]) % Sx
+    cf = xp.fft.fft(1.0 / eps_cell, axis=0) / Sx          # (Sx, Sy)
+    Tx = xp.transpose(cf[dmx, :], (2, 0, 1))              # (Sy, 2Mx+1, 2Mx+1)
+    Ahat = xp.fft.fft(xp.linalg.inv(Tx), axis=0) / Sy     # Laurent along y
+    dn = (orders[:, 1][:, None] - orders[:, 1][None, :]) % Sy
+    mi = orders[:, 0] + Mx
+    Cxx = Ahat[dn, mi[:, None], mi[None, :]]
+    # Cyy: inverse rule along y per pixel-column, direct along x.
+    ay = np.arange(-My, My + 1)
+    dmy = (ay[:, None] - ay[None, :]) % Sy
+    cg = xp.fft.fft(1.0 / eps_cell, axis=1) / Sy          # (Sx, Sy)
+    Ty = cg[:, dmy]                                       # (Sx, 2My+1, 2My+1)
+    Bhat = xp.fft.fft(xp.linalg.inv(Ty), axis=0) / Sx     # Laurent along x
+    dm = (orders[:, 0][:, None] - orders[:, 0][None, :]) % Sx
+    ni = orders[:, 1] + My
+    Cyy = Bhat[dm, ni[:, None], ni[None, :]]
+    return Cxx, Cyy
+
+
 
 def _nv_field_2d(eps_cell, period_x, period_y, *, method="smoothed_gradient",
                  sigma_px=1.5, eps_reg_frac=1e-3):
@@ -232,14 +299,14 @@ def _nv_convolutions_2d(eps_cell, Nx, Ny, orders, n_orders_x, n_orders_y, xp):
     wall-normal projection ``N N^T`` switches to the inverse rule), and
     ``Nab = [[Na Nb]]`` (Laurent convolution of the real field products).
 
-    ``EZZ = Einv = [[1/eps]]^{-1}`` (the DUAL-LAURENT / Li ``E_z`` elimination,
-    load-bearing): the tensor eigensolver uses ``inv(EZZ) = [[1/eps]]`` for the
-    ``P`` block, which is the SAME ``E_z`` rule the analytic-shape solver
-    :func:`rcwa_efficiency_2d_shapes` uses and the rule that matches the
-    staircase-free reference on a clean dielectric (the direct-rule
-    ``EZZ = [[eps]]`` is biased low by ~6e-2 there).  Pairing the in-plane
-    normal-vector projection with the dual-Laurent ``E_z`` is what makes the
-    factorization reduce to the rigorous answer for both dielectrics and metals.
+    ``EZZ = E = [[eps]]`` (the DIRECT-rule ``E_z`` elimination, v5.14.1 audit
+    F1): ``E_z`` is tangential to every vertical wall of a z-invariant layer,
+    so ``D_z = eps E_z`` has no concurrent jumps and Li's rule 1 mandates the
+    direct rule (Li 1997 Eq. 27; S4/grcwa do the same).  The pre-v5.14.1
+    dual-Laurent ``EZZ = [[1/eps]]^{-1}`` violated Li's rule 3 and
+    overestimated metal-stripe absorptance by up to +0.35; its apparent
+    dielectric advantage was error cancellation against the in-plane Laurent
+    slowness, not a correct factorization.
 
     ``eps_cell`` MUST be the INTERNAL (loss-bridge-conjugated) sample; ``Nx, Ny``
     are real host arrays from :func:`_nv_field_2d` on the same grid.
@@ -257,7 +324,7 @@ def _nv_convolutions_2d(eps_cell, Nx, Ny, orders, n_orders_x, n_orders_y, xp):
     Cyy = E - Delta @ Nyy
     Cxy = -(Delta @ Nxy)
     Cyx = Cxy                                    # N N^T is symmetric
-    EZZ = Einv                                   # dual-Laurent E_z: inv(EZZ)=[[1/eps]]
+    EZZ = E                                      # direct-rule E_z (Li 1997 Eq. 27)
     return Cxx, Cxy, Cyx, Cyy, EZZ
 
 
@@ -313,7 +380,6 @@ def _nv_nonseparable_guard(fn_name, eps_cell, allow_nonseparable_nv):
            f"the error is silent).  Use formulation='li' or 'laurent' for curved "
            f"/ non-separable patterns (both are rigorous there)")
     if allow_nonseparable_nv:
-        import warnings
         warnings.warn(
             msg + ".  [allow_nonseparable_nv=True -> proceeding with a WARNING; "
             "the absorptance / per-order split may be wrong, though the "
@@ -383,23 +449,26 @@ def rcwa_efficiency_2d(
           (``E_z`` elimination uses ``[[eps]]^{-1}``).  Correct and
           fast-converging for low-contrast dielectrics; kept as the default
           for bit-for-bit backward compatibility.
-        - ``'li'`` / ``'fff'`` -- the dual-Laurent (Li 1996 inverse-rule)
-          factorization: the ``E_z`` elimination uses ``[[1/eps]]`` (the
-          Toeplitz of the Fourier coefficients of ``1/eps``) instead of
-          ``[[eps]]^{-1}``.  This is the convergence-accelerating rule for
-          **TM / metals / high contrast** -- the same formulation the
-          analytic-shape solver :func:`rcwa_efficiency_2d_shapes` uses
-          unconditionally, and the rule used by mature FMM codes
-          (verified to converge toward grcwa / inkstone).  Recommended for
-          metallic 2-D gratings; for a *pixelated* ``eps_cell`` the in-plane
-          staircase still limits the rate, so prefer the analytic-shape
-          solver when the geometry is describable by disks / rectangles.
+        - ``'li'`` / ``'fff'`` -- the **Li-1997 sequential rule** for
+          axis-aligned crossed gratings (Li 1997 JOSAA 14:2758, Eqs. 8/9/27;
+          v5.14.1): each in-plane E-component takes the INVERSE rule along its
+          own axis (where it is wall-normal) and the DIRECT rule along the
+          other, and the ``E_z`` elimination uses the direct-rule ``[[eps]]``
+          (``E_z`` is tangential to every vertical wall).  This is the
+          rigorous fast-TM/metal factorization for pixelated (axis-aligned)
+          cells: a y-uniform cell reduces to 1-D ``'li'`` per-order to ~1e-14,
+          and on a metal stripe it converges ~10x faster than ``'laurent'``.
+          Routed through the in-plane tensor eigensolver (no ``symmetry``
+          fast path).  Recommended for metallic / high-contrast 2-D gratings.
 
-          NOTE: the 2-D ``'li'`` ``E_z`` elimination uses the ``[[1/eps]]``
-          pixel route, which is itself biased on a pixelated cell (a
-          y-uniform pixelated stripe converges to a value offset from the
-          rigorous 1-D-Li oracle); ``'fff_nv'`` below pairs the in-plane
-          projection with the unbiased direct-rule (Laurent) ``E_z``.
+          NOTE (v5.14.1, audit F1): the pre-v5.14.1 2-D ``'li'`` applied the
+          INVERSE rule to the ``E_z`` elimination instead -- the wrong Li
+          factorization for a z-invariant layer.  It overestimated
+          metal-stripe absorptance by up to +0.35 (period-robust, silent on
+          lossy cells where the energy guard cannot fire) and was *less*
+          accurate than ``'laurent'`` on dielectrics.  Results from 2-D
+          ``formulation='li'/'fff'/'auto'`` on lossy cells computed before
+          v5.14.1 should be re-run.
         - ``'fff_nv'`` -- the **normal-vector fast Fourier factorization**
           (Schuster 2007): the in-plane permittivity operator is assembled as
           a full 2x2 tensor ``[[Cxx, Cxy], [Cyx, Cyy]]`` from the local
@@ -476,18 +545,52 @@ def rcwa_efficiency_2d(
     """
     if stabilize and not (_is_traced(wavelength) or _is_traced(theta)):
         last = None
+        # Pre-filter upward bumps past the cell-sampling alias bound (audit
+        # P2: an out-of-bound bump raised _validate_cell_sampling's
+        # ValueError -- which the ladder does not catch -- telling the user
+        # their cell is too coarse for an n_orders they never requested).
+        try:
+            Sx_c, Sy_c = np.asarray(eps_cell).shape[:2]
+            max_bump = min((int(Sx_c) - 1) // 4 - int(n_orders_x),
+                           (int(Sy_c) - 1) // 4 - int(n_orders_y))
+        except (TypeError, ValueError, AttributeError):
+            max_bump = None
         for bump in _stabilize_bumps(min(int(n_orders_x), int(n_orders_y))):
+            if max_bump is not None and bump > max_bump:
+                continue
             try:
-                return rcwa_efficiency_2d(
-                    period_x, period_y, eps_cell, n_substrate, n_superstrate,
-                    depth, wavelength, theta=theta, phi=phi,
-                    polarization=polarization,
-                    n_orders_x=int(n_orders_x) + bump,
-                    n_orders_y=int(n_orders_y) + bump, formulation=formulation,
-                    truncation=truncation, stabilize=False, symmetry=symmetry,
-                    use_gpu=use_gpu)
+                with warnings.catch_warnings(record=True) as wlist:
+                    warnings.simplefilter("always")
+                    res = rcwa_efficiency_2d(
+                        period_x, period_y, eps_cell, n_substrate,
+                        n_superstrate, depth, wavelength, theta=theta, phi=phi,
+                        polarization=polarization,
+                        n_orders_x=int(n_orders_x) + bump,
+                        n_orders_y=int(n_orders_y) + bump,
+                        formulation=formulation,
+                        truncation=truncation, stabilize=False,
+                        symmetry=symmetry, use_gpu=use_gpu)
             except _EnergyError as e:
                 last = e
+                continue
+            # A lossless-closure _EnergyWarning marks the silent window where
+            # the per-order answers are wrong (audit P1) -> failed attempt.
+            closure = None
+            for w in wlist:
+                if issubclass(w.category, _EnergyWarning):
+                    closure = closure or w
+                else:
+                    warnings.warn_explicit(w.message, w.category, w.filename,
+                                           w.lineno)
+            if closure is not None:
+                last = _EnergyError(str(closure.message))
+                continue
+            return res
+        if last is None:
+            raise _EnergyError(
+                "rcwa_efficiency_2d: stabilize=True could not try any "
+                "truncation -- the unit-cell sampling bounds every candidate "
+                "n_orders below the request.  Refine the cell sampling.")
         raise last
     _validate_geometry("rcwa_efficiency_2d",
                        **_concrete(period=period_x, period_y=period_y,
@@ -555,18 +658,32 @@ def rcwa_efficiency_2d(
     kyv = xp.asarray(ky.astype(_C))
 
     EPS = _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y)
-    # NOTE (audit P2): 2-D 'li' applies the inverse rule to E_z ONLY -- the in-plane
-    # wall-normal operator stays Laurent ([[eps]]) here, UNLIKE 1-D 'li'.  Full in-
-    # plane normal-vector factorization needs the NV/fff path (formulation='fff_nv'),
-    # not a single global inverse rule (there is no global wall normal in 2-D).
-    EPS_normal = EPS  # Laurent rule: wall-normal convolution == [[eps]]
-    # Dual-Laurent (Li) z-rule: E_z elimination uses [[1/eps]] (Toeplitz of
-    # the Fourier coefficients of 1/eps) rather than [[eps]]^{-1}.  This is
-    # the convergence-accelerating factorization for TM / metals; gated so
-    # the default 'laurent' path stays bit-for-bit unchanged.
-    ez_inv = (_eps_convolution_2d(1.0 / eps_cell, orders, n_orders_x,
-                                  n_orders_y)
-              if formulation == "li" else None)
+    EPS_normal = EPS  # Laurent rule: in-plane convolution == [[eps]]
+    # 'li' (v5.14.1, audit F1): the Li-1997 SEQUENTIAL rule for axis-aligned
+    # crossed gratings -- inverse rule along each E-component's own axis,
+    # direct rule along the other, and the DIRECT-rule [[eps]] for the E_z
+    # elimination (Li 1997 Eq. 27).  Routed through the tensor eigensolver
+    # (Cxy = Cyx = 0).  The pre-v5.14.1 'li' (Laurent in-plane + [[1/eps]]
+    # z-rule) was the WRONG factorization: E_z is tangential to every vertical
+    # wall, so the inverse z-rule violates Li's rule 3 and overestimated metal
+    # absorptance by up to +0.35 (period-robust, invisible to the energy
+    # guard on lossy cells).  A y-uniform cell now reduces to rigorous 1-D
+    # 'li' per-order to ~1e-14.
+    li_ops = None
+    if formulation == "li":
+        if not is_jax:
+            # Uniform cell: all rules coincide; route to the scalar path whose
+            # analytic uniform modes avoid the degenerate eig.  (Under JAX the
+            # tensor eigensolver's iso-uniform blend handles this tracer-safe.)
+            e_np = to_numpy(eps_cell)
+            scale = max(1.0, float(np.max(np.abs(e_np))))
+            if float(np.max(np.abs(e_np - e_np.flat[0]))) < 1e-12 * scale:
+                formulation = "laurent"
+        if formulation == "li":
+            Cxx_li, Cyy_li = _li_convolutions_2d(
+                eps_cell, orders, n_orders_x, n_orders_y, xp)
+            li_ops = (Cxx_li, Cyy_li, EPS)
+    ez_inv = None
     # Normal-vector FFF (Schuster 2007): build the local wall-normal field from
     # the SAME internal (loss-bridge-conjugated) cell and assemble the full
     # in-plane tensor operator (the inverse rule projected on the normal, the
@@ -607,10 +724,11 @@ def rcwa_efficiency_2d(
     # incidence excites only even modes, so the whole recursion runs in the
     # (N+1)-d even subspace (see the section header above _symmetric_solve_rt).
     # Returns None -> not applicable -> fall through to the full 2N solve.
-    # GATED OFF for 'fff_nv': _symmetric_solve_rt is hard-wired to the scalar
-    # (EPS, EPS_normal, ez_inv) core and cannot represent the full in-plane tensor.
+    # GATED OFF for 'fff_nv' and 'li': _symmetric_solve_rt is hard-wired to the
+    # scalar (EPS, EPS_normal, ez_inv) core and cannot represent the per-
+    # component tensor operators.
     rt = None
-    if symmetry and not is_jax and kt < 1e-12 and formulation != "fff_nv":
+    if symmetry and not is_jax and kt < 1e-12 and formulation == "laurent":
         rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
                                  orders, k0, depth, cinc, xp)
     if rt is not None:
@@ -619,6 +737,10 @@ def rcwa_efficiency_2d(
         if formulation == "fff_nv":
             Wl, Vl, lam = _layer_eigenmodes_tensor(
                 Kx, Ky, Cxx_nv, Cxy_nv, Cyx_nv, Cyy_nv, EZZ_nv)
+        elif li_ops is not None:
+            Zli = xp.zeros_like(li_ops[0])
+            Wl, Vl, lam = _layer_eigenmodes_tensor(
+                Kx, Ky, li_ops[0], Zli, Zli, li_ops[1], li_ops[2])
         else:
             Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS_normal,
                                             ez_laurent_inv=ez_inv)
@@ -646,7 +768,8 @@ def rcwa_efficiency_2d(
     R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
     T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
     if not is_jax:
-        _check_energy("rcwa_efficiency_2d", R_eff, T_eff)
+        _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
+                      lossless=_cell_lossless(eps_sup, eps_sub, eps_cell))
     # cross-suite return shape: unpacks as (orders, R, T); .dof = 2N eigenproblem dim
     return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
 
@@ -684,7 +807,7 @@ class PreparedRCWA2D:
     __slots__ = ("xp", "polarization", "formulation", "symmetry", "orders", "N",
                  "eps_sup", "eps_sub", "EPS", "EPS_normal", "ez_inv", "fff",
                  "kx0", "ky0", "kt", "kz_inc", "einc_sq", "cinc",
-                 "period_x", "period_y", "depth", "eps_reals")
+                 "period_x", "period_y", "depth", "eps_reals", "lossless")
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -716,14 +839,14 @@ class PreparedRCWA2D:
         Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, self.eps_sub)
 
         rt = None
-        if self.symmetry and self.kt < 1e-12 and self.formulation != "fff_nv":
+        if self.symmetry and self.kt < 1e-12 and self.formulation == "laurent":
             rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, self.EPS,
                                      self.EPS_normal, self.ez_inv, orders, k0,
                                      self.depth, self.cinc, xp)
         if rt is not None:
             r, t = rt
         else:
-            if self.formulation == "fff_nv":
+            if self.fff is not None:
                 Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, *self.fff)
             else:
                 Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, self.EPS,
@@ -749,7 +872,8 @@ class PreparedRCWA2D:
                                                    + xp.abs(tz) ** 2) / self.einc_sq
         R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
         T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
-        _check_energy("rcwa_efficiency_2d", R_eff, T_eff)
+        _check_energy("rcwa_efficiency_2d", R_eff, T_eff,
+                      lossless=getattr(self, "lossless", False))
         return Efficiency2D(orders, R_eff, T_eff, 2 * N)
 
 
@@ -813,9 +937,19 @@ def prepare_rcwa_2d(
     # GEOMETRY-ONLY permittivity factorization (no k0).
     EPS = _eps_convolution_2d(eps_cell, orders, n_orders_x, n_orders_y)
     EPS_normal = EPS
-    ez_inv = (_eps_convolution_2d(1.0 / eps_cell, orders, n_orders_x, n_orders_y)
-              if formulation == "li" else None)
+    ez_inv = None
     fff = None
+    if formulation == "li":
+        # Li-1997 sequential rule (v5.14.1, audit F1) -- see _li_convolutions_2d.
+        e_np = to_numpy(eps_cell)
+        scale = max(1.0, float(np.max(np.abs(e_np))))
+        if float(np.max(np.abs(e_np - e_np.flat[0]))) < 1e-12 * scale:
+            formulation = "laurent"   # uniform cell: analytic scalar modes
+        else:
+            Cxx_li, Cyy_li = _li_convolutions_2d(
+                eps_cell, orders, n_orders_x, n_orders_y, xp)
+            Zli = xp.zeros_like(Cxx_li)
+            fff = (Cxx_li, Zli, Zli, Cyy_li, EPS)
     if formulation == "fff_nv":
         _nv_nonseparable_guard("prepare_rcwa_2d", eps_cell,
                                allow_nonseparable_nv)
@@ -845,7 +979,8 @@ def prepare_rcwa_2d(
         symmetry=symmetry, orders=orders, N=N, eps_sup=eps_sup, eps_sub=eps_sub,
         EPS=EPS, EPS_normal=EPS_normal, ez_inv=ez_inv, fff=fff,
         kx0=kx0, ky0=ky0, kt=kt, kz_inc=kz_inc, einc_sq=einc_sq, cinc=cinc,
-        period_x=period_x, period_y=period_y, depth=depth, eps_reals=eps_reals)
+        period_x=period_x, period_y=period_y, depth=depth, eps_reals=eps_reals,
+        lossless=_cell_lossless(eps_sup, eps_sub, eps_cell))
 
 
 def rcwa_efficiency_2d_vs_wavelength(
@@ -922,7 +1057,6 @@ def rcwa_efficiency_2d_vs_wavelength(
         R[i, :] = np.asarray(res[1])
         T[i, :] = np.asarray(res[2])
     if n_unstable:
-        import warnings
         warnings.warn(
             f"rcwa_efficiency_2d_vs_wavelength: {n_unstable}/{wl.size} "
             "wavelengths hit a numerical instability (energy non-conservation) "
@@ -1076,7 +1210,8 @@ def rcwa_jones_2d(
     T_eff = xp.stack(T_rows)
     jones_reflection = xp.stack(j_cols, axis=1)
     if not is_jax:
-        _check_energy("rcwa_jones_2d", R_eff, T_eff)
+        _check_energy("rcwa_jones_2d", R_eff, T_eff,
+                      lossless=_cell_lossless(eps_sup, eps_sub, eps_tensor_cell))
     return orders, R_eff, T_eff, jones_reflection
 
 
@@ -1256,15 +1391,18 @@ def rcwa_efficiency_2d_shapes(
 
     # Analytic (host) form factors -> move the convolution matrices to the
     # backend for the eigensolve.
-    EPS_np, EPS_inv_np = _analytic_convolutions_2d(
+    EPS_np, _EPS_inv_np = _analytic_convolutions_2d(
         eps_bg, shapes_c, orders, n_orders_x, n_orders_y, period_x, period_y)
     EPS = xp.asarray(EPS_np)
-    EPS_inv = xp.asarray(EPS_inv_np)
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
-    # Dual-Laurent: in-plane uses [[eps]], E_z elimination uses [[1/eps]].
-    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS, ez_laurent_inv=EPS_inv)
+    # In-plane uses the analytic [[eps]]; the E_z elimination uses the
+    # DIRECT rule inv([[eps]]) (v5.14.1 audit F1: the dual-Laurent [[1/eps]]
+    # z-rule was the wrong factorization -- E_z is wall-tangential -- and
+    # reproduced the identical metal-absorptance blow-up here, +0.35 at M=16,
+    # refuting the old attribution to the pixel route).
+    Wl, Vl, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
     S = _interface_smatrix(Wref, Vref, Wl, Vl)
     S = _redheffer_star(S, _propagation_smatrix(lam, k0 * depth))
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
@@ -1301,7 +1439,10 @@ def rcwa_efficiency_2d_shapes(
                                           + xp.abs(tz) ** 2) / einc_sq
     R_eff = xp.where(xp.real(kz_ref_f) > 0, xp.real(R_eff), 0.0)
     T_eff = xp.where(xp.real(kz_trn_f) > 0, xp.real(T_eff), 0.0)
-    _check_energy("rcwa_efficiency_2d_shapes", R_eff, T_eff)
+    _check_energy("rcwa_efficiency_2d_shapes", R_eff, T_eff,
+                  lossless=_cell_lossless(
+                      eps_sup, eps_sub,
+                      np.array([eps_bg] + [sh["eps"] for sh in shapes_c])))
     return Efficiency2D(orders, R_eff, T_eff, 2 * len(orders))
 
 

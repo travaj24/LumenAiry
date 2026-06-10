@@ -6,6 +6,7 @@ from __future__ import annotations
 import contextlib
 import functools
 import threading
+import warnings
 from typing import Optional
 
 import numpy as np
@@ -172,6 +173,21 @@ def _rcwa_xp(fn_name, use_gpu, *arrays):
                 f"the GPU stack (`pip install lumenairy[cuda]`) or call with "
                 f"use_gpu=False for the NumPy path.")
         import cupy as cp
+        # Audit P2 2026-06-10: a PARTIAL CUDA install (cupy wheel present but
+        # cublas/cufft/cusolver runtime wheels missing) passes the import
+        # check and then dies deep inside the first fft2 with a raw
+        # 'DLL load failed while importing cufft'.  Probe a trivial device op
+        # once and re-raise as the same friendly RuntimeError.
+        try:
+            cp.zeros(1).sum()
+            from cupy.fft import fft as _probe_fft  # noqa: F401
+        except (ImportError, OSError, RuntimeError) as e:
+            raise RuntimeError(
+                f"{fn_name}: use_gpu=True and CuPy is installed, but the CUDA "
+                f"runtime libraries are unusable ({type(e).__name__}: {e}).  "
+                f"Install the matching NVIDIA wheels (e.g. `pip install "
+                f"nvidia-cublas-cu12 nvidia-cufft-cu12 nvidia-cusolver-cu12`) "
+                f"or call with use_gpu=False for the NumPy path.") from e
         return cp
     return array_namespace(*arrays)
 
@@ -225,8 +241,16 @@ class _EnergyError(ValueError):
     ``stabilize=`` retry path can catch specifically."""
 
 
+class _EnergyWarning(UserWarning):
+    """Emitted by :func:`_check_energy` when a PROVABLY LOSSLESS solve
+    violates the exact closure ``sum(R)+sum(T) = 1`` beyond ~1e-6 but below
+    the hard 5% tripwire (the audited 'silent window': the per-order answers
+    there are wrong even though no error is raised).  The ``stabilize=``
+    retry ladders treat a recorded ``_EnergyWarning`` as a failed attempt."""
 
-def _check_energy(fn_name, R, T):
+
+
+def _check_energy(fn_name, R, T, lossless=False):
     """Raise if the total efficiency exceeds the incident power by a large
     margin.  A PASSIVE structure cannot reflect + transmit more than what
     comes in, so ``sum(R) + sum(T) >> 1`` per incident polarization signals a
@@ -255,6 +279,31 @@ def _check_energy(fn_name, R, T):
             f"large period / low index contrast).  Pass stabilize=True to "
             f"auto-retry at a slightly higher n_orders, or reduce n_orders, "
             f"adjust the period, or increase the index contrast.")
+    # Two-sided (audit P1 2026-06-10): a NEGATIVE total is just as
+    # non-physical as an excessive one (the gain-superstrate kz_inc flip
+    # returned sum T = -392 below the one-sided tripwire).
+    if tot < -1e-9 * n_states:
+        raise _EnergyError(
+            f"{fn_name}: NEGATIVE total efficiency (sum R+T = {tot:.3e}); "
+            f"the efficiency normalisation is non-physical (e.g. a gain or "
+            f"non-propagating incidence medium slipped past the entry "
+            f"guards).")
+    # Lossless-closure tripwire (audit P1 2026-06-10): for a PROVABLY
+    # lossless input (every region / structure permittivity exactly real)
+    # the closure R+T = 1 is exact in this code (clean solves hold it to
+    # <1e-11), so a violation in the silent window 1e-6..0.05 means the
+    # per-order answers are wrong (measured: +3.3e-2 closure error carried
+    # an 8% per-order error and broken +/-1 symmetry).  WARN here (raising
+    # would break shipped behaviour); the stabilize= retry ladders treat
+    # this warning as a failed attempt and move to the next truncation.
+    if lossless and abs(tot - n_states) > 1e-6 * n_states:
+        warnings.warn(_EnergyWarning(
+            f"{fn_name}: lossless energy closure violated (sum R+T - "
+            f"{n_states} = {tot - n_states:+.3e}, structure is provably "
+            f"lossless): the truncation is numerically unstable here and "
+            f"the PER-ORDER efficiencies are suspect.  Pass stabilize=True "
+            f"(retries nearby truncations) or change n_orders."),
+            stacklevel=3)
 
 
 
@@ -409,7 +458,24 @@ def _require_propagating_incidence(fn_name, eps_sup, kt0_sq):
     efficiency normalisation divides by ``kz_inc ~ 0`` and silently returns
     negative / NaN 'efficiencies'.  For a real lossless superstrate this can
     only trip at exactly grazing incidence (theta -> 90 deg); it fires for
-    evanescent / metallic / gain incidence media."""
+    evanescent / metallic incidence media.
+
+    Also rejects a GAIN superstrate (public ``Im(n_superstrate) < 0``, i.e.
+    INTERNAL ``Im(eps_sup) > 0`` after the loss-convention bridge) -- audit
+    P1 2026-06-10: even ``Im(n_sup) = -1e-9`` flips ``_sqrt_forward`` to its
+    ``Re < 0`` root, so ``kz_inc < 0`` silently negated every efficiency
+    (TE ``sum T = -11.7``, TM ``-392.8`` on a plain lossless grating) while
+    the reflected orders were masked to zero -- a discontinuity at
+    ``Im(n_sup) = 0^-`` invisible to the one-sided energy tripwire.  An
+    infinitesimally LOSSY superstrate remains continuous and supported."""
+    if float(np.imag(eps_sup)) > 0.0:
+        raise ValueError(
+            f"{fn_name}: gain incidence medium (Im(n_superstrate) < 0; "
+            f"public eps_superstrate = "
+            f"{complex(np.conj(complex(eps_sup))):.6g}) is not supported: "
+            f"the forward-root convention flips kz_inc negative and would "
+            f"silently negate every efficiency.  Use a lossless or lossy "
+            f"(Im(n_superstrate) >= 0) incidence medium.")
     if float(np.real(eps_sup)) - float(np.real(kt0_sq)) <= 1e-12:
         raise ValueError(
             f"{fn_name}: the incidence half-space is non-propagating "
@@ -1265,7 +1331,6 @@ def _rcwa_convergence_stack(stack, *, bump, atol, warn):
     report = dict(converged=converged, delta=delta, delta_sum_R=dsR,
                   delta_sum_T=dsT, n_orders_low=no_lo, n_orders_high=no_hi)
     if warn and not converged:
-        import warnings
         warnings.warn(
             f"rcwa_convergence: RCWAStack NOT converged at {no_lo} -- the "
             f"per-order efficiency changed by {delta:.2e} (> atol={atol:.1e}) "
@@ -1985,6 +2050,7 @@ __all__ = [
     "_concrete",
     "Efficiency2D",
     "_EnergyError",
+    "_EnergyWarning",
     "_check_energy",
     "_require_jax_x64",
     "_normalize_pol",

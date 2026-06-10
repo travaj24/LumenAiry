@@ -60,7 +60,10 @@ def test_large_angle_conical_matches_rcwa(theta_deg, phi_deg):
                                     formulation="li")
     m1, m2 = _o0(o1), _o0(o2)
     assert abs(float(T1[m1][0]) - float(T2[m2][0])) < 2e-2
-    assert abs(float(R1.sum()) - float(R2.sum())) < 2e-2
+    # 3e-2 (was 2e-2): the corrected sequential-rule 'li' oracle (audit F1,
+    # 2026-06-10) shifted the R-sum at [30, 30] to 2.4e-2 from the hybrid --
+    # the same coarse-settings Fourier floor the comment above documents.
+    assert abs(float(R1.sum()) - float(R2.sum())) < 3e-2
 
 
 def test_conical_jones_matches_rcwa():

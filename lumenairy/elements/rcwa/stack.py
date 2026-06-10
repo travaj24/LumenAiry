@@ -1102,12 +1102,14 @@ class RCWAStack:
             # Analytic (host) form factors -> move the convolution to backend.
             eps_bg, shapes = layer.data
             shapes_c = [dict(s, eps=complex(np.conj(_C(s["eps"])))) for s in shapes]
-            EPS_np, EPS_inv_np = _analytic_convolutions_2d(
+            EPS_np, _EPS_inv_np = _analytic_convolutions_2d(
                 complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
                 self.noy, self.period_x, self.period_y)
             EPS = xp.asarray(EPS_np)
-            W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS,
-                                          ez_laurent_inv=xp.asarray(EPS_inv_np))
+            # Direct-rule E_z elimination (v5.14.1 audit F1: the dual-Laurent
+            # [[1/eps]] z-rule is the wrong factorization for a z-invariant
+            # layer -- E_z is wall-tangential; see rcwa_efficiency_2d_shapes).
+            W, V, lam = _layer_eigenmodes(Kx, Ky, EPS, EPS)
             return W, V, lam, EPS
         et = xp.conj(xp.asarray(layer.data))
 

@@ -56,18 +56,30 @@ def _solve(cell, *, symmetry, pol="tm", formu="li", No=6, **kw):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("pol", ["te", "tm"])
-@pytest.mark.parametrize("formu", ["laurent", "li"])
 @pytest.mark.parametrize("cx,cy", [(0.0, 0.0), (0.13, -0.21), (-0.5, -0.5)])
-def test_even_sector_matches_full_solve(pol, formu, cx, cy):
+def test_even_sector_matches_full_solve(pol, cx, cy):
     cell = _pillar(64, cx, cy)
-    o0, R0, T0 = _solve(cell, symmetry=False, pol=pol, formu=formu)
-    o1, R1, T1 = _solve(cell, symmetry=True, pol=pol, formu=formu)
+    o0, R0, T0 = _solve(cell, symmetry=False, formu="laurent", pol=pol)
+    o1, R1, T1 = _solve(cell, symmetry=True, formu="laurent", pol=pol)
     # physically identical, but a different (even-adapted, recentred) basis,
     # so ~1e-12 rather than bit-for-bit
     assert np.allclose(R0, R1, atol=1e-11, rtol=0)
     assert np.allclose(T0, T1, atol=1e-11, rtol=0)
     # and it is genuinely the fast path, not a silent fallback
     assert not (np.array_equal(R0, R1) and np.array_equal(T0, T1))
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_li_falls_back_bit_identical(pol):
+    """Since v5.14.1 'li' is the Li-1997 SEQUENTIAL rule routed through the
+    per-component tensor eigensolver, which _symmetric_solve_rt (hard-wired
+    to the scalar core) cannot represent -- so symmetry=True must
+    transparently FALL BACK bit-for-bit for 'li' (extending the even-sector
+    fold to the per-component tensor operators is a roadmap perf item)."""
+    cell = _pillar(64, 0.13, -0.21)
+    o0, R0, T0 = _solve(cell, symmetry=False, formu="li", pol=pol)
+    o1, R1, T1 = _solve(cell, symmetry=True, formu="li", pol=pol)
+    assert np.array_equal(R0, R1) and np.array_equal(T0, T1)
 
 
 def test_even_sector_conserves_energy_lossless():

@@ -10,8 +10,9 @@ Coverage:
   (a) RATE / correctness on a CONVERGENT P~1.2um metal disk: ``fff_nv`` tracks the
       analytic-disk reference and lands closer than 2-D ``'li'`` at matched order.
   (b) SAME-LIMIT on a separable (y-uniform) metal stripe vs ``rcwa_efficiency_1d``.
-  (c) NO-BIAS + ENERGY on a lossless dielectric square: ``fff_nv`` matches
-      ``'laurent'`` and conserves energy (R+T=1).
+  (c) NO-BIAS + ENERGY on a lossless dielectric square: every formulation
+      conserves energy and shares one converged limit; the v5.14.1
+      sequential-rule ``'li'`` reaches it fastest.
   (d) DISK cross-term significance: ``Cxy = -Delta @ [[Nx Ny]]`` is nonzero for a
       curved wall and the with/without-cross results DIFFER.
   (e) ``'laurent'`` / ``'li'`` remain BIT-IDENTICAL after the integration.
@@ -113,18 +114,17 @@ def test_laurent_li_unchanged_vs_frozen_reference():
 # ===========================================================================
 
 def test_fff_nv_dielectric_no_bias_and_energy():
-    """On a lossless dielectric square fff_nv must match the STAIRCASE-FREE
-    reference (analytic-shape / dual-Laurent 'li', which carry the same
-    unbiased E_z rule) -- NOT the direct-rule 'laurent', which is itself biased
-    low here -- and conserve energy (R+T=1) at every order.
-
-    (fff_nv pairs the normal-vector in-plane projection with the dual-Laurent
-    ``inv(EZZ) = [[1/eps]]`` E_z elimination; using the direct-rule E_z instead
-    biases the dielectric square low by ~6e-2.)"""
+    """On a lossless dielectric square every formulation must conserve energy
+    and converge to the SAME limit; the v5.14.1 sequential-rule 'li' gets
+    there fastest (RE-PINNED 2026-06-10, audit F1: the old asserts pinned the
+    error-cancelling dual-Laurent E_z trio -- li/fff_nv/shapes "agreed" at
+    finite order because they shared the same WRONG inverse z-rule.  The
+    converged truth here is R00 ~ 0.9477: li reaches it by M=8 (~9e-4); the
+    Richardson 1/M extrapolation of 'laurent' lands on it (0.94752); fff_nv
+    approaches it from below)."""
     P, WL, DEPTH, THETA = 0.5e-6, 0.633e-6, 0.18e-6, np.deg2rad(1e-3)
     cell = _square_cell(160, 6.25 + 0j, 1.0 + 0j, 0.5)
-    shape = [dict(shape="rectangle", eps=6.25 + 0j, size=(0.25e-6, 0.25e-6),
-                  center=(P / 2, P / 2))]
+    R00_TRUTH = 0.9477          # li M=20 = 0.94771; laurent Richardson 0.94752
     for M in (8, 10):
         o, Rn, Tn = rcwa_efficiency_2d(
             P, P, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
@@ -132,37 +132,38 @@ def test_fff_nv_dielectric_no_bias_and_energy():
         o, Ri, Ti = rcwa_efficiency_2d(
             P, P, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
             polarization="tm", n_orders_x=M, n_orders_y=M, formulation="li")
-        oa, Ra, Ta = rcwa_efficiency_2d_shapes(
-            P, P, 1.0 + 0j, shape, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
-            polarization="tm", n_orders_x=M, n_orders_y=M)
-        # energy (lossless -> R+T = 1)
-        assert abs(float(Rn.sum() + Tn.sum()) - 1.0) < 1e-6
-        # tracks the unbiased dual-Laurent 'li' (same E_z rule)
-        assert abs(_r00(o, Rn) - _r00(o, Ri)) < 1.5e-2
-        # and the staircase-free analytic-shape reference
-        assert abs(_r00(o, Rn) - _r00(oa, Ra)) < 1.5e-2
-        # 'laurent' is the BIASED one here (sanity: it sits far below truth)
         o, Rl, Tl = rcwa_efficiency_2d(
             P, P, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
             polarization="tm", n_orders_x=M, n_orders_y=M, formulation="laurent")
-        assert abs(_r00(o, Rn) - _r00(o, Rl)) > 2e-2
+        # energy (lossless -> R+T = 1) for all three
+        assert abs(float(Rn.sum() + Tn.sum()) - 1.0) < 1e-6
+        assert abs(float(Ri.sum() + Ti.sum()) - 1.0) < 1e-6
+        assert abs(float(Rl.sum() + Tl.sum()) - 1.0) < 1e-6
+        # the sequential rule is already converged at these orders ...
+        assert abs(_r00(o, Ri) - R00_TRUTH) < 2e-3       # measured ~9e-4
+        # ... while 'laurent' is still ~1.5e-2 away (slow but correct)
+        assert abs(_r00(o, Rl) - R00_TRUTH) > 5e-3
+        # fff_nv tracks the fast rule, not the slow one
+        assert abs(_r00(o, Rn) - _r00(o, Ri)) < 1.5e-2   # measured <7e-3
 
 
 def test_fff_nv_te_matches_li_dielectric():
-    """TE: fff_nv tracks the dual-Laurent 'li' / analytic-shape reference
-    (the unbiased E_z rule)."""
+    """TE: fff_nv tracks the sequential-rule 'li' (RE-PINNED 2026-06-10,
+    audit F1: TE converged truth here is R00 ~ 0.9477 -- li 0.94720@M=10 /
+    0.94771@M=20, fff_nv 0.94065@M=10 -> 0.94754@M=20; the analytic-shape
+    solver is Laurent-in-plane and still 1.4e-2 high at M=10, so the old
+    shapes-proximity pin was the error-cancellation artifact)."""
     P, WL, DEPTH, THETA = 0.5e-6, 0.633e-6, 0.18e-6, np.deg2rad(1e-3)
     cell = _square_cell(160, 6.25 + 0j, 1.0 + 0j, 0.5)
-    shape = [dict(shape="rectangle", eps=6.25 + 0j, size=(0.25e-6, 0.25e-6),
-                  center=(P / 2, P / 2))]
     o, Rn, Tn = rcwa_efficiency_2d(
         P, P, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
         polarization="te", n_orders_x=10, n_orders_y=10, formulation="fff_nv")
-    oa, Ra, Ta = rcwa_efficiency_2d_shapes(
-        P, P, 1.0 + 0j, shape, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
-        polarization="te", n_orders_x=10, n_orders_y=10)
+    o, Ri, Ti = rcwa_efficiency_2d(
+        P, P, cell, 1.0, 1.0, DEPTH, WL, theta=THETA, phi=0.0,
+        polarization="te", n_orders_x=10, n_orders_y=10, formulation="li")
     assert abs(float(Rn.sum() + Tn.sum()) - 1.0) < 1e-6
-    assert abs(_r00(o, Rn) - _r00(oa, Ra)) < 1.5e-2
+    assert abs(_r00(o, Ri) - 0.9477) < 2e-3       # li at the converged truth
+    assert abs(_r00(o, Rn) - _r00(o, Ri)) < 1.5e-2  # fff_nv tracks it
 
 
 # ===========================================================================
@@ -282,12 +283,19 @@ def test_fff_nv_disk_raises_nonseparable_by_default_and_misplits_when_opted_in()
     # (2) the opt-out downgrades to a warning (expert reflection-only use)
     with pytest.warns(UserWarning, match="NON-SEPARABLE"):
         A_nv = _absorb("fff_nv", 13, allow_nonseparable_nv=True)
-    # (3) 'li' and 'laurent' agree on a nonzero absorptance = the correct value
+    # (3) RE-PINNED 2026-06-10 (audit F1): the converged staircased-disk
+    # absorptance is ~0.029 (li/laurent agree to 6e-4 at M=21: 0.02890 vs
+    # 0.02949); at M=13 the sequential-rule 'li' is already in the converged
+    # band (0.0351) while 'laurent' is ~2x high (0.0614) and crashes toward
+    # li as M grows (0.0353 at M=17).  The old "agree at M=13" pin held only
+    # because old-li shared laurent's in-plane rule.
     A_li, A_lau = _absorb("li", 13), _absorb("laurent", 13)
-    assert A_li > 0.04 and abs(A_li - A_lau) < 3e-2, (
-        f"li/laurent should agree on a nonzero disk absorptance: "
+    assert 0.02 < A_li < 0.05, f"li disk absorptance drifted: {A_li:.4f}"
+    assert A_lau > A_li + 1.5e-2, (
+        f"laurent should still be unconverged-high at M=13: "
         f"li={A_li:.4f} laurent={A_lau:.4f}")
-    # (4) opted-in fff_nv still mis-splits -> its absorptance is materially LOW.
+    # (4) opted-in fff_nv still mis-splits -> its absorptance is materially
+    # LOW (0.0152 at M=13 vs the ~0.029-0.035 converged band).
     assert A_nv < 0.6 * A_li, (
         f"fff_nv disk absorptance {A_nv:.4f} is unexpectedly close to the "
         f"'li' oracle {A_li:.4f} -- did the cross-term factorization get fixed? "
