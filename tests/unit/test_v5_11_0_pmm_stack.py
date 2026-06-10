@@ -268,8 +268,12 @@ def test_single_out_of_plane_layer_stack_equals_binary():
     o, R, T, J = st.set_source(0.633e-6).solve()
     ob, Rb, Tb, Jb = la.pmm_jones_1d(1.0e-6, er, eg, 1.5, 1.0, 0.5e-6, 0.5,
                                      0.633e-6, degree=16, elements_per_region=6)
-    assert abs((R[0].sum() + T[0].sum()) - (Rb[0].sum() + Tb[0].sum())) < 1e-10
-    assert abs(abs(J[0, 0]) - abs(Jb[0, 0])) < 1e-10
+    # v5.14: cross-path consistency, not bit-identity -- the metric paths'
+    # flux-split selections within degenerate pairs are BLAS-build-sensitive
+    # (a CI build diverged 0.036 under the LEGACY branch; both paths now use
+    # the robust branch, but the gauge can still differ at eig noise).
+    assert abs((R[0].sum() + T[0].sum()) - (Rb[0].sum() + Tb[0].sum())) < 1e-6
+    assert abs(abs(J[0, 0]) - abs(Jb[0, 0])) < 1e-6
 
 
 def test_mixed_inplane_out_of_plane_stack_conserves():

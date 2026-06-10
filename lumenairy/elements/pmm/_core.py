@@ -2644,12 +2644,14 @@ def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
         # shift already lives in A1's Lop).
         q2, Acoef = sla.eig(A1, A2)
         q = np.sqrt(q2)
-        if kx0:
-            tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
-            flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
-            q = np.where(flip, -q, q)
-        else:
-            q = np.where(q.imag < 0.0, -q, q)
+        # NOISE-ROBUST forward branch, unconditional (v5.14 P1 fix, the same
+        # legacy ``Im(q) < 0`` flip as _sem_modes: it flipped propagating
+        # modes on ~1e-15 QZ noise at normal incidence -- BLAS-build-dependent,
+        # which broke the slant-zero == vertical reduction on CI builds where
+        # the noise signs differ from the dev box).
+        tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+        flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
+        q = np.where(flip, -q, q)
         lam = -1j * q
         return dict(symmetric=True, W=Acoef, q=q, lam=lam, invop=invop,
                     Dop=Dop, t=t, k0=k0, polarization=polarization)

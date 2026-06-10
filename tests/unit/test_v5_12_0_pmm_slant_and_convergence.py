@@ -50,8 +50,11 @@ def test_slant_zero_reduces_to_vertical(pol):
                                            polarization=pol, degree=16,
                                            stabilize=False)
     assert np.array_equal(oV, oS)
-    assert np.max(np.abs(RV - RS)) < 1e-12
-    assert np.max(np.abs(TV - TS)) < 1e-12
+    # v5.14: both paths use the noise-robust forward branch; their selections
+    # within eig-noise-degenerate pairs can still differ per BLAS build, so the
+    # contract is physical agreement, not bit-identity (was 1e-12).
+    assert np.max(np.abs(RV - RS)) < 1e-9
+    assert np.max(np.abs(TV - TS)) < 1e-9
 
 
 @pytest.mark.parametrize("phi_deg", [10.0, 25.0, 45.0, 60.0, 75.0])
