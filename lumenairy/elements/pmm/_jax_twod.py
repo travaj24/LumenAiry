@@ -37,21 +37,43 @@ EXACTLY normal incidence on a CENTERED square returns the clean symmetry zero
 """
 from __future__ import annotations
 
+import threading
+
 import numpy as np
 
 from ...backend import is_jax_array  # noqa: F401  (re-exported for the dispatch)
 
 _C = np.complex128
 _STATIC_CACHE = {}
+_STATIC_CACHE_LOCK = threading.Lock()
+
+
+def _clear_jax_twod_caches():
+    """Registry hook: drop the geometry-constant cache."""
+    with _STATIC_CACHE_LOCK:
+        _STATIC_CACHE.clear()
+
+
+# Enroll with the central cache registry (the v4.16.0 contract: every
+# module-level cache is clearable via the global "clear all caches" path).
+try:
+    from ..._cache_registry import (
+        register_cache_clearer as _register_cache_clearer,
+    )
+    _register_cache_clearer("pmm_jax_twod_static", _clear_jax_twod_caches)
+except ImportError:  # pragma: no cover - registry always present in-tree
+    pass
 
 
 def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
                  n_orders):
     """Geometry-only constants (NumPy): the Fourier-projected unit-derivative
     operators, the projected identity, the pillar partition-of-unity weight
-    vector, and the order set.  Cached on the static key."""
+    vector, and the order set.  Cached on the static key (lock-guarded for
+    concurrent reader-writer safety)."""
     key = (period_x, period_y, x0, x1, y0, y1, degree, n_el, grade, n_orders)
-    hit = _STATIC_CACHE.get(key)
+    with _STATIC_CACHE_LOCK:
+        hit = _STATIC_CACHE.get(key)
     if hit is not None:
         return hit
     from .twod import _build_axis, _projectors
@@ -74,7 +96,8 @@ def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
         Gx0F=Tp @ Gx0 @ Tpinv, Gy0F=Tp @ Gy0 @ Tpinv,
         IprojF=Tp @ Tpinv,
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
-    _STATIC_CACHE[key] = out
+    with _STATIC_CACHE_LOCK:
+        _STATIC_CACHE[key] = out
     return out
 
 
