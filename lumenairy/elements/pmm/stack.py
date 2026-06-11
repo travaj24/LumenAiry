@@ -32,8 +32,10 @@ from ._core import (
     _resolve_order_count,
     _sem_fourier_projection,
     _sem_modes_tensor,
+    _sem_modes_uniform,
     _t3_slant,
     _tensor3_dict,
+    _uniform_geo_eig,
 )
 
 
@@ -575,8 +577,11 @@ class PMMStack:
             self.period, uwidths, [t_sub] * nU, self.degree, self.n_el, self.grade)
         n_glob = mats_sup["n_glob"]
 
-        Wsup, Vsup, _l, _g = _sem_modes_tensor(mats_sup, k0, kx0, True)
-        Wsub, Vsub, _l, _g = _sem_modes_tensor(mats_sub, k0, kx0, True)
+        _geo = _uniform_geo_eig(mats_sup, k0, kx0)
+        Wsup, Vsup, _l, _g = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup,
+                                                _geo)
+        Wsub, Vsub, _l, _g = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
+                                                _geo)
 
         # Redheffer recursion: sup -> [interface, propagation]*layers -> sub.
         # A layer needs the GENERAL fwd/back cascade if it is SLANTED or carries
@@ -840,6 +845,58 @@ class PMMStack:
             float(np.imag(Ex[:, c] @ (S0 @ np.conj(Hy[:, c])))
                   - np.imag(Ey[:, c] @ (S0 @ np.conj(Hx[:, c]))))
             for c in range(2)])
+
+    def internal_field(self, z, *, pol=0):
+        """Nodal internal field at depth ``z`` [m] below the stack top
+        (backlog B2, 2026-06-10): returns
+        ``dict(x, Ex, Ey, Hx, Hy, layer)`` -- the tangential field row
+        vectors on the shared union grid's global nodes for incident
+        polarization ``pol`` (0 = E_x, 1 = E_y).  Requires a prior
+        ``solve(retain_internal=True)`` (all-vertical in-plane stacks).
+
+        The magnetic rows carry the MODAL convention (an extra ``-i``
+        relative to physical H, the same convention the flux selector and
+        :meth:`layer_absorption` use); ratios and absorption bookkeeping are
+        convention-free.
+        """
+        d = getattr(self, "_internal", None)
+        if d is None or "cinc" not in d:
+            raise ValueError(
+                "PMMStack.internal_field: call solve(retain_internal=True) "
+                "first.")
+        z = float(z)
+        if pol not in (0, 1):
+            raise ValueError("PMMStack.internal_field: pol must be 0 or 1.")
+        ztop = 0.0
+        i = None
+        for li, (t, _segs, _sl) in enumerate(self._layers):
+            if z <= ztop + t or li == len(self._layers) - 1:
+                i = li
+                break
+            ztop += t
+        t = self._layers[i][0]
+        z_frac = min(max((z - ztop) / t, 0.0), 1.0)
+        amps = self._internal_amplitudes()
+        Wl, Vl, lam, _q = d["lmodes"][i]
+        c_fwd, c_bwd = amps[i]
+        k0 = d["k0"]
+        n_glob = d["n_glob"]
+        P = np.exp(-lam * k0 * (z_frac * t))[:, None]
+        Q = np.exp(-lam * k0 * ((1.0 - z_frac) * t))[:, None]
+        E = (Wl @ (P * c_fwd) + Wl @ (Q * c_bwd))[:, pol]
+        H = (Vl @ (P * c_fwd) - Vl @ (Q * c_bwd))[:, pol]
+        # global-node x coordinates from the element table
+        mats_i = d["layer_mats"][i]
+        from ._core import _gll_nodes_weights
+        ref_nodes, _w = _gll_nodes_weights(mats_i["degree"])
+        x_glob = np.zeros(n_glob)
+        for e, (xl, xr, _tns) in enumerate(mats_i["elem_bnds"]):
+            x_glob[mats_i["l2g"][e]] = 0.5 * (xl + xr) \
+                + 0.5 * (xr - xl) * ref_nodes
+        order = np.argsort(x_glob)
+        return dict(x=x_glob[order], Ex=E[:n_glob][order],
+                    Ey=E[n_glob:][order], Hx=H[:n_glob][order],
+                    Hy=H[n_glob:][order], layer=i)
 
     def layer_absorption(self, *, by_material=False):
         """Per-layer absorbed power fraction (device-geometry roadmap item 6,
@@ -1114,8 +1171,11 @@ class PMMStack:
                     [_tensor3_dict(_tens(e, w)) for e in layer_eps_u[i]],
                     self.degree, self.n_el, self.grade))
                 for i, m in enumerate(layer_mats)]
-            Wsup, Vsup, _l, _g = _sem_modes_tensor(mats_sup, k0, kx0, True)
-            Wsub, Vsub, _l, _g = _sem_modes_tensor(mats_sub, k0, kx0, True)
+            _geo = _uniform_geo_eig(mats_sup, k0, kx0)
+            Wsup, Vsup, _l, _g = _sem_modes_uniform(mats_sup, k0, kx0,
+                                                    eps_sup, _geo)
+            Wsub, Vsub, _l, _g = _sem_modes_uniform(mats_sub, k0, kx0,
+                                                    eps_sub, _geo)
             lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in mats_w]
             S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
             for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
@@ -1350,10 +1410,11 @@ class _PreparedPMMStack:
             m_sub = _build_sem_tensor_segments(
                 st.period, self._uwidths, [t_sub] * nU, st.degree, st.n_el,
                 st.grade)
+            _geo = _uniform_geo_eig(m_sup, k0, kx0)
             self._mats_cache[rk] = (
                 m_sup, m_sub,
-                _sem_modes_tensor(m_sup, k0, kx0, True),
-                _sem_modes_tensor(m_sub, k0, kx0, True))
+                _sem_modes_uniform(m_sup, k0, kx0, eps_sup, _geo),
+                _sem_modes_uniform(m_sub, k0, kx0, eps_sub, _geo))
         mats_sup, _mats_sub, sup_modes, sub_modes = self._mats_cache[rk]
         Wsup, Vsup = sup_modes[0], sup_modes[1]
         Wsub, Vsub = sub_modes[0], sub_modes[1]

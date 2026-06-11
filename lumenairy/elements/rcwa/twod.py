@@ -37,8 +37,10 @@ from ._core import (
     _require_propagating_incidence,
     _sqrt_forward,
     _stabilize_bumps,
+    _symmetric_cascade_rt,
     _symmetric_solve_rt,
     _tensor_offplane_present,
+    _tensor_PQ,
     _validate_cell_sampling,
     _validate_geometry,
     _validate_shapes,
@@ -727,13 +729,21 @@ def rcwa_efficiency_2d(
     # incidence excites only even modes, so the whole recursion runs in the
     # (N+1)-d even subspace (see the section header above _symmetric_solve_rt).
     # Returns None -> not applicable -> fall through to the full 2N solve.
-    # GATED OFF for 'fff_nv' and 'li': _symmetric_solve_rt is hard-wired to the
-    # scalar (EPS, EPS_normal, ez_inv) core and cannot represent the per-
-    # component tensor operators.
+    # 'laurent' keeps the scalar even-parity fold; 'li' regains it via the
+    # generalized (P, Q) cascade fold (backlog A1, 2026-06-10); 'fff_nv'
+    # stays gated off (its NV cross-terms are validated separable-only).
     rt = None
     if symmetry and not is_jax and kt < 1e-12 and formulation == "laurent":
         rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
                                  orders, k0, depth, cinc, xp)
+    elif symmetry and not is_jax and kt < 1e-12 and li_ops is not None:
+        Zli = xp.zeros_like(li_ops[0])
+        P_li, Q_li = _tensor_PQ(Kx, Ky, li_ops[0], Zli, Zli, li_ops[1],
+                                li_ops[2], xp)
+        out = _symmetric_cascade_rt(Vref, Vtrn, Kx, Ky,
+                                    [("PQ", P_li, Q_li, EPS)], [depth], k0,
+                                    [cinc], orders, xp)
+        rt = out[0] if out is not None else None
     if rt is not None:
         r, t = rt
     else:
@@ -846,6 +856,13 @@ class PreparedRCWA2D:
             rt = _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, self.EPS,
                                      self.EPS_normal, self.ez_inv, orders, k0,
                                      self.depth, self.cinc, xp)
+        elif (self.symmetry and self.kt < 1e-12
+                and self.formulation == "li" and self.fff is not None):
+            P_li, Q_li = _tensor_PQ(Kx, Ky, *self.fff, xp)
+            out = _symmetric_cascade_rt(
+                Vref, Vtrn, Kx, Ky, [("PQ", P_li, Q_li, self.EPS)],
+                [self.depth], k0, [self.cinc], orders, xp)
+            rt = out[0] if out is not None else None
         if rt is not None:
             r, t = rt
         else:
@@ -1082,6 +1099,7 @@ def rcwa_jones_2d(
     n_orders_x: int = 5,
     n_orders_y: int = 5,
     use_gpu: bool = False,
+    symmetry: bool = False,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
@@ -1104,6 +1122,13 @@ def rcwa_jones_2d(
     n_substrate, n_superstrate, depth, wavelength, theta, phi,
     n_orders_x, n_orders_y
         As in :func:`rcwa_efficiency_2d`.
+    symmetry : bool, optional
+        Opt-in EVEN-PARITY fast path (default ``False``).  At NORMAL incidence
+        with a centro-symmetric IN-PLANE tensor cell, both incident
+        polarizations are solved in the ``(N+1)``-dimensional even sector
+        (~x4); any failed precondition (oblique, out-of-plane components, a
+        non-symmetric cell, JAX backend) falls back to the full solve
+        bit-identically.
 
     Returns
     -------
@@ -1193,6 +1218,27 @@ def rcwa_jones_2d(
 
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
+    # even-parity fast path (backlog A1): a centro-symmetric IN-PLANE tensor
+    # cell at normal incidence solves in the (N+1)-d even sector for BOTH
+    # incident polarizations; transparent fallback otherwise.
+    sym_rt = None
+    if (symmetry and not is_jax and not offplane
+            and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
+        def _conv_sym(comp):
+            return _eps_convolution_2d(comp, orders, n_orders_x, n_orders_y)
+        Cxx_s = _conv_sym(eps_t[:, :, 0, 0])
+        Cxy_s = _conv_sym(eps_t[:, :, 0, 1])
+        Cyx_s = _conv_sym(eps_t[:, :, 1, 0])
+        Cyy_s = _conv_sym(eps_t[:, :, 1, 1])
+        EZZ_s = _conv_sym(eps_t[:, :, 2, 2])
+        P_s, Q_s = _tensor_PQ(Kx, Ky, Cxx_s, Cxy_s, Cyx_s, Cyy_s, EZZ_s, xp)
+        delta_s = xp.asarray(((orders[:, 0] == 0)
+                              & (orders[:, 1] == 0)).astype(_C))
+        cincs = [xp.concatenate([1.0 * delta_s, 0.0 * delta_s]),
+                 xp.concatenate([0.0 * delta_s, 1.0 * delta_s])]
+        sym_rt = _symmetric_cascade_rt(
+            Vref, Vtrn, Kx, Ky, [("PQ", P_s, Q_s, Cxx_s)], [depth], k0,
+            cincs, orders, xp)
     if offplane:
         # Full-3x3 path (audit GAP2, v5.14.1; the same Li-2003 order the 1-D
         # OOP path and pmm_jones_2d use): the POINTWISE ezz-Schur fold
@@ -1223,6 +1269,8 @@ def rcwa_jones_2d(
         S = _interface_smatrix_general(Mref, Ml)
         S = _propagation_star_general(S, lam, lam_b, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix_general(Ml, Mtrn))
+    elif sym_rt is not None:
+        S = None                              # even sector already solved
     else:
         Cxx = _conv(eps_t[:, :, 0, 0])
         Cxy = _conv(eps_t[:, :, 0, 1])
@@ -1233,7 +1281,8 @@ def rcwa_jones_2d(
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)
         S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wtrn, Vtrn))
-    S11, S12, S21, S22 = S
+    if S is not None:
+        S11, S12, S21, S22 = S
 
     p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
     delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
@@ -1243,14 +1292,17 @@ def rcwa_jones_2d(
     safe_r = xp.where(xp.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
     safe_t = xp.where(xp.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     R_rows, T_rows, j_cols = [], [], []
-    for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+    for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
         # Unit tangential E along (ex0, ey0); the incident wave's longitudinal
         # Ez = -(kx0 ex + ky0 ey)/kz_inc inflates |E_inc|^2 (cf. the 1-D sec^2).
         long_inc = (kx0 * ex0 + ky0 * ey0)
         einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-        cinc = xp.concatenate([ex0 * delta, ey0 * delta])
-        r = S11 @ cinc
-        t = S21 @ cinc
+        if sym_rt is not None:
+            r, t = sym_rt[col]
+        else:
+            cinc = xp.concatenate([ex0 * delta, ey0 * delta])
+            r = S11 @ cinc
+            t = S21 @ cinc
         rx, ry = r[:N], r[N:]
         tx, ty = t[:N], t[N:]
         rz = -(kxv * rx + kyv * ry) / safe_r

@@ -980,6 +980,79 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
 
 
 
+def _uniform_geo_eig(mats, k0, kx0=0.0):
+    """Eps-free GEOMETRIC eigendecomposition shared by every uniform
+    isotropic medium on one nodal grid (backlog A2 / PMM roadmap #2,
+    2026-06-10).
+
+    For a uniform isotropic ``eps`` the coupled operator of
+    :func:`_sem_modes_tensor` collapses EXACTLY (no approximation)::
+
+        Cxx = Cyy = eps * I,  Cxy = Cyx = 0,
+        KxEzziKx = Kx2 / eps          (the 1/ezz weights are 1/eps * unit)
+        => Mbig(eps) = eps * I_(2n) - blockdiag(Kx2, Kx2)
+
+    so ONE eig of the n x n geometric operator ``Kx2`` serves every uniform
+    medium: shared eigenvectors, spectrum ``q^2(eps) = eps - mu_geo``.  The
+    2n problem block-diagonalizes into two identical n-blocks, so this is
+    ~16x cheaper than two independent 2n eigs (the audited 51-64% of 1-D
+    eig time spent on half-spaces).  Returns ``(mu, w)``.
+    """
+    k02 = k0 * k0
+    iS0 = _safe_inv(mats["S0"])
+    op = mats["stiff"]["one"]
+    if kx0:
+        Cw = mats["conv"]["one"]
+        op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mats["mass"]["one"]
+    Kx2 = (1.0 / k02) * (iS0 @ op)
+    mu, w = np.linalg.eig(Kx2)
+    return mu, w, Kx2
+
+
+def _sem_modes_uniform(mats, k0, kx0, eps, geo=None):
+    """Uniform-isotropic modes from the SHARED geometric eig (see
+    :func:`_uniform_geo_eig`): same return contract as
+    :func:`_sem_modes_tensor` -- ``(W2, V2, lam, q)`` with the IDENTICAL
+    z-Poynting-flux forward selector, evaluated on the eps-shifted spectrum
+    (the branch choice legitimately depends on eps: a mode propagating in
+    the substrate may be evanescent in air).
+
+    The eigenvector GAUGE differs from a raw 2n eig (clean per-block
+    ``(w, 0)`` / ``(0, w)`` columns instead of arbitrary degenerate
+    mixtures) -- physically equivalent; downstream interface solves are
+    basis-agnostic.  Cross-path contracts follow docs/TOLERANCE_POLICY.md.
+    """
+    n = mats["n_glob"]
+    eps = _C(eps)
+    if geo is None:
+        geo = _uniform_geo_eig(mats, k0, kx0)
+    mu, w, _Kx2 = geo
+    q2 = eps - mu
+    q = np.sqrt(np.concatenate([q2, q2]))
+    Z = np.zeros((n, n), dtype=_C)
+    W2 = np.block([[w, Z], [Z, w]])
+    # Q @ W2 for the uniform medium: Q = [[0, eps I - Kx2], [-eps I, 0]] and
+    # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2)
+    QW = np.block([[Z, w * q2[None, :]], [-eps * w, Z]])
+    S0 = mats["S0"]
+    # --- the _sem_modes_tensor forward selector, verbatim policy ----------
+    lam0 = -1j * q
+    safe0 = np.where(np.abs(lam0) < 1e-12, 1e-12, lam0)
+    V0 = QW * (1.0 / safe0)[None, :]
+    SVt = S0 @ np.conj(V0[:n])          # S0 conj(Hx)
+    SVb = S0 @ np.conj(V0[n:])          # S0 conj(Hy)
+    flux = np.imag(np.einsum("in,in->n", W2[:n], SVb)
+                   - np.einsum("in,in->n", W2[n:], SVt))
+    fscale = 1e-9 * max(float(np.max(np.abs(flux))), 1.0)
+    prop = np.abs(flux) > fscale
+    flip = np.where(prop, flux < 0.0, q.imag < 0.0)
+    q = np.where(flip, -q, q)
+    lam = -1j * q
+    safe = np.where(np.abs(lam) < 1e-12, 1e-12, lam)
+    V2 = QW * (1.0 / safe)[None, :]
+    return W2, V2, lam, q
+
+
 def _pmm_jones_solve(period, eps_ridge3, eps_groove3, n_sub, n_sup, depth,
                      duty, wl, degree, n_ridge_el, n_groove_el, grade,
                      far_field_orders, angle=0.0):
@@ -1034,8 +1107,13 @@ def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     k0 = 2.0 * np.pi / wl
     n_glob = mats["n_glob"]
     Wl, Vl, lam_l, _ql = _sem_modes_tensor(mats, k0, kx0, robust)
-    Wsup, Vsup, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0, robust)
-    Wsub, Vsub, _lb, _qb = _sem_modes_tensor(mats_sub, k0, kx0, robust)
+    # uniform half-spaces share ONE geometric eig (backlog A2): the n x n
+    # spectrum is eps-shifted per medium -- ~16x cheaper than two 2n eigs
+    _geo = _uniform_geo_eig(mats_sup, k0, kx0)
+    Wsup, Vsup, _ls, _qs = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup,
+                                              _geo)
+    Wsub, Vsub, _lb, _qb = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
+                                              _geo)
 
     # Rayleigh order set for the forward far-field projection (cover the
     # propagating orders, kept well below the nodal DOF -- see the scalar path).
@@ -1124,6 +1202,17 @@ def _segment_elem_bnds(period, widths, materials, n_el_per_region, grade):
     for i in range(len(widths)):
         b = _graded_boundaries(walls[i], walls[i + 1], n_el_per_region, grade)
         elem_bnds += list(zip(b[:-1], b[1:], [materials[i]] * n_el_per_region))
+    # A single full-period element (one uniform region at n_el_per_region=1,
+    # e.g. ``PMMStack.add_layer(eps=...)`` in an all-uniform stack) leaves the
+    # periodic nodal basis too poor for the Rayleigh far-field match: energy
+    # leaks ~2-30% into spurious orders while LOOKING plausible (bug found
+    # 2026-06-10).  Splitting at the midpoint restores the proven >=2-element
+    # grid -- Fresnel-exact on the uniform-film oracle, and identical to what
+    # any patterned neighbour layer would force via the union grid anyway.
+    if len(elem_bnds) == 1:
+        xl, xr, mat = elem_bnds[0]
+        xm = 0.5 * (xl + xr)
+        elem_bnds = [(xl, xm, mat), (xm, xr, mat)]
     return elem_bnds
 
 
@@ -3354,8 +3443,10 @@ def _pmm_jones_slant_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     n_glob = mats["n_glob"]
     Wf_l, Vf_l, lamf_l, _qf, Wb_l, Vb_l, lamb_l, _qb = _layer_modes_metric(
         mats, k0, slant_angle, kx0)
-    Ws, Vs, _ls, _qs = _sem_modes_tensor(mats_sup, k0, kx0, True)
-    Wsub, Vsub, _lb, _qb2 = _sem_modes_tensor(mats_sub, k0, kx0, True)
+    _geo = _uniform_geo_eig(mats_sup, k0, kx0)
+    Ws, Vs, _ls, _qs = _sem_modes_uniform(mats_sup, k0, kx0, eps_sup, _geo)
+    Wsub, Vsub, _lb, _qb2 = _sem_modes_uniform(mats_sub, k0, kx0, eps_sub,
+                                               _geo)
     Ms = _half_M_sym_metric(Ws, Vs)
     Mb = _half_M_sym_metric(Wsub, Vsub)
     Ml = np.block([[Wf_l, Wb_l], [Vf_l, Vb_l]])
@@ -4066,6 +4157,8 @@ __all__ = [
     "_JONES_PASSIVE_TOL",
     "_build_sem_tensor",
     "_sem_modes_tensor",
+    "_sem_modes_uniform",
+    "_uniform_geo_eig",
     "_pmm_jones_solve",
     "_pmm_jones_solve_core",
     "_segment_walls",

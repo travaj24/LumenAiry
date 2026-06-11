@@ -1017,6 +1017,131 @@ def _symmetric_solve_rt(Vref, Vtrn, Kx, Ky, EPS, EPS_normal, ez_inv,
 
 
 
+def _tensor_PQ(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ, xp):
+    """The in-plane tensor layer's first-order blocks ``(P, Q)`` -- the exact
+    construction :func:`_layer_eigenmodes_tensor` eigendecomposes, exposed so
+    the even-parity machinery can fold them (backlog A1, 2026-06-10)."""
+    N = Kx.shape[0]
+    I = xp.eye(N, dtype=_C)
+    Ez_inv = xp.linalg.inv(EZZ)
+    P = _block(xp, [
+        [Kx @ Ez_inv @ Ky,        I - Kx @ Ez_inv @ Kx],
+        [Ky @ Ez_inv @ Ky - I,    -Ky @ Ez_inv @ Kx],
+    ])
+    Q = _block(xp, [
+        [Cyx + Kx @ Ky,        Cyy - Kx @ Kx],
+        [Ky @ Ky - Cxx,        -(Cxy + Ky @ Kx)],
+    ])
+    return P, Q
+
+
+def _scalar_PQ(Kx, Ky, EPS, EPS_normal, ez_inv, xp):
+    """The scalar layer's ``(P, Q)`` blocks (the :func:`_layer_eigenmodes`
+    structured-branch construction)."""
+    N = Kx.shape[0]
+    I = xp.eye(N, dtype=_C)
+    EPS_inv = ez_inv if ez_inv is not None else xp.linalg.inv(EPS)
+    P = _block(xp, [
+        [Kx @ EPS_inv @ Ky,        I - Kx @ EPS_inv @ Kx],
+        [Ky @ EPS_inv @ Ky - I,    -Ky @ EPS_inv @ Kx],
+    ])
+    Q = _layer_Q_matrix(Kx, Ky, EPS, EPS_normal)
+    return P, Q
+
+
+def _symmetric_cascade_rt(Vref, Vtrn, Kx, Ky, layer_specs, depths, k0,
+                          cincs, orders, xp):
+    """GENERALIZED even-parity-sector S-matrix cascade (backlog A1,
+    2026-06-10) -- the multi-layer / tensor extension of
+    :func:`_symmetric_solve_rt`.
+
+    ``layer_specs[i]`` is either ``("uniform", eps0)`` or
+    ``("PQ", P, Q, probe)`` where ``probe`` is an N-space convolution matrix
+    used for symmetry-centre detection (the layer's primary permittivity
+    convolution).  All layers must share ONE symmetry centre (detected from
+    the first structured layer; per-layer flip-invariance checks catch
+    mismatches -> ``None`` -> the caller falls back to the full solve).
+    ``cincs`` is a list of full-space source vectors (each must be purely
+    even -- the (0, 0)-order drive is); returns ``[(r, t), ...]`` per source
+    or ``None`` when any precondition fails.
+
+    Same contract as the single-layer path: results match the full solve to
+    ~1e-12 (a different, even-adapted basis -- NOT bit-identical; see
+    docs/TOLERANCE_POLICY.md), and the recentering gauge is a per-order
+    phase, so every |r|^2 / |t|^2 efficiency is gauge-invariant.
+    """
+    flip = _order_flip_perm(Kx, Ky)
+    if flip is None:
+        return None
+    n = flip.shape[0]
+    probe0 = next((sp[3] for sp in layer_specs if sp[0] == "PQ"), None)
+    if probe0 is None:
+        return None                       # all-uniform: analytic path is better
+    d = _recentering_phase(probe0, orders, xp)
+    if d is None:
+        return None
+    d2 = xp.concatenate([d, d])
+    d2inv = 1.0 / d2
+    flip2 = np.concatenate([flip, flip + n])
+    desc = _even_basis_desc(flip)
+    ne = desc[0].shape[0]
+    Ireg_e = xp.eye(ne, dtype=_C)
+    Vref_e = _even_fold(Vref, desc, xp)
+    Vtrn_e = _even_fold(Vtrn, desc, xp)
+    kxd = xp.diag(Kx)
+    kyd = xp.diag(Ky)
+    i0 = np.asarray(desc[0])
+
+    # per-layer even modes
+    modes_e = []
+    for sp in layer_specs:
+        if sp[0] == "uniform":
+            eps0 = _C(sp[1])
+            kz = _sqrt_forward(eps0 - kxd ** 2 - kyd ** 2)
+            lam_full = _sqrt_decay(-xp.concatenate([kz, kz]) ** 2)
+            lam_e = lam_full[xp.asarray(i0)]      # pairs share kz(k)=kz(-k)
+            EPSu = eps0 * xp.eye(n, dtype=_C)
+            Qu = _layer_Q_matrix(Kx, Ky, EPSu, EPSu)
+            Vl_e = _even_fold(Qu, desc, xp) * _inv_lam(lam_e)[None, :]
+            modes_e.append((Ireg_e, Vl_e, lam_e))
+            continue
+        _kind, P, Q, _probe = sp
+        Pr = (d2inv[:, None] * P) * d2[None, :]
+        Qr = (d2inv[:, None] * Q) * d2[None, :]
+        M = Pr @ Qr
+        Mh = to_numpy(M)
+        resid = np.max(np.abs(Mh[np.ix_(flip2, flip2)] - Mh))
+        scale = float(max(np.max(np.abs(np.diagonal(Mh))), 1.0))
+        if resid > 1e-10 * scale:
+            return None                   # not jointly centro-symmetric
+        Mp = _even_fold(M, desc, xp)
+        lam2_e, Wl_e = _eig_for(xp)(Mp)
+        lam_e = _sqrt_decay(lam2_e)
+        Q_e = _even_fold(Qr, desc, xp)
+        Vl_e = Q_e @ Wl_e @ xp.diag(_inv_lam(lam_e))
+        modes_e.append((Wl_e, Vl_e, lam_e))
+
+    # even-sector Redheffer recursion: sup | L1 ... Ln | sub
+    W0, V0, lam0 = modes_e[0]
+    S = _interface_smatrix(Ireg_e, Vref_e, W0, V0)
+    S = _propagation_star(S, lam0, k0 * depths[0])
+    for i in range(1, len(modes_e)):
+        Wp, Vp, _lp = modes_e[i - 1]
+        Wc, Vc, lamc = modes_e[i]
+        S = _redheffer_star(S, _interface_smatrix(Wp, Vp, Wc, Vc))
+        S = _propagation_star(S, lamc, k0 * depths[i])
+    Wl, Vl, _ll = modes_e[-1]
+    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Ireg_e, Vtrn_e))
+    S11, _S12, S21, _S22 = S
+
+    out = []
+    for cinc in cincs:
+        ce = _even_project(cinc, desc, xp)
+        out.append((_even_unfold(S11 @ ce, desc, xp),
+                    _even_unfold(S21 @ ce, desc, xp)))
+    return out
+
+
 def _layer_eigenmodes(Kx, Ky, EPS, EPS_normal, ez_laurent_inv=None):
     """Eigenmodes of a single layer (structured or uniform).
 
@@ -2112,6 +2237,9 @@ __all__ = [
     "_even_project",
     "_even_unfold",
     "_symmetric_solve_rt",
+    "_symmetric_cascade_rt",
+    "_tensor_PQ",
+    "_scalar_PQ",
     "_layer_eigenmodes",
     "_homogeneous_eigenmodes",
     "_redheffer_star",

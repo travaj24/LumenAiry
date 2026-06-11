@@ -36,9 +36,12 @@ from ._core import (
     _require_inplane_tensor,
     _require_jax_x64,
     _require_propagating_incidence,
+    _scalar_PQ,
     _sqrt_decay,
     _sqrt_forward,
+    _symmetric_cascade_rt,
     _tensor_offplane_present,
+    _tensor_PQ,
     _validate_cell_sampling,
     _validate_geometry,
     _validate_shapes,
@@ -1450,6 +1453,50 @@ class RCWAStack:
                 f"adjust n_orders.", stacklevel=2)
         return ret_orders, R_out, T_out, J_out
 
+    def _layer_even_spec(self, layer, Kx, Ky, orders, xp):
+        """One layer's ``("uniform", eps)`` / ``("PQ", P, Q, probe)`` spec for
+        the even-parity cascade (backlog A1, 2026-06-10), or ``None`` if the
+        layer kind cannot fold (out-of-plane / dispersive)."""
+        if getattr(layer, "dispersive", False):
+            return None
+        if layer.kind == "uniform":
+            return ("uniform", complex(np.conj(layer.data)))
+        if layer.kind == "iso":
+            cell_c = xp.conj(xp.asarray(layer.data))
+            EPS = _eps_convolution_2d(cell_c, orders, self.nox, self.noy)
+            if getattr(layer, "formulation", "laurent") == "li":
+                e_np = to_numpy(cell_c)
+                scale = max(1.0, float(np.max(np.abs(e_np))))
+                if float(np.max(np.abs(e_np - e_np.flat[0]))) > 1e-12 * scale:
+                    Cxx, Cyy = _li_convolutions_2d(cell_c, orders, self.nox,
+                                                   self.noy, xp)
+                    Z = xp.zeros_like(Cxx)
+                    P, Q = _tensor_PQ(Kx, Ky, Cxx, Z, Z, Cyy, EPS, xp)
+                    return ("PQ", P, Q, EPS)
+            P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
+            return ("PQ", P, Q, EPS)
+        if layer.kind == "shapes":
+            eps_bg, shapes = layer.data
+            shapes_c = [dict(sh, eps=complex(np.conj(_C(sh["eps"]))))
+                        for sh in shapes]
+            EPS_np, _inv = _analytic_convolutions_2d(
+                complex(np.conj(_C(eps_bg))), shapes_c, orders, self.nox,
+                self.noy, self.period_x, self.period_y)
+            EPS = xp.asarray(EPS_np)
+            P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
+            return ("PQ", P, Q, EPS)
+        # tensor: in-plane only (OOP cannot fold)
+        if _tensor_offplane_present(layer.data):
+            return None
+        et = xp.conj(xp.asarray(layer.data))
+
+        def cv(comp):
+            return _eps_convolution_2d(comp, orders, self.nox, self.noy)
+        P, Q = _tensor_PQ(Kx, Ky, cv(et[:, :, 0, 0]), cv(et[:, :, 0, 1]),
+                          cv(et[:, :, 1, 0]), cv(et[:, :, 1, 1]),
+                          cv(et[:, :, 2, 2]), xp)
+        return ("PQ", P, Q, cv(et[:, :, 0, 0]))
+
     def _layer_modes(self, layer, Kx, Ky, orders):
         """Layer eigenmodes ``(W, V, lam, EPS)``.  ``EPS`` is the wall-tangential
         ``[[eps]]`` convolution (``EZZ`` for a tensor layer) in the INTERNAL
@@ -1545,7 +1592,8 @@ class RCWAStack:
                 str(arr.dtype), arr.tobytes())
 
     @_with_blas_limit
-    def solve(self, *, retain_internal=False, stabilize=False) -> RCWAResult:
+    def solve(self, *, retain_internal=False, stabilize=False,
+              symmetry=False) -> RCWAResult:
         """Solve the stack -> :class:`RCWAResult`.
 
         ``stabilize=True`` (opt-in; default ``False``) guards against the
@@ -1570,9 +1618,23 @@ class RCWAStack:
         absorption via :meth:`RCWAResult.layer_absorption`).  It costs an extra
         ``O(n_layers)`` star-product sweep and keeps the per-layer ``2N x 2N``
         matrices, so it is off by default for hot efficiency sweeps.  NumPy /
-        CuPy only."""
+        CuPy only.
+
+        ``symmetry=True`` (opt-in) attempts the EVEN-PARITY fast path at NORMAL
+        incidence: when every layer is centro-symmetric about one common centre
+        (verified numerically per layer on the recentred operators), the whole
+        cascade is solved in the ``(N+1)``-dimensional even sector instead of
+        ``2N`` -- measured ~x4.5 on a 4-layer mixed stack.  Uniform, pixel-cell
+        (``'laurent'`` and ``'li'``), analytic-shapes and IN-PLANE tensor layers
+        all fold; ANY failed precondition (oblique incidence, an out-of-plane
+        tensor or dispersive layer, layers symmetric about DIFFERENT centres,
+        ``retain_internal=True``, JAX backend) falls back to the full solve
+        BIT-IDENTICALLY.  NB a pixel cell's feature centre lies on the
+        half-pixel grid -- mixing it with an analytic shape at exactly
+        ``period/2`` is a genuine centre mismatch and falls back."""
         if not stabilize:
-            return self._solve_once(retain_internal=retain_internal)
+            return self._solve_once(retain_internal=retain_internal,
+                                    symmetry=symmetry)
         import warnings
         base_nox, base_noy = self.nox, self.noy
 
@@ -1591,7 +1653,8 @@ class RCWAStack:
             for nox in window:
                 _set(nox)
                 try:
-                    res = self._solve_once(retain_internal=False)
+                    res = self._solve_once(retain_internal=False,
+                                           symmetry=symmetry)
                 except _EnergyError:
                     continue          # a windowed low-order count that trips the
                     #                   energy guard is SKIPPED, not fatal (audit P2)
@@ -1633,7 +1696,8 @@ class RCWAStack:
         finally:
             self.nox, self.noy = base_nox, base_noy
 
-    def _solve_once(self, *, retain_internal=False) -> RCWAResult:
+    def _solve_once(self, *, retain_internal=False,
+                    symmetry=False) -> RCWAResult:
         """Inner single-``n_orders`` stack solve (the public :meth:`solve` body;
         ``stabilize`` scans a window of these).
 
@@ -1710,9 +1774,27 @@ class RCWAStack:
         # repeated DBR / Bragg period, a metamaterial supercell) share one eig
         # instead of recomputing it.  Bit-exact -- it memoises a pure function;
         # a None key (traced JAX array) falls back to per-layer solves.
+        # even-parity fast path (backlog A1): a NORMAL-INCIDENCE stack of
+        # jointly centro-symmetric in-plane layers runs the WHOLE cascade in
+        # the (N+1)-d even sector (~x3-4); any failed precondition falls
+        # through to the full solve bit-identically.
+        sym_rt = None
+        if (symmetry and not retain_internal and bname != "jax"
+                and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
+            specs = [self._layer_even_spec(L, Kx, Ky, orders, xp)
+                     for L in self._layers]
+            if all(sp is not None for sp in specs):
+                delta_s = xp.asarray(((orders[:, 0] == 0)
+                                      & (orders[:, 1] == 0)).astype(_C))
+                cincs = [xp.concatenate([1.0 * delta_s, 0.0 * delta_s]),
+                         xp.concatenate([0.0 * delta_s, 1.0 * delta_s])]
+                depths = [float(L.thickness) for L in self._layers]
+                sym_rt = _symmetric_cascade_rt(
+                    Vref, Vtrn, Kx, Ky, specs, depths, k0, cincs, orders, xp)
+
         _mode_cache = {}
         modes = []
-        for L in self._layers:
+        for L in ([] if sym_rt is not None else self._layers):
             key = self._layer_eig_key(L)
             cached = _mode_cache.get(key) if key is not None else None
             if cached is None:
@@ -1722,7 +1804,9 @@ class RCWAStack:
             modes.append(cached)
         any_oop = any(isinstance(m, tuple) and len(m) == 8 and m[0] == "gen"
                       for m in modes)
-        if not any_oop:
+        if sym_rt is not None:
+            S = None                          # even sector already solved
+        elif not any_oop:
             W0, V0, lam0, _e0 = modes[0]
             S = _interface_smatrix(Wref, Vref, W0, V0)
             S = _propagation_star(S, lam0, k0 * self._layers[0].thickness)
@@ -1765,7 +1849,8 @@ class RCWAStack:
                 M_prev = Ml
             Msub = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
             S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
-        S11, S12, S21, S22 = S
+        if S is not None:
+            S11, S12, S21, S22 = S
 
         p0 = int(np.where((orders[:, 0] == 0) & (orders[:, 1] == 0))[0][0])
         delta = xp.asarray(((orders[:, 0] == 0) & (orders[:, 1] == 0)).astype(_C))
@@ -1781,12 +1866,15 @@ class RCWAStack:
         # Per-order tangential field amplitudes (PUBLIC exp(-iwt) convention =
         # conjugate of the internal), kept for the multi-order field bridge.
         rx_rows, ry_rows, tx_rows, ty_rows = [], [], [], []
-        for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+        for _col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
             long_inc = kx0 * ex0 + ky0 * ey0
             einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-            cinc = xp.concatenate([ex0 * delta, ey0 * delta])
-            r = S11 @ cinc
-            t = S21 @ cinc
+            if sym_rt is not None:
+                r, t = sym_rt[_col]
+            else:
+                cinc = xp.concatenate([ex0 * delta, ey0 * delta])
+                r = S11 @ cinc
+                t = S21 @ cinc
             rx, ry = r[:N], r[N:]
             tx, ty = t[:N], t[N:]
             rz = -(kxv * rx + kyv * ry) / safe_r

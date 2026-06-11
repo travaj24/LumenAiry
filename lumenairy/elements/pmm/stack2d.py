@@ -337,7 +337,7 @@ class PMM2DStack:
     # ------------------------------------------------------------------ #
     # solve
     # ------------------------------------------------------------------ #
-    def solve(self):
+    def solve(self, *, retain_internal=False):
         """Solve the cascade.  Returns ``(orders, R(2, N), T(2, N),
         jones_reflection(2, 2))`` -- row 0 = incident ``E_x``, row 1 =
         incident ``E_y``; Jones in the PUBLIC convention."""
@@ -428,17 +428,50 @@ class PMM2DStack:
             modes.append(("sym", Wl, Vl, lam, L["t"]))
 
         any_oop = any(m[0] == "gen" for m in modes)
+        if retain_internal and any_oop:
+            raise NotImplementedError(
+                "PMM2DStack.solve(retain_internal=True): symmetric "
+                "(in-plane, vertical) cascades only.")
         if not any_oop:
             # Redheffer cascade: sup | L1 | L2 | ... | Ln | sub (symmetric)
-            W_prev, V_prev = Wsup, Vsup
-            S = None
-            for (_k, Wl, Vl, lam, t) in modes:
-                Si = _interface_smatrix(W_prev, V_prev, Wl, Vl)
-                S = Si if S is None else _redheffer_star(S, Si)
+            nlay = len(modes)
+            ifc = [_interface_smatrix(Wsup, Vsup, modes[0][1], modes[0][2])]
+            for ii in range(1, nlay):
+                ifc.append(_interface_smatrix(
+                    modes[ii - 1][1], modes[ii - 1][2],
+                    modes[ii][1], modes[ii][2]))
+            ifc.append(_interface_smatrix(modes[-1][1], modes[-1][2],
+                                          Wsub, Vsub))
+            S = ifc[0]
+            for ii, (_k, Wl, Vl, lam, t) in enumerate(modes):
                 S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
-                W_prev, V_prev = Wl, Vl
-            S = _redheffer_star(S, _interface_smatrix(W_prev, V_prev, Wsub,
-                                                      Vsub))
+                S = _redheffer_star(S, ifc[ii + 1])
+            if retain_internal:
+                # partial cascades for internal-amplitude recovery (backlog
+                # B1, 2026-06-10 -- the 1-D PMMStack / RCWAStack pattern):
+                # S_above[i] = sup -> TOP of layer i (before its own
+                # propagation); S_below_bot[i] = BOTTOM of layer i -> sub
+                # (without its propagation), so backward amplitudes
+                # reference the layer BOTTOM and both exponentials decay.
+                S_above = [None] * nlay
+                S_above[0] = ifc[0]
+                for ii in range(1, nlay):
+                    S_above[ii] = _redheffer_star(
+                        _redheffer_star(S_above[ii - 1],
+                                        _propagation_smatrix(
+                                            modes[ii - 1][3],
+                                            k0 * modes[ii - 1][4])),
+                        ifc[ii])
+                S_below_bot = [None] * nlay
+                for ii in range(nlay - 1, -1, -1):
+                    below = ifc[ii + 1]
+                    for jj in range(ii + 1, nlay):
+                        below = _redheffer_star(below, _propagation_smatrix(
+                            modes[jj][3], k0 * modes[jj][4]))
+                        below = _redheffer_star(below, ifc[jj + 1])
+                    S_below_bot[ii] = below
+                self._internal = dict(modes=modes, S_above=S_above,
+                                      S_below_bot=S_below_bot, k0=k0, Nf=Nf)
         else:
             # GENERALIZED cascade (v5.14): any out-of-plane layer breaks the
             # [W; -V] <-> -lam symmetry, so the whole stack is promoted --
@@ -496,8 +529,82 @@ class PMM2DStack:
         T_eff = np.stack(T_rows)
         jones = np.stack(j_cols, axis=1)
         orders2d = np.stack([order_x, order_y], axis=1)
+        if retain_internal and getattr(self, "_internal", None) is not None:
+            cinc_cols = [np.concatenate([1.0 * delta, 0.0 * delta]),
+                         np.concatenate([0.0 * delta, 1.0 * delta])]
+            self._internal["cinc"] = np.stack(cinc_cols, axis=1).astype(_C)
+            self._internal["R_tot"] = R_eff.sum(axis=1)
+            self._internal["T_tot"] = T_eff.sum(axis=1)
         _warn_stack_energy(R_eff, T_eff)
         return orders2d, R_eff, T_eff, jones
+
+    def _internal_amplitudes(self):
+        """Per-layer ``(c_fwd_top, c_bwd_bot)`` modal amplitudes from the
+        retained partial cascades (both incident polarizations)."""
+        d = getattr(self, "_internal", None)
+        if d is None or "cinc" not in d:
+            raise ValueError(
+                "PMM2DStack: no internal data retained; call "
+                "solve(retain_internal=True) first.")
+        out = []
+        k0 = d["k0"]
+        for i, (_k, _Wl, _Vl, lam, t) in enumerate(d["modes"]):
+            Sa = d["S_above"][i]
+            Sb = d["S_below_bot"][i]
+            X = np.exp(-lam * k0 * t)
+            n = lam.shape[0]
+            A22, A21 = Sa[3], Sa[2]
+            B11 = Sb[0]
+            M = np.eye(n, dtype=_C) - (A22 * X[None, :]) @ (B11 * X[None, :])
+            c_fwd = np.linalg.solve(M, A21 @ d["cinc"])
+            c_bwd = B11 @ (X[:, None] * c_fwd)
+            out.append((c_fwd, c_bwd))
+        return out
+
+    def _flux_at(self, i, z_frac, amps):
+        """z-Poynting flux through a plane inside layer ``i`` in the shared
+        Rayleigh basis (Parseval: the order basis is orthogonal, so the
+        cell-integrated flux is the plain coefficient sum with the same
+        modal-H ``-i`` convention the 1-D machinery uses)."""
+        d = self._internal
+        _k, Wl, Vl, lam, t = d["modes"][i]
+        c_fwd, c_bwd = amps[i]
+        k0, Nf = d["k0"], d["Nf"]
+        P = np.exp(-lam * k0 * (z_frac * t))[:, None]
+        Q = np.exp(-lam * k0 * ((1.0 - z_frac) * t))[:, None]
+        E = Wl @ (P * c_fwd) + Wl @ (Q * c_bwd)
+        H = Vl @ (P * c_fwd) - Vl @ (Q * c_bwd)
+        Ex, Ey = E[:Nf], E[Nf:]
+        Hx, Hy = H[:Nf], H[Nf:]
+        return np.array([
+            float(np.imag(np.sum(Ex[:, c] * np.conj(Hy[:, c])
+                                 - Ey[:, c] * np.conj(Hx[:, c]))))
+            for c in range(2)])
+
+    def layer_absorption(self):
+        """Per-layer absorbed power fraction ``(n_layers, 2)`` (backlog B1,
+        2026-06-10) -- the 2-D mirror of :meth:`PMMStack.layer_absorption`,
+        from the internal z-Poynting flux difference across each layer.
+        Requires ``solve(retain_internal=True)`` (symmetric cascades).  The
+        cross-machinery invariant ``sum_i A_i ~= 1 - sum R - sum T`` is the
+        honest closure check (internal amplitudes vs Rayleigh far field).
+
+        Per-MATERIAL attribution is not offered in 2-D yet: the retained
+        modes live in the projected Rayleigh basis (the nodal volume data is
+        not stored) -- a follow-up if an application needs the split."""
+        d = getattr(self, "_internal", None)
+        if d is None or "cinc" not in d:
+            raise ValueError(
+                "PMM2DStack.layer_absorption: call "
+                "solve(retain_internal=True) first.")
+        amps = self._internal_amplitudes()
+        nlay = len(d["modes"])
+        F_top = np.array([self._flux_at(i, 0.0, amps) for i in range(nlay)])
+        F_bot = np.array([self._flux_at(i, 1.0, amps) for i in range(nlay)])
+        one_minus_R = 1.0 - d["R_tot"]
+        F_inc = np.where(np.abs(one_minus_R) > 1e-15,
+                         F_top[0] / one_minus_R, np.inf)
+        return (F_top - F_bot) / F_inc[None, :]
 
     def _materialized_layers(self, w, layers):
         """Concrete layer list at one wavelength: each DISPERSIVE layer's

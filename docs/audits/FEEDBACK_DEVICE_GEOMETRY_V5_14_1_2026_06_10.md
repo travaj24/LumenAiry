@@ -51,6 +51,17 @@ hand-built geometry.
 
 ## Residual asks (cosmetic, in priority order)
 
+> **RESOLUTION (same day, 47846d6 + 690087b, verified application-side
+> 2026-06-10, `validation/check_v5_14_1_fixes.py`):** all four addressed and
+> adopted. (1) viewer legends are key-named; (2) by-key absorption verified —
+> the twin-key split now resolves teeth-Cu vs column-Cu: φ0 **Cu(teeth)=6.14%,
+> CuCol(column)<0.02%, Ta=1.97%**, i.e. the copper loss is entirely in the
+> gap-plasmon tooth walls and the buried column is shielded, a design
+> confirmation the merged map could not show; (3) docstrings; (4)
+> `to_rcwa_stack` tensor materials verified — the application deleted its
+> hand pixelation and gets the identical value (59.9% @ nh=80 smoke).
+> Regression pin unchanged (coated φ0 77.8% / Rx 0.892 on 5.14.1).
+
 1. **Viewer label names.** `plot_geometry` legends show eps values
    (`eps=2.25`); when the stack was built via `to_pmm_stack(materials=…)` the
    key names are known at export time — pass them through so the legend reads

@@ -2,6 +2,63 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+**Backlog batch 1** (docs/BACKLOG_2026_06_10.md priority-① items A1, A2,
+B1+B2, D1):
+
+### Added
+
+- **RCWA even-parity scope extension (A1)**: the ×4 normal-incidence
+  symmetry fast path — previously `rcwa_efficiency_2d(formulation=
+  'laurent')` only — now also covers the sequential-rule `'li'`
+  (`rcwa_efficiency_2d` + `prepare_rcwa_2d`), `rcwa_jones_2d(symmetry=True)`
+  (in-plane tensor cells, both incident polarizations from one even solve),
+  and **`RCWAStack.solve(symmetry=True)`** (whole multi-layer cascades —
+  uniform, pixel-cell laurent/li, analytic shapes, and in-plane tensor
+  layers — run in the (N+1)-d even sector; measured ×4.5 on a 4-layer mixed
+  stack at n_orders 6 and 9). Implemented as a generalized
+  `_symmetric_cascade_rt` over per-layer `(P, Q)` operators with a common
+  recentering gauge; ANY failed precondition (oblique incidence,
+  out-of-plane tensors, dispersive layers, mismatched layer symmetry
+  centres) falls back to the full solve **bit-identically**. NB a pixel-cell
+  feature's centre lies on the half-pixel grid — an analytic-shapes layer
+  at exactly `period/2` in an otherwise pixel-cell stack is a GENUINE centre
+  mismatch and correctly falls back.
+- **PMM shared homogeneous eigenproblem (A2)**: uniform (half-space and
+  uniform-layer) SEM modes are now obtained from ONE eps-free geometric
+  eigenproblem of half the size (`q²(eps) = eps − μ_geo`, shared
+  eigenvectors; the 2n problem block-diagonalizes), with the z-Poynting
+  forward selector still applied per medium. Measured ×5.5–6.1 on the
+  half-space mode pair; spectra match the full eigensolve to ~1e-11.
+- **`PMM2DStack.solve(retain_internal=True)` + `.layer_absorption()`
+  (B1)**: per-layer absorbed power for the crossed (2-D) stack from partial
+  S-matrix cascades, evaluated in the Rayleigh basis (Parseval flux —
+  closure vs `1 − R − T` at ~4e-15, lossless spacers at ~1e-16).
+- **`PMMStack.internal_field(z, pol=)` (B2)**: nodal-exact internal field
+  profiles `(x, Ex, Ey, Hx, Hy)` inside any layer from the retained modal
+  amplitudes (tangential-E continuity across interfaces at truncation
+  level).
+- **Written BLAS-gauge tolerance policy (D1)**: `docs/TOLERANCE_POLICY.md`
+  (when bit-identity is allowed vs when a physical tolerance is mandatory —
+  degenerate-eig gauge freedom across code paths/builds) + named constants
+  in `tests/unit/_tolerances.py`, used by the new regression tests.
+
+### Fixed
+
+- **All-uniform PMM stacks were silently wrong**: a stack whose union grid
+  had NO interior walls (every layer a single full-period segment, e.g.
+  `PMMStack.add_layer(eps=...)` alone, or `pmm_jones_1d_segments` with one
+  segment) assembled ONE spectral element over the period — a periodic
+  nodal basis too poor for the Rayleigh far-field match. Energy leaked
+  ~2–30% into spurious orders and split the polarizations while LOOKING
+  plausible (closure off by +2.1e-2 at period 0.8 µm, −0.29 subwavelength).
+  `_segment_elem_bnds` now midpoint-splits a lone element; the uniform-film
+  oracle is Fresnel-exact (~2e-15) on all entry points. Patterned cells
+  (≥2 regions) are bit-unchanged.
+- `RCWAStack.solve(stabilize=..., symmetry=True)` propagates `symmetry`
+  into the stabilizer's window re-solves.
+
 ## [5.14.1] — 2026-06-10
 
 **Device-geometry roadmap** (docs/audits/ROADMAP_DEVICE_GEOMETRY_SWEEPS_

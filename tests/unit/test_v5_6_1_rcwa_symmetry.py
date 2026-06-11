@@ -70,16 +70,21 @@ def test_even_sector_matches_full_solve(pol, cx, cy):
 
 
 @pytest.mark.parametrize("pol", ["te", "tm"])
-def test_li_falls_back_bit_identical(pol):
-    """Since v5.14.1 'li' is the Li-1997 SEQUENTIAL rule routed through the
-    per-component tensor eigensolver, which _symmetric_solve_rt (hard-wired
-    to the scalar core) cannot represent -- so symmetry=True must
-    transparently FALL BACK bit-for-bit for 'li' (extending the even-sector
-    fold to the per-component tensor operators is a roadmap perf item)."""
+def test_li_even_sector_engages(pol):
+    """HISTORY: when v5.14.1 routed 'li' through the per-component tensor
+    eigensolver it LOST the even-parity fast path (the scalar-hard-wired
+    _symmetric_solve_rt could not represent it) and this test pinned the
+    bit-identical fallback.  Backlog A1 (2026-06-10) added the generalized
+    (P, Q) even cascade, so 'li' now ENGAGES the fast path again -- even for
+    an OFF-CENTRE pillar (the recentering gauge handles any shifted
+    symmetric cell).  Same contract as the laurent test above: match within
+    the even-basis gauge, and genuinely not the fallback."""
     cell = _pillar(64, 0.13, -0.21)
     o0, R0, T0 = _solve(cell, symmetry=False, formu="li", pol=pol)
     o1, R1, T1 = _solve(cell, symmetry=True, formu="li", pol=pol)
-    assert np.array_equal(R0, R1) and np.array_equal(T0, T1)
+    assert np.allclose(R0, R1, atol=1e-11, rtol=0)
+    assert np.allclose(T0, T1, atol=1e-11, rtol=0)
+    assert not (np.array_equal(R0, R1) and np.array_equal(T0, T1))
 
 
 def test_even_sector_conserves_energy_lossless():
