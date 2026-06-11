@@ -928,57 +928,209 @@ class PMMStack:
                   - np.imag(Ey[:, c] @ (S0 @ np.conj(Hx[:, c]))))
             for c in range(2)])
 
-    def internal_field(self, z, *, pol=0):
-        """Nodal internal field at depth ``z`` [m] below the stack top
-        (backlog B2, 2026-06-10): returns
-        ``dict(x, Ex, Ey, Hx, Hy, layer)`` -- the tangential field row
-        vectors on the shared union grid's global nodes for incident
-        polarization ``pol`` (0 = E_x, 1 = E_y).  Requires a prior
-        ``solve(retain_internal=True)`` (all-vertical in-plane stacks).
+    def internal_field(self, z, *, component="all", incident=None, pol=None,
+                       nx=None, layer=None):
+        """Reconstruct the E and/or H field INSIDE the stack -- the PMM
+        counterpart of :meth:`RCWAResult.internal_field`, on the NODAL grid
+        (spectral-element exact in x: no Fourier/Gibbs reconstruction floor).
 
-        The magnetic rows carry the MODAL convention (an extra ``-i``
-        relative to physical H, the same convention the flux selector and
-        :meth:`layer_absorption` use); ratios and absorption bookkeeping are
-        convention-free.
+        Requires a prior ``solve(retain_internal=True)`` (all-vertical
+        in-plane stacks).
+
+        Parameters
+        ----------
+        z : float or array-like
+            Depth(s) [m] from the stack TOP (the superstrate interface).
+            With ``layer=i``, ``z`` is the LOCAL depth inside layer ``i``.
+        component : {'E', 'H', 'all'}, optional
+            Which field(s) to return (default all six components).
+        incident : (complex, complex), optional
+            Incident Jones vector ``(E_x, E_y)``; default x-polarized.
+            Mutually exclusive with ``pol``.
+        pol : {0, 1}, optional
+            Legacy selector (0 = incident ``E_x``, 1 = ``E_y``).
+        nx : int, optional
+            Resample onto a UNIFORM x grid of ``nx`` points (barycentric
+            evaluation of the spectral interpolant).  Default: the exact
+            GLL nodal grid (non-uniform; returned in ``'x'``).
+        layer : int, optional
+            Force a layer index (``z`` then local to that layer).
+
+        Returns
+        -------
+        dict
+            ``{'Ex','Ey','Ez','Hx','Hy','Hz'}`` (per ``component``) plus
+            ``'x'``, ``'z'``, ``'layer'``.  Scalar ``z`` gives 1-D ``(n_x,)``
+            arrays and an int layer; array ``z`` gives ``(nz, n_x)`` arrays
+            and an ``(nz,)`` layer index array.  Fields are the FULL Bloch
+            fields (envelope x carrier ``exp(i kx0 x)``) in the PUBLIC
+            ``exp(-i w t)`` convention, ``H`` in the RCWA-co-registered
+            ``-i eta0`` scale (CHANGED in v5.14.3 from the modal-convention
+            envelope the day-one v5.14.2 method returned).  ``E_x`` is the
+            wall-NORMAL component: at a segment wall the C0 nodal basis
+            stores the (convergent) compromise value; ``Ez``/``Hz`` come
+            from per-element spectral derivatives, averaged at shared nodes.
         """
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
                 "PMMStack.internal_field: call solve(retain_internal=True) "
                 "first.")
-        z = float(z)
-        if pol not in (0, 1):
-            raise ValueError("PMMStack.internal_field: pol must be 0 or 1.")
-        ztop = 0.0
-        i = None
-        for li, (t, _segs, _sl) in enumerate(self._layers):
-            if z <= ztop + t or li == len(self._layers) - 1:
-                i = li
-                break
-            ztop += t
-        t = self._layers[i][0]
-        z_frac = min(max((z - ztop) / t, 0.0), 1.0)
+        names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
+                 "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
+        if component not in names:
+            raise ValueError(
+                f"PMMStack.internal_field: component must be 'E', 'H' or "
+                f"'all', got {component!r}.")
+        want = names[component]
+        if incident is not None and pol is not None:
+            raise ValueError(
+                "PMMStack.internal_field: give incident= OR pol=, not both.")
+        if incident is None:
+            p = 0 if pol is None else pol
+            if p not in (0, 1):
+                raise ValueError(
+                    "PMMStack.internal_field: pol must be 0 or 1.")
+            ex0, ey0 = (1.0, 0.0) if p == 0 else (0.0, 1.0)
+        else:
+            ex0, ey0 = complex(incident[0]), complex(incident[1])
+
         amps = self._internal_amplitudes()
-        Wl, Vl, lam, _q = d["lmodes"][i]
-        c_fwd, c_bwd = amps[i]
-        k0 = d["k0"]
-        n_glob = d["n_glob"]
-        P = np.exp(-lam * k0 * (z_frac * t))[:, None]
-        Q = np.exp(-lam * k0 * ((1.0 - z_frac) * t))[:, None]
-        E = (Wl @ (P * c_fwd) + Wl @ (Q * c_bwd))[:, pol]
-        H = (Vl @ (P * c_fwd) - Vl @ (Q * c_bwd))[:, pol]
-        # global-node x coordinates from the element table
-        mats_i = d["layer_mats"][i]
-        from ._core import _gll_nodes_weights
-        ref_nodes, _w = _gll_nodes_weights(mats_i["degree"])
+        k0, kx0, n_glob = d["k0"], d["kx0"], d["n_glob"]
+        thick = [L[0] for L in self._layers]
+        z_top = np.concatenate([[0.0], np.cumsum(thick)])
+        zs = np.atleast_1d(np.asarray(z, dtype=float))
+        scalar_in = np.ndim(z) == 0
+
+        # ---- shared nodal geometry (one union grid for every layer) -------
+        from ._core import _gll_nodes_weights, _lagrange_derivative_matrix
+        mats0 = d["layer_mats"][0]
+        deg = mats0["degree"]
+        ref_nodes, _w = _gll_nodes_weights(deg)
+        Dref = _lagrange_derivative_matrix(ref_nodes)
+        eb0 = mats0["elem_bnds"]
+        l2g = mats0["l2g"]
         x_glob = np.zeros(n_glob)
-        for e, (xl, xr, _tns) in enumerate(mats_i["elem_bnds"]):
-            x_glob[mats_i["l2g"][e]] = 0.5 * (xl + xr) \
-                + 0.5 * (xr - xl) * ref_nodes
+        for e, (xl, xr, _t) in enumerate(eb0):
+            x_glob[l2g[e]] = 0.5 * (xl + xr) + 0.5 * (xr - xl) * ref_nodes
         order = np.argsort(x_glob)
-        return dict(x=x_glob[order], Ex=E[:n_glob][order],
-                    Ey=E[n_glob:][order], Hx=H[:n_glob][order],
-                    Hy=H[n_glob:][order], layer=i)
+        x_sorted = x_glob[order]
+
+        def _ddx(env, ez_of_elem=None, mats_i=None):
+            """Per-element spectral d/dx of a nodal envelope, averaged at
+            shared (wall) nodes; optionally scaled per element by a tensor
+            function (the 1/ezz weight for Ez)."""
+            out = np.zeros(n_glob, dtype=_C)
+            cnt = np.zeros(n_glob)
+            for e, (xl, xr, tns) in enumerate((mats_i or mats0)["elem_bnds"]):
+                J = 0.5 * (xr - xl)
+                idx = l2g[e]
+                dloc = (Dref @ env[idx]) / J
+                if ez_of_elem is not None:
+                    dloc = dloc * ez_of_elem(tns)
+                out[idx] += dloc
+                cnt[idx] += 1.0
+            return out / cnt
+
+        # uniform resampling operator (barycentric Lagrange, per element)
+        if nx is not None:
+            nxi = int(nx)
+            xu = np.arange(nxi) * (self.period / nxi)
+            wbary = np.ones(deg + 1)
+            for jj in range(deg + 1):
+                for kk in range(deg + 1):
+                    if kk != jj:
+                        wbary[jj] /= (ref_nodes[jj] - ref_nodes[kk])
+            rows = []
+            cols = []
+            vals = []
+            for e, (xl, xr, _t) in enumerate(eb0):
+                inside = np.where((xu >= xl - 1e-15) & (xu <= xr + 1e-15))[0]
+                if inside.size == 0:
+                    continue
+                xi = (2.0 * (xu[inside] - xl) / (xr - xl)) - 1.0
+                for r, xv in zip(inside, xi):
+                    dif = xv - ref_nodes
+                    hit = np.argmin(np.abs(dif))
+                    if abs(dif[hit]) < 1e-14:
+                        rows.append(r)
+                        cols.append(l2g[e][hit])
+                        vals.append(1.0)
+                    else:
+                        num = wbary / dif
+                        for a in range(deg + 1):
+                            rows.append(r)
+                            cols.append(l2g[e][a])
+                            vals.append(num[a] / num.sum())
+            R = np.zeros((nxi, n_glob))
+            for r, c, v in zip(rows, cols, vals):
+                R[r, c] += v
+            # duplicate hits at element boundaries average out via overwrite
+            # safety: renormalize rows that accumulated two boundary copies
+            rs = R.sum(axis=1)
+            R[rs > 1.5] *= 0.5
+            x_out = xu
+        else:
+            R = None
+            x_out = x_sorted
+
+        n_x = len(x_out)
+        out = {c: np.empty((zs.shape[0], n_x), dtype=_C) for c in want}
+        layers_out = np.empty(zs.shape[0], dtype=int)
+        carrier = (np.exp(1j * kx0 * x_out) if abs(kx0) > 0
+                   else np.ones(n_x))
+
+        cache = {}
+        for zi, zz in enumerate(zs):
+            if layer is None:
+                i = int(np.clip(np.searchsorted(z_top, zz, side="right") - 1,
+                                0, len(thick) - 1))
+                zloc = zz - z_top[i]
+            else:
+                i, zloc = int(layer), float(zz)
+            layers_out[zi] = i
+            t_i = thick[i]
+            Wl, Vl, lam, _q = d["lmodes"][i]
+            if i not in cache:
+                c_fwd, c_bwd = amps[i]
+                cache[i] = (ex0 * c_fwd[:, 0] + ey0 * c_fwd[:, 1],
+                            ex0 * c_bwd[:, 0] + ey0 * c_bwd[:, 1])
+            cF, cB = cache[i]
+            P = np.exp(-lam * k0 * zloc)
+            Q = np.exp(-lam * k0 * max(t_i - zloc, 0.0))
+            s = Wl @ (P * cF) + Wl @ (Q * cB)
+            u = Vl @ (P * cF) - Vl @ (Q * cB)
+            Ex_e, Ey_e = s[:n_glob], s[n_glob:]
+            # +i (not RCWA's -i): the PMM modal V partner is built with the
+            # OPPOSITE sign convention (Q = [[...],[-Cxx,...]]); pinned by
+            # the RCWA co-registration oracle on a uniform film (Hy == +Ex
+            # for the forward vacuum wave) -- see test_internal_field
+            Hx_e, Hy_e = 1j * u[:n_glob], 1j * u[n_glob:]
+            h = dict(Ex=Ex_e, Ey=Ey_e, Hx=Hx_e, Hy=Hy_e)
+            if "Ez" in want:
+                mats_i = d["layer_mats"][i]
+                dHy = _ddx(Hy_e, mats_i=mats_i) + 1j * kx0 * Hy_e
+                ez_n = np.zeros(n_glob, dtype=_C)
+                cnt = np.zeros(n_glob)
+                for e, (xl, xr, tns) in enumerate(mats_i["elem_bnds"]):
+                    ez_n[l2g[e]] += tns["ezz"]
+                    cnt[l2g[e]] += 1.0
+                ez_n /= cnt
+                h["Ez"] = (1j / k0) * dHy / ez_n
+            if "Hz" in want:
+                dEy = _ddx(Ey_e) + 1j * kx0 * Ey_e
+                h["Hz"] = -(1j / k0) * dEy
+            for c in want:
+                env = h[c]
+                row = (R @ env if R is not None else env[order])
+                out[c][zi] = row * carrier
+        result = {}
+        for c in want:
+            result[c] = out[c][0] if scalar_in else out[c]
+        result["x"] = x_out
+        result["z"] = float(zs[0]) if scalar_in else zs
+        result["layer"] = int(layers_out[0]) if scalar_in else layers_out
+        return result
 
     def layer_absorption(self, *, by_material=False):
         """Per-layer absorbed power fraction (device-geometry roadmap item 6,

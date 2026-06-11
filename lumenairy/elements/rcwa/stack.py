@@ -581,7 +581,14 @@ class RCWAResult:
         delta = np.asarray(to_numpy(info["delta"]))
         thick = info["thick"]
         z_top = np.concatenate([[0.0], np.cumsum(thick)])
-        ex0, ey0 = incident
+        # The cascade runs in the INTERNAL (conjugate) gauge and the output
+        # is conjugated back, so a PUBLIC incident Jones (ex0, ey0) must enter
+        # CONJUGATED: conj(S(conj(inc))) = ex0 F_pub_x + ey0 F_pub_y -- the
+        # public-linear superposition.  Real incidents are unchanged; complex
+        # (circular/elliptical) drives previously returned the field of the
+        # conjugated incident, i.e. the OPPOSITE handedness (bug found by the
+        # PMM internal-field co-registration oracle, 2026-06-11).
+        ex0, ey0 = np.conj(incident[0]), np.conj(incident[1])
         cinc = np.concatenate([ex0 * delta, ey0 * delta]).astype(_C)
         sigma = self._lanczos_sigma() if filter == "lanczos" else None
 

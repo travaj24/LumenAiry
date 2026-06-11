@@ -575,7 +575,10 @@ class PMM2DStack:
                         below = _redheffer_star(below, ifc[jj + 1])
                     S_below_bot[ii] = below
                 self._internal = dict(modes=modes, S_above=S_above,
-                                      S_below_bot=S_below_bot, k0=k0, Nf=Nf)
+                                      S_below_bot=S_below_bot, k0=k0, Nf=Nf,
+                                      kxv=kxv, kyv=kyv, kx0=kx0, ky0=ky0,
+                                      order_x=order_x, order_y=order_y,
+                                      wl=wl)
         else:
             # GENERALIZED cascade (v5.14): any out-of-plane layer breaks the
             # [W; -V] <-> -lam symmetry, so the whole stack is promoted --
@@ -641,6 +644,182 @@ class PMM2DStack:
             self._internal["T_tot"] = T_eff.sum(axis=1)
         _warn_stack_energy(R_eff, T_eff)
         return orders2d, R_eff, T_eff, jones
+
+    def _layer_epsF(self, i):
+        """Projected ``[[ezz]]`` of layer ``i`` in the shared Fourier basis
+        (INTERNAL conj gauge) -- the ``Ez`` reconstruction operator, the
+        exact mirror of the RCWA route ``solve(EPS, -(Kx Hy - Ky Hx))``.
+        ``None`` for a uniform(-valued) layer (diagonal exact path).
+
+        NB the hybrid 2-D PMM solution LIVES in the projected Fourier basis
+        (the nodal grid is the operators' quadrature device, not a field
+        representation), so Fourier-side reconstruction is the consistent
+        one; pushing ``n_orders`` toward the axis nodal capacity degrades
+        the highest projected orders (pinv conditioning) and with them
+        ``Ez`` -- keep ``n_orders`` comfortably inside the validated
+        capacity (the solver's usual regime), as for the solve itself."""
+        cache = getattr(self, "_epsF_cache", None)
+        if cache is None:
+            cache = self._epsF_cache = {}
+        if i in cache:
+            return cache[i]
+        from .twod import _build_axis, _scalar_projected_ops
+        L = self._layers[i]
+        out = None
+        if L["kind"] in ("scalar", "tensor"):
+            # only ezz enters the Ez constitutive reconstruction, so an
+            # IN-PLANE tensor layer projects its zz component the same way
+            tile_i = (np.conj(L["tile"]) if L["kind"] == "scalar"
+                      else np.conj(L["tile"][..., 2, 2]))
+            eps0 = tile_i.flat[0]
+            if not bool(np.all(np.abs(tile_i - eps0) < 1e-12)):
+                ax = _build_axis(self.period_x, L["xw"], self.degree,
+                                 L["el_x"], self.grade)
+                ay = _build_axis(self.period_y, L["yw"], self.degree,
+                                 L["el_y"], self.grade)
+                ox = np.arange(-self.n_orders, self.n_orders + 1)
+                oy = np.arange(-self.n_orders, self.n_orders + 1)
+                lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
+                                             self.period_x, self.period_y)
+                out = lops["EpsF"]
+        cache[i] = out
+        return out
+
+    def internal_field(self, z, *, component="all", nx=64, ny=None, dx=None,
+                       dy=None, layer=None, incident=(1.0, 0.0),
+                       filter="none"):
+        """Reconstruct the real-space E and/or H field INSIDE the 2-D stack --
+        the crossed-grating mirror of :meth:`RCWAResult.internal_field`
+        (same grid conventions, carriers and output layout, so the two
+        co-register pointwise).
+
+        Requires a prior ``solve(retain_internal=True)`` (symmetric -- i.e.
+        in-plane vertical -- cascades).
+
+        Parameters
+        ----------
+        z : float or array-like
+            Depth(s) [m] from the stack TOP; with ``layer=i`` given, ``z`` is
+            LOCAL to layer ``i``.
+        component : {'E', 'H', 'all'}, optional
+            Which field(s) to return (default all six).
+        nx, ny : int, optional
+            Real-space grid (``ny`` defaults to ``nx``).
+        dx, dy : float, optional
+            Grid pitch [m] (default tiles one unit cell).
+        layer : int, optional
+            Force a layer index (``z`` then local).
+        incident : (complex, complex), optional
+            PUBLIC incident Jones ``(E_x, E_y)`` (default x-polarized;
+            complex values are handled in the public gauge -- the
+            handedness-correct superposition).
+        filter : {'none', 'lanczos'}, optional
+            Lanczos damping of the high orders (Gibbs suppression).
+
+        Returns
+        -------
+        dict
+            ``{'Ex','Ey','Ez','Hx','Hy','Hz'}`` (per ``component``), each
+            ``(nz, ny, nx)`` complex (``ny`` axis dropped when 1), plus
+            ``'z'``, ``'x'``, ``'y'``.  PUBLIC ``exp(-i w t)`` convention,
+            ``H`` in the RCWA-co-registered ``-i eta0`` scale.
+        """
+        d = getattr(self, "_internal", None)
+        if d is None or "cinc" not in d:
+            raise ValueError(
+                "PMM2DStack.internal_field: call solve(retain_internal=True) "
+                "first.")
+        names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
+                 "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
+        if component not in names:
+            raise ValueError(
+                f"PMM2DStack.internal_field: component must be 'E', 'H' or "
+                f"'all', got {component!r}.")
+        if filter not in ("none", "lanczos"):
+            raise ValueError(
+                f"PMM2DStack.internal_field: filter must be 'none' or "
+                f"'lanczos', got {filter!r}.")
+        want = names[component]
+        Nf = d["Nf"]
+        k0 = d["k0"]
+        kxv, kyv = d["kxv"], d["kyv"]
+        order_x, order_y = d["order_x"], d["order_y"]
+        thick = [L["t"] for L in self._layers]
+        z_top = np.concatenate([[0.0], np.cumsum(thick)])
+
+        # PUBLIC incident -> INTERNAL (conj) gauge superposition weights (the
+        # cascade runs conjugated and the output is conjugated back).
+        amps = self._internal_amplitudes()
+        wx, wy = np.conj(incident[0]), np.conj(incident[1])
+
+        ny_i = int(nx) if ny is None else int(ny)
+        nx_i = int(nx)
+        dx_f = float(self.period_x / nx_i if dx is None else dx)
+        dy_f = float(self.period_y / ny_i if dy is None else dy)
+        xg = (np.arange(nx_i) - nx_i // 2) * dx_f
+        yg = (np.arange(ny_i) - ny_i // 2) * dy_f
+        X, Y = np.meshgrid(xg, yg)                          # (ny, nx)
+        carriers = np.exp(1j * k0 * (np.real(kxv)[:, None, None] * X[None]
+                                     + np.real(kyv)[:, None, None] * Y[None]))
+        if filter == "lanczos":
+            mx = max(1, int(np.abs(order_x).max()))
+            my = max(1, int(np.abs(order_y).max()))
+            sigma = (np.sinc(order_x / (mx + 1.0))
+                     * np.sinc(order_y / (my + 1.0)))
+        else:
+            sigma = None
+
+        Kx = kxv.astype(_C)
+        Ky = kyv.astype(_C)
+        zs = np.atleast_1d(np.asarray(z, dtype=float))
+        out = {c: np.empty((zs.shape[0], ny_i, nx_i), dtype=_C) for c in want}
+        cache = {}
+        for zi, zz in enumerate(zs):
+            if layer is None:
+                i = int(np.clip(np.searchsorted(z_top, zz, side="right") - 1,
+                                0, len(thick) - 1))
+                zloc = zz - z_top[i]
+            else:
+                i, zloc = int(layer), float(zz)
+            _k, Wl, Vl, lam, t_i = d["modes"][i]
+            if i not in cache:
+                c_fwd, c_bwd = amps[i]
+                cache[i] = (wx * c_fwd[:, 0] + wy * c_fwd[:, 1],
+                            wx * c_bwd[:, 0] + wy * c_bwd[:, 1])
+            cF, cB = cache[i]
+            P = np.exp(-lam * k0 * zloc)
+            Q = np.exp(-lam * k0 * max(t_i - zloc, 0.0))
+            sv = Wl @ (P * cF) + Wl @ (Q * cB)
+            uv = Vl @ (P * cF) - Vl @ (Q * cB)
+            Ex_m, Ey_m = sv[:Nf], sv[Nf:]
+            Hx_m, Hy_m = -1j * uv[:Nf], -1j * uv[Nf:]
+            h = dict(Ex=Ex_m, Ey=Ey_m, Hx=Hx_m, Hy=Hy_m)
+            if "Ez" in want:
+                EpsF = self._layer_epsF(i)
+                if EpsF is None:
+                    Li_ = self._layers[i]
+                    if Li_["kind"] == "uniform":
+                        eps_l = np.conj(_C(Li_["eps"]))
+                    elif Li_["kind"] == "scalar":
+                        eps_l = np.conj(Li_["tile"].flat[0])
+                    else:
+                        eps_l = np.conj(Li_["tile"][..., 2, 2].flat[0])
+                    h["Ez"] = -(Kx * Hy_m - Ky * Hx_m) / eps_l
+                else:
+                    h["Ez"] = np.linalg.solve(EpsF,
+                                              -(Kx * Hy_m - Ky * Hx_m))
+            if "Hz" in want:
+                h["Hz"] = Kx * Ey_m - Ky * Ex_m
+            for c in want:
+                amp = np.conj(h[c])                         # internal -> public
+                if sigma is not None:
+                    amp = amp * sigma
+                out[c][zi] = np.tensordot(amp, carriers, axes=([0], [0]))
+        result = {c: (out[c][:, 0, :] if ny_i == 1 else out[c]) for c in want}
+        result["z"] = zs
+        result["x"] = xg
+        result["y"] = yg
+        return result
 
     def _internal_amplitudes(self):
         """Per-layer ``(c_fwd_top, c_bwd_bot)`` modal amplitudes from the

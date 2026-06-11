@@ -2,6 +2,57 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **PMM internal-field parity with RCWA** (user request 2026-06-11):
+  - `PMMStack.internal_field` upgraded to the `RCWAResult.internal_field`
+    interface: `z` arrays (stack-top or `layer=`-local), all SIX field
+    components (`Ez`/`Hz` from per-element spectral derivatives of the
+    nodal solution — exact pointwise `1/ezz`, no factorization rule),
+    `incident=` Jones (mutually exclusive with the legacy `pol=`), the
+    Bloch carrier `exp(i kx0 x)`, and optional uniform-grid resampling
+    (`nx=`, barycentric evaluation of the spectral interpolant; default
+    stays the exact GLL nodal grid).  BEHAVIOR CHANGE vs the day-one
+    v5.14.2 method: `Hx`/`Hy` are now in the RCWA-co-registered `-i eta0`
+    scale (the old return carried the raw modal convention, documented as
+    such) and the Bloch carrier is included.  Conventions pinned by
+    oracles: a uniform absorbing film matches RCWA pointwise in all six
+    components at ~1e-15 (normal, oblique, complex incident); on a
+    patterned grating RCWA's near field converges TOWARD the nodal-exact
+    PMM (3.4e-2 @ n_orders 30 → 9e-3 @ 120 interior); the volume-integral
+    absorption identity closes against the flux-based `layer_absorption`
+    (TE 4.5e-4, TM 5.6e-3 — wall-interpolation-limited, converging in
+    degree).
+  - **`PMM2DStack.internal_field`** (new): the crossed-grating mirror of
+    `RCWAResult.internal_field` — same centred grids, carriers, `component`
+    / `incident` / `layer` / `filter='lanczos'` semantics, so the two
+    co-register pointwise.  `Ez` via the projected `[[ezz]]` solve (the
+    RCWA-mirror route; in-plane tensor layers project their `zz`
+    component).  Validated: uniform conical film vs RCWA ~3e-16 all six
+    components incl. complex incident; patterned stripe converges to the
+    nodal-exact 1-D PMM as (n_orders, degree) rise together (Ex 0.105 →
+    0.044, Ez 0.114 → 0.049, Hy 0.024 → 0.009); tangential continuity
+    across internal interfaces ~2e-5; uniform-absorber volume identity
+    ~1e-3.  NB the hybrid 2-D solution lives in the projected Fourier
+    basis: keep `n_orders` comfortably inside the axis nodal capacity
+    (the solver's own validated regime) — the projection's highest orders
+    degrade first and `Ez` (order-weighted) shows it earliest.
+
+### Fixed
+
+- **`RCWAResult.internal_field` flipped the handedness of complex
+  incident Jones drives** (found by the PMM co-registration oracle): the
+  internal-gauge `cinc` was built directly from the PUBLIC incident and
+  the output conjugated, so a circular/elliptical `incident=` returned
+  the field of the CONJUGATED incident.  The incident now enters
+  conjugated (public-linear superposition restored:
+  `field(a, b) == a*field(1,0) + b*field(0,1)`); real incidents are
+  bit-unchanged.  `to_jones_field`/`to_multiorder_field` were already
+  public-linear and are unaffected; `layer_absorption` uses real basis
+  drives and is unaffected.
+
 ## [5.14.2] — 2026-06-11
 
 **Backlog batch 1** (docs/BACKLOG_2026_06_10.md priority-① items A1, A2,
