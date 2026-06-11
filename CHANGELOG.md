@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.14.3] — 2026-06-11
 
 ### Added
 
