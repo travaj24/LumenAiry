@@ -32,11 +32,15 @@ import re
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 
-# Actual justified count is 20 (see the triage above); slack of 2 so a future
-# legitimate KEEP-AS-IS (e.g. one more tracer guard) doesn't have to bump
-# this in the same commit.  If you add a non-tracer-guard site, NARROW it
-# instead of bumping.
-_NON_UI_EXCEPT_BUDGET = 22
+# Actual justified count is 20 (see the triage above) + the jax-tracer
+# concretization guards added with the stack-level JAX twins (v5.14.2,
+# 2026-06-11): pmm/_jax_stack.py `_concrete_real`/`_concrete_index`,
+# pmm/_jax_stack2d.py `_concrete`, pmm/stack.py's traced-tensor OOP probe,
+# pmm/stack2d.py's traced-thickness validation probe -- all the sanctioned
+# KEEP-AS-IS class (a tracer's concretization error is untypeable without
+# importing jax at module scope).  Slack of 2 retained.  If you add a
+# non-tracer-guard site, NARROW it instead of bumping.
+_NON_UI_EXCEPT_BUDGET = 28
 
 
 def _count_except_exception_in_non_ui() -> int:

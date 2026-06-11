@@ -11,6 +11,7 @@ import numpy as np
 # symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
 # top-level import introduces no cycle.
+from ...backend import is_jax_array
 from ..rcwa import _interface_smatrix_general, _propagation_smatrix_general
 from ._core import (
     _C,
@@ -131,8 +132,13 @@ class PMMStack:
                 "PMMStack: factorization must be 'auto', 'convection' or "
                 f"'covariant', got {factorization!r}.")
         self.period = float(period)
-        self.n_sub = n_substrate if callable(n_substrate) else _C(n_substrate)
-        self.n_sup = (n_superstrate if callable(n_superstrate)
+        # A JAX half-space index stays RAW so its gradient flows (the
+        # differentiable dispatch in solve()); _C() would sever the trace.
+        self.n_sub = (n_substrate if (callable(n_substrate)
+                                      or is_jax_array(n_substrate))
+                      else _C(n_substrate))
+        self.n_sup = (n_superstrate if (callable(n_superstrate)
+                                        or is_jax_array(n_superstrate))
                       else _C(n_superstrate))
         self.degree = int(degree)
         self.n_el = int(elements_per_region)
@@ -154,6 +160,18 @@ class PMMStack:
         self._src = None
 
     def _as_tensor(self, eps):
+        if is_jax_array(eps):
+            # Keep the trace alive: promote in jnp (np.asarray on a tracer
+            # raises; on a concrete jax array it would sever the gradient).
+            import jax.numpy as jnp
+            M = jnp.asarray(eps, dtype=jnp.complex128)
+            if M.ndim == 0:
+                M = M * jnp.eye(3, dtype=jnp.complex128)
+            if M.shape[-2:] != (3, 3):
+                raise ValueError(
+                    "PMMStack.add_layer: each eps must be a scalar or a "
+                    "(3, 3) permittivity tensor.")
+            return M
         M = np.asarray(eps, dtype=_C)
         if M.ndim == 0:
             M = M * np.eye(3, dtype=_C)
@@ -193,7 +211,9 @@ class PMMStack:
                 raise ValueError("PMMStack.add_layer: empty segments.")
             segs = [(float(w), e if (callable(e) or isinstance(e, str))
                      else self._as_tensor(e)) for w, e in segments]
-        self._layers.append((float(thickness), segs, float(slant_angle)))
+        thickness = (thickness if is_jax_array(thickness)
+                     else float(thickness))
+        self._layers.append((thickness, segs, float(slant_angle)))
         return self
 
     def add_tapered_grating(self, thickness, *, eps_ridge, eps_groove,
@@ -457,7 +477,9 @@ class PMMStack:
         points, so ``set_source(angle=A, theta=T)`` resolves to ``T`` in every
         suite.  Returns ``self``."""
         angle = _resolve_incidence(angle, theta)
-        self._src = dict(wl=float(wavelength), angle=float(angle))
+        self._src = dict(
+            wl=wavelength if is_jax_array(wavelength) else float(wavelength),
+            angle=angle if is_jax_array(angle) else float(angle))
         return self
 
     def _resliced_clone(self, dn):
@@ -489,6 +511,17 @@ class PMMStack:
                 i += 1
         return clone
 
+    def _holds_traced(self):
+        """True when any stored input is a JAX array (the differentiable
+        dispatch in solve(); the assemble-once paths are NumPy-only)."""
+        return (is_jax_array(self.n_sub) or is_jax_array(self.n_sup)
+                or (self._src is not None
+                    and (is_jax_array(self._src["wl"])
+                         or is_jax_array(self._src["angle"])))
+                or any(is_jax_array(t) for t, _s, _a in self._layers)
+                or any(is_jax_array(e) for _t, segs, _a in self._layers
+                       for _w, e in segs))
+
     def solve(self, *, stabilize=None, retain_internal=False):
         """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``
         as :func:`pmm_jones_1d_segments` (``R_eff`` / ``T_eff`` are ``(2, M)``:
@@ -503,7 +536,18 @@ class PMMStack:
         raising ``degree`` restores passivity, NOT accuracy.  The check
         re-solves every recorded taper builder at ``n_slices`` +/- 1 and
         WARNS when the zeroth-order Jones moves beyond the stack consensus
-        tolerance -- energy cannot catch this class, slice-consensus can."""
+        tolerance -- energy cannot catch this class, slice-consensus can.
+
+        DIFFERENTIABLE (JAX): passing any input as a jnp array -- a segment
+        eps (scalar or in-plane ``(3,3)``), a layer ``thickness``, the
+        ``wavelength``, the ``angle`` or a half-space index -- routes the
+        whole solve to the jnp twin (``pmm/_jax_stack.py``): same physics,
+        same order set, forward-identical to NumPy at ~1e-15, with gradients
+        flowing to every traced input (AD-vs-FD validated ~1e-8).  The
+        surface is ALL-VERTICAL IN-PLANE stacks with STATIC widths/walls;
+        slant, out-of-plane tensors, ``stabilize``, ``retain_internal`` and
+        the assemble-once sweep/prepare paths raise.  x64 required;
+        ``jnp.linalg.eig`` is CPU-only."""
         if self._src is None:
             raise ValueError("PMMStack.solve: call set_source(...) first.")
         if not self._layers:
@@ -521,6 +565,44 @@ class PMMStack:
                 f"PMMStack.solve: unresolved material keys {_unresolved}; "
                 f"pass materials={{...}} via prepare()/solve(materials=...) "
                 f"or use concrete permittivities.")
+        # ---- differentiable (JAX) dispatch ---------------------------------
+        # Any traced input (a layer eps / thickness, a half-space index, the
+        # wavelength or the angle) routes the whole solve to the jnp twin.
+        # The twin covers the ALL-VERTICAL IN-PLANE surface only -- the same
+        # surface as the single-layer _pmm_jones_1d_jax -- so everything else
+        # raises HERE (loudly, with the numpy alternative named).
+        if self._holds_traced():
+            if retain_internal:
+                raise NotImplementedError(
+                    "PMMStack.solve(retain_internal=True): not available on "
+                    "the JAX (differentiable) path; use NumPy inputs for "
+                    "internal fields / absorption.")
+            if stabilize not in (None, False):
+                raise NotImplementedError(
+                    "PMMStack.solve(stabilize=...): the slices-consensus "
+                    "check is host-side; use NumPy inputs.")
+            if any(abs(L[2]) > 1e-12 for L in self._layers):
+                raise NotImplementedError(
+                    "PMMStack: slanted layers are not differentiable (the "
+                    "covariant/metric generators are NumPy-only); use NumPy "
+                    "inputs for slanted stacks.")
+            for _t, _segs, _sl in self._layers:
+                for _w, _M in _segs:
+                    try:
+                        _oop = self._is_oop(np.asarray(_M))
+                    except Exception:
+                        _oop = False    # traced tensor: in-plane contract
+                    if _oop:
+                        raise NotImplementedError(
+                            "PMMStack: out-of-plane tensor layers are not "
+                            "differentiable (the generalized fwd/back "
+                            "cascade is NumPy-only); the JAX surface is "
+                            "in-plane.  NB a TRACED (3,3) tensor cannot be "
+                            "inspected -- its xz/yz/zx/zy entries are "
+                            "ignored.")
+            from ._jax_stack import _pmm_stack_solve_jax
+            return _pmm_stack_solve_jax(self)
+
         wl, angle = self._src["wl"], self._src["angle"]
         k0 = 2.0 * np.pi / wl
         kx0 = float(np.real(self.n_sup)) * np.sin(angle) * k0
@@ -1059,6 +1141,12 @@ class PMMStack:
             FOURTH element only when ``jones=True`` (default ``False`` keeps
             the released 3-tuple).
         """
+        if self._holds_traced():
+            raise NotImplementedError(
+                "PMMStack.solve_vs_wavelength: the assemble-once sweep "
+                "is NumPy-only; for traced (JAX) inputs call solve() "
+                "per wavelength (it dispatches to the differentiable "
+                "twin) or vmap over wavelength.")
         angle = _resolve_incidence(angle, theta)
         if not self._layers:
             raise ValueError("PMMStack.solve_vs_wavelength: add at least one "
@@ -1218,6 +1306,11 @@ class PMMStack:
         assembly (for an LC device ~40% of a solve), not an order of
         magnitude.  All-vertical in-plane stacks (the symmetric cascade).
         """
+        if self._holds_traced():
+            raise NotImplementedError(
+                "PMMStack.prepare: the prepared (assemble-once) path "
+                "is NumPy-only; traced (JAX) inputs dispatch through "
+                "solve().")
         return _PreparedPMMStack(self)
 
     def _solve_covariant(self, wl, angle, k0):

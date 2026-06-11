@@ -56,6 +56,9 @@ from .twod_jones import _require_nonzero_ezz, _tensor_layer_modes
 __all__ = ["PMM2DStack"]
 
 
+from ...backend import is_jax_array
+
+
 class PMM2DStack:
     """Builder for a multilayer doubly-periodic stack solved by the hybrid
     2-D PMM (see the module docstring).
@@ -82,8 +85,12 @@ class PMM2DStack:
                 f"{formulation!r}")
         self.period_x = float(period_x)
         self.period_y = float(period_x if period_y is None else period_y)
-        self.n_sup = complex(n_superstrate)
-        self.n_sub = complex(n_substrate)
+        # A JAX half-space index stays RAW so its gradient flows (the
+        # differentiable dispatch in solve()); complex() would sever it.
+        self.n_sup = (n_superstrate if is_jax_array(n_superstrate)
+                      else complex(n_superstrate))
+        self.n_sub = (n_substrate if is_jax_array(n_substrate)
+                      else complex(n_substrate))
         self.degree = int(degree)
         self.n_el = int(elements_per_strip)
         self.grade = bool(grade)
@@ -97,7 +104,7 @@ class PMM2DStack:
     # builder
     # ------------------------------------------------------------------ #
     def add_layer(self, thickness, *, eps=None, eps_cell=None,
-                  eps_tensor_cell=None):
+                  eps_tensor_cell=None, region_layout=None):
         """Append one layer: a UNIFORM film (``eps``, scalar), a patterned
         scalar cell (``eps_cell``, the :func:`pmm_efficiency_2d_cell` pixel
         grid), or an in-plane anisotropic tensor cell (``eps_tensor_cell``,
@@ -106,9 +113,28 @@ class PMM2DStack:
         DISPERSIVE materials (device-geometry roadmap item 5, 2026-06-10):
         any of the three slots may be a ``wl -> value`` callable; such a
         stack is solved with :meth:`solve_vs_wavelength` (a plain
-        :meth:`solve` raises)."""
-        if float(thickness) <= 0.0 or not np.isfinite(float(thickness)):
-            raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
+        :meth:`solve` raises).
+
+        DIFFERENTIABLE (JAX): ``eps`` and ``thickness`` may be traced jnp
+        scalars.  A traced ``eps_cell`` additionally needs
+        ``region_layout=`` -- a CONCRETE int grid (same shape) naming which
+        pixels share a region: the walls come from the layout (wall
+        extraction from pixel values is data-dependent control flow a
+        tracer cannot drive), the traced cell provides each region's value,
+        read at the region's first pixel.  Traced ``eps_tensor_cell``
+        raises (the 2-D JAX surface is scalar)."""
+        if is_jax_array(thickness):
+            t_store = thickness            # traced: validated only if concrete
+            try:
+                t_c = float(np.asarray(thickness))
+            except Exception:
+                t_c = None
+            if t_c is not None and (t_c <= 0.0 or not np.isfinite(t_c)):
+                raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
+        else:
+            if float(thickness) <= 0.0 or not np.isfinite(float(thickness)):
+                raise ValueError("PMM2DStack.add_layer: thickness must be > 0")
+            t_store = float(thickness)
         given = [v is not None for v in (eps, eps_cell, eps_tensor_cell)]
         if sum(given) != 1:
             raise ValueError(
@@ -122,10 +148,46 @@ class PMM2DStack:
                                          slot=slot, fn=v))
                 return self
         if eps is not None:
-            self._layers.append(dict(kind="uniform", t=float(thickness),
-                                     eps=complex(eps)))
+            self._layers.append(dict(
+                kind="uniform", t=t_store,
+                eps=eps if is_jax_array(eps) else complex(eps)))
             return self
         if eps_cell is not None:
+            if is_jax_array(eps_cell):
+                # TRACED cell values: a CONCRETE region_layout (int grid,
+                # same shape) must define the walls -- wall extraction from
+                # pixel values is data-dependent control flow a tracer
+                # cannot drive (the _pmm_efficiency_2d_cell_jax contract).
+                if region_layout is None:
+                    raise ValueError(
+                        "PMM2DStack.add_layer: a JAX (traced) eps_cell needs "
+                        "region_layout= (a CONCRETE int grid, same shape, "
+                        "naming which pixels share a region); the walls come "
+                        "from the layout, the traced cell provides each "
+                        "region's value.")
+                lay = np.ascontiguousarray(np.asarray(region_layout,
+                                                      dtype=np.int64))
+                if lay.shape != tuple(eps_cell.shape):
+                    raise ValueError(
+                        "PMM2DStack.add_layer: region_layout shape "
+                        f"{lay.shape} != eps_cell shape "
+                        f"{tuple(eps_cell.shape)}.")
+                xw, yw, ltile = _cell_to_walls_tile(
+                    lay.astype(complex), self.period_x, self.period_y,
+                    "PMM2DStack.add_layer")
+                first_idx = [tuple(int(v) for v in np.argwhere(lay == u)[0])
+                             for u in np.unique(lay)]
+                self._append_patterned("scalar", t_store, xw, yw,
+                                       np.real(ltile).astype(np.int64))
+                self._layers[-1].update(traced=True, cell=eps_cell,
+                                        layout_tile=self._layers[-1].pop(
+                                            "tile"),
+                                        first_idx=first_idx)
+                return self
+            if region_layout is not None:
+                raise ValueError(
+                    "PMM2DStack.add_layer: region_layout is only meaningful "
+                    "for a JAX (traced) eps_cell.")
             xw, yw, tile = _cell_to_walls_tile(
                 eps_cell, self.period_x, self.period_y,
                 "PMM2DStack.add_layer")
@@ -133,8 +195,13 @@ class PMM2DStack:
                 raise ValueError(
                     "PMM2DStack.add_layer: eps_cell must be a scalar (Sx, Sy) "
                     "grid; pass tensor cells via eps_tensor_cell.")
-            self._append_patterned("scalar", float(thickness), xw, yw, tile)
+            self._append_patterned("scalar", t_store, xw, yw, tile)
             return self
+        if is_jax_array(eps_tensor_cell):
+            raise NotImplementedError(
+                "PMM2DStack.add_layer: traced eps_tensor_cell is not "
+                "differentiable (the 2-D JAX surface is scalar; tensor "
+                "cells are NumPy-only).")
         cell = np.asarray(eps_tensor_cell, dtype=_C)
         if cell.ndim != 4 or cell.shape[2:] != (3, 3):
             raise ValueError(
@@ -146,7 +213,7 @@ class PMM2DStack:
         # OUT-OF-PLANE tensor layers are allowed (v5.14 roadmap item 3): any
         # such layer promotes the WHOLE cascade to the generalized S-matrix
         # in solve() (the 1-D PMMStack precedent).
-        self._append_patterned("tensor", float(thickness), xw, yw, tile)
+        self._append_patterned("tensor", t_store, xw, yw, tile)
         return self
 
     def _append_patterned(self, kind, t, xw, yw, tile):
@@ -329,9 +396,12 @@ class PMM2DStack:
         ``theta`` / azimuth ``phi`` [rad]).  ``angle`` is the cross-suite alias
         for ``theta`` (theta wins when both are given, as everywhere else)."""
         theta = _resolve_incidence(angle, theta)
-        self._src = dict(wavelength=float(wavelength),
-                         theta=0.0 if theta is None else float(theta),
-                         phi=float(phi))
+        self._src = dict(
+            wavelength=(wavelength if is_jax_array(wavelength)
+                        else float(wavelength)),
+            theta=(0.0 if theta is None
+                   else theta if is_jax_array(theta) else float(theta)),
+            phi=phi if is_jax_array(phi) else float(phi))
         return self
 
     # ------------------------------------------------------------------ #
@@ -340,7 +410,15 @@ class PMM2DStack:
     def solve(self, *, retain_internal=False):
         """Solve the cascade.  Returns ``(orders, R(2, N), T(2, N),
         jones_reflection(2, 2))`` -- row 0 = incident ``E_x``, row 1 =
-        incident ``E_y``; Jones in the PUBLIC convention."""
+        incident ``E_y``; Jones in the PUBLIC convention.
+
+        DIFFERENTIABLE (JAX): any traced input (a uniform-layer eps, a layer
+        thickness, the wavelength, ``theta``/``phi``, a half-space index, or
+        a traced ``eps_cell`` added with ``region_layout=``) routes to the
+        jnp twin (``pmm/_jax_stack2d.py``) -- the SCALAR in-plane vertical
+        surface, forward-identical to NumPy at ~1e-15 with AD-vs-FD
+        validated gradients.  Tensor layers and ``retain_internal`` raise
+        under JAX; x64 required; the eig is CPU-only."""
         if any(L.get("kind") == "disp" for L in self._layers):
             raise ValueError(
                 "PMM2DStack.solve: the stack holds DISPERSIVE (wl -> value) "
@@ -352,6 +430,32 @@ class PMM2DStack:
             raise ValueError("PMM2DStack.solve: add at least one layer")
         wavelength = self._src["wavelength"]
         theta, phi = self._src["theta"], self._src["phi"]
+
+        # ---- differentiable (JAX) dispatch ---------------------------------
+        # Any traced input (a uniform-layer eps, a traced eps_cell, a layer
+        # thickness, the wavelength, theta/phi or a half-space index) routes
+        # to the jnp twin -- the SCALAR in-plane vertical surface.  Tensor
+        # layers (and traced tensor cells) raise: the generalized cascade and
+        # the tensor assembly are NumPy-only.
+        _jax_in = (is_jax_array(self.n_sub) or is_jax_array(self.n_sup)
+                   or is_jax_array(wavelength) or is_jax_array(theta)
+                   or is_jax_array(phi)
+                   or any(is_jax_array(L.get("t")) for L in self._layers)
+                   or any(is_jax_array(L.get("eps")) for L in self._layers)
+                   or any(L.get("traced") for L in self._layers))
+        if _jax_in:
+            if retain_internal:
+                raise NotImplementedError(
+                    "PMM2DStack.solve(retain_internal=True): not available "
+                    "on the JAX (differentiable) path; use NumPy inputs for "
+                    "layer_absorption.")
+            if any(L["kind"] == "tensor" for L in self._layers):
+                raise NotImplementedError(
+                    "PMM2DStack: tensor layers are not differentiable (the "
+                    "2-D JAX surface is scalar in-plane); use NumPy inputs "
+                    "for tensor stacks.")
+            from ._jax_stack2d import _pmm_stack2d_solve_jax
+            return _pmm_stack2d_solve_jax(self)
 
         eps_sup = np.conj(_C(self.n_sup) ** 2)
         eps_sub = np.conj(_C(self.n_sub) ** 2)

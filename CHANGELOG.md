@@ -5,7 +5,8 @@ All notable changes to the core library are documented here.
 ## [5.14.2] — 2026-06-11
 
 **Backlog batch 1** (docs/BACKLOG_2026_06_10.md priority-① items A1, A2,
-B1+B2, D1):
+B1+B2, D1) **+ stack-level JAX differentiability** (PMMStack / PMM2DStack
+jnp twins):
 
 ### Added
 
@@ -43,6 +44,28 @@ B1+B2, D1):
   (when bit-identity is allowed vs when a physical tolerance is mandatory —
   degenerate-eig gauge freedom across code paths/builds) + named constants
   in `tests/unit/_tolerances.py`, used by the new regression tests.
+- **JAX differentiability at the STACK level** — `PMMStack.solve` and
+  `PMM2DStack.solve` gain jnp twins (`pmm/_jax_stack.py`,
+  `pmm/_jax_stack2d.py`) composing the validated single-layer machinery
+  (frozen NumPy geometry, eps-LINEAR traced assembly, the gauge-stable
+  custom-VJP eig, the backend-generic Redheffer cascade).  Passing any
+  input as a jnp array dispatches transparently:
+  - **1-D `PMMStack`**: all-vertical in-plane stacks — gradients w.r.t.
+    segment eps (re+im, scalar or in-plane tensor entries), layer
+    thicknesses, wavelength, angle, and half-space indices.  Forward
+    agreement with NumPy ~1e-15 (normal AND oblique); AD-vs-FD ≤6e-8
+    relative across all six parameter classes.  Widths/walls are static.
+  - **2-D `PMM2DStack`**: the scalar surface — traced uniform-layer eps,
+    thicknesses, wavelength, theta/phi, half-spaces, and traced
+    `eps_cell` VALUES via the new `add_layer(eps_cell=<jax>,
+    region_layout=<int grid>)` (a concrete layout defines the walls, the
+    traced cell provides each region's value — the
+    `_pmm_efficiency_2d_cell_jax` contract).  Forward ~1e-15 across every
+    dispatch flavor; AD-vs-FD ≤3e-9 (theta 2e-6, FD-limited).
+  - Everything off-surface raises loudly under JAX: slanted layers,
+    out-of-plane/tensor cells, `stabilize`, `retain_internal`, and the
+    assemble-once `solve_vs_wavelength`/`prepare` paths (NumPy-only).
+    x64 required; `jnp.linalg.eig` is CPU-only.
 
 ### Fixed
 
