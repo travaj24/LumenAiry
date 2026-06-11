@@ -2,7 +2,7 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased]
+## [5.14.2] — 2026-06-11
 
 **Backlog batch 1** (docs/BACKLOG_2026_06_10.md priority-① items A1, A2,
 B1+B2, D1):
