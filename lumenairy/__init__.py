@@ -368,6 +368,12 @@ from .analysis.through_focus import (
     tolerancing_sweep,
 )
 
+# â”€â”€ Thin-film coatings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+from .elements.berreman import (
+    BerremanStack,
+    berreman_jones_1d,
+)
+
 # â”€â”€ BSDF surface scatter (stray-light analysis) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.bsdf import (
     BSDFModel,
@@ -377,8 +383,6 @@ from .elements.bsdf import (
     make_bsdf,
     sample_scatter_rays,
 )
-
-# â”€â”€ Thin-film coatings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.coatings import (
     # v5.4 Phase 5: thin-film coating material database and accessor.
     COATING_MATERIAL_REGISTRY,
@@ -1579,6 +1583,10 @@ __all__ = [
     'coating_reflectance_jax',
     'quarter_wave_ar',
     'broadband_ar_v_coat',
+
+    # Berreman 4x4 (anisotropic planar multilayer)
+    'berreman_jones_1d',
+    'BerremanStack',
     # v5.4 Phase 5: thin-film coating material database.
     'COATING_MATERIAL_REGISTRY',
     'get_coating_material_index',

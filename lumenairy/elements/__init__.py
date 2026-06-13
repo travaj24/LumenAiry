@@ -23,6 +23,10 @@ Submodules:
   stray-light analysis.
 """
 
+from .berreman import (
+    BerremanStack,
+    berreman_jones_1d,
+)
 from .bsdf import (
     BSDFModel,
     GaussianBSDF,
@@ -169,6 +173,8 @@ __all__ = [
     'load_phase_file', 'save_phase_file', 'load_fits_field', 'save_fits_field',
     # coatings
     'coating_reflectance', 'quarter_wave_ar', 'broadband_ar_v_coat',
+    # berreman (anisotropic planar multilayer)
+    'berreman_jones_1d', 'BerremanStack',
     # freeform
     'surface_sag_xy_polynomial', 'surface_sag_zernike_freeform',
     'surface_sag_chebyshev',

@@ -2,6 +2,46 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **Berreman 4×4 anisotropic planar multilayer solver** (`lumenairy.
+  berreman_jones_1d`, `lumenairy.BerremanStack`) — the fast, exact
+  planar-anisotropic member of the solver family, generalizing the scalar
+  transfer-matrix coating model to fully anisotropic layers (LC retarders,
+  waveplates, birefringent / uniaxial / biaxial films, magneto-optic
+  stacks).  A `4×4` tangential-field state `[Ex, Ey, Hx, Hy]` per layer
+  (Berreman 1972 / Yeh 1979), composed by the SAME numerically-stable
+  generalized scattering-matrix cascade the PMM / RCWA out-of-plane paths
+  use (so a thick / lossy stack never overflows).  Promotes the previously
+  test-only single-slab Berreman oracle to a public **multilayer** solver
+  with the full RCWA/PMM-parity observable set:
+  - **Full `2×2` Jones** reflection and transmission, plus flux-normalized
+    `R` / `T` per incident polarization; conical (azimuthal `phi`) mounts.
+  - **`BerremanStack.internal_field(z, component=, incident=)`** — the
+    in-structure `E`/`H` field (all six components; `Ez` from `Dz = 0`,
+    `Hz` from the curl), tangentially continuous across interfaces and
+    equal to incident + reflected Jones at the top plane.
+  - **`BerremanStack.layer_absorption()`** — per-layer absorbed power, the
+    volume integral `k0 Im(E†·eps·E)` matching the flux-based result to
+    ~1e-7 and closing against `1 − R − T`.
+  - Validated to MACHINE PRECISION against independent oracles: the
+    isotropic limit reproduces `coating_reflectance` (the validated
+    complex-angle scalar TMM) in R, T AND reflection phase, for lossy and
+    multilayer stacks at oblique incidence; a uniform tensor slab
+    reproduces the independent `_berreman4x4` oracle (lossless and lossy);
+    energy is conserved on lossless conical stacks.
+  - It is NOT a competitor to RCWA / PMM — it is the planar (laterally
+    uniform) tier, ~100–1000× faster for unpatterned retarder / coating
+    design and the natural effective-medium screen that feeds the
+    patterned solvers.  CONVENTION NOTE: `eps` enters raw (public
+    `exp(-i w t)`, `Im > 0`), so the forward/backward mode split — and
+    hence the flux-based power — is PHYSICAL on lossy stacks (a
+    conjugated-eps split, as in the lossless-only standalone oracle, gives
+    `T > 1` / negative absorption; `test_lossy_power_matches_scalar_tmm`
+    guards this).
+
 ## [5.14.3] — 2026-06-11
 
 ### Added
