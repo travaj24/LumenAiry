@@ -68,6 +68,12 @@ from .elements import (
     generate_turbulence_screen,
     zernike,
 )
+from .emt import (
+    bruggeman,
+    maxwell_garnett,
+    rytov_segments_tensor,
+    rytov_tensor,
+)
 from .freeform import (
     surface_sag_chebyshev,
     surface_sag_freeform,
@@ -175,6 +181,8 @@ __all__ = [
     'coating_reflectance', 'quarter_wave_ar', 'broadband_ar_v_coat',
     # berreman (anisotropic planar multilayer)
     'berreman_jones_1d', 'BerremanStack',
+    # emt (effective-medium homogenization bridge)
+    'rytov_tensor', 'rytov_segments_tensor', 'maxwell_garnett', 'bruggeman',
     # freeform
     'surface_sag_xy_polynomial', 'surface_sag_zernike_freeform',
     'surface_sag_chebyshev',

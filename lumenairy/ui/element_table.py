@@ -76,6 +76,8 @@ class ElementTableModel(QAbstractTableModel):
                 return QColor(35, 35, 55)
             elif elem.elem_type in ('MLA', 'DOE', 'Dammann'):
                 return QColor(45, 35, 55)
+            elif elem.elem_type in ('Waveplate', 'PBS'):
+                return QColor(40, 40, 58)
 
         elif role == Qt.ForegroundRole:
             if col == 2:

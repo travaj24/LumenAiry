@@ -252,8 +252,15 @@ class Element:
 
     TYPES = [
         'Source', 'Singlet', 'Doublet', 'Triplet',
-        'Mirror', 'MLA', 'DOE', 'Dammann', 'Detector',
+        'Mirror', 'MLA', 'DOE', 'Dammann',
+        'Waveplate', 'PBS', 'Detector',
     ]
+    # Polarization elements (waveplate / PBS) are flat, beam-pass-through
+    # components: they trace as a thin window but carry polarization aux
+    # (waveplate: aux['wp_kind'] in {'quarter','half','full'} +
+    # aux['fast_axis_deg']; PBS: aux['pbs_angle_deg']) and render with a
+    # dedicated glyph in the 2-D / 3-D layout views.
+    POLARIZATION_TYPES = ('Waveplate', 'PBS')
 
     # Columns displayed in the element table (relative mode)
     COLUMNS_RELATIVE = [

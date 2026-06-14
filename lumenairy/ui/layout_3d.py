@@ -257,6 +257,17 @@ class Layout3DView(QWidget):
             if elem.elem_type == 'Detector':
                 continue
 
+            if elem.elem_type in ('Waveplate', 'PBS'):
+                sd0 = (elem.surfaces[0].semi_diameter
+                       if (elem.surfaces
+                           and np.isfinite(elem.surfaces[0].semi_diameter))
+                       else self.sm.epd_mm / 2)
+                if elem.elem_type == 'Waveplate':
+                    self._draw_waveplate_3d(o, R, sd0, elem, ei)
+                else:
+                    self._draw_pbs_3d(o, R, sd0, elem, ei)
+                continue
+
             cum_t = 0.0
             for si, srow in enumerate(elem.surfaces):
                 surf_origin = o + cum_t * R[:, 2]
@@ -406,6 +417,50 @@ class Layout3DView(QWidget):
             inner=0, outer=sd, r_res=1, c_res=48)
         self._plotter.add_mesh(disc, color='#7799cc', opacity=0.5,
                                name=f'mirror_{idx}')
+
+    def _draw_waveplate_3d(self, origin, R_world, sd, elem, idx):
+        """Render a waveplate as a thin translucent violet disc (the plate)
+        with a fast-axis bar across its face, oriented by the element frame.
+        """
+        if self._plotter is None:
+            return
+        o = np.asarray(origin, dtype=float)
+        zc = R_world[:, 2]
+        thick = max(0.4, sd * 0.18)
+        plate = pv.Cylinder(center=tuple(o), direction=tuple(zc),
+                            radius=sd, height=thick, resolution=48)
+        self._plotter.add_mesh(plate, color='#b482eb', opacity=0.45,
+                               name=f'waveplate_{idx}')
+        aux = getattr(elem, 'aux', None) or {}
+        a = np.radians(float(aux.get('fast_axis_deg', 0.0)))
+        # fast-axis bar in the plate plane (local x rotated by a about z)
+        axis_dir = np.cos(a) * R_world[:, 0] + np.sin(a) * R_world[:, 1]
+        p0, p1 = o - axis_dir * sd * 0.85, o + axis_dir * sd * 0.85
+        bar = pv.Line(tuple(p0), tuple(p1))
+        self._plotter.add_mesh(bar, color='#e6dcff', line_width=4,
+                               name=f'waveplate_axis_{idx}')
+
+    def _draw_pbs_3d(self, origin, R_world, sd, elem, idx):
+        """Render a polarizing beam splitter as a translucent cyan cube with
+        the diagonal splitting plane inside, oriented by the element frame.
+        """
+        if self._plotter is None:
+            return
+        o = np.asarray(origin, dtype=float)
+        s = float(sd)
+        cube = pv.Cube(center=tuple(o), x_length=2 * s, y_length=2 * s,
+                       z_length=2 * s)
+        # orient the cube by the element rotation (Cube is axis-aligned;
+        # transform its points through R_world about the centre)
+        cube.points = (cube.points - o) @ R_world.T + o
+        self._plotter.add_mesh(cube, color='#6ed2e1', opacity=0.28,
+                               name=f'pbs_{idx}')
+        # the splitting interface: a diagonal plane (normal along x+z local)
+        nrm = (R_world[:, 0] + R_world[:, 2]) / np.sqrt(2.0)
+        plane = pv.Plane(center=tuple(o), direction=tuple(nrm),
+                         i_size=2 * s * 1.41, j_size=2 * s)
+        self._plotter.add_mesh(plane, color='#c8f5fa', opacity=0.45,
+                               name=f'pbs_iface_{idx}')
 
     def _draw_source_3d(self, origin, R_world, src, idx):
         """3.6.1: render the optical source in the 3D view.

@@ -280,21 +280,34 @@ class Layout2DView(QWidget):
             # shot (Qt's createItemGroup walks an item list).
             items_before = set(self.scene.items())
 
-            for si, srow in enumerate(elem.surfaces):
-                # Local z of this surface inside the element.
-                z_local = sum(s.thickness
-                               for s in elem.surfaces[:si]) * S
-                sd = (srow.semi_diameter
-                      if np.isfinite(srow.semi_diameter)
-                      else self.sm.epd_mm / 2)
-                h = sd * S
-
-                if srow.surf_type == 'Mirror' \
-                        or elem.elem_type == 'Mirror':
-                    self._draw_mirror(z_local, h, srow)
+            if elem.elem_type in ('Waveplate', 'PBS'):
+                # Polarization element: a dedicated flat glyph (no
+                # refractive surfaces).  Sized to the element aperture.
+                sd0 = (elem.surfaces[0].semi_diameter
+                       if (elem.surfaces
+                           and np.isfinite(elem.surfaces[0].semi_diameter))
+                       else self.sm.epd_mm / 2)
+                h = sd0 * S
+                if elem.elem_type == 'Waveplate':
+                    self._draw_waveplate(0.0, h, elem)
                 else:
-                    self._draw_surface(z_local, h, srow,
-                                        si, elem.surfaces)
+                    self._draw_pbs(0.0, h, elem)
+            else:
+                for si, srow in enumerate(elem.surfaces):
+                    # Local z of this surface inside the element.
+                    z_local = sum(s.thickness
+                                   for s in elem.surfaces[:si]) * S
+                    sd = (srow.semi_diameter
+                          if np.isfinite(srow.semi_diameter)
+                          else self.sm.epd_mm / 2)
+                    h = sd * S
+
+                    if srow.surf_type == 'Mirror' \
+                            or elem.elem_type == 'Mirror':
+                        self._draw_mirror(z_local, h, srow)
+                    else:
+                        self._draw_surface(z_local, h, srow,
+                                            si, elem.surfaces)
 
             new_items = [it for it in self.scene.items()
                          if it not in items_before]
@@ -470,6 +483,57 @@ class Layout2DView(QWidget):
         for i in range(n_hatches + 1):
             y = -h + (2 * h / n_hatches) * i
             self.scene.addLine(z, y, z + 3, y - 4, hatch_pen)
+
+    def _draw_waveplate(self, z, h, elem):
+        """Draw a waveplate as a thin violet plate with a fast-axis tick
+        and a retardance label (lambda/4, lambda/2, or WP).  The fast-axis
+        angle and kind are read from ``elem.aux`` (defaults: 0 deg, generic
+        retarder)."""
+        aux = getattr(elem, 'aux', None) or {}
+        kind = aux.get('wp_kind', 'full')
+        ax_deg = float(aux.get('fast_axis_deg', 0.0))
+        accent = QColor(180, 130, 235)            # violet = polarization
+        pen = QPen(accent, 1.8)
+        fill = QBrush(QColor(180, 130, 235, 55))
+        w = max(4.0, h * 0.14)                    # plate half-thickness (px)
+        self.scene.addRect(z - w, -h, 2 * w, 2 * h, pen, fill)
+        # fast-axis tick across the plate (rotated by ax_deg about the plate
+        # centre, spanning the aperture)
+        a = np.radians(ax_deg)
+        ty = h * 0.78
+        tick = QPen(QColor(235, 220, 255), 1.4)
+        self.scene.addLine(z - np.sin(a) * ty, -np.cos(a) * ty,
+                           z + np.sin(a) * ty, np.cos(a) * ty, tick)
+        txt = {'quarter': 'λ/4', 'half': 'λ/2'}.get(kind, 'WP')
+        label = QGraphicsTextItem(txt)
+        label.setDefaultTextColor(QColor(205, 175, 245))
+        label.setFont(QFont('Consolas', 8))
+        label.setPos(z + w + 2, -h - 14)
+        self.scene.addItem(label)
+
+    def _draw_pbs(self, z, h, elem):
+        """Draw a polarizing beam splitter as a cyan cube outline with the
+        diagonal splitting interface and a side exit port (the reflected
+        s-channel)."""
+        accent = QColor(110, 210, 225)            # cyan = beam splitter
+        pen = QPen(accent, 1.8)
+        fill = QBrush(QColor(110, 210, 225, 40))
+        # the cube: a square of side 2h centred on (z, 0)
+        self.scene.addRect(z - h, -h, 2 * h, 2 * h, pen, fill)
+        # the splitting interface (one diagonal)
+        diag = QPen(QColor(200, 245, 250), 1.6)
+        self.scene.addLine(z - h, h, z + h, -h, diag)
+        # the reflected exit port: a short arrow leaving the top face
+        port = QPen(accent, 1.4)
+        self.scene.addLine(z, -h, z, -h - h * 0.5, port)
+        for dx in (-3, 3):
+            self.scene.addLine(z, -h - h * 0.5,
+                               z + dx, -h - h * 0.5 + 5, port)
+        label = QGraphicsTextItem('PBS')
+        label.setDefaultTextColor(QColor(150, 225, 235))
+        label.setFont(QFont('Consolas', 8))
+        label.setPos(z + h + 2, -h - 14)
+        self.scene.addItem(label)
 
     def _draw_source(self, z, src):
         """3.6.1: draw a visible glyph for the optical source.

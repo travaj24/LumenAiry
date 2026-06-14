@@ -295,6 +295,16 @@ def berreman_jones_1d(
         Reflection / transmission Jones; columns = incident lab ``[Ex; Ey]``,
         rows = reflected / transmitted lab ``[Ex; Ey]``.  PUBLIC ``exp(-i w t)``.
     """
+    # Differentiable (JAX) dispatch: any traced input routes to the jnp twin.
+    from ..backend import is_jax_array
+    if (is_jax_array(n_substrate) or is_jax_array(n_superstrate)
+            or is_jax_array(wavelength) or is_jax_array(angle)
+            or is_jax_array(phi) or is_jax_array(theta)
+            or any(is_jax_array(e) or is_jax_array(t) for e, t in layers)):
+        from ._berreman_jax import _berreman_jones_1d_jax
+        return _berreman_jones_1d_jax(layers, n_substrate, n_superstrate,
+                                      wavelength, angle=angle, phi=phi,
+                                      theta=theta)
     if theta is not None:
         angle = float(theta)
     eps_layers = [_as_eps_tensor(e) for e, _t in layers]
@@ -327,8 +337,12 @@ class BerremanStack:
     """
 
     def __init__(self, *, n_substrate=1.0, n_superstrate=1.0):
-        self.n_sub = _C(n_substrate)
-        self.n_sup = _C(n_superstrate)
+        from ..backend import is_jax_array
+        # JAX half-space indices stay RAW so their gradient flows.
+        self.n_sub = (n_substrate if is_jax_array(n_substrate)
+                      else _C(n_substrate))
+        self.n_sup = (n_superstrate if is_jax_array(n_superstrate)
+                      else _C(n_superstrate))
         self._layers = []                     # (thickness, eps_tensor_public)
         self._src = None
         self._internal = None
@@ -336,20 +350,66 @@ class BerremanStack:
     def add_layer(self, thickness, *, eps):
         """Append a planar layer of thickness ``t`` [m] and permittivity
         ``eps`` (scalar isotropic or ``(3, 3)`` tensor, PUBLIC ``Im > 0``)."""
-        t = float(thickness)
-        if t <= 0:
-            raise ValueError("BerremanStack.add_layer: thickness must be > 0.")
-        self._layers.append((t, _as_eps_tensor(eps)))
+        from ..backend import is_jax_array
+        # Keep traced thickness / eps raw (the differentiable solve path);
+        # float()/_as_eps_tensor() would sever the trace.
+        if is_jax_array(thickness):
+            t_store = thickness
+        else:
+            t_store = float(thickness)
+            if t_store <= 0:
+                raise ValueError(
+                    "BerremanStack.add_layer: thickness must be > 0.")
+        eps_store = eps if is_jax_array(eps) else _as_eps_tensor(eps)
+        self._layers.append((t_store, eps_store))
         return self
+
+    def add_effective_grating(self, thickness, *, eps_ridge, eps_groove, fill,
+                              period=None, order=0):
+        """Append a sub-wavelength 1-D binary grating as its EFFECTIVE-MEDIUM
+        (Rytov) uniaxial layer -- the EMT bridge that lets a whole design sweep
+        run in microseconds before a rigorous RCWA / PMM cross-check.
+
+        The grating (period along ``x``, ridge ``eps_ridge`` fill ``fill``,
+        groove ``eps_groove``) homogenizes to ``diag(eps_perp, eps_par,
+        eps_par)`` via :func:`~lumenairy.elements.emt.rytov_tensor`.  ``order=2``
+        adds the second-order bulk-index correction and needs ``period`` (the
+        wavelength comes from :meth:`set_source`, so call ``set_source`` first
+        for ``order=2``).  EXACT only as ``period -> 0`` -- a screen, not a
+        replacement for the rigorous solve."""
+        from .emt import rytov_tensor
+        wl = None
+        if order == 2:
+            if self._src is None:
+                raise ValueError(
+                    "BerremanStack.add_effective_grating: order=2 needs the "
+                    "wavelength; call set_source(...) before adding the layer.")
+            wl = self._src["wl"]
+        eps_eff = rytov_tensor(eps_ridge, eps_groove, fill,
+                               period=period, wavelength=wl, order=order)
+        return self.add_layer(thickness, eps=eps_eff)
 
     def set_source(self, wavelength, *, angle=0.0, theta=None, phi=0.0):
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
         ``angle`` / ``theta`` [rad], azimuth ``phi`` [rad])."""
+        from ..backend import is_jax_array
         if theta is not None:
             angle = theta
-        self._src = dict(wl=float(wavelength), angle=float(angle),
-                         phi=float(phi))
+        self._src = dict(
+            wl=wavelength if is_jax_array(wavelength) else float(wavelength),
+            angle=angle if is_jax_array(angle) else float(angle),
+            phi=phi if is_jax_array(phi) else float(phi))
         return self
+
+    def _holds_traced(self):
+        from ..backend import is_jax_array
+        return (is_jax_array(self.n_sub) or is_jax_array(self.n_sup)
+                or (self._src is not None
+                    and (is_jax_array(self._src["wl"])
+                         or is_jax_array(self._src["angle"])
+                         or is_jax_array(self._src["phi"])))
+                or any(is_jax_array(t) or is_jax_array(e)
+                       for t, e in self._layers))
 
     def _geom(self):
         wl, ang, phi = self._src["wl"], self._src["angle"], self._src["phi"]
@@ -370,6 +430,14 @@ class BerremanStack:
             raise ValueError("BerremanStack.solve: call set_source(...) first.")
         if not self._layers:
             raise ValueError("BerremanStack.solve: add at least one layer.")
+        if self._holds_traced():
+            if retain_internal:
+                raise NotImplementedError(
+                    "BerremanStack.solve(retain_internal=True): the internal-"
+                    "field / absorption observables are NumPy-only; use "
+                    "concrete inputs for fields.")
+            from ._berreman_jax import _berreman_stack_solve_jax
+            return _berreman_stack_solve_jax(self)
         wl, eps_sup, eps_sub, Kx, Ky, eps_layers, thicks = self._geom()
         core = _solve_core(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                            retain=retain_internal)

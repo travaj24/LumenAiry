@@ -406,6 +406,12 @@ from .elements.doe import (
     save_fits_field,
     save_phase_file,
 )
+from .elements.emt import (
+    bruggeman,
+    maxwell_garnett,
+    rytov_segments_tensor,
+    rytov_tensor,
+)
 
 # â”€â”€ Freeform surfaces â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.freeform import (
@@ -1587,6 +1593,12 @@ __all__ = [
     # Berreman 4x4 (anisotropic planar multilayer)
     'berreman_jones_1d',
     'BerremanStack',
+
+    # Effective-medium (EMT) homogenization bridge
+    'rytov_tensor',
+    'rytov_segments_tensor',
+    'maxwell_garnett',
+    'bruggeman',
     # v5.4 Phase 5: thin-film coating material database.
     'COATING_MATERIAL_REGISTRY',
     'get_coating_material_index',

@@ -6,6 +6,38 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Effective-medium (EMT) homogenization bridge** (`lumenairy.elements.emt`
+  — `rytov_tensor`, `rytov_segments_tensor`, `maxwell_garnett`, `bruggeman`,
+  plus `BerremanStack.add_effective_grating`) — the fast SCREEN that feeds
+  the rigorous patterned solvers: a sub-wavelength 1-D grating homogenizes
+  (Rytov) to a uniaxial `diag(eps_perp, eps_par, eps_par)` tensor solvable in
+  microseconds with `BerremanStack`.  Validated: the EMT + Berreman slab
+  Jones converges MONOTONICALLY onto the rigorous `rcwa_jones_1d` /
+  `pmm_jones_1d` as the period shrinks (≈3e-3 at period = λ/100).  The
+  zeroth-order tensor is the exact `period → 0` limit (the default); an
+  opt-in second-order bulk-index correction is available, with the honest
+  caveat that the homogenized SLAB keeps an inherent `O(period/λ)` interface
+  error — it screens, then you validate rigorously.  Maxwell-Garnett /
+  Bruggeman scalar mixing rules cover 2-D inclusion arrays (approximate).
+- **Berreman 4×4 JAX twin** — `berreman_jones_1d` / `BerremanStack.solve`
+  dispatch to a differentiable jnp path on JAX inputs: gradients flow
+  through every layer permittivity tensor (real AND imaginary entries),
+  thickness, wavelength, incidence `angle`/`phi`, and the half-space
+  indices.  Forward-identical to NumPy (~1e-16); AD-vs-FD ≤1e-8 across every
+  parameter class; `vmap`/`jit` clean.  The forward/backward mode split uses
+  a STABLE `jnp.argsort` (the gathered eigenpairs carry the gradient, the
+  integer permutation is constant) — this is what lets the Berreman twin
+  trace where the PMM out-of-plane path could not (its host-side NumPy
+  argsort severed the graph).  x64 required; the eig is CPU-only;
+  `retain_internal` is NumPy-only.
+- **Optics-viewer support for waveplate and polarizing-beam-splitter
+  elements** — the 2-D (Qt) and 3-D (PyVista) layout views render the new
+  `'Waveplate'` and `'PBS'` element types (`Element.TYPES`), previously
+  unvisualizable: a violet retarder plate with a fast-axis tick and a
+  λ/4 · λ/2 · WP label, and a cyan beam-splitter cube with its diagonal
+  interface and reflected exit port.  Polarization parameters
+  (`aux['wp_kind']`, `aux['fast_axis_deg']`, `aux['pbs_angle_deg']`) drive
+  the glyph; they trace as flat pass-through windows.
 - **Berreman 4×4 anisotropic planar multilayer solver** (`lumenairy.
   berreman_jones_1d`, `lumenairy.BerremanStack`) — the fast, exact
   planar-anisotropic member of the solver family, generalizing the scalar
