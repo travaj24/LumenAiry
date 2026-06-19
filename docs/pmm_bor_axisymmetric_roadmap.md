@@ -296,3 +296,30 @@ This means M2 and M3 are more entangled than first sequenced; the `P Q` operator
 for the OPEN (production) use, and the bound-PEC spectrum is best treated as a `(E_z, h_z)`
 determinant oracle rather than a coupled-eigenproblem gate. Net: the operator is in hand; the
 remaining work is the BC/boundary treatment + one of the two validation routes above.
+
+### M2 empirical result (2026-06-19) — naive collocation FAILS; the correct path is pinned
+
+A naive nodal-collocation `P Q` coupled operator (guided-mode test, core `eps=6` /
+cladding `eps=2`, validated against the step-index oracle's guided window `q in
+[sqrt(eps2) k0, sqrt(eps1) k0]`) gives the **WRONG** guided `q` (~13.8 vs the oracle's
+~14.69). This is the expected **vector-FEM failure**: nodal elements force `E_r`
+**continuous** at the `eps` interface, but the physical condition is `E_r` DISCONTINUOUS
+with `D_r = eps E_r` continuous. The bidirectional disproof (naive approach refuted against
+the oracle) pins the correct formulation:
+
+**The correct coupled operator = the curl-curl weak form with a DIV-CONFORMING `E_r`** (the
+cylindrical re-derivation of the library's ALREADY-VALIDATED Cartesian metric generator
+`_layer_modes_metric` / `_build_nodal_metric_segments`, which does exactly this for the
+Cartesian wall-normal `E_x` / div-conforming `E_z`). Weak form
+`INT (curl E)·(curl W) = k0^2 INT eps E·W` with `E_r` allowed to jump at the ring wall
+(`D_r` continuous = the inverse rule), the metric `(m^2+1)/r^2` centrifugal and the
+`+-2 i m/r^2` `E_r`<->`E_phi` metric coupling, the `r dr` measure, and the axis DOF drop in
+the `±` basis. This is NOT naive collocation -- it is the div-conforming spectral-element
+generator the roadmap's Table (Section 2) already names as the `_layer_modes_radial`
+replacement.
+
+**Net de-risking from this session:** foundation (M1) validated to ~1e-13; M2 oracle
+validated to ~1e-9; coupled-operator formulation fully pinned (curl-curl div-conforming,
+adapt the validated metric generator) AND the naive alternative empirically refuted. The
+remaining M2 work is the focused adaptation of `_layer_modes_metric` to the cylindrical
+metric + div-conforming `E_r`, gated by the guided-mode step-index oracle.
