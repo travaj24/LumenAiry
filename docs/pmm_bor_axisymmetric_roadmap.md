@@ -269,3 +269,30 @@ edge case.
 **Scope note (honest):** M2–M5 are each a separately-validated, research-grade increment
 (comparable to M1); the energy-invisible inverse rule (M2) and the open boundary (M3)
 especially must not be rushed. M1 (the foundation + the roadmap's #2 risk) is closed.
+
+### M2 progress note (2026-06-19) — coupled operator derived; validation-path subtlety found
+
+The coupled vector layer operator is **derived**: the cleanest form is the cylindrical
+analog of the validated Cartesian `_sem_modes_tensor` — a **`q^2`-eigenproblem
+`Mbig = P Q` acting on the tangential `(E_r, E_phi)`** (`q^2` are the eigenvalues, `V = Q W
+/ lam` the `(h_r, h_phi)` partner). This avoids the `1/gamma^2 = 1/(eps k0^2 - q^2)`
+that plagues the longitudinal `(E_z, h_z)` form (which is non-polynomial in `q`). The blocks
+are `P, Q` built from the radial metric operators `Lr = d/dr + 1/r`, `m/r`, `eps`, `1/eps`
+(the `1/eps` carrying the `E_r` inverse rule).
+
+**Subtlety found (refines the M2/M3 plan):** the `(E_r, E_phi)`-only eigenproblem cannot
+cleanly impose the full **PEC** wall BC, because `E_phi(R)=0` is a condition on the state but
+the second PEC condition `E_z(R)=0` depends on the PARTNER field `h` (`E_z ~ (1/eps)(Lr h_phi
+- i (m/r) h_r)`), not on `(E_r, E_phi)` directly. So the clean *isolated* PEC-bound
+validation (M2 vs `j_{m,n}`/`j'_{m,n}` in the coupled basis) is formulation-awkward. Two
+clean routes instead:
+  1. Validate the coupled modes with the **`(E_z, h_z)` determinant/shooting method** on the
+     SEM radial basis (natural BCs: `E_z` Dirichlet, `h_z` natural) against the step-index
+     oracle — q found by scanning, sidestepping the linear-eigenproblem BC mismatch.
+  2. Or fold M2's validation into **M3's open scattering** (no hard wall — the PML is a
+     complex-coordinate stretch in the operator, no `E_z=0` wall condition), validating the
+     coupled operator + boundary together against the step-index *reflection*.
+This means M2 and M3 are more entangled than first sequenced; the `P Q` operator is correct
+for the OPEN (production) use, and the bound-PEC spectrum is best treated as a `(E_z, h_z)`
+determinant oracle rather than a coupled-eigenproblem gate. Net: the operator is in hand; the
+remaining work is the BC/boundary treatment + one of the two validation routes above.
