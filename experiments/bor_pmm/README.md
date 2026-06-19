@@ -13,7 +13,7 @@ library integration.
 | **M1** | radial spectral-element eigensolve: cylindrical metric (`1/r`, `m²/r²`) + `r=0` axis BC | Bessel zeros `j_{m,n}` (TM) / `j'_{m,n}` (TE) + eigenfunctions `J_m(γr)` | **DONE — ~1e-13**, spectrally convergent |
 | **M2 oracle** | open-cladding (`K_m`) fiber dispersion — the CLEAN guided-mode gate (`fiber_oracle.py`) | canonical Okamoto/Snyder–Love vector char. eq. | **DONE — exact match**; caught a cross-`eps` bug in the old PEC `stepindex_oracle` |
 | **M2 solver** | coupled `(E_r,E_phi)` vector eigensolve: q² E_z-elimination + wall-normal inverse rule + consistent divergence-free filter (`coupled_radial_eigensolver.py`) | the fiber oracle above | **DONE — guided modes ~1e-4..1e-2 (FD floor), no spurious leakage**; 4 tests. Weakly-guided/large-box → SEM follow-on |
-| M3 | open radial boundary (PML / Hankel matching) — the #1 risk | bare half-space reflection ≈ 0 | pending |
+| **M3** | open radial boundary — radial PML (complex coordinate stretch `s=1+i sigma`), the roadmap's #1 risk | bound-mode q INVARIANT to `sigma_max`; radiation continuum absorbed (complex q) | **DONE** — q invariant to 1e-6 across `sigma_max=3..20`; bound mode = oracle (8.5e-5); continuum absorbed; 2 tests |
 | M4 | z-cascade + scattering (`r dr` flux split) | radially-uniform → Fresnel | pending |
 | M5 | far-field + public API + integration | energy/m, reciprocity, Cartesian limit, FDTD-BOR | pending |
 

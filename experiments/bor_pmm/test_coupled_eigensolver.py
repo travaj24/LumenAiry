@@ -59,6 +59,40 @@ def test_spurious_mode_is_filtered():
     assert near and near[0]["reldiv"] > 1.0
 
 
+def test_pml_bound_mode_invariant_to_sigma():
+    """M3 radial PML: a true bound mode CANNOT feel the absorbing layer, so its q
+    must be invariant to the PML strength sigma_max (the textbook PML check)."""
+    m, a, e1, e2, k0 = 1, 1.0, 6.0, 2.0, 2.0
+    qor = _oracle_bound(m, a, e1, e2, k0)
+    qstrong = qor[qor > 3.5][0]
+    qs = []
+    for sm in (3.0, 8.0, 20.0):
+        modes = radial_coupled_modes(m, 10.0, 500,
+                                     lambda r: np.where(r <= a, e1, e2), k0,
+                                     R_pml=6.0, sigma_max=sm)
+        win = [md["q"] for md in modes
+               if 3.5 < md["q"].real < 4.85 and abs(md["q"].imag) < 1e-3]
+        win = sorted(win, key=lambda q: abs(q.real - qstrong))
+        assert win, f"bound mode lost at sigma_max={sm}"
+        qs.append(win[0].real)
+    qs = np.array(qs)
+    assert np.max(np.abs(qs - qs[0])) < 1e-6        # invariant across sigma
+    assert abs(qs[0] - qstrong) < 1e-3              # and it IS the oracle mode
+
+
+def test_pml_absorbs_radiation_modes():
+    """M3: the radial PML pushes the radiation continuum off the real axis
+    (complex q) while the bound modes stay real -> an OPEN boundary."""
+    m, a, e1, e2, k0 = 1, 1.0, 6.0, 2.0, 2.0
+    modes = radial_coupled_modes(m, 10.0, 500,
+                                 lambda r: np.where(r <= a, e1, e2), k0,
+                                 R_pml=6.0, sigma_max=5.0)
+    qlo, qhi = np.sqrt(e2) * k0, np.sqrt(e1) * k0
+    win = [md["q"] for md in modes if qlo + 1e-3 < md["q"].real < qhi - 1e-3]
+    absorbed = [q for q in win if abs(q.imag) > 1e-2]
+    assert len(absorbed) > 10                       # continuum is absorbed
+
+
 def test_spurious_divergence_separation():
     """Physical guided modes have small relative divergence; the spurious mode
     is O(1)+ -> a robust separation."""

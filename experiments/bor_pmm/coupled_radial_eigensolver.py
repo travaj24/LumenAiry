@@ -61,20 +61,41 @@ def _normal_eps(eps):
     return 1.0 / en
 
 
-def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True):
+def _pml_stretch(r, h, R_pml, Rbig, sigma_max, p):
+    """Complex coordinate stretch for the radial PML (M3): ``s = 1 + i sigma``
+    with ``sigma`` ramping polynomially in ``[R_pml, Rbig]``.  Returns
+    ``sinv = 1/s`` and the stretched coordinate ``rt = int_0^r s dr'`` (== r in
+    the physical region).  Outgoing cylindrical waves are absorbed; bound modes
+    (decayed before R_pml) are untouched (verified: q invariant in sigma_max)."""
+    t = np.clip((r - R_pml) / (Rbig - R_pml), 0.0, 1.0)
+    s = 1.0 + 1j * sigma_max * t ** p
+    rt = np.cumsum(s) * h - 0.5 * s * h
+    return 1.0 / s, rt
+
+
+def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
+                         R_pml=None, sigma_max=5.0, pml_p=2):
     """All radial vector modes for azimuthal order ``m``.
 
     ``eps_profile`` : callable r-array -> eps-array (real or complex).
+    ``R_pml`` : if set, a radial PML (M3) occupies ``[R_pml, Rbig]`` so the
+    radial boundary is OPEN (radiation modes absorbed -> complex q; bound modes
+    unchanged).  Default ``None`` = hard wall (byte-identical to the M2 path).
     Returns a list of dicts: ``q`` (propagation const), ``reldiv`` (relative
     |div(eps E)|, the spurious flag), ``Er``/``Ephi``/``Ez`` fields, ``r``.
     """
-    r, D, _ = _fd_grid(Rbig, N)
+    r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps) if inverse_rule else eps
+    if R_pml is not None:
+        sinv, rg = _pml_stretch(r, h, R_pml, Rbig, sigma_max, pml_p)
+        D = np.diag(sinv) @ D                 # d/dr_tilde (stretched)
+    else:
+        rg = r                                # rg = the (possibly stretched) radius
     I = np.eye(N)
-    ir = np.diag(1.0 / r)
+    ir = np.diag(1.0 / rg)
     mr = m * ir
-    m2r2 = (m ** 2) * np.diag(1.0 / r ** 2)
+    m2r2 = (m ** 2) * np.diag(1.0 / rg ** 2)
     A = D + ir
     Lm = D @ D + ir @ D - m2r2
     dA = D @ A
@@ -97,7 +118,7 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True):
         # components.  Using pointwise eps for D_r instead inflates the physical
         # modes' divergence ~100x and breaks the spurious/physical separation.
         Dr = eps_n * Er
-        div = (1.0 / r) * (D @ (r * Dr)) + 1j * mr @ (eps * Ephi) + 1j * q[j] * (eps * Ez)
+        div = (1.0 / rg) * (D @ (rg * Dr)) + 1j * mr @ (eps * Ephi) + 1j * q[j] * (eps * Ez)
         En = np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2 + np.abs(Ez) ** 2))
         reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
         modes.append(dict(q=q[j], reldiv=float(reldiv.real),

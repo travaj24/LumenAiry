@@ -408,3 +408,31 @@ validated:
   production discretization. The strong/intermediate modes are solid today.
 - *Far-field / radiation modes.* Bound-vs-radiation is currently a heuristic tail test;
   M3's PML makes this rigorous.
+
+### M3 DONE — radial PML (the #1 risk) validated (2026-06-19, evening)
+
+**The open radial boundary works.** A radial PML via complex coordinate stretching
+(`s(r) = 1 + i sigma(r)`, `sigma` ramping polynomially in `[R_pml, Rbig]`; in the operator
+`d/dr -> (1/s) d/dr`, `1/r -> 1/r_tilde`) is folded into `radial_coupled_modes` as optional
+`R_pml`/`sigma_max` args (default `None` = hard wall, byte-identical to M2).
+
+- **Gate A (the definitive PML check) — PASS.** A true bound mode cannot feel the absorber:
+  the strong guided `q = 4.436382` is **invariant to <1e-6 across `sigma_max = 3, 8, 20`**
+  (and equals the oracle to `8.5e-5`). If the PML were wrong, the bound q would drift with
+  `sigma_max`.
+- **Gate C — PASS.** The radiation continuum is pushed off the real axis (>80 modes acquire
+  `Im(q) != 0`, absorbed), in forward/backward `±q` pairs, while the bound modes stay real.
+  The boundary is genuinely OPEN.
+- **Note on the M2 "open item":** with the *consistent* divergence metric (the M2 fix) the
+  hard wall at a modest box already resolves the weakly-guided `2.948` — so that item was
+  mostly the divergence-bug, not box-clutter. The PML's real payoff is **M4**: the radiation
+  basis is now outgoing/absorbed, which is what the open-domain S-matrix cascade needs.
+- 2 tests added (`test_pml_bound_mode_invariant_to_sigma`, `test_pml_absorbs_radiation_modes`);
+  full M1+M2+M3 suite = **17 green**.
+
+**Status:** the hard-physics core of the BOR-PMM is validated end-to-end — radial operator
+(M1) + coupled vector eigensolve (M2) + open boundary (M3), each against an exact oracle.
+Remaining: **M4** z-cascade S-matrix (`r dr` flux split; Fresnel anchor) and **M5**
+far-field + public API + library integration. The FD prototype is the reference; a SEM
+re-discretization is the production accuracy/conditioning upgrade (can come before or after
+M4 since the operator structure is fixed).
