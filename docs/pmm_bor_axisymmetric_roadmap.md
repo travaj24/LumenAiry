@@ -172,3 +172,100 @@ Not recommended as a co-equal feature:
   axisymmetric diffractive optics, VCSELs) — survey before Phase 1.
 - FDTD-BOR (axisymmetric FDTD) for the Phase 5 full-wave oracle (DynaMeta FDTD engine).
 - Hankel-function radiation conditions / radial PML (Phase 2 boundary).
+
+---
+
+# ASSESSMENT + GROUNDED FORMULATION + VALIDATED PHASE 0 (2026-06-19)
+
+A critical review (expert EM critique + a literature-grounded formulation pass) and a
+machine-precision-validated Phase-0 prototype. **Verdict: PROCEED WITH CHANGES.** The core
+BOR decoupling and the PMM-over-cylindrical-RCWA choice are sound; three items must be
+**promoted from footnotes to first-class, separately-gated deliverables**, and Phase 0 must
+be pinned to a *coupled* anchor (not a scalar one) so a green gate cannot hide the hard part.
+
+## A. What is already VALIDATED (Phase 0 / Milestone 1 — DONE)
+
+Standalone prototype `experiments/bor_pmm/radial_eigensolver.py` (+ `test_*`, 10 green).
+The radial spectral-element operator — the **cylindrical metric (`1/r`, `m^2/r^2`) and the
+`r=0` axis singularity**, the roadmap's stated #2 risk — is validated to **machine
+precision** against the exact Bessel spectrum:
+
+- TM (Dirichlet, `psi(R)=0`): `gamma R = j_{m,n}` — rel err ~1e-13, m = 0..3.
+- TE (Neumann, `psi'(R)=0`): `gamma R = j'_{m,n}` — rel err ~1e-13, m = 1,2.
+- Eigen**functions** match `J_m(gamma r)` to ~1e-13 (not just eigenvalues).
+- Spectral convergence confirmed (error ~25x/refinement).
+
+**Axis recipe that works** (the crux, now pinned): assemble with **Gauss-Legendre**
+quadrature (interior points → `1/r` never sampled at `r=0`) and **drop the `r=0` DOF for
+`m != 0`** (imposing `psi(0)=0` enforces `r^|m|` regularity AND discards the one divergent
+entry `A_00 ~ INT dr/r`; the retained basis vanishes at the axis so `(1/r) phi_i phi_j ~ r`
+is integrable). This resolves the roadmap's #2 risk.
+
+## B. Grounded formulation (the radial operator)
+
+Convention: `exp(-i w t)`, `exp(i m phi)`, `exp(i q z)`, `k0 = w/c`, `mu = 1`, normalized
+`h = sqrt(mu0/eps0) H` so `curl E = i k0 h`, `curl h = -i k0 eps E`. Transverse wavenumber
+`gamma^2 = eps k0^2 - q^2`.
+
+- **Longitudinal → transverse** (cylindrical waveguide relations):
+  - `E_r   = (i/gamma^2)[ q dE_z/dr + (m k0/r) h_z ]`
+  - `E_phi = (i/gamma^2)[ (i m q/r) E_z - k0 dh_z/dr ]`
+  - `h_r   = (i/gamma^2)[ q dh_z/dr - (m k0 eps/r) E_z ]`
+  - `h_phi = (i/gamma^2)[ (i m q/r) h_z + k0 eps dE_z/dr ]`
+- **Uniform region:** `E_z, h_z` solve Bessel's eq order `m`; `J_m(gamma r)`, `Y_m(gamma r)`.
+  Axis region keeps only `J_m` (~`r^|m|`); open half-spaces use outgoing `H_m^(1)`.
+- **Modal operator** per m: `L_m R = q^2 R`, `L_m = d^2/dr^2 + (1/r) d/dr - m^2/r^2 + eps(r) k0^2`.
+
+## C. The THREE risks promoted to first-class (the critique's core correction)
+
+1. **The `m != 0` radial system is COUPLED, not scalar.** TE-like (`h_z`) and TM-like
+   (`E_z`) couple through the `m/r` off-diagonal terms at any **radial material interface**
+   (only `m=0` splits into independent TE0/TM0; a *homogeneous* region also decouples — which
+   is why the validated Milestone 1 above, though exact, does NOT yet exercise the coupling).
+   The Phase-0 gate must be a **coupled `m=1` case with a ring wall**, not the scalar Bessel
+   anchor alone.
+2. **The `E_r` (radial-normal) inverse-rule is energy-invisible.** `D_r = eps E_r` is
+   continuous across a ring wall, so the operator must apply `1/eps` in the **factorized
+   inverse form `([[1/eps]])^{-1}`** on the radial-normal component (direct rule `[[eps]]` on
+   the tangential `E_phi, E_z`). A wrong factorization gives a convergence floor that
+   `sum R + sum T = 1` will NOT catch (the codebase's documented *lossless trap*). Validate
+   with a **per-quantity oracle** (analytic step-index/coax Bessel dispersion), never energy
+   alone.
+3. **The `r dr` measure is load-bearing — "reuse the S-matrix unchanged" is optimistic.**
+   The Redheffer star and the *propagation* S-matrix reuse verbatim, but (a) mode
+   normalization must use the **`r dr`-weighted mass** `S0_cyl = diag(w * r_node * J)`, and
+   (b) the **forward/backward flux split** must use the cylindrical z-Poynting `Im(INT (E_r
+   conj(h_phi) - E_phi conj(h_r)) r dr)` — the existing `_split_modes_flux_metric` Poynting sum
+   is Cartesian (no `r dr`) and would mis-rank/mis-normalize modes. The interface S-matrix is
+   correct *only if* both sides share one `r dr`-weighted basis and W/V are flux-normalized.
+   **Add a W/V `r dr`-orthonormality unit test as a first-class deliverable.**
+
+Additional omissions to fold in: the `m=+-1`-only claim holds for an *ideal transverse*
+plane wave (finite/focused/tilted/off-axis sources bring in all `m`; gyrotropic/chiral `eps`
+make `+m` and `-m` independent — do NOT hard-code `+-1` symmetry reuse); the cylindrical
+**far-field** needs a documented `H_m^(1)` → plane-wave (theta) projection (the `1/sqrt(r)`
+amplitude + phase), not a one-line Phase-4 item; the **`gamma=0` normal-incidence plane wave**
+is the continuum limit (`J_1(gamma r)/gamma → r/2`) — validate the cascade first on
+`gamma != 0` structures (bounded modes, focused/Bessel inputs), then handle the plane-wave
+edge case.
+
+## D. Re-sequenced milestones (each pinned to an EXACT oracle)
+
+- **M1 — radial eigensolve + axis BC + spectral convergence.** Oracle: Bessel zeros
+  `j_{m,n}` (TM) / `j'_{m,n}` (TE) + eigenfunctions. **DONE, ~1e-13.**
+- **M2 — coupled `m=1` vector eigensolve at ONE ring wall, with the `E_r` inverse rule and
+  `r dr` W/V-orthonormality.** Oracle: analytic step-index / coaxial **Bessel dispersion**
+  (`6x6` determinant: `E_z,E_phi,h_z,h_phi` continuous at the wall + PEC `E_z=E_phi=0` at R) —
+  a *per-quantity* oracle, not energy. **THIS is the real Phase-0 gate.** (Next up.)
+- **M3 — open outer boundary.** Radial PML (complex stretch `r → r(1+i sigma(r))` with the
+  `1/r`, `m^2/r^2` terms in the STRETCHED radius; must not corrupt the axis regularity) vs
+  analytic Hankel matching at a cap radius. Oracle: bare half-space reflection ≈ 0 (no
+  spurious reflection) before any structured run. **The #1 remaining risk.**
+- **M4 — z-cascade + scattering.** `r dr`-weighted flux split + interface normalization.
+  Oracle: radially-uniform stack → **Fresnel/Airy** (handle the `gamma=0` plane-wave limit).
+- **M5 — far-field + public API + library integration.** `H_m^(1)`→theta projection; energy
+  per m + reciprocity + Cartesian large-radius limit + FDTD-BOR cross-check.
+
+**Scope note (honest):** M2–M5 are each a separately-validated, research-grade increment
+(comparable to M1); the energy-invisible inverse rule (M2) and the open boundary (M3)
+especially must not be rushed. M1 (the foundation + the roadmap's #2 risk) is closed.
