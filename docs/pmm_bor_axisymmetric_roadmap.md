@@ -323,3 +323,36 @@ validated to ~1e-9; coupled-operator formulation fully pinned (curl-curl div-con
 adapt the validated metric generator) AND the naive alternative empirically refuted. The
 remaining M2 work is the focused adaptation of `_layer_modes_metric` to the cylindrical
 metric + div-conforming `E_r`, gated by the guided-mode step-index oracle.
+
+### M2 CORRECTION + operator VALIDATED (2026-06-19, later same day)
+
+**The earlier "naive collocation refuted -> need the inverse rule" conclusion was WRONG --
+it was an operator BUG, not the inverse rule.** Debugging the first-order operator `K`
+(`q Psi = K Psi`, `Psi = (E_r, E_phi, h_r, h_phi)`) by plugging in EXACT analytic
+homogeneous modes revealed a single wrong factor in the `E_r` row: the correct equation is
+`q E_r = (1/k0) d/dr[ eps^{-1} Cz_h ] + k0 h_phi` (factor `1/k0`), not `i/k0^2`.
+
+**With the fix, the coupled operator is VALIDATED to ~1e-12:** analytic TM (`E_z = J_m`)
+AND TE (`H_z = J_m`) modes for `m = 1, 2, 3` satisfy `K Psi = q Psi` pointwise (interior).
+The operator -- the genuinely-hard coupled physics -- is correct. (Also fixes a typo in
+Section B above: the longitudinal->transverse coupling terms carry the factor `i m k0/r`
+and `i m k0 eps/r`, i.e. `E_r = (i/gamma^2)[ q dE_z/dr + (i m k0/r) h_z ]` etc. -- the `i`
+was dropped in the first write-up.)
+
+**Cleaner problem structure (found while fixing).** In the `E_pm = E_r +- i E_phi` basis the
+HOMOGENEOUS coupled operator **decouples** into two SCALAR Helmholtz problems of order
+`m+-1` (`E_+ ~ J_{m+1}`, `E_- ~ J_{m-1}`) -- exactly the validated M1 scalar solver. So:
+  - the `E_pm` axis BC is the M1 recipe per component (`m+1` and `m-1` orders: drop the
+    axis DOF when the order != 0);
+  - the TE/TM **coupling lives ONLY at the ring interface** (the `eps` jump couples the
+    otherwise-decoupled `E_+`, `E_-`) -- this, not the bulk, is where the inverse rule
+    (`D_r = eps E_r` continuity) matters;
+  - the bulk eigensolve is two validated scalar operators; the new work is the interface
+    coupling + the vector wall BC.
+
+**Revised M2 plan (operator done):** build the weak-form eigensolve in the `E_pm` basis
+(two M1 scalar operators + the `r dr` mass), add the ring-interface `D_r`-continuity
+coupling, validate the eigenvalues against the guided-mode step-index oracle (modes decay
+before the wall -> wall BC irrelevant). The crude collocation eigensolve (axis `1/r`
+zeroing + C0 averaging) is the part that fails, NOT the operator -- replace it with the M1
+weak-form machinery.
