@@ -356,3 +356,55 @@ coupling, validate the eigenvalues against the guided-mode step-index oracle (mo
 before the wall -> wall BC irrelevant). The crude collocation eigensolve (axis `1/r`
 zeroing + C0 averaging) is the part that fails, NOT the operator -- replace it with the M1
 weak-form machinery.
+
+### M2 EIGENSOLVE WORKS — validated vs the fiber oracle (2026-06-19, evening)
+
+**The coupled eigensolve now reproduces the guided modes.** Three findings, each
+validated:
+
+1. **Oracle replaced + a hidden bug caught.** The old PEC-wall `stepindex_oracle`
+   has a cross-`eps` bug (returned `q=4.775` where the true bound mode is `4.4363`);
+   its homogeneous-only reduction test never exercised the two-`eps` physics — a
+   "lossless-trap" analog. The new `fiber_oracle.py` (open `K_m`-decaying cladding,
+   the standard fiber HE/EH dispersion) is validated to all printed digits against
+   the **independent canonical Okamoto/Snyder–Love** vector characteristic equation.
+   It is now the M2 gate. (The prior-session pessimism — "FD gives 13.7 vs 14.69" —
+   was an artifact of comparing against the *buggy* PEC oracle.)
+
+2. **The discretization recipe (3 pieces).** `coupled_radial_eigensolver.py`:
+   - **q² formulation with E_z elimination** — `K Psi = q^2 B Psi`, `Psi=(E_r,E_phi)`,
+     `Phi = (L_m + k0^2 eps)^{-1}[i A E_r - (m/r)E_phi]` (the cylindrical analog of the
+     Cartesian `G = I - Kx(1/ezz)Kx` in `_sem_modes_tensor`). Linear in `q^2` → one `eig`.
+   - **Wall-normal inverse rule** — `eps_n = [[1/eps]]^{-1}` (harmonic mean across the
+     ring); removes the interface mode-doubling and sharpens `q` to the oracle. Mirrors
+     `Cxx = [[1/exx]]^{-1}`; tangential `eps` stays pointwise. *Confirmed by ablation:
+     with the rule, the 2.93 doublet collapses to one mode and the top `q` hits the
+     oracle exactly; the rule does NOT touch the spurious mode (#3) → the spurious mode
+     is intrinsic, not interface-related.*
+   - **Divergence-free filter** — real-space vector discretizations emit spurious modes
+     violating `div(eps E)=0`. **The discrete divergence MUST be consistent with the
+     operator**: use the inverse-rule normal flux `D_r = eps_n E_r` (NOT pointwise
+     `eps E_r`) — the inconsistent form inflates the physical modes' divergence ~100x and
+     destroys the separation (a debugged false alarm). With the consistent metric:
+     physical modes `|div(eps E)|/k0|E|` ~ `0.02–0.35`; the spurious `q=3.76` mode reads
+     `4.7` — a stable separation across discretizations (`Rbig=8/N=600` and `12/700`).
+
+3. **Validation (cell-centered FD, `coupled_radial_eigensolver.py`).** Top guided mode
+   (`e1=6,e2=2,k0=2,a=1,m=1`) converges to oracle `4.43630`: N=300→`4.4479`,
+   N=600→`4.4364` (err `7e-5`), N=1000→`4.4364`. The oracle `|det|` is smooth & non-zero
+   at `3.77` (no root) → confirmed spurious, filtered. On the V=6 case (`k0=3`) the solver
+   recovers **all three** `m=1` bound modes (`7.022/5.887/5.454` vs oracle
+   `7.018/5.872/5.433`, err ≤`2.1e-2` = the 2nd-order FD floor) AND two of three `m=2`
+   modes — **no spurious leakage**. 4 pytest gates in `test_coupled_eigensolver.py` (match
+   oracle, multimode, spurious-filtered, divergence-separation) — all green.
+
+**Open items (the honest remainder):**
+- *Weakly-guided modes near the cladding line* (e.g. `m=1` `2.939`, decay length `~1.25`)
+  need a large box to separate from the radiation continuum; the explicit dense
+  `(L_m+k0^2 eps)^{-1}` inverse conditions poorly at large `Rbig·N`. **Fix = the SEM
+  upgrade** (block-sparse, no global dense inverse; element-aligned interface → spectral
+  accuracy AND better conditioning) — the planned accuracy follow-on, now also a
+  robustness need. The FD prototype validates the *physics + recipe*; the SEM is the
+  production discretization. The strong/intermediate modes are solid today.
+- *Far-field / radiation modes.* Bound-vs-radiation is currently a heuristic tail test;
+  M3's PML makes this rigorous.

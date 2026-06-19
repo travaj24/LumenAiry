@@ -11,8 +11,8 @@ library integration.
 | milestone | what | oracle | status |
 |---|---|---|---|
 | **M1** | radial spectral-element eigensolve: cylindrical metric (`1/r`, `m²/r²`) + `r=0` axis BC | Bessel zeros `j_{m,n}` (TM) / `j'_{m,n}` (TE) + eigenfunctions `J_m(γr)` | **DONE — ~1e-13**, spectrally convergent |
-| **M2 oracle** | analytic step-index / coaxial dispersion (the per-quantity gate for the coupled `E_r` inverse-rule) | homogeneous reduction → TM+TE spectrum | **BUILT + validated ~1e-9** |
-| M2 solver | coupled `m=1` vector eigensolve at one ring wall (TE↔TM coupling + `E_r` inverse rule + `r dr` W/V-orthonormality) | the M2 oracle above | next |
+| **M2 oracle** | open-cladding (`K_m`) fiber dispersion — the CLEAN guided-mode gate (`fiber_oracle.py`) | canonical Okamoto/Snyder–Love vector char. eq. | **DONE — exact match**; caught a cross-`eps` bug in the old PEC `stepindex_oracle` |
+| **M2 solver** | coupled `(E_r,E_phi)` vector eigensolve: q² E_z-elimination + wall-normal inverse rule + consistent divergence-free filter (`coupled_radial_eigensolver.py`) | the fiber oracle above | **DONE — guided modes ~1e-4..1e-2 (FD floor), no spurious leakage**; 4 tests. Weakly-guided/large-box → SEM follow-on |
 | M3 | open radial boundary (PML / Hankel matching) — the #1 risk | bare half-space reflection ≈ 0 | pending |
 | M4 | z-cascade + scattering (`r dr` flux split) | radially-uniform → Fresnel | pending |
 | M5 | far-field + public API + integration | energy/m, reciprocity, Cartesian limit, FDTD-BOR | pending |
