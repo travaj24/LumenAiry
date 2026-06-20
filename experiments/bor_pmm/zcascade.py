@@ -26,7 +26,7 @@ r*dr energy conservation).
 from __future__ import annotations
 
 import numpy as np
-from coupled_radial_eigensolver import _fd_grid, _normal_eps, _pml_stretch
+from coupled_radial_eigensolver import _fd_grid, _normal_eps, _pec_wall_ops, _pml_stretch
 from scipy.linalg import eig
 
 
@@ -34,25 +34,33 @@ from scipy.linalg import eig
 #  Layer modes -> (W, V, q) with forward orientation                           #
 # --------------------------------------------------------------------------- #
 def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
-                pml_p=2):
+                pml_p=2, wall="natural"):
     """Return the forward modal basis of a layer: ``W`` (2N x 2N tangential E),
     ``V`` (2N x 2N tangential H), ``q`` (2N axial wavenumbers, forward-oriented),
     plus the shared grid ``r`` and ``r*dr`` weights ``wq``.
+
+    ``wall='pec'`` (M5a) imposes a Dirichlet (closed) outer wall -> clean real-q
+    box modes (needed for physical multi-mode half-spaces); ``'natural'`` is the
+    leaky one-sided wall (only the bound modes are clean).  ``R_pml`` overrides
+    to an open PML boundary.
     """
     r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps)
+    Lap = None
     if R_pml is not None:
         sinv, rg = _pml_stretch(r, h, R_pml, Rbig, sigma_max, pml_p)
         D = np.diag(sinv) @ D
     else:
         rg = r
+        if wall == "pec":
+            D, Lap = _pec_wall_ops(D, h, N)
     Im = np.eye(N)
     ir = np.diag(1.0 / rg)
     mr = m * ir
     m2r2 = (m ** 2) * np.diag(1.0 / rg ** 2)
     A = D + ir
-    Lm = D @ D + ir @ D - m2r2
+    Lm = (D @ D if Lap is None else Lap) + ir @ D - m2r2
     dA = D @ A
     Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps))
     Phi_r = Lei @ (1j * A)

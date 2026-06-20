@@ -50,6 +50,30 @@ def _fd_grid(Rbig, N):
     return r, D, h
 
 
+def _pec_wall_ops(D, h, N):
+    """Apply a Dirichlet (PEC) wall at r=R to the cell-centered operators
+    (M5a): the tangential field vanishes at the wall via the antisymmetric ghost
+    ``f_N = -f_{N-1}`` (the wall sits halfway between node N-1 and ghost N).
+    Returns ``(Dd, Lap)`` -- the wall-corrected first derivative and the
+    Dirichlet Laplacian ``d^2/dr^2`` -- turning the leaky natural-wall
+    propagating modes into a clean real-q box spectrum (validated: same-medium
+    identity ~3e-12, multi-mode Fresnel mean ~2e-3).  Axis row 0 is untouched
+    (the cell-centered grid never samples r=0)."""
+    Dd = D.copy()
+    Dd[N - 1, N - 2] = -1.0 / (2 * h)         # (f_N - f_{N-2})/2h, f_N=-f_{N-1}
+    Dd[N - 1, N - 1] = -1.0 / (2 * h)
+    Lap = np.zeros((N, N), dtype=D.dtype)
+    for i in range(1, N - 1):
+        Lap[i, i - 1] = 1.0 / h ** 2
+        Lap[i, i] = -2.0 / h ** 2
+        Lap[i, i + 1] = 1.0 / h ** 2
+    Lap[0, 0] = -1.0 / h ** 2                  # axis: regular (Neumann-like)
+    Lap[0, 1] = 1.0 / h ** 2
+    Lap[N - 1, N - 2] = 1.0 / h ** 2           # wall ghost: -3 on the diagonal
+    Lap[N - 1, N - 1] = -3.0 / h ** 2
+    return Dd, Lap
+
+
 def _normal_eps(eps):
     """Wall-normal effective eps: harmonic mean across each eps jump
     ([[1/eps]]^{-1} inverse rule), pointwise elsewhere."""
@@ -74,7 +98,7 @@ def _pml_stretch(r, h, R_pml, Rbig, sigma_max, p):
 
 
 def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
-                         R_pml=None, sigma_max=5.0, pml_p=2):
+                         R_pml=None, sigma_max=5.0, pml_p=2, wall="natural"):
     """All radial vector modes for azimuthal order ``m``.
 
     ``eps_profile`` : callable r-array -> eps-array (real or complex).
@@ -87,17 +111,20 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
     r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps) if inverse_rule else eps
+    Lap = None
     if R_pml is not None:
         sinv, rg = _pml_stretch(r, h, R_pml, Rbig, sigma_max, pml_p)
         D = np.diag(sinv) @ D                 # d/dr_tilde (stretched)
     else:
         rg = r                                # rg = the (possibly stretched) radius
+        if wall == "pec":                     # M5a: Dirichlet (closed) wall
+            D, Lap = _pec_wall_ops(D, h, N)
     I = np.eye(N)
     ir = np.diag(1.0 / rg)
     mr = m * ir
     m2r2 = (m ** 2) * np.diag(1.0 / rg ** 2)
     A = D + ir
-    Lm = D @ D + ir @ D - m2r2
+    Lm = (D @ D if Lap is None else Lap) + ir @ D - m2r2
     dA = D @ A
     Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(eps))     # E_z elimination
     Phi_r = Lei @ (1j * A)

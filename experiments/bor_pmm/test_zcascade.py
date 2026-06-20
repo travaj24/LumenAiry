@@ -114,6 +114,45 @@ def test_slab_fabry_perot():
     assert found
 
 
+def test_pec_wall_multimode_fresnel():
+    """M5a: a PEC (Dirichlet) outer wall gives CLEAN multi-mode half-spaces.
+    With wall='pec' many propagating modes appear (natural wall leaks all but
+    ~1), and each matches its per-mode Fresnel coefficient."""
+    m, R, N, k0 = 0, 5.0, 300, 2.0
+    e1, e2 = 4.0, 2.25
+    La = layer_modes(m, R, N, _uniform(e1), k0, wall="pec")
+    Lb = layer_modes(m, R, N, _uniform(e2), k0, wall="pec")
+    S11 = interface_smatrix(La["W"], La["V"], Lb["W"], Lb["V"])[0]
+    qa = La["q"]
+    errs = []
+    for j in range(2 * N):
+        q1 = qa[j]
+        if abs(q1.imag) > 1e-6 or q1.real < 0.2:
+            continue
+        g2 = e1 * k0 ** 2 - q1.real ** 2
+        if g2 < 0:
+            continue
+        g = np.sqrt(g2)
+        q2 = np.sqrt(e2 * k0 ** 2 - g ** 2 + 0j)
+        if q2.imag > 1e-6:
+            continue
+        rTM = (e2 * q1 - e1 * q2) / (e2 * q1 + e1 * q2)
+        rTE = (q1 - q2) / (q1 + q2)
+        errs.append(min(abs(abs(S11[j, j]) - abs(rTM)),
+                        abs(abs(S11[j, j]) - abs(rTE))))
+    assert len(errs) >= 8                       # MANY clean propagating modes
+    assert np.mean(errs) < 1e-2                  # all match Fresnel
+
+
+def test_pec_wall_same_medium_identity():
+    """M5a: PEC-wall half-spaces still satisfy the measure-free identity gate."""
+    m, R, N, k0 = 0, 5.0, 300, 2.0
+    La = layer_modes(m, R, N, _uniform(4.0), k0, wall="pec")
+    Lb = layer_modes(m, R, N, _uniform(4.0), k0, wall="pec")
+    S11, S12, S21, S22 = interface_smatrix(La["W"], La["V"], Lb["W"], Lb["V"])
+    assert np.max(np.abs(S11)) < 1e-7
+
+
 def test_energy_conservation_slab():
     """GATE 3 (monitor): R + T == 1 on a lossless slab, propagating modes."""
     m, R, N, k0 = 0, 6.0, 300, 2.0
