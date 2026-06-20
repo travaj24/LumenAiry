@@ -50,6 +50,83 @@ def _fd_grid(Rbig, N):
     return r, D, h
 
 
+def _fd_grid_staggered(Rbig, N):
+    """Yee-staggered (div-conforming) radial grid -- the spurious-mode CURE.
+
+    Tangential ``E_phi, E_z`` (and ``Phi``) live on the cell-center NODES
+    ``r_node = (i+1/2)h``; the wall-NORMAL ``E_r`` lives on the radial FACES
+    ``r_face = (i+1)h`` where the flux ``D_r = eps E_r`` is single-valued.  The
+    discrete de Rham identity ``curl . grad == 0`` then holds to machine
+    precision, so the gradient null-space (the ~91% spurious sea of the nodal
+    operator) collapses to a benign electrostatic branch at large ``|q^2|`` --
+    OUT of the propagating window, with NO filtering/penalty and the eig size
+    still ``2N`` (a complete square basis).  Returns the two grids + the four
+    inter-grid bidiagonal operators (node->face / face->node derivative and
+    average).
+    """
+    h = Rbig / N
+    r_node = (np.arange(N) + 0.5) * h
+    r_face = (np.arange(N) + 1.0) * h          # face i between node i, i+1
+    Dn2f = np.zeros((N, N))                     # (Dn2f f)_{i+1/2} = (f_{i+1}-f_i)/h
+    for i in range(N - 1):
+        Dn2f[i, i] = -1.0 / h
+        Dn2f[i, i + 1] = 1.0 / h
+    Dn2f[N - 1, N - 1] = -1.0 / h               # outer wall: ghost node = 0 (PEC)
+    Df2n = np.zeros((N, N))                     # (Df2n g)_i = (g_{i+1/2}-g_{i-1/2})/h
+    for i in range(1, N):
+        Df2n[i, i - 1] = -1.0 / h
+        Df2n[i, i] = 1.0 / h
+    Df2n[0, 0] = 1.0 / h                         # axis: innermost face only (g_{-1/2}=0)
+    An2f = np.zeros((N, N))
+    for i in range(N - 1):
+        An2f[i, i] = An2f[i, i + 1] = 0.5
+    An2f[N - 1, N - 1] = 0.5
+    Af2n = np.zeros((N, N))
+    for i in range(1, N):
+        Af2n[i, i - 1] = Af2n[i, i] = 0.5
+    Af2n[0, 0] = 0.5
+    return r_node, r_face, h, Dn2f, Df2n, An2f, Af2n
+
+
+def _normal_eps_faces(eps_node):
+    """Wall-normal inverse-rule eps ON FACES: harmonic mean across the node-pair
+    straddling each face (the inverse rule now lives where the jump physically
+    is); pointwise inside a homogeneous ring."""
+    n = len(eps_node)
+    ef = np.asarray(eps_node, dtype=complex).copy()
+    for i in range(n - 1):
+        if eps_node[i] != eps_node[i + 1]:
+            ef[i] = 2.0 / (1.0 / eps_node[i] + 1.0 / eps_node[i + 1])
+    return ef
+
+
+def _assemble_staggered(m, Rbig, N, eps_profile, k0):
+    """Assemble the staggered q^2 generalized eigenproblem ``K Psi = q^2 B Psi``
+    in ``Psi = (E_r[faces], E_phi[nodes])``.  Returns everything the mode/field
+    recovery needs.  Operator placement (each term lands on its field's grid):
+      E_r equation -> FACES,  E_phi equation -> NODES,  E_z/Phi -> NODES.
+    """
+    r_n, r_f, h, Dn2f, Df2n, An2f, Af2n = _fd_grid_staggered(Rbig, N)
+    eps_node = np.asarray(eps_profile(r_n), dtype=complex)
+    eps_face = _normal_eps_faces(eps_node)
+    diag = np.diag
+    mrn, mrf = m / r_n, m / r_f
+    A_n2f = Dn2f + diag(1.0 / r_f) @ An2f       # grad-like (d/dr+1/r): nodes -> faces
+    A_f2n = Df2n + diag(1.0 / r_n) @ Af2n       # div-like:             faces -> nodes
+    Lm = diag(1.0 / r_n) @ Df2n @ diag(r_f) @ Dn2f - diag(mrn ** 2)   # node Laplacian
+    Lei = np.linalg.inv(Lm + k0 ** 2 * diag(eps_node))
+    Phi_r = Lei @ (1j * A_f2n)                  # E_r[faces]  -> Phi[nodes]
+    Phi_p = Lei @ (-diag(mrn))                  # E_phi[nodes]-> Phi[nodes]
+    I = np.eye(N)
+    B = np.block([[I + 1j * Dn2f @ Phi_r, 1j * Dn2f @ Phi_p],
+                  [-diag(mrn) @ Phi_r,    I - diag(mrn) @ Phi_p]])
+    K = np.block([[k0 ** 2 * diag(eps_face) - diag(mrf ** 2), -1j * diag(mrf) @ A_n2f],
+                  [-1j * Df2n @ diag(mrf),  k0 ** 2 * diag(eps_node) + Df2n @ A_n2f]])
+    return dict(K=K, B=B, Lei=Lei, A_f2n=A_f2n, Dn2f=Dn2f, mrn=mrn, mrf=mrf,
+                eps_node=eps_node, eps_face=eps_face, r_n=r_n, r_f=r_f, h=h,
+                Df2n=Df2n, An2f=An2f, Af2n=Af2n, k0=k0, m=m, N=N)
+
+
 def _pec_wall_ops(D, h, N):
     """Apply a Dirichlet (PEC) wall at r=R to the cell-centered operators
     (M5a): the tangential field vanishes at the wall via the antisymmetric ghost
@@ -98,16 +175,21 @@ def _pml_stretch(r, h, R_pml, Rbig, sigma_max, p):
 
 
 def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
-                         R_pml=None, sigma_max=5.0, pml_p=2, wall="natural"):
+                         R_pml=None, sigma_max=5.0, pml_p=2, wall="natural",
+                         staggered=False):
     """All radial vector modes for azimuthal order ``m``.
 
     ``eps_profile`` : callable r-array -> eps-array (real or complex).
     ``R_pml`` : if set, a radial PML (M3) occupies ``[R_pml, Rbig]`` so the
     radial boundary is OPEN (radiation modes absorbed -> complex q; bound modes
     unchanged).  Default ``None`` = hard wall (byte-identical to the M2 path).
-    Returns a list of dicts: ``q`` (propagation const), ``reldiv`` (relative
-    |div(eps E)|, the spurious flag), ``Er``/``Ephi``/``Ez`` fields, ``r``.
+    ``staggered`` : if True, use the Yee div-conforming discretization (the
+    spurious-mode CURE) -- ``E_r`` on faces, ``E_phi`` on nodes; the spurious
+    gradient sea collapses out of the physical window (eig still 2N).  Returns
+    a list of dicts: ``q``, ``reldiv``, ``Er``/``Ephi``/``Ez`` fields, ``r``.
     """
+    if staggered:
+        return _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0)
     r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps) if inverse_rule else eps
@@ -150,6 +232,30 @@ def radial_coupled_modes(m, Rbig, N, eps_profile, k0, *, inverse_rule=True,
         reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
         modes.append(dict(q=q[j], reldiv=float(reldiv.real),
                           Er=Er, Ephi=Ephi, Ez=Ez, r=r))
+    return modes
+
+
+def _radial_coupled_modes_staggered(m, Rbig, N, eps_profile, k0):
+    """Staggered (div-conforming) modes -- the spurious-mode cure.  ``Er`` on
+    faces, ``Ephi``/``Ez`` on nodes; the divergence diagnostic is exact-by-
+    construction (flux ``D_r = eps_face Er`` lives on the face)."""
+    op = _assemble_staggered(m, Rbig, N, eps_profile, k0)
+    q2, Vm = eig(op["K"], op["B"])
+    q = np.sqrt(q2)
+    Lei, A_f2n, Df2n = op["Lei"], op["A_f2n"], op["Df2n"]
+    mrn, eps_node, eps_face = op["mrn"], op["eps_node"], op["eps_face"]
+    r_n, r_f = op["r_n"], op["r_f"]
+    modes = []
+    for j in range(len(q)):
+        Er, Ephi = Vm[:N, j], Vm[N:, j]            # Er on faces, Ephi on nodes
+        Ez = q[j] * (Lei @ (1j * A_f2n @ Er - mrn * Ephi))     # nodes
+        Dr = eps_face * Er                          # face flux (native-continuous)
+        div = ((1.0 / r_n) * (Df2n @ (r_f * Dr)) + 1j * mrn * (eps_node * Ephi)
+               + 1j * q[j] * (eps_node * Ez))       # all on nodes
+        En = np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2 + np.abs(Ez) ** 2))
+        reldiv = np.sqrt(np.sum(np.abs(div) ** 2)) / (k0 * max(En, 1e-300))
+        modes.append(dict(q=q[j], reldiv=float(reldiv.real),
+                          Er=Er, Ephi=Ephi, Ez=Ez, r=r_n))
     return modes
 
 

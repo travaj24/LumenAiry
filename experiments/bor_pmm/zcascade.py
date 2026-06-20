@@ -26,15 +26,67 @@ r*dr energy conservation).
 from __future__ import annotations
 
 import numpy as np
-from coupled_radial_eigensolver import _fd_grid, _normal_eps, _pec_wall_ops, _pml_stretch
+from coupled_radial_eigensolver import (
+    _assemble_staggered,
+    _fd_grid,
+    _normal_eps,
+    _pec_wall_ops,
+    _pml_stretch,
+)
 from scipy.linalg import eig
 
 
 # --------------------------------------------------------------------------- #
 #  Layer modes -> (W, V, q) with forward orientation                           #
 # --------------------------------------------------------------------------- #
+def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
+    """Forward modal basis on the Yee div-conforming grid (spurious-mode cure).
+    ``W = [E_r(faces); E_phi(nodes)]``; the DUAL Yee H-placement puts
+    ``h_r`` on NODES (with E_phi) and ``h_phi`` on FACES (with E_r) so the
+    z-Poynting flux ``E_r h_phi* (faces) - E_phi h_r* (nodes)`` pairs WITHOUT
+    interpolation -> machine-precision energy conservation in the cascade."""
+    op = _assemble_staggered(m, Rbig, N, eps_profile, k0)
+    Lei, A_f2n, Dn2f = op["Lei"], op["A_f2n"], op["Dn2f"]
+    mrn, mrf = op["mrn"], op["mrf"]
+    r_n, r_f, h = op["r_n"], op["r_f"], op["h"]
+    q2, Vm = eig(op["K"], op["B"])
+    q = np.sqrt(q2)
+
+    def hfields(Er, Ephi, qj):
+        Ez = qj * (Lei @ (1j * A_f2n @ Er - mrn * Ephi))   # nodes
+        hr = (1.0 / k0) * (mrn * Ez - qj * Ephi)           # NODES (with E_phi)
+        hphi = (1.0 / k0) * (qj * Er + 1j * (Dn2f @ Ez))   # FACES (with E_r)
+        return hr, hphi
+
+    def flux(Er, Ephi, hr, hphi):
+        return np.real(np.sum(Er * np.conj(hphi) * r_f * h)
+                       - np.sum(Ephi * np.conj(hr) * r_n * h))
+
+    nm = len(q)
+    W = np.zeros((2 * N, nm), dtype=complex)
+    V = np.zeros((2 * N, nm), dtype=complex)
+    qf = np.zeros(nm, dtype=complex)
+    for j in range(nm):
+        Er, Ephi = Vm[:N, j], Vm[N:, j]
+        qj = q[j]
+        hr, hphi = hfields(Er, Ephi, qj)
+        P = flux(Er, Ephi, hr, hphi)
+        if abs(qj.imag) < 1e-9 * max(abs(qj.real), 1e-300):
+            qj = qj if P >= 0 else -qj
+        else:
+            qj = qj if qj.imag > 0 else -qj
+        hr, hphi = hfields(Er, Ephi, qj)
+        P = flux(Er, Ephi, hr, hphi)
+        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10
+             else 1.0 / np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2) + 1e-300))
+        W[:N, j] = Er * s; W[N:, j] = Ephi * s
+        V[:N, j] = hr * s; V[N:, j] = hphi * s
+        qf[j] = qj
+    return dict(W=W, V=V, q=qf, r=r_n, wq=(r_n * h).astype(complex), N=N)
+
+
 def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
-                pml_p=2, wall="natural"):
+                pml_p=2, wall="natural", staggered=False):
     """Return the forward modal basis of a layer: ``W`` (2N x 2N tangential E),
     ``V`` (2N x 2N tangential H), ``q`` (2N axial wavenumbers, forward-oriented),
     plus the shared grid ``r`` and ``r*dr`` weights ``wq``.
@@ -42,8 +94,12 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     ``wall='pec'`` (M5a) imposes a Dirichlet (closed) outer wall -> clean real-q
     box modes (needed for physical multi-mode half-spaces); ``'natural'`` is the
     leaky one-sided wall (only the bound modes are clean).  ``R_pml`` overrides
-    to an open PML boundary.
+    to an open PML boundary.  ``staggered=True`` uses the Yee div-conforming
+    discretization (the spurious-mode CURE -> machine-precision cascade energy);
+    the closed Dirichlet wall is built into its node->face stencil.
     """
+    if staggered:
+        return _layer_modes_staggered(m, Rbig, N, eps_profile, k0)
     r, D, h = _fd_grid(Rbig, N)
     eps = np.asarray(eps_profile(r), dtype=complex)
     eps_n = _normal_eps(eps)
