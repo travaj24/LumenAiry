@@ -497,12 +497,33 @@ immune, which is why M4's GATE 0 passed). cond(`W`) is fine (`1.7e3`); the physi
 (reldiv<0.5) is well-conditioned (`2.4e2`). **Fix = project the interface onto the physical
 subspace** (Galerkin `r dr` overlap + reldiv prefilter), which also needs clean half-spaces.
 
-**M5 remaining sub-phases** (a focused, validatable sequence):
-- **M5a** clean half-spaces (PEC-wall BC in the FD operator, or analytic Bessel modes, or
-  PML + near-to-far) — unblocks physical R/T.
-- **M5b** physical-subspace Galerkin interface for structured layers + connect `farfield.py`
-  to R/T efficiencies (modal z-flux × Parseval fractions).
-- **M5c** GATE 4 — the Cartesian large-R limit vs `pmm_efficiency_1d` (the real diffraction
-  validation; order powers agree to `O(Lambda/r0)`).
-- **M5d** public API (`BORStack` / `PMMStack(coords='cylindrical')`) + ring-geometry builder
-  + library integration + ship.
+**M5a DONE — clean half-spaces (PEC/Dirichlet wall).** The crude one-sided FD wall makes
+uniform-layer *propagating* modes leaky (~1 clean mode); the research workflow's recommended
+fix (smallest change, keeps the square pointwise interface byte-for-byte) is a Dirichlet wall
+via the antisymmetric ghost `f_N = -f_{N-1}` → clean real-q box spectrum (`{j_{m,n}} ∪
+{j'_{m,n}}` in the uniform limit). Opt-in `wall='pec'` on `radial_coupled_modes` +
+`layer_modes` (default `'natural'` byte-identical; `R_pml` overrides to the open PML).
+Validated (+2 tests): PEC same-medium identity `3e-12`; **multi-mode Fresnel — ≥8 (vs 1)
+propagating modes, mean `2e-3`**.
+
+**M5 far-field design (grounded, 5-agent workflow).** Project the **±1 vortex** components
+`E_± = (E_r ± i E_phi)/sqrt2` onto `J_{m±1}` (clean scalar Hankel — the cylindrical mirror of
+the planar TE/TM split): `F_+(kt)=INT E_+ J_{m+1}(kt r) r dr`, `F_-(kt)=INT E_- J_{m-1} r dr`.
+Normal incidence excites **m=±1 only** (left/right circular → m=+1/−1). z-power via the
+Hankel–Parseval relation `INT f g* r dr = INT F G* kt dkt`, flux density `~ Re(q(kt))/k0
+|F|^2` over the propagating cone `kt < sqrt(eps) k0`; circular grating of period `Lambda` →
+peaks at `kt_n = kt_inc + 2 pi n/Lambda` → the planar grating equation as `R -> inf`.
+`farfield.py` (Fourier-Bessel, Parseval `1.8e-10`) is the validated scalar engine for this.
+
+**M5 remaining sub-phases** (focused, fully-designed):
+- **M5b** physical-subspace handling for STRUCTURED layers: a ring grating emits ~393/500
+  spurious modes that blow up the full-basis interface (`|S11|~2e4`) — project onto the
+  reldiv-filtered physical subspace (Galerkin `r dr` overlap) + connect `farfield.py` to R/T
+  efficiencies (vortex Hankel × `Re(q)` flux; `R+T+A=1`).
+- **M5e** GATE 4 — Cartesian large-R limit: intermediate (uniform ring, m≠0, vs Fresnel/Airy,
+  ~30-50 LOC) then full multi-order (concentric-ring grating, `r0/Lambda = 50,100,200,400`
+  ladder; per-order `|eta_BOR - eta_planar(pmm_efficiency_1d)| < 2-3%` AND convergence slope
+  `~1.0` in `Lambda/r0` — the load-bearing NON-circular gate; energy alone is the lossless
+  trap).
+- **M5f** (LAST, only after M5b/e green) public API: `BORStack` in a NEW `lumenairy/elements/
+  bor/` mirroring `PMMStack` + ring-geometry builder + library integration + ship.

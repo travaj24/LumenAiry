@@ -15,7 +15,9 @@ library integration.
 | **M2 solver** | coupled `(E_r,E_phi)` vector eigensolve: q² E_z-elimination + wall-normal inverse rule + consistent divergence-free filter (`coupled_radial_eigensolver.py`) | the fiber oracle above | **DONE — guided modes ~1e-4..1e-2 (FD floor), no spurious leakage**; 4 tests. Weakly-guided/large-box → SEM follow-on |
 | **M3** | open radial boundary — radial PML (complex coordinate stretch `s=1+i sigma`), the roadmap's #1 risk | bound-mode q INVARIANT to `sigma_max`; radiation continuum absorbed (complex q) | **DONE** — q invariant to 1e-6 across `sigma_max=3..20`; bound mode = oracle (8.5e-5); continuum absorbed; 2 tests |
 | **M4** | z-cascade S-matrix (`zcascade.py`): modal `W/V` + Redheffer; `r dr` only in flux/energy (interface is pointwise) | same-medium identity, slab Airy, energy `R+T=1` | **DONE** — GATE 0 `5e-11`, round-trip `1.7e-10`, slab `3e-10`, energy `1e-6`; 5 tests. Clean half-spaces + Cartesian limit → M5 |
-| M5 | far-field + public API + integration | energy/m, reciprocity, Cartesian limit, FDTD-BOR | pending |
+| **M5a** | clean half-spaces — PEC/Dirichlet wall (`wall='pec'`): antisymmetric ghost → real-q box modes (`farfield.py` + `zcascade.py`) | same-medium identity, multi-mode Fresnel | **DONE** — identity `3e-12`, ≥8 (vs 1) propagating modes mean `2e-3` |
+| **M5b far-field core** | Fourier-Bessel / Hankel decomposition → cylindrical orders + Parseval power (`farfield.py`) | round-trip, Parseval, kt→θ | **DONE** — Parseval `1.8e-10`; 3 tests |
+| M5 (rest) | structured-layer Galerkin + efficiencies (±1 vortex Hankel); GATE 4 Cartesian limit vs `pmm_efficiency_1d`; `BORStack` library port | per-order η vs planar <2-3%, slope ~1.0; energy/reciprocity | designed (2 research workflows), pending |
 
 M1 closes the roadmap's stated #2 risk (the axis singularity) to machine
 precision. M2's analytic oracle is ready as the gate for the coupled operator —
