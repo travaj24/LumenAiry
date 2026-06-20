@@ -475,3 +475,34 @@ the dense `r dr` cross-flux overlap `O`, with a `reldiv` spurious-mode prefilter
 the workflow, ready to validate); and **GATE 4** (the Cartesian large-R limit — the only anchor
 that exercises genuinely multi-mode non-uniform-layer `r dr` coupling, needs the structured
 ring-layer operator + far-field projection).
+
+### M5 IN PROGRESS — far-field core validated; structured-layer path characterized (2026-06-20)
+
+**Far-field core DONE.** `experiments/bor_pmm/farfield.py`: the Fourier-Bessel / discrete
+Hankel decomposition projecting an axisymmetric near-field of order `m` onto cylindrical
+orders `kt_n = j_{m,n}/R` (→ far-field angles `sin theta_n = kt_n/(sqrt(eps) k0)`), with the
+**Parseval power normalization** `INT|f|^2 r dr = sum|c_n|^2 N_n` (`N_n = R^2 J_{m+1}(alpha_n)^2/2`)
+for diffraction efficiencies. Validated (`test_farfield.py`, 3 green): round-trip exact,
+reconstruction `1e-4`, **Parseval to `1.8e-10`**, `kt->theta` propagating/evanescent split.
+This is the cylindrical analog of the planar grating's Fourier-order decomposition; for a
+circular grating of radial period `Lambda` the populated `kt_n` cluster at the diffraction
+orders, → the planar grating equation as `R -> inf` (the basis for GATE 4).
+
+**Structured-layer path precisely characterized (the M5 frontier).** A concentric-ring
+grating layer (`eps(r)` with rings — already supported by the M2 solver) emits **~393/500
+spurious** (`reldiv>1`) modes vs ~21 physical. The full-basis pointwise interface then blows
+up (`|S11| ~ 2e4`) while the all-uniform control stays `~1e-9` — the spurious modes differ
+between a structured and a uniform layer, so they no longer cancel (same-grid uniform was
+immune, which is why M4's GATE 0 passed). cond(`W`) is fine (`1.7e3`); the physical subspace
+(reldiv<0.5) is well-conditioned (`2.4e2`). **Fix = project the interface onto the physical
+subspace** (Galerkin `r dr` overlap + reldiv prefilter), which also needs clean half-spaces.
+
+**M5 remaining sub-phases** (a focused, validatable sequence):
+- **M5a** clean half-spaces (PEC-wall BC in the FD operator, or analytic Bessel modes, or
+  PML + near-to-far) — unblocks physical R/T.
+- **M5b** physical-subspace Galerkin interface for structured layers + connect `farfield.py`
+  to R/T efficiencies (modal z-flux × Parseval fractions).
+- **M5c** GATE 4 — the Cartesian large-R limit vs `pmm_efficiency_1d` (the real diffraction
+  validation; order powers agree to `O(Lambda/r0)`).
+- **M5d** public API (`BORStack` / `PMMStack(coords='cylindrical')`) + ring-geometry builder
+  + library integration + ship.
