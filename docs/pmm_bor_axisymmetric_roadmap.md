@@ -436,3 +436,42 @@ Remaining: **M4** z-cascade S-matrix (`r dr` flux split; Fresnel anchor) and **M
 far-field + public API + library integration. The FD prototype is the reference; a SEM
 re-discretization is the production accuracy/conditioning upgrade (can come before or after
 M4 since the operator structure is fixed).
+
+### M4 DONE — z-cascade S-matrix machinery validated (2026-06-20)
+
+**The axial S-matrix cascade works.** `experiments/bor_pmm/zcascade.py`: each z-layer's
+M2 modal basis → tangential `W = [E_r; E_phi]` / `V = [h_r; h_phi]`, cascaded by the
+Redheffer star. A 5-agent research workflow grounded every convention; three were then
+**independently re-derived and verified** before coding (bidirectional check):
+
+- **h-field extraction** `h_r=(1/k0)[(m/r)E_z - q E_phi]`, `h_phi=(1/k0)[q E_r + i dE_z/dr]`
+  → satisfies `curl h = -i k0 eps E` to **6e-12** (with the inverse-rule normal flux `eps_n`;
+  the pointwise-eps residual is the localized ring inverse-rule, exactly as in M2).
+- **backward mode = `[W; -V]` EXACTLY** (`0.0`): `q->-q` flips `E_z` hence `h_t`, leaving
+  `E_t` → lumenairy's `_interface_smatrix` is reusable VERBATIM.
+- **flux-based forward/backward split** validated (13/14 modes, `sign(P_z)=sign(Re q)`).
+
+**The key structural finding** (workflow + independent read of `rcwa/_core.py`): the interface
+match is **POINTWISE** (`solve(Wb, Wa)` on the shared grid) — the `r dr` measure does NOT
+enter the interface algebra, **only** the flux selector + R/T efficiency. (Cartesian RCWA's
+unweighted harmonic sum is the Parseval inner product of orthonormal Fourier modes; the
+cylindrical radial basis is orthonormal under `r dr`, so only the flux/energy layer changes.)
+
+Gates (`test_zcascade.py`, 5 green):
+
+- **GATE 0 same-medium identity** (the STRONG measure-free test — no Fresnel coefficient can
+  absorb an `r dr`/flux-sign error): `|S11| = 5e-11`, `|S21 - I| = 4e-11`. ✅
+- **round-trip** `a->b->a` interface == identity: `1.7e-10`. ✅
+- **GATE 1 per-mode Fresnel** (m=0, sign smoke test — circular by design, NOT cascade
+  validation): `1e-10`. ✅
+- **GATE 2 slab Fabry-Perot Airy** (propagation + Redheffer signs): `3e-10`. ✅
+- **GATE 3 energy** `R + T = 1` on a lossless slab (monitor; lossless-trap-aware, paired with
+  GATE 0): exact to `1e-6`. ✅
+
+**Scoped to M5** (per the workflow's risk register): clean multi-mode half-spaces (the crude
+FD wall makes uniform-layer *propagating* modes leaky → only ~1 clean propagating mode; fix =
+PEC-wall BC or analytic Bessel half-space modes); the **cross-N Galerkin projection** (uses
+the dense `r dr` cross-flux overlap `O`, with a `reldiv` spurious-mode prefilter — designed by
+the workflow, ready to validate); and **GATE 4** (the Cartesian large-R limit — the only anchor
+that exercises genuinely multi-mode non-uniform-layer `r dr` coupling, needs the structured
+ring-layer operator + far-field projection).

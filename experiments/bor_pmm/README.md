@@ -14,7 +14,7 @@ library integration.
 | **M2 oracle** | open-cladding (`K_m`) fiber dispersion — the CLEAN guided-mode gate (`fiber_oracle.py`) | canonical Okamoto/Snyder–Love vector char. eq. | **DONE — exact match**; caught a cross-`eps` bug in the old PEC `stepindex_oracle` |
 | **M2 solver** | coupled `(E_r,E_phi)` vector eigensolve: q² E_z-elimination + wall-normal inverse rule + consistent divergence-free filter (`coupled_radial_eigensolver.py`) | the fiber oracle above | **DONE — guided modes ~1e-4..1e-2 (FD floor), no spurious leakage**; 4 tests. Weakly-guided/large-box → SEM follow-on |
 | **M3** | open radial boundary — radial PML (complex coordinate stretch `s=1+i sigma`), the roadmap's #1 risk | bound-mode q INVARIANT to `sigma_max`; radiation continuum absorbed (complex q) | **DONE** — q invariant to 1e-6 across `sigma_max=3..20`; bound mode = oracle (8.5e-5); continuum absorbed; 2 tests |
-| M4 | z-cascade + scattering (`r dr` flux split) | radially-uniform → Fresnel | pending |
+| **M4** | z-cascade S-matrix (`zcascade.py`): modal `W/V` + Redheffer; `r dr` only in flux/energy (interface is pointwise) | same-medium identity, slab Airy, energy `R+T=1` | **DONE** — GATE 0 `5e-11`, round-trip `1.7e-10`, slab `3e-10`, energy `1e-6`; 5 tests. Clean half-spaces + Cartesian limit → M5 |
 | M5 | far-field + public API + integration | energy/m, reciprocity, Cartesian limit, FDTD-BOR | pending |
 
 M1 closes the roadmap's stated #2 risk (the axis singularity) to machine
