@@ -551,3 +551,37 @@ workflow's "library port only after M5a-e GREEN"):
 → cylindrical-planar correspondence). The one remaining engineering item before a production
 library release is the **div-conforming SEM re-discretization** (kills spurious modes → machine
 precision → unlocks the full multi-order GATE 4 and the `BORStack` port).
+
+### SPURIOUS-MODE FLOOR CURED — Yee div-conforming discretization (2026-06-20)
+
+**The "div-conforming re-discretization" above is DONE — and it was a ~30-line staggered grid,
+not a months-long rebuild.**
+
+*Diagnosis (corrected a wrong hypothesis).* The spurious modes are NOT eps-interface-tied —
+a HOMOGENEOUS layer already has 365/400 (`reldiv>1`). They are the generic nodal-vector
+**curl-curl GRADIENT modes** (~91% of the spectrum). Ruled out by experiment: filtering /
+physical-subspace Galerkin FAILS (incomplete + ill-conditioned, energy `1e2–1e5`); the
+transverse grad-div penalty shifts physical modes; the consistent full penalty is a
+quartic-in-`q^2` QEP (over-complete, needs a Galerkin bolt-on). A 4-agent research workflow +
+these experiments converged on the **Yee staggered (div-conforming) grid** as the unique cure
+that is low-rework AND keeps a complete square `2N` basis.
+
+*The cure* (`staggered=True`, opt-in; nodal path byte-identical):
+- `E_r` on radial **FACES** `r=(i+1)h` (where `D_r = eps E_r` is single-valued; the inverse-rule
+  eps lives where the jump physically is); `E_phi`/`E_z`/`Phi` on cell-center **NODES**.
+- The discrete **de Rham identity `curl.grad == 0` holds to machine precision** (`1.8e-12`) →
+  the gradient null-space collapses to a benign electrostatic branch at large `|q^2|`, OUT of
+  the propagating window. `eig` stays `2N` (square complete basis); NO filtering, NO penalty.
+- **DUAL Yee H-placement** (`h_r` on NODES, `h_phi` on FACES) → the z-Poynting flux
+  `E_r h_phi*(faces) − E_phi h_r*(nodes)` pairs WITHOUT interpolation (the bug in the first
+  attempt: same-grid H forced averaging → non-monotonic energy).
+
+*Results* (`test_staggered.py`, 4 green):
+- spurious modes **365/400 → 0/400**; the nodal spurious `q~3.76` GONE from the window; guided
+  mode still matches the fiber oracle (`1.2e-4`).
+- structured ring-grating cascade energy: nodal `3.8e-2` floor → **machine precision**
+  `4e-13` (N=150) / `9e-13` (N=300) / `2e-12` (N=450) — **~10 orders better AND N-stable**.
+
+**This is the production discretization.** The SEM-gated items above are now UNBLOCKED: the
+full multi-order GATE 4 and the `BORStack` library port can proceed on a machine-precision,
+spurious-free basis.
