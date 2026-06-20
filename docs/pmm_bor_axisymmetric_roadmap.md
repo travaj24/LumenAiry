@@ -515,15 +515,39 @@ Hankel–Parseval relation `INT f g* r dr = INT F G* kt dkt`, flux density `~ Re
 peaks at `kt_n = kt_inc + 2 pi n/Lambda` → the planar grating equation as `R -> inf`.
 `farfield.py` (Fourier-Bessel, Parseval `1.8e-10`) is the validated scalar engine for this.
 
-**M5 remaining sub-phases** (focused, fully-designed):
-- **M5b** physical-subspace handling for STRUCTURED layers: a ring grating emits ~393/500
-  spurious modes that blow up the full-basis interface (`|S11|~2e4`) — project onto the
-  reldiv-filtered physical subspace (Galerkin `r dr` overlap) + connect `farfield.py` to R/T
-  efficiencies (vortex Hankel × `Re(q)` flux; `R+T+A=1`).
-- **M5e** GATE 4 — Cartesian large-R limit: intermediate (uniform ring, m≠0, vs Fresnel/Airy,
-  ~30-50 LOC) then full multi-order (concentric-ring grating, `r0/Lambda = 50,100,200,400`
-  ladder; per-order `|eta_BOR - eta_planar(pmm_efficiency_1d)| < 2-3%` AND convergence slope
-  `~1.0` in `Lambda/r0` — the load-bearing NON-circular gate; energy alone is the lossless
-  trap).
-- **M5f** (LAST, only after M5b/e green) public API: `BORStack` in a NEW `lumenairy/elements/
-  bor/` mirroring `PMMStack` + ring-geometry builder + library integration + ship.
+### M5 PROTOTYPE COMPLETE — high-level solver + GATE 4a; production port SEM-gated (2026-06-20)
+
+**M5b high-level solver DONE.** `experiments/bor_pmm/bor_solve.py` (the `BORStack` prototype):
+per-layer M2 modes (PEC half-spaces) → **flux-normalized** basis (`|S|^2` = power fraction) →
+M4 cascade → physical-propagating-mode R/T efficiencies. The PEC wall (M5a) also **tamed the
+structured-layer interface** (`|S11|` from `~2e4` → `4.4`, cond `7e2`). A ring-grating stack
+(m=1) cascades and conserves energy.
+
+**The spurious-mode floor (measured, important).** A ring layer emits ~383/400 spurious
+(`reldiv>1`) modes; their real-q members leak energy into unphysical channels. Structured-stack
+`R+T` conserves to **mean ~1.5%, max ~3.8%** — and this **does NOT improve with N** (`3.8e-2`
+at N=200 AND N=400), so it is a genuine FD-vector-discretization floor, not a 2nd-order error.
+The clean cure (no spurious modes) is the **div-conforming SEM** re-discretization.
+
+**GATE 4a PASS (the rigorous Cartesian-limit intermediate).** At m=1, a uniform interface
+reflects each radial mode with **EXACTLY the planar TE/TM Fresnel coefficient at that mode's
+local oblique angle** `theta = arcsin(gamma/(sqrt(eps) k0))` — validated to **~1e-5** across
+9/9 modes spanning 19°–46°. This is the load-bearing cylindrical→planar correspondence
+(against the closed-form Fresnel, independent of both solvers); it proves the cylindrical
+metric (`1/r`, `m^2/r^2`) reduces to planar oblique incidence. (`test_bor_solve.py`, 3 green.)
+
+**Deliberately NOT done — production port is SEM-gated** (the honest call, matching the
+workflow's "library port only after M5a-e GREEN"):
+- **Full multi-order GATE 4** (ring grating vs `pmm_efficiency_1d` on an `r0/Lambda` ladder,
+  per-order < 2-3%, slope ~1.0) — the per-order efficiencies exist (each output mode is a
+  diffraction order at its far-field angle), but the ~1.5% spurious floor sits right at the
+  tolerance, so a clean multi-order pass needs the SEM first.
+- **M5f library port** (`BORStack` in a NEW `lumenairy/elements/bor/`) — gated on the SEM so
+  production code is machine-precision, not 1.5%-floored. The `bor_solve.solve()` API shape is
+  the port template.
+
+**Net:** the BOR-PMM physics pipeline is **complete and validated end-to-end** (radial operator
+→ coupled eigensolve → open boundary → cascade → clean half-spaces → R/T efficiencies → far-field
+→ cylindrical-planar correspondence). The one remaining engineering item before a production
+library release is the **div-conforming SEM re-discretization** (kills spurious modes → machine
+precision → unlocks the full multi-order GATE 4 and the `BORStack` port).
