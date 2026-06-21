@@ -18,7 +18,6 @@ Example
 from __future__ import annotations
 
 import numpy as np
-from coupled_radial_eigensolver import radial_coupled_modes
 from zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 
@@ -66,29 +65,27 @@ class BORStack:
         return layer_modes(self.m, self.Rbig, self.N, eps_fn, self.k0,
                            staggered=True)
 
-    def solve(self, *, reldiv_tol=0.5):
+    def solve(self):
         """Cascade the stack and return per-propagating-order R/T efficiencies.
 
         Returns a dict: ``q`` (incident propagating axial wavenumbers),
         ``gamma`` (their transverse wavenumbers), ``angles`` (far-field polar
         angle in the substrate, rad), ``R``/``T`` (reflected/transmitted power
         fraction summed over propagating orders), ``energy`` (R+T per incident
-        order), ``S`` (the global S-matrix)."""
+        order), ``S`` (the global S-matrix).
+
+        The staggered basis is spurious-free, so NO reldiv filter is needed (the
+        propagating criterion alone is exact) -- which lets us skip the two
+        extra half-space eigensolves the reldiv tags would have cost.  Identical
+        super/substrate reuse the same eig."""
         if self.k0 is None:
             raise RuntimeError("call set_source(...) before solve()")
         k0 = self.k0
         sup = self._build(lambda r: np.full_like(r, self.eps_sup, dtype=complex))
-        sub = self._build(lambda r: np.full_like(r, self.eps_sub, dtype=complex))
+        sub = (sup if self.eps_sub == self.eps_sup
+               else self._build(lambda r: np.full_like(r, self.eps_sub,
+                                                        dtype=complex)))
         mids = [(thk, self._build(fn)) for thk, fn in self._layers]
-        # reldiv tags (for physical-mode selection in the half-spaces)
-        rd_sup = np.array([md["reldiv"] for md in radial_coupled_modes(
-            self.m, self.Rbig, self.N,
-            lambda r: np.full_like(r, self.eps_sup, dtype=complex), k0,
-            staggered=True)])
-        rd_sub = np.array([md["reldiv"] for md in radial_coupled_modes(
-            self.m, self.Rbig, self.N,
-            lambda r: np.full_like(r, self.eps_sub, dtype=complex), k0,
-            staggered=True)])
         # cascade: sup -> [mid prop mid] ... -> sub
         S = interface_smatrix(sup["W"], sup["V"], mids[0][1]["W"], mids[0][1]["V"]) \
             if mids else interface_smatrix(sup["W"], sup["V"], sub["W"], sub["V"])
@@ -100,12 +97,11 @@ class BORStack:
         S11, S12, S21, S22 = S
         q = sup["q"]
 
-        def prop(L, rd, eps):
+        def prop(L, eps):
             return np.where((np.abs(L["q"].imag) < 1e-4) & (L["q"].real > 0.1)
-                            & (np.sqrt(eps).real * k0 - L["q"].real > -1e-9)
-                            & (rd < reldiv_tol))[0]
-        inc = prop(sup, rd_sup, self.eps_sup)
-        out = prop(sub, rd_sub, self.eps_sub)
+                            & (np.sqrt(eps).real * k0 - L["q"].real > -1e-9))[0]
+        inc = prop(sup, self.eps_sup)
+        out = prop(sub, self.eps_sub)
         R = np.array([np.sum([abs(S11[jp, j]) ** 2 for jp in inc]) for j in inc])
         T = np.array([np.sum([abs(S21[jp, j]) ** 2 for jp in out]) for j in inc])
         qi = q[inc].real

@@ -28,6 +28,7 @@ from __future__ import annotations
 import numpy as np
 from coupled_radial_eigensolver import (
     _assemble_staggered,
+    _fast_geig,
     _fd_grid,
     _normal_eps,
     _pec_wall_ops,
@@ -49,7 +50,7 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
     Lei, A_f2n, Dn2f = op["Lei"], op["A_f2n"], op["Dn2f"]
     mrn, mrf = op["mrn"], op["mrf"]
     r_n, r_f, h = op["r_n"], op["r_f"], op["h"]
-    q2, Vm = eig(op["K"], op["B"])
+    q2, Vm = _fast_geig(op["K"], op["B"])
     q = np.sqrt(q2)
 
     def hfields(Er, Ephi, qj):
