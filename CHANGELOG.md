@@ -2,6 +2,28 @@
 
 All notable changes to the core library are documented here.
 
+## [5.14.5] — 2026-06-20
+
+### Performance
+
+- **Folded 1-D modal eigensolve** (`_fast_geig`) — the dominant cost of a 1-D
+  PMM solve is the dense modal eig `A x = q² B x` (`B` = nodal mass `S0` for TE,
+  `Pinv` for TM). It is now solved as the *standard* problem `eig(B⁻¹ A)` instead
+  of the generalized QZ, **~1.7× faster on the eigensolve** (e.g.
+  `pmm_efficiency_1d` 21.6 → 12.7 ms at `degree=24`), with **no change to the
+  result**. `B` is the mass matrix — well-conditioned by construction — so the
+  fold is exact (the JAX twin already folds `eig(solve(B, A))`, validated to
+  ~1e-12). Safety: the same element-size equilibration as `_safe_geig`, plus an
+  LU-pivot-ratio guard that falls back to the robust generalized QZ if `B` is
+  near-singular (an extreme-`eps` metal corner) — so speed never trades away
+  physical accuracy. Wired into the scalar 1-D path (`pmm_efficiency_1d`) and the
+  vertical-slant case (`pmm_efficiency_1d_slanted`).
+- Per-order efficiencies reproduce the generalized-QZ result to **~1e-14** across
+  TE, TM, oblique, and an extreme-`eps` metal cell; **269 PMM unit tests
+  unchanged**. `PMMStack`, `pmm_jones_*`, and `pmm_efficiency_2d` already use the
+  standard `eig` (the coupled `Mbig` / covariant-metric generators) and are
+  unaffected.
+
 ## [5.14.4] — 2026-06-14
 
 ### Added
