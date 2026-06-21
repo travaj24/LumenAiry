@@ -177,11 +177,84 @@ def layer_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
 
 
 # --------------------------------------------------------------------------- #
+#  Mode field reconstruction (the eigenvector psi(x,y) at a found mode)         #
+# --------------------------------------------------------------------------- #
+def _global_lateral_nullspace(strip_modes, qz2, t):
+    """Per-strip modal amplitudes ``(a_s, b_s)`` of the layer mode -- the null
+    vector of the GLOBAL lateral interface system.
+
+    Unlike the eigenvalue search (which cascades S-matrices), reconstructing the
+    field needs every strip's amplitudes.  Assembling the strip-interface +
+    Bloch-wrap conditions as ONE block matrix ``G(qz^2)`` and taking its null
+    space is stable -- each block carries only a SINGLE strip's ``exp(+-i ky h)``
+    (bounded), never the accumulated transfer-matrix product that blows up.
+    Returns the stacked null vector ``c`` and ``sigma_min(G)`` (the mode residual).
+    """
+    S = len(strip_modes)
+    Nx = strip_modes[0][0][1].shape[0]
+    wv = []
+    for (lam, Phi), h in strip_modes:
+        ky = np.sqrt(lam - qz2 + 0j)
+        wv.append((Phi, ky, h, np.exp(1j * ky * h), np.exp(-1j * ky * h)))
+    n = 2 * Nx * S
+    G = np.zeros((n, n), dtype=complex)
+    for r in range(S):                              # strip r (right) -> strip nxt (left)
+        Phi_c, ky_c, _, E_c, Ei_c = wv[r]
+        nxt = (r + 1) % S
+        Phi_n, ky_n, _, _, _ = wv[nxt]
+        tt = t if r == S - 1 else 1.0               # Bloch phase on the wrap only
+        rf, rd = 2 * Nx * r, 2 * Nx * r + Nx        # field rows / deriv rows
+        ca, cb = 2 * Nx * r, 2 * Nx * r + Nx        # strip r: a_r / b_r columns
+        na, nb = 2 * Nx * nxt, 2 * Nx * nxt + Nx    # strip nxt: a_n / b_n columns
+        ikc, ikn = 1j * ky_c, 1j * ky_n
+        # field continuity: Phi_c(a_c E_c + b_c Ei_c) = tt Phi_n(a_n + b_n)
+        G[rf:rf + Nx, ca:ca + Nx] += Phi_c * E_c[None, :]
+        G[rf:rf + Nx, cb:cb + Nx] += Phi_c * Ei_c[None, :]
+        G[rf:rf + Nx, na:na + Nx] -= tt * Phi_n
+        G[rf:rf + Nx, nb:nb + Nx] -= tt * Phi_n
+        # deriv continuity: Phi_c(i ky_c)(a_c E_c - b_c Ei_c) = tt Phi_n(i ky_n)(a_n - b_n)
+        G[rd:rd + Nx, ca:ca + Nx] += Phi_c * (ikc * E_c)[None, :]
+        G[rd:rd + Nx, cb:cb + Nx] -= Phi_c * (ikc * Ei_c)[None, :]
+        G[rd:rd + Nx, na:na + Nx] -= tt * Phi_n * ikn[None, :]
+        G[rd:rd + Nx, nb:nb + Nx] += tt * Phi_n * ikn[None, :]
+    s = svdvals(G)
+    c = np.linalg.svd(G)[2][-1].conj()              # right null vector
+    return c, s[-1]
+
+
+def mode_field(strip_modes, qz2, ky0, Ly, Ny):
+    """Reconstruct the 2-D Bloch mode field ``psi(x, y)`` at a layer mode ``qz2``.
+
+    ``strip_modes`` = ``[((lam, Phi), height), ...]`` (as built inside
+    ``layer_modes``).  Samples ``psi`` on an ``(Nx, Ny)`` grid with cell-centre
+    ``y`` (matching ``strips_to_eps_xy`` / the 2-D-FD oracle).  Returns
+    ``(psi, sigma)`` with ``sigma = sigma_min(G)`` (small confirms a true mode).
+    """
+    Nx = strip_modes[0][0][1].shape[0]
+    c, sigma = _global_lateral_nullspace(strip_modes, qz2, np.exp(1j * ky0 * Ly))
+    S = len(strip_modes)
+    edges = np.concatenate([[0.0], np.cumsum([h for _, h in strip_modes])])
+    yc = (np.arange(Ny) + 0.5) / Ny * Ly
+    psi = np.zeros((Nx, Ny), dtype=complex)
+    for j, y in enumerate(yc):
+        s = min(int(np.searchsorted(edges, y, side="right")) - 1, S - 1)
+        (lam, Phi), _ = strip_modes[s]
+        ky = np.sqrt(lam - qz2 + 0j)
+        a = c[2 * Nx * s:2 * Nx * s + Nx]
+        b = c[2 * Nx * s + Nx:2 * Nx * (s + 1)]
+        eta = y - edges[s]
+        psi[:, j] = Phi @ (a * np.exp(1j * ky * eta) + b * np.exp(-1j * ky * eta))
+    return psi, sigma
+
+
+# --------------------------------------------------------------------------- #
 #  Direct 2-D finite-difference reference (validation oracle)                  #
 # --------------------------------------------------------------------------- #
-def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0):
+def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False):
     """Bloch modes ``qz^2`` of ``[d2/dx2 + d2/dy2 + eps(x,y) k0^2] psi = qz^2 psi``
-    by a direct 2-D FD eigensolve (the independent oracle)."""
+    by a direct 2-D FD eigensolve (the independent oracle).  With
+    ``return_vecs`` also returns the eigenvectors reshaped to ``(Nx, Ny)`` (sorted
+    descending by ``qz^2``) for field-level validation of the reconstruction."""
     from scipy.linalg import eig
     hx, hy = Lx / Nx, Ly / Ny
     N = Nx * Ny
@@ -199,7 +272,11 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0):
             A[p, ix(i - 1, j)] += ((1 / px) if i == 0 else 1) / hx ** 2
             A[p, ix(i, j + 1)] += (py if j == Ny - 1 else 1) / hy ** 2
             A[p, ix(i, j - 1)] += ((1 / py) if j == 0 else 1) / hy ** 2
-    return np.sort(eig(A, right=False).real)[::-1]
+    if not return_vecs:
+        return np.sort(eig(A, right=False).real)[::-1]
+    w, Vv = eig(A)
+    order = np.argsort(w.real)[::-1]
+    return w[order].real, Vv[:, order].reshape(Nx, Ny, -1)
 
 
 def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):

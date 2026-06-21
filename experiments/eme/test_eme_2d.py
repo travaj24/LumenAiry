@@ -12,7 +12,13 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
 
 import numpy as np
-from eme_2d import layer_modes, ref_2d_modes, strips_to_eps_xy
+from eme_2d import (
+    layer_modes,
+    mode_field,
+    ref_2d_modes,
+    strip_x_modes,
+    strips_to_eps_xy,
+)
 
 Lx = Ly = 1.0
 k0 = 8.0
@@ -78,3 +84,23 @@ def test_no_duplicate_modes():
     eme = layer_modes(strips, Lx, Nx, Ly, k0, (120, 256), ky0=KY0)
     gaps = np.abs(np.diff(eme))
     assert np.all(gaps > 0.3)                    # no two reported modes coincide
+
+
+def test_mode_field_matches_2dfd_eigenvector():
+    """The reconstructed mode field psi(x,y) overlaps the 2-D-FD eigenvector ~1 --
+    validates the FIELD (the eigenvector), not just the eigenvalue.  Uses the
+    structured 2-strip (non-degenerate modes -> a single FD vector per mode)."""
+    Nx = 28
+    strips = [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
+    sm = [(strip_x_modes(e, Lx, Nx, k0, 0.0), h) for e, h in strips]
+    qs = layer_modes(strips, Lx, Nx, Ly, k0, (120, 256), ky0=KY0)[:3]
+    Ny = 120
+    w, V = ref_2d_modes(strips_to_eps_xy(strips, Lx, Nx, Ly, Ny),
+                        Lx, Ly, Nx, Ny, k0, ky0=KY0, return_vecs=True)
+    for q in qs:
+        psi, sig = mode_field(sm, q, KY0, Ly, Ny)
+        vfd = V[:, :, np.argmin(np.abs(w - q))]
+        ov = abs(np.vdot(vfd.ravel(), psi.ravel())) / (
+            np.linalg.norm(vfd) * np.linalg.norm(psi))
+        assert sig < 1e-2                        # confirmed a true mode (null of G)
+        assert ov > 0.999                        # reconstructed field matches the FD
