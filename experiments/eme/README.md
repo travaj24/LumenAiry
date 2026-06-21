@@ -19,7 +19,7 @@ its full 2-D Bloch modes built **without a 2-D eigensolve**:
 
 | Pitfall | Symptom | Cure |
 |---|---|---|
-| **Transfer matrices** carry `exp(+|ky| h)` for evanescent strip modes | lateral cascade blows up ~1e5 vs analytic | **Redheffer S-matrices** — only ever propagate *decaying* exponentials |
+| **Transfer matrices** carry `exp(+\|ky\| h)` for evanescent strip modes | lateral cascade blows up ~1e5 vs analytic | **Redheffer S-matrices** — only ever propagate *decaying* exponentials |
 | **Eigenvalue tracking** of the Bloch multiplier `mu → target` | modes sit at per-strip band edges where `mu` vanishes from the spectrum (branch transition) → missed | **`det(M(qz^2)) = 0`** via `sigma_min(M)`, which crosses zero *cleanly* through the band edge — no contour (Beyn) method needed |
 | **Single-basis** mode matrix `M` lives in the *first* strip's basis | a mode deeply evanescent in that strip has sub-precision signature → not found (`sigma_min ≈ 0.98` at a real mode) | **multi-basis search** — rotate the strip list to start the cell in each strip, union the modes (each basis sees the modes that propagate in *its* strip), dedup by `merge_rtol` |
 
@@ -46,24 +46,50 @@ Validated against a **direct 2-D finite-difference eigensolve** (`ref_2d_modes`)
 Run: `cd experiments/eme && python -m pytest test_eme_2d.py` (≈2 min — each test
 builds a converged 2-D-FD oracle).
 
-## Scope and the path to a full surface solver
+## Mode field reconstruction (`mode_field`)
 
-This module solves the **scalar Helmholtz layer modes** — the hard, novel core
-(stable lateral cascade + robust band-edge mode-finding). It is *not yet* a full
-diffraction-efficiency solver. Two documented extensions reuse these modes as the
-layer basis:
+`mode_field(strip_modes, qz2, ky0, Ly, Ny)` returns the mode's transverse field
+`psi(x, y)` — the eigenvector, not just `qz²`. At a found mode the per-strip
+modal amplitudes are the null vector of the **global lateral interface system**
+(`_global_lateral_nullspace`): the strip-interface + Bloch-wrap conditions
+assembled as one block matrix `G(qz²)`. Stable — each block carries only a
+*single* strip's `exp(±i ky h)`, never the accumulated transfer-matrix product.
+Validated (`test_mode_field_matches_2dfd_eigenvector`): the reconstructed field
+overlaps the 2-D-FD eigenvector to >0.999 for non-degenerate modes.
 
-1. **Diffraction (z-cascade + far-field).** Sandwich the structured layer between
-   plane-wave half-spaces: project the EME modes `psi(x, y)` onto the 2-D Rayleigh
-   plane-wave basis (overlap integrals → interface S-matrix), propagate
-   `exp(i qz d)` through depth, cascade in z (reuse the same Redheffer star), and
-   read the transmitted/reflected plane-wave amplitudes as diffraction
-   efficiencies. This makes it directly comparable to `pmm_efficiency_2d` /
-   `rcwa_efficiency_2d`.
-2. **Vector (TE/TM).** The scalar strip field becomes a 2-component
-   (Ez-/Hz-polarized) cross-section; the strip eigenproblem and the lateral
-   interface conditions double in size. Required for an anisotropic / full-Jones
-   surface (parity with `pmm_jones_2d` / `rcwa_jones_2d`).
+## Diffraction efficiencies — a documented dead end (`eme_diffraction.py`)
+
+The natural next step — turn the modes into a diffraction *surface* solver by
+mode-matching to Rayleigh half-spaces — **does not work with these modes**, and
+that is a real finding, not a bug:
+
+- **The mode-matching math is exact.** A uniform layer reproduces the analytic
+  scalar slab (Airy/Fabry-Pérot), energy `R+T=1` (machine precision at normal
+  incidence; FD accuracy at oblique). `mode_match` is validated
+  (`test_eme_diffraction.py`).
+- **Structured layers do not converge.** Efficiencies wander (e.g. `T_00` swinging
+  0.27 to 0.48) and energy strays from 1 as the order/mode count grows, for *every*
+  mode selection tried (highest `qz²`; largest order-overlap; complete coarse
+  grid). **Why:** a convergent modal grating method (Botten / classical lamellar)
+  computes the layer modes *in the truncated N_pw-order Fourier space*, where
+  there are exactly `N_pw` of them and they span it. The EME computes modes at
+  full *real-space* resolution; truncating that set to `N_pw` is not a basis of
+  the retained-order space. Efficiency truncation is a Fourier-space notion — the
+  EME modes are real-space.
+- **Use the right tool for efficiencies:** `lumenairy.rcwa_efficiency_2d`
+  (Fourier-space modes) or `pmm_efficiency_2d`. The EME's niche is **modes / band
+  structure**, not diffraction efficiencies.
+
+(Note `rcwa_efficiency_2d` solves the full *vector* problem; this scalar model
+reduces to it only in the y-uniform → 1-D-TE limit, not for a true 2-D crossed
+grating.)
+
+## The remaining vector extension (open)
+
+A vector (TE/TM) layer-mode solver would make the scalar strip field a
+2-component cross-section; the strip eigenproblem and lateral interface
+conditions double in size. That extends the **mode** solver (parity with the mode
+content of `pmm_jones_2d`), and is independent of the diffraction finding above.
 
 ## Known v1 limitation
 
