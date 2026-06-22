@@ -151,11 +151,17 @@ path is byte-identical):
   full `eig` otherwise). The 2-D-FD *oracle* is tensor-aware for **diagonal**
   tensors (the `exz` oracle term has a residual Yee-stagger error → deferred; the
   strip generator's `exz` is validated independently via Berreman).
+- **Lossy ε**: the FD oracle `ref_2d_modes_vector(return_complex=True)` solves
+  lossy layers **exactly** (complex `qz²`; a uniform lossy slab's modal loss
+  `Im(qz²)` matches analytic to ~1e-13). The strip-solver itself is lossless; a
+  weak-loss first-order perturbation reproduces the modal loss to ~5% (the exact
+  non-Hermitian PT — the eliminated `Ez ∝ 1/ε` term — is unfinished), so use the
+  oracle for exact lossy modes.
 
 *Documented as out of scope (research-grade):* high-degeneracy mode-finding (a
-conditioning wall in `G`'s degenerate null space); strong-loss / leaky modes and
-lossy-anisotropy (complex-`qz²` modes are off the real-axis scan → need a contour /
-Beyn eigensolver); `eyz/ezy` tensor coupling.
+conditioning wall in `G`'s degenerate null space); **strong-loss / leaky modes**
+and lossy-anisotropy (complex-`qz²` modes are off the real-axis scan → need a
+contour / Beyn eigensolver); `eyz/ezy` tensor coupling.
 
 **Performance.** Two exact/validated speedups: the block-anti-diagonal strip-eig
 reduction (~3× the whole solver) and the sparse shift-invert oracle (~145×). A

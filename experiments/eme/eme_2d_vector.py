@@ -41,11 +41,21 @@ the scalar Helmholtz field; TM = Hz with the inverse rule).  Validated against a
 direct Yee-staggered 2-D vector FD solve (``ref_2d_modes_vector``); uniform ->
 analytic (doubly degenerate TE+TM); structured -> the 2-D-FD converges to the EME.
 
-SCOPE: isotropic (or in-plane diagonal) lossless eps; a mode / band-structure
-solver (NOT diffraction efficiencies -- see ``eme_diffraction.py`` for why the
-lateral-cascade modes are the wrong basis for efficiency truncation).  Conventions:
-``exp(+i qz z)``, ``exp(+i ky y)``; normalized Maxwell ``curl E = i k0 h``,
-``curl h = -i k0 eps E`` (``h = Z0 H``); real eps (lossless).
+SCOPE: a mode / band-structure solver (NOT diffraction efficiencies -- see
+``eme_diffraction.py`` for why the lateral-cascade modes are the wrong basis for
+efficiency truncation).  Conventions: ``exp(+i qz z)``, ``exp(+i ky y)``;
+normalized Maxwell ``curl E = i k0 h``, ``curl h = -i k0 eps E`` (``h = Z0 H``).
+
+Materials/geometry (see ``layer_vector_modes`` / ``strip_vector_modes`` /
+``eps_xy_to_strips``): isotropic OR ``(Nx,3,3)`` anisotropic (DIAGONAL + ``exz``
+out-of-plane) lossless eps; arbitrary ``eps(x,y)`` via the ``eps_xy_to_strips``
+y-staircase.  LOSSY layers: the FD oracle ``ref_2d_modes_vector(return_complex=
+True)`` solves them EXACTLY (complex ``qz^2``); the strip-solver itself is lossless
+(a weak-loss first-order perturbation reproduces the modal loss to ~5% but the
+exact non-Hermitian PT is unfinished -- use the oracle for exact lossy modes).
+Out of scope (research): strong-loss / leaky modes (complex-``qz^2``, off the
+real-axis scan -> need a contour/Beyn eigensolver); ``eyz`` tensor coupling;
+high-degeneracy (uniform-slab) mode-finding.
 
 The strip generator and the FD oracle were derived + numerically self-validated as
 separate operators (uniform analytic; qz=0 scalar reduction byte-exact; qz-coupling
@@ -555,7 +565,8 @@ def _build_generator_tensor(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
 
 
 def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
-                        return_vecs=False, k=None, sigma=None):
+                        return_vecs=False, k=None, sigma=None,
+                        return_complex=False):
     """Full-vectorial 2-D Bloch modes ``qz^2`` of a z-invariant
     ``eps(x, y)`` by a direct Yee-staggered finite-difference Maxwell solve -- the
     independent oracle (vector analog of ``eme_2d.ref_2d_modes``).  ``eps_xy`` is
@@ -588,8 +599,9 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     qz2 = -(gam ** 2)
     order = np.argsort(qz2.real)[::-1]
     qz2, gam, V = qz2[order], gam[order], V[:, order]
+    out_qz2 = qz2.copy() if return_complex else qz2.real.copy()  # lossy -> complex
     if not return_vecs:
-        return qz2.real.copy()
+        return out_qz2
     reldiv = np.empty(V.shape[1])
     for m in range(V.shape[1]):
         Ex, Ey = V[0:N, m], V[N:2 * N, m]
@@ -612,7 +624,7 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
         V[0:N].reshape(Nx, Ny, -1), V[N:2 * N].reshape(Nx, Ny, -1),
         V[2 * N:3 * N].reshape(Nx, Ny, -1), V[3 * N:4 * N].reshape(Nx, Ny, -1),
     ], axis=0)
-    return qz2.real.copy(), fields, reldiv
+    return out_qz2, fields, reldiv
 
 
 def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):

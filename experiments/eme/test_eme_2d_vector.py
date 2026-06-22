@@ -250,3 +250,20 @@ def test_vector_anisotropic_eyz_raises():
     e = np.array([[4, 0, 0], [0, 4, 0.5], [0, 0.5, 4]], dtype=complex)
     with pytest.raises(NotImplementedError):
         strip_vector_modes(e[None, :, :], Lx, 1, k0, 0.0, 9.0)
+
+
+def test_vector_oracle_lossy_complex():
+    """The FD oracle solves LOSSY layers exactly: ``return_complex=True`` gives the
+    complex ``qz^2`` of a uniform lossy slab matching ``eps k0^2 - kx^2 - ky^2``
+    (the modal loss ``Im(qz^2)`` is exact).  Default (real) path is unchanged."""
+    Nx = Ny = 18
+    eps = 4.0 + 0.05j
+    q = ref_2d_modes_vector(np.full((Nx, Ny), eps, dtype=complex), Lx, Ly, Nx, Ny,
+                            k0, ky0=KY0, return_complex=True)
+    top = q[np.argmax(q.real)]
+    anal = eps * k0 ** 2 - KY0 ** 2              # (0,0) mode: kx=0, ky=KY0
+    assert abs(top.imag - anal.imag) < 1e-3      # modal loss exact
+    assert abs(top.real - anal.real) < 0.5       # real part to x-FD accuracy
+    qr = ref_2d_modes_vector(np.full((Nx, Ny), 4.0, dtype=complex), Lx, Ly, Nx, Ny,
+                             k0, ky0=KY0)
+    assert np.isrealobj(qr)                      # default path still real
