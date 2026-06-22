@@ -152,5 +152,5 @@ count (or a small `ky0` perturbation to split the pair) is the fix — deferred.
   `layer_vector_modes`, `mode_field_vec`) + the Yee 2-D vector oracle
   (`ref_2d_modes_vector`).
 - `eme_diffraction.py` — the documented diffraction dead end (validated slab math).
-- `test_eme_2d.py` (scalar, 6) / `test_eme_2d_vector.py` (vector, 6) /
+- `test_eme_2d.py` (scalar, 5) / `test_eme_2d_vector.py` (vector, 6) /
   `test_eme_diffraction.py` (diffraction finding, 3).

@@ -54,7 +54,7 @@ def test_structured_2strip_converges_from_2dfd():
     prev = np.inf
     for Ny in (28, 56, 112):
         eps_xy = strips_to_eps_xy(strips, Lx, Nx, Ly, Ny)
-        ref = ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, ky0=KY0)
+        ref = ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, ky0=KY0, k=12)
         ref = np.sort(ref[ref > 120][:3])[::-1]
         err = np.max(np.abs(ref - eme))
         assert err < prev or err < 1e-3        # monotone convergence to the EME
@@ -71,7 +71,7 @@ def test_high_contrast_pillar_multibasis():
     strips = [(epsH, 0.25), (epsG, 0.5), (epsH, 0.25)]
     eme = layer_modes(strips, Lx, Nx, Ly, k0, (60, 384), ky0=KY0)[:6]
     ref = ref_2d_modes(strips_to_eps_xy(strips, Lx, Nx, Ly, 200),
-                       Lx, Ly, Nx, 200, k0, ky0=KY0)
+                       Lx, Ly, Nx, 200, k0, ky0=KY0, k=12)
     ref = ref[ref > 60][:6]
     assert len(eme) == 6                         # found the localized modes too
     assert np.max(np.abs(eme - ref)) < 0.5       # all match (y-FD error ~0.1)
@@ -96,7 +96,7 @@ def test_mode_field_matches_2dfd_eigenvector():
     qs = layer_modes(strips, Lx, Nx, Ly, k0, (120, 256), ky0=KY0)[:3]
     Ny = 120
     w, V = ref_2d_modes(strips_to_eps_xy(strips, Lx, Nx, Ly, Ny),
-                        Lx, Ly, Nx, Ny, k0, ky0=KY0, return_vecs=True)
+                        Lx, Ly, Nx, Ny, k0, ky0=KY0, return_vecs=True, k=12)
     for q in qs:
         psi, sig = mode_field(sm, q, KY0, Ly, Ny)
         vfd = V[:, :, np.argmin(np.abs(w - q))]

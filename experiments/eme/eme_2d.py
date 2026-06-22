@@ -250,31 +250,49 @@ def mode_field(strip_modes, qz2, ky0, Ly, Ny):
 # --------------------------------------------------------------------------- #
 #  Direct 2-D finite-difference reference (validation oracle)                  #
 # --------------------------------------------------------------------------- #
-def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False):
+def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False,
+                 k=None, sigma=None):
     """Bloch modes ``qz^2`` of ``[d2/dx2 + d2/dy2 + eps(x,y) k0^2] psi = qz^2 psi``
-    by a direct 2-D FD eigensolve (the independent oracle).  With
-    ``return_vecs`` also returns the eigenvectors reshaped to ``(Nx, Ny)`` (sorted
-    descending by ``qz^2``) for field-level validation of the reconstruction."""
-    from scipy.linalg import eig
+    by a direct 2-D FD eigensolve (the independent oracle).  With ``return_vecs``
+    also returns the eigenvectors reshaped to ``(Nx, Ny)`` (descending by ``qz^2``).
+
+    Default: dense ``eig`` of the full ``Nx*Ny`` spectrum.  Pass ``k`` for a SPARSE
+    shift-invert (``scipy.sparse.linalg.eigs``) returning the ``k`` modes nearest
+    ``sigma`` (default: the band top ``max(eps) k0^2``) -- O(100x) faster for the
+    top / in-band modes."""
+    import scipy.sparse as _sp
     hx, hy = Lx / Nx, Ly / Ny
     N = Nx * Ny
-    A = np.zeros((N, N), dtype=complex)
     px, py = np.exp(1j * kx0 * Lx), np.exp(1j * ky0 * Ly)
 
     def ix(i, j):
         return (i % Nx) * Ny + (j % Ny)
 
+    rows, cols, vals = [], [], []
     for i in range(Nx):
         for j in range(Ny):
             p = ix(i, j)
-            A[p, p] = -2 / hx ** 2 - 2 / hy ** 2 + eps_xy[i, j] * k0 ** 2
-            A[p, ix(i + 1, j)] += (px if i == Nx - 1 else 1) / hx ** 2
-            A[p, ix(i - 1, j)] += ((1 / px) if i == 0 else 1) / hx ** 2
-            A[p, ix(i, j + 1)] += (py if j == Ny - 1 else 1) / hy ** 2
-            A[p, ix(i, j - 1)] += ((1 / py) if j == 0 else 1) / hy ** 2
-    if not return_vecs:
-        return np.sort(eig(A, right=False).real)[::-1]
-    w, Vv = eig(A)
+            rows += [p, p, p, p, p]
+            cols += [p, ix(i + 1, j), ix(i - 1, j), ix(i, j + 1), ix(i, j - 1)]
+            vals += [-2 / hx ** 2 - 2 / hy ** 2 + eps_xy[i, j] * k0 ** 2,
+                     (px if i == Nx - 1 else 1) / hx ** 2,
+                     ((1 / px) if i == 0 else 1) / hx ** 2,
+                     (py if j == Ny - 1 else 1) / hy ** 2,
+                     ((1 / py) if j == 0 else 1) / hy ** 2]
+    A = _sp.coo_matrix((vals, (rows, cols)), shape=(N, N), dtype=complex).tocsc()
+    if k is None:
+        from scipy.linalg import eig
+        Ad = A.toarray()
+        if not return_vecs:
+            return np.sort(eig(Ad, right=False).real)[::-1]
+        w, Vv = eig(Ad)
+    else:
+        from scipy.sparse.linalg import eigs
+        if sigma is None:
+            sigma = float(np.max(eps_xy.real)) * k0 ** 2
+        w, Vv = eigs(A, k=min(k, N - 2), sigma=sigma)
+        if not return_vecs:
+            return np.sort(w.real)[::-1]
     order = np.argsort(w.real)[::-1]
     return w[order].real, Vv[:, order].reshape(Nx, Ny, -1)
 
