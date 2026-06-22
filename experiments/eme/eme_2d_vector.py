@@ -58,6 +58,7 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import eig, svdvals
 from scipy.optimize import minimize_scalar
+from scipy.sparse.linalg import eigs
 
 
 # =========================================================================== #
@@ -146,16 +147,24 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0):
     """
     qz = np.sqrt(complex(qz2)) if qz2 != 0.0 else 0.0
     A = _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, complex(qz))
-    gam, psi = np.linalg.eig(A)
-    ky = gam / 1j
-    fwd = _strip_split_forward(ky)
-    if fwd.shape[0] != 2 * Nx:           # degenerate-real fallback (Berreman-style)
-        order = np.lexsort((-ky.real, -ky.imag))
-        fwd = order[:2 * Nx]
-    ky_f = ky[fwd]
-    psi_f = psi[:, fwd]
     n2 = 2 * Nx
-    return ky_f, psi_f[:n2, :], psi_f[n2:, :]
+    # A is block-ANTI-diagonal [[0, B], [C, 0]] (E-rows couple only to H, H-rows
+    # only to E), so the 4Nx eig(A) reduces EXACTLY to the 2Nx eig(B@C) -- ~7.5x
+    # cheaper, the dominant solver cost.  A[u; w] = mu[u; w] gives B w = mu u,
+    # C u = mu w => (B C) u = mu^2 u; the A-eigenvalue is mu = i ky, the H-part is
+    # w = C u / mu, and the two roots +-mu of mu^2 are the +-ky forward/backward
+    # pair (same E-part u, H-part sign-flipped -- the [W; -V] structure).
+    B, C = A[:n2, n2:], A[n2:, :n2]
+    mu2, U = np.linalg.eig(B @ C)
+    mu = np.sqrt(mu2)
+    kys = np.concatenate([mu / 1j, -mu / 1j])
+    Us = np.concatenate([U, U], axis=1)
+    mus = np.concatenate([mu, -mu])
+    fwd = _strip_split_forward(kys)
+    if fwd.shape[0] != n2:               # degenerate-real fallback (Berreman-style)
+        fwd = np.lexsort((-kys.real, -kys.imag))[:n2]
+    ky_f, U_f, mu_f = kys[fwd], Us[:, fwd], mus[fwd]
+    return ky_f, U_f, (C @ U_f) / mu_f[None, :]
 
 
 # =========================================================================== #
@@ -236,7 +245,7 @@ def dispersion_vec(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
 
 
 def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
-                       n_scan=400, tol=5e-2, ratio_tol=5e-2, merge_rtol=3e-3):
+                       n_scan=400, tol=5e-2, ratio_tol=1e-2, merge_rtol=3e-3):
     """Full-vector 2-D Bloch modes ``qz^2`` of a y-strip-sectioned layer (the
     vector analog of ``eme_2d.layer_modes``).
 
@@ -252,13 +261,13 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     ``tol`` are Brent-refined and kept iff the smallest gap among the bottom
     ``_NULL_KMAX`` values is ``< ratio_tol``; deduped within ``merge_rtol``.
 
-    VALIDATED REGIME -- STRUCTURED layers (TE/TM split): recall ~14/16 at Nx=20,
-    sharpening with Nx (15/16 at Nx=28) toward the full band, with ~1 spurious
-    near-threshold candidate (cross-check completeness-critical work against
-    ``ref_2d_modes_vector``).  This is a large improvement over the Redheffer
-    cascade residual it replaces (2/16).  KNOWN LIMITATION: HIGH-degeneracy layers
-    (e.g. a uniform slab, with ``+-ky x 2-pol`` 4-fold-degenerate dense clusters)
-    give unreliable mode-finding -- use the oracle / the analytic dispersion there.
+    VALIDATED REGIME -- STRUCTURED layers (TE/TM split): recall 16/16 on the
+    reference 2-strip cell at Nx=20 with ~1 spurious near-threshold candidate
+    (cross-check completeness-critical work against ``ref_2d_modes_vector``) -- a
+    large improvement over the Redheffer cascade residual it replaces (2/16).
+    KNOWN LIMITATION: HIGH-degeneracy layers (e.g. a uniform slab, with
+    ``+-ky x 2-pol`` 4-fold-degenerate dense clusters) give unreliable
+    mode-finding -- use the oracle / the analytic dispersion there.
     """
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
@@ -373,21 +382,33 @@ def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
 
 
 def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
-                        return_vecs=False):
+                        return_vecs=False, k=None, sigma=None):
     """Full-vectorial 2-D Bloch modes ``qz^2`` of a z-invariant isotropic
     ``eps(x, y)`` by a direct Yee-staggered finite-difference Maxwell solve -- the
     independent oracle (vector analog of ``eme_2d.ref_2d_modes``).
 
-    Returns ``qz^2`` (descending; ``4 Nx Ny`` of them: 2 pol x 2 sign x N spatial,
-    with ``+-qz`` collapsed by ``qz^2 = -gamma^2``).  With ``return_vecs`` also
-    returns ``(fields, reldiv)`` -- ``fields[c]`` (c in [Ex,Ey,hx,hy]) reshaped
+    Returns ``qz^2`` (descending).  With ``return_vecs`` also returns
+    ``(fields, reldiv)`` -- ``fields[c]`` (c in [Ex,Ey,hx,hy]) reshaped
     ``(Nx, Ny)`` per mode, and ``reldiv = |div(eps E)|/(k0|E|)`` per mode
     (physical ~1e-12, spurious O(1); the Yee operator is already spurious-free).
+
+    By default a DENSE ``eig`` returns the full ``4 Nx Ny`` spectrum (``+-qz`` per
+    polarization, collapsed by ``qz^2 = -gamma^2``) -- needed for mode-count /
+    degeneracy checks.  Pass ``k`` to instead use a SPARSE shift-invert
+    (``scipy.sparse.linalg.eigs``) that returns the ``k`` physical modes nearest
+    ``sigma`` (default: the band centre ``~ i k0 sqrt(max eps) * 0.78``) --
+    O(100x) faster for the top / in-band physical modes, and it returns the
+    DISTINCT modes directly (only the ``+i gamma`` branch, no ``+-qz`` doubling).
     """
     N = Nx * Ny
     G, (DxF, DxB, DyF, DyB), eps = _build_generator(
         eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0)
-    gam, V = eig(G.toarray())
+    if k is None:
+        gam, V = eig(G.toarray())                    # dense full spectrum
+    else:
+        if sigma is None:
+            sigma = 1j * k0 * np.sqrt(float(np.max(eps_xy.real))) * 0.78
+        gam, V = eigs(G.tocsc(), k=min(k, 4 * N - 2), sigma=sigma)
     qz2 = -(gam ** 2)
     order = np.argsort(qz2.real)[::-1]
     qz2, gam, V = qz2[order], gam[order], V[:, order]

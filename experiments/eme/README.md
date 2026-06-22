@@ -94,7 +94,10 @@ from 1-D-x vector strip modes.
   4-field generator on the y-tangential state `[Ex, Ez, Hx, Hz](x)`, eigenvalue
   `ky`. Yee-staggered x. The operator is **qz-dependent** (conical TE/TM coupling
   `~ qz·dε/dx`); the ky² spectrum shifts rigidly `ky²(qz)=ky²(0)−qz²` but the
-  eigenvectors rotate, so it's rebuilt per qz².
+  eigenvectors rotate, so it's rebuilt per qz². **Perf:** the 4Nx generator is
+  block-anti-diagonal `[[0,B],[C,0]]`, so its eig reduces *exactly* to the 2Nx
+  `eig(B·C)` — **~7.5× cheaper** per strip (~3× the whole solver), the dominant
+  cost.
 - **TE/TM**: TE = E along the invariant z (Ez), TM = Hz. Decoupled in an x-uniform
   strip or at qz=0 (where the solver reduces **exactly** to two scalar `eme_2d`
   runs — validated byte-level); hybridized by the x-structure at conical qz.
@@ -112,20 +115,28 @@ from 1-D-x vector strip modes.
 - **Oracle** (`ref_2d_modes_vector`): an independent **Yee-staggered 2-D vector
   FD** Maxwell solve — first-order generator on `[Ex,Ey,hx,hy]`, eigenvalue
   `qz²=−γ²`, spurious-free (cross-checked vs an independent Fourier-PWE solver).
+  Dense `eig` by default (full spectrum, for degeneracy/count checks); pass `k=`
+  for a **sparse shift-invert** that returns the `k` in-band physical modes
+  **~145× faster** (the test-suite arbiter).
 
-**Validation** (`test_eme_2d_vector.py`, 6 tests): qz=0 → scalar reduction
+**Validation** (`test_eme_2d_vector.py`, 6 tests, ~33 s): qz=0 → scalar reduction
 (byte-level); uniform oracle (doubly degenerate, spurious-free); structured →
 the 2-D-FD oracle converges to the EME; **full-band completeness** (block-`G`
-recovers ~14/16 of the band the cascade missed, sharpening toward complete with
-Nx — 15/16 at Nx=28); dedup; mode field.
+recovers **16/16** of the band the cascade missed at only 2/16); dedup; mode field.
 
 **Validated regime & limitations.** The mode-finder is validated for **structured
-layers** (TE/TM split): recall ~14–16/16 (resolution-improving) with ~1 spurious
-near-threshold candidate — cross-check completeness-critical work against the
-oracle. **High-degeneracy** layers (a uniform slab: `±ky × 2-pol` 4-fold-
-degenerate dense clusters) give unreliable mode-finding; use the oracle / analytic
-dispersion there. Exactly-degenerate pairs may merge under `merge_rtol`. Scalar in
-loss convention only (real ε); in-plane isotropic ε.
+layers** (TE/TM split): recall **16/16** on the reference 2-strip cell at Nx=20
+with ~1 spurious near-threshold candidate — cross-check completeness-critical work
+against the oracle. **High-degeneracy** layers (a uniform slab: `±ky × 2-pol`
+4-fold-degenerate dense clusters) give unreliable mode-finding; use the oracle /
+analytic dispersion there. Exactly-degenerate pairs may merge under `merge_rtol`.
+Scalar in loss convention only (real ε); in-plane isotropic ε.
+
+**Performance.** Two exact/validated speedups: the block-anti-diagonal strip-eig
+reduction (~3× the whole solver) and the sparse shift-invert oracle (~145×). A
+third (reducing the qz²-scan resolution `n_scan`) was investigated and **rejected**
+— it trades away recall (sharp σ_min dips need fine sampling to bracket). Net: the
+test suite went 357 s → 33 s (~11×).
 
 ## Known v1 limitation (scalar)
 

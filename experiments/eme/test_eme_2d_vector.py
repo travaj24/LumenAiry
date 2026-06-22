@@ -45,11 +45,14 @@ def _distinct(vals, rtol=3e-3):
     return np.array(out)
 
 
-def _oracle_band(strips, Nx, Ny, lo, hi):
-    """Distinct physical oracle modes ``qz^2`` in ``(lo, hi)`` (reldiv-clean)."""
+def _oracle_band(strips, Nx, Ny, lo, hi, k=40):
+    """Distinct physical oracle modes ``qz^2`` in ``(lo, hi)`` (reldiv-clean).
+    Uses the sparse shift-invert oracle (~100x faster, returns distinct modes)
+    centred on the band."""
     eps_xy = strips_to_eps_xy(strips, Lx, Nx, Ly, Ny)
+    sigma = 1j * np.sqrt(0.5 * (lo + hi))
     qz2, _, reldiv = ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, ky0=KY0,
-                                         return_vecs=True)
+                                         return_vecs=True, k=k, sigma=sigma)
     return _distinct(qz2[(qz2 > lo) & (qz2 < hi) & (reldiv < 1e-2)])
 
 
