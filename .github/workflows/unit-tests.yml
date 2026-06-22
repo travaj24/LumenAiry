@@ -80,7 +80,12 @@ jobs:
         # concrete to surface on failure.
         shell: bash
         run: |
-          python -m pytest tests/unit -m "not integration" --tb=short \
+          # v5.15.0: exclude ``slow`` from the FAST gate.  The graduated EME
+          # eig-heavy convergence tests (tests/unit/test_eme_*.py, ~10 min on
+          # the runner) pushed this step to 24:37 against the 25-min cap; they
+          # (and the rcwa FFF-NV slow test) now run in the dedicated
+          # ``slow-tests`` job below, keeping this gate fast (~15 min).
+          python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5 -v 2>&1 \
             | tee unit_test_output.txt
           exit ${PIPESTATUS[0]}
@@ -223,3 +228,48 @@ jobs:
 
       - name: Run public-API smoke
         run: python -m pytest tests/unit/test_public_api.py -v
+
+  slow-tests:
+    name: Slow tests (eig-heavy convergence)
+    runs-on: ubuntu-latest
+    # v5.15.0: the graduated EME mode-solver convergence tests
+    # (tests/unit/test_eme_*.py) and the RCWA FFF-NV slow test are eig-heavy
+    # (~10-12 min on the runner).  They were excluded from the fast ``unit``
+    # gate (which hit 24:37 against its 25-min cap once EME landed) and run
+    # here on a single Python -- the numerics are not version-sensitive -- with
+    # a longer cap, so they still gate every push / PR.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[fft,perf,numba,hdf5,zarr,dev]"
+
+      - name: Run slow tests
+        shell: bash
+        run: |
+          python -m pytest tests/unit -m "slow and not integration" --tb=short \
+            -p no:cacheprovider -v 2>&1 \
+            | tee slow_test_output.txt
+          exit ${PIPESTATUS[0]}
+        timeout-minutes: 35
+
+      - name: Upload slow-test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: slow-test-output
+          path: slow_test_output.txt
+          if-no-files-found: warn
+          retention-days: 7

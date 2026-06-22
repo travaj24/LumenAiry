@@ -49,6 +49,21 @@ _FROZEN_CACHE: dict = {}
 _FROZEN_LOCK = threading.Lock()
 
 
+def _clear_frozen_cache():
+    """Clear the frozen geometry-operator cache (enrolled with the central cache
+    registry so ``clear_asm_caches`` drains it -- mirrors the pmm JAX twin)."""
+    with _FROZEN_LOCK:
+        _FROZEN_CACHE.clear()
+
+
+try:
+    from ..._cache_registry import register_cache_clearer as _register_cache_clearer
+
+    _register_cache_clearer("eme_jax_frozen_ops", _clear_frozen_cache)
+except ImportError:
+    pass
+
+
 def _frozen_key(Nx, Ny, Lx, Ly, kx0, ky0):
     return (int(Nx), int(Ny), float(Lx), float(Ly), float(kx0), float(ky0))
 

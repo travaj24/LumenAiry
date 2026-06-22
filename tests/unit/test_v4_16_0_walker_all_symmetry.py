@@ -191,6 +191,38 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.raytrace.jax_trace', 'JaxPrescription'),
     ('lumenairy.raytrace.jax_trace', 'trace_jax_with_params'),
 
+    # ---- elements.eme (eigenmode-expansion mode solvers) ------------------
+    # v5.15.0: the EME 2-D Bloch *mode* / band-structure solvers are a
+    # specialized subpackage reached via ``la.elements.eme.*`` -- the
+    # mode-solver peer of ``pmm`` / ``rcwa`` (whose own public names ARE
+    # prefixed -- ``pmm_efficiency_1d`` etc. -- and so live at top level).
+    # The EME functions carry GENERIC names (``layer_modes``, ``dispersion``,
+    # ``mode_field``, ``cell_smatrix``, ``mode_match``, ...) that would be
+    # ambiguous and collision-prone in the ~450-name top-level surface
+    # (``dispersion`` / ``layer_modes`` read as far too general there).  They
+    # stay namespaced under the subpackage by design -- same rationale as the
+    # ``raytrace.bundles`` adapters and the ``backend.scipy`` primitives above.
+    ('lumenairy.elements.eme', 'strip_x_modes'),
+    ('lumenairy.elements.eme', 'cell_smatrix'),
+    ('lumenairy.elements.eme', 'dispersion'),
+    ('lumenairy.elements.eme', 'layer_modes'),
+    ('lumenairy.elements.eme', 'mode_field'),
+    ('lumenairy.elements.eme', 'ref_2d_modes'),
+    ('lumenairy.elements.eme', 'strip_vector_modes'),
+    ('lumenairy.elements.eme', 'dispersion_vec'),
+    ('lumenairy.elements.eme', 'layer_vector_modes'),
+    ('lumenairy.elements.eme', 'mode_field_vec'),
+    ('lumenairy.elements.eme', 'beyn_refine_complex'),
+    ('lumenairy.elements.eme', 'layer_vector_modes_complex'),
+    ('lumenairy.elements.eme', 'ref_2d_modes_vector'),
+    ('lumenairy.elements.eme', 'strips_to_eps_xy'),
+    ('lumenairy.elements.eme', 'eps_xy_to_strips'),
+    ('lumenairy.elements.eme', 'plane_wave_orders'),
+    ('lumenairy.elements.eme', 'pw_matrix'),
+    ('lumenairy.elements.eme', 'mode_match'),
+    ('lumenairy.elements.eme', 'diffraction_fd'),
+    ('lumenairy.elements.eme', 'diffraction_eme'),
+
     # ---- backend (package re-export of RandomState) -----------------------
     # ``RandomState`` IS at top level so this is NOT in the exemption
     # set -- listed here as a no-op anchor for the audit reader.

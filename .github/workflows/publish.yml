@@ -150,7 +150,11 @@ jobs:
 
       - name: Run unit tests (release tag verification)
         run: |
-          python -m pytest tests/unit -m "not integration" --tb=short \
+          # v5.15.0: exclude ``slow`` (the eig-heavy EME convergence tests run
+          # in the unit-tests ``slow-tests`` job on every push to main, so the
+          # release branch is already slow-verified; excluding them here keeps
+          # the release verify within the step cap).
+          python -m pytest tests/unit -m "not integration and not slow" --tb=short \
             -p no:cacheprovider --maxfail=5
         # v5.12.0: 15 -> 25 to match unit-tests.yml's proven step cap (the suite
         # now runs ~15 min on 3.10 + ~3 min install; the old 15-min step cap
