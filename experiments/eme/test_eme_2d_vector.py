@@ -265,6 +265,28 @@ def test_vector_anisotropic_oracle_returnvecs():
     assert rd[np.argmax(q)] < 1e-2               # physical mode is divergence-clean
 
 
+def test_vector_magnetic_mu():
+    """Scalar permeability mu(x): the strip dispersion is eps*mu*k0^2 - kx^2 - ky^2,
+    the oracle reproduces it (real + lossy), and mu=1 is byte-identical."""
+    qz = 3.0
+    for eps, mu in [(4.0, 2.0), (2.25, 1.8), (4.0, 0.6)]:
+        ky = strip_vector_modes(np.full(1, eps, complex), Lx, 1, k0, 0.0, qz ** 2,
+                                mu_x=mu)[0]
+        assert abs(np.abs(ky).max() - np.sqrt(eps * mu * k0 ** 2 - qz ** 2)) < 1e-9
+    Nx = Ny = 18                                     # lossy magnetic oracle: exact loss
+    eps, mu = 4.0, 2.5 + 0.05j
+    q = ref_2d_modes_vector(np.full((Nx, Ny), eps, complex), Lx, Ly, Nx, Ny, k0,
+                            ky0=KY0, mu_xy=np.full((Nx, Ny), mu, complex),
+                            return_complex=True)
+    top = q[np.argmax(q.real)]
+    assert abs(top.imag - (eps * mu * k0 ** 2 - KY0 ** 2).imag) < 1e-3
+    # mu=1 is byte-identical to the no-mu strip modes
+    e = _grating(16, 1.0, 4.0)
+    k_no = np.sort_complex(strip_vector_modes(e, Lx, 16, k0, 0.37, 9.0)[0])
+    k_one = np.sort_complex(strip_vector_modes(e, Lx, 16, k0, 0.37, 9.0, mu_x=1.0)[0])
+    assert np.array_equal(k_no, k_one)
+
+
 def test_vector_oracle_lossy_complex():
     """The FD oracle solves LOSSY layers exactly: ``return_complex=True`` gives the
     complex ``qz^2`` of a uniform lossy slab matching ``eps k0^2 - kx^2 - ky^2``

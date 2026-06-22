@@ -91,7 +91,7 @@ def _strip_yee_diffs(Nx, h, kx0, Lx):
     return Df, Db
 
 
-def _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, qz):
+def _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, qz, mu_x=1.0):
     """The ``4Nx x 4Nx`` generator ``A`` with ``d/dy psi = A psi`` for the
     y-tangential Berreman state ``psi = [Ex, Ez, Hx, Hz](x)`` of a strip
     ``eps = eps(x)`` (invariant in y, z), propagating in y.  Eigenvalues of ``A``
@@ -105,25 +105,30 @@ def _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, qz):
     BYTE-EXACTLY to this scalar body for an isotropic tensor ``e(x) * I3``."""
     eps = np.asarray(eps_x, dtype=complex)
     if eps.ndim == 3:                       # (Nx, 3, 3) anisotropic tensor branch
-        return _strip_vector_generator_tensor(eps, Lx, Nx, k0, kx0, qz)
+        return _strip_vector_generator_tensor(eps, Lx, Nx, k0, kx0, qz, mu_x)
     h = Lx / Nx
     Df, Db = _strip_yee_diffs(Nx, h, kx0, Lx)
-    I = np.eye(Nx, dtype=complex)
     Z = np.zeros((Nx, Nx), dtype=complex)
     Ei = np.diag(1.0 / eps)         # 1/eps(x) pointwise
     Eps = np.diag(eps)
-    # dEx/dy = Db[-(qz/k0)(1/eps)Hx - (i/k0)(1/eps)Df Hz] - i k0 Hz
+    # scalar permeability mu(x): curl E = i k0 mu h.  mu enters 6 terms; mu=1 (the
+    # default) makes Mu = Mi = I -> byte-identical to the lossless mu=1 generator.
+    mu = np.asarray(mu_x, dtype=complex)
+    if mu.ndim == 0:
+        mu = np.full(Nx, complex(mu))
+    Mi, Mu = np.diag(1.0 / mu), np.diag(mu)
+    # dEx/dy = Db[-(qz/k0)(1/eps)Hx - (i/k0)(1/eps)Df Hz] - i k0 mu Hz
     A_Ex_Hx = Db @ (-(qz / k0) * Ei)
-    A_Ex_Hz = Db @ (-(1j / k0) * (Ei @ Df)) - 1j * k0 * I
-    # dEz/dy = i k0 Hx - i(qz^2/k0)(1/eps)Hx + (qz/k0)(1/eps)Df Hz
-    A_Ez_Hx = 1j * k0 * I - 1j * (qz ** 2 / k0) * Ei
+    A_Ex_Hz = Db @ (-(1j / k0) * (Ei @ Df)) - 1j * k0 * Mu
+    # dEz/dy = i k0 mu Hx - i(qz^2/k0)(1/eps)Hx + (qz/k0)(1/eps)Df Hz
+    A_Ez_Hx = 1j * k0 * Mu - 1j * (qz ** 2 / k0) * Ei
     A_Ez_Hz = (qz / k0) * (Ei @ Df)
-    # dHx/dy = Df[(qz/k0)Ex + (i/k0)Db Ez] + i k0 eps Ez
-    A_Hx_Ex = Df @ ((qz / k0) * I)
-    A_Hx_Ez = Df @ ((1j / k0) * Db) + 1j * k0 * Eps
-    # dHz/dy = -i k0 eps Ex + i(qz^2/k0)Ex - (qz/k0)Db Ez
-    A_Hz_Ex = -1j * k0 * Eps + 1j * (qz ** 2 / k0) * I
-    A_Hz_Ez = -(qz / k0) * Db
+    # dHx/dy = Df[(qz/k0)(1/mu)Ex + (i/k0)(1/mu)Db Ez] + i k0 eps Ez
+    A_Hx_Ex = Df @ ((qz / k0) * Mi)
+    A_Hx_Ez = Df @ ((1j / k0) * (Mi @ Db)) + 1j * k0 * Eps
+    # dHz/dy = -i k0 eps Ex + i(qz^2/k0)(1/mu)Ex - (qz/k0)(1/mu)Db Ez
+    A_Hz_Ex = -1j * k0 * Eps + 1j * (qz ** 2 / k0) * Mi
+    A_Hz_Ez = -(qz / k0) * (Mi @ Db)
     return np.block([
         [Z, Z, A_Ex_Hx, A_Ex_Hz],
         [Z, Z, A_Ez_Hx, A_Ez_Hz],
@@ -132,7 +137,7 @@ def _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, qz):
     ])
 
 
-def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz):
+def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz, mu_x=1.0):
     """ANISOTROPIC strip generator (the tensor branch of
     :func:`_strip_vector_generator`).
 
@@ -165,6 +170,10 @@ def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz):
         raise NotImplementedError(
             "_strip_vector_generator: out-of-plane eyz/ezy (yz) coupling is not "
             "implemented (deferred -- diagonal + exz/ezx only).")
+    if np.any(np.asarray(mu_x, dtype=complex) != 1.0):
+        raise NotImplementedError(
+            "_strip_vector_generator: anisotropic-tensor eps with mu != 1 is not "
+            "implemented (scalar-eps + scalar-mu, or tensor-eps + mu=1, only).")
     h = Lx / Nx
     Df, Db = _strip_yee_diffs(Nx, h, kx0, Lx)
     I = np.eye(Nx, dtype=complex)
@@ -210,7 +219,7 @@ def _strip_split_forward(ky):
     return np.array(fwd, dtype=int)
 
 
-def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0):
+def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0, mu_x=1.0):
     """1-D-x VECTOR eigenmodes of a y-strip (``eps = eps(x)``, invariant in y, z)
     propagating in y -- the vector analog of ``eme_2d.strip_x_modes`` + ``_wv``.
 
@@ -223,10 +232,12 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0):
     UNCHANGED ``eme_2d._interface / _prop / _star`` (a ``2Nx`` block).
 
     The operator is qz-DEPENDENT (rebuild per trial ``qz2``); see the module
-    docstring.  ``qz = sqrt(qz2)``.
+    docstring.  ``qz = sqrt(qz2)``.  ``mu_x`` is the scalar (or ``(Nx,)``)
+    permeability ``mu(x)`` (default 1); magnetic media give the dispersion
+    ``eps mu k0^2 - kx^2 - ky^2`` (validated).
     """
     qz = np.sqrt(complex(qz2)) if qz2 != 0.0 else 0.0
-    A = _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, complex(qz))
+    A = _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, complex(qz), mu_x)
     n2 = 2 * Nx
     # A is block-ANTI-diagonal [[0, B], [C, 0]] (E-rows couple only to H, H-rows
     # only to E), so the 4Nx eig(A) reduces EXACTLY to the 2Nx eig(B@C) -- ~7.5x
@@ -281,9 +292,14 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0):
 #  multi-basis rotation is needed (the cascade M lived in the first strip's basis).
 def _strip_modes_at(strips, Lx, Nx, k0, kx0, qz2):
     """The ``(ky, W, V, h)`` vector strip modes of every strip at trial ``qz2``
-    (the strip operator is qz-dependent, so this is evaluated per ``qz2``)."""
-    return [(*strip_vector_modes(eps_x, Lx, Nx, k0, kx0, qz2), h)
-            for eps_x, h in strips]
+    (the strip operator is qz-dependent, so this is evaluated per ``qz2``).  A
+    strip is ``(eps_x, h)`` or ``(eps_x, h, mu_x)`` (magnetic; default ``mu = 1``)."""
+    out = []
+    for s in strips:
+        eps_x, h = s[0], s[1]
+        mu_x = s[2] if len(s) > 2 else 1.0
+        out.append((*strip_vector_modes(eps_x, Lx, Nx, k0, kx0, qz2, mu_x), h))
+    return out
 
 
 def _global_block_G(wvk, t):
@@ -480,7 +496,7 @@ def _yee_ops(Nx, Ny, Lx, Ly, kx0, ky0):
     return DxF, DxB, DyF, DyB
 
 
-def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
+def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, mu_xy=None):
     """Sparse 4N x 4N Yee generator G (gamma = i qz) for the transverse state
     [Ex, Ey, hx, hy] (Ez, hz eliminated).
 
@@ -488,9 +504,10 @@ def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
     byte-identical) or an ``(Nx, Ny, 3, 3)`` per-node permittivity TENSOR
     (DIAGONAL + ``exz``/``ezx``, lossless) -- the latter routes to
     :func:`_build_generator_tensor` and reduces to this body BYTE-EXACTLY for an
-    isotropic tensor.  The returned ``eps`` is the flattened scalar (isotropic)
-    or the ``(N, 3, 3)`` tensor (so the divergence check in
-    ``ref_2d_modes_vector`` can use the full tensor)."""
+    isotropic tensor.  ``mu_xy`` is an optional ``(Nx, Ny)`` scalar permeability
+    (default ``None`` -> ``mu = 1``, byte-identical); it enters the ``hz``
+    elimination (``1/mu``) and the ``i k0 mu`` source terms.  The returned ``eps``
+    is the flattened scalar or the ``(N, 3, 3)`` tensor (for the divergence check)."""
     arr = np.asarray(eps_xy, dtype=complex)
     if arr.ndim == 4:                       # (Nx, Ny, 3, 3) anisotropic branch
         return _build_generator_tensor(arr, Lx, Ly, Nx, Ny, k0, kx0, ky0)
@@ -499,14 +516,20 @@ def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
     eps = arr.reshape(N)
     inv = sp.diags(1.0 / (k0 * eps), format="csr")
     Eps = sp.diags(eps, format="csr")
-    I = sp.identity(N, dtype=complex, format="csr")
     Z = sp.csr_matrix((N, N), dtype=complex)
+    if mu_xy is None:
+        Mu = sp.identity(N, dtype=complex, format="csr")
+        invmu = sp.diags(np.full(N, 1.0 / k0), format="csr")
+    else:
+        mu = np.asarray(mu_xy, dtype=complex).reshape(N)
+        Mu = sp.diags(mu, format="csr")
+        invmu = sp.diags(1.0 / (k0 * mu), format="csr")
     Ez_hx = -1j * inv @ DyF
     Ez_hy = 1j * inv @ DxF
-    hz_Ex = (1j / k0) * DyB
-    hz_Ey = -(1j / k0) * DxB
-    rEx = [Z, Z, DxB @ Ez_hx, 1j * k0 * I + DxB @ Ez_hy]
-    rEy = [Z, Z, -1j * k0 * I + DyB @ Ez_hx, DyB @ Ez_hy]
+    hz_Ex = 1j * invmu @ DyB                    # mu=1 -> (1j/k0) DyB
+    hz_Ey = -1j * invmu @ DxB                   # mu=1 -> -(1j/k0) DxB
+    rEx = [Z, Z, DxB @ Ez_hx, 1j * k0 * Mu + DxB @ Ez_hy]
+    rEy = [Z, Z, -1j * k0 * Mu + DyB @ Ez_hx, DyB @ Ez_hy]
     rhx = [DxF @ hz_Ex, -1j * k0 * Eps + DxF @ hz_Ey, Z, Z]
     rhy = [1j * k0 * Eps + DyF @ hz_Ex, DyF @ hz_Ey, Z, Z]
     G = sp.bmat([rEx, rEy, rhx, rhy], format="csc")
@@ -566,7 +589,7 @@ def _build_generator_tensor(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
 
 def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
                         return_vecs=False, k=None, sigma=None,
-                        return_complex=False):
+                        return_complex=False, mu_xy=None):
     """Full-vectorial 2-D Bloch modes ``qz^2`` of a z-invariant
     ``eps(x, y)`` by a direct Yee-staggered finite-difference Maxwell solve -- the
     independent oracle (vector analog of ``eme_2d.ref_2d_modes``).  ``eps_xy`` is
@@ -588,7 +611,7 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     """
     N = Nx * Ny
     G, (DxF, DxB, DyF, DyB), eps = _build_generator(
-        eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0)
+        eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, mu_xy)
     is_tensor = eps.ndim == 3                            # (N, 3, 3) vs scalar (N,)
     if k is None:
         gam, V = eig(G.toarray())                    # dense full spectrum
