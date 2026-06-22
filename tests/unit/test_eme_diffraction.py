@@ -15,8 +15,11 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
 
 import numpy as np
-from eme_2d import strips_to_eps_xy
-from eme_diffraction import diffraction_fd
+import pytest
+
+from lumenairy.elements.eme import diffraction_fd, strips_to_eps_xy
+
+pytestmark = pytest.mark.slow      # eig-heavy EME convergence tests
 
 
 def _analytic_slab(eps_sup, eps_l, eps_sub, depth, k0, kx0, ky0):

@@ -49,7 +49,8 @@ to this scalar model for a genuine 2-D crossed grating.
 from __future__ import annotations
 
 import numpy as np
-from eme_2d import layer_modes, mode_field, ref_2d_modes, strip_x_modes
+
+from .eme_2d import layer_modes, mode_field, ref_2d_modes, strip_x_modes
 
 
 # --------------------------------------------------------------------------- #

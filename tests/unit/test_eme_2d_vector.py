@@ -12,23 +12,25 @@ slab's high degeneracy makes its mode-finding unreliable (its dispersion is
 validated here via the oracle instead).
 """
 import os
-import sys
 
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import numpy as np
-from eme_2d import strip_x_modes
-from eme_2d_vector import (
+import pytest
+
+from lumenairy.elements.eme import (
     eps_xy_to_strips,
     layer_vector_modes,
     layer_vector_modes_complex,
     mode_field_vec,
     ref_2d_modes_vector,
     strip_vector_modes,
+    strip_x_modes,
     strips_to_eps_xy,
 )
+
+pytestmark = pytest.mark.slow      # eig-heavy EME convergence tests (~2 min)
 
 Lx = Ly = 1.0
 k0 = 8.0
@@ -296,7 +298,7 @@ def test_vector_anisotropic_eyz_strip_vs_christoffel():
     # set back to zero gives a generator BYTE-IDENTICAL to the eyz-free one (the
     # yz additions collapse to the exact zero matrix -> the diagonal+exz path,
     # hence the existing diagonal/exz tests, is unchanged to the last bit).
-    from eme_2d_vector import _strip_vector_generator_tensor
+    from lumenairy.elements.eme.eme_2d_vector import _strip_vector_generator_tensor
     for Nx in (1, 20):
         et = np.zeros((Nx, 3, 3), dtype=complex)
         xg = (np.arange(Nx) + 0.5) / Nx

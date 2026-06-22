@@ -12,13 +12,17 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
 
 import numpy as np
-from eme_2d import (
+import pytest
+
+from lumenairy.elements.eme import (
     layer_modes,
     mode_field,
     ref_2d_modes,
     strip_x_modes,
     strips_to_eps_xy,
 )
+
+pytestmark = pytest.mark.slow      # eig-heavy EME convergence tests (~2 min)
 
 Lx = Ly = 1.0
 k0 = 8.0
