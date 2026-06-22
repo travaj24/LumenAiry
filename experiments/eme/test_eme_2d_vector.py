@@ -252,6 +252,19 @@ def test_vector_anisotropic_eyz_raises():
         strip_vector_modes(e[None, :, :], Lx, 1, k0, 0.0, 9.0)
 
 
+def test_vector_anisotropic_oracle_returnvecs():
+    """The tensor 2-D-FD oracle runs with return_vecs (the reldiv path) for a
+    diagonal tensor -- regression for the ``is_tensor`` dtype check (a (N,3,3)
+    eps was mis-detected and crashed the scalar reldiv branch)."""
+    Nx = Ny = 10
+    et = np.zeros((Nx, Ny, 3, 3), dtype=complex)
+    et[:, :, 0, 0], et[:, :, 1, 1], et[:, :, 2, 2] = 2.0, 4.0, 3.0
+    q, _, rd = ref_2d_modes_vector(et, Lx, Ly, Nx, Ny, k0, ky0=KY0,
+                                   return_vecs=True, k=4)
+    assert np.all(np.isfinite(rd))               # crashed before the fix
+    assert rd[np.argmax(q)] < 1e-2               # physical mode is divergence-clean
+
+
 def test_vector_oracle_lossy_complex():
     """The FD oracle solves LOSSY layers exactly: ``return_complex=True`` gives the
     complex ``qz^2`` of a uniform lossy slab matching ``eps k0^2 - kx^2 - ky^2``

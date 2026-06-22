@@ -589,7 +589,7 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     N = Nx * Ny
     G, (DxF, DxB, DyF, DyB), eps = _build_generator(
         eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0)
-    is_tensor = eps.ndim == 2 and eps.shape[1] == 3      # (N, 3, 3)
+    is_tensor = eps.ndim == 3                            # (N, 3, 3) vs scalar (N,)
     if k is None:
         gam, V = eig(G.toarray())                    # dense full spectrum
     else:
