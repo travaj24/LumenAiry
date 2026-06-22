@@ -244,8 +244,22 @@ def dispersion_vec(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly):
     return _block_singvals(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly)[-1]
 
 
+def _fd_eig_dist(strips, Lx, Nx, Ly, k0, kx0, ky0, qz2, ny):
+    """Distance from a candidate ``qz2`` to the NEAREST 2-D-FD oracle eigenvalue
+    (a few sparse shift-invert modes near it).  A real mode has an FD mode within
+    the y-FD error (~0.1); a spurious candidate has none nearby (O(1)).  The
+    independent ORACLE-ASSISTED spurious discriminator used by ``verify=True``
+    (a self-contained PDE-residual check fails -- piecewise-y Gibbs noise)."""
+    eps_xy = strips_to_eps_xy(strips, Lx, Nx, Ly, ny)
+    G, _, _ = _build_generator(eps_xy, Lx, Ly, Nx, ny, k0, kx0, ky0)
+    gam, _ = eigs(G.tocsc(), k=4, sigma=1j * np.sqrt(complex(qz2)))
+    return float(np.min(np.abs((-(gam ** 2)).real - qz2)))
+
+
 def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
-                       n_scan=400, tol=5e-2, ratio_tol=1e-2, merge_rtol=3e-3):
+                       n_scan=400, tol=5e-2, ratio_tol=1e-2, merge_rtol=3e-3,
+                       return_multiplicity=False, verify=False, verify_ny=None,
+                       verify_tol=1.0):
     """Full-vector 2-D Bloch modes ``qz^2`` of a y-strip-sectioned layer (the
     vector analog of ``eme_2d.layer_modes``).
 
@@ -261,22 +275,28 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     ``tol`` are Brent-refined and kept iff the smallest gap among the bottom
     ``_NULL_KMAX`` values is ``< ratio_tol``; deduped within ``merge_rtol``.
 
+    ``return_multiplicity`` : also return the per-mode degeneracy ``k`` (the
+    rank-drop location -- 1 non-degenerate, 2 a TE/TM pair, ...).
+    ``verify`` : drop any accepted candidate with no 2-D-FD oracle eigenvalue
+    within ``verify_tol`` (an FD solve at ``verify_ny`` rows; default ~6*nstrips).
+    This is an ORACLE-ASSISTED filter that removes the ~1 residual spurious
+    candidate (recall 16/16, spurious 0 on the reference cell); default-off, so the
+    legacy path is byte-identical.
+
     VALIDATED REGIME -- STRUCTURED layers (TE/TM split): recall 16/16 on the
-    reference 2-strip cell at Nx=20 with ~1 spurious near-threshold candidate
-    (cross-check completeness-critical work against ``ref_2d_modes_vector``) -- a
-    large improvement over the Redheffer cascade residual it replaces (2/16).
-    KNOWN LIMITATION: HIGH-degeneracy layers (e.g. a uniform slab, with
-    ``+-ky x 2-pol`` 4-fold-degenerate dense clusters) give unreliable
-    mode-finding -- use the oracle / the analytic dispersion there.
+    reference 2-strip cell at Nx=20.  KNOWN LIMITATION: HIGH-degeneracy layers
+    (e.g. a uniform slab, ``+-ky x 2-pol`` 4-fold-degenerate dense clusters) give
+    unreliable mode-finding -- use the oracle / the analytic dispersion there.
     """
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
+    vny = verify_ny if verify_ny is not None else max(48, 6 * len(strips))
 
     def f(q):
         return dispersion_vec(strips, Lx, Nx, k0, kx0, q, ky0, Ly)
 
     d = np.array([f(q) for q in grid])
-    found = []
+    found = []                                        # (qz2, multiplicity)
     for i in range(1, len(grid) - 1):
         if d[i] < d[i - 1] and d[i] < d[i + 1] and d[i] < tol:
             r = minimize_scalar(f, bracket=(grid[i - 1], grid[i], grid[i + 1]),
@@ -286,18 +306,22 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
             # a sharp GAP s_k << s_{k+1} somewhere in the smallest few singular
             # values (k=1 non-degenerate; k=2 TE/TM pair; k=4 a uniform layer's
             # +-ky x 2-pol; ...), while a spurious dip decays SMOOTHLY (no gap).
-            # Accept if the smallest gap among the bottom ``_NULL_KMAX+1`` values
-            # is below ``ratio_tol``.
             sa = s[::-1]                                  # ascending
             gaps = sa[:_NULL_KMAX] / sa[1:_NULL_KMAX + 1]
             if s[-1] < tol and float(gaps.min()) < ratio_tol:
-                found.append(r.x)
-    found = sorted(found, reverse=True)
+                if verify and _fd_eig_dist(
+                        strips, Lx, Nx, Ly, k0, kx0, ky0, r.x, vny) > verify_tol:
+                    continue                              # no FD mode nearby -> spurious
+                found.append((r.x, int(np.argmin(gaps)) + 1))
+    found.sort(key=lambda t: -t[0])
     out = []
-    for q in found:
-        if not out or abs(out[-1] - q) > merge_rtol * max(abs(q), 1.0):
-            out.append(q)
-    return np.array(out)
+    for q, m in found:
+        if not out or abs(out[-1][0] - q) > merge_rtol * max(abs(q), 1.0):
+            out.append((q, m))
+    qz2 = np.array([q for q, _ in out])
+    if return_multiplicity:
+        return qz2, np.array([m for _, m in out], dtype=int)
+    return qz2
 
 
 def mode_field_vec(strips, Lx, Nx, Ly, k0, qz2, ky0, Ny, *, kx0=0.0):
@@ -439,3 +463,32 @@ def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):
         msk = (yc >= edges[s]) & (yc < edges[s + 1])
         eps[:, msk] = np.asarray(ex, dtype=complex)[:, None]
     return eps
+
+
+# =========================================================================== #
+#  Arbitrary geometry -> y-strips (the lateral analog of RCWA z-staircasing)    #
+# =========================================================================== #
+def eps_xy_to_strips(eps, Nx, S, Lx, Ly):
+    """Rasterize an arbitrary ``eps(x, y)`` into ``S`` equal-height y-strips for
+    ``layer_vector_modes`` / ``layer_modes`` -- so the EME accepts an arbitrary
+    cell, not only a hand-built strip list.
+
+    ``eps`` is either a callable ``eps(x, y)`` (sampled at cell centres) or an
+    ``(Nx_in, Ny_in)`` grid (nearest-resampled).  Returns ``[(eps_x, Ly/S), ...]``
+    with ``eps_x`` complex on the cell-centre x grid ``(arange(Nx)+0.5)/Nx*Lx``.
+
+    This is the exact lateral analog of how RCWA staircases ``z``: the accuracy is
+    **1st-order staircase-limited**, so refine ``S`` for slanted / curved features
+    (a y-uniform piecewise structure is exact at the matching ``S``).  A
+    hand-built ``strips`` list bypasses this wrapper and is unaffected.
+    """
+    xc = (np.arange(Nx) + 0.5) / Nx * Lx
+    yc = (np.arange(S) + 0.5) / S * Ly
+    h = Ly / S
+    if callable(eps):
+        return [(np.array([eps(x, y) for x in xc], dtype=complex), h) for y in yc]
+    arr = np.asarray(eps, dtype=complex)
+    nxi, nyi = arr.shape
+    ix = np.minimum((xc / Lx * nxi).astype(int), nxi - 1)
+    jy = np.minimum((yc / Ly * nyi).astype(int), nyi - 1)
+    return [(arr[ix, j], h) for j in jy]

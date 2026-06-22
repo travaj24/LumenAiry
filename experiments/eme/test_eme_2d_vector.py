@@ -19,6 +19,7 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 import numpy as np
 from eme_2d import strip_x_modes
 from eme_2d_vector import (
+    eps_xy_to_strips,
     layer_vector_modes,
     mode_field_vec,
     ref_2d_modes_vector,
@@ -142,3 +143,48 @@ def test_vector_mode_field():
     assert sigma < 3e-3                          # confirmed a true mode (x-FD floor)
     assert max(np.abs(Ex).max(), np.abs(Ez).max()) > 1e-3   # non-trivial field
     assert Ex.shape == (Nx, 40) and Ez.shape == (Nx, 40)
+
+
+def test_vector_geometry_wrapper():
+    """eps_xy_to_strips (arbitrary eps(x,y) -> y-staircase) reproduces a hand-built
+    strip list -- the EME accepts an arbitrary cell, not only a strip list."""
+    Nx = 20
+
+    def eps_fn(x, y):                            # == the hand-built 2-strip cell
+        if y < 0.5:
+            return 4.0 if x < 0.5 else 1.0
+        return 2.0
+
+    hand = [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
+    wrap = eps_xy_to_strips(eps_fn, Nx, 2, Lx, Ly)
+    assert np.allclose(wrap[0][0], hand[0][0]) and np.allclose(wrap[1][0], hand[1][0])
+    mh = np.sort(layer_vector_modes(hand, Lx, Nx, Ly, k0, (130, 256), ky0=KY0))[::-1]
+    mw = np.sort(layer_vector_modes(wrap, Lx, Nx, Ly, k0, (130, 256), ky0=KY0))[::-1]
+    assert np.allclose(mh[:3], mw[:3])           # wrapper modes == hand-built modes
+
+
+def test_vector_verify_removes_spurious():
+    """verify=True drops the ~1 spurious near-threshold candidate via an FD-oracle
+    cross-check, without losing real modes (recall preserved, spurious -> 0)."""
+    Nx = 20
+    strips = [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
+    ref = _oracle_band(strips, Nx, 56, 56, 259)
+    plain = layer_vector_modes(strips, Lx, Nx, Ly, k0, (56, 259), ky0=KY0, n_scan=500)
+    verified = layer_vector_modes(strips, Lx, Nx, Ly, k0, (56, 259), ky0=KY0,
+                                  n_scan=500, verify=True)
+    rec = sum(min(abs(o - e) for e in verified) < 0.7 for o in ref)
+    spur = len(verified) - sum(min(abs(e - o) for o in ref) < 0.7 for e in verified)
+    assert len(verified) <= len(plain)           # verify only ever REMOVES candidates
+    assert rec >= len(ref) - 1                    # real modes preserved
+    assert spur == 0                              # spurious removed
+
+
+def test_vector_multiplicity():
+    """return_multiplicity reports the per-mode degeneracy (the rank-drop order) --
+    1 for every mode of the non-degenerate (TE/TM-split) structured cell."""
+    Nx = 20
+    strips = [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
+    qz2, mult = layer_vector_modes(strips, Lx, Nx, Ly, k0, (130, 256), ky0=KY0,
+                                   return_multiplicity=True)
+    assert qz2.shape == mult.shape and mult.dtype.kind == "i"
+    assert np.all(mult == 1)                     # non-degenerate -> all multiplicity 1
