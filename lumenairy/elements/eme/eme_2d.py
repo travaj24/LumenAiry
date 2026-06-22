@@ -40,6 +40,8 @@ import numpy as np
 from scipy.linalg import svdvals
 from scipy.optimize import minimize_scalar
 
+from ...backend.array import is_jax_array
+
 
 # --------------------------------------------------------------------------- #
 #  1-D-x modal building block + stable lateral S-matrix primitives            #
@@ -147,6 +149,12 @@ def layer_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     goes singular (``sigma_min(M) -> 0``) at a mode; minima below ``tol`` are
     refined by Brent.
     """
+    if strips and is_jax_array(strips[0][0]):
+        raise NotImplementedError(
+            "layer_modes: the sigma_min root-scan (real-axis scan + Brent "
+            "root-find) is NOT differentiable.  For differentiable 2-D modes use "
+            "ref_2d_modes with a JAX eps (the eig-based FD-oracle twin), or solve "
+            "on NumPy and apply implicit differentiation at the converged mode.")
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
     sm_all = [(strip_x_modes(e, Lx, Nx, k0, kx0), h) for e, h in strips]
@@ -260,6 +268,13 @@ def ref_2d_modes(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0, return_vecs=False
     shift-invert (``scipy.sparse.linalg.eigs``) returning the ``k`` modes nearest
     ``sigma`` (default: the band top ``max(eps) k0^2``) -- O(100x) faster for the
     top / in-band modes."""
+    if any(is_jax_array(a) for a in (eps_xy, k0, kx0, ky0)):
+        # differentiable twin (eig-based; see ._jax_modes).  Scalar isotropic eps,
+        # dense spectrum, qz^2 only.
+        from ._jax_modes import _ref_2d_modes_jax
+        return _ref_2d_modes_jax(
+            eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, return_vecs=return_vecs,
+            k=k, sigma=sigma)
     import scipy.sparse as _sp
     hx, hy = Lx / Nx, Ly / Ny
     N = Nx * Ny

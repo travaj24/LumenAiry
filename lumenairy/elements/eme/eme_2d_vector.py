@@ -78,6 +78,8 @@ from scipy.linalg import eig, svdvals
 from scipy.optimize import minimize_scalar
 from scipy.sparse.linalg import eigs, splu
 
+from ...backend.array import is_jax_array
+
 
 # =========================================================================== #
 #  1-D-x VECTOR strip modes (Berreman-in-y, Yee-staggered, qz-dependent)       #
@@ -526,6 +528,13 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     degenerate null-space (a symmetry-reduced ``G`` inherits the identical floor), so
     refining the FINDER cannot help -- raise ``Nx`` or use the oracle.
     """
+    if strips and is_jax_array(strips[0][0]):
+        raise NotImplementedError(
+            "layer_vector_modes: the sigma_min root-scan (real-axis scan + Brent "
+            "root-find) is NOT differentiable.  For differentiable 2-D modes use "
+            "ref_2d_modes_vector with a JAX eps (the eig-based FD-oracle twin), or "
+            "solve on NumPy and apply implicit differentiation at the converged "
+            "mode.")
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
     vny = verify_ny if verify_ny is not None else max(48, 6 * len(strips))
@@ -816,6 +825,14 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     O(100x) faster for the top / in-band physical modes, and it returns the
     DISTINCT modes directly (only the ``+i gamma`` branch, no ``+-qz`` doubling).
     """
+    if any(is_jax_array(a) for a in (eps_xy, k0, kx0, ky0)):
+        # differentiable twin (eig-based; see ._jax_modes).  Scalar isotropic eps,
+        # dense spectrum, qz^2 only -- the JAX guards reject tensor / sparse /
+        # return_vecs with a clear message.
+        from ._jax_modes import _ref_2d_modes_vector_jax
+        return _ref_2d_modes_vector_jax(
+            eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, return_vecs=return_vecs,
+            k=k, sigma=sigma, return_complex=return_complex, mu_xy=mu_xy)
     N = Nx * Ny
     G, (DxF, DxB, DyF, DyB), eps = _build_generator(
         eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0, mu_xy)
