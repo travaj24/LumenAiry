@@ -2,6 +2,42 @@
 
 All notable changes to the core library are documented here.
 
+## [5.15.0] — 2026-06-22
+
+### Added
+
+- **EME (eigenmode-expansion) 2-D mode solvers graduated to `lumenairy.elements.eme`**
+  — the scalar-Helmholtz (`ref_2d_modes`, `layer_modes`) and full-vector Maxwell
+  (`ref_2d_modes_vector`, `layer_vector_modes`, `strip_vector_modes`, `mode_field_vec`)
+  2-D Bloch *layer-mode* / band-structure solvers move from `experiments/eme/` into a
+  first-class subpackage — the mode-solver peer of `pmm` / `rcwa` (diffraction
+  *efficiencies* remain the job of `rcwa_efficiency_2d` / `pmm_efficiency_2d`; the EME
+  mode-matching route to efficiencies is a documented dead end). Access via
+  `from lumenairy.elements.eme import …`; the 27 convergence tests now run in CI
+  (marked `slow`).
+- **Full out-of-plane 3×3 anisotropic vector strips** — the vector strip generator
+  now supports the complete out-of-plane permittivity tensor (diagonal +
+  `exz`/`ezx` + `eyz`/`ezy`), validated against the role-swapped Berreman dispersion
+  (`exz`) and the analytic Christoffel determinant `det(k kᵀ − |k|²I + k0²ε) = 0`
+  (`eyz`, where the role-swapped Berreman is the *wrong* oracle). `eyz` breaks the
+  block-anti-diagonal `[W;−V]` backward mode, so the *strip* modes stay rigorous
+  (a `bc_ok` guard falls back to the full `eig`) while the cascade *layer* finder
+  is gated on `eyz`.
+- **Vector-solver universality** — scalar magnetic permeability `mu(x,y)`; a banded
+  O(S) inverse-power `σ_min` (`solver="banded"`) for fine y-staircases; a seeded
+  Beyn contour refiner (`beyn_refine_complex` / `layer_vector_modes_complex`)
+  reaching complex / lossy / leaky `qz²`; arbitrary-geometry rasterization
+  (`eps_xy_to_strips`).
+- **Differentiable (JAX) twin of the eig-based mode oracles** — pass a JAX `eps(x,y)`
+  to `ref_2d_modes` / `ref_2d_modes_vector` and get differentiable `qz²` (w.r.t.
+  `eps` and `k0`) via the gauge-fixed Lorentzian-broadened custom-VJP eig shared
+  with RCWA / PMM (`_jax_eig_stable`). The Yee / Laplacian operators are frozen
+  (geometry-/`k0`-only) and the generator is reassembled in `jnp` from the traced
+  `eps`. Forward is byte-exact vs NumPy; AD matches finite-difference to ~1e-7. The
+  `σ_min` root-scan layer finders are not differentiable and **raise** on a JAX
+  `eps` (use the oracle twin / implicit diff). Scalar isotropic `eps`, dense
+  spectrum, `qz²` only; CPU-only; keep `Nx·Ny` small (~12×12) for design loops.
+
 ## [5.14.6] — 2026-06-22
 
 ### Fixed
