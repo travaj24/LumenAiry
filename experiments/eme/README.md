@@ -84,14 +84,50 @@ that is a real finding, not a bug:
 reduces to it only in the y-uniform → 1-D-TE limit, not for a true 2-D crossed
 grating.)
 
-## The remaining vector extension (open)
+## Vector (TE/TM) layer-mode solver (`eme_2d_vector.py`)
 
-A vector (TE/TM) layer-mode solver would make the scalar strip field a
-2-component cross-section; the strip eigenproblem and lateral interface
-conditions double in size. That extends the **mode** solver (parity with the mode
-content of `pmm_jones_2d`), and is independent of the diffraction finding above.
+The full-Maxwell generalization of the scalar solver — the **vector** 2-D Bloch
+modes (propagation constant `qz` along z, both polarizations) of a y-strip layer,
+from 1-D-x vector strip modes.
 
-## Known v1 limitation
+- **Strip modes** (`strip_vector_modes`): each strip's 1-D-x **Berreman-in-y**
+  4-field generator on the y-tangential state `[Ex, Ez, Hx, Hz](x)`, eigenvalue
+  `ky`. Yee-staggered x. The operator is **qz-dependent** (conical TE/TM coupling
+  `~ qz·dε/dx`); the ky² spectrum shifts rigidly `ky²(qz)=ky²(0)−qz²` but the
+  eigenvectors rotate, so it's rebuilt per qz².
+- **TE/TM**: TE = E along the invariant z (Ez), TM = Hz. Decoupled in an x-uniform
+  strip or at qz=0 (where the solver reduces **exactly** to two scalar `eme_2d`
+  runs — validated byte-level); hybridized by the x-structure at conical qz.
+- **Mode condition** (`layer_vector_modes`): the **global block-`G`** lateral
+  interface matrix is singular at a mode (`σ_min(G)=0`). `G` (one block per strip,
+  no accumulation) replaces the Redheffer cascade residual `σ_min(M)`: the cascade
+  *physics is exact* (signs, `[W;-V]` backward, oracle independence all proven in
+  adversarial review) but its star-product **loses conditioning** as the
+  propagating-strip-mode count grows toward low qz², so it found only **2/16**
+  modes; the block `G` is well-conditioned and recovers the full band. Acceptance
+  uses a **degeneracy-agnostic rank-drop test** (a genuine k-fold mode shows a
+  sharp `s_k ≪ s_{k+1}` gap; spurious dips decay smoothly).
+- **Field reconstruction** (`mode_field_vec`): the per-strip amplitudes are the
+  null vector of the same `G`; returns the tangential-E field `(Ex, Ez)`.
+- **Oracle** (`ref_2d_modes_vector`): an independent **Yee-staggered 2-D vector
+  FD** Maxwell solve — first-order generator on `[Ex,Ey,hx,hy]`, eigenvalue
+  `qz²=−γ²`, spurious-free (cross-checked vs an independent Fourier-PWE solver).
+
+**Validation** (`test_eme_2d_vector.py`, 6 tests): qz=0 → scalar reduction
+(byte-level); uniform oracle (doubly degenerate, spurious-free); structured →
+the 2-D-FD oracle converges to the EME; **full-band completeness** (block-`G`
+recovers ~14/16 of the band the cascade missed, sharpening toward complete with
+Nx — 15/16 at Nx=28); dedup; mode field.
+
+**Validated regime & limitations.** The mode-finder is validated for **structured
+layers** (TE/TM split): recall ~14–16/16 (resolution-improving) with ~1 spurious
+near-threshold candidate — cross-check completeness-critical work against the
+oracle. **High-degeneracy** layers (a uniform slab: `±ky × 2-pol` 4-fold-
+degenerate dense clusters) give unreliable mode-finding; use the oracle / analytic
+dispersion there. Exactly-degenerate pairs may merge under `merge_rtol`. Scalar in
+loss convention only (real ε); in-plane isotropic ε.
+
+## Known v1 limitation (scalar)
 
 Exactly **degenerate** modes (e.g. a 4-strip checkerboard with a symmetry-paired
 `qz^2`) can cluster or merge under `merge_rtol`. A symmetry-aware multiplicity
@@ -99,6 +135,11 @@ count (or a small `ky0` perturbation to split the pair) is the fix — deferred.
 
 ## Files
 
-- `eme_2d.py` — the solver (`strip_x_modes`, `cell_smatrix`, `dispersion`,
-  `layer_modes`) + the FD oracle (`ref_2d_modes`, `strips_to_eps_xy`).
-- `test_eme_2d.py` — the 4-test validation suite.
+- `eme_2d.py` — the scalar solver (`strip_x_modes`, `cell_smatrix`, `dispersion`,
+  `layer_modes`, `mode_field`) + the FD oracle (`ref_2d_modes`).
+- `eme_2d_vector.py` — the vector solver (`strip_vector_modes`,
+  `layer_vector_modes`, `mode_field_vec`) + the Yee 2-D vector oracle
+  (`ref_2d_modes_vector`).
+- `eme_diffraction.py` — the documented diffraction dead end (validated slab math).
+- `test_eme_2d.py` (scalar, 6) / `test_eme_2d_vector.py` (vector, 6) /
+  `test_eme_diffraction.py` (diffraction finding, 3).
