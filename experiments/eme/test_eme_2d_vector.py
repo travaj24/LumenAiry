@@ -12,9 +12,11 @@ slab's high degeneracy makes its mode-finding unreliable (its dispersion is
 validated here via the oracle instead).
 """
 import os
+import sys
 
 for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "2")
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 import numpy as np
 from eme_2d import strip_x_modes
@@ -35,6 +37,23 @@ KY0 = np.pi                     # off the global band edge (cusp-free dispersion
 def _grating(Nx, e_lo, e_hi, duty=0.5):
     xg = (np.arange(Nx) + 0.5) / Nx
     return np.where(xg < duty, e_hi, e_lo).astype(float)
+
+
+def _iso_tensor(eps_x):
+    """Isotropic (Nx,3,3) tensor from a scalar/(Nx,) profile."""
+    eps_x = np.atleast_1d(np.asarray(eps_x, dtype=complex))
+    t = np.zeros((len(eps_x), 3, 3), dtype=complex)
+    t[:, 0, 0] = t[:, 1, 1] = t[:, 2, 2] = eps_x
+    return t
+
+
+def _berreman_ky(eps33, qz):
+    """Forward ``|ky|`` of a UNIFORM tensor strip via the role-swapped (y<->z)
+    Berreman planar Delta -- the anisotropic oracle for the strip generator."""
+    from lumenairy.elements.berreman import _berreman_delta
+    epsb = np.asarray(eps33, dtype=complex)[[0, 2, 1]][:, [0, 2, 1]]
+    gam = np.linalg.eigvals(_berreman_delta(epsb, 0.0, qz / k0))
+    return np.sort(np.unique(np.round(np.abs(-1j * gam * k0), 5)))
 
 
 def _distinct(vals, rtol=3e-3):
@@ -188,3 +207,46 @@ def test_vector_multiplicity():
                                    return_multiplicity=True)
     assert qz2.shape == mult.shape and mult.dtype.kind == "i"
     assert np.all(mult == 1)                     # non-degenerate -> all multiplicity 1
+
+
+def test_vector_anisotropic_reduces_to_scalar():
+    """An isotropic (Nx,3,3) tensor reproduces the SCALAR strip modes byte-exactly
+    -- the load-bearing gate that the anisotropic generator derivation is correct
+    (it reduces to the known-correct scalar code)."""
+    Nx = 20
+    eps_x = _grating(Nx, 2.0, 4.0)
+    for qz2 in (0.0, 9.0, 36.0):
+        ky_s = np.sort_complex(strip_vector_modes(eps_x, Lx, Nx, k0, 0.37, qz2)[0])
+        ky_t = np.sort_complex(strip_vector_modes(_iso_tensor(eps_x), Lx, Nx, k0,
+                                                  0.37, qz2)[0])
+        assert np.max(np.abs(ky_s - ky_t)) < 1e-10
+
+
+def test_vector_anisotropic_uniform_diagonal_vs_berreman():
+    """A uniform DIAGONAL-birefringent strip's kx=0 modes match the role-swapped
+    Berreman planar dispersion (ordinary + extraordinary)."""
+    qz = 0.5 * k0
+    eps33 = np.diag([2.0, 4.0, 3.0]).astype(complex)
+    ky = strip_vector_modes(eps33[None, :, :], Lx, 1, k0, 0.0, qz ** 2)[0]
+    got = np.sort(np.unique(np.round(np.abs(ky), 5)))
+    assert np.allclose(got, _berreman_ky(eps33, qz))
+
+
+def test_vector_anisotropic_exz_vs_berreman():
+    """Out-of-plane exz/ezx coupling (symmetric AND asymmetric exz != ezx) matches
+    the role-swapped Berreman oracle -- the novel anisotropy beyond diagonal."""
+    qz = 0.5 * k0
+    for exz, ezx in [(0.6, 0.6), (0.8, 0.5)]:
+        e = np.array([[4, 0, exz], [0, 4, 0], [ezx, 0, 4]], dtype=complex)
+        ky = strip_vector_modes(e[None, :, :], Lx, 1, k0, 0.0, qz ** 2)[0]
+        got = np.sort(np.unique(np.round(np.abs(ky), 5)))
+        assert np.allclose(got, _berreman_ky(e, qz))
+
+
+def test_vector_anisotropic_eyz_raises():
+    """eyz/ezy (yz) coupling is DEFERRED -- it breaks the block-anti-diagonal BC
+    structure and was error-prone to derive, so it raises (no silent wrong answer)."""
+    import pytest
+    e = np.array([[4, 0, 0], [0, 4, 0.5], [0, 0.5, 4]], dtype=complex)
+    with pytest.raises(NotImplementedError):
+        strip_vector_modes(e[None, :, :], Lx, 1, k0, 0.0, 9.0)

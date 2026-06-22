@@ -130,7 +130,32 @@ with ~1 spurious near-threshold candidate — cross-check completeness-critical 
 against the oracle. **High-degeneracy** layers (a uniform slab: `±ky × 2-pol`
 4-fold-degenerate dense clusters) give unreliable mode-finding; use the oracle /
 analytic dispersion there. Exactly-degenerate pairs may merge under `merge_rtol`.
-Scalar in loss convention only (real ε); in-plane isotropic ε.
+
+**Universality features** (toward general-tool parity; all additive, the legacy
+path is byte-identical):
+- **Arbitrary geometry** (`eps_xy_to_strips`): rasterize an arbitrary `eps(x,y)`
+  (callable or grid) into `S` y-strips — the lateral analog of RCWA z-staircasing
+  (1st-order; refine `S` for slant/curve). The EME accepts an arbitrary cell, not
+  only a hand-built strip list.
+- **Mode multiplicity** (`return_multiplicity=True`): also returns each mode's
+  degeneracy `k` (the rank-drop order).
+- **Spurious verify** (`verify=True`): drops the ~1 residual spurious candidate via
+  an FD-oracle cross-check → recall 16/16, **spurious 0** (oracle-assisted; a
+  self-contained PDE-residual check fails on piecewise-y Gibbs noise).
+- **Anisotropic ε** (tensor): `strip_vector_modes` accepts a per-node `(Nx,3,3)`
+  permittivity tensor — **diagonal birefringence + out-of-plane `exz`/`ezx`
+  coupling** (lossless). The tensor generator reduces **byte-exactly** to the
+  scalar one for an isotropic tensor, and a uniform strip matches the role-swapped
+  Berreman planar dispersion to machine precision (incl. asymmetric `exz≠ezx`). The
+  block-anti-diagonal `eig(B·C)` speedup survives (a `bc_ok` guard falls back to
+  full `eig` otherwise). The 2-D-FD *oracle* is tensor-aware for **diagonal**
+  tensors (the `exz` oracle term has a residual Yee-stagger error → deferred; the
+  strip generator's `exz` is validated independently via Berreman).
+
+*Documented as out of scope (research-grade):* high-degeneracy mode-finding (a
+conditioning wall in `G`'s degenerate null space); strong-loss / leaky modes and
+lossy-anisotropy (complex-`qz²` modes are off the real-axis scan → need a contour /
+Beyn eigensolver); `eyz/ezy` tensor coupling.
 
 **Performance.** Two exact/validated speedups: the block-anti-diagonal strip-eig
 reduction (~3× the whole solver) and the sparse shift-invert oracle (~145×). A

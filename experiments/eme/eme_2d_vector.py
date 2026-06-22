@@ -86,10 +86,18 @@ def _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, qz):
     y-tangential Berreman state ``psi = [Ex, Ez, Hx, Hz](x)`` of a strip
     ``eps = eps(x)`` (invariant in y, z), propagating in y.  Eigenvalues of ``A``
     are ``i*ky``.  qz-DEPENDENT.  Yee placement: ``Ex, Hz`` on integer nodes,
-    ``Ez, Hx`` on half nodes."""
+    ``Ez, Hx`` on half nodes.
+
+    ``eps_x`` is either a SCALAR / ``(Nx,)`` isotropic profile (the legacy path,
+    byte-identical to the original) or a per-node ``(Nx, 3, 3)`` permittivity
+    TENSOR (DIAGONAL + ``exz``/``ezx`` out-of-plane coupling, lossless), which
+    routes to :func:`_strip_vector_generator_tensor`.  The tensor branch reduces
+    BYTE-EXACTLY to this scalar body for an isotropic tensor ``e(x) * I3``."""
+    eps = np.asarray(eps_x, dtype=complex)
+    if eps.ndim == 3:                       # (Nx, 3, 3) anisotropic tensor branch
+        return _strip_vector_generator_tensor(eps, Lx, Nx, k0, kx0, qz)
     h = Lx / Nx
     Df, Db = _strip_yee_diffs(Nx, h, kx0, Lx)
-    eps = np.asarray(eps_x, dtype=complex)
     I = np.eye(Nx, dtype=complex)
     Z = np.zeros((Nx, Nx), dtype=complex)
     Ei = np.diag(1.0 / eps)         # 1/eps(x) pointwise
@@ -106,6 +114,68 @@ def _strip_vector_generator(eps_x, Lx, Nx, k0, kx0, qz):
     # dHz/dy = -i k0 eps Ex + i(qz^2/k0)Ex - (qz/k0)Db Ez
     A_Hz_Ex = -1j * k0 * Eps + 1j * (qz ** 2 / k0) * I
     A_Hz_Ez = -(qz / k0) * Db
+    return np.block([
+        [Z, Z, A_Ex_Hx, A_Ex_Hz],
+        [Z, Z, A_Ez_Hx, A_Ez_Hz],
+        [A_Hx_Ex, A_Hx_Ez, Z, Z],
+        [A_Hz_Ex, A_Hz_Ez, Z, Z],
+    ])
+
+
+def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz):
+    """ANISOTROPIC strip generator (the tensor branch of
+    :func:`_strip_vector_generator`).
+
+    ``eps_t`` is a per-node ``(Nx, 3, 3)`` permittivity tensor.  SCOPE: DIAGONAL
+    entries + the out-of-plane ``exz`` / ``ezx`` (``xz``) coupling, LOSSLESS (real
+    eps).  Raises ``NotImplementedError`` for ``eyz`` / ``ezy`` (the ``yz``
+    coupling -- deferred; a prior hand-derivation got that block wrong and it also
+    breaks the block-anti-diagonal structure ``eig(B C)`` relies on).
+
+    Derived directly from the normalized Maxwell curl equations
+    (``curl E = i k0 h``, ``curl h = -i k0 eps E``), propagating in y with
+    ``Ey, Hy`` eliminated via the in-plane ``y`` curl rows.  The key role-swap is
+    that ``1/eyy`` here plays the part ``1/ezz`` plays in the planar Berreman
+    ``Delta`` (y is the strip's eliminated in-plane axis).  Yee placement matches
+    the scalar body: E-rows take the OUTER ``Db`` / inner ``Df``; H-rows the outer
+    ``Df`` / inner ``Db``.  For an isotropic tensor ``e(x) * I3`` every block
+    equals the scalar generator's BYTE-FOR-BYTE (validated, gate 1).  For a
+    uniform tensor strip the forward ``ky`` multiset equals the role-swapped
+    planar Berreman ``Delta`` (swap eps axes ``y<->z``, ``Kx = kx/k0``,
+    ``Ky = qz/k0``, ``ky/k0 = -i*gam``) -- validated to machine precision at
+    ``kx0 = 0`` (gate 2); ``exz`` at ``kx0 != 0`` carries the expected O(h^2) Yee
+    dispersion in its single-``Dx`` cross-terms (2nd-order convergent, gate 2c)."""
+    e = np.asarray(eps_t, dtype=complex)
+    if e.shape != (Nx, 3, 3):
+        raise ValueError(
+            "_strip_vector_generator: a tensor eps must have shape (Nx, 3, 3), "
+            f"got {e.shape}.")
+    tol = 1e-12 * max(1.0, float(np.max(np.abs(e))))
+    if np.max(np.abs(e[:, 1, 2])) > tol or np.max(np.abs(e[:, 2, 1])) > tol:
+        raise NotImplementedError(
+            "_strip_vector_generator: out-of-plane eyz/ezy (yz) coupling is not "
+            "implemented (deferred -- diagonal + exz/ezx only).")
+    h = Lx / Nx
+    Df, Db = _strip_yee_diffs(Nx, h, kx0, Lx)
+    I = np.eye(Nx, dtype=complex)
+    Z = np.zeros((Nx, Nx), dtype=complex)
+    Eyyi = np.diag(1.0 / e[:, 1, 1])     # 1/eyy(x) -- the role-swapped 1/ezz
+    Exx = np.diag(e[:, 0, 0])
+    Ezz = np.diag(e[:, 2, 2])
+    Exz = np.diag(e[:, 0, 2])
+    Ezx = np.diag(e[:, 2, 0])
+    # E-rows: outer Db, inner Df (matches the scalar Yee placement exactly).
+    A_Ex_Hx = Db @ (-(qz / k0) * Eyyi)
+    A_Ex_Hz = Db @ (-(1j / k0) * (Eyyi @ Df)) - 1j * k0 * I
+    A_Ez_Hx = 1j * k0 * I - 1j * (qz ** 2 / k0) * Eyyi
+    A_Ez_Hz = (qz / k0) * (Eyyi @ Df)
+    # H-rows: outer Df, inner Db.  exz/ezx enter ONLY the E<->H blocks (Ezx in
+    # dHx/dy, Exx/Exz in dHz/dy), so the E-E / H-H blocks stay zero -> the
+    # block-anti-diagonal eig(B C) reduction survives (gate 3).
+    A_Hx_Ex = Df @ ((qz / k0) * I) + 1j * k0 * Ezx
+    A_Hx_Ez = Df @ ((1j / k0) * Db) + 1j * k0 * Ezz
+    A_Hz_Ex = -1j * k0 * Exx + 1j * (qz ** 2 / k0) * I
+    A_Hz_Ez = -(qz / k0) * Db - 1j * k0 * Exz
     return np.block([
         [Z, Z, A_Ex_Hx, A_Ex_Hz],
         [Z, Z, A_Ez_Hx, A_Ez_Hz],
@@ -153,18 +223,35 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0):
     # cheaper, the dominant solver cost.  A[u; w] = mu[u; w] gives B w = mu u,
     # C u = mu w => (B C) u = mu^2 u; the A-eigenvalue is mu = i ky, the H-part is
     # w = C u / mu, and the two roots +-mu of mu^2 are the +-ky forward/backward
-    # pair (same E-part u, H-part sign-flipped -- the [W; -V] structure).
+    # pair (same E-part u, H-part sign-flipped -- the [W; -V] structure).  This
+    # holds for the SCALAR path and for DIAGONAL + exz/ezx tensors (gate 3); the
+    # bc_ok guard below detects any future break (the E-E / H-H blocks becoming
+    # nonzero -- e.g. an eyz/ezy term) and falls back to the full eig(A).
+    AEE, AHH = A[:n2, :n2], A[n2:, n2:]
+    bc_tol = 1e-10 * max(1.0, float(np.max(np.abs(A))))
+    bc_ok = (np.max(np.abs(AEE)) < bc_tol and np.max(np.abs(AHH)) < bc_tol)
     B, C = A[:n2, n2:], A[n2:, :n2]
-    mu2, U = np.linalg.eig(B @ C)
-    mu = np.sqrt(mu2)
-    kys = np.concatenate([mu / 1j, -mu / 1j])
-    Us = np.concatenate([U, U], axis=1)
-    mus = np.concatenate([mu, -mu])
+    if bc_ok:
+        mu2, U = np.linalg.eig(B @ C)
+        mu = np.sqrt(mu2)
+        kys = np.concatenate([mu / 1j, -mu / 1j])
+        Us = np.concatenate([U, U], axis=1)
+        mus = np.concatenate([mu, -mu])
+        fwd = _strip_split_forward(kys)
+        if fwd.shape[0] != n2:           # degenerate-real fallback (Berreman-style)
+            fwd = np.lexsort((-kys.real, -kys.imag))[:n2]
+        ky_f, U_f, mu_f = kys[fwd], Us[:, fwd], mus[fwd]
+        return ky_f, U_f, (C @ U_f) / mu_f[None, :]
+    # general fallback: full 4Nx eig(A), then re-split E/H from the eigenvectors.
+    mu_all, Psi = np.linalg.eig(A)       # mu = i ky
+    kys = mu_all / 1j
     fwd = _strip_split_forward(kys)
-    if fwd.shape[0] != n2:               # degenerate-real fallback (Berreman-style)
+    if fwd.shape[0] != n2:
         fwd = np.lexsort((-kys.real, -kys.imag))[:n2]
-    ky_f, U_f, mu_f = kys[fwd], Us[:, fwd], mus[fwd]
-    return ky_f, U_f, (C @ U_f) / mu_f[None, :]
+    ky_f = kys[fwd]
+    W_f = Psi[:n2, fwd]                   # tangential-E rows [Ex; Ez]
+    V_f = Psi[n2:, fwd]                   # tangential-H rows [Hx; Hz]
+    return ky_f, W_f, V_f
 
 
 # =========================================================================== #
@@ -385,10 +472,21 @@ def _yee_ops(Nx, Ny, Lx, Ly, kx0, ky0):
 
 def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
     """Sparse 4N x 4N Yee generator G (gamma = i qz) for the transverse state
-    [Ex, Ey, hx, hy] (Ez, hz eliminated)."""
+    [Ex, Ey, hx, hy] (Ez, hz eliminated).
+
+    ``eps_xy`` is either an ``(Nx, Ny)`` scalar isotropic grid (the legacy path,
+    byte-identical) or an ``(Nx, Ny, 3, 3)`` per-node permittivity TENSOR
+    (DIAGONAL + ``exz``/``ezx``, lossless) -- the latter routes to
+    :func:`_build_generator_tensor` and reduces to this body BYTE-EXACTLY for an
+    isotropic tensor.  The returned ``eps`` is the flattened scalar (isotropic)
+    or the ``(N, 3, 3)`` tensor (so the divergence check in
+    ``ref_2d_modes_vector`` can use the full tensor)."""
+    arr = np.asarray(eps_xy, dtype=complex)
+    if arr.ndim == 4:                       # (Nx, Ny, 3, 3) anisotropic branch
+        return _build_generator_tensor(arr, Lx, Ly, Nx, Ny, k0, kx0, ky0)
     N = Nx * Ny
     DxF, DxB, DyF, DyB = _yee_ops(Nx, Ny, Lx, Ly, kx0, ky0)
-    eps = np.asarray(eps_xy, dtype=complex).reshape(N)
+    eps = arr.reshape(N)
     inv = sp.diags(1.0 / (k0 * eps), format="csr")
     Eps = sp.diags(eps, format="csr")
     I = sp.identity(N, dtype=complex, format="csr")
@@ -405,11 +503,64 @@ def _build_generator(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
     return G, (DxF, DxB, DyF, DyB), eps
 
 
+def _build_generator_tensor(eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0):
+    """Sparse 4N x 4N Yee oracle generator (gamma = i qz, state [Ex, Ey, hx, hy],
+    Ez/hz eliminated) for a per-node ``(Nx, Ny, 3, 3)`` permittivity TENSOR,
+    DIAGONAL + ``exz``/``ezx`` (lossless).  Raises ``NotImplementedError`` for
+    ``eyz``/``ezy``.  The tensor analog of :func:`_build_generator`; reduces to it
+    byte-exactly for an isotropic tensor (validated, gate 4a).  ``Ez`` is
+    eliminated from ``Dz = 0`` (``ezx Ex + ezz Ez = -(curl h)_z / (i k0)``).
+
+    VALIDATED REGIME -- DIAGONAL tensors: the oracle qz^2 converges to the planar
+    Berreman analytic at O(h^2) (gate 4b, ratio ~4), and a structured diagonal
+    cell's strip-generator EME band converges to it (gate 4d).  KNOWN LIMITATION
+    -- the ``exz``/``ezx`` off-diagonal terms carry a residual Yee-stagger error
+    (``Ex`` and the reconstructed ``Ez`` live on different half-nodes, so the
+    constitutive product ``exx Ex + exz Ez`` is location-mismatched): for a
+    UNIFORM exz cell the oracle qz^2 sits ~0.3 off the Berreman value and does NOT
+    converge with ``Nx``.  This needs a half-node averaging operator (the FD
+    analog of correct Fourier factorization) -- DEFERRED.  The ``exz`` STRIP
+    generator itself is rigorously validated WITHOUT this oracle, via the
+    role-swapped planar Berreman (gate 2, byte-exact)."""
+    N = Nx * Ny
+    e = np.asarray(eps_xy, dtype=complex).reshape(N, 3, 3)
+    tol = 1e-12 * max(1.0, float(np.max(np.abs(e))))
+    if np.max(np.abs(e[:, 1, 2])) > tol or np.max(np.abs(e[:, 2, 1])) > tol:
+        raise NotImplementedError(
+            "_build_generator: out-of-plane eyz/ezy (yz) coupling is not "
+            "implemented in the 2-D-FD oracle (diagonal + exz/ezx only).")
+    DxF, DxB, DyF, DyB = _yee_ops(Nx, Ny, Lx, Ly, kx0, ky0)
+    exx = sp.diags(e[:, 0, 0], format="csr")
+    exz = sp.diags(e[:, 0, 2], format="csr")
+    ezx = sp.diags(e[:, 2, 0], format="csr")
+    eyy = sp.diags(e[:, 1, 1], format="csr")
+    ezzi = sp.diags(1.0 / e[:, 2, 2], format="csr")
+    I = sp.identity(N, dtype=complex, format="csr")
+    Z = sp.csr_matrix((N, N), dtype=complex)
+    ik0 = 1j * k0
+    # Ez = (1/ezz)[ -(DxF hy - DyF hx)/(i k0) - ezx Ex ]   (forward inner)
+    Ez_hx = ezzi @ (DyF / ik0)
+    Ez_hy = ezzi @ (-DxF / ik0)
+    Ez_Ex = ezzi @ (-ezx)
+    # hz = (DxB Ey - DyB Ex)/(i k0)   (backward inner)
+    hz_Ex = -DyB / ik0
+    hz_Ey = DxB / ik0
+    rEx = [DxB @ Ez_Ex, Z, DxB @ Ez_hx, ik0 * I + DxB @ Ez_hy]
+    rEy = [DyB @ Ez_Ex, Z, -ik0 * I + DyB @ Ez_hx, DyB @ Ez_hy]
+    rhx = [DxF @ hz_Ex, -ik0 * eyy + DxF @ hz_Ey, Z, Z]
+    rhy = [ik0 * exx + ik0 * exz @ Ez_Ex + DyF @ hz_Ex,
+           DyF @ hz_Ey, ik0 * exz @ Ez_hx, ik0 * exz @ Ez_hy]
+    G = sp.bmat([rEx, rEy, rhx, rhy], format="csc")
+    return G, (DxF, DxB, DyF, DyB), e
+
+
 def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
                         return_vecs=False, k=None, sigma=None):
-    """Full-vectorial 2-D Bloch modes ``qz^2`` of a z-invariant isotropic
+    """Full-vectorial 2-D Bloch modes ``qz^2`` of a z-invariant
     ``eps(x, y)`` by a direct Yee-staggered finite-difference Maxwell solve -- the
-    independent oracle (vector analog of ``eme_2d.ref_2d_modes``).
+    independent oracle (vector analog of ``eme_2d.ref_2d_modes``).  ``eps_xy`` is
+    an ``(Nx, Ny)`` scalar isotropic grid OR an ``(Nx, Ny, 3, 3)`` per-node
+    permittivity TENSOR (DIAGONAL + ``exz``/``ezx``, lossless).
 
     Returns ``qz^2`` (descending).  With ``return_vecs`` also returns
     ``(fields, reldiv)`` -- ``fields[c]`` (c in [Ex,Ey,hx,hy]) reshaped
@@ -427,6 +578,7 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     N = Nx * Ny
     G, (DxF, DxB, DyF, DyB), eps = _build_generator(
         eps_xy, Lx, Ly, Nx, Ny, k0, kx0, ky0)
+    is_tensor = eps.ndim == 2 and eps.shape[1] == 3      # (N, 3, 3)
     if k is None:
         gam, V = eig(G.toarray())                    # dense full spectrum
     else:
@@ -443,8 +595,17 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
         Ex, Ey = V[0:N, m], V[N:2 * N, m]
         hx, hy = V[2 * N:3 * N, m], V[3 * N:4 * N, m]
         qz = -1j * gam[m]
-        Ez = (1j / (k0 * eps)) * (DxF @ hy - DyF @ hx)
-        divD = DxF @ (eps * Ex) + DyF @ (eps * Ey) + 1j * qz * (eps * Ez)
+        if is_tensor:
+            # diagonal + exz/ezx: Dz = ezx Ex + ezz Ez = -(curl h)_z/(i k0)
+            ezx, ezz = eps[:, 2, 0], eps[:, 2, 2]
+            Ez = ((1j / k0) * (DxF @ hy - DyF @ hx) - ezx * Ex) / ezz
+            Dx = eps[:, 0, 0] * Ex + eps[:, 0, 2] * Ez
+            Dy = eps[:, 1, 1] * Ey
+            Dz = ezx * Ex + ezz * Ez
+            divD = DxF @ Dx + DyF @ Dy + 1j * qz * Dz
+        else:
+            Ez = (1j / (k0 * eps)) * (DxF @ hy - DyF @ hx)
+            divD = DxF @ (eps * Ex) + DyF @ (eps * Ey) + 1j * qz * (eps * Ez)
         En = np.sqrt(np.sum(np.abs(Ex) ** 2 + np.abs(Ey) ** 2 + np.abs(Ez) ** 2))
         reldiv[m] = float(np.linalg.norm(divD) / (k0 * En + 1e-300))
     fields = np.stack([
@@ -455,13 +616,23 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
 
 
 def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):
-    """Rasterize a strip list onto an ``(Nx, Ny)`` grid for the 2-D reference."""
-    eps = np.zeros((Nx, Ny), dtype=complex)
+    """Rasterize a strip list onto an ``(Nx, Ny)`` grid for the 2-D reference.
+
+    Each strip's ``eps_x`` is a scalar isotropic ``(Nx,)`` profile (-> ``(Nx, Ny)``
+    output) OR a per-node ``(Nx, 3, 3)`` permittivity tensor (-> ``(Nx, Ny, 3, 3)``
+    output, the oracle's anisotropic input)."""
     edges = np.cumsum([0.0] + [h for _, h in strips])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
+    ex0 = np.asarray(strips[0][0], dtype=complex)
+    is_tensor = ex0.ndim == 3                       # (Nx, 3, 3)
+    eps = np.zeros((Nx, Ny, 3, 3) if is_tensor else (Nx, Ny), dtype=complex)
     for s, (ex, _) in enumerate(strips):
         msk = (yc >= edges[s]) & (yc < edges[s + 1])
-        eps[:, msk] = np.asarray(ex, dtype=complex)[:, None]
+        exa = np.asarray(ex, dtype=complex)
+        if is_tensor:
+            eps[:, msk] = exa[:, None, :, :]
+        else:
+            eps[:, msk] = exa[:, None]
     return eps
 
 
