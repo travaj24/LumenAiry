@@ -23,6 +23,7 @@ from eme_2d import strip_x_modes
 from eme_2d_vector import (
     eps_xy_to_strips,
     layer_vector_modes,
+    layer_vector_modes_complex,
     mode_field_vec,
     ref_2d_modes_vector,
     strip_vector_modes,
@@ -298,6 +299,28 @@ def test_vector_magnetic_mu():
     k_no = np.sort_complex(strip_vector_modes(e, Lx, 16, k0, 0.37, 9.0)[0])
     k_one = np.sort_complex(strip_vector_modes(e, Lx, 16, k0, 0.37, 9.0, mu_x=1.0)[0])
     assert np.array_equal(k_no, k_one)
+
+
+def test_vector_beyn_complex_lossy():
+    """The SEEDED Beyn refiner reaches COMPLEX (lossy) qz^2 modes the real-axis
+    scan structurally cannot: seed from the coarse complex oracle, refine to the
+    EME's own complex mode (genuinely complex, tracking the oracle to the x-FD
+    floor)."""
+    Nx = 24
+    xg = (np.arange(Nx) + 0.5) / Nx
+    g = np.where(xg < 0.5, 4.0 + 0.08j, 1.0)         # complex-preserving (the loss)
+    strips = [(g, 0.5), (np.full(Nx, 2.0 + 0j), 0.5)]
+    eps_xy = strips_to_eps_xy(strips, Lx, Nx, Ly, 64)
+    q, _, rd = ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, 64, k0, ky0=KY0,
+                                   return_vecs=True, k=12, sigma=1j * np.sqrt(190.0),
+                                   return_complex=True)
+    seeds = q[rd < 5e-2]
+    seeds = seeds[np.argsort(seeds.real)[::-1]][:3]
+    modes = layer_vector_modes_complex(strips, Lx, Nx, Ly, k0, seeds, ky0=KY0)
+    assert len(modes) == 3
+    assert np.all(np.abs(modes.imag) > 1e-2)         # genuinely complex (lossy)
+    for sd in seeds:                                  # track the oracle seeds
+        assert min(abs(sd - m) for m in modes) < 0.2
 
 
 def test_vector_oracle_lossy_complex():

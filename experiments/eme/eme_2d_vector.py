@@ -504,6 +504,88 @@ def mode_field_vec(strips, Lx, Nx, Ly, k0, qz2, ky0, Ny, *, kx0=0.0):
 
 
 # =========================================================================== #
+#  Seeded Beyn refiner -- COMPLEX qz^2 modes (lossy / leaky), off the real axis #
+# =========================================================================== #
+def _beyn_moments(getG, n, center, R, ar, Nq, L, rng):
+    """Beyn contour moments ``A0 = (1/2pi i) oint G(z)^-1 V dz`` and
+    ``A1 = (1/2pi i) oint z G(z)^-1 V dz`` over an ellipse (semi-axes ``R``,
+    ``R*ar``) centred at ``center``, ``Nq`` quadrature points, ``L`` random probe
+    columns ``V``."""
+    V = rng.standard_normal((n, L)) + 1j * rng.standard_normal((n, L))
+    A0 = np.zeros((n, L), dtype=complex)
+    A1 = np.zeros((n, L), dtype=complex)
+    for j in range(Nq):
+        th = 2 * np.pi * (j + 0.5) / Nq
+        zt = center + R * (np.cos(th) + 1j * ar * np.sin(th))
+        dz = R * (-np.sin(th) + 1j * ar * np.cos(th))
+        Ti = np.linalg.solve(getG(zt), V)
+        w = dz / Nq
+        A0 += w * Ti
+        A1 += (zt * w) * Ti
+    return A0 / 1j, A1 / 1j
+
+
+def beyn_refine_complex(strips, Lx, Nx, k0, ky0, Ly, seed, *, kx0=0.0,
+                        R=0.9, ar=0.22, Nq=160, L=12, seed_rng=0, s0_accept=None):
+    """Refine an approximate COMPLEX ``qz^2`` ``seed`` to the EME's own complex
+    layer mode by a SEEDED Beyn contour integral of ``G(z)^-1`` -- reaching
+    LOSSY / LEAKY / gain modes that the real-axis ``sigma_min`` scan structurally
+    cannot (they sit off the real ``qz^2`` axis).
+
+    Returns ``(mode, s0)``: ``mode`` is the residue-weighted centroid of the Beyn
+    root cloud inside the contour (``complex``), ``s0`` the leading singular value
+    of ``A0`` (the acceptance score).  If ``s0_accept`` is given and ``s0 <
+    s0_accept`` (an empty contour -- no mode), returns ``(None, s0)``.
+
+    SCOPE (honest): a SEEDED refiner, NOT an autonomous discoverer -- supply a
+    coarse complex ``qz^2`` (e.g. ``ref_2d_modes_vector(return_complex=True)`` at
+    a small ``Ny``, or an analytic guess).  One mode per contour; accuracy is
+    x-FD-floored (~1e-2..1e-3, the satellite-cloud limit, NOT pole-sharp);
+    weak-to-moderate loss.  Autonomous full-band complex discovery + clean
+    multiplicity from the ``A0`` rank is deferred (the near-pole satellite cloud).
+    """
+    n = 2 * (2 * Nx) * len(strips)
+    t = np.exp(1j * ky0 * Ly)
+    seed = complex(seed)
+
+    def getG(z):
+        return _global_block_G(_strip_modes_at(strips, Lx, Nx, k0, kx0, z), t)[0]
+
+    rng = np.random.default_rng(seed_rng)
+    A0, A1 = _beyn_moments(getG, n, seed, R, ar, Nq, L, rng)
+    U, s, Vh = np.linalg.svd(A0, full_matrices=False)
+    if s0_accept is not None and s[0] < s0_accept:
+        return None, s[0]
+    kk = max(1, int(np.sum(s / s[0] > 1e-2)))            # numerical rank of A0
+    B = U[:, :kk].conj().T @ A1 @ Vh[:kk].conj().T / s[:kk][None, :]
+    keep, wts = [], []
+    for lam in np.linalg.eigvals(B):                     # roots = Beyn eigenvalues
+        u, v = (lam.real - seed.real) / R, (lam.imag - seed.imag) / (R * ar)
+        if u * u + v * v <= 1.2:                         # inside the contour
+            keep.append(lam)
+            wts.append(1.0 / max(svdvals(getG(lam))[-1], 1e-12))   # residue weight
+    if not keep:
+        return None, s[0]
+    keep, wts = np.array(keep), np.array(wts)
+    return complex(np.sum(keep * wts) / np.sum(wts)), s[0]
+
+
+def layer_vector_modes_complex(strips, Lx, Nx, Ly, k0, seeds, *, kx0=0.0, ky0=0.0,
+                               **kw):
+    """Refine a list of approximate COMPLEX ``qz^2`` ``seeds`` (e.g. from
+    ``ref_2d_modes_vector(return_complex=True)`` at a coarse ``Ny``) to the EME's
+    own complex layer modes via the seeded Beyn refiner -- the lossy / leaky-mode
+    path the real-axis ``layer_vector_modes`` cannot reach.  Returns the array of
+    complex ``qz^2``."""
+    out = []
+    for sd in seeds:
+        m, _ = beyn_refine_complex(strips, Lx, Nx, k0, ky0, Ly, sd, kx0=kx0, **kw)
+        if m is not None:
+            out.append(m)
+    return np.array(out)
+
+
+# =========================================================================== #
 #  Direct Yee-staggered 2-D VECTOR FD reference (the validation oracle)        #
 # =========================================================================== #
 def _fd_fwd(N, h, p):
@@ -655,7 +737,10 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
     else:
         if sigma is None:
             sigma = 1j * k0 * np.sqrt(float(np.max(eps_xy.real))) * 0.78
-        gam, V = eigs(G.tocsc(), k=min(k, 4 * N - 2), sigma=sigma)
+        # fixed start vector -> deterministic ARPACK (eigenvalues are v0-independent;
+        # this only removes the random-start run-to-run jitter, not the result)
+        v0 = np.random.default_rng(0).standard_normal(4 * N)
+        gam, V = eigs(G.tocsc(), k=min(k, 4 * N - 2), sigma=sigma, v0=v0)
     qz2 = -(gam ** 2)
     order = np.argsort(qz2.real)[::-1]
     qz2, gam, V = qz2[order], gam[order], V[:, order]
