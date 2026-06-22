@@ -2112,7 +2112,15 @@ def _jax_eig_stable():
 
     @partial(jax.custom_vjp, nondiff_argnums=(1,))
     def _eig_raw(A, eps_broaden=1e-10):
-        return jnp.linalg.eig(A)
+        # Return a PLAIN tuple, not whatever ``jnp.linalg.eig`` returns: modern
+        # JAX (>=0.4.x / numpy 2.0) returns an ``EigResult`` namedtuple, a custom
+        # pytree node.  ``custom_vjp`` requires the primal ``f`` and its ``fwd``
+        # rule to share output pytree structure; ``_eig_raw_fwd`` returns a plain
+        # ``(lam, V)`` tuple, so the primal MUST too -- otherwise the structures
+        # disagree and ``grad`` composed with ``vmap`` raises (plain ``grad``
+        # happened to tolerate it).  Unpacking here is version-agnostic.
+        lam, V = jnp.linalg.eig(A)
+        return lam, V
 
     def _eig_raw_fwd(A, eps_broaden):
         lam, V = jnp.linalg.eig(A)
