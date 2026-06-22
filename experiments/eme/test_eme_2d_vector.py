@@ -265,6 +265,19 @@ def test_vector_anisotropic_oracle_returnvecs():
     assert rd[np.argmax(q)] < 1e-2               # physical mode is divergence-clean
 
 
+def test_vector_banded_solver():
+    """solver='banded' (the O(S) inverse-power sigma_min on the block-tridiagonal
+    G) finds the SAME modes as the default dense solver -- the fine-y-staircase
+    speedup (it grows with the strip count S)."""
+    Nx = 16
+    strips = [(_grating(Nx, 1.0, 4.0), 0.5), (np.full(Nx, 2.0), 0.5)]
+    md = np.sort(layer_vector_modes(strips, Lx, Nx, Ly, k0, (130, 256),
+                                    ky0=KY0))[::-1]
+    mb = np.sort(layer_vector_modes(strips, Lx, Nx, Ly, k0, (130, 256), ky0=KY0,
+                                    solver="banded"))[::-1]
+    assert np.allclose(md[:3], mb[:3])
+
+
 def test_vector_magnetic_mu():
     """Scalar permeability mu(x): the strip dispersion is eps*mu*k0^2 - kx^2 - ky^2,
     the oracle reproduces it (real + lossy), and mu=1 is byte-identical."""
