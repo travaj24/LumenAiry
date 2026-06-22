@@ -2,6 +2,34 @@
 
 All notable changes to the core library are documented here.
 
+## [5.14.6] — 2026-06-22
+
+### Fixed
+
+- **Differentiable `eig` custom-VJP pytree mismatch** (`_jax_eig_stable`, the
+  gauge-stable JAX eig shared by the Berreman and RCWA JAX paths). The primal
+  returned `jnp.linalg.eig(A)`, which in modern JAX / NumPy 2.0 is an `EigResult`
+  namedtuple — a custom pytree node — while its `custom_vjp` forward rule returned
+  a plain `(lam, V)` tuple. `custom_vjp` requires the primal and forward outputs
+  to share pytree structure: plain `grad` tolerated the mismatch, but
+  **`grad ∘ vmap` and `grad ∘ jit` raised**, breaking the batched / JIT gradient
+  of the Berreman 4×4 and RCWA eig paths. Fixed by unpacking the primal to a plain
+  tuple so both sides match. Purely structural — the gradient math is untouched
+  (AD vs finite-difference unchanged at ~1e-9); `grad`, `grad ∘ vmap`,
+  `vmap ∘ grad`, and `grad ∘ jit` all pass, 27 JAX gradient tests green.
+
+### Experiments (not packaged)
+
+- **EME lateral-cascade 2-D mode solvers** (`experiments/eme/`) — scalar and
+  full-vector (TE/TM) 2-D Bloch *layer-mode* solvers built from 1-D-x strips + a
+  well-conditioned global block-`G` lateral-interface null-space, validated
+  against a Yee-staggered 2-D vector FD oracle (cross-checked vs an independent
+  Fourier plane-wave solver). The vector strip modes are a Berreman 4×4 Δ
+  re-oriented to propagate laterally. Diffraction-*efficiency* mode-matching is
+  documented as a dead end (real-space modes are not a Fourier-order basis — use
+  `rcwa_efficiency_2d` / `pmm_efficiency_2d`); the EME's niche is modes / band
+  structure.
+
 ## [5.14.5] — 2026-06-20
 
 ### Performance
