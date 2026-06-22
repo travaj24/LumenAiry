@@ -143,25 +143,50 @@ path is byte-identical):
   an FD-oracle cross-check → recall 16/16, **spurious 0** (oracle-assisted; a
   self-contained PDE-residual check fails on piecewise-y Gibbs noise).
 - **Anisotropic ε** (tensor): `strip_vector_modes` accepts a per-node `(Nx,3,3)`
-  permittivity tensor — **diagonal birefringence + out-of-plane `exz`/`ezx`
-  coupling** (lossless). The tensor generator reduces **byte-exactly** to the
-  scalar one for an isotropic tensor, and a uniform strip matches the role-swapped
-  Berreman planar dispersion to machine precision (incl. asymmetric `exz≠ezx`). The
-  block-anti-diagonal `eig(B·C)` speedup survives (a `bc_ok` guard falls back to
-  full `eig` otherwise). The 2-D-FD *oracle* is tensor-aware for **diagonal**
-  tensors (the `exz` oracle term has a residual Yee-stagger error → deferred; the
-  strip generator's `exz` is validated independently via Berreman).
-- **Lossy ε**: the FD oracle `ref_2d_modes_vector(return_complex=True)` solves
-  lossy layers **exactly** (complex `qz²`; a uniform lossy slab's modal loss
-  `Im(qz²)` matches analytic to ~1e-13). The strip-solver itself is lossless; a
-  weak-loss first-order perturbation reproduces the modal loss to ~5% (the exact
-  non-Hermitian PT — the eliminated `Ez ∝ 1/ε` term — is unfinished), so use the
-  oracle for exact lossy modes.
+  permittivity tensor — the **full out-of-plane 3×3** (diagonal birefringence +
+  `exz`/`ezx` **and** `eyz`/`ezy` coupling, lossless). The tensor generator reduces
+  **byte-exactly** to the scalar one for an isotropic tensor (and to the diagonal+`exz`
+  body when `eyz=ezy=0`). A uniform strip matches the role-swapped Berreman planar
+  dispersion to machine precision for `exz` (incl. asymmetric `exz≠ezx`); for `eyz`
+  the role-swapped Berreman is the **wrong** oracle (its z-axis maps onto the
+  eliminated y-axis), so `eyz` is validated against the analytic **Christoffel
+  determinant** `det(k kᵀ − |k|²I + k0²ε)=0` to ~1e-13 (symmetric, asymmetric
+  non-reciprocal, and combined `exz+eyz`). The block-anti-diagonal `eig(B·C)` speedup
+  survives for diagonal/`exz`; `eyz` breaks it (populates the E-E/H-H blocks) and the
+  `bc_ok` guard falls back to full `eig`, so the **strip modes stay rigorous**. The
+  eyz **layer** mode-finder is gated (raises — `[W;-V]` is no longer the exact
+  backward mode; see the out-of-scope note). The 2-D-FD *oracle* is tensor-aware for
+  **diagonal** tensors only (the `exz`/`eyz` oracle terms have a residual Yee-stagger
+  error → deferred; the strip generator is validated independently via
+  Berreman / Christoffel).
+- **Magnetic media** (`mu_x` / `mu_xy`): scalar permeability `μ(x,y)` (curl E = i k0 μ h)
+  in the strip generator and the oracle — dispersion `eps·μ·k0² − kx² − ky²`. `μ=1`
+  byte-exact; lossy-`μ` modal loss exact (via `return_complex`); the `eig(B·C)`
+  speedup survives. (Tensor-`ε` with `μ≠1` raises — deferred.)
+- **Lossy / leaky `qz²`** (complex modes): the FD oracle `ref_2d_modes_vector(
+  return_complex=True)` solves lossy layers **exactly** (uniform slab `Im(qz²)` to
+  ~1e-13). For the *strip solver*, a **seeded Beyn refiner** (`beyn_refine_complex`
+  / `layer_vector_modes_complex`) reaches the complex modes the real-axis `σ_min`
+  scan structurally cannot: seed from the coarse complex oracle, refine to the
+  EME's own complex mode (x-FD floor ~1e-2, one mode/contour, weak–moderate loss).
+- **Fine-staircase speedup** (`solver="banded"`): `σ_min` via inverse-power on the
+  block-tridiagonal `G` (O(S) vs the dense O(S³) SVD) — for the large-`S` slant/curve
+  regime (same modes; 2.3× at S=8 → 3.7× at S=16, growing).
 
-*Documented as out of scope (research-grade):* high-degeneracy mode-finding (a
-conditioning wall in `G`'s degenerate null space); **strong-loss / leaky modes**
-and lossy-anisotropy (complex-`qz²` modes are off the real-axis scan → need a
-contour / Beyn eigensolver); `eyz/ezy` tensor coupling.
+*Documented as out of scope (research-grade, premises probe-tested):*
+- **High-degeneracy / uniform-slab mode-finding** — the floor is **O(h²) x-FD error
+  on high-`|kx|` strip modes, NOT degeneracy** (the premise was refuted: a
+  symmetry-reduced `G` inherits the identical floor); use the oracle / analytic there.
+- **Autonomous complex-mode discovery** (vs the seeded Beyn above) and
+  lossy-anisotropy — the near-pole satellite cloud blocks clean unseeded multiplicity.
+- **A self-contained spurious filter** — the ~1 spurious is a *true* `det(G)`
+  ghost-zero with a Maxwell-consistent field; no function of `G` alone separates it,
+  so `verify=True` stays oracle-assisted.
+- **`eyz/ezy` *layer* mode-finder** — the eyz **strip** operator/modes are shipped
+  and rigorous (above); only the cascade `layer_vector_modes` is gated (raises),
+  because `eyz` breaks the `[W;-V]` backward mode the global block-`G` hard-codes —
+  the general non-`[W;-V]` 4-field backward cascade is deferred (and structured-`eyz`
+  has no converging independent oracle for an end-to-end layer check).
 
 **Performance.** Two exact/validated speedups: the block-anti-diagonal strip-eig
 reduction (~3× the whole solver) and the sparse shift-invert oracle (~145×). A

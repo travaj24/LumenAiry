@@ -244,13 +244,93 @@ def test_vector_anisotropic_exz_vs_berreman():
         assert np.allclose(got, _berreman_ky(e, qz))
 
 
-def test_vector_anisotropic_eyz_raises():
-    """eyz/ezy (yz) coupling is DEFERRED -- it breaks the block-anti-diagonal BC
-    structure and was error-prone to derive, so it raises (no silent wrong answer)."""
+def _christoffel_roots(eps33, qz, kx=0.0):
+    """Signed ``ky`` roots of the CHRISTOFFEL determinant
+    ``det(k k^T - |k|^2 I + k0^2 eps) = 0`` at fixed ``(kx, qz)`` -- the rigorous
+    independent oracle for ANY 3x3 eps (including the ``yz`` coupling, where the
+    role-swapped Berreman is WRONG: Berreman's z-propagation axis maps onto the
+    eliminated y-axis).  Asymmetric eyz!=ezy is NON-reciprocal (``+ky`` and
+    ``-ky`` magnitudes differ), so the SIGNED roots -- not just ``|ky|`` -- are
+    the right oracle.  The determinant is a quartic in ``ky``; recovered exactly
+    from 5 samples (Vandermonde) + companion roots."""
+    eps = np.asarray(eps33, dtype=complex)
+
+    def detM(ky):
+        k = np.array([kx, ky, qz], dtype=complex)
+        return np.linalg.det(np.outer(k, k) - (k @ k) * np.eye(3) + k0 ** 2 * eps)
+
+    nodes = np.array([-2.0, -1.0, 0.0, 1.0, 2.0]) * k0
+    vals = np.array([detM(x) for x in nodes])
+    coeff = np.linalg.solve(np.vander(nodes, 5, increasing=True), vals)
+    return np.polynomial.polynomial.polyroots(coeff)
+
+
+def test_vector_anisotropic_eyz_strip_vs_christoffel():
+    """eyz/ezy (yz) coupling: a UNIFORM eyz strip's forward ``ky`` set matches the
+    analytic CHRISTOFFEL determinant (the CORRECT independent oracle for yz -- the
+    role-swapped Berreman is wrong here) to ~1e-9 at kx0=0, for SYMMETRIC
+    eyz=ezy, ASYMMETRIC eyz!=ezy (non-reciprocal -- signed roots), and a combined
+    exz+eyz cell.  Also the eyz=0 byte reduction: the new full-3x3 generator
+    equals the diagonal+exz body BYTE-EXACTLY (so the diagonal/exz path is
+    unchanged)."""
+    qz = 0.5 * k0
+    cases = [
+        np.array([[4, 0, 0], [0, 4, 0.5], [0, 0.5, 4]], dtype=complex),   # sym
+        np.array([[4, 0, 0], [0, 4, 0.8], [0, 0.3, 4]], dtype=complex),   # asym
+        np.array([[4, 0, 0.6], [0, 4, 0.5], [0.6, 0.5, 4]], dtype=complex),  # exz+eyz
+        np.array([[4, 0, 0.7], [0, 4, 0.8], [0.2, 0.3, 4]], dtype=complex),  # xz+yz
+    ]
+    for e in cases:
+        ky = strip_vector_modes(e[None, :, :], Lx, 1, k0, 0.0, qz ** 2)[0]
+        roots = _christoffel_roots(e, qz)
+        # each strip forward ky must coincide (sign included) with a Christoffel
+        # root, and the two forward roots must be distinct ones (no double-count).
+        used = set()
+        for k in ky:
+            j = int(np.argmin(np.abs(roots - k)))
+            assert np.abs(roots[j] - k) < 1e-9
+            assert j not in used
+            used.add(j)
+
+    # eyz=0 byte reduction: an exz/ezx tensor with eyz/ezy entries added and then
+    # set back to zero gives a generator BYTE-IDENTICAL to the eyz-free one (the
+    # yz additions collapse to the exact zero matrix -> the diagonal+exz path,
+    # hence the existing diagonal/exz tests, is unchanged to the last bit).
+    from eme_2d_vector import _strip_vector_generator_tensor
+    for Nx in (1, 20):
+        et = np.zeros((Nx, 3, 3), dtype=complex)
+        xg = (np.arange(Nx) + 0.5) / Nx
+        et[:, 0, 0] = np.where(xg < 0.5, 4.0, 2.0) if Nx > 1 else 4.0
+        et[:, 1, 1] = np.where(xg < 0.5, 3.5, 2.5) if Nx > 1 else 3.5
+        et[:, 2, 2] = np.where(xg < 0.5, 3.0, 2.2) if Nx > 1 else 3.0
+        et[:, 0, 2] = (np.where(xg < 0.5, 0.6, 0.18) if Nx > 1 else 0.6)  # exz
+        et[:, 2, 0] = (np.where(xg < 0.5, 0.5, 0.15) if Nx > 1 else 0.5)  # ezx
+        et_yz = et.copy()
+        et_yz[:, 1, 2] = 0.7                      # add eyz/ezy ...
+        et_yz[:, 2, 1] = 0.3
+        et_yz[:, 1, 2] = 0.0                      # ... then zero them
+        et_yz[:, 2, 1] = 0.0
+        for kx0 in (0.0, 0.37):
+            for qz2 in (0.0, 9.0, 36.0):
+                qzc = np.sqrt(complex(qz2)) if qz2 != 0.0 else 0.0
+                A_ref = _strip_vector_generator_tensor(et, Lx, Nx, k0, kx0, qzc)
+                A_yz0 = _strip_vector_generator_tensor(et_yz, Lx, Nx, k0, kx0, qzc)
+                assert np.max(np.abs(A_ref - A_yz0)) == 0.0
+
+
+def test_vector_eyz_layer_raises():
+    """The LAYER mode-finder is GATED on eyz: the global block-G cascade hard-codes
+    the ``[W; -V]`` backward mode, which is rigorously WRONG for an eyz strip (it
+    breaks the block-anti-diagonal structure -- ``S A S != -A``), so
+    ``layer_vector_modes`` raises rather than return silently-wrong modes.  (The
+    eyz STRIP modes via ``strip_vector_modes`` are rigorous and tested above.)"""
     import pytest
+    Nx = 8
     e = np.array([[4, 0, 0], [0, 4, 0.5], [0, 0.5, 4]], dtype=complex)
+    et = np.broadcast_to(e, (Nx, 3, 3)).copy()
+    strips = [(et, 0.5 * Ly), (et, 0.5 * Ly)]
     with pytest.raises(NotImplementedError):
-        strip_vector_modes(e[None, :, :], Lx, 1, k0, 0.0, 9.0)
+        layer_vector_modes(strips, Lx, Nx, Ly, k0, (150.0, 252.0), ky0=0.7)
 
 
 def test_vector_anisotropic_oracle_returnvecs():

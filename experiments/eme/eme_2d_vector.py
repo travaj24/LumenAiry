@@ -47,15 +47,23 @@ efficiency truncation).  Conventions: ``exp(+i qz z)``, ``exp(+i ky y)``;
 normalized Maxwell ``curl E = i k0 h``, ``curl h = -i k0 eps E`` (``h = Z0 H``).
 
 Materials/geometry (see ``layer_vector_modes`` / ``strip_vector_modes`` /
-``eps_xy_to_strips``): isotropic OR ``(Nx,3,3)`` anisotropic (DIAGONAL + ``exz``
-out-of-plane) lossless eps; arbitrary ``eps(x,y)`` via the ``eps_xy_to_strips``
-y-staircase.  LOSSY layers: the FD oracle ``ref_2d_modes_vector(return_complex=
-True)`` solves them EXACTLY (complex ``qz^2``); the strip-solver itself is lossless
-(a weak-loss first-order perturbation reproduces the modal loss to ~5% but the
-exact non-Hermitian PT is unfinished -- use the oracle for exact lossy modes).
-Out of scope (research): strong-loss / leaky modes (complex-``qz^2``, off the
-real-axis scan -> need a contour/Beyn eigensolver); ``eyz`` tensor coupling;
-high-degeneracy (uniform-slab) mode-finding.
+``eps_xy_to_strips``): isotropic OR ``(Nx,3,3)`` anisotropic FULL out-of-plane 3x3
+(DIAGONAL + ``exz``/``ezx`` + ``eyz``/``ezy``) lossless eps; scalar magnetic
+``mu(x,y)``; arbitrary ``eps(x,y)`` via the ``eps_xy_to_strips`` y-staircase.  The
+``eyz``/``ezy`` STRIP modes are rigorous (validated vs the analytic Christoffel
+determinant ``det(k k^T - |k|^2 I + k0^2 eps) = 0``), but ``eyz`` breaks the
+block-anti-diagonal ``[W; -V]`` backward mode, so the eyz LAYER finder
+(``layer_vector_modes``) is GATED -- see ``_strip_modes_at``.  LOSSY layers: the FD
+oracle ``ref_2d_modes_vector(return_complex=True)`` solves them EXACTLY (complex
+``qz^2``); for the strip-solver a SEEDED Beyn refiner (``beyn_refine_complex`` /
+``layer_vector_modes_complex``) reaches complex / lossy / leaky ``qz^2`` from a
+coarse complex seed (x-FD floor ~1e-2).
+Out of scope (research, premises probe-tested): the eyz LAYER cascade (the general
+non-``[W; -V]`` backward); AUTONOMOUS complex-mode discovery (vs the seeded Beyn) and
+lossy-anisotropy; in-plane ``exy``/``eyx`` coupling; tensor-eps with ``mu != 1``.
+NOTE: high-degeneracy (uniform-slab) mode-finding is NOT a conditioning wall -- the
+floor is the O(h^2) x-FD error on high-``|kx|`` strip modes (refuted premise); use
+the oracle / analytic dispersion there.
 
 The strip generator and the FD oracle were derived + numerically self-validated as
 separate operators (uniform analytic; qz=0 scalar reduction byte-exact; qz-coupling
@@ -141,11 +149,10 @@ def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz, mu_x=1.0):
     """ANISOTROPIC strip generator (the tensor branch of
     :func:`_strip_vector_generator`).
 
-    ``eps_t`` is a per-node ``(Nx, 3, 3)`` permittivity tensor.  SCOPE: DIAGONAL
-    entries + the out-of-plane ``exz`` / ``ezx`` (``xz``) coupling, LOSSLESS (real
-    eps).  Raises ``NotImplementedError`` for ``eyz`` / ``ezy`` (the ``yz``
-    coupling -- deferred; a prior hand-derivation got that block wrong and it also
-    breaks the block-anti-diagonal structure ``eig(B C)`` relies on).
+    ``eps_t`` is a per-node ``(Nx, 3, 3)`` permittivity tensor.  SCOPE: the FULL
+    out-of-plane 3x3 -- DIAGONAL entries, ``exz`` / ``ezx`` (``xz``) coupling, AND
+    ``eyz`` / ``ezy`` (``yz``) coupling, LOSSLESS (real eps).  (The in-plane
+    ``exy`` / ``eyx`` coupling is still out of scope.)
 
     Derived directly from the normalized Maxwell curl equations
     (``curl E = i k0 h``, ``curl h = -i k0 eps E``), propagating in y with
@@ -154,22 +161,42 @@ def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz, mu_x=1.0):
     ``Delta`` (y is the strip's eliminated in-plane axis).  Yee placement matches
     the scalar body: E-rows take the OUTER ``Db`` / inner ``Df``; H-rows the outer
     ``Df`` / inner ``Db``.  For an isotropic tensor ``e(x) * I3`` every block
-    equals the scalar generator's BYTE-FOR-BYTE (validated, gate 1).  For a
-    uniform tensor strip the forward ``ky`` multiset equals the role-swapped
-    planar Berreman ``Delta`` (swap eps axes ``y<->z``, ``Kx = kx/k0``,
-    ``Ky = qz/k0``, ``ky/k0 = -i*gam``) -- validated to machine precision at
-    ``kx0 = 0`` (gate 2); ``exz`` at ``kx0 != 0`` carries the expected O(h^2) Yee
-    dispersion in its single-``Dx`` cross-terms (2nd-order convergent, gate 2c)."""
+    equals the scalar generator's BYTE-FOR-BYTE (validated, gate 1).
+
+    The DIAGONAL + ``exz``/``ezx`` blocks are written verbatim from the original
+    (xz-only) body and the ``eyz``/``ezy`` terms are ADDED as separate
+    contributions, every one proportional to ``Ey_Ez = -(1/eyy) eyz`` or to
+    ``ezy``, so at ``eyz = ezy = 0`` they vanish to the exact zero matrix and the
+    block reduces BYTE-FOR-BYTE to the original xz-only generator (GATE A,
+    ``max|dA| = 0`` across ``Nx in {1,20}``, ``kx0 in {0,0.37}``,
+    ``qz2 in {0,9,36}`` and diagonal / sym-exz / asym-exz).
+
+    The ``eyz``/``ezy`` coupling enters through the ``Ey`` elimination
+    ``Ey = -(1/eyy)[(curl h)_y / (i k0) + eyz Ez]``: its ``eyz Ez`` part feeds the
+    E-rows (``dEz/dy += i qz Ey``, ``dEx/dy += Db Ey``), populating the E-E block;
+    and the ``i k0 ezy Ey`` term in ``dHx/dy`` populates the H-H block (its ``Hx`` /
+    ``Hz`` parts) plus an ``Hx <- Ez`` cross term (its ``Ey_Ez Ez`` part).  The E-E /
+    H-H blocks are zero for diagonal / xz, so the role-swapped Berreman is the WRONG
+    oracle for yz (its z-propagation axis maps onto the eliminated y-axis): the
+    CORRECT independent oracle is the analytic CHRISTOFFEL determinant
+    ``det(k k^T - |k|^2 I + k0^2 eps) = 0`` solved for ``ky`` at fixed
+    ``(kx, qz)`` -- the uniform-strip forward ``|ky|`` multiset matches it to
+    ~1e-13 at ``kx0 = 0`` (symmetric eyz=ezy, asymmetric eyz!=ezy, and a combined
+    exz+eyz cell; GATE B), with O(h^2) Yee convergence at ``kx0 != 0``.
+
+    The ``eyz``/``ezy`` E-E / H-H blocks BREAK the block-anti-diagonal structure
+    (``S A S != -A``, where ``S`` flips the H sign) that ``strip_vector_modes``
+    eig(B@C) reduction AND the global block-G ``[W; -V]`` backward mode rely on.
+    ``strip_vector_modes`` detects this via its ``bc_ok`` guard and falls back to
+    the full ``eig(A)`` with true E/H eigenvectors (so the STRIP modes stay
+    rigorous), but ``[W; -V]`` is no longer the exact backward mode for eyz, so
+    the LAYER mode-finder (``layer_vector_modes``) is gated on eyz -- see
+    ``_strip_modes_at``."""
     e = np.asarray(eps_t, dtype=complex)
     if e.shape != (Nx, 3, 3):
         raise ValueError(
             "_strip_vector_generator: a tensor eps must have shape (Nx, 3, 3), "
             f"got {e.shape}.")
-    tol = 1e-12 * max(1.0, float(np.max(np.abs(e))))
-    if np.max(np.abs(e[:, 1, 2])) > tol or np.max(np.abs(e[:, 2, 1])) > tol:
-        raise NotImplementedError(
-            "_strip_vector_generator: out-of-plane eyz/ezy (yz) coupling is not "
-            "implemented (deferred -- diagonal + exz/ezx only).")
     if np.any(np.asarray(mu_x, dtype=complex) != 1.0):
         raise NotImplementedError(
             "_strip_vector_generator: anisotropic-tensor eps with mu != 1 is not "
@@ -183,22 +210,37 @@ def _strip_vector_generator_tensor(eps_t, Lx, Nx, k0, kx0, qz, mu_x=1.0):
     Ezz = np.diag(e[:, 2, 2])
     Exz = np.diag(e[:, 0, 2])
     Ezx = np.diag(e[:, 2, 0])
+    Eyz = np.diag(e[:, 1, 2])
+    Ezy = np.diag(e[:, 2, 1])
+    # --- BASE blocks (diagonal + exz/ezx): VERBATIM from the original xz-only body
     # E-rows: outer Db, inner Df (matches the scalar Yee placement exactly).
     A_Ex_Hx = Db @ (-(qz / k0) * Eyyi)
     A_Ex_Hz = Db @ (-(1j / k0) * (Eyyi @ Df)) - 1j * k0 * I
     A_Ez_Hx = 1j * k0 * I - 1j * (qz ** 2 / k0) * Eyyi
     A_Ez_Hz = (qz / k0) * (Eyyi @ Df)
-    # H-rows: outer Df, inner Db.  exz/ezx enter ONLY the E<->H blocks (Ezx in
-    # dHx/dy, Exx/Exz in dHz/dy), so the E-E / H-H blocks stay zero -> the
-    # block-anti-diagonal eig(B C) reduction survives (gate 3).
+    # H-rows: outer Df, inner Db.  exz/ezx enter the E<->H blocks (Ezx in dHx/dy,
+    # Exx/Exz in dHz/dy).
     A_Hx_Ex = Df @ ((qz / k0) * I) + 1j * k0 * Ezx
     A_Hx_Ez = Df @ ((1j / k0) * Db) + 1j * k0 * Ezz
     A_Hz_Ex = -1j * k0 * Exx + 1j * (qz ** 2 / k0) * I
     A_Hz_Ez = -(qz / k0) * Db - 1j * k0 * Exz
+    # --- yz-coupling additions (every term == 0 when eyz=ezy=0 -> byte-exact base)
+    # Ey = -(1/eyy)[(qz/k0)Hx - (1/(i k0))Df Hz + eyz Ez]; the eyz part is Ey_Ez Ez.
+    Ey_Ez = -(Eyyi @ Eyz)                       # eyz part of the Ey elimination
+    Ey_Hx = -(Eyyi @ ((qz / k0) * I))           # (only needed for the ezy*Ey term)
+    Ey_Hz = -(Eyyi @ (-(1.0 / (1j * k0)) * Df))
+    # E-rows pick up Ey: dEz/dy += i qz Ey, dEx/dy += Db Ey -> the E-E block.
+    A_Ex_Ez = Db @ Ey_Ez
+    A_Ez_Ez = 1j * qz * Ey_Ez
+    # dHx/dy picks up +i k0 ezy Ey: its Ez part adds to A_Hx_Ez, its Hx/Hz parts
+    # populate the H-H block.
+    A_Hx_Ez = A_Hx_Ez + 1j * k0 * (Ezy @ Ey_Ez)
+    A_Hx_Hx = 1j * k0 * (Ezy @ Ey_Hx)
+    A_Hx_Hz = 1j * k0 * (Ezy @ Ey_Hz)
     return np.block([
-        [Z, Z, A_Ex_Hx, A_Ex_Hz],
-        [Z, Z, A_Ez_Hx, A_Ez_Hz],
-        [A_Hx_Ex, A_Hx_Ez, Z, Z],
+        [Z, A_Ex_Ez, A_Ex_Hx, A_Ex_Hz],
+        [Z, A_Ez_Ez, A_Ez_Hx, A_Ez_Hz],
+        [A_Hx_Ex, A_Hx_Ez, A_Hx_Hx, A_Hx_Hz],
         [A_Hz_Ex, A_Hz_Ez, Z, Z],
     ])
 
@@ -290,10 +332,50 @@ def strip_vector_modes(eps_x, Lx, Nx, k0, kx0=0.0, qz2=0.0, mu_x=1.0):
 #  oracle all proven exact in adversarial review); only its residual conditioning
 #  is poor, so the mode-finder uses G.  Bonus: G is basis-independent, so no
 #  multi-basis rotation is needed (the cascade M lived in the first strip's basis).
+def _strips_have_eyz(strips):
+    """True if any strip's eps tensor has a nonzero ``eyz``/``ezy`` (``yz``)
+    entry.  The global block-G ``[W; -V]`` backward mode is EXACT only for the
+    block-anti-diagonal strip generator (diagonal + ``exz``/``ezx``); ``eyz``
+    populates the E-E and H-H blocks (``S A S != -A``), so ``[W; -V]`` is no
+    longer the strip's true backward mode and the cascade mode-finder would
+    return WRONG layer modes -- the LAYER path is gated on ``eyz`` (the general
+    non-``[W; -V]`` backward cascade is deferred).  The STRIP operator / modes
+    themselves stay rigorous (``strip_vector_modes`` falls back to the full
+    ``eig(A)`` with true eigenvectors)."""
+    for s in strips:
+        ex = np.asarray(s[0], dtype=complex)
+        if ex.ndim == 3:                          # (Nx, 3, 3) tensor strip
+            tol = 1e-12 * max(1.0, float(np.max(np.abs(ex))))
+            if (np.max(np.abs(ex[:, 1, 2])) > tol
+                    or np.max(np.abs(ex[:, 2, 1])) > tol):
+                return True
+    return False
+
+
 def _strip_modes_at(strips, Lx, Nx, k0, kx0, qz2):
     """The ``(ky, W, V, h)`` vector strip modes of every strip at trial ``qz2``
     (the strip operator is qz-dependent, so this is evaluated per ``qz2``).  A
-    strip is ``(eps_x, h)`` or ``(eps_x, h, mu_x)`` (magnetic; default ``mu = 1``)."""
+    strip is ``(eps_x, h)`` or ``(eps_x, h, mu_x)`` (magnetic; default ``mu = 1``).
+
+    GATE: raises ``NotImplementedError`` if any strip carries ``eyz``/``ezy``
+    coupling -- the global block-G cascade hard-codes the ``[W; -V]`` backward
+    mode, which is rigorously WRONG for an eyz strip (it breaks the
+    block-anti-diagonal structure ``[W; -V]`` relies on; degeneracy-proof check
+    ``S A S = -A`` fails, ``max|SAS+A| ~ 2`` for eyz vs ``0`` for exz/diagonal).
+    Returning modes here would feed those wrong backward states to the layer
+    mode-finder, so it is gated rather than silently incorrect.  The general
+    backward cascade (consuming the strip's TRUE -ky eigenvectors) is deferred;
+    use the FD oracle for eyz LAYER modes meanwhile.  (The STRIP operator and its
+    modes via :func:`strip_vector_modes` remain rigorous and validated for eyz.)"""
+    if _strips_have_eyz(strips):
+        raise NotImplementedError(
+            "layer_vector_modes: the global block-G cascade hard-codes the "
+            "[W; -V] backward mode, which is exact only for block-anti-diagonal "
+            "strips (diagonal + exz/ezx).  eyz/ezy (yz) coupling breaks that, so "
+            "the cascade would return wrong layer modes -- it is gated (the "
+            "general non-[W;-V] backward cascade is deferred).  The eyz STRIP "
+            "operator/modes (strip_vector_modes) are rigorous; use "
+            "ref_2d_modes_vector for eyz LAYER modes.")
     out = []
     for s in strips:
         eps_x, h = s[0], s[1]
@@ -431,12 +513,18 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
     within ``verify_tol`` (an FD solve at ``verify_ny`` rows; default ~6*nstrips).
     This is an ORACLE-ASSISTED filter that removes the ~1 residual spurious
     candidate (recall 16/16, spurious 0 on the reference cell); default-off, so the
-    legacy path is byte-identical.
+    legacy path is byte-identical.  (That ~1 spurious is a TRUE ``det(G)`` ghost-zero
+    with a Maxwell-consistent field, NOT a numerical artifact -- probe-tested -- so no
+    function of ``G`` alone separates it and the FD oracle is required.)
 
     VALIDATED REGIME -- STRUCTURED layers (TE/TM split): recall 16/16 on the
     reference 2-strip cell at Nx=20.  KNOWN LIMITATION: HIGH-degeneracy layers
     (e.g. a uniform slab, ``+-ky x 2-pol`` 4-fold-degenerate dense clusters) give
-    unreliable mode-finding -- use the oracle / the analytic dispersion there.
+    unreliable mode-finding -- use the oracle / the analytic dispersion there.  The
+    root cause was probe-tested: it is the O(h^2) x-FD error on the high-``|kx|``
+    strip modes flooding ``sigma_min``'s floor, NOT a conditioning wall in ``G``'s
+    degenerate null-space (a symmetry-reduced ``G`` inherits the identical floor), so
+    refining the FINDER cannot help -- raise ``Nx`` or use the oracle.
     """
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
