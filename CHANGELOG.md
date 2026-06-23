@@ -2,6 +2,35 @@
 
 All notable changes to the core library are documented here.
 
+## [5.16.0] — 2026-06-23
+
+### Added
+
+- **BOR-PMM (body-of-revolution / axisymmetric Polynomial Modal Method) graduated to
+  `lumenairy.elements.bor`** — the **cylindrical-coordinate** peer of `pmm` / `rcwa`
+  for rotationally-symmetric structures (concentric-ring gratings, fibers, axisymmetric
+  diffractive optics). Fields separate as `exp(i m phi + i q z)`, so the problem reduces
+  to a 1-D *radial* eigenproblem per azimuthal order `m`, cascaded in `z` by a Redheffer
+  S-matrix (the direct analog of the 1-D PMM lateral solve). Headline API `BORStack`
+  (mirrors `PMMStack` in cylindrical coordinates); access via
+  `from lumenairy.elements.bor import …`. The radial solvers, far-field
+  (Fourier-Bessel / Hankel) helpers, and analytic validation oracles (`fiber_modes`,
+  `stepindex_modes`) are exported alongside it.
+- Built on the **Yee div-conforming (staggered) radial discretization** (`E_r` on
+  faces, `E_phi`/`E_z` on nodes), which makes the discrete `curl·grad = 0` to machine
+  precision and so eliminates the spurious curl-curl gradient mode sea → the z-cascade
+  conserves energy to machine precision (~1e-13).
+- **GATE 4 validated** (the load-bearing diffraction gate): a concentric ring grating's
+  per-order efficiency matches the rigorous planar `pmm_efficiency_1d` at each
+  cylindrical mode's local oblique angle `theta = arcsin(gamma/(n k0))`, for BOTH TE and
+  TM, to well under the few-percent bar on the staggered basis (the residual is the
+  2nd-order FD floor, shown to shrink under N-refinement). The match is ~28–100× tighter
+  than at a wrong incident angle — a genuine cylindrical→planar correspondence, not an
+  energy-balance artifact. Plus the full milestone ladder: radial operator vs Bessel
+  zeros (~1e-13), coupled vector eigensolve vs an exact open-cladding fiber-dispersion
+  oracle, the radial-PML open boundary, and the analytic-slab z-cascade. The BOR
+  convergence tests run in CI (marked `slow`).
+
 ## [5.15.0] — 2026-06-22
 
 ### Added
