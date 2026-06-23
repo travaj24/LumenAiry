@@ -5,8 +5,12 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import numpy as np
-from farfield import far_field_angles, fourier_bessel
+import pytest
 from scipy.special import jn_zeros, jv
+
+from lumenairy.elements.bor.farfield import far_field_angles, fourier_bessel
+
+pytestmark = pytest.mark.slow      # eig-heavy BOR-PMM convergence tests
 
 
 def _grid(R, N):

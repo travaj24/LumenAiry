@@ -23,7 +23,16 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import numpy as np
-from zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
+import pytest
+
+from lumenairy.elements.bor.zcascade import (
+    interface_smatrix,
+    layer_modes,
+    propagation_smatrix,
+    redheffer_star,
+)
+
+pytestmark = pytest.mark.slow      # eig-heavy BOR-PMM convergence tests
 
 
 def _uniform(val):
@@ -72,7 +81,10 @@ def test_per_mode_fresnel_sign():
         q1 = qa[j]
         if abs(q1.imag) > 1e-6 or q1.real < 0.2:
             continue
-        g = np.sqrt(e1 * k0 ** 2 - q1.real ** 2)
+        g2 = e1 * k0 ** 2 - q1.real ** 2
+        if g2 < 0:                              # above the light line (a spurious /
+            continue                            # numerically-drifted mode, not a valid
+        g = np.sqrt(g2)                         # propagating mode) -> skip (cf. GATE 4a)
         q2 = np.sqrt(e2 * k0 ** 2 - g ** 2 + 0j)
         if q2.imag > 1e-6:
             continue
@@ -101,7 +113,10 @@ def test_slab_fabry_perot():
         q1 = qa[j]
         if abs(q1.imag) > 1e-6 or q1.real < 0.2:
             continue
-        g = np.sqrt(e1 * k0 ** 2 - q1.real ** 2)
+        g2 = e1 * k0 ** 2 - q1.real ** 2
+        if g2 < 0:                              # above the light line (a spurious /
+            continue                            # numerically-drifted mode, not a valid
+        g = np.sqrt(g2)                         # propagating mode) -> skip (cf. GATE 4a)
         q2 = np.sqrt(e2 * k0 ** 2 - g ** 2 + 0j)
         if q2.imag > 1e-6:
             continue

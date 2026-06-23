@@ -18,7 +18,8 @@ Example
 from __future__ import annotations
 
 import numpy as np
-from zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
+
+from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 
 class BORStack:
@@ -48,9 +49,13 @@ class BORStack:
                                 ).astype(complex)
             fn = prof
         elif eps_profile is not None:
-            fn = lambda r: np.asarray(eps_profile(r), dtype=complex)
+            def prof(r, ep=eps_profile):
+                return np.asarray(ep(r), dtype=complex)
+            fn = prof
         elif eps is not None:
-            fn = lambda r, e=complex(eps): np.full_like(r, e, dtype=complex)
+            def prof(r, e=complex(eps)):
+                return np.full_like(r, e, dtype=complex)
+            fn = prof
         else:
             raise ValueError("add_layer needs eps_profile, rings, or eps")
         self._layers.append((float(thickness), fn))

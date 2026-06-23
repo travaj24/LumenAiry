@@ -223,6 +223,26 @@ _KNOWN_ALL_SYMMETRY_EXEMPTIONS = frozenset({
     ('lumenairy.elements.eme', 'diffraction_fd'),
     ('lumenairy.elements.eme', 'diffraction_eme'),
 
+    # ---- elements.bor (body-of-revolution / axisymmetric PMM) -------------
+    # v5.16.0: the BOR-PMM cylindrical-coordinate mode/grating solver is a
+    # specialized subpackage reached via ``la.elements.bor.*`` (the cylindrical
+    # peer of ``pmm`` / ``rcwa``).  Its public names are either generic
+    # (``layer_modes``, ``radial_spectrum``, ``guided_modes``) or domain-specific
+    # cylindrical jargon (``fourier_bessel``, ``radial_coupled_modes``,
+    # ``fiber_modes``) that would crowd / confuse the ~450-name top-level surface.
+    # Stay namespaced by design -- same rationale as the ``raytrace.bundles`` /
+    # ``backend.scipy`` clusters above and the ``elements.eme`` cluster.
+    ('lumenairy.elements.bor', 'BORStack'),
+    ('lumenairy.elements.bor', 'radial_spectrum'),
+    ('lumenairy.elements.bor', 'radial_coupled_modes'),
+    ('lumenairy.elements.bor', 'guided_modes'),
+    ('lumenairy.elements.bor', 'layer_modes'),
+    ('lumenairy.elements.bor', 'fourier_bessel'),
+    ('lumenairy.elements.bor', 'far_field_angles'),
+    ('lumenairy.elements.bor', 'order_power_fractions'),
+    ('lumenairy.elements.bor', 'fiber_modes'),
+    ('lumenairy.elements.bor', 'stepindex_modes'),
+
     # ---- backend (package re-export of RandomState) -----------------------
     # ``RandomState`` IS at top level so this is NOT in the exemption
     # set -- listed here as a no-op anchor for the audit reader.

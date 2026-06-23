@@ -16,9 +16,21 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import numpy as np
-from coupled_radial_eigensolver import _fd_grid_staggered, radial_coupled_modes
-from fiber_oracle import fiber_modes
-from zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
+import pytest
+
+from lumenairy.elements.bor.coupled_radial_eigensolver import (
+    _fd_grid_staggered,
+    radial_coupled_modes,
+)
+from lumenairy.elements.bor.fiber_oracle import fiber_modes
+from lumenairy.elements.bor.zcascade import (
+    interface_smatrix,
+    layer_modes,
+    propagation_smatrix,
+    redheffer_star,
+)
+
+pytestmark = pytest.mark.slow      # eig-heavy BOR-PMM convergence tests
 
 
 def test_derham_curl_grad_null():
@@ -43,7 +55,8 @@ def test_spurious_sea_collapses():
     still matches the fiber oracle."""
     m, a, e1, e2, k0 = 1, 1.0, 6.0, 2.0, 2.0
     N, Rbig = 200, 8.0
-    eps = lambda r: np.where(r <= a, e1, e2).astype(complex)
+    def eps(r):
+        return np.where(r <= a, e1, e2).astype(complex)
     md = radial_coupled_modes(m, Rbig, N, eps, k0, staggered=True)
     rd = np.array([x["reldiv"] for x in md])
     q = np.array([x["q"] for x in md])

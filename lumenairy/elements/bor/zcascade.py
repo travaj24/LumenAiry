@@ -26,7 +26,9 @@ r*dr energy conservation).
 from __future__ import annotations
 
 import numpy as np
-from coupled_radial_eigensolver import (
+from scipy.linalg import eig
+
+from .coupled_radial_eigensolver import (
     _assemble_staggered,
     _fast_geig,
     _fd_grid,
@@ -34,7 +36,6 @@ from coupled_radial_eigensolver import (
     _pec_wall_ops,
     _pml_stretch,
 )
-from scipy.linalg import eig
 
 
 # --------------------------------------------------------------------------- #
@@ -48,7 +49,7 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
     interpolation -> machine-precision energy conservation in the cascade."""
     op = _assemble_staggered(m, Rbig, N, eps_profile, k0)
     Lei, A_f2n, Dn2f = op["Lei"], op["A_f2n"], op["Dn2f"]
-    mrn, mrf = op["mrn"], op["mrf"]
+    mrn = op["mrn"]
     r_n, r_f, h = op["r_n"], op["r_f"], op["h"]
     q2, Vm = _fast_geig(op["K"], op["B"])
     q = np.sqrt(q2)
@@ -80,8 +81,10 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
         P = flux(Er, Ephi, hr, hphi)
         s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10
              else 1.0 / np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2) + 1e-300))
-        W[:N, j] = Er * s; W[N:, j] = Ephi * s
-        V[:N, j] = hr * s; V[N:, j] = hphi * s
+        W[:N, j] = Er * s
+        W[N:, j] = Ephi * s
+        V[:N, j] = hr * s
+        V[N:, j] = hphi * s
         qf[j] = qj
     return dict(W=W, V=V, q=qf, r=r_n, wq=(r_n * h).astype(complex), N=N)
 

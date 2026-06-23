@@ -8,8 +8,11 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
 
 import numpy as np
 import pytest
-from radial_eigensolver import radial_spectrum
 from scipy.special import jn_zeros, jnp_zeros, jv
+
+from lumenairy.elements.bor.radial_eigensolver import radial_spectrum
+
+pytestmark = pytest.mark.slow      # eig-heavy BOR-PMM convergence tests
 
 R = 1.0
 
@@ -50,7 +53,7 @@ def test_stepindex_oracle_homogeneous_reduction():
     homogeneous TM+TE Bessel spectrum when eps1 == eps2 -- a clean self-check
     of the 6x6 boundary matching + conventions, before it gates the coupled
     eigensolver."""
-    from stepindex_oracle import stepindex_modes
+    from lumenairy.elements.bor.stepindex_oracle import stepindex_modes
     R, a, eps, k0, m = 1.0, 0.5, 4.0, 12.0, 1
     q2 = stepindex_modes(m, a, R, eps, eps, k0, n_modes=8) ** 2
     tm = eps * k0 ** 2 - (jn_zeros(m, 8) / R) ** 2

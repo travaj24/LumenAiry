@@ -16,8 +16,9 @@ the full multi-order GATE 4 (the Cartesian-limit diffraction test).
 from __future__ import annotations
 
 import numpy as np
-from coupled_radial_eigensolver import radial_coupled_modes
-from zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
+
+from .coupled_radial_eigensolver import radial_coupled_modes
+from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 
 def _flux(L, j):

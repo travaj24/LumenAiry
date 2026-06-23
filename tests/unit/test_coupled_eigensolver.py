@@ -13,8 +13,15 @@ for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
     os.environ.setdefault(_v, "1")
 
 import numpy as np
-from coupled_radial_eigensolver import guided_modes, radial_coupled_modes
-from fiber_oracle import fiber_modes
+import pytest
+
+from lumenairy.elements.bor.coupled_radial_eigensolver import (
+    guided_modes,
+    radial_coupled_modes,
+)
+from lumenairy.elements.bor.fiber_oracle import fiber_modes
+
+pytestmark = pytest.mark.slow      # eig-heavy BOR-PMM convergence tests
 
 
 def _oracle_bound(m, a, e1, e2, k0):
