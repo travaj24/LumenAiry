@@ -452,6 +452,367 @@ def available_cpus() -> int:
     return max(1, int(os.cpu_count() or 1))
 
 
+# ============================================================================
+# System-level memory estimation + autodetect guardrail (v5.16.1)
+# ----------------------------------------------------------------------------
+# ``estimate_op_memory`` above models ONE elementwise/FFT operation as
+# ``n_work_arrays`` same-dtype temporaries.  That is accurate for a bare ASM
+# propagation but badly under-counts a full free-space + ray-traced-lens
+# simulation, whose PEAK step is the lens amplitude pass: a stack of
+# FLOAT64-FIXED full-grid arrays (the coordinate lineage seeded by
+# ``np.arange(N)*dx`` with no ``dtype=`` -> float64, then sag/opd, the
+# ``np.indices((N,N))`` + ``(2,N,N)`` map_coordinates upsample stack, and
+# delta_phase) that does NOT shrink with complex64.  The helpers below model
+# that peak so callers can (a) get an itemised estimate and (b) fail FAST with
+# an actionable message + concrete claw-backs instead of OOMing mid-run.
+#
+# CALIBRATION (measured peak RSS, system-wide incl. the Newton worker pool, on
+# a 137 GB / 24-core box; see tests/unit/test_memory_guardrail.py for the
+# anchors).  The float64-core count is the EFFECTIVE live count (eager-``del``
+# staggers the true coexistence), matched at N=16384/24576; it is a CONSERVATIVE
+# upper bound at larger N (the N^2 form over-predicts there, which is the
+# fail-safe direction for a go/no-go guardrail).
+#   apply_real_lens_traced, c64, ray_subsample=8, parallel_amp=False:
+#     N=16384 -> 44.5 GB | N=16384 sub16 -> 37.2 GB | N=24576 -> 83.6 GB
+#     N=16384 c128 -> 57.3 GB
+# ============================================================================
+
+# Effective live full-grid array counts (per N^2). DTYPE-INDEPENDENT (float64).
+_LENS_F64_ARRAYS = 9.5            # coord lineage + sag + opd + opl_map + indices + delta_phase
+_LENS_SLANT_F64_ARRAYS = 6.0     # extra angle stack (dsag_dx/dy, grad_sq, cos_ti/tt, opd) when slant/fresnel
+_LENS_COMPLEX_ARRAYS = 4.0       # E_analytic + live E + in-glass ASM complex working set
+_NEWTON_BYTES_PER_COARSE_PT = 2671.0   # coarse-grid Newton solve + poly fit + map_coordinates, per (N/sub)^2 pt
+_ASM_COMPLEX_ARRAYS = 4.0        # bare ASM step: E_in + H + fft scratch (+ resident plan buffers added separately)
+
+
+def _as_complex_itemsize(dtype: Any) -> int:
+    """Bytes/element for the field complex dtype (defaults to complex128)."""
+    return int(np.dtype(dtype).itemsize)
+
+
+def estimate_lens_memory(n_grid: int,
+                         complex_dtype: Any = 'complex128',
+                         *,
+                         lens_model: str = 'traced',
+                         ray_subsample: int = 8,
+                         parallel_amp: bool = True,
+                         slant_correction: bool = False,
+                         sag_dtype: Any = None,
+                         itemized: bool = False):
+    """Estimate the peak RAM (bytes) of ONE ``apply_real_lens_traced`` (or
+    ``apply_real_lens``) call -- the memory-determining step of a free-space
+    + real-lens simulation.
+
+    The model separates the **float64-fixed geometric core** (which does NOT
+    shrink with complex64) from the dtype-scaling complex fields, the
+    ``complex128``-first ``phase_exp`` transient, and the ``(N/ray_subsample)^2``
+    Newton coarse solve.  See the module-level CALIBRATION note.
+
+    Parameters
+    ----------
+    n_grid : int
+        Square grid size ``N`` (peak ~ N**2).
+    complex_dtype : dtype-like, default ``'complex128'``
+        Field dtype.  ``'complex64'`` halves ONLY the complex terms.
+    lens_model : ``'traced'`` | ``'real'``, default ``'traced'``
+        ``'real'`` (bare ``apply_real_lens``) omits the traced final-assembly
+        (Newton + ``map_coordinates`` + delta_phase) float64 arrays.
+    ray_subsample : int, default 8
+        Ray-trace OPL subsample.  Larger -> smaller Newton coarse solve.
+    parallel_amp : bool, default True
+        When True the amp + amp(pw) legs run concurrently -> ~2x the lens
+        working set (the single largest claw-back when turned off).
+    slant_correction : bool, default False
+        Adds the ~6 float64 angle-gradient arrays.
+    sag_dtype : dtype-like or None
+        Geometry dtype.  ``None`` -> float64 (the default + only validated
+        precision).  ``np.float32`` halves the geometric core AND removes the
+        complex128-first ``phase_exp`` transient (PR2 opt-in; accuracy-risky).
+    itemized : bool, default False
+        When True, return ``{'total', 'items', ...}`` instead of a bare int.
+
+    Returns
+    -------
+    int or dict
+        Peak additional bytes (or an itemised dict).
+    """
+    N = int(n_grid)
+    npix = N * N
+    cb = _as_complex_itemsize(complex_dtype)
+    sb = 4 if (sag_dtype is not None and np.dtype(sag_dtype) == np.float32) else 8
+
+    f64_core = _LENS_F64_ARRAYS * sb * npix
+    if slant_correction:
+        f64_core += _LENS_SLANT_F64_ARRAYS * sb * npix
+    complex_part = _LENS_COMPLEX_ARRAYS * cb * npix
+    # phase_exp = np.exp(1j*delta_phase) is built complex128-FIRST whenever
+    # delta_phase is float64 (the default sag), so a c128-sized transient
+    # rides even in a complex64 run.  float32 sag removes it.
+    phase_exp_trap = 16 * npix if sb == 8 else 0
+
+    if lens_model == 'traced':
+        sub = max(1, int(ray_subsample))
+        newton = _NEWTON_BYTES_PER_COARSE_PT * (N / sub) ** 2
+    else:  # bare apply_real_lens has no traced final assembly
+        newton = 0.0
+        # 'real' holds fewer of the assembly float64 arrays
+        f64_core *= (5.0 / _LENS_F64_ARRAYS)
+
+    if parallel_amp:
+        f64_core *= 2.0
+        complex_part *= 2.0
+
+    items = {
+        'float64_geometric_core': int(f64_core),
+        'complex_fields': int(complex_part),
+        'phase_exp_c128_transient': int(phase_exp_trap),
+        'newton_coarse_solve': int(newton),
+    }
+    total = sum(items.values())
+    if not itemized:
+        return total
+    return {'total': total, 'items': items, 'n_grid': N,
+            'complex_dtype': str(np.dtype(complex_dtype)),
+            'sag_dtype': 'float32' if sb == 4 else 'float64'}
+
+
+def estimate_asm_memory(n_grid: int,
+                        complex_dtype: Any = 'complex128',
+                        *,
+                        plan_cache_keys: int = 2) -> int:
+    """Estimate the peak RAM (bytes) of one band-limited ASM propagation
+    step, including the resident pyFFTW double-buffer aligned workspaces
+    (``plan_cache_keys`` distinct fwd/inv plan keys, two buffers each)."""
+    N = int(n_grid)
+    npix = N * N
+    cb = _as_complex_itemsize(complex_dtype)
+    work = _ASM_COMPLEX_ARRAYS * cb * npix
+    plan_bufs = max(0, int(plan_cache_keys)) * 2 * cb * npix
+    return int(work + plan_bufs)
+
+
+def estimate_sim_memory(n_grid: int,
+                        complex_dtype: Any = 'complex128',
+                        *,
+                        lens_model: str = 'traced',
+                        ray_subsample: int = 8,
+                        parallel_amp: bool = True,
+                        slant_correction: bool = False,
+                        sag_dtype: Any = None,
+                        resume_field_bytes: int = 0,
+                        plan_cache_keys: int = 2,
+                        safety_factor: float = 1.15,
+                        itemized: bool = False):
+    """Estimate the peak RAM (bytes) of a full free-space + real-lens
+    simulation: ``safety_factor * max(lens_step, asm_step) + resume_field``.
+
+    The consumer resets the FFT plan cache before each lens, so the lens
+    step and the ASM step do NOT overlap -- the peak is the larger of the
+    two, plus any resumed-checkpoint plane held resident.
+
+    Returns a bare int (peak bytes) or, with ``itemized=True``, a dict with
+    the per-step breakdown and the driving step.
+    """
+    lens = estimate_lens_memory(
+        n_grid, complex_dtype, lens_model=lens_model, ray_subsample=ray_subsample,
+        parallel_amp=parallel_amp, slant_correction=slant_correction,
+        sag_dtype=sag_dtype, itemized=True)
+    asm = estimate_asm_memory(n_grid, complex_dtype, plan_cache_keys=plan_cache_keys)
+    step = max(lens['total'], asm)
+    driver = 'lens' if lens['total'] >= asm else 'asm'
+    raw = step + int(resume_field_bytes)
+    peak = int(raw * float(safety_factor))
+    if not itemized:
+        return peak
+    return {
+        'peak_bytes': peak,
+        'raw_bytes': int(raw),
+        'safety_factor': float(safety_factor),
+        'driving_step': driver,
+        'lens_step_bytes': lens['total'],
+        'asm_step_bytes': asm,
+        'resume_field_bytes': int(resume_field_bytes),
+        'lens_items': lens['items'],
+        'n_grid': int(n_grid),
+        'complex_dtype': str(np.dtype(complex_dtype)),
+    }
+
+
+def check_sim_memory(n_grid: int,
+                     complex_dtype: Any = 'complex128',
+                     *,
+                     lens_model: str = 'traced',
+                     ray_subsample: int = 8,
+                     parallel_amp: bool = True,
+                     slant_correction: bool = False,
+                     sag_dtype: Any = None,
+                     resume_field_bytes: int = 0,
+                     plan_cache_keys: int = 2,
+                     safety_factor: float = 1.15,
+                     available: Optional[int] = None,
+                     mode: str = 'warn',
+                     verbose: bool = True) -> Dict[str, Any]:
+    """Autodetect guardrail: estimate the true peak, compare to available RAM,
+    and (depending on ``mode``) warn / raise / just report -- ALWAYS returning
+    a structured verdict that, when it does not fit, lists concrete claw-backs
+    that DO fit (parallel_amp off -> complex64 -> coarser ray_subsample ->
+    smaller N), each with its estimated peak.
+
+    Parameters
+    ----------
+    mode : ``'warn'`` (default) | ``'raise'`` | ``'silent'``
+        ``'warn'`` emits a ``RuntimeWarning`` if it will not fit; ``'raise'``
+        raises ``MemoryError``; ``'silent'`` only returns the verdict.
+    available : int or None
+        Available bytes; defaults to :func:`get_ram_budget`.
+
+    Returns
+    -------
+    dict
+        ``{'fits', 'peak_bytes', 'available_bytes', 'driving_step',
+        'breakdown', 'message', 'recommendations'}``.
+    """
+    if available is None:
+        available = get_ram_budget()
+    est = estimate_sim_memory(
+        n_grid, complex_dtype, lens_model=lens_model, ray_subsample=ray_subsample,
+        parallel_amp=parallel_amp, slant_correction=slant_correction,
+        sag_dtype=sag_dtype, resume_field_bytes=resume_field_bytes,
+        plan_cache_keys=plan_cache_keys, safety_factor=safety_factor, itemized=True)
+    peak = est['peak_bytes']
+    fits = peak <= int(available)
+
+    # Build the claw-back ladder: byte-identical knobs first, then accuracy/
+    # fidelity trades, then grid reduction.  Each entry re-estimates and is
+    # reported only if it actually fits.
+    recs = []
+    def _try(label, **over):
+        kw = dict(lens_model=lens_model, ray_subsample=ray_subsample,
+                  parallel_amp=parallel_amp, slant_correction=slant_correction,
+                  sag_dtype=sag_dtype, resume_field_bytes=resume_field_bytes,
+                  plan_cache_keys=plan_cache_keys, safety_factor=safety_factor)
+        ngrid = over.pop('n_grid', n_grid)
+        cdt = over.pop('complex_dtype', complex_dtype)
+        kw.update(over)
+        p = estimate_sim_memory(ngrid, cdt, **kw)
+        if p <= int(available):
+            recs.append({'change': label, 'peak_bytes': p,
+                         'peak_gb': p / 1e9, 'fits': True})
+    if not fits:
+        if parallel_amp:
+            _try('set parallel_amp=False (byte-identical)', parallel_amp=False)
+        if np.dtype(complex_dtype) == np.complex128:
+            _try('use complex64 fields', complex_dtype='complex64',
+                 parallel_amp=False)
+        if lens_model == 'traced' and int(ray_subsample) < 16:
+            _try('ray_subsample=16 (+parallel_amp=False)',
+                 ray_subsample=16, parallel_amp=False)
+        # grid reductions
+        for ng in (24576, 16384, 12288, 8192):
+            if ng < int(n_grid):
+                _try(f'reduce N_GRID to {ng} (+parallel_amp=False)',
+                     n_grid=ng, parallel_amp=False)
+                break
+
+    def gb(b):
+        return b / 1e9
+    items = est['lens_items']
+    msg = (f"N={n_grid} {np.dtype(complex_dtype)} {lens_model}-lens "
+           f"(sub={ray_subsample}, parallel_amp={parallel_amp}): "
+           f"peak ~{gb(peak):.0f} GB (driver: {est['driving_step']} step; "
+           f"f64-core {gb(items['float64_geometric_core']):.0f} GB + "
+           f"complex {gb(items['complex_fields']):.0f} GB + "
+           f"phase_exp {gb(items['phase_exp_c128_transient']):.0f} GB + "
+           f"newton {gb(items['newton_coarse_solve']):.0f} GB), "
+           f"x{safety_factor} safety; have {gb(available):.0f} GB.")
+    if fits:
+        msg = "OK: " + msg
+    else:
+        msg = "INSUFFICIENT RAM: " + msg
+        if recs:
+            msg += " Claw-backs that fit: " + "; ".join(
+                f"{r['change']} -> ~{r['peak_gb']:.0f} GB" for r in recs) + "."
+        else:
+            msg += (" No single claw-back fits; combine complex64 + sub=16 + "
+                    "lower N, or free RAM.")
+
+    verdict = {
+        'fits': bool(fits), 'peak_bytes': int(peak),
+        'available_bytes': int(available), 'driving_step': est['driving_step'],
+        'breakdown': est, 'message': msg, 'recommendations': recs,
+    }
+    if verbose:
+        print(("  " if fits else "  ** ") + msg, flush=True)
+    if not fits:
+        if mode == 'raise':
+            raise MemoryError(msg)
+        if mode == 'warn':
+            warnings.warn(msg, RuntimeWarning)
+    return verdict
+
+
+# ----------------------------------------------------------------------------
+# Low-memory preset
+# ----------------------------------------------------------------------------
+def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[str, Any]:
+    """Flip the BYTE-SAFE memory-lean knobs together (and, with
+    ``aggressive=True``, the numerics-changing ones).  Returns the prior
+    values so the change round-trips via ``set_low_memory(False)``.
+
+    Safe set (all byte-identical to a default run -- memory/speed trade only):
+      * ``set_fft_plan_cache_size(2)``     -- the fwd+inv floor for one grid
+      * ``set_lens_parallel_amp(False)``   -- sequential amp (largest claw-back)
+      * ``set_fft_auto_promote(False)``    -- no transient MEASURE re-plan
+
+    Aggressive set (CHANGE NUMERICS -- gated + logged):
+      * ``set_default_complex_dtype(np.complex64)``  (~80 dB dynamic range)
+
+    (The double-buffer-off and float32/chunked-sag knobs land in a follow-up.)
+    """
+    # Lazy imports keep memory.py dependency-light (no module-level edge into
+    # propagators/ or elements/, avoiding an import cycle).
+    from .elements._lens_traced import get_lens_parallel_amp, set_lens_parallel_amp
+    from .propagators.fft_infra import (
+        get_fft_plan_cache_size,
+        set_fft_auto_promote,
+        set_fft_plan_cache_size,
+    )
+
+    prior: Dict[str, Any] = {}
+
+    def _capture(key, getter):
+        try:
+            prior[key] = getter()
+        except Exception:
+            prior[key] = None
+
+    if enabled:
+        _capture('plan_cache_size', get_fft_plan_cache_size)
+        _capture('lens_parallel_amp', get_lens_parallel_amp)
+        prior['fft_auto_promote'] = True   # library default
+        set_fft_plan_cache_size(2)
+        set_lens_parallel_amp(False)
+        set_fft_auto_promote(False)
+        if aggressive:
+            try:
+                from .backend import get_default_complex_dtype, set_default_complex_dtype
+                prior['complex_dtype'] = get_default_complex_dtype()
+                set_default_complex_dtype(np.complex64)
+                warnings.warn(
+                    "set_low_memory(aggressive=True) set the default field "
+                    "dtype to complex64 (~80 dB dynamic range). Validate "
+                    "deep-null / stray-light-sensitive results.",
+                    RuntimeWarning)
+            except Exception:
+                pass
+    else:
+        # Restore shipped library defaults.
+        set_fft_plan_cache_size(8)
+        set_lens_parallel_amp(True)
+        set_fft_auto_promote(True)
+    return prior
+
+
 __all__ = [
     'get_ram_budget', 'set_max_ram', 'get_max_ram',
     'available_memory_bytes', 'total_memory_bytes', 'memory_info',
@@ -460,4 +821,7 @@ __all__ = [
     'should_split',
     'format_bytes', 'print_memory_report',
     'available_cpus',
+    # v5.16.1 system-level estimation + guardrail
+    'estimate_lens_memory', 'estimate_asm_memory', 'estimate_sim_memory',
+    'check_sim_memory', 'set_low_memory',
 ]

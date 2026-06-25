@@ -2,6 +2,56 @@
 
 All notable changes to the core library are documented here.
 
+## [5.16.1] — 2026-06-25
+
+### Added (memory estimation + autodetect guardrail)
+
+- **`estimate_sim_memory` / `estimate_lens_memory` / `estimate_asm_memory`** -- a
+  system-level peak-RAM estimator for free-space + ray-traced-lens simulations.
+  Where `estimate_op_memory` models one FFT op as `n_work_arrays` same-dtype
+  temporaries, these account for the memory-DETERMINING step: the ray-traced lens
+  amplitude pass, whose working set is a stack of **float64-fixed** full-grid
+  arrays (the `np.arange(N)*dx` coordinate lineage, sag/opd, the
+  `np.indices((N,N))` + `(2,N,N)` `map_coordinates` upsample stack, and
+  `delta_phase`) that does NOT shrink with complex64. Calibrated to measured peak
+  RSS on a 137 GB box; pass `itemized=True` for the per-term breakdown.
+- **`check_sim_memory`** -- an autodetect guardrail. Estimates the true peak,
+  compares to available RAM, and (mode `'warn'` / `'raise'` / `'silent'`) returns
+  a structured verdict that, when a config will not fit, lists concrete claw-backs
+  that DO fit (parallel_amp off -> complex64 -> coarser ray_subsample -> smaller
+  N), each with its estimated peak -- so large-grid runs fail FAST with an
+  actionable message instead of OOMing mid-run.
+- **`set_low_memory(enabled, *, aggressive=False)`** -- flips the byte-safe
+  memory-lean knobs together (FFT plan-cache -> 2, lens `parallel_amp` -> off,
+  auto-promote off) and restores them on `set_low_memory(False)`. `aggressive=True`
+  additionally sets the default field dtype to complex64 (logged).
+- **`set_lens_parallel_amp` / `get_lens_parallel_amp`** and
+  **`get_fft_plan_cache_size`** -- opt-in knobs for the largest lens-step claw-back
+  (sequential amp + amp(pw), ~2x working set, byte-identical output) and for
+  reading the resident pyFFTW plan-cache bound.
+
+### Changed
+
+- `apply_real_lens_traced(parallel_amp=...)` default is now `None`, resolving to
+  the process-wide `set_lens_parallel_amp` global (shipped default `True`).
+  **Byte-identical** for every caller: explicit `True` / `False` still win, and
+  callers that omit the kwarg get the unchanged `True` path.
+
+### Fixed
+
+- **Zemax `EVENASPH` loader power-index off-by-one** (`io/prescriptions_zemax.py`).
+  Zemax `PARM_n` is the coefficient on `r^(2n)`, but the loader mapped it to
+  `r^(2 + 2n)` (and the exporter inverted that) -- inflating a real ~3 um asphere
+  into a ~77 um surface and producing a multi-mm focus shift + smeared spots on
+  direct-imaging prescriptions. Loader and exporter corrected to
+  `power = 2*parm_num`.
+
+### Notes
+
+- All new knobs default to the shipped (pre-5.16.1) behaviour; `set_low_memory`
+  is the single opt-in. Existing results are byte-identical unless opted in. The
+  chunked-sag and float32-sag headroom knobs for N=32768 land in a follow-up.
+
 ## [5.16.0] — 2026-06-23
 
 ### Added

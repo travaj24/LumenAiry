@@ -98,6 +98,29 @@ def _load_numba():
 _NEWTON_MAX_ITERS = 12
 
 
+# Module-level default for ``apply_real_lens_traced(parallel_amp=...)``.  The
+# kwarg default is ``None`` -> resolves to this global, so a process-wide
+# ``set_lens_parallel_amp(False)`` (or ``lumenairy.set_low_memory(True)``)
+# flips the amp+amp(pw) concurrency off for callers that don't pass the kwarg.
+# Shipped default True is byte-identical to the historical behaviour; turning
+# it off is the single largest lens-step memory claw-back (~2x working set)
+# and is numerically identical (same math, serialised).
+_LENS_PARALLEL_AMP_DEFAULT = True
+
+
+def set_lens_parallel_amp(enabled: bool) -> None:
+    """Set the process-wide default for ``apply_real_lens_traced``'s
+    concurrent amp + amp(pw) execution.  ``False`` halves the lens-step
+    peak working set (byte-identical output, ~20% slower lens step)."""
+    global _LENS_PARALLEL_AMP_DEFAULT
+    _LENS_PARALLEL_AMP_DEFAULT = bool(enabled)
+
+
+def get_lens_parallel_amp() -> bool:
+    """Return the process-wide default for the lens amp/amp(pw) concurrency."""
+    return bool(_LENS_PARALLEL_AMP_DEFAULT)
+
+
 # Helpers shared with lenses.py (single-element sag, aperture warning).
 from .lenses import (
     _warn_if_aperture_exceeds_grid,
@@ -1108,7 +1131,7 @@ def apply_real_lens_traced(
     on_undersample: str = 'error',
     preserve_input_phase: bool = True,
     tilt_aware_rays: bool = False,
-    parallel_amp: bool = True,
+    parallel_amp: Optional[bool] = None,
     parallel_amp_min_free_gb: float = 48.0,
     newton_amp_mask_rel: float = 1e-4,
     newton_mask_dilate_coarse_px: int = 2,
@@ -1553,6 +1576,11 @@ def apply_real_lens_traced(
     # doubled working set -- tuned for the N=32768 complex128 case,
     # where the single-call transient peak is ~25 GB and doubling
     # brings it to ~50 GB.
+    # parallel_amp=None (the default) resolves to the module global, letting
+    # ``set_lens_parallel_amp(False)`` / ``set_low_memory(True)`` flip the
+    # default for callers that don't pass the kwarg.  Explicit True/False win.
+    if parallel_amp is None:
+        parallel_amp = _LENS_PARALLEL_AMP_DEFAULT
     _use_parallel_amp = (preserve_input_phase and parallel_amp)
     if _use_parallel_amp:
         try:
@@ -2445,4 +2473,6 @@ def apply_real_lens_traced(
 __all__ = [
     'apply_real_lens_traced',
     'close_worker_pool',
+    'set_lens_parallel_amp',
+    'get_lens_parallel_amp',
 ]

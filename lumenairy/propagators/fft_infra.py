@@ -686,6 +686,17 @@ def set_fft_plan_cache_size(n: int) -> None:
             _PYFFTW_PLAN_CACHE.popitem(last=False)
 
 
+def get_fft_plan_cache_size() -> int:
+    """Return the current maximum number of resident pyFFTW plans.
+
+    Each resident plan key holds a two-buffer ping-pong of aligned
+    full-grid workspaces, so this bounds the persistent FFT memory:
+    ``min(#distinct keys, size) * 2 * N*N*itemsize`` bytes.  The
+    estimator (:func:`lumenairy.estimate_sim_memory`) reads it to size
+    the ASM-step plan-buffer term."""
+    return int(_PYFFTW_PLAN_CACHE_SIZE)
+
+
 def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional[int] = None) -> int:
     """Pre-build pyFFTW plans for the given shapes so the first
     propagation at each shape pays the planning cost only once at
