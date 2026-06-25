@@ -383,19 +383,30 @@ def load_zemax_zmx(filepath: str,
                 q_r_max = 1.0
         else:
             # Aspheric coefficients (EVENASPH and silent on STANDARD).
-            # Zemax EVENASPH convention: PARM 1 = alpha_4 (dominant
-            # 4th-order term), PARM 2 = alpha_6, PARM N = alpha_(2*N+2).
-            # Library canonical form is a dict keyed by total power:
-            # {4: a4, 6: a6, ...}.  The exporter (export_zemax_zmx)
-            # round-trips with parm_idx = power//2 - 1, so loader must
-            # use power = 2 + 2*parm_num and accept parm_num >= 1.
-            # (Pre-v4.11.2 dropped PARM 1 entirely and mis-labelled
-            # every higher coefficient by one slot.)
+            # Zemax EVENASPH polynomial:
+            #     z = base_conic + sum_{n>=1} alpha_n * r^(2n)
+            # i.e. PARM 1 = alpha_1 (r^2 term), PARM 2 = alpha_2 (r^4),
+            # PARM 3 = alpha_3 (r^6), ...  So the TOTAL POWER of the
+            # radial term for PARM n is 2*n (NOT 2 + 2*n).  PARM 1 is
+            # usually 0 (the r^2 term is degenerate with curvature), so
+            # the first non-trivial coefficient is typically PARM 2 (r^4).
+            #
+            # The pre-fix loader used power = 2 + 2*parm_num, which shifted
+            # every coefficient UP one even power (r^4 -> r^6, ...) AND --
+            # via the unit_scale**(power-1) rescale -- inflated each value
+            # by unit_scale**2 = 1e6.  On a real Zemax import this turned a
+            # ~few-um asphere into a ~tens-of-um monster on the wrong order,
+            # destroying the traced-lens wavefront (observed: +2.8 mm image
+            # defocus + smeared spots on the poc1-19/20 designs).
+            #
+            # Library canonical form: dict keyed by TOTAL power {2: a1,
+            # 4: a2, 6: a3, ...}; consumed by elements.lenses.surface_sag.
+            # NOTE: export_zemax_zmx must mirror this (parm_idx = power//2).
             if s['aspheric_params']:
                 asph_coeffs = {}
                 for parm_num, parm_val in s['aspheric_params'].items():
                     if parm_num >= 1:
-                        power = 2 + 2 * parm_num
+                        power = 2 * parm_num
                         asph_coeffs[power] = (
                             parm_val / (unit_scale ** (power - 1)))
 
@@ -1395,7 +1406,7 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
                 for power in sorted(asph.keys()):
                     if power <= 0 or power % 2 != 0:
                         continue
-                    parm_idx = power // 2 - 1
+                    parm_idx = power // 2
                     coeff_mm = asph[power] * (1e3 ** (1 - power))
                     lines.append(f'  PARM {parm_idx} {coeff_mm:.10e}')
             lines.append(f'  DIAM {sd_mm_e:.6f} 0 0 0 1 ""')
@@ -1584,7 +1595,7 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
                 if power <= 0 or power % 2 != 0:
                     continue
                 # Zemax PARM index: a_4 -> 1, a_6 -> 2, a_8 -> 3, ...
-                parm_idx = power // 2 - 1
+                parm_idx = power // 2
                 # Coefficient unit: input is 1/m^(power-1) for our convention,
                 # Zemax expects 1/mm^(power-1).  Convert.
                 coeff_mm = asph[power] * (1e3 ** (1 - power))
