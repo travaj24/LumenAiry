@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import os
 import warnings
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Literal, Optional, Tuple, Union, overload
 
 import numpy as np
 
@@ -490,6 +490,22 @@ def _as_complex_itemsize(dtype: Any) -> int:
     return int(np.dtype(dtype).itemsize)
 
 
+@overload
+def estimate_lens_memory(
+    n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
+    ray_subsample: int = ..., parallel_amp: bool = ...,
+    slant_correction: bool = ..., sag_dtype: Any = ...,
+    itemized: Literal[False] = ...) -> int: ...
+
+
+@overload
+def estimate_lens_memory(
+    n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
+    ray_subsample: int = ..., parallel_amp: bool = ...,
+    slant_correction: bool = ..., sag_dtype: Any = ...,
+    itemized: Literal[True]) -> Dict[str, Any]: ...
+
+
 def estimate_lens_memory(n_grid: int,
                          complex_dtype: Any = 'complex128',
                          *,
@@ -498,7 +514,8 @@ def estimate_lens_memory(n_grid: int,
                          parallel_amp: bool = True,
                          slant_correction: bool = False,
                          sag_dtype: Any = None,
-                         itemized: bool = False):
+                         itemized: bool = False
+                         ) -> Union[int, Dict[str, Any]]:
     """Estimate the peak RAM (bytes) of ONE ``apply_real_lens_traced`` (or
     ``apply_real_lens``) call -- the memory-determining step of a free-space
     + real-lens simulation.
@@ -591,6 +608,24 @@ def estimate_asm_memory(n_grid: int,
     return int(work + plan_bufs)
 
 
+@overload
+def estimate_sim_memory(
+    n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
+    ray_subsample: int = ..., parallel_amp: bool = ...,
+    slant_correction: bool = ..., sag_dtype: Any = ...,
+    resume_field_bytes: int = ..., plan_cache_keys: int = ...,
+    safety_factor: float = ..., itemized: Literal[False] = ...) -> int: ...
+
+
+@overload
+def estimate_sim_memory(
+    n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
+    ray_subsample: int = ..., parallel_amp: bool = ...,
+    slant_correction: bool = ..., sag_dtype: Any = ...,
+    resume_field_bytes: int = ..., plan_cache_keys: int = ...,
+    safety_factor: float = ..., itemized: Literal[True]) -> Dict[str, Any]: ...
+
+
 def estimate_sim_memory(n_grid: int,
                         complex_dtype: Any = 'complex128',
                         *,
@@ -602,7 +637,8 @@ def estimate_sim_memory(n_grid: int,
                         resume_field_bytes: int = 0,
                         plan_cache_keys: int = 2,
                         safety_factor: float = 1.15,
-                        itemized: bool = False):
+                        itemized: bool = False
+                        ) -> Union[int, Dict[str, Any]]:
     """Estimate the peak RAM (bytes) of a full free-space + real-lens
     simulation: ``safety_factor * max(lens_step, asm_step) + resume_field``.
 
@@ -686,7 +722,7 @@ def check_sim_memory(n_grid: int,
     # fidelity trades, then grid reduction.  Each entry re-estimates and is
     # reported only if it actually fits.
     recs = []
-    def _try(label, **over):
+    def _try(label: str, **over: Any) -> None:
         kw = dict(lens_model=lens_model, ray_subsample=ray_subsample,
                   parallel_amp=parallel_amp, slant_correction=slant_correction,
                   sag_dtype=sag_dtype, resume_field_bytes=resume_field_bytes,
@@ -714,7 +750,7 @@ def check_sim_memory(n_grid: int,
                      n_grid=ng, parallel_amp=False)
                 break
 
-    def gb(b):
+    def gb(b: float) -> float:
         return b / 1e9
     items = est['lens_items']
     msg = (f"N={n_grid} {np.dtype(complex_dtype)} {lens_model}-lens "
@@ -780,7 +816,7 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
 
     prior: Dict[str, Any] = {}
 
-    def _capture(key, getter):
+    def _capture(key: str, getter: Any) -> None:
         try:
             prior[key] = getter()
         except Exception:
@@ -795,7 +831,10 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         set_fft_auto_promote(False)
         if aggressive:
             try:
-                from .backend import get_default_complex_dtype, set_default_complex_dtype
+                from .propagators.fft_infra import (
+                    get_default_complex_dtype,
+                    set_default_complex_dtype,
+                )
                 prior['complex_dtype'] = get_default_complex_dtype()
                 set_default_complex_dtype(np.complex64)
                 warnings.warn(
