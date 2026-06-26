@@ -79,12 +79,20 @@ def _write_zmx(text, suffix='.zmx'):
     return path
 
 
-def _minimal_evenasph_zmx(alpha4_per_mm3, alpha6_per_mm5=0.0):
-    """A minimal 2-surface .zmx with one EVENASPH surface.
+def _minimal_evenasph_zmx(parm_map):
+    """A minimal 2-surface .zmx with one EVENASPH surface whose PARM slots are
+    populated per ``parm_map`` (``{parm_num: value_in_mm_units}``).
 
-    PARM 1 (= alpha_4) is set to ``alpha4_per_mm3`` and PARM 2
-    (= alpha_6) to ``alpha6_per_mm5``.  Returns the .zmx text.
+    Zemax EVENASPH stores the even-aspheric polynomial
+    ``z += alpha_1*r^2 + alpha_2*r^4 + alpha_3*r^6 + ...`` as
+    ``PARM_n = alpha_n = the coefficient of r^(2n)``.  So PARM 1 is the r^2
+    term (conventionally 0 -- degenerate with the base curvature, which is why
+    real .zmx aspheres list ``PARM 1 0.0`` explicitly and put the first real
+    departure in PARM 2 = r^4).  The loader must therefore map
+    ``PARM_n -> power 2n``.  Returns the .zmx text.
     """
+    parm_lines = [f'  PARM {n} {v:.10e}'
+                  for n, v in sorted(parm_map.items())]
     lines = [
         'VERS 210000 0 123 0 0',
         'MODE SEQ',
@@ -104,8 +112,7 @@ def _minimal_evenasph_zmx(alpha4_per_mm3, alpha6_per_mm5=0.0):
         '  CURV 0.01 0 0 0 0 ""',
         '  DISZ 3.0',
         '  GLAS BK7 0 0 1.5 50.0',
-        f'  PARM 1 {alpha4_per_mm3:.10e}',
-        f'  PARM 2 {alpha6_per_mm5:.10e}',
+        *parm_lines,
         '  DIAM 5.0',
         'SURF 2',
         '  TYPE STANDARD',
@@ -124,40 +131,40 @@ def _minimal_evenasph_zmx(alpha4_per_mm3, alpha6_per_mm5=0.0):
 
 class TestAuditFixesV4_11_2_io_EvenAsphParm:
 
-    def test_parm1_is_alpha4(self):
-        """Pre-v4.11.2: loader's ``if parm_num >= 2`` filter dropped
-        PARM 1 (alpha_4) entirely.  Post-fix: PARM 1 lands on power=4
-        with correct unit conversion."""
-        # Use a recognisably-large alpha_4 so the test fails
-        # immediately if the filter regresses.
-        alpha4_per_mm3 = 1.5e-5      # 1/mm^3
-        zmx_text = _minimal_evenasph_zmx(alpha4_per_mm3, alpha6_per_mm5=0.0)
+    def test_parm1_maps_to_power2_not_power4(self):
+        """Zemax EVENASPH ``PARM_n = alpha_n`` is the coefficient of r^(2n),
+        so PARM 1 is the r^2 term (power=2), NOT r^4.
+
+        History: pre-v4.11.2 the loader's ``if parm_num >= 2`` filter dropped
+        PARM 1; v4.11.2 correctly stopped dropping it but assigned the wrong
+        power via ``power = 2 + 2*parm_num`` (PARM1->4, PARM2->6, ...) and this
+        test was written to that off-by-one.  v5.16.1 corrects the loader to
+        ``power = 2*parm_num``, verified against the poc1-19 design: its S9/S38
+        EVENASPH surfaces list ``PARM 1 0.0`` (the conventionally-zero r^2 term)
+        with the real departure in PARM 2+, and only the 2*parm_num mapping
+        reproduces their physical sub-micron aspheric sag (the +2 offset
+        inflated it ~10x and smeared the imaged spots)."""
+        alpha2_per_mm = 3.0e-3       # 1/mm (r^2 coefficient)
+        zmx_text = _minimal_evenasph_zmx({1: alpha2_per_mm})
         path = _write_zmx(zmx_text)
         try:
             rx = load_zemax_zmx(path)
         finally:
             os.unlink(path)
-        # First refracting surface is the EVENASPH.
         ac = rx['surfaces'][0]['aspheric_coeffs']
-        assert ac is not None, (
-            "alpha_4 (PARM 1) was dropped -- regression of the v4.11.2 "
-            "off-by-one fix.")
-        assert 4 in ac, (
-            f"Expected power=4 key in aspheric_coeffs, got {list(ac.keys())}. "
-            "The loader is mis-labelling PARM 1.")
-        # Unit conversion: input is 1/mm^3, library stores 1/m^3.
-        # 1 mm^-3 = 1e9 m^-3.
-        expected_per_m3 = alpha4_per_mm3 * 1e9
-        assert np.isclose(ac[4], expected_per_m3, rtol=1e-6), (
-            f"alpha_4 unit conversion wrong: got {ac[4]}, "
-            f"expected {expected_per_m3}.")
+        assert ac is not None, "PARM 1 was dropped (regression)."
+        assert 2 in ac and 4 not in ac, (
+            f"PARM 1 must map to power=2 (r^2), got {list(ac.keys())}.")
+        # Unit conversion: r^2 coeff is 1/mm -> 1/m, i.e. x 1e3.
+        assert np.isclose(ac[2], alpha2_per_mm * 1e3, rtol=1e-6), (
+            f"power=2 unit conversion wrong: got {ac[2]}, "
+            f"expected {alpha2_per_mm * 1e3}.")
 
-    def test_parm2_is_alpha6(self):
-        """PARM 2 = alpha_6 in Zemax EVENASPH convention.  Pre-fix it
-        was loaded as power=4."""
-        alpha6_per_mm5 = 2.0e-9      # 1/mm^5
-        zmx_text = _minimal_evenasph_zmx(
-            alpha4_per_mm3=0.0, alpha6_per_mm5=alpha6_per_mm5)
+    def test_parm2_maps_to_power4(self):
+        """PARM 2 = alpha_2 = the r^4 coefficient (the first conventionally-
+        nonzero aspheric term).  Pre-v5.16.1 it was mis-loaded as power=6."""
+        alpha4_per_mm3 = 1.5e-5      # 1/mm^3 (r^4 coefficient)
+        zmx_text = _minimal_evenasph_zmx({2: alpha4_per_mm3})
         path = _write_zmx(zmx_text)
         try:
             rx = load_zemax_zmx(path)
@@ -165,13 +172,26 @@ class TestAuditFixesV4_11_2_io_EvenAsphParm:
             os.unlink(path)
         ac = rx['surfaces'][0]['aspheric_coeffs']
         assert ac is not None
-        # Only PARM 2 was set -> only power=6 should be present.
+        assert 4 in ac and 6 not in ac, (
+            f"PARM 2 must map to power=4 (r^4), got {list(ac.keys())}.")
+        # 1 mm^-3 = 1e9 m^-3.
+        assert np.isclose(ac[4], alpha4_per_mm3 * 1e9, rtol=1e-6)
+
+    def test_parm3_maps_to_power6(self):
+        """PARM 3 = alpha_3 = the r^6 coefficient (power=6)."""
+        alpha6_per_mm5 = 2.0e-9      # 1/mm^5 (r^6 coefficient)
+        zmx_text = _minimal_evenasph_zmx({3: alpha6_per_mm5})
+        path = _write_zmx(zmx_text)
+        try:
+            rx = load_zemax_zmx(path)
+        finally:
+            os.unlink(path)
+        ac = rx['surfaces'][0]['aspheric_coeffs']
+        assert ac is not None
         assert 6 in ac, (
-            f"Expected power=6 key, got {list(ac.keys())}. "
-            "PARM 2 -> alpha_6 (power=6), not alpha_4 (power=4).")
+            f"PARM 3 must map to power=6 (r^6), got {list(ac.keys())}.")
         # 1 mm^-5 = 1e15 m^-5.
-        expected = alpha6_per_mm5 * 1e15
-        assert np.isclose(ac[6], expected, rtol=1e-6)
+        assert np.isclose(ac[6], alpha6_per_mm5 * 1e15, rtol=1e-6)
 
     def test_evenasph_full_round_trip_preserves_alpha4(self):
         """Synthetic prescription -> export .zmx -> reload -> assert
@@ -665,7 +685,7 @@ class TestAuditFixesV4_11_2_io_CodegenSystemListMirrorAperture:
 class TestAuditFixesV4_11_2_io_AsphericCoeffsTypeHarmonisation:
 
     def test_zemax_loader_returns_dict(self):
-        zmx_text = _minimal_evenasph_zmx(1e-5, 0.0)
+        zmx_text = _minimal_evenasph_zmx({2: 1e-5})
         path = _write_zmx(zmx_text)
         try:
             rx = load_zemax_zmx(path)

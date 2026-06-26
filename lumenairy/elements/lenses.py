@@ -947,5 +947,7 @@ from ._lens_thin import (  # noqa: E402, F401
 from ._lens_traced import (  # noqa: E402, F401
     apply_real_lens_traced,
     close_worker_pool,
+    get_lens_parallel_amp,
+    set_lens_parallel_amp,
 )
 from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402

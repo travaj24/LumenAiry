@@ -141,7 +141,9 @@ from .elements.lenses import (
     apply_thin_lens,
     check_grid_vs_apertures,
     close_worker_pool,
+    get_lens_parallel_amp,
     recommend_grid_for_prescription,
+    set_lens_parallel_amp,
     surface_sag_biconic,
     surface_sag_general,
 )
@@ -190,6 +192,7 @@ from .propagators.propagation import (
     get_default_real_dtype,
     get_default_wave_propagator,
     get_fft_auto_promote,
+    get_fft_plan_cache_size,
     get_fft_threads,
     get_pyfftw_planner,
     rayleigh_sommerfeld_propagate,
@@ -590,13 +593,18 @@ from .memory import (
     array_bytes,
     available_memory_bytes,
     bytes_per_element,
+    check_sim_memory,
+    estimate_asm_memory,
+    estimate_lens_memory,
     estimate_op_memory,
+    estimate_sim_memory,
     format_bytes,
     get_max_ram,
     get_ram_budget,
     memory_info,
     pick_batch_size,
     print_memory_report,
+    set_low_memory,
     set_max_ram,
     should_split,
     total_memory_bytes,
@@ -949,7 +957,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.16.0"
+__version__ = "5.16.1"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1028,6 +1036,8 @@ __all__ = [
     'apply_spherical_lens',
     'apply_aspheric_lens',
     'apply_real_lens',
+    'set_lens_parallel_amp',
+    'get_lens_parallel_amp',
     'apply_real_lens_traced',
     'close_worker_pool',
     'apply_real_lens_maslov',
@@ -1722,6 +1732,7 @@ __all__ = [
     'set_asm_cache_size',
     'get_asm_cache_size',
     'set_fft_plan_cache_size',
+    'get_fft_plan_cache_size',
     'set_pyfftw_planner',
     'get_pyfftw_planner',
     'set_fft_auto_promote',
@@ -1748,6 +1759,11 @@ __all__ = [
     'bytes_per_element',
     'array_bytes',
     'estimate_op_memory',
+    'estimate_lens_memory',
+    'estimate_asm_memory',
+    'estimate_sim_memory',
+    'check_sim_memory',
+    'set_low_memory',
     'pick_batch_size',
     'should_split',
     'format_bytes',
