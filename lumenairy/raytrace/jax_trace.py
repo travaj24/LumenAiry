@@ -860,6 +860,51 @@ def _reject_unsupported_jax_surfaces(surfaces_raw, fn_name):
             )
 
 
+def _resolve_semi_diameters(prescription):
+    """Resolve the effective per-surface clear semi-aperture [m].
+
+    Single source of the JAX backends' aperture semantics, mirroring
+    the NumPy backend (``trace.surfaces_from_prescription``,
+    trace.py:434-457) key for key:
+
+    1. Default: ``aperture_diameter / 2`` (``inf`` when absent).
+    2. A finite, positive per-surface ``'semi_diameter'`` REPLACES the
+       default; ``None`` / non-finite / <= 0 falls back (audit P2-35).
+    3. A ``prescription['elements']`` entry with
+       ``element_type == 'surface'`` (matched by index within the
+       refracting-surface entries, Zemax-loader layout) TIGHTENS the
+       result via ``min()`` when its ``'semi_diameter'`` is finite and
+       positive.
+
+    v5.17.x (audit P2-35 residual): pre-fix the JAX builders read only
+    the per-surface ``'semi_diameter'`` key and never consulted
+    ``'elements'``, so a Zemax-loaded prescription (whose apertures
+    live in ``'elements'``) vignetted under the NumPy trace but not
+    under trace_jax / trace_jax_with_params.  Returns a list of Python
+    floats (static -- never a JAX tracer), so it is jit/grad safe.
+    """
+    surfaces_raw = prescription.get('surfaces', [])
+    aperture_d = prescription.get('aperture_diameter')
+    default_semi = (aperture_d / 2.0
+                    if aperture_d is not None else float('inf'))
+    elements = prescription.get('elements', None)
+    refr_elems = ([e for e in elements
+                   if e.get('element_type') == 'surface']
+                  if elements is not None else [])
+    semi_ds = []
+    for i, s in enumerate(surfaces_raw):
+        sd = default_semi
+        ps_sd = s.get('semi_diameter')
+        if ps_sd is not None and np.isfinite(ps_sd) and ps_sd > 0:
+            sd = float(ps_sd)
+        if i < len(refr_elems):
+            elem_sd = refr_elems[i].get('semi_diameter', np.inf)
+            if elem_sd > 0 and np.isfinite(elem_sd):
+                sd = min(sd, float(elem_sd))
+        semi_ds.append(float(sd))
+    return semi_ds
+
+
 def _build_jax_prescription(prescription, wavelength,
                               surface_diffraction=None):
     """Build a :class:`JaxPrescription` from a plain prescription dict.
@@ -879,10 +924,6 @@ def _build_jax_prescription(prescription, wavelength,
     if len(thicknesses) < len(surfaces_raw) - 1:
         thicknesses = thicknesses + [0.0] * (
             len(surfaces_raw) - 1 - len(thicknesses))
-
-    aperture_d = prescription.get('aperture_diameter')
-    default_semi = (aperture_d / 2.0
-                    if aperture_d is not None else float('inf'))
 
     # Unsupported-surface fail-loud guard (4.10 / 4.13.2; hoisted to
     # _reject_unsupported_jax_surfaces for audit P2-34 -- see its
@@ -915,14 +956,10 @@ def _build_jax_prescription(prescription, wavelength,
         for s, pwr in zip(surfaces_raw, asph_powers)
     )
 
-    semi_ds = tuple(
-        float(default_semi if (
-            s.get('semi_diameter') is None
-            or not np.isfinite(s.get('semi_diameter'))
-            or s.get('semi_diameter') <= 0)
-            else s.get('semi_diameter'))
-        for s in surfaces_raw
-    )
+    # Audit P2-35 (residual): shared resolver -- honours the per-surface
+    # 'semi_diameter' key AND the 'elements' list exactly like the NumPy
+    # backend (see _resolve_semi_diameters).
+    semi_ds = tuple(_resolve_semi_diameters(prescription))
     n_pre = tuple(
         float(get_glass_index(s.get('glass_before', 'air'), wavelength))
         for s in surfaces_raw
@@ -1631,16 +1668,10 @@ def trace_jax_with_params(initial_state, prescription, wavelength,
     else:
         thicknesses_list = list(thicknesses)
 
-    # Apertures stay static.
-    aperture_d = prescription.get('aperture_diameter')
-    default_semi = (aperture_d / 2.0
-                    if aperture_d is not None else float('inf'))
-    semi_ds = []
-    for s in surfaces_raw:
-        sd = s.get('semi_diameter')
-        if sd is None or not np.isfinite(sd) or sd <= 0:
-            sd = default_semi
-        semi_ds.append(float(sd))
+    # Apertures stay static.  Audit P2-35 (residual): same shared
+    # resolver as _build_jax_prescription / the NumPy backend, so the
+    # 'elements' list is honoured here too.
+    semi_ds = _resolve_semi_diameters(prescription)
     n_pre = [
         float(get_glass_index(s.get('glass_before', 'air'), wavelength))
         for s in surfaces_raw

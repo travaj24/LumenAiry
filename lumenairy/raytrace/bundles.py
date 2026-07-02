@@ -134,6 +134,27 @@ def ray_to_beamlet(
 
     Use this when switching from a geometric raytrace into a GBD
     coherent-recombination workflow.
+
+    ``BeamletBundle`` has no ``opl`` / ``alive`` fields -- its complex
+    ``amplitude`` is the ONLY phase/weight carrier that
+    :func:`lumenairy.propagators.gbd.reconstruct_field_from_beamlets`
+    sums coherently.  When ``amplitude`` is None (the default) the
+    ray bundle's accumulated optical path length and alive mask are
+    therefore folded in as::
+
+        amplitude = exp(+1j * (2 pi / wavelength) * opd) * alive
+
+    matching the library's ``exp(-i omega t)`` / ``exp(+i k z)``
+    convention (:func:`gbd.propagate_beamlets_freespace` accumulates
+    ``exp(+1j * k * t)`` over a forward path ``t``, and
+    :func:`lumenairy.raytrace.rays_from_field` seeds
+    ``opd = angle(E) / k0``, which this expression inverts exactly).
+    Pre-fix (audit P2-33) the default silently dropped both: every
+    beamlet got phase 0 -- zeroing all inter-beamlet piston phases,
+    the exact quantity coherent recombination interferes on -- and
+    dead/TIR rays contributed full amplitude 1.  An explicitly passed
+    ``amplitude`` is used verbatim (no opd/alive folding), preserving
+    the pre-fix escape hatch where callers folded the phase themselves.
     """
     from ..propagators.gbd import BeamletBundle
 
@@ -143,7 +164,17 @@ def ray_to_beamlet(
     z_R = float(np.pi) * (waist0 ** 2) / wavelength
     Q = np.full(n, -1j / z_R, dtype=np.complex128)
     if amplitude is None:
-        amplitude = np.ones(n, dtype=np.complex128)
+        # Audit P2-33: carry RayBundle.opd (piston phase) and alive
+        # into the beamlet amplitude -- same getattr fallbacks as
+        # ray_to_path (missing opd -> zeros -> unit phase; missing
+        # alive -> all-True), so schema-less bundles keep the old
+        # all-ones default.
+        opd = np.asarray(getattr(ray_bundle, 'opd', np.zeros(n)),
+                         dtype=np.float64)
+        alive = np.asarray(getattr(ray_bundle, 'alive',
+                                    np.ones(n, dtype=bool)))
+        k0 = 2.0 * float(np.pi) / wavelength
+        amplitude = np.exp(1j * k0 * opd) * alive
     waist0_arr = np.full(n, float(waist0))
     return BeamletBundle(
         positions=positions,
