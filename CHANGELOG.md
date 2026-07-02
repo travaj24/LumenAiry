@@ -4,6 +4,99 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
 
+### Fixed (wave 5 — remaining P2s: physics conventions, IO trust, performance, UI robustness)
+
+**Three physics/convention BEHAVIOR CHANGES (each hand-derived against the
+literature / the library's own rigorous solvers before fixing):**
+
+- **`zernike_decompose(normalization='Noll')` no longer negates sine-mode
+  (m < 0) coefficients** (audit P2-02): Noll 1976 and OSA/ANSI Z80.28 use
+  IDENTICAL polynomials (both positive-sine; hand-derived from Noll Eq. 2 and
+  verified against Noll Table I), so the old flip matched NO published
+  convention.  'Noll' now returns coefficients equal to 'OSA' (the conventions
+  differ only in single-index ordering, deliberately not permuted).  The old
+  pinned test was circular and was replaced by hand-written Noll Table-I
+  oracles.
+- **`apply_waveplate` (and the Jones-element retarder family) slow-axis sign
+  flipped** to `exp(+i*retardance)` (audit P2-15), matching the library's own
+  Berreman/RCWA transmission Jones (a Berreman uniaxial QWP slab gives
+  slow-rel-fast phase +pi/2 under the public exp(-i omega t) convention).
+  Circular handedness (S3) no longer flips between the element family and the
+  solver family for the same physical waveplate.  QWP outputs equal the
+  CONJUGATE of prior releases (HWP unchanged); the QWP recipe producing
+  'right' circular from linear-x is now fast axis at -pi/4.  rcwa's internal
+  `_qwp_matrix` is deliberately unchanged: the `reflective_outcoupling`
+  metric is provably invariant to the conjugate choice at the default 45 deg
+  (documented in its docstring), so published out-coupling numbers are
+  unaffected.
+- **GBD `apply_abcd_to_beamlets` amplitude uses the Collins/Siegman factor**
+  `1/(A + B*Q_in)` instead of `Q_new/Q_old` (audit P2-30) -- amplitude and
+  piston were wrong by a factor `(C*q_in + D)`.  Hand-derived from the Collins
+  integral and validated against the analytic Gaussian-beam `w(z)/R(z)/Gouy`
+  free-space oracle.
+
+**Other fixes:**
+
+- **RCWAStack.solve(symmetry=True) per-order amplitude phases un-gauged**
+  (audit P2-18): the even-parity cascade computed amplitudes in the
+  recentering gauge, silently corrupting `per_order_amplitudes` /
+  `to_multiorder_field` / `to_jones_field` phases (efficiencies unaffected);
+  phases now match the symmetry=False path (probe: 0.343 -> 2e-13).
+- **PMM `layer_absorption(by_material=True)` includes the `Im(ezz)` channel**
+  (audit P2-13): a layer whose only loss was ezz vanished from the
+  per-material dict while its flux absorption was correctly nonzero.
+- **`stabilize` passive gate is two-sided and sign-aware** (audit P2-09): the
+  degree-scan consensus could certify solves with NEGATIVE totals; now
+  requires -tol <= tot <= 1+tol and per-order non-negativity
+  (defense-in-depth behind the wave-1 incidence guards).
+- **RCWA 1-D rejects back-side angles** (wave-3 follow-up): |angle| >= pi/2
+  raised, mirroring the wave-3 PMM guard (sin^2(100 deg) previously slipped
+  the evanescence check as a valid front-side angle).
+- **Zemax loader: unknown SURFTYPEs are no longer parsed as EVENASPH** (audit
+  P2-19) -- TOROIDAL/ODDASPHE/BICONICX/... PARM values were interpreted as
+  huge bogus aspheric coefficients; unknown types now import as a plain conic
+  with a loud per-surface warning naming the unsupported type.  **Exporter
+  emits aspheric coefficients for MIRRORS** (audit P2-20; load->export->load
+  is now identity for aspheric mirrors) and warns loudly on Q-type freeforms
+  Zemax cannot represent instead of dropping them silently.
+- **`ray_to_beamlet` carries `RayBundle.opd` into beamlet piston phases**
+  (audit P2-33): the advertised GBD coherent-recombination workflow silently
+  zeroed all inter-beamlet pistons.  JAX/NumPy trace backends now resolve
+  per-surface apertures identically (wave-3 P2-35 residual).
+- **Optimizer bounds honored for Powell / Nelder-Mead / TNC / COBYQA** (audit
+  P2-24): user bounds were silently dropped for every method outside
+  {L-BFGS-B, SLSQP, trust-constr} although scipy supports them.
+- **Real-dtype fields no longer poison the pyFFTW shape blacklist** (audit
+  P2-26): a real E_in is cast to the matching complex dtype at entry instead
+  of being rejected by pyFFTW and permanently blacklisting the shape for ALL
+  dtypes with a misleading warning.
+- **fresnel/fraunhofer complex64 carrier computed at float64** (audit P2-29),
+  matching the ASM kernel + MFT twins' documented precision contract.
+- **HFPI**: real-dtype inputs no longer discard the imaginary part of complex
+  path weights (audit P2-32); the normalization warning now states exactly
+  what is and is not applied (audit P2-31 -- the old text contradicted the
+  code).
+- **Performance**: `DeformableMirror.fit_phase`'s 'streamed' path actually
+  streams (probe: 307 -> 67 MB peak, 7.6x faster, lstsq for rank-deficient
+  geometries) (audit P2-01); `angular_spectrum_propagate_batch` no longer
+  wastes an FFT+IFFT pair on a proxy field (was measured 2.07x SLOWER than
+  two scalar calls; docstring re-measured honestly) (audit P2-27); tilted ASM
+  uses the exact 2-shift natural-H fold from v5.5.3 (audit P2-28,
+  byte-identical); `retain_internal` uses a linear reverse Redheffer
+  recurrence instead of O(n^2) chain rebuilds (audit P2-12).
+- **UI robustness** (audit P2-37/38/39/40 + a latent F821): worker QThreads
+  are no longer rebound while running (coherence dock crash), the app close
+  now interrupts + joins all dock workers (the v5.4.2 close-guard was only on
+  one dock), hidden analysis views defer recompute until shown, Stop buttons
+  use cooperative interruption instead of QThread.terminate() inside FFT/HDF5
+  C code, and a stray paste-duplicate referencing an undefined name in the
+  wave-optics dock (latent crash) was removed.
+- **Misc**: `makedammann2d` no longer uses `np.sign(complex)` (destroyed the
+  IFTA far-field phase on NumPy < 2.0) (audit P2-07);
+  `surface_sag_zernike_freeform` validates `norm_radius > 0` (audit P2-08);
+  the Maslov JAX docstring states its actual algorithm and the
+  even-multiplicity caustic limitation honestly (audit P2-03).
+
 ### Fixed (wave 4 — cache lifecycle: unbounded growth, stale values, lock discipline)
 
 - **RCWA homogeneous-modes cache bounded** (audit P2-16/P2-17): `_HOMOG_CACHE`
