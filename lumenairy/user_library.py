@@ -152,7 +152,7 @@ def load_material(name: str) -> Dict[str, Any]:
     mat_name = data['name']
 
     if data['type'] == 'catalog':
-        from .glass import GLASS_REGISTRY
+        from .glass import GLASS_REGISTRY, _invalidate_glass_name
         # v5.4.6 (audit F-35): warn before overriding a built-in registry
         # entry of the same name (the prior code clobbered it silently,
         # and load_material can auto-run at import).  The override still
@@ -165,6 +165,17 @@ def load_material(name: str) -> Dict[str, Any]:
                 f"built-in GLASS_REGISTRY entry of the same name.",
                 UserWarning, stacklevel=2)
         GLASS_REGISTRY[mat_name] = (data['shelf'], data['book'], data['page'])
+        # v5.17.1 (audit P2-41): re-pointing the registry must also drop
+        # any stale cached resolution for this name.  Pre-v5.17.1 a name
+        # that previously resolved through ``_glass_cache`` (a user-fixed
+        # ``_FixedIndex`` or a ``RefractiveIndexMaterial`` for a
+        # different catalogue page) kept serving the OLD index forever:
+        # ``get_glass_index``'s tuple branch trusts ``_glass_cache``
+        # unconditionally.  Mirrors ``register_fixed_glass``'s hygiene
+        # (which overwrites the cache entry and clears the value cache)
+        # with the surgical per-name pattern from
+        # ``raytrace.trace._register_fixed_index``.
+        _invalidate_glass_name(mat_name)
 
     elif data['type'] == 'fixed':
         # 4.11.2: ``save_material`` accepts a ``dispersion`` dict and
@@ -255,7 +266,12 @@ def register_fixed_glass(name: str, n: float) -> None:
             f"path; the upper bound covers Si ~3.4, Ge ~4.0, and any "
             f"common semiconductor used in mid-IR / THz design.)")
 
-    from .glass import GLASS_REGISTRY, _glass_cache, _glass_value_cache
+    from .glass import (
+        _GLASS_CACHE_LOCK,
+        GLASS_REGISTRY,
+        _glass_cache,
+        _glass_value_cache,
+    )
 
     if name in GLASS_REGISTRY:
         import warnings as _w
@@ -274,12 +290,14 @@ def register_fixed_glass(name: str, n: float) -> None:
             return self._n
 
     GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
-    _glass_cache[name] = _FixedIndex(n_f)
     # v5.6: a re-registered name must not serve a stale value from the
     # immutable-branch value cache (e.g. a catalogue glass overwritten by a
     # fixed index).  Clearing the whole value cache is cheap (registration is
-    # rare) and fully safe.
-    _glass_value_cache.clear()
+    # rare) and fully safe.  v5.17.1 (audit P3-40): mutations go under the
+    # glass cache lock now that the value cache is a shared LRU OrderedDict.
+    with _GLASS_CACHE_LOCK:
+        _glass_cache[name] = _FixedIndex(n_f)
+        _glass_value_cache.clear()
 
 
 # ════════════════════════════════════════════════════════════════════════

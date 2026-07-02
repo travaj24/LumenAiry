@@ -45,7 +45,10 @@ Walker design
     OR matches one of the documented private-but-enrolled cache
     names (``_lg_polynomial_items``).
   - Module-level ``ast.AnnAssign`` / ``ast.Assign`` whose LHS name
-    ends in ``_CACHE`` (case-sensitive) and whose RHS is
+    ends in ``_CACHE`` case-INSENSITIVELY (v5.17.1, audit P2-42: the
+    historical case-sensitive filter let ``glass.py``'s lower-case
+    ``_glass_cache`` / ``_glass_value_cache`` escape detection -- the
+    exact sibling-gap this walker exists to retire) and whose RHS is
     ``OrderedDict(...)``, ``dict(...)``, or ``{}``.
 
 * Enrollment verification: scan the module's AST for a top-level
@@ -112,20 +115,27 @@ _CACHE_REGISTRY_EXEMPTIONS = frozenset({
     # already excludes it, so this entry is a no-op.
     ('lumenairy/analysis/ao.py', '_DEFAULT_CACHE_CEILING_BYTES'),
 
-    # ---- propagators/asymptotic.py ---------------------------------------
+    # ---- propagators/asymptotic_jax_twin.py ------------------------------
     # ``_JAX_IFT_SOLVER_CACHE`` is a SINGLETON (built once per process,
     # never grows -- key is implicit "the solver").  It legitimately
     # doesn't need clearing via the registry; clearing it would mean
     # rebuilding the JAX custom_vjp decoration on next call, which the
     # library never does.  It pairs with ``_JAX_IFT_SOLVER_CACHE_LOCK``
-    # for the build-and-publish race only.
-    ('lumenairy/propagators/asymptotic.py', '_JAX_IFT_SOLVER_CACHE'),
+    # for the build-and-publish race only.  v5.17.1 (audit P2-42): path
+    # refreshed from the pre-v5.x ``propagators/asymptotic.py`` monolith;
+    # the declaration is now ``= None`` (RHS-shape-filtered by
+    # ``_is_cache_rhs``), so this entry is documentation-only, like the
+    # analysis/ao.py entry above.
+    ('lumenairy/propagators/asymptotic_jax_twin.py', '_JAX_IFT_SOLVER_CACHE'),
     # ``_HG_MODE_STACK_CACHE`` is cleared transitively by
     # ``clear_lg_mode_stack_cache`` (the LG/HG mode stack clearer drains
     # both LG and HG caches in one operation -- see ``clear_lg_mode_stack_cache``
-    # in asymptotic.py).  The registry enrolment is on ``lg_mode_stack``,
-    # which under the hood drains BOTH.
-    ('lumenairy/propagators/asymptotic.py', '_HG_MODE_STACK_CACHE'),
+    # in asymptotic_modes.py).  The registry enrolment is on ``lg_mode_stack``,
+    # which under the hood drains BOTH.  v5.17.1 (audit P2-42): path
+    # refreshed from the pre-v5.x ``propagators/asymptotic.py`` monolith;
+    # asymptotic_modes.py also enrolls directly, so this entry is
+    # documentation-only.
+    ('lumenairy/propagators/asymptotic_modes.py', '_HG_MODE_STACK_CACHE'),
 
     # ---- propagators/propagation.py -------------------------------------
     # ``_FREQ_GRID_CACHE``, ``_BANDLIMIT_CACHE``, ``_H_CACHE``,
@@ -242,6 +252,14 @@ def _discover_module_level_cache_assignments(tree):
     assignment in ``tree.body``.
 
     Returns a list of ``(cache_name, lineno)`` pairs.
+
+    v5.17.1 (audit P2-42): the suffix match is case-INSENSITIVE
+    (``_CACHE`` and ``_cache`` both qualify).  The historical
+    case-sensitive ``endswith('_CACHE')`` let ``lumenairy/glass.py``'s
+    lower-case ``_glass_cache`` / ``_glass_value_cache`` (which predate
+    the ``_FOO_CACHE`` naming convention) bypass discovery entirely, so
+    the main pin never evaluated them and their missing enrollment went
+    unflagged for the module's whole life.
     """
     found = []
     for node in tree.body:
@@ -250,7 +268,7 @@ def _discover_module_level_cache_assignments(tree):
             target = node.target
             if not isinstance(target, ast.Name):
                 continue
-            if not target.id.endswith('_CACHE'):
+            if not target.id.upper().endswith('_CACHE'):
                 continue
             if not _is_cache_rhs(node.value):
                 continue
@@ -263,7 +281,7 @@ def _discover_module_level_cache_assignments(tree):
             for target in node.targets:
                 if not isinstance(target, ast.Name):
                     continue
-                if not target.id.endswith('_CACHE'):
+                if not target.id.upper().endswith('_CACHE'):
                     continue
                 found.append((target.id, node.lineno))
             continue

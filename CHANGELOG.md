@@ -4,6 +4,45 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
 
+### Fixed (wave 4 — cache lifecycle: unbounded growth, stale values, lock discipline)
+
+- **RCWA homogeneous-modes cache bounded** (audit P2-16/P2-17): `_HOMOG_CACHE`
+  retained 2 dense eigenmode entries per sweep point FOREVER (probe: 42 MB per
+  25-wavelength sweep, doubling per incidence angle); now a 32-entry LRU
+  (last ~16 source configs stay hot; a solve touches 2), byte-identical on
+  hit, miss, and post-eviction recompute, with the existing
+  `rcwa_homogeneous_modes` clearer unchanged.
+- **pyFFTW plan-cache lock discipline** (audit P3-55):
+  `_clear_local_asm_caches` mutated `_PYFFTW_PLAN_CACHE`/`_PYFFTW_BAD_SHAPES`
+  under the WRONG lock (`_ASM_CACHE_LOCK`), racing concurrent planners into an
+  uncaught `KeyError` mid-FFT (deterministically reproduced); the two
+  structures are now cleared under `_PYFFTW_PLAN_LOCK`, acquired sequentially
+  (never nested) so no lock order is created and the worker-restore path
+  stays deadlock-free.
+- **JAX/prepared static caches bounded** (audit P3-16, P3-28, P3-32): the eme
+  frozen-operator cache grew one dense operator set per Bloch k-point (the
+  module's stated band-structure niche!) and the pmm 2-D JAX geometry cache
+  ~3-9 MB per distinct geometry, both forever; now 8- and 16-entry LRUs.
+  `_PreparedPMMStack`'s per-instance eig/mats caches are likewise bounded with
+  a `clear_cache()`; post-eviction recomputes are byte-identical everywhere.
+- **glass caches enrolled, bounded, and coherent** (audit P3-40 + P2-41 +
+  P2-42): glass.py's module caches were unbounded, unenrolled, AND invisible
+  to the enrollment meta-pin (its `endswith('_CACHE')` filter was
+  case-sensitive -- fixed, so this hole class stays closed).
+  `clear_asm_caches()` / `lumenairy_context(clear_caches_on_exit=True)` now
+  drain the glass value cache, warn-once sets, and catalogue-dispatch
+  material objects (user-FIXED entries are correctly PRESERVED -- for those
+  the cache is the authoritative store).  `user_library.load_material` now
+  invalidates the stale cache entries when it re-points a material, so a
+  re-load can no longer silently serve the previous refractive index.
+- **Wrapper-merit meshgrid cache keyed correctly** (audit P2-25): the cache
+  keyed six aperture-INDEPENDENT full-grid arrays on the aperture VALUE --
+  optimizing `aperture_diameter` meant a 100% miss rate plus up to 32
+  grid-sized payloads retained.  The grid-only arrays now live in a
+  grid-keyed LRU shared across apertures (merit values byte-identical);
+  historical CHANGELOG line-citations for the `_ZERO_APERTURE_MASK` branch
+  refreshed for the line drift.
+
 ### Fixed (wave 3 — guard-mirroring drift: a guard existed on one sibling but not another)
 
 - **PMM JAX twins now enforce the guards their NumPy siblings enforce** (audit
@@ -5263,7 +5302,7 @@ Cross-agent test breakage closed:
   `test_v4_16_0_walker_all_symmetry`,
   `test_v4_15_3_dispatcher_pin_2d_scalar_field`).
 * CHANGELOG line-citation refresh:
-  `optimize/core.py:3032` -> `optimize/wrapper_merits.py:876`
+  `optimize/core.py:3032` -> `optimize/wrapper_merits.py:955`
   (`_ZERO_APERTURE_MASK` branch); `optimize/core.py:987` ->
   `optimize/merit_terms.py:524` (`MatchIdealSystem._make_source`
   `ap>0` branch); `optimize/core.py:2044-2054` ->
@@ -6912,7 +6951,7 @@ counter-pin against accidentally-removed guards).
   only the CHANGELOG bullet lied.
 * **CHANGELOG sentinel-migration line citations refreshed**
   after Agent C's v4.15.3 wiring drift: `_ZERO_APERTURE_MASK`
-  branch now at `optimize/wrapper_merits.py:876` (was
+  branch now at `optimize/wrapper_merits.py:955` (was
   `optimize/core.py:3032` pre-v5.1.0 Agent E 6-file split, which
   moved `ToleranceAwareMerit.evaluate` out of the monolithic
   `optimize/core.py`; was `:3015` pre-v4.16.3 Agent C `Constraint`
@@ -7378,7 +7417,7 @@ analysis / inspection in v4.15.1.
   (the implementation was already correct; only the docstring lied).
 * `astigmatism_mag_angle` docstring range correction (also P1-F1-5).
 * CHANGELOG/release-notes: lenses_maslov `_ZERO_APERTURE_MASK`
-  sentinel branch now lives at `optimize/wrapper_merits.py:876`
+  sentinel branch now lives at `optimize/wrapper_merits.py:955`
   (the `if _cache['mask'] is _ZERO_APERTURE_MASK` line); was
   `optimize/core.py:3032` pre-v5.1.0 Agent E 6-file split (the
   branch moved out of the monolithic core.py to the new

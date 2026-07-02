@@ -14,8 +14,12 @@ Cache layout
 ``(Ny, Nx, dx, aperture_key, dtype_str)``.  The payload includes the
 coordinate meshgrid, the aperture boolean mask, and the wavelength-
 independent ``2*pi * Y`` / ``2*pi * X`` factors used for per-field
-tilt-phase construction.  See ``_get_wrapper_merit_cache`` for the
-detailed contract.
+tilt-phase construction.  v5.17.1 (audit P2-25): the aperture-
+INDEPENDENT arrays live in the sibling ``_WRAPPER_MERIT_GRID_CACHE``
+(keyed on ``(Ny, Nx, dx, dtype_str)`` only) and are shared by
+reference across per-aperture entries, so a free ``aperture_diameter``
+FD sweep no longer duplicates six N x N arrays per perturbed value.
+See ``_get_wrapper_merit_cache`` for the detailed contract.
 
 Lookup contract for ``system_abcd`` / ``through_focus_scan`` etc.
 -----------------------------------------------------------------
@@ -85,12 +89,44 @@ from .context import (
 _WRAPPER_MERIT_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
 _WRAPPER_MERIT_CACHE_SIZE = 32
 _WRAPPER_MERIT_MESHGRID_BUILDS = 0
+
+# v5.17.1 (audit P2-25): aperture-FREE sibling cache.  Six of the seven
+# payload arrays (X, Y, Y_factor, X_factor, r_squared, E_ones) depend
+# only on (N, dx, dtype), yet pre-v5.17.1 they were duplicated into
+# every per-aperture ``_WRAPPER_MERIT_CACHE`` entry.  With
+# ``aperture_diameter`` as a free optimisation variable every FD
+# perturbation minted a distinct key, so the 32-slot LRU retained up to
+# 32 full 57 B/px payloads (7.6 GB at N=2048) of which everything but
+# the 1 B/px mask was identical.  The grid arrays now live HERE, keyed
+# on ``(Ny, Nx, dx, dtype_str)`` only, and the per-aperture entries
+# hold references to the shared arrays plus their own boolean mask --
+# worst-case retention drops ~20x (one 56 B/px grid set + 32 masks).
+#
+# Bound rationale: a realistic single optimisation run touches ONE
+# (N, dx, dtype) grid (occasionally two when mixing precisions); 8
+# slots is generous headroom for multi-config scripts while capping
+# worst-case retention at 8 grid sets.  Eviction is safe by
+# construction: per-aperture entries (and callers) keep their own
+# references to the shared numpy arrays, which are never mutated.
+_WRAPPER_MERIT_GRID_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
+_WRAPPER_MERIT_GRID_CACHE_SIZE = 8
+
+# One lock guards BOTH the per-aperture and the grid sibling (they are
+# always touched together inside ``_get_wrapper_merit_cache`` /
+# ``_clear_wrapper_merit_cache``, so a second lock would only invite
+# lock-order bugs).  The alias satisfies the v4.14.2 cache<->lock
+# dispatcher pin's companion-name convention; it is the SAME lock
+# object as ``_WRAPPER_MERIT_CACHE_LOCK`` below.
+# (bound after the lock definition below)
 # v4.14.1 (P2-1): guard concurrent get / move_to_end / __setitem__ /
 # popitem(last=False) on _WRAPPER_MERIT_CACHE.  Follows the
 # _ASM_CACHE_LOCK precedent in propagators/propagation.py.  Without
 # this two threads racing through _get_wrapper_merit_cache could see a
 # torn OrderedDict.
 _WRAPPER_MERIT_CACHE_LOCK = threading.Lock()
+# v5.17.1 (audit P2-25): companion-name alias for the grid sibling --
+# the SAME lock object (see the note at _WRAPPER_MERIT_GRID_CACHE).
+_WRAPPER_MERIT_GRID_CACHE_LOCK = _WRAPPER_MERIT_CACHE_LOCK
 
 
 def _wrapper_merit_aperture_key(aperture: Any) -> tuple:
@@ -136,10 +172,20 @@ def _get_wrapper_merit_cache(
     - ``r_squared``: ``X*X + Y*Y`` (cached for callers that need to
       build their own custom aperture masks against the same grid).
 
-    The cache is LRU-bounded at 32 entries (``_WRAPPER_MERIT_CACHE_SIZE``).
-    A meshgrid build increments ``_WRAPPER_MERIT_MESHGRID_BUILDS``;
-    cache hits do NOT increment.  Use this counter in tests to pin
-    the invariance contract.
+    The per-aperture cache is LRU-bounded at 32 entries
+    (``_WRAPPER_MERIT_CACHE_SIZE``).  A per-signature entry build
+    increments ``_WRAPPER_MERIT_MESHGRID_BUILDS``; cache hits do NOT
+    increment.  Use this counter in tests to pin the invariance
+    contract.
+
+    v5.17.1 (audit P2-25): the six aperture-independent arrays are
+    memoised separately in ``_WRAPPER_MERIT_GRID_CACHE`` keyed on
+    ``(Ny, Nx, dx, dtype_str)`` and SHARED by reference across every
+    per-aperture entry, so an aperture-sweeping run (e.g.
+    ``aperture_diameter`` as a free FD variable) rebuilds only the
+    cheap boolean mask, and the LRU retains one grid set instead of
+    32 duplicates.  Values are byte-identical to the pre-split build
+    (same construction, same float64 comparison for the mask).
     """
     global _WRAPPER_MERIT_MESHGRID_BUILDS
 
@@ -156,6 +202,7 @@ def _get_wrapper_merit_cache(
         dtype_str = str(dtype)
     ap_key = _wrapper_merit_aperture_key(aperture)
     key = (Ny, Nx, dx_f, ap_key, dtype_str)
+    grid_key = (Ny, Nx, dx_f, dtype_str)
 
     with _WRAPPER_MERIT_CACHE_LOCK:
         entry = _WRAPPER_MERIT_CACHE.get(key)
@@ -163,14 +210,52 @@ def _get_wrapper_merit_cache(
             # LRU bookkeeping: refresh recency.
             _WRAPPER_MERIT_CACHE.move_to_end(key)
             return entry
+        grid = _WRAPPER_MERIT_GRID_CACHE.get(grid_key)
+        if grid is not None:
+            _WRAPPER_MERIT_GRID_CACHE.move_to_end(grid_key)
 
-    # Cache miss: build the grid + mask + Y-factor once and store.
-    # The build itself is pure-CPU numpy and re-entrant; only the
-    # OrderedDict get/move_to_end/set/popitem operations need the lock.
-    Y_idx, X_idx = np.indices((Ny, Nx))
-    X = (X_idx - Nx / 2) * dx_f
-    Y = (Y_idx - Ny / 2) * dx_f
-    r_squared = X * X + Y * Y
+    # Entry miss: fetch-or-build the aperture-independent grid arrays,
+    # then derive this aperture's mask.  The build itself is pure-CPU
+    # numpy and re-entrant; only the OrderedDict get/move_to_end/set/
+    # popitem operations need the lock.
+    if grid is None:
+        Y_idx, X_idx = np.indices((Ny, Nx))
+        X = (X_idx - Nx / 2) * dx_f
+        Y = (Y_idx - Ny / 2) * dx_f
+        r_squared = X * X + Y * Y
+        # Wavelength-independent tilt factors: 2*pi * Y / 2*pi * X.
+        # Per-leg the tilt phase is (Y_factor / wavelength) *
+        # sin(theta_y) plus the analogous X term.
+        Y_factor = (2.0 * np.pi) * Y
+        X_factor = (2.0 * np.pi) * X
+        # Cached np.ones array for ToleranceAwareMerit's per-trial
+        # source field.  Stored once per (N, dx, dtype); per-trial just
+        # .copy() this and feed apply_real_lens.  apply_real_lens
+        # never writes its input, but downstream merit code paths may
+        # so the .copy() at call site preserves correctness.
+        E_ones = np.ones((Ny, Nx), dtype=_dtype_obj)
+        grid = {
+            'X': X,
+            'Y': Y,
+            'Y_factor': Y_factor,
+            'X_factor': X_factor,
+            'r_squared': r_squared,
+            'E_ones': E_ones,
+        }
+        with _WRAPPER_MERIT_CACHE_LOCK:
+            # Double-check under the lock: another thread may have
+            # published the same grid while we were building; reuse
+            # THEIRS so per-aperture entries keep sharing one array set.
+            existing = _WRAPPER_MERIT_GRID_CACHE.get(grid_key)
+            if existing is not None:
+                _WRAPPER_MERIT_GRID_CACHE.move_to_end(grid_key)
+                grid = existing
+            else:
+                _WRAPPER_MERIT_GRID_CACHE[grid_key] = grid
+                while (len(_WRAPPER_MERIT_GRID_CACHE)
+                        > _WRAPPER_MERIT_GRID_CACHE_SIZE):
+                    _WRAPPER_MERIT_GRID_CACHE.popitem(last=False)
+    r_squared = grid['r_squared']
 
     if isinstance(aperture, np.ndarray):
         # Custom user-supplied aperture array; assume boolean-coercible.
@@ -200,29 +285,18 @@ def _get_wrapper_merit_cache(
             # case via ``is`` and zero their fields explicitly.
             mask = _ZERO_APERTURE_MASK
 
-    # Wavelength-independent Y-tilt factor: 2*pi * Y.  Per-leg the
-    # tilt phase is (Y_factor / wavelength) * sin(theta_y) plus the
-    # analogous X term.  Materialised so the per-leg cost is a
-    # single multiply.
-    Y_factor = (2.0 * np.pi) * Y
-    X_factor = (2.0 * np.pi) * X
-
-    # Cached np.ones array for ToleranceAwareMerit's per-trial
-    # source field.  Stored once per (N, dtype); per-trial just
-    # .copy() this and feed apply_real_lens.  apply_real_lens
-    # never writes its input, but downstream merit code paths may
-    # so the .copy() at call site preserves correctness.  Uses the
-    # ``_dtype_obj`` computed at the head of the function.
-    E_ones = np.ones((Ny, Nx), dtype=_dtype_obj)
-
+    # v5.17.1 (audit P2-25): the six aperture-independent arrays are
+    # REFERENCES into the shared grid-cache payload; only ``mask`` is
+    # owned by this entry.  Same payload keys as pre-split, so callers
+    # and the eval-count / identity pins are unaffected.
     entry = {
-        'X': X,
-        'Y': Y,
+        'X': grid['X'],
+        'Y': grid['Y'],
         'mask': mask,
-        'Y_factor': Y_factor,
-        'X_factor': X_factor,
-        'r_squared': r_squared,
-        'E_ones': E_ones,
+        'Y_factor': grid['Y_factor'],
+        'X_factor': grid['X_factor'],
+        'r_squared': grid['r_squared'],
+        'E_ones': grid['E_ones'],
     }
     with _WRAPPER_MERIT_CACHE_LOCK:
         # v5.4 (audit P3): increment inside lock to preserve cache-build-counter invariant
@@ -249,6 +323,10 @@ def _clear_wrapper_merit_cache() -> None:
     global _WRAPPER_MERIT_MESHGRID_BUILDS
     with _WRAPPER_MERIT_CACHE_LOCK:
         _WRAPPER_MERIT_CACHE.clear()
+        # v5.17.1 (audit P2-25): drain the aperture-free grid sibling
+        # in the same operation -- one registered 'wrapper_merit_meshgrid'
+        # clearer covers both (they are parent/child, not siblings).
+        _WRAPPER_MERIT_GRID_CACHE.clear()
     _WRAPPER_MERIT_MESHGRID_BUILDS = 0
 
 

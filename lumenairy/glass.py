@@ -74,6 +74,14 @@ from __future__ import annotations
 # ---------------------------------------------------------------------------
 import importlib.util as _importlib_util
 import math as _math
+import threading as _threading
+
+# NOTE: imported UN-aliased on purpose -- the v4.16.1 cache-enrollment
+# meta-pin's AST walker recognises a cache declaration by the literal
+# ``OrderedDict(...)`` / ``dict(...)`` / ``{}`` RHS shape; an aliased
+# ``_OrderedDict()`` would hide ``_glass_value_cache`` from discovery
+# (the exact blindness audit P2-42 just closed for lower-case names).
+from collections import OrderedDict
 from typing import List
 
 # v4.16.2 (audit P3-NEW-F1-4): import numpy at module scope to support
@@ -1209,31 +1217,96 @@ def search_glasses(pattern: str) -> List[str]:
 # ---------------------------------------------------------------------------
 _glass_cache = {}
 
+# v5.17.1 (audit P3-40): lock guarding ``_glass_value_cache`` LRU
+# bookkeeping (get / move_to_end / setitem / popitem) and the registry-
+# driven ``_clear_glass_caches`` drain.  Follows the ``_ASM_CACHE_LOCK``
+# precedent in ``propagators/propagation.py``.  Never held while calling
+# out (``compute`` runs outside the lock), so no lock-order coupling
+# with any other cache lock (see the P3-55 lock-discipline bug class).
+_GLASS_CACHE_LOCK = _threading.Lock()
+
+# Upper-case alias for the v4.14.2 cache<->lock dispatcher pin (its
+# runtime walker pairs ``_GLASS_CACHE_LOCK`` with a ``_GLASS_CACHE``
+# companion).  SAME dict object as ``_glass_cache`` -- the lower-case
+# canonical name predates the ``_FOO_CACHE`` convention and is kept
+# because tests / raytrace.trace / user_library mutate it in place by
+# that name.  Nothing may ever REBIND either name.
+_GLASS_CACHE = _glass_cache
+
 # v5.6: value cache for the IMMUTABLE-catalogue dispatch branches only
 # (__sellmeier__, __polynomial__ and the refractiveindex-unavailable
 # Sellmeier / polynomial fallback).  Keyed on (glass_name, wavelength in
-# femtometres) -> float index.  It is consulted ONLY inside those branches
-# (after the entry sentinel is confirmed), so re-registering a name under a
-# different dispatch (a callable, a tuple, register_fixed_glass) can never
-# serve a stale value; ``register_fixed_glass`` clears it as well.  Array
-# wavelengths bypass it (not hashable / not the hot scalar path).
-_glass_value_cache = {}
+# picometres) -> float index.  (v5.17.1 audit P3-40: the historical
+# "femtometre" wording was wrong -- ``round(wavelength * 1e12)`` is
+# picometre resolution, still far below any optical relevance.)  It is
+# consulted ONLY inside those branches (after the entry sentinel is
+# confirmed), so re-registering a name under a different dispatch (a
+# callable, a tuple, register_fixed_glass) can never serve a stale
+# value; ``register_fixed_glass`` clears it as well.  Array wavelengths
+# bypass it (not hashable / not the hot scalar path).
+#
+# v5.17.1 (audit P3-40): LRU-bounded OrderedDict (was an unbounded plain
+# dict) + enrolled in the central cache registry as ``'glass_caches'``
+# (see ``_clear_glass_caches`` at the bottom of this module).  Values
+# are immutable floats, so eviction can never mutate a value a caller
+# already holds, and the recompute is a pure Sellmeier / polynomial
+# evaluation -- byte-identical on hit, miss, and post-eviction.
+_glass_value_cache = OrderedDict()
+
+# v5.17.1 (audit P3-40) bound rationale: one entry costs ~100 B (tuple
+# key + float).  Only the 28 ``'__sellmeier__'`` / ``'__polynomial__'``
+# sentinel glasses (plus the no-refractiveindex fallback) use this
+# cache, so a dense dispersive sweep -- e.g. 1000 wavelengths x every
+# sentinel glass = 28 000 entries -- fits with >2x headroom and no
+# recompute inside a single solve.  65536 entries cap the cache at
+# ~6-13 MB while still requiring a >1e6-unique-wavelength Monte-Carlo
+# (the audit's leak scenario) to ever cycle.
+_GLASS_VALUE_CACHE_SIZE = 65536
 
 
 def _cached_glass_value(glass_name, wavelength, compute):
     """Memoise an immutable-catalogue index value keyed on
-    ``(glass_name, round(wavelength * 1e12))`` (femtometre resolution, far
+    ``(glass_name, round(wavelength * 1e12))`` (picometre resolution, far
     below any optical relevance).  Scalar wavelengths only; arrays recompute.
-    ``compute`` is a zero-arg callable returning the float index."""
+    ``compute`` is a zero-arg callable returning the float index.
+
+    v5.17.1 (audit P3-40): LRU-bounded at ``_GLASS_VALUE_CACHE_SIZE``
+    entries; mutations serialised by ``_GLASS_CACHE_LOCK``.  ``compute``
+    runs OUTSIDE the lock (pure float math; two racing threads may both
+    compute, last write wins with an identical value)."""
     if np.ndim(wavelength) != 0:
         return compute()
     key = (glass_name, round(float(wavelength) * 1e12))
-    cached = _glass_value_cache.get(key)
-    if cached is not None:
-        return cached
+    with _GLASS_CACHE_LOCK:
+        cached = _glass_value_cache.get(key)
+        if cached is not None:
+            _glass_value_cache.move_to_end(key)
+            return cached
     value = compute()
-    _glass_value_cache[key] = value
+    with _GLASS_CACHE_LOCK:
+        _glass_value_cache[key] = value
+        _glass_value_cache.move_to_end(key)
+        while len(_glass_value_cache) > _GLASS_VALUE_CACHE_SIZE:
+            _glass_value_cache.popitem(last=False)
     return value
+
+
+def _invalidate_glass_name(glass_name):
+    """Drop every cached resolution for ``glass_name`` (v5.17.1, audit
+    P2-41): the ``_glass_cache`` object (stale ``_FixedIndex`` or a
+    previously-loaded ``RefractiveIndexMaterial``) and any
+    ``_glass_value_cache`` entries keyed on the name.
+
+    Called by :func:`lumenairy.user_library.load_material` when its
+    catalog branch re-points ``GLASS_REGISTRY[name]``; mirrors the
+    surgical invalidation ``raytrace.trace._register_fixed_index``
+    performs on overwrite.  The warn-once sets are intentionally left
+    alone (a repeated warning is noisier than a stale one is harmful).
+    """
+    with _GLASS_CACHE_LOCK:
+        _glass_cache.pop(glass_name, None)
+        for _key in [k for k in _glass_value_cache if k[0] == glass_name]:
+            del _glass_value_cache[_key]
 
 
 def get_glass_index(glass_name: str, wavelength: float) -> float:
@@ -1543,3 +1616,62 @@ def _warn_missing_kappa_once(glass_name, wavelength):
         f"register_fixed_glass.",
         RuntimeWarning, stacklevel=3,
     )
+
+
+# ---------------------------------------------------------------------------
+# v5.17.1 (audit P3-40): central-registry enrollment for this module's
+# four caches.  Pre-v5.17.1 ``clear_asm_caches`` /
+# ``lumenairy_context(clear_caches_on_exit=True)`` never drained them
+# (the enrollment meta-pin's case-sensitive ``endswith('_CACHE')``
+# filter missed the lower-case names -- audit P2-42).
+# ---------------------------------------------------------------------------
+
+_USER_FIXED_SENTINEL = ('__user__', '__fixed__', '__fixed__')
+
+
+def _clear_glass_caches() -> None:
+    """Drain the glass module's caches (registered as ``'glass_caches'``).
+
+    Drops:
+
+    * every ``_glass_value_cache`` entry (recomputable pure math),
+    * both warn-once sets (``_validity_warned`` / ``_kappa_warned`` --
+      cleared warnings simply re-fire once),
+    * every RE-LOADABLE ``_glass_cache`` entry, i.e. entries whose
+      ``GLASS_REGISTRY`` dispatch is a catalogue ``(shelf, book, page)``
+      tuple: the next lookup rebuilds the ``RefractiveIndexMaterial``
+      from the registry (this is where the YAML dispersion databases --
+      the actual memory -- live).
+
+    PRESERVED: user-fixed entries (registry dispatch is the
+    ``('__user__', '__fixed__', '__fixed__')`` sentinel, e.g.
+    ``register_fixed_glass`` names, ``'__thin_lens__'`` and the
+    ``'__aspheric_*'`` entries added by ``raytrace.trace``).  For those
+    names ``_glass_cache`` is the AUTHORITATIVE value store, not a
+    cache -- dropping them would make the very next
+    ``get_glass_index`` raise ``ValueError`` ("flagged as user-fixed
+    but has no _glass_cache entry").  They are a handful of tiny
+    ``_FixedIndex`` objects, so retaining them costs nothing.
+    """
+    with _GLASS_CACHE_LOCK:
+        _glass_value_cache.clear()
+        _validity_warned.clear()
+        _kappa_warned.clear()
+        for _name in [n for n in _glass_cache
+                      if GLASS_REGISTRY.get(n) != _USER_FIXED_SENTINEL]:
+            del _glass_cache[_name]
+
+
+# Canonical v4.16.0 enrollment idiom (late-binding lambda so
+# ``mock.patch.object`` on ``_clear_glass_caches`` is honoured).
+try:
+    import sys as _sys
+
+    from ._cache_registry import register_cache_clearer as _register_cache_clearer
+    _this_mod = _sys.modules[__name__]
+    _register_cache_clearer(
+        'glass_caches',
+        lambda: getattr(_this_mod, '_clear_glass_caches')(),
+    )
+except ImportError:
+    pass
