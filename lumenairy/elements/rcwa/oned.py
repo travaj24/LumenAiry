@@ -227,6 +227,39 @@ def _resolve_incidence(angle, theta):
     return angle if theta is None else theta
 
 
+def _resolve_incidence_checked(fn_name, angle, theta):
+    """Resolve the ``angle``/``theta`` alias, then REJECT back-side incidence
+    (the pmm ``_resolve_incidence_checked`` mirror; audit wave-3 follow-on):
+    the angle enters the 1-D solve only as ``kx0 ~ sin(angle)``, so
+    ``|angle| >= pi/2`` would otherwise alias BYTE-IDENTICALLY to the
+    supplementary front-side angle ``pi - angle`` -- a plausible,
+    energy-conserving answer for the WRONG geometry (``sin^2(100 deg) = 0.97``
+    also slips the ``Re(eps_sup) <= kt0^2`` evanescent-incidence guard).
+    Raises ``ValueError`` instead.  A TRACED JAX angle (under ``jit``/``grad``)
+    has no concrete value to range-check and SKIPS the guard (the
+    ``_reject_jax_offplane`` tracer carve-out); a CONCRETE JAX angle is
+    checked.  A non-numeric angle is passed through for the solver's own
+    coercion to raise on."""
+    angle = _resolve_incidence(angle, theta)
+    if is_jax_array(angle):
+        try:                                 # concrete JAX array -> inspectable
+            a_c = float(np.asarray(angle))
+        except Exception:                    # tracer -> not materialisable
+            return angle
+    else:
+        try:
+            a_c = float(angle)
+        except (TypeError, ValueError):      # non-numeric: solver coercion raises
+            return angle
+    if not abs(a_c) < 0.5 * np.pi:           # NaN also fails this comparison
+        raise ValueError(
+            f"{fn_name}: incidence angle must satisfy |angle| < pi/2 "
+            f"(front-side illumination, measured from the +z surface normal); "
+            f"got {a_c} rad.  A past-grazing angle would silently alias to "
+            f"the supplementary front-side angle (pi - angle).")
+    return angle
+
+
 
 @_with_blas_limit
 def rcwa_efficiency_1d(
@@ -357,7 +390,7 @@ def rcwa_efficiency_1d(
     the default ``False`` the guard raises immediately (bit-for-bit backward
     compatible).  NumPy / CuPy only; the JAX path is unchanged.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("rcwa_efficiency_1d", angle, theta)
     if stabilize and not _is_traced(wavelength):
         last = None
         for bump in _stabilize_bumps(n_orders):
@@ -720,7 +753,7 @@ def rcwa_efficiency_vs_wavelength(
             "break the gradient); use jax.vmap over wavelength on "
             "rcwa_efficiency_1d directly.")
 
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("rcwa_efficiency_vs_wavelength", angle, theta)
     if quantity not in ("transmitted", "reflected"):
         raise ValueError(
             f"rcwa_efficiency_vs_wavelength: quantity must be 'transmitted' "
@@ -811,7 +844,7 @@ def rcwa_jones_vs_wavelength(
         Total reflected / transmitted efficiency (summed over orders) for each
         incident polarization (column 0 = incident ``E_x``, 1 = ``E_y``).
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("rcwa_jones_vs_wavelength", angle, theta)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(
@@ -888,7 +921,7 @@ def rcwa_jones_vs_wavelength_segments(
         Total reflected / transmitted efficiency (summed over orders) for each
         incident polarization (column 0 = incident ``E_x``, 1 = ``E_y``).
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("rcwa_jones_vs_wavelength_segments", angle, theta)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
         raise ValueError(
@@ -1065,7 +1098,7 @@ def rcwa_jones_1d(
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("rcwa_jones_1d", angle, theta)
     _validate_geometry("rcwa_jones_1d",
                        **_concrete(period=period, depth=depth,
                                    wavelength=wavelength), n_orders=n_orders)
@@ -1211,7 +1244,7 @@ def rcwa_jones_1d_segments(
         (PUBLIC ``exp(-i w t)`` convention); columns are the responses to
         incident ``E_x`` / ``E_y``, rows are ``[E_x; E_y]`` reflected.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("rcwa_jones_1d_segments", angle, theta)
     _validate_geometry("rcwa_jones_1d_segments",
                        **_concrete(period=period, depth=depth,
                                    wavelength=wavelength), n_orders=n_orders)
@@ -1411,12 +1444,22 @@ def interdigitated_grating_segments(tooth_widths, gap_width, tooth_materials,
 # W2 -- reflective-Jones device helpers (metasurface-as-Jones-element).
 # ===========================================================================
 def _qwp_matrix(theta, xp=np):
-    """Quarter-wave-plate 2x2 Jones matrix, fast axis at ``theta`` (radians), in
-    the library's ``exp(-i w t)`` convention (matches ``apply_waveplate`` with
-    retardance pi/2): ``R(theta) diag(1, -i) R(-theta)``.  Built in namespace
-    ``xp`` (NumPy by default) so it can multiply a JAX Jones matrix and keep the
-    autodiff graph; ``theta`` is a concrete host scalar (a device geometry knob,
-    not a traced quantity)."""
+    """Quarter-wave-plate 2x2 Jones matrix, fast axis at ``theta`` (radians):
+    ``R(theta) diag(1, exp(-i pi/2)) R(-theta)``.
+
+    CONVENTION NOTE (audit P2-15 follow-up): this is the CONJUGATE of
+    ``apply_waveplate(..., retardance=pi/2)`` after the polarization-element
+    family was aligned to the Berreman/RCWA solvers (which use the ``+i``
+    retarder sign).  Deliberately unchanged: at the default ``theta = pi/4``
+    the :func:`reflective_outcoupling` metric ``|[Q J Q]_{yx}|**2`` is
+    INVARIANT to the conjugate choice (at 45 deg ``[Q J Q]_{yx} =
+    (1 - e**2)(a + b)/4`` for a TE/TM-diagonal ``J = diag(a, b)``, and
+    ``1 - e**2 = 2`` for BOTH ``e = +i`` and ``e = -i``), so every published
+    out-coupling number is unaffected; flipping the sign here would only
+    change (unvalidated) non-default ``qwp_angle`` results.  Built in
+    namespace ``xp`` (NumPy by default) so it can multiply a JAX Jones matrix
+    and keep the autodiff graph; ``theta`` is a concrete host scalar (a device
+    geometry knob, not a traced quantity)."""
     c, s = float(np.cos(theta)), float(np.sin(theta))
     e = -1j                                        # exp(-i * pi/2)
     return xp.asarray([[c * c + e * s * s, c * s * (1 - e)],

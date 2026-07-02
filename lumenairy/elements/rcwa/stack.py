@@ -32,6 +32,7 @@ from ._core import (
     _propagation_star_general,
     _rcwa_convergence_stack,
     _rcwa_xp,
+    _recentering_phase,
     _redheffer_star,
     _require_inplane_tensor,
     _require_jax_x64,
@@ -1798,6 +1799,21 @@ class RCWAStack:
                 depths = [float(L.thickness) for L in self._layers]
                 sym_rt = _symmetric_cascade_rt(
                     Vref, Vtrn, Kx, Ky, specs, depths, k0, cincs, orders, xp)
+                if sym_rt is not None:
+                    # UNDO the recentering gauge (audit P2-18) so the stored
+                    # per-order AMPLITUDES match the full-solve phases.  The
+                    # cascade conjugates every layer operator by the diagonal
+                    # gauge D2 = diag(d2) (the half-space blocks are diagonal
+                    # and commute), so it returns r' = D2^{-1} S11 D2 cinc;
+                    # cinc lives on the (0, 0) order where d = 1, hence the
+                    # true amplitudes are r = d2 * r' (|d2| = 1: every
+                    # efficiency and the zeroth-order Jones are unchanged).
+                    # Same probe -> same deterministic d as the cascade used.
+                    probe0 = next(sp[3] for sp in specs if sp[0] == "PQ")
+                    d_g = _recentering_phase(probe0, orders, xp)
+                    if d_g is not None:
+                        d2_g = xp.concatenate([d_g, d_g])
+                        sym_rt = [(d2_g * r, d2_g * t) for r, t in sym_rt]
 
         _mode_cache = {}
         modes = []

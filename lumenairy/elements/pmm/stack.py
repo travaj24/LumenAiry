@@ -747,14 +747,20 @@ class PMMStack:
                         _redheffer_star(S_above[i - 1], _propagation_smatrix(
                             lmodes[i - 1][2],
                             k0 * self._layers[i - 1][0])), ifc[i])
+                # LINEAR reverse recurrence (audit P2-12): the Redheffer star
+                # is associative, so S_below_bot[i] = (ifc[i+1] * prop_{i+1})
+                # * S_below_bot[i+1] -- O(nlay) stars instead of the former
+                # per-layer full-chain rebuild (O(nlay^2)); the RCWAStack
+                # _internal_partials pattern.  Same operands, different
+                # association -- results agree to float round-off (~1e-16).
                 S_below_bot = [None] * nlay
-                for i in range(nlay - 1, -1, -1):
-                    below = ifc[i + 1]
-                    for j in range(i + 1, nlay):
-                        below = _redheffer_star(below, _propagation_smatrix(
-                            lmodes[j][2], k0 * self._layers[j][0]))
-                        below = _redheffer_star(below, ifc[j + 1])
-                    S_below_bot[i] = below
+                S_below_bot[nlay - 1] = ifc[nlay]
+                for i in range(nlay - 2, -1, -1):
+                    S_below_bot[i] = _redheffer_star(
+                        _redheffer_star(ifc[i + 1], _propagation_smatrix(
+                            lmodes[i + 1][2],
+                            k0 * self._layers[i + 1][0])),
+                        S_below_bot[i + 1])
                 # per-union-cell material LABELS (application feedback
                 # 2026-06-10): when the layers carry key names (a
                 # SegmentStackGeometry export), map them onto the union grid
@@ -1201,11 +1207,12 @@ class PMMStack:
         by distinct permittivity (complex key, e.g. the Ta vs the Cu value) to
         its ``(2,)`` absorbed fraction, attributed by the per-element lossy
         volume integral ``Im(E* . eps . E)`` within each layer (GLL
-        quadrature in x, closed-form in z; the in-plane field components --
-        the wall-normal ``E_z`` channel of an isotropic lossy segment is
-        carried by the in-plane form's flux normalization within each layer,
-        so the per-material SPLIT is renormalized to the exact per-layer
-        flux total).
+        quadrature in x, closed-form in z) over ALL THREE diagonal channels
+        ``Im(exx)|Ex|^2 + Im(eyy)|Ey|^2 + Im(ezz)|Ez|^2`` (audit P2-13:
+        ``Ez`` is reconstructed per element as in :meth:`internal_field`, so
+        an ``ezz``-only-lossy segment is attributed, not dropped); the
+        per-material SPLIT is renormalized to the exact per-layer flux
+        total.
         """
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
@@ -1227,27 +1234,34 @@ class PMMStack:
         # ---- per-material attribution within each layer --------------------
         # Split each layer's exact (flux-based) absorption across its
         # distinct permittivities by the lossy volume density
-        # Im(exx)|Ex|^2 + Im(eyy)|Ey|^2, GLL-quadratured in x and Gauss-
+        # Im(exx)|Ex|^2 + Im(eyy)|Ey|^2 + Im(ezz)|Ez|^2 (audit P2-13: the
+        # ezz channel used to be omitted, so a segment whose ONLY loss is
+        # Im(ezz) -- a uniaxial absorber with the lossy axis along z -- was
+        # dropped from the dict entirely), GLL-quadratured in x and Gauss-
         # sampled in z, then renormalized to the flux total (the split is a
-        # RATIO, so the common normalization cancels).
+        # RATIO, so the common normalization cancels).  Ez is reconstructed
+        # per element from Ampere's law, Ez = (i/k0) (dHy/dx + i kx0 Hy)/ezz
+        # -- the internal_field construction, with the ELEMENT's own ezz.
         amps = self._internal_amplitudes()
-        k0 = d["k0"]
+        k0, kx0 = d["k0"], d["kx0"]
         nz = 24
         zg, zw = np.polynomial.legendre.leggauss(nz)
         zg = 0.5 * (zg + 1.0)                  # fractional depth in (0, 1)
         zw = 0.5 * zw
         out = {}
         for i in range(nlay):
-            Wl, _Vl, lam, _q = d["lmodes"][i]
+            Wl, Vl, lam, _q = d["lmodes"][i]
             c_fwd, c_bwd = amps[i]
             t = self._layers[i][0]
             mats_i = d["layer_mats"][i]
             n_glob = d["n_glob"]
             elem_bnds = mats_i["elem_bnds"]
             l2g = mats_i["l2g"]
-            from ._core import _gll_nodes_weights
+            from ._core import _gll_nodes_weights, _lagrange_derivative_matrix
             _rn, ref_w = _gll_nodes_weights(mats_i["degree"])
+            Dref = _lagrange_derivative_matrix(_rn)
             keyed = {}
+            ez_terms = []   # (key, idx, 1/J, wel, ezz, Im(ezz)) per element
             labels_u = d.get("labels_u")
             ucum = np.concatenate([[0.0], np.cumsum(d["uwidths"])]) \
                 * self.period
@@ -1262,7 +1276,8 @@ class PMMStack:
                     key = labels_u[i][cell]
                 else:
                     key = complex(tns["exx"])
-                if abs(np.imag(tns["exx"])) < 1e-15 and                         abs(np.imag(tns["eyy"])) < 1e-15:
+                im_ezz = float(np.imag(tns["ezz"]))
+                if abs(np.imag(tns["exx"])) < 1e-15 and                         abs(np.imag(tns["eyy"])) < 1e-15 and abs(im_ezz) < 1e-15:
                     continue                   # lossless segment
                 J = 0.5 * (xr - xl)
                 wel = ref_w * J
@@ -1271,6 +1286,9 @@ class PMMStack:
                 wx, wy = keyed[key]
                 np.add.at(wx, l2g[e], wel * float(np.imag(tns["exx"])))
                 np.add.at(wy, l2g[e], wel * float(np.imag(tns["eyy"])))
+                if abs(im_ezz) >= 1e-15:
+                    ez_terms.append((key, l2g[e], 1.0 / J, wel,
+                                     complex(tns["ezz"]), im_ezz))
             if not keyed:
                 continue                       # nothing lossy in this layer
             raw = {k: np.zeros(2) for k in keyed}
@@ -1283,6 +1301,20 @@ class PMMStack:
                     raw[key] += w_z * (
                         (wx[:, None] * np.abs(Ex) ** 2).sum(axis=0)
                         + (wy[:, None] * np.abs(Ey) ** 2).sum(axis=0))
+                if ez_terms:
+                    # Ez channel (audit P2-13): Hy from the modal V partner
+                    # (the internal_field +i convention; a global phase, so
+                    # |Ez| is unaffected), then the per-element spectral
+                    # derivative -- Ez jumps with ezz at material walls, so
+                    # NO wall averaging (Ez is wall-tangential here, but the
+                    # per-element form is the discontinuity-safe one).
+                    U = Vl @ (P * c_fwd) - Vl @ (Q * c_bwd)
+                    Hy = 1j * U[n_glob:]
+                    for key, idx, invJ, wel, ezz, im_ezz in ez_terms:
+                        dHy = (Dref @ Hy[idx]) * invJ + 1j * kx0 * Hy[idx]
+                        Ez_e = (1j / k0) * dHy / ezz
+                        raw[key] += (w_z * im_ezz) * (
+                            wel[:, None] * np.abs(Ez_e) ** 2).sum(axis=0)
             tot = np.zeros(2)
             for v in raw.values():
                 tot = tot + v

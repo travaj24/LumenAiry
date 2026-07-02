@@ -1470,7 +1470,16 @@ def _stabilize_scalar(solve_at_degree, d0, label, *, passive_tol=None,
         except _StabilizeScanExhausted:
             break
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, orders, R, T, tot <= 1.0 + passive_tol, tot))
+        # TWO-SIDED passive gate + per-order non-negativity (audit P2-09):
+        # the historical one-sided ``tot <= 1 + tol`` test certified grossly
+        # NEGATIVE totals / per-order efficiencies -- a systematically-wrong
+        # solve repeats itself at consecutive degrees and formed a bogus
+        # 'converged cluster' with ZERO warnings.
+        eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
+                      float(np.min(np.real(T))) if np.size(T) else 0.0)
+        passive_ok = (-passive_tol <= tot <= 1.0 + passive_tol
+                      and eff_min >= -passive_tol)
+        scanned.append((d, orders, R, T, passive_ok, tot))
         records = [(s[1], (s[2], s[3]), None) for s in scanned]
         passive = [s[4] for s in scanned]
         cluster = _converged_cluster(records, passive, per_order_tol,
@@ -1514,7 +1523,13 @@ def _stabilize_jones(solve_at_degree, d0, label, *, passive_tol=None,
         except _StabilizeScanExhausted:
             break
         tot = float(np.real(R.sum() + T.sum()))
-        scanned.append((d, o, R, T, J, tot <= 2.0 + 2.0 * passive_tol, tot))
+        # TWO-SIDED + non-negative, as in _stabilize_scalar (audit P2-09);
+        # the Jones twin's target is 2 (both incident pols) with the 2x tol.
+        eff_min = min(float(np.min(np.real(R))) if np.size(R) else 0.0,
+                      float(np.min(np.real(T))) if np.size(T) else 0.0)
+        passive_ok = (-2.0 * passive_tol <= tot <= 2.0 + 2.0 * passive_tol
+                      and eff_min >= -2.0 * passive_tol)
+        scanned.append((d, o, R, T, J, passive_ok, tot))
         records = [(s[1], (s[2], s[3]), s[4]) for s in scanned]
         passive = [s[5] for s in scanned]
         cluster = _converged_cluster(records, passive, per_order_tol,
