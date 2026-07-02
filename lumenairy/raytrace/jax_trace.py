@@ -799,6 +799,67 @@ def _ensure_jaxprescription_registered():
         _JAXPRESCRIPTION_REGISTERED = True
 
 
+def _reject_unsupported_jax_surfaces(surfaces_raw, fn_name):
+    """Fail loud on surface kinds the JAX trace cannot represent.
+
+    4.10: refuse to silently pass mirrors / coord-breaks / biconic /
+    freeform through as flat refractives.  These surface kinds are
+    not yet implemented in the JAX trace; pre-4.10 the trace would
+    happily pretend they were spherical refractors and return wrong
+    answers.  Until proper implementations land, fail loud at build.
+
+    4.13.2 (P1-NEW-D): also reject Welford-style mirrors signalled
+    via ``glass_after='MIRROR'`` (case-insensitive).  The v4.13.1
+    P1-A apply_real_lens fix added both guards together; the JAX
+    prescription builder only got the ``is_mirror=True`` half, so
+    hand-built mirrors with ``glass_after='MIRROR'`` slipped through
+    and were silently traced as refractive air->air.
+
+    v5.17.x (audit P2-34): hoisted to a module-level helper so
+    :func:`trace_jax_with_params` (which bypasses
+    :func:`_build_jax_prescription` for perf) applies the SAME guard --
+    previously it silently traced mirrors / coord-breaks / biconics /
+    freeforms as flat refractives, reproducing the pre-4.10 wrong-answer
+    mode for differentiable prescriptions.
+
+    Trace-safety: this guard inspects only STATIC Python fields of the
+    prescription dict (booleans, glass strings, presence of biconic /
+    freeform keys) -- never the differentiable ``radii`` / ``conics`` /
+    ``aspheric_coeffs`` / ``thicknesses`` leaves -- so no JAX tracer is
+    ever materialised or branched on and the guard is safe under
+    ``jax.jit`` / ``jax.grad`` (cf. the tracer skip in
+    ``lumenairy.elements.rcwa._core._reject_jax_offplane``, which must
+    skip tracers because it inspects array VALUES; here there are no
+    array values to inspect).
+    """
+    for i, s in enumerate(surfaces_raw):
+        unsupported = []
+        gl_after = s.get('glass_after')
+        is_mirror_field = bool(s.get('is_mirror', False)) or (
+            isinstance(gl_after, str)
+            and gl_after.upper() == 'MIRROR'
+        )
+        if is_mirror_field:
+            unsupported.append('is_mirror')
+        if s.get('is_coordbrk'):
+            unsupported.append('is_coordbrk')
+        if s.get('radius_y') is not None:
+            unsupported.append('radius_y (biconic)')
+        if s.get('conic_y') is not None:
+            unsupported.append('conic_y (biconic)')
+        if s.get('aspheric_coeffs_y'):
+            unsupported.append('aspheric_coeffs_y (biconic)')
+        if s.get('freeform'):
+            unsupported.append('freeform')
+        if unsupported:
+            raise NotImplementedError(
+                f"{fn_name} does not yet support surface {i} with "
+                f"{', '.join(unsupported)}.  Use the NumPy ``trace`` "
+                f"backend, or open an issue if you need JAX-traceable "
+                f"reflective / coord-broken / biconic / freeform support."
+            )
+
+
 def _build_jax_prescription(prescription, wavelength,
                               surface_diffraction=None):
     """Build a :class:`JaxPrescription` from a plain prescription dict.
@@ -823,44 +884,10 @@ def _build_jax_prescription(prescription, wavelength,
     default_semi = (aperture_d / 2.0
                     if aperture_d is not None else float('inf'))
 
-    # 4.10: refuse to silently pass mirrors / coord-breaks / biconic /
-    # freeform through as flat refractives.  These surface kinds are
-    # not yet implemented in the JAX trace; pre-4.10 the trace would
-    # happily pretend they were spherical refractors and return wrong
-    # answers.  Until proper implementations land, fail loud at build.
-    #
-    # 4.13.2 (P1-NEW-D): also reject Welford-style mirrors signalled
-    # via ``glass_after='MIRROR'`` (case-insensitive).  The v4.13.1
-    # P1-A apply_real_lens fix added both guards together; the JAX
-    # prescription builder only got the ``is_mirror=True`` half, so
-    # hand-built mirrors with ``glass_after='MIRROR'`` slipped through
-    # and were silently traced as refractive air->air.
-    for i, s in enumerate(surfaces_raw):
-        unsupported = []
-        gl_after = s.get('glass_after')
-        is_mirror_field = bool(s.get('is_mirror', False)) or (
-            isinstance(gl_after, str)
-            and gl_after.upper() == 'MIRROR'
-        )
-        if is_mirror_field:
-            unsupported.append('is_mirror')
-        if s.get('is_coordbrk'):
-            unsupported.append('is_coordbrk')
-        if s.get('radius_y') is not None:
-            unsupported.append('radius_y (biconic)')
-        if s.get('conic_y') is not None:
-            unsupported.append('conic_y (biconic)')
-        if s.get('aspheric_coeffs_y'):
-            unsupported.append('aspheric_coeffs_y (biconic)')
-        if s.get('freeform'):
-            unsupported.append('freeform')
-        if unsupported:
-            raise NotImplementedError(
-                f"trace_jax does not yet support surface {i} with "
-                f"{', '.join(unsupported)}.  Use the NumPy ``trace`` "
-                f"backend, or open an issue if you need JAX-traceable "
-                f"reflective / coord-broken / biconic / freeform support."
-            )
+    # Unsupported-surface fail-loud guard (4.10 / 4.13.2; hoisted to
+    # _reject_unsupported_jax_surfaces for audit P2-34 -- see its
+    # docstring for history).
+    _reject_unsupported_jax_surfaces(surfaces_raw, 'trace_jax')
 
     n_surf = len(surfaces_raw)
 
@@ -1559,6 +1586,14 @@ def trace_jax_with_params(initial_state, prescription, wavelength,
 
     surfaces_raw = prescription.get('surfaces', [])
     n_surf = len(surfaces_raw)
+
+    # Audit P2-34: apply the same unsupported-surface fail-loud guard
+    # as trace_jax's builder.  This entry point bypasses
+    # _build_jax_prescription for perf, so pre-fix it silently traced
+    # mirrors / coord-breaks / biconics / freeforms as flat
+    # refractives.  Static-fields-only, hence jit/grad trace-safe (see
+    # _reject_unsupported_jax_surfaces).
+    _reject_unsupported_jax_surfaces(surfaces_raw, 'trace_jax_with_params')
 
     # Resolve per-surface params: prefer kwarg array, fall back to the
     # static prescription value.

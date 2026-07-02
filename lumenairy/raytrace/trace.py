@@ -436,6 +436,17 @@ def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
         sd = np.inf
         if aperture is not None:
             sd = aperture / 2.0
+        # Audit P2-35: honour the per-surface 'semi_diameter' key with
+        # the SAME semantics as the JAX backend
+        # (jax_trace._build_jax_prescription / trace_jax_with_params):
+        # a finite, positive per-surface value REPLACES the
+        # aperture_diameter/2 default; None / non-finite / <= 0 falls
+        # back to the default.  Pre-fix the NumPy backend silently
+        # ignored the key, so the identical prescription vignetted
+        # differently under the two backends (25/25 vs 1/25 alive).
+        ps_sd = ps.get('semi_diameter')
+        if ps_sd is not None and np.isfinite(ps_sd) and ps_sd > 0:
+            sd = float(ps_sd)
         # If elements list has per-surface semi-diameters, use the tighter one
         if elements is not None:
             # Match by index within refracting surfaces
