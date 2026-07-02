@@ -27,7 +27,7 @@ import pytest
 # the worker tests cleanly.  Locally everything imports and runs.
 try:
     import matplotlib  # noqa: F401
-    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QApplication
     matplotlib.use('Agg')
     from lumenairy.ui.waveoptics_dock import WaveOpticsWorker
     _GUI_OK = True
@@ -48,39 +48,66 @@ def test_dead_module_path_is_gone_and_fft_infra_flags_exist():
         import lumenairy.propagation  # noqa: F401
 
 
+class _FakeSurface:
+    is_mirror = False
+    is_coordbrk = False
+    label = 'S'
+    radius = float('inf')
+    conic = 0.0
+    semi_diameter = float('inf')
+    thickness = 0.0
+    glass_before = 'air'
+    glass_after = 'air'
+
+
 class _StubModel:
     """Minimal stand-in for SystemModel: enough attributes for the
-    pre-try section of WaveOpticsWorker._run_impl, with
-    build_trace_surfaces recording the live fft_infra backend flags and
-    then aborting the run."""
+    P3-63 __init__ snapshot and the pre-try section of
+    WaveOpticsWorker._run_impl."""
     wavelength_m = 550e-9
     epd_m = 5e-3
     elements = []
     source = None
 
-    def __init__(self):
-        self.seen_flags = None
-
     def build_trace_surfaces(self):
-        from lumenairy.propagators import fft_infra
-        self.seen_flags = (fft_infra.USE_PYFFTW, fft_infra.USE_SCIPY_FFT)
-        raise RuntimeError('stub abort')
+        return [_FakeSurface()]
 
 
-def _run_worker(backend):
+class _ProbeCfg(dict):
+    """Config dict that records the live fft_infra backend flags and
+    aborts the run at the first cfg read AFTER backend selection
+    ('unfold_mirrors', still before _run_impl's internal try).  Since
+    the P3-63 snapshot fix the model is no longer touched inside
+    run(), so the cfg is the natural in-run probe point."""
+
+    def __init__(self, *a, exc=None, **kw):
+        super().__init__(*a, **kw)
+        self.seen_flags = None
+        self.exc = exc or RuntimeError('stub abort')
+
+    def get(self, key, default=None):
+        if key == 'unfold_mirrors':
+            from lumenairy.propagators import fft_infra
+            self.seen_flags = (fft_infra.USE_PYFFTW,
+                               fft_infra.USE_SCIPY_FFT)
+            raise self.exc
+        return super().get(key, default)
+
+
+def _run_worker(backend, exc=None):
     """Run a worker synchronously (plain run() call, direct-connection
-    signals, no event loop) and return (model, finished_payloads)."""
-    QCoreApplication.instance() or QCoreApplication([])
+    signals, no event loop) and return (probe_cfg, finished_payloads)."""
+    QApplication.instance() or QApplication([])
     from lumenairy.propagators import fft_infra
     orig = (fft_infra.USE_PYFFTW, fft_infra.USE_SCIPY_FFT)
     try:
-        model = _StubModel()
-        cfg = {'N': 32, 'dx_m': 1e-6, 'method': 'asm', 'backend': backend}
-        worker = WaveOpticsWorker(model, cfg)
+        cfg = _ProbeCfg({'N': 32, 'dx_m': 1e-6, 'method': 'asm',
+                         'backend': backend}, exc=exc)
+        worker = WaveOpticsWorker(_StubModel(), cfg)
         got = []
-        worker.finished.connect(got.append)
+        worker.finished_result.connect(got.append)
         worker.run()  # must NOT raise (P1-08)
-        return model, got
+        return cfg, got
     finally:
         # run() mutates process-global backend flags by design; restore
         # so later tests see the environment default.
@@ -90,8 +117,9 @@ def _run_worker(backend):
 @pytest.mark.skipif(not _GUI_OK, reason=_SKIP_REASON)
 def test_worker_run_emits_finished_on_early_exception():
     """Any exception escaping the body -- including ones raised BEFORE
-    the internal try (here: build_trace_surfaces) -- must still emit
-    finished with an error payload so the dock can re-enable Run."""
+    the internal try (here: the cfg probe) -- must still emit
+    finished_result with an error payload so the dock can re-enable
+    Run."""
     _, got = _run_worker('numpy')
     assert len(got) == 1
     assert 'error' in got[0]
@@ -107,8 +135,8 @@ def test_worker_run_emits_finished_on_early_exception():
 def test_worker_backend_selection_reaches_fft_infra(backend, expect):
     """The combo-box backend must land on fft_infra's own module
     globals (the ones _fft2/_ifft2 read), not on a facade module."""
-    model, got = _run_worker(backend)
-    assert model.seen_flags == expect
+    cfg, got = _run_worker(backend)
+    assert cfg.seen_flags == expect
     assert len(got) == 1 and 'error' in got[0]
 
 
@@ -121,21 +149,6 @@ def test_worker_run_survives_exception_with_broken_str():
         def __str__(self):
             raise ValueError('__str__ is broken')
 
-    class _EvilModel(_StubModel):
-        def build_trace_surfaces(self):
-            raise _EvilError()
-
-    QCoreApplication.instance() or QCoreApplication([])
-    from lumenairy.propagators import fft_infra
-    orig = (fft_infra.USE_PYFFTW, fft_infra.USE_SCIPY_FFT)
-    try:
-        worker = WaveOpticsWorker(
-            _EvilModel(), {'N': 32, 'dx_m': 1e-6, 'method': 'asm',
-                           'backend': 'numpy'})
-        got = []
-        worker.finished.connect(got.append)
-        worker.run()                      # must not raise
-        assert len(got) == 1
-        assert got[0]['error'] == '_EvilError'
-    finally:
-        fft_infra.USE_PYFFTW, fft_infra.USE_SCIPY_FFT = orig
+    _, got = _run_worker('numpy', exc=_EvilError())
+    assert len(got) == 1
+    assert got[0]['error'] == '_EvilError'

@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QFont
 
+import copy
 import numpy as np
 import time
 import os
@@ -385,17 +386,80 @@ class WaveOpticsWorker(QThread):
     """Run wave-optics propagation in a background thread."""
     progress = Signal(int, int, str)          # step, total, label (coarse)
     fine_progress = Signal(float, str)        # overall fraction, stage msg
-    finished = Signal(object)                 # results dict
+    # v5.17 audit P3-62: named finished_result (matching every sibling
+    # dock's worker) instead of `finished`, which shadowed QThread's
+    # built-in finished signal -- the canonical
+    # worker.finished.connect(worker.deleteLater) idiom would have
+    # bound to the custom signal (wrong payload semantics, and never
+    # emitted if run() raised) instead of the always-fires built-in.
+    finished_result = Signal(object)          # results dict
 
     def __init__(self, model, config):
         super().__init__()
-        self.model = model
         self.cfg = config  # dict with all config
+        # v5.17 audit P3-63: snapshot every piece of SystemModel state
+        # the run needs HERE, on the GUI thread, instead of holding the
+        # live model and reading it from the background thread.  The
+        # GUI stays interactive during a run (only btn_run is
+        # disabled), so live reads could mix pre-edit and post-edit
+        # state (e.g. trace surfaces from the old design but the
+        # prescription exported from the new one) or race a list
+        # mutation.  Mirrors coronagraph_dock's snapshot-params
+        # pattern: no reference into the model survives into run().
+        # The snapshot itself is failure-safe: a model property that
+        # raises (e.g. an inconsistent prescription) is reported via
+        # the finished_result error payload from run() -- raising here
+        # would escape the dock's _run slot on the GUI thread after
+        # btn_run was already disabled.
+        self._snap_error = ''
+        try:
+            snap = self._snapshot_model(model)
+        except Exception as e:
+            try:
+                self._snap_error = f'{type(e).__name__}: {e}'
+            except Exception:
+                self._snap_error = type(e).__name__
+            snap = None
+        self._snap = snap
         # Per-stage (lo, hi) window for fine_progress so a sub-callback
         # inside apply_real_lens_traced can report 0-1 locally and we
         # map it into the overall timeline.
         self._stage_lo = 0.0
         self._stage_hi = 1.0
+
+    @staticmethod
+    def _snapshot_model(model):
+        snap = {}
+        snap['wavelength_m'] = model.wavelength_m
+        snap['n_elements'] = len(getattr(model, 'elements', []) or [])
+        snap['trace_surfs'] = list(model.build_trace_surfaces() or [])
+        snap['epd_m'] = model.epd_m
+        src = getattr(model, 'source', None)
+        try:
+            snap['source'] = copy.deepcopy(src)
+        except Exception:
+            snap['source'] = src
+        to_pres = getattr(model, 'to_prescription', None)
+        snap['prescription'] = None
+        snap['prescription_error'] = 'model has no to_prescription()'
+        if to_pres is not None:
+            try:
+                snap['prescription'] = to_pres()
+                snap['prescription_error'] = ''
+            except Exception as exc:
+                snap['prescription_error'] = (
+                    f'{type(exc).__name__}: {exc}')
+        opts_all = getattr(model, 'lens_options', {}) or {}
+        try:
+            snap['lens_options'] = copy.deepcopy(opts_all)
+        except Exception:
+            snap['lens_options'] = opts_all
+        for attr in ('bfl_mm', 'efl_mm'):
+            try:
+                snap[attr] = float(getattr(model, attr, float('nan')))
+            except Exception:
+                snap[attr] = float('nan')
+        return snap
 
     def _set_stage(self, lo, hi):
         self._stage_lo = lo
@@ -417,18 +481,20 @@ class WaveOpticsWorker(QThread):
         while it held the pyFFTW planner lock or was mid-HDF5 write.
         """
         if self.isInterruptionRequested():
-            self.finished.emit({'error': 'Stopped by user'})
+            self.finished_result.emit({'error': 'Stopped by user'})
             return True
         return False
 
     def run(self):
         # Nothing may escape run(): the dock's _on_finished slot (the
         # sole re-enabler of the Run button) only fires on the custom
-        # finished signal (which shadows QThread.finished -- see
-        # class-level Signal declarations), so an uncaught exception
-        # here would leave the UI stuck at 'Running...' until app
-        # restart.  _run_impl emits finished on all its own paths;
-        # this wrapper covers anything it lets escape.
+        # finished_result signal, so an uncaught exception here would
+        # leave the UI stuck at 'Running...' until app restart.
+        # _run_impl emits finished_result on all its own paths; this
+        # wrapper covers anything it lets escape.
+        if self._snap is None:
+            self.finished_result.emit({'error': self._snap_error})
+            return
         try:
             self._run_impl()
         except Exception as e:
@@ -439,7 +505,7 @@ class WaveOpticsWorker(QThread):
                 msg = f'{type(e).__name__}: {e}'
             except Exception:
                 msg = type(e).__name__
-            self.finished.emit({'error': msg})
+            self.finished_result.emit({'error': msg})
 
     def _run_impl(self):
         from ..propagators.propagation import (
@@ -458,7 +524,7 @@ class WaveOpticsWorker(QThread):
         cfg = self.cfg
         N = cfg['N']
         dx = cfg['dx_m']
-        wv = self.model.wavelength_m
+        wv = self._snap['wavelength_m']
         method = cfg['method']  # 'asm', 'fresnel', 'fraunhofer', etc.
         bandlimit = cfg.get('bandlimit', True)
         # MFT methods: between-element steps fall back to the
@@ -484,7 +550,7 @@ class WaveOpticsWorker(QThread):
         output_path = cfg.get('output_path', '')
         save_plane_flags = cfg.get('save_planes', {})  # {label: bool}
         start_idx = cfg.get('start_elem', 0)
-        end_idx = cfg.get('end_elem', len(self.model.elements) - 1)
+        end_idx = cfg.get('end_elem', self._snap['n_elements'] - 1)
 
         # Apply memory limit
         mem_limit = cfg.get('memory_limit_gb')
@@ -506,9 +572,9 @@ class WaveOpticsWorker(QThread):
         elif backend == 'scipy':
             _fft_infra.USE_SCIPY_FFT = True
 
-        trace_surfs = self.model.build_trace_surfaces()
+        trace_surfs = self._snap['trace_surfs']
         if not trace_surfs:
-            self.finished.emit({'error': 'No optical surfaces.'})
+            self.finished_result.emit({'error': 'No optical surfaces.'})
             return
 
         # 3.7.9: apply the dock's "Unfold mirrors" + "Ignore lateral
@@ -544,7 +610,7 @@ class WaveOpticsWorker(QThread):
             x = (np.arange(N) - N / 2) * dx
             X, Y = np.meshgrid(x, x)
             R_sq = X ** 2 + Y ** 2
-            epd_m = self.model.epd_m
+            epd_m = self._snap['epd_m']
 
             # Source construction (3.5.9): prefer the Source factories
             # (3.5.0) via SourceDefinition.to_source so the dock's
@@ -557,7 +623,7 @@ class WaveOpticsWorker(QThread):
             # legacy hand-rolled construction if to_source raises
             # (e.g. an unknown source_type added in a future model
             # version).
-            src = self.model.source
+            src = self._snap['source']
             try:
                 if src is None:
                     raise ValueError('no source defined')
@@ -623,12 +689,16 @@ class WaveOpticsWorker(QThread):
                 from ..elements.lenses import (apply_real_lens,
                                        apply_real_lens_traced,
                                        apply_real_lens_maslov)
-                pres = self.model.to_prescription()
+                pres = self._snap['prescription']
+                if pres is None:
+                    raise RuntimeError(
+                        'Cannot export prescription: '
+                        + self._snap['prescription_error'])
                 # Per-function kwarg overrides chosen via the &Options
                 # menu's Lens Options dialog.  Only kwargs the user
                 # actually changed are present; library defaults apply
                 # for everything else.
-                opts_all = getattr(self.model, 'lens_options', {}) or {}
+                opts_all = self._snap['lens_options']
                 # Allocate 70% of the bar to the lens call (dominant
                 # cost when traced is selected).
                 self._set_stage(lo=step / total_steps,
@@ -691,11 +761,11 @@ class WaveOpticsWorker(QThread):
                 'gbd', 'hfpi', 'huygens-fresnel', 'subaperture',
             }
             if method in whole_prescription:
-                try:
-                    pres = self.model.to_prescription()
-                except Exception as exc:
-                    self.finished.emit({
-                        'error': f'Cannot export prescription: {exc}'})
+                pres = self._snap['prescription']
+                if pres is None:
+                    self.finished_result.emit({
+                        'error': 'Cannot export prescription: '
+                                 + self._snap['prescription_error']})
                     return
                 step = total_steps - 2
                 self.progress.emit(step, total_steps,
@@ -724,7 +794,7 @@ class WaveOpticsWorker(QThread):
                         E_focus = propagate_subaperture_asymptotic(
                             E, dx, pres, wavelength=wv)
                 except Exception as exc:
-                    self.finished.emit({
+                    self.finished_result.emit({
                         'error': f'{method} failed: '
                                  f'{type(exc).__name__}: {exc}'})
                     return
@@ -762,7 +832,7 @@ class WaveOpticsWorker(QThread):
                     'output_path': '',
                     'propagation_result': None,
                 })
-                self.finished.emit(results)
+                self.finished_result.emit(results)
                 return
 
             if used_lens_router:
@@ -849,7 +919,7 @@ class WaveOpticsWorker(QThread):
             step += 1
             self.progress.emit(step, total_steps, 'Propagating to focus')
 
-            bfl_mm = self.model.bfl_mm
+            bfl_mm = self._snap['bfl_mm']
             if np.isfinite(bfl_mm) and bfl_mm > 0:
                 bfl_m = bfl_mm * 1e-3
                 if is_mft:
@@ -918,7 +988,7 @@ class WaveOpticsWorker(QThread):
                 if (chief_relative_focal
                         and method != 'fraunhofer'
                         and method != 'fraunhofer-mft'):
-                    efl_mm = float(self.model.efl_mm)
+                    efl_mm = self._snap['efl_mm']
                     if np.isfinite(efl_mm) and efl_mm > 0:
                         R = (bfl_mm - efl_mm) * 1e-3
                         if abs(R) > 1e-9:
@@ -974,8 +1044,9 @@ class WaveOpticsWorker(QThread):
                     # + planes -- back into the dock for review.
                     try:
                         import json as _json
-                        rx_json = _json.dumps(
-                            self.model.to_prescription())
+                        pres_snap = self._snap['prescription']
+                        rx_json = ('' if pres_snap is None
+                                   else _json.dumps(pres_snap))
                     except Exception:
                         rx_json = ''
                     write_metadata(output_path, {
@@ -1054,7 +1125,7 @@ class WaveOpticsWorker(QThread):
         except Exception as e:
             results = {'error': str(e)}
 
-        self.finished.emit(results)
+        self.finished_result.emit(results)
 
 
 # ════════════════════════════════════════════════════════════════════════
@@ -2518,7 +2589,7 @@ class WaveOpticsDock(QWidget):
         self._worker = WaveOpticsWorker(self.sm, config)
         self._worker.progress.connect(self._on_progress)
         self._worker.fine_progress.connect(self._on_fine_progress)
-        self._worker.finished.connect(self._on_finished)
+        self._worker.finished_result.connect(self._on_finished)
         self._worker.start()
 
     def _stop(self):

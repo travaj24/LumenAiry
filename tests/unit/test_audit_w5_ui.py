@@ -424,21 +424,17 @@ class _FakeSurface:
 
 
 class _StubWaveModel:
-    """Just enough SystemModel for WaveOpticsWorker._run_impl; can
-    request interruption on the worker from INSIDE the worker thread
-    (build_trace_surfaces runs before the first stage boundary)."""
+    """Just enough SystemModel for WaveOpticsWorker.  Since the P3-63
+    snapshot fix, build_trace_surfaces runs on the GUI thread inside
+    __init__, so interruption is requested directly on the worker
+    (before start) rather than from inside the run."""
     wavelength_m = 550e-9
     epd_m = 5e-3
     elements = []
     source = None
     bfl_mm = float('nan')
 
-    def __init__(self, interrupt_worker=None):
-        self._interrupt_worker = interrupt_worker
-
     def build_trace_surfaces(self):
-        if self._interrupt_worker is not None:
-            self._interrupt_worker.requestInterruption()
         return [_FakeSurface(), _FakeSurface()]
 
 
@@ -455,10 +451,25 @@ def test_waveoptics_worker_stops_at_stage_boundary():
     from lumenairy.propagators import fft_infra
     orig = (fft_infra.USE_PYFFTW, fft_infra.USE_SCIPY_FFT)
     model = _StubWaveModel()
-    w = waveoptics_dock.WaveOpticsWorker(model, _wave_cfg())
-    model._interrupt_worker = w
+
+    class _InterruptingCfg(dict):
+        """Requests interruption from INSIDE the worker thread at the
+        first cfg read after start (QThread.start() clears any flag
+        requested beforehand; the P3-63 snapshot moved
+        build_trace_surfaces -- the old in-thread hook -- to
+        __init__ on the GUI thread)."""
+        worker = None
+
+        def get(self, key, default=None):
+            if key == 'unfold_mirrors' and self.worker is not None:
+                self.worker.requestInterruption()
+            return super().get(key, default)
+
+    cfg = _InterruptingCfg(_wave_cfg())
+    w = waveoptics_dock.WaveOpticsWorker(model, cfg)
+    cfg.worker = w
     got = []
-    w.finished.connect(got.append)
+    w.finished_result.connect(got.append)
     w.start()
     try:
         assert w.wait(10000)
@@ -478,7 +489,7 @@ def test_waveoptics_worker_completes_without_interruption():
     try:
         w = waveoptics_dock.WaveOpticsWorker(_StubWaveModel(), _wave_cfg())
         got = []
-        w.finished.connect(got.append)
+        w.finished_result.connect(got.append)
         w.run()                   # synchronous, same-thread delivery
     finally:
         fft_infra.USE_PYFFTW, fft_infra.USE_SCIPY_FFT = orig
