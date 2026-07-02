@@ -2387,6 +2387,65 @@ def _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0=0.0):
     return W2, V2, lam, q
 
 
+def _juniform_geo_eig(mats, jnp, eig, k0, kx0=0.0):
+    """Eps-free GEOMETRIC eigendecomposition for a uniform isotropic medium --
+    the differentiable twin of :func:`_uniform_geo_eig` (backlog A2).  For a
+    uniform isotropic ``eps`` the coupled :func:`_jpmm_sem_modes_tensor`
+    operator collapses EXACTLY to ``Mbig(eps) = eps I_(2n) - blockdiag(Kx2, Kx2)``,
+    so ONE eig of the geometry-only ``Kx2`` serves every uniform medium on the
+    shared nodal grid.  ``Kx2`` depends on the mesh + (traced) ``kx0`` only, NOT
+    on ``eps`` -- so both half-spaces reuse it.  Returns ``(mu, w, Kx2)``."""
+    k02 = k0 * k0
+    iS0 = jnp.linalg.inv(mats["S0"])
+    op = mats["stiff"]["one"]
+    # traced kx0 (even valued 0) is not a python float -> keep the convection so
+    # d/d(angle) flows, exactly as _jpmm_sem_modes_tensor does.
+    oblique = not (isinstance(kx0, float) and kx0 == 0.0)
+    if oblique:
+        Cw = mats["conv"]["one"]
+        op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mats["mass"]["one"]
+    Kx2 = (1.0 / k02) * (iS0 @ op)
+    mu, w = eig(Kx2)
+    return mu, w, Kx2
+
+
+def _jpmm_sem_modes_uniform(mats, jnp, eig, k0, kx0, eps, geo=None):
+    """Uniform-isotropic modes from the SHARED geometric eig -- the
+    differentiable twin of :func:`_sem_modes_uniform`, returning the IDENTICAL
+    ``(W2, V2, lam, q)`` contract as :func:`_jpmm_sem_modes_tensor` with the
+    same z-Poynting forward selector, evaluated on the eps-shifted spectrum
+    ``q^2 = eps - mu`` (the branch choice legitimately depends on eps).  The
+    block-diagonal eigenvector gauge differs from a raw 2n eig but is physically
+    equivalent -- the downstream interface S-matrix is basis-agnostic."""
+    cj = jnp.complex128
+    n = mats["n_glob"]
+    eps = jnp.asarray(eps, dtype=cj)
+    if geo is None:
+        geo = _juniform_geo_eig(mats, jnp, eig, k0, kx0)
+    mu, w, _Kx2 = geo
+    q2 = eps - mu
+    q = jnp.sqrt(jnp.concatenate([q2, q2]))
+    Z = jnp.zeros((n, n), dtype=cj)
+    W2 = jnp.block([[w, Z], [Z, w]])
+    # Q @ W2 for the uniform medium: (eps I - Kx2) w = w diag(q2), Kx2 w = w mu.
+    QW = jnp.block([[Z, w * q2[None, :]], [-eps * w, Z]])
+    S0 = mats["S0"]
+    lam0 = -1j * q
+    safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
+    V0 = QW * (1.0 / safe0)[None, :]
+    SVt = S0 @ jnp.conj(V0[:n])
+    SVb = S0 @ jnp.conj(V0[n:])
+    flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
+                    - jnp.einsum("in,in->n", W2[n:], SVt))
+    fscale = 1e-9 * jnp.maximum(jnp.max(jnp.abs(flux)), 1.0)
+    prop = jnp.abs(flux) > fscale
+    flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
+    q = jnp.where(flip, -q, q)
+    lam = -1j * q
+    safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+    V2 = QW * (1.0 / safe)[None, :]
+    return W2, V2, lam, q
+
 
 def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
                       eps_sup, eps_sub, depth, wl, kx0=0.0, dyn=None):
@@ -2415,8 +2474,16 @@ def _jpmm_jones_solve(static, orders, Tp, jnp, eig, period, t_ridge, t_groove,
     mats_sub = _jpmm_assemble_tensor(static, jnp, t_iso_sub, t_iso_sub, dyn=dyn)
 
     Wl, Vl, lam_l, _ql = _jpmm_sem_modes_tensor(mats, jnp, eig, k0, kx0)
-    Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_tensor(mats_sup, jnp, eig, k0, kx0)
-    Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_tensor(mats_sub, jnp, eig, k0, kx0)
+    # v5.18.1 (audit P3-27 second half): the two ISOTROPIC half-spaces share
+    # ONE geometry-only eig (backlog A2) instead of two independent full 2n
+    # eigs -- Kx2 is eps-free and identical for sup/sub on the shared mesh.
+    # Mirrors the numpy _pmm_jones_solve_core, which already does this; the JAX
+    # twin now matches that oracle's shared-eig gauge exactly.
+    _geo = _juniform_geo_eig(mats_sup, jnp, eig, k0, kx0)
+    Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_uniform(
+        mats_sup, jnp, eig, k0, kx0, eps_sup, geo=_geo)
+    Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_uniform(
+        mats_sub, jnp, eig, k0, kx0, eps_sub, geo=_geo)
 
     def _ismat(Wa, Va, Wb, Vb):
         a = jnp.linalg.solve(Wb, Wa)

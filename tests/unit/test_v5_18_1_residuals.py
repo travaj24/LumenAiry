@@ -130,6 +130,33 @@ def test_txt_exporter_labels_aspheric_surface(tmp_path):
     assert 'aspheric coefficients' in text
 
 
+# --------------------------------------------------------------------------- #
+# ITEM 4 -- through_focus_scan_jax stream=True == fused vmap (identical result) #
+# --------------------------------------------------------------------------- #
+def test_through_focus_stream_matches_fused():
+    """The opt-in per-plane device loop (stream=True) is numerically identical
+    to the fused vmap path -- same kernel math, only device-memory footprint
+    differs."""
+    pytest.importorskip('jax')
+    from lumenairy.analysis.through_focus import through_focus_scan_jax
+    rng = np.random.default_rng(0)
+    N = 48
+    yy, xx = np.indices((N, N))
+    E = (rng.standard_normal((N, N)) + 1j * rng.standard_normal((N, N)))
+    E = E * np.exp(-(((xx - N / 2) ** 2 + (yy - N / 2) ** 2) / (2 * (N / 6) ** 2)))
+    E = E.astype(np.complex128)
+    z = np.linspace(-2e-4, 2e-4, 9)
+    kw = dict(bucket_radius=5e-5, ideal_peak=1.0)
+    fused = through_focus_scan_jax(E, 2e-6, 1.31e-6, z, stream=False, **kw)
+    strm = through_focus_scan_jax(E, 2e-6, 1.31e-6, z, stream=True, **kw)
+    for attr in ('peak_I', 'strehl', 'd4sigma_x', 'd4sigma_y', 'rms_radius',
+                 'power_in_bucket'):
+        va = np.asarray(getattr(fused, attr), dtype=float)
+        vb = np.asarray(getattr(strm, attr), dtype=float)
+        assert np.allclose(va, vb, rtol=1e-6, atol=1e-8, equal_nan=True), (
+            f'{attr} differs between stream and fused: {va} vs {vb}')
+
+
 def test_txt_exporter_all_spherical_has_no_footnote(tmp_path):
     """A purely spherical prescription keeps STANDARD rows and no aspheric
     footnote (byte-clean legacy behaviour for the common case)."""

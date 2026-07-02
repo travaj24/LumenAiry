@@ -1022,16 +1022,23 @@ def monte_carlo_tolerancing(
 
 def _build_through_focus_scan_jax_kernel(
     Ny: int, Nx: int, dx: float, wavelength: float, bandlimit: bool,
-    dtype_str: str,
+    dtype_str: str, vectorized: bool = True,
 ):
-    """Build a jit-compiled `vmap`'d ASM kernel for the through-focus
-    scan.  Caller passes the FFT'd input field and the z-vector at
-    call time; this function only builds (and the call site jits) the
-    structure that is invariant under those.
+    """Build a jit-compiled ASM kernel for the through-focus scan.  Caller
+    passes the FFT'd input field and the z-vector at call time; this function
+    only builds (and the call site jits) the structure that is invariant under
+    those.
 
-    The returned kernel signature is:
+    ``vectorized=True`` (default) returns a ``jax.vmap``'d kernel that
+    propagates ALL z at once (one fused call, all planes on device):
 
         kernel(E_fft_shifted, z_jax) -> fields[n_z, Ny, Nx]
+
+    ``vectorized=False`` (v5.18.1, the ``stream=True`` path) returns the
+    un-vmapped single-plane kernel so the caller can loop z in Python and keep
+    only ONE plane on the device at a time (``O(Ny*Nx)`` device memory):
+
+        kernel(E_fft_shifted, z_scalar) -> field[Ny, Nx]
 
     v4.12.2 D4 closure -- previously the kernel was a Python closure
     inside `through_focus_scan_jax` that captured `kz_safe`,
@@ -1071,6 +1078,10 @@ def _build_through_focus_scan_jax_kernel(
             jnp.fft.ifft2(jnp.fft.ifftshift(E_fft_shifted * H)))
         return E_out
 
+    if not vectorized:
+        # Single-plane kernel for the streaming path -- caller loops z and
+        # device_get's each plane, so peak device memory is O(Ny*Nx).
+        return jax.jit(_asm_one_z)
     # `in_axes=(None, 0)` -- E_fft_shifted is shared across z, only z
     # is the vectorised axis.
     kernel = jax.vmap(_asm_one_z, in_axes=(None, 0))
@@ -1085,6 +1096,7 @@ def through_focus_scan_jax(
     bucket_radius: Optional[float] = None,
     ideal_peak: Optional[float] = None,
     bandlimit: bool = True,
+    stream: bool = False,
 ) -> 'ThroughFocusResult':
     """JAX-vmapped through-focus scan.  Same return contract as
     :func:`through_focus_scan` but propagates all z values in a single
@@ -1102,8 +1114,15 @@ def through_focus_scan_jax(
     materialises all ``n_z`` propagated planes on the DEVICE at once
     (``O(n_z * Ny * Nx)`` complex), unlike the NumPy backend which
     streams one plane at a time (``O(Ny * Nx)``).  The host-side copy
-    IS streamed per plane, so host memory stays ``O(Ny * Nx)``.  For
-    dense scans on very large grids prefer ``through_focus_scan``.
+    IS streamed per plane, so host memory stays ``O(Ny * Nx)``.
+
+    ``stream=True`` (v5.18.1) trades the vmap fusion for a per-plane device
+    loop: each z is propagated by an un-vmapped single-plane kernel and
+    device_get'd before the next, so DEVICE memory also stays ``O(Ny * Nx)``.
+    Results are numerically identical to the fused path (same kernel math);
+    it is slower on hardware that would have parallelised the batch (notably
+    GPU) but lets a dense scan on a very large grid run within a tight device
+    budget without falling back to the slower NumPy ``through_focus_scan``.
 
     v4.12.2: the inner ASM kernel is now jit-compiled once per
     ``(shape, dtype, dx, wavelength, bandlimit)`` and cached in the
@@ -1141,7 +1160,7 @@ def through_focus_scan_jax(
 
     cache_key = (
         int(Ny), int(Nx), float(dx), float(wavelength), bool(bandlimit),
-        np.dtype(E_jax.dtype).str,
+        np.dtype(E_jax.dtype).str, bool(stream),   # stream -> single-plane kernel
     )
     with _THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK:
         kernel = _THROUGH_FOCUS_SCAN_JAX_CACHE.get(cache_key)
@@ -1156,7 +1175,7 @@ def through_focus_scan_jax(
         # waste; the second insert just overwrites the first.
         kernel = _build_through_focus_scan_jax_kernel(
             int(Ny), int(Nx), float(dx), float(wavelength),
-            bool(bandlimit), np.dtype(E_jax.dtype).str,
+            bool(bandlimit), np.dtype(E_jax.dtype).str, vectorized=not stream,
         )
         with _THROUGH_FOCUS_SCAN_JAX_CACHE_LOCK:
             _THROUGH_FOCUS_SCAN_JAX_CACHE[cache_key] = kernel
@@ -1164,8 +1183,18 @@ def through_focus_scan_jax(
                    > _THROUGH_FOCUS_SCAN_JAX_CACHE_MAXSIZE):
                 _THROUGH_FOCUS_SCAN_JAX_CACHE.popitem(last=False)
 
-    z_jax = jnp.asarray(z_arr)
-    fields = kernel(E_fft_shifted, z_jax)   # (n_z, Ny, Nx)
+    if stream:
+        # v5.18.1: per-plane device loop -- one plane on the device at a time.
+        fields = None
+
+        def _plane(i):
+            return np.asarray(kernel(E_fft_shifted, jnp.asarray(float(z_arr[i]))))
+    else:
+        z_jax = jnp.asarray(z_arr)
+        fields = kernel(E_fft_shifted, z_jax)   # (n_z, Ny, Nx)
+
+        def _plane(i):
+            return np.asarray(fields[i])
 
     # Per-plane metrics.  Bring back to NumPy at the metric boundary
     # since the metrics package isn't JAX-vmapped.
@@ -1185,7 +1214,7 @@ def through_focus_scan_jax(
     rms_r = np.full(n_z, np.nan)
     p_bucket = np.full(n_z, np.nan)
     for i in range(n_z):
-        E_z = np.asarray(fields[i])
+        E_z = _plane(i)
         I_z = np.abs(E_z) ** 2
         peak_I[i] = float(np.max(I_z))
         if ideal_peak is not None and ideal_peak > 0:
