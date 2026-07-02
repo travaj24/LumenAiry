@@ -1239,8 +1239,16 @@ def surfaces_from_elements(
             if 'aperture_diameter' in elem:
                 sd = elem['aperture_diameter'] / 2.0
 
-            # Register the glass temporarily
-            _glass_name = f'__spherical_{id(elem)}'
+            # Register the pseudo-glass under a content-derived name.
+            # v5.17.1 (audit P1-07): the name was id(elem)-derived, but
+            # CPython recycles ids after GC, so two builds with
+            # different n_lens could share a name and the second
+            # registration retargeted previously built surface lists
+            # to the wrong index (trace() resolves glass at trace
+            # time).  Content-derived names are idempotent (same
+            # content -> same name -> bounded registry growth) and
+            # collision-correct (same name -> same index).
+            _glass_name = f'__spherical_{float(n_lens)!r}'
             # Store a fixed-index material
             _register_fixed_index(_glass_name, n_lens, wavelength)
 
@@ -1267,7 +1275,9 @@ def surfaces_from_elements(
             if 'aperture_diameter' in elem:
                 sd = elem['aperture_diameter'] / 2.0
 
-            _glass_name = f'__aspheric_{id(elem)}'
+            # Content-derived name; see the spherical_lens branch
+            # comment (v5.17.1, audit P1-07).
+            _glass_name = f'__aspheric_{float(n_lens)!r}'
             _register_fixed_index(_glass_name, n_lens, wavelength)
 
             surfaces.append(Surface(
@@ -1302,7 +1312,7 @@ def surfaces_from_elements(
 # Thin-lens helper: register a fixed-index "glass" for spherical/aspheric lenses
 def _register_fixed_index(name, n, wavelength):
     """Register a fixed refractive index as a temporary glass entry."""
-    from ..glass import GLASS_REGISTRY, _glass_cache
+    from ..glass import GLASS_REGISTRY, _glass_cache, _glass_value_cache
 
     class _FixedIndex:
         def __init__(self, n_val):
@@ -1310,8 +1320,21 @@ def _register_fixed_index(name, n, wavelength):
         def get_refractive_index(self, wv_nm, unit='nm'):
             return self._n
 
-    GLASS_REGISTRY[name] = ('__fixed__', '__fixed__', '__fixed__')
+    # v5.17.1 (audit P2-36): the '__user__' sentinel is what
+    # get_glass_index's user-fixed branch matches (glass.py), so the
+    # lookup resolves from _glass_cache without the optional
+    # refractiveindex package.  The previous
+    # ('__fixed__', '__fixed__', '__fixed__') tuple fell through to
+    # the refractiveindex.info branch and raised ImportError on
+    # minimal installs.
+    GLASS_REGISTRY[name] = ('__user__', '__fixed__', '__fixed__')
     _glass_cache[name] = _FixedIndex(n)
+    # v5.17.1 (audit P3-61): an overwrite must not leave stale
+    # immutable-branch value-cache entries for this name (targeted
+    # removal, cheaper than register_fixed_glass's full clear because
+    # this runs on every spherical/aspheric element conversion).
+    for _key in [k for k in _glass_value_cache if k[0] == name]:
+        del _glass_value_cache[_key]
 
 # Also register the thin-lens pseudo-glass
 _register_fixed_index('__thin_lens__', 1.5, 550e-9)
