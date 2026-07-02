@@ -90,9 +90,11 @@ class ZernikeDock(QWidget):
         self.combo_normalization.addItems(
             ['OSA', 'Noll', 'Fringe', 'Standard'])
         self.combo_normalization.setToolTip(
-            "Zernike normalization convention.  'OSA' (default) and "
-            "'Standard' are orthonormal; 'Noll' flips sign on sine "
-            "modes; 'Fringe' is not yet supported (raises in lib).")
+            "Zernike normalization convention.  'OSA' (default), 'Noll' "
+            "and 'Standard' are orthonormal ('Noll' coefficients equal "
+            "OSA -- the conventions differ only in single-index ordering, "
+            "which this selector does not permute); 'Fringe' is not yet "
+            "supported (raises in lib).")
         norm_row.addWidget(self.combo_normalization)
         norm_row.addStretch()
         layout.addLayout(norm_row)

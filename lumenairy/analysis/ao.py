@@ -203,16 +203,28 @@ class DeformableMirror:
         of reaching into the private ``_IF_basis`` attribute when
         closing a modal-to-zonal projection in your control loop.
 
-        Always works regardless of ``cache_basis`` setting: streams
-        per-actuator IF rows in to a normal-equations solver, so peak
-        memory is ``n_actuators**2 * N**2 / chunk_size`` at most.
+        Always works regardless of ``cache_basis`` setting.  Small
+        problems materialise the design matrix and solve via ``lstsq``
+        directly; large problems (design matrix over ~128 MB) fall
+        back to normal equations accumulated over horizontal bands of
+        the pupil grid, so peak scratch memory is the band block
+        (bounded at ~32 MB) plus the ``n_act**2 x n_act**2`` normal
+        matrix -- the full ``N**2 x n_act**2`` design matrix is never
+        materialised.  When the IF basis is already cached the normal
+        equations are formed from views of the cache with a single
+        BLAS gemm and no extra large allocation.  Caveat: normal
+        equations square the condition number, so for pathologically
+        degenerate actuator geometries the large-problem path is less
+        accurate than the direct ``lstsq`` path (rank deficiency is
+        handled via a least-squares solve of the normal system rather
+        than a hard failure).
         """
         target = np.asarray(target_phase, dtype=np.float64).ravel()
         n2 = self.n_actuators ** 2
         # Build the design matrix A of shape (N**2, n_act**2).  For
         # small DMs (n_act <= 16 say) materialising A directly is
-        # already < 1 GB; for larger DMs we stream rows and accumulate
-        # the n2 x n2 normal matrix instead.
+        # already < 1 GB; for larger DMs we stream row bands and
+        # accumulate the n2 x n2 normal matrix instead.
         bytes_design = (self.N ** 2) * n2 * 8
         if bytes_design <= _DEFAULT_CACHE_CEILING_BYTES // 4:
             # Materialise A and solve directly.
@@ -221,19 +233,49 @@ class DeformableMirror:
                 A[:, k] = self._influence_function_kth(k).ravel()
             coeffs, *_ = np.linalg.lstsq(A, target, rcond=None)
         else:
-            # Streamed normal equations: AtA = sum_k a_k a_k^T,
-            # Atb = sum_k a_k * <target, a_k> -- both n2 x n2 / n2.
-            AtA = np.zeros((n2, n2), dtype=np.float64)
-            Atb = np.zeros(n2, dtype=np.float64)
-            cols = [self._influence_function_kth(k).ravel()
-                    for k in range(n2)]
-            for i in range(n2):
-                ci = cols[i]
-                Atb[i] = float(ci @ target)
-                for j in range(i, n2):
-                    AtA[i, j] = float(ci @ cols[j])
-                    AtA[j, i] = AtA[i, j]
-            coeffs = np.linalg.solve(AtA, Atb)
+            # Streamed normal equations (v5.17.1, audit P2-01): the
+            # previous implementation materialised ALL n2 columns
+            # (defeating the memory contract) and formed AtA via
+            # n2*(n2+1)/2 Python-level np.dot calls (O(n_act^4) loop).
+            # Now AtA = A^T A and Atb = A^T b are accumulated with
+            # BLAS gemms without ever holding the full design matrix.
+            if self._IF_basis is not None:
+                # Cached basis: (n, n, N, N) reshapes to (n2, N**2) as
+                # a VIEW (row k = actuator divmod(k, n), matching
+                # _influence_function_kth) -- one gemm, no big alloc.
+                A_rows = self._IF_basis.reshape(n2, -1)
+                AtA = A_rows @ A_rows.T
+                Atb = A_rows @ target
+            else:
+                # No cache: accumulate over horizontal bands of grid
+                # rows.  Band block is (rows_band * N, n2); bound its
+                # size to ~ceiling/16 (= 32 MB default) of scratch.
+                N = self.N
+                dx = self.dx
+                s2 = self._sigma_IF ** 2
+                x = (np.arange(N) - N / 2) * dx
+                y = (np.arange(N) - N / 2) * dx
+                bytes_per_row = N * n2 * 8
+                rows_band = max(
+                    1, (_DEFAULT_CACHE_CEILING_BYTES // 16)
+                    // bytes_per_row)
+                AtA = np.zeros((n2, n2), dtype=np.float64)
+                Atb = np.zeros(n2, dtype=np.float64)
+                target_2d = target.reshape(N, N)
+                for r0 in range(0, N, rows_band):
+                    r1 = min(r0 + rows_band, N)
+                    Xb, Yb = np.meshgrid(x, y[r0:r1])
+                    C = np.empty(((r1 - r0) * N, n2), dtype=np.float64)
+                    for k in range(n2):
+                        j, i = divmod(k, self.n_actuators)
+                        d2 = ((Xb - self._act_centres[i]) ** 2
+                              + (Yb - self._act_centres[j]) ** 2)
+                        C[:, k] = np.exp(-d2 / (2.0 * s2)).ravel()
+                    AtA += C.T @ C
+                    Atb += C.T @ target_2d[r0:r1].ravel()
+            # lstsq (not solve) so a rank-deficient normal matrix
+            # yields the minimum-norm solution instead of blowing up.
+            coeffs, *_ = np.linalg.lstsq(AtA, Atb, rcond=None)
         self.set_command(coeffs)
         return self.command.copy()
 

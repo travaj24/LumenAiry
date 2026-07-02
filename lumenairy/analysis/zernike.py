@@ -344,14 +344,22 @@ def zernike_basis_matrix(
 # -----------------------
 # * ``'OSA'``       -- ANSI/OSA orthonormal (current behavior).
 #                      Per-mode factor = 1.  Reference: ANSI Z80.28-2010.
-# * ``'Noll'``      -- Noll 1976 (J. Opt. Soc. Am. 66, 207-211).  Same
-#                      magnitudes as OSA, but the sign convention on
-#                      the sine-like (m < 0) modes is opposite to OSA.
-#                      Implemented as factor = -1 for m < 0, +1
-#                      otherwise.  This matches the most-documented
-#                      practical difference; if the caller really wants
-#                      Noll's j-ordering as well they can permute
-#                      after the fact.
+# * ``'Noll'``      -- Noll 1976 (J. Opt. Soc. Am. 66, 207-211).
+#                      Noll's polynomials are IDENTICAL to OSA/ANSI for
+#                      every mode -- including the sine-like (m < 0)
+#                      modes: Noll Eq. (2) uses
+#                      sqrt(2(n+1)) R_n^m sin(m*theta) with m > 0
+#                      (positive sine), and OSA Z_n^m for m < 0 is
+#                      -N R_n^{|m|} sin(m*theta) = +N R_n^{|m|}
+#                      sin(|m|*theta) (positive sine, since sin is
+#                      odd).  The two conventions differ ONLY in
+#                      single-index ordering, which this kwarg
+#                      deliberately does not permute; if the caller
+#                      wants Noll's j-ordering they can permute after
+#                      the fact.  Per-mode factor = 1.
+#                      (v5.4-v5.17.0 applied a spurious factor = -1 on
+#                      m < 0 modes, matching NO published convention;
+#                      fixed per audit P2-02.)
 # * ``'Standard'``  -- ANSI/Z80.28-2010 Born-Wolf form.  Algebraically
 #                      identical to OSA (factor = 1).  Provided
 #                      explicitly so dock dropdowns don't have to
@@ -403,20 +411,19 @@ def _normalization_factors(n_modes: int, normalization: str) -> np.ndarray:
             "(not RMS-1) polynomials, so it cannot be implemented as a "
             "per-mode rescale of the OSA basis.  Planned for v5.5; "
             "use 'OSA' or 'Noll' for now.")
-    if normalization in ('OSA', 'Standard'):
-        # ANSI/Z80.28-2010 ('Standard') is algebraically identical to
-        # OSA/ANSI orthonormal -- both give N_n^m = sqrt(2(n+1)/
-        # (1+delta_{m,0})).  No rescale required.
-        return np.ones(n_modes, dtype=np.float64)
-    # 'Noll': flip sign on sine-like (m < 0) modes vs OSA.  Magnitudes
-    # are identical, so |c_j^{Noll}| = |c_j^{OSA}| and RMS aggregates
-    # are unchanged; only signs on m<0 entries differ.
-    s = np.ones(n_modes, dtype=np.float64)
-    for j in range(n_modes):
-        _n, m = zernike_index_to_nm(j)
-        if m < 0:
-            s[j] = -1.0
-    return s
+    # 'OSA' / 'Standard' / 'Noll' all share the same polynomials.
+    # ANSI/Z80.28-2010 ('Standard') is algebraically identical to
+    # OSA/ANSI orthonormal -- both give N_n^m = sqrt(2(n+1)/
+    # (1+delta_{m,0})).  Noll 1976's polynomials are ALSO identical,
+    # including the sine (m < 0) modes: Noll Eq. (2) is
+    # sqrt(2(n+1)) R_n^m sin(m*theta) with m > 0 and OSA's m < 0 mode
+    # is -N R sin(m*theta) = +N R sin(|m|*theta) -- the same positive
+    # sine.  The conventions differ only in single-index ORDERING,
+    # which is deliberately not permuted here.  (Audit P2-02: the
+    # former factor = -1 on m < 0 modes for 'Noll' matched no
+    # published convention and negated every true Noll sine
+    # coefficient; removed.)
+    return np.ones(n_modes, dtype=np.float64)
 
 
 def zernike_decompose(
@@ -452,14 +459,18 @@ def zernike_decompose(
         Also return the 2-D residual ``opd_map - reconstruction`` and
         its RMS.
     normalization : {'OSA', 'Noll', 'Standard', 'Fringe'}, default 'OSA'
-        Zernike normalization convention.  ``'OSA'`` (default) and
-        ``'Standard'`` (ANSI/Z80.28-2010 Born-Wolf form) are
-        orthonormal on the unit disk and produce algebraically
-        identical coefficients.  ``'Noll'`` (Noll 1976, J. Opt. Soc.
-        Am. 66, 207-211) has the same magnitudes as OSA but the
-        opposite sign convention on the sine-like (m < 0) modes --
-        i.e. ``c_j^{Noll} = -c_j^{OSA}`` for any j whose OSA azimuthal
-        order is negative; magnitudes and RMS-sums are unchanged.
+        Zernike normalization convention.  ``'OSA'`` (default),
+        ``'Standard'`` (ANSI/Z80.28-2010 Born-Wolf form) and
+        ``'Noll'`` (Noll 1976, J. Opt. Soc. Am. 66, 207-211) all use
+        the SAME orthonormal polynomials on the unit disk -- including
+        identical signs on the sine-like (m < 0) modes -- so all three
+        produce algebraically identical coefficients here.  Noll
+        differs from OSA only in single-index ordering, which this
+        kwarg deliberately does not permute (use
+        :func:`zernike_index_to_nm` to map indices).  Note: v5.4
+        through v5.17.0 wrongly negated the m < 0 coefficients for
+        ``'Noll'`` (audit P2-02); that matched no published convention
+        and has been removed.
         ``'Fringe'`` (Wyant / U-Arizona) raises
         ``NotImplementedError`` -- the Fringe convention uses a
         different mode set AND peak-value-1 polynomials, so it cannot

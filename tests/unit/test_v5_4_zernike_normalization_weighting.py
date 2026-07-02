@@ -15,8 +15,15 @@ Pins
    product directly).
 2. **``normalization='OSA'`` == default**: explicit OSA matches the
    no-kwarg path.
-3. **``normalization='Noll'``**: same magnitudes as OSA, but the
-   sine-like (m < 0) coefficients are sign-flipped.
+3. **``normalization='Noll'``**: identical coefficients to OSA for
+   EVERY mode (Noll 1976 and OSA/ANSI share the same polynomials,
+   including signs on the sine-like m < 0 modes; they differ only in
+   single-index ordering, which the kwarg does not permute).
+   [Updated for audit P2-02: the original pin asserted a sign flip on
+   m < 0 modes, circularly encoding a fabricated convention that
+   matched no published source.  See
+   tests/unit/test_audit_w5_analysis.py for the non-circular pin
+   against hand-written Noll 1976 Table I polynomials.]
 4. **``normalization='Bogus'`` raises ``ValueError``**; ``'Fringe'``
    raises ``NotImplementedError``.
 5. **``weighting=None`` == default**.
@@ -154,17 +161,30 @@ def test_normalization_standard_equals_osa(grid):
 
 
 # ----------------------------------------------------------------------
-# (3) 'Noll' flips sign on sine-like (m < 0) modes
+# (3) 'Noll' coefficients are identical to OSA on EVERY mode
 # ----------------------------------------------------------------------
+#
+# Audit P2-02 (v5.17.0 deep audit): the original version of this test
+# asserted c_noll[j] == -c_osa[j] for m < 0, but that pin was CIRCULAR
+# (it compared the library against its own OSA output plus the same
+# wrong premise baked into _normalization_factors).  Noll 1976 Eq. (2)
+# defines the sine modes as sqrt(2(n+1)) R_n^m sin(m*theta) with m > 0
+# (positive sine), and OSA/ANSI Z80.28 defines Z_n^m for m < 0 as
+# -N R sin(m*theta) = +N R sin(|m|*theta) -- the SAME positive sine.
+# The two conventions share identical polynomials and differ only in
+# single-index ordering (which the kwarg does not permute), so the
+# correct pin is exact equality.  The non-circular oracle against
+# hand-written Noll 1976 Table I polynomials lives in
+# tests/unit/test_audit_w5_analysis.py.
 
-def test_normalization_noll_changes_sign_on_odd_terms(grid):
-    """Noll 1976's sine convention is opposite to OSA, so coefficients
-    on negative-m OSA modes must be sign-flipped.  All cosine (m >= 0)
-    coefficients are unchanged in magnitude AND sign; sine (m < 0)
-    coefficients are unchanged in magnitude but flipped in sign.
+def test_normalization_noll_equals_osa_all_modes(grid):
+    """Noll 1976 and OSA/ANSI use identical polynomials (identical
+    signs on sine modes), so coefficients must match bit-for-bit on
+    every mode -- cosine, sine, and rotationally symmetric alike.
 
     Inject a pattern with non-zero coefficients on BOTH cosine and
-    sine modes so the sign-flip is testable.
+    sine modes so a fabricated sign flip (the pre-fix behavior) would
+    be caught.
     """
     n_modes = 12
     # Inject: tilt-Y (j=1, m=-1, sine), tilt-X (j=2, m=+1, cosine),
@@ -186,16 +206,10 @@ def test_normalization_noll_changes_sign_on_odd_terms(grid):
 
     for j in range(n_modes):
         _n, m = zernike_index_to_nm(j)
-        if m < 0:
-            # Sine term: sign flipped relative to OSA.
-            assert c_noll[j] == pytest.approx(-c_osa[j], abs=1e-18), (
-                f'j={j} (n,m)=({_n},{m}) sine term should flip sign '
-                f'under Noll; got OSA={c_osa[j]} Noll={c_noll[j]}')
-        else:
-            # Cosine / piston / defocus: identical to OSA.
-            assert c_noll[j] == pytest.approx(c_osa[j], abs=1e-18), (
-                f'j={j} (n,m)=({_n},{m}) non-sine term should match '
-                f'OSA; got OSA={c_osa[j]} Noll={c_noll[j]}')
+        assert c_noll[j] == pytest.approx(c_osa[j], abs=1e-18), (
+            f'j={j} (n,m)=({_n},{m}) must match OSA exactly (Noll '
+            f'polynomials are identical, incl. sine signs); got '
+            f'OSA={c_osa[j]} Noll={c_noll[j]}')
 
 
 # ----------------------------------------------------------------------
