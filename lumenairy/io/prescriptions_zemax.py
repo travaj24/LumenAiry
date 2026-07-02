@@ -381,6 +381,37 @@ def load_zemax_zmx(filepath: str,
                 # validate (surface_sag_q_bfs / q_con raise on a
                 # non-positive r_max).
                 q_r_max = 1.0
+        elif stype_u not in ('STANDARD', 'EVENASPH'):
+            # v5.17.1 (audit P2-19): unknown SURFTYPE.  Pre-fix, every
+            # non-QBFS/QCON type fell into the EVENASPH branch below,
+            # which interpreted its PARM table as even-asphere
+            # coefficients.  For sibling Zemax types the PARM slots
+            # mean something entirely different (TOROIDAL PARM 1 =
+            # radius of rotation in mm; ODDASPHE PARM n = coefficient
+            # of r^n; DGRATING PARM 1 = grating lines/um; PARAXIAL
+            # PARM 1 = focal length; ...), so the prescription silently
+            # acquired enormous fake aspheric sag (a TOROIDAL
+            # ``PARM 1 100.0`` became a_2 = 1e5 1/m -> 0.625 m of sag
+            # at r = 2.5 mm).  Import unknown types as the plain base
+            # conic (CURV/CONI are still honoured), SKIP the PARM
+            # table, and warn loudly per surface.
+            _dropped_parms = {
+                pn: pv for pn, pv in
+                (s.get('aspheric_params') or {}).items() if pn >= 1}
+            warnings.warn(
+                f"Zemax surface {s['surf_num']} has unsupported SURFTYPE "
+                f"'{stype_u}' (supported: STANDARD, EVENASPH, QBFS, QCON, "
+                f"COORDBRK). Importing it as a plain conic "
+                f"(curvature + conic only)"
+                + (f"; its PARM table {_dropped_parms} was DROPPED, not "
+                   f"interpreted as aspheric coefficients"
+                   if _dropped_parms else "")
+                + ". The imported surface shape is likely WRONG -- "
+                  "convert the surface to a supported type in Zemax "
+                  "before importing.",
+                UserWarning,
+                stacklevel=2,
+            )
         else:
             # Aspheric coefficients (EVENASPH and silent on STANDARD).
             # Zemax EVENASPH polynomial:
@@ -1180,6 +1211,33 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
         f.write('\n'.join(lines) + '\n')
 
 
+def _warn_dropped_qtype(surf_dict, surf_label):
+    """v5.17.1 (audit P2-20): warn LOUDLY when a Forbes Q-type freeform
+    surface (``freeform_type`` = ``'q_bfs'`` / ``'q_con'`` with its
+    ``q_bfs_coeffs`` / ``q_con_coeffs`` + ``r_max`` keys) is exported by
+    a ``.zmx`` writer that has no QBFS/QCON emission path.
+
+    Pre-fix both writers silently dropped these keys, so an exported
+    Q-type surface degraded to its base conic with no diagnostic and a
+    Zemax cross-check compared against the WRONG surface.
+    """
+    ftype = surf_dict.get('freeform_type')
+    if ftype is None:
+        return
+    coeff_key = f'{ftype}_coeffs'
+    warnings.warn(
+        f"Exported surface {surf_label} carries Forbes Q-type freeform "
+        f"keys (freeform_type='{ftype}', {coeff_key}="
+        f"{surf_dict.get(coeff_key)}, r_max={surf_dict.get('r_max')}) "
+        f"that this .zmx writer cannot emit -- the surface is written "
+        f"as its BASE CONIC ONLY. The exported file does NOT represent "
+        f"the freeform sag; re-enter the Q-type coefficients in Zemax "
+        f"manually before comparing results.",
+        UserWarning,
+        stacklevel=2,
+    )
+
+
 def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
                             stop_surface=None, aperture_diameter=None,
                             back_focal_length=None, name=None):
@@ -1374,6 +1432,12 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
         lines.append(f'SURF {surf_counter}')
         if comment:
             lines.append(f'  COMM {comment}')
+        # v5.17.1 (audit P2-20): Forbes Q-type freeform keys have no
+        # emission path in this writer -- warn LOUDLY instead of
+        # silently degrading the surface to its base conic, so the
+        # cross-verification workflow (LumenAiry vs OpticStudio) is
+        # never run against the wrong surface unawares.
+        _warn_dropped_qtype(e, surf_counter)
         if e_type == 'mirror':
             lines.append('  TYPE STANDARD')
             lines.append(f'  CURV {curv_val:.10f} 0 0 0 0 ""')
@@ -1381,6 +1445,27 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
                 lines.append(f'  CONI {conic:.6f}')
             lines.append('  GLAS MIRROR 0 0 1.5 50.0 0 0 0 0 0 0')
             lines.append(f'  DISZ {disz_mm:.8f}')
+            # v5.17.1 (audit P2-20): emit even-aspheric coefficients on
+            # mirrors too.  Pre-fix only the refractive branch below had
+            # the EVENASPH switch + PARM emission, so an aspherized
+            # mirror (e.g. an aspherized OAP) silently degraded to its
+            # base conic on export and load->export->load was not
+            # identity.  Same PARM mapping as refractives:
+            # parm_idx = power // 2 (v5.16.1 power = 2*parm_num
+            # convention), coefficient converted 1/m^(power-1) ->
+            # 1/mm^(power-1).
+            asph_m = e.get('aspheric_coeffs') or {}
+            if asph_m:
+                for j in range(len(lines) - 1, -1, -1):
+                    if lines[j] == '  TYPE STANDARD':
+                        lines[j] = '  TYPE EVENASPH'
+                        break
+                for power in sorted(asph_m.keys()):
+                    if power <= 0 or power % 2 != 0:
+                        continue
+                    parm_idx = power // 2
+                    coeff_mm = asph_m[power] * (1e3 ** (1 - power))
+                    lines.append(f'  PARM {parm_idx} {coeff_mm:.10e}')
             lines.append(f'  DIAM {sd_mm_e:.6f} 0 0 0 1 ""')
             mirror_count += 1
         else:
@@ -1569,6 +1654,10 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
         # Per-surface semi-diameter wins over the global aperture/2.
         sd_surf = surf.get('semi_diameter')
         sd_mm = float(sd_surf) * 1e3 if sd_surf is not None else semi_dia_mm
+
+        # v5.17.1 (audit P2-20): warn loudly instead of silently
+        # dropping Forbes Q-type freeform coefficients.
+        _warn_dropped_qtype(surf, idx)
 
         lines.append(f'SURF {idx}')
         lines.append('  TYPE STANDARD')
