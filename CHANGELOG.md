@@ -2,6 +2,88 @@
 
 All notable changes to the core library are documented here.
 
+## [5.17.0] — 2026-07-01
+
+### Changed (row-band lens mode ON by default — auto)
+
+- **`sag_chunk_rows=None` now resolves to AUTO**: the row-band lens path is
+  the default for grids with `N >= 4096` (band = `max(256, N // 16)`);
+  smaller grids keep the whole-grid path exactly as before.  Rationale for
+  a default flip: the banded path is **byte-identical** (`np.array_equal`-
+  pinned across preserve_input_phase modes, band sizes, and fallback
+  surfaces), **wall-clock neutral** (133 vs 136 s at N=16384/sub=16; the
+  banded assembly cost is offset by a 3.5x faster Newton fed contiguous
+  coarse grids), and dramatically leaner (43.6 -> 18.4 GB traced-lens peak
+  at N=16384 pre-lifetime-fixes).  Pass ``sag_chunk_rows=0`` to force the
+  whole-grid path; an explicit positive int sets the band size.  The
+  memory estimator mirrors the same auto rule so estimates match a
+  default call.
+
+### Added (row-band lens memory mode — the fidelity-preserving large-grid enabler)
+
+- **`sag_chunk_rows` (BYTE-IDENTICAL)** on `apply_real_lens` and
+  `apply_real_lens_traced` -- runs the per-surface phase screens AND the traced
+  OPL-upsample/exit-assembly in row bands, so the full-grid float64 lens stack
+  (coordinate meshgrids, sag/opd, `np.indices` + the `(2,N,N)` map_coordinates
+  input, `delta_phase`, the complex128-first `phase_exp`) never materialises.
+  Element-identical to the whole-grid path (`np.array_equal`-pinned; the
+  order-1 `map_coordinates` upsample is pointwise in the output). Measured
+  traced-lens peak at N=16384/sub=16/c64: **43.6 -> 18.4 GB** (whole-grid vs
+  chunked) -- 45% below even the v3.2.14.1-era 33.2 GB. This restores
+  full-fidelity N=32768 runs on 128-137 GB boxes with NO accuracy trade.
+  Non-narrow surfaces (decenter/tilt/slant/fresnel/stop/biconic/freeform)
+  fall through to the whole-grid path per surface (meshgrids built lazily),
+  so mixed prescriptions remain exact.
+- **`sag_dtype` (opt-in, accuracy-trading)** on the same functions +
+  process-wide `set_lens_sag_dtype` / `get_lens_sag_dtype` -- float32 geometry
+  (coordinate/sag/opd lineage), halving the float64 core. Gated by
+  **`lens_sag_float32_opd_error`**: a radial OPD scan + a field-level float32
+  vs float64 A/B. The field error is CONFIG-dependent (the f32 phase
+  perturbation interferes through in-glass diffraction), so pass your
+  production `field_check_dx=` for sign-off; the default coarse check is a
+  gross-failure screen only.
+- **Estimator + guardrail understand chunking**: `estimate_lens_memory` /
+  `estimate_sim_memory` / `check_sim_memory` take `sag_chunk_rows`
+  (calibrated 18.4 GB anchor), and the guardrail's claw-back ladder now
+  RECOMMENDS the byte-identical row-band mode FIRST -- before any
+  dtype/subsample/grid reduction that would trade fidelity.
+
+### Fixed (memory root-cause -- benefits DEFAULT whole-grid runs too)
+
+Stage-profiling the identical lens on the archived 3.2.14.1 vs 5.16.1
+measured a **+32% traced-lens peak-memory growth** (33.2 -> 43.6 GB at
+N=16384/sub=16/c64), which is what moved full-grid N=32768 traced runs from
+fits-on-128-GB (historical Design-51/71 runs) to OOM. tracemalloc per-line
+attribution pinned it (the suspected polynomial-Newton fit was innocent,
+~0.07 GB coarse-scale) and the components are now fixed:
+
+- **v4.10 tilt-detection leak (the big one).**  The `tilt_aware_rays=False`
+  advisory check computed `np.abs` / mask / `np.angle` / `np.gradient` of
+  the full input field and left all five arrays referenced by the function
+  frame for the REST of the lens call -- ~4 full-grid float32 + a bool
+  (~18 GB at N=32768) held through the ray trace, Newton, and assembly.
+  Now freed immediately after the RMS is computed (pure lifetime fix;
+  values, outputs, and the warning behaviour unchanged).
+- **Whole-grid OPL upsample built the `(2, N, N)` `map_coordinates`
+  coordinate stack twice** (once for the OPL, once for the NaN mask) with
+  `ii`/`jj` held throughout -- ~4 extra full-grid float64 (~34 GB at
+  N=32768) at the upsample peak, present since 3.2.14.1.  Built once,
+  freed early; identical coords -> byte-identical outputs.
+- **Eager frees in the whole-grid exit assembly** (`opl_map` /
+  `delta_phase` / `phase_exp` dropped as soon as their consumer exists).
+- **`set_fft_double_buffer(False)` / `get_fft_double_buffer`** -- opt-out
+  for the v4.12 two-buffer pyFFTW ping-pong (the one remaining deliberate
+  delta vs 3.2.14.1: one extra resident full-grid aligned buffer per plan
+  key, 16 GiB/key at N=32768 complex128).  Disabling returns
+  `buf.copy()` per FFT instead -- byte-identical values, ~one extra copy
+  per transform.  Folded into `set_low_memory(True)`.
+
+Post-fix tracemalloc (N=4096 probe): assembly-stage peak and end-of-call
+residual are now BELOW the 3.2.14.1 baseline (2.83 -> 1.88 GB and 2.43 ->
+1.34 GB vs archived 2.33 / 1.93); the overall whole-grid peak is within
+~8% of 3.2.14.1, all of it the (opt-out-able) double buffer.
+`sag_chunk_rows` remains far leaner still, at zero fidelity cost.
+
 ## [5.16.1] — 2026-06-25
 
 ### Added (memory estimation + autodetect guardrail)

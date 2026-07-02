@@ -1106,12 +1106,17 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     from scipy.ndimage import map_coordinates
     ii, jj = np.indices((N, N), dtype=np.float64)
     coords = np.array([ii * N_c / N, jj * N_c / N])
+    # v5.17.0 lifetime hygiene (same pattern as the Newton-path upsample):
+    # ii/jj are folded into coords -- free them before interpolating, and
+    # free coords before the final mask combine.  Byte-identical.
+    del ii, jj
     opl_map = map_coordinates(
         np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
         coords, order=1, mode='nearest')
     nan_coarse = np.isnan(opl_coarse).astype(np.float64)
     nan_full = map_coordinates(
         nan_coarse, coords, order=1, mode='nearest')
+    del coords
     opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
     return opl_map
 
@@ -1143,6 +1148,8 @@ def apply_real_lens_traced(
     use_gpu: bool = False,
     amp_use_gpu: bool = False,
     wave_propagator: Optional[str] = None,
+    sag_dtype: Optional[Any] = None,
+    sag_chunk_rows: Optional[int] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -1521,7 +1528,31 @@ def apply_real_lens_traced(
                     )
 
     x = (np.arange(N) - N / 2) * dx
-    X, Y = np.meshgrid(x, x)
+    # Opt-in row-band (chunked) FINAL ASSEMBLY: when ``sag_chunk_rows`` is set
+    # (and the standard sub>1 Newton path is active), the OPL upsample +
+    # delta-phase + exit-field assembly run in row bands, so the full-grid
+    # float64 stack (ii/jj indices, the (2,N,N) map_coordinates input,
+    # opl_map, nan_full, delta_phase, the complex128-first phase_exp) never
+    # materialises -- only (chunk_rows x N) bands.  Values are byte-identical
+    # to the whole-grid path (map_coordinates order-1 is pointwise in the
+    # output; the phase/mask algebra is elementwise) -- pinned by
+    # test_chunked_assembly_byte_identical.  The full X/Y meshgrids are not
+    # built on this path: the Newton coarse grid comes from the 1-D x
+    # subsample and the exit-aperture mask is banded.
+    # v5.17.0: sag_chunk_rows=None resolves to AUTO (banded when N >= 4096);
+    # pass 0 to force the whole-grid path.  The resolved value also flows to
+    # the apply_real_lens amp legs so both stages band consistently.
+    from ._lens_real import _resolve_sag_chunk_rows
+    sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, N)
+    _chunk_assembly = (
+        sag_chunk_rows is not None and int(sag_chunk_rows) > 0
+        and max(1, int(ray_subsample)) > 1
+        and inversion_method == 'newton'
+    )
+    if _chunk_assembly:
+        X = Y = None
+    else:
+        X, Y = np.meshgrid(x, x)
 
     # ----- Step 1: amplitude envelope from the ANALYTIC lens model -----
     #
@@ -1611,6 +1642,7 @@ def apply_real_lens_traced(
                 E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                 bandlimit=bandlimit, use_gpu=amp_use_gpu,
                 wave_propagator=wave_propagator,
+                sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
                 progress=lambda stage, frac, msg='':
                     amp_cb(frac, f'amp: {msg}'))
 
@@ -1634,7 +1666,9 @@ def apply_real_lens_traced(
                 return apply_real_lens(
                     ones_input, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
-                    wave_propagator=wave_propagator, progress=None)
+                    wave_propagator=wave_propagator,
+                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                    progress=None)
 
             with ThreadPoolExecutor(max_workers=2,
                                     thread_name_prefix='rlt_amp') as _tp:
@@ -1652,6 +1686,7 @@ def apply_real_lens_traced(
         E_analytic = apply_real_lens(
             E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx, bandlimit=bandlimit,
             use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
+            sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
             progress=lambda stage, frac, msg='': amp_cb(frac, f'amp: {msg}'))
         _xp = cp if _is_cupy_array(E_analytic) else np
         amp = _xp.abs(E_analytic)
@@ -1681,6 +1716,7 @@ def apply_real_lens_traced(
                     np.ones_like(E_in), prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator,
+                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
                     progress=lambda stage, frac, msg='':
                         analytic_pw_cb(frac, f'amp(pw): {msg}'))
                 phase_analytic_lens = _xp.angle(E_analytic_pw)
@@ -1814,13 +1850,24 @@ def apply_real_lens_traced(
             E_arr = np.asarray(E_in)
             mag = np.abs(E_arr)
             mask = mag > 0.05 * mag.max()
+            del mag
             if mask.any():
                 phase = np.angle(E_arr)
                 dpy, dpx = np.gradient(phase, dx, dx)
+                del phase
                 k0 = 2.0 * np.pi / wavelength
                 tilt_rms = float(np.sqrt(
                     (np.mean((dpx[mask] / k0) ** 2)
                      + np.mean((dpy[mask] / k0) ** 2))))
+                # v5.16.2 (memory root-cause): free the full-grid
+                # diagnostics IMMEDIATELY.  Pre-fix, mag/mask/phase/dpx/
+                # dpy stayed referenced by this frame for the REST of the
+                # lens call -- ~4 full-grid float32 + a bool (~18 GB at
+                # N=32768) held through the ray trace, Newton, and
+                # assembly.  tracemalloc-attributed as the largest single
+                # component of the 3.2.14.1 -> 5.16.x traced-lens memory
+                # growth.  Values/output unchanged (pure lifetime fix).
+                del dpx, dpy
                 if tilt_rms > 1e-4:
                     import warnings
                     warnings.warn(
@@ -1832,6 +1879,7 @@ def apply_real_lens_traced(
                         "for tilt-sensitive analyses.",
                         RuntimeWarning, stacklevel=3,
                     )
+            del E_arr, mask
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 AttributeError, TypeError):
             # tilt-RMS estimation is best-effort; suppressing the
@@ -2372,9 +2420,16 @@ def apply_real_lens_traced(
             E_analytic, lens_prescription, wavelength, dx,
             N_grid=N, ray_subsample=sub)
     elif sub > 1:
-        # Evaluate Newton on sub-sampled output grid
-        Xs = X[::sub, ::sub]
-        Ys = Y[::sub, ::sub]
+        # Evaluate Newton on sub-sampled output grid.  On the chunked-
+        # assembly path the full X/Y meshgrids were never built; the coarse
+        # grid from the 1-D subsampled vector is element-identical to
+        # ``X[::sub, ::sub]`` (meshgrid(x,x) is x[j]/x[i] replicated).
+        if X is None:
+            _x_c = x[::sub]
+            Xs, Ys = np.meshgrid(_x_c, _x_c)
+        else:
+            Xs = X[::sub, ::sub]
+            Ys = Y[::sub, ::sub]
         amp_coarse = amp[::sub, ::sub]
         mask_coarse = _build_newton_mask(amp_coarse)
         if mask_coarse is None:
@@ -2390,18 +2445,36 @@ def apply_real_lens_traced(
         # Bilinearly interpolate to full grid
         from scipy.ndimage import map_coordinates
         Ns = opl_coarse.shape[0]
-        ii, jj = np.indices((N, N), dtype=np.float64)
-        opl_map = map_coordinates(
-            np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
-            np.array([ii * Ns / N, jj * Ns / N]),
-            order=1, mode='nearest')
-        # Propagate NaN mask
-        nan_coarse = np.isnan(opl_coarse).astype(np.float64)
-        nan_full = map_coordinates(
-            nan_coarse,
-            np.array([ii * Ns / N, jj * Ns / N]),
-            order=1, mode='nearest')
-        opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
+        if _chunk_assembly:
+            # Row-band path: defer the upsample into the Step-3 band loop
+            # (map_coordinates order-1 is pointwise in the output, so the
+            # banded interpolation is element-identical).  Only the SMALL
+            # coarse arrays are kept; the full-grid ii/jj index pair, the
+            # (2, N, N) coords stack, opl_map and nan_full never allocate.
+            _opl_coarse_clean = np.where(
+                np.isnan(opl_coarse), 0.0, opl_coarse)
+            _nan_coarse = np.isnan(opl_coarse).astype(np.float64)
+            opl_map = None
+        else:
+            # v5.16.2 (memory root-cause): build the (2, N, N) coordinate
+            # stack ONCE and free ii/jj before interpolating.  Pre-fix the
+            # stack was constructed twice (once per map_coordinates call)
+            # with ii/jj held throughout -- ~4 extra full-grid float64
+            # (~34 GB at N=32768) at the upsample peak.  Same coords,
+            # same map_coordinates inputs -> byte-identical outputs.
+            ii, jj = np.indices((N, N), dtype=np.float64)
+            _coords = np.array([ii * Ns / N, jj * Ns / N])
+            del ii, jj
+            opl_map = map_coordinates(
+                np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
+                _coords, order=1, mode='nearest')
+            # Propagate NaN mask
+            nan_coarse = np.isnan(opl_coarse).astype(np.float64)
+            nan_full = map_coordinates(
+                nan_coarse, _coords, order=1, mode='nearest')
+            del _coords
+            opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
+            del nan_full
     else:
         mask_full = _build_newton_mask(amp)
         if mask_full is None:
@@ -2438,24 +2511,81 @@ def apply_real_lens_traced(
     #   measuring the lens-only OPD on a plane-wave input, where the
     #   input-phase question is moot.
     k0 = 2.0 * np.pi / wavelength
-    valid = np.isfinite(opl_map)
     # Preserve the caller's complex dtype: apply_real_lens (called
     # above to build E_analytic / amp) already returns a field in
     # E_in.dtype, but the ``* np.exp(1j * ...)`` multiply here would
     # silently upcast to complex128 unless we cast the exp() result.
     target_cdtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
+    if _chunk_assembly and opl_map is None:
+        # Row-band assembly: upsample + delta-phase + combine + masks per
+        # (chunk_rows x N) band, writing into E_analytic in place (it is not
+        # read again after its own band is consumed).  Element-identical to
+        # the whole-grid branch below: map_coordinates(order=1) interpolates
+        # each output point independently from the WHOLE coarse grid, and
+        # every other op is pointwise; the band aperture term
+        # ``x[j]^2 + x[i]^2`` reproduces ``(X**2 + Y**2)[r0:r1]`` exactly.
+        from scipy.ndimage import map_coordinates
+        cr = int(sag_chunk_rows)
+        r_ap_sq = (aperture / 2) ** 2 if aperture is not None else None
+        E_out = E_analytic
+        for r0 in range(0, N, cr):
+            r1 = min(N, r0 + cr)
+            ii_b, jj_b = np.indices((r1 - r0, N), dtype=np.float64)
+            if r0:
+                ii_b += r0
+            coords_b = np.array([ii_b * Ns / N, jj_b * Ns / N])
+            opl_b = map_coordinates(_opl_coarse_clean, coords_b,
+                                    order=1, mode='nearest')
+            nan_b = map_coordinates(_nan_coarse, coords_b,
+                                    order=1, mode='nearest')
+            del ii_b, jj_b, coords_b
+            opl_b = np.where(nan_b > 0.5, np.nan, opl_b)
+            valid_b = np.isfinite(opl_b)
+            if preserve_input_phase:
+                dp_b = np.where(
+                    valid_b, k0 * opl_b - phase_analytic_lens[r0:r1], 0.0)
+            else:
+                dp_b = np.where(valid_b, k0 * opl_b, 0.0)
+            pe_b = np.exp(1j * dp_b)
+            if pe_b.dtype != target_cdtype:
+                pe_b = pe_b.astype(target_cdtype)
+            if preserve_input_phase:
+                band = E_analytic[r0:r1] * pe_b
+            else:
+                band = amp[r0:r1] * pe_b
+            band = np.where(valid_b, band, target_cdtype.type(0))
+            if r_ap_sq is not None:
+                h_b = x[None, :] ** 2 + x[r0:r1, None] ** 2
+                band = np.where(h_b <= r_ap_sq, band,
+                                target_cdtype.type(0))
+            E_out[r0:r1] = band
+        if E_out.dtype != target_cdtype:
+            E_out = E_out.astype(target_cdtype)
+        call_progress(progress, 'real_lens_traced', 1.0, 'done')
+        return E_out
+    valid = np.isfinite(opl_map)
+    # v5.16.2: free each full-grid intermediate as soon as its consumer is
+    # built (delta_phase/phase after phase_exp; phase_exp after E_out;
+    # opl_map after the phase build).  Pure lifetime fixes -- values and
+    # outputs unchanged.
     if preserve_input_phase:
         delta_phase = np.where(valid, k0 * opl_map - phase_analytic_lens, 0.0)
+        del opl_map
         phase_exp = np.exp(1j * delta_phase)
+        del delta_phase
         if phase_exp.dtype != target_cdtype:
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = E_analytic * phase_exp
+        del phase_exp
     else:
         phase = np.where(valid, k0 * opl_map, 0.0)
+        del opl_map
         phase_exp = np.exp(1j * phase)
+        del phase
         if phase_exp.dtype != target_cdtype:
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = amp * phase_exp
+        del phase_exp
     # Zero outside the exit-pupil (ray-coverage) region
     E_out = np.where(valid, E_out, target_cdtype.type(0))
     # And outside the entrance aperture (defensive: in practice the

@@ -919,7 +919,12 @@ from ._lens_jax import (  # noqa: E402, F401
 # existing `from lumenairy.elements.lenses import apply_real_lens`
 # imports continue to work.
 # ---------------------------------------------------------------------------
-from ._lens_real import apply_real_lens  # noqa: E402, F401
+from ._lens_real import (  # noqa: E402, F401
+    apply_real_lens,
+    get_lens_sag_dtype,
+    lens_sag_float32_opd_error,
+    set_lens_sag_dtype,
+)
 
 # ---------------------------------------------------------------------------
 # Thin-lens / single-element phase screens were moved to
