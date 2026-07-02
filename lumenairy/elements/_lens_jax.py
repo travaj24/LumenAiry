@@ -401,6 +401,18 @@ def apply_real_lens_traced_jax(
       replaces the first, JAX's GPU backend the second, and the
       tilt-aware launch falls naturally out of the OPD-screen model
       (``E_in``'s phase is preserved through the multiply).
+    * The v5.17.0 row-band memory mode (``sag_chunk_rows``, the NumPy
+      default at N >= 4096) is NOT replicated either: this function
+      allocates fully monolithic ``(N, N)`` wave grids and phase
+      screens, plus an ``(cheb_order + 1, N, N)`` Chebyshev stack
+      inside the Newton loop, and reverse-mode autodiff additionally
+      retains forward residuals for the tape.
+      :func:`lumenairy.memory.estimate_lens_memory` does NOT model
+      this JAX path.  For memory-bound large grids use the NumPy
+      :func:`apply_real_lens_traced` (row-banded by default), or
+      budget for the full monolithic cost here.  (The
+      ``amplitude='analytic'`` callback leg runs the NumPy
+      :func:`apply_real_lens` and does inherit its row-band default.)
     """
     if not _jax_available():
         raise ImportError(
@@ -638,6 +650,11 @@ def apply_real_lens_maslov_jax(
     Parameters and gradient flow are identical to
     :func:`apply_real_lens_traced_jax`.  Differentiable through
     ``E_in``; lens prescription is treated as a static closure.
+    The Notes there apply here too -- in particular, the v5.17.0
+    row-band memory mode (``sag_chunk_rows``) is NOT replicated:
+    allocation is fully monolithic ``(N, N)`` (plus the
+    ``(cheb_order + 1, N, N)`` Chebyshev stack), so for memory-bound
+    large grids use the NumPy path or budget for the monolithic cost.
 
     The Maslov correction is implemented as:
 

@@ -186,6 +186,140 @@ def test_lens_sag_float32_opd_error_validator():
             {'surfaces': _presc()['surfaces']}, LAM)  # no aperture
 
 
+# ---------------------------------------------------------------------------
+# v5.17.1 audit wave-2 fixes (AUDIT_V5_17_0_2026_07_01_DEEP, lens-chunked
+# cluster): P2-04 / P2-05 / P3-08 / P3-09 / P3-06 / P3-05.
+# ---------------------------------------------------------------------------
+
+def _zernike_presc():
+    p = _presc()
+    p['surfaces'][0] = dict(p['surfaces'][0], freeform_type='zernike',
+                            zernike_coeffs={8: 2e-8}, norm_radius=1.5e-3)
+    return p
+
+
+def test_chunked_freeform_warns_and_falls_through():
+    """P2-04: a non-Q freeform surface (zernike) must fall through to the
+    whole-grid path on the chunked run so the 'freeform departure is NOT
+    included' RuntimeWarning keeps firing (pre-fix the band loop silently
+    dropped the departure with no diagnostic).  Outputs stay byte-identical
+    (the departure was dropped on both paths)."""
+    N, dx = 256, 8e-6
+    E = _field(N, dx, w=0.6e-3)
+    kw = dict(prescription=_zernike_presc(), wavelength=LAM, dx=dx)
+    with pytest.warns(RuntimeWarning, match='freeform departure'):
+        Ew = apply_real_lens(E.copy(), sag_chunk_rows=0, **kw)
+    with pytest.warns(RuntimeWarning, match='freeform departure'):
+        Ec = apply_real_lens(E.copy(), sag_chunk_rows=64, **kw)
+    assert np.array_equal(Ew, Ec)
+
+
+def test_traced_forwards_raw_sag_chunk_rows_to_amp_legs(monkeypatch):
+    """P2-05: sag_chunk_rows=0 (documented force-whole-grid) must survive
+    into the internal apply_real_lens amp legs.  Pre-fix the traced function
+    forwarded the RESOLVED value (0 -> None), which the inner call
+    re-resolved to AUTO banding at N >= 4096."""
+    from lumenairy.elements import _lens_traced as lt
+    from lumenairy.elements._lens_real import _resolve_sag_chunk_rows
+
+    N, dx = 256, 8e-6
+    E = _field(N, dx, w=0.6e-3)
+    kw = dict(prescription=_presc(), wavelength=LAM, dx=dx,
+              ray_subsample=4, parallel_amp=False)
+
+    seen = []
+    orig = lt.apply_real_lens
+
+    def spy(*a, **k):
+        seen.append(k['sag_chunk_rows'])
+        return orig(*a, **k)
+
+    monkeypatch.setattr(lt, 'apply_real_lens', spy)
+    apply_real_lens_traced(E.copy(), sag_chunk_rows=0, **kw)
+    assert seen, "amp legs never called"
+    # The forwarded value must force whole-grid at ANY N when re-resolved
+    # by the inner apply_real_lens (0 -> whole grid; the pre-fix None
+    # re-resolved to a 1024-row band at N=16384).
+    assert all(_resolve_sag_chunk_rows(v, 16384) is None for v in seen), seen
+    # Explicit positive ints round-trip untouched.
+    seen.clear()
+    apply_real_lens_traced(E.copy(), sag_chunk_rows=64, **kw)
+    assert all(v == 64 for v in seen), seen
+
+
+def test_undersample_floor_enforced_without_aperture():
+    """P3-08: the min_coarse_samples_per_aperture floor must also fire for
+    prescriptions WITHOUT aperture_diameter (pre-fix it was silently
+    skipped), using the largest per-surface clear_aperture when present,
+    else the launch diameter (grid extent)."""
+    N, dx = 256, 1.5e-5
+    E = _field(N, dx, w=1.5e-3)
+    kw = dict(wavelength=LAM, dx=dx, parallel_amp=False)
+    p_noap = _presc()
+    p_noap.pop('aperture_diameter')
+    # Grid-extent fallback: N/sub = 16 coarse samples < 32 -> raises.
+    with pytest.raises(ValueError, match='coarse samples'):
+        apply_real_lens_traced(E.copy(), prescription=p_noap,
+                               ray_subsample=16, **kw)
+    # clear_aperture fallback: 1 mm pupil / (8 * 15 um) = 8.3 < 32 even
+    # though the grid extent would pass (N/sub = 32).
+    p_ca = _presc()
+    p_ca.pop('aperture_diameter')
+    p_ca['surfaces'][0] = dict(p_ca['surfaces'][0], clear_aperture=1.0e-3)
+    with pytest.raises(ValueError, match='clear_aperture'):
+        apply_real_lens_traced(E.copy(), prescription=p_ca,
+                               ray_subsample=8, **kw)
+    # A well-sampled apertureless run still completes (N/sub = 64 >= 32).
+    out = apply_real_lens_traced(E.copy(), prescription=p_noap,
+                                 ray_subsample=4, **kw)
+    assert np.all(np.isfinite(out))
+
+
+def test_amp_freed_before_assembly_on_preserve_path():
+    """P3-09: on the sub>1 preserve_input_phase=True path the full-grid
+    |E_analytic| array is dead after the coarse subsample; it must be freed
+    (del'd) before the band assembly.  Byte-identity with the whole-grid
+    path must survive the eager free."""
+    import sys
+
+    N, dx = 256, 8e-6
+    E = _field(N, dx, w=0.6e-3)
+    seen = {}
+
+    def prog(stage, frac, msg=''):
+        if 'assembling' in msg:
+            f = sys._getframe(1)
+            while f is not None and \
+                    f.f_code.co_name != 'apply_real_lens_traced':
+                f = f.f_back
+            assert f is not None, "traced frame not found"
+            seen['amp_alive'] = 'amp' in f.f_locals
+
+    kw = dict(prescription=_presc(), wavelength=LAM, dx=dx,
+              ray_subsample=4, parallel_amp=False, progress=prog)
+    T_chunk = apply_real_lens_traced(E.copy(), sag_chunk_rows=64, **kw)
+    assert seen.get('amp_alive') is False, (
+        "full-grid amp still resident at band assembly")
+    T_whole = apply_real_lens_traced(E.copy(), sag_chunk_rows=0, **kw)
+    assert np.array_equal(T_chunk, T_whole)
+
+
+def test_public_docstrings_document_memory_knobs():
+    """P3-06 + P3-05: the v5.17.0 knobs must be discoverable via help() on
+    both NumPy propagators, and the JAX twins must document the ABSENCE of
+    the row-band mode."""
+    for fn in (apply_real_lens, apply_real_lens_traced):
+        doc = fn.__doc__ or ''
+        assert 'sag_dtype' in doc, fn.__name__
+        assert 'sag_chunk_rows' in doc, fn.__name__
+        assert 'lens_sag_float32_opd_error' in doc, fn.__name__
+    from lumenairy.elements import _lens_jax
+    for fn in (_lens_jax.apply_real_lens_traced_jax,
+               _lens_jax.apply_real_lens_maslov_jax):
+        assert 'sag_chunk_rows' in (fn.__doc__ or ''), fn.__name__
+        assert 'monolithic' in (fn.__doc__ or ''), fn.__name__
+
+
 def test_v5_17_0_auto_default_byte_identical_at_threshold():
     """At N >= 4096 the DEFAULT (sag_chunk_rows=None -> auto row-band) must
     produce byte-identical results to the forced whole-grid path

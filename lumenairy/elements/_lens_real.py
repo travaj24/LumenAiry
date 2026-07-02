@@ -640,6 +640,30 @@ def apply_real_lens(
         sag's curvature must rotate with the surface, not just acquire
         a linear ramp.  See the "Field-frame vs surface-frame
         decenter / tilt" docstring section above for the physics.
+    sag_dtype : {None, np.float32, np.float64}, default None
+        v5.17.0 opt-in geometry (coordinate/sag/OPD) dtype.  ``None``
+        (default) resolves to the process-wide
+        :func:`set_lens_sag_dtype` value, which defaults to float64 --
+        byte-identical to prior releases.  ``np.float32`` halves the
+        float64 coordinate/sag/opd core (enabling larger grids) but is
+        ACCURACY-RISKY: the exit-field error scales with the total sag
+        depth and is config-dependent (dx / grid fill), so validate
+        the prescription with :func:`lens_sag_float32_opd_error` at
+        your production sampling before trusting a float32-sag result.
+    sag_chunk_rows : int or None, default None
+        v5.17.0 row-band (chunked) sag / phase-screen evaluation.
+        ``None`` -> AUTO: row-banded (``max(256, N // 16)`` rows per
+        band) when ``N >= 4096``, whole-grid below.  ``0`` forces the
+        whole-grid path; a positive int forces that band size.  The
+        banded path is BYTE-IDENTICAL to the whole-grid path (every
+        banded op is pointwise, same numexpr complex128-internal
+        phase screen) and wall-clock neutral, while the full-grid
+        coordinate / sag / OPD transients never materialise (~tens of
+        GB reclaimed at N=32768).  Surfaces outside the narrow
+        chunk-eligible case (decenter / tilt / form error / biconic /
+        freeform / clear_aperture / stop surface / fresnel / slant /
+        surface-frame, or a non-NumPy backend) fall through to the
+        whole-grid path per surface.
 
     Returns
     -------
@@ -923,7 +947,15 @@ def apply_real_lens(
             and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
             and surf.get('form_error') is None
             and surf.get('radius_y') is None
-            and surf.get('freeform_type') not in ('q_bfs', 'q_con')
+            # v5.17.1 (audit P2-04): ANY freeform_type falls through to the
+            # whole-grid path -- Q-bfs / Q-con so their departure IS
+            # computed there, and the non-Q types (zernike / xy_polynomial
+            # / chebyshev) so the whole-grid path's "freeform departure is
+            # NOT included" RuntimeWarning keeps firing on the (default)
+            # banded path.  Pre-fix the band loop silently dropped the
+            # departure for non-Q types with no diagnostic.  Outputs are
+            # unchanged (the departure was dropped on both paths).
+            and surf.get('freeform_type') is None
             and surf.get('clear_aperture') is None
             and not (stop_index is not None and i == stop_index
                      and aperture is not None)

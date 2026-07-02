@@ -1245,10 +1245,15 @@ def apply_real_lens_traced(
     min_coarse_samples_per_aperture : int, default 32
         Guardrail against undersampled Newton inversion.  After
         ``ray_subsample`` is applied, the coarse output grid must have
-        at least this many samples spanning the lens aperture (or
-        ``launch_radius`` if no explicit aperture is set), otherwise
-        the cubic-spline interpolation of the wavefront will alias and
-        the result will be wrong.
+        at least this many samples spanning the lens aperture,
+        otherwise the cubic-spline interpolation of the wavefront will
+        alias and the result will be wrong.  When the prescription has
+        no ``aperture_diameter``, the effective pupil is the largest
+        per-surface ``clear_aperture`` (capped at the launch diameter)
+        if any surface carries one, else the launch diameter itself
+        (= the grid extent ``N * dx``).  (v5.17.1, audit P3-08:
+        previously the check was silently SKIPPED for apertureless
+        prescriptions.)
 
         Empirical scaling on a singlet at lambda = 1.31 um:
 
@@ -1355,6 +1360,24 @@ def apply_real_lens_traced(
         the coarse grid is below ~200 k pixels (pool startup cost
         dominates) or when pool spawn fails.  Measured speedup on
         large grids: ~8x on 16 cores.
+
+    sag_dtype : {None, np.float32, np.float64}, default None
+        v5.17.0 opt-in geometry dtype, forwarded to the internal
+        :func:`apply_real_lens` amplitude legs.  ``None`` (default)
+        resolves to the process-wide :func:`set_lens_sag_dtype` value
+        (float64 by default -- byte-identical to prior releases).
+        ``np.float32`` is ACCURACY-RISKY -- validate the prescription
+        with :func:`lens_sag_float32_opd_error` first.  See
+        :func:`apply_real_lens` for details.
+    sag_chunk_rows : int or None, default None
+        v5.17.0 row-band (chunked) memory mode: banded per-surface
+        phase screens inside the internal :func:`apply_real_lens`
+        amplitude legs AND banded OPL-upsample / exit-field assembly
+        here (the latter on the ``ray_subsample > 1`` Newton path).
+        ``None`` -> AUTO: row-banded (``max(256, N // 16)`` rows per
+        band) when ``N >= 4096``, whole-grid below.  ``0`` forces the
+        whole-grid path in BOTH stages; a positive int forces that
+        band size.  Byte-identical to the whole-grid path.
 
     Returns
     -------
@@ -1540,9 +1563,18 @@ def apply_real_lens_traced(
     # built on this path: the Newton coarse grid comes from the 1-D x
     # subsample and the exit-aperture mask is banded.
     # v5.17.0: sag_chunk_rows=None resolves to AUTO (banded when N >= 4096);
-    # pass 0 to force the whole-grid path.  The resolved value also flows to
-    # the apply_real_lens amp legs so both stages band consistently.
+    # pass 0 to force the whole-grid path.  The caller's RAW kwarg also flows
+    # to the apply_real_lens amp legs so both stages resolve -- and band --
+    # consistently.
+    # v5.17.1 (audit P2-05): forward the RAW kwarg, not the resolved value.
+    # The resolver maps 0 -> None, and apply_real_lens re-resolves None ->
+    # AUTO, so forwarding the resolved value silently re-enabled row-banding
+    # in the amp legs when the caller passed the documented force-whole-grid
+    # sentinel 0.  Both stages resolve the raw value against the same N, so
+    # None / positive ints band identically in both stages and 0 now forces
+    # whole-grid in BOTH.
     from ._lens_real import _resolve_sag_chunk_rows
+    _sag_chunk_rows_raw = sag_chunk_rows
     sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, N)
     _chunk_assembly = (
         sag_chunk_rows is not None and int(sag_chunk_rows) > 0
@@ -1616,7 +1648,14 @@ def apply_real_lens_traced(
     if _use_parallel_amp:
         try:
             import psutil as _psutil
-            _free_gb = _psutil.virtual_memory().available / 1e9
+
+            # v5.17.2 (audit P2-21): honour a pinned set_max_ram() budget --
+            # the doubled parallel working set must fit the effective
+            # budget, not just physical free RAM (get_ram_budget() equals
+            # the psutil read when no override is set).
+            from ..memory import get_ram_budget
+            _free_gb = min(int(_psutil.virtual_memory().available),
+                           get_ram_budget()) / 1e9
             if _free_gb < parallel_amp_min_free_gb:
                 _use_parallel_amp = False
         except (ImportError, AttributeError, OSError):
@@ -1642,7 +1681,7 @@ def apply_real_lens_traced(
                 E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                 bandlimit=bandlimit, use_gpu=amp_use_gpu,
                 wave_propagator=wave_propagator,
-                sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                sag_dtype=sag_dtype, sag_chunk_rows=_sag_chunk_rows_raw,
                 progress=lambda stage, frac, msg='':
                     amp_cb(frac, f'amp: {msg}'))
 
@@ -1667,7 +1706,7 @@ def apply_real_lens_traced(
                     ones_input, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator,
-                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                    sag_dtype=sag_dtype, sag_chunk_rows=_sag_chunk_rows_raw,
                     progress=None)
 
             with ThreadPoolExecutor(max_workers=2,
@@ -1686,7 +1725,7 @@ def apply_real_lens_traced(
         E_analytic = apply_real_lens(
             E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx, bandlimit=bandlimit,
             use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
-            sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+            sag_dtype=sag_dtype, sag_chunk_rows=_sag_chunk_rows_raw,
             progress=lambda stage, frac, msg='': amp_cb(frac, f'amp: {msg}'))
         _xp = cp if _is_cupy_array(E_analytic) else np
         amp = _xp.abs(E_analytic)
@@ -1716,7 +1755,7 @@ def apply_real_lens_traced(
                     np.ones_like(E_in), prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator,
-                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                    sag_dtype=sag_dtype, sag_chunk_rows=_sag_chunk_rows_raw,
                     progress=lambda stage, frac, msg='':
                         analytic_pw_cb(frac, f'amp(pw): {msg}'))
                 phase_analytic_lens = _xp.angle(E_analytic_pw)
@@ -1777,8 +1816,30 @@ def apply_real_lens_traced(
     # as (samples_per_aperture)^-2 from the benchmark sweep -- 32
     # samples gives ~85 nm at lambda = 1.31 um, 16 samples gives ~350
     # nm and is unusable).
-    if min_coarse_samples_per_aperture and aperture is not None:
-        ap_diameter = float(aperture)
+    if min_coarse_samples_per_aperture:
+        if aperture is not None:
+            ap_diameter = float(aperture)
+            _ap_label = 'aperture'
+        else:
+            # v5.17.1 (audit P3-08): the floor was documented as enforced
+            # against the launch radius when no ``aperture_diameter`` is
+            # set, but the guard was silently skipped for apertureless
+            # prescriptions.  Derive the effective pupil from the largest
+            # per-surface ``clear_aperture`` when present (the actual
+            # pupil-limiting hardware, capped at the launch diameter the
+            # coarse grid actually spans), else the launch diameter itself
+            # (= the grid extent), so apertureless prescriptions get the
+            # same aliasing protection.
+            _cas = [float(s['clear_aperture'])
+                    for s in (lens_prescription.get('surfaces') or [])
+                    if isinstance(s, dict)
+                    and s.get('clear_aperture') is not None]
+            if _cas:
+                ap_diameter = min(max(_cas), 2.0 * launch_radius)
+                _ap_label = 'largest clear_aperture'
+            else:
+                ap_diameter = 2.0 * launch_radius
+                _ap_label = 'launch diameter (grid extent)'
         coarse_dx = dx * sub
         n_coarse_across = ap_diameter / coarse_dx if coarse_dx > 0 else 0
         if n_coarse_across < min_coarse_samples_per_aperture:
@@ -1789,7 +1850,7 @@ def apply_real_lens_traced(
             msg = (
                 f'apply_real_lens_traced: ray_subsample={ray_subsample} '
                 f'gives only {n_coarse_across:.1f} coarse samples across '
-                f'the {ap_diameter*1e3:.2f}-mm aperture (threshold '
+                f'the {ap_diameter*1e3:.2f}-mm {_ap_label} (threshold '
                 f'{min_coarse_samples_per_aperture}).  At this density '
                 f'the spline interpolation of the wavefront will alias '
                 f'and the OPD will be wrong by ~lambda/4 or more.  '
@@ -2432,6 +2493,17 @@ def apply_real_lens_traced(
             Ys = Y[::sub, ::sub]
         amp_coarse = amp[::sub, ::sub]
         mask_coarse = _build_newton_mask(amp_coarse)
+        if preserve_input_phase:
+            # v5.17.1 (audit P3-09): on the sub>1 preserve_input_phase
+            # path ``amp`` is never read again (Step 3 combines with
+            # E_analytic, not amp) and ``amp_coarse`` is dead after the
+            # Newton-mask build -- but amp_coarse is a VIEW, so the
+            # full-grid float base (float64 for complex128 fields,
+            # ~8.6 GB at N=32768) would otherwise stay resident through
+            # the Newton inversion and the entire band assembly.  Free
+            # both eagerly -- same lifetime-fix pattern as the v5.16.2
+            # eager frees; values/outputs byte-identical.
+            del amp_coarse, amp
         if mask_coarse is None:
             opl_coarse = _invert_newton_parallel(
                 Xs, Ys, sub_progress=newton_cb)
