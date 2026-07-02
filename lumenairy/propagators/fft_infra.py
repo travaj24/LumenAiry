@@ -697,6 +697,34 @@ def get_fft_plan_cache_size() -> int:
     return int(_PYFFTW_PLAN_CACHE_SIZE)
 
 
+# v5.16.2: opt-out for the v4.12 two-buffer ping-pong.  With the ping-pong,
+# ``_fft2``/``_ifft2`` return one of two live workspace buffers with no copy
+# (speed), at the cost of a SECOND resident full-grid aligned buffer per plan
+# key (16 GiB/key at N=32768 complex128).  ``set_fft_double_buffer(False)``
+# restores the pre-v4.12 single-buffer footprint; the dispatchers then return
+# ``buf.copy()`` so results stay private -- byte-identical values, ~one extra
+# array copy per FFT (~1-3% of a large transform).
+_PYFFTW_DOUBLE_BUFFER = True
+
+
+def set_fft_double_buffer(enabled: bool) -> None:
+    """Enable/disable the pyFFTW two-buffer ping-pong (default enabled).
+
+    Disabling halves the resident aligned-workspace memory (one full-grid
+    buffer per plan key instead of two) in exchange for one array copy per
+    FFT.  Clears the plan cache so every resident entry matches the new
+    mode."""
+    global _PYFFTW_DOUBLE_BUFFER
+    _PYFFTW_DOUBLE_BUFFER = bool(enabled)
+    with _PYFFTW_PLAN_LOCK:
+        _PYFFTW_PLAN_CACHE.clear()
+
+
+def get_fft_double_buffer() -> bool:
+    """Return whether the pyFFTW two-buffer ping-pong is enabled."""
+    return bool(_PYFFTW_DOUBLE_BUFFER)
+
+
 def warmup_fft_plans(shapes: Any, dtype: Optional[Any] = None, threads: Optional[int] = None) -> int:
     """Pre-build pyFFTW plans for the given shapes so the first
     propagation at each shape pays the planning cost only once at
@@ -809,13 +837,22 @@ _PYFFTW_AUTO_PROMOTE_LOGGED = False
 
 
 def _build_plan_entry(direction, shape_t, dt, threads, flag):
-    """Build a fresh double-buffered plan entry.
+    """Build a fresh plan entry (double-buffered by default).
 
     Allocates two aligned workspaces and one in-place pyFFTW plan per
     buffer (each plan is bound to its own buffer so the two can be
     used in alternation without any ``update_arrays`` overhead).
     Returns the cache-entry dict; the caller is responsible for
     storing it under the appropriate key.
+
+    v5.16.2: when :func:`set_fft_double_buffer` disabled the ping-pong
+    (``_PYFFTW_DOUBLE_BUFFER = False``), a SINGLE buffer + plan is built
+    instead -- halving the resident aligned-workspace memory (one
+    full-grid array per plan key; 16 GiB/key at N=32768 complex128,
+    matching the pre-v4.12 single-buffer behaviour).  ``_fft2`` /
+    ``_ifft2`` then return ``buf.copy()`` instead of the live buffer, so
+    results stay private (byte-identical values; ~one extra copy per
+    FFT).
 
     Note: on ``flag = 'FFTW_MEASURE'`` (or stronger), the pyFFTW
     constructor runs the planner against the supplied buffer, which
@@ -829,23 +866,17 @@ def _build_plan_entry(direction, shape_t, dt, threads, flag):
         axes = (len(shape_t) - 2, len(shape_t) - 1)
     direction_flag = 'FFTW_FORWARD' if direction == 'fwd' else 'FFTW_BACKWARD'
 
-    bufs = [pyfftw.empty_aligned(shape_t, dtype=dt),
-            pyfftw.empty_aligned(shape_t, dtype=dt)]
+    n_bufs = 2 if _PYFFTW_DOUBLE_BUFFER else 1
+    bufs = [pyfftw.empty_aligned(shape_t, dtype=dt) for _ in range(n_bufs)]
     plans = [
         pyfftw.FFTW(
-            bufs[0], bufs[0],
+            b, b,
             axes=axes,
             direction=direction_flag,
             flags=(flag,),
             threads=max(1, int(threads)),
-        ),
-        pyfftw.FFTW(
-            bufs[1], bufs[1],
-            axes=axes,
-            direction=direction_flag,
-            flags=(flag,),
-            threads=max(1, int(threads)),
-        ),
+        )
+        for b in bufs
     ]
     return {
         'plans': plans,
@@ -983,9 +1014,11 @@ def _get_or_make_plan(direction, shape, dtype, threads):
                     entry = new_entry
                 # Advance ping-pong slot under the cache lock so two
                 # threads contending at the same key can't both grab
-                # the same slot.
-                slot = entry['idx']
-                entry['idx'] = 1 - slot
+                # the same slot.  Length-aware so single-buffer entries
+                # (set_fft_double_buffer(False)) always serve slot 0.
+                _nb = len(entry['bufs'])
+                slot = entry['idx'] % _nb
+                entry['idx'] = (slot + 1) % _nb
                 return entry['plans'][slot], entry['bufs'][slot], entry['lock']
             # Buffer mutated under us (rare; defensive); fall through
             # and rebuild.
@@ -1003,8 +1036,9 @@ def _get_or_make_plan(direction, shape, dtype, threads):
         _PYFFTW_PLAN_CACHE[key] = new_entry
         while len(_PYFFTW_PLAN_CACHE) > _PYFFTW_PLAN_CACHE_SIZE:
             _PYFFTW_PLAN_CACHE.popitem(last=False)
-        slot = new_entry['idx']
-        new_entry['idx'] = 1 - slot
+        _nb = len(new_entry['bufs'])
+        slot = new_entry['idx'] % _nb
+        new_entry['idx'] = (slot + 1) % _nb
     return new_entry['plans'][slot], new_entry['bufs'][slot], new_entry['lock']
 
 
@@ -1616,7 +1650,10 @@ def _fft2(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf
+                # Single-buffer mode (set_fft_double_buffer(False)):
+                # privatise the result so the next call at this key
+                # can't clobber the caller's reference.
+                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             # pyFFTW failure modes: RuntimeError (planner internal
@@ -1660,7 +1697,10 @@ def _ifft2(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf
+                # Single-buffer mode (set_fft_double_buffer(False)):
+                # privatise the result so the next call at this key
+                # can't clobber the caller's reference.
+                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             # Same pyFFTW failure spectrum as ``_fft2``; see comment
@@ -1694,7 +1734,10 @@ def _fft2_nd(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf
+                # Single-buffer mode (set_fft_double_buffer(False)):
+                # privatise the result so the next call at this key
+                # can't clobber the caller's reference.
+                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:
@@ -1723,7 +1766,10 @@ def _ifft2_nd(x):
             with lock:
                 np.copyto(buf, x, casting='no')
                 plan()
-                return buf
+                # Single-buffer mode (set_fft_double_buffer(False)):
+                # privatise the result so the next call at this key
+                # can't clobber the caller's reference.
+                return buf if _PYFFTW_DOUBLE_BUFFER else buf.copy()
         except (RuntimeError, MemoryError, ValueError, TypeError,
                 AttributeError) as e:
             if not PYFFTW_FALLBACK_ON_ERROR:

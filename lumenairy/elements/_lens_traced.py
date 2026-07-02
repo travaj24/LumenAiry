@@ -1840,13 +1840,24 @@ def apply_real_lens_traced(
             E_arr = np.asarray(E_in)
             mag = np.abs(E_arr)
             mask = mag > 0.05 * mag.max()
+            del mag
             if mask.any():
                 phase = np.angle(E_arr)
                 dpy, dpx = np.gradient(phase, dx, dx)
+                del phase
                 k0 = 2.0 * np.pi / wavelength
                 tilt_rms = float(np.sqrt(
                     (np.mean((dpx[mask] / k0) ** 2)
                      + np.mean((dpy[mask] / k0) ** 2))))
+                # v5.16.2 (memory root-cause): free the full-grid
+                # diagnostics IMMEDIATELY.  Pre-fix, mag/mask/phase/dpx/
+                # dpy stayed referenced by this frame for the REST of the
+                # lens call -- ~4 full-grid float32 + a bool (~18 GB at
+                # N=32768) held through the ray trace, Newton, and
+                # assembly.  tracemalloc-attributed as the largest single
+                # component of the 3.2.14.1 -> 5.16.x traced-lens memory
+                # growth.  Values/output unchanged (pure lifetime fix).
+                del dpx, dpy
                 if tilt_rms > 1e-4:
                     import warnings
                     warnings.warn(
@@ -1858,6 +1869,7 @@ def apply_real_lens_traced(
                         "for tilt-sensitive analyses.",
                         RuntimeWarning, stacklevel=3,
                     )
+            del E_arr, mask
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 AttributeError, TypeError):
             # tilt-RMS estimation is best-effort; suppressing the
@@ -2434,18 +2446,25 @@ def apply_real_lens_traced(
             _nan_coarse = np.isnan(opl_coarse).astype(np.float64)
             opl_map = None
         else:
+            # v5.16.2 (memory root-cause): build the (2, N, N) coordinate
+            # stack ONCE and free ii/jj before interpolating.  Pre-fix the
+            # stack was constructed twice (once per map_coordinates call)
+            # with ii/jj held throughout -- ~4 extra full-grid float64
+            # (~34 GB at N=32768) at the upsample peak.  Same coords,
+            # same map_coordinates inputs -> byte-identical outputs.
             ii, jj = np.indices((N, N), dtype=np.float64)
+            _coords = np.array([ii * Ns / N, jj * Ns / N])
+            del ii, jj
             opl_map = map_coordinates(
                 np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
-                np.array([ii * Ns / N, jj * Ns / N]),
-                order=1, mode='nearest')
+                _coords, order=1, mode='nearest')
             # Propagate NaN mask
             nan_coarse = np.isnan(opl_coarse).astype(np.float64)
             nan_full = map_coordinates(
-                nan_coarse,
-                np.array([ii * Ns / N, jj * Ns / N]),
-                order=1, mode='nearest')
+                nan_coarse, _coords, order=1, mode='nearest')
+            del _coords
             opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
+            del nan_full
     else:
         mask_full = _build_newton_mask(amp)
         if mask_full is None:
@@ -2535,18 +2554,28 @@ def apply_real_lens_traced(
         call_progress(progress, 'real_lens_traced', 1.0, 'done')
         return E_out
     valid = np.isfinite(opl_map)
+    # v5.16.2: free each full-grid intermediate as soon as its consumer is
+    # built (delta_phase/phase after phase_exp; phase_exp after E_out;
+    # opl_map after the phase build).  Pure lifetime fixes -- values and
+    # outputs unchanged.
     if preserve_input_phase:
         delta_phase = np.where(valid, k0 * opl_map - phase_analytic_lens, 0.0)
+        del opl_map
         phase_exp = np.exp(1j * delta_phase)
+        del delta_phase
         if phase_exp.dtype != target_cdtype:
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = E_analytic * phase_exp
+        del phase_exp
     else:
         phase = np.where(valid, k0 * opl_map, 0.0)
+        del opl_map
         phase_exp = np.exp(1j * phase)
+        del phase
         if phase_exp.dtype != target_cdtype:
             phase_exp = phase_exp.astype(target_cdtype)
         E_out = amp * phase_exp
+        del phase_exp
     # Zero outside the exit-pupil (ray-coverage) region
     E_out = np.where(valid, E_out, target_cdtype.type(0))
     # And outside the entrance aperture (defensive: in practice the

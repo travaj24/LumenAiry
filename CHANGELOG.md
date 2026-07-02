@@ -33,14 +33,41 @@ All notable changes to the core library are documented here.
   RECOMMENDS the byte-identical row-band mode FIRST -- before any
   dtype/subsample/grid reduction that would trade fidelity.
 
-### Background (why)
+### Fixed (memory root-cause -- benefits DEFAULT whole-grid runs too)
 
 Stage-profiling the identical lens on the archived 3.2.14.1 vs 5.16.1
 measured a **+32% traced-lens peak-memory growth** (33.2 -> 43.6 GB at
-N=16384/sub=16/c64), accumulated across v3.5-v5.16 features. That growth is
-what moved full-grid N=32768 traced runs from fits-on-128-GB (historical
-Design-51/71 runs) to OOM. `sag_chunk_rows` claws back far more than the
-regression at zero fidelity cost.
+N=16384/sub=16/c64), which is what moved full-grid N=32768 traced runs from
+fits-on-128-GB (historical Design-51/71 runs) to OOM. tracemalloc per-line
+attribution pinned it (the suspected polynomial-Newton fit was innocent,
+~0.07 GB coarse-scale) and the components are now fixed:
+
+- **v4.10 tilt-detection leak (the big one).**  The `tilt_aware_rays=False`
+  advisory check computed `np.abs` / mask / `np.angle` / `np.gradient` of
+  the full input field and left all five arrays referenced by the function
+  frame for the REST of the lens call -- ~4 full-grid float32 + a bool
+  (~18 GB at N=32768) held through the ray trace, Newton, and assembly.
+  Now freed immediately after the RMS is computed (pure lifetime fix;
+  values, outputs, and the warning behaviour unchanged).
+- **Whole-grid OPL upsample built the `(2, N, N)` `map_coordinates`
+  coordinate stack twice** (once for the OPL, once for the NaN mask) with
+  `ii`/`jj` held throughout -- ~4 extra full-grid float64 (~34 GB at
+  N=32768) at the upsample peak, present since 3.2.14.1.  Built once,
+  freed early; identical coords -> byte-identical outputs.
+- **Eager frees in the whole-grid exit assembly** (`opl_map` /
+  `delta_phase` / `phase_exp` dropped as soon as their consumer exists).
+- **`set_fft_double_buffer(False)` / `get_fft_double_buffer`** -- opt-out
+  for the v4.12 two-buffer pyFFTW ping-pong (the one remaining deliberate
+  delta vs 3.2.14.1: one extra resident full-grid aligned buffer per plan
+  key, 16 GiB/key at N=32768 complex128).  Disabling returns
+  `buf.copy()` per FFT instead -- byte-identical values, ~one extra copy
+  per transform.  Folded into `set_low_memory(True)`.
+
+Post-fix tracemalloc (N=4096 probe): assembly-stage peak and end-of-call
+residual are now BELOW the 3.2.14.1 baseline (2.83 -> 1.88 GB and 2.43 ->
+1.34 GB vs archived 2.33 / 1.93); the overall whole-grid peak is within
+~8% of 3.2.14.1, all of it the (opt-out-able) double buffer.
+`sag_chunk_rows` remains far leaner still, at zero fidelity cost.
 
 ## [5.16.1] — 2026-06-25
 

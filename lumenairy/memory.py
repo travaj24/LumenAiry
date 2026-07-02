@@ -851,6 +851,7 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
     Safe set (all byte-identical to a default run -- memory/speed trade only):
       * ``set_fft_plan_cache_size(2)``     -- the fwd+inv floor for one grid
       * ``set_lens_parallel_amp(False)``   -- sequential amp (largest claw-back)
+      * ``set_fft_double_buffer(False)``   -- one aligned buffer per plan key
       * ``set_fft_auto_promote(False)``    -- no transient MEASURE re-plan
 
     Aggressive set (CHANGE NUMERICS -- gated + logged):
@@ -862,8 +863,10 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
     # propagators/ or elements/, avoiding an import cycle).
     from .elements._lens_traced import get_lens_parallel_amp, set_lens_parallel_amp
     from .propagators.fft_infra import (
+        get_fft_double_buffer,
         get_fft_plan_cache_size,
         set_fft_auto_promote,
+        set_fft_double_buffer,
         set_fft_plan_cache_size,
     )
 
@@ -878,9 +881,11 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
     if enabled:
         _capture('plan_cache_size', get_fft_plan_cache_size)
         _capture('lens_parallel_amp', get_lens_parallel_amp)
+        _capture('fft_double_buffer', get_fft_double_buffer)
         prior['fft_auto_promote'] = True   # library default
         set_fft_plan_cache_size(2)
         set_lens_parallel_amp(False)
+        set_fft_double_buffer(False)
         set_fft_auto_promote(False)
         if aggressive:
             try:
@@ -901,6 +906,7 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         # Restore shipped library defaults.
         set_fft_plan_cache_size(8)
         set_lens_parallel_amp(True)
+        set_fft_double_buffer(True)
         set_fft_auto_promote(True)
     return prior
 
