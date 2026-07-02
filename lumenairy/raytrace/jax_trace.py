@@ -76,6 +76,36 @@ _TRANSFER_JAX_WARNING_EMITTED = False
 # exit, but we use a fixed count here so JIT/grad can trace once.
 _ASPHERIC_NEWTON_ITERS = 8
 
+# v5.17.1 (audit P3-59): post-Newton residual acceptance tolerance [m].
+# The NumPy reference (intersection.py) tracks per-ray convergence and
+# kills never-converged rays as RAY_MISSED_SURFACE, accepting a
+# stuck-with-residual ray only when |F| < 1e-12.  The JAX kernels run a
+# FIXED iteration count (no early exit -- required for jit/grad), so
+# an unconverged finite t used to be accepted silently and the ray
+# landed off-surface.  After the fixed iterations we evaluate the
+# residual F(t) = z - sag(x, y) once and kill rays with |F| above this
+# tolerance, mirroring the NumPy 1e-12 residual criterion.
+_ASPHERIC_NEWTON_RESIDUAL_TOL = 1e-12
+
+
+def _newton_residual_tol(dtype):
+    """Dtype-aware residual tolerance for the post-Newton convergence
+    check (audit P3-59).
+
+    The 1e-12 [m] criterion is calibrated against the always-float64
+    NumPy reference.  Under JAX's default float32 (``jax_enable_x64``
+    off) a converged Newton residual bottoms out at ~eps(f32) * scale
+    (~1e-9 m for mm-scale optics) -- far above 1e-12 -- so the raw
+    tolerance would kill every ray.  Scale by the eps ratio ("same
+    number of ulps above the rounding floor"): float64 keeps 1e-12,
+    float32 gets ~5.4e-4, which still discriminates genuine
+    non-convergence (the audit reproducers land 9e-4 .. 3e4 m
+    off-surface).  ``dtype`` is static under jit, so this Python-level
+    branch is trace-safe.
+    """
+    return _ASPHERIC_NEWTON_RESIDUAL_TOL * (
+        float(np.finfo(dtype).eps) / float(np.finfo(np.float64).eps))
+
 
 class JaxRayState(NamedTuple):
     """Functional / immutable counterpart to :class:`RayBundle` for
@@ -246,6 +276,14 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
         disc_pos = disc > 0
         disc_safe = jnp.where(disc_pos, disc, 1.0)
         sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
+        # v5.17.1 (audit P3-58): acceptance is disc >= 0, matching the
+        # NumPy path (intersection.py, v5.4.6 audit P3-3) which keeps
+        # the tangent case disc == 0 as a real single-point
+        # intersection (t = -b/2; sqrt_disc is 0 there via the
+        # double-where above, so t1 == t2 already equals it).  The
+        # sqrt guard stays on the STRICT disc > 0 so the disc = 0
+        # gradient singularity keeps being masked (H-RT-7).
+        disc_ok = disc >= 0
         t1 = (-b_q - sqrt_disc) / 2.0
         t2 = (-b_q + sqrt_disc) / 2.0
         if R_is_inf:
@@ -260,9 +298,10 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
             # reflection) lands on the diametrically-opposite FAR root.  The
             # near root is min(|t1|, |t2|) regardless of curvature sign.
             t_pick = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
-            t0 = jnp.where(disc_pos, t_pick, 0.0)
-            # disc<=0 means the ray missed the sphere entirely.
-            miss = miss | (~disc_pos)
+            t0 = jnp.where(disc_ok, t_pick, 0.0)
+            # disc < 0 means the ray missed the sphere entirely
+            # (disc == 0 tangency is accepted -- audit P3-58).
+            miss = miss | (~disc_ok)
 
         if has_aspheric:
             def body(_, t):
@@ -283,6 +322,22 @@ def _intersect_jax(state, R, conic, asph_items, n_medium):
                 return t - step
 
             t = jax.lax.fori_loop(0, _ASPHERIC_NEWTON_ITERS, body, t0)
+            # v5.17.1 (audit P3-59): convergence check.  The fixed
+            # iteration count has no early-exit/convergence tracking,
+            # so a finite-but-unconverged t (steep asphere, grazing
+            # incidence) used to be silently accepted where the NumPy
+            # path kills the ray as RAY_MISSED_SURFACE.  Evaluate the
+            # residual once and fold it into the miss mask.  The
+            # residual only feeds a boolean comparison, so no gradient
+            # flows through this extra sag evaluation (trace-safe);
+            # the ~(<=) form also kills NaN residuals.
+            xi = state.x + state.L * t
+            yi = state.y + state.M * t
+            zi = state.z + state.N * t
+            resid = zi - _sag_value_jax(xi, yi, R_is_inf, R_safe,
+                                         conic, asph_items)
+            miss = miss | ~(jnp.abs(resid)
+                            <= _newton_residual_tol(resid.dtype))
         else:
             t = t0
 
@@ -460,7 +515,11 @@ def _apply_doe_kick_jax(state, order_x, order_y, period_x, period_y,
     L_new = state.L + dL
     M_new = state.M + dM
     sumsq = L_new * L_new + M_new * M_new
-    propagating = sumsq < 1.0
+    # v5.17.1 (audit P3-58): evanescence is STRICTLY sumsq > 1.0,
+    # matching the NumPy trace loop (trace.py ``_evan = _sumsq > 1.0``).
+    # A grazing order with L^2 + M^2 exactly 1.0 propagates (N = 0)
+    # on both backends instead of dying only on the JAX path.
+    propagating = sumsq <= 1.0
     cos2 = jnp.maximum(1.0 - sumsq, 0.0)
     N_mag = jnp.sqrt(cos2)
     # Preserve the sign of the longitudinal cosine.
@@ -1467,6 +1526,11 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     disc_pos = disc > 0
     disc_safe = jnp.where(disc_pos, disc, 1.0)
     sqrt_disc = jnp.where(disc_pos, jnp.sqrt(disc_safe), 0.0)
+    # v5.17.1 (audit P3-58): acceptance is disc >= 0 (NumPy parity,
+    # v5.4.6 audit P3-3 tangency semantics); the sqrt guard stays on
+    # the strict disc > 0 for the H-RT-7 gradient mask.  At disc == 0
+    # both roots equal -b/2, the tangent intersection.
+    disc_ok = disc >= 0
     t1 = (-b_q - sqrt_disc) / 2.0
     t2 = (-b_q + sqrt_disc) / 2.0
     # v5.4.6 (audit P3-1): direction-aware near-root pick (min |t|), matching
@@ -1476,17 +1540,18 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
     # prescriptions.  As a bonus this removes the dependence on the sign of a
     # (possibly traced) curvature, improving JAX traceability.
     t_sphere = jnp.where(jnp.abs(t1) <= jnp.abs(t2), t1, t2)
-    t_sphere = jnp.where(disc_pos, t_sphere, 0.0)
+    t_sphere = jnp.where(disc_ok, t_sphere, 0.0)
 
     # Flat initial guess.
     N_safe = jnp.where(jnp.abs(state.N) > eps, state.N, eps)
     t_flat = -state.z / N_safe
 
     t0 = jnp.where(is_flat, t_flat, t_sphere)
-    # 4.11.1 (H-RT-5): rays that missed the sphere (disc<=0) AND aren't
+    # 4.11.1 (H-RT-5): rays that missed the sphere (disc < 0) AND aren't
     # on the flat branch are dead.  Flat rays parallel to the surface
-    # (|N| -> 0) are also dead.
-    miss = (~is_flat & ~disc_pos) | (is_flat & (jnp.abs(state.N) <= eps))
+    # (|N| -> 0) are also dead.  disc == 0 tangency is accepted
+    # (v5.17.1, audit P3-58 -- NumPy parity).
+    miss = (~is_flat & ~disc_ok) | (is_flat & (jnp.abs(state.N) <= eps))
 
     # Newton refinement.  For pure-spherical/flat (no asph, conic=0)
     # this is essentially a no-op (1 iter to verify convergence).
@@ -1511,6 +1576,17 @@ def _intersect_jax_param(state, R, conic, asph_powers, asph_coeffs,
         return t - step
 
     t = jax.lax.fori_loop(0, _ASPHERIC_NEWTON_ITERS, body, t0)
+    # v5.17.1 (audit P3-59): convergence check -- mirror the NumPy
+    # residual kill (see _ASPHERIC_NEWTON_RESIDUAL_TOL and the static
+    # `_intersect_jax` twin).  Residual only feeds a boolean, so this
+    # extra sag evaluation is jit/grad trace-safe; the ~(<=) form
+    # also kills NaN residuals.
+    xi = state.x + state.L * t
+    yi = state.y + state.M * t
+    zi = state.z + state.N * t
+    resid = zi - _sag_value_param(xi, yi, R, conic, asph_powers,
+                                    asph_coeffs)
+    miss = miss | ~(jnp.abs(resid) <= _newton_residual_tol(resid.dtype))
     # 4.11.1 (H-RT-5): also catch non-finite Newton output (NaN/Inf
     # from divergent surfaces) and propagate the kill into alive.
     miss = miss | (~jnp.isfinite(t))

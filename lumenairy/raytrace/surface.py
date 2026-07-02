@@ -440,12 +440,21 @@ def _surface_normal(x, y, surface):
 def _surface_copy_with(surf, **overrides):
     """Return a new Surface with the given fields overridden.
 
-    Propagates all optional fields (``radius_y``, ``conic_y``,
-    ``aspheric_coeffs_y``, ``freeform``, ``is_stop``) so anamorphic,
-    freeform, and stop-flagged surfaces survive the clone.  This is a
-    lightweight drop-in for ``dataclasses.replace`` that keeps the
-    fallback ``getattr(..., None)`` for bundles unpickled from older
+    Propagates ALL optional fields -- the biconic block (``radius_y``,
+    ``conic_y``, ``aspheric_coeffs_y``), ``freeform``, ``bsdf``,
+    ``is_stop``, the coord-break block (``is_coordbrk``,
+    ``tilt_x/y/z_deg``, ``decenter_x/y_m``, ``coordbrk_order``), and
+    the world-frame fields (``world_origin``, ``world_R``) -- so
+    anamorphic, freeform, stop-flagged, coord-break, and world-frame
+    surfaces survive the clone.  This is a lightweight drop-in for
+    ``dataclasses.replace`` that keeps the fallback
+    ``getattr(..., <default>)`` for bundles unpickled from older
     library versions.
+
+    v5.17.1 (audit P3-60): pre-fix the hand-rolled field list dropped
+    the coord-break and world-frame blocks, so a cloned coord-break
+    Surface silently became a regular flat refracting surface and a
+    cloned world-frame surface lost its frame.
     """
     return Surface(
         radius=overrides.get('radius', surf.radius),
@@ -459,6 +468,20 @@ def _surface_copy_with(surf, **overrides):
         thickness=overrides.get('thickness', surf.thickness),
         label=overrides.get('label', surf.label),
         surf_num=overrides.get('surf_num', surf.surf_num),
+        is_coordbrk=overrides.get('is_coordbrk',
+                                    getattr(surf, 'is_coordbrk', False)),
+        tilt_x_deg=overrides.get('tilt_x_deg',
+                                   getattr(surf, 'tilt_x_deg', 0.0)),
+        tilt_y_deg=overrides.get('tilt_y_deg',
+                                   getattr(surf, 'tilt_y_deg', 0.0)),
+        tilt_z_deg=overrides.get('tilt_z_deg',
+                                   getattr(surf, 'tilt_z_deg', 0.0)),
+        decenter_x_m=overrides.get('decenter_x_m',
+                                     getattr(surf, 'decenter_x_m', 0.0)),
+        decenter_y_m=overrides.get('decenter_y_m',
+                                     getattr(surf, 'decenter_y_m', 0.0)),
+        coordbrk_order=overrides.get(
+            'coordbrk_order', getattr(surf, 'coordbrk_order', 0)),
         radius_y=overrides.get('radius_y',
                                  getattr(surf, 'radius_y', None)),
         conic_y=overrides.get('conic_y',
@@ -469,6 +492,9 @@ def _surface_copy_with(surf, **overrides):
         freeform=overrides.get('freeform',
                                  getattr(surf, 'freeform', None)),
         bsdf=overrides.get('bsdf', getattr(surf, 'bsdf', None)),
+        world_origin=overrides.get(
+            'world_origin', getattr(surf, 'world_origin', None)),
+        world_R=overrides.get('world_R', getattr(surf, 'world_R', None)),
     )
 
 
