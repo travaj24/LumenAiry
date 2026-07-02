@@ -4,6 +4,64 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
 
+### Fixed (wave 2 — v5.16.1/v5.17.0 recent-delta consistency)
+
+- **`set_max_ram()` is now actually honored** (audit P2-21): `pick_batch_size`
+  / `should_split` default their available-RAM read to `get_ram_budget()`
+  (which equals the psutil read when no override is set -- default behavior
+  unchanged), and `apply_real_lens_traced`'s parallel-amp guard compares
+  against `min(psutil-free, budget)`, so a pinned budget can force the doubled
+  parallel working set off.
+- **Row-band lens memory estimates account for `parallel_amp` and
+  `slant_correction`** (audit P2-22): the chunked branch of
+  `estimate_lens_memory` now models the runtime parallel doubling of the
+  leg-local working set and the full-grid slant fall-through stack.
+  **Estimates (and `check_sim_memory` refusal peaks) for default
+  parallel-amp configs roughly double -- matching measured runtime truth**;
+  the calibrated `parallel_amp=False` anchors are bit-unchanged, and the
+  'set parallel_amp=False (byte-identical)' claw-back rung works in chunked
+  mode again.  The 'use complex64 fields' claw-back label now discloses its
+  `parallel_amp=False` assumption (audit P3-45).
+- **`set_low_memory(False)` restores exactly what `set_low_memory(True)`
+  found** (audit P2-23 + P3-46): priors are captured from the live getters at
+  first-enable (including the aggressive complex64 default-dtype flip, which
+  previously PERSISTED after 'restoring defaults', and user customizations
+  like reproducibility pins), and disable replays that snapshot.
+- **`sag_chunk_rows=0` (force whole-grid) is honored end-to-end** (audit
+  P2-05): `apply_real_lens_traced` forwarded the RESOLVED value (0 -> None) to
+  its internal `apply_real_lens` amplitude legs, where None re-resolved to
+  AUTO -- silently re-enabling row-banding.  The raw kwarg is now forwarded, so
+  0 forces the whole-grid path in BOTH stages (None / positive ints band
+  identically in both, as before).
+- **Freeform surfaces keep their diagnostic on the default row-band path**
+  (audit P2-04): zernike/xy-polynomial/chebyshev surfaces were chunk-eligible,
+  and the band loop computes only the base conic sag -- silently dropping the
+  'freeform departure is NOT included' RuntimeWarning that every release since
+  the warning's introduction emitted.  Non-Q freeform surfaces now fall
+  through to the whole-grid path per surface (outputs byte-identical -- the
+  departure was dropped on both paths; only the diagnostic differed).
+- **Undersample floor enforced for apertureless prescriptions** (audit P3-08):
+  the `ray_subsample` coarse-sampling check -- documented as 'already
+  enforced' -- was silently skipped when the prescription had no
+  `aperture_diameter`; the effective pupil now falls back to the largest
+  per-surface `clear_aperture` (capped at the launch diameter) or the launch
+  diameter itself.
+- **Chunked-assembly lifetime fix** (audit P3-09): the full-grid `amp` array
+  (and its coarse subsample) are freed immediately after the Newton-mask
+  build on the default `preserve_input_phase=True` path -- byte-identical
+  outputs, lower peak.
+- **`snapshot_fft_state` captures the post-v5.4.6 knobs** (audit P3-54):
+  `USE_SCIPY_FFT`, the pyFFTW fallback flag, the v5.17.0 double-buffer
+  opt-out, the plan-cache bound (restored through its trimming setter), and
+  the ASM cache bounds now survive into spawned workers;
+  `restore_fft_state` tolerates old snapshots that lack the new keys
+  (mixed-version worker pools).
+- **Docstrings** (audit P3-06 + P3-05): `sag_dtype` / `sag_chunk_rows` are now
+  documented in both `apply_real_lens` and `apply_real_lens_traced` Parameters
+  sections (auto-band rule, the 0 escape hatch, the float32 sign-off
+  validator), and the JAX lens twins document that the row-band mode is NOT
+  replicated there (monolithic allocation).
+
 ### Fixed (wave 1 — the eight P1 findings, all adversarially re-verified)
 
 - **`bruggeman()` returned a non-solution** (`elements/emt.py`, audit P1-02): the
