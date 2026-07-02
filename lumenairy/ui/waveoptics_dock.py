@@ -407,6 +407,20 @@ class WaveOpticsWorker(QThread):
         self.fine_progress.emit(overall,
                                 f'{stage}: {msg}' if msg else stage)
 
+    def _interrupted(self):
+        """v5.17 audit P2-40: cooperative Stop.  Polled at stage
+        boundaries in _run_impl; when the dock's Stop button has
+        called requestInterruption(), emit the stopped payload
+        (the worker's own finished emission is the ONLY path that
+        re-enables the dock UI) and tell the caller to bail out.
+        Replaces QThread.terminate(), which could kill the thread
+        while it held the pyFFTW planner lock or was mid-HDF5 write.
+        """
+        if self.isInterruptionRequested():
+            self.finished.emit({'error': 'Stopped by user'})
+            return True
+        return False
+
     def run(self):
         # Nothing may escape run(): the dock's _on_finished slot (the
         # sole re-enabler of the Run button) only fires on the custom
@@ -591,6 +605,10 @@ class WaveOpticsWorker(QThread):
             maybe_save('Source', E, 0.0)
             z_cum = 0.0
 
+            # v5.17 audit P2-40: cooperative Stop, stage boundary 1.
+            if self._interrupted():
+                return
+
             # ── Step 2a: lens-model router ─────────────────────────────
             # If the user asked for apply_real_lens[_traced] we delegate
             # the ENTIRE optical train to the core function, then
@@ -752,6 +770,10 @@ class WaveOpticsWorker(QThread):
             else:
                 pass
             for i, ts in enumerate(trace_surfs):
+                # v5.17 audit P2-40: cooperative Stop, per-surface
+                # stage boundary.
+                if self._interrupted():
+                    return
                 step += 1
                 self.progress.emit(step, total_steps,
                                    f'Surface {i+1}/{len(trace_surfs)}: {ts.label}')
@@ -820,6 +842,10 @@ class WaveOpticsWorker(QThread):
                 maybe_save(ts.label, E, z_cum)
 
             # ── Step 3: Propagate to focus ──
+            # v5.17 audit P2-40: cooperative Stop, stage boundary
+            # after the surface loop / lens router.
+            if self._interrupted():
+                return
             step += 1
             self.progress.emit(step, total_steps, 'Propagating to focus')
 
@@ -920,6 +946,12 @@ class WaveOpticsWorker(QThread):
             elapsed = time.time() - t_start
 
             # ── Save to file ──
+            # v5.17 audit P2-40: cooperative Stop, stage boundary
+            # BEFORE the file write so a stop requested during the
+            # focus/analysis stages never starts (and so never
+            # truncates) the HDF5/Zarr output.
+            if self._interrupted():
+                return
             if output_path:
                 self.progress.emit(step, total_steps, f'Saving to {os.path.basename(output_path)}')
                 try:
@@ -2019,12 +2051,12 @@ class WaveOpticsDock(QWidget):
             lines.append(
                 f'  {surf.z * 1e3:10.4f}  {peak:10.4e}    {label}')
         self.lbl_mhs_status.setPlainText('\n'.join(lines))
-        self.btn_save_toggle.setText(
-            'Save planes: ON' if checked else 'Save planes: OFF')
-        # Keep the main save-to-file checkbox in sync so the two
-        # controls never disagree.
-        self.chk_save.setChecked(checked)
-        self._update_forecast()
+        # v5.17 audit wave-5 (F821): a stray paste-duplicate of the
+        # _on_save_toggle body used to sit here, referencing the
+        # undefined name `checked` -- a NameError on every successful
+        # MHS pipeline run.  The save-toggle sync belongs (and remains)
+        # in _on_save_toggle below; running the pipeline must not
+        # touch the save-planes state.
 
     def _on_save_toggle(self, checked):
         """Sync the save-planes pill with the main save-to-file
@@ -2490,9 +2522,21 @@ class WaveOpticsDock(QWidget):
         self._worker.start()
 
     def _stop(self):
+        # v5.17 audit P2-40: cooperative interruption instead of
+        # QThread.terminate().  terminate() could kill the thread
+        # while it held the pyFFTW planner lock or was mid-HDF5/Zarr
+        # write (corrupt output, deadlocked next run), and the manual
+        # _on_finished call here dropped self._worker while the OS
+        # thread was still winding down AND raced the worker's own
+        # queued finished emission (double completion).  The worker
+        # now polls isInterruptionRequested() at stage boundaries and
+        # its own finished emission is the only path that re-enables
+        # the UI (mirrors coronagraph_dock / optimizer_dock).
         if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-            self._on_finished({'error': 'Stopped by user'})
+            self._worker.requestInterruption()
+            self.btn_stop.setEnabled(False)
+            self.progress_label.setText(
+                'Stopping (finishes current stage)...')
 
     def _load_saved_run(self):
         """3.7.9: Open a saved wave-optics output file (HDF5 / Zarr)

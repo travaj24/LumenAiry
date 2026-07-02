@@ -34,6 +34,15 @@ except ImportError:
     HAS_MPL = False
 
 
+class _ScanInterrupted(Exception):
+    """v5.17 audit P2-40: raised from the worker's progress hook to
+    abort ``through_focus_scan`` cooperatively between z-planes.
+    Direct Exception subclass on purpose: ``call_progress`` swallows
+    the TypeError/ValueError/RuntimeError/... family, so this class
+    must not be one of those for the abort to propagate.
+    """
+
+
 class ThroughFocusWorker(QThread):
     """Background thread for the through-focus scan."""
     fine_progress = Signal(float, str)
@@ -50,6 +59,13 @@ class ThroughFocusWorker(QThread):
         self.ideal_peak = ideal_peak
 
     def _on_progress(self, stage, fraction, message=''):
+        # v5.17 audit P2-40: cooperative Stop.  The core scan calls
+        # this hook at every z-plane boundary, so raising here aborts
+        # between planes without QThread.terminate() (which could
+        # kill the thread mid-FFT while it holds the pyFFTW planner
+        # lock).
+        if self.isInterruptionRequested():
+            raise _ScanInterrupted()
         self.fine_progress.emit(float(fraction), str(message))
 
     def run(self):
@@ -61,6 +77,9 @@ class ThroughFocusWorker(QThread):
                 ideal_peak=self.ideal_peak,
                 verbose=False, progress=self._on_progress)
             self.finished_result.emit(res)
+        except _ScanInterrupted:
+            # None is the dock's established 'Stopped.' payload.
+            self.finished_result.emit(None)
         except Exception as e:
             self.finished_result.emit(
                 {'error': f'{type(e).__name__}: {e}'})
@@ -288,9 +307,17 @@ class ThroughFocusDock(QWidget):
         self._worker.start()
 
     def _stop_scan(self):
+        # v5.17 audit P2-40: cooperative interruption instead of
+        # QThread.terminate() + manual _on_finished (which dropped
+        # self._worker while the OS thread was still being killed and
+        # raced the worker's own queued finished emission).  The
+        # worker's progress hook raises between z-planes when
+        # interruption is requested; its finished_result(None)
+        # emission is now the only path that re-enables the UI.
         if self._worker and self._worker.isRunning():
-            self._worker.terminate()
-            self._on_finished(None)
+            self._worker.requestInterruption()
+            self.btn_stop.setEnabled(False)
+            self.summary.append('Stop requested (finishes current plane).')
 
     def _on_progress(self, fraction, message):
         self.progress_bar.setValue(int(1000 * max(0.0, min(1.0, fraction))))

@@ -470,6 +470,20 @@ class CoherenceDock(QWidget):
         combo.setCurrentIndex(0)
 
     def _dispatch_worker(self, mode, params, btn, summary, msg):
+        # v5.17 audit P2-37: tabs 2-4 share _analysis_worker but each
+        # disables only its OWN Run button, so launching from another
+        # tab mid-run used to rebind the attribute -- dropping the
+        # only Python reference to a live QThread and hard-aborting
+        # the app ('QThread: Destroyed while thread is still running')
+        # when its run() returned.  Same isRunning() guard as the
+        # sibling docks (coronagraph_dock, waveoptics_dock, ...).
+        if (self._analysis_worker is not None
+                and self._analysis_worker.isRunning()):
+            summary.setPlainText(
+                'Another coherence analysis (tab 2-4) is still '
+                'running -- wait for it to finish before starting a '
+                'new one.')
+            return
         btn.setEnabled(False)
         summary.setPlainText(msg)
         self._analysis_worker = _CoherenceAnalysisWorker(self.sm, mode, params)

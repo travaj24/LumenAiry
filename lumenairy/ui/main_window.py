@@ -37,6 +37,40 @@ from .workspace import (
 )
 
 
+def _shutdown_dock_workers(window, per_worker_timeout_ms=2000):
+    """v5.17 audit P2-38: app-wide version of coronagraph_dock's
+    v5.4.2 'C1' close guard, run from MainWindow.closeEvent.
+
+    QDockWidget.closeEvent does NOT fire for docked (non-floating)
+    docks on application quit, so even a per-dock guard never runs
+    then; without this sweep, quitting mid-run destroys the window
+    while worker QThreads are alive -> 'QThread: Destroyed while
+    thread is still running' hard abort (and a possibly truncated
+    output file).  Every analysis dock stores its background thread
+    on ``_worker`` (coherence_dock additionally ``_analysis_worker``),
+    so one central sweep here replaces per-dock closeEvent copies.
+    Interruption is requested on ALL running workers first so they
+    wind down in parallel, then each is waited on (bounded).
+
+    Returns the list of workers that were running (for tests).
+    """
+    from PySide6.QtCore import QThread
+    workers = []
+    for dock in window.findChildren(QDockWidget):
+        w = dock.widget()
+        if w is None:
+            continue
+        for attr in ('_worker', '_analysis_worker'):
+            th = getattr(w, attr, None)
+            if isinstance(th, QThread) and th.isRunning():
+                workers.append(th)
+    for th in workers:
+        th.requestInterruption()
+    for th in workers:
+        th.wait(int(per_worker_timeout_ms))
+    return workers
+
+
 class MainWindow(QMainWindow):
     """LumenAiry Designer main application window."""
 
@@ -1057,6 +1091,13 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         try:
             self._save_workspace_preferences()
+        except Exception:
+            pass
+        # v5.17 audit P2-38: stop + join running dock worker threads
+        # before the window (and the dock C++ objects the workers
+        # emit into) is destroyed.  See _shutdown_dock_workers.
+        try:
+            _shutdown_dock_workers(self)
         except Exception:
             pass
         super().closeEvent(event)

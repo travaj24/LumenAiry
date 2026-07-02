@@ -91,10 +91,31 @@ class SpotFieldDock(QWidget):
             'color: #7a94b8; font-family: monospace; padding: 4px;')
         layout.addWidget(self.lbl_status)
 
-        self.sm.system_changed.connect(self._replot)
+        # v5.17 audit P2-39: don't recompute while hidden/tabified.
+        # A slider drag emits system_changed ~25x/sec and the full
+        # spot trace + matplotlib rebuild costs >100 ms, so unguarded
+        # replots from a hidden dock stall the GUI thread for work
+        # nobody can see.  Mark stale instead and replot on show.
+        self._stale = False
+        self.sm.system_changed.connect(self._on_system_changed)
         self._replot()
 
+    def _on_system_changed(self):
+        """v5.17 audit P2-39: isVisible() gate for system_changed."""
+        if self.isVisible():
+            self._replot()
+        else:
+            self._stale = True
+
+    def showEvent(self, event):
+        """v5.17 audit P2-39: recompute-on-show companion to the
+        isVisible() gate above."""
+        super().showEvent(event)
+        if self._stale:
+            self._replot()
+
     def _replot(self):
+        self._stale = False
         from ..raytrace import find_paraxial_focus, system_abcd
         from ..analysis.field import spot_diagram_vs_field
         self.fig.clear()
