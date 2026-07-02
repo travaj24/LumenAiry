@@ -2,7 +2,50 @@
 
 All notable changes to the core library are documented here.
 
-## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
+## [5.18.0] — 2026-07-02
+
+Deep-audit remediation.  All 114 findings of the v5.17.0 deep audit
+(`AUDIT_V5_17_0_2026_07_01_DEEP.md`) are resolved: 113 fixed, 1 refuted in
+implementation (P3-20 — the prescribed single-SVD merge provably breaks the
+EME sigma_min mode diagnostic on the real reference cell; the two-call
+structure is kept, documented, and pinned by a regression test).  Fixes were
+implemented in six themed waves, each: reproduce-first probe, minimal surgical
+change, discriminating test, sibling-suite runs, ruff-clean; the physics /
+convention changes were hand-derived before the fix was trusted.  Minor bump
+(not a patch) because this release contains deliberate output-changing
+behavior changes — enumerated here up front.
+
+**BEHAVIOR CHANGES (ten; each corrects a previously wrong or misleading
+output — review before upgrading):**
+
+1. `bruggeman()` — every output moves; the old effective-medium root solved
+   the wrong quadratic (a passive-root selector now picks the physical branch).
+2. `zernike_decompose(normalization='Noll')` — no longer negates sine-mode
+   (m < 0) coefficients; 'Noll' now equals 'OSA' (both are Noll 1976 / OSA
+   positive-sine; the old flip matched no published convention).
+3. `apply_waveplate` and the Jones-element retarder family — slow-axis sign is
+   `exp(+i*retardance)`, matching the library's Berreman/RCWA transmission
+   Jones; QWP outputs are the CONJUGATE of prior releases (HWP unchanged), the
+   linear-x -> right-circular recipe is now fast axis at -pi/4.  rcwa's internal
+   `_qwp_matrix` is deliberately unchanged — the `reflective_outcoupling`
+   metric is provably conjugate-invariant at the default 45 deg, so published
+   out-coupling numbers are unaffected.
+4. GBD `apply_abcd_to_beamlets` — amplitude/piston use the Collins/Siegman
+   factor `1/(A + B*Q_in)` (were wrong by `(C*q_in + D)`).
+5. `PMMStack`/`PMM2DStack` — a stale `internal_field` after a superseding
+   solve now raises instead of returning silently-wrong data.
+6. RCWA `symmetry=True` — reflected/transmitted amplitudes are returned
+   un-gauged (the symmetry basis phase no longer leaks into user amplitudes).
+7. PMM (1-D / staggered / JAX twins) and RCWA back-side incidence — a
+   gain/evanescent or otherwise non-propagating incident angle now raises a
+   clear error instead of silently returning meaningless efficiencies.
+8. `make_shack_hartmann_wfs(rng_seed=...)` — seeded detector noise is now a
+   reproducible SEQUENCE across frames (was the identical frozen realization
+   every AO frame); seeded noise streams change.
+9. The asymptotic-mode JAX twins — raise when `jax_enable_x64` is off instead
+   of flipping the global JAX config mid-call.
+10. Low-memory chunked-lens memory ESTIMATES — report ~2x for
+    `parallel_amp=True` (the runtime truth), up from the prior under-estimate.
 
 ### Fixed (wave 6 — the P3 sweep: boundary guards, doc honesty, small physics, perf)
 
