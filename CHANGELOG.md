@@ -2,6 +2,72 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
+
+### Fixed (wave 1 — the eight P1 findings, all adversarially re-verified)
+
+- **`bruggeman()` returned a non-solution** (`elements/emt.py`, audit P1-02): the
+  quadratic's linear coefficient was algebraically wrong (hand-re-derived:
+  `b = ((1-f) - g f) eps_a + (f - g(1-f)) eps_b`), so the returned permittivity
+  violated the defining Bruggeman self-consistency equation at essentially every
+  fill (e.g. `bruggeman(4, 4, 0.5)` returned 2.828 instead of 4.0; the dilute
+  limit `f=0.001` returned 5.218 instead of ~2.003).  The root selector was also
+  rewritten to pick the PASSIVE branch (`Im(eps) >= 0`, continuous with the
+  infinitesimal-loss limit) instead of an arbitrary `Re > 0` root that broke
+  metallic mixtures (`bruggeman(-10, 2.25, 0.0)` returned +5.0 instead of 2.25).
+  **BEHAVIOR CHANGE: every `bruggeman()` output moves** (the old values were
+  wrong); validated by a 40,000-sample self-consistency sweep (residual
+  <= 2e-13, passivity everywhere, no branch jumps).  `maxwell_garnett` and the
+  Rytov tensors are unchanged.
+- **BOR-PMM unit-system dependence** (`elements/bor/`, audit P1-01 + P2-06): the
+  flux-normalization threshold (absolute `1e-10`) and the propagating-mode
+  classifiers (absolute `|q.imag| < 1e-4`, `q.real > 0.1`) were dimensional, so
+  the SAME physics expressed in meters returned silently wrong T (energy
+  0.44-0.99) and nm-scale inputs returned silently EMPTY R/T.  Both now work in
+  unit-invariant form (flux relative to the mode's own `r dr` field norm;
+  classifiers in the dimensionless `q/k0`), bit-identical at the validated
+  micron scale and verified identical across 5 unit systems (nm to m).
+- **1-D PMM gain/evanescent incidence guard** (`elements/pmm/_core.py` +
+  `oned.py` docstrings, audit P1-03): mirrored the v5.14.1 RCWA audit-P1 guard
+  into all 1-D PMM far-field paths (scalar, Jones, slanted, segments, oblique
+  out-of-plane) -- a gain superstrate (public `Im(n) < 0`, even `-1e-9`)
+  previously flipped `kz_inc` negative and silently returned zeroed R with
+  negative T (`sum T = -12.5`).  Now raises `ValueError` like RCWA; plain lossy
+  superstrates still run (documented caveat).  Same guard added to
+  `pmm_efficiency_2d_staggered` (audit P1-05), which silently returned
+  `sum T = -144.6` where the hybrid raised.
+- **Stale retained internals in PMMStack / PMM2DStack** (audit P1-04):
+  `internal_field()` / `layer_absorption()` silently served the PREVIOUS solve's
+  fields after the source or geometry changed.  Retained internals are now
+  invalidated at every superseding entry point (`solve`, `solve_vs_wavelength`,
+  `add_layer`, `set_source`, and the prepared assemble-once path), so they can
+  only describe the most recent solve, which must have used
+  `retain_internal=True` -- otherwise the documented `ValueError` is raised.
+  **BEHAVIOR CHANGE: sequences that previously (wrongly) returned stale fields
+  now raise.**
+- **LG/HG mode-stack cache origin collision**
+  (`propagators/asymptotic_modes.py`, audit P1-06): the cache keys captured
+  shape/pitch/waist/centre/dtype but not the grid ORIGIN, so `decompose_lg` /
+  `decompose_hg` on a shifted same-shape grid silently reused the wrong cached
+  modes (~27% amplitude error).  The origin `(X[0,0], Y[0,0])` is now part of
+  both keys.
+- **Ray-trace pseudo-glass registration collisions** (`raytrace/trace.py`,
+  audit P1-07 + P2-36 + P3-61): spherical/aspheric elements registered their
+  fixed-index glass under `id(elem)`-derived names -- CPython id recycling let a
+  later build silently retarget earlier surface lists to the WRONG refractive
+  index (198/200 wrong in a 200-point sweep).  Names are now content-derived
+  (`__spherical_<repr(n)>`), the registry sentinel was corrected to the
+  `'__user__'` tuple `get_glass_index` actually matches (fixes `ImportError` on
+  installs without the optional `refractiveindex` package), and re-registration
+  invalidates the per-name value cache.
+- **GUI wave-optics dock dead import** (`ui/waveoptics_dock.py`, audit P1-08):
+  the worker imported the pre-v5.14-reorg module path `lumenairy.propagation`,
+  so every Run died instantly and the dock hung at 'Running...'.  Backend
+  selection now sets the flags on `propagators.fft_infra` (where the FFT
+  dispatchers actually read them), and `run()` is failure-safe: any exception
+  -- including ones with a broken `__str__` -- still emits the finished signal
+  with an error payload, so the Run button always recovers.
+
 ## [5.17.1] — 2026-07-02
 
 ### Fixed
