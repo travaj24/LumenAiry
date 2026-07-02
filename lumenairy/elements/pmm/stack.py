@@ -2,6 +2,9 @@
 layers via the div-conforming covariant-metric generator)."""
 from __future__ import annotations
 
+import threading
+from collections import OrderedDict
+
 import numpy as np
 
 # Backend detection for the JAX (differentiable) dispatch in pmm_efficiency_1d.
@@ -1622,7 +1625,33 @@ class _PreparedPMMStack:
     Caches per-layer modal eigs keyed by ``(layer, wavelength, angle,
     resolved-eps-content)`` so a material sweep (e.g. an LC director tuning
     curve) re-eigs only the layers whose material keys changed; key-free
-    layers and the half-spaces eig once per ``(wavelength, angle)``."""
+    layers and the half-spaces eig once per ``(wavelength, angle)``.
+
+    Both caches are per-INSTANCE LRU-bounded ``OrderedDict``\\ s (audit
+    P3-32): unbounded dicts retained one modal set per historical
+    (wavelength, angle, material-content) point forever -- a 1000-tensor LC
+    director sweep on a long-lived prepared object accumulated GBs the
+    documented re-eig contract never needs.  Sizing: a keyed ``_eig_cache``
+    entry is ~3 dense ``(2*n_glob)^2`` complex arrays (~11.5 MB at
+    production ``n_glob~300``), and one solve holds at most ``n_layers``
+    entries live at once, so 64 slots (worst case ~0.7 GB) guarantee a
+    single solve never self-evicts while typical few-state material scans
+    still hit; a ``_mats_cache`` entry (SEM operators + two half-space mode
+    sets per ``(wavelength, angle)``) is used once per solve, so 8 slots
+    cover alternating wavelength/angle revisits.  Eviction only drops the
+    dict's reference -- returned mode arrays held by callers are never
+    mutated -- and a post-eviction recompute is byte-identical (same LAPACK
+    eig on the same input bytes).  ``clear_cache`` drains both on demand.
+
+    These instance caches are NOT enrolled in ``lumenairy._cache_registry``
+    (deliberate): the registry's contract (v4.16.0) covers PROCESS-GLOBAL
+    module caches, and the v4.16.1 enrollment meta-pin walker accordingly
+    discovers only module-level ``_CACHE`` assignments -- an instance
+    attribute's lifetime is its owning object's, so dropping the prepared
+    object (or calling :meth:`clear_cache`) is the release path."""
+
+    _EIG_CACHE_SIZE = 64
+    _MATS_CACHE_SIZE = 8
 
     def __init__(self, stack):
         if any(abs(L[2]) > 1e-12 for L in stack._layers):
@@ -1637,8 +1666,21 @@ class _PreparedPMMStack:
             [L[1] for L in stack._layers], stack.min_feature / stack.period)
         self._layer_keys = [sorted({e for e in eps_u if isinstance(e, str)})
                             for eps_u in self._layer_eps_u]
-        self._eig_cache = {}
-        self._mats_cache = {}
+        self._eig_cache = OrderedDict()
+        self._mats_cache = OrderedDict()
+        # Guards get / move_to_end / setitem / popitem on both caches
+        # (mirrors the _WRAPPER_MERIT_CACHE_LOCK precedent); the eig /
+        # assembly builds themselves run outside the lock.
+        self._cache_lock = threading.Lock()
+
+    def clear_cache(self):
+        """Drop every cached modal eig + per-``(wavelength, angle)`` operator
+        set (audit P3-32).  The next :meth:`solve` recomputes them
+        byte-identically; call between sweep stages to release memory
+        without discarding the prepared stack."""
+        with self._cache_lock:
+            self._eig_cache.clear()
+            self._mats_cache.clear()
 
     def _resolve(self, eps_u, materials, wavelength):
         out = []
@@ -1667,15 +1709,22 @@ class _PreparedPMMStack:
         else:
             resolved = None
             ck = (i, wavelength, angle)
-        if ck in self._eig_cache:
-            return self._eig_cache[ck]
+        with self._cache_lock:
+            hit = self._eig_cache.get(ck)
+            if hit is not None:
+                self._eig_cache.move_to_end(ck)   # LRU: refresh recency
+        if hit is not None:
+            return hit
         if resolved is None:
             resolved = [st._as_tensor(e) for e in self._layer_eps_u[i]]
         mats = _build_sem_tensor_segments(
             st.period, self._uwidths, [_tensor3_dict(e) for e in resolved],
             st.degree, st.n_el, st.grade)
         modes = _sem_modes_tensor(mats, k0, kx0, True)
-        self._eig_cache[ck] = modes
+        with self._cache_lock:
+            self._eig_cache[ck] = modes
+            while len(self._eig_cache) > self._EIG_CACHE_SIZE:
+                self._eig_cache.popitem(last=False)
         return modes
 
     def solve(self, *, wavelength, materials=None, angle=0.0, theta=None):
@@ -1693,7 +1742,11 @@ class _PreparedPMMStack:
         eps_sup, eps_sub = st.n_sup ** 2, st.n_sub ** 2
         nU = len(self._uwidths)
         rk = (wl, angle)
-        if rk not in self._mats_cache:
+        with self._cache_lock:
+            entry = self._mats_cache.get(rk)
+            if entry is not None:
+                self._mats_cache.move_to_end(rk)   # LRU: refresh recency
+        if entry is None:
             t_sup = _tensor3_dict(eps_sup * np.eye(3))
             t_sub = _tensor3_dict(eps_sub * np.eye(3))
             m_sup = _build_sem_tensor_segments(
@@ -1703,11 +1756,15 @@ class _PreparedPMMStack:
                 st.period, self._uwidths, [t_sub] * nU, st.degree, st.n_el,
                 st.grade)
             _geo = _uniform_geo_eig(m_sup, k0, kx0)
-            self._mats_cache[rk] = (
+            entry = (
                 m_sup, m_sub,
                 _sem_modes_uniform(m_sup, k0, kx0, eps_sup, _geo),
                 _sem_modes_uniform(m_sub, k0, kx0, eps_sub, _geo))
-        mats_sup, _mats_sub, sup_modes, sub_modes = self._mats_cache[rk]
+            with self._cache_lock:
+                self._mats_cache[rk] = entry
+                while len(self._mats_cache) > self._MATS_CACHE_SIZE:
+                    self._mats_cache.popitem(last=False)
+        mats_sup, _mats_sub, sup_modes, sub_modes = entry
         Wsup, Vsup = sup_modes[0], sup_modes[1]
         Wsub, Vsub = sub_modes[0], sub_modes[1]
         n_glob = mats_sup["n_glob"]

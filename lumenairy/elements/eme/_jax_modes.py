@@ -37,6 +37,7 @@ plus its VJP (an ``inv(V)``) -- ``O((4 Nx Ny)^3)``.  Keep ``Nx*Ny`` small
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 
 import numpy as np
 
@@ -45,7 +46,17 @@ from .eme_2d_vector import _yee_ops
 
 # Frozen geometry-only operators, cached by (Nx, Ny, Lx, Ly, kx0, ky0).  Values
 # are NumPy dense arrays; converted to jnp.asarray at use (cheap, host->device).
-_FROZEN_CACHE: dict = {}
+#
+# LRU-bounded (audit P3-16): the keys include the Bloch phases kx0/ky0, which
+# VARY per point in exactly the band-structure use case this module exists
+# for, so an unbounded dict retains one dense operator set PER K-POINT forever
+# (a "yee" entry is 4 dense (Nx*Ny)^2 complex arrays -- ~1.3 MB at the
+# documented 12x12 scope, ~67 MB at 32x32).  Within a solve only the CURRENT
+# k-point's operators are reused, so a handful of slots preserves every hit;
+# 8 follows the audit's fix direction and matches the propagation.py
+# OrderedDict-LRU convention (move_to_end on hit, popitem(last=False) evict).
+_FROZEN_CACHE: 'OrderedDict[tuple, object]' = OrderedDict()
+_FROZEN_CACHE_SIZE = 8
 _FROZEN_LOCK = threading.Lock()
 
 
@@ -74,12 +85,16 @@ def _frozen_yee_dense(Nx, Ny, Lx, Ly, kx0, ky0):
     key = ("yee",) + _frozen_key(Nx, Ny, Lx, Ly, kx0, ky0)
     with _FROZEN_LOCK:
         hit = _FROZEN_CACHE.get(key)
+        if hit is not None:
+            _FROZEN_CACHE.move_to_end(key)   # LRU: refresh recency
     if hit is not None:
         return hit
     ops = tuple(op.toarray().astype(complex) for op in
                 _yee_ops(Nx, Ny, Lx, Ly, kx0, ky0))
     with _FROZEN_LOCK:
         _FROZEN_CACHE[key] = ops
+        while len(_FROZEN_CACHE) > _FROZEN_CACHE_SIZE:
+            _FROZEN_CACHE.popitem(last=False)
     return ops
 
 
@@ -90,6 +105,8 @@ def _frozen_helmholtz_L(Nx, Ny, Lx, Ly, kx0, ky0):
     key = ("helm",) + _frozen_key(Nx, Ny, Lx, Ly, kx0, ky0)
     with _FROZEN_LOCK:
         hit = _FROZEN_CACHE.get(key)
+        if hit is not None:
+            _FROZEN_CACHE.move_to_end(key)   # LRU: refresh recency
     if hit is not None:
         return hit
     hx, hy = Lx / Nx, Ly / Ny
@@ -110,6 +127,8 @@ def _frozen_helmholtz_L(Nx, Ny, Lx, Ly, kx0, ky0):
             L[p, ix(i, j - 1)] += ((1 / py) if j == 0 else 1) / hy ** 2
     with _FROZEN_LOCK:
         _FROZEN_CACHE[key] = L
+        while len(_FROZEN_CACHE) > _FROZEN_CACHE_SIZE:
+            _FROZEN_CACHE.popitem(last=False)
     return L
 
 

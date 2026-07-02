@@ -43,13 +43,23 @@ EXACTLY normal incidence on a CENTERED square returns the clean symmetry zero
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 
 import numpy as np
 
 from ...backend import is_jax_array  # noqa: F401  (re-exported for the dispatch)
 
 _C = np.complex128
-_STATIC_CACHE = {}
+# LRU-bounded (audit P3-28): the key includes the CONTINUOUS pillar bounds /
+# cell-layout bytes, so an external geometry sweep or FD geometry
+# optimization inserts one multi-MB projected-operator entry PER GEOMETRY
+# (~3 MB at toy sizes, ~9 MB at production degree=5 / n_orders=7).  A single
+# solve touches exactly ONE geometry entry, so 16 slots keep every realistic
+# repeated-geometry hit while capping worst-case residency at ~150 MB.
+# Follows the propagation.py / wrapper_merits.py OrderedDict-LRU convention
+# (move_to_end on hit, popitem(last=False) evict, all under the cache lock).
+_STATIC_CACHE: 'OrderedDict[tuple, dict]' = OrderedDict()
+_STATIC_CACHE_SIZE = 16
 _STATIC_CACHE_LOCK = threading.Lock()
 
 
@@ -135,6 +145,8 @@ def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
     key = (period_x, period_y, x0, x1, y0, y1, degree, n_el, grade, n_orders)
     with _STATIC_CACHE_LOCK:
         hit = _STATIC_CACHE.get(key)
+        if hit is not None:
+            _STATIC_CACHE.move_to_end(key)   # LRU: refresh recency
     if hit is not None:
         return hit
     from .twod import _build_axis, _projectors
@@ -159,6 +171,8 @@ def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
     with _STATIC_CACHE_LOCK:
         _STATIC_CACHE[key] = out
+        while len(_STATIC_CACHE) > _STATIC_CACHE_SIZE:
+            _STATIC_CACHE.popitem(last=False)
     return out
 
 
@@ -174,6 +188,8 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
            n_orders)
     with _STATIC_CACHE_LOCK:
         hit = _STATIC_CACHE.get(key)
+        if hit is not None:
+            _STATIC_CACHE.move_to_end(key)   # LRU: refresh recency
     if hit is not None:
         return hit
     from .twod import (
@@ -225,6 +241,8 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
     with _STATIC_CACHE_LOCK:
         _STATIC_CACHE[key] = out
+        while len(_STATIC_CACHE) > _STATIC_CACHE_SIZE:
+            _STATIC_CACHE.popitem(last=False)
     return out
 
 
