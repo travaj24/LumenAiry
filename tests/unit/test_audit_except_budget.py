@@ -38,9 +38,21 @@ LUMENAIRY_DIR = os.path.join(REPO_ROOT, 'lumenairy')
 # pmm/_jax_stack2d.py `_concrete`, pmm/stack.py's traced-tensor OOP probe,
 # pmm/stack2d.py's traced-thickness validation probe -- all the sanctioned
 # KEEP-AS-IS class (a tracer's concretization error is untypeable without
-# importing jax at module scope).  Slack of 2 retained.  If you add a
-# non-tracer-guard site, NARROW it instead of bumping.
-_NON_UI_EXCEPT_BUDGET = 28
+# importing jax at module scope).
+#
+# Audit-fix campaign (AUDIT_V5_17_0, waves 3/5/6, 2026-07-02): +9 sites of
+# the SAME sanctioned tracer-guard class -- the incidence/validation guards
+# mirrored into the JAX twins must concretize source values and skip on any
+# tracer error: pmm/_core.py `_jpmm_concrete_incidence_guard`,
+# pmm/_jax_stack.py `_grazing_guard_concrete`, pmm/_jax_twod.py `_concrete`
+# + host-guard pair (3), pmm/oned.py `_resolve_incidence_checked`,
+# pmm/stack.py add_layer traced-thickness check, rcwa/oned.py
+# `_resolve_incidence_checked`, propagators/asymptotic_jax_twin.py
+# `_require_jax_x64` config read.  (The one non-tracer wave-2 site in
+# memory.py was NARROWED to the registry-walk tuple instead of counted.)
+# Slack of 2 retained.  If you add a non-tracer-guard site, NARROW it
+# instead of bumping.
+_NON_UI_EXCEPT_BUDGET = 39
 
 
 def _count_except_exception_in_non_ui() -> int:

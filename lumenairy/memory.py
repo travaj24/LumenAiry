@@ -932,7 +932,9 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
     def _capture(key: str, getter: Any) -> None:
         try:
             prior[key] = getter()
-        except Exception:
+        except (ImportError, RuntimeError, AttributeError):
+            # Best-effort: a getter failing on a partial install must not
+            # strand the rest of the capture (the registry-walk tuple).
             prior[key] = None
 
     if enabled:
