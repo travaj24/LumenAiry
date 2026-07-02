@@ -233,11 +233,15 @@ def clear_lg_mode_stack_cache() -> None:
     :func:`decompose_lg` / :func:`decompose_hg`.
 
     Each entry is a stack of ``(N_modes, Ny, Nx)`` complex arrays keyed
-    on ``(p_max, ell_max, Ny, Nx, w, cx, cy, dx, dy, dtype_str)`` (LG) or
-    ``(m_max, n_max, Ny, Nx, wx, wy, cx, cy, dx, dy, dtype_str)`` (HG).
+    on ``(p_max, ell_max, Ny, Nx, w, cx, cy, dx, dy, dtype_str, x0, y0)``
+    (LG) or ``(m_max, n_max, Ny, Nx, wx, wy, cx, cy, dx, dy, dtype_str,
+    x0, y0)`` (HG), where ``x0, y0`` are the grid origin
+    ``(X[0, 0], Y[0, 0])``.
     The ``dx, dy`` entries were added in v4.14.1 (P0-NEW-1) -- pre-v4.14.1
     keys captured only the grid shape, so two calls at the same N but
     different physical pitch silently collided on the cached entry.
+    The ``x0, y0`` entries were added in v5.17.1 (audit P1-06) -- without
+    them, same-shape/same-pitch grids at different offsets collided.
     Safe to call at any time; subsequent decompose calls rebuild and
     re-cache.
     """
@@ -293,8 +297,9 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     as ``keys``.  Each slice is ``np.conj(LG_{p, ell}(X, Y; w, cx, cy))``.
 
     Cache key includes the grid shape, the physical pitch ``(dx, dy)``,
-    all basis parameters, and the dtype of the (X, Y) sample arrays so
-    cached entries are only reused when the result would be bit-equal.
+    the grid origin ``(X[0, 0], Y[0, 0])``, all basis parameters, and
+    the dtype of the (X, Y) sample arrays so cached entries are only
+    reused when the result would be bit-equal.
 
     v4.14.1 (P0-NEW-1):  ``dx, dy`` are included in the cache key.
     Pre-v4.14.1 keys captured only ``(Ny, Nx)``, so two calls with the
@@ -302,6 +307,12 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
     ``dx=2e-6`` at N=256) collided on the cache and the second call
     silently received the first call's modes evaluated against the
     second call's field.  Thread-safe via ``_LG_MODE_STACK_LOCK``.
+
+    v5.17.1 (audit P1-06):  the grid origin ``(X[0, 0], Y[0, 0])`` is
+    included in the cache key.  Shape + pitch alone do not pin the
+    physical sample positions, so two same-shape/same-pitch grids at
+    different offsets (e.g. a shifted ROI) collided and the second call
+    silently received modes evaluated at the first grid's coordinates.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -312,6 +323,7 @@ def _lg_mode_conj_stack(X: np.ndarray, Y: np.ndarray, w: float,
         int(p_max), int(ell_max), Ny, Nx,
         float(w), float(cx), float(cy),
         float(dx), float(dy), dtype_str,
+        float(X.flat[0]), float(Y.flat[0]),
     )
     with _LG_MODE_STACK_LOCK:
         cached = _LG_MODE_STACK_CACHE.get(cache_key)
@@ -355,6 +367,9 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
     the same reason as the LG variant -- same shape at different
     physical pitch must not collide.  Thread-safe via
     ``_HG_MODE_STACK_LOCK``.
+
+    v5.17.1 (audit P1-06):  the grid origin ``(X[0, 0], Y[0, 0])`` is
+    included in the cache key; see :func:`_lg_mode_conj_stack`.
     """
     X = np.asarray(X)
     Y = np.asarray(Y)
@@ -365,6 +380,7 @@ def _hg_mode_conj_stack(X: np.ndarray, Y: np.ndarray,
         int(m_max), int(n_max), Ny, Nx,
         float(wx), float(wy), float(cx), float(cy),
         float(dx), float(dy), dtype_str,
+        float(X.flat[0]), float(Y.flat[0]),
     )
     with _HG_MODE_STACK_LOCK:
         cached = _HG_MODE_STACK_CACHE.get(cache_key)
