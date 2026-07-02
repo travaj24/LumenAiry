@@ -172,19 +172,31 @@ def _aligned_max_diff(rec_a, rec_b):
 
 
 def _converged_cluster(records, passive, tol, min_cluster):
-    """Indices of the largest group of PASSIVE solves that mutually agree
-    PER-ORDER (and on the Jones matrix) within ``tol`` -- the converged plateau.
+    """Indices of the largest group of PASSIVE solves that MUTUALLY (pairwise)
+    agree PER-ORDER (and on the Jones matrix) within ``tol`` -- the converged
+    plateau.
 
     ``records[i]`` is the ``rec`` tuple for :func:`_aligned_max_diff`; ``passive``
     is the aligned bool list.  Returns the index list (sorted) when it reaches
     ``min_cluster`` members, else ``[]``.  Clustering on the per-order signature
     (not the total) is what rejects an under-converged-but-energy-passive solve:
     such a degree fails to agree with the higher-degree plateau and is excluded.
+
+    The group is a CLIQUE, grown greedily around each anchor (audit P3-26: the
+    previous anchor-star admitted members up to ``2*tol`` apart, quietly
+    doubling the documented worst-case spread of the consensus pick); on a
+    genuinely converged plateau -- every pair within ``tol`` -- the result is
+    identical to the old star.
     """
     pidx = [i for i, p in enumerate(passive) if p]
     best = []
     for a in pidx:
-        grp = [b for b in pidx if _aligned_max_diff(records[a], records[b]) <= tol]
+        grp = [a]
+        for b in pidx:
+            if b != a and all(
+                    _aligned_max_diff(records[b], records[m]) <= tol
+                    for m in grp):
+                grp.append(b)
         if len(grp) > len(best):
             best = grp
     return sorted(best) if len(best) >= min_cluster else []

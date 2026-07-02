@@ -490,9 +490,19 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
         EinvF = (Tp * inv_nodal[None, :]) @ Tpinv
         EpnF = (Tp * (1.0 / inv_nodal)[None, :]) @ Tpinv
         Ip = np.kron(Ty @ Typ, Tx @ Txp)
+        # Per-slot inverse-rule routing (audit P3-33): on a DOUBLY-patterned
+        # cell the nodal factorized operators are pointwise (no per-axis
+        # Fourier rule exists in this representation), so the historical
+        # assignment -- harmonic-average ``EpnF`` on the Ex slot, Laurent
+        # ``EpsF`` on the Ey slot -- is kept unchanged (byte-identical
+        # pillars); the separable branches below route per axis rigorously.
         return dict(Gx0F=Gx0F, Gy0F=Gy0F, EpsF=EpsF, EinvF=EinvF, EpnF=EpnF,
-                    IpxF=Ip, IpyF=Ip)
+                    EpnxF=EpnF, EpnyF=EpsF, IpxF=Ip, IpyF=Ip)
     if nsy == 1 and nsx > 1:                    # uniform along y
+        # x-patterned: the walls are x-normal, so the INVERSE rule belongs on
+        # the Ex slot (EpnxF) and the tangential Ey slot keeps Laurent (audit
+        # P3-33: this branch was already Li-correct; the per-slot keys make
+        # the routing explicit).
         o1 = _axis_ops_1d(ax, eps_tile[:, 0])
         Tx = _axis_projection(ax, ox)
         Txp = np.linalg.pinv(Tx)
@@ -500,13 +510,21 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
         ipx = Tx @ Txp
         Gy0F = np.diag(np.repeat(oy, NxO).astype(_C)
                        * (2.0 * np.pi / period_y))
+        EpsF = np.kron(Iy, Tx @ o1["Eps"] @ Txp)
         return dict(Gx0F=np.kron(Iy, Tx @ o1["G0"] @ Txp), Gy0F=Gy0F,
-                    EpsF=np.kron(Iy, Tx @ o1["Eps"] @ Txp),
+                    EpsF=EpsF,
                     EinvF=np.kron(Iy, Tx @ o1["Einv"] @ Txp),
                     EpnF=np.kron(Iy, Tx @ o1["Epn"] @ Txp),
+                    EpnxF=np.kron(Iy, Tx @ o1["Epn"] @ Txp),
+                    EpnyF=EpsF,
                     IpxF=np.kron(Iy, ipx),
                     IpyF=np.eye(NxO * NyO, dtype=_C))
     if nsx == 1 and nsy > 1:                    # uniform along x
+        # y-patterned: the walls are y-NORMAL, so the inverse rule belongs on
+        # the Ey slot (EpnyF) and the tangential Ex slot keeps Laurent.
+        # Audit P3-33: the legacy single ``EpnF`` landed on the Ex slot --
+        # BOTH slots anti-Li on this branch, breaking the 90-degree rotation
+        # symmetry that formulation='laurent' has exactly.
         o1 = _axis_ops_1d(ay, eps_tile[0, :])
         Ty = _axis_projection(ay, oy)
         Typ = np.linalg.pinv(Ty)
@@ -514,10 +532,13 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
         ipy = Ty @ Typ
         Gx0F = np.diag(np.tile(ox, NyO).astype(_C)
                        * (2.0 * np.pi / period_x))
+        EpsF = np.kron(Ty @ o1["Eps"] @ Typ, Ix)
         return dict(Gx0F=Gx0F, Gy0F=np.kron(Ty @ o1["G0"] @ Typ, Ix),
-                    EpsF=np.kron(Ty @ o1["Eps"] @ Typ, Ix),
+                    EpsF=EpsF,
                     EinvF=np.kron(Ty @ o1["Einv"] @ Typ, Ix),
                     EpnF=np.kron(Ty @ o1["Epn"] @ Typ, Ix),
+                    EpnxF=EpsF,
+                    EpnyF=np.kron(Ty @ o1["Epn"] @ Typ, Ix),
                     IpxF=np.eye(NxO * NyO, dtype=_C),
                     IpyF=np.kron(ipy, Ix))
     # no walls on either axis: a uniform cell (the callers shortcut this to
@@ -527,15 +548,28 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
     Gx0F = np.diag(np.tile(ox, NyO).astype(_C) * (2.0 * np.pi / period_x))
     Gy0F = np.diag(np.repeat(oy, NxO).astype(_C) * (2.0 * np.pi / period_y))
     return dict(Gx0F=Gx0F, Gy0F=Gy0F, EpsF=eps0 * NfI, EinvF=NfI / eps0,
-                EpnF=eps0 * NfI, IpxF=NfI, IpyF=NfI)
+                EpnF=eps0 * NfI, EpnxF=eps0 * NfI, EpnyF=eps0 * NfI,
+                IpxF=NfI, IpyF=NfI)
 
 
-def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li"):
+def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li",
+                           EpnxF=None, EpnyF=None):
+    """Projected-layer modal solve.  Under ``formulation='li'`` the eps
+    operator in the ``Q`` block multiplying each transverse E component is
+    per-slot routable (audit P3-33): ``EpnxF`` lands on the Ex slot and
+    ``EpnyF`` on the Ey slot, so a separable cell gets the inverse rule on its
+    wall-NORMAL component and Laurent on the tangential one, either
+    orientation.  Callers not passing the per-slot operators (the PMM2DStack
+    path) keep the legacy assignment ``(Ex <- EpnF, Ey <- EpsF)``."""
     Nf = GxF.shape[0]
     I = np.eye(Nf, dtype=_C)
-    EPS_normal = EpnF if formulation == "li" else EpsF
-    Q = np.block([[GxF @ GyF, EpsF - GxF @ GxF],
-                  [GyF @ GyF - EPS_normal, -GyF @ GxF]])
+    if formulation == "li":
+        EPS_nx = EpnxF if EpnxF is not None else EpnF
+        EPS_ny = EpnyF if EpnyF is not None else EpsF
+    else:
+        EPS_nx = EPS_ny = EpsF
+    Q = np.block([[GxF @ GyF, EPS_ny - GxF @ GxF],
+                  [GyF @ GyF - EPS_nx, -GyF @ GxF]])
     EPS_inv = EinvF if formulation == "li" else np.linalg.inv(EpsF)
     P = np.block([[GxF @ EPS_inv @ GyF, I - GxF @ EPS_inv @ GxF],
                   [GyF @ EPS_inv @ GyF - I, -GyF @ EPS_inv @ GxF]])
@@ -615,7 +649,8 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
         GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
         Wl, Vl, lam_l = _layer_modes_projected(
             GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-            formulation=formulation)
+            formulation=formulation, EpnxF=lops["EpnxF"],
+            EpnyF=lops["EpnyF"])
 
     # ---- Redheffer recursion (Fourier/Rayleigh basis) ----
     S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
@@ -710,8 +745,11 @@ def pmm_efficiency_2d(
     eps_pillar, eps_host : complex
         Relative permittivities of the pillar and the surrounding host.
     x_bounds, y_bounds : (float, float)
-        ``(x0, x1)`` and ``(y0, y1)`` rectangle edges (metres), ``0 <= x0 <
-        x1 <= period_x`` (and likewise in y).
+        ``(x0, x1)`` and ``(y0, y1)`` rectangle edges (metres), ``0 < x0 <
+        x1 < period_x`` (and likewise in y) -- strictly interior,
+        non-degenerate walls (a wall coincident with the cell edge would
+        degenerate the outer strip).  Express an edge-touching pillar by
+        shifting the unit-cell origin (the lattice is periodic).
     n_substrate, n_superstrate : complex
         Refractive indices of the transmission (substrate) and incidence
         (superstrate) half-spaces.  Internally squared to permittivities.
@@ -910,8 +948,11 @@ def pmm_efficiency_2d_cell(
     when that total is even, one extra element is added to the widest strip on
     that axis (a pure hp-refinement) to keep the periodic node count odd (the
     Nyquist-null fix -- see the module docstring).  ``max_nodal_dof`` caps the
-    dense nodal problem size ``nodes_x * nodes_y`` (default 4000, ~256 MB per
-    dense operator).  ``stabilize=True`` runs the 1-D PMM's per-order
+    nodal problem size ``nodes_x * nodes_y`` (default ``150_000``; the v5.14
+    factorized assembly never materializes a dense ``N x N`` operator -- the
+    binding cost is the ``(Nf, N)`` projector pair, so staircased curved
+    cells such as a 32-strip disk at ``N ~ 83k`` fit).  ``stabilize=True``
+    runs the 1-D PMM's per-order
     degree-scan consensus (guards the measure-zero quasi-resonances; each scan
     step re-solves at the next ODD degree -- expensive in 2-D, so the default
     is False).
@@ -1007,8 +1048,8 @@ class PreparedPMM2D:
     __slots__ = ("period_x", "period_y", "depth", "polarization", "formulation",
                  "eps_h", "eps_sup", "eps_sub", "uniform_layer",
                  "order_x", "order_y", "Nf", "kx0", "ky0",
-                 "Gx0F", "Gy0F", "EpsF", "EinvF", "EpnF", "IpxF", "IpyF",
-                 "cinc", "einc_sq", "kz_inc", "eps_reals")
+                 "Gx0F", "Gy0F", "EpsF", "EinvF", "EpnF", "EpnxF", "EpnyF",
+                 "IpxF", "IpyF", "cinc", "einc_sq", "kz_inc", "eps_reals")
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -1035,7 +1076,8 @@ class PreparedPMM2D:
             GyF = self.Gy0F / k0 + self.ky0 * self.IpyF
             Wl, Vl, lam_l = _layer_modes_projected(
                 GxF, GyF, self.EpsF, self.EinvF, self.EpnF,
-                formulation=self.formulation)
+                formulation=self.formulation, EpnxF=self.EpnxF,
+                EpnyF=self.EpnyF)
 
         S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
         S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * self.depth))
@@ -1144,7 +1186,7 @@ def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
 
     eps0 = eps_tile.flat[0]
     uniform_layer = bool(np.all(np.abs(eps_tile - eps0) < 1e-12))
-    Gx0F = Gy0F = EpsF = EinvF = EpnF = IpxF = IpyF = None
+    Gx0F = Gy0F = EpsF = EinvF = EpnF = EpnxF = EpnyF = IpxF = IpyF = None
     if not uniform_layer:
         # k0-free projected operators (unit derivative ops; the per-wavelength
         # rescale in solve() is GxF = Gx0F/k0 + kx0*IpxF), with exact diagonal
@@ -1153,6 +1195,7 @@ def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
                                      period_y)
         Gx0F, Gy0F = lops["Gx0F"], lops["Gy0F"]
         EpsF, EinvF, EpnF = lops["EpsF"], lops["EinvF"], lops["EpnF"]
+        EpnxF, EpnyF = lops["EpnxF"], lops["EpnyF"]
         IpxF, IpyF = lops["IpxF"], lops["IpyF"]
 
     # Incident plane wave (angle + eps_sup, NOT wavelength).
@@ -1179,8 +1222,8 @@ def _prepare_pmm2d_core(period_x, period_y, x_walls, y_walls, eps_tile,
         eps_h=eps0, eps_sup=eps_sup, eps_sub=eps_sub,
         uniform_layer=uniform_layer, order_x=order_x, order_y=order_y, Nf=Nf,
         kx0=kx0, ky0=ky0, Gx0F=Gx0F, Gy0F=Gy0F, EpsF=EpsF, EinvF=EinvF,
-        EpnF=EpnF, IpxF=IpxF, IpyF=IpyF, cinc=cinc, einc_sq=einc_sq,
-        kz_inc=kz_inc, eps_reals=eps_reals)
+        EpnF=EpnF, EpnxF=EpnxF, EpnyF=EpnyF, IpxF=IpxF, IpyF=IpyF, cinc=cinc,
+        einc_sq=einc_sq, kz_inc=kz_inc, eps_reals=eps_reals)
 
 
 def prepare_pmm_2d_cell(

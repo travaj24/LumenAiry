@@ -462,8 +462,10 @@ class Granet2DTransverseE:
         #   div-like   s = d1(eps E1) + d2(eps E2)
         # and form S_tt, Schur as G3-mediated products of these directed ops.
         #
-        # V3 Gram (no eps), the E3=Btil(x)Btil space:  G3 = kron(Mtt_y, Mtt_x).
-        G3 = np.kron(Mtt_y, Mtt_x)
+        # V3 Gram (no eps), the E3=Btil(x)Btil space, would be
+        # kron(Mtt_y, Mtt_x) -- never consumed (the curl is tested in its own
+        # Vw space below, and the Schur solve runs against Meps33), so it is
+        # not built (audit P3-37; already flagged 2026-06-08).
 
         # === S_tt : the curl chi33 curl operator ===
         # MIMETIC PLACEMENT (the crux of the staggered basis).  The de Rham
@@ -541,16 +543,16 @@ class Granet2DTransverseE:
         Lmat += Stt
         Lmat -= Schur
 
+        # Only the operators DOWNSTREAM consumers read are retained
+        # (_region_modes: Lmat/Rmat/Et_blocks/Stt; _homog_geom_cache adds
+        # Schur).  Curl/Kzt/Ktz/Meps33 stay assembly locals -- storing them
+        # retained ~44% more dead operator memory per solver at convergence-
+        # grade sizes (audit P3-37; e.g. 1.66 GB per solver at Nx=Ny=4, M=16).
         self.Rmat = Rmat
         self.Lmat = Lmat
-        self.G3 = G3
-        self.Meps33 = Meps33
         self.Et_blocks = (Et_11, Et_22)
         self.Stt = Stt
         self.Schur = Schur
-        self.Curl = Curl
-        self.Kzt = Kzt
-        self.Ktz = Ktz
         self.dimtot = 2 * qq
 
     # --- eps-weighted directed (deriv) 2-D operator into V3 ------------------
@@ -963,6 +965,11 @@ def pmm_efficiency_2d_staggered(
                                 np.full((Nx, Ny), _C(eps_sup)),
                                 alpha0x=alpha0x, alpha0y=alpha0y, k0=k0)
     geom = _homog_geom_cache(sol_h)
+    # The geom tuple carries everything the half-spaces need; release the
+    # homogeneous solver's large operator attributes before the S-matrix /
+    # far-field stages (audit P3-37 -- keeping BOTH solver instances alive
+    # through the far field retained several GB at convergence-grade M).
+    del sol_h
     Wsup, Vsup, _ls = _homog_region_modes(geom, eps_sup)
     Wsub, Vsub, _lb = _homog_region_modes(geom, eps_sub)
 

@@ -129,6 +129,61 @@ def _jstack_assemble(static, jnp, t_cells):
                 n_glob=n_glob)
 
 
+def _jstack_geo_ops(static):
+    """GEOMETRY-ONLY global operators (weight-1 mass / stiffness / convection)
+    assembled once in concrete NumPy -- the eps-free ingredients of the shared
+    half-space eig (audit P3-27).  These are exactly the ``one``-keyed outputs
+    of :func:`_jstack_assemble` (no eps enters them), so building them host-side
+    skips the traced per-element scatter-add loop entirely."""
+    n_glob, n_el = static["n_glob"], static["n_el"]
+    l2g = static["l2g"]
+    S0 = np.zeros((n_glob, n_glob), dtype=np.complex128)
+    K = np.zeros_like(S0)
+    Cw = np.zeros_like(S0)
+    for e in range(n_el):
+        ix = np.ix_(l2g[e], l2g[e])
+        S0[ix] += np.diag(static["Mloc"][e])
+        K[ix] += static["Kloc"][e]
+        Cw[ix] += static["Cloc"][e]
+    return S0, K, Cw
+
+
+def _jstack_modes_uniform(S0, mu, w, jnp, eps):
+    """Uniform-isotropic half-space modes from the SHARED geometric eig -- the
+    traced twin of :func:`_core._sem_modes_uniform` (v5.14.2 backlog A2,
+    ported per audit P3-27).  For a uniform ``eps`` the coupled operator
+    collapses exactly to ``Mbig(eps) = eps I - blockdiag(Kx2, Kx2)``, so the
+    eps-free ``(mu, w)`` eig of ``Kx2`` serves every half-space with the
+    ANALYTIC spectrum shift ``q^2 = eps - mu`` (eps gradients flow through the
+    shift; k0/kx0 gradients through the one shared eig).  Same return contract
+    and z-Poynting forward selector as :func:`_jpmm_sem_modes_tensor`."""
+    cj = jnp.complex128
+    n = w.shape[0]
+    q2 = eps - mu
+    q = jnp.sqrt(jnp.concatenate([q2, q2]))
+    Zn = jnp.zeros((n, n), cj)
+    W2 = jnp.block([[w, Zn], [Zn, w]])
+    # Q @ W2 for the uniform medium: Q = [[0, eps I - Kx2], [-eps I, 0]] and
+    # Kx2 w = w diag(mu)  =>  (eps I - Kx2) w = w diag(q2)
+    QW = jnp.block([[Zn, w * q2[None, :]], [-eps * w, Zn]])
+    # --- the _jpmm_sem_modes_tensor forward selector, verbatim policy -------
+    lam0 = -1j * q
+    safe0 = jnp.where(jnp.abs(lam0) < 1e-12, 1e-12, lam0)
+    V0 = QW * (1.0 / safe0)[None, :]
+    SVt = S0 @ jnp.conj(V0[:n])             # S0 conj(Hx)
+    SVb = S0 @ jnp.conj(V0[n:])             # S0 conj(Hy)
+    flux = jnp.imag(jnp.einsum("in,in->n", W2[:n], SVb)
+                    - jnp.einsum("in,in->n", W2[n:], SVt))
+    fscale = 1e-9 * jnp.maximum(jnp.max(jnp.abs(flux)), 1.0)
+    prop = jnp.abs(flux) > fscale
+    flip = jnp.where(prop, flux < 0.0, q.imag < 0.0)
+    q = jnp.where(flip, -q, q)
+    lam = -1j * q
+    safe = jnp.where(jnp.abs(lam) < 1e-12, 1e-12, lam)
+    V2 = QW * (1.0 / safe)[None, :]
+    return W2, V2, lam, q
+
+
 # ---------------------------------------------------------------------------
 # the traced multilayer solve
 # ---------------------------------------------------------------------------
@@ -204,7 +259,6 @@ def _pmm_stack_solve_jax(stack):
     # ---- frozen geometry (concrete widths; eps objects pass through) ------
     uwidths, layer_eps_u = _pmm_union_grid(
         [L[1] for L in stack._layers], stack.min_feature / stack.period)
-    nU = len(uwidths)
     static = _jstack_static(stack.period, uwidths, stack.degree, stack.n_el,
                             stack.grade)
 
@@ -250,13 +304,25 @@ def _pmm_stack_solve_jax(stack):
         return dict(exx=M[0, 0], exy=M[0, 1], eyx=M[1, 0], eyy=M[1, 1],
                     ezz=M[2, 2])
 
-    def _iso(eps):
-        return dict(exx=eps, exy=0.0 * eps, eyx=0.0 * eps, eyy=eps, ezz=eps)
-
-    mats_sup = _jstack_assemble(static, jnp, [_iso(eps_sup)] * nU)
-    mats_sub = _jstack_assemble(static, jnp, [_iso(eps_sub)] * nU)
-    Wsup, Vsup, _ls, _qs = _jpmm_sem_modes_tensor(mats_sup, jnp, eig, k0, kx0)
-    Wsub, Vsub, _lb, _qb = _jpmm_sem_modes_tensor(mats_sub, jnp, eig, k0, kx0)
+    # SHARED-EIG half-spaces (audit P3-27; the NumPy stack's v5.14.2 backlog-A2
+    # optimization ported to the twin).  Both UNIFORM half-spaces reduce to
+    # ``Mbig(eps) = eps I - blockdiag(Kx2, Kx2)`` with the eps-free geometric
+    # ``Kx2 = S0^-1 (K - i kx0 (C - C^T) + kx0^2 S0) / k0^2``, so ONE n x n
+    # custom-VJP eig (traced through k0 / kx0) replaces the two full traced
+    # assemblies + two dense 2n x 2n eigs; the eps / n_sup / n_sub gradients
+    # flow ANALYTICALLY through the spectrum shift q^2 = eps - mu.
+    S0g, Kg, Cwg = _jstack_geo_ops(static)
+    S0j = jnp.asarray(S0g, cj)
+    op = jnp.asarray(Kg, cj)
+    if not (isinstance(kx0, float) and kx0 == 0.0):
+        Cwj = jnp.asarray(Cwg, cj)
+        op = op - 1j * kx0 * (Cwj - Cwj.T) + (kx0 * kx0) * S0j
+    Kx2 = (1.0 / (k0 * k0)) * (jnp.linalg.inv(S0j) @ op)
+    mu_geo, w_geo = eig(Kx2)
+    Wsup, Vsup, _ls, _qs = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
+                                                 eps_sup)
+    Wsub, Vsub, _lb, _qb = _jstack_modes_uniform(S0j, mu_geo, w_geo, jnp,
+                                                 eps_sub)
 
     lmodes = []
     for i, (thk, _segs, _slant) in enumerate(stack._layers):

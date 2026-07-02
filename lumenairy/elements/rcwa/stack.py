@@ -34,7 +34,6 @@ from ._core import (
     _rcwa_xp,
     _recentering_phase,
     _redheffer_star,
-    _require_inplane_tensor,
     _require_jax_x64,
     _require_propagating_incidence,
     _scalar_PQ,
@@ -1377,7 +1376,20 @@ class RCWAStack:
                 tcell = np.asarray(L.data(wl), dtype=_C)
                 _validate_cell_sampling("solve_vs_wavelength", tcell, self.nox,
                                         self.noy)
-                _require_inplane_tensor("solve_vs_wavelength", tcell)
+                # Mirror the STATIC add_layer tensor contract (audit P3-38):
+                # out-of-plane tensors are supported since v5.14.1, so the
+                # materialised dispersive cell must not re-impose the old
+                # in-plane-only restriction -- only the nonzero-e_zz guard
+                # (the pointwise ezz-Schur fold divides by it) applies.
+                if _tensor_offplane_present(tcell):
+                    ezz_min = float(np.min(np.abs(tcell[..., 2, 2])))
+                    if ezz_min < 1e-12:
+                        raise ValueError(
+                            "solve_vs_wavelength: an out-of-plane dispersive "
+                            "tensor layer requires |e_zz| > 0 everywhere "
+                            "(the E_z elimination divides by it); min "
+                            f"|e_zz| = {ezz_min:.3e} at wavelength "
+                            f"{wl:.6g} m.")
                 out.append(_RCWALayer(L.thickness, "tensor", tcell))
         return out
 
