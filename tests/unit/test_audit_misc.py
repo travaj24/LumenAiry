@@ -287,13 +287,22 @@ class TestAuditFixesV4_11_1_CircularPolarisationHandednessConsistent:
 
     1. ``create_circular_polarized('right')`` -> S3 > 0
     2. ``apply_quarter_wave_plate`` on a linear x-polarised input
-       at fast-axis angle pi/4 -> matches handedness of 1.
+       at fast-axis angle -pi/4 -> matches handedness of 1.
     3. (Documented match with ``vector_diffraction.py:147`` is by
        inspection: ``(1, +1j)/sqrt(2)`` is hard-coded for
        ``polarization='circular'``.)
 
     Pre-4.11.1 the three sites disagreed (the 4.10 patch flipped
     ``create_circular_polarized`` and inadvertently broke parity).
+
+    UPDATED for audit P2-15 (post-v5.17.0): ``apply_waveplate``'s
+    slow-axis sign flipped from ``exp(-i*phi)`` to ``exp(+i*phi)`` to
+    match the Berreman/RCWA solver transmission Jones, so the QWP
+    fast-axis angle that produces 'right' on x-pol moved from +pi/4
+    to -pi/4 (a fast axis at +pi/4 now gives 'left', agreeing with a
+    rigorous Berreman QWP slab at the same orientation).
+    ``create_circular_polarized`` and ``vector_diffraction`` are
+    unchanged.
     """
 
     def test_create_right_has_positive_s3(self):
@@ -314,18 +323,19 @@ class TestAuditFixesV4_11_1_CircularPolarisationHandednessConsistent:
         N, dx = 16, 5e-6
         scalar = np.ones((N, N), dtype=np.complex128)
         jf_lin = lm.create_linear_polarized(scalar, dx, angle=0.0)
-        jf_qwp = lm.apply_quarter_wave_plate(jf_lin, angle=np.pi / 4)
+        jf_qwp = lm.apply_quarter_wave_plate(jf_lin, angle=-np.pi / 4)
         jf_ref = lm.create_circular_polarized(
             scalar, dx, handedness='right')
         # Both should land at the same handedness (same sign of S3).
         s_qwp = float(np.mean(lm.stokes_parameters(jf_qwp)['S3']))
         s_ref = float(np.mean(lm.stokes_parameters(jf_ref)['S3']))
         assert s_qwp * s_ref > 0, (
-            f"apply_quarter_wave_plate on linear-x at angle=pi/4 "
+            f"apply_quarter_wave_plate on linear-x at angle=-pi/4 "
             f"gave S3={s_qwp:.3f}; create_circular_polarized('right') "
             f"gave S3={s_ref:.3f}.  Signs must agree for the two "
             f"recipes to produce the same physical handedness.  "
-            f"Pre-4.11.1 these disagreed."
+            f"(Audit P2-15: -pi/4 is the 'right' recipe under the "
+            f"solver-aligned retarder sign.)"
         )
 
 

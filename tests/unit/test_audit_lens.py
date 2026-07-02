@@ -325,13 +325,21 @@ class TestAuditFixesV4_11_2_rw_lens_CoatingAvgPolarizationSymmetric:
 # ============================================================================
 
 class TestAuditFixesV4_11_2_rw_lens_ApplyWaveplateMatchesCreateCircularRight:
-    """4.11.1 already pinned this equivalence; the v4.11.2 docstring
-    sync (correcting the docstring formula
-    ``J = R(-theta) diag(1, exp(+i phi)) R(theta)`` -> the actual
-    ``R(theta) diag(1, exp(-i phi)) R(-theta)``) shouldn't break it.
+    """4.11.1 pinned the QWP <-> create_circular_polarized('right')
+    equivalence at fast axis +pi/4.
+
+    UPDATED for audit P2-15 (post-v5.17.0): ``apply_waveplate``'s slow-
+    axis sign was flipped from ``exp(-i*phi)`` to ``exp(+i*phi)`` so the
+    Jones-element family matches the library's rigorous Berreman/RCWA
+    transmission Jones (a Berreman uniaxial QWP slab gives slow-rel-fast
+    phase +pi/2 under the public ``exp(-i omega t)`` convention).  Under
+    the corrected sign, the QWP recipe that reproduces 'right'
+    (S3 = +1) on x-pol is fast axis at **-pi/4**; fast axis at +pi/4
+    now gives 'left' (S3 = -1), in agreement with a Berreman QWP slab
+    with fast axis at +45 deg (``Ey/Ex = -i``).
 
     Test approach: pass a linear-x JonesField through a quarter-wave
-    plate at angle pi/4 and compare the on-grid Stokes S3 sign with
+    plate at angle -pi/4 and compare the on-grid Stokes S3 sign with
     ``create_circular_polarized('right')`` -- they must agree (same
     handedness).
     """
@@ -340,18 +348,17 @@ class TestAuditFixesV4_11_2_rw_lens_ApplyWaveplateMatchesCreateCircularRight:
         N, dx = 16, 5e-6
         scalar = np.ones((N, N), dtype=np.complex128)
         jf_lin = lm.create_linear_polarized(scalar, dx, angle=0.0)
-        jf_qwp = lm.apply_quarter_wave_plate(jf_lin, angle=np.pi / 4)
+        jf_qwp = lm.apply_quarter_wave_plate(jf_lin, angle=-np.pi / 4)
         jf_ref = lm.create_circular_polarized(
             scalar, dx, handedness='right')
         s_qwp = float(np.mean(lm.stokes_parameters(jf_qwp)['S3']))
         s_ref = float(np.mean(lm.stokes_parameters(jf_ref)['S3']))
         assert s_qwp * s_ref > 0, (
-            f"apply_waveplate(retardance=pi/2, angle=pi/4) on linear-x: "
+            f"apply_waveplate(retardance=pi/2, angle=-pi/4) on linear-x: "
             f"S3 = {s_qwp:.3f} should agree in sign with "
             f"create_circular_polarized('right') S3 = {s_ref:.3f}.  "
-            f"4.11.2 only synced the docstring formula, not the "
-            f"implementation, so this 4.11.1 equivalence must still "
-            f"hold."
+            f"(Audit P2-15: fast axis -pi/4 -> 'right' under the "
+            f"solver-aligned retarder sign.)"
         )
         # Tight bound: both should be close to +1 in S3/S0 ratio.
         assert s_qwp > 0.5 and s_ref > 0.5, (

@@ -6,8 +6,10 @@ real-lens path:
 
 * ``apply_real_lens_traced_jax`` -- per-pixel ray-traced phase screen
   via ``trace_jax`` + Chebyshev-fit Newton inversion.
-* ``apply_real_lens_maslov_jax`` -- traced + Maslov-index correction
-  for caustic-region accuracy.
+* ``apply_real_lens_maslov_jax`` -- traced + det(J)-sign-flip caustic
+  phase counter.  NOT algorithmically equivalent to the NumPy
+  ``apply_real_lens_maslov`` (audit P2-03) -- see its docstring for
+  the even-multiplicity (point-focus Gouy) limitation.
 
 Plus the shared Chebyshev tensor-product fit + evaluation helpers
 that both functions use, and a ``custom_jvp``-wrapped amplitude
@@ -636,16 +638,46 @@ def apply_real_lens_maslov_jax(
     amplitude: str = 'input',
     bandlimit: bool = True,
 ) -> Any:
-    """JAX-traceable Maslov-method real-lens propagator.
+    """JAX-traceable ray-traced lens propagator with a det(J)-sign-flip
+    caustic phase counter.
 
-    Same structure as :func:`apply_real_lens_traced_jax` but with a
-    Maslov-index correction added to the geometric phase: when the
-    forward map's Jacobian determinant changes sign across the entrance
-    grid, a -pi/2 phase shift is accumulated for each crossing in the
-    cumulative-product Maslov index along the radial direction.  This
-    extends the validity of the geometric-OPL phase model into the
-    caustic / focal-region neighbourhood that the plain ray-traced
-    method aliases through.
+    Same structure as :func:`apply_real_lens_traced_jax` -- a thin-OPD
+    geometric phase screen built from a Chebyshev fit of the traced
+    ray map -- plus a Maslov-style correction: when the forward map's
+    Jacobian determinant changes sign along the straight path from the
+    axis to each exit pixel, a -pi/2 phase shift is accumulated per
+    crossing.
+
+    .. warning::
+       Audit P2-03 (post-v5.17.0): despite the historical name, this
+       is **NOT** algorithmically equivalent to the NumPy
+       :func:`apply_real_lens_maslov`.  That function is a phase-space
+       quadrature / stationary-phase integral whose caustic phase
+       comes from the Hessian signature factor ``exp(i*pi*sig/4)`` (it
+       contains no radial sign-flip scan at all), and its amplitude is
+       the diffraction integral itself.  This JAX function is a phase
+       *screen* with a sign-flip-only counter.  Known limitations of
+       the counter, deliberately documented rather than fixed (an
+       even-multiplicity caustic classifier is research-grade):
+
+       * **Even-multiplicity caustics are missed.**  Through an axial
+         point focus BOTH eigenvalues of J flip sign, so det(J) does
+         not change sign, the count stays 0, and the true Maslov index
+         advance of 2 (the ``-pi`` Gouy shift) is dropped -- the
+         output phase is wrong by ``pi`` past an axial focus, exactly
+         the regime a "Maslov" propagator is usually reached for.
+         (Measured: an f~48 mm singlet evaluated ~52 mm past focus
+         shows magnification -1.06 on both axes -- every ray crossed
+         the focus -- yet the counter reports 0 flips and the output
+         is identical to the plain traced screen to ~3e-17 rad.)
+       * The radial scan uses 32 fixed steps, so closely spaced
+         odd-multiplicity flips can also be skipped.
+
+       For quantitatively correct focal-region / caustic phase and
+       amplitude, use the NumPy :func:`apply_real_lens_maslov`; use
+       this function when you need JAX autodiff and operate away from
+       even-multiplicity caustics (fold caustics from spherical
+       aberration ARE counted).
 
     Parameters and gradient flow are identical to
     :func:`apply_real_lens_traced_jax`.  Differentiable through
@@ -656,16 +688,14 @@ def apply_real_lens_maslov_jax(
     ``(cheb_order + 1, N, N)`` Chebyshev stack), so for memory-bound
     large grids use the NumPy path or budget for the monolithic cost.
 
-    The Maslov correction is implemented as:
+    The correction actually implemented is:
 
-        m(xe, ye) = #{Jacobian sign flips along the radial path
-                       from on-axis to (xe, ye)}
+        m(xe, ye) = #{det(J) sign flips along the straight path
+                       from on-axis to (xe, ye), 32 samples}
         phase_maslov = -pi/2 * m(xe, ye)
 
-    This is the same definition the NumPy
-    :func:`apply_real_lens_maslov` uses; the only difference is that
-    the radial scan is implemented as a ``jax.lax.fori_loop`` over a
-    polar resampling of the entrance grid for JAX traceability.
+    evaluated with a ``jax.lax.fori_loop`` over the Chebyshev-fitted
+    forward map for JAX traceability.
     """
     if not _jax_available():
         raise ImportError(

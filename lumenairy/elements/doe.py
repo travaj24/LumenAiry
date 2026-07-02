@@ -855,8 +855,28 @@ def makedammann2d(
             np.sum(farfieldamp ** 2) / farfieldamp.size
         )
 
-        # Combine amplitude constraint with current phase
-        farfield2 = farfieldamp * np.sign(farfield)
+        # Combine amplitude constraint with current phase.
+        #
+        # Audit P2-07 (post-v5.17.0): this used ``np.sign(farfield)``,
+        # which is only the Octave ``sign()`` (= z/|z|) this port needs
+        # on NumPy >= 2.0.  On NumPy 1.x (pyproject allows
+        # ``numpy>=1.20``) complex ``np.sign`` returns
+        # ``sign(z.real)`` (falling back to ``sign(z.imag)`` on the
+        # imaginary axis), so the far-field phase was replaced by +-1
+        # each iteration and the IFTA silently degenerated (8x8
+        # target, itr=200: uniformity 0.97 -> 0.00).  Compute the unit
+        # phasor z/|z| explicitly, 0-safe (0 -> 0, matching
+        # ``np.sign(0) == 0``).  Componentwise division by
+        # ``hypot(re, im)`` is bit-identical to NumPy 2.x complex
+        # ``np.sign`` (A/B verified), so NumPy >= 2.0 results are
+        # unchanged.
+        _ff_mag = np.hypot(farfield.real, farfield.imag)
+        _ff_unit = np.zeros_like(farfield)
+        np.divide(farfield.real, _ff_mag, out=_ff_unit.real,
+                  where=_ff_mag > 0)
+        np.divide(farfield.imag, _ff_mag, out=_ff_unit.imag,
+                  where=_ff_mag > 0)
+        farfield2 = farfieldamp * _ff_unit
 
         # Inverse transform (far field -> near field)
         nearfield2 = ifftshift(ifft2(ifftshift(farfield2))) * np.sqrt(farfield2.size)

@@ -269,13 +269,36 @@ def surface_sag_zernike_freeform(X, Y, R=np.inf, conic=0.0,
     zernike_coeffs : dict of {j: coefficient_m}
         OSA Zernike index j -> sag departure coefficient [m].
     norm_radius : float
-        Normalisation radius for the Zernike polynomials [m].
+        Normalisation radius for the Zernike polynomials [m].  Must be
+        positive and finite; non-positive values raise ``ValueError``
+        (audit P2-08, matching the P1-NEW-11 guards on the sibling
+        freeform sag functions).
 
     Returns
     -------
     sag : ndarray
     """
     from ..analysis import zernike_index_to_nm, zernike_polynomial
+
+    # Audit P2-08 (post-v5.17.0): reject non-positive ``norm_radius``,
+    # matching the v4.14.3 P1-NEW-11 guards on the four sibling sag
+    # functions (xy_polynomial / chebyshev norm_x, norm_y; q_bfs /
+    # q_con r_max).  This function missed that sweep: a negative
+    # ``norm_radius`` gives ``rho <= 0`` everywhere, which (a) flips
+    # the sign of every odd-n Zernike term (tilt, coma, trefoil) --
+    # silently mirrored sag -- and (b) defeats zernike_polynomial's
+    # ``rho <= 1`` pupil mask, so out-of-pupil pixels carry spurious
+    # departure too.  ``norm_radius = 0`` gives ``rho = inf`` and a
+    # silently all-zero departure.  Validate at entry so the typo
+    # surfaces at the call site.
+    if not (np.isfinite(norm_radius) and norm_radius > 0):
+        raise ValueError(
+            f"surface_sag_zernike_freeform: norm_radius must be a "
+            f"positive finite pupil radius [m]; got "
+            f"norm_radius={norm_radius!r}.  A negative value would "
+            f"silently flip the sign of every odd-order Zernike term "
+            f"(and defeat the rho <= 1 pupil mask); zero would "
+            f"silently zero the whole freeform departure.")
 
     h_sq = X ** 2 + Y ** 2
     sag = surface_sag_general(h_sq, R, conic)

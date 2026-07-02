@@ -660,34 +660,56 @@ def apply_waveplate(
     The Jones matrix for a waveplate with fast axis at angle theta and
     retardance phi (under the library's exp(-i omega t) convention) is::
 
-        J = R(theta) * diag(1, exp(-i*phi)) * R(-theta)
+        J = R(theta) * diag(1, exp(+i*phi)) * R(-theta)
 
     where R(theta) = [[cos t, -sin t], [sin t, cos t]] is the 2D
-    rotation matrix.  The negative sign on ``exp(-i phi)`` reflects
-    the fact that the slow axis arrives *later* than the fast axis
-    under the engineering-physics ``exp(-i omega t)`` time-harmonic
-    convention.  (Pre-4.7 the code used ``exp(+i phi)`` and the
-    pre-4.11.2 docstring still showed the EE-convention form
-    ``R(-theta) * diag(1, exp(+i phi)) * R(theta)``, which was
-    inconsistent with the actual implementation.)
+    rotation matrix.  Under the library-wide ``exp(-i omega t)`` /
+    ``exp(+i k n z)`` field convention (the one berreman.py declares
+    "PUBLIC throughout" and the propagators' ``exp(+i k OPL)`` phase
+    uses), traversing a thickness ``d`` of index ``n`` multiplies the
+    phasor by ``exp(+i k0 n d)``, so the SLOW axis (larger ``n``,
+    arrives *later*: a time delay ``tau`` contributes
+    ``exp(+i omega tau)`` when the carrier is ``exp(-i omega t)``)
+    accumulates POSITIVE relative phase ``exp(+i*phi)``.
 
-    v5.4.6 (audit P3-22): this slow-axis ``exp(-i*retardance)`` is
-    DECOUPLED from the propagators' field-phase convention
-    ``exp(+i*k*OPL)`` (asymptotic.py / vectorial_hfpi.py).  It is an
-    intentional, regression-pinned choice -- closed Jones pipelines give
-    correct intensities because this retarder sign and the Stokes
-    S3 = -2 Im(Ex conj Ey) sign are mutually consistent.  See
-    CONVENTIONS.md section 7 (Waveplate row).
+    BEHAVIOR CHANGE (audit P2-15, post-v5.17.0): from v4.7 through
+    v5.17.0 this function used ``exp(-i*retardance)`` on the slow axis
+    -- the ``exp(+i omega t)`` (EE-convention) sign -- with a docstring
+    that incorrectly attributed it to ``exp(-i omega t)``.  That made
+    the Jones-element family the CONJUGATE of the library's own
+    rigorous solver Jones: ``berreman_jones_1d`` on a uniaxial
+    quarter-wave slab (``eps = diag(no^2, ne^2, no^2)``,
+    ``d = lambda/(4 (ne - no))``, index-matched half-spaces) returns
+    transmission Jones ``diag(e^{i k0 no d}, e^{i k0 ne d})`` --
+    slow-relative-fast phase ``+pi/2`` -- and the same slab with its
+    fast axis at +45 deg maps x-pol to ``Ey/Ex = -i`` (S3 = -1),
+    while the pre-fix ``apply_waveplate`` gave ``Ey/Ex = +i``
+    (S3 = +1): circular handedness flipped between the element and
+    solver families for the same physical device.  The element sign
+    now matches the solver family (``berreman_jones_1d`` /
+    ``BerremanStack`` / ``rcwa_jones_1d``), so solver-derived Jones
+    matrices drop into JonesField pipelines without conjugation.
+
+    Consequences: a QWP with fast axis at +45 deg on x-pol now yields
+    S3 = -1 (``create_circular_polarized``'s 'left'); use fast axis
+    at -45 deg for S3 = +1 ('right').  Half-wave plates are unaffected
+    (``exp(+-i pi) = -1`` either way), as are all
+    retardance-magnitude / intensity results.  The v5.4.6 (P3-22)
+    "DECOUPLED, mutually consistent" note predates the Berreman /
+    RCWA retarder Jones (v5.14.4) and is superseded by this
+    cross-family alignment; see CONVENTIONS.md section 7.
     """
     angle = _resolve_angle('apply_waveplate', angle, angle_deg)
     c = np.cos(angle)
     s = np.sin(angle)
-    # Under the library's exp(-i omega t) time-harmonic convention,
-    # the slow axis arrives *later* than the fast axis, i.e. picks up
-    # phase exp(-i phi).  Pre-4.7 the code used exp(+i phi) here,
-    # which was the EE-convention sign and produced LHCP from
-    # (1, 0)+QWP@45 instead of the textbook-expected RHCP.
-    e = np.exp(-1j * retardance)
+    # Slow axis picks up POSITIVE relative phase exp(+i phi) under the
+    # library's exp(-i omega t) / exp(+i k n z) convention -- matching
+    # berreman_jones_1d / rcwa_jones_1d transmission Jones (audit
+    # P2-15, post-v5.17.0).  History: pre-4.7 exp(+i phi); v4.7
+    # flipped to exp(-i phi) (the EE-convention sign, misattributed
+    # to exp(-i omega t)); the audit fix restores exp(+i phi) so the
+    # element family agrees with the solver family on handedness.
+    e = np.exp(+1j * retardance)
 
     # R(theta) * diag(1, e) * R(-theta)  -- fast axis at angle theta,
     # slow axis perpendicular and delayed by `retardance` radians.
@@ -927,11 +949,15 @@ def create_circular_polarized(
         - 'right' (RHC): Jones vector ``(1, +i)/sqrt(2)``; S3 = +1.
         - 'left'  (LHC): Jones vector ``(1, -i)/sqrt(2)``; S3 = -1.
 
-        This matches ``apply_waveplate(QWP, 45 deg)`` acting on a
-        linear x-polarized input (which produces ``(1, +i)/sqrt(2)``
-        under the library's ``exp(-i omega t)`` time convention) and
-        the ``vector_diffraction.richards_wolf_focus`` circular-pol
-        branch.
+        This matches ``apply_waveplate(QWP, fast axis at -45 deg)``
+        acting on a linear x-polarized input (which produces
+        ``(1, +i)/sqrt(2)`` up to a global phase under the library's
+        ``exp(-i omega t)`` time convention) and the
+        ``vector_diffraction.richards_wolf_focus`` circular-pol
+        branch.  (Audit P2-15, post-v5.17.0: ``apply_waveplate`` was
+        realigned to the Berreman/RCWA solver Jones, so a QWP with
+        fast axis at **+45 deg** on x-pol now gives 'left' (S3 = -1);
+        pre-fix it gave 'right'.)
     dy : float, optional
 
     Returns
@@ -943,12 +969,17 @@ def create_circular_polarized(
     4.11.1: the 4.10 "fix" to this function flipped the handedness
     branches so that 'right' produced ``(1, -i)/sqrt(2)``, which gave
     ``S3 = -1`` under the library's own Stokes formula and contradicted
-    both ``apply_waveplate`` (whose QWP@45° on (1,0) produces
-    ``(1, +i)/sqrt(2)``) and the hard-coded right-circular Jones vector
-    in ``vector_diffraction.py``.  4.11.1 restores the pre-4.10 form
-    where 'right' obeys ``S3 > 0``, ``apply_waveplate(QWP, 45 deg)``
-    on x-pol produces ``create_circular_polarized('right')``, and all
-    three Jones-vector sites in the library agree.
+    the hard-coded right-circular Jones vector in
+    ``vector_diffraction.py``.  4.11.1 restores the pre-4.10 form
+    where 'right' obeys ``S3 > 0``.
+
+    Audit P2-15 (post-v5.17.0): ``apply_waveplate``'s retarder sign
+    was flipped to match the Berreman/RCWA solver Jones (slow axis
+    ``exp(+i*phi)``), so the QWP recipe that reproduces
+    ``create_circular_polarized('right')`` on x-pol is now fast axis
+    at **-45 deg** (pre-fix: +45 deg).  This function's own Jones
+    vectors and its agreement with ``vector_diffraction.py`` are
+    unchanged.
     """
     Ex = scalar_field / np.sqrt(2)
     if handedness.lower().startswith('r'):
