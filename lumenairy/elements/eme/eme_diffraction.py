@@ -175,6 +175,9 @@ def diffraction_eme(strips, Lx, Nx, Ly, k0, eps_sup, eps_sub, depth, Mx, My, *,
     ``mode_field``; the matcher is shared with ``diffraction_fd``.  For a
     structured layer this does NOT converge (module docstring); use
     ``rcwa_efficiency_2d`` / ``pmm_efficiency_2d`` for efficiencies.
+
+    Returns the ``mode_match`` dict (same shape as ``diffraction_fd``) with the
+    retained layer eigenvalues attached as ``res["qz2"]``.
     """
     Npw = (2 * Mx + 1) * (2 * My + 1)
     if qz2_window is None:
@@ -193,6 +196,8 @@ def diffraction_eme(strips, Lx, Nx, Ly, k0, eps_sup, eps_sub, depth, Mx, My, *,
     Psi = np.empty((Nx * Ny, Npw), dtype=complex)
     for n, q in enumerate(qz2):
         Psi[:, n] = mode_field(sm, q, ky0, Ly, Ny)[0].reshape(Nx * Ny)
-    return mode_match(qz2, Psi, plane_wave_orders(Mx, My), kx0=kx0, ky0=ky0,
-                      k0=k0, eps_sup=eps_sup, eps_sub=eps_sub, depth=depth,
-                      Lx=Lx, Ly=Ly, Nx=Nx, Ny=Ny), qz2
+    res = mode_match(qz2, Psi, plane_wave_orders(Mx, My), kx0=kx0, ky0=ky0,
+                     k0=k0, eps_sup=eps_sup, eps_sub=eps_sub, depth=depth,
+                     Lx=Lx, Ly=Ly, Nx=Nx, Ny=Ny)
+    res["qz2"] = qz2                                 # bare dict, like diffraction_fd
+    return res

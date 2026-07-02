@@ -478,6 +478,25 @@ def dispersion_vec(strips, Lx, Nx, k0, kx0, qz2, ky0, Ly, solver="dense"):
     return svdvals(Geq)[-1]
 
 
+def _strips_to_mu_xy(strips, Nx, Ly, Ny):
+    """Rasterize the optional per-strip scalar ``mu_x`` (magnetic ``(eps, h, mu)``
+    3-tuple strips) onto an ``(Nx, Ny)`` grid for the FD oracle.  Returns ``None``
+    when every strip has ``mu == 1`` (the byte-identical legacy oracle path)."""
+    if all(len(s) < 3 or not np.any(np.asarray(s[2], dtype=complex) != 1.0)
+           for s in strips):
+        return None
+    edges = np.cumsum([0.0] + [s[1] for s in strips])
+    yc = (np.arange(Ny) + 0.5) / Ny * Ly
+    mu = np.ones((Nx, Ny), dtype=complex)
+    for s, st in enumerate(strips):
+        msk = (yc >= edges[s]) & (yc < edges[s + 1])
+        mu_s = np.asarray(st[2] if len(st) > 2 else 1.0, dtype=complex)
+        if mu_s.ndim == 0:
+            mu_s = np.full(Nx, complex(mu_s))
+        mu[:, msk] = mu_s[:, None]
+    return mu
+
+
 def _fd_eig_dist(strips, Lx, Nx, Ly, k0, kx0, ky0, qz2, ny):
     """Distance from a candidate ``qz2`` to the NEAREST 2-D-FD oracle eigenvalue
     (a few sparse shift-invert modes near it).  A real mode has an FD mode within
@@ -485,7 +504,8 @@ def _fd_eig_dist(strips, Lx, Nx, Ly, k0, kx0, ky0, qz2, ny):
     independent ORACLE-ASSISTED spurious discriminator used by ``verify=True``
     (a self-contained PDE-residual check fails -- piecewise-y Gibbs noise)."""
     eps_xy = strips_to_eps_xy(strips, Lx, Nx, Ly, ny)
-    G, _, _ = _build_generator(eps_xy, Lx, Ly, Nx, ny, k0, kx0, ky0)
+    mu_xy = _strips_to_mu_xy(strips, Nx, Ly, ny)   # magnetic -> mu-consistent oracle
+    G, _, _ = _build_generator(eps_xy, Lx, Ly, Nx, ny, k0, kx0, ky0, mu_xy)
     gam, _ = eigs(G.tocsc(), k=4, sigma=1j * np.sqrt(complex(qz2)))
     return float(np.min(np.abs((-(gam ** 2)).real - qz2)))
 
@@ -535,6 +555,12 @@ def layer_vector_modes(strips, Lx, Nx, Ly, k0, qz2_range, *, kx0=0.0, ky0=0.0,
             "ref_2d_modes_vector with a JAX eps (the eig-based FD-oracle twin), or "
             "solve on NumPy and apply implicit differentiation at the converged "
             "mode.")
+    hsum = float(np.real(sum(s[1] for s in strips)))
+    if abs(hsum - Ly) > 1e-9 * max(abs(Ly), 1.0):
+        raise ValueError(
+            f"layer_vector_modes: strip heights sum to {hsum:g} but Ly = {Ly:g}; "
+            "the cell physics uses sum(h) while the Bloch wrap phase uses Ly, so "
+            "they must agree (documented contract: heights sum to Ly).")
     lo, hi = qz2_range
     grid = np.linspace(lo, hi, n_scan)
     vny = verify_ny if verify_ny is not None else max(48, 6 * len(strips))
@@ -584,7 +610,8 @@ def mode_field_vec(strips, Lx, Nx, Ly, k0, qz2, ky0, Ny, *, kx0=0.0):
     sigma = s[1][-1]
     S = len(strips)
     M = 2 * Nx
-    edges = np.concatenate([[0.0], np.cumsum([h for _, h in strips])])
+    # strips may be (eps_x, h) OR magnetic (eps_x, h, mu_x) -- like _strip_modes_at
+    edges = np.concatenate([[0.0], np.cumsum([s[1] for s in strips])])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
     Ex = np.zeros((Nx, Ny), dtype=complex)
     Ez = np.zeros((Nx, Ny), dtype=complex)
@@ -880,17 +907,19 @@ def ref_2d_modes_vector(eps_xy, Lx, Ly, Nx, Ny, k0, kx0=0.0, ky0=0.0,
 def strips_to_eps_xy(strips, Lx, Nx, Ly, Ny):
     """Rasterize a strip list onto an ``(Nx, Ny)`` grid for the 2-D reference.
 
-    Each strip's ``eps_x`` is a scalar isotropic ``(Nx,)`` profile (-> ``(Nx, Ny)``
-    output) OR a per-node ``(Nx, 3, 3)`` permittivity tensor (-> ``(Nx, Ny, 3, 3)``
-    output, the oracle's anisotropic input)."""
-    edges = np.cumsum([0.0] + [h for _, h in strips])
+    Each strip is ``(eps_x, h)`` or magnetic ``(eps_x, h, mu_x)`` (the ``mu_x`` is
+    ignored here -- see ``_strips_to_mu_xy`` for the ``mu`` grid).  ``eps_x`` is a
+    scalar isotropic ``(Nx,)`` profile (-> ``(Nx, Ny)`` output) OR a per-node
+    ``(Nx, 3, 3)`` permittivity tensor (-> ``(Nx, Ny, 3, 3)`` output, the oracle's
+    anisotropic input)."""
+    edges = np.cumsum([0.0] + [s[1] for s in strips])
     yc = (np.arange(Ny) + 0.5) / Ny * Ly
     ex0 = np.asarray(strips[0][0], dtype=complex)
     is_tensor = ex0.ndim == 3                       # (Nx, 3, 3)
     eps = np.zeros((Nx, Ny, 3, 3) if is_tensor else (Nx, Ny), dtype=complex)
-    for s, (ex, _) in enumerate(strips):
+    for s, st in enumerate(strips):
         msk = (yc >= edges[s]) & (yc < edges[s + 1])
-        exa = np.asarray(ex, dtype=complex)
+        exa = np.asarray(st[0], dtype=complex)
         if is_tensor:
             eps[:, msk] = exa[:, None, :, :]
         else:
