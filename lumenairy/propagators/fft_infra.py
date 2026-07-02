@@ -795,7 +795,32 @@ _FFT_STATE_KEYS = (
     'DEFAULT_COMPLEX_DTYPE', 'DEFAULT_REAL_DTYPE', 'DEFAULT_WAVE_PROPAGATOR',
     'DEFAULT_DY', 'FFTW_THREADS', 'SCIPY_FFT_WORKERS', 'USE_PYFFTW',
     '_PYFFTW_PLAN_FLAGS', '_PYFFTW_AUTO_PROMOTE',
+    # v5.17.1 (audit P3-54): setter-backed globals added after v5.4.6 that
+    # spawned workers must inherit too -- without these a worker silently
+    # reverts to double-buffered plans / default cache budgets, i.e. ~2x
+    # the FFT workspace the parent's knobs were set to prevent.
+    # restore_fft_state tolerates snapshots from older library versions
+    # that lack these keys (mixed-version worker pools).
+    'USE_SCIPY_FFT',                 # raw toggle (peer of USE_PYFFTW)
+    'PYFFTW_FALLBACK_ON_ERROR',      # set_fft_fallback
+    '_PYFFTW_DOUBLE_BUFFER',         # set_fft_double_buffer (v5.16.2)
+    '_PYFFTW_PLAN_CACHE_SIZE',       # set_fft_plan_cache_size
+    '_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE', '_BANDLIMIT_CACHE_SIZE',
+    '_H_CACHE_MAX_BYTES_PER_ENTRY', '_H_CACHE_MAX_TOTAL_BYTES',
+    # ^ the five set_asm_cache_size bounds
 )
+
+# Keys that must be restored THROUGH their setters, not by raw global
+# write: the setters carry required side effects (flipping the ping-pong
+# mode clears plans built in the other mode; tightening a cache bound
+# trims already-resident entries).  In a fresh spawn worker the caches
+# are empty so the side effects are no-ops, but restore_fft_state is
+# also callable in a warm process.  v5.17.1 (audit P3-54).
+_FFT_STATE_SETTER_KEYS = frozenset((
+    '_PYFFTW_DOUBLE_BUFFER', '_PYFFTW_PLAN_CACHE_SIZE',
+    '_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE', '_BANDLIMIT_CACHE_SIZE',
+    '_H_CACHE_MAX_BYTES_PER_ENTRY', '_H_CACHE_MAX_TOTAL_BYTES',
+))
 
 
 def snapshot_fft_state() -> dict:
@@ -804,6 +829,11 @@ def snapshot_fft_state() -> dict:
 
     Returns a plain, pickleable ``dict`` suitable for handing to a spawned
     worker.  See :func:`restore_fft_state`.  v5.4.6 (audit P3-16).
+
+    v5.17.1 (audit P3-54): also captures the later-added knobs --
+    ``USE_SCIPY_FFT``, :func:`set_fft_fallback`,
+    :func:`set_fft_double_buffer`, :func:`set_fft_plan_cache_size` and
+    the :func:`set_asm_cache_size` bounds.
     """
     g = globals()
     return {k: g[k] for k in _FFT_STATE_KEYS}
@@ -828,8 +858,35 @@ def restore_fft_state(state: dict) -> None:
         return
     g = globals()
     for k in _FFT_STATE_KEYS:
-        if k in state:
+        # Missing keys (snapshot taken by an older library version in a
+        # mixed-version worker pool) leave this process's value alone;
+        # unknown extra keys in ``state`` are ignored.  v5.17.1 (P3-54).
+        if k in state and k not in _FFT_STATE_SETTER_KEYS:
             g[k] = state[k]
+    # v5.17.1 (audit P3-54): the remaining keys go through their setters
+    # so the side effects fire (plan-cache clear on a ping-pong flip;
+    # LRU trim on tightened bounds).  No-ops in a fresh spawn worker.
+    if '_PYFFTW_DOUBLE_BUFFER' in state:
+        # Only flip through the setter when the mode actually changes:
+        # set_fft_double_buffer clears the plan cache, and a warm process
+        # restoring an identical snapshot should keep its plans.
+        if bool(state['_PYFFTW_DOUBLE_BUFFER']) != bool(g['_PYFFTW_DOUBLE_BUFFER']):
+            set_fft_double_buffer(bool(state['_PYFFTW_DOUBLE_BUFFER']))
+    if '_PYFFTW_PLAN_CACHE_SIZE' in state:
+        set_fft_plan_cache_size(state['_PYFFTW_PLAN_CACHE_SIZE'])
+    if any(k in state for k in ('_H_CACHE_SIZE', '_FREQ_GRID_CACHE_SIZE',
+                                '_BANDLIMIT_CACHE_SIZE',
+                                '_H_CACHE_MAX_BYTES_PER_ENTRY',
+                                '_H_CACHE_MAX_TOTAL_BYTES')):
+        # set_asm_cache_size treats None as "leave unchanged", which is
+        # exactly the right behaviour for keys absent from an old snapshot.
+        set_asm_cache_size(
+            h_cache=state.get('_H_CACHE_SIZE'),
+            freq_cache=state.get('_FREQ_GRID_CACHE_SIZE'),
+            bandlimit_cache=state.get('_BANDLIMIT_CACHE_SIZE'),
+            h_max_bytes_per_entry=state.get('_H_CACHE_MAX_BYTES_PER_ENTRY'),
+            h_max_total_bytes=state.get('_H_CACHE_MAX_TOTAL_BYTES'),
+        )
 
 
 # Whether we have emitted the first-promote info log this process.
