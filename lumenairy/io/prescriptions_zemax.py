@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import os
 import warnings
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
@@ -1134,6 +1134,38 @@ def load_zemax_prescription_data_txt(filepath: str,
 # of the surface vertex.
 
 
+def _txt_surface_type(surf: Dict[str, Any]) -> Tuple[str, bool]:
+    """Resolve the Zemax TYPE label + aspheric flag for one prescription
+    surface in the human-readable paste table (v5.18.1).
+
+    Prefers an explicit ``surf['type']``; otherwise infers ``EVENASPH`` from a
+    non-empty / non-zero ``aspheric_params`` (or legacy ``aspheric_coeffs``)
+    entry.  ``is_aspheric`` is True for any non-STANDARD, non-coordbreak
+    surface whose extra shape data the paste table cannot represent.
+    """
+    explicit = (surf.get('type') or '').upper().strip()
+
+    def _has_nonzero(coeffs) -> bool:
+        if not coeffs:
+            return False
+        vals = coeffs.values() if isinstance(coeffs, dict) else coeffs
+        try:
+            return any(abs(float(c)) > 0.0 for c in vals)
+        except (TypeError, ValueError):
+            return False
+
+    has_asph = _has_nonzero(surf.get('aspheric_params')) or \
+        _has_nonzero(surf.get('aspheric_coeffs'))
+    if explicit:
+        tp = explicit
+    elif has_asph:
+        tp = 'EVENASPH'
+    else:
+        tp = 'STANDARD'
+    is_aspheric = tp not in ('STANDARD', 'COORDBRK') or has_asph
+    return tp, is_aspheric
+
+
 def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
                            wavelength: float,
                            stop_surface: Optional[int] = None,
@@ -1231,6 +1263,7 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
                 '--', '0.000', '0.000', 'Object at infinity'))
 
     # Refracting surfaces
+    _asph_labels: List[str] = []
     for i, surf in enumerate(surfaces):
         label = 'STO' if i == stop_surface else str(i + 1)
         stop_mark = ' * ' if i == stop_surface else '   '
@@ -1253,10 +1286,19 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
         # round-trip through the exported file.
         sd_surf = surf.get('semi_diameter')
         sd_mm = float(sd_surf) * 1e3 if sd_surf is not None else semi_dia_mm
+        # v5.18.1: reflect the surface's ACTUAL type in the TYPE column instead
+        # of hardcoding STANDARD -- an aspheric or freeform surface was
+        # previously mislabelled STANDARD in the paste table (the export-side
+        # sibling of the P3-43 .txt-loader drop).  The paste table's columns
+        # cannot carry the aspheric a4/a6/... coefficients themselves, so record
+        # such surfaces for a footnote pointing at the lossless .zmx export.
+        tp, is_asph = _txt_surface_type(surf)
+        if is_asph:
+            _asph_labels.append(label)
         lines.append(
             '{mark}{surf:4s} {tp:11s} {rad:>16s} {th:>16s} '
             '{gl:>10s} {sd:>10.4f} {con:>8.4f}  {cm}'
-            .format(mark=stop_mark, surf=label, tp='STANDARD',
+            .format(mark=stop_mark, surf=label, tp=tp,
                     rad=rad, th=t_str, gl=glass, sd=sd_mm,
                     con=float(conic), cm=comment or f'surface {i+1}'))
 
@@ -1268,6 +1310,13 @@ def export_zemax_lens_data(prescription: Dict[str, Any], path: str, *,
 
     lines.append('#')
     lines.append('# Legend: "*" marks the aperture stop.')
+    if _asph_labels:
+        lines.append(
+            '# NOTE: surface(s) {0} are non-spherical (EVENASPH/freeform); '
+            'this paste table shows only the base radius + conic and does '
+            'NOT carry their aspheric coefficients (a4, a6, ...).  Use '
+            'export_zemax_zmx for a lossless, importable round-trip.'
+            .format(', '.join(_asph_labels)))
     lines.append('# To verify OPD in Zemax: Analysis > Wavefront > '
                  'Wavefront Map, or Analysis > Aberrations > Optical '
                  'Path Difference (OPD fan).')

@@ -4,13 +4,15 @@ estimate_sim_memory / check_sim_memory / set_low_memory).
 
 The estimator is calibrated to MEASURED peak RSS (system-wide, incl. the Newton
 worker pool) on a 137 GB / 24-core box for design-119's biggest relay lens
-(apply_real_lens_traced, parallel_amp=False):
+(apply_real_lens_traced, parallel_amp=False).  The v5.17.1 recalibration (see
+the anchor table in ``lumenairy/memory.py``) fits the 3-parameter model EXACTLY
+to the whole-grid deltas measured AFTER the v4.10 tilt-check leak was fixed:
 
-    N=16384 c64  sub=8  -> 44.5 GB    N=16384 c64  sub=16 -> 37.2 GB
-    N=16384 c128 sub=8  -> 57.3 GB    N=24576 c64  sub=8  -> 83.6 GB
+    N=16384 c64  sub=8  -> 29.69 GB   N=16384 c64  sub=16 -> 21.87 GB
+    N=16384 c128 sub=8  -> 31.39 GB   (chunked c128 sub=16 -> 26.30 GB)
 
-and the verdict is validated against a guard-killed N=32768/sub=16 run that hit
-135.8 GB on the same box (i.e. did NOT fit).
+(The pre-v5.17.0 anchors 44.5/37.2/57.3 GB reflected that since-fixed leak and
+survive only in memory.py's history comment.)
 """
 import numpy as np
 import pytest

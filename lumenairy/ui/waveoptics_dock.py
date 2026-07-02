@@ -2742,7 +2742,11 @@ class WaveOpticsDock(QWidget):
                 try:
                     import json as _json
                     rx = _json.loads(rx_json)
-                    self.model.load_prescription(rx)
+                    # v5.18.1: the dock stores the model as ``self.sm`` (see
+                    # __init__); ``self.model`` never existed, so this load
+                    # path always raised AttributeError (caught below as a
+                    # "Load failed" dialog -- the feature never worked).
+                    self.sm.load_prescription(rx)
                     QMessageBox.information(
                         dlg, 'Loaded',
                         'Prescription loaded into the current model.')

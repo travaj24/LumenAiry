@@ -258,6 +258,21 @@ jobs:
 
       - name: Run slow tests
         shell: bash
+        # v5.18.1: pin BLAS to a single thread.  The eig-heavy EME vector
+        # convergence tests (test_eme_2d_vector) resolve near-threshold modes
+        # from an ill-conditioned cascade generator whose svdvals are sensitive
+        # to multi-threaded BLAS reduction order -- run-to-run the recovered
+        # mode count wobbled enough to flip the completeness/convergence
+        # assertions (byte-identical code passed one run, failed the next).
+        # Single-threaded BLAS makes the reductions deterministic per runner,
+        # removing the dominant flake source.  (These remain hardware-sensitive
+        # convergence tests; single-threading is a mitigation, not a proof.)
+        env:
+          OMP_NUM_THREADS: '1'
+          OPENBLAS_NUM_THREADS: '1'
+          MKL_NUM_THREADS: '1'
+          NUMEXPR_NUM_THREADS: '1'
+          VECLIB_MAXIMUM_THREADS: '1'
         run: |
           python -m pytest tests/unit -m "slow and not integration" --tb=short \
             -p no:cacheprovider -v 2>&1 \
