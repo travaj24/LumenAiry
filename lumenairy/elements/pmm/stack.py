@@ -195,6 +195,7 @@ class PMMStack:
         = vertical); a slanted layer is solved by the div-conforming covariant-
         metric generator and cascaded via the general fwd/back S-matrix, so a
         stack may MIX vertical and slanted layers.  Returns ``self``."""
+        self._internal = None   # supersedes any retained internals (audit P1-04)
         if (segments is None) == (eps is None):
             raise ValueError(
                 "PMMStack.add_layer: give exactly one of `segments` or `eps`.")
@@ -476,6 +477,7 @@ class PMMStack:
         are supplied -- the SAME rule as ``RCWAStack.set_source`` and the 1-D entry
         points, so ``set_source(angle=A, theta=T)`` resolves to ``T`` in every
         suite.  Returns ``self``."""
+        self._internal = None   # supersedes any retained internals (audit P1-04)
         angle = _resolve_incidence(angle, theta)
         self._src = dict(
             wl=wavelength if is_jax_array(wavelength) else float(wavelength),
@@ -548,6 +550,12 @@ class PMMStack:
         slant, out-of-plane tensors, ``stabilize``, ``retain_internal`` and
         the assemble-once sweep/prepare paths raise.  x64 required;
         ``jnp.linalg.eig`` is CPU-only."""
+        # Invalidate retained internals BEFORE any dispatch/early return
+        # (audit P1-04): every solve() supersedes the retained state, so
+        # internal_field/layer_absorption can only serve the LAST solve --
+        # a retain_internal=True one.  Stale fields from a previous
+        # source/geometry must never be served silently.
+        self._internal = None
         if self._src is None:
             raise ValueError("PMMStack.solve: call set_source(...) first.")
         if not self._layers:
@@ -882,8 +890,9 @@ class PMMStack:
         if getattr(self, "_internal", None) is None or \
                 "cinc" not in self._internal:
             raise ValueError(
-                "PMMStack: no internal data retained; call "
-                "solve(retain_internal=True) first.")
+                "PMMStack: no internal data retained; the MOST RECENT "
+                "solve must use solve(retain_internal=True) (any re-solve "
+                "invalidates previously retained internals).")
         d = self._internal
         out = []
         k0 = d["k0"]
@@ -934,8 +943,9 @@ class PMMStack:
         counterpart of :meth:`RCWAResult.internal_field`, on the NODAL grid
         (spectral-element exact in x: no Fourier/Gibbs reconstruction floor).
 
-        Requires a prior ``solve(retain_internal=True)`` (all-vertical
-        in-plane stacks).
+        Requires that the MOST RECENT ``solve`` used
+        ``retain_internal=True`` (all-vertical in-plane stacks); any
+        re-solve invalidates previously retained internals.
 
         Parameters
         ----------
@@ -974,8 +984,9 @@ class PMMStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMMStack.internal_field: call solve(retain_internal=True) "
-                "first.")
+                "PMMStack.internal_field: no internal data retained; the "
+                "MOST RECENT solve must use solve(retain_internal=True) "
+                "(any re-solve invalidates previously retained internals).")
         names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
                  "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
         if component not in names:
@@ -1137,8 +1148,10 @@ class PMMStack:
         2026-06-10) -- the PMM counterpart of
         :meth:`RCWAResult.layer_absorption`.
 
-        Requires a prior ``solve(retain_internal=True)`` (all-vertical
-        in-plane stacks).  Returns an ``(n_layers, 2)`` array (one column per
+        Requires that the MOST RECENT ``solve`` used
+        ``retain_internal=True`` (all-vertical in-plane stacks); any
+        re-solve invalidates previously retained internals.  Returns an
+        ``(n_layers, 2)`` array (one column per
         incident polarization, the :meth:`solve` row order) computed from the
         INTERNAL z-Poynting flux difference across each layer, normalized so
         the totals close against the far field: the test invariant is
@@ -1163,8 +1176,9 @@ class PMMStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMMStack.layer_absorption: call solve(retain_internal=True) "
-                "first.")
+                "PMMStack.layer_absorption: no internal data retained; the "
+                "MOST RECENT solve must use solve(retain_internal=True) "
+                "(any re-solve invalidates previously retained internals).")
         nlay = len(self._layers)
         F_top = np.array([self._flux_at(i, 0.0) for i in range(nlay)])
         F_bot = np.array([self._flux_at(i, 1.0) for i in range(nlay)])
@@ -1293,6 +1307,7 @@ class PMMStack:
             FOURTH element only when ``jones=True`` (default ``False`` keeps
             the released 3-tuple).
         """
+        self._internal = None   # supersedes any retained internals (audit P1-04)
         if self._holds_traced():
             raise NotImplementedError(
                 "PMMStack.solve_vs_wavelength: the assemble-once sweep "
@@ -1638,6 +1653,7 @@ class _PreparedPMMStack:
         callables).  Returns ``(orders, R, T, jones)`` exactly as
         :meth:`PMMStack.solve`; equal to the rebuild path to ~1e-12."""
         st = self._st
+        st._internal = None  # prepared solve supersedes retained internals (audit P1-04)
         materials = dict(materials or {})
         angle = _resolve_incidence(angle, theta)
         wl = float(wavelength)

@@ -123,6 +123,7 @@ class PMM2DStack:
         tracer cannot drive), the traced cell provides each region's value,
         read at the region's first pixel.  Traced ``eps_tensor_cell``
         raises (the 2-D JAX surface is scalar)."""
+        self._internal = None   # supersedes any retained internals (audit P1-04)
         if is_jax_array(thickness):
             t_store = thickness            # traced: validated only if concrete
             try:
@@ -395,6 +396,7 @@ class PMM2DStack:
         """Set the incident plane wave (vacuum ``wavelength`` [m], polar
         ``theta`` / azimuth ``phi`` [rad]).  ``angle`` is the cross-suite alias
         for ``theta`` (theta wins when both are given, as everywhere else)."""
+        self._internal = None   # supersedes any retained internals (audit P1-04)
         theta = _resolve_incidence(angle, theta)
         self._src = dict(
             wavelength=(wavelength if is_jax_array(wavelength)
@@ -419,6 +421,12 @@ class PMM2DStack:
         surface, forward-identical to NumPy at ~1e-15 with AD-vs-FD
         validated gradients.  Tensor layers and ``retain_internal`` raise
         under JAX; x64 required; the eig is CPU-only."""
+        # Invalidate retained internals BEFORE any dispatch/early return
+        # (audit P1-04): every solve() supersedes the retained state, so
+        # internal_field/layer_absorption can only serve the LAST solve --
+        # a retain_internal=True one.  Stale fields from a previous
+        # source/geometry must never be served silently.
+        self._internal = None
         if any(L.get("kind") == "disp" for L in self._layers):
             raise ValueError(
                 "PMM2DStack.solve: the stack holds DISPERSIVE (wl -> value) "
@@ -693,8 +701,9 @@ class PMM2DStack:
         (same grid conventions, carriers and output layout, so the two
         co-register pointwise).
 
-        Requires a prior ``solve(retain_internal=True)`` (symmetric -- i.e.
-        in-plane vertical -- cascades).
+        Requires that the MOST RECENT ``solve`` used
+        ``retain_internal=True`` (symmetric -- i.e. in-plane vertical --
+        cascades); any re-solve invalidates previously retained internals.
 
         Parameters
         ----------
@@ -727,8 +736,9 @@ class PMM2DStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMM2DStack.internal_field: call solve(retain_internal=True) "
-                "first.")
+                "PMM2DStack.internal_field: no internal data retained; the "
+                "MOST RECENT solve must use solve(retain_internal=True) "
+                "(any re-solve invalidates previously retained internals).")
         names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
                  "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
         if component not in names:
@@ -827,8 +837,9 @@ class PMM2DStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMM2DStack: no internal data retained; call "
-                "solve(retain_internal=True) first.")
+                "PMM2DStack: no internal data retained; the MOST RECENT "
+                "solve must use solve(retain_internal=True) (any re-solve "
+                "invalidates previously retained internals).")
         out = []
         k0 = d["k0"]
         for i, (_k, _Wl, _Vl, lam, t) in enumerate(d["modes"]):
@@ -868,7 +879,9 @@ class PMM2DStack:
         """Per-layer absorbed power fraction ``(n_layers, 2)`` (backlog B1,
         2026-06-10) -- the 2-D mirror of :meth:`PMMStack.layer_absorption`,
         from the internal z-Poynting flux difference across each layer.
-        Requires ``solve(retain_internal=True)`` (symmetric cascades).  The
+        Requires that the MOST RECENT ``solve`` used
+        ``retain_internal=True`` (symmetric cascades; any re-solve
+        invalidates previously retained internals).  The
         cross-machinery invariant ``sum_i A_i ~= 1 - sum R - sum T`` is the
         honest closure check (internal amplitudes vs Rayleigh far field).
 
@@ -878,8 +891,9 @@ class PMM2DStack:
         d = getattr(self, "_internal", None)
         if d is None or "cinc" not in d:
             raise ValueError(
-                "PMM2DStack.layer_absorption: call "
-                "solve(retain_internal=True) first.")
+                "PMM2DStack.layer_absorption: no internal data retained; "
+                "the MOST RECENT solve must use solve(retain_internal=True) "
+                "(any re-solve invalidates previously retained internals).")
         amps = self._internal_amplitudes()
         nlay = len(d["modes"])
         F_top = np.array([self._flux_at(i, 0.0, amps) for i in range(nlay)])
@@ -913,6 +927,7 @@ class PMM2DStack:
         Returns ``(orders, R(n_wl, 2, N), T(n_wl, 2, N))``, plus a FOURTH
         ``jones (n_wl, 2, 2)`` element when ``jones=True`` (default ``False``
         keeps the released 3-tuple)."""
+        self._internal = None   # supersedes any retained internals (audit P1-04)
         wlv = np.atleast_1d(np.asarray(wavelengths, dtype=float))
         if wlv.size == 0:
             raise ValueError("PMM2DStack.solve_vs_wavelength: wavelengths is "
