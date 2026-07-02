@@ -4,6 +4,48 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
 
+### Fixed (wave 3 — guard-mirroring drift: a guard existed on one sibling but not another)
+
+- **PMM JAX twins now enforce the guards their NumPy siblings enforce** (audit
+  P2-10, P2-11, P2-14 + the 1-D twins): grazing/evanescent incidence on the
+  JAX stack twin raised NaN-free nowhere (returned `R = nan` silently) and a
+  gain superstrate on the 1-D twins silently negated T; both now raise the
+  string-identical NumPy errors when the source values are CONCRETE (a traced
+  value skips the guard -- documented; gradients through valid points are
+  unaffected).  The 2-D pillar/cell twins also apply the propagating-incidence
+  raise and the Wood-anomaly grazing-wavelength nudge (restoring NumPy-vs-JAX
+  parity at Rayleigh cutoffs from 5e-5 to ~4e-16), and pillar-bounds
+  validation now runs BEFORE the JAX dispatch (inverted bounds previously
+  returned an energy-conserving but wrong answer on the JAX path).
+- **`trace_jax_with_params` fails loud on unsupported surfaces** (audit
+  P2-34): mirrors / coordinate breaks / biconics / freeforms were silently
+  traced as flat refractives; the v4.10/v4.13.2 fail-loud builder guard is now
+  shared by both JAX entry points (`NotImplementedError`, same message
+  family).
+- **NumPy trace backend honors per-surface `semi_diameter`** (audit P2-35):
+  the key was honored by the JAX backend but silently ignored by the NumPy
+  backend, so the identical prescription vignetted 1/25 vs 25/25 rays.  Same
+  replace-the-default semantics on both backends; prescriptions without the
+  key are byte-identical.
+- **1-D PMM rejects back-side incidence angles** (audit P3-29): all eleven
+  public 1-D entry points raise `ValueError` for `|angle| >= pi/2` (or NaN)
+  instead of silently aliasing to the supplementary front-side angle.
+- **`PMMStack` entry validation parity** (audit P3-30 + P3-31):
+  `add_layer` now rejects non-positive/non-finite thickness (mirroring
+  `PMM2DStack`); `solve` validates `stabilize` EAGERLY (an invalid value was
+  silently accepted on the covariant path), and the covariant (uniform-slant)
+  dispatch now raises `NotImplementedError` for `retain_internal=True` and
+  honors `stabilize='slices'` instead of silently ignoring both kwargs.
+- **`pmm_efficiency_2d_staggered` non-square cells raise a clear error**
+  (audit P3-36): `Nx != Ny` cells died with a deep cryptic `AssertionError`;
+  the entry point now raises `ValueError` naming the square-cell restriction
+  and the `pmm_efficiency_2d_cell` alternative.
+- **`BORStack` input validation** (audit P3-10): non-positive `Rbig` /
+  thickness / wavelength / `k0`, non-integral `m` / `N` now raise clear
+  errors instead of propagating to plausible-looking garbage (e.g. a negative
+  thickness silently destabilized the Redheffer cascade; `wavelength <= 0`
+  returned EMPTY R/T).
+
 ### Fixed (wave 2 — v5.16.1/v5.17.0 recent-delta consistency)
 
 - **`set_max_ram()` is now actually honored** (audit P2-21): `pick_batch_size`
