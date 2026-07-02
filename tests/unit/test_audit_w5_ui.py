@@ -61,6 +61,30 @@ try:
 except ImportError as _e:  # pragma: no cover - CI without [gui] extra
     _GUI_OK = False
     _SKIP_REASON = f'GUI deps unavailable: {_e}'
+    # Headless CI (no [gui] extra) has no PySide6, so the names imported
+    # above are undefined -- yet the helper classes further down subclass
+    # QThread / QObject / a dock worker and declare ``Signal(...)`` class
+    # attributes, all of which execute at COLLECTION time (before the
+    # ``pytestmark`` skip can take effect).  Provide inert fallbacks so the
+    # module still imports; every test is skipped via ``pytestmark`` so none
+    # of these placeholders is ever instantiated or called.
+    QObject = QThread = QApplication = QDockWidget = QMainWindow = \
+        QWidget = object
+    Qt = None
+
+    def Signal(*_a, **_k):  # noqa: N802 - mimics PySide6.QtCore.Signal
+        return None
+
+    class _MissingDockModule:
+        """A stand-in dock module whose every attribute (e.g. the
+        ``ThroughFocusWorker`` used as a base class) resolves to ``object``
+        so the helper class bodies below parse on a headless runner."""
+
+        def __getattr__(self, _name):
+            return object
+
+    coherence_dock = spot_field_dock = through_focus_dock = \
+        waveoptics_dock = _MissingDockModule()
 
 # main_window pulls the whole dock fleet (incl. pyvista via layout_3d),
 # so probe it separately: its absence must only skip the P2-38 tests.
