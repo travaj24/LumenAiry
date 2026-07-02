@@ -466,30 +466,31 @@ def available_cpus() -> int:
 # that peak so callers can (a) get an itemised estimate and (b) fail FAST with
 # an actionable message + concrete claw-backs instead of OOMing mid-run.
 #
-# CALIBRATION (measured peak RSS, system-wide incl. the Newton worker pool, on
-# a 137 GB / 24-core box; see tests/unit/test_memory_guardrail.py for the
-# anchors).  The float64-core count is the EFFECTIVE live count (eager-``del``
-# staggers the true coexistence), matched at N=16384/24576; it is a CONSERVATIVE
-# upper bound at larger N (the N^2 form over-predicts there, which is the
-# fail-safe direction for a go/no-go guardrail).
-#   apply_real_lens_traced, c64, ray_subsample=8, parallel_amp=False:
-#     N=16384 -> 44.5 GB | N=16384 sub16 -> 37.2 GB | N=24576 -> 83.6 GB
-#     N=16384 c128 -> 57.3 GB
+# CALIBRATION (v5.17.1, POST-lifetime-fix; measured system-wide peak-used
+# deltas on a quiet 137 GB / 24-core box, apply_real_lens_traced on a real
+# 2-surface relay lens, parallel_amp=False, plan cache=1, auto-promote off).
+# Whole-grid anchors at N=16384 (fit the 3-parameter model EXACTLY):
+#     c64  sub=8  -> 29.69 GB | c64 sub=16 -> 21.87 GB | c128 sub=8 -> 31.39 GB
+# Chunked anchor: c128 sub=16 -> 26.30 GB (the c64-chunked reading is
+# unreliable in a shared process -- persistent FFT plan buffers cross-
+# contaminate the delta -- so the chunked constant is calibrated from the
+# LARGER c128 point: conservative, i.e. the fail-safe direction).
+# Pre-v5.17.0 anchors (44.5/37.2/57.3 GB) reflected the since-fixed v4.10
+# tilt-check leak + upsample double-build and are obsolete.
 # ============================================================================
 
 # Effective live full-grid array counts (per N^2). DTYPE-INDEPENDENT (float64).
-_LENS_F64_ARRAYS = 9.5            # coord lineage + sag + opd + opl_map + indices + delta_phase
+_LENS_F64_ARRAYS = 6.2            # coord lineage + sag/opd transients + opl_map/upsample (post-fix)
 _LENS_SLANT_F64_ARRAYS = 6.0     # extra angle stack (dsag_dx/dy, grad_sq, cos_ti/tt, opd) when slant/fresnel
-_LENS_COMPLEX_ARRAYS = 4.0       # E_analytic + live E + in-glass ASM complex working set
-_NEWTON_BYTES_PER_COARSE_PT = 2671.0   # coarse-grid Newton solve + poly fit + map_coordinates, per (N/sub)^2 pt
+_LENS_COMPLEX_ARRAYS = 0.8       # resident complex set after the v5.17.0 eager frees
+_NEWTON_BYTES_PER_COARSE_PT = 2490.0   # coarse-grid Newton solve + poly fit + map_coordinates, per (N/sub)^2 pt
 _ASM_COMPLEX_ARRAYS = 4.0        # bare ASM step: E_in + H + fft scratch (+ resident plan buffers added separately)
 # Row-band (sag_chunk_rows) mode: the full-grid float64 lens stack never
-# materialises; the peak is the resident complex fields (E copy + live E +
-# E_analytic + amp/phase halves + FFT plan buffers) + band transients.
-# Calibrated: 18.4 GB measured at N=16384/sub=16/c64 chunked (vs 43.6
-# whole-grid) -> ~8.6 complex-array equivalents.  Conservative (N^2) upper
-# bound at larger N.
-_LENS_CHUNKED_COMPLEX_ARRAYS = 8.6
+# materialises; the peak is the resident complex fields + FFT plan buffers +
+# band transients.  Calibrated from the c128 chunked anchor (26.3 GB at
+# N=16384/sub=16) -> ~5.3 complex-array equivalents; over-predicts c64
+# (fail-safe).
+_LENS_CHUNKED_COMPLEX_ARRAYS = 5.3
 
 
 def _as_complex_itemsize(dtype: Any) -> int:

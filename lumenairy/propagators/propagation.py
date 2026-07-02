@@ -254,6 +254,11 @@ _LIVE_FORWARD_NAMES = frozenset({
     '_PYFFTW_AUTO_PROMOTE_THRESHOLD',
     '_PYFFTW_AUTO_PROMOTE_LOGGED',
     '_PYFFTW_PLAN_CACHE_SIZE',
+    # v5.17.1: single/double aligned-buffer mode, mutated by
+    # set_fft_double_buffer() -- live-forwarded so consumer reads of
+    # ``propagation._PYFFTW_DOUBLE_BUFFER`` track the current value
+    # (V14 walker requirement; caught by the release verify gate).
+    '_PYFFTW_DOUBLE_BUFFER',
     '_PYFFTW_BAD_SHAPES',
     '_H_CACHE_SIZE',
     '_FREQ_GRID_CACHE_SIZE',

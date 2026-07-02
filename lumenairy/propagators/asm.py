@@ -728,8 +728,28 @@ def angular_spectrum_propagate_tilted(
     X, Y = np.meshgrid(x, y)
 
     # -- demodulate: remove carrier tilt -------------------------------------
-    carrier = np.exp(-1j * 2 * np.pi * (fx0 * X + fy0 * Y))
-    E_demod = E_in * carrier
+    # v5.17.1: build the carrier AT the target dtype.  Pre-fix it was
+    # unconditionally complex128 (``np.exp`` of a float64 phase), which
+    # silently upcast the ENTIRE tilted pipeline (demod field, FFTs,
+    # remodulated output) for complex64 inputs -- doubling the working
+    # memory AND returning complex128, violating the dtype-follows-input
+    # contract every other propagator honours.  For complex64 the carrier
+    # phase is folded mod 2*pi in float64 BEFORE the float32 cast (the same
+    # accuracy mitigation as the main ASM kernel), so the large carrier
+    # argument (~1e5 rad across a big tilted grid) doesn't hit the float32
+    # precision floor.  The complex128 path is bit-identical to pre-fix.
+    _carrier_phase = (-2.0 * np.pi) * (fx0 * X + fy0 * Y)
+    del X, Y
+    if np.dtype(target_cdtype) == np.complex64:
+        _ph = np.mod(_carrier_phase, 2.0 * np.pi)
+        carrier = np.empty(_ph.shape, dtype=np.complex64)
+        carrier.real[:] = np.cos(_ph).astype(np.float32)
+        carrier.imag[:] = np.sin(_ph).astype(np.float32)
+        del _ph
+    else:
+        carrier = np.exp(1j * _carrier_phase)
+    del _carrier_phase
+    E_demod = E_in.astype(target_cdtype, copy=False) * carrier
 
     # H cache (NumPy backend)
     # The shifted transfer function depends on (Ny, Nx, dy, dx,
@@ -792,7 +812,9 @@ def angular_spectrum_propagate_tilted(
 
     # -- propagate baseband with shifted transfer function -------------------
     E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_demod)))
+    del E_demod
     E_prop = np.fft.fftshift(_ifft2(np.fft.ifftshift(E_fft * H)))
+    del E_fft
 
     # -- remodulate: restore carrier tilt ------------------------------------
     E_out = E_prop * np.conj(carrier)

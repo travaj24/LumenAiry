@@ -2,6 +2,33 @@
 
 All notable changes to the core library are documented here.
 
+## [5.17.1] — 2026-07-02
+
+### Fixed
+
+- **Release-blocking V14 forwarding gap** (caught by the v5.17.0 publish
+  verify gate -- v5.17.0 never reached PyPI): the new
+  ``_PYFFTW_DOUBLE_BUFFER`` global was missing from
+  ``propagation._LIVE_FORWARD_NAMES``, so ``propagation.X`` attribute reads
+  after ``set_fft_double_buffer()`` saw a stale import-time snapshot.
+  Added to the live-forward whitelist.
+- **Tilted-ASM dtype contract**: ``angular_spectrum_propagate_tilted`` built
+  its carrier unconditionally as complex128, silently upcasting the whole
+  tilted pipeline for complex64 inputs (2x working memory) and RETURNING
+  complex128.  The carrier is now built at the target dtype with the
+  carrier phase folded mod 2*pi in float64 before the float32 cast (the
+  main-ASM accuracy mitigation): complex64 agrees with the complex128
+  pipeline to < 5e-5 relative and honours dtype-follows-input; the
+  complex128 path is bit-identical to pre-fix.  Eager frees added for the
+  carrier grids / demod field / spectrum.
+
+### Changed (estimator recalibration)
+
+- ``estimate_lens_memory`` / ``estimate_sim_memory`` anchors recalibrated
+  to post-lifetime-fix measurements (see the calibration table in the
+  module docstring); the pre-fix anchors over-predicted the whole-grid
+  path by ~30% after the v5.17.0 leak fixes.
+
 ## [5.17.0] — 2026-07-01
 
 ### Changed (row-band lens mode ON by default — auto)
