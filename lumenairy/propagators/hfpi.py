@@ -435,6 +435,29 @@ def accumulate_to_grid(
     return out.reshape(Ny, Nx)
 
 
+def _complex_output_dtype(dtype):
+    """Promote a real dtype to its matching complex dtype
+    (float64 -> complex128, float32 -> complex64); pass complex through.
+
+    v5.17.x (P2-32): the end-to-end helpers used to pass
+    ``output_dtype=E_in.dtype`` straight into
+    :func:`accumulate_to_grid`, so a REAL-dtype input field (e.g. a
+    plain float aperture/amplitude mask) allocated a real output buffer
+    and ``np.add.at`` silently discarded the imaginary part of every
+    complex path weight (the weights are intrinsically complex: the
+    ``1/(jλ)`` prefactor and every ``exp(j·k·Δs)`` leg).  Only a
+    suppressible ComplexWarning was emitted; measured ~40% of the total
+    intensity silently lost on a flat real source.  Mirrors the v4.10
+    fix in ``hf.py`` for the same bug class.
+    """
+    dt = np.dtype(dtype)
+    if dt.kind == 'c':
+        return dt
+    if dt == np.float32:
+        return np.dtype(np.complex64)
+    return np.dtype(np.complex128)
+
+
 # ============================================================================
 # End-to-end convenience
 # ============================================================================
@@ -462,25 +485,43 @@ def propagate_hfpi(
     ``(E_in, dx, *, z_to_aperture, ..., wavelength, ...)`` order).
 
     .. warning::
-       **Phase-only stochastic propagator -- absolute amplitudes are
-       unnormalized** (audit #3.1).  This implementation samples paths
-       uniformly across the source grid and assigns each
-       ``exp(j·k·Δs)`` propagation phase, then bins to the output grid.
-       The full Fresnel-Kirchhoff integral
+       **Partially-normalized stochastic propagator** (audit #3.1;
+       warning text corrected in v5.17.x, P2-31 -- the pre-fix text
+       contradicted the v4.10/v4.11.2 code).  The full
+       Fresnel-Kirchhoff integral
 
            E(P) = (1/jλ) ∫∫ E(Q) · (cos θ / r) · exp(jkr) dS
 
-       carries three normalization factors that this code does **not**
-       apply: the ``1/(jλ)`` Kirchhoff prefactor, the per-path
-       ``1/r`` geometric-spreading attenuation, and the Monte Carlo
-       solid-angle weight ``2π·(1 − cos θ_max) / N_paths``.  The
-       returned field has the correct **phase structure** (fringe
-       positions, interference contrast, relative-intensity ratios
-       within a single experiment) but the absolute amplitude is
-       arbitrary.  Use it as a phase-structure / interference
-       diagnostic; do not interpret absolute coupling-efficiency
-       numbers across experiments without re-normalising against a
-       known-amplitude reference.
+       is sampled by Monte Carlo paths.  Of its normalization factors,
+       this code **does** apply:
+
+       * the ``1/(jλ)`` Kirchhoff prefactor -- at the source init
+         (v4.10) and at every aperture re-emission (v4.11.2);
+       * the Monte Carlo solid-angle weight
+         ``2π·(1 − cos θ_max) / N_paths`` -- same sites;
+       * the obliquity factor (``cos θ`` at init; the symmetric
+         ``(cos θ_in + cos θ_out)/2`` at re-emissions, v4.10.2) and
+         the source pixel area ``dx²``.
+
+       It does **not** apply:
+
+       * the per-path ``1/r`` geometric-spreading attenuation
+         (``propagate_to_plane`` / the prescription segment trace
+         multiply only ``exp(j·k·Δs)``);
+       * any output-binning Jacobian (pixel-area / ``cos θ_out`` /
+         MC ray-density correction) when scatter-adding paths into
+         output pixels.
+
+       Because ``r`` and ``θ_out`` differ per path and per output
+       pixel, the missing factors bias the SPATIAL intensity profile
+       (measured up to ~14x relative bias between on-axis and
+       wide-angle bins on a single-pixel source probe), not just a
+       global constant -- so neither absolute amplitudes NOR
+       relative-intensity ratios across the field are quantitative.
+       Fringe positions and interference contrast (phase structure)
+       are correct.  Use it as a phase-structure / interference
+       diagnostic; re-normalise against a known-amplitude reference
+       (e.g. ASM on the same geometry) for anything photometric.
     """
     return propagate_hfpi_freespace_aperture(
         E_in, dx, z_to_aperture=z, wavelength=wavelength,
@@ -557,7 +598,9 @@ def propagate_hfpi_freespace_aperture(
         output_dx = dx
     return accumulate_to_grid(
         paths, Ny=Ny, Nx=Nx, dx=output_dx, centre=output_centre,
-        output_dtype=E_in.dtype,
+        # v5.17.x (P2-32): promote real input dtypes to complex so the
+        # scatter-add keeps the imaginary half of the path weights.
+        output_dtype=_complex_output_dtype(E_in.dtype),
     )
 
 
@@ -906,7 +949,9 @@ def propagate_hfpi_through_prescription(
         paths,
         Ny=Ny_out, Nx=Nx_out,
         dx=output_dx, centre=output_centre,
-        output_dtype=E_in.dtype,
+        # v5.17.x (P2-32): promote real input dtypes to complex so the
+        # scatter-add keeps the imaginary half of the path weights.
+        output_dtype=_complex_output_dtype(E_in.dtype),
     )
 
 

@@ -607,10 +607,27 @@ def apply_abcd_to_beamlets(
     z_out = beamlets.positions[..., 2]
     new_positions = xp.stack([x_out, y_out, z_out], axis=-1)
 
-    # Amplitude correction: q_in / q_out factor for Gaussian-beam
-    # amplitude conservation (the Q-parameter formulation absorbs
-    # this as Q_out / Q_in).
-    qratio = Q_new / Q_old
+    # Amplitude correction: Collins/Siegman on-axis Gaussian-beam factor
+    #   u_out(0) = u_in(0) / (A + B/q_in) = u_in(0) / (A + B*Q_in)
+    # (Siegman ch. 20 / Collins integral; both transverse dimensions of
+    # the rotationally-symmetric beamlet give 1/sqrt each).
+    #
+    # v5.17.x (P2-30) BEHAVIOUR CHANGE: pre-fix this applied
+    # ``Q_new / Q_old`` = ``q_in / q_out`` = (C*q_in + D)/(A + B*Q_in),
+    # i.e. the Collins factor times a spurious ``(C*q_in + D)``.  For any
+    # focusing system (C != 0) that factor has non-unit modulus, so the
+    # single-ABCD path disagreed with the sequential per-leg path
+    # (``propagate_beamlets_freespace`` + ``apply_thin_lens_to_beamlets``
+    # compose exactly to exp(ikL)/(A + B*Q_in), verified to 1e-15) in
+    # both amplitude and piston phase -- e.g. a t1=20mm -> f=50mm ->
+    # t2=30mm system came out |C*q_in+D| = 0.60x low in field amplitude
+    # (0.36x in intensity) with a wrong piston, defeating the v4.11.1
+    # axial_opl coherent-superposition fix.  Free-space-only ABCD (C=0,
+    # D=1) is unchanged.  ``Q`` here is the module's engineering 1/q
+    # parameterisation (Q = 1/q_code, q_code = conj(q_physics)); ABCD
+    # elements are real so the Collins factor commutes with that
+    # convention.
+    qratio = 1.0 / (A + B * Q_old)
     # 4.10.2: include the chief-ray axial OPL phase exp(+i*k*L_chief)
     # when supplied.  The three-leg helpers (propagate_gbd_freespace,
     # propagate_gbd_thin_lens) accumulate this leg-wise; the single-

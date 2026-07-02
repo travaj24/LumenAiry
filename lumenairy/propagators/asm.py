@@ -132,6 +132,144 @@ def _build_asm_H_square(
     return H
 
 
+def _get_asm_H_natural(
+    Ny: int,
+    Nx: int,
+    dy: float,
+    dx: float,
+    wavelength: float,
+    z: float,
+    bandlimit: bool,
+    target_cdtype,
+    xp,
+    is_jax: bool = False,
+    verbose: bool = False,
+):
+    """Fetch (or build + cache) the plain-ASM transfer function in
+    NATURAL (``ifftshift``-ed) FFT layout.
+
+    v5.17.x (P2-27): factored out of :func:`angular_spectrum_propagate`
+    verbatim so :func:`angular_spectrum_propagate_batch` can obtain
+    ``H`` without running a full wasted FFT+IFFT pair on a proxy field.
+    The arithmetic is byte-identical to the pre-refactor inline block
+    (same cache key, same chunked construction, same verbose output).
+
+    Returns ``H`` in the natural (un-``fftshift``-ed) spectrum layout,
+    which is how the v5.5.3 2-shift propagation fold consumes it.
+    """
+    target_fdtype = np.float32 if target_cdtype == np.complex64 else np.float64
+    k = 2 * np.pi / wavelength
+
+    # 3.2.14 H cache
+    # Geometry signature.  Hits return the previously-built H without
+    # re-running the chunked kernel construction (~30-50% of total
+    # ASM time on 2k+ grids).  CuPy device arrays and JAX traced
+    # arrays are kept out of the cache (host-side dict can't safely
+    # retain device pointers / traced objects).
+    h_key = None
+    H = None
+    if xp is np:
+        # 4.10: add 'ASM' tag string to the cache key so plain-ASM
+        # entries are guaranteed disjoint from ASM_TILTED / ASM_MFT /
+        # RS / SAS even if those keys ever evolve to the same tuple
+        # length.  Defensive future-proofing.
+        h_key = (int(Ny), int(Nx), float(dy), float(dx),
+                 float(wavelength), float(z), bool(bandlimit),
+                 np.dtype(target_cdtype).str, 'ASM')
+        H = _h_cache_lookup(h_key)
+
+    if H is None and is_jax:
+        # JAX path: build H in one shot (no chunking, no in-place
+        # writes; jax.numpy is functional / immutable).
+        fx = (xp.arange(Nx, dtype=xp.float64) - Nx / 2) / (Nx * dx)
+        fy = (xp.arange(Ny, dtype=xp.float64) - Ny / 2) / (Ny * dy)
+        kx_sq = (2 * float(np.pi) * fx) ** 2
+        ky_sq = (2 * float(np.pi) * fy) ** 2
+        kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
+        prop = kz_sq > 0
+        kz = xp.where(prop, xp.sqrt(xp.where(prop, kz_sq, 0.0)), 0.0)
+        H = xp.where(prop, xp.exp(1j * kz * z), 0.0).astype(target_cdtype)
+        if bandlimit and z != 0:
+            Lx = Nx * dx
+            Ly = Ny * dy
+            fx_max = Lx / (2 * wavelength * abs(z))
+            fy_max = Ly / (2 * wavelength * abs(z))
+            bl_x = xp.abs(fx) < fx_max
+            bl_y = xp.abs(fy) < fy_max
+            mask = bl_x[None, :] & bl_y[:, None]
+            H = H * mask.astype(target_cdtype)
+        # v5.5.3: store H in NATURAL (un-shifted) FFT layout so the per-call
+        # propagation folds away the two spectrum-domain shifts (4 -> 2 shifts).
+        H = xp.fft.ifftshift(H)
+
+    if H is None:
+        # Spatial-frequency squared vectors (cached on numpy path).
+        kx_sq, ky_sq = _get_or_make_freq_grids(Ny, Nx, dy, dx, xp is np)
+        if bandlimit and z != 0:
+            bl_x, bl_y = _get_or_make_bandlimit(
+                Ny, Nx, dy, dx, wavelength, abs(z), xp is np)
+        else:
+            bl_x = bl_y = None
+
+        # Chunked H construction, sized to fit a small slice of RAM.
+        from ..memory import get_ram_budget
+        ram = get_ram_budget()
+        row_cost = 3 * Nx * 16   # bytes per row of workspace (complex128)
+        if row_cost > 0:
+            max_chunk = max(1, int(ram * 0.1 / row_cost))
+        else:
+            max_chunk = Ny
+        chunk = min(Ny, max_chunk)
+
+        H = xp.empty((Ny, Nx), dtype=target_cdtype)
+        kept_count = 0
+        for j0 in range(0, Ny, chunk):
+            j1 = min(Ny, j0 + chunk)
+            # kz_sq is float64 regardless of target dtype to keep the
+            # huge kernel argument (kz * z up to ~1e6 rad) accurate.
+            kz_sq_c = k**2 - kx_sq[None, :] - ky_sq[j0:j1, None]
+            prop = kz_sq_c > 0
+            kz_c = xp.where(prop, xp.sqrt(xp.maximum(kz_sq_c, 0)), 0)
+            if target_cdtype == np.complex128:
+                H_c = xp.where(prop, xp.exp(1j * kz_c * z), 0)
+            else:
+                # complex64 path: fold phase mod 2*pi in float64
+                # BEFORE casting to float32 so the float32 precision
+                # floor doesn't inject speckle-like noise.
+                phase = xp.mod(kz_c * z, 2.0 * np.pi)
+                c = xp.cos(phase).astype(target_fdtype)
+                s = xp.sin(phase).astype(target_fdtype)
+                H_c = xp.empty((j1 - j0, Nx), dtype=target_cdtype)
+                H_c.real[:] = xp.where(prop, c, target_fdtype(0))
+                H_c.imag[:] = xp.where(prop, s, target_fdtype(0))
+            if bl_x is not None:
+                bl_mask = bl_x[None, :] & bl_y[j0:j1, None]
+                H_c *= bl_mask
+                if verbose:
+                    kept_count += int(xp.sum(bl_mask))
+            H[j0:j1, :] = H_c
+
+        if verbose and bl_x is not None:
+            kept_frac = kept_count / (Nx * Ny)
+            print(f"  Band-limiting: keeping {kept_frac*100:.1f}% of spectrum")
+        if verbose:
+            print(f"  ASM propagation: z = {z*1e3:.3f} mm  "
+                  f"(H cache miss, built in {chunk}-row chunks)")
+            print(f"  Grid: {Ny}x{Nx}, dx={dx*1e6:.3f} um, dy={dy*1e6:.3f} um")
+            print(f"  Wavelength: {wavelength*1e9:.1f} nm")
+        # v5.5.3: cache H in NATURAL (un-shifted) FFT layout (see below).
+        H = xp.fft.ifftshift(H)
+        # Store under the numpy key only.  The cached H is read-only
+        # in normal use; we don't deep-copy on lookup, so callers must
+        # not mutate it in place.
+        if h_key is not None:
+            _h_cache_store(h_key, H)
+    elif verbose:
+        print(f"  ASM propagation: z = {z*1e3:.3f} mm  (H cache HIT)")
+
+    return H
+
+
 def angular_spectrum_propagate(
     E_in: np.ndarray,
     z: float,
@@ -262,9 +400,6 @@ def angular_spectrum_propagate(
     if dy is None:
         dy = dx
 
-    # -- wave parameters -----------------------------------------------------
-    k = 2 * np.pi / wavelength
-
     # Target complex dtype for the transfer function and the output.
     # Inferred from E_in so the caller controls precision by the dtype of
     # the field they pass in.  Non-complex input (e.g. float arrays used
@@ -273,114 +408,21 @@ def angular_spectrum_propagate(
         target_cdtype = E_in.dtype
     else:
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
-    target_fdtype = np.float32 if target_cdtype == np.complex64 else np.float64
+        # v5.17.x (P2-26): cast the real-dtype field to the target complex
+        # dtype BEFORE it reaches ``_fft2`` (mirrors the batch sibling).
+        # Pre-fix, a real float32/float64 E_in was fed uncast into the
+        # pyFFTW dispatcher, which rejects a real->complex in-place plan
+        # with ``ValueError: Invalid direction``; the failure handler then
+        # permanently blacklisted the bare SHAPE for ALL dtypes (so every
+        # later complex128 call at that shape silently ran on scipy) and
+        # emitted a misleading 'memory pressure' warning.
+        E_in = E_in.astype(target_cdtype)
 
-    # 3.2.14 H cache
-    # Geometry signature.  Hits return the previously-built H without
-    # re-running the chunked kernel construction (~30-50% of total
-    # ASM time on 2k+ grids).  CuPy device arrays and JAX traced
-    # arrays are kept out of the cache (host-side dict can't safely
-    # retain device pointers / traced objects).
-    h_key = None
-    H = None
-    if xp is np:
-        # 4.10: add 'ASM' tag string to the cache key so plain-ASM
-        # entries are guaranteed disjoint from ASM_TILTED / ASM_MFT /
-        # RS / SAS even if those keys ever evolve to the same tuple
-        # length.  Defensive future-proofing.
-        h_key = (int(Ny), int(Nx), float(dy), float(dx),
-                 float(wavelength), float(z), bool(bandlimit),
-                 np.dtype(target_cdtype).str, 'ASM')
-        H = _h_cache_lookup(h_key)
-
-    if H is None and is_jax:
-        # JAX path: build H in one shot (no chunking, no in-place
-        # writes; jax.numpy is functional / immutable).
-        fx = (xp.arange(Nx, dtype=xp.float64) - Nx / 2) / (Nx * dx)
-        fy = (xp.arange(Ny, dtype=xp.float64) - Ny / 2) / (Ny * dy)
-        kx_sq = (2 * float(np.pi) * fx) ** 2
-        ky_sq = (2 * float(np.pi) * fy) ** 2
-        kz_sq = k ** 2 - kx_sq[None, :] - ky_sq[:, None]
-        prop = kz_sq > 0
-        kz = xp.where(prop, xp.sqrt(xp.where(prop, kz_sq, 0.0)), 0.0)
-        H = xp.where(prop, xp.exp(1j * kz * z), 0.0).astype(target_cdtype)
-        if bandlimit and z != 0:
-            Lx = Nx * dx
-            Ly = Ny * dy
-            fx_max = Lx / (2 * wavelength * abs(z))
-            fy_max = Ly / (2 * wavelength * abs(z))
-            bl_x = xp.abs(fx) < fx_max
-            bl_y = xp.abs(fy) < fy_max
-            mask = bl_x[None, :] & bl_y[:, None]
-            H = H * mask.astype(target_cdtype)
-        # v5.5.3: store H in NATURAL (un-shifted) FFT layout so the per-call
-        # propagation folds away the two spectrum-domain shifts (4 -> 2 shifts).
-        H = xp.fft.ifftshift(H)
-
-    if H is None:
-        # Spatial-frequency squared vectors (cached on numpy path).
-        kx_sq, ky_sq = _get_or_make_freq_grids(Ny, Nx, dy, dx, xp is np)
-        if bandlimit and z != 0:
-            bl_x, bl_y = _get_or_make_bandlimit(
-                Ny, Nx, dy, dx, wavelength, abs(z), xp is np)
-        else:
-            bl_x = bl_y = None
-
-        # Chunked H construction, sized to fit a small slice of RAM.
-        from ..memory import get_ram_budget
-        ram = get_ram_budget()
-        row_cost = 3 * Nx * 16   # bytes per row of workspace (complex128)
-        if row_cost > 0:
-            max_chunk = max(1, int(ram * 0.1 / row_cost))
-        else:
-            max_chunk = Ny
-        chunk = min(Ny, max_chunk)
-
-        H = xp.empty((Ny, Nx), dtype=target_cdtype)
-        kept_count = 0
-        for j0 in range(0, Ny, chunk):
-            j1 = min(Ny, j0 + chunk)
-            # kz_sq is float64 regardless of target dtype to keep the
-            # huge kernel argument (kz * z up to ~1e6 rad) accurate.
-            kz_sq_c = k**2 - kx_sq[None, :] - ky_sq[j0:j1, None]
-            prop = kz_sq_c > 0
-            kz_c = xp.where(prop, xp.sqrt(xp.maximum(kz_sq_c, 0)), 0)
-            if target_cdtype == np.complex128:
-                H_c = xp.where(prop, xp.exp(1j * kz_c * z), 0)
-            else:
-                # complex64 path: fold phase mod 2*pi in float64
-                # BEFORE casting to float32 so the float32 precision
-                # floor doesn't inject speckle-like noise.
-                phase = xp.mod(kz_c * z, 2.0 * np.pi)
-                c = xp.cos(phase).astype(target_fdtype)
-                s = xp.sin(phase).astype(target_fdtype)
-                H_c = xp.empty((j1 - j0, Nx), dtype=target_cdtype)
-                H_c.real[:] = xp.where(prop, c, target_fdtype(0))
-                H_c.imag[:] = xp.where(prop, s, target_fdtype(0))
-            if bl_x is not None:
-                bl_mask = bl_x[None, :] & bl_y[j0:j1, None]
-                H_c *= bl_mask
-                if verbose:
-                    kept_count += int(xp.sum(bl_mask))
-            H[j0:j1, :] = H_c
-
-        if verbose and bl_x is not None:
-            kept_frac = kept_count / (Nx * Ny)
-            print(f"  Band-limiting: keeping {kept_frac*100:.1f}% of spectrum")
-        if verbose:
-            print(f"  ASM propagation: z = {z*1e3:.3f} mm  "
-                  f"(H cache miss, built in {chunk}-row chunks)")
-            print(f"  Grid: {Ny}x{Nx}, dx={dx*1e6:.3f} um, dy={dy*1e6:.3f} um")
-            print(f"  Wavelength: {wavelength*1e9:.1f} nm")
-        # v5.5.3: cache H in NATURAL (un-shifted) FFT layout (see below).
-        H = xp.fft.ifftshift(H)
-        # Store under the numpy key only.  The cached H is read-only
-        # in normal use; we don't deep-copy on lookup, so callers must
-        # not mutate it in place.
-        if h_key is not None:
-            _h_cache_store(h_key, H)
-    elif verbose:
-        print(f"  ASM propagation: z = {z*1e3:.3f} mm  (H cache HIT)")
+    # v5.17.x (P2-27): the H-cache lookup / chunked construction moved
+    # verbatim into :func:`_get_asm_H_natural` (shared with the batch
+    # variant).  Byte-identical to the pre-refactor inline block.
+    H = _get_asm_H_natural(Ny, Nx, dy, dx, wavelength, z, bandlimit,
+                           target_cdtype, xp, is_jax=is_jax, verbose=verbose)
 
     # -- propagate: E_out = IFFT{ FFT{E_in} * H } ---------------------------
     # H is stored NATURAL-layout, so the two spectrum-domain shifts fold away:
@@ -521,9 +563,20 @@ def angular_spectrum_propagate_batch(
     distance, so the transfer function ``H`` is built once (reusing
     the H cache) and broadcast across the batch.  Two batched FFTs
     (forward + inverse, axes ``(-2, -1)``) replace ``2*B`` separate
-    2-D FFTs, which on JonesField (Ex, Ey) is ~30-60% wall-clock
-    faster than calling :func:`angular_spectrum_propagate` per
-    component.
+    2-D FFTs.
+
+    .. note::
+       **Honest performance (v5.17.x, P2-27).**  Measured warm
+       (H-cache + pyFFTW plans hot, complex128, B=2, N=1024/2048):
+       batch is at PARITY with two scalar calls (median ratio
+       0.98-1.02x), with a single fused (B, Ny, Nx) plan and fewer
+       Python-level dispatches.  The pre-v5.17.x docstring claimed
+       '30-60% faster'; in reality that version was 2x+ SLOWER than
+       per-component scalar calls because it fetched ``H`` by running
+       the full scalar propagator on a garbage proxy field (a wasted
+       full-grid FFT+IFFT pair per call, since removed).  Prefer the
+       batch form for convenience / GPU stacks, not for a wall-clock
+       win at small B.
 
     Parameters
     ----------
@@ -566,16 +619,15 @@ def angular_spectrum_propagate_batch(
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
         E_stack = E_stack.astype(target_cdtype)
 
-    # Reuse the H cache from the scalar propagator: build H by
-    # delegating to the scalar function on a tiny ``Ny x Nx`` field
-    # of the right dtype with ``return_transfer_function=True``.  H
-    # is read-only after construction so it is safe to reuse across
-    # the batch.
-    _proxy = xp.empty((Ny, Nx), dtype=target_cdtype)
-    _, H = angular_spectrum_propagate(
-        _proxy, z, wavelength, dx, dy=dy, bandlimit=bandlimit,
-        return_transfer_function=True, use_gpu=(xp is not np),
-    )
+    # v5.17.x (P2-27): fetch H directly through the shared cache/build
+    # helper.  Pre-fix this delegated to the FULL scalar propagator on
+    # an uninitialised ``xp.empty`` proxy field with
+    # ``return_transfer_function=True``, paying a wasted full-grid
+    # FFT+IFFT pair (plus an fftshift+copy of H) on garbage data on
+    # EVERY batch call -- even on H-cache hits -- which made the batch
+    # entry point measurably SLOWER than two scalar calls.
+    H = _get_asm_H_natural(Ny, Nx, dy, dx, wavelength, z, bandlimit,
+                           target_cdtype, xp, is_jax=False)
 
     # Single batched FFT pair across the last two axes.  pyFFTW's
     # multi-slot plan cache (also new in 3.2.14) keys on the full
@@ -583,26 +635,24 @@ def angular_spectrum_propagate_batch(
     # the first call and reused thereafter.  The numpy / scipy
     # fallback paths handle 3-D input natively via ``fft2`` over the
     # last two axes.
+    #
+    # v5.17.x (P2-27): H is NATURAL-layout, so the two spectrum-domain
+    # shifts fold away exactly as in the v5.5.3 scalar path (4 -> 2
+    # shifts per batch call; algebraically exact for any N).
     if xp is np:
         # Use scipy.fft for ND batched (workers parameter), pyFFTW
         # plan cache picks up the (B, Ny, Nx) shape automatically via
-        # ``_fft2`` if the array is large enough.
-        E_fft = xp.fft.fftshift(
-            _fft2_nd(xp.fft.ifftshift(E_stack, axes=(-2, -1))),
-            axes=(-2, -1))
+        # ``_fft2_nd`` if the array is large enough.
         E_out = xp.fft.fftshift(
-            _ifft2_nd(xp.fft.ifftshift(E_fft * H[None, :, :],
-                                        axes=(-2, -1))),
+            _ifft2_nd(_fft2_nd(xp.fft.ifftshift(E_stack, axes=(-2, -1)))
+                      * H[None, :, :]),
             axes=(-2, -1))
     else:
-        E_fft = xp.fft.fftshift(
-            xp.fft.fft2(xp.fft.ifftshift(E_stack, axes=(-2, -1)),
-                        axes=(-2, -1)),
-            axes=(-2, -1))
         E_out = xp.fft.fftshift(
-            xp.fft.ifft2(xp.fft.ifftshift(E_fft * H[None, :, :],
-                                            axes=(-2, -1)),
-                          axes=(-2, -1)),
+            xp.fft.ifft2(
+                xp.fft.fft2(xp.fft.ifftshift(E_stack, axes=(-2, -1)),
+                            axes=(-2, -1)) * H[None, :, :],
+                axes=(-2, -1)),
             axes=(-2, -1))
     return E_out
 
@@ -808,13 +858,21 @@ def angular_spectrum_propagate_tilted(
         if H.dtype != target_cdtype:
             H = H.astype(target_cdtype)
 
+        # v5.17.x (P2-28): store the tilted H in NATURAL (un-shifted) FFT
+        # layout, mirroring the v5.5.3 plain-ASM fold, so the per-call
+        # propagation drops the two spectrum-domain shifts (4 -> 2).
+        # ``ifftshift(fftshift(X)) == X`` and shifts are permutations that
+        # distribute over elementwise products, so the fold is
+        # algebraically EXACT for any N (even or odd) -- verified
+        # bit-identical at complex64, complex128 and odd N.
+        H = np.fft.ifftshift(H)
         _h_cache_store(h_key, H)
 
     # -- propagate baseband with shifted transfer function -------------------
-    E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_demod)))
+    # H is NATURAL-layout (see above): 2-shift fold of the pre-v5.17.x
+    # 4-shift centered-H idiom.
+    E_prop = np.fft.fftshift(_ifft2(_fft2(np.fft.ifftshift(E_demod)) * H))
     del E_demod
-    E_prop = np.fft.fftshift(_ifft2(np.fft.ifftshift(E_fft * H)))
-    del E_fft
 
     # -- remodulate: restore carrier tilt ------------------------------------
     E_out = E_prop * np.conj(carrier)

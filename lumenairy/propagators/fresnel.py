@@ -130,16 +130,25 @@ def fresnel_propagate(
         target_cdtype = E_in.dtype
     else:
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
-    fdtype = np.float64 if np.dtype(target_cdtype) == np.complex128 else np.float32
 
     # -- input / output coordinates -----------------------------------------
-    x1 = (xp.arange(Nx, dtype=fdtype) - Nx / 2) * dx
-    y1 = (xp.arange(Ny, dtype=fdtype) - Ny / 2) * dy
+    # v5.17.x (P2-29): coordinate grids are ALWAYS float64 so the
+    # quadratic-phase carrier argument ``k/(2z) * r^2`` (up to ~1e3-1e5
+    # rad on large grids) is accumulated at f64 and only the finished
+    # carrier is cast to the target dtype (the mft.py f64-carrier-then-
+    # cast pattern; same contract as the ASM kernel's mod-2pi fold --
+    # see ``set_default_complex_dtype``).  Pre-fix the complex64 path
+    # built the grids at float32, accumulating the carrier argument
+    # wholly in f32: measured max carrier error 7.7e-4 rad-equivalent
+    # vs 4.1e-8 with the f64 carrier (N=2048, dx=2 um, z=5 mm).
+    # complex128 inputs are byte-identical to pre-fix.
+    x1 = (xp.arange(Nx, dtype=np.float64) - Nx / 2) * dx
+    y1 = (xp.arange(Ny, dtype=np.float64) - Ny / 2) * dy
     X1, Y1 = xp.meshgrid(x1, y1, indexing='xy')
     dx_out = wavelength * z / (Nx * dx)
     dy_out = wavelength * z / (Ny * dy)
-    x2 = (xp.arange(Nx, dtype=fdtype) - Nx / 2) * dx_out
-    y2 = (xp.arange(Ny, dtype=fdtype) - Ny / 2) * dy_out
+    x2 = (xp.arange(Nx, dtype=np.float64) - Nx / 2) * dx_out
+    y2 = (xp.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
     X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # -- quadratic phase in input plane --------------------------------------
@@ -266,15 +275,17 @@ def fraunhofer_propagate(
         target_cdtype = E_in.dtype
     else:
         target_cdtype = np.dtype(_state.DEFAULT_COMPLEX_DTYPE)
-    fdtype = np.float64 if np.dtype(target_cdtype) == np.complex128 else np.float32
 
     # Output grid spacing
     dx_out = wavelength * z / (Nx * dx)
     dy_out = wavelength * z / (Ny * dy)
 
     # Output coordinates
-    x2 = (xp.arange(Nx, dtype=fdtype) - Nx / 2) * dx_out
-    y2 = (xp.arange(Ny, dtype=fdtype) - Ny / 2) * dy_out
+    # v5.17.x (P2-29): always float64 -- the quadratic-phase carrier
+    # argument is accumulated at f64 and cast to the target dtype only
+    # after ``exp`` (see the matching comment in ``fresnel_propagate``).
+    x2 = (xp.arange(Nx, dtype=np.float64) - Nx / 2) * dx_out
+    y2 = (xp.arange(Ny, dtype=np.float64) - Ny / 2) * dy_out
     X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # Single FFT of the input field
