@@ -2,6 +2,55 @@
 
 All notable changes to the core library are documented here.
 
+## [5.18.1] — 2026-07-02
+
+Post-release cleanup of the deferred / residual items recorded during the
+v5.18.0 audit-fix campaign (the report's "New residual observations"), plus the
+two deferred JAX residuals.  No behavior changes to existing default code paths.
+
+### Fixed
+
+- **UI load-saved-run crash**: `WaveOpticsDock`'s "load embedded prescription"
+  path called `self.model`, which never existed (the dock stores the model as
+  `self.sm`), so it always raised `AttributeError` -- swallowed as a "Load
+  failed" dialog.  The feature now works.
+- **EME verify determinism**: `layer_vector_modes(verify=True)` called ARPACK
+  `eigs` (in `_fd_eig_dist`) with a random start vector, making the FD spurious
+  discriminator non-deterministic run-to-run.  It now seeds `v0` (eigenvalues
+  are unchanged; only the random-start jitter is removed).
+- **scipy 1.18 already handled in 5.18.0** — this release additionally pins the
+  slow-tests CI job to single-threaded BLAS so the eig-heavy EME vector
+  convergence tests (whose ill-conditioned cascade svdvals are sensitive to
+  multi-threaded reduction order) stop wobbling their recovered mode count
+  across runs.
+- **Zemax `.txt` exporter type**: `export_zemax_lens_data` hardcoded
+  `TYPE=STANDARD` for every surface, mislabelling aspheric/freeform surfaces
+  (the export-side sibling of the P3-43 .txt-loader drop).  It now emits the
+  real type (`EVENASPH`/freeform, inferred from non-zero aspheric coefficients
+  when no explicit type is present) and footnotes any aspheric surface,
+  pointing at `export_zemax_zmx` for a lossless round-trip.
+- **Doc**: the `test_memory_guardrail` header quoted the pre-v5.17.0 estimator
+  anchors (44.5/37.2/57.3 GB) that `lumenairy/memory.py` itself flags as
+  superseded by the v5.17.1 recalibration (29.69/21.87/31.39 + 26.30 GB
+  chunked).  Synced.
+
+### Added
+
+- **`through_focus_scan_jax(..., stream=True)`** (audit P3-03 residual): an
+  opt-in per-plane device loop that keeps DEVICE memory at `O(Ny*Nx)` (one
+  plane at a time) instead of the fused vmap's `O(n_z*Ny*Nx)`.  Numerically
+  identical to the default fused path; trades batch fusion for a tight device
+  budget on dense large-grid scans.
+
+### Performance
+
+- **Differentiable JAX Jones twin** (`pmm_jones_1d` with JAX input; audit
+  P3-27 second half): the two isotropic half-spaces now share ONE geometry-only
+  eig (backlog A2) instead of two independent full `2n` eigs, mirroring the
+  numpy `_pmm_jones_solve_core`.  As a bonus, because the twin now uses the
+  identical shared-eig gauge as the numpy oracle, forward parity IMPROVES to
+  machine precision (`max|dJones|` ~9e-16 vs the oracle); gradients stay finite.
+
 ## [5.18.0] — 2026-07-02
 
 Deep-audit remediation.  All 114 findings of the v5.17.0 deep audit
