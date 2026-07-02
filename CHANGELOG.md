@@ -97,6 +97,14 @@ output — review before upgrading):**
   aperture_diameter=None; TNC receives `maxfun` (its budget option) so
   max_iter is effective; `DesignParameterization` gains the duplicate-free-vars
   guard; two docstrings corrected (the solver zeros C, not B).
+- **scipy 1.18 compatibility**: `design_optimize` no longer passes `disp` as a
+  `scipy.optimize.minimize` solver option.  scipy 1.18.0 tightened per-method
+  option validation and rejects `disp` for L-BFGS-B (and likely other methods),
+  emitting `OptimizeWarning: Unknown solver options: disp` on every generic
+  minimize (scipy <= 1.17 accepted it).  The driver already prints its own
+  iteration progress from the merit callback when `verbose=True`, so scipy's
+  internal `disp` was redundant; `differential_evolution` / `basinhopping`
+  keep their native `disp=` argument.
 - **Analysis/elements** (audit P3-01/02/03/04/07/15/24/25/39): seeded
   Shack-Hartmann noise is a reproducible SEQUENCE (was the IDENTICAL frozen
   frame every AO frame -- seeded noise realizations change); GaussianBSDF's

@@ -1305,7 +1305,7 @@ def design_optimize(parameterization: Any,
                 merit_fn, x0, method=_scipy_method,
                 jac=_grad_for_newton,
                 hess=_hess_fn,
-                options={'maxiter': max_iter, 'disp': verbose},
+                options={'maxiter': max_iter},
                 callback=_scipy_cb_minimize)
             x_opt = res.x
         else:
@@ -1347,11 +1347,20 @@ def design_optimize(parameterization: Any,
             # options: maxiter' and ran with its DEFAULT budget, so
             # ``max_iter`` was silently ineffective for TNC.  Map the
             # option name per-method.
+            #
+            # v5.18.0: 'disp' is NO LONGER passed as a solver option.
+            # scipy 1.18.0 tightened per-method option validation and now
+            # rejects 'disp' for L-BFGS-B (and likely other methods),
+            # emitting ``OptimizeWarning: Unknown solver options: disp``
+            # under every generic-minimize call (scipy <= 1.17 accepted
+            # it).  The driver already prints its own iteration progress
+            # from the merit callback when ``verbose`` is set, so scipy's
+            # internal ``disp`` was redundant; dropping it keeps the
+            # generic path option-clean on scipy 1.17 AND 1.18.
             if isinstance(method, str) and method.lower() == 'tnc':
-                _options: Dict[str, Any] = {
-                    'maxfun': max_iter, 'disp': verbose}
+                _options: Dict[str, Any] = {'maxfun': max_iter}
             else:
-                _options = {'maxiter': max_iter, 'disp': verbose}
+                _options = {'maxiter': max_iter}
             _minimize_kwargs: Dict[str, Any] = {
                 'jac': final_jac,
                 'bounds': bounds if _supports_bounds else None,
