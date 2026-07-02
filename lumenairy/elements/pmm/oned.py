@@ -163,6 +163,10 @@ def pmm_jones_1d(
     in-plane slant TM channel (validated vs an RCWA tensor z-staircase across slant
     15-60 deg, normal + oblique).  The multi-region (segments) out-of-plane + slant
     path remains guarded.
+
+    A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
+    medium raises ``ValueError`` on the NumPy path; see the INCIDENCE-MEDIUM
+    SCOPE note on :func:`pmm_efficiency_1d`.
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -388,6 +392,19 @@ def pmm_efficiency_1d(
     for the modal eig).  TM converges monotone-with-no-floor but only
     spectral-*ish* (the discontinuous TM partner is C0-averaged at the wall);
     ``elements_per_region>1, grade=True`` recovers the rate for metals.
+
+    INCIDENCE-MEDIUM SCOPE (the rcwa audit-P1 guard, mirrored suite-wide): a
+    GAIN superstrate (public ``Im(n_superstrate) < 0`` -- even ``-1e-9``) or a
+    non-propagating (evanescent / metallic) incidence medium raises
+    ``ValueError`` on the NumPy path -- the forward-root convention would flip
+    ``kz_inc`` negative and silently negate every efficiency.  An
+    infinitesimally LOSSY superstrate (``Im(n_superstrate) > 0``) remains
+    continuous and supported, but the incident z-flux then decays with z, so
+    ``sum(R)+sum(T)`` may slightly exceed 1 and ``stabilize=True`` may reject
+    every degree (a false 'resonance band' diagnosis) -- use
+    ``stabilize=False`` for a significantly lossy incidence medium.  The
+    substrate is NOT guarded (mirrors rcwa; a gain substrate is caught only by
+    the energy tripwires).
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -552,6 +569,12 @@ def pmm_efficiency_1d_segments(
     Returns
     -------
     orders, R_eff, T_eff : as in :func:`pmm_efficiency_1d`.
+
+    Notes
+    -----
+    A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
+    medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
+    :func:`pmm_efficiency_1d`.
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -627,6 +650,12 @@ def pmm_jones_1d_segments(
     Returns
     -------
     orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
+
+    Notes
+    -----
+    A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
+    medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
+    :func:`pmm_efficiency_1d`.
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -759,6 +788,10 @@ def pmm_efficiency_1d_slanted(
     staircase -- the wall-normal TM/p-pol inverse-rule limit plus the oblique-slant
     convection, not a coupling error; the in-plane wall-normal TM floor alone is much
     tighter, ~3e-5..1e-4 near degree 18-20, U-shaped).
+
+    A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
+    medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
+    :func:`pmm_efficiency_1d`.
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -953,6 +986,10 @@ def pmm_jones_1d_slanted(
     Energy conserves to ~1e-13 in all paths.  The combined oblique+slant far field
     (inclined-frame consistent, lab half-spaces) is degree-clean -- no stabilize
     crutch.
+
+    A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
+    medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
+    :func:`pmm_efficiency_1d`.
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
@@ -1168,6 +1205,10 @@ def pmm_jones_1d_slanted_segments(
     div-conforming discretization difference).  Full ``(3, 3)`` tensor IN-PLANE
     OR OUT-OF-PLANE (out-of-plane + slant reaches the ~1e-4 wall-normal floor,
     validated vs a multi-region RCWA tensor z-staircase); NumPy/SciPy (not JAX).
+
+    A GAIN (public ``Im(n_superstrate) < 0``) or non-propagating incidence
+    medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
+    :func:`pmm_efficiency_1d`.
     """
     angle = _resolve_incidence(angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)

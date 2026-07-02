@@ -23,6 +23,11 @@ from ...backend import is_jax_array
 # top-level import introduces no cycle.
 from ..rcwa import _interface_smatrix_general, _propagation_smatrix_general
 
+# Incidence-medium guard shared with the 2-D PMM paths (twod.py / stack2d.py):
+# the rcwa guard expects the INTERNAL exp(+i w t) eps convention, so PUBLIC-
+# convention callers pass np.conj(eps_sup) (mirrors twod_staggered's bridge).
+from ..rcwa._core import _require_propagating_incidence
+
 _C = np.complex128
 
 # Minimum slant (radians) for the covariant oblique-coordinate path.  The covariant
@@ -666,7 +671,7 @@ def _assemble_jones_farfield(Hsup, Hsub, S11, S21, orders, kx,
 
 
 def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
-                        polarization):
+                        polarization, label="pmm"):
     """TE/TM diffraction efficiencies from the order-resolved reflection /
     transmission amplitudes of a scalar PMM solve.
 
@@ -674,7 +679,14 @@ def _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
     channel normalizes by the wall-normal flux ``kz/eps`` (the inverse-rule
     channel), with the incident flux ``kz_inc/eps_sup``.  Orders below cut-off
     (``Re(kz) <= 0``) carry zero efficiency.  Shared verbatim by the vertical
-    scalar core and the scalar slant solver."""
+    scalar core and the scalar slant solver.
+
+    A GAIN superstrate (public ``Im(n_sup) < 0``) or a non-propagating
+    (evanescent/metallic) incidence medium raises -- ``_kz_forward`` would flip
+    ``kz_inc`` negative and silently negate every efficiency (the rcwa audit-P1
+    guard, mirrored; ``eps_sup`` is PUBLIC here -> conj to internal)."""
+    _require_propagating_incidence(label, np.conj(_C(eps_sup)),
+                                   (kx0 / k0) ** 2)
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
     kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
@@ -813,7 +825,7 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     t_ord = Hsub @ (S21 @ cinc)
 
     R, T = _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
-                               polarization)
+                               polarization, label=label)
     return orders, R, T, n_glob
 
 
@@ -1179,6 +1191,10 @@ def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     Hsup = _project(Wsup)
     Hsub = _project(Wsub)
 
+    # Gain / non-propagating incidence-medium guard (rcwa audit-P1 mirror;
+    # PUBLIC-convention eps_sup here -> conj to the guard's internal gauge).
+    _require_propagating_incidence(label, np.conj(_C(eps_sup)),
+                                   (kx0 / k0) ** 2)
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
     kz_inc = float(np.real(_kz_forward(eps_sup, np.array([kx0 / k0]))[0]))
@@ -2984,7 +3000,7 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
     t_ord = Hsub @ (S21 @ cinc)
 
     R, T = _scalar_farfield_RT(r_ord, t_ord, kx, kx0, k0, eps_sup, eps_sub,
-                               polarization)
+                               polarization, label="pmm_efficiency_1d_slanted")
     if return_coeffs:
         m0 = int(np.where(orders == 0)[0][0])
         return orders, R, T, n_glob, _C(r_ord[m0]), _C(t_ord[m0])
@@ -3511,6 +3527,10 @@ def _pmm_jones_slant_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     Hsup = _proj_fwd(Ms)
     Hsub = _proj_fwd(Mb)
 
+    # Gain / non-propagating incidence-medium guard (rcwa audit-P1 mirror;
+    # PUBLIC-convention eps_sup here -> conj to the guard's internal gauge).
+    _require_propagating_incidence(label, np.conj(_C(eps_sup)),
+                                   (kx0 / k0) ** 2)
     kz_sup = _kz_forward(eps_sup, kx)
     kz_sub = _kz_forward(eps_sub, kx)
     kx0n = kx0 / k0
@@ -3866,6 +3886,10 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
         # internal kz has Re<0 there, which the ``Re(kz)>0`` mask silently zeroes
         # (T=0).  Lossless eps is real -> conj is a no-op -> byte-unchanged.  P1-A.
         return _kz_forward(np.conj(_C(eps)), kx)
+    # Gain / non-propagating incidence-medium guard (rcwa audit-P1 mirror).
+    # ``eps_sup`` is already INTERNAL exp(+iwt) here -- exactly the gauge the
+    # rcwa guard expects -- so it is passed WITHOUT the public->internal conj.
+    _require_propagating_incidence(label, _C(eps_sup), (kx0 / k0) ** 2)
     kzo_s = kz_ord(eps_sup)
     kzo_b = kz_ord(eps_sub)
     kz_inc = float(np.real(kzo_s[m0]))

@@ -890,13 +890,25 @@ def pmm_efficiency_2d_staggered(
     # -1e-9, 205 at -1e-12).  Nudge off an EXACT coincidence, and WARN loudly
     # inside the divergence band (the hybrid pmm_efficiency_2d_cell is clean
     # there -- use it near cutoffs).
-    from ..rcwa._core import _grazing_safe_wavelength
+    from ..rcwa._core import (
+        _grazing_safe_wavelength,
+        _require_propagating_incidence,
+    )
     nre0 = float(np.real(np.sqrt(eps_sup)))
     _mo = np.arange(-int(n_orders), int(n_orders) + 1)
     _mx = np.tile(_mo, len(_mo))
     _my = np.repeat(_mo, len(_mo))
     _kx0n = nre0 * np.sin(theta) * np.cos(phi)
     _ky0n = nre0 * np.sin(theta) * np.sin(phi)
+    # Incidence guard (mirrors pmm_efficiency_2d / rcwa_efficiency_2d, v5.14.1
+    # suite-wide fix): reject a gain superstrate (kz_inc forward root flips
+    # negative -> every T silently negated) and an evanescent incident wave
+    # (kz_inc ~ 0 divides the flux normalization).  This module keeps eps in
+    # the PUBLIC exp(-iwt) convention (Im eps > 0 for loss), so conjugate into
+    # the guard's INTERNAL convention.
+    _require_propagating_incidence("pmm_efficiency_2d_staggered",
+                                   np.conj(eps_sup),
+                                   _kx0n ** 2 + _ky0n ** 2)
     wl = _grazing_safe_wavelength(float(wavelength), _kx0n, _ky0n, _mx, _my,
                                   period_x, period_y, [eps_sup, eps_sub])
     _kt2 = ((_kx0n + _mx * (wl / period_x)) ** 2
