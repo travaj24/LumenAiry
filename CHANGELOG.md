@@ -4,6 +4,77 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased] — audit-fix campaign (AUDIT_V5_17_0_2026_07_01_DEEP.md)
 
+### Fixed (wave 6 — the P3 sweep: boundary guards, doc honesty, small physics, perf)
+
+- **EME** (audit P3-17..P3-23): lossy scalar strips at kx0=0 now return the true
+  COMPLEX spectrum (eigh silently discarded Im(eps)); `ref_2d_modes` gains
+  `return_complex=` and warns when a lossy eps would be realified; band-edge
+  scan samples no longer crash `layer_modes` with `LinAlgError`; strip heights
+  are validated against `Ly` (silent wrong Bloch modes at ky0 != 0 previously);
+  magnetic `(eps, h, mu)` 3-tuple strips now work in `mode_field_vec`,
+  `strips_to_eps_xy` and `layer_vector_modes(verify=True)` with a mu-consistent
+  verify oracle; the duplicated rasterizer is unified; `diffraction_eme`
+  returns a bare dict (with `qz2` folded in) like its sibling.  **Audit P3-20
+  was REFUTED in implementation**: the prescribed single-SVD merge breaks the
+  sigma_min mode diagnostic on the real reference cell (gesdd with-vectors
+  sigma is ~14x off on the unequilibrated G); the two-call structure is
+  accuracy-load-bearing, now documented in-code and pinned by a regression
+  test.
+- **BOR-PMM** (audit P3-11..P3-14 + P3-64): per-instance bounded modal cache +
+  identical-layer dedup (repeated solve/sweeps reuse eigensolves,
+  byte-identical R/T); the `_fast_geig` QZ fallback is now actually reachable
+  at longitudinal resonances (LU pivot-ratio guard, ported from pmm); the
+  staggered layer basis returns the FACE grid + per-half quadrature weights;
+  `angles` docstring corrected (superstrate, not substrate); GATE 4a now
+  classifies mode polarization so a TE/TM-swap bug cannot pass it.
+- **PMM/RCWA** (audit P3-26/27/33/34/35/37/38): the stabilize consensus
+  cluster is now pairwise-MUTUAL (was an anchor star admitting members 2x tol
+  apart); the v5.14.2 shared-eig optimization is ported to the JAX stack twin;
+  the 2-D `formulation='li'` inverse rule is applied per-slot so y-patterned
+  (x-uniform) cells get the rule on the correct components; the staggered
+  assembler frees five dead operator matrices (~2x peak); dispersive tensor
+  layers get the same validation contract as static ones; two stale docstrings
+  corrected.
+- **Propagators** (audit P3-51/52/53/56/57 + gate hardening): the asymptotic
+  JAX twins adopt the x64 guard and no longer mutate `jax_enable_x64`
+  MID-CALL (**now raise if x64 is off** -- previously flipped global config);
+  `decompose_lg/decompose_hg` handle `indexing='ij'` meshgrids (previously
+  silent all-zero coefficients); `apply_fresnel_curvature` honors
+  dtype-follows-input; `fresnel_propagate` drops an avoidable full-grid copy;
+  the dead `chunk_output` parameter is deprecated; the pyFFTW gate itself now
+  requires complex input so no future caller can poison the shape blacklist.
+- **Raytrace JAX parity** (audit P3-58/59/60): tangent rays (disc == 0)
+  survive like NumPy; the DOE-kick boundary comparison matches; the JAX
+  aspheric Newton adds the post-iteration convergence check (unconverged
+  intersections are killed like NumPy instead of silently accepted);
+  `_surface_copy_with` propagates ALL optional Surface fields (coordinate
+  breaks / tilts / decenters / world frames were silently dropped).
+- **Optimize** (audit P3-47/48/49/50 + TNC): FD gradients clamp their stencil
+  inside the bounds box at active bounds; `MaxFNumberMerit` tolerates
+  aperture_diameter=None; TNC receives `maxfun` (its budget option) so
+  max_iter is effective; `DesignParameterization` gains the duplicate-free-vars
+  guard; two docstrings corrected (the solver zeros C, not B).
+- **Analysis/elements** (audit P3-01/02/03/04/07/15/24/25/39): seeded
+  Shack-Hartmann noise is a reproducible SEQUENCE (was the IDENTICAL frozen
+  frame every AO frame -- seeded noise realizations change); GaussianBSDF's
+  hemisphere integral now equals `total_integrated_scatter()` at oblique
+  incidence; Rytov EMT warns outside its period/wavelength validity domain;
+  `through_focus_scan_jax` streams host copies per plane; the duplicate
+  `_jax_available` definition removed; the segment-geometry liner warns when
+  it cannot fit; three doc corrections (Marechal doctest value, thin-lens
+  thickness formula sign, maslov JAX pointer).
+- **Zemax IO** (audit P3-41..P3-44): malformed/truncated .zmx lines raise
+  `ValueError` with file/line/text context (was raw IndexError); the
+  auto-detected exit surface is no longer appended after a terminal MIRROR
+  (bogus refractive element); the .txt loader warns per-surface when it drops
+  aspheric data instead of silently claiming interchangeability; a stale
+  exporter comment corrected.
+- **UI** (audit P3-62/63): `WaveOpticsWorker`'s custom signal renamed
+  (`finished_result`, matching the 14 sibling dock workers) so it no longer
+  shadows `QThread.finished`; the worker snapshots all model state on the GUI
+  thread at construction instead of reading the live model from the
+  background thread.
+
 ### Fixed (wave 5 — remaining P2s: physics conventions, IO trust, performance, UI robustness)
 
 **Three physics/convention BEHAVIOR CHANGES (each hand-derived against the
