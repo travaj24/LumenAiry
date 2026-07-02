@@ -775,6 +775,15 @@ def pmm_efficiency_2d(
     if polarization not in ("te", "tm"):
         raise ValueError("polarization must be 'te' or 'tm'")
 
+    # Pillar-bounds contract BEFORE the JAX dispatch (audit P2-14): the bounds
+    # are STATIC concrete geometry on every path (only materials / depth /
+    # wavelength / angles are traced -- _static_prep float()-coerces them), so
+    # inverted / degenerate bounds must raise here too; previously the JAX
+    # branch returned first and silently built a negative-width strip (an
+    # energy-conserving but geometrically WRONG answer -- the lossless trap).
+    _validate_pillar_bounds("pmm_efficiency_2d", x_bounds, y_bounds,
+                            period_x, period_y)
+
     # JAX auto-dispatch (Phase 7): traced material values / depth / wavelength
     # / angles on STATIC pillar bounds + degree + orders -- the 2-D analogue of
     # the 1-D binary twin's scope.  See pmm/_jax_twod.py for the caveats.
@@ -795,8 +804,6 @@ def pmm_efficiency_2d(
             n_orders=n_orders, formulation=formulation)
         return Efficiency2D(o, R, T, 2 * (2 * n_orders + 1) ** 2)
 
-    _validate_pillar_bounds("pmm_efficiency_2d", x_bounds, y_bounds,
-                            period_x, period_y)
     x0, x1 = float(x_bounds[0]), float(x_bounds[1])
     y0, y1 = float(y_bounds[0]), float(y_bounds[1])
     # Loss-convention bridge (matches pmm_efficiency_1d / rcwa_efficiency_2d):

@@ -35,6 +35,7 @@ from ._core import (
     _jpmm_fourier_projection,
     _jpmm_order_set,
     _jpmm_sem_modes_tensor,
+    _kz_forward,
     _l2g_periodic,
     _lagrange_derivative_matrix,
     _pmm_union_grid,
@@ -150,6 +151,32 @@ def _concrete_index(eps):
         return None
 
 
+def _grazing_guard_concrete(n_sup, angle):
+    """Host-side mirror of the NumPy stack's grazing/evanescent-incidence
+    raise (``_core._assemble_jones_farfield``), run ONLY when ``n_sup`` and
+    ``angle`` are concrete (audit P2-10): the twin divides the flux
+    normalization by ``kz_inc``, so at (near-)grazing incidence it returned
+    NaN R/T where the NumPy stack raises.  Same tolerance (``|kz_inc| <
+    1e-9``) and message as the NumPy guard.
+
+    A TRACED ``n_sup`` / ``angle`` (a ``jax.grad`` / ``jax.jit`` Tracer has no
+    concrete host value) SKIPS the guard -- concretizing would sever the
+    trace (the ``_reject_jax_offplane`` tracer contract); the sibling
+    ``_jax_stack2d`` degrades identically."""
+    try:
+        nsup_c = complex(np.asarray(n_sup))
+        angle_c = float(np.real(np.asarray(angle)))
+    except Exception:               # Tracer: no concrete value -> skip
+        return
+    kx0n = float(np.real(nsup_c)) * np.sin(angle_c)
+    kz_inc = float(np.real(_kz_forward(nsup_c ** 2, np.array([kx0n]))[0]))
+    if abs(kz_inc) < 1e-9:
+        raise ValueError(
+            "pmm: grazing/evanescent incidence (kz_inc ~ 0) -- the incident wave "
+            "carries ~no z-flux, so the R/T flux normalization is ill-defined.  "
+            "Reduce the incidence angle below grazing.")
+
+
 def _pmm_stack_solve_jax(stack):
     """The JAX twin of the all-vertical in-plane branch of
     :meth:`PMMStack.solve`.  Consumes the stack's stored (possibly traced)
@@ -164,6 +191,9 @@ def _pmm_stack_solve_jax(stack):
 
     wl = stack._src["wl"]
     angle = stack._src["angle"]
+    # concrete-only grazing/evanescent-incidence guard (audit P2-10; a traced
+    # n_sup / angle skips it -- see _grazing_guard_concrete)
+    _grazing_guard_concrete(stack.n_sup, angle)
     n_sup = jnp.asarray(stack.n_sup, cj)
     n_sub = jnp.asarray(stack.n_sub, cj)
     eps_sup = n_sup ** 2

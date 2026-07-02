@@ -28,7 +28,12 @@ trace.  Only the small projected eig (``2*Nf``, via the shared custom-VJP
 Caveats (mirroring the 1-D twin): ``stabilize`` is rejected (host-side degree
 scan); the uniform-pillar analytic shortcut is NOT taken (a traced eps cannot
 branch -- a uniform cell solves through the structured path); ``jnp.linalg.eig``
-is CPU-only; x64 is required.  Measured gradient fidelity (AD vs central FD):
+is CPU-only; x64 is required.  Host-side guards that need concrete values
+degrade gracefully (audit P2-11, mirroring ``_jax_stack2d``): the
+propagating-incidence raise and the Wood-anomaly grazing-wavelength nudge run
+only when ``wavelength`` / ``theta`` / ``phi`` / ``n_superstrate`` are
+concrete; a traced source value skips them (gradients are valid only BETWEEN
+order cutoffs).  Measured gradient fidelity (AD vs central FD):
 material eps ~3e-9 relative at BOTH a degenerate centered square and an
 asymmetric pillar; depth/wavelength ~5e-10; theta at oblique ~1e-9; theta at
 EXACTLY normal incidence on a CENTERED square returns the clean symmetry zero
@@ -63,6 +68,62 @@ try:
     _register_cache_clearer("pmm_jax_twod_static", _clear_jax_twod_caches)
 except ImportError:  # pragma: no cover - registry always present in-tree
     pass
+
+
+def _concrete(v):
+    """float(v) when concrete, else None (tracers have no concrete value)."""
+    try:
+        return float(np.real(np.asarray(v)))
+    except Exception:
+        return None
+
+
+def _host_incidence_guard(fn_name, st, period_x, period_y, wavelength, theta,
+                          phi, n_superstrate, n_substrate, eps_candidates):
+    """Host-side propagating-incidence check + Wood-anomaly wavelength nudge,
+    run ONLY when the source values are concrete -- verbatim the sibling
+    multilayer twin (``_jax_stack2d._pmm_stack2d_solve_jax``) and the NumPy
+    core (``twod._pmm2d_solve_core``).  Returns the (possibly nudged)
+    wavelength to solve at.
+
+    A TRACED ``wavelength`` / ``theta`` / ``phi`` / ``n_superstrate`` (a
+    ``jax.grad`` / ``jax.jit`` Tracer has no concrete host value) SKIPS both
+    guards: the wavelength passes through un-nudged (the documented
+    Wood-anomaly caveat -- gradients are valid only BETWEEN order cutoffs) and
+    grazing/evanescent incidence is not rejected.  ``eps_candidates`` holds
+    the PUBLIC layer permittivities (scalars or arrays); traced entries are
+    dropped from the nudge's constituent list (``Re()`` is what the nudge
+    uses, and it is conjugation-invariant)."""
+    wl_c = _concrete(wavelength)
+    th_c = _concrete(theta)
+    ph_c = _concrete(phi)
+    nsup_c = _concrete(n_superstrate)
+    if None in (wl_c, th_c, ph_c, nsup_c):
+        return wavelength
+    from .twod import (
+        _grazing_safe_wavelength,
+        _require_propagating_incidence,
+    )
+    kx0_c = nsup_c * np.sin(th_c) * np.cos(ph_c)
+    ky0_c = nsup_c * np.sin(th_c) * np.sin(ph_c)
+    eps_reals = []
+    for v in (n_superstrate, n_substrate):
+        try:
+            eps_reals.append(complex(np.conj(complex(np.asarray(v)) ** 2)))
+        except Exception:
+            pass
+    for e in eps_candidates:
+        try:
+            eps_reals += [complex(np.conj(complex(x)))
+                          for x in np.asarray(e).ravel()]
+        except Exception:
+            pass
+    _require_propagating_incidence(
+        fn_name, complex(np.conj(complex(nsup_c) ** 2)),
+        kx0_c ** 2 + ky0_c ** 2)
+    return _grazing_safe_wavelength(wl_c, kx0_c, ky0_c, st["order_x"],
+                                    st["order_y"], period_x, period_y,
+                                    eps_reals)
 
 
 def _static_prep(period_x, period_y, x0, x1, y0, y1, degree, n_el, grade,
@@ -181,6 +242,11 @@ def _pmm_efficiency_2d_cell_jax(period_x, period_y, eps_cell, region_layout,
     st = _static_prep_cell(float(period_x), float(period_y), region_layout,
                            int(degree), int(elements_per_strip), bool(grade),
                            int(n_orders))
+    # concrete-only incidence + Wood-anomaly guards (audit P2-11; a traced
+    # source value skips them -- see _host_incidence_guard)
+    wavelength = _host_incidence_guard(
+        "pmm_efficiency_2d_cell", st, float(period_x), float(period_y),
+        wavelength, theta, phi, n_superstrate, n_substrate, (eps_cell,))
     cj = jnp.complex128
     eps_c = jnp.asarray(eps_cell).astype(cj)
     eps_regions = jnp.stack([eps_c[i, j] for (i, j) in st["first_idx"]])
@@ -206,6 +272,12 @@ def _pmm_efficiency_2d_jax(period_x, period_y, eps_pillar, eps_host,
                       float(y_bounds[0]), float(y_bounds[1]),
                       int(degree), int(elements_per_strip), bool(grade),
                       int(n_orders))
+    # concrete-only incidence + Wood-anomaly guards (audit P2-11; a traced
+    # source value skips them -- see _host_incidence_guard)
+    wavelength = _host_incidence_guard(
+        "pmm_efficiency_2d", st, float(period_x), float(period_y),
+        wavelength, theta, phi, n_superstrate, n_substrate,
+        (eps_pillar, eps_host))
     cj = jnp.complex128
     w = jnp.asarray(st["w"])
     # loss-convention bridge (PUBLIC Im>0 -> internal exp(+iwt))

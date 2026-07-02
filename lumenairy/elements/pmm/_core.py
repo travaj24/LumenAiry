@@ -2037,6 +2037,32 @@ def _jpmm_solve(static, orders, Tp, jnp, eig, period, eps_ridge, eps_groove,
 
 
 
+def _jpmm_concrete_incidence_guard(label, n_superstrate, angle):
+    """Concrete-only mirror of the NumPy 1-D incidence-medium guard (the rcwa
+    audit-P1 ``_require_propagating_incidence``, mirrored into the 1-D PMM by
+    the 2026-07 wave-1 fix): reject a GAIN (public ``Im(n_superstrate) < 0``)
+    or non-propagating (grazing / evanescent / metallic) incidence medium with
+    the SAME ``ValueError`` the NumPy path raises -- the forward-root
+    convention would flip ``kz_inc`` negative and silently negate every
+    efficiency (NaN gradients downstream).
+
+    Runs ONLY when BOTH ``n_superstrate`` and ``angle`` have concrete host
+    values.  A TRACED value (a ``jax.grad`` / ``jax.jit`` Tracer) cannot be
+    materialised without severing the trace (the rcwa
+    ``_reject_jax_offplane`` tracer contract), so it SKIPS the guard: the JAX
+    path guards only CONCRETE incidence media -- differentiating w.r.t.
+    ``n_superstrate`` or ``angle`` bypasses the raise (documented in the
+    INCIDENCE-MEDIUM SCOPE note on :func:`pmm_efficiency_1d`)."""
+    try:
+        nsup_c = complex(np.asarray(n_superstrate))
+        angle_c = float(np.real(np.asarray(angle)))
+    except Exception:               # Tracer: no concrete value -> skip
+        return
+    kx0n = float(np.real(nsup_c)) * np.sin(angle_c)
+    _require_propagating_incidence(label, np.conj(_C(nsup_c ** 2)),
+                                   kx0n ** 2)
+
+
 def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
                            n_superstrate, depth, duty_cycle, wavelength,
                            *, angle, polarization, degree, elements_per_region,
@@ -2052,7 +2078,11 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
 
     Oblique Wood-anomaly caveat: the propagating-order COUNT (array shapes) is
     sized from CONCRETE inputs and held static per trace, so ``d/d(angle)`` /
-    ``d/d(wl)`` are valid only BETWEEN Rayleigh-order cutoffs."""
+    ``d/d(wl)`` are valid only BETWEEN Rayleigh-order cutoffs.
+
+    Incidence-medium guard: gain / non-propagating incidence media are
+    rejected ONLY when ``n_superstrate`` and ``angle`` are concrete; a traced
+    value skips the guard (see :func:`_jpmm_concrete_incidence_guard`)."""
     import jax.numpy as jnp
 
     from ..rcwa import _jax_eig_stable, _require_jax_x64
@@ -2063,6 +2093,10 @@ def _pmm_efficiency_1d_jax(period, n_ridge, n_groove, n_substrate,
             "pmm_efficiency_1d: the JAX (differentiable) path currently "
             "supports elements_per_region == 1 only (the binary de-risking "
             "spike); use the NumPy path for hp-refinement.")
+
+    # concrete-only incidence-medium guard (the wave-1 P1-03 NumPy mirror;
+    # traced n_superstrate / angle skips it -- see the helper's docstring)
+    _jpmm_concrete_incidence_guard("pmm_efficiency_1d", n_superstrate, angle)
 
     cj = jnp.complex128
 
@@ -2464,7 +2498,11 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
     angle input is a JAX array.  Differentiable w.r.t. the in-plane tensor
     entries (incl off-diagonal ``exy`` / ``eyx``), ``depth``, ``wavelength``,
     ``angle`` and the half-space indices.  Anything outside the surface
-    (stabilize, multi-region, out-of-plane, slant) raises (handled upstream)."""
+    (stabilize, multi-region, out-of-plane, slant) raises (handled upstream).
+
+    Incidence-medium guard: gain / non-propagating incidence media are
+    rejected ONLY when ``n_superstrate`` and ``angle`` are concrete; a traced
+    value skips the guard (see :func:`_jpmm_concrete_incidence_guard`)."""
     import jax.numpy as jnp
 
     from ..rcwa import _jax_eig_stable, _require_jax_x64
@@ -2475,6 +2513,10 @@ def _pmm_jones_1d_jax(period, eps_ridge, eps_groove, n_substrate, n_superstrate,
             "pmm_jones_1d: the JAX (differentiable) path currently supports "
             "elements_per_region == 1 only; use the NumPy path for "
             "hp-refinement.")
+
+    # concrete-only incidence-medium guard (the wave-1 P1-03 NumPy mirror;
+    # traced n_superstrate / angle skips it -- see the helper's docstring)
+    _jpmm_concrete_incidence_guard("pmm_jones_1d", n_superstrate, angle)
 
     cj = jnp.complex128
     er = jnp.asarray(eps_ridge, cj)
