@@ -131,7 +131,7 @@ def load_zemax_zmx(filepath: str,
     surfaces_raw = []
     current_surf = None
 
-    for line in lines:
+    for line_num, line in enumerate(lines, 1):
         stripped = line.strip()
         tokens = stripped.split()
         if not tokens:
@@ -139,81 +139,94 @@ def load_zemax_zmx(filepath: str,
 
         keyword = tokens[0]
 
-        if keyword == 'SURF':
-            if current_surf is not None:
-                surfaces_raw.append(current_surf)
-            current_surf = {
-                'surf_num': int(tokens[1]),
-                'type': 'STANDARD',
-                'curvature': 0.0,
-                'conic': 0.0,
-                'thickness': 0.0,
-                'glass': None,
-                'semi_diameter': 0.0,
-                'aspheric_params': {},
-                'is_stop': False,
-                'is_mirror': False,
-                'is_coordbrk': False,
-                'comment': '',
-            }
+        # v5.17.1 (audit P3-41): wrap the per-line keyword dispatch so a
+        # malformed or truncated line (e.g. a bare '  CURV' from a
+        # partial file copy) raises a clear ValueError naming the file,
+        # line number, and offending text instead of a bare
+        # IndexError/ValueError from deep inside the token handlers.
+        try:
+            if keyword == 'SURF':
+                if current_surf is not None:
+                    surfaces_raw.append(current_surf)
+                current_surf = {
+                    'surf_num': int(tokens[1]),
+                    'type': 'STANDARD',
+                    'curvature': 0.0,
+                    'conic': 0.0,
+                    'thickness': 0.0,
+                    'glass': None,
+                    'semi_diameter': 0.0,
+                    'aspheric_params': {},
+                    'is_stop': False,
+                    'is_mirror': False,
+                    'is_coordbrk': False,
+                    'comment': '',
+                }
 
-        elif current_surf is not None:
-            if keyword == 'TYPE':
-                stype = tokens[1] if len(tokens) > 1 else 'STANDARD'
-                current_surf['type'] = stype
-                if stype == 'COORDBRK':
-                    current_surf['is_coordbrk'] = True
+            elif current_surf is not None:
+                if keyword == 'TYPE':
+                    stype = tokens[1] if len(tokens) > 1 else 'STANDARD'
+                    current_surf['type'] = stype
+                    if stype == 'COORDBRK':
+                        current_surf['is_coordbrk'] = True
 
-            elif keyword == 'STOP':
-                current_surf['is_stop'] = True
+                elif keyword == 'STOP':
+                    current_surf['is_stop'] = True
 
-            elif keyword == 'CURV':
-                # Only read the curvature value (first token after keyword).
-                # Remaining fields are solve parameters (pickup source,
-                # scale factor, etc.) -- NOT conic constants.
-                current_surf['curvature'] = float(tokens[1])
+                elif keyword == 'CURV':
+                    # Only read the curvature value (first token after
+                    # keyword).  Remaining fields are solve parameters
+                    # (pickup source, scale factor, etc.) -- NOT conic
+                    # constants.
+                    current_surf['curvature'] = float(tokens[1])
 
-            elif keyword == 'CONI':
-                current_surf['conic'] = float(tokens[1])
+                elif keyword == 'CONI':
+                    current_surf['conic'] = float(tokens[1])
 
-            elif keyword == 'DISZ':
-                if tokens[1].upper() == 'INFINITY':
-                    current_surf['thickness'] = float('inf')
-                else:
-                    current_surf['thickness'] = float(tokens[1])
+                elif keyword == 'DISZ':
+                    if tokens[1].upper() == 'INFINITY':
+                        current_surf['thickness'] = float('inf')
+                    else:
+                        current_surf['thickness'] = float(tokens[1])
 
-            elif keyword == 'GLAS':
-                glass_name = tokens[1]
-                current_surf['glass'] = glass_name
-                if glass_name.upper() == 'MIRROR':
-                    current_surf['is_mirror'] = True
-
-            elif keyword == 'MIRR':
-                # Some files use MIRR flag instead of GLAS MIRROR
-                try:
-                    if int(tokens[1]) == 1:  # 1 = reflective
+                elif keyword == 'GLAS':
+                    glass_name = tokens[1]
+                    current_surf['glass'] = glass_name
+                    if glass_name.upper() == 'MIRROR':
                         current_surf['is_mirror'] = True
-                except (ValueError, IndexError):
-                    pass
 
-            elif keyword == 'DIAM':
-                current_surf['semi_diameter'] = float(tokens[1])
+                elif keyword == 'MIRR':
+                    # Some files use MIRR flag instead of GLAS MIRROR
+                    try:
+                        if int(tokens[1]) == 1:  # 1 = reflective
+                            current_surf['is_mirror'] = True
+                    except (ValueError, IndexError):
+                        pass
 
-            elif keyword == 'PARM':
-                parm_num = int(tokens[1])
-                parm_val = float(tokens[2])
-                # PARM 0 is meaningful on Q-type freeforms (Norm Radius
-                # convention; see Forbes 2007 sect. 5 / Zemax QBFS QCON
-                # docs).  Pre-v4.15.1 the loader only stored non-zero
-                # values and the parm_num >= 1 filter further dropped
-                # any PARM 0 sourced from a Q-type freeform; v4.15.1
-                # stores PARM 0 unconditionally and decides per-surface
-                # how to consume it (Q-type r_max vs EVENASPH ignore).
-                if parm_num == 0 or parm_val != 0.0:
-                    current_surf['aspheric_params'][parm_num] = parm_val
+                elif keyword == 'DIAM':
+                    current_surf['semi_diameter'] = float(tokens[1])
 
-            elif keyword == 'COMM':
-                current_surf['comment'] = stripped[5:].strip().strip('"')
+                elif keyword == 'PARM':
+                    parm_num = int(tokens[1])
+                    parm_val = float(tokens[2])
+                    # PARM 0 is meaningful on Q-type freeforms (Norm
+                    # Radius convention; see Forbes 2007 sect. 5 / Zemax
+                    # QBFS QCON docs).  Pre-v4.15.1 the loader only
+                    # stored non-zero values and the parm_num >= 1
+                    # filter further dropped any PARM 0 sourced from a
+                    # Q-type freeform; v4.15.1 stores PARM 0
+                    # unconditionally and decides per-surface how to
+                    # consume it (Q-type r_max vs EVENASPH ignore).
+                    if parm_num == 0 or parm_val != 0.0:
+                        current_surf['aspheric_params'][parm_num] = parm_val
+
+                elif keyword == 'COMM':
+                    current_surf['comment'] = stripped[5:].strip().strip('"')
+        except (IndexError, ValueError) as exc:
+            raise ValueError(
+                f"Malformed Zemax line {line_num} in {filepath}: "
+                f"{stripped!r} ({type(exc).__name__}: {exc}). The file "
+                f"may be truncated, corrupt, or hand-edited.") from exc
 
     # Don't forget the last surface
     if current_surf is not None:
@@ -238,11 +251,26 @@ def load_zemax_zmx(filepath: str,
         if not active:
             raise ValueError(f"No glass/mirror surfaces found in {filepath}")
         s_first = active[0]['surf_num']
-        s_last = active[-1]['surf_num'] + 1
+        # v5.17.1 (audit P3-42): only extend the range by +1 when the
+        # last active surface is refractive glass (the +1 exists to
+        # capture that glass's EXIT surface).  A terminal MIRROR has no
+        # exit surface; the unconditional +1 pulled in the next surface
+        # (often the image plane or a dummy) as a bogus air-air
+        # 'surface' element whose DIAM then polluted the no-STOP
+        # aperture fallback and added a spurious element/thickness.
+        if active[-1]['is_mirror']:
+            s_last = active[-1]['surf_num']
+        else:
+            s_last = active[-1]['surf_num'] + 1
         lens_surfaces = [s for s in optical_surfaces
                          if s_first <= s['surf_num'] <= s_last]
 
-    if len(lens_surfaces) < 2:
+    # v5.17.1 (audit P3-42): a single terminal mirror is a legitimate
+    # one-element system (elements-only prescription for apply_mirror);
+    # the >= 2 requirement applies to refractive selections, which need
+    # at least an entry + exit surface.
+    if len(lens_surfaces) < 2 and not (
+            len(lens_surfaces) == 1 and lens_surfaces[0]['is_mirror']):
         raise ValueError(
             f"Need at least 2 surfaces, got {len(lens_surfaces)} "
             f"in range ({s_first}, {s_last})")
@@ -645,8 +673,18 @@ def load_zemax_prescription_data_txt(filepath: str,
     Zemax's *Analyze -> Reports -> Prescription Data* command exports a
     tab-separated text report containing the full surface table plus
     system parameters (wavelength, units, focal length, etc.).  This
-    parser reads that format and produces the same output structure as
-    :func:`load_zemax_zmx` so the two loaders are interchangeable.
+    parser reads that format and produces the same output *structure*
+    as :func:`load_zemax_zmx`.
+
+    .. warning::
+        The two loaders are NOT fully interchangeable: the SURFACE DATA
+        SUMMARY table carries no aspheric or freeform coefficients, so
+        every surface loaded from a ``.txt`` report has
+        ``aspheric_coeffs=None`` and no Q-type freeform keys -- an
+        EVENASPH / QBFS / QCON surface silently degrades to its base
+        conic (a :class:`UserWarning` is emitted per affected surface).
+        For aspheric or freeform designs, load the ``.zmx`` file with
+        :func:`load_zemax_zmx` instead.
 
     The file is typically UTF-16 encoded (both BOM-marked UTF-16 and
     UTF-8 are tried automatically).
@@ -885,15 +923,45 @@ def load_zemax_prescription_data_txt(filepath: str,
         if not active:
             raise ValueError(f"No glass/mirror surfaces found in {filepath}")
         s_first = active[0]['surf_num']
-        s_last = active[-1]['surf_num'] + 1
+        # v5.17.1 (audit P3-42): only extend the range by +1 when the
+        # last active surface is refractive glass (the +1 captures its
+        # exit surface).  A terminal MIRROR has no exit surface -- see
+        # the matching fix in load_zemax_zmx.
+        if active[-1]['is_mirror']:
+            s_last = active[-1]['surf_num']
+        else:
+            s_last = active[-1]['surf_num'] + 1
         lens_surfaces = [s for s in optical_surfaces
                          if s_first <= s['surf_num'] <= s_last]
 
-    if len(lens_surfaces) < 2:
+    # v5.17.1 (audit P3-42): allow a single terminal mirror (see
+    # load_zemax_zmx for rationale).
+    if len(lens_surfaces) < 2 and not (
+            len(lens_surfaces) == 1 and lens_surfaces[0]['is_mirror']):
         raise ValueError(
             f"Need at least 2 surfaces, got {len(lens_surfaces)} "
             f"in range ({s_first}, {s_last})"
         )
+
+    # v5.17.1 (audit P3-43): the SURFACE DATA SUMMARY table carries no
+    # aspheric/freeform coefficients (the SURFACE DATA DETAIL section
+    # that would is used only as an end marker), so any non-STANDARD
+    # surface type in the selection loses its shape data here.  Warn
+    # loudly per surface instead of silently degrading an EVENASPH /
+    # QBFS / QCON / TOROIDAL surface to its base conic.
+    for s in lens_surfaces:
+        _stype = (s.get('type') or 'STANDARD').upper()
+        if _stype not in ('STANDARD', 'COORDBRK'):
+            warnings.warn(
+                f"Surface {s['surf_num']} in {filepath} has Type "
+                f"'{_stype}', but the Prescription Data summary table "
+                f"carries no aspheric/freeform coefficients -- the "
+                f"surface is imported as its BASE CONIC ONLY "
+                f"(aspheric_coeffs=None). For aspheric/freeform designs "
+                f"load the .zmx file with load_zemax_zmx instead.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     # Object-space distance (see load_zemax_zmx for rationale).
     # Sum ``thickness`` values from the STOP surface (treated as the
@@ -1491,6 +1559,9 @@ def _export_zemax_zmx_full(prescription, path, wavelength=1.31e-6,
                 for power in sorted(asph.keys()):
                     if power <= 0 or power % 2 != 0:
                         continue
+                    # Zemax PARM index: a_4 -> PARM 2, a_6 -> PARM 3,
+                    # ... (PARM n = coefficient on r^(2n); inverse of
+                    # the v5.16.1 loader mapping power = 2*parm_num).
                     parm_idx = power // 2
                     coeff_mm = asph[power] * (1e3 ** (1 - power))
                     lines.append(f'  PARM {parm_idx} {coeff_mm:.10e}')
@@ -1683,7 +1754,9 @@ def export_zemax_zmx(prescription: Dict[str, Any], path: str, *,
             for power in sorted(asph.keys()):
                 if power <= 0 or power % 2 != 0:
                     continue
-                # Zemax PARM index: a_4 -> 1, a_6 -> 2, a_8 -> 3, ...
+                # Zemax PARM index: a_4 -> PARM 2, a_6 -> PARM 3, ...
+                # (PARM n = coefficient on r^(2n); inverse of the
+                # v5.16.1 loader mapping power = 2*parm_num).
                 parm_idx = power // 2
                 # Coefficient unit: input is 1/m^(power-1) for our convention,
                 # Zemax expects 1/mm^(power-1).  Convert.
