@@ -117,20 +117,26 @@ def test_noise_sigma_affects_output():
         "repeated calls with the same input; got identical outputs.")
 
 
-def test_seeded_rng_is_deterministic():
-    """With ``rng_seed`` set, repeated calls on the same input give
-    identical outputs (deterministic noise realisation)."""
-    wfs = make_shack_hartmann_wfs(
-        subaperture_grid=8, noise_sigma_pixels=1.0, rng_seed=42,
-        n_modes=15)
+def test_seeded_rng_is_reproducible_sequence():
+    """v5.17 (audit P3-01): with ``rng_seed`` set the noise SEQUENCE is
+    reproducible -- two closures built with the same seed produce
+    identical per-call outputs -- but successive calls draw FRESH
+    noise (no frozen per-frame realisation)."""
+    kw = dict(subaperture_grid=8, noise_sigma_pixels=1.0, rng_seed=42,
+              n_modes=15)
+    wfs1 = make_shack_hartmann_wfs(**kw)
+    wfs2 = make_shack_hartmann_wfs(**kw)
     N = 64
     X, _Y, _rho2, mask = _disk_grid(N)
     phase = 0.05 * X * mask
-    a = wfs(phase)
-    b = wfs(phase)
-    assert np.array_equal(a, b), (
-        "Closure with rng_seed set must be deterministic; got "
-        "different outputs on repeated calls.")
+    a1, b1 = wfs1(phase), wfs1(phase)
+    a2, b2 = wfs2(phase), wfs2(phase)
+    assert np.array_equal(a1, a2) and np.array_equal(b1, b2), (
+        "Same rng_seed must reproduce the same noise SEQUENCE across "
+        "closures; got differing outputs.")
+    assert not np.array_equal(a1, b1), (
+        "Successive calls with rng_seed set must draw FRESH noise "
+        "(reproducible sequence, not a frozen per-frame realisation).")
 
 
 def test_modal_basis_choices():

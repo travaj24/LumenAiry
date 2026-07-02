@@ -260,6 +260,15 @@ class GaussianBSDF(BSDFModel):
     that the TIS equals the caller-specified ``scattered_fraction``
     (typical polished optics: ~0.001 -- 0.01, i.e. 0.1 % -- 1 %).
 
+    v5.17 (audit P3-15): the normalization is incidence-aware --
+    ``evaluate`` divides the closed-form ``A`` by
+    ``|cos(theta_spec)|`` so the projected-solid-angle integral
+    ``int BSDF * cos(theta_s) dOmega`` equals ``scattered_fraction``
+    at ALL incidence angles, consistent with
+    :meth:`total_integrated_scatter`.  (Previously the closed form
+    assumed a normal-sitting lobe, so oblique hemisphere integrals of
+    ``evaluate`` under-reported by a factor ``cos(theta_i)``.)
+
     Parameters
     ----------
     sigma_rad : float
@@ -298,6 +307,14 @@ class GaussianBSDF(BSDFModel):
         cos_theta = np.clip(np.sum(sd * specular, axis=-1), -1.0, 1.0)
         theta = np.arccos(cos_theta)
         A = self._normalization()
+        # v5.17 audit (P3-15): the closed-form A assumes the lobe sits
+        # at the surface normal (cos(theta_s) ~ 1 over the lobe).  For
+        # an oblique specular direction the cos(theta_s) weight in
+        # TIS = int BSDF * cos(theta_s) dOmega is ~|cos(theta_spec)|,
+        # so divide it out to keep TIS == scattered_fraction at all
+        # incidence angles (consistent with total_integrated_scatter).
+        cos_spec = np.abs(inc[..., 2]) if inc.ndim > 1 else abs(inc[2])
+        A = A / np.where(cos_spec > 1e-12, cos_spec, 1.0)
         in_hemi = sd[..., 2] > 0 if sd.ndim > 1 else sd[2] > 0
         return (A * np.exp(-theta ** 2 / (2 * self.sigma_rad ** 2))
                 * in_hemi)

@@ -1098,6 +1098,13 @@ def through_focus_scan_jax(
     Identical signature to `through_focus_scan` but no `verbose` /
     `progress` callbacks (the whole scan is one fused call).
 
+    Memory contract (v5.17, audit P3-03): the fused vmap kernel
+    materialises all ``n_z`` propagated planes on the DEVICE at once
+    (``O(n_z * Ny * Nx)`` complex), unlike the NumPy backend which
+    streams one plane at a time (``O(Ny * Nx)``).  The host-side copy
+    IS streamed per plane, so host memory stays ``O(Ny * Nx)``.  For
+    dense scans on very large grids prefer ``through_focus_scan``.
+
     v4.12.2: the inner ASM kernel is now jit-compiled once per
     ``(shape, dtype, dx, wavelength, bandlimit)`` and cached in the
     module-scope :data:`_THROUGH_FOCUS_SCAN_JAX_CACHE`.  Repeated calls
@@ -1162,7 +1169,15 @@ def through_focus_scan_jax(
 
     # Per-plane metrics.  Bring back to NumPy at the metric boundary
     # since the metrics package isn't JAX-vmapped.
-    fields_np = np.asarray(fields)
+    #
+    # v5.17 audit (P3-03): stream the host copy ONE plane at a time
+    # (np.asarray(fields[i]) inside the loop) instead of materialising
+    # a second full (n_z, Ny, Nx) host copy alongside the device stack.
+    # The vmapped kernel still holds all n_z planes on the device --
+    # that is the fused-vmap contract -- but the host side is now O(N^2)
+    # rather than O(n_z * N^2), halving the peak footprint.  Use
+    # backend='numpy' (through_focus_scan) for a fully-streamed
+    # O(N^2) memory contract on dense large-grid scans.
     peak_I = np.full(n_z, np.nan)
     strehl = np.full(n_z, np.nan)
     d4x = np.full(n_z, np.nan)
@@ -1170,7 +1185,7 @@ def through_focus_scan_jax(
     rms_r = np.full(n_z, np.nan)
     p_bucket = np.full(n_z, np.nan)
     for i in range(n_z):
-        E_z = fields_np[i]
+        E_z = np.asarray(fields[i])
         I_z = np.abs(E_z) ** 2
         peak_I[i] = float(np.max(I_z))
         if ideal_peak is not None and ideal_peak > 0:

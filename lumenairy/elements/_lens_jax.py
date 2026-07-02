@@ -30,7 +30,9 @@ import numpy as np
 
 
 def _jax_available():
-    """Lazy JAX_AVAILABLE check."""
+    """Lazy JAX_AVAILABLE check.  Imported lazily to keep this module
+    importable without :mod:`lumenairy.backend` being eager.
+    """
     from ..backend import JAX_AVAILABLE as _JA
     return _JA
 
@@ -300,12 +302,9 @@ def _amp_callback_jax_linear(E_in, lens_prescription, wavelength, dx,
     return _amp(E_in)
 
 
-def _jax_available():
-    """Lazy JAX_AVAILABLE check.  Imported lazily to keep this module
-    importable without :mod:`lumenairy.backend` being eager.
-    """
-    from ..backend import JAX_AVAILABLE as _JA
-    return _JA
+# v5.17 audit (P3-04): a second, identical ``_jax_available`` definition
+# lived here and silently shadowed the module-top one; removed -- the
+# single definition near the top of the module is now the only binding.
 
 
 def apply_real_lens_traced_jax(

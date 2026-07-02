@@ -9,9 +9,10 @@ from :mod:`lumenairy.elements.lenses` for callers that import it from
 there.
 
 This module owns the Maslov NumPy implementation (the JAX variant
-``apply_real_lens_maslov_jax`` lives in :mod:`lumenairy.elements.lenses`
-because it shares a Chebyshev evaluator with
-``apply_real_lens_traced_jax``).
+``apply_real_lens_maslov_jax`` lives in
+:mod:`lumenairy.elements._lens_jax` because it shares the ``_cheb_*``
+Chebyshev evaluators there with ``apply_real_lens_traced_jax``; it is
+re-exported from :mod:`lumenairy.elements.lenses`).
 
 Author: Andrew Traverso
 """

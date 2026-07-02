@@ -25,6 +25,8 @@ and exposed floors in one operation.
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 BACKGROUND = "__background__"
@@ -264,7 +266,13 @@ class SegmentStackGeometry:
         """Insert a liner of thickness ``t`` wherever ``mat_a`` touches
         ``mat_b`` (vertical walls AND horizontal interfaces), carved out of
         the ``side`` material ('a' or 'b') so the outer geometry is
-        unchanged -- the 1 nm Ta-on-specific-interfaces operation."""
+        unchanged -- the 1 nm Ta-on-specific-interfaces operation.
+
+        v5.17 (audit P3-39): when the carved-side band at a horizontal
+        interface is THINNER than ``t`` the horizontal liner cannot be
+        carved and is omitted there; a ``UserWarning`` is emitted
+        (previously a silent no-op leaving an inconsistent partial
+        liner)."""
         t = float(t)
         a, b = str(mat_a), str(mat_b)
         carve = a if side == "a" else b
@@ -319,6 +327,7 @@ class SegmentStackGeometry:
         for tt, ivs in self._bands:
             zb.append([z, z + tt, list(ivs)])
             z += tt
+        warned_thin = set()
         for i in range(len(zb) - 1):
             _z0, z1, up = zb[i]
             _z2, _z3, dn = zb[i + 1]
@@ -329,6 +338,27 @@ class SegmentStackGeometry:
                     olo, ohi = max(ulo, dlo), min(uhi, dhi)
                     if ohi - olo <= 1e-15:
                         continue
+                    # v5.17 audit (P3-39): when the carved-side band is
+                    # THINNER than the liner thickness t, no split plane
+                    # was inserted and the exact-equality carve gate
+                    # below can never fire -- previously a silent no-op
+                    # that left an inconsistent partial liner (vertical
+                    # walls lined, this horizontal interface not).
+                    # Warn once per (band, side).
+                    if um == carve and (z1 - zb[i][0]) < t - 1e-15:
+                        if (i, 'up') not in warned_thin:
+                            warned_thin.add((i, 'up'))
+                            warnings.warn(
+                                f"line_interface: the {carve!r} band above "
+                                f"the horizontal {a!r}|{b!r} interface at "
+                                f"z={z1:.6g} m is only "
+                                f"{z1 - zb[i][0]:.6g} m thick -- thinner "
+                                f"than the liner thickness t={t:.6g} m -- "
+                                f"so the horizontal liner is OMITTED at "
+                                f"this interface (vertical-wall liners "
+                                f"are still inserted).  Reduce t or "
+                                f"thicken the band.",
+                                UserWarning, stacklevel=2)
                     if um == carve and abs((z1 - zb[i][0])) >= t - 1e-15:
                         # carve the bottom t of the upper band's overlap
                         if abs((z1 - zb[i][0]) - t) < 1e-15:
@@ -338,6 +368,20 @@ class SegmentStackGeometry:
                         if abs((zb[i + 1][1] - z1) - t) < 1e-15:
                             zb[i + 1][2] = self._replace_x(zb[i + 1][2], olo,
                                                            ohi, mat)
+                    elif dm == carve and (zb[i + 1][1] - z1) < t - 1e-15:
+                        if (i, 'dn') not in warned_thin:
+                            warned_thin.add((i, 'dn'))
+                            warnings.warn(
+                                f"line_interface: the {carve!r} band below "
+                                f"the horizontal {a!r}|{b!r} interface at "
+                                f"z={z1:.6g} m is only "
+                                f"{zb[i + 1][1] - z1:.6g} m thick -- "
+                                f"thinner than the liner thickness "
+                                f"t={t:.6g} m -- so the horizontal liner "
+                                f"is OMITTED at this interface "
+                                f"(vertical-wall liners are still "
+                                f"inserted).  Reduce t or thicken the "
+                                f"band.", UserWarning, stacklevel=2)
         self._bands = [(z1 - z0, _norm_intervals(ivs, self.period))
                        for z0, z1, ivs in zb]
         return self

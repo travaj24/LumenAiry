@@ -985,8 +985,10 @@ def make_shack_hartmann_wfs(
     noise_sigma_pixels : float, default 0.0
         Gaussian sigma of additive centroid noise in pixel units of
         the input phase grid.  Non-zero values inject fresh noise on
-        every call (deterministic when ``rng_seed`` is set, otherwise
-        seeded from a per-call :func:`numpy.random.default_rng`).
+        every call; setting ``rng_seed`` makes the noise SEQUENCE
+        reproducible (two closures built with the same seed produce
+        the same per-call realisations), it does NOT freeze a single
+        realisation across calls.
     modal_basis : {'zernike'}, default 'zernike'
         Modal-basis identifier.  ``'zernike'`` is the only supported
         option at v5.4 -- a placeholder for the v5.4-roadmap
@@ -996,10 +998,11 @@ def make_shack_hartmann_wfs(
         at OSA index 1 -- tip).  36 covers through 7th-order
         spherical aberration.
     rng_seed : int, optional
-        Seed for the noise RNG.  If set, the closure is fully
-        deterministic; if ``None`` (default), each call samples a
-        fresh ``default_rng()`` so repeated calls on the same input
-        produce different outputs (the canonical noisy-WFS semantics).
+        Seed for the noise RNG.  The generator is constructed ONCE in
+        the factory (v5.17, audit P3-01), so successive calls always
+        draw fresh noise; a fixed seed reproduces the same SEQUENCE of
+        realisations across factories (reproducible-run semantics),
+        while ``None`` (default) seeds from the OS entropy pool.
     dx_pupil : float, optional
         Pupil-grid spacing [m].  If ``None``, derived from the input
         ``residual`` shape on the assumption that the residual fills a
@@ -1023,11 +1026,16 @@ def make_shack_hartmann_wfs(
 
     Notes
     -----
-    Side-effect freedom: the closure does not mutate any captured
-    state.  When ``rng_seed`` is set the same residual always
-    produces the same measured phase; with ``rng_seed=None`` and
-    ``noise_sigma_pixels > 0`` repeated calls on the same residual
-    return different reconstructions.
+    RNG statefulness (v5.17, audit P3-01): with
+    ``noise_sigma_pixels > 0`` the closure advances a factory-scoped
+    RNG on every call, so repeated calls on the same residual return
+    DIFFERENT reconstructions -- the canonical noisy-WFS semantics --
+    even when ``rng_seed`` is set.  Seeding makes the noise sequence
+    reproducible across closures built with the same seed, not frozen
+    per frame.  (Pre-v5.17 a seeded closure re-drew the identical
+    realisation every call, which biased closed-loop noise studies.)
+    With ``noise_sigma_pixels == 0`` the closure is fully
+    deterministic and side-effect free.
 
     The reconstructor truncates the input residual to the projection
     of the chosen Zernike basis on the in-disk subapertures, so very
@@ -1064,7 +1072,14 @@ def make_shack_hartmann_wfs(
     _subap = int(subaperture_grid)
     _n_modes = int(n_modes)
     _noise = float(noise_sigma_pixels)
-    _rng_seed = rng_seed
+    # v5.17 audit (P3-01): construct the noise RNG ONCE in the factory
+    # so a fixed ``rng_seed`` yields a reproducible SEQUENCE of
+    # per-frame noise realisations.  The previous per-call
+    # ``default_rng(_rng_seed)`` re-seeded inside the closure, so every
+    # AO frame received the IDENTICAL noise realisation and
+    # ``ao_closed_loop``'s leaky integrator accumulated a constant bias
+    # instead of averaging zero-mean noise.
+    _rng = np.random.default_rng(rng_seed)
     _dx_user = dx_pupil
     _wl = wl_default
     _focal = float(lenslet_focal)
@@ -1187,8 +1202,10 @@ def make_shack_hartmann_wfs(
         slopes_x = np.where(good, (slopes_x - sx_ref) / slope_scale, slopes_x)
         slopes_y = np.where(good, (slopes_y - sy_ref) / slope_scale, slopes_y)
 
-        # 3. Optional centroid noise: per-call RNG so the closure is
-        # non-deterministic by default (canonical noisy-WFS semantics).
+        # 3. Optional centroid noise: the factory-scoped RNG draws a
+        # FRESH realisation on every call (canonical noisy-WFS
+        # semantics); a fixed ``rng_seed`` makes the sequence of
+        # realisations reproducible across factory instances.
         # ``noise_sigma_pixels`` is interpreted as SH-detector-pixel
         # sigma, with a detector pixel pitch equal to the input grid
         # spacing ``dx`` (the SH simulator samples the focal plane on
@@ -1197,8 +1214,8 @@ def make_shack_hartmann_wfs(
         # ``sigma_pixels * dx / lenslet_focal`` (m of OPD per m of
         # pupil = radians of tilt).
         if _noise > 0.0:
-            rng = np.random.default_rng(_rng_seed)
             sigma_slope = _noise * dx / _focal
+            rng = _rng
             slopes_x = slopes_x + rng.standard_normal(slopes_x.shape) * sigma_slope
             slopes_y = slopes_y + rng.standard_normal(slopes_y.shape) * sigma_slope
 

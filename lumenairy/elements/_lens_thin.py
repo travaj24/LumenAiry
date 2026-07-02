@@ -273,8 +273,9 @@ def apply_spherical_lens(
 
     Notes
     -----
-    The thickness profile is ``t(h) = d - sag1(h) - sag2(h)`` where each
-    signed sag is ``sag(h) = R - sign(R) * sqrt(R**2 - h**2)``.
+    The thickness profile is ``t(h) = d - sag1(h) + sag2(h)`` (the glass
+    spans ``z`` in ``[sag1(h), d + sag2(h)]``) where each signed sag is
+    ``sag(h) = R - sign(R) * sqrt(R**2 - h**2)``.
 
     The OPD relative to the center is:
 

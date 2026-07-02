@@ -143,7 +143,7 @@ def strehl_marechal(rms_waves: Union[float, np.ndarray]) -> Union[float, np.ndar
     >>> import lumenairy as la
     >>> # Diffraction-limited rule of thumb: sigma ~ 1/14 wave -> S ~ 0.82
     >>> float(la.strehl_marechal(1.0 / 14.0))
-    0.8189...
+    0.8175...
     """
     sigma = 2.0 * np.pi * np.asarray(rms_waves, dtype=float)
     return np.exp(-(sigma ** 2))

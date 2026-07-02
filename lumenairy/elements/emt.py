@@ -32,11 +32,48 @@ the Berreman / RCWA / PMM convention.
 """
 from __future__ import annotations
 
+import warnings
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
 _C = np.complex128
+
+# v5.17 audit (P3-24): validity-domain guard threshold.  The order=2
+# Rytov correction is an asymptotic series term in (period/wavelength)^2;
+# beyond ~0.5 it grows without bound and can push the effective tensor
+# outside the constituent bounds (even negative for high contrast).
+_RYTOV_ORDER2_RATIO_WARN = 0.5
+
+
+def _warn_rytov_validity(func_name, period, wavelength, order, eps_list):
+    """Warn when (period, wavelength) sits outside the homogenization
+    regime the Rytov expansion is valid in (v5.17, audit P3-24)."""
+    if period is None or wavelength is None:
+        return
+    p, wl = float(period), float(wavelength)
+    if p <= 0 or wl <= 0:
+        return
+    ratio = p / wl
+    if order == 2 and ratio > _RYTOV_ORDER2_RATIO_WARN:
+        warnings.warn(
+            f"{func_name}: period/wavelength = {ratio:.3g} exceeds "
+            f"{_RYTOV_ORDER2_RATIO_WARN} -- the order=2 "
+            f"(period/wavelength)^2 correction is an asymptotic term "
+            f"valid only deep sub-wavelength and can drive the "
+            f"effective tensor far outside the constituent bounds "
+            f"here.  Use a rigorous grating solver (rcwa/pmm) at this "
+            f"period.", UserWarning, stacklevel=3)
+        return
+    n_max = max(abs(np.sqrt(complex(e))) for e in eps_list)
+    if p > wl / max(n_max, 1e-300):
+        warnings.warn(
+            f"{func_name}: period = {p:.3g} m exceeds "
+            f"wavelength/max|n| = {wl / n_max:.3g} m -- non-zero "
+            f"diffraction orders propagate inside the densest "
+            f"constituent, so the homogenized (EMT) tensor is "
+            f"resonance-blind here.  Use a rigorous grating solver "
+            f"(rcwa/pmm) at this period.", UserWarning, stacklevel=3)
 
 __all__ = [
     "rytov_tensor",
@@ -73,7 +110,11 @@ def rytov_tensor(
     period, wavelength : float, optional
         Grating period and vacuum wavelength [m] -- REQUIRED for ``order=2``
         (the correction scales as ``(period/wavelength)^2``); ignored for
-        ``order=0``.
+        ``order=0`` (though if BOTH are supplied a validity check still
+        runs).  v5.17 (audit P3-24): a ``UserWarning`` is emitted when
+        ``order=2`` is used with ``period/wavelength > 0.5``, or when a
+        supplied period exceeds ``wavelength/max|n|`` (diffraction
+        orders propagate -- EMT is resonance-blind there).
     order : {0, 2}, optional
         ``0`` (default) = zeroth-order Rytov (the exact ``period -> 0``
         limit -- recommended for slab work); ``2`` = with the second-order
@@ -96,6 +137,10 @@ def rytov_tensor(
     if order not in (0, 2):
         raise ValueError(f"rytov_tensor: order must be 0 or 2, got {order}.")
     ea, eb = _C(eps_ridge), _C(eps_groove)
+    # v5.17 audit (P3-24): validity-domain diagnostic -- warn (do not
+    # raise) outside the homogenization regime.
+    _warn_rytov_validity("rytov_tensor", period, wavelength, order,
+                         (ea, eb))
     eps_par0 = f * ea + (1.0 - f) * eb                 # arithmetic (TE / par)
     eps_perp0 = 1.0 / (f / ea + (1.0 - f) / eb)        # harmonic (TM / perp)
     eps_par, eps_perp = eps_par0, eps_perp0
@@ -143,6 +188,10 @@ def rytov_segments_tensor(
         raise ValueError(
             f"rytov_segments_tensor: widths must sum to 1, got {ws.sum()}.")
     es = np.array([_C(e) for _w, e in segments], dtype=_C)
+    # v5.17 audit (P3-24): validity-domain diagnostic (order=0 path --
+    # fires only when BOTH period and wavelength are supplied).
+    _warn_rytov_validity("rytov_segments_tensor", period, wavelength,
+                         order, es.tolist())
     eps_par = complex(np.sum(ws * es))
     eps_perp = complex(1.0 / np.sum(ws / es))
     out = np.zeros((3, 3), dtype=_C)
