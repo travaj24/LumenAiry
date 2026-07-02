@@ -42,6 +42,20 @@ from lumenairy.propagators.asymptotic import (
     _polynomial_substitute_linear_2d,
 )
 
+# v5.18.0 (audit P3-52): the differentiable asymptotic twins
+# (aberration_tensor_lg00_jax, propagate_modal_asymptotic_lg00_jax,
+# solve_envelope_stationary_jax_ift, fit_canonical_polynomials_jax) now RAISE
+# when jax_enable_x64 is off instead of silently flipping the global JAX
+# config mid-call (an unsafe process-wide side effect).  The differentiable
+# path genuinely requires float64 (single precision gives ~5% canonical-fit
+# error + NaN gradients), so the correct usage -- documented in the raised
+# message -- is to enable x64 ONCE at import.  Do that here so the JAX layers
+# below exercise the twins under the precision they require; this file runs in
+# its own subprocess (validation/run_all.py) so the global flag does not leak.
+if la.JAX_AVAILABLE:
+    import jax
+    jax.config.update('jax_enable_x64', True)
+
 
 H = Harness('asymptotic')
 
