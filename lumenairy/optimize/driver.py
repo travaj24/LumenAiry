@@ -50,6 +50,20 @@ from .wrapper_merits import (
     ToleranceAwareMerit,
 )
 
+# v5.17.x (AUDIT_V5_17_0 P2-24): scipy.optimize.minimize methods that
+# natively honour ``bounds=`` (scipy >= 1.7; verified against scipy
+# 1.17.1 -- e.g. Powell on (x-2)^2 with bounds=[(0, 1)] converges to
+# x=1.0).  Lowercase because scipy's own method dispatch is
+# case-insensitive (``meth = method.lower()``).  Methods NOT listed
+# here (CG / BFGS / Newton-CG / dogleg / trust-ncg / trust-exact /
+# trust-krylov) merely emit an easy-to-miss RuntimeWarning inside
+# scipy and IGNORE the bounds, so the driver warns loudly instead of
+# forwarding them (see the generic-minimize branch below).
+_MINIMIZE_METHODS_SUPPORTING_BOUNDS = frozenset({
+    'nelder-mead', 'powell', 'l-bfgs-b', 'tnc', 'cobyla', 'cobyqa',
+    'slsqp', 'trust-constr',
+})
+
 # =========================================================================
 # Wave-propagator registry
 # =========================================================================
@@ -1184,10 +1198,36 @@ def design_optimize(parameterization: Any,
             # validated up-front; here we just translate each
             # :class:`Constraint` to a scipy NonlinearConstraint.
             _scipy_constraints = [c.to_scipy() for c in constraint_seq]
+            # v5.17.x (AUDIT_V5_17_0 P2-24): forward ``bounds`` for
+            # EVERY minimize method that honours them.  Pre-fix the
+            # whitelist was ('L-BFGS-B', 'SLSQP', 'trust-constr'), so
+            # user-supplied bounds were SILENTLY dropped for Powell /
+            # Nelder-Mead / TNC / COBYLA / COBYQA -- methods scipy
+            # box-constrains natively -- and the optimizer freely
+            # walked outside the user's stated box (probe: bounded
+            # Powell converged to x=2.0 with bounds [(0, 1)]).  For
+            # methods that truly cannot handle bounds we keep passing
+            # None but warn loudly (parity with the method='lm'
+            # bounds warning above) instead of dropping silently.
+            _supports_bounds = (
+                isinstance(method, str)
+                and method.lower() in _MINIMIZE_METHODS_SUPPORTING_BOUNDS)
+            if bounds is not None and not _supports_bounds:
+                warnings.warn(
+                    f"design_optimize(method={method!r}, bounds=...): "
+                    f"this scipy.optimize.minimize method cannot "
+                    f"handle bounds, so the supplied bounds are being "
+                    f"DROPPED and the optimizer may evaluate / "
+                    f"converge outside them.  Use a bounds-capable "
+                    f"method (e.g. 'L-BFGS-B', 'Powell', "
+                    f"'Nelder-Mead', 'TNC', 'SLSQP', 'trust-constr') "
+                    f"or remove the parameterization's bounds to "
+                    f"silence this warning.",
+                    UserWarning, stacklevel=2,
+                )
             _minimize_kwargs: Dict[str, Any] = {
                 'jac': final_jac,
-                'bounds': bounds if method in ('L-BFGS-B', 'SLSQP',
-                                                'trust-constr') else None,
+                'bounds': bounds if _supports_bounds else None,
                 'options': {'maxiter': max_iter, 'disp': verbose},
                 'callback': _scipy_cb_minimize,
             }
