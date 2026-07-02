@@ -408,6 +408,26 @@ class WaveOpticsWorker(QThread):
                                 f'{stage}: {msg}' if msg else stage)
 
     def run(self):
+        # Nothing may escape run(): the dock's _on_finished slot (the
+        # sole re-enabler of the Run button) only fires on the custom
+        # finished signal (which shadows QThread.finished -- see
+        # class-level Signal declarations), so an uncaught exception
+        # here would leave the UI stuck at 'Running...' until app
+        # restart.  _run_impl emits finished on all its own paths;
+        # this wrapper covers anything it lets escape.
+        try:
+            self._run_impl()
+        except Exception as e:
+            # str(e) itself may raise (a broken __str__ would otherwise
+            # escape run() and re-create the stuck-at-'Running...' hang
+            # this wrapper exists to prevent) -- format defensively.
+            try:
+                msg = f'{type(e).__name__}: {e}'
+            except Exception:
+                msg = type(e).__name__
+            self.finished.emit({'error': msg})
+
+    def _run_impl(self):
         from ..propagators.propagation import (
             angular_spectrum_propagate,
             fresnel_propagate, fraunhofer_propagate,
@@ -458,15 +478,19 @@ class WaveOpticsWorker(QThread):
             from ..memory import set_max_ram
             set_max_ram(mem_limit)
 
-        # Set FFT backend
+        # Set FFT backend.  The flags must be set on fft_infra itself:
+        # that is where _fft2/_ifft2 read their module globals, and it
+        # is the supported power-user mechanism (see the __all__ note
+        # in fft_infra).  Setting them on the propagation facade would
+        # create shadowing attributes the dispatchers never see.
         backend = cfg.get('backend', 'numpy')
-        import lumenairy.propagation as _prop
-        _prop.USE_PYFFTW = False
-        _prop.USE_SCIPY_FFT = False
+        from ..propagators import fft_infra as _fft_infra
+        _fft_infra.USE_PYFFTW = False
+        _fft_infra.USE_SCIPY_FFT = False
         if backend == 'pyfftw':
-            _prop.USE_PYFFTW = True
+            _fft_infra.USE_PYFFTW = True
         elif backend == 'scipy':
-            _prop.USE_SCIPY_FFT = True
+            _fft_infra.USE_SCIPY_FFT = True
 
         trace_surfs = self.model.build_trace_surfaces()
         if not trace_surfs:
