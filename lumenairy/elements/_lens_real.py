@@ -123,6 +123,27 @@ def _resolve_sag_real(sag_dtype: Any) -> Any:
     return np.float64
 
 
+# Row-band (chunked) lens mode auto-default (v5.17.0).  The banded path is
+# BYTE-IDENTICAL to the whole-grid path and wall-clock neutral, so it is ON
+# by default for grids large enough to benefit; below the threshold the
+# whole-grid path runs exactly as before (band-loop overhead isn't worth it
+# on small grids).  ``sag_chunk_rows=None`` -> auto; an explicit int > 0
+# forces that band size; ``0`` forces the whole-grid path.
+_SAG_CHUNK_AUTO_MIN_N = 4096
+_SAG_CHUNK_AUTO_MIN_ROWS = 256
+
+
+def _resolve_sag_chunk_rows(sag_chunk_rows: Optional[int], n_rows: int) -> Optional[int]:
+    """Resolve the effective row-band size: ``None`` -> auto
+    (``max(256, N // 16)`` when ``N >= 4096``, else whole-grid); ``0`` (or
+    negative) -> whole-grid; a positive int -> that band size."""
+    if sag_chunk_rows is None:
+        if n_rows >= _SAG_CHUNK_AUTO_MIN_N:
+            return max(_SAG_CHUNK_AUTO_MIN_ROWS, n_rows // 16)
+        return None
+    return int(sag_chunk_rows) if int(sag_chunk_rows) > 0 else None
+
+
 def lens_sag_float32_opd_error(prescription: Dict[str, Any],
                                wavelength: float,
                                *,
@@ -792,6 +813,10 @@ def apply_real_lens(
     # falls through to the whole-grid path (decenter/tilt/slant/stop/...)
     # or the Seidel block needs them -- ``_ensure_full_grids`` builds them
     # on first such use.
+    # v5.17.0: sag_chunk_rows=None resolves to AUTO (banded when N >= 4096;
+    # byte-identical + wall-clock neutral, far leaner).  Pass 0 to force the
+    # whole-grid path.
+    sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, Ny)
     _chunk_grids = (sag_chunk_rows is not None and int(sag_chunk_rows) > 0
                     and xp is np)
     if _chunk_grids:

@@ -1534,6 +1534,11 @@ def apply_real_lens_traced(
     # test_chunked_assembly_byte_identical.  The full X/Y meshgrids are not
     # built on this path: the Newton coarse grid comes from the 1-D x
     # subsample and the exit-aperture mask is banded.
+    # v5.17.0: sag_chunk_rows=None resolves to AUTO (banded when N >= 4096);
+    # pass 0 to force the whole-grid path.  The resolved value also flows to
+    # the apply_real_lens amp legs so both stages band consistently.
+    from ._lens_real import _resolve_sag_chunk_rows
+    sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, N)
     _chunk_assembly = (
         sag_chunk_rows is not None and int(sag_chunk_rows) > 0
         and max(1, int(ray_subsample)) > 1

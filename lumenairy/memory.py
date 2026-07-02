@@ -574,6 +574,12 @@ def estimate_lens_memory(n_grid: int,
     cb = _as_complex_itemsize(complex_dtype)
     sb = 4 if (sag_dtype is not None and np.dtype(sag_dtype) == np.float32) else 8
 
+    # v5.17.0: mirror the runtime AUTO default (None -> banded when
+    # N >= 4096; 0 -> whole-grid) so estimates match what a default call
+    # actually does.  Lazy import keeps memory.py dependency-light.
+    from .elements._lens_real import _resolve_sag_chunk_rows
+    sag_chunk_rows = _resolve_sag_chunk_rows(sag_chunk_rows, N)
+
     if sag_chunk_rows is not None and int(sag_chunk_rows) > 0:
         # Row-band mode: calibrated complex-equivalents envelope + the
         # coarse Newton solve + one band's worth of float64 transients.
@@ -781,12 +787,15 @@ def check_sim_memory(n_grid: int,
                          'peak_gb': p / 1e9, 'fits': True})
     if not fits:
         _n = int(n_grid)
-        if lens_model == 'traced' and sag_chunk_rows is None:
-            _try(f'set sag_chunk_rows={_n // 16} (row-band lens, '
-                 f'byte-identical)', sag_chunk_rows=_n // 16)
-            _try(f'sag_chunk_rows={_n // 16} + parallel_amp=False '
+        # v5.17.0: chunking is the AUTO default (None); this rung only
+        # applies when the caller explicitly forced the whole-grid path.
+        if (lens_model == 'traced' and sag_chunk_rows is not None
+                and int(sag_chunk_rows) == 0):
+            _try(f'set sag_chunk_rows={max(256, _n // 16)} (row-band lens, '
+                 f'byte-identical)', sag_chunk_rows=max(256, _n // 16))
+            _try(f'sag_chunk_rows={max(256, _n // 16)} + parallel_amp=False '
                  f'(both byte-identical)',
-                 sag_chunk_rows=_n // 16, parallel_amp=False)
+                 sag_chunk_rows=max(256, _n // 16), parallel_amp=False)
         if parallel_amp:
             _try('set parallel_amp=False (byte-identical)', parallel_amp=False)
         if np.dtype(complex_dtype) == np.complex128:

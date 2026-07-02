@@ -2,11 +2,26 @@
 
 All notable changes to the core library are documented here.
 
-## [5.16.2] — 2026-07-01
+## [5.17.0] — 2026-07-01
+
+### Changed (row-band lens mode ON by default — auto)
+
+- **`sag_chunk_rows=None` now resolves to AUTO**: the row-band lens path is
+  the default for grids with `N >= 4096` (band = `max(256, N // 16)`);
+  smaller grids keep the whole-grid path exactly as before.  Rationale for
+  a default flip: the banded path is **byte-identical** (`np.array_equal`-
+  pinned across preserve_input_phase modes, band sizes, and fallback
+  surfaces), **wall-clock neutral** (133 vs 136 s at N=16384/sub=16; the
+  banded assembly cost is offset by a 3.5x faster Newton fed contiguous
+  coarse grids), and dramatically leaner (43.6 -> 18.4 GB traced-lens peak
+  at N=16384 pre-lifetime-fixes).  Pass ``sag_chunk_rows=0`` to force the
+  whole-grid path; an explicit positive int sets the band size.  The
+  memory estimator mirrors the same auto rule so estimates match a
+  default call.
 
 ### Added (row-band lens memory mode — the fidelity-preserving large-grid enabler)
 
-- **`sag_chunk_rows` (opt-in, BYTE-IDENTICAL)** on `apply_real_lens` and
+- **`sag_chunk_rows` (BYTE-IDENTICAL)** on `apply_real_lens` and
   `apply_real_lens_traced` -- runs the per-surface phase screens AND the traced
   OPL-upsample/exit-assembly in row bands, so the full-grid float64 lens stack
   (coordinate meshgrids, sag/opd, `np.indices` + the `(2,N,N)` map_coordinates

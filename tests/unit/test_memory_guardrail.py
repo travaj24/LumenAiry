@@ -35,7 +35,8 @@ def test_estimate_lens_matches_measured_anchors(N, dt, sub, meas):
     peak: exact at the 16384 calibration points, a conservative UPPER bound at
     larger N (the N^2 form over-predicts there -- the fail-safe direction)."""
     est_gb = m.estimate_lens_memory(N, dt, ray_subsample=sub,
-                                    parallel_amp=False) / GB
+                                    parallel_amp=False,
+                                    sag_chunk_rows=0) / GB
     ratio = est_gb / meas
     # 16384 anchors: tight (+-12%). 24576: allowed to over-predict up to +30%.
     hi = 1.30 if N >= 24576 else 1.12
@@ -47,9 +48,11 @@ def test_complex64_only_saves_the_complex_part():
     complex fields + the complex128 phase_exp transient. So the c64->c128
     delta equals the complex terms, and the float64 core is identical."""
     i64 = m.estimate_lens_memory(16384, 'complex64', ray_subsample=8,
-                                 parallel_amp=False, itemized=True)
+                                 parallel_amp=False, sag_chunk_rows=0,
+                                 itemized=True)
     i128 = m.estimate_lens_memory(16384, 'complex128', ray_subsample=8,
-                                  parallel_amp=False, itemized=True)
+                                  parallel_amp=False, sag_chunk_rows=0,
+                                  itemized=True)
     assert i64['items']['float64_geometric_core'] == i128['items']['float64_geometric_core']
     assert i64['items']['newton_coarse_solve'] == i128['items']['newton_coarse_solve']
     # complex fields double; the phase_exp transient is complex128 in BOTH.
@@ -61,9 +64,11 @@ def test_subsample_reduces_only_newton_term():
     """Coarser subsample shrinks the Newton coarse solve (quadratically) and
     nothing else."""
     s8 = m.estimate_lens_memory(16384, 'complex64', ray_subsample=8,
-                                parallel_amp=False, itemized=True)
+                                parallel_amp=False, sag_chunk_rows=0,
+                                itemized=True)
     s16 = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
-                                 parallel_amp=False, itemized=True)
+                                 parallel_amp=False, sag_chunk_rows=0,
+                                 itemized=True)
     assert s8['items']['float64_geometric_core'] == s16['items']['float64_geometric_core']
     # newton ~ (N/sub)^2 -> sub doubling quarters it
     assert s16['items']['newton_coarse_solve'] == pytest.approx(
@@ -71,8 +76,10 @@ def test_subsample_reduces_only_newton_term():
 
 
 def test_parallel_amp_doubles_working_set():
-    off = m.estimate_lens_memory(16384, 'complex64', ray_subsample=8, parallel_amp=False)
-    on = m.estimate_lens_memory(16384, 'complex64', ray_subsample=8, parallel_amp=True)
+    off = m.estimate_lens_memory(16384, 'complex64', ray_subsample=8,
+                                 parallel_amp=False, sag_chunk_rows=0)
+    on = m.estimate_lens_memory(16384, 'complex64', ray_subsample=8,
+                                parallel_amp=True, sag_chunk_rows=0)
     assert on > 1.5 * off  # ~2x the f64-core + complex; newton/trap once
 
 
@@ -90,9 +97,12 @@ def test_guardrail_predicts_32768_oom_and_recommends_24576():
     available) must be predicted as INSUFFICIENT, with a claw-back that fits."""
     avail = 117 * GB
     v = m.check_sim_memory(32768, 'complex64', ray_subsample=16,
-                           parallel_amp=False, available=avail,
-                           mode='silent', verbose=False)
+                           parallel_amp=False, sag_chunk_rows=0,
+                           available=avail, mode='silent', verbose=False)
     assert v['fits'] is False
+    # v5.17.0: the explicit whole-grid refusal must recommend re-enabling
+    # the byte-identical row-band mode first
+    assert any('sag_chunk_rows' in r['change'] for r in v['recommendations'])
     assert any('24576' in r['change'] for r in v['recommendations'])
     # and every recommendation it offers genuinely fits
     assert all(r['peak_bytes'] <= avail for r in v['recommendations'])
@@ -151,3 +161,28 @@ def test_parallel_amp_default_resolution():
     finally:
         la.set_lens_parallel_amp(True)
     assert la.get_lens_parallel_amp() is True
+
+
+def test_v5_17_0_chunked_is_the_auto_default():
+    """sag_chunk_rows=None resolves to the row-band mode at N >= 4096: the
+    default estimate equals the explicit-chunked one and is far below the
+    forced whole-grid estimate; the default 32768 config now FITS."""
+    dflt = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
+                                  parallel_amp=False)
+    chunked = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
+                                     parallel_amp=False,
+                                     sag_chunk_rows=max(256, 16384 // 16))
+    whole = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
+                                   parallel_amp=False, sag_chunk_rows=0)
+    assert dflt == chunked
+    assert dflt < 0.7 * whole
+    # below the auto threshold the default stays whole-grid
+    small_dflt = m.estimate_lens_memory(2048, 'complex64', ray_subsample=8,
+                                        parallel_amp=False)
+    small_whole = m.estimate_lens_memory(2048, 'complex64', ray_subsample=8,
+                                         parallel_amp=False, sag_chunk_rows=0)
+    assert small_dflt == small_whole
+    v = m.check_sim_memory(32768, 'complex64', ray_subsample=16,
+                           parallel_amp=False, available=117 * GB,
+                           mode='silent', verbose=False)
+    assert v['fits'] is True

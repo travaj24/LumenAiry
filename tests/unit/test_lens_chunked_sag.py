@@ -184,3 +184,16 @@ def test_lens_sag_float32_opd_error_validator():
     with pytest.raises(ValueError):
         lens_sag_float32_opd_error(
             {'surfaces': _presc()['surfaces']}, LAM)  # no aperture
+
+
+def test_v5_17_0_auto_default_byte_identical_at_threshold():
+    """At N >= 4096 the DEFAULT (sag_chunk_rows=None -> auto row-band) must
+    produce byte-identical results to the forced whole-grid path
+    (sag_chunk_rows=0) -- the guarantee that justified flipping the
+    default."""
+    N, dx = 4096, 1.5e-6
+    E = _field(N, dx)
+    kw = dict(prescription=_presc(), wavelength=LAM, dx=dx)
+    E_auto = apply_real_lens(E.copy(), **kw)                    # default: auto
+    E_whole = apply_real_lens(E.copy(), sag_chunk_rows=0, **kw)  # forced whole
+    assert np.array_equal(E_auto, E_whole)
