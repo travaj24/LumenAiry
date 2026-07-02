@@ -57,7 +57,7 @@ def test_gate4a_planar_fresnel_correspondence():
     S11 = interface_smatrix(La["W"], La["V"], Lb["W"], Lb["V"])[0]
     qa = La["q"]
     n_checked = 0
-    for j in np.where(_physical_propagating(La))[0]:
+    for j in np.where(_physical_propagating(La, k0))[0]:
         q1 = qa[j].real
         g2 = e1 * k0 ** 2 - q1 ** 2
         if g2 < 0:
@@ -82,7 +82,7 @@ def test_gate4a_oblique_angles_span():
     La = build_layer(m, R, N, _uni(e1), k0)
     qa = La["q"]
     angles = []
-    for j in np.where(_physical_propagating(La))[0]:
+    for j in np.where(_physical_propagating(La, k0))[0]:
         g2 = e1 * k0 ** 2 - qa[j].real ** 2
         if g2 > 0:
             angles.append(np.degrees(np.arcsin(np.sqrt(g2) / (np.sqrt(e1) * k0))))

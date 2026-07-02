@@ -79,7 +79,11 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
             qj = qj if qj.imag > 0 else -qj
         hr, hphi = hfields(Er, Ephi, qj)
         P = flux(Er, Ephi, hr, hphi)
-        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10
+        # propagating-vs-evanescent split by flux RELATIVE to the mode's own
+        # r*dr field norm (both scale as field^2*length^2 -> unit-invariant;
+        # an absolute threshold silently mis-normalized meter-scale inputs)
+        fnrm = np.sum(np.abs(Er) ** 2 * r_f * h) + np.sum(np.abs(Ephi) ** 2 * r_n * h)
+        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10 * fnrm
              else 1.0 / np.sqrt(np.sum(np.abs(Er) ** 2 + np.abs(Ephi) ** 2) + 1e-300))
         W[:N, j] = Er * s
         W[N:, j] = Ephi * s

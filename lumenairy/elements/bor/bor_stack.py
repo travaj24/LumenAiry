@@ -103,8 +103,14 @@ class BORStack:
         q = sup["q"]
 
         def prop(L, eps):
-            return np.where((np.abs(L["q"].imag) < 1e-4) & (L["q"].real > 0.1)
-                            & (np.sqrt(eps).real * k0 - L["q"].real > -1e-9))[0]
+            # Classify in the DIMENSIONLESS axial index q/k0 (audit P2-06):
+            # absolute thresholds on q (units 1/length) silently returned
+            # empty R/T for small-k0 unit systems (e.g. nm-scale).  The
+            # constants are the validated k0=2.0 thresholds divided by 2,
+            # so behavior at the validated scale is bit-identical.
+            qn = L["q"] / k0
+            return np.where((np.abs(qn.imag) < 5e-5) & (qn.real > 0.05)
+                            & (np.sqrt(eps).real - qn.real > -5e-10))[0]
         inc = prop(sup, self.eps_sup)
         out = prop(sub, self.eps_sub)
         R = np.array([np.sum([abs(S11[jp, j]) ** 2 for jp in inc]) for j in inc])

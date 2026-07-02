@@ -33,9 +33,14 @@ def _flux_normalize(L):
     (evanescent), so a flux-normalized S-matrix has ``|S|^2`` = power fraction."""
     L = dict(L)
     W, V = L["W"].copy(), L["V"].copy()
+    N, wq = L["N"], np.real(L["wq"])
     for j in range(W.shape[1]):
         P = _flux(L, j)
-        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10
+        # flux threshold RELATIVE to the mode's own r*dr field norm (same
+        # measure as the flux -> unit-invariant; absolute 1e-10 silently
+        # mis-normalized meter-scale inputs)
+        fnrm = np.sum((np.abs(W[:N, j]) ** 2 + np.abs(W[N:, j]) ** 2) * wq)
+        s = (1.0 / np.sqrt(abs(P)) if abs(P) > 1e-10 * fnrm
              else 1.0 / np.sqrt(np.sum(np.abs(W[:, j]) ** 2) + 1e-300))
         W[:, j] *= s
         V[:, j] *= s
@@ -54,8 +59,13 @@ def build_layer(m, Rbig, N, eps_profile, k0, *, wall="pec", thickness=None):
     return L
 
 
-def _physical_propagating(L, reldiv_tol=0.5):
-    return (np.abs(L["q"].imag) < 1e-4) & (L["q"].real > 0.1) & \
+def _physical_propagating(L, k0, reldiv_tol=0.5):
+    # Dimensionless q/k0 classifier (audit P2-06): absolute thresholds on q
+    # (units 1/length) silently emptied the propagating set for small-k0 unit
+    # systems.  Constants = the validated k0=2.0 thresholds / 2 (bit-identical
+    # at the validated scale).
+    qn = L["q"] / k0
+    return (np.abs(qn.imag) < 5e-5) & (qn.real > 0.05) & \
            (L["reldiv"] < reldiv_tol)
 
 
@@ -77,8 +87,8 @@ def solve(layers, k0):
                                                 layers[i + 1]["W"],
                                                 layers[i + 1]["V"]))
     S11, S12, S21, S22 = S
-    inc = np.where(_physical_propagating(layers[0]))[0]
-    out = np.where(_physical_propagating(layers[-1]))[0]
+    inc = np.where(_physical_propagating(layers[0], k0))[0]
+    out = np.where(_physical_propagating(layers[-1], k0))[0]
     R = np.array([np.sum([abs(S11[jp, j]) ** 2 for jp in inc]) for j in inc])
     T = np.array([np.sum([abs(S21[jp, j]) ** 2 for jp in out]) for j in inc])
     return dict(S=S, inc=inc, out=out, R=R, T=T, energy=R + T,
