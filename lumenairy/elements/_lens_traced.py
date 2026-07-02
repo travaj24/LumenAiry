@@ -1143,6 +1143,8 @@ def apply_real_lens_traced(
     use_gpu: bool = False,
     amp_use_gpu: bool = False,
     wave_propagator: Optional[str] = None,
+    sag_dtype: Optional[Any] = None,
+    sag_chunk_rows: Optional[int] = None,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -1611,6 +1613,7 @@ def apply_real_lens_traced(
                 E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                 bandlimit=bandlimit, use_gpu=amp_use_gpu,
                 wave_propagator=wave_propagator,
+                sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
                 progress=lambda stage, frac, msg='':
                     amp_cb(frac, f'amp: {msg}'))
 
@@ -1634,7 +1637,9 @@ def apply_real_lens_traced(
                 return apply_real_lens(
                     ones_input, prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
-                    wave_propagator=wave_propagator, progress=None)
+                    wave_propagator=wave_propagator,
+                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                    progress=None)
 
             with ThreadPoolExecutor(max_workers=2,
                                     thread_name_prefix='rlt_amp') as _tp:
@@ -1652,6 +1657,7 @@ def apply_real_lens_traced(
         E_analytic = apply_real_lens(
             E_in, prescription=lens_prescription, wavelength=wavelength, dx=dx, bandlimit=bandlimit,
             use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
+            sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
             progress=lambda stage, frac, msg='': amp_cb(frac, f'amp: {msg}'))
         _xp = cp if _is_cupy_array(E_analytic) else np
         amp = _xp.abs(E_analytic)
@@ -1681,6 +1687,7 @@ def apply_real_lens_traced(
                     np.ones_like(E_in), prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator,
+                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
                     progress=lambda stage, frac, msg='':
                         analytic_pw_cb(frac, f'amp(pw): {msg}'))
                 phase_analytic_lens = _xp.angle(E_analytic_pw)

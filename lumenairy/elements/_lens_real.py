@@ -76,6 +76,164 @@ from ..propagators.propagation import angular_spectrum_propagate
 _VALID_WAVE_PROPAGATORS = ('asm', 'sas', 'fresnel', 'rayleigh_sommerfeld', 'rs')
 
 
+# ---------------------------------------------------------------------------
+# Opt-in geometry (sag / coordinate) precision.
+# ---------------------------------------------------------------------------
+# The float64 coordinate lineage (x/y meshgrids -> h_sq -> sag -> opd) is the
+# dtype-INDEPENDENT memory core of the real-lens propagators: it does NOT
+# shrink with a complex64 field.  Downcasting it to float32 halves that core
+# (the reclaim that lets N=32768 fit a 137 GB box) but drops the surface-
+# departure precision to ~1e-7 relative, which over a ~9 mm aperture is a
+# sub-nm..nm OPD error.  ACCURACY-RISKY: validate with
+# ``lens_sag_float32_opd_error`` before trusting a float32-sag result.  Shipped
+# default None -> float64 (byte-identical to prior releases).
+_LENS_SAG_DTYPE = None   # None -> float64
+
+
+def set_lens_sag_dtype(dtype: Any) -> None:
+    """Set the process-wide geometry (sag/coordinate) dtype for the real-lens
+    propagators.  ``np.float32`` halves the float64 coordinate/sag/opd core
+    (enabling larger grids) at an accuracy cost -- validate first with
+    :func:`lens_sag_float32_opd_error`.  ``np.float64`` (or ``None``) restores
+    the byte-identical default."""
+    global _LENS_SAG_DTYPE
+    if dtype is None:
+        _LENS_SAG_DTYPE = None
+        return
+    d = np.dtype(dtype)
+    if d not in (np.dtype(np.float32), np.dtype(np.float64)):
+        raise ValueError(
+            "set_lens_sag_dtype: dtype must be float32 or float64, "
+            f"got {dtype!r}.")
+    _LENS_SAG_DTYPE = None if d == np.dtype(np.float64) else np.float32
+
+
+def get_lens_sag_dtype() -> Any:
+    """Return the process-wide geometry dtype (``np.float32`` when set, else
+    ``np.float64`` = the default)."""
+    return np.float32 if _LENS_SAG_DTYPE is np.float32 else np.float64
+
+
+def _resolve_sag_real(sag_dtype: Any) -> Any:
+    """Resolve the effective REAL geometry dtype: explicit kwarg wins, else
+    the process global, else float64."""
+    d = sag_dtype if sag_dtype is not None else _LENS_SAG_DTYPE
+    if d is not None and np.dtype(d) == np.dtype(np.float32):
+        return np.float32
+    return np.float64
+
+
+def lens_sag_float32_opd_error(prescription: Dict[str, Any],
+                               wavelength: float,
+                               *,
+                               aperture: Optional[float] = None,
+                               n_samples: int = 4096) -> Dict[str, Any]:
+    """Estimate the thin-element OPD error incurred by float32 sag precision
+    for one prescription, so a caller can decide whether
+    ``set_lens_sag_dtype(np.float32)`` (or ``sag_dtype=np.float32``) is safe.
+
+    Evaluates the summed per-surface refraction OPD ``sum (n2 - n1) * sag(r)``
+    along a radial profile from the axis to the aperture edge in BOTH float32
+    and float64, and returns the peak / RMS ``|dOPD|`` in waves (the error is
+    worst at the aperture edge, where the aspheric departure is largest).  A
+    few x 1e-3 waves is negligible; ``ok`` is True when peak < lambda/50.
+
+    This is cheap (a 1-D radial scan, no full grid), so it is safe to call at
+    the exact production grid's aperture before committing to float32.
+
+    Parameters
+    ----------
+    prescription : dict
+        Same surface/aperture prescription apply_real_lens consumes.
+    wavelength : float
+        Metres.
+    aperture : float, optional
+        Clear-aperture diameter [m].  Defaults to
+        ``prescription['aperture_diameter']``.
+    n_samples : int, default 4096
+        Radial samples from axis to edge.
+
+    Returns
+    -------
+    dict
+        ``{'max_opd_error_waves', 'rms_opd_error_waves', 'max_opd_error_nm',
+        'aperture_m', 'ok'}``.
+    """
+    ap = aperture if aperture is not None else prescription.get('aperture_diameter')
+    if not ap:
+        raise ValueError(
+            "lens_sag_float32_opd_error: need an aperture -- pass aperture= or "
+            "set prescription['aperture_diameter'].")
+    r = np.linspace(0.0, float(ap) / 2.0, int(n_samples))
+
+    def _opd(real: Any) -> np.ndarray:
+        h_sq = (r.astype(real)) ** 2
+        opd = np.zeros_like(h_sq)
+        for surf in prescription['surfaces']:
+            R = surf['radius']
+            kc = surf.get('conic', 0.0)
+            asph = surf.get('aspheric_coeffs')
+            n1 = get_glass_index(surf['glass_before'], wavelength)
+            n2 = get_glass_index(surf['glass_after'], wavelength)
+            sag = _surface_sag_general(h_sq, R, kc, asph)
+            opd = opd + (n2 - n1) * np.where(np.isnan(sag), 0.0, sag)
+        return opd.astype(np.float64)
+
+    d = np.abs(_opd(np.float32) - _opd(np.float64))
+    max_waves = float(d.max() / wavelength)
+    return {
+        'max_opd_error_waves': max_waves,
+        'rms_opd_error_waves': float(np.sqrt(np.mean(d ** 2)) / wavelength),
+        'max_opd_error_nm': float(d.max() * 1e9),
+        'aperture_m': float(ap),
+        'ok': bool(max_waves < 0.02),   # < lambda/50
+    }
+
+
+def _propagate_through_glass(E: Any, thickness: float, wavelength: float,
+                             n_medium_r: float, n_medium_kappa: float,
+                             dx: float, dy: float, bandlimit: bool,
+                             wave_propagator: Optional[str], absorption: bool,
+                             k0: float, xp: Any) -> Any:
+    """Propagate ``E`` a distance ``thickness`` through a medium of real index
+    ``n_medium_r`` (+ optional bulk absorption via ``n_medium_kappa``),
+    dispatching on ``wave_propagator``.
+
+    Extracted verbatim from the per-surface loop so the whole-grid path and the
+    row-band (``sag_chunk_rows``) path share one glass-propagation
+    implementation.  Returns the propagated field."""
+    lam_medium = wavelength / n_medium_r
+    if wave_propagator == 'sas':
+        from ..propagators.propagation import (
+            resample_field,
+            scalable_angular_spectrum_propagate,
+        )
+        E, dx_new, _ = scalable_angular_spectrum_propagate(
+            E, thickness, lam_medium, dx)
+        if abs(dx_new - dx) > dx * 1e-6:
+            E, _ = resample_field(E, dx_new, dx, N_out=E.shape[-1])
+    elif wave_propagator == 'fresnel':
+        from ..propagators.propagation import fresnel_propagate, resample_field
+        E, dx_new, _ = fresnel_propagate(E, thickness, lam_medium, dx, dy=dy)
+        if abs(dx_new - dx) > dx * 1e-6:
+            E, _ = resample_field(E, dx_new, dx, N_out=E.shape[-1])
+    elif wave_propagator in ('rayleigh_sommerfeld', 'rs'):
+        from ..propagators.propagation import rayleigh_sommerfeld_propagate
+        E = rayleigh_sommerfeld_propagate(
+            E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
+    elif wave_propagator == 'asm':
+        E = angular_spectrum_propagate(
+            E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
+    else:
+        raise ValueError(
+            f"apply_real_lens: unknown wave_propagator {wave_propagator!r}.  "
+            f"Supported: 'asm', 'sas', 'fresnel', 'rayleigh_sommerfeld' "
+            f"(alias 'rs').")
+    if absorption and n_medium_kappa != 0.0:
+        E = E * xp.exp(-k0 * n_medium_kappa * thickness)
+    return E
+
+
 def _check_apply_real_lens_kwarg_combination(
     *,
     wave_propagator: str,
@@ -208,6 +366,8 @@ def apply_real_lens(
     use_gpu: bool = False,
     wave_propagator: Optional[str] = None,
     surface_frame: bool = False,
+    sag_dtype: Optional[Any] = None,
+    sag_chunk_rows: Optional[int] = None,
 ) -> np.ndarray:
     """
     Propagate a field through a real lens defined by a surface prescription.
@@ -570,8 +730,13 @@ def apply_real_lens(
     Ny, Nx = E_in.shape
     k0 = 2 * np.pi / wavelength
 
-    x = (xp.arange(Nx) - Nx / 2) * dx
-    y = (xp.arange(Ny) - Ny / 2) * dy
+    # Geometry dtype: float64 (default, byte-identical) or float32 (opt-in via
+    # sag_dtype= / set_lens_sag_dtype), which halves the coordinate/sag/opd
+    # float64 core.  The .astype pins the dtype across NumPy casting-rule
+    # versions; for float64 it is a no-op, so the default path is unchanged.
+    _sag_real = _resolve_sag_real(sag_dtype)
+    x = ((xp.arange(Nx, dtype=_sag_real) - Nx / 2) * dx).astype(_sag_real, copy=False)
+    y = ((xp.arange(Ny, dtype=_sag_real) - Ny / 2) * dy).astype(_sag_real, copy=False)
     X, Y = xp.meshgrid(x, y)
     h_sq_axis = X ** 2 + Y ** 2  # axis-centered distance, used for stop aperture
 
@@ -635,6 +800,57 @@ def apply_real_lens(
         asph_y = surf.get('aspheric_coeffs_y')
         n1c, n2c = resolved[i]
         n1r, n2r = n1c.real, n2c.real
+
+        # ---- Opt-in row-band (chunked) phase screen -------------------
+        # When ``sag_chunk_rows`` is set AND the surface is the plain conic+
+        # aspheric case (no decenter / tilt / form-error / slant / fresnel /
+        # surface-frame / biconic / freeform / clear-aperture, and not the
+        # stop surface), compute the per-surface sag/OPD and apply the phase
+        # screen in row-bands so the full-grid float64 sag + OPD transients
+        # never materialise -- only a (chunk_rows x Nx) band at a time.  The
+        # sag/OPD are pointwise and the phase screen uses the SAME numexpr
+        # (complex128-internal) path the whole grid uses, so this is
+        # byte-identical (test_chunked_sag_byte_identical).  Any deviation
+        # from the narrow case falls through to the whole-grid path below.
+        _narrow_chunk = (
+            sag_chunk_rows is not None and int(sag_chunk_rows) > 0
+            and xp is np and not slant_correction and not fresnel
+            and not surface_frame
+            and (surf.get('decenter') or (0.0, 0.0)) == (0.0, 0.0)
+            and (surf.get('tilt') or (0.0, 0.0)) == (0.0, 0.0)
+            and surf.get('form_error') is None
+            and surf.get('radius_y') is None
+            and surf.get('freeform_type') not in ('q_bfs', 'q_con')
+            and surf.get('clear_aperture') is None
+            and not (stop_index is not None and i == stop_index
+                     and aperture is not None)
+        )
+        if _narrow_chunk:
+            cr = int(sag_chunk_rows)
+            _use_ne = (NUMEXPR_AVAILABLE and E.size >= _NUMEXPR_MIN_SIZE
+                       and _ensure_numexpr_loaded())
+            for r0 in range(0, Ny, cr):
+                r1 = min(Ny, r0 + cr)
+                sag_b = _surface_sag_general(h_sq_axis[r0:r1], R, kc, asph)
+                opd_b = (n2r - n1r) * sag_b
+                if bool(np.any(np.isnan(opd_b))):
+                    opd_b = np.where(np.isnan(opd_b), 0.0, opd_b)
+                if _use_ne:
+                    Eb = E[r0:r1]
+                    _ne.evaluate('Eb * exp(-1j * k0 * opd_b)',
+                                 local_dict={'Eb': Eb, 'k0': k0, 'opd_b': opd_b},
+                                 out=Eb)
+                else:
+                    ph = np.exp(-1j * k0 * opd_b)
+                    if ph.dtype != E.dtype:
+                        ph = ph.astype(E.dtype)
+                    E[r0:r1] = E[r0:r1] * ph
+                del sag_b, opd_b
+            if i < len(surfaces) - 1:
+                E = _propagate_through_glass(
+                    E, thicknesses[i], wavelength, n2r, n2c.imag,
+                    dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
+            continue
 
         # ---- Decenter --------------------------------------------------
         # v5.2 (ROADMAP v5.1 off-axis conic in surface frame;
@@ -957,66 +1173,13 @@ def apply_real_lens(
                              E, xp.zeros((), dtype=E.dtype))
 
         # ---- Propagate through glass to the next surface --------------
+        # Dispatch (asm / sas / fresnel / rayleigh_sommerfeld) + bulk
+        # absorption is factored into ``_propagate_through_glass`` so the
+        # row-band (chunked) path above reuses the identical implementation.
         if i < len(surfaces) - 1:
-            n_medium_r = n2r
-            n_medium_kappa = n2c.imag
-            thickness = thicknesses[i]
-            lam_medium = wavelength / n_medium_r
-            # Default path: ASM (auto-detects cupy backend from E dtype).
-            # Expert override via ``wave_propagator`` -- supports four
-            # values:
-            #
-            #   'asm'                (default) angular spectrum method
-            #   'sas'                scalable angular spectrum + resample
-            #   'fresnel'            single-FFT Fresnel + resample
-            #   'rayleigh_sommerfeld' Rayleigh-Sommerfeld convolution
-            #     (alias: 'rs')
-            #
-            # Physically ASM is the right choice for the short (mm) glass
-            # thicknesses typical of lenses; the other three are exposed
-            # for research, cross-validation, and pipelines that want a
-            # single propagator used consistently throughout.  Both
-            # Fresnel and SAS produce an output grid with a much
-            # smaller pitch than the input when z is small (mm-scale),
-            # so the back-resample to ``dx`` loses most of the
-            # high-spatial-frequency content the chirp produced; that
-            # loss is a feature of the physical regime, not a bug in
-            # the dispatcher.
-            if wave_propagator == 'sas':
-                from ..propagators.propagation import (
-                    resample_field,
-                    scalable_angular_spectrum_propagate,
-                )
-                # SAS is currently single-pitch (square-grid).  Fall
-                # back to the dx value -- callers wanting an
-                # anamorphic SAS path need to add a dy axis themselves.
-                E, dx_new, _ = scalable_angular_spectrum_propagate(
-                    E, thickness, lam_medium, dx)
-                if abs(dx_new - dx) > dx * 1e-6:
-                    E, _ = resample_field(
-                        E, dx_new, dx, N_out=E.shape[-1])
-            elif wave_propagator == 'fresnel':
-                from ..propagators.propagation import fresnel_propagate, resample_field
-                E, dx_new, _ = fresnel_propagate(
-                    E, thickness, lam_medium, dx, dy=dy)
-                if abs(dx_new - dx) > dx * 1e-6:
-                    E, _ = resample_field(
-                        E, dx_new, dx, N_out=E.shape[-1])
-            elif wave_propagator in ('rayleigh_sommerfeld', 'rs'):
-                from ..propagators.propagation import rayleigh_sommerfeld_propagate
-                E = rayleigh_sommerfeld_propagate(
-                    E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
-            elif wave_propagator == 'asm':
-                E = angular_spectrum_propagate(
-                    E, thickness, lam_medium, dx, dy=dy, bandlimit=bandlimit)
-            else:
-                raise ValueError(
-                    f"apply_real_lens: unknown wave_propagator "
-                    f"{wave_propagator!r}.  Supported: 'asm', 'sas', "
-                    f"'fresnel', 'rayleigh_sommerfeld' (alias 'rs').")
-            # Bulk absorption: exp(-2*pi * kappa * t / lambda0)
-            if absorption and n_medium_kappa != 0.0:
-                E = E * xp.exp(-k0 * n_medium_kappa * thickness)
+            E = _propagate_through_glass(
+                E, thicknesses[i], wavelength, n2r, n2c.imag,
+                dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
 
     # ----- Seidel correction ------------------------------------------
     # Apply a ray-trace-derived radial phase correction that captures
