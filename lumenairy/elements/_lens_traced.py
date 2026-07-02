@@ -1106,12 +1106,17 @@ def _opl_by_backward_trace(E_analytic, lens_prescription, wavelength, dx,
     from scipy.ndimage import map_coordinates
     ii, jj = np.indices((N, N), dtype=np.float64)
     coords = np.array([ii * N_c / N, jj * N_c / N])
+    # v5.17.0 lifetime hygiene (same pattern as the Newton-path upsample):
+    # ii/jj are folded into coords -- free them before interpolating, and
+    # free coords before the final mask combine.  Byte-identical.
+    del ii, jj
     opl_map = map_coordinates(
         np.where(np.isnan(opl_coarse), 0.0, opl_coarse),
         coords, order=1, mode='nearest')
     nan_coarse = np.isnan(opl_coarse).astype(np.float64)
     nan_full = map_coordinates(
         nan_coarse, coords, order=1, mode='nearest')
+    del coords
     opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
     return opl_map
 

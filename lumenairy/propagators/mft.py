@@ -359,11 +359,17 @@ def resample_field(
     iy = (jy - Ny_out / 2) * scale + Ny_in / 2
     IX, IY = np.meshgrid(ix, iy)
     coords = np.array([IY.ravel(), IX.ravel()])
+    # v5.17.0 lifetime hygiene: the meshgrids are folded into coords --
+    # free them before interpolating, free coords before the complex
+    # combine, and free each part once consumed.  Byte-identical.
+    del IX, IY
 
     # Interpolate real and imaginary parts separately
     real_out = map_coordinates(E_in.real, coords, order=order, mode='constant', cval=0.0)
     imag_out = map_coordinates(E_in.imag, coords, order=order, mode='constant', cval=0.0)
+    del coords
     E_out = (real_out + 1j * imag_out).reshape(Ny_out, Nx_out)
+    del real_out, imag_out
 
     return E_out, dx_out
 

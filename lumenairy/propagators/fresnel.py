@@ -145,18 +145,25 @@ def fresnel_propagate(
     # -- quadratic phase in input plane --------------------------------------
     phase_in = xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(target_cdtype)
     E_mod = E_in.astype(target_cdtype) * phase_in
+    # v5.17.0 lifetime hygiene (byte-identical): the input-plane grids and
+    # phase screen are consumed -- free before the FFT so they don't ride
+    # through it.  (JAX arrays are immutable/functional; del is a no-op
+    # name-drop there, which is fine.)
+    del X1, Y1, phase_in
 
     # -- FFT -- use _fft for NumPy/CuPy fast path; jnp.fft for JAX -----------
     if is_jax:
         E_fft = xp.fft.fftshift(xp.fft.fft2(xp.fft.ifftshift(E_mod)))
     else:
         E_fft = np.fft.fftshift(_fft2(np.fft.ifftshift(E_mod)))
+    del E_mod
 
     # -- quadratic phase in output plane + prefactor -------------------------
     prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
                  * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
     prefactor = prefactor.astype(target_cdtype)
+    del X2, Y2
 
     E_out = prefactor * E_fft
 
