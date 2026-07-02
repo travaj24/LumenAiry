@@ -289,6 +289,9 @@ def pick_batch_size(n_items: int, cost_per_item: int,
         Memory cost of ONE item in bytes.
     available : int or None
         Available memory in bytes.  If ``None``, uses
+        :func:`get_ram_budget` (the :func:`set_max_ram` override when
+        set, else the auto-detected available memory) -- audit P2-21:
+        pre-v5.17.2 this bypassed the override via
         :func:`available_memory_bytes`.
     safety : float
         Fraction of available memory to use.  Default 0.5 leaves
@@ -312,7 +315,7 @@ def pick_batch_size(n_items: int, cost_per_item: int,
     >>> print(f'Batch size: {batch}')  # e.g. 12 on a 24 GB machine
     """
     if available is None:
-        available = available_memory_bytes()
+        available = get_ram_budget()
 
     if cost_per_item <= 0:
         return max(min_batch, n_items)
@@ -338,7 +341,8 @@ def should_split(total_cost: int,
         Estimated memory cost of running the whole operation at once,
         in bytes.
     available : int or None
-        Available memory in bytes.  Defaults to current system state.
+        Available memory in bytes.  Defaults to :func:`get_ram_budget`
+        (honours a :func:`set_max_ram` override -- audit P2-21).
     safety : float
         Fraction of available memory considered "safe" to use.
 
@@ -348,7 +352,7 @@ def should_split(total_cost: int,
         True if ``total_cost`` exceeds ``safety * available``.
     """
     if available is None:
-        available = available_memory_bytes()
+        available = get_ram_budget()
     return total_cost > int(available * safety)
 
 
@@ -588,14 +592,31 @@ def estimate_lens_memory(n_grid: int,
         newton_c = (_NEWTON_BYTES_PER_COARSE_PT * (N / sub_c) ** 2
                     if lens_model == 'traced' else 0.0)
         band = 9 * sb * N * max(1, int(sag_chunk_rows))
-        total_c = int(_LENS_CHUNKED_COMPLEX_ARRAYS * cb * npix
-                      + newton_c + band)
+        resident_c = _LENS_CHUNKED_COMPLEX_ARRAYS * cb * npix
+        # slant_correction disables the narrow per-surface chunking
+        # (``_lens_real._narrow_chunk`` requires ``not slant_correction``),
+        # so the full-grid angle stack materialises even in row-band mode.
+        slant_c = (_LENS_SLANT_F64_ARRAYS * sb * npix
+                   if slant_correction else 0.0)
+        # v5.17.2 (audit P2-22): the runtime row-band path still runs the
+        # amp + amp(pw) legs concurrently when parallel_amp=True, so the
+        # LEG-LOCAL working set (resident complex fields + band transients
+        # + any slant fall-through stack) doubles -- the same rule the
+        # whole-grid branch applies below; the post-legs Newton solve
+        # stays single.  Conservative for the shared FFT plan-buffer share
+        # of the calibrated envelope (the fail-safe direction).
+        if parallel_amp:
+            resident_c *= 2.0
+            band *= 2
+            slant_c *= 2.0
+        total_c = int(resident_c + newton_c + band + slant_c)
         items_c = {
-            'chunked_resident_complex': int(
-                _LENS_CHUNKED_COMPLEX_ARRAYS * cb * npix),
+            'chunked_resident_complex': int(resident_c),
             'newton_coarse_solve': int(newton_c),
             'band_transients': int(band),
         }
+        if slant_correction:
+            items_c['slant_fullgrid_stack'] = int(slant_c)
         if not itemized:
             return total_c
         return {'total': total_c, 'items': items_c, 'n_grid': N,
@@ -800,8 +821,10 @@ def check_sim_memory(n_grid: int,
         if parallel_amp:
             _try('set parallel_amp=False (byte-identical)', parallel_amp=False)
         if np.dtype(complex_dtype) == np.complex128:
-            _try('use complex64 fields', complex_dtype='complex64',
-                 parallel_amp=False)
+            # audit P3-45: the re-estimate assumes parallel_amp=False too,
+            # so the label must say so (matches the neighbouring rungs).
+            _try('use complex64 fields (+parallel_amp=False)',
+                 complex_dtype='complex64', parallel_amp=False)
         if lens_model == 'traced' and int(ray_subsample) < 16:
             _try('ray_subsample=16 (+parallel_amp=False)',
                  ray_subsample=16, parallel_amp=False)
@@ -853,10 +876,32 @@ def check_sim_memory(n_grid: int,
 # ----------------------------------------------------------------------------
 # Low-memory preset
 # ----------------------------------------------------------------------------
+# v5.17.2 (audit P2-23 / P3-46): the values captured at the FIRST
+# set_low_memory(True) since the last disable, so set_low_memory(False)
+# restores exactly what the user had (including the aggressive complex64
+# default-dtype flip and any pre-existing non-default knob settings)
+# instead of clobbering to shipped defaults.
+_LOW_MEMORY_PRIOR: Optional[Dict[str, Any]] = None
+
+# Shipped library defaults for the byte-safe knobs, used only when
+# set_low_memory(False) is called with no enable on record (or when a
+# getter failed at capture time).
+_LOW_MEMORY_SHIPPED_DEFAULTS: Dict[str, Any] = {
+    'plan_cache_size': 8,
+    'lens_parallel_amp': True,
+    'fft_double_buffer': True,
+    'fft_auto_promote': True,
+}
+
+
 def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[str, Any]:
     """Flip the BYTE-SAFE memory-lean knobs together (and, with
     ``aggressive=True``, the numerics-changing ones).  Returns the prior
-    values so the change round-trips via ``set_low_memory(False)``.
+    values so the change round-trips via ``set_low_memory(False)``, which
+    restores exactly the values captured at the first ``set_low_memory(True)``
+    -- including a user's pre-existing non-default settings and the
+    aggressive default-dtype flip.  ``set_low_memory(False)`` without a
+    matching enable restores the shipped library defaults.
 
     Safe set (all byte-identical to a default run -- memory/speed trade only):
       * ``set_fft_plan_cache_size(2)``     -- the fwd+inv floor for one grid
@@ -869,10 +914,12 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
 
     (The double-buffer-off and float32/chunked-sag knobs land in a follow-up.)
     """
+    global _LOW_MEMORY_PRIOR
     # Lazy imports keep memory.py dependency-light (no module-level edge into
     # propagators/ or elements/, avoiding an import cycle).
     from .elements._lens_traced import get_lens_parallel_amp, set_lens_parallel_amp
     from .propagators.fft_infra import (
+        get_fft_auto_promote,
         get_fft_double_buffer,
         get_fft_plan_cache_size,
         set_fft_auto_promote,
@@ -892,7 +939,10 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
         _capture('plan_cache_size', get_fft_plan_cache_size)
         _capture('lens_parallel_amp', get_lens_parallel_amp)
         _capture('fft_double_buffer', get_fft_double_buffer)
-        prior['fft_auto_promote'] = True   # library default
+        # audit P3-46: read the LIVE value like the other knobs (pre-fix
+        # this hardcoded True, losing e.g. a byte-reproducibility pin set
+        # via set_fft_auto_promote(False)).
+        _capture('fft_auto_promote', get_fft_auto_promote)
         set_fft_plan_cache_size(2)
         set_lens_parallel_amp(False)
         set_fft_double_buffer(False)
@@ -912,12 +962,43 @@ def set_low_memory(enabled: bool = True, *, aggressive: bool = False) -> Dict[st
                     RuntimeWarning)
             except Exception:
                 pass
+        # Stash the FIRST-enable snapshot: repeated set_low_memory(True)
+        # calls must not overwrite the true prior with low-memory values.
+        # A later aggressive enable still records the pre-flip dtype
+        # (setdefault: an already-stashed dtype wins).
+        if _LOW_MEMORY_PRIOR is None:
+            _LOW_MEMORY_PRIOR = dict(prior)
+        elif 'complex_dtype' in prior:
+            _LOW_MEMORY_PRIOR.setdefault('complex_dtype',
+                                         prior['complex_dtype'])
     else:
-        # Restore shipped library defaults.
-        set_fft_plan_cache_size(8)
-        set_lens_parallel_amp(True)
-        set_fft_double_buffer(True)
-        set_fft_auto_promote(True)
+        # audit P2-23 / P3-46: restore EXACTLY the values captured at
+        # enable time (falling back to the shipped default for any knob
+        # whose getter failed at capture, or for a disable with no enable
+        # on record).
+        stash = _LOW_MEMORY_PRIOR
+        _LOW_MEMORY_PRIOR = None
+        if stash is None:
+            stash = dict(_LOW_MEMORY_SHIPPED_DEFAULTS)
+
+        def _restore(key: str, setter: Any) -> None:
+            val = stash.get(key)
+            if val is None:
+                val = _LOW_MEMORY_SHIPPED_DEFAULTS[key]
+            setter(val)
+
+        _restore('plan_cache_size', set_fft_plan_cache_size)
+        _restore('lens_parallel_amp', set_lens_parallel_amp)
+        _restore('fft_double_buffer', set_fft_double_buffer)
+        _restore('fft_auto_promote', set_fft_auto_promote)
+        # audit P2-23: revert the aggressive default-dtype flip (only when
+        # an aggressive enable actually captured one).
+        if stash.get('complex_dtype') is not None:
+            try:
+                from .propagators.fft_infra import set_default_complex_dtype
+                set_default_complex_dtype(stash['complex_dtype'])
+            except Exception:
+                pass
     return prior
 
 

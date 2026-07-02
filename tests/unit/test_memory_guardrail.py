@@ -149,6 +149,182 @@ def test_set_low_memory_roundtrip_and_byte_safe_defaults():
     assert la.get_lens_parallel_amp() is True
 
 
+# ---------------------------------------------------------------------------
+# Wave-2 audit fixes (AUDIT_V5_17_0_2026_07_01_DEEP.md, memory-knobs cluster)
+# ---------------------------------------------------------------------------
+
+def test_set_max_ram_governs_pick_batch_and_should_split():
+    """audit P2-21: pick_batch_size / should_split must honour a pinned
+    set_max_ram() budget through get_ram_budget() (pre-fix they read psutil
+    directly, so a 1 GB pin was silently ignored)."""
+    la.set_max_ram(1)   # 1 GB budget
+    try:
+        assert la.get_ram_budget() == 1024**3
+        # 0.9 GB > safety(0.5) * 1 GB -> must split
+        assert m.should_split(int(0.9 * 1024**3)) is True
+        # budget 0.5 GB / 0.2 GB per item -> batch of 2, not all 100
+        assert m.pick_batch_size(100, int(0.2 * 1024**3)) == 2
+    finally:
+        la.set_max_ram(None)
+    # explicit `available` still wins over the budget
+    assert m.should_split(int(0.9 * 1024**3), available=4 * 1024**3) is False
+
+
+def test_parallel_amp_guard_honors_set_max_ram(monkeypatch):
+    """audit P2-21 (runtime half): the apply_real_lens_traced parallel-amp
+    RAM guard must fold in the pinned budget (min(psutil-free, budget)) --
+    pre-fix a 1 GB pin still ran the doubled parallel working set."""
+    import concurrent.futures as cf
+
+    from lumenairy.elements._lens_traced import apply_real_lens_traced
+
+    prefixes = []
+    real_tpe = cf.ThreadPoolExecutor
+
+    class Spy(real_tpe):
+        def __init__(self, *a, **kw):
+            prefixes.append(kw.get('thread_name_prefix', ''))
+            super().__init__(*a, **kw)
+
+    monkeypatch.setattr(cf, 'ThreadPoolExecutor', Spy)
+
+    presc = {'name': 't', 'aperture_diameter': 3e-3,
+             'surfaces': [
+                 {'radius': 12e-3, 'conic': -0.4,
+                  'glass_before': 'air', 'glass_after': 'N-BK7'},
+                 {'radius': -15e-3, 'conic': 0.0,
+                  'glass_before': 'N-BK7', 'glass_after': 'air'}],
+             'thicknesses': [2.5e-3]}
+    N, dx = 256, 12e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X**2 + Y**2) / (1.2e-3)**2).astype(np.complex128)
+    kw = dict(prescription=presc, wavelength=1.31e-6, dx=dx,
+              parallel_amp=True, ray_subsample=2)
+
+    # control: tiny threshold, no pin -> parallel path engages
+    apply_real_lens_traced(E.copy(), parallel_amp_min_free_gb=0.001, **kw)
+    assert 'rlt_amp' in prefixes
+
+    # pinned 1 GB budget < 2 GB threshold -> sequential, regardless of
+    # how much physical RAM the box has free
+    prefixes.clear()
+    la.set_max_ram(1)
+    try:
+        apply_real_lens_traced(E.copy(), parallel_amp_min_free_gb=2.0, **kw)
+    finally:
+        la.set_max_ram(None)
+    assert 'rlt_amp' not in prefixes
+
+
+def test_chunked_estimate_accounts_for_parallel_amp_and_slant():
+    """audit P2-22: the row-band estimate must model the runtime parallel
+    doubling of the leg-local working set (resident complex + band
+    transients) and the slant full-grid fall-through stack, while the
+    calibrated parallel_amp=False anchor stays untouched."""
+    # calibrated chunked anchor (c128 sub=16 N=16384, parallel off): 26.30 GB
+    anchor = m.estimate_lens_memory(16384, 'complex128', ray_subsample=16,
+                                    parallel_amp=False) / GB
+    assert 0.88 <= anchor / 26.30 <= 1.12
+
+    off = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
+                                 parallel_amp=False, itemized=True)
+    on = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
+                                parallel_amp=True, itemized=True)
+    # leg-local terms double; the post-legs Newton solve stays single
+    assert on['items']['chunked_resident_complex'] == \
+        2 * off['items']['chunked_resident_complex']
+    assert on['items']['band_transients'] == 2 * off['items']['band_transients']
+    assert on['items']['newton_coarse_solve'] == off['items']['newton_coarse_solve']
+    assert on['total'] > 1.5 * off['total']
+
+    # slant_correction disables the narrow per-surface chunking -> the
+    # full-grid angle stack must appear in the row-band estimate too
+    slant = m.estimate_lens_memory(16384, 'complex64', ray_subsample=16,
+                                   parallel_amp=False, slant_correction=True,
+                                   itemized=True)
+    assert slant['items']['slant_fullgrid_stack'] == \
+        int(m._LENS_SLANT_F64_ARRAYS * 8 * 16384**2)
+    assert slant['total'] > off['total']
+
+
+def test_chunked_parallel_off_clawback_revived():
+    """audit P2-22 (dead rung): with the chunked estimate now depending on
+    parallel_amp, the 'set parallel_amp=False (byte-identical)' claw-back
+    can genuinely surface for a default (auto-chunked, parallel) config."""
+    v = m.check_sim_memory(16384, 'complex64', ray_subsample=16,
+                           parallel_amp=True, available=int(25 * GB),
+                           mode='silent', verbose=False)
+    assert v['fits'] is False   # pre-fix: 17.5 GB estimate 'fit' 25 GB
+    labels = [r['change'] for r in v['recommendations']]
+    assert any('parallel_amp=False' in lbl for lbl in labels)
+    assert all(r['peak_bytes'] <= 25 * GB for r in v['recommendations'])
+
+
+def test_set_low_memory_aggressive_dtype_roundtrip():
+    """audit P2-23: set_low_memory(False) must revert the aggressive
+    complex64 default-dtype flip (pre-fix it silently persisted)."""
+    assert la.get_default_complex_dtype() == np.complex128
+    try:
+        with pytest.warns(RuntimeWarning):
+            prior = la.set_low_memory(True, aggressive=True)
+        assert prior['complex_dtype'] == np.complex128
+        assert la.get_default_complex_dtype() == np.complex64
+        la.set_low_memory(False)
+        assert la.get_default_complex_dtype() == np.complex128
+    finally:
+        la.set_default_complex_dtype(np.complex128)
+        la.set_low_memory(False)   # idempotent: no stash -> shipped defaults
+
+
+def test_set_low_memory_restores_user_customizations():
+    """audit P3-46: priors are captured from the LIVE getters (auto-promote
+    was hardcoded True) and set_low_memory(False) restores the captured
+    values, not shipped defaults."""
+    la.set_fft_auto_promote(False)      # e.g. byte-reproducibility pin
+    la.set_fft_plan_cache_size(16)
+    try:
+        prior = la.set_low_memory(True)
+        assert prior['fft_auto_promote'] is False
+        assert prior['plan_cache_size'] == 16
+        assert la.get_fft_auto_promote() is False   # low-mem sets it False too
+        assert la.get_fft_plan_cache_size() == 2
+        la.set_low_memory(False)
+        assert la.get_fft_auto_promote() is False   # user pin survives
+        assert la.get_fft_plan_cache_size() == 16   # user size survives
+    finally:
+        la.set_fft_auto_promote(True)
+        la.set_fft_plan_cache_size(8)
+
+
+def test_set_low_memory_repeated_enable_keeps_first_prior():
+    """A second set_low_memory(True) must not overwrite the true prior with
+    low-memory values; disable still restores the original settings."""
+    assert la.get_fft_plan_cache_size() == 8
+    try:
+        la.set_low_memory(True)
+        la.set_low_memory(True)     # would capture plan_cache_size == 2
+        la.set_low_memory(False)
+    finally:
+        pass
+    assert la.get_fft_plan_cache_size() == 8
+    assert la.get_lens_parallel_amp() is True
+
+
+def test_complex64_clawback_label_discloses_parallel_amp():
+    """audit P3-45: the complex64 rung's re-estimate assumes
+    parallel_amp=False, so its label must say so (like its neighbours)."""
+    v = m.check_sim_memory(16384, 'complex128', ray_subsample=8,
+                           parallel_amp=True, sag_chunk_rows=0,
+                           available=int(40 * GB),
+                           mode='silent', verbose=False)
+    assert v['fits'] is False
+    labels = [r['change'] for r in v['recommendations']]
+    c64 = [lbl for lbl in labels if 'complex64' in lbl]
+    assert c64, f"complex64 rung missing from {labels}"
+    assert all('parallel_amp=False' in lbl for lbl in c64)
+
+
 def test_parallel_amp_default_resolution():
     """parallel_amp=None resolves to the module global, so set_lens_parallel_amp
     flips the default for callers that don't pass the kwarg -- the mechanism the
