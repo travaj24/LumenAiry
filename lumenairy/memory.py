@@ -483,6 +483,13 @@ _LENS_SLANT_F64_ARRAYS = 6.0     # extra angle stack (dsag_dx/dy, grad_sq, cos_t
 _LENS_COMPLEX_ARRAYS = 4.0       # E_analytic + live E + in-glass ASM complex working set
 _NEWTON_BYTES_PER_COARSE_PT = 2671.0   # coarse-grid Newton solve + poly fit + map_coordinates, per (N/sub)^2 pt
 _ASM_COMPLEX_ARRAYS = 4.0        # bare ASM step: E_in + H + fft scratch (+ resident plan buffers added separately)
+# Row-band (sag_chunk_rows) mode: the full-grid float64 lens stack never
+# materialises; the peak is the resident complex fields (E copy + live E +
+# E_analytic + amp/phase halves + FFT plan buffers) + band transients.
+# Calibrated: 18.4 GB measured at N=16384/sub=16/c64 chunked (vs 43.6
+# whole-grid) -> ~8.6 complex-array equivalents.  Conservative (N^2) upper
+# bound at larger N.
+_LENS_CHUNKED_COMPLEX_ARRAYS = 8.6
 
 
 def _as_complex_itemsize(dtype: Any) -> int:
@@ -495,6 +502,7 @@ def estimate_lens_memory(
     n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
     ray_subsample: int = ..., parallel_amp: bool = ...,
     slant_correction: bool = ..., sag_dtype: Any = ...,
+    sag_chunk_rows: Optional[int] = ...,
     itemized: Literal[False] = ...) -> int: ...
 
 
@@ -503,6 +511,7 @@ def estimate_lens_memory(
     n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
     ray_subsample: int = ..., parallel_amp: bool = ...,
     slant_correction: bool = ..., sag_dtype: Any = ...,
+    sag_chunk_rows: Optional[int] = ...,
     itemized: Literal[True]) -> Dict[str, Any]: ...
 
 
@@ -514,6 +523,7 @@ def estimate_lens_memory(n_grid: int,
                          parallel_amp: bool = True,
                          slant_correction: bool = False,
                          sag_dtype: Any = None,
+                         sag_chunk_rows: Optional[int] = None,
                          itemized: bool = False
                          ) -> Union[int, Dict[str, Any]]:
     """Estimate the peak RAM (bytes) of ONE ``apply_real_lens_traced`` (or
@@ -544,7 +554,13 @@ def estimate_lens_memory(n_grid: int,
     sag_dtype : dtype-like or None
         Geometry dtype.  ``None`` -> float64 (the default + only validated
         precision).  ``np.float32`` halves the geometric core AND removes the
-        complex128-first ``phase_exp`` transient (PR2 opt-in; accuracy-risky).
+        complex128-first ``phase_exp`` transient (opt-in; accuracy-risky).
+    sag_chunk_rows : int or None
+        Row-band lens mode (v5.16.2 opt-in, BYTE-IDENTICAL).  When set, the
+        full-grid float64 stack never materialises -- the peak collapses to
+        the resident complex fields + band transients (measured 18.4 GB vs
+        43.6 GB whole-grid at N=16384/sub=16/c64).  The single largest
+        fidelity-preserving claw-back.
     itemized : bool, default False
         When True, return ``{'total', 'items', ...}`` instead of a bare int.
 
@@ -557,6 +573,27 @@ def estimate_lens_memory(n_grid: int,
     npix = N * N
     cb = _as_complex_itemsize(complex_dtype)
     sb = 4 if (sag_dtype is not None and np.dtype(sag_dtype) == np.float32) else 8
+
+    if sag_chunk_rows is not None and int(sag_chunk_rows) > 0:
+        # Row-band mode: calibrated complex-equivalents envelope + the
+        # coarse Newton solve + one band's worth of float64 transients.
+        sub_c = max(1, int(ray_subsample))
+        newton_c = (_NEWTON_BYTES_PER_COARSE_PT * (N / sub_c) ** 2
+                    if lens_model == 'traced' else 0.0)
+        band = 9 * sb * N * max(1, int(sag_chunk_rows))
+        total_c = int(_LENS_CHUNKED_COMPLEX_ARRAYS * cb * npix
+                      + newton_c + band)
+        items_c = {
+            'chunked_resident_complex': int(
+                _LENS_CHUNKED_COMPLEX_ARRAYS * cb * npix),
+            'newton_coarse_solve': int(newton_c),
+            'band_transients': int(band),
+        }
+        if not itemized:
+            return total_c
+        return {'total': total_c, 'items': items_c, 'n_grid': N,
+                'complex_dtype': str(np.dtype(complex_dtype)),
+                'sag_dtype': 'float32' if sb == 4 else 'float64'}
 
     f64_core = _LENS_F64_ARRAYS * sb * npix
     if slant_correction:
@@ -613,6 +650,7 @@ def estimate_sim_memory(
     n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
     ray_subsample: int = ..., parallel_amp: bool = ...,
     slant_correction: bool = ..., sag_dtype: Any = ...,
+    sag_chunk_rows: Optional[int] = ...,
     resume_field_bytes: int = ..., plan_cache_keys: int = ...,
     safety_factor: float = ..., itemized: Literal[False] = ...) -> int: ...
 
@@ -622,6 +660,7 @@ def estimate_sim_memory(
     n_grid: int, complex_dtype: Any = ..., *, lens_model: str = ...,
     ray_subsample: int = ..., parallel_amp: bool = ...,
     slant_correction: bool = ..., sag_dtype: Any = ...,
+    sag_chunk_rows: Optional[int] = ...,
     resume_field_bytes: int = ..., plan_cache_keys: int = ...,
     safety_factor: float = ..., itemized: Literal[True]) -> Dict[str, Any]: ...
 
@@ -634,6 +673,7 @@ def estimate_sim_memory(n_grid: int,
                         parallel_amp: bool = True,
                         slant_correction: bool = False,
                         sag_dtype: Any = None,
+                        sag_chunk_rows: Optional[int] = None,
                         resume_field_bytes: int = 0,
                         plan_cache_keys: int = 2,
                         safety_factor: float = 1.15,
@@ -652,7 +692,7 @@ def estimate_sim_memory(n_grid: int,
     lens = estimate_lens_memory(
         n_grid, complex_dtype, lens_model=lens_model, ray_subsample=ray_subsample,
         parallel_amp=parallel_amp, slant_correction=slant_correction,
-        sag_dtype=sag_dtype, itemized=True)
+        sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows, itemized=True)
     asm = estimate_asm_memory(n_grid, complex_dtype, plan_cache_keys=plan_cache_keys)
     step = max(lens['total'], asm)
     driver = 'lens' if lens['total'] >= asm else 'asm'
@@ -682,6 +722,7 @@ def check_sim_memory(n_grid: int,
                      parallel_amp: bool = True,
                      slant_correction: bool = False,
                      sag_dtype: Any = None,
+                     sag_chunk_rows: Optional[int] = None,
                      resume_field_bytes: int = 0,
                      plan_cache_keys: int = 2,
                      safety_factor: float = 1.15,
@@ -691,8 +732,9 @@ def check_sim_memory(n_grid: int,
     """Autodetect guardrail: estimate the true peak, compare to available RAM,
     and (depending on ``mode``) warn / raise / just report -- ALWAYS returning
     a structured verdict that, when it does not fit, lists concrete claw-backs
-    that DO fit (parallel_amp off -> complex64 -> coarser ray_subsample ->
-    smaller N), each with its estimated peak.
+    that DO fit (sag_chunk_rows [byte-identical] -> parallel_amp off ->
+    complex64 -> coarser ray_subsample -> smaller N), each with its
+    estimated peak.
 
     Parameters
     ----------
@@ -713,19 +755,22 @@ def check_sim_memory(n_grid: int,
     est = estimate_sim_memory(
         n_grid, complex_dtype, lens_model=lens_model, ray_subsample=ray_subsample,
         parallel_amp=parallel_amp, slant_correction=slant_correction,
-        sag_dtype=sag_dtype, resume_field_bytes=resume_field_bytes,
+        sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+        resume_field_bytes=resume_field_bytes,
         plan_cache_keys=plan_cache_keys, safety_factor=safety_factor, itemized=True)
     peak = est['peak_bytes']
     fits = peak <= int(available)
 
-    # Build the claw-back ladder: byte-identical knobs first, then accuracy/
+    # Build the claw-back ladder: byte-identical knobs first (row-band lens
+    # mode preserves fidelity EXACTLY, so it always leads), then accuracy/
     # fidelity trades, then grid reduction.  Each entry re-estimates and is
     # reported only if it actually fits.
     recs = []
     def _try(label: str, **over: Any) -> None:
         kw = dict(lens_model=lens_model, ray_subsample=ray_subsample,
                   parallel_amp=parallel_amp, slant_correction=slant_correction,
-                  sag_dtype=sag_dtype, resume_field_bytes=resume_field_bytes,
+                  sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                  resume_field_bytes=resume_field_bytes,
                   plan_cache_keys=plan_cache_keys, safety_factor=safety_factor)
         ngrid = over.pop('n_grid', n_grid)
         cdt = over.pop('complex_dtype', complex_dtype)
@@ -735,6 +780,13 @@ def check_sim_memory(n_grid: int,
             recs.append({'change': label, 'peak_bytes': p,
                          'peak_gb': p / 1e9, 'fits': True})
     if not fits:
+        _n = int(n_grid)
+        if lens_model == 'traced' and sag_chunk_rows is None:
+            _try(f'set sag_chunk_rows={_n // 16} (row-band lens, '
+                 f'byte-identical)', sag_chunk_rows=_n // 16)
+            _try(f'sag_chunk_rows={_n // 16} + parallel_amp=False '
+                 f'(both byte-identical)',
+                 sag_chunk_rows=_n // 16, parallel_amp=False)
         if parallel_amp:
             _try('set parallel_amp=False (byte-identical)', parallel_amp=False)
         if np.dtype(complex_dtype) == np.complex128:
@@ -753,13 +805,14 @@ def check_sim_memory(n_grid: int,
     def gb(b: float) -> float:
         return b / 1e9
     items = est['lens_items']
+    # Itemisation differs between the whole-grid and row-band lens models.
+    items_str = " + ".join(
+        f"{k.replace('_', '-')} {gb(v):.0f} GB" for k, v in items.items())
     msg = (f"N={n_grid} {np.dtype(complex_dtype)} {lens_model}-lens "
-           f"(sub={ray_subsample}, parallel_amp={parallel_amp}): "
+           f"(sub={ray_subsample}, parallel_amp={parallel_amp}"
+           f"{f', chunk_rows={sag_chunk_rows}' if sag_chunk_rows else ''}): "
            f"peak ~{gb(peak):.0f} GB (driver: {est['driving_step']} step; "
-           f"f64-core {gb(items['float64_geometric_core']):.0f} GB + "
-           f"complex {gb(items['complex_fields']):.0f} GB + "
-           f"phase_exp {gb(items['phase_exp_c128_transient']):.0f} GB + "
-           f"newton {gb(items['newton_coarse_solve']):.0f} GB), "
+           f"{items_str}), "
            f"x{safety_factor} safety; have {gb(available):.0f} GB.")
     if fits:
         msg = "OK: " + msg

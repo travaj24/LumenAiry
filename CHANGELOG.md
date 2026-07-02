@@ -2,6 +2,46 @@
 
 All notable changes to the core library are documented here.
 
+## [5.16.2] — 2026-07-01
+
+### Added (row-band lens memory mode — the fidelity-preserving large-grid enabler)
+
+- **`sag_chunk_rows` (opt-in, BYTE-IDENTICAL)** on `apply_real_lens` and
+  `apply_real_lens_traced` -- runs the per-surface phase screens AND the traced
+  OPL-upsample/exit-assembly in row bands, so the full-grid float64 lens stack
+  (coordinate meshgrids, sag/opd, `np.indices` + the `(2,N,N)` map_coordinates
+  input, `delta_phase`, the complex128-first `phase_exp`) never materialises.
+  Element-identical to the whole-grid path (`np.array_equal`-pinned; the
+  order-1 `map_coordinates` upsample is pointwise in the output). Measured
+  traced-lens peak at N=16384/sub=16/c64: **43.6 -> 18.4 GB** (whole-grid vs
+  chunked) -- 45% below even the v3.2.14.1-era 33.2 GB. This restores
+  full-fidelity N=32768 runs on 128-137 GB boxes with NO accuracy trade.
+  Non-narrow surfaces (decenter/tilt/slant/fresnel/stop/biconic/freeform)
+  fall through to the whole-grid path per surface (meshgrids built lazily),
+  so mixed prescriptions remain exact.
+- **`sag_dtype` (opt-in, accuracy-trading)** on the same functions +
+  process-wide `set_lens_sag_dtype` / `get_lens_sag_dtype` -- float32 geometry
+  (coordinate/sag/opd lineage), halving the float64 core. Gated by
+  **`lens_sag_float32_opd_error`**: a radial OPD scan + a field-level float32
+  vs float64 A/B. The field error is CONFIG-dependent (the f32 phase
+  perturbation interferes through in-glass diffraction), so pass your
+  production `field_check_dx=` for sign-off; the default coarse check is a
+  gross-failure screen only.
+- **Estimator + guardrail understand chunking**: `estimate_lens_memory` /
+  `estimate_sim_memory` / `check_sim_memory` take `sag_chunk_rows`
+  (calibrated 18.4 GB anchor), and the guardrail's claw-back ladder now
+  RECOMMENDS the byte-identical row-band mode FIRST -- before any
+  dtype/subsample/grid reduction that would trade fidelity.
+
+### Background (why)
+
+Stage-profiling the identical lens on the archived 3.2.14.1 vs 5.16.1
+measured a **+32% traced-lens peak-memory growth** (33.2 -> 43.6 GB at
+N=16384/sub=16/c64), accumulated across v3.5-v5.16 features. That growth is
+what moved full-grid N=32768 traced runs from fits-on-128-GB (historical
+Design-51/71 runs) to OOM. `sag_chunk_rows` claws back far more than the
+regression at zero fidelity cost.
+
 ## [5.16.1] — 2026-06-25
 
 ### Added (memory estimation + autodetect guardrail)

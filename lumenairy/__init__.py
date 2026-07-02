@@ -142,8 +142,11 @@ from .elements.lenses import (
     check_grid_vs_apertures,
     close_worker_pool,
     get_lens_parallel_amp,
+    get_lens_sag_dtype,
+    lens_sag_float32_opd_error,
     recommend_grid_for_prescription,
     set_lens_parallel_amp,
+    set_lens_sag_dtype,
     surface_sag_biconic,
     surface_sag_general,
 )
@@ -957,7 +960,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.16.1"
+__version__ = "5.16.2"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1038,6 +1041,9 @@ __all__ = [
     'apply_real_lens',
     'set_lens_parallel_amp',
     'get_lens_parallel_amp',
+    'set_lens_sag_dtype',
+    'get_lens_sag_dtype',
+    'lens_sag_float32_opd_error',
     'apply_real_lens_traced',
     'close_worker_pool',
     'apply_real_lens_maslov',

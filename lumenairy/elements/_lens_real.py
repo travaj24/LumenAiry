@@ -127,19 +127,38 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
                                wavelength: float,
                                *,
                                aperture: Optional[float] = None,
-                               n_samples: int = 4096) -> Dict[str, Any]:
-    """Estimate the thin-element OPD error incurred by float32 sag precision
-    for one prescription, so a caller can decide whether
+                               n_samples: int = 4096,
+                               field_check_n: int = 512,
+                               field_check_dx: Optional[float] = None,
+                               max_field_rel_error: float = 1e-3
+                               ) -> Dict[str, Any]:
+    """Estimate the error incurred by float32 sag precision for one
+    prescription, so a caller can decide whether
     ``set_lens_sag_dtype(np.float32)`` (or ``sag_dtype=np.float32``) is safe.
 
-    Evaluates the summed per-surface refraction OPD ``sum (n2 - n1) * sag(r)``
-    along a radial profile from the axis to the aperture edge in BOTH float32
-    and float64, and returns the peak / RMS ``|dOPD|`` in waves (the error is
-    worst at the aperture edge, where the aspheric departure is largest).  A
-    few x 1e-3 waves is negligible; ``ok`` is True when peak < lambda/50.
+    Two independent checks:
 
-    This is cheap (a 1-D radial scan, no full grid), so it is safe to call at
-    the exact production grid's aperture before committing to float32.
+    1. **Radial OPD scan** (1-D, cheap): the summed per-surface refraction
+       OPD ``sum (n2 - n1) * sag(r)`` in float32 vs float64, reported in
+       waves.
+    2. **Field-level A/B** (grid ``field_check_n`` / ``field_check_dx``): a
+       full ``apply_real_lens`` run in float32 vs float64 geometry,
+       reporting the max relative exit-field error.  This catches what the
+       OPD scan systematically UNDER-reports: the exit-field phase error
+       scales with the TOTAL sag depth (``k0 * OPD * eps_f32``), so a deep
+       singlet can show a negligible waves-level OPD delta yet a >1e-3
+       field error.
+
+    IMPORTANT: the field-level error is CONFIG-DEPENDENT -- the f32 phase
+    perturbation interferes through the in-glass diffraction, so its
+    magnitude depends on dx / grid fill / beam extent, not just the
+    prescription.  The DEFAULT coarse check (auto dx, N=512) is a
+    gross-failure screen only; for production sign-off pass your actual
+    pixel pitch via ``field_check_dx=`` (and a representative
+    ``field_check_n``) so the A/B reproduces your sampling regime.
+
+    ``ok`` requires BOTH: OPD peak < lambda/50 AND field error <
+    ``max_field_rel_error``.
 
     Parameters
     ----------
@@ -152,12 +171,16 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
         ``prescription['aperture_diameter']``.
     n_samples : int, default 4096
         Radial samples from axis to edge.
+    field_check_n : int, default 512
+        Grid size for the field-level A/B (0 skips it).
+    max_field_rel_error : float, default 1e-3
+        Field-error gate for ``ok``.
 
     Returns
     -------
     dict
         ``{'max_opd_error_waves', 'rms_opd_error_waves', 'max_opd_error_nm',
-        'aperture_m', 'ok'}``.
+        'max_field_rel_error', 'aperture_m', 'ok'}``.
     """
     ap = aperture if aperture is not None else prescription.get('aperture_diameter')
     if not ap:
@@ -181,12 +204,37 @@ def lens_sag_float32_opd_error(prescription: Dict[str, Any],
 
     d = np.abs(_opd(np.float32) - _opd(np.float64))
     max_waves = float(d.max() / wavelength)
+
+    field_rel = 0.0
+    n_fc = int(field_check_n)
+    if n_fc > 0:
+        # A/B with the beam filling the aperture.  Default dx sized so the
+        # aperture spans ~80% of the grid; pass field_check_dx= to
+        # reproduce the production sampling regime instead.
+        dx_fc = (float(field_check_dx) if field_check_dx
+                 else float(ap) / (0.8 * n_fc))
+        xs = (np.arange(n_fc) - n_fc / 2) * dx_fc
+        Xf, Yf = np.meshgrid(xs, xs)
+        w_beam = float(ap) / 3.0
+        E_fc = np.exp(-(Xf**2 + Yf**2) / w_beam**2).astype(np.complex64)
+        E64 = apply_real_lens(E_fc.copy(), prescription=prescription,
+                              wavelength=wavelength, dx=dx_fc,
+                              sag_dtype=np.float64)
+        E32 = apply_real_lens(E_fc.copy(), prescription=prescription,
+                              wavelength=wavelength, dx=dx_fc,
+                              sag_dtype=np.float32)
+        m = float(np.abs(E64).max())
+        if m > 0:
+            field_rel = float(np.abs(E32 - E64).max() / m)
+
     return {
         'max_opd_error_waves': max_waves,
         'rms_opd_error_waves': float(np.sqrt(np.mean(d ** 2)) / wavelength),
         'max_opd_error_nm': float(d.max() * 1e9),
+        'max_field_rel_error': field_rel,
         'aperture_m': float(ap),
-        'ok': bool(max_waves < 0.02),   # < lambda/50
+        'ok': bool(max_waves < 0.02
+                   and field_rel < float(max_field_rel_error)),
     }
 
 
@@ -737,8 +785,29 @@ def apply_real_lens(
     _sag_real = _resolve_sag_real(sag_dtype)
     x = ((xp.arange(Nx, dtype=_sag_real) - Nx / 2) * dx).astype(_sag_real, copy=False)
     y = ((xp.arange(Ny, dtype=_sag_real) - Ny / 2) * dy).astype(_sag_real, copy=False)
-    X, Y = xp.meshgrid(x, y)
-    h_sq_axis = X ** 2 + Y ** 2  # axis-centered distance, used for stop aperture
+    # Row-band (chunked) mode defers the full X/Y/h_sq_axis meshgrids: the
+    # banded phase screens compute ``x2[j] + y2[i]`` per band (element-
+    # identical to a slice of ``X**2 + Y**2``), so the three full-grid
+    # float arrays (~26 GB at N=32768) never allocate unless a surface
+    # falls through to the whole-grid path (decenter/tilt/slant/stop/...)
+    # or the Seidel block needs them -- ``_ensure_full_grids`` builds them
+    # on first such use.
+    _chunk_grids = (sag_chunk_rows is not None and int(sag_chunk_rows) > 0
+                    and xp is np)
+    if _chunk_grids:
+        X = Y = h_sq_axis = None
+        _x_sq = x ** 2
+        _y_sq = y ** 2
+    else:
+        X, Y = xp.meshgrid(x, y)
+        h_sq_axis = X ** 2 + Y ** 2  # axis-centered distance, used for stop aperture
+
+    def _ensure_full_grids():
+        nonlocal X, Y, h_sq_axis
+        if X is None:
+            X, Y = xp.meshgrid(x, y)
+            h_sq_axis = X ** 2 + Y ** 2
+        return X, Y, h_sq_axis
 
     # Preserve the caller's complex dtype (complex128 or complex64).
     # The numexpr ``out=E`` path below evaluates the phase screen
@@ -769,8 +838,17 @@ def apply_real_lens(
     # v4.13.2 (audit C-P1-4): dtype-aware zero to preserve complex64
     # E (the ``0.0 + 0.0j`` literal silently upcast to complex128).
     if aperture is not None and stop_index is None:
-        E = xp.where(h_sq_axis <= (aperture / 2) ** 2, E,
-                     xp.zeros((), dtype=E.dtype))
+        if _chunk_grids:
+            _r_ap_sq = (aperture / 2) ** 2
+            _cr = int(sag_chunk_rows)
+            for _r0 in range(0, Ny, _cr):
+                _r1 = min(Ny, _r0 + _cr)
+                _h_b = _x_sq[None, :] + _y_sq[_r0:_r1, None]
+                E[_r0:_r1] = xp.where(_h_b <= _r_ap_sq, E[_r0:_r1],
+                                      xp.zeros((), dtype=E.dtype))
+        else:
+            E = xp.where(h_sq_axis <= (aperture / 2) ** 2, E,
+                         xp.zeros((), dtype=E.dtype))
 
     # Resolve glass names once.  Use complex form so we can recover kappa for
     # absorption while still having the real part for geometry/Snell.
@@ -831,7 +909,9 @@ def apply_real_lens(
                        and _ensure_numexpr_loaded())
             for r0 in range(0, Ny, cr):
                 r1 = min(Ny, r0 + cr)
-                sag_b = _surface_sag_general(h_sq_axis[r0:r1], R, kc, asph)
+                _h_b = (_x_sq[None, :] + _y_sq[r0:r1, None]
+                        if h_sq_axis is None else h_sq_axis[r0:r1])
+                sag_b = _surface_sag_general(_h_b, R, kc, asph)
                 opd_b = (n2r - n1r) * sag_b
                 if bool(np.any(np.isnan(opd_b))):
                     opd_b = np.where(np.isnan(opd_b), 0.0, opd_b)
@@ -851,6 +931,10 @@ def apply_real_lens(
                     E, thicknesses[i], wavelength, n2r, n2c.imag,
                     dx, dy, bandlimit, wave_propagator, absorption, k0, xp)
             continue
+
+        # Whole-grid path from here on -- build the deferred meshgrids on
+        # first use (no-op when they already exist).
+        X, Y, h_sq_axis = _ensure_full_grids()
 
         # ---- Decenter --------------------------------------------------
         # v5.2 (ROADMAP v5.1 off-axis conic in surface frame;
@@ -1303,6 +1387,7 @@ def apply_real_lens(
                 # coeffs came from a CPU lstsq so scalar-broadcast
                 # them into xp.  Final phase screen multiplies E on
                 # the target device.
+                X, Y, h_sq_axis = _ensure_full_grids()
                 rho_map_sq = h_sq_axis / (r_pupil ** 2)
                 corr_map = xp.zeros_like(rho_map_sq)
                 for p, c in zip(even_powers, coeffs):
