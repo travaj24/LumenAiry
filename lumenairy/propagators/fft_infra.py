@@ -1165,11 +1165,26 @@ def _clear_local_asm_caches() -> None:
 
     Public API users should call :func:`clear_asm_caches` instead so
     every sibling cache is drained in the same operation.
+
+    v5.17.1 (audit P3-55): the two pyFFTW structures are cleared under
+    ``_PYFFTW_PLAN_LOCK`` -- the lock that serialises every other
+    mutation of them (``_get_or_make_plan``, ``_handle_pyfftw_failure``,
+    ``reset_fft_backend`` per the v5.4.6 P3-14 fix).  Clearing them
+    under ``_ASM_CACHE_LOCK`` let this clearer empty the plan cache
+    between ``_get_or_make_plan``'s membership check and its indexing
+    (both performed while HOLDING the plan lock), raising an uncaught
+    ``KeyError`` out of ``_fft2`` in a concurrent clear.  The two locks
+    are acquired SEQUENTIALLY (never nested) so no lock order is
+    established with any other holder (``restore_fft_state`` ->
+    ``set_fft_plan_cache_size`` takes the plan lock alone;
+    ``reset_fft_backend`` releases it before calling
+    ``clear_asm_caches``).
     """
     with _ASM_CACHE_LOCK:
         _FREQ_GRID_CACHE.clear()
         _BANDLIMIT_CACHE.clear()
         _H_CACHE.clear()
+    with _PYFFTW_PLAN_LOCK:
         _PYFFTW_PLAN_CACHE.clear()
         _PYFFTW_BAD_SHAPES.clear()
 

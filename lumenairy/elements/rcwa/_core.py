@@ -7,6 +7,7 @@ import contextlib
 import functools
 import threading
 import warnings
+from collections import OrderedDict
 from typing import Optional
 
 import numpy as np
@@ -2166,7 +2167,24 @@ def _jax_eig_stable():
 # the same superstrate / substrate / spacer recurs across a stack and across
 # a wavelength or angle sweep.  Guarded by a Lock for thread safety; cleared
 # via the library cache registry.
-_HOMOG_CACHE: dict = {}
+#
+# v5.17.1 (audit P2-16/P2-17): bounded LRU OrderedDict (was a plain unbounded
+# dict).  The key embeds (wl, theta, phi), so every point of
+# ``solve_vs_wavelength`` / an angle sweep minted 2 permanent entries, each
+# holding dense (2N, 2N) complex W and V (~10.7 MB/entry at nox=noy=8):
+# a 500-wavelength sweep retained ~10.7 GB for the life of the process.
+# Bound rationale: one ``RCWAStack.solve`` touches exactly 2 entries
+# (sup + sub), so 32 keeps the last 16 (wavelength, angle) source
+# configurations hot -- repeated re-solves of the same geometry (optimizer
+# loops, symmetry A/B checks) still hit -- while capping worst-case
+# retention at ~32 x entry (e.g. ~342 MB at nox=noy=8).  Same
+# move_to_end/popitem pattern as ``_H_CACHE`` (propagators/fft_infra.py)
+# and the v4.12.2 LRU conversions.  Eviction only drops the dict's
+# reference; the value tuple (W, V, kz) held by any in-flight caller is
+# never mutated, and a post-eviction recompute is a pure function of
+# (Kx, Ky, eps) so it returns byte-identical arrays.
+_HOMOG_CACHE: 'OrderedDict[tuple, tuple]' = OrderedDict()
+_HOMOG_CACHE_SIZE = 32
 _HOMOG_LOCK = threading.Lock()
 
 
@@ -2181,11 +2199,16 @@ def _clear_rcwa_caches() -> None:
 def _cached_homogeneous_eigenmodes(eps, Kx, Ky, key):
     with _HOMOG_LOCK:
         hit = _HOMOG_CACHE.get(key)
+        if hit is not None:
+            _HOMOG_CACHE.move_to_end(key)
     if hit is not None:
         return hit
     res = _homogeneous_eigenmodes(Kx, Ky, eps)
     with _HOMOG_LOCK:
         _HOMOG_CACHE[key] = res
+        _HOMOG_CACHE.move_to_end(key)
+        while len(_HOMOG_CACHE) > _HOMOG_CACHE_SIZE:
+            _HOMOG_CACHE.popitem(last=False)
     return res
 
 
