@@ -184,6 +184,32 @@ register_wave_propagator('asymptotic', _wave_asymptotic)
 # Finite-difference gradient helper
 # =========================================================================
 
+def _fd_bounds_arrays(
+    bounds: Optional[Sequence[Optional[Tuple[float, float]]]],
+    n: int,
+) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """v5.17.x (AUDIT_V5_17_0 P3-47): normalise a driver-style bounds
+    list (``[(lb, ub) or None, ...]`` with optional ``None`` endpoints)
+    to a ``(lb, ub)`` pair of float64 arrays with ``+/-inf`` for the
+    unbounded sides.  Returns ``None`` when ``bounds`` is ``None`` so
+    callers can skip the clipping path entirely (byte-identical legacy
+    behaviour)."""
+    if bounds is None:
+        return None
+    lb = np.full(n, -np.inf, dtype=np.float64)
+    ub = np.full(n, +np.inf, dtype=np.float64)
+    for i, b in enumerate(bounds):
+        if i >= n:
+            break
+        if b is None:
+            continue
+        if b[0] is not None:
+            lb[i] = float(b[0])
+        if b[1] is not None:
+            ub[i] = float(b[1])
+    return lb, ub
+
+
 def _fd_grad_pure(
     f: Callable,
     x: np.ndarray,
@@ -192,6 +218,7 @@ def _fd_grad_pure(
     f0: Optional[float] = None,
     scheme: str = 'central',
     validate_f0: bool = False,
+    bounds: Optional[Sequence[Optional[Tuple[float, float]]]] = None,
 ) -> np.ndarray:
     """Finite-difference gradient of a scalar callable ``f(x)``.
 
@@ -262,6 +289,17 @@ def _fd_grad_pure(
         ``f`` call, which exactly cancels the saving from skipping
         the centre evaluation.  Useful for debugging stale-cache
         bugs in caller code.
+    bounds : list of (lower, upper) tuples, optional
+        v5.17.x (AUDIT_V5_17_0 P3-47): box constraints for the FD
+        stencil, in the driver's bounds format (per-parameter
+        2-tuples; ``None`` entries / endpoints mean unbounded).  When
+        supplied, perturbed evaluation points are kept INSIDE the box
+        (matching scipy's internal 2-point numdiff): a stencil leg
+        that would cross a bound is clipped to it and the difference
+        quotient uses the actual (shrunken) span; if a variable is
+        pinned exactly at a bound, a one-sided difference pointing
+        into the box is used instead.  ``None`` (default) preserves
+        the historical unclipped stencil byte-for-byte.
 
     Returns
     -------
@@ -279,16 +317,37 @@ def _fd_grad_pure(
         scale_floor = np.broadcast_to(
             np.asarray(scale_floor, dtype=np.float64), (N,))
     g = np.zeros(N, dtype=np.float64)
+    # v5.17.x (AUDIT_V5_17_0 P3-47): normalised (lb, ub) arrays for
+    # stencil clipping; None => legacy unclipped behaviour.
+    lb_ub = _fd_bounds_arrays(bounds, N)
     if scheme == 'central':
         for i in range(N):
             step = eps * max(abs(x[i]), float(scale_floor[i]))
+            hi = x[i] + step
+            lo = x[i] - step
+            clipped = False
+            if lb_ub is not None:
+                lb, ub = lb_ub
+                if hi > ub[i]:
+                    hi = ub[i]
+                    clipped = True
+                if lo < lb[i]:
+                    lo = lb[i]
+                    clipped = True
+            if clipped and not (hi > lo):
+                # Degenerate box (lb == ub): no room to difference.
+                g[i] = 0.0
+                continue
             xp_step = x.copy()
             xm_step = x.copy()
-            xp_step[i] = x[i] + step
-            xm_step[i] = x[i] - step
+            xp_step[i] = hi
+            xm_step[i] = lo
             fp = float(f(xp_step))
             fm = float(f(xm_step))
-            g[i] = (fp - fm) / (2.0 * step)
+            # Use the actual (possibly shrunken) span only when a
+            # clip occurred so the unclipped path stays byte-identical
+            # with the historical (fp - fm) / (2 * step).
+            g[i] = (fp - fm) / ((hi - lo) if clipped else (2.0 * step))
     else:  # forward
         if f0 is None:
             f0 = float(f(x))
@@ -307,8 +366,35 @@ def _fd_grad_pure(
                     f"responsible for the f0 == f(x) invariant.")
         for i in range(N):
             step = eps * max(abs(x[i]), float(scale_floor[i]))
+            hi = x[i] + step
+            if lb_ub is not None and hi > lb_ub[1][i]:
+                # v5.17.x (AUDIT_V5_17_0 P3-47): the forward step
+                # would cross the upper bound.  Clip it to the bound
+                # (shrunken forward step) or, if x[i] is pinned
+                # exactly at the bound, switch to a one-sided
+                # BACKWARD difference pointing into the box -- scipy
+                # _numdiff style.  (At a lower bound the forward step
+                # already points into the box; nothing to do.)
+                lb, ub = lb_ub
+                hi = ub[i]
+                if hi > x[i]:
+                    xp_step = x.copy()
+                    xp_step[i] = hi
+                    fp = float(f(xp_step))
+                    g[i] = (fp - f0) / (hi - x[i])
+                else:
+                    lo = max(x[i] - step, lb[i])
+                    if not (lo < x[i]):
+                        # Degenerate box (lb == ub): no room at all.
+                        g[i] = 0.0
+                        continue
+                    xm_step = x.copy()
+                    xm_step[i] = lo
+                    fm = float(f(xm_step))
+                    g[i] = (f0 - fm) / (x[i] - lo)
+                continue
             xp_step = x.copy()
-            xp_step[i] = x[i] + step
+            xp_step[i] = hi
             fp = float(f(xp_step))
             g[i] = (fp - f0) / step
     return g
@@ -836,9 +922,14 @@ def design_optimize(parameterization: Any,
             _, ctx_ = evaluate(xv)
             return sum(t.evaluate(ctx_) for t in terms)
 
+        # v5.17.x (AUDIT_V5_17_0 P3-47): forward the parameterization
+        # bounds so the FD stencil never evaluates the merit outside
+        # the box (scipy's own 2-point numdiff clips; the library FD
+        # helpers did not, so a variable pinned at a bound produced a
+        # spurious sentinel-driven gradient component).
         return _fd_grad_pure(_f_terms, x, eps=eps,
                              scale_floor=scale_floor, f0=f0,
-                             scheme=scheme)
+                             scheme=scheme, bounds=bounds)
 
     def _merit_jac_auto(x):
         # Analytic part: sum gradient_at_x for JAX terms.
@@ -1149,10 +1240,14 @@ def design_optimize(parameterization: Any,
                 # when available; otherwise FD the full merit.
                 if final_jac is not None:
                     return np.asarray(final_jac(xv), dtype=np.float64)
+                # v5.17.x (AUDIT_V5_17_0 P3-47): clip the FD stencil
+                # to the parameterization bounds (trust-ncg itself
+                # receives no bounds, but an x0 placed on a physical
+                # wall must not push the merit outside the box).
                 return _fd_grad_pure(
                     merit_fn,
                     np.asarray(xv, dtype=np.float64),
-                    eps=1e-6, scheme='central')
+                    eps=1e-6, scheme='central', bounds=bounds)
 
             def _hess_for_newton(xv):
                 # FD-Hessian = FD-Jacobian-of-FD-gradient.  Central
@@ -1169,15 +1264,36 @@ def design_optimize(parameterization: Any,
                 # is already O(h) at h=1e-6, so the outer step should
                 # be ~1e-4 for a balanced O(h)+O(h^2) trade-off.
                 eps_outer = 1e-4
+                # v5.17.x (AUDIT_V5_17_0 P3-47): clip the outer
+                # central stencil to the parameterization bounds so a
+                # variable sitting on a physical wall never drives a
+                # merit evaluation outside the box.  Unclipped legs
+                # keep the historical (gp - gm) / (2 * step) quotient
+                # byte-for-byte.
+                _lb_ub = _fd_bounds_arrays(bounds, Nv)
                 for i in range(Nv):
                     step = eps_outer * max(abs(x_arr[i]), 1e-6)
+                    hi = x_arr[i] + step
+                    lo = x_arr[i] - step
+                    clipped = False
+                    if _lb_ub is not None:
+                        if hi > _lb_ub[1][i]:
+                            hi = _lb_ub[1][i]
+                            clipped = True
+                        if lo < _lb_ub[0][i]:
+                            lo = _lb_ub[0][i]
+                            clipped = True
+                    if clipped and not (hi > lo):
+                        # Degenerate box (lb == ub): leave column 0.
+                        continue
                     xp_step = x_arr.copy()
-                    xp_step[i] = x_arr[i] + step
+                    xp_step[i] = hi
                     xm_step = x_arr.copy()
-                    xm_step[i] = x_arr[i] - step
+                    xm_step[i] = lo
                     gp = _grad_for_newton(xp_step)
                     gm = _grad_for_newton(xm_step)
-                    H[:, i] = (gp - gm) / (2.0 * step)
+                    H[:, i] = (gp - gm) / ((hi - lo) if clipped
+                                           else (2.0 * step))
                 # Symmetrise to suppress FD-asymmetry noise; the true
                 # Hessian is symmetric.
                 H = 0.5 * (H + H.T)
@@ -1225,10 +1341,21 @@ def design_optimize(parameterization: Any,
                     f"silence this warning.",
                     UserWarning, stacklevel=2,
                 )
+            # v5.17.x (AUDIT_V5_17_0 wave-5 follow-up): TNC does not
+            # take a 'maxiter' option -- its evaluation budget is
+            # 'maxfun'.  Pre-fix scipy warned 'Unknown solver
+            # options: maxiter' and ran with its DEFAULT budget, so
+            # ``max_iter`` was silently ineffective for TNC.  Map the
+            # option name per-method.
+            if isinstance(method, str) and method.lower() == 'tnc':
+                _options: Dict[str, Any] = {
+                    'maxfun': max_iter, 'disp': verbose}
+            else:
+                _options = {'maxiter': max_iter, 'disp': verbose}
             _minimize_kwargs: Dict[str, Any] = {
                 'jac': final_jac,
                 'bounds': bounds if _supports_bounds else None,
-                'options': {'maxiter': max_iter, 'disp': verbose},
+                'options': _options,
                 'callback': _scipy_cb_minimize,
             }
             if _scipy_constraints:

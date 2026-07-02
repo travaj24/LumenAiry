@@ -1335,6 +1335,14 @@ class MaxFNumberMerit(MeritTerm):
         if not ctx_is_valid(ctx, 'efl'):
             return self.weight
         ap = ctx.prescription.get('aperture_diameter', 1e-3)
+        # v5.17.x (AUDIT_V5_17_0 P3-48): ``aperture_diameter`` present
+        # with value ``None`` is a legal "no aperture" prescription
+        # state (every sibling merit None-guards it); dict.get's
+        # default does NOT fire for an existing None, and ``None > 0``
+        # raised TypeError out of scipy.minimize, aborting the run.
+        # Route None to the existing ap <= 0 fallback penalty below.
+        if ap is None:
+            ap = 0.0
         fnum = abs(ctx.efl) / ap if ap > 0 else 1e9
         excess = max(0.0, fnum - self.max_f_number)
         return self.weight * excess * excess

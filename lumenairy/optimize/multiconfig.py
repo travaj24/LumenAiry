@@ -302,7 +302,7 @@ def beam_expander_prescription(M: float, f_objective: float, *,
     separation is ``f_obj + f_eye`` with ``f_eye = -f_obj / M``, but
     that ignores finite-thickness principal-plane offsets.  This
     function solves numerically for the air-gap that drives the
-    system ABCD matrix's B element to zero, giving a genuinely
+    system ABCD matrix's C element to zero, giving a genuinely
     afocal output for the thick singlets it generates.
 
     Parameters
@@ -311,10 +311,12 @@ def beam_expander_prescription(M: float, f_objective: float, *,
         Expansion ratio (> 1 for expansion, < 1 for compression).
     f_objective : float
         Focal length of the positive (output) lens [m].
+    wavelength : float
+        Design wavelength used to compute the thick-lens correction.
+        Required, keyword-only (the 550e-9 default was deprecated in
+        v4.7 and removed in v5.0).
     glass : str
     aperture : float
-    wavelength : float, default 550e-9
-        Design wavelength used to compute the thick-lens correction.
 
     Returns
     -------
@@ -380,7 +382,7 @@ def keplerian_telescope(f_objective: float, f_eyepiece: float, *,
 
     The classical thin-lens separation is ``f_obj + f_eye``, but thick
     singlets need a principal-plane correction.  This function solves
-    numerically for the air gap that zeros the system ABCD's B
+    numerically for the air gap that zeros the system ABCD's C
     element, delivering a truly afocal output at the design
     wavelength regardless of lens thickness.
 
@@ -388,10 +390,12 @@ def keplerian_telescope(f_objective: float, f_eyepiece: float, *,
     ----------
     f_objective : float [m]
     f_eyepiece : float [m]
+    wavelength : float
+        Design wavelength used to compute the thick-lens correction.
+        Required, keyword-only (the 550e-9 default was deprecated in
+        v4.7 and removed in v5.0).
     glass : str
     aperture : float [m]
-    wavelength : float, default 550e-9
-        Design wavelength used to compute the thick-lens correction.
 
     Returns
     -------

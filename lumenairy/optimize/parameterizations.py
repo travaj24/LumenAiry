@@ -135,6 +135,35 @@ class DesignParameterization:
     scale_floor: Optional[Any] = None
 
     def __post_init__(self) -> None:
+        # v5.17.x (AUDIT_V5_17_0 P3-50): mirror the v4.14 (audit P3
+        # #19) duplicate-free_vars guard from
+        # MultiPrescriptionParameterization.  Duplicate path entries
+        # silently get separate ``x[i]`` slots that all write to the
+        # same prescription field: ``build(x)`` applies them in order
+        # so the last write wins, the earlier slot becomes a dead
+        # variable, and the optimiser's FD gradient is split
+        # arbitrarily across the duplicates -- a quietly-wrong
+        # over-parameterised design.  Catch it at construction time.
+        seen_keys: Dict[Tuple[Any, ...], int] = {}
+        duplicates: List[Tuple[int, int, Tuple[Any, ...]]] = []
+        for i, fv in enumerate(self.free_vars):
+            # Normalise: cast integer path components to plain int so
+            # numpy int / Python int compare equal in the dict key.
+            key = tuple(
+                int(p) if isinstance(p, (int, np.integer)) else p
+                for p in fv)
+            if key in seen_keys:
+                duplicates.append((seen_keys[key], i, key))
+            else:
+                seen_keys[key] = i
+        if duplicates:
+            dup_lines = '\n  '.join(
+                f"slots x[{a}] and x[{b}] both target {k!r}"
+                for a, b, k in duplicates)
+            raise ValueError(
+                f"DesignParameterization: duplicate path entries in "
+                f"free_vars -- each prescription field can be a free "
+                f"variable at most once:\n  {dup_lines}")
         if self.bounds is not None:
             if len(self.bounds) != len(self.free_vars):
                 raise ValueError(
