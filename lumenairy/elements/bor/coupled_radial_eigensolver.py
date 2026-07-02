@@ -31,8 +31,10 @@ the accuracy follow-on, but the FD form already matches the oracle to ~1e-4..1e-
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
-from scipy.linalg import eig
+from scipy.linalg import eig, lu_factor, lu_solve
 
 
 def _fd_grid(Rbig, N):
@@ -114,7 +116,25 @@ def _assemble_staggered(m, Rbig, N, eps_profile, k0):
     A_n2f = Dn2f + diag(1.0 / r_f) @ An2f       # grad-like (d/dr+1/r): nodes -> faces
     A_f2n = Df2n + diag(1.0 / r_n) @ Af2n       # div-like:             faces -> nodes
     Lm = diag(1.0 / r_n) @ Df2n @ diag(r_f) @ Dn2f - diag(mrn ** 2)   # node Laplacian
-    Lei = np.linalg.inv(Lm + k0 ** 2 * diag(eps_node))
+    # E_z-elimination operand.  At a LONGITUDINAL resonance (k0^2 eps hits an
+    # eigenvalue of -Lm) this matrix is near-singular and the inv() below --
+    # which feeds Phi_r/Phi_p into BOTH K and B -- silently loses accuracy
+    # (measured: cascade energy error jumps ~1e-14 -> ~1e-5..1e-4 in a
+    # ~1e-11-relative k0 window).  Cheap LU pivot-ratio check + warn (audit
+    # P3-13); the inv() itself is unchanged so off-resonance results are
+    # byte-identical.
+    Mz = Lm + k0 ** 2 * diag(eps_node)
+    _du = np.abs(np.diag(lu_factor(Mz)[0]))
+    if _du.size and _du.min() <= 1e-12 * _du.max():
+        warnings.warn(
+            f"_assemble_staggered: the E_z-elimination operator "
+            f"Lm + k0^2*eps is near-singular (LU pivot ratio "
+            f"{_du.min() / _du.max():.2e}) -- k0={k0:.10g} sits at a "
+            f"longitudinal resonance of this (N={N}, Rbig={Rbig}) "
+            f"discretization.  The modal basis loses ~8-10 digits here; "
+            f"detune k0 by ~1e-8 relative (or change N) to restore "
+            f"machine-precision energy.", stacklevel=2)
+    Lei = np.linalg.inv(Mz)
     Phi_r = Lei @ (1j * A_f2n)                  # E_r[faces]  -> Phi[nodes]
     Phi_p = Lei @ (-diag(mrn))                  # E_phi[nodes]-> Phi[nodes]
     I = np.eye(N)
@@ -133,20 +153,27 @@ def _fast_geig(K, B):
     (which it is here: ``B = I + Phi-coupling``, a mass-like matrix).
 
     Symmetric diagonal equilibration first (so the fold's conditioning matches
-    the QZ's), then ``eig(Be^{-1} Ke)``; falls back to the robust generalized QZ
-    if ``B`` is singular (a longitudinal resonance) -- so the speed is free and
-    the physics is never compromised.  Eigenvalues reproduce the QZ spectrum to
-    ~1e-7 (the inaccuracy lands only in the deep-evanescent branch that decays
-    in the cascade; the physical guided modes + machine-precision energy are
-    unchanged -- validated)."""
+    the QZ's), then ``eig(Be^{-1} Ke)``.  An LU pivot-ratio guard (the pmm
+    ``_core._fast_geig`` pattern, audit P3-13) routes NEAR-singular ``B`` --
+    a longitudinal resonance -- to the robust generalized QZ ``eig(Ke, Be)``;
+    LAPACK's ``solve`` raises only on an EXACT zero pivot, so an exception
+    hook alone never fires there.  Note the guard protects only this fold: at
+    an exact resonance the upstream ``Lei`` inversion in
+    ``_assemble_staggered`` has already lost accuracy (it warns; detune k0 to
+    restore machine precision).  Off-resonance, eigenvalues reproduce the QZ
+    spectrum to ~1e-7 (the inaccuracy lands only in the deep-evanescent
+    branch that decays in the cascade; the physical guided modes +
+    machine-precision energy are unchanged -- validated)."""
     d = np.sqrt(np.abs(np.diag(B)))
     d = np.where(d > 0, 1.0 / d, 1.0)
     Ke = (d[:, None] * K) * d[None, :]
     Be = (d[:, None] * B) * d[None, :]
-    try:
-        q2, z = eig(np.linalg.solve(Be, Ke))
-    except np.linalg.LinAlgError:
-        q2, z = eig(Ke, Be)                       # singular B -> robust QZ
+    lu, piv = lu_factor(Be)
+    du = np.abs(np.diag(lu))
+    if du.size and du.min() <= 1e-12 * du.max():   # near-singular -> robust QZ
+        q2, z = eig(Ke, Be)
+    else:
+        q2, z = eig(lu_solve((lu, piv), Ke))
     return q2, d[:, None] * z
 
 

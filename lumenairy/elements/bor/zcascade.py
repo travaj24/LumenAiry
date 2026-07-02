@@ -46,7 +46,15 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
     ``W = [E_r(faces); E_phi(nodes)]``; the DUAL Yee H-placement puts
     ``h_r`` on NODES (with E_phi) and ``h_phi`` on FACES (with E_r) so the
     z-Poynting flux ``E_r h_phi* (faces) - E_phi h_r* (nodes)`` pairs WITHOUT
-    interpolation -> machine-precision energy conservation in the cascade."""
+    interpolation -> machine-precision energy conservation in the cascade.
+
+    Grid bookkeeping (audit P3-14): rows ``[:N]`` of ``W``/``V`` live on the
+    FACE grid ``r_face = (i+1)h`` and rows ``[N:]`` on the NODE grid
+    ``r = (i+1/2)h``.  Both grids and their per-half ``r*dr`` quadrature
+    weights are returned (``r``/``wq_node`` for the node half, ``r_face``/
+    ``wq_face`` for the face half); the legacy ``wq`` key equals ``wq_node``
+    and must NOT be applied to the face rows (an O(h) half-cell-shift
+    error)."""
     op = _assemble_staggered(m, Rbig, N, eps_profile, k0)
     Lei, A_f2n, Dn2f = op["Lei"], op["A_f2n"], op["Dn2f"]
     mrn = op["mrn"]
@@ -90,7 +98,10 @@ def _layer_modes_staggered(m, Rbig, N, eps_profile, k0):
         V[:N, j] = hr * s
         V[N:, j] = hphi * s
         qf[j] = qj
-    return dict(W=W, V=V, q=qf, r=r_n, wq=(r_n * h).astype(complex), N=N)
+    wq_node = (r_n * h).astype(complex)
+    wq_face = (r_f * h).astype(complex)
+    return dict(W=W, V=V, q=qf, r=r_n, wq=wq_node, N=N,
+                r_face=r_f, wq_node=wq_node, wq_face=wq_face)
 
 
 def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
@@ -105,6 +116,15 @@ def layer_modes(m, Rbig, N, eps_profile, k0, *, R_pml=None, sigma_max=5.0,
     to an open PML boundary.  ``staggered=True`` uses the Yee div-conforming
     discretization (the spurious-mode CURE -> machine-precision cascade energy);
     the closed Dirichlet wall is built into its node->face stencil.
+
+    .. note:: (audit P3-14) With ``staggered=True`` the basis is TWO-grid:
+       rows ``[:N]`` of ``W``/``V`` (``E_r``, ``h_phi``) live on the FACE grid
+       and rows ``[N:]`` (``E_phi``, ``h_r``) on the NODE grid.  ``r``/``wq``
+       describe the NODE grid only; the extra keys ``r_face``/``wq_face`` (and
+       the alias ``wq_node = wq``) carry the face grid + per-half quadrature.
+       Flux/far-field quadrature must weight the face rows by ``wq_face`` and
+       the node rows by ``wq_node`` (a single shared ``wq`` is only correct
+       for ``staggered=False``, where all rows share one cell-centered grid).
     """
     if staggered:
         return _layer_modes_staggered(m, Rbig, N, eps_profile, k0)

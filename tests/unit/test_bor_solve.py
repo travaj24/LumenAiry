@@ -3,12 +3,18 @@
 - ENERGY monitor: a structured (ring-grating) stack conserves R+T to the FD
   spurious-mode floor (~1-4%; does NOT improve with N -> the div-conforming SEM
   is the high-accuracy path, also the gate for the production library port).
-- GATE 4a (the Cartesian-limit intermediate, rigorous): a uniform interface at
-  m!=0 reflects each radial mode with EXACTLY the planar TE/TM Fresnel coefficient
-  at that mode's local oblique angle theta = arcsin(gamma/(sqrt(eps) k0)) -- the
-  cylindrical->planar correspondence, validated against the closed-form Fresnel
-  (independent of both solvers).  This is the load-bearing per-mode physics; the
-  full multi-order ring-grating-vs-pmm_efficiency_1d test is SEM-scoped.
+- GATE 4a (the Cartesian-limit intermediate): a uniform interface at m!=0
+  reflects each radial mode with the planar Fresnel coefficient OF ITS OWN
+  POLARIZATION at that mode's local oblique angle
+  theta = arcsin(gamma/(sqrt(eps) k0)) -- the cylindrical->planar
+  correspondence, validated against the closed-form Fresnel (independent of
+  both solvers).  Each checked mode is polarization-CLASSIFIED first (audit
+  P3-64; the earlier min-over-both-coefficients form was necessary-not-
+  sufficient -- a systematic TE/TM swap would have passed).  Scope caveat: on
+  this nodal PEC basis the TM-like modes carry O(1) relative divergence and
+  are dropped by the reldiv filter, so GATE 4a anchors the TE coefficient in
+  practice; the TM anchor (and full multi-order discrimination) lives in the
+  slower ``test_gate4.py`` grating comparison on the staggered basis.
 """
 import os
 
@@ -19,6 +25,7 @@ import numpy as np
 import pytest
 
 from lumenairy.elements.bor.bor_solve import _physical_propagating, build_layer, solve
+from lumenairy.elements.bor.coupled_radial_eigensolver import _fd_grid, _pec_wall_ops
 from lumenairy.elements.bor.zcascade import interface_smatrix
 
 pytestmark = pytest.mark.slow      # eig-heavy BOR-PMM convergence tests
@@ -47,15 +54,46 @@ def test_structured_stack_energy_floor():
     assert np.max(np.abs(res["energy"] - 1.0)) < 0.05  # within the ~4% floor
 
 
+def _pol_fraction_nodal(m, R, N, k0, eps_val, L):
+    """P_te[j] = <|E_phi|^2> / <|E_r|^2+|E_phi|^2+|E_z|^2> per mode column on
+    the nodal PEC-wall basis (the ``build_layer`` basis) -- the classifier
+    pattern of ``test_gate4._pol_fraction``, re-derived for the non-staggered
+    grid.  TE-like (azimuthal E) -> 1; TM-like (E_r, E_z in the plane of
+    incidence) -> 0.  Rebuilds the layer's E_z-elimination operators exactly
+    as ``layer_modes(wall='pec')`` assembles them."""
+    r, D, h = _fd_grid(R, N)
+    D, Lap = _pec_wall_ops(D, h, N)
+    ir = np.diag(1.0 / r)
+    mr = m * ir
+    A = D + ir
+    Lm = Lap + ir @ D - (m ** 2) * np.diag(1.0 / r ** 2)
+    Lei = np.linalg.inv(Lm + k0 ** 2 * np.diag(
+        np.full(N, eps_val, dtype=complex)))
+    wq = np.real(L["wq"])
+    Pte = np.zeros(L["W"].shape[1])
+    for j in range(L["W"].shape[1]):
+        Er, Ephi = L["W"][:N, j], L["W"][N:, j]
+        Ez = L["q"][j] * (Lei @ (1j * A @ Er - mr @ Ephi))
+        e_r = np.sum(np.abs(Er) ** 2 * wq)
+        e_p = np.sum(np.abs(Ephi) ** 2 * wq)
+        e_z = np.sum(np.abs(Ez) ** 2 * wq)
+        Pte[j] = e_p / max(e_r + e_p + e_z, 1e-300)
+    return Pte
+
+
 def test_gate4a_planar_fresnel_correspondence():
-    """GATE 4a: m!=0 uniform-interface per-mode |S11| == planar TE/TM Fresnel at
-    the mode's local oblique angle, to ~1e-3 (measured ~1e-5)."""
+    """GATE 4a: m!=0 uniform-interface per-mode |S11| == the planar Fresnel
+    coefficient of the mode's OWN polarization at its local oblique angle, to
+    ~1e-3 (measured ~1e-5).  Audit P3-64: modes are pol-classified first --
+    the old ``min(|s-rTM|, |s-rTE|)`` passed under a systematic TE/TM swap
+    (|rTE-rTM| is 0.003..0.23 here, up to 230x the tolerance)."""
     m, R, N, k0 = 1, 5.0, 300, 2.0
     e1, e2 = 4.0, 2.25
     La = build_layer(m, R, N, _uni(e1), k0)
     Lb = build_layer(m, R, N, _uni(e2), k0)
     S11 = interface_smatrix(La["W"], La["V"], Lb["W"], Lb["V"])[0]
     qa = La["q"]
+    Pte = _pol_fraction_nodal(m, R, N, k0, e1, La)
     n_checked = 0
     for j in np.where(_physical_propagating(La, k0))[0]:
         q1 = qa[j].real
@@ -69,7 +107,16 @@ def test_gate4a_planar_fresnel_correspondence():
         rTM = abs((e2 * q1 - e1 * q2) / (e2 * q1 + e1 * q2))
         rTE = abs((q1 - q2) / (q1 + q2))
         s = abs(S11[j, j])
-        assert min(abs(s - rTM), abs(s - rTE)) < 1e-3
+        # anchor against the classified polarization ONLY (test_gate4 cuts:
+        # TE-like > 0.6, TM-like < 0.4; mixed modes have no planar anchor)
+        if Pte[j] > 0.6:
+            assert abs(s - rTE) < 1e-3, \
+                f"TE-like mode {j} (P_te={Pte[j]:.2f}): |s-rTE|={abs(s-rTE):.2e}"
+        elif Pte[j] < 0.4:
+            assert abs(s - rTM) < 1e-3, \
+                f"TM-like mode {j} (P_te={Pte[j]:.2f}): |s-rTM|={abs(s-rTM):.2e}"
+        else:
+            continue
         n_checked += 1
     assert n_checked >= 5
 
