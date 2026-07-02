@@ -1706,7 +1706,16 @@ def _fft2(x):
     if _is_cupy_array(x):
         return cp.fft.fft2(x)
     shape = tuple(x.shape)
+    # v5.17.x (audit W5 P2-26 hardening): the pyFFTW path is complex-to-
+    # complex only -- a real-dtype input used to reach _get_or_make_plan,
+    # fail (ValueError), and permanently poison the bare-shape
+    # _PYFFTW_BAD_SHAPES blacklist for ALL dtypes at that shape, with a
+    # misleading "memory pressure" warning.  Gate on iscomplexobj here
+    # (and in the three sibling dispatchers) so real input routes
+    # directly to the scipy/numpy fallback -- correct result, no
+    # blacklist poisoning -- regardless of how future callers cast.
     if (USE_PYFFTW and PYFFTW_AVAILABLE
+            and np.iscomplexobj(x)
             and x.shape[0] >= FFTW_MIN_SIZE
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
@@ -1760,7 +1769,9 @@ def _ifft2(x):
     if _is_cupy_array(x):
         return cp.fft.ifft2(x)
     shape = tuple(x.shape)
+    # v5.17.x (audit W5 P2-26 hardening): complex-only gate; see _fft2.
     if (USE_PYFFTW and PYFFTW_AVAILABLE
+            and np.iscomplexobj(x)
             and x.shape[0] >= FFTW_MIN_SIZE
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
@@ -1796,7 +1807,9 @@ def _fft2_nd(x):
     if _is_cupy_array(x):
         return cp.fft.fft2(x, axes=(-2, -1))
     shape = tuple(x.shape)
+    # v5.17.x (audit W5 P2-26 hardening): complex-only gate; see _fft2.
     if (USE_PYFFTW and PYFFTW_AVAILABLE and len(shape) >= 2
+            and np.iscomplexobj(x)
             and shape[-2] >= FFTW_MIN_SIZE
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1
@@ -1828,7 +1841,9 @@ def _ifft2_nd(x):
     if _is_cupy_array(x):
         return cp.fft.ifft2(x, axes=(-2, -1))
     shape = tuple(x.shape)
+    # v5.17.x (audit W5 P2-26 hardening): complex-only gate; see _fft2.
     if (USE_PYFFTW and PYFFTW_AVAILABLE and len(shape) >= 2
+            and np.iscomplexobj(x)
             and shape[-2] >= FFTW_MIN_SIZE
             and shape not in _PYFFTW_BAD_SHAPES):
         threads = FFTW_THREADS if FFTW_THREADS > 0 else 1

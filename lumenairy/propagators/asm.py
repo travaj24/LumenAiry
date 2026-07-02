@@ -544,7 +544,21 @@ def apply_fresnel_curvature(
     Y, X = np.meshgrid(ax_y, ax_x, indexing='ij')
     r2 = X * X + Y * Y
     k = 2.0 * np.pi / wavelength
-    return E * np.exp(sign * 1j * k * r2 / (2.0 * R))
+    # v5.17.x (audit P3-51): honour dtype-follows-input.  The carrier
+    # argument ``k*r2/(2R)`` is accumulated at float64 (r2 is built from
+    # f64 grids above) and only the FINISHED phase factor is cast to
+    # E's complex dtype before the multiply -- the P2-29 f64-carrier-
+    # then-cast recipe.  Pre-fix a complex64 E was silently promoted to
+    # complex128 whenever R != 0 (while the R=0 early-return above kept
+    # complex64), contradicting the docstring's "same shape and dtype".
+    # complex128 inputs are byte-identical (astype(copy=False) no-op).
+    if np.iscomplexobj(E):
+        target_cdtype = E.dtype
+    else:
+        target_cdtype = np.dtype(np.complex128)
+    phase = np.exp(sign * 1j * k * r2 / (2.0 * R)).astype(
+        target_cdtype, copy=False)
+    return E * phase
 
 
 def angular_spectrum_propagate_batch(

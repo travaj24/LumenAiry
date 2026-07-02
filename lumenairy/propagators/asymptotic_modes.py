@@ -681,6 +681,40 @@ def gaussian_moment_table_2d(M: np.ndarray, max_total_order: int
 # Section 7 -- LG/HG decomposition utilities
 # ===========================================================================
 
+def _meshgrid_axis_step(coord: np.ndarray, name: str, fn_name: str) -> float:
+    """Grid step of a 2-D meshgrid coordinate array, robust to indexing.
+
+    v5.17.x (audit P3-53): the 2-D-meshgrid branch of
+    :func:`decompose_lg` / :func:`decompose_hg` hard-coded the
+    ``indexing='xy'`` orientation (``dx`` from ``np.diff(x, axis=1)``),
+    so an ``indexing='ij'`` meshgrid -- constant along that axis --
+    silently produced ``dx = 0``, ``da = 0`` and ALL-ZERO overlap
+    coefficients.  Detect the varying axis instead: the overlap
+    integral itself is orientation-agnostic (the modes are evaluated
+    pointwise on X, Y and the einsum sums every pixel), so only the
+    area element needs the step.  Raises when neither or both axes
+    vary (degenerate or sheared/rotated grid).
+    """
+    coord = np.asarray(coord)
+    d1 = np.diff(coord, axis=1)
+    d0 = np.diff(coord, axis=0)
+    v1 = float(np.max(np.abs(d1))) if d1.size else 0.0
+    v0 = float(np.max(np.abs(d0))) if d0.size else 0.0
+    if v1 > 0.0 and v0 == 0.0:
+        # indexing='xy' orientation (pre-fix idiom, unchanged values)
+        return float(np.mean(d1[:, 0]))
+    if v0 > 0.0 and v1 == 0.0:
+        # indexing='ij' orientation -- mirrored idiom
+        return float(np.mean(d0[0, :]))
+    raise ValueError(
+        f"{fn_name}: could not infer the grid step for {name!r} -- the "
+        f"2-D coordinate array must vary along exactly one axis (a "
+        f"rectilinear meshgrid, either indexing='xy' or indexing='ij'). "
+        f"Got per-axis variation (axis0={v0:g}, axis1={v1:g}); sheared/"
+        f"rotated or degenerate single-point grids are not supported. "
+        f"Pass 1-D coordinate axes instead if in doubt.")
+
+
 def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
                  w: float, p_max: int, ell_max: int,
                  cx: float = 0.0, cy: float = 0.0
@@ -722,8 +756,11 @@ def decompose_lg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
         if field.shape != x.shape or field.shape != y.shape:
             raise ValueError("field, x, y must have the same shape")
         X, Y = x, y
-        dx = float(np.mean(np.diff(x, axis=1)[:, 0]))
-        dy = float(np.mean(np.diff(y, axis=0)[0, :]))
+        # v5.17.x (audit P3-53): orientation-robust step (was hard-coded
+        # to indexing='xy'; an 'ij' meshgrid gave dx=0 and all-zero
+        # coefficients).  See _meshgrid_axis_step.
+        dx = _meshgrid_axis_step(x, 'x', 'decompose_lg')
+        dy = _meshgrid_axis_step(y, 'y', 'decompose_lg')
     da = abs(dx * dy)
     # 4.14.0 (perf 1B): build the conjugated LG mode stack once per
     # (p_max, ell_max, shape, w, cx, cy, dtype) signature and collapse
@@ -766,8 +803,11 @@ def decompose_hg(field: np.ndarray, x: np.ndarray, y: np.ndarray,
         if field.shape != x.shape or field.shape != y.shape:
             raise ValueError("field, x, y must have the same shape")
         X, Y = x, y
-        dx = float(np.mean(np.diff(x, axis=1)[:, 0]))
-        dy = float(np.mean(np.diff(y, axis=0)[0, :]))
+        # v5.17.x (audit P3-53): orientation-robust step (was hard-coded
+        # to indexing='xy'; an 'ij' meshgrid gave dx=0 and all-zero
+        # coefficients).  See _meshgrid_axis_step.
+        dx = _meshgrid_axis_step(x, 'x', 'decompose_hg')
+        dy = _meshgrid_axis_step(y, 'y', 'decompose_hg')
     da = abs(dx * dy)
     # 4.14.0 (perf 1B): build the conjugated HG mode stack once per
     # signature and collapse all overlaps to one ``einsum``.  See

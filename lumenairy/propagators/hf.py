@@ -198,7 +198,7 @@ def propagate_huygens_fresnel_with_opl_callable(
     wavelength: float,
     apply_van_vleck: bool = True,
     finite_diff_step: float = 1e-9,
-    chunk_output: int = 64,
+    chunk_output: Optional[int] = None,
 ) -> np.ndarray:
     """Evaluate the HF integral for a user-supplied OPL callable
     ``Phi(s1, s2)``.
@@ -211,7 +211,24 @@ def propagate_huygens_fresnel_with_opl_callable(
 
     where the cross-Hessian determinant is evaluated by central
     differences on the supplied callable.
+
+    .. deprecated:: 5.17
+        ``chunk_output`` (audit P3-57): the parameter never had any
+        effect -- evaluation has always been strictly per output pixel
+        (the outer "chunk" loop only partitioned the identical per-pixel
+        inner loop), so no value of ``chunk_output`` changed either the
+        result or the runtime.  It is now ignored with a
+        ``DeprecationWarning`` and will be removed in a future release.
+        For a genuinely chunk-vectorised HF quadrature use
+        :func:`propagate_hf_chebyshev_quadrature`.
     """
+    if chunk_output is not None:
+        warnings.warn(
+            "propagate_huygens_fresnel_with_opl_callable: chunk_output is "
+            "deprecated and has no effect (evaluation has always been "
+            "strictly per output pixel; the parameter never changed the "
+            "result or the runtime).  It will be removed in a future "
+            "release.", DeprecationWarning, stacklevel=2)
     xp = array_namespace(E_in)
 
     Ny_in, Nx_in = E_in.shape[-2], E_in.shape[-1]
@@ -247,57 +264,57 @@ def propagate_huygens_fresnel_with_opl_callable(
     flat_y = xp.reshape(xp.broadcast_to(output_grid_y[:, None],
                                         (Ny_out, Nx_out)), (-1,))
 
-    for start in range(0, n_out, chunk_output):
-        end = min(start + chunk_output, n_out)
-        for k in range(start, end):
-            s2x = float(flat_x[k]) if hasattr(flat_x[k], '__float__') else flat_x[k]
-            s2y = float(flat_y[k]) if hasattr(flat_y[k], '__float__') else flat_y[k]
+    # v5.17.x (audit P3-57): the former chunk_output outer loop was dead
+    # code -- it only partitioned this identical per-pixel loop.
+    for k in range(n_out):
+        s2x = float(flat_x[k]) if hasattr(flat_x[k], '__float__') else flat_x[k]
+        s2y = float(flat_y[k]) if hasattr(flat_y[k], '__float__') else flat_y[k]
 
-            phi = opl_fn(S1X, S1Y, s2x, s2y)
+        phi = opl_fn(S1X, S1Y, s2x, s2y)
 
-            if apply_van_vleck:
-                pxx = (
-                    opl_fn(S1X + h, S1Y, s2x + h, s2y)
-                    - opl_fn(S1X + h, S1Y, s2x - h, s2y)
-                    - opl_fn(S1X - h, S1Y, s2x + h, s2y)
-                    + opl_fn(S1X - h, S1Y, s2x - h, s2y)
-                ) / (4 * h * h)
-                pyy = (
-                    opl_fn(S1X, S1Y + h, s2x, s2y + h)
-                    - opl_fn(S1X, S1Y + h, s2x, s2y - h)
-                    - opl_fn(S1X, S1Y - h, s2x, s2y + h)
-                    + opl_fn(S1X, S1Y - h, s2x, s2y - h)
-                ) / (4 * h * h)
-                pxy = (
-                    opl_fn(S1X + h, S1Y, s2x, s2y + h)
-                    - opl_fn(S1X + h, S1Y, s2x, s2y - h)
-                    - opl_fn(S1X - h, S1Y, s2x, s2y + h)
-                    + opl_fn(S1X - h, S1Y, s2x, s2y - h)
-                ) / (4 * h * h)
-                pyx = (
-                    opl_fn(S1X, S1Y + h, s2x + h, s2y)
-                    - opl_fn(S1X, S1Y + h, s2x - h, s2y)
-                    - opl_fn(S1X, S1Y - h, s2x + h, s2y)
-                    + opl_fn(S1X, S1Y - h, s2x - h, s2y)
-                ) / (4 * h * h)
-                det = pxx * pyy - pxy * pyx
-                density = xp.sqrt(xp.abs(det))
-            else:
-                density = 1.0
+        if apply_van_vleck:
+            pxx = (
+                opl_fn(S1X + h, S1Y, s2x + h, s2y)
+                - opl_fn(S1X + h, S1Y, s2x - h, s2y)
+                - opl_fn(S1X - h, S1Y, s2x + h, s2y)
+                + opl_fn(S1X - h, S1Y, s2x - h, s2y)
+            ) / (4 * h * h)
+            pyy = (
+                opl_fn(S1X, S1Y + h, s2x, s2y + h)
+                - opl_fn(S1X, S1Y + h, s2x, s2y - h)
+                - opl_fn(S1X, S1Y - h, s2x, s2y + h)
+                + opl_fn(S1X, S1Y - h, s2x, s2y - h)
+            ) / (4 * h * h)
+            pxy = (
+                opl_fn(S1X + h, S1Y, s2x, s2y + h)
+                - opl_fn(S1X + h, S1Y, s2x, s2y - h)
+                - opl_fn(S1X - h, S1Y, s2x, s2y + h)
+                + opl_fn(S1X - h, S1Y, s2x, s2y - h)
+            ) / (4 * h * h)
+            pyx = (
+                opl_fn(S1X, S1Y + h, s2x + h, s2y)
+                - opl_fn(S1X, S1Y + h, s2x - h, s2y)
+                - opl_fn(S1X, S1Y - h, s2x + h, s2y)
+                + opl_fn(S1X, S1Y - h, s2x - h, s2y)
+            ) / (4 * h * h)
+            det = pxx * pyy - pxy * pyx
+            density = xp.sqrt(xp.abs(det))
+        else:
+            density = 1.0
 
-            # 4.10: cast to the complex output dtype, not E_in.dtype
-            # (which may be real -- see comment above the out-array
-            # allocation).  Pre-4.10 a real E_in stripped the imag
-            # part of the kernel before the multiply.
-            kernel = xp.exp(2j * float(np.pi) * phi).astype(out_dtype)
-            integrand = E_in * density * kernel
-            iy = k // Nx_out
-            ix = k % Nx_out
-            out_value = xp.sum(integrand) * pixel_area
-            if is_jax_array(E_in):
-                out = out.at[iy, ix].set(out_value)
-            else:
-                out[iy, ix] = out_value
+        # 4.10: cast to the complex output dtype, not E_in.dtype
+        # (which may be real -- see comment above the out-array
+        # allocation).  Pre-4.10 a real E_in stripped the imag
+        # part of the kernel before the multiply.
+        kernel = xp.exp(2j * float(np.pi) * phi).astype(out_dtype)
+        integrand = E_in * density * kernel
+        iy = k // Nx_out
+        ix = k % Nx_out
+        out_value = xp.sum(integrand) * pixel_area
+        if is_jax_array(E_in):
+            out = out.at[iy, ix].set(out_value)
+        else:
+            out[iy, ix] = out_value
 
     # 4.11.2: apply the Van Vleck-Morette asymptotic prefactor
     # (2π)^(-d/2)·i^(-d/2) for d=2, which is -i/(2π).  The 2π part is

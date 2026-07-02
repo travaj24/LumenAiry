@@ -54,6 +54,36 @@ __all__ = [
 ]
 
 
+def _require_jax_x64(fn_name):
+    """Require JAX double precision on the JAX (differentiable) path.
+
+    v5.17.x (audit P3-52): replicates
+    :func:`lumenairy.elements.rcwa._core._require_jax_x64` (kept local
+    to avoid a propagators -> elements.rcwa import edge).  The
+    asymptotic twins need float64: single-precision ``lstsq`` gives
+    ~5% coefficient error and NaN gradients in the canonical fit, and
+    the Newton-IFT / Strehl-coefficient evaluations degrade silently.
+    Pre-fix, :func:`fit_canonical_polynomials_jax` auto-enabled x64 by
+    mutating the global ``jax_enable_x64`` MID-CALL -- unsafe when the
+    caller jits the surrounding computation (JAX documents mid-trace
+    config mutation as undefined behaviour) -- while the other three
+    twins had no x64 handling at all.  A one-line caller setup replaces
+    both: raise with instructions instead."""
+    import jax
+    try:
+        enabled = bool(jax.config.read("jax_enable_x64"))
+    except Exception:
+        enabled = bool(getattr(jax.config, "jax_enable_x64", False))
+    if not enabled:
+        raise RuntimeError(
+            f"{fn_name}: the JAX (differentiable) asymptotic path requires "
+            f"double precision, but jax_enable_x64 is disabled -- JAX would "
+            f"silently truncate float64/complex128 to single precision, "
+            f"giving ~5% canonical-fit coefficient error, NaN gradients, "
+            f"and quietly degraded Strehl coefficients.  Enable it once at "
+            f"import: jax.config.update('jax_enable_x64', True).")
+
+
 # ===========================================================================
 # Section 9 -- Backend-aware polynomial evaluation (NumPy / CuPy / JAX)
 # ===========================================================================
@@ -331,6 +361,8 @@ def aberration_tensor_lg00_jax(
     """
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
+    # v5.17.x (audit P3-52): same x64 policy as the rest of the family.
+    _require_jax_x64('aberration_tensor_lg00_jax')
     import jax.numpy as jnp
 
     s2x, s2y = s2_image
@@ -458,6 +490,8 @@ def propagate_modal_asymptotic_lg00_jax(
     """
     if not JAX_AVAILABLE:
         raise ImportError("JAX is not installed.")
+    # v5.17.x (audit P3-52): same x64 policy as the rest of the family.
+    _require_jax_x64('propagate_modal_asymptotic_lg00_jax')
     import jax
     import jax.numpy as jnp
 
@@ -706,6 +740,8 @@ def solve_envelope_stationary_jax_ift(
     if not JAX_AVAILABLE:
         raise ImportError(
             "JAX is not installed; install with `pip install jax`.")
+    # v5.17.x (audit P3-52): same x64 policy as the rest of the family.
+    _require_jax_x64('solve_envelope_stationary_jax_ift')
     import jax.numpy as jnp
 
     solver = _build_jax_ift_solver()
@@ -747,6 +783,11 @@ def fit_canonical_polynomials_jax(
 
     Limitations
     -----------
+    * Requires ``jax_enable_x64`` (raises ``RuntimeError`` otherwise).
+      v5.17.x (audit P3-52): the former auto-enable mutated the global
+      ``jax_enable_x64`` MID-CALL, which is unsafe inside ``jax.jit``
+      (undefined behaviour per the JAX docs).  Enable it once at
+      import: ``jax.config.update('jax_enable_x64', True)``.
     * The prescription dict (radii, conic, aspheric coeffs) is treated
       as a static argument, same as :func:`trace_jax`.  Differentiate
       w.r.t. lens parameters via :func:`fit_canonical_polynomials` or
@@ -769,23 +810,12 @@ def fit_canonical_polynomials_jax(
         raise ValueError(f"poly_order must be >= 0, got {poly_order}")
     if source_box_half <= 0 or pupil_box_half <= 0:
         raise ValueError("source_box_half and pupil_box_half must be > 0")
-    if not jax.config.jax_enable_x64:
-        # 3.5.6: auto-enable JAX x64 with a one-time warning rather
-        # than raising.  Single-precision JAX gives ~5% error in
-        # coef_phi on a moderate singlet and NaN gradients -- match
-        # the reference NumPy fit's float64 precision by default.
-        # Users who explicitly want float32 should set
-        # `jax.config.update('jax_enable_x64', False)` AFTER importing
-        # lumenairy and pass `# nofmt`-style explicit dtype kwargs
-        # downstream.
-        import warnings as _warnings
-        _warnings.warn(
-            "fit_canonical_polynomials_jax: JAX x64 mode is required "
-            "(single-precision lstsq gives ~5% coefficient error). "
-            "Auto-enabling via jax.config.update('jax_enable_x64', "
-            "True) for the rest of this Python session.",
-            RuntimeWarning, stacklevel=2)
-        jax.config.update('jax_enable_x64', True)
+    # v5.17.x (audit P3-52): REQUIRE x64 instead of auto-enabling it.
+    # The 3.5.6 behaviour (warn + jax.config.update('jax_enable_x64',
+    # True) mid-call) mutated the global config MID-CALL -- undefined
+    # behaviour when the caller jits the surrounding computation, and
+    # the exact pattern rcwa's ``_require_jax_x64`` rejects as unsafe.
+    _require_jax_x64('fit_canonical_polynomials_jax')
 
     if object_distance is None:
         object_distance = float(prescription.get('object_distance', 0.0)) or 0.0

@@ -152,8 +152,16 @@ def fresnel_propagate(
     X2, Y2 = xp.meshgrid(x2, y2, indexing='xy')
 
     # -- quadratic phase in input plane --------------------------------------
-    phase_in = xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(target_cdtype)
-    E_mod = E_in.astype(target_cdtype) * phase_in
+    # v5.17.x (audit P3-56): astype(copy=False) throughout -- the phase
+    # screen is freshly allocated by xp.exp (never aliased) and E_in is
+    # only *read* by the multiply below, so neither needs the defensive
+    # copy.  Pre-fix the bare astype paid two avoidable full-grid copy
+    # passes (~4 GB transient each at 16384^2 complex128), partially
+    # undoing the v5.17.0 lifetime hygiene in this function.
+    # Byte-identical output.
+    phase_in = xp.exp(1j * k / (2 * z) * (X1**2 + Y1**2)).astype(
+        target_cdtype, copy=False)
+    E_mod = E_in.astype(target_cdtype, copy=False) * phase_in
     # v5.17.0 lifetime hygiene (byte-identical): the input-plane grids and
     # phase screen are consumed -- free before the FFT so they don't ride
     # through it.  (JAX arrays are immutable/functional; del is a no-op
@@ -171,7 +179,8 @@ def fresnel_propagate(
     prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
                  * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
-    prefactor = prefactor.astype(target_cdtype)
+    # v5.17.x (audit P3-56): copy=False -- prefactor is freshly built above.
+    prefactor = prefactor.astype(target_cdtype, copy=False)
     del X2, Y2
 
     E_out = prefactor * E_fft
@@ -299,7 +308,8 @@ def fraunhofer_propagate(
     prefactor = (xp.exp(1j * k * z) / (1j * wavelength * z)
                  * xp.exp(1j * k / (2 * z) * (X2**2 + Y2**2))
                  * dx * dy)
-    prefactor = prefactor.astype(target_cdtype)
+    # v5.17.x (audit P3-56): copy=False -- prefactor is freshly built above.
+    prefactor = prefactor.astype(target_cdtype, copy=False)
 
     E_out = prefactor * E_fft
 
