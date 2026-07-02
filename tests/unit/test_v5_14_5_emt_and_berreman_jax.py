@@ -97,9 +97,19 @@ def test_mixing_rules_properties():
     assert abs(maxwell_garnett(2.0, 5.0, 1.0) - 5.0) < 1e-9
     # Bruggeman is symmetric in the two phases at fill 0.5
     assert abs(bruggeman(2.0, 5.0, 0.5) - bruggeman(5.0, 2.0, 0.5)) < 1e-12
+    # ... and satisfies its defining self-consistency equation (audit P1-02:
+    # symmetry alone also held for a wrong linear coefficient)
+    for ea, eb, f, g in [(2.0, 5.0, 0.5, 2.0), (9.0, 2.0, 0.3, 1.0)]:
+        geom = "sphere" if g == 2.0 else "cylinder"
+        e = bruggeman(ea, eb, f, geometry=geom)
+        res = (f * (ea - e) / (ea + g * e)
+               + (1 - f) * (eb - e) / (eb + g * e))
+        assert abs(res) < 1e-12
     # both stay within the constituent bounds for a real dilute mix
     mg = maxwell_garnett(2.0, 5.0, 0.3, geometry="cylinder")
     assert 2.0 < mg.real < 5.0
+    br = bruggeman(2.0, 5.0, 0.3)
+    assert 2.0 < br.real < 5.0
     with pytest.raises(ValueError, match="geometry"):
         maxwell_garnett(2.0, 5.0, 0.3, geometry="bogus")
 

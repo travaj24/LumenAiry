@@ -196,12 +196,27 @@ def bruggeman(eps_a: complex, eps_b: complex, fill_a: float,
             f"bruggeman: geometry must be 'sphere' or 'cylinder', got "
             f"{geometry!r}.")
     # f (ea - e)/(ea + g e) + (1-f)(eb - e)/(eb + g e) = 0 -> quadratic in e.
-    # (1+g) e^2 ... solve the standard closed form, pick the Im>=0 root.
-    b = (g * f - 1.0) * ea + (g * (1.0 - f) - 1.0) * eb     # linear coeff sign
+    # Solve the standard closed form, pick the Im>=0 root.
+    b = ((1.0 - f) - g * f) * ea + (f - g * (1.0 - f)) * eb  # linear coeff
     # Closed form: g e^2 + b e - ea eb = 0  (from clearing denominators)
     disc = np.sqrt(b * b + 4.0 * g * ea * eb)
     r1 = (-b + disc) / (2.0 * g)
     r2 = (-b - disc) / (2.0 * g)
-    # physical root: Re > 0 and Im >= 0 (passive)
-    cand = r1 if (r1.real > 0 and r1.imag >= -1e-12) else r2
+    # Physical root: the passive branch, Im(e) >= 0 (Im(eps) > 0 = loss).
+    # When Im does not discriminate (lossless constituents -> both roots
+    # real, e.g. metal/dielectric outside the resonance band), continue the
+    # branch from an infinitesimal-loss nudge of the constituents.
+    scale = abs(r1) + abs(r2) + 1.0
+    if abs(r1.imag - r2.imag) <= 1e-9 * scale:
+        na = ea + 1j * 1e-8 * (1.0 + abs(ea))
+        nb = eb + 1j * 1e-8 * (1.0 + abs(eb))
+        bn = ((1.0 - f) - g * f) * na + (f - g * (1.0 - f)) * nb
+        dn = np.sqrt(bn * bn + 4.0 * g * na * nb)
+        ref = (-bn + dn) / (2.0 * g)
+        alt = (-bn - dn) / (2.0 * g)
+        if alt.imag > ref.imag:
+            ref = alt
+        cand = r1 if abs(r1 - ref) <= abs(r2 - ref) else r2
+    else:
+        cand = r1 if r1.imag > r2.imag else r2
     return complex(cand)
