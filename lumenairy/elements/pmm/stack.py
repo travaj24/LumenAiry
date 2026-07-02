@@ -212,8 +212,20 @@ class PMMStack:
                 raise ValueError("PMMStack.add_layer: empty segments.")
             segs = [(float(w), e if (callable(e) or isinstance(e, str))
                      else self._as_tensor(e)) for w, e in segments]
-        thickness = (thickness if is_jax_array(thickness)
-                     else float(thickness))
+        # Thickness validation (audit P3-30) -- mirror PMM2DStack.add_layer:
+        # finite and > 0.  A CONCRETE JAX thickness is checked; a TRACED one
+        # (under jit/grad) has no value to range-check and skips the guard.
+        if is_jax_array(thickness):
+            try:
+                t_c = float(np.asarray(thickness))
+            except Exception:
+                t_c = None                 # tracer: validated only if concrete
+            if t_c is not None and (t_c <= 0.0 or not np.isfinite(t_c)):
+                raise ValueError("PMMStack.add_layer: thickness must be > 0")
+        else:
+            if float(thickness) <= 0.0 or not np.isfinite(float(thickness)):
+                raise ValueError("PMMStack.add_layer: thickness must be > 0")
+            thickness = float(thickness)
         self._layers.append((thickness, segs, float(slant_angle)))
         return self
 
@@ -560,6 +572,13 @@ class PMMStack:
             raise ValueError("PMMStack.solve: call set_source(...) first.")
         if not self._layers:
             raise ValueError("PMMStack.solve: add at least one layer.")
+        # Validate ``stabilize`` EAGERLY, before ANY dispatch/early return
+        # (audit P3-31): the covariant (uniform-slant) dispatch used to return
+        # before the late vertical-path check, silently accepting garbage.
+        if stabilize not in (None, False, "slices"):
+            raise ValueError(
+                f"PMMStack.solve: stabilize must be None or 'slices', got "
+                f"{stabilize!r}.")
         if (any(callable(e) for L in self._layers for _w, e in L[1])
                 or callable(self.n_sub) or callable(self.n_sup)):
             raise ValueError(
@@ -649,7 +668,19 @@ class PMMStack:
                     "non-zero slant across all layers (the covariant oblique "
                     "frame is per-slant); use 'convection' or 'auto' for "
                     "vertical / mixed-slant stacks.")
-            return self._solve_covariant(wl, angle, k0)
+            # kwarg handling BEFORE the covariant early return (audit P3-31):
+            # retain_internal raises (the covariant cascade keeps no partial
+            # cascades -- same contract as the general slanted path below);
+            # stabilize='slices' is HONOURED via the shared consensus check
+            # (which itself warns when no taper builder is recorded).
+            if retain_internal:
+                raise NotImplementedError(
+                    "PMMStack.solve(retain_internal=True): all-vertical "
+                    "in-plane stacks only (the symmetric cascade).")
+            res = self._solve_covariant(wl, angle, k0)
+            if stabilize == "slices":
+                self._slices_consensus_check(res[3])
+            return res
 
         uwidths, layer_eps_u = _pmm_union_grid([L[1] for L in self._layers],
                                        self.min_feature / self.period)

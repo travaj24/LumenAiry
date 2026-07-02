@@ -24,7 +24,21 @@ from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redhe
 
 class BORStack:
     def __init__(self, Rbig, m, *, n_substrate=1.0, n_superstrate=1.0, N=300):
-        self.Rbig = float(Rbig)
+        # Input validation (audit P3-10) -- mirror the PMMStack/PMM2DStack
+        # builder guards: a bad domain/grid propagates to plausible-looking
+        # garbage (negative-radius grid, 1-point operators) deep in the build.
+        Rbig = float(Rbig)
+        if not np.isfinite(Rbig) or Rbig <= 0.0:
+            raise ValueError(
+                f"BORStack: Rbig (domain radius) must be > 0, got {Rbig}.")
+        if not float(m).is_integer():
+            raise ValueError(
+                f"BORStack: m (azimuthal order) must be an integer, got {m!r}.")
+        if not float(N).is_integer() or int(N) < 2:
+            raise ValueError(
+                f"BORStack: N (radial grid points) must be an integer >= 2, "
+                f"got {N!r}.")
+        self.Rbig = Rbig
         self.m = int(m)
         self.N = int(N)
         self.eps_sub = complex(n_substrate) ** 2
@@ -58,11 +72,35 @@ class BORStack:
             fn = prof
         else:
             raise ValueError("add_layer needs eps_profile, rings, or eps")
-        self._layers.append((float(thickness), fn))
+        # Thickness validation (audit P3-10) -- mirror PMM2DStack.add_layer:
+        # a NEGATIVE thickness flips the propagation exponent exp(iqL) so
+        # forward-oriented evanescent modes GROW, silently destabilizing the
+        # Redheffer cascade instead of raising.
+        thickness = float(thickness)
+        if not np.isfinite(thickness) or thickness <= 0.0:
+            raise ValueError("BORStack.add_layer: thickness must be > 0")
+        self._layers.append((thickness, fn))
         return self
 
     def set_source(self, wavelength=None, *, k0=None):
-        self.k0 = (2 * np.pi / wavelength) if k0 is None else float(k0)
+        # Source validation (audit P3-10): wavelength <= 0 gives k0 = inf /
+        # negative, and solve() then silently returns EMPTY R/T.
+        if k0 is None:
+            if wavelength is None:
+                raise ValueError(
+                    "BORStack.set_source: give wavelength or k0.")
+            wavelength = float(wavelength)
+            if not np.isfinite(wavelength) or wavelength <= 0.0:
+                raise ValueError(
+                    f"BORStack.set_source: wavelength must be > 0, got "
+                    f"{wavelength}.")
+            self.k0 = 2 * np.pi / wavelength
+        else:
+            k0 = float(k0)
+            if not np.isfinite(k0) or k0 <= 0.0:
+                raise ValueError(
+                    f"BORStack.set_source: k0 must be > 0, got {k0}.")
+            self.k0 = k0
         return self
 
     # ---- solve ---------------------------------------------------------- #

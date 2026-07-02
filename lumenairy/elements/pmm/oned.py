@@ -40,6 +40,38 @@ from ._core import (
 )
 
 
+def _resolve_incidence_checked(fn_name, angle, theta):
+    """Resolve the ``angle``/``theta`` alias, then REJECT back-side incidence
+    (audit P3-29): the angle enters the 1-D solve only as ``kx0 ~ sin(angle)``,
+    so ``|angle| >= pi/2`` would otherwise alias BYTE-IDENTICALLY to the
+    supplementary front-side angle ``pi - angle`` -- a plausible,
+    energy-conserving answer for the WRONG geometry.  Raises ``ValueError``
+    instead.  Composes with (does not duplicate) the grazing guard, which
+    catches ``kz_inc ~ 0`` just BELOW ``pi/2``.  A TRACED JAX angle (under
+    ``jit``/``grad``) has no concrete value to range-check and SKIPS the guard
+    (the rcwa ``_reject_jax_offplane`` tracer carve-out); a CONCRETE JAX angle
+    is checked.  A non-numeric angle is passed through for the solver's own
+    coercion to raise on."""
+    angle = _resolve_incidence(angle, theta)
+    if is_jax_array(angle):
+        try:                                 # concrete JAX array -> inspectable
+            a_c = float(np.asarray(angle))
+        except Exception:                    # tracer -> not materialisable
+            return angle
+    else:
+        try:
+            a_c = float(angle)
+        except (TypeError, ValueError):      # non-numeric: solver coercion raises
+            return angle
+    if not abs(a_c) < 0.5 * np.pi:           # NaN also fails this comparison
+        raise ValueError(
+            f"{fn_name}: incidence angle must satisfy |angle| < pi/2 "
+            f"(front-side illumination, measured from the +z surface normal); "
+            f"got {a_c} rad.  A past-grazing angle would silently alias to "
+            f"the supplementary front-side angle (pi - angle).")
+    return angle
+
+
 def pmm_jones_1d(
     period: float,
     eps_ridge,
@@ -168,7 +200,7 @@ def pmm_jones_1d(
     medium raises ``ValueError`` on the NumPy path; see the INCIDENCE-MEDIUM
     SCOPE note on :func:`pmm_efficiency_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_jones_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d: degree must be >= 2.")
@@ -404,9 +436,13 @@ def pmm_efficiency_1d(
     every degree (a false 'resonance band' diagnosis) -- use
     ``stabilize=False`` for a significantly lossy incidence medium.  The
     substrate is NOT guarded (mirrors rcwa; a gain substrate is caught only by
-    the energy tripwires).
+    the energy tripwires).  On the JAX path the guard acts on CONCRETE
+    incidence media only: a TRACED ``n_superstrate`` / ``angle`` (a
+    ``jax.grad`` / ``jax.jit`` Tracer) cannot be inspected without severing
+    the trace, so it skips the guard -- keep the differentiated incidence
+    medium propagating and non-gain yourself.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_efficiency_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -576,7 +612,7 @@ def pmm_efficiency_1d_segments(
     medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
     :func:`pmm_efficiency_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_efficiency_1d_segments", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -657,7 +693,7 @@ def pmm_jones_1d_segments(
     medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
     :func:`pmm_efficiency_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_jones_1d_segments", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_segments: degree must be >= 2.")
@@ -793,7 +829,7 @@ def pmm_efficiency_1d_slanted(
     medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
     :func:`pmm_efficiency_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_efficiency_1d_slanted", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     pol = polarization.lower()
     if pol not in ("te", "tm"):
@@ -991,7 +1027,7 @@ def pmm_jones_1d_slanted(
     medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
     :func:`pmm_efficiency_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_jones_1d_slanted", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted: degree must be >= 2.")
@@ -1210,7 +1246,7 @@ def pmm_jones_1d_slanted_segments(
     medium raises ``ValueError``; see the INCIDENCE-MEDIUM SCOPE note on
     :func:`pmm_efficiency_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_jones_1d_slanted_segments", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     if int(degree) < 2:
         raise ValueError("pmm_jones_1d_slanted_segments: degree must be >= 2.")
@@ -1348,7 +1384,7 @@ def pmm_1d(
     -------
     orders, R_eff, T_eff, jones_reflection : as in :func:`pmm_jones_1d`.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_1d", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     has_binary = eps_ridge is not None or eps_groove is not None
     if (segments is None) == (not has_binary):
@@ -1567,7 +1603,7 @@ def pmm_efficiency_1d_vs_wavelength(
         Total reflected / transmitted efficiency (summed over orders) at each
         wavelength.
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_efficiency_1d_vs_wavelength", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
@@ -1628,7 +1664,7 @@ def pmm_jones_1d_vs_wavelength(
         Total efficiencies per incident polarization (row order: incident
         ``E_x``, ``E_y``).
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_jones_1d_vs_wavelength", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):
@@ -1685,7 +1721,7 @@ def pmm_jones_1d_segments_vs_wavelength(
     T_total (Nwl, 2))`` exactly as :func:`pmm_jones_1d_vs_wavelength`
     (scalar wavelength in -> scalar out).
     """
-    angle = _resolve_incidence(angle, theta)
+    angle = _resolve_incidence_checked("pmm_jones_1d_segments_vs_wavelength", angle, theta)
     far_field_orders = _resolve_order_count(far_field_orders, n_orders)
     wl = np.atleast_1d(np.asarray(wavelengths, dtype=float))
     if wl.size == 0 or not np.all(np.isfinite(wl)) or np.any(wl <= 0.0):

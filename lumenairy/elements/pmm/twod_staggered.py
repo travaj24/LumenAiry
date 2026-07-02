@@ -805,7 +805,11 @@ def pmm_efficiency_2d_staggered(
         ``Nx`` x ``Ny`` rectangular grid.  The pillar walls are the segment
         boundaries, so ``eps`` is exact per element (Eq. 26) -- the grid must
         resolve the rectangular pillar exactly (e.g. a centred half-fill pillar
-        is ``Nx = Ny = 2``).  PUBLIC convention ``Im(eps) > 0`` for loss.
+        is ``Nx = Ny = 2``).  The grid MUST be SQUARE (``Nx == Ny``; the
+        staggered tensor-product basis requires ``Nx*(M-1) == Ny*(M-1)``) --
+        tile a uniform axis into equal segments, or use
+        :func:`pmm_efficiency_2d_cell`, which handles non-square cells.
+        PUBLIC convention ``Im(eps) > 0`` for loss.
     n_substrate, n_superstrate : complex
         Transmission / incidence half-space indices (``n = n + i kappa``).
     depth : float
@@ -877,6 +881,18 @@ def pmm_efficiency_2d_staggered(
         raise ValueError(
             f"pmm_efficiency_2d_staggered: eps_cell must be a 2-D (Nx, Ny) "
             f"array, got shape {eps_cell.shape}.")
+    # SQUARE-grid restriction (audit P3-36): the staggered tensor-product
+    # basis requires Nx*(M-1) == Ny*(M-1), i.e. Nx == Ny -- previously enforced
+    # only by a deep assert (stripped under ``python -O`` into a cryptic
+    # kron/broadcast shape error).  Fail loudly at the entry point instead.
+    if eps_cell.shape[0] != eps_cell.shape[1]:
+        raise ValueError(
+            f"pmm_efficiency_2d_staggered: eps_cell must be SQUARE (Nx == Ny; "
+            f"the staggered tensor-product basis requires "
+            f"Nx*(M-1) == Ny*(M-1)), got shape {eps_cell.shape}.  Pad the "
+            f"uniform axis into equal segments (e.g. tile a (2, 1) cell to "
+            f"(2, 2)), or use pmm_efficiency_2d_cell, which handles "
+            f"non-square cells.")
     polarization = pol
     Nx, Ny = eps_cell.shape
     M = int(degree)
