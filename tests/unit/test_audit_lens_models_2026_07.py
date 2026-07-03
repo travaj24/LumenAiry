@@ -385,6 +385,68 @@ def test_n3_broadband_input_clamps_na_proxy():
     assert float(np.sum(np.abs(out) ** 2)) > 0.0
 
 
+def _flat_prism(amp, ap=24e-3, R_flat=1e9):
+    """A wedge/prism: FLAT surfaces (no power -> coarse field stays well-
+    resolved) with an xy_polynomial (1,0) tilt term (honored by the trace)
+    that deviates the beam.  This drives a large REAL s2 linear-OPD slope
+    (_lin[1]) while keeping the coarse integral resolvable -- isolating the
+    fine-grid post-multiply from N2 under-resolution."""
+    return {
+        'name': 'prism', 'aperture_diameter': ap,
+        'surfaces': [
+            {'radius': R_flat, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': ap / 2,
+             'freeform_type': 'xy_polynomial', 'xy_coeffs': {(1, 0): amp}},
+            {'radius': R_flat, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': ap / 2},
+        ],
+        'thicknesses': [4e-3],
+    }
+
+
+def test_n4_freeform_large_slope_is_subsample_invariant():
+    """A freeform PRISM produces a real _lin[1] ~ 15.6 waves -- nearly 2x the
+    coarse Nyquist at output_subsample=6 -- so the s2 post-multiply MUST run
+    on the fine grid.  Applied there, the recovered output tilt is sign- and
+    magnitude-invariant between output_subsample 1 and 6; a coarse-grid
+    multiply would alias/flip it (adversarial-review verification, Claim C:
+    fine grid recovers 0.42 cyc/pix vs coarse-then-zoom 0.10).  This is the
+    reachable large-real-slope regime that refuted the earlier
+    'slope always ~0' characterisation."""
+    N = 192
+    dx = 24e-3 / N
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (7e-3) ** 2).astype(np.complex64)
+    kw = dict(prescription=_flat_prism(4e-3), wavelength=LAM, dx=dx,
+              integration_method='quadrature', ray_field_samples=12,
+              ray_pupil_samples=12, poly_order=4, n_v2=16,
+              collimated_input=True, extract_linear_phase=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        c1 = _spectral_centroid_fx(
+            la.apply_real_lens_maslov(E, output_subsample=1, **kw), dx)
+        c6 = _spectral_centroid_fx(
+            la.apply_real_lens_maslov(E, output_subsample=6, **kw), dx)
+    # a genuine, large output tilt (not a near-DC artefact)
+    assert abs(c1) > 500.0, f"prism tilt too weak to exercise the path: {c1:.1f}"
+    assert np.sign(c1) == np.sign(c6), f"tilt sign flipped: {c1:.1f} vs {c6:.1f}"
+    assert abs(c6 - c1) / abs(c1) < 0.06, f"{c1:.1f} vs {c6:.1f}"
+
+
+def test_n3_nan_input_na_raises_clear_error():
+    """input_na=NaN must fail fast with a clear ValueError, not slip past the
+    (NaN-blind) na_proxy>=1 clamp and die later with a misleading
+    '0 rays survived' TIR message (adversarial-review Claim B)."""
+    N, dx = 128, 60e-6
+    E = _gauss(N, dx, w=1.0e-3)
+    with pytest.raises(ValueError, match='finite'):
+        la.apply_real_lens_maslov(
+            E, prescription=_singlet(), wavelength=LAM, dx=dx,
+            integration_method='stationary_phase', input_na=float('nan'),
+            **_MASLOV_KW)
+
+
 def test_n3_explicit_input_na_not_clamped_when_physical():
     """A physical explicit input_na (<1) must pass through unclamped -- the
     clamp only fires on the auto-estimate blowing past the horizon."""

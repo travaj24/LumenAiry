@@ -15,8 +15,8 @@ finding definitions.
 |---|---|---|---|
 | **N1** | Hoist the `(N_out², M)` Chebyshev design matrix `G` into the quadrature branch; drop the unused `G` param from `_integrate_stationary_phase` / `_integrate_local_quadrature`. Verified those two never read `G`. | `lenses_maslov.py` | `test_n1_all_integrators_run_full_resolution` |
 | **N2** | Under-resolution warning for uniform `quadrature`: v2-oscillation bound from `Σ|coef_opd|` over v2-dependent terms; points at the asymptotic evaluators. | `lenses_maslov.py` | `test_n2_under_resolved_quadrature_warns` |
-| **N3** | Size the pupil chart from `na_lens + na_input`, `na_input` = 3σ of the input angular spectrum (one FFT); new `input_na=` kwarg + coverage warning. **Clamp `na_proxy` < 1** (adversarial P2, §6). | `lenses_maslov.py` | `test_n3_input_na_widens_chart`, `..._coverage_warning`, `..._clamps_na_proxy`, `..._not_clamped_when_physical` |
-| **N4** | Re-apply the orphaned fitted linear OPD term. Exact split: s2 part `(c0+c1u_s2x+c2u_s2y)` re-applied after dispatch — **piston as a scalar, slope on the FINE post-upsample grid** (adversarial P2, §6); v2 part `(c3u_v2x+c4u_v2y)` inside every integrator's OPD + saddle-point gradient (Hessian unchanged). | `lenses_maslov.py` | `test_n4_linear_phase_reapplied_offaxis` (True==False, all 3 integrators), `..._wellresolved_output_is_subsample_invariant`, `..._piston_reapplied_as_global_phase` |
+| **N3** | Size the pupil chart from `na_lens + na_input`, `na_input` = 3σ of the input angular spectrum (one FFT); new `input_na=` kwarg + coverage warning. **Clamp `na_proxy` < 1** + reject non-finite `input_na` (adversarial P2/B, §3a). | `lenses_maslov.py` | `test_n3_input_na_widens_chart`, `..._coverage_warning`, `..._clamps_na_proxy`, `..._not_clamped_when_physical`, `..._nan_input_na_raises_clear_error` |
+| **N4** | Re-apply the orphaned fitted linear OPD term. Exact split: s2 part `(c0+c1u_s2x+c2u_s2y)` re-applied after dispatch — **piston as a scalar, slope on the FINE post-upsample grid** (load-bearing for freeform prescriptions, adversarial P2/A, §3a); v2 part `(c3u_v2x+c4u_v2y)` inside every integrator's OPD + saddle-point gradient (Hessian unchanged). | `lenses_maslov.py` | `test_n4_linear_phase_reapplied_offaxis` (True==False, all 3 integrators), `..._freeform_large_slope_is_subsample_invariant`, `..._wellresolved_output_is_subsample_invariant`, `..._piston_reapplied_as_global_phase` |
 | **F3** | Route Maslov `_progress` through the suite `call_progress(stage, frac, msg)`; fixes the mid-lens `TypeError` on a standard callback. | `lenses_maslov.py` | `test_f3_suite_style_progress_callback` |
 | **F4** | Gate the `tilt_aware_rays` recommendation on a **wrapping-safe** coherence ratio (nearest-neighbour complex-product increments, not `np.gradient(np.angle)`). | `_lens_traced.py` | `test_f4_single_tilt / two_beam_fringe / collimated` |
 | **N7** | Docstring: `n_workers` is a no-op on the default polynomial-Newton path. | `_lens_traced.py` | — |
@@ -90,34 +90,52 @@ review's severity claims were themselves corrected on investigation.
   **Fix:** `del _v2` inside the `_Ptot > 0` branch and `del _P, _FX, _FY, _fx`
   after the estimate (guarded so an all-zero input does not `NameError`).
 
-* **N4 — s2-tilt post-multiply aliased on the coarse grid (P2, fixed placement;
-  latent in practice).** The review flagged that the s2 linear-OPD post-multiply
-  ran on the **coarse** field *before* the cubic upsample, so a slope above the
-  coarse Nyquist (`c1 > N_out_coarse/4`) would alias / flip. **Fix:** piston
-  `_lin[0]` is now applied as a **scalar** global phase (grid-invariant, avoids
-  an `N²` temporary), and the slope terms `_lin[1]/_lin[2]` are applied on the
-  **fine, post-upsample grid**, at the coordinate `scipy.zoom` actually sampled
+* **N4 — s2-tilt post-multiply aliased on the coarse grid (P2, fixed).** The
+  review flagged that the s2 linear-OPD post-multiply ran on the **coarse** field
+  *before* the cubic upsample, so a slope above the coarse Nyquist
+  (`c1 > N_out_coarse/4`) would alias / flip. **Fix:** piston `_lin[0]` is now
+  applied as a **scalar** global phase (grid-invariant, avoids an `N²`
+  temporary); the slope terms `_lin[1]/_lin[2]` are applied on the **fine,
+  post-upsample grid**, at the coordinate `scipy.zoom` actually sampled
   (reproduced by zooming the coarse axis with the same call — convention-
-  independent, no `grid_mode=False` edge-stretch).
+  independent, no `grid_mode=False` edge-stretch); a `|·| > 1e-6` gate skips the
+  `N²` coordinate build when the slope is negligible (the ~17 GB-at-N=32768
+  symmetric-lens case).
 
-  **Correction to the review's severity.** On investigation the slope terms are
-  **~0 for every realizable input** to the current model: the Maslov ray trace
-  is always **centered** (surface `decenter` is read only for a warning and
-  otherwise ignored — `_lin` is byte-identical across decenter values), so the
-  OPL is even in output position and `|_lin[1]| < 0.04` waves even for a
-  0.04 rad tilted input. So the aliasing path is **unreachable through the
-  public API today**; the fix is the correct, zero-risk placement that also
-  future-proofs a decentered/tilted trace. Critically, the dramatic
-  subsample>1 tilt-**flip** the review reproduced for a *tilted input* is a
-  **different, N2 effect**: that output tilt lives *inside* the canonical
-  integral (via the `_lin_v3/_v4` pupil terms) and is coarse-resolved, so it
-  aliases for output tilts above the coarse Nyquist **regardless** of where this
-  post-multiply runs. A direct probe confirms the flip **persists** with the fix
-  applied — the honest mitigation is the N2 under-resolution warning (already
-  shipped) plus reducing `output_subsample`, not relocating the post-multiply.
-  Tests `test_n4_wellresolved_output_is_subsample_invariant` (sign + magnitude
-  invariance for a resolvable output) and `test_n4_piston_reapplied_as_global_phase`
-  (piston does not leak into intensity).
+  **Reachability — corrected twice.** My *first* pass characterised this slope as
+  "~0 for every realizable input / unreachable" because the trace ignores literal
+  `decenter`/`tilt` keys. **A second, independent adversarial verification
+  refuted that**: `surfaces_from_prescription` **does** honor **freeform** odd
+  terms (`xy_polynomial`, `zernike`), and a wedge/prism then produces a genuine
+  output-position OPL slope — measured `|_lin[1]|` from 0.5 up to **~9776 waves**.
+  So the fine-grid placement is **load-bearing, not defensive**: a flat prism
+  with `|_lin[1]| = 15.6` waves (≈2× the coarse Nyquist) stays sign- and
+  magnitude-invariant between `output_subsample` 1 and 6 *because* the slope is
+  applied on the fine grid; a coarse-grid multiply flips it (verifier Claim C:
+  fine grid recovers 0.42 cyc/pix vs coarse-then-zoom 0.10). It remains true that
+  `|_lin[1]| ~ 1e-10` for rotationally-symmetric prescriptions, and that when a
+  large output tilt *also* has an in-integral (pupil / `_lin_v3/_v4`) component
+  — a strongly-**powered** freeform lens, not a flat wedge — that component is
+  coarse-resolved and aliases above the coarse Nyquist **regardless** of where
+  this post-multiply runs (the N2 regime; reduce `output_subsample`). Tests:
+  `test_n4_freeform_large_slope_is_subsample_invariant` (the reachable large-real-
+  slope regime), `..._wellresolved_output_is_subsample_invariant`,
+  `..._piston_reapplied_as_global_phase`.
+
+* **N3 — NaN `input_na` escapes the clamp (found by the second verification,
+  fixed).** `input_na = NaN` gave `na_proxy = NaN`; `NaN >= 1.0` is `False`, so it
+  slipped past the clamp and reached the trace as `N_dir = NaN`, dying with a
+  misleading *"0 rays survived"* TIR message. **Fix:** validate an explicit
+  `input_na` is finite and non-negative up front (clear `ValueError`; also
+  rejects `inf`), and change the clamp guard to `not (na_proxy < 1.0)` so any
+  residual non-finite proxy is caught. Test `test_n3_nan_input_na_raises_clear_error`.
+
+*The §3a fixes were themselves put through an independent, refutation-first
+verification workflow (3 adversarial agents executing code); it refuted the N4
+"unreachable" claim and the NaN path above, and could not break the N4 restructure's
+physics (True==False intensity to 2.15e-4; piston `|E|`-invariant to 3e-12;
+fine-grid slope Nyquist-correct at injected c1=20). The corrections here reflect
+its findings.*
 
 ## 4. Deferred (documented follow-ups)
 

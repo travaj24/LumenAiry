@@ -354,6 +354,17 @@ def apply_real_lens_maslov(
         del _P, _FX, _FY, _fx
     if input_na is not None:
         na_input = float(input_na)
+        # Explicit input_na must be a finite, non-negative direction cosine.
+        # A NaN slips past the na_proxy>=1 clamp below (NaN comparisons are
+        # False), reaching the trace as N_dir=NaN and dying with a
+        # misleading "0 rays survived" TIR message (adversarial review) --
+        # fail fast here with the real cause instead.
+        if not (np.isfinite(na_input) and na_input >= 0.0):
+            raise ValueError(
+                f"apply_real_lens_maslov: input_na must be a finite, "
+                f"non-negative number (an input-side NA / direction cosine); "
+                f"got {input_na!r}.  Omit input_na to auto-size the pupil "
+                f"chart from the field's angular spectrum.")
         # Coverage guard: warn if the caller under-specified input_na
         # relative to the measured angular spread (the field will clip).
         if (not collimated_input) and na_input < 0.7 * _na_meas:
@@ -380,8 +391,11 @@ def apply_real_lens_maslov(
     # N_dir = sqrt(max(1 - v1x^2 - v1y^2, 0)) = 0 and the whole chart is
     # grazing -> the wide-angle content it was meant to capture is dropped.
     # Cap just below unity and tell the caller the estimate is being
-    # trusted only up to the horizon.
-    if na_proxy >= 1.0:
+    # trusted only up to the horizon.  Use ``not (na_proxy < 1.0)`` rather
+    # than ``na_proxy >= 1.0`` so a non-finite proxy (e.g. an inf leaking in
+    # from na_lens) is also caught -- NaN would already have been rejected
+    # for explicit input_na above, but this keeps N_dir strictly real.
+    if not (na_proxy < 1.0):
         import warnings
         warnings.warn(
             f"apply_real_lens_maslov: NA proxy {na_proxy:.3f} (lens "
@@ -724,29 +738,37 @@ def apply_real_lens_maslov(
     #    grid-invariant, so this avoids building an N x N temporary just to
     #    add a constant (the piston is ~10^3 waves and is the ONLY term
     #    that is ever appreciable here -- see below).
-    #  * The s2-slope terms (_lin[1], _lin[2]) are ~0 for the always-
-    #    centered Maslov ray trace: the OPL is even in output position, so
-    #    there is no first-order output tilt (measured |_lin[1]| < 0.04
-    #    waves even for a 0.04 rad tilted input; decenter is ignored by the
-    #    centered trace).  They become appreciable only if a future
-    #    decentered / tilted-element trace is added.  In THAT case they must
-    #    be applied on the FINE (post-upsample) grid: a slope above the
-    #    coarse Nyquist (c1 > N_out_coarse/4) aliases / flips under the
-    #    cubic phase-zoom if applied on the coarse field first (adversarial
-    #    review N4).  The fine-pixel coordinate is reproduced by zooming the
+    #  * The s2-slope terms (_lin[1], _lin[2]) are ~0 for a rotationally-
+    #    symmetric prescription (the OPL is then even in output position:
+    #    measured |_lin[1]| ~ 1e-10 for a symmetric singlet, < 0.04 waves
+    #    for a 0.04 rad tilted input; literal decenter/tilt dict keys are
+    #    dropped by the centred trace).  But a FREEFORM surface
+    #    (xy_polynomial / zernike odd terms are honored by the trace) makes
+    #    them genuinely large -- a wedge/prism deviates the beam, giving a
+    #    real output-position OPL slope of up to ~10^4 waves (adversarial
+    #    review; verified prism |_lin[1]| = 15.6 waves >> coarse Nyquist,
+    #    still subsample-invariant here).  So this branch is load-bearing,
+    #    not defensive: the slope MUST be applied on the FINE (post-upsample)
+    #    grid, because a slope above the coarse Nyquist (c1 > N_out_coarse/4)
+    #    aliases / flips under the cubic phase-zoom if applied on the coarse
+    #    field first.  The fine-pixel coordinate is reproduced by zooming the
     #    coarse output axis with the SAME zoom call, so the tilt lands
     #    exactly where the zoomed content lives (convention-independent;
     #    avoids the grid_mode=False edge-stretch of a nominal fine axis).
+    #    The abs()>1e-6 gate skips the N x N coordinate build for the common
+    #    symmetric case (where the slope is a negligible ~1e-10 waves and
+    #    the meshgrid would otherwise cost ~17 GB at N=32768).
     #
-    # NB the subsample>1 tilt-flip the review reproduced for a *tilted
-    # input* is a different effect: that output tilt lives INSIDE the
-    # canonical integral (via the _lin_v3/_v4 pupil terms) and is coarse-
-    # resolved, so it aliases for output tilts above the coarse Nyquist
-    # regardless of where this post-multiply runs -- that is the N2
-    # under-resolution regime (warned separately); reduce output_subsample.
+    # NB when a large real output tilt ALSO has an in-integral (pupil, v2)
+    # component -- e.g. a strongly-powered freeform lens rather than a flat
+    # wedge -- that component lives INSIDE the canonical integral (via the
+    # _lin_v3/_v4 terms) and is coarse-resolved, so it aliases for output
+    # tilts above the coarse Nyquist regardless of where this post-multiply
+    # runs.  That is the N2 under-resolution regime (warned separately);
+    # reduce output_subsample.
     if _lin[0]:
         E_out = (E_out * np.exp(2j * np.pi * _lin[0])).astype(E_in.dtype)
-    if _lin[1] or _lin[2]:
+    if abs(_lin[1]) > 1e-6 or abs(_lin[2]) > 1e-6:
         if output_subsample > 1:
             from scipy.ndimage import zoom as _zoom1d
             out_axis_f = _zoom1d(out_axis, float(N) / float(N_out_coarse),
