@@ -188,3 +188,108 @@ def test_f4_collimated_no_warning():
     X, Y = np.meshgrid(xs, xs)
     E = np.exp(-(X ** 2 + Y ** 2) / (0.4e-3) ** 2).astype(np.complex64)
     assert _f4_warn_text(E).strip() == ''
+
+
+# --------------------------------------------------------------------------
+# S5.1 carrier-referenced traced + F1 collimation guard
+# --------------------------------------------------------------------------
+from lumenairy.elements._lens_real import apply_real_lens  # noqa: E402
+from lumenairy.elements._lens_traced import _carrier_residual_rms, _compute_carrier  # noqa: E402
+
+
+def _diverging(N, dx, s, w=0.6e-3):
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    k0 = 2 * np.pi / LAM
+    E = (np.exp(-(X ** 2 + Y ** 2) / w ** 2)
+         * np.exp(1j * k0 * (X ** 2 + Y ** 2) / (2 * s)))
+    return E.astype(np.complex64), X, Y
+
+
+def test_carrier_residual_removes_divergence():
+    """The matching carrier drives the residual angular spread to ~0."""
+    N, dx, s = 512, 6e-6, 30e-3
+    E, X, Y = _diverging(N, dx, s)
+    raw = _carrier_residual_rms(E, None, LAM, dx)
+    W = (X ** 2 + Y ** 2) / (2 * s)
+    resid = _carrier_residual_rms(E, W, LAM, dx)
+    assert raw > 0.01
+    assert resid < 0.1 * raw
+
+
+def test_carrier_auto_recovers_conjugate():
+    """carrier='auto' fits a wavefront whose edge slope matches the known
+    diverging conjugate (grad W ~ x/s)."""
+    N, dx, s = 512, 6e-6, 30e-3
+    E, X, Y = _diverging(N, dx, s)
+    _W, grad_fn = _compute_carrier('auto', E, LAM, dx, X, Y)
+    xq = np.array([0.8e-3, -0.8e-3, 0.0])
+    yq = np.array([0.0, 0.0, 0.8e-3])
+    L, M = grad_fn(xq, yq)
+    # expected direction cosines x/s, y/s
+    assert np.allclose(L, xq / s, atol=0.15 * abs(0.8e-3 / s) + 1e-4)
+    assert np.allclose(M, yq / s, atol=0.15 * abs(0.8e-3 / s) + 1e-4)
+
+
+def _carrier_lens():
+    return {
+        'name': 's', 'aperture_diameter': 3e-3,
+        'surfaces': [
+            {'radius': 60e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 1.5e-3},
+            {'radius': -60e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 1.5e-3},
+        ],
+        'thicknesses': [3e-3],
+    }
+
+
+def test_f1_guard_warns_on_unreferenced_divergent_input():
+    N, dx, s = 1024, 4e-6, 25e-3
+    E, _, _ = _diverging(N, dx, s)
+    with pytest.warns(RuntimeWarning, match='collimated-reference'):
+        apply_real_lens_traced(E, prescription=_carrier_lens(),
+                               wavelength=LAM, dx=dx, ray_subsample=2,
+                               parallel_amp=False)
+
+
+def test_f1_guard_silent_when_carrier_matches():
+    """With a matching carrier the residual is small -> no F1 warning."""
+    N, dx, s = 1024, 4e-6, 25e-3
+    E, _, _ = _diverging(N, dx, s)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter('always')
+        apply_real_lens_traced(E, prescription=_carrier_lens(),
+                               wavelength=LAM, dx=dx, ray_subsample=2,
+                               parallel_amp=False, carrier=s)
+    assert not any('collimated-reference' in str(x.message) for x in w)
+
+
+def test_f1_delegate_returns_analytic():
+    """on_noncollimated='delegate' falls back to apply_real_lens exactly."""
+    N, dx, s = 1024, 4e-6, 25e-3
+    E, _, _ = _diverging(N, dx, s)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        got = apply_real_lens_traced(
+            E, prescription=_carrier_lens(), wavelength=LAM, dx=dx,
+            ray_subsample=2, parallel_amp=False, on_noncollimated='delegate')
+        ref = apply_real_lens(E, prescription=_carrier_lens(),
+                              wavelength=LAM, dx=dx)
+    assert np.array_equal(got, ref)
+
+
+def test_carrier_none_regression_wellbehaved():
+    """carrier=None (default) keeps the plane-wave reference: a collimated
+    input is unaffected and the output is finite/power-reasonable."""
+    N, dx = 512, 8e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (0.5e-3) ** 2).astype(np.complex64)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        out = apply_real_lens_traced(E, prescription=_carrier_lens(),
+                                     wavelength=LAM, dx=dx, ray_subsample=2,
+                                     parallel_amp=False, carrier=None)
+    assert np.isfinite(out).all()
+    assert np.abs(out).max() > 0

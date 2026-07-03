@@ -767,6 +767,169 @@ def _geometric_lens_phase(lens_prescription, wavelength, dx, N):
     return np.angle(np.exp(1j * phase))
 
 
+# F1 (audit): residual transverse-angular-spread (radians) above which the
+# plane-wave / carrier-referenced traced correction is flagged as invalid.
+# ~0.02 rad (~1 deg) cleanly separates a collimated / carrier-matched beam
+# (residual ~ 0) from an unreferenced divergent / emitter-array field
+# (residual 0.1-0.2 rad); heuristic, tunable by the caller via the
+# on_noncollimated policy.
+_NONCOLLIMATED_RESID_THRESH = 0.02
+
+
+def _carrier_residual_rms(E_in, W_full, wavelength, dx):
+    """RMS transverse angular spread (radians) of ``E_in`` AFTER removing
+    the carrier wavefront ``W_full`` (length units; ``None`` -> no carrier).
+
+    This is the discriminator for the F1 collimation guard: a beam that is
+    a single smooth carrier plus a small angular residual (an emitter array,
+    a diverging source) has a SMALL residual once the carrier is subtracted,
+    even though its raw angular spread is large -- so it is well within the
+    carrier-referenced traced model's validity.  Uses the wrapping-safe
+    nearest-neighbour phase-increment estimator.
+    """
+    k0 = 2.0 * np.pi / wavelength
+    E = np.asarray(E_in)
+    if W_full is not None:
+        E = E * np.exp(-1j * k0 * np.asarray(W_full))
+    mag = np.abs(E)
+    mx = mag.max()
+    if not np.isfinite(mx) or mx <= 0:
+        return 0.0
+    mask = mag > 0.05 * mx
+    del mag
+    if not mask.any():
+        return 0.0
+    gx = E[:, 1:] * np.conj(E[:, :-1])
+    lx = (np.angle(gx) / (k0 * dx))[mask[:, 1:] & mask[:, :-1]]
+    del gx
+    gy = E[1:, :] * np.conj(E[:-1, :])
+    my = (np.angle(gy) / (k0 * dx))[mask[1:, :] & mask[:-1, :]]
+    del gy
+    if lx.size == 0 or my.size == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(lx ** 2) + np.mean(my ** 2)))
+
+
+def _compute_carrier(carrier, E_in, wavelength, dx, X, Y, auto_degree=2):
+    """Build the carrier reference wavefront ``W(x, y)`` (length units;
+    reference phase = ``k0 * W``) and a callable giving its transverse
+    gradient -- the ray direction cosines ``L = dW/dx``, ``M = dW/dy``.
+
+    ``carrier`` accepts:
+
+    * ``float`` -- an on-axis point-source conjugate at signed distance
+      ``s`` (metres): paraxial spherical wavefront ``W = (x^2+y^2)/(2s)``
+      (``s > 0`` for a diverging source in front of the plane).
+    * ``ndarray`` -- an explicit wavefront (metres), same shape as ``E_in``.
+    * ``'auto'`` -- a low-order (``auto_degree``) polynomial fit of the
+      smooth carrier, obtained by least-squares matching the polynomial's
+      GRADIENT to the wrapping-safe local tilt field of ``E_in`` over its
+      bright support (never per-pixel gradients -- that is F4's failure).
+      Curl-free by construction (a scalar potential is fit, not L/M
+      separately).
+
+    Returns ``(W_full, grad_fn)`` where ``W_full`` is an ``(N, N)`` array
+    and ``grad_fn(xq, yq)`` returns ``(L, M)`` at the query positions.
+    """
+    N = X.shape[0]
+    if isinstance(carrier, np.ndarray):
+        W_full = np.asarray(carrier, dtype=np.float64)
+        if W_full.shape != X.shape:
+            raise ValueError(
+                f"carrier ndarray shape {W_full.shape} != field shape "
+                f"{X.shape}")
+        gWy, gWx = np.gradient(W_full, dx, dx)
+
+        def grad_fn(xq, yq):
+            fx = np.clip(xq / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            fy = np.clip(yq / dx + N / 2.0, 0, N - 1).astype(np.int64)
+            return gWx[fy, fx], gWy[fy, fx]
+
+        return W_full, grad_fn
+
+    if isinstance(carrier, str):
+        if carrier != 'auto':
+            raise ValueError(
+                f"carrier string must be 'auto', got {carrier!r}")
+        # Wrapping-safe local tilt field over the bright support.
+        k0 = 2.0 * np.pi / wavelength
+        E = np.asarray(E_in)
+        mag = np.abs(E)
+        mask = mag > 0.05 * mag.max()
+        gx = E[:, 1:] * np.conj(E[:, :-1])
+        Lx = np.angle(gx) / (k0 * dx)
+        del gx
+        gy = E[1:, :] * np.conj(E[:-1, :])
+        My = np.angle(gy) / (k0 * dx)
+        del gy
+        mxx = mask[:, 1:] & mask[:, :-1]
+        myy = mask[1:, :] & mask[:-1, :]
+        # sample coords at the increment midpoints
+        xax = (np.arange(N) - N / 2.0) * dx
+        Xg, Yg = np.meshgrid(xax, xax, indexing='xy')
+        xL = 0.5 * (Xg[:, 1:] + Xg[:, :-1])[mxx]
+        yL = Yg[:, 1:][mxx]
+        Lv = Lx[mxx]
+        xM = Xg[1:, :][myy]
+        yM = 0.5 * (Yg[1:, :] + Yg[:-1, :])[myy]
+        Mv = My[myy]
+        # Intensity weights: on a fringed multi-source field the local tilt
+        # is noisy, so weight each sample by the local |E| (bright regions
+        # -- the imaged carrier -- dominate the low-order fit and the
+        # fringe noise averages out).  This is why the fit is robust where
+        # per-pixel tilts (F4) fail.
+        magI = np.abs(E)
+        wL = 0.5 * (magI[:, 1:] + magI[:, :-1])[mxx]
+        wM = 0.5 * (magI[1:, :] + magI[:-1, :])[myy]
+        del magI
+        # Polynomial basis terms b_k(x,y)=x^i y^j (i+j<=deg, i+j>=1); fit the
+        # scalar potential W = sum c_k b_k by matching grad(W) to (Lv, Mv).
+        terms = [(i, j) for d in range(1, auto_degree + 1)
+                 for i in range(d + 1) for j in [d - i]]
+        nL, nM = xL.size, xM.size
+        A = np.zeros((nL + nM, len(terms)))
+        for k, (i, j) in enumerate(terms):
+            # d/dx of x^i y^j = i x^(i-1) y^j ; d/dy = j x^i y^(j-1)
+            A[:nL, k] = (i * xL ** (i - 1) * yL ** j) if i >= 1 else 0.0
+            A[nL:, k] = (j * xM ** i * yM ** (j - 1)) if j >= 1 else 0.0
+        rhs = np.concatenate([Lv, Mv])
+        w = np.concatenate([wL, wM])
+        A = A * w[:, None]
+        rhs = rhs * w
+        coef, *_ = np.linalg.lstsq(A, rhs, rcond=None)
+
+        def _poly_and_grad(xq, yq):
+            Wq = np.zeros_like(xq, dtype=np.float64)
+            Lq = np.zeros_like(xq, dtype=np.float64)
+            Mq = np.zeros_like(xq, dtype=np.float64)
+            for k, (i, j) in enumerate(terms):
+                Wq += coef[k] * xq ** i * yq ** j
+                if i >= 1:
+                    Lq += coef[k] * i * xq ** (i - 1) * yq ** j
+                if j >= 1:
+                    Mq += coef[k] * j * xq ** i * yq ** (j - 1)
+            return Wq, Lq, Mq
+
+        W_full, _, _ = _poly_and_grad(X, Y)
+
+        def grad_fn(xq, yq):
+            _, Lq, Mq = _poly_and_grad(xq, yq)
+            return Lq, Mq
+
+        return W_full, grad_fn
+
+    # scalar conjugate distance
+    s = float(carrier)
+    if s == 0.0:
+        raise ValueError("carrier conjugate distance must be non-zero")
+    W_full = (X ** 2 + Y ** 2) / (2.0 * s)
+
+    def grad_fn(xq, yq):
+        return xq / s, yq / s
+
+    return W_full, grad_fn
+
+
 def _sample_local_tilts(E_in, wavelength, dx, entrance_x, entrance_y,
                          max_sin=0.5, smooth_sigma_px=4.0,
                          multimode_diagnostic=None):
@@ -1136,6 +1299,8 @@ def apply_real_lens_traced(
     on_undersample: str = 'error',
     preserve_input_phase: bool = True,
     tilt_aware_rays: bool = False,
+    carrier: Optional[Any] = None,
+    on_noncollimated: str = 'warn',
     parallel_amp: Optional[bool] = None,
     parallel_amp_min_free_gb: float = 48.0,
     newton_amp_mask_rel: float = 1e-4,
@@ -1165,13 +1330,22 @@ def apply_real_lens_traced(
         for JAX-autodiff optimisation loops and for output planes at
         or near a caustic.
 
-    Quick decision guide
+    Quick decision guide (revised per the 2026-07 wave-lens-models audit)
     --------------------
-    * Default / fast wave model -> ``apply_real_lens``.
-    * Sub-nm OPD on cemented doublets / multi-surface curved interfaces
-      -> ``apply_real_lens_traced`` (this function).
-    * Inside a JAX-autodiff design optimisation, or near a caustic
-      -> ``apply_real_lens_maslov`` / ``apply_real_lens_maslov_jax``.
+    * Collimated / MLA-relayed input, thick or cemented optics, sub-nm OPD
+      -> ``apply_real_lens_traced`` (this function), ``carrier=None``.
+    * Divergent / converging / tilted source or emitter array through a
+      multi-element train (e.g. no-MLA direct imaging)
+      -> ``apply_real_lens_traced(carrier='auto')`` (or a known conjugate);
+      or ``apply_real_lens`` for a fast estimate on symmetric / well-
+      corrected designs (its per-surface thin-screen ``sag*theta^2`` error
+      is the design-dependent floor -- see its Oblique validity boundary).
+    * Genuinely multi-congruence fields, planes at/near a caustic, or
+      JAX-autodiff design loops -> ``apply_real_lens_maslov`` /
+      ``apply_real_lens_maslov_jax`` (``integration_method='local_quadrature'``
+      at production NA).
+    * Aberration-free paraxial reference / isolating model vs geometry
+      -> the thin-lens ABCD equivalent.
 
     Description
     -----------
@@ -1208,9 +1382,15 @@ def apply_real_lens_traced(
 
     Limitations
     -----------
-    * Assumes the input field is approximately a collimated plane wave
-      (each pixel ray launched parallel to z).  For converging or
-      tilted input, fall back to :func:`apply_real_lens`.
+    * The DEFAULT (``carrier=None``) references the correction to a
+      collimated plane wave (each pixel ray launched parallel to z), valid
+      only when the input beam is ~collimated.  For a divergent / converging
+      / tilted / emitter-array input, pass ``carrier=`` (a conjugate, an
+      explicit wavefront, or ``'auto'``) to reference the beam's own
+      congruence -- this generalises the model to those inputs (audit
+      S5.1).  Without a carrier, such inputs blur; the ``on_noncollimated``
+      guard warns or delegates to :func:`apply_real_lens` when it detects
+      this regime.
     * Replaces the wave's exit phase with the geometric OPL; this
       gives correct OPD by construction but bypasses any wave-physics
       phase content that the ASM would have introduced (negligible for
@@ -1339,6 +1519,43 @@ def apply_real_lens_traced(
         by default inside :func:`_sample_local_tilts`) to tame
         multi-mode aliasing; neither applies when the flag is False
         (the default).
+    carrier : float | ndarray | 'auto' | None, default None
+        Reference congruence for the traced correction (audit S5.1).  The
+        default (``None``) references the correction to a PLANE WAVE (unit
+        input for ``phase_analytic_lens``; rays launched parallel to z),
+        which is valid only when the input beam is ~collimated.  For a
+        DIVERGENT / converging / tilted / emitter-array input (e.g. no-MLA
+        direct imaging), supply the beam's smooth carrier wavefront so the
+        reference matches the beam:
+
+        * ``float`` -- an on-axis point-source conjugate at signed distance
+          ``s`` metres (``W = (x^2+y^2)/(2s)``; ``s > 0`` diverging in front).
+        * ``ndarray`` -- an explicit wavefront ``W(x, y)`` in metres,
+          same shape as ``E_in`` (reference phase = ``k0 * W``).
+        * ``'auto'`` -- fit a low-order polynomial carrier from ``E_in``'s
+          intensity-weighted, wrapping-safe local tilt field (never
+          per-pixel gradients -- that is the ``tilt_aware_rays`` failure
+          mode).  Robust on fringed multi-emitter fields; the correct
+          general choice when the conjugate is not known analytically.
+
+        With a carrier the exit reference is well-conditioned (it focuses
+        where the real beam does) and the rays launch along the carrier
+        normals, so the traced OPL is applied to the small angular RESIDUAL
+        only.  ``carrier`` forces ``fast_analytic_phase=False`` (the fast
+        geometric reference cannot carry the carrier congruence).
+
+        Validity: one carrier fails for genuinely multi-congruence fields
+        (comparable-power beams at well-separated angles, e.g. immediately
+        post-DOE at large split angles) or planes at/near an intermediate
+        focus -- use :func:`apply_real_lens_maslov` there.
+    on_noncollimated : {'warn', 'delegate', 'off'}, default 'warn'
+        Policy when the input's residual angular spread (after removing any
+        ``carrier``) exceeds the collimated-reference validity threshold --
+        i.e. the plane-wave-referenced correction would blur (the silent
+        regression class the audit was written for).  ``'warn'`` emits a
+        ``RuntimeWarning`` pointing at ``carrier=`` / :func:`apply_real_lens`;
+        ``'delegate'`` transparently falls back to :func:`apply_real_lens`;
+        ``'off'`` disables the check (and its one-FFT-free cost).
 
     preserve_input_phase : bool, default True
         If True, the input field's phase structure (source tilts,
@@ -1598,6 +1815,74 @@ def apply_real_lens_traced(
     else:
         X, Y = np.meshgrid(x, x)
 
+    # ----- Carrier-referenced correction (audit S5.1) -------------------
+    # Traced's default correction is referenced to a PLANE WAVE (unit input
+    # for phase_analytic_lens; rays launched parallel to z), valid only when
+    # the input congruence is ~collimated.  For a divergent / tilted /
+    # emitter-array input, supply the beam's own smooth CARRIER wavefront:
+    # the reference then matches the beam (well-conditioned exit reference,
+    # fixing N5) and the rays launch along the carrier normals, so the
+    # traced correction is applied to the small residual only.  W is in
+    # length units (reference phase = k0 * W); grad(W) gives the ray
+    # direction cosines.
+    _k0 = 2.0 * np.pi / wavelength
+    _carrier_W = None
+    _carrier_grad = None
+    if carrier is not None:
+        if X is None:
+            _cx = (np.arange(E_in.shape[0]) - E_in.shape[0] / 2) * dx
+            _CX, _CY = np.meshgrid(_cx, _cx)
+        else:
+            _CX, _CY = X, Y
+        _carrier_W, _carrier_grad = _compute_carrier(
+            carrier, E_in, wavelength, dx, _CX, _CY)
+        del _CX, _CY
+        # The fast_analytic_phase reference is the lens's on-axis geometric
+        # phase (input-independent), which cannot carry the carrier
+        # congruence; force the full wave reference when a carrier is set.
+        if fast_analytic_phase:
+            fast_analytic_phase = False
+
+    # F1 (audit) collimation guard: measure the residual angular spread
+    # (after removing any carrier) and warn / delegate when the input is
+    # too far from the reference congruence for the traced correction to be
+    # accurate.  With a carrier supplied the residual is small (the carrier
+    # absorbs the divergence), so this only fires for an UNREFERENCED
+    # non-collimated input -- exactly the silent-blur regression class.
+    if on_noncollimated != 'off':
+        try:
+            _resid = _carrier_residual_rms(E_in, _carrier_W, wavelength, dx)
+        except (ValueError, RuntimeError, FloatingPointError):
+            _resid = 0.0
+        if _resid > _NONCOLLIMATED_RESID_THRESH:
+            if on_noncollimated == 'delegate':
+                return apply_real_lens(
+                    E_in, prescription=lens_prescription,
+                    wavelength=wavelength, dx=dx, bandlimit=bandlimit,
+                    use_gpu=amp_use_gpu, wave_propagator=wave_propagator,
+                    sag_dtype=sag_dtype, sag_chunk_rows=sag_chunk_rows,
+                    progress=progress)
+            else:  # 'warn'
+                import warnings
+                warnings.warn(
+                    f"apply_real_lens_traced: input residual angular spread "
+                    f"{_resid:.3f} rad exceeds the collimated-reference "
+                    f"validity threshold ({_NONCOLLIMATED_RESID_THRESH} "
+                    f"rad).  The plane-wave-referenced traced correction "
+                    f"will be inaccurate (blurred).  Pass carrier= (a "
+                    f"conjugate distance, an explicit wavefront, or 'auto') "
+                    f"to reference the beam's own congruence, or use "
+                    f"apply_real_lens.  Set on_noncollimated='delegate' to "
+                    f"fall back automatically, or 'off' to silence.",
+                    RuntimeWarning, stacklevel=2)
+
+    # Reference input for the analytic lens-phase leg: the carrier
+    # wavefront when supplied, else a unit plane wave (legacy default).
+    def _reference_input():
+        if _carrier_W is not None:
+            return np.exp(1j * _k0 * _carrier_W).astype(E_in.dtype)
+        return np.ones_like(E_in)
+
     # ----- Step 1: amplitude envelope from the ANALYTIC lens model -----
     #
     # WHY WE CALL apply_real_lens HERE (the "double call"):
@@ -1711,7 +1996,7 @@ def apply_real_lens_traced(
             if _xp is cp:
                 phase_analytic_lens = cp.asarray(phase_analytic_lens)
         else:
-            ones_input = np.ones_like(E_in)
+            ones_input = _reference_input()  # carrier wavefront or plane wave
 
             def _amp_pw_call():
                 return apply_real_lens(
@@ -1764,7 +2049,7 @@ def apply_real_lens_traced(
                 analytic_pw_cb = ProgressScaler(progress, 'real_lens_traced',
                                                  lo=0.40, hi=0.50)
                 E_analytic_pw = apply_real_lens(
-                    np.ones_like(E_in), prescription=lens_prescription, wavelength=wavelength, dx=dx,
+                    _reference_input(), prescription=lens_prescription, wavelength=wavelength, dx=dx,
                     bandlimit=bandlimit, use_gpu=amp_use_gpu,
                     wave_propagator=wave_propagator,
                     sag_dtype=sag_dtype, sag_chunk_rows=_sag_chunk_rows_raw,
@@ -1911,6 +2196,14 @@ def apply_real_lens_traced(
         L_in, M_in = _sample_local_tilts(E_in, wavelength, dx, Xs_in, Ys_in)
         L_in = L_in.ravel()
         M_in = M_in.ravel()
+    elif _carrier_grad is not None:
+        # Carrier-referenced launch (audit S5.1): rays follow the carrier
+        # normals grad(W) at their entrance positions, so the ray-traced
+        # OPL is referenced to the beam's own congruence (matching the
+        # exp(i*k0*W) amplitude reference) rather than a plane wave.
+        L_in, M_in = _carrier_grad(h_x, h_y)
+        L_in = np.asarray(L_in, dtype=np.float64).ravel()
+        M_in = np.asarray(M_in, dtype=np.float64).ravel()
     else:
         # 4.10: emit a one-time warning when the input field has a
         # measurable transverse tilt and tilt_aware_rays=False.  The
@@ -1980,14 +2273,15 @@ def apply_real_lens_traced(
                     else:
                         warnings.warn(
                             "apply_real_lens_traced: tilt_aware_rays=False "
-                            f"with a non-trivial, spatially INCOHERENT input "
-                            f"tilt (RMS = {tilt_rms:.2e} rad, coherence "
-                            f"{coherence_ratio:.2f}) -- a multi-source / "
-                            "post-DOE interference field.  Do NOT set "
-                            "tilt_aware_rays=True here (per-pixel direction "
-                            "estimation fails on fringed fields); use "
-                            "apply_real_lens, or apply_real_lens_traced with "
-                            "a carrier= reference once available.",
+                            f"with a non-trivial input tilt of no single "
+                            f"direction (RMS = {tilt_rms:.2e} rad, coherence "
+                            f"{coherence_ratio:.2f}, i.e. INCOHERENT) -- a "
+                            "divergent, multi-beam, or post-DOE interference "
+                            "field.  Do NOT set tilt_aware_rays=True here "
+                            "(per-pixel single-direction estimation fails on "
+                            "such fields); pass carrier= (a conjugate, a "
+                            "wavefront, or 'auto') to reference the beam's "
+                            "congruence, or use apply_real_lens.",
                             RuntimeWarning, stacklevel=3,
                         )
             del E_arr, mask
