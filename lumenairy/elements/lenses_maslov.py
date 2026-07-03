@@ -41,6 +41,7 @@ from .._math.chebyshev import (
 from .._math.chebyshev import (
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
+from ..progress import call_progress
 
 # Other shared helpers still live in lenses.py.
 from .lenses import (
@@ -50,7 +51,6 @@ from .lenses import (
     _multi_indices_total_degree,
     _warn_if_aperture_exceeds_grid,
 )
-from ..progress import call_progress
 
 
 def apply_real_lens_maslov(
@@ -74,6 +74,7 @@ def apply_real_lens_maslov(
     local_n_samples: int = 8,
     local_window_sigma: float = 3.0,
     collimated_input: bool = False,
+    input_na: Optional[float] = None,
     normalize_output: str = 'power',
     verbose: bool = False,
     progress: Optional[Any] = None,
@@ -305,30 +306,75 @@ def apply_real_lens_maslov(
     s1x = HX * r_aperture
     s1y = HY * r_aperture
 
+    # N3 (audit): the pupil-direction chart must span BOTH the lens
+    # acceptance NA and the INPUT field's angular content.  Sizing from
+    # the lens EFL alone (the pre-fix na_proxy) drops any divergent /
+    # tilted input source off the traced ray chart, so its wide-angle
+    # rays are extrapolated or clip at |u_v2| = 1 -- silently dim / wrong
+    # output at ANY resolution.  Split the sizing into a lens term and an
+    # input term.
     if collimated_input:
-        na_proxy = 1e-5
+        na_lens = 1e-5
     else:
         try:
             _M, _efl, _bfl, _ffl = rt.system_abcd_prescription(
                 lens_prescription, wavelength)
             efl_abs = float(abs(_efl))
             if np.isfinite(efl_abs) and efl_abs > 0:
-                na_proxy = r_aperture / max(efl_abs, r_aperture * 10)
+                na_lens = r_aperture / max(efl_abs, r_aperture * 10)
             else:
                 lens_total_thickness = sum(s.thickness for s in surfaces)
-                na_proxy = r_aperture / max(lens_total_thickness,
-                                             r_aperture * 10)
+                na_lens = r_aperture / max(lens_total_thickness,
+                                           r_aperture * 10)
         except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                 np.linalg.LinAlgError, IndexError, TypeError):
             # system_abcd_prescription failure -- fall back to a
             # thickness-based NA proxy (geometric heuristic).
             lens_total_thickness = sum(s.thickness for s in surfaces)
-            na_proxy = r_aperture / max(lens_total_thickness,
-                                         r_aperture * 10)
+            na_lens = r_aperture / max(lens_total_thickness,
+                                       r_aperture * 10)
+
+    # Divergence NA of the input field: measured from the second moment
+    # of its angular spectrum (a single FFT; direction cosine v =
+    # wavelength * fx in the paraxial regime), unless the caller supplies
+    # input_na explicitly (or the field is declared collimated).
+    _na_meas = 0.0
+    if not collimated_input:
+        _F = np.fft.fft2(E_in)
+        _P = np.abs(_F) ** 2
+        del _F
+        _fx = np.fft.fftfreq(N, d=dx)
+        _FX, _FY = np.meshgrid(_fx, _fx, indexing='xy')
+        _Ptot = float(_P.sum())
+        if _Ptot > 0.0:
+            _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
+            _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
+            _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
+        del _P
+    if input_na is not None:
+        na_input = float(input_na)
+        # Coverage guard: warn if the caller under-specified input_na
+        # relative to the measured angular spread (the field will clip).
+        if (not collimated_input) and na_input < 0.7 * _na_meas:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_maslov: input_na={na_input:.4f} is well "
+                f"below the measured input angular spread "
+                f"(~{_na_meas:.4f}); the pupil chart may not cover the "
+                f"field and wide-angle content will be lost.  Omit "
+                f"input_na to auto-size from the field.",
+                RuntimeWarning, stacklevel=2)
+    elif collimated_input:
+        na_input = 0.0
+    else:
+        na_input = _na_meas
+
+    # Chart spans the lens acceptance plus the input divergence.
+    na_proxy = na_lens + na_input
 
     if verbose:
-        print(f"  NA_proxy = {na_proxy:.5f}  "
-              f"(collimated_input={collimated_input})")
+        print(f"  NA_proxy = {na_proxy:.5f}  (lens {na_lens:.5f} + "
+              f"input {na_input:.5f}; collimated_input={collimated_input})")
 
     v1x = PX * na_proxy
     v1y = PY * na_proxy
@@ -387,6 +433,23 @@ def apply_real_lens_maslov(
         opd_residual = opd_w - opd_linear
     else:
         opd_residual = opd_w.copy()
+
+    # N4 (audit): the fitted linear OPD term was subtracted for fit
+    # conditioning but never re-applied -- silently dropping output tilt
+    # and shifting the stationary point for decentered / tilted / off-axis
+    # systems (benign piston for a centered lens).  Re-apply it EXACTLY by
+    # splitting it: the s2 part (c0 + c1*u_s2x + c2*u_s2y) is constant in
+    # the pupil-momentum integration variable v2, so it factors out of the
+    # canonical integral and is re-applied as an output post-multiply after
+    # dispatch; the v2 part (c3*u_v2x + c4*u_v2y) lives inside the integral
+    # (it shifts the stationary point) and is threaded into every
+    # integrator's OPD + saddle-point gradient.  linear_coeffs are in WAVES
+    # (same units as opd), so they add directly with no scaling.
+    if linear_coeffs is None:
+        linear_coeffs = np.zeros(5, dtype=np.float64)
+    _lin = np.asarray(linear_coeffs, dtype=np.float64)
+    _lin_v3 = float(_lin[3])
+    _lin_v4 = float(_lin[4])
 
     mi = _multi_indices_total_degree(4, poly_order)
     M = len(mi)
@@ -511,6 +574,7 @@ def apply_real_lens_maslov(
             stationary_newton_iter, stationary_newton_tol,
             _progress, verbose,
             out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
     elif integration_method == 'local_quadrature':
         E_out_coarse = _integrate_local_quadrature(
@@ -524,8 +588,34 @@ def apply_real_lens_maslov(
             local_n_samples, local_window_sigma,
             _progress, verbose,
             out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
     else:
+        # N2 (audit): estimate the v2 oscillation count of the integrand
+        # phase 2*pi*OPD(s2,v2) from the fitted coefficients.  Chebyshev
+        # polynomials are bounded by 1 on [-1, 1], so the sum of
+        # |coef_opd| over v2-dependent terms (k3>0 or k4>0) upper-bounds
+        # the OPD excursion in WAVES = cycles along v2.  Uniform n_v2-point
+        # quadrature needs a few samples per cycle; when under-resolved the
+        # result speckles regardless of grid/memory (no output-resolution
+        # fix helps) -- warn and point at the asymptotic evaluators, which
+        # are the correct choice at production NA.
+        _v2_mask = np.array(
+            [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
+            dtype=np.float64)
+        _v2_osc = float(np.sum(np.abs(coef_opd) * _v2_mask))
+        if n_v2 < 4.0 * _v2_osc:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_maslov: integration_method='quadrature' "
+                f"with n_v2={n_v2} is under-resolved for this chart "
+                f"(~{_v2_osc:.0f} v2 oscillations; want n_v2 >~ "
+                f"{int(4 * _v2_osc)}).  Uniform quadrature will speckle "
+                f"regardless of output resolution or memory.  Increase "
+                f"n_v2, or use integration_method='local_quadrature' / "
+                f"'stationary_phase' (the correct evaluators at "
+                f"production NA).",
+                RuntimeWarning, stacklevel=2)
         # N1 (audit): the (N_out^2, M) Chebyshev design matrix G is used
         # ONLY by the quadrature integrator (its G @ H GEMMs).  The
         # stationary_phase / local_quadrature integrators evaluate the
@@ -555,7 +645,20 @@ def apply_real_lens_maslov(
             use_numexpr, _progress,
             _lenses_module,
             out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
+
+    # N4 (audit): re-apply the s2 part of the fitted linear OPD (piston +
+    # output tilt) that was subtracted before fitting.  It is constant in
+    # v2, so it factored out of the canonical integral and is applied here
+    # as a per-output-pixel phase on the coarse field (u_s2x_out /
+    # u_s2y_out are the coarse-grid normalized s2 coords, same shape as
+    # E_out_coarse).  Waves -> exp(2*pi*i*.).  No-op when
+    # extract_linear_phase=False (coeffs are zero).
+    if _lin[0] or _lin[1] or _lin[2]:
+        E_out_coarse = (E_out_coarse * np.exp(
+            2j * np.pi * (_lin[0] + _lin[1] * u_s2x_out
+                          + _lin[2] * u_s2y_out))).astype(E_out_coarse.dtype)
 
     # -----------------------------------------------------------------
     # Step 5: Upsample to the full grid if output_subsample > 1
@@ -660,6 +763,7 @@ def _integrate_quadrature(
     use_numexpr, _progress,
     _lenses_module,
     out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
 ):
     """Uniform Tukey-windowed quadrature on the (v2x, v2y) grid.
 
@@ -697,6 +801,11 @@ def _integrate_quadrature(
 
     weight_per_sample = tuk_2d.ravel() * du * du * (v2x_h * v2y_h)
 
+    # N4: linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y), one value per v2
+    # sample; added to the residual-fit opd_c in the chunk loop below.
+    lin_v = (lin_v3 * u_v2x_samples[v2x_idx]
+             + lin_v4 * u_v2y_samples[v2y_idx])
+
     if use_numexpr is None:
         use_numexpr = NUMEXPR_AVAILABLE
     use_numexpr = (bool(use_numexpr) and NUMEXPR_AVAILABLE
@@ -716,6 +825,7 @@ def _integrate_quadrature(
         c_end = min(c_start + chunk_v2, n_v2_total)
 
         opd_c      = G @ H_opd     [:, c_start:c_end]
+        opd_c      = opd_c + lin_v[None, c_start:c_end]
         s1x_c      = G @ H_s1x     [:, c_start:c_end]
         s1y_c      = G @ H_s1y     [:, c_start:c_end]
         ds1x_du3_c = G @ H_ds1x_du3[:, c_start:c_end]
@@ -786,6 +896,7 @@ def _integrate_stationary_phase(
     newton_iter, newton_tol,
     _progress, verbose,
     out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
 ):
     """Leading-order stationary-phase (Gaussian-moment) evaluation.
 
@@ -844,6 +955,11 @@ def _integrate_stationary_phase(
         u4 = u_v2y[active]
         _, g3, g4, H33, H34, H44 = _opd_and_derivs(
             coef_opd, u1, u2, u3, u4)
+        # N4: the linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y) has constant
+        # v2-gradient (c3, c4) and zero Hessian, so it shifts the saddle
+        # point but not its curvature.  Add it to the gradient here.
+        g3 = g3 + lin_v3
+        g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
         det_safe = np.where(np.abs(det_H) < 1e-30,
                              np.sign(det_H) * 1e-30 + 1e-30, det_H)
@@ -878,6 +994,8 @@ def _integrate_stationary_phase(
 
     opd_star, g3, g4, H33, H34, H44 = _opd_and_derivs(
         coef_opd, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
+    # N4: add the linear-in-v2 OPD contribution at the (shifted) saddle.
+    opd_star = opd_star + lin_v3 * u_v2x + lin_v4 * u_v2y
     s1x_star, ds1x_du3, ds1x_du4, _, _, _ = _opd_and_derivs(
         coef_s1x, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
     s1y_star, ds1y_du3, ds1y_du4, _, _, _ = _opd_and_derivs(
@@ -936,6 +1054,7 @@ def _integrate_local_quadrature(
     n_samples, window_sigma,
     _progress, verbose,
     out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
 ):
     """Hybrid stationary-phase + local quadrature.
 
@@ -991,6 +1110,9 @@ def _integrate_local_quadrature(
         u3 = u_v2x[active]
         u4 = u_v2y[active]
         _, g3, g4, H33, H34, H44 = _opd_and_derivs(coef_opd, u1, u2, u3, u4)
+        # N4: linear-in-v2 OPD term shifts the saddle gradient (c3, c4).
+        g3 = g3 + lin_v3
+        g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
         det_safe = np.where(np.abs(det_H) < 1e-30,
                              np.sign(det_H) * 1e-30 + 1e-30, det_H)
@@ -1059,6 +1181,8 @@ def _integrate_local_quadrature(
         u1 = u_s2x_tile[p_start:p_end].ravel()
         u2 = u_s2y_tile[p_start:p_end].ravel()
         opd_v, _, _, _, _, _        = _opd_and_derivs(coef_opd, u1, u2, u3, u4)
+        # N4: linear-in-v2 OPD contribution at each window sample.
+        opd_v = opd_v + lin_v3 * u3 + lin_v4 * u4
         s1x_v, ds1x_du3, ds1x_du4, *_ = _opd_and_derivs(coef_s1x, u1, u2, u3, u4)
         s1y_v, ds1y_du3, ds1y_du4, *_ = _opd_and_derivs(coef_s1y, u1, u2, u3, u4)
         det_J = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
