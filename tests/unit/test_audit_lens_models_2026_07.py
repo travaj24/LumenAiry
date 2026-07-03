@@ -748,6 +748,32 @@ def test_mp4_end_to_end_numba_equals_numpy():
     assert rel < 1e-5, f"numba vs numpy end-to-end {rel:.2e}"
 
 
+def test_mp6_roi_matches_full_slice():
+    """M-P6: a ROI evaluation must return exactly the corresponding sub-window
+    of the full-grid field (byte-identical -- each output pixel is integrated
+    independently), for both an on-axis and an off-axis window, while
+    computing only roi_n^2 pixels."""
+    N, dx = 192, 60e-6
+    E = _gauss(N, dx, w=3e-3)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              integration_method='stationary_phase', output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=6, n_v2=24)
+    roi_n = 32
+    hw = roi_n * dx / 2
+    off = (N - roi_n) // 2
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        full = la.apply_real_lens_maslov(E, normalize_output='none', **kw)
+        r_on = la.apply_real_lens_maslov(E, roi=(0.0, 0.0, hw), **kw)
+        k0x, k0y = 24, -16
+        r_off = la.apply_real_lens_maslov(E, roi=(k0x * dx, k0y * dx, hw), **kw)
+    assert r_on.shape == (roi_n, roi_n)
+    assert np.array_equal(r_on, full[off:off + roi_n, off:off + roi_n]), "on-axis ROI"
+    assert np.array_equal(
+        r_off, full[k0y + off:k0y + off + roi_n, k0x + off:k0x + off + roi_n]
+    ), "off-axis ROI"
+
+
 def test_stationary_phase_pixel_banding_matches_unbanded():
     """Banding _opd_and_derivs by pixel must reproduce the unbanded result:
     byte-identical for a realistic band (reduction shape preserved), and

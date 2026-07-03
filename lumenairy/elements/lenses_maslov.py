@@ -276,6 +276,7 @@ def apply_real_lens_maslov(
     poly_order: int = 4,
     n_v2: int = 32,
     output_subsample: int = 1,
+    roi: Optional[Any] = None,
     extract_linear_phase: bool = True,
     chunk_v2: int = 64,
     use_numexpr: Optional[bool] = None,
@@ -741,9 +742,34 @@ def apply_real_lens_maslov(
         output_subsample = 1
     N_out_coarse = N // output_subsample
 
-    out_axis = (np.arange(N_out_coarse) - N_out_coarse / 2) * \
-               (dx * output_subsample)
-    s2x_grid, s2y_grid = np.meshgrid(out_axis, out_axis, indexing='xy')
+    if roi is None:
+        out_axis = (np.arange(N_out_coarse) - N_out_coarse / 2) * \
+                   (dx * output_subsample)
+        out_axis_x = out_axis
+        out_axis_y = out_axis
+        _roi_active = False
+    else:
+        # M-P6 (audit perf): evaluate only a region of interest -- a square
+        # window of ``roi_n`` pixels at the native ``dx`` spacing centred at
+        # physical ``(roi_cx, roi_cy)`` = ``roi[:2]`` with half-width
+        # ``roi[2]``.  The integrators evaluate each output pixel
+        # independently, so the returned (roi_n, roi_n) field is identical to
+        # the ROI slice of the full-grid field, but costs O(roi_n^2) instead
+        # of O(N^2) integrand evaluations -- 10^3-10^4x fewer for spot
+        # studies.  Full resolution only (output_subsample forced to 1); the
+        # power normalisation is skipped (ill-defined on a sub-window -- the
+        # ROI captures only part of the output power), so ROI returns the
+        # raw field, matching a normalize_output='none' full run.
+        roi_cx, roi_cy, roi_hw = float(roi[0]), float(roi[1]), float(roi[2])
+        output_subsample = 1
+        N_out_coarse = max(1, int(round(2.0 * roi_hw / dx)))
+        _ax = (np.arange(N_out_coarse) - N_out_coarse / 2) * dx
+        out_axis_x = _ax + roi_cx
+        out_axis_y = _ax + roi_cy
+        out_axis = out_axis_x        # legacy alias (upsample path is inactive)
+        normalize_output = 'none'
+        _roi_active = True
+    s2x_grid, s2y_grid = np.meshgrid(out_axis_x, out_axis_y, indexing='xy')
 
     u_s2x_out = (s2x_grid - s2x_c) / s2x_h
     u_s2y_out = (s2y_grid - s2y_c) / s2y_h
@@ -881,9 +907,9 @@ def apply_real_lens_maslov(
         _progress('integrate', 0.61,
                   f'precomputing (s2)-axis basis on {N_out_coarse} points')
         Tx_1d = _chebyshev_vandermonde(
-            (out_axis - s2x_c) / s2x_h, poly_order)
+            (out_axis_x - s2x_c) / s2x_h, poly_order)
         Ty_1d = _chebyshev_vandermonde(
-            (out_axis - s2y_c) / s2y_h, poly_order)
+            (out_axis_y - s2y_c) / s2y_h, poly_order)
         E_out_coarse = _integrate_quadrature(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
@@ -984,17 +1010,20 @@ def apply_real_lens_maslov(
         E_out = (E_out * np.exp(2j * np.pi * _lin[0])).astype(E_in.dtype)
     if abs(_lin[1]) > 1e-6 or abs(_lin[2]) > 1e-6:
         if output_subsample > 1:
+            # subsample>1 is non-ROI, so out_axis_x == out_axis_y == out_axis.
             from scipy.ndimage import zoom as _zoom1d
-            out_axis_f = _zoom1d(out_axis, float(N) / float(N_out_coarse),
-                                 order=1, mode='nearest')
-            if out_axis_f.shape[0] != N:   # non-divisible safety (matches _fit)
-                _tmp = np.zeros(N, dtype=out_axis_f.dtype)
-                _n = min(out_axis_f.shape[0], N)
-                _tmp[:_n] = out_axis_f[:_n]
-                out_axis_f = _tmp
+            out_axis_fx = _zoom1d(out_axis, float(N) / float(N_out_coarse),
+                                  order=1, mode='nearest')
+            if out_axis_fx.shape[0] != N:  # non-divisible safety (matches _fit)
+                _tmp = np.zeros(N, dtype=out_axis_fx.dtype)
+                _n = min(out_axis_fx.shape[0], N)
+                _tmp[:_n] = out_axis_fx[:_n]
+                out_axis_fx = _tmp
+            out_axis_fy = out_axis_fx
         else:
-            out_axis_f = out_axis          # coarse grid == fine grid
-        _s2x_f, _s2y_f = np.meshgrid(out_axis_f, out_axis_f, indexing='xy')
+            out_axis_fx = out_axis_x       # coarse grid == fine grid (ROI-safe)
+            out_axis_fy = out_axis_y
+        _s2x_f, _s2y_f = np.meshgrid(out_axis_fx, out_axis_fy, indexing='xy')
         _u_s2x_f = (_s2x_f - s2x_c) / s2x_h
         _u_s2y_f = (_s2y_f - s2y_c) / s2y_h
         E_out = (E_out * np.exp(
