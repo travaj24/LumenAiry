@@ -1315,6 +1315,7 @@ def apply_real_lens_traced(
     wave_propagator: Optional[str] = None,
     sag_dtype: Optional[Any] = None,
     sag_chunk_rows: Optional[int] = None,
+    return_screen: bool = False,
 ) -> np.ndarray:
     """Wave + per-pixel ray-traced phase variant of :func:`apply_real_lens`.
 
@@ -2943,6 +2944,23 @@ def apply_real_lens_traced(
     # E_in.dtype, but the ``* np.exp(1j * ...)`` multiply here would
     # silently upcast to complex128 unless we cast the exp() result.
     target_cdtype = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
+    if return_screen:
+        # T-P1 (prepared-traced): the entire traced leg -- ray trace, fits,
+        # Newton inversion, phase_analytic_lens, opl_map, and the valid /
+        # aperture masks -- is input-independent per
+        # (prescription, wavelength, dx, N, carrier).  The ONLY
+        # input-dependent factor is E_analytic = apply_real_lens(E_in), which
+        # the assembly below multiplies in pointwise (with the masks folding
+        # in multiplicatively).  Substituting ones for E_analytic here makes
+        # the returned E_out equal the reusable "screen"
+        # = mask(valid) * mask(aperture) * exp(1j*(k0*opl - phase_analytic)).
+        # prepare_real_lens_traced() caches it; each subsequent call is then
+        # one apply_real_lens(E_in) + one complex multiply.  Requires
+        # preserve_input_phase=True (else the assembly uses |E_analytic|),
+        # newton_amp_mask_rel=0 and tilt_aware_rays=False (else the valid
+        # region / opl depend on E_in), and carrier != 'auto'; the factory
+        # enforces all four.
+        E_analytic = np.ones_like(E_analytic)
     if _chunk_assembly and opl_map is None:
         # Row-band assembly: upsample + delta-phase + combine + masks per
         # (chunk_rows x N) band, writing into E_analytic in place (it is not
@@ -3027,8 +3045,125 @@ def apply_real_lens_traced(
     return E_out
 
 
+class PreparedTracedLens:
+    """A traced lens with its input-independent phase ``screen`` precomputed.
+
+    Built by :func:`prepare_real_lens_traced`.  The entire traced leg (ray
+    trace, Chebyshev/spline fits, Newton inversion, ``phase_analytic_lens``,
+    the ``opl`` map and the valid / aperture masks) depends only on
+    ``(prescription, wavelength, dx, N, carrier)``, so it is computed once and
+    stored as ``screen``.  Each call is then just the input-dependent analytic
+    leg plus one complex multiply::
+
+        E_out = apply_real_lens(E_in, ...) * screen
+
+    which drops the trace/fit/Newton stages from optimizer / tolerancing /
+    multi-field loops entirely (>=2x per call).  Mirrors the library's
+    ``PreparedRCWA2D`` / ``PreparedPMM2D`` precedent.
+    """
+
+    __slots__ = ('screen', 'prescription', 'wavelength', 'dx', 'bandlimit',
+                 'amp_use_gpu', 'wave_propagator', 'sag_dtype',
+                 'sag_chunk_rows', 'N')
+
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+    def __call__(self, E_in: np.ndarray) -> np.ndarray:
+        """Apply the prepared traced lens to ``E_in`` (shape must match N)."""
+        E_in = np.asarray(E_in)
+        if E_in.shape != self.screen.shape:
+            raise ValueError(
+                f"PreparedTracedLens: E_in shape {E_in.shape} != prepared "
+                f"grid {self.screen.shape}.")
+        # Reproduce E_analytic EXACTLY as apply_real_lens_traced's internal
+        # amp leg builds it (same 8 kwargs; note use_gpu=amp_use_gpu and the
+        # raw sag_chunk_rows; dy is intentionally not forwarded there either).
+        E_analytic = apply_real_lens(
+            E_in, prescription=self.prescription, wavelength=self.wavelength,
+            dx=self.dx, bandlimit=self.bandlimit, use_gpu=self.amp_use_gpu,
+            wave_propagator=self.wave_propagator, sag_dtype=self.sag_dtype,
+            sag_chunk_rows=self.sag_chunk_rows)
+        out = E_analytic * self.screen
+        tcd = E_in.dtype if np.iscomplexobj(E_in) else np.complex128
+        return out.astype(tcd) if out.dtype != tcd else out
+
+
+def prepare_real_lens_traced(
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    N: int,
+    carrier: Optional[Any] = None,
+    bandlimit: bool = True,
+    ray_subsample: int = 8,
+    min_coarse_samples_per_aperture: int = 32,
+    on_undersample: str = 'error',
+    on_noncollimated: str = 'warn',
+    inversion_method: str = 'newton',
+    newton_fit: str = 'polynomial',
+    newton_poly_order: int = 6,
+    newton_max_iters: Optional[int] = None,
+    amp_use_gpu: bool = False,
+    use_gpu: bool = False,
+    wave_propagator: Optional[str] = None,
+    sag_dtype: Optional[Any] = None,
+    sag_chunk_rows: Optional[int] = None,
+    n_workers: Optional[int] = None,
+    progress: Optional[Any] = None,
+) -> PreparedTracedLens:
+    """Precompute the input-independent traced-lens screen for reuse (T-P1).
+
+    The returned :class:`PreparedTracedLens` caches the whole trace/fit/Newton
+    result, so every subsequent ``prepared(E_in)`` costs one analytic
+    ``apply_real_lens`` + one complex multiply -- ideal for optimizer,
+    tolerancing and multi-field loops that hold ``(prescription, wavelength,
+    dx, N, carrier)`` fixed.
+
+    The screen is exactly input-independent only for
+    ``carrier in {None, <explicit wavefront / conjugate distance>}`` (NOT
+    ``'auto'``, which fits the carrier from the field), so ``'auto'`` is
+    rejected.  ``tilt_aware_rays`` is forced False and the amplitude Newton
+    mask is disabled (full coarse grid) so the cached ``valid`` region does
+    not depend on any particular input; this makes the first (prepare) call a
+    touch more expensive, amortized on the first reuse.  The screen is stored
+    at float64 complex precision; per-call output is cast back to the input
+    dtype.
+    """
+    if isinstance(carrier, str) and carrier == 'auto':
+        raise ValueError(
+            "prepare_real_lens_traced cannot cache carrier='auto' (the "
+            "carrier is fit from the field -> input-dependent).  Pass an "
+            "explicit carrier (conjugate distance or wavefront ndarray) or "
+            "None (plane-wave reference).")
+    ones = np.ones((int(N), int(N)), dtype=np.complex128)
+    screen = apply_real_lens_traced(
+        ones, prescription=prescription, wavelength=wavelength, dx=dx,
+        bandlimit=bandlimit, ray_subsample=ray_subsample,
+        min_coarse_samples_per_aperture=min_coarse_samples_per_aperture,
+        on_undersample=on_undersample, preserve_input_phase=True,
+        tilt_aware_rays=False, carrier=carrier,
+        on_noncollimated=on_noncollimated, parallel_amp=False,
+        newton_amp_mask_rel=0.0, inversion_method=inversion_method,
+        fast_analytic_phase=False, newton_fit=newton_fit,
+        newton_poly_order=newton_poly_order, newton_max_iters=newton_max_iters,
+        use_gpu=use_gpu, amp_use_gpu=amp_use_gpu,
+        wave_propagator=wave_propagator, sag_dtype=sag_dtype,
+        sag_chunk_rows=sag_chunk_rows, n_workers=n_workers, progress=progress,
+        return_screen=True)
+    return PreparedTracedLens(
+        screen=screen, prescription=prescription, wavelength=wavelength,
+        dx=dx, bandlimit=bandlimit, amp_use_gpu=amp_use_gpu,
+        wave_propagator=wave_propagator, sag_dtype=sag_dtype,
+        sag_chunk_rows=sag_chunk_rows, N=int(N))
+
+
 __all__ = [
     'apply_real_lens_traced',
+    'prepare_real_lens_traced',
+    'PreparedTracedLens',
     'close_worker_pool',
     'set_lens_parallel_amp',
     'get_lens_parallel_amp',

@@ -191,6 +191,95 @@ def test_f4_collimated_no_warning():
 
 
 # --------------------------------------------------------------------------
+# T-P1 (audit perf follow-up): prepared traced lens caches the input-
+# independent screen; each call is one apply_real_lens + one complex multiply.
+# --------------------------------------------------------------------------
+from lumenairy.elements._lens_traced import (  # noqa: E402
+    prepare_real_lens_traced,
+)
+
+
+def _prep_lens():
+    return {
+        'name': 'p', 'aperture_diameter': 6e-3,
+        'surfaces': [
+            {'radius': 60e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+            {'radius': -60e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 3e-3},
+        ],
+        'thicknesses': [3e-3],
+    }
+
+
+@pytest.mark.parametrize('dtype', [np.complex128, np.complex64])
+def test_tp1_prepared_matches_direct(dtype):
+    """prepare_real_lens_traced()(E) must equal a direct apply_real_lens_traced
+    with the same prepared-mode settings (full-grid Newton, no tilt-aware,
+    sequential amp): exact at complex128, float32-ULP at complex64 (the
+    cached screen is complex128 so the prepared path is marginally MORE
+    accurate)."""
+    N, dx = 192, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+         * np.exp(1j * (2 * np.pi / LAM) * np.sin(0.01) * X)).astype(dtype)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        direct = apply_real_lens_traced(
+            E, prescription=_prep_lens(), wavelength=LAM, dx=dx,
+            ray_subsample=4, parallel_amp=False, newton_amp_mask_rel=0.0,
+            tilt_aware_rays=False)
+        prep = prepare_real_lens_traced(
+            prescription=_prep_lens(), wavelength=LAM, dx=dx, N=N,
+            ray_subsample=4)
+        out = prep(E)
+    assert out.shape == direct.shape and out.dtype == E.dtype
+    m = np.abs(direct) > 0.02 * np.abs(direct).max()
+    rel = float(np.linalg.norm((out - direct)[m])) / (float(np.linalg.norm(direct[m])) + 1e-30)
+    tol = 1e-12 if dtype == np.complex128 else 1e-5
+    assert rel < tol, f"{dtype.__name__}: prepared vs direct {rel:.2e}"
+
+
+def test_tp1_reuse_is_input_independent():
+    """One prepared object applied to two DIFFERENT inputs must equal two
+    direct calls -- i.e. the cached screen is genuinely input-independent."""
+    N, dx = 160, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E1 = np.exp(-(X ** 2 + Y ** 2) / (1.0e-3) ** 2).astype(np.complex128)
+    E2 = (np.exp(-((X - 0.4e-3) ** 2 + Y ** 2) / (0.7e-3) ** 2)
+          * np.exp(1j * (2 * np.pi / LAM) * np.sin(0.015) * Y)).astype(np.complex128)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        prep = prepare_real_lens_traced(prescription=_prep_lens(),
+                                        wavelength=LAM, dx=dx, N=N, ray_subsample=4)
+        kw = dict(prescription=_prep_lens(), wavelength=LAM, dx=dx,
+                  ray_subsample=4, parallel_amp=False, newton_amp_mask_rel=0.0,
+                  tilt_aware_rays=False)
+        for E in (E1, E2):
+            d = apply_real_lens_traced(E, **kw)
+            p = prep(E)
+            rel = float(np.linalg.norm(p - d)) / (float(np.linalg.norm(d)) + 1e-30)
+            assert rel < 1e-12, f"reuse mismatch {rel:.2e}"
+
+
+def test_tp1_rejects_auto_carrier():
+    with pytest.raises(ValueError, match="auto"):
+        prepare_real_lens_traced(prescription=_prep_lens(), wavelength=LAM,
+                                 dx=6e-6, N=128, carrier='auto')
+
+
+def test_tp1_shape_mismatch_raises():
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        prep = prepare_real_lens_traced(prescription=_prep_lens(),
+                                        wavelength=LAM, dx=6e-6, N=128, ray_subsample=4)
+    with pytest.raises(ValueError, match='shape'):
+        prep(np.ones((64, 64), dtype=np.complex128))
+
+
+# --------------------------------------------------------------------------
 # S5.1 carrier-referenced traced + F1 collimation guard
 # --------------------------------------------------------------------------
 from lumenairy.elements._lens_real import apply_real_lens  # noqa: E402
