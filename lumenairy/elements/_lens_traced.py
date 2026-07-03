@@ -1334,12 +1334,17 @@ def apply_real_lens_traced(
     --------------------
     * Collimated / MLA-relayed input, thick or cemented optics, sub-nm OPD
       -> ``apply_real_lens_traced`` (this function), ``carrier=None``.
-    * Divergent / converging / tilted source or emitter array through a
-      multi-element train (e.g. no-MLA direct imaging)
-      -> ``apply_real_lens_traced(carrier='auto')`` (or a known conjugate);
-      or ``apply_real_lens`` for a fast estimate on symmetric / well-
-      corrected designs (its per-surface thin-screen ``sag*theta^2`` error
-      is the design-dependent floor -- see its Oblique validity boundary).
+    * SINGLE divergent / converging / tilted source through a multi-element
+      train -> ``apply_real_lens_traced(carrier='auto')`` (or a known
+      conjugate): the carrier drives the reference residual to ~0.
+    * MULTI-source / emitter-array direct imaging (e.g. the no-MLA TX case):
+      a SINGLE carrier is insufficient -- each source is its own congruence,
+      so a per-lens residual survives (the ``on_noncollimated`` guard keeps
+      firing even with ``carrier='auto'``) and the spots stay soft.  Use
+      ``apply_real_lens`` (all angles via ASM legs; the validated choice for
+      this family -- mind its ``sag*theta^2`` oblique floor on fast /
+      asymmetric designs, see its Oblique validity boundary).  A future
+      K-carrier decomposition would extend the traced model here.
     * Genuinely multi-congruence fields, planes at/near a caustic, or
       JAX-autodiff design loops -> ``apply_real_lens_maslov`` /
       ``apply_real_lens_maslov_jax`` (``integration_method='local_quadrature'``
@@ -1535,8 +1540,8 @@ def apply_real_lens_traced(
         * ``'auto'`` -- fit a low-order polynomial carrier from ``E_in``'s
           intensity-weighted, wrapping-safe local tilt field (never
           per-pixel gradients -- that is the ``tilt_aware_rays`` failure
-          mode).  Robust on fringed multi-emitter fields; the correct
-          general choice when the conjugate is not known analytically.
+          mode).  Extracts the smooth COMMON wavefront; the correct choice
+          for a single divergent source of unknown conjugate.
 
         With a carrier the exit reference is well-conditioned (it focuses
         where the real beam does) and the rays launch along the carrier
@@ -1544,10 +1549,16 @@ def apply_real_lens_traced(
         only.  ``carrier`` forces ``fast_analytic_phase=False`` (the fast
         geometric reference cannot carry the carrier congruence).
 
-        Validity: one carrier fails for genuinely multi-congruence fields
-        (comparable-power beams at well-separated angles, e.g. immediately
-        post-DOE at large split angles) or planes at/near an intermediate
-        focus -- use :func:`apply_real_lens_maslov` there.
+        Validity: a SINGLE carrier only helps when the residual after its
+        removal is small.  It is INSUFFICIENT for genuinely multi-congruence
+        fields -- an emitter array whose per-source residual (source spread
+        / throw) is not small (e.g. the no-MLA TX imaging case; measured
+        design-119 per-lens residual ~0.02-0.04 rad even with
+        ``carrier='auto'``, so the ``on_noncollimated`` guard keeps firing
+        and the spots stay soft), comparable-power beams at well-separated
+        angles (post-DOE at large split), or planes at/near an intermediate
+        focus.  Use :func:`apply_real_lens` (split-step, all angles) or
+        :func:`apply_real_lens_maslov` there.
     on_noncollimated : {'warn', 'delegate', 'off'}, default 'warn'
         Policy when the input's residual angular spread (after removing any
         ``carrier``) exceeds the collimated-reference validity threshold --
