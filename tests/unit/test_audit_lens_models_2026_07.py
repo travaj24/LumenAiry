@@ -697,6 +697,57 @@ def test_n3_explicit_input_na_not_clamped_when_physical():
 import lumenairy.elements.lenses_maslov as _lm  # noqa: E402
 
 
+def test_mp4_numba_kernel_matches_numpy_reference():
+    """M-P4: the Numba 4-var Chebyshev value+derivative kernel must reproduce
+    the NumPy reference for all six outputs (f, df3, df4, d2_33, d2_34, d2_44)
+    to ULP -- same 3-term recurrences, only the term-reduction order differs."""
+    kern = _lm._get_cheb4d_numba()
+    if kern is None:
+        import pytest as _pt
+        _pt.skip("numba not available")
+    rng = np.random.default_rng(1)
+    P = 6
+    mi = _lm._multi_indices_total_degree(4, P)
+    K = [np.array([t[j] for t in mi], dtype=np.int64) for j in range(4)]
+    coef = rng.standard_normal(len(mi))
+    us = [rng.uniform(-1.0, 1.0, 3000) for _ in range(4)]
+    ref = _lm._opd6_numpy(coef, *K, *us, P)
+    old = _lm._MASLOV_USE_NUMBA
+    try:
+        _lm._MASLOV_USE_NUMBA = True
+        got = _lm._opd6(coef, *K, *us, P)
+    finally:
+        _lm._MASLOV_USE_NUMBA = old
+    for r, g in zip(ref, got):
+        rel = float(np.abs(r - g).max()) / (float(np.abs(r).max()) + 1e-30)
+        assert rel < 1e-12, f"kernel output diverges: {rel:.2e}"
+
+
+def test_mp4_end_to_end_numba_equals_numpy():
+    """apply_real_lens_maslov must give the same field with the Numba kernel
+    (default) and the NumPy reference path."""
+    if _lm._get_cheb4d_numba() is None:
+        import pytest as _pt
+        _pt.skip("numba not available")
+    N, dx = 192, 60e-6
+    E = _gauss(N, dx, w=3e-3)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              integration_method='stationary_phase', output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=6, n_v2=24)
+    old = _lm._MASLOV_USE_NUMBA
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            _lm._MASLOV_USE_NUMBA = True
+            nb = la.apply_real_lens_maslov(E, **kw)
+            _lm._MASLOV_USE_NUMBA = False
+            npx = la.apply_real_lens_maslov(E, **kw)
+    finally:
+        _lm._MASLOV_USE_NUMBA = old
+    rel = float(np.abs(nb - npx).max()) / (float(np.abs(npx).max()) + 1e-30)
+    assert rel < 1e-5, f"numba vs numpy end-to-end {rel:.2e}"
+
+
 def test_stationary_phase_pixel_banding_matches_unbanded():
     """Banding _opd_and_derivs by pixel must reproduce the unbanded result:
     byte-identical for a realistic band (reduction shape preserved), and

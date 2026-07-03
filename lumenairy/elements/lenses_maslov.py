@@ -76,6 +76,193 @@ from .lenses import (
     _warn_if_aperture_exceeds_grid,
 )
 
+# ---------------------------------------------------------------------------
+# M-P4 (audit perf): optional Numba kernel for the 4-variable Chebyshev
+# value+derivative sum ``_opd_and_derivs``.  The NumPy path materialises eight
+# (M, n_px) basis-gathered arrays and six full-array reductions per call; a
+# single @njit(parallel) kernel collapses that to O(poly_order) stack work per
+# sample via 3-term Chebyshev recurrences (T, T'=n*U_{n-1}, and the
+# differentiated T'' recurrence -- byte-for-byte the same recurrences as
+# lumenairy._math.chebyshev, so the only deviation from NumPy is the
+# term-reduction order -> ULP).  Lazily compiled on first use (numba import is
+# ~1.8 s); pure-NumPy fallback when numba is absent.  ``_MASLOV_USE_NUMBA`` is
+# a test seam (set False to force the NumPy reference).
+_MASLOV_USE_NUMBA = True
+
+import importlib.util as _mz_ilu  # noqa: E402
+
+_MZ_NUMBA_AVAILABLE = _mz_ilu.find_spec("numba") is not None
+_mz_njit = None
+_mz_prange = None
+_MZ_KERNELS: dict = {}
+
+
+def _mz_load_numba():
+    global _mz_njit, _mz_prange
+    if _mz_njit is not None:
+        return True
+    if not _MZ_NUMBA_AVAILABLE:
+        return False
+    from numba import njit as _nj
+    from numba import prange as _pr
+    _mz_njit, _mz_prange = _nj, _pr
+    return True
+
+
+def _get_cheb4d_numba():
+    """Compile (once) and return the 4-var Chebyshev value+deriv kernel, or
+    None if numba is unavailable."""
+    if "cheb4d" in _MZ_KERNELS:
+        return _MZ_KERNELS["cheb4d"]
+    if not _mz_load_numba():
+        _MZ_KERNELS["cheb4d"] = None
+        return None
+
+    @_mz_njit(cache=True, parallel=True, fastmath=True)
+    def _cheb4d_opd_derivs(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+        n = u1.shape[0]
+        M = coef.shape[0]
+        f = np.zeros(n)
+        df3 = np.zeros(n)
+        df4 = np.zeros(n)
+        d233 = np.zeros(n)
+        d234 = np.zeros(n)
+        d244 = np.zeros(n)
+        for i in _mz_prange(n):
+            a1 = u1[i]
+            a2 = u2[i]
+            a3 = u3[i]
+            a4 = u4[i]
+            # T_n (first kind) for all four variables
+            Tu1 = np.empty(P + 1)
+            Tu2 = np.empty(P + 1)
+            Tu3 = np.empty(P + 1)
+            Tu4 = np.empty(P + 1)
+            Tu1[0] = 1.0
+            Tu2[0] = 1.0
+            Tu3[0] = 1.0
+            Tu4[0] = 1.0
+            if P >= 1:
+                Tu1[1] = a1
+                Tu2[1] = a2
+                Tu3[1] = a3
+                Tu4[1] = a4
+            for m in range(2, P + 1):
+                Tu1[m] = 2.0 * a1 * Tu1[m - 1] - Tu1[m - 2]
+                Tu2[m] = 2.0 * a2 * Tu2[m - 1] - Tu2[m - 2]
+                Tu3[m] = 2.0 * a3 * Tu3[m - 1] - Tu3[m - 2]
+                Tu4[m] = 2.0 * a4 * Tu4[m - 1] - Tu4[m - 2]
+            # U_n (second kind) for u3, u4 -> first derivative T'_n = n*U_{n-1}
+            Uu3 = np.empty(P + 1)
+            Uu4 = np.empty(P + 1)
+            Uu3[0] = 1.0
+            Uu4[0] = 1.0
+            if P >= 1:
+                Uu3[1] = 2.0 * a3
+                Uu4[1] = 2.0 * a4
+            for m in range(2, P + 1):
+                Uu3[m] = 2.0 * a3 * Uu3[m - 1] - Uu3[m - 2]
+                Uu4[m] = 2.0 * a4 * Uu4[m - 1] - Uu4[m - 2]
+            dTu3 = np.zeros(P + 1)
+            dTu4 = np.zeros(P + 1)
+            for m in range(1, P + 1):
+                dTu3[m] = float(m) * Uu3[m - 1]
+                dTu4[m] = float(m) * Uu4[m - 1]
+            # T''_n via differentiated recurrence: T''_2=4,
+            # T''_{n+1} = 2u T''_n + 4 T'_n - T''_{n-1}
+            d2Tu3 = np.zeros(P + 1)
+            d2Tu4 = np.zeros(P + 1)
+            if P >= 2:
+                d2Tu3[2] = 4.0
+                d2Tu4[2] = 4.0
+            for m in range(2, P):
+                d2Tu3[m + 1] = 2.0 * a3 * d2Tu3[m] + 4.0 * dTu3[m] - d2Tu3[m - 1]
+                d2Tu4[m + 1] = 2.0 * a4 * d2Tu4[m] + 4.0 * dTu4[m] - d2Tu4[m - 1]
+            sf = 0.0
+            sdf3 = 0.0
+            sdf4 = 0.0
+            sd233 = 0.0
+            sd234 = 0.0
+            sd244 = 0.0
+            for mm in range(M):
+                k1 = K1[mm]
+                k2 = K2[mm]
+                k3 = K3[mm]
+                k4 = K4[mm]
+                t12 = Tu1[k1] * Tu2[k2]
+                base = coef[mm] * t12       # matches NumPy's c * (T1b*T2b)
+                t3 = Tu3[k3]
+                t4 = Tu4[k4]
+                dt3 = dTu3[k3]
+                dt4 = dTu4[k4]
+                sf += base * t3 * t4
+                sdf3 += base * dt3 * t4
+                sdf4 += base * t3 * dt4
+                sd233 += base * d2Tu3[k3] * t4
+                sd244 += base * t3 * d2Tu4[k4]
+                sd234 += base * dt3 * dt4
+            f[i] = sf
+            df3[i] = sdf3
+            df4[i] = sdf4
+            d233[i] = sd233
+            d234[i] = sd234
+            d244[i] = sd244
+        return f, df3, df4, d233, d234, d244
+
+    _MZ_KERNELS["cheb4d"] = _cheb4d_opd_derivs
+    return _cheb4d_opd_derivs
+
+
+def _opd6_numpy(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """NumPy reference for the 4-var Chebyshev value + v2-derivatives.  Returns
+    (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44)."""
+    T1 = _chebyshev_vandermonde(u1, P)
+    T2 = _chebyshev_vandermonde(u2, P)
+    T3 = _chebyshev_vandermonde(u3, P)
+    T4 = _chebyshev_vandermonde(u4, P)
+    dT3 = _chebyshev_derivative_vandermonde(u3, P)
+    dT4 = _chebyshev_derivative_vandermonde(u4, P)
+    d2T3 = _chebyshev_second_derivative_vandermonde(u3, P)
+    d2T4 = _chebyshev_second_derivative_vandermonde(u4, P)
+    T1b = T1[K1]
+    T2b = T2[K2]
+    T3b = T3[K3]
+    T4b = T4[K4]
+    dT3b = dT3[K3]
+    dT4b = dT4[K4]
+    d2T3b = d2T3[K3]
+    d2T4b = d2T4[K4]
+    T12 = T1b * T2b
+    c = coef[:, None]
+    f = np.sum(c * T12 * T3b * T4b, axis=0)
+    df_du3 = np.sum(c * T12 * dT3b * T4b, axis=0)
+    df_du4 = np.sum(c * T12 * T3b * dT4b, axis=0)
+    d2f_33 = np.sum(c * T12 * d2T3b * T4b, axis=0)
+    d2f_44 = np.sum(c * T12 * T3b * d2T4b, axis=0)
+    d2f_34 = np.sum(c * T12 * dT3b * dT4b, axis=0)
+    return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+
+
+def _opd6(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Dispatch the 4-var Chebyshev value+deriv sum to the Numba kernel
+    (default, when available) or the NumPy reference.  Result-identical to
+    ULP; the kernel avoids the eight (M, n) basis arrays + six reductions."""
+    if _MASLOV_USE_NUMBA:
+        kern = _get_cheb4d_numba()
+        if kern is not None:
+            return kern(
+                np.ascontiguousarray(coef, dtype=np.float64),
+                np.ascontiguousarray(K1, dtype=np.int64),
+                np.ascontiguousarray(K2, dtype=np.int64),
+                np.ascontiguousarray(K3, dtype=np.int64),
+                np.ascontiguousarray(K4, dtype=np.int64),
+                np.ascontiguousarray(u1, dtype=np.float64),
+                np.ascontiguousarray(u2, dtype=np.float64),
+                np.ascontiguousarray(u3, dtype=np.float64),
+                np.ascontiguousarray(u4, dtype=np.float64),
+                int(P))
+    return _opd6_numpy(coef, K1, K2, K3, K4, u1, u2, u3, u4, P)
+
 
 def apply_real_lens_maslov(
     E_in: np.ndarray,
@@ -1100,31 +1287,10 @@ def _integrate_stationary_phase(
     u_v2y = np.zeros(N_px, dtype=np.float64)
 
     def _opd_and_derivs(coef, u1, u2, u3, u4):
-        T1 = _chebyshev_vandermonde(u1, poly_order)
-        T2 = _chebyshev_vandermonde(u2, poly_order)
-        T3 = _chebyshev_vandermonde(u3, poly_order)
-        T4 = _chebyshev_vandermonde(u4, poly_order)
-        dT3 = _chebyshev_derivative_vandermonde(u3, poly_order)
-        dT4 = _chebyshev_derivative_vandermonde(u4, poly_order)
-        d2T3 = _chebyshev_second_derivative_vandermonde(u3, poly_order)
-        d2T4 = _chebyshev_second_derivative_vandermonde(u4, poly_order)
-        T1b = T1[K1_arr]
-        T2b = T2[K2_arr]
-        T3b = T3[K3_arr]
-        T4b = T4[K4_arr]
-        dT3b = dT3[K3_arr]
-        dT4b = dT4[K4_arr]
-        d2T3b = d2T3[K3_arr]
-        d2T4b = d2T4[K4_arr]
-        T12 = T1b * T2b
-        c = coef[:, None]
-        f        = np.sum(c * T12 * T3b  * T4b , axis=0)
-        df_du3   = np.sum(c * T12 * dT3b * T4b , axis=0)
-        df_du4   = np.sum(c * T12 * T3b  * dT4b, axis=0)
-        d2f_33   = np.sum(c * T12 * d2T3b* T4b , axis=0)
-        d2f_44   = np.sum(c * T12 * T3b  * d2T4b, axis=0)
-        d2f_34   = np.sum(c * T12 * dT3b * dT4b, axis=0)
-        return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+        # M-P4: dispatch to the Numba kernel (default, ULP-equal) or the
+        # NumPy reference; returns (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44).
+        return _opd6(coef, K1_arr, K2_arr, K3_arr, K4_arr,
+                     u1, u2, u3, u4, poly_order)
 
     # Deferred follow-up (audit remediation): _opd_and_derivs builds the
     # (M, n_px) Chebyshev basis for ALL its input pixels at once, so a
@@ -1281,31 +1447,10 @@ def _integrate_local_quadrature(
     u_v2y = np.zeros(N_px, dtype=np.float64)
 
     def _opd_and_derivs(coef, u1, u2, u3, u4):
-        T1 = _chebyshev_vandermonde(u1, poly_order)
-        T2 = _chebyshev_vandermonde(u2, poly_order)
-        T3 = _chebyshev_vandermonde(u3, poly_order)
-        T4 = _chebyshev_vandermonde(u4, poly_order)
-        dT3 = _chebyshev_derivative_vandermonde(u3, poly_order)
-        dT4 = _chebyshev_derivative_vandermonde(u4, poly_order)
-        d2T3 = _chebyshev_second_derivative_vandermonde(u3, poly_order)
-        d2T4 = _chebyshev_second_derivative_vandermonde(u4, poly_order)
-        T1b = T1[K1_arr]
-        T2b = T2[K2_arr]
-        T3b = T3[K3_arr]
-        T4b = T4[K4_arr]
-        dT3b = dT3[K3_arr]
-        dT4b = dT4[K4_arr]
-        d2T3b = d2T3[K3_arr]
-        d2T4b = d2T4[K4_arr]
-        T12 = T1b * T2b
-        c = coef[:, None]
-        f        = np.sum(c * T12 * T3b  * T4b , axis=0)
-        df_du3   = np.sum(c * T12 * dT3b * T4b , axis=0)
-        df_du4   = np.sum(c * T12 * T3b  * dT4b, axis=0)
-        d2f_33   = np.sum(c * T12 * d2T3b* T4b , axis=0)
-        d2f_44   = np.sum(c * T12 * T3b  * d2T4b, axis=0)
-        d2f_34   = np.sum(c * T12 * dT3b * dT4b, axis=0)
-        return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+        # M-P4: dispatch to the Numba kernel (default, ULP-equal) or the
+        # NumPy reference; returns (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44).
+        return _opd6(coef, K1_arr, K2_arr, K3_arr, K4_arr,
+                     u1, u2, u3, u4, poly_order)
 
     converged = np.zeros(N_px, dtype=bool)
     converged[~inbox_flat] = True
