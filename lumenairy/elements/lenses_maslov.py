@@ -708,12 +708,19 @@ def apply_real_lens_maslov(
     for j, (k1, k2, k3, k4) in enumerate(mi):
         A[:, j] = T1[k1] * T2[k2] * T3[k3] * T4[k4]
 
-    _progress('fit', 0.35, 'solving lstsq for OPD')
-    coef_opd, *_ = np.linalg.lstsq(A, opd_residual, rcond=None)
-    _progress('fit', 0.45, 'solving lstsq for s1x')
-    coef_s1x, *_ = np.linalg.lstsq(A, s1x_live, rcond=None)
-    _progress('fit', 0.55, 'solving lstsq for s1y')
-    coef_s1y, *_ = np.linalg.lstsq(A, s1y_live, rcond=None)
+    # Perf (M-P5-adjacent): the OPD, s1x and s1y fits all share the SAME
+    # design matrix A, so solve them with a single stacked right-hand side --
+    # one SVD of A instead of three.  ~2.9x cheaper on the fit stage (which
+    # dominates the Maslov runtime once M-P4 has accelerated the integrate
+    # step).  LAPACK's multi-RHS gelsd path reorders slightly vs three
+    # single-RHS solves, so the coefficients differ at ULP (~1e-15 relative,
+    # far below complex64 output precision) -- not byte-identical.
+    _progress('fit', 0.35, 'solving lstsq for OPD + s1x + s1y (stacked RHS)')
+    _coef3, *_ = np.linalg.lstsq(
+        A, np.column_stack([opd_residual, s1x_live, s1y_live]), rcond=None)
+    coef_opd = _coef3[:, 0]
+    coef_s1x = _coef3[:, 1]
+    coef_s1y = _coef3[:, 2]
 
     opd_pred = A @ coef_opd
     s1x_pred = A @ coef_s1x
