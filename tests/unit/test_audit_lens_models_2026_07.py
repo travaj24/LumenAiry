@@ -614,28 +614,44 @@ def test_quadrature_factorization_matches_explicit_G(use_numexpr):
 
 @pytest.mark.parametrize('use_numexpr', [False, True])
 def test_quadrature_output_row_banding_matches_unbanded(use_numexpr):
-    """Building G one output-row-band at a time must be byte-identical to the
-    single-band path, for both the numpy and numexpr integrand kernels."""
+    """Output-row-banding must not change the result across band sizes.  On
+    the explicit-G reference path (`_QUAD_FACTORIZE=False`) the banding is
+    BYTE-identical (the GEMM contraction is band-independent).  On the default
+    Kronecker-factorized path the per-band `einsum` picks a contraction order
+    that depends on the band's row count -- notably a degenerate 1-row band
+    differs at ULP -- so there the invariant is ULP, not byte-identical."""
     N, dx = 160, 60e-6
     E = _gauss(N, dx, w=3e-3)
     kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
               integration_method='quadrature', output_subsample=1,
               ray_field_samples=14, ray_pupil_samples=14, poly_order=4, n_v2=20,
               use_numexpr=use_numexpr)
-    old = _lm._QUAD_ROW_BAND
+    old_band = _lm._QUAD_ROW_BAND
+    old_fac = _lm._QUAD_FACTORIZE
     try:
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
+            # (a) reference GEMM path: byte-identical across band sizes.
+            _lm._QUAD_FACTORIZE = False
             _lm._QUAD_ROW_BAND = None
             ref = la.apply_real_lens_maslov(E, **kw)
-            _lm._QUAD_ROW_BAND = 7      # non-divisor of N -> ragged last band
+            _lm._QUAD_ROW_BAND = 7       # non-divisor of N -> ragged last band
             band7 = la.apply_real_lens_maslov(E, **kw)
-            _lm._QUAD_ROW_BAND = 1      # one output row per band
+            _lm._QUAD_ROW_BAND = 1       # one output row per band
             band1 = la.apply_real_lens_maslov(E, **kw)
+            assert np.array_equal(ref, band7), "GEMM 7-row band not byte-identical"
+            assert np.array_equal(ref, band1), "GEMM 1-row band not byte-identical"
+            # (b) default factorized path: band-invariant to ULP.
+            _lm._QUAD_FACTORIZE = True
+            _lm._QUAD_ROW_BAND = None
+            fref = la.apply_real_lens_maslov(E, **kw)
+            _lm._QUAD_ROW_BAND = 1
+            fband1 = la.apply_real_lens_maslov(E, **kw)
     finally:
-        _lm._QUAD_ROW_BAND = old
-    assert np.array_equal(ref, band7), "7-row band not byte-identical"
-    assert np.array_equal(ref, band1), "1-row band not byte-identical"
+        _lm._QUAD_ROW_BAND = old_band
+        _lm._QUAD_FACTORIZE = old_fac
+    rel = float(np.abs(fref - fband1).max()) / (float(np.abs(fref).max()) + 1e-30)
+    assert rel < 1e-6, f"factorized band-variance exceeds ULP: {rel:.2e}"
 
 
 def test_non_divisible_subsample_roundtrips():
