@@ -480,6 +480,26 @@ def apply_real_lens(
     a few specific geometries (asymmetric meniscus, very steep
     asphere) but not a universal improvement.
 
+    Oblique validity boundary
+    -------------------------
+    Each surface is modelled as a **normal-projected thin phase
+    screen**: ``sag(x, y)`` is the axial (z) surface departure and the
+    OPD ``(n2-n1)*sag`` is imprinted on a single axial plane, with exact
+    homogeneous angular-spectrum propagation between surfaces.  A thin
+    screen collapses the finite ray traverse through the sag onto one
+    plane, so the residual OPD error per surface scales as the leading
+    obliquity term ``~ sag * theta**2``, where ``theta`` is the local
+    ray angle at that surface.  The bound is therefore
+    **design-dependent**: it grows with fast (high-NA) surfaces, large
+    sag, and off-axis fields, and shrinks toward the axis and for slow
+    surfaces.  In **symmetric relays** the even-order (``theta**2``)
+    errors of conjugate surfaces partially cancel, so such designs reach
+    much sharper OPD agreement than the per-surface bound alone would
+    predict -- do not generalise that sharpness to asymmetric systems.
+    When ``sag * theta**2`` is not negligible against the target OPD
+    tolerance, use :func:`apply_real_lens_traced` (per-pixel ray-traced
+    OPL) or ``slant_correction=True`` (partial obliquity correction).
+
     Optional opt-in features add further physical realism:
 
     * ``fresnel=True`` -- multiply by s/p-averaged Fresnel amplitude

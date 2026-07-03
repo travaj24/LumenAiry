@@ -50,6 +50,7 @@ from .lenses import (
     _multi_indices_total_degree,
     _warn_if_aperture_exceeds_grid,
 )
+from ..progress import call_progress
 
 
 def apply_real_lens_maslov(
@@ -207,15 +208,19 @@ def apply_real_lens_maslov(
         pass
 
     def _progress(phase, frac, note=''):
+        dt = time.perf_counter() - t0
         if progress is not None:
-            try:
-                progress(phase=phase, fraction=float(frac),
-                         elapsed=time.perf_counter() - t0, note=note)
-            except TypeError:
-                progress(phase, float(frac), time.perf_counter() - t0,
-                         note)
+            # F3 (audit): emit the suite-standard (stage, fraction,
+            # message) signature via call_progress instead of the old
+            # bespoke keyword/4-positional protocol, which raised
+            # TypeError on a standard (label, frac[, msg]) callback and
+            # crashed the propagator mid-lens.  ``phase`` becomes the
+            # stage label; the note + elapsed time fold into the message
+            # so no information is lost.  call_progress swallows broken-
+            # callback exceptions so a progress bar can never crash the run.
+            msg = f'{note} ({dt:.1f}s)' if note else f'({dt:.1f}s)'
+            call_progress(progress, phase, float(frac), msg)
         if verbose:
-            dt = time.perf_counter() - t0
             print(f"  maslov {phase:>10s}  {frac*100:5.1f}%  "
                   f"({dt:6.1f}s) {note}", flush=True)
 
@@ -486,20 +491,7 @@ def apply_real_lens_maslov(
             f"got {integration_method!r}")
 
     _progress('integrate', 0.60,
-              f'method={integration_method}; '
-              f'precomputing (s2)-basis on {N_out_coarse}^2 output grid')
-
-    Tx_1d = _chebyshev_vandermonde(
-        (out_axis - s2x_c) / s2x_h, poly_order)
-    Ty_1d = _chebyshev_vandermonde(
-        (out_axis - s2y_c) / s2y_h, poly_order)
-
-    M = len(mi)
-    G = np.empty((N_out_coarse * N_out_coarse, M), dtype=np.float64)
-    for m, (k1, k2, _, _) in enumerate(mi):
-        G[:, m] = np.outer(Ty_1d[k2], Tx_1d[k1]).ravel()
-    _progress('integrate', 0.63,
-              f'G matrix {G.shape} = {G.nbytes/1e6:.1f} MB')
+              f'method={integration_method}')
 
     K1_arr = np.array([k[0] for k in mi], dtype=np.int64)
     K2_arr = np.array([k[1] for k in mi], dtype=np.int64)
@@ -512,7 +504,7 @@ def apply_real_lens_maslov(
         E_out_coarse = _integrate_stationary_phase(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, G, N_out_coarse,
+            poly_order, N_out_coarse,
             u_s2x_out, u_s2y_out, inbox_flat,
             v2x_c, v2y_c, v2x_h, v2y_h,
             sample_E_bilinear,
@@ -524,7 +516,7 @@ def apply_real_lens_maslov(
         E_out_coarse = _integrate_local_quadrature(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, G, N_out_coarse,
+            poly_order, N_out_coarse,
             u_s2x_out, u_s2y_out, inbox_flat,
             v2x_c, v2y_c, v2x_h, v2y_h,
             sample_E_bilinear,
@@ -534,6 +526,25 @@ def apply_real_lens_maslov(
             out_dtype=E_in.dtype,
         )
     else:
+        # N1 (audit): the (N_out^2, M) Chebyshev design matrix G is used
+        # ONLY by the quadrature integrator (its G @ H GEMMs).  The
+        # stationary_phase / local_quadrature integrators evaluate the
+        # Chebyshev basis per pixel-chunk and never touch G, so building
+        # it unconditionally forced a 451 GB allocation at N=16384 /
+        # output_subsample=1 on integrators that never read it.  Build it
+        # here, in the quadrature branch only.
+        _progress('integrate', 0.61,
+                  f'precomputing (s2)-basis on {N_out_coarse}^2 output grid')
+        Tx_1d = _chebyshev_vandermonde(
+            (out_axis - s2x_c) / s2x_h, poly_order)
+        Ty_1d = _chebyshev_vandermonde(
+            (out_axis - s2y_c) / s2y_h, poly_order)
+        M = len(mi)
+        G = np.empty((N_out_coarse * N_out_coarse, M), dtype=np.float64)
+        for m, (k1, k2, _, _) in enumerate(mi):
+            G[:, m] = np.outer(Ty_1d[k2], Tx_1d[k1]).ravel()
+        _progress('integrate', 0.63,
+                  f'G matrix {G.shape} = {G.nbytes/1e6:.1f} MB')
         E_out_coarse = _integrate_quadrature(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
@@ -768,7 +779,7 @@ def _integrate_quadrature(
 def _integrate_stationary_phase(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
-    poly_order, G, N_out_coarse,
+    poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
     v2x_c, v2y_c, v2x_h, v2y_h,
     sample_E_bilinear,
@@ -917,7 +928,7 @@ def _integrate_stationary_phase(
 def _integrate_local_quadrature(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
-    poly_order, G, N_out_coarse,
+    poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
     v2x_c, v2y_c, v2x_h, v2y_h,
     sample_E_bilinear,

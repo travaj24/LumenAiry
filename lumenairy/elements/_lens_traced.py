@@ -1283,6 +1283,18 @@ def apply_real_lens_traced(
         force the in-process serial path (useful for reproducible
         timings or when called from a parent pool that already
         saturates the machine).
+
+        .. note::
+           This knob is currently a **no-op for the default**
+           ``newton_fit='polynomial'`` path: the Newton inversion always
+           runs in-process (serial) for the polynomial fit, because the
+           process worker rebuilds a SciPy spline
+           (``RectBivariateSpline``) rather than the polynomial
+           ``_Cheb2DEvaluator``.  ``n_workers`` only engages the process
+           pool for ``newton_fit='spline'`` on the CPU path
+           (``use_gpu=False``).  Polynomial Newton is cheap at the
+           default subsampling, so the serial path is not a bottleneck
+           in practice.
     tilt_aware_rays : bool, default False
         If True, each ray's initial direction ``(L, M)`` is derived
         from the local phase gradient of ``E_in`` at the entrance
@@ -1913,33 +1925,71 @@ def apply_real_lens_traced(
             mask = mag > 0.05 * mag.max()
             del mag
             if mask.any():
-                phase = np.angle(E_arr)
-                dpy, dpx = np.gradient(phase, dx, dx)
-                del phase
                 k0 = 2.0 * np.pi / wavelength
-                tilt_rms = float(np.sqrt(
-                    (np.mean((dpx[mask] / k0) ** 2)
-                     + np.mean((dpy[mask] / k0) ** 2))))
-                # v5.16.2 (memory root-cause): free the full-grid
-                # diagnostics IMMEDIATELY.  Pre-fix, mag/mask/phase/dpx/
-                # dpy stayed referenced by this frame for the REST of the
-                # lens call -- ~4 full-grid float32 + a bool (~18 GB at
-                # N=32768) held through the ray trace, Newton, and
-                # assembly.  tracemalloc-attributed as the largest single
-                # component of the 3.2.14.1 -> 5.16.x traced-lens memory
-                # growth.  Values/output unchanged (pure lifetime fix).
-                del dpx, dpy
+                # Local transverse tilt (direction cosines) via NEAREST-
+                # NEIGHBOUR phase increments -- angle(E[i+1]*conj(E[i])) --
+                # which is WRAPPING-SAFE: for an adequately-sampled field
+                # each increment is in (-pi, pi], so a strongly-tilted beam
+                # (many 2*pi wraps across the aperture) does NOT produce the
+                # gradient spikes that np.gradient(np.angle(E)) does.  Those
+                # spikes previously corrupted both the RMS and the mean and
+                # mis-classified strong single tilts as incoherent.
+                _gx = E_arr[:, 1:] * np.conj(E_arr[:, :-1])
+                _Lx = (np.angle(_gx) / (k0 * dx))[mask[:, 1:] & mask[:, :-1]]
+                del _gx
+                _gy = E_arr[1:, :] * np.conj(E_arr[:-1, :])
+                _My = (np.angle(_gy) / (k0 * dx))[mask[1:, :] & mask[:-1, :]]
+                del _gy
+                # v5.16.2 (memory root-cause): keep only the masked 1-D
+                # samples; the full-grid increment/angle arrays are freed
+                # here so nothing rides through the ray trace / Newton /
+                # assembly (~18 GB at N=32768 in the pre-fix code).
+                if _Lx.size and _My.size:
+                    tilt_rms = float(np.sqrt(np.mean(_Lx ** 2)
+                                             + np.mean(_My ** 2)))
+                    # F4 (audit): a genuine SINGLE-beam tilt has a spatially
+                    # COHERENT direction field, so |mean(L,M)| ~ rms(L,M)
+                    # (coherence_ratio ~ 1) and tilt_aware_rays=True recovers
+                    # the per-ray direction.  A MULTI-source / post-DOE
+                    # interference field has sign-varying local directions
+                    # whose vector mean ~ 0 while the RMS is large
+                    # (coherence_ratio << 1); there tilt_aware_rays cannot
+                    # recover a per-ray direction (_sample_local_tilts
+                    # degenerates it toward the collimated launch, or worse),
+                    # so recommending it is actively misleading -- point at
+                    # apply_real_lens / carrier= instead.
+                    coherent = float(np.hypot(np.mean(_Lx), np.mean(_My)))
+                    coherence_ratio = (coherent / tilt_rms
+                                       if tilt_rms > 0 else 1.0)
+                else:
+                    tilt_rms = 0.0
+                    coherence_ratio = 1.0
+                del _Lx, _My
                 if tilt_rms > 1e-4:
                     import warnings
-                    warnings.warn(
-                        "apply_real_lens_traced: tilt_aware_rays=False "
-                        f"with a non-trivial input-field tilt (RMS = "
-                        f"{tilt_rms:.2e} rad).  The plane-wave "
-                        "reference OPD is off by an amount proportional "
-                        "to (tilt * aperture); set tilt_aware_rays=True "
-                        "for tilt-sensitive analyses.",
-                        RuntimeWarning, stacklevel=3,
-                    )
+                    if coherence_ratio >= 0.5:
+                        warnings.warn(
+                            "apply_real_lens_traced: tilt_aware_rays=False "
+                            f"with a non-trivial single-beam input tilt "
+                            f"(RMS = {tilt_rms:.2e} rad).  The plane-wave "
+                            "reference OPD is off by an amount proportional "
+                            "to (tilt * aperture); set tilt_aware_rays=True "
+                            "for tilt-sensitive analyses.",
+                            RuntimeWarning, stacklevel=3,
+                        )
+                    else:
+                        warnings.warn(
+                            "apply_real_lens_traced: tilt_aware_rays=False "
+                            f"with a non-trivial, spatially INCOHERENT input "
+                            f"tilt (RMS = {tilt_rms:.2e} rad, coherence "
+                            f"{coherence_ratio:.2f}) -- a multi-source / "
+                            "post-DOE interference field.  Do NOT set "
+                            "tilt_aware_rays=True here (per-pixel direction "
+                            "estimation fails on fringed fields); use "
+                            "apply_real_lens, or apply_real_lens_traced with "
+                            "a carrier= reference once available.",
+                            RuntimeWarning, stacklevel=3,
+                        )
             del E_arr, mask
         except (ValueError, RuntimeError, ZeroDivisionError, IndexError,
                 AttributeError, TypeError):
