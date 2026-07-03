@@ -92,6 +92,7 @@ from .lenses import (
     apply_real_lens,
     apply_real_lens_maslov,
     apply_real_lens_traced,
+    apply_real_lens_traced_multi,
     apply_spherical_lens,
     apply_thin_lens,
     check_grid_vs_apertures,
@@ -174,6 +175,7 @@ __all__ = [
     # lenses
     'apply_thin_lens', 'apply_spherical_lens', 'apply_aspheric_lens',
     'apply_real_lens', 'apply_real_lens_traced', 'apply_real_lens_maslov',
+    'apply_real_lens_traced_multi',
     'prepare_real_lens_traced', 'PreparedTracedLens',
     'set_lens_parallel_amp', 'get_lens_parallel_amp',
     'set_lens_sag_dtype', 'get_lens_sag_dtype',

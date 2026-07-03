@@ -952,6 +952,7 @@ from ._lens_thin import (  # noqa: E402, F401
 from ._lens_traced import (  # noqa: E402, F401
     PreparedTracedLens,
     apply_real_lens_traced,
+    apply_real_lens_traced_multi,
     close_worker_pool,
     get_lens_parallel_amp,
     prepare_real_lens_traced,

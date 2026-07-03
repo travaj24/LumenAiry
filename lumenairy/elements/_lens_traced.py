@@ -3045,6 +3045,150 @@ def apply_real_lens_traced(
     return E_out
 
 
+def _carrier_reuse_key(carrier):
+    """Hashable key for a carrier that is SAFE to share a prepared screen
+    across emitters, or None if it must get its own trace.  'auto' fits the
+    carrier from each field, so every emitter's 'auto' carrier is different ->
+    NOT reusable.  An ndarray wavefront is per-emitter data -> not reusable.
+    A float conjugate distance or None (plane wave) is a shared geometry ->
+    reusable."""
+    if carrier is None:
+        return ('none',)
+    if isinstance(carrier, str):
+        return None            # 'auto' (or any string mode): never share
+    if isinstance(carrier, np.ndarray):
+        return None            # explicit per-field wavefront: never share
+    try:
+        return ('scalar', float(carrier))
+    except (TypeError, ValueError):
+        return None
+
+
+def apply_real_lens_traced_multi(
+    emitter_fields,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    carriers: Any = 'auto',
+    reuse_prepared: bool = True,
+    **traced_kwargs,
+) -> np.ndarray:
+    """Coherently sum the traced lens applied to each emitter's field SEPARATELY.
+
+    The traced model assigns one ray-traced OPL per output pixel (the dominant
+    congruence), so it is **not linear**: when several emitter beams overlap on
+    a pixel, ``traced(sum_k E_k)`` violates the single-OPL assumption.  Each
+    emitter taken ALONE is a single congruence, so ``traced(E_k, carrier_k)`` is
+    valid, and this returns their coherent sum::
+
+        E_image = sum_k  apply_real_lens_traced(E_k, carrier=carrier_k, ...)
+
+    which is the tractable form of carrier K-decomposition -- the K congruences
+    are the *known* emitters, so no blind congruence segmentation is needed.
+    It is exact for a single emitter and reproduces every per-emitter congruence
+    correctly.
+
+    **When this actually helps (read before using).**  The value is regime-
+    dependent, and this is NOT a universal upgrade:
+
+    * The analytic :func:`apply_real_lens` is **exactly linear**, so for it
+      ``analytic(sum E_k) == sum analytic(E_k)`` -- there is *zero* benefit; just
+      propagate the combined field once.
+    * For a **well-corrected** lens the traced OPD correction is ~0, i.e.
+      ``traced ~= analytic``, so ``traced(sum E_k)`` is already essentially exact
+      and this per-emitter path only *adds* the per-emitter carrier-fit residual.
+    * This mode earns its keep only when you genuinely need the traced ray-OPD
+      **refinement** (a lens aberrated enough that analytic is insufficient) AND
+      the scene is multi-emitter.  There the traced non-linearity is large
+      (>100% between ``traced(sum)`` and this sum on strongly-aberrated lenses),
+      and applying traced per emitter is the correct way to keep it valid.
+    * Note the no-MLA multi-angle *direct-imaging* case was separately found to
+      be modelled correctly by **analytic**, not traced -- so for that geometry
+      prefer analytic on the combined field; this mode is for when traced's
+      refinement is the thing you specifically want.
+
+    Composes with T-P1: pass a shared explicit ``carrier`` (or ``None``) with
+    ``reuse_prepared=True`` to pay the trace/fit/Newton cost once across all
+    emitters that share it (see ``reuse_prepared``).
+
+    Parameters
+    ----------
+    emitter_fields : sequence of complex ndarray
+        Each ``E_k`` is the field AT THE LENS-INPUT PLANE from emitter ``k``
+        alone (propagate each emitter to the lens plane first).  All must share
+        the grid.
+    carriers : 'auto' | None | float | ndarray | sequence
+        Per-emitter carrier passed to :func:`apply_real_lens_traced`.  A scalar
+        / string / single ndarray is broadcast to every emitter; a list/tuple of
+        length ``len(emitter_fields)`` is used element-wise.  Default ``'auto'``
+        fits each emitter's own congruence (drives its residual angular spread
+        to ~0), which is what a divergent point-source array needs.
+    reuse_prepared : bool
+        When True and a carrier is a shared geometry (``None`` or a float
+        conjugate distance), a :class:`PreparedTracedLens` screen is built once
+        per distinct carrier and reused across emitters -- the trace/fit/Newton
+        cost is paid once instead of per emitter.  ``'auto'`` and ndarray
+        carriers are always full per-emitter passes (their screens differ).
+
+    Returns
+    -------
+    E_image : complex ndarray
+        The coherently-summed output field, dtype following the emitter fields.
+    """
+    fields = list(emitter_fields)
+    if not fields:
+        raise ValueError("apply_real_lens_traced_multi: emitter_fields is empty.")
+    n = len(fields)
+    shape0 = np.asarray(fields[0]).shape
+    for k, E in enumerate(fields):
+        if np.asarray(E).shape != shape0:
+            raise ValueError(
+                f"apply_real_lens_traced_multi: emitter_fields[{k}] shape "
+                f"{np.asarray(E).shape} != emitter_fields[0] {shape0}.")
+
+    if isinstance(carriers, (list, tuple)):
+        if len(carriers) != n:
+            raise ValueError(
+                f"apply_real_lens_traced_multi: carriers list length "
+                f"{len(carriers)} != number of emitters {n}.")
+        carr_list = list(carriers)
+    else:
+        carr_list = [carriers] * n     # scalar / str / single ndarray broadcast
+
+    # Each per-emitter pass runs full-grid Newton (no amp mask) so an emitter's
+    # OWN dim regions are never clipped -- they may still contribute where a
+    # later emitter is bright, and the reuse path (prepared screen) already
+    # forces this.  tilt_aware_rays is off (the carrier carries the tilt) and
+    # the phase is preserved.  These override any conflicting traced_kwargs.
+    for _k in ('newton_amp_mask_rel', 'tilt_aware_rays', 'preserve_input_phase',
+               'return_screen', 'parallel_amp'):
+        traced_kwargs.pop(_k, None)
+
+    N = int(shape0[0])
+    prepared_cache = {}
+    E_out = None
+    for E_k, carrier_k in zip(fields, carr_list):
+        E_k = np.asarray(E_k)
+        key = _carrier_reuse_key(carrier_k) if reuse_prepared else None
+        if key is not None:
+            prep = prepared_cache.get(key)
+            if prep is None:
+                prep = prepare_real_lens_traced(
+                    prescription=prescription, wavelength=wavelength, dx=dx,
+                    N=N, carrier=carrier_k, **traced_kwargs)
+                prepared_cache[key] = prep
+            contrib = prep(E_k)
+        else:
+            contrib = apply_real_lens_traced(
+                E_k, prescription=prescription, wavelength=wavelength, dx=dx,
+                carrier=carrier_k, newton_amp_mask_rel=0.0,
+                tilt_aware_rays=False, preserve_input_phase=True,
+                parallel_amp=False, **traced_kwargs)
+        E_out = contrib if E_out is None else E_out + contrib
+    return E_out
+
+
 class PreparedTracedLens:
     """A traced lens with its input-independent phase ``screen`` precomputed.
 
@@ -3162,6 +3306,7 @@ def prepare_real_lens_traced(
 
 __all__ = [
     'apply_real_lens_traced',
+    'apply_real_lens_traced_multi',
     'prepare_real_lens_traced',
     'PreparedTracedLens',
     'close_worker_pool',

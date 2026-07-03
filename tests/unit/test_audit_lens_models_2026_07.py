@@ -195,6 +195,7 @@ def test_f4_collimated_no_warning():
 # independent screen; each call is one apply_real_lens + one complex multiply.
 # --------------------------------------------------------------------------
 from lumenairy.elements._lens_traced import (  # noqa: E402
+    apply_real_lens_traced_multi,
     prepare_real_lens_traced,
 )
 
@@ -262,6 +263,110 @@ def test_tp1_reuse_is_input_independent():
             p = prep(E)
             rel = float(np.linalg.norm(p - d)) / (float(np.linalg.norm(d)) + 1e-30)
             assert rel < 1e-12, f"reuse mismatch {rel:.2e}"
+
+
+def _two_emitters(N, dx):
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E1 = np.exp(-((X + 0.5e-3) ** 2 + Y ** 2) / (0.8e-3) ** 2).astype(np.complex128)
+    E2 = np.exp(-((X - 0.5e-3) ** 2 + Y ** 2) / (0.8e-3) ** 2).astype(np.complex128)
+    return E1, E2
+
+
+def test_multi_single_emitter_is_exact():
+    """multi([E]) with one emitter must equal a single traced pass with the
+    same forced settings (full-grid Newton, no tilt-aware, sequential amp)."""
+    N, dx = 160, 6e-6
+    E1, _ = _two_emitters(N, dx)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        m = apply_real_lens_traced_multi(
+            [E1], prescription=_prep_lens(), wavelength=LAM, dx=dx,
+            carriers=30e-3, ray_subsample=4)
+        d = apply_real_lens_traced(
+            E1, prescription=_prep_lens(), wavelength=LAM, dx=dx, carrier=30e-3,
+            ray_subsample=4, newton_amp_mask_rel=0.0, tilt_aware_rays=False,
+            preserve_input_phase=True, parallel_amp=False)
+    rel = float(np.linalg.norm(m - d)) / (float(np.linalg.norm(d)) + 1e-30)
+    assert rel < 1e-12, f"single-emitter multi not exact: {rel:.2e}"
+
+
+def test_multi_reuse_matches_noreuse_for_shared_carrier():
+    """With a shared explicit carrier the prepared-screen reuse path must equal
+    the full per-emitter path (byte-identical) and equal the sum of two direct
+    traced calls."""
+    N, dx = 160, 6e-6
+    E1, E2 = _two_emitters(N, dx)
+    kw = dict(prescription=_prep_lens(), wavelength=LAM, dx=dx,
+              carriers=30e-3, ray_subsample=4)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        reuse = apply_real_lens_traced_multi([E1, E2], reuse_prepared=True, **kw)
+        noreuse = apply_real_lens_traced_multi([E1, E2], reuse_prepared=False, **kw)
+        dkw = dict(prescription=_prep_lens(), wavelength=LAM, dx=dx,
+                   carrier=30e-3, ray_subsample=4, newton_amp_mask_rel=0.0,
+                   tilt_aware_rays=False, preserve_input_phase=True,
+                   parallel_amp=False)
+        direct = (apply_real_lens_traced(E1, **dkw)
+                  + apply_real_lens_traced(E2, **dkw))
+    assert np.array_equal(reuse, noreuse), "reuse != no-reuse"
+    rel = float(np.linalg.norm(reuse - direct)) / (float(np.linalg.norm(direct)) + 1e-30)
+    assert rel < 1e-12, f"multi != sum of direct calls: {rel:.2e}"
+
+
+def test_multi_captures_traced_nonlinearity():
+    """On an aberrated lens with DIVERGENT, OVERLAPPING emitter congruences the
+    traced model is strongly non-linear, so the per-emitter coherent sum must
+    DIFFER substantially from feeding the combined field to a single traced pass
+    -- the effect the mode exists to handle.  The emitters are point sources
+    free-space-propagated to the lens plane so their beams overlap there (a
+    collimated, non-overlapping pair would show no effect -- separate regime)."""
+    from lumenairy.propagators.asm import angular_spectrum_propagate as _asm
+    N, dx = 256, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+
+    def _src(x0):
+        s = np.exp(-((X - x0) ** 2 + Y ** 2) / (0.2e-3) ** 2).astype(np.complex128)
+        return _asm(s, 18e-3, LAM, dx)     # diverge to the lens plane
+    E1, E2 = _src(-1.0e-3), _src(+1.0e-3)
+    aber = {  # strong plano-convex -> large ray aberration -> traced != analytic
+        'name': 'pc', 'aperture_diameter': 9e-3,
+        'surfaces': [
+            {'radius': 12e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 4.5e-3},
+            {'radius': -1e9, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 4.5e-3},
+        ],
+        'thicknesses': [3e-3],
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        multi = apply_real_lens_traced_multi(
+            [E1, E2], prescription=aber, wavelength=LAM, dx=dx,
+            carriers='auto', ray_subsample=4)
+        naive = apply_real_lens_traced(
+            E1 + E2, prescription=aber, wavelength=LAM, dx=dx, carrier='auto',
+            ray_subsample=4, newton_amp_mask_rel=0.0, tilt_aware_rays=False,
+            parallel_amp=False)
+    m = np.abs(multi) > 0.02 * np.abs(multi).max()
+    rel = float(np.linalg.norm((naive - multi)[m])) / (float(np.linalg.norm(multi[m])) + 1e-30)
+    assert rel > 0.2, f"expected large traced non-linearity, got {rel:.2e}"
+
+
+def test_multi_input_validation():
+    with pytest.raises(ValueError, match='empty'):
+        apply_real_lens_traced_multi([], prescription=_prep_lens(),
+                                     wavelength=LAM, dx=6e-6)
+    E = np.ones((64, 64), dtype=np.complex128)
+    Ebad = np.ones((32, 32), dtype=np.complex128)
+    with pytest.raises(ValueError, match='shape'):
+        apply_real_lens_traced_multi([E, Ebad], prescription=_prep_lens(),
+                                     wavelength=LAM, dx=6e-6)
+    with pytest.raises(ValueError, match='length'):
+        apply_real_lens_traced_multi([E, E], prescription=_prep_lens(),
+                                     wavelength=LAM, dx=6e-6,
+                                     carriers=[1e-3, 2e-3, 3e-3])
 
 
 def test_tp1_rejects_auto_carrier():
