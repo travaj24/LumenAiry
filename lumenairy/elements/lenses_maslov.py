@@ -43,6 +43,21 @@ from .._math.chebyshev import (
 )
 from ..progress import call_progress
 
+# Pixel-band size for the stationary_phase integrator's _opd_and_derivs
+# evaluations.  None -> auto (memory-budgeted from the basis count).  A test
+# seam: setting it to a small int forces maximal banding, which must produce
+# byte-identical output to the unbanded path (the per-pixel work is
+# independent).  Analogous to the quadrature integrator's ``chunk_v2`` param.
+_SP_PIXEL_CHUNK = None
+
+# Output-ROW band for the uniform-quadrature integrator (F2 follow-up).  The
+# (N_out^2, M) design matrix G is the quadrature path's dominant allocation
+# (451 GB at N=16384 / output_subsample=1), so instead of materialising it
+# whole we band the output rows and build only a G-band per band.  None ->
+# auto (memory-budgeted rows/band); a small int is a test seam forcing many
+# bands (output is ~ULP-close; exactly byte-identical for the numpy path).
+_QUAD_ROW_BAND = None
+
 # Other shared helpers still live in lenses.py.
 from .lenses import (
     NUMEXPR_AVAILABLE,
@@ -651,29 +666,25 @@ def apply_real_lens_maslov(
                 f"'stationary_phase' (the correct evaluators at "
                 f"production NA).",
                 RuntimeWarning, stacklevel=2)
-        # N1 (audit): the (N_out^2, M) Chebyshev design matrix G is used
+        # N1 + F2 (audit): the (N_out^2, M) Chebyshev design matrix G is used
         # ONLY by the quadrature integrator (its G @ H GEMMs).  The
         # stationary_phase / local_quadrature integrators evaluate the
-        # Chebyshev basis per pixel-chunk and never touch G, so building
-        # it unconditionally forced a 451 GB allocation at N=16384 /
-        # output_subsample=1 on integrators that never read it.  Build it
-        # here, in the quadrature branch only.
+        # Chebyshev basis per pixel-chunk and never touch it (N1: don't build
+        # it for them).  For the quadrature path itself, materialising the
+        # whole G forced a 451 GB allocation at N=16384 / output_subsample=1
+        # (F2); instead we pass only the two cheap per-axis Vandermondes
+        # ((poly_order+1, N_out) each) and let the integrator build a
+        # per-output-row-band G on the fly.
         _progress('integrate', 0.61,
-                  f'precomputing (s2)-basis on {N_out_coarse}^2 output grid')
+                  f'precomputing (s2)-axis basis on {N_out_coarse} points')
         Tx_1d = _chebyshev_vandermonde(
             (out_axis - s2x_c) / s2x_h, poly_order)
         Ty_1d = _chebyshev_vandermonde(
             (out_axis - s2y_c) / s2y_h, poly_order)
-        M = len(mi)
-        G = np.empty((N_out_coarse * N_out_coarse, M), dtype=np.float64)
-        for m, (k1, k2, _, _) in enumerate(mi):
-            G[:, m] = np.outer(Ty_1d[k2], Tx_1d[k1]).ravel()
-        _progress('integrate', 0.63,
-                  f'G matrix {G.shape} = {G.nbytes/1e6:.1f} MB')
         E_out_coarse = _integrate_quadrature(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, G, N_out_coarse,
+            poly_order, Tx_1d, Ty_1d, N_out_coarse,
             u_v2x_samples, u_v2y_samples, tuk_2d, du,
             v2x_h, v2y_h, chunk_v2, inbox_flat,
             sample_E_bilinear,
@@ -836,7 +847,7 @@ def _count_multi_indices_4d(max_order: int) -> int:
 def _integrate_quadrature(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
-    poly_order, G, N_out_coarse,
+    poly_order, Tx_1d, Ty_1d, N_out_coarse,
     u_v2x_samples, u_v2y_samples, tuk_2d, du,
     v2x_h, v2y_h, chunk_v2, inbox_flat,
     sample_E_bilinear,
@@ -849,9 +860,20 @@ def _integrate_quadrature(
 
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+
+    F2 follow-up (audit remediation): the (N_out^2, M) design matrix ``G``
+    is the quadrature path's dominant allocation and OOMs at scale (451 GB
+    at N=16384, output_subsample=1).  Rather than take a prebuilt ``G``, this
+    now takes the two cheap per-axis Chebyshev Vandermondes
+    ``Tx_1d``/``Ty_1d`` ((poly_order+1, N_out) each) and builds only a
+    ``G_band`` for a band of output ROWS at a time
+    (``G[iy*N_out+ix, m] = Ty_1d[k2, iy] * Tx_1d[k1, ix]``), capping peak
+    memory to O(rows_per_band * (M + n_v2)).
     """
     n_v2 = len(u_v2x_samples)
     n_v2_total = n_v2 * n_v2
+    M = len(mi)
+    k1k2 = [(k[0], k[1]) for k in mi]
 
     Tu3_all  = _chebyshev_vandermonde(u_v2x_samples, poly_order)
     Tu4_all  = _chebyshev_vandermonde(u_v2y_samples, poly_order)
@@ -898,68 +920,102 @@ def _integrate_quadrature(
         chunk_v2 = n_v2_total
     chunk_v2 = min(chunk_v2, n_v2_total)
 
+    # Output-row band: full rows only, so band pixels = rows_per_band * N_out
+    # align to the (iy, ix) row-major layout.  Auto-size to keep the G-band
+    # plus the (band_px, chunk_v2) working set bounded (~budget bytes).
+    if _QUAD_ROW_BAND:
+        rows_per_band = max(1, int(_QUAD_ROW_BAND))
+    else:
+        _budget_px = 4_000_000  # ~ band_px cap -> G_band ~ band_px*M*8 bytes
+        rows_per_band = max(1, min(N_out_coarse, _budget_px // max(1, N_out_coarse)))
+
     E_out_flat = np.zeros(N_out_coarse * N_out_coarse, dtype=out_dtype)
     t_int_start = time.perf_counter()
 
-    for c_start in range(0, n_v2_total, chunk_v2):
-        c_end = min(c_start + chunk_v2, n_v2_total)
+    _ne = _lenses_module._ne if use_numexpr else None
+    n_bands = (N_out_coarse + rows_per_band - 1) // rows_per_band
 
-        opd_c      = G @ H_opd     [:, c_start:c_end]
-        opd_c      = opd_c + lin_v[None, c_start:c_end]
-        s1x_c      = G @ H_s1x     [:, c_start:c_end]
-        s1y_c      = G @ H_s1y     [:, c_start:c_end]
-        ds1x_du3_c = G @ H_ds1x_du3[:, c_start:c_end]
-        ds1x_du4_c = G @ H_ds1x_du4[:, c_start:c_end]
-        ds1y_du3_c = G @ H_ds1y_du3[:, c_start:c_end]
-        ds1y_du4_c = G @ H_ds1y_du4[:, c_start:c_end]
+    for iy0 in range(0, N_out_coarse, rows_per_band):
+        iy1 = min(iy0 + rows_per_band, N_out_coarse)
+        p0 = iy0 * N_out_coarse
+        p1 = iy1 * N_out_coarse
+        inbox_b = inbox_flat[p0:p1]
 
-        det_J_c = (ds1x_du3_c * ds1y_du4_c
-                   - ds1x_du4_c * ds1y_du3_c)
-        abs_J_c = np.abs(det_J_c) / (v2x_h * v2y_h)
+        # Build the design matrix for just these output rows:
+        # G_band[(iy-iy0)*N_out + ix, m] = Ty_1d[k2, iy] * Tx_1d[k1, ix].
+        G_band = np.empty((p1 - p0, M), dtype=np.float64)
+        for m_, (k1, k2) in enumerate(k1k2):
+            G_band[:, m_] = np.outer(Ty_1d[k2, iy0:iy1], Tx_1d[k1]).ravel()
 
-        Eobj_c = sample_E_bilinear(s1x_c, s1y_c)
-        weights_c = weight_per_sample[c_start:c_end]
+        acc = np.zeros(p1 - p0, dtype=out_dtype)
+        for c_start in range(0, n_v2_total, chunk_v2):
+            c_end = min(c_start + chunk_v2, n_v2_total)
 
-        if use_numexpr:
-            # v5.2.1: numexpr's ``evaluate(expr)`` reads variable names
-            # from the caller's stack frame via introspection, which
-            # makes ``twopi`` / ``cos_term`` / etc. invisible to static
-            # analysis (ruff F841).  Pass an explicit ``local_dict=``
-            # so the locals appear in the surrounding code's AST.
-            # Matches the canonical pattern at ``_lens_real.py:882``.
-            _ne = _lenses_module._ne
-            twopi = 2.0 * np.pi
-            cos_term = _ne.evaluate(
-                "cos(twopi * opd_c)",
-                local_dict={'twopi': twopi, 'opd_c': opd_c})
-            sin_term = _ne.evaluate(
-                "sin(twopi * opd_c)",
-                local_dict={'twopi': twopi, 'opd_c': opd_c})
-            Er = Eobj_c.real
-            Ei = Eobj_c.imag
-            contrib_r = _ne.evaluate(
-                "(Er*cos_term - Ei*sin_term) * abs_J_c * weights_c",
-                local_dict={'Er': Er, 'Ei': Ei,
-                            'cos_term': cos_term, 'sin_term': sin_term,
-                            'abs_J_c': abs_J_c, 'weights_c': weights_c})
-            contrib_i = _ne.evaluate(
-                "(Ei*cos_term + Er*sin_term) * abs_J_c * weights_c",
-                local_dict={'Er': Er, 'Ei': Ei,
-                            'cos_term': cos_term, 'sin_term': sin_term,
-                            'abs_J_c': abs_J_c, 'weights_c': weights_c})
-            contrib_sum = contrib_r.sum(axis=1) + 1j * contrib_i.sum(axis=1)
-        else:
-            contrib_c = (Eobj_c
-                          * np.exp(2j * np.pi * opd_c)
-                          * abs_J_c
-                          * weights_c)
-            contrib_sum = contrib_c.sum(axis=1)
+            opd_c      = G_band @ H_opd     [:, c_start:c_end]
+            opd_c      = opd_c + lin_v[None, c_start:c_end]
+            s1x_c      = G_band @ H_s1x     [:, c_start:c_end]
+            s1y_c      = G_band @ H_s1y     [:, c_start:c_end]
+            ds1x_du3_c = G_band @ H_ds1x_du3[:, c_start:c_end]
+            ds1x_du4_c = G_band @ H_ds1x_du4[:, c_start:c_end]
+            ds1y_du3_c = G_band @ H_ds1y_du3[:, c_start:c_end]
+            ds1y_du4_c = G_band @ H_ds1y_du4[:, c_start:c_end]
 
-        E_out_flat[inbox_flat] += contrib_sum[inbox_flat]
+            det_J_c = (ds1x_du3_c * ds1y_du4_c
+                       - ds1x_du4_c * ds1y_du3_c)
+            abs_J_c = np.abs(det_J_c) / (v2x_h * v2y_h)
+
+            Eobj_c = sample_E_bilinear(s1x_c, s1y_c)
+            weights_c = weight_per_sample[c_start:c_end]
+
+            if use_numexpr:
+                # v5.2.1: numexpr's ``evaluate(expr)`` reads variable names
+                # from the caller's stack frame via introspection, which
+                # makes ``twopi`` / ``cos_term`` / etc. invisible to static
+                # analysis (ruff F841).  Pass an explicit ``local_dict=``
+                # so the locals appear in the surrounding code's AST.
+                # Matches the canonical pattern at ``_lens_real.py:882``.
+                twopi = 2.0 * np.pi
+                cos_term = _ne.evaluate(
+                    "cos(twopi * opd_c)",
+                    local_dict={'twopi': twopi, 'opd_c': opd_c})
+                sin_term = _ne.evaluate(
+                    "sin(twopi * opd_c)",
+                    local_dict={'twopi': twopi, 'opd_c': opd_c})
+                Er = Eobj_c.real
+                Ei = Eobj_c.imag
+                contrib_r = _ne.evaluate(
+                    "(Er*cos_term - Ei*sin_term) * abs_J_c * weights_c",
+                    local_dict={'Er': Er, 'Ei': Ei,
+                                'cos_term': cos_term, 'sin_term': sin_term,
+                                'abs_J_c': abs_J_c, 'weights_c': weights_c})
+                contrib_i = _ne.evaluate(
+                    "(Ei*cos_term + Er*sin_term) * abs_J_c * weights_c",
+                    local_dict={'Er': Er, 'Ei': Ei,
+                                'cos_term': cos_term, 'sin_term': sin_term,
+                                'abs_J_c': abs_J_c, 'weights_c': weights_c})
+                contrib_sum = contrib_r.sum(axis=1) + 1j * contrib_i.sum(axis=1)
+            else:
+                contrib_c = (Eobj_c
+                              * np.exp(2j * np.pi * opd_c)
+                              * abs_J_c
+                              * weights_c)
+                contrib_sum = contrib_c.sum(axis=1)
+
+            acc += contrib_sum
+
+        # Write only in-box pixels (reads acc only where inbox, so any
+        # out-of-box garbage from sample_E_bilinear never propagates).
+        rel_inbox = np.nonzero(inbox_b)[0]
+        E_out_flat[p0 + rel_inbox] = acc[rel_inbox]
+
+        if n_bands > 1:
+            _progress('integrate', 0.65 + 0.30 * (iy1 / N_out_coarse),
+                      f'quadrature output-row band {iy1}/{N_out_coarse}')
 
     t_int = time.perf_counter() - t_int_start
     _progress('integrate', 0.95,
-              f'quadrature: {n_v2_total} v2 samples in {t_int:.1f}s '
+              f'quadrature: {n_v2_total} v2 samples, {n_bands} row band(s), '
+              f'in {t_int:.1f}s '
               f'({"numexpr" if use_numexpr else "numpy"}, '
               f'chunk={chunk_v2})')
 
@@ -1022,6 +1078,30 @@ def _integrate_stationary_phase(
         d2f_34   = np.sum(c * T12 * dT3b * dT4b, axis=0)
         return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
 
+    # Deferred follow-up (audit remediation): _opd_and_derivs builds the
+    # (M, n_px) Chebyshev basis for ALL its input pixels at once, so a
+    # full-resolution call (n_px = N_out_coarse^2) peaks at ~M * n_px *
+    # O(10) * 8 bytes -- ~133 GB at N=16384, the OOM the audit flagged for
+    # this integrator (unlike local_quadrature it was not pixel-banded).
+    # Band it here: the per-pixel work is independent (the only reduction
+    # is np.sum over the basis axis WITHIN a pixel), so evaluating in
+    # contiguous pixel chunks and concatenating is BYTE-IDENTICAL to the
+    # unbanded call while capping peak memory to ~0.5 GB.
+    _PX_CHUNK_SP = (int(_SP_PIXEL_CHUNK) if _SP_PIXEL_CHUNK
+                    else max(1, 4_000_000 // max(1, len(mi))))
+
+    def _opd_and_derivs_banded(coef, u1, u2, u3, u4):
+        n = u1.shape[0]
+        if n <= _PX_CHUNK_SP:
+            return _opd_and_derivs(coef, u1, u2, u3, u4)
+        outs = tuple(np.empty(n, dtype=np.float64) for _ in range(6))
+        for s in range(0, n, _PX_CHUNK_SP):
+            e = min(s + _PX_CHUNK_SP, n)
+            res = _opd_and_derivs(coef, u1[s:e], u2[s:e], u3[s:e], u4[s:e])
+            for k in range(6):
+                outs[k][s:e] = res[k]
+        return outs
+
     converged_mask = np.zeros(N_px, dtype=bool)
     converged_mask[~inbox_flat] = True
 
@@ -1033,7 +1113,7 @@ def _integrate_stationary_phase(
         u2 = u_s2y_flat[active]
         u3 = u_v2x[active]
         u4 = u_v2y[active]
-        _, g3, g4, H33, H34, H44 = _opd_and_derivs(
+        _, g3, g4, H33, H34, H44 = _opd_and_derivs_banded(
             coef_opd, u1, u2, u3, u4)
         # N4: the linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y) has constant
         # v2-gradient (c3, c4) and zero Hessian, so it shifts the saddle
@@ -1072,13 +1152,13 @@ def _integrate_stationary_phase(
 
     _progress('integrate', 0.85, 'evaluating saddle-point formula')
 
-    opd_star, g3, g4, H33, H34, H44 = _opd_and_derivs(
+    opd_star, g3, g4, H33, H34, H44 = _opd_and_derivs_banded(
         coef_opd, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
     # N4: add the linear-in-v2 OPD contribution at the (shifted) saddle.
     opd_star = opd_star + lin_v3 * u_v2x + lin_v4 * u_v2y
-    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = _opd_and_derivs(
+    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = _opd_and_derivs_banded(
         coef_s1x, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
-    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = _opd_and_derivs(
+    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = _opd_and_derivs_banded(
         coef_s1y, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
 
     det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3

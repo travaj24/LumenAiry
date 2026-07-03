@@ -460,6 +460,126 @@ def test_n3_explicit_input_na_not_clamped_when_physical():
     assert not any('exceeds 1' in str(x.message) for x in w)
 
 
+# --------------------------------------------------------------------------
+# Deferred follow-ups (audit remediation): integrator memory-banding.
+#   stationary_phase: _opd_and_derivs pixel-banded (was not pixel-chunked ->
+#     OOM at scale).  F2: quadrature builds only a per-output-row-band G
+#     instead of the full (N_out^2, M) design matrix.
+# Both must be numerically equivalent to the unbanded path.
+# --------------------------------------------------------------------------
+import lumenairy.elements.lenses_maslov as _lm  # noqa: E402
+
+
+def test_stationary_phase_pixel_banding_matches_unbanded():
+    """Banding _opd_and_derivs by pixel must reproduce the unbanded result:
+    byte-identical for a realistic band (reduction shape preserved), and
+    within float32 ULP for the degenerate 1-pixel band (np.sum reduces a
+    different array shape -> ULP reordering only, not a logic change)."""
+    N, dx = 160, 60e-6
+    E = _gauss(N, dx, w=3e-3)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              integration_method='stationary_phase', output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=4, n_v2=24)
+    old = _lm._SP_PIXEL_CHUNK
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            _lm._SP_PIXEL_CHUNK = None
+            ref = la.apply_real_lens_maslov(E, **kw)
+            _lm._SP_PIXEL_CHUNK = 997   # forces many bands, keeps reduce shape
+            banded = la.apply_real_lens_maslov(E, **kw)
+            _lm._SP_PIXEL_CHUNK = 1     # maximal banding (degenerate reduce)
+            band1 = la.apply_real_lens_maslov(E, **kw)
+    finally:
+        _lm._SP_PIXEL_CHUNK = old
+    assert np.array_equal(ref, banded), "realistic band not byte-identical"
+    rel = float(np.abs(ref - band1).max()) / (float(np.abs(ref).max()) + 1e-30)
+    assert rel < 1e-6, f"1-pixel band exceeds ULP: {rel:.2e}"
+
+
+@pytest.mark.parametrize('use_numexpr', [False, True])
+def test_quadrature_output_row_banding_matches_unbanded(use_numexpr):
+    """Building G one output-row-band at a time must be byte-identical to the
+    single-band path, for both the numpy and numexpr integrand kernels."""
+    N, dx = 160, 60e-6
+    E = _gauss(N, dx, w=3e-3)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              integration_method='quadrature', output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=4, n_v2=20,
+              use_numexpr=use_numexpr)
+    old = _lm._QUAD_ROW_BAND
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            _lm._QUAD_ROW_BAND = None
+            ref = la.apply_real_lens_maslov(E, **kw)
+            _lm._QUAD_ROW_BAND = 7      # non-divisor of N -> ragged last band
+            band7 = la.apply_real_lens_maslov(E, **kw)
+            _lm._QUAD_ROW_BAND = 1      # one output row per band
+            band1 = la.apply_real_lens_maslov(E, **kw)
+    finally:
+        _lm._QUAD_ROW_BAND = old
+    assert np.array_equal(ref, band7), "7-row band not byte-identical"
+    assert np.array_equal(ref, band1), "1-row band not byte-identical"
+
+
+def test_non_divisible_subsample_roundtrips():
+    """output_subsample that does not divide N (N=200, ss=3 -> N_out=66,
+    66*3=198) must still return an (N, N) field, finite, with True/False
+    linear-phase extraction agreeing.  scipy.zoom returns exactly N here
+    (verified over N=16..4096 x ss=2..16), so the pad guards do not fire --
+    this pins the realistic non-divisible path end to end."""
+    N, dx = 200, 60e-6
+    E = _gauss(N, dx, w=3e-3)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              integration_method='quadrature', output_subsample=3,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=4, n_v2=20)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        a = la.apply_real_lens_maslov(E, extract_linear_phase=True, **kw)
+        b = la.apply_real_lens_maslov(E, extract_linear_phase=False, **kw)
+    assert a.shape == (N, N) and b.shape == (N, N)
+    assert np.isfinite(a).all()
+    rel = float(np.abs(np.abs(a) - np.abs(b)).max()) / (float(np.abs(a).max()) + 1e-30)
+    assert rel < 0.05
+
+
+def test_fine_grid_pad_guard_recovers_short_zoom():
+    """The out_axis_f pad guard (`if out_axis_f.shape[0] != N`) is defensive
+    -- scipy.zoom empirically always returns exactly N, so it never fires in
+    practice.  Force it by shortening ONLY the 1-D axis zoom (ndim==1, leaving
+    the 2-D amp/phase zooms intact) and confirm the field is still (N, N),
+    finite and non-zero (the slope branch is live: a freeform prism gives a
+    large _lin[1])."""
+    import scipy.ndimage as _ndi
+    N, dx = 192, 24e-3 / 192
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (7e-3) ** 2).astype(np.complex64)
+    _orig = _ndi.zoom
+
+    def _short1d(arr, *a, **k):
+        out = _orig(arr, *a, **k)
+        if arr.ndim == 1 and out.shape[0] == N:
+            return out[:-1]                     # force shape != N -> pad guard
+        return out
+
+    _ndi.zoom = _short1d
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            out = la.apply_real_lens_maslov(
+                E, prescription=_flat_prism(4e-3), wavelength=LAM, dx=dx,
+                integration_method='quadrature', output_subsample=6,
+                extract_linear_phase=True, collimated_input=True,
+                ray_field_samples=12, ray_pupil_samples=12, poly_order=4, n_v2=16)
+    finally:
+        _ndi.zoom = _orig
+    assert out.shape == (N, N)
+    assert np.isfinite(out).all()
+    assert np.abs(out).max() > 0.0
+
+
 def test_carrier_none_regression_wellbehaved():
     """carrier=None (default) keeps the plane-wave reference: a collimated
     input is unaffected and the output is finite/power-reasonable."""
