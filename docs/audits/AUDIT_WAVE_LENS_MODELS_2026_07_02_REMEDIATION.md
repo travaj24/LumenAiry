@@ -137,15 +137,35 @@ physics (True==False intensity to 2.15e-4; piston `|E|`-invariant to 3e-12;
 fine-grid slope Nyquist-correct at injected c1=20). The corrections here reflect
 its findings.*
 
-## 4. Deferred (documented follow-ups)
+## 4. Deferred-items program (2026-07-03, second pass)
 
-| Item | Why deferred |
+The originally-deferred follow-ups were then worked through as their own
+program.  Status below distinguishes **implemented + validated** from
+**assessed** (design recorded, deferred with a concrete reason).
+
+### 4.1 Implemented + validated
+
+| Item | What shipped | Validation |
+|---|---|---|
+| **`stationary_phase` pixel-banding** | `_opd_and_derivs` evaluated in memory-budgeted pixel bands (seam `_SP_PIXEL_CHUNK`); fixes the ~133 GB full-grid basis build. | Byte-identical for realistic bands; 3.8e-9 (30x below f32 ULP) at the degenerate 1-pixel band (np.sum reduction shape only). |
+| **F2 quadrature output-row-banding** | Pass the two per-axis Vandermondes instead of the full `(N_out^2, M)` `G`; build only a per-output-row-band `G` (seam `_QUAD_ROW_BAND`). Kills the 451 GB allocation. | Byte-identical (rel=0.0), numpy AND numexpr, all band sizes. |
+| **M-P2 G-factorization** | `G = Ty (x) Tx` Kronecker: scatter `H`'s rows into a `(P,P,.)` tensor, one `einsum` per band -- no `G` at all, ~M/P fewer FLOPs (seam `_QUAD_FACTORIZE`). | Factorized vs explicit `G @ H` = 2.5e-9 (below f32 ULP), numpy + numexpr. |
+| **T-P1 prepared-traced** | `prepare_real_lens_traced(...)` / `PreparedTracedLens`: caches the input-independent screen; each call = one `apply_real_lens` + one complex multiply. New public API, exported top-level. | Prepared == direct to 4.6e-16 (c128) / 1.5e-7 (c64); reuse on 2 different inputs matches 2 direct calls to <1e-12; **measured 55x per-call speedup**, break-even after <1 reuse; `carrier='auto'` rejected. |
+| **non-divisible-N** | End-to-end test + a forced-pad-guard test (shorten the 1-D axis zoom). | Proved `scipy.zoom` returns exactly N for all N=16..4096 x ss=2..16 (0 mismatches) -> the pad guards are defensive-only. |
+| **JAX-x64 flake** | Made the `test_twins_raise_without_x64` subprocess env explicit (`JAX_ENABLE_X64=0`). Root cause: a sibling module's `os.environ.setdefault("JAX_ENABLE_X64","true")` at import leaks into the inherited subprocess env. | Passes under a deliberately polluted env. |
+
+### 4.2 Assessed (design recorded; deferred with reason)
+
+| Item | Assessment |
 |---|---|
-| **N6** eigen-rotated, tapered `local_quadrature` window | Accuracy refinement for astigmatic (rotated-saddle) charts; needs a regression oracle; ~no benefit on centered relays; rewriting the production integrator's hot loop for it was not worth the risk in this pass. |
-| **`stationary_phase` pixel-banding** | Its `_opd_and_derivs` is not pixel-chunked (§3); band it like `local_quadrature`'s `PX_CHUNK` loop to make it scale. |
-| **F2** quadrature output-row-banding | Only needed for the exact-integral validation mode; `local_quadrature` (N1) is the production path. |
-| **carrier K-decomposition** | The multi-congruence extension (§2). |
-| **Performance** (T-P1 prepared-traced, T-P2 inverse-map fit, M-P2 G-factorization, M-P5/6 composite maps + ROI, A-P1 prepared screens, M-P4/7 numba/float32) | Optimizations; each warrants its own validation cycle. |
+| **N6** eigen-rotated `local_quadrature` window | **Implemented, validated, REVERTED.** The rotation (align the window to the Hessian eigenvectors: `theta = 0.5 atan2(2 H34, H33-H44)`, offset `xi1*sigma1*e1 + xi2*sigma2*e2`, area element unchanged) is mathematically correct and reduces to the legacy path when axis-aligned. But a clean benefit could not be isolated against a dense-quadrature oracle: `local_quadrature` already diverges ~67% (intensity) from the oracle in the strong-astigmatism regime where window rotation would matter (partly aperture-vs-grid truncation), and rotation was neutral-to-worse in every tested case. Shipping it would be an unvalidated behavior change. Rotation math preserved here for a future cycle that first closes the `local_quadrature`-vs-oracle accuracy gap (which is the real issue). |
+| **A-P1** prepared analytic screens | Design: a `PreparedAnalyticLens` caching the per-surface complex screens `exp(-i k0 opd)` + per-gap ASM transfer functions (all input-independent). **Ceiling measured ~1.5-2x** and only for many-surface prescriptions -- the FFT legs (~half the per-surface cost, not cacheable) dominate few-surface lenses. Threading a cache through `apply_real_lens`'s banded / GPU / multi-propagator loop (or faithfully reimplementing it) is high-risk surgery on a core path for a modest, prescription-dependent gain. Deferred: value/risk unfavorable vs T-P1 (55x). Note T-P1 already amortizes the whole traced leg; A-P1 would only speed the residual analytic leg. |
+| **T-P2** inverse-map fit (delete Newton) | Design: fit Chebyshev polynomials of `(OPL, x_in, y_in)` as functions of `(x_out, y_out)` by scattered lstsq (the pattern Maslov already uses), replacing the per-pixel Newton stage (~50% of the non-amp budget). Deferred: must be validated on the cemented-doublet **sub-nm** OPD cases before it can become a default -- a dedicated accuracy campaign, not a drop-in. |
+| **M-P4** numba/GPU 4-var Chebyshev kernel | Generalize `_lens_traced._get_cheb2d_val_grad_numba` (2-var) to 4 variables for `_opd_and_derivs`. Mechanical but a real numba-kernel port + a CuPy twin; each needs its own numerical-parity gate. Deferred as a self-contained speed task. |
+| **M-P5** prepared-Maslov / composite maps | Cache the geometry-only rays + s1/OPD fits and re-scale OPD/lambda per wavelength (Maslov analogue of T-P1); plus one canonical map per contiguous prescription train. Substantial; the wavelength-rescale half is the tractable first step. |
+| **M-P6** ROI / image-plane evaluation | The largest practical lever (10^3-10^4x fewer output pixels for spot studies) -- compose the free-space leg into the canonical map and evaluate only a region of interest. A genuine feature (new evaluation mode + its own validation), not an optimization tweak. |
+| **M-P7** float32 quadrature arrays | Assessed and **declined**: the quadrature integrator is the exact-integral *validation reference*; trading its float64 precision for float32 bandwidth is counterproductive there. Float32 would make sense only on the production `local_quadrature` path, where it warrants its own power-normalized validation. |
+| **carrier K-decomposition** | The multi-congruence extension (2 of Section 2) -- one traced pass per congruence, summed coherently -- is the path that would actually sharpen the no-MLA multi-emitter TX case. It requires segmenting the K congruences from the field's local-wavevector map (itself a clustering research problem), K traced passes, and coherent recombination. Genuinely multi-session; recorded as the principled next step for the design-119 imaging problem (past a few carriers it re-derives the phase-space integral -> use Maslov). |
 
 ## 5. Consumer wiring (Reverse_Symmetric_ASM, not this repo)
 
