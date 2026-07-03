@@ -15,8 +15,8 @@ finding definitions.
 |---|---|---|---|
 | **N1** | Hoist the `(N_out², M)` Chebyshev design matrix `G` into the quadrature branch; drop the unused `G` param from `_integrate_stationary_phase` / `_integrate_local_quadrature`. Verified those two never read `G`. | `lenses_maslov.py` | `test_n1_all_integrators_run_full_resolution` |
 | **N2** | Under-resolution warning for uniform `quadrature`: v2-oscillation bound from `Σ|coef_opd|` over v2-dependent terms; points at the asymptotic evaluators. | `lenses_maslov.py` | `test_n2_under_resolved_quadrature_warns` |
-| **N3** | Size the pupil chart from `na_lens + na_input`, `na_input` = 3σ of the input angular spectrum (one FFT); new `input_na=` kwarg + coverage warning. | `lenses_maslov.py` | `test_n3_input_na_widens_chart`, `..._coverage_warning` |
-| **N4** | Re-apply the orphaned fitted linear OPD term. Exact split: s2 part `(c0+c1u_s2x+c2u_s2y)` as an output post-multiply (constant in v2 → factors out of the integral); v2 part `(c3u_v2x+c4u_v2y)` inside every integrator's OPD + saddle-point gradient (Hessian unchanged). | `lenses_maslov.py` | `test_n4_linear_phase_reapplied_offaxis` (True==False to ~1e-7, all 3 integrators) |
+| **N3** | Size the pupil chart from `na_lens + na_input`, `na_input` = 3σ of the input angular spectrum (one FFT); new `input_na=` kwarg + coverage warning. **Clamp `na_proxy` < 1** (adversarial P2, §6). | `lenses_maslov.py` | `test_n3_input_na_widens_chart`, `..._coverage_warning`, `..._clamps_na_proxy`, `..._not_clamped_when_physical` |
+| **N4** | Re-apply the orphaned fitted linear OPD term. Exact split: s2 part `(c0+c1u_s2x+c2u_s2y)` re-applied after dispatch — **piston as a scalar, slope on the FINE post-upsample grid** (adversarial P2, §6); v2 part `(c3u_v2x+c4u_v2y)` inside every integrator's OPD + saddle-point gradient (Hessian unchanged). | `lenses_maslov.py` | `test_n4_linear_phase_reapplied_offaxis` (True==False, all 3 integrators), `..._wellresolved_output_is_subsample_invariant`, `..._piston_reapplied_as_global_phase` |
 | **F3** | Route Maslov `_progress` through the suite `call_progress(stage, frac, msg)`; fixes the mid-lens `TypeError` on a standard callback. | `lenses_maslov.py` | `test_f3_suite_style_progress_callback` |
 | **F4** | Gate the `tilt_aware_rays` recommendation on a **wrapping-safe** coherence ratio (nearest-neighbour complex-product increments, not `np.gradient(np.angle)`). | `_lens_traced.py` | `test_f4_single_tilt / two_beam_fringe / collimated` |
 | **N7** | Docstring: `n_workers` is a no-op on the default polynomial-Newton path. | `_lens_traced.py` | — |
@@ -67,6 +67,57 @@ carrier set**, correctly directing the user to `apply_real_lens`. So:
   pixel-chunked**. So N1 truly unblocks only the pixel-chunked
   **`local_quadrature`** at scale (61.8 GB observed vs the 451 GB `G` OOM);
   `stationary_phase` needs pixel-banding too (§4).
+
+## 3a. Adversarial-review follow-up (2026-07-03)
+
+A refutation-first review of the remediation diff itself flagged three defects
+in the newly-added N3/N4 code. All three were reproduced and fixed; two of the
+review's severity claims were themselves corrected on investigation.
+
+* **N3 — NA proxy can exceed 1 (P2, fixed).** A speckled / hard-aperture input
+  at fine `dx` gives a 3σ angular-spread estimate `na_input > 1` (measured
+  **2.7–5.4** for white-noise fields at `dx = 0.3–0.6 µm`). That made
+  `na_proxy = na_lens + na_input > 1`, so **every** pupil ray had
+  `v1x²+v1y² > 1` → `N_dir = 0` → the entire chart went grazing and the
+  wide-angle content the term was meant to capture was silently dropped.
+  **Fix:** clamp `na_proxy` to `0.999` (the physical horizon) with a
+  `RuntimeWarning`. Verified end-to-end: `NA_proxy` clamps `2.786 → 0.999`,
+  output stays finite with non-zero power. Test `test_n3_broadband_input_clamps_na_proxy`.
+
+* **N3 — FFT temporaries not freed (P3, fixed).** The `input_na` estimate builds
+  `fft2(E_in)`, `|·|²`, and two `meshgrid` frequency arrays (each `N²`). Only
+  `_P` was being freed; `_v2 / _FX / _FY / _fx` lived until function exit.
+  **Fix:** `del _v2` inside the `_Ptot > 0` branch and `del _P, _FX, _FY, _fx`
+  after the estimate (guarded so an all-zero input does not `NameError`).
+
+* **N4 — s2-tilt post-multiply aliased on the coarse grid (P2, fixed placement;
+  latent in practice).** The review flagged that the s2 linear-OPD post-multiply
+  ran on the **coarse** field *before* the cubic upsample, so a slope above the
+  coarse Nyquist (`c1 > N_out_coarse/4`) would alias / flip. **Fix:** piston
+  `_lin[0]` is now applied as a **scalar** global phase (grid-invariant, avoids
+  an `N²` temporary), and the slope terms `_lin[1]/_lin[2]` are applied on the
+  **fine, post-upsample grid**, at the coordinate `scipy.zoom` actually sampled
+  (reproduced by zooming the coarse axis with the same call — convention-
+  independent, no `grid_mode=False` edge-stretch).
+
+  **Correction to the review's severity.** On investigation the slope terms are
+  **~0 for every realizable input** to the current model: the Maslov ray trace
+  is always **centered** (surface `decenter` is read only for a warning and
+  otherwise ignored — `_lin` is byte-identical across decenter values), so the
+  OPL is even in output position and `|_lin[1]| < 0.04` waves even for a
+  0.04 rad tilted input. So the aliasing path is **unreachable through the
+  public API today**; the fix is the correct, zero-risk placement that also
+  future-proofs a decentered/tilted trace. Critically, the dramatic
+  subsample>1 tilt-**flip** the review reproduced for a *tilted input* is a
+  **different, N2 effect**: that output tilt lives *inside* the canonical
+  integral (via the `_lin_v3/_v4` pupil terms) and is coarse-resolved, so it
+  aliases for output tilts above the coarse Nyquist **regardless** of where this
+  post-multiply runs. A direct probe confirms the flip **persists** with the fix
+  applied — the honest mitigation is the N2 under-resolution warning (already
+  shipped) plus reducing `output_subsample`, not relocating the post-multiply.
+  Tests `test_n4_wellresolved_output_is_subsample_invariant` (sign + magnitude
+  invariance for a resolvable output) and `test_n4_piston_reapplied_as_global_phase`
+  (piston does not leak into intensity).
 
 ## 4. Deferred (documented follow-ups)
 

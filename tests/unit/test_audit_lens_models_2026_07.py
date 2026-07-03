@@ -279,6 +279,125 @@ def test_f1_delegate_returns_analytic():
     assert np.array_equal(got, ref)
 
 
+# --------------------------------------------------------------------------
+# Adversarial-review P2 fixes (2026-07-03)
+#   N4  s2-tilt post-multiply moved to the FINE (post-upsample) grid.
+#   N3  NA proxy clamped to < 1 so a broadband input cannot grazing-kill
+#       the whole pupil chart.
+# --------------------------------------------------------------------------
+def _weak_lens(R=2000e-3, ap=1.6e-3):
+    """A weak, small-aperture lens whose output is well-resolved on a
+    coarse output grid -> isolates the linear-OPD post-multiply from the
+    quadratic (focusing) phase that N2 under-resolution is about."""
+    return {
+        'name': 'weak', 'aperture_diameter': ap,
+        'surfaces': [
+            {'radius': R, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': ap / 2},
+            {'radius': -R, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': ap / 2},
+        ],
+        'thicknesses': [1.5e-3],
+    }
+
+
+def _spectral_centroid_fx(E, dx):
+    N = E.shape[0]
+    P = np.abs(np.fft.fft2(E)) ** 2
+    fx = np.fft.fftfreq(N, d=dx)
+    FX, _ = np.meshgrid(fx, fx, indexing='xy')
+    return float((FX * P).sum() / P.sum())
+
+
+def test_n4_wellresolved_output_is_subsample_invariant():
+    """A well-resolved output tilt must be recovered with the SAME sign and
+    ~same magnitude at output_subsample=1 and >1.  Before the P2 fix the
+    linear-OPD post-multiply was applied on the coarse grid before the cubic
+    upsample; a coarse-grid multiply that aliases would flip the recovered
+    tilt sign here.  (The reachable regime keeps the tilt below the coarse
+    Nyquist; the fix guarantees the post-multiply itself never corrupts it.)"""
+    N, dx, w = 384, 5e-6, 0.45e-3
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = (np.exp(-(X ** 2 + Y ** 2) / w ** 2)
+         * np.exp(1j * (2 * np.pi / LAM) * np.sin(0.012) * X)).astype(np.complex64)
+    kw = dict(prescription=_weak_lens(), wavelength=LAM, dx=dx,
+              integration_method='quadrature', ray_field_samples=14,
+              ray_pupil_samples=14, poly_order=4, n_v2=20,
+              extract_linear_phase=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        c1 = _spectral_centroid_fx(
+            la.apply_real_lens_maslov(E, output_subsample=1, **kw), dx)
+        c6 = _spectral_centroid_fx(
+            la.apply_real_lens_maslov(E, output_subsample=6, **kw), dx)
+    assert np.sign(c1) == np.sign(c6), f"tilt sign flipped: {c1:.1f} vs {c6:.1f}"
+    assert abs(c6 - c1) / (abs(c1) + 1e-9) < 0.05, f"{c1:.1f} vs {c6:.1f}"
+
+
+def test_n4_piston_reapplied_as_global_phase():
+    """The fitted piston (_lin[0], ~10^3 waves) is re-applied but is a global
+    phase: it must not touch the intensity (|E| identical whether or not the
+    linear term is extracted)."""
+    N, dx, w = 256, 6e-6, 0.5e-3
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / w ** 2).astype(np.complex64)
+    kw = dict(prescription=_weak_lens(), wavelength=LAM, dx=dx,
+              integration_method='quadrature', ray_field_samples=14,
+              ray_pupil_samples=14, poly_order=4, n_v2=20, output_subsample=1)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        a = la.apply_real_lens_maslov(E, extract_linear_phase=True, **kw)
+        b = la.apply_real_lens_maslov(E, extract_linear_phase=False, **kw)
+    ia, ib = np.abs(a), np.abs(b)
+    rel = float(np.abs(ia - ib).max()) / (float(ia.max()) + 1e-30)
+    assert rel < 5e-3, f"piston leaked into intensity: {rel:.2e}"
+
+
+def test_n3_broadband_input_clamps_na_proxy():
+    """A broadband (speckle) input at fine dx pushes the 3-sigma input-NA
+    estimate above 1.  Without the clamp na_proxy>1 makes every pupil ray
+    grazing (N_dir=0) and the chart is empty; the clamp caps it at 0.999,
+    warns, and still produces a finite non-zero field."""
+    N, dx = 96, 0.6e-6
+    lens = {
+        'name': 'micro', 'aperture_diameter': 60e-6,
+        'surfaces': [
+            {'radius': 40e-6, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 30e-6},
+            {'radius': -40e-6, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 30e-6},
+        ],
+        'thicknesses': [5e-6],
+    }
+    rng = np.random.default_rng(0)
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    amp = np.exp(-(X ** 2 + Y ** 2) / (N * dx / 4) ** 2)
+    E = (amp * np.exp(1j * rng.uniform(-np.pi, np.pi, (N, N)))).astype(np.complex64)
+    with pytest.warns(RuntimeWarning, match='exceeds 1'):
+        out = la.apply_real_lens_maslov(
+            E, prescription=lens, wavelength=LAM, dx=dx,
+            integration_method='stationary_phase', output_subsample=1,
+            ray_field_samples=12, ray_pupil_samples=12, poly_order=4, n_v2=16)
+    assert np.isfinite(out).all()
+    assert float(np.sum(np.abs(out) ** 2)) > 0.0
+
+
+def test_n3_explicit_input_na_not_clamped_when_physical():
+    """A physical explicit input_na (<1) must pass through unclamped -- the
+    clamp only fires on the auto-estimate blowing past the horizon."""
+    N, dx = 128, 60e-6
+    E = _gauss(N, dx, w=1.0e-3)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter('always')
+        la.apply_real_lens_maslov(
+            E, prescription=_singlet(), wavelength=LAM, dx=dx,
+            integration_method='stationary_phase', input_na=0.3, **_MASLOV_KW)
+    assert not any('exceeds 1' in str(x.message) for x in w)
+
+
 def test_carrier_none_regression_wellbehaved():
     """carrier=None (default) keeps the plane-wave reference: a collimated
     input is unaffected and the output is finite/power-reasonable."""

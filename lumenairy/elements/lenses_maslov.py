@@ -350,7 +350,8 @@ def apply_real_lens_maslov(
             _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
             _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
             _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
-        del _P
+            del _v2
+        del _P, _FX, _FY, _fx
     if input_na is not None:
         na_input = float(input_na)
         # Coverage guard: warn if the caller under-specified input_na
@@ -371,6 +372,26 @@ def apply_real_lens_maslov(
 
     # Chart spans the lens acceptance plus the input divergence.
     na_proxy = na_lens + na_input
+
+    # Clamp to a physical direction cosine (< 1).  A speckled / hard-aperture
+    # input can have a 3-sigma angular estimate na_input > 1 (measured
+    # 1.3-4.1 on white-noise fields, adversarial review P2); leaving
+    # na_proxy > 1 forces every pupil ray to v1x^2+v1y^2 > 1, so
+    # N_dir = sqrt(max(1 - v1x^2 - v1y^2, 0)) = 0 and the whole chart is
+    # grazing -> the wide-angle content it was meant to capture is dropped.
+    # Cap just below unity and tell the caller the estimate is being
+    # trusted only up to the horizon.
+    if na_proxy >= 1.0:
+        import warnings
+        warnings.warn(
+            f"apply_real_lens_maslov: NA proxy {na_proxy:.3f} (lens "
+            f"{na_lens:.3f} + input {na_input:.3f}) exceeds 1; the input "
+            f"angular-spread estimate is likely inflated by high-frequency / "
+            f"aperture-edge content.  Clamping the pupil chart to NA=0.999 "
+            f"(the physical horizon).  Pass input_na explicitly to size the "
+            f"chart deliberately.",
+            RuntimeWarning, stacklevel=2)
+        na_proxy = 0.999
 
     if verbose:
         print(f"  NA_proxy = {na_proxy:.5f}  (lens {na_lens:.5f} + "
@@ -648,18 +669,6 @@ def apply_real_lens_maslov(
             lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
 
-    # N4 (audit): re-apply the s2 part of the fitted linear OPD (piston +
-    # output tilt) that was subtracted before fitting.  It is constant in
-    # v2, so it factored out of the canonical integral and is applied here
-    # as a per-output-pixel phase on the coarse field (u_s2x_out /
-    # u_s2y_out are the coarse-grid normalized s2 coords, same shape as
-    # E_out_coarse).  Waves -> exp(2*pi*i*.).  No-op when
-    # extract_linear_phase=False (coeffs are zero).
-    if _lin[0] or _lin[1] or _lin[2]:
-        E_out_coarse = (E_out_coarse * np.exp(
-            2j * np.pi * (_lin[0] + _lin[1] * u_s2x_out
-                          + _lin[2] * u_s2y_out))).astype(E_out_coarse.dtype)
-
     # -----------------------------------------------------------------
     # Step 5: Upsample to the full grid if output_subsample > 1
     # -----------------------------------------------------------------
@@ -707,6 +716,55 @@ def apply_real_lens_maslov(
         E_out = (_fit(E_out_re) + 1j * _fit(E_out_im)).astype(E_in.dtype)
     else:
         E_out = E_out_coarse
+
+    # N4 (audit) re-apply the s2 part of the fitted linear OPD that was
+    # subtracted before fitting.  Split by cost + Nyquist-safety:
+    #
+    #  * Piston (_lin[0]) is a GLOBAL phase -> apply as a scalar.  It is
+    #    grid-invariant, so this avoids building an N x N temporary just to
+    #    add a constant (the piston is ~10^3 waves and is the ONLY term
+    #    that is ever appreciable here -- see below).
+    #  * The s2-slope terms (_lin[1], _lin[2]) are ~0 for the always-
+    #    centered Maslov ray trace: the OPL is even in output position, so
+    #    there is no first-order output tilt (measured |_lin[1]| < 0.04
+    #    waves even for a 0.04 rad tilted input; decenter is ignored by the
+    #    centered trace).  They become appreciable only if a future
+    #    decentered / tilted-element trace is added.  In THAT case they must
+    #    be applied on the FINE (post-upsample) grid: a slope above the
+    #    coarse Nyquist (c1 > N_out_coarse/4) aliases / flips under the
+    #    cubic phase-zoom if applied on the coarse field first (adversarial
+    #    review N4).  The fine-pixel coordinate is reproduced by zooming the
+    #    coarse output axis with the SAME zoom call, so the tilt lands
+    #    exactly where the zoomed content lives (convention-independent;
+    #    avoids the grid_mode=False edge-stretch of a nominal fine axis).
+    #
+    # NB the subsample>1 tilt-flip the review reproduced for a *tilted
+    # input* is a different effect: that output tilt lives INSIDE the
+    # canonical integral (via the _lin_v3/_v4 pupil terms) and is coarse-
+    # resolved, so it aliases for output tilts above the coarse Nyquist
+    # regardless of where this post-multiply runs -- that is the N2
+    # under-resolution regime (warned separately); reduce output_subsample.
+    if _lin[0]:
+        E_out = (E_out * np.exp(2j * np.pi * _lin[0])).astype(E_in.dtype)
+    if _lin[1] or _lin[2]:
+        if output_subsample > 1:
+            from scipy.ndimage import zoom as _zoom1d
+            out_axis_f = _zoom1d(out_axis, float(N) / float(N_out_coarse),
+                                 order=1, mode='nearest')
+            if out_axis_f.shape[0] != N:   # non-divisible safety (matches _fit)
+                _tmp = np.zeros(N, dtype=out_axis_f.dtype)
+                _n = min(out_axis_f.shape[0], N)
+                _tmp[:_n] = out_axis_f[:_n]
+                out_axis_f = _tmp
+        else:
+            out_axis_f = out_axis          # coarse grid == fine grid
+        _s2x_f, _s2y_f = np.meshgrid(out_axis_f, out_axis_f, indexing='xy')
+        _u_s2x_f = (_s2x_f - s2x_c) / s2x_h
+        _u_s2y_f = (_s2y_f - s2y_c) / s2y_h
+        E_out = (E_out * np.exp(
+            2j * np.pi * (_lin[1] * _u_s2x_f
+                          + _lin[2] * _u_s2y_f))).astype(E_in.dtype)
+        del _s2x_f, _s2y_f, _u_s2x_f, _u_s2y_f
 
     # -----------------------------------------------------------------
     # Step 6: Absolute-amplitude normalization.
