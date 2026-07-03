@@ -445,6 +445,12 @@ _GUARD_EXEMPTIONS = frozenset({
     ('lumenairy/analysis/plotting.py', 'plot_cross_section'),
     ('lumenairy/analysis/plotting.py', 'plot_beam_profile'),
     ('lumenairy/analysis/plotting.py', 'plot_psf'),
+    # ``apply_real_lens_traced_multi`` takes a SEQUENCE of per-emitter 2-D
+    # fields, not a single 2-D scalar field, so the single-field
+    # ``_check_2d_scalar_field`` guard does not fit its signature.  It
+    # validates each emitter field's shape itself, and every per-emitter
+    # ``apply_real_lens_traced`` call it makes runs the guard.
+    ('lumenairy/elements/_lens_traced.py', 'apply_real_lens_traced_multi'),
 })
 
 
