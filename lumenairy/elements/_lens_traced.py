@@ -2372,6 +2372,62 @@ def apply_real_lens_traced(
     i_axis = n_launch // 2
     opl_grid = opl_grid - opl_grid[i_axis, i_axis]
 
+    # T-P2 (audit perf): optional DIRECT inverse-map fit.  Instead of Newton-
+    # inverting the forward map per output pixel, fit ``opl`` as a smooth
+    # function of the EXIT coordinates ``(x_out, y_out)`` by scattered
+    # Chebyshev least squares from the already-traced ray samples, then
+    # evaluate that polynomial on the exit grid -- one lstsq + one poly eval,
+    # no per-pixel Newton.  A GLOBAL Chebyshev fit (vs the pre-3.x griddata
+    # scatter this file replaced) avoids the Delaunay-edge spikes noted below,
+    # while staying opt-in (``inversion_method='fit'``) so the thoroughly-
+    # validated Newton path remains the default.  Output convention is
+    # identical: on-axis-referenced OPL in metres, NaN outside the exit
+    # sample hull.
+    _use_fit = (inversion_method == 'fit')
+    if _use_fit:
+        from numpy.polynomial.chebyshev import chebvander as _chebvander
+        from scipy.spatial import ConvexHull as _ConvexHull
+        _fo = int(newton_poly_order)
+        _xo_s = x_out_grid.ravel()
+        _yo_s = y_out_grid.ravel()
+        _op_s = opl_grid.ravel()
+        _g = np.isfinite(_xo_s) & np.isfinite(_yo_s) & np.isfinite(_op_s)
+        _xo_s, _yo_s, _op_s = _xo_s[_g], _yo_s[_g], _op_s[_g]
+        _fx_c = 0.5 * (_xo_s.max() + _xo_s.min())
+        _fx_h = 0.5 * (_xo_s.max() - _xo_s.min()) or 1.0
+        _fy_c = 0.5 * (_yo_s.max() + _yo_s.min())
+        _fy_h = 0.5 * (_yo_s.max() - _yo_s.min()) or 1.0
+        # total-degree multi-index list, encoded as (P, 2) int for a
+        # vectorized column-product Chebyshev design.
+        _terms = np.array([[a, b] for a in range(_fo + 1)
+                           for b in range(_fo + 1 - a)], dtype=np.intp)
+
+        def _fit_design(ux, uy):
+            Vx = _chebvander(ux, _fo)   # (K, _fo+1); col a = T_a(ux)
+            Vy = _chebvander(uy, _fo)
+            return Vx[:, _terms[:, 0]] * Vy[:, _terms[:, 1]]   # (K, M)
+
+        _Afit = _fit_design((_xo_s - _fx_c) / _fx_h, (_yo_s - _fy_c) / _fy_h)
+        _fit_coef, *_ = np.linalg.lstsq(_Afit, _op_s, rcond=None)
+        # Domain: keep only exit pixels inside the convex hull of the ray
+        # landing spots -- a vectorized half-plane test (A.x + b <= 0 for
+        # every facet), far cheaper than a Delaunay simplex search over the
+        # full output grid.  A lens exit region is convex (a disc), so the
+        # hull is the exact coverage boundary.
+        _heq = _ConvexHull(np.column_stack([_xo_s, _yo_s])).equations  # (F,3)
+        _hA = np.ascontiguousarray(_heq[:, :2].T)   # (2, F)
+        _hb = _heq[:, 2]
+
+        def _invert_fit(Xw, Yw):
+            _sh = np.asarray(Xw).shape
+            xw = np.asarray(Xw).ravel()
+            yw = np.asarray(Yw).ravel()
+            val = _fit_design((xw - _fx_c) / _fx_h,
+                              (yw - _fy_c) / _fy_h) @ _fit_coef
+            pts = np.column_stack([xw, yw])
+            inside = np.all(pts @ _hA + _hb <= 1e-12, axis=1)
+            return np.where(inside, val, np.nan).reshape(_sh)
+
     # ----- OPTION B: RectBivariateSpline + Newton-inversion of the
     # entrance->exit mapping ------------------------------------------
     #
@@ -2847,29 +2903,36 @@ def apply_real_lens_traced(
         else:
             Xs = X[::sub, ::sub]
             Ys = Y[::sub, ::sub]
-        amp_coarse = amp[::sub, ::sub]
-        mask_coarse = _build_newton_mask(amp_coarse)
-        if preserve_input_phase:
-            # v5.17.1 (audit P3-09): on the sub>1 preserve_input_phase
-            # path ``amp`` is never read again (Step 3 combines with
-            # E_analytic, not amp) and ``amp_coarse`` is dead after the
-            # Newton-mask build -- but amp_coarse is a VIEW, so the
-            # full-grid float base (float64 for complex128 fields,
-            # ~8.6 GB at N=32768) would otherwise stay resident through
-            # the Newton inversion and the entire band assembly.  Free
-            # both eagerly -- same lifetime-fix pattern as the v5.16.2
-            # eager frees; values/outputs byte-identical.
-            del amp_coarse, amp
-        if mask_coarse is None:
-            opl_coarse = _invert_newton_parallel(
-                Xs, Ys, sub_progress=newton_cb)
+        if _use_fit:
+            # T-P2: one polynomial evaluation over the whole coarse grid; no
+            # amp mask (the fit is cheap everywhere, hull-masked to NaN).
+            if preserve_input_phase:
+                del amp
+            opl_coarse = _invert_fit(Xs, Ys)
         else:
-            Xs_masked = Xs[mask_coarse]
-            Ys_masked = Ys[mask_coarse]
-            opl_1d = _invert_newton_parallel(
-                Xs_masked, Ys_masked, sub_progress=newton_cb)
-            opl_coarse = np.full(Xs.shape, np.nan, dtype=opl_1d.dtype)
-            opl_coarse[mask_coarse] = opl_1d
+            amp_coarse = amp[::sub, ::sub]
+            mask_coarse = _build_newton_mask(amp_coarse)
+            if preserve_input_phase:
+                # v5.17.1 (audit P3-09): on the sub>1 preserve_input_phase
+                # path ``amp`` is never read again (Step 3 combines with
+                # E_analytic, not amp) and ``amp_coarse`` is dead after the
+                # Newton-mask build -- but amp_coarse is a VIEW, so the
+                # full-grid float base (float64 for complex128 fields,
+                # ~8.6 GB at N=32768) would otherwise stay resident through
+                # the Newton inversion and the entire band assembly.  Free
+                # both eagerly -- same lifetime-fix pattern as the v5.16.2
+                # eager frees; values/outputs byte-identical.
+                del amp_coarse, amp
+            if mask_coarse is None:
+                opl_coarse = _invert_newton_parallel(
+                    Xs, Ys, sub_progress=newton_cb)
+            else:
+                Xs_masked = Xs[mask_coarse]
+                Ys_masked = Ys[mask_coarse]
+                opl_1d = _invert_newton_parallel(
+                    Xs_masked, Ys_masked, sub_progress=newton_cb)
+                opl_coarse = np.full(Xs.shape, np.nan, dtype=opl_1d.dtype)
+                opl_coarse[mask_coarse] = opl_1d
         # Bilinearly interpolate to full grid
         from scipy.ndimage import map_coordinates
         Ns = opl_coarse.shape[0]
@@ -2903,6 +2966,11 @@ def apply_real_lens_traced(
             del _coords
             opl_map = np.where(nan_full > 0.5, np.nan, opl_map)
             del nan_full
+    elif _use_fit:
+        # T-P2: full-grid inverse-map fit (no Newton, no amp mask).
+        if X is None:
+            X, Y = np.meshgrid(x, x)
+        opl_map = _invert_fit(X, Y)
     else:
         mask_full = _build_newton_mask(amp)
         if mask_full is None:

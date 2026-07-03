@@ -369,6 +369,39 @@ def test_multi_input_validation():
                                      carriers=[1e-3, 2e-3, 3e-3])
 
 
+def test_tp2_fit_inversion_matches_newton():
+    """T-P2: inversion_method='fit' (scattered Chebyshev inverse-map fit,
+    hull-masked) must reproduce the Newton inversion to a small relative error
+    over the illuminated region, at both full-res and subsampled output.  It
+    is opt-in; 'newton' remains the default."""
+    N, dx = 256, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+         * np.exp(1j * (2 * np.pi / LAM) * np.sin(0.008) * X)).astype(np.complex128)
+    lens = {
+        'name': 's', 'aperture_diameter': 8e-3,
+        'surfaces': [
+            {'radius': 60e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 4e-3},
+            {'radius': -60e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 4e-3},
+        ],
+        'thicknesses': [3e-3],
+    }
+    for sub in (1, 4):
+        kw = dict(prescription=lens, wavelength=LAM, dx=dx, ray_subsample=sub,
+                  parallel_amp=False, newton_amp_mask_rel=0.0)
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            newton = apply_real_lens_traced(E, inversion_method='newton', **kw)
+            fit = apply_real_lens_traced(E, inversion_method='fit',
+                                         newton_poly_order=8, **kw)
+        msk = np.abs(newton) > 0.02 * np.abs(newton).max()
+        rel = float(np.linalg.norm((fit - newton)[msk])) / (float(np.linalg.norm(newton[msk])) + 1e-30)
+        assert rel < 1e-3, f"sub={sub}: fit vs newton {rel:.2e}"
+
+
 def test_tp1_rejects_auto_carrier():
     with pytest.raises(ValueError, match="auto"):
         prepare_real_lens_traced(prescription=_prep_lens(), wavelength=LAM,
