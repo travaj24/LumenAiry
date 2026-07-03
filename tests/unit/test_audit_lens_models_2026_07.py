@@ -587,6 +587,32 @@ def test_stationary_phase_pixel_banding_matches_unbanded():
 
 
 @pytest.mark.parametrize('use_numexpr', [False, True])
+def test_quadrature_factorization_matches_explicit_G(use_numexpr):
+    """M-P2: the Kronecker-factorized quadrature (no G materialized) must
+    match the explicit per-row-band G @ H reference to float32 ULP, for both
+    integrand kernels.  Uses poly_order=6 (M=210, P=7) so the factorization
+    path is meaningfully different from the GEMM path."""
+    N, dx = 160, 60e-6
+    E = _gauss(N, dx, w=3e-3)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              integration_method='quadrature', output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=6, n_v2=24,
+              use_numexpr=use_numexpr)
+    old = _lm._QUAD_FACTORIZE
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter('ignore')
+            _lm._QUAD_FACTORIZE = False
+            ref = la.apply_real_lens_maslov(E, **kw)
+            _lm._QUAD_FACTORIZE = True
+            fac = la.apply_real_lens_maslov(E, **kw)
+    finally:
+        _lm._QUAD_FACTORIZE = old
+    rel = float(np.abs(fac - ref).max()) / (float(np.abs(ref).max()) + 1e-30)
+    assert rel < 1e-6, f"factorized vs G @ H exceeds ULP: {rel:.2e}"
+
+
+@pytest.mark.parametrize('use_numexpr', [False, True])
 def test_quadrature_output_row_banding_matches_unbanded(use_numexpr):
     """Building G one output-row-band at a time must be byte-identical to the
     single-band path, for both the numpy and numexpr integrand kernels."""

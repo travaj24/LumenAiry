@@ -58,6 +58,15 @@ _SP_PIXEL_CHUNK = None
 # bands (output is ~ULP-close; exactly byte-identical for the numpy path).
 _QUAD_ROW_BAND = None
 
+# M-P2 follow-up: the (N_out^2, M) design matrix G is a Kronecker product
+# G[(iy,ix),m] = Ty[k2,iy]*Tx[k1,ix], so G @ H factorizes -- scatter H's rows
+# by their (k1,k2) pair into a (P,P,.) tensor (P=poly_order+1), then a single
+# einsum per chunk -- eliminating the G build and cutting the integration
+# FLOPs by ~M/P (14-30x).  True (default) uses the factorized path; False
+# falls back to the explicit per-row-band G (the ULP-level validation
+# reference).  A tiny seam for A/B checks.
+_QUAD_FACTORIZE = True
+
 # Other shared helpers still live in lenses.py.
 from .lenses import (
     NUMEXPR_AVAILABLE,
@@ -901,6 +910,32 @@ def _integrate_quadrature(
     H_ds1y_du3 = coef_s1y[:, None] * dT3_T4
     H_ds1y_du4 = coef_s1y[:, None] * T3_dT4
 
+    P_ord = poly_order + 1
+    if _QUAD_FACTORIZE:
+        # M-P2: G[(iy,ix),m] = Ty[k2,iy]*Tx[k1,ix] is a Kronecker product, so
+        # (G @ H)[(iy,ix),j] = sum_{k1,k2} Ty[k2,iy] Tx[k1,ix] Hh[k1,k2,j]
+        # where Hh scatter-sums H's rows by their (k1,k2) pair.  The (P,P,.)
+        # tensors are tiny; the per-band contraction is one einsum, no G.
+        _S = np.zeros((P_ord * P_ord, M), dtype=np.float64)
+        for _m, (_k1, _k2) in enumerate(k1k2):
+            _S[_k1 * P_ord + _k2, _m] = 1.0
+
+        def _hat(H):
+            return (_S @ H).reshape(P_ord, P_ord, H.shape[1])
+
+        Hh_opd = _hat(H_opd)
+        Hh_s1x = _hat(H_s1x)
+        Hh_s1y = _hat(H_s1y)
+        Hh_ds1x_du3 = _hat(H_ds1x_du3)
+        Hh_ds1x_du4 = _hat(H_ds1x_du4)
+        Hh_ds1y_du3 = _hat(H_ds1y_du3)
+        Hh_ds1y_du4 = _hat(H_ds1y_du4)
+
+        def _factor_contract(Hh, Tyb, cs, ce, bw):
+            # result[R,i,j] = sum_{a,b} Ty[b,R] Hh[a,b,j] Tx[a,i]
+            return np.einsum('bR,abj,ai->Rij', Tyb, Hh[:, :, cs:ce], Tx_1d,
+                             optimize=True).reshape(bw * N_out_coarse, ce - cs)
+
     weight_per_sample = tuk_2d.ravel() * du * du * (v2x_h * v2y_h)
 
     # N4: linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y), one value per v2
@@ -940,25 +975,38 @@ def _integrate_quadrature(
         p0 = iy0 * N_out_coarse
         p1 = iy1 * N_out_coarse
         inbox_b = inbox_flat[p0:p1]
+        _bw = iy1 - iy0
 
-        # Build the design matrix for just these output rows:
-        # G_band[(iy-iy0)*N_out + ix, m] = Ty_1d[k2, iy] * Tx_1d[k1, ix].
-        G_band = np.empty((p1 - p0, M), dtype=np.float64)
-        for m_, (k1, k2) in enumerate(k1k2):
-            G_band[:, m_] = np.outer(Ty_1d[k2, iy0:iy1], Tx_1d[k1]).ravel()
+        if _QUAD_FACTORIZE:
+            _Tyb = Ty_1d[:, iy0:iy1]          # (P, band_rows); no G materialized
+        else:
+            # Explicit per-row-band design matrix (validation reference):
+            # G_band[(iy-iy0)*N_out + ix, m] = Ty_1d[k2, iy] * Tx_1d[k1, ix].
+            G_band = np.empty((p1 - p0, M), dtype=np.float64)
+            for m_, (k1, k2) in enumerate(k1k2):
+                G_band[:, m_] = np.outer(Ty_1d[k2, iy0:iy1], Tx_1d[k1]).ravel()
 
         acc = np.zeros(p1 - p0, dtype=out_dtype)
         for c_start in range(0, n_v2_total, chunk_v2):
             c_end = min(c_start + chunk_v2, n_v2_total)
 
-            opd_c      = G_band @ H_opd     [:, c_start:c_end]
+            if _QUAD_FACTORIZE:
+                opd_c      = _factor_contract(Hh_opd, _Tyb, c_start, c_end, _bw)
+                s1x_c      = _factor_contract(Hh_s1x, _Tyb, c_start, c_end, _bw)
+                s1y_c      = _factor_contract(Hh_s1y, _Tyb, c_start, c_end, _bw)
+                ds1x_du3_c = _factor_contract(Hh_ds1x_du3, _Tyb, c_start, c_end, _bw)
+                ds1x_du4_c = _factor_contract(Hh_ds1x_du4, _Tyb, c_start, c_end, _bw)
+                ds1y_du3_c = _factor_contract(Hh_ds1y_du3, _Tyb, c_start, c_end, _bw)
+                ds1y_du4_c = _factor_contract(Hh_ds1y_du4, _Tyb, c_start, c_end, _bw)
+            else:
+                opd_c      = G_band @ H_opd     [:, c_start:c_end]
+                s1x_c      = G_band @ H_s1x     [:, c_start:c_end]
+                s1y_c      = G_band @ H_s1y     [:, c_start:c_end]
+                ds1x_du3_c = G_band @ H_ds1x_du3[:, c_start:c_end]
+                ds1x_du4_c = G_band @ H_ds1x_du4[:, c_start:c_end]
+                ds1y_du3_c = G_band @ H_ds1y_du3[:, c_start:c_end]
+                ds1y_du4_c = G_band @ H_ds1y_du4[:, c_start:c_end]
             opd_c      = opd_c + lin_v[None, c_start:c_end]
-            s1x_c      = G_band @ H_s1x     [:, c_start:c_end]
-            s1y_c      = G_band @ H_s1y     [:, c_start:c_end]
-            ds1x_du3_c = G_band @ H_ds1x_du3[:, c_start:c_end]
-            ds1x_du4_c = G_band @ H_ds1x_du4[:, c_start:c_end]
-            ds1y_du3_c = G_band @ H_ds1y_du3[:, c_start:c_end]
-            ds1y_du4_c = G_band @ H_ds1y_du4[:, c_start:c_end]
 
             det_J_c = (ds1x_du3_c * ds1y_du4_c
                        - ds1x_du4_c * ds1y_du3_c)
