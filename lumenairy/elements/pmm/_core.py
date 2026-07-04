@@ -545,6 +545,44 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
     return Acoef, lam, q, invop
 
 
+def _scalar_uniform_geo_eig(mats, k0, kx0=0.0):
+    """Eps-free GEOMETRIC eig for a uniform-isotropic half-space (audit S5-P1).
+
+    For uniform eps both the TE ``(eps*S0 - Lop/k0^2) x = q^2 S0 x`` and the TM
+    ``(S0 - Linv/k0^2) x = q^2 Pinv x`` problems fold (Linv = L/eps, Pinv =
+    S0/eps, Cinv = C/eps) to the SAME eps-FREE pencil
+    ``(Lop/k0^2) x = (eps - q^2) S0 x`` with ``Lop = L - i*kx0*(C - C^T) +
+    kx0^2*S0`` (geometry + Bloch only).  So ONE eig serves both half-spaces
+    (sup/sub share the mesh -> identical L/C/S0) and both polarizations, with
+    ``q^2 = eps - mu``.  Returns ``(mu, X)``."""
+    k02 = k0 * k0
+    Lop = mats["L"]
+    if kx0:
+        Cas = mats["C"] - mats["C"].T
+        Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * mats["S0"]
+    mu, X = _fast_geig(Lop / k02, mats["S0"])
+    return mu, X
+
+
+def _sem_modes_uniform_scalar(mats, k0, polarization, eps, kx0=0.0, geo=None):
+    """Uniform-isotropic half-space modes from the shared geometric eig
+    (audit S5-P1) -- the same ``(Acoef, lam, q, invop)`` contract as
+    :func:`_sem_modes` for a uniform-eps cell, with ``q^2 = eps - mu`` and the
+    IDENTICAL forward-branch selector + TM ``invop``.  The eigenvector gauge
+    may differ from a raw per-eps :func:`_sem_modes` eig, but the downstream
+    interface S-matrix is gauge-agnostic."""
+    if geo is None:
+        geo = _scalar_uniform_geo_eig(mats, k0, kx0)
+    mu, X = geo
+    q = np.sqrt(_C(eps) - mu)
+    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
+    q = np.where(flip, -q, q)
+    lam = -1j * q
+    invop = (None if polarization == "te"
+             else _safe_solve(mats["S0"], mats["Pinv"]))
+    return X, lam, q, invop
+
 
 @functools.lru_cache(maxsize=64)
 def _sem_projection_quad(degree, ref_nodes_key):
@@ -826,8 +864,14 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     Wl = Acoef
     Vl = (Acoef if polarization == "te" else invop @ Acoef) @ np.diag(q_l)
 
-    Wsup, _ls, q_sup, invsup = _sem_modes(mats_sup, k0, polarization, kx0, robust)
-    Wsub, _lb, q_sub, invsub = _sem_modes(mats_sub, k0, polarization, kx0, robust)
+    # audit S5-P1: the two UNIFORM sup/sub half-spaces share ONE eps-free
+    # geometric eig (they share the mesh -> identical L/C/S0) instead of two
+    # full _sem_modes eigs -- the half-spaces were 51-64% of the 1-D eig time.
+    _geo = _scalar_uniform_geo_eig(mats_sup, k0, kx0)
+    Wsup, _ls, q_sup, invsup = _sem_modes_uniform_scalar(
+        mats_sup, k0, polarization, eps_sup, kx0, geo=_geo)
+    Wsub, _lb, q_sub, invsub = _sem_modes_uniform_scalar(
+        mats_sub, k0, polarization, eps_sub, kx0, geo=_geo)
     if polarization == "te":
         Vsup, Vsub = Wsup @ np.diag(q_sup), Wsub @ np.diag(q_sub)
     else:

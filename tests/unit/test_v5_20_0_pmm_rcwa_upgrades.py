@@ -11,6 +11,35 @@ import lumenairy as la
 
 
 # --------------------------------------------------------------------------- #
+# S5-P1 -- shared eps-free geometric eig for uniform half-spaces               #
+# --------------------------------------------------------------------------- #
+def test_shared_uniform_geo_eig_reproduces_sem_modes():
+    """The shared geometric-eig half-space modes reproduce the per-eps
+    _sem_modes q-spectrum (as a set) for both polarizations and at oblique
+    incidence -- one eps-free eig, q^2 = eps - mu (audit S5-P1)."""
+    from lumenairy.elements.pmm._core import (
+        _build_sem,
+        _scalar_uniform_geo_eig,
+        _sem_modes,
+        _sem_modes_uniform_scalar,
+    )
+    period, degree = 1.0e-6, 15
+    k0 = 2.0 * np.pi / 0.8e-6
+    eps = 2.3 + 0.0j
+    mats = _build_sem(period, 0.5e-6, eps, eps, degree, 1, 1, True)
+    for kx0 in (0.0, 0.31 * k0):
+        geo = _scalar_uniform_geo_eig(mats, k0, kx0)
+        for pol in ("te", "tm"):
+            _A, _lam, q_ref, _iv = _sem_modes(mats, k0, pol, kx0)
+            _X, _l2, q_new, _iv2 = _sem_modes_uniform_scalar(
+                mats, k0, pol, eps, kx0, geo=geo)
+            a = np.sort_complex(np.round(q_ref, 10))
+            b = np.sort_complex(np.round(q_new, 10))
+            assert np.allclose(a, b, atol=1e-9), (
+                f"pol={pol} kx0={kx0}: shared-eig q spectrum differs")
+
+
+# --------------------------------------------------------------------------- #
 # B3 -- solve_vs_wavelength reuses a previously set_source()-configured angle   #
 # --------------------------------------------------------------------------- #
 def _stack():
