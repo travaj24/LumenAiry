@@ -108,6 +108,29 @@ def test_stack_repeated_layer_dedup_is_transparent():
     assert np.max(np.abs(R4 - R1)) < 1e-9 and np.max(np.abs(T4 - T1)) < 1e-9
 
 
+def test_stack_sweep_geom_cache_is_transparent_and_reused():
+    """F4 part 2: a wavelength sweep reuses the wl-independent per-layer build
+    (one geom-cache entry per unique layer, shared across all wavelengths) and
+    is bit-identical to per-wavelength fresh solves."""
+    P, DEP = 0.6e-6, 0.25e-6
+    S = 6
+    cell = np.full((S, S), 1.0 + 0j)
+    cell[1:4, 1:4] = 6.0
+    wls = np.array([0.50e-6, 0.55e-6, 0.60e-6])
+    st = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
+                       n_superstrate=1.0, degree=9, n_orders=3)
+    st.add_layer(DEP, eps_cell=cell)
+    o, R, T = st.solve_vs_wavelength(wls)[:3]
+    assert len(st._geom_cache) == 1        # one unique layer, built once
+    for i, w in enumerate(wls):
+        ref = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
+                            n_superstrate=1.0, degree=9, n_orders=3)
+        ref.add_layer(DEP, eps_cell=cell)
+        ref.set_source(float(w))
+        _o1, R1, T1, _j = ref.solve()
+        assert np.array_equal(R[i], R1) and np.array_equal(T[i], T1)
+
+
 # --------------------------------------------------------------------------- #
 # F8 -- circular truncation (Lalanne 1997) for the 2-D PMM hybrid              #
 # --------------------------------------------------------------------------- #

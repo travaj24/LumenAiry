@@ -99,6 +99,13 @@ class PMM2DStack:
         self.max_nodal_dof = int(max_nodal_dof)
         self._layers = []          # dicts: kind, thickness, payload (PUBLIC eps)
         self._src = None
+        # F4 part 2 (audit): content-keyed cache of the WAVELENGTH-INDEPENDENT
+        # per-layer build (ax/ay nodal assembly + the k0-free projected
+        # operators) so a wavelength sweep reuses it instead of rebuilding it
+        # per layer per wl.  Persists across solve() calls; cleared on add_layer
+        # (geometry change).  A dispersive layer's tile changes per wl -> a new
+        # content key, so the cache never serves a stale build.
+        self._geom_cache = {}
 
     # ------------------------------------------------------------------ #
     # builder
@@ -124,6 +131,7 @@ class PMM2DStack:
         read at the region's first pixel.  Traced ``eps_tensor_cell``
         raises (the 2-D JAX surface is scalar)."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        self._geom_cache = {}   # F4 part 2: geometry changed -> drop the cache
         if is_jax_array(thickness):
             t_store = thickness            # traced: validated only if concrete
             try:
@@ -536,13 +544,21 @@ class PMM2DStack:
             if hit is not None:
                 modes.append(hit + (L["t"],))
                 continue
-            ax = _build_axis(self.period_x, L["xw"], self.degree,
-                             L["el_x"], self.grade)
-            ay = _build_axis(self.period_y, L["yw"], self.degree,
-                             L["el_y"], self.grade)
+            # F4 part 2: reuse the wl-independent (ax, ay, scalar lops) build
+            # across the sweep; only the eig below re-runs per wavelength.
+            gc = self._geom_cache.get(gkey)
+            if gc is not None:
+                ax, ay, lops = gc
+            else:
+                ax = _build_axis(self.period_x, L["xw"], self.degree,
+                                 L["el_x"], self.grade)
+                ay = _build_axis(self.period_y, L["yw"], self.degree,
+                                 L["el_y"], self.grade)
+                lops = (_scalar_projected_ops(ax, ay, tile_i, ox, oy,
+                                              self.period_x, self.period_y)
+                        if L["kind"] == "scalar" else None)
+                self._geom_cache[gkey] = (ax, ay, lops)
             if L["kind"] == "scalar":
-                lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
-                                             self.period_x, self.period_y)
                 GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
                 GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
                 Wl, Vl, lam = _layer_modes_projected(
