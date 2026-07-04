@@ -249,6 +249,27 @@ def test_solve_vs_wavelength_defaults_normal_without_set_source():
 # --------------------------------------------------------------------------- #
 # B1 -- pmm_efficiency_2d_cell honours max_nodal_dof on the JAX path           #
 # --------------------------------------------------------------------------- #
+def test_cell_jax_path_factorized_matches_numpy():
+    """B1 part b: the JAX cell path builds Gx0F/Gy0F by per-axis factorization
+    (no dense N x N Minv/kron), still matching the NumPy cell path to machine
+    precision."""
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    import jax.numpy as jnp
+
+    from lumenairy.elements.pmm.twod import pmm_efficiency_2d_cell
+    P, DEP, WL = 0.6e-6, 0.25e-6, 0.55e-6
+    lay = np.zeros((10, 10), dtype=int)
+    lay[2:7, 2:7] = 1
+    eps = np.where(lay == 1, 6.0, 2.0).astype(complex)
+    kw = dict(period_x=P, period_y=P, region_layout=lay, n_substrate=1.5,
+              n_superstrate=1.0, depth=DEP, wavelength=WL, degree=7, n_orders=4)
+    _on, Rn, Tn = pmm_efficiency_2d_cell(eps_cell=eps, **kw)[:3]
+    _oj, Rj, Tj = pmm_efficiency_2d_cell(eps_cell=jnp.asarray(eps), **kw)[:3]
+    assert np.max(np.abs(Rn - np.asarray(Rj))) < 1e-11
+    assert np.max(np.abs(Tn - np.asarray(Tj))) < 1e-11
+
+
 def test_cell_jax_path_honours_max_nodal_dof():
     """The JAX cell dispatch used to skip _validate_cell_cost and drive a dense
     N x N assembly -> OOM.  It now rejects an oversized cell with the same

@@ -194,6 +194,7 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
         return hit
     from .twod import (
         _axis_elem_counts,
+        _axis_projection,
         _build_axis,
         _cell_to_walls_tile,
         _projectors,
@@ -231,13 +232,25 @@ def _static_prep_cell(period_x, period_y, layout, degree, n_el, grade,
     for u in uniq:
         i, j = np.argwhere(lay == u)[0]
         first_idx.append((int(i), int(j)))
-    Minv = np.diag(1.0 / Mdiag)
-    Gx0 = -1j * (Minv @ np.kron(ay["M"], ax["D"]))
-    Gy0 = -1j * (Minv @ np.kron(ay["D"], ax["M"]))
+    # B1 part b (audit): FACTORIZED derivative operators -- the GLL masses are
+    # (near-)diagonal so ``Minv @ kron(ay['M'], ax['D'])`` collapses to a per-
+    # axis form; build Gx0F/Gy0F as ``kron`` of the SMALL projected per-axis
+    # operators instead of materializing the dense N x N ``Minv`` and
+    # ``kron(ay['M'], ax['D'])`` (~110 GB at N ~ 83k -- the sibling
+    # _jax_stack2d already uses this form).
+    Tx = _axis_projection(ax, ox)
+    Txp = np.linalg.pinv(Tx)
+    Ty = _axis_projection(ay, oy)
+    Typ = np.linalg.pinv(Ty)
+    NxO, NyO = len(ox), len(oy)
+    gx1 = Tx @ ((1.0 / mdx)[:, None] * ax["D"]) @ Txp
+    gy1 = Ty @ ((1.0 / mdy)[:, None] * ay["D"]) @ Typ
+    Gx0F = -1j * np.kron(np.eye(NyO, dtype=_C), gx1)
+    Gy0F = -1j * np.kron(gy1, np.eye(NxO, dtype=_C))
     out = dict(
         Tp=Tp, Tpinv=Tpinv, Wreg=Wreg, first_idx=first_idx,
-        Gx0F=Tp @ Gx0 @ Tpinv, Gy0F=Tp @ Gy0 @ Tpinv,
-        IprojF=Tp @ Tpinv,
+        Gx0F=Gx0F, Gy0F=Gy0F,
+        IprojF=np.kron(Ty @ Typ, Tx @ Txp),
         order_x=np.tile(ox, len(oy)), order_y=np.repeat(oy, len(ox)))
     with _STATIC_CACHE_LOCK:
         _STATIC_CACHE[key] = out
