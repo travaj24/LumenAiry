@@ -486,19 +486,28 @@ class PMMStack:
         ax.set_title("PMMStack geometry (exact walls)")
         return ax
 
-    def set_source(self, wavelength, *, angle=0.0, theta=None):
-        """Set the incident plane wave (vacuum wavelength [m], incidence
-        ``angle`` [rad] in the x-z plane).  ``theta`` is accepted as a cross-suite
-        alias for ``angle`` (matching ``RCWAStack.set_source``'s polar angle, with
-        the 1-D classical mount's azimuth ``phi = 0``).  ``theta`` WINS when both
-        are supplied -- the SAME rule as ``RCWAStack.set_source`` and the 1-D entry
-        points, so ``set_source(angle=A, theta=T)`` resolves to ``T`` in every
-        suite.  Returns ``self``."""
+    def set_source(self, wavelength, *, angle=0.0, theta=None, phi=0.0):
+        """Set the incident plane wave (vacuum wavelength [m], polar incidence
+        ``angle`` [rad]).  ``theta`` is accepted as a cross-suite alias for
+        ``angle`` (matching ``RCWAStack.set_source``'s polar angle); ``theta``
+        WINS when both are supplied -- the SAME rule as ``RCWAStack.set_source``
+        and the 1-D entry points, so ``set_source(angle=A, theta=T)`` resolves
+        to ``T`` in every suite.
+
+        ``phi`` [rad] is the CONICAL (out-of-plane) azimuth (audit conical Path
+        B phase 4).  ``phi = 0`` is the classical x-z mount (the historical
+        default, unchanged).  A ``phi != 0`` solve runs the native ``O(N)``
+        conical reduction (``n_y = 0`` degenerate; the coupled 2N cascade), and
+        is restricted to ALL-VERTICAL scalar / in-plane stacks with NumPy inputs
+        (slant, out-of-plane tensors, JAX, ``stabilize`` and ``retain_internal``
+        raise under ``phi != 0`` -- use ``PMM2DStack`` with y-invariant cells for
+        those).  Returns ``self``."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
         angle = _resolve_incidence(angle, theta)
         self._src = dict(
             wl=wavelength if is_jax_array(wavelength) else float(wavelength),
-            angle=angle if is_jax_array(angle) else float(angle))
+            angle=angle if is_jax_array(angle) else float(angle),
+            phi=phi if is_jax_array(phi) else float(phi))
         return self
 
     def _resliced_clone(self, dn):
@@ -540,6 +549,147 @@ class PMMStack:
                 or any(is_jax_array(t) for t, _s, _a in self._layers)
                 or any(is_jax_array(e) for _t, segs, _a in self._layers
                        for _w, e in segs))
+
+    def _solve_conical(self, wl, angle, phi):
+        """Native ``O(N)`` conical (``phi != 0``) multilayer solve (Path B phase
+        4) -- the ``n_y = 0`` degenerate reduction.
+
+        Every layer's coupled ``2N`` modes come from the SAME 2-D machinery the
+        native conical single layer uses (:func:`_tensor_layer_modes` with
+        ``oy = [0]``); segments are stored as ``(3, 3)`` tensors, so a scalar
+        layer is the isotropic diagonal that reduces exactly to
+        :func:`pmm_jones_1d_conical`.  Each patterned layer carries its OWN
+        spectral-element grid + projector (no union grid -- the projection
+        decouples layers, as in :class:`PMM2DStack`).  Vertical layers keep the
+        ``+/-lam`` symmetric cascade; an out-of-plane layer promotes the whole
+        stack to the generalized fwd/back S-matrix.  Closed with the shared
+        conical far field.  Restricted to all-vertical NumPy stacks (the caller
+        gates slant / JAX / stabilize / retain_internal)."""
+        from ..rcwa._core import (
+            _interface_smatrix_general,
+            _modes_to_M,
+            _propagation_smatrix_general,
+        )
+        from .conical import _conical_jones_farfield
+        from .twod import (
+            _build_axis,
+            _homogeneous_modes,
+            _interface_smatrix,
+            _layer_modes_projected,
+            _propagation_smatrix,
+            _redheffer_star,
+            _scalar_projected_ops,
+        )
+        from .twod_jones import _tensor_layer_modes
+
+        def _scalar_eps(M):
+            """The scalar eps of an isotropic-diagonal (3, 3) tile entry, else
+            None (a genuine tensor -> the tensor path)."""
+            M = np.asarray(M, dtype=_C)
+            d = np.diag(M)
+            scale = max(float(np.max(np.abs(M))), 1.0)
+            off = float(np.max(np.abs(M - np.diag(d))))
+            if (off < 1e-12 * scale and abs(d[0] - d[1]) < 1e-12 * scale
+                    and abs(d[0] - d[2]) < 1e-12 * scale):
+                return _C(d[0])
+            return None
+
+        P = self.period
+        degree = self.degree
+        n_orders = max(3, (self.ffo - 1) // 2)
+        eps_sup = np.conj(_C(self.n_sup) ** 2)         # internal exp(+iwt) gauge
+        eps_sub = np.conj(_C(self.n_sub) ** 2)
+        nre = float(np.real(np.sqrt(eps_sup)))
+        kx0 = nre * np.sin(angle) * np.cos(phi)
+        ky0 = nre * np.sin(angle) * np.sin(phi)
+
+        ox = np.arange(-n_orders, n_orders + 1)
+        oy = np.array([0])
+        order_x = np.tile(ox, len(oy))
+        order_y = np.repeat(oy, len(ox))
+        k0 = 2.0 * np.pi / wl
+        kxv = kx0 + order_x * (wl / P)
+        kyv = ky0 + order_y * (wl / P)                 # == ky0 (constant)
+        ez_rule = "li" if self.factorization != "convection" else "laurent"
+
+        Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
+        Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)
+
+        # per-layer coupled modes (each layer's own grid; oy=[0] -> O(N)).  A
+        # scalar (isotropic) layer takes the SCALAR projected path (the Li
+        # inverse rule on the wall-normal component -> fast TM convergence,
+        # matching pmm_jones_1d_conical); a genuine tensor layer the tensor path.
+        modes = []
+        for (thk, segs, _slant) in self._layers:
+            widths = np.array([float(w) for w, _ in segs], dtype=float)
+            scalars = [_scalar_eps(e) for _, e in segs]
+            is_scalar = all(s is not None for s in scalars)
+            if len(segs) == 1:                         # uniform layer
+                x_walls = []
+            else:
+                cw = np.cumsum(widths)
+                cw = cw / cw[-1]
+                x_walls = [float(c * P) for c in cw[:-1]]
+            if is_scalar and len(segs) == 1:           # uniform isotropic slab
+                Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv, np.conj(scalars[0]))
+                modes.append(("sym", Wl, Vl, lam, thk))
+                continue
+            ax = _build_axis(P, x_walls, degree, self.n_el, self.grade)
+            ay = _build_axis(P, [], degree, self.n_el, self.grade)
+            if is_scalar:                              # patterned isotropic
+                eps_tile = np.conj(np.array([[s] for s in scalars]))  # (nseg, 1)
+                lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, P, P)
+                GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
+                GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+                Wl, Vl, lam = _layer_modes_projected(
+                    GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
+                    formulation=ez_rule, EpnxF=lops["EpnxF"],
+                    EpnyF=lops["EpnyF"])
+                modes.append(("sym", Wl, Vl, lam, thk))
+                continue
+            tile = np.stack([np.asarray(e, dtype=_C) for _, e in segs])
+            tile_i = np.conj(tile)[:, None, :, :]      # (nseg, 1, 3, 3) internal
+            out = _tensor_layer_modes(ax, ay, x_walls, [], tile_i, k0, kx0, ky0,
+                                      ox, oy, kxv, kyv, ez_rule)
+            entry = (("gen",) + out if len(out) == 6 else ("sym",) + tuple(out))
+            modes.append(entry + (thk,))
+
+        any_oop = any(m[0] == "gen" for m in modes)
+        if not any_oop:
+            nlay = len(modes)
+            ifc = [_interface_smatrix(Wsup, Vsup, modes[0][1], modes[0][2])]
+            for i in range(1, nlay):
+                ifc.append(_interface_smatrix(modes[i - 1][1], modes[i - 1][2],
+                                              modes[i][1], modes[i][2]))
+            ifc.append(_interface_smatrix(modes[-1][1], modes[-1][2],
+                                          Wsub, Vsub))
+            S = ifc[0]
+            for i, (_k, _W, _V, lam, t) in enumerate(modes):
+                S = _redheffer_star(S, _propagation_smatrix(lam, k0 * t))
+                S = _redheffer_star(S, ifc[i + 1])
+        else:
+            def _blocks(m):
+                if m[0] == "sym":
+                    _k, W, V, lam, t = m
+                    return _modes_to_M(W, V, W, -V), lam, -lam, t
+                _k, Wf, Vf, lf, Wb, Vb, lb, t = m
+                return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb, t
+
+            M_prev = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
+            S = None
+            for m in modes:
+                Ml, lf, lb, t = _blocks(m)
+                Si = _interface_smatrix_general(M_prev, Ml)
+                S = Si if S is None else _redheffer_star(S, Si)
+                S = _redheffer_star(
+                    S, _propagation_smatrix_general(lf, lb, k0 * t))
+                M_prev = Ml
+            Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
+            S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
+        S11, _S12, S21, _S22 = S
+
+        return _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv,
+                                       kx0, ky0, eps_sup, eps_sub)
 
     def solve(self, *, stabilize=None, retain_internal=False):
         """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``
@@ -597,6 +747,33 @@ class PMMStack:
                 f"PMMStack.solve: unresolved material keys {_unresolved}; "
                 f"pass materials={{...}} via prepare()/solve(materials=...) "
                 f"or use concrete permittivities.")
+        # ---- native conical (out-of-plane, phi != 0) dispatch --------------
+        # Path B phase 4: the O(N) n_y = 0 reduction.  Restricted to all-vertical
+        # NumPy scalar / in-plane stacks; the JAX / slant / stabilize /
+        # retain_internal combinations raise (PMM2DStack with y-invariant cells
+        # is the general route).  An out-of-plane tensor layer is permitted (it
+        # promotes to the generalized cascade) but inherits the shared-generator
+        # OOP-at-conical residual documented on pmm_jones_1d_conical_tensor.
+        phi = float(self._src.get("phi", 0.0))
+        if abs(phi) > 1e-12:
+            if self._holds_traced():
+                raise NotImplementedError(
+                    "PMMStack.solve: conical incidence (phi != 0) is NumPy-only "
+                    "(the JAX surface is the classical phi = 0 mount).")
+            if stabilize not in (None, False):
+                raise NotImplementedError(
+                    "PMMStack.solve(stabilize=...): not available at conical "
+                    "incidence (phi != 0).")
+            if retain_internal:
+                raise NotImplementedError(
+                    "PMMStack.solve(retain_internal=True): not available at "
+                    "conical incidence (phi != 0).")
+            if any(abs(L[2]) > 1e-12 for L in self._layers):
+                raise NotImplementedError(
+                    "PMMStack: conical incidence (phi != 0) is not available for "
+                    "SLANTED layers; use PMM2DStack with y-invariant cells.")
+            return self._solve_conical(self._src["wl"], self._src["angle"], phi)
+
         # ---- differentiable (JAX) dispatch ---------------------------------
         # Any traced input (a layer eps / thickness, a half-space index, the
         # wavelength or the angle) routes the whole solve to the jnp twin.
