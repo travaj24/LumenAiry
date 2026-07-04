@@ -65,10 +65,7 @@ Added
   grows a `phi` kwarg for the native `O(N)` conical MULTILAYER stack.  Validated
   against the analytic Berreman 4×4 conical oracle (uniform slab, singular
   values), the classical 1-D solver (`phi = 0` reduction) and the `PMM2DStack`
-  y-invariant bridge.  Restricted to all-vertical scalar / in-plane NumPy stacks;
-  an out-of-plane tensor at conical incidence inherits a documented shared-
-  generator residual vs Berreman on one eigenchannel (`pmm_jones_2d`/
-  `rcwa_jones_2d` affected identically — flagged for a focused follow-up).
+  y-invariant bridge.  Restricted to all-vertical scalar / in-plane NumPy stacks.
 - **Conical `PMM2DStack` bridge validation (Path A).**  The existing y-invariant
   bridge is now validated at `phi != 0` against the Berreman conical oracle,
   unblocking out-of-plane cuts through `PMM2DStack` with y-invariant cells.
@@ -96,6 +93,18 @@ Performance (opt-in fast paths; default byte-identical)
 
 Fixed
 
+- **Out-of-plane tensor at conical incidence.**  The shared full-3×3 tensor
+  generator (`_layer_eigenmodes_tensor`, used by `pmm_jones_2d`, `rcwa_jones_2d`
+  and the native conical path) built its off-plane cross-blocks to match the
+  Berreman 4×4 Δ, which is written in the `exp(-iωt)` convention — but the modal
+  cascade is `exp(+iωt)`, so the i-odd off-plane coupling entered with the wrong
+  sign.  A tilted-director tensor at conical incidence was off Berreman by a few
+  percent on one reflection eigenchannel.  Negating the two off-plane blocks
+  (`G = [[-A, P], [Q, -B]]`) restores agreement to machine precision (full Jones,
+  R/T and singular values ~1e-15 across 1-D and 2-D, uniform and patterned,
+  reciprocal and lossy) and is byte-identical wherever the coupling vanishes
+  (in-plane / isotropic tiles at any incidence; the (0,0) order at normal), so
+  every prior in-plane / isotropic / OOP-normal validation is unchanged.
 - `pmm_efficiency_2d_cell` JAX dispatch now honours `max_nodal_dof` (P1 resource
   blow-up); stale-internal invalidation, `_epsF_cache` invalidation and dead-code
   cleanups (B4/B5); `fff_nv` direct-rule documentation (B2).

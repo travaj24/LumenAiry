@@ -1941,7 +1941,17 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
             [EYZ @ Ez_inv @ Ky,    -EYZ @ Ez_inv @ Kx],
             [-EXZ @ Ez_inv @ Ky,   EXZ @ Ez_inv @ Kx],
         ])
-        G = _block(xp, [[A, P], [Q, B]])
+        # The off-plane cross-blocks A, B built above match the Berreman 4x4
+        # Delta, which is written in the exp(-i w t) convention; this internal
+        # cascade is exp(+i w t), so the OOP coupling (the only i-odd part -- the
+        # in-plane P, Q are convention-symmetric) enters with the opposite sign.
+        # Negating A and B corrects OOP-at-conical to the Berreman ground truth
+        # (R/T + Jones singular values ~1e-16) and is byte-identical wherever the
+        # coupling vanishes -- in-plane / isotropic tiles (EZX=EZY=EXZ=EYZ=0 ->
+        # A=B=0 at every order) and normal incidence on the (0,0) order (Kx=Ky=0
+        # -> A=B=0); the higher orders of a uniform slab are decoupled + evanescent
+        # so the observed (0,0) reflection is unchanged there too.
+        G = _block(xp, [[-A, P], [Q, -B]])
         gam, Vfull = _eig_for(xp)(G)
         fidx = _select_forward_flux(gam, Vfull, N)
         fset = set(np.asarray(to_numpy(fidx)).tolist())
