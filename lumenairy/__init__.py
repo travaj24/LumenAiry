@@ -128,6 +128,7 @@ from .elements import (
 # â”€â”€ Lenses â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 from .elements.lenses import (
     NUMEXPR_AVAILABLE,
+    PreparedAnalyticLens,
     PreparedTracedLens,
     apply_aspheric_lens,
     apply_axicon,
@@ -146,6 +147,7 @@ from .elements.lenses import (
     get_lens_parallel_amp,
     get_lens_sag_dtype,
     lens_sag_float32_opd_error,
+    prepare_real_lens,
     prepare_real_lens_traced,
     recommend_grid_for_prescription,
     set_lens_parallel_amp,
@@ -1053,6 +1055,8 @@ __all__ = [
     'apply_real_lens_traced_multi',
     'prepare_real_lens_traced',
     'PreparedTracedLens',
+    'prepare_real_lens',
+    'PreparedAnalyticLens',
     'close_worker_pool',
     'apply_real_lens_maslov',
     'apply_real_lens_traced_jax',

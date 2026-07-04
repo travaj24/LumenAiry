@@ -402,6 +402,85 @@ def test_tp2_fit_inversion_matches_newton():
         assert rel < 1e-3, f"sub={sub}: fit vs newton {rel:.2e}"
 
 
+from lumenairy.elements._lens_real import prepare_real_lens  # noqa: E402
+
+
+def _multi_lens(nsurf=6, ap=8e-3):
+    surfs = []
+    for i in range(nsurf):
+        R = 60e-3 if i % 2 == 0 else -60e-3
+        surfs.append({
+            'radius': R, 'conic': 0.0,
+            'glass_before': 'air' if i % 2 == 0 else 'N-BK7',
+            'glass_after': 'N-BK7' if i % 2 == 0 else 'air',
+            'semi_diameter': ap / 2})
+    return {'name': 'm', 'aperture_diameter': ap, 'surfaces': surfs,
+            'thicknesses': [2e-3] * (nsurf - 1)}
+
+
+@pytest.mark.parametrize('dtype', [np.complex128, np.complex64])
+def test_ap1_prepared_analytic_matches_direct(dtype):
+    """A-P1: prepare_real_lens()(E) must equal apply_real_lens(E) to machine
+    precision on the default ASM / conic path (the cached screens are the same
+    exp(-i k0 opd) the direct path recomputes; only exp reassociation differs
+    -> ~3e-15 at complex128, float32-ULP at complex64)."""
+    N, dx = 384, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = (np.exp(-(X ** 2 + Y ** 2) / (2e-3) ** 2)
+         * np.exp(1j * (2 * np.pi / LAM) * np.sin(0.006) * X)).astype(dtype)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        direct = la.apply_real_lens(E, prescription=_multi_lens(6),
+                                    wavelength=LAM, dx=dx)
+        prep = prepare_real_lens(prescription=_multi_lens(6), wavelength=LAM,
+                                 dx=dx, N=N)
+        out = prep(E)
+    assert out.shape == direct.shape and out.dtype == E.dtype
+    rel = float(np.abs(out - direct).max()) / (float(np.abs(direct).max()) + 1e-30)
+    tol = 1e-12 if dtype == np.complex128 else 1e-5
+    assert rel < tol, f"{dtype.__name__}: prepared vs direct {rel:.2e}"
+
+
+def test_ap1_reuse_is_input_independent():
+    N, dx = 256, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E1 = np.exp(-(X ** 2 + Y ** 2) / (1.5e-3) ** 2).astype(np.complex128)
+    E2 = (np.exp(-((X - 0.5e-3) ** 2 + Y ** 2) / (1.0e-3) ** 2)
+          * np.exp(1j * (2 * np.pi / LAM) * np.sin(0.01) * Y)).astype(np.complex128)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        prep = prepare_real_lens(prescription=_multi_lens(4), wavelength=LAM,
+                                 dx=dx, N=N)
+        for E in (E1, E2):
+            d = la.apply_real_lens(E, prescription=_multi_lens(4),
+                                   wavelength=LAM, dx=dx)
+            rel = float(np.abs(prep(E) - d).max()) / (float(np.abs(d).max()) + 1e-30)
+            assert rel < 1e-12, f"reuse mismatch {rel:.2e}"
+
+
+def test_ap1_rejects_unsupported_configs():
+    for bad in ({'decenter': (1e-4, 0.0)}, {'tilt': (1e-3, 0.0)},
+                {'freeform_type': 'xy_polynomial'}, {'radius_y': 50e-3},
+                {'clear_aperture': 3e-3}):
+        p = _multi_lens(2)
+        p['surfaces'][0].update(bad)
+        with pytest.raises(NotImplementedError):
+            prepare_real_lens(prescription=p, wavelength=LAM, dx=6e-6, N=64)
+    p = _multi_lens(3)
+    p['stop_index'] = 1
+    with pytest.raises(NotImplementedError):
+        prepare_real_lens(prescription=p, wavelength=LAM, dx=6e-6, N=64)
+
+
+def test_ap1_shape_mismatch_raises():
+    prep = prepare_real_lens(prescription=_multi_lens(2), wavelength=LAM,
+                             dx=6e-6, N=128)
+    with pytest.raises(ValueError, match='shape'):
+        prep(np.ones((64, 64), dtype=np.complex128))
+
+
 def test_tp1_rejects_auto_carrier():
     with pytest.raises(ValueError, match="auto"):
         prepare_real_lens_traced(prescription=_prep_lens(), wavelength=LAM,

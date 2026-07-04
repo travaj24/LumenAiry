@@ -84,6 +84,7 @@ from .freeform import (
 )
 from .lenses import (
     NUMEXPR_AVAILABLE,
+    PreparedAnalyticLens,
     PreparedTracedLens,
     apply_aspheric_lens,
     apply_axicon,
@@ -99,6 +100,7 @@ from .lenses import (
     get_lens_parallel_amp,
     get_lens_sag_dtype,
     lens_sag_float32_opd_error,
+    prepare_real_lens,
     prepare_real_lens_traced,
     recommend_grid_for_prescription,
     set_lens_parallel_amp,
@@ -177,6 +179,7 @@ __all__ = [
     'apply_real_lens', 'apply_real_lens_traced', 'apply_real_lens_maslov',
     'apply_real_lens_traced_multi',
     'prepare_real_lens_traced', 'PreparedTracedLens',
+    'prepare_real_lens', 'PreparedAnalyticLens',
     'set_lens_parallel_amp', 'get_lens_parallel_amp',
     'set_lens_sag_dtype', 'get_lens_sag_dtype',
     'lens_sag_float32_opd_error',

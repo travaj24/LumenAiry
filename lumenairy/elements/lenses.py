@@ -920,9 +920,11 @@ from ._lens_jax import (  # noqa: E402, F401
 # imports continue to work.
 # ---------------------------------------------------------------------------
 from ._lens_real import (  # noqa: E402, F401
+    PreparedAnalyticLens,
     apply_real_lens,
     get_lens_sag_dtype,
     lens_sag_float32_opd_error,
+    prepare_real_lens,
     set_lens_sag_dtype,
 )
 

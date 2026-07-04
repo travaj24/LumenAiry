@@ -1475,4 +1475,145 @@ def apply_real_lens(
     call_progress(progress, 'apply_real_lens', 1.0, 'done')
     return E
 
-__all__ = ['apply_real_lens']
+
+class PreparedAnalyticLens:
+    """An analytic (split-step) lens with its input-independent per-surface
+    phase screens precomputed (A-P1).
+
+    Built by :func:`prepare_real_lens`.  Each per-surface OPD screen
+    ``exp(-i k0 (n2-n1) sag(h))`` and the entrance-aperture mask depend only on
+    ``(prescription, wavelength, dx, dy, N)``, not on the input field, yet
+    :func:`apply_real_lens` recomputes them (sag + OPD + ``exp``) on every
+    call.  This caches them once; each call is then the FFT propagation legs
+    (whose ASM transfer functions are already cached inside
+    ``angular_spectrum_propagate``) plus one complex multiply per surface.
+    Biggest effect on many-surface prescriptions and optimizer / tolerancing
+    loops.  Mirrors the ``PreparedRCWA2D`` / ``PreparedTracedLens`` precedent.
+
+    Supports only the DEFAULT propagation path -- NumPy backend, ASM
+    propagator, plain conic + aspheric refractive surfaces.  The factory
+    raises ``NotImplementedError`` for decentred / tilted / freeform / biconic
+    / stop / mirror surfaces or the slant / fresnel / absorption / seidel /
+    surface-frame / GPU / non-ASM modes; use :func:`apply_real_lens` directly
+    for those.
+    """
+
+    __slots__ = ('_screens', '_entrance_mask', '_gap', '_N', '_dx', '_dy',
+                 '_bandlimit')
+
+    def __init__(self, **kw):
+        for k, v in kw.items():
+            setattr(self, k, v)
+
+    def __call__(self, E_in: np.ndarray) -> np.ndarray:
+        """Apply the prepared analytic lens to ``E_in`` (shape must be N x N)."""
+        E_in = np.asarray(E_in)
+        if E_in.shape != (self._N, self._N):
+            raise ValueError(
+                f"PreparedAnalyticLens: E_in shape {E_in.shape} != prepared "
+                f"grid ({self._N}, {self._N}).")
+        # Match apply_real_lens ingestion exactly.
+        if np.iscomplexobj(E_in):
+            E = E_in.copy()
+        else:
+            from ..propagators.propagation import DEFAULT_COMPLEX_DTYPE
+            E = E_in.astype(DEFAULT_COMPLEX_DTYPE)
+        if self._entrance_mask is not None:
+            E = np.where(self._entrance_mask, E, E.dtype.type(0))
+        n_surf = len(self._screens)
+        for i, screen in enumerate(self._screens):
+            sc = screen if screen.dtype == E.dtype else screen.astype(E.dtype)
+            E = E * sc
+            if i < n_surf - 1:
+                thick, lam_med = self._gap[i]
+                E = angular_spectrum_propagate(
+                    E, thick, lam_med, self._dx, dy=self._dy,
+                    bandlimit=self._bandlimit)
+        return E
+
+
+def prepare_real_lens(
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    N: int,
+    dy: Optional[float] = None,
+    bandlimit: bool = True,
+) -> PreparedAnalyticLens:
+    """Precompute the input-independent screens of an analytic lens (A-P1).
+
+    Returns a :class:`PreparedAnalyticLens` whose per-surface phase screens and
+    entrance-aperture mask are cached, so every subsequent ``prepared(E_in)``
+    costs only the FFT legs + one complex multiply per surface (the sag / OPD /
+    ``exp`` recompute that :func:`apply_real_lens` does per call is paid once).
+
+    Only the default ASM / plain-conic-aspheric path is supported; see
+    :class:`PreparedAnalyticLens` for the unsupported cases (which raise here).
+    """
+    surfaces = prescription['surfaces']
+    thicknesses = prescription['thicknesses']
+    aperture = prescription.get('aperture_diameter')
+    stop_index = prescription.get('stop_index')
+    if len(thicknesses) != len(surfaces) - 1:
+        raise ValueError(
+            f"prepare_real_lens: need {len(surfaces) - 1} thicknesses for "
+            f"{len(surfaces)} surfaces, got {len(thicknesses)}.")
+    if stop_index is not None:
+        raise NotImplementedError(
+            "prepare_real_lens: a decentred / mid-train stop (stop_index) is "
+            "not supported; call apply_real_lens directly.")
+    for i, surf in enumerate(surfaces):
+        for _k in ('decenter', 'tilt'):
+            _v = surf.get(_k)
+            if _v is not None and tuple(_v) != (0.0, 0.0):
+                raise NotImplementedError(
+                    f"prepare_real_lens: surfaces[{i}].{_k}={_v} is not "
+                    f"supported; call apply_real_lens directly.")
+        for _k in ('form_error', 'radius_y', 'freeform_type', 'clear_aperture'):
+            if surf.get(_k) is not None:
+                raise NotImplementedError(
+                    f"prepare_real_lens: surfaces[{i}].{_k} is not supported; "
+                    f"call apply_real_lens directly.")
+        if surf.get('is_mirror') or str(surf.get('glass_after', '')).upper() == 'MIRROR':
+            raise NotImplementedError(
+                f"prepare_real_lens: surfaces[{i}] is a mirror; call "
+                f"apply_real_lens directly.")
+
+    N = int(N)
+    if dy is None:
+        dy = dx
+    k0 = 2.0 * np.pi / wavelength
+    # Grid -- matches apply_real_lens exactly (float division, meshgrid(x, y)).
+    x = (np.arange(N, dtype=np.float64) - N / 2) * dx
+    y = (np.arange(N, dtype=np.float64) - N / 2) * dy
+    X, Y = np.meshgrid(x, y)
+    h_sq_axis = X ** 2 + Y ** 2
+
+    entrance_mask = None
+    if aperture is not None:          # stop_index is None here (rejected above)
+        entrance_mask = h_sq_axis <= (aperture / 2) ** 2
+
+    screens = []
+    gap = []
+    n_surf = len(surfaces)
+    for i, surf in enumerate(surfaces):
+        R = surf['radius']
+        kc = surf.get('conic', 0.0)
+        asph = surf.get('aspheric_coeffs')
+        n1r = get_glass_index(surf['glass_before'], wavelength)
+        n2r = get_glass_index(surf['glass_after'], wavelength)
+        sag = _surface_sag_general(h_sq_axis, R, kc, asph)
+        opd = (n2r - n1r) * sag
+        if bool(np.any(np.isnan(opd))):
+            opd = np.where(np.isnan(opd), 0.0, opd)
+        screens.append(np.exp(-1j * k0 * opd))    # complex128 screen
+        if i < n_surf - 1:
+            gap.append((thicknesses[i], wavelength / n2r))  # z, in-medium lambda
+
+    return PreparedAnalyticLens(
+        _screens=screens, _entrance_mask=entrance_mask, _gap=gap, _N=N,
+        _dx=dx, _dy=dy, _bandlimit=bandlimit)
+
+
+__all__ = ['apply_real_lens', 'prepare_real_lens', 'PreparedAnalyticLens']
