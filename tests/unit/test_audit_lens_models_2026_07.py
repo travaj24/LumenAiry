@@ -113,6 +113,308 @@ def test_n2_under_resolved_quadrature_warns():
             ray_field_samples=14, ray_pupil_samples=14, poly_order=4, n_v2=6)
 
 
+def test_a1_auto_n_v2_resolves_demanding_default_quadrature():
+    """A1 (v5.20): n_v2=None (the new default) auto-resolves the uniform
+    quadrature from the fitted v2-oscillation estimate, so the *default*
+    ``apply_real_lens_maslov`` call on a demanding tight-focus chart matches
+    the well-resolved local_quadrature truth instead of speckling at a fixed
+    n_v2=32.  This is the corrected A1 fix: the '67% gap' was never a
+    local_quadrature bug -- it was the default quadrature being under-resolved.
+    """
+    N, dx = 128, 90e-6
+    E = _gauss(N, dx, w=3e-3).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+              poly_order=6)
+
+    def il2(a, b):
+        A, B = np.abs(a) ** 2, np.abs(b) ** 2
+        m = B > 0.02 * B.max()
+        return float(np.linalg.norm((A - B)[m])) / float(np.linalg.norm(B[m]))
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        truth = la.apply_real_lens_maslov(
+            E, integration_method='local_quadrature', n_v2=24,
+            local_n_samples=8, local_window_sigma=3.0, **kw)
+        auto = la.apply_real_lens_maslov(E, **kw)          # default: n_v2=None
+        old32 = la.apply_real_lens_maslov(E, n_v2=32, **kw)
+    # The auto default now tracks the truth; the old fixed default did not.
+    assert il2(auto, truth) < 5e-3, il2(auto, truth)
+    assert il2(old32, truth) > 0.5, il2(old32, truth)
+
+
+def test_a1_auto_n_v2_floor_is_byte_identical_to_32_on_weak_chart():
+    """A low-NA / weakly-focusing chart needs << 32 v2 samples, so auto-
+    resolution clamps to the floor (_N_V2_AUTO_MIN=32) and the default call is
+    *byte-identical* to the historical explicit n_v2=32 -- no silent change for
+    the configs the old default already handled."""
+    N, dx = 96, 150e-6
+    weak = {
+        'name': 'weak', 'aperture_diameter': 6e-3,
+        'surfaces': [
+            {'radius': 400e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+            {'radius': -400e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 3e-3},
+        ],
+        'thicknesses': [4e-3],
+    }
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (6e-3) ** 2).astype(np.complex128)
+    kw = dict(prescription=weak, wavelength=LAM, dx=dx, output_subsample=1,
+              ray_field_samples=12, ray_pupil_samples=12, poly_order=4)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        auto = la.apply_real_lens_maslov(E, **kw)
+        pinned = la.apply_real_lens_maslov(E, n_v2=32, **kw)
+    assert np.array_equal(auto, pinned)
+
+
+def test_a1_explicit_n_v2_is_respected_not_auto_overridden():
+    """Passing an explicit n_v2 pins the sampling exactly (reproducibility);
+    auto-resolution only engages when n_v2 is left None."""
+    N, dx = 96, 120e-6
+    E = _gauss(N, dx, w=4e-3).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=12, ray_pupil_samples=12,
+              poly_order=4)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        a = la.apply_real_lens_maslov(E, n_v2=20, **kw)
+        b = la.apply_real_lens_maslov(E, n_v2=20, **kw)
+    assert np.array_equal(a, b)
+
+
+# --------------------------------------------------------------------------
+# v5.20 anamorphic (dy != dx) support
+# --------------------------------------------------------------------------
+def _rms_px(a):
+    """Intensity-weighted rms width in pixels, per axis (sx, sy)."""
+    I = np.abs(a) ** 2
+    I = I / I.sum()
+    yy, xx = np.mgrid[0:a.shape[0], 0:a.shape[1]]
+    cy = (I * yy).sum()
+    cx = (I * xx).sum()
+    return (np.sqrt((I * (xx - cx) ** 2).sum()),
+            np.sqrt((I * (yy - cy) ** 2).sum()))
+
+
+def test_anamorphic_square_pixels_byte_identical_to_before():
+    """dy=None and dy=dx must be byte-identical (the anamorphic plumbing
+    collapses exactly to the legacy square path when dx == dy -- no regression
+    for the overwhelmingly common square-pixel call)."""
+    N, dx = 128, 90e-6
+    E = _gauss(N, dx, w=3e-3).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+              poly_order=6)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        m_none = la.apply_real_lens_maslov(E, **kw)
+        m_eq = la.apply_real_lens_maslov(E, dy=dx, **kw)
+    assert np.array_equal(m_none, m_eq)
+
+
+def test_anamorphic_isotropic_beam_pixel_ellipticity_matches_analytic():
+    """A physically circular beam through the symmetric singlet, rendered on an
+    anamorphic grid (dy = 2*dx), must render with pixel-space y-rms = 1/2 the
+    x-rms (each y-pixel spans 2x the physical distance).  Both apply_real_lens
+    (independently anamorphic) and apply_real_lens_maslov must reproduce that
+    exact 0.5 ratio and agree -- the decisive proof the Maslov dy threading is
+    geometrically correct (not merely finite)."""
+    N, ratio = 160, 2.0
+    dx, dy = 40e-6, 40e-6 * ratio
+    xa = (np.arange(N) - N // 2) * dx
+    ya = (np.arange(N) - N // 2) * dy
+    Xa, Ya = np.meshgrid(xa, ya)
+    Eiso = np.exp(-(Xa ** 2 + Ya ** 2) / (1.5e-3) ** 2).astype(np.complex128)
+    p = {
+        'name': 'singlet', 'aperture_diameter': 6e-3,
+        'surfaces': [
+            {'radius': 140e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+            {'radius': -140e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 3e-3},
+        ],
+        'thicknesses': [4e-3],
+    }
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        ana = la.apply_real_lens(Eiso, prescription=p, wavelength=LAM,
+                                 dx=dx, dy=dy)
+        mas = la.apply_real_lens_maslov(
+            Eiso, prescription=p, wavelength=LAM, dx=dx, dy=dy,
+            output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+            poly_order=6)
+    sxa, sya = _rms_px(ana)
+    sxm, sym = _rms_px(mas)
+    assert mas.shape == (N, N) and np.isfinite(mas).all()
+    # both reproduce the geometric 1/ratio pixel-ellipticity
+    assert abs((sya / sxa) - 1.0 / ratio) < 0.02
+    assert abs((sym / sxm) - 1.0 / ratio) < 0.02
+    # and maslov tracks analytic's ellipticity tightly
+    assert abs((sym / sxm) - (sya / sxa)) / (sya / sxa) < 5e-3
+
+
+def test_anamorphic_dy_actually_threaded_changes_output():
+    """Sanity floor: propagating with dy=2*dx must NOT equal propagating the
+    same array with dy=dx -- if dy were silently ignored the two would match."""
+    N = 160
+    dx, dy = 40e-6, 80e-6
+    xa = (np.arange(N) - N // 2) * dx
+    ya = (np.arange(N) - N // 2) * dy
+    Xa, Ya = np.meshgrid(xa, ya)
+    E = np.exp(-(Xa ** 2) / (1.2e-3) ** 2
+               - (Ya ** 2) / (2.4e-3) ** 2).astype(np.complex128)
+    p = {
+        'name': 'singlet', 'aperture_diameter': 6e-3,
+        'surfaces': [
+            {'radius': 140e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+            {'radius': -140e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 3e-3},
+        ],
+        'thicknesses': [4e-3],
+    }
+    kw = dict(prescription=p, wavelength=LAM, dx=dx, output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=6)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        m_ana = la.apply_real_lens_maslov(E, dy=dy, **kw)
+        m_sq = la.apply_real_lens_maslov(E, dy=dx, **kw)
+    assert not np.allclose(m_ana, m_sq)
+
+
+def test_anamorphic_rectangular_array_rejected():
+    """A rectangular *array* (Ny != Nx) is still apply_real_lens territory and
+    must raise the square-2D guard."""
+    E = np.ones((64, 128), dtype=np.complex128)
+    with pytest.raises(ValueError, match='square'):
+        la.apply_real_lens_maslov(
+            E, prescription=_singlet(), wavelength=LAM, dx=40e-6, dy=80e-6,
+            output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+            poly_order=4)
+
+
+def test_anamorphic_roi_rejected():
+    """roi= with anamorphic pixels maps a square physical window to a
+    rectangular pixel grid the square integrators can't take -> clean raise."""
+    N, dx, dy = 128, 40e-6, 80e-6
+    E = _gauss(N, dx, w=1.5e-3).astype(np.complex128)
+    with pytest.raises(NotImplementedError, match='anamorphic'):
+        la.apply_real_lens_maslov(
+            E, prescription=_singlet(), wavelength=LAM, dx=dx, dy=dy,
+            roi=(0.0, 0.0, 1e-3), ray_field_samples=14, ray_pupil_samples=14,
+            poly_order=4)
+
+
+# --------------------------------------------------------------------------
+# v5.20 GPU (CuPy) quadrature integrator
+# --------------------------------------------------------------------------
+def _gpu_available():
+    """True only when CuPy imports AND a GEMM (cublas) actually runs -- a bare
+    ``import cupy`` succeeds on hosts whose cublas DLL is missing, so probe a
+    real matmul (the quadrature path's core op)."""
+    try:
+        import cupy as cp
+        _ = cp.asnumpy(cp.arange(4.0) @ cp.arange(4.0))
+        return True
+    except Exception:
+        return False
+
+
+_GPU = _gpu_available()
+_gpu_skip = pytest.mark.skipif(not _GPU, reason='CuPy+GPU (cublas) unavailable')
+
+
+def _il2c(a, b):
+    m = np.abs(b) > 0.02 * np.abs(b).max()
+    return float(np.linalg.norm((a - b)[m])) / (float(np.linalg.norm(b[m]))
+                                                 + 1e-30)
+
+
+@_gpu_skip
+def test_gpu_quadrature_matches_cpu():
+    """use_gpu=True runs the phase-space quadrature on the device and matches
+    the CPU integrator (device BLAS/reduction order -> ~1e-5 or better), and
+    returns a CuPy device array."""
+    import cupy as cp
+    N, dx = 160, 70e-6
+    E = _gauss(N, dx, w=3e-3).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+              poly_order=6, integration_method='quadrature')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cpu = la.apply_real_lens_maslov(E, **kw)
+        gpu = la.apply_real_lens_maslov(E, use_gpu=True, **kw)
+    assert isinstance(gpu, cp.ndarray)
+    assert gpu.dtype == E.dtype and gpu.shape == (N, N)
+    assert _il2c(cp.asnumpy(gpu), cpu) < 1e-5
+
+
+@_gpu_skip
+def test_gpu_cupy_input_array_triggers_gpu():
+    """Passing a CuPy input array (no use_gpu flag) routes to the GPU path and
+    returns a device array matching the CPU result."""
+    import cupy as cp
+    N, dx = 128, 80e-6
+    E = _gauss(N, dx, w=3e-3).astype(np.complex128)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=12, ray_pupil_samples=12,
+              poly_order=6, integration_method='quadrature')
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cpu = la.apply_real_lens_maslov(E, **kw)
+        gpu = la.apply_real_lens_maslov(cp.asarray(E), **kw)
+    assert isinstance(gpu, cp.ndarray)
+    assert _il2c(cp.asnumpy(gpu), cpu) < 1e-5
+
+
+@_gpu_skip
+def test_gpu_anamorphic_matches_cpu():
+    """The GPU quadrature honours anamorphic pixels (dy != dx) and matches the
+    CPU anamorphic result."""
+    import cupy as cp
+    N, dx, dy = 160, 40e-6, 80e-6
+    xa = (np.arange(N) - N // 2) * dx
+    ya = (np.arange(N) - N // 2) * dy
+    Xa, Ya = np.meshgrid(xa, ya)
+    E = np.exp(-(Xa ** 2 + Ya ** 2) / (1.5e-3) ** 2).astype(np.complex128)
+    p = {
+        'name': 'singlet', 'aperture_diameter': 6e-3,
+        'surfaces': [
+            {'radius': 140e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+            {'radius': -140e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 3e-3},
+        ],
+        'thicknesses': [4e-3],
+    }
+    kw = dict(prescription=p, wavelength=LAM, dx=dx, dy=dy, output_subsample=1,
+              ray_field_samples=14, ray_pupil_samples=14, poly_order=6)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cpu = la.apply_real_lens_maslov(E, **kw)
+        gpu = la.apply_real_lens_maslov(E, use_gpu=True, **kw)
+    assert _il2c(cp.asnumpy(gpu), cpu) < 1e-5
+
+
+@_gpu_skip
+def test_gpu_non_quadrature_method_rejected():
+    """use_gpu with an asymptotic evaluator (no CuPy Numba-saddle twin yet)
+    raises a clear NotImplementedError rather than silently falling back."""
+    N, dx = 96, 90e-6
+    E = _gauss(N, dx, w=3e-3).astype(np.complex128)
+    with pytest.raises(NotImplementedError, match='quadrature'):
+        la.apply_real_lens_maslov(
+            E, prescription=_singlet(), wavelength=LAM, dx=dx, use_gpu=True,
+            integration_method='stationary_phase', output_subsample=1,
+            ray_field_samples=12, ray_pupil_samples=12, poly_order=4, n_v2=16)
+
+
 def test_f3_suite_style_progress_callback_does_not_crash():
     """A strict 3-arg (stage, frac, msg) suite callback must work; before F3
     the bespoke keyword call raised TypeError mid-lens."""

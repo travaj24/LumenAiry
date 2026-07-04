@@ -159,7 +159,7 @@ program.  Status below distinguishes **implemented + validated** from
 
 | Item | Assessment |
 |---|---|
-| **N6** eigen-rotated `local_quadrature` window | **Implemented, validated, REVERTED.** The rotation (align the window to the Hessian eigenvectors: `theta = 0.5 atan2(2 H34, H33-H44)`, offset `xi1*sigma1*e1 + xi2*sigma2*e2`, area element unchanged) is mathematically correct and reduces to the legacy path when axis-aligned. But a clean benefit could not be isolated against a dense-quadrature oracle: `local_quadrature` already diverges ~67% (intensity) from the oracle in the strong-astigmatism regime where window rotation would matter (partly aperture-vs-grid truncation), and rotation was neutral-to-worse in every tested case. Shipping it would be an unvalidated behavior change. Rotation math preserved here for a future cycle that first closes the `local_quadrature`-vs-oracle accuracy gap (which is the real issue). |
+| **N6** eigen-rotated `local_quadrature` window | **Implemented, validated, REVERTED — and the stated rationale was later CORRECTED (2026-07-04, see below).** The rotation (align the window to the Hessian eigenvectors: `theta = 0.5 atan2(2 H34, H33-H44)`, offset `xi1*sigma1*e1 + xi2*sigma2*e2`, area element unchanged) is mathematically correct and reduces to the legacy path when axis-aligned. It was reverted because rotation was neutral-to-worse in every tested case — that conclusion (revert) stands. **However, the original justification recorded here — "`local_quadrature` diverges ~67% from the dense-quadrature oracle, the real accuracy issue" — was WRONG.** That 67% was `local_quadrature` measured against an *under-resolved* `quadrature` reference (and, in one config, an aperture-truncated grid), i.e. a bad-oracle artifact. The 2026-07-04 A1 re-diagnosis (below) shows `quadrature` converges to `local_quadrature` to **0.1%** once resolved (`n_v2 >~ 4*v2-osc`; the code's own N2 guard wanted ~179, the "oracle" used far fewer), and all three integrators agree to 0.1–0.24% through strong astigmatism. **There is no `local_quadrature` accuracy gap; N6/MGO window rotation is not needed.** The real, actionable issue the diagnosis surfaced was the *default* `quadrature` `n_v2=32` being under-resolved — fixed by auto-resolution (A1, v5.20). Rotation math preserved for the caustic-merge regime only, where a genuinely 2-D window (per-point `A,B` symplectic frame, MGO-style) could still help. |
 | **A-P1** prepared analytic screens | **IMPLEMENTED.** `prepare_real_lens(...)` / `PreparedAnalyticLens` caches the per-surface `exp(-i k0 (n2-n1) sag)` screens + entrance mask (input-independent) and reuses the ASM legs -- whose transfer functions are already cached inside `angular_spectrum_propagate`, so no ASM-math reimplementation was needed and the divergence surface is just the screen multiply. Scoped to the default path (NumPy / ASM / plain conic+aspheric); the factory raises `NotImplementedError` for decenter / tilt / freeform / biconic / clear-aperture / stop / mirror surfaces and the slant / fresnel / absorption / seidel / surface-frame / GPU / non-ASM modes. Validated: prepared == direct to **3e-15** (complex128) / 1.45e-6 (complex64, float32-ULP); reuse on two inputs matches two direct calls to <1e-12; **2.85x faster on an 8-surface lens (N=512)**; every unsupported config rejected. New public API, exported top-level. |
 | **T-P2** inverse-map fit | **IMPLEMENTED (opt-in).** `inversion_method='fit'`: fit `opl(x_out, y_out)` by scattered total-degree Chebyshev lstsq from the traced ray samples, convex-hull-masked, evaluated on the exit grid -- no per-pixel Newton. Default stays `'newton'` (zero risk). Validated 2.6e-6 vs Newton; **2.42x faster at the default `ray_subsample`** (slower only at `ray_subsample=1`, where the optimized parallel Newton wins -- follow-up: skip the redundant Newton spline setup on the fit path). Not yet promoted to default pending the sub-nm cemented-doublet campaign. |
 | **M-P4** numba 4-var Chebyshev kernel | **IMPLEMENTED.** A `@njit(parallel, fastmath)` kernel for the Maslov `_opd_and_derivs` (all six outputs via O(poly_order) stack recurrences); both integrator closures delegate to a shared `_opd6` dispatch (Numba default, NumPy fallback, `_MASLOV_USE_NUMBA` seam). Kernel vs NumPy ~1e-15 on all outputs; end-to-end byte-identical; **13.6x faster** (stationary_phase, N=256). CuPy twin deferred (needs integrator-wide GPU array support first). |
@@ -167,6 +167,76 @@ program.  Status below distinguishes **implemented + validated** from
 | **M-P6** ROI / image-plane evaluation | **IMPLEMENTED.** `roi=(cx, cy, half_width)` evaluates only a square window; the returned field is **byte-identical to the full-grid slice** (each output pixel integrates independently), on- and off-axis, at O(roi_n^2) instead of O(N^2) integrand evals. Measured 1.5x (N=256) -> 3.4x (512) -> **8.8x (1024)** for a 40x40 window, growing with N as the trace+fit floor shrinks. Follow-up: composing a free-space leg into the canonical map to place a downstream (focus-plane) ROI directly. |
 | **M-P7** float32 quadrature arrays | Assessed and **declined**: the quadrature integrator is the exact-integral *validation reference*; trading its float64 precision for float32 bandwidth is counterproductive there. Float32 would make sense only on the production `local_quadrature` path, where it warrants its own power-normalized validation. |
 | **carrier K-decomposition** | **Tractable form IMPLEMENTED** as `apply_real_lens_traced_multi` (§4.1): when the K congruences are the KNOWN emitters, no blind segmentation is needed -- propagate each per-emitter field through the traced lens and coherently sum. The remaining open piece is the AUTO variant: segmenting the K congruences from a single *blended* field's local-wavevector map (a clustering problem) when the emitters are not separately available. Past a few carriers it re-derives the phase-space integral -> use Maslov. |
+
+### 4.3 A1 re-diagnosis + auto-`n_v2` fix (2026-07-04, v5.20)
+
+Follow-up work to "close out A1/A2" (the claimed `local_quadrature` accuracy
+gap) **disproved the gap**. Three clean diagnostics on a demanding tight-focus
+singlet (grid ≥ aperture, no truncation):
+
+1. **Convergence.** `quadrature` vs `local_quadrature`: 0.81 at `n_v2=60`,
+   **0.0011** at `n_v2=120`, 0.0011 at `n_v2=180`. The code's own N2 guard
+   wanted `n_v2 >~ 179` for this chart. → the "67% gap" was the *reference*
+   being under-resolved, not `local_quadrature` being wrong.
+2. **Astigmatism.** `local_quadrature` vs a *converged* `quadrature`(180) across
+   freeform cross-terms 0→8: 0.0011–0.0024; `stationary_phase`: 0.0006. No
+   astigmatism-window defect → N6 rotation genuinely unneeded.
+3. **Cross-check.** All three integrators agree to 0.1–0.24% and match the
+   independent analytic full-wave to 4.6% intensity. (The maslov-vs-analytic
+   *phase* differs at high order — an asymptotic-vs-full-wave property of the
+   method, not an integrator bug; for smooth lenses you use analytic anyway.)
+
+**Actionable outcome — the real issue was the default, not the integrator.**
+The default was `integration_method='quadrature'` with a fixed `n_v2=32`, which
+is badly under-resolved for demanding charts (181% off the truth on the chart
+above; the code warned but still returned speckle). Fix (**A1, v5.20**):
+`n_v2` now defaults to `None` → auto-resolution from the fitted v2-oscillation
+count (`clip(ceil(4*v2_osc)+1, _N_V2_AUTO_MIN=32, _N_V2_AUTO_MAX=256)`), engaged
+only for the `quadrature` path (the asymptotic paths ignore `n_v2`). Validated:
+default call 181% → **0.1%** vs truth; low-NA charts clamp to the floor and stay
+**byte-identical** to the historical `n_v2=32`; explicit `n_v2` is respected.
+Regression tests: `test_a1_auto_n_v2_*` in `test_audit_lens_models_2026_07.py`.
+
+**Lesson (again):** never grade an integrator against an unconverged "oracle."
+The 67% number drove a whole MGO-rotation investigation that was chasing a
+measurement artifact. Convergence-test the reference first.
+
+### 4.4 Maslov parity: anamorphic + GPU (2026-07-04, v5.20)
+
+Bringing `apply_real_lens_maslov` in line with the rest of the lens family.
+
+**Anamorphic (`dy != dx`).** The propagator previously hard-rejected non-square
+pixels. It now threads the separate `dx`/`dy` pitches through the entrance/exit
+bilinear sampler, the output axes (`out_axis_x` at `dx`, `out_axis_y` at `dy`),
+and the angular-content FFT, resolving `dy` on the same
+`None -> get_default_dy() -> dx` chain as `apply_real_lens`. No integrator
+change was needed: the Chebyshev entrance->exit fit already normalises the x/y
+axes independently, and the quadrature integrator already consumes separate
+per-axis Vandermondes (`Tx_1d` from `out_axis_x`, `Ty_1d` from `out_axis_y`), so
+anisotropic *physical* spacing just flows through. Scope: the array stays
+**square** `N x N` (the integrators' output pixel *count* is one `N_out` per
+axis) — a rectangular *array* (`Ny != Nx`) and `roi=` under anamorphic pixels
+raise `NotImplementedError` and point at `apply_real_lens`. Validation: a
+physically circular beam on a `dy = 2 dx` grid renders with pixel-space
+`sy/sx = 0.500` for both `apply_real_lens` and the Maslov path, agreeing to
+**1.3e-4** (the decisive geometric check); square pixels stay byte-identical to
+the pre-change path. Tests: `test_anamorphic_*`.
+
+**GPU (CuPy).** The existing `apply_real_lens_maslov_jax` is a differentiable
+phase *screen* (P2-03), NOT the phase-space integral, so no GPU path existed for
+the actual quadrature. Added `use_gpu=True` / CuPy-input dispatch (mirroring
+`apply_real_lens`) that keeps the cheap trace + fit on the host and runs the
+O(N^2 * n_v2) integrand on the device via a self-contained CuPy twin of the
+factorized quadrature (`_integrate_quadrature_cupy`). The CPU integrator is left
+**byte-for-byte untouched** (zero regression risk); the CuPy twin's math is
+validated byte-identical to the CPU integrator with a NumPy backend
+(`max|dE| = 0`), and on-device against the 4070 Ti to **5e-16** complex L2 with a
+**35x** speedup at N=192 (auto-`n_v2`). Scope: `integration_method='quadrature'`
+only (the asymptotic evaluators' Numba per-pixel-saddle kernel has no CuPy twin
+yet and raise under `use_gpu`); returns a device array (`cupy.asnumpy` to pull
+to host). Anamorphic + GPU compose (GPU vs CPU anamorphic = 3e-16). JAX
+phase-space twin deferred (owner steer: "CuPy now, JAX later"). Tests:
+`test_gpu_*` (skipped when CuPy/cublas absent).
 
 ## 5. Consumer wiring (Reverse_Symmetric_ASM, not this repo)
 

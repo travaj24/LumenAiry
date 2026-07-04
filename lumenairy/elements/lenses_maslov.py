@@ -67,6 +67,20 @@ _QUAD_ROW_BAND = None
 # reference).  A tiny seam for A/B checks.
 _QUAD_FACTORIZE = True
 
+# A1 (v5.20): auto-resolution bounds for the uniform-quadrature v2 sampling.
+# When the caller leaves ``n_v2`` unset (the new default), the quadrature path
+# sizes it from the same v2-oscillation estimate the N2 under-resolution guard
+# uses (want n_v2 >~ 4 * v2-oscillations), clamped to [_N_V2_AUTO_MIN,
+# _N_V2_AUTO_MAX].  This makes the robust default integrator *properly
+# resolved* out of the box instead of speckling at the old fixed n_v2=32
+# (a demanding tight-focus chart wants ~150-200; see the 2026-07 audit
+# remediation, A1 diagnosis).  The floor keeps low-NA charts byte-identical to
+# the historical default; past the ceiling the N2 warning still fires and
+# points at local_quadrature / stationary_phase (the cheap asymptotic
+# evaluators, which are the correct choice at high production NA).
+_N_V2_AUTO_MIN = 32
+_N_V2_AUTO_MAX = 256
+
 # Other shared helpers still live in lenses.py.
 from .lenses import (
     NUMEXPR_AVAILABLE,
@@ -274,7 +288,7 @@ def apply_real_lens_maslov(
     ray_field_samples: int = 16,
     ray_pupil_samples: int = 16,
     poly_order: int = 4,
-    n_v2: int = 32,
+    n_v2: Optional[int] = None,
     output_subsample: int = 1,
     roi: Optional[Any] = None,
     extract_linear_phase: bool = True,
@@ -290,6 +304,7 @@ def apply_real_lens_maslov(
     normalize_output: str = 'power',
     verbose: bool = False,
     progress: Optional[Any] = None,
+    use_gpu: bool = False,
 ) -> np.ndarray:
     """
     Phase-space / Maslov propagator through a thick-lens prescription.
@@ -336,10 +351,43 @@ def apply_real_lens_maslov(
     Parameters mirror the inline-in-lenses.py predecessor exactly so
     no caller-side changes are required.
 
-    The ``dy`` parameter is accepted for API symmetry with the rest
-    of the lens family; the Maslov propagator's Chebyshev-tensor-
-    product fit assumes square pixels and will raise if
-    ``dy != dx``.
+    Anamorphic pixels (``dy != dx``) are supported (v5.20): the
+    entrance/exit sampler, output axes, and angular-content estimate
+    use the separate ``dx``/``dy`` pitches, and the Chebyshev fit +
+    per-axis quadrature Vandermondes already normalise x and y
+    independently.  ``dy`` resolves ``None -> get_default_dy() -> dx``
+    like ``apply_real_lens``.  The array itself must still be **square**
+    (``N x N``); a rectangular *array* (``Ny != Nx``) and the ``roi=``
+    window under anamorphic pixels are not yet supported and raise --
+    use ``apply_real_lens`` for those.
+
+    ``n_v2`` (uniform-quadrature v2 sampling) defaults to ``None`` ->
+    **auto-resolution**: the ``integration_method='quadrature'`` path
+    sizes it from the fitted OPD's v2-oscillation count (want
+    ``n_v2 >~ 4 * v2-oscillations``), clamped to
+    ``[_N_V2_AUTO_MIN, _N_V2_AUTO_MAX]``.  This keeps the robust default
+    integrator properly resolved (a demanding tight-focus chart wants
+    ~150-200 samples; the old fixed default of 32 speckled).  Low-NA
+    charts clamp to the floor and stay byte-identical to the historical
+    default; past the ceiling the N2 warning fires and steers you to the
+    cheap asymptotic evaluators.  ``n_v2`` is ignored by
+    ``local_quadrature`` / ``stationary_phase`` (they window around the
+    per-pixel saddle rather than sample a uniform v2 grid); pass an
+    explicit int to pin the sampling for reproducibility.
+
+    ``use_gpu`` (v5.20, opt-in) runs the O(N^2 * n_v2) phase-space
+    quadrature integral on the GPU via CuPy -- the same
+    ``use_gpu=True`` / cupy-array entry as ``apply_real_lens``.  The
+    cheap ray trace + Chebyshev fit stay on the host; only the integrand
+    evaluation moves to the device.  Supported for
+    ``integration_method='quadrature'`` (the default, robust integrator);
+    the asymptotic evaluators (``stationary_phase`` /
+    ``local_quadrature``) remain CPU-only for now (their Numba per-pixel
+    saddle kernel has no CuPy twin yet) and raise under ``use_gpu``.
+    Requires the ``cupy`` package; returns a CuPy device array (call
+    ``cupy.asnumpy`` to pull it back to the host).  GPU results match the
+    CPU integrator to ~1e-6 (device BLAS/reduction order, not
+    byte-identical -- like the existing numexpr-vs-numpy ULP delta).
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
@@ -397,19 +445,58 @@ def apply_real_lens_maslov(
     # (lenses.py) holds the lazy module slot.
     from . import lenses as _lenses_module
     t0 = time.perf_counter()
-    E_in = np.asarray(E_in)
+
+    # v5.20 (GPU): CuPy dispatch mirrors apply_real_lens -- opt in via
+    # use_gpu=True OR by passing a CuPy input array.  Only the O(N^2 * n_v2)
+    # integrand evaluation runs on the device; the cheap ray trace + Chebyshev
+    # fit stay on the host, so E_in is normalised to a host copy for that
+    # pipeline and a device copy is uploaded for the integrator.
+    from ._lens_real import _ensure_cupy_loaded, _is_cupy_array
+    _cupy_in = _is_cupy_array(E_in)
+    _use_gpu = bool(use_gpu) or _cupy_in
+    _cp = None
+    if _use_gpu:
+        if not _ensure_cupy_loaded():
+            raise ImportError(
+                "apply_real_lens_maslov: use_gpu=True (or a CuPy input array) "
+                "requires the 'cupy' package.  Install cupy-cuda12x (NVIDIA, "
+                "matching your CUDA version) or cupy-rocm-6-1 (AMD ROCm); or "
+                "call with use_gpu=False for the CPU path.")
+        import cupy as _cp
+        E_in = _cp.asnumpy(E_in) if _cupy_in else np.asarray(E_in)
+    else:
+        E_in = np.asarray(E_in)
     if E_in.ndim != 2 or E_in.shape[0] != E_in.shape[1]:
         raise ValueError(
             f"E_in must be square 2D, got shape {E_in.shape}")
     N = E_in.shape[0]
 
+    if _use_gpu and integration_method != 'quadrature':
+        raise NotImplementedError(
+            "apply_real_lens_maslov: use_gpu currently supports "
+            f"integration_method='quadrature' only (got {integration_method!r}); "
+            "the asymptotic evaluators use a Numba per-pixel saddle kernel that "
+            "has no CuPy twin yet.  Use integration_method='quadrature' for the "
+            "GPU path, or use_gpu=False for the asymptotic evaluators.")
+
+    # v5.20: anamorphic (dy != dx) support.  Resolve dy on the same
+    # ``None -> get_default_dy() -> dx`` chain as apply_real_lens, then thread
+    # the separate x/y pitches through the input sampler, the output axes, and
+    # the angular-content FFT.  The Chebyshev entrance->exit fit already
+    # normalises s1x/s1y (and v2x/v2y) on independent axes, and the quadrature
+    # integrator already receives separate per-axis Vandermondes (Tx_1d from
+    # out_axis_x at dx, Ty_1d from out_axis_y at dy), so anisotropic *physical*
+    # spacing needs no integrator change -- only the axes feeding it.  The
+    # array itself must still be square N x N (the integrators' output pixel
+    # COUNT is a single N_out per axis); a rectangular ARRAY (Ny != Nx) remains
+    # apply_real_lens territory and is rejected by the square-2D guard above.
     if dy is None:
-        dy = dx
-    if abs(float(dy) - float(dx)) > 1e-15 * max(abs(float(dx)), 1.0):
-        raise ValueError(
-            "apply_real_lens_maslov currently requires square pixels "
-            f"(dx == dy); got dx={dx!r}, dy={dy!r}.  Use apply_real_lens "
-            "for anamorphic grids.")
+        from ..propagators.propagation import get_default_dy
+        dy = get_default_dy()
+        if dy is None:
+            dy = dx
+    dy = float(dy)
+    _anamorphic = abs(dy - float(dx)) > 1e-12 * max(abs(float(dx)), 1.0)
 
     # Pre-flight grid vs prescription-aperture check.
     try:
@@ -488,7 +575,10 @@ def apply_real_lens_maslov(
         if sds:
             aperture_m = 2.0 * min(sds)
         else:
-            aperture_m = N * dx * 0.5
+            # Circular-aperture fallback: use the smaller grid half-extent so
+            # the launched bundle stays inside the (possibly anamorphic) grid
+            # (min(dx, dy) == dx for the square-pixel case, so unchanged there).
+            aperture_m = N * min(float(dx), float(dy)) * 0.5
     r_aperture = 0.5 * aperture_m
 
     def cheb_nodes(n):
@@ -556,14 +646,15 @@ def apply_real_lens_maslov(
         _P = np.abs(_F) ** 2
         del _F
         _fx = np.fft.fftfreq(N, d=dx)
-        _FX, _FY = np.meshgrid(_fx, _fx, indexing='xy')
+        _fy = np.fft.fftfreq(N, d=dy)   # v5.20: anamorphic y-axis pitch
+        _FX, _FY = np.meshgrid(_fx, _fy, indexing='xy')
         _Ptot = float(_P.sum())
         if _Ptot > 0.0:
             _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
             _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
             _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
             del _v2
-        del _P, _FX, _FY, _fx
+        del _P, _FX, _FY, _fx, _fy
     if input_na is not None:
         na_input = float(input_na)
         # Explicit input_na must be a finite, non-negative direction cosine.
@@ -743,12 +834,22 @@ def apply_real_lens_maslov(
     N_out_coarse = N // output_subsample
 
     if roi is None:
-        out_axis = (np.arange(N_out_coarse) - N_out_coarse / 2) * \
-                   (dx * output_subsample)
-        out_axis_x = out_axis
-        out_axis_y = out_axis
+        _idx = np.arange(N_out_coarse) - N_out_coarse / 2
+        out_axis_x = _idx * (dx * output_subsample)
+        out_axis_y = _idx * (dy * output_subsample)   # v5.20: anamorphic
         _roi_active = False
     else:
+        if _anamorphic:
+            # A square physical ROI window at native pitch resolves to
+            # different pixel counts in x (roi_hw/dx) and y (roi_hw/dy) --
+            # a rectangular output the square integrators don't take.  ROI is
+            # square-pixel only for now; the full-grid path is anamorphic.
+            raise NotImplementedError(
+                "apply_real_lens_maslov: roi= is not yet supported together "
+                f"with anamorphic pixels (dx={dx!r} != dy={dy!r}); a square "
+                "ROI window maps to a rectangular pixel grid.  Use the full "
+                "grid (roi=None) for anamorphic runs, or square pixels for "
+                "ROI.")
         # M-P6 (audit perf): evaluate only a region of interest -- a square
         # window of ``roi_n`` pixels at the native ``dx`` spacing centred at
         # physical ``(roi_cx, roi_cy)`` = ``roi[:2]`` with half-width
@@ -766,7 +867,6 @@ def apply_real_lens_maslov(
         _ax = (np.arange(N_out_coarse) - N_out_coarse / 2) * dx
         out_axis_x = _ax + roi_cx
         out_axis_y = _ax + roi_cy
-        out_axis = out_axis_x        # legacy alias (upsample path is inactive)
         normalize_output = 'none'
         _roi_active = True
     s2x_grid, s2y_grid = np.meshgrid(out_axis_x, out_axis_y, indexing='xy')
@@ -774,6 +874,24 @@ def apply_real_lens_maslov(
     u_s2x_out = (s2x_grid - s2x_c) / s2x_h
     u_s2y_out = (s2y_grid - s2y_c) / s2y_h
     inbox = (np.abs(u_s2x_out) <= 1.0) & (np.abs(u_s2y_out) <= 1.0)
+
+    # A1 (v5.20): auto-resolve the uniform-quadrature v2 sampling when the
+    # caller left n_v2 unset.  n_v2 drives ONLY integration_method='quadrature'
+    # (the local_quadrature / stationary_phase paths window around the per-pixel
+    # saddle via the v2-box half-width v2x_h/v2y_h, and never read this uniform
+    # sample count), so size it from the same _v2_osc estimate the N2 guard
+    # below uses and leave the asymptotic paths at the floor.  Both ``mi`` and
+    # ``coef_opd`` are already fitted at this point.
+    if n_v2 is None:
+        if integration_method == 'quadrature':
+            _v2_mask_auto = np.array(
+                [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
+                dtype=np.float64)
+            _v2_osc_auto = float(np.sum(np.abs(coef_opd) * _v2_mask_auto))
+            n_v2 = int(np.clip(int(np.ceil(4.0 * _v2_osc_auto)) + 1,
+                               _N_V2_AUTO_MIN, _N_V2_AUTO_MAX))
+        else:
+            n_v2 = _N_V2_AUTO_MIN
 
     u_v2x_samples = np.linspace(-1.0, 1.0, n_v2)
     u_v2y_samples = np.linspace(-1.0, 1.0, n_v2)
@@ -797,9 +915,10 @@ def apply_real_lens_maslov(
 
 
     def sample_E_bilinear(s1x_q: np.ndarray, s1y_q: np.ndarray) -> np.ndarray:
-        in_axis = (np.arange(N) - N / 2) * dx
-        fx = (s1x_q - in_axis[0]) / dx
-        fy = (s1y_q - in_axis[0]) / dx
+        in_axis_x = (np.arange(N) - N / 2) * dx
+        in_axis_y = (np.arange(N) - N / 2) * dy   # v5.20: anamorphic y pitch
+        fx = (s1x_q - in_axis_x[0]) / dx
+        fy = (s1y_q - in_axis_y[0]) / dy
         ix = np.floor(fx).astype(np.int64)
         iy = np.floor(fy).astype(np.int64)
         wx = fx - ix
@@ -910,18 +1029,39 @@ def apply_real_lens_maslov(
             (out_axis_x - s2x_c) / s2x_h, poly_order)
         Ty_1d = _chebyshev_vandermonde(
             (out_axis_y - s2y_c) / s2y_h, poly_order)
-        E_out_coarse = _integrate_quadrature(
-            coef_opd, coef_s1x, coef_s1y, mi,
-            K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, Tx_1d, Ty_1d, N_out_coarse,
-            u_v2x_samples, u_v2y_samples, tuk_2d, du,
-            v2x_h, v2y_h, chunk_v2, inbox_flat,
-            sample_E_bilinear,
-            use_numexpr, _progress,
-            _lenses_module,
-            out_dtype=E_in.dtype,
-            lin_v3=_lin_v3, lin_v4=_lin_v4,
-        )
+        if _use_gpu:
+            # v5.20: GPU quadrature.  Upload E_in once, run the O(N^2 * n_v2)
+            # integrand on the device, pull the coarse field back to the host
+            # for the (numpy) upsample / linear-phase / normalize steps; the
+            # final return re-uploads to a device array (apply_real_lens
+            # convention) when use_gpu / a CuPy input was given.
+            _E_in_gpu = _cp.asarray(E_in)
+            E_out_coarse = _cp.asnumpy(_integrate_quadrature_cupy(
+                _cp,
+                coef_opd, coef_s1x, coef_s1y, mi,
+                K3_arr, K4_arr,
+                poly_order, Tx_1d, Ty_1d, N_out_coarse,
+                u_v2x_samples, u_v2y_samples, tuk_2d, du,
+                v2x_h, v2y_h, chunk_v2, inbox_flat,
+                _E_in_gpu, N, dx, dy,
+                _progress,
+                out_dtype=E_in.dtype,
+                lin_v3=_lin_v3, lin_v4=_lin_v4,
+            ))
+            del _E_in_gpu
+        else:
+            E_out_coarse = _integrate_quadrature(
+                coef_opd, coef_s1x, coef_s1y, mi,
+                K1_arr, K2_arr, K3_arr, K4_arr,
+                poly_order, Tx_1d, Ty_1d, N_out_coarse,
+                u_v2x_samples, u_v2y_samples, tuk_2d, du,
+                v2x_h, v2y_h, chunk_v2, inbox_flat,
+                sample_E_bilinear,
+                use_numexpr, _progress,
+                _lenses_module,
+                out_dtype=E_in.dtype,
+                lin_v3=_lin_v3, lin_v4=_lin_v4,
+            )
 
     # -----------------------------------------------------------------
     # Step 5: Upsample to the full grid if output_subsample > 1
@@ -1010,16 +1150,24 @@ def apply_real_lens_maslov(
         E_out = (E_out * np.exp(2j * np.pi * _lin[0])).astype(E_in.dtype)
     if abs(_lin[1]) > 1e-6 or abs(_lin[2]) > 1e-6:
         if output_subsample > 1:
-            # subsample>1 is non-ROI, so out_axis_x == out_axis_y == out_axis.
+            # subsample>1 is non-ROI.  v5.20: zoom BOTH axes independently --
+            # for anamorphic pixels out_axis_x (dx) != out_axis_y (dy), so the
+            # old ``out_axis_fy = out_axis_fx`` would place the y-tilt at the
+            # wrong pitch.  (Square pixels: the two zooms are identical.)
             from scipy.ndimage import zoom as _zoom1d
-            out_axis_fx = _zoom1d(out_axis, float(N) / float(N_out_coarse),
-                                  order=1, mode='nearest')
-            if out_axis_fx.shape[0] != N:  # non-divisible safety (matches _fit)
-                _tmp = np.zeros(N, dtype=out_axis_fx.dtype)
-                _n = min(out_axis_fx.shape[0], N)
-                _tmp[:_n] = out_axis_fx[:_n]
-                out_axis_fx = _tmp
-            out_axis_fy = out_axis_fx
+
+            def _zoom_axis(_ax):
+                _f = _zoom1d(_ax, float(N) / float(N_out_coarse),
+                             order=1, mode='nearest')
+                if _f.shape[0] != N:  # non-divisible safety (matches _fit)
+                    _tmp = np.zeros(N, dtype=_f.dtype)
+                    _n = min(_f.shape[0], N)
+                    _tmp[:_n] = _f[:_n]
+                    _f = _tmp
+                return _f
+
+            out_axis_fx = _zoom_axis(out_axis_x)
+            out_axis_fy = _zoom_axis(out_axis_y)
         else:
             out_axis_fx = out_axis_x       # coarse grid == fine grid (ROI-safe)
             out_axis_fy = out_axis_y
@@ -1062,6 +1210,11 @@ def apply_real_lens_maslov(
 
     _progress('done', 1.0,
               f'total {time.perf_counter()-t0:.1f}s')
+    if _use_gpu:
+        # Match apply_real_lens: use_gpu / CuPy-input -> return a device array
+        # (the host-side post-processing above is O(N^2), cheap vs the
+        # integration).  Call cupy.asnumpy on the result to pull it to host.
+        return _cp.asarray(E_out)
     return E_out
 
 
@@ -1289,6 +1442,159 @@ def _integrate_quadrature(
               f'in {t_int:.1f}s '
               f'({"numexpr" if use_numexpr else "numpy"}, '
               f'chunk={chunk_v2})')
+
+    return E_out_flat.reshape(N_out_coarse, N_out_coarse)
+
+
+def _integrate_quadrature_cupy(
+    cp,
+    coef_opd, coef_s1x, coef_s1y, mi,
+    K3_arr, K4_arr,
+    poly_order, Tx_1d, Ty_1d, N_out_coarse,
+    u_v2x_samples, u_v2y_samples, tuk_2d, du,
+    v2x_h, v2y_h, chunk_v2, inbox_flat,
+    E_in_gpu, N, dx, dy,
+    _progress,
+    out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
+):
+    """CuPy GPU twin of the factorized :func:`_integrate_quadrature`.
+
+    Same phase-space quadrature math as the CPU factorized (non-numexpr)
+    path -- ``E_out(s2) = sum_v2 E_in(s1(s2,v2)) exp(2 pi i OPD) |det ds1/dv2|
+    w(v2)`` -- with the Kronecker ``G = Ty (x) Tx`` factorization
+    (``G @ H`` = one einsum per row band, no ``G`` materialized) evaluated on
+    the device.  Only the O(N^2 * n_v2) integrand touches the GPU; the trace,
+    fit, and coefficient arrays arrive from the host.  Output-row banding is
+    retained for device-memory safety; numexpr and the CPU byte-budget
+    heuristics are dropped (the GPU reduces directly).  Validated against the
+    CPU integrator to ~1e-6 (device BLAS/reduction order -> not byte-identical).
+    """
+    xp = cp
+    n_v2 = len(u_v2x_samples)
+    n_v2_total = n_v2 * n_v2
+    M = len(mi)
+    k1k2 = [(int(k[0]), int(k[1])) for k in mi]
+    P_ord = poly_order + 1
+
+    # Small per-v2-axis Vandermondes: build on host, move to device.
+    Tu3 = xp.asarray(_chebyshev_vandermonde(u_v2x_samples, poly_order))
+    Tu4 = xp.asarray(_chebyshev_vandermonde(u_v2y_samples, poly_order))
+    dTu3 = xp.asarray(_chebyshev_derivative_vandermonde(u_v2x_samples, poly_order))
+    dTu4 = xp.asarray(_chebyshev_derivative_vandermonde(u_v2y_samples, poly_order))
+    Tx_g = xp.asarray(Tx_1d)
+    Ty_g = xp.asarray(Ty_1d)
+
+    iy_grid, ix_grid = xp.meshgrid(xp.arange(n_v2), xp.arange(n_v2),
+                                   indexing='ij')
+    v2x_idx = ix_grid.ravel()
+    v2y_idx = iy_grid.ravel()
+
+    K3g = xp.asarray(K3_arr)
+    K4g = xp.asarray(K4_arr)
+    T3bj = Tu3[K3g[:, None], v2x_idx[None, :]]
+    T4bj = Tu4[K4g[:, None], v2y_idx[None, :]]
+    dT3bj = dTu3[K3g[:, None], v2x_idx[None, :]]
+    dT4bj = dTu4[K4g[:, None], v2y_idx[None, :]]
+    T3_T4 = T3bj * T4bj
+    dT3_T4 = dT3bj * T4bj
+    T3_dT4 = T3bj * dT4bj
+
+    cop = xp.asarray(coef_opd)[:, None]
+    csx = xp.asarray(coef_s1x)[:, None]
+    csy = xp.asarray(coef_s1y)[:, None]
+    H_opd = cop * T3_T4
+    H_s1x = csx * T3_T4
+    H_s1y = csy * T3_T4
+    H_ds1x_du3 = csx * dT3_T4
+    H_ds1x_du4 = csx * T3_dT4
+    H_ds1y_du3 = csy * dT3_T4
+    H_ds1y_du4 = csy * T3_dT4
+
+    # Scatter H rows by (k1, k2) into a (P, P, .) tensor; factor-contract.
+    _S = xp.zeros((P_ord * P_ord, M), dtype=xp.float64)
+    for _m, (_k1, _k2) in enumerate(k1k2):
+        _S[_k1 * P_ord + _k2, _m] = 1.0
+
+    def _hat(H):
+        return (_S @ H).reshape(P_ord, P_ord, H.shape[1])
+
+    Hh_opd = _hat(H_opd)
+    Hh_s1x = _hat(H_s1x)
+    Hh_s1y = _hat(H_s1y)
+    Hh_ds1x_du3 = _hat(H_ds1x_du3)
+    Hh_ds1x_du4 = _hat(H_ds1x_du4)
+    Hh_ds1y_du3 = _hat(H_ds1y_du3)
+    Hh_ds1y_du4 = _hat(H_ds1y_du4)
+
+    def _factor_contract(Hh, Tyb, cs, ce, bw):
+        return xp.einsum('bR,abj,ai->Rij', Tyb, Hh[:, :, cs:ce], Tx_g,
+                         optimize=True).reshape(bw * N_out_coarse, ce - cs)
+
+    weight_per_sample = xp.asarray(tuk_2d.ravel()) * du * du * (v2x_h * v2y_h)
+    u_v2x_g = xp.asarray(u_v2x_samples)
+    u_v2y_g = xp.asarray(u_v2y_samples)
+    lin_v = (lin_v3 * u_v2x_g[v2x_idx] + lin_v4 * u_v2y_g[v2y_idx])
+
+    inbox_g = xp.asarray(inbox_flat)
+    in0x = -(N / 2) * dx        # in_axis_x[0]
+    in0y = -(N / 2) * dy        # in_axis_y[0] (anamorphic)
+
+    def _sample(s1x_q, s1y_q):
+        fx = (s1x_q - in0x) / dx
+        fy = (s1y_q - in0y) / dy
+        ix = xp.floor(fx).astype(xp.int64)
+        iy = xp.floor(fy).astype(xp.int64)
+        wx = fx - ix
+        wy = fy - iy
+        ok = (ix >= 0) & (ix < N - 1) & (iy >= 0) & (iy < N - 1)
+        ixc = xp.clip(ix, 0, N - 2)
+        iyc = xp.clip(iy, 0, N - 2)
+        e00 = E_in_gpu[iyc, ixc]
+        e10 = E_in_gpu[iyc, ixc + 1]
+        e01 = E_in_gpu[iyc + 1, ixc]
+        e11 = E_in_gpu[iyc + 1, ixc + 1]
+        val = ((1 - wx) * (1 - wy) * e00 + wx * (1 - wy) * e10
+               + (1 - wx) * wy * e01 + wx * wy * e11)
+        return xp.where(ok, val, xp.zeros((), dtype=val.dtype))
+
+    if chunk_v2 <= 0:
+        chunk_v2 = n_v2_total
+    chunk_v2 = min(chunk_v2, n_v2_total)
+    _budget_px = 4_000_000
+    rows_per_band = max(1, min(N_out_coarse,
+                               _budget_px // max(1, N_out_coarse)))
+    E_out_flat = xp.zeros(N_out_coarse * N_out_coarse, dtype=out_dtype)
+    n_bands = (N_out_coarse + rows_per_band - 1) // rows_per_band
+
+    for iy0 in range(0, N_out_coarse, rows_per_band):
+        iy1 = min(iy0 + rows_per_band, N_out_coarse)
+        _bw = iy1 - iy0
+        p0 = iy0 * N_out_coarse
+        p1 = iy1 * N_out_coarse
+        _Tyb = Ty_g[:, iy0:iy1]
+        acc = xp.zeros(p1 - p0, dtype=out_dtype)
+        for cs in range(0, n_v2_total, chunk_v2):
+            ce = min(cs + chunk_v2, n_v2_total)
+            opd_c = _factor_contract(Hh_opd, _Tyb, cs, ce, _bw) \
+                + lin_v[None, cs:ce]
+            s1x_c = _factor_contract(Hh_s1x, _Tyb, cs, ce, _bw)
+            s1y_c = _factor_contract(Hh_s1y, _Tyb, cs, ce, _bw)
+            d13 = _factor_contract(Hh_ds1x_du3, _Tyb, cs, ce, _bw)
+            d14 = _factor_contract(Hh_ds1x_du4, _Tyb, cs, ce, _bw)
+            d23 = _factor_contract(Hh_ds1y_du3, _Tyb, cs, ce, _bw)
+            d24 = _factor_contract(Hh_ds1y_du4, _Tyb, cs, ce, _bw)
+            det_J_c = d13 * d24 - d14 * d23
+            abs_J_c = xp.abs(det_J_c) / (v2x_h * v2y_h)
+            Eobj_c = _sample(s1x_c, s1y_c)
+            contrib = (Eobj_c * xp.exp(2j * xp.pi * opd_c)
+                       * abs_J_c * weight_per_sample[cs:ce])
+            acc += contrib.sum(axis=1)
+        rel = xp.nonzero(inbox_g[p0:p1])[0]
+        E_out_flat[p0 + rel] = acc[rel]
+        if n_bands > 1:
+            _progress('integrate', 0.65 + 0.30 * (iy1 / N_out_coarse),
+                      f'quadrature[gpu] output-row band {iy1}/{N_out_coarse}')
 
     return E_out_flat.reshape(N_out_coarse, N_out_coarse)
 

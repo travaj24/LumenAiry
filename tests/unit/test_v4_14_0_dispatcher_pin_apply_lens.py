@@ -16,9 +16,11 @@ following residual gaps that v4.14 should pin:
    verified across all 5 variants by a parametrized test.
 2. The ``dy=None`` acceptance contract added in v4.13.2 P1-NEW-E
    needs a parametrized regression guard.
-3. The ``dy != dx`` accept-vs-raise behaviour split between NumPy
-   (honour) and JAX/maslov (raise) needs documentation via
-   parametrize.
+3. The ``dy != dx`` accept-vs-raise behaviour split needs
+   documentation via parametrize.  As of v5.20 the NumPy
+   ``apply_real_lens`` AND ``apply_real_lens_maslov`` honour
+   anamorphic grids; ``apply_real_lens_traced`` and the JAX twins
+   still raise.
 4. Input dtype preservation (complex64 in -> complex64 out) was
    pinned for the thin-lens family in v4.13.2 B.4/B.5 but not yet
    pinned for the full real-lens family.
@@ -99,16 +101,16 @@ _APPLY_REAL_LENS_VARIANTS = [
 ]
 
 
-# (variant, expected_behaviour) for dy != dx -- NumPy variants honour
-# the anamorphic grid for the simple apply_real_lens, the traced /
-# maslov / JAX variants currently raise.
+# (variant, expected_behaviour) for dy != dx -- the NumPy apply_real_lens and
+# (v5.20) apply_real_lens_maslov honour the anamorphic grid; the traced and
+# JAX variants currently raise.
 _DY_NE_DX_VARIANTS = [
     pytest.param('apply_real_lens', 'honour', id='apply_real_lens'),
     pytest.param(
         'apply_real_lens_traced', 'raise',
         id='apply_real_lens_traced'),
     pytest.param(
-        'apply_real_lens_maslov', 'raise',
+        'apply_real_lens_maslov', 'honour',
         id='apply_real_lens_maslov'),
     pytest.param(
         'apply_real_lens_traced_jax', 'raise',
@@ -299,20 +301,23 @@ class TestDyNoneAcceptanceDispatcherPin:
 
 
 # ============================================================================
-# Pin 3 -- dy != dx behaviour: NumPy variants honour OR raise;
-# JAX / traced / maslov variants raise with a clear message.
+# Pin 3 -- dy != dx behaviour: the NumPy apply_real_lens and (v5.20)
+# apply_real_lens_maslov honour anamorphic grids; apply_real_lens_traced
+# and the JAX twins raise with a clear message.
 # ============================================================================
 
 class TestDyNeDxBehaviourDispatcherPin:
-    """Pin: ``dy != dx`` either runs (NumPy ``apply_real_lens``
-    honours anamorphic grids end-to-end) OR raises a ``ValueError``
-    with a clear message (the traced / maslov / JAX variants).
+    """Pin: ``dy != dx`` either runs (the NumPy ``apply_real_lens`` and,
+    as of v5.20, ``apply_real_lens_maslov`` honour anamorphic grids
+    end-to-end) OR raises a ``ValueError`` with a clear message
+    (``apply_real_lens_traced`` and the JAX twins).
 
     Pre-fix the JAX twins had no ``dy`` kwarg at all so the kwarg was
     silently dropped (TypeError on keyword form; positional form's dy
     was ignored).  v4.13.2 P1-NEW-E added the explicit raise.  The
-    NumPy traced / maslov contracts (documented in their docstrings)
-    have always raised for ``dy != dx``.
+    NumPy traced contract (documented in its docstring) still raises
+    for ``dy != dx``; ``apply_real_lens_maslov`` gained anamorphic
+    support in v5.20 and now honours it.
 
     This parametrization documents the per-variant contract by
     encoding ``expected_behaviour='honour' | 'raise'`` so a future

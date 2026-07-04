@@ -2,6 +2,104 @@
 
 All notable changes to the core library are documented here.
 
+## [5.20.0] — 2026-07-04
+
+Maslov propagator (`apply_real_lens_maslov`) brought in line with the rest of
+the lens family: an accuracy/UX fix to the default integrator, anamorphic
+(`dy != dx`) support, and a GPU (CuPy) path.  Minor bump — one default-output
+change (documented below), otherwise additive.  See
+`docs/audits/AUDIT_WAVE_LENS_MODELS_2026_07_02_REMEDIATION.md` §4.3–4.4.
+
+### Changed
+
+- **`apply_real_lens_maslov` auto-resolves `n_v2`** (uniform-quadrature v2
+  sampling).  `n_v2` now defaults to `None` → the `integration_method=
+  'quadrature'` path sizes it from the fitted OPD's v2-oscillation count
+  (`clip(ceil(4·v2_osc)+1, 32, 256)`), so the robust default integrator is
+  *properly resolved* out of the box instead of speckling at the old fixed
+  `n_v2=32`.  A demanding tight-focus chart (that the code's N2 guard flags as
+  wanting ~180 samples) went from **181 % off** the well-resolved truth to
+  **0.1 %**.  Low-NA charts clamp to the floor and stay **byte-identical** to
+  the historical `n_v2=32`; an explicit `n_v2` is still honoured exactly.  This
+  corrects a mis-diagnosis in the 5.19.0 notes: the claimed "`local_quadrature`
+  diverges ~67 % from the oracle" was the *reference* being under-resolved, not
+  an integrator bug — all three integrators agree to 0.1–0.24 % once the
+  reference is converged (audit §4.3).
+
+### Added
+
+- **Anamorphic Maslov (`dy != dx`).**  `apply_real_lens_maslov` no longer
+  rejects non-square pixels: the entrance/exit sampler, output axes, and
+  angular-content estimate use the separate `dx`/`dy` pitches (`dy` resolves
+  `None → get_default_dy() → dx`, matching `apply_real_lens`).  Validated
+  against the analytic propagator via the pixel-ellipticity invariant — a
+  circular beam on a `dy = 2·dx` grid renders at `sy/sx = 0.500` for both, to
+  **1.3e-4**.  The array must stay square `N×N`; a rectangular *array*
+  (`Ny != Nx`) and `roi=` under anamorphic pixels raise a clear
+  `NotImplementedError` pointing at `apply_real_lens`.
+- **GPU Maslov (CuPy).**  `apply_real_lens_maslov(..., use_gpu=True)` — or
+  passing a CuPy input array — runs the O(N²·n_v2) phase-space quadrature on the
+  device, mirroring `apply_real_lens`'s dispatch.  The trace + Chebyshev fit
+  stay on the host; only the integrand moves to the GPU (self-contained CuPy
+  twin of the factorized quadrature, CPU path untouched).  Validated
+  byte-identical to the CPU integrator (NumPy backend) and to **5e-16** on an
+  RTX 4070 Ti, with a **35× speedup** at N=192.  Supported for
+  `integration_method='quadrature'` (the default); the asymptotic evaluators
+  remain CPU-only and raise under `use_gpu`.  Composes with anamorphic pixels.
+  Returns a device array (`cupy.asnumpy` to pull to host).
+
+### PMM / RCWA solver upgrades
+
+Implements the two solver audits — `docs/audits/PMM_RCWA_AUDIT_2026_07_02.md`
+(findings + performance) and `docs/audits/AUDIT_PMM_CONICAL_OUT_OF_PLANE_2026_07_03.md`
+(conical incidence).  Every change is gated by a byte-identity parity harness
+across all ten solver families; the default (public) paths are byte-identical to
+5.19.0, with the new fast paths opt-in and a full-solve fallback.
+
+Added
+
+- **Native conical (out-of-plane, `phi != 0`) PMM.**  `pmm_jones_1d_conical`
+  (isotropic grating) and `pmm_jones_1d_conical_tensor` (full `(3,3)` LC-director
+  profile) — the `O(N)` `n_y = 0` reduction of the 2-D coupled build (keeps the
+  y-axis degenerate, routes through the same 2-D machinery).  `PMMStack.set_source`
+  grows a `phi` kwarg for the native `O(N)` conical MULTILAYER stack.  Validated
+  against the analytic Berreman 4×4 conical oracle (uniform slab, singular
+  values), the classical 1-D solver (`phi = 0` reduction) and the `PMM2DStack`
+  y-invariant bridge.  Restricted to all-vertical scalar / in-plane NumPy stacks;
+  an out-of-plane tensor at conical incidence inherits a documented shared-
+  generator residual vs Berreman on one eigenchannel (`pmm_jones_2d`/
+  `rcwa_jones_2d` affected identically — flagged for a focused follow-up).
+- **Conical `PMM2DStack` bridge validation (Path A).**  The existing y-invariant
+  bridge is now validated at `phi != 0` against the Berreman conical oracle,
+  unblocking out-of-plane cuts through `PMM2DStack` with y-invariant cells.
+
+Performance (opt-in fast paths; default byte-identical)
+
+- **Even-parity symmetry fold** (`symmetry=True`) extended from
+  `pmm_efficiency_2d(_cell)` to `PMM2DStack` (the whole Redheffer cascade in the
+  even sector) and `pmm_jones_2d` (the in-plane tensor `(P, Q)` folded via RCWA's
+  `_tensor_PQ`).  A centro-symmetric cell at normal incidence runs in the
+  `(Nf+1)`-d even subspace (~2–4.5× on the O(Nf³) steps); a per-layer flip-
+  invariance guard falls back to the full solve.
+- **Shared structure-aware S-matrix algebra (F1):** PMM reuses RCWA's zero-block
+  Redheffer + diagonal-aware propagation star (isotropic paths bit-identical,
+  generalized ≤ 1 ULP).
+- **Shared eps-free geometric half-space eig (S5-P1):** the 1-D scalar uniform
+  half-spaces (and now the slant half-spaces) share ONE geometric eig across both
+  polarizations (`q² = eps − mu`), ~1.5–2× (gauge-equivalent ~1e-14).
+- **2-D hybrid:** factorized sandwiches never materialize `kron(Ty, Tx)` (F5,
+  bit-identical); optional Lalanne circular truncation (F8, ~2× eig); `PMM2DStack`
+  dedups repeated identical layers within a solve and hoists the wavelength-
+  independent build across a sweep (F4); the JAX 2-D cell assembly is factorized
+  to remove the dense N×N materialization (B1).
+- Quadrature cache (P2, bit-exact); sweep angle reuse (B3).
+
+Fixed
+
+- `pmm_efficiency_2d_cell` JAX dispatch now honours `max_nodal_dof` (P1 resource
+  blow-up); stale-internal invalidation, `_epsF_cache` invalidation and dead-code
+  cleanups (B4/B5); `fff_nv` direct-rule documentation (B2).
+
 ## [5.19.0] — 2026-07-04
 
 Wave lens-models audit remediation (F1-F5, N1-N8) reconciled with a companion
