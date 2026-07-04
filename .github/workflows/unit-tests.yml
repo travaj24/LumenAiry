@@ -28,12 +28,15 @@ jobs:
         # did (parallel-edit race during 6 file splits).  Re-adding
         # here so the documented minimum is actually exercised on PR.
         python-version: ['3.10', '3.11', '3.12', '3.13']
-    # The full unit suite (4077 tests, -v) runs ~15 min on the runner; install
-    # + import sanity adds ~3.  Job cap was 20 (step 15) which the suite brushed
-    # against (a 14:50 run, then a 15-min step TIMEOUT once the suite grew).
-    # Give real headroom so CI-load variance / the slow multiprocess SWMR tests
-    # don't intermittently trip the cap.
-    timeout-minutes: 30
+    # The fast unit suite (-v, ``not slow and not integration``) has grown with
+    # the library; install + import sanity add ~3-4 min.  History: job cap 20
+    # (step 15) -> 30 (step 25) as the suite grew.  v5.20.0: the suite now brushes
+    # 25 min (Python 3.10 finished ~24:50 while 3.11-3.13 tripped the 25-min step
+    # cap on slower runners -- pure CI-load variance at the boundary, NOT a hung
+    # test; the eig-heavy v5.20.0 PMM/RCWA tests already run in the slow-tests
+    # job).  Bump to job 40 / step 33 for real headroom.  FOLLOW-UP: re-optimise
+    # the fast gate (pytest-xdist -n auto, or move more eig-heavy tests to slow).
+    timeout-minutes: 40
 
     steps:
       # v5.2.5 (AUDIT_V5_2_3 post-tag fix): fetch full history + tags
@@ -89,7 +92,7 @@ jobs:
             -p no:cacheprovider --maxfail=5 -v 2>&1 \
             | tee unit_test_output.txt
           exit ${PIPESTATUS[0]}
-        timeout-minutes: 25
+        timeout-minutes: 33
 
       - name: Upload unit-test log on failure
         if: failure()
