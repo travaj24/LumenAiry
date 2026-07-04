@@ -318,7 +318,7 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
     from ..rcwa import _jax_eig_stable, _require_jax_x64
     from ..rcwa._core import (
         _interface_smatrix,
-        _propagation_smatrix,
+        _propagation_star,
         _redheffer_star,
     )
     _require_jax_x64("pmm_efficiency_2d")
@@ -389,7 +389,7 @@ def _scalar_jax_tail(jnp, st, eps_nodal, inv_nodal, eps_sup, eps_sub,
     Vl = Q @ Wl @ jnp.diag(_inv_lam(lam_l))
 
     S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
+    S = _propagation_star(S, lam_l, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
     S11, _S12, S21, _S22 = S
 

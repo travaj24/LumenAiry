@@ -21,7 +21,18 @@ from ...backend import is_jax_array
 # symmetry (like a full-3x3 tensor layer), so it needs the GENERALIZED
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
 # top-level import introduces no cycle.
-from ..rcwa import _interface_smatrix_general, _propagation_smatrix_general
+from ..rcwa import (
+    _interface_smatrix_general,
+    _propagation_star,
+    _propagation_star_general,
+    # F1 (PMM_RCWA_AUDIT_2026_07_02): the Redheffer/propagation-star algebra is
+    # convention-free, so share RCWA's structure-aware copies instead of keeping
+    # a performance-diverged local fork.  ``_redheffer_star`` gains the zero-block
+    # shortcut (skips two dense 2N inverses against a propagation S-matrix's zero
+    # diagonal blocks -- proven bit-identical); ``_propagation_star(_general)``
+    # collapses the whole star against a propagation S-matrix to row/col scaling.
+    _redheffer_star,
+)
 
 # Incidence-medium guard shared with the 2-D PMM paths (twod.py / stack2d.py):
 # the rcwa guard expects the INTERNAL exp(+i w t) eps convention, so PUBLIC-
@@ -600,18 +611,6 @@ def _propagation_smatrix(lam, k0_L):
 
 
 
-def _redheffer_star(SA, SB):
-    A11, A12, A21, A22 = SA
-    B11, B12, B21, B22 = SB
-    n = A11.shape[0]
-    I = np.eye(n, dtype=_C)
-    D = np.linalg.inv(I - B11 @ A22)
-    F = np.linalg.inv(I - A22 @ B11)
-    return (A11 + A12 @ D @ B11 @ A21, A12 @ D @ B12,
-            B21 @ F @ A21, B22 + B21 @ F @ A22 @ B12)
-
-
-
 def _kz_forward(eps, kx):
     """``kz/k0`` on the forward branch for ``exp(-i w t)``: ``Im(kz) >= 0`` so
     the forward wave ``exp(+i kz z)`` decays."""
@@ -823,7 +822,7 @@ def _pmm_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max, period,
     # (region half-spaces do not propagate, so no region lam is needed.)
 
     S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
+    S = _propagation_star(S, lam_l, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
     S11, _S12, S21, _S22 = S
 
@@ -1191,7 +1190,7 @@ def _pmm_jones_solve_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     # interface + propagation S-matrix (block size 2*n_glob; the field stacks
     # [Ex_nodal; Ey_nodal], so each mode matrix is already 2*n_glob tall).
     S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
+    S = _propagation_star(S, lam_l, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
     S11, _S12, S21, _S22 = S
 
@@ -3121,8 +3120,7 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
     Mb, _lamf_b, _lamb_b, Wf_b = _modes_M_slant(md_b)
 
     S = _interface_smatrix_general(Ms, Ml)
-    S = _redheffer_star(S, _propagation_smatrix_general(lamf_l, lamb_l,
-                                                        k0 * depth))
+    S = _propagation_star_general(S, lamf_l, lamb_l, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix_general(Ml, Mb))
     S11, _S12, S21, _S22 = S
 
@@ -3652,8 +3650,7 @@ def _pmm_jones_slant_core(mats, mats_sup, mats_sub, eps_sup, eps_sub, n_max,
     Tp = _sem_fourier_projection(orders, period, mats)
 
     S = _interface_smatrix_general(Ms, Ml)
-    S = _redheffer_star(
-        S, _propagation_smatrix_general(lamf_l, lamb_l, k0 * depth))
+    S = _propagation_star_general(S, lamf_l, lamb_l, k0 * depth)
     S = _redheffer_star(S, _interface_smatrix_general(Ml, Mb))
     S11, _S12, S21, _S22 = S
 
@@ -3991,8 +3988,7 @@ def _pmm_jones_oblique_core(mats, mats_s, mats_b, eps_sup, eps_sub, n_max,
     Ml = Mmat(Wl, Vl, fl, bl)
     Mb = Msym(Wb, Vb, fb)
     S = _interface_smatrix_general(Ms, Ml)
-    S = _redheffer_star(S, _propagation_smatrix_general(
-        -1j * kzl[fl], -1j * kzl[bl], k0 * depth))
+    S = _propagation_star_general(S, -1j * kzl[fl], -1j * kzl[bl], k0 * depth)
     S = _redheffer_star(S, _interface_smatrix_general(Ml, Mb))
     S11, _S12, S21, _S22 = S
 

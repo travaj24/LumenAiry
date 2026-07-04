@@ -111,7 +111,7 @@ def _pmm_stack2d_solve_jax(stack):
     from ..rcwa import _jax_eig_stable, _require_jax_x64
     from ..rcwa._core import (
         _interface_smatrix,
-        _propagation_smatrix,
+        _propagation_star,
         _redheffer_star,
     )
     _require_jax_x64("PMM2DStack.solve")
@@ -265,7 +265,7 @@ def _pmm_stack2d_solve_jax(stack):
     ifc.append(_interface_smatrix(modes[-1][0], modes[-1][1], Wsub, Vsub))
     S = ifc[0]
     for ii, (Wl, Vl, lam, thk) in enumerate(modes):
-        S = _redheffer_star(S, _propagation_smatrix(lam, k0 * thk))
+        S = _propagation_star(S, lam, k0 * thk)
         S = _redheffer_star(S, ifc[ii + 1])
     S11, _S12, S21, _S22 = S
 

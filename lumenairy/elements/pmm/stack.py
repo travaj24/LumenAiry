@@ -15,7 +15,7 @@ import numpy as np
 # (explicit forward/backward) S-matrix.  rcwa does NOT import pmm, so this
 # top-level import introduces no cycle.
 from ...backend import is_jax_array
-from ..rcwa import _interface_smatrix_general, _propagation_smatrix_general
+from ..rcwa import _interface_smatrix_general
 from ._core import (
     _C,
     _COV_MIN_SLANT_RAD,
@@ -31,6 +31,8 @@ from ._core import (
     _n_propagating_orders,
     _pmm_union_grid,
     _propagation_smatrix,
+    _propagation_star,
+    _propagation_star_general,
     _redheffer_star,
     _resolve_incidence,
     _resolve_order_count,
@@ -728,8 +730,7 @@ class PMMStack:
                                           Wsub, Vsub))
             S = ifc[0]
             for i in range(nlay):
-                S = _redheffer_star(S, _propagation_smatrix(
-                    lmodes[i][2], k0 * self._layers[i][0]))
+                S = _propagation_star(S, lmodes[i][2], k0 * self._layers[i][0])
                 S = _redheffer_star(S, ifc[i + 1])
             if retain_internal:
                 # partial cascades for internal-amplitude recovery (device-
@@ -819,8 +820,8 @@ class PMMStack:
                 lambs.append(lamb)
             S = _interface_smatrix_general(Ms, Mls[0])
             for i in range(len(self._layers)):
-                S = _redheffer_star(S, _propagation_smatrix_general(
-                    lamfs[i], lambs[i], k0 * self._layers[i][0]))
+                S = _propagation_star_general(
+                    S, lamfs[i], lambs[i], k0 * self._layers[i][0])
                 nextM = (Mb if i == len(self._layers) - 1 else Mls[i + 1])
                 S = _redheffer_star(S, _interface_smatrix_general(Mls[i], nextM))
         S11, _S12, S21, _S22 = S
@@ -1500,8 +1501,7 @@ class PMMStack:
             lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in mats_w]
             S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
             for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-                S = _redheffer_star(S, _propagation_smatrix(
-                    lam_l, k0 * self._layers[i][0]))
+                S = _propagation_star(S, lam_l, k0 * self._layers[i][0])
                 nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
                           else (lmodes[i + 1][0], lmodes[i + 1][1]))
                 S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
@@ -1602,8 +1602,8 @@ class PMMStack:
             lamb_l.append(-1j * kzl[bl])
         S = _interface_smatrix_general(_msym(Ws, Vs, fs), Mls[0])
         for i in range(len(self._layers)):
-            S = _redheffer_star(S, _propagation_smatrix_general(
-                lamf_l[i], lamb_l[i], k0 * self._layers[i][0]))
+            S = _propagation_star_general(
+                S, lamf_l[i], lamb_l[i], k0 * self._layers[i][0])
             nextM = (_msym(Wb, Vb, fb) if i == len(self._layers) - 1
                      else Mls[i + 1])
             S = _redheffer_star(S, _interface_smatrix_general(Mls[i], nextM))
@@ -1806,8 +1806,7 @@ class _PreparedPMMStack:
         # out-of-plane resolved tensors are not supported on this path
         S = _interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])
         for i, (Wl_, Vl_, lam_l, _q) in enumerate(lmodes):
-            S = _redheffer_star(S, _propagation_smatrix(
-                lam_l, k0 * st._layers[i][0]))
+            S = _propagation_star(S, lam_l, k0 * st._layers[i][0])
             nW, nV = ((Wsub, Vsub) if i == len(lmodes) - 1
                       else (lmodes[i + 1][0], lmodes[i + 1][1]))
             S = _redheffer_star(S, _interface_smatrix(Wl_, Vl_, nW, nV))
