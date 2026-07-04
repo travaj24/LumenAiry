@@ -131,12 +131,22 @@ def pmm_jones_1d_conical(period, eps_ridge, eps_groove, n_substrate,
     Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)
 
     # ---- coupled layer modes (GyF = ky0*I; the 2-D machinery, y degenerate) ----
-    lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period, period)
-    GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
-    GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
-    Wl, Vl, lam_l = _layer_modes_projected(
-        GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-        formulation=formulation, EpnxF=lops["EpnxF"], EpnyF=lops["EpnyF"])
+    # A UNIFORM tile (eps_ridge == eps_groove) has DOUBLY-DEGENERATE modes (TE/TM
+    # share kz at conical too), so the general eig of _layer_modes_projected
+    # returns an arbitrary, BLAS-build-dependent eigenvector basis whose interface
+    # solve corrupts the reflected Jones.  Detect it and use the analytic Rayleigh
+    # modes (the _homogeneous_modes uniform path the half-spaces already use) --
+    # exact, non-degenerate and deterministic.
+    eps0 = eps_tile.flat[0]
+    if bool(np.all(np.abs(eps_tile - eps0) < 1e-14)):
+        Wl, Vl, lam_l, _ = _homogeneous_modes(kxv, kyv, eps0)
+    else:
+        lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period, period)
+        GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
+        GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+        Wl, Vl, lam_l = _layer_modes_projected(
+            GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
+            formulation=formulation, EpnxF=lops["EpnxF"], EpnyF=lops["EpnyF"])
 
     # ---- Redheffer cascade ----
     S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
