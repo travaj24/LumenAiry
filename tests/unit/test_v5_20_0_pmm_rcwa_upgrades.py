@@ -40,6 +40,47 @@ def test_shared_uniform_geo_eig_reproduces_sem_modes():
 
 
 # --------------------------------------------------------------------------- #
+# F2 -- even-parity symmetry fold for the 2-D PMM hybrid                       #
+# --------------------------------------------------------------------------- #
+def _centered(pol, sym, **kw):
+    from lumenairy.elements.pmm.twod import pmm_efficiency_2d
+    P, DEP, WL = 0.6e-6, 0.25e-6, 0.55e-6
+    xb = (0.3 * P, 0.7 * P)                       # centered on the cell centre
+    return pmm_efficiency_2d(
+        P, P, 6.0, 2.0, xb, xb, 1.5, 1.0, DEP, WL, polarization=pol,
+        symmetry=sym, **kw)[:3]
+
+
+@pytest.mark.parametrize("pol", ["te", "tm"])
+def test_symmetry_fold_matches_full_solve(pol):
+    """symmetry=True (even-parity sector) matches the full 2N solve to ~1e-12
+    for a centered pillar at normal incidence (audit F2)."""
+    kw = dict(degree=11, n_orders=6)
+    o_f, R_f, T_f = _centered(pol, False, **kw)
+    o_s, R_s, T_s = _centered(pol, True, **kw)
+    assert np.array_equal(o_f, o_s)
+    assert np.max(np.abs(R_f - R_s)) < 1e-11
+    assert np.max(np.abs(T_f - T_s)) < 1e-11
+
+
+def test_symmetry_falls_back_when_precondition_fails():
+    """symmetry=True must fall back to the FULL solve (bit-identical) when the
+    precondition fails -- oblique incidence (order set not flip-closed) and an
+    off-centre cell -- so the result is always correct."""
+    from lumenairy.elements.pmm.twod import pmm_efficiency_2d
+    P, DEP, WL = 0.6e-6, 0.25e-6, 0.55e-6
+    kw = dict(degree=9, n_orders=5)
+    # oblique -> flip perm is None -> full solve
+    a = pmm_efficiency_2d(P, P, 6.0, 2.0, (0.3 * P, 0.7 * P), (0.3 * P, 0.7 * P),
+                          1.5, 1.0, DEP, WL, theta=np.radians(20.0),
+                          symmetry=False, **kw)[:3]
+    b = pmm_efficiency_2d(P, P, 6.0, 2.0, (0.3 * P, 0.7 * P), (0.3 * P, 0.7 * P),
+                          1.5, 1.0, DEP, WL, theta=np.radians(20.0),
+                          symmetry=True, **kw)[:3]
+    assert np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2])
+
+
+# --------------------------------------------------------------------------- #
 # F4 -- PMM2DStack repeated-layer dedup is transparent (bit-exact physics)     #
 # --------------------------------------------------------------------------- #
 def test_stack_repeated_layer_dedup_is_transparent():

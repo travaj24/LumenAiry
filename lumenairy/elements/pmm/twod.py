@@ -92,6 +92,7 @@ from ._core import (
     _interface_smatrix,
     _lagrange_derivative_matrix,
     _propagation_smatrix,
+    _propagation_star,
     _redheffer_star,
     _stabilize_scalar,
     _StabilizeScanExhausted,
@@ -599,6 +600,88 @@ def _layer_modes_projected(GxF, GyF, EpsF, EinvF, EpnF, formulation="li",
     return W, V, lam
 
 
+def _symmetric_solve_2d(kxv, kyv, order_x, order_y, GxF, GyF, EpsF, EinvF,
+                        EPS_nx, EPS_ny, formulation, Vsup, Vsub, k0, depth,
+                        cinc):
+    """Even-parity-sector 2-D PMM solve (audit F2) -- the SEM-operator twin of
+    rcwa's :func:`_symmetric_solve_rt`.
+
+    When the cell is centro-symmetric and incidence is normal, every operator
+    in the PMM cascade (the P@Q system, the region V blocks, the interface /
+    Redheffer S-matrices) commutes with the order-flip ``J: (m,n)->(-m,-n)`` and
+    the ``(0,0)`` source is purely even, so the whole recursion runs in the
+    ``(Nf+1)``-d EVEN subspace instead of ``2Nf`` -- every O(Nf^3) step shrinks
+    ~8x.  Reuses rcwa's dimension-agnostic fold helpers (the P/Q block structure
+    is identical -- SEM ``GxF/GyF/EpsF`` in place of Fourier ``Kx/Ky/EPS``).
+
+    Returns the full ``2Nf`` ``(r, t)`` so the caller's per-order tail is
+    unchanged, or ``None`` if the symmetry precondition fails (the caller then
+    runs the full solve, so the result is always correct).  Opt-in because the
+    even-basis recursion changes the result at the ~1e-12 level.
+    """
+    from ..rcwa._core import (
+        _even_basis_desc,
+        _even_fold,
+        _even_project,
+        _even_unfold,
+        _flip_invariant,
+        _order_flip_perm,
+        _recentering_phase,
+    )
+    Kx = np.diag(kxv.astype(_C))
+    Ky = np.diag(kyv.astype(_C))
+    flip = _order_flip_perm(Kx, Ky)
+    if flip is None:                                   # oblique / not flip-closed
+        return None
+    orders = np.stack([order_x, order_y], axis=1)
+    # Move an off-origin symmetry centre to the FFT origin: read the linear
+    # phase ramp off EpsF's first harmonics (EpsF is the projected eps operator,
+    # so its (0,0)-column carries the same c_{+/-e} structure the Toeplitz EPS
+    # does) and conjugate every operator by the diagonal gauge D.  D is a
+    # per-order phase, so |r_i| (every efficiency) and the (0,0) Jones are
+    # unchanged -- no undo needed.
+    d = _recentering_phase(EpsF, orders, np)
+    if d is None:
+        return None
+    dinv = 1.0 / d
+
+    def _rc(A):
+        return (dinv[:, None] * A) * d[None, :]
+
+    EpsF_r = _rc(EpsF)
+    if not _flip_invariant(EpsF_r, flip):              # non-centro-symmetric cell
+        return None
+    EPS_nx_r, EPS_ny_r = _rc(EPS_nx), _rc(EPS_ny)
+    EPS_inv_r = _rc(EinvF) if formulation == "li" else np.linalg.inv(EpsF_r)
+    # GxF/GyF are diagonal in the order index (momentum) -> gauge-invariant
+    # under D (a diagonal conjugation of a diagonal matrix is itself), so use
+    # them directly.
+    Nf = GxF.shape[0]
+    Imat = np.eye(Nf, dtype=_C)
+    Q = np.block([[GxF @ GyF, EPS_ny_r - GxF @ GxF],
+                  [GyF @ GyF - EPS_nx_r, -GyF @ GxF]])
+    P = np.block([[GxF @ EPS_inv_r @ GyF, Imat - GxF @ EPS_inv_r @ GxF],
+                  [GyF @ EPS_inv_r @ GyF - Imat, -GyF @ EPS_inv_r @ GxF]])
+    desc = _even_basis_desc(flip)
+    Mp = _even_fold(P @ Q, desc, np)
+    lam2_e, Wl_e = np.linalg.eig(Mp)
+    lam_e = _sqrt_decay(lam2_e)
+    Q_e = _even_fold(Q, desc, np)
+    Vl_e = Q_e @ Wl_e @ np.diag(_inv_lam(lam_e))
+    ne = Mp.shape[0]
+    Ireg_e = np.eye(ne, dtype=_C)
+    Vsup_e = _even_fold(Vsup, desc, np)
+    Vsub_e = _even_fold(Vsub, desc, np)
+    S = _interface_smatrix(Ireg_e, Vsup_e, Wl_e, Vl_e)
+    S = _propagation_star(S, lam_e, k0 * depth)
+    S = _redheffer_star(S, _interface_smatrix(Wl_e, Vl_e, Ireg_e, Vsub_e))
+    S11, _S12, S21, _S22 = S
+    cinc_e = _even_project(cinc, desc, np)
+    r = _even_unfold(S11 @ cinc_e, desc, np)
+    t = _even_unfold(S21 @ cinc_e, desc, np)
+    return r, t
+
+
 def _homogeneous_modes(kx, ky, eps):
     """Analytic plane-wave (Rayleigh) modes: W=I, V=Q diag(1/lam)."""
     N = len(kx)
@@ -623,7 +706,8 @@ def _homogeneous_modes(kx, ky, eps):
 def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
                       eps_sup, eps_sub, depth, wavelength, degree, el_x, el_y,
                       grade, polarization, theta, phi, n_orders, formulation,
-                      truncation="rectangular", fn_name="pmm_efficiency_2d"):
+                      truncation="rectangular", symmetry=False,
+                      fn_name="pmm_efficiency_2d"):
     ax = _build_axis(period_x, x_walls, degree, el_x, grade)
     ay = _build_axis(period_y, y_walls, degree, el_y, grade)
 
@@ -677,32 +761,6 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
     Wsup, Vsup, _ls, kz_ref = _homogeneous_modes(kxv, kyv, eps_sup)
     Wsub, Vsub, _lb, kz_trn = _homogeneous_modes(kxv, kyv, eps_sub)
 
-    # ---- layer modes: projected nodal, UNLESS laterally uniform (-> analytic)
-    eps0 = eps_tile.flat[0]
-    uniform_layer = bool(np.all(np.abs(eps_tile - eps0) < 1e-12))
-    if uniform_layer:
-        Wl, Vl, lam_l, _ = _homogeneous_modes(kxv, kyv, eps0)
-    else:
-        lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x,
-                                     period_y)
-        if keep is not None:                    # F8: restrict to circular orders
-            ix = np.ix_(keep, keep)
-            lops = {kk: (v[ix] if (hasattr(v, "shape") and np.ndim(v) == 2
-                                   and v.shape[0] == len(keep)) else v)
-                    for kk, v in lops.items()}
-        GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
-        GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
-        Wl, Vl, lam_l = _layer_modes_projected(
-            GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-            formulation=formulation, EpnxF=lops["EpnxF"],
-            EpnyF=lops["EpnyF"])
-
-    # ---- Redheffer recursion (Fourier/Rayleigh basis) ----
-    S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
-    S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
-    S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
-    S11, _S12, S21, _S22 = S
-
     # ---- incident (0,0) plane wave (Rayleigh basis: amplitudes ARE coeffs) --
     kt = float(np.hypot(kx0, ky0))
     if kt < 1e-12:
@@ -719,8 +777,49 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
             einc_sq = 1.0 + (kt / kz_inc0) ** 2
     delta = ((order_x == 0) & (order_y == 0)).astype(_C)
     cinc = np.concatenate([ex0 * delta, ey0 * delta])
-    r = S11 @ cinc
-    t = S21 @ cinc
+
+    # ---- layer modes + cascade: projected nodal, UNLESS laterally uniform ----
+    eps0 = eps_tile.flat[0]
+    uniform_layer = bool(np.all(np.abs(eps_tile - eps0) < 1e-12))
+    rt = None
+    if uniform_layer:
+        Wl, Vl, lam_l, _ = _homogeneous_modes(kxv, kyv, eps0)
+    else:
+        lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x,
+                                     period_y)
+        if keep is not None:                    # F8: restrict to circular orders
+            ix = np.ix_(keep, keep)
+            lops = {kk: (v[ix] if (hasattr(v, "shape") and np.ndim(v) == 2
+                                   and v.shape[0] == len(keep)) else v)
+                    for kk, v in lops.items()}
+        GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
+        GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+        # F2 (audit): even-parity fast path -- centro-symmetric cell + normal
+        # incidence runs the eig + cascade in the (Nf+1)-d even sector (~3x).
+        # Returns None (-> full solve below) unless the precondition holds.
+        if symmetry and kt < 1e-12:
+            _enx = lops["EpnxF"] if formulation == "li" else lops["EpsF"]
+            _eny = lops["EpnyF"] if formulation == "li" else lops["EpsF"]
+            rt = _symmetric_solve_2d(
+                kxv, kyv, order_x, order_y, GxF, GyF, lops["EpsF"],
+                lops["EinvF"], _enx, _eny, formulation, Vsup, Vsub, k0, depth,
+                cinc)
+        if rt is None:
+            Wl, Vl, lam_l = _layer_modes_projected(
+                GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
+                formulation=formulation, EpnxF=lops["EpnxF"],
+                EpnyF=lops["EpnyF"])
+
+    if rt is not None:
+        r, t = rt
+    else:
+        # ---- Redheffer recursion (Fourier/Rayleigh basis) ----
+        S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
+        S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
+        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
+        S11, _S12, S21, _S22 = S
+        r = S11 @ cinc
+        t = S21 @ cinc
     rx, ry = r[:Nf], r[Nf:]
     tx, ty = t[:Nf], t[Nf:]
 
@@ -772,6 +871,7 @@ def pmm_efficiency_2d(
     n_orders: int = 11,
     formulation: str = "li",
     truncation: str = "rectangular",
+    symmetry: bool = False,
     stabilize: bool = False,
 ) -> Efficiency2D:
     r"""Diffraction efficiencies of a 2-D rectangular pillar via the hybrid PMM.
@@ -918,7 +1018,7 @@ def pmm_efficiency_2d(
             period_x, period_y, [x0, x1], [y0, y1], eps_tile, eps_sup,
             eps_sub, depth, wavelength, deg, elements_per_strip,
             elements_per_strip, grade, polarization, theta, phi, n_orders,
-            formulation, truncation=truncation)
+            formulation, truncation=truncation, symmetry=symmetry)
 
     if not stabilize:
         return _solve_at(degree)
@@ -965,6 +1065,7 @@ def pmm_efficiency_2d_cell(
     n_orders: int = 11,
     formulation: str = "li",
     truncation: str = "rectangular",
+    symmetry: bool = False,
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
     region_layout=None,
@@ -1069,7 +1170,7 @@ def pmm_efficiency_2d_cell(
             period_x, period_y, x_walls, y_walls, eps_tile, eps_sup, eps_sub,
             depth, wavelength, deg, el_x, el_y, grade, polarization, theta,
             phi, n_orders, formulation, truncation=truncation,
-            fn_name="pmm_efficiency_2d_cell")
+            symmetry=symmetry, fn_name="pmm_efficiency_2d_cell")
 
     if not stabilize:
         return _solve_at(degree)
