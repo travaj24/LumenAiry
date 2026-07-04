@@ -2,6 +2,95 @@
 
 All notable changes to the core library are documented here.
 
+## [5.19.0] — 2026-07-04
+
+Wave lens-models audit remediation (F1-F5, N1-N8) reconciled with a companion
+review and two adversarial verification passes, followed by the full
+deferred-items performance program worked to completion.  Every addition is
+backward-compatible and opt-in -- Minor bump for the new public APIs; no
+existing default code path changes output.  Every speedup below was validated
+byte-identical or ULP against the exact reference path it replaces.
+
+### Added
+
+- **Prepared lenses** for optimizer / tolerancing / multi-field loops that hold
+  `(prescription, wavelength, dx, N)` fixed.  `prepare_real_lens_traced(...)` /
+  `PreparedTracedLens` caches the traced lens's input-independent screen (ray
+  trace + Chebyshev/spline fits + Newton inversion + analytic-phase reference +
+  valid/aperture masks), so each call is one `apply_real_lens` + one complex
+  multiply -- **55x** per call (prepared == direct to 4.6e-16).
+  `prepare_real_lens(...)` / `PreparedAnalyticLens` is the analytic analogue
+  (per-surface `exp(-i k0 (n2-n1) sag)` screens + entrance mask; the ASM
+  transfer functions are already cached inside `angular_spectrum_propagate`) --
+  **2.85x** on an 8-surface lens (3e-15 vs direct).  Both raise a clear
+  `NotImplementedError` for the paths they do not cover (decentred / tilted /
+  freeform / biconic / stop / mirror surfaces, `'auto'` carriers, and the
+  slant / fresnel / absorption / seidel / surface-frame / GPU / non-ASM modes).
+- **`apply_real_lens_traced_multi(emitter_fields, ..., carriers=)`**: applies
+  the traced model PER emitter (each a single congruence) and coherently sums.
+  The traced model assigns one ray-traced OPL per output pixel, so it is not
+  linear; feeding it the summed field of a multi-emitter scene violates the
+  single-congruence assumption and softens the image.  This is the correct way
+  to image a multi-emitter scene with the traced model, and the tractable form
+  of carrier K-decomposition (the K congruences are the known emitters, so no
+  blind segmentation is needed).  `reuse_prepared=True` shares a
+  `PreparedTracedLens` screen per distinct carrier.
+- **`apply_real_lens_maslov(..., roi=(cx, cy, half_width))`**: evaluate the
+  Maslov output only on a square region of interest -- byte-identical to the
+  full-grid slice (on- and off-axis) at `O(roi_n^2)` instead of `O(N^2)`
+  integrand evaluations (**8.8x** at N=1024 for a 40x40 spot; grows with N).
+- **`apply_real_lens_traced(..., inversion_method='fit')`**: opt-in scattered
+  Chebyshev inverse-map fit that replaces the per-pixel Newton inversion
+  (convex-hull-masked) -- 2.6e-6 vs Newton, **2.42x** at the default
+  `ray_subsample`.  Default stays `'newton'`.
+- **Carrier-referenced traced model** (`apply_real_lens_traced(..., carrier=
+  <float>|<ndarray>|'auto', on_noncollimated=)`): references the traced
+  correction to the beam's own smooth carrier wavefront instead of a plane
+  wave, generalizing the traced model past its collimated-input assumption for
+  a single divergent / tilted congruence; the `on_noncollimated` guard warns /
+  delegates when the residual angular spread is too large (e.g. an
+  un-referenced emitter array, where `apply_real_lens` remains correct).
+
+### Performance
+
+- **Maslov integrators.**  A Numba `@njit(parallel)` 4-variable Chebyshev
+  value+derivative kernel for `_opd_and_derivs` (**13.6x**, ULP-equal, NumPy
+  fallback when Numba is absent); the three fit solves (OPD, s1x, s1y)
+  collapsed into one multi-RHS `lstsq` sharing a single SVD (**2.9x** fit);
+  Kronecker factorization of the `(N_out^2, M)` quadrature design matrix (no
+  `G` materialized); and pixel-band (`stationary_phase`) + output-row-band
+  (exact quadrature) evaluation that removes the 133 GB / 451 GB full-grid
+  allocations at N=16384.
+
+### Fixed
+
+- **Maslov `input_na` / NA-clamp**: an explicit `input_na=NaN` slipped past the
+  `na_proxy >= 1` clamp (`NaN >= 1` is False) and died later with a misleading
+  "0 rays survived" TIR error; explicit `input_na` is now validated finite and
+  non-negative up front, and the auto NA proxy is clamped below unity so a
+  broadband / hard-aperture input cannot grazing-kill the whole pupil chart.
+  Plus the N1-N4 / F3 / F4 audit items: the `(N_out^2, M)` design-matrix hoist
+  out of the non-quadrature integrators, the uniform-quadrature under-resolution
+  warning, re-applying the orphaned fitted linear-OPD term (piston as a scalar,
+  slope on the fine grid), the suite-signature progress callback, and the
+  wrapping-safe `tilt_aware_rays` recommendation.
+- **JAX-x64 test flake**: `test_twins_raise_without_x64` spawned a subprocess
+  that inherited a sibling module's `os.environ.setdefault("JAX_ENABLE_X64",
+  "true")`, so the child saw x64 ON and the "expected x64 OFF" assertion failed
+  order-dependently in a full-suite run; the child now gets an explicit
+  `JAX_ENABLE_X64=0` env.
+
+### Changed
+
+- **Docs**: honest model-selection guidance for the three wave lens models
+  (analytic vs traced vs Maslov), the `sag * theta^2` analytic validity
+  boundary, and the carrier validity boundary from the design-119 no-MLA
+  multi-emitter investigation.  The full remediation record, including the
+  items assessed and declined with measured reasons (N6 eigen-rotation reverted
+  as no-benefit-vs-oracle; the M-P5 wavelength-rescale as dispersion-limited;
+  M-P7 float32 as counterproductive on the validation integrator), is in
+  `docs/audits/AUDIT_WAVE_LENS_MODELS_2026_07_02_REMEDIATION.md`.
+
 ## [5.18.1] — 2026-07-02
 
 Post-release cleanup of the deferred / residual items recorded during the
