@@ -147,9 +147,20 @@ class TestP352X64Policy:
 
         import lumenairy
         repo_root = os.path.dirname(os.path.dirname(lumenairy.__file__))
+        # Force x64 OFF in the child regardless of the ambient session.  JAX
+        # reads ``JAX_ENABLE_X64`` from the environment at import, and the
+        # child inherits the parent's env; a sibling module
+        # (test_v5_14_0_pmm2d_autodiff) does
+        # ``os.environ.setdefault("JAX_ENABLE_X64", "true")`` at import, so in
+        # a full-suite run (all modules collected) the child would otherwise
+        # see x64 ON and the "expected x64 OFF" assertion fails -- an
+        # order-dependent flake that passes in isolation.  Set it explicitly
+        # here so the subprocess's default-off precondition is guaranteed.
+        child_env = {**os.environ, "JAX_ENABLE_X64": "0"}
         proc = subprocess.run(
             [sys.executable, "-c", _P352_SUBPROCESS_SRC],
-            capture_output=True, text=True, timeout=300, cwd=repo_root)
+            capture_output=True, text=True, timeout=300, cwd=repo_root,
+            env=child_env)
         assert proc.returncode == 0, proc.stderr
         assert proc.stdout.strip().endswith("OK")
 

@@ -920,9 +920,11 @@ from ._lens_jax import (  # noqa: E402, F401
 # imports continue to work.
 # ---------------------------------------------------------------------------
 from ._lens_real import (  # noqa: E402, F401
+    PreparedAnalyticLens,
     apply_real_lens,
     get_lens_sag_dtype,
     lens_sag_float32_opd_error,
+    prepare_real_lens,
     set_lens_sag_dtype,
 )
 
@@ -950,9 +952,12 @@ from ._lens_thin import (  # noqa: E402, F401
 # imports continue to work.
 # ---------------------------------------------------------------------------
 from ._lens_traced import (  # noqa: E402, F401
+    PreparedTracedLens,
     apply_real_lens_traced,
+    apply_real_lens_traced_multi,
     close_worker_pool,
     get_lens_parallel_amp,
+    prepare_real_lens_traced,
     set_lens_parallel_amp,
 )
 from .lenses_maslov import apply_real_lens_maslov  # noqa: F401, E402

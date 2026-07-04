@@ -41,6 +41,31 @@ from .._math.chebyshev import (
 from .._math.chebyshev import (
     chebyshev_vandermonde as _chebyshev_vandermonde,
 )
+from ..progress import call_progress
+
+# Pixel-band size for the stationary_phase integrator's _opd_and_derivs
+# evaluations.  None -> auto (memory-budgeted from the basis count).  A test
+# seam: setting it to a small int forces maximal banding, which must produce
+# byte-identical output to the unbanded path (the per-pixel work is
+# independent).  Analogous to the quadrature integrator's ``chunk_v2`` param.
+_SP_PIXEL_CHUNK = None
+
+# Output-ROW band for the uniform-quadrature integrator (F2 follow-up).  The
+# (N_out^2, M) design matrix G is the quadrature path's dominant allocation
+# (451 GB at N=16384 / output_subsample=1), so instead of materialising it
+# whole we band the output rows and build only a G-band per band.  None ->
+# auto (memory-budgeted rows/band); a small int is a test seam forcing many
+# bands (output is ~ULP-close; exactly byte-identical for the numpy path).
+_QUAD_ROW_BAND = None
+
+# M-P2 follow-up: the (N_out^2, M) design matrix G is a Kronecker product
+# G[(iy,ix),m] = Ty[k2,iy]*Tx[k1,ix], so G @ H factorizes -- scatter H's rows
+# by their (k1,k2) pair into a (P,P,.) tensor (P=poly_order+1), then a single
+# einsum per chunk -- eliminating the G build and cutting the integration
+# FLOPs by ~M/P (14-30x).  True (default) uses the factorized path; False
+# falls back to the explicit per-row-band G (the ULP-level validation
+# reference).  A tiny seam for A/B checks.
+_QUAD_FACTORIZE = True
 
 # Other shared helpers still live in lenses.py.
 from .lenses import (
@@ -50,6 +75,193 @@ from .lenses import (
     _multi_indices_total_degree,
     _warn_if_aperture_exceeds_grid,
 )
+
+# ---------------------------------------------------------------------------
+# M-P4 (audit perf): optional Numba kernel for the 4-variable Chebyshev
+# value+derivative sum ``_opd_and_derivs``.  The NumPy path materialises eight
+# (M, n_px) basis-gathered arrays and six full-array reductions per call; a
+# single @njit(parallel) kernel collapses that to O(poly_order) stack work per
+# sample via 3-term Chebyshev recurrences (T, T'=n*U_{n-1}, and the
+# differentiated T'' recurrence -- byte-for-byte the same recurrences as
+# lumenairy._math.chebyshev, so the only deviation from NumPy is the
+# term-reduction order -> ULP).  Lazily compiled on first use (numba import is
+# ~1.8 s); pure-NumPy fallback when numba is absent.  ``_MASLOV_USE_NUMBA`` is
+# a test seam (set False to force the NumPy reference).
+_MASLOV_USE_NUMBA = True
+
+import importlib.util as _mz_ilu  # noqa: E402
+
+_MZ_NUMBA_AVAILABLE = _mz_ilu.find_spec("numba") is not None
+_mz_njit = None
+_mz_prange = None
+_MZ_KERNELS: dict = {}
+
+
+def _mz_load_numba():
+    global _mz_njit, _mz_prange
+    if _mz_njit is not None:
+        return True
+    if not _MZ_NUMBA_AVAILABLE:
+        return False
+    from numba import njit as _nj
+    from numba import prange as _pr
+    _mz_njit, _mz_prange = _nj, _pr
+    return True
+
+
+def _get_cheb4d_numba():
+    """Compile (once) and return the 4-var Chebyshev value+deriv kernel, or
+    None if numba is unavailable."""
+    if "cheb4d" in _MZ_KERNELS:
+        return _MZ_KERNELS["cheb4d"]
+    if not _mz_load_numba():
+        _MZ_KERNELS["cheb4d"] = None
+        return None
+
+    @_mz_njit(cache=True, parallel=True, fastmath=True)
+    def _cheb4d_opd_derivs(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+        n = u1.shape[0]
+        M = coef.shape[0]
+        f = np.zeros(n)
+        df3 = np.zeros(n)
+        df4 = np.zeros(n)
+        d233 = np.zeros(n)
+        d234 = np.zeros(n)
+        d244 = np.zeros(n)
+        for i in _mz_prange(n):
+            a1 = u1[i]
+            a2 = u2[i]
+            a3 = u3[i]
+            a4 = u4[i]
+            # T_n (first kind) for all four variables
+            Tu1 = np.empty(P + 1)
+            Tu2 = np.empty(P + 1)
+            Tu3 = np.empty(P + 1)
+            Tu4 = np.empty(P + 1)
+            Tu1[0] = 1.0
+            Tu2[0] = 1.0
+            Tu3[0] = 1.0
+            Tu4[0] = 1.0
+            if P >= 1:
+                Tu1[1] = a1
+                Tu2[1] = a2
+                Tu3[1] = a3
+                Tu4[1] = a4
+            for m in range(2, P + 1):
+                Tu1[m] = 2.0 * a1 * Tu1[m - 1] - Tu1[m - 2]
+                Tu2[m] = 2.0 * a2 * Tu2[m - 1] - Tu2[m - 2]
+                Tu3[m] = 2.0 * a3 * Tu3[m - 1] - Tu3[m - 2]
+                Tu4[m] = 2.0 * a4 * Tu4[m - 1] - Tu4[m - 2]
+            # U_n (second kind) for u3, u4 -> first derivative T'_n = n*U_{n-1}
+            Uu3 = np.empty(P + 1)
+            Uu4 = np.empty(P + 1)
+            Uu3[0] = 1.0
+            Uu4[0] = 1.0
+            if P >= 1:
+                Uu3[1] = 2.0 * a3
+                Uu4[1] = 2.0 * a4
+            for m in range(2, P + 1):
+                Uu3[m] = 2.0 * a3 * Uu3[m - 1] - Uu3[m - 2]
+                Uu4[m] = 2.0 * a4 * Uu4[m - 1] - Uu4[m - 2]
+            dTu3 = np.zeros(P + 1)
+            dTu4 = np.zeros(P + 1)
+            for m in range(1, P + 1):
+                dTu3[m] = float(m) * Uu3[m - 1]
+                dTu4[m] = float(m) * Uu4[m - 1]
+            # T''_n via differentiated recurrence: T''_2=4,
+            # T''_{n+1} = 2u T''_n + 4 T'_n - T''_{n-1}
+            d2Tu3 = np.zeros(P + 1)
+            d2Tu4 = np.zeros(P + 1)
+            if P >= 2:
+                d2Tu3[2] = 4.0
+                d2Tu4[2] = 4.0
+            for m in range(2, P):
+                d2Tu3[m + 1] = 2.0 * a3 * d2Tu3[m] + 4.0 * dTu3[m] - d2Tu3[m - 1]
+                d2Tu4[m + 1] = 2.0 * a4 * d2Tu4[m] + 4.0 * dTu4[m] - d2Tu4[m - 1]
+            sf = 0.0
+            sdf3 = 0.0
+            sdf4 = 0.0
+            sd233 = 0.0
+            sd234 = 0.0
+            sd244 = 0.0
+            for mm in range(M):
+                k1 = K1[mm]
+                k2 = K2[mm]
+                k3 = K3[mm]
+                k4 = K4[mm]
+                t12 = Tu1[k1] * Tu2[k2]
+                base = coef[mm] * t12       # matches NumPy's c * (T1b*T2b)
+                t3 = Tu3[k3]
+                t4 = Tu4[k4]
+                dt3 = dTu3[k3]
+                dt4 = dTu4[k4]
+                sf += base * t3 * t4
+                sdf3 += base * dt3 * t4
+                sdf4 += base * t3 * dt4
+                sd233 += base * d2Tu3[k3] * t4
+                sd244 += base * t3 * d2Tu4[k4]
+                sd234 += base * dt3 * dt4
+            f[i] = sf
+            df3[i] = sdf3
+            df4[i] = sdf4
+            d233[i] = sd233
+            d234[i] = sd234
+            d244[i] = sd244
+        return f, df3, df4, d233, d234, d244
+
+    _MZ_KERNELS["cheb4d"] = _cheb4d_opd_derivs
+    return _cheb4d_opd_derivs
+
+
+def _opd6_numpy(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """NumPy reference for the 4-var Chebyshev value + v2-derivatives.  Returns
+    (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44)."""
+    T1 = _chebyshev_vandermonde(u1, P)
+    T2 = _chebyshev_vandermonde(u2, P)
+    T3 = _chebyshev_vandermonde(u3, P)
+    T4 = _chebyshev_vandermonde(u4, P)
+    dT3 = _chebyshev_derivative_vandermonde(u3, P)
+    dT4 = _chebyshev_derivative_vandermonde(u4, P)
+    d2T3 = _chebyshev_second_derivative_vandermonde(u3, P)
+    d2T4 = _chebyshev_second_derivative_vandermonde(u4, P)
+    T1b = T1[K1]
+    T2b = T2[K2]
+    T3b = T3[K3]
+    T4b = T4[K4]
+    dT3b = dT3[K3]
+    dT4b = dT4[K4]
+    d2T3b = d2T3[K3]
+    d2T4b = d2T4[K4]
+    T12 = T1b * T2b
+    c = coef[:, None]
+    f = np.sum(c * T12 * T3b * T4b, axis=0)
+    df_du3 = np.sum(c * T12 * dT3b * T4b, axis=0)
+    df_du4 = np.sum(c * T12 * T3b * dT4b, axis=0)
+    d2f_33 = np.sum(c * T12 * d2T3b * T4b, axis=0)
+    d2f_44 = np.sum(c * T12 * T3b * d2T4b, axis=0)
+    d2f_34 = np.sum(c * T12 * dT3b * dT4b, axis=0)
+    return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+
+
+def _opd6(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Dispatch the 4-var Chebyshev value+deriv sum to the Numba kernel
+    (default, when available) or the NumPy reference.  Result-identical to
+    ULP; the kernel avoids the eight (M, n) basis arrays + six reductions."""
+    if _MASLOV_USE_NUMBA:
+        kern = _get_cheb4d_numba()
+        if kern is not None:
+            return kern(
+                np.ascontiguousarray(coef, dtype=np.float64),
+                np.ascontiguousarray(K1, dtype=np.int64),
+                np.ascontiguousarray(K2, dtype=np.int64),
+                np.ascontiguousarray(K3, dtype=np.int64),
+                np.ascontiguousarray(K4, dtype=np.int64),
+                np.ascontiguousarray(u1, dtype=np.float64),
+                np.ascontiguousarray(u2, dtype=np.float64),
+                np.ascontiguousarray(u3, dtype=np.float64),
+                np.ascontiguousarray(u4, dtype=np.float64),
+                int(P))
+    return _opd6_numpy(coef, K1, K2, K3, K4, u1, u2, u3, u4, P)
 
 
 def apply_real_lens_maslov(
@@ -64,6 +276,7 @@ def apply_real_lens_maslov(
     poly_order: int = 4,
     n_v2: int = 32,
     output_subsample: int = 1,
+    roi: Optional[Any] = None,
     extract_linear_phase: bool = True,
     chunk_v2: int = 64,
     use_numexpr: Optional[bool] = None,
@@ -73,6 +286,7 @@ def apply_real_lens_maslov(
     local_n_samples: int = 8,
     local_window_sigma: float = 3.0,
     collimated_input: bool = False,
+    input_na: Optional[float] = None,
     normalize_output: str = 'power',
     verbose: bool = False,
     progress: Optional[Any] = None,
@@ -207,15 +421,19 @@ def apply_real_lens_maslov(
         pass
 
     def _progress(phase, frac, note=''):
+        dt = time.perf_counter() - t0
         if progress is not None:
-            try:
-                progress(phase=phase, fraction=float(frac),
-                         elapsed=time.perf_counter() - t0, note=note)
-            except TypeError:
-                progress(phase, float(frac), time.perf_counter() - t0,
-                         note)
+            # F3 (audit): emit the suite-standard (stage, fraction,
+            # message) signature via call_progress instead of the old
+            # bespoke keyword/4-positional protocol, which raised
+            # TypeError on a standard (label, frac[, msg]) callback and
+            # crashed the propagator mid-lens.  ``phase`` becomes the
+            # stage label; the note + elapsed time fold into the message
+            # so no information is lost.  call_progress swallows broken-
+            # callback exceptions so a progress bar can never crash the run.
+            msg = f'{note} ({dt:.1f}s)' if note else f'({dt:.1f}s)'
+            call_progress(progress, phase, float(frac), msg)
         if verbose:
-            dt = time.perf_counter() - t0
             print(f"  maslov {phase:>10s}  {frac*100:5.1f}%  "
                   f"({dt:6.1f}s) {note}", flush=True)
 
@@ -300,30 +518,110 @@ def apply_real_lens_maslov(
     s1x = HX * r_aperture
     s1y = HY * r_aperture
 
+    # N3 (audit): the pupil-direction chart must span BOTH the lens
+    # acceptance NA and the INPUT field's angular content.  Sizing from
+    # the lens EFL alone (the pre-fix na_proxy) drops any divergent /
+    # tilted input source off the traced ray chart, so its wide-angle
+    # rays are extrapolated or clip at |u_v2| = 1 -- silently dim / wrong
+    # output at ANY resolution.  Split the sizing into a lens term and an
+    # input term.
     if collimated_input:
-        na_proxy = 1e-5
+        na_lens = 1e-5
     else:
         try:
             _M, _efl, _bfl, _ffl = rt.system_abcd_prescription(
                 lens_prescription, wavelength)
             efl_abs = float(abs(_efl))
             if np.isfinite(efl_abs) and efl_abs > 0:
-                na_proxy = r_aperture / max(efl_abs, r_aperture * 10)
+                na_lens = r_aperture / max(efl_abs, r_aperture * 10)
             else:
                 lens_total_thickness = sum(s.thickness for s in surfaces)
-                na_proxy = r_aperture / max(lens_total_thickness,
-                                             r_aperture * 10)
+                na_lens = r_aperture / max(lens_total_thickness,
+                                           r_aperture * 10)
         except (ValueError, RuntimeError, ZeroDivisionError, KeyError,
                 np.linalg.LinAlgError, IndexError, TypeError):
             # system_abcd_prescription failure -- fall back to a
             # thickness-based NA proxy (geometric heuristic).
             lens_total_thickness = sum(s.thickness for s in surfaces)
-            na_proxy = r_aperture / max(lens_total_thickness,
-                                         r_aperture * 10)
+            na_lens = r_aperture / max(lens_total_thickness,
+                                       r_aperture * 10)
+
+    # Divergence NA of the input field: measured from the second moment
+    # of its angular spectrum (a single FFT; direction cosine v =
+    # wavelength * fx in the paraxial regime), unless the caller supplies
+    # input_na explicitly (or the field is declared collimated).
+    _na_meas = 0.0
+    if not collimated_input:
+        _F = np.fft.fft2(E_in)
+        _P = np.abs(_F) ** 2
+        del _F
+        _fx = np.fft.fftfreq(N, d=dx)
+        _FX, _FY = np.meshgrid(_fx, _fx, indexing='xy')
+        _Ptot = float(_P.sum())
+        if _Ptot > 0.0:
+            _v2 = (wavelength ** 2) * (_FX ** 2 + _FY ** 2)
+            _rms = float(np.sqrt(float((_v2 * _P).sum()) / _Ptot))
+            _na_meas = 3.0 * _rms   # ~3-sigma coverage of the spectrum
+            del _v2
+        del _P, _FX, _FY, _fx
+    if input_na is not None:
+        na_input = float(input_na)
+        # Explicit input_na must be a finite, non-negative direction cosine.
+        # A NaN slips past the na_proxy>=1 clamp below (NaN comparisons are
+        # False), reaching the trace as N_dir=NaN and dying with a
+        # misleading "0 rays survived" TIR message (adversarial review) --
+        # fail fast here with the real cause instead.
+        if not (np.isfinite(na_input) and na_input >= 0.0):
+            raise ValueError(
+                f"apply_real_lens_maslov: input_na must be a finite, "
+                f"non-negative number (an input-side NA / direction cosine); "
+                f"got {input_na!r}.  Omit input_na to auto-size the pupil "
+                f"chart from the field's angular spectrum.")
+        # Coverage guard: warn if the caller under-specified input_na
+        # relative to the measured angular spread (the field will clip).
+        if (not collimated_input) and na_input < 0.7 * _na_meas:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_maslov: input_na={na_input:.4f} is well "
+                f"below the measured input angular spread "
+                f"(~{_na_meas:.4f}); the pupil chart may not cover the "
+                f"field and wide-angle content will be lost.  Omit "
+                f"input_na to auto-size from the field.",
+                RuntimeWarning, stacklevel=2)
+    elif collimated_input:
+        na_input = 0.0
+    else:
+        na_input = _na_meas
+
+    # Chart spans the lens acceptance plus the input divergence.
+    na_proxy = na_lens + na_input
+
+    # Clamp to a physical direction cosine (< 1).  A speckled / hard-aperture
+    # input can have a 3-sigma angular estimate na_input > 1 (measured
+    # 1.3-4.1 on white-noise fields, adversarial review P2); leaving
+    # na_proxy > 1 forces every pupil ray to v1x^2+v1y^2 > 1, so
+    # N_dir = sqrt(max(1 - v1x^2 - v1y^2, 0)) = 0 and the whole chart is
+    # grazing -> the wide-angle content it was meant to capture is dropped.
+    # Cap just below unity and tell the caller the estimate is being
+    # trusted only up to the horizon.  Use ``not (na_proxy < 1.0)`` rather
+    # than ``na_proxy >= 1.0`` so a non-finite proxy (e.g. an inf leaking in
+    # from na_lens) is also caught -- NaN would already have been rejected
+    # for explicit input_na above, but this keeps N_dir strictly real.
+    if not (na_proxy < 1.0):
+        import warnings
+        warnings.warn(
+            f"apply_real_lens_maslov: NA proxy {na_proxy:.3f} (lens "
+            f"{na_lens:.3f} + input {na_input:.3f}) exceeds 1; the input "
+            f"angular-spread estimate is likely inflated by high-frequency / "
+            f"aperture-edge content.  Clamping the pupil chart to NA=0.999 "
+            f"(the physical horizon).  Pass input_na explicitly to size the "
+            f"chart deliberately.",
+            RuntimeWarning, stacklevel=2)
+        na_proxy = 0.999
 
     if verbose:
-        print(f"  NA_proxy = {na_proxy:.5f}  "
-              f"(collimated_input={collimated_input})")
+        print(f"  NA_proxy = {na_proxy:.5f}  (lens {na_lens:.5f} + "
+              f"input {na_input:.5f}; collimated_input={collimated_input})")
 
     v1x = PX * na_proxy
     v1y = PY * na_proxy
@@ -383,6 +681,23 @@ def apply_real_lens_maslov(
     else:
         opd_residual = opd_w.copy()
 
+    # N4 (audit): the fitted linear OPD term was subtracted for fit
+    # conditioning but never re-applied -- silently dropping output tilt
+    # and shifting the stationary point for decentered / tilted / off-axis
+    # systems (benign piston for a centered lens).  Re-apply it EXACTLY by
+    # splitting it: the s2 part (c0 + c1*u_s2x + c2*u_s2y) is constant in
+    # the pupil-momentum integration variable v2, so it factors out of the
+    # canonical integral and is re-applied as an output post-multiply after
+    # dispatch; the v2 part (c3*u_v2x + c4*u_v2y) lives inside the integral
+    # (it shifts the stationary point) and is threaded into every
+    # integrator's OPD + saddle-point gradient.  linear_coeffs are in WAVES
+    # (same units as opd), so they add directly with no scaling.
+    if linear_coeffs is None:
+        linear_coeffs = np.zeros(5, dtype=np.float64)
+    _lin = np.asarray(linear_coeffs, dtype=np.float64)
+    _lin_v3 = float(_lin[3])
+    _lin_v4 = float(_lin[4])
+
     mi = _multi_indices_total_degree(4, poly_order)
     M = len(mi)
     _progress('fit', 0.25, f'building design matrix ({n_rays} x {M})')
@@ -394,12 +709,19 @@ def apply_real_lens_maslov(
     for j, (k1, k2, k3, k4) in enumerate(mi):
         A[:, j] = T1[k1] * T2[k2] * T3[k3] * T4[k4]
 
-    _progress('fit', 0.35, 'solving lstsq for OPD')
-    coef_opd, *_ = np.linalg.lstsq(A, opd_residual, rcond=None)
-    _progress('fit', 0.45, 'solving lstsq for s1x')
-    coef_s1x, *_ = np.linalg.lstsq(A, s1x_live, rcond=None)
-    _progress('fit', 0.55, 'solving lstsq for s1y')
-    coef_s1y, *_ = np.linalg.lstsq(A, s1y_live, rcond=None)
+    # Perf (M-P5-adjacent): the OPD, s1x and s1y fits all share the SAME
+    # design matrix A, so solve them with a single stacked right-hand side --
+    # one SVD of A instead of three.  ~2.9x cheaper on the fit stage (which
+    # dominates the Maslov runtime once M-P4 has accelerated the integrate
+    # step).  LAPACK's multi-RHS gelsd path reorders slightly vs three
+    # single-RHS solves, so the coefficients differ at ULP (~1e-15 relative,
+    # far below complex64 output precision) -- not byte-identical.
+    _progress('fit', 0.35, 'solving lstsq for OPD + s1x + s1y (stacked RHS)')
+    _coef3, *_ = np.linalg.lstsq(
+        A, np.column_stack([opd_residual, s1x_live, s1y_live]), rcond=None)
+    coef_opd = _coef3[:, 0]
+    coef_s1x = _coef3[:, 1]
+    coef_s1y = _coef3[:, 2]
 
     opd_pred = A @ coef_opd
     s1x_pred = A @ coef_s1x
@@ -420,9 +742,34 @@ def apply_real_lens_maslov(
         output_subsample = 1
     N_out_coarse = N // output_subsample
 
-    out_axis = (np.arange(N_out_coarse) - N_out_coarse / 2) * \
-               (dx * output_subsample)
-    s2x_grid, s2y_grid = np.meshgrid(out_axis, out_axis, indexing='xy')
+    if roi is None:
+        out_axis = (np.arange(N_out_coarse) - N_out_coarse / 2) * \
+                   (dx * output_subsample)
+        out_axis_x = out_axis
+        out_axis_y = out_axis
+        _roi_active = False
+    else:
+        # M-P6 (audit perf): evaluate only a region of interest -- a square
+        # window of ``roi_n`` pixels at the native ``dx`` spacing centred at
+        # physical ``(roi_cx, roi_cy)`` = ``roi[:2]`` with half-width
+        # ``roi[2]``.  The integrators evaluate each output pixel
+        # independently, so the returned (roi_n, roi_n) field is identical to
+        # the ROI slice of the full-grid field, but costs O(roi_n^2) instead
+        # of O(N^2) integrand evaluations -- 10^3-10^4x fewer for spot
+        # studies.  Full resolution only (output_subsample forced to 1); the
+        # power normalisation is skipped (ill-defined on a sub-window -- the
+        # ROI captures only part of the output power), so ROI returns the
+        # raw field, matching a normalize_output='none' full run.
+        roi_cx, roi_cy, roi_hw = float(roi[0]), float(roi[1]), float(roi[2])
+        output_subsample = 1
+        N_out_coarse = max(1, int(round(2.0 * roi_hw / dx)))
+        _ax = (np.arange(N_out_coarse) - N_out_coarse / 2) * dx
+        out_axis_x = _ax + roi_cx
+        out_axis_y = _ax + roi_cy
+        out_axis = out_axis_x        # legacy alias (upsample path is inactive)
+        normalize_output = 'none'
+        _roi_active = True
+    s2x_grid, s2y_grid = np.meshgrid(out_axis_x, out_axis_y, indexing='xy')
 
     u_s2x_out = (s2x_grid - s2x_c) / s2x_h
     u_s2y_out = (s2y_grid - s2y_c) / s2y_h
@@ -486,20 +833,7 @@ def apply_real_lens_maslov(
             f"got {integration_method!r}")
 
     _progress('integrate', 0.60,
-              f'method={integration_method}; '
-              f'precomputing (s2)-basis on {N_out_coarse}^2 output grid')
-
-    Tx_1d = _chebyshev_vandermonde(
-        (out_axis - s2x_c) / s2x_h, poly_order)
-    Ty_1d = _chebyshev_vandermonde(
-        (out_axis - s2y_c) / s2y_h, poly_order)
-
-    M = len(mi)
-    G = np.empty((N_out_coarse * N_out_coarse, M), dtype=np.float64)
-    for m, (k1, k2, _, _) in enumerate(mi):
-        G[:, m] = np.outer(Ty_1d[k2], Tx_1d[k1]).ravel()
-    _progress('integrate', 0.63,
-              f'G matrix {G.shape} = {G.nbytes/1e6:.1f} MB')
+              f'method={integration_method}')
 
     K1_arr = np.array([k[0] for k in mi], dtype=np.int64)
     K2_arr = np.array([k[1] for k in mi], dtype=np.int64)
@@ -512,19 +846,20 @@ def apply_real_lens_maslov(
         E_out_coarse = _integrate_stationary_phase(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, G, N_out_coarse,
+            poly_order, N_out_coarse,
             u_s2x_out, u_s2y_out, inbox_flat,
             v2x_c, v2y_c, v2x_h, v2y_h,
             sample_E_bilinear,
             stationary_newton_iter, stationary_newton_tol,
             _progress, verbose,
             out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
     elif integration_method == 'local_quadrature':
         E_out_coarse = _integrate_local_quadrature(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, G, N_out_coarse,
+            poly_order, N_out_coarse,
             u_s2x_out, u_s2y_out, inbox_flat,
             v2x_c, v2y_c, v2x_h, v2y_h,
             sample_E_bilinear,
@@ -532,18 +867,60 @@ def apply_real_lens_maslov(
             local_n_samples, local_window_sigma,
             _progress, verbose,
             out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
     else:
+        # N2 (audit): estimate the v2 oscillation count of the integrand
+        # phase 2*pi*OPD(s2,v2) from the fitted coefficients.  Chebyshev
+        # polynomials are bounded by 1 on [-1, 1], so the sum of
+        # |coef_opd| over v2-dependent terms (k3>0 or k4>0) upper-bounds
+        # the OPD excursion in WAVES = cycles along v2.  Uniform n_v2-point
+        # quadrature needs a few samples per cycle; when under-resolved the
+        # result speckles regardless of grid/memory (no output-resolution
+        # fix helps) -- warn and point at the asymptotic evaluators, which
+        # are the correct choice at production NA.
+        _v2_mask = np.array(
+            [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
+            dtype=np.float64)
+        _v2_osc = float(np.sum(np.abs(coef_opd) * _v2_mask))
+        if n_v2 < 4.0 * _v2_osc:
+            import warnings
+            warnings.warn(
+                f"apply_real_lens_maslov: integration_method='quadrature' "
+                f"with n_v2={n_v2} is under-resolved for this chart "
+                f"(~{_v2_osc:.0f} v2 oscillations; want n_v2 >~ "
+                f"{int(4 * _v2_osc)}).  Uniform quadrature will speckle "
+                f"regardless of output resolution or memory.  Increase "
+                f"n_v2, or use integration_method='local_quadrature' / "
+                f"'stationary_phase' (the correct evaluators at "
+                f"production NA).",
+                RuntimeWarning, stacklevel=2)
+        # N1 + F2 (audit): the (N_out^2, M) Chebyshev design matrix G is used
+        # ONLY by the quadrature integrator (its G @ H GEMMs).  The
+        # stationary_phase / local_quadrature integrators evaluate the
+        # Chebyshev basis per pixel-chunk and never touch it (N1: don't build
+        # it for them).  For the quadrature path itself, materialising the
+        # whole G forced a 451 GB allocation at N=16384 / output_subsample=1
+        # (F2); instead we pass only the two cheap per-axis Vandermondes
+        # ((poly_order+1, N_out) each) and let the integrator build a
+        # per-output-row-band G on the fly.
+        _progress('integrate', 0.61,
+                  f'precomputing (s2)-axis basis on {N_out_coarse} points')
+        Tx_1d = _chebyshev_vandermonde(
+            (out_axis_x - s2x_c) / s2x_h, poly_order)
+        Ty_1d = _chebyshev_vandermonde(
+            (out_axis_y - s2y_c) / s2y_h, poly_order)
         E_out_coarse = _integrate_quadrature(
             coef_opd, coef_s1x, coef_s1y, mi,
             K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, G, N_out_coarse,
+            poly_order, Tx_1d, Ty_1d, N_out_coarse,
             u_v2x_samples, u_v2y_samples, tuk_2d, du,
             v2x_h, v2y_h, chunk_v2, inbox_flat,
             sample_E_bilinear,
             use_numexpr, _progress,
             _lenses_module,
             out_dtype=E_in.dtype,
+            lin_v3=_lin_v3, lin_v4=_lin_v4,
         )
 
     # -----------------------------------------------------------------
@@ -594,6 +971,66 @@ def apply_real_lens_maslov(
     else:
         E_out = E_out_coarse
 
+    # N4 (audit) re-apply the s2 part of the fitted linear OPD that was
+    # subtracted before fitting.  Split by cost + Nyquist-safety:
+    #
+    #  * Piston (_lin[0]) is a GLOBAL phase -> apply as a scalar.  It is
+    #    grid-invariant, so this avoids building an N x N temporary just to
+    #    add a constant (the piston is ~10^3 waves and is the ONLY term
+    #    that is ever appreciable here -- see below).
+    #  * The s2-slope terms (_lin[1], _lin[2]) are ~0 for a rotationally-
+    #    symmetric prescription (the OPL is then even in output position:
+    #    measured |_lin[1]| ~ 1e-10 for a symmetric singlet, < 0.04 waves
+    #    for a 0.04 rad tilted input; literal decenter/tilt dict keys are
+    #    dropped by the centred trace).  But a FREEFORM surface
+    #    (xy_polynomial / zernike odd terms are honored by the trace) makes
+    #    them genuinely large -- a wedge/prism deviates the beam, giving a
+    #    real output-position OPL slope of up to ~10^4 waves (adversarial
+    #    review; verified prism |_lin[1]| = 15.6 waves >> coarse Nyquist,
+    #    still subsample-invariant here).  So this branch is load-bearing,
+    #    not defensive: the slope MUST be applied on the FINE (post-upsample)
+    #    grid, because a slope above the coarse Nyquist (c1 > N_out_coarse/4)
+    #    aliases / flips under the cubic phase-zoom if applied on the coarse
+    #    field first.  The fine-pixel coordinate is reproduced by zooming the
+    #    coarse output axis with the SAME zoom call, so the tilt lands
+    #    exactly where the zoomed content lives (convention-independent;
+    #    avoids the grid_mode=False edge-stretch of a nominal fine axis).
+    #    The abs()>1e-6 gate skips the N x N coordinate build for the common
+    #    symmetric case (where the slope is a negligible ~1e-10 waves and
+    #    the meshgrid would otherwise cost ~17 GB at N=32768).
+    #
+    # NB when a large real output tilt ALSO has an in-integral (pupil, v2)
+    # component -- e.g. a strongly-powered freeform lens rather than a flat
+    # wedge -- that component lives INSIDE the canonical integral (via the
+    # _lin_v3/_v4 terms) and is coarse-resolved, so it aliases for output
+    # tilts above the coarse Nyquist regardless of where this post-multiply
+    # runs.  That is the N2 under-resolution regime (warned separately);
+    # reduce output_subsample.
+    if _lin[0]:
+        E_out = (E_out * np.exp(2j * np.pi * _lin[0])).astype(E_in.dtype)
+    if abs(_lin[1]) > 1e-6 or abs(_lin[2]) > 1e-6:
+        if output_subsample > 1:
+            # subsample>1 is non-ROI, so out_axis_x == out_axis_y == out_axis.
+            from scipy.ndimage import zoom as _zoom1d
+            out_axis_fx = _zoom1d(out_axis, float(N) / float(N_out_coarse),
+                                  order=1, mode='nearest')
+            if out_axis_fx.shape[0] != N:  # non-divisible safety (matches _fit)
+                _tmp = np.zeros(N, dtype=out_axis_fx.dtype)
+                _n = min(out_axis_fx.shape[0], N)
+                _tmp[:_n] = out_axis_fx[:_n]
+                out_axis_fx = _tmp
+            out_axis_fy = out_axis_fx
+        else:
+            out_axis_fx = out_axis_x       # coarse grid == fine grid (ROI-safe)
+            out_axis_fy = out_axis_y
+        _s2x_f, _s2y_f = np.meshgrid(out_axis_fx, out_axis_fy, indexing='xy')
+        _u_s2x_f = (_s2x_f - s2x_c) / s2x_h
+        _u_s2y_f = (_s2y_f - s2y_c) / s2y_h
+        E_out = (E_out * np.exp(
+            2j * np.pi * (_lin[1] * _u_s2x_f
+                          + _lin[2] * _u_s2y_f))).astype(E_in.dtype)
+        del _s2x_f, _s2y_f, _u_s2x_f, _u_s2y_f
+
     # -----------------------------------------------------------------
     # Step 6: Absolute-amplitude normalization.
     # -----------------------------------------------------------------
@@ -642,21 +1079,33 @@ def _count_multi_indices_4d(max_order: int) -> int:
 def _integrate_quadrature(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
-    poly_order, G, N_out_coarse,
+    poly_order, Tx_1d, Ty_1d, N_out_coarse,
     u_v2x_samples, u_v2y_samples, tuk_2d, du,
     v2x_h, v2y_h, chunk_v2, inbox_flat,
     sample_E_bilinear,
     use_numexpr, _progress,
     _lenses_module,
     out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
 ):
     """Uniform Tukey-windowed quadrature on the (v2x, v2y) grid.
 
     v4.14.0: ``out_dtype`` defaults to ``np.complex128`` for back-
     compat; callers pass ``E_in.dtype`` to preserve complex64 inputs.
+
+    F2 follow-up (audit remediation): the (N_out^2, M) design matrix ``G``
+    is the quadrature path's dominant allocation and OOMs at scale (451 GB
+    at N=16384, output_subsample=1).  Rather than take a prebuilt ``G``, this
+    now takes the two cheap per-axis Chebyshev Vandermondes
+    ``Tx_1d``/``Ty_1d`` ((poly_order+1, N_out) each) and builds only a
+    ``G_band`` for a band of output ROWS at a time
+    (``G[iy*N_out+ix, m] = Ty_1d[k2, iy] * Tx_1d[k1, ix]``), capping peak
+    memory to O(rows_per_band * (M + n_v2)).
     """
     n_v2 = len(u_v2x_samples)
     n_v2_total = n_v2 * n_v2
+    M = len(mi)
+    k1k2 = [(k[0], k[1]) for k in mi]
 
     Tu3_all  = _chebyshev_vandermonde(u_v2x_samples, poly_order)
     Tu4_all  = _chebyshev_vandermonde(u_v2y_samples, poly_order)
@@ -684,7 +1133,38 @@ def _integrate_quadrature(
     H_ds1y_du3 = coef_s1y[:, None] * dT3_T4
     H_ds1y_du4 = coef_s1y[:, None] * T3_dT4
 
+    P_ord = poly_order + 1
+    if _QUAD_FACTORIZE:
+        # M-P2: G[(iy,ix),m] = Ty[k2,iy]*Tx[k1,ix] is a Kronecker product, so
+        # (G @ H)[(iy,ix),j] = sum_{k1,k2} Ty[k2,iy] Tx[k1,ix] Hh[k1,k2,j]
+        # where Hh scatter-sums H's rows by their (k1,k2) pair.  The (P,P,.)
+        # tensors are tiny; the per-band contraction is one einsum, no G.
+        _S = np.zeros((P_ord * P_ord, M), dtype=np.float64)
+        for _m, (_k1, _k2) in enumerate(k1k2):
+            _S[_k1 * P_ord + _k2, _m] = 1.0
+
+        def _hat(H):
+            return (_S @ H).reshape(P_ord, P_ord, H.shape[1])
+
+        Hh_opd = _hat(H_opd)
+        Hh_s1x = _hat(H_s1x)
+        Hh_s1y = _hat(H_s1y)
+        Hh_ds1x_du3 = _hat(H_ds1x_du3)
+        Hh_ds1x_du4 = _hat(H_ds1x_du4)
+        Hh_ds1y_du3 = _hat(H_ds1y_du3)
+        Hh_ds1y_du4 = _hat(H_ds1y_du4)
+
+        def _factor_contract(Hh, Tyb, cs, ce, bw):
+            # result[R,i,j] = sum_{a,b} Ty[b,R] Hh[a,b,j] Tx[a,i]
+            return np.einsum('bR,abj,ai->Rij', Tyb, Hh[:, :, cs:ce], Tx_1d,
+                             optimize=True).reshape(bw * N_out_coarse, ce - cs)
+
     weight_per_sample = tuk_2d.ravel() * du * du * (v2x_h * v2y_h)
+
+    # N4: linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y), one value per v2
+    # sample; added to the residual-fit opd_c in the chunk loop below.
+    lin_v = (lin_v3 * u_v2x_samples[v2x_idx]
+             + lin_v4 * u_v2y_samples[v2y_idx])
 
     if use_numexpr is None:
         use_numexpr = NUMEXPR_AVAILABLE
@@ -698,67 +1178,115 @@ def _integrate_quadrature(
         chunk_v2 = n_v2_total
     chunk_v2 = min(chunk_v2, n_v2_total)
 
+    # Output-row band: full rows only, so band pixels = rows_per_band * N_out
+    # align to the (iy, ix) row-major layout.  Auto-size to keep the G-band
+    # plus the (band_px, chunk_v2) working set bounded (~budget bytes).
+    if _QUAD_ROW_BAND:
+        rows_per_band = max(1, int(_QUAD_ROW_BAND))
+    else:
+        _budget_px = 4_000_000  # ~ band_px cap -> G_band ~ band_px*M*8 bytes
+        rows_per_band = max(1, min(N_out_coarse, _budget_px // max(1, N_out_coarse)))
+
     E_out_flat = np.zeros(N_out_coarse * N_out_coarse, dtype=out_dtype)
     t_int_start = time.perf_counter()
 
-    for c_start in range(0, n_v2_total, chunk_v2):
-        c_end = min(c_start + chunk_v2, n_v2_total)
+    _ne = _lenses_module._ne if use_numexpr else None
+    n_bands = (N_out_coarse + rows_per_band - 1) // rows_per_band
 
-        opd_c      = G @ H_opd     [:, c_start:c_end]
-        s1x_c      = G @ H_s1x     [:, c_start:c_end]
-        s1y_c      = G @ H_s1y     [:, c_start:c_end]
-        ds1x_du3_c = G @ H_ds1x_du3[:, c_start:c_end]
-        ds1x_du4_c = G @ H_ds1x_du4[:, c_start:c_end]
-        ds1y_du3_c = G @ H_ds1y_du3[:, c_start:c_end]
-        ds1y_du4_c = G @ H_ds1y_du4[:, c_start:c_end]
+    for iy0 in range(0, N_out_coarse, rows_per_band):
+        iy1 = min(iy0 + rows_per_band, N_out_coarse)
+        p0 = iy0 * N_out_coarse
+        p1 = iy1 * N_out_coarse
+        inbox_b = inbox_flat[p0:p1]
+        _bw = iy1 - iy0
 
-        det_J_c = (ds1x_du3_c * ds1y_du4_c
-                   - ds1x_du4_c * ds1y_du3_c)
-        abs_J_c = np.abs(det_J_c) / (v2x_h * v2y_h)
-
-        Eobj_c = sample_E_bilinear(s1x_c, s1y_c)
-        weights_c = weight_per_sample[c_start:c_end]
-
-        if use_numexpr:
-            # v5.2.1: numexpr's ``evaluate(expr)`` reads variable names
-            # from the caller's stack frame via introspection, which
-            # makes ``twopi`` / ``cos_term`` / etc. invisible to static
-            # analysis (ruff F841).  Pass an explicit ``local_dict=``
-            # so the locals appear in the surrounding code's AST.
-            # Matches the canonical pattern at ``_lens_real.py:882``.
-            _ne = _lenses_module._ne
-            twopi = 2.0 * np.pi
-            cos_term = _ne.evaluate(
-                "cos(twopi * opd_c)",
-                local_dict={'twopi': twopi, 'opd_c': opd_c})
-            sin_term = _ne.evaluate(
-                "sin(twopi * opd_c)",
-                local_dict={'twopi': twopi, 'opd_c': opd_c})
-            Er = Eobj_c.real
-            Ei = Eobj_c.imag
-            contrib_r = _ne.evaluate(
-                "(Er*cos_term - Ei*sin_term) * abs_J_c * weights_c",
-                local_dict={'Er': Er, 'Ei': Ei,
-                            'cos_term': cos_term, 'sin_term': sin_term,
-                            'abs_J_c': abs_J_c, 'weights_c': weights_c})
-            contrib_i = _ne.evaluate(
-                "(Ei*cos_term + Er*sin_term) * abs_J_c * weights_c",
-                local_dict={'Er': Er, 'Ei': Ei,
-                            'cos_term': cos_term, 'sin_term': sin_term,
-                            'abs_J_c': abs_J_c, 'weights_c': weights_c})
-            contrib_sum = contrib_r.sum(axis=1) + 1j * contrib_i.sum(axis=1)
+        if _QUAD_FACTORIZE:
+            _Tyb = Ty_1d[:, iy0:iy1]          # (P, band_rows); no G materialized
         else:
-            contrib_c = (Eobj_c
-                          * np.exp(2j * np.pi * opd_c)
-                          * abs_J_c
-                          * weights_c)
-            contrib_sum = contrib_c.sum(axis=1)
+            # Explicit per-row-band design matrix (validation reference):
+            # G_band[(iy-iy0)*N_out + ix, m] = Ty_1d[k2, iy] * Tx_1d[k1, ix].
+            G_band = np.empty((p1 - p0, M), dtype=np.float64)
+            for m_, (k1, k2) in enumerate(k1k2):
+                G_band[:, m_] = np.outer(Ty_1d[k2, iy0:iy1], Tx_1d[k1]).ravel()
 
-        E_out_flat[inbox_flat] += contrib_sum[inbox_flat]
+        acc = np.zeros(p1 - p0, dtype=out_dtype)
+        for c_start in range(0, n_v2_total, chunk_v2):
+            c_end = min(c_start + chunk_v2, n_v2_total)
+
+            if _QUAD_FACTORIZE:
+                opd_c      = _factor_contract(Hh_opd, _Tyb, c_start, c_end, _bw)
+                s1x_c      = _factor_contract(Hh_s1x, _Tyb, c_start, c_end, _bw)
+                s1y_c      = _factor_contract(Hh_s1y, _Tyb, c_start, c_end, _bw)
+                ds1x_du3_c = _factor_contract(Hh_ds1x_du3, _Tyb, c_start, c_end, _bw)
+                ds1x_du4_c = _factor_contract(Hh_ds1x_du4, _Tyb, c_start, c_end, _bw)
+                ds1y_du3_c = _factor_contract(Hh_ds1y_du3, _Tyb, c_start, c_end, _bw)
+                ds1y_du4_c = _factor_contract(Hh_ds1y_du4, _Tyb, c_start, c_end, _bw)
+            else:
+                opd_c      = G_band @ H_opd     [:, c_start:c_end]
+                s1x_c      = G_band @ H_s1x     [:, c_start:c_end]
+                s1y_c      = G_band @ H_s1y     [:, c_start:c_end]
+                ds1x_du3_c = G_band @ H_ds1x_du3[:, c_start:c_end]
+                ds1x_du4_c = G_band @ H_ds1x_du4[:, c_start:c_end]
+                ds1y_du3_c = G_band @ H_ds1y_du3[:, c_start:c_end]
+                ds1y_du4_c = G_band @ H_ds1y_du4[:, c_start:c_end]
+            opd_c      = opd_c + lin_v[None, c_start:c_end]
+
+            det_J_c = (ds1x_du3_c * ds1y_du4_c
+                       - ds1x_du4_c * ds1y_du3_c)
+            abs_J_c = np.abs(det_J_c) / (v2x_h * v2y_h)
+
+            Eobj_c = sample_E_bilinear(s1x_c, s1y_c)
+            weights_c = weight_per_sample[c_start:c_end]
+
+            if use_numexpr:
+                # v5.2.1: numexpr's ``evaluate(expr)`` reads variable names
+                # from the caller's stack frame via introspection, which
+                # makes ``twopi`` / ``cos_term`` / etc. invisible to static
+                # analysis (ruff F841).  Pass an explicit ``local_dict=``
+                # so the locals appear in the surrounding code's AST.
+                # Matches the canonical pattern at ``_lens_real.py:882``.
+                twopi = 2.0 * np.pi
+                cos_term = _ne.evaluate(
+                    "cos(twopi * opd_c)",
+                    local_dict={'twopi': twopi, 'opd_c': opd_c})
+                sin_term = _ne.evaluate(
+                    "sin(twopi * opd_c)",
+                    local_dict={'twopi': twopi, 'opd_c': opd_c})
+                Er = Eobj_c.real
+                Ei = Eobj_c.imag
+                contrib_r = _ne.evaluate(
+                    "(Er*cos_term - Ei*sin_term) * abs_J_c * weights_c",
+                    local_dict={'Er': Er, 'Ei': Ei,
+                                'cos_term': cos_term, 'sin_term': sin_term,
+                                'abs_J_c': abs_J_c, 'weights_c': weights_c})
+                contrib_i = _ne.evaluate(
+                    "(Ei*cos_term + Er*sin_term) * abs_J_c * weights_c",
+                    local_dict={'Er': Er, 'Ei': Ei,
+                                'cos_term': cos_term, 'sin_term': sin_term,
+                                'abs_J_c': abs_J_c, 'weights_c': weights_c})
+                contrib_sum = contrib_r.sum(axis=1) + 1j * contrib_i.sum(axis=1)
+            else:
+                contrib_c = (Eobj_c
+                              * np.exp(2j * np.pi * opd_c)
+                              * abs_J_c
+                              * weights_c)
+                contrib_sum = contrib_c.sum(axis=1)
+
+            acc += contrib_sum
+
+        # Write only in-box pixels (reads acc only where inbox, so any
+        # out-of-box garbage from sample_E_bilinear never propagates).
+        rel_inbox = np.nonzero(inbox_b)[0]
+        E_out_flat[p0 + rel_inbox] = acc[rel_inbox]
+
+        if n_bands > 1:
+            _progress('integrate', 0.65 + 0.30 * (iy1 / N_out_coarse),
+                      f'quadrature output-row band {iy1}/{N_out_coarse}')
 
     t_int = time.perf_counter() - t_int_start
     _progress('integrate', 0.95,
-              f'quadrature: {n_v2_total} v2 samples in {t_int:.1f}s '
+              f'quadrature: {n_v2_total} v2 samples, {n_bands} row band(s), '
+              f'in {t_int:.1f}s '
               f'({"numexpr" if use_numexpr else "numpy"}, '
               f'chunk={chunk_v2})')
 
@@ -768,13 +1296,14 @@ def _integrate_quadrature(
 def _integrate_stationary_phase(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
-    poly_order, G, N_out_coarse,
+    poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
     v2x_c, v2y_c, v2x_h, v2y_h,
     sample_E_bilinear,
     newton_iter, newton_tol,
     _progress, verbose,
     out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
 ):
     """Leading-order stationary-phase (Gaussian-moment) evaluation.
 
@@ -794,31 +1323,34 @@ def _integrate_stationary_phase(
     u_v2y = np.zeros(N_px, dtype=np.float64)
 
     def _opd_and_derivs(coef, u1, u2, u3, u4):
-        T1 = _chebyshev_vandermonde(u1, poly_order)
-        T2 = _chebyshev_vandermonde(u2, poly_order)
-        T3 = _chebyshev_vandermonde(u3, poly_order)
-        T4 = _chebyshev_vandermonde(u4, poly_order)
-        dT3 = _chebyshev_derivative_vandermonde(u3, poly_order)
-        dT4 = _chebyshev_derivative_vandermonde(u4, poly_order)
-        d2T3 = _chebyshev_second_derivative_vandermonde(u3, poly_order)
-        d2T4 = _chebyshev_second_derivative_vandermonde(u4, poly_order)
-        T1b = T1[K1_arr]
-        T2b = T2[K2_arr]
-        T3b = T3[K3_arr]
-        T4b = T4[K4_arr]
-        dT3b = dT3[K3_arr]
-        dT4b = dT4[K4_arr]
-        d2T3b = d2T3[K3_arr]
-        d2T4b = d2T4[K4_arr]
-        T12 = T1b * T2b
-        c = coef[:, None]
-        f        = np.sum(c * T12 * T3b  * T4b , axis=0)
-        df_du3   = np.sum(c * T12 * dT3b * T4b , axis=0)
-        df_du4   = np.sum(c * T12 * T3b  * dT4b, axis=0)
-        d2f_33   = np.sum(c * T12 * d2T3b* T4b , axis=0)
-        d2f_44   = np.sum(c * T12 * T3b  * d2T4b, axis=0)
-        d2f_34   = np.sum(c * T12 * dT3b * dT4b, axis=0)
-        return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+        # M-P4: dispatch to the Numba kernel (default, ULP-equal) or the
+        # NumPy reference; returns (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44).
+        return _opd6(coef, K1_arr, K2_arr, K3_arr, K4_arr,
+                     u1, u2, u3, u4, poly_order)
+
+    # Deferred follow-up (audit remediation): _opd_and_derivs builds the
+    # (M, n_px) Chebyshev basis for ALL its input pixels at once, so a
+    # full-resolution call (n_px = N_out_coarse^2) peaks at ~M * n_px *
+    # O(10) * 8 bytes -- ~133 GB at N=16384, the OOM the audit flagged for
+    # this integrator (unlike local_quadrature it was not pixel-banded).
+    # Band it here: the per-pixel work is independent (the only reduction
+    # is np.sum over the basis axis WITHIN a pixel), so evaluating in
+    # contiguous pixel chunks and concatenating is BYTE-IDENTICAL to the
+    # unbanded call while capping peak memory to ~0.5 GB.
+    _PX_CHUNK_SP = (int(_SP_PIXEL_CHUNK) if _SP_PIXEL_CHUNK
+                    else max(1, 4_000_000 // max(1, len(mi))))
+
+    def _opd_and_derivs_banded(coef, u1, u2, u3, u4):
+        n = u1.shape[0]
+        if n <= _PX_CHUNK_SP:
+            return _opd_and_derivs(coef, u1, u2, u3, u4)
+        outs = tuple(np.empty(n, dtype=np.float64) for _ in range(6))
+        for s in range(0, n, _PX_CHUNK_SP):
+            e = min(s + _PX_CHUNK_SP, n)
+            res = _opd_and_derivs(coef, u1[s:e], u2[s:e], u3[s:e], u4[s:e])
+            for k in range(6):
+                outs[k][s:e] = res[k]
+        return outs
 
     converged_mask = np.zeros(N_px, dtype=bool)
     converged_mask[~inbox_flat] = True
@@ -831,8 +1363,13 @@ def _integrate_stationary_phase(
         u2 = u_s2y_flat[active]
         u3 = u_v2x[active]
         u4 = u_v2y[active]
-        _, g3, g4, H33, H34, H44 = _opd_and_derivs(
+        _, g3, g4, H33, H34, H44 = _opd_and_derivs_banded(
             coef_opd, u1, u2, u3, u4)
+        # N4: the linear-in-v2 OPD term (c3*u_v2x + c4*u_v2y) has constant
+        # v2-gradient (c3, c4) and zero Hessian, so it shifts the saddle
+        # point but not its curvature.  Add it to the gradient here.
+        g3 = g3 + lin_v3
+        g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
         det_safe = np.where(np.abs(det_H) < 1e-30,
                              np.sign(det_H) * 1e-30 + 1e-30, det_H)
@@ -865,11 +1402,13 @@ def _integrate_stationary_phase(
 
     _progress('integrate', 0.85, 'evaluating saddle-point formula')
 
-    opd_star, g3, g4, H33, H34, H44 = _opd_and_derivs(
+    opd_star, g3, g4, H33, H34, H44 = _opd_and_derivs_banded(
         coef_opd, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
-    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = _opd_and_derivs(
+    # N4: add the linear-in-v2 OPD contribution at the (shifted) saddle.
+    opd_star = opd_star + lin_v3 * u_v2x + lin_v4 * u_v2y
+    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = _opd_and_derivs_banded(
         coef_s1x, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
-    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = _opd_and_derivs(
+    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = _opd_and_derivs_banded(
         coef_s1y, u_s2x_flat, u_s2y_flat, u_v2x, u_v2y)
 
     det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
@@ -917,7 +1456,7 @@ def _integrate_stationary_phase(
 def _integrate_local_quadrature(
     coef_opd, coef_s1x, coef_s1y, mi,
     K1_arr, K2_arr, K3_arr, K4_arr,
-    poly_order, G, N_out_coarse,
+    poly_order, N_out_coarse,
     u_s2x_out, u_s2y_out, inbox_flat,
     v2x_c, v2y_c, v2x_h, v2y_h,
     sample_E_bilinear,
@@ -925,6 +1464,7 @@ def _integrate_local_quadrature(
     n_samples, window_sigma,
     _progress, verbose,
     out_dtype=np.complex128,
+    lin_v3=0.0, lin_v4=0.0,
 ):
     """Hybrid stationary-phase + local quadrature.
 
@@ -943,31 +1483,10 @@ def _integrate_local_quadrature(
     u_v2y = np.zeros(N_px, dtype=np.float64)
 
     def _opd_and_derivs(coef, u1, u2, u3, u4):
-        T1 = _chebyshev_vandermonde(u1, poly_order)
-        T2 = _chebyshev_vandermonde(u2, poly_order)
-        T3 = _chebyshev_vandermonde(u3, poly_order)
-        T4 = _chebyshev_vandermonde(u4, poly_order)
-        dT3 = _chebyshev_derivative_vandermonde(u3, poly_order)
-        dT4 = _chebyshev_derivative_vandermonde(u4, poly_order)
-        d2T3 = _chebyshev_second_derivative_vandermonde(u3, poly_order)
-        d2T4 = _chebyshev_second_derivative_vandermonde(u4, poly_order)
-        T1b = T1[K1_arr]
-        T2b = T2[K2_arr]
-        T3b = T3[K3_arr]
-        T4b = T4[K4_arr]
-        dT3b = dT3[K3_arr]
-        dT4b = dT4[K4_arr]
-        d2T3b = d2T3[K3_arr]
-        d2T4b = d2T4[K4_arr]
-        T12 = T1b * T2b
-        c = coef[:, None]
-        f        = np.sum(c * T12 * T3b  * T4b , axis=0)
-        df_du3   = np.sum(c * T12 * dT3b * T4b , axis=0)
-        df_du4   = np.sum(c * T12 * T3b  * dT4b, axis=0)
-        d2f_33   = np.sum(c * T12 * d2T3b* T4b , axis=0)
-        d2f_44   = np.sum(c * T12 * T3b  * d2T4b, axis=0)
-        d2f_34   = np.sum(c * T12 * dT3b * dT4b, axis=0)
-        return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+        # M-P4: dispatch to the Numba kernel (default, ULP-equal) or the
+        # NumPy reference; returns (f, df_du3, df_du4, d2f_33, d2f_34, d2f_44).
+        return _opd6(coef, K1_arr, K2_arr, K3_arr, K4_arr,
+                     u1, u2, u3, u4, poly_order)
 
     converged = np.zeros(N_px, dtype=bool)
     converged[~inbox_flat] = True
@@ -980,6 +1499,9 @@ def _integrate_local_quadrature(
         u3 = u_v2x[active]
         u4 = u_v2y[active]
         _, g3, g4, H33, H34, H44 = _opd_and_derivs(coef_opd, u1, u2, u3, u4)
+        # N4: linear-in-v2 OPD term shifts the saddle gradient (c3, c4).
+        g3 = g3 + lin_v3
+        g4 = g4 + lin_v4
         det_H = H33 * H44 - H34 * H34
         det_safe = np.where(np.abs(det_H) < 1e-30,
                              np.sign(det_H) * 1e-30 + 1e-30, det_H)
@@ -1048,6 +1570,8 @@ def _integrate_local_quadrature(
         u1 = u_s2x_tile[p_start:p_end].ravel()
         u2 = u_s2y_tile[p_start:p_end].ravel()
         opd_v, _, _, _, _, _        = _opd_and_derivs(coef_opd, u1, u2, u3, u4)
+        # N4: linear-in-v2 OPD contribution at each window sample.
+        opd_v = opd_v + lin_v3 * u3 + lin_v4 * u4
         s1x_v, ds1x_du3, ds1x_du4, *_ = _opd_and_derivs(coef_s1x, u1, u2, u3, u4)
         s1y_v, ds1y_du3, ds1y_du4, *_ = _opd_and_derivs(coef_s1y, u1, u2, u3, u4)
         det_J = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3

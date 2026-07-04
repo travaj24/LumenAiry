@@ -159,6 +159,15 @@ _KNOWN_DY_THREADING_EXEMPTIONS = frozenset({
     # is square by the mirror's intrinsic actuator pitch.  An anamorphic
     # DM would need a DM-level dx/dy split first.
     'apply_dm',
+
+    # ---- multi-field orchestrator (forwards dy via **traced_kwargs) -------
+    # ``apply_real_lens_traced_multi`` takes a SEQUENCE of per-emitter fields
+    # and forwards its ``**traced_kwargs`` (which may include ``dy``)
+    # unchanged to the per-emitter ``apply_real_lens_traced`` calls -- it does
+    # not introduce a separate grid-spacing axis of its own, so a top-level
+    # ``dy`` kwarg would only shadow the value the caller already threads
+    # through the traced kwargs.
+    'apply_real_lens_traced_multi',
 })
 
 
