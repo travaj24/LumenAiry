@@ -22,6 +22,11 @@ import pytest
 import lumenairy as la
 from lumenairy.elements.berreman import berreman_jones_1d
 
+# All v5.20.0 PMM/RCWA/conical tests are eig-heavy 2-D numerics -> run in
+# the dedicated slow-tests job (keeps the fast unit gate under its 25-min
+# cap, the v5.15.0 design); they still gate every push there.
+pytestmark = pytest.mark.slow
+
 _P, _WL, _DEP = 0.6e-6, 0.55e-6, 0.30e-6
 _TH, _PHI = np.deg2rad(30.0), np.deg2rad(40.0)
 
@@ -84,7 +89,6 @@ def test_stack_conical_uniform_slab_matches_berreman():
         assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 1e-6
 
 
-@pytest.mark.slow
 def test_stack_conical_multilayer_matches_path_a():
     """G_pathA: a (gentle) multilayer stack matches PMM2DStack Path A (the
     y-invariant-cell bridge) on the (m, 0) orders."""
