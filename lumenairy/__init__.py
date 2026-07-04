@@ -449,6 +449,7 @@ from .elements.pmm import (
     pmm_graded_segments,
     pmm_jones_1d,
     pmm_jones_1d_conical,
+    pmm_jones_1d_conical_tensor,
     pmm_jones_1d_segments,
     pmm_jones_1d_segments_vs_wavelength,
     pmm_jones_1d_slanted,
@@ -968,7 +969,7 @@ load_zemax_prescription_txt = _deprecated_alias(
     version_removed='5.0',
 )
 
-__version__ = "5.19.0"
+__version__ = "5.20.0"
 
 #
 # __all__ is grouped by user-journey tier:
@@ -1582,6 +1583,7 @@ __all__ = [
     'pmm_1d',
     'pmm_jones_1d',
     'pmm_jones_1d_conical',
+    'pmm_jones_1d_conical_tensor',
     'pmm_jones_1d_segments',
     'pmm_jones_1d_slanted',
     'pmm_jones_1d_slanted_segments',
