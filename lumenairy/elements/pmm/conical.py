@@ -169,13 +169,18 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     convention (the ``(m, 0)`` orders; rows = incident lab ``E_x``/``E_y``).
 
     Validation status.  This is a FAITHFUL ``O(N)`` reduction of the 2-D tensor
-    path, validated against the analytic Berreman 4x4 oracle across the full
-    tensor range: an isotropic tensor reduces byte-exactly to
-    :func:`pmm_jones_1d_conical`; an IN-PLANE tensor and an OUT-OF-PLANE
-    (tilted-director) tensor both match Berreman to machine precision (full Jones
-    + R/T) at NORMAL, oblique AND conical incidence -- the shared-generator
-    OOP-at-conical convention item is fixed at source in
-    :func:`_layer_eigenmodes_tensor` (the ``exp(+i w t)`` off-plane block sign).
+    path -- an IN-PLANE tensor at conical incidence matches the analytic
+    Berreman 4x4 oracle to Berreman grade (singular values), an isotropic tensor
+    reduces byte-exactly to :func:`pmm_jones_1d_conical`, and an OUT-OF-PLANE
+    (tilted-director) tensor matches Berreman exactly at NORMAL incidence.  An
+    OUT-OF-PLANE tensor at CONICAL incidence inherits a KNOWN residual of the
+    shared 2-D tensor generator (:func:`_layer_eigenmodes_tensor`): its layer
+    modes equal the Berreman ``4x4`` Delta modes exactly, but the coupling to the
+    isotropic Rayleigh half-spaces disagrees with Berreman on one eigenchannel by
+    a few percent (energy still conserves).  This module reproduces
+    :func:`pmm_jones_2d` bit-for-bit there; the discrepancy is a generator-vs-
+    half-space convention item flagged for a focused follow-up, NOT specific to
+    the native reduction.
     """
     if formulation not in ("laurent", "li"):
         raise ValueError(
