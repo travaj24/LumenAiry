@@ -142,6 +142,7 @@ def _pillar(trunc, **kw):
         1.5, 1.0, DEP, WL, truncation=trunc, **kw)[:3]
 
 
+@pytest.mark.slow
 def test_circular_truncation_reduces_orders_and_converges():
     """truncation='circular' drops the high-|G| corner orders, conserves
     energy, and its zeroth order agrees with 'rectangular' (audit F8)."""
@@ -249,6 +250,7 @@ def test_solve_vs_wavelength_defaults_normal_without_set_source():
 # --------------------------------------------------------------------------- #
 # B1 -- pmm_efficiency_2d_cell honours max_nodal_dof on the JAX path           #
 # --------------------------------------------------------------------------- #
+@pytest.mark.slow
 def test_cell_jax_path_factorized_matches_numpy():
     """B1 part b: the JAX cell path builds Gx0F/Gy0F by per-axis factorization
     (no dense N x N Minv/kron), still matching the NumPy cell path to machine
@@ -270,6 +272,7 @@ def test_cell_jax_path_factorized_matches_numpy():
     assert np.max(np.abs(Tn - np.asarray(Tj))) < 1e-11
 
 
+@pytest.mark.slow
 def test_cell_jax_path_honours_max_nodal_dof():
     """The JAX cell dispatch used to skip _validate_cell_cost and drive a dense
     N x N assembly -> OOM.  It now rejects an oversized cell with the same
@@ -315,6 +318,7 @@ def _sym_stack(sym, *, theta=0.0):
     return st.set_source(WL, theta=theta, phi=0.0).solve()
 
 
+@pytest.mark.slow
 def test_stack_symmetry_fold_matches_full_solve():
     """PMM2DStack(symmetry=True) runs the whole cascade in the even sector and
     matches the full solve to the ~1e-12 even-basis level for a centro-symmetric
@@ -327,6 +331,7 @@ def test_stack_symmetry_fold_matches_full_solve():
     assert np.max(np.abs(np.asarray(J_f) - np.asarray(J_s))) < 1e-11
 
 
+@pytest.mark.slow
 def test_stack_symmetry_falls_back_at_oblique():
     """Oblique incidence is not flip-closed -> the stack even-parity fold must
     fall back to the full solve, BYTE-IDENTICAL."""
@@ -371,6 +376,7 @@ def test_jones_2d_tensor_symmetry_fold_matches_full(formulation):
     assert np.max(np.abs(np.asarray(a[3]) - np.asarray(b[3]))) < 1e-11
 
 
+@pytest.mark.slow
 def test_jones_2d_symmetry_falls_back_offplane():
     """An OUT-OF-PLANE tensor cell cannot fold (the generator breaks +/-lam),
     so symmetry=True falls back to the generalized cascade BYTE-IDENTICALLY."""

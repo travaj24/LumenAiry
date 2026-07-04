@@ -21,6 +21,7 @@ _P, _WL, _DEP = 0.6e-6, 0.55e-6, 0.25e-6
 _TH, _PHI = np.deg2rad(30.0), np.deg2rad(40.0)
 
 
+@pytest.mark.slow
 def test_conical_y_invariant_grating_conserves_y_momentum():
     """A y-invariant (x-only) grating at phi != 0 diffracts ONLY into n_y = 0
     orders -- the separable-exact-in-y path carries machine-zero into the
@@ -103,6 +104,7 @@ def test_native_conical_reduces_to_classical_at_phi0():
         assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 2e-2
 
 
+@pytest.mark.slow
 def test_native_conical_grating_converges_to_path_a():
     """G2: the native conical grating and the Path A (PMM2DStack y-invariant)
     bridge converge TOGETHER toward the same result as n_orders grows (the

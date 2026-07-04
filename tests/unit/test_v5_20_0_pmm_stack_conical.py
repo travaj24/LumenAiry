@@ -84,6 +84,7 @@ def test_stack_conical_uniform_slab_matches_berreman():
         assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 1e-6
 
 
+@pytest.mark.slow
 def test_stack_conical_multilayer_matches_path_a():
     """G_pathA: a (gentle) multilayer stack matches PMM2DStack Path A (the
     y-invariant-cell bridge) on the (m, 0) orders."""
