@@ -596,9 +596,36 @@ class PMMStack:
 
         P = self.period
         degree = self.degree
-        n_orders = max(3, (self.ffo - 1) // 2)
         eps_sup = np.conj(_C(self.n_sup) ** 2)         # internal exp(+iwt) gauge
         eps_sub = np.conj(_C(self.n_sub) ** 2)
+        # Order count: requested from far_field_orders, then CAPPED to the
+        # coarsest PATTERNED layer's x-axis nodal capacity (a uniform layer is
+        # exact in the Fourier basis -> no nodal need).  Mirrors the classical
+        # path's n_glob cap + _validate_cell_orders (audit review): without it a
+        # far_field_orders raised past the spectral-element grid drives a rank-
+        # deficient projection that silently returns energy-violating numbers.
+        n_orders = max(3, (self.ffo - 1) // 2)
+        cap = None
+        for (_thk, _segs, _sl) in self._layers:
+            if len(_segs) > 1:                          # patterned -> nodal grid
+                c = (len(_segs) * self.n_el * degree - 1) // 2
+                cap = c if cap is None else min(cap, c)
+        if cap is not None:
+            n_orders = max(1, min(n_orders, cap))
+        # The grid must at least resolve the propagating orders (classical
+        # parity: degree too low for the physics is an error, not silent garbage).
+        _idx = [float(np.real(np.sqrt(eps_sup))), float(np.real(np.sqrt(eps_sub)))]
+        for _t, _segs, _s in self._layers:
+            for _w, _e in _segs:
+                _d = np.diag(np.asarray(_e, dtype=_C))
+                _idx.append(float(np.real(np.sqrt(np.max(np.abs(_d))))))
+        m_prop = _n_propagating_orders(P, wl, max(_idx))
+        if 2 * m_prop + 1 > 2 * n_orders + 1:
+            raise ValueError(
+                "PMMStack.solve (conical, phi != 0): the spectral-element grid "
+                f"resolves only {2 * n_orders + 1} orders but {2 * m_prop + 1} "
+                "propagate; raise degree / elements_per_region (or lower "
+                "far_field_orders).")
         nre = float(np.real(np.sqrt(eps_sup)))
         kx0 = nre * np.sin(angle) * np.cos(phi)
         ky0 = nre * np.sin(angle) * np.sin(phi)
@@ -688,8 +715,14 @@ class PMMStack:
             S = _redheffer_star(S, _interface_smatrix_general(M_prev, Msub))
         S11, _S12, S21, _S22 = S
 
-        return _conical_jones_farfield(S11, S21, order_x, order_y, kxv, kyv,
-                                       kx0, ky0, eps_sup, eps_sub)
+        _o2d, R_eff, T_eff, jones = _conical_jones_farfield(
+            S11, S21, order_x, order_y, kxv, kyv, kx0, ky0, eps_sup, eps_sub)
+        # Energy tripwire (audit review): the conical path must warn on R+T > 1
+        # like every classical PMMStack return, so an under-resolved solve is not
+        # silently trusted.  Orders are the 1-D (m,) array (the classical /
+        # pmm_jones_1d_segments contract; y is degenerate so n_y == 0 for all).
+        _warn_stack_energy(R_eff, T_eff)
+        return order_x, R_eff, T_eff, jones
 
     def solve(self, *, stabilize=None, retain_internal=False):
         """Solve the stack.  Returns ``(orders, R_eff, T_eff, jones_reflection)``

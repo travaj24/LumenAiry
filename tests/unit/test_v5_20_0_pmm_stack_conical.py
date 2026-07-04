@@ -48,7 +48,9 @@ def test_stack_conical_scalar_grating_matches_native():
     o2, R2, T2, J2 = la.pmm_jones_1d_conical(
         _P, epsr, epsg, 1.5, 1.0, _DEP, duty, _WL, theta=_TH, phi=_PHI,
         degree=15, n_orders=7)
-    assert np.array_equal(o1, o2)
+    # PMMStack returns the 1-D (m,) order array (pmm_jones_1d_segments contract);
+    # the native single-layer returns (Nf, 2) (m, n_y=0) like pmm_jones_2d
+    assert o1.ndim == 1 and np.array_equal(o1, o2[:, 0])
     assert np.max(np.abs(np.asarray(R1) - np.asarray(R2))) == 0.0
     assert np.max(np.abs(np.asarray(T1) - np.asarray(T2))) == 0.0
     assert np.max(np.abs(np.asarray(J1) - np.asarray(J2))) == 0.0
@@ -133,3 +135,30 @@ def test_stack_conical_rejects_unsupported_combinations():
         st2.solve(stabilize="slices")
     with pytest.raises(NotImplementedError, match="retain_internal"):
         st2.solve(retain_internal=True)
+
+
+def test_stack_conical_caps_orders_and_warns_on_underresolution():
+    """Audit review (P2): the conical path CAPS n_orders to the spectral-element
+    grid capacity (no rank-deficient garbage), RAISES when the grid cannot even
+    resolve the propagating orders, and WARNS on residual energy violation --
+    classical-path parity (previously it silently returned R+T up to ~6.9)."""
+    import warnings
+    Pp, WL, DEP = 2.0e-6, 1.0e-6, 0.6e-6
+    th, ph = np.deg2rad(30.0), np.deg2rad(40.0)
+    # degree too low to resolve the propagating orders -> raise, not silent garbage
+    st = la.PMMStack(Pp, n_substrate=1.5, n_superstrate=1.0, degree=4,
+                     far_field_orders=41)
+    st.add_layer(DEP, segments=[(0.5, 6.0), (0.5, 1.0)])
+    with pytest.raises(ValueError, match="propagate"):
+        st.set_source(WL, angle=th, phi=ph).solve()
+    # a tight-but-resolvable degree caps the output well below far_field_orders
+    # AND fires the energy tripwire on the residual under-resolution
+    st2 = la.PMMStack(Pp, n_substrate=1.5, n_superstrate=1.0, degree=5,
+                      far_field_orders=41)
+    st2.add_layer(DEP, segments=[(0.5, 6.0), (0.5, 1.0)])
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
+        o, R, T, J = st2.set_source(WL, angle=th, phi=ph).solve()
+    assert o.ndim == 1 and len(o) < 41                      # capped to capacity
+    assert float((R.sum(1) + T.sum(1)).max()) < 1.1        # no rank-def blowup
+    assert any("energy" in str(x.message).lower() for x in rec)   # tripwire fired
