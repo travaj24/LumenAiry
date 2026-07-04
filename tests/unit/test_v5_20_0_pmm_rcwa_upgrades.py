@@ -292,3 +292,99 @@ def test_cell_jax_path_honours_max_nodal_dof():
     for e in (jnp.asarray(eps), eps):
         with pytest.raises(ValueError, match="max_nodal_dof"):
             pmm_efficiency_2d_cell(eps_cell=e, max_nodal_dof=50, **kw)
+
+
+# --------------------------------------------------------------------------- #
+# R3 -- F2 even-parity fold extended to PMM2DStack + pmm_jones_2d (tensor)      #
+# --------------------------------------------------------------------------- #
+def _centro_scalar_cell(S, eps_hi=6.25):
+    """Centro-symmetric scalar cell: a centred square (flip-invariant grid)."""
+    c = np.full((S, S), 1.0 + 0j)
+    lo, hi = S // 4, S - S // 4
+    c[lo:hi, lo:hi] = eps_hi
+    return c
+
+
+def _sym_stack(sym, *, theta=0.0):
+    P, WL = 0.6e-6, 0.55e-6
+    st = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
+                       n_superstrate=1.0, degree=11, n_orders=6, symmetry=sym)
+    st.add_layer(0.22e-6, eps_cell=_centro_scalar_cell(8))
+    st.add_layer(0.08e-6, eps=2.10)                       # uniform interlayer
+    st.add_layer(0.18e-6, eps_cell=_centro_scalar_cell(6, 5.0))
+    return st.set_source(WL, theta=theta, phi=0.0).solve()
+
+
+def test_stack_symmetry_fold_matches_full_solve():
+    """PMM2DStack(symmetry=True) runs the whole cascade in the even sector and
+    matches the full solve to the ~1e-12 even-basis level for a centro-symmetric
+    multilayer scalar stack at normal incidence (audit F2 for the cascade)."""
+    o_f, R_f, T_f, J_f = _sym_stack(False)
+    o_s, R_s, T_s, J_s = _sym_stack(True)
+    assert np.array_equal(o_f, o_s)
+    assert np.max(np.abs(R_f - R_s)) < 1e-11
+    assert np.max(np.abs(T_f - T_s)) < 1e-11
+    assert np.max(np.abs(np.asarray(J_f) - np.asarray(J_s))) < 1e-11
+
+
+def test_stack_symmetry_falls_back_at_oblique():
+    """Oblique incidence is not flip-closed -> the stack even-parity fold must
+    fall back to the full solve, BYTE-IDENTICAL."""
+    o_f, R_f, T_f, J_f = _sym_stack(False, theta=np.radians(20.0))
+    o_s, R_s, T_s, J_s = _sym_stack(True, theta=np.radians(20.0))
+    assert np.array_equal(R_f, R_s) and np.array_equal(T_f, T_s)
+    assert np.array_equal(np.asarray(J_f), np.asarray(J_s))
+
+
+def _inplane_tensor(n_o, n_e, az):
+    """Exactly-in-plane uniaxial tensor (zz = n_o**2, no z-coupling)."""
+    eo, ee = n_o ** 2, n_e ** 2
+    c, s = np.cos(az), np.sin(az)
+    Rz = np.array([[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]])
+    return Rz @ np.diag([ee, eo, eo]).astype(complex) @ Rz.T
+
+
+def _centro_tensor_cell(S):
+    cell = np.empty((S, S, 3, 3), dtype=complex)
+    for i in range(S):
+        for j in range(S):
+            xr, yr = (i - (S - 1) / 2) / S, (j - (S - 1) / 2) / S
+            az = 0.6 * np.cos(2 * np.pi * np.hypot(xr, yr))   # centro-symmetric
+            cell[i, j] = _inplane_tensor(1.5, 1.7, az)
+    return cell
+
+
+@pytest.mark.parametrize("formulation", ["laurent", "li"])
+def test_jones_2d_tensor_symmetry_fold_matches_full(formulation):
+    """pmm_jones_2d(symmetry=True) folds the IN-PLANE tensor P/Q (rcwa's
+    _tensor_PQ, byte-identical to the eigendecomposed blocks) into the even
+    sector, matching the full 2Nf tensor solve to ~1e-12 (audit F2, tensor)."""
+    P, WL, DEP = 0.55e-6, 0.5e-6, 0.30e-6
+    kw = dict(degree=9, n_orders=6, formulation=formulation, theta=0.0)
+    a = la.pmm_jones_2d(P, P, _centro_tensor_cell(8), 1.5, 1.0, DEP, WL,
+                        symmetry=False, **kw)
+    b = la.pmm_jones_2d(P, P, _centro_tensor_cell(8), 1.5, 1.0, DEP, WL,
+                        symmetry=True, **kw)
+    assert np.array_equal(a[0], b[0])
+    assert np.max(np.abs(a[1] - b[1])) < 1e-11
+    assert np.max(np.abs(a[2] - b[2])) < 1e-11
+    assert np.max(np.abs(np.asarray(a[3]) - np.asarray(b[3]))) < 1e-11
+
+
+def test_jones_2d_symmetry_falls_back_offplane():
+    """An OUT-OF-PLANE tensor cell cannot fold (the generator breaks +/-lam),
+    so symmetry=True falls back to the generalized cascade BYTE-IDENTICALLY."""
+    from lumenairy.elements.rcwa._core import uniaxial_tensor
+    P, WL, DEP = 0.55e-6, 0.5e-6, 0.30e-6
+    S = 6
+    cell = np.empty((S, S, 3, 3), dtype=complex)
+    for i in range(S):
+        for j in range(S):
+            xr, yr = (i - (S - 1) / 2) / S, (j - (S - 1) / 2) / S
+            az = 0.5 * np.cos(2 * np.pi * np.hypot(xr, yr))
+            cell[i, j] = uniaxial_tensor(1.5, 1.7, np.deg2rad(35.0), phi=az)
+    kw = dict(degree=9, n_orders=5, theta=0.0)
+    a = la.pmm_jones_2d(P, P, cell, 1.5, 1.0, DEP, WL, symmetry=False, **kw)
+    b = la.pmm_jones_2d(P, P, cell, 1.5, 1.0, DEP, WL, symmetry=True, **kw)
+    assert np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2])
+    assert np.array_equal(np.asarray(a[3]), np.asarray(b[3]))

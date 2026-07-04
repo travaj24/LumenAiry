@@ -147,7 +147,7 @@ def _assemble_2d_tensor(ax, ay, tile33):
 
 
 def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
-                        ox, oy, kxv, kyv, formulation):
+                        ox, oy, kxv, kyv, formulation, return_ops=False):
     """Fourier-basis layer eigenmodes of a full (3, 3) tensor cell -- the
     SEM-projected operators fed to the shared dimension-agnostic
     :func:`_layer_eigenmodes_tensor` (also used per-layer by
@@ -305,6 +305,13 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
                        EZY=_proj(lambda t: t[2, 1]),
                        EXZ=_proj(lambda t: t[0, 2]),
                        EYZ=_proj(lambda t: t[1, 2]))
+    if return_ops:
+        # F2 (audit): expose the projected operators so the even-parity fold
+        # can build (P, Q) via rcwa's _tensor_PQ.  Only IN-PLANE cells fold
+        # (the out-of-plane generator breaks the +/-lam symmetry) -> None.
+        if offp:
+            return None
+        return GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ
     return _layer_eigenmodes_tensor(GxF, GyF, CxxF, CxyF, CyxF, CyyF, EZZ,
                                     **oop)
 
@@ -327,6 +334,7 @@ def pmm_jones_2d(
     formulation: str = "laurent",
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
+    symmetry: bool = False,
 ):
     """Rigorous 2-D anisotropic grating via the hybrid PMM: a single layer whose
     permittivity is a full IN-PLANE tensor field over an axis-aligned
@@ -364,6 +372,13 @@ def pmm_jones_2d(
         Per-order + Jones degree-scan consensus (the 1-D guard against the
         measure-zero quasi-resonances), stepping through consecutive ODD
         degrees.  Expensive in 2-D -> default False.
+    symmetry : bool, optional
+        Opt-in even-parity fold (audit F2): a centro-symmetric IN-PLANE tensor
+        cell at NORMAL incidence excites only even modes, so the single-layer
+        solve runs in the ``(Nf+1)``-d even sector (rcwa's :func:`_tensor_PQ`
+        folded through :func:`_symmetric_cascade_rt`).  Default off ->
+        byte-identical; a per-cell flip-invariance guard falls back to the full
+        ``2Nf`` solve (out-of-plane / off-centre / oblique never fold).
 
     Returns
     -------
@@ -399,7 +414,7 @@ def pmm_jones_2d(
         return _pmm_jones_2d_at(
             period_x, period_y, x_walls, y_walls, tile_i, eps_sup, eps_sub,
             depth, wavelength, theta, phi, deg, elements_per_strip, grade,
-            n_orders, formulation, max_nodal_dof)
+            n_orders, formulation, max_nodal_dof, symmetry)
 
     if stabilize:
         # consensus over consecutive ODD degrees (the 1-D _stabilize_jones
@@ -414,7 +429,7 @@ def pmm_jones_2d(
 def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
                      eps_sub, depth, wavelength, theta, phi, degree,
                      elements_per_strip, grade, n_orders, formulation,
-                     max_nodal_dof):
+                     max_nodal_dof, symmetry=False):
     """Single fixed-degree tensor solve (eps already internal-convention)."""
     el_x = _axis_elem_counts(period_x, x_walls, degree, elements_per_strip,
                              "pmm_jones_2d", "x")
@@ -454,47 +469,75 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
     Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)
 
-    modes = _tensor_layer_modes(
-        ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
-        formulation)
-
-    if len(modes) == 3:
-        # ---- in-plane: symmetric +/-lam cascade (the rcwa_jones_2d tail) ----
-        Wl, Vl, lam_l = modes
-        S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
-        S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
-        S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
-    else:
-        # ---- OUT-OF-PLANE: the full-3x3 generator breaks the [W; -V] <->
-        # -lam symmetry, so forward AND backward modes are distinct -> the
-        # GENERALIZED S-matrix cascade (the rcwa/oned.py full-3x3 template;
-        # the isotropic half-spaces keep their symmetric [W, W; V, -V] form).
-        Wf, Vf, lam_f, Wb, Vb, lam_b = modes
-        Msup = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
-        Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
-        Ml = _modes_to_M(Wf, Vf, Wb, Vb)
-        S = _interface_smatrix_general(Msup, Ml)
-        S = _redheffer_star(
-            S, _propagation_smatrix_general(lam_f, lam_b, k0 * depth))
-        S = _redheffer_star(S, _interface_smatrix_general(Ml, Msub))
-    S11, _S12, S21, _S22 = S
-
     p0 = int(np.where((order_x == 0) & (order_y == 0))[0][0])
     delta = ((order_x == 0) & (order_y == 0)).astype(_C)
+    orders2d = np.stack([order_x, order_y], axis=1)
+    kt = float(np.hypot(kx0, ky0))
+
+    # F2 (audit): even-parity fold of the IN-PLANE tensor layer at normal
+    # incidence.  Build (P, Q) via rcwa's _tensor_PQ (byte-identical to the
+    # blocks _layer_eigenmodes_tensor eigendecomposes) and run the single-layer
+    # cascade in the (Nf+1)-d even sector; None -> not applicable (out-of-plane,
+    # off-centre or oblique) -> the full 2Nf solve below (byte-identical there).
+    sym_pairs = None
+    if symmetry and kt < 1e-12:
+        ops = _tensor_layer_modes(
+            ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
+            formulation, return_ops=True)
+        if ops is not None:                        # in-plane only
+            from ..rcwa._core import _symmetric_cascade_rt, _tensor_PQ
+            GxF, GyF, Cxx, Cxy, Cyx, Cyy, EZZ = ops
+            Pt, Qt = _tensor_PQ(GxF, GyF, Cxx, Cxy, Cyx, Cyy, EZZ, np)
+            sym_pairs = _symmetric_cascade_rt(
+                Vsup, Vsub, np.diag(kxv.astype(_C)), np.diag(kyv.astype(_C)),
+                [("PQ", Pt, Qt, Cxx)], [depth], k0,
+                [np.concatenate([1.0 * delta, 0.0 * delta]),
+                 np.concatenate([0.0 * delta, 1.0 * delta])], orders2d, np)
+
+    S11 = S21 = None
+    if sym_pairs is None:
+        modes = _tensor_layer_modes(
+            ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
+            formulation)
+
+        if len(modes) == 3:
+            # -- in-plane: symmetric +/-lam cascade (the rcwa_jones_2d tail) --
+            Wl, Vl, lam_l = modes
+            S = _interface_smatrix(Wsup, Vsup, Wl, Vl)
+            S = _redheffer_star(S, _propagation_smatrix(lam_l, k0 * depth))
+            S = _redheffer_star(S, _interface_smatrix(Wl, Vl, Wsub, Vsub))
+        else:
+            # -- OUT-OF-PLANE: the full-3x3 generator breaks the [W; -V] <->
+            # -lam symmetry, so forward AND backward modes are distinct -> the
+            # GENERALIZED S-matrix cascade (the rcwa/oned.py full-3x3 template;
+            # the isotropic half-spaces keep their symmetric [W, W; V, -V] form).
+            Wf, Vf, lam_f, Wb, Vb, lam_b = modes
+            Msup = _modes_to_M(Wsup, Vsup, Wsup, -Vsup)
+            Msub = _modes_to_M(Wsub, Vsub, Wsub, -Vsub)
+            Ml = _modes_to_M(Wf, Vf, Wb, Vb)
+            S = _interface_smatrix_general(Msup, Ml)
+            S = _redheffer_star(
+                S, _propagation_smatrix_general(lam_f, lam_b, k0 * depth))
+            S = _redheffer_star(S, _interface_smatrix_general(Ml, Msub))
+        S11, _S12, S21, _S22 = S
+
     kz_inc = float(np.real(_kz_forward2(np.conj(eps_sup), kx0, ky0)))
     kz_ref_f = _kz_forward2(np.conj(eps_sup), kxv, kyv)
     kz_trn_f = _kz_forward2(np.conj(eps_sub), kxv, kyv)
     safe_r = np.where(np.abs(kz_ref_f) < 1e-12, 1.0, kz_ref_f)
     safe_t = np.where(np.abs(kz_trn_f) < 1e-12, 1.0, kz_trn_f)
     R_rows, T_rows, j_cols = [], [], []
-    for ex0, ey0 in ((1.0, 0.0), (0.0, 1.0)):
+    for ip, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
         # Unit tangential E along (ex0, ey0); the incident wave's longitudinal
         # Ez = -(kx0 ex + ky0 ey)/kz_inc inflates |E_inc|^2 (cf. the 1-D sec^2).
         long_inc = (kx0 * ex0 + ky0 * ey0)
         einc_sq = 1.0 + (long_inc / kz_inc) ** 2 if kz_inc != 0 else 1.0
-        cinc = np.concatenate([ex0 * delta, ey0 * delta])
-        r = S11 @ cinc
-        t = S21 @ cinc
+        if sym_pairs is not None:
+            r, t = sym_pairs[ip]                   # even-parity fold (F2)
+        else:
+            cinc = np.concatenate([ex0 * delta, ey0 * delta])
+            r = S11 @ cinc
+            t = S21 @ cinc
         rx, ry = r[:Nf], r[Nf:]
         tx, ty = t[:Nf], t[Nf:]
         rz = -(kxv * rx + kyv * ry) / safe_r
@@ -510,5 +553,4 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     R_eff = np.stack(R_rows)
     T_eff = np.stack(T_rows)
     jones_reflection = np.stack(j_cols, axis=1)
-    orders2d = np.stack([order_x, order_y], axis=1)
     return orders2d, R_eff, T_eff, jones_reflection
