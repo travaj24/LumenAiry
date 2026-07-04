@@ -10,6 +10,7 @@ no-floor staggered 2-D PMM, ``pmm_efficiency_2d_staggered``).  Re-exported so
 ``lumenairy.elements.pmm.<name>`` resolves for every public name AND the
 test-imported / monkeypatched privates (the slant dispatch spies these)."""
 from ._core import *
+from .conical import pmm_jones_1d_conical
 from .oned import *
 from .stack import *
 from .stack2d import *
@@ -19,7 +20,8 @@ from .twod_staggered import *
 
 __all__ = ["pmm_efficiency_1d", "pmm_efficiency_1d_jax",
            "pmm_efficiency_1d_segments",
-           "pmm_jones_1d", "pmm_jones_1d_segments", "PMMStack",
+           "pmm_jones_1d", "pmm_jones_1d_conical",
+           "pmm_jones_1d_segments", "PMMStack",
            "pmm_efficiency_1d_slanted", "pmm_jones_1d_slanted",
            "pmm_jones_1d_slanted_segments", "pmm_1d",
            "pmm_efficiency_1d_vs_wavelength", "pmm_jones_1d_vs_wavelength",
