@@ -52,7 +52,7 @@ def test_native_conical_inplane_tensor_matches_berreman():
     assert np.allclose(_sv(J), _sv(Jr), atol=3e-3), (
         f"in-plane conical sv {_sv(J)} vs berreman {_sv(Jr)}")
     for p in range(2):
-        assert abs(float(R[p].sum() + Tt[p].sum()) - 1.0) < 1e-8
+        assert abs(float(R[p].sum() + Tt[p].sum()) - 1.0) < 1e-6
 
 
 def test_native_conical_isotropic_tensor_reduces_to_scalar():

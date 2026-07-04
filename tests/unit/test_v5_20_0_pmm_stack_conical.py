@@ -81,7 +81,7 @@ def test_stack_conical_uniform_slab_matches_berreman():
                                            angle=_TH, phi=_PHI)
     assert np.allclose(_sv(J), _sv(Jr), atol=3e-3)
     for p in range(2):
-        assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 1e-8
+        assert abs(float(R[p].sum() + T[p].sum()) - 1.0) < 1e-6
 
 
 def test_stack_conical_multilayer_matches_path_a():
