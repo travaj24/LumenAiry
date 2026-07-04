@@ -433,6 +433,23 @@ def _axis_ops_1d(axd, eps_1d):
                 Epn=np.linalg.solve(P_inv, M))
 
 
+def _sandwich_factorized(Tx, Txp, Ty, Typ, v_nodal, NyO, NxO, Ny, Nx):
+    """``(kron(Ty, Tx) * v_nodal) @ kron(Typ, Txp)`` WITHOUT materializing the
+    ``(Nf, N)`` Kronecker projector or the ``O(Nf^2 N)`` sandwich (audit F5).
+
+    Two per-axis contractions of the ``(Ny, Nx)`` nodal weight ``v``: contract
+    the x-nodal index against ``Tx``/``Txp``, then the y-nodal index against
+    ``Ty``/``Typ``.  Algebraically identical to the dense sandwich (to machine
+    precision -- the contraction order differs), at ~10-500x fewer flops and no
+    2.5 GB ``kron(Ty, Tx)`` for a large staircased cell."""
+    E = np.asarray(v_nodal).reshape(Ny, Nx)
+    # x contraction: TE[ax, jy, bx] = sum_jx Tx[ax,jx] E[jy,jx] Txp[jx,bx]
+    TE = np.einsum('ak,jk,kd->ajd', Tx, E, Txp, optimize=True)  # (NxO, Ny, NxO)
+    # y contraction: out[ay, ax, by, bx] = sum_jy Ty[ay,jy] Typ[jy,by] TE[ax,jy,bx]
+    out = np.einsum('pj,jr,ajd->pard', Ty, Typ, TE, optimize=True)
+    return out.reshape(NyO * NxO, NyO * NxO)
+
+
 def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
     """K0-FREE Fourier-projected scalar layer operators, with per-axis EXACT
     handling of WALL-LESS axes.
@@ -484,11 +501,14 @@ def _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x, period_y):
                 P_inv += ker / e
         eps_nodal = P_eps / Mdiag
         inv_nodal = P_inv / Mdiag
-        Tp = np.kron(Ty, Tx)
-        Tpinv = np.kron(Typ, Txp)
-        EpsF = (Tp * eps_nodal[None, :]) @ Tpinv
-        EinvF = (Tp * inv_nodal[None, :]) @ Tpinv
-        EpnF = (Tp * (1.0 / inv_nodal)[None, :]) @ Tpinv
+        # F5 (audit): factorized sandwiches -- never materialize kron(Ty, Tx).
+        Nx, Ny = mdx.shape[0], mdy.shape[0]
+        EpsF = _sandwich_factorized(Tx, Txp, Ty, Typ, eps_nodal,
+                                    NyO, NxO, Ny, Nx)
+        EinvF = _sandwich_factorized(Tx, Txp, Ty, Typ, inv_nodal,
+                                     NyO, NxO, Ny, Nx)
+        EpnF = _sandwich_factorized(Tx, Txp, Ty, Typ, 1.0 / inv_nodal,
+                                    NyO, NxO, Ny, Nx)
         Ip = np.kron(Ty @ Typ, Tx @ Txp)
         # Per-slot inverse-rule routing (audit P3-33): on a DOUBLY-patterned
         # cell the nodal factorized operators are pointwise (no per-axis

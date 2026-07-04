@@ -40,6 +40,26 @@ def test_shared_uniform_geo_eig_reproduces_sem_modes():
 
 
 # --------------------------------------------------------------------------- #
+# F5 -- factorized sandwich == dense (kron(Ty,Tx)*v) @ kron(Typ,Txp)            #
+# --------------------------------------------------------------------------- #
+def test_factorized_sandwich_matches_dense():
+    """_sandwich_factorized reproduces the dense Kronecker sandwich to machine
+    precision, without materializing kron(Ty, Tx) (audit F5)."""
+    from lumenairy.elements.pmm.twod import _sandwich_factorized
+    rng = np.random.default_rng(0)
+    NyO, NxO, Ny, Nx = 5, 7, 11, 9
+    Tx = rng.standard_normal((NxO, Nx)) + 1j * rng.standard_normal((NxO, Nx))
+    Txp = rng.standard_normal((Nx, NxO)) + 1j * rng.standard_normal((Nx, NxO))
+    Ty = rng.standard_normal((NyO, Ny)) + 1j * rng.standard_normal((NyO, Ny))
+    Typ = rng.standard_normal((Ny, NyO)) + 1j * rng.standard_normal((Ny, NyO))
+    v = rng.standard_normal(Ny * Nx) + 1j * rng.standard_normal(Ny * Nx)
+    dense = (np.kron(Ty, Tx) * v[None, :]) @ np.kron(Typ, Txp)
+    fac = _sandwich_factorized(Tx, Txp, Ty, Typ, v, NyO, NxO, Ny, Nx)
+    assert fac.shape == (NyO * NxO, NyO * NxO)
+    assert np.max(np.abs(dense - fac)) < 1e-11 * np.max(np.abs(dense))
+
+
+# --------------------------------------------------------------------------- #
 # B3 -- solve_vs_wavelength reuses a previously set_source()-configured angle   #
 # --------------------------------------------------------------------------- #
 def _stack():
