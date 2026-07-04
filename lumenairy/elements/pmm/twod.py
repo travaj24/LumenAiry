@@ -623,7 +623,7 @@ def _homogeneous_modes(kx, ky, eps):
 def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
                       eps_sup, eps_sub, depth, wavelength, degree, el_x, el_y,
                       grade, polarization, theta, phi, n_orders, formulation,
-                      fn_name="pmm_efficiency_2d"):
+                      truncation="rectangular", fn_name="pmm_efficiency_2d"):
     ax = _build_axis(period_x, x_walls, degree, el_x, grade)
     ay = _build_axis(period_y, y_walls, degree, el_y, grade)
 
@@ -636,6 +636,26 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
     order_x = np.tile(ox, len(oy))
     order_y = np.repeat(oy, len(ox))
     Nf = len(order_x)
+    # F8 (audit): optional Lalanne-1997 circular truncation -- keep only the
+    # orders inside the largest reciprocal-space circle inscribed in the box
+    # (isotropic resolution; drops the wasted high-|G| corners), Nf -> ~(pi/4)Nf
+    # and the eig (O(Nf^3)) ~x0.48.  ``keep`` is the full-box boolean mask used
+    # below to restrict the (Nf_full, Nf_full) projected operators to the
+    # circular subspace (op[circ][:, circ] == the operator built on the circular
+    # orders, since the SEM operators are functions of the order list).
+    keep = None
+    if truncation == "circular":
+        gx_o = order_x / float(period_x)
+        gy_o = order_y / float(period_y)
+        r2 = min(n_orders / float(period_x),
+                 n_orders / float(period_y)) ** 2
+        keep = (gx_o ** 2 + gy_o ** 2) <= r2 * (1.0 + 1e-9)
+        order_x, order_y = order_x[keep], order_y[keep]
+        Nf = len(order_x)
+    elif truncation != "rectangular":
+        raise ValueError(
+            f"{fn_name}: truncation must be 'rectangular' or 'circular', "
+            f"got {truncation!r}.")
 
     # Conical-incidence hardening (mirrors rcwa_efficiency_2d): reject an
     # evanescent incident wave (grazing/metallic superstrate -> kz_inc ~ 0
@@ -665,6 +685,11 @@ def _pmm2d_solve_core(period_x, period_y, x_walls, y_walls, eps_tile,
     else:
         lops = _scalar_projected_ops(ax, ay, eps_tile, ox, oy, period_x,
                                      period_y)
+        if keep is not None:                    # F8: restrict to circular orders
+            ix = np.ix_(keep, keep)
+            lops = {kk: (v[ix] if (hasattr(v, "shape") and np.ndim(v) == 2
+                                   and v.shape[0] == len(keep)) else v)
+                    for kk, v in lops.items()}
         GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
         GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
         Wl, Vl, lam_l = _layer_modes_projected(
@@ -746,6 +771,7 @@ def pmm_efficiency_2d(
     phi: float = 0.0,
     n_orders: int = 11,
     formulation: str = "li",
+    truncation: str = "rectangular",
     stabilize: bool = False,
 ) -> Efficiency2D:
     r"""Diffraction efficiencies of a 2-D rectangular pillar via the hybrid PMM.
@@ -892,7 +918,7 @@ def pmm_efficiency_2d(
             period_x, period_y, [x0, x1], [y0, y1], eps_tile, eps_sup,
             eps_sub, depth, wavelength, deg, elements_per_strip,
             elements_per_strip, grade, polarization, theta, phi, n_orders,
-            formulation)
+            formulation, truncation=truncation)
 
     if not stabilize:
         return _solve_at(degree)
@@ -938,6 +964,7 @@ def pmm_efficiency_2d_cell(
     phi: float = 0.0,
     n_orders: int = 11,
     formulation: str = "li",
+    truncation: str = "rectangular",
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
     region_layout=None,
@@ -1041,7 +1068,8 @@ def pmm_efficiency_2d_cell(
         return _pmm2d_solve_core(
             period_x, period_y, x_walls, y_walls, eps_tile, eps_sup, eps_sub,
             depth, wavelength, deg, el_x, el_y, grade, polarization, theta,
-            phi, n_orders, formulation, fn_name="pmm_efficiency_2d_cell")
+            phi, n_orders, formulation, truncation=truncation,
+            fn_name="pmm_efficiency_2d_cell")
 
     if not stabilize:
         return _solve_at(degree)

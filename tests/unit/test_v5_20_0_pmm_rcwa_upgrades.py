@@ -40,6 +40,47 @@ def test_shared_uniform_geo_eig_reproduces_sem_modes():
 
 
 # --------------------------------------------------------------------------- #
+# F8 -- circular truncation (Lalanne 1997) for the 2-D PMM hybrid              #
+# --------------------------------------------------------------------------- #
+def _pillar(trunc, **kw):
+    from lumenairy.elements.pmm.twod import pmm_efficiency_2d
+    P, DEP, WL = 0.6e-6, 0.25e-6, 0.55e-6
+    return pmm_efficiency_2d(
+        P, P, 6.0, 2.0, (0.2 * P, 0.6 * P), (0.2 * P, 0.6 * P),
+        1.5, 1.0, DEP, WL, truncation=trunc, **kw)[:3]
+
+
+def test_circular_truncation_reduces_orders_and_converges():
+    """truncation='circular' drops the high-|G| corner orders, conserves
+    energy, and its zeroth order agrees with 'rectangular' (audit F8)."""
+    kw = dict(degree=11, n_orders=8)
+    o_r, R_r, T_r = _pillar("rectangular", **kw)
+    o_c, R_c, T_c = _pillar("circular", **kw)
+    assert len(o_c) < len(o_r), "circular must keep fewer orders"
+    assert abs(float(R_c.sum() + T_c.sum()) - 1.0) < 1e-2   # energy at floor
+    ir = (o_r[:, 0] == 0) & (o_r[:, 1] == 0)
+    ic = (o_c[:, 0] == 0) & (o_c[:, 1] == 0)
+    assert abs(float(R_r[ir][0]) - float(R_c[ic][0])) < 5e-3
+
+
+def test_rectangular_truncation_is_the_default_and_unchanged():
+    """The default is 'rectangular'; passing it explicitly is identical."""
+    a = _pillar("rectangular", degree=9, n_orders=4)
+    from lumenairy.elements.pmm.twod import pmm_efficiency_2d
+    P, DEP, WL = 0.6e-6, 0.25e-6, 0.55e-6
+    b = pmm_efficiency_2d(P, P, 6.0, 2.0, (0.2 * P, 0.6 * P),
+                          (0.2 * P, 0.6 * P), 1.5, 1.0, DEP, WL,
+                          degree=9, n_orders=4)[:3]
+    assert len(a[0]) == len(b[0])
+    assert np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2])
+
+
+def test_invalid_truncation_raises():
+    with pytest.raises(ValueError, match="truncation"):
+        _pillar("bogus", degree=7, n_orders=3)
+
+
+# --------------------------------------------------------------------------- #
 # F5 -- factorized sandwich == dense (kron(Ty,Tx)*v) @ kron(Typ,Txp)            #
 # --------------------------------------------------------------------------- #
 def test_factorized_sandwich_matches_dense():
