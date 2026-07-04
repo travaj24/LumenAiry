@@ -40,6 +40,34 @@ def test_shared_uniform_geo_eig_reproduces_sem_modes():
 
 
 # --------------------------------------------------------------------------- #
+# F4 -- PMM2DStack repeated-layer dedup is transparent (bit-exact physics)     #
+# --------------------------------------------------------------------------- #
+def test_stack_repeated_layer_dedup_is_transparent():
+    """A stack of N IDENTICAL patterned layers (dedup fires -> one eig reused)
+    equals a single layer of the total thickness: the interfaces between
+    identical-material layers reflect nothing, so the physics is unchanged and
+    the dedup is exact (audit F4)."""
+    P, WL = 0.6e-6, 0.55e-6
+    S = 6
+    cell = np.full((S, S), 1.0 + 0j)
+    cell[1:4, 1:4] = 6.0
+
+    def _stack(n, t_each):
+        st = la.PMM2DStack(period_x=P, period_y=P, n_substrate=1.5,
+                           n_superstrate=1.0, degree=9, n_orders=3)
+        for _ in range(n):
+            st.add_layer(t_each, eps_cell=cell)
+        return st.set_source(WL, theta=0.0, phi=0.0).solve()
+
+    o4, R4, T4, J4 = _stack(4, 0.1e-6)     # 4 identical layers -> 1 dedup'd eig
+    o1, R1, T1, J1 = _stack(1, 0.4e-6)     # single 0.4um layer
+    assert np.array_equal(o4, o1)
+    assert np.max(np.abs(np.asarray(J4) - np.asarray(J1))) < 1e-9, (
+        "identical-material internal interfaces must be transparent")
+    assert np.max(np.abs(R4 - R1)) < 1e-9 and np.max(np.abs(T4 - T1)) < 1e-9
+
+
+# --------------------------------------------------------------------------- #
 # F8 -- circular truncation (Lalanne 1997) for the 2-D PMM hybrid              #
 # --------------------------------------------------------------------------- #
 def _pillar(trunc, **kw):

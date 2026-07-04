@@ -506,44 +506,58 @@ class PMM2DStack:
         Wsup, Vsup, _ls, _kzr = _homogeneous_modes(kxv, kyv, eps_sup)
         Wsub, Vsub, _lb, _kzt = _homogeneous_modes(kxv, kyv, eps_sub)
 
-        # per-layer modes in the shared Rayleigh basis
+        # per-layer modes in the shared Rayleigh basis.
+        # F4 (audit): dedup repeated identical patterned layers.  Every layer in
+        # THIS solve shares (k0, kx0, ky0), so two layers with identical
+        # geometry have identical transverse modes; the eig-heavy build runs
+        # once and both reuse it (RCWAStack._layer_eig_key pattern).  Modes are
+        # thickness-independent (thickness enters the propagation S-matrix), so
+        # each layer still carries its OWN thickness.  Bit-exact.
         modes = []
+        _mode_cache = {}
         for L in self._layers:
             if L["kind"] == "uniform":
                 Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv,
                                                     np.conj(_C(L["eps"])))
-            elif L["kind"] == "scalar":
-                tile_i = np.conj(L["tile"])
+                modes.append(("sym", Wl, Vl, lam, L["t"]))
+                continue
+            tile_i = np.conj(L["tile"])
+            if L["kind"] == "scalar":
                 eps0 = tile_i.flat[0]
-                if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):
+                if bool(np.all(np.abs(tile_i - eps0) < 1e-12)):  # uniform tile
                     Wl, Vl, lam, _ = _homogeneous_modes(kxv, kyv, eps0)
-                else:
-                    ax = _build_axis(self.period_x, L["xw"], self.degree,
-                                     L["el_x"], self.grade)
-                    ay = _build_axis(self.period_y, L["yw"], self.degree,
-                                     L["el_y"], self.grade)
-                    lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
-                                                 self.period_x, self.period_y)
-                    GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
-                    GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
-                    Wl, Vl, lam = _layer_modes_projected(
-                        GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
-                        formulation=self.formulation)
+                    modes.append(("sym", Wl, Vl, lam, L["t"]))
+                    continue
+            # patterned scalar or tensor -> expensive build + eig; dedup it
+            gkey = (L["kind"], L["tile"].tobytes(), L["tile"].shape,
+                    tuple(np.ravel(L["xw"])), tuple(np.ravel(L["yw"])),
+                    tuple(np.ravel(L["el_x"])), tuple(np.ravel(L["el_y"])))
+            hit = _mode_cache.get(gkey)
+            if hit is not None:
+                modes.append(hit + (L["t"],))
+                continue
+            ax = _build_axis(self.period_x, L["xw"], self.degree,
+                             L["el_x"], self.grade)
+            ay = _build_axis(self.period_y, L["yw"], self.degree,
+                             L["el_y"], self.grade)
+            if L["kind"] == "scalar":
+                lops = _scalar_projected_ops(ax, ay, tile_i, ox, oy,
+                                             self.period_x, self.period_y)
+                GxF = lops["Gx0F"] / k0 + kx0 * lops["IpxF"]
+                GyF = lops["Gy0F"] / k0 + ky0 * lops["IpyF"]
+                Wl, Vl, lam = _layer_modes_projected(
+                    GxF, GyF, lops["EpsF"], lops["EinvF"], lops["EpnF"],
+                    formulation=self.formulation)
+                entry = ("sym", Wl, Vl, lam)
             else:                                   # tensor (full 3x3)
-                tile_i = np.conj(L["tile"])
-                ax = _build_axis(self.period_x, L["xw"], self.degree,
-                                 L["el_x"], self.grade)
-                ay = _build_axis(self.period_y, L["yw"], self.degree,
-                                 L["el_y"], self.grade)
                 ez_rule = ("li" if self.formulation == "li" else "laurent")
                 out = _tensor_layer_modes(
                     ax, ay, L["xw"], L["yw"], tile_i, k0, kx0, ky0, ox, oy,
                     kxv, kyv, ez_rule)
-                if len(out) == 6:                   # out-of-plane generator
-                    modes.append(("gen",) + out + (L["t"],))
-                    continue
-                Wl, Vl, lam = out
-            modes.append(("sym", Wl, Vl, lam, L["t"]))
+                entry = (("gen",) + out if len(out) == 6
+                         else ("sym",) + tuple(out))
+            _mode_cache[gkey] = entry
+            modes.append(entry + (L["t"],))
 
         any_oop = any(m[0] == "gen" for m in modes)
         if retain_internal and any_oop:
