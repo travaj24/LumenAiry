@@ -427,6 +427,12 @@ class PMM2DStack:
         # a retain_internal=True one.  Stale fields from a previous
         # source/geometry must never be served silently.
         self._internal = None
+        # audit B5: the layer-index-keyed Ez-reconstruction cache is tied to the
+        # solved state -- clear it here (the single choke point every solve path,
+        # incl. the per-wavelength dispersive solve_vs_wavelength loop, passes
+        # through) so a re-solve after add_layer / a dispersive layer swap can
+        # never serve a stale projected-eps for a reused index.
+        self._epsF_cache = {}
         if any(L.get("kind") == "disp" for L in self._layers):
             raise ValueError(
                 "PMM2DStack.solve: the stack holds DISPERSIVE (wl -> value) "
@@ -919,15 +925,29 @@ class PMM2DStack:
             out.extend(probe._layers)
         return out
 
-    def solve_vs_wavelength(self, wavelengths, *, theta=None, phi=0.0,
+    def solve_vs_wavelength(self, wavelengths, *, theta=None, phi=None,
                             angle=None, jones=False):
         """Solve the stack across a wavelength sweep, materialising any
         DISPERSIVE (``wl -> value``) layer callables per wavelength (item 5,
         device-geometry roadmap 2026-06-10).
         Returns ``(orders, R(n_wl, 2, N), T(n_wl, 2, N))``, plus a FOURTH
         ``jones (n_wl, 2, 2)`` element when ``jones=True`` (default ``False``
-        keeps the released 3-tuple)."""
+        keeps the released 3-tuple).
+
+        v5.20 (audit B3): when neither ``theta``/``angle`` nor ``phi`` is
+        passed, the sweep REUSES a previously ``set_source()``-configured
+        incidence instead of silently resetting to normal incidence.  Any
+        explicit ``theta``/``angle``/``phi`` still wins."""
         self._internal = None   # supersedes any retained internals (audit P1-04)
+        # audit B3: inherit the configured source angle/azimuth when the sweep
+        # leaves them unset (theta/angle both None -> reuse _src['theta'];
+        # phi None -> reuse _src['phi']).  Falls back to normal incidence when
+        # no set_source() was called (the pre-B3 default).
+        src = getattr(self, "_src", None)
+        if theta is None and angle is None and src is not None:
+            theta = src.get("theta")
+        if phi is None:
+            phi = src.get("phi", 0.0) if src is not None else 0.0
         wlv = np.atleast_1d(np.asarray(wavelengths, dtype=float))
         if wlv.size == 0:
             raise ValueError("PMM2DStack.solve_vs_wavelength: wavelengths is "

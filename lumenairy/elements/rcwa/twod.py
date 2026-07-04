@@ -480,9 +480,10 @@ def rcwa_efficiency_2d(
           wall-normal field ``N(x, y)``, so the inverse rule is applied along
           the (spatially varying) wall normal and the direct rule along the
           tangent -- the rigorous Li-1996 factorization generalised to
-          arbitrarily oriented walls.  The ``E_z`` elimination uses the
-          dual-Laurent ``[[1/eps]]`` rule (``inv(EZZ) = [[1/eps]]``, the same
-          unbiased ``E_z`` rule the analytic-shape solver uses).  This is the
+          arbitrarily oriented walls.  The ``E_z`` elimination uses the DIRECT
+          rule (``EZZ = [[eps]]``, matching the analytic-shape solver) since
+          audit F1 (v5.14.1): the pre-v5.14.1 dual-Laurent ``[[1/eps]]`` z-rule
+          violated Li's rule 3 and biased the absorptance by ~+0.35.  This is the
           convergence-accelerating factorization for **SEPARABLE / axis-aligned
           2-D metallic gratings**: there it reaches a target accuracy in fewer
           orders than ``'li'`` and matches the rigorous 1-D-Li oracle (absorptance

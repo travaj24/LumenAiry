@@ -546,14 +546,18 @@ def _sem_modes(mats, k0, polarization, kx0=0.0, robust=False):
 
 
 
-def _sem_fourier_projection(orders, period, mats):
-    """``T[m, i] = (1/period) INT phi_i(x) exp(-i m G x) dx`` for the global
-    nodal Lagrange basis ``phi_i``; exact per element by oversampled Gauss
-    quadrature (the integrand is oscillatory)."""
+@functools.lru_cache(maxsize=64)
+def _sem_projection_quad(degree, ref_nodes_key):
+    """Degree-only Gauss quadrature + reference Lagrange values for
+    :func:`_sem_fourier_projection` (audit P2).  ``leggauss`` (a Newton
+    iteration), the barycentric weights and the Lagrange values at the
+    quadrature nodes depend only on ``degree`` (the GLL reference nodes), NOT on
+    the geometry -- cache them so every solve and every stabilize-scan step
+    reuses them.  Keyed on ``ref_nodes_key`` (a tuple) as well so a different
+    reference node set can never return stale values.  Returns read-only
+    ``(xg, wg, Lv)``; callers must not mutate them (they don't)."""
     from numpy.polynomial.legendre import leggauss
-    l2g, elem_bnds, degree = mats["l2g"], mats["elem_bnds"], mats["degree"]
-    ref_nodes, n_glob = mats["ref_nodes"], mats["n_glob"]
-    G = 2.0 * np.pi / period
+    ref_nodes = np.asarray(ref_nodes_key, dtype=float)
     nq = max(2 * degree + 8, 24)
     xg, wg = leggauss(nq)
     wbary = np.ones(degree + 1)
@@ -561,19 +565,29 @@ def _sem_fourier_projection(orders, period, mats):
         for k in range(degree + 1):
             if k != j:
                 wbary[j] /= (ref_nodes[j] - ref_nodes[k])
+    Lv = np.zeros((len(xg), degree + 1))
+    for r, x in enumerate(xg):
+        diff = x - ref_nodes
+        if np.any(np.abs(diff) < 1e-14):
+            Lv[r, np.argmin(np.abs(diff))] = 1.0
+        else:
+            num = wbary / diff
+            Lv[r, :] = num / num.sum()
+    xg.flags.writeable = False
+    wg.flags.writeable = False
+    Lv.flags.writeable = False
+    return xg, wg, Lv
 
-    def _lagrange_vals(xi):
-        V = np.zeros((len(xi), degree + 1))
-        for r, x in enumerate(xi):
-            diff = x - ref_nodes
-            if np.any(np.abs(diff) < 1e-14):
-                V[r, np.argmin(np.abs(diff))] = 1.0
-            else:
-                num = wbary / diff
-                V[r, :] = num / num.sum()
-        return V
 
-    Lv = _lagrange_vals(xg)
+def _sem_fourier_projection(orders, period, mats):
+    """``T[m, i] = (1/period) INT phi_i(x) exp(-i m G x) dx`` for the global
+    nodal Lagrange basis ``phi_i``; exact per element by oversampled Gauss
+    quadrature (the integrand is oscillatory)."""
+    l2g, elem_bnds, degree = mats["l2g"], mats["elem_bnds"], mats["degree"]
+    ref_nodes, n_glob = mats["ref_nodes"], mats["n_glob"]
+    G = 2.0 * np.pi / period
+    xg, wg, Lv = _sem_projection_quad(
+        int(degree), tuple(float(x) for x in ref_nodes))
     T = np.zeros((len(orders), n_glob), dtype=_C)
     for e in range(len(elem_bnds)):
         xl, xr, _eps = elem_bnds[e]

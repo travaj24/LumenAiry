@@ -630,7 +630,6 @@ def _stag_fourier_projection(basis: Basis1D, orders):
     T_local = np.zeros((len(orders), N, M), dtype=_C)
     J = basis.J
     for seg in range(N):
-        xb[seg]
         xphys = 0.5 * (xb[seg] + xb[seg + 1]) + J * xg     # physical x at quad pts
         phase = np.exp(-1j * np.outer(orders * G, xphys))  # (nO, nq)
         # contribution[m,a] = (J/d) sum_q phase[m,q] wg[q] Vref[a,q]
