@@ -3093,6 +3093,40 @@ def _sem_modes_slant(mats, k0, polarization, slant_angle, kx0=0.0):
 
 
 
+def _sem_modes_slant_uniform(mats, k0, polarization, eps, kx0=0.0, geo=None,
+                             Dop=None):
+    """Homogeneous half-space slant-mode dict from the SHARED eps-free geometric
+    eig (audit S5-P1 for the slant path).
+
+    A uniform medium has no walls -> ``slant_angle = 0`` (``t = 0``), so the
+    ``+/-q`` symmetric convention holds and BOTH the TE ``(eps S0 - Lop/k0^2)x =
+    q^2 S0 x`` and TM ``(S0 - Linv/k0^2)x = q^2 Pinv x`` problems fold (``Linv =
+    L/eps``, ``Pinv = S0/eps`` for uniform eps) to the SAME eps-FREE pencil
+    ``(Lop/k0^2)x = (eps - q^2)S0 x`` -- exactly :func:`_scalar_uniform_geo_eig`.
+    So ONE eig serves the superstrate AND substrate half-spaces (shared mesh ->
+    identical ``L/C/S0``) AND both polarizations, with ``q^2 = eps - mu`` and the
+    IDENTICAL forward-branch flip as the ``skip_slant`` branch of
+    :func:`_sem_modes_slant`.  ``invop = (1/eps) I`` exactly (``Pinv = (1/eps)S0``
+    for a uniform medium, so ``S0^-1 Pinv = (1/eps)I`` -- no solve).  The
+    eigenvector gauge / order may differ from a raw per-eps eig, but the
+    downstream interface S-matrix + far-field lstsq are gauge-agnostic (the same
+    guarantee S5-P1 uses for the vertical half-spaces)."""
+    if geo is None:
+        geo = _scalar_uniform_geo_eig(mats, k0, kx0)
+    mu, X = geo
+    q = np.sqrt(_C(eps) - mu)
+    tol = 1e-8 * max(float(np.max(np.abs(q))), 1.0)
+    flip = (q.imag < -tol) | ((np.abs(q.imag) <= tol) & (q.real < 0.0))
+    q = np.where(flip, -q, q)
+    lam = -1j * q
+    n = mats["S0"].shape[0]
+    invop = None if polarization == "te" else np.eye(n, dtype=_C) / _C(eps)
+    if Dop is None:
+        Dop = _safe_solve(mats["S0"], mats["C"])
+    return dict(symmetric=True, W=X, q=q, lam=lam, invop=invop,
+                Dop=Dop, t=-0.0, k0=k0, polarization=polarization)
+
+
 def _modes_M_slant(md):
     """Build the generalized field-mode matrix ``M = [[Wf, Wb], [Vf, Vb]]`` plus
     ``(lam_f, lam_b)`` and the forward field block ``Wf`` from a
@@ -3171,8 +3205,16 @@ def _pmm_slant_solve(period, n_ridge, n_groove, n_substrate, n_superstrate,
     # assembled into the explicit forward/backward field-mode matrix for the
     # GENERALIZED S-matrix (the slant breaks the +/-q symmetry).
     md_l = _sem_modes_slant(mats, k0, polarization, slant_angle, kx0)
-    md_s = _sem_modes_slant(mats_sup, k0, polarization, 0.0, kx0)
-    md_b = _sem_modes_slant(mats_sub, k0, polarization, 0.0, kx0)
+    # S5-P1 (slant): the two HOMOGENEOUS half-spaces share the mesh (identical
+    # L/C/S0) and are slant-free, so ONE eps-free geometric eig (+ one shared
+    # Dop) serves both -- q^2 = eps - mu, invop = (1/eps)I.  Gauge-equivalent to
+    # the per-eps _sem_modes_slant eig (interface S-matrix is gauge-agnostic).
+    _geo_hs = _scalar_uniform_geo_eig(mats_sup, k0, kx0)
+    _Dop_hs = _safe_solve(mats_sup["S0"], mats_sup["C"])
+    md_s = _sem_modes_slant_uniform(mats_sup, k0, polarization, eps_sup, kx0,
+                                    _geo_hs, _Dop_hs)
+    md_b = _sem_modes_slant_uniform(mats_sub, k0, polarization, eps_sub, kx0,
+                                    _geo_hs, _Dop_hs)
     Ml, lamf_l, lamb_l, _Wf_l = _modes_M_slant(md_l)
     Ms, _lamf_s, _lamb_s, Wf_s = _modes_M_slant(md_s)
     Mb, _lamf_b, _lamb_b, Wf_b = _modes_M_slant(md_b)

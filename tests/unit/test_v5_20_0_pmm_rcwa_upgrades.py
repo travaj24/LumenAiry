@@ -388,3 +388,44 @@ def test_jones_2d_symmetry_falls_back_offplane():
     b = la.pmm_jones_2d(P, P, cell, 1.5, 1.0, DEP, WL, symmetry=True, **kw)
     assert np.array_equal(a[1], b[1]) and np.array_equal(a[2], b[2])
     assert np.array_equal(np.asarray(a[3]), np.asarray(b[3]))
+
+
+# --------------------------------------------------------------------------- #
+# R6 -- S5-P1 shared eps-free geometric eig for the SLANT half-spaces          #
+# --------------------------------------------------------------------------- #
+def test_slant_shared_uniform_geo_eig_reproduces_sem_modes_slant():
+    """A homogeneous (slant-free) half-space's shared-eig slant modes reproduce
+    the per-eps _sem_modes_slant q-spectrum (as a set), both pols + oblique --
+    q^2 = eps - mu, invop = (1/eps)I (audit S5-P1 for the slant path)."""
+    from lumenairy.elements.pmm._core import (
+        _build_sem_slant,
+        _scalar_uniform_geo_eig,
+        _sem_modes_slant,
+        _sem_modes_slant_uniform,
+    )
+    period, degree = 1.0e-6, 15
+    k0 = 2.0 * np.pi / 0.8e-6
+    eps = 2.3 + 0.0j
+    mats = _build_sem_slant(period, 0.5e-6, eps, eps, degree, 1, 1, True)
+    for kx0 in (0.0, 0.31 * k0):
+        geo = _scalar_uniform_geo_eig(mats, k0, kx0)
+        for pol in ("te", "tm"):
+            ref = _sem_modes_slant(mats, k0, pol, 0.0, kx0)      # per-eps
+            new = _sem_modes_slant_uniform(mats, k0, pol, eps, kx0, geo=geo)
+            a = np.sort_complex(np.round(ref["q"], 10))
+            b = np.sort_complex(np.round(new["q"], 10))
+            assert np.allclose(a, b, atol=1e-9), (
+                f"pol={pol} kx0={kx0}: shared-eig slant q spectrum differs")
+            if pol == "tm":                          # invop == (1/eps)I exactly
+                n = mats["S0"].shape[0]
+                assert np.allclose(new["invop"], np.eye(n) / eps, atol=1e-12)
+
+
+def test_slant_efficiency_unchanged_by_shared_eig():
+    """pmm_efficiency_1d_slanted still matches the analytic energy balance with
+    the shared-eig half-spaces (the S5-P1 slant port is gauge-equivalent)."""
+    o, R, T = la.pmm_efficiency_1d_slanted(
+        0.5e-6, np.sqrt(2.0), 1.0, 1.5, 1.0, 0.4e-6, 0.5, 0.55e-6,
+        slant_angle=np.deg2rad(15.0), angle=np.deg2rad(20.0),
+        polarization="te", degree=13)
+    assert abs(float(R.sum() + T.sum()) - 1.0) < 1e-6    # lossless TE closes
