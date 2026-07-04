@@ -976,6 +976,24 @@ def pmm_efficiency_2d_cell(
                 "pmm_efficiency_2d_cell: a traced eps_cell cannot define the "
                 "exact walls -- pass region_layout (a CONCRETE int grid of "
                 "the same shape labelling the regions) on the JAX path.")
+        # audit B1: honour max_nodal_dof on the JAX branch too.  The dispatch
+        # previously skipped _validate_cell_cost (only the NumPy _solve_at ran
+        # it), so an oversized region_layout drove _static_prep_cell straight
+        # into a dense N x N assembly (~110 GB at N ~ 83k) and OOM'd.  Compute
+        # the same wall / element counts from the concrete region_layout and
+        # reject too-large cells with the identical guidance as the NumPy path.
+        _lay_jx = np.ascontiguousarray(np.asarray(region_layout))
+        _xw_jx, _yw_jx, _ = _cell_to_walls_tile(
+            _lay_jx.astype(complex), period_x, period_y,
+            "pmm_efficiency_2d_cell")
+        _elx_jx = _axis_elem_counts(period_x, _xw_jx, degree,
+                                    elements_per_strip,
+                                    "pmm_efficiency_2d_cell", "x")
+        _ely_jx = _axis_elem_counts(period_y, _yw_jx, degree,
+                                    elements_per_strip,
+                                    "pmm_efficiency_2d_cell", "y")
+        _validate_cell_cost("pmm_efficiency_2d_cell", _elx_jx, _ely_jx,
+                            degree, max_nodal_dof)
         from ._jax_twod import _pmm_efficiency_2d_cell_jax
         o, R, T = _pmm_efficiency_2d_cell_jax(
             period_x, period_y, eps_cell, region_layout, n_substrate,
