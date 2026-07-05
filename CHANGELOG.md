@@ -83,21 +83,35 @@ All notable changes to the core library are documented here.
   - **Vector / Jones with polarization ray tracing** — free-space
     `propagate_gbd_freespace_vector` (independent-component), and through a real
     prescription `propagate_gbd_vector_through_prescription` applies **per-surface
-    Fresnel s/p transmission** along each beamlet's base ray
-    (`_fresnel_jones_matrix_per_beamlet`, a per-beamlet `(2,2)` transverse Jones
-    matrix; s channel transverse-exact, p channel with the honest `cos θ_out`
-    projection; vignetted rays zeroed, never NaN).  Validated: an x-polarized
-    beam through a singlet carries the two-surface near-axis Fresnel power
-    transmission `T1·T2` (0.9179 = 0.9581²) with cross-pol at the symmetry
-    floor.  Transmission only (reflection / thin-film coatings build on the same
-    base-ray trace and remain a documented extension).
+    Fresnel s/p** along each beamlet's base ray (`_fresnel_jones_matrix_per_
+    beamlet`, a per-beamlet `(2,2)` transverse Jones matrix) — dispatching each
+    surface exactly as `raytrace.trace`:
+    - **refraction** — Fresnel transmission `t_s` / `t_p` (s channel transverse-
+      exact, p channel with the honest `cos θ_out` projection).  An x-polarized
+      beam through a singlet carries the two-surface near-axis Fresnel power
+      transmission `T1·T2` (0.9179 = 0.9581²) with cross-pol at the symmetry
+      floor.
+    - **reflection** at `is_mirror` surfaces — an **ideal reflector**
+      `|r_s| = |r_p| = 1` (energy-conserving, no diattenuation; PEC convention
+      `r_s = -1`, `r_p = +1`) with the geometric s/p frame rotation carried by
+      recomposing on the reflected p axis.  The `r_s = -1` / `r_p = +1` pairing
+      was checked against an independent Maxwell boundary-condition oracle to
+      ≤2.2e-16 (an adversarial 3-lens verification; the flipped sign violates the
+      tangential-E boundary condition by O(5)).  A concave mirror is
+      energy-conserving (`det|P| = 1` on-axis) where an equivalent refractive
+      surface is Fresnel-lossy.
+    Vignetted rays are zeroed (never NaN).  Real metallic-coating complex
+    `r_s` / `r_p` (diattenuation + retardance) needs a coating index the
+    prescription does not yet carry, and large folds (which reverse the
+    propagation axis) inherit the existing paraxial-output reconstruction limit —
+    both documented extensions.
   - **JAX-differentiable** free-space / thin-lens paths (backend-dispatched;
     `jax.grad` / `jax.jit` validated), plus a differentiable per-ray transfer
     `raytrace.ray_transfer_jacobian_jax` (`jax.jacfwd` around `trace_jax`,
     vmapped) — the gradient foundation for per-surface GBD lens design (matches
     the NumPy finite-difference primitive at low NA; the `_transfer_jax` high-NA
     `B`-block caveat is documented in `raytrace/differential.py`).
-  Tests: `tests/unit/test_gbd_feature_complete.py` (16 tests).
+  Tests: `tests/unit/test_gbd_feature_complete.py` (17 tests).
 
 ## [5.20.0] — 2026-07-04
 

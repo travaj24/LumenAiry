@@ -876,12 +876,25 @@ def propagate_gbd_freespace_vector(
 
 def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     """Per-beamlet 2x2 transverse Jones matrix ``(E_x, E_y)_in -> _out`` from
-    per-surface Fresnel s/p transmission along each base ray (polarization ray
-    tracing).  Traces surface-by-surface, and at each refracting surface splits
-    the field into s (perp to plane of incidence) and p components, scaling by
-    the Fresnel amplitude transmission ``t_s``, ``t_p`` and rotating the p axis
-    from the incident to the refracted ray.  Transmission only (no reflection /
-    thin-film coatings).
+    per-surface Fresnel s/p along each base ray (polarization ray tracing).
+    Traces surface-by-surface, dispatching each surface exactly as
+    :func:`raytrace.trace` (reflect at ``is_mirror`` surfaces, refract
+    otherwise), then splits the field into s (perp to plane of incidence) and p
+    components and applies the surface coefficients:
+
+    * **Refraction** -- Fresnel amplitude transmission ``t_s``, ``t_p``, rotating
+      the p axis from the incident to the refracted ray.
+    * **Reflection** (``is_mirror``) -- an ideal reflector ``|r_s| = |r_p| = 1``
+      (energy-conserving, no diattenuation; PEC convention ``r_s = -1``,
+      ``r_p = +1`` for the fold's relative s-p phase), with the geometric s/p
+      frame rotation carried by recomposing on the reflected p axis.  Real
+      metallic-coating complex ``r_s`` / ``r_p`` (diattenuation + retardance)
+      needs a coating index the prescription does not yet carry and is a
+      documented materials extension.
+
+    Partial (Fresnel) reflection at refractive surfaces (ghost beams) is not
+    modeled -- forward GBD carries only the transmitted / intended-reflected
+    beam.
 
     Convention: the returned matrix is the **transverse** ``(E_x, E_y)`` field,
     so the s channel (always transverse) is Fresnel-exact at every angle, while
@@ -897,7 +910,13 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     for dead rays so ``P @ E`` never propagates NaNs.
     """
     from ..glass import get_glass_index
-    from ..raytrace.intersection import _intersect_surface, _refract, _surface_normal, _transfer
+    from ..raytrace.intersection import (
+        _intersect_surface,
+        _reflect,
+        _refract,
+        _surface_normal,
+        _transfer,
+    )
     from ..raytrace.trace import _make_bundle, surfaces_from_prescription
 
     surfs = surfaces_from_prescription(prescription)
@@ -909,23 +928,49 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
         rb = _make_bundle(x.copy(), y.copy(), L0.copy(), M0.copy(), wavelength)
         J = J0.astype(np.complex128).copy()
         for s in surfs:
-            _intersect_surface(rb, s)
+            n1 = float(get_glass_index(
+                getattr(s, 'glass_before', None) or 'air', wavelength))
+            n2 = float(get_glass_index(
+                getattr(s, 'glass_after', None) or 'air', wavelength))
+            # pass n_medium=n1 so rb.opd stays consistent with raytrace.trace
+            # in immersed media (the Jones build never reads opd, but keep the
+            # trace faithful).
+            _intersect_surface(rb, s, n_medium=n1)
             nx, ny, nz = _surface_normal(rb.x, rb.y, s)
             d_in = np.stack([rb.L, rb.M, rb.N], axis=-1)
             nrm = np.stack([nx, ny, nz], axis=-1)
             cosd = np.sum(d_in * nrm, axis=-1)
             nrm = np.where(cosd[:, None] > 0, -nrm, nrm)
             cos_i = np.abs(cosd)
-            n1 = float(get_glass_index(
-                getattr(s, 'glass_before', None) or 'air', wavelength))
-            n2 = float(get_glass_index(
-                getattr(s, 'glass_after', None) or 'air', wavelength))
-            _refract(rb, s, n1, n2)
+            is_mirror = bool(getattr(s, 'is_mirror', False))
+            # Dispatch the base ray exactly as raytrace.trace does (reflect vs
+            # refract) so the traced path stays correct through mirror / fold
+            # surfaces; then build the per-surface s/p coefficients.
+            if is_mirror:
+                _reflect(rb, s)
+                # Ideal reflector: |r_s| = |r_p| = 1 (energy-conserving, no
+                # diattenuation).  PEC convention r_s = -1, r_p = +1 carries the
+                # fold's relative s-p phase; the geometric s/p frame rotation
+                # (recompose on the reflected p_out) carries the rest.  A real
+                # metallic-coating complex r_s / r_p (diattenuation + retardance)
+                # needs a coating index the prescription does not yet carry and
+                # is a documented materials extension.
+                cs = -np.ones_like(cos_i, dtype=np.complex128)   # s coeff
+                cp = np.ones_like(cos_i, dtype=np.complex128)    # p coeff
+                c_normal = cs                                    # r_s = r_p = -1
+                n_after = n2
+            else:
+                _refract(rb, s, n1, n2)
+                mu = n1 / n2
+                cos_t = np.sqrt(np.maximum(
+                    1.0 - mu ** 2 * (1.0 - cos_i ** 2), 0.0))
+                cs = (2.0 * n1 * cos_i
+                      / (n1 * cos_i + n2 * cos_t)).astype(np.complex128)  # t_s
+                cp = (2.0 * n1 * cos_i
+                      / (n2 * cos_i + n1 * cos_t)).astype(np.complex128)  # t_p
+                c_normal = cs                                    # t_s == t_p
+                n_after = n2
             d_out = np.stack([rb.L, rb.M, rb.N], axis=-1)
-            mu = n1 / n2
-            cos_t = np.sqrt(np.maximum(1.0 - mu ** 2 * (1.0 - cos_i ** 2), 0.0))
-            ts = 2.0 * n1 * cos_i / (n1 * cos_i + n2 * cos_t)
-            tp = 2.0 * n1 * cos_i / (n2 * cos_i + n1 * cos_t)
             s_vec = np.cross(d_in, nrm)
             s_norm = np.linalg.norm(s_vec, axis=-1, keepdims=True)
             at_normal = s_norm[:, 0] < 1e-9
@@ -935,10 +980,11 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
             p_out = np.cross(d_out, s_hat)
             Es = np.sum(J * s_hat, axis=-1)
             Ep = np.sum(J * p_in, axis=-1)
-            J_sp = (Es * ts)[:, None] * s_hat + (Ep * tp)[:, None] * p_out
-            # at normal incidence s/p is degenerate but ts == tp -> just scale
-            J = np.where(at_normal[:, None], ts[:, None] * J, J_sp)
-            _transfer(rb, float(getattr(s, 'thickness', 0.0) or 0.0), n2)
+            J_sp = (Es * cs)[:, None] * s_hat + (Ep * cp)[:, None] * p_out
+            # at normal incidence s/p is degenerate but the coefficients agree
+            # (t_s == t_p for refraction; r_s == r_p = -1 for a mirror) -> scale.
+            J = np.where(at_normal[:, None], c_normal[:, None] * J, J_sp)
+            _transfer(rb, float(getattr(s, 'thickness', 0.0) or 0.0), n_after)
         # project onto the output transverse (x, y) plane (paraxial output ray)
         return J[:, 0], J[:, 1], rb.alive
 

@@ -433,6 +433,52 @@ def test_vector_through_prescription_applies_fresnel_transmission():
     assert abs(Pvx / Ps - T1 * T2) < 5e-3, (Pvx / Ps, T1 * T2)
 
 
+def test_fresnel_jones_mirror_reflects_and_conserves_energy():
+    """A surface flagged ``is_mirror`` is REFLECTED (not refracted) along the
+    base ray -- matching raytrace.trace -- and gets ideal-reflector coefficients
+    ``|r_s| = |r_p| = 1`` (energy-conserving, no diattenuation), unlike a
+    refractive surface which is Fresnel-lossy.  Off-axis the p (x) column carries
+    the honest ``cos(2i)`` transverse projection of the beam folded by ``2i``
+    while the s (y) column stays exactly unit."""
+    from lumenairy.propagators.gbd import _fresnel_jones_matrix_per_beamlet
+    from lumenairy.raytrace.intersection import _intersect_surface, _reflect
+    from lumenairy.raytrace.trace import _make_bundle, surfaces_from_prescription
+    R = 40e-3
+    mirror = {'name': 'm', 'aperture_diameter': 40e-3,
+              'surfaces': [{'radius': -R, 'conic': 0., 'glass_before': 'air',
+                            'glass_after': 'air', 'is_mirror': True,
+                            'semi_diameter': 18e-3}],
+              'thicknesses': [0.0]}
+    surfs = surfaces_from_prescription(mirror)
+    assert getattr(surfs[0], 'is_mirror', False) is True
+    hs = np.array([0.0, 5e-3, 10e-3, 15e-3])
+    z = np.zeros_like(hs)
+    # (1) base ray really reflects: my traced output dir == a direct _reflect
+    rb = _make_bundle(hs.copy(), z.copy(), z.copy(), z.copy(), 0.633e-6)
+    _intersect_surface(rb, surfs[0])
+    _reflect(rb, surfs[0])
+    ref_N = rb.N.copy()
+    assert np.all(ref_N < 0)   # reflected back toward -z (a real reflection)
+    P, alive = _fresnel_jones_matrix_per_beamlet(hs, z, z, z, mirror, 0.633e-6)
+    assert alive.all() and np.isfinite(P).all()
+    # (2) on-axis: unitary / energy-conserving, no diattenuation
+    assert abs(abs(np.linalg.det(P[0])) - 1.0) < 1e-9
+    assert abs(np.linalg.norm(P[0, :, 0]) - 1.0) < 1e-9
+    assert abs(np.linalg.norm(P[0, :, 1]) - 1.0) < 1e-9
+    # (3) off-axis: s (y) column stays unit; p (x) column == cos(2i) projection
+    for h, Pi in zip(hs[1:], P[1:]):
+        i = np.arcsin(h / R)
+        assert abs(np.linalg.norm(Pi[:, 1]) - 1.0) < 1e-6          # s exact
+        assert abs(np.linalg.norm(Pi[:, 0]) - np.cos(2 * i)) < 1e-6  # p proj
+    # (4) contrast: same geometry made refractive is Fresnel-LOSSY (< 1)
+    refr = {'name': 'r', 'aperture_diameter': 40e-3,
+            'surfaces': [{'radius': -R, 'conic': 0., 'glass_before': 'air',
+                          'glass_after': 'N-BK7', 'semi_diameter': 18e-3}],
+            'thicknesses': [0.0]}
+    Pr, _ = _fresnel_jones_matrix_per_beamlet(hs, z, z, z, refr, 0.633e-6)
+    assert np.linalg.norm(Pr[0, :, 0]) < 0.99   # normal-incidence Fresnel loss
+
+
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
     """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the
