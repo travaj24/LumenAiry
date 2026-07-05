@@ -339,6 +339,60 @@ def apply_thin_lens_to_beamlets(
     )
 
 
+def apply_aperture_to_beamlets(
+    beamlets: BeamletBundle,
+    semi_diameter: float,
+    *,
+    centre: Tuple[float, float] = (0.0, 0.0),
+    shape: str = 'circular',
+) -> BeamletBundle:
+    """Vignette a beamlet bundle at an aperture stop of half-size
+    ``semi_diameter``.
+
+    Beamlets whose base-ray transverse position falls outside the aperture
+    have their amplitude zeroed (geometric / chief-ray vignetting).  This is
+    the *approximate* GBD aperture model: because each beamlet is a smooth
+    Gaussian, a hard edge is resolved only to the beamlet-spacing scale (a
+    beamlet straddling the rim is kept or dropped whole).  For hard-edged
+    apertures where the diffraction ripple matters at finer than the beamlet
+    pitch, use finer ``sample_step`` (more, narrower beamlets) or the HFPI
+    propagator.  ``shape='circular'`` clips on ``sqrt(x^2+y^2)``;
+    ``shape='rectangular'`` clips on ``max(|x|,|y|)`` (``semi_diameter`` is the
+    half-width).
+
+    Parameters
+    ----------
+    beamlets : BeamletBundle
+    semi_diameter : float
+        Aperture half-size (radius for circular, half-width for rectangular).
+    centre : (float, float), optional
+        Aperture centre in the transverse plane (m).
+    shape : {'circular', 'rectangular'}
+    """
+    xp = array_namespace(beamlets.positions)
+    cx, cy = centre
+    x = beamlets.positions[..., 0] - cx
+    y = beamlets.positions[..., 1] - cy
+    if shape == 'rectangular':
+        inside = (xp.abs(x) <= semi_diameter) & (xp.abs(y) <= semi_diameter)
+    elif shape == 'circular':
+        inside = (x * x + y * y) <= (semi_diameter * semi_diameter)
+    else:
+        raise ValueError(
+            f"apply_aperture_to_beamlets: shape must be 'circular' or "
+            f"'rectangular', got {shape!r}")
+    mask = inside.astype(beamlets.amplitude.dtype)
+    new_amplitude = beamlets.amplitude * mask
+
+    return BeamletBundle(
+        positions=beamlets.positions,
+        directions=beamlets.directions,
+        Q=beamlets.Q,
+        amplitude=new_amplitude,
+        waist0=beamlets.waist0,
+    )
+
+
 # ============================================================================
 # Reconstruction
 # ============================================================================
@@ -546,6 +600,8 @@ def propagate_gbd_thin_lens(
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
     direction_sampling: bool = False,
+    aperture_semi_diameter: Optional[float] = None,
+    aperture_shape: str = 'circular',
 ) -> np.ndarray:
     """End-to-end three-leg GBD: source -> free space -> thin lens
     -> free space -> output (the canonical GBD validation case).
@@ -575,6 +631,10 @@ def propagate_gbd_thin_lens(
     )
     bundle = propagate_beamlets_freespace(bundle, z_distance=z_to_lens,
                                           wavelength=wavelength)
+    if aperture_semi_diameter is not None:
+        bundle = apply_aperture_to_beamlets(
+            bundle, aperture_semi_diameter, centre=lens_centre,
+            shape=aperture_shape)
     bundle = apply_thin_lens_to_beamlets(bundle, focal_length=focal_length,
                                          wavelength=wavelength,
                                          centre=lens_centre)
@@ -849,6 +909,7 @@ __all__ = [
     'decompose_field_to_beamlets',
     'propagate_beamlets_freespace',
     'apply_thin_lens_to_beamlets',
+    'apply_aperture_to_beamlets',
     'apply_abcd_to_beamlets',
     'reconstruct_field_from_beamlets',
     'propagate_gbd_freespace',

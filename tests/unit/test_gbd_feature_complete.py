@@ -11,10 +11,22 @@ import numpy as np
 import pytest
 
 from lumenairy.propagators.gbd import (
+    apply_aperture_to_beamlets,
+    decompose_field_to_beamlets,
     propagate_gbd_thin_lens,
 )
 
 LAM = 1.0e-6
+
+
+def _rms_width(F, X, Y):
+    I = np.abs(F) ** 2
+    s = I.sum()
+    if s <= 0:
+        return 0.0
+    cx = (I * X).sum() / s
+    cy = (I * Y).sum() / s
+    return float(np.sqrt(((I * ((X - cx) ** 2 + (Y - cy) ** 2)).sum()) / s))
 
 
 def _centroid_x(F, X):
@@ -49,3 +61,44 @@ def test_husimi_through_lens_focuses_tilted_beam_off_axis():
     assert err_hus < 0.12 * abs(x_analytic), (err_hus, x_analytic)
     # ...and is dramatically better than position-only for this tilted source.
     assert err_hus < 0.3 * err_pos, (err_hus, err_pos)
+
+
+def test_aperture_clips_out_of_bound_beamlets():
+    """apply_aperture_to_beamlets zeros beamlets whose base ray lies outside
+    the stop and leaves the interior amplitudes untouched."""
+    N, dx = 64, 20e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.ones((N, N), dtype=np.complex128)
+    bundle = decompose_field_to_beamlets(E, dx, wavelength=LAM)
+    R = 0.4e-3
+    clipped = apply_aperture_to_beamlets(bundle, R, shape='circular')
+    # match the function's own criterion (x^2+y^2 <= R^2) to avoid a
+    # sqrt-vs-square floating-point disagreement on boundary beamlets.
+    r2 = bundle.positions[:, 0] ** 2 + bundle.positions[:, 1] ** 2
+    inside = r2 <= R ** 2
+    # inside amplitudes untouched, outside zeroed
+    assert np.allclose(clipped.amplitude[inside], bundle.amplitude[inside])
+    assert np.allclose(clipped.amplitude[~inside], 0.0)
+    assert inside.any() and (~inside).any()  # the test actually clips something
+
+
+def test_aperture_vignettes_and_broadens_focus():
+    """A stop smaller than the beam through a lens must remove energy and
+    diffraction-broaden the focal spot (a hard aperture -> wider PSF)."""
+    N, dx = 192, 8e-6
+    f = 20e-3
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    w = 0.6e-3
+    E = np.exp(-(X ** 2 + Y ** 2) / w ** 2).astype(np.complex128)
+    kw = dict(dx=dx, z_to_lens=0.0, focal_length=f, z_lens_to_output=f,
+              wavelength=LAM, output_dx=dx, waist_factor=1.0, sample_step=2)
+    full = propagate_gbd_thin_lens(E, **kw)
+    stopped = propagate_gbd_thin_lens(E, **kw, aperture_semi_diameter=0.3e-3)
+    e_full = float((np.abs(full) ** 2).sum())
+    e_stop = float((np.abs(stopped) ** 2).sum())
+    assert np.isfinite(stopped).all()
+    assert e_stop < e_full           # vignetting removed energy
+    # a tighter stop diffraction-broadens the focus
+    assert _rms_width(stopped, X, Y) > _rms_width(full, X, Y)
