@@ -34,7 +34,6 @@ from ._core import (
     _rcwa_xp,
     _recentering_phase,
     _redheffer_star,
-    _reject_jax_offplane,
     _require_jax_x64,
     _require_propagating_incidence,
     _scalar_PQ,
@@ -57,6 +56,24 @@ from .twod import (
     _harmonic_orders_2d,
     _li_convolutions_2d,
 )
+
+
+def _layer_offplane_or_traced(data):
+    """True if a ``(3, 3)`` tensor cell has OUT-OF-PLANE coupling.  A concrete
+    array is inspected; a TRACED jax array (under ``jax.grad`` / ``jit``) cannot
+    be materialised and is treated as out-of-plane -- routed to the general
+    cascade, which is EXACT for in-plane tensors too.  Keeping a traced layer on
+    the same (general) branch its concrete forward would take is what makes the
+    differentiable out-of-plane stack gradient correct (a traced OOP layer left
+    on the in-plane branch silently drops the z-coupling)."""
+    if _tensor_offplane_present(data):
+        return True
+    if is_jax_array(data):
+        try:
+            return _tensor_offplane_present(np.asarray(to_numpy(data)))
+        except Exception:
+            return True                       # tracer -> general path
+    return False
 
 
 def rcwa_convergence(solver, *, order_params=("n_orders",), bump=4, atol=1e-3,
@@ -1009,14 +1026,12 @@ class RCWAStack:
             _validate_cell_sampling("add_layer", tcell, self.nox, self.noy)
             # OUT-OF-PLANE tensor layers are SUPPORTED since v5.14.1 (the
             # rcwa_jones_2d GAP2 machinery promoted to the stack via the
-            # PMM2DStack any_oop pattern); the remaining contract is a
-            # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The
-            # DIFFERENTIABLE (JAX) solve cannot represent an out-of-plane tensor
-            # (the forward/backward split is a host argsort), so a CONCRETE JAX
-            # out-of-plane cell is rejected here rather than silently kept as
-            # in-plane (which would give a quietly WRONG gradient); a TRACER is
-            # undetectable and documented as in-plane-only.
-            _reject_jax_offplane("RCWAStack.add_layer", tcell)
+            # PMM2DStack any_oop pattern), including the DIFFERENTIABLE (JAX)
+            # solve (a concrete cell is inspected for out-of-plane coupling; a
+            # traced cell routes to the general cascade -- exact for in-plane
+            # too -- so a differentiable out-of-plane stack gets a correct
+            # gradient).  The remaining contract is a nonzero e_zz (the pointwise
+            # ezz-Schur fold divides by it), checkable only for a concrete cell.
             if _tensor_offplane_present(tcell):
                 ezz_min = float(np.min(np.abs(
                     to_numpy(tcell)[..., 2, 2])))
@@ -1512,7 +1527,7 @@ class RCWAStack:
             P, Q = _scalar_PQ(Kx, Ky, EPS, EPS, None, xp)
             return ("PQ", P, Q, EPS)
         # tensor: in-plane only (OOP cannot fold)
-        if _tensor_offplane_present(layer.data):
+        if _layer_offplane_or_traced(layer.data):
             return None
         et = xp.conj(xp.asarray(layer.data))
 
@@ -1572,7 +1587,7 @@ class RCWAStack:
         def cv(comp):
             return _eps_convolution_2d(comp, orders, self.nox, self.noy)
         EZZ = cv(et[:, :, 2, 2])
-        if _tensor_offplane_present(layer.data):
+        if _layer_offplane_or_traced(layer.data):
             # full-3x3 layer (v5.14.1): pointwise ezz-Schur fold on the CELL
             # before the direct-rule convolution + the 6-tuple generator --
             # the rcwa_jones_2d GAP2 machinery, per stack layer.

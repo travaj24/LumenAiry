@@ -10,6 +10,7 @@ import numpy as np
 from ...backend import (
     array_namespace,
     backend_name,
+    is_jax_array,
     to_numpy,
 )
 from ._core import (
@@ -33,7 +34,6 @@ from ._core import (
     _propagation_star_general,
     _rcwa_xp,
     _redheffer_star,
-    _reject_jax_offplane,
     _require_jax_x64,
     _require_propagating_incidence,
     _sqrt_forward,
@@ -1168,15 +1168,26 @@ def rcwa_jones_2d(
                             n_orders_x, n_orders_y)
     # OUT-OF-PLANE tensors are SUPPORTED since v5.14.1 (audit GAP2) via the
     # generalized forward/backward cascade below; the remaining contract is a
-    # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The forward/
-    # backward mode split is a host-side argsort, so the DIFFERENTIABLE (JAX)
-    # path cannot represent an out-of-plane tensor: a CONCRETE JAX out-of-plane
-    # cell is rejected loudly here (rather than silently keeping the in-plane
-    # contract, which would return a quietly WRONG gradient); a TRACER's off-
-    # plane content is undetectable and documented as in-plane-only.
-    _reject_jax_offplane("rcwa_jones_2d", eps_tensor_cell)
+    # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The
+    # DIFFERENTIABLE (JAX) out-of-plane path uses a trace-safe argsort forward/
+    # backward split (:func:`_select_forward_flux_jax`) + the gauge-invariant
+    # broadened eig VJP, so out-of-plane JAX tensors are fully supported
+    # (gradients validated vs finite difference).  ``_tensor_offplane_present``
+    # skips JAX arrays; a CONCRETE JAX cell is re-inspected here, while a TRACER
+    # (under jax.grad / jit) cannot be inspected -- it routes to the GENERAL
+    # (out-of-plane) cascade, which is EXACT for in-plane tensors too.  Routing
+    # a traced tensor to the same branch its concrete forward takes is what keeps
+    # the differentiable out-of-plane gradient correct (a traced tensor left on
+    # the in-plane branch silently DROPS the z-coupling -> wrong gradient).
     offplane = _tensor_offplane_present(eps_tensor_cell)
-    if offplane:
+    traced_tensor = False
+    if not offplane and is_jax_array(eps_tensor_cell):
+        try:
+            offplane = _tensor_offplane_present(
+                np.asarray(to_numpy(eps_tensor_cell)))
+        except Exception:
+            offplane, traced_tensor = True, True   # tracer -> general path
+    if offplane and not traced_tensor:
         ezz_min = float(np.min(np.abs(np.asarray(
             to_numpy(eps_tensor_cell))[..., 2, 2])))
         if ezz_min < 1e-12:

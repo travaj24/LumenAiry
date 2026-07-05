@@ -1883,6 +1883,25 @@ def _select_forward_flux(gam, Vfull, N):
     return np.where(fwd_fixed)[0]
 
 
+def _select_forward_flux_jax(gam, Vfull, N, xp):
+    """JAX (differentiable) twin of :func:`_select_forward_flux` -- trace-safe
+    ``argsort`` split on the same signed forwardness score (flux-carrying modes
+    by ``Sz``, evanescent/deep-decay by ``Re(gam)``); returns ``(fwd, bwd)``."""
+    gre = xp.real(gam)
+    Ex = Vfull[:N, :]
+    Ey = Vfull[N:2 * N, :]
+    Hx = Vfull[2 * N:3 * N, :] / 1j
+    Hy = Vfull[3 * N:4 * N, :] / 1j
+    Sz = xp.real(xp.sum(Ex * xp.conj(Hy) - Ey * xp.conj(Hx), axis=0))
+    mx = xp.maximum(xp.max(xp.abs(Sz)), 1.0)
+    carries = xp.abs(Sz) > 1e-9 * mx
+    deep_noise = (xp.abs(Sz) < 3e-3 * mx) & (xp.abs(gre) > 0.1)
+    deep = xp.abs(gre) > 0.5
+    carries = carries & (~deep_noise) & (~deep)
+    score = xp.where(carries, Sz, gre)
+    order = xp.argsort(-score)
+    return order[:2 * N], order[2 * N:]
+
 
 def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
                              EZX=None, EZY=None, EXZ=None, EYZ=None):
@@ -1943,9 +1962,12 @@ def _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
         ])
         G = _block(xp, [[A, P], [Q, B]])
         gam, Vfull = _eig_for(xp)(G)
-        fidx = _select_forward_flux(gam, Vfull, N)
-        fset = set(np.asarray(to_numpy(fidx)).tolist())
-        bidx = xp.asarray(np.array(sorted(set(range(4 * N)) - fset)))
+        if backend_name(xp) == "jax":
+            fidx, bidx = _select_forward_flux_jax(gam, Vfull, N, xp)
+        else:
+            fidx = _select_forward_flux(gam, Vfull, N)
+            fset = set(np.asarray(to_numpy(fidx)).tolist())
+            bidx = xp.asarray(np.array(sorted(set(range(4 * N)) - fset)))
         lam = gam[fidx]
         lam_b = gam[bidx]
         Vf = Vfull[:, fidx]
