@@ -304,3 +304,39 @@ def test_vector_gbd_propagates_jones_components_independently():
     oy = propagate_gbd_freespace(Ey, dx, z=z, wavelength=LAM, sample_step=2)
     assert np.allclose(out[0], ox, rtol=1e-10, atol=1e-12)
     assert np.allclose(out[1], oy, rtol=1e-10, atol=1e-12)
+
+
+# --------------------------------------------------------------------------
+# Anamorphic (dy != dx) grid sampling -> elliptical / diagonal-tensor-Q beamlets
+# --------------------------------------------------------------------------
+def test_anamorphic_scalar_path_byte_identical():
+    """dy=None (and dy=dx) keep the scalar circular-beamlet path
+    byte-identical -- no regression from the tensor-Q generalization."""
+    N, dx = 96, 8e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (0.15e-3) ** 2).astype(np.complex128)
+    F0 = propagate_gbd_freespace(E, dx, z=5e-3, wavelength=LAM, sample_step=2)
+    F1 = propagate_gbd_freespace(E, dx, z=5e-3, wavelength=LAM, dy=dx,
+                                 sample_step=2)
+    assert np.array_equal(F0, F1)
+
+
+def test_anamorphic_circular_beam_stays_circular():
+    """On an anamorphic grid (dy = 2*dx) a physically circular Gaussian is
+    decomposed into elliptical (diagonal-tensor-Q) beamlets; after free-space
+    propagation it must stay physically circular and finite -- exercising the
+    tensor free-space Q evolution."""
+    dxa, dya, N = 6e-6, 12e-6, 160
+    xa = (np.arange(N) - N // 2) * dxa
+    ya = (np.arange(N) - N // 2) * dya
+    Xa, Ya = np.meshgrid(xa, ya)
+    E = np.exp(-(Xa ** 2 + Ya ** 2) / (0.12e-3) ** 2).astype(np.complex128)
+    F = propagate_gbd_freespace(E, dxa, z=8e-3, wavelength=LAM, dy=dya,
+                                sample_step=2, waist_factor=1.5)
+    assert np.isfinite(F).all()
+    I = np.abs(F) ** 2
+    s = I.sum()
+    sx = np.sqrt((I * (Xa - (I * Xa).sum() / s) ** 2).sum() / s)
+    sy = np.sqrt((I * (Ya - (I * Ya).sum() / s) ** 2).sum() / s)
+    assert abs(sx / sy - 1.0) < 0.05, (sx, sy)   # physically circular

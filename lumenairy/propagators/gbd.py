@@ -164,6 +164,7 @@ def decompose_field_to_beamlets(
     dx: float,
     *,
     wavelength: float,
+    dy: Optional[float] = None,
     waist_factor: float = 1.0,
     sample_step: int = 1,
     z_input_plane: float = 0.0,
@@ -204,6 +205,12 @@ def decompose_field_to_beamlets(
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
+    # v5.21: anamorphic sampling.  dy == dx (the default) keeps the scalar-Q
+    # circular-beamlet path byte-identical; dy != dx makes each beamlet an
+    # ELLIPTICAL (axis-aligned) Gaussian -> a DIAGONAL tensor Q.
+    if dy is None:
+        dy = dx
+    _aniso = abs(float(dy) - float(dx)) > 1e-12 * max(abs(float(dx)), 1.0)
 
     iy = xp.arange(0, Ny, sample_step)
     ix = xp.arange(0, Nx, sample_step)
@@ -221,7 +228,7 @@ def decompose_field_to_beamlets(
     # reconstruction grid -- producing a `k_0 * dx / 2 * off-axis` phase
     # error that grew with NA and field angle.
     x_b = (Ix - Nx / 2) * dx
-    y_b = (Iy - Ny / 2) * dx
+    y_b = (Iy - Ny / 2) * dy
     z_b = xp.full((n,), float(z_input_plane), dtype=x_b.dtype)
     positions = xp.stack([x_b, y_b, z_b], axis=-1)
 
@@ -232,7 +239,7 @@ def decompose_field_to_beamlets(
         # propagation) instead of only its amplitude.
         kmag = 2.0 * float(np.pi) / wavelength
         gx = xp.gradient(E_in, dx, axis=-1)      # dE/dx
-        gy = xp.gradient(E_in, dx, axis=-2)      # dE/dy
+        gy = xp.gradient(E_in, dy, axis=-2)      # dE/dy
         E_c = E_in[Iy, Ix]
         mag_c = xp.abs(E_c)
         thr = 1e-6 * xp.abs(E_in).max()
@@ -252,15 +259,27 @@ def decompose_field_to_beamlets(
         N = xp.ones((n,), dtype=x_b.dtype)
     directions = xp.stack([L, M, N], axis=-1)
 
-    w0 = waist_factor * dx
-    z_R = float(np.pi) * (w0 ** 2) / wavelength
-    Q = xp.full((n,), -1j / z_R,
-                dtype=xp.complex128 if hasattr(xp, 'complex128') else 'complex128')
-    waist0 = xp.full((n,), float(w0), dtype=x_b.dtype)
-
+    _cdt = xp.complex128 if hasattr(xp, 'complex128') else 'complex128'
+    wx = waist_factor * dx
+    wy = waist_factor * dy
     sample = E_in[Iy, Ix]
-    pixel_area = (sample_step * dx) ** 2
-    amplitude = sample * pixel_area / (float(np.pi) * w0 * w0)
+    if _aniso:
+        # Elliptical beamlet -> diagonal tensor Q = diag(-i/zRx, -i/zRy).
+        zRx = float(np.pi) * (wx ** 2) / wavelength
+        zRy = float(np.pi) * (wy ** 2) / wavelength
+        diag = xp.stack([xp.full((n,), -1j / zRx, dtype=_cdt),
+                         xp.full((n,), -1j / zRy, dtype=_cdt)], axis=-1)
+        Q = diag[:, :, None] * xp.eye(2, dtype=_cdt)[None, :, :]  # (n,2,2)
+        waist0 = xp.full((n,), float(np.sqrt(wx * wy)), dtype=x_b.dtype)
+        pixel_area = (sample_step ** 2) * dx * dy
+        amplitude = sample * pixel_area / (float(np.pi) * wx * wy)
+    else:
+        w0 = wx
+        z_R = float(np.pi) * (w0 ** 2) / wavelength
+        Q = xp.full((n,), -1j / z_R, dtype=_cdt)
+        waist0 = xp.full((n,), float(w0), dtype=x_b.dtype)
+        pixel_area = (sample_step * dx) ** 2
+        amplitude = sample * pixel_area / (float(np.pi) * w0 * w0)
 
     return BeamletBundle(
         positions=positions,
@@ -361,8 +380,6 @@ def propagate_beamlets_freespace(
     new_positions = beamlets.positions + t[..., None] * beamlets.directions
 
     Q_old = beamlets.Q
-    Q_new = Q_old / (1 + t.astype(Q_old.dtype) * Q_old)
-
     k = 2 * float(np.pi) / wavelength * n_medium
     # 4.9 fix (audit #2.2): use raw ``t`` (signed) instead of
     # ``abs(t)``.  Under the exp(-iωt) time convention forward
@@ -372,7 +389,21 @@ def propagate_beamlets_freespace(
     # giving wrong sign on the propagated wavefront.  Forward
     # propagation was unaffected (because abs(positive) == positive).
     axial_phase = xp.exp(1j * k * t)
-    qratio = Q_new / Q_old
+    if _q_is_tensor(Q_old):
+        # v5.21: tensor (astigmatic / anamorphic) Q free-space -- matrix
+        # Mobius Q_new = Q (I + t Q)^{-1} with a per-eigenvalue branch-safe
+        # amplitude prod_i 1/sqrt(1 + t lambda_i) (eigenvalues have Im<0 for a
+        # physical beam, so each principal sqrt is continuous through a focus).
+        I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
+        tt = t[:, None, None].astype(Q_old.dtype)
+        Q_new = Q_old @ xp.linalg.inv(I2 + tt * Q_old)
+        Q_new = 0.5 * (Q_new + xp.transpose(Q_new, (0, 2, 1)))
+        lam = xp.linalg.eigvals(Q_old)
+        qratio = xp.prod(
+            1.0 / xp.sqrt(1.0 + t[:, None].astype(Q_old.dtype) * lam), axis=1)
+    else:
+        Q_new = Q_old / (1 + t.astype(Q_old.dtype) * Q_old)
+        qratio = Q_new / Q_old
     new_amplitude = beamlets.amplitude * qratio * axial_phase.astype(Q_old.dtype)
 
     return BeamletBundle(
@@ -395,7 +426,13 @@ def apply_thin_lens_to_beamlets(
     xp = array_namespace(beamlets.positions)
     cx, cy = centre
 
-    Q_new = beamlets.Q - (1.0 / focal_length)
+    if _q_is_tensor(beamlets.Q):
+        # v5.21: tensor Q -- an ideal (rotationally-symmetric) lens subtracts
+        # 1/f from BOTH principal curvatures, i.e. (1/f) I2.
+        I2 = xp.eye(2, dtype=beamlets.Q.dtype)[None, :, :]
+        Q_new = beamlets.Q - (1.0 / focal_length) * I2
+    else:
+        Q_new = beamlets.Q - (1.0 / focal_length)
 
     x_off = beamlets.positions[..., 0] - cx
     y_off = beamlets.positions[..., 1] - cy
@@ -499,17 +536,21 @@ def reconstruct_field_from_beamlets(
     dx: float,
     centre: Tuple[float, float] = (0.0, 0.0),
     wavelength: float,
+    dy: Optional[float] = None,
     chunk_beamlets: int = 4096,
 ) -> np.ndarray:
     """Coherently sum every beamlet's transverse profile on a 2-D
-    output grid."""
+    output grid.  ``dy`` (default ``dx``) sets the y-axis output pitch for an
+    anamorphic grid."""
     xp = array_namespace(beamlets.positions)
     cx, cy = centre
+    if dy is None:
+        dy = dx
 
     ix = xp.arange(Nx, dtype=beamlets.positions.dtype)
     iy = xp.arange(Ny, dtype=beamlets.positions.dtype)
     Xg, Yg = xp.meshgrid((ix - Nx / 2) * dx + cx,
-                         (iy - Ny / 2) * dx + cy,
+                         (iy - Ny / 2) * dy + cy,
                          indexing='xy')
 
     k = 2 * float(np.pi) / wavelength
@@ -650,6 +691,8 @@ def propagate_gbd_freespace(
     output_grid: Optional[Tuple[int, int]] = None,
     output_dx: Optional[float] = None,
     output_centre: Tuple[float, float] = (0.0, 0.0),
+    dy: Optional[float] = None,
+    output_dy: Optional[float] = None,
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
@@ -660,6 +703,10 @@ def propagate_gbd_freespace(
     ``direction_sampling=True`` selects the Husimi (position + direction)
     decomposition -- needed for a source that is already tilted / diverging
     at the input plane; see :func:`decompose_field_to_beamlets`.
+
+    ``dy`` (source y-pitch, default ``dx``) and ``output_dy`` (output y-pitch,
+    default ``output_dx``) support **anamorphic** grids: ``dy != dx`` makes each
+    beamlet an axis-aligned ellipse (a diagonal tensor ``Q``).
 
     .. note::
        This function uses a non-canonical argument order
@@ -684,9 +731,11 @@ def propagate_gbd_freespace(
     )
     if output_dx is None:
         output_dx = dx
+    if output_dy is None:
+        output_dy = dy if dy is not None else output_dx
 
     bundle = decompose_field_to_beamlets(
-        E_in, dx, wavelength=wavelength,
+        E_in, dx, wavelength=wavelength, dy=dy,
         waist_factor=waist_factor,
         sample_step=sample_step,
         direction_sampling=direction_sampling,
@@ -694,7 +743,7 @@ def propagate_gbd_freespace(
     bundle = propagate_beamlets_freespace(bundle, z_distance=z,
                                           wavelength=wavelength)
     return reconstruct_field_from_beamlets(
-        bundle, Ny=Ny, Nx=Nx, dx=output_dx,
+        bundle, Ny=Ny, Nx=Nx, dx=output_dx, dy=output_dy,
         centre=output_centre, wavelength=wavelength,
         chunk_beamlets=chunk_beamlets,
     )
@@ -927,7 +976,14 @@ def apply_abcd_to_beamlets(
 
     # Q evolution.
     Q_old = beamlets.Q
-    Q_new = (C + D * Q_old) / (A + B * Q_old)
+    if _q_is_tensor(Q_old):
+        # v5.21: tensor Q -- generalized (matrix) Collins with scalar blocks
+        # A,B,C,D -> A I2 etc.
+        _I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
+        Q_new = (C * _I2 + D * Q_old) @ xp.linalg.inv(A * _I2 + B * Q_old)
+        Q_new = 0.5 * (Q_new + xp.transpose(Q_new, (0, 2, 1)))
+    else:
+        Q_new = (C + D * Q_old) / (A + B * Q_old)
 
     # Base-ray paraxial transform: ray height x and slope u.
     x_in = beamlets.positions[..., 0]
@@ -972,7 +1028,11 @@ def apply_abcd_to_beamlets(
     # parameterisation (Q = 1/q_code, q_code = conj(q_physics)); ABCD
     # elements are real so the Collins factor commutes with that
     # convention.
-    qratio = 1.0 / (A + B * Q_old)
+    if _q_is_tensor(Q_old):
+        _I2 = xp.eye(2, dtype=Q_old.dtype)[None, :, :]
+        qratio = 1.0 / xp.sqrt(xp.linalg.det(A * _I2 + B * Q_old))
+    else:
+        qratio = 1.0 / (A + B * Q_old)
     # 4.10.2: include the chief-ray axial OPL phase exp(+i*k*L_chief)
     # when supplied.  The three-leg helpers (propagate_gbd_freespace,
     # propagate_gbd_thin_lens) accumulate this leg-wise; the single-
