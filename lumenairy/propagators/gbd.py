@@ -36,9 +36,12 @@ Limitations:
   edges; HFPI handles hard cutoffs better.
 * **Caustic-region accuracy** -- like all paraxial complex-ray
   methods, GBD's accuracy degrades near a caustic.
-* **Polarization** -- the vector helper propagates the Jones components
-  independently (exact for non-polarizing / free-space systems); Fresnel s/p
-  at surfaces (polarization ray tracing) is a future extension.
+* **Polarization** -- ``propagate_gbd_freespace_vector`` propagates the Jones
+  components independently (exact for non-polarizing / free-space systems);
+  ``propagate_gbd_vector_through_prescription`` carries the vector field through
+  a real prescription applying per-surface Fresnel s/p transmission
+  (polarization ray tracing).  Reflection / thin-film coatings build on the same
+  base-ray trace and remain a future extension.
 
 See ``REFERENCES.txt`` Section C for the foundational publications.
 
@@ -836,13 +839,13 @@ def propagate_gbd_freespace_vector(
     and reconstructed on its own and the vector field is reassembled.
 
     .. note::
-       Polarization-**changing** elements -- Fresnel transmission/reflection at
-       tilted or high-NA surfaces, waveplates, diattenuators -- are NOT modeled
-       here: that requires per-surface s/p (Jones/polarization ray tracing)
-       along each base ray, a documented future extension built on the same
-       differential-ray-transfer trace as the ``per_surface`` scalar path.  For
-       coordinate-frame / non-polarizing free-space and thin-element systems the
-       independent-component propagation is exact.
+       This free-space helper models only polarization-**preserving**
+       propagation (independent components).  For **polarization-changing**
+       transmission through a real prescription -- per-surface Fresnel s/p
+       diattenuation along each base ray -- use
+       :func:`propagate_gbd_vector_through_prescription`.  Reflection at
+       surfaces, waveplates, and thin-film coatings build on the same base-ray
+       trace and remain future extensions.
 
     Parameters
     ----------

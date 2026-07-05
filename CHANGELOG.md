@@ -70,13 +70,34 @@ All notable changes to the core library are documented here.
     (`direction_sampling=`), so a tilted source focuses at `f·tanθ`.
   - **Aperture vignetting** (`apply_aperture_to_beamlets`, `aperture_semi_
     diameter=`), **polychromatic** (`propagate_gbd_freespace_spectral`,
-    stack/incoherent-intensity), **vector / Jones** (`propagate_gbd_freespace_
-    vector`; independent-component free-space, Fresnel-at-surface deferred),
-    **auto-sampling** (`recommend_gbd_sampling`), and a **tensor-Q reconstruction**
-    branch (isotropic reduces to scalar at 2.3e-15).
+    stack/incoherent-intensity), **auto-sampling** (`recommend_gbd_sampling`),
+    and a **tensor-Q reconstruction** branch (isotropic reduces to scalar at
+    2.3e-15).
+  - **Anamorphic (`dy != dx`) sampling** — `decompose_field_to_beamlets` /
+    `reconstruct_field_from_beamlets` / `propagate_gbd_freespace(..., dy=,
+    output_dy=)` accept a separate `y` pitch, decomposing into **elliptical
+    (diagonal-tensor-`Q`) beamlets**; a physically circular Gaussian on a
+    `dy = 2·dx` grid propagates and stays circular.  `dy=None`/`dy=dx` keeps the
+    scalar circular-beamlet path **byte-identical** (the tensor-`Q` core
+    generalization is opt-in).
+  - **Vector / Jones with polarization ray tracing** — free-space
+    `propagate_gbd_freespace_vector` (independent-component), and through a real
+    prescription `propagate_gbd_vector_through_prescription` applies **per-surface
+    Fresnel s/p transmission** along each beamlet's base ray
+    (`_fresnel_jones_matrix_per_beamlet`, a per-beamlet `(2,2)` transverse Jones
+    matrix; s channel transverse-exact, p channel with the honest `cos θ_out`
+    projection; vignetted rays zeroed, never NaN).  Validated: an x-polarized
+    beam through a singlet carries the two-surface near-axis Fresnel power
+    transmission `T1·T2` (0.9179 = 0.9581²) with cross-pol at the symmetry
+    floor.  Transmission only (reflection / thin-film coatings build on the same
+    base-ray trace and remain a documented extension).
   - **JAX-differentiable** free-space / thin-lens paths (backend-dispatched;
-    `jax.grad` / `jax.jit` validated).
-  Tests: `tests/unit/test_gbd_feature_complete.py`.
+    `jax.grad` / `jax.jit` validated), plus a differentiable per-ray transfer
+    `raytrace.ray_transfer_jacobian_jax` (`jax.jacfwd` around `trace_jax`,
+    vmapped) — the gradient foundation for per-surface GBD lens design (matches
+    the NumPy finite-difference primitive at low NA; the `_transfer_jax` high-NA
+    `B`-block caveat is documented in `raytrace/differential.py`).
+  Tests: `tests/unit/test_gbd_feature_complete.py` (16 tests).
 
 ## [5.20.0] — 2026-07-04
 
