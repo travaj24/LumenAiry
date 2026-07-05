@@ -925,6 +925,115 @@ def apply_abcd_to_beamlets(
     )
 
 
+def apply_prescription_persurface_to_beamlets(
+    beamlets: BeamletBundle,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    *,
+    z_image: Optional[float] = None,
+) -> BeamletBundle:
+    """Per-surface tensor-Q evolution of a beamlet bundle through a prescription.
+
+    The per-element form of :func:`apply_abcd_to_beamlets` (which applies a
+    single whole-system paraxial ABCD).  Each beamlet's complex parameter is
+    evolved **surface by surface** via the real per-ray differential ray
+    transfer (:func:`lumenairy.raytrace.ray_transfer_jacobian`), so the
+    scalar ``Q`` promotes to a ``(N, 2, 2)`` complex-symmetric TENSOR that
+    captures off-axis **astigmatism** and higher-order aberration the paraxial
+    system ABCD cannot.  The beamlets are carried through the refracting
+    surfaces (generalized Collins ``Q_out = (C + D Q)(A + B Q)^{-1}``, amplitude
+    ``1/sqrt(det(A + B Q))`` accumulated per surface so the sqrt branch stays
+    unambiguous, plus the base-ray OPL piston), then a branch-safe tensor
+    free-space to the image plane.
+
+    NumPy backend (the trace + finite-difference Jacobian are numpy); the
+    returned bundle's tensor ``Q`` reconstructs via the tensor branch of
+    :func:`reconstruct_field_from_beamlets`.  Dead beamlets (vignette / TIR /
+    miss) are dropped.
+
+    Parameters
+    ----------
+    beamlets : BeamletBundle
+        Source-plane bundle (scalar or tensor Q).
+    prescription : dict
+    wavelength : float
+    z_image : float, optional
+        Axial distance from the last surface vertex to the output/image plane
+        [m].  Defaults to the system back focal length
+        (``system_abcd_prescription`` BFL).
+    """
+    import copy as _copy
+
+    from ..raytrace import surfaces_from_prescription, system_abcd_prescription
+    from ..raytrace.differential import ray_transfer_jacobian
+
+    surfs = list(surfaces_from_prescription(prescription))
+    if z_image is None:
+        _res = system_abcd_prescription(prescription, wavelength)
+        z_image = float(_res[2])
+    # Trace to the LAST surface vertex (zero its transfer); the image-side
+    # free-space is done branch-safe below (its single leg crosses the focus).
+    surfs[-1] = _copy.copy(surfs[-1])
+    try:
+        surfs[-1].thickness = 0.0
+    except (AttributeError, TypeError):
+        pass
+
+    pos = np.asarray(beamlets.positions)
+    dr = np.asarray(beamlets.directions)
+    x = pos[:, 0].astype(np.float64)
+    y = pos[:, 1].astype(np.float64)
+    Nz = dr[:, 2]
+    ux = (dr[:, 0] / Nz).astype(np.float64)
+    uy = (dr[:, 1] / Nz).astype(np.float64)
+
+    dt = ray_transfer_jacobian(x, y, ux, uy, surfs, wavelength,
+                               per_surface=True)
+    n = x.shape[0]
+    I2 = np.eye(2)[None, :, :]
+    Qsrc = np.asarray(beamlets.Q)
+    Q = (Qsrc.astype(np.complex128) if _q_is_tensor(Qsrc)
+         else Qsrc[:, None, None] * I2)
+    amp = np.ones(n, dtype=np.complex128)
+    k0 = 2.0 * np.pi / wavelength
+
+    for k in range(dt.jacobian.shape[0]):
+        J = dt.jacobian[k]
+        A = J[:, 0:2, 0:2]
+        B = J[:, 0:2, 2:4]
+        C = J[:, 2:4, 0:2]
+        D = J[:, 2:4, 2:4]
+        ABQ = A + B @ Q
+        amp = amp / np.sqrt(np.linalg.det(ABQ))
+        Q = (C + D @ Q) @ np.linalg.inv(ABQ)
+        Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    # base-ray OPL piston (input plane -> last vertex): where the wavefront
+    # aberration enters (different beamlets accumulate different OPL).
+    amp = amp * np.exp(1j * k0 * dt.opd)
+
+    # branch-safe tensor free-space to the image plane (per-eigenvalue sqrt so
+    # the focus-crossing Gouy phase is unambiguous; eigenvalues have Im<0).
+    inv = 1.0 / np.sqrt(1.0 + dt.ux ** 2 + dt.uy ** 2)
+    Lx = dt.ux * inv
+    My = dt.uy * inv
+    Nz2 = inv
+    t = z_image / Nz2
+    lam = np.linalg.eigvals(Q)
+    amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
+    amp = amp * np.exp(1j * k0 * t)
+    Q = Q @ np.linalg.inv(I2 + t[:, None, None] * Q)
+    Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    new_pos = np.stack([dt.x + t * Lx, dt.y + t * My,
+                        np.zeros_like(dt.x)], axis=-1)
+    new_dir = np.stack([Lx, My, Nz2], axis=-1)
+    new_amp = np.asarray(beamlets.amplitude) * amp
+    alive = np.asarray(dt.alive, dtype=bool)
+    w0 = np.asarray(beamlets.waist0)
+    return BeamletBundle(
+        positions=new_pos[alive], directions=new_dir[alive], Q=Q[alive],
+        amplitude=new_amp[alive], waist0=w0[alive])
+
+
 def propagate_gbd_through_prescription(
     E_in: np.ndarray,
     dx: float,
@@ -939,6 +1048,8 @@ def propagate_gbd_through_prescription(
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
     direction_sampling: bool = False,
+    per_surface: bool = False,
+    z_image: Optional[float] = None,
 ) -> np.ndarray:
     """End-to-end GBD through a sequential lumenairy prescription
     via system ABCD evolution.
@@ -948,11 +1059,19 @@ def propagate_gbd_through_prescription(
     base ray by the prescription's paraxial system ABCD matrix,
     and coherently reconstructs the output field.
 
-    This is the **paraxial** GBD form: it reduces to the
-    Collins integral applied beamlet-by-beamlet.  For wide-field
-    or strongly-aberrated systems the per-surface evolution form
-    (not yet implemented; tracked as a future extension) gives
-    higher accuracy.
+    Two forms, selected by ``per_surface``:
+
+    * ``per_surface=False`` (default) -- the **paraxial** form: a single
+      whole-system ABCD applied beamlet-by-beamlet (the Collins integral).
+      Exact for well-corrected / paraxial systems; carries no aberration.
+    * ``per_surface=True`` -- the **per-element** form: each beamlet's
+      complex parameter is evolved surface-by-surface via the real per-ray
+      differential ray transfer, promoting ``Q`` to a ``(N, 2, 2)`` tensor
+      that captures off-axis **astigmatism** (tangential/sagittal focal
+      separation growing ~field^2) and higher-order aberration.  NumPy
+      backend; see :func:`apply_prescription_persurface_to_beamlets` and
+      :func:`lumenairy.raytrace.ray_transfer_jacobian`.  ``z_image`` sets the
+      last-vertex-to-output distance (defaults to the system BFL).
 
     ``direction_sampling=True`` selects the Husimi (position + direction)
     decomposition so a source already tilted / diverging at the input
@@ -994,6 +1113,18 @@ def propagate_gbd_through_prescription(
         sample_step=sample_step,
         direction_sampling=direction_sampling,
     )
+
+    if per_surface:
+        # Per-element form: evolve each beamlet's tensor Q surface-by-surface
+        # via the real per-ray differential ray transfer (captures off-axis
+        # astigmatism / aberration the single whole-system ABCD cannot).
+        bundle = apply_prescription_persurface_to_beamlets(
+            bundle, prescription, wavelength, z_image=z_image)
+        return reconstruct_field_from_beamlets(
+            bundle, Ny=Ny, Nx=Nx, dx=output_dx,
+            centre=output_centre, wavelength=wavelength,
+            chunk_beamlets=chunk_beamlets,
+        )
 
     # Get the system's paraxial ABCD matrix.  ``system_abcd_prescription``
     # returns ``(matrix, efl, bfl)``.
@@ -1081,6 +1212,7 @@ __all__ = [
     'apply_thin_lens_to_beamlets',
     'apply_aperture_to_beamlets',
     'apply_abcd_to_beamlets',
+    'apply_prescription_persurface_to_beamlets',
     'reconstruct_field_from_beamlets',
     'propagate_gbd_freespace',
     'propagate_gbd_freespace_spectral',

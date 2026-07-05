@@ -160,3 +160,86 @@ def test_recommend_sampling_scales_with_field_structure_and_roundtrips():
     rel = np.linalg.norm((np.abs(recon) - np.abs(smooth))[m]) / \
         np.linalg.norm(np.abs(smooth)[m])
     assert rel < 0.1, rel
+
+
+# --------------------------------------------------------------------------
+# Per-surface tensor-Q GBD + the differential-ray-transfer primitive
+# --------------------------------------------------------------------------
+def _singlet(last=0.0):
+    return {'name': 's', 'aperture_diameter': 12e-3,
+            'surfaces': [
+                {'radius': 51.5e-3, 'conic': 0., 'glass_before': 'air',
+                 'glass_after': 'N-BK7', 'semi_diameter': 6e-3},
+                {'radius': -51.5e-3, 'conic': 0., 'glass_before': 'N-BK7',
+                 'glass_after': 'air', 'semi_diameter': 6e-3}],
+            'thicknesses': [4e-3, last]}
+
+
+def test_ray_transfer_jacobian_matches_paraxial_abcd():
+    """The differential-ray-transfer primitive's on-axis 2x2 meridional block
+    reproduces the analytic paraxial system ABCD -- i.e. system_abcd is exactly
+    its paraxial limit."""
+    from lumenairy.raytrace import (
+        ray_transfer_jacobian,
+        surfaces_from_prescription,
+        system_abcd_prescription,
+    )
+    surfs = surfaces_from_prescription(_singlet())
+    Msys = np.asarray(system_abcd_prescription(_singlet(), LAM)[0])
+    z = np.zeros(1)
+    dt = ray_transfer_jacobian(z, z, z, z, surfs, LAM)
+    J = dt.jacobian[0]
+    xblk = np.array([[J[0, 0], J[0, 2]], [J[2, 0], J[2, 2]]])
+    assert np.max(np.abs(xblk - Msys)) < 1e-6
+
+
+def test_persurface_reduces_isotropic_on_axis():
+    """per_surface=True on an on-axis field gives an isotropic (round) focus --
+    it reduces to the rotationally-symmetric result, no regression."""
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+    N, dx = 160, 18e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2).astype(np.complex128)
+    F = propagate_gbd_through_prescription(
+        E, dx, _singlet(), wavelength=LAM, per_surface=True,
+        output_dx=3e-6, output_shape=(96, 96), sample_step=2, waist_factor=2.0)
+    assert np.isfinite(F).all()
+    xf = (np.arange(96) - 48) * 3e-6
+    Xf, Yf = np.meshgrid(xf, xf)
+    I = np.abs(F) ** 2
+    s = I.sum()
+    sx = np.sqrt((I * (Xf - (I * Xf).sum() / s) ** 2).sum() / s)
+    sy = np.sqrt((I * (Yf - (I * Yf).sum() / s) ** 2).sum() / s)
+    assert abs(sx / sy - 1.0) < 0.05, (sx, sy)
+
+
+def test_persurface_captures_off_axis_astigmatism():
+    """per_surface=True at an off-axis field produces a strongly astigmatic
+    (line-like) focus -- the tangential and sagittal foci separate -- which the
+    paraxial single-ABCD form cannot.  Measured as focal-spot ellipticity far
+    from 1 off-axis vs ~1 on-axis."""
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+    from lumenairy.raytrace import system_abcd_prescription
+    N, dx = 160, 18e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    efl = float(system_abcd_prescription(_singlet(), LAM)[1])
+    th = np.radians(6.0)
+    E = (np.exp(-(X ** 2 + Y ** 2) / (1.2e-3) ** 2)
+         * np.exp(1j * 2 * np.pi / LAM * np.sin(th) * X)).astype(np.complex128)
+    F = propagate_gbd_through_prescription(
+        E, dx, _singlet(), wavelength=LAM, per_surface=True,
+        output_dx=3e-6, output_shape=(96, 96), sample_step=2, waist_factor=2.0,
+        direction_sampling=True, output_centre=(efl * np.tan(th), 0.0))
+    assert np.isfinite(F).all()
+    xf = (np.arange(96) - 48) * 3e-6
+    Xf, Yf = np.meshgrid(xf, xf)
+    I = np.abs(F) ** 2
+    s = I.sum()
+    assert s > 0
+    sx = np.sqrt((I * (Xf - (I * Xf).sum() / s) ** 2).sum() / s)
+    sy = np.sqrt((I * (Yf - (I * Yf).sum() / s) ** 2).sum() / s)
+    ellip = sx / sy
+    # strongly astigmatic: one axis focuses much tighter than the other
+    assert (ellip < 0.5) or (ellip > 2.0), ellip

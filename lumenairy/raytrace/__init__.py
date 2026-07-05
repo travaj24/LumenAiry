@@ -16,7 +16,7 @@ from .bundles import (
     ray_to_beamlet,
     ray_to_path,
 )
-from .core import (
+from .core import (  # noqa: E402  (continuation of the .core import list)
     RAY_APERTURE,
     RAY_EVANESCENT,
     RAY_MISSED_SURFACE,
@@ -69,6 +69,10 @@ from .core import (
     trace_world,
     validate_prescription,
 )
+from .differential import (  # noqa: E402
+    DifferentialTransfer,
+    ray_transfer_jacobian,
+)
 
 # v4.15.1 (Cluster B Item 6): bridge a coherent field into a RayBundle.
 from .from_field import rays_from_field
@@ -120,6 +124,8 @@ __all__ = [
     'trace_prescription',
     'system_abcd',
     'system_abcd_prescription',
+    'ray_transfer_jacobian',
+    'DifferentialTransfer',
     'seidel_coefficients',
     'seidel_prescription',
     'seidel_field_sweep',
