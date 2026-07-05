@@ -231,12 +231,36 @@ factorized quadrature (`_integrate_quadrature_cupy`). The CPU integrator is left
 **byte-for-byte untouched** (zero regression risk); the CuPy twin's math is
 validated byte-identical to the CPU integrator with a NumPy backend
 (`max|dE| = 0`), and on-device against the 4070 Ti to **5e-16** complex L2 with a
-**35x** speedup at N=192 (auto-`n_v2`). Scope: `integration_method='quadrature'`
-only (the asymptotic evaluators' Numba per-pixel-saddle kernel has no CuPy twin
-yet and raise under `use_gpu`); returns a device array (`cupy.asnumpy` to pull
-to host). Anamorphic + GPU compose (GPU vs CPU anamorphic = 3e-16). JAX
+**35x** speedup at N=192 (auto-`n_v2`). Returns a device array (`cupy.asnumpy`
+to pull to host). Anamorphic + GPU compose (GPU vs CPU anamorphic = 3e-16). JAX
 phase-space twin deferred (owner steer: "CuPy now, JAX later"). Tests:
 `test_gpu_*` (skipped when CuPy/cublas absent).
+
+### 4.5 GPU asymptotic evaluators (post-v5.20 follow-up)
+
+v5.20 GPU'd only the robust-but-slow default (`quadrature`); the *fast
+production* evaluators (`stationary_phase` / `local_quadrature`) still raised
+under `use_gpu`. This closes that gap so all three integrators run on the
+device. The asymptotic evaluators share a per-pixel Newton saddle solve + a
+Chebyshev value/derivative kernel (`_opd6`); the GPU twins
+(`_integrate_stationary_phase_cupy`, `_integrate_local_quadrature_cupy`) reuse a
+shared xp-dispatched kernel (`_opd6_xp`) and Newton helper
+(`_maslov_newton_saddle_xp`, which processes all pixels each iteration and
+freezes converged ones — the SIMD form, numerically equivalent to the CPU
+active-subset loop). The CPU integrators are left untouched.
+
+**Key lesson — the naive port was slower than the CPU.** A first cut had
+`_opd6_xp` mirror the *numpy* kernel, which materializes `(M, n)` temporaries
+(~1.7 GB at `n ~ 1e6`) → memory-bound: **0.5x** (stationary_phase) and **0.1x**
+(local_quadrature, i.e. 10x *slower*) at N=192. The fix is a fused CuPy
+`RawKernel` (`_opd6_cupy`) that mirrors the Numba per-pixel stack recurrence —
+one thread per query point, O(P) local memory, no `(M, n)` globals. That turned
+it into a genuine speedup that grows with N: **stationary_phase 1.8–1.9x**,
+**local_quadrature 6.4x (N=192) → 10.4x (N=384)** on a 4070 Ti, matching the
+CPU integrator to **~1e-12** (complex64 byte-identical; anamorphic composes).
+`_opd6_xp` still uses the numpy `(M, n)` path for `xp=np` (byte-identical to
+`_opd6_numpy`, used for validation). Cap: `poly_order <= 23` on the GPU path
+(`_MZ_CUPY_PMAX`, per-thread local arrays). Tests: `test_gpu_asymptotic_*`.
 
 ## 5. Consumer wiring (Reverse_Symmetric_ASM, not this repo)
 

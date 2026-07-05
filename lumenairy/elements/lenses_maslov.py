@@ -278,6 +278,193 @@ def _opd6(coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
     return _opd6_numpy(coef, K1, K2, K3, K4, u1, u2, u3, u4, P)
 
 
+# CuPy fused kernel for the 4-var Chebyshev value+derivs -- the device twin of
+# the Numba ``_cheb4d_opd_derivs``.  One thread per query point runs the O(P)
+# T/U/T'/T'' recurrences in local memory then loops over the M multi-indices,
+# so it avoids the (M, n) global temporaries the numpy-style ``_opd6_xp`` path
+# materializes (~1.7 GB at n~1e6) -- those temporaries make the asymptotic
+# evaluators MEMORY-BOUND and slower than the CPU on the GPU.  PMAX bounds the
+# per-thread local arrays (poly_order + 1 <= PMAX).
+_MZ_CUPY_KERNELS = {}
+_MZ_CUPY_PMAX = 24
+_MZ_CHEB4D_CUDA = r'''
+extern "C" __global__ void cheb4d_opd_derivs(
+    const double* coef, const long long* K1, const long long* K2,
+    const long long* K3, const long long* K4,
+    const double* u1, const double* u2, const double* u3, const double* u4,
+    const int P, const int M, const long long n,
+    double* f, double* df3, double* df4,
+    double* d233, double* d234, double* d244)
+{
+    long long i = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n) return;
+    const int PM = %d;
+    double a1 = u1[i], a2 = u2[i], a3 = u3[i], a4 = u4[i];
+    double Tu1[PM], Tu2[PM], Tu3[PM], Tu4[PM];
+    double Uu3[PM], Uu4[PM], dTu3[PM], dTu4[PM], d2Tu3[PM], d2Tu4[PM];
+    Tu1[0] = Tu2[0] = Tu3[0] = Tu4[0] = 1.0;
+    if (P >= 1) { Tu1[1] = a1; Tu2[1] = a2; Tu3[1] = a3; Tu4[1] = a4; }
+    for (int m = 2; m <= P; ++m) {
+        Tu1[m] = 2.0 * a1 * Tu1[m-1] - Tu1[m-2];
+        Tu2[m] = 2.0 * a2 * Tu2[m-1] - Tu2[m-2];
+        Tu3[m] = 2.0 * a3 * Tu3[m-1] - Tu3[m-2];
+        Tu4[m] = 2.0 * a4 * Tu4[m-1] - Tu4[m-2];
+    }
+    Uu3[0] = Uu4[0] = 1.0;
+    if (P >= 1) { Uu3[1] = 2.0 * a3; Uu4[1] = 2.0 * a4; }
+    for (int m = 2; m <= P; ++m) {
+        Uu3[m] = 2.0 * a3 * Uu3[m-1] - Uu3[m-2];
+        Uu4[m] = 2.0 * a4 * Uu4[m-1] - Uu4[m-2];
+    }
+    for (int m = 0; m <= P; ++m) { dTu3[m] = 0.0; dTu4[m] = 0.0;
+                                   d2Tu3[m] = 0.0; d2Tu4[m] = 0.0; }
+    for (int m = 1; m <= P; ++m) { dTu3[m] = (double)m * Uu3[m-1];
+                                   dTu4[m] = (double)m * Uu4[m-1]; }
+    if (P >= 2) { d2Tu3[2] = 4.0; d2Tu4[2] = 4.0; }
+    for (int m = 2; m < P; ++m) {
+        d2Tu3[m+1] = 2.0 * a3 * d2Tu3[m] + 4.0 * dTu3[m] - d2Tu3[m-1];
+        d2Tu4[m+1] = 2.0 * a4 * d2Tu4[m] + 4.0 * dTu4[m] - d2Tu4[m-1];
+    }
+    double sf = 0.0, sdf3 = 0.0, sdf4 = 0.0;
+    double sd233 = 0.0, sd234 = 0.0, sd244 = 0.0;
+    for (int mm = 0; mm < M; ++mm) {
+        int k1 = (int)K1[mm], k2 = (int)K2[mm];
+        int k3 = (int)K3[mm], k4 = (int)K4[mm];
+        double base = coef[mm] * Tu1[k1] * Tu2[k2];
+        double t3 = Tu3[k3], t4 = Tu4[k4];
+        double dt3 = dTu3[k3], dt4 = dTu4[k4];
+        sf   += base * t3 * t4;
+        sdf3 += base * dt3 * t4;
+        sdf4 += base * t3 * dt4;
+        sd233 += base * d2Tu3[k3] * t4;
+        sd244 += base * t3 * d2Tu4[k4];
+        sd234 += base * dt3 * dt4;
+    }
+    f[i] = sf; df3[i] = sdf3; df4[i] = sdf4;
+    d233[i] = sd233; d234[i] = sd234; d244[i] = sd244;
+}
+''' % _MZ_CUPY_PMAX
+
+
+def _get_cheb4d_cupy(cp):
+    """Compile (once, cached) and return the CuPy RawKernel twin of the Numba
+    4-var Chebyshev value+deriv kernel."""
+    if 'cheb4d' not in _MZ_CUPY_KERNELS:
+        _MZ_CUPY_KERNELS['cheb4d'] = cp.RawKernel(
+            _MZ_CHEB4D_CUDA, 'cheb4d_opd_derivs')
+    return _MZ_CUPY_KERNELS['cheb4d']
+
+
+def _opd6_cupy(cp, coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """Device evaluation of the 4-var Chebyshev value + v2 derivatives via the
+    fused RawKernel (one thread per query point).  Result-close to the Numba /
+    NumPy kernels (~1e-13; strict-IEEE vs numba fastmath reassociation)."""
+    if P + 1 > _MZ_CUPY_PMAX:
+        raise ValueError(
+            f"apply_real_lens_maslov: use_gpu asymptotic evaluators support "
+            f"poly_order <= {_MZ_CUPY_PMAX - 1} (got {P}); raise _MZ_CUPY_PMAX "
+            f"or use use_gpu=False.")
+    coef = cp.ascontiguousarray(coef, dtype=cp.float64)
+    K1 = cp.ascontiguousarray(K1, dtype=cp.int64)
+    K2 = cp.ascontiguousarray(K2, dtype=cp.int64)
+    K3 = cp.ascontiguousarray(K3, dtype=cp.int64)
+    K4 = cp.ascontiguousarray(K4, dtype=cp.int64)
+    u1 = cp.ascontiguousarray(u1, dtype=cp.float64)
+    u2 = cp.ascontiguousarray(u2, dtype=cp.float64)
+    u3 = cp.ascontiguousarray(u3, dtype=cp.float64)
+    u4 = cp.ascontiguousarray(u4, dtype=cp.float64)
+    n = int(u1.shape[0])
+    M = int(coef.shape[0])
+    outs = [cp.empty(n, dtype=cp.float64) for _ in range(6)]
+    kern = _get_cheb4d_cupy(cp)
+    threads = 128
+    blocks = (n + threads - 1) // threads
+    kern((blocks,), (threads,),
+         (coef, K1, K2, K3, K4, u1, u2, u3, u4,
+          np.int32(P), np.int32(M), np.int64(n),
+          outs[0], outs[1], outs[2], outs[3], outs[4], outs[5]))
+    return tuple(outs)
+
+
+def _opd6_xp(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, P):
+    """xp-dispatched (NumPy or CuPy) twin of :func:`_opd6_numpy` -- the 4-var
+    Chebyshev value + v2 first/second derivatives.  With ``xp=np`` it is
+    byte-identical to ``_opd6_numpy`` (the numpy (M, n) path); with ``xp=cupy``
+    it dispatches to the fused :func:`_opd6_cupy` RawKernel (per-pixel, no
+    (M, n) temporaries) so the asymptotic evaluators are actually FAST on the
+    GPU rather than memory-bound.  Returns
+    ``(f, df_du3, df_du4, d2f_33, d2f_34, d2f_44)``.
+    """
+    if xp is not np:
+        return _opd6_cupy(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, P)
+    T1 = _chebyshev_vandermonde(u1, P, xp=xp)
+    T2 = _chebyshev_vandermonde(u2, P, xp=xp)
+    T3 = _chebyshev_vandermonde(u3, P, xp=xp)
+    T4 = _chebyshev_vandermonde(u4, P, xp=xp)
+    dT3 = _chebyshev_derivative_vandermonde(u3, P, xp=xp)
+    dT4 = _chebyshev_derivative_vandermonde(u4, P, xp=xp)
+    d2T3 = _chebyshev_second_derivative_vandermonde(u3, P, xp=xp)
+    d2T4 = _chebyshev_second_derivative_vandermonde(u4, P, xp=xp)
+    T1b = T1[K1]
+    T2b = T2[K2]
+    T3b = T3[K3]
+    T4b = T4[K4]
+    dT3b = dT3[K3]
+    dT4b = dT4[K4]
+    d2T3b = d2T3[K3]
+    d2T4b = d2T4[K4]
+    T12 = T1b * T2b
+    c = coef[:, None]
+    f = xp.sum(c * T12 * T3b * T4b, axis=0)
+    df_du3 = xp.sum(c * T12 * dT3b * T4b, axis=0)
+    df_du4 = xp.sum(c * T12 * T3b * dT4b, axis=0)
+    d2f_33 = xp.sum(c * T12 * d2T3b * T4b, axis=0)
+    d2f_44 = xp.sum(c * T12 * T3b * d2T4b, axis=0)
+    d2f_34 = xp.sum(c * T12 * dT3b * dT4b, axis=0)
+    return f, df_du3, df_du4, d2f_33, d2f_34, d2f_44
+
+
+def _maslov_newton_saddle_xp(xp, opd6, coef_opd, u_s2x, u_s2y, inbox_flat,
+                             newton_iter, newton_tol, lin_v3, lin_v4):
+    """Per-pixel Newton solve for the v2 stationary point, shared by the
+    stationary_phase / local_quadrature GPU twins.
+
+    Unlike the CPU integrators (which shrink an ``active`` boolean subset each
+    iteration) this evaluates ALL pixels every iteration and freezes the step
+    of already-converged pixels (``dv = 0``) -- the SIMD-friendly form for the
+    GPU, and numerically equivalent to the CPU active-subset loop (a frozen
+    pixel's ``u_v2`` never changes, so its later gradients are irrelevant).
+    Out-of-box pixels start ``converged`` (frozen at ``u_v2 = 0``) and are
+    zeroed by the caller.  Returns ``(u_v2x, u_v2y, converged)``.
+    """
+    n_px = u_s2x.shape[0]
+    u_v2x = xp.zeros(n_px, dtype=xp.float64)
+    u_v2y = xp.zeros(n_px, dtype=xp.float64)
+    converged = ~inbox_flat
+    for _it in range(newton_iter):
+        _, g3, g4, H33, H34, H44 = opd6(coef_opd, u_s2x, u_s2y, u_v2x, u_v2y)
+        g3 = g3 + lin_v3
+        g4 = g4 + lin_v4
+        det_H = H33 * H44 - H34 * H34
+        det_safe = xp.where(xp.abs(det_H) < 1e-30,
+                            xp.sign(det_H) * 1e-30 + 1e-30, det_H)
+        dv3 = -(H44 * g3 - H34 * g4) / det_safe
+        dv4 = -(-H34 * g3 + H33 * g4) / det_safe
+        step_size = xp.sqrt(dv3 ** 2 + dv4 ** 2)
+        damp = xp.where(step_size > 0.5,
+                        0.5 / xp.maximum(step_size, 1e-30), 1.0)
+        dv3 = dv3 * damp
+        dv4 = dv4 * damp
+        # Freeze already-converged (incl. out-of-box) pixels.
+        dv3 = xp.where(converged, 0.0, dv3)
+        dv4 = xp.where(converged, 0.0, dv4)
+        u_v2x = xp.clip(u_v2x + dv3, -1.0, 1.0)
+        u_v2y = xp.clip(u_v2y + dv4, -1.0, 1.0)
+        grad_mag = xp.sqrt(g3 ** 2 + g4 ** 2)
+        converged = converged | (grad_mag < newton_tol)
+    return u_v2x, u_v2y, converged
+
+
 def apply_real_lens_maslov(
     E_in: np.ndarray,
     *,
@@ -375,19 +562,19 @@ def apply_real_lens_maslov(
     per-pixel saddle rather than sample a uniform v2 grid); pass an
     explicit int to pin the sampling for reproducibility.
 
-    ``use_gpu`` (v5.20, opt-in) runs the O(N^2 * n_v2) phase-space
-    quadrature integral on the GPU via CuPy -- the same
-    ``use_gpu=True`` / cupy-array entry as ``apply_real_lens``.  The
-    cheap ray trace + Chebyshev fit stay on the host; only the integrand
-    evaluation moves to the device.  Supported for
-    ``integration_method='quadrature'`` (the default, robust integrator);
-    the asymptotic evaluators (``stationary_phase`` /
-    ``local_quadrature``) remain CPU-only for now (their Numba per-pixel
-    saddle kernel has no CuPy twin yet) and raise under ``use_gpu``.
-    Requires the ``cupy`` package; returns a CuPy device array (call
-    ``cupy.asnumpy`` to pull it back to the host).  GPU results match the
-    CPU integrator to ~1e-6 (device BLAS/reduction order, not
-    byte-identical -- like the existing numexpr-vs-numpy ULP delta).
+    ``use_gpu`` (opt-in) runs the per-pixel integrand on the GPU via
+    CuPy -- the same ``use_gpu=True`` / cupy-array entry as
+    ``apply_real_lens``.  The cheap ray trace + Chebyshev fit stay on the
+    host; only the O(N^2 * n_v2) integrand evaluation moves to the
+    device.  Supported for **all three** integrators: ``quadrature``
+    (v5.20; the Kronecker-factorized uniform quadrature) and, as of the
+    next release, the asymptotic evaluators ``stationary_phase`` /
+    ``local_quadrature`` (the per-pixel Newton saddle + Hessian signature
+    on an xp-dispatched Chebyshev kernel).  Requires the ``cupy``
+    package; returns a CuPy device array (call ``cupy.asnumpy`` to pull it
+    back to the host).  GPU results match the CPU integrator to ~1e-6
+    (device reduction order, not byte-identical -- like the existing
+    numexpr-vs-numpy ULP delta).
     """
     # v4.15.3 (P0-NEW-F2-1): defensive guard via the shared
     # ``_check_2d_scalar_field`` helper -- siblings missed by the
@@ -470,14 +657,6 @@ def apply_real_lens_maslov(
         raise ValueError(
             f"E_in must be square 2D, got shape {E_in.shape}")
     N = E_in.shape[0]
-
-    if _use_gpu and integration_method != 'quadrature':
-        raise NotImplementedError(
-            "apply_real_lens_maslov: use_gpu currently supports "
-            f"integration_method='quadrature' only (got {integration_method!r}); "
-            "the asymptotic evaluators use a Numba per-pixel saddle kernel that "
-            "has no CuPy twin yet.  Use integration_method='quadrature' for the "
-            "GPU path, or use_gpu=False for the asymptotic evaluators.")
 
     # v5.20: anamorphic (dy != dx) support.  Resolve dy on the same
     # ``None -> get_default_dy() -> dx`` chain as apply_real_lens, then thread
@@ -961,33 +1140,64 @@ def apply_real_lens_maslov(
 
     inbox_flat = inbox.ravel()
 
+    # Upload the input field to the device once for whichever GPU integrator
+    # runs below (the coarse result is pulled back to the host for the
+    # numpy post-processing, then re-uploaded at return).
+    if _use_gpu:
+        _E_in_gpu = _cp.asarray(E_in)
+
     if integration_method == 'stationary_phase':
-        E_out_coarse = _integrate_stationary_phase(
-            coef_opd, coef_s1x, coef_s1y, mi,
-            K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, N_out_coarse,
-            u_s2x_out, u_s2y_out, inbox_flat,
-            v2x_c, v2y_c, v2x_h, v2y_h,
-            sample_E_bilinear,
-            stationary_newton_iter, stationary_newton_tol,
-            _progress, verbose,
-            out_dtype=E_in.dtype,
-            lin_v3=_lin_v3, lin_v4=_lin_v4,
-        )
+        if _use_gpu:
+            E_out_coarse = _cp.asnumpy(_integrate_stationary_phase_cupy(
+                _cp, coef_opd, coef_s1x, coef_s1y,
+                K1_arr, K2_arr, K3_arr, K4_arr,
+                poly_order, N_out_coarse,
+                u_s2x_out, u_s2y_out, inbox_flat,
+                v2x_h, v2y_h,
+                _E_in_gpu, N, dx, dy,
+                stationary_newton_iter, stationary_newton_tol,
+                out_dtype=E_in.dtype, lin_v3=_lin_v3, lin_v4=_lin_v4,
+            ))
+        else:
+            E_out_coarse = _integrate_stationary_phase(
+                coef_opd, coef_s1x, coef_s1y, mi,
+                K1_arr, K2_arr, K3_arr, K4_arr,
+                poly_order, N_out_coarse,
+                u_s2x_out, u_s2y_out, inbox_flat,
+                v2x_c, v2y_c, v2x_h, v2y_h,
+                sample_E_bilinear,
+                stationary_newton_iter, stationary_newton_tol,
+                _progress, verbose,
+                out_dtype=E_in.dtype,
+                lin_v3=_lin_v3, lin_v4=_lin_v4,
+            )
     elif integration_method == 'local_quadrature':
-        E_out_coarse = _integrate_local_quadrature(
-            coef_opd, coef_s1x, coef_s1y, mi,
-            K1_arr, K2_arr, K3_arr, K4_arr,
-            poly_order, N_out_coarse,
-            u_s2x_out, u_s2y_out, inbox_flat,
-            v2x_c, v2y_c, v2x_h, v2y_h,
-            sample_E_bilinear,
-            stationary_newton_iter, stationary_newton_tol,
-            local_n_samples, local_window_sigma,
-            _progress, verbose,
-            out_dtype=E_in.dtype,
-            lin_v3=_lin_v3, lin_v4=_lin_v4,
-        )
+        if _use_gpu:
+            E_out_coarse = _cp.asnumpy(_integrate_local_quadrature_cupy(
+                _cp, coef_opd, coef_s1x, coef_s1y,
+                K1_arr, K2_arr, K3_arr, K4_arr,
+                poly_order, N_out_coarse,
+                u_s2x_out, u_s2y_out, inbox_flat,
+                v2x_h, v2y_h,
+                _E_in_gpu, N, dx, dy,
+                stationary_newton_iter, stationary_newton_tol,
+                local_n_samples, local_window_sigma,
+                out_dtype=E_in.dtype, lin_v3=_lin_v3, lin_v4=_lin_v4,
+            ))
+        else:
+            E_out_coarse = _integrate_local_quadrature(
+                coef_opd, coef_s1x, coef_s1y, mi,
+                K1_arr, K2_arr, K3_arr, K4_arr,
+                poly_order, N_out_coarse,
+                u_s2x_out, u_s2y_out, inbox_flat,
+                v2x_c, v2y_c, v2x_h, v2y_h,
+                sample_E_bilinear,
+                stationary_newton_iter, stationary_newton_tol,
+                local_n_samples, local_window_sigma,
+                _progress, verbose,
+                out_dtype=E_in.dtype,
+                lin_v3=_lin_v3, lin_v4=_lin_v4,
+            )
     else:
         # N2 (audit): estimate the v2 oscillation count of the integrand
         # phase 2*pi*OPD(s2,v2) from the fitted coefficients.  Chebyshev
@@ -1030,12 +1240,11 @@ def apply_real_lens_maslov(
         Ty_1d = _chebyshev_vandermonde(
             (out_axis_y - s2y_c) / s2y_h, poly_order)
         if _use_gpu:
-            # v5.20: GPU quadrature.  Upload E_in once, run the O(N^2 * n_v2)
-            # integrand on the device, pull the coarse field back to the host
-            # for the (numpy) upsample / linear-phase / normalize steps; the
-            # final return re-uploads to a device array (apply_real_lens
-            # convention) when use_gpu / a CuPy input was given.
-            _E_in_gpu = _cp.asarray(E_in)
+            # GPU quadrature.  Run the O(N^2 * n_v2) integrand on the device
+            # (E_in already uploaded to _E_in_gpu above), pull the coarse field
+            # back to the host for the (numpy) upsample / linear-phase /
+            # normalize steps; the final return re-uploads to a device array
+            # (apply_real_lens convention) when use_gpu / a CuPy input was given.
             E_out_coarse = _cp.asnumpy(_integrate_quadrature_cupy(
                 _cp,
                 coef_opd, coef_s1x, coef_s1y, mi,
@@ -1048,7 +1257,6 @@ def apply_real_lens_maslov(
                 out_dtype=E_in.dtype,
                 lin_v3=_lin_v3, lin_v4=_lin_v4,
             ))
-            del _E_in_gpu
         else:
             E_out_coarse = _integrate_quadrature(
                 coef_opd, coef_s1x, coef_s1y, mi,
@@ -1904,6 +2112,185 @@ def _integrate_local_quadrature(
               f'local_quadrature: {N_px} pixels, '
               f'{n_s2} samples/pixel, {t_int:.1f}s')
 
+    return E_flat.reshape(N_out_coarse, N_out_coarse)
+
+
+def _sample_bilinear_xp(xp, E_in_gpu, N, dx, dy, s1x_q, s1y_q):
+    """xp bilinear sample of the (device) input field at physical (s1x, s1y).
+    Mirrors the CPU ``sample_E_bilinear`` closure exactly (anamorphic dx/dy,
+    dtype-preserving out-of-bounds zero) for the GPU asymptotic evaluators."""
+    in0x = -(N / 2) * dx        # in_axis_x[0]
+    in0y = -(N / 2) * dy        # in_axis_y[0]
+    fx = (s1x_q - in0x) / dx
+    fy = (s1y_q - in0y) / dy
+    ix = xp.floor(fx).astype(xp.int64)
+    iy = xp.floor(fy).astype(xp.int64)
+    wx = fx - ix
+    wy = fy - iy
+    ok = (ix >= 0) & (ix < N - 1) & (iy >= 0) & (iy < N - 1)
+    ixc = xp.clip(ix, 0, N - 2)
+    iyc = xp.clip(iy, 0, N - 2)
+    e00 = E_in_gpu[iyc, ixc]
+    e10 = E_in_gpu[iyc, ixc + 1]
+    e01 = E_in_gpu[iyc + 1, ixc]
+    e11 = E_in_gpu[iyc + 1, ixc + 1]
+    val = ((1 - wx) * (1 - wy) * e00 + wx * (1 - wy) * e10
+           + (1 - wx) * wy * e01 + wx * wy * e11)
+    return xp.where(ok, val, xp.zeros((), dtype=val.dtype))
+
+
+def _integrate_stationary_phase_cupy(
+    cp, coef_opd, coef_s1x, coef_s1y,
+    K1_arr, K2_arr, K3_arr, K4_arr,
+    poly_order, N_out_coarse,
+    u_s2x_out, u_s2y_out, inbox_flat,
+    v2x_h, v2y_h,
+    E_in_gpu, N, dx, dy,
+    newton_iter, newton_tol,
+    out_dtype=np.complex128, lin_v3=0.0, lin_v4=0.0,
+):
+    """CuPy GPU twin of :func:`_integrate_stationary_phase`.
+
+    Same leading-order saddle-point (Gaussian-moment) evaluation -- per-pixel
+    Newton solve for the v2 stationary point, then the Hessian-signature
+    amplitude ``exp(i pi sig / 4) / sqrt|det H|`` -- evaluated on the device via
+    the xp-dispatched Chebyshev kernel :func:`_opd6_xp`.  The CPU integrator is
+    left untouched.  Validated against it on a NumPy backend (ULP) and on-device
+    to ~1e-6 (device reduction order + the SIMD all-pixel Newton loop vs the CPU
+    active-subset loop, numerically equivalent).
+    """
+    xp = cp
+    K1 = xp.asarray(K1_arr)
+    K2 = xp.asarray(K2_arr)
+    K3 = xp.asarray(K3_arr)
+    K4 = xp.asarray(K4_arr)
+    cop = xp.asarray(coef_opd)
+    csx = xp.asarray(coef_s1x)
+    csy = xp.asarray(coef_s1y)
+    u_s2x = xp.asarray(u_s2x_out.ravel())
+    u_s2y = xp.asarray(u_s2y_out.ravel())
+    inbox = xp.asarray(inbox_flat)
+
+    def opd6(coef, u1, u2, u3, u4):
+        return _opd6_xp(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, poly_order)
+
+    u_v2x, u_v2y, converged = _maslov_newton_saddle_xp(
+        xp, opd6, cop, u_s2x, u_s2y, inbox, newton_iter, newton_tol,
+        lin_v3, lin_v4)
+
+    opd_star, g3, g4, H33, H34, H44 = opd6(cop, u_s2x, u_s2y, u_v2x, u_v2y)
+    opd_star = opd_star + lin_v3 * u_v2x + lin_v4 * u_v2y
+    s1x_star, ds1x_du3, ds1x_du4, _, _, _ = opd6(csx, u_s2x, u_s2y, u_v2x, u_v2y)
+    s1y_star, ds1y_du3, ds1y_du4, _, _, _ = opd6(csy, u_s2x, u_s2y, u_v2x, u_v2y)
+
+    det_J_norm = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
+    abs_J = xp.abs(det_J_norm) / (v2x_h * v2y_h)
+
+    H33_phys = H33 / (v2x_h * v2x_h)
+    H34_phys = H34 / (v2x_h * v2y_h)
+    H44_phys = H44 / (v2y_h * v2y_h)
+    det_H_phys = H33_phys * H44_phys - H34_phys * H34_phys
+    trace_H = H33_phys + H44_phys
+    sig = xp.where(det_H_phys > 0,
+                   xp.where(trace_H > 0, 2.0, -2.0), 0.0)
+    amp_sp = 1.0 / xp.sqrt(xp.maximum(xp.abs(det_H_phys), 1e-300))
+    phase_sp = xp.exp(1j * (xp.pi / 4.0) * sig)
+
+    Eobj_star = _sample_bilinear_xp(xp, E_in_gpu, N, dx, dy, s1x_star, s1y_star)
+    E_flat = (Eobj_star * xp.exp(2j * xp.pi * opd_star)
+              * abs_J * amp_sp * phase_sp).astype(out_dtype)
+    # Zero in-box-non-converged (converged incl. out-of-box) then out-of-box.
+    E_flat = xp.where(converged, E_flat, xp.asarray(0, dtype=out_dtype))
+    E_flat = xp.where(inbox, E_flat, xp.asarray(0, dtype=out_dtype))
+    return E_flat.reshape(N_out_coarse, N_out_coarse)
+
+
+def _integrate_local_quadrature_cupy(
+    cp, coef_opd, coef_s1x, coef_s1y,
+    K1_arr, K2_arr, K3_arr, K4_arr,
+    poly_order, N_out_coarse,
+    u_s2x_out, u_s2y_out, inbox_flat,
+    v2x_h, v2y_h,
+    E_in_gpu, N, dx, dy,
+    newton_iter, newton_tol,
+    n_samples, window_sigma,
+    out_dtype=np.complex128, lin_v3=0.0, lin_v4=0.0,
+):
+    """CuPy GPU twin of :func:`_integrate_local_quadrature`.
+
+    Same hybrid stationary-phase + local windowed quadrature -- Newton saddle,
+    Hessian eigen-scale window (`sigma1`, `sigma2`), then an
+    ``n_samples x n_samples`` local grid integrated per pixel -- on the device.
+    CPU integrator untouched; validated NumPy-backend ULP and on-device ~1e-6.
+    """
+    xp = cp
+    K1 = xp.asarray(K1_arr)
+    K2 = xp.asarray(K2_arr)
+    K3 = xp.asarray(K3_arr)
+    K4 = xp.asarray(K4_arr)
+    cop = xp.asarray(coef_opd)
+    csx = xp.asarray(coef_s1x)
+    csy = xp.asarray(coef_s1y)
+    u_s2x = xp.asarray(u_s2x_out.ravel())
+    u_s2y = xp.asarray(u_s2y_out.ravel())
+    inbox = xp.asarray(inbox_flat)
+    N_px = N_out_coarse * N_out_coarse
+
+    def opd6(coef, u1, u2, u3, u4):
+        return _opd6_xp(xp, coef, K1, K2, K3, K4, u1, u2, u3, u4, poly_order)
+
+    u_v2x, u_v2y, converged = _maslov_newton_saddle_xp(
+        xp, opd6, cop, u_s2x, u_s2y, inbox, newton_iter, newton_tol,
+        lin_v3, lin_v4)
+
+    _, _, _, H33, H34, H44 = opd6(cop, u_s2x, u_s2y, u_v2x, u_v2y)
+    H33_phys = H33 / (v2x_h ** 2)
+    H34_phys = H34 / (v2x_h * v2y_h)
+    H44_phys = H44 / (v2y_h ** 2)
+    tau = H33_phys + H44_phys
+    detH = H33_phys * H44_phys - H34_phys ** 2
+    disc = xp.maximum(tau ** 2 / 4.0 - detH, 0.0)
+    sqrt_disc = xp.sqrt(disc)
+    lam1 = tau / 2.0 + sqrt_disc
+    lam2 = tau / 2.0 - sqrt_disc
+    sigma1_phys = 1.0 / xp.sqrt(xp.maximum(xp.abs(lam1), 1e-30) * xp.pi)
+    sigma2_phys = 1.0 / xp.sqrt(xp.maximum(xp.abs(lam2), 1e-30) * xp.pi)
+    sigma1_norm = sigma1_phys / v2x_h
+    sigma2_norm = sigma2_phys / v2y_h
+
+    lin = xp.linspace(-window_sigma, window_sigma, n_samples)
+    dxi = lin[1] - lin[0]
+    Xlin, Ylin = xp.meshgrid(lin, lin, indexing='xy')
+    Xlin_flat = Xlin.ravel()
+    Ylin_flat = Ylin.ravel()
+    u_v2x_samp = xp.clip(
+        u_v2x[:, None] + sigma1_norm[:, None] * Xlin_flat[None, :], -1.0, 1.0)
+    u_v2y_samp = xp.clip(
+        u_v2y[:, None] + sigma2_norm[:, None] * Ylin_flat[None, :], -1.0, 1.0)
+    n_s2 = n_samples * n_samples
+    w2d_phys = (sigma1_phys * sigma2_phys) * (dxi ** 2)
+
+    E_flat = xp.zeros(N_px, dtype=out_dtype)
+    PX_CHUNK = max(1, min(N_px, 1024 * 64 // max(1, n_s2 // 16)))
+    for p0 in range(0, N_px, PX_CHUNK):
+        p1 = min(p0 + PX_CHUNK, N_px)
+        bw = p1 - p0
+        u3 = u_v2x_samp[p0:p1].ravel()
+        u4 = u_v2y_samp[p0:p1].ravel()
+        u1 = xp.broadcast_to(u_s2x[p0:p1, None], (bw, n_s2)).ravel()
+        u2 = xp.broadcast_to(u_s2y[p0:p1, None], (bw, n_s2)).ravel()
+        opd_v, _, _, _, _, _ = opd6(cop, u1, u2, u3, u4)
+        opd_v = opd_v + lin_v3 * u3 + lin_v4 * u4
+        s1x_v, ds1x_du3, ds1x_du4, _, _, _ = opd6(csx, u1, u2, u3, u4)
+        s1y_v, ds1y_du3, ds1y_du4, _, _, _ = opd6(csy, u1, u2, u3, u4)
+        det_J = ds1x_du3 * ds1y_du4 - ds1x_du4 * ds1y_du3
+        abs_J = xp.abs(det_J) / (v2x_h * v2y_h)
+        Eobj_v = _sample_bilinear_xp(xp, E_in_gpu, N, dx, dy, s1x_v, s1y_v)
+        contrib = (Eobj_v * xp.exp(2j * xp.pi * opd_v) * abs_J)
+        E_flat[p0:p1] = contrib.reshape(bw, n_s2).sum(axis=1) * w2d_phys[p0:p1]
+
+    E_flat = xp.where(converged, E_flat, xp.asarray(0, dtype=out_dtype))
+    E_flat = xp.where(inbox, E_flat, xp.asarray(0, dtype=out_dtype))
     return E_flat.reshape(N_out_coarse, N_out_coarse)
 
 

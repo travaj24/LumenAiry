@@ -403,16 +403,72 @@ def test_gpu_anamorphic_matches_cpu():
 
 
 @_gpu_skip
-def test_gpu_non_quadrature_method_rejected():
-    """use_gpu with an asymptotic evaluator (no CuPy Numba-saddle twin yet)
-    raises a clear NotImplementedError rather than silently falling back."""
-    N, dx = 96, 90e-6
+@pytest.mark.parametrize('method', ['stationary_phase', 'local_quadrature'])
+def test_gpu_asymptotic_evaluators_match_cpu(method):
+    """The asymptotic evaluators run on the GPU (fused CuPy RawKernel for the
+    per-pixel Chebyshev value+derivs) and match the CPU integrator; they return
+    a CuPy device array.  (Earlier these raised under use_gpu; now supported.)"""
+    import cupy as cp
+    N, dx = 160, 70e-6
     E = _gauss(N, dx, w=3e-3).astype(np.complex128)
-    with pytest.raises(NotImplementedError, match='quadrature'):
-        la.apply_real_lens_maslov(
-            E, prescription=_singlet(), wavelength=LAM, dx=dx, use_gpu=True,
-            integration_method='stationary_phase', output_subsample=1,
-            ray_field_samples=12, ray_pupil_samples=12, poly_order=4, n_v2=16)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+              poly_order=6, integration_method=method,
+              local_n_samples=8, local_window_sigma=3.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cpu = la.apply_real_lens_maslov(E, **kw)
+        gpu = la.apply_real_lens_maslov(E, use_gpu=True, **kw)
+    assert isinstance(gpu, cp.ndarray)
+    assert gpu.dtype == E.dtype and gpu.shape == (N, N)
+    assert _il2c(cp.asnumpy(gpu), cpu) < 1e-6
+
+
+@_gpu_skip
+@pytest.mark.parametrize('method', ['stationary_phase', 'local_quadrature'])
+def test_gpu_asymptotic_complex64_and_anamorphic(method):
+    """The GPU asymptotic evaluators preserve complex64 and honour anamorphic
+    pixels, matching the CPU integrator in both cases."""
+    import cupy as cp
+    N = 160
+    # complex64, square
+    dx = 70e-6
+    E = _gauss(N, dx, w=3e-3).astype(np.complex64)
+    kw = dict(prescription=_singlet(), wavelength=LAM, dx=dx,
+              output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+              poly_order=6, integration_method=method,
+              local_n_samples=8, local_window_sigma=3.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        cpu64 = la.apply_real_lens_maslov(E, **kw)
+        gpu64 = la.apply_real_lens_maslov(cp.asarray(E), **kw)
+    assert gpu64.dtype == np.complex64
+    assert _il2c(cp.asnumpy(gpu64), cpu64) < 1e-4
+    # anamorphic dy = 2*dx
+    dxa, dya = 40e-6, 80e-6
+    xa = (np.arange(N) - N // 2) * dxa
+    ya = (np.arange(N) - N // 2) * dya
+    Xa, Ya = np.meshgrid(xa, ya)
+    Ean = np.exp(-(Xa ** 2 + Ya ** 2) / (1.5e-3) ** 2).astype(np.complex128)
+    p = {
+        'name': 'singlet', 'aperture_diameter': 6e-3,
+        'surfaces': [
+            {'radius': 140e-3, 'conic': 0.0, 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 3e-3},
+            {'radius': -140e-3, 'conic': 0.0, 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 3e-3},
+        ],
+        'thicknesses': [4e-3],
+    }
+    akw = dict(prescription=p, wavelength=LAM, dx=dxa, dy=dya,
+               output_subsample=1, ray_field_samples=14, ray_pupil_samples=14,
+               poly_order=6, integration_method=method,
+               local_n_samples=8, local_window_sigma=3.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        an_c = la.apply_real_lens_maslov(Ean, **akw)
+        an_g = la.apply_real_lens_maslov(Ean, use_gpu=True, **akw)
+    assert _il2c(cp.asnumpy(an_g), an_c) < 1e-6
 
 
 def test_f3_suite_style_progress_callback_does_not_crash():

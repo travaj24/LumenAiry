@@ -2,6 +2,23 @@
 
 All notable changes to the core library are documented here.
 
+## [Unreleased]
+
+### Added
+
+- **GPU (CuPy) for the Maslov asymptotic evaluators.**  `apply_real_lens_maslov(
+  ..., use_gpu=True)` now supports `integration_method='stationary_phase'` and
+  `'local_quadrature'` (v5.20 GPU'd only the `quadrature` default; the fast
+  production evaluators previously raised under `use_gpu`).  The per-pixel Newton
+  saddle + Chebyshev value/derivative work runs on the device via a fused CuPy
+  `RawKernel` (one thread per query point, O(poly_order) local memory — mirroring
+  the Numba CPU kernel, no `(M, n)` global temporaries).  **1.8–1.9×**
+  (stationary_phase) and **6.4× → 10.4×** (local_quadrature, N=192 → 384, growing
+  with N) on an RTX 4070 Ti, matching the CPU integrator to ~1e-12 (complex64
+  byte-identical; anamorphic pixels compose).  The CPU integrators are untouched.
+  GPU path caps at `poly_order <= 23`.  See
+  `docs/audits/AUDIT_WAVE_LENS_MODELS_2026_07_02_REMEDIATION.md` §4.5.
+
 ## [5.20.0] — 2026-07-04
 
 Maslov propagator (`apply_real_lens_maslov`) brought in line with the rest of
