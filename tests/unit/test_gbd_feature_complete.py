@@ -16,6 +16,8 @@ from lumenairy.propagators.gbd import (
     propagate_gbd_freespace,
     propagate_gbd_freespace_spectral,
     propagate_gbd_thin_lens,
+    recommend_gbd_sampling,
+    reconstruct_field_from_beamlets,
 )
 
 LAM = 1.0e-6
@@ -130,3 +132,31 @@ def test_spectral_stack_matches_single_wavelength_and_intensity_sum():
     assert np.isrealobj(inten) or np.allclose(inten.imag, 0.0)
     ref = sum(wi * np.abs(stack[i]) ** 2 for i, wi in enumerate(w))
     assert np.allclose(np.asarray(inten), ref, rtol=1e-10, atol=1e-12)
+
+
+def test_recommend_sampling_scales_with_field_structure_and_roundtrips():
+    """recommend_gbd_sampling picks a coarser grid for a smooth field than for
+    a finely-structured one, sets overlapping waists, and the recommended
+    sampling reconstructs the source (z=0 round-trip) to a few percent."""
+    N, dx = 128, 8e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    smooth = np.exp(-(X ** 2 + Y ** 2) / (0.25e-3) ** 2).astype(np.complex128)
+    fine = (smooth * np.exp(1j * 2 * np.pi / LAM * np.sin(0.05) * X)).astype(
+        np.complex128)  # steep tilt -> fast phase gradient
+    rs = recommend_gbd_sampling(smooth, dx, wavelength=LAM)
+    rf = recommend_gbd_sampling(fine, dx, wavelength=LAM)
+    assert rs['sample_step'] >= 1 and rf['sample_step'] >= 1
+    # the steeply-tilted (finer) field must not be sampled MORE coarsely
+    assert rf['sample_step'] <= rs['sample_step']
+    # overlapping waists (w0 > spacing)
+    assert rs['waist_factor'] > rs['sample_step'] * 0.9
+    # z=0 round-trip with the recommendation reproduces the smooth source
+    kw = {k: rs[k] for k in ('sample_step', 'waist_factor')}
+    b = decompose_field_to_beamlets(smooth, dx, wavelength=LAM, **kw)
+    recon = reconstruct_field_from_beamlets(
+        b, Ny=N, Nx=N, dx=dx, wavelength=LAM)
+    m = np.abs(smooth) > 0.05 * np.abs(smooth).max()
+    rel = np.linalg.norm((np.abs(recon) - np.abs(smooth))[m]) / \
+        np.linalg.norm(np.abs(smooth)[m])
+    assert rel < 0.1, rel

@@ -246,6 +246,75 @@ def decompose_field_to_beamlets(
     )
 
 
+def recommend_gbd_sampling(
+    E_in: np.ndarray,
+    dx: float,
+    *,
+    wavelength: float,
+    target_overlap: float = 1.5,
+    oversample: float = 4.0,
+) -> Dict[str, Any]:
+    """Recommend ``sample_step`` and ``waist_factor`` for a source field.
+
+    Picks the beamlet grid automatically instead of leaving ``sample_step``
+    and ``waist_factor`` as blind manual knobs.  The spacing must resolve BOTH
+    the field's amplitude structure and its local wavevector (phase gradient),
+    so the beamlet grid is chosen as the finer of:
+
+    * an **amplitude** feature scale ``||E|| / || grad E ||`` (L2), and
+    * a **phase / angular** Nyquist from the max local tilt
+      ``k_local = grad(arg E)`` (a beamlet spacing that resolves the tilt
+      variation) --
+
+    downsampled by ``oversample`` beamlets per feature, clamped to
+    ``[1, N/4]``.  ``waist_factor`` is then set to ``target_overlap *
+    sample_step`` so neighbouring beamlets overlap (``w0 = target_overlap *
+    spacing``); ``target_overlap ~ 1.5`` is a good smooth-field default.
+
+    Returns
+    -------
+    dict
+        ``{'sample_step': int, 'waist_factor': float, 'n_beamlets': int}``
+        -- splat into ``decompose_field_to_beamlets`` /
+        ``propagate_gbd_*`` (``**recommend_gbd_sampling(...)`` minus
+        ``n_beamlets``).
+    """
+    xp = array_namespace(E_in)
+    Ny, Nx = E_in.shape[-2], E_in.shape[-1]
+    gx = xp.gradient(E_in, dx, axis=-1)
+    gy = xp.gradient(E_in, dx, axis=-2)
+    amp = xp.abs(E_in)
+    norm_E = float(xp.sqrt(xp.sum(amp ** 2)))
+    grad_mag = xp.sqrt(xp.abs(gx) ** 2 + xp.abs(gy) ** 2)
+    norm_grad = float(xp.sqrt(xp.sum(grad_mag ** 2)))
+    # Amplitude feature scale (m); guard the smooth/flat field (grad ~ 0).
+    if norm_grad > 0.0:
+        feat_amp = norm_E / norm_grad
+    else:
+        feat_amp = float(Nx * dx)
+    # Phase / angular feature: max local transverse spatial frequency of the
+    # tilt.  k_local = Im(grad E / E) [rad/m]; the beamlet spacing must be
+    # small vs 1/max|k_local| (in cycles) so the launch direction is locally
+    # constant.
+    thr = 1e-6 * float(xp.max(amp)) if amp.size else 0.0
+    safe = xp.where(amp > thr, E_in, xp.full_like(E_in, thr + 1e-30))
+    kx = xp.imag(gx / safe)
+    ky = xp.imag(gy / safe)
+    kloc_max = float(xp.max(xp.sqrt(kx ** 2 + ky ** 2)))
+    feat_phase = (2.0 * float(np.pi) / kloc_max) if kloc_max > 0.0 else feat_amp
+    feature = min(feat_amp, feat_phase)
+    s_px = feature / (oversample * dx)
+    sample_step = int(min(max(1, round(s_px)), max(1, min(Ny, Nx) // 4)))
+    waist_factor = float(target_overlap * sample_step)
+    n_beamlets = ((Ny + sample_step - 1) // sample_step) * \
+                 ((Nx + sample_step - 1) // sample_step)
+    return {
+        'sample_step': sample_step,
+        'waist_factor': waist_factor,
+        'n_beamlets': int(n_beamlets),
+    }
+
+
 # ============================================================================
 # ABCD evolution
 # ============================================================================
@@ -977,6 +1046,7 @@ def propagate_gbd_through_prescription(
 __all__ = [
     'BeamletBundle',
     'decompose_field_to_beamlets',
+    'recommend_gbd_sampling',
     'propagate_beamlets_freespace',
     'apply_thin_lens_to_beamlets',
     'apply_aperture_to_beamlets',
