@@ -211,6 +211,16 @@ class Surface:
     # trace; invoke :func:`bsdf.sample_scatter_rays` to spawn scatter
     # rays from a surface that carries this field.
     bsdf: Optional[object] = None
+    # Reflective-coating material for a mirror (``is_mirror=True``): a
+    # complex refractive index ``n + i*kappa`` (metal) that drives the
+    # Fresnel ``r_s`` / ``r_p`` used by polarization ray tracing
+    # (``propagators.gbd._fresnel_jones_matrix_per_beamlet``), giving the
+    # diattenuation + retardance of a real metal mirror.  Accepts a material
+    # NAME (looked up via :func:`glass.get_glass_index_complex`), a callable
+    # ``wavelength -> complex``, or a direct complex value.  ``None`` -> an
+    # ideal reflector (``|r_s| = |r_p| = 1``).  Does not affect the geometric
+    # trace (reflection is pure geometry).
+    coating: Optional[object] = None
 
     # 3.7.5: World-frame trace support.  When ``world_origin`` and
     # ``world_R`` are both populated, :func:`trace_world` propagates
@@ -492,6 +502,7 @@ def _surface_copy_with(surf, **overrides):
         freeform=overrides.get('freeform',
                                  getattr(surf, 'freeform', None)),
         bsdf=overrides.get('bsdf', getattr(surf, 'bsdf', None)),
+        coating=overrides.get('coating', getattr(surf, 'coating', None)),
         world_origin=overrides.get(
             'world_origin', getattr(surf, 'world_origin', None)),
         world_R=overrides.get('world_R', getattr(surf, 'world_R', None)),

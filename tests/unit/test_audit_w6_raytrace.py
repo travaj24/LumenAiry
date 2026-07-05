@@ -316,6 +316,7 @@ _NON_DEFAULT = {
     'aspheric_coeffs_y': {6: -3.0e4},
     'freeform': {'kind': 'xy_polynomial', 'coefficients': {(2, 1): 1e-4}},
     'bsdf': object(),
+    'coating': (1.374 + 7.62j),
     'world_origin': np.array([0.1, -0.2, 1.0]),
     'world_R': np.array([[0.0, -1.0, 0.0],
                          [1.0, 0.0, 0.0],

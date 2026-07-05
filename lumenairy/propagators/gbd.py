@@ -874,6 +874,23 @@ def propagate_gbd_freespace_vector(
     return xp.stack(comps, axis=0)
 
 
+def _resolve_coating_index(coating: Any, wavelength: float) -> complex:
+    """Resolve a mirror ``coating`` spec to a complex refractive index
+    ``n + i*kappa``.
+
+    Accepts a material NAME (looked up via
+    :func:`lumenairy.glass.get_glass_index_complex`, e.g. ``'Au'``, ``'Ag'``,
+    ``'Al'``), a callable ``wavelength -> complex``, or a direct numeric
+    (``complex`` / ``float``) index.
+    """
+    if callable(coating):
+        return complex(coating(wavelength))
+    if isinstance(coating, (int, float, complex)):
+        return complex(coating)
+    from ..glass import get_glass_index_complex
+    return complex(get_glass_index_complex(str(coating), wavelength))
+
+
 def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     """Per-beamlet 2x2 transverse Jones matrix ``(E_x, E_y)_in -> _out`` from
     per-surface Fresnel s/p along each base ray (polarization ray tracing).
@@ -884,13 +901,16 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
 
     * **Refraction** -- Fresnel amplitude transmission ``t_s``, ``t_p``, rotating
       the p axis from the incident to the refracted ray.
-    * **Reflection** (``is_mirror``) -- an ideal reflector ``|r_s| = |r_p| = 1``
-      (energy-conserving, no diattenuation; PEC convention ``r_s = -1``,
-      ``r_p = +1`` for the fold's relative s-p phase), with the geometric s/p
-      frame rotation carried by recomposing on the reflected p axis.  Real
-      metallic-coating complex ``r_s`` / ``r_p`` (diattenuation + retardance)
-      needs a coating index the prescription does not yet carry and is a
-      documented materials extension.
+    * **Reflection** (``is_mirror``) -- if the surface carries no ``coating``,
+      an ideal reflector ``|r_s| = |r_p| = 1`` (energy-conserving, no
+      diattenuation; PEC convention ``r_s = -1``, ``r_p = +1`` for the fold's
+      relative s-p phase).  If the surface carries a ``coating`` (a complex
+      refractive index ``n + i*kappa`` -- a metal), the full **complex Fresnel**
+      ``r_s`` / ``r_p`` are used, giving the metal mirror's **diattenuation**
+      (``|r_s| != |r_p|``) and **retardance** (``arg r_s != arg r_p``); these
+      reduce continuously to the ideal ``r_s = -1``, ``r_p = +1`` as
+      ``|n_coating| -> inf`` (perfect conductor).  Either way the geometric s/p
+      frame rotation is carried by recomposing on the reflected p axis.
 
     Partial (Fresnel) reflection at refractive surfaces (ghost beams) is not
     modeled -- forward GBD carries only the transmitted / intended-reflected
@@ -948,16 +968,29 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
             # surfaces; then build the per-surface s/p coefficients.
             if is_mirror:
                 _reflect(rb, s)
-                # Ideal reflector: |r_s| = |r_p| = 1 (energy-conserving, no
-                # diattenuation).  PEC convention r_s = -1, r_p = +1 carries the
-                # fold's relative s-p phase; the geometric s/p frame rotation
-                # (recompose on the reflected p_out) carries the rest.  A real
-                # metallic-coating complex r_s / r_p (diattenuation + retardance)
-                # needs a coating index the prescription does not yet carry and
-                # is a documented materials extension.
-                cs = -np.ones_like(cos_i, dtype=np.complex128)   # s coeff
-                cp = np.ones_like(cos_i, dtype=np.complex128)    # p coeff
-                c_normal = cs                                    # r_s = r_p = -1
+                coating = getattr(s, 'coating', None)
+                if coating is None:
+                    # Ideal reflector: |r_s| = |r_p| = 1 (energy-conserving, no
+                    # diattenuation).  PEC convention r_s = -1, r_p = +1 carries
+                    # the fold's relative s-p phase; the geometric s/p frame
+                    # rotation (recompose on the reflected p_out) does the rest.
+                    cs = -np.ones_like(cos_i, dtype=np.complex128)   # r_s
+                    cp = np.ones_like(cos_i, dtype=np.complex128)    # r_p
+                else:
+                    # Real metal coating: full complex Fresnel r_s / r_p from the
+                    # coating's complex index n_c = n + i*kappa -> diattenuation
+                    # (|r_s| != |r_p|) + retardance (arg r_s != arg r_p).
+                    # Continuously reduces to the ideal r_s=-1, r_p=+1 as
+                    # |n_c| -> inf (perfect conductor).
+                    nc = _resolve_coating_index(coating, wavelength)
+                    ci = cos_i.astype(np.complex128)
+                    ct = np.sqrt(1.0 - (n1 / nc) ** 2 * (1.0 - ci ** 2))
+                    cs = (n1 * ci - nc * ct) / (n1 * ci + nc * ct)   # r_s
+                    cp = (nc * ci - n1 * ct) / (nc * ci + n1 * ct)   # r_p
+                # at normal incidence s/p degenerate -> the physical reflection
+                # coefficient is r_s (r_p = -r_s there is the p-basis-flip
+                # artifact the oblique p_out recomposition otherwise absorbs).
+                c_normal = cs
                 n_after = n2
             else:
                 _refract(rb, s, n1, n2)

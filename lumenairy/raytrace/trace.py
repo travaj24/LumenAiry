@@ -524,6 +524,9 @@ def surfaces_from_prescription(prescription: Dict[str, Any]) -> List['Surface']:
             conic_y=ps.get('conic_y'),
             aspheric_coeffs_y=ps.get('aspheric_coeffs_y'),
             freeform=ff,
+            # Reflective-coating material for a mirror (complex-index metal ->
+            # Fresnel r_s / r_p with diattenuation + retardance).
+            coating=ps.get('coating'),
         ))
 
     return surface_list

@@ -479,6 +479,62 @@ def test_fresnel_jones_mirror_reflects_and_conserves_energy():
     assert np.linalg.norm(Pr[0, :, 0]) < 0.99   # normal-incidence Fresnel loss
 
 
+def test_fresnel_jones_metal_coating_diattenuation_and_retardance():
+    """A mirror carrying a complex-index ``coating`` (metal) gets the full
+    complex Fresnel r_s / r_p: normal-incidence reflectance matches the analytic
+    metal value, off-axis it shows diattenuation (|r_s| != |r_p|, matching
+    analytic) and retardance, and as the coating -> a perfect conductor it
+    reduces continuously to the ideal (no-coating) reflector."""
+    from lumenairy.propagators.gbd import _fresnel_jones_matrix_per_beamlet
+    nAl = 1.374 + 7.620j          # aluminum @ 633 nm (n + i*kappa)
+    R = 40e-3
+
+    def _mirror(coat):
+        return {'name': 'm', 'aperture_diameter': 40e-3,
+                'surfaces': [{'radius': -R, 'conic': 0., 'glass_before': 'air',
+                              'glass_after': 'air', 'is_mirror': True,
+                              'coating': coat, 'semi_diameter': 18e-3}],
+                'thicknesses': [0.0]}
+    hs = np.array([0.0, 5e-3, 10e-3, 15e-3])
+    z = np.zeros_like(hs)
+    P, _ = _fresnel_jones_matrix_per_beamlet(
+        hs, z, z, z, _mirror(lambda w: nAl), 0.633e-6)
+    # (1) normal-incidence reflectance == analytic |(1-n)/(1+n)|^2 (~0.914 Al)
+    Rn = abs((1 - nAl) / (1 + nAl)) ** 2
+    assert abs(abs(P[0, 0, 0]) ** 2 - Rn) < 1e-6
+    assert abs(abs(P[0, 1, 1]) ** 2 - Rn) < 1e-6
+    assert 0.90 < Rn < 0.93
+    # (2) off-axis: |r_s| (= |Pyy|) and |r_p| (= |Pxx|/cos 2i) match analytic
+    #     Fresnel, and the metal is diattenuating (|r_s| > |r_p|, growing).
+    prev = -1.0
+    for h, Pi in zip(hs[1:], P[1:]):
+        i = np.arcsin(h / R)
+        ci = np.cos(i) + 0j
+        ct = np.sqrt(1 - (1 / nAl) ** 2 * (1 - ci ** 2))
+        rs = (ci - nAl * ct) / (ci + nAl * ct)
+        rp = (nAl * ci - ct) / (nAl * ci + ct)
+        assert abs(abs(Pi[1, 1]) - abs(rs)) < 1e-6
+        assert abs(abs(Pi[0, 0]) / np.cos(2 * i) - abs(rp)) < 1e-6
+        d = abs(rs) - abs(rp)
+        assert d > prev and d > 0        # diattenuation grows with angle
+        prev = d
+    # (3) retardance: the metal's s-p relative phase differs from an ideal
+    #     mirror's (PEC is real -1 / +1 -> relative phase pi; the metal is not).
+    Pideal, _ = _fresnel_jones_matrix_per_beamlet(hs, z, z, z, _mirror(None),
+                                                  0.633e-6)
+    rel_metal = np.angle(P[2, 1, 1]) - np.angle(P[2, 0, 0])
+    rel_ideal = np.angle(Pideal[2, 1, 1]) - np.angle(Pideal[2, 0, 0])
+    assert abs(rel_metal - rel_ideal) > 1e-3     # a real retardance signature
+    # (4) perfect-conductor limit reduces continuously to the ideal reflector
+    Pbig, _ = _fresnel_jones_matrix_per_beamlet(
+        hs, z, z, z, _mirror(lambda w: 1 + 1e7j), 0.633e-6)
+    assert np.max(np.abs(Pbig - Pideal)) < 1e-5
+    # (5) a direct complex coating value resolves the same as a callable
+    Pc, _ = _fresnel_jones_matrix_per_beamlet(
+        hs, z, z, z, _mirror(nAl), 0.633e-6)
+    assert np.allclose(Pc, P)
+
+
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
     """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the
