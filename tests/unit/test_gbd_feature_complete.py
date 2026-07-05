@@ -535,6 +535,128 @@ def test_fresnel_jones_metal_coating_diattenuation_and_retardance():
     assert np.allclose(Pc, P)
 
 
+# --------------------------------------------------------------------------
+# World-frame output plane (large folds -- reconstruct on the physical plane
+# perpendicular to the folded beam, not the fixed +z x-y grid)
+# --------------------------------------------------------------------------
+def _periscope():
+    """Plano-convex N-BK7 singlet + two 45-deg flat folds (90-deg periscope)
+    to +y; detector 50 mm past the fold."""
+    return {'surfaces': [
+        {'radius': 50e-3, 'glass_before': 'air', 'glass_after': 'N-BK7',
+         'surf_num': 1},
+        {'radius': float('inf'), 'glass_before': 'N-BK7', 'glass_after': 'air',
+         'surf_num': 2},
+        {'radius': float('inf'), 'glass_before': 'air', 'glass_after': 'MIRROR',
+         'surf_num': 15},
+        {'radius': float('inf'), 'glass_before': 'air', 'glass_after': 'air',
+         'surf_num': 25}],
+        'thicknesses': [3e-3, 0.05, 0.0, 0.0], 'aperture_diameter': 0.010,
+        'coord_breaks': [
+            {'surf_num': 10, 'tilt_x_deg': 45.0, 'order': 0, 'thickness_m': 0.0},
+            {'surf_num': 20, 'tilt_x_deg': 45.0, 'order': 0,
+             'thickness_m': -0.05}]}
+
+
+def _peak_and_rms(F, dxo):
+    I = np.abs(F) ** 2
+    s = I.sum()
+    if not np.isfinite(s) or s <= 0:
+        return float('nan'), float('nan')
+    n = F.shape[0]
+    xf = (np.arange(F.shape[1]) - F.shape[1] // 2) * dxo
+    yf = (np.arange(n) - n // 2) * dxo
+    Xf, Yf = np.meshgrid(xf, yf)
+    cx = (I * Xf).sum() / s
+    cy = (I * Yf).sum() / s
+    rms = np.sqrt((I * ((Xf - cx) ** 2 + (Yf - cy) ** 2)).sum() / s)
+    return float(I.max()), float(rms)
+
+
+def test_world_output_plane_focuses_folded_periscope():
+    """A 90-deg periscope folds the beam onto +y; the fixed +z x-y
+    reconstruction is meaningless (blows up), but world_output_plane='auto'
+    reconstructs on the physical (folded) focal plane and gives a finite,
+    focused spot."""
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+    N, dx = 160, 12e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (3.0e-3) ** 2).astype(np.complex128)
+    kw = dict(wavelength=0.633e-6, per_surface=True, output_dx=1.5e-6,
+              output_shape=(128, 128), sample_step=3, waist_factor=2.0)
+    Fw = propagate_gbd_through_prescription(
+        E, dx, _periscope(), world_output_plane='auto', **kw)
+    peak_w, rms_w = _peak_and_rms(Fw, 1.5e-6)
+    assert np.isfinite(Fw).all()
+    assert peak_w > 0 and np.isfinite(rms_w)
+    assert rms_w < 60e-6            # a real focus (not a smear across the grid)
+    # the fold-blind fixed x-y path does NOT focus (reflects to -z, huge tilt)
+    Fx = propagate_gbd_through_prescription(E, dx, _periscope(), **kw)
+    with np.errstate(over='ignore', invalid='ignore'):
+        energy_x = float(np.sum(np.abs(Fx) ** 2))
+        _, rms_x = _peak_and_rms(Fx, 1.5e-6)
+    assert (not np.isfinite(energy_x)) or (rms_x > 3 * rms_w) \
+        or (not np.isfinite(rms_x))
+
+
+def test_world_output_plane_matches_baseline_on_unfolded_system():
+    """On a straight (unfolded) singlet, world_output_plane='auto' reproduces
+    the default (fixed x-y) per-surface reconstruction's focused spot -- same
+    peak intensity and rms -- so the world reframing is a faithful no-op when
+    there is no fold."""
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+    straight = {'surfaces': [
+        {'radius': 50e-3, 'glass_before': 'air', 'glass_after': 'N-BK7',
+         'surf_num': 1},
+        {'radius': float('inf'), 'glass_before': 'N-BK7', 'glass_after': 'air',
+         'surf_num': 2},
+        {'radius': float('inf'), 'glass_before': 'air', 'glass_after': 'air',
+         'surf_num': 25}],
+        'thicknesses': [3e-3, 0.0971, 0.0], 'aperture_diameter': 0.010,
+        'coord_breaks': [{'surf_num': 1, 'tilt_x_deg': 0.0, 'order': 0,
+                          'thickness_m': 0.0}]}
+    N, dx = 160, 12e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (3.0e-3) ** 2).astype(np.complex128)
+    kw = dict(wavelength=0.633e-6, per_surface=True, output_dx=1.5e-6,
+              output_shape=(128, 128), sample_step=3, waist_factor=2.0)
+    Fn = propagate_gbd_through_prescription(E, dx, straight, **kw)
+    Fa = propagate_gbd_through_prescription(
+        E, dx, straight, world_output_plane='auto', **kw)
+    pk_n, rms_n = _peak_and_rms(Fn, 1.5e-6)
+    pk_a, rms_a = _peak_and_rms(Fa, 1.5e-6)
+    assert abs(pk_a - pk_n) < 0.02 * pk_n       # same focused intensity
+    assert abs(rms_a - rms_n) < 0.02 * rms_n + 1e-7
+
+
+def test_world_output_plane_rejects_curved_fold():
+    """A curved (powered) fold mirror is not Q-invariant, so the unfolded-
+    equivalent shortcut is invalid and the call raises a clear error."""
+    from lumenairy.propagators.gbd import propagate_gbd_through_prescription
+    curved = {'surfaces': [
+        {'radius': -0.2, 'glass_before': 'air', 'glass_after': 'MIRROR',
+         'surf_num': 15},
+        {'radius': float('inf'), 'glass_before': 'air', 'glass_after': 'air',
+         'surf_num': 25}],
+        'thicknesses': [0.0, 0.0], 'aperture_diameter': 0.020,
+        'coord_breaks': [
+            {'surf_num': 1, 'tilt_x_deg': 0.0, 'order': 0, 'thickness_m': 0.1},
+            {'surf_num': 10, 'tilt_x_deg': 45.0, 'order': 0, 'thickness_m': 0.0},
+            {'surf_num': 20, 'tilt_x_deg': 45.0, 'order': 0,
+             'thickness_m': -0.1}]}
+    N, dx = 96, 12e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (3.0e-3) ** 2).astype(np.complex128)
+    with pytest.raises(NotImplementedError):
+        propagate_gbd_through_prescription(
+            E, dx, curved, wavelength=0.633e-6, per_surface=True,
+            world_output_plane='auto', output_dx=2e-6, output_shape=(64, 64),
+            sample_step=4)
+
+
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
     """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the

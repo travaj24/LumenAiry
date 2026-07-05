@@ -135,11 +135,27 @@ All notable changes to the core library are documented here.
       tangential-E boundary condition by O(5)).  A concave mirror is
       energy-conserving (`det|P| = 1` on-axis) where an equivalent refractive
       surface is Fresnel-lossy.
-    Vignetted rays are zeroed (never NaN).  Real metallic-coating complex
-    `r_s` / `r_p` (diattenuation + retardance) needs a coating index the
-    prescription does not yet carry, and large folds (which reverse the
-    propagation axis) inherit the existing paraxial-output reconstruction limit —
-    both documented extensions.
+    Vignetted rays are zeroed (never NaN).  A mirror may also carry a
+    **`coating`** (a complex refractive index — a metal) for the full complex
+    Fresnel `r_s` / `r_p` (**diattenuation + retardance**): aluminum
+    (1.374+7.62j @633nm) reproduces the analytic normal-incidence reflectance
+    (0.914) and off-axis `|r_s|` / `|r_p|` to 1e-6, reducing continuously to the
+    ideal reflector as `|n_coating| → ∞`.
+  - **World-frame output plane for large folds** —
+    `propagate_gbd_through_prescription(..., world_output_plane='auto' | (p0,
+    R_out))`.  A large fold (e.g. a 90° periscope) reverses the propagation
+    axis, so the default fixed +z x-y reconstruction is meaningless.  This
+    reconstructs on the physical plane perpendicular to the *folded* beam: the
+    base rays are world-traced (`raytrace.trace_world` /
+    `paraxial_focus_world`), `Q` is evolved on the **unfolded-equivalent**
+    straight system (a fold reflects the local trace — `N` flips sign, so the
+    slope phase-space `u=L/N` is corrupted; flat folds are Q-invariant, so the
+    straight equivalent is exact), then reframed onto the plane (with a
+    `Q → R₂ Q R₂ᵀ` transverse-frame rotation).  Validated on a 90° periscope
+    (focuses where the fixed x-y path blows up) and shown to reproduce the
+    default reconstruction on an unfolded system.  Forces `per_surface=True`.
+    **Curved (powered) fold mirrors** raise `NotImplementedError` (not
+    Q-invariant — they need the full world per-surface differential transfer).
   - **JAX-differentiable** free-space / thin-lens paths (backend-dispatched;
     `jax.grad` / `jax.jit` validated), plus a differentiable per-ray transfer
     `raytrace.ray_transfer_jacobian_jax` (`jax.jacfwd` around `trace_jax`,

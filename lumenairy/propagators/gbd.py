@@ -1292,12 +1292,89 @@ def apply_abcd_to_beamlets(
     )
 
 
+def _frame_from_normal(n: np.ndarray) -> np.ndarray:
+    """Right-handed orthonormal 3x3 whose 3rd column is the unit normal ``n``
+    (the output-plane propagation direction).  The in-plane x/y axes are a
+    deterministic Gram-Schmidt against world ``+x`` (or ``+y`` if ``n`` is
+    nearly along ``+x``)."""
+    n = np.asarray(n, dtype=np.float64)
+    n = n / np.linalg.norm(n)
+    up = np.array([1.0, 0.0, 0.0]) if abs(n[0]) < 0.9 else np.array([0.0, 1.0,
+                                                                     0.0])
+    xh = np.cross(up, n)
+    xh = xh / np.linalg.norm(xh)
+    yh = np.cross(n, xh)
+    return np.stack([xh, yh, n], axis=1)   # columns = x_hat, y_hat, n_hat
+
+
+def _unfolded_equivalent_surfaces(prescription, wavelength):
+    """Straight-line surface list equivalent (for Q evolution) to a folded
+    prescription: each optical surface at its cumulative WORLD path distance,
+    with **flat** fold mirrors replaced by transmissive identity surfaces.
+
+    Rationale: a fold mirror makes the sequential trace reflect (the axial
+    direction cosine ``N`` flips sign, so the slope ``u = L/N`` flips and the
+    slope-based Q evolution is corrupted); on-axis / flat-fold systems have
+    isotropic Q that is invariant to the fold, so the straight equivalent (same
+    powers, same geometric gaps, no reflection) reproduces the true Q.  A
+    **curved** fold mirror has optical power that a transmissive surface does
+    not, so it is *not* equivalent -- that case raises ``NotImplementedError``
+    (it needs the full world per-surface differential transfer).
+    """
+    import copy as _copy
+
+    from ..raytrace.world import world_surfaces_from_prescription
+    wsurfs = world_surfaces_from_prescription(prescription)
+    out = []
+    for k, s in enumerate(wsurfs):
+        if bool(getattr(s, 'is_mirror', False)) and np.isfinite(
+                getattr(s, 'radius', np.inf)):
+            raise NotImplementedError(
+                'world_output_plane: curved (powered) fold mirrors are not yet '
+                'supported (a flat fold is invariant to Q, a curved one is '
+                'not).  Use per-surface world differential transfer, or a flat '
+                'fold.')
+        s2 = _copy.copy(s)
+        s2.is_mirror = False           # flat mirror -> transmissive identity
+        s2.world_origin = None
+        s2.world_R = None
+        if k < len(wsurfs) - 1:
+            gap = float(np.linalg.norm(
+                np.asarray(wsurfs[k + 1].world_origin, np.float64)
+                - np.asarray(wsurfs[k].world_origin, np.float64)))
+            s2.thickness = gap
+        else:
+            s2.thickness = 0.0
+        out.append(s2)
+    return out
+
+
+def _resolve_world_output_plane(prescription, wavelength, spec):
+    """Resolve ``world_output_plane`` to ``(p0, R_out, world_surfaces)``.
+
+    ``spec='auto'`` -> plane at the paraxial image in world coords, normal along
+    the (folded) chief-ray direction.  ``spec=(p0, R_out)`` -> used directly
+    (``R_out`` columns = plane x_hat, y_hat, normal).
+    """
+    from ..raytrace.world import (
+        paraxial_focus_world,
+        world_surfaces_from_prescription,
+    )
+    wsurfs = world_surfaces_from_prescription(prescription)
+    if isinstance(spec, str) and spec == 'auto':
+        p0, nrm = paraxial_focus_world(wsurfs, wavelength)
+        return np.asarray(p0, np.float64), _frame_from_normal(nrm), wsurfs
+    p0, R_out = spec
+    return np.asarray(p0, np.float64), np.asarray(R_out, np.float64), wsurfs
+
+
 def apply_prescription_persurface_to_beamlets(
     beamlets: BeamletBundle,
     prescription: Dict[str, Any],
     wavelength: float,
     *,
     z_image: Optional[float] = None,
+    world_output_plane: Any = None,
 ) -> BeamletBundle:
     """Per-surface tensor-Q evolution of a beamlet bundle through a prescription.
 
@@ -1334,10 +1411,21 @@ def apply_prescription_persurface_to_beamlets(
     from ..raytrace import surfaces_from_prescription, system_abcd_prescription
     from ..raytrace.differential import ray_transfer_jacobian
 
-    surfs = list(surfaces_from_prescription(prescription))
-    if z_image is None:
-        _res = system_abcd_prescription(prescription, wavelength)
-        z_image = float(_res[2])
+    if world_output_plane is not None:
+        # Evolve Q on the UNFOLDED-EQUIVALENT straight system: a fold mirror
+        # makes the local trace reflect (N flips sign -> the slope ``u = L/N``
+        # flips, corrupting the slope phase-space Q evolution).  The straight
+        # equivalent (flat mirrors -> transmissive identity, thicknesses = world
+        # geometric gaps) has no sign flip and the true path lengths, so Q
+        # evolves correctly; the fold geometry re-enters only via the world
+        # trace in the reframe.  Base-ray positions then come from the world
+        # trace, Q from this straight evolution.
+        surfs = _unfolded_equivalent_surfaces(prescription, wavelength)
+    else:
+        surfs = list(surfaces_from_prescription(prescription))
+        if z_image is None:
+            _res = system_abcd_prescription(prescription, wavelength)
+            z_image = float(_res[2])
     # Trace to the LAST surface vertex (zero its transfer); the image-side
     # free-space is done branch-safe below (its single leg crosses the focus).
     surfs[-1] = _copy.copy(surfs[-1])
@@ -1378,6 +1466,21 @@ def apply_prescription_persurface_to_beamlets(
     # aberration enters (different beamlets accumulate different OPL).
     amp = amp * np.exp(1j * k0 * dt.opd)
 
+    if world_output_plane is not None:
+        # Reframe onto a WORLD-frame output plane (large folds -- e.g. a
+        # periscope -- reverse the propagation axis, so the fixed local x-y
+        # grid is meaningless).  World-trace the base rays through the folded
+        # prescription, express each at the plane's local (x, y), and free-space
+        # the (isotropic-or-tensor) Q to the plane.  See _reframe_beamlets_to_
+        # world_plane.  Reduces to the local +z path on an unfolded system.
+        new_pos, new_dir, Q, amp2, alive = _reframe_beamlets_to_world_plane(
+            beamlets, prescription, wavelength, Q, amp, k0, world_output_plane)
+        new_amp = np.asarray(beamlets.amplitude) * amp2
+        w0 = np.asarray(beamlets.waist0)
+        return BeamletBundle(
+            positions=new_pos[alive], directions=new_dir[alive], Q=Q[alive],
+            amplitude=new_amp[alive], waist0=w0[alive])
+
     # branch-safe tensor free-space to the image plane (per-eigenvalue sqrt so
     # the focus-crossing Gouy phase is unambiguous; eigenvalues have Im<0).
     inv = 1.0 / np.sqrt(1.0 + dt.ux ** 2 + dt.uy ** 2)
@@ -1401,6 +1504,78 @@ def apply_prescription_persurface_to_beamlets(
         amplitude=new_amp[alive], waist0=w0[alive])
 
 
+def _reframe_beamlets_to_world_plane(beamlets, prescription, wavelength, Q, amp,
+                                     k0, world_output_plane):
+    """Reframe straight-evolved beamlets (tensor Q at the unfolded last vertex)
+    onto a world-frame output plane.
+
+    World-traces the base rays through the folded prescription, lifts the output
+    to world coords, expresses each in the plane's local frame, propagates each
+    beamlet to the plane along its own ray, and free-spaces the (branch-safe)
+    tensor Q by that distance -- rotating Q into the plane's transverse frame
+    first (a no-op for the isotropic Q of an on-axis / flat-fold system).  ``Q``
+    was evolved on the unfolded-equivalent straight system (see
+    :func:`_unfolded_equivalent_surfaces`), so the geometric world path length
+    to the last vertex matches the straight one and a single ``t_geom`` leg
+    (last vertex -> plane) is exact.
+
+    Returns ``(positions, directions, Q, amp, alive)`` in the plane's local
+    frame (ready for :func:`reconstruct_field_from_beamlets` at ``centre=(0,0)``).
+    """
+    from ..raytrace.trace import _make_bundle
+    from ..raytrace.world_trace import trace_world
+
+    p0, R_out, wsurfs = _resolve_world_output_plane(
+        prescription, wavelength, world_output_plane)
+    last = wsurfs[-1]
+
+    pos = np.asarray(beamlets.positions)
+    dr = np.asarray(beamlets.directions)
+    x = pos[:, 0].astype(np.float64)
+    y = pos[:, 1].astype(np.float64)
+    Nz = dr[:, 2]
+    L0 = (dr[:, 0] / Nz)
+    M0 = (dr[:, 1] / Nz)
+    inv0 = 1.0 / np.sqrt(1.0 + L0 ** 2 + M0 ** 2)
+    rb = _make_bundle(x.copy(), y.copy(), (L0 * inv0), (M0 * inv0), wavelength)
+    res = trace_world(rb, wsurfs, wavelength, output_filter='last')
+    img = res.image_rays
+    alive = np.asarray(img.alive, dtype=bool)
+
+    # lift the last-surface LOCAL output state to WORLD, then into the plane
+    # frame (R_out columns = x_hat, y_hat, n_hat; R_out^T @ v == v @ R_out).
+    loc = np.stack([img.x, img.y, img.z], axis=-1)
+    p_w = last.world_origin[None, :] + loc @ last.world_R.T
+    d_w = np.stack([img.L, img.M, img.N], axis=-1) @ last.world_R.T
+    d_w = d_w / np.linalg.norm(d_w, axis=1, keepdims=True)
+    p_l = (p_w - p0[None, :]) @ R_out
+    d_l = d_w @ R_out
+    # propagate the base ray (and Q) to the plane (local z = 0)
+    dz = np.where(np.abs(d_l[:, 2]) < 1e-12, 1e-12, d_l[:, 2])
+    t = -p_l[:, 2] / dz
+    p_hit = p_l + t[:, None] * d_l
+
+    # rotate Q into the plane's transverse frame (isotropic Q -> no-op) then
+    # branch-safe free-space by t.
+    I2 = np.eye(2)[None, :, :]
+    R2 = R_out[:, 0:2].T @ last.world_R[:, 0:2]        # (2,2)
+    Q = R2[None] @ Q @ R2.T[None]
+    Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+    lam = np.linalg.eigvals(Q)
+    amp = amp * np.prod(1.0 / np.sqrt(1.0 + t[:, None] * lam), axis=1)
+    amp = amp * np.exp(1j * k0 * t)
+    Q = Q @ np.linalg.inv(I2 + t[:, None, None] * Q)
+    Q = 0.5 * (Q + np.transpose(Q, (0, 2, 1)))
+
+    positions = np.stack([p_hit[:, 0], p_hit[:, 1],
+                          np.zeros_like(p_hit[:, 0])], axis=-1)
+    directions = d_l
+    # kill any non-finite (dead) rows so no NaNs enter the coherent sum.
+    alive = alive & np.isfinite(positions).all(axis=1) & np.isfinite(amp) \
+        & np.isfinite(Q).all(axis=(1, 2))
+    return positions, directions, Q, amp, alive
+
+
 def propagate_gbd_through_prescription(
     E_in: np.ndarray,
     dx: float,
@@ -1417,6 +1592,7 @@ def propagate_gbd_through_prescription(
     direction_sampling: bool = False,
     per_surface: bool = False,
     z_image: Optional[float] = None,
+    world_output_plane: Any = None,
 ) -> np.ndarray:
     """End-to-end GBD through a sequential lumenairy prescription
     via system ABCD evolution.
@@ -1481,15 +1657,26 @@ def propagate_gbd_through_prescription(
         direction_sampling=direction_sampling,
     )
 
+    if world_output_plane is not None and not per_surface:
+        # The whole-system-ABCD path drops coord-breaks (is fold-blind), so a
+        # world output plane requires the per-surface (world-traced) evolver.
+        per_surface = True
+
     if per_surface:
         # Per-element form: evolve each beamlet's tensor Q surface-by-surface
         # via the real per-ray differential ray transfer (captures off-axis
-        # astigmatism / aberration the single whole-system ABCD cannot).
+        # astigmatism / aberration the single whole-system ABCD cannot).  With
+        # ``world_output_plane`` the output is reconstructed on a world-frame
+        # plane (large folds reverse the propagation axis; the fixed local x-y
+        # grid is then meaningless) -- the plane is the local origin, so the
+        # reconstruction centre is (0, 0).
         bundle = apply_prescription_persurface_to_beamlets(
-            bundle, prescription, wavelength, z_image=z_image)
+            bundle, prescription, wavelength, z_image=z_image,
+            world_output_plane=world_output_plane)
+        centre = (0.0, 0.0) if world_output_plane is not None else output_centre
         return reconstruct_field_from_beamlets(
             bundle, Ny=Ny, Nx=Nx, dx=output_dx,
-            centre=output_centre, wavelength=wavelength,
+            centre=centre, wavelength=wavelength,
             chunk_beamlets=chunk_beamlets,
         )
 
