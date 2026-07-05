@@ -294,6 +294,20 @@ def berreman_jones_1d(
     jones_r, jones_t : (2, 2) complex ndarray
         Reflection / transmission Jones; columns = incident lab ``[Ex; Ey]``,
         rows = reflected / transmitted lab ``[Ex; Ey]``.  PUBLIC ``exp(-i w t)``.
+
+    Accuracy
+    --------
+    Exact for isotropic, in-plane-anisotropic and out-of-plane-tensor layers at
+    NORMAL incidence.  KNOWN LIMITATION: for an OUT-OF-PLANE tensor layer
+    (``eps_xz/eps_yz != 0``) at OBLIQUE incidence (planar OR conical) the
+    reflection is off by ~a few percent on one eigenchannel -- the S-matrix
+    cascade's mode convention is subtly wrong for the coupled anisotropic modes
+    (the layer eigenmodes are exact, but the reflected amplitudes disagree with
+    the transfer-matrix boundary solve; energy is still conserved, so the error
+    is silent).  For rigorous tilted-director / out-of-plane-tensor Jones at
+    oblique incidence use :func:`~lumenairy.elements.rcwa.rcwa_jones_2d` (or the
+    native conical PMM), which are verified against the audit-fixed conical
+    Berreman 4x4 oracle to machine precision.  Fix tracked as a follow-up.
     """
     # Differentiable (JAX) dispatch: any traced input routes to the jnp twin.
     from ..backend import is_jax_array
