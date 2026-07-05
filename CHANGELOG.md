@@ -4,6 +4,33 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Berreman out-of-plane tensor at OBLIQUE / CONICAL incidence is now exact.**
+  `berreman_jones_1d` / `BerremanStack` were off by ~2% on one reflection
+  eigenchannel for an out-of-plane permittivity tensor (`eps_xz/eps_yz != 0`) at
+  oblique or conical incidence (exact for isotropic / in-plane / out-of-plane-
+  at-normal; energy still conserved, so the error was silent).  Root cause: the
+  native Berreman 4×4 S-matrix cascade pairs forward/backward modes via the
+  `[W; -V] ↔ -λ` symmetry, which an out-of-plane tensor at oblique incidence
+  *breaks*.  That regime — and only that regime — now routes to the same
+  generalized (Li 2003) single-Fourier-order S-matrix that `rcwa_jones_1d` /
+  `RCWAStack` use (`_homogeneous_eigenmodes` half-spaces + `_layer_eigenmodes_
+  tensor` fed the ezz-Schur-condensed in-plane block + raw off-plane operators),
+  to which a planar stack reduces exactly.  Validated to machine precision
+  against `RCWAStack` across isotropic / in-plane / out-of-plane at normal /
+  planar-oblique / conical, lossy, and multilayer stacks; all non-out-of-plane
+  regimes stay on the native cascade **byte-identical**.  The differentiable
+  (JAX) twin still uses the native path, so a concretely-detected out-of-plane-
+  tensor-at-oblique JAX call now raises `NotImplementedError` rather than
+  returning a silently inaccurate gradient.  See
+  `lumenairy/elements/berreman.py:_offplane_oblique_solve` and
+  `tests/unit/test_v5_20_1_berreman_offplane_oblique.py`.  This closes the
+  documented `berreman_jones_1d` "KNOWN LIMITATION" and the memory-tracked
+  PMM/RCWA-vs-Berreman out-of-plane-conical residual (an artifact of two
+  transfer-matrix *oracles* — single-layer direction and multilayer order — each
+  carrying its own error; the solvers agree to machine precision).
+
 ### Added
 
 - **GPU (CuPy) for the Maslov asymptotic evaluators.**  `apply_real_lens_maslov(

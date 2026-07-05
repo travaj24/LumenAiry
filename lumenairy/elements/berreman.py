@@ -46,6 +46,14 @@ from .rcwa import (
     _propagation_smatrix_general,
     _redheffer_star,
 )
+from .rcwa._core import (
+    _forward_flux_kz,
+    _homogeneous_eigenmodes,
+    _layer_eigenmodes_tensor,
+    _propagation_star_general,
+    _sqrt_decay,
+    _sqrt_forward,
+)
 
 _C = np.complex128
 
@@ -253,6 +261,131 @@ def _farfield(core, eps_sup, eps_sub, Kx, Ky):
 
 
 # =========================================================================== #
+# out-of-plane-tensor + oblique incidence: generalized S-matrix cascade
+# =========================================================================== #
+#
+# The native Berreman 4x4 S-matrix cascade above is EXACT for isotropic,
+# in-plane-anisotropic and out-of-plane-tensor-at-NORMAL layers, but its
+# forward/backward mode convention is subtly wrong for an OUT-OF-PLANE tensor
+# (``eps_xz/eps_yz != 0``) at OBLIQUE incidence -- the [W; -V] <-> -lam symmetry
+# the native pairing implicitly relies on is BROKEN there, so the reflected
+# amplitudes come out ~2% off (energy still conserves, so the error is silent).
+# For that regime ONLY we route to the SAME generalized (Li 2003) S-matrix that
+# ``rcwa_jones_1d`` / ``RCWAStack`` use: a planar stack is a single-Fourier-order
+# grating, so the RCWA mode machinery (``_homogeneous_eigenmodes`` for the
+# isotropic half-spaces / scalar spacers, ``_layer_eigenmodes_tensor`` fed the
+# ezz-Schur-condensed in-plane block + raw off-plane operators for tensor layers)
+# reduces to it EXACTLY.  Validated to match ``rcwa_jones_1d`` / ``RCWAStack``
+# to machine precision across iso / in-plane / OOP-normal / OOP-oblique /
+# OOP-conical / lossy / multilayer.  (The two harness transfer-matrix oracles
+# that previously flagged this as a "berreman bug" each carried their own
+# transfer-direction error, single-layer and multilayer; the generalized S-matrix
+# is the independently-cross-checked truth.)
+
+
+def _tensor_is_offplane(eps):
+    """True if a ``(3, 3)`` permittivity has OUT-OF-PLANE coupling
+    (``eps_xz / eps_yz / eps_zx / eps_zy`` above a tiny relative tolerance).
+    Scalars / isotropic tensors return False."""
+    M = np.asarray(eps, dtype=_C)
+    if M.ndim != 2 or M.shape != (3, 3):
+        return False
+    off = max(abs(M[0, 2]), abs(M[1, 2]), abs(M[2, 0]), abs(M[2, 1]))
+    diag = max(abs(M[0, 0]), abs(M[1, 1]), abs(M[2, 2]), 1.0)
+    return bool(off > 1e-12 * diag)
+
+
+def _offplane_oblique(eps_layers, Kx, Ky):
+    """Route condition for the generalized S-matrix path: at least one
+    out-of-plane tensor layer AND oblique incidence (``Kx`` or ``Ky != 0``).
+    Everything else stays on the exact native Berreman cascade."""
+    oblique = (abs(float(np.real(Kx))) > 1e-12
+               or abs(float(np.real(Ky))) > 1e-12)
+    return oblique and any(_tensor_is_offplane(e) for e in eps_layers)
+
+
+def _offplane_condensed_M(eps_internal, Kx1, Ky1):
+    """``(M, lam_f, lam_b)`` for one layer (INTERNAL-convention eps) via the RCWA
+    mode functions.  Scalar / isotropic -> analytic homogeneous ``[W; -V]``
+    (``lam, -lam``); tensor -> ezz-Schur-condensed in-plane block + raw off-plane
+    (Li 2003), as the general 6-tuple (out-of-plane) or the symmetric 3-tuple
+    (in-plane).  ``Kx1 / Ky1`` are ``1x1`` (single Fourier order)."""
+    e = np.asarray(eps_internal, dtype=_C)
+    if e.ndim == 0 or float(np.max(np.abs(e - e[0, 0] * np.eye(3)))) < \
+            1e-12 * max(1.0, abs(e[0, 0] if e.ndim else e)):
+        es = complex(e if e.ndim == 0 else e[0, 0])
+        W, V, kz = _homogeneous_eigenmodes(Kx1, Ky1, es)
+        kzc = kz.ravel()
+        lam = _sqrt_decay(-np.concatenate([kzc, kzc]) ** 2)
+        return _modes_to_M(W, V, W, -V), lam, -lam
+    exx, exy, exz = e[0, 0], e[0, 1], e[0, 2]
+    eyx, eyy, eyz = e[1, 0], e[1, 1], e[1, 2]
+    ezx, ezy, ezz = e[2, 0], e[2, 1], e[2, 2]
+    d = 1.0 / ezz
+    o = lambda v: np.array([[v]], dtype=_C)     # noqa: E731 (1x1 Fourier op)
+    Cxx, Cxy = o(exx - exz * ezx * d), o(exy - exz * ezy * d)
+    Cyx, Cyy = o(eyx - eyz * ezx * d), o(eyy - eyz * ezy * d)
+    if max(abs(exz), abs(eyz), abs(ezx), abs(ezy)) > 1e-12:
+        Wf, Vf, lf, Wb, Vb, lb = _layer_eigenmodes_tensor(
+            Kx1, Ky1, Cxx, Cxy, Cyx, Cyy, o(ezz),
+            o(ezx), o(ezy), o(exz), o(eyz))
+        return _modes_to_M(Wf, Vf, Wb, Vb), lf, lb
+    W, V, lam = _layer_eigenmodes_tensor(Kx1, Ky1, Cxx, Cxy, Cyx, Cyy, o(ezz))
+    return _modes_to_M(W, V, W, -V), lam, -lam
+
+
+def _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky):
+    """``(R, T, Jr, Jt)`` for a stack with out-of-plane tensor layer(s) at oblique
+    incidence, via the generalized (Li 2003) single-order S-matrix cascade.
+    ``eps_*`` are PUBLIC (``Im > 0``); returns PUBLIC-convention Jones + per-lab-
+    polarization power ``R, T``.  Validated to ``rcwa_jones_1d`` / ``RCWAStack``."""
+    kx0, ky0 = float(np.real(Kx)), float(np.real(Ky))
+    o = lambda v: np.array([[v]], dtype=_C)     # noqa: E731 (1x1 Fourier op)
+    Kx1, Ky1 = o(kx0), o(ky0)
+    k0 = 2.0 * np.pi / wl
+    Wr, Vr, _kzr = _homogeneous_eigenmodes(Kx1, Ky1, np.conj(_C(eps_sup)))
+    Wt, Vt, _kzt = _homogeneous_eigenmodes(Kx1, Ky1, np.conj(_C(eps_sub)))
+    M_prev = _modes_to_M(Wr, Vr, Wr, -Vr)
+    S = None
+    for eps, thk in zip(eps_layers, thicks):
+        Ml, lf, lb = _offplane_condensed_M(
+            np.conj(np.asarray(eps, dtype=_C)), Kx1, Ky1)
+        Si = _interface_smatrix_general(M_prev, Ml)
+        S = Si if S is None else _redheffer_star(S, Si)
+        S = _propagation_star_general(S, lf, lb, k0 * float(thk))
+        M_prev = Ml
+    S = _redheffer_star(
+        S, _interface_smatrix_general(M_prev, _modes_to_M(Wt, Vt, Wt, -Vt)))
+    S11, _S12, S21, _S22 = S
+    kz_inc = float(np.real(_sqrt_forward(_C(eps_sup) - kx0 ** 2 - ky0 ** 2)))
+    kzrf = _forward_flux_kz(_C(eps_sup), np.array([kx0]), np.array([ky0]))[0]
+    kztf = _forward_flux_kz(_C(eps_sub), np.array([kx0]), np.array([ky0]))[0]
+    Jr = np.zeros((2, 2), dtype=_C)
+    Jt = np.zeros((2, 2), dtype=_C)
+    R = np.zeros(2)
+    T = np.zeros(2)
+    for col, (ex0, ey0) in enumerate(((1.0, 0.0), (0.0, 1.0))):
+        r = S11 @ np.array([ex0, ey0], dtype=_C)
+        t = S21 @ np.array([ex0, ey0], dtype=_C)
+        rx, ry, tx, ty = r[0], r[1], t[0], t[1]
+        longi = kx0 * ex0 + ky0 * ey0
+        einc_sq = 1.0 + (longi / kz_inc) ** 2 if kz_inc != 0 else 1.0
+        # longitudinal (z) field from div(D)=0: BOTH kx and ky contribute at a
+        # CONICAL mount (dropping ky under-counts the y-pol flux by ~1%).
+        rz = -(kx0 * rx + ky0 * ry) / (kzrf if abs(kzrf) > 1e-12 else 1.0)
+        tz = -(kx0 * tx + ky0 * ty) / (kztf if abs(kztf) > 1e-12 else 1.0)
+        R[col] = (float(np.real(kzrf / kz_inc))
+                  * (abs(rx) ** 2 + abs(ry) ** 2 + abs(rz) ** 2) / einc_sq
+                  if np.real(kzrf) > 0 else 0.0)
+        T[col] = (float(np.real(kztf / kz_inc))
+                  * (abs(tx) ** 2 + abs(ty) ** 2 + abs(tz) ** 2) / einc_sq
+                  if np.real(kztf) > 0 else 0.0)
+        Jr[:, col] = [np.conj(rx), np.conj(ry)]
+        Jt[:, col] = [np.conj(tx), np.conj(ty)]
+    return R, T, Jr, Jt
+
+
+# =========================================================================== #
 # functional entry
 # =========================================================================== #
 
@@ -297,17 +430,16 @@ def berreman_jones_1d(
 
     Accuracy
     --------
-    Exact for isotropic, in-plane-anisotropic and out-of-plane-tensor layers at
-    NORMAL incidence.  KNOWN LIMITATION: for an OUT-OF-PLANE tensor layer
-    (``eps_xz/eps_yz != 0``) at OBLIQUE incidence (planar OR conical) the
-    reflection is off by ~a few percent on one eigenchannel -- the S-matrix
-    cascade's mode convention is subtly wrong for the coupled anisotropic modes
-    (the layer eigenmodes are exact, but the reflected amplitudes disagree with
-    the transfer-matrix boundary solve; energy is still conserved, so the error
-    is silent).  For rigorous tilted-director / out-of-plane-tensor Jones at
-    oblique incidence use :func:`~lumenairy.elements.rcwa.rcwa_jones_2d` (or the
-    native conical PMM), which are verified against the audit-fixed conical
-    Berreman 4x4 oracle to machine precision.  Fix tracked as a follow-up.
+    Exact (machine precision) for isotropic, in-plane-anisotropic and
+    out-of-plane-tensor layers at any incidence, including OBLIQUE and CONICAL.
+    Two internal paths: the native Berreman ``4x4`` S-matrix cascade for the
+    symmetric cases (isotropic / in-plane / out-of-plane-at-NORMAL), and -- for
+    an OUT-OF-PLANE tensor (``eps_xz/eps_yz != 0``) at OBLIQUE incidence, where
+    that cascade's forward/backward mode convention would be ~a few percent off
+    -- the generalized (Li 2003) single-Fourier-order S-matrix that
+    :func:`~lumenairy.elements.rcwa.rcwa_jones_1d` / ``RCWAStack`` use, to which
+    it is validated to machine precision (all regimes + lossy + multilayer).
+    The route is automatic; both paths agree on every case they share.
     """
     # Differentiable (JAX) dispatch: any traced input routes to the jnp twin.
     from ..backend import is_jax_array
@@ -315,6 +447,24 @@ def berreman_jones_1d(
             or is_jax_array(wavelength) or is_jax_array(angle)
             or is_jax_array(phi) or is_jax_array(theta)
             or any(is_jax_array(e) or is_jax_array(t) for e, t in layers)):
+        # The generalized-S-matrix out-of-plane-oblique fix is NumPy-only; the
+        # jnp twin still uses the native cascade (the ~2%-off convention).  Guard
+        # the concretely-detectable out-of-plane-tensor case at non-normal (or
+        # traced) incidence so it fails loudly rather than returning a silently
+        # inaccurate differentiable result.  (Normal incidence is exact on the
+        # native path, so a provably-normal mount is allowed through.)
+        _off = any(not is_jax_array(e) and _tensor_is_offplane(_as_eps_tensor(e))
+                   for e, _t in layers)
+        _ang = (float(theta) if (theta is not None and not is_jax_array(theta))
+                else float(angle) if not is_jax_array(angle) else None)
+        if _off and (_ang is None or abs(_ang) > 1e-12):
+            raise NotImplementedError(
+                "berreman_jones_1d: differentiable (JAX) evaluation of an "
+                "out-of-plane tensor (eps_xz/eps_yz != 0) at OBLIQUE incidence "
+                "is not supported -- the jnp twin uses the native 4x4 cascade, "
+                "which is ~2% off in that regime (the generalized-S-matrix fix "
+                "is NumPy-only).  Use NumPy inputs, restrict to normal "
+                "incidence, or differentiate rcwa.rcwa_jones_1d / RCWAStack.")
         from ._berreman_jax import _berreman_jones_1d_jax
         return _berreman_jones_1d_jax(layers, n_substrate, n_superstrate,
                                       wavelength, angle=angle, phi=phi,
@@ -328,6 +478,11 @@ def berreman_jones_1d(
     nre = float(np.real(_C(n_superstrate)))
     Kx = nre * np.sin(angle) * np.cos(phi)
     Ky = nre * np.sin(angle) * np.sin(phi)
+    if _offplane_oblique(eps_layers, Kx, Ky):
+        # out-of-plane tensor at oblique incidence: the generalized S-matrix
+        # cascade (matches rcwa_jones_1d / RCWAStack to machine precision).
+        return _offplane_oblique_solve(eps_layers, thicks, eps_sup, eps_sub,
+                                       wavelength, Kx, Ky)
     core = _solve_core(eps_layers, thicks, eps_sup, eps_sub, wavelength,
                        Kx, Ky)
     Jr, Jt, R, T = _farfield(core, eps_sup, eps_sub, Kx, Ky)
@@ -453,6 +608,21 @@ class BerremanStack:
             from ._berreman_jax import _berreman_stack_solve_jax
             return _berreman_stack_solve_jax(self)
         wl, eps_sup, eps_sub, Kx, Ky, eps_layers, thicks = self._geom()
+        eps_layers = [_as_eps_tensor(e) for e in eps_layers]
+        if _offplane_oblique(eps_layers, Kx, Ky):
+            # out-of-plane tensor at oblique incidence -> generalized S-matrix.
+            if retain_internal:
+                raise NotImplementedError(
+                    "BerremanStack.solve(retain_internal=True): the internal-"
+                    "field / absorption observables are not available for "
+                    "out-of-plane tensor layers at oblique incidence (that "
+                    "regime uses the generalized S-matrix cascade, which has no "
+                    "per-layer Berreman-mode reconstruction).  Use "
+                    "rcwa.RCWAStack for internal fields of such stacks, or "
+                    "normal incidence.")
+            R, T, Jr, _Jt = _offplane_oblique_solve(
+                eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky)
+            return R, T, Jr
         core = _solve_core(eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky,
                            retain=retain_internal)
         Jr, Jt, R, T = _farfield(core, eps_sup, eps_sub, Kx, Ky)
