@@ -4,7 +4,42 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Differentiable (JAX) OUT-OF-PLANE 2-D RCWA** (`rcwa_jones_2d`, `RCWAStack`).
+  An out-of-plane permittivity tensor (`eps_xz/eps_yz != 0`) at oblique/conical
+  incidence is now `jax.grad` / `jit`-able (gradients match central finite
+  difference to ~4e-9; forward matches NumPy to 1e-15; in-plane gradients
+  unchanged at 1.8e-10).  Two parts: a trace-safe `jnp.argsort` forward/backward
+  flux selector (`_select_forward_flux_jax`) replacing the host argsort in the
+  generalized generator, and a routing fix -- a TRACED tensor cannot be inspected
+  for out-of-plane coupling, so under `jax.grad` the solve was silently taking
+  the in-plane branch (dropping the z-coupling, ~30%-wrong gradient) while the
+  concrete forward correctly took the out-of-plane branch; a traced jax tensor
+  now routes to the general cascade (exact for in-plane too).  This was *not* an
+  eig-VJP / adjoint research problem (the broadened eig VJP is accurate on the
+  4N generator to 1e-9) -- purely the routing.  Concrete in-plane forwards keep
+  the faster symmetric path.  See `tests/unit/test_v5_20_1_rcwa_2d_oop_jax.py`.
+
 ### Fixed
+
+- **`pmm_jones_2d` no longer blows up SILENTLY** at a near-singular truncation.
+  A high-contrast / birefringent tensor cell -- common at CONICAL incidence --
+  could return a non-physical answer (sum R+T up to ~1e7, singular values >> 1)
+  with no warning (while `rcwa_jones_2d` stayed stable and PMM with
+  `stabilize=True` converged).  The non-stabilized path now runs the same energy
+  tripwire as `rcwa_jones_2d`: it RAISES `_EnergyError` on the catastrophic case
+  and WARNS on a lossless-closure violation, both pointing at `stabilize=True`
+  (verified to cure it) or a different `n_orders`.  Lossy cells and converged
+  solves are unaffected.
+
+- **Stale out-of-plane-at-conical documentation corrected** across PMM/RCWA.  The
+  "PMM/RCWA-vs-Berreman OOP-at-conical few-percent residual" was a PHANTOM (graded
+  against the buggy `berreman_jones_1d` oracle, fixed 77b1964); with the corrected
+  oracle `pmm_jones_1d_conical_tensor` / `pmm_jones_2d` / `rcwa_jones_2d` match
+  Berreman to ~1e-15 at every incidence (cross-solver verified).  Also corrected
+  `rcwa._core._require_inplane_tensor`, whose docstring + error wrongly said
+  "2-D / RCWAStack out-of-plane is pending" (supported since v5.14.1).
 
 - **Berreman out-of-plane tensor at OBLIQUE / CONICAL incidence is now exact.**
   `berreman_jones_1d` / `BerremanStack` were off by ~2% on one reflection
