@@ -21,9 +21,14 @@ All notable changes to the core library are documented here.
   against `RCWAStack` across isotropic / in-plane / out-of-plane at normal /
   planar-oblique / conical, lossy, and multilayer stacks; all non-out-of-plane
   regimes stay on the native cascade **byte-identical**.  The differentiable
-  (JAX) twin still uses the native path, so a concretely-detected out-of-plane-
-  tensor-at-oblique JAX call now raises `NotImplementedError` rather than
-  returning a silently inaccurate gradient.  See
+  (JAX) twin routes a concretely-detected out-of-plane tensor to the SAME
+  generalized path, so **`jax.grad` / `jit` through out-of-plane-oblique /
+  conical Berreman now works** (matches NumPy to machine precision; gradient
+  agrees with central finite difference).  Internal-field / absorption
+  retention (`retain_internal=True`) is not available for the out-of-plane-
+  oblique regime -- that needs asymmetric-mode field reconstruction in the
+  generalized convention, machinery `rcwa.RCWAStack` also lacks (it raises the
+  same for out-of-plane stacks); far-field R / T / Jones are exact.  See
   `lumenairy/elements/berreman.py:_offplane_oblique_solve` and
   `tests/unit/test_v5_20_1_berreman_offplane_oblique.py`.  This closes the
   documented `berreman_jones_1d` "KNOWN LIMITATION" and the memory-tracked

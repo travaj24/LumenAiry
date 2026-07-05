@@ -447,24 +447,12 @@ def berreman_jones_1d(
             or is_jax_array(wavelength) or is_jax_array(angle)
             or is_jax_array(phi) or is_jax_array(theta)
             or any(is_jax_array(e) or is_jax_array(t) for e, t in layers)):
-        # The generalized-S-matrix out-of-plane-oblique fix is NumPy-only; the
-        # jnp twin still uses the native cascade (the ~2%-off convention).  Guard
-        # the concretely-detectable out-of-plane-tensor case at non-normal (or
-        # traced) incidence so it fails loudly rather than returning a silently
-        # inaccurate differentiable result.  (Normal incidence is exact on the
-        # native path, so a provably-normal mount is allowed through.)
-        _off = any(not is_jax_array(e) and _tensor_is_offplane(_as_eps_tensor(e))
-                   for e, _t in layers)
-        _ang = (float(theta) if (theta is not None and not is_jax_array(theta))
-                else float(angle) if not is_jax_array(angle) else None)
-        if _off and (_ang is None or abs(_ang) > 1e-12):
-            raise NotImplementedError(
-                "berreman_jones_1d: differentiable (JAX) evaluation of an "
-                "out-of-plane tensor (eps_xz/eps_yz != 0) at OBLIQUE incidence "
-                "is not supported -- the jnp twin uses the native 4x4 cascade, "
-                "which is ~2% off in that regime (the generalized-S-matrix fix "
-                "is NumPy-only).  Use NumPy inputs, restrict to normal "
-                "incidence, or differentiate rcwa.rcwa_jones_1d / RCWAStack.")
+        # The jnp twin routes a concretely-detected out-of-plane tensor to the
+        # SAME generalized (out-of-plane-correct) S-matrix as the NumPy path, so
+        # differentiable out-of-plane-oblique / conical is supported.  (A stack
+        # whose out-of-plane tensor is itself a TRACED array cannot be detected
+        # and falls through to the native cascade -- accurate for iso / in-plane,
+        # ~2% off only for a traced-tensor out-of-plane-oblique gradient.)
         from ._berreman_jax import _berreman_jones_1d_jax
         return _berreman_jones_1d_jax(layers, n_substrate, n_superstrate,
                                       wavelength, angle=angle, phi=phi,
@@ -615,11 +603,15 @@ class BerremanStack:
                 raise NotImplementedError(
                     "BerremanStack.solve(retain_internal=True): the internal-"
                     "field / absorption observables are not available for "
-                    "out-of-plane tensor layers at oblique incidence (that "
-                    "regime uses the generalized S-matrix cascade, which has no "
-                    "per-layer Berreman-mode reconstruction).  Use "
-                    "rcwa.RCWAStack for internal fields of such stacks, or "
-                    "normal incidence.")
+                    "out-of-plane tensor layers at OBLIQUE incidence.  That "
+                    "regime uses the generalized (RCWA-convention) S-matrix "
+                    "cascade, whose per-layer field reconstruction would need "
+                    "asymmetric-mode recovery in the generalized convention with "
+                    "a Rayleigh-consistent flux -- machinery neither this solver "
+                    "nor rcwa.RCWAStack currently has (RCWAStack raises the same "
+                    "for out-of-plane stacks).  Far-field R / T / Jones ARE "
+                    "exact here; internal fields are available at NORMAL "
+                    "incidence (native path) or for iso / in-plane stacks.")
             R, T, Jr, _Jt = _offplane_oblique_solve(
                 eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky)
             return R, T, Jr

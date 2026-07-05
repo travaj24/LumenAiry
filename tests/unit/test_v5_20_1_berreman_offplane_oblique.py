@@ -170,3 +170,51 @@ def test_retain_internal_raises_for_oop_oblique():
     st.set_source(WL, theta=th, phi=ph)
     with pytest.raises(NotImplementedError):
         st.solve(retain_internal=True)
+
+
+# --------------------------------------------------------------------------- #
+# JAX twin: differentiable out-of-plane-oblique matches NumPy + valid gradients
+# --------------------------------------------------------------------------- #
+
+def _jax():
+    jax = pytest.importorskip("jax")
+    jax.config.update("jax_enable_x64", True)
+    return jax
+
+
+@pytest.mark.parametrize("theta_deg,phi_deg", [(20.0, 0.0), (20.0, 25.0)])
+def test_jax_oop_oblique_matches_numpy(theta_deg, phi_deg):
+    _jax()
+    import jax.numpy as jnp
+    th, ph = np.deg2rad(theta_deg), np.deg2rad(phi_deg)
+    _R, _T, Jn, _ = berreman_jones_1d([(_OOP_LOSSY, 0.4e-6)], 1.5, 1.0, WL,
+                                      angle=th, phi=ph)
+    _Rj, _Tj, Jj, _ = berreman_jones_1d(
+        [(jnp.asarray(_OOP_LOSSY, jnp.complex128), 0.4e-6)],
+        jnp.asarray(1.5 + 0j), jnp.asarray(1.0 + 0j), jnp.asarray(WL),
+        angle=jnp.asarray(th), phi=jnp.asarray(ph))
+    assert np.max(np.abs(_sv(np.asarray(Jj)) - _sv(np.asarray(Jn)))) < 1e-11
+
+
+def test_jax_oop_conical_gradient_matches_fd():
+    """d/dtheta of the reflected-power Frobenius norm through the generalized
+    out-of-plane path -- AD must agree with central finite difference."""
+    jax = _jax()
+    import jax.numpy as jnp
+    ph = np.deg2rad(25.0)
+
+    def loss(theta):
+        _R, _T, J, _ = berreman_jones_1d(
+            [(jnp.asarray(_OOP, jnp.complex128), 0.4e-6)],
+            jnp.asarray(1.5 + 0j), jnp.asarray(1.0 + 0j), jnp.asarray(WL),
+            angle=theta, phi=jnp.asarray(ph))
+        return jnp.sum(jnp.abs(J) ** 2)
+
+    th0 = 0.35
+    g_ad = float(jax.grad(loss)(jnp.asarray(th0)))
+    h = 1e-6
+    g_fd = (float(loss(jnp.asarray(th0 + h)))
+            - float(loss(jnp.asarray(th0 - h)))) / (2 * h)
+    assert abs(g_ad - g_fd) <= 1e-5 * max(abs(g_fd), 1.0) + 1e-9
+    # jit must trace without a host-side argsort severing the graph
+    assert np.isfinite(float(jax.jit(loss)(jnp.asarray(th0))))
