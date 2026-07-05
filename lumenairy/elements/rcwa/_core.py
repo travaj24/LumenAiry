@@ -2060,21 +2060,25 @@ def _require_inplane_tensor(fn_name, *tensors, allow_offplane=False):
     only -- a JAX tensor is skipped (not materialisable here) and assumed
     in-plane on the differentiable path.
 
-    The 1-D NumPy/CuPy path now has a FULL-3x3 (out-of-plane) solver (Li 2003,
-    v5.11.0), so it passes ``allow_offplane=True`` and this returns whether
-    out-of-plane coupling is present (the caller routes to the full path) instead
-    of raising.  The 2-D (:func:`rcwa_jones_2d`) and :class:`RCWAStack` paths keep
-    ``allow_offplane=False`` (1-D only; 2-D / stack out-of-plane pending)."""
+    Full-3x3 (out-of-plane) solvers now exist on BOTH the 1-D NumPy/CuPy path
+    (:func:`rcwa_jones_1d`, Li 2003, v5.11.0) and the 2-D tensor / stack paths
+    (:func:`rcwa_jones_2d`, :class:`RCWAStack`, Li 2003 6-tuple generator, GAP2
+    v5.14.1) -- those callers pass ``allow_offplane=True`` and route to the full
+    generalized-S-matrix path.  This guard therefore fires only on the paths that
+    genuinely CANNOT represent z-coupling: the z-decoupled legacy in-plane subset
+    and the scalar/isotropic efficiency solvers.  Concrete (NumPy / CuPy) tensors
+    only -- a JAX tensor is skipped (not materialisable here) and assumed in-plane
+    on the differentiable path."""
     has_off = _tensor_offplane_present(*tensors)
     if has_off and not allow_offplane:
         raise ValueError(
-            f"{fn_name}: the anisotropic path is the z-decoupled in-plane "
-            f"tensor subset (exx, exy, eyx, eyy, ezz); the supplied tensor "
-            f"has out-of-plane coupling (eps_xz / eps_yz / eps_zx / eps_zy "
-            f"!= 0 -- e.g. a tilted-director LC or a magneto-optic / "
-            f"gyrotropic tensor), which this solver would silently drop. "
-            f"Full 3x3 (out-of-plane) tensors are supported on the 1-D path "
-            f"(rcwa_jones_1d); 2-D / RCWAStack out-of-plane is pending.")
+            f"{fn_name}: this path is the z-decoupled in-plane tensor subset "
+            f"(exx, exy, eyx, eyy, ezz); the supplied tensor has out-of-plane "
+            f"coupling (eps_xz / eps_yz / eps_zx / eps_zy != 0 -- e.g. a "
+            f"tilted-director LC or a magneto-optic / gyrotropic tensor), which "
+            f"it would silently drop.  Full 3x3 (out-of-plane) tensors are "
+            f"supported by rcwa_jones_1d, rcwa_jones_2d, and RCWAStack (forward "
+            f"R / T / Jones); use one of those for an out-of-plane tensor.")
     return has_off
 
 

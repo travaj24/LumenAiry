@@ -182,15 +182,13 @@ def pmm_jones_1d_conical_tensor(period, eps_tensor_cell, n_substrate,
     path -- an IN-PLANE tensor at conical incidence matches the analytic
     Berreman 4x4 oracle to Berreman grade (singular values), an isotropic tensor
     reduces byte-exactly to :func:`pmm_jones_1d_conical`, and an OUT-OF-PLANE
-    (tilted-director) tensor matches Berreman exactly at NORMAL incidence.  An
-    OUT-OF-PLANE tensor at CONICAL incidence inherits a KNOWN residual of the
-    shared 2-D tensor generator (:func:`_layer_eigenmodes_tensor`): its layer
-    modes equal the Berreman ``4x4`` Delta modes exactly, but the coupling to the
-    isotropic Rayleigh half-spaces disagrees with Berreman on one eigenchannel by
-    a few percent (energy still conserves).  This module reproduces
-    :func:`pmm_jones_2d` bit-for-bit there; the discrepancy is a generator-vs-
-    half-space convention item flagged for a focused follow-up, NOT specific to
-    the native reduction.
+    (tilted-director) tensor matches Berreman to MACHINE PRECISION at every
+    incidence -- normal, planar-oblique, AND conical.  (Historical note: the
+    docstring here previously reported a "few-percent OOP-at-conical residual vs
+    Berreman"; that was an artifact of a BUG in the ``berreman_jones_1d`` S-matrix
+    oracle it was graded against -- fixed 2026-07-05 -- NOT of this generator.
+    With the corrected oracle the singular-value agreement is ``~1e-15``; this
+    solver, :func:`pmm_jones_2d`, and ``rcwa_jones_2d`` were all correct.)
     """
     if formulation not in ("laurent", "li"):
         raise ValueError(
