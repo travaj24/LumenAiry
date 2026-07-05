@@ -243,3 +243,64 @@ def test_persurface_captures_off_axis_astigmatism():
     ellip = sx / sy
     # strongly astigmatic: one axis focuses much tighter than the other
     assert (ellip < 0.5) or (ellip > 2.0), ellip
+
+
+# --------------------------------------------------------------------------
+# JAX differentiability (the free-space / thin-lens paths are xp-dispatched)
+# --------------------------------------------------------------------------
+def _jax_ok():
+    try:
+        import jax  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
+def test_gbd_freespace_is_jax_differentiable_and_matches_numpy():
+    """GBD's free-space path is backend-dispatched (array_namespace), so it
+    runs under jax.numpy, matches the numpy result, and is differentiable /
+    jittable -- the differentiable GBD twin for source-field / free-space /
+    lens design optimisation (the per-surface prescription path is numpy-only)."""
+    import jax
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    N, dx = 64, 10e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (0.15e-3) ** 2).astype(np.complex128)
+    F_np = propagate_gbd_freespace(E, dx, z=5e-3, wavelength=LAM, sample_step=2)
+    F_j = propagate_gbd_freespace(jnp.asarray(E), dx, z=5e-3, wavelength=LAM,
+                                  sample_step=2)
+    assert float(jnp.linalg.norm(jnp.asarray(F_np) - F_j)
+                 / jnp.linalg.norm(F_j)) < 1e-10
+
+    def loss(a):
+        F = propagate_gbd_freespace(a * jnp.asarray(E), dx, z=5e-3,
+                                    wavelength=LAM, sample_step=2)
+        return jnp.sum(jnp.abs(F) ** 2)
+
+    g = float(jax.grad(loss)(1.0))
+    assert np.isfinite(g) and g != 0.0
+    assert np.isfinite(float(jax.jit(loss)(1.0)))
+
+
+def test_vector_gbd_propagates_jones_components_independently():
+    """propagate_gbd_freespace_vector propagates each Jones component through
+    free space and each equals the scalar propagate_gbd_freespace of that
+    component (independent-component propagation is exact in free space)."""
+    from lumenairy.propagators.gbd import propagate_gbd_freespace_vector
+    N, dx = 96, 8e-6
+    z = 4e-3
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    Ex = np.exp(-(X ** 2 + Y ** 2) / (0.15e-3) ** 2).astype(np.complex128)
+    Ey = (X / 0.15e-3) * Ex     # a distinct (linearly-polarized-varying) comp
+    Evec = np.stack([Ex, Ey], axis=0)
+    out = propagate_gbd_freespace_vector(
+        Evec, dx, z=z, wavelength=LAM, sample_step=2)
+    assert out.shape == (2, N, N)
+    ox = propagate_gbd_freespace(Ex, dx, z=z, wavelength=LAM, sample_step=2)
+    oy = propagate_gbd_freespace(Ey, dx, z=z, wavelength=LAM, sample_step=2)
+    assert np.allclose(out[0], ox, rtol=1e-10, atol=1e-12)
+    assert np.allclose(out[1], oy, rtol=1e-10, atol=1e-12)

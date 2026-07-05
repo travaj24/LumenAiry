@@ -51,6 +51,33 @@ All notable changes to the core library are documented here.
   GPU path caps at `poly_order <= 23`.  See
   `docs/audits/AUDIT_WAVE_LENS_MODELS_2026_07_02_REMEDIATION.md` §4.5.
 
+- **GBD feature-completeness.**  The Gaussian Beam Decomposition propagator
+  (`lumenairy.propagators.gbd`) gains, on top of the audit-closed correctness:
+  - **Per-surface / aberration-aware form** —
+    `propagate_gbd_through_prescription(..., per_surface=True)` (default `False`
+    keeps the whole-system-ABCD path unchanged) evolves each beamlet's complex
+    parameter **surface by surface** via a new reusable raytrace primitive
+    `raytrace.ray_transfer_jacobian` (the per-ray ABCD Jacobian of the real
+    aberrated trace, by central finite differences; on-axis 2×2 block reproduces
+    `system_abcd_prescription` to 1.1e-8).  `Q` promotes to a `(N, 2, 2)` tensor
+    (general astigmatic Gaussian) — generalized Collins `Q_out=(C+DQ)(A+BQ)^{-1}`,
+    per-surface `1/sqrt(det(A+BQ))` amplitude (branch-safe), base-ray OPL piston,
+    branch-safe tensor free-space.  Reduces to the isotropic result on-axis;
+    off-axis it captures tangential/sagittal **astigmatism** (~field², a
+    near-line focus at 6°) the paraxial form cannot.  `raytrace.
+    ray_transfer_jacobian` is reusable (Maslov Hessian propagation later).
+  - **Husimi decomposition plumbed through the lens & prescription helpers**
+    (`direction_sampling=`), so a tilted source focuses at `f·tanθ`.
+  - **Aperture vignetting** (`apply_aperture_to_beamlets`, `aperture_semi_
+    diameter=`), **polychromatic** (`propagate_gbd_freespace_spectral`,
+    stack/incoherent-intensity), **vector / Jones** (`propagate_gbd_freespace_
+    vector`; independent-component free-space, Fresnel-at-surface deferred),
+    **auto-sampling** (`recommend_gbd_sampling`), and a **tensor-Q reconstruction**
+    branch (isotropic reduces to scalar at 2.3e-15).
+  - **JAX-differentiable** free-space / thin-lens paths (backend-dispatched;
+    `jax.grad` / `jax.jit` validated).
+  Tests: `tests/unit/test_gbd_feature_complete.py`.
+
 ## [5.20.0] — 2026-07-04
 
 Maslov propagator (`apply_real_lens_maslov`) brought in line with the rest of

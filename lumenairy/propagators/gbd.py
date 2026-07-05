@@ -14,6 +14,21 @@ The deterministic counterpart to Monte Carlo HFPI.  Strengths:
 * **Composes with raytrace** -- each beamlet's base ray is just a
   geometric ray, so the existing ``trace`` infrastructure
   propagates everything.
+* **Aberration-aware (per-surface form)** --
+  ``propagate_gbd_through_prescription(..., per_surface=True)`` evolves each
+  beamlet's complex parameter surface-by-surface via the real per-ray
+  differential ray transfer (``raytrace.ray_transfer_jacobian``), promoting
+  ``Q`` to a ``(N, 2, 2)`` tensor that captures off-axis **astigmatism** and
+  higher-order aberration (the paraxial whole-system-ABCD form cannot).
+* **Differentiable** -- backend-dispatched (``array_namespace``), so the
+  free-space / thin-lens paths run under ``jax.numpy`` and are ``jax.grad`` /
+  ``jax.jit`` friendly.
+
+Feature helpers: Husimi (direction-sampling) decomposition for tilted /
+diverging sources (``direction_sampling=True``), aperture vignetting
+(``apply_aperture_to_beamlets``), polychromatic (``propagate_gbd_freespace_
+spectral``), vector / Jones (``propagate_gbd_freespace_vector``), and
+auto-sampling (``recommend_gbd_sampling``).
 
 Limitations:
 
@@ -21,6 +36,9 @@ Limitations:
   edges; HFPI handles hard cutoffs better.
 * **Caustic-region accuracy** -- like all paraxial complex-ray
   methods, GBD's accuracy degrades near a caustic.
+* **Polarization** -- the vector helper propagates the Jones components
+  independently (exact for non-polarizing / free-space systems); Fresnel s/p
+  at surfaces (polarization ray tracing) is a future extension.
 
 See ``REFERENCES.txt`` Section C for the foundational publications.
 
@@ -752,6 +770,58 @@ def propagate_gbd_freespace_spectral(
         f"'intensity', got {combine!r}")
 
 
+def propagate_gbd_freespace_vector(
+    E_vec: np.ndarray,
+    dx: float,
+    *,
+    z: float,
+    wavelength: float,
+    **freespace_kwargs: Any,
+) -> np.ndarray:
+    """Vector (polarized) free-space GBD.
+
+    Propagates a two-component Jones field.  In free space -- and through
+    ideal, **polarization-preserving** optics -- the two transverse
+    polarization components ``E_x`` and ``E_y`` propagate independently (the
+    paraxial beamlet geometry is polarization-agnostic), so each is decomposed
+    and reconstructed on its own and the vector field is reassembled.
+
+    .. note::
+       Polarization-**changing** elements -- Fresnel transmission/reflection at
+       tilted or high-NA surfaces, waveplates, diattenuators -- are NOT modeled
+       here: that requires per-surface s/p (Jones/polarization ray tracing)
+       along each base ray, a documented future extension built on the same
+       differential-ray-transfer trace as the ``per_surface`` scalar path.  For
+       coordinate-frame / non-polarizing free-space and thin-element systems the
+       independent-component propagation is exact.
+
+    Parameters
+    ----------
+    E_vec : array ``(2, Ny, Nx)`` complex
+        The ``(E_x, E_y)`` Jones components of the source field.
+    dx, z, wavelength : see :func:`propagate_gbd_freespace`.
+    **freespace_kwargs
+        Forwarded to :func:`propagate_gbd_freespace` for each component.
+
+    Returns
+    -------
+    array ``(2, Ny, Nx)`` complex
+        The propagated ``(E_x, E_y)`` Jones field.
+    """
+    xp = array_namespace(E_vec)
+    E_vec = xp.asarray(E_vec)
+    if E_vec.shape[0] != 2 or E_vec.ndim != 3:
+        raise ValueError(
+            "propagate_gbd_freespace_vector: E_vec must be (2, Ny, Nx) "
+            f"(the E_x, E_y Jones components); got shape {E_vec.shape}.")
+    comps = [
+        propagate_gbd_freespace(E_vec[c], dx, z=z, wavelength=wavelength,
+                                **freespace_kwargs)
+        for c in range(2)
+    ]
+    return xp.stack(comps, axis=0)
+
+
 def propagate_gbd_thin_lens(
     E_in: np.ndarray,
     dx: float,
@@ -1216,6 +1286,7 @@ __all__ = [
     'reconstruct_field_from_beamlets',
     'propagate_gbd_freespace',
     'propagate_gbd_freespace_spectral',
+    'propagate_gbd_freespace_vector',
     'propagate_gbd_thin_lens',
     'propagate_gbd_through_prescription',
 ]
