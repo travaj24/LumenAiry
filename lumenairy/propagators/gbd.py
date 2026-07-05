@@ -130,6 +130,13 @@ class BeamletBundle:
             return 0
 
 
+def _q_is_tensor(Q: Any) -> bool:
+    """True if ``Q`` is a (N, 2, 2) tensor beam parameter (general astigmatic
+    Gaussian), False for the (N,) scalar (rotationally-symmetric) parameter.
+    The single dispatch predicate that keeps the scalar paths untouched."""
+    return getattr(Q, 'ndim', 1) == 3
+
+
 # ============================================================================
 # Source-plane decomposition
 # ============================================================================
@@ -502,6 +509,12 @@ def reconstruct_field_from_beamlets(
     # the ramp is zero so this fix is a no-op for that path.
     has_dirs = (hasattr(beamlets, 'directions')
                 and beamlets.directions is not None)
+    # v5.21 (per-surface GBD): a beamlet bundle may carry a (N, 2, 2) complex-
+    # symmetric TENSOR Q (general astigmatic Gaussian beam) instead of the (N,)
+    # scalar Q.  Detected once here; the scalar branch below is preserved
+    # verbatim (byte-identical) and only the tensor case takes the new quadratic
+    # form.  ``_q_is_tensor`` is the single dispatch predicate.
+    is_tensor = _q_is_tensor(beamlets.Q)
     # v4.13.1 perf: fuse the two ``xp.exp`` calls into one (only on the
     # has_dirs branch, where pre-v4.13.1 evaluated ``exp(-i*k*Q*rho2/2)``
     # and ``exp(i*k*tilt)`` separately and multiplied them).  ``exp(A) *
@@ -526,7 +539,24 @@ def reconstruct_field_from_beamlets(
         dX = Xg[..., None] - x_b[None, None, :]
         dY = Yg[..., None] - y_b[None, None, :]
         rho2 = dX * dX + dY * dY
-        if has_dirs:
+        if is_tensor:
+            # General astigmatic Gaussian: transverse curvature is the
+            # quadratic form 0.5 * conj(Q) : (rho rho^T) with the F-1 conj
+            # (gbd.py physics convention) applied ELEMENTWISE to every Q
+            # component, incl. the off-diagonal Qxy -- dropping conj on Qxy
+            # would silently conjugate only the skew-astigmatism phase (an
+            # intensity-invisible bug).  Q is symmetric so Qxy == Qyx.
+            Qxx = Q_b[:, 0, 0]
+            Qyy = Q_b[:, 1, 1]
+            Qxy = Q_b[:, 0, 1]
+            L_b = beamlets.directions[start:end, 0]
+            M_b = beamlets.directions[start:end, 1]
+            arg = (0.5 * (xp.conj(Qxx)[None, None, :] * (dX * dX)
+                          + xp.conj(Qyy)[None, None, :] * (dY * dY)
+                          + 2.0 * xp.conj(Qxy)[None, None, :] * (dX * dY))
+                   + L_b[None, None, :] * dX + M_b[None, None, :] * dY)
+            phase = xp.exp(1j * k * arg)
+        elif has_dirs:
             L_b = beamlets.directions[start:end, 0]
             M_b = beamlets.directions[start:end, 1]
             # Fused phase argument.  v5.4.6 (audit F-1): the stored Q uses
