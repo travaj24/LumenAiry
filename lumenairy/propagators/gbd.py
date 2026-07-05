@@ -545,9 +545,15 @@ def propagate_gbd_thin_lens(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
+    direction_sampling: bool = False,
 ) -> np.ndarray:
     """End-to-end three-leg GBD: source -> free space -> thin lens
     -> free space -> output (the canonical GBD validation case).
+
+    ``direction_sampling=True`` selects the Husimi (position + direction)
+    decomposition so a source already tilted / diverging at the input plane
+    walks off correctly through the system; see
+    :func:`decompose_field_to_beamlets`.
 
     .. versionchanged:: 5.2
         ``output_grid`` -> ``output_shape`` rename (AUDIT_V4_13_1 Part 2
@@ -565,6 +571,7 @@ def propagate_gbd_thin_lens(
         E_in, dx, wavelength=wavelength,
         waist_factor=waist_factor,
         sample_step=sample_step,
+        direction_sampling=direction_sampling,
     )
     bundle = propagate_beamlets_freespace(bundle, z_distance=z_to_lens,
                                           wavelength=wavelength)
@@ -702,6 +709,7 @@ def propagate_gbd_through_prescription(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
+    direction_sampling: bool = False,
 ) -> np.ndarray:
     """End-to-end GBD through a sequential lumenairy prescription
     via system ABCD evolution.
@@ -716,6 +724,10 @@ def propagate_gbd_through_prescription(
     or strongly-aberrated systems the per-surface evolution form
     (not yet implemented; tracked as a future extension) gives
     higher accuracy.
+
+    ``direction_sampling=True`` selects the Husimi (position + direction)
+    decomposition so a source already tilted / diverging at the input
+    plane walks off correctly; see :func:`decompose_field_to_beamlets`.
 
     Parameters
     ----------
@@ -751,6 +763,7 @@ def propagate_gbd_through_prescription(
         E_in, dx, wavelength=wavelength,
         waist_factor=waist_factor,
         sample_step=sample_step,
+        direction_sampling=direction_sampling,
     )
 
     # Get the system's paraxial ABCD matrix.  ``system_abcd_prescription``
