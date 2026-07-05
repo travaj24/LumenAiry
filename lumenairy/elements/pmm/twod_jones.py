@@ -53,6 +53,7 @@ from __future__ import annotations
 import numpy as np
 
 from ..rcwa._core import (
+    _check_energy,
     _grazing_safe_wavelength,
     _interface_smatrix_general,
     _layer_eigenmodes_tensor,
@@ -423,7 +424,18 @@ def pmm_jones_2d(
                                 "pmm_jones_2d",
                                 passive_tol=_PASSIVE_TOL_2D,
                                 per_order_tol=_PER_ORDER_TOL_2D)
-    return _solve_at(degree)
+    res = _solve_at(degree)
+    # Blowup guard (mirror rcwa_jones_2d): a high-contrast / birefringent cell
+    # at a near-singular (degree, n_orders) truncation -- common at CONICAL
+    # incidence -- can return a NON-PHYSICAL answer (sum R+T up to ~1e7) with no
+    # signal.  _check_energy RAISES on that catastrophic case and WARNS on a
+    # lossless-closure violation, both pointing at ``stabilize=True`` (which
+    # retries nearby degrees and cures it -- verified on birefringent conical
+    # gratings).  Provably lossless == every cell permittivity exactly real.
+    lossless = not bool(np.any(np.abs(np.imag(np.asarray(tile, dtype=_C)))
+                               > 1e-12))
+    _check_energy("pmm_jones_2d", res[1], res[2], lossless=lossless)
+    return res
 
 
 def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
