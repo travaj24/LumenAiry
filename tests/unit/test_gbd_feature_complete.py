@@ -13,6 +13,8 @@ import pytest
 from lumenairy.propagators.gbd import (
     apply_aperture_to_beamlets,
     decompose_field_to_beamlets,
+    propagate_gbd_freespace,
+    propagate_gbd_freespace_spectral,
     propagate_gbd_thin_lens,
 )
 
@@ -102,3 +104,29 @@ def test_aperture_vignettes_and_broadens_focus():
     assert e_stop < e_full           # vignetting removed energy
     # a tighter stop diffraction-broadens the focus
     assert _rms_width(stopped, X, Y) > _rms_width(full, X, Y)
+
+
+def test_spectral_stack_matches_single_wavelength_and_intensity_sum():
+    """propagate_gbd_freespace_spectral stacks per-wavelength fields that each
+    equal the single-wavelength call, and 'intensity' returns the weighted
+    incoherent sum."""
+    N, dx = 96, 8e-6
+    z = 5e-3
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (0.15e-3) ** 2).astype(np.complex128)
+    lams = [0.8e-6, 1.0e-6, 1.3e-6]
+    stack = propagate_gbd_freespace_spectral(
+        E, dx, z=z, wavelengths=lams, combine='stack', sample_step=2)
+    assert stack.shape == (3, N, N)
+    for i, lam in enumerate(lams):
+        one = propagate_gbd_freespace(E, dx, z=z, wavelength=lam, sample_step=2)
+        assert np.allclose(stack[i], one, rtol=1e-10, atol=1e-12)
+    w = [1.0, 2.0, 0.5]
+    inten = propagate_gbd_freespace_spectral(
+        E, dx, z=z, wavelengths=lams, weights=w, combine='intensity',
+        sample_step=2)
+    assert inten.shape == (N, N)
+    assert np.isrealobj(inten) or np.allclose(inten.imag, 0.0)
+    ref = sum(wi * np.abs(stack[i]) ** 2 for i, wi in enumerate(w))
+    assert np.allclose(np.asarray(inten), ref, rtol=1e-10, atol=1e-12)

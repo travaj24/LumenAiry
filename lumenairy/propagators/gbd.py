@@ -583,6 +583,76 @@ def propagate_gbd_freespace(
     )
 
 
+def propagate_gbd_freespace_spectral(
+    E_in: np.ndarray,
+    dx: float,
+    *,
+    z: float,
+    wavelengths: Any,
+    weights: Optional[Any] = None,
+    combine: str = 'stack',
+    **freespace_kwargs: Any,
+) -> np.ndarray:
+    """Polychromatic free-space GBD: propagate ``E_in`` at each wavelength.
+
+    Because the beamlet complex parameter ``Q = -i/z_R``, its Rayleigh range
+    ``z_R = pi w0^2 / lambda`` and the reconstruction phase ``k`` are all
+    wavelength-dependent, each wavelength is decomposed and propagated
+    independently and the results are combined.
+
+    Parameters
+    ----------
+    wavelengths : array-like of float
+        The wavelengths (m) to propagate.
+    weights : array-like, optional
+        Per-wavelength spectral weights (e.g. source SED); defaults to equal
+        weights.  Used only by ``combine='intensity'``.
+    combine : {'stack', 'intensity'}
+        ``'stack'`` returns the per-wavelength complex fields stacked as
+        ``(n_lambda, Ny, Nx)``.  ``'intensity'`` returns the weighted
+        **incoherent** sum ``sum_l w_l |E_l|^2`` (real ``(Ny, Nx)``) -- the
+        broadband PSF / image-plane intensity.
+    **freespace_kwargs
+        Forwarded to :func:`propagate_gbd_freespace` (``output_shape``,
+        ``output_dx``, ``waist_factor``, ``sample_step``, ``chunk_beamlets``,
+        ``direction_sampling``, ...).
+
+    Returns
+    -------
+    array
+        ``(n_lambda, Ny, Nx)`` complex for ``combine='stack'`` or
+        ``(Ny, Nx)`` real for ``combine='intensity'``.
+    """
+    xp = array_namespace(E_in)
+    lams = [float(_l) for _l in wavelengths]
+    if not lams:
+        raise ValueError(
+            "propagate_gbd_freespace_spectral: ``wavelengths`` is empty.")
+    fields = [
+        propagate_gbd_freespace(E_in, dx, z=z, wavelength=_l,
+                                **freespace_kwargs)
+        for _l in lams
+    ]
+    if combine == 'stack':
+        return xp.stack(fields, axis=0)
+    if combine == 'intensity':
+        if weights is None:
+            w = [1.0] * len(lams)
+        else:
+            w = [float(_w) for _w in weights]
+            if len(w) != len(lams):
+                raise ValueError(
+                    "propagate_gbd_freespace_spectral: ``weights`` length "
+                    f"{len(w)} != ``wavelengths`` length {len(lams)}.")
+        acc = xp.zeros(fields[0].shape, dtype=xp.abs(fields[0]).dtype)
+        for _w, _F in zip(w, fields):
+            acc = acc + _w * xp.abs(_F) ** 2
+        return acc
+    raise ValueError(
+        f"propagate_gbd_freespace_spectral: combine must be 'stack' or "
+        f"'intensity', got {combine!r}")
+
+
 def propagate_gbd_thin_lens(
     E_in: np.ndarray,
     dx: float,
@@ -913,6 +983,7 @@ __all__ = [
     'apply_abcd_to_beamlets',
     'reconstruct_field_from_beamlets',
     'propagate_gbd_freespace',
+    'propagate_gbd_freespace_spectral',
     'propagate_gbd_thin_lens',
     'propagate_gbd_through_prescription',
 ]
