@@ -1674,6 +1674,83 @@ class TestAuditFixesV4_12_1_grid_unify_AsmVsGbdGridAlignment:
             f"did not.")
 
 
+class TestGbdMatchesAnalyticGaussianWhereAsmAliases:
+    """GBD reproduces the EXACT analytic Gaussian-beam solution in free
+    space, and is *more* accurate than plain ASM once the discrete
+    Fresnel ratio ``Q = z*lambda / (N*dx^2)`` exceeds 1.
+
+    Diagnosis pin (2026-06-24): an earlier reading found GBD "8% off"
+    on a collimated free-space Gaussian and blamed GBD.  That was
+    backwards -- it compared GBD against an *under-sampled* ASM.  When
+    the reference is the closed-form Gaussian beam
+    ``E(r,z) = (q0/q(z)) exp(i k r^2 / (2 q(z))) exp(i k z)`` with
+    ``q0 = -i z_R`` (the library's exp(-i w t) / forward exp(+ikz)
+    convention -- ``q_physics = conj(q_code)``, ``Q = 1/q_code``), GBD
+    matches to ~0.1% while plain ASM at ``Q >> 1`` aliases (the
+    expanding beam's tails wrap the periodic FFT grid; see Physics-III
+    Sec. 1.1).  Padding the ASM grid removes ASM's error entirely --
+    GBD never had one.  This pin guards against re-blaming GBD.
+    """
+
+    def _analytic_gaussian(self, R2, z, w0, wl):
+        k = 2.0 * np.pi / wl
+        zR = np.pi * w0 * w0 / wl
+        q0 = -1j * zR
+        q = q0 + z
+        return (q0 / q) * np.exp(1j * k * R2 / (2.0 * q)) * np.exp(1j * k * z)
+
+    def test_gbd_vs_analytic_gaussian_Q_gt_1(self):
+        # Well-sampled source (w0/dx = 10) expanded past ~1 Rayleigh range
+        # so the periodic-FFT ASM aliases (Q > 1) while GBD stays exact.
+        N, dx, w0, z = 64, 2e-6, 20e-6, 2.5e-3
+        wl = WAVELENGTH
+        zR = np.pi * w0 * w0 / wl
+        Q = z * wl / (N * dx * dx)           # discrete Fresnel ratio
+        assert Q > 1.0, f"test needs the ASM-aliasing regime; Q={Q:.2f}"
+
+        x = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, x, indexing='xy')
+        R2 = X * X + Y * Y
+        E0 = np.exp(-R2 / w0 ** 2).astype(np.complex128)
+
+        E_ref = self._analytic_gaussian(R2, z, w0, wl)
+        E_gbd = np.asarray(propagate_gbd_freespace(
+            E0, dx, z=z, wavelength=wl,
+            waist_factor=1.5, sample_step=2, chunk_beamlets=512))
+        E_asm = np.asarray(angular_spectrum_propagate(E0, z, wl, dx))
+
+        def prof_err(field):
+            a = np.abs(E_ref)
+            b = np.abs(field)
+            return float(np.linalg.norm(a / a.max() - b / b.max())
+                         / np.linalg.norm(a / a.max()))
+
+        gbd_err = prof_err(E_gbd)
+        asm_err = prof_err(E_asm)
+        gbd_energy = float((np.abs(E_gbd) ** 2).sum()
+                           / (np.abs(E_ref) ** 2).sum())
+
+        # Primary pin: GBD reproduces the analytic Gaussian to <1%
+        # (it is ~0.3% here and -> 0 as w0/dx grows; NOT the "8%" a
+        # regression against under-sampled ASM once suggested).
+        assert gbd_err < 1e-2, (
+            f"GBD deviates {gbd_err:.4f} from the analytic Gaussian at "
+            f"z={z*1e3:.1f}mm (z/zR={z/zR:.1f}, Q={Q:.1f}); expected ~3e-3. "
+            f"A regression here means the beamlet propagate/reconstruct "
+            f"path drifted from the closed-form beam.")
+        # Energy is (approximately) conserved by the propagation (a few
+        # percent slack for the finite beamlet grid vs the analytic tails).
+        assert abs(gbd_energy - 1.0) < 5e-2, (
+            f"GBD energy ratio {gbd_energy:.4f} (expected ~1).")
+        # Documentation pin: plain ASM is the INACCURATE one here (Q>1
+        # wraparound), clearly worse than GBD -- do NOT use unpadded ASM
+        # as the accuracy reference in this regime.
+        assert asm_err > 1.5 * gbd_err, (
+            f"expected plain ASM to alias at Q={Q:.1f} (asm_err={asm_err:.4f}) "
+            f"and be worse than GBD (gbd_err={gbd_err:.4f}); if ASM is now "
+            f"accurate here the grid/Q assumptions of this pin changed.")
+
+
 # ============================================================================
 # 3. HF vs ASM cross-method coherent overlay
 # ============================================================================
