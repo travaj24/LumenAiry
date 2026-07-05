@@ -173,4 +173,51 @@ def ray_transfer_jacobian(
         opd=bopd[:n], alive=np.asarray(balive[:n], bool))
 
 
-__all__ = ['DifferentialTransfer', 'ray_transfer_jacobian']
+def ray_transfer_jacobian_jax(x, y, ux, uy, prescription, wavelength):
+    """Differentiable per-ray composite ABCD Jacobian via ``jax`` autodiff.
+
+    The JAX twin of :func:`ray_transfer_jacobian` (composite input->output):
+    the 4x4 ``(x, y, ux, uy)`` ray-transfer Jacobian of the JAX-traceable
+    :func:`raytrace.trace_jax`, computed by ``jax.jacfwd`` (EXACT, not finite
+    differences) and vmapped over rays.  Because it is built on ``trace_jax``,
+    the whole thing is ``jax.grad`` / ``jax.jit`` friendly and differentiable
+    with respect to the ray state -- and, via
+    :func:`raytrace.trace_jax_with_params`, with respect to prescription
+    parameters (radii, thicknesses) -- enabling gradient-based lens design on
+    the per-surface GBD.
+
+    .. warning::
+       ``jax_trace._transfer_jax`` propagates ``x_new = x + L * thickness``
+       using the direction cosine ``L`` rather than the paraxial slope
+       ``u = L / N``, so the ``B``-block is scaled by ~``N`` and deviates at
+       high NA.  Use the NumPy finite-difference :func:`ray_transfer_jacobian`
+       as the accuracy reference; this path is for **gradients / optimization**
+       (and is exact at low NA, where ``L ~ u``).
+
+    Returns
+    -------
+    jax array ``(N, 4, 4)``
+        Per-ray composite ray-transfer Jacobian (row/col order (x, y, ux, uy)).
+    """
+    import jax
+    import jax.numpy as jnp
+
+    from .jax_trace import make_jax_ray_state, trace_jax
+
+    def _out_state(s4):
+        xx, yy, uxx, uyy = s4[0], s4[1], s4[2], s4[3]
+        inv = 1.0 / jnp.sqrt(1.0 + uxx * uxx + uyy * uyy)
+        st = make_jax_ray_state(
+            jnp.reshape(xx, (1,)), jnp.reshape(yy, (1,)),
+            jnp.zeros((1,)), jnp.reshape(uxx * inv, (1,)),
+            jnp.reshape(uyy * inv, (1,)), jnp.reshape(inv, (1,)))
+        r = trace_jax(st, prescription, wavelength)
+        return jnp.stack([r.x[0], r.y[0], r.L[0] / r.N[0], r.M[0] / r.N[0]])
+
+    s4 = jnp.stack([jnp.asarray(x), jnp.asarray(y),
+                    jnp.asarray(ux), jnp.asarray(uy)], axis=-1)
+    return jax.vmap(jax.jacfwd(_out_state))(s4)
+
+
+__all__ = ['DifferentialTransfer', 'ray_transfer_jacobian',
+           'ray_transfer_jacobian_jax']

@@ -72,6 +72,7 @@ from .core import (  # noqa: E402  (continuation of the .core import list)
 from .differential import (  # noqa: E402
     DifferentialTransfer,
     ray_transfer_jacobian,
+    ray_transfer_jacobian_jax,
 )
 
 # v4.15.1 (Cluster B Item 6): bridge a coherent field into a RayBundle.
@@ -125,6 +126,7 @@ __all__ = [
     'system_abcd',
     'system_abcd_prescription',
     'ray_transfer_jacobian',
+    'ray_transfer_jacobian_jax',
     'DifferentialTransfer',
     'seidel_coefficients',
     'seidel_prescription',

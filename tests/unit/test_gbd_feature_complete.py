@@ -340,3 +340,33 @@ def test_anamorphic_circular_beam_stays_circular():
     sx = np.sqrt((I * (Xa - (I * Xa).sum() / s) ** 2).sum() / s)
     sy = np.sqrt((I * (Ya - (I * Ya).sum() / s) ** 2).sum() / s)
     assert abs(sx / sy - 1.0) < 0.05, (sx, sy)   # physically circular
+
+
+@pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
+def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
+    """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the
+    NumPy finite-difference primitive at low NA and is jax.grad-differentiable
+    -- the differentiable foundation for per-surface GBD design optimization."""
+    import jax
+    import jax.numpy as jnp
+    jax.config.update('jax_enable_x64', True)
+    from lumenairy.raytrace import (
+        ray_transfer_jacobian,
+        ray_transfer_jacobian_jax,
+        surfaces_from_prescription,
+    )
+    p = _singlet()
+    surfs = surfaces_from_prescription(p)
+    x = np.linspace(-1e-3, 1e-3, 5)
+    z = np.zeros(5)
+    Jfd = ray_transfer_jacobian(x, z, z, z, surfs, 0.633e-6).jacobian
+    Jjax = np.asarray(ray_transfer_jacobian_jax(x, z, z, z, p, 0.633e-6))
+    assert np.max(np.abs(Jjax - Jfd)) < 1e-6
+
+    def loss(xv):
+        J = ray_transfer_jacobian_jax(xv, jnp.zeros(5), jnp.zeros(5),
+                                      jnp.zeros(5), p, 0.633e-6)
+        return jnp.sum(J[:, 0, 0] ** 2)
+
+    g = np.asarray(jax.grad(loss)(jnp.asarray(x)))
+    assert np.isfinite(g).all() and g.shape == (5,)
