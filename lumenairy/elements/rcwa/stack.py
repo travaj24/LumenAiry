@@ -34,6 +34,7 @@ from ._core import (
     _rcwa_xp,
     _recentering_phase,
     _redheffer_star,
+    _reject_jax_offplane,
     _require_jax_x64,
     _require_propagating_incidence,
     _scalar_PQ,
@@ -1009,8 +1010,13 @@ class RCWAStack:
             # OUT-OF-PLANE tensor layers are SUPPORTED since v5.14.1 (the
             # rcwa_jones_2d GAP2 machinery promoted to the stack via the
             # PMM2DStack any_oop pattern); the remaining contract is a
-            # nonzero e_zz (the pointwise ezz-Schur fold divides by it).
-            # Traced JAX tensors keep the in-plane contract.
+            # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The
+            # DIFFERENTIABLE (JAX) solve cannot represent an out-of-plane tensor
+            # (the forward/backward split is a host argsort), so a CONCRETE JAX
+            # out-of-plane cell is rejected here rather than silently kept as
+            # in-plane (which would give a quietly WRONG gradient); a TRACER is
+            # undetectable and documented as in-plane-only.
+            _reject_jax_offplane("RCWAStack.add_layer", tcell)
             if _tensor_offplane_present(tcell):
                 ezz_min = float(np.min(np.abs(
                     to_numpy(tcell)[..., 2, 2])))

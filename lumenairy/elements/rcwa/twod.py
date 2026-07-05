@@ -33,6 +33,7 @@ from ._core import (
     _propagation_star_general,
     _rcwa_xp,
     _redheffer_star,
+    _reject_jax_offplane,
     _require_jax_x64,
     _require_propagating_incidence,
     _sqrt_forward,
@@ -1167,8 +1168,13 @@ def rcwa_jones_2d(
                             n_orders_x, n_orders_y)
     # OUT-OF-PLANE tensors are SUPPORTED since v5.14.1 (audit GAP2) via the
     # generalized forward/backward cascade below; the remaining contract is a
-    # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  Traced JAX
-    # tensors cannot be inspected and keep the in-plane contract.
+    # nonzero e_zz (the pointwise ezz-Schur fold divides by it).  The forward/
+    # backward mode split is a host-side argsort, so the DIFFERENTIABLE (JAX)
+    # path cannot represent an out-of-plane tensor: a CONCRETE JAX out-of-plane
+    # cell is rejected loudly here (rather than silently keeping the in-plane
+    # contract, which would return a quietly WRONG gradient); a TRACER's off-
+    # plane content is undetectable and documented as in-plane-only.
+    _reject_jax_offplane("rcwa_jones_2d", eps_tensor_cell)
     offplane = _tensor_offplane_present(eps_tensor_cell)
     if offplane:
         ezz_min = float(np.min(np.abs(np.asarray(
