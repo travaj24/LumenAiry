@@ -1751,6 +1751,73 @@ class TestGbdMatchesAnalyticGaussianWhereAsmAliases:
             f"accurate here the grid/Q assumptions of this pin changed.")
 
 
+class TestGbdHusimiDirectionSampling:
+    """``direction_sampling=True`` (Husimi / Gabor) launches each beamlet
+    along the field's LOCAL wavevector (``k = grad(arg E)``), so a source
+    that is ALREADY tilted at the input plane walks off correctly -- the
+    fix for the documented position-only limitation.  (2026-06-24 feature.)
+    """
+
+    def test_tilted_source_walks_off_with_direction_sampling(self):
+        N, dx, w0 = 96, 4e-6, 40e-6
+        z, tilt_deg = 2e-3, 2.0
+        wl = WAVELENGTH
+        k = 2 * np.pi / wl
+        Q = z * wl / (N * dx * dx)
+        assert Q < 1.0, f"reference ASM must be well-sampled; Q={Q:.2f}"
+        x = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, x, indexing='xy')
+        theta = np.deg2rad(tilt_deg)
+        E0 = (np.exp(-(X ** 2 + Y ** 2) / w0 ** 2)
+              * np.exp(1j * k * np.sin(theta) * X)).astype(np.complex128)
+        walk = z * np.tan(theta)          # geometric walk-off
+
+        def cx(field):
+            inten = np.abs(field) ** 2
+            return float((X * inten).sum() / inten.sum())
+
+        E_asm = np.asarray(angular_spectrum_propagate(E0, z, wl, dx))
+        E_pos = np.asarray(propagate_gbd_freespace(
+            E0, dx, z=z, wavelength=wl, sample_step=2,
+            waist_factor=2.0, direction_sampling=False))
+        E_hus = np.asarray(propagate_gbd_freespace(
+            E0, dx, z=z, wavelength=wl, sample_step=2,
+            waist_factor=2.0, direction_sampling=True))
+        cx_asm, cx_pos, cx_hus = cx(E_asm), cx(E_pos), cx(E_hus)
+
+        # ASM (Q<1) is the trusted reference; it walks off ~geometrically.
+        assert abs(cx_asm - walk) < 0.15 * walk, (
+            f"reference ASM centroid {cx_asm*1e6:.1f}um != geometric "
+            f"walk-off {walk*1e6:.1f}um -- test setup drifted.")
+        # Husimi tracks ASM to a few pixels; position-only falls short.
+        assert abs(cx_hus - cx_asm) < 3 * dx, (
+            f"Husimi centroid {cx_hus*1e6:.1f}um should track ASM "
+            f"{cx_asm*1e6:.1f}um (walk-off {walk*1e6:.1f}um); "
+            f"position-only was {cx_pos*1e6:.1f}um.")
+        assert (cx_asm - cx_pos) > 3.0 * abs(cx_asm - cx_hus), (
+            f"Husimi ({cx_hus*1e6:.1f}um) must be much closer to ASM "
+            f"({cx_asm*1e6:.1f}um) than position-only ({cx_pos*1e6:.1f}um).")
+
+    def test_direction_sampling_no_regression_on_collimated(self):
+        # A real (zero-phase) collimated field has zero local wavevector
+        # everywhere, so direction_sampling must reproduce the position-only
+        # result exactly (axial directions).
+        N, dx, w0, z = 64, 2e-6, 20e-6, 1e-3
+        wl = WAVELENGTH
+        x = (np.arange(N) - N / 2) * dx
+        X, Y = np.meshgrid(x, x, indexing='xy')
+        E0 = np.exp(-(X ** 2 + Y ** 2) / w0 ** 2).astype(np.complex128)
+        E_pos = np.asarray(propagate_gbd_freespace(
+            E0, dx, z=z, wavelength=wl, sample_step=2,
+            direction_sampling=False))
+        E_hus = np.asarray(propagate_gbd_freespace(
+            E0, dx, z=z, wavelength=wl, sample_step=2,
+            direction_sampling=True))
+        assert np.allclose(E_pos, E_hus, atol=1e-12, rtol=0), (
+            "direction_sampling must not change a collimated (zero-tilt) "
+            "field -- its local wavevector is 0 everywhere.")
+
+
 # ============================================================================
 # 3. HF vs ASM cross-method coherent overlay
 # ============================================================================

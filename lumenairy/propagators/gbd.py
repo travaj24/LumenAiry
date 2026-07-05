@@ -142,29 +142,40 @@ def decompose_field_to_beamlets(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     z_input_plane: float = 0.0,
+    direction_sampling: bool = False,
 ) -> BeamletBundle:
-    """Position-decomposition of a 2-D complex source field into a
-    regular grid of Gaussian beamlets.
+    """Decomposition of a 2-D complex source field into a regular grid
+    of Gaussian beamlets.
 
     Each grid pixel becomes a beamlet centred at its physical
-    coordinate, with on-axis amplitude ``E_in[i, j]``, propagating
-    along ``+z``, and Gaussian waist ``w0 = waist_factor * dx``.
+    coordinate, with on-axis amplitude ``E_in[i, j]`` and Gaussian
+    waist ``w0 = waist_factor * dx``.
 
-    .. warning::
-       **Position-only decomposition -- the local k-content of the
-       input field is encoded in the beamlet AMPLITUDE, not its
-       DIRECTION** (audit #3.2).  Every beamlet is assigned the
-       on-axis direction ``(0, 0, +1)``; a tilted input plane wave
-       (linear-phase-ramp field) is therefore reconstructed at the
-       output plane as a phase-ramped sum of axial beamlets rather
-       than walked off in the tilted direction.  Works fine for
-       small-tilt / near-collimated / paraxial sources -- which is
-       the design target -- but fails for steeply diverging beams
-       or off-axis tilts large enough that the geometric drift
-       across the propagation distance exceeds the beamlet waist.
-       Proper "Husimi" GBD (position + direction sampling) is on
-       the roadmap; for now switch to HFPI or sub-aperture ASM for
-       strongly off-axis sources.
+    Parameters
+    ----------
+    direction_sampling : bool, default ``False``
+        Selects how each beamlet's launch **direction** is chosen.
+
+        ``False`` (default, position-only) -- every beamlet is launched
+        along ``(0, 0, +1)`` and the field's local tilt is carried in
+        the beamlet AMPLITUDE.  Backward-compatible and byte-identical to
+        the historical behaviour.  Correct for near-collimated / paraxial
+        sources and for any beam that *acquires* its angles from later
+        optics (the direction is updated at each lens / ABCD element), but
+        a source that is *already* tilted or diverging at the input plane
+        is not walked off correctly (its intensity envelope stays put).
+
+        ``True`` ("Husimi" / Gabor decomposition) -- each beamlet is
+        launched along the field's **local wavevector**, obtained from the
+        transverse phase gradient
+        ``k_x = d(arg E)/dx = Im((dE/dx) / E)`` (and likewise ``k_y``);
+        the direction cosines are ``(k_x/k, k_y/k, sqrt(1 - ...))``.  The
+        tilt then lives in the *direction*, so a tilted or diverging
+        source walks off correctly on propagation.  Falls back to axial
+        where ``|E|`` is negligible or the local angle exceeds the light
+        cone (``k_x^2 + k_y^2 >= k^2``, i.e. under-sampled / evanescent),
+        so it never produces NaNs.  The local gradient must be resolved by
+        the grid (phase change ``< pi`` per pixel); beyond that use HFPI.
     """
     xp = array_namespace(E_in)
     Ny, Nx = E_in.shape[-2], E_in.shape[-1]
@@ -189,9 +200,31 @@ def decompose_field_to_beamlets(
     z_b = xp.full((n,), float(z_input_plane), dtype=x_b.dtype)
     positions = xp.stack([x_b, y_b, z_b], axis=-1)
 
-    L = xp.zeros((n,), dtype=x_b.dtype)
-    M = xp.zeros((n,), dtype=x_b.dtype)
-    N = xp.ones((n,), dtype=x_b.dtype)
+    if direction_sampling:
+        # Husimi / Gabor: launch each beamlet along the field's LOCAL
+        # wavevector k_local = grad(arg E) = Im((grad E) / E).  This puts
+        # the input tilt into the beamlet DIRECTION (so it walks off on
+        # propagation) instead of only its amplitude.
+        kmag = 2.0 * float(np.pi) / wavelength
+        gx = xp.gradient(E_in, dx, axis=-1)      # dE/dx
+        gy = xp.gradient(E_in, dx, axis=-2)      # dE/dy
+        E_c = E_in[Iy, Ix]
+        mag_c = xp.abs(E_c)
+        thr = 1e-6 * xp.abs(E_in).max()
+        E_safe = xp.where(mag_c > thr, E_c, xp.full_like(E_c, thr))
+        kx = xp.imag(gx[Iy, Ix] / E_safe) / kmag
+        ky = xp.imag(gy[Iy, Ix] / E_safe) / kmag
+        # Fall back to axial where |E| is negligible or the local angle
+        # leaves the light cone (aliased / evanescent) -- keeps N real.
+        weak = (mag_c <= thr) | (kx * kx + ky * ky >= 1.0)
+        zero = xp.zeros_like(kx)
+        L = xp.where(weak, zero, kx).astype(x_b.dtype)
+        M = xp.where(weak, zero, ky).astype(x_b.dtype)
+        N = xp.sqrt(xp.maximum(1.0 - L * L - M * M, xp.zeros_like(L)))
+    else:
+        L = xp.zeros((n,), dtype=x_b.dtype)
+        M = xp.zeros((n,), dtype=x_b.dtype)
+        N = xp.ones((n,), dtype=x_b.dtype)
     directions = xp.stack([L, M, N], axis=-1)
 
     w0 = waist_factor * dx
@@ -449,8 +482,13 @@ def propagate_gbd_freespace(
     waist_factor: float = 1.0,
     sample_step: int = 1,
     chunk_beamlets: int = 4096,
+    direction_sampling: bool = False,
 ) -> np.ndarray:
     """End-to-end free-space GBD: source -> z -> output.
+
+    ``direction_sampling=True`` selects the Husimi (position + direction)
+    decomposition -- needed for a source that is already tilted / diverging
+    at the input plane; see :func:`decompose_field_to_beamlets`.
 
     .. note::
        This function uses a non-canonical argument order
@@ -480,6 +518,7 @@ def propagate_gbd_freespace(
         E_in, dx, wavelength=wavelength,
         waist_factor=waist_factor,
         sample_step=sample_step,
+        direction_sampling=direction_sampling,
     )
     bundle = propagate_beamlets_freespace(bundle, z_distance=z,
                                           wavelength=wavelength)
