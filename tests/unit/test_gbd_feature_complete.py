@@ -342,6 +342,97 @@ def test_anamorphic_circular_beam_stays_circular():
     assert abs(sx / sy - 1.0) < 0.05, (sx, sy)   # physically circular
 
 
+# --------------------------------------------------------------------------
+# Polarization ray tracing (per-surface Fresnel s/p Jones along each base ray)
+# --------------------------------------------------------------------------
+def _single_sphere(R=20e-3):
+    """One air->glass spherical refracting surface (clean analytic Fresnel)."""
+    return {'name': 'sph', 'aperture_diameter': 30e-3,
+            'surfaces': [{'radius': R, 'conic': 0., 'glass_before': 'air',
+                          'glass_after': 'N-BK7', 'semi_diameter': 15e-3}],
+            'thicknesses': [0.0]}
+
+
+def test_fresnel_jones_onaxis_isotropic_and_s_channel_exact():
+    """The per-beamlet Fresnel Jones matrix is isotropic on-axis (= the
+    normal-incidence Fresnel amplitude, no diattenuation, no s-p mixing), and
+    for an off-axis meridional ray its s channel (E_y here) is transverse-exact
+    -- it equals the analytic Fresnel t_s at the surface's local incidence
+    angle -- with no s-p cross terms."""
+    from lumenairy.glass import get_glass_index
+    from lumenairy.propagators.gbd import _fresnel_jones_matrix_per_beamlet
+    R = 20e-3
+    presc = _single_sphere(R)
+    ng = float(get_glass_index('N-BK7', 0.633e-6))
+    z = np.zeros(1)
+    # on-axis: P = diag(t0, t0), t0 = 2/(1+ng), off-diagonals zero
+    P0, a0 = _fresnel_jones_matrix_per_beamlet(z, z, z, z, presc, 0.633e-6)
+    t0 = 2.0 / (1.0 + ng)
+    assert a0[0]
+    assert abs(P0[0, 0, 0] - t0) < 1e-9 and abs(P0[0, 1, 1] - t0) < 1e-9
+    assert abs(P0[0, 0, 1]) < 1e-12 and abs(P0[0, 1, 0]) < 1e-12
+    # off-axis meridional (x-offset) ray: incidence i = asin(h/R); s = E_y
+    for h in (4e-3, 8e-3):
+        x = np.array([h])
+        P, al = _fresnel_jones_matrix_per_beamlet(x, z, z, z, presc, 0.633e-6)
+        i = np.arcsin(h / R)
+        ci = np.cos(i)
+        ct = np.sqrt(1.0 - (np.sin(i) / ng) ** 2)
+        ts = 2.0 * ci / (ci + ng * ct)
+        assert al[0]
+        assert abs(abs(P[0, 1, 1]) - ts) < 1e-6, (h, abs(P[0, 1, 1]), ts)
+        # no s-p mixing for a purely meridional ray
+        assert abs(P[0, 0, 1]) < 1e-9 and abs(P[0, 1, 0]) < 1e-9
+
+
+def test_fresnel_jones_dead_ray_is_zeroed_not_nan():
+    """A base ray that vignettes (outside the aperture) comes back alive=False
+    with a zeroed (finite, not NaN) Jones matrix, so P @ E never propagates
+    NaNs into live neighbouring beamlets."""
+    from lumenairy.propagators.gbd import _fresnel_jones_matrix_per_beamlet
+    presc = _single_sphere(20e-3)
+    z = np.zeros(1)
+    x = np.array([20e-3])   # outside the 15 mm semi-diameter stop
+    P, alive = _fresnel_jones_matrix_per_beamlet(x, z, z, z, presc, 0.633e-6)
+    assert not alive[0]
+    assert np.isfinite(P).all()
+    assert np.allclose(P, 0.0)
+
+
+def test_vector_through_prescription_applies_fresnel_transmission():
+    """propagate_gbd_vector_through_prescription carries an x-polarized beam
+    through a singlet applying per-surface Fresnel s/p transmission: the output
+    (2, Ny, Nx) Jones field is finite, stays predominantly x-polarized (cross-
+    pol negligible by rotational symmetry), and its x-channel power is the
+    scalar (no-Fresnel) result scaled by the two-surface Fresnel power
+    transmission T1*T2 (near-axis)."""
+    from lumenairy.glass import get_glass_index
+    from lumenairy.propagators.gbd import (
+        propagate_gbd_through_prescription,
+        propagate_gbd_vector_through_prescription,
+    )
+    N, dx = 96, 10e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E0 = np.exp(-(X ** 2 + Y ** 2) / (2.0e-3) ** 2).astype(np.complex128)
+    kw = dict(wavelength=LAM, per_surface=True, output_dx=3e-6,
+              output_shape=(64, 64), sample_step=2, waist_factor=2.0)
+    scal = propagate_gbd_through_prescription(E0, dx, _singlet(49.3e-3), **kw)
+    vec = propagate_gbd_vector_through_prescription(
+        np.stack([E0, np.zeros_like(E0)]), dx, _singlet(49.3e-3), **kw)
+    assert vec.shape == (2, 64, 64) and np.isfinite(vec).all()
+    Ps = float(np.sum(np.abs(scal) ** 2))
+    Pvx = float(np.sum(np.abs(vec[0]) ** 2))
+    Pvy = float(np.sum(np.abs(vec[1]) ** 2))
+    # cross-pol negligible by symmetry
+    assert Pvy < 1e-6 * Pvx
+    # x-channel carries the two-surface near-axis Fresnel power transmission
+    ng = float(get_glass_index('N-BK7', LAM))
+    T1 = ng * (2.0 / (1.0 + ng)) ** 2                    # air -> glass
+    T2 = (1.0 / ng) * (2.0 * ng / (ng + 1.0)) ** 2       # glass -> air
+    assert abs(Pvx / Ps - T1 * T2) < 5e-3, (Pvx / Ps, T1 * T2)
+
+
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
     """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the

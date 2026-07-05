@@ -871,6 +871,161 @@ def propagate_gbd_freespace_vector(
     return xp.stack(comps, axis=0)
 
 
+def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
+    """Per-beamlet 2x2 transverse Jones matrix ``(E_x, E_y)_in -> _out`` from
+    per-surface Fresnel s/p transmission along each base ray (polarization ray
+    tracing).  Traces surface-by-surface, and at each refracting surface splits
+    the field into s (perp to plane of incidence) and p components, scaling by
+    the Fresnel amplitude transmission ``t_s``, ``t_p`` and rotating the p axis
+    from the incident to the refracted ray.  Transmission only (no reflection /
+    thin-film coatings).
+
+    Convention: the returned matrix is the **transverse** ``(E_x, E_y)`` field,
+    so the s channel (always transverse) is Fresnel-exact at every angle, while
+    the p channel carries the honest ``cos(theta_out)`` projection of the tilted
+    output ray's p-vector (its small longitudinal component is not part of the
+    transverse field).  Input rays should be launched **axially** (``ux = uy =
+    0``), as they are in :func:`propagate_gbd_vector_through_prescription`, so
+    that ``(x, y)`` *is* the input transverse frame; the incidence angles then
+    come from the surface curvature/tilt, not from a pre-tilted input ray.
+
+    Returns ``(P, alive)``: ``P`` is ``(N, 2, 2)`` complex; ``alive`` is
+    ``(N,)`` bool (False where the base ray vignetted / TIR'd).  ``P`` is zeroed
+    for dead rays so ``P @ E`` never propagates NaNs.
+    """
+    from ..glass import get_glass_index
+    from ..raytrace.intersection import _intersect_surface, _refract, _surface_normal, _transfer
+    from ..raytrace.trace import _make_bundle, surfaces_from_prescription
+
+    surfs = surfaces_from_prescription(prescription)
+    inv = 1.0 / np.sqrt(1.0 + ux ** 2 + uy ** 2)
+    L0, M0 = ux * inv, uy * inv
+    n = x.shape[0]
+
+    def _trace_jones(J0):
+        rb = _make_bundle(x.copy(), y.copy(), L0.copy(), M0.copy(), wavelength)
+        J = J0.astype(np.complex128).copy()
+        for s in surfs:
+            _intersect_surface(rb, s)
+            nx, ny, nz = _surface_normal(rb.x, rb.y, s)
+            d_in = np.stack([rb.L, rb.M, rb.N], axis=-1)
+            nrm = np.stack([nx, ny, nz], axis=-1)
+            cosd = np.sum(d_in * nrm, axis=-1)
+            nrm = np.where(cosd[:, None] > 0, -nrm, nrm)
+            cos_i = np.abs(cosd)
+            n1 = float(get_glass_index(
+                getattr(s, 'glass_before', None) or 'air', wavelength))
+            n2 = float(get_glass_index(
+                getattr(s, 'glass_after', None) or 'air', wavelength))
+            _refract(rb, s, n1, n2)
+            d_out = np.stack([rb.L, rb.M, rb.N], axis=-1)
+            mu = n1 / n2
+            cos_t = np.sqrt(np.maximum(1.0 - mu ** 2 * (1.0 - cos_i ** 2), 0.0))
+            ts = 2.0 * n1 * cos_i / (n1 * cos_i + n2 * cos_t)
+            tp = 2.0 * n1 * cos_i / (n2 * cos_i + n1 * cos_t)
+            s_vec = np.cross(d_in, nrm)
+            s_norm = np.linalg.norm(s_vec, axis=-1, keepdims=True)
+            at_normal = s_norm[:, 0] < 1e-9
+            s_hat = np.where(s_norm > 1e-30, s_vec / np.where(s_norm > 0, s_norm, 1.0),
+                             np.array([1.0, 0.0, 0.0]))
+            p_in = np.cross(d_in, s_hat)
+            p_out = np.cross(d_out, s_hat)
+            Es = np.sum(J * s_hat, axis=-1)
+            Ep = np.sum(J * p_in, axis=-1)
+            J_sp = (Es * ts)[:, None] * s_hat + (Ep * tp)[:, None] * p_out
+            # at normal incidence s/p is degenerate but ts == tp -> just scale
+            J = np.where(at_normal[:, None], ts[:, None] * J, J_sp)
+            _transfer(rb, float(getattr(s, 'thickness', 0.0) or 0.0), n2)
+        # project onto the output transverse (x, y) plane (paraxial output ray)
+        return J[:, 0], J[:, 1], rb.alive
+
+    ex_x, ex_y, alive = _trace_jones(
+        np.tile(np.array([1.0, 0.0, 0.0]), (n, 1)))
+    ey_x, ey_y, _ = _trace_jones(np.tile(np.array([0.0, 1.0, 0.0]), (n, 1)))
+    P = np.empty((n, 2, 2), dtype=np.complex128)
+    P[:, 0, 0] = ex_x
+    P[:, 1, 0] = ex_y
+    P[:, 0, 1] = ey_x
+    P[:, 1, 1] = ey_y
+    # zero out dead / non-finite rays so ``P @ E`` never propagates NaNs into
+    # live neighbouring beamlets (a vignetted base ray can leave NaN in P).
+    alive = np.asarray(alive, bool) & np.isfinite(P).all(axis=(1, 2))
+    P[~alive] = 0.0
+    return P, alive
+
+
+def propagate_gbd_vector_through_prescription(
+    E_vec: np.ndarray,
+    dx: float,
+    prescription: Dict[str, Any],
+    *,
+    wavelength: float,
+    per_surface: bool = True,
+    **kwargs: Any,
+) -> np.ndarray:
+    """Vector (Jones) GBD through a prescription with **polarization ray
+    tracing** -- per-surface Fresnel s/p diattenuation along each beamlet's
+    base ray, mixing the ``(E_x, E_y)`` components.
+
+    Combines the scalar/tensor envelope propagation
+    (:func:`propagate_gbd_through_prescription`, ``per_surface`` selecting the
+    aberration-aware form) with the per-beamlet Fresnel Jones matrix from
+    :func:`_fresnel_jones_matrix_per_beamlet`: the diattenuation modifies the
+    beamlet amplitudes, then each transformed component is reconstructed.
+
+    Transmission only (no reflection / thin-film coatings -- those build on the
+    same base-ray trace and are a documented extension).
+
+    Parameters
+    ----------
+    E_vec : array ``(2, Ny, Nx)`` complex -- the ``(E_x, E_y)`` Jones field.
+    dx, prescription, wavelength : as elsewhere.
+    per_surface : bool -- passed to the envelope propagator.
+    **kwargs : forwarded to :func:`propagate_gbd_through_prescription`.
+
+    Returns
+    -------
+    array ``(2, Ny, Nx)`` complex -- the ``(E_x, E_y)`` output Jones field.
+    """
+    E_vec = np.asarray(E_vec)
+    if E_vec.shape[0] != 2 or E_vec.ndim != 3:
+        raise ValueError(
+            "propagate_gbd_vector_through_prescription: E_vec must be "
+            f"(2, Ny, Nx); got {E_vec.shape}.")
+    # per-beamlet Fresnel Jones matrix from the base-ray grid (axial launch)
+    Ny, Nx = E_vec.shape[-2], E_vec.shape[-1]
+    sample_step = kwargs.get('sample_step', 1)
+    iy = np.arange(0, Ny, sample_step)
+    ix = np.arange(0, Nx, sample_step)
+    Iy, Ix = np.meshgrid(iy, ix, indexing='ij')
+    xb = (Ix.ravel() - Nx / 2) * dx
+    yb = (Iy.ravel() - Ny / 2) * dx
+    zc = np.zeros_like(xb)
+    P, _alive = _fresnel_jones_matrix_per_beamlet(
+        xb, yb, zc, zc, prescription, wavelength)
+    # apply P to the (E_x, E_y) samples, then envelope-propagate each mixed
+    # component and reconstruct.
+    ExS = E_vec[0][Iy, Ix].ravel()
+    EyS = E_vec[1][Iy, Ix].ravel()
+    ExM = (P[:, 0, 0] * ExS + P[:, 0, 1] * EyS).reshape(Iy.shape)
+    EyM = (P[:, 1, 0] * ExS + P[:, 1, 1] * EyS).reshape(Iy.shape)
+    # scatter the mixed samples back onto full grids (per component) so the
+    # existing decompose sub-samples them consistently.
+    ExF = np.zeros((Ny, Nx), dtype=np.complex128)
+    EyF = np.zeros((Ny, Nx), dtype=np.complex128)
+    ExF[Iy, Ix] = ExM
+    EyF[Iy, Ix] = EyM
+    kw = dict(kwargs)
+    kw['sample_step'] = sample_step
+    out_x = propagate_gbd_through_prescription(
+        ExF, dx, prescription, wavelength=wavelength, per_surface=per_surface,
+        **kw)
+    out_y = propagate_gbd_through_prescription(
+        EyF, dx, prescription, wavelength=wavelength, per_surface=per_surface,
+        **kw)
+    return np.stack([out_x, out_y], axis=0)
+
+
 def propagate_gbd_thin_lens(
     E_in: np.ndarray,
     dx: float,
@@ -1347,6 +1502,7 @@ __all__ = [
     'propagate_gbd_freespace',
     'propagate_gbd_freespace_spectral',
     'propagate_gbd_freespace_vector',
+    'propagate_gbd_vector_through_prescription',
     'propagate_gbd_thin_lens',
     'propagate_gbd_through_prescription',
 ]
