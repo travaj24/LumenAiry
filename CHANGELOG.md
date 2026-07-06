@@ -191,9 +191,13 @@ All notable changes to the core library are documented here.
     OPL + alive) across a hard sweep — f/1, hyperbolas `k=−6`, `u=1.5` field,
     concave backtracks, mirrors, near-TIR, a 3906-ray root-selection sweep — with
     a *proof* (`|ae| < q²`) that the near-vertex root is always the physical
-    one, and a Coddington sagittal/tangential cross-check.  Conic surfaces
-    (aspheres/freeforms/coord-breaks raise, pointing back to the FD primitive).
-    Selectable in the per-surface GBD via
+    one, and a Coddington sagittal/tangential cross-check.  Conic surfaces +
+    reflection (`is_mirror`) + **Zemax coordinate breaks** (`is_coordbrk` --
+    decenter + X/Y/Z tilts, a smooth differentiable frame transform, matching FD
+    to 1.3e-8 on a tilted+decentered system → differentiable alignment /
+    tolerancing through a fold; a *large* tilt shares the world-frame slope-space
+    caveat); aspheres / freeforms / biconics raise, pointing back to the FD
+    primitive.  Selectable in the per-surface GBD via
     `propagate_gbd_through_prescription(..., jacobian='analytic')` (default
     `'fd'` unchanged; the two give the same field to ~1e-10).
   - **Husimi decomposition plumbed through the lens & prescription helpers**
