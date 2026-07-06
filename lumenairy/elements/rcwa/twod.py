@@ -1108,12 +1108,12 @@ def rcwa_jones_2d(
     n_orders_y: int = 5,
     use_gpu: bool = False,
     symmetry="auto",
+    formulation: str = "laurent",
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Rigorous 2-D (doubly periodic) anisotropic grating: a single layer
     whose permittivity is a full in-plane TENSOR FIELD (the z-decoupled LC
-    subset; Li 2003, direct-rule factorization).  Returns diffraction
-    efficiencies for both incident linear polarizations plus the 2x2
-    zeroth-order Jones reflection matrix.
+    subset; Li 2003).  Returns diffraction efficiencies for both incident
+    linear polarizations plus the 2x2 zeroth-order Jones reflection matrix.
 
     Backend-dispatched (NumPy / CuPy via ``use_gpu`` / differentiable JAX when
     ``eps_tensor_cell`` is a JAX array); see :func:`rcwa_efficiency_1d`.
@@ -1138,6 +1138,24 @@ def rcwa_jones_2d(
         a non-symmetric cell, JAX backend) falls back to the full solve
         bit-identically.  ``symmetry=False`` forces the full solve (the even
         basis matches it to ~1e-12, not bit-for-bit).
+    formulation : {'laurent', 'li'}, optional
+        Fourier factorization of the IN-PLANE tensor operators.  ``'laurent'``
+        (default) applies the direct rule to every component -- exactly
+        energy-conserving, and the fast choice for smooth / dielectric cells.
+        ``'li'`` applies the Li-1997 (JOSA A 14:2758, Eqs. 8/9) inverse rule to
+        the DIAGONAL blocks -- ``C_xx`` uses the inverse rule along x (``E_x`` is
+        wall-normal at x-walls) and Laurent along y, ``C_yy`` the transpose --
+        which converges faster for HIGH-CONTRAST / metallic anisotropic cells
+        with sharp axis-aligned walls (the Gibbs-limited wall-normal
+        discontinuity), reaching the SAME limit as ``'laurent'``.  The
+        off-diagonal ``C_xy``/``C_yx`` and the ``E_z`` rule stay Laurent (Li
+        rule 3: ``E_z`` is tangential to every vertical wall); the full
+        Popov-Neviere mixed-composite off-diagonal rule is not implemented, so a
+        strongly-rotated director sees only a partial gain.
+        A scalar cell reduces EXACTLY to ``rcwa_efficiency_2d(formulation='li')``.
+        In-plane cells only -- an out-of-plane cell always uses the direct rule
+        (the ezz-Schur composite has no validated inverse rule).  The even-parity
+        fold runs on ``'laurent'`` only (``'li'`` takes the full solve).
 
     Returns
     -------
@@ -1152,10 +1170,12 @@ def rcwa_jones_2d(
 
     Notes
     -----
-    Uses the direct (Laurent) tensor factorization, which is exactly
+    The default direct (Laurent) tensor factorization is exactly
     energy-conserving for a lossless tensor and reduces to
     :func:`rcwa_efficiency_2d` for a scalar cell; it converges fastest for
-    smooth / dielectric anisotropic media (e.g. liquid-crystal cells).
+    smooth / dielectric anisotropic media (e.g. liquid-crystal cells).  For
+    high-contrast / metallic anisotropic cells with sharp axis-aligned walls,
+    ``formulation='li'`` (the Li-1997 diagonal inverse rule) converges faster.
 
     OUT-OF-PLANE tensors (``e_xz, e_yz, e_zx, e_zy != 0`` -- tilted
     uniaxials, magneto-optic media) are supported since v5.14.1 (audit
@@ -1167,6 +1187,10 @@ def rcwa_jones_2d(
     polarization-dependent extinction; only PROVABLY-LOSSLESS (all-real)
     cells are closure-checked.
     """
+    if formulation not in ("laurent", "li"):
+        raise ValueError(
+            f"rcwa_jones_2d: formulation must be 'laurent' or 'li', got "
+            f"{formulation!r}")
     _validate_geometry("rcwa_jones_2d",
                        **_concrete(period=period_x, period_y=period_y,
                                    depth=depth, wavelength=wavelength),
@@ -1241,6 +1265,19 @@ def rcwa_jones_2d(
     def _conv(comp):
         return _eps_convolution_2d(comp, orders, n_orders_x, n_orders_y)
 
+    def _inplane_ops(exx, exy, eyx, eyy, ezz):
+        """The five in-plane operators ``(Cxx, Cxy, Cyx, Cyy, EZZ)`` under the
+        selected factorization.  ``'li'`` swaps the DIAGONAL blocks for the
+        Li-1997 inverse rule (``Cxx`` inverse-along-x from ``exx``; ``Cyy``
+        inverse-along-y from ``eyy``) via the validated scalar builder; the
+        off-diagonal blocks and ``EZZ`` keep the direct rule (Li rule 3)."""
+        if formulation == "li":
+            Cxx = _li_convolutions_2d(exx, orders, n_orders_x, n_orders_y, xp)[0]
+            Cyy = _li_convolutions_2d(eyy, orders, n_orders_x, n_orders_y, xp)[1]
+        else:
+            Cxx, Cyy = _conv(exx), _conv(eyy)
+        return Cxx, _conv(exy), _conv(eyx), Cyy, _conv(ezz)
+
     Wref, Vref, kz_ref = _homogeneous_eigenmodes(Kx, Ky, eps_sup)
     Wtrn, Vtrn, kz_trn = _homogeneous_eigenmodes(Kx, Ky, eps_sub)
     # even-parity fast path (backlog A1): a centro-symmetric IN-PLANE tensor
@@ -1248,6 +1285,7 @@ def rcwa_jones_2d(
     # incident polarizations; transparent fallback otherwise.
     sym_rt = None
     if (_symmetry_on(symmetry) and not is_jax and not offplane
+            and formulation == "laurent"
             and abs(kx0) < 1e-12 and abs(ky0) < 1e-12):
         def _conv_sym(comp):
             return _eps_convolution_2d(comp, orders, n_orders_x, n_orders_y)
@@ -1297,11 +1335,9 @@ def rcwa_jones_2d(
     elif sym_rt is not None:
         S = None                              # even sector already solved
     else:
-        Cxx = _conv(eps_t[:, :, 0, 0])
-        Cxy = _conv(eps_t[:, :, 0, 1])
-        Cyx = _conv(eps_t[:, :, 1, 0])
-        Cyy = _conv(eps_t[:, :, 1, 1])
-        EZZ = _conv(eps_t[:, :, 2, 2])
+        Cxx, Cxy, Cyx, Cyy, EZZ = _inplane_ops(
+            eps_t[:, :, 0, 0], eps_t[:, :, 0, 1], eps_t[:, :, 1, 0],
+            eps_t[:, :, 1, 1], eps_t[:, :, 2, 2])
         Wl, Vl, lam = _layer_eigenmodes_tensor(Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ)
         S = _interface_smatrix(Wref, Vref, Wl, Vl)
         S = _propagation_star(S, lam, k0 * depth)

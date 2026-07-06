@@ -4,6 +4,23 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **`rcwa_jones_2d` gains a `formulation` kwarg** (`'laurent'` default, `'li'`).
+  `'li'` applies the Li-1997 (JOSA A 14:2758, Eqs. 8/9) inverse rule to the
+  DIAGONAL in-plane tensor blocks (`C_xx` inverse-along-x from `exx`, `C_yy`
+  inverse-along-y from `eyy`, reusing the validated scalar `_li_convolutions_2d`),
+  which converges faster for high-contrast / metallic anisotropic cells with
+  sharp axis-aligned walls (the Gibbs-limited wall-normal discontinuity),
+  reaching the SAME limit as `'laurent'` (verified: the two agree at high
+  `n_orders` and the gap shrinks with truncation).  The off-diagonal blocks and
+  the `E_z` rule stay Laurent (Li rule 3), so the full Popov-Neviere
+  mixed-composite off-diagonal rule is not implemented -- a strongly-rotated
+  director sees only a partial gain.  A scalar cell reduces EXACTLY to
+  `rcwa_efficiency_2d(formulation='li')` (~1e-14); in-plane cells only (an
+  out-of-plane cell always uses the direct rule).  The default (`'laurent'`) path
+  is byte-identical to before.  See `tests/unit/test_v5_20_6_rcwa_jones_2d_li.py`.
+
 ### Changed
 
 - **Even-parity fold is now ON by default** (`symmetry='auto'`) across the 2-D
