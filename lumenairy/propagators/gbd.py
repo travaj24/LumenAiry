@@ -1001,6 +1001,95 @@ def _thin_film_coefficients(layers, n0, ns, cos0, wavelength):
     return rs, rp, ts, tp
 
 
+def gbd_ghost_analysis(
+    prescription: Dict[str, Any],
+    wavelength: float,
+    *,
+    field_angle: float = 0.0,
+) -> Dict[str, Any]:
+    """First-order stray-light / ghost budget for a refractive prescription.
+
+    Forward GBD carries only the transmitted beam; a fraction of the light
+    Fresnel-**reflects** at every dielectric surface, and a double bounce
+    (reflect at surface j on the way in, reflect again at surface i < j) forms a
+    ghost that reaches the image as veiling glare.  This quantifies the budget
+    without propagating the (much weaker) ghost fields:
+
+    * ``surface_reflectance`` -- per refracting surface, the unpolarized power
+      reflectance ``R = (R_s + R_p) / 2`` of the base ray (the ghost-*source*
+      strength; a multilayer AR ``coating`` is honoured via the thin-film TMM).
+    * ``double_bounce`` -- for each surface pair ``(i, j)`` (i < j), the relative
+      ghost irradiance ``~ R_i * R_j`` (the leading double-reflection term; the
+      transmission at the other surfaces is ~1 for good AR coats and is not
+      double-counted here).  The largest entries are the ghosts to design out.
+
+    A chief ray at ``field_angle`` (radians, tilt in x) samples the incidence
+    angles.  This is a ray-optics budget; the coherent ghost *field* (its focus
+    / defocus and PSF) needs the double-bounce field propagation, a documented
+    extension (it shares the curved-fold world-frame machinery).
+
+    Returns
+    -------
+    dict with ``'surface_reflectance'`` ``(n_surf,)``, ``'double_bounce'``
+    ``(n_surf, n_surf)`` (upper triangular, ``R_i*R_j``), and ``'worst'`` --
+    ``(i, j, relative_intensity)`` of the brightest ghost.
+    """
+    from ..glass import get_glass_index
+    from ..raytrace.intersection import (
+        _intersect_surface,
+        _reflect,
+        _refract,
+        _surface_normal,
+        _transfer,
+    )
+    from ..raytrace.trace import _make_bundle, surfaces_from_prescription
+
+    surfs = surfaces_from_prescription(prescription)
+    ux0 = float(np.tan(field_angle))
+    inv = 1.0 / np.sqrt(1.0 + ux0 ** 2)
+    rb = _make_bundle(np.array([0.0]), np.array([0.0]),
+                      np.array([ux0 * inv]), np.array([0.0]), wavelength)
+    refl = []
+    for s in surfs:
+        n1 = float(get_glass_index(getattr(s, 'glass_before', None) or 'air',
+                                   wavelength))
+        n2 = float(get_glass_index(getattr(s, 'glass_after', None) or 'air',
+                                   wavelength))
+        _intersect_surface(rb, s, n_medium=n1)
+        if bool(getattr(s, 'is_mirror', False)):
+            # a real mirror is the intended path, not a ghost source (R=0)
+            refl.append(0.0)
+            _reflect(rb, s)
+            _transfer(rb, float(getattr(s, 'thickness', 0.0) or 0.0), n2)
+            continue
+        nx, ny, nz = _surface_normal(rb.x, rb.y, s)
+        cosd = rb.L * nx + rb.M * ny + rb.N * nz
+        cos_i = float(np.abs(cosd)[0])
+        stack = _coating_stack_layers(getattr(s, 'coating', None), wavelength)
+        if stack is not None:
+            rs, rp, _ts, _tp = _thin_film_coefficients(
+                stack, n1, n2, np.array([cos_i]), wavelength)
+            R = 0.5 * (abs(rs[0]) ** 2 + abs(rp[0]) ** 2)
+        else:
+            ct = np.sqrt(max(1.0 - (n1 / n2) ** 2 * (1.0 - cos_i ** 2), 0.0))
+            rs = (n1 * cos_i - n2 * ct) / (n1 * cos_i + n2 * ct)
+            rp = (n2 * cos_i - n1 * ct) / (n2 * cos_i + n1 * ct)
+            R = 0.5 * (rs ** 2 + rp ** 2)
+        refl.append(float(R))
+        _refract(rb, s, n1, n2)
+        _transfer(rb, float(getattr(s, 'thickness', 0.0) or 0.0), n2)
+    refl = np.asarray(refl)
+    n = refl.shape[0]
+    db = np.zeros((n, n))
+    worst = (0, 0, 0.0)
+    for i in range(n):
+        for j in range(i + 1, n):
+            db[i, j] = refl[i] * refl[j]
+            if db[i, j] > worst[2]:
+                worst = (i, j, float(db[i, j]))
+    return {'surface_reflectance': refl, 'double_bounce': db, 'worst': worst}
+
+
 def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     """Per-beamlet 2x2 transverse Jones matrix ``(E_x, E_y)_in -> _out`` from
     per-surface Fresnel s/p along each base ray (polarization ray tracing).
@@ -1930,6 +2019,7 @@ __all__ = [
     'apply_abcd_to_beamlets',
     'apply_prescription_persurface_to_beamlets',
     'reconstruct_field_from_beamlets',
+    'gbd_ghost_analysis',
     'propagate_gbd_freespace',
     'propagate_gbd_freespace_spectral',
     'propagate_gbd_freespace_vector',

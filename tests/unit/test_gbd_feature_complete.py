@@ -778,3 +778,33 @@ def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
 
     g = np.asarray(jax.grad(loss)(jnp.asarray(x)))
     assert np.isfinite(g).all() and g.shape == (5,)
+
+
+def test_gbd_ghost_analysis_stray_light_budget():
+    """gbd_ghost_analysis returns the first-order ghost budget: per-surface
+    Fresnel reflectance (~4% uncoated N-BK7) and the double-bounce relative
+    intensity (~R_i*R_j); a quarter-wave AR coating suppresses both."""
+    from lumenairy.propagators.gbd import gbd_ghost_analysis
+    lam = 0.633e-6
+    ng = 1.515
+    n_ar = np.sqrt(ng)
+    d_ar = lam / (4 * n_ar)
+
+    def _singlet(coats):
+        return {'aperture_diameter': 12e-3, 'surfaces': [
+            {'radius': 51.5e-3, 'glass_before': 'air', 'glass_after': 'N-BK7',
+             'coating': coats[0]},
+            {'radius': -51.5e-3, 'glass_before': 'N-BK7', 'glass_after': 'air',
+             'coating': coats[1]}], 'thicknesses': [4e-3, 40e-3]}
+    g = gbd_ghost_analysis(_singlet([None, None]), lam)
+    R = g['surface_reflectance']
+    assert R.shape == (2,)
+    assert np.all(np.abs(R - 0.0419) < 2e-3)          # ~4% uncoated glass
+    i, j, gi = g['worst']
+    assert (i, j) == (0, 1)
+    assert abs(gi - R[0] * R[1]) < 1e-9               # double-bounce = R_i*R_j
+    # AR coating suppresses both surfaces -> the ghost by many orders
+    ga = gbd_ghost_analysis(
+        _singlet([[(n_ar, d_ar)], [(n_ar, d_ar)]]), lam)
+    assert np.all(ga['surface_reflectance'] < 1e-4)
+    assert ga['worst'][2] < 1e-6 * gi
