@@ -1155,7 +1155,21 @@ def _fft_reconstruct_applicable(beamlets: BeamletBundle, Nx: int, Ny: int,
     no skew), a UNIFORM launch direction, and beamlet centres that land on the
     output grid.  This is exactly what :func:`decompose_field_to_beamlets`
     followed by free-space / uniform-ABCD evolution produces (positions
-    unchanged for an axial bundle, ``Q`` and amplitude evolve identically)."""
+    unchanged for an axial bundle, ``Q`` and amplitude evolve identically).
+
+    Whether it applies is a data-dependent DECISION (is ``Q`` uniform? on-grid?)
+    and so cannot be taken under a JAX ``jit`` trace, where the bundle arrays are
+    abstract tracers -- inspecting them (``np.asarray``) raises.  In that case
+    (and on any inspection failure) return ``False`` so the reconstruction falls
+    back to the trace-safe dense sum; the FFT fast path still engages for
+    concrete arrays (eager execution and under ``jax.grad``)."""
+    try:
+        return _fft_applicable_impl(beamlets, Nx, Ny, dx, dy, centre)
+    except Exception:      # jax tracer (jit) / non-inspectable array -> dense
+        return False
+
+
+def _fft_applicable_impl(beamlets, Nx, Ny, dx, dy, centre) -> bool:
     n = int(beamlets.positions.shape[0])
     if n == 0:
         return False
