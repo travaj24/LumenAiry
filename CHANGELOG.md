@@ -6,6 +6,19 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **PMM 1-D geometric-eig sweep cache** (speed).  The eps-free geometric eig of a
+  uniform half-space (`_uniform_geo_eig` / `_scalar_uniform_geo_eig`) depends only
+  on the nodal geometry and `kx0` (angle), NOT on `k0` (wavelength -- which enters
+  purely as the `1/k0^2` spectrum scale), so a fixed-angle wavelength sweep
+  re-eigs the SAME pencil at every point (the audited 51-64% of 1-D eig time).  A
+  bounded LRU (`_cached_geo_eig`, cache-registry-clearable) now eigs the
+  k0-independent pencil ONCE and scales -- verified the cache does not grow across
+  a sweep.  (The modes match the historical per-`k0` eig to ~1e-14 -- `eig(cB)`
+  and `eig(B)` share eigenvectors to machine precision with exact eigenvalue
+  scaling -- a physically-equivalent gauge, not bit-for-bit; a cleared-vs-warm
+  solve within a version is byte-identical.)  See
+  `tests/unit/test_v5_20_7_pmm_geo_eig_cache.py`.
+
 - **`rcwa_jones_2d` gains a `formulation` kwarg** (`'laurent'` default, `'li'`).
   `'li'` applies the Li-1997 (JOSA A 14:2758, Eqs. 8/9) inverse rule to the
   DIAGONAL in-plane tensor blocks (`C_xx` inverse-along-x from `exx`, `C_yy`

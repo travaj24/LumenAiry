@@ -7,6 +7,7 @@ from __future__ import annotations
 import functools
 import threading
 import warnings
+from collections import OrderedDict
 
 import numpy as np
 import scipy.linalg as sla
@@ -284,6 +285,7 @@ def _clear_pmm_caches() -> None:
     registry, so the global 'clear all caches' path empties them too)."""
     with _LAGRANGE_DREF_LOCK:
         _LAGRANGE_DREF_CACHE.clear()
+    _clear_geo_eig_cache()
 
 
 
@@ -560,8 +562,17 @@ def _scalar_uniform_geo_eig(mats, k0, kx0=0.0):
     if kx0:
         Cas = mats["C"] - mats["C"].T
         Lop = Lop - 1j * kx0 * Cas + (kx0 * kx0) * mats["S0"]
-    mu, X = _fast_geig(Lop / k02, mats["S0"])
-    return mu, X
+    # The generalized pencil (Lop, S0) is k0-INDEPENDENT (geometry + angle only);
+    # k0 enters purely as the 1/k0^2 scale.  eig(Lop/k0^2, S0) has eigenvalues
+    # eig(Lop, S0)/k0^2 with the SAME eigenvectors, so eig the pencil ONCE
+    # (cached) and scale -- removing the half-space eig from a fixed-angle
+    # wavelength sweep after the first point (matches the historical per-k0 eig
+    # to ~1e-14, the physically-equivalent gauge; see _uniform_geo_eig).
+    S0 = mats["S0"]
+    mu_geo, X = _cached_geo_eig(
+        (b"scalar", Lop.shape, Lop.tobytes(), S0.tobytes()),
+        lambda: _fast_geig(Lop, S0))
+    return mu_geo / k02, X
 
 
 def _sem_modes_uniform_scalar(mats, k0, polarization, eps, kx0=0.0, geo=None):
@@ -1090,6 +1101,43 @@ def _sem_modes_tensor(mats, k0, kx0=0.0, robust=False):
 
 
 
+# --- geometric-eig cache (wavelength-independent at fixed angle) --------------
+# The eps-free geometric operator B = inv(S0) @ op depends only on the nodal
+# GEOMETRY (mats) and kx0 (angle), NOT on k0 (wavelength): the k0 enters purely
+# as the 1/k0^2 scale on B.  So a fixed-angle wavelength sweep re-eigs the SAME
+# B every point.  Eig B ONCE (cached on its bytes) and scale the spectrum by
+# 1/k0^2 -- this removes the half-space geometric eig (the audited 51-64% of 1-D
+# eig time) from every sweep point after the first.  (NB the modes then match
+# the historical per-k0 eig of B/k0^2 to ~1e-14 -- eig(cB) and eig(B) share
+# eigenVECTORS to machine precision, exact eigenvalue scaling -- rather than
+# bit-for-bit; a physically-equivalent gauge, as with the even-parity fold.)
+_GEO_EIG_CACHE: 'OrderedDict[bytes, tuple]' = OrderedDict()
+_GEO_EIG_CACHE_SIZE = 64
+_GEO_EIG_CACHE_LOCK = threading.Lock()
+
+
+def _clear_geo_eig_cache():
+    """Registry hook: drop the geometric-eig cache."""
+    with _GEO_EIG_CACHE_LOCK:
+        _GEO_EIG_CACHE.clear()
+
+
+def _cached_geo_eig(key, compute):
+    """Memoize the k0-independent geometric eig ``compute()`` on ``key`` (a
+    bytes fingerprint of the geometry+angle pencil).  Bounded LRU."""
+    with _GEO_EIG_CACHE_LOCK:
+        hit = _GEO_EIG_CACHE.get(key)
+        if hit is not None:
+            _GEO_EIG_CACHE.move_to_end(key)          # LRU: refresh recency
+            return hit
+    res = compute()
+    with _GEO_EIG_CACHE_LOCK:
+        _GEO_EIG_CACHE[key] = res
+        while len(_GEO_EIG_CACHE) > _GEO_EIG_CACHE_SIZE:
+            _GEO_EIG_CACHE.popitem(last=False)
+    return res
+
+
 def _uniform_geo_eig(mats, k0, kx0=0.0):
     """Eps-free GEOMETRIC eigendecomposition shared by every uniform
     isotropic medium on one nodal grid (backlog A2 / PMM roadmap #2,
@@ -1114,9 +1162,10 @@ def _uniform_geo_eig(mats, k0, kx0=0.0):
     if kx0:
         Cw = mats["conv"]["one"]
         op = op - 1j * kx0 * (Cw - Cw.T) + (kx0 * kx0) * mats["mass"]["one"]
-    Kx2 = (1.0 / k02) * (iS0 @ op)
-    mu, w = np.linalg.eig(Kx2)
-    return mu, w, Kx2
+    B = iS0 @ op                              # k0-INDEPENDENT (geometry + angle)
+    mu_geo, w = _cached_geo_eig(
+        (b"tensor", B.shape, B.tobytes()), lambda: np.linalg.eig(B))
+    return mu_geo / k02, w, B / k02
 
 
 def _sem_modes_uniform(mats, k0, kx0, eps, geo=None):
