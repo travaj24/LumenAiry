@@ -129,6 +129,187 @@ def _solve_jax(eps_layers, thicks, eps_sup, eps_sub, wavelength, Kx, Ky, jnp):
     return R, T, Jr, Jt
 
 
+def _solve_jax_retain(eps_layers, thicks, eps_sup, eps_sub, wavelength,
+                      Kx, Ky, jnp):
+    """Differentiable native Berreman solve that ALSO retains the bracketing
+    partial cascades for the internal-field / layer-absorption reconstruction --
+    the jnp twin of ``berreman._solve_core(retain=True)`` + far-field.  Returns
+    ``(R, T, Jr, core)`` (in-plane / iso / OOP-at-normal only -- the caller
+    rejects OOP-oblique)."""
+    from .rcwa import _jax_eig_stable
+    from .rcwa._core import (
+        _interface_smatrix_general,
+        _modes_to_M,
+        _propagation_smatrix_general,
+        _redheffer_star,
+    )
+    cj = jnp.complex128
+    eig = _jax_eig_stable()
+    k0 = 2.0 * jnp.pi / wavelength
+    I3 = jnp.eye(3, dtype=cj)
+
+    Wf_s, Vf_s, lf_s, Wb_s, Vb_s, lb_s = _layer_modes_jax(
+        eps_sup * I3, Kx, Ky, jnp, eig)
+    Wf_b, Vf_b, lf_b, Wb_b, Vb_b, lb_b = _layer_modes_jax(
+        eps_sub * I3, Kx, Ky, jnp, eig)
+    M_sup = _modes_to_M(Wf_s, Vf_s, Wb_s, Vb_s)
+    M_sub = _modes_to_M(Wf_b, Vf_b, Wb_b, Vb_b)
+    modes = [_layer_modes_jax(e, Kx, Ky, jnp, eig) for e in eps_layers]
+    Ms = [_modes_to_M(m[0], m[1], m[3], m[4]) for m in modes]
+    nlay = len(modes)
+
+    # full cascade for the far field
+    S = _interface_smatrix_general(M_sup, Ms[0])
+    for i in range(nlay):
+        S = _redheffer_star(S, _propagation_smatrix_general(
+            modes[i][2], modes[i][5], k0 * thicks[i]))
+        nxt = M_sub if i == nlay - 1 else Ms[i + 1]
+        S = _redheffer_star(S, _interface_smatrix_general(Ms[i], nxt))
+    S11, _S12, S21, _S22 = S
+
+    # bracketing partials (mirror berreman._solve_core's retain block)
+    ifc = [_interface_smatrix_general(M_sup, Ms[0])]
+    for i in range(1, nlay):
+        ifc.append(_interface_smatrix_general(Ms[i - 1], Ms[i]))
+    ifc.append(_interface_smatrix_general(Ms[-1], M_sub))
+    prop = [_propagation_smatrix_general(modes[i][2], modes[i][5],
+                                         k0 * thicks[i]) for i in range(nlay)]
+    S_above = [ifc[0]] + [None] * (nlay - 1)
+    for i in range(1, nlay):
+        S_above[i] = _redheffer_star(
+            _redheffer_star(S_above[i - 1], prop[i - 1]), ifc[i])
+    S_below = [None] * nlay
+    S_below_bot = [None] * nlay
+    for i in range(nlay - 1, -1, -1):
+        S_below_bot[i] = (ifc[nlay] if i == nlay - 1
+                          else _redheffer_star(ifc[i + 1], S_below[i + 1]))
+        S_below[i] = _redheffer_star(prop[i], S_below_bot[i])
+
+    # far field + incident modal amplitudes
+    Jr_cols, Rs, Ts, cinc_cols = [], [], [], []
+    for Einc in (jnp.array([1.0, 0.0], cj), jnp.array([0.0, 1.0], cj)):
+        c_inc = jnp.linalg.solve(Wf_s, Einc)
+        cinc_cols.append(c_inc)
+        c_ref = S11 @ c_inc
+        c_trn = S21 @ c_inc
+        E_inc, H_inc = Wf_s @ c_inc, Vf_s @ c_inc
+        E_ref, H_ref = Wb_s @ c_ref, Vb_s @ c_ref
+        E_trn, H_trn = Wf_b @ c_trn, Vf_b @ c_trn
+        Jr_cols.append(E_ref)
+        F_inc = _flux_jax(E_inc, H_inc, jnp)
+        Rs.append(-_flux_jax(E_ref, H_ref, jnp) / F_inc)
+        Ts.append(_flux_jax(E_trn, H_trn, jnp) / F_inc)
+    core = dict(_is_jax=True, modes=modes, thicks=thicks, eps_layers=eps_layers,
+                S_above=S_above, S_below=S_below, S_below_bot=S_below_bot,
+                Wf_s=Wf_s, Vf_s=Vf_s, k0=k0, Kx=Kx, Ky=Ky,
+                cinc=jnp.stack(cinc_cols, axis=1))
+    return jnp.stack(Rs), jnp.stack(Ts), jnp.stack(Jr_cols, axis=1), core
+
+
+def _amplitudes_jax(d, jnp):
+    """Per-layer ``(c_fwd_top, c_bwd_bot)`` modal amplitudes (jnp twin of
+    ``BerremanStack._amplitudes``)."""
+    cinc = d["cinc"]
+    k0 = d["k0"]
+    I2 = jnp.eye(2, dtype=jnp.complex128)
+    out = []
+    for i, (Wf, Vf, lamf, Wb, Vb, lamb) in enumerate(d["modes"]):
+        Sa = d["S_above"][i]
+        Sb11 = d["S_below"][i][0]
+        Bb11 = d["S_below_bot"][i][0]
+        A22, A21 = Sa[3], Sa[2]
+        denom = jnp.linalg.inv(I2 - A22 @ Sb11)
+        c_fwd = denom @ (A21 @ cinc)               # forward at layer TOP
+        Xf = jnp.exp(-lamf * k0 * d["thicks"][i])
+        c_bwd = Bb11 @ (Xf[:, None] * c_fwd)       # backward at layer BOTTOM
+        out.append((c_fwd, c_bwd))
+    return out
+
+
+def _layer_absorption_jax(d, jnp):
+    """Per-layer absorbed power fraction ``(n_layers, 2)`` (jnp twin of
+    ``BerremanStack.layer_absorption``)."""
+    amps = _amplitudes_jax(d, jnp)
+    k0 = d["k0"]
+    nlay = len(d["modes"])
+
+    def flux_at(i, zfrac):
+        Wf, Vf, lamf, Wb, Vb, lamb = d["modes"][i]
+        c_fwd, c_bwd = amps[i]
+        t = d["thicks"][i]
+        P = jnp.exp(-lamf * k0 * (zfrac * t))[:, None]
+        Q = jnp.exp(lamb * k0 * ((1.0 - zfrac) * t))[:, None]
+        E = Wf @ (P * c_fwd) + Wb @ (Q * c_bwd)
+        H = Vf @ (P * c_fwd) + Vb @ (Q * c_bwd)
+        return jnp.stack([_flux_jax(E[:, c], H[:, c], jnp) for c in range(2)])
+
+    F_top = jnp.stack([flux_at(i, 0.0) for i in range(nlay)])
+    F_bot = jnp.stack([flux_at(i, 1.0) for i in range(nlay)])
+    F_inc = jnp.stack([_flux_jax(d["Wf_s"] @ d["cinc"][:, c],
+                                 d["Vf_s"] @ d["cinc"][:, c], jnp)
+                       for c in range(2)])
+    return (F_top - F_bot) / F_inc[None, :]
+
+
+def _internal_field_jax(d, z, component, incident, jnp):
+    """Reconstruct the internal E/H field (jnp twin of
+    ``BerremanStack.internal_field``).  Layer binning uses CONCRETE geometry
+    (raises if a thickness is itself traced)."""
+    names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
+             "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
+    if component not in names:
+        raise ValueError(
+            f"BerremanStack.internal_field: component must be 'E', 'H' or "
+            f"'all', got {component!r}.")
+    want = names[component]
+    wx = jnp.asarray(incident[0], jnp.complex128)
+    wy = jnp.asarray(incident[1], jnp.complex128)
+    amps = _amplitudes_jax(d, jnp)
+    k0, Kx, Ky = d["k0"], d["Kx"], d["Ky"]
+    thicks = d["thicks"]
+    try:
+        thk_c = [float(np.real(np.asarray(t))) for t in thicks]
+    except Exception as exc:                       # traced thickness
+        raise NotImplementedError(
+            "BerremanStack.internal_field at arbitrary z needs a concrete "
+            "thickness (differentiate layer_absorption instead).") from exc
+    z_top = np.concatenate([[0.0], np.cumsum(thk_c)])
+    zs = np.atleast_1d(np.asarray(z, dtype=float))
+    scalar_in = np.ndim(z) == 0
+    out = {c: [] for c in want}
+    layers_out = []
+    cache = {}
+    for zz in zs:
+        i = int(np.clip(np.searchsorted(z_top, zz, side="right") - 1,
+                        0, len(thk_c) - 1))
+        zloc = float(zz - z_top[i])
+        layers_out.append(i)
+        Wf, Vf, lamf, Wb, Vb, lamb = d["modes"][i]
+        if i not in cache:
+            c_fwd, c_bwd = amps[i]
+            cache[i] = (wx * c_fwd[:, 0] + wy * c_fwd[:, 1],
+                        wx * c_bwd[:, 0] + wy * c_bwd[:, 1])
+        cF, cB = cache[i]
+        P = jnp.exp(-lamf * k0 * zloc)
+        Q = jnp.exp(lamb * k0 * (thicks[i] - zloc))
+        E = Wf @ (P * cF) + Wb @ (Q * cB)
+        H = Vf @ (P * cF) + Vb @ (Q * cB)
+        Ex, Ey = E[0], E[1]
+        Hx, Hy = -1j * H[0], -1j * H[1]
+        eps_t = d["eps_layers"][i]
+        ezz = eps_t[2, 2]
+        Ez = (-(Kx * Hy - Ky * Hx)
+              - eps_t[2, 0] * Ex - eps_t[2, 1] * Ey) / ezz
+        Hz = Kx * Ey - Ky * Ex
+        full = dict(Ex=Ex, Ey=Ey, Ez=Ez, Hx=Hx, Hy=Hy, Hz=Hz)
+        for c in want:
+            out[c].append(full[c])
+    res = {c: (out[c][0] if scalar_in else jnp.stack(out[c])) for c in want}
+    res["z"] = float(zs[0]) if scalar_in else zs
+    res["layer"] = layers_out[0] if scalar_in else np.asarray(layers_out)
+    return res
+
+
 def _tensor_is_offplane_jax(e, jnp):
     """True if a CONCRETE ``(3, 3)`` eps has out-of-plane coupling.  A concrete
     ``jax.Array`` (e.g. ``jnp.asarray`` of a fixed tensor) materialises fine; a
@@ -286,9 +467,25 @@ def _berreman_jones_1d_jax(layers, n_substrate, n_superstrate, wavelength,
     return R, T, Jr, Jt
 
 
-def _berreman_stack_solve_jax(stack):
+def _berreman_stack_solve_jax(stack, retain_internal=False):
     src = stack._src
     layers = [(e, t) for t, e in stack._layers]
+    if retain_internal:
+        import jax.numpy as _jnp
+        if any(_tensor_is_offplane_jax(e, _jnp) for e, _t in layers):
+            raise NotImplementedError(
+                "BerremanStack.solve(retain_internal=True): internal fields "
+                "are not available for out-of-plane tensor layers at OBLIQUE "
+                "incidence (the generalized cascade's per-layer field "
+                "reconstruction is not implemented); far-field R/T/Jones ARE "
+                "exact.  Use a concrete NumPy solve for internal fields there.")
+        jnp, eps_layers, thicks, eps_sup, eps_sub, wl, Kx, Ky = _prep(
+            layers, stack.n_sub, stack.n_sup, src["wl"], src["angle"],
+            src["phi"], None)
+        R, T, Jr, core = _solve_jax_retain(
+            eps_layers, thicks, eps_sup, eps_sub, jnp.asarray(wl), Kx, Ky, jnp)
+        stack._internal = core
+        return R, T, Jr
     R, T, Jr, Jt = _berreman_jones_1d_jax(
         layers, stack.n_sub, stack.n_sup, src["wl"],
         angle=src["angle"], phi=src["phi"])

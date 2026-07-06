@@ -668,13 +668,13 @@ class BerremanStack:
         if not self._layers:
             raise ValueError("BerremanStack.solve: add at least one layer.")
         if self._holds_traced():
-            if retain_internal:
-                raise NotImplementedError(
-                    "BerremanStack.solve(retain_internal=True): the internal-"
-                    "field / absorption observables are NumPy-only; use "
-                    "concrete inputs for fields.")
+            # The differentiable twin now supports retain_internal too (the
+            # internal-field / layer-absorption reconstruction is backend-generic
+            # S-matrix algebra); it stores self._internal so the observables
+            # dispatch to their jnp ports below.
             from ._berreman_jax import _berreman_stack_solve_jax
-            return _berreman_stack_solve_jax(self)
+            return _berreman_stack_solve_jax(
+                self, retain_internal=retain_internal)
         wl, eps_sup, eps_sub, Kx, Ky, eps_layers, thicks = self._geom()
         eps_layers = [_as_eps_tensor(e) for e in eps_layers]
         if _offplane_oblique(eps_layers, Kx, Ky):
@@ -721,6 +721,11 @@ class BerremanStack:
         backward amplitude at the BOTTOM from the forward field propagated
         down (a DECAYING ``Xf``)."""
         d = self._internal
+        if d.get("_is_jax"):
+            import jax.numpy as jnp
+
+            from ._berreman_jax import _amplitudes_jax
+            return _amplitudes_jax(d, jnp)
         cinc = d["cinc"]
         out = []
         k0 = d["k0"]
@@ -764,6 +769,11 @@ class BerremanStack:
             raise ValueError(
                 "BerremanStack.internal_field: call solve(retain_internal="
                 "True) first.")
+        if d.get("_is_jax"):
+            import jax.numpy as jnp
+
+            from ._berreman_jax import _internal_field_jax
+            return _internal_field_jax(d, z, component, incident, jnp)
         names = {"E": ("Ex", "Ey", "Ez"), "H": ("Hx", "Hy", "Hz"),
                  "all": ("Ex", "Ey", "Ez", "Hx", "Hy", "Hz")}
         if component not in names:
@@ -824,6 +834,11 @@ class BerremanStack:
             raise ValueError(
                 "BerremanStack.layer_absorption: call solve(retain_internal="
                 "True) first.")
+        if d.get("_is_jax"):
+            import jax.numpy as jnp
+
+            from ._berreman_jax import _layer_absorption_jax
+            return _layer_absorption_jax(d, jnp)
         amps = self._amplitudes()
         k0 = d["k0"]
         nlay = len(d["modes"])

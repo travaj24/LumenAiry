@@ -6,6 +6,20 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Differentiable (JAX) Berreman internal observables** (`layer_absorption`,
+  `internal_field`).  `BerremanStack.solve(retain_internal=True)` now works under
+  a trace (previously it raised): the per-layer modal-amplitude reconstruction
+  from the retained partial cascades is backend-generic S-matrix algebra, so the
+  absorbed-power-per-layer and the internal E/H field intensities now
+  differentiate w.r.t. a lossy layer's Im(eps), the layer indices, thicknesses
+  and the source -- a natural objective for LC retarder / magneto-optic / lossy
+  dichroic film design.  jnp twins (`_solve_jax_retain` + `_amplitudes_jax` /
+  `_layer_absorption_jax` / `_internal_field_jax`) port the validated NumPy loops.
+  Traced == concrete to machine precision (~3e-16), the closure invariant
+  `sum_i A_i == 1 - R - T` holds, and grad matches central FD to ~1e-10;
+  out-of-plane-oblique retain still raises (no field reconstruction there).  See
+  `tests/unit/test_v5_20_10_berreman_internal_jax.py`.
+
 - **Differentiable (JAX) EMT mixing rules** (`rytov_tensor`,
   `rytov_segments_tensor`, `maxwell_garnett`, `bruggeman`).  The closed-form
   effective-medium rules are now backend-generic (via `array_namespace`), so a
