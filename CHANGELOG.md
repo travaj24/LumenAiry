@@ -12,11 +12,15 @@ All notable changes to the core library are documented here.
   followed by free-space / uniform-ABCD evolution produces -- the coherent sum
   is a convolution of the amplitude array with ONE Gaussian kernel, evaluated
   as a single FFT of `O(Ny*Nx log)` **independent of beamlet count**.  Auto-
-  detected inside `reconstruct_field_from_beamlets(..., window=...)` on the
-  NumPy backend; machine-precision identical to the dense sum (~1e-15) and
-  **2000-3700x faster** in the spread/dense regime where the windowed box fills
-  the grid.  Falls back to the windowed scatter-add for per-beamlet-`Q`, skew,
-  off-grid or per-beamlet-tilted bundles.
+  detected inside `reconstruct_field_from_beamlets(..., window=...)`;
+  machine-precision identical to the dense sum (~1e-15) and **2000-3700x
+  faster** in the spread/dense regime where the windowed box fills the grid.
+  **Backend-generic** (NumPy / JAX / CuPy via `xp.fft` + per-backend scatter),
+  so it runs on the GPU under CuPy and is `jax.grad` / `jit` differentiable
+  under JAX (grad matches FD to ~1e-12) -- a fast, differentiable free-space
+  reconstruct.  Falls back to the windowed scatter-add (NumPy) or the dense sum
+  (JAX / CuPy) for per-beamlet-`Q`, skew, off-grid or per-beamlet-tilted
+  bundles.
 
 ### Changed
 

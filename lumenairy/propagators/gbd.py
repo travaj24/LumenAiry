@@ -63,11 +63,6 @@ import numpy as np
 
 from ..backend import array_namespace, is_jax_array
 
-try:  # optional: the #9 FFT-convolution reconstruction fast path
-    from scipy.signal import fftconvolve as _scipy_fftconvolve
-except ImportError:  # pragma: no cover - scipy is a normal dependency
-    _scipy_fftconvolve = None
-
 # v5.21: default amplitude-1/e-radius window for the windowed (bounded-support)
 # reconstruction the drivers use on the NumPy backend.  5.0 -> Gaussian tail
 # exp(-25) ~ 1.4e-11 dropped (machine-precision identical to the dense sum, but
@@ -847,24 +842,27 @@ def reconstruct_field_from_beamlets(
     if dy is None:
         dy = dx
 
-    # v5.21: windowed scatter-add reconstruction (NumPy fast path).
-    if window is not None and xp is np:
+    # v5.21: fast reconstruction paths.
+    if window is not None:
         # #9: when the bundle is uniform-Q (scalar or diagonal), uniform-
         # direction and on-grid -- exactly what decompose + free-space produces
         # -- the coherent sum is a single Gaussian-kernel CONVOLUTION, an FFT of
         # O(Ny*Nx log) INDEPENDENT of beamlet count.  Machine-precision identical
         # to the dense/windowed sum (~1e-15) and orders of magnitude faster in
-        # the spread/dense regime where the window fills the grid (measured
-        # ~2000-3700x).  Falls through to the windowed scatter-add otherwise
-        # (per-beamlet Q, skew, off-grid, tilted-per-beamlet).
+        # the spread/dense regime (measured ~2000-3700x).  Backend-generic
+        # (#5: NumPy / JAX / CuPy), so GPU + jax.grad get it too.
         if _fft_reconstruct_applicable(beamlets, Nx, Ny, dx, dy, centre):
             return _reconstruct_fft(
-                beamlets, Ny=Ny, Nx=Nx, dx=dx, dy=dy, centre=centre,
+                beamlets, xp=xp, Ny=Ny, Nx=Nx, dx=dx, dy=dy, centre=centre,
                 wavelength=wavelength)
-        return _reconstruct_windowed(
-            beamlets, Ny=Ny, Nx=Nx, dx=dx, dy=dy, centre=centre,
-            wavelength=wavelength, n_sigma=float(window),
-            mem_budget_mb=mem_budget_mb)
+        # Windowed scatter-add: NumPy fast path (per-beamlet Q, skew, off-grid,
+        # tilted-per-beamlet); JAX / CuPy non-uniform bundles fall to the dense
+        # sum below (data-dependent windows are awkward there).
+        if xp is np:
+            return _reconstruct_windowed(
+                beamlets, Ny=Ny, Nx=Nx, dx=dx, dy=dy, centre=centre,
+                wavelength=wavelength, n_sigma=float(window),
+                mem_budget_mb=mem_budget_mb)
 
     # v5.21: auto-shrink chunk_beamlets to the memory budget.  bytes per
     # beamlet-column of the dense working set ~ Ny*Nx*16 (the dX/dY/rho2/phase
@@ -1158,8 +1156,6 @@ def _fft_reconstruct_applicable(beamlets: BeamletBundle, Nx: int, Ny: int,
     output grid.  This is exactly what :func:`decompose_field_to_beamlets`
     followed by free-space / uniform-ABCD evolution produces (positions
     unchanged for an axial bundle, ``Q`` and amplitude evolve identically)."""
-    if _scipy_fftconvolve is None:
-        return False
     n = int(beamlets.positions.shape[0])
     if n == 0:
         return False
@@ -1189,10 +1185,36 @@ def _fft_reconstruct_applicable(beamlets: BeamletBundle, Nx: int, Ny: int,
     return True
 
 
-def _reconstruct_fft(beamlets: BeamletBundle, *, Ny: int, Nx: int, dx: float,
-                     dy: float, centre: Tuple[float, float],
+def _fftconv_same(xp: Any, a: np.ndarray, G: np.ndarray) -> np.ndarray:
+    """Linear (zero-padded) 2-D convolution of ``a`` with ``G``, returning the
+    ``mode='same'`` central slice aligned to ``a`` -- backend-generic via
+    ``xp.fft`` (matches ``scipy.signal.fftconvolve(a, G, 'same')`` to ~6e-16)."""
+    Ny, Nx = a.shape
+    Gy, Gx = G.shape
+    sy, sx = Ny + Gy - 1, Nx + Gx - 1
+    F = xp.fft.ifft2(xp.fft.fft2(a, s=(sy, sx)) * xp.fft.fft2(G, s=(sy, sx)))
+    sy0, sx0 = (Gy - 1) // 2, (Gx - 1) // 2
+    return F[sy0:sy0 + Ny, sx0:sx0 + Nx]
+
+
+def _scatter_grid(xp: Any, Ny: int, Nx: int, flat: np.ndarray,
+                  vals: np.ndarray) -> np.ndarray:
+    """Scatter-add complex ``vals`` into an ``(Ny, Nx)`` grid at flat indices
+    ``flat`` -- ``jnp.at[].add`` for JAX (static shape), real/imag ``bincount``
+    for NumPy / CuPy."""
+    if is_jax_array(vals):
+        g = xp.zeros(Ny * Nx, dtype=vals.dtype).at[flat].add(vals)
+    else:
+        gr = xp.bincount(flat, weights=vals.real, minlength=Ny * Nx)[:Ny * Nx]
+        gi = xp.bincount(flat, weights=vals.imag, minlength=Ny * Nx)[:Ny * Nx]
+        g = gr + 1j * gi
+    return g.reshape(Ny, Nx)
+
+
+def _reconstruct_fft(beamlets: BeamletBundle, *, xp: Any, Ny: int, Nx: int,
+                     dx: float, dy: float, centre: Tuple[float, float],
                      wavelength: float) -> np.ndarray:
-    """FFT-convolution reconstruction, NumPy only.
+    """FFT-convolution reconstruction -- backend-generic (NumPy / JAX / CuPy).
 
     For a uniform-``Q``, uniform-direction, on-grid bundle the coherent sum
     ``E(p) = sum_b a_b exp(0.5j k conj(Q):(p-b)^2 + i k dir.(p-b))`` is the
@@ -1201,39 +1223,46 @@ def _reconstruct_fft(beamlets: BeamletBundle, *, Ny: int, Nx: int, dx: float,
     convolution -- ``O(Ny*Nx log(Ny*Nx))`` INDEPENDENT of the beamlet count,
     vs the ``O(n_beamlets * Ny * Nx)`` dense/windowed sum which the window path
     degrades to once the beamlets spread to fill the grid.  Machine-precision
-    identical to the dense sum (~1e-15).  Applicability is gated by
-    :func:`_fft_reconstruct_applicable`."""
-    fftconvolve = _scipy_fftconvolve
+    identical to the dense sum (~1e-15); the FFT + scatter run entirely on the
+    backend (GPU under CuPy, and it is ``jax.grad`` / ``jit`` differentiable
+    under JAX).  Applicability is gated by :func:`_fft_reconstruct_applicable`.
+    """
     k = 2.0 * float(np.pi) / wavelength
     cx, cy = centre
-    a = np.asarray(beamlets.amplitude)
-    out_dtype = beamlets.amplitude.dtype
-    xb = np.asarray(beamlets.positions[:, 0], dtype=np.float64)
-    yb = np.asarray(beamlets.positions[:, 1], dtype=np.float64)
+    a = beamlets.amplitude
+    out_dtype = a.dtype
+    xb = beamlets.positions[:, 0]
+    yb = beamlets.positions[:, 1]
+    # Uniform-Q / uniform-direction scalars (one host element read; cheap).
     if _q_is_tensor(beamlets.Q):
-        Q = np.asarray(beamlets.Q)
-        cqx = np.conj(complex(Q[0, 0, 0]))
-        cqy = np.conj(complex(Q[0, 1, 1]))
+        Qh = np.asarray(beamlets.Q[0])
+        cqx = np.conj(complex(Qh[0, 0]))
+        cqy = np.conj(complex(Qh[1, 1]))
     else:
-        cq = np.conj(complex(np.asarray(beamlets.Q)[0]))
-        cqx = cqy = cq
+        cqx = cqy = np.conj(complex(np.asarray(beamlets.Q).reshape(-1)[0]))
     dr = getattr(beamlets, 'directions', None)
-    L0, M0 = (float(dr[0, 0]), float(dr[0, 1])) if dr is not None else (0.0, 0.0)
+    if dr is not None:
+        drh = np.asarray(dr[0])
+        L0, M0 = float(drh[0]), float(drh[1])
+    else:
+        L0, M0 = 0.0, 0.0
 
-    # Scatter the (complex) beamlet amplitudes onto the output grid.
-    ix = np.round((xb - cx) / dx + Nx / 2.0).astype(np.int64)
-    iy = np.round((yb - cy) / dy + Ny / 2.0).astype(np.int64)
+    # Scatter the beamlet amplitudes onto the grid (static-shape safe: clamp OOB
+    # indices and zero their value rather than boolean-mask).
+    ix = xp.round((xb - cx) / dx + Nx / 2.0).astype(xp.int32)
+    iy = xp.round((yb - cy) / dy + Ny / 2.0).astype(xp.int32)
     valid = (ix >= 0) & (ix < Nx) & (iy >= 0) & (iy < Ny)
-    a_grid = np.zeros((Ny, Nx), dtype=np.complex128)
-    np.add.at(a_grid, (iy[valid], ix[valid]), a[valid])
+    vals = xp.where(valid, a, xp.zeros_like(a))
+    flat = xp.clip(iy, 0, Ny - 1) * Nx + xp.clip(ix, 0, Nx - 1)
+    a_grid = _scatter_grid(xp, Ny, Nx, flat, vals)
 
     # Gaussian kernel over the full linear-convolution offset range, centred.
-    ux = (np.arange(2 * Nx - 1) - (Nx - 1)) * dx
-    uy = (np.arange(2 * Ny - 1) - (Ny - 1)) * dy
-    UX, UY = np.meshgrid(ux, uy)
-    G = np.exp(1j * k * (0.5 * (cqx * UX * UX + cqy * UY * UY)
+    ux = (xp.arange(2 * Nx - 1) - (Nx - 1)) * dx
+    uy = (xp.arange(2 * Ny - 1) - (Ny - 1)) * dy
+    UX, UY = xp.meshgrid(ux, uy)
+    G = xp.exp(1j * k * (0.5 * (cqx * UX * UX + cqy * UY * UY)
                          + L0 * UX + M0 * UY))
-    out = fftconvolve(a_grid, G, mode='same')
+    out = _fftconv_same(xp, a_grid, G)
     return out.astype(out_dtype)
 
 

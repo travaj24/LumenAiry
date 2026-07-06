@@ -138,3 +138,56 @@ def test_fft_reconstruct_anamorphic_diagonal_Q():
     fft = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx, dy=dy,
                                           wavelength=LAM, window=5.0)
     assert _relerr(fft, dense) < 1e-9
+
+
+# --------------------------------------------------------------------------
+# #5 backend-generic FFT-conv reconstruction (JAX / CuPy) + differentiable
+# --------------------------------------------------------------------------
+def _jax_ok():
+    try:
+        import jax  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+@pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
+def test_fft_reconstruct_jax_matches_numpy_and_differentiable():
+    """The FFT-conv reconstruction runs on the JAX backend (matches NumPy) and
+    is jax.grad-differentiable through the whole reconstruct."""
+    import jax
+    jax.config.update('jax_enable_x64', True)
+    import jax.numpy as jnp
+
+    from lumenairy.propagators.gbd import (
+        BeamletBundle,
+        decompose_field_to_beamlets,
+        propagate_beamlets_freespace,
+        reconstruct_field_from_beamlets,
+    )
+    N, dx = 96, 5e-6
+    E0 = _gauss(N, dx, w0=0.15e-3)
+    b = decompose_field_to_beamlets(E0, dx, wavelength=LAM, sample_step=1,
+                                    waist_factor=1.5)
+    b = propagate_beamlets_freespace(b, 8e-3, LAM)
+    fft_np = reconstruct_field_from_beamlets(b, Ny=N, Nx=N, dx=dx,
+                                             wavelength=LAM, window=5.0)
+    bj = BeamletBundle(
+        positions=jnp.asarray(b.positions),
+        directions=jnp.asarray(b.directions),
+        Q=jnp.asarray(b.Q), amplitude=jnp.asarray(b.amplitude),
+        waist0=jnp.asarray(b.waist0))
+    fft_jax = reconstruct_field_from_beamlets(bj, Ny=N, Nx=N, dx=dx,
+                                              wavelength=LAM, window=5.0)
+    assert _relerr(np.asarray(fft_jax), fft_np) < 1e-9
+
+    def loss(scale):
+        bs = BeamletBundle(positions=bj.positions, directions=bj.directions,
+                           Q=bj.Q, amplitude=bj.amplitude * scale,
+                           waist0=bj.waist0)
+        F = reconstruct_field_from_beamlets(bs, Ny=N, Nx=N, dx=dx,
+                                            wavelength=LAM, window=5.0)
+        return jnp.sum(jnp.abs(F) ** 2)
+    g = float(jax.grad(loss)(1.0))
+    fd = float((loss(1.0 + 1e-5) - loss(1.0 - 1e-5)) / 2e-5)
+    assert abs(g - fd) / abs(fd) < 1e-6
