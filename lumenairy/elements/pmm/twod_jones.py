@@ -170,6 +170,11 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
     Nf = len(kxv)
     nsx, nsy = len(ax["strips"]), len(ay["strips"])
     offp = _tile_is_offplane(tile_i)
+    if formulation == "fff_nv" and offp:
+        raise ValueError(
+            "pmm_jones_2d: formulation='fff_nv' is IN-PLANE only (the "
+            "out-of-plane anisotropic FFF is not implemented) -- use 'laurent' "
+            "or 'li' for an out-of-plane tensor cell.")
     oop = dict(EZX=None, EZY=None, EXZ=None, EYZ=None)
     if offp:
         # ezz-Schur reduction POINTWISE (per region), BEFORE any factorization
@@ -229,6 +234,28 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
         czz = _mass(lambda t: t[2, 2])
         cizz = _mass(lambda t: 1.0 / t[2, 2])
         ez1 = np.linalg.inv(cizz) if formulation == "li" else czz
+        if formulation == "fff_nv":
+            # Full Popov-Neviere OFF-DIAGONAL rule for a SEPARABLE cell: the
+            # wall-normal is CONSTANT along the patterned axis (n = e_x for an
+            # x-stripe, e_y for a y-stripe), so Q = [[eps.C]][[C]]^-1 reduces
+            # EXACTLY to the rigorous Li-1996 1-D anisotropic factorization --
+            # the wall-normal diagonal takes the inverse rule and the
+            # off-diagonal gets its correct composite (the diagonal-only 'li'
+            # leaves Cxy/Cyx Laurent-floored).  Every operator here is a 1-D
+            # projected mass along the patterned axis, so the single inversion
+            # [[1/e_nn]]^-1 is well-conditioned (no crossed-cell blow-up).  EZZ
+            # stays DIRECT (ez1 = czz above; E_z is tangential to every vertical
+            # wall -- Li 1997 Eq. 27, the rcwa_jones_2d fff_nv mirror).
+            nn = 0 if nsy == 1 else 1          # wall-normal in-plane component
+            tt = 1 - nn                        # tangential in-plane component
+            inn = np.linalg.inv(_mass(lambda t: 1.0 / t[nn, nn]))
+            b_nt = _mass(lambda t: t[nn, tt] / t[nn, nn])
+            b_tn = _mass(lambda t: t[tt, nn] / t[nn, nn])
+            schur = _mass(lambda t: t[tt, tt] - t[tt, nn] * t[nn, tt] / t[nn, nn])
+            c = {(nn, nn): inn,
+                 (nn, tt): inn @ b_nt,
+                 (tt, nn): b_tn @ inn,
+                 (tt, tt): schur + b_tn @ inn @ b_nt}
         o1 = {}
         if offp:
             o1 = {k: _mass(lambda t, a=a, b=b: t[a, b])
@@ -257,6 +284,15 @@ def _tensor_layer_modes(ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0,
             if offp:
                 oop = {k: np.kron(v, Ix) for k, v in o1.items()}
     else:
+        if formulation == "fff_nv":
+            raise ValueError(
+                "pmm_jones_2d: formulation='fff_nv' requires a SEPARABLE "
+                "(single-orientation, x- or y-patterned) anisotropic cell -- "
+                "this cell is patterned along BOTH axes (a varying wall normal), "
+                "whose projected anisotropic factorization is ill-conditioned "
+                "(the research-grade matched-coordinate FFF regime).  Use "
+                "formulation='li' or 'laurent' (both rigorous -- the off-diagonal "
+                "stays Laurent-floored but the solve is stable).")
         # FACTORIZED dense-branch assembly (v5.14 perf audit P1; mirrors
         # twod._scalar_projected_ops): diagonal GLL masses make every tensor
         # component a NODAL VECTOR and the derivative operators kron-factor --
@@ -365,13 +401,26 @@ def pmm_jones_2d(
         Conical incidence angles (radians).
     degree, elements_per_strip, grade, n_orders, max_nodal_dof
         As in :func:`pmm_efficiency_2d_cell`.
-    formulation : {'laurent', 'li'}, optional
+    formulation : {'laurent', 'li', 'fff_nv'}, optional
         ``E_z``-elimination rule: ``'laurent'`` = ``inv([[e_zz]])`` (the
         :func:`rcwa_jones_2d` mirror; a scalar cell reduces EXACTLY to
         ``pmm_efficiency_2d_cell(formulation='laurent')``); ``'li'`` = the
         projected multiply-by-``1/e_zz`` (the hybrid's inverse-rule
-        elimination).  The in-plane tensor block is direct-rule either way
-        (see the module docstring for the Li-1997 mixed-rule note).
+        elimination).  The in-plane tensor block is direct-rule for both of
+        those (see the module docstring for the Li-1997 mixed-rule note).
+        ``'fff_nv'`` is the full Popov-Neviere (2001) anisotropic OFF-DIAGONAL
+        factorization: for a SEPARABLE (single-orientation, e.g. an x- or
+        y-patterned stripe) anisotropic cell the wall-normal is constant, so the
+        projected tensor operator reduces to the rigorous Li-1996 1-D
+        factorization -- the wall-normal diagonal gets the inverse rule and the
+        off-diagonal ``Cxy``/``Cyx`` of a rotated director (``exy, eyx != 0``)
+        gets its correct composite (the ``'li'`` diagonal rule leaves it
+        Laurent-floored).  It converges markedly faster than ``'laurent'`` on
+        sharp anisotropic walls and matches the rigorous 1-D solver; NumPy only,
+        in-plane only.  A CROSSED (both-axis-patterned) cell has a varying
+        normal whose projected factorization is ill-conditioned (the
+        matched-coordinate FFF regime) and RAISES -- use ``'li'``/``'laurent'``
+        (the :func:`rcwa_jones_2d` mirror gates the same way).
     stabilize : bool, optional
         Per-order + Jones degree-scan consensus (the 1-D guard against the
         measure-zero quasi-resonances), stepping through consecutive ODD
@@ -414,10 +463,17 @@ def pmm_jones_2d(
         Zeroth-order Jones reflection matrix in the lab ``(x, y)`` basis
         (PUBLIC ``exp(-i w t)`` convention).
     """
-    if formulation not in ("laurent", "li"):
+    if formulation not in ("laurent", "li", "fff_nv"):
         raise ValueError(
-            f"pmm_jones_2d: formulation must be 'laurent' or 'li', got "
-            f"{formulation!r}")
+            f"pmm_jones_2d: formulation must be 'laurent', 'li' or 'fff_nv', "
+            f"got {formulation!r}")
+    if formulation == "fff_nv" and any(is_jax_array(a) for a in
+                                       (eps_tensor_cell, n_substrate,
+                                        n_superstrate, depth, wavelength,
+                                        theta, phi)):
+        raise ValueError(
+            "pmm_jones_2d: formulation='fff_nv' is NumPy only -- use 'laurent' "
+            "or 'li' on the JAX backend.")
 
     # ---- JAX (differentiable) dispatch --------------------------------------
     # A traced eps_tensor_cell / source value routes to the full-3x3-generator
@@ -578,7 +634,7 @@ def _pmm_jones_2d_at(period_x, period_y, x_walls, y_walls, tile_i, eps_sup,
     # cascade in the (Nf+1)-d even sector; None -> not applicable (out-of-plane,
     # off-centre or oblique) -> the full 2Nf solve below (byte-identical there).
     sym_pairs = None
-    if _symmetry_on(symmetry) and kt < 1e-12:
+    if _symmetry_on(symmetry) and kt < 1e-12 and formulation != "fff_nv":
         ops = _tensor_layer_modes(
             ax, ay, x_walls, y_walls, tile_i, k0, kx0, ky0, ox, oy, kxv, kyv,
             formulation, return_ops=True)

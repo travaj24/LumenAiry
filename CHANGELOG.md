@@ -160,6 +160,24 @@ All notable changes to the core library are documented here.
   `_nv_convolutions_2d_tensor` + `_nv_field_2d(..., unit=True)`.  See
   `tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py`.
 
+- **`formulation='fff_nv'` ported to the hybrid PMM** (`pmm_jones_2d`).  For a
+  SEPARABLE (single-orientation, x- or y-patterned) anisotropic cell the
+  wall-normal is constant, so the SEM-projected tensor operator reduces to the
+  rigorous Li-1996 1-D anisotropic factorization built directly from the
+  projected component masses -- the wall-normal diagonal takes the inverse rule
+  and the off-diagonal `Cxy`/`Cyx` of a rotated director gets its correct
+  composite, with the single inversion `[[1/e_nn]]^-1` well-conditioned by
+  construction (no crossed-cell blow-up, so no `cond` gate is needed on this
+  path).  Note PMM's `'li'` applied the inverse rule ONLY to the `E_z`
+  elimination in the separable branch, so `'fff_nv'` is the FIRST correct
+  in-plane inverse-rule treatment there -- an even bigger gain than in rcwa.
+  Validated: converges to the rigorous `rcwa_jones_1d_segments` on a stripe
+  (measured err 9e-5 vs laurent 7.3e-3 at n_orders=13), agrees cross-solver with
+  `rcwa_jones_2d(fff_nv)`, and the lossy absorptance split tracks 1-D.  A crossed
+  (both-axis-patterned) / out-of-plane / JAX cell raises (the same honest scope
+  as rcwa; the crossed case is research-grade matched-coordinate FFF).  See
+  `tests/unit/test_v5_20_13_pmm_jones_2d_fff_nv.py`.
+
 ### Changed
 
 - **`apply_real_lens_maslov` default `integration_method` is now `'auto'`**
