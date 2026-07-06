@@ -149,10 +149,11 @@ def test_analytic_gives_the_same_gbd_field_as_fd():
 
 
 def test_analytic_rejects_biconic_and_asphere():
-    """The analytic path reads only ``radius`` / ``conic`` (rotationally
-    symmetric), so it must REJECT biconic (``radius_y``), aspheric-polynomial
-    and coordinate-break surfaces rather than silently trace them
-    rotationally-symmetric with a wrong off-axis power."""
+    """The analytic path reads only ``radius`` / ``conic`` for a
+    refracting/reflecting surface (rotationally symmetric), so it must REJECT
+    biconic (``radius_y``) and aspheric-polynomial surfaces rather than silently
+    trace them rotationally-symmetric with a wrong off-axis power.  (Coordinate
+    breaks ARE handled -- a separate frame-transform branch.)"""
     biconic = {'name': 'b', 'aperture_diameter': 16e-3, 'surfaces': [
         {'radius': 50e-3, 'radius_y': 30e-3, 'conic': 0., 'conic_y': 0.,
          'glass_before': 'air', 'glass_after': 'N-BK7', 'semi_diameter': 8e-3}],
@@ -279,3 +280,50 @@ def test_analytic_jax_exact_and_differentiable():
     g = np.asarray(jax.grad(loss)(jnp.array([1e-3, 3e-3, 5e-3])))
     assert np.isfinite(g).all() and g.shape == (3,)
     assert np.isfinite(float(jax.jit(loss)(jnp.array([1e-3, 3e-3, 5e-3]))))
+
+
+def test_analytic_coordbreak_tilt_decenter_matches_fd_and_differentiable():
+    """A coordinate break (decenter + X/Y/Z tilts) in the surface list is a
+    smooth frame transform: the analytic ray-transfer Jacobian through a
+    tilted+decentered system matches the finite-difference primitive to its
+    truncation floor, and is jax.grad-differentiable (the differentiable
+    ray transfer through a fold -- alignment / tolerancing sensitivity)."""
+    from lumenairy.raytrace.surface import Surface
+    base = surfaces_from_prescription({
+        'name': 's', 'aperture_diameter': 20e-3, 'surfaces': [
+            {'radius': 51.5e-3, 'conic': 0., 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'semi_diameter': 10e-3},
+            {'radius': -51.5e-3, 'conic': 0., 'glass_before': 'N-BK7',
+             'glass_after': 'air', 'semi_diameter': 10e-3}],
+        'thicknesses': [4e-3, 10e-3]})
+    cb = Surface(is_coordbrk=True, tilt_x_deg=2.0, tilt_y_deg=1.0,
+                 tilt_z_deg=0.5, decenter_x_m=0.3e-3, decenter_y_m=-0.2e-3,
+                 thickness=15e-3, glass_before='air', glass_after='air')
+    det = Surface(radius=np.inf, glass_before='air', glass_after='air',
+                  thickness=0.0)
+    surfs = [base[0], base[1], cb, det]
+    x = np.array([0.0, 3e-3, -4e-3])
+    y = np.array([0.0, 2e-3, 1e-3])
+    z = np.zeros(3)
+    a = ray_transfer_jacobian_analytic(x, y, z, z, surfs, LAM)
+    f = ray_transfer_jacobian(x, y, z, z, surfs, LAM)
+    assert np.max(np.abs(a.jacobian - f.jacobian)) < 1e-6      # FD floor
+    assert np.max(np.abs(np.stack(
+        [a.x - f.x, a.y - f.y, a.ux - f.ux, a.uy - f.uy]))) < 1e-10
+    assert np.max(np.abs(a.opd - f.opd)) < 1e-12
+    if _jax_ok():
+        import jax
+        import jax.numpy as jnp
+        jax.config.update('jax_enable_x64', True)
+        Jj = np.asarray(ray_transfer_jacobian_analytic(
+            jnp.asarray(x), jnp.asarray(y), jnp.zeros(3), jnp.zeros(3),
+            surfs, LAM).jacobian)
+        assert np.max(np.abs(a.jacobian - Jj)) < 1e-9
+
+        def loss(xv):
+            J = ray_transfer_jacobian_analytic(
+                xv, jnp.zeros(3), jnp.zeros(3), jnp.zeros(3), surfs,
+                LAM).jacobian
+            return jnp.sum(J[:, 0, 0] ** 2)
+        g = np.asarray(jax.grad(loss)(jnp.asarray(x)))
+        assert np.isfinite(g).all() and g.shape == (3,)

@@ -308,14 +308,84 @@ _DUAL_OPS = {'sqrt': _dual_sqrt, 'val': lambda a: a.v,
              'pwhere': np.where, 'dwhere': _dual_where}
 
 
+def _adrt_coordbreak(x, y, ux, uy, surf, wavelength, apply_transfer,
+                     sqrt, val, compute_dead):
+    """Zemax-style coordinate break (decenter + intrinsic X,Y,Z tilts) then the
+    gap transfer -- no intersection.  A smooth frame rotation, so it is exactly
+    differentiable; replicates ``raytrace.intersection._apply_coord_break``
+    (decenter-then-tilt for ``coordbrk_order=0``, tilt-then-decenter for 1).
+    The ray starts and ends at ``z = 0`` (the vertex planes), so no cross-step
+    ``z`` state is needed -- the intermediate ``z`` from the tilt is consumed by
+    the gap transfer.  Small tilts / decenters give differentiable alignment
+    (tolerancing) sensitivity; large folds share the world-frame slope-space
+    caveat (``u = L/N`` degenerates as ``N -> 0``)."""
+    import math
+
+    from ..glass import get_glass_index
+    tx = math.radians(float(getattr(surf, 'tilt_x_deg', 0.0) or 0.0))
+    ty = math.radians(float(getattr(surf, 'tilt_y_deg', 0.0) or 0.0))
+    tz = math.radians(float(getattr(surf, 'tilt_z_deg', 0.0) or 0.0))
+    dcx = float(getattr(surf, 'decenter_x_m', 0.0) or 0.0)
+    dcy = float(getattr(surf, 'decenter_y_m', 0.0) or 0.0)
+    order = int(getattr(surf, 'coordbrk_order', 0) or 0)
+
+    sden = sqrt(1.0 + ux * ux + uy * uy)
+    L = ux / sden
+    M = uy / sden
+    Nn = 1.0 / sden
+    px, py, pz = x, y, 0.0 * ux            # z = 0 at the vertex plane
+
+    def _decenter(px, py):
+        return px - dcx, py - dcy
+
+    def _tilts(px, py, pz, L, M, Nn):
+        cx, sx = math.cos(tx), math.sin(tx)      # Rx (optical convention)
+        py, pz = cx * py - sx * pz, sx * py + cx * pz
+        M, Nn = cx * M - sx * Nn, sx * M + cx * Nn
+        cy, sy = math.cos(ty), math.sin(ty)      # Ry
+        px, pz = cy * px + sy * pz, -sy * px + cy * pz
+        L, Nn = cy * L + sy * Nn, -sy * L + cy * Nn
+        cz, sz = math.cos(tz), math.sin(tz)      # Rz
+        px, py = cz * px - sz * py, sz * px + cz * py
+        L, M = cz * L - sz * M, sz * L + cz * M
+        return px, py, pz, L, M, Nn
+
+    if order == 1:
+        px, py, pz, L, M, Nn = _tilts(px, py, pz, L, M, Nn)
+        px, py = _decenter(px, py)
+    else:
+        px, py = _decenter(px, py)
+        px, py, pz, L, M, Nn = _tilts(px, py, pz, L, M, Nn)
+
+    opd = 0.0 * val(ux)
+    if apply_transfer:
+        t = float(getattr(surf, 'thickness', 0.0) or 0.0)
+        n2 = float(get_glass_index(
+            getattr(surf, 'glass_after', None) or 'air', wavelength))
+        tau = (t - pz) / Nn
+        px = px + L * tau
+        py = py + M * tau
+        opd = n2 * abs(val(tau))
+    ux_out = L / Nn
+    uy_out = M / Nn
+    dead = None
+    if compute_dead:
+        dead = np.zeros(val(ux).shape, dtype=bool)
+    return px, py, ux_out, uy_out, opd, dead
+
+
 def _adrt_step(x, y, ux, uy, surf, wavelength, apply_transfer, O,
                compute_dead=True):
     """One surface: exact intersect (conic) + refract/reflect + optional
-    transfer, on dual-or-jnp ``(x, y, ux, uy)``.  Returns the updated state plus
-    the plain-array OPL increment and dead-ray mask."""
+    transfer, OR a coordinate-break frame transform (``is_coordbrk``), on
+    dual-or-jnp ``(x, y, ux, uy)``.  Returns the updated state plus the
+    plain-array OPL increment and dead-ray mask."""
     from ..glass import get_glass_index
     sqrt, val = O['sqrt'], O['val']
     pwhere, dwhere = O['pwhere'], O['dwhere']
+    if bool(getattr(surf, 'is_coordbrk', False)):
+        return _adrt_coordbreak(x, y, ux, uy, surf, wavelength,
+                                apply_transfer, sqrt, val, compute_dead)
     R = float(getattr(surf, 'radius', np.inf))
     c = 0.0 if not np.isfinite(R) else 1.0 / R
     k = float(getattr(surf, 'conic', 0.0) or 0.0)
@@ -480,10 +550,14 @@ def ray_transfer_jacobian_analytic(
     truncation floor (~1e-8).  On axis the 2x2 meridional block equals
     ``system_abcd_prescription`` (exactly for air-to-air prescriptions, where
     the unreduced slope ``u = L/N`` coincides with the reduced ``n*u`` momentum
-    at the ``n = 1`` endpoints).  Surfaces must be conic (sphere / conic ``+``
-    thickness ``+`` glass ``+`` ``is_mirror``); aspheric-polynomial departures,
-    freeforms and coordinate breaks are not yet handled (use the FD primitive
-    there).
+    at the ``n = 1`` endpoints).  Refracting / reflecting surfaces must be conic
+    (sphere / conic ``+`` thickness ``+`` glass ``+`` ``is_mirror``); **Zemax
+    coordinate breaks** (``is_coordbrk`` -- decenter + X/Y/Z tilts, a smooth
+    frame transform) ARE handled and differentiable, giving alignment /
+    tolerancing sensitivity through a fold (a *large* tilt shares the slope-
+    space caveat: ``u = L/N`` degenerates as the folded ``N -> 0``).
+    Aspheric-polynomial departures, freeforms and biconics are not yet handled
+    (use the FD primitive there).
 
     Returns
     -------
@@ -491,23 +565,23 @@ def ray_transfer_jacobian_analytic(
     """
     from ..backend.array import is_jax_array
     for s in surfaces:
-        # _adrt_step reads only ``radius`` / ``conic`` (rotationally symmetric),
-        # so any surface that departs from that -- aspheres, freeforms, coord
-        # breaks, OR a biconic ``radius_y`` / ``conic_y`` / ``aspheric_coeffs_y``
-        # -- must be rejected (else a biconic would be silently traced as if it
-        # were rotationally symmetric, giving a wrong y-axis power).
+        # _adrt_step reads only ``radius`` / ``conic`` (rotationally symmetric)
+        # for refracting/reflecting surfaces (coordinate breaks are handled
+        # separately), so a biconic ``radius_y`` / ``conic_y`` /
+        # ``aspheric_coeffs_y``, an asphere, or a freeform must be rejected
+        # (else a biconic would be silently traced as if it were rotationally
+        # symmetric, giving a wrong y-axis power).
         if (getattr(s, 'aspheric_coeffs', None)
                 or getattr(s, 'freeform', None)
-                or getattr(s, 'is_coordbrk', False)
                 or getattr(s, 'radius_y', None) is not None
                 or getattr(s, 'conic_y', None) is not None
                 or getattr(s, 'aspheric_coeffs_y', None) is not None):
             raise NotImplementedError(
                 'ray_transfer_jacobian_analytic handles rotationally-symmetric '
-                'conic surfaces only; aspheric-polynomial departures, '
-                'freeforms, coordinate breaks and biconic (radius_y / conic_y) '
-                'surfaces are not yet supported -- use ray_transfer_jacobian '
-                '(FD) for those.')
+                'conic surfaces (plus coordinate breaks) only; aspheric-'
+                'polynomial departures, freeforms and biconic (radius_y / '
+                'conic_y) surfaces are not yet supported -- use '
+                'ray_transfer_jacobian (FD) for those.')
     if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
             or is_jax_array(uy):
         return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)
