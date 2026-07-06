@@ -19,7 +19,9 @@ path).  The tensor entry routes the y-uniform (3, 3) profile -- including the
 out-of-plane ``xz/yz`` director coupling -- through the SAME 2-D tensor
 machinery (:func:`~lumenairy.elements.pmm.twod_jones._tensor_layer_modes`) with
 ``oy = [0]``, so an off-plane tensor picks up the generalized S-matrix generator
-automatically.  ``PMMStack`` conical wiring is the remaining follow-up (phase 4).
+automatically.  MULTILAYER conical is wired into ``PMMStack`` (its
+``_solve_conical`` Path-B-phase-4 cascade; ``PMMStack.set_source(..., phi)`` +
+``solve()`` route there for ``phi != 0``, all-vertical NumPy stacks).
 Validated against the analytic Berreman 4x4 conical oracle (uniform slab) and
 the same-family Path A (PMM2DStack y-invariant) bridge.
 """
