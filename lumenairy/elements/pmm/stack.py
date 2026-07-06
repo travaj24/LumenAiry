@@ -928,8 +928,21 @@ class PMMStack:
         if not any(abs(L[2]) > 1e-12 or oo
                    for L, oo in zip(self._layers, oop_layer)):
             # ALL-VERTICAL IN-PLANE: the symmetric (+/-q) S-matrix path --
-            # bit-identical to the prior release.
-            lmodes = [_sem_modes_tensor(m, k0, kx0, True) for m in layer_mats]
+            # bit-identical to the prior release.  Dedup the per-layer modal eig
+            # (the dominant cost) across IDENTICAL layers -- a periodic / Bragg
+            # (ABAB...) stack recomputes the same eig P times; content-key it on
+            # the layer's eps bytes (a 1:1 fingerprint of ``m`` since geometry /
+            # degree / grade are shared).  Byte-identical (deterministic eig,
+            # same arrays a plain loop would build; mirrors rcwa/stack.py).
+            _eig_memo = {}
+            lmodes = []
+            for eps_u, m in zip(layer_eps_u, layer_mats):
+                ck = tuple(np.asarray(e, dtype=_C).tobytes() for e in eps_u)
+                hit = _eig_memo.get(ck)
+                if hit is None:
+                    hit = _sem_modes_tensor(m, k0, kx0, True)
+                    _eig_memo[ck] = hit
+                lmodes.append(hit)
             nlay = len(lmodes)
             ifc = [_interface_smatrix(Wsup, Vsup, lmodes[0][0], lmodes[0][1])]
             for i in range(1, nlay):
