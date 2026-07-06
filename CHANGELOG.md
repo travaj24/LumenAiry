@@ -6,6 +6,28 @@ All notable changes to the core library are documented here.
 
 ### Added
 
+- **Differentiable (JAX) 2-D anisotropic PMM Jones solver** (`pmm_jones_2d`).
+  The full-tensor 2-D hybrid PMM is now `jax.grad` / `jit`-able: gradients flow
+  through the per-region (3, 3) permittivity tensor values (real and imaginary
+  parts), the half-space indices, depth, wavelength and the incidence angles.
+  As with the scalar cell twin, a traced `eps_tensor_cell` cannot define the
+  spectral-element walls, so a CONCRETE `region_layout` (int grid labelling the
+  regions) is passed alongside on the JAX path.  The twin reuses the already-
+  differentiable shared tensor generator (`_layer_eigenmodes_tensor`, whose
+  out-of-plane branch was made trace-safe for the RCWA-2D twin) + the generalized
+  S-matrix cascade, feeding it a jnp operator assembly that is LINEAR in the
+  traced eps (the GLL nodal masses are diagonal).  It ALWAYS drives the full-3x3
+  generator path -- exact for an in-plane tensor, correct for an out-of-plane one
+  -- so the forward and the gradient share ONE branch (no silently-wrong in-plane
+  fallback under `jax.grad`).  Verified: forward matches NumPy to MACHINE
+  PRECISION (~1e-13, in-plane AND out-of-plane), gradients match central finite
+  difference to ~1e-9 (eps re/im, depth, wavelength, theta), `jit`-able.  Scope:
+  cells patterned along BOTH axes (a cell uniform along an axis -- fully uniform
+  or a 1-D-grating stripe -- has a degenerate spectrum that `jnp.linalg.eig`
+  resolves ill-conditionedly, so the JAX path RAISES for it, pointing at the 1-D
+  differentiable solvers / `berreman_jones_1d`).  See
+  `tests/unit/test_v5_20_2_pmm_jones_2d_jax.py`.
+
 - **Differentiable (JAX) OUT-OF-PLANE 2-D RCWA** (`rcwa_jones_2d`, `RCWAStack`).
   An out-of-plane permittivity tensor (`eps_xz/eps_yz != 0`) at oblique/conical
   incidence is now `jax.grad` / `jit`-able (gradients match central finite

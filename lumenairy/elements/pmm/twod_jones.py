@@ -52,6 +52,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from ...backend import is_jax_array
 from ..rcwa._core import (
     _check_energy,
     _grazing_safe_wavelength,
@@ -336,6 +337,7 @@ def pmm_jones_2d(
     max_nodal_dof: int = _MAX_NODAL_DOF,
     stabilize: bool = False,
     symmetry: bool = False,
+    region_layout=None,
 ):
     """Rigorous 2-D anisotropic grating via the hybrid PMM: a single layer whose
     permittivity is a full IN-PLANE tensor field over an axis-aligned
@@ -380,6 +382,22 @@ def pmm_jones_2d(
         folded through :func:`_symmetric_cascade_rt`).  Default off ->
         byte-identical; a per-cell flip-invariance guard falls back to the full
         ``2Nf`` solve (out-of-plane / off-centre / oblique never fold).
+    region_layout : (Sx, Sy) int array_like, optional
+        JAX-only.  A traced ``eps_tensor_cell`` (under ``jax.grad`` /
+        ``jax.jit``) cannot define the exact spectral-element walls (that is
+        data-dependent control flow), so pass a CONCRETE int grid of the same
+        ``(Sx, Sy)`` shape labelling the regions; the traced tensor supplies the
+        per-region VALUES (gradients flow through them and through
+        depth / wavelength / angles).  See :func:`pmm_efficiency_2d_cell`.  The
+        differentiable path always uses the full-3x3 generator (``4*Nf`` eig,
+        exact for an in-plane tensor, correct for out-of-plane) so forward and
+        gradient share one branch; prefer modest ``n_orders`` for in-plane
+        gradient loops.  Cells patterned along BOTH axes only -- a cell uniform
+        along an axis (fully uniform, or a 1-D-grating stripe) is degenerate
+        under ``jnp.linalg.eig`` and RAISES (use the differentiable
+        ``pmm_jones_1d`` / ``rcwa_jones_1d`` for a 1-D grating, or
+        ``berreman_jones_1d`` for a uniform anisotropic layer).  Ignored on the
+        NumPy path.
 
     Returns
     -------
@@ -396,6 +414,70 @@ def pmm_jones_2d(
         raise ValueError(
             f"pmm_jones_2d: formulation must be 'laurent' or 'li', got "
             f"{formulation!r}")
+
+    # ---- JAX (differentiable) dispatch --------------------------------------
+    # A traced eps_tensor_cell / source value routes to the full-3x3-generator
+    # twin.  This branch MUST precede the np.asarray coercion below, which would
+    # sever the JAX trace (materialize a tracer -> TracerArrayConversionError).
+    _jx = (eps_tensor_cell, n_substrate, n_superstrate, depth, wavelength,
+           theta, phi)
+    if any(is_jax_array(a) for a in _jx):
+        if stabilize:
+            raise ValueError(
+                "pmm_jones_2d: stabilize=True is not differentiable "
+                "(host-side degree-scan consensus); pass stabilize=False on "
+                "the JAX path.")
+        if region_layout is None:
+            raise ValueError(
+                "pmm_jones_2d: a traced eps_tensor_cell cannot define the "
+                "exact walls -- pass region_layout (a CONCRETE int grid of the "
+                "same (Sx, Sy) shape labelling the regions) on the JAX path.")
+        lay = np.ascontiguousarray(np.asarray(region_layout))
+        if lay.ndim != 2 or lay.shape != tuple(np.shape(eps_tensor_cell)[:2]):
+            raise ValueError(
+                f"pmm_jones_2d: region_layout must be a 2-D int grid of shape "
+                f"{tuple(np.shape(eps_tensor_cell)[:2])} (the (Sx, Sy) of "
+                f"eps_tensor_cell), got shape {lay.shape}.")
+        # honour max_nodal_dof on the JAX branch too (audit B1 parity): compute
+        # the wall / element counts from the concrete region_layout and reject
+        # too-large cells before _static_prep_cell hits a dense assembly.
+        xw, yw, _ = _cell_to_walls_tile(
+            lay.astype(complex), period_x, period_y, "pmm_jones_2d")
+        if len(xw) == 0 or len(yw) == 0:
+            # A cell that is UNIFORM along an axis (no wall on x OR on y --
+            # including a fully uniform single-region cell and a 1-axis-patterned
+            # "stripe") leaves that axis's Fourier orders UNCOUPLED, so the modal
+            # spectrum is degenerate and jnp.linalg.eig returns an
+            # ill-conditioned eigenbasis (~1e-3 error) -- the same degeneracy the
+            # symmetric jax branch cures with an iso-uniform blend, which the
+            # full-3x3 generator lacks.  A cell patterned along BOTH axes couples
+            # every order, lifts the degeneracy, and solves to machine precision.
+            # A cell uniform along one axis is a 1-D grating (use the
+            # differentiable pmm_jones_1d / rcwa_jones_1d); a fully uniform
+            # anisotropic layer is a planar problem (use the differentiable
+            # berreman_jones_1d, exact and analytic).
+            raise NotImplementedError(
+                "pmm_jones_2d: the JAX (differentiable) path requires a cell "
+                "patterned along BOTH axes (region_layout must vary in x AND "
+                "y); a cell uniform along an axis has a degenerate modal "
+                "spectrum that makes jnp.linalg.eig ill-conditioned (~1e-3 "
+                "error).  For a 1-D grating (uniform along one axis) use the "
+                "differentiable pmm_jones_1d / rcwa_jones_1d; for a uniform "
+                "anisotropic layer use the differentiable berreman_jones_1d "
+                "(exact, analytic).")
+        elx = _axis_elem_counts(period_x, xw, degree, elements_per_strip,
+                                "pmm_jones_2d", "x")
+        ely = _axis_elem_counts(period_y, yw, degree, elements_per_strip,
+                                "pmm_jones_2d", "y")
+        _validate_cell_orders("pmm_jones_2d", n_orders, degree, elx, ely)
+        _validate_cell_cost("pmm_jones_2d", elx, ely, degree, max_nodal_dof)
+        from ._jax_twod_jones import _pmm_jones_2d_cell_jax
+        return _pmm_jones_2d_cell_jax(
+            period_x, period_y, eps_tensor_cell, region_layout, n_substrate,
+            n_superstrate, depth, wavelength, theta=theta, phi=phi,
+            degree=degree, elements_per_strip=elements_per_strip, grade=grade,
+            n_orders=n_orders, formulation=formulation)
+
     cell = np.asarray(eps_tensor_cell, dtype=_C)
     if cell.ndim != 4 or cell.shape[2:] != (3, 3):
         raise ValueError(
