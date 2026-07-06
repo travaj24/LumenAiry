@@ -62,7 +62,7 @@ All notable changes to the core library are documented here.
   `None` = byte-identical dense sum); the drivers (`propagate_gbd_thin_lens`,
   `propagate_gbd_freespace`, `propagate_gbd_through_prescription`) default to it
   on the NumPy backend.  JAX / CuPy fall back to the dense sum.  See
-  `tests/unit/test_v5_22_gbd_windowed_adaptive.py`.
+  `tests/unit/test_v5_21_gbd_windowed_adaptive.py`.
 
 - **GBD adaptive (edge-refined) decomposition** (`decompose_field_adaptive`).
   A two-level residual-refinement decomposition: a coarse beamlet grid at
