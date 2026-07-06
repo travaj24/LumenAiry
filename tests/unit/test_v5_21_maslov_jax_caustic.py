@@ -198,3 +198,38 @@ def test_maslov_fold_split_noop_on_unfolded():
     F1 = apply_real_lens_maslov(E, prescription=presc, wavelength=0.633e-6,
                                 dx=dx, fold_split=True)
     assert np.array_equal(F0, F1)
+
+
+def test_maslov_vector_polarization():
+    """apply_real_lens_maslov_vector applies the base-ray Fresnel Jones (reusing
+    the GBD polarization ray tracing) then propagates each mixed component with
+    the caustic-safe scalar Maslov: an x-polarized beam through a singlet stays
+    x-polarized (cross-pol at the symmetry floor) and carries the two-surface
+    Fresnel transmission T1*T2."""
+    from lumenairy.elements.lenses_maslov import (
+        apply_real_lens_maslov,
+        apply_real_lens_maslov_vector,
+    )
+    lam = 0.633e-6
+    singlet = {'aperture_diameter': 10e-3, 'surfaces': [
+        {'radius': 50e-3, 'glass_before': 'air', 'glass_after': 'N-BK7'},
+        {'radius': -50e-3, 'glass_before': 'N-BK7', 'glass_after': 'air'}],
+        'thicknesses': [4e-3, 45e-3]}
+    N, dx = 72, 6e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E0 = np.exp(-(X ** 2 + Y ** 2) / (2.0e-3) ** 2).astype(np.complex128)
+    Evec = np.stack([E0, np.zeros_like(E0)])       # x-polarized
+    out = apply_real_lens_maslov_vector(
+        Evec, prescription=singlet, wavelength=lam, dx=dx,
+        integration_method='auto')
+    assert out.shape == (2, N, N) and np.isfinite(out).all()
+    Px = float(np.sum(np.abs(out[0]) ** 2))
+    Py = float(np.sum(np.abs(out[1]) ** 2))
+    assert Py < 1e-6 * Px                          # cross-pol at symmetry floor
+    scal = apply_real_lens_maslov(E0, prescription=singlet, wavelength=lam,
+                                  dx=dx, integration_method='auto')
+    ng = 1.515
+    T1 = ng * (2.0 / (1.0 + ng)) ** 2
+    T2 = (1.0 / ng) * (2.0 * ng / (ng + 1.0)) ** 2
+    assert abs(Px / float(np.sum(np.abs(scal) ** 2)) - T1 * T2) < 5e-3

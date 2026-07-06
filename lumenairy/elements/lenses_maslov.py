@@ -1518,6 +1518,78 @@ def apply_real_lens_maslov(
     return E_out
 
 
+def apply_real_lens_maslov_vector(
+    E_vec: np.ndarray,
+    *,
+    prescription: Dict[str, Any],
+    wavelength: float,
+    dx: float,
+    dy: Optional[float] = None,
+    **maslov_kwargs: Any,
+) -> np.ndarray:
+    """Vector (Jones) Maslov lens propagator: caustic-safe phase-space
+    propagation *with* polarization ray tracing.
+
+    Applies the per-pixel transverse Jones matrix of the prescription's
+    base-ray Fresnel s/p (transmission -- reusing the GBD polarization ray
+    tracing, :func:`lumenairy.propagators.gbd._fresnel_jones_matrix_per_beamlet`,
+    incl. per-surface refraction ``t_s`` / ``t_p`` and multilayer coatings) to
+    the input ``(E_x, E_y)`` Jones field, then propagates each mixed component
+    through the lens with the scalar :func:`apply_real_lens_maslov` (which keeps
+    the field finite through a caustic).  This closes the "Maslov is scalar-only"
+    gap: polarization-resolved study through a focus, which GBD's paraxial
+    beamlets cannot do with caustic fidelity.
+
+    Parameters
+    ----------
+    E_vec : array ``(2, Ny, Nx)`` complex -- the ``(E_x, E_y)`` Jones field.
+    prescription, wavelength, dx, dy : as :func:`apply_real_lens_maslov`.
+    **maslov_kwargs : forwarded to :func:`apply_real_lens_maslov` for each
+        component (``integration_method``, ``poly_order``, ``use_gpu``, ...).
+
+    Returns
+    -------
+    array ``(2, Ny, Nx)`` complex -- the output ``(E_x, E_y)`` Jones field.
+
+    Notes
+    -----
+    Transmission Jones only (the base-ray Fresnel is applied at the input plane
+    then the scalar envelope is propagated), matching the GBD vector convention;
+    reflection at fold mirrors is handled by ``apply_mirror`` / ``fold_split``.
+    """
+    from ..propagators.gbd import _fresnel_jones_matrix_per_beamlet
+
+    E_vec = np.asarray(E_vec)
+    if E_vec.ndim != 3 or E_vec.shape[0] != 2:
+        raise ValueError(
+            "apply_real_lens_maslov_vector: E_vec must be (2, Ny, Nx) (the "
+            f"E_x, E_y Jones components); got shape {E_vec.shape}.")
+    Ny, Nx = E_vec.shape[-2], E_vec.shape[-1]
+    if dy is None:
+        dy = dx
+    ix = np.arange(Nx)
+    iy = np.arange(Ny)
+    Ix, Iy = np.meshgrid(ix, iy, indexing='xy')
+    xb = (Ix.ravel() - Nx / 2.0) * dx
+    yb = (Iy.ravel() - Ny / 2.0) * float(dy)
+    zc = np.zeros_like(xb)
+    P, _alive = _fresnel_jones_matrix_per_beamlet(
+        xb, yb, zc, zc, prescription, wavelength)
+    ExS = np.asarray(E_vec[0]).ravel()
+    EyS = np.asarray(E_vec[1]).ravel()
+    ExM = (P[:, 0, 0] * ExS + P[:, 0, 1] * EyS).reshape(Ny, Nx)
+    EyM = (P[:, 1, 0] * ExS + P[:, 1, 1] * EyS).reshape(Ny, Nx)
+    out_x = apply_real_lens_maslov(
+        ExM, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
+        **maslov_kwargs)
+    out_y = apply_real_lens_maslov(
+        EyM, prescription=prescription, wavelength=wavelength, dx=dx, dy=dy,
+        **maslov_kwargs)
+    from ..backend.array import array_namespace
+    xp = array_namespace(out_x)
+    return xp.stack([out_x, out_y], axis=0)
+
+
 def _count_multi_indices_4d(max_order: int) -> int:
     """Number of 4-variable multi-indices with total degree <= max_order
     (== C(n+4, 4) for n = max_order)."""
@@ -2388,4 +2460,5 @@ def _integrate_local_quadrature_cupy(
 
 __all__ = [
     'apply_real_lens_maslov',
+    'apply_real_lens_maslov_vector',
 ]
