@@ -183,8 +183,15 @@ All notable changes to the core library are documented here.
   rotated-director pillar now CONVERGES monotonically, ~10x faster than
   `'laurent'` and reliably (the diagonal-only `'li'` is non-monotone there).
   Rigorous for AXIS-ALIGNED (Manhattan) cells; the `L2 L1` vs `L1 L2` order
-  differs in the truncated space (Li 2003 Sec. 5.2, same limit).  In-plane,
-  NumPy/CuPy only; new `_li_convolutions_2d_tensor` + `_li_axis_tensor`.  See
+  differs in the truncated space (Li 2003 Sec. 5.2, same limit).  OUT-OF-PLANE
+  tensor cells (`exz, eyz != 0` -- tilted-director / magneto-optic gratings) are
+  ALSO handled: the full-3x3 `L2 L1` factorization plus the `E_z` fold `l3-`
+  (Li 2003 Eq. 27, an ordinary matrix inverse of `ehat^{33}` through the
+  generalized forward/backward cascade), converging to the direct-rule limit but
+  far faster (nearly order-independent from n_orders~7 on a tilted-uniaxial
+  stripe where laurent and the 1-D solver are still ~9e-5 short at n_orders=41).
+  NumPy/CuPy only; new `_li_convolutions_2d_tensor(_full)` and
+  `_li_axis_tensor` / `_li_axis_blocks`.  See
   `tests/unit/test_v5_20_12_rcwa_jones_2d_fff_nv.py`.
 
 - **`formulation='fff_nv'` ported to the hybrid PMM** (`pmm_jones_2d`).  For a

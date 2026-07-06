@@ -418,6 +418,84 @@ def _li_convolutions_2d_tensor(exx, exy, eyx, eyy, orders, n_orders_x,
     return Cxx, Cxy, Cyx, Cyy
 
 
+def _li_axis_blocks(blocks, pivot, others, M_along, S_along, xp):
+    """General one-direction Li operator ``L_tau = l+_tau F_tau l-_tau`` on a
+    block dict over an arbitrary index set (full 3x3), with the wall-normal
+    ``pivot`` index (= the spatial factorization axis).  ``blocks[(a,b)]`` are
+    ``(Sx, Sy)`` fields; returns ``pivot``-axis-factorized operators
+    ``(S_other, 2M+1, 2M+1)`` per other-axis pixel.  Only the scalar pivot
+    element is inverted (well-conditioned)."""
+    p = pivot
+    e = blocks
+    inv_p = 1.0 / e[(p, p)]                          # l-_tau: pivot reciprocal
+    g = {(p, p): inv_p}
+    for s in others:
+        g[(p, s)] = inv_p * e[(p, s)]
+        g[(s, p)] = e[(s, p)] * inv_p
+    for r in others:
+        for s in others:
+            g[(r, s)] = e[(r, s)] - e[(r, p)] * inv_p * e[(p, s)]
+    a = np.arange(-M_along, M_along + 1)
+    dk = (a[:, None] - a[None, :]) % S_along
+    T = {}
+    for k, v in g.items():                           # F_tau: 1-D Toeplitz
+        cf = xp.moveaxis(xp.fft.fft(v, axis=p) / S_along, p, -1)
+        T[k] = cf[..., dk]
+    Ip = xp.linalg.inv(T[(p, p)])                    # l+_tau: operator inverse
+    h = {(p, p): Ip}
+    for s in others:
+        h[(p, s)] = Ip @ T[(p, s)]
+        h[(s, p)] = T[(s, p)] @ Ip
+    for r in others:
+        for s in others:
+            h[(r, s)] = T[(r, s)] + T[(r, p)] @ Ip @ T[(p, s)]
+    return h
+
+
+def _li_convolutions_2d_tensor_full(eps_cell, orders, n_orders_x, xp):
+    """Li-2003 successive factorization ``ehat = L2 L1(eps)`` of the FULL 3x3
+    tensor (JOSA/J.Opt.A 5:345, Eqs. 13-20): the OUT-OF-PLANE generalization of
+    :func:`_li_convolutions_2d_tensor`.  Returns the 9-entry dict of operators
+    ``ehat[(r, s)]`` (indices 0/1/2 = x/y/z).  ``L1`` factorizes along x
+    (pivot=x), ``L2`` along y (pivot=y); the out-of-plane ``exz/eyz/ezx/ezy``
+    components ride the wall-normal pivots through the Schur reorganization.  The
+    caller applies the E_z fold ``l3-`` (an ordinary matrix inverse of
+    ``ehat[(2,2)]``, Li 2003 Eq. 27) via the tensor eigensolver's ``inv(EZZ)``.
+    ``eps_cell`` is the INTERNAL (loss-bridge-conjugated) (Sx, Sy, 3, 3) sample.
+    """
+    Mx = int(n_orders_x)
+    Sx, Sy = eps_cell.shape[0], eps_cell.shape[1]
+    blk = {(a, b): xp.asarray(eps_cell[:, :, a, b]).astype(_C)
+           for a in range(3) for b in range(3)}
+    hA = _li_axis_blocks(blk, 0, [1, 2], Mx, Sx, xp)     # L1 (x)
+    # L2 (y): pivot=1, others=[0, 2]; the block entries are x-operators
+    p, others = 1, [0, 2]
+    invp = xp.linalg.inv(hA[(p, p)])
+    g = {(p, p): invp}
+    for s in others:
+        g[(p, s)] = invp @ hA[(p, s)]
+        g[(s, p)] = hA[(s, p)] @ invp
+    for r in others:
+        for s in others:
+            g[(r, s)] = hA[(r, s)] - hA[(r, p)] @ invp @ hA[(p, s)]
+    dn = (orders[:, 1][:, None] - orders[:, 1][None, :]) % Sy
+    mi = orders[:, 0] + Mx
+
+    def _asm(gab):                                       # F_y + gather to 2-D
+        gf = xp.fft.fft(gab, axis=0) / Sy
+        return gf[dn, mi[:, None], mi[None, :]]
+    G = {k: _asm(v) for k, v in g.items()}
+    Gp = xp.linalg.inv(G[(p, p)])                        # l+_y
+    eh = {(p, p): Gp}
+    for s in others:
+        eh[(p, s)] = Gp @ G[(p, s)]
+        eh[(s, p)] = G[(s, p)] @ Gp
+    for r in others:
+        for s in others:
+            eh[(r, s)] = G[(r, s)] + G[(r, p)] @ Gp @ G[(p, s)]
+    return eh
+
+
 def _nv_curved_wall_fraction(eps_cell):
     """Fraction of the pattern's boundary that runs DIAGONAL to the axes -- the
     cheap, smoothing-free discriminator for the fff_nv gate.
@@ -1249,9 +1327,13 @@ def rcwa_jones_2d(
         diagonal-only ``'li'`` it stays MONOTONE there.  Rigorous for AXIS-ALIGNED
         (Manhattan) cells; ``L2 L1`` vs ``L1 L2`` differ in the truncated space
         (Li 2003 Sec. 5.2, same limit) -- the fixed ``L2 L1`` order is used.
-        Reduces EXACTLY to the rigorous 1-D full-tensor solver for a y-uniform
-        stripe.  IN-PLANE and NumPy/CuPy only; takes the full 2N solve (no
-        even-parity fold).
+        OUT-OF-PLANE tensors (``exz, eyz != 0``) are also supported: the full-3x3
+        ``L2 L1`` factorization plus the ``E_z`` fold ``l3-`` (Li 2003 Eq. 27, an
+        ordinary matrix inverse of ``ehat^{33}`` through the generalized cascade),
+        again converging to the direct-rule limit but far faster (nearly
+        order-independent where laurent still climbs).  Reduces EXACTLY to the
+        rigorous 1-D full-tensor solver for a y-uniform stripe.  NumPy/CuPy only;
+        takes the full 2N solve (no even-parity fold).
         A scalar cell reduces EXACTLY to ``rcwa_efficiency_2d(formulation='li')``
         (``'li'``).  ``'li'`` on an out-of-plane cell always uses the direct rule
         (the ezz-Schur composite has no validated inverse rule).  The even-parity
@@ -1337,21 +1419,14 @@ def rcwa_jones_2d(
 
     if formulation == "fff_nv":
         # The anisotropic FFF builds a HOST-side normal-vector field and is
-        # in-plane only (the out-of-plane FFF is not implemented).
+        # NumPy/CuPy only (the host-side successive factorization is not traced).
         if is_jax or traced_tensor:
             raise ValueError(
-                "rcwa_jones_2d: formulation='fff_nv' builds a host-side "
-                "normal-vector field (non-differentiable) -- use 'laurent' or "
-                "'li' on the JAX backend.")
-        if offplane:
-            raise ValueError(
-                "rcwa_jones_2d: formulation='fff_nv' is IN-PLANE only (the "
-                "out-of-plane anisotropic FFF is not implemented) -- use "
-                "'laurent' or 'li' for an out-of-plane tensor cell.")
+                "rcwa_jones_2d: formulation='fff_nv' is NumPy/CuPy only -- use "
+                "'laurent' or 'li' on the JAX backend.")
         e_np = to_numpy(eps_t)
         scale = max(1.0, float(np.max(np.abs(e_np))))
-        ip = e_np[:, :, :2, :2]
-        if float(np.max(np.abs(ip - ip[0, 0]))) < 1e-12 * scale:
+        if float(np.max(np.abs(e_np - e_np[0, 0]))) < 1e-12 * scale:
             formulation = "laurent"       # uniform cell: no walls, Laurent exact
 
     orders, N = _harmonic_orders_2d(n_orders_x, n_orders_y)
@@ -1430,21 +1505,42 @@ def rcwa_jones_2d(
         # generator, and the asymmetric forward/backward mode sets cascade
         # through the GENERALIZED S-matrix.  Validated against a conical
         # Berreman 4x4 oracle on uniform tilted-uniaxial / lossy cells.
-        ezz_c = eps_t[:, :, 2, 2]
-        inv_ezz = 1.0 / ezz_c
-        exz_c = eps_t[:, :, 0, 2]
-        eyz_c = eps_t[:, :, 1, 2]
-        ezx_c = eps_t[:, :, 2, 0]
-        ezy_c = eps_t[:, :, 2, 1]
-        Cxx = _conv(eps_t[:, :, 0, 0] - exz_c * ezx_c * inv_ezz)
-        Cxy = _conv(eps_t[:, :, 0, 1] - exz_c * ezy_c * inv_ezz)
-        Cyx = _conv(eps_t[:, :, 1, 0] - eyz_c * ezx_c * inv_ezz)
-        Cyy = _conv(eps_t[:, :, 1, 1] - eyz_c * ezy_c * inv_ezz)
-        EZZ = _conv(ezz_c)
+        if formulation == "fff_nv":
+            # CORRECT-RULE out-of-plane: the Li-2003 successive full-3x3
+            # factorization ehat = L2 L1(eps) (inverse rule on the wall-normal
+            # diagonals, off-plane components carried through the Schur pivots),
+            # then the E_z fold l3- as the OPERATOR Schur complement on
+            # ehat^{33} (Li 2003 Eq. 27) -- the in-plane blocks are pre-folded
+            # for the Q block while the raw ehat cross-blocks + ehat^{33} feed
+            # the generator's own inv(EZZ) for the A/B off-plane coupling.
+            eh = _li_convolutions_2d_tensor_full(eps_t, orders, n_orders_x, xp)
+            ezzi = xp.linalg.inv(eh[(2, 2)])
+            Cxx = eh[(0, 0)] - eh[(0, 2)] @ ezzi @ eh[(2, 0)]
+            Cxy = eh[(0, 1)] - eh[(0, 2)] @ ezzi @ eh[(2, 1)]
+            Cyx = eh[(1, 0)] - eh[(1, 2)] @ ezzi @ eh[(2, 0)]
+            Cyy = eh[(1, 1)] - eh[(1, 2)] @ ezzi @ eh[(2, 1)]
+            EZZ, EZX, EZY = eh[(2, 2)], eh[(2, 0)], eh[(2, 1)]
+            EXZ, EYZ = eh[(0, 2)], eh[(1, 2)]
+        else:
+            # Direct-rule (laurent) / 'li': the POINTWISE ezz-Schur fold
+            # a_eff = e_ab - e_az e_zb / e_zz on the CELL before convolution
+            # (folding AFTER convolution is the audited "gen2" trap).
+            ezz_c = eps_t[:, :, 2, 2]
+            inv_ezz = 1.0 / ezz_c
+            exz_c = eps_t[:, :, 0, 2]
+            eyz_c = eps_t[:, :, 1, 2]
+            ezx_c = eps_t[:, :, 2, 0]
+            ezy_c = eps_t[:, :, 2, 1]
+            Cxx = _conv(eps_t[:, :, 0, 0] - exz_c * ezx_c * inv_ezz)
+            Cxy = _conv(eps_t[:, :, 0, 1] - exz_c * ezy_c * inv_ezz)
+            Cyx = _conv(eps_t[:, :, 1, 0] - eyz_c * ezx_c * inv_ezz)
+            Cyy = _conv(eps_t[:, :, 1, 1] - eyz_c * ezy_c * inv_ezz)
+            EZZ = _conv(ezz_c)
+            EZX, EZY = _conv(ezx_c), _conv(ezy_c)
+            EXZ, EYZ = _conv(exz_c), _conv(eyz_c)
         Wl, Vl, lam, Wlb, Vlb, lam_b = _layer_eigenmodes_tensor(
             Kx, Ky, Cxx, Cxy, Cyx, Cyy, EZZ,
-            EZX=_conv(ezx_c), EZY=_conv(ezy_c),
-            EXZ=_conv(exz_c), EYZ=_conv(eyz_c))
+            EZX=EZX, EZY=EZY, EXZ=EXZ, EYZ=EYZ)
         Mref = _modes_to_M(Wref, Vref, Wref, -Vref)
         Mtrn = _modes_to_M(Wtrn, Vtrn, Wtrn, -Vtrn)
         Ml = _modes_to_M(Wl, Vl, Wlb, Vlb)

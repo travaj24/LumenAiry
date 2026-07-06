@@ -13,11 +13,13 @@ ill-conditioned 2N x 2N matrix, ``cond ~ 1e7`` for a crossed pillar), the Li-200
 operator inverts ONLY scalar wall-normal elements (plus one N x N block), so it
 is well-conditioned even for a CROSSED (both-axis-patterned) cell -- so crossed
 anisotropic pillars now CONVERGE (rigorous for axis-aligned / Manhattan cells).
+Out-of-plane tensors (`exz, eyz != 0`) are also handled -- the full-3x3 `L2 L1`
+plus the `E_z` fold (Li 2003 Eq. 27) -- again converging far faster than laurent.
 These tests pin: the operator reduction to the rigorous Li-1996 1-D rule on a
 stripe, the exact reduction to the 1-D full-tensor solver + faster-than-Laurent
 convergence on a stripe, the lossy absorptance SPLIT (the lossless-trap guard),
-the crossed-cell convergence (monotone + beats laurent), the uniform-cell
-routing, and the JAX / out-of-plane guards.
+the crossed-cell convergence (monotone + beats laurent), the out-of-plane
+fast convergence, the uniform-cell routing, and the JAX guard.
 """
 from __future__ import annotations
 
@@ -187,18 +189,48 @@ def test_fff_nv_uniform_routes_to_laurent():
     assert np.max(np.abs(Jf - Jl)) < 1e-12
 
 
-def test_fff_nv_jax_and_offplane_raise():
-    """fff_nv rejects a JAX-traced cell (host normal field) and an out-of-plane
-    tensor (the out-of-plane anisotropic FFF is not implemented)."""
+def _oop_stripe(No):
+    """y-uniform stripe of a tilted uniaxial (optic axis tilted about y ->
+    exz, ezx != 0, out-of-plane)."""
+    th = np.deg2rad(35.0)
+    c, s = np.cos(th), np.sin(th)
+    Ry = np.array([[c, 0, s], [0, 1, 0], [-s, 0, c]])
+    er = Ry @ np.diag([1.5 ** 2, 1.5 ** 2, 2.4 ** 2]).astype(complex) @ Ry.T
+    eg = np.diag([2.1, 2.1, 2.1]).astype(complex)
+    Sx = max(64, 4 * No + 4)
+    xm = (np.arange(Sx) + 0.5) / Sx < 0.5
+    cell = np.zeros((Sx, 8, 3, 3), complex)
+    for ix in range(Sx):
+        cell[ix, :] = er if xm[ix] else eg
+    return cell
+
+
+def test_fff_nv_out_of_plane_converges_fast():
+    """OUT-OF-PLANE (exz, ezx != 0) is now supported: the Li-2003 successive
+    full-3x3 factorization + the E_z fold.  fff_nv converges FAST (nearly
+    order-independent) while laurent climbs slowly TOWARD the same value -- so
+    fff_nv reaches the true limit at far lower order.  Energy closes."""
+    def sumR(No, form):
+        _o, R, T, _J = rcwa_jones_2d(PX, PX, _oop_stripe(No), 1.5, 1.0, DEPTH,
+                                     WL, n_orders_x=No, n_orders_y=1,
+                                     formulation=form, symmetry=False)
+        return np.sum(R), np.sum(R) + np.sum(T)
+
+    conv, e0 = sumR(13, "fff_nv")                  # fff_nv converged value
+    assert abs(e0 - 2.0) < 5e-3                     # energy closes
+    f7, _ = sumR(7, "fff_nv")
+    l7, _ = sumR(7, "laurent")
+    l15, _ = sumR(15, "laurent")
+    assert abs(f7 - conv) < 2e-5                    # fff_nv ~converged by No=7
+    assert abs(l15 - conv) < abs(l7 - conv)         # laurent climbs toward fff_nv
+    assert abs(f7 - conv) < 0.3 * abs(l7 - conv)    # fff_nv converges much faster
+
+
+def test_fff_nv_jax_raises():
+    """fff_nv rejects a JAX-traced cell (host-side successive factorization)."""
     er = _rot(np.deg2rad(35.0), 1.5, 2.3)
     eg = np.diag([2.25] * 3).astype(complex)
     cell = _stripe(er, eg)
-    # out-of-plane: add exz/ezx coupling
-    oop = cell.copy()
-    oop[:, :, 0, 2] = oop[:, :, 2, 0] = 0.3
-    with pytest.raises(ValueError, match="IN-PLANE only"):
-        rcwa_jones_2d(PX, PX, oop, 1.5, 1.0, DEPTH, WL, n_orders_x=9,
-                      n_orders_y=1, formulation="fff_nv", symmetry=False)
     jax = pytest.importorskip("jax")
     jax.config.update("jax_enable_x64", True)
     import jax.numpy as jnp
