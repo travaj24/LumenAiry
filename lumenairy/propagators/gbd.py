@@ -902,8 +902,8 @@ def propagate_gbd_freespace_vector(
 
 
 def _resolve_coating_index(coating: Any, wavelength: float) -> complex:
-    """Resolve a mirror ``coating`` spec to a complex refractive index
-    ``n + i*kappa``.
+    """Resolve a single-material ``coating`` / layer index spec to a complex
+    refractive index ``n + i*kappa``.
 
     Accepts a material NAME (looked up via
     :func:`lumenairy.glass.get_glass_index_complex`, e.g. ``'Au'``, ``'Ag'``,
@@ -918,6 +918,76 @@ def _resolve_coating_index(coating: Any, wavelength: float) -> complex:
     return complex(get_glass_index_complex(str(coating), wavelength))
 
 
+def _coating_stack_layers(coating: Any, wavelength: float):
+    """Parse a multilayer thin-film ``coating`` into ``[(n_complex, d_m), ...]``.
+
+    A stack is a **list/tuple of layers**, each ``(index, thickness_m)`` or
+    ``{'index': ..., 'thickness': ...}`` (``index`` resolved by
+    :func:`_resolve_coating_index`).  Returns ``None`` when ``coating`` is not a
+    stack (e.g. a single metal index for a mirror, or ``None``)."""
+    if coating is None or isinstance(coating, (int, float, complex)) \
+            or callable(coating) or isinstance(coating, str):
+        return None
+    if not isinstance(coating, (list, tuple)) or len(coating) == 0:
+        return None
+    layers = []
+    for lay in coating:
+        if isinstance(lay, dict):
+            idx, d = lay['index'], lay['thickness']
+        else:
+            idx, d = lay[0], lay[1]
+        layers.append((_resolve_coating_index(idx, wavelength), float(d)))
+    return layers
+
+
+def _thin_film_coefficients(layers, n0, ns, cos0, wavelength):
+    """Thin-film characteristic-matrix (TMM) amplitude coefficients for a stack
+    of ``layers`` ``[(n, d), ...]`` between incident index ``n0`` and substrate
+    ``ns``, at per-ray ``cos0`` (cosine of incidence in medium 0).
+
+    Returns ``(r_s, r_p, t_s, t_p)`` as **E-field** amplitude coefficients (the
+    convention the Jones matrix uses): they reduce to the bare Fresnel
+    coefficients at zero layers (validated), with the standard p-reflection sign
+    and the ``cos0/cos_s`` p-transmission E-field factor.  ``n0`` is real,
+    ``ns`` / layer indices may be complex (absorbing).
+    """
+    n0 = complex(n0)
+    ns = complex(ns)
+    cos0 = np.asarray(cos0, dtype=np.complex128)
+    sin0sq = 1.0 - cos0 ** 2
+    cos_s = np.sqrt(1.0 - (n0 / ns) ** 2 * sin0sq)
+
+    def _mat(pol):
+        def eta(nn, cc):
+            return nn * cc if pol == 's' else nn / cc
+        M11 = np.ones_like(cos0)
+        M12 = np.zeros_like(cos0)
+        M21 = np.zeros_like(cos0)
+        M22 = np.ones_like(cos0)
+        for nj, dj in layers:
+            nj = complex(nj)
+            cosj = np.sqrt(1.0 - (n0 / nj) ** 2 * sin0sq)
+            delta = (2.0 * np.pi / wavelength) * nj * dj * cosj
+            ej = eta(nj, cosj)
+            c = np.cos(delta)
+            s = np.sin(delta)
+            m11, m12, m21, m22 = c, 1j * s / ej, 1j * ej * s, c
+            M11, M12, M21, M22 = (M11 * m11 + M12 * m21, M11 * m12 + M12 * m22,
+                                  M21 * m11 + M22 * m21, M21 * m12 + M22 * m22)
+        e0 = eta(n0, cos0)
+        es = eta(ns, cos_s)
+        B = M11 + M12 * es
+        C = M21 + M22 * es
+        r = (e0 * B - C) / (e0 * B + C)
+        t = 2.0 * e0 / (e0 * B + C)
+        return r, t
+    rs, ts = _mat('s')
+    rp_adm, tp_adm = _mat('p')
+    rp = -rp_adm                      # standard Fresnel p-reflection sign
+    tp = tp_adm * (cos0 / cos_s)      # tangential -> E-field p-transmission
+    return rs, rp, ts, tp
+
+
 def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     """Per-beamlet 2x2 transverse Jones matrix ``(E_x, E_y)_in -> _out`` from
     per-surface Fresnel s/p along each base ray (polarization ray tracing).
@@ -927,7 +997,12 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
     components and applies the surface coefficients:
 
     * **Refraction** -- Fresnel amplitude transmission ``t_s``, ``t_p``, rotating
-      the p axis from the incident to the refracted ray.
+      the p axis from the incident to the refracted ray.  If the surface carries
+      a **multilayer** ``coating`` (a list of ``(index, thickness)`` layers --
+      an AR / dichroic stack), ``t_s`` / ``t_p`` come from the thin-film
+      characteristic-matrix method (:func:`_thin_film_coefficients`) instead of
+      the bare single-interface Fresnel, capturing the stack's transmittance +
+      retardance (reduces to bare Fresnel at zero layers).
     * **Reflection** (``is_mirror``) -- if the surface carries no ``coating``,
       an ideal reflector ``|r_s| = |r_p| = 1`` (energy-conserving, no
       diattenuation; PEC convention ``r_s = -1``, ``r_p = +1`` for the fold's
@@ -1021,14 +1096,26 @@ def _fresnel_jones_matrix_per_beamlet(x, y, ux, uy, prescription, wavelength):
                 n_after = n2
             else:
                 _refract(rb, s, n1, n2)
-                mu = n1 / n2
-                cos_t = np.sqrt(np.maximum(
-                    1.0 - mu ** 2 * (1.0 - cos_i ** 2), 0.0))
-                cs = (2.0 * n1 * cos_i
-                      / (n1 * cos_i + n2 * cos_t)).astype(np.complex128)  # t_s
-                cp = (2.0 * n1 * cos_i
-                      / (n2 * cos_i + n1 * cos_t)).astype(np.complex128)  # t_p
-                c_normal = cs                                    # t_s == t_p
+                stack = _coating_stack_layers(
+                    getattr(s, 'coating', None), wavelength)
+                if stack is not None:
+                    # Multilayer thin-film (e.g. AR / dichroic) between n1 and
+                    # n2: E-field transmission t_s / t_p from the characteristic
+                    # matrix, with the stack's wavelength/angle-dependent
+                    # transmittance + retardance.  Reduces to bare Fresnel at 0
+                    # layers.
+                    _rs, _rp, cs, cp = _thin_film_coefficients(
+                        stack, n1, n2, cos_i, wavelength)
+                    c_normal = cs
+                else:
+                    mu = n1 / n2
+                    cos_t = np.sqrt(np.maximum(
+                        1.0 - mu ** 2 * (1.0 - cos_i ** 2), 0.0))
+                    cs = (2.0 * n1 * cos_i
+                          / (n1 * cos_i + n2 * cos_t)).astype(np.complex128)
+                    cp = (2.0 * n1 * cos_i
+                          / (n2 * cos_i + n1 * cos_t)).astype(np.complex128)
+                    c_normal = cs                                # t_s == t_p
                 n_after = n2
             d_out = np.stack([rb.L, rb.M, rb.N], axis=-1)
             s_vec = np.cross(d_in, nrm)

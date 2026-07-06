@@ -657,6 +657,52 @@ def test_world_output_plane_rejects_curved_fold():
             sample_step=4)
 
 
+def test_transmit_thin_film_ar_coating():
+    """A multilayer (AR) ``coating`` on a refracting surface routes t_s / t_p
+    through the thin-film characteristic matrix: a quarter-wave AR layer nearly
+    eliminates the single-interface Fresnel reflection loss (transmittance -> 1),
+    while ``coating=None`` stays byte-identical to bare Fresnel; the TMM reduces
+    to bare Fresnel at zero layers."""
+    from lumenairy.propagators.gbd import (
+        _fresnel_jones_matrix_per_beamlet,
+        _thin_film_coefficients,
+    )
+    ng = 1.515
+    n_ar = np.sqrt(ng)
+    d_ar = 0.633e-6 / (4 * n_ar)      # quarter-wave at 633 nm
+
+    def _surf(coat):
+        return {'name': 's', 'aperture_diameter': 30e-3, 'surfaces': [
+            {'radius': 40e-3, 'conic': 0., 'glass_before': 'air',
+             'glass_after': 'N-BK7', 'coating': coat, 'semi_diameter': 14e-3}],
+            'thicknesses': [0.0]}
+    hs = np.array([0.0, 4e-3, 8e-3])
+    z = np.zeros(3)
+    Pu, _ = _fresnel_jones_matrix_per_beamlet(hs, z, z, z, _surf(None), 0.633e-6)
+    Pa, _ = _fresnel_jones_matrix_per_beamlet(
+        hs, z, z, z, _surf([(n_ar, d_ar)]), 0.633e-6)
+    R = 40e-3
+    for i, h in enumerate(hs):
+        ai = np.arcsin(h / R)
+        ci = np.cos(ai)
+        ct = np.sqrt(1 - (np.sin(ai) / ng) ** 2)
+        Tu = (ng * ct) / ci * abs(Pu[i, 1, 1]) ** 2
+        Ta = (ng * ct) / ci * abs(Pa[i, 1, 1]) ** 2
+        assert Tu < 0.97                 # uncoated has a Fresnel loss
+        assert Ta > 0.999                # AR nearly eliminates it
+    # coating=None is byte-identical (bare-Fresnel path untouched)
+    assert np.array_equal(
+        Pu, _fresnel_jones_matrix_per_beamlet(hs, z, z, z, _surf(None),
+                                              0.633e-6)[0])
+    # zero-layer TMM == bare Fresnel; dict layer form == tuple form
+    rs, rp, ts, tp = _thin_film_coefficients([], 1.0, ng, np.array([1.0]),
+                                             0.633e-6)
+    assert abs(abs(ts[0]) - 2.0 / (1.0 + ng)) < 1e-12
+    Pd, _ = _fresnel_jones_matrix_per_beamlet(
+        hs, z, z, z, _surf([{'index': n_ar, 'thickness': d_ar}]), 0.633e-6)
+    assert np.allclose(Pd, Pa)
+
+
 @pytest.mark.skipif(not _jax_ok(), reason='jax not installed')
 def test_ray_transfer_jacobian_jax_matches_fd_and_differentiable():
     """The JAX differential-ray-transfer (jacfwd around trace_jax) matches the
