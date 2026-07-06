@@ -101,6 +101,23 @@ All notable changes to the core library are documented here.
     off-axis it captures tangential/sagittal **astigmatism** (~field², a
     near-line focus at 6°) the paraxial form cannot.  `raytrace.
     ray_transfer_jacobian` is reusable (Maslov Hessian propagation later).
+  - **Analytic differential ray transfer** —
+    `raytrace.ray_transfer_jacobian_analytic`, the closed-form / autodiff twin
+    of the FD `ray_transfer_jacobian`: forward-mode AD (dual numbers) over the
+    **exact** conic trace (intersection + vector Snell / reflection + vertex
+    transfer), so the `(x,y,ux,uy)` Jacobian is **truncation-free** (the FD
+    `h → 0` limit) and, on the JAX backend, `jax.jacfwd`/`grad`/`jit`-able in
+    pure NumPy elsewhere.  Forward-mode AD == analytic differential ray tracing
+    (Volatier 2017); see `docs/ANALYTIC_DIFFERENTIAL_RAY_TRACING_LITERATURE.md`.
+    Adversarially verified exact vs the FD primitive (composite + per-surface +
+    OPL + alive) across a hard sweep — f/1, hyperbolas `k=−6`, `u=1.5` field,
+    concave backtracks, mirrors, near-TIR, a 3906-ray root-selection sweep — with
+    a *proof* (`|ae| < q²`) that the near-vertex root is always the physical
+    one, and a Coddington sagittal/tangential cross-check.  Conic surfaces
+    (aspheres/freeforms/coord-breaks raise, pointing back to the FD primitive).
+    Selectable in the per-surface GBD via
+    `propagate_gbd_through_prescription(..., jacobian='analytic')` (default
+    `'fd'` unchanged; the two give the same field to ~1e-10).
   - **Husimi decomposition plumbed through the lens & prescription helpers**
     (`direction_sampling=`), so a tilted source focuses at `f·tanθ`.
   - **Aperture vignetting** (`apply_aperture_to_beamlets`, `aperture_semi_

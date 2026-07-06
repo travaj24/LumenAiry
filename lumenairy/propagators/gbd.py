@@ -1375,6 +1375,7 @@ def apply_prescription_persurface_to_beamlets(
     *,
     z_image: Optional[float] = None,
     world_output_plane: Any = None,
+    jacobian: str = 'fd',
 ) -> BeamletBundle:
     """Per-surface tensor-Q evolution of a beamlet bundle through a prescription.
 
@@ -1409,7 +1410,18 @@ def apply_prescription_persurface_to_beamlets(
     import copy as _copy
 
     from ..raytrace import surfaces_from_prescription, system_abcd_prescription
-    from ..raytrace.differential import ray_transfer_jacobian
+    from ..raytrace.differential import (
+        ray_transfer_jacobian,
+        ray_transfer_jacobian_analytic,
+    )
+
+    if jacobian == 'analytic':
+        _jac = ray_transfer_jacobian_analytic
+    elif jacobian == 'fd':
+        _jac = ray_transfer_jacobian
+    else:
+        raise ValueError(
+            f"jacobian must be 'fd' or 'analytic', got {jacobian!r}.")
 
     if world_output_plane is not None:
         # Evolve Q on the UNFOLDED-EQUIVALENT straight system: a fold mirror
@@ -1442,8 +1454,7 @@ def apply_prescription_persurface_to_beamlets(
     ux = (dr[:, 0] / Nz).astype(np.float64)
     uy = (dr[:, 1] / Nz).astype(np.float64)
 
-    dt = ray_transfer_jacobian(x, y, ux, uy, surfs, wavelength,
-                               per_surface=True)
+    dt = _jac(x, y, ux, uy, surfs, wavelength, per_surface=True)
     n = x.shape[0]
     I2 = np.eye(2)[None, :, :]
     Qsrc = np.asarray(beamlets.Q)
@@ -1593,6 +1604,7 @@ def propagate_gbd_through_prescription(
     per_surface: bool = False,
     z_image: Optional[float] = None,
     world_output_plane: Any = None,
+    jacobian: str = 'fd',
 ) -> np.ndarray:
     """End-to-end GBD through a sequential lumenairy prescription
     via system ABCD evolution.
@@ -1672,7 +1684,7 @@ def propagate_gbd_through_prescription(
         # reconstruction centre is (0, 0).
         bundle = apply_prescription_persurface_to_beamlets(
             bundle, prescription, wavelength, z_image=z_image,
-            world_output_plane=world_output_plane)
+            world_output_plane=world_output_plane, jacobian=jacobian)
         centre = (0.0, 0.0) if world_output_plane is not None else output_centre
         return reconstruct_field_from_beamlets(
             bundle, Ny=Ny, Nx=Nx, dx=output_dx,

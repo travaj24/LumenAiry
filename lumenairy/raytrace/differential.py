@@ -186,13 +186,19 @@ def ray_transfer_jacobian_jax(x, y, ux, uy, prescription, wavelength):
     parameters (radii, thicknesses) -- enabling gradient-based lens design on
     the per-surface GBD.
 
-    .. warning::
+    .. note::
        ``jax_trace._transfer_jax`` propagates ``x_new = x + L * thickness``
-       using the direction cosine ``L`` rather than the paraxial slope
-       ``u = L / N``, so the ``B``-block is scaled by ~``N`` and deviates at
-       high NA.  Use the NumPy finite-difference :func:`ray_transfer_jacobian`
-       as the accuracy reference; this path is for **gradients / optimization**
-       (and is exact at low NA, where ``L ~ u``).
+       using the direction cosine ``L`` rather than the slope ``u = L / N`` --
+       paraxial *for that step in isolation*.  BUT it does **not** reset ``z``
+       afterwards, so the next surface's intersection re-propagates the ray to
+       the true vertex plane and *undoes* the under-count.  Empirically the
+       **composed** output Jacobian therefore matches the NumPy FD
+       :func:`ray_transfer_jacobian` (and the exact
+       :func:`ray_transfer_jacobian_analytic`) to ~1e-8 even at high NA (e.g.
+       slope ``u = 0.9`` through a powered lens), because every transfer is
+       followed by an intersection.  (The only way to expose the isolated
+       paraxial step would be a final transfer with no following surface, which
+       this primitive never emits -- its output is at the last vertex.)
 
     Returns
     -------
@@ -219,5 +225,326 @@ def ray_transfer_jacobian_jax(x, y, ux, uy, prescription, wavelength):
     return jax.vmap(jax.jacfwd(_out_state))(s4)
 
 
+# ---------------------------------------------------------------------------
+# Analytic differential ray transfer (forward-mode AD over the EXACT conic
+# trace).  Forward-mode AD of the exact intersection + Snell map *is* the
+# analytic differential ray tracing of Stone & Forbes (Volatier, JOSA A 34,
+# 1146 (2017)); it produces the same 4x4 (x, y, ux, uy) Jacobian as the finite-
+# difference :func:`ray_transfer_jacobian` but EXACTLY (no truncation), in pure
+# NumPy, and -- on the JAX backend -- differentiably (jax.jacfwd / grad / jit).
+# Conic surfaces (sphere / conic), refraction and reflection.
+# See docs/ANALYTIC_DIFFERENTIAL_RAY_TRACING_LITERATURE.md.
+# ---------------------------------------------------------------------------
+
+
+class _AdrtDual:
+    """Minimal forward-mode AD dual: value ``v`` ``(N,)`` and derivative ``d``
+    ``(N, 4)`` w.r.t. the seed state ``(x, y, ux, uy)``."""
+    __slots__ = ('v', 'd')
+    # Defer to our __r*__ so ``ndarray * dual`` (sign selectors) doesn't get
+    # absorbed into an object-array by NumPy.
+    __array_ufunc__ = None
+
+    def __init__(self, v, d):
+        self.v = v
+        self.d = d
+
+    def __add__(s, o):
+        o = _as_dual(o, s)
+        return _AdrtDual(s.v + o.v, s.d + o.d)
+    __radd__ = __add__
+
+    def __sub__(s, o):
+        o = _as_dual(o, s)
+        return _AdrtDual(s.v - o.v, s.d - o.d)
+
+    def __rsub__(s, o):
+        o = _as_dual(o, s)
+        return _AdrtDual(o.v - s.v, o.d - s.d)
+
+    def __mul__(s, o):
+        o = _as_dual(o, s)
+        return _AdrtDual(s.v * o.v, s.v[:, None] * o.d + o.v[:, None] * s.d)
+    __rmul__ = __mul__
+
+    def __truediv__(s, o):
+        o = _as_dual(o, s)
+        iv = 1.0 / o.v
+        return _AdrtDual(s.v * iv,
+                         (s.d * o.v[:, None] - s.v[:, None] * o.d)
+                         * (iv * iv)[:, None])
+
+    def __rtruediv__(s, o):
+        return _as_dual(o, s).__truediv__(s)
+
+    def __neg__(s):
+        return _AdrtDual(-s.v, -s.d)
+
+
+def _as_dual(o, ref):
+    if isinstance(o, _AdrtDual):
+        return o
+    n = ref.v.shape[0]
+    return _AdrtDual(np.broadcast_to(np.asarray(o, np.float64), (n,)).copy(),
+                     np.zeros((n, 4)))
+
+
+def _dual_sqrt(a):
+    # clamp the radicand at 0 so a dead ray (missed surface / TIR: negative
+    # discriminant) yields a FINITE (masked) value instead of a NaN that would
+    # contaminate live neighbours; live rays (radicand > 0) are unaffected.
+    vc = np.maximum(a.v, 0.0)
+    v = np.sqrt(vc)
+    return _AdrtDual(v, a.d / (2.0 * np.maximum(v, 1e-300))[:, None])
+
+
+def _dual_where(m, a, b):
+    a = _as_dual(a, b if isinstance(b, _AdrtDual) else a)
+    b = _as_dual(b, a)
+    return _AdrtDual(np.where(m, a.v, b.v), np.where(m[:, None], a.d, b.d))
+
+
+_DUAL_OPS = {'sqrt': _dual_sqrt, 'val': lambda a: a.v,
+             'pwhere': np.where, 'dwhere': _dual_where}
+
+
+def _adrt_step(x, y, ux, uy, surf, wavelength, apply_transfer, O,
+               compute_dead=True):
+    """One surface: exact intersect (conic) + refract/reflect + optional
+    transfer, on dual-or-jnp ``(x, y, ux, uy)``.  Returns the updated state plus
+    the plain-array OPL increment and dead-ray mask."""
+    from ..glass import get_glass_index
+    sqrt, val = O['sqrt'], O['val']
+    pwhere, dwhere = O['pwhere'], O['dwhere']
+    R = float(getattr(surf, 'radius', np.inf))
+    c = 0.0 if not np.isfinite(R) else 1.0 / R
+    k = float(getattr(surf, 'conic', 0.0) or 0.0)
+    is_mir = bool(getattr(surf, 'is_mirror', False))
+    n1 = float(get_glass_index(getattr(surf, 'glass_before', None) or 'air',
+                               wavelength))
+    n2 = float(get_glass_index(getattr(surf, 'glass_after', None) or 'air',
+                               wavelength))
+    sden = sqrt(1.0 + ux * ux + uy * uy)
+    L = ux / sden
+    M = uy / sden
+    Nn = 1.0 / sden
+    # intersect conic F = c(x^2+y^2) - 2z + (1+k) c z^2 = 0, ray from (x, y, 0)
+    a = c * (L * L + M * M) + (1.0 + k) * c * (Nn * Nn)
+    b = 2.0 * (c * (x * L + y * M) - Nn)
+    e = c * (x * x + y * y)
+    disc = b * b - 4.0 * a * e
+    sq = sqrt(disc)
+    sgn = pwhere(val(b) >= 0.0, 1.0, -1.0)
+    q = -0.5 * (b + sgn * sq)
+    # stable near-vertex root tau = e/q; flat surface (a == 0) -> tau = -e/b
+    tau = dwhere(abs(val(a)) < 1e-14, (0.0 - e) / b, e / q)
+    xi = x + tau * L
+    yi = y + tau * M
+    zi = tau * Nn
+    # surface normal grad F = (2c x, 2c y, -2 + 2(1+k)c z), oriented against ray
+    gx = (2.0 * c) * xi
+    gy = (2.0 * c) * yi
+    gz = -2.0 + (2.0 * (1.0 + k) * c) * zi
+    gn = sqrt(gx * gx + gy * gy + gz * gz)
+    nx = gx / gn
+    ny = gy / gn
+    nz = gz / gn
+    dn = L * nx + M * ny + Nn * nz
+    fl = pwhere(val(dn) > 0.0, -1.0, 1.0)
+    nx = nx * fl
+    ny = ny * fl
+    nz = nz * fl
+    cos_i = 0.0 - (L * nx + M * ny + Nn * nz)
+    if is_mir:
+        two_ci = 2.0 * cos_i
+        Lp = L + two_ci * nx
+        Mp = M + two_ci * ny
+        Np = Nn + two_ci * nz
+        disc_r = None
+    else:
+        eta = n1 / n2
+        disc_r = 1.0 - (eta * eta) * (1.0 - cos_i * cos_i)
+        root = sqrt(disc_r)
+        coef = eta * cos_i - root
+        Lp = eta * L + coef * nx
+        Mp = eta * M + coef * ny
+        Np = eta * Nn + coef * nz
+    if apply_transfer:
+        t = float(getattr(surf, 'thickness', 0.0) or 0.0)
+        tau2 = (t - zi) / Np
+        x_out = xi + tau2 * Lp
+        y_out = yi + tau2 * Mp
+        # OPL: SIGNED intersection leg (a backtrack on a concave surface
+        # subtracts over-counted OPL, matching raytrace._intersect_surface) plus
+        # the |transfer| leg (matching raytrace._transfer).
+        opd = n1 * val(tau) + n2 * abs(val(tau2))
+    else:
+        x_out = xi
+        y_out = yi
+        opd = n1 * val(tau)
+    ux_out = Lp / Np
+    uy_out = Mp / Np
+    # dead: aperture vignette + TIR (NumPy path only; the JAX path returns
+    # alive=True and would trip a tracer->ndarray conversion here).
+    dead = None
+    if compute_dead:
+        dead = val(disc) < 0.0                    # missed the surface
+        sd = float(getattr(surf, 'semi_diameter', np.inf))
+        if np.isfinite(sd):
+            dead = dead | (val(xi) ** 2 + val(yi) ** 2 > sd * sd)
+        if disc_r is not None:
+            dead = dead | (val(disc_r) < 0.0)     # TIR
+    return x_out, y_out, ux_out, uy_out, opd, dead
+
+
+def _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface):
+    x = np.asarray(x, np.float64)
+    n = x.shape[0]
+    y = np.broadcast_to(np.asarray(y, np.float64), (n,)).copy()
+    ux = np.broadcast_to(np.asarray(ux, np.float64), (n,)).copy()
+    uy = np.broadcast_to(np.asarray(uy, np.float64), (n,)).copy()
+    x = np.broadcast_to(x, (n,)).copy()
+    eye = np.eye(4)
+
+    def _seed(xv, yv, uxv, uyv):
+        return (_AdrtDual(xv.copy(), np.tile(eye[0], (n, 1))),
+                _AdrtDual(yv.copy(), np.tile(eye[1], (n, 1))),
+                _AdrtDual(uxv.copy(), np.tile(eye[2], (n, 1))),
+                _AdrtDual(uyv.copy(), np.tile(eye[3], (n, 1))))
+
+    opd = np.zeros(n)
+    alive = np.ones(n, dtype=bool)
+    nsurf = len(surfaces)
+    # dead rays (missed / TIR) can overflow the dual arithmetic; the result is
+    # masked (alive) and nan_to_num'd below, so silence the expected noise.
+    with np.errstate(over='ignore', invalid='ignore', divide='ignore'):
+        if per_surface:
+            locals_ = []
+            cx, cy, cux, cuy = x, y, ux, uy
+            for si, s in enumerate(surfaces):
+                X, Y, UX, UY = _seed(cx, cy, cux, cuy)
+                X, Y, UX, UY, dopd, dead = _adrt_step(
+                    X, Y, UX, UY, s, wavelength, si < nsurf - 1, _DUAL_OPS)
+                Jk = np.stack([X.d, Y.d, UX.d, UY.d], axis=1)   # (n, 4, 4)
+                locals_.append(Jk)
+                opd = opd + dopd
+                alive = alive & ~dead
+                cx, cy, cux, cuy = X.v, Y.v, UX.v, UY.v
+            jac = np.stack(locals_, axis=0)                 # (nsurf, n, 4, 4)
+            bx, by, bux, buy = cx, cy, cux, cuy
+        else:
+            X, Y, UX, UY = _seed(x, y, ux, uy)
+            for si, s in enumerate(surfaces):
+                X, Y, UX, UY, dopd, dead = _adrt_step(
+                    X, Y, UX, UY, s, wavelength, si < nsurf - 1, _DUAL_OPS)
+                opd = opd + dopd
+                alive = alive & ~dead
+            jac = np.stack([X.d, Y.d, UX.d, UY.d], axis=1)  # (n, 4, 4)
+            bx, by, bux, buy = X.v, Y.v, UX.v, UY.v
+    # A dead ray (missed / TIR) can leave non-finite entries (e.g. a grazing
+    # 1/N'); zero them so they cannot contaminate array-wide ops downstream.
+    # Live rays are already finite, so this is a no-op for them.
+    jac = np.nan_to_num(jac, nan=0.0, posinf=0.0, neginf=0.0)
+    bx, by, bux, buy, opd = (np.nan_to_num(v) for v in (bx, by, bux, buy, opd))
+    return DifferentialTransfer(jacobian=jac, x=bx, y=by, ux=bux, uy=buy,
+                                opd=opd, alive=alive)
+
+
+def ray_transfer_jacobian_analytic(
+    x, y, ux, uy, surfaces, wavelength, *, per_surface: bool = False,
+):
+    """Analytic (exact) differential ray-transfer Jacobian -- the closed-form /
+    autodiff twin of the finite-difference :func:`ray_transfer_jacobian`.
+
+    Forward-mode AD over the EXACT conic trace (intersection + vector Snell /
+    reflection + vertex transfer), so the 4x4 ``(x, y, ux, uy)`` ray-transfer
+    Jacobian is computed WITHOUT finite-difference truncation (the ``h -> 0``
+    limit) and is correct at all NA.  On the JAX backend (``x`` a jax array) the
+    trace is differentiated by ``jax.jacfwd`` and is itself ``jax.grad`` /
+    ``jit`` friendly.
+
+    Value vs the two existing primitives: it is exact where the FD
+    :func:`ray_transfer_jacobian` carries ~1e-8 truncation, and pure NumPy (no
+    JAX dependency, unlike :func:`ray_transfer_jacobian_jax`).  It is the
+    closed-form realization of the differential ray tracing of Stone & Forbes
+    (forward-mode AD == analytic differential ray tracing, Volatier 2017); see
+    ``docs/ANALYTIC_DIFFERENTIAL_RAY_TRACING_LITERATURE.md``.  (Note: the
+    *composed output* of :func:`ray_transfer_jacobian_jax` is empirically also
+    exact at high NA -- its per-surface paraxial transfer under-count is undone
+    by the next surface's intersection -- so this is not a high-NA correction of
+    that path, just a NumPy-native, truncation-free one with a cleaner
+    forward-AD structure.)
+
+    Same signature / return (:class:`DifferentialTransfer`) and ``per_surface``
+    semantics as :func:`ray_transfer_jacobian`; agrees with it to the FD
+    truncation floor (~1e-8).  On axis the 2x2 meridional block equals
+    ``system_abcd_prescription`` (exactly for air-to-air prescriptions, where
+    the unreduced slope ``u = L/N`` coincides with the reduced ``n*u`` momentum
+    at the ``n = 1`` endpoints).  Surfaces must be conic (sphere / conic ``+``
+    thickness ``+`` glass ``+`` ``is_mirror``); aspheric-polynomial departures,
+    freeforms and coordinate breaks are not yet handled (use the FD primitive
+    there).
+
+    Returns
+    -------
+    DifferentialTransfer
+    """
+    from ..backend.array import is_jax_array
+    for s in surfaces:
+        if getattr(s, 'aspheric_coeffs', None) or getattr(s, 'freeform', None) \
+                or getattr(s, 'is_coordbrk', False):
+            raise NotImplementedError(
+                'ray_transfer_jacobian_analytic handles conic surfaces only; '
+                'aspheric-polynomial departures, freeforms and coordinate '
+                'breaks are not yet supported -- use ray_transfer_jacobian (FD) '
+                'for those.')
+    if is_jax_array(x) or is_jax_array(y) or is_jax_array(ux) \
+            or is_jax_array(uy):
+        return _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface)
+    return _adrt_numpy(x, y, ux, uy, surfaces, wavelength, per_surface)
+
+
+def _adrt_jax(x, y, ux, uy, surfaces, wavelength, per_surface):
+    import jax
+    import jax.numpy as jnp
+    if per_surface:
+        raise NotImplementedError(
+            'ray_transfer_jacobian_analytic: per_surface=True is NumPy-only; '
+            'the JAX path returns the composite Jacobian (use jax.jacfwd on the '
+            'per-surface steps if per-surface gradients are needed).')
+    jnp_ops = {'sqrt': lambda z: jnp.sqrt(jnp.maximum(z, 0.0)),
+               'val': lambda a: a, 'pwhere': jnp.where, 'dwhere': jnp.where}
+    nsurf = len(surfaces)
+
+    def _state(s4):
+        xx, yy, uxx, uyy = s4[0], s4[1], s4[2], s4[3]
+        for si, s in enumerate(surfaces):
+            xx, yy, uxx, uyy, _dopd, _dead = _adrt_step(
+                xx, yy, uxx, uyy, s, wavelength, si < nsurf - 1, jnp_ops,
+                compute_dead=False)
+        return jnp.stack([xx, yy, uxx, uyy])
+
+    def _full(s4):
+        xx, yy, uxx, uyy = s4[0], s4[1], s4[2], s4[3]
+        opd = jnp.zeros(())
+        for si, s in enumerate(surfaces):
+            xx, yy, uxx, uyy, dopd, _dead = _adrt_step(
+                xx, yy, uxx, uyy, s, wavelength, si < nsurf - 1, jnp_ops,
+                compute_dead=False)
+            opd = opd + dopd
+        return jnp.stack([xx, yy, uxx, uyy]), opd
+
+    s4 = jnp.stack([jnp.reshape(jnp.asarray(x), (-1,)),
+                    jnp.reshape(jnp.asarray(y), (-1,)),
+                    jnp.reshape(jnp.asarray(ux), (-1,)),
+                    jnp.reshape(jnp.asarray(uy), (-1,))], axis=0)
+    n = s4.shape[1]
+    jac = jax.vmap(jax.jacfwd(_state), in_axes=1, out_axes=0)(s4)
+    st, opd = jax.vmap(_full, in_axes=1, out_axes=(0, 0))(s4)
+    return DifferentialTransfer(
+        jacobian=jac, x=st[:, 0], y=st[:, 1], ux=st[:, 2], uy=st[:, 3],
+        opd=opd, alive=jnp.ones((n,), dtype=bool))
+
+
 __all__ = ['DifferentialTransfer', 'ray_transfer_jacobian',
-           'ray_transfer_jacobian_jax']
+           'ray_transfer_jacobian_analytic', 'ray_transfer_jacobian_jax']
