@@ -37,6 +37,8 @@ from typing import List, Optional, Tuple, Union
 
 import numpy as np
 
+from ..backend import array_namespace, is_jax_array
+
 _C = np.complex128
 
 # v5.17 audit (P3-24): validity-domain guard threshold.  The order=2
@@ -131,16 +133,28 @@ def rytov_tensor(
         carries the harmonic mean, ``y`` / ``z`` (along the lamellae) the
         arithmetic mean.  Feed directly to ``BerremanStack.add_layer(eps=...)``.
     """
-    f = float(fill)
-    if not (0.0 < f < 1.0):
-        raise ValueError(f"rytov_tensor: fill must be in (0, 1), got {f}.")
+    # Backend-generic: a traced (JAX) ridge/groove eps or fill flows through
+    # differentiably (via array_namespace); a concrete call stays NumPy and
+    # byte-identical to the pre-JAX path.
+    xp = array_namespace(eps_ridge, eps_groove, fill)
+    traced = (is_jax_array(eps_ridge) or is_jax_array(eps_groove)
+              or is_jax_array(fill))
+    cj = xp.complex128
+    if traced:
+        f = fill                                        # keep raw so grad flows
+    else:
+        f = float(fill)
+        if not (0.0 < f < 1.0):
+            raise ValueError(f"rytov_tensor: fill must be in (0, 1), got {f}.")
     if order not in (0, 2):
         raise ValueError(f"rytov_tensor: order must be 0 or 2, got {order}.")
-    ea, eb = _C(eps_ridge), _C(eps_groove)
-    # v5.17 audit (P3-24): validity-domain diagnostic -- warn (do not
-    # raise) outside the homogenization regime.
-    _warn_rytov_validity("rytov_tensor", period, wavelength, order,
-                         (ea, eb))
+    ea = xp.asarray(eps_ridge, dtype=cj)
+    eb = xp.asarray(eps_groove, dtype=cj)
+    if not traced:
+        # v5.17 audit (P3-24): validity-domain diagnostic -- warn (do not
+        # raise) outside the homogenization regime (concrete eps only).
+        _warn_rytov_validity("rytov_tensor", period, wavelength, order,
+                             (complex(eps_ridge), complex(eps_groove)))
     eps_par0 = f * ea + (1.0 - f) * eb                 # arithmetic (TE / par)
     eps_perp0 = 1.0 / (f / ea + (1.0 - f) / eb)        # harmonic (TM / perp)
     eps_par, eps_perp = eps_par0, eps_perp0
@@ -148,7 +162,7 @@ def rytov_tensor(
         if period is None or wavelength is None:
             raise ValueError(
                 "rytov_tensor: order=2 needs period and wavelength.")
-        u2 = (float(period) / float(wavelength)) ** 2
+        u2 = (float(period) / float(wavelength)) ** 2   # period/wl stay concrete
         pref = (np.pi ** 2 / 3.0) * u2 * f ** 2 * (1.0 - f) ** 2
         # Lalanne & Lemercier-Lalanne 1996, eq. for the equivalent uniaxial
         # indices: the TE (parallel) correction is additive in eps; the TM
@@ -157,11 +171,7 @@ def rytov_tensor(
         eps_perp = (eps_perp0
                     + pref * (1.0 / ea - 1.0 / eb) ** 2
                     * eps_perp0 ** 3 * eps_par0)
-    out = np.zeros((3, 3), dtype=_C)
-    out[0, 0] = eps_perp
-    out[1, 1] = eps_par
-    out[2, 2] = eps_par
-    return out
+    return xp.diag(xp.stack([eps_perp, eps_par, eps_par]))
 
 
 def rytov_segments_tensor(
@@ -183,22 +193,24 @@ def rytov_segments_tensor(
         raise ValueError(
             "rytov_segments_tensor: only order=0 is defined for multi-region "
             "cells; use rytov_tensor for the binary second-order correction.")
-    ws = np.array([float(w) for w, _e in segments], dtype=float)
-    if abs(ws.sum() - 1.0) > 1e-6:
-        raise ValueError(
-            f"rytov_segments_tensor: widths must sum to 1, got {ws.sum()}.")
-    es = np.array([_C(e) for _w, e in segments], dtype=_C)
-    # v5.17 audit (P3-24): validity-domain diagnostic (order=0 path --
-    # fires only when BOTH period and wavelength are supplied).
-    _warn_rytov_validity("rytov_segments_tensor", period, wavelength,
-                         order, es.tolist())
-    eps_par = complex(np.sum(ws * es))
-    eps_perp = complex(1.0 / np.sum(ws / es))
-    out = np.zeros((3, 3), dtype=_C)
-    out[0, 0] = eps_perp
-    out[1, 1] = eps_par
-    out[2, 2] = eps_par
-    return out
+    w_list = [w for w, _e in segments]
+    e_list = [e for _w, e in segments]
+    xp = array_namespace(*w_list, *e_list)
+    cj = xp.complex128
+    traced = any(is_jax_array(v) for v in (*w_list, *e_list))
+    ws = xp.stack([xp.asarray(w, dtype=cj) for w in w_list])
+    es = xp.stack([xp.asarray(e, dtype=cj) for e in e_list])
+    if not traced:
+        wsum = float(np.real(np.asarray([complex(w) for w in w_list]).sum()))
+        if abs(wsum - 1.0) > 1e-6:
+            raise ValueError(
+                f"rytov_segments_tensor: widths must sum to 1, got {wsum}.")
+        # v5.17 audit (P3-24): validity-domain diagnostic (concrete eps only).
+        _warn_rytov_validity("rytov_segments_tensor", period, wavelength,
+                             order, [complex(e) for e in e_list])
+    eps_par = xp.sum(ws * es)                           # arithmetic
+    eps_perp = 1.0 / xp.sum(ws / es)                    # harmonic
+    return xp.diag(xp.stack([eps_perp, eps_par, eps_par]))
 
 
 # =========================================================================== #
@@ -216,8 +228,14 @@ def maxwell_garnett(eps_host: complex, eps_inclusion: complex,
     depolarization 1/2 -- the natural choice for vertical pillars at normal
     incidence).  Accurate only in the dilute, deeply sub-wavelength limit; it
     is asymmetric in host vs inclusion (swap them and the value changes)."""
-    eh, ei, f = _C(eps_host), _C(eps_inclusion), float(fill)
-    if not (0.0 <= f <= 1.0):
+    xp = array_namespace(eps_host, eps_inclusion, fill)
+    cj = xp.complex128
+    traced = (is_jax_array(eps_host) or is_jax_array(eps_inclusion)
+              or is_jax_array(fill))
+    eh = xp.asarray(eps_host, dtype=cj)
+    ei = xp.asarray(eps_inclusion, dtype=cj)
+    f = fill if traced else float(fill)
+    if not traced and not (0.0 <= f <= 1.0):
         raise ValueError(f"maxwell_garnett: fill must be in [0, 1], got {f}.")
     g = {"sphere": 2.0, "cylinder": 1.0}.get(geometry)
     if g is None:
@@ -226,7 +244,8 @@ def maxwell_garnett(eps_host: complex, eps_inclusion: complex,
             f"{geometry!r}.")
     # (eps - eh)/(eps + g eh) = f (ei - eh)/(ei + g eh)
     beta = (ei - eh) / (ei + g * eh)
-    return complex(eh * (1.0 + g * f * beta) / (1.0 - f * beta))
+    eff = eh * (1.0 + g * f * beta) / (1.0 - f * beta)
+    return eff if traced else complex(eff)
 
 
 def bruggeman(eps_a: complex, eps_b: complex, fill_a: float,
@@ -236,14 +255,40 @@ def bruggeman(eps_a: complex, eps_b: complex, fill_a: float,
     ``eps_b``, both treated as grains in the effective medium (no host /
     inclusion asymmetry, so it spans the full fill range and a percolation
     threshold).  ``geometry='sphere'`` (1/3) or ``'cylinder'`` (1/2)."""
-    ea, eb, f = _C(eps_a), _C(eps_b), float(fill_a)
-    if not (0.0 <= f <= 1.0):
-        raise ValueError(f"bruggeman: fill_a must be in [0, 1], got {f}.")
+    traced = (is_jax_array(eps_a) or is_jax_array(eps_b)
+              or is_jax_array(fill_a))
     g = {"sphere": 2.0, "cylinder": 1.0}.get(geometry)
     if g is None:
         raise ValueError(
             f"bruggeman: geometry must be 'sphere' or 'cylinder', got "
             f"{geometry!r}.")
+    if traced:
+        # Differentiable twin: solve the same quadratic in jnp and pick the
+        # passive root via a nudge-continued reference (well-defined for lossy
+        # AND lossless constituents), selecting the nearer EXACT root with
+        # ``where`` -- a measure-zero branch predicate, so grad flows through
+        # the chosen exact root (fully differentiable in ea/eb/f).
+        xp = array_namespace(eps_a, eps_b, fill_a)
+        cj = xp.complex128
+        ea = xp.asarray(eps_a, dtype=cj)
+        eb = xp.asarray(eps_b, dtype=cj)
+        f = fill_a
+        b = ((1.0 - f) - g * f) * ea + (f - g * (1.0 - f)) * eb
+        disc = xp.sqrt(b * b + 4.0 * g * ea * eb)
+        r1 = (-b + disc) / (2.0 * g)
+        r2 = (-b - disc) / (2.0 * g)
+        na = ea + 1j * 1e-8 * (1.0 + xp.abs(ea))
+        nb = eb + 1j * 1e-8 * (1.0 + xp.abs(eb))
+        bn = ((1.0 - f) - g * f) * na + (f - g * (1.0 - f)) * nb
+        dn = xp.sqrt(bn * bn + 4.0 * g * na * nb)
+        ref = (-bn + dn) / (2.0 * g)
+        alt = (-bn - dn) / (2.0 * g)
+        ref = xp.where(xp.imag(alt) > xp.imag(ref), alt, ref)
+        return xp.where(xp.abs(r1 - ref) <= xp.abs(r2 - ref), r1, r2)
+    # ---- concrete NumPy path (byte-identical to the pre-JAX behavior) -------
+    ea, eb, f = _C(eps_a), _C(eps_b), float(fill_a)
+    if not (0.0 <= f <= 1.0):
+        raise ValueError(f"bruggeman: fill_a must be in [0, 1], got {f}.")
     # f (ea - e)/(ea + g e) + (1-f)(eb - e)/(eb + g e) = 0 -> quadratic in e.
     # Solve the standard closed form, pick the Im>=0 root.
     b = ((1.0 - f) - g * f) * ea + (f - g * (1.0 - f)) * eb  # linear coeff

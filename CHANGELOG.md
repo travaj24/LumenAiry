@@ -4,6 +4,21 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Differentiable (JAX) EMT mixing rules** (`rytov_tensor`,
+  `rytov_segments_tensor`, `maxwell_garnett`, `bruggeman`).  The closed-form
+  effective-medium rules are now backend-generic (via `array_namespace`), so a
+  traced constituent eps / index or fill flows through them and onward through
+  `BerremanStack.add_effective_grating` -> the Berreman jnp far-field twin --
+  enabling gradient-based homogenized-grating design loops (the fast
+  screen-then-optimize workflow the module advertises).  `bruggeman`'s
+  data-dependent passive-root selection is made differentiable with a
+  nudge-continued reference + `where` (a measure-zero branch, so the gradient
+  flows through the chosen exact root).  The concrete NumPy path is
+  byte-identical (34 emt tests unchanged); grad matches central FD to ~1e-10
+  (rytov->Berreman, MG, Bruggeman).  See `tests/unit/test_v5_20_9_emt_jax.py`.
+
 ### Changed
 
 - **`retain_internal` stores fewer S-blocks per layer** (memory; byte-identical).
