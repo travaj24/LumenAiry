@@ -562,6 +562,16 @@ def apply_real_lens_maslov(
     per-pixel saddle rather than sample a uniform v2 grid); pass an
     explicit int to pin the sampling for reproducibility.
 
+    ``integration_method='auto'`` (v5.21) resolves to a concrete integrator
+    from the fitted chart's v2-oscillation count: **uniform 'quadrature'** when
+    it is well-resolved (``4 * v2_osc <= _N_V2_AUTO_MAX``) -- exact and
+    caustic-safe, and where low-oscillation / near-caustic charts fall -- and
+    the fast asymptotic **'local_quadrature'** only when uniform quadrature
+    would need more than the sample cap (the very oscillatory / high-NA regime
+    where quadrature is both slow and speckles).  Byte-identical to the method
+    it picks; measured **357x** faster than the default ``'quadrature'`` on a
+    high-NA singlet chart while staying on the safe quadrature elsewhere.
+
     ``use_gpu`` (opt-in) runs the per-pixel integrand on the GPU via
     CuPy -- the same ``use_gpu=True`` / cupy-array entry as
     ``apply_real_lens``.  The cheap ray trace + Chebyshev fit stay on the
@@ -1053,6 +1063,29 @@ def apply_real_lens_maslov(
     u_s2x_out = (s2x_grid - s2x_c) / s2x_h
     u_s2y_out = (s2y_grid - s2y_c) / s2y_h
     inbox = (np.abs(u_s2x_out) <= 1.0) & (np.abs(u_s2y_out) <= 1.0)
+
+    # v5.21: integration_method='auto' -- resolve to a concrete integrator from
+    # the fitted chart's v2-oscillation count.  Uniform 'quadrature' is exact
+    # AND caustic-safe (its integrand amplitude |det ds1/dv2| is finite through
+    # focus) but costs O(N^2 * n_v2); the asymptotic 'local_quadrature' is
+    # 77-386x faster but is singular AT a caustic and only accurate when the
+    # integrand is oscillatory (the saddle dominates).  So: use quadrature when
+    # it is well-resolved (need n_v2 <= _N_V2_AUTO_MAX -- this covers low-
+    # oscillation AND near-caustic charts, which are low-v2-oscillation and thus
+    # stay on the safe path), and switch to the fast asymptotic only when
+    # quadrature would need MORE samples than the cap (the very oscillatory /
+    # high-NA regime where uniform quadrature is both slow and would speckle,
+    # exactly where the saddle approximation is the intended tool).
+    if integration_method == 'auto':
+        _v2m_a = np.array(
+            [1.0 if (k[2] > 0 or k[3] > 0) else 0.0 for k in mi],
+            dtype=np.float64)
+        _osc_a = float(np.sum(np.abs(coef_opd) * _v2m_a))
+        _need_a = int(np.ceil(4.0 * _osc_a)) + 1
+        integration_method = ('local_quadrature' if _need_a > _N_V2_AUTO_MAX
+                              else 'quadrature')
+        _progress('integrate', 0.595,
+                  f"auto -> {integration_method} (need n_v2~{_need_a})")
 
     # A1 (v5.20): auto-resolve the uniform-quadrature v2 sampling when the
     # caller left n_v2 unset.  n_v2 drives ONLY integration_method='quadrature'

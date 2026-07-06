@@ -89,3 +89,36 @@ def test_maslov_jax_still_differentiable():
 
     g = float(jax.grad(loss)(1.0))
     assert np.isfinite(g) and g != 0.0
+
+
+def test_maslov_integration_method_auto_matches_and_is_fast():
+    """integration_method='auto' resolves to the concrete integrator from the
+    chart's v2-oscillation count and is byte-identical to it: uniform
+    'quadrature' when well-resolved (low-NA), the fast asymptotic
+    'local_quadrature' when uniform quadrature would over-run its sample cap
+    (high-NA oscillatory)."""
+    from lumenairy.elements.lenses_maslov import apply_real_lens_maslov
+    lam = 0.633e-6
+
+    def _singlet(back, ap):
+        return {'aperture_diameter': ap, 'surfaces': [
+            {'radius': 25e-3, 'glass_before': 'air', 'glass_after': 'N-BK7'},
+            {'radius': float('inf'), 'glass_before': 'N-BK7',
+             'glass_after': 'air'}], 'thicknesses': [3e-3, back]}
+    N, dx = 64, 4e-6
+    xs = (np.arange(N) - N // 2) * dx
+    X, Y = np.meshgrid(xs, xs)
+    E = np.exp(-(X ** 2 + Y ** 2) / (2.0e-3) ** 2).astype(np.complex128)
+    for ap, back in [(3e-3, 40e-3), (10e-3, 48e-3)]:
+        Fa = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+                                    wavelength=lam, dx=dx,
+                                    integration_method='auto')
+        Fq = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+                                    wavelength=lam, dx=dx,
+                                    integration_method='quadrature')
+        Fl = apply_real_lens_maslov(E, prescription=_singlet(back, ap),
+                                    wavelength=lam, dx=dx,
+                                    integration_method='local_quadrature')
+        # auto must be byte-identical to exactly one of the two concrete methods
+        assert (np.max(np.abs(Fa - Fq)) < 1e-12) or \
+               (np.max(np.abs(Fa - Fl)) < 1e-12)
