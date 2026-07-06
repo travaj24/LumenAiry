@@ -75,6 +75,26 @@ All notable changes to the core library are documented here.
   byte-identical (34 emt tests unchanged); grad matches central FD to ~1e-10
   (rytov->Berreman, MG, Bruggeman).  See `tests/unit/test_v5_20_9_emt_jax.py`.
 
+- **Differentiable (JAX) axisymmetric BOR-PMM stack** (`BORStack.solve`).
+  `solve()` now runs under a trace when any layer permittivity, concentric-ring
+  ridge index, or thickness is a JAX array (the half-spaces stay concrete): the
+  geometry-only staggered stencils are frozen into the trace once, and the
+  eps-dependent `K x = q^2 B x` assembly, the equilibrated-fold eigensolve (the
+  rcwa gauge-stable custom-VJP eig -- the "generalized eig VJP" is a phantom, the
+  fold is a plain standard eig), the modal field/flux reconstruction (with a
+  trace-safe `where` forward-orientation), and the Redheffer cascade are all
+  differentiable -- enabling gradient-based axisymmetric grating / VCSEL-aperture
+  design loops.  Like the RCWA/PMM twins the propagating order SET is data-
+  dependent and cannot be materialized under a trace, so `R`/`T` come back as
+  full-`2N` per-mode arrays masked to 0 off the propagating set; the concrete
+  NumPy path is unchanged (65 bor tests) and the traced TOTAL `sum(R)`/`sum(T)`
+  reproduce the NumPy solve to ~1e-13 (order-/gauge-invariant), the masked
+  per-order energy closes (`R+T==1` lossless, <1e-6), and grad matches central FD
+  to ~1e-8 for the ring index, thickness and a lossy layer's Im(eps).  New
+  `lumenairy/elements/bor/_jax_bor.py`; dispatched on `is_jax_array` like the
+  other twins.  CPU-only (`jnp.linalg.eig`).  See
+  `tests/unit/test_v5_20_11_bor_jax.py`.
+
 ### Changed
 
 - **`apply_real_lens_maslov` default `integration_method` is now `'auto'`**

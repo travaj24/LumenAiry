@@ -21,6 +21,7 @@ from collections import OrderedDict
 
 import numpy as np
 
+from ...backend import is_jax_array as _is_jax_array
 from .zcascade import interface_smatrix, layer_modes, propagation_smatrix, redheffer_star
 
 # v5.17.1 (audit P3-12): bound on the per-instance modal-basis LRU.  Each
@@ -54,6 +55,10 @@ class BORStack:
         self.eps_sub = complex(n_substrate) ** 2
         self.eps_sup = complex(n_superstrate) ** 2
         self._layers = []   # list of (thickness, eps_profile callable, profile key)
+        # Parallel differentiable spec per layer: (thickness, jbuild(r_n, jnp) ->
+        # jnp eps_node, raw_values) -- lets the JAX twin rebuild eps_node in the
+        # active namespace from the RAW (possibly-traced) ring index / eps.
+        self._jax_layers = []
         self.k0 = None
         # v5.17.1 (audit P3-12): per-instance modal-basis LRU keyed on
         # (profile fingerprint, k0).  Dedups identical layers WITHIN a solve
@@ -78,17 +83,35 @@ class BORStack:
         share one eigensolve per ``k0`` via the modal LRU (audit P3-12)."""
         if rings is not None:
             period, duty, n_r, n_g = rings
-            er, eg = complex(n_r) ** 2, complex(n_g) ** 2
+            # er/eg computed lazily (inside prof / the key) so a TRACED ring
+            # index does not hit complex() at add_layer time (the NumPy prof /
+            # key are unused on the JAX path).
+            _rt = _is_jax_array(n_r) or _is_jax_array(n_g)
 
-            def prof(r, period=period, duty=duty, er=er, eg=eg):
-                return np.where((r % period) < duty * period, er, eg
+            def prof(r, period=period, duty=duty, nr=n_r, ng=n_g):
+                return np.where((r % period) < duty * period,
+                                complex(nr) ** 2, complex(ng) ** 2
                                 ).astype(complex)
             fn = prof
-            key = ("rings", float(period), float(duty), er, eg)
+            key = (("rings_t", float(period), float(duty), id(n_r), id(n_g))
+                   if _rt else
+                   ("rings", float(period), float(duty),
+                    complex(n_r) ** 2, complex(n_g) ** 2))
+
+            def jbuild(r_n, jnp, period=period, duty=duty, nr=n_r, ng=n_g):
+                cj = jnp.complex128
+                mask = jnp.asarray((r_n % period) < duty * period)
+                return jnp.where(mask, jnp.asarray(nr).astype(cj) ** 2,
+                                 jnp.asarray(ng).astype(cj) ** 2)
+            raw = [n_r, n_g]
         elif eps_profile is not None:
             def prof(r, ep=eps_profile):
                 return np.asarray(ep(r), dtype=complex)
             fn = prof
+
+            def jbuild(r_n, jnp, ep=eps_profile):
+                return jnp.asarray(ep(r_n)).astype(jnp.complex128)
+            raw = []                               # traced-ness not auto-detected
             # Fingerprint by the USER callable's identity (the key tuple
             # keeps it alive, so the id can't be recycled); repeated
             # add_layer with the same callable dedups.  Unhashable callables
@@ -99,21 +122,39 @@ class BORStack:
             except TypeError:
                 key = ("profile", fn)
         elif eps is not None:
-            def prof(r, e=complex(eps)):
-                return np.full_like(r, e, dtype=complex)
+            def prof(r, e=eps):
+                return np.full_like(r, complex(e), dtype=complex)
             fn = prof
-            key = ("eps", complex(eps))
+            key = (("eps_t", id(eps)) if _is_jax_array(eps)
+                   else ("eps", complex(eps)))
+
+            def jbuild(r_n, jnp, e=eps):
+                return jnp.full((r_n.shape[0],),
+                                jnp.asarray(e).astype(jnp.complex128))
+            raw = [eps]
         else:
             raise ValueError("add_layer needs eps_profile, rings, or eps")
         # Thickness validation (audit P3-10) -- mirror PMM2DStack.add_layer:
         # a NEGATIVE thickness flips the propagation exponent exp(iqL) so
         # forward-oriented evanescent modes GROW, silently destabilizing the
         # Redheffer cascade instead of raising.
-        thickness = float(thickness)
-        if not np.isfinite(thickness) or thickness <= 0.0:
-            raise ValueError("BORStack.add_layer: thickness must be > 0")
-        self._layers.append((thickness, fn, key))
+        if _is_jax_array(thickness):
+            thk_store = thickness                 # traced thickness stays raw
+        else:
+            thickness = float(thickness)
+            if not np.isfinite(thickness) or thickness <= 0.0:
+                raise ValueError("BORStack.add_layer: thickness must be > 0")
+            thk_store = thickness
+        self._layers.append((thk_store, fn, key))
+        self._jax_layers.append((thk_store, jbuild, raw))
         return self
+
+    def _is_jax(self):
+        """True if any traced layer eps / ring index / thickness is a JAX array
+        (the half-spaces stay concrete)."""
+        return any(_is_jax_array(v)
+                   for thk, _jb, raw in self._jax_layers
+                   for v in ([thk] + list(raw)))
 
     def set_source(self, wavelength=None, *, k0=None):
         # Source validation (audit P3-10): wavelength <= 0 gives k0 = inf /
@@ -174,6 +215,12 @@ class BORStack:
         eig via the modal LRU (audit P3-12)."""
         if self.k0 is None:
             raise RuntimeError("call set_source(...) before solve()")
+        if self._is_jax():
+            # Differentiable twin: gradients flow through the traced layer eps /
+            # ring index / thickness (half-spaces concrete).  Returns R/T as
+            # full-2N masked arrays -- sum(R)/sum(T) match this NumPy path.
+            from ._jax_bor import _jax_bor_stack_solve
+            return _jax_bor_stack_solve(self)
         k0 = self.k0
         sup = self._build(("eps", self.eps_sup),
                           lambda r: np.full_like(r, self.eps_sup, dtype=complex))
