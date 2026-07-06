@@ -985,6 +985,13 @@ class PMMStack:
                             lmodes[i + 1][2],
                             k0 * self._layers[i + 1][0])),
                         S_below_bot[i + 1])
+                # MEMORY: the recurrences are complete, so drop the (2N,2N)
+                # blocks no reader touches -- _internal_amplitudes reads only
+                # S_above[.][2:4] and S_below_bot[.][0].  8 -> 3 retained
+                # blocks/layer (byte-identical; retained arrays unchanged).
+                S_above = [(None, None, Sa[2], Sa[3]) for Sa in S_above]
+                S_below_bot = [(Sbb[0], None, None, None)
+                               for Sbb in S_below_bot]
                 # per-union-cell material LABELS (application feedback
                 # 2026-06-10): when the layers carry key names (a
                 # SegmentStackGeometry export), map them onto the union grid

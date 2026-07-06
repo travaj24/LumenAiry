@@ -4,6 +4,18 @@ All notable changes to the core library are documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **`retain_internal` stores fewer S-blocks per layer** (memory; byte-identical).
+  The internal-field / layer-absorption reconstruction (`RCWAStack` /
+  `PMMStack` `solve(retain_internal=True)`) kept the FULL 4-block partial
+  S-matrices per layer, but the reconstruction reads only `S_above[.][2:4]`,
+  `S_below[.][0]` and `S_below_bot[.][0]`.  After the (complete) cascade
+  recurrences, the unused `(2N, 2N)` blocks are now dropped: RCWA 12 -> 4
+  retained blocks/layer (~63% of the retained field state), PMM 8 -> 3.  The
+  retained arrays are unchanged, so internal fields / absorption are
+  byte-identical (58 internal-field tests pass).
+
 ### Added
 
 - **Threaded `RCWAStack.solve_vs_wavelength`** (speed; byte-identical).  The

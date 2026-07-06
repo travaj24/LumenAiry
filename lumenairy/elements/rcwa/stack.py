@@ -2077,6 +2077,13 @@ class RCWAStack:
             X = xpb.exp(-lam_L[i][0] * lam_L[i][1])
             S_below[i] = ((X[:, None] * B11) * X[None, :], X[:, None] * B12,
                           B21 * X[None, :], B22)
+        # MEMORY: the recurrences above are complete, so drop the (2N,2N) blocks
+        # no reader touches -- RCWAResult._internal_cpm reads only S_above[.][2:4],
+        # S_below[.][0], S_below_bot[.][0].  12 -> 4 retained blocks/layer
+        # (byte-identical; the retained arrays are unchanged).
+        S_above = [(None, None, Sa[2], Sa[3]) for Sa in S_above]
+        S_below = [(Sb[0], None, None, None) for Sb in S_below]
+        S_below_bot = [(Sbb[0], None, None, None) for Sbb in S_below_bot]
         return S_above, S_below, S_below_bot
 
 
